@@ -70,6 +70,8 @@ class QualityReport:
     diff_pairs: List[DiffPairResult] = field(default_factory=list)
     length_matches: List[LengthMatchResult] = field(default_factory=list)
     net_class_length_mm: Dict[str, float] = field(default_factory=dict)
+    electrical: Optional[Dict] = None
+    electrical_required: bool = False
 
     @property
     def fully_routed(self) -> bool:
@@ -80,6 +82,7 @@ class QualityReport:
         """Fully routed AND all diff-pair + length-match checks pass."""
         return (
             self.fully_routed
+            and (not self.electrical_required or bool(self.electrical and self.electrical.get("qualified")))
             and all(d.ok for d in self.diff_pairs)
             and all(m.ok for m in self.length_matches)
         )
@@ -93,7 +96,7 @@ class QualityReport:
         for c, ln in sorted(self.net_class_length_mm.items()):
             lines.append(f"  net-class {c}: {ln:.0f} mm")
         for d in self.diff_pairs:
-            status = "OK" if d.ok else ("UNROUTED" if not d.routed else "FAIL")
+            status = "OK" if d.ok else (("UNVERIFIED" if self.electrical_required else "UNROUTED") if not d.routed else "FAIL")
             lines.append(
                 f"  diff-pair {d.name}: skew {d.skew_mm:.2f} mm " f"(tol {d.tol_mm:.2f}) [{status}]"
             )
@@ -103,6 +106,8 @@ class QualityReport:
                 f"  length-match {m.name}: spread {m.spread_mm:.2f} mm "
                 f"(tol {m.tol_mm:.2f}) [{status}]"
             )
+        if self.electrical_required:
+            lines.append("  electrical qualification: " + ("PASS" if self.electrical and self.electrical.get("qualified") else "PENDING / NOT QUALIFIED"))
         lines.append(f"quality: {'PASS' if self.ok else 'FAIL'}")
         return "\n".join(lines)
 
@@ -167,6 +172,7 @@ def analyze(
         diff_pairs=diff_pairs,
         length_matches=length_matches,
         net_class_length_mm=nc_len,
+        electrical_required=bool(rules.get("electrical_fab")),
     )
 
 
@@ -223,6 +229,24 @@ def main(argv: Optional[List[str]] = None) -> int:
             rules = json.load(fh)
 
     report = analyze(lengths, vias, rules, unrouted=unrouted)
+    if report.electrical_required:
+        from pathlib import Path
+        import pcbnew
+        from pnr.electrical_audit import audit_board
+        board = pcbnew.LoadBoard(args.pcb)
+        board.BuildConnectivity()
+        report.electrical = audit_board(board, rules, Path(args.pcb).read_text())
+        reports = {p["name"]: p for p in report.electrical["pairs"]}
+        for pair in report.diff_pairs:
+            checked = reports.get(pair.name, {})
+            metrics = checked.get("endpoint_metrics", {})
+            pair.routed = all(metrics.get(n, {}).get("valid", False) for n in (pair.p, pair.n))
+            if pair.routed:
+                pair.len_p_mm = metrics[pair.p]["length_mm"]
+                pair.len_n_mm = metrics[pair.n]["length_mm"]
+                pair.skew_mm = abs(pair.len_p_mm - pair.len_n_mm)
+            else:
+                pair.skew_mm = float("inf")
     text = report.summary()
     print(text)
     if args.out:

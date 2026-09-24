@@ -27,6 +27,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("pcb", help="the routed .kicad_pcb (modified in place)")
     ap.add_argument("--rules", required=True, help="rules.json (pnr.route --dump-rules)")
+    ap.add_argument("--refill-only", action="store_true", help="Refill saved zones without generating fanouts")
     args = ap.parse_args(argv)
 
     import pcbnew
@@ -36,7 +37,11 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     board = pcbnew.LoadBoard(args.pcb)
     board.BuildConnectivity()
-    n = apply_planes(board, rules)
+    if args.refill_only:
+        pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+        n = len(list(board.Zones()))
+    else:
+        n = apply_planes(board, rules)
     pcbnew.SaveBoard(args.pcb, board)
     # Authoritatively stamp the design rules into the project file *after* the last
     # board save — DRC reads the .kicad_pro, and the board's live settings detach

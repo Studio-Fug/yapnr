@@ -74,6 +74,13 @@ class RoutingRuleCompileTest(unittest.TestCase):
 
 
 class QualityAnalyzeTest(unittest.TestCase):
+    def test_current_aware_report_requires_electrical_evidence(self):
+        report = analyze({"rail": 10}, {}, {"electrical_fab": {"outer_copper_oz": 1}})
+        self.assertFalse(report.ok)
+        self.assertIn("NOT QUALIFIED", report.summary())
+        report.electrical = {"qualified": False}
+        self.assertFalse(report.ok)
+
     def test_totals(self):
         r = analyze({"a": 10.0, "b": 5.0}, {"a": 2, "b": 1}, {})
         self.assertEqual(r.total_length_mm, 15.0)

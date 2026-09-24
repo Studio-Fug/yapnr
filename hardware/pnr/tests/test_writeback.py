@@ -16,6 +16,23 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FIXTURE = os.path.join(HERE, "..", "testdata", "splanc_dev")
 
 
+class DuplicateDrillTextTest(unittest.TestCase):
+    def test_exact_duplicate_only_and_idempotence(self):
+        from pnr.writeback import normalize_duplicate_drill_text
+        pad = '(pad "7" thru_hole circle (at 0 0) (size .45 .45) (drill .2) (layers "*.Cu") (net 1 "GND") (uuid "ID"))'
+        duplicate = pad.replace('ID', 'SECOND')
+        array = pad.replace('(at 0 0)', '(at 1 0)').replace('ID', 'ARRAY')
+        foreign = pad.replace('"GND"', '"OTHER"').replace('ID', 'OTHER')
+        smd = '(pad "7" smd circle (at 0 0) (size 1 1) (layers "F.Cu") (net 1 "GND"))'
+        text = '(kicad_pcb (footprint "first" '+pad+duplicate+array+foreign+smd+') (footprint "second" '+pad+'))'
+        result = normalize_duplicate_drill_text(text)
+        self.assertEqual(result.count('(pad '), 5)
+        self.assertNotIn('SECOND', result)
+        self.assertIn('ARRAY', result)
+        self.assertIn('OTHER', result)
+        self.assertEqual(normalize_duplicate_drill_text(result), result)
+
+
 class FrameMathTest(unittest.TestCase):
     def test_origin_maps_to_page_offset_top(self):
         # engine (0,0) bottom-left -> pcbnew (offset, offset+H): y is flipped.
@@ -234,7 +251,7 @@ class LiveCopperKeepoutTest(unittest.TestCase):
         zone=zones[0]
         self.assertTrue(zone.GetDoNotAllowTracks())
         self.assertTrue(zone.GetDoNotAllowVias())
-        self.assertTrue(zone.GetDoNotAllowCopperPour())
+        self.assertTrue(zone.GetDoNotAllowZoneFills())
         for layer in (pcbnew.F_Cu,pcbnew.In1_Cu,pcbnew.In2_Cu,pcbnew.B_Cu):
             self.assertTrue(zone.GetLayerSet().Contains(layer))
         box=zone.GetBoundingBox()

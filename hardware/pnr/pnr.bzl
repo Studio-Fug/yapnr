@@ -14,7 +14,7 @@ pnr_fab`) for the place↔route optimization. One action runs, in order:
   1. ingest    (pcbnew)     resolved .kicad_pcb            -> graph.json
   2. place+route (torch)    graph.json + constraints.yaml  -> placed.json   (§4/§6 loop)
   3. writeback (pcbnew)     placed.json                    -> placed .kicad_pcb (+ Edge.Cuts)
-  4. detail route (pcbnew + FreeRouting)                   -> routed .kicad_pcb
+  4. detail route (own router + pcbnew)                   -> routed .kicad_pcb
   5. DRC + export (kicad-cli)                              -> fab bundle dir
 
 The board rule re-provides `AtopileLayoutInfo`, so the routed board flows into the
@@ -66,13 +66,13 @@ def _pcbnew_env(info, pnr_pp_file):
         '_KI_CLI="%s"' % ki_cli,
         'command -v "$_KI_CLI" >/dev/null 2>&1 && _KI_CLI="$(command -v "$_KI_CLI")"',
         '_KI_ROOT="$(cd "$(dirname "$(readlink -f "$_KI_CLI")")/.." 2>/dev/null && pwd || true)"',
-        '_KI_SP="$(ls -d "$_KI_ROOT"/lib/python3*/site-packages 2>/dev/null | head -1)"',
+        '_KI_SP="$(ls -d "$_KI_ROOT"/lib/python3*/site-packages 2>/dev/null | head -1 || true)"',
         # PNR package dir: parent of the dir holding graph.py (…/hardware/pnr).
         '_PNR_PP="$(cd "$(dirname "$(dirname \'%s\')")" && pwd)"' % pnr_pp_file.path,
         '_KI_PP="${_KI_SP:+$_KI_SP:}$_PNR_PP"',
         '_KI_PY="%s"' % ki_py,
         'if [ -z "$_KI_PY" ] || ! PYTHONPATH="$_KI_PP" "$_KI_PY" -c "import pcbnew" >/dev/null 2>&1; then',
-        '  for _c in "${KICAD_PYTHON:-}" python3; do',
+        '  for _c in "${KICAD_PYTHON:-}" /Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3 python3; do',
         '    if [ -n "$_c" ] && command -v "$_c" >/dev/null 2>&1 && PYTHONPATH="$_KI_PP" "$_c" -c "import pcbnew" >/dev/null 2>&1; then _KI_PY="$_c"; break; fi',
         "  done",
         "fi",
@@ -93,6 +93,8 @@ def _graph_py(ctx):
 
 def _pnr_board_impl(ctx):
     info = _toolinfo(ctx)
+    if ctx.files.annotation_sources and not ctx.file.plane_access_fab:
+        fail("annotation_sources requires plane_access_fab")
     in_pcb = ctx.attr.layout[AtopileLayoutInfo].pcb
     bom = ctx.attr.layout[AtopileLayoutInfo].bom
     out_pcb = ctx.actions.declare_file(ctx.label.name + ".kicad_pcb")
@@ -100,8 +102,17 @@ def _pnr_board_impl(ctx):
     out_libs = ctx.actions.declare_file(ctx.label.name + ".fp-lib-table")
     footprint_args = " ".join(['"%s"' % f.path for f in ctx.files.footprints])
     drc_rpt = ctx.actions.declare_file(ctx.label.name + ".drc.rpt")
+    access_rpt = ctx.actions.declare_file(ctx.label.name + ".plane-access.json")
+    pad_rpt = ctx.actions.declare_file(ctx.label.name + ".pad-entry.json")
+    coalesce_rpt = ctx.actions.declare_file(ctx.label.name + ".via-coalesce.json")
     quality_rpt = ctx.actions.declare_file(ctx.label.name + ".quality.txt")
 
+    native_rpt = ctx.actions.declare_file(ctx.label.name + ".native-loop.json")
+    electrical_rpt = ctx.actions.declare_file(ctx.label.name + ".electrical.json")
+    diagnostics = ctx.actions.declare_directory(ctx.label.name + ".diagnostics")
+    if ctx.file.electrical_fab and not ctx.files.annotation_sources:
+        fail("electrical_fab requires annotation_sources")
+    electrical_args = (("--electrical-fab \"%s\" " % ctx.file.electrical_fab.path) + " ".join(['--annotation-source "%s"' % f.path for f in ctx.files.annotation_sources])) if ctx.file.electrical_fab else ""
     placer = ctx.executable.placer
     graph_py = _graph_py(ctx)
     name = ctx.attr.board_name or ctx.label.name
@@ -111,24 +122,56 @@ def _pnr_board_impl(ctx):
     cmd = "\n".join([
         "set -euo pipefail",
         'export HOME="${HOME:-$(mktemp -d)}"',
-        "_WORK=\"$(mktemp -d)\"",
+        '_WORK="%s"' % diagnostics.path,
+        'mkdir -p "$_WORK"',
+        '_WORK="$(cd "$_WORK" && pwd)"',
+        'echo "PnR diagnostics: $_WORK"',
         _pcbnew_env(info, graph_py),
+        # Canonical source geometry preserves multi-shape terminals before ingest.
+        (_ki_run('-m pnr.source_footprints "%s" --out "$_WORK/source.kicad_pcb" --report "$_WORK/source-footprints.json" %s' % (in_pcb.path, footprint_args))
+         if ctx.files.footprints else 'cp "%s" "$_WORK/source.kicad_pcb"' % in_pcb.path),
         # 1. ingest: resolved board -> neutral graph.
-        _ki_run('-m pnr.ingest "%s" --name "%s" --dump-json "$_WORK/graph.json"' % (in_pcb.path, name)),
+        _ki_run('-m pnr.ingest "$_WORK/source.kicad_pcb" --name "%s" --dump-json "$_WORK/graph.json"' % name),
         # 2. place + route feedback loop (torch) -> placed graph + routing rules
         # (net classes / diff pairs / length match). Runs with its OWN runfiles
         # env (no injected PYTHONPATH).
-        '"%s" "$_WORK/graph.json" "%s" --dump-json "$_WORK/placed.json" --dump-rules "$_WORK/rules.json" --dump-routes "$_WORK/routes.json" --detail-loop %s' % (
+        'PNR_ROUND_DIAGNOSTICS="$_WORK" PNR_PLACEMENT_DIAGNOSTICS="$_WORK/placement-failure.json" "%s" "$_WORK/graph.json" "%s" --dump-json "$_WORK/placed.json" --dump-rules "$_WORK/rules.json" --dump-routes "$_WORK/routes.json" --detail-loop --max-rounds %d %s %s' % (
             placer.path,
             ctx.file.constraints.path,
-            "--allow-unconverged" if ctx.attr.allow_unconverged else "",
+            ctx.attr.placement_rounds,
+            "--allow-unconverged" if ctx.attr.allow_unconverged or ctx.file.electrical_fab else "",
+            electrical_args + (' --plane-access-fab "%s"' % ctx.file.plane_access_fab.path if ctx.file.plane_access_fab else ""),
         ),
         # 3. writeback: place the optimized layout + net classes + the OWN detailed
         # router's tracks/vias onto the board (replaces FreeRouting), frame
         # Edge.Cuts to the placement region (all pads inside; set the layer count).
-        _ki_run('-m pnr.writeback "%s" "$_WORK/placed.json" --out "%s" --rules "$_WORK/rules.json" --routes "$_WORK/routes.json"' % (in_pcb.path, out_pcb.path)),
+        _ki_run('-m pnr.writeback "%s" "$_WORK/placed.json" --out "%s" --rules "$_WORK/rules.json" %s' % ("$_WORK/source.kicad_pcb", out_pcb.path, '' if ctx.file.electrical_fab else '--routes "$_WORK/routes.json"')),
+        # Source-derived power-return arrays are persisted before plane refill.
+        (_ki_run('-m pnr.plane_access "%s" --out "%s" --fab-model "%s" --report "%s" %s' % (
+            out_pcb.path, out_pcb.path, ctx.file.plane_access_fab.path, access_rpt.path,
+            " ".join(['--annotation-source "%s"' % f.path for f in ctx.files.annotation_sources]),
+        )) if ctx.files.annotation_sources else ("echo '{}' > \"%s\"" % access_rpt.path)),
         # 4. pour ground/power planes + fanout their pads.
         _ki_run('-m pnr.planes "%s" --rules "$_WORK/rules.json"' % out_pcb.path),
+        # Register source footprints before the first native DRC, not only at export.
+        'cp "%s" "$_WORK/board.kicad_pcb"' % out_pcb.path,
+        'cp "%s" "$_WORK/board.kicad_pro"' % out_pro.path,
+        _ki_run('-m pnr.library_table --out "$_WORK/fp-lib-table" %s' % footprint_args),
+        # Native electrical routing and placement feedback, after actual plane fill.
+        (('"%s" "%s" --repo "$PWD" --rules "$_WORK/rules.json" --constraints "%s" --out-dir "$_WORK/native-loop" --kicad-python "$_KI_PY" --kicad-cli "%s" --early-pairs --cycles 12 --route-attempts 40 --placement-attempts 2 --search-seconds 90 --seconds %d %s' % (
+            ctx.executable._native_controller.path, "$_WORK/board.kicad_pcb", ctx.file.constraints.path, _kicad_cli(info), ctx.attr.native_seconds, electrical_args,
+        )) if ctx.file.electrical_fab else 'true'),
+        (('cp "$_WORK/native-loop/best/candidate.kicad_pcb" "%s"\ncp "$_WORK/native-loop/best/candidate.kicad_pro" "%s"\ncp "$_WORK/native-loop/progress.json" "%s"\ncp "$_WORK/native-loop/policy/prepare.json" "$_WORK/rules.json"' % (out_pcb.path,out_pro.path,native_rpt.path)) if ctx.file.electrical_fab else ("echo '{}' > \"%s\"" % native_rpt.path)),
+        # Reuse through-vias and reduce redundant track cycles before final pad-entry
+        # validation. Each transaction is independently filled and native-DRC gated.
+        _ki_run('-m pnr.via_coalesce "%s" --out "%s" --rules "$_WORK/rules.json" --report "%s" --work-dir "$_WORK/coalesce" --kicad-cli "%s" %s' % (
+            out_pcb.path, out_pcb.path, coalesce_rpt.path, _kicad_cli(info),
+            " ".join(['--annotation-source "%s"' % f.path for f in ctx.files.annotation_sources]),
+        )),
+        # Reject unresolved grazing/undersized trace entries after all fanouts.
+        _ki_run('-m pnr.pad_entry "%s" --out "%s" --rules "$_WORK/rules.json" --report "%s" --strict' % (out_pcb.path, out_pcb.path, pad_rpt.path)),
+        _ki_run('-m pnr.planes "%s" --rules "$_WORK/rules.json" --refill-only' % out_pcb.path),
+        (_ki_run('-m pnr.electrical_audit "%s" --rules "$_WORK/native-loop/policy/prepare.json" --out "%s"' % (out_pcb.path,electrical_rpt.path)) if ctx.file.electrical_fab else ("echo '{}' > \"%s\"" % electrical_rpt.path)),
         # Validate in an isolated project folder with the source libraries.
         'cp "%s" "$_WORK/board.kicad_pcb"' % out_pcb.path,
         'cp "%s" "$_WORK/board.kicad_pro"' % out_pro.path,
@@ -158,25 +201,25 @@ def _pnr_board_impl(ctx):
     ])
 
     inputs = depset(
-        direct = [in_pcb, ctx.file.constraints, graph_py] + ctx.files._pnr_srcs + ctx.files.footprints,
+        direct = [in_pcb, ctx.file.constraints, graph_py, ctx.file._regional_adapter] + ctx.files._pnr_srcs + ctx.files.footprints + ctx.files.annotation_sources + ([ctx.file.plane_access_fab] if ctx.file.plane_access_fab else []) + ([ctx.file.electrical_fab] if ctx.file.electrical_fab else []),
         transitive = [_tool_inputs(info)],
     )
 
     ctx.actions.run_shell(
-        outputs = [out_pcb, out_pro, out_libs, drc_rpt, quality_rpt],
+        outputs = [out_pcb, out_pro, out_libs, drc_rpt, quality_rpt, access_rpt, pad_rpt, coalesce_rpt, native_rpt, electrical_rpt, diagnostics],
         inputs = inputs,
         # files_to_run stages the placer py_binary AND its runfiles tree.
-        tools = [ctx.attr.placer[DefaultInfo].files_to_run],
+        tools = [ctx.attr.placer[DefaultInfo].files_to_run, ctx.attr._native_controller[DefaultInfo].files_to_run],
         command = cmd,
         mnemonic = "PnrBoard",
         progress_message = "PnR place+route -> %s" % out_pcb.short_path,
         use_default_shell_env = True,
-        # Non-hermetic like the atopile actions: FreeRouting is a JVM subprocess
+        # Non-hermetic like the atopile actions: native KiCad runs out of process
         # and pcbnew resolves against the nix store; keep it local/no-sandbox.
         execution_requirements = {"local": "1", "no-sandbox": "1"},
     )
     return [
-        DefaultInfo(files = depset([out_pcb, out_pro, out_libs, drc_rpt, quality_rpt])),
+        DefaultInfo(files = depset([out_pcb, out_pro, out_libs, drc_rpt, quality_rpt, access_rpt, pad_rpt, coalesce_rpt, native_rpt, electrical_rpt, diagnostics])),
         AtopileLayoutInfo(pcb = out_pcb, bom = bom),
         PnrReportsInfo(drc = drc_rpt, quality = quality_rpt, project = out_pro, library_table = out_libs, footprints = ctx.files.footprints),
     ]
@@ -185,6 +228,13 @@ _pnr_board = rule(
     implementation = _pnr_board_impl,
     attrs = {
         "layout": attr.label(providers = [AtopileLayoutInfo], mandatory = True, doc = "Resolved atopile board to place+route."),
+        "annotation_sources": attr.label_list(allow_files = [".ato"], doc = "Source-authored plane-access intent; target addresses survive ref renumbering."),
+        "electrical_fab": attr.label(allow_single_file = [".json"], doc = "Current/copper/temperature and via budgets for native electrical routing."),
+        "native_seconds": attr.int(default = 900),
+        "placement_rounds": attr.int(default = 6),
+        "_native_controller": attr.label(default = "//hardware/pnr:native_loop", executable = True, cfg = "exec"),
+        "_regional_adapter": attr.label(default = "//hardware/tools:keyhole_region.py", allow_single_file = True),
+        "plane_access_fab": attr.label(allow_single_file = [".json"], doc = "Explicit plating/loss/drop/trace model required with source annotations."),
         "constraints": attr.label(allow_single_file = [".yaml", ".yml"], mandatory = True, doc = "Sidecar constraints.yaml (design §3)."),
         "placer": attr.label(executable = True, cfg = "exec", mandatory = True, doc = "The torch place+route+detail-route py_binary (//hardware/pnr:pnr_fab)."),
         "footprints": attr.label_list(allow_files = [".kicad_mod"], doc = "Source footprints for DRC and the portable fab bundle."),
@@ -259,6 +309,11 @@ def atopile_pnr(
         layout,
         constraints,
         footprints = [],
+        annotation_sources = [],
+        plane_access_fab = None,
+        electrical_fab = None,
+        native_seconds = 900,
+        placement_rounds = 6,
         drc_gate = False,
         quality_gate = False,
         require_routed = True,
@@ -290,6 +345,11 @@ def atopile_pnr(
         layout = layout,
         constraints = constraints,
         footprints = footprints,
+        annotation_sources = annotation_sources,
+        plane_access_fab = plane_access_fab,
+        electrical_fab = electrical_fab,
+        native_seconds = native_seconds,
+        placement_rounds = placement_rounds,
         placer = "//hardware/pnr:pnr_fab",
         drc_gate = drc_gate,
         quality_gate = quality_gate,

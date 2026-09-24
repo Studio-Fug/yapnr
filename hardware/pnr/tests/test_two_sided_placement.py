@@ -22,6 +22,34 @@ class TwoSidedPlacementTest(unittest.TestCase):
         set_component_side(c, 'top')
         self.assertEqual(c.pads[0].offset, (1, 2))
 
+    def test_fresh_source_fixed_side_applied_before_placement(self):
+        from pnr.constraints import compile_constraints
+        from pnr.place.placer import place
+        a,b=part('U1','top'),part('TP1','top')
+        b.pads[0].offset=(1,2)
+        g=BoardGraph('fresh',[a,b],[])
+        rules=compile_constraints({'board':{'outline':{'w':10,'h':10}},
+            'fixed':{'U1':{'at':[5,5],'side':'top'},'TP1':{'at':[5,5],'side':'bottom'}}},g.refs)
+        result,report=place(g,rules,iters=1)
+        self.assertTrue(report.legal,report.summary())
+        self.assertEqual(result.component('TP1').side,'bottom')
+        self.assertEqual(result.component('TP1').pads[0].offset,(1,-2))
+        self.assertEqual(g.component('TP1').side,'top')
+
+    def test_global_spreading_does_not_repel_opposite_surface_smd(self):
+        from pnr.constraints import compile_constraints
+        from pnr.graph import Net
+        from pnr.place.model import global_place
+        a,b=part('U1','top'),part('TP1','bottom')
+        g=BoardGraph('test',[a,b],[Net('GND',1,[('U1','1'),('TP1','1')])])
+        c=compile_constraints({'board':{'outline':{'w':15,'h':15}},
+                              'fixed':{'TP1':{'at':[5,5],'side':'bottom'}}},g.refs)
+        positions,_=global_place(g,c,15,15,iters=150,orient=False,w_spread=10)
+        self.assertLess(abs(positions['U1'][0]-5)+abs(positions['U1'][1]-5), .2)
+        a.pads[0].through_hole=True
+        positions,_=global_place(g,c,15,15,iters=150,orient=False,w_spread=10)
+        self.assertGreater(abs(positions['U1'][0]-5)+abs(positions['U1'][1]-5), 3)
+
     def test_opposite_smd_can_share_position(self):
         g = BoardGraph('test', [part('U1', 'top'), part('TP1', 'bottom')])
         result = legalize(g, 10, 10, fixed={'U1': (5, 5)}, keepouts=[], grid_mm=.2)
@@ -43,6 +71,23 @@ class TwoSidedPlacementTest(unittest.TestCase):
         result = legalize(g, 15, 15, fixed={'TP1': (5,5)},keepouts=[],grid_mm=.2)
         self.assertEqual(overlap_pairs(result), [])
 
+
+
+class SurfaceBodyHoleTest(unittest.TestCase):
+    def test_smd_body_reserves_actual_holes_on_opposite_side(self):
+        a=part('U1','top',True);a.smd_body=True;a.courtyard=(10,10)
+        b=part('TP1','bottom');b.courtyard=(1,1);b.pos=(8,5)
+        g=BoardGraph('test',[a,b])
+        self.assertEqual(overlap_pairs(g),[])
+        b.pos=(5,5)
+        self.assertEqual(overlap_pairs(g),[('U1','TP1')])
+        b.pos=(8,5)
+        clone=BoardGraph.from_json(g.to_json())
+        self.assertTrue(clone.component('U1').smd_body)
+        result=legalize(clone,15,15,fixed={'U1':(5,5)},keepouts=[],grid_mm=.2)
+        self.assertEqual(overlap_pairs(result),[])
+        self.assertLess(abs(result.component('TP1').pos[0]-8),.3)
+        self.assertLess(abs(result.component('TP1').pos[1]-5),.3)
 
 if __name__ == '__main__':
     unittest.main()

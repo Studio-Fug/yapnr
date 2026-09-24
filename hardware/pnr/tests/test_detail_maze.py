@@ -45,6 +45,47 @@ def _no_shared_cells(res):
 
 
 class TwoPinTest(unittest.TestCase):
+    def test_through_via_checks_non_landing_layers(self):
+        from pnr.route.detail.maze import _astar
+        g=RouteGrid(1,1,1,layers=('F.Cu','In1.Cu','In2.Cu','B.Cu'))
+        args=(g,{Cell(0,0,0)},{Cell(1,0,0)},'N',{},{},5,1)
+        g.pad_net[(3,0,0)]='OTHER'
+        self.assertIsNone(_astar(*args))
+        g.pad_net.clear();g.via_blocked[3,0,0]=True
+        self.assertIsNone(_astar(*args))
+        g.via_blocked[3,0,0]=False
+        # A plane away from the landing layer may form an antipad.
+        g.blocked[2,0,0]=True
+        self.assertIsNotNone(_astar(*args))
+        g.blocked[1,0,0]=True
+        self.assertIsNone(_astar(*args))
+
+    def test_same_net_drills_need_spacing_but_exact_barrel_is_reusable(self):
+        from pnr.route.detail.maze import _astar
+        g=RouteGrid(1,1,1);g.via_spacing=.5
+        args=(g,{Cell(0,0,0)},{Cell(1,0,0)},'N',{},{},5,1)
+        g.escape_vias=[('N',(.85,.5))]
+        self.assertIsNone(_astar(*args))
+        g.escape_vias=[('N',(.5,.5))]
+        self.assertIsNotNone(_astar(*args))
+
+    def test_partial_multi_terminal_net_keeps_branches_without_claiming_completion(self):
+        g=RouteGrid(6,6,1,layers=('F.Cu',));g.pad_net[(0,5,5)]='OTHER'
+        a,z,blocked=Cell(0,0,0),Cell(0,2,0),Cell(0,5,5)
+        result=route(g,{'N':[a,z,blocked]},rrr_rounds=1,max_iters=1)
+        self.assertEqual(result.unrouted,['N'])
+        self.assertFalse(result.nets['N'].routed)
+        self.assertTrue(_connected(result.nets['N'],a,z))
+        self.assertNotIn(blocked,result.nets['N'].cells)
+
+    def test_crossed_column_without_layer_transition_does_not_emit_via(self):
+        from pnr.route.detail.maze import _Route,_to_geometry
+        edges=[(Cell(0,0,0),Cell(0,1,0)),(Cell(1,0,0),Cell(1,0,1))]
+        rn=_to_geometry(_Route([c for pair in edges for c in pair],edges))
+        self.assertEqual(rn.vias,[])
+        edges.append((Cell(0,1,0),Cell(1,1,0)))
+        self.assertEqual(_to_geometry(_Route([c for pair in edges for c in pair],edges)).vias,[(1,0)])
+
     def test_same_layer_connects(self):
         g = RouteGrid(6, 6, 1.0)
         res = route(g, {"N": [Cell(0, 0, 0), Cell(0, 5, 5)]})

@@ -21,6 +21,28 @@ def _box_in(grid, layer, i, j):
 
 
 class EscapePlanTest(unittest.TestCase):
+    def test_offgrid_bridge_leaves_overreserved_cell_on_same_layer(self):
+        from pnr.place.geometry import Rect
+        g = RouteGrid(10,10,.35,clearance=.15,track_width=.2)
+        i,j = g.cell_of(5,5)
+        g.pad_net[(0,i,j)] = 'OTHER'
+        g.pad_rectangles.append((0,'OTHER',Rect(5.4,5,.2,.2)))
+        esc = _plan_one(g,'N',Cell(0,i,j),(5,5),0,(5,4),
+                        via_keepout=1,allow_via_in_pad=True,
+                        allow_dogbone=True,dogbone_reach=4)
+        self.assertEqual(esc.kind,'offgrid')
+        self.assertIsNone(esc.via_xy)
+        self.assertEqual(esc.stub_path[0],(5,5))
+        self.assertTrue(g.passable(esc.access.layer,esc.access.i,esc.access.j,'N'))
+
+    def test_offgrid_bridge_cannot_cross_actual_foreign_copper(self):
+        from pnr.place.geometry import Rect
+        from pnr.route.detail.escape import _offgrid_escape
+        g = _grid(); i,j=g.cell_of(5,5)
+        g.pad_rectangles.append((0,'OTHER',Rect(5,5,1,1)))
+        self.assertIsNone(_offgrid_escape(g,'N',Cell(0,i,j),(5,5),0,(5,4)))
+        self.assertEqual(g.escape_segments,[])
+
     def test_onlayer_when_room(self):
         g = _grid()
         center = Cell(0, 10, 10)
@@ -115,6 +137,28 @@ class EscapePlanTest(unittest.TestCase):
             dogbone_reach=4,
         )
         self.assertEqual(esc.kind, "onlayer")  # no escape allowed => center fallback
+
+
+
+import unittest
+from pnr.route.detail.grid import RouteGrid,Cell
+from pnr.route.detail.escape import _offgrid_escape
+class ProtectedEscapeTest(unittest.TestCase):
+ def test_later_escape_cannot_invalidate_existing_terminal(self):
+  g=RouteGrid(6,6,.2,track_width=.2,clearance=.15,via_radius=.3)
+  key=(0,7,9);g.pad_net[key]='B';g.protected_escape_access={key:'B'}
+  esc=_offgrid_escape(g,'A',Cell(0,10,10),(2,2),0,(3,2))
+  self.assertIsNotNone(esc);self.assertTrue(g.passable(*key,'B'));self.assertTrue(g.passable(esc.access.layer,esc.access.i,esc.access.j,'A'))
+
+
+
+import unittest
+from pnr.route.detail.grid import RouteGrid,Cell
+from pnr.route.detail.escape import trapped_access_sites
+class BlockedTerminalTest(unittest.TestCase):
+ def test_inaccessible_source_is_failure_even_with_free_neighbors(self):
+  g=RouteGrid(5,5,.2);g.pad_net[0,10,10]='OTHER'
+  self.assertEqual(trapped_access_sites(g,{'A':[Cell(0,10,10)]},['A']),{'A':[g.center_of(10,10)]})
 
 
 if __name__ == "__main__":

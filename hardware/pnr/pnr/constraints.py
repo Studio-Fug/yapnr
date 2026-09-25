@@ -495,6 +495,8 @@ def compile_constraints(doc: Dict, known_refs: Sequence[str], addresses=None, pi
         "board",
         "fab",
         "fixed",
+        "orientation",
+        "row",
         "edge_align",
         "keepout",
         "side_pref",
@@ -531,6 +533,20 @@ def compile_constraints(doc: Dict, known_refs: Sequence[str], addresses=None, pi
                 },
             )
         )
+
+    # Orientation is independent of XY; sensor axes do not require fixed centres.
+    import math
+    for selector, spec in (doc.get("orientation") or {}).items():
+        angle = spec.get("rot") if isinstance(spec, dict) else spec
+        if (isinstance(angle, bool) or not isinstance(angle, (int, float))
+                or not math.isfinite(angle) or abs(angle / 90 - round(angle / 90)) > 1e-8):
+            raise ConstraintError("orientation requires a finite cardinal rotation")
+        refs = _expand_refs([selector], known_refs, warnings, "orientation")
+        for con in constraints:
+            if con.kind == "fixed" and set(refs).intersection(con.refs) and (con.params.get("rot") or 0) % 360 != angle % 360:
+                raise ConstraintError("orientation conflicts with fixed rotation")
+        constraints.append(Constraint("orientation", Enforcement.HARD, refs,
+                           {"rot": angle % 360, "reason": spec.get("reason") if isinstance(spec,dict) else None}))
 
     # edge_align: SOFT — pull the part to a board edge; snap orientation.
     for ref, spec in (doc.get("edge_align") or {}).items():
@@ -602,6 +618,26 @@ def compile_constraints(doc: Dict, known_refs: Sequence[str], addresses=None, pi
             )
         )
 
+    # Relative rows have no global origin. Each global start samples a joint
+    # legal edge configuration; the final source guard validates the relation.
+    row_members = set()
+    for entry in doc.get("row") or []:
+        members = tuple(entry.get("members") or ())
+        if not members or len(set(members)) != len(members) or any(r not in known_refs for r in members):
+            raise ConstraintError("row requires known unique ordered members")
+        if row_members.intersection(members):raise ConstraintError("component occurs in multiple rows")
+        if any(c.kind == "fixed" and set(members).intersection(c.refs) for c in constraints):
+            raise ConstraintError("row cannot silently override an authored absolute pose")
+        row_members.update(members)
+        if entry.get("edge") != "any":raise ConstraintError("row currently requires edge: any")
+        facing = entry.get("facing")
+        if facing not in (None, "north", "south"):raise ConstraintError("row facing must be a local north/south normal")
+        gap = entry.get("gap_mm", float(board.default_clearance_mm))
+        if isinstance(gap,bool) or not isinstance(gap,(int,float)) or not math.isfinite(gap) or gap < float(board.default_clearance_mm):
+            raise ConstraintError("row gap must meet placement clearance")
+        constraints.append(Constraint("row", Enforcement.HARD, members,
+            dict(edge="any",facing=facing,gap_mm=gap,reason=entry.get("reason","User-authored relative row")),name=entry.get("name")))
+
     # Groups are soft by default; hard groups survive legalization.
     for entry in doc.get("group") or []:
         entry = entry or {}
@@ -618,9 +654,8 @@ def compile_constraints(doc: Dict, known_refs: Sequence[str], addresses=None, pi
             radius = entry.get("radius_mm")
             if isinstance(radius, bool) or not isinstance(radius, (int, float)) or not 0 < radius < float("inf"):
                 raise ConstraintError("hard group requires a finite positive radius_mm")
-            fixed_refs = {r for c in constraints if c.kind == "fixed" for r in c.refs}
-            if anchor not in fixed_refs:
-                raise ConstraintError("hard group requires an explicitly fixed anchor")
+            if anchor not in known_refs:
+                raise ConstraintError("hard group requires a known anchor")
         if anchor is not None and anchor not in known_refs:
             warnings.append(f"group.anchor: unknown component ref {anchor!r}")
         constraints.append(

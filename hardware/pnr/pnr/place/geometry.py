@@ -15,20 +15,37 @@ from pnr.constraints import CompiledConstraints, Enforcement
 from pnr.graph import BoardGraph, Component
 
 
-def hard_group_limits(constraints, poses):
-    """Intersect centre-distance limits around explicitly fixed anchors."""
+def hard_group_edges(constraints):
+    """Relative distance bounds, independent of absolute XY anchoring."""
+    return [(con.params["anchor"], ref, con.params["radius_mm"])
+            for con in constraints.constraints
+            if con.kind == "group" and con.enforcement == Enforcement.HARD
+            for ref in con.refs if ref != con.params["anchor"]]
+
+
+def hard_group_limits(constraints, poses, *, partial=False):
+    """Relative bounds against current positions; reciprocal when both are known.
+
+    Partial mode is only for held-out batches; complete joint validation follows.
+    """
     limits = {}
-    for con in constraints.constraints:
-        if con.kind != "group" or con.enforcement != Enforcement.HARD:
-            continue
-        anchor = con.params["anchor"]
-        if anchor not in poses:
-            raise ValueError(f"hard group anchor {anchor} has no fixed pose")
-        ax, ay = poses[anchor]
-        for ref in con.refs:
-            if ref != anchor:
-                limits.setdefault(ref, []).append((ax, ay, con.params["radius_mm"]))
+    for anchor, ref, radius in hard_group_edges(constraints):
+        if anchor not in poses and not partial:
+            raise ValueError(f"hard group anchor {anchor} has no current pose")
+        if anchor in poses:limits.setdefault(ref, []).append((*poses[anchor], radius))
+        if ref in poses:limits.setdefault(anchor, []).append((*poses[ref], radius))
     return limits
+
+
+def resolve_hard_rotations(constraints):
+    rotations = {}
+    for con in constraints.hard:
+        if con.kind not in ("fixed", "orientation"):continue
+        for ref in con.refs:
+            value = float(con.params.get("rot") or 0) % 360
+            if ref in rotations and rotations[ref] != value:raise ValueError("conflicting hard rotations")
+            rotations[ref] = value
+    return rotations
 
 
 @dataclass(frozen=True)
@@ -261,24 +278,18 @@ def keepout_rects(
         extent = c.params.get("extent") or {}
         depth = float(extent.get("depth_mm", 0))
         for ref in c.refs:
-            if ref not in placed:
-                continue
             try:
                 comp = graph.component(ref)
             except KeyError:
                 continue
-            cr = courtyard_rect(comp)
-            cx, cy = placed[ref]
-            cr = Rect(cx, cy, cr.w, cr.h)
-            edge = extent.get("edge")
-            if edge == "north":
-                rects.append(Rect(cr.cx, cr.top + depth / 2, cr.w, depth))
-            elif edge == "south":
-                rects.append(Rect(cr.cx, cr.bottom - depth / 2, cr.w, depth))
-            elif edge == "east":
-                rects.append(Rect(cr.right + depth / 2, cr.cy, depth, cr.h))
-            elif edge == "west":
-                rects.append(Rect(cr.left - depth / 2, cr.cy, depth, cr.h))
+            cx, cy = placed.get(ref, comp.pos)
+            w,h = comp.courtyard
+            local = {"north":(0,(h+depth)/2,w,depth),"south":(0,-(h+depth)/2,w,depth),
+                     "east":((w+depth)/2,0,depth,h),"west":(-(w+depth)/2,0,depth,h)}.get(extent.get("edge"))
+            if local is None:continue
+            angle = resolve_hard_rotations(constraints).get(ref,comp.rot)
+            rad=math.radians(angle);ct,st=math.cos(rad),math.sin(rad);x,y,kw,kh=local
+            rects.append(Rect(cx+x*ct-y*st,cy+x*st+y*ct,abs(kw*ct)+abs(kh*st),abs(kw*st)+abs(kh*ct)))
     return rects
 
 

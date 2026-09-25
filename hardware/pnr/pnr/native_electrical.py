@@ -7,7 +7,7 @@ run by native_loop under KiCad Python, never in the torch interpreter.
 """
 import argparse
 from collections import Counter,defaultdict
-import json,math,shutil,subprocess,time
+import json,math,shutil,subprocess,time,os
 from pathlib import Path
 from types import SimpleNamespace
 from pnr.electrical import net_policy,current_width,terminal_policy,neck_budget
@@ -33,7 +33,7 @@ class Oracle:
         self.items=[p for f in b.GetFootprints() for p in f.Pads()]+list(b.GetTracks())
         self.layers=list(b.GetEnabledLayers().CuStack());self.obstacles=[];self.buckets=defaultdict(set)
         from pnr.writeback import outline_bounds
-        self.box=outline_bounds(b);self.ignored=set(ignored)
+        self.box=outline_bounds(b);self.ignored=set(ignored);self.pair_reserved={}
         for t in self.items:
             if uid(t) in self.ignored:continue
             gap=net_policy(t.GetNetname(),rules)['clearance_mm']+.001
@@ -64,7 +64,7 @@ class Oracle:
             setattr(clone,name,list(getattr(self,name)))
         for name in ('buckets','physical_buckets','hole_buckets'):
             setattr(clone,name,defaultdict(set,{key:set(values) for key,values in getattr(self,name).items()}))
-        clone.ignored=set(self.ignored);clone.cache=dict(self.cache)
+        clone.ignored=set(self.ignored);clone.cache=dict(self.cache);clone.pair_reserved=dict(self.pair_reserved)
         clone.hits=Counter();clone.via_hits=Counter();clone.probe=k.PCB_TRACK(self.b)
         if deadline is not None:clone.deadline=min(self.deadline,deadline)
         return clone
@@ -89,9 +89,10 @@ class Oracle:
         index=len(self.obstacles);self.obstacles.append((shape,gap,net,identity))
         for x in range(math.floor(box.GetLeft()/1e6)-1,math.floor(box.GetRight()/1e6)+2):
             for y in range(math.floor(box.GetTop()/1e6)-1,math.floor(box.GetBottom()/1e6)+2):self.buckets[la,x,y].add(index)
-    def clear(self,net,la,a,z,width,ignore_nets=()):
+    def clear(self,net,la,a,z,width,ignore_nets=(),pair=None):
         if time.monotonic()>self.deadline:raise TimeoutError('electrical search time budget')
-        key=(net,la,tuple(a),tuple(z),width,tuple(ignore_nets))
+        pair_key=(pair["p"],pair["n"],pair["gap_mm"]) if pair else None
+        key=(net,la,tuple(a),tuple(z),width,tuple(ignore_nets),pair_key)
         if key in self.cache:return self.cache[key]
         edge=width/2+self.rules.get('fab',{}).get('edge_clearance_mm',.2)+.001
         if any(not(self.box.GetLeft()/1e6+edge<=p[0]<=self.box.GetRight()/1e6-edge and self.box.GetTop()/1e6+edge<=p[1]<=self.box.GetBottom()/1e6-edge) for p in (a,z)):return False
@@ -102,6 +103,14 @@ class Oracle:
         for i in found:
             other,gap,n,identity=self.obstacles[i]
             if n==net or n in ignore_nets:continue
+            if pair and {net,n}=={pair['p'],pair['n']} and identity in self.pair_reserved:
+                from pnr.route.detail.regional import segment_distance
+                other_a,other_z,other_width=self.pair_reserved[identity]
+                required=(round(width*1e6)/1e6+other_width)/2+max(pair['gap_mm'],net_policy(net,self.rules)['clearance_mm'],net_policy(n,self.rules)['clearance_mm'])
+                actual=segment_distance(xy(self.probe.GetStart()),xy(self.probe.GetEnd()),other_a,other_z)
+                if actual+1e-9<required:
+                    self.hits[identity]+=1;self.cache[key]=False;return False
+                continue
             if other.Collide(shape,round(max(gap,net_policy(net,self.rules)['clearance_mm']+.001 if n is not None else gap)*1e6)):
                 self.hits[identity]+=1;self.cache[key]=False;return False
         self.cache[key]=True;return True
@@ -110,6 +119,7 @@ class Oracle:
         import pcbnew as k
         track=k.PCB_TRACK(self.b);track.SetLayer(layer);track.SetStart(vec(a));track.SetEnd(vec(z));track.SetWidth(round(width*1e6));track.SetNetCode(self.b.FindNet(net).GetNetCode())
         self.items.append(track);self.index_physical(track)
+        self.pair_reserved[uid(track)]=(xy(track.GetStart()),xy(track.GetEnd()),track.GetWidth()/1e6)
         self.add(track.GetEffectiveShape(layer),track.GetBoundingBox(),net_policy(net,self.rules)['clearance_mm']+.001,net,uid(track),layer)
         self.cache.clear()
 
@@ -510,27 +520,69 @@ def power_plan(b,net,source,target,rules,oracle,bounds,pitch,*,prefer_tree=True,
     return dict(status='no_current_sized_channel',mode=p['mode'],policy=p,branch_counts=branch_counts,neck_count=len(necks))
 
 
+def bridge_half_plane(a,z,hand):
+    if hand not in (-1,0,1):raise ValueError('bridge hand must be -1,0,+1')
+    dx,dy=z[0]-a[0],z[1]-a[1]
+    return lambda q:not hand or hand*(dx*(q[1]-a[1])-dy*(q[0]-a[0]))>=-1e-9
+
+
+def pair_topologies(pair):
+    auxiliary=pair.get('auxiliary_pairs',[])
+    candidates=[]
+    # Only the first declared connector group has interchangeable duplicate
+    # contacts. Intermediate protection/load terminals remain in source order.
+    if auxiliary and all('source' in g and 'target' in g for g in auxiliary):
+        for takeoff in ('declared','auxiliary_source','declared_p_source_n','source_p_declared_n'):
+            for hand in (-1,1):
+                candidates.append(dict(bridge_hand=hand,takeoff=takeoff,auxiliary_order=('p','n')))
+    for order in ([('p','n'),('n','p')] if auxiliary else [('p','n')]):
+        candidates.append(dict(bridge_hand=0,takeoff='auxiliary_source',auxiliary_order=order))
+    return candidates
+
+
 def pair_plan(b,pair,rules,oracle,bounds,pitch):
-    """Search both duplicate-contact orders under one finite routing budget."""
-    parent_deadline=oracle.deadline
-    orders=[('p','n'),('n','p')] if pair.get('auxiliary_pairs') else [('p','n')]
-    attempts=[];all_hits=Counter();all_via_hits=Counter();result={}
-    for index,order in enumerate(orders):
+    """Compare bounded connector embeddings and takeoffs, without net swapping."""
+    deadline=oracle.deadline;configs=pair_topologies(pair);attempts=[];hits=Counter();via_hits=Counter();best=None;retained=[];last={}
+    joint_count=0;joint_deadline=time.monotonic();joint_trial_seconds=90.
+    if os.environ.get('PNR_PAIR_JOINT_TOPOLOGIES','0')=='1':
+        from pnr.pair_joint import joint_topologies
+        joint_trial_seconds=float(os.environ.get('PNR_PAIR_JOINT_TRIAL_SECONDS','90'))
+        if not math.isfinite(joint_trial_seconds) or joint_trial_seconds<=0:raise ValueError('invalid joint topology trial seconds')
+        positions={f.GetReference()+'.'+pad.GetNumber():xy(pad.GetPosition()) for f in b.GetFootprints() for pad in f.Pads()}
+        joint=joint_topologies(pair,positions,max_trials=int(os.environ.get('PNR_PAIR_JOINT_MAX_TRIALS','6')),budget_scope=os.environ.get('PNR_PAIR_AUXILIARY_SCOPE','separate'))
+        joint_count=len(joint);configs=joint+configs
+        now=time.monotonic();remaining=max(0.,deadline-now)
+        # Keep a bounded fallback reserve. Do not divide one viable 60-second
+        # joint search into eighteen subsecond trials merely to exhaust seeds.
+        joint_deadline=now+(remaining-min(30.,remaining/3) if math.isfinite(remaining) else joint_count*joint_trial_seconds)
+    for index,config in enumerate(configs):
         now=time.monotonic()
-        if now>=oracle.deadline:break
-        trial=oracle.fork(now+(oracle.deadline-now)/(len(orders)-index))
-        try:result=_pair_plan_order(b,pair,rules,trial,bounds,pitch,order)
+        if now>=deadline:break
+        if index<joint_count:
+            if now>=joint_deadline:
+                attempts.append(dict(config,status='joint_phase_budget',elapsed_seconds=0.));continue
+            trial_deadline=min(deadline,joint_deadline,now+joint_trial_seconds)
+        else:trial_deadline=now+(deadline-now)/(len(configs)-index)
+        trial=oracle.fork(trial_deadline);retained.append(trial)
+        order=config['auxiliary_order']
+        try:
+            if config['bridge_hand']:
+                result=_pair_plan_order(b,pair,rules,trial,bounds,pitch,order,config)
+            else:result=_pair_plan_order(b,pair,rules,trial,bounds,pitch,order)
         except TimeoutError:result=dict(status='time_budget',mode='pair')
-        attempts.append(dict(auxiliary_order=list(order),status=result['status']))
-        all_hits.update(trial.hits);all_via_hits.update(trial.via_hits)
+        last=result;hits.update(trial.hits);via_hits.update(trial.via_hits)
+        attempt=dict(config,status=result['status'],elapsed_seconds=time.monotonic()-now);attempts.append(attempt)
+        for key in ('failed_stage','endpoint_metrics','connector_endpoint_metrics'):
+            if key in result:attempt[key]=result[key]
         if result['status']=='routed':
-            oracle.__dict__.update(trial.__dict__)
-            oracle.deadline=parent_deadline
-            oracle.hits=all_hits;oracle.via_hits=all_via_hits
-            result['order_attempts']=attempts
-            return result
-    oracle.hits.update(all_hits);oracle.via_hits.update(all_via_hits)
-    return dict(result or dict(status='time_budget',mode='pair'),order_attempts=attempts)
+            score=(len(result.get('pair_vias',[])),sum(math.dist(a,z) for _,_,a,z,_ in result.get('pair_tracks',[])))
+            attempt['route_score']=score
+            if best is None or score<best[0]:best=(score,result,trial)
+    if best:
+        _,result,trial=best;oracle.__dict__.update(trial.__dict__);oracle.deadline=deadline;oracle.hits=hits;oracle.via_hits=via_hits
+        return dict(result,order_attempts=attempts)
+    oracle.hits.update(hits);oracle.via_hits.update(via_hits)
+    return dict(last or dict(status='time_budget',mode='pair'),order_attempts=attempts)
 
 
 
@@ -619,11 +671,8 @@ def main():
         for net,pt in plan.get('pair_vias',[]):
             v=k.PCB_VIA(b);v.SetNetCode(b.FindNet(net).GetNetCode());v.SetPosition(vec(pt));v.SetFrontWidth(round(plan['via_diameter_mm']*1e6));v.SetDrill(round(plan['via_drill_mm']*1e6));v.SetViaType(k.VIATYPE_THROUGH);v.SetLayerPair(k.F_Cu,k.B_Cu);b.Add(v);keep.append(v)
         b.BuildConnectivity()
-        from pnr.pad_entry import repair
-        proposed=snapshot(b,rules)
-        new_bad={identity for identity,good in proposed.items() if not good and
-                 (identity not in entries or entries[identity])}
-        plan['entry_repairs']=repair(b,rules,only_keys=new_bad)
+        from pnr.pad_entry import repair_changed_entries
+        plan.update(repair_changed_entries(b,rules,entries))
         b.BuildConnectivity();k.ZONE_FILLER(b).Fill(b.Zones());b.BuildConnectivity()
         if plan.get('mode')=='pair':
             pair=policy['pair'];reference=pair_reference_validator(b,pair,rules)
@@ -680,11 +729,11 @@ def pair_bridge_ports(pair,terminals,rules,oracle,bounds,index):
                     sites={net:tuple(center[i]+side*axis[i]*spacing/2 for i in (0,1)) for net,side in ((p,1),(n,-1))}
                     if any(not(bounds[0]<=v[0]<=bounds[2] and bounds[1]<=v[1]<=bounds[3]) for v in sites.values()):continue
                     if not all(oracle.via(net,point,diameter,drill) for net,point in sites.items()):continue
-                    choices={net:[path for path in elbows(terminals[net][index],sites[net]) if length(path)<cap-.15 and all(oracle.clear(net,k.F_Cu,x,y,width) for x,y in zip(path,path[1:]))] for net in (p,n)}
+                    choices={net:[path for path in elbows(terminals[net][index],sites[net]) if length(path)<cap-.15 and all(oracle.clear(net,k.F_Cu,x,y,width,pair=pair) for x,y in zip(path,path[1:]))] for net in (p,n)}
                     for pp in choices[p]:
                         for nn in choices[n]:
                             paths={p:pp,n:nn}
-                            if not geometry_ok(paths,width,gap,lambda net,x,y,w:oracle.clear(net,k.F_Cu,x,y,w)):continue
+                            if not geometry_ok(paths,width,gap,lambda net,x,y,w:oracle.clear(net,k.F_Cu,x,y,w,pair=pair)):continue
                             if any(segment_distance(sites[other],sites[other],x,y)<(diameter+width)/2+clearance+.001 for net,other in ((p,n),(n,p)) for x,y in zip(paths[net],paths[net][1:])):continue
                             found.append(dict(shift_mm=shift,sites=sites,paths=paths,lengths={net:length(path) for net,path in paths.items()}));break
                         else:continue
@@ -744,7 +793,7 @@ def reference_failures(board,rules):
     return failures
 
 
-def pair_layer_bridge(b,pair,terminals,rules,oracle,bounds,pitch,offsets,reuse_source=None,reference_validator=None,prior_reference=(),prior_vias=()):
+def pair_layer_bridge(b,pair,terminals,rules,oracle,bounds,pitch,offsets,reuse_source=None,reference_validator=None,prior_reference=(),prior_vias=(),solution_index=0,max_expansions=15000,timing_target_mm=0):
     """Matched through-via pairs and a checked B.Cu trunk, no single-leg jump.
 
     The combined surface and bridge-plane fanout obeys the original planar
@@ -762,33 +811,63 @@ def pair_layer_bridge(b,pair,terminals,rules,oracle,bounds,pitch,offsets,reuse_s
     ports=lambda index:pair_bridge_ports(pair,terminals,rules,oracle,bounds,index)
     starts,ends=([reuse_source] if reuse_source else ports(0)),ports(1)
     candidates=sorted(((a,z) for a in starts for z in ends),key=lambda az:(abs(az[0].get('shift_mm',0))+abs(az[1].get('shift_mm',0)),sum(az[0]['lengths'].values())+sum(az[1]['lengths'].values())+sum(math.dist(az[0]['sites'][net],az[1]['sites'][net]) for net in (p,n))))
-    bridge_failures=Counter();examples=[]
+    bridge_failures=Counter();examples=[];successful=0
     for a,z in candidates[:64]:
         vias=[(net,group['sites'][net]) for group in (a,z) for net in (p,n)]
         if any(math.dist(v,q)+1e-6<(via_spacing if net!=other else drill+rules.get('fab',{}).get('hole_clearance_mm',.2)+.002) for i,(net,v) in enumerate(vias) for other,q in vias[i+1:]):continue
         def clear(net,x,y,w):
-            return oracle.clear(net,k.B_Cu,x,y,w) and all(other==net or segment_distance(x,y,pt,pt)>=(diameter+w)/2+clearance+.001 for other,pt in vias)
+            return oracle.clear(net,k.B_Cu,x,y,w,pair=pair) and all(other==net or segment_distance(x,y,pt,pt)>=(diameter+w)/2+clearance+.001 for other,pt in vias)
         candidate_reference=pair_reference_validator(b,pair,rules,list(prior_vias)+vias,base_center=reference_validator.center) if reference_validator else None
         if candidate_reference and any(not candidate_reference(paths,0) for paths in prior_reference):continue
-        remaining=cap-max(max(a['lengths'].values()),max(z['lengths'].values()))
+        remaining=cap-max(max(a['lengths'].values())+a.get('entry_budget_mm',0),max(z['lengths'].values()))
+        if remaining<=0:continue
         totals={net:offsets.get(net,0)+a['lengths'][net]+z['lengths'][net]+(1 if a.get('reuse') else 2)*rules['electrical_fab']['board_thickness_mm'] for net in (p,n)}
-        rr=solve_pair(p,n,{net:(a['sites'][net],z['sites'][net]) for net in (p,n)},bounds,clear,lambda x,y,w:oracle.clear(p,k.B_Cu,x,y,w,ignore_nets=(p,n)) and (candidate_reference is None or candidate_reference.center(tuple(x),tuple(y),w+gap)),width,gap,pair['skew_mm'],pitch=pitch,max_expansions=15000,max_uncoupled=remaining,max_tuning_length=cap,offsets=totals,accept_paths=(lambda paths:candidate_reference(paths,remaining)) if candidate_reference else None)
+        tuning_offsets=dict(totals);tuning_offsets[n]+=timing_target_mm
+        rr=solve_pair(p,n,{net:(a['sites'][net],z['sites'][net]) for net in (p,n)},bounds,clear,lambda x,y,w:oracle.clear(p,k.B_Cu,x,y,w,ignore_nets=(p,n)) and (candidate_reference is None or candidate_reference.center(tuple(x),tuple(y),w+gap)),width,gap,pair['skew_mm'],pitch=pitch,max_expansions=max_expansions,max_uncoupled=remaining,max_tuning_length=cap,offsets=tuning_offsets,accept_paths=(lambda paths:candidate_reference(paths,remaining)) if candidate_reference else None)
         if rr['status']!='routed':
             bridge_failures.update(rr.get('failures',{}))
             if len(examples)<8:examples.append(dict(source=a,target=z,remaining=remaining,result=rr))
             continue
+        if successful<solution_index:
+            successful+=1
+            continue
+        rr['lengths'][n]-=timing_target_mm
+        rr['intermediate_timing_target_mm']=timing_target_mm
         tracks=[]
         for net in (p,n):
             for group in (a,z):tracks.extend((net,k.F_Cu,x,y,width) for x,y in zip(group['paths'][net],group['paths'][net][1:]))
             tracks.extend((net,k.B_Cu,x,y,width) for x,y in zip(rr['paths'][net],rr['paths'][net][1:]))
         from pnr.route.detail.coupled import trim_path
         rr['reference_paths']={net:trim_path(path,remaining,remaining) for net,path in rr['paths'].items()}
-        rr.update(pair_tracks=tracks,pair_vias=[(net,group['sites'][net]) for group in (a,z) if not group.get('reuse') for net in (p,n)],bridge_target=z,layer='B.Cu',via_diameter_mm=diameter,via_drill_mm=drill,fanout_lengths=[a['lengths'],z['lengths']])
+        rr.update(pair_tracks=tracks,pair_vias=[(net,group['sites'][net]) for group in (a,z) if not group.get('reuse') for net in (p,n)],bridge_target=z,selected_port_rank=successful,layer='B.Cu',via_diameter_mm=diameter,via_drill_mm=drill,fanout_lengths=[a['lengths'],z['lengths']])
         return rr
     return dict(status='pair_no_matched_layer_bridge',source_ports=len(starts),target_ports=len(ends),attempts=min(len(candidates),64),failures=dict(bridge_failures),examples=examples)
 
-def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order):
+def duplicate_endpoint_metrics(pair,bylabel,tracks,vias,thickness):
+    """Measure every declared connector contact, including actual branch joins."""
     import pcbnew as k
+    origins=[pair['terminal_chain'][0]]
+    origins.extend(group['source'] for group in pair.get('auxiliary_pairs',[]))
+    origins.extend(group['target'] for group in pair.get('auxiliary_pairs',[]))
+    result={}
+    for origin in origins:
+        name=origin['p']+'/'+origin['n']
+        if name in result:continue
+        values={}
+        for net,key in ((pair['p'],'p'),(pair['n'],'n')):
+            start=bylabel[origin[key]];end=bylabel[pair['terminal_chain'][-1][key]]
+            values[net]=path_metrics([(la,a,z) for nn,la,a,z,w in tracks if nn==net],[(pt,[k.F_Cu,k.B_Cu]) for nn,pt in vias if nn==net],(xy(start.GetPosition()),k.F_Cu),(xy(end.GetPosition()),k.F_Cu),layer_heights={k.F_Cu:0,k.B_Cu:thickness})
+        result[name]=values
+    return result
+
+
+def connector_origins_qualified(pair,metrics):
+    return bool(metrics) and all(all(m.get('valid',False) for m in values.values()) and abs(values[pair['p']]['length_mm']-values[pair['n']]['length_mm'])<=pair['skew_mm']+1e-6 for values in metrics.values())
+
+
+def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order,topology=None):
+    import pcbnew as k
+    topology=topology or {};hand=topology.get('bridge_hand',0);takeoff=topology.get('takeoff','auxiliary_source')
     p,n=pair['p'],pair['n'];pads=[pad for f in b.GetFootprints() for pad in f.Pads() if pad.GetNetname() in (p,n)]
     groups=defaultdict(lambda:defaultdict(list))
     for pad in pads:groups[pad.GetParentFootprint().GetReference()][pad.GetNetname()].append(pad)
@@ -806,21 +885,35 @@ def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order):
     # second independently routed long pair. Each branch still needs a native
     # path and an endpoint timing check; crossovers may use checked vias.
     from pnr.route.detail.layered import route_layers
-    auxiliary=[]
+    auxiliary=[];branch_paths=[];joint_source_port=None
     diameter,drill=pair_via_geometry(rules)
     bylabel={pad.GetParentFootprint().GetReference()+'.'+pad.GetNumber():pad for pad in pads}
     for group in pair.get('auxiliary_pairs',[]):
-        lengths={}
+        lengths={};group_paths={}
         for key in auxiliary_order:
             net=pair[key]
             first,last=bylabel[group['source'][key]],bylabel[group['target'][key]]
             a,z=xy(first.GetPosition()),xy(last.GetPosition())
             region=[min(a[0],z[0])-2,min(a[1],z[1])-2,max(a[0],z[0])+2,max(a[1],z[1])+2]
-            rr=route_layers([a],[z],region,lambda i,a,z:oracle.clear(net,(k.F_Cu,k.B_Cu)[i],a,z,pair['width_mm']),lambda pt:oracle.via(net,pt,diameter,drill),pitch=.1,layers=2,max_expansions=5000,max_vias=2,deadline=oracle.deadline)
+            # Mirrored embeddings constrain the short duplicate-contact bridge
+            # to either side of its own chord. This is rigid-transform invariant
+            # and keeps literal net/pad assignments; it never swaps polarity.
+            side=bridge_half_plane(a,z,hand)
+            clear_branch=lambda i,x,y:side(x) and side(y) and oracle.clear(net,(k.F_Cu,k.B_Cu)[i],x,y,pair['width_mm'],pair=pair)
+            if topology.get('bridge_depth_mm'):
+                from types import SimpleNamespace
+                dx,dy=z[0]-a[0],z[1]-a[1];span=math.hypot(dx,dy);depth=topology['bridge_depth_mm']
+                mid=((a[0]+z[0])/2-hand*dy/span*depth,(a[1]+z[1])/2+hand*dx/span*depth)
+                left=route_layers([a],[mid],region,clear_branch,lambda pt:False,pitch=.05,layers=2,max_expansions=5000,max_vias=0,deadline=oracle.deadline)
+                right=route_layers([mid],[z],region,clear_branch,lambda pt:False,pitch=.05,layers=2,max_expansions=5000,max_vias=0,deadline=oracle.deadline)
+                rr=SimpleNamespace(status='routed' if left.status==right.status=='routed' else 'no_channel',path=left.path[:-1]+right.path)
+            else:
+                rr=route_layers([a],[z],region,clear_branch,lambda pt:side(pt) and oracle.via(net,pt,diameter,drill),pitch=.1,layers=2,max_expansions=5000,max_vias=2,deadline=oracle.deadline)
+
             if rr.status!='routed':return dict(status='pair_auxiliary_'+rr.status)
             total=sum(math.dist(a[:2],z[:2]) if a[2]==z[2] else rules['electrical_fab']['board_thickness_mm'] for a,z in zip(rr.path,rr.path[1:]))
             if total>group['max_length_mm']:return dict(status='pair_auxiliary_length_limit',length_mm=total)
-            lengths[net]=total
+            lengths[net]=total;group_paths[net]=rr.path
             for a,z in zip(rr.path,rr.path[1:]):
                 if a[2]==z[2]:
                     layer=(k.F_Cu,k.B_Cu)[a[2]]
@@ -829,15 +922,24 @@ def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order):
                 else:
                     vias.append((net,a[:2]));oracle.reserve_via(net,a[:2],diameter,drill)
         if abs(lengths[p]-lengths[n])>pair['skew_mm']:return dict(status='pair_auxiliary_skew',lengths=lengths)
-        auxiliary.append(lengths)
+        auxiliary.append(lengths);branch_paths.append(group_paths)
     routing_endpoints=[dict(t) for t in endpoints]
     for group,branch_lengths in zip(pair.get('auxiliary_pairs',[]),auxiliary):
         if group['target']==routing_endpoints[0]:
-            routing_endpoints[0]=dict(group['source'])
-            accumulated={net:accumulated[net]+branch_lengths[net] for net in (p,n)}
+            keys={'auxiliary_source':('p','n'),'declared_p_source_n':('n',),'source_p_declared_n':('p',)}.get(takeoff,())
+            for key in keys:
+                routing_endpoints[0][key]=group['source'][key];accumulated[pair[key]]+=branch_lengths[pair[key]]
+    if takeoff=='bridge_join_via':
+        from pnr.pair_joint import branch_join_port
+        groups=list(zip(pair.get('auxiliary_pairs',[]),branch_paths))
+        found=next((paths for group,paths in groups if group['target']==endpoints[0]),None)
+        if found is None:return dict(status='pair_joint_missing_connector_group')
+        joint=branch_join_port(pair,found,oracle,rules,topology.get('join_fraction',.5),budget_scope=topology.get('auxiliary_budget_scope','combined'))
+        if joint['status']!='routed':return joint
+        joint_source_port=joint['port'];accumulated=joint['declared_offsets']
     for stage,(first,last) in enumerate(zip(routing_endpoints,routing_endpoints[1:])):
         if stage:
-            actual={}
+            actual={} 
             for net,key in ((p,'p'),(n,'n')):
                 origin,finish=bylabel[endpoints[0][key]],bylabel[first[key]]
                 metric=path_metrics([(la,a,z) for nn,la,a,z,w in tracks if nn==net],[(pt,[k.F_Cu,k.B_Cu]) for nn,pt in vias if nn==net],(xy(origin.GetPosition()),k.F_Cu),(xy(finish.GetPosition()),k.F_Cu),layer_heights={k.F_Cu:0,k.B_Cu:rules['electrical_fab']['board_thickness_mm']})
@@ -854,20 +956,20 @@ def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order):
             a,z=find(first[key]),find(last[key])
             if not a.IsOnLayer(la) or not z.IsOnLayer(la):return dict(status='pair_requires_layer_transition')
             terminals[net]=(xy(a.GetPosition()),xy(z.GetPosition()))
-        def clear(net,a,z,width):return oracle.clear(net,la,a,z,width)
+        def clear(net,a,z,width):return oracle.clear(net,la,a,z,width,pair=pair)
         def envelope(a,z,width):return oracle.clear(p,la,a,z,width,ignore_nets=(p,n)) and reference_validator.center(tuple(a),tuple(z),width+pair['gap_mm'])
-        result=solve_pair(p,n,terminals,bounds,clear,envelope,pair['width_mm'],pair['gap_mm'],pair['skew_mm'] if stage==len(endpoints)-2 else 1e9,pitch=pitch,max_expansions=30000,max_attempts=128,max_uncoupled=pair.get('max_uncoupled_mm',2),offsets=accumulated,accept_paths=lambda paths:reference_validator(paths,pair.get('max_uncoupled_mm',2)))
+        result=dict(status='joint_source_via_requested') if (stage==0 and joint_source_port) else solve_pair(p,n,terminals,bounds,clear,envelope,pair['width_mm'],pair['gap_mm'],pair['skew_mm'] if stage==len(endpoints)-2 else 1e9,pitch=pitch,max_expansions=30000,max_attempts=128,max_uncoupled=pair.get('max_uncoupled_mm',2),offsets=accumulated,accept_paths=lambda paths:reference_validator(paths,pair.get('max_uncoupled_mm',2)))
         if result['status']!='routed':
             surface_failure=result
-            reuse=None;bridge_offsets=accumulated
+            reuse=(joint_source_port if stage==0 else None);bridge_offsets=accumulated
             if metrics and metrics[-1].get('bridge_target'):
                 old=metrics[-1]['bridge_target']
                 reuse=dict(sites=old['sites'],paths={net:[] for net in (p,n)},lengths={net:0 for net in (p,n)},reuse=True)
                 # The prior surface leg becomes an ESD stub, not a round trip
                 # in the connector-to-receiver timing path.
                 bridge_offsets={net:accumulated[net]-old['lengths'][net]-rules['electrical_fab']['board_thickness_mm'] for net in (p,n)}
-            result=pair_layer_bridge(b,pair,terminals,rules,oracle,bounds,pitch,bridge_offsets,reuse_source=reuse,reference_validator=reference_validator,prior_reference=[m["reference_paths"] for m in metrics],prior_vias=vias)
-            if result['status']!='routed':return dict(result,failed_stage=stage,terminals=terminals,surface_failure=surface_failure)
+            result=pair_layer_bridge(b,pair,terminals,rules,oracle,bounds,pitch,bridge_offsets,reuse_source=reuse,reference_validator=reference_validator,prior_reference=[m["reference_paths"] for m in metrics],prior_vias=vias,solution_index=topology.get("target_port_rank",0) if stage==0 else 0,max_expansions=60000 if stage and takeoff=='bridge_join_via' else 15000,timing_target_mm=topology.get("prefix_timing_target_mm",0) if stage==0 else 0)
+            if result['status']!='routed':return dict(result,failed_stage=stage,terminals=terminals,surface_failure=surface_failure,planned_tracks=tracks,joint_source_port=joint_source_port)
         if result.get('pair_tracks'):
             metrics.append(result);accumulated=dict(result['lengths'])
             tracks.extend(result['pair_tracks']);vias.extend(result['pair_vias'])
@@ -910,7 +1012,9 @@ def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order):
         endpoint_metrics[net]=path_metrics([(la,a,z) for nn,la,a,z,w in tracks if nn==net],[(pt,[k.F_Cu,k.B_Cu]) for nn,pt in vias if nn==net],(xy(first.GetPosition()),k.F_Cu),(xy(last.GetPosition()),k.F_Cu),layer_heights={k.F_Cu:0,k.B_Cu:rules['electrical_fab']['board_thickness_mm']})
     if not all(v.get('valid') for v in endpoint_metrics.values()):return dict(status='pair_endpoint_graph_invalid',endpoint_metrics=endpoint_metrics)
     if abs(endpoint_metrics[p]['length_mm']-endpoint_metrics[n]['length_mm'])>pair['skew_mm']+1e-6:return dict(status='pair_endpoint_skew',endpoint_metrics=endpoint_metrics)
-    return dict(status='routed',pair_tracks=tracks,pair_vias=vias,segments=metrics,auxiliary=auxiliary,endpoint_metrics=endpoint_metrics,mode='pair',via_diameter_mm=diameter,via_drill_mm=drill,impedance_qualified=False)
+    duplicate_metrics=duplicate_endpoint_metrics(pair,bylabel,tracks,vias,rules['electrical_fab']['board_thickness_mm'])
+    if not connector_origins_qualified(pair,duplicate_metrics):return dict(status='pair_duplicate_endpoint_skew',endpoint_metrics=endpoint_metrics,connector_endpoint_metrics=duplicate_metrics)
+    return dict(status='routed',pair_tracks=tracks,pair_vias=vias,segments=metrics,auxiliary=auxiliary,topology=topology,joint_source_port=joint_source_port,endpoint_metrics=endpoint_metrics,connector_endpoint_metrics=duplicate_metrics,mode='pair',via_diameter_mm=diameter,via_drill_mm=drill,impedance_qualified=False)
 
 def screen_pair_placements(board_path,rules,pair,proposals,bounds):
     """Order legal placement proposals by exact paired escape availability.

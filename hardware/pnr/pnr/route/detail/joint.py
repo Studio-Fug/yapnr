@@ -11,6 +11,7 @@ import itertools
 import math
 import time
 from .layered import primitives, route_layers
+from .spatial_conflicts import PrimitiveIndex
 from .regional import RegionalResult, segment_distance
 
 
@@ -78,6 +79,10 @@ def solve_joint_region(
         raise ValueError("unique request names required")
     deadline = time.monotonic() + max_seconds
     attempts = []
+    terminal_index = PrimitiveIndex([(r,('track',la,p,p)) for r in requests
+        for p in r.sources+r.targets for la in terminal_layers(r,p)], conflict)
+    via_terminal_index = PrimitiveIndex([(r,('track',0,p,p)) for r in requests
+        for p in r.sources+r.targets], conflict)
 
     def plan(name, constraints):
         r = byname[name]
@@ -87,6 +92,8 @@ def solve_joint_region(
             if owner == name
         ]
 
+        barrier_index = PrimitiveIndex(barriers, conflict)
+
         def clear(la, a, b):
             if any(
                 not (bounds[0] <= p[0] <= bounds[2] and bounds[1] <= p[1] <= bounds[3])
@@ -94,29 +101,15 @@ def solve_joint_region(
             ):
                 return False
             edge = ("track", la, a, b)
-            for other in requests:
-                if other.net == r.net:
-                    continue
-                for p in other.sources + other.targets:
-                    if la in terminal_layers(other, p) and conflict(
-                        r, edge, other, ("track", la, p, p)
-                    ):
-                        return False
-            return not any(
-                conflict(r, edge, other, copper) for other, copper in barriers
-            ) and static_clear(r, la, a, b)
+            return (not terminal_index.collides(r, edge)
+                    and not barrier_index.collides(r, edge)
+                    and static_clear(r, la, a, b))
 
         def via(p):
-            edge = ("via", None, p, p)
-            for other in requests:
-                if other.net != r.net and any(
-                    conflict(r, edge, other, ("track", 0, q, q))
-                    for q in other.sources + other.targets
-                ):
-                    return False
-            return not any(
-                conflict(r, edge, other, copper) for other, copper in barriers
-            ) and static_via_clear(r, p)
+            edge = ('via', None, p, p)
+            return (not via_terminal_index.collides(r, edge)
+                    and not barrier_index.collides(r, edge)
+                    and static_via_clear(r, p))
 
         started = time.monotonic()
         result = route_layers(
@@ -201,6 +194,8 @@ def solve_joint_region(
                 partial_paths=paths,
             )
         )
+        if on_event is not None:
+            on_event(dict(stage='joint_paths',node=node,conflicts=len(collisions),partial_paths=paths))
         if not collisions:
             return RegionalResult("routed", paths, attempts)
         an, ap, bn, bp = collisions[0]
@@ -222,6 +217,8 @@ def solve_joint_region(
                 # exploring its sibling. Native acceptance still runs afterward.
                 if not conflicts(requests, child_paths):
                     attempts.append(dict(stage="complete", node=node, constraints=child_constraints))
+                    if on_event is not None:
+                        on_event(dict(stage="joint_paths",node=node,conflicts=0,partial_paths=child_paths))
                     return RegionalResult("routed", child_paths, attempts)
                 push(child_paths, child_constraints)
     return RegionalResult(

@@ -43,7 +43,7 @@ def _mark(occ: np.ndarray, g: float, rect: Rect) -> None:
 
 def _place_part(
     occ: np.ndarray, g: float, bw: int, bh: int, target: Tuple[float, float],
-    limits=(), candidate_cost=None,
+    limits=(), candidate_cost=None, forbidden=(),
 ) -> Tuple[int, int]:
     """Find the free ``bh x bw`` block nearest ``target`` (returns top-left r, c)."""
     ny, nx = occ.shape
@@ -65,6 +65,12 @@ def _place_part(
     cy = (rows + bh / 2.0) * g
     for ax, ay, radius in limits:
         free &= (cx - ax) ** 2 + (cy - ay) ** 2 <= radius ** 2 + 1e-9
+    for rr, cc in forbidden:
+        # Branches must explore distinct packings, not thousands of adjacent
+        # quarter-mm variants of the same obstructing pose. This is bounded
+        # sampling, not an exhaustive infeasibility proof.
+        radius=max(.75, min(2., min(bw,bh)*g*.25)) / g
+        free &= (rows-rr)**2+(cols-cc)**2 > radius**2
     if not free.any():
         raise LegalizationError("no free slot inside hard group radius")
     dist2 = (cx - target[0]) ** 2 + (cy - target[1]) ** 2
@@ -91,6 +97,10 @@ def legalize(
     channel_model=None,
     channel_weight: float = 25.0,
     allow_rotation: bool = False,
+    group_edges=(),
+    rotations=None,
+    backtrack_budget=500,
+    mobility=None,
 ) -> BoardGraph:
     """Return a copy of ``graph`` with movable parts snapped to a legal layout.
 
@@ -112,6 +122,7 @@ def legalize(
     """
     inflation = inflation or {}
     group_limits = group_limits or {}
+    rotations = rotations or {}
     g = grid_mm
     nx = int(math.ceil(width / g))
     ny = int(math.ceil(height / g))
@@ -124,6 +135,20 @@ def legalize(
     placed = BoardGraph.from_json(graph.to_json())  # deep copy
     by_ref = {c.ref: c for c in placed.components}
     neighbors = []
+    cost_records = []
+    # Bounds follow the real legalized neighbour positions, in both directions.
+    parents = {}
+    for anchor, member, radius in group_edges:
+        parents.setdefault(member, set()).add(anchor)
+    def limits_for(ref):
+        points = {c.ref:c.pos for c in neighbors}
+        limits = list(group_limits.get(ref, ()))
+        for anchor, member, radius in group_edges:
+            if member == ref and anchor in points:limits.append((*points[anchor], radius))
+            if anchor == ref and member in points:limits.append((*points[member], radius))
+        return limits
+    for ref, angle in rotations.items():
+        if ref in by_ref:by_ref[ref].rot = angle
 
     # Fixed parts: pin at their pose, mark occupied.
     for ref, (px, py) in fixed.items():
@@ -133,7 +158,7 @@ def legalize(
         comp.pos = (px, py)
         neighbors.append(comp)
         if any(math.hypot(px - ax, py - ay) > radius + 1e-9
-               for ax, ay, radius in group_limits.get(ref, ())):
+               for ax, ay, radius in limits_for(ref)):
             raise LegalizationError(f"fixed part {ref} lies outside hard group radius")
         for side, rect in placement_rects(comp):
             _mark(occupancy[side], g, Rect(rect.cx, rect.cy, rect.w + clearance, rect.h + clearance))
@@ -154,24 +179,66 @@ def legalize(
         free = (integ[bh:,bw:]-integ[:-bh,bw:]-integ[bh:,:-bw]+integ[:-bh,:-bw]) == 0
         cx=(np.arange(free.shape[1])[None,:]+bw/2)*g
         cy=(np.arange(free.shape[0])[:,None]+bh/2)*g
-        for ax,ay,radius in group_limits.get(comp.ref,()):
+        for ax,ay,radius in limits_for(comp.ref):
             free &= (cx-ax)**2+(cy-ay)**2 <= radius**2+1e-9
         return int(free.sum())
     def available(comp):
         count=available_pose(comp)
-        if count or not allow_rotation:return count
+        if count or not allow_rotation or comp.ref in rotations:return count
         previous=comp.rot;comp.rot=(previous+90)%360
         count=available_pose(comp);comp.rot=previous
         return count
+    # Finish each electrically constrained connected block before unrelated
+    # footprints consume its local escape/decoupling space. Source radii remain
+    # exact; this changes ordering, never legality or fixed poses.
+    adjacency = {}
+    for anchor, member, _ in group_edges:
+        adjacency.setdefault(anchor, set()).add(member)
+        adjacency.setdefault(member, set()).add(anchor)
+    blocks = {}
+    for ref in sorted(adjacency):
+        if ref in blocks: continue
+        pending = [ref]; members = set()
+        while pending:
+            v = pending.pop()
+            if v in members: continue
+            members.add(v); pending.extend(adjacency.get(v, ()))
+        for v in members: blocks[v] = members
+    active_block = set()
+    stack = []
+    banned = {}
+    backtracks = 0
     while movable:
-        comp = min(movable,key=lambda c:(available(c),-courtyard_rect(c).w*courtyard_rect(c).h,c.ref))
+        placed_refs = {c.ref for c in neighbors}
+        ready = [c for c in movable if parents.get(c.ref, set()) <= placed_refs]
+        # A cycle is still checked symmetrically as its vertices become placed.
+        eligible = ready or movable
+        active = [c for c in eligible if c.ref in active_block]
+        if not active:
+            grouped = [c for c in eligible if c.ref in blocks]
+            if grouped:
+                def block_rank(c):
+                    area = sum(courtyard_rect(by_ref[v]).w * courtyard_rect(by_ref[v]).h
+                               for v in blocks[c.ref] if v not in placed_refs)
+                    return (available(c) / max(area, .01), -area, c.ref)
+                root = min(grouped, key=block_rank)
+                active_block = blocks[root.ref]
+                active = [c for c in eligible if c.ref in active_block]
+        comp = min(active or eligible,key=lambda c:(available(c),-courtyard_rect(c).w*courtyard_rect(c).h,c.ref))
+        state = dict(occupancy={s:a.copy() for s,a in occupancy.items()},
+                     neighbors=list(neighbors), movable=list(movable), active=set(active_block),
+                     poses={c.ref:(c.pos,c.rot) for c in placed.components},
+                     records=list(cost_records), banned={k:set(v) for k,v in banned.items()})
         movable.remove(comp)
         infl = max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
         sides = ('top','bottom') if any(p.through_hole for p in comp.pads) else occupied_sides(comp)
         occ = np.logical_or.reduce([occupancy[side] for side in sides])
         original_rotation=comp.rot
         error=None
-        for rotation in [original_rotation]+([(original_rotation+90)%360] if allow_rotation else []):
+        from .cost_capture import folder as cost_folder, legalizer_decision
+        capturing=cost_folder() is not None
+        captured_fields={}
+        for rotation in [original_rotation]+([(original_rotation+90)%360] if allow_rotation and comp.ref not in rotations else []):
             comp.rot=rotation
             cr=courtyard_rect(comp)
             bw=int(math.ceil((cr.w*infl+clearance)/g))
@@ -179,23 +246,62 @@ def legalize(
             try:
                 candidate_cost = None if channel_model is None else (
                     lambda xs, ys: channel_weight * channel_model.penalty(comp, neighbors, xs, ys))
-                r,c=_place_part(occ,g,bw,bh,comp.pos,group_limits.get(comp.ref,()),candidate_cost=candidate_cost)
+                if capturing:
+                    def candidate_cost(xs, ys):
+                        channel=0. if channel_model is None else channel_model.penalty(comp,neighbors,xs,ys)
+                        if np.asarray(xs).ndim:
+                            xx,yy,ch=np.broadcast_arrays(xs,ys,channel)
+                            captured_fields[rotation]=np.column_stack((xx,yy,(xx-comp.pos[0])**2+(yy-comp.pos[1])**2,ch,np.zeros(xx.shape)))
+                        return channel_weight*channel
+                r,c=_place_part(occ,g,bw,bh,comp.pos,limits_for(comp.ref),candidate_cost=candidate_cost,
+                                forbidden=[(rr,cc) for rot,rr,cc in banned.get(comp.ref,()) if rot==rotation])
                 error=None
                 break
             except LegalizationError as exc:error=exc
+        if error is not None and stack and (group_edges or group_limits) and backtracks < backtrack_budget:
+            previous, chosen_ref, chosen_pose = stack.pop()
+            occupancy = previous['occupancy']; neighbors = previous['neighbors']
+            movable = previous['movable']; active_block = previous['active']
+            for ref,(pos,rot) in previous['poses'].items():by_ref[ref].pos=pos;by_ref[ref].rot=rot
+            cost_records=previous['records'];banned=previous['banned']
+            banned.setdefault(chosen_ref,set()).add(chosen_pose)
+            backtracks += 1
+            continue
         if error is not None:
             comp.rot=original_rotation
             import os, json
             from pathlib import Path
             debug=os.environ.get('PNR_PLACEMENT_DIAGNOSTICS')
             if debug:
-                Path(debug).write_text(json.dumps(dict(failed=comp.ref,remaining=[c.ref for c in movable],placed=[c.ref for c in neighbors],graph=json.loads(placed.to_json()),limits=group_limits,grid_mm=g,keepouts=[vars(k) for k in keepouts]),indent=2))
+                Path(debug).write_text(json.dumps(dict(failed=comp.ref,remaining=[c.ref for c in movable],placed=[c.ref for c in neighbors],graph=json.loads(placed.to_json()),limits=group_limits,grid_mm=g,backtracks=backtracks,keepouts=[vars(k) for k in keepouts]),indent=2))
             raise LegalizationError(f"{comp.ref}: {error}") from error
+        if capturing:
+            target=comp.pos;position=((c+bw/2)*g,(r+bh/2)*g)
+            channel=0. if channel_model is None else float(channel_model.penalty(comp,neighbors,*position))
+            # Keep only the accepted search path. Rejected branches must not
+            # serialize full graphs or become displayed legalization decisions.
+            cost_records.append(dict(ref=comp.ref,target=target,position=position,
+                rotation=comp.rot,neighbors=[n.ref for n in neighbors],fields=captured_fields,
+                chosen=((position[0]-target[0])**2+(position[1]-target[1])**2,channel,0.),
+                poses={q.ref:(q.pos,q.rot) for q in placed.components}))
+        stack.append((state,comp.ref,(comp.rot,r,c)))
+        banned.pop(comp.ref,None)
         for side in sides:
             occupancy[side][r : r + bh, c : c + bw] = True
         comp.pos = ((c + bw / 2.0) * g, (r + bh / 2.0) * g)
         neighbors.append(comp)
 
+    if cost_records:
+        import hashlib,json
+        from pathlib import Path
+        from .cost_capture import save
+        records=[]
+        replay=BoardGraph.from_json(placed.to_json());replay_refs={c.ref:c for c in replay.components}
+        for v in cost_records:
+            for ref,(pos,rot) in v['poses'].items():replay_refs[ref].pos=pos;replay_refs[ref].rot=rot
+            records.append(legalizer_decision(replay,v['ref'],v['target'],v['position'],v['rotation'],
+                [replay_refs[ref] for ref in v['neighbors']],v['fields'],v['chosen'],g,channel_weight))
+        save('legalizer-complete',dict(graph=json.loads(placed.to_json()),decisions=[dict(path=p,sha256=hashlib.sha256(Path(p).read_bytes()).hexdigest()) for p in records],mobility=mobility or {},fixed_refs=sorted(fixed),hard_group_edges=list(group_edges),hard_rotations=rotations,backtracks=backtracks,scope='Actual per-component sequential legalizer decisions; each field retains its own previously occupied neighbors'))
     return placed
 
 

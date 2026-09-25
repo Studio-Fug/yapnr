@@ -120,6 +120,13 @@ def global_place(
             fixed_xy[idx[ref]] = torch.tensor([px, py])
             fixed_angle_idx[idx[ref]] = int(round(fixed_rot.get(ref, 0.0) / 90.0)) % 4
 
+    from .geometry import resolve_hard_rotations
+    rotation_fixed = is_fixed.clone()
+    for ref, angle in resolve_hard_rotations(constraints).items():
+        if ref in idx:
+            rotation_fixed[idx[ref]] = True
+            fixed_angle_idx[idx[ref]] = int(round(angle/90)) % 4
+
     # Init movable positions spread across the interior (seeded, deterministic).
     init = torch.rand(n, 2)
     init[:, 0] = half[:, 0] + init[:, 0] * (width - 2 * half[:, 0])
@@ -158,7 +165,7 @@ def global_place(
             raw[:, 0] = 1.0
         else:
             raw = torch.softmax(rot_logits / temp, dim=1)
-        return torch.where(is_fixed.unsqueeze(1), fixed_onehot, raw)
+        return torch.where(rotation_fixed.unsqueeze(1), fixed_onehot, raw)
 
     # Pins: component index + the four rotated offsets (rot 0/90/180/270).
     pin_comp: List[int] = []
@@ -334,6 +341,9 @@ def global_place(
             )
             loss = loss + w_keep * ((kox * koy) * movable_f.unsqueeze(1)).sum()
 
+        if step == iters-1 and os.environ.get('PNR_COST_CAPTURE_DIR'):
+            from .cost_capture import record_global_loss
+            record_global_loss(graph,constraints,pos.detach().tolist(),p.detach().tolist(),exp_off.detach().tolist(),exp_half.detach().tolist(),float(loss.detach()),dict(gamma=gamma,spread=spread,w_spread=w_spread,w_bound=w_bound,w_keep=w_keep,w_plane=w_plane,w_plane_sep=w_plane_sep),inflation,step)
         loss.backward()
         opt.step()
 

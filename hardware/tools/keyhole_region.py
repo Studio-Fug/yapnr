@@ -31,6 +31,7 @@ from pnr.route.detail.regional import (
 from pnr.route.detail.keyhole import acceptable
 from pnr.route.detail.layered import solve_layered_region
 from pnr.route.detail.joint import solve_joint_region
+from pnr.route.detail.portal_joint import solve_portal_region
 
 
 print("IMPLEMENTATION "+json.dumps({name:dict(path=sys.modules[name].__file__,sha256=hashlib.sha256(Path(sys.modules[name].__file__).read_bytes()).hexdigest()) for name in ("pnr.route.detail.keyhole","pnr.route.detail.layered","pnr.route.detail.joint")}),flush=True)
@@ -113,7 +114,10 @@ def main():
     )
     ap.add_argument("--rules", type=Path, help="Source-resolved routing policy for generic native loop")
     ap.add_argument("--annotation-source", action="append", default=[], type=Path)
+    ap.add_argument("--portal-joint", action="store_true", help="coordinate surface escapes before joint trunk routing; requires --joint --layers")
     args = ap.parse_args()
+    if args.portal_joint and not (args.joint and args.layers):
+        ap.error("portal joint requires layered joint routing")
     if args.joint and not args.layers:
         ap.error("joint search requires --layers")
     if not 0 < args.max_seconds < math.inf:
@@ -668,6 +672,7 @@ def main():
         relocate_vias=args.relocate_vias,
         source_via_windows=via_windows,
         joint=args.joint,
+        portal_joint=args.portal_joint,
         preserve_copper=args.preserve_copper,
         redundant_restorations=redundant_restorations,
         ground_leaf=args.ground_leaf,
@@ -698,6 +703,9 @@ def main():
         len(selected),
         flush=True,
     )
+    from pnr.live import emit as live_emit
+    if args.portal_joint:
+        live_emit('candidate_start',board=baseline,data=dict(phase='coordinated-portals',provisional=True))
     if args.layers:
 
         def record_search_event(event):
@@ -705,8 +713,17 @@ def main():
             with (args.out_dir / "search-events.jsonl").open("a") as stream:
                 stream.write(line + "\n")
             print(line, flush=True)
+            if args.portal_joint:
+                live_emit('search_progress',data=dict(phase='coordinated-portals',provisional=True,
+                    **{k:v for k,v in event.items() if k not in ('partial_paths','ports','choices')}))
+                for request_name,path in event.get('partial_paths',{}).items():
+                    request=next(r for r in requests if r.name==request_name)
+                    tracks=[(request.net,b.GetLayerName(route_layers[pa[2]]),pa[:2],pb[:2],request.width)
+                            for pa,pb in zip(path,path[1:]) if pa[2]==pb[2]]
+                    live_emit('signal_net_added',data=dict(net=request_name,phase='coordinated-portals',provisional=True,tracks=tracks))
 
-        solver = solve_joint_region if args.joint else solve_layered_region
+
+        solver = solve_portal_region if args.portal_joint else solve_joint_region if args.joint else solve_layered_region
         result = solver(
             requests,
             args.bounds,
@@ -792,6 +809,30 @@ def main():
             return run_drc(args.kicad_cli,path,path.with_suffix('.drc.json'))
 
         before, after = drc(baseline), drc(output)
+        # A successful rip-up/restoration can strand an old signal via.
+        # Only newly native-dangling vias are proposed, under source protection,
+        # exact layer contacts and a fresh complete transaction quality gate.
+        if (args.rules is not None and preserved and entry_ok
+                and not acceptable(before, after)
+                and len(after["unconnected_items"]) < len(before["unconnected_items"])
+                and any(v["type"] == "via_dangling" for v in after["violations"])):
+            cleanup = args.out_dir / "transaction-cleanup"
+            cleanup_cmd = [sys.executable, "-m", "pnr.transaction_cleanup", str(output),
+                "--baseline", str(baseline), "--rules", str(args.rules),
+                "--out-dir", str(cleanup), "--kicad-cli", args.kicad_cli,
+                "--kicad-python", sys.executable]
+            for net_name in args.net: cleanup_cmd += ["--net", net_name]
+            for source_file in args.annotation_source:
+                cleanup_cmd += ["--annotation-source", str(source_file)]
+            with (args.out_dir / "transaction-cleanup.log").open("w") as log:
+                cleanup_process = subprocess.run(cleanup_cmd, stdout=log, stderr=subprocess.STDOUT)
+            report["cleanup_returncode"] = cleanup_process.returncode
+            if cleanup_process.returncode == 0 and (cleanup / "result.json").exists():
+                cleanup_report = json.loads((cleanup / "result.json").read_text())
+                report["transaction_cleanup"] = cleanup_report
+                if cleanup_report.get("accepted") and cleanup_report.get("inputs_unchanged"):
+                    shutil.copyfile(cleanup / "candidate.kicad_pcb", output)
+                    after = drc(output)
         report.update(
             accepted=preserved and entry_ok and acceptable(before, after),
             preserved_pad_connectivity=preserved,

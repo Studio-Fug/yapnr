@@ -18,6 +18,29 @@ import time
 from pnr.placement_trials import diverse_pair_poses
 
 
+def open_net_coverage(report, item_nets):
+    """Count exact current native opens without reusing initial coverage.
+
+    Pad/item UUIDs are authoritative while present. Newly routed track UUIDs may
+    not exist in the last inventory; match their native description only against
+    known net names. Conflicting or unresolved identities retain an unknown
+    bucket so counts can never silently disappear.
+    """
+    known = {name for name in item_nets.values() if name}
+    coverage = Counter()
+    for finding in report['unconnected_items']:
+        names = set()
+        for item in finding.get('items', []):
+            name = item_nets.get(item.get('uuid'))
+            if name:
+                names.add(name)
+            else:
+                description = item.get('description', '')
+                names.update(n for n in known if '[' + n + ']' in description)
+        coverage[next(iter(names)) if len(names) == 1 else 'unknown'] += 1
+    return coverage
+
+
 def read(p):
     return json.loads(Path(p).read_text())
 
@@ -446,6 +469,15 @@ def terminal_repair_nets(worker,board,route_dir,target):
     return worker('terminal-blockers',board,folder/'probe',['--spec',str(spec)])['reopen']
 
 
+def electrical_search_bounds(mode, attempt, local, board, enabled=False):
+    # Local retries can exclude a legal full-current path around dense packages.
+    # Widen only later power attempts; the oracle still enforces exact edges,
+    # copper/current constraints, pad entries and whole-board native acceptance.
+    if mode == 'pair' or (enabled and mode == 'power' and attempt >= 3):
+        return list(board)
+    return list(local)
+
+
 def route_search_pitch(attempt):
     """Spend initial retries on broad channels before the finest pad grid.
 
@@ -522,6 +554,33 @@ def main(argv=None):
         if a.phase_dir:
             from pnr.phase_capture import capture
             capture(a.phase_dir,name,board,a.rules,a.kicad_cli,metadata=metadata)
+    def bank_consolidation(board, label):
+        # Source-current bank geometry only; independent workers preserve pad
+        # partitions, qualified entries, reference and whole-current budgets.
+        # Do not multiply this pass in the recursive electrical subphases.
+        if os.environ.get('PNR_POWER_BANK_REUSE')!='1' or a.only_mode or not a.electrical_fab:
+            return board
+        folder=a.out_dir/label;folder.mkdir()
+        output=folder/'candidate.kicad_pcb'
+        previous=drc(board)
+        worker('inspect',board,folder/'reference')
+        cmd=[a.kicad_python,'-m','pnr.power_bank_stage',str(board),
+             '--rules',str(a.rules.resolve()),'--out',str(output),
+             '--report',str(folder/'result.json'),'--work-dir',str(folder/'trials'),
+             '--kicad-python',a.kicad_python,'--kicad-cli',a.kicad_cli,'--max-trials','4']
+        event=dict(stage='power_bank_consolidation',phase=label,accepted=False,folder=str(folder))
+        try:
+            invoke(cmd,folder/'run.log');summary=read(folder/'result.json')
+            checks=worker('check',output,folder/'checks',['--spec',str(folder/'reference/inspect.json')])
+            after=drc(output)
+            event.update(summary=summary,accepted=bool(summary['accepted_transactions'] and gate(previous,after,checks,strict=False)))
+        except subprocess.CalledProcessError as error:
+            event.update(status='worker_error',returncode=error.returncode)
+        events.append(event)
+        result=output if event['accepted'] else board
+        phase(label,result,event)
+        emit('route_result',board=result,data=dict(**event,opens=len(drc(result)['unconnected_items'])))
+        return result
     emit('phase_start',board=current,data=dict(phase='usb-pairs' if a.early_pairs else (a.only_mode or 'native-refinement'),budget_seconds=a.seconds))
     if a.early_pairs:
         if not a.electrical_fab:raise ValueError('early pairs require source electrical policy')
@@ -552,12 +611,14 @@ def main(argv=None):
             phase(f'{phase_index:02d}-{name}',powered,read(a.out_dir/name/'progress.json'))
         current=route_signals(powered,a.rules,a.constraints,a.out_dir/'staged-signal',a.kicad_python,a.kicad_cli)
         phase('06-signals',current)
+    current=bank_consolidation(current,'06b-power-bank-consolidation')
     started=phase_clock.begin_refinement()
     before=drc(current);initial=before
     inv=worker('inspect',current,a.out_dir/'initial');original=inv['footprint_poses']
-    coverage=Counter(inv['item_nets'].get(u['items'][0]['uuid'],'unknown') for u in initial['unconnected_items'])
     def record(reason='running'):
+        coverage=open_net_coverage(before,inv['item_nets'])
         save(a.out_dir/'progress.json',dict(source=str(a.board.resolve()),source_sha256=hashlib.sha256(a.board.read_bytes()).hexdigest(),best=str(current),best_sha256=hashlib.sha256(current.read_bytes()).hexdigest(),initial_opens=len(initial['unconnected_items']),opens=len(before['unconnected_items']),rounds=rounds,events=events,component_scores=history,termination=reason,elapsed_seconds=round(time.monotonic()-started,2),prerequisite_seconds=round(phase_clock.prerequisite_seconds,2),native_open_nets=dict(coverage),protected_open_nets={n:c for n,c in coverage.items() if n in inv['excluded']},electrical_modes_enabled=bool(a.electrical_fab),budgets=dict(cycles=a.cycles,route_attempts=a.route_attempts,placement_attempts=a.placement_attempts,seconds=a.seconds)))
+    portal_trials=set()
     def route_sweep(source,inventory,folder,targets=None):
         nonlocal seq
         trial_current=source;report=drc(source); failures=[];accepted_count=0
@@ -645,10 +706,9 @@ def main(argv=None):
             for s in a.annotation_source:cmd+=['--annotation-source',str(s.resolve())]
             if a.electrical_fab and target.get('mode','signal')!='signal':
                 cmd=[a.kicad_python,'-m','pnr.native_electrical',str(trial_current),'--rules',str(a.rules.resolve()),'--out-dir',str(rd),'--net',target['net'],'--source-pad',target['source'],'--target-pad',target['target'],'--bounds',*map(str,box),'--seconds',str(search_seconds),'--pitch',str(search_pitch),'--kicad-cli',a.kicad_cli]
-                if target.get('mode')=='pair':
-                    # A coupled pair transaction includes its complete source
-                    # terminal chain, not only the nearest missing-pad rectangle.
-                    index=cmd.index('--bounds');cmd[index+1:index+5]=list(map(str,bounds))
+                electrical_box=electrical_search_bounds(target.get('mode'),attempt,box,bounds,
+                    enabled=os.environ.get('PNR_WIDE_POWER_SEARCH')=='1')
+                index=cmd.index('--bounds');cmd[index+1:index+5]=list(map(str,electrical_box))
                 reopened=[]
             for end in ('source','target'):
                 if target.get(end+'_uuid'):
@@ -764,6 +824,21 @@ def main(argv=None):
                     events.append(dict(stage='power_detour_repair',target=target,focus=focus,
                         status=repair_outcome['status'],accepted=repair_outcome.get('accepted',False),folder=str(trial),budget=power_detour_budget.summary()))
                     if repair_outcome.get('accepted'):rd=trial;outcome=repair_outcome;break
+            if (os.environ.get('PNR_PORTAL_REPAIR')=='1' and not placement_trial
+                    and target.get('mode','signal')=='signal' and not outcome.get('accepted')
+                    and len(portal_trials)<3):
+                from pnr.portal_retry import retry_command
+                portal_key=route_job_key(target)
+                remaining=a.seconds-(time.monotonic()-started)
+                trial=folder/f'portal-repair-{seq:03d}'
+                retry=retry_command(cmd,trial,remaining)
+                if portal_key not in portal_trials and retry:
+                    portal_trials.add(portal_key)
+                    try:invoke(retry,trial.with_suffix('.log'));portal_outcome=read(trial/'result.json')
+                    except subprocess.CalledProcessError:portal_outcome=dict(status='worker_error',accepted=False)
+                    events.append(dict(stage='portal_repair',target=target,status=portal_outcome['status'],
+                        accepted=portal_outcome.get('accepted',False),folder=str(trial),command=retry))
+                    if portal_outcome.get('accepted'):rd=trial;outcome=portal_outcome
             if not placement_trial and not terminal_repair and target.get('mode','signal')=='signal':
                 hint=progress_budget_hint(outcome,search_seconds,a.search_seconds)
                 if hint:job_budget_hints[route_job_key(target)]=hint
@@ -862,6 +937,7 @@ def main(argv=None):
         accepted=gate(before,after,checks,strict=False)
         events.append(dict(stage='coalesce_and_graph',accepted=accepted,folder=str(cleanup)))
         if accepted:current,before=out,after
+    current=bank_consolidation(current,'08b-power-bank-consolidation')
     result=a.out_dir/'best'/'candidate.kicad_pcb';copy_board(current,result);current=result;before=drc(current,final=True);record(reason)
     print(json.dumps(dict(best=str(current),opens=len(before['unconnected_items']),cycles=len(rounds),termination=reason)))
     phase('07-native-refinement',result,read(a.out_dir/'progress.json'))

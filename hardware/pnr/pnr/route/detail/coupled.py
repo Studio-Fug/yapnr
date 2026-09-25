@@ -41,6 +41,34 @@ def simplify(path):
         out.append(point)
     return out
 
+def relaxed_centerlines(path,clear,pitch):
+    """Remove grid hooks and bevel sharp corners under the same exact envelope.
+
+    The callback retains endpoint heading/reference constraints. Final offset
+    traces, fanouts and tuning are independently revalidated by solve_pair.
+    """
+    reduced=list(path);changed=False
+    i=0
+    while i<len(reduced)-2:
+        for j in range(len(reduced)-1,i+1,-1):
+            if j>i+1 and clear(reduced[i],reduced[j]):
+                reduced=reduced[:i+1]+reduced[j:];changed=True;break
+        i+=1
+    output=[reduced] if changed else []
+    for distance in (pitch,pitch*1.5,pitch*2,pitch*3):
+        points=[reduced[0]]
+        for index,point in enumerate(reduced[1:-1],1):
+            previous,following=reduced[index-1],reduced[index+1]
+            left,right=math.dist(previous,point),math.dist(point,following)
+            cut=min(distance,left/3,right/3)
+            if cut<1e-9:continue
+            points.append(tuple(point[j]+(previous[j]-point[j])*cut/left for j in (0,1)))
+            points.append(tuple(point[j]+(following[j]-point[j])*cut/right for j in (0,1)))
+        points.append(reduced[-1]);points=simplify(points)
+        if len(points)>1 and all(clear(a,z) for a,z in zip(points,points[1:])):output.append(points)
+    return output
+
+
 def geometry_ok(paths,width,gap,clear):
     for net,path in paths.items():
         if not all(clear(net,a,b,width) for a,b in zip(path,path[1:])):return False
@@ -214,7 +242,11 @@ def solve_pair(p,n,terminals,bounds,clear,envelope_clear,width,gap,skew,*,pitch=
                         if all(bounds[0]<=q[0]<=bounds[2] and bounds[1]<=q[1]<=bounds[3] for q in path) and all(center_clear(x,y) for x,y in zip(path,path[1:])):
                             trial_paths.append(path)
         if routed.status == 'routed': trial_paths.append(routed.path)
-        for raw_path in trial_paths:
+        smooth_trials=[]
+        for raw in trial_paths:
+            smooth_trials.extend(relaxed_centerlines(raw,center_clear,width+gap))
+            smooth_trials.append(raw)
+        for raw_path in smooth_trials:
             # Grid lead-in corners can create tiny hooks when offset. Move the
             # coupled portion's ends along its existing envelope and re-check the
             # exact pad fanouts, retaining the source-defined uncoupled length cap.
@@ -245,6 +277,9 @@ def solve_pair(p,n,terminals,bounds,clear,envelope_clear,width,gap,skew,*,pitch=
                             if not geometry_ok(paths,width,gap,clear):
                                 failed("pair_geometry");continue
                             tuned=tune(paths,width,gap,skew,clear,offsets,max_tuning_length=max_uncoupled if max_tuning_length is None else max_tuning_length)
+                            if not tuned:
+                                failed('skew_tuning')
+                                if len(fanout_debug)<8:fanout_debug.append(dict(skew_tuning_lengths={net:length(path)+(offsets or {}).get(net,0) for net,path in paths.items()},offsets=offsets,max_tuning_length=max_tuning_length,centerline=centerline))
                             if tuned and accept_paths is not None and not accept_paths(tuned):
                                 failed('path_validation');continue
                             if tuned:return dict(status='routed',paths=tuned,lengths={net:length(path)+(offsets or {}).get(net,0) for net,path in tuned.items()},centerline=centerline,attempts=attempts)

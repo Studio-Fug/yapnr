@@ -29,6 +29,11 @@ def acceptance(pnr,audit,drc):
   if drc['violations']:reasons.append('native_drc_violations')
  return reasons
 
+def source_inputs(repo):
+ scanner=repo/'hardware/tools/scan_via_proximity.py'
+ if not scanner.is_file():raise FileNotFoundError('Native regression requires '+str(scanner))
+ return sorted((repo/'hardware/pnr/pnr').rglob('*.py'))+sorted((repo/'hardware/pnr/regression').glob('*.py'))+[scanner]
+
 def main():
  global REPO
  ap=argparse.ArgumentParser(description=__doc__)
@@ -51,7 +56,7 @@ def main():
  out=args.out.resolve();out.mkdir(parents=True,exist_ok=False)
  allcases=designs();cases=[c for c in allcases if not args.case or c['name'] in args.case]
  if not cases or (set(args.case)-{c['name'] for c in cases}):raise SystemExit('Unknown/empty case selection')
- source_files=sorted((REPO/'hardware/pnr/pnr').rglob('*.py'))+sorted((REPO/'hardware/pnr/regression').glob('*.py'))
+ source_files=source_inputs(REPO)
  manifest={str(p.relative_to(REPO)):sha(p) for p in source_files}
  freeze=out/'source-freeze'
  for source_path in source_files:
@@ -104,7 +109,7 @@ def main():
     run('refill',[args.kicad_python,'-m','pnr.planes',board,'--rules',root/'rules.json','--refill-only'])
     run('audit',[args.kicad_python,frozen_here/'native.py','audit',root,'--pcb',board])
     run('drc',[args.kicad_cli,'pcb','drc',board,'--format','json','--output',root/'drc.json'])
-    run('via-scan',[args.kicad_python,REPO/'hardware/tools/scan_via_proximity.py',board,'--radius-mm','5','--out-dir',root/'via-scan'])
+    run('via-scan',[args.kicad_python,freeze/'hardware/tools/scan_via_proximity.py',board,'--radius-mm','5','--out-dir',root/'via-scan'])
     pnr=json.loads((root/'pnr-report.json').read_text());audit=json.loads((root/'native-audit.json').read_text());drc=json.loads((root/'drc.json').read_text())
     result.update(reasons=acceptance(pnr,audit,drc),opens=len(drc['unconnected_items']),violations=dict(Counter(x['type'] for x in drc['violations'])),
      tracks=audit['tracks'],vias=audit['vias'],copper_length_mm=audit['copper_length_mm'],pnr=pnr,

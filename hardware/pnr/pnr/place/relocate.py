@@ -5,6 +5,7 @@ loop reroutes a proposal and retains its best completed routing round. No hard
 pose, side, orientation, group or keepout is relaxed by this module.
 """
 import heapq
+import os
 import math
 import numpy as np
 from pnr.graph import BoardGraph
@@ -12,7 +13,7 @@ from .geometry import pin_positions, resolve_fixed_poses, outline_size
 from .metrics import translation_checker, hard_violations, hpwl
 
 
-def distance_field(blocked, via_clear, crossing, seeds, pitch, via_cost=3., crossing_cost=100.):
+def distance_field(blocked, via_clear, crossing, seeds, pitch, via_cost=3., crossing_cost=100., *, terms=False):
     """3D Dijkstra: 1 cost/mm, 3 mm/via, 100 additional cost/mm copper conflict.
 
     Foreign tracks may be crossed *only as an expensive rip-up estimate*.
@@ -21,6 +22,7 @@ def distance_field(blocked, via_clear, crossing, seeds, pitch, via_cost=3., cros
     """
     layers,ny,nx=blocked.shape
     dist=np.full(blocked.shape,np.inf);queue=[]
+    detail=np.zeros((*blocked.shape,3),dtype=float) if terms else None
     for la,j,i in seeds:
         if 0<=la<layers and 0<=j<ny and 0<=i<nx and not blocked[la,j,i]:
             dist[la,j,i]=0.;heapq.heappush(queue,(0.,la,j,i))
@@ -30,13 +32,22 @@ def distance_field(blocked, via_clear, crossing, seeds, pitch, via_cost=3., cros
         for y,x in ((j-1,i),(j+1,i),(j,i-1),(j,i+1)):
             if 0<=y<ny and 0<=x<nx and not blocked[la,y,x]:
                 new=cost+pitch*(1+crossing_cost*max(crossing[la,j,i],crossing[la,y,x]))
-                if new<dist[la,y,x]:dist[la,y,x]=new;heapq.heappush(queue,(new,la,y,x))
+                if new<dist[la,y,x]:
+                    dist[la,y,x]=new;heapq.heappush(queue,(new,la,y,x))
+                    if detail is not None:
+                        detail[la,y,x]=detail[la,j,i]
+                        detail[la,y,x,0]+=pitch
+                        detail[la,y,x,2]+=pitch*max(crossing[la,j,i],crossing[la,y,x])
         if via_clear[j,i]:
             for other in range(layers):
                 if other==la or blocked[other,j,i]:continue
                 new=cost+via_cost
-                if new<dist[other,j,i]:dist[other,j,i]=new;heapq.heappush(queue,(new,other,j,i))
-    return dist
+                if new<dist[other,j,i]:
+                    dist[other,j,i]=new;heapq.heappush(queue,(new,other,j,i))
+                    if detail is not None:
+                        detail[other,j,i]=detail[la,j,i]
+                        detail[other,j,i,1]+=1
+    return (dist,detail) if terms else dist
 
 
 def _near(grid, blocked, xy, layer, radius=1.5):
@@ -49,7 +60,7 @@ def _near(grid, blocked, xy, layer, radius=1.5):
     return sorted(cells)
 
 
-def _fields(graph,comp,rules,tracks,vias,pitch):
+def _fields(graph,comp,rules,tracks,vias,pitch,*,terms=False):
     from pnr.route.detail.grid import RouteGrid
     from pnr.route.detail.router import _fab,_signal_layers,_mark_plane_regions,_mark_copper_keepouts,_mark_source_arrays,_net_widths,_plane_nets
     # Remove only this component's pads from the static substrate. Keep its body
@@ -98,9 +109,35 @@ def _fields(graph,comp,rules,tracks,vias,pitch):
                 for la in (range(len(layers)) if pad.through_hole else [side]):
                     near=_near(g,blocked,xy,la)
                     if near:seeds.append(near[0][1:])
-        if seeds:fields[net]=(g,blocked,distance_field(blocked,via_clear,copper,seeds,pitch))
+        if seeds:
+            result=distance_field(blocked,via_clear,copper,seeds,pitch,terms=terms)
+            fields[net]=(g,blocked,*result) if terms else (g,blocked,result)
     return fields
 
+
+
+PROBE_TERMS=(('routing_length','Layered path length','mm',1.),('via_transitions','Through-layer transitions','count',3.),('foreign_copper','Foreign copper crossing estimate','mm',100.),('terminal_approach','Pad-to-grid approach','mm',1.),('unreachable_penalty','Unreachable terminals','count',10000.))
+
+def probe_cost(comp,fields,pos):
+    score=0.;raw=[0.]*5;omitted=[]
+    for pad,(_,xy) in zip(comp.pads,pin_positions(comp)):
+        if pad.net not in fields:
+            if pad.net:omitted.append(dict(pad=pad.name,net=pad.net,reason='plane or no stationary terminal seeds'))
+            continue
+        field=fields[pad.net];grid,blocked,dist=field[:3]
+        point=(xy[0]+pos[0]-comp.pos[0],xy[1]+pos[1]-comp.pos[1]);side=0 if comp.side=='top' else len(grid.layers)-1
+        near=_near(grid,blocked,point,side)
+        values=[dist[la,j,i]+d for d,la,j,i in near]
+        best=min(range(len(values)),key=lambda i:values[i]) if values else None
+        cost=values[best] if best is not None else math.inf
+        if not math.isfinite(cost):cost=10000.;raw[4]+=1
+        elif len(field)>3:
+            d,la,j,i=near[best];detail=field[3][la,j,i]
+            for k in range(3):raw[k]+=float(detail[k])
+            raw[3]+=d
+        score+=cost
+    terms=[dict(key=key,label=label,raw_share=value,weights=[weight],weighted=value*weight,unit=unit) for (key,label,unit,weight),value in zip(PROBE_TERMS,raw)]
+    return float(score),int(raw[4]),terms,omitted
 
 def propose(graph,constraints,rules,tracks,vias=(),*,pressure=None,tried=None,refs=None,pitch=.8,candidate_pitch=2.,shortlist=32,max_parts=6,temperature=0.,rng=None):
     """Search the full legal board for translations, preserving physical rules.
@@ -152,8 +189,16 @@ def propose(graph,constraints,rules,tracks,vias=(),*,pressure=None,tried=None,re
         for cost,p in points:bins.setdefault((int(p[0]/(width/6)),int(p[1]/(height/6))),p)
         selected=list(dict.fromkeys([original,*selected,*bins.values()]))
         if len(selected)<2:continue
-        fields=_fields(g,comp,rules,tracks,vias,pitch)
+        capture=bool(os.environ.get("PNR_COST_CAPTURE_DIR"))
+        fields=_fields(g,comp,rules,tracks,vias,pitch,**({"terms":True} if capture else {}))
+        evaluated={}
         def heavy(pos):
+            if capture:
+                score,missing,terms,omitted=probe_cost(comp,fields,pos);air=light(pos)
+                terms.append(dict(key="airwire_screen",label="Endpoint Manhattan screen",raw_share=air,weights=[.1],weighted=.1*air,unit="mm"))
+                total=score+.1*air
+                evaluated[tuple(pos)]=dict(position=list(pos),cost=total,unreachable=missing,terms=terms,omitted=omitted)
+                return total,missing
             score=0.;missing=0
             for pad,(_,xy) in zip(comp.pads,pin_positions(comp)):
                 if pad.net not in fields:continue
@@ -170,6 +215,9 @@ def propose(graph,constraints,rules,tracks,vias=(),*,pressure=None,tried=None,re
             cost,missing=heavy(pos);ranked.append(dict(position=list(pos),cost=cost,unreachable=missing))
             if cost<baseline-1e-6 or temperature>0:choices.append((baseline-cost,comp.ref,pos,baseline,cost,identity))
         audit.append(dict(ref=comp.ref,baseline_cost=baseline,legal_candidates=len(points),heavy_candidates=len(selected),best_candidates=sorted(ranked,key=lambda d:d['cost'])[:8]))
+        if capture:
+            from .cost_capture import routing_probe
+            routing_probe(g,comp,evaluated[tuple(original)],list(evaluated.values()),dict(model='global-layered-relocation-v2',held_out=[comp.ref],grid_pitch_mm=pitch,candidate_pitch_mm=candidate_pitch,unscored_nets=evaluated[tuple(original)]['omitted'],screen='Layered routing proxy plus .1 endpoint Manhattan distance; fixed face/orientation'))
     if not choices:return None
     # Compare relative improvements across components with different pin counts.
     # Zero temperature retains the original deterministic greedy behavior.

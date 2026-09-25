@@ -9,7 +9,7 @@ from pnr.graph import BoardGraph
 from .geometry import (resolve_fixed_poses,outline_size,keepout_rects,
                        hard_group_limits,courtyard_rect,placement_rects,pin_positions)
 from .metrics import hard_violations,hpwl
-from .relocate import _fields,_near
+from .relocate import _fields,_near,probe_cost
 from .anneal import choose_cost
 
 
@@ -35,8 +35,8 @@ def joint_configurations(graph,constraints,options,*,samples=4,temperature=.1,rn
         if any(bad.values()):rejections.append(dict(indices=choices,reason=bad));continue
         # Internal-to-batch nets had no stationary field seeds. Joint HPWL now
         # measures their new endpoints, never their stale original positions.
-        cost+=.1*hpwl(g)
-        legal.append(dict(indices=choices,cost=cost,moves=moves,graph=g))
+        component_probe_cost=cost;wire=hpwl(g);cost+=.1*wire
+        legal.append(dict(indices=choices,cost=cost,moves=moves,graph=g,terms=[dict(key="component_probe_cost",raw=component_probe_cost,weight=1.,weighted=component_probe_cost),dict(key="joint_hpwl",raw=wire,weight=.1,weighted=.1*wire)]))
     legal_count=len(legal)
     proxy_audit=None
     if rules is not None:
@@ -69,12 +69,13 @@ def propose_batches(graph,constraints,rules,tracks,vias=(),*,k=4,n=4,samples=4,p
         if c.ref in held:c.pads=[]
     clean_tracks=[t for t in tracks if t[0] not in affected];clean_vias=[v for v in vias if v[0] not in affected]
     stationary=[(c.ref,placement_rects(c)) for c in graph.components if c.ref not in held]
-    width,height=outline_size(graph,constraints);keepouts=keepout_rects(graph,constraints,fixed);limits=hard_group_limits(constraints,fixed)
+    width,height=outline_size(graph,constraints);keepouts=keepout_rects(graph,constraints,fixed);limits=hard_group_limits(constraints,{c.ref:c.pos for c in graph.components if c.ref not in held},partial=True)
     from pnr.live import emit
     emit('batch_holdout',layout=json.loads(graph.to_json()),data=dict(held_out=selected,removed_nets=sorted(affected)))
-    options={};probes=[]
+    options={};probes=[];captured_probes={}
+    capture=bool(os.environ.get("PNR_COST_CAPTURE_DIR"))
     for ref in selected:
-        comp=graph.component(ref);fields=_fields(substrate,comp,rules,clean_tracks,clean_vias,pitch);old=comp.pos;ranked=[]
+        comp=graph.component(ref);fields=_fields(substrate,comp,rules,clean_tracks,clean_vias,pitch,**({"terms":True} if capture else {}));old=comp.pos;ranked=[]
         def legal(pos):
             c=BoardGraph.from_json(graph.to_json()).component(ref);c.pos=pos;rect=courtyard_rect(c)
             return (rect.inside(width,height) and not any(rect.overlaps(v) for v in keepouts)
@@ -82,14 +83,10 @@ def propose_batches(graph,constraints,rules,tracks,vias=(),*,k=4,n=4,samples=4,p
                     and not any(side==other_side and area.overlaps(other) for _,regions in stationary for other_side,other in regions for side,area in placement_rects(c)))
         for pos in dict.fromkeys([old,*[(float(x),float(y)) for x in np.arange(candidate_pitch/2,width,candidate_pitch) for y in np.arange(candidate_pitch/2,height,candidate_pitch)]]):
             if not legal(pos):continue
-            score=0.;unreachable=0
-            for pad,(_,xy) in zip(comp.pads,pin_positions(comp)):
-                if pad.net not in fields:continue
-                grid,blocked,dist=fields[pad.net];pt=(xy[0]+pos[0]-old[0],xy[1]+pos[1]-old[1]);side=0 if comp.side=='top' else len(grid.layers)-1
-                cost=min([dist[la,j,i]+d for d,la,j,i in _near(grid,blocked,pt,side)],default=math.inf)
-                if not math.isfinite(cost):cost=10000.;unreachable+=1
-                score+=cost
-            ranked.append(dict(position=list(pos),cost=float(score),unreachable=unreachable))
+            score,unreachable,terms,omitted=probe_cost(comp,fields,pos)
+            row=dict(position=list(pos),cost=score,unreachable=unreachable)
+            if capture:row.update(terms=terms,omitted=omitted)
+            ranked.append(row)
         ranked.sort(key=lambda v:v['cost']);original=next(v for v in ranked if tuple(v['position'])==old)
         if os.environ.get('PNR_CAPACITY_PROXY')=='1':
             from .capacity_proxy import diverse_options
@@ -97,6 +94,9 @@ def propose_batches(graph,constraints,rules,tracks,vias=(),*,k=4,n=4,samples=4,p
         else:options[ref]=[original]+[v for v in ranked if v is not original][:max(0,n-1)]
         probes.append(dict(ref=ref,original=list(old),candidates=ranked,shortlist=options[ref]))
         emit('placement_costs',data=probes[-1])
+        if capture:
+            from .cost_capture import routing_probe
+            routing_probe(graph,comp,original,ranked,dict(model='joint-held-out-relocation-v1',held_out=selected,removed_nets=sorted(affected),removed_tracks=len(tracks)-len(clean_tracks),removed_vias=len(vias)-len(clean_vias),grid_pitch_mm=pitch,candidate_pitch_mm=candidate_pitch,unscored_nets=original['omitted'],joint_hpwl_weight=.1),accumulator=captured_probes)
     choices,audit=joint_configurations(graph,constraints,options,samples=samples,temperature=temperature,rng=rng,rules=rules if os.environ.get('PNR_CAPACITY_PROXY')=='1' else None,proxy_budget=int(os.environ.get('PNR_PROXY_BUDGET','12')))
     audit.update(model='joint-held-out-relocation-v1',held_out=selected,k=len(selected),n=n,removed_nets=sorted(affected),removed_tracks=len(tracks)-len(clean_tracks),removed_vias=len(vias)-len(clean_vias),probes=probes,temperature=temperature)
     emit('batch_alternatives',data=audit)

@@ -58,7 +58,7 @@ class LayerRoute:
     expanded: int = 0
 
 
-def escape_frontier(points, opposite, bounds, clear, via_clear, pitch, budget):
+def escape_frontier(points, opposite, bounds, clear, via_clear, pitch, budget, *, port_spacing=.3, max_ports=32):
     """Reachable surface via ports and their checked fanout paths."""
     x0, y0, x1, y1 = bounds
     nx = int((x1 - x0) / pitch) + 1
@@ -111,7 +111,7 @@ def escape_frontier(points, opposite, bounds, clear, via_clear, pitch, budget):
     buckets = set()
     for _, key in sorted(ports):
         p = point(*key)
-        bucket = (round(p[0] / 0.3), round(p[1] / 0.3))
+        bucket = (round(p[0] / port_spacing), round(p[1] / port_spacing))
         if bucket in buckets:
             continue
         buckets.add(bucket)
@@ -121,7 +121,7 @@ def escape_frontier(points, opposite, bounds, clear, via_clear, pitch, budget):
         nodes.reverse()
         path = prefixes[nodes[0]][:-1] + [point(*q) for q in nodes]
         chosen[p] = relax(path, clear)
-        if len(chosen) >= 32:
+        if len(chosen) >= max_ports:
             break
     return chosen, expanded
 

@@ -100,9 +100,9 @@ class HardGroupTest(unittest.TestCase):
                 compile_constraints({'fixed': {'U1': {'at': [5, 5]}},
                     'group': [{'members': ['C1'], 'anchor': 'U1',
                                'radius_mm': radius, 'hard': True}]}, ['U1', 'C1'])
-        with self.assertRaises(ConstraintError):
-            compile_constraints({'group': [{'members': ['C1'], 'anchor': 'U1',
+        movable = compile_constraints({'group': [{'members': ['C1'], 'anchor': 'U1',
                 'radius_mm': 2, 'hard': True}]}, ['U1', 'C1'])
+        self.assertEqual(movable.locked_refs, ())
 
     def test_independent_metrics_detect_scattered_group(self):
         from pnr.graph import Component, BoardOutline

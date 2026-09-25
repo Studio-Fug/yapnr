@@ -9,7 +9,7 @@ from pnr.constraints import CompiledConstraints
 from pnr.graph import BoardGraph, BoardOutline
 
 from . import metrics
-from .geometry import keepout_rects, outline_size, resolve_fixed_poses, hard_group_limits, set_component_side, apply_hard_sides
+from .geometry import keepout_rects, outline_size, resolve_fixed_poses, hard_group_limits, hard_group_edges, resolve_hard_rotations, set_component_side, apply_hard_sides
 from .legalize import legalize
 from .model import global_place
 
@@ -82,6 +82,11 @@ def place(
     footprint of congested parts so the next round spreads them. Deterministic
     under a fixed ``seed``.
     """
+    # Edge rows are optimized across complete global starts. These temporary
+    # search choices are distinct from authored absolute locks.
+    if any(c.kind == "row" and not c.params.get("trial_resolved") for c in constraints.constraints):
+        from .rows import sample_constraints
+        constraints = sample_constraints(graph,constraints,seed)
     # The source compiler emits every footprint on top. Apply physical side
     # constraints before any obstacle/HPWL calculations, including pad mirroring.
     graph = BoardGraph.from_json(graph.to_json())
@@ -129,7 +134,11 @@ def place(
         fixed=poses,
         allow_rotation=orient,
         channel_model=channels,
-        group_limits=hard_group_limits(constraints, poses),
+        group_limits=hard_group_limits(constraints, poses, partial=True),
+        group_edges=hard_group_edges(constraints),
+        rotations=resolve_hard_rotations(constraints),
+        mobility={ref:dict(source_fixed=not bool(c.params.get('row_trial')),row_trial=c.params.get('row_trial'))
+                  for c in constraints.constraints if c.kind=='fixed' for ref in c.refs},
         keepouts=keepouts,
         clearance=clearance,
         grid_mm=grid_mm,

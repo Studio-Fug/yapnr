@@ -24,7 +24,7 @@ from .geometry import (
     pin_positions,
     resolve_fixed_poses,
     resolve_hard_sides,
-    hard_group_limits,
+    hard_group_limits, hard_group_edges, resolve_hard_rotations,
 )
 
 
@@ -106,17 +106,18 @@ def hard_violations(
     width, height = outline_size(graph, constraints)
     poses = resolve_fixed_poses(graph, constraints)
     keepouts = keepout_rects(graph, constraints, poses)
-    limits = hard_group_limits(constraints, poses)
+    limits = hard_group_limits(constraints, {c.ref:c.pos for c in graph.components})
+    from .rows import violations as row_violations
+    rows_bad=row_violations(graph,constraints)
     return {
         "overlaps": overlap_pairs(graph, clearance),
         "outside_outline": outside_outline(graph, width, height, exclude=constraints.locked_refs),
-        "fixed_misplaced": misplaced_fixed(graph, poses),
+        "fixed_misplaced": sorted(set(misplaced_fixed(graph, poses)) | {ref for ref,angle in resolve_hard_rotations(constraints).items() if abs((graph.component(ref).rot-angle+180)%360-180)>1e-6}),
         "side_misplaced": [ref for ref,side in resolve_hard_sides(constraints).items()
                            if graph.component(ref).side != side],
         "keepout": in_keepout(graph, keepouts, clearance),
-        "group_outside": [c.ref for c in graph.components
-                          if any(math.dist(c.pos, (ax, ay)) > radius + 1e-9
-                                 for ax, ay, radius in limits.get(c.ref, ()))],
+        "group_outside": sorted(set(rows_bad) | {member for anchor, member, radius in hard_group_edges(constraints)
+                                  if math.dist(graph.component(anchor).pos, graph.component(member).pos) > radius + 1e-9}),
     }
 
 
@@ -133,11 +134,14 @@ def translation_checker(graph, constraints, clearance=0.0):
     width,height=outline_size(graph,constraints)
     poses=resolve_fixed_poses(graph,constraints)
     keepouts=keepout_rects(graph,constraints,poses)
-    limits=hard_group_limits(constraints,poses)
+    limits=hard_group_limits(constraints,{c.ref:c.pos for c in graph.components})
     geometry={c.ref:placement_rects(c) for c in graph.components}
-    sides_required=resolve_hard_sides(constraints)
+    sides_required=resolve_hard_sides(constraints); rotations_required=resolve_hard_rotations(constraints)
     def legal(comp):
+        from .rows import violations as row_violations
+        if row_violations(graph,constraints):return False
         rect=courtyard_rect(comp);sides=frozenset(occupied_sides(comp))
+        if comp.ref in rotations_required and abs((comp.rot-rotations_required[comp.ref]+180)%360-180)>1e-6:return False
         if comp.ref in sides_required and comp.side != sides_required[comp.ref]:return False
         if comp.ref in poses and any(abs(a-b)>1e-3 for a,b in zip(comp.pos,poses[comp.ref])):return False
         if comp.ref not in constraints.locked_refs and not rect.inside(width,height):return False

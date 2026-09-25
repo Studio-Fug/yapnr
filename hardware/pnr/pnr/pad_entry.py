@@ -270,7 +270,15 @@ def repair(board, rules, only_keys=None):
                 reason = "required width exceeds existing trace; needs current/neck policy"
                 continue
             end = closest(start, xy(old.GetStart()), xy(old.GetEnd()))
-            if math.dist(start, end) < 1e-6 or math.dist(start, end) > 1.0:
+            # A large conventional land may need a centre branch longer than
+            # 1 mm even when the trace already touches its edge. Bound the
+            # allowance by the land radius plus the existing 1 mm local reach;
+            # never lower width or bypass foreign-copper/entry/native guards.
+            local_reach = 1.0
+            if p.GetShape() in (pcbnew.PAD_SHAPE_RECT, pcbnew.PAD_SHAPE_ROUNDRECT,
+                                pcbnew.PAD_SHAPE_OVAL, pcbnew.PAD_SHAPE_CIRCLE):
+                local_reach += math.hypot(*xy(p.GetSize())) / 2
+            if math.dist(start, end) < 1e-6 or math.dist(start, end) > local_reach:
                 continue
             t = pcbnew.PCB_TRACK(board)
             t.SetStart(pcbnew.VECTOR2I(round(start[0]*1e6),round(start[1]*1e6)))
@@ -330,11 +338,21 @@ def repair(board, rules, only_keys=None):
 
 def repair_changed_entries(board, rules, before):
     """Repair newly bad contacts and report lost witnesses for a transaction."""
-    proposed = snapshot(board, rules)
-    needs_entry = {key for key, good in proposed.items() if not good
-                   and (key not in before or before[key])}
-    repairs = repair(board, rules, only_keys=needs_entry)
-    board.BuildConnectivity()
+    repairs = dict(added=[], blocked=[], passes=0)
+    for _ in range(5):
+        proposed = snapshot(board, rules)
+        needs_entry = {key for key, good in proposed.items() if not good
+                       and (key not in before or before[key])}
+        if not needs_entry:
+            repairs['blocked'] = []
+            break
+        step = repair(board, rules, only_keys=needs_entry)
+        repairs['added'].extend(step['added'])
+        repairs['blocked'] = step['blocked']
+        repairs['passes'] += 1
+        board.BuildConnectivity()
+        if not step['added']:
+            break
     current = snapshot(board, rules)
     return dict(entry_repairs=repairs,
                 lost_pad_entries=[key for key, good in before.items()

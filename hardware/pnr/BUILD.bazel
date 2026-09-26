@@ -967,3 +967,28 @@ py_test(
     main = "tests/test_group_backtrack.py",
     deps = [":pnr", ":pnr_place", requirement("numpy"), requirement("torch")],
 )
+
+# Evaluate all screened placements through every native electrical phase.
+py_binary(
+    name = "electrical_pool",
+    srcs = ["pnr/electrical_pool.py"],
+    main = "pnr/electrical_pool.py",
+    imports = ["."],
+    deps = [":pnr", ":pnr_place", ":pnr_detail", ":pnr_route"],
+)
+
+py_test(
+    name = "electrical_pool_test",
+    srcs = ["tests/test_electrical_pool.py"],
+    main = "tests/test_electrical_pool.py",
+    imports = ["."],
+    deps = [":pnr"],
+)
+
+py_test(
+    name = "partial_cycle_test",
+    srcs = ["tests/test_partial_cycle.py"],
+    main = "tests/test_partial_cycle.py",
+    imports = ["."],
+    deps = [":pnr"],
+)

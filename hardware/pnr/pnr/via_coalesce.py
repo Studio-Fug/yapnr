@@ -150,8 +150,17 @@ def plan(board, keep, remove, rules):
                         and x.GetNetCode() == t.GetNetCode() and touch(x, guard, la)]
             if not contacts:
                 trims.append(dict(uuid=uid(t), endpoint='start' if a == start else 'end', point=end))
-        # The discarded annulus cannot be evidence for surviving connectivity.
-        if all(uid(t) in connected for t in attached):
+        # A transitive copper connection does not retain a track endpoint's
+        # barrel contact. Native dangling cleanup can otherwise delete that
+        # branch (and then its upstream junctions). Give untrimmed endpoints
+        # ending at the removed barrel a checked bridge to the survivor, even
+        # when they are already reachable through another route on this layer.
+        trimmed = {edit['uuid'] for edit in trims}
+        terminal_ports = [t for t in attached if t.GetClass() == 'PCB_TRACK'
+                          and uid(t) not in trimmed
+                          and any(math.dist(xy(point), start) <= 1e-6
+                                  for point in (t.GetStart(), t.GetEnd()))]
+        if all(uid(t) in connected for t in attached) and not terminal_ports:
             continue
         minimum = rules.get('fab', {}).get('track_width_mm', 0.2)
         width = max([minimum] + [t.GetWidth() / 1e6 for t in attached if t.GetClass() == 'PCB_TRACK'])
@@ -235,7 +244,10 @@ def worker(args, rules):
         requested = json.loads(args.transaction.read_text())
         choices = cycle_candidates(b, rules, args.annotation_source, 2 * args.radius)
         proposal = next((p for p in choices if p['remove_tracks'] == requested['remove_tracks']
-                         and p['net'] == requested['net'] and p['layer'] == requested['layer']), None)
+                         and p['net'] == requested['net'] and p['layer'] == requested['layer']
+                         and json.dumps(p.get('replacement_segments', []), sort_keys=True)
+                             == json.dumps(requested.get('replacement_segments', []), sort_keys=True)
+                         and json.dumps(p['endpoints']) == json.dumps(requested['endpoints'])), None)
         if proposal is None:
             result = dict(skipped='cycle no longer eligible')
         else:
@@ -420,6 +432,8 @@ def main():
                   removed_vias=len(removed), before_opens=len(initial['unconnected_items']),
                   after_opens=len(before['unconnected_items']), events=events,
                   cycle_events=cycle_events, removed_cycle_tracks=sum(len(e['remove_tracks']) for e in cycle_events if e['accepted']),
+                  reconstructed_cycle_tracks=sum(len(e.get('replacement_segments', [])) for e in cycle_events if e['accepted']),
+                  removed_cycle_length_mm=sum(e['length_mm'] for e in cycle_events if e['accepted']),
                   candidates=len(inventory['pairs']), trial_limit=args.max_trials,
                   protected_intents=inventory['protected_intents'])
     # Release borrowed track wrappers while their native board is still alive.

@@ -158,9 +158,16 @@ def _pnr_board_impl(ctx):
         'cp "%s" "$_WORK/board.kicad_pro"' % out_pro.path,
         _ki_run('-m pnr.library_table --out "$_WORK/fp-lib-table" %s' % footprint_args),
         # Native electrical routing and placement feedback, after actual plane fill.
-        (('"%s" "%s" --repo "$PWD" --rules "$_WORK/rules.json" --constraints "%s" --out-dir "$_WORK/native-loop" --kicad-python "$_KI_PY" --kicad-cli "%s" --early-pairs --cycles 12 --route-attempts 40 --placement-attempts 2 --search-seconds 90 --seconds %d %s' % (
+        (('if [ "${PNR_FULL_ELECTRICAL_POOL:-0}" = "1" ]; then\n' +
+           ('"%s" --diagnostics "$_WORK" --out-dir "$_WORK/native-loop" --constraints "%s" --electrical-fab "%s" --plane-fab "%s" --kicad-python "$_KI_PY" --kicad-cli "%s" --seconds "${PNR_ELECTRICAL_POOL_SECONDS:-%d}" --workers "${PNR_ELECTRICAL_POOL_WORKERS:-2}" --route-workers "${PNR_ELECTRICAL_ROUTE_WORKERS:-4}" %s\n' % (
+               ctx.executable._electrical_controller.path, ctx.file.constraints.path,
+               ctx.file.electrical_fab.path, ctx.file.plane_access_fab.path,
+               _kicad_cli(info), ctx.attr.native_seconds,
+               " ".join(['--annotation-source "%s"' % f.path for f in ctx.files.annotation_sources]))) +
+           ('cp "$_WORK/native-loop/selected-plane-access.json" "%s"\n' % access_rpt.path) +
+           'else\n' + (('"%s" "%s" --repo "$PWD" --rules "$_WORK/rules.json" --constraints "%s" --out-dir "$_WORK/native-loop" --kicad-python "$_KI_PY" --kicad-cli "%s" --early-pairs --cycles 12 --route-attempts 40 --placement-attempts 2 --search-seconds 90 --seconds %d %s' % (
             ctx.executable._native_controller.path, "$_WORK/board.kicad_pcb", ctx.file.constraints.path, _kicad_cli(info), ctx.attr.native_seconds, electrical_args,
-        )) if ctx.file.electrical_fab else 'true'),
+        )) if ctx.file.electrical_fab else 'true') + '\nfi') if ctx.file.electrical_fab else 'true'),
         (('cp "$_WORK/native-loop/best/candidate.kicad_pcb" "%s"\ncp "$_WORK/native-loop/best/candidate.kicad_pro" "%s"\ncp "$_WORK/native-loop/progress.json" "%s"\ncp "$_WORK/native-loop/policy/prepare.json" "$_WORK/rules.json"' % (out_pcb.path,out_pro.path,native_rpt.path)) if ctx.file.electrical_fab else ("echo '{}' > \"%s\"" % native_rpt.path)),
         # Reuse through-vias and reduce redundant track cycles before final pad-entry
         # validation. Each transaction is independently filled and native-DRC gated.
@@ -209,7 +216,7 @@ def _pnr_board_impl(ctx):
         outputs = [out_pcb, out_pro, out_libs, drc_rpt, quality_rpt, access_rpt, pad_rpt, coalesce_rpt, native_rpt, electrical_rpt, diagnostics],
         inputs = inputs,
         # files_to_run stages the placer py_binary AND its runfiles tree.
-        tools = [ctx.attr.placer[DefaultInfo].files_to_run, ctx.attr._native_controller[DefaultInfo].files_to_run],
+        tools = [ctx.attr.placer[DefaultInfo].files_to_run, ctx.attr._native_controller[DefaultInfo].files_to_run, ctx.attr._electrical_controller[DefaultInfo].files_to_run],
         command = cmd,
         mnemonic = "PnrBoard",
         progress_message = "PnR place+route -> %s" % out_pcb.short_path,
@@ -233,6 +240,7 @@ _pnr_board = rule(
         "native_seconds": attr.int(default = 900),
         "placement_rounds": attr.int(default = 6),
         "_native_controller": attr.label(default = "//hardware/pnr:native_loop", executable = True, cfg = "exec"),
+        "_electrical_controller": attr.label(default = "//hardware/pnr:electrical_pool", executable = True, cfg = "exec"),
         "_regional_adapter": attr.label(default = "//hardware/tools:keyhole_region.py", allow_single_file = True),
         "plane_access_fab": attr.label(allow_single_file = [".json"], doc = "Explicit plating/loss/drop/trace model required with source annotations."),
         "constraints": attr.label(allow_single_file = [".yaml", ".yml"], mandatory = True, doc = "Sidecar constraints.yaml (design §3)."),

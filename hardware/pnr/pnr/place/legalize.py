@@ -101,6 +101,7 @@ def legalize(
     rotations=None,
     backtrack_budget=500,
     mobility=None,
+    roles=None,
 ) -> BoardGraph:
     """Return a copy of ``graph`` with movable parts snapped to a legal layout.
 
@@ -119,6 +120,12 @@ def legalize(
 
     ``channel_model`` adds directional pad-escape demand to candidate costs.
     This is a soft routing estimate, not an additional legality guarantee.
+
+    ``roles`` (power-first placement, :mod:`pnr.place.power_first`; inert when
+    None) orders parts by tier inside the parent-first/hard-block order, moves
+    each target by the weighted displacement of already placed cost neighbours,
+    and accepts a slot only if a greedy trial pack of every unplaced
+    hard-limited part still succeeds (ban and retry, then normal backtracking).
     """
     inflation = inflation or {}
     group_limits = group_limits or {}
@@ -134,6 +141,10 @@ def legalize(
 
     placed = BoardGraph.from_json(graph.to_json())  # deep copy
     by_ref = {c.ref: c for c in placed.components}
+    aid = None
+    if roles is not None:
+        from .power_first import LOOK_AHEAD_TRIES, LegalizeAid
+        aid = LegalizeAid(roles, placed.components)
     neighbors = []
     cost_records = []
     # Bounds follow the real legalized neighbour positions, in both directions.
@@ -188,6 +199,51 @@ def legalize(
         previous=comp.rot;comp.rot=(previous+90)%360
         count=available_pose(comp);comp.rot=previous
         return count
+    def starves(comp, r, c, bw, bh, sides):
+        """Power-first look-ahead: does this slot strand an unplaced hard-limited part?
+
+        Greedy trial pack on a copy of the occupancy: every unplaced part with a
+        hard limit, in minimum-remaining-slots order, at its nearest relative
+        target, trying both rotations. Everything is restored afterwards.
+        """
+        saved = {side: occ_.copy() for side, occ_ in occupancy.items()}
+        poses = [(m, m.pos, m.rot) for m in movable] + [(comp, comp.pos, comp.rot)]
+        count = len(neighbors)
+        try:
+            for side in sides:
+                occupancy[side][r:r + bh, c:c + bw] = True
+            comp.pos = ((c + bw / 2.0) * g, (r + bh / 2.0) * g)
+            neighbors.append(comp)
+            pending = [m for m in movable if limits_for(m.ref)]
+            pending.sort(key=lambda m: (available(m), -courtyard_rect(m).w * courtyard_rect(m).h, m.ref))
+            for m in pending:
+                sides_m = ('top','bottom') if any(p.through_hole for p in m.pads) else occupied_sides(m)
+                occ_m = np.logical_or.reduce([occupancy[side] for side in sides_m])
+                infl_m = max(1.0, spread, float(inflation.get(m.ref, 1.0)))
+                target = aid.target(m.ref, neighbors)
+                for rot in [m.rot] + ([(m.rot + 90) % 360] if allow_rotation and m.ref not in rotations else []):
+                    m.rot = rot
+                    cr = courtyard_rect(m)
+                    bw_ = int(math.ceil((cr.w * infl_m + clearance) / g))
+                    bh_ = int(math.ceil((cr.h * infl_m + clearance) / g))
+                    try:
+                        rr, cc = _place_part(occ_m, g, bw_, bh_, target, limits_for(m.ref))
+                    except LegalizationError:
+                        continue
+                    for side in sides_m:
+                        occupancy[side][rr:rr + bh_, cc:cc + bw_] = True
+                    m.pos = ((cc + bw_ / 2.0) * g, (rr + bh_ / 2.0) * g)
+                    neighbors.append(m)
+                    break
+                else:
+                    return True
+            return False
+        finally:
+            del neighbors[count:]
+            for m, pos, rot in poses:
+                m.pos = pos; m.rot = rot
+            for side in occupancy:
+                occupancy[side][:] = saved[side]
     # Finish each electrically constrained connected block before unrelated
     # footprints consume its local escape/decoupling space. Source radii remain
     # exact; this changes ordering, never legality or fixed poses.
@@ -224,7 +280,11 @@ def legalize(
                 root = min(grouped, key=block_rank)
                 active_block = blocks[root.ref]
                 active = [c for c in eligible if c.ref in active_block]
-        comp = min(active or eligible,key=lambda c:(available(c),-courtyard_rect(c).w*courtyard_rect(c).h,c.ref))
+        if aid is None:
+            comp = min(active or eligible,key=lambda c:(available(c),-courtyard_rect(c).w*courtyard_rect(c).h,c.ref))
+        else:
+            comp = min(active or eligible,key=lambda c:(aid.tier(c.ref),available(c),-courtyard_rect(c).w*courtyard_rect(c).h,c.ref))
+            comp.pos = aid.target(comp.ref, neighbors)
         state = dict(occupancy={s:a.copy() for s,a in occupancy.items()},
                      neighbors=list(neighbors), movable=list(movable), active=set(active_block),
                      poses={c.ref:(c.pos,c.rot) for c in placed.components},
@@ -255,6 +315,15 @@ def legalize(
                         return channel_weight*channel
                 r,c=_place_part(occ,g,bw,bh,comp.pos,limits_for(comp.ref),candidate_cost=candidate_cost,
                                 forbidden=[(rr,cc) for rot,rr,cc in banned.get(comp.ref,()) if rot==rotation])
+                if aid is not None:
+                    tried=[(rr,cc) for rot,rr,cc in banned.get(comp.ref,()) if rot==rotation]
+                    for attempt in range(LOOK_AHEAD_TRIES):
+                        if not starves(comp,r,c,bw,bh,sides):
+                            break
+                        tried.append((r,c))
+                        if attempt==LOOK_AHEAD_TRIES-1:
+                            raise LegalizationError("look-ahead: every tried slot strands a hard-limited part")
+                        r,c=_place_part(occ,g,bw,bh,comp.pos,limits_for(comp.ref),candidate_cost=candidate_cost,forbidden=tried)
                 error=None
                 break
             except LegalizationError as exc:error=exc

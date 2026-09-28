@@ -182,10 +182,15 @@ def main():
             )
     elif not args.rules and any(policy(n)["name"] != "Default" or n not in allowed for n in args.net):
         ap.error("regional policy supports only reviewed Default-class signals")
-    b = pcbnew.LoadBoard(str(args.board))
+    from pnr.fab_profile import load_board  # custom rules in force for the final refill
+    b = load_board(args.board)
     retain_native(b)
     b.BuildConnectivity()
     entry_rules = json.loads(args.rules.read_text()) if args.rules else None
+    # Fab numbers: the routing policy's fab block, else the selected profile
+    # (PNR_FAB_PROFILE). Legacy reproduces the former 0.6/0.3 via, 0.15 clearance.
+    from pnr.fab_profile import active_geometry, geometry
+    fg = geometry(entry_rules) if entry_rules is not None else active_geometry()
     before_entries = {}
     if args.rules:
         from pnr.via_coalesce import protected
@@ -231,8 +236,8 @@ def main():
             p = pt(t.GetPosition())
             return (
                 args.relocate_vias
-                and t.GetWidth(pcbnew.F_Cu) == 600000
-                and t.GetDrill() == 300000
+                and t.GetWidth(pcbnew.F_Cu) == round(fg.via_diameter * 1e6)
+                and t.GetDrill() == round(fg.via_drill * 1e6)
                 and x0 + 0.3 <= p[0] <= x1 - 0.3
                 and y0 + 0.3 <= p[1] <= y1 - 0.3
             )
@@ -355,7 +360,7 @@ def main():
                     list(tree),
                     [target],
                     0.2,
-                    max(0.151, policy(n).get("clearance", 0.15) + 0.001),
+                    max(fg.clearance_gap, policy(n).get("clearance", fg.clearance) + 0.001),
                 )
             )
             tree.append(target)
@@ -440,7 +445,7 @@ def main():
             aa,
             zz,
             0.2,
-            max(0.151, policy(net).get("clearance", 0.15) + 0.001),
+            max(fg.clearance_gap, policy(net).get("clearance", fg.clearance) + 0.001),
         ),
     )
     # Conservative static native copper oracle. Clearance includes project rules.
@@ -448,7 +453,7 @@ def main():
     retain_native(obstacles)
     buckets = defaultdict(set)
 
-    def add(shape, box, gap, n, identity, la, smd=False):
+    def add(shape, box, gap, n, identity, la, smd=None):
         i = len(obstacles)
         obstacles.append((shape, gap, n, identity, la, smd))
         for x in range(
@@ -461,28 +466,48 @@ def main():
                 buckets[la, x, y].add(i)
 
     copper_layers = list(b.GetEnabledLayers().CuStack())
+    from pnr.via_in_pad import hole_keepouts
     for t in pads + remaining:
         for la in copper_layers:
             if t.IsOnLayer(la):
                 add(
                     t.GetEffectiveShape(la),
                     t.GetBoundingBox(),
-                    max(0.151, policy(t.GetNetname()).get("clearance", 0.15) + 0.001),
+                    max(fg.clearance_gap, policy(t.GetNetname()).get("clearance", fg.clearance) + 0.001),
                     t.GetNetname(),
                     uid(t),
                     la,
-                    isinstance(t, pcbnew.PAD)
-                    and t.GetAttribute() == pcbnew.PAD_ATTRIB_SMD,
+                    # SMD pads carry the pad: pnr.via_in_pad judges vias against it.
+                    t if isinstance(t, pcbnew.PAD)
+                    and t.GetAttribute() == pcbnew.PAD_ATTRIB_SMD else None,
                 )
             if isinstance(t, pcbnew.PAD) and t.GetAttribute() == pcbnew.PAD_ATTRIB_NPTH:
                 add(
                     t.GetEffectiveHoleShape(),
                     t.GetBoundingBox(),
-                    0.201,
+                    0.201 if fg.npth_hole_clearance is None else round(fg.npth_hole_clearance + 0.001, 9),
                     None,
                     uid(t),
                     la,
                 )
+            elif (fg.pth_hole_clearance is not None and isinstance(t, pcbnew.PAD)
+                  and t.GetAttribute() == pcbnew.PAD_ATTRIB_PTH and t.IsOnLayer(la)
+                  and max(t.GetDrillSize().x, t.GetDrillSize().y) > 0):
+                # Fab profile: plated drill wall to foreign copper (own net may
+                # enter): component PTH 0.35, a footprint's via-class drill 0.20.
+                kind = fg.hole_kind(False, True, max(t.GetDrillSize().x, t.GetDrillSize().y) / 1e6)
+                add(
+                    t.GetEffectiveHoleShape(),
+                    t.GetBoundingBox(),
+                    round(fg.pad_hole_clearance(kind) + 0.001, 9),
+                    t.GetNetname(),
+                    uid(t),
+                    la,
+                )
+        # A via with removed unused pads (5B in-pad) is its bare hole where it has
+        # no pad: foreign copper keeps the via hole clearance (0.20) from the wall.
+        for la, hole, hole_gap in hole_keepouts(fg, t, copper_layers):
+            add(hole, t.GetBoundingBox(), hole_gap, t.GetNetname(), uid(t), la)
     for z in b.Zones():
         for la in copper_layers:
             if z.GetIsRuleArea() and z.IsOnLayer(la) and z.GetDoNotAllowTracks():
@@ -507,7 +532,7 @@ def main():
         key = (la, r.net, r.width, r.clearance, tuple(sorted((a, z))))
         if key in cache:
             return cache[key]
-        edge = r.width / 2 + 0.201
+        edge = r.width / 2 + fg.edge_gap
         if any(
             not (
                 box.GetLeft() / 1e6 + edge <= p[0] <= box.GetRight() / 1e6 - edge
@@ -559,6 +584,21 @@ def main():
         and max(t.GetDrillSize().x, t.GetDrillSize().y) > 0
     ]
     retain_native(drilled)
+    # Drill gap (nm) a new via needs to each existing hole: one value (0.201)
+    # before profiles; via / component PTH / NPTH differ under a fab profile, and
+    # a footprint's via-class pad drill (under 0.30) counts as a via.
+    def hole_kind(t):
+        if isinstance(t, pcbnew.PCB_VIA):
+            return fg.hole_kind(True)
+        return fg.hole_kind(False, t.GetAttribute() != pcbnew.PAD_ATTRIB_NPTH,
+                            max(t.GetDrillSize().x, t.GetDrillSize().y) / 1e6)
+
+    drilled_gaps = [
+        (other, bb, t, round((fg.via_hole_gap(hole_kind(t)) + 0.001) * 1e6))
+        for other, bb, t in drilled
+    ]
+    hole_reach = max(0.6, fg.max_via_hole_gap + 0.001 + fg.via_drill / 2)
+    via_margin = fg.via_edge_margin()
     via_zones = [z for z in b.Zones() if z.GetIsRuleArea() and z.GetDoNotAllowVias()]
     # The board is immutable during search; resolve native metadata once.
     existing_vias_by_net = defaultdict(list)
@@ -568,15 +608,55 @@ def main():
     net_codes = {pad.GetNetname(): pad.GetNetCode() for pad in pads}
 
 
-    def make_via(p, code):
+    from pnr.via_in_pad import smd_keepout_violated, in_pad_size, style_in_pad_via
+    smd_pads = [t for t in pads if t.GetAttribute() == pcbnew.PAD_ATTRIB_SMD]
+    # (net, x, y) -> (diameter, drill) of a checked 5B filled in-pad via (profile only).
+    in_pad_vias = {}
+    in_pad_key = lambda net, p: (net, round(p[0], 6), round(p[1], 6))
+
+    def make_via(p, code, size=None):
+        diameter, drill = size or (fg.via_diameter, fg.via_drill)
         via = pcbnew.PCB_VIA(b)
         via.SetPosition(vec(p))
-        via.SetFrontWidth(600000)
-        via.SetDrill(300000)
+        via.SetFrontWidth(round(diameter * 1e6))
+        via.SetDrill(round(drill * 1e6))
         via.SetViaType(pcbnew.VIATYPE_THROUGH)
         via.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
         via.SetNetCode(code)
         return via
+
+    def via_fits(r, p, code, size=None):
+        """Copper, keepout and drill checks of one via (default size unless ``size``)."""
+        diameter, drill = size or (fg.via_diameter, fg.via_drill)
+        via = make_via(p, code, size)
+        for la in copper_layers:
+            shape = via.GetEffectiveShape(la)
+            found = set()
+            for x in range(math.floor(p[0] - 0.8), math.floor(p[0] + 0.8) + 1):
+                for y in range(math.floor(p[1] - 0.8), math.floor(p[1] + 0.8) + 1):
+                    found.update(buckets[la, x, y])
+            for i in found:
+                other, gap, n, identity, _, smd = obstacles[i]
+                # Legacy: no via within 0.05 mm of any SMD pad. Profile: 5A 0.127
+                # unless a qualified 5B filled in-pad via of the pad's own net.
+                if smd is not None and smd_keepout_violated(fg, smd, other, shape, r.net, p, diameter, drill, la):
+                    return False
+                if n != r.net and other.Collide(
+                    shape, round(max(gap, r.clearance if n is not None else gap) * 1e6)
+                ):
+                    return False
+            for zone in via_zones:
+                if zone.IsOnLayer(la) and zone.Outline().Collide(shape, 1000):
+                    return False
+        hole = via.GetEffectiveHoleShape()
+        for other, bb, t, gap in drilled_gaps:
+            if (
+                bb.GetLeft() / 1e6 - hole_reach <= p[0] <= bb.GetRight() / 1e6 + hole_reach
+                and bb.GetTop() / 1e6 - hole_reach <= p[1] <= bb.GetBottom() / 1e6 + hole_reach
+                and other.Collide(hole, gap)
+            ):
+                return False
+        return True
 
     def via_clear(r, p):
         key = (r.net, p)
@@ -584,8 +664,8 @@ def main():
             return via_cache[key]
         via_cache[key] = False
         if not (
-            box.GetLeft() / 1e6 + 0.501 <= p[0] <= box.GetRight() / 1e6 - 0.501
-            and box.GetTop() / 1e6 + 0.501 <= p[1] <= box.GetBottom() / 1e6 - 0.501
+            box.GetLeft() / 1e6 + via_margin <= p[0] <= box.GetRight() / 1e6 - via_margin
+            and box.GetTop() / 1e6 + via_margin <= p[1] <= box.GetBottom() / 1e6 - via_margin
         ):
             return False
         reused = next(
@@ -599,34 +679,15 @@ def main():
         if reused:
             via_cache[key] = True
             return True
-        if not reference_guard.via_clear(r.net,p,.6):return False
+        if not reference_guard.via_clear(r.net,p,fg.via_diameter):return False
         code = net_codes[r.net]
-        via = make_via(p, code)
-        for la in copper_layers:
-            shape = via.GetEffectiveShape(la)
-            found = set()
-            for x in range(math.floor(p[0] - 0.8), math.floor(p[0] + 0.8) + 1):
-                for y in range(math.floor(p[1] - 0.8), math.floor(p[1] + 0.8) + 1):
-                    found.update(buckets[la, x, y])
-            for i in found:
-                other, gap, n, identity, _, smd = obstacles[i]
-                if smd and other.Collide(shape, 50000):
-                    return False
-                if n != r.net and other.Collide(
-                    shape, round(max(gap, r.clearance if n is not None else gap) * 1e6)
-                ):
-                    return False
-            for zone in via_zones:
-                if zone.IsOnLayer(la) and zone.Outline().Collide(shape, 1000):
-                    return False
-        hole = via.GetEffectiveHoleShape()
-        for other, bb, t in drilled:
-            if (
-                bb.GetLeft() / 1e6 - 0.6 <= p[0] <= bb.GetRight() / 1e6 + 0.6
-                and bb.GetTop() / 1e6 - 0.6 <= p[1] <= bb.GetBottom() / 1e6 + 0.6
-                and other.Collide(hole, 201000)
-            ):
+        if not via_fits(r, p, code):
+            # Profile only: inside a same-net SMD pad the default via is refused;
+            # a 5B filled in-pad class via (0.20/0.35, else 0.20/0.45) may fit.
+            size = in_pad_size(fg, smd_pads, r.net, p)
+            if size is None or not via_fits(r, p, code, size):
                 return False
+            in_pad_vias[in_pad_key(r.net, p)] = size
         via_cache[key] = True
         return True
 
@@ -779,7 +840,11 @@ def main():
                         math.dist(a[:2], position) < 1e-8
                         for position, t in existing_vias_by_net.get(r.net, ())
                     ):
-                        b.Add(make_via(a[:2], code))
+                        size = in_pad_vias.get(in_pad_key(r.net, a[:2]))
+                        via = make_via(a[:2], code, size)
+                        if size:
+                            style_in_pad_via(fg, via)
+                        b.Add(via)
                         added_vias.add(key)
                     continue
                 t = pcbnew.PCB_TRACK(b)
@@ -790,6 +855,7 @@ def main():
                 t.SetWidth(round(r.width * 1e6))
                 b.Add(t)
         report["added_vias"] = len(added_vias)
+        report["added_in_pad_vias"] = sum(in_pad_key(n, (x, y)) in in_pad_vias for n, x, y in added_vias)
         b.BuildConnectivity()
         entry_ok = True
         if entry_rules is not None:

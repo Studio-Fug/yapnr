@@ -60,6 +60,7 @@ filegroup(
         "pnr/placement_trials.py",
         "pnr/placement_copper.py",
         "pnr/staged_signal.py",
+        "pnr/fanout_reserve.py",
         "pnr/electrical_repair.py",
         "pnr/plane_leaf.py",
         "pnr/plane_leaf_repair.py",
@@ -434,6 +435,14 @@ py_test(
     srcs = ["tests/test_two_sided_placement.py"],
     main = "tests/test_two_sided_placement.py",
     deps = [":pnr", ":pnr_place"],
+)
+
+py_test(
+    name = "fanout_reserve_test",
+    size = "small",
+    srcs = ["tests/test_fanout_reserve.py"],
+    main = "tests/test_fanout_reserve.py",
+    deps = [":pnr", ":pnr_detail"],
 )
 
 py_test(

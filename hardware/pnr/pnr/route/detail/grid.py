@@ -14,6 +14,7 @@ layer, the last index the bottom (B.Cu). Inner layers are planes (not routed her
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
@@ -81,7 +82,28 @@ class RouteGrid:
         self.via_drill_radius = self.via_radius  # conservative until fab rules supply the drill
         self.hole_clearance = .2
         self.source_drills = []  # centre, conservative radius; slots use enclosing circle
+        # Fab-profile hole kinds (None = one hole_clearance for every drill, the
+        # pre-profile rule): plated flag per source drill, aligned by index.
+        self.source_drill_plated = []
+        self.pth_hole_gap = None  # via drill to component PTH drill
+        self.npth_hole_gap = None  # via drill to NPTH drill
+        self.via_hole_gap = None  # via drill to via-class drill (None: hole_clearance)
+        # Plated pad drills under this are a footprint's vias (5A Component PTH
+        # hole 0.30 or more): via rules, not PTH ones. None: every plated pad is PTH.
+        self.component_pth_min_drill = None
+        self.drilled_pads = []  # (layers, net, centre, drill radius, plated)
         self.plated_ports = []  # net, exact centre, conservative in-land radius
+        # Surface pads (layer, net, Rect, land corner) and the fab profile's
+        # via-to-SMD-pad rule (restrict_smd_vias: 5A via copper 0.127 from any SMD
+        # pad, 5B filled in-pad class inside an own-net pad). The corner is the
+        # exact land's corner radius (graph Pad.land_corner), None when the Rect
+        # only bounds the copper (no in-pad via there). None rule: the pre-profile
+        # grid, where a via may enter or graze its own net's pads.
+        self.smd_pads = []
+        self.in_pad = None
+        self.via_to_smd_pad = None
+        self.smd_via_blocked = None  # (ny, nx) bool, cell-centre verdicts
+        self._smd_index = None
 
 
     def plated_transition(self, net, i, j):
@@ -102,12 +124,66 @@ class RouteGrid:
     def hole_site_clear(self, point, sites=()):
         """Same-net copper may merge; two distinct drills still need spacing."""
         import math
-        if any(math.dist(point, p) < radius + self.via_drill_radius + self.hole_clearance - 1e-7
-               for p, radius in self.source_drills):
+        if self.pth_hole_gap is None:
+            if any(math.dist(point, p) < radius + self.via_drill_radius + self.hole_clearance - 1e-7
+                   for p, radius in self.source_drills):
+                return False
+        elif any(math.dist(point, p) < radius + self.via_drill_radius + self._source_hole_gap(k) - 1e-7
+                 for k, (p, radius) in enumerate(self.source_drills)):
             return False
         return all(math.dist(point, p) < 1e-7 or
                    math.dist(point, p) >= self.via_spacing - 1e-7
                    for p in [xy for _, xy in self.escape_vias] + list(sites))
+
+    def _via_class_drill(self, radius: float) -> bool:
+        """A plated pad drill of this radius is a footprint's via (not a component PTH)."""
+        return self.component_pth_min_drill is not None and 2 * radius < self.component_pth_min_drill - 1e-9
+
+    def _source_hole_gap(self, index):
+        """Profile drill gap from a new via to source drill ``index``."""
+        plated = self.source_drill_plated[index] if index < len(self.source_drill_plated) else None
+        if plated and self._via_class_drill(self.source_drills[index][1]):
+            return self.via_hole_gap if self.via_hole_gap is not None else self.hole_clearance
+        npth = self.npth_hole_gap if self.npth_hole_gap is not None else self.pth_hole_gap
+        return self.pth_hole_gap if plated else npth if plated is False else max(self.pth_hole_gap, npth)
+
+    def mark_pth_hole_keepouts(self, pth_hole_clearance: float,
+                               via_hole_clearance: Optional[float] = None) -> None:
+        """Fab profile: foreign tracks keep ``pth_hole_clearance`` from a
+        component PTH drill wall even where its copper land is narrow (the pad
+        track halo only guarantees ``clearance`` from the land). A footprint's
+        via-class drill keeps ``via_hole_clearance`` instead (none if None)."""
+        for layers, net, (cx, cy), radius, plated in self.drilled_pads:
+            if not plated:
+                continue
+            gap = via_hole_clearance if self._via_class_drill(radius) else pth_hole_clearance
+            if gap is None:
+                continue
+            hole = Rect(cx, cy, 2 * radius, 2 * radius)
+            for la in layers:
+                def reserve(L, i, j, owner_net=net):
+                    key = (L, i, j)
+                    owner = self.pad_net.get(key)
+                    self.pad_net[key] = owner_net if owner is None or owner == owner_net else "\0conflict"
+                self._mark_rect(la, hole, gap + 0.5 * self.track_width, reserve)
+
+    def block_edge_inset_split(self, track_inset: float, via_inset: float) -> None:
+        """Fab profile edge rules: copper-to-edge for tracks, and for vias the
+        larger of copper-to-edge and hole-to-edge (pad cells left alone, as in
+        :meth:`block_edge_inset`)."""
+        for j in range(self.ny):
+            for i in range(self.nx):
+                d = min((i + 0.5) * self.pitch, (j + 0.5) * self.pitch,
+                        self.width - (i + 0.5) * self.pitch, self.height - (j + 0.5) * self.pitch)
+                if d >= max(track_inset, via_inset) - 1e-9:
+                    continue
+                for la in range(self.nlayers):
+                    if (la, i, j) in self.pad_net:
+                        continue
+                    if d < track_inset - 1e-9:
+                        self.blocked[la, j, i] = True
+                    if d < via_inset - 1e-9:
+                        self.via_blocked[la, j, i] = True
 
     # -- coordinate mapping --------------------------------------------------
 
@@ -138,17 +214,89 @@ class RouteGrid:
         owner = self.pad_net.get((layer, i, j))
         return owner is None or owner == net
 
-    def via_passable(self, layer: int, i: int, j: int, net: Optional[str] = None) -> bool:
+    def via_passable(self, layer: int, i: int, j: int, net: Optional[str] = None,
+                     point: Optional[Tuple[float, float]] = None) -> bool:
         """True if net ``net`` may drop a **via** at cell (layer, i, j): passable for
         a track *and* clear of every other net's wider via-halo (a via is fatter than
-        a track, so it needs more room from foreign pads)."""
+        a track, so it needs more room from foreign pads). Under a fab profile the
+        via-to-SMD-pad rule applies at the cell centre, or at ``point`` (an exact
+        off-grid via site such as a pad centre) when given."""
         if not self.in_bounds(i,j) or self.via_blocked[layer,j,i]:
             return False
+        if self.smd_via_blocked is not None:
+            if point is not None:
+                if not self.smd_via_ok(point, net):
+                    return False
+            elif self.smd_via_blocked[j, i]:
+                return False
         owner = self.pad_net.get((layer,i,j))
         if owner is not None and owner != net:
             return False
         vh = self.via_halo.get((layer, i, j))
         return vh is None or vh == net
+
+    def smd_via_ok(self, point: Tuple[float, float], net: Optional[str] = None) -> bool:
+        """Fab profile via-to-SMD-pad rule for a via centred at ``point`` (mm).
+
+        Outside every surface pad the default via keeps ``via_to_smd_pad`` from each
+        one (5A).
+        A via whose centre lies in pads (all of one net, ``net`` when given) must be
+        a 5B filled in-pad via there: :func:`pnr.fab_profile.in_pad_fit` on the pad
+        rectangle with its land corner. Only exact lands qualify: a Rect that only
+        bounds a custom, chamfered, rotated or offset land (corner None) can hold
+        points with no copper or with too little hole margin, so it admits no via.
+        Emission re-checks the native land and sizes it (pnr.via_in_pad.in_pad_size).
+        """
+        from pnr.fab_profile import in_pad_fit
+        keep = self.via_radius + self.via_to_smd_pad + .001
+        index = self._smd_index
+        if index is None or index[0] != keep:
+            buckets: Dict[Tuple[int, int], List[int]] = {}
+            for k, (_, _, r, _) in enumerate(self.smd_pads):
+                for bx in range(math.floor(r.left - keep), math.floor(r.right + keep) + 1):
+                    for by in range(math.floor(r.bottom - keep), math.floor(r.top + keep) + 1):
+                        buckets.setdefault((bx, by), []).append(k)
+            index = self._smd_index = (keep, buckets)
+        inside = []
+        for k in index[1].get((math.floor(point[0]), math.floor(point[1])), ()):
+            _, owner, r, corner = self.smd_pads[k]
+            dx = max(r.left - point[0], 0.0, point[0] - r.right)
+            dy = max(r.bottom - point[1], 0.0, point[1] - r.top)
+            if dx == 0.0 and dy == 0.0:
+                inside.append((owner, r, corner))
+            elif math.hypot(dx, dy) < keep - 1e-9:
+                return False
+        if not inside:
+            return True
+        ip = self.in_pad
+        owners = {owner for owner, _, _ in inside}
+        if ip is None or len(owners) != 1 or not next(iter(owners)) or (net is not None and owners != {net}):
+            return False
+        if any(corner is None for _, _, corner in inside):
+            return False
+        return any(all(in_pad_fit(ip, (r.w, r.h), (point[0] - r.cx, point[1] - r.cy), d, ip.drill, corner)
+                       for _, r, corner in inside) for d in ip.diameters)
+
+    def restrict_smd_vias(self, in_pad, via_to_smd_pad: float) -> None:
+        """Apply the fab profile's via-to-SMD-pad rule (:meth:`smd_via_ok`) to every
+        cell near a surface pad; the grid is unchanged elsewhere."""
+        self.in_pad = in_pad
+        self.via_to_smd_pad = float(via_to_smd_pad)
+        self.smd_via_blocked = np.zeros((self.ny, self.nx), dtype=bool)
+        reach = self.via_radius + self.via_to_smd_pad + self.pitch
+        seen = set()
+        for _, _, r, _ in self.smd_pads:
+            i0 = max(0, int((r.left - reach) / self.pitch))
+            i1 = min(self.nx - 1, int((r.right + reach) / self.pitch))
+            j0 = max(0, int((r.bottom - reach) / self.pitch))
+            j1 = min(self.ny - 1, int((r.top + reach) / self.pitch))
+            for j in range(j0, j1 + 1):
+                for i in range(i0, i1 + 1):
+                    if (i, j) in seen:
+                        continue
+                    seen.add((i, j))
+                    if not self.smd_via_ok(self.center_of(i, j)):
+                        self.smd_via_blocked[j, i] = True
 
     # -- construction --------------------------------------------------------
 
@@ -252,7 +400,10 @@ class RouteGrid:
         )
         for comp in graph.components:
             side = g.side_layer(comp.side)
+            # pad_rects is exact only at quarter-turn part rotations.
+            quarter = abs(comp.rot / 90.0 - round(comp.rot / 90.0)) < 1e-6
             for (name, net, r), pad in zip(pad_rects(comp), comp.pads):
+                land = pad.land_corner if quarter else None
                 # A through-hole pad occupies (and must be cleared on) *every* signal
                 # layer; an SMD pad only the component's side.
                 pad_layers = tuple(range(g.nlayers)) if pad.through_hole else (side,)
@@ -260,6 +411,8 @@ class RouteGrid:
                     # Circular envelope is conservative for oval/rotated slots;
                     # source drills are obstacles even for copper on the same net.
                     g.source_drills.append(((r.cx, r.cy), max(pad.drill_size) / 2))
+                    g.source_drill_plated.append(pad.plated)
+                    g.drilled_pads.append((pad_layers, net, (r.cx, r.cy), max(pad.drill_size) / 2, pad.plated))
                     if pad.plated is True and net and pad.plated_land_radius > 0:
                         g.plated_ports.append((net, (r.cx, r.cy), pad.plated_land_radius))
                 if not net:
@@ -271,9 +424,13 @@ class RouteGrid:
                     # has the empty name, and no access point is created here.
                     for la in pad_layers:
                         g.add_pad(la, "", r)
+                    if not pad.through_hole and r.w > 0 and r.h > 0:
+                        g.smd_pads.append((side, "", r, land))
                     continue
                 for la in pad_layers:
                     g.add_pad(la, net, r)
+                if not pad.through_hole and r.w > 0 and r.h > 0:
+                    g.smd_pads.append((side, net, r, land))
                 # Access cell on the component's side (where a same-side track meets
                 # it); a through-hole pad is reachable from either side via its via.
                 g.access[(net, comp.ref + "." + name)] = Cell(side, *g.cell_of(r.cx, r.cy))

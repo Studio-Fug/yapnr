@@ -28,24 +28,27 @@ def folder():
 def save(kind,payload):
  p=folder()
  if p is None:return None
- raw=json.dumps(dict(schema='pnr-placement-cost-capture-v1',kind=kind,phase_context=phase_context(),runtime_sources={name:hashlib.sha256((Path(__file__).parent/name).read_bytes()).hexdigest() for name in ('model.py','legalize.py','cost_inspect.py','cost_capture.py')},**payload),separators=(',',':'),default=lambda v:v.value if isinstance(v,enum.Enum) else str(v)).encode();sha=hashlib.sha256(raw).hexdigest();dest=p/(sha+'.json')
+ sources={name:hashlib.sha256((Path(__file__).parent/name).read_bytes()).hexdigest() for name in ('model.py','legalize.py','cost_inspect.py','cost_capture.py')}
+ if os.environ.get('PNR_POWER_FIRST')=='1':sources.update({name:hashlib.sha256((Path(__file__).parent/name).read_bytes()).hexdigest() for name in ('power_first.py','../power_topology.py')})
+ raw=json.dumps(dict(schema='pnr-placement-cost-capture-v1',kind=kind,phase_context=phase_context(),runtime_sources=sources,**payload),separators=(',',':'),default=lambda v:v.value if isinstance(v,enum.Enum) else str(v)).encode();sha=hashlib.sha256(raw).hexdigest();dest=p/(sha+'.json')
  if not dest.exists():
   tmp=p/(uuid.uuid4().hex+'.tmp');tmp.write_bytes(raw);tmp.replace(dest)
  from pnr.live import emit
  if kind!='legalizer-decision':emit('placement_cost_capture',layout=payload.get('graph'),data=dict(phase=kind,placement_context=phase_context(),cost_capture=dict(path=str(dest.resolve()),sha256=sha,kind=kind)))
  return str(dest)
 
-def global_loss(graph,constraints,pos,probabilities,offsets,half,loss,parameters,inflation,step):
+def global_loss(graph,constraints,pos,probabilities,offsets,half,loss,parameters,inflation,step,roles=None,pf_state=None):
  from pnr.graph import BoardGraph, BoardOutline
  from .geometry import outline_size
  from .cost_inspect import Objective
  g=BoardGraph.from_json(graph.to_json())
  width,height=outline_size(g,constraints);g.outline=BoardOutline(width,height)
  for i,c in enumerate(g.components):c.pos=tuple(pos[i]);c.rot=float(90*max(range(4),key=lambda j:probabilities[i][j]))
- m=Objective(g,constraints,parameters=parameters,inflation=inflation,effective_offsets=offsets,effective_half=half);report=m.report();difference=report['board_total']-loss
+ m=Objective(g,constraints,parameters=parameters,inflation=inflation,effective_offsets=offsets,effective_half=half,roles=roles,pf_state=pf_state);report=m.report();difference=report['board_total']-loss
  if abs(difference)>max(.005,abs(loss)*2e-6):raise ValueError('Cost capture diverges from optimizer objective')
  report.update(scope='recorded-optimizer-soft-state-before-update',actual_optimizer_loss=loss,replay_error=difference)
- return save('global-objective',dict(graph=json.loads(g.to_json()),constraints=dataclasses.asdict(constraints),parameters=parameters,inflation=inflation or {},effective_offsets=offsets,effective_half=half,rotation_probabilities=probabilities,optimizer_step=step,report=report,geometry_scope='display uses argmax rotations; cost uses recorded soft rotation mixture'))
+ extra={} if roles is None else dict(roles=roles,pf_state=pf_state)
+ return save('global-objective',dict(graph=json.loads(g.to_json()),constraints=dataclasses.asdict(constraints),parameters=parameters,inflation=inflation or {},effective_offsets=offsets,effective_half=half,rotation_probabilities=probabilities,optimizer_step=step,report=report,geometry_scope='display uses argmax rotations; cost uses recorded soft rotation mixture',**extra))
 
 def legalizer_decision(graph,ref,target,position,rotation,neighbors,fields,chosen,grid,channel_weight,local_details=()):
  """Store actual evaluated legal candidates/terms before another part is placed."""

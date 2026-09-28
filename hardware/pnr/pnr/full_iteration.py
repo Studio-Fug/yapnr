@@ -25,6 +25,7 @@ def main():
     ap.add_argument('--annotation-source',action='append',default=[])
     ap.add_argument('--seconds',type=int,default=600)
     ap.add_argument('--geometric-relax',action='store_true')
+    ap.add_argument('--assemble',type=Path,help='JSON list of routed block boards to copy in after placement')
     ap.add_argument('--python',default='/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3')
     ap.add_argument('--cli',default='/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli')
     a=ap.parse_args();p=a.round.resolve();phases=p/'phases';work=p/'electrical';work.mkdir(exist_ok=False)
@@ -32,6 +33,9 @@ def main():
     sources=a.annotation_source or ['hardware/splanc_dev/elec/src/splanc_mini.ato']
     annotations=[v for source in sources for v in ['--annotation-source',str(Path(source).resolve())]]
     rules=p/'rules.json';board=work/'board.kicad_pcb'
+    # One fab profile for the whole round (PNR_FAB_PROFILE; no-op for legacy).
+    from pnr.fab_profile import apply_rules_file
+    apply_rules_file(rules)
     from pnr.live import emit
     def run(args,name):
         emit('phase_start',data=dict(phase=name))
@@ -40,6 +44,9 @@ def main():
     # The production order reserves pair/power corridors before ordinary signals.
     # Rebuild from the candidate placement, not a previously filled signal board.
     run(['pnr.writeback',p/'source.kicad_pcb',p/'placed.json','--out',board,'--rules',rules],'placement')
+    if a.assemble:
+        blocks=[x for b in json.loads(a.assemble.read_text()) for x in ('--block',b)]
+        run(['pnr.hier.assemble',board,*blocks,'--out',board],'assemble')
     table=p/'fp-lib-table'
     if not table.exists():table=Path('output/fresh-pnr-20260919/source-footprint-probe/fp-lib-table')
     shutil.copy2(table,work/'fp-lib-table')

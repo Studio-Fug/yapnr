@@ -62,11 +62,19 @@ class Pad:
     drill_size: Tuple[float, float] = (0.0, 0.0)  # native drill/slot dimensions, mm
     plated: Optional[bool] = None  # None for legacy graphs that did not distinguish PTH/NPTH
     plated_land_radius: float = 0.0  # native-confirmed inscribed copper radius; unknown/custom=0
+    # Corner radius (mm) of an SMD land whose offset/size rectangle IS its copper
+    # outline (rect 0, roundrect r, oval/circle half the short side); None when the
+    # rectangle only bounds the copper (custom, chamfered, trapezoid, non-cardinal or
+    # offset lands, and every legacy graph). The detailed grid admits filled in-pad
+    # vias (fab profile 5B) only in exact lands.
+    land_corner: Optional[float] = None
 
     def __post_init__(self):
         self.offset = _fpair(self.offset)
         self.size = _fpair(self.size)
         self.drill_size = _fpair(self.drill_size)
+        if self.land_corner is not None:
+            self.land_corner = float(self.land_corner)
 
 
 @dataclass
@@ -193,6 +201,7 @@ class BoardGraph:
                         drill_size=p.get("drill_size", (0.0, 0.0)),
                         plated=p.get("plated"),
                         plated_land_radius=float(p.get("plated_land_radius", 0.0)),
+                        land_corner=p.get("land_corner"),
                     )
                     for p in c.get("pads", [])
                 ],

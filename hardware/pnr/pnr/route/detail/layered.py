@@ -12,6 +12,20 @@ import math
 import time
 from .keyhole import elbows, legal, length, relax, route, grid_access
 from .regional import RegionalResult, segment_distance
+from pnr.fab_profile import bind_active
+
+# Fab-profile default via and via-to-via drill gap (PNR_FAB_PROFILE; legacy
+# 0.6 / 0.3 / 0.201 / 0.501) in module globals: read per primitive, not per call.
+_VIA_DIAMETER = _VIA_DRILL = _HOLE_GAP = _VIA_PITCH = None
+
+
+def _bind(g):
+    global _VIA_DIAMETER, _VIA_DRILL, _HOLE_GAP, _VIA_PITCH
+    _VIA_DIAMETER, _VIA_DRILL, _HOLE_GAP, _VIA_PITCH = (
+        g.via_diameter, g.via_drill, g.hole_gap, g.same_net_via_pitch)
+
+
+bind_active(_bind)
 
 
 def primitives(path):
@@ -23,7 +37,10 @@ def primitives(path):
         )
 
 
-def copper_conflict(a, b, layer, path, width, other_width, clearance, via_diameter=0.6):
+def copper_conflict(a, b, layer, path, width, other_width, clearance, via_diameter=None):
+    # Default via of the fab profile (PNR_FAB_PROFILE; legacy 0.6).
+    if via_diameter is None:
+        via_diameter = _VIA_DIAMETER
     for kind, la, c, d in primitives(path):
         if kind == "track" and la != layer:
             continue
@@ -36,11 +53,16 @@ def copper_conflict(a, b, layer, path, width, other_width, clearance, via_diamet
 
 
 def via_conflict(
-    p, path, width, clearance, via_diameter=0.6, drill=0.3, same_net=False
+    p, path, width, clearance, via_diameter=None, drill=None, same_net=False
 ):
+    # Default via and via-to-via drill gap of the fab profile (legacy 0.6/0.3/0.201).
+    if via_diameter is None:
+        via_diameter = _VIA_DIAMETER
+    if drill is None:
+        drill = _VIA_DRILL
     for kind, la, a, b in primitives(path):
         if same_net:
-            if kind == "via" and 1e-8 < math.dist(p, a) < drill + 0.201 - 1e-9:
+            if kind == "via" and 1e-8 < math.dist(p, a) < drill + _HOLE_GAP - 1e-9:
                 return True
             continue
         radius = (
@@ -194,7 +216,7 @@ def _route_escape_ports(
         return (all(transition_clear(a[:2],a[2],b[2]) for a,b in zip(path,path[1:]) if a[2]!=b[2]) and
                 len(via_points)<=max_vias and
                 (not via_points or first_via_allowed(via_points[0])) and
-                all(math.dist(a,b)>=.501-1e-9 for i,a in enumerate(via_points) for b in via_points[i+1:]))
+                all(math.dist(a,b)>=_VIA_PITCH-1e-9 for i,a in enumerate(via_points) for b in via_points[i+1:]))
     # Try every layer with a small finite trunk search before spending the
     # full expansion allowance on a single blocked layer. Every candidate
     # still goes through exact segment, via and transition checks.
@@ -333,6 +355,7 @@ def _route_layers(
     if ports.path and (not force_layered or any(kind=="via" for kind,_,_,_ in primitives(ports.path))):
         ports.expanded += planar.expanded
         return ports
+    via_pitch = _VIA_PITCH  # distinct drills (legacy 0.501)
     x0, y0, x1, y1 = bounds
     nx = int((x1 - x0) / pitch) + 1
     ny = int((y1 - y0) / pitch) + 1
@@ -441,7 +464,7 @@ def _route_layers(
                     )
                 )
         if count < min(max_vias, 2) and (
-            count == 0 or math.dist(point(i, j), point(vi, vj)) >= 0.501 - 1e-9
+            count == 0 or math.dist(point(i, j), point(vi, vj)) >= via_pitch - 1e-9
         ):
             if (i, j) not in vias:
                 vias[i, j] = via_clear(point(i, j))
@@ -562,7 +585,7 @@ def solve_layered_region(
                 for other in requests:
                     if other.net == r.net:
                         continue
-                    gap = (0.6 + other.width) / 2 + max(r.clearance, other.clearance)
+                    gap = (_VIA_DIAMETER + other.width) / 2 + max(r.clearance, other.clearance)
                     if any(
                         len(ps) == 1 and math.dist(p, ps[0]) < gap - 1e-9
                         for ps in (other.sources, other.targets)

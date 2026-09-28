@@ -11,7 +11,11 @@ class NativeLifecycleTest(unittest.TestCase):
   for xy in [(1,1),(19,1),(19,19),(1,19)]:outline.Append(vec(xy))
   b.Add(zone);zone.thisown=False;k.ZONE_FILLER(b).Fill(b.Zones());b.BuildConnectivity()
   with tempfile.TemporaryDirectory(prefix='plane-leaf-lifecycle-') as tmp:
-   root=Path(tmp);seed=root/'seed.kicad_pcb';k.SaveBoard(str(seed),b);seed.with_suffix('.kicad_pro').write_text('{}');rp=root/'rules.json';rp.write_text(json.dumps(rules))
+   root=Path(tmp);seed=root/'seed.kicad_pcb';k.SaveBoard(str(seed),b);seed.with_suffix('.kicad_pro').write_text('{}');rp=root/'rules.json'
+   # The worker's native DRC applies the selected fab profile (PNR_FAB_PROFILE);
+   # hand it rules compiled for that profile, as the pipeline boundaries do.
+   from pnr.fab_profile import apply_rules
+   rp.write_text(json.dumps(apply_rules(rules)))
    env=dict(os.environ);env.pop('PNR_DRC_SERVICE',None)
    for index in range(2):
     out=root/str(index);command=[sys.executable,'-m','pnr.plane_leaf',str(seed),'--rules',str(rp),'--focus','RENAMED','--out-dir',str(out)]

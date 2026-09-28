@@ -13,17 +13,30 @@ import time
 from .layered import primitives, route_layers
 from .spatial_conflicts import PrimitiveIndex
 from .regional import RegionalResult, segment_distance
+from pnr.fab_profile import bind_active
+
+# Fab-profile default via (PNR_FAB_PROFILE; legacy 0.6 / 0.501), kept in module
+# globals: conflict() runs per primitive pair and must cost what the literals did.
+_VIA_DIAMETER = _VIA_PITCH = None
+
+
+def _bind(g):
+    global _VIA_DIAMETER, _VIA_PITCH
+    _VIA_DIAMETER, _VIA_PITCH = g.via_diameter, g.same_net_via_pitch
+
+
+bind_active(_bind)
 
 
 def conflict(a_request, a, b_request, b):
     ak, al, ap, aq = a
     bk, bl, bp, bq = b
     if a_request.net == b_request.net:
-        return ak == bk == "via" and 1e-8 < math.dist(ap, bp) < 0.501 - 1e-9
+        return ak == bk == "via" and 1e-8 < math.dist(ap, bp) < _VIA_PITCH - 1e-9
     if ak == bk == "track" and al != bl:
         return False
-    aw = a_request.width if ak == "track" else 0.6
-    bw = b_request.width if bk == "track" else 0.6
+    aw = a_request.width if ak == "track" else _VIA_DIAMETER
+    bw = b_request.width if bk == "track" else _VIA_DIAMETER
     gap = (aw + bw) / 2 + max(a_request.clearance, b_request.clearance)
     # Disjoint expanded coordinate intervals are a lower bound on distance.
     # Keep the exact distance test for all potentially contacting primitives.

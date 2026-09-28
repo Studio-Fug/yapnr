@@ -88,11 +88,12 @@ def consolidate(a):
         cmd=[a.kicad_python,'-m','pnr.power_bank_stage',str(board),'--worker',mode,
              '--rules',str(a.rules),'--report',str(report),'--radius',str(a.radius)]+list(map(str,extra))
         started=time.monotonic()
+        from pnr.proc import run as run_bounded
         with report.with_suffix('.log').open('w') as log:
-            process=subprocess.run(cmd,stdout=log,stderr=subprocess.STDOUT)
-        worker_exits.append(dict(mode=mode,returncode=process.returncode,seconds=time.monotonic()-started))
+            code=run_bounded(cmd,stdout=log,stderr=subprocess.STDOUT)
+        worker_exits.append(dict(mode=mode,returncode=code,seconds=time.monotonic()-started))
         save(a.work_dir/'worker-exits.json',worker_exits)
-        process.check_returncode()
+        if code:raise subprocess.CalledProcessError(code,cmd)
         return read(report)
     def drc(board):return run_drc(a.kicad_cli,board,board.with_suffix('.drc.json'))
     before=drc(current);initial=before
@@ -162,10 +163,11 @@ def main():
     p.add_argument('--transaction',type=Path);p.add_argument('--prune',action='append',default=[]);a=p.parse_args()
     a.board=a.board.resolve();a.rules=a.rules.resolve()
     if a.worker:
-        import wx
-        app=wx.App(False)
+        # Headless by design: never bootstrap a wx App here. On macOS it enters the
+        # Cocoa event loop and can block forever when no GUI session is available.
         import pcbnew as k
-        board=k.LoadBoard(str(a.board));execute_native(a,read(a.rules),board)
+        from pnr.fab_profile import load_board  # custom rules in force for the 'fill' worker
+        board=load_board(a.board);execute_native(a,read(a.rules),board)
     else:
         result=consolidate(a)
         print(json.dumps({k:result[k] for k in ['before_opens','after_opens','before_vias','after_vias','accepted_transactions','termination']}))

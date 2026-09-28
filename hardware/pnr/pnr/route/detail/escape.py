@@ -68,7 +68,7 @@ def _line_clear(
     )
 
 
-def _via_clean(grid: RouteGrid, i: int, j: int, net: str, via_keepout: int) -> bool:
+def _via_clean(grid: RouteGrid, i: int, j: int, net: str, via_keepout: int, point=None) -> bool:
     """True if a via for ``net`` at column (i, j) clears all *other*-net copper — its
     keep-out halo (all layers) touches no cell owned by another net. A Ø0.45 via
     dropped in a 0.5 mm-pitch pad field would short its neighbours; this rejects that
@@ -76,7 +76,9 @@ def _via_clean(grid: RouteGrid, i: int, j: int, net: str, via_keepout: int) -> b
     if not grid.hole_site_clear(grid.center_of(i, j)):
         return False
     for la in range(grid.nlayers):
-        if not grid.via_passable(la,i,j,net):return False
+        # ``point``: an exact off-grid via site (a pad centre) for the fab
+        # profile's via-to-SMD-pad rule; None judges the cell centre.
+        if not grid.via_passable(la,i,j,net,point):return False
         for di in range(-via_keepout, via_keepout + 1):
             for dj in range(-via_keepout, via_keepout + 1):
                 owner = grid.pad_net.get((la, i + di, j + dj))
@@ -294,11 +296,11 @@ def _plan_one(
         for la in order:
             tgt = Cell(la, ci, cj)
             if (
-                grid.via_passable(la, ci, cj, net)
+                grid.via_passable(la, ci, cj, net, pad_xy)
                 and grid.passable(la,ci,cj,net)
                 and _has_free_neighbor(grid, tgt, net)
                 and grid.hole_site_clear(pad_xy)
-                and _via_clean(grid, ci, cj, net, via_keepout)
+                and _via_clean(grid, ci, cj, net, via_keepout, pad_xy)
             ):
                 _reserve_via(grid, ci, cj, net, via_keepout)
                 return Escape(

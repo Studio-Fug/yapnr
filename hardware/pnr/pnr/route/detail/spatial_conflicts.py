@@ -1,13 +1,24 @@
 """Conservative spatial broad phase for immutable regional copper primitives."""
 from collections import defaultdict
 import math
+from pnr.fab_profile import bind_active
+
+_VIA_RADIUS = None  # fab-profile default via radius (PNR_FAB_PROFILE; legacy 0.3)
+
+
+def _bind(g):
+    global _VIA_RADIUS
+    _VIA_RADIUS = g.via_radius
+
+
+bind_active(_bind)
 
 class PrimitiveIndex:
     def __init__(self, entries, predicate, bucket_mm=1.0):
         self.entries=list(entries);self.predicate=predicate;self.bucket_mm=bucket_mm
         if not bucket_mm>0:raise ValueError('positive bucket required')
         self.buckets=defaultdict(list)
-        self.max_half_width=max((.3 if p[0]=='via' else r.width/2 for r,p in self.entries),default=0.)
+        self.max_half_width=max((_VIA_RADIUS if p[0]=='via' else r.width/2 for r,p in self.entries),default=0.)
         self.max_clearance=max((r.clearance for r,p in self.entries),default=0.)
         for index,(_,p) in enumerate(self.entries):
             for cell in self.cells(p[2],p[3],0):self.buckets[cell].append(index)
@@ -19,7 +30,7 @@ class PrimitiveIndex:
                 yield x,y
 
     def collides(self,request,primitive):
-        gap=(.3 if primitive[0]=='via' else request.width/2)+self.max_half_width+max(request.clearance,self.max_clearance)
+        gap=(_VIA_RADIUS if primitive[0]=='via' else request.width/2)+self.max_half_width+max(request.clearance,self.max_clearance)
         seen=set()
         for cell in self.cells(primitive[2],primitive[3],gap):
             for index in self.buckets.get(cell,()):

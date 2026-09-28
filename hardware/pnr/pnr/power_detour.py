@@ -27,7 +27,7 @@ def port_count(oracle,pad,rules):
   for i in range(16):
    theta=i*math.pi/8;q=(round(p[0]+radius*math.cos(theta),6),round(p[1]+radius*math.sin(theta),6))
    if not any(all(oracle.clear(net,la,a,b,width) for a,b in zip(path,path[1:])) for path in elbows(p,q)):continue
-   if oracle.via(net,q,.6,.3):count+=1;ports.append(q)
+   if oracle.via(net,q,oracle.geometry.via_diameter,oracle.geometry.via_drill):count+=1;ports.append(q)
  return count,ports
 
 def propose(board,pad,rules):
@@ -87,5 +87,5 @@ def execute(a,board,rules):
 
 def main():
  import argparse,pcbnew as k
- p=argparse.ArgumentParser();p.add_argument('board',type=Path);p.add_argument('--rules',type=Path,required=True);p.add_argument('--focus',required=True);p.add_argument('--out-dir',type=Path,required=True);p.add_argument('--plan-only',action='store_true');p.add_argument('--probe-offset',type=float);p.add_argument('--plan-index',type=int,default=0);p.add_argument('--kicad-cli',default='/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli');a=p.parse_args();a.out_dir.mkdir(exist_ok=False);board=k.LoadBoard(str(a.board));execute(a,board,json.loads(a.rules.read_text()))
+ p=argparse.ArgumentParser();p.add_argument('board',type=Path);p.add_argument('--rules',type=Path,required=True);p.add_argument('--focus',required=True);p.add_argument('--out-dir',type=Path,required=True);p.add_argument('--plan-only',action='store_true');p.add_argument('--probe-offset',type=float);p.add_argument('--plan-index',type=int,default=0);p.add_argument('--kicad-cli',default='/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli');a=p.parse_args();a.out_dir.mkdir(exist_ok=False);from pnr.fab_profile import load_board;board=load_board(a.board);execute(a,board,json.loads(a.rules.read_text()))
 if __name__=='__main__':main()

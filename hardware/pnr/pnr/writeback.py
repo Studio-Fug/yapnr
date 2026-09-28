@@ -466,6 +466,9 @@ def outline_bounds(board):
 def _dogbone_fanout_net(board, netcode: int, clearance_mm: float = 0.2, rules=None) -> int:
     """Add only checked external pad-to-plane escapes; never force via-in-pad.
 
+    Under a fab profile with a filled via-in-pad policy (5B) a pad with no legal
+    external escape may take a checked in-pad via instead (_in_pad_plane_via).
+
     Leaves congested pads unrouted for the connectivity gate. Through-hole pads
     already reach the plane. Conservative obstacles include every copper layer;
     final KiCad DRC remains authoritative for zones, keepouts and board edges.
@@ -482,12 +485,16 @@ def _dogbone_fanout_net(board, netcode: int, clearance_mm: float = 0.2, rules=No
     obstacles = _collect_obstacles(board)
     bounds = outline_bounds(board)
     edge = via_r + _nm(fab['edge_clearance_mm'])
+    hole_edge = ((rules or {}).get('fab') or {}).get('hole_to_edge_mm')
+    if hole_edge is not None:  # fab profile: drill wall to outline as well
+        edge = max(edge, drill_d/2. + _nm(hole_edge))
     oracle = None
     if bounds.GetWidth() and bounds.GetHeight():
         import copy
         from pnr.native_electrical import Oracle
         checked_rules=copy.deepcopy(rules or {})
-        checked_rules['fab']=dict(fab,clearance_mm=clr/1e6)
+        # Keep the fab profile's per-hole-kind keys (hole-to-hole, PTH/NPTH, edge).
+        checked_rules['fab']=dict((rules or {}).get('fab') or {},**dict(fab,clearance_mm=clr/1e6))
         oracle=Oracle(board,checked_rules)
     added, skipped = 0, []
     board.BuildConnectivity()
@@ -561,11 +568,57 @@ def _dogbone_fanout_net(board, netcode: int, clearance_mm: float = 0.2, rules=No
                     break
                 if placed:
                     break
+            if not placed and oracle is not None and oracle.geometry.in_pad is not None:
+                # Profile only (5B): no legal dog-bone, so try a filled via in the pad.
+                placed = _in_pad_plane_via(board, pad, rules or {}, oracle, obstacles)
+                if placed:
+                    added += 1
+                    board.BuildConnectivity()
             if not placed:
                 skipped.append(f'{fp.GetReference()}.{pad.GetNumber()}')
     if skipped:
         sys.stderr.write('planes: no clear fanout for ' + ', '.join(skipped) + '\n')
     return added
+
+
+def _in_pad_plane_via(board, pad, rules, oracle, obstacles) -> bool:
+    """A filled 5B in-pad via at the land centre of an SMD plane pad.
+
+    Only under a profile with a via-in-pad policy (``oracle.geometry.in_pad``;
+    docs/fab-comparison.md 5B "Via-in-pad via": 0.20/0.35 centred, hole edge 0.09
+    from the pad edge). The native Oracle checks it like every other via. A pad
+    with a current contract takes it only if one in-pad barrel carries that
+    contract in the engine's via model (no current is inferred or shared).
+    """
+    import pcbnew
+    from pnr.via_in_pad import pad_frame, in_pad_size, pad_policy, array_requirement, style_in_pad_via
+    g = oracle.geometry
+    frame = pad_frame(pad)
+    if frame is None:
+        return False
+    point = frame[0]
+    size = in_pad_size(g, [pad], pad.GetNetname(), point)
+    if size is None:
+        return False
+    policy = pad_policy(pad, rules)
+    if policy is not None and array_requirement(policy, rules, g)['count'] > 1:
+        return False
+    if not oracle.via(pad.GetNetname(), point, *size):
+        return False
+    via = pcbnew.PCB_VIA(board)
+    via.SetPosition(pcbnew.VECTOR2I(round(point[0] * 1e6), round(point[1] * 1e6)))
+    via.SetViaType(pcbnew.VIATYPE_THROUGH)
+    via.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
+    via.SetFrontWidth(_nm(size[0]))
+    via.SetDrill(_nm(size[1]))
+    via.SetNetCode(pad.GetNetCode())
+    style_in_pad_via(g, via)
+    board.Add(via)
+    target = (via.GetPosition().x, via.GetPosition().y)
+    obstacles.append((target, target, _nm(size[0]) / 2., pad.GetNetCode()))
+    obstacles.append((target, target, _nm(size[1]) / 2., -1))
+    oracle.reserve_via(pad.GetNetname(), point, size[0], size[1])
+    return True
 
 
 def _clear_tracks(board) -> int:
@@ -743,18 +796,14 @@ def patch_project_rules(pro_path: str, rules: Optional[dict] = None) -> bool:
     True if the file was patched.
     """
     import json
+    from pnr import fab_profile
 
+    # Stamp under the selected fab profile (identity for legacy rules/profile).
+    rules = fab_profile.apply_rules(rules if rules is not None else {})
     fab = _fab(rules)
-    rule_set = {
-        "min_clearance": fab["clearance_mm"],
-        "min_track_width": fab["track_width_mm"],
-        "min_via_diameter": fab["via_diameter_mm"],
-        "min_via_annular_width": fab["via_annular_mm"],
-        "min_through_hole_diameter": fab["min_through_drill_mm"],
-        "min_hole_clearance": fab["hole_clearance_mm"],
-        "min_hole_to_hole": fab["hole_clearance_mm"],
-        "min_copper_edge_clearance": fab["edge_clearance_mm"],
-    }
+    # Per-hole-kind / minimum keys the 8-key _fab() drops (absent for legacy).
+    extra = {k: v for k, v in ((rules or {}).get("fab") or {}).items() if k not in fab}
+    rule_set = fab_profile.board_constraints(dict(fab, **extra))
     try:
         with open(pro_path, encoding="utf-8") as fh:
             pro = json.load(fh)
@@ -763,6 +812,11 @@ def patch_project_rules(pro_path: str, rules: Optional[dict] = None) -> bool:
     pro.setdefault("meta", {}).setdefault("version", 3)
     rules_j = pro.setdefault("board", {}).setdefault("design_settings", {}).setdefault("rules", {})
     rules_j.update(rule_set)
+    if isinstance(extra.get("via_classes"), dict):
+        # Pre-defined via sizes for interactive work: the profile's via classes.
+        pro["board"]["design_settings"]["via_dimensions"] = [
+            {"diameter": v["diameter_mm"], "drill": v["drill_mm"]}
+            for v in extra["via_classes"].values()]
     settings = pro.setdefault("net_settings", {})
     # Without the version marker KiCad migrates this as an old project and can
     # silently reset the supplied Default clearance to 0.2mm.
@@ -803,23 +857,38 @@ def patch_project_rules(pro_path: str, rules: Optional[dict] = None) -> bool:
             cls["diff_pair_gap"] = spec["gap_mm"]
     with open(pro_path, "w", encoding="utf-8") as fh:
         json.dump(pro, fh, indent=2)
+    # KiCad custom rules (PTH/NPTH/filled-via distinctions) next to the project;
+    # legacy writes none (and removes only a stale generated one).
+    fab_profile.write_dru(pro_path, fab=dict(fab, **extra),
+                          name=(rules or {}).get(fab_profile.MARKER) or fab_profile.LEGACY)
     return True
 
 
-def _set_design_rules(board, clearance_mm: float = 0.13, track_mm: float = 0.15) -> None:
+def _set_design_rules(board, clearance_mm: float = 0.13, track_mm: float = 0.15,
+                      fab: Optional[dict] = None) -> None:
     """Best-effort in-board mirror of :func:`patch_project_rules` (set the live
     board settings so an in-process DRC sees them). NOT authoritative — the JSON
-    patch is (see that function's note on the project/board detach). Fully guarded."""
+    patch is (see that function's note on the project/board detach). Fully guarded.
+
+    ``fab`` (a profile-applied fab block) replaces the fixed pre-profile values."""
     ds = board.GetDesignSettings()
+    if fab is not None:
+        from pnr.fab_profile import board_constraints
+        c = board_constraints(fab)
+        values = (c["min_via_diameter"], c["min_via_annular_width"], c["min_through_hole_diameter"],
+                  c["min_hole_clearance"], c["min_hole_to_hole"], c["min_copper_edge_clearance"])
+        track_mm = c["min_track_width"]
+    else:
+        values = (0.45, 0.0, 0.20, 0.20, 0.20, 0.20)
     for attr, mm in (
         ("m_MinClearance", clearance_mm),
         ("m_TrackMinWidth", track_mm),
-        ("m_ViasMinSize", 0.45),
-        ("m_ViasMinAnnularWidth", 0.0),
-        ("m_MinThroughDrill", 0.20),
-        ("m_HoleClearance", 0.20),
-        ("m_HoleToHoleMin", 0.20),
-        ("m_CopperEdgeClearance", 0.20),
+        ("m_ViasMinSize", values[0]),
+        ("m_ViasMinAnnularWidth", values[1]),
+        ("m_MinThroughDrill", values[2]),
+        ("m_HoleClearance", values[3]),
+        ("m_HoleToHoleMin", values[4]),
+        ("m_CopperEdgeClearance", values[5]),
     ):
         try:
             setattr(ds, attr, _nm(mm))
@@ -845,6 +914,7 @@ def emit_routes(
     net_code: Dict[str, int],
     offset: float = _PAGE_OFFSET_MM,
     fab: Optional[dict] = None,
+    rules: Optional[dict] = None,
 ) -> int:
     """Add the own detailed router's tracks + vias (``routes.json``, engine mm)
     onto the board via the write-back frame (engine y-up → pcbnew y-down). Each
@@ -877,14 +947,25 @@ def emit_routes(
         t.SetNetCode(code(net))
         board.Add(t)
         n_tracks += 1
+    # Profile 5B only: a via the grid placed inside a same-net SMD pad is the
+    # filled in-pad class (pnr.via_in_pad) when it qualifies in the native land;
+    # otherwise it keeps the default via, which the DRU's via_to_smd_pad rule
+    # reports. Legacy rules keep every via at the fab default.
+    from pnr.fab_profile import geometry
+    from pnr.via_in_pad import in_pad_size, style_in_pad_via
+    g = geometry(rules) if rules else None
+    smd = [p for f in board.GetFootprints() for p in f.Pads()] if g is not None and g.in_pad else []
     for net, x, y in routes.get("vias", []):
         v = pcbnew.PCB_VIA(board)
         v.SetPosition(frame.point(x, y))
         v.SetViaType(pcbnew.VIATYPE_THROUGH)
         v.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
-        v.SetFrontWidth(via_d)  # from the fab profile; radius-1 keep-out ⇒ DRC-clean
-        v.SetDrill(via_drill)  # via-via + via-track at the grid pitch
+        size = in_pad_size(g, smd, net, (v.GetPosition().x / 1e6, v.GetPosition().y / 1e6)) if smd else None
+        v.SetFrontWidth(_nm(size[0]) if size else via_d)  # from the fab profile; radius-1 keep-out ⇒ DRC-clean
+        v.SetDrill(_nm(size[1]) if size else via_drill)  # via-via + via-track at the grid pitch
         v.SetNetCode(code(net))
+        if size:
+            style_in_pad_via(g, v)
         board.Add(v)
     board.BuildConnectivity()
     return n_tracks
@@ -1025,8 +1106,10 @@ def writeback(
     # Emit the own detailed router's signal tracks/vias (replaces FreeRouting).
     if routes:
         fab = _fab(rules)
-        _set_design_rules(board, clearance_mm=fab["clearance_mm"], track_mm=fab["track_width_mm"])
-        emit_routes(board, routes, height, net_code, fab=fab)
+        profiled = dict((rules or {}).get("fab") or {}) if (rules or {}).get("fab_profile") else None
+        _set_design_rules(board, clearance_mm=fab["clearance_mm"], track_mm=fab["track_width_mm"],
+                          fab=dict(fab, **profiled) if profiled else None)
+        emit_routes(board, routes, height, net_code, fab=fab, rules=rules)
     pcbnew.SaveBoard(out_pcb, board)
     # Text pass: strip all (stale) Edge.Cuts — pcbnew reformats gr_lines into
     # nested strokes a single-level regex can't remove — then stamp one clean

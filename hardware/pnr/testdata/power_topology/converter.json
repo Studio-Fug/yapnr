@@ -1,0 +1,4156 @@
+{
+ "constraints": {
+  "board": {
+   "default_clearance_mm": 0.2,
+   "layers": 4,
+   "outline": {
+    "h": 30.0,
+    "w": 30.0
+   },
+   "references_on_fab": true
+  },
+  "copper_keepout": [],
+  "diff_pair": [],
+  "fab": {
+   "clearance_mm": 0.15,
+   "track_width_mm": 0.2,
+   "via_diameter_mm": 0.6,
+   "via_drill_mm": 0.3
+  },
+  "fixed": {},
+  "group": [
+   {
+    "anchor": "@board.converter.ic",
+    "hard": true,
+    "members": [
+     "@board.converter.bootstrap*",
+     "@board.converter.vcc_dec*",
+     "@board.converter.input_hf*",
+     "@board.converter.output_hf*"
+    ],
+    "radius_mm": 5
+   },
+   {
+    "anchor": "@board.converter.ic",
+    "hard": true,
+    "members": [
+     "@board.converter.high_fet",
+     "@board.converter.low_fet",
+     "@board.converter.inductor"
+    ],
+    "radius_mm": 12
+   },
+   {
+    "anchor": "@board.converter.ic",
+    "hard": true,
+    "members": [
+     "@board.converter.*"
+    ],
+    "radius_mm": 12
+   }
+  ],
+  "keepout": [],
+  "net_class": {
+   "power": {
+    "clearance_mm": 0.15,
+    "nets": [
+     "net@board.converter.ic:3",
+     "net@board.converter.shunt._p:1",
+     "net@board.converter.inductor:1",
+     "net@board.converter.inductor:2"
+    ],
+    "width_mm": 1.5
+   }
+  },
+  "orientation": {},
+  "schema": "v0",
+  "side": {}
+ },
+ "graph": {
+  "components": [
+   {
+    "address": "board.converter.compensation_pole",
+    "bbox": [
+     1.89,
+     1.15
+    ],
+    "courtyard": [
+     1.89,
+     1.15
+    ],
+    "footprint": "Samsung_CL05C331JB5NNNC:C0402",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "COMP",
+      "offset": [
+       -0.42,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.5,
+       0.54
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       0.42,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.5,
+       0.54
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "C12",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.output_cap6._p",
+    "bbox": [
+     4.07,
+     1.95
+    ],
+    "courtyard": [
+     4.07,
+     1.95
+    ],
+    "footprint": "Samsung_CL21A226MOQNNNE:C0805",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "board.converter-1-3",
+      "offset": [
+       -1.0,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.41,
+       1.35
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       1.0,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.41,
+       1.35
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "C22",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.output_cap1._p",
+    "bbox": [
+     4.07,
+     1.95
+    ],
+    "courtyard": [
+     4.07,
+     1.95
+    ],
+    "footprint": "Samsung_CL21A226MOQNNNE:C0805",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "board.converter-1-3",
+      "offset": [
+       -1.0,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.41,
+       1.35
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       1.0,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.41,
+       1.35
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "C17",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.ic",
+    "bbox": [
+     5.9,
+     4.45
+    ],
+    "courtyard": [
+     5.9,
+     4.45
+    ],
+    "footprint": "Texas_Instruments_TPS552882RPMR:VQFN-HR-26_L4.0-W3.5_TPS55288RPMR",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "DR1L",
+      "offset": [
+       -1.85,
+       1.79
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.8,
+       0.82
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "DR1H",
+      "offset": [
+       -1.9,
+       1.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.6,
+       0.25
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "3",
+      "net": "negotiated-hv",
+      "offset": [
+       -1.84,
+       0.5
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.72,
+       0.25
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "4",
+      "net": "EN_UVLO",
+      "offset": [
+       -1.84,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.72,
+       0.25
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "5",
+      "net": "power_good",
+      "offset": [
+       -1.84,
+       -0.5
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.72,
+       0.25
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "6",
+      "net": "nCC",
+      "offset": [
+       -1.9,
+       -1.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.6,
+       0.25
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "7",
+      "net": "lv",
+      "offset": [
+       -1.85,
+       -1.79
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.8,
+       0.82
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "8",
+      "net": "FSW",
+      "offset": [
+       -1.13,
+       -1.67
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.25,
+       0.62
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "9",
+      "net": "lv",
+      "offset": [
+       -0.62,
+       -1.67
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.25,
+       0.62
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "10",
+      "net": "lv",
+      "offset": [
+       -0.13,
+       -1.67
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.25,
+       0.62
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "11",
+      "net": "board.converter-1-3",
+      "offset": [
+       0.6,
+       -1.67
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.25,
+       0.62
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "12",
+      "net": "board.converter-1-3",
+      "offset": [
+       1.1,
+       -1.67
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.25,
+       0.62
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "13",
+      "net": "p5v-hv",
+      "offset": [
+       1.85,
+       -1.79
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.8,
+       0.82
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "14",
+      "net": "board.converter-FB",
+      "offset": [
+       1.9,
+       -1.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.6,
+       0.25
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "15",
+      "net": "MODE",
+      "offset": [
+       1.84,
+       -0.5
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.72,
+       0.25
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "16",
+      "net": "CDC",
+      "offset": [
+       1.84,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.72,
+       0.25
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "17",
+      "net": "ILIM",
+      "offset": [
+       1.84,
+       0.5
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.72,
+       0.25
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "18",
+      "net": "COMP",
+      "offset": [
+       1.9,
+       1.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.6,
+       0.25
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "19",
+      "net": "VCC",
+      "offset": [
+       1.85,
+       1.79
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.8,
+       0.82
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "20",
+      "net": "20",
+      "offset": [
+       1.05,
+       1.64
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.25,
+       0.68
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "21",
+      "net": "board.converter-2",
+      "offset": [
+       0.25,
+       1.68
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.25,
+       0.6
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "22",
+      "net": "22",
+      "offset": [
+       -0.25,
+       1.68
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.25,
+       0.6
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "23",
+      "net": "board.converter-1",
+      "offset": [
+       -1.05,
+       1.64
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.25,
+       0.68
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "24",
+      "net": "lv",
+      "offset": [
+       -0.62,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.38,
+       1.43
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.2,
+       0.2
+      ],
+      "land_corner": null,
+      "name": "24",
+      "net": "lv",
+      "offset": [
+       -0.62,
+       -0.0
+      ],
+      "plated": true,
+      "plated_land_radius": 0.225,
+      "size": [
+       0.45,
+       0.45
+      ],
+      "through_hole": true
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "25",
+      "net": "board.converter-2",
+      "offset": [
+       0.0,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.38,
+       1.43
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "26",
+      "net": "board.converter-1-3",
+      "offset": [
+       0.62,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.38,
+       1.43
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "U5",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.current_limit._p",
+    "bbox": [
+     2.03,
+     1.15
+    ],
+    "courtyard": [
+     2.03,
+     1.15
+    ],
+    "footprint": "UNI_ROYAL_0402WGF1003TCE:R0402",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "ILIM",
+      "offset": [
+       -0.43,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       0.54
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       0.43,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       0.54
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "R4",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.vcc_dec._p",
+    "bbox": [
+     4.07,
+     1.95
+    ],
+    "courtyard": [
+     4.07,
+     1.95
+    ],
+    "footprint": "Samsung_CL21A106KAYNNNE:C0805",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "VCC",
+      "offset": [
+       -1.0,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.41,
+       1.35
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       1.0,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.41,
+       1.35
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "C25",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.low_fet",
+    "bbox": [
+     5.94,
+     8.22
+    ],
+    "courtyard": [
+     5.94,
+     8.22
+    ],
+    "footprint": "TI_CSD18531Q5A:PQFN-8_L5.8-W4.9-P1.27-LS6.0-BL",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "lv",
+      "offset": [
+       -1.91,
+       -2.97
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       1.6
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       -0.63,
+       -2.97
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       1.6
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "3",
+      "net": "lv",
+      "offset": [
+       0.63,
+       -2.97
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       1.6
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "4",
+      "net": "DR1L",
+      "offset": [
+       1.9,
+       -2.97
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       1.6
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "5",
+      "net": "board.converter-1",
+      "offset": [
+       1.9,
+       2.97
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       1.6
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "6",
+      "net": "board.converter-1",
+      "offset": [
+       0.63,
+       2.97
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       1.6
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "7",
+      "net": "board.converter-1",
+      "offset": [
+       -0.63,
+       2.97
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       1.6
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "8",
+      "net": "board.converter-1",
+      "offset": [
+       -1.91,
+       2.97
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       1.6
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "9",
+      "net": "board.converter-1",
+      "offset": [
+       0.0,
+       0.79
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       4.2,
+       3.58
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "Q2",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.fb_bottom._p",
+    "bbox": [
+     2.03,
+     1.15
+    ],
+    "courtyard": [
+     2.03,
+     1.15
+    ],
+    "footprint": "UNI_ROYAL_0402WGF1003TCE:R0402",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "board.converter-FB",
+      "offset": [
+       -0.43,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       0.54
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       0.43,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       0.54
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "R7",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.output_cap7._p",
+    "bbox": [
+     4.07,
+     1.95
+    ],
+    "courtyard": [
+     4.07,
+     1.95
+    ],
+    "footprint": "Samsung_CL21A226MOQNNNE:C0805",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "board.converter-1-3",
+      "offset": [
+       -1.0,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.41,
+       1.35
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       1.0,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.41,
+       1.35
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "C23",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.output_cap5._p",
+    "bbox": [
+     4.07,
+     1.95
+    ],
+    "courtyard": [
+     4.07,
+     1.95
+    ],
+    "footprint": "Samsung_CL21A226MOQNNNE:C0805",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "board.converter-1-3",
+      "offset": [
+       -1.0,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.41,
+       1.35
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       1.0,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.41,
+       1.35
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "C21",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.mode",
+    "bbox": [
+     2.03,
+     1.15
+    ],
+    "courtyard": [
+     2.03,
+     1.15
+    ],
+    "footprint": "UNI_ROYAL_0402WGF2492TCE:R0402",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "MODE",
+      "offset": [
+       -0.43,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       0.54
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       0.43,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       0.54
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "R11",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.output_cap2._p",
+    "bbox": [
+     4.07,
+     1.95
+    ],
+    "courtyard": [
+     4.07,
+     1.95
+    ],
+    "footprint": "Samsung_CL21A226MOQNNNE:C0805",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "board.converter-1-3",
+      "offset": [
+       -1.0,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.41,
+       1.35
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       1.0,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.41,
+       1.35
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "C18",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.inductor",
+    "bbox": [
+     13.0,
+     10.15
+    ],
+    "courtyard": [
+     13.0,
+     10.15
+    ],
+    "footprint": "BOURNS_SRP1038A_4R7M:IND-SMD_L11.0-W10.0_SRP1038A",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "board.converter-1",
+      "offset": [
+       -4.75,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       3.5000000000000004,
+       3.5000000000000004
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "board.converter-2",
+      "offset": [
+       4.75,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       3.5,
+       3.5
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "L2",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": false
+   },
+   {
+    "address": "board.converter.output_cap0._p",
+    "bbox": [
+     4.07,
+     1.95
+    ],
+    "courtyard": [
+     4.07,
+     1.95
+    ],
+    "footprint": "Samsung_CL21A226MOQNNNE:C0805",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "board.converter-1-3",
+      "offset": [
+       -1.0,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.41,
+       1.35
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       1.0,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.41,
+       1.35
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "C16",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.input_cap0",
+    "bbox": [
+     5.27,
+     2.33
+    ],
+    "courtyard": [
+     5.27,
+     2.33
+    ],
+    "footprint": "Samsung_CL31B106KBHNNNE:C1206",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "negotiated-hv",
+      "offset": [
+       -1.59,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.49,
+       1.73
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       1.59,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.49,
+       1.73
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "C13",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.compensation_a._p",
+    "bbox": [
+     1.89,
+     1.15
+    ],
+    "courtyard": [
+     1.89,
+     1.15
+    ],
+    "footprint": "Samsung_CL05B473KO5NNNC:C0402",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "board.converter-1-1",
+      "offset": [
+       -0.42,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.5,
+       0.54
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "board.converter-1-2",
+      "offset": [
+       0.42,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.5,
+       0.54
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "C10",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.bootstrap1._p",
+    "bbox": [
+     1.89,
+     1.15
+    ],
+    "courtyard": [
+     1.89,
+     1.15
+    ],
+    "footprint": "Samsung_CL05B104KO5NNNC:C0402",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "22",
+      "offset": [
+       -0.42,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.5,
+       0.54
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "board.converter-1",
+      "offset": [
+       0.42,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.5,
+       0.54
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "C8",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.shunt._p",
+    "bbox": [
+     4.77,
+     2.31
+    ],
+    "courtyard": [
+     4.77,
+     2.31
+    ],
+    "footprint": "Walter_Elec_STE1206M1W0R010F:R1206",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "board.converter-1-3",
+      "offset": [
+       -1.48,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.21,
+       1.7
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "p5v-hv",
+      "offset": [
+       1.48,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.21,
+       1.7
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "R13",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.input_cap1",
+    "bbox": [
+     5.27,
+     2.33
+    ],
+    "courtyard": [
+     5.27,
+     2.33
+    ],
+    "footprint": "Samsung_CL31B106KBHNNNE:C1206",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "negotiated-hv",
+      "offset": [
+       -1.59,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.49,
+       1.73
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       1.59,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.49,
+       1.73
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "C14",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.enable_bottom._p",
+    "bbox": [
+     2.03,
+     1.15
+    ],
+    "courtyard": [
+     2.03,
+     1.15
+    ],
+    "footprint": "UNI_ROYAL_0402WGF1003TCE:R0402",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "EN_UVLO",
+      "offset": [
+       -0.43,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       0.54
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       0.43,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       0.54
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "R5",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.output_cap3._p",
+    "bbox": [
+     4.07,
+     1.95
+    ],
+    "courtyard": [
+     4.07,
+     1.95
+    ],
+    "footprint": "Samsung_CL21A226MOQNNNE:C0805",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "board.converter-1-3",
+      "offset": [
+       -1.0,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.41,
+       1.35
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       1.0,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.41,
+       1.35
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "C19",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.enable_top._p",
+    "bbox": [
+     2.03,
+     1.15
+    ],
+    "courtyard": [
+     2.03,
+     1.15
+    ],
+    "footprint": "UNI_ROYAL_0402WGF1003TCE:R0402",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "negotiated-hv",
+      "offset": [
+       -0.43,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       0.54
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "EN_UVLO",
+      "offset": [
+       0.43,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       0.54
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "R6",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.frequency1._p",
+    "bbox": [
+     2.03,
+     1.15
+    ],
+    "courtyard": [
+     2.03,
+     1.15
+    ],
+    "footprint": "UNI_ROYAL_0402WGF1003TCE:R0402",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "FSW",
+      "offset": [
+       -0.43,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       0.54
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       0.43,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       0.54
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "R9",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.output_cap4._p",
+    "bbox": [
+     4.07,
+     1.95
+    ],
+    "courtyard": [
+     4.07,
+     1.95
+    ],
+    "footprint": "Samsung_CL21A226MOQNNNE:C0805",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "board.converter-1-3",
+      "offset": [
+       -1.0,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.41,
+       1.35
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       1.0,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       1.41,
+       1.35
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "C20",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.fb_top._p",
+    "bbox": [
+     2.03,
+     1.15
+    ],
+    "courtyard": [
+     2.03,
+     1.15
+    ],
+    "footprint": "UNI_ROYAL_0402WGF1003TCE:R0402",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "p5v-hv",
+      "offset": [
+       -0.43,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       0.54
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "board.converter-FB",
+      "offset": [
+       0.43,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       0.54
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "R8",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.high_fet",
+    "bbox": [
+     5.94,
+     8.22
+    ],
+    "courtyard": [
+     5.94,
+     8.22
+    ],
+    "footprint": "TI_CSD18531Q5A:PQFN-8_L5.8-W4.9-P1.27-LS6.0-BL",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "board.converter-1",
+      "offset": [
+       -1.91,
+       -2.97
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       1.6
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "board.converter-1",
+      "offset": [
+       -0.63,
+       -2.97
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       1.6
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "3",
+      "net": "board.converter-1",
+      "offset": [
+       0.63,
+       -2.97
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       1.6
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "4",
+      "net": "DR1H",
+      "offset": [
+       1.9,
+       -2.97
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       1.6
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "5",
+      "net": "negotiated-hv",
+      "offset": [
+       1.9,
+       2.97
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       1.6
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "6",
+      "net": "negotiated-hv",
+      "offset": [
+       0.63,
+       2.97
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       1.6
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "7",
+      "net": "negotiated-hv",
+      "offset": [
+       -0.63,
+       2.97
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       1.6
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "8",
+      "net": "negotiated-hv",
+      "offset": [
+       -1.91,
+       2.97
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       1.6
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "9",
+      "net": "negotiated-hv",
+      "offset": [
+       0.0,
+       0.79
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       4.2,
+       3.58
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "Q1",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.compensation_r._p",
+    "bbox": [
+     2.03,
+     1.15
+    ],
+    "courtyard": [
+     2.03,
+     1.15
+    ],
+    "footprint": "UNI_ROYAL_0402WGF2001TCE:R0402",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "COMP",
+      "offset": [
+       -0.43,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       0.54
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "board.converter-1-1",
+      "offset": [
+       0.43,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       0.54
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "R3",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.compensation_b._p",
+    "bbox": [
+     1.89,
+     1.15
+    ],
+    "courtyard": [
+     1.89,
+     1.15
+    ],
+    "footprint": "Samsung_CL05B473KO5NNNC:C0402",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "board.converter-1-2",
+      "offset": [
+       -0.42,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.5,
+       0.54
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       0.42,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.5,
+       0.54
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "C11",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.bootstrap2._p",
+    "bbox": [
+     1.89,
+     1.15
+    ],
+    "courtyard": [
+     1.89,
+     1.15
+    ],
+    "footprint": "Samsung_CL05B104KO5NNNC:C0402",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "20",
+      "offset": [
+       -0.42,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.5,
+       0.54
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "board.converter-2",
+      "offset": [
+       0.42,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.5,
+       0.54
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "C9",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.frequency2._p",
+    "bbox": [
+     2.03,
+     1.15
+    ],
+    "courtyard": [
+     2.03,
+     1.15
+    ],
+    "footprint": "UNI_ROYAL_0402WGF1003TCE:R0402",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "FSW",
+      "offset": [
+       -0.43,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       0.54
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       0.43,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.57,
+       0.54
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "R10",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.output_hf._p",
+    "bbox": [
+     1.89,
+     1.15
+    ],
+    "courtyard": [
+     1.89,
+     1.15
+    ],
+    "footprint": "Samsung_CL05B104KO5NNNC:C0402",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "board.converter-1-3",
+      "offset": [
+       -0.42,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.5,
+       0.54
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       0.42,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.5,
+       0.54
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "C24",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.input_hf._p",
+    "bbox": [
+     3.03,
+     1.67
+    ],
+    "courtyard": [
+     3.03,
+     1.67
+    ],
+    "footprint": "Samsung_CL10B104KB8NNNC:C0603",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "negotiated-hv",
+      "offset": [
+       -0.7,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.8,
+       0.9
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "lv",
+      "offset": [
+       0.7,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.8,
+       0.9
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "C15",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   },
+   {
+    "address": "board.converter.pg_pullup._p",
+    "bbox": [
+     2.93,
+     1.47
+    ],
+    "courtyard": [
+     2.93,
+     1.47
+    ],
+    "footprint": "UNI_ROYAL_0603WAF1002T5E:R0603",
+    "locked": false,
+    "pads": [
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "1",
+      "net": "logic-hv",
+      "offset": [
+       -0.75,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.81,
+       0.86
+      ],
+      "through_hole": false
+     },
+     {
+      "drill_size": [
+       0.0,
+       0.0
+      ],
+      "land_corner": null,
+      "name": "2",
+      "net": "power_good",
+      "offset": [
+       0.75,
+       -0.0
+      ],
+      "plated": false,
+      "plated_land_radius": 0.0,
+      "size": [
+       0.81,
+       0.86
+      ],
+      "through_hole": false
+     }
+    ],
+    "pos": [
+     15.0,
+     15.0
+    ],
+    "ref": "R12",
+    "rot": 0.0,
+    "side": "top",
+    "smd_body": true
+   }
+  ],
+  "name": "splanc_mini.fab.board:board.converter",
+  "nets": [
+   {
+    "code": 2,
+    "name": "lv",
+    "pins": [
+     [
+      "C12",
+      "2"
+     ],
+     [
+      "C22",
+      "2"
+     ],
+     [
+      "C17",
+      "2"
+     ],
+     [
+      "U5",
+      "7"
+     ],
+     [
+      "U5",
+      "9"
+     ],
+     [
+      "U5",
+      "10"
+     ],
+     [
+      "U5",
+      "24"
+     ],
+     [
+      "U5",
+      "24"
+     ],
+     [
+      "R4",
+      "2"
+     ],
+     [
+      "C25",
+      "2"
+     ],
+     [
+      "Q2",
+      "1"
+     ],
+     [
+      "Q2",
+      "2"
+     ],
+     [
+      "Q2",
+      "3"
+     ],
+     [
+      "R7",
+      "2"
+     ],
+     [
+      "C23",
+      "2"
+     ],
+     [
+      "C21",
+      "2"
+     ],
+     [
+      "R11",
+      "2"
+     ],
+     [
+      "C18",
+      "2"
+     ],
+     [
+      "C16",
+      "2"
+     ],
+     [
+      "C13",
+      "2"
+     ],
+     [
+      "C14",
+      "2"
+     ],
+     [
+      "R5",
+      "2"
+     ],
+     [
+      "C19",
+      "2"
+     ],
+     [
+      "R9",
+      "2"
+     ],
+     [
+      "C20",
+      "2"
+     ],
+     [
+      "C11",
+      "2"
+     ],
+     [
+      "R10",
+      "2"
+     ],
+     [
+      "C24",
+      "2"
+     ],
+     [
+      "C15",
+      "2"
+     ]
+    ]
+   },
+   {
+    "code": 3,
+    "name": "COMP",
+    "pins": [
+     [
+      "C12",
+      "1"
+     ],
+     [
+      "U5",
+      "18"
+     ],
+     [
+      "R3",
+      "1"
+     ]
+    ]
+   },
+   {
+    "code": 4,
+    "name": "board.converter-1-3",
+    "pins": [
+     [
+      "C22",
+      "1"
+     ],
+     [
+      "C17",
+      "1"
+     ],
+     [
+      "U5",
+      "11"
+     ],
+     [
+      "U5",
+      "12"
+     ],
+     [
+      "U5",
+      "26"
+     ],
+     [
+      "C23",
+      "1"
+     ],
+     [
+      "C21",
+      "1"
+     ],
+     [
+      "C18",
+      "1"
+     ],
+     [
+      "C16",
+      "1"
+     ],
+     [
+      "R13",
+      "1"
+     ],
+     [
+      "C19",
+      "1"
+     ],
+     [
+      "C20",
+      "1"
+     ],
+     [
+      "C24",
+      "1"
+     ]
+    ]
+   },
+   {
+    "code": 6,
+    "name": "negotiated-hv",
+    "pins": [
+     [
+      "U5",
+      "3"
+     ],
+     [
+      "C13",
+      "1"
+     ],
+     [
+      "C14",
+      "1"
+     ],
+     [
+      "R6",
+      "1"
+     ],
+     [
+      "Q1",
+      "5"
+     ],
+     [
+      "Q1",
+      "6"
+     ],
+     [
+      "Q1",
+      "7"
+     ],
+     [
+      "Q1",
+      "8"
+     ],
+     [
+      "Q1",
+      "9"
+     ],
+     [
+      "C15",
+      "1"
+     ]
+    ]
+   },
+   {
+    "code": 14,
+    "name": "logic-hv",
+    "pins": [
+     [
+      "R12",
+      "1"
+     ]
+    ]
+   },
+   {
+    "code": 19,
+    "name": "DR1L",
+    "pins": [
+     [
+      "U5",
+      "1"
+     ],
+     [
+      "Q2",
+      "4"
+     ]
+    ]
+   },
+   {
+    "code": 20,
+    "name": "DR1H",
+    "pins": [
+     [
+      "U5",
+      "2"
+     ],
+     [
+      "Q1",
+      "4"
+     ]
+    ]
+   },
+   {
+    "code": 21,
+    "name": "EN_UVLO",
+    "pins": [
+     [
+      "U5",
+      "4"
+     ],
+     [
+      "R5",
+      "1"
+     ],
+     [
+      "R6",
+      "2"
+     ]
+    ]
+   },
+   {
+    "code": 22,
+    "name": "power_good",
+    "pins": [
+     [
+      "U5",
+      "5"
+     ],
+     [
+      "R12",
+      "2"
+     ]
+    ]
+   },
+   {
+    "code": 23,
+    "name": "nCC",
+    "pins": [
+     [
+      "U5",
+      "6"
+     ]
+    ]
+   },
+   {
+    "code": 24,
+    "name": "FSW",
+    "pins": [
+     [
+      "U5",
+      "8"
+     ],
+     [
+      "R9",
+      "1"
+     ],
+     [
+      "R10",
+      "1"
+     ]
+    ]
+   },
+   {
+    "code": 25,
+    "name": "p5v-hv",
+    "pins": [
+     [
+      "U5",
+      "13"
+     ],
+     [
+      "R13",
+      "2"
+     ],
+     [
+      "R8",
+      "1"
+     ]
+    ]
+   },
+   {
+    "code": 26,
+    "name": "board.converter-FB",
+    "pins": [
+     [
+      "U5",
+      "14"
+     ],
+     [
+      "R7",
+      "1"
+     ],
+     [
+      "R8",
+      "2"
+     ]
+    ]
+   },
+   {
+    "code": 27,
+    "name": "MODE",
+    "pins": [
+     [
+      "U5",
+      "15"
+     ],
+     [
+      "R11",
+      "1"
+     ]
+    ]
+   },
+   {
+    "code": 28,
+    "name": "CDC",
+    "pins": [
+     [
+      "U5",
+      "16"
+     ]
+    ]
+   },
+   {
+    "code": 29,
+    "name": "ILIM",
+    "pins": [
+     [
+      "U5",
+      "17"
+     ],
+     [
+      "R4",
+      "1"
+     ]
+    ]
+   },
+   {
+    "code": 30,
+    "name": "VCC",
+    "pins": [
+     [
+      "U5",
+      "19"
+     ],
+     [
+      "C25",
+      "1"
+     ]
+    ]
+   },
+   {
+    "code": 31,
+    "name": "20",
+    "pins": [
+     [
+      "U5",
+      "20"
+     ],
+     [
+      "C9",
+      "1"
+     ]
+    ]
+   },
+   {
+    "code": 32,
+    "name": "board.converter-2",
+    "pins": [
+     [
+      "U5",
+      "21"
+     ],
+     [
+      "U5",
+      "25"
+     ],
+     [
+      "L2",
+      "2"
+     ],
+     [
+      "C9",
+      "2"
+     ]
+    ]
+   },
+   {
+    "code": 33,
+    "name": "22",
+    "pins": [
+     [
+      "U5",
+      "22"
+     ],
+     [
+      "C8",
+      "1"
+     ]
+    ]
+   },
+   {
+    "code": 34,
+    "name": "board.converter-1",
+    "pins": [
+     [
+      "U5",
+      "23"
+     ],
+     [
+      "Q2",
+      "5"
+     ],
+     [
+      "Q2",
+      "6"
+     ],
+     [
+      "Q2",
+      "7"
+     ],
+     [
+      "Q2",
+      "8"
+     ],
+     [
+      "Q2",
+      "9"
+     ],
+     [
+      "L2",
+      "1"
+     ],
+     [
+      "C8",
+      "2"
+     ],
+     [
+      "Q1",
+      "1"
+     ],
+     [
+      "Q1",
+      "2"
+     ],
+     [
+      "Q1",
+      "3"
+     ]
+    ]
+   },
+   {
+    "code": 74,
+    "name": "board.converter-1-1",
+    "pins": [
+     [
+      "C10",
+      "1"
+     ],
+     [
+      "R3",
+      "2"
+     ]
+    ]
+   },
+   {
+    "code": 75,
+    "name": "board.converter-1-2",
+    "pins": [
+     [
+      "C10",
+      "2"
+     ],
+     [
+      "C11",
+      "1"
+     ]
+    ]
+   }
+  ],
+  "outline": {
+   "height": 30.0,
+   "polygon": [],
+   "width": 30.0
+  },
+  "schema": "v0"
+ },
+ "net_classes": [
+  {
+   "clearance_mm": null,
+   "copper_oz": 1.0,
+   "current_a": null,
+   "delta_t_c": 10.0,
+   "external": true,
+   "name": "gnd",
+   "nets": [
+    "lv"
+   ],
+   "plane_layer": "In1.Cu",
+   "width_mm": null
+  },
+  {
+   "clearance_mm": 0.15,
+   "copper_oz": 1.0,
+   "current_a": null,
+   "delta_t_c": 10.0,
+   "external": true,
+   "name": "power",
+   "nets": [
+    "p5v-hv",
+    "negotiated-hv",
+    "raw_usb-hv",
+    "negotiated-hv",
+    "board.converter-1-3",
+    "board.converter-1",
+    "board.converter-2",
+    "IN",
+    "board-1-4",
+    "board.led1-IN",
+    "board-1-3"
+   ],
+   "plane_layer": null,
+   "width_mm": 1.5
+  },
+  {
+   "clearance_mm": null,
+   "copper_oz": 1.0,
+   "current_a": null,
+   "delta_t_c": 10.0,
+   "external": true,
+   "name": "logic",
+   "nets": [
+    "logic-hv",
+    "hv"
+   ],
+   "plane_layer": null,
+   "width_mm": 0.5
+  },
+  {
+   "clearance_mm": 0.15,
+   "copper_oz": 1.0,
+   "current_a": null,
+   "delta_t_c": 10.0,
+   "external": true,
+   "name": "buck_switch",
+   "nets": [
+    "SW"
+   ],
+   "plane_layer": null,
+   "width_mm": 1.0
+  }
+ ],
+ "rules": {
+  "block_ports": [
+   "logic-hv",
+   "lv",
+   "negotiated-hv",
+   "p5v-hv"
+  ],
+  "copper_keepouts": [],
+  "current_intents": [
+   {
+    "net": "board.converter-1-3",
+    "pads": [
+     "1"
+    ],
+    "peak_current_a": 5,
+    "ref": "R13",
+    "rms_current_a": 4,
+    "scope": "net",
+    "source": {
+     "line": 156,
+     "path": "hardware/splanc_dev/elec/src/splanc_mini.ato",
+     "sha256": "c576d35a400881bea22ce9e3fc04f38c3fe099313bcfc72822a554278b171314"
+    },
+    "target": "converter.shunt"
+   },
+   {
+    "net": "p5v-hv",
+    "pads": [
+     "2"
+    ],
+    "peak_current_a": 5,
+    "ref": "R13",
+    "rms_current_a": 4,
+    "scope": "net",
+    "source": {
+     "line": 157,
+     "path": "hardware/splanc_dev/elec/src/splanc_mini.ato",
+     "sha256": "c576d35a400881bea22ce9e3fc04f38c3fe099313bcfc72822a554278b171314"
+    },
+    "target": "converter.shunt"
+   },
+   {
+    "net": "board.converter-1",
+    "pads": [
+     "1"
+    ],
+    "peak_current_a": 16,
+    "ref": "L2",
+    "rms_current_a": 5,
+    "scope": "net",
+    "source": {
+     "line": 158,
+     "path": "hardware/splanc_dev/elec/src/splanc_mini.ato",
+     "sha256": "c576d35a400881bea22ce9e3fc04f38c3fe099313bcfc72822a554278b171314"
+    },
+    "target": "converter.inductor"
+   },
+   {
+    "net": "board.converter-2",
+    "pads": [
+     "2"
+    ],
+    "peak_current_a": 16,
+    "ref": "L2",
+    "rms_current_a": 5,
+    "scope": "net",
+    "source": {
+     "line": 159,
+     "path": "hardware/splanc_dev/elec/src/splanc_mini.ato",
+     "sha256": "c576d35a400881bea22ce9e3fc04f38c3fe099313bcfc72822a554278b171314"
+    },
+    "target": "converter.inductor"
+   },
+   {
+    "net": "negotiated-hv",
+    "pads": [
+     "3"
+    ],
+    "peak_current_a": 0.1,
+    "ref": "U5",
+    "rms_current_a": 0.1,
+    "scope": "terminal",
+    "source": {
+     "line": 183,
+     "path": "hardware/splanc_dev/elec/src/splanc_mini.ato",
+     "sha256": "c576d35a400881bea22ce9e3fc04f38c3fe099313bcfc72822a554278b171314"
+    },
+    "target": "converter.ic"
+   },
+   {
+    "net": "board.converter-1-3",
+    "pads": [
+     "12"
+    ],
+    "peak_current_a": 0.01,
+    "ref": "U5",
+    "rms_current_a": 0.01,
+    "scope": "terminal",
+    "source": {
+     "line": 191,
+     "path": "hardware/splanc_dev/elec/src/splanc_mini.ato",
+     "sha256": "c576d35a400881bea22ce9e3fc04f38c3fe099313bcfc72822a554278b171314"
+    },
+    "target": "converter.ic"
+   },
+   {
+    "net": "p5v-hv",
+    "pads": [
+     "13"
+    ],
+    "peak_current_a": 0.01,
+    "ref": "U5",
+    "rms_current_a": 0.01,
+    "scope": "terminal",
+    "source": {
+     "line": 192,
+     "path": "hardware/splanc_dev/elec/src/splanc_mini.ato",
+     "sha256": "c576d35a400881bea22ce9e3fc04f38c3fe099313bcfc72822a554278b171314"
+    },
+    "target": "converter.ic"
+   },
+   {
+    "net": "negotiated-hv",
+    "pads": [
+     "1"
+    ],
+    "peak_current_a": 0.001,
+    "ref": "R6",
+    "rms_current_a": 0.001,
+    "scope": "terminal",
+    "source": {
+     "line": 193,
+     "path": "hardware/splanc_dev/elec/src/splanc_mini.ato",
+     "sha256": "c576d35a400881bea22ce9e3fc04f38c3fe099313bcfc72822a554278b171314"
+    },
+    "target": "converter.enable_top"
+   },
+   {
+    "net": "p5v-hv",
+    "pads": [
+     "1"
+    ],
+    "peak_current_a": 0.001,
+    "ref": "R8",
+    "rms_current_a": 0.001,
+    "scope": "terminal",
+    "source": {
+     "line": 194,
+     "path": "hardware/splanc_dev/elec/src/splanc_mini.ato",
+     "sha256": "c576d35a400881bea22ce9e3fc04f38c3fe099313bcfc72822a554278b171314"
+    },
+    "target": "converter.fb_top"
+   },
+   {
+    "neck_max_length_mm": 0.5,
+    "net": "board.converter-1-3",
+    "pads": [
+     "11",
+     "26"
+    ],
+    "peak_current_a": 5,
+    "ref": "U5",
+    "rms_current_a": 4,
+    "scope": "terminal",
+    "source": {
+     "line": 462,
+     "path": "hardware/splanc_dev/elec/src/splanc_mini.ato",
+     "sha256": "c576d35a400881bea22ce9e3fc04f38c3fe099313bcfc72822a554278b171314"
+    },
+    "target": "converter.ic"
+   },
+   {
+    "neck_max_length_mm": 0.5,
+    "net": "board.converter-2",
+    "pads": [
+     "21",
+     "25"
+    ],
+    "peak_current_a": 16,
+    "ref": "U5",
+    "rms_current_a": 5,
+    "scope": "terminal",
+    "source": {
+     "line": 465,
+     "path": "hardware/splanc_dev/elec/src/splanc_mini.ato",
+     "sha256": "c576d35a400881bea22ce9e3fc04f38c3fe099313bcfc72822a554278b171314"
+    },
+    "target": "converter.ic"
+   },
+   {
+    "neck_max_length_mm": 0.5,
+    "net": "board.converter-1",
+    "pads": [
+     "23"
+    ],
+    "peak_current_a": 1.8,
+    "ref": "U5",
+    "rms_current_a": 0.2,
+    "scope": "terminal",
+    "source": {
+     "line": 472,
+     "path": "hardware/splanc_dev/elec/src/splanc_mini.ato",
+     "sha256": "c576d35a400881bea22ce9e3fc04f38c3fe099313bcfc72822a554278b171314"
+    },
+    "target": "converter.ic"
+   },
+   {
+    "neck_max_length_mm": 0.25,
+    "net": "board.converter-1",
+    "pads": [
+     "2"
+    ],
+    "peak_current_a": 1.8,
+    "ref": "C8",
+    "rms_current_a": 0.2,
+    "scope": "terminal",
+    "source": {
+     "line": 482,
+     "path": "hardware/splanc_dev/elec/src/splanc_mini.ato",
+     "sha256": "c576d35a400881bea22ce9e3fc04f38c3fe099313bcfc72822a554278b171314"
+    },
+    "target": "converter.bootstrap1"
+   },
+   {
+    "neck_max_length_mm": 0.25,
+    "net": "board.converter-2",
+    "pads": [
+     "2"
+    ],
+    "peak_current_a": 1.8,
+    "ref": "C9",
+    "rms_current_a": 0.2,
+    "scope": "terminal",
+    "source": {
+     "line": 483,
+     "path": "hardware/splanc_dev/elec/src/splanc_mini.ato",
+     "sha256": "c576d35a400881bea22ce9e3fc04f38c3fe099313bcfc72822a554278b171314"
+    },
+    "target": "converter.bootstrap2"
+   }
+  ],
+  "default_clearance_mm": 0.2,
+  "diff_pairs": [],
+  "electrical_fab": {
+   "board_thickness_mm": 1.6,
+   "component_pth_min_drill_mm": 0.3,
+   "copper_resistivity_ohm_mm": 2.1e-05,
+   "delta_t_c": 40,
+   "edge_clearance_mm": 0.3,
+   "fab_profile": "jlc-pofv",
+   "filled_via_hole_to_hole_mm": 0.45,
+   "hole_clearance_mm": 0.2,
+   "hole_to_edge_mm": 0.5,
+   "hole_to_hole_mm": 0.25,
+   "inner_copper_oz": 0.4342857142857143,
+   "inner_copper_um": 15.2,
+   "min_via_plating_um": 18,
+   "neck_loss_budget_w": 0.01,
+   "neck_peak_drop_v": 0.005,
+   "outer_copper_oz": 1.0,
+   "outer_copper_um": 35.0,
+   "plane_access_delta_t_c": 40,
+   "power_bus_min_width_mm": 1.5,
+   "pth_hole_to_hole_mm": 0.5,
+   "qualification": "JLCPCB standard 4-layer 1.6 mm (JLC04161H-7628) + POFV screening: 35 um outer / 15.2 um inner finished copper, 18 um barrel plating (docs/fab-comparison.md 5A/5B). IPC-2221 screening only; IPC-2152 thermal and impedance qualification remain pending.",
+   "track_width_mm": 0.2,
+   "via_array_peak_drop_v": 0.01,
+   "via_barrel_loss_budget_w": 0.01,
+   "via_diameter_mm": 0.45,
+   "via_drill_mm": 0.3,
+   "via_to_smd_pad_mm": 0.127
+  },
+  "electrical_nets": {
+   "board.converter-1": {
+    "inner_width_mm": 7.141874585336357,
+    "model": "IPC-2221 screening; explicit current envelope; thermal qualification separate",
+    "outer_width_mm": 1.5,
+    "peak_current_a": 16,
+    "rms_current_a": 5,
+    "sources": [
+     {
+      "line": 158,
+      "path": "hardware/splanc_dev/elec/src/splanc_mini.ato",
+      "sha256": "c576d35a400881bea22ce9e3fc04f38c3fe099313bcfc72822a554278b171314"
+     }
+    ],
+    "via_array": {
+     "barrel_resistance_ohm": 0.0018684857050620847,
+     "basis": "explicit source current and fabrication loss/drop budgets; thermal validation separate",
+     "count": 3,
+     "diameter_mm": 0.45,
+     "drill_mm": 0.3,
+     "peak_drop_v": 0.009965257093664451,
+     "per_via_loss_w": 0.005190238069616902,
+     "per_via_rms_a": 1.6666666666666667
+    }
+   },
+   "board.converter-1-3": {
+    "inner_width_mm": 5.249805772204976,
+    "model": "IPC-2221 screening; explicit current envelope; thermal qualification separate",
+    "outer_width_mm": 1.5,
+    "peak_current_a": 5,
+    "rms_current_a": 4,
+    "sources": [
+     {
+      "line": 156,
+      "path": "hardware/splanc_dev/elec/src/splanc_mini.ato",
+      "sha256": "c576d35a400881bea22ce9e3fc04f38c3fe099313bcfc72822a554278b171314"
+     }
+    ],
+    "via_array": {
+     "barrel_resistance_ohm": 0.0018684857050620847,
+     "basis": "explicit source current and fabrication loss/drop budgets; thermal validation separate",
+     "count": 2,
+     "diameter_mm": 0.45,
+     "drill_mm": 0.3,
+     "peak_drop_v": 0.004671214262655212,
+     "per_via_loss_w": 0.007473942820248339,
+     "per_via_rms_a": 2.0
+    }
+   },
+   "board.converter-2": {
+    "inner_width_mm": 7.141874585336357,
+    "model": "IPC-2221 screening; explicit current envelope; thermal qualification separate",
+    "outer_width_mm": 1.5,
+    "peak_current_a": 16,
+    "rms_current_a": 5,
+    "sources": [
+     {
+      "line": 159,
+      "path": "hardware/splanc_dev/elec/src/splanc_mini.ato",
+      "sha256": "c576d35a400881bea22ce9e3fc04f38c3fe099313bcfc72822a554278b171314"
+     }
+    ],
+    "via_array": {
+     "barrel_resistance_ohm": 0.0018684857050620847,
+     "basis": "explicit source current and fabrication loss/drop budgets; thermal validation separate",
+     "count": 3,
+     "diameter_mm": 0.45,
+     "drill_mm": 0.3,
+     "peak_drop_v": 0.009965257093664451,
+     "per_via_loss_w": 0.005190238069616902,
+     "per_via_rms_a": 1.6666666666666667
+    }
+   },
+   "logic-hv": {
+    "inner_width_mm": 2.0180385070016107,
+    "model": "IPC-2221 screening; explicit current envelope; thermal qualification separate",
+    "outer_width_mm": 0.5,
+    "peak_current_a": 2,
+    "rms_current_a": 2,
+    "sources": [
+     {
+      "line": 160,
+      "path": "hardware/splanc_dev/elec/src/splanc_mini.ato",
+      "sha256": "c576d35a400881bea22ce9e3fc04f38c3fe099313bcfc72822a554278b171314"
+     }
+    ],
+    "via_array": {
+     "barrel_resistance_ohm": 0.0018684857050620847,
+     "basis": "explicit source current and fabrication loss/drop budgets; thermal validation separate",
+     "count": 1,
+     "diameter_mm": 0.45,
+     "drill_mm": 0.3,
+     "peak_drop_v": 0.0037369714101241694,
+     "per_via_loss_w": 0.007473942820248339,
+     "per_via_rms_a": 2.0
+    }
+   },
+   "negotiated-hv": {
+    "inner_width_mm": 7.141874585336357,
+    "model": "IPC-2221 screening; explicit current envelope; thermal qualification separate",
+    "outer_width_mm": 1.5,
+    "peak_current_a": 5,
+    "rms_current_a": 5,
+    "sources": [
+     {
+      "line": 155,
+      "path": "hardware/splanc_dev/elec/src/splanc_mini.ato",
+      "sha256": "c576d35a400881bea22ce9e3fc04f38c3fe099313bcfc72822a554278b171314"
+     }
+    ],
+    "via_array": {
+     "barrel_resistance_ohm": 0.0018684857050620847,
+     "basis": "explicit source current and fabrication loss/drop budgets; thermal validation separate",
+     "count": 3,
+     "diameter_mm": 0.45,
+     "drill_mm": 0.3,
+     "peak_drop_v": 0.0031141428417701413,
+     "per_via_loss_w": 0.005190238069616902,
+     "per_via_rms_a": 1.6666666666666667
+    }
+   },
+   "p5v-hv": {
+    "inner_width_mm": 5.249805772204976,
+    "model": "IPC-2221 screening; explicit current envelope; thermal qualification separate",
+    "outer_width_mm": 1.5,
+    "peak_current_a": 5,
+    "rms_current_a": 4,
+    "sources": [
+     {
+      "line": 157,
+      "path": "hardware/splanc_dev/elec/src/splanc_mini.ato",
+      "sha256": "c576d35a400881bea22ce9e3fc04f38c3fe099313bcfc72822a554278b171314"
+     }
+    ],
+    "via_array": {
+     "barrel_resistance_ohm": 0.0018684857050620847,
+     "basis": "explicit source current and fabrication loss/drop budgets; thermal validation separate",
+     "count": 2,
+     "diameter_mm": 0.45,
+     "drill_mm": 0.3,
+     "peak_drop_v": 0.004671214262655212,
+     "per_via_loss_w": 0.007473942820248339,
+     "per_via_rms_a": 2.0
+    }
+   }
+  },
+  "fab": {
+   "clearance_mm": 0.127,
+   "component_pth_min_drill_mm": 0.3,
+   "edge_clearance_mm": 0.3,
+   "filled_via_hole_to_hole_mm": 0.45,
+   "hole_clearance_mm": 0.2,
+   "hole_to_edge_mm": 0.5,
+   "hole_to_hole_mm": 0.25,
+   "min_npth_drill_mm": 0.5,
+   "min_through_drill_mm": 0.2,
+   "min_track_width_mm": 0.127,
+   "min_via_diameter_mm": 0.35,
+   "npth_hole_clearance_mm": 0.2,
+   "pth_hole_clearance_mm": 0.35,
+   "pth_hole_to_hole_mm": 0.5,
+   "smd_pad_clearance_mm": 0.15,
+   "track_width_mm": 0.2,
+   "via_annular_mm": 0.075,
+   "via_classes": {
+    "default": {
+     "diameter_mm": 0.45,
+     "drill_mm": 0.3
+    },
+    "escape": {
+     "diameter_mm": 0.45,
+     "drill_mm": 0.2
+    },
+    "in_pad": {
+     "alt_diameter_mm": 0.45,
+     "diameter_mm": 0.35,
+     "drill_mm": 0.2,
+     "filled": true,
+     "min_hole_edge_to_pad_edge_mm": 0.09,
+     "min_row_pitch_mm": 0.45,
+     "remove_unused_inner_pads": true,
+     "row_pitch_mm": 0.5,
+     "stagger_mm": 0.25
+    },
+    "power": {
+     "diameter_mm": 0.6,
+     "drill_mm": 0.3
+    }
+   },
+   "via_diameter_mm": 0.45,
+   "via_drill_mm": 0.3,
+   "via_to_smd_pad_mm": 0.127
+  },
+  "fab_profile": "jlc-pofv",
+  "layers": 4,
+  "length_match": [],
+  "mounting_holes": [],
+  "net_classes": [
+   {
+    "clearance_mm": null,
+    "copper_oz": 1.0,
+    "current_a": null,
+    "delta_t_c": 10.0,
+    "external": true,
+    "name": "gnd",
+    "nets": [
+     "lv"
+    ],
+    "plane_layer": "In1.Cu",
+    "width_mm": null
+   },
+   {
+    "clearance_mm": 0.15,
+    "copper_oz": 1.0,
+    "current_a": null,
+    "delta_t_c": 10.0,
+    "external": true,
+    "name": "power",
+    "nets": [
+     "p5v-hv",
+     "negotiated-hv",
+     "raw_usb-hv",
+     "board.converter-1-3",
+     "board.converter-1",
+     "board.converter-2",
+     "IN",
+     "board-1-4",
+     "board.led1-IN",
+     "board-1-3"
+    ],
+    "plane_layer": null,
+    "width_mm": 1.5
+   },
+   {
+    "clearance_mm": null,
+    "copper_oz": 1.0,
+    "current_a": null,
+    "delta_t_c": 10.0,
+    "external": true,
+    "name": "logic",
+    "nets": [
+     "logic-hv",
+     "hv"
+    ],
+    "plane_layer": null,
+    "width_mm": 0.5
+   },
+   {
+    "clearance_mm": 0.15,
+    "copper_oz": 1.0,
+    "current_a": null,
+    "delta_t_c": 10.0,
+    "external": true,
+    "name": "buck_switch",
+    "nets": [
+     "SW"
+    ],
+    "plane_layer": null,
+    "width_mm": 1.0
+   }
+  ],
+  "plane_access_fab": {
+   "board_thickness_mm": 1.6,
+   "component_pth_min_drill_mm": 0.3,
+   "copper_resistivity_ohm_mm": 2.1e-05,
+   "edge_clearance_mm": 0.3,
+   "fab_profile": "jlc-pofv",
+   "filled_via_hole_to_hole_mm": 0.45,
+   "hole_clearance_mm": 0.2,
+   "hole_to_edge_mm": 0.5,
+   "hole_to_hole_mm": 0.25,
+   "inner_copper_oz": 0.4342857142857143,
+   "inner_copper_um": 15.2,
+   "min_via_plating_um": 18,
+   "outer_copper_oz": 1.0,
+   "outer_copper_um": 35.0,
+   "plane_access_delta_t_c": 40,
+   "power_bus_min_width_mm": 1.5,
+   "pth_hole_to_hole_mm": 0.5,
+   "qualification": "JLCPCB standard 4-layer 1.6 mm (JLC04161H-7628) + POFV screening: 35 um outer / 15.2 um inner finished copper, 18 um barrel plating (docs/fab-comparison.md 5A/5B). IPC-2221 screening only; IPC-2152 thermal and impedance qualification remain pending.",
+   "track_width_mm": 0.2,
+   "via_array_peak_drop_v": 0.01,
+   "via_barrel_loss_budget_w": 0.01,
+   "via_diameter_mm": 0.45,
+   "via_drill_mm": 0.3,
+   "via_to_smd_pad_mm": 0.127
+  },
+  "plane_access_intents": [
+   {
+    "address": "board.converter.low_fet",
+    "kind": "power_array",
+    "max_array_span_mm": 3.0,
+    "net": "lv",
+    "pads": [
+     "1",
+     "2",
+     "3"
+    ],
+    "peak_current_a": 16.0,
+    "plane": "In1.Cu",
+    "ref": "Q2",
+    "rms_current_a": 5.0,
+    "source": {
+     "line": 145,
+     "path": "hardware/splanc_dev/elec/src/splanc_mini.ato",
+     "sha256": "c576d35a400881bea22ce9e3fc04f38c3fe099313bcfc72822a554278b171314"
+    },
+    "surface": "F.Cu",
+    "target": "converter.low_fet"
+   }
+  ],
+  "references_on_fab": true,
+  "routed_pair_references": []
+ },
+ "source": {
+  "block": "board.converter",
+  "height": 30.0,
+  "inputs": "inputs2",
+  "width": 30.0
+ }
+}

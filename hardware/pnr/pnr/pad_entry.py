@@ -176,6 +176,38 @@ def connected_land_witness(target,anchor,layer,rules):
     return not overlap.IsEmpty()
 
 
+def array_attached_pads(board, rules, tracks=None):
+    """UUIDs of SMD pads whose terminal is attached by a filled in-pad via array
+    (pnr.via_in_pad.array_attach: qualified 5B vias inside the pad, connected to one
+    full-width trunk on another layer, combined barrel capacity >= the pad's
+    budget). Empty without a via-in-pad profile policy (legacy) or electrical
+    policy, so pre-profile entries are unchanged. Barrels alone never qualify."""
+    if not rules.get('electrical_fab'):
+        return set()
+    from pnr.fab_profile import geometry
+    g = geometry(rules)
+    if g.in_pad is None:
+        return set()
+    import pcbnew
+    from pnr.via_in_pad import array_attach
+    vias = {}
+    for t in (board.GetTracks() if tracks is None else tracks):
+        if t.GetClass() == 'PCB_VIA':
+            vias.setdefault(t.GetNetCode(), []).append(t.GetPosition())
+    out = set()
+    for fp in board.GetFootprints():
+        for pad in fp.Pads():
+            if not pad.GetNetCode() or pad.GetAttribute() != pcbnew.PAD_ATTRIB_SMD:
+                continue
+            box = pad.GetBoundingBox()
+            if not any(box.Contains(p) for p in vias.get(pad.GetNetCode(), ())):
+                continue
+            report = array_attach(board, pad, rules, g)
+            if report and report['qualified']:
+                out.add(pad.m_Uuid.AsString())
+    return out
+
+
 def inspect(board, rules):
     import pcbnew
 
@@ -184,6 +216,9 @@ def inspect(board, rules):
     by_net_layer=defaultdict(list)
     for t in tracks:
         if t.GetClass()=='PCB_TRACK':by_net_layer[t.GetNetCode(),t.GetLayer()].append(t)
+    # Profile 5B only: a terminal attached by its in-pad array (no surface trace
+    # needed on its own layer) is a qualified entry; see array_attached_pads.
+    attached = array_attached_pads(board, rules, tracks)
     records = []; record_groups=[]; groups=defaultdict(set)
     for fp in board.GetFootprints():
         for pad in fp.Pads():
@@ -209,7 +244,8 @@ def inspect(board, rules):
                         layer,
                         touching,
                         width,
-                        any(witness(pad, t, width) or neck_witness(pad,t,width,tracks,rules) for t in touching),
+                        any(witness(pad, t, width) or neck_witness(pad,t,width,tracks,rules) for t in touching)
+                        or pad.m_Uuid.AsString() in attached,
                     )
                 )
     # Propagate only from an independently qualified trace/neck entry, through
@@ -222,7 +258,9 @@ def inspect(board, rules):
                any(records[j][1]==layer and connected_land_witness(p,records[j][0],layer,rules) for j in groups[record_groups[i]] & good)}
         if not added:break
         good.update(added)
-    return [(p,layer,touching,width,i in good) for i,(p,layer,touching,width,_) in enumerate(records) if touching]
+    # An in-pad array attach is reported even without a surface trace on the land.
+    return [(p,layer,touching,width,i in good) for i,(p,layer,touching,width,_) in enumerate(records)
+            if touching or p.m_Uuid.AsString() in attached]
 
 
 def snapshot(board, rules):

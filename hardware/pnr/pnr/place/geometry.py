@@ -125,7 +125,13 @@ def apply_hard_sides(graph, constraints):
 
 
 def occupied_sides(comp: Component):
-    """Reserve through-hole component bodies on both sides, conservatively."""
+    """Reserve through-hole component bodies on both sides, conservatively.
+
+    Assembled hierarchical blocks (``block:`` macros from :mod:`pnr.hier.macro`)
+    carry their routed through vias and possibly bottom-side members, so their
+    whole outline is reserved on both sides as well.
+    """
+    if (comp.footprint or "").startswith("block:"):return ("top", "bottom")
     return ("top", "bottom") if not comp.smd_body and any(p.through_hole for p in comp.pads) else (comp.side,)
 
 

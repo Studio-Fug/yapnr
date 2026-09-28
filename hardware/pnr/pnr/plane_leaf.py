@@ -95,7 +95,7 @@ def main():
  import pcbnew as k
  # Keep the owning board in this caller until execute releases every borrowed
  # pad/track/connectivity wrapper. KiCad 10 SWIG locals may otherwise outlive it.
- ap=argparse.ArgumentParser();ap.add_argument('board',type=Path);ap.add_argument('--rules',type=Path,required=True);ap.add_argument('--annotation-source',type=Path,action='append',default=[]);ap.add_argument('--focus',required=True);ap.add_argument('--out-dir',type=Path,required=True);a=ap.parse_args();a.out_dir.mkdir(exist_ok=False);rules=json.loads(a.rules.read_text());board=k.LoadBoard(str(a.board))
+ ap=argparse.ArgumentParser();ap.add_argument('board',type=Path);ap.add_argument('--rules',type=Path,required=True);ap.add_argument('--annotation-source',type=Path,action='append',default=[]);ap.add_argument('--focus',required=True);ap.add_argument('--out-dir',type=Path,required=True);a=ap.parse_args();a.out_dir.mkdir(exist_ok=False);rules=json.loads(a.rules.read_text());from pnr.fab_profile import load_board;board=load_board(a.board)
  execute(a,rules,board)
 
 if __name__=='__main__':main()

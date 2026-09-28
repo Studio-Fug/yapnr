@@ -1,3 +1,4 @@
+import os
 """Source-authored plane-access contracts and fabrication-dependent sizing.
 
 Annotations are JSON in `# @pnr-plane-access {...}` comments in atopile source.
@@ -66,6 +67,8 @@ def resolve(annotations, components):
             or c.address.removesuffix("._p").endswith("." + target)
         ]
         if not matches:
+            if os.environ.get("PNR_SUBBOARD") == "1":
+                continue  # block sub-board: annotation targets another block
             raise ValueError(f"unresolved source plane-access target: {target}")
         for c in matches:
             pads = [p for p in c.pads if p.name in a["pads"]]
@@ -116,6 +119,25 @@ def size_array(intent, fab):
     )
 
 
+def array_capacity(fab, drill_mm, count):
+    """The current ``count`` barrels of ``drill_mm`` carry within the same budgets
+    ``size_array`` sizes against (inverse of it; mm, A, V, W).
+
+    RMS is loss-limited (each barrel <= via_barrel_loss_budget_w), peak is
+    drop-limited (array drop <= via_array_peak_drop_v). Screening only, like
+    ``size_array``; thermal validation separate.
+    """
+    drill = positive(drill_mm, "drill")
+    plating = positive(fab["min_via_plating_um"], "plating") / 1000
+    length = positive(fab["board_thickness_mm"], "board thickness")
+    rho = positive(fab["copper_resistivity_ohm_mm"], "resistivity")
+    loss = positive(fab["via_barrel_loss_budget_w"], "barrel loss")
+    drop = positive(fab["via_array_peak_drop_v"], "peak drop")
+    resistance = rho * length / (math.pi * ((drill / 2 + plating) ** 2 - (drill / 2) ** 2))
+    return dict(barrel_resistance_ohm=resistance, max_rms_current_a=count * math.sqrt(loss / resistance),
+                max_peak_current_a=count * drop / resistance)
+
+
 def reserve_array_space(graph, intents, fab, edge_clearance_mm):
     """Reserve a conservative, rotation-independent courtyard for source arrays.
 
@@ -129,7 +151,7 @@ def reserve_array_space(graph, intents, fab, edge_clearance_mm):
         pads = [p for p in comp.pads if p.name in intent['pads']]
         sizing = size_array(intent, fab)
         n, diameter, drill = sizing['count'], sizing['diameter_mm'], sizing['drill_mm']
-        span = (n - 1) * max(diameter + .2, drill + fab.get('hole_clearance_mm', .2))
+        span = (n - 1) * max(diameter + .2, drill + fab.get('hole_to_hole_mm', fab.get('hole_clearance_mm', .2)))
         if span > intent['max_array_span_mm']:
             raise ValueError('current-sized array exceeds source span')
         area = (intent['rms_current_a'] / (.048 * fab['plane_access_delta_t_c'] ** .44)) ** (1/.725)
@@ -167,7 +189,7 @@ def array_geometry(pads, center, intent, fab, offset_mm=0.0):
     vx,vy=-uy,ux
     projections=[x*vx+y*vy for x,y in ps];low,high=min(projections),max(projections)
     n=sizing['count'];diameter=sizing['diameter_mm'];drill=sizing['drill_mm']
-    pitch=max(diameter+.2,drill+fab.get('hole_clearance_mm',.2));span=(n-1)*pitch
+    pitch=max(diameter+.2,drill+fab.get('hole_to_hole_mm',fab.get('hole_clearance_mm',.2)));span=(n-1)*pitch
     if span>intent['max_array_span_mm']:raise ValueError('current-sized array exceeds source span')
     edge=max(x*ux+y*uy+(size[0]*abs(ux)+size[1]*abs(uy))/2 for (x,y),size in pads)
     bus=edge-.25;via_axis=edge+diameter/2+.15+offset_mm

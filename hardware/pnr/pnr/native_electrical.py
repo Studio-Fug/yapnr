@@ -4,6 +4,11 @@ Add-only power repair preserves current-carrying trunks/arrays. A layer change
 uses a complete source-sized via bank, not a single signal via. Pair replacement
 is atomic for both nets; all old pad connectivity must survive. This module is
 run by native_loop under KiCad Python, never in the torch interpreter.
+
+Under a fab profile with a filled via-in-pad policy (jlc-pofv, 5B) a terminal
+land without any budgeted surface attach may instead be attached by a
+current-sized in-pad via array whose trunk continues on another layer
+(:func:`power_plan`, pnr.via_in_pad.array_attach); legacy rules never do.
 """
 import argparse
 from collections import Counter,defaultdict
@@ -16,6 +21,7 @@ from pnr.route.detail.keyhole import route,length,elbows
 from pnr.route.detail.coupled import solve_pair,path_metrics
 from pnr.pad_entry import snapshot,witness
 from pnr.via_coalesce import partition,preserved,acceptable
+from pnr.via_in_pad import smd_keepout_violated,hole_keepouts
 
 
 def xy(p):return (p.x/1e6,p.y/1e6)
@@ -33,6 +39,11 @@ class Oracle:
         self.items=[p for f in b.GetFootprints() for p in f.Pads()]+list(b.GetTracks())
         self.layers=list(b.GetEnabledLayers().CuStack());self.obstacles=[];self.buckets=defaultdict(set)
         from pnr.writeback import outline_bounds
+        from pnr.fab_profile import geometry
+        # Fab numbers from the rules; per-hole-kind values are None (unused) for
+        # legacy rules, which keep the original single hole clearance exactly.
+        self.geometry=g=geometry(rules)
+        npth_gap=.201 if g.npth_hole_clearance is None else g.npth_hole_clearance+.001
         self.box=outline_bounds(b);self.ignored=set(ignored);self.pair_reserved={}
         for t in self.items:
             if uid(t) in self.ignored:continue
@@ -40,7 +51,16 @@ class Oracle:
             for la in self.layers:
                 if t.IsOnLayer(la):self.add(t.GetEffectiveShape(la),t.GetBoundingBox(),gap,t.GetNetname(),uid(t),la)
                 if t.GetClass()=='PAD' and t.GetAttribute()==k.PAD_ATTRIB_NPTH:
-                    self.add(t.GetEffectiveHoleShape(),t.GetBoundingBox(),.201,None,uid(t),la)
+                    self.add(t.GetEffectiveHoleShape(),t.GetBoundingBox(),npth_gap,None,uid(t),la)
+                elif (g.pth_hole_clearance is not None and t.GetClass()=='PAD' and t.IsOnLayer(la)
+                      and t.GetAttribute()==k.PAD_ATTRIB_PTH and max(t.GetDrillSize().x,t.GetDrillSize().y)>0):
+                    # Plated pad hole to foreign copper (same net may enter its own land):
+                    # component PTH 0.35; a footprint's via-class hole (drill < 0.30) 0.20.
+                    kind=g.hole_kind(False,True,max(t.GetDrillSize().x,t.GetDrillSize().y)/1e6)
+                    self.add(t.GetEffectiveHoleShape(),t.GetBoundingBox(),g.pad_hole_clearance(kind)+.001,t.GetNetname(),uid(t),la)
+            # A via with removed unused pads (5B in-pad) is its bare hole where it has
+            # no pad: foreign copper keeps the via hole clearance (0.20) from the wall.
+            for la,hole,hole_gap in hole_keepouts(g,t,self.layers):self.add(hole,t.GetBoundingBox(),hole_gap,t.GetNetname(),uid(t),la)
         for z in b.Zones():
             for la in self.layers:
                 if not z.IsOnLayer(la):continue
@@ -52,7 +72,7 @@ class Oracle:
         # Cache exact physical shapes in 1 mm buckets. Vias query every crossed
         # layer and drill neighborhood; foreign filled planes remain cuttable.
         self.physical=[];self.physical_buckets=defaultdict(set)
-        self.holes=[];self.hole_buckets=defaultdict(set);self.clearance_cap=.05
+        self.holes=[];self.hole_gaps=[];self.hole_buckets=defaultdict(set);self.clearance_cap=.05
         for item in self.items:self.index_physical(item)
         from pnr.reference_guard import ReferenceGuard
         self.reference_guard=ReferenceGuard(b,rules)
@@ -60,7 +80,7 @@ class Oracle:
         """Isolate provisional copper while retaining the caller's obstacles."""
         import copy,pcbnew as k
         clone=copy.copy(self)
-        for name in ('items','obstacles','physical','holes','drilled'):
+        for name in ('items','obstacles','physical','holes','hole_gaps','drilled'):
             setattr(clone,name,list(getattr(self,name)))
         for name in ('buckets','physical_buckets','hole_buckets'):
             setattr(clone,name,defaultdict(set,{key:set(values) for key,values in getattr(self,name).items()}))
@@ -74,15 +94,28 @@ class Oracle:
         if uid(item) in self.ignored:return
         net=item.GetNetname();gap=net_policy(net,self.rules)['clearance_mm']+.001
         self.clearance_cap=max(self.clearance_cap,gap)
-        smd=item.GetClass()=='PAD' and item.GetAttribute()==k.PAD_ATTRIB_SMD
+        # SMD pads carry the pad itself: pnr.via_in_pad judges vias against them.
+        smd=item if item.GetClass()=='PAD' and item.GetAttribute()==k.PAD_ATTRIB_SMD else None
         for layer in self.layers:
             if not item.IsOnLayer(layer):continue
             shape=item.GetEffectiveShape(layer);box=shape.BBox();i=len(self.physical)
             self.physical.append((shape,net,gap,smd,uid(item)))
             for x in range(math.floor(box.GetLeft()/1e6),math.floor(box.GetRight()/1e6)+1):
                 for y in range(math.floor(box.GetTop()/1e6),math.floor(box.GetBottom()/1e6)+1):self.physical_buckets[layer,x,y].add(i)
+        # Removed-pad via: its hole wall keeps the via hole clearance (hole_keepouts).
+        for layer,hole,hole_gap in hole_keepouts(self.geometry,item,self.layers):
+            box=hole.BBox();i=len(self.physical);self.clearance_cap=max(self.clearance_cap,hole_gap)
+            self.physical.append((hole,net,hole_gap,None,uid(item)))
+            for x in range(math.floor(box.GetLeft()/1e6),math.floor(box.GetRight()/1e6)+1):
+                for y in range(math.floor(box.GetTop()/1e6),math.floor(box.GetBottom()/1e6)+1):self.physical_buckets[layer,x,y].add(i)
         if item.GetClass()=='PCB_VIA' or item.GetClass()=='PAD' and max(item.GetDrillSize().x,item.GetDrillSize().y)>0:
             shape=item.GetEffectiveHoleShape();box=shape.BBox();i=len(self.holes);self.holes.append(shape)
+            # Drill gap a new via needs to this hole (profile: via/PTH/NPTH differ;
+            # a footprint's via-class pad hole counts as a via).
+            via=item.GetClass()=='PCB_VIA'
+            kind=self.geometry.hole_kind(via,None if via else item.GetAttribute()!=k.PAD_ATTRIB_NPTH,
+                                         0 if via else max(item.GetDrillSize().x,item.GetDrillSize().y)/1e6)
+            self.hole_gaps.append(self.geometry.via_hole_gap(kind))
             for x in range(math.floor(box.GetLeft()/1e6),math.floor(box.GetRight()/1e6)+1):
                 for y in range(math.floor(box.GetTop()/1e6),math.floor(box.GetBottom()/1e6)+1):self.hole_buckets[x,y].add(i)
     def add(self,shape,box,gap,net,identity,la):
@@ -136,11 +169,11 @@ class Oracle:
         # collide with tracks/pads/keepouts. Plane contact is checked after fill.
         v=k.PCB_VIA(self.b);v.SetPosition(vec(p));v.SetFrontWidth(round(diameter*1e6));v.SetDrill(round(drill*1e6));v.SetViaType(k.VIATYPE_THROUGH);v.SetLayerPair(k.F_Cu,k.B_Cu)
         if not self.reference_guard.via_clear(net,p,diameter):return False
-        hole=v.GetEffectiveHoleShape();hg=self.rules.get('fab',{}).get('hole_clearance_mm',.2)+.001
+        hole=v.GetEffectiveHoleShape();hg=self.geometry.max_via_hole_gap+.001
         box=hole.BBox();near=set()
         for x in range(math.floor(box.GetLeft()/1e6-hg),math.floor(box.GetRight()/1e6+hg)+1):
             for y in range(math.floor(box.GetTop()/1e6-hg),math.floor(box.GetBottom()/1e6+hg)+1):near.update(self.hole_buckets[x,y])
-        if any(self.holes[i].Collide(hole,round(hg*1e6)) for i in near):return False
+        if any(self.holes[i].Collide(hole,round((self.hole_gaps[i]+.001)*1e6)) for i in near):return False
         gap=net_policy(net,self.rules)['clearance_mm']+.001;r=max(gap,self.clearance_cap,.05)
         for la in self.layers:
             near=set();shape=v.GetEffectiveShape(la);box=shape.BBox()
@@ -148,12 +181,15 @@ class Oracle:
                 for y in range(math.floor(box.GetTop()/1e6-r),math.floor(box.GetBottom()/1e6+r)+1):near.update(self.physical_buckets[la,x,y])
             for i in sorted(near):
                 other,other_net,other_gap,smd,identity=self.physical[i]
-                if smd and other.Collide(shape,50000):return False
+                # Legacy: no via within 0.05 mm of any SMD pad. Profile: 5A 0.127 from
+                # every SMD pad unless a qualified 5B filled in-pad via of its own net.
+                if smd is not None and smd_keepout_violated(self.geometry,smd,other,shape,net,p,diameter,drill,la):return False
                 if other_net!=net and other.Collide(shape,round(max(gap,other_gap)*1e6)):
                     self.via_hits[identity]+=1;return False
         for z in self.b.Zones():
             if z.GetIsRuleArea() and z.GetDoNotAllowVias() and z.Outline().Collide(v.GetEffectiveShape(k.F_Cu),1000):return False
-        edge=diameter/2+.201
+        g=self.geometry
+        edge=diameter/2+.201 if g.hole_to_edge is None else g.via_edge_margin(diameter,drill)
         return self.box.GetLeft()/1e6+edge<=p[0]<=self.box.GetRight()/1e6-edge and self.box.GetTop()/1e6+edge<=p[1]<=self.box.GetBottom()/1e6-edge
 
 
@@ -225,11 +261,24 @@ def bank_points(center,count,diameter,drill,hole_clearance):
 def bank_clear(oracle,net,center,policy,layers):
     sizing=policy.get('via_array')
     if not sizing:return None
-    points=bank_points(center,sizing['count'],sizing['diameter_mm'],sizing['drill_mm'],oracle.rules.get('fab',{}).get('hole_clearance_mm',.2))
+    fab=oracle.rules.get('fab',{})
+    points=bank_points(center,sizing['count'],sizing['diameter_mm'],sizing['drill_mm'],fab.get('hole_to_hole_mm',fab.get('hole_clearance_mm',.2)))
     if not all(oracle.via(net,p,sizing['diameter_mm'],sizing['drill_mm']) for p in points):return None
     for la,width in layers:
         if not all(oracle.clear(net,la,center,p,width) for p in points):return None
     return points
+
+
+def add_in_pad_vias(b,net,vias,geometry):
+    """Filled 5B in-pad through vias ``[(point, diameter, drill)]`` with their unused
+    inner pads removed (via_in_pad.style_in_pad_via, 5B "Inner layers")."""
+    import pcbnew as k
+    from pnr.via_in_pad import style_in_pad_via
+    keep=[]
+    for point,diameter,drill in vias:
+        v=k.PCB_VIA(b);v.SetNetCode(b.FindNet(net).GetNetCode());v.SetPosition(vec(point));v.SetViaType(k.VIATYPE_THROUGH);v.SetLayerPair(k.F_Cu,k.B_Cu)
+        v.SetFrontWidth(round(diameter*1e6));v.SetDrill(round(drill*1e6));style_in_pad_via(geometry,v);b.Add(v);keep.append(v)
+    return keep
 
 
 def add_bank(b,net,center,points,policy,layers):
@@ -309,10 +358,17 @@ def power_plan(b,net,source,target,rules,oracle,bounds,pitch,*,prefer_tree=True,
         return list(access_cache[key])
     # Same-net copper is not automatically a safe attachment: a thin branch
     # grazing an otherwise bare power pad creates an unqualified pad entry.
-    from pnr.pad_entry import required_width
+    from pnr.pad_entry import required_width,array_attached_pads
     existing_entries=snapshot(b,rules)
     guarded_pads=[(pad,required_width(pad,rules)) for f in b.GetFootprints() for pad in f.Pads()
                   if pad.GetNetname()==net and pad.GetAttribute()==k.PAD_ATTRIB_SMD]
+    # Terminals already attached by a qualified in-pad array (profile 5B only;
+    # always empty for legacy rules): their entry carries their full budget.
+    attached_cache={}
+    def array_attached():
+        if 'ids' not in attached_cache:
+            attached_cache['ids']=array_attached_pads(b,rules) if oracle.geometry.in_pad is not None else set()
+        return attached_cache['ids']
     probe=k.PCB_TRACK(b)
     def entry_clear(net,layer,a,z,width):
         if not oracle.clear(net,layer,a,z,width):return False
@@ -362,6 +418,10 @@ def power_plan(b,net,source,target,rules,oracle,bounds,pitch,*,prefer_tree=True,
         from pnr.pad_entry import required_width
         for pad in (t for t in root_items if t.GetClass()=='PAD' and t.IsOnLayer(layer)):
             landing_width=max(branch_width,required_width(pad,rules))
+            # A terminal attached by its qualified in-pad array (profile 5B) already
+            # has its full-budget entry, so a declared branch joins its land at the
+            # branch's own width (entry_clear likewise admits a qualified entry).
+            if uid(pad) in array_attached():landing_width=branch_width
             for center in power_access([pad],layer,landing_width):
                 if landing_width<=branch_width+1e-9:
                     points.append(center);continue
@@ -373,11 +433,24 @@ def power_plan(b,net,source,target,rules,oracle,bounds,pitch,*,prefer_tree=True,
         return points
     layers=[k.F_Cu,k.B_Cu,k.In2_Cu]
     necks={};branch_counts={}
+    # Terminal in-pad array attach (profile 5B only: legacy geometry has no in_pad
+    # policy, so nothing below runs). Applies to a lone SMD terminal land whose
+    # own layer has no budgeted surface access (full width or source-bounded
+    # neck). Its current-sized row of filled 5B vias starts the trunk on another
+    # layer; in_pad_ports maps (layer, start point) to that attach.
+    g=oracle.geometry;in_pad_ports={};in_pad_state={}
+    source_pads=[t for t in aa if t.GetClass()=='PAD']
+    terminal_pad=(source_pads[0] if g.in_pad is not None and len(source_pads)==1 and p.get('terminal_sources')
+                  and p.get('current_known') and source_pads[0].GetAttribute()==k.PAD_ATTRIB_SMD else None)
+    terminal_layer=None
+    if terminal_pad is not None:
+        from pnr.via_in_pad import pad_layer
+        terminal_layer=pad_layer(terminal_pad)
     @lru_cache(maxsize=None)
     def branch_access(layer):
         w=p['outer_width_mm'] if layer in (k.F_Cu,k.B_Cu) else p['inner_width_mm']
         points=power_access(aa,layer,w)
-        if layer not in (k.F_Cu,k.B_Cu):return points
+        if layer not in (k.F_Cu,k.B_Cu):return points+in_pad_access(layer)
         for pad in [t for t in aa if t.GetClass()=='PAD' and t.IsOnLayer(layer)]:
             center=xy(pad.GetPosition());minimum=max(min(xy(pad.GetSize())),rules.get('fab',{}).get('track_width_mm',.2))
             if minimum>=w:continue
@@ -406,8 +479,67 @@ def power_plan(b,net,source,target,rules,oracle,bounds,pitch,*,prefer_tree=True,
                                 if not contract or not neck_budget(contract,nw,distance,rules['electrical_fab']) or not witness(touched,neck_probe,nw):eligible=False;break
                             if eligible:
                                 points.append(end);necks[layer,end]=(layer,center,end,nw,budget)
-        points=sorted(set(points));branch_counts[str(layer)]=len(points)
+        points=sorted(set(points+in_pad_access(layer)));branch_counts[str(layer)]=len(points)
         return points
+    def in_pad_access(layer):
+        """Trunk start points on ``layer`` of the terminal's in-pad array attach."""
+        if terminal_pad is None or layer==terminal_layer:return []
+        if branch_access(terminal_layer):return []  # a budgeted surface attach exists
+        plan_in_pad()
+        return sorted(pt for la,pt in in_pad_ports if la==layer)
+    def plan_in_pad():
+        """Choose the array once: the engine's barrel-model count for the terminal
+        budget (via_in_pad.array_requirement), 5B sites (attach_windows), every via
+        through the native Oracle plus same-array hole spacing, and on each other
+        power layer the full-width collector along the row whose copper covers every
+        via disk (the trunk's first segment; via_in_pad.array_attach re-checks it)."""
+        if in_pad_state:return
+        from pnr.via_in_pad import array_requirement,attach_windows,layer_width,trunk_contact
+        need=array_requirement(p,rules,g)
+        in_pad_state.update(pad=terminal_pad.GetParentFootprint().GetReference()+'.'+terminal_pad.GetNumber(),
+                            root_strategy=root_strategy,required=need['count'],windows=0,via_blocked=0,ports=0)
+        # Diagnostic trail across the retries of this worker (result.json in_pad_attempts).
+        oracle.__dict__.setdefault('in_pad_attempts',[]).append(in_pad_state)
+        # Barrels this worker already validated and reserved (an earlier root strategy
+        # of the same plan): re-checking them would collide with their own reservation.
+        reserved=oracle.__dict__.setdefault('in_pad_reserved',set())
+        for window in attach_windows(b,terminal_pad,need['count'],g):
+            in_pad_state['windows']+=1;vias=window['vias']
+            if any(math.dist(a[0],z[0])-(a[2]+z[2])/2<g.hole_gap-1e-9 for i,a in enumerate(vias) for z in vias[i+1:]):continue
+            if not all((net,pt,d,h) in reserved or oracle.via(net,pt,d,h) for pt,d,h in vias):in_pad_state['via_blocked']+=1;continue
+            diameter=max(d for _,d,_ in vias);first,last=vias[0][0],vias[-1][0];across=window['across']
+            found=[]
+            for la in layers:
+                if la==terminal_layer:continue
+                w=layer_width(p,la);reach=max(0.,(w-diameter)/2)
+                offsets=sorted({0.}|{s*round(i*.01,6) for i in range(1,int(reach/.01+1e-9)+1) for s in (-1,1)}|({-reach,reach} if reach else set()),key=lambda s:(abs(s),s))
+                chosen={}
+                for s in offsets:
+                    sides=[1,-1] if not s else [1 if s>0 else -1]
+                    if all(side in chosen for side in sides):continue
+                    a0=(round(first[0]+s*across[0],6),round(first[1]+s*across[1],6))
+                    a1=(round(last[0]+s*across[0],6),round(last[1]+s*across[1],6))
+                    if not all(trunk_contact(pt,d,a0,a1,w) for pt,d,_ in vias):continue
+                    if not entry_clear(net,la,a0,a1,w):continue
+                    for side in sides:chosen.setdefault(side,(s,a0,a1))
+                for s,a0,a1 in dict.fromkeys(chosen.values()):
+                    attach=dict(layer=la,vias=vias,collector=(la,a0,a1,w),
+                                report=dict(pad=terminal_pad.GetParentFootprint().GetReference()+'.'+terminal_pad.GetNumber(),
+                                            pad_uuid=uid(terminal_pad),layer=b.GetLayerName(la),variant=window['variant'],
+                                            offsets_mm=window['offsets_mm'],neighbour_offsets_mm=window['neighbour_offsets_mm'],
+                                            collector_offset_mm=s,trunk_width_mm=w,required=need['count'],
+                                            vias=[dict(position=pt,diameter_mm=d,drill_mm=h) for pt,d,h in vias],
+                                            rms_current_a=p['rms_current_a'],peak_current_a=p['peak_current_a']))
+                    mid=(round((a0[0]+a1[0])/2,6),round((a0[1]+a1[1])/2,6))
+                    for pt in dict.fromkeys((a0,a1,mid)):in_pad_ports.setdefault((la,pt),attach)
+                    found.append(la)
+            if found:
+                # Later banks keep the drill spacing to these barrels (same-net holes).
+                for pt,d,h in vias:
+                    if (net,pt,d,h) not in reserved:reserved.add((net,pt,d,h));oracle.reserve_via(net,pt,d,h)
+                in_pad_state.update(variant=window['variant'],layers=[b.GetLayerName(la) for la in dict.fromkeys(found)],
+                                    ports=len(in_pad_ports))
+                return
     def with_neck(plan):
         plan['root_strategy']=root_strategy
         # Add the selected terminal escape exactly once, never every candidate.
@@ -419,6 +551,13 @@ def power_plan(b,net,source,target,rules,oracle,bounds,pitch,*,prefer_tree=True,
         if candidates:
             chosen=min(candidates,key=lambda v:v[-1]['length_mm'])
             plan['tracks'].append(chosen[:4]);plan['neck']=chosen[-1]
+        # The terminal's in-pad array attach, if the trunk starts at its collector.
+        centres={tuple(center) for center,_,_ in plan.get('banks',[])}
+        attaches=[v for key,v in in_pad_ports.items() if key in endpoints or key[1] in centres]
+        if attaches:
+            attach=attaches[0];la,a0,a1,w=attach['collector']
+            if math.dist(a0,a1)>1e-8:plan['tracks'].append(attach['collector'])
+            plan['in_pad_vias']=attach['vias'];plan['in_pad_array']=attach['report']
         return plan
     blocked=[]
     for la in layers:
@@ -633,7 +772,8 @@ def main():
     ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('board',type=Path);ap.add_argument('--rules',type=Path,required=True);ap.add_argument('--out-dir',type=Path,required=True);ap.add_argument('--source-pad',required=True);ap.add_argument('--target-pad',required=True);ap.add_argument('--net',required=True);ap.add_argument('--bounds',nargs=4,type=float,required=True);ap.add_argument('--seconds',type=float,default=20);ap.add_argument('--pitch',type=float,default=.15);ap.add_argument('--kicad-cli',required=True);ap.add_argument('--placement-spec',type=Path);ap.add_argument('--placement-candidates',type=Path)
     ap.add_argument('--source-pad-uuid');ap.add_argument('--target-pad-uuid')
     a=ap.parse_args();a.out_dir.mkdir(parents=True,exist_ok=False)
-    rules=json.loads(a.rules.read_text());b=k.LoadBoard(str(a.board));b.BuildConnectivity();groups=partition(b);entries=snapshot(b,rules)
+    from pnr.fab_profile import load_board  # custom rules in force for the refills below
+    rules=json.loads(a.rules.read_text());b=load_board(a.board);b.BuildConnectivity();groups=partition(b);entries=snapshot(b,rules)
     policy=net_policy(a.net,rules)
     if a.placement_candidates:
         proposals=screen_pair_placements(a.board,rules,policy['pair'],json.loads(a.placement_candidates.read_text()),a.bounds)
@@ -659,14 +799,20 @@ def main():
     if policy['mode']=='pair':
         k.ZONE_FILLER(b).Fill(b.Zones());b.BuildConnectivity()
     oracle=Oracle(b,rules,deadline=time.monotonic()+a.seconds)
+    # Profile only (5A/5B via-to-SMD-pad rule; legacy has none and KiCad DRC is its
+    # whole rule): vias breaking the rule before this transaction.
+    from pnr.via_in_pad import forbidden_vias
+    forbidden_before=forbidden_vias(b,oracle.geometry) if oracle.geometry.via_to_smd_pad is not None else None
     try:
         plan=pair_plan(b,policy['pair'],rules,oracle,a.bounds,a.pitch) if policy['mode']=='pair' else power_plan(b,a.net,source,target,rules,oracle,a.bounds,a.pitch)
     except TimeoutError:plan=dict(status='time_budget',mode=policy['mode'])
     plan.update(accepted=False,placement=placement,static_blockers=dict(oracle.hits.most_common(30)),via_blockers=dict(oracle.via_hits.most_common(30)))
+    if getattr(oracle,'in_pad_attempts',None):plan['in_pad_attempts']=oracle.in_pad_attempts
     keep=[]
     if plan['status']=='routed':
         for la,x,y,w in plan.get('tracks',[]):keep.append(add_track(b,a.net,la,x,y,w))
         for center,points,layers in plan.get('banks',[]):keep.extend(add_bank(b,a.net,center,points,plan['policy'],layers))
+        if plan.get('in_pad_vias'):keep.extend(add_in_pad_vias(b,a.net,plan['in_pad_vias'],oracle.geometry))
         for net,la,x,y,w in plan.get('pair_tracks',[]):keep.append(add_track(b,net,la,x,y,w))
         for net,pt in plan.get('pair_vias',[]):
             v=k.PCB_VIA(b);v.SetNetCode(b.FindNet(net).GetNetCode());v.SetPosition(vec(pt));v.SetFrontWidth(round(plan['via_diameter_mm']*1e6));v.SetDrill(round(plan['via_drill_mm']*1e6));v.SetViaType(k.VIATYPE_THROUGH);v.SetLayerPair(k.F_Cu,k.B_Cu);b.Add(v);keep.append(v)
@@ -683,6 +829,15 @@ def main():
         current=snapshot(b,rules)
         checks=dict(preserved=preserved(groups,partition(b)),lost_pad_entries=[i for i,v in entries.items() if v and not current.get(i,False)],new_bad_entries=[i for i,v in current.items() if not v and i not in entries])
         checks['reference_failures']=reference_failures(b,rules)
+        if forbidden_before is not None:
+            # 5B geometry KiCad cannot see (the DRU exempts the 0.20-drill class).
+            checks['new_forbidden_smd_vias']=sorted(forbidden_vias(b,oracle.geometry)-forbidden_before)
+        if plan.get('in_pad_vias'):
+            # The array is the terminal attach only if it qualifies as built: 5B
+            # vias in the pad, one full-width trunk on the other layer, capacity.
+            from pnr.via_in_pad import array_attach
+            terminal=next(p for f in b.GetFootprints() for p in f.Pads() if uid(p)==plan['in_pad_array']['pad_uuid'])
+            checks['in_pad_attach']=array_attach(b,terminal,rules,oracle.geometry)
         output=a.out_dir/'candidate.kicad_pcb';k.SaveBoard(str(output),b);shutil.copyfile(a.board.with_suffix('.kicad_pro'),output.with_suffix('.kicad_pro'))
         table=a.board.parent/'fp-lib-table'
         if table.exists():(a.out_dir/'fp-lib-table').write_text(table.read_text().replace('${KIPRJMOD}',str(a.board.parent.resolve())))
@@ -690,7 +845,8 @@ def main():
             from pnr.native_drc import run_drc
             return run_drc(a.kicad_cli,board,a.out_dir/name)
         before=drc(a.board,'baseline.drc.json');after=drc(output,'candidate.drc.json')
-        plan.update(checks=checks,before_opens=len(before['unconnected_items']),after_opens=len(after['unconnected_items']),accepted=plan['status']=='routed' and not checks['reference_failures'] and acceptable(before,after,checks) and not checks['new_bad_entries'] and len(after['unconnected_items'])<len(before['unconnected_items']))
+        plan.update(checks=checks,before_opens=len(before['unconnected_items']),after_opens=len(after['unconnected_items']),accepted=plan['status']=='routed' and not checks['reference_failures'] and acceptable(before,after,checks) and not checks['new_bad_entries'] and len(after['unconnected_items'])<len(before['unconnected_items'])
+                    and not checks.get('new_forbidden_smd_vias') and (not plan.get('in_pad_vias') or bool((checks.get('in_pad_attach') or {}).get('qualified'))))
     if not plan['accepted']:
         diagnostic=a.out_dir/'diagnostic-NOT-ACCEPTED.kicad_pcb'
         k.SaveBoard(str(diagnostic),b)
@@ -715,7 +871,8 @@ def pair_bridge_ports(pair,terminals,rules,oracle,bounds,index):
     p,n=pair['p'],pair['n'];width,gap=pair['width_mm'],pair['gap_mm']
     diameter,drill=pair_via_geometry(rules)
     clearance=max(net_policy(net,rules)['clearance_mm'] for net in (p,n))
-    via_spacing=max(diameter+clearance+.002,drill+rules.get('fab',{}).get('hole_clearance_mm',.2)+.002)
+    hole_gap=rules.get('fab',{}).get('hole_to_hole_mm',rules.get('fab',{}).get('hole_clearance_mm',.2))
+    via_spacing=max(diameter+clearance+.002,drill+hole_gap+.002)
     cap=pair.get('max_uncoupled_mm',2)
     a,z=terminals[p][index],terminals[n][index];distance=math.dist(a,z)
     if distance<1e-8:return []
@@ -806,7 +963,8 @@ def pair_layer_bridge(b,pair,terminals,rules,oracle,bounds,pitch,offsets,reuse_s
     p,n=pair['p'],pair['n'];width,gap=pair['width_mm'],pair['gap_mm']
     diameter,drill=pair_via_geometry(rules)
     clearance=max(net_policy(net,rules)['clearance_mm'] for net in (p,n))
-    via_spacing=max(diameter+clearance+.002,drill+rules.get('fab',{}).get('hole_clearance_mm',.2)+.002)
+    hole_gap=rules.get('fab',{}).get('hole_to_hole_mm',rules.get('fab',{}).get('hole_clearance_mm',.2))
+    via_spacing=max(diameter+clearance+.002,drill+hole_gap+.002)
     cap=pair.get('max_uncoupled_mm',2)
     ports=lambda index:pair_bridge_ports(pair,terminals,rules,oracle,bounds,index)
     starts,ends=([reuse_source] if reuse_source else ports(0)),ports(1)
@@ -814,7 +972,7 @@ def pair_layer_bridge(b,pair,terminals,rules,oracle,bounds,pitch,offsets,reuse_s
     bridge_failures=Counter();examples=[];successful=0
     for a,z in candidates[:64]:
         vias=[(net,group['sites'][net]) for group in (a,z) for net in (p,n)]
-        if any(math.dist(v,q)+1e-6<(via_spacing if net!=other else drill+rules.get('fab',{}).get('hole_clearance_mm',.2)+.002) for i,(net,v) in enumerate(vias) for other,q in vias[i+1:]):continue
+        if any(math.dist(v,q)+1e-6<(via_spacing if net!=other else drill+hole_gap+.002) for i,(net,v) in enumerate(vias) for other,q in vias[i+1:]):continue
         def clear(net,x,y,w):
             return oracle.clear(net,k.B_Cu,x,y,w,pair=pair) and all(other==net or segment_distance(x,y,pt,pt)>=(diameter+w)/2+clearance+.001 for other,pt in vias)
         candidate_reference=pair_reference_validator(b,pair,rules,list(prior_vias)+vias,base_center=reference_validator.center) if reference_validator else None

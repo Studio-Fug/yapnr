@@ -30,6 +30,8 @@ def main():
         if source.GetClass()=='PCB_VIA':
             t=pcbnew.PCB_VIA(current);t.SetPosition(source.GetPosition());t.SetViaType(source.GetViaType());t.SetLayerPair(source.TopLayer(),source.BottomLayer());t.SetDrill(source.GetDrillValue())
             for la in current.GetEnabledLayers().CuStack():t.SetWidth(la,source.GetWidth(la))
+            # Filled in-pad vias drop unused inner pads (5B); legacy vias keep all (default).
+            t.Padstack().SetUnconnectedLayerMode(source.Padstack().UnconnectedLayerMode())
         else:
             t=pcbnew.PCB_TRACK(current);t.SetStart(source.GetStart());t.SetEnd(source.GetEnd());t.SetLayer(source.GetLayer());t.SetWidth(source.GetWidth())
         t.SetNetCode(net.GetNetCode())
@@ -37,5 +39,8 @@ def main():
         current.Add(t);t.thisown=False
     a.out.parent.mkdir(parents=True,exist_ok=True);pcbnew.SaveBoard(str(a.out),current)
     shutil.copy2(a.current.with_suffix('.kicad_pro'),a.out.with_suffix('.kicad_pro'))
+    # The fab profile's custom rules travel with the project (the caller's refill
+    # loads the board through pnr.fab_profile.load_board, which also writes them).
+    from pnr.fab_profile import copy_dru;copy_dru(a.current,a.out)
     print(json.dumps(dict(added=len(delta),requires_native_validation=True)))
 if __name__=='__main__':main()

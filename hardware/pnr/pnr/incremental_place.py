@@ -47,12 +47,17 @@ def apply(board,graph,rules):
   if c.side!=o.side: f.Flip(f.GetPosition(),False)
   f.SetPosition(f.GetPosition()+k.VECTOR2I(round((c.pos[0]-o.pos[0])*1e6),round((o.pos[1]-c.pos[1])*1e6)))
   f.SetOrientationDegrees(float(c.rot))
- # Pads and holes own clearance, not the footprint's whole body/courtyard.
+ # Pads and holes own clearance, not the footprint's whole body/courtyard. A via
+ # with removed unused pads (5B in-pad) also keeps the via hole clearance from its
+ # drill wall where it has no pad (pnr.via_in_pad.clearance_shapes).
+ from pnr.fab_profile import geometry
+ from pnr.via_in_pad import clearance_shapes
+ hole_clearance=geometry(rules).hole_clearance
  for t in tracks:
   if uid(t) in removed:continue
   for p in moving:
    gap=round((max(net_policy(t.GetNetname(),rules)['clearance_mm'],net_policy(p.GetNetname(),rules)['clearance_mm'])+.001)*1e6)
-   collision=any(t.IsOnLayer(la) and p.IsOnLayer(la) and t.GetNetCode()!=p.GetNetCode() and t.GetEffectiveShape(la).Collide(p.GetEffectiveShape(la),gap) for la in layers)
+   collision=any(t.IsOnLayer(la) and p.IsOnLayer(la) and t.GetNetCode()!=p.GetNetCode() and any(s.Collide(p.GetEffectiveShape(la),gap) for s in clearance_shapes(t,la,gap/1e6,hole_clearance)) for la in layers)
    if p.GetDrillSize().x:
     collision=collision or any(t.IsOnLayer(la) and t.GetEffectiveShape(la).Collide(p.GetEffectiveHoleShape(),gap) for la in layers)
    if collision:
@@ -83,7 +88,8 @@ def main():
  import pcbnew as k
  from pnr.graph import BoardGraph
  p=argparse.ArgumentParser();p.add_argument('board',type=Path);p.add_argument('graph',type=Path);p.add_argument('--rules',required=True,type=Path);p.add_argument('--out',required=True,type=Path);p.add_argument('--report',required=True,type=Path);a=p.parse_args()
- b=k.LoadBoard(str(a.board));rules=json.loads(a.rules.read_text());report=apply(b,BoardGraph.from_json(a.graph.read_text()),rules)
+ from pnr.fab_profile import load_board  # custom rules in force for the refill
+ b=load_board(a.board);rules=json.loads(a.rules.read_text());report=apply(b,BoardGraph.from_json(a.graph.read_text()),rules)
  a.out.parent.mkdir(parents=True,exist_ok=True);k.SaveBoard(str(a.out),b);shutil.copy2(a.board.with_suffix('.kicad_pro'),a.out.with_suffix('.kicad_pro'))
  if (a.board.parent/'fp-lib-table').exists():(a.out.parent/'fp-lib-table').write_text((a.board.parent/'fp-lib-table').read_text().replace('${KIPRJMOD}',str(a.board.parent.resolve())))
  a.rules.write_text(json.dumps(rules,indent=2));report['source_sha256']=hashlib.sha256(a.board.read_bytes()).hexdigest();a.report.write_text(json.dumps(report,indent=2))

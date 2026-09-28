@@ -10,6 +10,7 @@ import time
 from .joint import conflict, conflicts, solve_joint_region
 from .joint_access import select_joint
 from .spatial_conflicts import PrimitiveIndex
+from pnr.fab_profile import active_geometry
 from .keyhole import route
 from .layered import escape_frontier, primitives, SearchTimeout
 from .regional import Request, RegionalResult
@@ -182,7 +183,7 @@ def solve_portal_region(requests, bounds, static_clear, static_via_clear, *,
         emit(dict(stage='portal_cache',tracks=cached_body_clear.cache_info()._asdict(),vias=cached_body_via.cache_info()._asdict()))
         attempts=events+result.attempts
         if result.status!='routed':return RegionalResult(result.status,{},attempts)
-        paths={}
+        paths={};via_pitch=active_geometry().same_net_via_pitch  # distinct drills (legacy 0.501)
         for r in requests:
             path=chosen[f'{r.name}/0'].path+result.paths[r.name]+list(reversed(chosen[f'{r.name}/1'].path))
             paths[r.name]=[p for i,p in enumerate(path) if not i or p!=path[i-1]]
@@ -191,7 +192,7 @@ def solve_portal_region(requests, bounds, static_clear, static_via_clear, *,
             holes=list(dict.fromkeys(tuple(p) for p in holes))
             emit(dict(stage='composed_vias',request=r.name,count=len(holes),limit=max_total_vias,holes=holes,path=paths[r.name]))
             if (len(holes)>max_total_vias or (holes and not first_via_allowed(r,holes[0])) or
-                any(1e-8<math.dist(a,b)<.501-1e-9 for i,a in enumerate(holes) for b in holes[i+1:])):
+                any(1e-8<math.dist(a,b)<via_pitch-1e-9 for i,a in enumerate(holes) for b in holes[i+1:])):
                 return RegionalResult('portal_transition_rejected',{},events+result.attempts)
         if conflicts(requests,paths):return RegionalResult('portal_composition_conflict',{},events+result.attempts)
         # Each source/target prefix is original, exact-oracle-qualified geometry.

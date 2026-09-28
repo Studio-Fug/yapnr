@@ -49,13 +49,40 @@ def save(p, value):
     Path(p).write_text(json.dumps(value, indent=2) + '\n')
 
 
+def copy_lib_table(source, folder):
+    """Give a board written into folder its source project's footprint table.
+
+    Without it native DRC reports every footprint as lib_footprint_issues and
+    gate() rejects the board. Returns whether source had a table to copy.
+    """
+    table = source.parent / 'fp-lib-table'
+    if not table.exists():
+        return False
+    (folder / 'fp-lib-table').write_text(table.read_text().replace('${KIPRJMOD}', str(source.parent.resolve())))
+    return True
+
+
 def copy_board(source, target):
     target.parent.mkdir(parents=True, exist_ok=True)
     for ext in ['.kicad_pcb', '.kicad_pro']:
         shutil.copyfile(source.with_suffix(ext), target.with_suffix(ext))
-    table = source.parent / 'fp-lib-table'
-    if table.exists():
-        (target.parent / 'fp-lib-table').write_text(table.read_text().replace('${KIPRJMOD}', str(source.parent.resolve())))
+    # Fab-profile custom rules travel with the project (native DRC rewrites them
+    # anyway; copying keeps warm/interactive sessions on the same policy).
+    if source.with_suffix('.kicad_dru').exists():
+        shutil.copyfile(source.with_suffix('.kicad_dru'), target.with_suffix('.kicad_dru'))
+    copy_lib_table(source, target.parent)
+
+
+# Labels passed to phase(); PNR_STOP_AFTER_PHASE must name one of them.
+PHASE_LABELS = ('02-usb-pairs', '03-early-power', '04-early-plane', '05-early-power-refine', '06-signals',
+                '06b-power-bank-consolidation', '07-native-refinement', '08b-power-bank-consolidation')
+
+
+class StopAfterPhase(Exception):
+    """PNR_STOP_AFTER_PHASE reached; result is the loop's written best board."""
+    def __init__(self, label, result):
+        super().__init__(label)
+        self.label, self.result = label, result
 
 
 def native_worker(a):
@@ -64,7 +91,8 @@ def native_worker(a):
     from pnr.via_coalesce import partition, preserved, protected, touch
     from pnr.pad_entry import snapshot
     from pnr.plane_access import uid
-    b = k.LoadBoard(str(a.board)); b.BuildConnectivity()
+    from pnr.fab_profile import load_board  # custom rules in force for the 'check' refill
+    b = load_board(a.board); b.BuildConnectivity()
     rules = read(a.rules)
     excluded, intents = protected(b, rules, a.annotation_source)
     movement_excluded=set(excluded)
@@ -81,9 +109,10 @@ def native_worker(a):
         from pnr.electrical import annotations, resolve_currents, compile_policy, resolve_pair_chains
         g = build_graph(b)
         resolved = resolve_currents(annotations(a.annotation_source), g.components)
-        compiled = compile_policy(rules, resolved, read(a.electrical_fab))
+        from pnr.fab_profile import apply_fab_model, apply_rules
+        compiled = compile_policy(rules, resolved, apply_fab_model(read(a.electrical_fab)))
         compiled = resolve_pair_chains(compiled, a.annotation_source, g.components)
-        save(a.report, compiled)
+        save(a.report, apply_rules(compiled))
         return
     if a.worker == 'terminal-blockers':
         from pnr.terminal_repair import suggest
@@ -492,7 +521,13 @@ def gate(before, after, checks, strict=True):
     return bool(not checks.get("reference_failures") and acceptable(before,after,checks) and (not strict or len(after['unconnected_items'])<len(before['unconnected_items'])))
 
 
-def main(argv=None):
+def main(argv=None,nested=False):
+    """Controller/worker entry. PNR_STOP_AFTER_PHASE returns its stopped best board."""
+    try:return controller(argv,nested)
+    except StopAfterPhase as stop:return stop.result
+
+
+def controller(argv=None,nested=False):
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('board',type=Path);ap.add_argument('--rules',required=True,type=Path)
     ap.add_argument('--annotation-source',action='append',default=[],type=Path)
@@ -515,6 +550,9 @@ def main(argv=None):
     a.repo=a.repo.resolve();os.chdir(a.repo)
     if not all([a.constraints,a.out_dir,a.kicad_python,a.kicad_cli]):ap.error('controller requires constraints, out-dir and KiCad runtimes')
     if min(a.cycles,a.route_attempts,a.placement_attempts,a.max_move,a.search_seconds,a.seconds)<=0:ap.error('positive budgets required')
+    # Recursive early subphases share os.environ; only the outer loop stops.
+    stop_label=None if nested else os.environ.get('PNR_STOP_AFTER_PHASE') or None
+    if stop_label and stop_label not in PHASE_LABELS:ap.error('PNR_STOP_AFTER_PHASE must be one of: '+', '.join(PHASE_LABELS))
     a.out_dir=a.out_dir.resolve();a.out_dir.mkdir(parents=True,exist_ok=False)
     worker_root=a.out_dir/'worker-source'
     shutil.copytree(Path(__file__).resolve().parent,worker_root/'hardware/pnr/pnr',ignore=shutil.ignore_patterns('__pycache__'))
@@ -527,6 +565,10 @@ def main(argv=None):
         origins.append(dict(original=str(source.resolve()),snapshot=str(target),sha256=hashlib.sha256(target.read_bytes()).hexdigest()));sources.append(target)
     a.annotation_source=sources
     save(inputs/'origins.json',origins)
+    # Standalone runs may pass pre-profile rules: workers get the profiled copy.
+    from pnr.fab_profile import apply_rules
+    source_rules=read(a.rules);profiled=apply_rules(source_rules)
+    if profiled is not source_rules:a.rules=inputs/'rules.fab-profile.json';save(a.rules,profiled)
     env=dict(os.environ,PYTHONPATH=str(worker_root/'hardware/pnr'))
     from pnr.phase_budget import PhaseClock
     phase_clock=PhaseClock();started=phase_clock.started;events=[];rounds=[];history={};tried=set();seq=0;failure_history={};job_attempts={};job_budget_hints={};electrical_repair_attempts=set()
@@ -535,9 +577,21 @@ def main(argv=None):
     from pnr.power_detour_repair import DetourBudget
     power_detour_budget=DetourBudget()
     current=a.out_dir/'baseline.kicad_pcb';copy_board(a.board.resolve(),current)
+    if profiled is not source_rules:
+        # The input project may predate the profile; the DRC gate must see the same
+        # board constraints the workers route with.
+        from pnr.writeback import patch_project_rules
+        patch_project_rules(str(current.with_suffix('.kicad_pro')),profiled)
     def invoke(cmd,log):
         with Path(log).open('w') as f:
-            subprocess.run(cmd,env=env,stdout=f,stderr=subprocess.STDOUT,check=True)
+            # KiCad's python occasionally dies by signal (seen: SIGSEGV at teardown);
+            # an identical rerun succeeds, so retry once on a signal exit only.
+            for attempt in (0,1):
+                from pnr.proc import run as run_bounded
+                code=run_bounded(cmd,env=env,stdout=f,stderr=subprocess.STDOUT)
+                if code>=0 or attempt:break
+                f.write('\n[retry after signal %d]\n'%-code);f.flush()
+            if code:raise subprocess.CalledProcessError(code,cmd)
     def worker(mode,board,folder,extra=()):
         folder.mkdir(parents=True,exist_ok=True);report=folder/(mode+'.json')
         cmd=[a.kicad_python,'-m','pnr.native_loop',str(board),'--worker',mode,'--rules',str(a.rules.resolve()),'--report',str(report)]
@@ -550,10 +604,27 @@ def main(argv=None):
     if a.electrical_fab:
         compiled=worker('prepare',current,a.out_dir/'policy',['--electrical-fab',str(a.electrical_fab.resolve())])
         a.rules=a.out_dir/'policy'/'prepare.json'
-    def phase(name,board,metadata=None):
+    def phase(name,board,metadata=None,stop=True):
         if a.phase_dir:
             from pnr.phase_capture import capture
             capture(a.phase_dir,name,board,a.rules,a.kicad_cli,metadata=metadata)
+        if stop:stop_after(name,board)
+    def stop_after(name,board):
+        # Opt-in diagnostic cut. Publish this phase's board with the normal
+        # termination contract (best copy, final DRC, progress.json, returned
+        # path) so full_iteration still coalesces, audits and scores it.
+        if name!=stop_label:return
+        result=a.out_dir/'best'/'candidate.kicad_pcb';board=Path(board)
+        if board.resolve()!=result.resolve():copy_board(board,result)
+        report=drc(result,final=True);opens=len(report['unconnected_items']);progress_path=a.out_dir/'progress.json'
+        inventory=worker('inspect',result,a.out_dir/'stopped-inventory');coverage=open_net_coverage(report,inventory['item_nets'])
+        progress=read(progress_path) if progress_path.exists() else dict(source=str(a.board.resolve()),source_sha256=hashlib.sha256(a.board.read_bytes()).hexdigest(),initial_opens=opens,elapsed_seconds=0.,prerequisite_seconds=round(phase_clock.now()-phase_clock.overall_started,2),electrical_modes_enabled=bool(a.electrical_fab),budgets=dict(cycles=a.cycles,route_attempts=a.route_attempts,placement_attempts=a.placement_attempts,seconds=a.seconds))
+        # Post-refinement phases (07/08b) keep the loop's own reason alongside.
+        if 'termination' in progress:progress.update(loop_termination=progress['termination'],elapsed_seconds=round(time.monotonic()-started,2))
+        progress.update(best=str(result),best_sha256=hashlib.sha256(result.read_bytes()).hexdigest(),opens=opens,rounds=rounds,events=events,component_scores=history,native_open_nets=dict(coverage),protected_open_nets={n:c for n,c in coverage.items() if n in inventory['excluded']},termination='stopped_after_phase',stopped_after_phase=name)
+        save(progress_path,progress)
+        print(json.dumps(dict(best=str(result),opens=opens,cycles=len(rounds),termination='stopped_after_phase')))
+        raise StopAfterPhase(name,result)
     def bank_consolidation(board, label):
         # Source-current bank geometry only; independent workers preserve pad
         # partitions, qualified entries, reference and whole-current budgets.
@@ -581,18 +652,44 @@ def main(argv=None):
         phase(label,result,event)
         emit('route_result',board=result,data=dict(**event,opens=len(drc(result)['unconnected_items'])))
         return result
+    def fanout(board,action,label):
+        # PNR_FANOUT_RESERVE=1: named all-net rule areas keep planned fine-pitch
+        # signal escapes free through phases 03-05; release deletes exactly them
+        # before staged signals. Both pass the partition/pad-entry/DRC gate.
+        folder=a.out_dir/('fanout-'+action);base=folder/'baseline.kicad_pcb';output=folder/'candidate.kicad_pcb'
+        copy_board(board,base);copy_board(board,output);previous=drc(base);worker('inspect',base,folder/'reference')
+        event=dict(stage='fanout_'+action,accepted=False,folder=str(folder))
+        try:
+            invoke([a.kicad_python,'-m','pnr.fanout_reserve',str(base),'--rules',str(a.rules.resolve()),'--out',str(output),
+                    '--report',str(folder/'result.json')]+(['--release'] if action=='release' else []),folder/'run.log')
+            checks=worker('check',output,folder/'checks',['--spec',str(folder/'reference/inspect.json')])
+            summary=read(folder/'result.json')
+            event.update(summary={k:summary[k] for k in ('eligible','reserved','rule_areas','released','packages','seconds') if k in summary},
+                         accepted=gate(previous,drc(output),checks,strict=False))
+        except subprocess.CalledProcessError as error:
+            event.update(status='worker_error',returncode=error.returncode)
+        events.append(event)
+        if action=='release' and not event['accepted']:raise RuntimeError('fanout release rejected; see '+str(folder))
+        result=output if event['accepted'] else board
+        phase(label,result,event,stop=False)
+        return result
     emit('phase_start',board=current,data=dict(phase='usb-pairs' if a.early_pairs else (a.only_mode or 'native-refinement'),budget_seconds=a.seconds))
     if a.early_pairs:
         if not a.electrical_fab:raise ValueError('early pairs require source electrical policy')
         from pnr.paired_bootstrap import run as route_pairs
         from pnr.staged_signal import run as route_signals
         paired=route_pairs(current,a.rules,a.constraints,a.out_dir/'early-pairs',a.kicad_python,a.kicad_cli,allow_placement=(not a.route_only or a.early_pair_placement))
-        phase('02-usb-pairs',paired)
+        phase('02-usb-pairs',paired,stop=False)
         policy=read(a.rules);policy['routed_pair_references']=read(paired.parent/'paired-reference.json');save(a.rules,policy)
+        # A stop here must still publish the routed pair references to the policy.
+        stop_after('02-usb-pairs',paired)
         # Complete high-priority electrical work before the ordinary maze can
         # consume its escape corridors. Ground access is a distinct native mode.
         # The second power sweep can reuse copper added by the earlier phases.
         powered=paired
+        reserved=os.environ.get('PNR_FANOUT_RESERVE')=='1'
+        if reserved:
+            powered=fanout(paired,'reserve','02b-fanout-reserve');reserved=powered!=paired
         for phase_index,(name,mode,cycles,attempts,seconds) in enumerate((
                 ('early-power','power',2,40,600),
                 ('early-plane','plane',1,40,180),
@@ -607,8 +704,11 @@ def main(argv=None):
             if a.route_only:phase_args+=['--route-only']
             for source in a.annotation_source:phase_args+=['--annotation-source',str(source.resolve())]
             # No early-pairs flag: phases cannot recursively bootstrap.
-            powered=main(phase_args)
-            phase(f'{phase_index:02d}-{name}',powered,read(a.out_dir/name/'progress.json'))
+            powered=main(phase_args,nested=True)
+            label=f'{phase_index:02d}-{name}'
+            if reserved and label==stop_label:powered=fanout(powered,'release',f'{phase_index:02d}b-fanout-release');reserved=False
+            phase(label,powered,read(a.out_dir/name/'progress.json'))
+        if reserved:powered=fanout(powered,'release','05b-fanout-release')
         current=route_signals(powered,a.rules,a.constraints,a.out_dir/'staged-signal',a.kicad_python,a.kicad_cli)
         phase('06-signals',current)
     current=bank_consolidation(current,'06b-power-bank-consolidation')
@@ -660,6 +760,13 @@ def main(argv=None):
                     if not proposal.get('accepted') or time.monotonic()-started>=a.seconds:return None
                     rd=paths[route_job_key(target)];merged=rd/'merged.kicad_pcb'
                     invoke([a.kicad_python,'-m','pnr.merge_additive',str(base),str(rd/'proposal/candidate.kicad_pcb'),str(current),str(merged)],rd/'merge.log')
+                    # merge_additive writes .kicad_pcb/.kicad_pro (+ the fab-profile
+                    # .kicad_dru, which pnr.planes also writes before it refills: KiCad
+                    # fills zones under the rules it reads at load). Without the
+                    # footprint table every footprint is a lib_footprint_issues DRC
+                    # violation and gate() rejects every parallel merge.
+                    for origin in (current,base,rd/'proposal/candidate.kicad_pcb'):
+                        if copy_lib_table(Path(origin),rd):break
                     invoke([a.kicad_python,'-m','pnr.planes',str(merged),'--rules',str(a.rules.resolve()),'--refill-only'],rd/'refill.log')
                     checks=worker('check',merged,rd/'checks',['--spec',str(folder/'reference.json')]);after=drc(merged)
                     if not gate(report,after,checks):return None

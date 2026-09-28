@@ -54,7 +54,14 @@ def audit_board(board,rules,board_text=''):
         pair_reports.append(report)
     from pnr.native_electrical import reference_failures
     reference=reference_failures(board,rules) if rules.get('routed_pair_references') else None
-    return dict(reference_failures=reference,stackup=dict(enabled_layers=sorted(enabled),defined_copper_layers=sorted(defined),consistent=enabled==defined),power_current_unknown=sorted(unknown),subwidth_track_count=len(undersized),subwidth_tracks=undersized,pairs=pair_reports,qualified=False)
+    # Vias in / touching SMD pads under the rules' fab profile (docs/fab-comparison.md
+    # 5A "Vias in SMD pads", 5B "Via-in-pad via"): forbidden ones and in-pad arrays
+    # counted against their pad's current contract, each with its terminal attach
+    # (via_in_pad.array_attach: 5B vias in the pad reaching one full-width trunk on
+    # another layer with barrel capacity >= the budget; in_pad_terminal_attaches
+    # lists the qualified ones, which pad_entry counts as entries). Not scored.
+    from pnr.via_in_pad import audit as via_in_pad_audit
+    return dict(reference_failures=reference,stackup=dict(enabled_layers=sorted(enabled),defined_copper_layers=sorted(defined),consistent=enabled==defined),power_current_unknown=sorted(unknown),subwidth_track_count=len(undersized),subwidth_tracks=undersized,pairs=pair_reports,vias_in_smd_pads=via_in_pad_audit(board,rules),qualified=False)
 
 
 def main():

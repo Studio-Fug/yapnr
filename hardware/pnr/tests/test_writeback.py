@@ -163,7 +163,10 @@ class ProjectRulesTest(unittest.TestCase):
             self.assertEqual(project['meta']['version'], 3)
             self.assertEqual(project['net_settings']['meta']['version'], 4)
             classes = {c['name']: c for c in project['net_settings']['classes']}
-            self.assertEqual(classes['Default']['clearance'], .15)
+            # The selected fab profile may override the fab clearance (jlc-pofv:
+            # 0.127); legacy stamps the given 0.15. Explicit class values stay.
+            from pnr.fab_profile import apply_fab
+            self.assertEqual(classes['Default']['clearance'], apply_fab(rules['fab'])['clearance_mm'])
             self.assertEqual(classes['power']['clearance'], .3)
             self.assertEqual(classes['power']['track_width'], 1.5)
             self.assertEqual(classes['dp_usb']['diff_pair_gap'], .15)

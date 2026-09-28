@@ -1,10 +1,12 @@
 import math, random, unittest
 from pnr.route.detail.joint import conflict
 from pnr.route.detail.regional import Request, segment_distance
+from pnr.fab_profile import active_geometry
 
 class ConflictBoundsTest(unittest.TestCase):
     def test_matches_exact_distance_for_random_and_touching_primitives(self):
         rng=random.Random(73)
+        g=active_geometry()  # profile default via (legacy 0.6 / 0.501)
         for i in range(20000):
             same=i%7==0
             ar=Request('a','a',[],[],rng.uniform(.1,2),rng.uniform(.1,.4))
@@ -15,9 +17,9 @@ class ConflictBoundsTest(unittest.TestCase):
             if ak=='via':aq=ap
             if bk=='via':bq=bp
             a=(ak,al,ap,aq);b=(bk,bl,bp,bq)
-            if same:expected=ak==bk=='via' and 1e-8<math.dist(ap,bp)<.501-1e-9
+            if same:expected=ak==bk=='via' and 1e-8<math.dist(ap,bp)<g.same_net_via_pitch-1e-9
             elif ak==bk=='track' and al!=bl:expected=False
-            else:expected=segment_distance(ap,aq,bp,bq)<((ar.width if ak=='track' else .6)+(br.width if bk=='track' else .6))/2+max(ar.clearance,br.clearance)-1e-9
+            else:expected=segment_distance(ap,aq,bp,bq)<((ar.width if ak=='track' else g.via_diameter)+(br.width if bk=='track' else g.via_diameter))/2+max(ar.clearance,br.clearance)-1e-9
             self.assertEqual(conflict(ar,a,br,b),expected,(a,b))
         ar=Request('a','a',[],[],.2,.15);br=Request('b','b',[],[],.2,.15)
         for offset in [-2e-9,0,2e-9]:

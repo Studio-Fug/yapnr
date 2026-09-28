@@ -1,0 +1,1627 @@
+{
+ "W": 7.5,
+ "carry_frac": 0.25,
+ "carrying": {
+  "C13": {
+   "lv": [
+    "2"
+   ],
+   "negotiated-hv": [
+    "1"
+   ]
+  },
+  "C14": {
+   "lv": [
+    "2"
+   ],
+   "negotiated-hv": [
+    "1"
+   ]
+  },
+  "C15": {
+   "lv": [
+    "2"
+   ],
+   "negotiated-hv": [
+    "1"
+   ]
+  },
+  "C16": {
+   "board.converter-1-3": [
+    "1"
+   ],
+   "lv": [
+    "2"
+   ]
+  },
+  "C17": {
+   "board.converter-1-3": [
+    "1"
+   ],
+   "lv": [
+    "2"
+   ]
+  },
+  "C18": {
+   "board.converter-1-3": [
+    "1"
+   ],
+   "lv": [
+    "2"
+   ]
+  },
+  "C19": {
+   "board.converter-1-3": [
+    "1"
+   ],
+   "lv": [
+    "2"
+   ]
+  },
+  "C20": {
+   "board.converter-1-3": [
+    "1"
+   ],
+   "lv": [
+    "2"
+   ]
+  },
+  "C21": {
+   "board.converter-1-3": [
+    "1"
+   ],
+   "lv": [
+    "2"
+   ]
+  },
+  "C22": {
+   "board.converter-1-3": [
+    "1"
+   ],
+   "lv": [
+    "2"
+   ]
+  },
+  "C23": {
+   "board.converter-1-3": [
+    "1"
+   ],
+   "lv": [
+    "2"
+   ]
+  },
+  "C24": {
+   "board.converter-1-3": [
+    "1"
+   ],
+   "lv": [
+    "2"
+   ]
+  },
+  "L2": {
+   "board.converter-1": [
+    "1"
+   ],
+   "board.converter-2": [
+    "2"
+   ]
+  },
+  "Q1": {
+   "board.converter-1": [
+    "1",
+    "2",
+    "3"
+   ],
+   "negotiated-hv": [
+    "5",
+    "6",
+    "7",
+    "8",
+    "9"
+   ]
+  },
+  "Q2": {
+   "board.converter-1": [
+    "5",
+    "6",
+    "7",
+    "8",
+    "9"
+   ],
+   "lv": [
+    "1",
+    "2",
+    "3"
+   ]
+  },
+  "R13": {
+   "board.converter-1-3": [
+    "1"
+   ],
+   "p5v-hv": [
+    "2"
+   ]
+  },
+  "U5": {
+   "board.converter-1-3": [
+    "11",
+    "26"
+   ],
+   "board.converter-2": [
+    "21",
+    "25"
+   ],
+   "lv": [
+    "7",
+    "9",
+    "10",
+    "24"
+   ]
+  }
+ },
+ "classes": [
+  {
+   "label": "C22|C17|C23|C21|C18|C16|C19|C20|C24",
+   "members": [
+    "C22",
+    "C17",
+    "C23",
+    "C21",
+    "C18",
+    "C16",
+    "C19",
+    "C20",
+    "C24"
+   ],
+   "nets": [
+    "lv",
+    "board.converter-1-3"
+   ],
+   "shunt": true
+  },
+  {
+   "label": "U5",
+   "members": [
+    "U5"
+   ],
+   "nets": [
+    "lv",
+    "board.converter-1-3",
+    "board.converter-2"
+   ],
+   "shunt": false
+  },
+  {
+   "label": "Q2",
+   "members": [
+    "Q2"
+   ],
+   "nets": [
+    "lv",
+    "board.converter-1"
+   ],
+   "shunt": false
+  },
+  {
+   "label": "L2",
+   "members": [
+    "L2"
+   ],
+   "nets": [
+    "board.converter-2",
+    "board.converter-1"
+   ],
+   "shunt": false
+  },
+  {
+   "label": "C13|C14|C15",
+   "members": [
+    "C13",
+    "C14",
+    "C15"
+   ],
+   "nets": [
+    "lv",
+    "negotiated-hv"
+   ],
+   "shunt": true
+  },
+  {
+   "label": "R13",
+   "members": [
+    "R13"
+   ],
+   "nets": [
+    "board.converter-1-3",
+    "p5v-hv"
+   ],
+   "shunt": false
+  },
+  {
+   "label": "Q1",
+   "members": [
+    "Q1"
+   ],
+   "nets": [
+    "negotiated-hv",
+    "board.converter-1"
+   ],
+   "shunt": false
+  }
+ ],
+ "controllers": [
+  "U5"
+ ],
+ "elements": [
+  {
+   "kind": "bbox",
+   "name": "trunk:lv",
+   "net": "lv",
+   "pins": [
+    [
+     "C22",
+     "2"
+    ],
+    [
+     "C17",
+     "2"
+    ],
+    [
+     "U5",
+     "7"
+    ],
+    [
+     "U5",
+     "9"
+    ],
+    [
+     "U5",
+     "10"
+    ],
+    [
+     "U5",
+     "24"
+    ],
+    [
+     "Q2",
+     "1"
+    ],
+    [
+     "Q2",
+     "2"
+    ],
+    [
+     "Q2",
+     "3"
+    ],
+    [
+     "C23",
+     "2"
+    ],
+    [
+     "C21",
+     "2"
+    ],
+    [
+     "C18",
+     "2"
+    ],
+    [
+     "C16",
+     "2"
+    ],
+    [
+     "C13",
+     "2"
+    ],
+    [
+     "C14",
+     "2"
+    ],
+    [
+     "C19",
+     "2"
+    ],
+    [
+     "C20",
+     "2"
+    ],
+    [
+     "C24",
+     "2"
+    ],
+    [
+     "C15",
+     "2"
+    ]
+   ],
+   "role": "trunk",
+   "stage": 1,
+   "weight": 1.0
+  },
+  {
+   "kind": "bbox",
+   "name": "trunk:board.converter-1-3",
+   "net": "board.converter-1-3",
+   "pins": [
+    [
+     "C22",
+     "1"
+    ],
+    [
+     "C17",
+     "1"
+    ],
+    [
+     "U5",
+     "11"
+    ],
+    [
+     "U5",
+     "26"
+    ],
+    [
+     "C23",
+     "1"
+    ],
+    [
+     "C21",
+     "1"
+    ],
+    [
+     "C18",
+     "1"
+    ],
+    [
+     "C16",
+     "1"
+    ],
+    [
+     "R13",
+     "1"
+    ],
+    [
+     "C19",
+     "1"
+    ],
+    [
+     "C20",
+     "1"
+    ],
+    [
+     "C24",
+     "1"
+    ]
+   ],
+   "role": "trunk",
+   "stage": 1,
+   "weight": 7.5
+  },
+  {
+   "kind": "bbox",
+   "name": "trunk:negotiated-hv",
+   "net": "negotiated-hv",
+   "pins": [
+    [
+     "C13",
+     "1"
+    ],
+    [
+     "C14",
+     "1"
+    ],
+    [
+     "Q1",
+     "5"
+    ],
+    [
+     "Q1",
+     "6"
+    ],
+    [
+     "Q1",
+     "7"
+    ],
+    [
+     "Q1",
+     "8"
+    ],
+    [
+     "Q1",
+     "9"
+    ],
+    [
+     "C15",
+     "1"
+    ]
+   ],
+   "role": "trunk",
+   "stage": 1,
+   "weight": 7.5
+  },
+  {
+   "kind": "bbox",
+   "name": "trunk:board.converter-2",
+   "net": "board.converter-2",
+   "pins": [
+    [
+     "U5",
+     "21"
+    ],
+    [
+     "U5",
+     "25"
+    ],
+    [
+     "L2",
+     "2"
+    ]
+   ],
+   "role": "trunk",
+   "stage": 1,
+   "weight": 7.5
+  },
+  {
+   "kind": "bbox",
+   "name": "trunk:board.converter-1",
+   "net": "board.converter-1",
+   "pins": [
+    [
+     "Q2",
+     "5"
+    ],
+    [
+     "Q2",
+     "6"
+    ],
+    [
+     "Q2",
+     "7"
+    ],
+    [
+     "Q2",
+     "8"
+    ],
+    [
+     "Q2",
+     "9"
+    ],
+    [
+     "L2",
+     "1"
+    ],
+    [
+     "Q1",
+     "1"
+    ],
+    [
+     "Q1",
+     "2"
+    ],
+    [
+     "Q1",
+     "3"
+    ]
+   ],
+   "role": "trunk",
+   "stage": 1,
+   "weight": 7.5
+  },
+  {
+   "capped": false,
+   "kind": "loop",
+   "loop": 0,
+   "members": [
+    [
+     "C22",
+     "C17",
+     "C23",
+     "C21",
+     "C18",
+     "C16",
+     "C19",
+     "C20",
+     "C24"
+    ],
+    [
+     "U5"
+    ]
+   ],
+   "name": "loop:C22|C17|C23|C21|C18|C16|C19|C20|C24>U5",
+   "nets": [
+    "lv",
+    "board.converter-1-3"
+   ],
+   "pins": {
+    "C16": {
+     "board.converter-1-3": [
+      "1"
+     ],
+     "lv": [
+      "2"
+     ]
+    },
+    "C17": {
+     "board.converter-1-3": [
+      "1"
+     ],
+     "lv": [
+      "2"
+     ]
+    },
+    "C18": {
+     "board.converter-1-3": [
+      "1"
+     ],
+     "lv": [
+      "2"
+     ]
+    },
+    "C19": {
+     "board.converter-1-3": [
+      "1"
+     ],
+     "lv": [
+      "2"
+     ]
+    },
+    "C20": {
+     "board.converter-1-3": [
+      "1"
+     ],
+     "lv": [
+      "2"
+     ]
+    },
+    "C21": {
+     "board.converter-1-3": [
+      "1"
+     ],
+     "lv": [
+      "2"
+     ]
+    },
+    "C22": {
+     "board.converter-1-3": [
+      "1"
+     ],
+     "lv": [
+      "2"
+     ]
+    },
+    "C23": {
+     "board.converter-1-3": [
+      "1"
+     ],
+     "lv": [
+      "2"
+     ]
+    },
+    "C24": {
+     "board.converter-1-3": [
+      "1"
+     ],
+     "lv": [
+      "2"
+     ]
+    },
+    "U5": {
+     "board.converter-1-3": [
+      "11",
+      "26"
+     ],
+     "lv": [
+      "7",
+      "9",
+      "10",
+      "24"
+     ]
+    }
+   },
+   "role": "loop",
+   "stage": 1,
+   "weight": 2.34375
+  },
+  {
+   "capped": false,
+   "kind": "loop",
+   "loop": 2,
+   "members": [
+    [
+     "Q2"
+    ],
+    [
+     "C13",
+     "C14",
+     "C15"
+    ],
+    [
+     "Q1"
+    ]
+   ],
+   "name": "loop:Q2>C13|C14|C15>Q1",
+   "nets": [
+    "lv",
+    "negotiated-hv",
+    "board.converter-1"
+   ],
+   "pins": {
+    "C13": {
+     "lv": [
+      "2"
+     ],
+     "negotiated-hv": [
+      "1"
+     ]
+    },
+    "C14": {
+     "lv": [
+      "2"
+     ],
+     "negotiated-hv": [
+      "1"
+     ]
+    },
+    "C15": {
+     "lv": [
+      "2"
+     ],
+     "negotiated-hv": [
+      "1"
+     ]
+    },
+    "Q1": {
+     "board.converter-1": [
+      "1",
+      "2",
+      "3"
+     ],
+     "negotiated-hv": [
+      "5",
+      "6",
+      "7",
+      "8",
+      "9"
+     ]
+    },
+    "Q2": {
+     "board.converter-1": [
+      "5",
+      "6",
+      "7",
+      "8",
+      "9"
+     ],
+     "lv": [
+      "1",
+      "2",
+      "3"
+     ]
+    }
+   },
+   "role": "loop",
+   "stage": 1,
+   "weight": 7.5
+  },
+  {
+   "kind": "tap",
+   "name": "tap:U5.12",
+   "net": "board.converter-1-3",
+   "pin": [
+    "U5",
+    "12"
+   ],
+   "role": "tap",
+   "stage": 2,
+   "targets": [
+    [
+     "C22",
+     "1"
+    ],
+    [
+     "C17",
+     "1"
+    ],
+    [
+     "C23",
+     "1"
+    ],
+    [
+     "C21",
+     "1"
+    ],
+    [
+     "C18",
+     "1"
+    ],
+    [
+     "C16",
+     "1"
+    ],
+    [
+     "R13",
+     "1"
+    ],
+    [
+     "C19",
+     "1"
+    ],
+    [
+     "C20",
+     "1"
+    ],
+    [
+     "C24",
+     "1"
+    ]
+   ],
+   "weight": 1.0
+  },
+  {
+   "kind": "tap",
+   "name": "tap:U5.3",
+   "net": "negotiated-hv",
+   "pin": [
+    "U5",
+    "3"
+   ],
+   "role": "tap",
+   "stage": 2,
+   "targets": [
+    [
+     "C13",
+     "1"
+    ],
+    [
+     "C14",
+     "1"
+    ],
+    [
+     "Q1",
+     "5"
+    ],
+    [
+     "Q1",
+     "6"
+    ],
+    [
+     "Q1",
+     "7"
+    ],
+    [
+     "Q1",
+     "8"
+    ],
+    [
+     "Q1",
+     "9"
+    ],
+    [
+     "C15",
+     "1"
+    ]
+   ],
+   "weight": 1.0
+  },
+  {
+   "kind": "tap",
+   "name": "tap:R6.1",
+   "net": "negotiated-hv",
+   "pin": [
+    "R6",
+    "1"
+   ],
+   "role": "tap",
+   "stage": 3,
+   "targets": [
+    [
+     "C13",
+     "1"
+    ],
+    [
+     "C14",
+     "1"
+    ],
+    [
+     "Q1",
+     "5"
+    ],
+    [
+     "Q1",
+     "6"
+    ],
+    [
+     "Q1",
+     "7"
+    ],
+    [
+     "Q1",
+     "8"
+    ],
+    [
+     "Q1",
+     "9"
+    ],
+    [
+     "C15",
+     "1"
+    ]
+   ],
+   "weight": 1.0
+  },
+  {
+   "kind": "tap",
+   "name": "tap:U5.13",
+   "net": "p5v-hv",
+   "pin": [
+    "U5",
+    "13"
+   ],
+   "role": "tap",
+   "stage": 2,
+   "targets": [
+    [
+     "R13",
+     "2"
+    ]
+   ],
+   "weight": 1.0
+  },
+  {
+   "kind": "tap",
+   "name": "tap:R8.1",
+   "net": "p5v-hv",
+   "pin": [
+    "R8",
+    "1"
+   ],
+   "role": "tap",
+   "stage": 3,
+   "targets": [
+    [
+     "R13",
+     "2"
+    ]
+   ],
+   "weight": 1.0
+  },
+  {
+   "kind": "tap",
+   "name": "tap:C9.2",
+   "net": "board.converter-2",
+   "pin": [
+    "C9",
+    "2"
+   ],
+   "role": "tap",
+   "stage": 3,
+   "targets": [
+    [
+     "U5",
+     "21"
+    ],
+    [
+     "U5",
+     "25"
+    ],
+    [
+     "L2",
+     "2"
+    ]
+   ],
+   "weight": 1.0
+  },
+  {
+   "kind": "tap",
+   "name": "tap:U5.23",
+   "net": "board.converter-1",
+   "pin": [
+    "U5",
+    "23"
+   ],
+   "role": "tap",
+   "stage": 2,
+   "targets": [
+    [
+     "Q2",
+     "5"
+    ],
+    [
+     "Q2",
+     "6"
+    ],
+    [
+     "Q2",
+     "7"
+    ],
+    [
+     "Q2",
+     "8"
+    ],
+    [
+     "Q2",
+     "9"
+    ],
+    [
+     "L2",
+     "1"
+    ],
+    [
+     "Q1",
+     "1"
+    ],
+    [
+     "Q1",
+     "2"
+    ],
+    [
+     "Q1",
+     "3"
+    ]
+   ],
+   "weight": 1.0
+  },
+  {
+   "kind": "tap",
+   "name": "tap:C8.2",
+   "net": "board.converter-1",
+   "pin": [
+    "C8",
+    "2"
+   ],
+   "role": "tap",
+   "stage": 3,
+   "targets": [
+    [
+     "Q2",
+     "5"
+    ],
+    [
+     "Q2",
+     "6"
+    ],
+    [
+     "Q2",
+     "7"
+    ],
+    [
+     "Q2",
+     "8"
+    ],
+    [
+     "Q2",
+     "9"
+    ],
+    [
+     "L2",
+     "1"
+    ],
+    [
+     "Q1",
+     "1"
+    ],
+    [
+     "Q1",
+     "2"
+    ],
+    [
+     "Q1",
+     "3"
+    ]
+   ],
+   "weight": 1.0
+  },
+  {
+   "kind": "bbox",
+   "name": "net:COMP",
+   "net": "COMP",
+   "pins": [
+    [
+     "C12",
+     "1"
+    ],
+    [
+     "U5",
+     "18"
+    ],
+    [
+     "R3",
+     "1"
+    ]
+   ],
+   "role": "signal",
+   "stage": 3,
+   "weight": 1.0
+  },
+  {
+   "kind": "bbox",
+   "name": "net:DR1L",
+   "net": "DR1L",
+   "pins": [
+    [
+     "U5",
+     "1"
+    ],
+    [
+     "Q2",
+     "4"
+    ]
+   ],
+   "role": "signal",
+   "stage": 2,
+   "weight": 1.0
+  },
+  {
+   "kind": "bbox",
+   "name": "net:DR1H",
+   "net": "DR1H",
+   "pins": [
+    [
+     "U5",
+     "2"
+    ],
+    [
+     "Q1",
+     "4"
+    ]
+   ],
+   "role": "signal",
+   "stage": 2,
+   "weight": 1.0
+  },
+  {
+   "kind": "bbox",
+   "name": "net:EN_UVLO",
+   "net": "EN_UVLO",
+   "pins": [
+    [
+     "U5",
+     "4"
+    ],
+    [
+     "R5",
+     "1"
+    ],
+    [
+     "R6",
+     "2"
+    ]
+   ],
+   "role": "signal",
+   "stage": 3,
+   "weight": 1.0
+  },
+  {
+   "kind": "bbox",
+   "name": "net:power_good",
+   "net": "power_good",
+   "pins": [
+    [
+     "U5",
+     "5"
+    ],
+    [
+     "R12",
+     "2"
+    ]
+   ],
+   "role": "signal",
+   "stage": 3,
+   "weight": 1.0
+  },
+  {
+   "kind": "bbox",
+   "name": "net:FSW",
+   "net": "FSW",
+   "pins": [
+    [
+     "U5",
+     "8"
+    ],
+    [
+     "R9",
+     "1"
+    ],
+    [
+     "R10",
+     "1"
+    ]
+   ],
+   "role": "signal",
+   "stage": 3,
+   "weight": 1.0
+  },
+  {
+   "kind": "bbox",
+   "name": "net:board.converter-FB",
+   "net": "board.converter-FB",
+   "pins": [
+    [
+     "U5",
+     "14"
+    ],
+    [
+     "R7",
+     "1"
+    ],
+    [
+     "R8",
+     "2"
+    ]
+   ],
+   "role": "signal",
+   "stage": 3,
+   "weight": 1.0
+  },
+  {
+   "kind": "bbox",
+   "name": "net:MODE",
+   "net": "MODE",
+   "pins": [
+    [
+     "U5",
+     "15"
+    ],
+    [
+     "R11",
+     "1"
+    ]
+   ],
+   "role": "signal",
+   "stage": 3,
+   "weight": 1.0
+  },
+  {
+   "kind": "bbox",
+   "name": "net:ILIM",
+   "net": "ILIM",
+   "pins": [
+    [
+     "U5",
+     "17"
+    ],
+    [
+     "R4",
+     "1"
+    ]
+   ],
+   "role": "signal",
+   "stage": 3,
+   "weight": 1.0
+  },
+  {
+   "kind": "bbox",
+   "name": "net:VCC",
+   "net": "VCC",
+   "pins": [
+    [
+     "U5",
+     "19"
+    ],
+    [
+     "C25",
+     "1"
+    ]
+   ],
+   "role": "signal",
+   "stage": 3,
+   "weight": 1.0
+  },
+  {
+   "kind": "bbox",
+   "name": "net:20",
+   "net": "20",
+   "pins": [
+    [
+     "U5",
+     "20"
+    ],
+    [
+     "C9",
+     "1"
+    ]
+   ],
+   "role": "signal",
+   "stage": 3,
+   "weight": 1.0
+  },
+  {
+   "kind": "bbox",
+   "name": "net:22",
+   "net": "22",
+   "pins": [
+    [
+     "U5",
+     "22"
+    ],
+    [
+     "C8",
+     "1"
+    ]
+   ],
+   "role": "signal",
+   "stage": 3,
+   "weight": 1.0
+  },
+  {
+   "kind": "bbox",
+   "name": "net:board.converter-1-1",
+   "net": "board.converter-1-1",
+   "pins": [
+    [
+     "C10",
+     "1"
+    ],
+    [
+     "R3",
+     "2"
+    ]
+   ],
+   "role": "signal",
+   "stage": 3,
+   "weight": 1.0
+  },
+  {
+   "kind": "bbox",
+   "name": "net:board.converter-1-2",
+   "net": "board.converter-1-2",
+   "pins": [
+    [
+     "C10",
+     "2"
+    ],
+    [
+     "C11",
+     "1"
+    ]
+   ],
+   "role": "signal",
+   "stage": 3,
+   "weight": 1.0
+  }
+ ],
+ "envelope": {
+  "board.converter-1": {
+   "peak_a": 16.0,
+   "rms_a": 5.0,
+   "source": "electrical_nets"
+  },
+  "board.converter-1-3": {
+   "peak_a": 5.0,
+   "rms_a": 4.0,
+   "source": "electrical_nets"
+  },
+  "board.converter-2": {
+   "peak_a": 16.0,
+   "rms_a": 5.0,
+   "source": "electrical_nets"
+  },
+  "logic-hv": {
+   "peak_a": 2.0,
+   "rms_a": 2.0,
+   "source": "electrical_nets"
+  },
+  "lv": {
+   "peak_a": 16.0,
+   "rms_a": 5.0,
+   "source": "plane_access"
+  },
+  "negotiated-hv": {
+   "peak_a": 5.0,
+   "rms_a": 5.0,
+   "source": "electrical_nets"
+  },
+  "p5v-hv": {
+   "peak_a": 5.0,
+   "rms_a": 4.0,
+   "source": "electrical_nets"
+  }
+ },
+ "hard_group_diagnostic": [
+  {
+   "anchor": "U5",
+   "anchor_current_a": {
+    "negotiated-hv": 0.1
+   },
+   "constraint": null,
+   "finding": "hard group ties a hot-loop part to an anchor that carries none of its power current; the radius caps how compact the power stage can be",
+   "member": "C15",
+   "member_power_nets": [
+    "negotiated-hv"
+   ],
+   "radius_mm": 5.0
+  },
+  {
+   "anchor": "U5",
+   "anchor_current_a": {
+    "board.converter-1": 0.2
+   },
+   "constraint": null,
+   "finding": "hard group ties a hot-loop part to an anchor that carries none of its power current; the radius caps how compact the power stage can be",
+   "member": "Q2",
+   "member_power_nets": [
+    "board.converter-1"
+   ],
+   "radius_mm": 12.0
+  },
+  {
+   "anchor": "U5",
+   "anchor_current_a": {
+    "board.converter-1": 0.2,
+    "negotiated-hv": 0.1
+   },
+   "constraint": null,
+   "finding": "hard group ties a hot-loop part to an anchor that carries none of its power current; the radius caps how compact the power stage can be",
+   "member": "Q1",
+   "member_power_nets": [
+    "board.converter-1",
+    "negotiated-hv"
+   ],
+   "radius_mm": 12.0
+  },
+  {
+   "anchor": "U5",
+   "anchor_current_a": {
+    "negotiated-hv": 0.1
+   },
+   "constraint": null,
+   "finding": "hard group ties a hot-loop part to an anchor that carries none of its power current; the radius caps how compact the power stage can be",
+   "member": "C13",
+   "member_power_nets": [
+    "negotiated-hv"
+   ],
+   "radius_mm": 12.0
+  },
+  {
+   "anchor": "U5",
+   "anchor_current_a": {
+    "negotiated-hv": 0.1
+   },
+   "constraint": null,
+   "finding": "hard group ties a hot-loop part to an anchor that carries none of its power current; the radius caps how compact the power stage can be",
+   "member": "C14",
+   "member_power_nets": [
+    "negotiated-hv"
+   ],
+   "radius_mm": 12.0
+  },
+  {
+   "anchor": "U5",
+   "anchor_current_a": {
+    "negotiated-hv": 0.1
+   },
+   "constraint": null,
+   "finding": "hard group ties a hot-loop part to an anchor that carries none of its power current; the radius caps how compact the power stage can be",
+   "member": "C15",
+   "member_power_nets": [
+    "negotiated-hv"
+   ],
+   "radius_mm": 12.0
+  }
+ ],
+ "loops": [
+  {
+   "classes": [
+    0,
+    1
+   ],
+   "hot": true,
+   "labels": [
+    "C22|C17|C23|C21|C18|C16|C19|C20|C24",
+    "U5"
+   ],
+   "links": [
+    {
+     "a": 0,
+     "b": 1,
+     "net": "lv"
+    },
+    {
+     "a": 1,
+     "b": 0,
+     "net": "board.converter-1-3"
+    }
+   ],
+   "nets": [
+    "lv",
+    "board.converter-1-3"
+   ],
+   "peak_a": 5.0,
+   "weight": 2.34375
+  },
+  {
+   "classes": [
+    1,
+    2,
+    3
+   ],
+   "hot": false,
+   "labels": [
+    "U5",
+    "Q2",
+    "L2"
+   ],
+   "links": [
+    {
+     "a": 1,
+     "b": 2,
+     "net": "lv"
+    },
+    {
+     "a": 2,
+     "b": 3,
+     "net": "board.converter-1"
+    },
+    {
+     "a": 3,
+     "b": 1,
+     "net": "board.converter-2"
+    }
+   ],
+   "nets": [
+    "lv",
+    "board.converter-1",
+    "board.converter-2"
+   ],
+   "peak_a": 16.0,
+   "weight": 0.0
+  },
+  {
+   "classes": [
+    2,
+    4,
+    6
+   ],
+   "hot": true,
+   "labels": [
+    "Q2",
+    "C13|C14|C15",
+    "Q1"
+   ],
+   "links": [
+    {
+     "a": 2,
+     "b": 4,
+     "net": "lv"
+    },
+    {
+     "a": 4,
+     "b": 6,
+     "net": "negotiated-hv"
+    },
+    {
+     "a": 6,
+     "b": 2,
+     "net": "board.converter-1"
+    }
+   ],
+   "nets": [
+    "lv",
+    "negotiated-hv",
+    "board.converter-1"
+   ],
+   "peak_a": 16.0,
+   "weight": 7.5
+  }
+ ],
+ "mixed": [
+  "U5"
+ ],
+ "pad_share": 0.5,
+ "power_nets": [
+  "board.converter-1-3",
+  "negotiated-hv",
+  "logic-hv",
+  "p5v-hv",
+  "board.converter-2",
+  "board.converter-1"
+ ],
+ "return_nets": [
+  "lv"
+ ],
+ "schema": "pnr-power-topology-v1",
+ "series": {
+  "classes": [
+   6,
+   3,
+   1,
+   5
+  ],
+  "labels": [
+   "Q1",
+   "L2",
+   "U5",
+   "R13"
+  ],
+  "nets": [
+   "negotiated-hv",
+   "board.converter-1",
+   "board.converter-2",
+   "board.converter-1-3",
+   "p5v-hv"
+  ],
+  "ports": [
+   "negotiated-hv",
+   "p5v-hv"
+  ]
+ },
+ "signal_nets": [
+  "COMP",
+  "DR1L",
+  "DR1H",
+  "EN_UVLO",
+  "power_good",
+  "FSW",
+  "board.converter-FB",
+  "MODE",
+  "ILIM",
+  "VCC",
+  "20",
+  "22",
+  "board.converter-1-1",
+  "board.converter-1-2"
+ ],
+ "tier": {
+  "C10": 3,
+  "C11": 3,
+  "C12": 3,
+  "C13": 1,
+  "C14": 1,
+  "C15": 1,
+  "C16": 1,
+  "C17": 1,
+  "C18": 1,
+  "C19": 1,
+  "C20": 1,
+  "C21": 1,
+  "C22": 1,
+  "C23": 1,
+  "C24": 1,
+  "C25": 3,
+  "C8": 3,
+  "C9": 3,
+  "L2": 1,
+  "Q1": 1,
+  "Q2": 1,
+  "R10": 3,
+  "R11": 3,
+  "R12": 3,
+  "R13": 1,
+  "R3": 3,
+  "R4": 3,
+  "R5": 3,
+  "R6": 3,
+  "R7": 3,
+  "R8": 3,
+  "R9": 3,
+  "U5": 1
+ },
+ "tier1": [
+  "C22",
+  "C17",
+  "U5",
+  "Q2",
+  "C23",
+  "C21",
+  "C18",
+  "L2",
+  "C16",
+  "C13",
+  "R13",
+  "C14",
+  "C19",
+  "C20",
+  "Q1",
+  "C24",
+  "C15"
+ ],
+ "w_ret": 1.0,
+ "weight": {
+  "board.converter-1": 7.5,
+  "board.converter-1-3": 7.5,
+  "board.converter-2": 7.5,
+  "logic-hv": 2.5,
+  "negotiated-hv": 7.5,
+  "p5v-hv": 7.5
+ }
+}

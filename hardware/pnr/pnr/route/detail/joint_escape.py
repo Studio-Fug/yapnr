@@ -68,7 +68,9 @@ def _segment_clear(grid, net, layer, a, b, width):
 def _via_clear(grid, net, p, via_keepout):
     from .escape import _via_clean
     i, j = grid.cell_of(*p)
-    if not _via_clean(grid, i, j, net, via_keepout) or not grid.hole_site_clear(p):
+    # The via sits exactly at p (a pad centre for via-in-pad): the fab profile's
+    # via-to-SMD-pad rule is judged there, not at the cell centre.
+    if not _via_clean(grid, i, j, net, via_keepout, p) or not grid.hole_site_clear(p):
         return False
     # Checking a point with the via diameter reuses the exact foreign copper test
     # in every layer; via-blocked applies even when tracks may use an inner gap.

@@ -72,7 +72,8 @@ def main():
         invoke([sys.executable,a.regional_adapter,str(current),'--out-dir',str(target),'--net',a.blocker_net,'--source-pad',p.GetParentFootprint().GetReference()+'.'+p.GetNumber(),'--target-pad',q.GetParentFootprint().GetReference()+'.'+q.GetNumber(),'--source-pad-uuid',uid(p),'--target-pad-uuid',uid(q),'--bounds',*map(str,bounds),'--pitch','.05','--layers','--joint','--relocate-vias','--max-seconds',str(a.seconds),'--rules',str(a.rules),'--kicad-cli',a.kicad_cli],a.out_dir/f'signal-{step}.log')
         if not json.loads((target/'result.json').read_text()).get('accepted'):return finish('signal_restore_failed')
         current=target/'candidate.kicad_pcb'
-    b=k.LoadBoard(str(current));b.BuildConnectivity()
+    from pnr.fab_profile import load_board  # custom rules in force for the refill below
+    b=load_board(current);b.BuildConnectivity()
     current_drc=drc(current,a.out_dir/'precleanup.drc.json',a.kicad_cli)
     old_dangling={i['uuid'] for v in before['violations'] if v['type']=='via_dangling' for i in v['items']}
     stranded={i['uuid'] for v in current_drc['violations'] if v['type']=='via_dangling' for i in v['items']}-old_dangling

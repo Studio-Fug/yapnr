@@ -6,6 +6,7 @@ requirement. Inner and outer copper are independently sized. Unknown current
 is reported, never inferred from the width of an old trace.
 """
 import hashlib
+import os
 import json
 import math
 from pathlib import Path
@@ -43,6 +44,7 @@ def resolve_currents(records, components):
     for a in records:
         target=a['target'].strip('.')
         matches=[c for c in components if c.address.removesuffix('._p')==target or c.address.removesuffix('._p').endswith('.'+target)]
+        if not matches and os.environ.get('PNR_SUBBOARD')=='1':continue  # target lies in another block
         if len(matches)!=1:raise ValueError('ambiguous/missing current target '+target)
         c=matches[0];pads=[p for p in c.pads if p.name in a['pads']]
         if set(p.name for p in pads)!=set(a['pads']) or len(set(p.net for p in pads))!=1 or not pads[0].net:
@@ -52,10 +54,24 @@ def resolve_currents(records, components):
 
 
 def compile_policy(rules, currents, fab):
-    """Carry provenance and electrical budgets through the native JSON seam."""
+    """Carry provenance and electrical budgets through the native JSON seam.
+
+    A sub-board (PNR_SUBBOARD=1) resolves only its own parts' intents, but a
+    rail's envelope is set by declarations anywhere on the parent board. The
+    incoming rules then hold the parent's electrical_nets already restricted to
+    nets present on the sub-board (pnr.hier.blocks.sub_board); their envelopes
+    seed the policy so it equals the full-board policy on every present net.
+    Widths and via arrays are still recomputed here from this fab/net_classes.
+    """
     result=json.loads(json.dumps(rules));result['electrical_fab']=dict(fab)
     result['current_intents']=currents
-    policies={}
+    policies={};inherited=set()
+    if os.environ.get('PNR_SUBBOARD')=='1':
+        for net,q in result.get('electrical_nets',{}).items():
+            if 'rms_current_a' not in q or 'peak_current_a' not in q:continue
+            policies[net]=dict(rms_current_a=q['rms_current_a'],peak_current_a=q['peak_current_a'],sources=list(q.get('sources',[])))
+            inherited.add(net)
+    key=lambda s:(s.get('line'),s.get('sha256'))
     for a in currents:
         if a.get('scope','net')!='net':continue
         p=policies.setdefault(a['net'],dict(rms_current_a=0,peak_current_a=0,sources=[]))
@@ -63,14 +79,27 @@ def compile_policy(rules, currents, fab):
         # to sum. Branch load aggregation must happen in source design intent.
         p['rms_current_a']=max(p['rms_current_a'],a['rms_current_a'])
         p['peak_current_a']=max(p['peak_current_a'],a['peak_current_a'])
-        p['sources'].append(a['source'])
-    for net,p in policies.items():
+        # An inherited envelope already cites this annotation line (the parent
+        # read it from another snapshot path); cite each source line once.
+        if a['net'] not in inherited or all(key(s)!=key(a['source']) for s in p['sources']):p['sources'].append(a['source'])
+    result['electrical_nets']=policies
+    return size_policies(result)
+
+
+def size_policies(result):
+    """(Re)derive every net envelope's widths and via array from rules['electrical_fab'].
+
+    Shared by compile_policy and pnr.fab_profile.apply_rules (a new copper model
+    must resize existing envelopes). Envelopes (currents, sources) are untouched.
+    """
+    fab=result['electrical_fab']
+    for net,p in result.get('electrical_nets',{}).items():
+        if 'rms_current_a' not in p:continue
         base=max([result.get('fab',{}).get('track_width_mm',.2)]+[c['width_mm'] for c in result.get('net_classes',[]) if net in c['nets'] and c.get('width_mm')])
         p['outer_width_mm']=max(base,current_width(p['rms_current_a'],fab['outer_copper_oz'],fab['delta_t_c'],True))
         p['inner_width_mm']=max(base,current_width(p['rms_current_a'],fab['inner_copper_oz'],fab['delta_t_c'],False))
         p['via_array']=size_array(p,fab)
         p['model']='IPC-2221 screening; explicit current envelope; thermal qualification separate'
-    result['electrical_nets']=policies
     return result
 
 
@@ -96,7 +125,9 @@ def resolve_pair_chains(rules, paths, components):
         for line,text in enumerate(raw.decode().splitlines(),1):
             if not text.strip().startswith('# @pnr-pair '):continue
             a=json.loads(text.strip().split('# @pnr-pair ',1)[1])
-            pair=next(p for p in result['diff_pairs'] if p['name']==a['name'])
+            pair=next((p for p in result['diff_pairs'] if p['name']==a['name']),None)
+            if pair is None and os.environ.get('PNR_SUBBOARD')=='1':continue  # pair lies outside this block
+            if pair is None:raise ValueError('annotated pair not declared: '+a['name'])
             def endpoint(spec):
                 out={}
                 for polarity in ('p','n'):

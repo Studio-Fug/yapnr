@@ -130,17 +130,21 @@ def main(argv: Optional[List[str]] = None) -> int:
              if c.address for p in c.pads if p.name},
         )
 
+    from pnr.fab_profile import apply_fab_model, apply_rules
     net_names = [n.name for n in graph.nets]
     rules = compile_routing_rules(constraints, net_names)
     if args.electrical_fab:
         from pnr.electrical import annotations,resolve_currents,compile_policy,resolve_pair_chains
-        with open(args.electrical_fab) as f: fab=json.load(f)
+        with open(args.electrical_fab) as f: fab=apply_fab_model(json.load(f))
         rules=compile_policy(rules,resolve_currents(annotations(args.annotation_source),graph.components),fab)
         rules=resolve_pair_chains(rules,args.annotation_source,graph.components)
     if args.plane_access_fab:
         from pnr.plane_intent import read_annotations, resolve
         rules["plane_access_intents"] = resolve(read_annotations(args.annotation_source), graph.components)
-        rules["plane_access_fab"] = json.loads(open(args.plane_access_fab).read())
+        rules["plane_access_fab"] = apply_fab_model(json.loads(open(args.plane_access_fab).read()))
+    # Fab capability profile (PNR_FAB_PROFILE; identity for legacy): every
+    # downstream consumer of the dumped rules.json sees one rule set.
+    rules = apply_rules(rules)
     route_pitch = args.route_pitch or None  # 0 => auto from the fab profile
 
     placed, report = route_and_place(

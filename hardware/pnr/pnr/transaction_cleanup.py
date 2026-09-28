@@ -112,7 +112,8 @@ def main():
     p=argparse.ArgumentParser();p.add_argument('board',type=Path);p.add_argument('--rules',type=Path,required=True);p.add_argument('--baseline',type=Path);p.add_argument('--out-dir',type=Path);p.add_argument('--net',action='append',default=[]);p.add_argument('--annotation-source',action='append',type=Path,default=[]);p.add_argument('--kicad-python',default='/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3');p.add_argument('--kicad-cli',default='/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli');p.add_argument('--worker',choices=['audit','prune','fill']);p.add_argument('--report',type=Path);p.add_argument('--spec',type=Path);p.add_argument('--out',type=Path);a=p.parse_args()
     if a.worker:
         import pcbnew as k
-        board=k.LoadBoard(str(a.board));native_worker(a,board)
+        from pnr.fab_profile import load_board  # custom rules in force for the 'fill' worker
+        board=load_board(a.board);native_worker(a,board)
     else:
         if not a.baseline or not a.out_dir:p.error('baseline and new out-dir required')
         run(a)

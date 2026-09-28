@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
@@ -103,6 +104,23 @@ def place(
     keepouts = keepout_rects(graph, constraints, poses)
     clearance = float(constraints.board.default_clearance_mm)
 
+    roles = None
+    if os.environ.get("PNR_POWER_FIRST") == "1":
+        # Power-first placement: derive tiers/loops, staged lexicographic global
+        # placement, then power-first legalization (pnr.place.power_first).
+        from .power_first import roles_for, staged_place
+        roles = roles_for(graph, constraints, channel_rules)
+    if roles is not None:
+        placed = staged_place(
+            graph, constraints, roles, width, height, seed=seed, iters=iters, orient=orient,
+            inflation=inflation, spread=spread, channel_rules=channel_rules,
+            initial_positions=initial_positions, initial_rotations=initial_rotations, poses=poses,
+            keepouts=keepouts, clearance=clearance, grid_mm=grid_mm,
+            legalize_spread=min(spread, _LEGALIZE_SPREAD_CAP),
+            mobility={ref:dict(source_fixed=not bool(c.params.get('row_trial')),row_trial=c.params.get('row_trial'))
+                      for c in constraints.constraints if c.kind=='fixed' for ref in c.refs})
+        return _finish(placed, graph, constraints, width, height, baseline)
+
     # 1. Global placement (continuous position + orientation).
     positions, rotations = global_place(
         graph,
@@ -149,7 +167,10 @@ def place(
         # (grow the outline via the rubber-band instead).
         spread=min(spread, _LEGALIZE_SPREAD_CAP),
     )
+    return _finish(placed, graph, constraints, width, height, baseline)
 
+
+def _finish(placed, graph, constraints, width, height, baseline):
     # Stamp the *placement region* as the placed board's outline, so downstream
     # steps (writeback framing, route SVG) use the constraint-resolved region
     # rather than the incoming atopile-framed one.

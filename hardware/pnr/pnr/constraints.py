@@ -64,6 +64,12 @@ class FabProfile:
     router's via/track geometry, and the ``.kicad_pro`` DRC rules — one source of
     truth. ``min_through_drill`` / ``via_annular`` are loosened only to *tolerate
     source footprints* (vendor parts with sub-spec drills / annuli), not routing.
+
+    The optional fields (None = not distinguished, the pre-profile behaviour) are
+    the per-hole-kind rules a fab capability profile adds; they are emitted into
+    ``rules.json`` only when set. The selected profile (``pnr.fab_profile``,
+    ``PNR_FAB_PROFILE``) overrides these capability values at the pipeline
+    boundaries; ``track_width_mm`` (the default signal track) stays the design's.
     """
 
     track_width_mm: float = 0.15
@@ -74,6 +80,18 @@ class FabProfile:
     edge_clearance_mm: float = 0.20
     min_through_drill_mm: float = 0.20
     via_annular_mm: float = 0.0
+    min_track_width_mm: Optional[float] = None
+    smd_pad_clearance_mm: Optional[float] = None
+    pth_hole_clearance_mm: Optional[float] = None
+    npth_hole_clearance_mm: Optional[float] = None
+    hole_to_hole_mm: Optional[float] = None
+    pth_hole_to_hole_mm: Optional[float] = None
+    filled_via_hole_to_hole_mm: Optional[float] = None
+    hole_to_edge_mm: Optional[float] = None
+    min_via_diameter_mm: Optional[float] = None
+    min_npth_drill_mm: Optional[float] = None
+    component_pth_min_drill_mm: Optional[float] = None
+    via_to_smd_pad_mm: Optional[float] = None
 
     @property
     def pitch_floor_mm(self) -> float:
@@ -308,6 +326,8 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
             "edge_clearance_mm": fab.edge_clearance_mm,
             "min_through_drill_mm": fab.min_through_drill_mm,
             "via_annular_mm": fab.via_annular_mm,
+            # Per-hole-kind distinctions only when the fab block sets them.
+            **{k: getattr(fab, k) for k in _OPTIONAL_FAB if getattr(fab, k) is not None},
         },
         "net_classes": [
             {
@@ -358,6 +378,22 @@ def _parse_board(raw: Dict) -> BoardSpec:
     )
 
 
+_OPTIONAL_FAB = (
+    "min_track_width_mm",
+    "smd_pad_clearance_mm",
+    "pth_hole_clearance_mm",
+    "npth_hole_clearance_mm",
+    "hole_to_hole_mm",
+    "pth_hole_to_hole_mm",
+    "filled_via_hole_to_hole_mm",
+    "hole_to_edge_mm",
+    "min_via_diameter_mm",
+    "min_npth_drill_mm",
+    "component_pth_min_drill_mm",
+    "via_to_smd_pad_mm",
+)
+
+
 def _parse_fab(raw: Dict) -> FabProfile:
     """Parse the optional ``fab:`` block; any omitted field keeps its default."""
     d = FabProfile()
@@ -370,7 +406,7 @@ def _parse_fab(raw: Dict) -> FabProfile:
         "edge_clearance_mm",
         "min_through_drill_mm",
         "via_annular_mm",
-    )
+    ) + _OPTIONAL_FAB
     for k in fields:
         if k in raw:
             setattr(d, k, float(raw[k]))

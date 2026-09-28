@@ -685,3 +685,49 @@ tests and 15 placement/orientation tests pass. Both 229-part factory placements
 remain clearance-clean with 499 unconnected items. The previous 360-unconnected
 partial route is obsolete after these component moves. Power classification now
 includes 21 nets; this is not a substitute for qualified power copper geometry.
+
+### Power-first placement (`PNR_POWER_FIRST=1`, opt-in)
+
+Converter trials put Q1, Q2, L2 and the input caps in a star around U5. The
+global objective weighted every net equally, and authored 12 mm / 5 mm hard
+groups anchor everything to the IC, so nothing tied the switching loop
+together. `pnr/power_topology.py` (pure Python) derives from @pnr-current
+envelopes, terminal budgets, plane classes/intents and the netlist: carrying
+pads (series bound, pad-share guard), tiers (power stage, controllers,
+passives), width weights and hot loops (Horton minimum cycle basis of the
+class/net graph, shunt class = hot). It never names refs. `pnr/place/power_first.py`
+minimises J1 (power trunks and hot loops), then J2 (controller/sense), then J3
+(passives) as lexicographic stages with epsilon guards. Stage 1 runs 8 batched
+starts. The continuous overlap reserves one legalizer grid cell, and the
+legalizer (tier order, relative targets, trial-pack look-ahead, pour channels
+on trunk nets both facing parts carry) gets one bounded retry from the stage-1
+runner-up.
+synth_native records placement and routed power quality and ranks by open hot
+loops, q_band and crossings after opens and violations. `model.py`,
+`channels.py` and `batched_cost.py` are unchanged. With the flag unset,
+placements, reports, trial/library records and capture payloads are
+byte-identical to the base (fixed PYTHONHASHSEED; captured channel fields already
+vary with the hash seed). Converter, 12 outlines x 3 seeds: legal 36/36 (default
+30/36), buck-loop pad gaps median 28.1 -> 12.2 mm, Q1-Q2 15.7 -> 7.6 mm, power-net
+MST 113 -> 79 mm, signal HPWL +18%. Routed effects (vias, single-layer power,
+opens) still need a native A/B. The SW2 pin-25 open is a router pin-access
+issue outside placement. Tests: tests/test_power_first.py; fixtures via
+tests/power_topology_golden.py.
+
+Repair after review. (1) Pour channels first dropped escape demand for any
+trunk net of either tier-1 part, so output and input caps packed against the
+16 A switch-node rows of U5 (SW2) and Q1/Q2 (SW1) at no channel cost. Copper
+pours across a gap only on a net both parts carry, so only that intersection
+is exempt now. Converter, 36 runs: layouts with a tier-1 switch-node row blocked
+<1 mm by a power part off that net 13 -> 0 (default 0/30); channel shortage
+median 36.7 -> 19.6 (default 12.1); unshared switch-node shortage 11.5 -> 2.3
+(default 3.2). (2) The retry gate compared total J1, which the VOUT trunk
+dominates, so legalization doubled the buck loop in 10/36 runs and never
+retried. Every hot loop's Lambda is now also checked (retry above RETRY_RATIO x
+its continuous value, floored at links x (clearance + grid)). The two attempts
+are ranked by legality, then sum w_L Lambda_L with an EPS[0] tie band, then J1.
+Buck gaps median/p90 12.2/19.4 -> 13.2/17.6 mm (default 28.1/38.8), and runs
+with legal gaps > 1.5x continuous 10 -> 5. Retries rise 3 -> 18 of 36; the
+median placement takes 1.8 s. The correct pour rule costs about 2% J1 and
+power MST (799 -> 817, 78.6 -> 80.5 mm); signal HPWL is unchanged (+18% vs
+default).

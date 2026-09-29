@@ -34,8 +34,12 @@ DRIFT_SIDES = 16  # polygon rows approximating the cumulative part-displacement 
 
 
 def line_length_limit(length_mm):
-    """G1 per moved power/plane line: |length change| <= min(0.5 mm, 5 %)."""
-    return min(.5, .05 * length_mm)
+    """G1 per moved power/plane line: |length change| <= min(0.5 mm, max(5 %, 0.15 mm)).
+
+    The 0.15 mm floor (user decision 2026-09-28) admits the small stretches a slightly
+    different original placement would have produced; widths/necks stay rigid and every
+    transaction still passes the electrical audit."""
+    return min(.5, max(.05 * length_mm, .15))
 
 
 def _xy(p):

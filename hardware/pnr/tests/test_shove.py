@@ -205,9 +205,12 @@ class NudgeMergeTest(unittest.TestCase):
 
 
 class InvariantTest(unittest.TestCase):
-    def test_line_length_limit_is_five_percent_capped(self):
+    def test_line_length_limit_is_five_percent_floored_and_capped(self):
+        # min(0.5 mm, max(5 %, 0.15 mm)); necks are rigid separately (rigid_necks), so a
+        # short neck never uses the 0.15 mm floor.
         from pnr.shove.ladder import line_length_limit
-        self.assertAlmostEqual(line_length_limit(.2), .01)    # a 0.2 mm neck may not grow 0.15 mm
+        self.assertAlmostEqual(line_length_limit(.2), .15)
+        self.assertAlmostEqual(line_length_limit(1.35), .15)
         self.assertAlmostEqual(line_length_limit(4.0), .2)
         self.assertAlmostEqual(line_length_limit(30.0), .5)
 

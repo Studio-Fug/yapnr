@@ -128,6 +128,7 @@ def native_worker(a):
             if p.GetNetCode() and (rules.get('electrical_fab') or p.GetNetname() not in excluded):
                 bynet[p.GetNetname()].append(p)
         targets = []
+        shove=os.environ.get('PNR_SHOVE')=='1'
         for net, ps in bynet.items():
             choices = []
             for i, p in enumerate(ps):
@@ -140,7 +141,17 @@ def native_worker(a):
             def root(i):
                 while roots[i]!=i:i=roots[i]
                 return i
-            for distance, _, _, p, q in sorted(choices, key=lambda c: (not restores_connection(restoration,c[1],c[2]),c[:3])):
+            ordered=sorted(choices, key=lambda c: (not restores_connection(restoration,c[1],c[2]),c[:3]))
+            trunk_ids=[]
+            if shove and rules.get('electrical_fab'):
+                # PNR_SHOVE=1 (A2): the full-current trunk (highest terminal contract,
+                # via a bulk capacitor hop, to the net-scope carrier) is targeted first,
+                # so leaf branches later attach to it instead of racing it.
+                from pnr.shove.targets import trunk_pairs
+                trunk_ids=[{uid(x),uid(y)} for x,y in trunk_pairs(net,ps,rules,lambda t:membership[uid(t)])]
+                if trunk_ids:
+                    ordered=[c for ids in trunk_ids for c in ordered if {c[1],c[2]}==ids]+[c for c in ordered if {c[1],c[2]} not in trunk_ids]
+            for distance, _, _, p, q in ordered:
                 x,y=root(membership[uid(p)]),root(membership[uid(q)])
                 if x==y:continue
                 roots[x]=y
@@ -151,6 +162,15 @@ def native_worker(a):
                 if policy['mode']=='pair':
                     related=sorted({v.rsplit('.',1)[0] for t in policy['pair'].get('terminal_chain',[]) for v in t.values()})
                 targets.append(dict(restoration_required=restores_connection(restoration,uid(p),uid(q)), net=net, source=label(p), target=label(q), source_uuid=uid(p), target_uuid=uid(q), source_xy=xy(p.GetPosition()), target_xy=xy(q.GetPosition()), distance=distance, mode=policy['mode'], pair_name=policy.get('pair',{}).get('name'), related_refs=related))
+                if shove and policy['mode'] in ('power','plane'):
+                    # A3: the root copper a branch may attach to (both groups' pads and
+                    # copper), so the search box can include it.
+                    from pnr.shove.targets import group_box
+                    targets[-1]['root_box']=group_box(b,[membership[uid(p)],membership[uid(q)]],groups,net)
+                    if {uid(p),uid(q)} in trunk_ids:targets[-1]['trunk']=True
+                    from pnr.shove.targets import leaf_current
+                    leaf=leaf_current(net,[p,q],rules)
+                    if leaf is not None:targets[-1]['leaf_rms_a']=leaf
         g = build_graph(b)
         physical_locks = sorted(c.ref for c in g.components if c.locked)
         for c in g.components:
@@ -305,6 +325,13 @@ def route_search_seconds(maximum, attempt):
 
 def scheduled_route_jobs(targets, attempts):
     """Untested terminal pairs precede repeat failures; keep shortest-first ties."""
+    if os.environ.get('PNR_SHOVE')=='1':
+        # A2: full-current trunks first; their copper roots every later branch.
+        from pnr.shove.targets import schedule_key
+        return sorted(unique_route_jobs(targets),
+                      key=lambda t: (schedule_key(t), attempts.get(route_job_key(t), 0),
+                                     not t.get('restoration_required',False),
+                                     t.get('distance', 0), route_job_key(t)))
     return sorted(unique_route_jobs(targets),
                   key=lambda t: (attempts.get(route_job_key(t), 0),
                                  not t.get('restoration_required',False),
@@ -544,6 +571,7 @@ def controller(argv=None,nested=False):
     ap.add_argument('--placement-attempts',type=int,default=8);ap.add_argument('--max-move',type=float,default=2)
     ap.add_argument('--search-seconds',type=float,default=20);ap.add_argument('--seconds',type=float,default=1200)
     ap.add_argument('--worker',choices=['prepare','inspect','move','unmove','check','terminal-blockers','placement-copper']);ap.add_argument('--report',type=Path);ap.add_argument('--spec',type=Path);ap.add_argument('--out',type=Path)
+    ap.add_argument('--shove-origin-board',type=Path,help='PNR_SHOVE=1: the flow origin placement (make-room nudges are capped against it); nested phases get the outer baseline')
     a=ap.parse_args(argv)
     from pnr.live import emit
     if a.worker:return native_worker(a)
@@ -576,7 +604,14 @@ def controller(argv=None,nested=False):
     plane_leaf_budget=RepairBudget()
     from pnr.power_detour_repair import DetourBudget
     power_detour_budget=DetourBudget()
+    if os.environ.get('PNR_SHOVE')=='1':
+        from pnr.shove.control import ShoveBudget
+        shove_budget=ShoveBudget(3 if nested else 6)
     current=a.out_dir/'baseline.kicad_pcb';copy_board(a.board.resolve(),current)
+    if os.environ.get('PNR_SHOVE')=='1':
+        # Make-room nudges are capped (0.5 mm in total) against the placement the
+        # whole flow started from, not each transaction's own start.
+        shove_origin=(a.shove_origin_board or current).resolve()
     if profiled is not source_rules:
         # The input project may predate the profile; the DRC gate must see the same
         # board constraints the workers route with.
@@ -702,6 +737,7 @@ def controller(argv=None,nested=False):
                 '--out-dir',str((a.out_dir/name).resolve()),
                 '--kicad-python',a.kicad_python,'--kicad-cli',a.kicad_cli]
             if a.route_only:phase_args+=['--route-only']
+            if os.environ.get('PNR_SHOVE')=='1':phase_args+=['--shove-origin-board',str(shove_origin)]
             for source in a.annotation_source:phase_args+=['--annotation-source',str(source.resolve())]
             # No early-pairs flag: phases cannot recursively bootstrap.
             powered=main(phase_args,nested=True)
@@ -815,6 +851,10 @@ def controller(argv=None,nested=False):
                 cmd=[a.kicad_python,'-m','pnr.native_electrical',str(trial_current),'--rules',str(a.rules.resolve()),'--out-dir',str(rd),'--net',target['net'],'--source-pad',target['source'],'--target-pad',target['target'],'--bounds',*map(str,box),'--seconds',str(search_seconds),'--pitch',str(search_pitch),'--kicad-cli',a.kicad_cli]
                 electrical_box=electrical_search_bounds(target.get('mode'),attempt,box,bounds,
                     enabled=os.environ.get('PNR_WIDE_POWER_SEARCH')=='1')
+                if os.environ.get('PNR_SHOVE')=='1' and electrical_box==list(box):
+                    # A3: trunks search the board; branches include their root copper.
+                    from pnr.shove.targets import search_bounds
+                    electrical_box=search_bounds(target,attempt,box,bounds)
                 index=cmd.index('--bounds');cmd[index+1:index+5]=list(map(str,electrical_box))
                 reopened=[]
             for end in ('source','target'):
@@ -879,6 +919,35 @@ def controller(argv=None,nested=False):
                             status=repair_outcome['status'],accepted=repair_outcome.get('accepted',False),folder=str(trial)))
                         if repair_outcome.get('accepted'):
                             rd=trial;outcome=repair_outcome;break
+            # PNR_SHOVE=1: make room for a blocked power/plane route (pnr.shove):
+            # copper shove, small part nudges, or a bounded signal rip-reroute. The
+            # candidate still passes the unchanged outer gate below.
+            if os.environ.get('PNR_SHOVE')=='1':
+                from pnr.shove import control as shove_control
+                if shove_control.eligible(target,outcome,True,a.electrical_fab,placement_trial,a.seconds-(time.monotonic()-started)):
+                    import hashlib
+                    board_hash=hashlib.sha256(trial_current.read_bytes()).hexdigest()
+                    if shove_budget.reserve(board_hash,route_job_key(target)):
+                        trial=folder/f'shove-{seq:03d}';spec=folder/f'shove-target-{seq:03d}.json'
+                        save(spec,dict(target,static_blockers=outcome.get('static_blockers',{}),via_blockers=outcome.get('via_blockers',{})))
+                        from pnr.shove.placement import protected_refs
+                        parts=shove_control.nudge_candidates(inventory,a.constraints,[target['source_xy'],target['target_xy']],
+                                                             exclude=protected_refs(read(a.rules)))
+                        remaining=a.seconds-(time.monotonic()-started)
+                        rcmd=[a.kicad_python,'-m','pnr.shove',str(trial_current),'--rules',str(a.rules.resolve()),
+                              '--target-json',str(spec),'--out-dir',str(trial),'--kicad-cli',a.kicad_cli,
+                              '--adapter',str(worker_root/'hardware/tools/keyhole_region.py'),
+                              '--seconds',str(max(30.,min(150.,remaining-60))),'--parts',','.join(parts),
+                              '--constraints',str(a.constraints.resolve()),'--placement-python',sys.executable,
+                              '--origin-board',str(shove_origin),
+                              '--bounds',*map(str,electrical_box if a.electrical_fab and target.get('mode','signal')!='signal' else box)]
+                        for source in a.annotation_source:rcmd+=['--annotation-source',str(source.resolve())]
+                        try:invoke(rcmd,trial.with_suffix('.log'));shove_outcome=read(trial/'result.json')
+                        except (subprocess.CalledProcessError,FileNotFoundError):shove_outcome=dict(status='worker_error',accepted=False)
+                        shove_budget.record(shove_outcome)
+                        events.append(shove_control.event(target,shove_outcome,trial,shove_budget))
+                        if shove_outcome.get('accepted'):rd=trial;outcome=shove_outcome
+                        else:outcome=shove_control.merge_failure(outcome,shove_outcome,inventory.get('owners',{}))
             # Explicit opt-in experiment: restore an ordinary plane-return leaf
             # atomically with a trapped signal, not an unchecked clearance waiver.
             if (os.environ.get('PNR_PLANE_LEAF_REPAIR')=='1' and not placement_trial

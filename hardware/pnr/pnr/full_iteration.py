@@ -55,7 +55,10 @@ def main():
     run(['pnr.planes',board,'--rules',rules],'planes')
     capture(phases,'01-plane-access-fill',board,rules,a.cli)
     from pnr.native_loop import main as native
-    final=native([str(board),'--repo',str(Path(__file__).resolve().parents[3]),'--rules',str(rules),'--constraints',str(a.constraints.resolve()),'--out-dir',str(work/'native-loop'),'--kicad-python',a.python,'--kicad-cli',a.cli,'--electrical-fab',a.electrical_fab,'--early-pairs','--early-pair-placement','--route-only','--cycles','12','--route-attempts','40','--placement-attempts','2','--search-seconds','90','--seconds',str(a.seconds),'--phase-dir',str(phases),*annotations])
+    # PNR_SHOVE=1 with PNR_NATIVE_PLACEMENT=1 lets the refinement loop try native
+    # placement moves (the routing-failure signal); otherwise route-only as before.
+    route_only=[] if os.environ.get('PNR_SHOVE')=='1' and os.environ.get('PNR_NATIVE_PLACEMENT')=='1' else ['--route-only']
+    final=native([str(board),'--repo',str(Path(__file__).resolve().parents[3]),'--rules',str(rules),'--constraints',str(a.constraints.resolve()),'--out-dir',str(work/'native-loop'),'--kicad-python',a.python,'--kicad-cli',a.cli,'--electrical-fab',a.electrical_fab,'--early-pairs','--early-pair-placement',*route_only,'--cycles','12','--route-attempts','40','--placement-attempts','2','--search-seconds','90','--seconds',str(a.seconds),'--phase-dir',str(phases),*annotations])
     rules=work/'native-loop/policy/prepare.json'
     run(['pnr.via_coalesce',final,'--out',board,'--rules',rules,'--report',work/'coalesce.json','--work-dir',work/'coalesce','--kicad-cli',a.cli,*annotations],'coalesce')
     capture(phases,'08-coalescing',board,rules,a.cli)
@@ -86,6 +89,11 @@ def main():
     feedback['routing_failure_scores']=native_progress.get('component_scores',{})
     for ref,score in feedback['routing_failure_scores'].items():
         if isinstance(score,(int,float)):feedback['component_scores'][ref]=feedback['component_scores'].get(ref,0)+score
+    if os.environ.get('PNR_SHOVE')=='1':
+        # Make-room transactions of every loop (early phases included): what was
+        # moved, nudged or ripped, and which parts the solver could not move.
+        from pnr.shove.control import feedback_section
+        feedback['shove']=feedback_section(work/'native-loop')
     (p/'feedback.json').write_text(json.dumps(feedback,indent=2))
     result=dict(all_phases_completed=True,score_scope='post-electrical-final-refill',objective=objective(drc,entries,audit),qualified=audit['qualified'],electrical_audit=audit,pad_entry=entries,final=last,feedback=str((p/'feedback.json').resolve()))
     (p/'evaluation.json').write_text(json.dumps(result,indent=2)+'\n')

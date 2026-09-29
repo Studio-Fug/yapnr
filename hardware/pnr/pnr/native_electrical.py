@@ -24,6 +24,11 @@ from pnr.via_coalesce import partition,preserved,acceptable
 from pnr.via_in_pad import smd_keepout_violated,hole_keepouts
 
 
+def shove_enabled():
+    """PNR_SHOVE=1 enables the make-room/scheduling extensions; unset is the default path."""
+    return os.environ.get('PNR_SHOVE')=='1'
+
+
 def xy(p):return (p.x/1e6,p.y/1e6)
 def uid(t):return t.m_Uuid.AsString()
 def vec(p):
@@ -325,7 +330,30 @@ def qualified_tree_pads(b,net,layer,policy,rules,anchors,excluded=()):
     return result
 
 
-def power_plan(b,net,source,target,rules,oracle,bounds,pitch,*,prefer_tree=True,root_strategy=None,_source_only=False,_reverse_retry=True):
+def array_roots(b,net,layer,rules,attached,excluded,policies):
+    """PNR_SHOVE=1 (A4): array-attached lands on ``layer`` that may root a branch.
+
+    Only a full-current terminal qualifies: an explicit terminal contract whose rms
+    and peak currents are at least every policy in ``policies`` (the net envelope
+    and the branch), the same capacity rule as :func:`qualified_tree_pads`. Its
+    qualified in-pad array and collector already carry the net's whole current,
+    so a branch landing there adds no unbudgeted current. A leaf's own array (a
+    10 mA sense pin with one small via) never becomes a root for other branches.
+    """
+    if not all(policy.get('current_known') for policy in policies):return []
+    rms=max(policy['rms_current_a'] for policy in policies);peak=max(policy['peak_current_a'] for policy in policies)
+    out=[]
+    for fp in b.GetFootprints():
+        for land in fp.Pads():
+            if land.GetNetname()!=net or uid(land) in excluded or uid(land) not in attached or not land.IsOnLayer(layer):continue
+            try:terminal=terminal_policy(fp.GetReference(),[land.GetNumber()],net,rules)
+            except ValueError:terminal=None
+            if not terminal or terminal['rms_current_a']+1e-12<rms or terminal['peak_current_a']+1e-12<peak:continue
+            out.append(land)
+    return out
+
+
+def power_plan(b,net,source,target,rules,oracle,bounds,pitch,*,prefer_tree=True,root_strategy=None,_source_only=False,_reverse_retry=True,_force_in_pad=False):
     import pcbnew as k
     p=net_policy(net,rules);aa=connected_items(b,source);zz=connected_items(b,target)
     trunk=dict(p)
@@ -406,6 +434,14 @@ def power_plan(b,net,source,target,rules,oracle,bounds,pitch,*,prefer_tree=True,
             for pad in qualified:
                 terminal=terminal_policy(pad.GetParentFootprint().GetReference(),[pad.GetNumber()],net,rules)
                 existing+=power_access([pad],layer,terminal['outer_width_mm'])
+            if shove_enabled():
+                # A4: a full-current land already attached by its qualified in-pad
+                # array carries the net's whole envelope; a declared branch may join
+                # it at the branch's own width (as the 'target' strategy below
+                # already allows), nearest root wins. Leaf arrays never root.
+                branch_width=p['outer_width_mm'] if layer in (k.F_Cu,k.B_Cu) else p['inner_width_mm']
+                for land in array_roots(b,net,layer,rules,array_attached(),source_ids,(trunk,p)):
+                    existing+=power_access([land],layer,branch_width)
             return sorted(set(existing))
         # Grow a multi-terminal tree toward already full-current copper, rather
         # than forcing a low-current leaf through an unqualified isolated pad.
@@ -484,7 +520,11 @@ def power_plan(b,net,source,target,rules,oracle,bounds,pitch,*,prefer_tree=True,
     def in_pad_access(layer):
         """Trunk start points on ``layer`` of the terminal's in-pad array attach."""
         if terminal_pad is None or layer==terminal_layer:return []
-        if branch_access(terminal_layer):return []  # a budgeted surface attach exists
+        if branch_access(terminal_layer) and not _force_in_pad:
+            # A budgeted surface attach exists. PNR_SHOVE=1 records that the in-pad
+            # escape was skipped, so a failed plan can retry with it (main()).
+            if shove_enabled():oracle.__dict__['in_pad_skipped']=True
+            return []
         plan_in_pad()
         return sorted(pt for la,pt in in_pad_ports if la==layer)
     def plan_in_pad():
@@ -650,11 +690,13 @@ def power_plan(b,net,source,target,rules,oracle,bounds,pitch,*,prefer_tree=True,
                             if rr.status=='routed':return with_neck(dict(status='routed',tracks=[(source_layer,a,center,outer)]+[(bridge_layer,x,y,width) for x,y in zip(rr.path,rr.path[1:])],banks=[(center,points,ls)],mode=p['mode'],policy=p))
     if prefer_tree and time.monotonic()<oracle.deadline:
         if root_strategy=='existing' and trunk.get('current_known'):
-            return power_plan(b,net,source,target,rules,oracle,bounds,pitch,prefer_tree=True,root_strategy='all',_source_only=_source_only,_reverse_retry=_reverse_retry)
-        if trunk_anchors:return power_plan(b,net,source,target,rules,oracle,bounds,pitch,prefer_tree=False,_source_only=_source_only,_reverse_retry=_reverse_retry)
+            return power_plan(b,net,source,target,rules,oracle,bounds,pitch,prefer_tree=True,root_strategy='all',_source_only=_source_only,_reverse_retry=_reverse_retry,_force_in_pad=_force_in_pad)
+        if trunk_anchors:return power_plan(b,net,source,target,rules,oracle,bounds,pitch,prefer_tree=False,_source_only=_source_only,_reverse_retry=_reverse_retry,_force_in_pad=_force_in_pad)
     if _reverse_retry:
-        result=power_plan(b,net,target,source,rules,oracle,bounds,pitch,prefer_tree=True,_source_only=True,_reverse_retry=False)
+        result=power_plan(b,net,target,source,rules,oracle,bounds,pitch,prefer_tree=True,_source_only=True,_reverse_retry=False,_force_in_pad=_force_in_pad)
         result['reversed_branch_retry']=True
+        # PNR_SHOVE=1: the reversed retry's policy is not the forward attempt's.
+        if shove_enabled():result.setdefault('forward_policy',p)
         return result
     return dict(status='no_current_sized_channel',mode=p['mode'],policy=p,branch_counts=branch_counts,neck_count=len(necks))
 
@@ -767,10 +809,31 @@ def move_pair_support(b,pair,spec):
     b.BuildConnectivity()
     return dict(ref=ref,original=spec['original'],position=spec['position'],original_rotation=old_rotation,rotation=rotation,translated_return_items=sorted(moved))
 
+def load_replay_plan(b,spec):
+    """A routed power plan saved by pnr.shove (JSON), in power_plan's own shape.
+
+    Copper is added by the same add_track/add_bank/add_in_pad_vias calls and judged
+    by the same checks, DRC and acceptance expression as a searched plan. Only
+    power/plane plans; widths, via sizes and policies are taken as saved (the plan
+    came from power_plan against the exact current contracts).
+    """
+    if spec.get('status')!='routed' or spec.get('mode') not in ('power','plane'):raise ValueError('replay plan must be a routed power/plane plan')
+    pt=lambda v:(float(v[0]),float(v[1]))
+    plan=dict(spec,status='routed',replayed=True)
+    plan['tracks']=[(int(la),pt(x),pt(z),float(w)) for la,x,z,w in spec.get('tracks',[])]
+    plan['banks']=[(pt(c),[pt(v) for v in points],[(int(la),float(w)) for la,w in layers]) for c,points,layers in spec.get('banks',[])]
+    if spec.get('in_pad_vias'):plan['in_pad_vias']=[(pt(v),float(d),float(h)) for v,d,h in spec['in_pad_vias']]
+    for key in ('neck','root_landing'):
+        if spec.get(key):plan[key]=spec[key]
+    if any(w<=0 for _,_,_,w in plan['tracks']):raise ValueError('invalid replay width')
+    return plan
+
+
 def main():
     import pcbnew as k
     ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('board',type=Path);ap.add_argument('--rules',type=Path,required=True);ap.add_argument('--out-dir',type=Path,required=True);ap.add_argument('--source-pad',required=True);ap.add_argument('--target-pad',required=True);ap.add_argument('--net',required=True);ap.add_argument('--bounds',nargs=4,type=float,required=True);ap.add_argument('--seconds',type=float,default=20);ap.add_argument('--pitch',type=float,default=.15);ap.add_argument('--kicad-cli',required=True);ap.add_argument('--placement-spec',type=Path);ap.add_argument('--placement-candidates',type=Path)
     ap.add_argument('--source-pad-uuid');ap.add_argument('--target-pad-uuid')
+    ap.add_argument('--replay-plan',type=Path,help='PNR_SHOVE=1 only: add this pnr.shove plan instead of searching')
     a=ap.parse_args();a.out_dir.mkdir(parents=True,exist_ok=False)
     from pnr.fab_profile import load_board  # custom rules in force for the refills below
     rules=json.loads(a.rules.read_text());b=load_board(a.board);b.BuildConnectivity();groups=partition(b);entries=snapshot(b,rules)
@@ -799,14 +862,57 @@ def main():
     if policy['mode']=='pair':
         k.ZONE_FILLER(b).Fill(b.Zones());b.BuildConnectivity()
     oracle=Oracle(b,rules,deadline=time.monotonic()+a.seconds)
+    if shove_enabled() and not a.replay_plan and policy['mode']!='pair':
+        # R1 prevention: keep the in-pad escape (via + short stub on the other
+        # layer) of every still-isolated sense leaf of another net free while this
+        # route searches; the leaf's own job later uses it (A1).
+        from pnr.shove.targets import reserve_sense_escapes
+        reserved_escapes=reserve_sense_escapes(b,rules,oracle,a.net)
+        oracle.hits.clear();oracle.via_hits.clear()  # probing the leaves is not this route's blocker data
+    else:reserved_escapes=None
     # Profile only (5A/5B via-to-SMD-pad rule; legacy has none and KiCad DRC is its
     # whole rule): vias breaking the rule before this transaction.
     from pnr.via_in_pad import forbidden_vias
     forbidden_before=forbidden_vias(b,oracle.geometry) if oracle.geometry.via_to_smd_pad is not None else None
-    try:
-        plan=pair_plan(b,policy['pair'],rules,oracle,a.bounds,a.pitch) if policy['mode']=='pair' else power_plan(b,a.net,source,target,rules,oracle,a.bounds,a.pitch)
-    except TimeoutError:plan=dict(status='time_budget',mode=policy['mode'])
+    replay=None
+    if shove_enabled() and a.replay_plan:
+        # pnr.shove commit: the plan was searched on the pre-shove board; add exactly
+        # that copper here so the worker's own checks/DRC/acceptance decide.
+        plan=replay=load_replay_plan(b,json.loads(a.replay_plan.read_text()))
+    elif shove_enabled() and policy['mode']!='pair':
+        # PNR_SHOVE=1: the box also covers the copper both ends are connected to now
+        # (a trunk routed after the controller sized this job), and 40 % of the
+        # budget is kept for one retry with the terminal's in-pad escape forced
+        # (surface access points exist but are all trapped).
+        from pnr.shove.targets import runtime_bounds
+        a.bounds=runtime_bounds(b,groups,source,target,a.net,a.bounds)
+        started=time.monotonic()
+        def contracted(pad):
+            try:return pad.GetAttribute()==k.PAD_ATTRIB_SMD and bool(terminal_policy(pad.GetParentFootprint().GetReference(),[pad.GetNumber()],a.net,rules))
+            except ValueError:return False
+        terminal=oracle.geometry.in_pad is not None and any(contracted(pad) for pad in (source,target))
+        if terminal:oracle.deadline=started+.6*a.seconds
+        try:plan=power_plan(b,a.net,source,target,rules,oracle,a.bounds,a.pitch)
+        except TimeoutError:plan=dict(status='time_budget',mode=policy['mode'])
+        oracle.deadline=started+a.seconds
+        if plan['status']!='routed' and oracle.__dict__.pop('in_pad_skipped',False) and os.environ.get('PNR_SHOVE_IN_PAD','1')!='0':
+            first=plan
+            try:plan=power_plan(b,a.net,source,target,rules,oracle,a.bounds,a.pitch,_force_in_pad=True)
+            except TimeoutError:plan=dict(status='time_budget',mode=policy['mode'])
+            plan['forced_in_pad']=True;plan['unforced_status']=first['status']
+            if plan['status']!='routed' and first.get('forward_policy'):plan.setdefault('forward_policy',first['forward_policy'])
+    else:
+        try:
+            plan=pair_plan(b,policy['pair'],rules,oracle,a.bounds,a.pitch) if policy['mode']=='pair' else power_plan(b,a.net,source,target,rules,oracle,a.bounds,a.pitch)
+        except TimeoutError:plan=dict(status='time_budget',mode=policy['mode'])
+    if shove_enabled() and replay is None:
+        # Same-net self hits (e.g. the target's own land) are not blockers (A5).
+        own={uid(t) for t in b.GetTracks() if t.GetNetname()==a.net}|{uid(p) for f in b.GetFootprints() for p in f.Pads() if p.GetNetname()==a.net}
+        for counter in (oracle.hits,oracle.via_hits):
+            for identity in list(counter):
+                if identity in own:del counter[identity]
     plan.update(accepted=False,placement=placement,static_blockers=dict(oracle.hits.most_common(30)),via_blockers=dict(oracle.via_hits.most_common(30)))
+    if reserved_escapes:plan['reserved_sense_escapes']=reserved_escapes
     if getattr(oracle,'in_pad_attempts',None):plan['in_pad_attempts']=oracle.in_pad_attempts
     keep=[]
     if plan['status']=='routed':

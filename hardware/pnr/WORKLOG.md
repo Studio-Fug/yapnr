@@ -731,3 +731,110 @@ with legal gaps > 1.5x continuous 10 -> 5. Retries rise 3 -> 18 of 36; the
 median placement takes 1.8 s. The correct pour rule costs about 2% J1 and
 power MST (799 -> 817, 78.6 -> 80.5 mm); signal HPWL is unchanged (+18% vs
 default).
+
+## PNR_SHOVE=1: make-room transactions and power scheduling (converter block case)
+
+Case: blocks/nb3-pf/d5be6b6d0e99/native/board_converter-s1-35.75x27.75 (4 opens:
+U5.13->R13.2 p5v-hv, and SW2 U5.21/U5.25/C9.2/L2.2). Everything below is behind
+PNR_SHOVE=1; with it unset nothing new is imported and worker results/inventories
+are identical to src10.base (only KiCad's random UUIDs of new items differ run to
+run). New package pnr/shove (targets, geom, qp, world, relax, ladder, gates,
+control, __main__).
+
+Scheduling and access (stage A):
+* In-pad escape for trapped leaves: power_plan(_force_in_pad) retries once with the
+  terminal's in-pad array when its surface access points exist but are all walled in
+  (in_pad_skipped); via_in_pad.general_attach_sites samples non-analytic custom lands
+  (the L-shaped U5.13 ISN pin: 0.35/0.20 on y=45.025, x 51.50-51.71).
+* Trunk-first targets: inspect pre-unions the trunk hops (highest terminal contract ->
+  uncontracted bulk-cap land within 4 mm -> net-scope carrier) and marks them
+  trunk=True; scheduled_route_jobs routes trunks first. Trunks search the whole
+  board; branches search local box U root copper box + 1 mm.
+* Array-attached lands are branch roots in the 'existing' strategy (U5.21 -> U5.25
+  1.7 mm bridge instead of a 10 mm run to L2.2).
+* Sense-escape reservation: every power worker reserves, in its Oracle only, the
+  in-pad via + 1 mm stub of each still-isolated sense leaf (terminal <= 50 mA) of
+  another net. Routing sense leaves first was tried and dropped: it closed the
+  phase-03 board but cost two SW2 opens on the final board.
+* Same-net self hits are dropped from static_blockers; result.json keeps
+  forward_policy after the reversed retry.
+
+Make-room worker (python -m pnr.shove, hooked after electrical_blocker_repair for
+failed power/plane targets, <=3 per nested early loop, <=6 per refinement loop):
+L1 copper QP (delta-relaxed wish plan from power_plan, joints/welds/rigid banks,
+Hildreth dual ascent, caps signal 0.6 / power line 0.35 / power via 0.25 mm),
+L2 adds small nearby parts (<=4 pads, not locked/fixed/intent; 0.5 mm cap, soft
+lands, claim attaches ride with the part), L4 rips whole local signal nets (<=3,
+bounded negotiation) and/or one sub-trunk-width power branch, routes the target with
+native_electrical, restores signals with keyhole_region and power branches with
+native_electrical. Commits replay the plan through native_electrical --replay-plan,
+then pnr.shove.gates judges against the ORIGINAL board (partition, lost connections,
+pad entries, reference, new forbidden SMD vias, native DRC keys/dangling/per-moved-uuid,
+strictly fewer opens, no leftover PNR shove:/leaf: areas, unjustified sub-width not up).
+Failures fold the certificate's solid owners into static_blockers.
+
+Case results (src10 contracts from the prepare worker, PNR_SUBBOARD=1; scratch):
+* final board 4 -> 0 opens, 0 DRC violations before/after, all gates clean (jobs in
+  scheduler order, worker then shove as the hook runs them): SW2 trunk by L4 (rip
+  COMP+MODE, 3x0.35/0.20 in-strip array, 1.19 mm B.Cu, both restored), U5.21 by L1
+  (0.049 mm), C9.2 by L2 (C19/C24/C9/R10 nudged <= 0.083 mm), U5.13 by the forced
+  in-pad via whose escape the earlier jobs had to leave free. The user's picture (standard via beside U5.13):
+  L2 moves the VOUT bank/landing and C24 0.15 mm north (not +x: C24.1's via-to-SMD
+  keepout and FB via e5536d17 block +x), 4 -> 3, DRC clean.
+* phase-03 board 22 -> 18 (all four case opens) with stage A alone.
+* One emulated early-power sweep (worker per scheduled power job, shove on failure)
+  from the case's real phase-03 input (02b board): every power job routes with the
+  plain worker, 46 -> 18 opens, only signal targets left, 0 DRC violations.
+* One full_iteration of the layout (1 worker, 600 s, PNR_SHOVE/POWER_FIRST/
+  FANOUT_RESERVE, intermediate build without reservations/bulk-cap hop): objective
+  [0,0,0,54,0,2] vs [0,0,0,15,0,4]; SW2 and U5.13 closed (U5.13 by L2 with C24 and C9
+  nudged 0.12/0.21 mm); open: C24.1's 1.5 mm VOUT landing and ILIM (signal).
+Feedback: native placement trials are still off in hier (full_iteration passes
+--route-only unless PNR_SHOVE=1 and PNR_NATIVE_PLACEMENT=1); feedback.json gains a
+'shove' section; synth_native writes accepted nudges back into the layout so
+hier.assemble stays rigid. Tests: tests/test_shove.py, tests/test_shove_native.py.
+
+### PNR_SHOVE=1 review fixes (placement legality, necks, branch roots, template write-back)
+
+* Part nudges are checked against the hard placement constraints. New
+  pnr/shove/placement.py: the KiCad side lists moved footprints and rejects locked,
+  rotated/flipped and source-owned parts (plane-access power array / copper keepout
+  owners, as incremental_place refuses); the PnR runtime (`python -m
+  pnr.shove.placement`, needs yaml) runs place.metrics.hard_violations on both
+  build_graph graphs under the loop constraints.yaml and rejects any new violation
+  (HARD group radii, rows, keepouts, outline, fixed poses/rotations, sides, overlaps).
+  Runs as G0 inside L2 before commit and again in the whole-transaction gate;
+  without --constraints/--placement-python a nudge is unverifiable and rejected.
+  native_loop passes the loop constraints, its own interpreter and the origin board;
+  nudge_candidates also excludes source-owned parts.
+* Cumulative nudge cap: 0.5 mm from the ORIGIN placement (the outer loop's
+  baseline board, handed to nested early phases as --shove-origin-board), not from
+  each transaction's start. The QP carries 16 inscribed-polygon rows per part; the
+  ladder drops parts with < 0.02 mm budget left; invariants and the gate re-check.
+* Courtyards of both sides are QP rows (B.CrtYd too), same side only.
+* Necks are rigid: power/plane copper narrower than its land's required entry width
+  binds both vertices to the land's joint (world.rigid_necks), so it cannot stretch
+  or turn. Per moved power line |dlength| <= min(0.5 mm, 5 %) as designed (the
+  0.15 mm floor is gone) and is now also a linearised QP row family, so the solver
+  searches inside the guard instead of being rejected after the fact.
+* gates.unjustified_subwidth judges each thin power track by the terminal it
+  serves: a track entering a terminal land must be at least its outer width, a
+  source-bounded neck of it (neck_budget: length <= neck_max_length_mm, loss/drop),
+  or a branch landing on an in-pad-array-attached land; and it must be a valid neck
+  or as wide as a terminal its sub-width branch serves (joined through shared ends
+  and vias inside its copper; an in-pad via under a collector serves its land).
+* A4 branch roots: only full-current array-attached terminals (terminal rms/peak >=
+  the net envelope and the branch, as qualified_tree_pads) - a sense leaf's single
+  in-pad via (U5.13) never roots another branch; U5.25 (5 A = net) still does.
+* synth_native write-back: any disagreement between template instances, including
+  one instance not nudging a part another nudged or unreadable nudges, fails the
+  record (nudged_conflict); an agreed nudged layout must add no hard violation in
+  the block frame (instance_board: block rectangle, groups, rows, overlaps) or the
+  record fails, so no illegal pose reaches hier.assemble / top placement.
+* Case re-verification (src10 contracts, scratch): final board 4 -> 0 opens, 0 DRC
+  before/after, every gate incl. placement clean (L2 nudges C19/C24/C9/R10 <= 0.083
+  mm total from origin, no new hard violation); phase-03 board 22 -> 18 (all four
+  case opens). The user's-picture variant (standard via beside U5.13, in-pad
+  disabled) is no longer accepted: it needs a 0.148 mm (11 %) stretch of a 1.35 mm
+  VOUT branch segment, beyond the 5 % per-line guard; with the guard in the QP the
+  solver finds no feasible placement (certificate: U5.15 / FB track / VOUT track).

@@ -136,19 +136,109 @@ def _native(inputs, constraints_path, rec, names, out, seconds, workers, repo, r
         tag += '-r%d' % repeat if repeat else ''
         try:
             r = evaluate(Path(out) / 'native' / tag, Path(inputs), doc, g2, r2, seconds, workers,
-                         Path(repo), live_lane='blocks/' + tag)
+                         Path(repo), live_lane=Path(out).parent.name + '/' + tag)
         except Exception as error:
             r = dict(status='failed', error=repr(error), traceback=traceback.format_exc()[-1500:])
         r['instance'] = name
         r['dir'] = str(Path(out) / 'native' / tag)
+        if os.environ.get('PNR_SHOVE') == '1' and r.get('status') == 'ok':
+            r['nudged'] = _nudged_layout(Path(r['dir']), blk, r.get('apron_mm', 0.0))
         results.append(r)
     ok = all(r.get('status') == 'ok' for r in results)
     total = [sum(r['objective'][i] for r in results) for i in range(6)] if ok else None
     out = dict(rec, stage='native', repeat=repeat, instances=results, status='ok' if ok else 'failed',
                objective=total)
+    if os.environ.get('PNR_SHOVE') == '1' and ok:
+        # Accepted make-room nudges moved parts inside the routed block board; the
+        # layout must carry them or hier.assemble finds the block non-rigid.
+        merged, conflict = merge_nudges(rec['layout'], results)
+        if merged:
+            out['nudged'] = merged
+            out['nudged_conflict'] = conflict
+            if conflict:
+                # Every instance of a template is posed from ONE layout: instances
+                # that disagree (one nudged a part, another did not, or nudged it
+                # elsewhere) cannot all be rigid with it, so the record is unusable.
+                out.update(status='failed', error='nudged_conflict: ' + conflict)
+            else:
+                layout = dict(rec['layout'], **merged)
+                bad = {}
+                for name in names:
+                    for kind, values in _layout_violations(graph, constraints, rules, blocks[name], rec['layout'],
+                                                           layout, rec['width'], rec['height']).items():
+                        bad[kind] = sorted(set(bad.get(kind, [])) | set(values))
+                if bad:
+                    out.update(status='failed', error='nudged layout breaks hard placement constraints: '
+                               + json.dumps(bad, sort_keys=True))
+                    out['nudged_violations'] = bad
+                else:
+                    out['layout'] = layout
     if _power_first():
         hot = [r.get('hot_loops_open') for r in results]
         out['hot_loops_open'] = sum(hot) if ok and all(h is not None for h in hot) else None
+    return out
+
+
+def merge_nudges(layout, results):
+    """``(merged, conflict)`` of the instances' nudged poses (PNR_SHOVE=1).
+
+    Each instance's effective pose of a key is its nudged pose, else the shared
+    layout pose. Any disagreement between instances, including one instance not
+    nudging a part another nudged, or an instance whose nudges are unknown, is a
+    conflict (a non-empty description); ``merged`` holds the agreed poses."""
+    keys = sorted({key for r in results for key in (r.get('nudged') or {})})
+    if not keys:
+        return {}, ''
+    merged, problems = {}, []
+    for key in keys:
+        poses = []
+        for r in results:
+            nudged = r.get('nudged')
+            if nudged is None:
+                problems.append('%s: nudges of %s unknown' % (key, r.get('instance')))
+                continue
+            poses.append(nudged.get(key, layout.get(key)))
+        same = lambda p, q: (p is not None and q is not None and math.dist(p[:2], q[:2]) <= 1e-6
+                             and list(p[2:]) == list(q[2:]))
+        if any(not same(pose, poses[0]) for pose in poses[1:]):
+            problems.append('%s: instances disagree' % key)
+        elif poses:
+            merged[key] = poses[0]
+    return merged, '; '.join(problems)
+
+
+def _layout_violations(graph, constraints, rules, block, before, after, w, h):
+    """Hard placement violations the nudged ``after`` layout adds to ``before``,
+    in the block frame hierarchical placement uses (block rectangle, groups,
+    rows, overlaps): {} when legal."""
+    from pnr.hier.synth import instance_board
+    from pnr.place.metrics import hard_violations
+
+    def violations(layout):
+        g2, c2, _ = instance_board(graph, constraints, rules, block, layout, w, h)
+        return {kind: {json.dumps(v, sort_keys=True) for v in values}
+                for kind, values in hard_violations(g2, c2).items()}
+    old, new = violations(before), violations(after)
+    return {kind: sorted(values - old.get(kind, set())) for kind, values in new.items() if values - old.get(kind, set())}
+
+
+def _nudged_layout(round_dir, block, apron):
+    """Layout poses (block-local, apron removed) of parts whose evaluated pose
+    differs from the placed pose (PNR_SHOVE=1 make-room nudges); None when the
+    placements cannot be read (the instance's nudges are unknown)."""
+    import json
+    from pnr.hier.synth import local_key
+    try:
+        placed = {c['ref']: c for c in json.loads((round_dir / 'placed.json').read_text())['components']}
+        final = {c['ref']: c for c in json.loads((round_dir / 'evaluated-placed.json').read_text())['components']}
+    except (OSError, ValueError, KeyError):
+        return None
+    out = {}
+    for ref, c in final.items():
+        p = placed.get(ref)
+        if p is None or math.dist(p['pos'], c['pos']) <= 1e-6:
+            continue
+        out[local_key(block, c['address'])] = [c['pos'][0] - apron, c['pos'][1] - apron, c['rot'], c['side']]
     return out
 
 

@@ -34,6 +34,7 @@ KiCad's own DRC cannot express the 5B in-pad geometry (the generated .kicad_dru
 only forbids non-0.20-drill vias within 0.127 of SMD pads), so the engine checks it.
 """
 import math
+import os
 from collections import defaultdict
 
 from pnr.fab_profile import geometry, in_pad_fit, in_pad_sites
@@ -410,6 +411,10 @@ def attach_windows(board, pad, count, g):
     """
     ip = g.in_pad
     axes = attach_axes(pad)
+    if ip is not None and axes is None and count >= 1 and os.environ.get('PNR_SHOVE') == '1':
+        # General (non-analytic) custom land, e.g. an L-shaped sense pad: sample the
+        # exact eroded copper (PNR_SHOVE=1 only; the default keeps returning []).
+        return general_attach_sites(board, pad, count, g)
     if ip is None or axes is None or count < 1:
         return []
     centre, along, across, size, corner = axes
@@ -453,6 +458,140 @@ def neighbour_offsets(board, pad, reach_mm=1.0):
         if abs(along) <= long_half and short_half < abs(across) <= short_half + reach_mm:
             out.append(round(along, 6))
     return sorted(set(out))
+
+
+def _rings(poly):
+    rings = []
+    for i in range(poly.OutlineCount()):
+        chain = poly.COutline(i)
+        rings.append([_xy(chain.CPoint(j)) for j in range(chain.PointCount())])
+    return rings
+
+
+def _edge_distance(point, rings):
+    """Distance (mm) from ``point`` to the nearest polygon edge of ``rings``."""
+    from pnr.pad_entry import closest
+    best = math.inf
+    for ring in rings:
+        for a, z in zip(ring, ring[1:] + ring[:1]):
+            best = min(best, math.dist(point, closest(point, a, z)))
+    return best
+
+
+def _scan_midpoints(rings, step):
+    """Mid-points of the polygon's interior intervals on vertical and horizontal
+    scan lines ``step`` apart, plus a lattice: thin strips (a 0.40 mm bar eroded to
+    a 20 um band) are found on their centreline, never missed between lattice rows."""
+    xs = [p[0] for ring in rings for p in ring]
+    ys = [p[1] for ring in rings for p in ring]
+    if not xs:
+        return []
+    x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+    out = []
+    for axis in (0, 1):
+        lo, hi = (x0, x1) if axis == 0 else (y0, y1)
+        n = int(math.floor((hi - lo) / step)) + 1
+        offset = ((hi - lo) - (n - 1) * step) / 2
+        for i in range(n):
+            c = lo + offset + i * step
+            cuts = []
+            for ring in rings:
+                for a, z in zip(ring, ring[1:] + ring[:1]):
+                    if (a[axis] > c) != (z[axis] > c):
+                        t = (c - a[axis]) / (z[axis] - a[axis])
+                        cuts.append(a[1 - axis] + t * (z[1 - axis] - a[1 - axis]))
+            cuts.sort()
+            for u, v in zip(cuts[0::2], cuts[1::2]):
+                mid = (u + v) / 2
+                out.append((c, mid) if axis == 0 else (mid, c))
+                # Longer intervals also get lattice points along them.
+                k = int(math.floor((v - u) / step))
+                for j in range(1, k):
+                    w = u + j * step
+                    out.append((c, w) if axis == 0 else (w, c))
+    return out
+
+
+def general_attach_sites(board, pad, count, g, limit=8):
+    """In-pad attach windows of a general custom SMD land (no analytic frame).
+
+    PNR_SHOVE=1 path of :func:`attach_windows`: the exact land is eroded by the 5B
+    hole margin, candidate centres are sampled on it (:func:`_scan_midpoints`) and
+    kept only where :func:`qualifies` (the general-copper 5B path) and
+    :func:`in_pad_size` accept them, deepest in the land first. ``count`` > 1 forms
+    collinear windows at the 5B row pitch along the sites' principal axis. Every
+    via is still checked by the caller's Oracle, same-array hole spacing and
+    collector/array_attach tests. Same dict shape as :func:`attach_windows`
+    (``variant`` = 'general')."""
+    import pcbnew as k
+    ip = g.in_pad
+    if ip is None or count < 1 or not is_smd(pad):
+        return []
+    layer = pad_layer(pad)
+    land = k.SHAPE_POLY_SET()
+    pad.TransformShapeToPolygon(land, layer, 0, 1000, k.ERROR_INSIDE)
+    land_rings = _rings(land)
+    radius = max(ip.drill / 2 + ip.hole_margin, min(ip.diameters) / 2)
+    eroded = k.SHAPE_POLY_SET()
+    pad.TransformShapeToPolygon(eroded, layer, 0, 1000, k.ERROR_INSIDE)
+    eroded.Inflate(-round(radius * 1e6) - 1000, k.CORNER_STRATEGY_ROUND_ALL_CORNERS, 1000)
+    if eroded.IsEmpty():
+        return []
+    candidates = {}
+    for point in _scan_midpoints(_rings(eroded), .025):
+        point = (round(point[0], 4), round(point[1], 4))
+        if point in candidates or not eroded.Contains(_vec(point)):
+            continue
+        size = in_pad_size(g, [pad], pad.GetNetname(), point)
+        if size is None or not qualifies(g, pad, point, size[0], size[1], layer):
+            continue
+        candidates[point] = (_edge_distance(point, land_rings), size)
+    if not candidates:
+        return []
+    centre = _xy(pad.GetPosition())
+    ranked = sorted(candidates, key=lambda p: (-round(candidates[p][0], 4), math.dist(p, centre), p))
+    if count == 1:
+        # Spread the offered sites so a blocked neighbourhood does not use them all.
+        chosen = []
+        for p in ranked:
+            if all(math.dist(p, q) >= .05 - 1e-9 for q in chosen):
+                chosen.append(p)
+            if len(chosen) >= limit:
+                break
+        return [dict(variant='general', offsets_mm=[0.0], across=(0.0, 1.0), neighbour_offsets_mm=[],
+                     depth_mm=round(candidates[p][0], 4),
+                     vias=[(p, candidates[p][1][0], candidates[p][1][1])]) for p in chosen]
+    # Principal axis of the qualified sites (2x2 covariance, closed form).
+    mx = sum(p[0] for p in ranked) / len(ranked)
+    my = sum(p[1] for p in ranked) / len(ranked)
+    sxx = sum((p[0] - mx) ** 2 for p in ranked)
+    syy = sum((p[1] - my) ** 2 for p in ranked)
+    sxy = sum((p[0] - mx) * (p[1] - my) for p in ranked)
+    angle = .5 * math.atan2(2 * sxy, sxx - syy)
+    along = (math.cos(angle), math.sin(angle))
+    across = (-along[1], along[0])
+    lines = defaultdict(list)
+    for p in ranked:
+        lines[round((p[0] - mx) * across[0] + (p[1] - my) * across[1], 3)].append(p)
+    out = []
+    for offset, points in sorted(lines.items(), key=lambda kv: (abs(kv[0]), kv[0])):
+        points.sort(key=lambda p: (p[0] - mx) * along[0] + (p[1] - my) * along[1])
+        for start in points:
+            u0 = (start[0] - mx) * along[0] + (start[1] - my) * along[1]
+            row = [start]
+            for q in points:
+                u = (q[0] - mx) * along[0] + (q[1] - my) * along[1]
+                if abs(u - u0 - len(row) * ip.pitch) <= .0125:
+                    row.append(q)
+                if len(row) == count:
+                    break
+            if len(row) == count:
+                out.append(dict(variant='general', offsets_mm=[round(i * ip.pitch, 6) for i in range(count)],
+                                across=across, neighbour_offsets_mm=[],
+                                depth_mm=round(min(candidates[p][0] for p in row), 4),
+                                vias=[(p, candidates[p][1][0], candidates[p][1][1]) for p in row]))
+    out.sort(key=lambda w: -w['depth_mm'])
+    return out[:limit]
 
 
 def plan_pad(board, pad, rules, g=None):

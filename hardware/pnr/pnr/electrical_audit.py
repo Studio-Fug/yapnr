@@ -61,7 +61,15 @@ def audit_board(board,rules,board_text=''):
     # another layer with barrel capacity >= the budget; in_pad_terminal_attaches
     # lists the qualified ones, which pad_entry counts as entries). Not scored.
     from pnr.via_in_pad import audit as via_in_pad_audit
-    return dict(reference_failures=reference,stackup=dict(enabled_layers=sorted(enabled),defined_copper_layers=sorted(defined),consistent=enabled==defined),power_current_unknown=sorted(unknown),subwidth_track_count=len(undersized),subwidth_tracks=undersized,pairs=pair_reports,vias_in_smd_pads=via_in_pad_audit(board,rules),qualified=False)
+    result=dict(reference_failures=reference,stackup=dict(enabled_layers=sorted(enabled),defined_copper_layers=sorted(defined),consistent=enabled==defined),power_current_unknown=sorted(unknown),subwidth_track_count=len(undersized),subwidth_tracks=undersized,pairs=pair_reports,vias_in_smd_pads=via_in_pad_audit(board,rules),qualified=False)
+    import os
+    if os.environ.get('PNR_SHOVE')=='1':
+        # Report only: sub-width power copper not justified by a terminal contract
+        # of its net or a short pad neck (a declared leaf/branch is not a defect).
+        from pnr.shove.gates import unjustified_subwidth
+        unjustified=unjustified_subwidth(board,rules,result)
+        result.update(unjustified_subwidth_count=len(unjustified),unjustified_subwidth_tracks=unjustified)
+    return result
 
 
 def main():

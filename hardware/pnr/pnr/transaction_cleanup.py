@@ -3,7 +3,7 @@
 Native reports nominate; real layer contacts, source protection and final global
 checks decide. A worker failure never replaces the input checkpoint.
 """
-import argparse, hashlib, json, shutil, subprocess, sys
+import argparse, hashlib, json, os, shutil, subprocess, sys
 from pathlib import Path
 
 def read(p): return json.loads(Path(p).read_text())
@@ -109,7 +109,7 @@ def run(a):
     print(json.dumps({k:v for k,v in result.items() if k not in ('events','checks')}))
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('board',type=Path);p.add_argument('--rules',type=Path,required=True);p.add_argument('--baseline',type=Path);p.add_argument('--out-dir',type=Path);p.add_argument('--net',action='append',default=[]);p.add_argument('--annotation-source',action='append',type=Path,default=[]);p.add_argument('--kicad-python',default='/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3');p.add_argument('--kicad-cli',default='/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli');p.add_argument('--worker',choices=['audit','prune','fill']);p.add_argument('--report',type=Path);p.add_argument('--spec',type=Path);p.add_argument('--out',type=Path);a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('board',type=Path);p.add_argument('--rules',type=Path,required=True);p.add_argument('--baseline',type=Path);p.add_argument('--out-dir',type=Path);p.add_argument('--net',action='append',default=[]);p.add_argument('--annotation-source',action='append',type=Path,default=[]);p.add_argument('--kicad-python',default='/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3');p.add_argument('--kicad-cli',default=os.environ.get('PNR_KICAD_CLI','/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli'));p.add_argument('--worker',choices=['audit','prune','fill']);p.add_argument('--report',type=Path);p.add_argument('--spec',type=Path);p.add_argument('--out',type=Path);a=p.parse_args()
     if a.worker:
         import pcbnew as k
         from pnr.fab_profile import load_board  # custom rules in force for the 'fill' worker

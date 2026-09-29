@@ -4,7 +4,7 @@ Protected source arrays/returns, shared islands, plated pads, locked copper and
 barrels with any other layer track port are excluded. Current geometry cannot
 be narrowed. Native connectivity, entries, filled reference and DRC gate output.
 """
-import argparse,json,math,shutil,time,sys
+import argparse,json,math,os,shutil,time,sys
 from pathlib import Path
 
 def eligible(board,pad,rules,protected_pads=()):
@@ -63,7 +63,7 @@ def execute(a,rules,b):
  from pnr.via_coalesce import partition,preserved,acceptable,protected
  from pnr.native_drc import run_drc
  from pnr.live import emit
- b.BuildConnectivity();_,intents=protected(b,rules,a.annotation_source);protect={(i['ref'],str(n)) for i in intents for n in i['pads']};pads=[p for f in b.GetFootprints() for p in f.Pads()];protected_ids={uid(p) for p in pads if (p.GetParentFootprint().GetReference(),p.GetNumber()) in protect};before_part=partition(b);before_entry=snapshot(b,rules);cli='/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli';before=run_drc(cli,a.board,a.out_dir/'baseline.drc.json');result=dict(accepted=False,focus=a.focus,proposals=[]);leaves=[]
+ b.BuildConnectivity();_,intents=protected(b,rules,a.annotation_source);protect={(i['ref'],str(n)) for i in intents for n in i['pads']};pads=[p for f in b.GetFootprints() for p in f.Pads()];protected_ids={uid(p) for p in pads if (p.GetParentFootprint().GetReference(),p.GetNumber()) in protect};before_part=partition(b);before_entry=snapshot(b,rules);cli=os.environ.get('PNR_KICAD_CLI','/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli');before=run_drc(cli,a.board,a.out_dir/'baseline.drc.json');result=dict(accepted=False,focus=a.focus,proposals=[]);leaves=[]
  for p in pads:
   if p.GetParentFootprint().GetReference()!=a.focus:continue
   leaf=eligible(b,p,rules,protected_ids)

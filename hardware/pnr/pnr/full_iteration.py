@@ -27,7 +27,7 @@ def main():
     ap.add_argument('--geometric-relax',action='store_true')
     ap.add_argument('--assemble',type=Path,help='JSON list of routed block boards to copy in after placement')
     ap.add_argument('--python',default='/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3')
-    ap.add_argument('--cli',default='/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli')
+    ap.add_argument('--cli',default=os.environ.get('PNR_KICAD_CLI','/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli'))
     a=ap.parse_args();p=a.round.resolve();phases=p/'phases';work=p/'electrical';work.mkdir(exist_ok=False)
     env=dict(os.environ,PYTHONPATH=str(Path(__file__).resolve().parent.parent))
     sources=a.annotation_source or ['hardware/splanc_dev/elec/src/splanc_mini.ato']

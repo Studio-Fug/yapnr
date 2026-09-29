@@ -3,7 +3,7 @@
 No via/pad movement, no width reduction, no pair/plane changes. Endpoint/branch
 preservation and all native guards required before testing signal closure.
 """
-import json,math,time
+import json,math,os,time
 from pathlib import Path
 
 def shifted_path(a,b,focus,offset):
@@ -87,5 +87,5 @@ def execute(a,board,rules):
 
 def main():
  import argparse,pcbnew as k
- p=argparse.ArgumentParser();p.add_argument('board',type=Path);p.add_argument('--rules',type=Path,required=True);p.add_argument('--focus',required=True);p.add_argument('--out-dir',type=Path,required=True);p.add_argument('--plan-only',action='store_true');p.add_argument('--probe-offset',type=float);p.add_argument('--plan-index',type=int,default=0);p.add_argument('--kicad-cli',default='/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli');a=p.parse_args();a.out_dir.mkdir(exist_ok=False);from pnr.fab_profile import load_board;board=load_board(a.board);execute(a,board,json.loads(a.rules.read_text()))
+ p=argparse.ArgumentParser();p.add_argument('board',type=Path);p.add_argument('--rules',type=Path,required=True);p.add_argument('--focus',required=True);p.add_argument('--out-dir',type=Path,required=True);p.add_argument('--plan-only',action='store_true');p.add_argument('--probe-offset',type=float);p.add_argument('--plan-index',type=int,default=0);p.add_argument('--kicad-cli',default=os.environ.get('PNR_KICAD_CLI','/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli'));a=p.parse_args();a.out_dir.mkdir(exist_ok=False);from pnr.fab_profile import load_board;board=load_board(a.board);execute(a,board,json.loads(a.rules.read_text()))
 if __name__=='__main__':main()

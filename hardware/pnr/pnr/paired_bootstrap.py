@@ -4,7 +4,7 @@ Controller uses the PnR interpreter; each exact geometry/DRC transaction runs
 in a fresh KiCad process. Only legal intermediate-package proposals are tried.
 An unsuccessful pair remains explicitly pending for the final completeness gate.
 """
-import argparse,json,os,shutil,subprocess,threading,time
+import math,argparse,json,os,shutil,subprocess,threading,time
 from concurrent.futures import FIRST_COMPLETED,ThreadPoolExecutor,wait
 from pathlib import Path
 from pnr.native_loop import copy_board,pair_placements
@@ -72,6 +72,10 @@ def first_accepted(count,launch,accepted,workers=3,done=None):
 
 
 def run(board,rules,constraints,out,kicad_python,kicad_cli,seconds=600,attempts=5,search_seconds=90,allow_placement=True):
+    # Env overrides for the phase / per-trial search budgets (the joint-topology window is
+    # search_seconds minus a fallback reserve, so PNR_PAIR_JOINT_TRIAL_SECONDS alone cannot widen it).
+    seconds=float(os.environ.get('PNR_PAIR_PHASE_SECONDS',seconds));search_seconds=float(os.environ.get('PNR_PAIR_SEARCH_SECONDS',search_seconds))
+    if not (math.isfinite(seconds) and seconds>0 and math.isfinite(search_seconds) and search_seconds>0):raise ValueError('invalid pair budget seconds')
     out=Path(out);out.mkdir(parents=True,exist_ok=False)
     board=Path(board).resolve();rules=Path(rules).resolve()
     current=out/'baseline.kicad_pcb';copy_board(board,current)

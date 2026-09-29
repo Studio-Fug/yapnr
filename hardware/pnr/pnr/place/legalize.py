@@ -283,7 +283,9 @@ def legalize(
         if aid is None:
             comp = min(active or eligible,key=lambda c:(available(c),-courtyard_rect(c).w*courtyard_rect(c).h,c.ref))
         else:
-            comp = min(active or eligible,key=lambda c:(aid.tier(c.ref),available(c),-courtyard_rect(c).w*courtyard_rect(c).h,c.ref))
+            # Mixed-size legalization: block macros (pnr.hier.macro, footprint 'block:*') take their
+            # slots before any tier, as their members' tiers are already fixed inside the layout.
+            comp = min(active or eligible,key=lambda c:(0 if str(c.footprint).startswith('block:') else aid.tier(c.ref),available(c),-courtyard_rect(c).w*courtyard_rect(c).h,c.ref))
             comp.pos = aid.target(comp.ref, neighbors)
         state = dict(occupancy={s:a.copy() for s,a in occupancy.items()},
                      neighbors=list(neighbors), movable=list(movable), active=set(active_block),

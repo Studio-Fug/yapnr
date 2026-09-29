@@ -329,7 +329,7 @@ def candidates(oracle,pad,lanes,g):
 def release(board):
     """Delete exactly the reservation rule areas."""
     zones=[z for z in board.Zones() if z.GetZoneName().startswith(PREFIX)]
-    for z in zones:board.Remove(z)
+    for z in zones:board.Delete(z)  # Delete, not Remove: detached zones crash KiCad-python teardown (SIGSEGV)
     return len(zones)
 
 

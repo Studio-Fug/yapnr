@@ -9,6 +9,45 @@ Under a fab profile with a filled via-in-pad policy (jlc-pofv, 5B) a terminal
 land without any budgeted surface attach may instead be attached by a
 current-sized in-pad via array whose trunk continues on another layer
 (:func:`power_plan`, pnr.via_in_pad.array_attach); legacy rules never do.
+
+Pair-chain opt-in flags (environment, default off; unset/any other value keeps
+the original behaviour exactly):
+
+PNR_PAIR_POST_BRIDGE_SURFACE=1
+    Every routed surface leg of a pair chain is checked with the exact endpoint
+    graph (path_metrics from the declared origin to this leg's end, over all
+    planned copper plus the new leg) before it is committed. Oracle.clear ignores
+    same-net copper, so a leg can cross an earlier same-net stub (e.g. the
+    via-to-pad fanout of a preceding layer bridge) and close a loop that the
+    final check could only reject as pair_endpoint_graph_invalid after the whole
+    chain was planned. A leg whose graph is not a valid tree is treated as
+    unrouted (status pair_surface_leg_cycle) and the stage falls back. When the
+    previous stage ended on a via bridge, the first fallback is a surface leg
+    that starts at that bridge's via pair (offsets = measured prefix minus the
+    via-to-pad fanout), so the intermediate pad fanout becomes a stub: the same
+    topology the existing bridge-to-bridge via reuse already produces, with no
+    new vias. Only if that also fails does the stage use the existing via-reuse
+    layer bridge. No electrical limit (uncoupled budget, skew, clearance,
+    reference plane, via geometry) is changed; every leg is still judged by
+    solve_pair, the reference validator and the final endpoint/skew checks.
+PNR_PAIR_JOINT_FAIR=1
+    Joint-topology scheduling in pair_plan: the first joint configuration of each
+    bridge hand is capped at (joint window remaining)/(hands not yet tried), so
+    the second hand is not starved when the first one uses the whole window
+    (60 s of the default 90 s trial). Later configurations are unchanged.
+PNR_PAIR_FALLBACK_RESERVE_SECONDS=<s>   (default 30 = unchanged)
+    Upper bound of the time pair_plan keeps after the joint-topology window for
+    the ten legacy topologies (min(<s>, remaining/3)). With the default 90 s trial
+    those get 3 s each and, on the Splanc USB chain, never route; a smaller value
+    widens the joint window that PNR_PAIR_JOINT_FAIR splits between the hands.
+PNR_PAIR_JOINT_HAND_FIRST=+1|-1   (normally set by paired_bootstrap, see
+    PNR_PAIR_HAND_SWAP_TRIAL there): the named bridge hand runs first within each
+    joint seed, and so gets the whole first-config window instead of the other hand.
+PNR_PAIR_PREFER_INLINE=1
+    Route choice in pair_plan: the score (vias, copper length) becomes (vias,
+    stub legs, copper length), so among complete routes with equal via count one
+    that keeps every intermediate device (ESD) in line beats one that leaves its
+    pad fanout as a stub. Selection only; no route is added or relaxed.
 """
 import argparse
 from collections import Counter,defaultdict
@@ -27,6 +66,53 @@ from pnr.via_in_pad import smd_keepout_violated,hole_keepouts
 def shove_enabled():
     """PNR_SHOVE=1 enables the make-room/scheduling extensions; unset is the default path."""
     return os.environ.get('PNR_SHOVE')=='1'
+
+
+def post_bridge_surface_enabled():
+    """PNR_PAIR_POST_BRIDGE_SURFACE=1: loop-checked surface legs + via-start after a bridge."""
+    return os.environ.get('PNR_PAIR_POST_BRIDGE_SURFACE')=='1'
+
+
+def joint_fair_enabled():
+    """PNR_PAIR_JOINT_FAIR=1: first joint config of each bridge hand gets a fair share."""
+    return os.environ.get('PNR_PAIR_JOINT_FAIR')=='1'
+
+
+def fallback_reserve_seconds():
+    """PNR_PAIR_FALLBACK_RESERVE_SECONDS: legacy-topology reserve after the joint window (default 30)."""
+    value=float(os.environ.get('PNR_PAIR_FALLBACK_RESERVE_SECONDS','30'))
+    if not math.isfinite(value) or value<0:raise ValueError('invalid pair fallback reserve seconds')
+    return value
+
+
+def hand_first_order(joint,first):
+    """PNR_PAIR_JOINT_HAND_FIRST=+1|-1 (set per trial by paired_bootstrap under
+    PNR_PAIR_HAND_SWAP_TRIAL=1): within each (join fraction, timing target) seed
+    the named bridge hand runs first. Unset/empty keeps the enumeration order."""
+    if not first:return joint
+    hand=int(first)
+    if hand not in (-1,1):raise ValueError('PNR_PAIR_JOINT_HAND_FIRST must be +1 or -1')
+    seeds={}
+    for c in joint:seeds.setdefault((c.get('join_fraction'),c.get('prefix_timing_target_mm')),len(seeds))
+    return sorted(joint,key=lambda c:(seeds[c.get('join_fraction'),c.get('prefix_timing_target_mm')],c.get('bridge_hand')!=hand))
+
+
+def prefer_inline_enabled():
+    """PNR_PAIR_PREFER_INLINE=1: among equal-via routes prefer fewer intermediate-pad stubs."""
+    return os.environ.get('PNR_PAIR_PREFER_INLINE')=='1'
+
+
+def stub_legs(segments):
+    """Chain legs that start at the previous bridge's vias (its pad fanout is left as a stub).
+
+    That is a surface leg started there (PNR_PAIR_POST_BRIDGE_SURFACE) or a layer
+    bridge reusing those vias (its source fanout lengths are all zero).
+    """
+    count=0
+    for index,segment in enumerate(segments):
+        if 'post_bridge_start' in segment:count+=1
+        elif index and segments[index-1].get('bridge_target') and segment.get('fanout_lengths') and not any(segment['fanout_lengths'][0].values()):count+=1
+    return count
 
 
 def xy(p):return (p.x/1e6,p.y/1e6)
@@ -731,11 +817,15 @@ def pair_plan(b,pair,rules,oracle,bounds,pitch):
         if not math.isfinite(joint_trial_seconds) or joint_trial_seconds<=0:raise ValueError('invalid joint topology trial seconds')
         positions={f.GetReference()+'.'+pad.GetNumber():xy(pad.GetPosition()) for f in b.GetFootprints() for pad in f.Pads()}
         joint=joint_topologies(pair,positions,max_trials=int(os.environ.get('PNR_PAIR_JOINT_MAX_TRIALS','6')),budget_scope=os.environ.get('PNR_PAIR_AUXILIARY_SCOPE','separate'))
+        joint=hand_first_order(joint,os.environ.get('PNR_PAIR_JOINT_HAND_FIRST'))
         joint_count=len(joint);configs=joint+configs
         now=time.monotonic();remaining=max(0.,deadline-now)
         # Keep a bounded fallback reserve. Do not divide one viable 60-second
         # joint search into eighteen subsecond trials merely to exhaust seeds.
-        joint_deadline=now+(remaining-min(30.,remaining/3) if math.isfinite(remaining) else joint_count*joint_trial_seconds)
+        # PNR_PAIR_FALLBACK_RESERVE_SECONDS (default 30) bounds that reserve.
+        reserve=fallback_reserve_seconds()
+        joint_deadline=now+(remaining-min(reserve,remaining/3) if math.isfinite(remaining) else joint_count*joint_trial_seconds)
+    fair=joint_fair_enabled();started_hands=set();prefer_inline=prefer_inline_enabled()
     for index,config in enumerate(configs):
         now=time.monotonic()
         if now>=deadline:break
@@ -743,6 +833,13 @@ def pair_plan(b,pair,rules,oracle,bounds,pitch):
             if now>=joint_deadline:
                 attempts.append(dict(config,status='joint_phase_budget',elapsed_seconds=0.));continue
             trial_deadline=min(deadline,joint_deadline,now+joint_trial_seconds)
+            hand=config.get('bridge_hand')
+            if fair and hand not in started_hands:
+                # PNR_PAIR_JOINT_FAIR: the first config of a hand must leave an
+                # equal share of the joint window to every hand not yet started.
+                waiting={c.get('bridge_hand') for c in configs[index:joint_count]}-started_hands
+                trial_deadline=min(trial_deadline,now+max(0.,joint_deadline-now)/max(1,len(waiting)))
+                started_hands.add(hand)
         else:trial_deadline=now+(deadline-now)/(len(configs)-index)
         trial=oracle.fork(trial_deadline);retained.append(trial)
         order=config['auxiliary_order']
@@ -753,17 +850,23 @@ def pair_plan(b,pair,rules,oracle,bounds,pitch):
         except TimeoutError:result=dict(status='time_budget',mode='pair')
         last=result;hits.update(trial.hits);via_hits.update(trial.via_hits)
         attempt=dict(config,status=result['status'],elapsed_seconds=time.monotonic()-now);attempts.append(attempt)
-        for key in ('failed_stage','endpoint_metrics','connector_endpoint_metrics'):
+        if fair and index<joint_count:attempt['budget_seconds']=trial_deadline-now
+        for key in ('failed_stage','endpoint_metrics','connector_endpoint_metrics','post_bridge_legs'):
             if key in result:attempt[key]=result[key]
         if result['status']=='routed':
             score=(len(result.get('pair_vias',[])),sum(math.dist(a,z) for _,_,a,z,_ in result.get('pair_tracks',[])))
+            if prefer_inline:score=(score[0],stub_legs(result.get('segments',[])),score[1])
             attempt['route_score']=score
             if best is None or score<best[0]:best=(score,result,trial)
+    flags={name:True for name,on in (('PNR_PAIR_POST_BRIDGE_SURFACE',post_bridge_surface_enabled()),('PNR_PAIR_JOINT_FAIR',fair),('PNR_PAIR_PREFER_INLINE',prefer_inline)) if on}
+    if os.environ.get('PNR_PAIR_JOINT_HAND_FIRST'):flags['PNR_PAIR_JOINT_HAND_FIRST']=int(os.environ['PNR_PAIR_JOINT_HAND_FIRST'])
+    if 'PNR_PAIR_FALLBACK_RESERVE_SECONDS' in os.environ:flags['PNR_PAIR_FALLBACK_RESERVE_SECONDS']=fallback_reserve_seconds()
+    extra=dict(pair_engine_flags=flags) if flags else {}
     if best:
         _,result,trial=best;oracle.__dict__.update(trial.__dict__);oracle.deadline=deadline;oracle.hits=hits;oracle.via_hits=via_hits
-        return dict(result,order_attempts=attempts)
+        return dict(result,order_attempts=attempts,**extra)
     oracle.hits.update(hits);oracle.via_hits.update(via_hits)
-    return dict(last or dict(status='time_budget',mode='pair'),order_attempts=attempts)
+    return dict(last or dict(status='time_budget',mode='pair'),order_attempts=attempts,**extra)
 
 
 
@@ -1129,6 +1232,22 @@ def connector_origins_qualified(pair,metrics):
     return bool(metrics) and all(all(m.get('valid',False) for m in values.values()) and abs(values[pair['p']]['length_mm']-values[pair['n']]['length_mm'])<=pair['skew_mm']+1e-6 for values in metrics.values())
 
 
+def surface_leg_graph_failure(pair,tracks,vias,paths,layer,origins,ends,thickness):
+    """None if planned pair copper plus one surface leg is a valid endpoint tree.
+
+    Same exact graph as the final endpoint check (pnr.route.detail.coupled.
+    path_metrics): tracks are (net,layer,a,z,width), vias (net,point), paths the
+    leg centerlines per net on `layer`; origins/ends are the declared chain origin
+    and this leg's end per net. Otherwise the first failing metric plus its net.
+    """
+    import pcbnew as k
+    for net in (pair['p'],pair['n']):
+        leg=[(layer,a,z) for a,z in zip(paths[net],paths[net][1:])]
+        metric=path_metrics([(la,a,z) for nn,la,a,z,w in tracks if nn==net]+leg,[(pt,[k.F_Cu,k.B_Cu]) for nn,pt in vias if nn==net],(tuple(origins[net]),k.F_Cu),(tuple(ends[net]),k.F_Cu),layer_heights={k.F_Cu:0,k.B_Cu:thickness})
+        if not metric.get('valid'):return dict(net=net,reason=metric.get('reason'),connected=metric.get('connected'))
+    return None
+
+
 def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order,topology=None):
     import pcbnew as k
     topology=topology or {};hand=topology.get('bridge_hand',0);takeoff=topology.get('takeoff','auxiliary_source')
@@ -1201,6 +1320,7 @@ def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order,topology=N
         joint=branch_join_port(pair,found,oracle,rules,topology.get('join_fraction',.5),budget_scope=topology.get('auxiliary_budget_scope','combined'))
         if joint['status']!='routed':return joint
         joint_source_port=joint['port'];accumulated=joint['declared_offsets']
+    post_bridge=post_bridge_surface_enabled();post_bridge_legs=[]
     for stage,(first,last) in enumerate(zip(routing_endpoints,routing_endpoints[1:])):
         if stage:
             actual={} 
@@ -1222,7 +1342,39 @@ def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order,topology=N
             terminals[net]=(xy(a.GetPosition()),xy(z.GetPosition()))
         def clear(net,a,z,width):return oracle.clear(net,la,a,z,width,pair=pair)
         def envelope(a,z,width):return oracle.clear(p,la,a,z,width,ignore_nets=(p,n)) and reference_validator.center(tuple(a),tuple(z),width+pair['gap_mm'])
-        result=dict(status='joint_source_via_requested') if (stage==0 and joint_source_port) else solve_pair(p,n,terminals,bounds,clear,envelope,pair['width_mm'],pair['gap_mm'],pair['skew_mm'] if stage==len(endpoints)-2 else 1e9,pitch=pitch,max_expansions=30000,max_attempts=128,max_uncoupled=pair.get('max_uncoupled_mm',2),offsets=accumulated,accept_paths=lambda paths:reference_validator(paths,pair.get('max_uncoupled_mm',2)))
+        def surface(leg_terminals,leg_offsets):
+            return solve_pair(p,n,leg_terminals,bounds,clear,envelope,pair['width_mm'],pair['gap_mm'],pair['skew_mm'] if stage==len(endpoints)-2 else 1e9,pitch=pitch,max_expansions=30000,max_attempts=128,max_uncoupled=pair.get('max_uncoupled_mm',2),offsets=leg_offsets,accept_paths=lambda paths:reference_validator(paths,pair.get('max_uncoupled_mm',2)))
+        def leg_graph_failure(leg):
+            # PNR_PAIR_POST_BRIDGE_SURFACE: the leg must leave the planned copper
+            # a valid endpoint tree (the final check would reject a loop anyway).
+            return surface_leg_graph_failure(pair,tracks,vias,leg['paths'],la,{net:xy(bylabel[endpoints[0][key]].GetPosition()) for net,key in ((p,'p'),(n,'n'))},{net:terminals[net][1] for net in (p,n)},rules['electrical_fab']['board_thickness_mm'])
+        result=dict(status='joint_source_via_requested') if (stage==0 and joint_source_port) else surface(terminals,accumulated)
+        if post_bridge and result['status']=='routed':
+            broken=leg_graph_failure(result)
+            if broken:
+                post_bridge_legs.append(dict(stage=stage,start='pad',status='pair_surface_leg_cycle',net=broken['net'],reason=broken.get('reason')))
+                result=dict(status='pair_surface_leg_cycle',net=broken['net'],reason=broken.get('reason'))
+            elif metrics and metrics[-1].get('bridge_target'):post_bridge_legs.append(dict(stage=stage,start='pad',status='routed'))
+        if post_bridge and result['status']!='routed' and metrics and metrics[-1].get('bridge_target'):
+            # Start the surface leg at the previous bridge's via pair; its
+            # via-to-pad fanout stays as the intermediate device's stub (the
+            # topology of the bridge-to-bridge reuse below, without new vias).
+            old=metrics[-1]['bridge_target']
+            via_terminals={net:(tuple(old['sites'][net]),terminals[net][1]) for net in (p,n)}
+            via_offsets={net:accumulated[net]-old['lengths'][net] for net in (p,n)}
+            alternative=surface(via_terminals,via_offsets)
+            record=dict(stage=stage,start='bridge_vias',status=alternative['status'],sites={net:via_terminals[net][0] for net in (p,n)})
+            if alternative['status']=='routed':
+                broken=leg_graph_failure(alternative)
+                if broken:
+                    record.update(status='pair_surface_leg_cycle',net=broken['net'],reason=broken.get('reason'))
+                    alternative=dict(status='pair_surface_leg_cycle')
+            else:record['failures']=alternative.get('failures',{})
+            post_bridge_legs.append(record)
+            if alternative['status']=='routed':
+                alternative['post_bridge_start']=dict(sites={net:via_terminals[net][0] for net in (p,n)},stub_lengths=dict(old['lengths']))
+                result=alternative
+            else:result=dict(result,post_bridge_via_start=record)
         if result['status']!='routed':
             surface_failure=result
             reuse=(joint_source_port if stage==0 else None);bridge_offsets=accumulated
@@ -1233,7 +1385,7 @@ def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order,topology=N
                 # in the connector-to-receiver timing path.
                 bridge_offsets={net:accumulated[net]-old['lengths'][net]-rules['electrical_fab']['board_thickness_mm'] for net in (p,n)}
             result=pair_layer_bridge(b,pair,terminals,rules,oracle,bounds,pitch,bridge_offsets,reuse_source=reuse,reference_validator=reference_validator,prior_reference=[m["reference_paths"] for m in metrics],prior_vias=vias,solution_index=topology.get("target_port_rank",0) if stage==0 else 0,max_expansions=60000 if stage and takeoff=='bridge_join_via' else 15000,timing_target_mm=topology.get("prefix_timing_target_mm",0) if stage==0 else 0)
-            if result['status']!='routed':return dict(result,failed_stage=stage,terminals=terminals,surface_failure=surface_failure,planned_tracks=tracks,joint_source_port=joint_source_port)
+            if result['status']!='routed':return dict(result,failed_stage=stage,terminals=terminals,surface_failure=surface_failure,planned_tracks=tracks,joint_source_port=joint_source_port,**({'post_bridge_legs':post_bridge_legs} if post_bridge else {}))
         if result.get('pair_tracks'):
             metrics.append(result);accumulated=dict(result['lengths'])
             tracks.extend(result['pair_tracks']);vias.extend(result['pair_vias'])
@@ -1274,11 +1426,12 @@ def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order,topology=N
     for net,key in ((p,'p'),(n,'n')):
         first,last=bylabel[endpoints[0][key]],bylabel[endpoints[-1][key]]
         endpoint_metrics[net]=path_metrics([(la,a,z) for nn,la,a,z,w in tracks if nn==net],[(pt,[k.F_Cu,k.B_Cu]) for nn,pt in vias if nn==net],(xy(first.GetPosition()),k.F_Cu),(xy(last.GetPosition()),k.F_Cu),layer_heights={k.F_Cu:0,k.B_Cu:rules['electrical_fab']['board_thickness_mm']})
-    if not all(v.get('valid') for v in endpoint_metrics.values()):return dict(status='pair_endpoint_graph_invalid',endpoint_metrics=endpoint_metrics)
-    if abs(endpoint_metrics[p]['length_mm']-endpoint_metrics[n]['length_mm'])>pair['skew_mm']+1e-6:return dict(status='pair_endpoint_skew',endpoint_metrics=endpoint_metrics)
+    trace={'post_bridge_legs':post_bridge_legs} if post_bridge else {}
+    if not all(v.get('valid') for v in endpoint_metrics.values()):return dict(status='pair_endpoint_graph_invalid',endpoint_metrics=endpoint_metrics,**trace)
+    if abs(endpoint_metrics[p]['length_mm']-endpoint_metrics[n]['length_mm'])>pair['skew_mm']+1e-6:return dict(status='pair_endpoint_skew',endpoint_metrics=endpoint_metrics,**trace)
     duplicate_metrics=duplicate_endpoint_metrics(pair,bylabel,tracks,vias,rules['electrical_fab']['board_thickness_mm'])
-    if not connector_origins_qualified(pair,duplicate_metrics):return dict(status='pair_duplicate_endpoint_skew',endpoint_metrics=endpoint_metrics,connector_endpoint_metrics=duplicate_metrics)
-    return dict(status='routed',pair_tracks=tracks,pair_vias=vias,segments=metrics,auxiliary=auxiliary,topology=topology,joint_source_port=joint_source_port,endpoint_metrics=endpoint_metrics,connector_endpoint_metrics=duplicate_metrics,mode='pair',via_diameter_mm=diameter,via_drill_mm=drill,impedance_qualified=False)
+    if not connector_origins_qualified(pair,duplicate_metrics):return dict(status='pair_duplicate_endpoint_skew',endpoint_metrics=endpoint_metrics,connector_endpoint_metrics=duplicate_metrics,**trace)
+    return dict(status='routed',pair_tracks=tracks,pair_vias=vias,segments=metrics,auxiliary=auxiliary,topology=topology,joint_source_port=joint_source_port,endpoint_metrics=endpoint_metrics,connector_endpoint_metrics=duplicate_metrics,mode='pair',via_diameter_mm=diameter,via_drill_mm=drill,impedance_qualified=False,**trace)
 
 def screen_pair_placements(board_path,rules,pair,proposals,bounds):
     """Order legal placement proposals by exact paired escape availability.

@@ -916,3 +916,31 @@ nothing; in the hier flow the only routing -> placement effect was PNR_SHOVE nud
 * E2E (one native evaluation, 1 worker, 240 s, 385 s wall): nb5-noshove converter s1-34x34
   rebased under src11 (plain): 2 -> 2 opens; input = nb5 stage-A layout; stamped code 97e9032431
   = the code derived from the new round's origins.json; library ranks only the rebase (12 stale).
+
+## src12b (2026-09-29): USB pair chain after a via bridge (opt-in flags, default off)
+
+src12b = src12 + opt-in flags in pnr/native_electrical.py and pnr/paired_bootstrap.py (unset =
+src12 behaviour; the 336 native_electrical/paired_bootstrap tests are unchanged, +12 new in
+tests/test_pair_post_bridge.py under KiCad Python). Validation and commands: hier/pairs/fix-README.md.
+
+* PNR_PAIR_POST_BRIDGE_SURFACE=1 (_pair_plan_order): every routed surface leg is checked with the
+  exact endpoint graph (surface_leg_graph_failure -> path_metrics). Oracle.clear ignores same-net
+  copper, so the D2->U6 leg could cross the stage-0 bridge's via->D2-pad fanout; that loop was only
+  rejected at the end (pair_endpoint_graph_invalid). A looping leg is now pair_surface_leg_cycle;
+  after a bridge the next fallback is a surface leg from that bridge's via pair (offsets = measured
+  prefix - fanout; D2 fanout becomes a stub as in the old bridge->bridge reuse; 0 new vias), then
+  the old reuse bridge. Records: post_bridge_legs, segment post_bridge_start.
+* PNR_PAIR_HAND_SWAP_TRIAL=1 (paired_bootstrap, needs PNR_PAIR_JOINT_TOPOLOGIES=1): one extra
+  trial after trial 0 on the unmoved pose with PNR_PAIR_JOINT_HAND_FIRST=-1 (pair_plan runs hand
+  -1 first within each joint seed). Hand +1 alone can use the whole 60 s joint window.
+* PNR_PAIR_JOINT_FAIR=1 (pair_plan): first config per hand capped at window/hands-not-started.
+  Works at PNR_PAIR_SEARCH_SECONDS=300, but at 90 s it loses p007 (hand +1 needs 22-46 s) -> use
+  HAND_SWAP_TRIAL instead. PNR_PAIR_FALLBACK_RESERVE_SECONDS (default 30) did not change that.
+* PNR_PAIR_PREFER_INLINE=1 (pair_plan score): (vias, stub legs, length) - keeps D2 in line when
+  an equal-via in-line route exists.
+
+Recommended: POST_BRIDGE_SURFACE=1 + HAND_SWAP_TRIAL=1 at the default 90 s trial: h4p032, g1c04,
+g1c05 0/5 -> accepted (4 vias, skew 0.203-0.285 <= 0.3, 0 DRC violations, opens 266 -> 260);
+controls p007 (t0) and h3p010 (production route, one trial later) identical to production.
+Still failing (stage 1, TP1 landing blocker + shared uncoupled budget = design proposals 2/3):
+ab-h4p030, ab-deepS, ab-h5r0, h3p035, g1c00.

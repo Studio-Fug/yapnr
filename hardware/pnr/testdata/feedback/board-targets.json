@@ -1,0 +1,271 @@
+{
+"source": "runs/h3/cand/p010/native/feedback.json (targets, native_opens 38)",
+"targets": [
+{
+"net": "board-1-3",
+"source": "C36.1",
+"target": "U11.1",
+"mode": "power",
+"distance": 2.7517131027779804
+},
+{
+"net": "raw_usb-hv",
+"source": "USB1.A4B9",
+"target": "USB1.B4A9",
+"mode": "power",
+"distance": 4.799999999999997
+},
+{
+"net": "board-1-3",
+"source": "U11.1",
+"target": "C33.1",
+"mode": "power",
+"distance": 5.037511786586709
+},
+{
+"net": "raw_usb-hv",
+"source": "C57.1",
+"target": "U19.33",
+"mode": "power",
+"distance": 5.398900350997408
+},
+{
+"net": "board.led0-B",
+"source": "R21.1",
+"target": "U9.4",
+"mode": "signal",
+"distance": 5.619399434103264
+},
+{
+"net": "negotiated-hv",
+"source": "C14.1",
+"target": "R6.1",
+"mode": "power",
+"distance": 5.906915438704031
+},
+{
+"net": "20",
+"source": "U5.20",
+"target": "C9.1",
+"mode": "signal",
+"distance": 6.079031584060079
+},
+{
+"net": "negotiated-hv",
+"source": "C13.1",
+"target": "C15.1",
+"mode": "power",
+"distance": 6.8710152088319525
+},
+{
+"net": "negotiated-hv",
+"source": "U5.3",
+"target": "C14.1",
+"mode": "power",
+"distance": 7.375
+},
+{
+"net": "raw_usb-hv",
+"source": "C55.1",
+"target": "C57.1",
+"mode": "power",
+"distance": 7.5
+},
+{
+"net": "raw_usb-hv",
+"source": "USB1.B4A9",
+"target": "C55.1",
+"mode": "power",
+"distance": 8.041595272664749
+},
+{
+"net": "p5v-hv",
+"source": "R13.2",
+"target": "TP1.5",
+"mode": "power",
+"distance": 8.06900396579404
+},
+{
+"net": "negotiated-hv",
+"source": "U19.20",
+"target": "C61.1",
+"mode": "power",
+"distance": 8.086477910685222
+},
+{
+"net": "sda",
+"source": "U17.14",
+"target": "TP1.13",
+"mode": "signal",
+"distance": 8.091983687576247
+},
+{
+"net": "nFAULT_IN",
+"source": "U18.9",
+"target": "U19.18",
+"mode": "signal",
+"distance": 8.442822395384141
+},
+{
+"net": "negotiated-hv",
+"source": "U5.3",
+"target": "Q1.9",
+"mode": "power",
+"distance": 9.198131603755185
+},
+{
+"net": "sda",
+"source": "U19.8",
+"target": "U1.4",
+"mode": "signal",
+"distance": 9.202582517967445
+},
+{
+"net": "scl",
+"source": "U19.9",
+"target": "U1.2",
+"mode": "signal",
+"distance": 9.780619867881592
+},
+{
+"net": "board.converter-2",
+"source": "U5.21",
+"target": "L2.2",
+"mode": "power",
+"distance": 10.424275754219092
+},
+{
+"net": "CC2",
+"source": "U18.11",
+"target": "U19.29",
+"mode": "signal",
+"distance": 10.497202008154362
+},
+{
+"net": "board-1-3",
+"source": "CN2.1",
+"target": "C36.1",
+"mode": "power",
+"distance": 11.567141457556799
+},
+{
+"net": "5",
+"source": "R29.1",
+"target": "U19.5",
+"mode": "signal",
+"distance": 12.479043432891809
+},
+{
+"net": "MODE",
+"source": "U5.15",
+"target": "R11.1",
+"mode": "signal",
+"distance": 12.691281456180855
+},
+{
+"net": "sda",
+"source": "U4.B2",
+"target": "U19.8",
+"mode": "signal",
+"distance": 12.913776558389102
+},
+{
+"net": "board-fault",
+"source": "U11.3",
+"target": "TP1.8",
+"mode": "signal",
+"distance": 13.01092809910193
+},
+{
+"net": "scl",
+"source": "U4.A2",
+"target": "U19.9",
+"mode": "signal",
+"distance": 13.048587088263618
+},
+{
+"net": "board-fault",
+"source": "R23.2",
+"target": "U11.3",
+"mode": "signal",
+"distance": 13.203348060245936
+},
+{
+"net": "scl",
+"source": "U6.7",
+"target": "U19.9",
+"mode": "signal",
+"distance": 13.901268774191946
+},
+{
+"net": "sda",
+"source": "U6.6",
+"target": "U19.8",
+"mode": "signal",
+"distance": 14.571354553792318
+},
+{
+"net": "scl",
+"source": "R32.2",
+"target": "TP1.14",
+"mode": "signal",
+"distance": 15.084274095892042
+},
+{
+"net": "A5",
+"source": "USB1.A5",
+"target": "U18.7",
+"mode": "signal",
+"distance": 15.806021748983644
+},
+{
+"net": "data_out",
+"source": "CN1.2",
+"target": "R21.2",
+"mode": "signal",
+"distance": 17.189414241012663
+},
+{
+"net": "sda",
+"source": "U17.14",
+"target": "U19.8",
+"mode": "signal",
+"distance": 18.139494204635366
+},
+{
+"net": "scl",
+"source": "U17.13",
+"target": "U19.9",
+"mode": "signal",
+"distance": 18.231188935447953
+},
+{
+"net": "sda",
+"source": "U4.B2",
+"target": "R33.2",
+"mode": "signal",
+"distance": 18.379211082089462
+},
+{
+"net": "fault",
+"source": "U7.3",
+"target": "U8.3",
+"mode": "signal",
+"distance": 19.096733359399455
+},
+{
+"net": "fault",
+"source": "U6.26",
+"target": "TP1.7",
+"mode": "signal",
+"distance": 23.256110487188614
+},
+{
+"net": "INT1_INT",
+"source": "U17.4",
+"target": "U6.19",
+"mode": "signal",
+"distance": 25.163481683430135
+}
+]
+}

@@ -1,0 +1,287 @@
+{
+ "scope": "all electrical modes after final refill",
+ "targets": [
+  {
+   "restoration_required": false,
+   "net": "EN_UVLO",
+   "source": "U5.4",
+   "target": "R6.2",
+   "source_uuid": "c1aab11c-85d4-4474-8fba-aba1445654ed",
+   "target_uuid": "05adadba-4d08-5ca2-9a6d-451ff69f8239",
+   "source_xy": [
+    43.425,
+    45.335
+   ],
+   "target_xy": [
+    48.8,
+    42.355
+   ],
+   "distance": 6.145813615787581,
+   "mode": "signal",
+   "pair_name": null,
+   "related_refs": []
+  },
+  {
+   "restoration_required": false,
+   "net": "board.converter-FB",
+   "source": "U5.14",
+   "target": "R7.1",
+   "source_uuid": "9aa2e389-a8b9-41dd-aebe-b2eb7e962d6a",
+   "target_uuid": "4d58fb38-1def-5391-95dd-df5965cc65e8",
+   "source_xy": [
+    42.425,
+    49.075
+   ],
+   "target_xy": [
+    44.995,
+    55.05
+   ],
+   "distance": 6.504269751478634,
+   "mode": "signal",
+   "pair_name": null,
+   "related_refs": []
+  },
+  {
+   "restoration_required": false,
+   "net": "board.converter-1",
+   "source": "U5.23",
+   "target": "L2.1",
+   "source_uuid": "94db57cd-8eb6-42a8-a529-d34f11cc9071",
+   "target_uuid": "22111130-867f-4e7a-8ac7-eea02f2fecb0",
+   "source_xy": [
+    45.065,
+    46.125
+   ],
+   "target_xy": [
+    54.8,
+    43.175
+   ],
+   "distance": 10.172154393244334,
+   "mode": "power",
+   "pair_name": null,
+   "related_refs": [],
+   "root_box": [
+    36.48,
+    30.83,
+    56.55,
+    50.255
+   ],
+   "leaf_rms_a": 0.2
+  },
+  {
+   "restoration_required": false,
+   "net": "DR1H",
+   "source": "U5.2",
+   "target": "Q1.4",
+   "source_uuid": "49ddb3bd-84a0-4360-a815-0da94961b0df",
+   "target_uuid": "9bebb89b-42bb-5c95-b33b-966e069f9dfb",
+   "source_xy": [
+    44.425,
+    45.275
+   ],
+   "target_xy": [
+    43.025,
+    33.33
+   ],
+   "distance": 12.026762864545056,
+   "mode": "signal",
+   "pair_name": null,
+   "related_refs": []
+  },
+  {
+   "restoration_required": false,
+   "net": "EN_UVLO",
+   "source": "U5.4",
+   "target": "R5.1",
+   "source_uuid": "c1aab11c-85d4-4474-8fba-aba1445654ed",
+   "target_uuid": "8179f794-da46-5605-bb47-0c0c26f0ba92",
+   "source_xy": [
+    43.425,
+    45.335
+   ],
+   "target_xy": [
+    44.8,
+    58.495
+   ],
+   "distance": 13.231637275862722,
+   "mode": "signal",
+   "pair_name": null,
+   "related_refs": []
+  }
+ ],
+ "native_opens": 5,
+ "component_scores": {
+  "U5": 57.42790426926514,
+  "R6": 8.463142816751795,
+  "R7": 8.960504889331965,
+  "L2": 7.2070975223629326,
+  "Q1": 10.064798367206523,
+  "R5": 7.35109927325927,
+  "C17": 1.6569569614528,
+  "C9": 1.9809111176409897,
+  "C13": 1.5764154521916491,
+  "C15": 1.156795408719617,
+  "R4": 1.4829929387003729,
+  "C16": 0.6475376940001123,
+  "R8": 0.4573280879730614,
+  "C24": 0.7767028388787526,
+  "C23": 1.380764842884893,
+  "C21": 1.091023276892407,
+  "C18": 1.3686879324635417,
+  "C8": 3.3398590198648246,
+  "C11": 1.2005614711666648,
+  "C22": 1.5310558812187303,
+  "R3": 1.5142821173245717,
+  "R13": 0.21755172665652348,
+  "R11": 1.4430506108517982,
+  "Q2": 5.187574577963711,
+  "C10": 0.3996503150899523,
+  "C14": 0.3369654980624097,
+  "C25": 0.381817475501089,
+  "C19": 0.05857610686259172,
+  "R12": 0.03778714769973188
+ },
+ "routing_failure_scores": {
+  "U5": 52.42790426926514,
+  "R6": 7.4631428167517955,
+  "C17": 1.6569569614528,
+  "C9": 1.9809111176409897,
+  "C13": 1.5764154521916491,
+  "Q1": 9.064798367206523,
+  "C15": 1.156795408719617,
+  "R4": 1.4829929387003729,
+  "C16": 0.6475376940001123,
+  "R8": 0.4573280879730614,
+  "C24": 0.7767028388787526,
+  "R7": 7.960504889331966,
+  "C23": 1.380764842884893,
+  "C21": 1.091023276892407,
+  "C18": 1.3686879324635417,
+  "C8": 3.3398590198648246,
+  "C11": 1.2005614711666648,
+  "C22": 1.5310558812187303,
+  "R3": 1.5142821173245717,
+  "R13": 0.21755172665652348,
+  "R11": 1.4430506108517982,
+  "R5": 6.35109927325927,
+  "L2": 6.2070975223629326,
+  "Q2": 5.187574577963711,
+  "C10": 0.3996503150899523,
+  "C14": 0.3369654980624097,
+  "C25": 0.381817475501089,
+  "C19": 0.05857610686259172,
+  "R12": 0.03778714769973188
+ },
+ "shove": {
+  "events": [
+   {
+    "loop": "early-power",
+    "status": "routed",
+    "target": {
+     "net": "board.converter-1-3",
+     "source": "C17.1",
+     "target": "U5.26"
+    }
+   },
+   {
+    "loop": "early-power",
+    "status": "no_make_room",
+    "target": {
+     "net": "board.converter-1",
+     "source": "U5.23",
+     "target": "L2.1"
+    }
+   },
+   {
+    "loop": "early-power",
+    "status": "no_make_room",
+    "target": {
+     "net": "board.converter-1",
+     "source": "U5.23",
+     "target": "Q2.9"
+    }
+   },
+   {
+    "loop": "early-power-refine",
+    "status": "no_make_room",
+    "target": {
+     "net": "board.converter-1-3",
+     "source": "C17.1",
+     "target": "U5.26"
+    }
+   },
+   {
+    "loop": "early-power-refine",
+    "status": "no_make_room",
+    "target": {
+     "net": "board.converter-1",
+     "source": "U5.23",
+     "target": "L2.1"
+    }
+   },
+   {
+    "loop": "early-power-refine",
+    "status": "no_make_room",
+    "target": {
+     "net": "board.converter-1",
+     "source": "U5.23",
+     "target": "Q2.9"
+    }
+   },
+   {
+    "loop": ".",
+    "status": "routed",
+    "target": {
+     "net": "board.converter-1-3",
+     "source": "C17.1",
+     "target": "U5.26"
+    }
+   },
+   {
+    "loop": ".",
+    "status": "no_make_room",
+    "target": {
+     "net": "board.converter-1",
+     "source": "U5.23",
+     "target": "L2.1"
+    }
+   },
+   {
+    "loop": ".",
+    "status": "no_make_room",
+    "target": {
+     "net": "board.converter-1",
+     "source": "U5.23",
+     "target": "Q2.9"
+    }
+   },
+   {
+    "loop": ".",
+    "status": "no_make_room",
+    "target": {
+     "net": "board.converter-1",
+     "source": "U5.23",
+     "target": "L2.1"
+    }
+   },
+   {
+    "loop": ".",
+    "status": "no_make_room",
+    "target": {
+     "net": "board.converter-1",
+     "source": "U5.23",
+     "target": "Q2.9"
+    }
+   },
+   {
+    "loop": ".",
+    "status": "no_make_room",
+    "target": {
+     "net": "board.converter-1",
+     "source": "U5.23",
+     "target": "L2.1"
+    }
+   }
+  ]
+ }
+}

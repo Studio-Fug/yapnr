@@ -109,8 +109,27 @@ def draw_layout(tier, rng, ratio=None):
     return len(tier) - 1, tier[-1]
 
 
-def hierarchical_place(graph, constraints, rules, library, seed, iters=600):
-    """Return (flat placed graph, placement report, choice record)."""
+def macro_pair_weights(pair_weights, plan):
+    """Flat pad-pair weights {(ref_a, pad_a, ref_b, pad_b): w} on the macro graph.
+
+    A block member's pad is the macro pad ``'<ref>.<pad>'`` of its macro; pairs
+    inside one macro are rigid there and dropped; duplicates add up."""
+    out = {}
+    for (ra, pa, rb, pb), w in (pair_weights or {}).items():
+        ma, mb = plan.member_of.get(ra), plan.member_of.get(rb)
+        if ma is not None and ma == mb:
+            continue
+        a = (ma, '%s.%s' % (ra, pa)) if ma else (ra, pa)
+        b = (mb, '%s.%s' % (rb, pb)) if mb else (rb, pb)
+        out[(a[0], a[1], b[0], b[1])] = out.get((a[0], a[1], b[0], b[1]), 0.0) + float(w)
+    return out or None
+
+
+def hierarchical_place(graph, constraints, rules, library, seed, iters=600, pair_weights=None):
+    """Return (flat placed graph, placement report, choice record).
+
+    ``pair_weights`` (flat refs, pnr.feedback) become a pad-pair attraction on the
+    macro placement; None leaves it as before."""
     from pnr.place.initial_pool import preserve_source_locks, _prepared_source
     from pnr.place.placer import place
     rng = random.Random(seed)
@@ -135,7 +154,7 @@ def hierarchical_place(graph, constraints, rules, library, seed, iters=600):
                                   native_dir=boards.get(b.name))
     mgraph, mcon, mrules, plan = collapse(source, constraints, rules, layouts)
     placed_macro, report = place(mgraph, mcon, seed=seed, iters=iters, orient=True, spread=1.0,
-                                 channel_rules=mrules)
+                                 channel_rules=mrules, pair_weights=macro_pair_weights(pair_weights, plan))
     flat = plan.expand(placed_macro, source)
     return flat, report, dict(blocks=choice, macro_legal=report.legal,
                               macros={m: dict(block=v['block'], width=v['width'], height=v['height'])

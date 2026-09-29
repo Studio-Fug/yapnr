@@ -1,0 +1,334 @@
+{
+"components": [
+{
+"ref": "C12",
+"address": "board.converter.compensation_pole",
+"pos": [
+16.675,
+24.8
+],
+"rot": 0.0,
+"side": "top"
+},
+{
+"ref": "C22",
+"address": "board.converter.output_cap6._p",
+"pos": [
+23.55,
+17.175
+],
+"rot": 0.0,
+"side": "top"
+},
+{
+"ref": "C17",
+"address": "board.converter.output_cap1._p",
+"pos": [
+18.3,
+26.925
+],
+"rot": 0.0,
+"side": "top"
+},
+{
+"ref": "U5",
+"address": "board.converter.ic",
+"pos": [
+12.925,
+16.425
+],
+"rot": 180.0,
+"side": "top"
+},
+{
+"ref": "R4",
+"address": "board.converter.current_limit._p",
+"pos": [
+24.05,
+14.425
+],
+"rot": -90.0,
+"side": "top"
+},
+{
+"ref": "C25",
+"address": "board.converter.vcc_dec._p",
+"pos": [
+14.3,
+20.175
+],
+"rot": 180.0,
+"side": "top"
+},
+{
+"ref": "Q2",
+"address": "board.converter.low_fet",
+"pos": [
+15.175,
+8.175
+],
+"rot": 180.0,
+"side": "top"
+},
+{
+"ref": "R7",
+"address": "board.converter.fb_bottom._p",
+"pos": [
+14.8,
+28.175
+],
+"rot": 90.0,
+"side": "top"
+},
+{
+"ref": "C23",
+"address": "board.converter.output_cap7._p",
+"pos": [
+12.175,
+28.05
+],
+"rot": 90.0,
+"side": "top"
+},
+{
+"ref": "C21",
+"address": "board.converter.output_cap5._p",
+"pos": [
+14.425,
+24.8
+],
+"rot": 90.0,
+"side": "top"
+},
+{
+"ref": "R11",
+"address": "board.converter.mode",
+"pos": [
+16.675,
+22.05
+],
+"rot": 0.0,
+"side": "top"
+},
+{
+"ref": "C18",
+"address": "board.converter.output_cap2._p",
+"pos": [
+6.925,
+26.8
+],
+"rot": 90.0,
+"side": "top"
+},
+{
+"ref": "L2",
+"address": "board.converter.inductor",
+"pos": [
+6.3,
+7.425
+],
+"rot": 90.0,
+"side": "top"
+},
+{
+"ref": "C16",
+"address": "board.converter.output_cap0._p",
+"pos": [
+9.175,
+27.8
+],
+"rot": 90.0,
+"side": "top"
+},
+{
+"ref": "C13",
+"address": "board.converter.input_cap0",
+"pos": [
+23.3,
+21.925
+],
+"rot": 0.0,
+"side": "top"
+},
+{
+"ref": "C10",
+"address": "board.converter.compensation_a._p",
+"pos": [
+9.175,
+22.05
+],
+"rot": 0.0,
+"side": "top"
+},
+{
+"ref": "C8",
+"address": "board.converter.bootstrap1._p",
+"pos": [
+9.8,
+19.925
+],
+"rot": -90.0,
+"side": "top"
+},
+{
+"ref": "R13",
+"address": "board.converter.shunt._p",
+"pos": [
+4.8,
+18.175
+],
+"rot": 180.0,
+"side": "top"
+},
+{
+"ref": "C14",
+"address": "board.converter.input_cap1",
+"pos": [
+19.3,
+14.675
+],
+"rot": 180.0,
+"side": "top"
+},
+{
+"ref": "R5",
+"address": "board.converter.enable_bottom._p",
+"pos": [
+17.675,
+20.55
+],
+"rot": 0.0,
+"side": "top"
+},
+{
+"ref": "C19",
+"address": "board.converter.output_cap3._p",
+"pos": [
+5.55,
+23.175
+],
+"rot": 180.0,
+"side": "top"
+},
+{
+"ref": "R6",
+"address": "board.converter.enable_top._p",
+"pos": [
+19.675,
+19.05
+],
+"rot": 180.0,
+"side": "top"
+},
+{
+"ref": "R9",
+"address": "board.converter.frequency1._p",
+"pos": [
+24.175,
+19.05
+],
+"rot": 0.0,
+"side": "top"
+},
+{
+"ref": "C20",
+"address": "board.converter.output_cap4._p",
+"pos": [
+5.8,
+20.675
+],
+"rot": 180.0,
+"side": "top"
+},
+{
+"ref": "R8",
+"address": "board.converter.fb_top._p",
+"pos": [
+19.05,
+24.675
+],
+"rot": 90.0,
+"side": "top"
+},
+{
+"ref": "Q1",
+"address": "board.converter.high_fet",
+"pos": [
+21.425,
+8.8
+],
+"rot": 0.0,
+"side": "top"
+},
+{
+"ref": "R3",
+"address": "board.converter.compensation_r._p",
+"pos": [
+2.425,
+21.3
+],
+"rot": 180.0,
+"side": "top"
+},
+{
+"ref": "C11",
+"address": "board.converter.compensation_b._p",
+"pos": [
+20.925,
+24.8
+],
+"rot": 0.0,
+"side": "top"
+},
+{
+"ref": "C9",
+"address": "board.converter.bootstrap2._p",
+"pos": [
+11.3,
+20.925
+],
+"rot": 90.0,
+"side": "top"
+},
+{
+"ref": "R10",
+"address": "board.converter.frequency2._p",
+"pos": [
+8.3,
+18.425
+],
+"rot": 90.0,
+"side": "top"
+},
+{
+"ref": "C24",
+"address": "board.converter.output_hf._p",
+"pos": [
+9.05,
+15.175
+],
+"rot": -90.0,
+"side": "top"
+},
+{
+"ref": "C15",
+"address": "board.converter.input_hf._p",
+"pos": [
+17.55,
+18.175
+],
+"rot": 90.0,
+"side": "top"
+},
+{
+"ref": "R12",
+"address": "board.converter.pg_pullup._p",
+"pos": [
+10.425,
+23.925
+],
+"rot": 0.0,
+"side": "top"
+}
+]
+}

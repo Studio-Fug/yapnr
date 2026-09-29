@@ -73,6 +73,7 @@ def place(
     channel_rules: Optional[dict] = None,
     initial_positions: Optional[Dict[str, Tuple[float, float]]] = None,
     initial_rotations: Optional[Dict[str, float]] = None,
+    pair_weights: Optional[Dict[Tuple[str, str, str, str], float]] = None,
 ) -> Tuple[BoardGraph, PlacementReport]:
     """Place ``graph`` under ``constraints``; return the placed graph + report.
 
@@ -80,8 +81,11 @@ def place(
     so the report shows the improvement. With ``orient`` the placer also picks a
     90° rotation per movable part (Phase 3). ``inflation`` (ref → spreading
     multiplier) is the routing-feedback hook (§6): the place↔route loop grows the
-    footprint of congested parts so the next round spreads them. Deterministic
-    under a fixed ``seed``.
+    footprint of congested parts so the next round spreads them.
+    ``pair_weights`` ({(ref_a, pad_a, ref_b, pad_b): w}) adds a pad-pair
+    attraction ``w * |pad_a - pad_b|`` to the global objective (pnr.feedback:
+    connections that often fail routing); None leaves the objective untouched.
+    Deterministic under a fixed ``seed``.
     """
     # Edge rows are optimized across complete global starts. These temporary
     # search choices are distinct from authored absolute locks.
@@ -116,7 +120,7 @@ def place(
             inflation=inflation, spread=spread, channel_rules=channel_rules,
             initial_positions=initial_positions, initial_rotations=initial_rotations, poses=poses,
             keepouts=keepouts, clearance=clearance, grid_mm=grid_mm,
-            legalize_spread=min(spread, _LEGALIZE_SPREAD_CAP),
+            legalize_spread=min(spread, _LEGALIZE_SPREAD_CAP), pair_weights=pair_weights,
             mobility={ref:dict(source_fixed=not bool(c.params.get('row_trial')),row_trial=c.params.get('row_trial'))
                       for c in constraints.constraints if c.kind=='fixed' for ref in c.refs})
         return _finish(placed, graph, constraints, width, height, baseline)
@@ -134,6 +138,7 @@ def place(
         spread=spread,
         initial_positions=initial_positions,
         initial_rotations=initial_rotations,
+        pair_weights=pair_weights,
     )
     cont = BoardGraph.from_json(graph.to_json())
     for comp in cont.components:

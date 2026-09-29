@@ -838,3 +838,81 @@ hier.assemble stays rigid. Tests: tests/test_shove.py, tests/test_shove_native.p
   disabled) is no longer accepted: it needs a 0.148 mm (11 %) stretch of a 1.35 mm
   VOUT branch segment, beyond the 5 % per-line guard; with the guard in the QP the
   solver finds no feasible placement (certificate: U5.15 / FB track / VOUT track).
+
+## PNR_FEEDBACK=1: routing failures drive later placement rounds (synth_native, halving)
+
+Before: feedback.json was written for every block trial and halving candidate and read by
+nothing; in the hier flow the only routing -> placement effect was PNR_SHOVE nudges
+(<= 0.5 mm, inside one evaluation). Opt-in now (PNR_FEEDBACK=1 plus --rounds/--generations
+> 0; defaults unchanged, place() bit-identical with pair_weights=None, golden-tested):
+
+* pnr/feedback/signals.py: one evaluated round -> the failed cross-part connections keyed
+  by block-local path (template) or ref (top level), mode, shove no_make_room; same-part
+  failures counted, never acted on; per-part scores kept as diagnostics only (the signal
+  study found them IC-dominated and moving their parts goes with more opens). Router key
+  (router, stage, budget, power-first, fanout, fab profile, inputs sha); imports must match.
+* pnr/feedback/table.py: per-scope failure rates, rebuilt each round from records;
+  floor = >= 90 % of >= 6 evaluations (reported, never a target); lineage failure counts;
+  router-separated.
+* pnr/feedback/moves.py: PULL moves one non-anchor end of a failed connection (weight
+  1 + 2 x lineage failures + power + no_room, cap 5) on a 0.25 mm lattice <= 3 mm (tier-1
+  power parts only for tier1-tier1 connections, <= 1 mm), any allowed rotation; every other
+  part keeps its exact parent pose; target must shorten >= 0.25 mm, lineage cap 4 mm from
+  the root pose; legality = mover clears everything by the board clearance with plane-array
+  reservations + no new hard violation + driver check (template rigidity over all
+  instances / halving source checks) + power guard (no new power crossings, q_band <= +1).
+  RAND = matched random control. pair_weights = population attraction for 'prior' samples.
+* place(..., pair_weights=): sum w * |pad_a - pad_b| in global_place and in every
+  power-first stage (x W); hierarchical_place maps flat pads to macro pads.
+* synth_native --rounds R: round 0 = stage A/B or --import-trials (never re-evaluated);
+  parents = top ceil(P / 2^(g-1)) with a PULL child; children, RAND, prior/fresh evaluated
+  like stage B (tag suffix -g<g><arm><j>-<parent sha>); one pool, unchanged rank_key; stops
+  on --enough / --gen-plateau; resume replays the plan and skips existing tags.
+* halving --generations G: between the native rung and deep; --seed-from imports earlier
+  runs' native records (--n0 0 skips own stages); children from the parent's evaluated pose
+  (shove nudges / USB rescue included); entry rung1 (best half promoted) or native; repeat
+  child in generation 1 measures noise; deep takes the best of the whole native pool.
+  Library mode moves library blocks rigidly (translation) and glue parts alone.
+* pnr/feedback/report.py: mechanical progress report (complete per evaluation, per-arm
+  child - parent, PULL vs RAND sign test, repeat delta, load, disk).
+* Tier-1 movers: no pad moves more than 1 mm (rotations included); RAND never rotates them.
+* Offline replay (84 real block layouts nb3-pf/nb4-pf/nb5-*): 58/65 layouts with cross-part
+  failures yield a PULL child; 90/90 PULL and 62/62 RAND children pass an independent
+  legality re-check and move only the mover; median move 0.79 mm, target shortening 0.90 mm.
+* End-to-end (scratch, one native evaluation, 1 worker, 240 s budget, 382 s wall): nb5-noshove
+  converter import, round 1 parent s1-34x34 (2 opens at 600 s), PULL child moved L2 0.56 mm
+  (U5.21-L2.2 0.34 mm shorter) -> 3 opens; record carries gen/arm/parent/op_detail/fb, the
+  library ranks it among the 12 imports (none re-run). Plumbing check only (budget differs).
+* Library-mode hierarchical placement with the nb5 libraries fails legalization (MB00: no
+  free slot) for 6/6 seeds with or without weights: pre-existing, not from this change.
+
+### PNR_FEEDBACK review repairs (same day)
+
+* Code identity in the router key: `signals.eval_code_files` hashes the static import closure
+  of the evaluation entry points (full_iteration, hier.native_block/synth/blocks; function-local
+  imports, `-m pnr.x` targets and package `__main__` followed; drivers pnr.feedback, pnr.mc,
+  hier.synth_native, hier.top excluded; pnr.shove only for the shove router, every outside
+  import of it being PNR_SHOVE-gated). Records made with PNR_FEEDBACK=1 stamp `code`; imports
+  without it are traced to their tree through `electrical/native-loop/source-inputs/origins.json`
+  (the --annotation-source the driver passed), refused as unknown if any closure module is newer
+  than the round. nb5-shove = src10.frozen (d1b507fd94: shove/world.py without the 0.15 mm floor
+  + pair_weights plumbing) != src11 shove f5f699666e; h4 = src10b = src11.base (7364369252).
+* `--import-code-mismatch {error,warn,rebase}` (both drivers, default error), `--import-rebase N`:
+  rebase re-evaluates the stale imports' own router inputs (blocks: the stage-A layout or the
+  stamped `input_layout`; halving: the seed placed.json) under this code as round 0 (arm rebase,
+  tag -g0b-<sha> / id rb-<id>); stale records are never ranked, counted for --enough, pooled in the
+  failure table or taken by deep.
+* synth_native --import-trials selects only templates with imported native records (--block
+  naming another is an error); imports are round 0 (gen 0, source_gen kept).
+* Fresh/prior: a stage-A (seed, outline) already handed to any router is not spare (dedup by
+  base tag + stamped/stage-A input keys, not the nudged layout); 'prior' is skipped when the
+  table has no pair weights (both drivers), instead of reproducing the unweighted sample.
+* RAND records `matched` = the parent's k=0 PULL child; the report pairs exactly those (best-of-
+  several PULL vs one RAND favoured PULL under the null) and prints n and the smallest reachable p.
+* halving --seed-from: the seed run must have finished its native stage (status.json) unless
+  --seed-allow-running; torn dataset lines skipped with a warning; the import set and code policy
+  are frozen at the first start (a 'seed-from' dataset record); a resume whose regenerated child
+  differs in parent/arm/poses_sha from the stored gen-place record stops ("resume plan changed").
+* E2E (one native evaluation, 1 worker, 240 s, 385 s wall): nb5-noshove converter s1-34x34
+  rebased under src11 (plain): 2 -> 2 opens; input = nb5 stage-A layout; stamped code 97e9032431
+  = the code derived from the new round's origins.json; library ranks only the rebase (12 stale).

@@ -288,7 +288,7 @@ class StagedPlacer:
     def __init__(self, graph, constraints, width, height, roles, *, seed=0, iters=800, lr=0.3, gamma=GAMMA,
                  orient=True, inflation=None, spread=1.0, w_spread=1.0, w_bound=20.0, w_keep=40.0,
                  w_group=0.5, w_plane=0.05, w_plane_sep=0.35, initial_positions=None,
-                 initial_rotations=None, starts=STARTS, grid_mm=0.0):
+                 initial_rotations=None, starts=STARTS, grid_mm=0.0, pair_weights=None):
         import torch
         from .model import ANGLES, _base_half_sizes
         from .geometry import keepout_rects, occupied_sides, resolve_fixed_poses, resolve_hard_rotations
@@ -384,6 +384,8 @@ class StagedPlacer:
                 off4.append(variants)
         self.pin_comp = torch.tensor(pin_comp, dtype=torch.long)
         self.pin_off4 = torch.tensor(off4, dtype=torch.float32).reshape((-1, 4, 2))
+        from .model import pair_tensors
+        self.pairs = pair_tensors(pair_weights, pin_key)
         pats = [p for nc in constraints.net_classes if nc.plane_layer for p in nc.nets]
         self.plane_pins = []
         for net in graph.nets:
@@ -463,6 +465,11 @@ class StagedPlacer:
             d = torch.linalg.vector_norm(pos[:, members] - pos[:, anchor:anchor + 1], dim=-1)
             group = group + weight * (torch.clamp(d - reach, min=0.0) ** 2).sum(-1)
         loss = J + guard + w_ov * overlap + w["w_bound"] * W * bound + w["w_group"] * W * rho * group
+        if self.pairs is not None:
+            from .model import PAIR_EPS2
+            pa, pb, pw = self.pairs
+            d = torch.sqrt(((xy[:, pa] - xy[:, pb]) ** 2).sum(-1) + PAIR_EPS2)       # (K, pairs)
+            loss = loss + W * (pw[None] * d).sum(-1)
         if self.plane_pins and (w["w_plane"] > 0.0 or w["w_plane_sep"] > 0.0):
             boxes = []
             g = self.gamma
@@ -724,7 +731,7 @@ def better_attempt(a, b):
 
 def staged_place(graph, constraints, roles, width, height, *, seed, iters, orient, inflation, spread,
                  channel_rules, initial_positions, initial_rotations, poses, keepouts, clearance, grid_mm,
-                 legalize_spread, mobility):
+                 legalize_spread, mobility, pair_weights=None):
     """Staged global placement, power-first legalization, one bounded retry.
 
     Returns the legal graph. Legalization can undo a hot loop while barely
@@ -744,7 +751,7 @@ def staged_place(graph, constraints, roles, width, height, *, seed, iters, orien
     from .legalize import LegalizationError, legalize
     sp = StagedPlacer(graph, constraints, width, height, roles, seed=seed, iters=iters, orient=orient,
                       inflation=inflation, spread=spread, initial_positions=initial_positions,
-                      initial_rotations=initial_rotations, grid_mm=grid_mm)
+                      initial_rotations=initial_rotations, grid_mm=grid_mm, pair_weights=pair_weights)
     best, runner = sp.stage1()
     compiled = sp.compiled
     links = {name: len(combos[0]) for _, name, combos, _ in compiled.loops[1]}

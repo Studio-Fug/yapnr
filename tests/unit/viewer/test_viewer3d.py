@@ -855,7 +855,9 @@ class Service(Base):
             "ready",
         )
         wait(lambda: all(j["state"] != "running" for j in list(s.jobs.values())))
-        self.assertEqual(list((self.d / "cache").glob("v3d-*")), [])  # snapshot removed
+        # The worker marks the job done before its outer finally removes the snapshot, so wait
+        # for the removal rather than checking once.
+        wait(lambda: not list((self.d / "cache").glob("v3d-*")))  # snapshot removed
 
     def test_leftovers_are_swept(self):
         c = self.d / "cache"

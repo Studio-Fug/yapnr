@@ -15,7 +15,9 @@ Last updated: 2026-09-30 (PR4, the viewer).
   fetched pinned by sha256 into `//yapnr/viewer:dist`; 11 offline unit test targets on a
   synthetic atopile fixture, live checks manual in `tests/e2e/viewer`. Choices:
   [docs/decisions.md](docs/decisions.md) ("Choices made in PR4"); guide:
-  [docs/viewer.md](docs/viewer.md). The engine hygiene branch is merged (#8).
+  [docs/viewer.md](docs/viewer.md). The engine hygiene branch is merged (#8). Checked against a
+  copy of three lanes of a live experiment (`bazel run //:viewer`, agent off): PCB, schematic,
+  3D (headless `kicad-cli`), Source, Inspect and Notes work, and the Ask tab says it is off.
 
 ## Next
 

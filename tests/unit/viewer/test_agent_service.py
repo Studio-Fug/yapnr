@@ -484,14 +484,14 @@ class TranslatorTest(unittest.TestCase):
                 *tool_msg(
                     "m1",
                     "Read",
-                    dict(file_path=str(REPO / "output/hier/docs/fab-comparison.md"), limit=5),
+                    dict(file_path=str(REPO / "runs/example/docs/fab-comparison.md"), limit=5),
                 ),
                 *text_msg("m2", ["The doc", " compares fabs."]),
                 result("The doc compares fabs."),
             ]
         )
         self.assertEqual(
-            out[0], ("tool", dict(name="Read", detail="output/hier/docs/fab-comparison.md"))
+            out[0], ("tool", dict(name="Read", detail="runs/example/docs/fab-comparison.md"))
         )
         self.assertEqual(
             "".join(d["text"] for e, d in out if e == "delta"), "The doc compares fabs."
@@ -518,14 +518,16 @@ class TranslatorTest(unittest.TestCase):
             *tool_msg(
                 "m2",
                 "Grep",
-                dict(pattern="output_cap1", path=str(REPO / "output/hier"), glob="*.ato"),
+                dict(pattern="output_cap1", path=str(REPO / "runs/example"), glob="*.ato"),
                 error="Permission denied",
             ),
             *text_msg("m3", ["Found."]),
         ]
         t, out = self.feed(steps)
         self.assertEqual("".join(d["text"] for e, d in out if e == "delta"), "Looking.\n\nFound.")
-        self.assertIn(("tool", dict(name="Grep", detail="output_cap1 in output/hier (*.ato)")), out)
+        self.assertIn(
+            ("tool", dict(name="Grep", detail="output_cap1 in runs/example (*.ato)")), out
+        )
         self.assertEqual(t.denials[0]["tool"], "Grep")
         t, out = self.feed(
             [
@@ -1038,7 +1040,7 @@ class WebNotesTest(Base):
                 *tool_msg(
                     "m1",
                     "WebFetch",
-                    dict(url="http://127.0.0.1:8781/", prompt="x"),
+                    dict(url="http://127.0.0.1:8766/", prompt="x"),
                     error=(
                         "PreToolUse:WebFetch hook error: Blocked by the yapnr viewer: 127.0.0.1 is not a "
                         "public address."
@@ -1054,7 +1056,7 @@ class WebNotesTest(Base):
         self.assertEqual(ev[-1][0], "done")
         self.assertIn("| web: on", a[1])
         pairs = [(e, d) for e, d, _ in ev]
-        self.assertIn(("tool", dict(name="WebFetch", detail="http://127.0.0.1:8781/")), pairs)
+        self.assertIn(("tool", dict(name="WebFetch", detail="http://127.0.0.1:8766/")), pairs)
         self.assertIn(("tool", dict(name="WebSearch", detail="TPS552882 datasheet")), pairs)
         self.assertIn(
             "not a public address", next(d for e, d in pairs if e == "tool_error")["error"]
@@ -1062,7 +1064,7 @@ class WebNotesTest(Base):
         row = json.loads((w.conv_dir / f"{ev[0][1]['id']}.jsonl").read_text())
         self.assertEqual(
             (row["web"], [t["detail"] for t in row["tools"]], len(row["denials"])),
-            (True, ["http://127.0.0.1:8781/", "TPS552882 datasheet"], 1),
+            (True, ["http://127.0.0.1:8766/", "TPS552882 datasheet"], 1),
         )
         self.run_chat(w, dict(message="x", model="sonnet", web=False))
         a = self.argv()[-1]
@@ -1223,7 +1225,7 @@ class WebGuardTest(unittest.TestCase):
         ):
             self.assertIsNone(why(u), u)
         for u in (
-            "http://127.0.0.1:8781/",
+            "http://127.0.0.1:8766/",
             "http://127.1/",
             "http://0x7f.1/",
             "http://2130706433/",
@@ -1234,12 +1236,12 @@ class WebGuardTest(unittest.TestCase):
             f"http://{LAN_IP}/",
             f"http://{HOME_IP}/",
             "http://169.254.169.254/latest/meta-data",
-            f"http://{TAILNET_IP}:8781/",
+            f"http://{TAILNET_IP}:8766/",
             "http://[fd7a:115c:a1e0::1]/",
-            "http://localhost:8781/",
+            "http://localhost:8766/",
             "http://a.localhost/",
-            f"http://{TAILNET_NAME}:8781/",
-            "http://viewer-host:8781/",
+            f"http://{TAILNET_NAME}:8766/",
+            "http://viewer-host:8766/",
             f"http://{MDNS_NAME}/",
             "http://rebind.example/",
             "http://tail.example/",
@@ -1275,7 +1277,7 @@ class WebGuardTest(unittest.TestCase):
             )
             return json.loads(out.getvalue()) if out.getvalue() else None
 
-        d = run(dict(tool_name="WebFetch", tool_input=dict(url="http://127.0.0.1:8781/")))[
+        d = run(dict(tool_name="WebFetch", tool_input=dict(url="http://127.0.0.1:8766/")))[
             "hookSpecificOutput"
         ]
         self.assertEqual((d["hookEventName"], d["permissionDecision"]), ("PreToolUse", "deny"))

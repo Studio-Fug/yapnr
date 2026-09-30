@@ -90,15 +90,15 @@ claude = "/opt/claude/bin/claude"
 
 ## Design inputs and optional services
 
-| Feature                       | Needs                                                              | Without it                            |
-| ----------------------------- | ------------------------------------------------------------------ | ------------------------------------- |
-| Board geometry of checkpoints | KiCad's Python (`--kicad-python`, `YAPNR_KICAD_PYTHON`)            | events without a layout show no board |
-| Placement cost inspection     | the engine's cost model (`--engine-runtime`, default: imported)    | the cost panel says unavailable       |
-| Schematic view                | `--graph` (plus `--constraints`, `--parts` symbols)                | the schematic tab says unavailable    |
-| Source browser (Inspect)      | atopile sources (`--atopile-root` + `--atopile-build`) and a graph | no Source tab; notes use the graph    |
-| 3D view                       | a headless `kicad-cli` (`--kicad-cli`, `YAPNR_KICAD_CLI`)          | the 3D pane says why                  |
-| Design notes                  | nothing (on by default)                                            |                                       |
-| Ask agent, AI net labels      | `--agent on`, `--net-summaries on` and the `claude` CLI            | off (the default)                     |
+| Feature                       | Needs                                                              | Without it                                   |
+| ----------------------------- | ------------------------------------------------------------------ | -------------------------------------------- |
+| Board geometry of checkpoints | KiCad's Python (`--kicad-python`, `YAPNR_KICAD_PYTHON`)            | events without a layout show no board        |
+| Placement cost inspection     | the engine's cost model (`--engine-runtime`, default: imported)    | the cost panel says unavailable              |
+| Schematic view                | `--graph` (plus `--constraints`, `--parts` symbols)                | the schematic tab says unavailable           |
+| Source browser (Inspect)      | atopile sources (`--atopile-root` + `--atopile-build`) and a graph | the Source tab says why; notes use the graph |
+| 3D view                       | a headless `kicad-cli` (`--kicad-cli`, `YAPNR_KICAD_CLI`)          | the 3D pane says why                         |
+| Design notes                  | nothing (on by default)                                            |                                              |
+| Ask agent, AI net labels      | `--agent on`, `--net-summaries on` and the `claude` CLI            | off (the default)                            |
 
 The atopile source browser reads the project's `ato.yaml`: `builds.<build>.entry` names the entry
 module, and the source folder is that file's folder (`--atopile-src` overrides it; `--parts`

@@ -26,7 +26,7 @@ class ServerIngestionTest(unittest.TestCase):
                          board_sha256=sha, data=dict(opens=181, violations=0, scope="Signal-only screening"))
             (root / "events/event-01.json").write_text(json.dumps(event))
             process = subprocess.Popen([sys.executable, str(Path(__file__).with_name("server.py")),
-                    str(root), "--port", "0", "--repo", str(repo)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    str(root), "--port", "0", "--repo", str(repo), '--cost-runtime', os.environ.get('PNR_COST_TEST_RUNTIME',str(repo/'hardware/pnr'))], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             try:
                 base = process.stdout.readline().strip().removeprefix("Live PnR: ")
                 self.assertTrue(base.startswith("http://127.0.0.1:"), base)

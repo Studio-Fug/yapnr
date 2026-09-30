@@ -1,14 +1,16 @@
 """Explicit-interface live PnR telemetry, immutable pins and annotated snapshots."""
-import argparse,copy,json,os,re,subprocess,threading,time,uuid,sys
+import argparse,copy,json,os,re,subprocess,threading,time,uuid,sys,hashlib,functools,math
 from pathlib import Path
 from urllib.parse import urlparse,parse_qs
 from http.server import ThreadingHTTPServer,BaseHTTPRequestHandler
-ap=argparse.ArgumentParser();ap.add_argument('root',type=Path);ap.add_argument('--port',type=int,default=8766);ap.add_argument('--listen',action='append');ap.add_argument('--allow-origin',action='append',default=[]);ap.add_argument('--repo',type=Path,help='Repository for runtime imports and persistent preferences (isolated viewer deployment)');a=ap.parse_args();root=a.root.resolve();root.mkdir(parents=True,exist_ok=True)
+ap=argparse.ArgumentParser();ap.add_argument('root',type=Path);ap.add_argument('--port',type=int,default=8766);ap.add_argument('--listen',action='append');ap.add_argument('--allow-origin',action='append',default=[]);ap.add_argument('--repo',type=Path,help='Repository for runtime imports and persistent preferences (isolated viewer deployment)');ap.add_argument('--cost-runtime',type=Path,help='Frozen PnR package parent for cost replay; defaults to repository hardware/pnr');ap.add_argument('--cost-contexts',type=Path,help='Optional explicit retrospective contexts JSON');a=ap.parse_args();root=a.root.resolve();root.mkdir(parents=True,exist_ok=True)
 repo=(a.repo or Path(__file__).resolve().parents[3]).resolve();assets=Path(__file__).parent/'dist';lock=threading.RLock();state=dict(schema='pnr-live-state-v1',run=str(root.parent),revision=0,lanes={},events=[],search={},errors=[]);seen=set();cache={}
 sys.path.insert(0,str(repo/'hardware/pnr'))
 from pnr.runtime_controls import read as read_controls,write as write_controls,LIMITS
 from settings import seed as seed_settings,save as save_settings
 from event_schema import phase_frame
+from cost_service import CostService
+cost_service=CostService(root,repo,Path(__file__).parent,runtime=a.cost_runtime,contexts=a.cost_contexts)
 preferences=repo/'output/pnr-settings.json'
 state['controls']=seed_settings(root/'control.json',preferences);state['active_controls']=None
 ki='/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3'
@@ -52,6 +54,11 @@ def ingest():
    if f.name in seen:continue
    try:
     e=json.loads(f.read_text());frame=phase_frame(e) if e['kind']=='phase_complete' else None;geo=geometry(e) if 'board' in e else (from_graph(e['layout']) if 'layout' in e else None)
+    layout_sha=None
+    if e['kind']=='placement_cost_capture':
+     layout_sha=hashlib.sha256(json.dumps(e['layout'],sort_keys=True,separators=(',',':')).encode()).hexdigest()
+     cache[layout_sha]=geo;write_json_atomic(root/'geometry'/(layout_sha+'.json'),geo)
+     frame=dict(name=e['data']['phase']+' · recorded placement cost',kind='placement-cost',layout_sha256=layout_sha,event_id=e['id'],opens=None,violations=None,label_source='data.phase',metric_sources={},cost_capture=e['data']['cost_capture'])
     with lock:
      lane=state['lanes'].setdefault(e['candidate'],dict(id=e['candidate'],draft={},costs={},frames=[]));lane.update(event_id=e['id'],time=e['time'],iteration=e['iteration'],kind=e['kind'])
      if e['data'].get('phase'):lane['phase']=e['data']['phase']
@@ -59,10 +66,10 @@ def ingest():
      if e['kind']=='worker_config_applied':lane['worker_config']=e['data']
      if frame:
       lane['phase']=frame['name'];lane['opens']=frame['opens'];lane['violations']=frame['violations']
-      lane['phase_label_source']=frame['label_source']
+      lane['phase_label_source']=frame['label_source'];lane['phase_metric_sources']=frame['metric_sources'];lane['phase_accepted']=frame.get('accepted')
      if geo:
       if lane.get('geometry') and e.get('board_sha256')!=lane.get('board_sha256'):lane['previous']=lane['geometry']
-      lane['geometry']=geo;lane['board_sha256']=e.get('board_sha256');lane['geometry_event_id']=e['id'];lane['draft']={}
+      lane['geometry']=geo;lane['board_sha256']=e.get('board_sha256');lane['layout_sha256']=layout_sha;lane['geometry_event_id']=e['id'];lane['draft']={}
      if frame:lane['frames'].append(frame)
      if e['kind']=='route_result':lane['opens']=e['data'].get('opens');lane['last_route']=e['data'];lane['copper_changed_at']=time.time() if e['data'].get('accepted') else lane.get('copper_changed_at',0)
      if e['kind']=='candidate_queued':lane['moves']=e['data'].get('moves',[]);lane['cost']=e['data'].get('cost')
@@ -100,20 +107,68 @@ def state_response(query):
     if old[0]!=rev:del response_cache[old]
    response_cache[key]=json.dumps(current(selected,full=False),separators=(',',':')).encode()
   return response_cache[key]
+def write_json_atomic(path,value):
+ path.parent.mkdir(exist_ok=True)
+ temporary=path.with_name(path.name+'.'+uuid.uuid4().hex+'.tmp')
+ try:
+  temporary.write_text(json.dumps(value,indent=2));temporary.replace(path)
+ finally:
+  temporary.unlink(missing_ok=True)
+@functools.lru_cache(maxsize=16)
+def pin_summary(pin):
+ # Immutable pins can be large; repeated keystrokes need only compact identity
+ # metadata. Bound this cache and load full geometry only for a final bundle.
+ snapshot=json.loads((root/'pins'/(pin+'.json')).read_text())
+ return dict(run=snapshot['run'],lanes={key:dict(board_sha256=lane.get('board_sha256'),frames=lane.get('frames',[])) for key,lane in snapshot['lanes'].items()})
+def read_annotation(body,full=False):
+ pin=body['pin_id']
+ if not isinstance(pin,str) or not re.fullmatch('[a-f0-9]{32}',pin):raise ValueError('invalid pin')
+ summary=pin_summary(pin);snapshot=json.loads((root/'pins'/(pin+'.json')).read_text()) if full else None
+ selected=body.get('view',{});lane=summary['lanes'].get(selected.get('lane'));phase=selected.get('phase','live')
+ if lane is None:raise ValueError('selected lane is absent from the immutable pin')
+ if phase!='live':
+  if not isinstance(phase,str) or not phase.isdigit() or int(phase)>=len(lane.get('frames',[])):raise ValueError('selected phase is absent from the immutable pin')
+  frame=lane['frames'][int(phase)];sha=frame.get('board_sha256') or frame['layout_sha256']
+  # A server restart may not have replayed this old frame yet. The exact
+  # immutable geometry is already on disk; never substitute a live board.
+  if full:snapshot['selected_geometry']=cache.get(sha) or json.loads((root/'geometry'/(sha+'.json')).read_text())
+ rects=body.get('annotations',[])
+ if not isinstance(rects,list) or len(rects)>500:raise ValueError('invalid rectangle list')
+ for rect in rects:
+  if len(rect['bounds'])!=4 or not all(type(v) in (int,float) and math.isfinite(v) and abs(v)<100000 for v in rect['bounds']):raise ValueError('invalid bounds')
+ note=body.get('note','')
+ if not isinstance(note,str):raise ValueError('invalid note')
+ revision=body.get('draft_revision',0)
+ if type(revision) is not int or revision<0:raise ValueError('invalid draft revision')
+ return pin,snapshot,dict(pin_id=pin,run=summary['run'],annotations=rects,view=selected,note=note[:10000],draft_revision=revision)
 class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args):pass
  def send(self,obj,status=200):
   raw=obj if isinstance(obj,bytes) else json.dumps(obj,separators=(',',':')).encode();self.send_response(status);self.send_header('Content-Type','application/json');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
  def do_GET(self):
   path=self.path.split('?')[0]
+  if path=='/api/component-cost':
+   q=parse_qs(urlparse(self.path).query)
+   try:return self.send(cost_service.request(q.get('event_id',[''])[0],q.get('ref',[None])[0]))
+   except (ValueError,KeyError,IndexError,TypeError,FileNotFoundError) as ex:return self.send(dict(error=str(ex)),400)
   if path=='/api/controls':
    return self.send(dict(requested=read_controls(root/'control.json'),active=state.get('active_controls'),limits=LIMITS,max_total_workers=16))
   if path=='/api/state':
    return self.send(state_response(parse_qs(urlparse(self.path).query)))
   if path.startswith('/api/geometry/'):
    sha=path.rsplit('/',1)[-1]
-   if not re.fullmatch('[a-f0-9]{64}',sha) or sha not in cache:return self.send({'error':'not found'},404)
+   if not re.fullmatch('[a-f0-9]{64}',sha):return self.send({'error':'not found'},404)
+   if sha not in cache:
+    f=root/'geometry'/(sha+'.json')
+    if not f.exists():return self.send({'error':'not found'},404)
+    cache[sha]=json.loads(f.read_text())
    return self.send(cache[sha])
+  for prefix,directory in (('/api/pins/','pins'),('/api/drafts/','drafts')):
+   if path.startswith(prefix):
+    name=path[len(prefix):]
+    if not re.fullmatch('[a-f0-9]{32}',name):return self.send({'error':'invalid id'},400)
+    f=root/directory/(name+'.json')
+    return self.send(json.loads(f.read_text())) if f.exists() else self.send({'error':'not found'},404)
   if path.startswith('/api/snapshots/'):
    name=path.rsplit('/',1)[-1]
    if not re.fullmatch('[a-f0-9]{32}',name):return self.send({'error':'invalid id'},400)
@@ -135,19 +190,21 @@ class Handler(BaseHTTPRequestHandler):
     return self.send(updated)
    if self.path=='/api/pin':
     key=uuid.uuid4().hex;snapshot=current();folder=root/'pins';folder.mkdir(exist_ok=True);(folder/(key+'.json')).write_text(json.dumps(snapshot));return self.send(dict(pin_id=key,state=snapshot))
-   if self.path=='/api/snapshot':
-    pin=body['pin_id']
-    if not re.fullmatch('[a-f0-9]{32}',pin):raise ValueError('invalid pin')
-    snapshot=json.loads((root/'pins'/(pin+'.json')).read_text());rects=body.get('annotations',[])
-    selected=body.get('view',{});selected_lane=snapshot['lanes'].get(selected.get('lane'),{});selected_phase=selected.get('phase','live')
-    if selected_phase!='live':
-     frame=selected_lane['frames'][int(selected_phase)];snapshot['selected_geometry']=cache[frame['board_sha256']]
-    if len(rects)>500:raise ValueError('too many rectangles')
-    for rect in rects:
-     if len(rect['bounds'])!=4 or not all(isinstance(v,(int,float)) and abs(v)<100000 for v in rect['bounds']):raise ValueError('invalid bounds')
-    key=uuid.uuid4().hex;bundle=dict(schema='pnr-annotated-snapshot-v1',id=key,created_at=time.time(),coordinate_frame='mm-y-up',state=snapshot,annotations=rects,view=body.get('view',{}),note=body.get('note','')[:10000]);folder=root/'snapshots';folder.mkdir(exist_ok=True);dest=folder/(key+'.json');dest.write_text(json.dumps(bundle,indent=2));return self.send(dict(id=key,path=str(dest),url='/api/snapshots/'+key))
+   if self.path in ('/api/draft','/api/snapshot'):
+    pin,snapshot,payload=read_annotation(body,full=self.path=='/api/snapshot')
+    if self.path=='/api/draft':
+     path=root/'drafts'/(pin+'.json')
+     with lock:
+      old=json.loads(path.read_text()) if path.exists() else {}
+      if old.get('draft_revision',-1)>payload['draft_revision']:return self.send({'error':'newer draft already saved'},409)
+      draft=dict(payload,schema='pnr-annotation-draft-v1',updated_at=time.time())
+      write_json_atomic(path,draft)
+     return self.send(dict(pin_id=pin,draft_revision=payload['draft_revision'],path=str(path)))
+    key=uuid.uuid4().hex;bundle=dict(schema='pnr-annotated-snapshot-v1',id=key,created_at=time.time(),coordinate_frame='mm-y-up',state=snapshot,annotations=payload['annotations'],view=payload['view'],note=payload['note'])
+    dest=root/'snapshots'/(key+'.json');write_json_atomic(dest,bundle)
+    return self.send(dict(id=key,path=str(dest),url='/api/snapshots/'+key))
    self.send({'error':'not found'},404)
-  except (ValueError,KeyError,FileNotFoundError) as ex:self.send({'error':str(ex)},400)
+  except (ValueError,KeyError,IndexError,TypeError,FileNotFoundError) as ex:self.send({'error':str(ex)},400)
 servers=[ThreadingHTTPServer((host,a.port),Handler) for host in (a.listen or ['127.0.0.1'])]
 threading.Thread(target=ingest,daemon=True).start()
 for server in servers[:-1]:threading.Thread(target=server.serve_forever,daemon=True).start()

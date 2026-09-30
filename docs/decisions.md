@@ -241,6 +241,7 @@ Update a pin together with the file that holds it, and note why here.
 | torch            | `>=2.2,<2.4` (lock: 2.3.1) | `requirements.in`, lock                |
 | numpy            | `>=1.26,<2` (lock: 1.26.4) | `requirements.in`, lock                |
 | pyyaml           | `>=6` (lock: 6.0.3)        | `requirements.in`, lock                |
+| Pillow           | `>=12,<13` (lock: 12.3.0)  | `requirements.in`, lock                |
 | Sphinx stack     | see below                  | `requirements.in`                      |
 | mermaid (JS)     | `11.4.1`                   | `docs/_sphinx/conf.py`                 |
 | prek             | `0.4.12`                   | `setup-precommit.sh`, `ci.yaml`        |
@@ -269,6 +270,11 @@ Rationale:
 - **numpy 1.x:** torch 2.3 wheels are built against the numpy 1 ABI, and the engine was tuned on
   numpy 1.26. (Splanc's lock pairs torch 2.3.1 with numpy 2, which this avoids.) The interop smoke
   test in `tests/unit/interop` guards it.
+- **Pillow below 13:** the renderer of the place-and-route animations (`pnr.animate`), a
+  contributor and docs tool: it is in `requirements.in` only, not in `requirements-runtime.in`, so
+  the wheel's dependencies and the image's runtime locks do not change. The bytes of an animation
+  depend on the libwebp, zlib and FreeType that the Pillow wheels bundle, so the major version is
+  capped and the animations' manifest records the exact version.
 - **Sphinx stack:** sphinx 9.0.4, myst-parser 5.1.0, furo 2025.12.19, sphinx-copybutton 0.5.2,
   sphinx-design 0.7.0 and sphinxcontrib-mermaid 2.1.0, exactly Splanc's locked versions, so both
   sites build the same way. matplotlib is left out until a page needs generated figures.

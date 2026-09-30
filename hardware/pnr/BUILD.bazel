@@ -1031,9 +1031,32 @@ py_binary(
     tags = ["manual", "requires-kicad"],
 )
 
-# --- Traces and provenance (pnr.trace, pnr.provenance) -------------------------------------
+# --- Traces, provenance and animations (pnr.trace, pnr.provenance, pnr.animate) -----------
 # pnr.trace, pnr.trace_board and pnr.provenance are stdlib-only members of :pnr (its glob);
-# pnr.route.detail.trace_route belongs to :pnr_detail.
+# pnr.route.detail.trace_route belongs to :pnr_detail. The renderer needs Pillow only (no
+# torch), so building it fetches no torch wheel.
+py_library(
+    name = "pnr_animate",
+    srcs = glob(
+        ["pnr/animate/*.py"],
+        exclude = ["pnr/animate/__main__.py"],
+    ),
+    imports = ["."],
+    deps = [
+        ":pnr",
+        requirement("pillow"),
+    ],
+)
+
+# bazel run //hardware/pnr:animate -- SOURCE --out PATH (python -m pnr.animate).
+py_binary(
+    name = "animate",
+    srcs = ["pnr/animate/__main__.py"],
+    imports = ["."],
+    main = "pnr/animate/__main__.py",
+    deps = [":pnr_animate"],
+)
+
 py_test(
     name = "trace_test",
     size = "small",
@@ -1089,6 +1112,18 @@ py_test(
     imports = ["."],
     main = "tests/test_provenance.py",
     deps = [":pnr"],
+)
+
+py_test(
+    name = "animate_test",
+    size = "medium",
+    srcs = ["tests/test_animate.py"],
+    imports = ["."],
+    main = "tests/test_animate.py",
+    deps = [
+        ":pnr",
+        ":pnr_animate",
+    ],
 )
 
 py_test(

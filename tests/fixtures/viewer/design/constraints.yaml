@@ -1,0 +1,4 @@
+# Placement constraints of the synthetic viewer test board.
+board:
+  width_mm: 20
+  height_mm: 15

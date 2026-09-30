@@ -84,7 +84,8 @@ yapnr as a **headless Bazel ruleset**.
    a commit series, landed with merge commits (everything else is squash-merged).
 8. Mechanical changes (format, rename, moves) are separate commits, and their commits on `main` are
    listed in `.git-blame-ignore-revs`. Squash merging rehashes, so a hash is added in a follow-up
-   after the merge (PR3b, whose pure-move commit must survive, is merged with a merge commit).
+   after the merge (PR3a and PR3b, whose format and pure-move commits must survive, are merged
+   with a merge commit).
    In-flight engine work is ported through them with a checked-in tool.
 9. `drc_warm` (GUI-bound) and the old `keyhole_{repair,loop,shift_via,deform}` adapters are
    imported with history but deleted during restructuring. They remain recoverable from history.
@@ -142,7 +143,7 @@ yapnr/                          repository root
 ├── examples/
 │   ├── led555/                 KiCad-native example project (CI fixture, frontend "kicad")
 │   └── atopile-blinky/         atopile-frontend fixture (sources + prebuilt board)
-├── third_party/                three/ (MIT, vendored); elkjs/ (EPL-2.0, license text only)
+├── third_party/                image-licenses/ (the viewer's elkjs and three.js are fetched)
 ├── tools/                      privacy_scan.py, check_test_wiring.py, repo_root.py,
 │                               bazel/py_tests.bzl (PR0); kicad_test_runner.sh, migrate/
 └── docs/                       Sphinx (MyST) site; see §6
@@ -232,12 +233,13 @@ Tests stay `unittest`-style (no current test uses pytest). Four files need both 
 - **Network use (AGPL section 13).** The viewer is served over a network. It gets an About/Source
   link showing the repository URL and the exact engine commit of the run being viewed.
 - **Third-party material** is listed in `THIRD_PARTY.md`:
-  - three.js r180 plus `GLTFLoader` (MIT), vendored under `third_party/three/` with its license
-    (PR4d).
+  - three.js 0.186.1 plus `GLTFLoader` and the add-ons the 3D view imports (MIT). Updated in PR4:
+    fetched at build time like elkjs (its build files exceed the 600 KB limit), served with its
+    license under `vendor/three/`.
   - elkjs 0.9.3 (EPL-2.0, which contains an Apache-2.0 web-worker shim). It is **never
-    committed**: it is fetched with a sha256-pinned `http_file` and served as a separate,
-    unmodified file (never bundled or minified with AGPL code). Its license text is kept under
-    `third_party/elkjs/` (PR4b).
+    committed**: it is fetched with a sha256-pinned archive and served as a separate, unmodified
+    file (never bundled or minified with AGPL code). Its license text is served next to it from
+    the same archive (PR4; [decisions](decisions.md)).
   - KiCad stock footprints and 3D models (CC-BY-SA-4.0 with the KiCad library exception) are
     referenced, not vendored.
 - **README.md:** what yapnr is, status (alpha, KiCad 10 only), quick start (`bazel run //:yapnr`),
@@ -750,8 +752,7 @@ bazel_dep(name = "rules_shell", version = "0.6.1")                      # PR6a (
 bazel_dep(name = "rules_rust", version = "0.71.3")                      # PR5
 # release tarballs, later:
 bazel_dep(name = "rules_pkg", version = "1.2.0", dev_dependency = True)
-# viewer JS tests (PR4):
-bazel_dep(name = "rules_nodejs", version = "<pin in PR4>", dev_dependency = True)
+# viewer JS tests: not added in PR4 (no node toolchain; browser checks move to tests/e2e)
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 python.toolchain(python_version = "3.11", is_default = True)
@@ -984,8 +985,8 @@ Changes from Splanc:
 
 - Dropped: `nixpkgs-fmt` (no `.nix` files), the container-overlay local hook, and Splanc-specific
   excludes.
-- **Global exclude reserved** for `^(hardware/|docs/hardware/|third_party/)`: the verbatim Splanc
-  import (until PR3a/PR3b) and vendored upstream files. No other paths go there.
+- **Global exclude reserved** for `^(docs/hardware/|third_party/)` (`hardware/` too until PR3a):
+  the verbatim Splanc import (until PR7) and vendored upstream files. No other paths go there.
 - `check-added-large-files` excludes `third_party/` explicitly (vendored files are size-reviewed
   when vendored).
 - Added local hook `yapnr-privacy-scan` (`tools/privacy_scan.py`, stdlib only) with generic
@@ -1020,12 +1021,18 @@ Changes from Splanc:
   one) or move the helpers out of `tests/`.
 - **Lint baseline for imported code.** Until PR3a, `hardware/` and `docs/hardware/` (the verbatim
   import) are skipped by all hooks through the reserved global exclude (and by `.flake8`
-  `extend-exclude` and `.markdownlintignore`). PR3a formats `hardware/` and drops it from those
-  excludes; PR3b moves the code out; PR7 splits `docs/hardware/` into the docs pages. After PR3a,
-  flake8 uses `per-file-ignores` in `.flake8` for the remaining E501/E731/E402 findings, and that
-  list only shrinks. The measured debt: about 1,378 lines over 120 characters, about 2,000 lines
-  with `;` joins, and 149 real F-codes in the committed code, including one genuine `F821` in
-  `via_coalesce.py` (`items.clear()` in `main`).
+  `extend-exclude` and `.markdownlintignore`). PR3a formats the Python under `hardware/` and drops
+  `hardware/` from the global exclude and from `.flake8`; PR3b moves the code out; PR7 splits
+  `docs/hardware/` into the docs pages. The measured debt before PR3a: about 1,378 lines over 120
+  characters, about 2,000 lines with `;` joins, and 149 real F-codes in the committed code,
+  including one genuine `F821` in `via_coalesce.py` (`items.clear()` in `main`). After black and
+  isort, 479 findings in 157 files remain (F401 112, E731 106, E741 64, E402 63, E501 60, F841 46,
+  F811 17, F402 6, E721 2, F821 1, F541 1, E262 1). PR3a fixes none by hand (every fix changes a
+  syntax tree, and inside the evaluation modules a code key); `.flake8` lists each file's codes in
+  `per-file-ignores`, and that list only shrinks. The non-Python files under `hardware/` keep
+  per-hook excludes where a hook would rewrite or reject them (prettier, markdownlint, buildifier,
+  and the whitespace hooks for test data and the built viewer bundle); the comment in
+  `.pre-commit-config.yaml` lists them.
 
 `setup-precommit.sh` follows Splanc's (prek 0.4.12, then `prek install` and
 `prek run --all-files`), except that prek is installed in isolation: a `prek` on `PATH` is used
@@ -1512,17 +1519,24 @@ unchanged.
 ### PR3a: mechanical format and lint fixes
 
 - **Contents:**
-  - black and isort on the imported trees, as a format-only PR of its own (squash-merged; a
-    follow-up adds its `main` commit to `.git-blame-ignore-revs`);
-  - hand fixes for F-codes (F821 in `via_coalesce`, F401/F841/F811/F402);
-  - the `.flake8` baseline for E501/E731/E402;
-  - `hardware/` removed from the global exclude, `.flake8` and `.markdownlintignore`.
+  - code keys that survive formatting (code key scheme 2: a canonical syntax tree per module),
+    committed ahead of the format so no library or trial is invalidated by it;
+  - black and isort on the imported trees, as format-only commits (merged with a merge commit so
+    they survive; a follow-up adds them to `.git-blame-ignore-revs`), with isort's settings pinned
+    in `.isort.cfg` so its order does not depend on the directory it runs in;
+  - the `.flake8` baseline: every remaining code per file, F-codes included (no hand fixes; the
+    F821 in `via_coalesce` stays for its own change, Appendix B);
+  - `hardware/` removed from the global exclude and `.flake8`; per-hook excludes (and
+    `.markdownlintignore`) keep only the non-Python files a hook would rewrite or reject.
 - **Acceptance:**
-  - black's AST-equivalence check;
+  - black's AST-equivalence check, and for isort a check that every difference is a
+    reordering inside one run of imports;
+  - code keys unchanged by the format;
   - same pass set in both lanes;
-  - `prek run --all-files` clean with no path excludes for `hardware/`.
+  - `prek run --all-files` clean with `hardware/` Python covered.
 - **Risks:** isort moving imports across `sys.path` bootstrap code in worker scripts. Such files
-  get `# isort: skip_file` and are removed in PR3b anyway.
+  get `# isort: skip_file` and are removed in PR3b anyway. (Measured in PR3a: isort 6 moves no
+  import across code, so no file needed it.)
 
 ### PR3b: package rename and restructure
 
@@ -1643,8 +1657,14 @@ unchanged.
 - **4c:**
   - the notes store and MCP, the optional agent and AI net labels (**off by default**; CLI via
     `shutil.which`, spend caps, web guard), schema and env renames, test literals replaced.
-- **4d:** the 3D view (three.js r180 + GLTFLoader vendored, GLB through the headless `kicad-cli`),
-  once the in-progress viewer-dev work lands.
+- **4d:** the 3D view (three.js 0.186.1 + GLTFLoader, fetched and pinned like elkjs; GLB through
+  the headless `kicad-cli`).
+- **Done as one branch (`claude/pr4-viewer`):** the four parts are one commit series (move,
+  imports, format, packaging and configuration, lint, fetched JavaScript and Bazel targets, tests
+  and docs); the choices that differ from this section are in [decisions](decisions.md) ("Choices
+  made in PR4"). Still open: `--project` and the manifest's `[viewer]` table (with PR3d), the
+  published `yapnr-live-event-v1` JSON Schema, the browser (e2e) tests, `examples/led555` as the
+  smoke run (PR6b).
 - **Acceptance:**
   - viewer tests pass;
   - `bazel run //:viewer -- --project examples/led555` shows the smoke run;
@@ -1804,8 +1824,9 @@ Still open:
 
 ## Appendix B: known defects to carry as issues
 
-- `via_coalesce.main` calls `items.clear()` but `items` exists only in `worker()` (F821). Fixed in
-  PR3a.
+- `via_coalesce.main` calls `items.clear()` but `items` exists only in `worker()` (F821). Kept
+  (baselined) in PR3a, which makes no semantic edits: the fix changes the evaluation code key, so
+  it lands with a test of its own in PR3b or later.
 - ~~About 25 `board.Remove` call sites may detach items that crash KiCad Python at teardown
   (PR2e).~~ Done: 27 discarded-item calls use `board.Delete`; 3 `Remove` calls stay (kept alive
   or detached with `thisown=False`), guarded per call by `//hardware/pnr:board_delete_test`.

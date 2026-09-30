@@ -5,9 +5,15 @@ failed and electrical_blocker_repair did not rescue it; the transaction itself i
 the ``python -m pnr.shove`` KiCad worker, whose candidate then passes
 native_loop's unchanged outer gate (worker 'check' + native DRC + strict gate).
 """
+
 import math
 
-SHOVE_STATUSES = ('no_current_sized_channel', 'no_surface_channel', 'no_qualified_power_access', 'time_budget')
+SHOVE_STATUSES = (
+    "no_current_sized_channel",
+    "no_surface_channel",
+    "no_qualified_power_access",
+    "time_budget",
+)
 
 
 class ShoveBudget:
@@ -28,15 +34,22 @@ class ShoveBudget:
         return True
 
     def record(self, outcome):
-        self.accepted += int(bool(outcome.get('accepted')))
+        self.accepted += int(bool(outcome.get("accepted")))
 
     def summary(self):
         return dict(limit=self.limit, used=self.count, accepted=self.accepted)
 
 
 def eligible(target, outcome, enabled, electrical, placement_trial, remaining):
-    return bool(enabled and electrical and not placement_trial and target.get('mode') in ('power', 'plane')
-                and not outcome.get('accepted') and outcome.get('status') in SHOVE_STATUSES and remaining > 90)
+    return bool(
+        enabled
+        and electrical
+        and not placement_trial
+        and target.get("mode") in ("power", "plane")
+        and not outcome.get("accepted")
+        and outcome.get("status") in SHOVE_STATUSES
+        and remaining > 90
+    )
 
 
 def nudge_candidates(inventory, constraints_path, points, radius=3.0, max_pads=4, exclude=()):
@@ -47,25 +60,37 @@ def nudge_candidates(inventory, constraints_path, points, radius=3.0, max_pads=4
     attach inside its land rides with it."""
     import json
     from pathlib import Path
+
     import yaml
-    from pnr.graph import BoardGraph
+
     from pnr.constraints import compile_constraints
+    from pnr.graph import BoardGraph
     from pnr.place.geometry import resolve_fixed_poses
-    g = BoardGraph.from_json(json.dumps(inventory['graph']))
+
+    g = BoardGraph.from_json(json.dumps(inventory["graph"]))
     try:
-        cc = compile_constraints(yaml.safe_load(Path(constraints_path).read_text()), g.refs,
-                                 {c.address: c.ref for c in g.components},
-                                 {f'{c.address}:{p.name}': p.net for c in g.components for p in c.pads})
+        cc = compile_constraints(
+            yaml.safe_load(Path(constraints_path).read_text()),
+            g.refs,
+            {c.address: c.ref for c in g.components},
+            {f"{c.address}:{p.name}": p.net for c in g.components for p in c.pads},
+        )
         fixed = set(resolve_fixed_poses(g, cc))
-        holes = {h['name'] for h in cc.mounting_holes}
+        holes = {h["name"] for h in cc.mounting_holes}
     except Exception:
         return []
-    physical = set(inventory.get('physical_locks', []))
-    poses = inventory.get('footprint_poses', {})
+    physical = set(inventory.get("physical_locks", []))
+    poses = inventory.get("footprint_poses", {})
     out = []
     for c in g.components:
-        if (c.locked or c.ref in fixed or c.ref in holes or c.ref in physical or c.ref in exclude
-                or len(c.pads) > max_pads):
+        if (
+            c.locked
+            or c.ref in fixed
+            or c.ref in holes
+            or c.ref in physical
+            or c.ref in exclude
+            or len(c.pads) > max_pads
+        ):
             continue
         pose = poses.get(c.ref)
         if pose is None:
@@ -79,13 +104,13 @@ def nudge_candidates(inventory, constraints_path, points, radius=3.0, max_pads=4
 def merge_failure(outcome, shove, owners):
     """Fold a failed transaction's certificate into the route outcome, so the
     loop's failure history and component scores name the real obstacle."""
-    blockers = dict(outcome.get('static_blockers') or {})
-    for identity, weight in (shove.get('solid_blockers') or {}).items():
+    blockers = dict(outcome.get("static_blockers") or {})
+    for identity, weight in (shove.get("solid_blockers") or {}).items():
         blockers[identity] = blockers.get(identity, 0) + max(1, round(10 * weight))
     by_ref = {}
     for identity, ref in owners.items():
         by_ref.setdefault(ref, identity)
-    for ref in shove.get('solid_parts') or []:
+    for ref in shove.get("solid_parts") or []:
         if ref in by_ref:
             blockers[by_ref[ref]] = blockers.get(by_ref[ref], 0) + 10
     outcome = dict(outcome, static_blockers=blockers)
@@ -93,15 +118,30 @@ def merge_failure(outcome, shove, owners):
 
 
 def event(target, shove, folder, budget):
-    rungs = [(r.get('rung'), r.get('status')) for r in shove.get('rungs', [])]
-    return dict(stage='shove_repair', target=target, status=shove.get('status'), accepted=shove.get('accepted', False),
-                rung=shove.get('rung'), rungs=rungs, moved=len(shove.get('moved', [])),
-                max_disp_mm=max([m.get('disp_mm', 0) for m in shove.get('moved', [])] + [0]),
-                nudges=shove.get('nudges', []), ripped=shove.get('ripped', []),
-                restored=[(r['net'], r['source'], r['target'], r['accepted']) for r in shove.get('restored', [])],
-                certificate=[(c.get('a_label'), c.get('b_label'), c.get('multiplier')) for c in shove.get('certificate', [])[:5]],
-                solid_parts=shove.get('solid_parts', []), folder=str(folder), budget=budget.summary(),
-                seconds=shove.get('seconds'))
+    rungs = [(r.get("rung"), r.get("status")) for r in shove.get("rungs", [])]
+    return dict(
+        stage="shove_repair",
+        target=target,
+        status=shove.get("status"),
+        accepted=shove.get("accepted", False),
+        rung=shove.get("rung"),
+        rungs=rungs,
+        moved=len(shove.get("moved", [])),
+        max_disp_mm=max([m.get("disp_mm", 0) for m in shove.get("moved", [])] + [0]),
+        nudges=shove.get("nudges", []),
+        ripped=shove.get("ripped", []),
+        restored=[
+            (r["net"], r["source"], r["target"], r["accepted"]) for r in shove.get("restored", [])
+        ],
+        certificate=[
+            (c.get("a_label"), c.get("b_label"), c.get("multiplier"))
+            for c in shove.get("certificate", [])[:5]
+        ],
+        solid_parts=shove.get("solid_parts", []),
+        folder=str(folder),
+        budget=budget.summary(),
+        seconds=shove.get("seconds"),
+    )
 
 
 def feedback_section(loop_dir):
@@ -110,19 +150,52 @@ def feedback_section(loop_dir):
     import json
     from collections import Counter
     from pathlib import Path
+
     events = []
-    for progress in sorted(Path(loop_dir).glob('**/progress.json')):
+    for progress in sorted(Path(loop_dir).glob("**/progress.json")):
         try:
             data = json.loads(progress.read_text())
         except (OSError, ValueError):
             continue
-        for e in data.get('events', []):
-            if e.get('stage') == 'shove_repair':
-                events.append(dict(e, loop=str(progress.parent.relative_to(loop_dir)) if progress.parent != Path(loop_dir) else '.'))
-    parts = Counter(ref for e in events if not e.get('accepted') for ref in e.get('solid_parts', []))
-    return dict(transactions=len(events), accepted=sum(1 for e in events if e.get('accepted')),
-                nudges=[n for e in events if e.get('accepted') for n in e.get('nudges', [])],
-                ripped=[r for e in events if e.get('accepted') for r in e.get('ripped', [])],
-                certificate_parts=dict(parts.most_common()),
-                events=[{k: e.get(k) for k in ('loop', 'target', 'status', 'accepted', 'rung', 'rungs', 'moved',
-                                               'max_disp_mm', 'nudges', 'ripped', 'solid_parts', 'folder')} for e in events])
+        for e in data.get("events", []):
+            if e.get("stage") == "shove_repair":
+                events.append(
+                    dict(
+                        e,
+                        loop=(
+                            str(progress.parent.relative_to(loop_dir))
+                            if progress.parent != Path(loop_dir)
+                            else "."
+                        ),
+                    )
+                )
+    parts = Counter(
+        ref for e in events if not e.get("accepted") for ref in e.get("solid_parts", [])
+    )
+    return dict(
+        transactions=len(events),
+        accepted=sum(1 for e in events if e.get("accepted")),
+        nudges=[n for e in events if e.get("accepted") for n in e.get("nudges", [])],
+        ripped=[r for e in events if e.get("accepted") for r in e.get("ripped", [])],
+        certificate_parts=dict(parts.most_common()),
+        events=[
+            {
+                k: e.get(k)
+                for k in (
+                    "loop",
+                    "target",
+                    "status",
+                    "accepted",
+                    "rung",
+                    "rungs",
+                    "moved",
+                    "max_disp_mm",
+                    "nudges",
+                    "ripped",
+                    "solid_parts",
+                    "folder",
+                )
+            }
+            for e in events
+        ],
+    )

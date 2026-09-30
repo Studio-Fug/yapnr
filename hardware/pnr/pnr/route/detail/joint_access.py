@@ -6,6 +6,7 @@ It prefers a full assignment, then lower total cost. Independent conflict
 components are solved separately; a node or component-size limit retains a legal
 partial assignment and records why the search did not complete.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -24,14 +25,23 @@ class JointSelection:
         return not self.unresolved
 
     def report(self):
-        return {"complete": self.complete, "selected": dict(self.selected),
-                "unresolved": dict(self.unresolved), "states": self.states,
-                "clusters": self.clusters}
+        return {
+            "complete": self.complete,
+            "selected": dict(self.selected),
+            "unresolved": dict(self.unresolved),
+            "states": self.states,
+            "clusters": self.clusters,
+        }
 
 
-def select_joint(options: Dict[str, Sequence], conflict: Callable,
-                 *, max_states: int = 20000, max_cluster_size: int = 24,
-                 may_interact: Callable = None) -> JointSelection:
+def select_joint(
+    options: Dict[str, Sequence],
+    conflict: Callable,
+    *,
+    max_states: int = 20000,
+    max_cluster_size: int = 24,
+    may_interact: Callable = None,
+) -> JointSelection:
     """Choose one option per terminal; each option exposes a nonnegative ``cost``.
 
     ``conflict(a,b)`` includes the geometry and resource checks. It is called once
@@ -48,51 +58,67 @@ def select_joint(options: Dict[str, Sequence], conflict: Callable,
     for x, a in enumerate(keys):
         if not options[a]:
             result.unresolved[a] = "no_generated_option"
-        for b in keys[x+1:]:
+        for b in keys[x + 1 :]:
             if may_interact is not None and not may_interact(a, b):
                 continue
             for i, ca in enumerate(options[a]):
                 for j, cb in enumerate(options[b]):
                     if conflict(ca, cb):
-                        adjacent[a].add(b); adjacent[b].add(a)
-                        forbidden[a, i].add((b, j)); forbidden[b, j].add((a, i))
+                        adjacent[a].add(b)
+                        adjacent[b].add(a)
+                        forbidden[a, i].add((b, j))
+                        forbidden[b, j].add((a, i))
     unseen = {key for key in keys if options[key]}
     while unseen:
-        todo = [min(unseen)]; component = set()
+        todo = [min(unseen)]
+        component = set()
         while todo:
             key = todo.pop()
             if key in component or key not in unseen:
                 continue
-            component.add(key); todo.extend(adjacent[key])
+            component.add(key)
+            todo.extend(adjacent[key])
         unseen -= component
         members = sorted(component)
-        domains = {key: tuple(sorted(range(len(options[key])),
-                   key=lambda i: (options[key][i].cost, i))) for key in members}
-        best = {}; best_cost = float("inf"); states = 0; exhausted = False
+        domains = {
+            key: tuple(sorted(range(len(options[key])), key=lambda i: (options[key][i].cost, i)))
+            for key in members
+        }
+        best = {}
+        best_cost = float("inf")
+        states = 0
+        exhausted = False
 
         def remember(chosen, cost):
             nonlocal best, best_cost
             if len(chosen) > len(best) or (len(chosen) == len(best) and cost < best_cost):
-                best = dict(chosen); best_cost = cost
+                best = dict(chosen)
+                best_cost = cost
 
         # A deterministic scarcity-first incumbent is always available, including
         # when the requested search budget is zero or the component is oversized.
-        remaining = dict(domains); chosen = {}; cost = 0.
+        remaining = dict(domains)
+        chosen = {}
+        cost = 0.0
         while remaining:
             key = min(remaining, key=lambda k: (len(remaining[k]), -len(adjacent[k]), k))
             domain = remaining.pop(key)
             if not domain:
                 continue
-            i = domain[0]; chosen[key] = i; cost += options[key][i].cost
+            i = domain[0]
+            chosen[key] = i
+            cost += options[key][i].cost
             bans = forbidden[key, i]
-            remaining = {k: tuple(j for j in ds if (k, j) not in bans)
-                         for k, ds in remaining.items()}
+            remaining = {
+                k: tuple(j for j in ds if (k, j) not in bans) for k, ds in remaining.items()
+            }
         remember(chosen, cost)
 
         def visit(chosen, pending, cost):
             nonlocal states, exhausted
             if states >= max_states:
-                exhausted = True; return
+                exhausted = True
+                return
             states += 1
             remember(chosen, cost)
             if not pending:
@@ -111,8 +137,9 @@ def select_joint(options: Dict[str, Sequence], conflict: Callable,
             others = {k: ds for k, ds in pending.items() if k != key}
             for i in pending[key]:
                 bans = forbidden[key, i]
-                next_domains = {k: tuple(j for j in ds if (k, j) not in bans)
-                                for k, ds in others.items()}
+                next_domains = {
+                    k: tuple(j for j in ds if (k, j) not in bans) for k, ds in others.items()
+                }
                 visit({**chosen, key: i}, next_domains, cost + options[key][i].cost)
                 if exhausted:
                     return
@@ -123,16 +150,31 @@ def select_joint(options: Dict[str, Sequence], conflict: Callable,
 
         oversized = len(members) > max_cluster_size
         if not oversized:
-            visit({}, domains, 0.)
-        reason = ("cluster_size_limit" if oversized else
-                  "search_budget" if exhausted else
-                  "candidate_set_conflict" if len(best) < len(members) else "complete")
-        result.selected.update(best); result.states += states
+            visit({}, domains, 0.0)
+        reason = (
+            "cluster_size_limit"
+            if oversized
+            else (
+                "search_budget"
+                if exhausted
+                else "candidate_set_conflict" if len(best) < len(members) else "complete"
+            )
+        )
+        result.selected.update(best)
+        result.states += states
         for key in members:
             if key not in best:
                 result.unresolved[key] = reason
-        result.clusters.append({"terminals": members, "selected_count": len(best),
-                                "reason": reason, "states": states,
-                                "cost": best_cost, "optimal_in_candidate_set":
-                                not oversized and not exhausted and len(best) == len(members)})
+        result.clusters.append(
+            {
+                "terminals": members,
+                "selected_count": len(best),
+                "reason": reason,
+                "states": states,
+                "cost": best_cost,
+                "optimal_in_candidate_set": not oversized
+                and not exhausted
+                and len(best) == len(members),
+            }
+        )
     return result

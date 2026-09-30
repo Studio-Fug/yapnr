@@ -23,10 +23,13 @@ from pnr.graph import BoardGraph, Component
 
 def hard_group_edges(constraints):
     """Relative distance bounds, independent of absolute XY anchoring."""
-    return [(con.params["anchor"], ref, con.params["radius_mm"])
-            for con in constraints.constraints
-            if con.kind == "group" and con.enforcement == Enforcement.HARD
-            for ref in con.refs if ref != con.params["anchor"]]
+    return [
+        (con.params["anchor"], ref, con.params["radius_mm"])
+        for con in constraints.constraints
+        if con.kind == "group" and con.enforcement == Enforcement.HARD
+        for ref in con.refs
+        if ref != con.params["anchor"]
+    ]
 
 
 def hard_group_limits(constraints, poses, *, partial=False):
@@ -38,18 +41,22 @@ def hard_group_limits(constraints, poses, *, partial=False):
     for anchor, ref, radius in hard_group_edges(constraints):
         if anchor not in poses and not partial:
             raise ValueError(f"hard group anchor {anchor} has no current pose")
-        if anchor in poses:limits.setdefault(ref, []).append((*poses[anchor], radius))
-        if ref in poses:limits.setdefault(anchor, []).append((*poses[ref], radius))
+        if anchor in poses:
+            limits.setdefault(ref, []).append((*poses[anchor], radius))
+        if ref in poses:
+            limits.setdefault(anchor, []).append((*poses[ref], radius))
     return limits
 
 
 def resolve_hard_rotations(constraints):
     rotations = {}
     for con in constraints.hard:
-        if con.kind not in ("fixed", "orientation"):continue
+        if con.kind not in ("fixed", "orientation"):
+            continue
         for ref in con.refs:
             value = float(con.params.get("rot") or 0) % 360
-            if ref in rotations and rotations[ref] != value:raise ValueError("conflicting hard rotations")
+            if ref in rotations and rotations[ref] != value:
+                raise ValueError("conflicting hard rotations")
             rotations[ref] = value
     return rotations
 
@@ -134,7 +141,9 @@ class ReserveRect(Rect):
         mount = getattr(other, "mount", None)
         if mount is not None and mount not in (self.side, "both"):
             return False
-        return Rect.overlaps(Rect(self.cx, self.cy, self.w, self.h), Rect(other.cx, other.cy, other.w, other.h), gap)
+        return Rect.overlaps(
+            Rect(self.cx, self.cy, self.w, self.h), Rect(other.cx, other.cy, other.w, other.h), gap
+        )
 
 
 def set_component_side(comp: Component, side: str):
@@ -143,8 +152,8 @@ def set_component_side(comp: Component, side: str):
     Ingestion stores offsets in the current side's unrotated frame. Merely
     changing the side label would leave the router targeting mirrored pads.
     """
-    if side not in ('top', 'bottom'):
-        raise ValueError(f'Invalid placement side: {side}')
+    if side not in ("top", "bottom"):
+        raise ValueError(f"Invalid placement side: {side}")
     if comp.side != side:
         for pad in comp.pads:
             pad.offset = (pad.offset[0], -pad.offset[1])
@@ -155,12 +164,12 @@ def resolve_hard_sides(constraints):
     """Resolve physical side rules without adding a position lock."""
     sides = {}
     for con in constraints.hard:
-        if con.kind not in ('fixed', 'side') or not con.params.get('side'):
+        if con.kind not in ("fixed", "side") or not con.params.get("side"):
             continue
         for ref in con.refs:
-            if ref in sides and sides[ref] != con.params['side']:
-                raise ValueError(f'conflicting hard side rules for {ref}')
-            sides[ref] = con.params['side']
+            if ref in sides and sides[ref] != con.params["side"]:
+                raise ValueError(f"conflicting hard side rules for {ref}")
+            sides[ref] = con.params["side"]
     return sides
 
 
@@ -176,8 +185,13 @@ def occupied_sides(comp: Component):
     carry their routed through vias and possibly bottom-side members, so their
     whole outline is reserved on both sides as well.
     """
-    if (comp.footprint or "").startswith("block:"):return ("top", "bottom")
-    return ("top", "bottom") if not comp.smd_body and any(p.through_hole for p in comp.pads) else (comp.side,)
+    if (comp.footprint or "").startswith("block:"):
+        return ("top", "bottom")
+    return (
+        ("top", "bottom")
+        if not comp.smd_body and any(p.through_hole for p in comp.pads)
+        else (comp.side,)
+    )
 
 
 def courtyard_rect(comp: Component) -> Rect:
@@ -334,13 +348,27 @@ def keepout_rects(
             except KeyError:
                 continue
             cx, cy = placed.get(ref, comp.pos)
-            w,h = comp.courtyard
-            local = {"north":(0,(h+depth)/2,w,depth),"south":(0,-(h+depth)/2,w,depth),
-                     "east":((w+depth)/2,0,depth,h),"west":(-(w+depth)/2,0,depth,h)}.get(extent.get("edge"))
-            if local is None:continue
-            angle = resolve_hard_rotations(constraints).get(ref,comp.rot)
-            rad=math.radians(angle);ct,st=math.cos(rad),math.sin(rad);x,y,kw,kh=local
-            rects.append(Rect(cx+x*ct-y*st,cy+x*st+y*ct,abs(kw*ct)+abs(kh*st),abs(kw*st)+abs(kh*ct)))
+            w, h = comp.courtyard
+            local = {
+                "north": (0, (h + depth) / 2, w, depth),
+                "south": (0, -(h + depth) / 2, w, depth),
+                "east": ((w + depth) / 2, 0, depth, h),
+                "west": (-(w + depth) / 2, 0, depth, h),
+            }.get(extent.get("edge"))
+            if local is None:
+                continue
+            angle = resolve_hard_rotations(constraints).get(ref, comp.rot)
+            rad = math.radians(angle)
+            ct, st = math.cos(rad), math.sin(rad)
+            x, y, kw, kh = local
+            rects.append(
+                Rect(
+                    cx + x * ct - y * st,
+                    cy + x * st + y * ct,
+                    abs(kw * ct) + abs(kh * st),
+                    abs(kw * st) + abs(kh * ct),
+                )
+            )
     return rects
 
 
@@ -362,25 +390,32 @@ def placement_rects(comp):
     the component's landing reserves are appended; each flag alone returns exactly
     what its own line (src12n / src13) returned.
     """
-    result=None
+    result = None
     if getattr(comp, "hull", None):
         from .hull import enabled, hull_placement_rects
+
         if enabled():
-            result=hull_placement_rects(comp)
+            result = hull_placement_rects(comp)
     if result is None:
-        result=[(side,courtyard_rect(comp)) for side in occupied_sides(comp)]
+        result = [(side, courtyard_rect(comp)) for side in occupied_sides(comp)]
         if comp.smd_body:
-            opposite='bottom' if comp.side=='top' else 'top'
-            for pad,(_,_,rect) in zip(comp.pads,pad_rects(comp)):
-                if pad.through_hole:result.append((opposite,rect))
+            opposite = "bottom" if comp.side == "top" else "top"
+            for pad, (_, _, rect) in zip(comp.pads, pad_rects(comp)):
+                if pad.through_hole:
+                    result.append((opposite, rect))
         if os.environ.get("PNR_MACRO_HULL") == "1":
             from .hull import inner_rects
+
             result += inner_rects(comp)
     if _landing.enabled():
         # PNR_PAIR_LANDING_RESERVE=1: bodies carry their mount side and the
         # component's diff-pair via landings are added as ReserveRects.
-        mount=_landing.macro_mount(comp) if (comp.footprint or '').startswith('block:') else comp.side
-        result=[(side,MountedRect(r.cx,r.cy,r.w,r.h,mount=mount)) for side,r in result]+_landing.reserve_rects(comp)
+        mount = (
+            _landing.macro_mount(comp) if (comp.footprint or "").startswith("block:") else comp.side
+        )
+        result = [
+            (side, MountedRect(r.cx, r.cy, r.w, r.h, mount=mount)) for side, r in result
+        ] + _landing.reserve_rects(comp)
     return result
 
 

@@ -1,0 +1,8 @@
+import is_atomic_part
+
+component Regulator_package:
+    """Linear regulator, 3.3 V, SOT-23."""
+    trait is_atomic_part<manufacturer="Example", partnumber="REG-33", footprint="SOT-23.kicad_mod", symbol="Regulator.kicad_sym">
+    signal VIN ~ pin 1
+    signal GND ~ pin 2
+    signal VOUT ~ pin 3

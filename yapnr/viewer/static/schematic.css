@@ -1,0 +1,128 @@
+/* Schematic view (schematic.js). PCB styles live in style.css and are unchanged. */
+#views{flex:1 1 0;display:flex;min-height:200px;min-width:0;overflow:hidden}
+.workspace{min-height:0}
+#views>#boardwrap{flex:1 1 0;min-width:0}
+#schwrap{flex:1 1 0;min-width:0;position:relative;overflow:hidden;display:none;background:#0e171b;border-left:1px solid #2c3a41}
+body[data-view=split] #schwrap,body[data-view=sch] #schwrap{display:flex}
+#sch-main{flex:1 1 0;min-width:0;min-height:0;position:relative;overflow:hidden}
+#schwrap{min-height:0}
+body[data-view=sch] #boardwrap{display:none}
+body[data-view=sch] #schwrap{border-left:0}
+body[data-view=sch] #fit{display:none}
+.toolbar .tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.seg{display:inline-flex;border:1px solid #425762;border-radius:6px;overflow:hidden}
+.seg button{border:0;border-radius:0;background:#1d2b33;font-size:11px;padding:6px 10px}
+.seg button+button{border-left:1px solid #425762}
+.seg button.active{background:#9ee6d1;color:#102b25;font-weight:650}
+#sch-chip{font-size:11px;color:#ffd166;border:1px solid #6b5a2a;background:#2a2513;border-radius:12px;padding:3px 4px 3px 10px;max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#sch-chip button{padding:0 7px;margin-left:4px;font-size:12px;background:transparent;border:0;color:#ffd166}
+#sch-svg{display:block;width:100%;height:100%;touch-action:none;cursor:grab;user-select:none;--refs:1.5px}
+#sch-svg:active{cursor:grabbing}
+#sch-bar{position:absolute;top:8px;left:10px;right:10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;pointer-events:none}
+#sch-bar>*{pointer-events:auto}
+#sch-bar>button{font-size:11px;padding:6px 10px}
+#sch-status{position:absolute;left:12px;top:48px;background:#10191dd9;padding:8px 10px;border-radius:5px;display:none;max-width:70%}
+#sch-hover{position:absolute;display:none;pointer-events:none;background:#223540f0;border:1px solid #557383;padding:7px 9px;white-space:pre-line;font-size:11px;line-height:1.5;max-width:360px;z-index:3;border-radius:4px}
+#sch-legend{flex:0 0 244px;overflow:auto;background:#111b20;border-left:1px solid #2f4149;padding:10px 12px;font-size:11px}
+body[data-view=split] #sch-legend{position:absolute;top:44px;right:8px;bottom:8px;width:236px;background:#101b20ee;border:1px solid #2f4149;border-radius:6px;z-index:2}
+body.sch-nolegend #sch-legend{display:none}
+body:not(.sch-nolegend) #sch-legend-toggle{background:#26453f;border-color:#9ee6d1}
+#sch-legend h3{font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:#a7bdc8;margin:12px 0 6px}
+#sch-legend p{margin:4px 0 6px}
+#sch-legend .lghead b{display:block;font-size:12px;color:#e8f2f5}
+#sch-legend .lghead span{color:#8fa4ad;font-size:10.5px;line-height:1.5;display:block;overflow-wrap:anywhere}
+#sch-legend .lg{display:grid;grid-template-columns:12px 1fr;column-gap:7px;width:100%;text-align:left;background:transparent;border:1px solid transparent;padding:4px 5px;margin:1px 0;font-size:11px;line-height:1.35;border-radius:4px}
+#sch-legend .lg:hover{border-color:#40606b;background:#1a2a31}
+#sch-legend .lg.on{border-color:#ffd166;background:#2a2716}
+#sch-legend .lg.ind{padding-left:17px;grid-template-columns:10px 1fr}
+#sch-legend .lg i{width:12px;height:12px;border-radius:3px;margin-top:1px;opacity:.9}
+#sch-legend .lg.ind i{width:10px;height:10px;opacity:.6}
+#sch-legend .lg i.dash{background-image:repeating-linear-gradient(90deg,transparent 0 3px,#101b20 3px 5px)!important}
+#sch-legend .lg span{overflow-wrap:anywhere}
+#sch-legend .lg em{grid-column:2;color:#8fa4ad;font-size:10px;font-style:normal}
+#sch-legend details{margin-top:10px}#sch-legend details p{white-space:pre-line;overflow-wrap:anywhere}
+
+/* drawing: mm user units, hairline strokes that do not scale */
+#sch-root .b,#sch-root .pin,#sch-root .w,#sch-root .stub,#sch-root .nc,#sch-root .gnd,#sch-root .rbar,#sch-root .rarrow,#sch-root .lflag,#sch-root .selbox,#sch-root .frame rect,#sch-root .halo{vector-effect:non-scaling-stroke}
+#sch-root .b{fill:none;stroke:#e2b27c;stroke-width:1.3px;stroke-linejoin:round}
+#sch-root .b.bg{fill:#1f2c33}
+#sch-root .b.fo{fill:#e2b27c}
+#sch-root .pin{stroke:#d49a6a;stroke-width:1px}
+#sch-root .ph{fill:transparent;stroke:none;cursor:pointer}
+#sch-root text{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+#sch-root .rf{font-size:var(--refs);font-weight:700;fill:#f4f8fa;font-family:Inter,system-ui,sans-serif}
+#sch-root .vl{font-size:1.2px;fill:#a9bcc5}
+#sch-root .it{font-size:1px;fill:#7f97a2;font-style:italic}
+#sch-root .pn{font-size:1.1px;fill:#8fd3e0}
+#sch-root .pq{font-size:.8px;fill:#8a9ea7}
+#sch-root .st{font-size:1px;fill:#e2b27c}
+#sch-root .w{fill:none;stroke:#5fcf8f;stroke-width:1.3px;stroke-linejoin:round}
+#sch-root .jn{fill:#5fcf8f}
+#sch-root .stub{stroke:#5fcf8f;stroke-width:1.2px}
+#sch-root .gnd{fill:none;stroke:#b8c7ce;stroke-width:1.2px}
+#sch-root .nc{stroke:#6f8cff;stroke-width:1.2px}
+#sch-root .rail .rt{font-size:1.25px;fill:#ff8f7e;font-weight:700}
+#sch-root .rarrow{fill:#ff8f7e;stroke:none}
+#sch-root .rbar{stroke:#ff8f7e;stroke-width:2px}
+#sch-root .lbl .lt{font-size:1.25px;fill:#8ec5ff}
+#sch-root .lflag{fill:#15283a;stroke:#5a8fc7;stroke-width:1px}
+#sch-root .lbl.mini .lt{font-size:1px;fill:#7fb0e0}
+#sch-root .selbox{fill:none;stroke:#79ffe0;stroke-width:2px;stroke-dasharray:6 3;display:none}
+#sch-root .p.sel .selbox{display:block}
+#sch-root .p{cursor:pointer}
+#sch-root .frame rect{fill:var(--fc,#6b8793);fill-opacity:.045;stroke:var(--fc,#6b8793);stroke-opacity:.75;stroke-width:1.4px}
+#sch-root .frame .ft{font-size:var(--ft,3.2px);fill:var(--fc,#a7bdc8);font-weight:700;font-family:Inter,system-ui,sans-serif}
+#sch-root .halo{stroke-width:1px;fill-opacity:.16;stroke-opacity:.55}
+#sch-root.color-role .halo.grp,#sch-root.color-group .halo.role{display:none}
+#sch-root .halo.grp.d1{fill-opacity:.1;stroke-dasharray:3 2}
+#sch-root .loop polygon{fill:none;stroke-linejoin:round;stroke-linecap:round;stroke-width:1.3;opacity:.5}
+#sch-root .loop.hot polygon{stroke:#ff5b3a}
+#sch-root .loop.path polygon{stroke:#ffb347;stroke-dasharray:1.6 1.2}
+#sch-root .loop .lb{fill:#2b150f;stroke:#ff5b3a;stroke-width:.3}
+#sch-root .loop.path .lb{stroke:#ffb347}
+#sch-root .loop .lbt{font-size:2.2px;font-weight:700;fill:#ffb199;font-family:Inter,system-ui,sans-serif}
+#sch-root .loop{display:none}
+#sch-root .loop.in{display:inline}
+#sch-root .lbadge rect{fill:#3a160e;stroke:#ff5b3a;stroke-width:.25}
+#sch-root .lbadge.path rect{fill:#33240c;stroke:#ffb347}
+#sch-root .lbadge .lbt2{font-size:1.25px;font-weight:700;fill:#ffb199;font-family:Inter,system-ui,sans-serif}
+#sch-root .lbadge.path .lbt2{fill:#ffd08a}
+#sch-root.color-group .lbadge{display:none}
+#sch-root .lbadge{cursor:pointer}
+#sch-root.focusing .lbadge:not(.in){opacity:.2}
+#sch-root .loop{cursor:pointer}
+
+/* focus: a legend entry dims everything outside it */
+#sch-root.focusing .p:not(.in),#sch-root.focusing .wires>:not(.in),#sch-root.focusing .halo:not(.in),#sch-root.focusing .loop:not(.in){opacity:.16}
+#sch-root.focusing .frame:not(.in){opacity:.35}
+#sch-root.focusing .frame.in rect{stroke:#ffd166;stroke-opacity:1;stroke-width:2.4px}
+#sch-root.focusing .p.in .b{stroke:#ffd166}
+#sch-root.focusing .halo.in{fill-opacity:.3;stroke-opacity:1}
+#sch-root .loop.in polygon{opacity:.95;stroke-width:1.8}
+#sch-root .w.in{stroke-width:2.4px}
+/* net trace (click) and PCB hover mirror */
+#sch-root .w.hl,#sch-root .stub.hl,#sch-root .hl .stub,#sch-root .pin.hl{stroke:#ffe066!important;stroke-width:3px!important;opacity:1!important}
+#sch-root .jn.hl{fill:#ffe066}
+#sch-root .hl .rt,#sch-root .hl .lt{fill:#ffe066!important}
+#sch-root .gnd.hl{stroke:#ffe066}
+#sch-root .w.hov,#sch-root .hov .stub,#sch-root .pin.hov{stroke:#ffffff;stroke-width:2.4px}
+#sch-root .hov .rt,#sch-root .hov .lt{fill:#ffffff}
+#sch-root .w.routing,#sch-root .routing .stub,#sch-root .pin.routing{stroke:#ffde68;stroke-dasharray:4 3}
+#sch-root .routing .rt,#sch-root .routing .lt{fill:#ffde68}
+/* level of detail */
+#sch-svg.lod1 .pq,#sch-svg.lod1 .it{display:none}
+#sch-svg.lod0 .pn,#sch-svg.lod0 .vl,#sch-svg.lod0 .lbl.mini{display:none}
+/* Inspect / Ask highlight (YapnrView.highlight), pink like the PCB overlay */
+#sch-root .p.ask .b{stroke:#ff7ad9}
+#sch-root .p.ask .selbox{display:block;stroke:#ff7ad9;stroke-dasharray:none}
+#sch-root .w.ask,#sch-root .stub.ask,#sch-root .ask .stub,#sch-root .pin.ask{stroke:#ff7ad9!important;stroke-width:3px!important;opacity:1!important}
+#sch-root .jn.ask{fill:#ff7ad9}
+#sch-root .ask .rt,#sch-root .ask .lt{fill:#ff7ad9!important}
+#sch-root .gnd.ask{stroke:#ff7ad9}
+#sch-chip button.sch-ask{color:#bff5e6;border:1px solid #6fbfaa;border-radius:9px;padding:0 7px;margin-left:6px}
+#sch-toast{position:absolute;left:12px;bottom:12px;background:#10191ded;border:1px solid #6fbfaa;color:#bff5e6;padding:6px 10px;border-radius:5px;font-size:11px;pointer-events:none;z-index:3;max-width:70%}
+/* note badges (schematic.js schNoteBadges; colours as the PCB badges in notes.js) */
+#sch-root .nbadge{cursor:pointer}
+#sch-root .nbadge path{stroke:#0b1216;stroke-width:.18}
+#sch-root .nbadge .nbf{fill:#0b121670;stroke:none}
+#sch-root .nbadge .nbt{font-size:1.45px;font-weight:800;fill:#0b1216;font-family:Inter,system-ui,sans-serif;pointer-events:none}

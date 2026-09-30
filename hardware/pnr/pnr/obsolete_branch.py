@@ -6,6 +6,7 @@ peel these clusters while retaining the articulation item at a shared junction.
 Only leaves reached from moved-pad seeds are removed; unrelated stubs survive.
 """
 
+
 def _blocks(graph):
     """Iterative Tarjan blocks; avoids recursion limits on long routed traces."""
     discovery, low, parent, edges, result = {}, {}, {}, [], []

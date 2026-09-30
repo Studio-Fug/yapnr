@@ -9,30 +9,59 @@ from unittest.mock import patch
 class PlaneRefillTest(unittest.TestCase):
     def test_same_package_plated_hole_is_reused_across_back_layer_copper(self):
         import pcbnew as k
-        from pnr.writeback import _dogbone_fanout_net,_has_through_access
-        b=k.BOARD();b.SetCopperLayerCount(4);n=k.NETINFO_ITEM(b,'lv');b.Add(n)
-        f=k.FOOTPRINT(b);b.Add(f);f.SetPosition(k.VECTOR2I(5000000,5000000))
-        pads=[]
-        for through,x in ((False,5),(True,6.5)):
-            p=k.PAD(f);p.SetNumber('2' if through else '1');p.SetSize(k.VECTOR2I(800000,800000))
-            p.SetShape(k.PAD_SHAPE_CIRCLE);p.SetPosition(k.VECTOR2I(round(x*1e6),5000000))
+
+        from pnr.writeback import _dogbone_fanout_net, _has_through_access
+
+        b = k.BOARD()
+        b.SetCopperLayerCount(4)
+        n = k.NETINFO_ITEM(b, "lv")
+        b.Add(n)
+        f = k.FOOTPRINT(b)
+        b.Add(f)
+        f.SetPosition(k.VECTOR2I(5000000, 5000000))
+        pads = []
+        for through, x in ((False, 5), (True, 6.5)):
+            p = k.PAD(f)
+            p.SetNumber("2" if through else "1")
+            p.SetSize(k.VECTOR2I(800000, 800000))
+            p.SetShape(k.PAD_SHAPE_CIRCLE)
+            p.SetPosition(k.VECTOR2I(round(x * 1e6), 5000000))
             p.SetAttribute(k.PAD_ATTRIB_PTH if through else k.PAD_ATTRIB_SMD)
-            layers=k.LSET.AllCuMask() if through else k.LSET();layers.AddLayer(k.F_Cu);p.SetLayerSet(layers)
-            if through:p.SetDrillSize(k.VECTOR2I(300000,300000))
-            p.SetNetCode(n.GetNetCode());f.Add(p);pads.append(p)
-        edge=k.PCB_SHAPE(b);edge.SetShape(k.SHAPE_T_RECT);edge.SetStart(k.VECTOR2I(0,0));edge.SetEnd(k.VECTOR2I(12000000,12000000));edge.SetLayer(k.Edge_Cuts);edge.SetWidth(50000);b.Add(edge)
-        other=k.NETINFO_ITEM(b,'back');b.Add(other)
-        t=k.PCB_TRACK(b);t.SetLayer(k.B_Cu);t.SetStart(k.VECTOR2I(5750000,4000000));t.SetEnd(k.VECTOR2I(5750000,6000000));t.SetWidth(200000);t.SetNetCode(other.GetNetCode());b.Add(t)
+            layers = k.LSET.AllCuMask() if through else k.LSET()
+            layers.AddLayer(k.F_Cu)
+            p.SetLayerSet(layers)
+            if through:
+                p.SetDrillSize(k.VECTOR2I(300000, 300000))
+            p.SetNetCode(n.GetNetCode())
+            f.Add(p)
+            pads.append(p)
+        edge = k.PCB_SHAPE(b)
+        edge.SetShape(k.SHAPE_T_RECT)
+        edge.SetStart(k.VECTOR2I(0, 0))
+        edge.SetEnd(k.VECTOR2I(12000000, 12000000))
+        edge.SetLayer(k.Edge_Cuts)
+        edge.SetWidth(50000)
+        b.Add(edge)
+        other = k.NETINFO_ITEM(b, "back")
+        b.Add(other)
+        t = k.PCB_TRACK(b)
+        t.SetLayer(k.B_Cu)
+        t.SetStart(k.VECTOR2I(5750000, 4000000))
+        t.SetEnd(k.VECTOR2I(5750000, 6000000))
+        t.SetWidth(200000)
+        t.SetNetCode(other.GetNetCode())
+        b.Add(t)
         b.BuildConnectivity()
-        self.assertEqual(_dogbone_fanout_net(b,n.GetNetCode()),0)
-        self.assertTrue(_has_through_access(b,pads[0]))
-        self.assertEqual(sum(t.GetClass()=='PCB_VIA' for t in b.GetTracks()),0)
-        self.assertEqual(len(list(b.GetTracks())),2)
-        self.assertEqual(_dogbone_fanout_net(b,n.GetNetCode()),0)
-        self.assertEqual(len(list(b.GetTracks())),2)
+        self.assertEqual(_dogbone_fanout_net(b, n.GetNetCode()), 0)
+        self.assertTrue(_has_through_access(b, pads[0]))
+        self.assertEqual(sum(t.GetClass() == "PCB_VIA" for t in b.GetTracks()), 0)
+        self.assertEqual(len(list(b.GetTracks())), 2)
+        self.assertEqual(_dogbone_fanout_net(b, n.GetNetCode()), 0)
+        self.assertEqual(len(list(b.GetTracks())), 2)
 
     def test_surface_reuse_is_idempotent_and_avoids_another_via(self):
         import pcbnew
+
         from pnr.writeback import _dogbone_fanout_net, _has_through_access
 
         b = pcbnew.BOARD()
@@ -80,6 +109,7 @@ class PlaneRefillTest(unittest.TestCase):
 
     def test_existing_thermal_pad_prevents_extra_router_via(self):
         import pcbnew
+
         from pnr.writeback import _dogbone_fanout_net
 
         b = pcbnew.BOARD()
@@ -98,9 +128,7 @@ class PlaneRefillTest(unittest.TestCase):
             ls.AddLayer(pcbnew.F_Cu)
             p.SetLayerSet(ls)
             p.SetSize(
-                pcbnew.VECTOR2I(600000, 600000)
-                if thermal
-                else pcbnew.VECTOR2I(2650000, 2650000)
+                pcbnew.VECTOR2I(600000, 600000) if thermal else pcbnew.VECTOR2I(2650000, 2650000)
             )
             if thermal:
                 p.SetDrillSize(pcbnew.VECTOR2I(200000, 200000))
@@ -112,6 +140,7 @@ class PlaneRefillTest(unittest.TestCase):
 
     def test_surface_reuse_rejects_blocked_connection(self):
         import pcbnew
+
         from pnr.writeback import _reuse_surface_ground
 
         b = pcbnew.BOARD()
@@ -147,6 +176,7 @@ class PlaneRefillTest(unittest.TestCase):
 
     def test_refill_preserves_plane_and_does_not_repeat_fanout(self):
         import pcbnew
+
         from pnr.writeback import apply_planes
 
         board = pcbnew.BOARD()
@@ -178,9 +208,9 @@ class PlaneRefillTest(unittest.TestCase):
             edges.append(edge)
         board.BuildConnectivity()
         rules = {"net_classes": [{"plane_layer": "In1.Cu", "nets": ["GND"]}]}
-        with patch(
-            "pnr.writeback._dogbone_fanout_net", return_value=0
-        ) as fanout, patch("pcbnew.ZONE_FILLER") as filler:
+        with patch("pnr.writeback._dogbone_fanout_net", return_value=0) as fanout, patch(
+            "pcbnew.ZONE_FILLER"
+        ) as filler:
             self.assertEqual(apply_planes(board, rules), 1)
             original = next(iter(board.Zones())).m_Uuid.AsString()
             self.assertEqual(apply_planes(board, rules), 1)

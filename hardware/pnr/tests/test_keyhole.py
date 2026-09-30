@@ -1,11 +1,12 @@
 import unittest
+
 from pnr.route.detail.keyhole import (
-    route,
-    relax,
+    acceptable,
+    align_parallel,
     length,
     octilinear,
-    align_parallel,
-    acceptable,
+    relax,
+    route,
 )
 
 
@@ -25,9 +26,7 @@ class KeyholeTest(unittest.TestCase):
         self.assertEqual(r.status, "routed")
         self.assertEqual(r.path[0], (0, 0))
         self.assertEqual(r.path[-1], (4, 0))
-        self.assertTrue(
-            all(clear(a, b) and octilinear(a, b) for a, b in zip(r.path, r.path[1:]))
-        )
+        self.assertTrue(all(clear(a, b) and octilinear(a, b) for a, b in zip(r.path, r.path[1:])))
         self.assertLessEqual(length(r.path), r.raw_length + 1e-8)
 
     def test_terminal_is_not_snapped_out_of_obstacle(self):
@@ -77,19 +76,14 @@ class KeyholeTest(unittest.TestCase):
         self.assertEqual(q[0], path[0])
         self.assertEqual(q[-1], path[-1])
         self.assertTrue(
-            any(
-                abs(a[1] - 0.35) < 1e-8 and abs(b[1] - 0.35) < 1e-8
-                for a, b in zip(q, q[1:])
-            )
+            any(abs(a[1] - 0.35) < 1e-8 and abs(b[1] - 0.35) < 1e-8 for a, b in zip(q, q[1:]))
         )
         self.assertTrue(all(octilinear(a, b) for a, b in zip(q, q[1:])))
 
     def test_alignment_cannot_cross_obstacle(self):
         path = [(0, 1), (1, 0.5), (3, 0.5), (4, 1)]
         self.assertEqual(
-            align_parallel(
-                path, [((0, 0), (4, 0))], 0.35, lambda a, b: min(a[1], b[1]) >= 0.49
-            ),
+            align_parallel(path, [((0, 0), (4, 0))], 0.35, lambda a, b: min(a[1], b[1]) >= 0.49),
             path,
         )
 
@@ -142,12 +136,17 @@ class KeyholeTest(unittest.TestCase):
 
 
 class BoundsTest(unittest.TestCase):
- def test_direct_fast_path_obeys_regional_bounds(self):
-  self.assertNotEqual(route([(5,5)],[(6,5)],(0,0,1,1),lambda a,b:True).status,'routed')
- def test_outside_island_anchor_cannot_win_shortcut(self):
-  r=route([(0,0),(1.01,.5)],[(1,.5)],(0,0,1,1),lambda a,b:True)
-  self.assertEqual(r.status,'routed');self.assertEqual(r.path[0],(0,0))
-  self.assertTrue(all(0<=x<=1 and 0<=y<=1 for x,y in r.path))
+    def test_direct_fast_path_obeys_regional_bounds(self):
+        self.assertNotEqual(
+            route([(5, 5)], [(6, 5)], (0, 0, 1, 1), lambda a, b: True).status, "routed"
+        )
+
+    def test_outside_island_anchor_cannot_win_shortcut(self):
+        r = route([(0, 0), (1.01, 0.5)], [(1, 0.5)], (0, 0, 1, 1), lambda a, b: True)
+        self.assertEqual(r.status, "routed")
+        self.assertEqual(r.path[0], (0, 0))
+        self.assertTrue(all(0 <= x <= 1 and 0 <= y <= 1 for x, y in r.path))
+
 
 if __name__ == "__main__":
     unittest.main()

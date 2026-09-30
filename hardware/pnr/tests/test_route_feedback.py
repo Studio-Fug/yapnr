@@ -10,6 +10,7 @@ import os
 import unittest
 
 import yaml
+
 from pnr.constraints import compile_constraints
 from pnr.graph import BoardGraph
 from pnr.route.feedback import route_and_place

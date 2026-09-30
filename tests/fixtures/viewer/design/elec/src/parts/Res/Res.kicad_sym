@@ -1,0 +1,13 @@
+(kicad_symbol_lib (version 20211014) (generator yapnr_test_fixture)
+  (symbol "Res" (pin_numbers hide) (pin_names hide) (in_bom yes) (on_board yes)
+    (property "Reference" "R" (at 2.54 0 90) (effects (font (size 1.27 1.27))))
+    (property "Value" "10k" (at -2.54 0 90) (effects (font (size 1.27 1.27))))
+    (symbol "Res_0_1"
+      (rectangle (start -1.016 2.54) (end 1.016 -2.54) (stroke (width 0.254) (type default)) (fill (type none)))
+    )
+    (symbol "Res_1_1"
+      (pin passive line (at 0 3.81 270) (length 1.27) (name "~" (effects (font (size 1.27 1.27)))) (number "1" (effects (font (size 1.27 1.27)))))
+      (pin passive line (at 0 -3.81 90) (length 1.27) (name "~" (effects (font (size 1.27 1.27)))) (number "2" (effects (font (size 1.27 1.27)))))
+    )
+  )
+)

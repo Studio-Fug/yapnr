@@ -27,7 +27,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("pcb", help="the routed .kicad_pcb (modified in place)")
     ap.add_argument("--rules", required=True, help="rules.json (pnr.route --dump-rules)")
-    ap.add_argument("--refill-only", action="store_true", help="Refill saved zones without generating fanouts")
+    ap.add_argument(
+        "--refill-only", action="store_true", help="Refill saved zones without generating fanouts"
+    )
     args = ap.parse_args(argv)
 
     import pcbnew
@@ -38,6 +40,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     # The fab profile's custom rules must be beside the board *before* it is
     # loaded: the zone filler applies the rules KiCad reads at load time.
     from pnr.fab_profile import load_board
+
     board = load_board(args.pcb)
     board.BuildConnectivity()
     if args.refill_only:

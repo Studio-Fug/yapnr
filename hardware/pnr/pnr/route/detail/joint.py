@@ -10,10 +10,12 @@ import heapq
 import itertools
 import math
 import time
-from .layered import primitives, route_layers
-from .spatial_conflicts import PrimitiveIndex
-from .regional import RegionalResult, segment_distance
+
 from pnr.fab_profile import bind_active
+
+from .layered import primitives, route_layers
+from .regional import RegionalResult, segment_distance
+from .spatial_conflicts import PrimitiveIndex
 
 # Fab-profile default via (PNR_FAB_PROFILE; legacy 0.6 / 0.501), kept in module
 # globals: conflict() runs per primitive pair and must cost what the literals did.
@@ -40,10 +42,12 @@ def conflict(a_request, a, b_request, b):
     gap = (aw + bw) / 2 + max(a_request.clearance, b_request.clearance)
     # Disjoint expanded coordinate intervals are a lower bound on distance.
     # Keep the exact distance test for all potentially contacting primitives.
-    if (min(ap[0],aq[0]) - max(bp[0],bq[0]) >= gap or
-        min(bp[0],bq[0]) - max(ap[0],aq[0]) >= gap or
-        min(ap[1],aq[1]) - max(bp[1],bq[1]) >= gap or
-        min(bp[1],bq[1]) - max(ap[1],aq[1]) >= gap):
+    if (
+        min(ap[0], aq[0]) - max(bp[0], bq[0]) >= gap
+        or min(bp[0], bq[0]) - max(ap[0], aq[0]) >= gap
+        or min(ap[1], aq[1]) - max(bp[1], bq[1]) >= gap
+        or min(bp[1], bq[1]) - max(ap[1], aq[1]) >= gap
+    ):
         return False
     return segment_distance(ap, aq, bp, bq) < gap - 1e-9
 
@@ -92,17 +96,23 @@ def solve_joint_region(
         raise ValueError("unique request names required")
     deadline = time.monotonic() + max_seconds
     attempts = []
-    terminal_index = PrimitiveIndex([(r,('track',la,p,p)) for r in requests
-        for p in r.sources+r.targets for la in terminal_layers(r,p)], conflict)
-    via_terminal_index = PrimitiveIndex([(r,('track',0,p,p)) for r in requests
-        for p in r.sources+r.targets], conflict)
+    terminal_index = PrimitiveIndex(
+        [
+            (r, ("track", la, p, p))
+            for r in requests
+            for p in r.sources + r.targets
+            for la in terminal_layers(r, p)
+        ],
+        conflict,
+    )
+    via_terminal_index = PrimitiveIndex(
+        [(r, ("track", 0, p, p)) for r in requests for p in r.sources + r.targets], conflict
+    )
 
     def plan(name, constraints):
         r = byname[name]
         barriers = [
-            (byname[other], primitive)
-            for owner, other, primitive in constraints
-            if owner == name
+            (byname[other], primitive) for owner, other, primitive in constraints if owner == name
         ]
 
         barrier_index = PrimitiveIndex(barriers, conflict)
@@ -114,15 +124,19 @@ def solve_joint_region(
             ):
                 return False
             edge = ("track", la, a, b)
-            return (not terminal_index.collides(r, edge)
-                    and not barrier_index.collides(r, edge)
-                    and static_clear(r, la, a, b))
+            return (
+                not terminal_index.collides(r, edge)
+                and not barrier_index.collides(r, edge)
+                and static_clear(r, la, a, b)
+            )
 
         def via(p):
-            edge = ('via', None, p, p)
-            return (not via_terminal_index.collides(r, edge)
-                    and not barrier_index.collides(r, edge)
-                    and static_via_clear(r, p))
+            edge = ("via", None, p, p)
+            return (
+                not via_terminal_index.collides(r, edge)
+                and not barrier_index.collides(r, edge)
+                and static_via_clear(r, p)
+            )
 
         started = time.monotonic()
         result = route_layers(
@@ -137,11 +151,7 @@ def solve_joint_region(
             terminal_layers=lambda p: terminal_layers(r, p),
             first_via_allowed=lambda p: first_via_allowed(r, p),
             deadline=min(deadline, started + route_seconds),
-            on_stage=(
-                (lambda event: on_event(dict(request=name, **event)))
-                if on_event
-                else None
-            ),
+            on_stage=((lambda event: on_event(dict(request=name, **event))) if on_event else None),
         )
         event = dict(
             request=name,
@@ -163,16 +173,10 @@ def solve_joint_region(
             return RegionalResult(
                 result.status,
                 {},
-                [
-                    dict(
-                        stage="independent", events=initial_events, completed=len(paths)
-                    )
-                ],
+                [dict(stage="independent", events=initial_events, completed=len(paths))],
             )
         paths[r.name] = result.path
-    attempts.append(
-        dict(stage="independent", events=initial_events, completed=len(paths))
-    )
+    attempts.append(dict(stage="independent", events=initial_events, completed=len(paths)))
     queue = []
     sequence = itertools.count()
     seen = {frozenset()}
@@ -208,7 +212,9 @@ def solve_joint_region(
             )
         )
         if on_event is not None:
-            on_event(dict(stage='joint_paths',node=node,conflicts=len(collisions),partial_paths=paths))
+            on_event(
+                dict(stage="joint_paths", node=node, conflicts=len(collisions), partial_paths=paths)
+            )
         if not collisions:
             return RegionalResult("routed", paths, attempts)
         an, ap, bn, bp = collisions[0]
@@ -229,9 +235,18 @@ def solve_joint_region(
                 # A complete feasible transaction must not be discarded while
                 # exploring its sibling. Native acceptance still runs afterward.
                 if not conflicts(requests, child_paths):
-                    attempts.append(dict(stage="complete", node=node, constraints=child_constraints))
+                    attempts.append(
+                        dict(stage="complete", node=node, constraints=child_constraints)
+                    )
                     if on_event is not None:
-                        on_event(dict(stage="joint_paths",node=node,conflicts=0,partial_paths=child_paths))
+                        on_event(
+                            dict(
+                                stage="joint_paths",
+                                node=node,
+                                conflicts=0,
+                                partial_paths=child_paths,
+                            )
+                        )
                     return RegionalResult("routed", child_paths, attempts)
                 push(child_paths, child_constraints)
     return RegionalResult(

@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+
 from pnr.constraints import CompiledConstraints
 from pnr.graph import BoardGraph
 from pnr.place import place
@@ -66,8 +67,11 @@ class FeedbackReport:
         hist = " -> ".join(f"{o:.0f}" for o in self.overflow_history)
         estimate = ""
         if self.connection_history:
-            estimate = "; estimated missing signal connections [" + " -> ".join(
-                str(n) for n in self.connection_history) + "]"
+            estimate = (
+                "; estimated missing signal connections ["
+                + " -> ".join(str(n) for n in self.connection_history)
+                + "]"
+            )
         outline = ""
         if self.outline:
             outline = "; outline %.1fx%.1f mm (x%.2f)" % (
@@ -75,12 +79,10 @@ class FeedbackReport:
                 self.outline[1],
                 self.outline_scale,
             )
-        return (
-            f"place<->route {self.rounds} round(s): overflow [{hist}], "
-            f"converged={self.converged}; best round={self.best_round}; stop={self.termination}; deferred to native={len(self.deferred_nets)}"
-            + outline + estimate
-            + (f"; {self.placement.summary()}" if self.placement else "")
-            + (f"; {self.route.summary()}" if self.route else "")
+        return f"place<->route {self.rounds} round(s): overflow [{hist}], " f"converged={self.converged}; best round={self.best_round}; stop={self.termination}; deferred to native={len(self.deferred_nets)}" + outline + estimate + (
+            f"; {self.placement.summary()}" if self.placement else ""
+        ) + (
+            f"; {self.route.summary()}" if self.route else ""
         )
 
 
@@ -139,14 +141,15 @@ def detail_congestion(
     nx = max(1, int(np.ceil(width / gcell_mm)))
     ny = max(1, int(np.ceil(height / gcell_mm)))
     cong = np.zeros((nx, ny))
-    events=getattr(board_route,'pressure_events',None)
+    events = getattr(board_route, "pressure_events", None)
     if events is not None:
         for event in events:
-            for x,y in event['points']:
-                i=min(nx-1,max(0,int(x/gcell_mm)));j=min(ny-1,max(0,int(y/gcell_mm)))
-                cong[i,j]+=event['weight']
+            for x, y in event["points"]:
+                i = min(nx - 1, max(0, int(x / gcell_mm)))
+                j = min(ny - 1, max(0, int(y / gcell_mm)))
+                cong[i, j] += event["weight"]
         return cong
-    unrouted = set(board_route.result.unrouted) - set(getattr(board_route,"deferred_nets",()))
+    unrouted = set(board_route.result.unrouted) - set(getattr(board_route, "deferred_nets", ()))
     if not unrouted:
         return cong
     for net, points in getattr(board_route, "failure_sites", {}).items():
@@ -174,7 +177,7 @@ def detail_congestion(
     return cong
 
 
-def local_feedback_placement(graph,constraints,rules,pressure,tried):
+def local_feedback_placement(graph, constraints, rules, pressure, tried):
     """Perturb a legal checkpoint when global legalization exhausts its seeds.
 
     Score source-derived channel relief near observed routing pressure. Every
@@ -182,30 +185,53 @@ def local_feedback_placement(graph,constraints,rules,pressure,tried):
     a subsequent complete detailed route decides whether it is an improvement.
     """
     import math
+
     from pnr.place.channels import ChannelModel
-    from pnr.place.metrics import hard_violations,hpwl
-    g=BoardGraph.from_json(graph.to_json());fixed=resolve_fixed_poses(g,constraints)
-    model=ChannelModel(g,rules or {});options=[]
-    for c in sorted(g.components,key=lambda c:(-pressure.get(c.ref,1),c.ref))[:]:
-        if c.ref in fixed or c.locked or pressure.get(c.ref,1)<=1:continue
-        others=[o for o in g.components if o.ref!=c.ref];old=tuple(c.pos)
-        points=[(old[0]+dx*d,old[1]+dy*d) for d in (.25,.5,1.) for dx,dy in ((1,0),(-1,0),(0,1),(0,-1),(1,1),(1,-1),(-1,1),(-1,-1))]
-        baseline=float(model.penalty(c,others,*old));costs=model.penalty(c,others,np.array([q[0] for q in points]),np.array([q[1] for q in points]))
-        for point,cost in zip(points,costs):
-            identity=(c.ref,round(point[0],6),round(point[1],6),c.rot)
-            if identity in tried:continue
-            c.pos=point
-            if not any(hard_violations(g,constraints).values()):
-                gain=baseline-float(cost)
-                score=pressure[c.ref]*(gain+.01)-.001*math.dist(old,point)
-                options.append((score,c.ref,point,identity,gain))
-        c.pos=old
-    if not options:return None
-    score,ref,point,identity,gain=max(options,key=lambda t:(t[0],t[1],t[2]))
-    tried.add(identity);c=g.component(ref);old=c.pos;c.pos=point
-    width,height=outline_size(g,constraints);bad=hard_violations(g,constraints)
-    report=PlacementReport(width,height,hpwl(graph),hpwl(g),**bad)
-    return g,report,dict(ref=ref,original=list(old),position=list(point),predicted_channel_gain=gain)
+    from pnr.place.metrics import hard_violations, hpwl
+
+    g = BoardGraph.from_json(graph.to_json())
+    fixed = resolve_fixed_poses(g, constraints)
+    model = ChannelModel(g, rules or {})
+    options = []
+    for c in sorted(g.components, key=lambda c: (-pressure.get(c.ref, 1), c.ref))[:]:
+        if c.ref in fixed or c.locked or pressure.get(c.ref, 1) <= 1:
+            continue
+        others = [o for o in g.components if o.ref != c.ref]
+        old = tuple(c.pos)
+        points = [
+            (old[0] + dx * d, old[1] + dy * d)
+            for d in (0.25, 0.5, 1.0)
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1))
+        ]
+        baseline = float(model.penalty(c, others, *old))
+        costs = model.penalty(
+            c, others, np.array([q[0] for q in points]), np.array([q[1] for q in points])
+        )
+        for point, cost in zip(points, costs):
+            identity = (c.ref, round(point[0], 6), round(point[1], 6), c.rot)
+            if identity in tried:
+                continue
+            c.pos = point
+            if not any(hard_violations(g, constraints).values()):
+                gain = baseline - float(cost)
+                score = pressure[c.ref] * (gain + 0.01) - 0.001 * math.dist(old, point)
+                options.append((score, c.ref, point, identity, gain))
+        c.pos = old
+    if not options:
+        return None
+    score, ref, point, identity, gain = max(options, key=lambda t: (t[0], t[1], t[2]))
+    tried.add(identity)
+    c = g.component(ref)
+    old = c.pos
+    c.pos = point
+    width, height = outline_size(g, constraints)
+    bad = hard_violations(g, constraints)
+    report = PlacementReport(width, height, hpwl(graph), hpwl(g), **bad)
+    return (
+        g,
+        report,
+        dict(ref=ref, original=list(old), position=list(point), predicted_channel_gain=gain),
+    )
 
 
 def _place_route_loop(
@@ -228,10 +254,20 @@ def _place_route_loop(
     """One place↔route loop at the *current* ``constraints`` outline (the inner loop
     the rubber-band wraps). See :func:`route_and_place`."""
     from pnr.place.initial_pool import InitialPoolConfig, preserve_source_locks
-    pool_config = (InitialPoolConfig.from_environment() if initial_pool is None else
-                   InitialPoolConfig() if initial_pool is True else
-                   InitialPoolConfig(**initial_pool) if isinstance(initial_pool, dict) else
-                   initial_pool or None)
+
+    pool_config = (
+        InitialPoolConfig.from_environment()
+        if initial_pool is None
+        else (
+            InitialPoolConfig()
+            if initial_pool is True
+            else (
+                InitialPoolConfig(**initial_pool)
+                if isinstance(initial_pool, dict)
+                else initial_pool or None
+            )
+        )
+    )
     if pool_config is not None:
         if detail_rules is None:
             raise ValueError("initial placement exploration requires detailed routing rules")
@@ -248,112 +284,204 @@ def _place_route_loop(
     best_overflow = float("inf")
     best_unfinished = float("inf")
     stale = 0
-    local_only=False;local_tried=set()
+    local_only = False
+    local_tried = set()
     import os
-    elastic_mode=os.environ.get("PNR_PLACEMENT_MODE")=="elastic"
-    relocate_mode=os.environ.get("PNR_PLACEMENT_MODE")=="relocate"
-    previous_route=None
-    from pnr.place.anneal import Plateau
+
+    elastic_mode = os.environ.get("PNR_PLACEMENT_MODE") == "elastic"
+    relocate_mode = os.environ.get("PNR_PLACEMENT_MODE") == "relocate"
+    previous_route = None
     import random
-    relocation_plateau=Plateau()
-    relocation_rng=random.Random(seed)
-    mesh_reference_scale=None
+
+    from pnr.place.anneal import Plateau
+
+    relocation_plateau = Plateau()
+    relocation_rng = random.Random(seed)
+    mesh_reference_scale = None
     from pnr import trace as _trace
+
     tracer = _trace.current()  # None unless PNR_TRACE_DIR is set; observational only
 
     for r in range(max_rounds):
         report.rounds = r + 1
         if tracer is not None:
             tracer.section("round-%02d" % (r + 1), "round", inflated_parts=len(inflation))
-        from pnr.place.legalize import LegalizationError
+        import json
+        import os
+        import time
         from pathlib import Path
-        import os,json,time
-        started=time.monotonic()
-        requested_inflation=dict(inflation)
-        last_error = LegalizationError('global search exhausted') if local_only else None
-        local_move=None
-        placement_attempt_log=[]
-        initial_route=None
+
+        from pnr.place.legalize import LegalizationError
+
+        started = time.monotonic()
+        requested_inflation = dict(inflation)
+        last_error = LegalizationError("global search exhausted") if local_only else None
+        local_move = None
+        placement_attempt_log = []
+        initial_route = None
         if pool_config is not None and r == 0:
             from pnr.place.initial_pool import select_initial_placement
-            diagnostic=os.environ.get('PNR_ROUND_DIAGNOSTICS')
+
+            diagnostic = os.environ.get("PNR_ROUND_DIAGNOSTICS")
             with _trace.scope("initial-pool", "pool"):
-                placed,prep,initial_route,pool_report=select_initial_placement(
-                    graph,constraints,detail_rules,config=pool_config,seed=seed,iters=iters,
-                    orient=orient,spread=spread,pitch=detail_pitch_mm,route_iters=detail_iters,
-                    output=Path(diagnostic)/'initial-pool' if diagnostic else None)
-            report.initial_pool=pool_report
-            placement_attempt_log=pool_report['candidates']
-            damping=1.;trial_seed=next(c['seed'] for c in pool_report['candidates'] if c['id']==pool_report['selected'])
-            last_error=None
+                placed, prep, initial_route, pool_report = select_initial_placement(
+                    graph,
+                    constraints,
+                    detail_rules,
+                    config=pool_config,
+                    seed=seed,
+                    iters=iters,
+                    orient=orient,
+                    spread=spread,
+                    pitch=detail_pitch_mm,
+                    route_iters=detail_iters,
+                    output=Path(diagnostic) / "initial-pool" if diagnostic else None,
+                )
+            report.initial_pool = pool_report
+            placement_attempt_log = pool_report["candidates"]
+            damping = 1.0
+            trial_seed = next(
+                c["seed"] for c in pool_report["candidates"] if c["id"] == pool_report["selected"]
+            )
+            last_error = None
         if relocate_mode and r:
             from pnr.place.relocate import propose
+
             if previous_route is None:
-                raise ValueError('relocation requires detailed routing feedback')
-            proposal=propose(placed,constraints,detail_rules or {},previous_route.tracks,
-                             previous_route.vias,pressure=inflation,tried=local_tried,
-                             temperature=relocation_plateau.temperature,rng=relocation_rng)
+                raise ValueError("relocation requires detailed routing feedback")
+            proposal = propose(
+                placed,
+                constraints,
+                detail_rules or {},
+                previous_route.tracks,
+                previous_route.vias,
+                pressure=inflation,
+                tried=local_tried,
+                temperature=relocation_plateau.temperature,
+                rng=relocation_rng,
+            )
             if proposal is None:
-                report.termination='relocation_candidate_pool_exhausted'
+                report.termination = "relocation_candidate_pool_exhausted"
                 break
-            placed,prep,local_move=proposal;damping=0.;trial_seed=None;last_error=None
-            print('PnR global relocation: '+json.dumps(local_move['moves']),flush=True)
+            placed, prep, local_move = proposal
+            damping = 0.0
+            trial_seed = None
+            last_error = None
+            print("PnR global relocation: " + json.dumps(local_move["moves"]), flush=True)
         if elastic_mode and r:
             from pnr.place.elastic import deform
+
             # Fixed reference scale retains the magnitude of accumulated pressure.
-            pressure={}
+            pressure = {}
             if accum is not None:
                 for c in placed.components:
-                    i=min(accum.shape[0]-1,max(0,int(c.pos[0]/gcell_mm)))
-                    j=min(accum.shape[1]-1,max(0,int(c.pos[1]/gcell_mm)))
-                    pressure[c.ref]=float(accum[max(0,i-1):i+2,max(0,j-1):j+2].max())/(mesh_reference_scale or 1.)
-            attempts={}
-            proposal=deform(placed,constraints,detail_rules or {},pressure,
-                           strength=min(8.,1.5**stale),diagnostics=attempts)
+                    i = min(accum.shape[0] - 1, max(0, int(c.pos[0] / gcell_mm)))
+                    j = min(accum.shape[1] - 1, max(0, int(c.pos[1] / gcell_mm)))
+                    pressure[c.ref] = float(
+                        accum[max(0, i - 1) : i + 2, max(0, j - 1) : j + 2].max()
+                    ) / (mesh_reference_scale or 1.0)
+            attempts = {}
+            proposal = deform(
+                placed,
+                constraints,
+                detail_rules or {},
+                pressure,
+                strength=min(8.0, 1.5**stale),
+                diagnostics=attempts,
+            )
             if proposal is None:
-                report.termination='elastic_no_legal_proposal'
-                diagnostic=os.environ.get('PNR_ROUND_DIAGNOSTICS')
-                if diagnostic:Path(diagnostic,'elastic-rejection.json').write_text(json.dumps(attempts,indent=2))
+                report.termination = "elastic_no_legal_proposal"
+                diagnostic = os.environ.get("PNR_ROUND_DIAGNOSTICS")
+                if diagnostic:
+                    Path(diagnostic, "elastic-rejection.json").write_text(
+                        json.dumps(attempts, indent=2)
+                    )
                 break
-            placed,prep,local_move=proposal;damping=0.;trial_seed=None;last_error=None
-            print('PnR elastic mesh: moved %d parts, channel %.2f -> %.2f, strength %.2f' %
-                  (len(local_move['moves']),local_move['channel_before'],local_move['channel_after'],local_move['strength']),flush=True)
-        for trial_seed in ([] if initial_route is not None or local_only or ((elastic_mode or relocate_mode) and r) else range(seed + r, seed + r + 4)):
-            for damping in ((1.,.5,.25,0.) if inflation else (1.,)):
+            placed, prep, local_move = proposal
+            damping = 0.0
+            trial_seed = None
+            last_error = None
+            print(
+                "PnR elastic mesh: moved %d parts, channel %.2f -> %.2f, strength %.2f"
+                % (
+                    len(local_move["moves"]),
+                    local_move["channel_before"],
+                    local_move["channel_after"],
+                    local_move["strength"],
+                ),
+                flush=True,
+            )
+        for trial_seed in (
+            []
+            if initial_route is not None or local_only or ((elastic_mode or relocate_mode) and r)
+            else range(seed + r, seed + r + 4)
+        ):
+            for damping in (1.0, 0.5, 0.25, 0.0) if inflation else (1.0,):
                 try:
-                    with _trace.scope("attempt-%d" % len(placement_attempt_log), "attempt",
-                                      seed=trial_seed, damping=damping):
-                        placed,prep=place(graph,constraints,seed=trial_seed,iters=iters,orient=orient,
-                            inflation={k:1+(v-1)*damping for k,v in inflation.items()},
-                            spread=spread,channel_rules=detail_rules)
-                    placement_attempt_log.append(dict(seed=trial_seed,damping=damping,legal=True))
+                    with _trace.scope(
+                        "attempt-%d" % len(placement_attempt_log),
+                        "attempt",
+                        seed=trial_seed,
+                        damping=damping,
+                    ):
+                        placed, prep = place(
+                            graph,
+                            constraints,
+                            seed=trial_seed,
+                            iters=iters,
+                            orient=orient,
+                            inflation={k: 1 + (v - 1) * damping for k, v in inflation.items()},
+                            spread=spread,
+                            channel_rules=detail_rules,
+                        )
+                    placement_attempt_log.append(dict(seed=trial_seed, damping=damping, legal=True))
                     last_error = None
                     break
                 except LegalizationError as error:
                     last_error = error
-                    placement_attempt_log.append(dict(seed=trial_seed,damping=damping,legal=False,error=str(error)))
+                    placement_attempt_log.append(
+                        dict(seed=trial_seed, damping=damping, legal=False, error=str(error))
+                    )
             if last_error is None:
                 break
         if last_error is not None:
-            if best_overflow == float("inf"):raise last_error
-            fallback=local_feedback_placement(best_placed,constraints,detail_rules,inflation,local_tried)
+            if best_overflow == float("inf"):
+                raise last_error
+            fallback = local_feedback_placement(
+                best_placed, constraints, detail_rules, inflation, local_tried
+            )
             if fallback is None:
                 report.termination = "placement_search_exhausted"
                 break
-            placed,prep,local_move=fallback;damping=0.;trial_seed=None;local_only=True
-            print('PnR local placement feedback: '+json.dumps(local_move),flush=True)
+            placed, prep, local_move = fallback
+            damping = 0.0
+            trial_seed = None
+            local_only = True
+            print("PnR local placement feedback: " + json.dumps(local_move), flush=True)
         if tracer is not None:
             tracer.poses("round", placed, local_move=local_move is not None)
-        diagnostic=os.environ.get('PNR_ROUND_DIAGNOSTICS')
-        folder=Path(diagnostic)/('round-%02d'%(r+1)) if diagnostic else None
+        diagnostic = os.environ.get("PNR_ROUND_DIAGNOSTICS")
+        folder = Path(diagnostic) / ("round-%02d" % (r + 1)) if diagnostic else None
         if folder:
-            folder.mkdir(parents=True,exist_ok=True)
-            (folder/'placed.json').write_text(placed.to_json())
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / "placed.json").write_text(placed.to_json())
         from pnr.live import emit
-        emit('source_round_start', layout=__import__('json').loads(placed.to_json()),
-             data=dict(phase='source P/R round %d' % (r+1), provisional=True,
-                       source_round=r+1, cached_initial_finalist=initial_route is not None))
-        print('PnR round %d: placement legal=%s, inflation factor=%s; routing started'%(r+1,prep.legal,damping),flush=True)
+
+        emit(
+            "source_round_start",
+            layout=__import__("json").loads(placed.to_json()),
+            data=dict(
+                phase="source P/R round %d" % (r + 1),
+                provisional=True,
+                source_round=r + 1,
+                cached_initial_finalist=initial_route is not None,
+            ),
+        )
+        print(
+            "PnR round %d: placement legal=%s, inflation factor=%s; routing started"
+            % (r + 1, prep.legal, damping),
+            flush=True,
+        )
         if detail_rules is not None:
             # Grid connectivity guides placement; native DRC remains authoritative.
             from .detail.router import route_board
@@ -361,38 +489,90 @@ def _place_route_loop(
             # The selected initial finalist already used this exact routing
             # budget; retain its result instead of giving the winner a second run.
             with _trace.scope("route", "route", reused=initial_route is not None):
-                broute = initial_route if initial_route is not None else route_board(
-                    placed, constraints, detail_rules, pitch=detail_pitch_mm, max_iters=detail_iters
+                broute = (
+                    initial_route
+                    if initial_route is not None
+                    else route_board(
+                        placed,
+                        constraints,
+                        detail_rules,
+                        pitch=detail_pitch_mm,
+                        max_iters=detail_iters,
+                    )
                 )
-            if folder and getattr(broute,'pressure_events',None) is not None:
-                (folder/'pressure-events.json').write_text(json.dumps(broute.pressure_events,indent=2))
-            previous_route=broute
-            report.deferred_nets=sorted(broute.deferred_nets)
-            n_unrouted = len(set(broute.result.unrouted)-broute.deferred_nets)
-            missing = sum(max(1, broute.result.nets[n].remaining_connections)
-                          for n in set(broute.result.unrouted) - broute.deferred_nets)
+            if folder and getattr(broute, "pressure_events", None) is not None:
+                (folder / "pressure-events.json").write_text(
+                    json.dumps(broute.pressure_events, indent=2)
+                )
+            previous_route = broute
+            report.deferred_nets = sorted(broute.deferred_nets)
+            n_unrouted = len(set(broute.result.unrouted) - broute.deferred_nets)
+            missing = sum(
+                max(1, broute.result.nets[n].remaining_connections)
+                for n in set(broute.result.unrouted) - broute.deferred_nets
+            )
             report.connection_history.append(missing)
             if folder:
-                (folder/'routes.json').write_text(json.dumps(dict(tracks=broute.tracks,vias=broute.vias,unrouted=broute.result.unrouted,deferred=report.deferred_nets)))
-                (folder/'result.json').write_text(json.dumps(dict(signal_unrouted=n_unrouted,estimated_missing_connections=missing,deferred=report.deferred_nets,elapsed_seconds=time.monotonic()-started,inflation_damping=damping,placement_seed=trial_seed,local_feedback_move=local_move)))
-            print('PnR round %d: %d signal nets unresolved, %d deferred electrical nets, %.1fs'%(r+1,n_unrouted,len(report.deferred_nets),time.monotonic()-started),flush=True)
+                (folder / "routes.json").write_text(
+                    json.dumps(
+                        dict(
+                            tracks=broute.tracks,
+                            vias=broute.vias,
+                            unrouted=broute.result.unrouted,
+                            deferred=report.deferred_nets,
+                        )
+                    )
+                )
+                (folder / "result.json").write_text(
+                    json.dumps(
+                        dict(
+                            signal_unrouted=n_unrouted,
+                            estimated_missing_connections=missing,
+                            deferred=report.deferred_nets,
+                            elapsed_seconds=time.monotonic() - started,
+                            inflation_damping=damping,
+                            placement_seed=trial_seed,
+                            local_feedback_move=local_move,
+                        )
+                    )
+                )
+            print(
+                "PnR round %d: %d signal nets unresolved, %d deferred electrical nets, %.1fs"
+                % (r + 1, n_unrouted, len(report.deferred_nets), time.monotonic() - started),
+                flush=True,
+            )
             report.overflow_history.append(float(n_unrouted))
             report.route = None
             if folder and n_unrouted <= 0:
                 from pnr.congestion_diagnostics import snapshot, write_snapshot
-                write_snapshot(folder, snapshot(placed, detail_rules, label=f"Source P/R cycle {r+1}",
-                    cell=detail_congestion(broute,placed,width,height,gcell_mm), pitch=gcell_mm,
-                    inflation=requested_inflation,
-                    applied_inflation={} if local_move else {k:1+(v-1)*damping for k,v in requested_inflation.items()},
-                    metadata=dict(summary='Zero unresolved signal nets; native validation still required',
-                                  deferred_nets=report.deferred_nets)))
+
+                write_snapshot(
+                    folder,
+                    snapshot(
+                        placed,
+                        detail_rules,
+                        label=f"Source P/R cycle {r+1}",
+                        cell=detail_congestion(broute, placed, width, height, gcell_mm),
+                        pitch=gcell_mm,
+                        inflation=requested_inflation,
+                        applied_inflation=(
+                            {}
+                            if local_move
+                            else {k: 1 + (v - 1) * damping for k, v in requested_inflation.items()}
+                        ),
+                        metadata=dict(
+                            summary="Zero unresolved signal nets; native validation still required",
+                            deferred_nets=report.deferred_nets,
+                        ),
+                    ),
+                )
             if n_unrouted <= 0:
                 report.converged = True
                 report.best_round = r + 1
                 report.termination = "routing_stage_converged"
                 report.placement = prep
                 best_placed = placed
-                report.detail_result=broute
+                report.detail_result = broute
                 break
             cell = detail_congestion(broute, placed, width, height, gcell_mm)
             overflow = float(missing)
@@ -420,22 +600,40 @@ def _place_route_loop(
 
         if folder:
             from pnr.congestion_diagnostics import snapshot, write_snapshot
-            applied = {} if local_move else {k:1+(v-1)*damping for k,v in requested_inflation.items()}
-            diagnostic = snapshot(placed, detail_rules or {}, label=f"Source P/R cycle {r+1}",
-                cell=cell, pitch=gcell_mm, inflation=requested_inflation,
-                applied_inflation=applied, metadata=dict(
+
+            applied = (
+                {}
+                if local_move
+                else {k: 1 + (v - 1) * damping for k, v in requested_inflation.items()}
+            )
+            diagnostic = snapshot(
+                placed,
+                detail_rules or {},
+                label=f"Source P/R cycle {r+1}",
+                cell=cell,
+                pitch=gcell_mm,
+                inflation=requested_inflation,
+                applied_inflation=applied,
+                metadata=dict(
                     summary=f"missing signal connections {missing if detail_rules is not None else 'n/a'}; damping {damping}",
-                    local_move=local_move, deferred_nets=report.deferred_nets,
-                    global_spread=spread, placement_attempts=placement_attempt_log,
-                    failure_sites=getattr(broute, 'failure_sites', {}) if detail_rules is not None else {},
-                    accumulation_before=None if accum is None else accum.tolist()))
+                    local_move=local_move,
+                    deferred_nets=report.deferred_nets,
+                    global_spread=spread,
+                    placement_attempts=placement_attempt_log,
+                    failure_sites=(
+                        getattr(broute, "failure_sites", {}) if detail_rules is not None else {}
+                    ),
+                    accumulation_before=None if accum is None else accum.tolist(),
+                ),
+            )
             write_snapshot(folder, diagnostic)
 
         # Accumulate this round's congestion (the persistent history term) and
         # re-derive inflation from the running total, so pressure only grows.
         if accum is None:
             accum = np.zeros_like(cell)
-        if mesh_reference_scale is None:mesh_reference_scale=max(1.,float(cell.max()))
+        if mesh_reference_scale is None:
+            mesh_reference_scale = max(1.0, float(cell.max()))
         accum = accum + cell
         inflation = derive_inflation(placed, accum, gcell_mm, fixed=fixed)
         if tracer is not None:
@@ -445,14 +643,18 @@ def _place_route_loop(
         # oscillate (round N+1 worse than round N), so we must not return the last
         # round blindly; return the fewest estimated missing connections.
         unfinished = n_unrouted if detail_rules is not None else 0
-        if (overflow < best_overflow - 1e-9 or
-            abs(overflow-best_overflow)<=1e-9 and unfinished<best_unfinished):
+        if (
+            overflow < best_overflow - 1e-9
+            or abs(overflow - best_overflow) <= 1e-9
+            and unfinished < best_unfinished
+        ):
             best_overflow = overflow
             best_unfinished = unfinished
             best_placed = placed
             report.best_round = r + 1
             report.placement = prep
-            if detail_rules is not None:report.detail_result=broute
+            if detail_rules is not None:
+                report.detail_result = broute
             stale = 0
         else:
             stale += 1
@@ -463,16 +665,21 @@ def _place_route_loop(
         if relocate_mode:
             relocation_plateau.observe(overflow)
             if relocation_plateau.reached:
-                report.termination = 'relocation_observed_plateau'
+                report.termination = "relocation_observed_plateau"
                 break
 
-    if relocate_mode and report.termination == 'round_limit':
-        report.termination = 'relocation_round_budget_exhausted'
+    if relocate_mode and report.termination == "round_limit":
+        report.termination = "relocation_round_budget_exhausted"
     if tracer is not None:
         tracer.leave(type="round")
         rounds = ["round-%02d" % (i + 1) for i in range(report.rounds)]
-        tracer.select("best-round", rounds, "round-%02d" % report.best_round if report.best_round else None,
-                      "missing-connections", dict(zip(rounds, report.connection_history or report.overflow_history)))
+        tracer.select(
+            "best-round",
+            rounds,
+            "round-%02d" % report.best_round if report.best_round else None,
+            "missing-connections",
+            dict(zip(rounds, report.connection_history or report.overflow_history)),
+        )
     return best_placed, report
 
 
@@ -521,6 +728,7 @@ def route_and_place(
     """
     base_w, base_h = outline_size(graph, constraints)
     from pnr import trace as _trace
+
     tracer = _trace.current()  # None unless PNR_TRACE_DIR is set; observational only
     if tracer is not None:
         tracer.begin_board(graph, constraints, detail_rules)

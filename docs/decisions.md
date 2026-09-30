@@ -228,6 +228,151 @@ reviews them with the pull request:
   on two linux-aarch64 cores; the shared CI runner, which took 77 s for the former three, needs
   an estimated 185 to 240 s, so the target is `large` (900 s) and no longer `manual`.
 
+Choices made in PR3a (the mechanical format of the imported engine; [migration plan](migration-plan.md)
+PR3a); the owner reviews them with the pull request:
+
+- **Code keys hash each module's canonical syntax tree, not its bytes** (code key scheme 2), so
+  the format commits do not invalidate the libraries and trials that routing feedback imports.
+  `pnr.feedback.signals` hashes every module of the evaluation closure by module name; comments
+  and layout are not in the tree, and on top of that it applies what black's own AST check
+  allows (docstrings compared stripped line by line, the `u` prefix, `del (a, b)` as
+  `del a, b`) and what isort does: each block of consecutive imports counts as a sorted set of
+  imported names, unless the order can matter (a star import, or a name bound twice). An import
+  never moves across other code in that form, and a docstring's text still counts. Fields are
+  named and empty ones left out, so Python 3.9, 3.11 and 3.12 give the same key for the engine.
+  Measured on the engine: black and isort change 338 files, 226 of them in their plain
+  `ast.dump` (import order, docstring indentation), none in the canonical form, and both routers'
+  keys stay the same. New records stamp `code_key_scheme` next to `code`. A record without it
+  is legacy (scheme 1, raw file bytes by path, the exact former key): it is compared under that
+  scheme, or re-keyed from its evaluation tree when that tree still hashes to its stamp, so
+  trials of frozen snapshot trees survive the format while those of a tree reformatted since
+  do not. PR3b's rename needs a scheme that applies the module map to module names and imports.
+  The router key string (`router_key` in statuses, tables and libraries) ends with the scheme,
+  and the feedback report names a key's scheme when it is not the current one, so a legacy key
+  and a new one cannot be mistaken for each other there.
+- **The new key has two blind spots, by design.** Reordering the imports inside a block does not
+  change it, even where the order matters at import time, so a fix to an import-order bug changes
+  the key only if it changes something else too. Whitespace at the start or end of a docstring's
+  lines does not change it either (black re-indents docstrings), although `__doc__` keeps it.
+  Both are what the format needs to leave alone. In this format, black changed docstring
+  whitespace in six files; one of them, `hier/subpcb.py`, passes its module docstring to argparse,
+  whose default formatter reflows it, so its `--help` is unchanged.
+- **Other hashes of engine source stay raw bytes**, and the format changes them:
+  `place/cost_capture.py` (`runtime_sources` and `probe_sources` in cost captures), `profile.py`
+  (`source_hashes`), `drc_warm/host.py` (`sha256` in `ready.json`) and `regression/run.py`
+  (`source_hashes` in `provenance.json`). They are diagnostic: nothing compares them across trees
+  (the regression runner checks its manifest only against its own source freeze, within one run).
+- **The format is three mechanical commits, and the pull request is merged with a merge commit**
+  so their hashes reach `main` and a follow-up lists them in `.git-blame-ignore-revs` (the plan
+  had a squash merge and a follow-up with the squashed hash). black 25.1.0 and isort 6.0.1, the
+  pinned hooks run through prek, cover every Python file under `hardware/` (`pnr`, `tools`,
+  `experiments`): black changes 369 files, isort 294. The third commit pins isort's settings in
+  `.isort.cfg` (black profile, 100 columns, `known_first_party = pnr,yapnr,tools`): without them
+  isort guessed first-party packages from its working directory, so `pnr` was third party when
+  run from the root (as prek runs it) and first party from `hardware/pnr`, where 117 files then
+  failed `isort --check`. Re-sorting with the pinned settings changes 130 files under `hardware/`
+  (`pnr` imports get their own block), each only inside one run of imports; the code keys and the
+  results of the 43 re-sorted test files are unchanged. black's own equivalence check passes for
+  all 369 (plain `ast.dump` differs in 6, docstring whitespace only). isort's differences are all
+  reorderings, splits or merges of imports inside one run of consecutive imports (each run
+  compared as a multiset), so no import moved across code, and no file needed
+  `# isort: skip_file`. isort changes the syntax tree of 250 files (the other 44 only in
+  layout); no torch/numpy pair changes order, the engine's import-time effects
+  (`torch.set_num_threads(1)` in `pnr.place.model`, three `fab_profile.bind_active` callbacks
+  that each set their own module's globals) do not depend on order, and each of 344 modules of
+  `hardware/pnr` imports in a fresh interpreter with the same outcome before and after (import
+  cycles would show there).
+- **No hand lint fixes; a per-file flake8 baseline instead.** After black and isort, flake8 finds
+  479 issues in 157 files, 112 of them unused imports. Every fix changes a syntax tree, and 155
+  of the findings (27 unused imports, the F821) are in the 127 modules an evaluation runs, where
+  any change alters the code key and so invalidates routing-feedback libraries and trials, which
+  is what the new key scheme avoids. Outside them an unused import is still a module attribute
+  that tests patch or other modules import (`subprocess` in `native_electrical`), so proving one
+  unused takes a per-name search. `.flake8` therefore lists each file's remaining codes in
+  `per-file-ignores`; new files and codes are checked in full, the list only shrinks, and PR3b's
+  codemod (which changes every import anyway) is where it shrinks.
+- **Non-Python files under `hardware/` keep per-hook excludes** where a hook would rewrite or
+  reject them, measured with the global exclude lifted: prettier rewrites 42 files (SI model and
+  test-data JSON, the engine's Markdown), markdownlint fails on 3 Markdown files, buildifier
+  rewrites `BUILD.bazel` and `pnr.bzl` (regenerated in PR3b), end-of-file-fixer adds a final
+  newline to 28 byte-exact test-data files and trailing-whitespace changes the built viewer's
+  CSS. `name-tests-test` rejects two test helpers (`cost_fixture.py`,
+  `power_topology_golden.py`), which PR3b moves. Every other hook passes on `hardware/` and now
+  covers it.
+- **Five tests that read engine source as text now ignore its layout.** `test_via_in_pad` and
+  three `test_src15_merge` checks matched Splanc's single quotes and one-line calls, so the
+  format changed their results; they now compare with quotes and whitespace normalized (a
+  wrapped call's first two lines count as context). `board_delete_test` required
+  `thisown=False` on the line of the kept `b.Remove(t)` calls (`a; b` joins that black splits);
+  it now requires the next statement to set that item's `thisown` to `False`, on the syntax
+  tree. On the tree before and after the format they give the same result per test. Two of the
+  `test_src15_merge` checks still fail, as before the format, on Splanc-only files and eight
+  tool defaults (PR3c).
+- **What Bazel runs of the new key.** `code_key_test` covers the key, legacy records and both
+  feedback drivers' seed imports on fake records (halving's `_import_seed_runs`, synth_native's
+  `_import_code`), and `test_feedback_signals` is wired as `feedback_signals_test`. The two
+  generation tests (`test_halving_generations`, `test_synth_native_generations`) stay unwired:
+  without Splanc's Mini inputs every one of their tests skips, so they wait for PR3c's fixtures.
+  They pass by hand with the Mini inputs, with new and with legacy stamps.
+
+Choices made in PR4 (the viewer; branch `claude/pr4-viewer`), following the plan where it
+applies; the owner reviews them with the pull request:
+
+- **One branch instead of four sub-PRs (4a to 4d).** The deployed viewer is one program whose
+  parts import each other (the server wires the cost, schematic, source, notes, agent and 3D
+  services together), so it is ported as one commit series: a pure move, the imports (privacy
+  scrubbed while staging), a mechanical format, then packaging, lint, the build and the tests.
+- **Imported from the deployed viewer only,** after checking it is a superset of Splanc's
+  `pnr_live` working tree (plan risk "four diverging viewer copies"). The Splanc working tree's
+  uncommitted `pnr_live` changes are imported first, as their own commit.
+- **three.js is fetched, not vendored** (this replaces "vendored under `third_party/three/`" in
+  the plan and in `THIRD_PARTY.md`): `three.core.js` (1.46 MB) and `three.module.js` (0.66 MB)
+  exceed the 600 KB file limit, and the version the viewer uses is 0.186.1 (r186), not r180. It
+  is pinned by sha256 like elkjs.
+- **elkjs's license is served from the pinned tarball** (`third_party/elkjs/LICENSE.md` in the
+  served directory) instead of a copy under `third_party/elkjs/` in the repository: the text then
+  always matches the fetched version.
+- **The third-party files come in through `use_repo_rule(http_archive)` in `MODULE.bazel`,** not a
+  new `bazel_dep` (no rules_js); a genrule copies them unmodified into `//yapnr/viewer:dist`.
+  Repositories are fetched lazily, so a build that does not need the viewer never downloads them.
+- **No node toolchain.** The two node tests (`test_ui.cjs`, `test_controls_ui.cjs`) read Splanc's
+  paths and a captured state; they are dropped, not ported. Browser checks become `tests/e2e`
+  (Chrome DevTools) in a later change; until then the viewer's behaviour is covered by the Python
+  unit tests and manual screenshots.
+- **The Ask agent needs `--agent on` also on loopback** (it was on by default there), its web tools
+  need `--agent-web on`, and AI net labels need `--net-summaries on` (they followed the agent).
+  The default agent model stays opus with a $2 per-turn and $20 per-process cap; the owner may
+  prefer sonnet as the default.
+- **Configuration is flags plus a TOML file (`yapnr-viewer-v1`), not the project manifest yet.**
+  The manifest's `[viewer]` table and `--project` arrive with the project abstraction (PR3d);
+  until then no setting defaults to a machine path, and machine tool paths come from flags,
+  `YAPNR_*` variables or `~/.config/yapnr/config.toml`.
+- **`pnr.capacitor_intent` is not recreated.** It exists in no snapshot; the cost replay reports a
+  placement context that needs it as unavailable. The owner files the issue.
+- **The viewer stays out of the wheel and the images** until the engine it imports is in them
+  (PR3b); `//yapnr:cli` has no viewer dependency.
+- **One spend cap per server process for every paid call** (`--agent-total-usd`, default $20):
+  Ask turns and AI net labels draw from the same meter (`yapnr/viewer/agent/spend.py`). A call
+  holds its whole budget (`--agent-budget-usd`, default $2; `--net-summary-budget-usd`, default $1)
+  while it runs and starts only if the cap covers it, so concurrent calls cannot pass the cap; a
+  call without a cost report from the CLI (timeout, cancel, killed) is charged its whole budget.
+  The meter is in memory: a restart resets it.
+- **The Apache-2.0 license text is kept in the repository** (`third_party/licenses/`), byte for
+  byte as published: elkjs's bundle includes an Apache-2.0 web-worker shim, and its tarball has
+  only the EPL-2.0 text. It is served next to `elk.bundled.js`; the code itself stays fetched.
+- **The Source link names the viewer's own revision,** not the engine commit of the run being
+  viewed (plan §1.4, "Network use"): it links the repository tree of the commit the server runs
+  and marks a checkout with uncommitted changes as modified. Runs do not record the engine commit
+  yet; showing it per run waits for the run manifests (PR3d).
+- **No `//yapnr/viewer:dev` target.** There is no auto-reload server: a development viewer is
+  `bazel run //:viewer -- --root <live dir> --port <spare port>`, rebuilt after edits to
+  `static/`.
+- **The viewer's KiCad lookup is stricter than plan §2.3** until `yapnr.kicad.toolchain` replaces
+  it (PR6a): it follows AGENTS.md and refuses everything inside `KiCad.app` or
+  `/Applications/KiCad`, KiCad's Python included (the plan allows the stock Python); on macOS it
+  discovers only the headless copy, never `PATH`; and it does not check for KiCad 10.x (the
+  toolchain module will).
+
 Choices made for the regression ladder in CI and the animations (branch
 `claude/ladder-animations`); the owner reviews them with the pull request:
 
@@ -303,6 +448,8 @@ Update a pin together with the file that holds it, and note why here.
 | uv (image build) | `0.12.21`, by digest       | `docker/yapnr/Dockerfile`              |
 | PBS (image)      | `20260807`, by sha256      | `docker/yapnr/Dockerfile`              |
 | Runtime locks    | from `requirements.lock`   | `docker/yapnr/runtime-*.lock`          |
+| elkjs (viewer)   | `0.9.3`, by sha256         | `MODULE.bazel`                         |
+| three (viewer)   | `0.186.1`, by sha256       | `MODULE.bazel`                         |
 | Image, release   | every action by commit SHA | `.github/actions/`, `image.yaml`, ...  |
 
 Rationale:
@@ -332,6 +479,12 @@ Rationale:
   shellcheck-py v0.9.0.6, buildifier 8.2.0, prettier v3.1.0, markdownlint-cli v0.38.0,
   pre-commit-hooks v4.5.0), minus `nixpkgs-fmt`, plus the local privacy scan.
 - **mermaid, prek, `setup-bazel`:** the same as Splanc.
+- **elkjs 0.9.3 and three.js 0.186.1:** the versions the Splanc viewer shipped and was tested
+  with. The npm tarballs are pinned by sha256 (elkjs
+  `b95b224bd1ab71fd40f6d9a6365c28d989745dff6b0d514407bc1eb68f2f561e`, three
+  `8cd068708ea44f2c73c944b1cead2ba2f0d5c15c8fc194e5700f4e4f4a033fe7`), and the served files by
+  `tests/unit/viewer/test_dist.py`. An upgrade changes both and gets a browser check of the
+  schematic and 3D views.
 - **GitHub Actions majors** (`actions/checkout@v4`, `setup-python@v5`, `cache@v4`,
   `upload-artifact@v4`, `download-artifact@v4`, `setup-bazel@0.15.0`): Splanc's. They declare Node
   20, which GitHub now runs on Node 24 with a deprecation warning. Move to the Node 24 majors

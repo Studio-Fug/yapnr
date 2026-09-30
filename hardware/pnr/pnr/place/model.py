@@ -25,14 +25,15 @@ the end we snap to the arg-max angle. Fixed parts keep their constrained angle.
 
 from __future__ import annotations
 
+import os
 from typing import Dict, List, Optional, Tuple
 
-import os
 import torch
+
 from pnr.constraints import CompiledConstraints
 from pnr.graph import BoardGraph
 
-from .geometry import keepout_rects, resolve_fixed_poses, occupied_sides
+from .geometry import keepout_rects, occupied_sides, resolve_fixed_poses
 
 # Reproducibility ("same inputs -> same board", design §10): run torch
 # single-threaded so the float reductions don't vary with thread scheduling.
@@ -46,7 +47,7 @@ torch.set_num_threads(1)
 ANGLES = (0.0, 90.0, 180.0, 270.0)
 
 
-PAIR_EPS2 = 0.01   # mm^2 inside the pad-pair distance sqrt (smooth at zero)
+PAIR_EPS2 = 0.01  # mm^2 inside the pad-pair distance sqrt (smooth at zero)
 
 
 def pair_tensors(pair_weights, pin_key):
@@ -54,13 +55,18 @@ def pair_tensors(pair_weights, pin_key):
     ``pin_key`` ({(ref, pad): pin index}), or None when there are none."""
     if not pair_weights:
         return None
-    rows = sorted((pin_key[(ra, pa)], pin_key[(rb, pb)], float(w))
-                  for (ra, pa, rb, pb), w in pair_weights.items()
-                  if ra != rb and float(w) > 0 and (ra, pa) in pin_key and (rb, pb) in pin_key)
+    rows = sorted(
+        (pin_key[(ra, pa)], pin_key[(rb, pb)], float(w))
+        for (ra, pa, rb, pb), w in pair_weights.items()
+        if ra != rb and float(w) > 0 and (ra, pa) in pin_key and (rb, pb) in pin_key
+    )
     if not rows:
         return None
-    return (torch.tensor([r[0] for r in rows], dtype=torch.long), torch.tensor([r[1] for r in rows], dtype=torch.long),
-            torch.tensor([r[2] for r in rows], dtype=torch.float32))
+    return (
+        torch.tensor([r[0] for r in rows], dtype=torch.long),
+        torch.tensor([r[1] for r in rows], dtype=torch.long),
+        torch.tensor([r[2] for r in rows], dtype=torch.float32),
+    )
 
 
 def _base_half_sizes(graph: BoardGraph) -> torch.Tensor:
@@ -111,8 +117,10 @@ def global_place(
     n = len(comps)
     idx = {c.ref: i for i, c in enumerate(comps)}
 
-    side_overlap = torch.tensor([[bool(set(occupied_sides(a)) & set(occupied_sides(b)))
-                                  for b in comps] for a in comps], dtype=torch.float32)
+    side_overlap = torch.tensor(
+        [[bool(set(occupied_sides(a)) & set(occupied_sides(b))) for b in comps] for a in comps],
+        dtype=torch.float32,
+    )
     half = _base_half_sizes(graph)  # (n, 2), unrotated
     # Inflate the *spreading* footprint (not WL, not the reported courtyard): a
     # per-part ``inflation`` floor (congested parts, from the loop) OR a global
@@ -132,8 +140,15 @@ def global_place(
     # Block macros with per-side hulls (PNR_MACRO_HULL=1): overlap over per-side
     # bodies instead of whole courtyards; None (the unchanged path) otherwise.
     from .hull import gp_bodies, gp_overlap
-    bodies = gp_bodies(comps, [max(1.0, spread, float((inflation or {}).get(c.ref, 1.0))) for c in comps]
-                       if (inflation or spread > 1.0) else None)
+
+    bodies = gp_bodies(
+        comps,
+        (
+            [max(1.0, spread, float((inflation or {}).get(c.ref, 1.0))) for c in comps]
+            if (inflation or spread > 1.0)
+            else None
+        ),
+    )
 
     poses = resolve_fixed_poses(graph, constraints)
     is_fixed = torch.zeros(n, dtype=torch.bool)
@@ -151,11 +166,12 @@ def global_place(
             fixed_angle_idx[idx[ref]] = int(round(fixed_rot.get(ref, 0.0) / 90.0)) % 4
 
     from .geometry import resolve_hard_rotations
+
     rotation_fixed = is_fixed.clone()
     for ref, angle in resolve_hard_rotations(constraints).items():
         if ref in idx:
             rotation_fixed[idx[ref]] = True
-            fixed_angle_idx[idx[ref]] = int(round(angle/90)) % 4
+            fixed_angle_idx[idx[ref]] = int(round(angle / 90)) % 4
 
     # Init movable positions spread across the interior (seeded, deterministic).
     init = torch.rand(n, 2)
@@ -220,6 +236,7 @@ def global_place(
     batched_wl = None
     if os.environ.get("PNR_BATCHED_WIRELENGTH") == "1":
         from .batched_cost import BucketedWirelength
+
         batched_wl = BucketedWirelength(net_pin_idx)
 
     # Plane nets (power/ground poured as copper planes): the pins on each, used to
@@ -330,8 +347,15 @@ def global_place(
         loss = wl + w_spread * overlap + w_bound * bound
         if pairs is not None:
             pa, pb, pw = pairs
-            loss = loss + (pw * torch.sqrt((pin_x[pa] - pin_x[pb]) ** 2 + (pin_y[pa] - pin_y[pb]) ** 2
-                                           + PAIR_EPS2)).sum()
+            loss = (
+                loss
+                + (
+                    pw
+                    * torch.sqrt(
+                        (pin_x[pa] - pin_x[pb]) ** 2 + (pin_y[pa] - pin_y[pb]) ** 2 + PAIR_EPS2
+                    )
+                ).sum()
+            )
 
         # Power-plane compactness + inter-domain separation. Each plane net gets a
         # smooth pad bbox; minimise its AREA (compact planes) and penalise overlap
@@ -382,9 +406,29 @@ def global_place(
             )
             loss = loss + w_keep * ((kox * koy) * movable_f.unsqueeze(1)).sum()
 
-        if step == iters-1 and os.environ.get('PNR_COST_CAPTURE_DIR'):
+        if step == iters - 1 and os.environ.get("PNR_COST_CAPTURE_DIR"):
             from .cost_capture import record_global_loss
-            record_global_loss(graph,constraints,pos.detach().tolist(),p.detach().tolist(),exp_off.detach().tolist(),exp_half.detach().tolist(),float(loss.detach()),dict(gamma=gamma,spread=spread,w_spread=w_spread,w_bound=w_bound,w_keep=w_keep,w_plane=w_plane,w_plane_sep=w_plane_sep),inflation,step)
+
+            record_global_loss(
+                graph,
+                constraints,
+                pos.detach().tolist(),
+                p.detach().tolist(),
+                exp_off.detach().tolist(),
+                exp_half.detach().tolist(),
+                float(loss.detach()),
+                dict(
+                    gamma=gamma,
+                    spread=spread,
+                    w_spread=w_spread,
+                    w_bound=w_bound,
+                    w_keep=w_keep,
+                    w_plane=w_plane,
+                    w_plane_sep=w_plane_sep,
+                ),
+                inflation,
+                step,
+            )
         if tracer is not None and tracer.due(step):
             tracer.snapshot(step, pos, p)
         loss.backward()

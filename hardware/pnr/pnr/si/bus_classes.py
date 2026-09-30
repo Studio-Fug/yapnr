@@ -51,6 +51,7 @@ With the flag off nothing here runs: the ``class`` key of an annotation is ignor
 and rules.json is byte-identical to the unflagged engine. Stdlib only, Python 3.9
 compatible (the KiCad-python ``prepare`` worker imports it).
 """
+
 from __future__ import annotations
 
 import ast
@@ -60,20 +61,32 @@ import math
 import os
 from pathlib import Path
 
-ENV = 'PNR_BUS_CLASSES'
-SCHEMA = 'pnr-bus-classes'
+ENV = "PNR_BUS_CLASSES"
+SCHEMA = "pnr-bus-classes"
 SCHEMA_VERSION = 1
-C_MM_PER_PS = 0.299792458          # speed of light, mm/ps
-DEFAULT_FILE = Path(__file__).resolve().parents[2] / 'si_models' / 'bus_classes.json'
-STUB_READING_DELAY = 'delay to the pad centre, via barrel included'
-STUB_READING_MM = 'copper length to where the copper enters the pad (src13 reading)'
+C_MM_PER_PS = 0.299792458  # speed of light, mm/ps
+DEFAULT_FILE = Path(__file__).resolve().parents[2] / "si_models" / "bus_classes.json"
+STUB_READING_DELAY = "delay to the pad centre, via barrel included"
+STUB_READING_MM = "copper length to where the copper enters the pad (src13 reading)"
 # The layers pnr.native_electrical's pair router places pair copper on: surface legs on the
 # top copper layer (F.Cu) and the layer-bridge trunk on the bottom one (B.Cu). A pair entry
 # may name its own ``layers`` (rules.json) for a router that uses others.
-PAIR_ROUTER_LAYERS = 'outer copper layers (pnr.native_electrical pair router: surface legs F.Cu, bridge trunk B.Cu)'
-BASIS = ('spec', 'interpretation')
-OVERRIDE_KEYS = ('t_rise_ns', 'stub_k', 'uncoupled_k', 'stub_delay_max_ps', 'stub_max_mm', 'skew_mm', 'skew_ps',
-                 'max_uncoupled_mm', 'max_length_mm', 'params')
+PAIR_ROUTER_LAYERS = (
+    "outer copper layers (pnr.native_electrical pair router: surface legs F.Cu, bridge trunk B.Cu)"
+)
+BASIS = ("spec", "interpretation")
+OVERRIDE_KEYS = (
+    "t_rise_ns",
+    "stub_k",
+    "uncoupled_k",
+    "stub_delay_max_ps",
+    "stub_max_mm",
+    "skew_mm",
+    "skew_ps",
+    "max_uncoupled_mm",
+    "max_length_mm",
+    "params",
+)
 
 
 class BusClassError(ValueError):
@@ -81,15 +94,15 @@ class BusClassError(ValueError):
 
 
 def enabled(env=None):
-    return ((os.environ if env is None else env).get(ENV) or '').strip() == '1'
+    return ((os.environ if env is None else env).get(ENV) or "").strip() == "1"
 
 
 def classes_path(env=None):
     env = os.environ if env is None else env
-    if env.get('PNR_BUS_CLASSES_FILE'):
-        return Path(env['PNR_BUS_CLASSES_FILE'])
-    if env.get('PNR_SI_MODELS'):
-        return Path(env['PNR_SI_MODELS']) / 'bus_classes.json'
+    if env.get("PNR_BUS_CLASSES_FILE"):
+        return Path(env["PNR_BUS_CLASSES_FILE"])
+    if env.get("PNR_SI_MODELS"):
+        return Path(env["PNR_SI_MODELS"]) / "bus_classes.json"
     return DEFAULT_FILE
 
 
@@ -103,30 +116,57 @@ def load(path=None, env=None):
     key = (str(path), hashlib.sha256(raw).hexdigest())
     if key in _CACHE:
         return _CACHE[key]
-    lib = json.loads(raw.decode('utf-8'))
-    if lib.get('schema') != SCHEMA or lib.get('schema_version') != SCHEMA_VERSION:
-        raise BusClassError('%s: schema %r v%r, expected %s v%d' % (path, lib.get('schema'), lib.get('schema_version'),
-                                                                  SCHEMA, SCHEMA_VERSION))
-    for cid, cls in lib.get('classes', {}).items():
-        for part in ('signalling', 'impedance', 'skew'):
+    lib = json.loads(raw.decode("utf-8"))
+    if lib.get("schema") != SCHEMA or lib.get("schema_version") != SCHEMA_VERSION:
+        raise BusClassError(
+            "%s: schema %r v%r, expected %s v%d"
+            % (path, lib.get("schema"), lib.get("schema_version"), SCHEMA, SCHEMA_VERSION)
+        )
+    for cid, cls in lib.get("classes", {}).items():
+        for part in ("signalling", "impedance", "skew"):
             if part not in cls:
-                raise BusClassError('%s: class %s lacks %r' % (path, cid, part))
+                raise BusClassError("%s: class %s lacks %r" % (path, cid, part))
         # every applied number says whether the document requires it of the board pair
         # ('spec') or sets it for something else (cable, connector, driver) and this
         # library applies it to the board ('interpretation', with the reasoning)
-        imp, skew, length = cls['impedance'], cls['skew'], cls.get('length') or {}
-        checks = [('impedance', imp, imp.get('differential_ohm') is not None or imp.get('single_ended_ohm') is not None),
-                  ('skew', skew, skew.get('max_ps') is not None),
-                  ('length', length, any((length.get(k) or {}).get('value') is not None for k in ('max_mm', 'max_delay_ps')))]
+        imp, skew, length = cls["impedance"], cls["skew"], cls.get("length") or {}
+        checks = [
+            (
+                "impedance",
+                imp,
+                imp.get("differential_ohm") is not None or imp.get("single_ended_ohm") is not None,
+            ),
+            ("skew", skew, skew.get("max_ps") is not None),
+            (
+                "length",
+                length,
+                any(
+                    (length.get(k) or {}).get("value") is not None
+                    for k in ("max_mm", "max_delay_ps")
+                ),
+            ),
+        ]
         for part, node, has_value in checks:
-            if has_value and node.get('basis') not in BASIS:
-                raise BusClassError('%s: class %s %s needs "basis" in %s' % (path, cid, part, BASIS))
-            if has_value and node.get('basis') == 'interpretation' and not node.get('interpretation'):
-                raise BusClassError('%s: class %s %s is an interpretation without its "interpretation" text' % (path, cid, part))
-        unknown = sorted(_cited(cls) - set(lib.get('sources', {})))
+            if has_value and node.get("basis") not in BASIS:
+                raise BusClassError(
+                    '%s: class %s %s needs "basis" in %s' % (path, cid, part, BASIS)
+                )
+            if (
+                has_value
+                and node.get("basis") == "interpretation"
+                and not node.get("interpretation")
+            ):
+                raise BusClassError(
+                    '%s: class %s %s is an interpretation without its "interpretation" text'
+                    % (path, cid, part)
+                )
+        unknown = sorted(_cited(cls) - set(lib.get("sources", {})))
         if unknown:
-            raise BusClassError('%s: class %s cites unknown source(s) %s' % (path, cid, ', '.join(map(repr, unknown))))
-    lib['_file'] = dict(path=str(path), sha256=key[1], schema=SCHEMA, schema_version=SCHEMA_VERSION)
+            raise BusClassError(
+                "%s: class %s cites unknown source(s) %s"
+                % (path, cid, ", ".join(map(repr, unknown)))
+            )
+    lib["_file"] = dict(path=str(path), sha256=key[1], schema=SCHEMA, schema_version=SCHEMA_VERSION)
     # a run-directory-independent id: relative to the pnr source root (the worker-source copy
     # native_loop makes has the same layout), else the file name + the override variable
     try:
@@ -134,9 +174,23 @@ def load(path=None, env=None):
     except ValueError:
         rel = None
     env = os.environ if env is None else env
-    lib['_id'] = dict(file=rel or Path(path).name, sha256=key[1], schema=SCHEMA, schema_version=SCHEMA_VERSION,
-                      **({} if rel else {'override': 'PNR_BUS_CLASSES_FILE' if env.get('PNR_BUS_CLASSES_FILE') else
-                                         ('PNR_SI_MODELS' if env.get('PNR_SI_MODELS') else 'path argument')}))
+    lib["_id"] = dict(
+        file=rel or Path(path).name,
+        sha256=key[1],
+        schema=SCHEMA,
+        schema_version=SCHEMA_VERSION,
+        **(
+            {}
+            if rel
+            else {
+                "override": (
+                    "PNR_BUS_CLASSES_FILE"
+                    if env.get("PNR_BUS_CLASSES_FILE")
+                    else ("PNR_SI_MODELS" if env.get("PNR_SI_MODELS") else "path argument")
+                )
+            }
+        ),
+    )
     _CACHE[key] = lib
     return lib
 
@@ -147,7 +201,7 @@ def _r(x, n=6):
 
 def _eval(expr, names):
     """Arithmetic over ``names`` with min/max only (class ``expr`` fields)."""
-    tree = ast.parse(expr, mode='eval')
+    tree = ast.parse(expr, mode="eval")
 
     def ev(node):
         if isinstance(node, ast.Expression):
@@ -156,73 +210,105 @@ def _eval(expr, names):
             return float(node.value)
         if isinstance(node, ast.Name):
             if names.get(node.id) is None:
-                raise BusClassError('expression %r needs parameter %r' % (expr, node.id))
+                raise BusClassError("expression %r needs parameter %r" % (expr, node.id))
             return float(names[node.id])
-        if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div)):
+        if isinstance(node, ast.BinOp) and isinstance(
+            node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div)
+        ):
             a, b = ev(node.left), ev(node.right)
-            return {ast.Add: a + b, ast.Sub: a - b, ast.Mult: a * b, ast.Div: a / b if b else math.inf}[type(node.op)]
+            return {
+                ast.Add: a + b,
+                ast.Sub: a - b,
+                ast.Mult: a * b,
+                ast.Div: a / b if b else math.inf,
+            }[type(node.op)]
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
             return -ev(node.operand)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ('min', 'max') and not node.keywords:
-            return (min if node.func.id == 'min' else max)(ev(a) for a in node.args)
-        raise BusClassError('unsupported expression %r' % expr)
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in ("min", "max")
+            and not node.keywords
+        ):
+            return (min if node.func.id == "min" else max)(ev(a) for a in node.args)
+        raise BusClassError("unsupported expression %r" % expr)
+
     return ev(tree)
 
 
 def class_params(cls, annotation):
     """Class parameters: defaults, then the annotation's ``params`` (explicit)."""
-    out = {k: (v or {}).get('default') for k, v in (cls.get('params') or {}).items()}
-    given = dict(annotation.get('params') or {})
-    if 't_rise_ns' in annotation and 't_rise_ns' in out:
-        given.setdefault('t_rise_ns', annotation['t_rise_ns'])
+    out = {k: (v or {}).get("default") for k, v in (cls.get("params") or {}).items()}
+    given = dict(annotation.get("params") or {})
+    if "t_rise_ns" in annotation and "t_rise_ns" in out:
+        given.setdefault("t_rise_ns", annotation["t_rise_ns"])
     unknown = sorted(set(given) - set(out))
     if unknown:
-        raise BusClassError('unknown class parameter(s) %s' % ', '.join(unknown))
+        raise BusClassError("unknown class parameter(s) %s" % ", ".join(unknown))
     out.update(given)
     return out, sorted(given)
 
 
 def t_rise(cls, annotation, params):
     """(t_rise_min in ps or None, provenance)."""
-    if annotation.get('t_rise_ns') is not None:
-        v = float(annotation['t_rise_ns']) * 1000.0
+    if annotation.get("t_rise_ns") is not None:
+        v = float(annotation["t_rise_ns"]) * 1000.0
         if not v > 0:
-            raise BusClassError('t_rise_ns must be positive')
-        spec = cls['signalling'].get('t_rise_min_ps') or {}
-        return v, dict(value=_r(v), unit='ps', source='explicit', annotation_key='t_rise_ns',
-                       class_value=_r(spec.get('value')), cite=spec.get('cite'))
-    spec = cls['signalling'].get('t_rise_min_ps') or {}
-    value = spec.get('value')
-    how = 'class'
-    if spec.get('expr'):
+            raise BusClassError("t_rise_ns must be positive")
+        spec = cls["signalling"].get("t_rise_min_ps") or {}
+        return v, dict(
+            value=_r(v),
+            unit="ps",
+            source="explicit",
+            annotation_key="t_rise_ns",
+            class_value=_r(spec.get("value")),
+            cite=spec.get("cite"),
+        )
+    spec = cls["signalling"].get("t_rise_min_ps") or {}
+    value = spec.get("value")
+    how = "class"
+    if spec.get("expr"):
         try:
-            value = _eval(spec['expr'], params)
-            how = 'class expression %s with %s' % (spec['expr'], json.dumps(params, sort_keys=True))
+            value = _eval(spec["expr"], params)
+            how = "class expression %s with %s" % (spec["expr"], json.dumps(params, sort_keys=True))
         except BusClassError:
             if value is None:
-                return None, dict(value=None, unit='ps', source='class', note=spec.get('note'), cite=spec.get('cite'))
+                return None, dict(
+                    value=None,
+                    unit="ps",
+                    source="class",
+                    note=spec.get("note"),
+                    cite=spec.get("cite"),
+                )
     if value is None:
-        return None, dict(value=None, unit='ps', source='class', note=spec.get('note'), cite=spec.get('cite'))
-    return float(value), dict(value=_r(value), unit='ps', source=how, cite=spec.get('cite'), note=spec.get('note'))
+        return None, dict(
+            value=None, unit="ps", source="class", note=spec.get("note"), cite=spec.get("cite")
+        )
+    return float(value), dict(
+        value=_r(value), unit="ps", source=how, cite=spec.get("cite"), note=spec.get("note")
+    )
 
 
 def _value(spec, params):
     """(value or None, provenance) of a class field {value, expr?, cite?, note?}."""
     if not isinstance(spec, dict):
         return None, None
-    value, how = spec.get('value'), 'class'
-    if spec.get('expr'):
+    value, how = spec.get("value"), "class"
+    if spec.get("expr"):
         try:
-            value = _eval(spec['expr'], params)
-            how = 'class expression %s with %s' % (spec['expr'], json.dumps(params, sort_keys=True))
+            value = _eval(spec["expr"], params)
+            how = "class expression %s with %s" % (spec["expr"], json.dumps(params, sort_keys=True))
         except BusClassError:
             pass
     if value is None:
-        return None, dict(value=None, source='class', note=spec.get('note'), cite=spec.get('cite'))
-    return float(value), dict(value=_r(value), source=how, cite=spec.get('cite'), note=spec.get('note'))
+        return None, dict(value=None, source="class", note=spec.get("note"), cite=spec.get("cite"))
+    return float(value), dict(
+        value=_r(value), source=how, cite=spec.get("cite"), note=spec.get("note")
+    )
 
 
 # ------------------------------------------------------------------ stackup side
+
 
 def stackup_inputs(rules, pair=None):
     """Stackup, per-layer lines and via barrel inputs from pnr.si.physics.
@@ -230,60 +316,103 @@ def stackup_inputs(rules, pair=None):
     Refuses a stackup whose copper-layer count differs from the board's
     (``rules['layers']``); the pair's ``reference_layer`` is a reference plane."""
     from pnr.si import physics
+
     st = physics.stackup(rules)
     copper = physics.copper_layers(st)
-    explicit = isinstance(rules.get('stackup'), dict) and bool(rules['stackup'].get('layers'))
-    board = rules.get('layers')
+    explicit = isinstance(rules.get("stackup"), dict) and bool(rules["stackup"].get("layers"))
+    board = rules.get("layers")
     if board is not None and int(board) != len(copper):
-        raise BusClassError('the board has %d copper layers but the %s stackup %s has %d (%s): give rules["stackup"] '
-                            'for this board' % (int(board), 'declared' if explicit else 'default', st.get('name'),
-                                                len(copper), ', '.join(copper)))
-    net_planes = sorted({c['plane_layer'] for c in rules.get('net_classes', []) if c.get('plane_layer')})
-    ref = (pair or {}).get('reference_layer')
-    planes = list(st.get('planes', []))
+        raise BusClassError(
+            'the board has %d copper layers but the %s stackup %s has %d (%s): give rules["stackup"] '
+            "for this board"
+            % (
+                int(board),
+                "declared" if explicit else "default",
+                st.get("name"),
+                len(copper),
+                ", ".join(copper),
+            )
+        )
+    net_planes = sorted(
+        {c["plane_layer"] for c in rules.get("net_classes", []) if c.get("plane_layer")}
+    )
+    ref = (pair or {}).get("reference_layer")
+    planes = list(st.get("planes", []))
     if ref:
         if ref not in copper:
-            raise BusClassError('pair reference_layer %r is not a copper layer of the stackup (%s)' % (ref, ', '.join(copper)))
+            raise BusClassError(
+                "pair reference_layer %r is not a copper layer of the stackup (%s)"
+                % (ref, ", ".join(copper))
+            )
         if ref not in planes:
             planes = [n for n in copper if n in set(planes) | {ref}]
-    st['planes'] = planes
-    planes_source = ('rules.stackup planes' if explicit and 'planes' in rules['stackup'] else
-                     'net-class plane_layer' if net_planes else 'pnr.si.physics default (In1.Cu)')
+    st["planes"] = planes
+    planes_source = (
+        "rules.stackup planes"
+        if explicit and "planes" in rules["stackup"]
+        else "net-class plane_layer" if net_planes else "pnr.si.physics default (In1.Cu)"
+    )
     if ref:
-        planes_source += ' + pair reference_layer %s' % ref
-    thickness = float((rules.get('electrical_fab') or {}).get('board_thickness_mm') or physics.thickness(st))
+        planes_source += " + pair reference_layer %s" % ref
+    thickness = float(
+        (rules.get("electrical_fab") or {}).get("board_thickness_mm") or physics.thickness(st)
+    )
     via = physics.via(st, physics.copper_layers(st)[0], physics.copper_layers(st)[-1])
-    barrel_td = math.sqrt(via['er']) / C_MM_PER_PS
+    barrel_td = math.sqrt(via["er"]) / C_MM_PER_PS
     return st, dict(
-        stackup=st.get('name'), fab_profile=st.get('fab_profile'),
-        stack=[dict(name=x['name'], kind=x['kind'], t_mm=_r(x['t_mm']), **({'er': x['er']} if 'er' in x else {}))
-               for x in st['layers']],
-        stack_source=('rules.stackup' if explicit else 'default (pnr.si.physics): %s' % st.get('source')),
+        stackup=st.get("name"),
+        fab_profile=st.get("fab_profile"),
+        stack=[
+            dict(
+                name=x["name"],
+                kind=x["kind"],
+                t_mm=_r(x["t_mm"]),
+                **({"er": x["er"]} if "er" in x else {}),
+            )
+            for x in st["layers"]
+        ],
+        stack_source=(
+            "rules.stackup" if explicit else "default (pnr.si.physics): %s" % st.get("source")
+        ),
         board_copper_layers=None if board is None else int(board),
-        layer_count_check=('match (%d copper layers)' % len(copper)) if board is not None else
-                          'unverified: rules has no "layers" count',
-        planes=list(st.get('planes', [])), planes_source=planes_source,
-        board_thickness_mm=_r(thickness), stack_thickness_mm=_r(physics.thickness(st)),
-        barrel=dict(length_mm=_r(thickness), er=_r(via['er']), td_ps_per_mm=_r(barrel_td), ps=_r(thickness * barrel_td),
-                    formula='td = sqrt(er_dielectric) / c (first-order TEM delay through the dielectric the barrel '
-                            'crosses; thickness-weighted er of pnr.si.physics.via); length = electrical_fab '
-                            'board_thickness_mm (the full barrel, F.Cu to B.Cu)'))
+        layer_count_check=(
+            ("match (%d copper layers)" % len(copper))
+            if board is not None
+            else 'unverified: rules has no "layers" count'
+        ),
+        planes=list(st.get("planes", [])),
+        planes_source=planes_source,
+        board_thickness_mm=_r(thickness),
+        stack_thickness_mm=_r(physics.thickness(st)),
+        barrel=dict(
+            length_mm=_r(thickness),
+            er=_r(via["er"]),
+            td_ps_per_mm=_r(barrel_td),
+            ps=_r(thickness * barrel_td),
+            formula="td = sqrt(er_dielectric) / c (first-order TEM delay through the dielectric the barrel "
+            "crosses; thickness-weighted er of pnr.si.physics.via); length = electrical_fab "
+            "board_thickness_mm (the full barrel, F.Cu to B.Cu)",
+        ),
+    )
 
 
 def pair_layers(st, pair):
     """(layers, source): the copper layers the pair is routed on, planes excluded."""
     from pnr.si import physics
+
     copper = physics.copper_layers(st)
-    planes = set(st.get('planes', []))
-    if pair.get('layers'):
-        names = list(pair['layers'])
+    planes = set(st.get("planes", []))
+    if pair.get("layers"):
+        names = list(pair["layers"])
         bad = [n for n in names if n not in copper or n in planes]
         if bad:
-            raise BusClassError('pair layers %s are not signal copper layers of the stackup' % ', '.join(bad))
-        return names, 'pair layers (rules.json)'
+            raise BusClassError(
+                "pair layers %s are not signal copper layers of the stackup" % ", ".join(bad)
+            )
+        return names, "pair layers (rules.json)"
     names = [n for n in (copper[0], copper[-1]) if n not in planes]
     if not names:
-        raise BusClassError('no outer signal layer for the pair (both outer layers are planes)')
+        raise BusClassError("no outer signal layer for the pair (both outer layers are planes)")
     return names, PAIR_ROUTER_LAYERS
 
 
@@ -291,29 +420,45 @@ def diff_impedance(rec, width, gap, b=None):
     """Edge-coupled differential impedance estimate (report-only) from a line record.
 
     ``b``: plane-to-plane spacing (stripline only)."""
-    if gap is None or rec['z0_ohm'] is None:
+    if gap is None or rec["z0_ohm"] is None:
         return None, None
-    if rec['model'].startswith('stripline') and b:
-        return 2 * rec['z0_ohm'] * (1 - 0.347 * math.exp(-2.9 * gap / b)), 'Zdiff = 2 Z0 (1 - 0.347 exp(-2.9 s/b))'
-    return 2 * rec['z0_ohm'] * (1 - 0.48 * math.exp(-0.96 * gap / rec['h_mm'])), 'Zdiff = 2 Z0 (1 - 0.48 exp(-0.96 s/h))'
+    if rec["model"].startswith("stripline") and b:
+        return (
+            2 * rec["z0_ohm"] * (1 - 0.347 * math.exp(-2.9 * gap / b)),
+            "Zdiff = 2 Z0 (1 - 0.347 exp(-2.9 s/b))",
+        )
+    return (
+        2 * rec["z0_ohm"] * (1 - 0.48 * math.exp(-0.96 * gap / rec["h_mm"])),
+        "Zdiff = 2 Z0 (1 - 0.48 exp(-0.96 s/h))",
+    )
 
 
 def layer_table(st, width, gap):
     from pnr.si import physics
+
     out = {}
     zt = physics.z_table(st)
     for name in physics.copper_layers(st):
         rec = physics.line(st, name, width)
-        ref = rec.get('reference') or []
+        ref = rec.get("reference") or []
         b = zt[ref[1]][0] - zt[ref[0]][1] if len(ref) == 2 else None
         z, formula = diff_impedance(rec, width, gap, b)
-        out[name] = dict(td_ps_per_mm=_r(rec['td_ps_per_mm']), eps_eff=_r(rec['eps_eff']), z0_ohm=_r(rec['z0_ohm'], 3),
-                         zdiff_ohm=_r(z, 3), zdiff_formula=formula, model=rec['model'], reference=rec['reference'],
-                         h_mm=_r(rec['h_mm']), er=_r(rec['er']))
+        out[name] = dict(
+            td_ps_per_mm=_r(rec["td_ps_per_mm"]),
+            eps_eff=_r(rec["eps_eff"]),
+            z0_ohm=_r(rec["z0_ohm"], 3),
+            zdiff_ohm=_r(z, 3),
+            zdiff_formula=formula,
+            model=rec["model"],
+            reference=rec["reference"],
+            h_mm=_r(rec["h_mm"]),
+            er=_r(rec["er"]),
+        )
     return out
 
 
 # ------------------------------------------------------------------ derivation
+
 
 def derive(class_id, annotation, pair, rules, lib=None):
     """Derived limits for ``class_id`` on this board (no pair mutation).
@@ -321,134 +466,221 @@ def derive(class_id, annotation, pair, rules, lib=None):
     Returns the provenance record stored as ``pair['bus_class']`` (without
     ``applied``, which :func:`apply_class` adds)."""
     lib = lib or load()
-    cls = lib['classes'].get(class_id)
+    cls = lib["classes"].get(class_id)
     if cls is None:
-        raise BusClassError('unknown bus class %r (known: %s)' % (class_id, ', '.join(sorted(lib['classes']))))
+        raise BusClassError(
+            "unknown bus class %r (known: %s)" % (class_id, ", ".join(sorted(lib["classes"])))
+        )
     params, explicit_params = class_params(cls, annotation)
     tr, tr_prov = t_rise(cls, annotation, params)
-    width = pair.get('width_mm') or (rules.get('fab') or {}).get('track_width_mm') or 0.2
-    gap = pair.get('gap_mm')
+    width = pair.get("width_mm") or (rules.get("fab") or {}).get("track_width_mm") or 0.2
+    gap = pair.get("gap_mm")
     # the pair's reference layer (resolve_pair_chains copies it from the annotation first)
-    if not pair.get('reference_layer') and annotation.get('reference_layer'):
-        pair = dict(pair, reference_layer=annotation['reference_layer'])
+    if not pair.get("reference_layer") and annotation.get("reference_layer"):
+        pair = dict(pair, reference_layer=annotation["reference_layer"])
     st, inputs = stackup_inputs(rules, pair)
     layers_all = layer_table(st, width, gap)
     routing, routing_source = pair_layers(st, pair)
     # line models of the pair's layers only (a plane or an unused signal layer carries no pair copper)
     layers = {n: layers_all[n] for n in routing}
-    slow = max(routing, key=lambda n: layers[n]['td_ps_per_mm'])
-    fast = min(routing, key=lambda n: layers[n]['td_ps_per_mm'])
-    td_slow, td_fast = layers[slow]['td_ps_per_mm'], layers[fast]['td_ps_per_mm']
-    defaults = lib.get('defaults', {})
-    barrel = inputs['barrel']
+    slow = max(routing, key=lambda n: layers[n]["td_ps_per_mm"])
+    fast = min(routing, key=lambda n: layers[n]["td_ps_per_mm"])
+    td_slow, td_fast = layers[slow]["td_ps_per_mm"], layers[fast]["td_ps_per_mm"]
+    defaults = lib.get("defaults", {})
+    barrel = inputs["barrel"]
 
     def k_of(name):
         if annotation.get(name) is not None:
-            return float(annotation[name]), dict(source='explicit', annotation_key=name)
+            return float(annotation[name]), dict(source="explicit", annotation_key=name)
         if cls.get(name) is not None:
-            return float(cls[name]), dict(source='class')
-        return float(defaults[name]['value']), dict(source='library default', basis=defaults[name].get('basis'))
+            return float(cls[name]), dict(source="class")
+        return float(defaults[name]["value"]), dict(
+            source="library default", basis=defaults[name].get("basis")
+        )
 
     derived = {}
-    stub_k, stub_k_prov = k_of('stub_k')
-    unc_k, unc_k_prov = k_of('uncoupled_k')
+    stub_k, stub_k_prov = k_of("stub_k")
+    unc_k, unc_k_prov = k_of("uncoupled_k")
 
     def layer_inputs(names, with_barrel=False):
         """The stackup inputs a derived value used: the per-layer delays it read (the full line
         models are under ``bus_class.stackup.layers``) and, for stub values, the barrel."""
-        out = dict(stackup=inputs['stackup'], fab_profile=inputs['fab_profile'], planes=inputs['planes'],
-                   width_mm=width, td_ps_per_mm={n: layers[n]['td_ps_per_mm'] for n in names},
-                   line_models='bus_class.stackup.layers')
+        out = dict(
+            stackup=inputs["stackup"],
+            fab_profile=inputs["fab_profile"],
+            planes=inputs["planes"],
+            width_mm=width,
+            td_ps_per_mm={n: layers[n]["td_ps_per_mm"] for n in names},
+            line_models="bus_class.stackup.layers",
+        )
         if with_barrel:
-            out['barrel_ps'] = barrel['ps']
+            out["barrel_ps"] = barrel["ps"]
         return out
 
     # derived entries cite by {source, ref}; the quotes are in the class copy of this record
     # (signalling / skew / length) and t_rise_min_ps holds the full rise-time provenance
-    ref_of = lambda c: {k: c[k] for k in ('source', 'ref') if k in c}
-    tr_cite = [ref_of(tr_prov['cite'])] if tr_prov.get('cite') else []
-    tr_in = dict(value=tr_prov.get('value'), source=tr_prov.get('source'), see='bus_class.t_rise_min_ps')
+    ref_of = lambda c: {k: c[k] for k in ("source", "ref") if k in c}
+    tr_cite = [ref_of(tr_prov["cite"])] if tr_prov.get("cite") else []
+    tr_in = dict(
+        value=tr_prov.get("value"), source=tr_prov.get("source"), see="bus_class.t_rise_min_ps"
+    )
     if tr is not None:
         v = stub_k * tr
-        derived['stub_delay_max_ps'] = dict(
-            value=_r(v, 3), unit='ps', formula='stub_k * t_rise_min_ps',
+        derived["stub_delay_max_ps"] = dict(
+            value=_r(v, 3),
+            unit="ps",
+            formula="stub_k * t_rise_min_ps",
             inputs=dict(stub_k=dict(value=stub_k, **stub_k_prov), t_rise_min_ps=tr_in),
-            reading=STUB_READING_DELAY, class_id=class_id, citation=tr_cite,
+            reading=STUB_READING_DELAY,
+            class_id=class_id,
+            citation=tr_cite,
             # the delay limit itself needs no stackup; the check reads copper with these
-            stackup_inputs=layer_inputs(routing, True))
-        derived['stub_max_mm_equivalent'] = dict(
-            value=_r(v / td_fast, 3), unit='mm',
-            formula='stub_delay_max_ps / td_ps_per_mm(fastest pair layer): the longest planar stub the delay allows '
-                    '(the router\'s search cap); per_layer = (stub_delay_max_ps - n_barrels * barrel_ps) / '
-                    'td_ps_per_mm(layer) for 0 and 1 barrel (information; the check uses the delay)',
-            inputs=dict(stub_delay_max_ps=_r(v, 3), layer=fast, td_ps_per_mm=td_fast, barrel_ps=barrel['ps']),
-            per_layer={n: dict(no_via=_r(v / layers[n]['td_ps_per_mm'], 3),
-                               one_via=_r(max(0.0, v - barrel['ps']) / layers[n]['td_ps_per_mm'], 3))
-                       for n in routing},
-            class_id=class_id, citation=tr_cite, stackup_inputs=layer_inputs(routing, True))
+            stackup_inputs=layer_inputs(routing, True),
+        )
+        derived["stub_max_mm_equivalent"] = dict(
+            value=_r(v / td_fast, 3),
+            unit="mm",
+            formula="stub_delay_max_ps / td_ps_per_mm(fastest pair layer): the longest planar stub the delay allows "
+            "(the router's search cap); per_layer = (stub_delay_max_ps - n_barrels * barrel_ps) / "
+            "td_ps_per_mm(layer) for 0 and 1 barrel (information; the check uses the delay)",
+            inputs=dict(
+                stub_delay_max_ps=_r(v, 3), layer=fast, td_ps_per_mm=td_fast, barrel_ps=barrel["ps"]
+            ),
+            per_layer={
+                n: dict(
+                    no_via=_r(v / layers[n]["td_ps_per_mm"], 3),
+                    one_via=_r(max(0.0, v - barrel["ps"]) / layers[n]["td_ps_per_mm"], 3),
+                )
+                for n in routing
+            },
+            class_id=class_id,
+            citation=tr_cite,
+            stackup_inputs=layer_inputs(routing, True),
+        )
         u = unc_k * tr
-        derived['max_uncoupled_mm'] = dict(
-            value=_r(u / td_slow, 3), unit='mm', formula='uncoupled_k * t_rise_min_ps / td_ps_per_mm(slowest pair layer)',
-            inputs=dict(uncoupled_k=dict(value=unc_k, **unc_k_prov), t_rise_min_ps=tr_in,
-                        layer=slow, td_ps_per_mm=td_slow),
-            delay_ps=_r(u, 3), class_id=class_id,
-            citation=tr_cite, stackup_inputs=layer_inputs([slow]))
-    skew = cls.get('skew') or {}
-    if skew.get('max_ps') is not None:
-        derived['skew_mm'] = dict(
-            value=_r(skew['max_ps'] / td_slow, 3), unit='mm', formula='skew.max_ps / td_ps_per_mm(slowest pair layer)',
-            inputs=dict(skew_max_ps=skew['max_ps'], layer=slow, td_ps_per_mm=td_slow),
-            applies_to=skew.get('applies_to'), spec_basis=skew.get('basis'), interpretation=skew.get('interpretation'),
-            class_id=class_id, citation=[ref_of(skew['cite'])] if skew.get('cite') else [], stackup_inputs=layer_inputs([slow]))
-    length = cls.get('length') or {}
-    lmm, lps = _value(length.get('max_mm'), params), _value(length.get('max_delay_ps'), params)
+        derived["max_uncoupled_mm"] = dict(
+            value=_r(u / td_slow, 3),
+            unit="mm",
+            formula="uncoupled_k * t_rise_min_ps / td_ps_per_mm(slowest pair layer)",
+            inputs=dict(
+                uncoupled_k=dict(value=unc_k, **unc_k_prov),
+                t_rise_min_ps=tr_in,
+                layer=slow,
+                td_ps_per_mm=td_slow,
+            ),
+            delay_ps=_r(u, 3),
+            class_id=class_id,
+            citation=tr_cite,
+            stackup_inputs=layer_inputs([slow]),
+        )
+    skew = cls.get("skew") or {}
+    if skew.get("max_ps") is not None:
+        derived["skew_mm"] = dict(
+            value=_r(skew["max_ps"] / td_slow, 3),
+            unit="mm",
+            formula="skew.max_ps / td_ps_per_mm(slowest pair layer)",
+            inputs=dict(skew_max_ps=skew["max_ps"], layer=slow, td_ps_per_mm=td_slow),
+            applies_to=skew.get("applies_to"),
+            spec_basis=skew.get("basis"),
+            interpretation=skew.get("interpretation"),
+            class_id=class_id,
+            citation=[ref_of(skew["cite"])] if skew.get("cite") else [],
+            stackup_inputs=layer_inputs([slow]),
+        )
+    length = cls.get("length") or {}
+    lmm, lps = _value(length.get("max_mm"), params), _value(length.get("max_delay_ps"), params)
     if lmm[0] is not None or lps[0] is not None:
         # optional total-length rule (report-only in v1: the pair router checks no
         # total length; recorded so the owner sees it)
         if lmm[0] is not None:
-            lv, lf, li, spec = lmm[0], 'length.max_mm', dict(max_mm=lmm[1]), length['max_mm']
+            lv, lf, li, spec = lmm[0], "length.max_mm", dict(max_mm=lmm[1]), length["max_mm"]
         else:
             lv = lps[0] / td_slow
-            lf, spec = 'length.max_delay_ps / td_ps_per_mm(slowest pair layer)', length['max_delay_ps']
+            lf, spec = (
+                "length.max_delay_ps / td_ps_per_mm(slowest pair layer)",
+                length["max_delay_ps"],
+            )
             li = dict(max_delay_ps=lps[1], layer=slow, td_ps_per_mm=td_slow)
-        derived['max_length_mm'] = dict(
-            value=_r(lv, 3), unit='mm', formula=lf, inputs=li, class_id=class_id,
-            delay_ps=None if lps[0] is None else _r(lps[0], 3), applies_to=length.get('applies_to'),
-            spec_basis=length.get('basis'), interpretation=length.get('interpretation'),
-            citation=[ref_of(spec['cite'])] if spec.get('cite') else [], stackup_inputs=layer_inputs([slow]),
-            enforced=False, note='report-only in v1 (the pair router checks no total length)')
-    imp = cls.get('impedance') or {}
+        derived["max_length_mm"] = dict(
+            value=_r(lv, 3),
+            unit="mm",
+            formula=lf,
+            inputs=li,
+            class_id=class_id,
+            delay_ps=None if lps[0] is None else _r(lps[0], 3),
+            applies_to=length.get("applies_to"),
+            spec_basis=length.get("basis"),
+            interpretation=length.get("interpretation"),
+            citation=[ref_of(spec["cite"])] if spec.get("cite") else [],
+            stackup_inputs=layer_inputs([slow]),
+            enforced=False,
+            note="report-only in v1 (the pair router checks no total length)",
+        )
+    imp = cls.get("impedance") or {}
     check = None
-    if imp.get('differential_ohm') is not None:
-        target = float(imp['differential_ohm'])
-        tol = target * float(imp['tolerance_pct']) / 100 if imp.get('tolerance_pct') is not None else float(imp.get('tolerance_ohm') or 0)
-        check = dict(target_ohm=target, min_ohm=_r(target - tol, 3), max_ohm=_r(target + tol, 3),
-                     required=bool(imp.get('required')), spec_basis=imp.get('basis'),
-                     interpretation=imp.get('interpretation'), width_mm=width, gap_mm=gap,
-                     per_layer={n: dict(zdiff_ohm=layers[n]['zdiff_ohm'],
-                                        within=None if layers[n]['zdiff_ohm'] is None else
-                                        (target - tol - 1e-9 <= layers[n]['zdiff_ohm'] <= target + tol + 1e-9))
-                                for n in routing},
-                     basis='report-only estimate: pnr.si.physics single-ended Z0 with the edge-coupled approximation '
-                           'commonly attributed to IPC-2141; not a field solve')
+    if imp.get("differential_ohm") is not None:
+        target = float(imp["differential_ohm"])
+        tol = (
+            target * float(imp["tolerance_pct"]) / 100
+            if imp.get("tolerance_pct") is not None
+            else float(imp.get("tolerance_ohm") or 0)
+        )
+        check = dict(
+            target_ohm=target,
+            min_ohm=_r(target - tol, 3),
+            max_ohm=_r(target + tol, 3),
+            required=bool(imp.get("required")),
+            spec_basis=imp.get("basis"),
+            interpretation=imp.get("interpretation"),
+            width_mm=width,
+            gap_mm=gap,
+            per_layer={
+                n: dict(
+                    zdiff_ohm=layers[n]["zdiff_ohm"],
+                    within=(
+                        None
+                        if layers[n]["zdiff_ohm"] is None
+                        else (target - tol - 1e-9 <= layers[n]["zdiff_ohm"] <= target + tol + 1e-9)
+                    ),
+                )
+                for n in routing
+            },
+            basis="report-only estimate: pnr.si.physics single-ended Z0 with the edge-coupled approximation "
+            "commonly attributed to IPC-2141; not a field solve",
+        )
     return dict(
-        id=class_id, title=cls.get('title'), kind=cls.get('kind'),
-        library=dict(lib.get('_id') or lib['_file']),
-        sources={k: lib['sources'][k] for k in sorted(_cited(cls)) if k in lib.get('sources', {})},
+        id=class_id,
+        title=cls.get("title"),
+        kind=cls.get("kind"),
+        library=dict(lib.get("_id") or lib["_file"]),
+        sources={k: lib["sources"][k] for k in sorted(_cited(cls)) if k in lib.get("sources", {})},
         # the class as cited, without the quotes/notes (those are in the library file, pinned by
         # library.sha256); basis + interpretation stay
-        signalling=_compact(cls.get('signalling')), impedance=_compact(imp), skew=_compact(skew),
+        signalling=_compact(cls.get("signalling")),
+        impedance=_compact(imp),
+        skew=_compact(skew),
         params=dict(values=params, explicit=explicit_params),
         t_rise_min_ps=tr_prov,
-        stackup=dict(inputs, width_mm=width, gap_mm=gap, pair_layers=routing, pair_layers_source=routing_source,
-                     slowest_layer=slow, fastest_layer=fast, layers=layers,
-                     source='pnr.si.physics.stackup(rules) + physics.line / physics.via'),
-        derived=derived, impedance_check=check, flag=ENV)
+        stackup=dict(
+            inputs,
+            width_mm=width,
+            gap_mm=gap,
+            pair_layers=routing,
+            pair_layers_source=routing_source,
+            slowest_layer=slow,
+            fastest_layer=fast,
+            layers=layers,
+            source="pnr.si.physics.stackup(rules) + physics.line / physics.via",
+        ),
+        derived=derived,
+        impedance_check=check,
+        flag=ENV,
+    )
 
 
 def _compact(node):
     if isinstance(node, dict):
-        return {k: _compact(v) for k, v in node.items() if k not in ('quote', 'note')}
+        return {k: _compact(v) for k, v in node.items() if k not in ("quote", "note")}
     if isinstance(node, list):
         return [_compact(v) for v in node]
     return node
@@ -457,8 +689,8 @@ def _compact(node):
 def _cited(node):
     out = set()
     if isinstance(node, dict):
-        if isinstance(node.get('cite'), dict) and node['cite'].get('source'):
-            out.add(node['cite']['source'])
+        if isinstance(node.get("cite"), dict) and node["cite"].get("source"):
+            out.add(node["cite"]["source"])
         for v in node.values():
             out |= _cited(v)
     elif isinstance(node, list):
@@ -477,93 +709,132 @@ def apply_class(pair, annotation, rules, lib=None, where=None):
     Sets ``skew_mm`` / ``max_uncoupled_mm`` (explicit values win) and ``stub_limit``
     (the limit the pair router checks), and stores the provenance in
     ``pair['bus_class']``."""
-    cid = annotation['class']
+    cid = annotation["class"]
     rec = derive(cid, annotation, pair, rules, lib)
-    if rec['kind'] != 'differential':
-        raise BusClassError('%s: class %s is %s and cannot bind a @pnr-pair' % (where or pair.get('name'), cid, rec['kind']))
-    d = rec['derived']
+    if rec["kind"] != "differential":
+        raise BusClassError(
+            "%s: class %s is %s and cannot bind a @pnr-pair"
+            % (where or pair.get("name"), cid, rec["kind"])
+        )
+    d = rec["derived"]
     applied = {}
-    ann = dict(source='@pnr-pair annotation', **(where or {}))
+    ann = dict(source="@pnr-pair annotation", **(where or {}))
 
     # skew
-    if _explicit(annotation, 'skew_mm'):
-        applied['skew_mm'] = dict(value=float(annotation['skew_mm']), source='explicit', where=ann)
-    elif _explicit(annotation, 'skew_ps'):
-        slow = rec['stackup']['slowest_layer']
-        v = float(annotation['skew_ps']) / rec['stackup']['layers'][slow]['td_ps_per_mm']
-        applied['skew_mm'] = dict(value=_r(v, 3), source='explicit skew_ps converted on the slowest routing layer', where=ann)
-    elif pair.get('skew_mm') is not None and 'skew_mm' not in (pair.get('defaulted') or ()):
-        applied['skew_mm'] = dict(value=float(pair['skew_mm']), source='explicit', where=dict(source='constraints diff_pair (rules.json)'))
-    elif 'skew_mm' in d:
-        applied['skew_mm'] = dict(value=d['skew_mm']['value'], source='class')
-    if 'skew_mm' in applied:
-        applied['skew_mm']['class_derived'] = (d.get('skew_mm') or {}).get('value')
-        pair['skew_mm'] = applied['skew_mm']['value']
+    if _explicit(annotation, "skew_mm"):
+        applied["skew_mm"] = dict(value=float(annotation["skew_mm"]), source="explicit", where=ann)
+    elif _explicit(annotation, "skew_ps"):
+        slow = rec["stackup"]["slowest_layer"]
+        v = float(annotation["skew_ps"]) / rec["stackup"]["layers"][slow]["td_ps_per_mm"]
+        applied["skew_mm"] = dict(
+            value=_r(v, 3),
+            source="explicit skew_ps converted on the slowest routing layer",
+            where=ann,
+        )
+    elif pair.get("skew_mm") is not None and "skew_mm" not in (pair.get("defaulted") or ()):
+        applied["skew_mm"] = dict(
+            value=float(pair["skew_mm"]),
+            source="explicit",
+            where=dict(source="constraints diff_pair (rules.json)"),
+        )
+    elif "skew_mm" in d:
+        applied["skew_mm"] = dict(value=d["skew_mm"]["value"], source="class")
+    if "skew_mm" in applied:
+        applied["skew_mm"]["class_derived"] = (d.get("skew_mm") or {}).get("value")
+        pair["skew_mm"] = applied["skew_mm"]["value"]
 
     # continuous uncoupled run
-    if _explicit(annotation, 'max_uncoupled_mm'):
-        applied['max_uncoupled_mm'] = dict(value=float(annotation['max_uncoupled_mm']), source='explicit', where=ann)
-    elif 'max_uncoupled_mm' in d:
-        applied['max_uncoupled_mm'] = dict(value=d['max_uncoupled_mm']['value'], source='class')
+    if _explicit(annotation, "max_uncoupled_mm"):
+        applied["max_uncoupled_mm"] = dict(
+            value=float(annotation["max_uncoupled_mm"]), source="explicit", where=ann
+        )
+    elif "max_uncoupled_mm" in d:
+        applied["max_uncoupled_mm"] = dict(value=d["max_uncoupled_mm"]["value"], source="class")
     else:
-        raise BusClassError('%s: no max_uncoupled_mm in the annotation and class %s derives none (no t_rise); add '
-                            '"max_uncoupled_mm" or "t_rise_ns"' % (pair.get('name'), cid))
-    applied['max_uncoupled_mm']['class_derived'] = (d.get('max_uncoupled_mm') or {}).get('value')
-    pair['max_uncoupled_mm'] = applied['max_uncoupled_mm']['value']
+        raise BusClassError(
+            "%s: no max_uncoupled_mm in the annotation and class %s derives none (no t_rise); add "
+            '"max_uncoupled_mm" or "t_rise_ns"' % (pair.get("name"), cid)
+        )
+    applied["max_uncoupled_mm"]["class_derived"] = (d.get("max_uncoupled_mm") or {}).get("value")
+    pair["max_uncoupled_mm"] = applied["max_uncoupled_mm"]["value"]
 
     # intermediate-terminal stub (PNR_PAIR_STUB_MAX_MM still overrides at run time)
-    st = rec['stackup']
-    if _explicit(annotation, 'stub_max_mm'):
-        limit = dict(kind='mm', max_mm=float(annotation['stub_max_mm']), reading=STUB_READING_MM, source='explicit', where=ann)
-    elif _explicit(annotation, 'stub_delay_max_ps'):
-        limit = dict(kind='delay', max_ps=float(annotation['stub_delay_max_ps']), reading=STUB_READING_DELAY,
-                     source='explicit', where=ann)
-    elif 'stub_delay_max_ps' in d:
-        limit = dict(kind='delay', max_ps=d['stub_delay_max_ps']['value'], reading=STUB_READING_DELAY, source='class')
+    st = rec["stackup"]
+    if _explicit(annotation, "stub_max_mm"):
+        limit = dict(
+            kind="mm",
+            max_mm=float(annotation["stub_max_mm"]),
+            reading=STUB_READING_MM,
+            source="explicit",
+            where=ann,
+        )
+    elif _explicit(annotation, "stub_delay_max_ps"):
+        limit = dict(
+            kind="delay",
+            max_ps=float(annotation["stub_delay_max_ps"]),
+            reading=STUB_READING_DELAY,
+            source="explicit",
+            where=ann,
+        )
+    elif "stub_delay_max_ps" in d:
+        limit = dict(
+            kind="delay",
+            max_ps=d["stub_delay_max_ps"]["value"],
+            reading=STUB_READING_DELAY,
+            source="class",
+        )
     else:
         limit = None
-    if limit is not None and limit['kind'] == 'delay':
+    if limit is not None and limit["kind"] == "delay":
         # the pair's layers only: a plane layer carries no pair copper (its line model is
         # meaningless), and a layer missing from the table reads as the slowest one
-        td = {n: st['layers'][n]['td_ps_per_mm'] for n in st['pair_layers']}
-        limit.update(td_ps_per_mm=td,
-                     barrel_ps_per_mm=st['barrel']['td_ps_per_mm'], barrel_mm=st['barrel']['length_mm'],
-                     # search-side pruning must never reject a stub the final delay check
-                     # accepts: the largest planar length any pair layer allows
-                     search_cap_mm=_r(limit['max_ps'] / min(td.values()), 3))
+        td = {n: st["layers"][n]["td_ps_per_mm"] for n in st["pair_layers"]}
+        limit.update(
+            td_ps_per_mm=td,
+            barrel_ps_per_mm=st["barrel"]["td_ps_per_mm"],
+            barrel_mm=st["barrel"]["length_mm"],
+            # search-side pruning must never reject a stub the final delay check
+            # accepts: the largest planar length any pair layer allows
+            search_cap_mm=_r(limit["max_ps"] / min(td.values()), 3),
+        )
     if limit is not None:
-        limit['class_derived_ps'] = (d.get('stub_delay_max_ps') or {}).get('value')
-        pair['stub_limit'] = limit
-        applied['stub'] = limit
+        limit["class_derived_ps"] = (d.get("stub_delay_max_ps") or {}).get("value")
+        pair["stub_limit"] = limit
+        applied["stub"] = limit
 
     # optional total length (report-only in v1; recorded, not set on the pair)
-    if _explicit(annotation, 'max_length_mm'):
-        applied['max_length_mm'] = dict(value=float(annotation['max_length_mm']), source='explicit', where=ann)
-    elif 'max_length_mm' in d:
-        applied['max_length_mm'] = dict(value=d['max_length_mm']['value'], source='class')
-    if 'max_length_mm' in applied:
-        applied['max_length_mm'].update(class_derived=(d.get('max_length_mm') or {}).get('value'), enforced=False)
-    rec['applied'] = applied
-    pair['bus_class'] = rec
+    if _explicit(annotation, "max_length_mm"):
+        applied["max_length_mm"] = dict(
+            value=float(annotation["max_length_mm"]), source="explicit", where=ann
+        )
+    elif "max_length_mm" in d:
+        applied["max_length_mm"] = dict(value=d["max_length_mm"]["value"], source="class")
+    if "max_length_mm" in applied:
+        applied["max_length_mm"].update(
+            class_derived=(d.get("max_length_mm") or {}).get("value"), enforced=False
+        )
+    rec["applied"] = applied
+    pair["bus_class"] = rec
     return rec
 
 
 # ------------------------------------------------------------------ stub delay (router side)
 
+
 def stub_delay_limit(pair, env=None):
     """The pair's delay-kind stub limit (dict) when the flag is on, else None."""
     if not enabled(env):
         return None
-    limit = pair.get('stub_limit')
-    return limit if limit and limit.get('kind') == 'delay' else None
+    limit = pair.get("stub_limit")
+    return limit if limit and limit.get("kind") == "delay" else None
 
 
 def stub_mm_limit(pair, env=None):
     """An explicit annotation mm stub cap (flag on), else None."""
     if not enabled(env):
         return None
-    limit = pair.get('stub_limit')
-    return float(limit['max_mm']) if limit and limit.get('kind') == 'mm' else None
+    limit = pair.get("stub_limit")
+    return float(limit["max_mm"]) if limit and limit.get("kind") == "mm" else None
 
 
 def router_stub_rule(pair, env_cap_mm, env=None):
@@ -574,13 +845,13 @@ def router_stub_rule(pair, env_cap_mm, env=None):
     ``stub_k * t_rise_min`` (kind 'delay': searched with ``search_cap_mm``, checked as
     delay to the pad centre with the barrel). Flag off: only the env cap."""
     if env_cap_mm is not None:
-        return float(env_cap_mm), None, 'PNR_PAIR_STUB_MAX_MM'
+        return float(env_cap_mm), None, "PNR_PAIR_STUB_MAX_MM"
     mm = stub_mm_limit(pair, env)
     if mm is not None:
-        return mm, None, 'annotation stub_max_mm'
+        return mm, None, "annotation stub_max_mm"
     delay = stub_delay_limit(pair, env)
     if delay is not None:
-        return float(delay['search_cap_mm']), delay, 'delay (%s)' % delay.get('source')
+        return float(delay["search_cap_mm"]), delay, "delay (%s)" % delay.get("source")
     return None, None, None
 
 

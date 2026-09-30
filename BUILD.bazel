@@ -1,7 +1,8 @@
 """Repository root package.
 
 - //:yapnr and //:doctor are the user-facing entry points
-  (`bazel run //:yapnr -- --version`, `bazel run //:doctor`).
+  (`bazel run //:yapnr -- --version`, `bazel run //:doctor`); //:viewer serves
+  the live viewer (`bazel run //:viewer -- --root <live dir>`).
 - //release:wheel is the yapnr wheel (stamped with the release version; see
   release/BUILD.bazel and docs/releases.md).
 - //:requirements.update regenerates requirements.lock from requirements.in.
@@ -34,6 +35,12 @@ alias(
 alias(
     name = "doctor",
     actual = "//yapnr:doctor",
+)
+
+# `bazel run //:viewer -- --root <live dir> [--config viewer.toml]`: the live viewer.
+alias(
+    name = "viewer",
+    actual = "//yapnr/viewer:server",
 )
 
 compile_pip_requirements(

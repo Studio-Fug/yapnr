@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 
 from PIL import Image, ImageColor
+
 from pnr import trace
 from pnr.animate import encode
 from pnr.animate import render as render_mod

@@ -17,6 +17,7 @@ what yapnr is, see [README.md](README.md); for the migration from Splanc, see
 ```sh
 bazel run //:yapnr -- --version       # the CLI
 bazel run //:doctor                   # environment report (Python, numpy, torch, KiCad CLI)
+bazel run //:viewer -- --root <live>  # the live viewer on http://127.0.0.1:8766
 bazel test //...                      # unit tests and repo checks (no KiCad needed)
 bazel test --config=quick //...       # skip tests tagged slow
 bazel run //docs:build                # docs -> docs/site/html/
@@ -133,6 +134,26 @@ The copy's `kicad-cli` registers as background-only and never shows a Dock icon;
 match the stock bundle. KiCad's Python workers do not register with the Dock. A future
 `yapnr kicad make-headless` command automates this (PR3d). Redo the copy after upgrading KiCad.
 
+## The live viewer
+
+`yapnr/viewer` is the web front end for experiments ([docs/viewer.md](docs/viewer.md); code
+layout and tests in [yapnr/viewer/README.md](yapnr/viewer/README.md)). Notes for working on it:
+
+- Run a development copy on a spare loopback port, never on the ports of viewers other people
+  use: `bazel run //:viewer -- --root <live> --port 8795`. It reads the same live directory
+  safely (writes only pins, drafts, snapshots and control requests you make).
+- The served files are `//yapnr/viewer:dist`: `static/` plus elkjs and three.js, fetched pinned
+  by sha256 at build time (never vendored; [THIRD_PARTY.md](THIRD_PARTY.md)). To upgrade one,
+  change its URL and sha256 in `MODULE.bazel` and the file hashes in
+  `tests/unit/viewer/test_dist.py`, and check the schematic and 3D views in a browser.
+- KiCad for the viewer comes from `--kicad-cli`/`--kicad-python`, `YAPNR_KICAD_CLI`
+  (`PNR_KICAD_CLI`) and `YAPNR_KICAD_PYTHON`, or `~/.config/yapnr/config.toml`; see [KiCad](#kicad)
+  for the headless copy. The Ask agent and AI net labels make paid Claude calls and are off unless
+  `--agent on` / `--net-summaries on`; the unit tests use fake CLIs, and the live checks in
+  `tests/e2e/viewer` are manual.
+- The front end is plain JavaScript without a build step or a node toolchain; there is no
+  JavaScript test runner yet, so check changes to `static/` in a browser (headless Chrome works).
+
 ## Container images and releases
 
 The container images (`ghcr.io/studio-fug/yapnr` and its KiCad base) are described in
@@ -149,8 +170,10 @@ regenerate the image's runtime locks with `tools/image/update_runtime_locks.sh` 
 
 | Path                             | What                                                                  |
 | -------------------------------- | --------------------------------------------------------------------- |
-| `yapnr/`                         | the Python package (today: version and CLI)                           |
+| `yapnr/`                         | the Python package (today: version, CLI and the live viewer)          |
 | `tests/unit/`                    | hermetic unit tests and repo checks                                   |
+| `tests/e2e/`                     | manual live checks (paid agent calls, real KiCad exports)             |
+| `tests/fixtures/`                | synthetic test inputs (the viewer's small atopile project)            |
 | `tools/`                         | privacy scan, test-wiring check, internal Bazel macros                |
 | `tools/release/`, `tools/image/` | version derivation, release notes, image build and smoke test         |
 | `release/`                       | the yapnr wheel (`//release:wheel`)                                   |

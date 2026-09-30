@@ -150,6 +150,18 @@ py_library(
     ],
 )
 
+# Hierarchical PnR (blocks, macros, sub-boards). Only the viewer's schematic builder
+# (pnr.hier.blocks) depends on it so far; PR3b re-homes it under //yapnr/hier.
+py_library(
+    name = "pnr_hier",
+    srcs = glob(["pnr/hier/*.py"]),
+    imports = ["."],
+    deps = [
+        ":pnr",
+        requirement("pyyaml"),
+    ],
+)
+
 # Runnable placer: python -m pnr.place graph.json constraints.yaml [--dump-svg ...]
 py_binary(
     name = "place",
@@ -579,6 +591,34 @@ py_test(
     srcs = ["tests/test_board_delete.py"],
     data = glob(["pnr/**/*.py", "regression/*.py"]) + ["//hardware/tools:keyhole_region.py"],
     main = "tests/test_board_delete.py",
+    deps = [":pnr"],
+)
+
+# Code keys of the routing feedback (pnr.feedback.signals): formatting-only
+# changes keep them, semantic changes alter them, legacy records still validate,
+# and the halving and synth_native seed imports carry each record's key scheme.
+# The black/isort round trip over the engine runs only where both are installed.
+py_test(
+    name = "code_key_test",
+    size = "small",
+    srcs = ["tests/test_code_key.py"],
+    data = glob(["pnr/**/*.py"]),
+    main = "tests/test_code_key.py",
+    deps = [":pnr"],
+)
+
+# pnr.feedback.signals on trimmed real feedback rounds (targets, shove events,
+# router keys, code identity of a round). pnr.feedback, pnr.hier and pnr.mc are
+# not in :pnr yet (PR3b), so their sources come in as data.
+py_test(
+    name = "feedback_signals_test",
+    size = "small",
+    srcs = ["tests/test_feedback_signals.py"],
+    data = glob([
+        "pnr/**/*.py",
+        "testdata/feedback/rounds/**",
+    ]),
+    main = "tests/test_feedback_signals.py",
     deps = [":pnr"],
 )
 

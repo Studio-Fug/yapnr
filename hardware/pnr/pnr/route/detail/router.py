@@ -169,44 +169,63 @@ def _mark_copper_keepouts(grid: RouteGrid, graph: BoardGraph, rules: Optional[di
     """
     if not rules:
         return
-    for spec in rules.get('mounting_holes', []):
-        x, y = spec['at']
-        diameter = spec['clearance_diameter_mm']
+    for spec in rules.get("mounting_holes", []):
+        x, y = spec["at"]
+        diameter = spec["clearance_diameter_mm"]
         grid.block_region(Rect(x, y, diameter, diameter), grow=grid.via_radius)
-    for spec in rules.get('copper_keepouts', []):
-        comp = graph.component(spec['ref'])
-        x0, y0, x1, y1 = spec['rect_mm']
+    for spec in rules.get("copper_keepouts", []):
+        comp = graph.component(spec["ref"])
+        x0, y0, x1, y1 = spec["rect_mm"]
         angle = math.radians(comp.rot)
         co, si = math.cos(angle), math.sin(angle)
         points = []
-        for x,y in ((x0,y0),(x1,y0),(x1,y1),(x0,y1)):
-            if comp.side == 'bottom':
+        for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1)):
+            if comp.side == "bottom":
                 x = -x  # Keep identical to writeback's rule-area transform.
-            points.append((comp.pos[0]+co*x-si*y,comp.pos[1]+si*x+co*y))
-        xs,ys=zip(*points)
-        grid.block_region(Rect((min(xs)+max(xs))/2,(min(ys)+max(ys))/2,
-                               max(xs)-min(xs),max(ys)-min(ys)),grow=grid.via_radius)
+            points.append((comp.pos[0] + co * x - si * y, comp.pos[1] + si * x + co * y))
+        xs, ys = zip(*points)
+        grid.block_region(
+            Rect(
+                (min(xs) + max(xs)) / 2,
+                (min(ys) + max(ys)) / 2,
+                max(xs) - min(xs),
+                max(ys) - min(ys),
+            ),
+            grow=grid.via_radius,
+        )
 
 
 def _mark_source_arrays(grid, graph, rules):
     """Reserve copper that the following native source-array stage will emit."""
-    if not rules or not rules.get('plane_access_intents'):return
+    if not rules or not rules.get("plane_access_intents"):
+        return
     from pnr.plane_intent import array_geometry
-    for intent in rules['plane_access_intents']:
-        if intent['kind']!='power_array':continue
-        comp=graph.component(intent['ref'])
-        pads=[((r.cx,r.cy),(r.w,r.h)) for number,net,r in pad_rects(comp)
-              if number in intent['pads']]
-        plan=array_geometry(pads,comp.pos,intent,rules['plane_access_fab'])
-        surface=grid.layers.index(intent['surface'])
-        extra=max(0.,rules['plane_access_fab'].get('clearance_mm',.2)-grid.clearance)
-        for a,z,width in plan['tracks']:
-            r=Rect((a[0]+z[0])/2,(a[1]+z[1])/2,abs(a[0]-z[0])+width+2*extra,abs(a[1]-z[1])+width+2*extra)
-            grid.add_pad(surface,intent['net'],r)
-        for point,diameter,drill in plan['vias']:
-            r=Rect(*point,diameter+2*extra,diameter+2*extra)
-            for layer in range(grid.nlayers):grid.add_pad(layer,intent['net'],r)
-            grid.escape_vias.append((intent['net'],point))
+
+    for intent in rules["plane_access_intents"]:
+        if intent["kind"] != "power_array":
+            continue
+        comp = graph.component(intent["ref"])
+        pads = [
+            ((r.cx, r.cy), (r.w, r.h))
+            for number, net, r in pad_rects(comp)
+            if number in intent["pads"]
+        ]
+        plan = array_geometry(pads, comp.pos, intent, rules["plane_access_fab"])
+        surface = grid.layers.index(intent["surface"])
+        extra = max(0.0, rules["plane_access_fab"].get("clearance_mm", 0.2) - grid.clearance)
+        for a, z, width in plan["tracks"]:
+            r = Rect(
+                (a[0] + z[0]) / 2,
+                (a[1] + z[1]) / 2,
+                abs(a[0] - z[0]) + width + 2 * extra,
+                abs(a[1] - z[1]) + width + 2 * extra,
+            )
+            grid.add_pad(surface, intent["net"], r)
+        for point, diameter, drill in plan["vias"]:
+            r = Rect(*point, diameter + 2 * extra, diameter + 2 * extra)
+            for layer in range(grid.nlayers):
+                grid.add_pad(layer, intent["net"], r)
+            grid.escape_vias.append((intent["net"], point))
 
 
 def _diag_unrouted(grid, net_access, unrouted, via_keepout):
@@ -313,28 +332,35 @@ def route_board(
     grid.net_widths = net_width
     # Fab-profile per-hole-kind rules ride in rules['fab'] beside the 5 keys
     # _fab() keeps; absent (legacy rules) they leave the original model intact.
-    extra = dict((rules or {}).get('fab') or {})
-    grid.via_spacing = fab['via_drill_mm'] + extra.get('hole_to_hole_mm', fab.get('hole_clearance_mm', .2))
-    grid.via_drill_radius = fab['via_drill_mm'] / 2
-    grid.hole_clearance = fab.get('hole_clearance_mm', .2)
-    if extra.get('component_pth_min_drill_mm') is not None:
+    extra = dict((rules or {}).get("fab") or {})
+    grid.via_spacing = fab["via_drill_mm"] + extra.get(
+        "hole_to_hole_mm", fab.get("hole_clearance_mm", 0.2)
+    )
+    grid.via_drill_radius = fab["via_drill_mm"] / 2
+    grid.hole_clearance = fab.get("hole_clearance_mm", 0.2)
+    if extra.get("component_pth_min_drill_mm") is not None:
         # Footprint via-class drills (under 5A Component PTH hole 0.30) get via rules.
-        grid.component_pth_min_drill = float(extra['component_pth_min_drill_mm'])
-        grid.via_hole_gap = float(extra.get('hole_to_hole_mm', grid.hole_clearance))
-    if extra.get('pth_hole_to_hole_mm') is not None:
-        grid.pth_hole_gap = float(extra['pth_hole_to_hole_mm'])
-        grid.npth_hole_gap = float(extra.get('filled_via_hole_to_hole_mm', extra['pth_hole_to_hole_mm']))
-    if extra.get('pth_hole_clearance_mm') is not None:
-        grid.mark_pth_hole_keepouts(float(extra['pth_hole_clearance_mm']), grid.hole_clearance)
-    if extra.get('via_to_smd_pad_mm') is not None:
+        grid.component_pth_min_drill = float(extra["component_pth_min_drill_mm"])
+        grid.via_hole_gap = float(extra.get("hole_to_hole_mm", grid.hole_clearance))
+    if extra.get("pth_hole_to_hole_mm") is not None:
+        grid.pth_hole_gap = float(extra["pth_hole_to_hole_mm"])
+        grid.npth_hole_gap = float(
+            extra.get("filled_via_hole_to_hole_mm", extra["pth_hole_to_hole_mm"])
+        )
+    if extra.get("pth_hole_clearance_mm") is not None:
+        grid.mark_pth_hole_keepouts(float(extra["pth_hole_clearance_mm"]), grid.hole_clearance)
+    if extra.get("via_to_smd_pad_mm") is not None:
         # Fab profile: 5A via copper 0.127 from any SMD pad; inside an own-net pad
         # only a 5B filled in-pad via (sized at emission, pnr.fixed_copper).
         from pnr.fab_profile import in_pad_policy
-        grid.restrict_smd_vias(in_pad_policy(extra), float(extra['via_to_smd_pad_mm']))
-    if extra.get('hole_to_edge_mm') is not None:
-        edge = float(extra.get('edge_clearance_mm', .2))
-        grid.block_edge_inset_split(edge + track_width_mm / 2,
-                                    max(edge + via_radius_mm, float(extra['hole_to_edge_mm']) + fab['via_drill_mm'] / 2))
+
+        grid.restrict_smd_vias(in_pad_policy(extra), float(extra["via_to_smd_pad_mm"]))
+    if extra.get("hole_to_edge_mm") is not None:
+        edge = float(extra.get("edge_clearance_mm", 0.2))
+        grid.block_edge_inset_split(
+            edge + track_width_mm / 2,
+            max(edge + via_radius_mm, float(extra["hole_to_edge_mm"]) + fab["via_drill_mm"] / 2),
+        )
     # Split planes on the inner layers become obstacles the signals route around
     # (matching the 2 mm writeback pour margin).
     _mark_plane_regions(grid, graph, rules, margin=2.0)
@@ -345,16 +371,22 @@ def route_board(
     # Plan a pin escape per pad (E2 via-in-pad / E3 dog-bone) — the access cell the
     # maze routes each net from, plus the escape geometry that bonds pad→access.
     signal_nets = {net.name for net in graph.nets if net.name not in planes and net.degree >= 2}
-    deferred=set()
-    if rules and rules.get('electrical_fab'):
+    deferred = set()
+    if rules and rules.get("electrical_fab"):
         from pnr.electrical import net_policy
-        deferred={n for n in signal_nets if net_policy(n,rules)['mode'] in ('power','pair')}
+
+        deferred = {n for n in signal_nets if net_policy(n, rules)["mode"] in ("power", "pair")}
         # These jobs require the native capacity/coupling adapters. The signal
         # grid must not emit undersized vias or independent differential legs.
-        signal_nets-=deferred
+        signal_nets -= deferred
     if fixed_copper:
         from .fixed import reserve_fixed_copper
-        reserve_fixed_copper(grid, fixed_copper, max([track_width_mm]+[net_width.get(n,track_width_mm) for n in signal_nets]))
+
+        reserve_fixed_copper(
+            grid,
+            fixed_copper,
+            max([track_width_mm] + [net_width.get(n, track_width_mm) for n in signal_nets]),
+        )
     plan = plan_escapes(
         grid,
         graph,
@@ -368,34 +400,51 @@ def route_board(
         joint_max_states=int(os.environ.get("PNR_JOINT_ACCESS_STATES", "20000")),
         joint_max_cluster_size=int(os.environ.get("PNR_JOINT_ACCESS_CLUSTER", "24")),
     )
-    net_access = {n: cells for n, cells in plan.net_access.items() if len(cells) >= 2 and n not in plan.blocked_nets}
+    net_access = {
+        n: cells
+        for n, cells in plan.net_access.items()
+        if len(cells) >= 2 and n not in plan.blocked_nets
+    }
     # PNR_TRACE_DIR only: records this route inside a traced route scope (pnr.trace).
     from .trace_route import start as trace_start
-    route_trace = trace_start(graph, grid, plan, net_width, track_width_mm, planes, deferred, max_iters)
+
+    route_trace = trace_start(
+        graph, grid, plan, net_width, track_width_mm, planes, deferred, max_iters
+    )
 
     # Price a layer transition in physical distance so finer grids do not
     # accidentally make short via excursions cheaper than surface detours.
     result = route(
-        grid, net_access, max_iters=max_iters, via_keepout=via_keepout, net_halo=net_halo,
-        rrr_rounds=ripup_rounds, via_cost=3.0/grid.pitch
+        grid,
+        net_access,
+        max_iters=max_iters,
+        via_keepout=via_keepout,
+        net_halo=net_halo,
+        rrr_rounds=ripup_rounds,
+        via_cost=3.0 / grid.pitch,
     )
 
     if deferred or plan.blocked_nets:
         from .maze import RoutedNet
-        for name in sorted(deferred | plan.blocked_nets):result.nets[name]=RoutedNet(name)
-        result.unrouted=sorted(set(result.unrouted)|deferred|plan.blocked_nets)
+
+        for name in sorted(deferred | plan.blocked_nets):
+            result.nets[name] = RoutedNet(name)
+        result.unrouted = sorted(set(result.unrouted) | deferred | plan.blocked_nets)
 
     if os.environ.get("PNR_DIAG_UNROUTED"):
         _diag_unrouted(grid, net_access, result.unrouted, via_keepout)
 
     board = BoardRoute(
-        result=result, grid=grid, plane_nets=planes,
+        result=result,
+        grid=grid,
+        plane_nets=planes,
         failure_sites=trapped_access_sites(grid, plan.net_access, result.unrouted),
         escape_diagnostics=plan.diagnostics,
     )
-    if os.environ.get('PNR_LOCAL_PRESSURE')=='1':
+    if os.environ.get("PNR_LOCAL_PRESSURE") == "1":
         from .pressure import localized_pressure
-        board.pressure_events=localized_pressure(grid,net_access,result,deferred)
+
+        board.pressure_events = localized_pressure(grid, net_access, result, deferred)
     layer_names = grid.layers
     routed_names = {n for n, rn in result.nets.items() if rn.routed}
     for name, rn in result.nets.items():
@@ -448,8 +497,8 @@ def _emit_escape(board: BoardRoute, esc, grid: RouteGrid, w: float) -> None:
         if esc.via_xy is not None:
             board.vias.append((esc.net, *esc.via_xy))
     elif esc.kind == "offgrid":
-        for a,b in zip(esc.stub_path,esc.stub_path[1:]):
-            board.tracks.append((esc.net,esc.side_layer,a,b,w))
+        for a, b in zip(esc.stub_path, esc.stub_path[1:]):
+            board.tracks.append((esc.net, esc.side_layer, a, b, w))
     elif esc.kind == "via_in_pad":
         # Via in the pad (side ↔ access layer); short stub on the access layer to the
         # cell centre where the maze route begins.

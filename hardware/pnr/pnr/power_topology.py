@@ -35,6 +35,7 @@ P/R nets. A cycle through a shunt class (two-net parts across one P and one R
 net) is a hot loop, weight W * Ipk(loop) / max hot Ipk; any other cycle is a
 conduction path and gets no term.
 """
+
 from __future__ import annotations
 
 import fnmatch
@@ -63,7 +64,12 @@ class PowerTopologyUnavailable(ValueError):
 def _plane_patterns(constraints, rules):
     if constraints is not None:
         return [p for nc in constraints.net_classes if nc.plane_layer for p in nc.nets]
-    return [p for nc in rules.get("net_classes") or [] if nc.get("plane_layer") for p in nc.get("nets", [])]
+    return [
+        p
+        for nc in rules.get("net_classes") or []
+        if nc.get("plane_layer")
+        for p in nc.get("nets", [])
+    ]
 
 
 def _unique(seq):
@@ -84,8 +90,10 @@ def minimum_cycle_basis(adj, key):
     """
     nodes = sorted(adj, key=key)
     nbrs = {v: sorted(set(adj[v]), key=key) for v in nodes}
-    edges = sorted({tuple(sorted((u, v), key=key)) for u in nodes for v in nbrs[u]},
-                   key=lambda e: (key(e[0]), key(e[1])))
+    edges = sorted(
+        {tuple(sorted((u, v), key=key)) for u in nodes for v in nbrs[u]},
+        key=lambda e: (key(e[0]), key(e[1])),
+    )
     bit = {e: i for i, e in enumerate(edges)}
     seen, ncomp = set(), 0
     for v in nodes:
@@ -127,6 +135,7 @@ def minimum_cycle_basis(adj, key):
                 out.append(x)
                 x = prev[x]
             return out[::-1]
+
         for x, y in edges:
             if x not in prev or y not in prev or prev[x] == y or prev[y] == x:
                 continue
@@ -170,6 +179,7 @@ def derive(graph, constraints, rules, *, block_of=None):
     is a conduction path, not a hot loop.
     """
     from pnr.electrical import net_policy
+
     en = rules.get("electrical_nets") or {}
     if not any(q.get("rms_current_a") for q in en.values()):
         raise PowerTopologyUnavailable("rules carry no electrical_nets current envelopes")
@@ -183,23 +193,29 @@ def derive(graph, constraints, rules, *, block_of=None):
     connected = {n for n in present if npins[n] >= 2 or n in ports}
     pats = _plane_patterns(constraints, rules)
     access = [a for a in rules.get("plane_access_intents") or [] if a.get("net") in present]
-    R = {n for n in present if any(fnmatch.fnmatch(n, p) for p in pats)} | {a["net"] for a in access}
+    R = {n for n in present if any(fnmatch.fnmatch(n, p) for p in pats)} | {
+        a["net"] for a in access
+    }
     P = {n for n in present - R if net_policy(n, rules)["mode"] == "power"}
     loop_nets = P | R
     signal = connected - loop_nets
     by_net = lambda names: sorted(names, key=norder.get)
 
     board_rms = max((float(q.get("rms_current_a") or 0) for q in en.values()), default=0.0)
-    board_pk = max((float(q.get("peak_current_a") or q.get("rms_current_a") or 0) for q in en.values()),
-                   default=0.0)
+    board_pk = max(
+        (float(q.get("peak_current_a") or q.get("rms_current_a") or 0) for q in en.values()),
+        default=0.0,
+    )
     env, env_source = {}, {}
     for n in by_net(loop_nets):
         q = en.get(n) or {}
         if n in R:
             pa = [a for a in access if a["net"] == n]
             if pa:
-                env[n] = (max(float(a["rms_current_a"]) for a in pa),
-                          max(float(a.get("peak_current_a", a["rms_current_a"])) for a in pa))
+                env[n] = (
+                    max(float(a["rms_current_a"]) for a in pa),
+                    max(float(a.get("peak_current_a", a["rms_current_a"])) for a in pa),
+                )
                 env_source[n] = "plane_access"
             else:
                 env[n] = (board_rms, board_pk)
@@ -271,8 +287,17 @@ def derive(graph, constraints, rules, *, block_of=None):
         pins = [[c.ref, name] for c in comps if c.ref in tier1 for name in pins_on(c.ref, n, True)]
         trunk[n] = pins
         if len({r for r, _ in pins}) >= 2:
-            elements.append(dict(kind="bbox", role="trunk", name="trunk:" + n, net=n, stage=1,
-                                 weight=weight[n] if n in P else w_ret, pins=pins))
+            elements.append(
+                dict(
+                    kind="bbox",
+                    role="trunk",
+                    name="trunk:" + n,
+                    net=n,
+                    stage=1,
+                    weight=weight[n] if n in P else w_ret,
+                    pins=pins,
+                )
+            )
 
     # --- classes and loops -------------------------------------------------------
     class_of, classes = {}, []
@@ -289,8 +314,13 @@ def derive(graph, constraints, rules, *, block_of=None):
     for k in classes:
         nets = k["nets"]
         k["label"] = "|".join(k["members"])
-        k["shunt"] = (len(nets) == 2 and len(set(nets) & P) == 1 and len(set(nets) & R) == 1
-                      and all(len(conn_nets_of[r]) == 2 for r in k["members"]))
+        k["shunt"] = (
+            len(nets) == 2
+            and len(set(nets) & P) == 1
+            and len(set(nets) & R) == 1
+            and all(len(conn_nets_of[r]) == 2 for r in k["members"])
+        )
+
     def bipartite(indices):
         adj = {}
         for i in indices:
@@ -298,6 +328,7 @@ def derive(graph, constraints, rules, *, block_of=None):
                 adj.setdefault(("K", i), set()).add(("N", n))
                 adj.setdefault(("N", n), set()).add(("K", i))
         return adj
+
     adj = bipartite(range(len(classes)))
     key = lambda v: (0, v[1]) if v[0] == "K" else (1, norder[v[1]])
     # Only a loop inside one block can be hot, so at top level the cycle basis is
@@ -305,7 +336,9 @@ def derive(graph, constraints, rules, *, block_of=None):
     groups = {}
     for i, k in enumerate(classes):
         groups.setdefault((block_of or {}).get(k["members"][0]), []).append(i)
-    cycles = [cyc for indices in groups.values() for cyc in minimum_cycle_basis(bipartite(indices), key)]
+    cycles = [
+        cyc for indices in groups.values() for cyc in minimum_cycle_basis(bipartite(indices), key)
+    ]
     loops = []
     for cyc in cycles:
         ks = [v[1] for v in cyc[0::2]]
@@ -314,9 +347,16 @@ def derive(graph, constraints, rules, *, block_of=None):
         blocks = {block_of.get(r) for m in members for r in m} - {None} if block_of else set()
         hot = any(classes[i]["shunt"] for i in ks) and len(blocks) <= 1
         peak = max((env[n][1] for n in ns if n in P), default=0.0)
-        loops.append(dict(classes=ks, labels=[classes[i]["label"] for i in ks], nets=ns, hot=hot,
-                          peak_a=peak, links=[dict(net=ns[j], a=ks[j], b=ks[(j + 1) % len(ks)])
-                                              for j in range(len(ks))]))
+        loops.append(
+            dict(
+                classes=ks,
+                labels=[classes[i]["label"] for i in ks],
+                nets=ns,
+                hot=hot,
+                peak_a=peak,
+                links=[dict(net=ns[j], a=ks[j], b=ks[(j + 1) % len(ks)]) for j in range(len(ks))],
+            )
+        )
     top = max((l["peak_a"] for l in loops if l["hot"]), default=0.0)
     for li, l in enumerate(loops):
         l["weight"] = W * l["peak_a"] / top if l["hot"] and top > 0 else 0.0
@@ -324,11 +364,24 @@ def derive(graph, constraints, rules, *, block_of=None):
             continue
         members = [classes[i]["members"] for i in l["classes"]]
         combos = math.prod(len(m) for m in members)
-        elements.append(dict(kind="loop", role="loop", name="loop:" + ">".join(l["labels"]), loop=li, stage=1,
-                             weight=l["weight"], nets=l["nets"], members=members,
-                             pins={r: {n: pins_on(r, n, True) for n in l["nets"] if n in carrying.get(r, {})}
-                                   for m in members for r in m},
-                             capped=combos > MAX_LOOP_COMBOS))
+        elements.append(
+            dict(
+                kind="loop",
+                role="loop",
+                name="loop:" + ">".join(l["labels"]),
+                loop=li,
+                stage=1,
+                weight=l["weight"],
+                nets=l["nets"],
+                members=members,
+                pins={
+                    r: {n: pins_on(r, n, True) for n in l["nets"] if n in carrying.get(r, {})}
+                    for m in members
+                    for r in m
+                },
+                capped=combos > MAX_LOOP_COMBOS,
+            )
+        )
 
     # --- taps, signal nets ---------------------------------------------------------
     early = lambda ref: tier[ref] in (1, 2)
@@ -337,34 +390,74 @@ def derive(graph, constraints, rules, *, block_of=None):
         tr = {tuple(t) for t in trunk[n]}
         if not tr:
             if len(pins_all) >= 2:
-                elements.append(dict(kind="bbox", role="signal", name="net:" + n, net=n,
-                                     stage=2 if all(early(r) for r, _ in pins_all) else 3, weight=1.0,
-                                     pins=[list(p) for p in pins_all]))
+                elements.append(
+                    dict(
+                        kind="bbox",
+                        role="signal",
+                        name="net:" + n,
+                        net=n,
+                        stage=2 if all(early(r) for r, _ in pins_all) else 3,
+                        weight=1.0,
+                        pins=[list(p) for p in pins_all],
+                    )
+                )
             continue
         for r, p in pins_all:
             if (r, p) in tr:
                 continue
             targets = [t for t in trunk[n] if t[0] != r] or trunk[n]
-            elements.append(dict(kind="tap", role="tap", name="tap:%s.%s" % (r, p), net=n,
-                                 stage=2 if early(r) else 3, weight=1.0, pin=[r, p], targets=targets))
+            elements.append(
+                dict(
+                    kind="tap",
+                    role="tap",
+                    name="tap:%s.%s" % (r, p),
+                    net=n,
+                    stage=2 if early(r) else 3,
+                    weight=1.0,
+                    pin=[r, p],
+                    targets=targets,
+                )
+            )
     for net in graph.nets:
         if net.name in loop_nets or len(net.pins) < 2:
             continue
         pins = [list(p) for p in _unique(tuple(p) for p in net.pins)]
-        elements.append(dict(kind="bbox", role="signal", name="net:" + net.name, net=net.name,
-                             stage=2 if all(early(r) for r, _ in pins) else 3, weight=1.0, pins=pins))
+        elements.append(
+            dict(
+                kind="bbox",
+                role="signal",
+                name="net:" + net.name,
+                net=net.name,
+                stage=2 if all(early(r) for r, _ in pins) else 3,
+                weight=1.0,
+                pins=pins,
+            )
+        )
 
-    roles = dict(schema=SCHEMA, carry_frac=CARRY_FRAC, pad_share=PAD_SHARE,
-                 power_nets=by_net(P), return_nets=by_net(R), signal_nets=by_net(signal),
-                 envelope={n: dict(rms_a=env[n][0], peak_a=env[n][1], source=env_source[n]) for n in env},
-                 weight=weight, w_ret=w_ret, W=W,
-                 carrying={r: carrying[r] for r in (c.ref for c in comps) if r in carrying},
-                 tier=tier, tier1=[c.ref for c in comps if c.ref in tier1],
-                 controllers=[c.ref for c in comps if c.ref in controllers],
-                 mixed=[c.ref for c in comps if c.ref in mixed],
-                 classes=classes, loops=loops, elements=elements)
+    roles = dict(
+        schema=SCHEMA,
+        carry_frac=CARRY_FRAC,
+        pad_share=PAD_SHARE,
+        power_nets=by_net(P),
+        return_nets=by_net(R),
+        signal_nets=by_net(signal),
+        envelope={n: dict(rms_a=env[n][0], peak_a=env[n][1], source=env_source[n]) for n in env},
+        weight=weight,
+        w_ret=w_ret,
+        W=W,
+        carrying={r: carrying[r] for r in (c.ref for c in comps) if r in carrying},
+        tier=tier,
+        tier1=[c.ref for c in comps if c.ref in tier1],
+        controllers=[c.ref for c in comps if c.ref in controllers],
+        mixed=[c.ref for c in comps if c.ref in mixed],
+        classes=classes,
+        loops=loops,
+        elements=elements,
+    )
     roles["series"] = _series_path(roles, adj, key, ports & P, classes)
-    roles["hard_group_diagnostic"] = _hard_group_diagnostic(roles, constraints, pad_amps, comps, cidx)
+    roles["hard_group_diagnostic"] = _hard_group_diagnostic(
+        roles, constraints, pad_amps, comps, cidx
+    )
     return roles
 
 
@@ -394,8 +487,12 @@ def _series_path(roles, adj, key, port_nets, classes):
             best = path
     if not best:
         return None
-    return dict(ports=[best[0][1], best[-1][1]], nets=[v[1] for v in best[0::2]],
-                classes=[v[1] for v in best[1::2]], labels=[classes[v[1]]["label"] for v in best[1::2]])
+    return dict(
+        ports=[best[0][1], best[-1][1]],
+        nets=[v[1] for v in best[0::2]],
+        classes=[v[1] for v in best[1::2]],
+        labels=[classes[v[1]]["label"] for v in best[1::2]],
+    )
 
 
 def _hard_group_diagnostic(roles, constraints, pad_amps, comps, cidx):
@@ -407,9 +504,16 @@ def _hard_group_diagnostic(roles, constraints, pad_amps, comps, cidx):
     if constraints is None:
         return []
     from pnr.constraints import Enforcement
+
     carrying = roles["carrying"]
     P = set(roles["power_nets"])
-    in_hot = {r for l in roles["loops"] if l["hot"] for i in l["classes"] for r in roles["classes"][i]["members"]}
+    in_hot = {
+        r
+        for l in roles["loops"]
+        if l["hot"]
+        for i in l["classes"]
+        for r in roles["classes"][i]["members"]
+    }
     out, seen = [], set()
     for con in constraints.constraints:
         if con.kind != "group" or con.enforcement is not Enforcement.HARD:
@@ -430,22 +534,49 @@ def _hard_group_diagnostic(roles, constraints, pad_amps, comps, cidx):
             seen.add(k)
             anchor_amps = {}
             for n in nets:
-                amps = [pad_amps.get((anchor, p.name)) for p in comps[cidx[anchor]].pads if p.net == n]
+                amps = [
+                    pad_amps.get((anchor, p.name)) for p in comps[cidx[anchor]].pads if p.net == n
+                ]
                 amps = [a for a in amps if a is not None]
                 anchor_amps[n] = max(amps) if amps else None
-            out.append(dict(anchor=anchor, member=member, radius_mm=radius, member_power_nets=nets,
-                            anchor_current_a=anchor_amps, constraint=con.name,
-                            finding="hard group ties a hot-loop part to an anchor that carries none of "
-                                    "its power current; the radius caps how compact the power stage can be"))
+            out.append(
+                dict(
+                    anchor=anchor,
+                    member=member,
+                    radius_mm=radius,
+                    member_power_nets=nets,
+                    anchor_current_a=anchor_amps,
+                    constraint=con.name,
+                    finding="hard group ties a hot-loop part to an anchor that carries none of "
+                    "its power current; the radius caps how compact the power stage can be",
+                )
+            )
     return out
 
 
 def summary(roles):
     """Compact, JSON-friendly digest for logs, trials and the library."""
     tiers = {k: [r for r, t in roles["tier"].items() if t == k] for k in (1, 2, 3)}
-    return dict(schema=roles["schema"], power_nets=roles["power_nets"], return_nets=roles["return_nets"],
-                tier1=tiers[1], tier2=tiers[2], tier3=tiers[3], mixed=roles["mixed"],
-                controllers=roles["controllers"], W=roles["W"],
-                loops=[dict(labels=l["labels"], nets=l["nets"], hot=l["hot"], peak_a=l["peak_a"],
-                            weight=round(l["weight"], 4)) for l in roles["loops"]],
-                series=roles["series"], hard_group_diagnostic=roles["hard_group_diagnostic"])
+    return dict(
+        schema=roles["schema"],
+        power_nets=roles["power_nets"],
+        return_nets=roles["return_nets"],
+        tier1=tiers[1],
+        tier2=tiers[2],
+        tier3=tiers[3],
+        mixed=roles["mixed"],
+        controllers=roles["controllers"],
+        W=roles["W"],
+        loops=[
+            dict(
+                labels=l["labels"],
+                nets=l["nets"],
+                hot=l["hot"],
+                peak_a=l["peak_a"],
+                weight=round(l["weight"], 4),
+            )
+            for l in roles["loops"]
+        ],
+        series=roles["series"],
+        hard_group_diagnostic=roles["hard_group_diagnostic"],
+    )

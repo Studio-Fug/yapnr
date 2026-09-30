@@ -5,9 +5,14 @@ vias. JSON records all pair distances and per-layer track/pad contacts. SVGs
 show local copper geometry (filled zones omitted and explicitly labeled).
 """
 
-import argparse, hashlib, html, json, math
-from pathlib import Path
+import argparse
+import hashlib
+import html
+import json
+import math
 from collections import defaultdict
+from pathlib import Path
+
 import pcbnew
 
 
@@ -21,8 +26,7 @@ def scan(board, radius):
     holes = [
         p
         for p in pads
-        if p.GetAttribute() == pcbnew.PAD_ATTRIB_PTH
-        and (p.GetDrillSize().x or p.GetDrillSize().y)
+        if p.GetAttribute() == pcbnew.PAD_ATTRIB_PTH and (p.GetDrillSize().x or p.GetDrillSize().y)
     ]
     items = vias + holes
     nodes = {}
@@ -33,9 +37,7 @@ def scan(board, radius):
         if not a.GetNetname():
             continue
         for b in items[i + 1 :]:
-            if a.GetNetCode() != b.GetNetCode() or (
-                uid(a) in hole_ids and uid(b) in hole_ids
-            ):
+            if a.GetNetCode() != b.GetNetCode() or (uid(a) in hole_ids and uid(b) in hole_ids):
                 continue
             d = math.dist(pos(a), pos(b))
             if d <= radius + 1e-9:
@@ -66,17 +68,11 @@ def scan(board, radius):
                             uuid=uid(o),
                             kind=o.GetClass(),
                             label=(
-                                o.GetParentFootprint().GetReference()
-                                + "."
-                                + o.GetNumber()
+                                o.GetParentFootprint().GetReference() + "." + o.GetNumber()
                                 if isinstance(o, pcbnew.PAD)
                                 else ""
                             ),
-                            width_mm=(
-                                None
-                                if isinstance(o, pcbnew.PAD)
-                                else o.GetWidth() / 1e6
-                            ),
+                            width_mm=(None if isinstance(o, pcbnew.PAD) else o.GetWidth() / 1e6),
                         )
                     )
             if found:
@@ -88,15 +84,8 @@ def scan(board, radius):
             net=t.GetNetname(),
             xy=pos(t),
             locked=t.IsLocked(),
-            label=(
-                ""
-                if via
-                else t.GetParentFootprint().GetReference() + "." + t.GetNumber()
-            ),
-            near=[
-                p.GetParentFootprint().GetReference() + "." + p.GetNumber()
-                for p in near
-            ],
+            label=("" if via else t.GetParentFootprint().GetReference() + "." + t.GetNumber()),
+            near=[p.GetParentFootprint().GetReference() + "." + p.GetNumber() for p in near],
             contacts=contacts,
         )
     groups = []
@@ -146,9 +135,7 @@ def render(board, group, out):
         '<rect width="1500" height="1540" fill="#121b25"/>',
         f'<text x="15" y="25" fill="white" font-size="18">{group["id"]} {html.escape(group["net"])} | same-net proximity | zones omitted; contacts in JSON</text>',
     ]
-    for index, la in enumerate(
-        [pcbnew.F_Cu, pcbnew.In1_Cu, pcbnew.In2_Cu, pcbnew.B_Cu]
-    ):
+    for index, la in enumerate([pcbnew.F_Cu, pcbnew.In1_Cu, pcbnew.In2_Cu, pcbnew.B_Cu]):
         px = (index % 2) * 750
         py = 40 + (index // 2) * 750
         svg.append(
@@ -183,9 +170,7 @@ def render(board, group, out):
                 svg.append(f'<polygon points="{ps}" fill="{color}"/>')
             if isinstance(t, pcbnew.PAD):
                 p = t.GetPosition()
-                label = html.escape(
-                    t.GetParentFootprint().GetReference() + "." + t.GetNumber()
-                )
+                label = html.escape(t.GetParentFootprint().GetReference() + "." + t.GetNumber())
                 svg.append(
                     f'<text x="{p.x/1e6}" y="{p.y/1e6}" fill="white" font-size=".13">{label}</text>'
                 )
@@ -218,11 +203,7 @@ def main():
     for g in r["clusters"]:
         render(b, g, a.out_dir / (g["id"] + ".svg"))
     (a.out_dir / "scan.json").write_text(json.dumps(r, indent=2) + "\n")
-    print(
-        json.dumps(
-            {k: r[k] for k in ["via_count", "pair_count", "cluster_count", "radius_mm"]}
-        )
-    )
+    print(json.dumps({k: r[k] for k in ["via_count", "pair_count", "cluster_count", "radius_mm"]}))
 
 
 if __name__ == "__main__":

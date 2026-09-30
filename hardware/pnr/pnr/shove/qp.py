@@ -12,6 +12,7 @@ def hildreth(cons, weights, iters=6000, tol=2e-6, deadline=None):
     b, is_equality)] and positive ``weights``. ``deadline`` is a
     time.monotonic() bound checked every 50 sweeps."""
     import time
+
     x = [0.0] * len(weights)
     lam = [0.0] * len(cons)
     inverse = [1.0 / w for w in weights]

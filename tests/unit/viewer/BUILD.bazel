@@ -1,0 +1,26 @@
+load("@yapnr_pypi//:requirements.bzl", "requirement")
+load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+
+# The viewer's unit tests: hermetic, offline and free (fake claude and kicad-cli programs; no
+# model calls, no KiCad). Tests that start viewer processes or builders are medium; the cost
+# replay imports torch. test_dist checks the assembled //yapnr/viewer:dist.
+yapnr_py_tests(
+    data = ["//tests/fixtures/viewer"],
+    overrides = {
+        "test_agent_service": {"size": "medium"},
+        "test_cost_service": {
+            "deps": [
+                requirement("numpy"),
+                requirement("torch"),
+            ],
+            "size": "medium",
+        },
+        "test_schematic": {"size": "medium"},
+        "test_server": {"size": "medium"},
+        "test_viewer3d": {"size": "medium"},
+    },
+    deps = [
+        "//yapnr/viewer",
+        "//yapnr/viewer:testing",
+    ],
+)

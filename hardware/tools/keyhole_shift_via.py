@@ -5,15 +5,20 @@ A nonregressing relocation is only a precursor, not a routing improvement. Run
 regional repair afterwards and compare the complete transaction to its source.
 """
 import argparse
+import json
+import math
+import shutil
+import subprocess
+import sys
 from collections import Counter, defaultdict
-import json, math, shutil, subprocess, sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pnr"))
 import pcbnew
-from pnr.route.detail.keyhole import route, violation_keys, length
-from pnr.route.detail.regional import preserves_connections
 from keyhole_region import pad_partition
+
+from pnr.route.detail.keyhole import length, route, violation_keys
+from pnr.route.detail.regional import preserves_connections
 
 
 def main():
@@ -45,9 +50,7 @@ def main():
     cn = b.GetConnectivity()
     attached = list(cn.GetConnectedTracks(via))
     if any(
-        isinstance(t, pcbnew.PCB_VIA)
-        or t.IsLocked()
-        or t.GetNetCode() != via.GetNetCode()
+        isinstance(t, pcbnew.PCB_VIA) or t.IsLocked() or t.GetNetCode() != via.GetNetCode()
         for t in attached
     ):
         ap.error("unsupported via attachment")
@@ -76,10 +79,7 @@ def main():
                 continue
             la = t.GetLayer()
             if not any(
-                la == al
-                and other.GetEffectiveShape(la).Collide(
-                    pcbnew.SHAPE_CIRCLE(vec(p), 1), 0
-                )
+                la == al and other.GetEffectiveShape(la).Collide(pcbnew.SHAPE_CIRCLE(vec(p), 1), 0)
                 for al, p, w in anchors
             ):
                 near = min(
@@ -97,8 +97,7 @@ def main():
                 if math.dist(contact, near) > 0.5:
                     ap.error("external endpoint exceeds local attachment budget")
                 anchors = [
-                    (al, contact if al == la and p == near else p, w)
-                    for al, p, w in anchors
+                    (al, contact if al == la and p == near else p, w) for al, p, w in anchors
                 ]
     remaining = [t for t in tracks if uid(t) not in removed_ids | {uid(via)}]
     for t in attached:
@@ -215,9 +214,7 @@ def main():
     shutil.copyfile(args.board, baseline)
     pcbnew.SaveBoard(str(out), b)
     for p in (baseline, out):
-        shutil.copyfile(
-            args.board.with_suffix(".kicad_pro"), p.with_suffix(".kicad_pro")
-        )
+        shutil.copyfile(args.board.with_suffix(".kicad_pro"), p.with_suffix(".kicad_pro"))
     table = args.board.parent / "fp-lib-table"
     if table.exists():
         (args.out_dir / "fp-lib-table").write_text(
@@ -273,9 +270,7 @@ def main():
         b.BuildConnectivity()
         pcbnew.ZONE_FILLER(b).Fill(b.Zones())
         pcbnew.SaveBoard(str(out), b)
-        shutil.copyfile(
-            args.board.with_suffix(".kicad_pro"), out.with_suffix(".kicad_pro")
-        )
+        shutil.copyfile(args.board.with_suffix(".kicad_pro"), out.with_suffix(".kicad_pro"))
         after = drc(out)
         preserved = preserves_connections(before_parts, pad_partition(b))
     old_counts = Counter(v["type"] for v in before["violations"])
@@ -284,9 +279,7 @@ def main():
         preserved
         and len(after["unconnected_items"]) <= len(before["unconnected_items"])
         and not (violation_keys(after) - violation_keys(before))
-        and all(
-            new_counts[k] <= old_counts[k] for k in ("track_dangling", "via_dangling")
-        )
+        and all(new_counts[k] <= old_counts[k] for k in ("track_dangling", "via_dangling"))
     )
     report = dict(
         source=str(args.board.resolve()),

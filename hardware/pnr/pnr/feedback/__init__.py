@@ -14,8 +14,10 @@ synthesis (:mod:`pnr.hier.synth_native`) and top-level Monte Carlo
   evaluated poses) into a JSON-safe record: the failed cross-part connections
   (same-part failures are counted, never acted on), their mode and whether shove
   reported ``no_make_room``; plus the router key that decides which evaluations
-  may be pooled. The key includes the evaluation code (a hash of every module an
-  evaluation can run, shove only for the shove router): imports routed by other
+  may be pooled. The key includes the evaluation code (a hash of the syntax tree
+  of every module an evaluation can run, shove only for the shove router, so
+  reformatting leaves it unchanged; ``code_key_scheme`` in a record names the
+  scheme, legacy records keep their raw-bytes key): imports routed by other
   code are refused, or with ``--import-code-mismatch rebase`` re-evaluated
   unchanged under this code first and never ranked themselves, so parents and
   children are always compared under one router.

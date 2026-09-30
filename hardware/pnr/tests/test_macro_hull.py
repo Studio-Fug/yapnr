@@ -24,6 +24,7 @@ from pathlib import Path
 from unittest import mock
 
 import numpy as np
+
 from pnr.graph import BoardGraph, Component, Net, Pad
 from pnr.hier import extent as E
 from pnr.place import hull as H

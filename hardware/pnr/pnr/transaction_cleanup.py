@@ -52,6 +52,7 @@ def eligible(item, requested, nets, excluded, mode, contact_layers):
 
 def native_worker(a, board):
     import pcbnew as k
+
     from pnr.electrical import net_policy
     from pnr.electrical_audit import audit_board
     from pnr.native_electrical import reference_failures
@@ -286,6 +287,7 @@ def main():
     a = p.parse_args()
     if a.worker:
         import pcbnew as k
+
         from pnr.fab_profile import load_board  # custom rules in force for the 'fill' worker
 
         board = load_board(a.board)

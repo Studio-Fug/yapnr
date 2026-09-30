@@ -10,6 +10,7 @@ from pathlib import Path
 class SourceFootprintsTest(unittest.TestCase):
     def test_restores_shapes_preserves_terminal_nets_and_is_idempotent(self):
         import pcbnew as k
+
         from pnr.source_footprints import restore
 
         with tempfile.TemporaryDirectory() as directory:

@@ -28,6 +28,7 @@ import os
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+
 from pnr.graph import BoardGraph, Component
 
 from .geometry import Rect, ReserveRect, courtyard_rect, occupied_sides, pad_rects, placement_rects

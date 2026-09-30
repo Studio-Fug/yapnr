@@ -194,6 +194,7 @@ def propose(board, pad, rules):
 
 def execute(a, board, rules):
     import pcbnew as k
+
     from pnr.native_drc import run_drc
     from pnr.native_electrical import reference_failures, uid, vec
     from pnr.pad_entry import snapshot

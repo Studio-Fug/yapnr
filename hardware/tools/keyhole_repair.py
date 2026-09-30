@@ -17,6 +17,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 import pcbnew
+
 from pnr.route.detail.keyhole import align_parallel, elbows, legal, length, route
 
 

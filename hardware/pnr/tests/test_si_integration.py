@@ -25,11 +25,12 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from tests.test_si_annotations import fixture_components
+from tests.test_si_report import FakeSim, fake_kibis, intents, tmpdir
+
 from pnr.si import annotations as A
 from pnr.si import extract as X
 from pnr.si import report as R
-from tests.test_si_annotations import fixture_components
-from tests.test_si_report import FakeSim, fake_kibis, intents, tmpdir
 
 TESTDATA = Path(__file__).resolve().parents[1] / "testdata/si"
 PNR_ROOT = Path(__file__).resolve().parents[1]

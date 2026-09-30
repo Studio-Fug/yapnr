@@ -29,6 +29,7 @@ import os
 from typing import Dict, List, Optional, Tuple
 
 import torch
+
 from pnr.constraints import CompiledConstraints
 from pnr.graph import BoardGraph
 

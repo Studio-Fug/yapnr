@@ -4,8 +4,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pcbnew as k
-from pnr.fixed_copper import validate
 from test_native_electrical import add_track, board, pad
+
+from pnr.fixed_copper import validate
 
 
 class StageGateTest(unittest.TestCase):

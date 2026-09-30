@@ -1,6 +1,7 @@
 import unittest
 
 import numpy as np
+
 from pnr.constraints import compile_constraints
 from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
 from pnr.place.elastic import deform, mesh_weights, project_collectively

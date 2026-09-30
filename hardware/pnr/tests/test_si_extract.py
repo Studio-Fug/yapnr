@@ -5,10 +5,11 @@ import os
 import unittest
 from pathlib import Path
 
+from tests.test_si_annotations import fixture_components
+
 from pnr.si import annotations as A
 from pnr.si import extract as X
 from pnr.si import models, physics
-from tests.test_si_annotations import fixture_components
 
 TESTDATA = Path(__file__).resolve().parents[1] / "testdata/si"
 ST = physics.stackup({})

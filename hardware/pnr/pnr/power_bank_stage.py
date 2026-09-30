@@ -60,6 +60,7 @@ def quality_checks(before, after, old, new):
 
 def execute_native(a, rules, board):
     import pcbnew as k
+
     from pnr.electrical_audit import audit_board
     from pnr.native_electrical import reference_failures, uid
     from pnr.pad_entry import snapshot
@@ -293,6 +294,7 @@ def main():
         # Headless by design: never bootstrap a wx App here. On macOS it enters the
         # Cocoa event loop and can block forever when no GUI session is available.
         import pcbnew as k
+
         from pnr.fab_profile import load_board  # custom rules in force for the 'fill' worker
 
         board = load_board(a.board)

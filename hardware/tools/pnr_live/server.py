@@ -43,11 +43,12 @@ seen = set()
 cache = {}
 sys.path.insert(0, str(repo / "hardware/pnr"))
 from event_schema import phase_frame
+from settings import save as save_settings
+from settings import seed as seed_settings
+
 from pnr.runtime_controls import LIMITS
 from pnr.runtime_controls import read as read_controls
 from pnr.runtime_controls import write as write_controls
-from settings import save as save_settings
-from settings import seed as seed_settings
 
 preferences = repo / "output/pnr-settings.json"
 state["controls"] = seed_settings(root / "control.json", preferences)

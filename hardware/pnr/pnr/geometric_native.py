@@ -11,6 +11,7 @@ from pnr.profile import span
 
 def propose(board, rules, net, layer):
     import pcbnew as k
+
     from pnr.native_electrical import Oracle, uid, xy
     from pnr.via_coalesce import protected, touch
 
@@ -66,6 +67,7 @@ def propose(board, rules, net, layer):
 
 def main():
     import pcbnew as k
+
     from pnr.native_electrical import add_track, uid
     from pnr.pad_entry import snapshot
     from pnr.via_coalesce import partition, preserved

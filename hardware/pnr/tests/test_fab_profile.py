@@ -170,6 +170,7 @@ class LegacyTest(unittest.TestCase):
     @unittest.skipUnless(HAS_YAML, "requires pyyaml (PnR runtime)")
     def test_compiled_rules_carry_no_new_keys(self):
         import yaml
+
         from pnr.constraints import compile_constraints, compile_routing_rules
 
         doc = yaml.safe_load((DEV / "mini-constraints.yaml").read_text())

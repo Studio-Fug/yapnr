@@ -75,6 +75,7 @@ def pad_frame(pad, layer=None):
     A land drawn offset from its anchor has no frame here (general copper path).
     """
     import pcbnew as k
+
     from pnr.pad_entry import rectangular_custom_land
 
     layer = pad_layer(pad) if layer is None else layer
@@ -395,6 +396,7 @@ def array_attach(board, pad, rules, g=None):
     budget. Vias that reach no full-width trunk count for nothing.
     """
     import pcbnew as k
+
     from pnr.plane_intent import array_capacity
 
     g = g or geometry(rules)

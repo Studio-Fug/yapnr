@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
+
 from pnr.constraints import compile_constraints
 from pnr.graph import BoardGraph
 from pnr.route.detail.grid import Cell, RouteGrid

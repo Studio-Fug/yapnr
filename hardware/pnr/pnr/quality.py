@@ -253,6 +253,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         from pathlib import Path
 
         import pcbnew
+
         from pnr.electrical_audit import audit_board
 
         board = pcbnew.LoadBoard(args.pcb)

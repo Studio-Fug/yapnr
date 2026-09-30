@@ -17,6 +17,7 @@ def digest(path):
 
 def extract(board):
     import pcbnew as k
+
     from pnr.ingest import _board_frame
 
     frame, _ = _board_frame(board)
@@ -59,6 +60,7 @@ def extract(board):
 
 def export(source, folder):
     import pcbnew as k
+
     from pnr.ingest import build_graph
 
     folder = Path(folder)
@@ -72,6 +74,7 @@ def export(source, folder):
 
 def append(source, fixed, routes, rules, out):
     import pcbnew as k
+
     from pnr.ingest import _board_frame
     from pnr.native_loop import copy_board
     from pnr.writeback import _net_code_map
@@ -146,6 +149,7 @@ def append(source, fixed, routes, rules, out):
 
 def validate(source, candidate, rules, before_drc, after_drc, references=()):
     import pcbnew as k
+
     from pnr.native_electrical import pair_reference_validator
     from pnr.pad_entry import snapshot
     from pnr.via_coalesce import acceptable, partition, preserved

@@ -105,6 +105,7 @@ class StripEdgeCutsTest(unittest.TestCase):
 class LiveWritebackTest(unittest.TestCase):
     def test_apply_places_and_outlines(self):
         import pcbnew
+
         from pnr.graph import BoardGraph, BoardOutline
         from pnr.writeback import apply_placement
 
@@ -229,6 +230,7 @@ class FanoutGeometryTest(unittest.TestCase):
 class LiveFanoutTest(unittest.TestCase):
     def test_uses_fab_geometry_and_never_forces_congested_via(self):
         import pcbnew
+
         from pnr.writeback import _dogbone_fanout_net
 
         board = pcbnew.BOARD()
@@ -279,6 +281,7 @@ class LiveFanoutTest(unittest.TestCase):
 class LiveCopperKeepoutTest(unittest.TestCase):
     def test_all_layer_keepout_tracks_placement_and_is_idempotent(self):
         import pcbnew
+
         from pnr.graph import BoardGraph, Component
         from pnr.writeback import apply_copper_keepouts
 
@@ -308,6 +311,7 @@ class LiveCopperKeepoutTest(unittest.TestCase):
 class LiveUuidTest(unittest.TestCase):
     def test_duplicate_children_are_unique_and_repair_is_idempotent(self):
         import pcbnew
+
         from pnr.writeback import normalize_item_uuids
 
         board = pcbnew.BOARD()

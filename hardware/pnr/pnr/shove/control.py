@@ -62,6 +62,7 @@ def nudge_candidates(inventory, constraints_path, points, radius=3.0, max_pads=4
     from pathlib import Path
 
     import yaml
+
     from pnr.constraints import compile_constraints
     from pnr.graph import BoardGraph
     from pnr.place.geometry import resolve_fixed_poses

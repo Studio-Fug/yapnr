@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 import yaml
+
 from pnr import proc
 
 # PNR_KICAD_PYTHON overrides the KiCad python (headless bundle); unset keeps the old default.

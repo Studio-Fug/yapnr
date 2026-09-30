@@ -147,6 +147,7 @@ class World:
         total_part_cap=None
     ):
         import pcbnew as k
+
         from pnr.fab_profile import geometry
         from pnr.via_in_pad import removes_unused_pads
 

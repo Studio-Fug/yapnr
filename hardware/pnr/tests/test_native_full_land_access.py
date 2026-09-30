@@ -5,10 +5,11 @@ import unittest
 from unittest.mock import patch
 
 import pcbnew as k
+from test_native_electrical import board, pad, rules
+
 import pnr.native_electrical as electrical
 from pnr.native_electrical import Oracle, access, add_track, power_plan
 from pnr.pad_entry import witness
-from test_native_electrical import board, pad, rules
 
 
 class FullLandAccess(unittest.TestCase):

@@ -357,6 +357,7 @@ def acceptable(before, after, checks):
 
 def worker(args, rules):
     import pcbnew
+
     from pnr.fab_profile import load_board  # custom rules in force for the 'check' refill
 
     b = load_board(args.board)

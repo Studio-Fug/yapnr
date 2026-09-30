@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 import pcbnew as k
+
 from pnr.electrical import net_policy
 from pnr.native_electrical import uid, xy
 from pnr.pad_entry import snapshot

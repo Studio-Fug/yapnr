@@ -389,6 +389,7 @@ class StagedPlacer:
         pair_weights=None,
     ):
         import torch
+
         from pnr.constraints import Enforcement
 
         from .geometry import (

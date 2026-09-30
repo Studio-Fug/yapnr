@@ -107,6 +107,7 @@ class NativeTests(unittest.TestCase):
 
     def test_native_pad_connectivity_entry_and_repeatability(self):
         import pcbnew as k
+
         from pnr.pad_entry import snapshot
         from pnr.track_graph import apply_cycle, cycle_candidates
         from pnr.via_coalesce import partition, preserved
@@ -132,6 +133,7 @@ class NativeTests(unittest.TestCase):
         from types import SimpleNamespace
 
         import pcbnew as k
+
         from pnr.track_graph import cycle_candidates
         from pnr.via_coalesce import worker
 
@@ -163,6 +165,7 @@ class NativeTests(unittest.TestCase):
 
     def test_source_current_array_and_diff_pair_excluded(self):
         import pcbnew as k
+
         from pnr.track_graph import cycle_candidates
 
         b = self.fixture()
@@ -192,6 +195,7 @@ class NativeTests(unittest.TestCase):
 
     def test_layers_cannot_be_conflated(self):
         import pcbnew as k
+
         from pnr.track_graph import cycle_candidates
 
         b = self.fixture()

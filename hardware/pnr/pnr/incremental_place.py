@@ -9,6 +9,7 @@ from pathlib import Path
 
 def apply(board, graph, rules):
     import pcbnew as k
+
     from pnr.electrical import net_policy
     from pnr.ingest import build_graph
     from pnr.merge_additive import signature
@@ -205,6 +206,7 @@ def apply(board, graph, rules):
 
 def main():
     import pcbnew as k
+
     from pnr.graph import BoardGraph
 
     p = argparse.ArgumentParser()

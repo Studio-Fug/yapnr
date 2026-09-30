@@ -267,6 +267,7 @@ class ZoneRefillTest(unittest.TestCase):
 class KiCadEnforcementTest(unittest.TestCase):
     def drc(self, profile_name):
         import pcbnew
+
         from pnr import fab_profile as fp
         from pnr.native_drc import run_drc
         from pnr.writeback import patch_project_rules

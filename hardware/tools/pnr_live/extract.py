@@ -5,6 +5,7 @@ import math
 import sys
 
 import pcbnew as k
+
 from pnr.ingest import _board_frame, build_graph
 
 b = k.LoadBoard(sys.argv[1])

@@ -44,6 +44,7 @@ class PowerArrayTests(unittest.TestCase):
 
     def test_initial_generation_restart_and_fanout(self):
         import pcbnew
+
         from pnr.plane_access import replace_power_array
         from pnr.writeback import _dogbone_fanout_net
 
@@ -86,6 +87,7 @@ class PowerArrayTests(unittest.TestCase):
         import math
 
         import pcbnew as k
+
         from pnr.plane_access import replace_power_array
         from pnr.plane_intent import array_geometry
 
@@ -116,6 +118,7 @@ class PowerArrayTests(unittest.TestCase):
 
     def test_future_bank_rejects_foreign_back_copper_before_mutation(self):
         import pcbnew as k
+
         from pnr.plane_access import replace_power_array
         from pnr.plane_intent import array_geometry
 

@@ -15,6 +15,7 @@ from unittest import mock
 
 try:
     import numpy  # noqa: F401
+
     from pnr.hier import extent as E
     from pnr.place import hull as H
     from pnr.place.legalize import legalize

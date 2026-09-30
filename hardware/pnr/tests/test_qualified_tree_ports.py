@@ -1,9 +1,10 @@
 import unittest
 
 import pcbnew as k
+from test_native_electrical import FAB, board, pad
+
 from pnr.electrical import compile_policy, net_policy, terminal_policy
 from pnr.native_electrical import add_track, qualified_tree_pads, uid
-from test_native_electrical import FAB, board, pad
 
 
 class QualifiedTreePortsTest(unittest.TestCase):

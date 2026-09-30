@@ -3,9 +3,10 @@ import time
 import unittest
 
 import pcbnew as k
+from test_native_electrical import FAB, board, pad
+
 from pnr.electrical import compile_policy, terminal_policy
 from pnr.native_electrical import Oracle, add_track, power_plan, xy
-from test_native_electrical import FAB, board, pad
 
 
 class TreeDispatchTest(unittest.TestCase):

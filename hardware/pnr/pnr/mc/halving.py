@@ -152,6 +152,7 @@ def _agreement(pairs):
 
 def _load(inputs: Path, constraints_path: Path):
     import yaml
+
     from pnr.constraints import compile_constraints
     from pnr.graph import BoardGraph
 

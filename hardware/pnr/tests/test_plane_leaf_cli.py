@@ -9,8 +9,9 @@ import unittest
 from pathlib import Path
 
 import pcbnew as k
-from pnr.native_electrical import vec
 from test_plane_leaf import PlaneLeafTest
+
+from pnr.native_electrical import vec
 
 
 class NativeLifecycleTest(unittest.TestCase):

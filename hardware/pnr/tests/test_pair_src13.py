@@ -25,6 +25,7 @@ except ImportError:
 try:
     import numpy  # noqa: F401
     import yaml  # noqa: F401
+
     from pnr.place.legalize import legalize  # imports pnr.place (torch)
 
     PLACE = True
@@ -449,8 +450,9 @@ class ExactMinimumRunTest(unittest.TestCase):
     """U6-like module edge: 1.5 x 0.9 pads at 1.26 pitch; exact min run ~ .75+.225+.127."""
 
     def ports(self, flag):
-        from pnr.native_electrical import Oracle, pair_bridge_ports
         from test_native_electrical import FAB, board, pad
+
+        from pnr.native_electrical import Oracle, pair_bridge_ports
 
         b = board()
         for num, net, y in (
@@ -531,9 +533,10 @@ class ChainRunAndStubTest(unittest.TestCase):
     """Real _pair_plan_order on the J -> D -> U chain of test_pair_post_bridge."""
 
     def plan(self, flags, stage1, bridge1=None):
+        from test_pair_post_bridge import PADS, chain_board, stage0_bridge
+
         from pnr.native_electrical import Oracle, _pair_plan_order
         from pnr.route.detail import coupled
-        from test_pair_post_bridge import PADS, chain_board, stage0_bridge
 
         b, pair, r = chain_board()
         oracle = Oracle(b, r, deadline=time.monotonic() + 60)
@@ -684,8 +687,9 @@ class ChainRunAndStubTest(unittest.TestCase):
             self.assertNotIn(key, result)
 
     def test_per_run_charges_the_arriving_run_and_measures_the_whole_route(self):
-        from pnr.native_electrical import route_uncoupled_runs
         from test_pair_post_bridge import CLEAN, PADS, stage0_bridge
+
+        from pnr.native_electrical import route_uncoupled_runs
 
         # First src13 convention (coupled stretches < w+g merge into runs): the
         # stage-1 pad-start leg is charged the run arriving at the D pads: the
@@ -761,8 +765,9 @@ class TwoTerminalRunLimitTest(unittest.TestCase):
     TIGHT = {"p": [(3, 5.2), (15, 5.2)], "n": [(3, 4.8), (15, 4.8)]}
 
     def plan(self, flag, leg):
-        from pnr.native_electrical import Oracle, _pair_plan_order
         from test_native_electrical import FAB, board, pad
+
+        from pnr.native_electrical import Oracle, _pair_plan_order
 
         b = board()
         for ref, x in (("J", 3), ("U", 15)):
@@ -877,8 +882,9 @@ class JointContactRunTest(unittest.TestCase):
     }
 
     def plan(self, flags):
-        from pnr.native_electrical import Oracle, _pair_plan_order
         from test_native_electrical import FAB, board, pad
+
+        from pnr.native_electrical import Oracle, _pair_plan_order
 
         b = board()
         for label, xy in self.PADS.items():
@@ -1019,9 +1025,10 @@ class JointContactRunTest(unittest.TestCase):
 @unittest.skipIf(k is None, "needs pcbnew (KiCad Python)")
 class EarlyExitTest(unittest.TestCase):
     def run_plan(self, flags, routes):
-        from pnr.native_electrical import Oracle, pair_plan
         from test_native_electrical import board
         from test_native_electrical import rules as power_rules
+
+        from pnr.native_electrical import Oracle, pair_plan
 
         b = board()
         o = Oracle(b, power_rules(), deadline=time.monotonic() + 30)
@@ -1192,9 +1199,10 @@ class EarlyExitTest(unittest.TestCase):
 @unittest.skipIf(k is None, "needs pcbnew (KiCad Python)")
 class TimeoutTraceTest(unittest.TestCase):
     def run_plan(self, flags):
-        from pnr.native_electrical import Oracle, pair_plan
         from test_native_electrical import board
         from test_native_electrical import rules as power_rules
+
+        from pnr.native_electrical import Oracle, pair_plan
 
         b = board()
         o = Oracle(b, power_rules(), deadline=time.monotonic() + 30)

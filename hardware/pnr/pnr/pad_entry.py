@@ -462,6 +462,7 @@ def array_attached_pads(board, rules, tracks=None):
     if g.in_pad is None:
         return set()
     import pcbnew
+
     from pnr.via_in_pad import array_attach
 
     vias = {}

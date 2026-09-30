@@ -9,6 +9,7 @@ from types import SimpleNamespace as NS
 from unittest.mock import patch
 
 import numpy as np
+
 from pnr.congestion_diagnostics import native_endpoints, snapshot, svg
 from pnr.constraints import compile_constraints
 from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad

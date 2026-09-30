@@ -174,6 +174,7 @@ def reserve_sense_escapes(board, rules, oracle, routing_net, max_current=0.05, s
     (turned up to 90 degrees if blocked). Routes of other nets then keep clear of
     it; nothing is written to the board. Returns the reservations made."""
     import pcbnew as k
+
     from pnr.electrical import terminal_policy
     from pnr.via_coalesce import partition
     from pnr.via_in_pad import attach_windows, is_smd, pad_layer

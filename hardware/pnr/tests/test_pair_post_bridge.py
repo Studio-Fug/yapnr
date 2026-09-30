@@ -15,11 +15,12 @@ import unittest
 from unittest.mock import patch
 
 import pcbnew as k
+from test_native_electrical import FAB, board, pad
+from test_native_electrical import rules as power_rules
+
 from pnr.native_electrical import Oracle, _pair_plan_order, pair_plan, surface_leg_graph_failure
 from pnr.route.detail import coupled
 from pnr.route.detail.coupled import path_metrics
-from test_native_electrical import FAB, board, pad
-from test_native_electrical import rules as power_rules
 
 F, B = k.F_Cu, k.B_Cu
 PADS = {

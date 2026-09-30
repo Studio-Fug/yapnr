@@ -23,6 +23,7 @@ def soft_pads(board, parts):
     """UUIDs of the simple-shape lands of nudgeable ``parts`` (rect, rounded
     rect, oval, circle): these may be penetrated by delta like soft copper."""
     import pcbnew as k
+
     from pnr.native_electrical import uid
 
     shapes = (k.PAD_SHAPE_RECT, k.PAD_SHAPE_ROUNDRECT, k.PAD_SHAPE_OVAL, k.PAD_SHAPE_CIRCLE)
@@ -37,6 +38,7 @@ def soft_pads(board, parts):
 
 def relaxed_oracle(board, board_path, rules, soft, delta, deadline, parts=()):
     import pcbnew as k
+
     from pnr.fab_profile import load_board
     from pnr.native_electrical import Oracle, uid
 
@@ -163,6 +165,7 @@ def plan_shapes(board, plan):
     """``[(layer or None, shape, width_or_diameter)]`` for every copper element of
     a routed plan (tracks, bank vias, in-pad vias) as native probe shapes."""
     import pcbnew as k
+
     from pnr.native_electrical import vec
 
     shapes = []

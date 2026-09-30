@@ -844,6 +844,7 @@ def add_in_pad_vias(b, net, vias, geometry):
     """Filled 5B in-pad through vias ``[(point, diameter, drill)]`` with their unused
     inner pads removed (via_in_pad.style_in_pad_via, 5B "Inner layers")."""
     import pcbnew as k
+
     from pnr.via_in_pad import style_in_pad_via
 
     keep = []
@@ -1989,6 +1990,7 @@ def move_pair_support(b, pair, spec):
     worker, and full native connectivity/DRC after the pair is rebuilt.
     """
     import pcbnew as k
+
     from pnr.plane_access import surface_group
 
     intermediate = {
@@ -2371,6 +2373,7 @@ def pair_via_geometry(rules):
 def pair_bridge_ports(pair, terminals, rules, oracle, bounds, index):
     """Exact paired surface fanouts and all-layer legal via sites."""
     import pcbnew as k
+
     from pnr.route.detail.coupled import geometry_ok
     from pnr.route.detail.regional import segment_distance
 
@@ -2492,6 +2495,7 @@ def pair_bridge_ports(pair, terminals, rules, oracle, bounds, index):
 def pair_reference_validator(board, pair, rules, prospective_vias=(), base_center=None):
     """Validate actual tuned trunks against the saved filled reference copper."""
     import pcbnew as k
+
     from pnr.route.detail.coupled import trim_path
 
     reference = board.GetLayerID(pair.get("reference_layer", "In1.Cu"))
@@ -2685,6 +2689,7 @@ def pair_layer_bridge(
     PNR_PAIR_REF_TRIM_PER_END=1 (then each end's own budget).
     """
     import pcbnew as k
+
     from pnr.route.detail.coupled import geometry_ok
     from pnr.route.detail.regional import segment_distance
 
@@ -3015,6 +3020,7 @@ def route_uncoupled_runs(pair, tracks, vias, origins, ends, thickness, exempt=()
     None if either endpoint graph is not a valid tree.
     """
     import pcbnew as k
+
     from pnr.route.detail.coupled import path_steps, uncoupled_runs
     from pnr.track_graph import on_segment
 
@@ -3086,6 +3092,7 @@ def pair_stub_metrics(pair, bylabel, tracks, vias, thickness, barrel=None, delay
     endpoint path itself is always found with the real barrel lengths.
     """
     import pcbnew as k
+
     from pnr.route.detail.coupled import branch_lengths
 
     chain = pair["terminal_chain"]
@@ -3186,6 +3193,7 @@ def stub_delay_metrics(pair, pad, found, delay, thickness):
     straight distance to the pad centre on that layer (0 for the centre itself). In line
     (any start on the endpoint path): 0 ps."""
     import pcbnew as k
+
     from pnr.si.bus_classes import path_delay
 
     if not found or found[1] is None:

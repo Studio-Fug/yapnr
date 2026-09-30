@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from cost_fixture import fixture
+
 from pnr.place.cost_capture import initial_start_context, phase_context
 from pnr.place.initial_pool import InitialPoolConfig, select_initial_placement
 from pnr.place.legalize import LegalizationError

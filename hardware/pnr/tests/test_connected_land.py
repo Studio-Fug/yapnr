@@ -1,9 +1,10 @@
 import unittest
 
 import pcbnew as k
+from test_native_electrical import board, pad, vec
+
 from pnr.native_electrical import add_track
 from pnr.pad_entry import connected_land_witness, inspect
-from test_native_electrical import board, pad, vec
 
 
 class ConnectedLandTest(unittest.TestCase):

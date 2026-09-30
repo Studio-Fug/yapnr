@@ -4,8 +4,9 @@ import unittest
 from pathlib import Path
 
 import pcbnew as k
-from pnr.fixed_copper import append, export, extract
 from test_native_electrical import add_track, board, pad
+
+from pnr.fixed_copper import append, export, extract
 
 
 class FixedNativeTest(unittest.TestCase):

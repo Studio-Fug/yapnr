@@ -17,6 +17,7 @@ from pnr.profile import span
 
 def main():
     import pcbnew as k
+
     from pnr.electrical import net_policy
     from pnr.native_electrical import Oracle, add_track, uid, vec, xy
     from pnr.pad_entry import snapshot

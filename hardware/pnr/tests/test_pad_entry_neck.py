@@ -2,11 +2,12 @@ import copy
 import unittest
 
 import pcbnew as k
+from test_native_electrical import FAB, board, pad
+
 from pnr.electrical import compile_policy
 from pnr.native_electrical import add_track
 from pnr.pad_entry import repair_changed_entries, snapshot
 from pnr.pad_entry_neck import repair_neck
-from test_native_electrical import FAB, board, pad
 
 
 class PadEntryNeckTest(unittest.TestCase):

@@ -4,10 +4,11 @@ import math
 import unittest
 
 import pcbnew as k
+from test_native_electrical import FAB, board, pad
+
 from pnr.electrical import compile_policy
 from pnr.native_electrical import add_track
 from pnr.pad_entry import neck_witness, witness
-from test_native_electrical import FAB, board, pad
 
 
 class NativePadAngleTest(unittest.TestCase):

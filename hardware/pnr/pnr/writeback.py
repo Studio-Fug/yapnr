@@ -707,6 +707,7 @@ def _in_pad_plane_via(board, pad, rules, oracle, obstacles) -> bool:
     contract in the engine's via model (no current is inferred or shared).
     """
     import pcbnew
+
     from pnr.via_in_pad import (
         array_requirement,
         in_pad_size,

@@ -2,6 +2,7 @@ import unittest
 
 import numpy as np
 import torch
+
 from pnr.place.batched_cost import (
     BucketedWirelength,
     PaddedWirelength,

@@ -6,9 +6,10 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from test_native_electrical import board, pad, rules
+
 from pnr.native_electrical import Oracle, pair_plan
 from pnr.pair_joint import branch_join_port, joint_topologies
-from test_native_electrical import board, pad, rules
 
 
 class PairJointDispatchTest(unittest.TestCase):

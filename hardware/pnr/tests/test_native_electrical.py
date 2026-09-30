@@ -9,6 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 
 import pcbnew as k
+
 from pnr.electrical import compile_policy
 from pnr.native_electrical import (
     Oracle,

@@ -1,9 +1,10 @@
 import unittest
 
 import pcbnew as k
+from test_native_electrical import board, pad
+
 from pnr.native_electrical import add_track
 from pnr.terminal_repair import suggest
-from test_native_electrical import board, pad
 
 
 class TerminalRepairTest(unittest.TestCase):

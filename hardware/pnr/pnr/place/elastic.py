@@ -9,6 +9,7 @@ import math
 
 import numpy as np
 import torch
+
 from pnr.graph import BoardGraph
 
 from .channels import ChannelModel

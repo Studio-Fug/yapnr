@@ -34,6 +34,7 @@ def _frozen_graph() -> BoardGraph:
 class BodyAttributeTest(unittest.TestCase):
     def test_native_smd_attribute_is_preserved(self):
         import pcbnew
+
         from pnr.ingest import _component, _Frame
 
         # Reuse a native board frame; the attribute must not be inferred from pads.
@@ -100,6 +101,7 @@ class LiveExtractionTest(unittest.TestCase):
 
     def test_outline_frame_excludes_drawing_stroke(self):
         import pcbnew
+
         from pnr.ingest import _board_frame
 
         board = pcbnew.BOARD()
@@ -118,6 +120,7 @@ class LiveExtractionTest(unittest.TestCase):
 
     def test_offset_body_is_bounded_about_origin_at_any_rotation(self):
         import pcbnew
+
         from pnr.ingest import _phys_bbox_mm
 
         board = pcbnew.BOARD()
@@ -140,6 +143,7 @@ class LiveExtractionTest(unittest.TestCase):
 
     def test_asymmetric_custom_pad_envelope_contains_offset_copper(self):
         import pcbnew as k
+
         from pnr.ingest import _component, _Frame
 
         board = k.BOARD()
@@ -164,6 +168,7 @@ class LiveExtractionTest(unittest.TestCase):
 
     def test_individual_pad_rotation_survives_footprint_rotation(self):
         import pcbnew as k
+
         from pnr.ingest import _component, _Frame
 
         board = k.BOARD()
@@ -194,6 +199,7 @@ class LiveExtractionTest(unittest.TestCase):
 
     def test_placement_envelope_covers_silk_beyond_declared_courtyard(self):
         import pcbnew as k
+
         from pnr.ingest import _component, _Frame
 
         board = k.BOARD()

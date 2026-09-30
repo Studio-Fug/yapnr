@@ -3,8 +3,9 @@ import unittest
 from unittest.mock import patch
 
 import pcbnew as k
-from pnr.native_electrical import Oracle, pair_plan
 from test_native_electrical import board, rules
+
+from pnr.native_electrical import Oracle, pair_plan
 
 
 class PairOrderSearchTest(unittest.TestCase):

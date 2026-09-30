@@ -140,6 +140,7 @@ class CoveragePredicateTests(unittest.TestCase):
 class ReuseExistingBankTests(unittest.TestCase):
     def fixture(self, foreign=True):
         import pcbnew as k
+
         from pnr.plane_access import replace_power_array
 
         b = k.BOARD()
@@ -210,6 +211,7 @@ class ReuseExistingBankTests(unittest.TestCase):
 
     def test_legacy_flag_and_mismatched_bank_keep_replacement_diagnostics(self):
         import pcbnew as k
+
         from pnr.plane_access import replace_power_array
 
         b, via = self.fixture()
@@ -253,6 +255,7 @@ class ReuseExistingBankTests(unittest.TestCase):
 
     def test_bank_violating_board_rules_is_not_kept(self):
         import pcbnew as k
+
         from pnr.plane_access import replace_power_array
 
         def via_at(b, net, pos):

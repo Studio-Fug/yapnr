@@ -105,6 +105,7 @@ class StopAfterPhase(Exception):
 
 def native_worker(a):
     import pcbnew as k
+
     from pnr.fab_profile import load_board  # custom rules in force for the 'check' refill
     from pnr.ingest import build_graph
     from pnr.pad_entry import snapshot
@@ -663,6 +664,7 @@ def rank_translation_channels(graph, rules, candidates):
     Only pose order changes; persistent blocker scores still choose components.
     """
     import numpy as np
+
     from pnr.place.channels import ChannelModel
 
     model = ChannelModel(graph, rules)
@@ -688,6 +690,7 @@ def rank_translation_channels(graph, rules, candidates):
 
 def placements(inventory, constraints_path, scores, tried, original, max_move, rules=None):
     import yaml
+
     from pnr.constraints import compile_constraints
     from pnr.graph import BoardGraph
     from pnr.place.geometry import resolve_fixed_poses
@@ -779,6 +782,7 @@ def pair_placements(inventory, constraints_path, pair, rules=None):
     placement over a landing, are not the proposal's and do not veto it).
     """
     import yaml
+
     from pnr.constraints import compile_constraints
     from pnr.graph import BoardGraph
     from pnr.place.geometry import resolve_fixed_poses

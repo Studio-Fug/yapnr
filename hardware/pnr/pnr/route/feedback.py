@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+
 from pnr.constraints import CompiledConstraints
 from pnr.graph import BoardGraph
 from pnr.place import place

@@ -469,6 +469,7 @@ def build_hull(
     import hashlib
 
     import numpy as np
+
     from pnr.place import hull as H
 
     ox, oy = origin

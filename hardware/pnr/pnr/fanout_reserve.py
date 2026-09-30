@@ -269,6 +269,7 @@ def land(pad, layer):
 def zone_polygons(board, option, clearance):
     """Keepout outlines: the stub on its layer, the via disc on every copper layer."""
     import pcbnew as k
+
     from pnr.native_electrical import vec
 
     gap = round((clearance + MARGIN) * 1e6)
@@ -329,6 +330,7 @@ def reserve(board, rules, max_pitch=0.65, node_limit=50000):
     from collections import defaultdict
 
     import pcbnew as k
+
     from pnr.electrical import net_policy
     from pnr.native_electrical import Oracle, connected_items
     from pnr.pad_entry import required_width

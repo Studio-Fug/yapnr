@@ -11,6 +11,7 @@ import os
 import random
 
 import numpy as np
+
 from pnr.graph import BoardGraph
 
 from .anneal import choose_cost

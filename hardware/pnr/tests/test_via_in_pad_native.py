@@ -8,6 +8,7 @@ fallback, under jlc-pofv (5A/5B) and legacy rules.
 import unittest
 
 import pcbnew as k
+
 from pnr import fab_profile as fp
 from pnr.electrical import compile_policy
 

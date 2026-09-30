@@ -6,10 +6,11 @@ import re
 import unittest
 from pathlib import Path
 
+from tests.test_si_extract import p027_intents
+
 from pnr.si import deck as D
 from pnr.si import extract as X
 from pnr.si import models, physics
-from tests.test_si_extract import p027_intents
 
 TESTDATA = Path(__file__).resolve().parents[1] / "testdata/si"
 DRV = dict(subckt="U1.SN74LVC1T45_DBV", rail_v=5.0, sha256="0" * 64)

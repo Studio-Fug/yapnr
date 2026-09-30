@@ -12,9 +12,10 @@ import math
 import unittest
 
 import pcbnew as k
+from test_via_in_pad_native import FAB, V, board, pad, u5, via
+
 from pnr import fab_profile as fp
 from pnr.electrical import compile_policy
-from test_via_in_pad_native import FAB, V, board, pad, u5, via
 
 SW = dict(net="sw", scope="terminal", neck_max_length_mm=0.5, source={})
 

@@ -11,10 +11,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from tests.test_si_annotations import fixture_components
+
 from pnr.si import SCHEMA
 from pnr.si import annotations as A
 from pnr.si import report as R
-from tests.test_si_annotations import fixture_components
 
 TESTDATA = Path(__file__).resolve().parents[1] / "testdata/si"
 # Every temporary file/dir of these tests lives under one directory removed at interpreter exit

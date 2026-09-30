@@ -4,6 +4,7 @@
 class ReferenceGuard:
     def __init__(self, board, rules):
         import pcbnew as k
+
         from pnr.electrical import net_policy
         from pnr.native_electrical import vec
 
@@ -47,6 +48,7 @@ class ReferenceGuard:
 
     def via_clear(self, net, point, diameter):
         import pcbnew as k
+
         from pnr.electrical import net_policy
         from pnr.native_electrical import vec
 

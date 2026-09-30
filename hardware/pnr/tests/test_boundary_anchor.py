@@ -8,8 +8,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pcbnew as k
-from pnr.native_electrical import add_track, vec
 from test_native_electrical import board, pad
+
+from pnr.native_electrical import add_track, vec
 
 
 class SearchStarted(Exception):

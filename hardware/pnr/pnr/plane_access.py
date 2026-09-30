@@ -305,6 +305,7 @@ def _reuse_existing(board, fp, pads, intent, fab, offset_mm=0.0):
     runs unchanged and rebuilds or raises its own diagnostics.
     """
     import pcbnew
+
     from pnr.writeback import outline_bounds
 
     try:
@@ -499,6 +500,7 @@ def main():
     from types import SimpleNamespace
 
     import pcbnew
+
     from pnr.plane_intent import read_annotations, resolve
 
     ap = argparse.ArgumentParser(description=__doc__)

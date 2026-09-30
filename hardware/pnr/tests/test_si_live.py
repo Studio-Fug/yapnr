@@ -16,8 +16,9 @@ import time
 import unittest
 from pathlib import Path
 
-from pnr.si import report as R
 from tests.test_si_extract import p027_intents
+
+from pnr.si import report as R
 
 TESTDATA = Path(__file__).resolve().parents[1] / "testdata/si"
 HIER = Path(__file__).resolve().parents[4]

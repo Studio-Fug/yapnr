@@ -3,9 +3,10 @@
 import unittest
 
 import pcbnew as k
+from test_native_electrical import FAB, board, pad
+
 from pnr.native_electrical import Oracle, pair_layer_bridge, pair_via_geometry
 from pnr.route.detail.coupled import path_metrics
-from test_native_electrical import FAB, board, pad
 
 
 class PairBridgeTest(unittest.TestCase):

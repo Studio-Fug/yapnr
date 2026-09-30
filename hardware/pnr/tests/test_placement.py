@@ -10,6 +10,7 @@ import os
 import unittest
 
 import yaml
+
 from pnr.constraints import compile_constraints
 from pnr.graph import BoardGraph
 from pnr.place import place
@@ -71,6 +72,7 @@ class PlacementAcceptanceTest(unittest.TestCase):
 class HardGroupTest(unittest.TestCase):
     def test_legalizer_preserves_radius_even_with_distant_target(self):
         import numpy as np
+
         from pnr.place.legalize import _place_part
 
         occ = np.zeros((20, 20), dtype=bool)
@@ -79,6 +81,7 @@ class HardGroupTest(unittest.TestCase):
 
     def test_full_group_region_fails_instead_of_scattering(self):
         import numpy as np
+
         from pnr.place.legalize import LegalizationError, _place_part
 
         occ = np.zeros((20, 20), dtype=bool)
@@ -88,6 +91,7 @@ class HardGroupTest(unittest.TestCase):
 
     def test_overlapping_groups_are_intersected(self):
         import numpy as np
+
         from pnr.place.legalize import _place_part
 
         limits = [(5, 5, 2), (8, 5, 2)]

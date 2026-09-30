@@ -1,10 +1,11 @@
 import unittest
 
 import pcbnew as k
+from test_native_electrical import add_track, board, pad, rules
+
 from pnr.native_electrical import Oracle, power_plan
 from pnr.pad_entry import snapshot
 from pnr.via_coalesce import partition
-from test_native_electrical import add_track, board, pad, rules
 
 
 class EntryAvoidTest(unittest.TestCase):

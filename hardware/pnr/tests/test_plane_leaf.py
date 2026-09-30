@@ -1,9 +1,10 @@
 import unittest
 
 import pcbnew as k
+from test_native_electrical import board, pad
+
 from pnr.native_electrical import add_track, uid, vec
 from pnr.plane_leaf import eligible, plan
-from test_native_electrical import board, pad
 
 
 class PlaneLeafTest(unittest.TestCase):

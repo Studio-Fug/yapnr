@@ -10,6 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pcbnew as k
+
 from pnr.native_loop import native_worker
 from pnr.via_coalesce import partition, preserved
 

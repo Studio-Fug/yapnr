@@ -254,8 +254,9 @@ class SubBoardTest(unittest.TestCase):
         import tempfile
         from pathlib import Path
 
-        import pnr.hier.native_block as nb
         import yaml
+
+        import pnr.hier.native_block as nb
 
         g, _, r = self.cut()
         for c in g.components:

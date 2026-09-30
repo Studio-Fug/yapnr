@@ -10,6 +10,7 @@ import math
 import os
 
 import numpy as np
+
 from pnr.graph import BoardGraph
 
 from .geometry import outline_size, pin_positions, resolve_fixed_poses

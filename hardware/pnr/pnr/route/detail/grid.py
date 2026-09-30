@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+
 from pnr.graph import SIDE_BOTTOM, BoardGraph
 
 from ...place.geometry import Rect, pad_rects

@@ -9,6 +9,7 @@ feedback test.
 import unittest
 
 import numpy as np
+
 from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
 from pnr.route.feedback import derive_inflation
 from pnr.route.global_route import global_route

@@ -155,6 +155,7 @@ def unjustified_subwidth(board, rules, audit):
 
 def facts(path, rules):
     import pcbnew as k
+
     from pnr.electrical_audit import audit_board
     from pnr.fab_profile import geometry, load_board
     from pnr.native_electrical import reference_failures

@@ -19,6 +19,7 @@ from pathlib import Path
 from unittest import mock
 
 import pcbnew as k
+
 from pnr import fab_profile as fp
 from pnr.electrical import compile_policy
 

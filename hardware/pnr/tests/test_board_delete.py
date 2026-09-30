@@ -249,6 +249,7 @@ class DeleteNativeTests(unittest.TestCase):
 
     def test_fanout_release_worker(self):
         import pcbnew as k
+
         from pnr import fanout_reserve
 
         with tempfile.TemporaryDirectory() as directory:

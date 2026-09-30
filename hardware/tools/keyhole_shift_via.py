@@ -16,6 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pnr"))
 import pcbnew
 from keyhole_region import pad_partition
+
 from pnr.route.detail.keyhole import length, route, violation_keys
 from pnr.route.detail.regional import preserves_connections
 

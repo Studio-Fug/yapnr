@@ -17,6 +17,7 @@ from pathlib import Path
 
 def eligible(board, pad, rules, protected_pads=()):
     import pcbnew as k
+
     from pnr.electrical import net_policy
     from pnr.native_electrical import uid
     from pnr.plane_access import surface_group
@@ -125,6 +126,7 @@ def plan(board, leaf, rules):
 
 def execute(a, rules, b):
     import pcbnew as k
+
     from pnr.live import emit
     from pnr.native_drc import run_drc
     from pnr.native_electrical import reference_failures, uid, vec

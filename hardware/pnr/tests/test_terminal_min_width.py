@@ -590,6 +590,7 @@ class GeometryTest(unittest.TestCase):
 
     def test_post_route_report_and_hard_floor(self):
         import pcbnew
+
         from pnr.pad_entry import inspect, terminal_width_report
 
         b, net = self.board(((5, 10), (10, 10), (15, 10)))

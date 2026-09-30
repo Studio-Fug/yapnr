@@ -20,6 +20,7 @@ SRC15 = {name: "" for name in ELECTRICAL221}
 class ViaCoalesceTests(unittest.TestCase):
     def fixture(self):
         import pcbnew as k
+
         from pnr.via_coalesce import vec
 
         b = k.BOARD()
@@ -78,6 +79,7 @@ class ViaCoalesceTests(unittest.TestCase):
 
     def test_overlapping_annuli_do_not_replace_surviving_layer_bridges(self):
         import pcbnew as k
+
         from pnr.via_coalesce import apply, partition, plan, preserved, vec
 
         b, keep, remove, tail, track = self.fixture()
@@ -99,6 +101,7 @@ class ViaCoalesceTests(unittest.TestCase):
     @mock.patch.dict(os.environ, ELECTRICAL221)
     def test_transitively_connected_tail_keeps_native_barrel_contact(self):
         import pcbnew as k
+
         from pnr.via_coalesce import apply, partition, plan, preserved, xy
 
         b, keep, remove, _, track = self.fixture()
@@ -134,6 +137,7 @@ class ViaCoalesceTests(unittest.TestCase):
     @mock.patch.dict(os.environ, SRC15)
     def test_src15_default_adds_no_bridge_when_every_port_reaches_the_survivor(self):
         import pcbnew as k
+
         from pnr.via_coalesce import plan, xy
 
         b, keep, remove, _, track = self.fixture()
@@ -212,6 +216,7 @@ class ViaCoalesceTests(unittest.TestCase):
     @mock.patch.dict(os.environ, SRC15)
     def test_coalescence_then_graph_cleanup_preserves_three_layer_branches_src15(self):
         import pcbnew as k
+
         from pnr.track_graph import apply_cycle, cycle_candidates
         from pnr.via_coalesce import apply, partition, plan, preserved
 
@@ -232,6 +237,7 @@ class ViaCoalesceTests(unittest.TestCase):
     @mock.patch.dict(os.environ, ELECTRICAL221)
     def test_coalescence_then_graph_cleanup_preserves_three_layer_branches(self):
         import pcbnew as k
+
         from pnr.track_graph import apply_cycle, cycle_candidates
         from pnr.via_coalesce import apply, partition, plan, preserved
 
@@ -257,6 +263,7 @@ class ViaCoalesceTests(unittest.TestCase):
 
     def test_obstructed_layer_bridge_rejected(self):
         import pcbnew as k
+
         from pnr.via_coalesce import plan
 
         b, keep, remove, _, track = self.fixture()
@@ -268,6 +275,7 @@ class ViaCoalesceTests(unittest.TestCase):
 
     def test_width_not_necked_and_locked_port_rejected(self):
         import pcbnew as k
+
         from pnr.via_coalesce import plan
 
         b, keep, remove, _, _ = self.fixture()
@@ -292,6 +300,7 @@ class ViaCoalesceTests(unittest.TestCase):
 
     def test_source_current_array_excluded_after_ref_rename(self):
         import pcbnew as k
+
         from pnr.via_coalesce import candidates
 
         b, *_ = self.fixture()
@@ -319,6 +328,7 @@ class ViaCoalesceTests(unittest.TestCase):
 
     def test_removing_required_branch_fails_native_partition(self):
         import pcbnew as k
+
         from pnr.via_coalesce import partition, preserved
 
         b, keep, remove, _, _ = self.fixture()
@@ -330,6 +340,7 @@ class ViaCoalesceTests(unittest.TestCase):
 
     def test_locked_or_blind_via_and_smaller_survivor_rejected(self):
         import pcbnew as k
+
         from pnr.via_coalesce import plan
 
         b, keep, remove, _, _ = self.fixture()
@@ -347,6 +358,7 @@ class ViaCoalesceTests(unittest.TestCase):
 
     def test_nearby_unconnected_vias_are_not_candidates(self):
         import pcbnew as k
+
         from pnr.via_coalesce import candidates
 
         b, keep, remove, _, _ = self.fixture()
@@ -381,6 +393,7 @@ class StrandedSurvivorTests(unittest.TestCase):
         from types import SimpleNamespace
 
         import pcbnew as k
+
         from pnr.via_coalesce import uid, worker
 
         b, keep, remove, _, _ = self.fixture()

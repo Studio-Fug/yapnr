@@ -1,9 +1,10 @@
 import unittest
 
 import pcbnew as k
+from test_native_electrical import board
+
 from pnr.native_electrical import Oracle, add_track
 from pnr.reference_guard import ReferenceGuard
-from test_native_electrical import board
 
 
 class ReferenceGuardTest(unittest.TestCase):

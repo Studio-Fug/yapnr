@@ -21,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pnr"))
 import pcbnew
+
 from pnr.profile import retain_native
 from pnr.route.detail.joint import solve_joint_region
 from pnr.route.detail.keyhole import acceptable

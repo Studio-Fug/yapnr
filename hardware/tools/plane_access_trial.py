@@ -10,6 +10,7 @@ import pcbnew
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pnr"))
 from keyhole_region import pad_partition
+
 from pnr.pad_entry import snapshot
 from pnr.route.detail.regional import preserves_connections
 

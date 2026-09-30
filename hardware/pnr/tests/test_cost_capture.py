@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import numpy as np
 from cost_fixture import fixture
+
 from pnr.place import place
 
 

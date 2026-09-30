@@ -5,6 +5,7 @@ import math
 
 def repair_neck(board, pad, layer, touching, width, rules):
     import pcbnew as k
+
     from pnr.electrical import neck_budget, terminal_policy
     from pnr.native_electrical import Oracle, vec, xy
     from pnr.pad_entry import closest, neck_witness, witness

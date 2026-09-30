@@ -9,6 +9,7 @@ from unittest.mock import patch
 class PlaneRefillTest(unittest.TestCase):
     def test_same_package_plated_hole_is_reused_across_back_layer_copper(self):
         import pcbnew as k
+
         from pnr.writeback import _dogbone_fanout_net, _has_through_access
 
         b = k.BOARD()
@@ -60,6 +61,7 @@ class PlaneRefillTest(unittest.TestCase):
 
     def test_surface_reuse_is_idempotent_and_avoids_another_via(self):
         import pcbnew
+
         from pnr.writeback import _dogbone_fanout_net, _has_through_access
 
         b = pcbnew.BOARD()
@@ -107,6 +109,7 @@ class PlaneRefillTest(unittest.TestCase):
 
     def test_existing_thermal_pad_prevents_extra_router_via(self):
         import pcbnew
+
         from pnr.writeback import _dogbone_fanout_net
 
         b = pcbnew.BOARD()
@@ -137,6 +140,7 @@ class PlaneRefillTest(unittest.TestCase):
 
     def test_surface_reuse_rejects_blocked_connection(self):
         import pcbnew
+
         from pnr.writeback import _reuse_surface_ground
 
         b = pcbnew.BOARD()
@@ -172,6 +176,7 @@ class PlaneRefillTest(unittest.TestCase):
 
     def test_refill_preserves_plane_and_does_not_repeat_fanout(self):
         import pcbnew
+
         from pnr.writeback import apply_planes
 
         board = pcbnew.BOARD()

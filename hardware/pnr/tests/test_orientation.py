@@ -30,6 +30,7 @@ import sys
 import unittest
 
 import yaml
+
 from pnr.constraints import compile_constraints
 from pnr.graph import BoardGraph
 from pnr.place import place

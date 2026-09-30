@@ -370,6 +370,7 @@ class Transaction:
         """G0: a fresh Oracle on the applied board (moved items ignored) must clear
         every moved track/via and every claim of the solved plan."""
         import pcbnew as k
+
         from pnr.native_electrical import Oracle, xy
 
         moved = world.moved()
@@ -751,6 +752,7 @@ class Transaction:
         """Unlocked sub-trunk-width power copper (tracks, and vias whose every
         track is such copper) of foreign power nets within ``radius``."""
         import pcbnew as k
+
         from pnr.electrical import net_policy
         from pnr.shove.relax import distance_to
         from pnr.via_in_pad import removes_unused_pads
@@ -1050,6 +1052,7 @@ class Transaction:
         first) that the original board connected and the current one does not:
         ``(net, label, uuid, label, uuid, box)`` or None."""
         import pcbnew as k
+
         from pnr.fab_profile import load_board
         from pnr.via_coalesce import partition
 

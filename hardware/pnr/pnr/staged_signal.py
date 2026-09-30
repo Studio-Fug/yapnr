@@ -9,6 +9,7 @@ from pathlib import Path
 
 def run(board, rules, constraints, out, kicad_python, kicad_cli, iterations=12):
     import yaml
+
     from pnr.constraints import compile_constraints
     from pnr.graph import BoardGraph
     from pnr.route.detail.router import route_board

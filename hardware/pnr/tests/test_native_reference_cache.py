@@ -2,10 +2,11 @@ import unittest
 from unittest.mock import patch
 
 import pcbnew as k
+from test_reference_guard import ReferenceGuardTest
+
 from pnr.electrical import net_policy
 from pnr.native_electrical import vec
 from pnr.reference_guard import ReferenceGuard
-from test_reference_guard import ReferenceGuardTest
 
 
 class CacheTest(unittest.TestCase):

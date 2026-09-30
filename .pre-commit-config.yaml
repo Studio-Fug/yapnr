@@ -24,7 +24,7 @@
 exclude: ^(docs/hardware/|third_party/)
 
 repos:
-  # Python formatting and linting (flake8 settings live in .flake8)
+  # Python formatting and linting (isort settings live in .isort.cfg, flake8's in .flake8)
   - repo: https://github.com/psf/black
     rev: 25.1.0
     hooks:
@@ -36,8 +36,8 @@ repos:
   - repo: https://github.com/pycqa/isort
     rev: 6.0.1
     hooks:
+      # black profile, 100 columns and the first-party packages: .isort.cfg
       - id: isort
-        args: [--profile=black, --line-length=100]
 
   - repo: https://github.com/pycqa/flake8
     rev: 7.0.0

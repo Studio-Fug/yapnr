@@ -1,8 +1,13 @@
 """pnr.animate on a tiny synthetic trace: storyboard, frames, deterministic bytes (also from a
-moved trace), size budgets, no metadata, the overlay text validator and the command line."""
+moved trace), size budgets, no metadata, the overlay text validator and the command line; the
+ladder's timelines unchanged by the constraint and hierarchy work (a golden over the views);
+line groups (rigid tween, one legalization step per body, highlighting, metrics) and
+side-by-side comparisons (the sync rule, determinism, width, the command line)."""
 
+import hashlib
 import io
 import json
+import math
 import shutil
 import struct
 import tempfile
@@ -12,7 +17,7 @@ from pathlib import Path
 from PIL import Image, ImageColor
 
 from pnr import trace
-from pnr.animate import encode
+from pnr.animate import compare, encode, highlight
 from pnr.animate import render as render_mod
 from pnr.animate import storyboard
 from pnr.animate.cli import main, render_animation
@@ -619,6 +624,322 @@ class CoarseRunTest(unittest.TestCase):
         self.assertEqual(doc["kind"], "synthesis")
         self.assertIn("block:usb/usb-0", doc["path"])
         self.assertEqual(doc["rejected"], {"native-rank": 4})
+
+
+# --- the ladder's timelines, unchanged ----------------------------------------------------
+# The digest of the views below as the branch base's renderer (before line groups, board edges
+# and hierarchical chapters) built them; pure data, so it holds on every platform.
+TIMELINE_GOLDEN = "15746729db568eddbe57b2843dacf996ffad8c5c48476abbff7a03f3efb2f0ad"
+
+
+def _r(value):
+    return round(float(value), 3)
+
+
+def view_row(view, ms):
+    montage = None
+    if view.montage is not None:
+        m = view.montage
+        montage = [_r(m.get("alpha", 1)), _r(m.get("zoom", 0)), [t["label"] for t in m["tiles"]]]
+    card = (view.card or {}).get("kind")
+    return [
+        ms,
+        view.phase,
+        view.caption,
+        list(view.step) if view.step else None,
+        list(view.progress),
+        list(view.ghost) if view.ghost else None,
+        sorted([k, _r(p[0]), _r(p[1]), _r(p[2]), p[3]] for k, p in view.poses.items()),
+        sorted(view.committed),
+        sorted(view.provisional),
+        sorted(view.flash.items()),
+        sorted(view.ripped),
+        [_r(c) for c in view.camera],
+        card,
+        montage,
+        _r(view.native_mix),
+        _r(view.zone_reveal),
+        list(view.marked),
+        view.failed,
+        sorted((k, v) for k, v in view.groups.items()) if view.groups else [],
+        None if view.blend is None else _r(view.blend[1]),
+    ]
+
+
+class UnchangedTest(unittest.TestCase):
+    def test_the_ladder_timelines_are_unchanged(self):
+        out = []
+        with tempfile.TemporaryDirectory() as tmp:
+            make_trace(Path(tmp) / "a" / "trace")
+            loaded = Trace(Path(tmp) / "a" / "trace")
+            board = storyboard.build(loaded)
+            for seconds in (3, 4, 30):
+                frames = Timeline(loaded, board, max_seconds=seconds).frames
+                out.append([view_row(v, ms) for v, ms in frames])
+            rounds_trace(Path(tmp) / "b")
+            loaded = Trace(Path(tmp) / "b")
+            board = storyboard.build(loaded)
+            out.append([view_row(v, ms) for v, ms in Timeline(loaded, board, max_seconds=6).frames])
+        digest = hashlib.sha256(json.dumps(out, sort_keys=True).encode()).hexdigest()
+        self.assertEqual(digest, TIMELINE_GOLDEN)
+
+    def test_no_highlighting_without_constraints(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_trace(Path(tmp) / "t")
+            loaded = Trace(Path(tmp) / "t")
+            board = storyboard.build(loaded)
+            frames = Timeline(loaded, board, max_seconds=3).frames
+            renderer = Renderer(loaded.header, board["subject"], width=240)
+            self.assertEqual(renderer._highlights(), [])
+            calls = []
+            saved = highlight.draw_under, highlight.draw_over
+            highlight.draw_under = highlight.draw_over = lambda *a, **k: calls.append(a)
+            try:
+                for view, _ms in frames:
+                    renderer.frame(view)
+            finally:
+                highlight.draw_under, highlight.draw_over = saved
+            self.assertEqual(calls, [])
+            self.assertTrue(all(v.bodies is None and v.fixed is None for v, _ms in frames))
+
+
+# --- line groups ---------------------------------------------------------------------------
+LINE = ("D1", "D2", "D3")
+PITCH = 3000
+
+
+def line_graph():
+    def part(ref, x, a, b, kind="LED_0805"):
+        pads = [Pad("1", a, (-0.9, 0.0), (0.9, 1.2)), Pad("2", b, (0.9, 0.0), (0.9, 1.2))]
+        return Component(ref, kind, (x, 20.0), 0.0, "top", (3.2, 1.8), (3.2, 1.8), pads=pads)
+
+    parts = [part("R1", 16.0, "A", "B", "R_0805")]
+    parts += [part(ref, 20.0 + 4 * k, "B", "K%d" % k) for k, ref in enumerate(LINE)]
+    nets = [Net("A", 1, [("R1", "1")]), Net("B", 2, [("R1", "2")] + [(r, "1") for r in LINE])]
+    nets += [Net("K%d" % k, 3 + k, [(ref, "2")]) for k, ref in enumerate(LINE)]
+    return BoardGraph("line", parts, nets, BoardOutline(16.0, 10.0))
+
+
+def line_rows(x, y, rot):
+    """Member rows of the line under a body pose (members at ``rot`` + 90 in the body)."""
+    rows = []
+    for k, ref in enumerate(LINE):
+        a = math.radians(rot)
+        dx = (k - 1) * PITCH
+        rows.append(
+            [ref, round(x + dx * math.cos(a)), round(y + dx * math.sin(a)), (rot + 90) % 360, "top"]
+        )
+    return rows, [["LG00", x, y, float(rot), "top"]]
+
+
+def line_trace(root):
+    root = Path(root)
+    trace.write_run(root, dict(subject=dict(case="00-line", seed=0, description="A line.")))
+    rec = trace.Recorder(root)
+    rec.begin_board(line_graph(), None, {"fab": {"track_width_mm": 0.25}})
+    members = {"LG00": list(LINE)}
+    rec.section("round-01", "round")
+    rec.enter("initial-pool", "pool")
+    rec.enter("start-00", "start", kind="global")
+    for step, (x, y, rot) in enumerate(((6000, 5000, 0), (6500, 5000, 270), (9000, 5000, 270))):
+        rows, groups = line_rows(x, y, rot)
+        rec.poses(
+            "global",
+            [["R1", 2000 + 300 * step, 5000, 0.0, "top"]] + rows,
+            iter=5 * step,
+            iters=10,
+            phase="global-placement",
+            groups=groups,
+            group_members=members,
+        )
+    rows, groups = line_rows(9000, 5000, 270)
+    rec.event(
+        "legal",
+        order=[["R1", 2500, 5000, 0.0, "top"]] + rows,
+        backtracks=0,
+        groups=groups,
+        group_members=members,
+    )
+    rec.leave()
+    rec.select("shortlist", ["start-00"], ["start-00"], "capacity-proxy", {"start-00": 1.0})
+    rec.enter("start-00-route", "route", start="start-00")
+    a = rec.blob(copper(5000))
+    rec.event(
+        "net",
+        net="B",
+        op="commit",
+        provisional=False,
+        copper=a,
+        groups=[[0, 1, 2, 3]],
+        progress=dict(done=3, total=3, source="router"),
+    )
+    rec.event(
+        "route_end",
+        nets={"B": a},
+        groups={"B": [[0, 1, 2, 3]]},
+        unrouted=[],
+        progress=dict(done=3, total=3, source="router"),
+    )
+    rec.leave()
+    rec.select("chosen", ["start-00-route"], "start-00-route", "route-objective", {})
+    rec.leave(type="pool")
+    rec.leave(rec.enter("route", "route", reused=True))
+    rec.leave(type="round")
+    rec.select("best-round", ["round-01"], "round-01", "missing-connections", {"round-01": 0})
+    rec.close()
+    header = json.loads((root / "header.json").read_text())
+    header["constraints"] = [
+        dict(kind="line_group", name="leds", refs=list(LINE), hard=True, pitch_um=PITCH, rot=90.0)
+    ]
+    (root / "header.json").write_text(json.dumps(header))
+    return root
+
+
+class LineGroupTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.root = line_trace(Path(cls.tmp.name) / "line" / "trace")
+        cls.trace = Trace(cls.root)
+        cls.board = storyboard.build(cls.trace)
+        cls.frames = Timeline(cls.trace, cls.board, max_seconds=30, pacing="showcase").frames
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def test_the_body_turns_rigidly(self):
+        turning = 0
+        for view, _ms in self.frames:
+            if view.phase != "global-placement" or not view.bodies:
+                continue
+            x, y, rot, _side = view.bodies["LG00"]
+            ends = [view.poses[r][:2] for r in (LINE[0], LINE[-1])]
+            self.assertAlmostEqual(math.dist(*ends), 2 * PITCH, delta=2.0)  # never shrinks
+            self.assertLess(math.dist(view.poses[LINE[1]][:2], (x, y)), 2.0)
+            for ref in LINE:  # members keep their angle in the body
+                self.assertAlmostEqual((view.poses[ref][2] - rot) % 360.0, 90.0, delta=1e-6)
+            if 271.0 < rot < 359.0:
+                turning += 1  # 0 to 270 on the shorter arc, through 315
+        self.assertGreater(turning, 0)
+
+    def test_a_body_is_one_legalization_step(self):
+        steps = [v for v, _ms in self.frames if v.phase == "legalization"]
+        self.assertEqual([v.marked for v in steps], [("R1",), LINE])
+        self.assertEqual(steps[-1].step, (2, 2, "step"))
+
+    def test_highlighting_follows_the_header(self):
+        renderer = Renderer(self.trace.header, self.board["subject"], width=320)
+        self.assertEqual([c["kind"] for c in renderer.constraints], ["line_group"])
+        view = self.frames[-1][0].copy(card=None)
+        drawn = renderer.board(view, 320, 200)
+        renderer.constraints = []
+        plain = renderer.board(view, 320, 200)
+        self.assertNotEqual(drawn.tobytes(), plain.tobytes())
+        self.assertEqual(
+            highlight.legend(self.trace.header["constraints"]),
+            ["line_group D1-D3 \u00b7 3.0 mm pitch"],
+        )
+
+    def test_metrics(self):
+        self.assertEqual(highlight.line_error([(0, 0), (1000, 0), (2000, 0)]), 0.0)
+        self.assertAlmostEqual(highlight.line_error([(0, 0), (1000, 300), (2000, 0)]), 200.0)
+        pins = {"A": [("R1", "1"), ("D1", "1")], "B": [("R1", "2")]}
+        xy = {("R1", "1"): (0, 0), ("D1", "1"): (3000, 4000), ("R1", "2"): (9, 9)}
+        self.assertEqual(highlight.hpwl(pins, xy), 7000.0)
+        header = dict(outline=dict(w=20000, h=10000))
+        comps = {"J1": dict(courtyard=[4000, 2000]), "SW1": dict(courtyard=[6000, 3000])}
+        poses = {"J1": (15000, 1400, 0.0, "top"), "SW1": (5000, 5000, 90.0, "top")}
+        edges = [dict(kind="edge_align", refs=["J1", "SW1"], edge="south", tolerance_um=1000)]
+        # J1: courtyard bottom 400 um from the edge; SW1 (turned): 5000 - 3000 = 2000 um.
+        self.assertEqual(highlight.edge_distance(header, comps["SW1"], poses["SW1"], "south"), 2000)
+        self.assertEqual(highlight.on_edge(header, comps, poses, edges), (1, 2))
+        self.assertEqual(highlight.edge_order(poses, edges), [("south", ["SW1", "J1"])])
+
+
+# --- comparisons -----------------------------------------------------------------------------
+class CompareTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.left_root = Path(cls.tmp.name) / "free" / "trace"
+        make_trace(cls.left_root)
+        cls.right_root = line_trace(Path(cls.tmp.name) / "line" / "trace")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def test_scene_phases(self):
+        marks = [(0, "title"), (2, "source"), (4, "placement"), (9, "montage"), (12, "route")]
+        marks += [(20, "montage"), (23, "native"), (25, "native"), (26, "end")]
+        self.assertEqual(
+            compare.scene_phases(marks),
+            [("intro", 0), ("placement", 4), ("routing", 12), ("native", 23), ("end", 26)],
+        )
+
+    def test_the_shorter_run_holds_its_last_frame(self):
+        a1, a2, b1, b2, b3 = "a1", "a2", "b1", "b2", "b3"
+        marks = [(0, "title"), (1, "route")]
+        left = [(a1, 100), (a2, 200)]
+        right = [(b1, 120), (b3, 180), (b2, 60)]
+        pairs = compare.synchronize(left, marks, right, [(0, "title"), (2, "route")], clock_ms=60)
+        # Scene by scene: 300 ms of title (a1 held), then 200 ms of route (b2 held).
+        self.assertEqual(pairs, [((a1, b1), 120), ((a1, b3), 180), ((a2, b2), 200)])
+        # Different scene sequences: phase by phase.
+        other = [(0, "title"), (1, "source"), (2, "route")]
+        pairs = compare.synchronize(left, marks, right, other, clock_ms=60)
+        self.assertEqual(sum(ms for _p, ms in pairs), 500)
+        self.assertEqual(pairs[0][0], (a1, b1))
+
+    def test_a_comparison_is_deterministic_and_960_wide(self):
+        def render(left_root, right_root):
+            renderer, frames = compare.build(
+                Trace(left_root), Trace(right_root), width=960, max_seconds=4
+            )
+            return renderer, encode.webp_bytes(renderer, frames, quality=60)
+
+        renderer, one = render(self.left_root, self.right_root)
+        self.assertEqual(renderer.width, 960)
+        self.assertEqual(renderer.labels, ["Unconstrained", "line_group D1-D3 \u00b7 3.0 mm pitch"])
+        self.assertEqual(renderer.left.reference, self.right_trace_constraints())
+        _renderer, two = render(self.left_root, self.right_root)
+        self.assertEqual(one, two)
+        with tempfile.TemporaryDirectory() as other:
+            left = Path(other) / "x" / "l"
+            right = Path(other) / "y" / "r"
+            shutil.copytree(self.left_root, left)
+            shutil.copytree(self.right_root, right)
+            _renderer, three = render(left, right)
+        self.assertEqual(one, three)
+        self.assertEqual(Image.open(io.BytesIO(one)).size[0], 960)
+        self.assertFalse({b"EXIF", b"XMP ", b"ICCP"} & set(riff_chunks(one)))
+
+    def right_trace_constraints(self):
+        return Trace(self.right_root).header["constraints"]
+
+    def test_the_command_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "pair.webp"
+            code = main(
+                [
+                    "--compare",
+                    str(self.left_root.parent),
+                    str(self.right_root.parent),
+                    "--labels",
+                    "Free",
+                    "Line",
+                    "--out",
+                    str(out),
+                    "--width",
+                    "480",
+                    "--max-seconds",
+                    "3",
+                ]
+            )
+            self.assertEqual(code, 0)
+            with Image.open(out) as image:
+                self.assertEqual(image.size[0], 480)
 
 
 if __name__ == "__main__":

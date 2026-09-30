@@ -1221,6 +1221,7 @@ py_test(
     main = "tests/test_hier_case.py",
     deps = [
         ":pnr",
+        ":pnr_animate",  # the bundle animates in chapters (pnr.animate.hier)
         ":pnr_detail",
         ":pnr_hier",
         ":pnr_place",

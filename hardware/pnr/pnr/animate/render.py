@@ -8,6 +8,12 @@ DRC finding markers, ratsnest, highlights, outline, overlay. Translucent colours
 blended with the substrate up front, so a frame needs no alpha compositing except for the
 congestion heat map and zone reveals.
 
+A header that lists placement constraints (or a comparison's reference overlay) adds two passes
+(:mod:`.highlight`): tints and a line group's guide line right after the substrate, and the
+rigid bodies, target edges and tethers after the outline. Copper a route keeps as it is (a
+hierarchical knit's block copper, ``View.fixed``) is drawn dimmed. Without either, a frame is
+drawn exactly as before.
+
 Overlay text is whitelisted: :func:`safe_text` rejects anything that looks like a path or an
 e-mail address, and every other string comes from the fixed tables of :mod:`.theme`.
 """
@@ -19,7 +25,7 @@ import re
 
 from PIL import Image, ImageDraw, ImageFont
 
-from . import theme
+from . import highlight, theme
 from .timeline import montage_score_text
 
 _UNSAFE = re.compile(r"\w/\w|~|[A-Za-z]:\\|\\\\|[\w.+-]+@[\w-]+\.[\w.]+|://")
@@ -109,6 +115,11 @@ class Renderer:
         self.description = safe_text(subject.get("description") or "")
         self.strings = {self.title, self.stats, self.description}
         self._last = None
+        # Constraint highlighting (section 6.2 of the constraint animation design): the
+        # header's own constraints, or another design's as a neutral reference overlay.
+        self.constraints = highlight.constraints_of(header)
+        self.reference = []
+        self.compact = False  # comparison panels and hierarchy tiles: smaller montage text
 
     # --- frames -------------------------------------------------------------------------
     def frame(self, view):
@@ -154,12 +165,17 @@ class Renderer:
         tf = Transform(view.camera, width * ss, height * ss)
         draw = ImageDraw.Draw(big)
         self._substrate(draw, tf)
+        marks = self._highlights()
+        for constraints, reference in marks:
+            highlight.draw_under(self, draw, tf, view.poses, constraints, reference, ss)
         if view.native is not None and view.native_mix >= 1.0:
             self._zones(big, tf, view.native.get("zones", []), view.zone_reveal)
             draw = ImageDraw.Draw(big)
             layers = [({"": view.native}, {})]
         else:
             layers = self._engine_copper(view)
+            if view.fixed is not None:  # a hierarchical knit's block copper, kept as it is
+                layers = [({"": view.fixed}, {"": "fixed"})] + layers
         for nets, styles in layers:
             self._copper(draw, tf, nets, styles, ss)
         self._pads(draw, tf, view.poses, ss)
@@ -171,9 +187,24 @@ class Renderer:
         self._findings(draw, tf, view.findings, ss)
         self._ratsnest(draw, tf, view, ss)
         self._outline(draw, tf, ss)
+        for constraints, reference in marks:
+            highlight.draw_over(self, draw, tf, view.poses, constraints, reference, ss)
+        self._decorate(big, draw, tf, view, ss)
         if view.heat is not None:
             big = self._heat(big, tf, view.heat)
         return big.resize((width, height), Image.LANCZOS)
+
+    def _highlights(self):
+        """``[(constraints, reference)]`` to draw: none for a design without constraints."""
+        marks = []
+        if self.constraints:
+            marks.append((self.constraints, False))
+        if self.reference:
+            marks.append((self.reference, True))
+        return marks
+
+    def _decorate(self, image, draw, tf, view, ss):
+        """A hook for subclasses (block outlines of the hierarchical renderer)."""
 
     # --- board layers -------------------------------------------------------------------
     def _outline_points(self, tf):
@@ -248,6 +279,8 @@ class Renderer:
                 "flash": rgb(theme.NEW),
                 "ripped": rgb(theme.RIPPED),
             }.get(style, layer_color(name))
+            if style == "fixed":
+                color = mix(theme.SUBSTRATE, layer_color(name), 0.55)
             if style == "ripped":
                 self._dashed(draw, a, b, w, color, tf, ss)
                 continue
@@ -262,6 +295,8 @@ class Renderer:
                 ring = rgb(theme.PROVISIONAL)
             if style == "ripped":
                 ring = rgb(theme.RIPPED)
+            if style == "fixed":
+                ring = mix(theme.SUBSTRATE, theme.VIA_RING, 0.55)
             for x, y, diameter, drill in copper.get("vias", []):
                 cx, cy = tf(x, y)
                 r = max(1.5, tf.length(diameter) / 2.0)
@@ -444,7 +479,7 @@ class Renderer:
         count = len(tiles) + (1 if m.get("more") else 0)
         cols = count if count <= 4 else 4
         rows = int(math.ceil(count / float(cols)))
-        gap, label = 10, 18
+        gap, label = (8, 28) if self.compact else (10, 18)
         tw = (width - gap * (cols + 1)) // cols
         th = (height - gap * (rows + 1) - label * rows) // rows
         ow, oh = self.header["outline"]["w"], self.header["outline"]["h"]
@@ -479,7 +514,7 @@ class Renderer:
             image.paste(picture, box[:2])
             text = safe_text(tile["label"])
             score = montage_score_text(m.get("criterion"), tile.get("score"))
-            if score:
+            if score and not self.compact:
                 text += " · " + safe_text(score)
             tone = theme.TEXT if tile["lit"] else theme.MUTED
             if tile["chosen"]:
@@ -490,6 +525,9 @@ class Renderer:
                 )
                 text = "chosen · " + text
                 tone = theme.ACCENT
+            if self.compact:
+                self._tile_caption(draw, box, tw, th, text, score, tile, tone, fade)
+                continue
             draw.text(
                 (box[0] + tw / 2.0, box[1] + th + 3),
                 text,
@@ -525,6 +563,26 @@ class Renderer:
     def _fit_box(self, width, height):
         return (0, 0, width, height)
 
+    def _tile_caption(self, draw, box, tw, th, text, score, tile, tone, fade):
+        """Two short lines under a compact montage tile: the label, then its score (and, for
+        a design with edge alignments, the order of its edge parts)."""
+        lines = [text]
+        extra = [safe_text(score)] if score else []
+        for _edge, refs in highlight.edge_order(tile["view"].poses, self.constraints):
+            extra.append(safe_text("\u00b7".join(refs)))
+        if extra:
+            lines.append(" · ".join(extra))
+        for k, line in enumerate(lines):
+            size, line = _fit(draw, line, tw + 6, (11, 10, 9) if k == 0 else (10, 9))
+            self.strings.add(line)
+            draw.text(
+                (box[0] + tw / 2.0, box[1] + th + 3 + 13 * k),
+                line,
+                fill=mix(theme.BACKGROUND, tone if k == 0 else theme.MUTED, fade),
+                font=font(size),
+                anchor="ma",
+            )
+
     # --- overlay and cards --------------------------------------------------------------
     def _overlay(self, image, view):
         draw = ImageDraw.Draw(image)
@@ -538,8 +596,12 @@ class Renderer:
             font=font(13),
             anchor="rm",
         )
-        top = self.height - footer
-        draw.rectangle((0, top, self.width, self.height), fill=rgb(theme.BACKGROUND))
+        self._footer(draw, view, self.height - footer)
+
+    def _footer(self, draw, view, top):
+        """The footer strip from ``top``: phase, experiment, "% routed" bar and step."""
+        footer = theme.FOOTER_PX
+        draw.rectangle((0, top, self.width, top + footer), fill=rgb(theme.BACKGROUND))
         phase = theme.PHASE_TEXT.get(view.phase, "")
         if view.caption:
             phase = (phase + " · " if phase else "") + safe_text(view.caption)

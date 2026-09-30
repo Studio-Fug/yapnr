@@ -38,6 +38,24 @@ GIF_STEPS = (
     dict(colors=64, frame_ms=100, width=640),
     dict(colors=64, frame_ms=100, width=560),
 )
+# Comparisons (two 480 px panels) and hierarchical animations (docs/design/
+# constraint-and-hier-animations.md, section 6.3 and 6.7).
+COMPARE_WEBP_STEPS = (
+    dict(quality=80, frame_ms=60, width=960),
+    dict(quality=70, frame_ms=60, width=960),
+    dict(quality=60, frame_ms=60, width=960),
+    dict(quality=60, frame_ms=80, width=960),
+    dict(quality=60, frame_ms=80, width=880),
+    dict(quality=60, frame_ms=80, width=800),
+)
+COMPARE_GIF_STEPS = (
+    dict(colors=128, frame_ms=80, width=960),
+    dict(colors=96, frame_ms=80, width=960),
+    dict(colors=64, frame_ms=80, width=960),
+    dict(colors=64, frame_ms=100, width=960),
+    dict(colors=64, frame_ms=100, width=880),
+    dict(colors=64, frame_ms=100, width=800),
+)
 PALETTE_SAMPLES = 12
 # Kept exactly in every GIF palette: the colours that carry meaning in small areas, and the
 # copper layers' own (median cut would otherwise pull F.Cu towards the failure red).
@@ -51,6 +69,8 @@ SIGNAL_COLOURS = (
     theme.PAD,
     theme.VIA_RING,
 ) + tuple(theme.LAYERS[name] for name in sorted(theme.LAYERS))
+# Also kept in a comparison's palette: the constraint highlights.
+CONSTRAINT_COLOURS = (theme.CONSTRAINT, theme.REFERENCE, theme.BLOCK_OUTLINE)
 
 
 class FrameSequence(Image.Image):
@@ -110,8 +130,9 @@ def webp_bytes(renderer, frames, quality=80, method=4):
     return out.getvalue()
 
 
-def gif_palette(renderer, frames, colors):
-    """A palette image from evenly sampled frames (median cut, deterministic)."""
+def gif_palette(renderer, frames, colors, extra_colours=()):
+    """A palette image from evenly sampled frames (median cut, deterministic); ``extra_colours``
+    join the signal colours."""
     count = min(PALETTE_SAMPLES, len(frames))
     picks = sorted({int(round(i * (len(frames) - 1) / max(1, count - 1))) for i in range(count)})
     first = renderer.frame(frames[picks[0]][0])
@@ -119,7 +140,7 @@ def gif_palette(renderer, frames, colors):
     for k, index in enumerate(picks):
         sheet.paste(renderer.frame(frames[index][0]), (0, first.height * k))
     small = sheet.resize((max(1, sheet.width // 2), max(1, sheet.height // 2)), Image.NEAREST)
-    fixed = [ImageColor.getrgb(c) for c in SIGNAL_COLOURS]
+    fixed = [ImageColor.getrgb(c) for c in SIGNAL_COLOURS + tuple(extra_colours)]
     count = max(2, int(colors) - len(fixed))
     cut = small.quantize(colors=count, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
     raw = cut.getpalette() or []
@@ -130,9 +151,9 @@ def gif_palette(renderer, frames, colors):
     return palette
 
 
-def gif_bytes(renderer, frames, colors=128):
+def gif_bytes(renderer, frames, colors=128, extra_colours=()):
     """GIF of ``frames`` with one fixed palette and no dithering."""
-    palette = gif_palette(renderer, frames, colors)
+    palette = gif_palette(renderer, frames, colors, extra_colours)
 
     def render(i):
         return renderer.frame(frames[i][0]).quantize(palette=palette, dither=Image.Dither.NONE)
@@ -177,7 +198,7 @@ def mp4(renderer, frames, path, frame_ms=60, timeout=600):
     return True
 
 
-def encode(kind, make, budget_bytes, steps=None):
+def encode(kind, make, budget_bytes, steps=None, extra_colours=()):
     """Encode with the first setting of ``steps`` whose output fits ``budget_bytes``.
 
     ``make(width, frame_ms)`` returns ``(renderer, frames)``. Returns ``(bytes, settings,
@@ -189,7 +210,9 @@ def encode(kind, make, budget_bytes, steps=None):
         if kind == "webp":
             data = webp_bytes(renderer, frames, quality=setting["quality"])
         else:
-            data = gif_bytes(renderer, frames, colors=setting["colors"])
+            data = gif_bytes(
+                renderer, frames, colors=setting["colors"], extra_colours=extra_colours
+            )
         last = (data, dict(setting), frames, renderer)
         if len(data) <= budget_bytes:
             return last

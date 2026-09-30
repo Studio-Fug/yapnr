@@ -238,6 +238,42 @@ class HierCaseTest(unittest.TestCase):
         self.assertEqual([s["id"] for s in case.selects], ["top-seed"])
         self.assertFalse((self.root / "trace" / "errors.json").exists())
 
+    def test_the_bundle_animates_in_chapters(self):
+        from pnr.animate import hier, storyboard
+        from pnr.animate.cli import trace_digest
+
+        case = provenance.Trace(self.root / "trace")
+        board = storyboard.build(case)
+        self.assertEqual(board["kind"], "hier")
+        types = [s["type"] for s in board["scenes"]]
+        self.assertEqual(types[:4], ["title", "source", "chapter", "block-grid"])
+        for kind in ("block-montage", "reuse", "lift", "placement", "route", "end"):
+            self.assertIn(kind, types)
+        self.assertEqual(types.count("chapter"), 3)
+        self.assertTrue(any(n.startswith("block:") for n in board["path"]))
+        renderer, frames = hier.make(case, board, 320, 60, 12.0, "showcase")
+        kinds = {(v.card or {}).get("kind") for v, _ms in frames}
+        self.assertTrue({"title", "chapter", "grid", "reuse"} <= kinds)
+        # The knit starts from the joins the block copper makes.
+        done = case.kind("top-00-route", "fixed")[0]["connections_done"]
+        knit = [v for v, _ms in frames if v.phase in ("negotiation", "commit", "routed")]
+        self.assertTrue(knit and all(v.progress[0] >= done for v in knit))
+        self.assertTrue(all(v.fixed is not None for v in knit))
+        # Rigid macros: every member follows its block (block frame) under the macro pose.
+        placed = [v for v, _ms in frames if v.phase == "global-placement" and v.bodies]
+        self.assertTrue(placed)
+        for view, _ms in frames[:: max(1, len(frames) // 12)]:
+            self.assertEqual(renderer.frame(view).size, (renderer.width, renderer.height))
+        # The block traces count in the trace digest.
+        before = trace_digest(case)
+        sub = next((self.root / "trace" / "blocks").iterdir()) / "header.json"
+        text = sub.read_text()
+        try:
+            sub.write_text(text + " ")
+            self.assertNotEqual(trace_digest(provenance.Trace(self.root / "trace")), before)
+        finally:
+            sub.write_text(text)
+
 
 if __name__ == "__main__":
     unittest.main()

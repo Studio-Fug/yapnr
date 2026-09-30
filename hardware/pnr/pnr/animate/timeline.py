@@ -4,7 +4,15 @@ A :class:`View` is everything one frame shows (poses, copper by net and state, t
 pad groups or KiCad's open pairs, overlays, the camera, cards and montage tiles); the renderer
 draws it. Frames carry their own durations, so a hold costs one frame. Motion uses
 ease-in-out cubic. Scene durations follow the design table and are scaled down together when
-their sum exceeds ``max_seconds``.
+their sum exceeds ``max_seconds``; ``pacing="showcase"`` gives placement, legalization and
+routing more time (docs/design/constraint-and-hier-animations.md, section 6.5).
+
+Rigid bodies (a line group or a block macro, recorded as ``groups`` rows with
+``group_members``) move as one: between two snapshots the body's centre is interpolated
+linearly and its angle along the shorter arc, and its members are posed from that pose, never
+one by one (which would shrink a line mid-turn). The legalizer's order places a body in one
+step. ``marks`` records where each scene begins (frame index and scene type) without changing
+the frames, so a comparison can synchronize two runs by phase.
 """
 
 from __future__ import annotations
@@ -27,6 +35,13 @@ ROUTE_S = (3.0, 8.0)
 ROUTE_NEGOTIATION_SHARE = 0.4
 ROUTE_HOLD_S = 0.5
 CONGESTION_S = 0.8
+# Scene timing presets: None reproduces the ladder's animations frame for frame.
+PACING = {
+    None: dict(
+        global_s=GLOBAL_S, legal_part_s=LEGAL_PART_S, legal_max_s=LEGAL_MAX_S, route_s=ROUTE_S
+    ),
+    "showcase": dict(global_s=(4.0, 6.0), legal_part_s=0.12, legal_max_s=2.4, route_s=(3.0, 6.0)),
+}
 NATIVE_S = {"writeback": 0.6, "planes": 1.2, "refill": 0.4}
 NATIVE_EMPTY_S = 0.3
 END_S = 2.8
@@ -68,6 +83,60 @@ def lerp_rect(a, b, t):
     return tuple(lerp(x, y, t) for x, y in zip(a, b))
 
 
+def rotate(x, y, degrees):
+    a = math.radians(degrees)
+    c, s = math.cos(a), math.sin(a)
+    return x * c - y * s, x * s + y * c
+
+
+def event_bodies(event):
+    """``{body: (x, y, rot, side)}`` of an event's rigid bodies (its ``groups`` rows)."""
+    return {r[0]: (r[1], r[2], r[3], r[4]) for r in event.get("groups") or []}
+
+
+def rigid_offsets(trace, events):
+    """``{body: [(ref, dx, dy, drot)]}``: each member's pose in its body's frame, from the
+    first event that records the body (members follow their body rigidly)."""
+    out = {}
+    for event in events:
+        members = event.get("group_members") or {}
+        if not members:
+            continue
+        bodies = event_bodies(event)
+        poses = None
+        for name in sorted(members):
+            if name in out or name not in bodies:
+                continue
+            if poses is None:
+                poses = event_poses(trace, event)
+            bx, by, br, _side = bodies[name]
+            rows = []
+            for ref in members[name]:
+                if ref not in poses:
+                    continue
+                x, y, rot, _s = poses[ref]
+                dx, dy = rotate(x - bx, y - by, -br)
+                rows.append((ref, dx, dy, (rot - br) % 360.0))
+            out[name] = rows
+    return out
+
+
+def pose_members(body, offsets):
+    """The members' poses under a body pose."""
+    x, y, rot, side = body
+    out = {}
+    for ref, dx, dy, drot in offsets:
+        ox, oy = rotate(dx, dy, rot)
+        out[ref] = (x + ox, y + oy, (rot + drot) % 360.0, side)
+    return out
+
+
+def lerp_body(a, b, t):
+    """A rigid body's pose between two recorded poses: centre linear, angle on the shorter arc."""
+    side = b[3] if t >= 0.5 else a[3]
+    return (lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp_angle(a[2], b[2], t), side)
+
+
 class View:
     """What one frame shows. Copper dicts are shared between frames and never mutated."""
 
@@ -95,6 +164,8 @@ class View:
         "card",
         "montage",
         "blend",
+        "bodies",
+        "fixed",
     )
 
     def __init__(self, **fields):
@@ -121,6 +192,8 @@ class View:
         self.card = None
         self.montage = None
         self.blend = None
+        self.bodies = None  # rigid bodies' own poses (line groups, block macros)
+        self.fixed = None  # copper a route keeps as it is (a hierarchical knit's blocks)
         for key, value in fields.items():
             setattr(self, key, value)
 
@@ -164,13 +237,21 @@ def bounds_camera(header, poses):
 class Timeline:
     """Frames ``[(View, milliseconds)]`` of a storyboard over its trace."""
 
-    def __init__(self, trace, storyboard, frame_ms=60, max_seconds=22.0):
+    def __init__(self, trace, storyboard, frame_ms=60, max_seconds=22.0, pacing=None):
         self.trace = trace
         self.board = storyboard
         self.header = trace.header
         self.frame_ms = int(frame_ms)
         self.total = self.header.get("connections_total", 0)
         self.frames = []
+        self.marks = []  # [(frame index, scene type)] where each scene begins
+        self.base_groups = {}  # pad groups joined before placement (a knit's block copper)
+        if pacing not in PACING:
+            raise ValueError("unknown pacing %r" % (pacing,))
+        self.pacing = pacing
+        preset = PACING[pacing]
+        self.global_s, self.route_s = preset["global_s"], preset["route_s"]
+        self.legal_part_s, self.legal_max_s = preset["legal_part_s"], preset["legal_max_s"]
         nominal = sum(self.duration(s) for s in storyboard["scenes"])
         self.scale = min(1.0, float(max_seconds) / nominal) if nominal > 0 else 1.0
         source = header_poses(self.header)
@@ -182,7 +263,8 @@ class Timeline:
         scenes = storyboard["scenes"]
         for index, scene in enumerate(scenes):
             following = scenes[index + 1] if index + 1 < len(scenes) else None
-            getattr(self, "_" + scene["type"])(scene, following)
+            self.marks.append((len(self.frames), scene["type"]))
+            getattr(self, "_" + scene["type"].replace("-", "_"))(scene, following)
 
     # --- durations ----------------------------------------------------------------------
     def duration(self, scene):
@@ -198,7 +280,7 @@ class Timeline:
         if kind == "congestion":
             return CONGESTION_S
         if kind == "placement":
-            parts = len(self._legal_order(scene["scope"])[0])
+            parts = len(self._legal_units(scene["scope"]))
             return self._global_seconds(scene["scope"]) + FLY_IN_S + self._legal_seconds(parts)
         if kind == "move":
             return MOVE_S
@@ -218,11 +300,10 @@ class Timeline:
         snaps = self._snapshots(scope)
         if len(snaps) < 3:
             return 0.3 * len(snaps)  # nothing to interpolate
-        return lerp(GLOBAL_S[0], GLOBAL_S[1], min(1.0, len(snaps) / 25.0))
+        return lerp(self.global_s[0], self.global_s[1], min(1.0, len(snaps) / 25.0))
 
-    @staticmethod
-    def _legal_seconds(parts):
-        return min(LEGAL_MAX_S, LEGAL_PART_S * parts)
+    def _legal_seconds(self, parts):
+        return min(self.legal_max_s, self.legal_part_s * parts)
 
     def _route_events(self, scope):
         return [e for e in self.trace.scopes[scope].events if e["kind"] in ("net", "route_end")]
@@ -230,7 +311,7 @@ class Timeline:
     def _route_seconds(self, scope):
         n = len(self._route_events(scope))
         share = min(1.0, math.log10(max(n, 10) / 10.0) / 2.0)
-        return lerp(ROUTE_S[0], ROUTE_S[1], share)
+        return lerp(self.route_s[0], self.route_s[1], share)
 
     def frames_for(self, seconds):
         return max(1, int(round(seconds * self.scale * 1000.0 / self.frame_ms)))
@@ -319,7 +400,9 @@ class Timeline:
     def _montage(self, scene, following):
         tiles = [dict(t, view=self._tile_view(t)) for t in scene["tiles"]]
         chosen = next((t for t in tiles if t["chosen"]), tiles[-1])
-        caption = montage_caption(scene["criterion"], scene["among"], scene["selected"])
+        caption = scene.get("caption") or montage_caption(
+            scene["criterion"], scene["among"], scene["selected"]
+        )
         grouped = following is not None and following["type"] == "montage"
 
         def frame(alpha, zoom, chosen_alpha=1.0):
@@ -399,6 +482,22 @@ class Timeline:
         rows = legal[-1].get("order") or self.trace.blob(legal[-1].get("order_blob")) or []
         return [r[0] for r in rows], {r[0]: (r[1], r[2], r[3], r[4]) for r in rows}
 
+    def _legal_units(self, scope):
+        """The legalizer's steps: ``[(body or None, [refs])]``; a rigid body is one step."""
+        order, placed = self._legal_order(scope)
+        legal = self.trace.kind(scope, "legal")
+        members = (legal[-1].get("group_members") or {}) if legal else {}
+        owner = {ref: name for name, refs in members.items() for ref in refs}
+        units, seen = [], set()
+        for ref in order:
+            name = owner.get(ref)
+            if name is None:
+                units.append((None, [ref]))
+            elif name not in seen:
+                seen.add(name)
+                units.append((name, [r for r in members[name] if r in placed]))
+        return units
+
     def _final_poses(self, scope):
         order, legal = self._legal_order(scope)
         if legal:
@@ -418,7 +517,6 @@ class Timeline:
             provisional={},
             flash={},
             ripped={},
-            groups={},
             native=None,
             native_mix=0.0,
             open_pairs=None,
@@ -427,6 +525,8 @@ class Timeline:
             ghost=None,
             phase="global-placement",
             caption=caption,
+            fixed=None,
+            groups=dict(self.base_groups),
         )
         start_poses, start_camera = self.view.poses, self.view.camera
         if snaps:
@@ -441,39 +541,82 @@ class Timeline:
                 )
                 self.emit()
             poses = [event_poses(self.trace, e) for e in snaps]
+            bodies = [event_bodies(e) for e in snaps]
+            offsets = rigid_offsets(self.trace, snaps)
             steps = self.frames_for(self._global_seconds(scope))
             for k in range(steps):
                 u = ease((k + 1) / steps) * (len(poses) - 1)
                 i = min(len(poses) - 2, int(math.floor(u))) if len(poses) > 1 else 0
                 frac = u - i if len(poses) > 1 else 1.0
-                current = lerp_poses(poses[i], poses[min(i + 1, len(poses) - 1)], frac)
+                j = min(i + 1, len(poses) - 1)
+                current = lerp_poses(poses[i], poses[j], frac)
                 iteration = snaps[min(len(snaps) - 1, int(round(u)))]
+                changes = {}
+                if offsets:  # rigid bodies: members posed from the interpolated body pose
+                    now = {}
+                    for name in sorted(offsets):
+                        a, b = bodies[i].get(name), bodies[j].get(name)
+                        if a is None or b is None:
+                            continue
+                        now[name] = lerp_body(a, b, frac)
+                        current.update(pose_members(now[name], offsets[name]))
+                    changes["bodies"] = now
                 self.view = self.view.copy(
                     poses=current,
                     step=(iteration.get("iter") or 0, iteration.get("iters") or 0, "iteration"),
+                    **changes,
                 )
                 self.emit()
         order, legal = self._legal_order(scope)
         if legal:
             self.view = self.view.copy(phase="legalization", camera=outline)
             fixed = {c["ref"] for c in self.header["components"] if c["fixed"]}
-            moving = [r for r in order if r not in fixed]
-            seconds = self._legal_seconds(len(order))
-            per = max(
-                self.frame_ms, int(round(seconds * self.scale * 1000.0 / max(1, len(moving))))
-            )
-            poses = dict(self.view.poses)
-            for ref in fixed:
-                if ref in legal:
-                    poses[ref] = legal[ref]
-            for index, ref in enumerate(moving):
-                poses[ref] = legal[ref]
-                self.view = self.view.copy(
-                    poses=dict(poses), marked=(ref,), step=(index + 1, len(moving), "part")
+            units = self._legal_units(scope)
+            if any(name is not None for name, _refs in units):
+                self._legal_bodies(scope, units, legal, fixed)
+            else:
+                moving = [r for r in order if r not in fixed]
+                seconds = self._legal_seconds(len(order))
+                per = max(
+                    self.frame_ms, int(round(seconds * self.scale * 1000.0 / max(1, len(moving))))
                 )
-                self.emit(ms=per)
+                poses = dict(self.view.poses)
+                for ref in fixed:
+                    if ref in legal:
+                        poses[ref] = legal[ref]
+                for index, ref in enumerate(moving):
+                    poses[ref] = legal[ref]
+                    self.view = self.view.copy(
+                        poses=dict(poses), marked=(ref,), step=(index + 1, len(moving), "part")
+                    )
+                    self.emit(ms=per)
             self.view = self.view.copy(poses=dict(legal), marked=(), step=None, phase="placement")
         self.view = self.view.copy(camera=outline)
+
+    def _legal_bodies(self, scope, units, legal, fixed):
+        """Legalization with rigid bodies: a body (all its members) is one step."""
+        moving = [u for u in units if not all(r in fixed for r in u[1])]
+        seconds = self._legal_seconds(len(units))
+        per = max(self.frame_ms, int(round(seconds * self.scale * 1000.0 / max(1, len(moving)))))
+        poses = dict(self.view.poses)
+        for ref in fixed:
+            if ref in legal:
+                poses[ref] = legal[ref]
+        final = event_bodies(self.trace.kind(scope, "legal")[-1])
+        placed = dict(self.view.bodies or {})
+        for index, (name, refs) in enumerate(moving):
+            for ref in refs:
+                poses[ref] = legal[ref]
+            if name is not None and name in final:
+                placed[name] = final[name]
+            self.view = self.view.copy(
+                poses=dict(poses),
+                bodies=dict(placed),
+                marked=tuple(refs),
+                step=(index + 1, len(moving), "step"),
+            )
+            self.emit(ms=per)
+        self.view = self.view.copy(bodies=final)
 
     def _move(self, scene, following):
         events = self.trace.kind(scene["scope"], "poses")
@@ -516,6 +659,16 @@ class Timeline:
         nego_frames = int(round(frames * share)) if negotiation else 0
         commit_frames = max(1, frames - nego_frames)
         self.view = self.view.copy(caption=scene.get("label") or "", marked=(), heat=None)
+        fixed = self.trace.kind(scope, "fixed")
+        if fixed:  # a knit: the block copper is final, the progress starts at its joins
+            event = fixed[-1]
+            self.view = self.view.copy(
+                fixed=self.trace.blob(event["copper"]),
+                groups={n: [list(g) for g in gs] for n, gs in (event.get("groups") or {}).items()},
+                committed={},
+                provisional={},
+                progress=_progress(event, self.total),
+            )
         counter = [0]
 
         def play(batch_events, count, phase):

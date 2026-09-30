@@ -25,6 +25,7 @@ py_library(
         "picker/server.py",
     ],
     imports = ["../../.."],
+    deps = ["//yapnr:package"],
 )
 
 py_library(

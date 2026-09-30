@@ -111,16 +111,21 @@ def dump_main(src, dst, nets):
 def kicad_python(env=None):
     """``(interpreter, warning)`` for the pcbnew board read.
 
-    ``PNR_SI_KICAD_PYTHON``, else the headless KiCad copy's python. The GUI bundle's
+    ``PNR_SI_KICAD_PYTHON``, else ``PNR_KICAD_PYTHON`` (src15: the engine-wide KiCad
+    python, hier/env2.json), else the headless KiCad copy's python. The GUI bundle's
     python is only a fallback (a pcbnew-reading worker, which registers no Dock app,
     unlike the bundle's kicad-cli); using it returns a warning that is printed to
     stderr and recorded in the dump and the report. ``PNR_SI_NO_GUI_PYTHON=1`` refuses
-    it instead, like the ngspice runner refuses GUI-bundle interpreters.
+    it instead, like the ngspice runner refuses GUI-bundle interpreters; so does a set
+    ``PNR_KICAD_PYTHON`` (never a /Applications/KiCad path when the env var is set).
     """
     env = os.environ if env is None else env
-    for cand in (env.get('PNR_SI_KICAD_PYTHON'), str(HEADLESS_PY)):
+    for cand in (env.get('PNR_SI_KICAD_PYTHON'), env.get('PNR_KICAD_PYTHON'), str(HEADLESS_PY)):
         if cand and os.access(cand, os.X_OK):
             return cand, None
+    if env.get('PNR_KICAD_PYTHON'):
+        raise FileNotFoundError('PNR_KICAD_PYTHON=%s is not executable (the GUI bundle python is never used '
+                                'when it is set)' % env['PNR_KICAD_PYTHON'])
     if os.access(GUI_PY, os.X_OK):
         if (env.get('PNR_SI_NO_GUI_PYTHON') or '').strip() == '1':
             raise FileNotFoundError('headless KiCad python missing (%s) and PNR_SI_NO_GUI_PYTHON=1 refuses the GUI '

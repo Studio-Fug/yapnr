@@ -177,6 +177,30 @@ class LegalizeCompositionTest(unittest.TestCase):
             out, pairs = self.run_(**on)
             self.assertEqual(pairs, [], on)
 
+    def test_heuristics_ignore_reserves_for_hull_macros_too(self):
+        """Review fix: the slot-count heuristic (available_pose) and the power-first look-ahead
+        (starves) ignore landing reserves for every part (src13 design); the hull free map they
+        use must too. Only the hull macro's actual slot search avoids them."""
+        import inspect
+        calls = []
+        real = H.free_map
+
+        def spy(*args, **kw):
+            frame = inspect.currentframe().f_back            # hull_free
+            calls.append((frame.f_back.f_code.co_name, frame.f_locals.get('reserves'), frame.f_locals.get('avoid')))
+            return real(*args, **kw)
+        with mock.patch.object(H, 'free_map', spy):
+            out, pairs = self.run_(PNR_MACRO_HULL='1', PNR_PAIR_LANDING_RESERVE='1')
+        self.assertEqual(pairs, [])
+        callers = {c for c, _, _ in calls}
+        self.assertIn('available_pose', callers)
+        for caller, reserves, avoid in calls:
+            if caller in ('available_pose', 'starves'):
+                self.assertEqual((reserves, avoid), (False, ()), caller)
+            else:
+                self.assertEqual((caller, reserves), ('legalize', True))
+                self.assertTrue(avoid)                         # the macro's mount side(s)
+
 
 class MacroCollapseTest(unittest.TestCase):
     """collapse() carries member landing reserves onto shaped (shrink/hull) macros too."""
@@ -207,35 +231,146 @@ class MacroCollapseTest(unittest.TestCase):
 
 
 class KiCadDefaultsTest(unittest.TestCase):
-    """Every defaulted KiCad cli/python path honours PNR_KICAD_CLI / PNR_KICAD_PYTHON."""
-    ROOT = __import__('pathlib').Path(__file__).resolve().parents[1]
-    # Not a cli/python default: SI refusal constants (they name the GUI bundle to refuse it),
-    # halving.KI (unused), the GUI-bound warm-DRC host (pcbnew.app; off, documented).
-    EXEMPT = {'pnr/si/runner.py', 'pnr/si/models.py', 'pnr/si/extract.py', 'pnr/mc/halving.py', 'pnr/drc_warm/launch_host.py'}
+    """Every defaulted KiCad cli/python path honours PNR_KICAD_CLI / PNR_KICAD_PYTHON.
+
+    Scans the whole source tree (hardware/**, patches/, MODULE.bazel: .py, .bzl, .bazel,
+    BUILD, .sh, .patch added/context lines; single- and double-quoted strings) for every
+    ``/Applications/KiCad/`` path (the trailing slash keeps ``~/Applications/KiCad-headless``
+    out). An occurrence passes only as an env-first default (``os.environ.get('PNR_KICAD_CLI'|
+    'PNR_KICAD_PYTHON', ...)`` or a shell ``${PNR_KICAD_CLI:-...}`` / ``${PNR_KICAD_PYTHON:-...}``),
+    as a GUI-python fallback that the very next line disables when ``PNR_KICAD_PYTHON`` is set,
+    in a comment, or at one of the reviewed SITES below (each with its reason)."""
+    SRC = __import__('pathlib').Path(__file__).resolve().parents[3]
+    SUFFIXES = {'.py', '.bzl', '.bazel', '.sh', '.patch'}
+    ENV_DEFAULT = (r"os\.environ\.get\(\s*['\"]PNR_KICAD_(CLI|PYTHON)['\"]\s*,\s*['\"]/Applications/KiCad/",
+                   r"\$\{PNR_KICAD_(CLI|PYTHON):-/Applications/KiCad/")
+    # (relative path, fragment of the line): reason. Nothing here chooses a /Applications binary
+    # while PNR_KICAD_CLI / PNR_KICAD_PYTHON are set.
+    SITES = {
+        ('hardware/pnr/pnr/si/models.py', "GUI_BUNDLE = '/Applications/KiCad/'"): 'refusal constant (kicad-cli inside it is refused)',
+        ('hardware/pnr/pnr/si/runner.py', "GUI_BUNDLE = '/Applications/KiCad/'"): 'refusal constant (interpreters inside it are refused)',
+        ('hardware/pnr/pnr/si/extract.py', "GUI_PY = '/Applications/KiCad/"): 'last-resort fallback, refused when PNR_KICAD_PYTHON is set (test_si_extract)',
+        ('hardware/pnr/pnr/mc/halving.py', "KI = '/Applications/KiCad/"): 'unused constant (test_halving_ki_unused)',
+        ('hardware/pnr/pnr/drc_warm/launch_host.py', "exe='/Applications/KiCad/"): 'GUI-bound warm-DRC host (pcbnew.app), off by design',
+        ('hardware/pnr/regression/run.py', "KI='/Applications/KiCad/"): 'bundle root; every use is env-first (test_regression_ki_uses)',
+        ('hardware/pnr/tests/test_si_runner.py', "'/Applications/KiCad/"): 'test: the GUI bundle is refused',
+        ('hardware/pnr/tests/test_si_models.py', "'/Applications/KiCad/"): 'test: a PNR_KICAD_CLI inside the GUI bundle is refused',
+        ('hardware/pnr/tests/test_macro_hull.py', "'/Applications/KiCad/"): 'test: the unset-env fallback of src12n',
+    }
+    SELF = 'hardware/pnr/tests/test_src15_merge.py'
+
+    def files(self):
+        roots = [self.SRC / 'hardware', self.SRC / 'patches']
+        out = [self.SRC / 'MODULE.bazel'] if (self.SRC / 'MODULE.bazel').exists() else []
+        for root in roots:
+            if root.is_dir():
+                out += [p for p in root.rglob('*') if p.is_file() and '__pycache__' not in p.parts
+                        and (p.suffix in self.SUFFIXES or p.name in ('BUILD', 'BUILD.bazel'))]
+        return sorted(set(out))
+
+    @staticmethod
+    def code_lines(path):
+        """(line number, code text) with comments removed (Python via tokenize; '#'-lines elsewhere)."""
+        import io, tokenize
+        text = path.read_text(errors='replace')
+        lines = text.splitlines()
+        if path.suffix == '.patch':
+            # the patched result: added and context lines, without the diff marker
+            return [(n, l[1:]) for n, l in enumerate(lines, 1)
+                    if l[:1] in ('+', ' ') and not l.startswith('+++') and not l[1:].lstrip().startswith('#')]
+        if path.suffix == '.py':
+            comments = {}
+            try:
+                for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+                    if tok.type == tokenize.COMMENT:
+                        comments[tok.start[0]] = tok.start[1]
+            except (tokenize.TokenError, IndentationError, SyntaxError):
+                pass
+            return [(n, l[:comments[n]] if n in comments else l) for n, l in enumerate(lines, 1)]
+        return [(n, l) for n, l in enumerate(lines, 1) if not l.lstrip().startswith('#')]
 
     def test_no_bare_applications_default(self):
         import re
-        bad = []
-        for path in sorted(self.ROOT.glob('pnr/**/*.py')) + [self.ROOT / 'regression/run.py']:
-            rel = str(path.relative_to(self.ROOT))
-            if rel in self.EXEMPT:
+        bad, seen_sites = [], set()
+        for path in self.files():
+            rel = str(path.relative_to(self.SRC))
+            if rel == self.SELF:
                 continue
-            for n, line in enumerate(path.read_text().splitlines(), 1):
-                for m in re.finditer(r"'/Applications/KiCad[^']*'", line):
-                    before = line[:m.start()]
-                    if not re.search(r"os\.environ\.get\('PNR_KICAD_(CLI|PYTHON)',\s*$", before) and 'KI=' not in line.replace(' ', ''):
-                        bad.append('%s:%d' % (rel, n))
-                if re.search(r"default='kicad-cli'|default=sys\.executable", line):
-                    bad.append('%s:%d' % (rel, n))
+            lines = self.code_lines(path)
+            for i, (n, line) in enumerate(lines):
+                if re.search(r"default='kicad-cli'|default=\"kicad-cli\"|default=sys\.executable", line):
+                    bad.append('%s:%d bare default' % (rel, n))
+                if not re.search(r"(?<![\w~}])/Applications/KiCad/", line):
+                    continue
+                if any(re.search(p, line) for p in self.ENV_DEFAULT):
+                    continue
+                if '_KI_GUI_PY=' in line and i + 1 < len(lines) and \
+                        re.search(r'\[ -z "\$\{PNR_KICAD_PYTHON:-\}" \] \|\| _KI_GUI_PY=""', lines[i + 1][1]):
+                    continue
+                site = next((k for k in self.SITES if k[0] == rel and k[1] in line), None)
+                if site:
+                    seen_sites.add(site)
+                    continue
+                bad.append('%s:%d %s' % (rel, n, line.strip()[:100]))
         self.assertEqual(bad, [])
+        self.assertEqual(seen_sites, set(self.SITES))      # the reviewed list stays exact
+
+    def test_scanner_catches_both_quote_styles_and_bzl(self):
+        import re, tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as d:
+            for name, text in (('a.py', 'X = "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"\n'),
+                               ('b.bzl', 'K = "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"\n'),
+                               ('c.py', "# /Applications/KiCad/ in a comment\nY = 1\n"),
+                               ('d.py', "Z = os.environ.get('PNR_KICAD_CLI', \"/Applications/KiCad/x\")\n")):
+                (Path(d) / name).write_text(text)
+            hits = {}
+            for p in sorted(Path(d).iterdir()):
+                hits[p.name] = [l for _, l in self.code_lines(p) if re.search(r"(?<![\w~}])/Applications/KiCad/", l)
+                                and not any(re.search(q, l) for q in self.ENV_DEFAULT)]
+        self.assertEqual({k: len(v) for k, v in hits.items()}, {'a.py': 1, 'b.bzl': 1, 'c.py': 0, 'd.py': 0})
+
+    def test_halving_ki_unused(self):
+        import re
+        text = (self.SRC / 'hardware/pnr/pnr/mc/halving.py').read_text()
+        self.assertEqual(len(re.findall(r'\bKI\b', text)), 1)
+
+    def test_regression_ki_uses(self):
+        # every KI+ use is env-first: os.environ.get('PNR_KICAD_*', KI+...) / os.environ.get(...) or KI+...,
+        # or the footprint fallback of kicad_footprints() (PNR_KICAD_FOOTPRINTS, then the PNR_KICAD_CLI bundle)
+        import re
+        uses = 0
+        for n, line in self.code_lines(self.SRC / 'hardware/pnr/regression/run.py'):
+            if re.search(r'\bKI\s*\+', line):
+                uses += 1
+                self.assertTrue(re.search(r"os\.environ\.get\('PNR_KICAD_(CLI|PYTHON)'(\)\s*or\s*|,)KI\s*\+", line) or
+                                line == " return Path(KI+'/SharedSupport/footprints')", (n, line))
+        self.assertEqual(uses, 4)
 
     def test_kicad_path_constants_follow_the_environment(self):
-        text = (self.ROOT / 'regression/run.py').read_text()
+        text = (self.SRC / 'hardware/pnr/regression/run.py').read_text()
         self.assertIn("os.environ.get('PNR_KICAD_PYTHON',KI+", text)
         self.assertIn("os.environ.get('PNR_KICAD_CLI',KI+", text)
-        bzl = (self.ROOT / 'pnr.bzl').read_text()
+        self.assertIn("PNR_KICAD_FOOTPRINTS", text)
+        bzl = (self.SRC / 'hardware/pnr/pnr.bzl').read_text()
         self.assertIn('${PNR_KICAD_CLI:-', bzl)
         self.assertIn('${PNR_KICAD_PYTHON:-', bzl)
+        atopile = (self.SRC / 'hardware/atopile/BUILD.bazel').read_text()
+        self.assertIn('DARWIN_KICAD_CLI = "${PNR_KICAD_CLI:-/Applications/KiCad/', atopile)
+        patch = (self.SRC / 'patches/rules_atopile-autoroute-kicad-python.patch').read_text()
+        self.assertIn('"${PNR_KICAD_PYTHON:-}" "%s" "${KICAD_PYTHON:-}" "$_KI_GUI_PY"', patch)
+
+    def test_no_wx_app_outside_the_gui_host(self):
+        import re
+        bad = []
+        for path in self.files():
+            rel = str(path.relative_to(self.SRC))
+            if path.suffix != '.py' or rel in (self.SELF, 'hardware/pnr/pnr/drc_warm/host.py'):
+                continue
+            for n, line in self.code_lines(path):
+                if re.search(r'\bwx\.App\s*\(', line):
+                    bad.append('%s:%d' % (rel, n))
+        self.assertEqual(bad, [])
 
 
 if __name__ == '__main__':

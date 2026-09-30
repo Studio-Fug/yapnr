@@ -14,6 +14,14 @@ HERE=Path(__file__).resolve().parent
 REPO=HERE.parents[2]
 KI='/Applications/KiCad/KiCad.app/Contents'
 
+def kicad_footprints():
+ """Footprint library default (src15): PNR_KICAD_FOOTPRINTS, else the SharedSupport of the app bundle
+ PNR_KICAD_CLI lives in (~/Applications/KiCad-headless.app via hier/env2.json), else the system KiCad.app."""
+ if os.environ.get('PNR_KICAD_FOOTPRINTS'):return Path(os.environ['PNR_KICAD_FOOTPRINTS'])
+ cli=Path(os.environ.get('PNR_KICAD_CLI') or KI+'/MacOS/kicad-cli')
+ if cli.parent.name=='MacOS' and cli.parent.parent.name=='Contents':return cli.parent.parent/'SharedSupport/footprints'
+ return Path(KI+'/SharedSupport/footprints')
+
 def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
 def acceptance(pnr,audit,drc):
@@ -51,7 +59,7 @@ def main():
  ap.add_argument('--initial-finalists',type=int,default=3)
  ap.add_argument('--kicad-python',default=os.environ.get('PNR_KICAD_PYTHON',KI+'/Frameworks/Python.framework/Versions/3.9/bin/python3'))  # PNR_KICAD_PYTHON: headless bundle (src15)
  ap.add_argument('--kicad-cli',default=os.environ.get('PNR_KICAD_CLI',KI+'/MacOS/kicad-cli'))  # PNR_KICAD_CLI: headless bundle (src15)
- ap.add_argument('--library',type=Path,default=Path(KI+'/SharedSupport/footprints'))
+ ap.add_argument('--library',type=Path,default=kicad_footprints())  # PNR_KICAD_FOOTPRINTS / PNR_KICAD_CLI bundle (src15)
  args=ap.parse_args();REPO=args.repo.resolve();args.python=args.python or str(REPO/'output/pnr-regression-runtime/bin/python')
  out=args.out.resolve();out.mkdir(parents=True,exist_ok=False)
  allcases=designs();cases=[c for c in allcases if not args.case or c['name'] in args.case]

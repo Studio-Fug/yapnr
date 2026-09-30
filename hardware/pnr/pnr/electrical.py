@@ -211,7 +211,13 @@ def resolve_pair_chains(rules, paths, components):
                 # stackup; explicit annotation / constraint values win (pnr.si.bus_classes).
                 from pnr.si.bus_classes import apply_class
                 if 'max_uncoupled_mm' in a:a=dict(a,max_uncoupled_mm=pair['max_uncoupled_mm'])
-                apply_class(pair,a,result,where=dict(path=str(path),line=line))
+                # file name + line only (the absolute path is pair['source']): no run-directory path
+                apply_class(pair,a,result,where=dict(file=Path(path).name,line=line))
+    if bus_classes_enabled():
+        # constraints.py's "defaulted" marker (PNR_BUS_CLASSES=1) only feeds apply_class above;
+        # it never reaches the compiled policy, so a pair without a class is byte-identical to
+        # the flags-off rules (review fix 2026-09-30).
+        for pair in result.get('diff_pairs',[]):pair.pop('defaulted',None)
     return result
 
 

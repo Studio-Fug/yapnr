@@ -120,6 +120,14 @@ class EstimateLayersAndPythonTest(unittest.TestCase):
                 X.kicad_python({'PNR_SI_NO_GUI_PYTHON': '1'})
         with mock.patch('os.access', return_value=True):
             self.assertEqual(X.kicad_python({'PNR_SI_KICAD_PYTHON': '/x/python3'}), ('/x/python3', None))
+            # src15: PNR_KICAD_PYTHON (the engine-wide KiCad python) after the SI override
+            self.assertEqual(X.kicad_python({'PNR_KICAD_PYTHON': '/k/python3'}), ('/k/python3', None))
+            self.assertEqual(X.kicad_python({'PNR_SI_KICAD_PYTHON': '/x/python3', 'PNR_KICAD_PYTHON': '/k/python3'}),
+                             ('/x/python3', None))
+        # a set PNR_KICAD_PYTHON never falls back to the GUI bundle python
+        with mock.patch('os.access', side_effect=lambda p, m: p == gui), mock.patch('sys.stderr'):
+            with self.assertRaises(FileNotFoundError):
+                X.kicad_python({'PNR_KICAD_PYTHON': '/missing/python3'})
 
 
 class SyntheticExtractTest(unittest.TestCase):

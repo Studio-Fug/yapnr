@@ -12,10 +12,13 @@ derives numeric limits from the class plus the board stackup
 (:func:`pnr.si.physics.stackup`: per-layer eps_eff and propagation delay from the
 fab profile; via barrel delay from the board thickness and the dielectric) and
 records each derived value in the pair's ``bus_class`` entry of rules.json with its
-provenance (every ``derived`` entry carries ``class_id``, ``citation``, ``formula``,
-``inputs`` and the ``stackup_inputs`` it used; the record adds the library path and
-sha256, the physical stack and the per-routing-layer line models). EXPLICIT values
-always win over derived ones:
+provenance (every ``derived`` entry carries ``value``, ``formula``, ``inputs``,
+``class_id``, ``citation`` ({source, ref}) and the ``stackup_inputs`` it used: the
+per-layer delays, pointing at the full line models in ``bus_class.stackup.layers``; the
+record adds the library file (relative to the pnr source root, so rules.json does not
+depend on the run directory) and its sha256, the physical stack and the per-pair-layer
+line models; the quotes stay in the library file). EXPLICIT values always win over
+derived ones:
 
 * ``skew_mm``: annotation ``skew_mm`` (or ``skew_ps``) > the constraint file's
   ``skew_mm`` (explicit unless constraints.py marked it ``defaulted``) > class
@@ -34,6 +37,15 @@ always win over derived ones:
 ``t_rise_min`` comes from the annotation's ``t_rise_ns`` when given, else from the
 class (a class whose document specifies no data-edge rate, e.g. USB 3.x, derives no
 delay rule until the annotation gives ``t_rise_ns``).
+
+Stackup (review fixes 2026-09-30): ``rules['stackup']`` when present, else the
+pnr.si.physics default (JLC04161H-7628); either way its copper-layer count must equal
+the board's (``rules['layers']``) or the class is refused, so a 2- or 6-layer design
+never gets 4-layer numbers silently. Reference planes are the net-class plane layers
+plus the pair's own ``reference_layer``. Time -> length conversions use the layers the
+pair is routed on (``pair['layers']`` when given, else the outer copper layers:
+pnr.native_electrical's pair router lays surface legs on F.Cu and the bridge trunk on
+B.Cu), not every signal layer of the stack.
 
 With the flag off nothing here runs: the ``class`` key of an annotation is ignored
 and rules.json is byte-identical to the unflagged engine. Stdlib only, Python 3.9
@@ -55,6 +67,11 @@ C_MM_PER_PS = 0.299792458          # speed of light, mm/ps
 DEFAULT_FILE = Path(__file__).resolve().parents[2] / 'si_models' / 'bus_classes.json'
 STUB_READING_DELAY = 'delay to the pad centre, via barrel included'
 STUB_READING_MM = 'copper length to where the copper enters the pad (src13 reading)'
+# The layers pnr.native_electrical's pair router places pair copper on: surface legs on the
+# top copper layer (F.Cu) and the layer-bridge trunk on the bottom one (B.Cu). A pair entry
+# may name its own ``layers`` (rules.json) for a router that uses others.
+PAIR_ROUTER_LAYERS = 'outer copper layers (pnr.native_electrical pair router: surface legs F.Cu, bridge trunk B.Cu)'
+BASIS = ('spec', 'interpretation')
 OVERRIDE_KEYS = ('t_rise_ns', 'stub_k', 'uncoupled_k', 'stub_delay_max_ps', 'stub_max_mm', 'skew_mm', 'skew_ps',
                  'max_uncoupled_mm', 'max_length_mm', 'params')
 
@@ -94,10 +111,32 @@ def load(path=None, env=None):
         for part in ('signalling', 'impedance', 'skew'):
             if part not in cls:
                 raise BusClassError('%s: class %s lacks %r' % (path, cid, part))
+        # every applied number says whether the document requires it of the board pair
+        # ('spec') or sets it for something else (cable, connector, driver) and this
+        # library applies it to the board ('interpretation', with the reasoning)
+        imp, skew, length = cls['impedance'], cls['skew'], cls.get('length') or {}
+        checks = [('impedance', imp, imp.get('differential_ohm') is not None or imp.get('single_ended_ohm') is not None),
+                  ('skew', skew, skew.get('max_ps') is not None),
+                  ('length', length, any((length.get(k) or {}).get('value') is not None for k in ('max_mm', 'max_delay_ps')))]
+        for part, node, has_value in checks:
+            if has_value and node.get('basis') not in BASIS:
+                raise BusClassError('%s: class %s %s needs "basis" in %s' % (path, cid, part, BASIS))
+            if has_value and node.get('basis') == 'interpretation' and not node.get('interpretation'):
+                raise BusClassError('%s: class %s %s is an interpretation without its "interpretation" text' % (path, cid, part))
         unknown = sorted(_cited(cls) - set(lib.get('sources', {})))
         if unknown:
             raise BusClassError('%s: class %s cites unknown source(s) %s' % (path, cid, ', '.join(map(repr, unknown))))
     lib['_file'] = dict(path=str(path), sha256=key[1], schema=SCHEMA, schema_version=SCHEMA_VERSION)
+    # a run-directory-independent id: relative to the pnr source root (the worker-source copy
+    # native_loop makes has the same layout), else the file name + the override variable
+    try:
+        rel = str(Path(path).resolve().relative_to(DEFAULT_FILE.parents[1]))
+    except ValueError:
+        rel = None
+    env = os.environ if env is None else env
+    lib['_id'] = dict(file=rel or Path(path).name, sha256=key[1], schema=SCHEMA, schema_version=SCHEMA_VERSION,
+                      **({} if rel else {'override': 'PNR_BUS_CLASSES_FILE' if env.get('PNR_BUS_CLASSES_FILE') else
+                                         ('PNR_SI_MODELS' if env.get('PNR_SI_MODELS') else 'path argument')}))
     _CACHE[key] = lib
     return lib
 
@@ -149,7 +188,9 @@ def t_rise(cls, annotation, params):
         v = float(annotation['t_rise_ns']) * 1000.0
         if not v > 0:
             raise BusClassError('t_rise_ns must be positive')
-        return v, dict(value=_r(v), unit='ps', source='explicit', annotation_key='t_rise_ns')
+        spec = cls['signalling'].get('t_rise_min_ps') or {}
+        return v, dict(value=_r(v), unit='ps', source='explicit', annotation_key='t_rise_ns',
+                       class_value=_r(spec.get('value')), cite=spec.get('cite'))
     spec = cls['signalling'].get('t_rise_min_ps') or {}
     value = spec.get('value')
     how = 'class'
@@ -183,10 +224,33 @@ def _value(spec, params):
 
 # ------------------------------------------------------------------ stackup side
 
-def stackup_inputs(rules):
-    """Stackup, per-layer lines and via barrel inputs from pnr.si.physics."""
+def stackup_inputs(rules, pair=None):
+    """Stackup, per-layer lines and via barrel inputs from pnr.si.physics.
+
+    Refuses a stackup whose copper-layer count differs from the board's
+    (``rules['layers']``); the pair's ``reference_layer`` is a reference plane."""
     from pnr.si import physics
     st = physics.stackup(rules)
+    copper = physics.copper_layers(st)
+    explicit = isinstance(rules.get('stackup'), dict) and bool(rules['stackup'].get('layers'))
+    board = rules.get('layers')
+    if board is not None and int(board) != len(copper):
+        raise BusClassError('the board has %d copper layers but the %s stackup %s has %d (%s): give rules["stackup"] '
+                            'for this board' % (int(board), 'declared' if explicit else 'default', st.get('name'),
+                                                len(copper), ', '.join(copper)))
+    net_planes = sorted({c['plane_layer'] for c in rules.get('net_classes', []) if c.get('plane_layer')})
+    ref = (pair or {}).get('reference_layer')
+    planes = list(st.get('planes', []))
+    if ref:
+        if ref not in copper:
+            raise BusClassError('pair reference_layer %r is not a copper layer of the stackup (%s)' % (ref, ', '.join(copper)))
+        if ref not in planes:
+            planes = [n for n in copper if n in set(planes) | {ref}]
+    st['planes'] = planes
+    planes_source = ('rules.stackup planes' if explicit and 'planes' in rules['stackup'] else
+                     'net-class plane_layer' if net_planes else 'pnr.si.physics default (In1.Cu)')
+    if ref:
+        planes_source += ' + pair reference_layer %s' % ref
     thickness = float((rules.get('electrical_fab') or {}).get('board_thickness_mm') or physics.thickness(st))
     via = physics.via(st, physics.copper_layers(st)[0], physics.copper_layers(st)[-1])
     barrel_td = math.sqrt(via['er']) / C_MM_PER_PS
@@ -194,8 +258,11 @@ def stackup_inputs(rules):
         stackup=st.get('name'), fab_profile=st.get('fab_profile'),
         stack=[dict(name=x['name'], kind=x['kind'], t_mm=_r(x['t_mm']), **({'er': x['er']} if 'er' in x else {}))
                for x in st['layers']],
-        stack_source=st.get('source'),
-        planes=list(st.get('planes', [])),
+        stack_source=('rules.stackup' if explicit else 'default (pnr.si.physics): %s' % st.get('source')),
+        board_copper_layers=None if board is None else int(board),
+        layer_count_check=('match (%d copper layers)' % len(copper)) if board is not None else
+                          'unverified: rules has no "layers" count',
+        planes=list(st.get('planes', [])), planes_source=planes_source,
         board_thickness_mm=_r(thickness), stack_thickness_mm=_r(physics.thickness(st)),
         barrel=dict(length_mm=_r(thickness), er=_r(via['er']), td_ps_per_mm=_r(barrel_td), ps=_r(thickness * barrel_td),
                     formula='td = sqrt(er_dielectric) / c (first-order TEM delay through the dielectric the barrel '
@@ -203,10 +270,21 @@ def stackup_inputs(rules):
                             'board_thickness_mm (the full barrel, F.Cu to B.Cu)'))
 
 
-def routing_layers(st):
+def pair_layers(st, pair):
+    """(layers, source): the copper layers the pair is routed on, planes excluded."""
     from pnr.si import physics
+    copper = physics.copper_layers(st)
     planes = set(st.get('planes', []))
-    return [n for n in physics.copper_layers(st) if n not in planes]
+    if pair.get('layers'):
+        names = list(pair['layers'])
+        bad = [n for n in names if n not in copper or n in planes]
+        if bad:
+            raise BusClassError('pair layers %s are not signal copper layers of the stackup' % ', '.join(bad))
+        return names, 'pair layers (rules.json)'
+    names = [n for n in (copper[0], copper[-1]) if n not in planes]
+    if not names:
+        raise BusClassError('no outer signal layer for the pair (both outer layers are planes)')
+    return names, PAIR_ROUTER_LAYERS
 
 
 def diff_impedance(rec, width, gap, b=None):
@@ -250,15 +328,19 @@ def derive(class_id, annotation, pair, rules, lib=None):
     tr, tr_prov = t_rise(cls, annotation, params)
     width = pair.get('width_mm') or (rules.get('fab') or {}).get('track_width_mm') or 0.2
     gap = pair.get('gap_mm')
-    st, inputs = stackup_inputs(rules)
-    layers = layer_table(st, width, gap)
-    routing = routing_layers(st) or list(layers)
-    # line models of the routing layers only (a plane layer carries no pair copper)
-    layers = {n: layers[n] for n in routing}
+    # the pair's reference layer (resolve_pair_chains copies it from the annotation first)
+    if not pair.get('reference_layer') and annotation.get('reference_layer'):
+        pair = dict(pair, reference_layer=annotation['reference_layer'])
+    st, inputs = stackup_inputs(rules, pair)
+    layers_all = layer_table(st, width, gap)
+    routing, routing_source = pair_layers(st, pair)
+    # line models of the pair's layers only (a plane or an unused signal layer carries no pair copper)
+    layers = {n: layers_all[n] for n in routing}
     slow = max(routing, key=lambda n: layers[n]['td_ps_per_mm'])
     fast = min(routing, key=lambda n: layers[n]['td_ps_per_mm'])
     td_slow, td_fast = layers[slow]['td_ps_per_mm'], layers[fast]['td_ps_per_mm']
     defaults = lib.get('defaults', {})
+    barrel = inputs['barrel']
 
     def k_of(name):
         if annotation.get(name) is not None:
@@ -271,42 +353,53 @@ def derive(class_id, annotation, pair, rules, lib=None):
     stub_k, stub_k_prov = k_of('stub_k')
     unc_k, unc_k_prov = k_of('uncoupled_k')
 
-    def layer_inputs(names):
-        """The stackup inputs a derived value used (per-layer line model + where it came from)."""
-        return dict(stackup=inputs['stackup'], fab_profile=inputs['fab_profile'], planes=inputs['planes'],
-                    width_mm=width, layers={n: {k: layers[n][k] for k in ('td_ps_per_mm', 'eps_eff', 'model', 'reference',
-                                                                            'h_mm', 'er')} for n in names})
+    def layer_inputs(names, with_barrel=False):
+        """The stackup inputs a derived value used: the per-layer delays it read (the full line
+        models are under ``bus_class.stackup.layers``) and, for stub values, the barrel."""
+        out = dict(stackup=inputs['stackup'], fab_profile=inputs['fab_profile'], planes=inputs['planes'],
+                   width_mm=width, td_ps_per_mm={n: layers[n]['td_ps_per_mm'] for n in names},
+                   line_models='bus_class.stackup.layers')
+        if with_barrel:
+            out['barrel_ps'] = barrel['ps']
+        return out
 
-    tr_cite = [tr_prov['cite']] if tr_prov.get('cite') else []
+    # derived entries cite by {source, ref}; the quotes are in the class copy of this record
+    # (signalling / skew / length) and t_rise_min_ps holds the full rise-time provenance
+    ref_of = lambda c: {k: c[k] for k in ('source', 'ref') if k in c}
+    tr_cite = [ref_of(tr_prov['cite'])] if tr_prov.get('cite') else []
+    tr_in = dict(value=tr_prov.get('value'), source=tr_prov.get('source'), see='bus_class.t_rise_min_ps')
     if tr is not None:
         v = stub_k * tr
         derived['stub_delay_max_ps'] = dict(
             value=_r(v, 3), unit='ps', formula='stub_k * t_rise_min_ps',
-            inputs=dict(stub_k=dict(value=stub_k, **stub_k_prov), t_rise_min_ps=tr_prov),
+            inputs=dict(stub_k=dict(value=stub_k, **stub_k_prov), t_rise_min_ps=tr_in),
             reading=STUB_READING_DELAY, class_id=class_id, citation=tr_cite,
             # the delay limit itself needs no stackup; the check reads copper with these
-            stackup_inputs=dict(layer_inputs(routing), barrel=inputs['barrel']))
+            stackup_inputs=layer_inputs(routing, True))
         derived['stub_max_mm_equivalent'] = dict(
-            unit='mm', formula='(stub_delay_max_ps - n_barrels * barrel_ps) / td_ps_per_mm(layer) (information only; '
-                               'the check uses the delay)',
+            value=_r(v / td_fast, 3), unit='mm',
+            formula='stub_delay_max_ps / td_ps_per_mm(fastest pair layer): the longest planar stub the delay allows '
+                    '(the router\'s search cap); per_layer = (stub_delay_max_ps - n_barrels * barrel_ps) / '
+                    'td_ps_per_mm(layer) for 0 and 1 barrel (information; the check uses the delay)',
+            inputs=dict(stub_delay_max_ps=_r(v, 3), layer=fast, td_ps_per_mm=td_fast, barrel_ps=barrel['ps']),
             per_layer={n: dict(no_via=_r(v / layers[n]['td_ps_per_mm'], 3),
-                               one_via=_r(max(0.0, v - inputs['barrel']['ps']) / layers[n]['td_ps_per_mm'], 3))
+                               one_via=_r(max(0.0, v - barrel['ps']) / layers[n]['td_ps_per_mm'], 3))
                        for n in routing},
-            class_id=class_id, citation=tr_cite, stackup_inputs=dict(layer_inputs(routing), barrel=inputs['barrel']))
+            class_id=class_id, citation=tr_cite, stackup_inputs=layer_inputs(routing, True))
         u = unc_k * tr
         derived['max_uncoupled_mm'] = dict(
-            value=_r(u / td_slow, 3), unit='mm', formula='uncoupled_k * t_rise_min_ps / td_ps_per_mm(slowest routing layer)',
-            inputs=dict(uncoupled_k=dict(value=unc_k, **unc_k_prov), t_rise_min_ps=tr_prov,
+            value=_r(u / td_slow, 3), unit='mm', formula='uncoupled_k * t_rise_min_ps / td_ps_per_mm(slowest pair layer)',
+            inputs=dict(uncoupled_k=dict(value=unc_k, **unc_k_prov), t_rise_min_ps=tr_in,
                         layer=slow, td_ps_per_mm=td_slow),
-            delay_ps=_r(u, 3), basis=(defaults.get('uncoupled_k') or {}).get('basis'), class_id=class_id,
+            delay_ps=_r(u, 3), class_id=class_id,
             citation=tr_cite, stackup_inputs=layer_inputs([slow]))
     skew = cls.get('skew') or {}
     if skew.get('max_ps') is not None:
         derived['skew_mm'] = dict(
-            value=_r(skew['max_ps'] / td_slow, 3), unit='mm', formula='skew.max_ps / td_ps_per_mm(slowest routing layer)',
+            value=_r(skew['max_ps'] / td_slow, 3), unit='mm', formula='skew.max_ps / td_ps_per_mm(slowest pair layer)',
             inputs=dict(skew_max_ps=skew['max_ps'], layer=slow, td_ps_per_mm=td_slow),
-            cite=skew.get('cite'), applies_to=skew.get('applies_to'), class_id=class_id,
-            citation=[skew['cite']] if skew.get('cite') else [], stackup_inputs=layer_inputs([slow]))
+            applies_to=skew.get('applies_to'), spec_basis=skew.get('basis'), interpretation=skew.get('interpretation'),
+            class_id=class_id, citation=[ref_of(skew['cite'])] if skew.get('cite') else [], stackup_inputs=layer_inputs([slow]))
     length = cls.get('length') or {}
     lmm, lps = _value(length.get('max_mm'), params), _value(length.get('max_delay_ps'), params)
     if lmm[0] is not None or lps[0] is not None:
@@ -316,12 +409,13 @@ def derive(class_id, annotation, pair, rules, lib=None):
             lv, lf, li, spec = lmm[0], 'length.max_mm', dict(max_mm=lmm[1]), length['max_mm']
         else:
             lv = lps[0] / td_slow
-            lf, spec = 'length.max_delay_ps / td_ps_per_mm(slowest routing layer)', length['max_delay_ps']
+            lf, spec = 'length.max_delay_ps / td_ps_per_mm(slowest pair layer)', length['max_delay_ps']
             li = dict(max_delay_ps=lps[1], layer=slow, td_ps_per_mm=td_slow)
         derived['max_length_mm'] = dict(
             value=_r(lv, 3), unit='mm', formula=lf, inputs=li, class_id=class_id,
             delay_ps=None if lps[0] is None else _r(lps[0], 3), applies_to=length.get('applies_to'),
-            citation=[spec['cite']] if spec.get('cite') else [], stackup_inputs=layer_inputs([slow]),
+            spec_basis=length.get('basis'), interpretation=length.get('interpretation'),
+            citation=[ref_of(spec['cite'])] if spec.get('cite') else [], stackup_inputs=layer_inputs([slow]),
             enforced=False, note='report-only in v1 (the pair router checks no total length)')
     imp = cls.get('impedance') or {}
     check = None
@@ -329,7 +423,8 @@ def derive(class_id, annotation, pair, rules, lib=None):
         target = float(imp['differential_ohm'])
         tol = target * float(imp['tolerance_pct']) / 100 if imp.get('tolerance_pct') is not None else float(imp.get('tolerance_ohm') or 0)
         check = dict(target_ohm=target, min_ohm=_r(target - tol, 3), max_ohm=_r(target + tol, 3),
-                     required=bool(imp.get('required')), width_mm=width, gap_mm=gap,
+                     required=bool(imp.get('required')), spec_basis=imp.get('basis'),
+                     interpretation=imp.get('interpretation'), width_mm=width, gap_mm=gap,
                      per_layer={n: dict(zdiff_ohm=layers[n]['zdiff_ohm'],
                                         within=None if layers[n]['zdiff_ohm'] is None else
                                         (target - tol - 1e-9 <= layers[n]['zdiff_ohm'] <= target + tol + 1e-9))
@@ -338,13 +433,25 @@ def derive(class_id, annotation, pair, rules, lib=None):
                            'commonly attributed to IPC-2141; not a field solve')
     return dict(
         id=class_id, title=cls.get('title'), kind=cls.get('kind'),
-        library=dict(lib['_file']), sources={k: lib['sources'][k] for k in sorted(_cited(cls)) if k in lib.get('sources', {})},
-        signalling=cls.get('signalling'), impedance=imp, skew=skew,
+        library=dict(lib.get('_id') or lib['_file']),
+        sources={k: lib['sources'][k] for k in sorted(_cited(cls)) if k in lib.get('sources', {})},
+        # the class as cited, without the quotes/notes (those are in the library file, pinned by
+        # library.sha256); basis + interpretation stay
+        signalling=_compact(cls.get('signalling')), impedance=_compact(imp), skew=_compact(skew),
         params=dict(values=params, explicit=explicit_params),
         t_rise_min_ps=tr_prov,
-        stackup=dict(inputs, width_mm=width, gap_mm=gap, routing_layers=routing, slowest_layer=slow, fastest_layer=fast,
-                     layers=layers, source='pnr.si.physics.stackup(rules) + physics.line / physics.via'),
+        stackup=dict(inputs, width_mm=width, gap_mm=gap, pair_layers=routing, pair_layers_source=routing_source,
+                     slowest_layer=slow, fastest_layer=fast, layers=layers,
+                     source='pnr.si.physics.stackup(rules) + physics.line / physics.via'),
         derived=derived, impedance_check=check, flag=ENV)
+
+
+def _compact(node):
+    if isinstance(node, dict):
+        return {k: _compact(v) for k, v in node.items() if k not in ('quote', 'note')}
+    if isinstance(node, list):
+        return [_compact(v) for v in node]
+    return node
 
 
 def _cited(node):
@@ -416,13 +523,13 @@ def apply_class(pair, annotation, rules, lib=None, where=None):
     else:
         limit = None
     if limit is not None and limit['kind'] == 'delay':
-        # routing layers only: a plane layer carries no pair copper (its line model is
+        # the pair's layers only: a plane layer carries no pair copper (its line model is
         # meaningless), and a layer missing from the table reads as the slowest one
-        td = {n: st['layers'][n]['td_ps_per_mm'] for n in st['routing_layers']}
+        td = {n: st['layers'][n]['td_ps_per_mm'] for n in st['pair_layers']}
         limit.update(td_ps_per_mm=td,
                      barrel_ps_per_mm=st['barrel']['td_ps_per_mm'], barrel_mm=st['barrel']['length_mm'],
                      # search-side pruning must never reject a stub the final delay check
-                     # accepts: the largest planar length any routing layer allows
+                     # accepts: the largest planar length any pair layer allows
                      search_cap_mm=_r(limit['max_ps'] / min(td.values()), 3))
     if limit is not None:
         limit['class_derived_ps'] = (d.get('stub_delay_max_ps') or {}).get('value')

@@ -133,9 +133,17 @@ PNR_BUS_CLASSES=1   (src15; the pair carries a bus class, pnr.si.bus_classes)
     apply), measured to the pad CENTRE (from the copper's entry vertex, plus the
     straight entry-to-centre distance when the track does not end at the centre);
     stub_metrics add stub_delay_ps and its breakdown; above the limit (or
-    unmeasurable) is pair_stub_limit. The search keeps the src13 machinery with an
-    mm cap no stub within the delay limit can exceed (limit / fastest layer ps/mm),
-    so pruning never rejects a route the delay check accepts. kind 'mm' (annotation
+    unmeasurable) is pair_stub_limit. The pad's own copper layer is used (a
+    bottom-side or through-hole terminal is read on B.Cu / either side). The search
+    keeps the src13 machinery with an mm cap no stub within the delay limit can
+    exceed (limit / fastest layer ps/mm), plus the delay itself as estimated from the
+    planar fanout (to the pad entry, at the leg layer's ps/mm, + barrels): target ports
+    are the src order interleaved with short-stub-first by it (order_bridge_candidates),
+    and via-start / via-reuse legs whose estimated
+    stub delay exceeds the limit are skipped (review fix 2026-09-30: with only the
+    70 mm cap the src13 short-stub-first order was lost). The estimate never exceeds
+    the pad-centre reading, so pruning never rejects a route the delay check accepts.
+    kind 'mm' (annotation
     stub_max_mm) behaves exactly as PNR_PAIR_STUB_MAX_MM. PNR_PAIR_STUB_MAX_MM, when
     set, overrides both (explicit mm override).
 PNR_PAIR_EARLY_EXIT=1
@@ -1386,7 +1394,42 @@ def reference_failures(board,rules):
     return failures
 
 
-def pair_layer_bridge(b,pair,terminals,rules,oracle,bounds,pitch,offsets,reuse_source=None,reference_validator=None,prior_reference=(),prior_vias=(),solution_index=0,max_expansions=15000,timing_target_mm=0,head_prior_mm=0.,target_stub_cap=None,target_stub_length=None):
+def order_bridge_candidates(candidates,target_stub_cap,stub_of,target_stub_delay=None):
+    """Order (source port, target port) bridge candidates by the stub the target port would leave.
+
+    mm cap only (PNR_PAIR_STUB_MAX_MM / annotation stub_max_mm, src13): a stable partition,
+    ports whose stub exceeds the cap last. Delay limit (PNR_BUS_CLASSES): ``target_stub_delay``
+    = (estimate, limit_ps) with estimate(planar mm) -> ps. The ports within the limit (and within
+    the mm cap: the search cap, or the in-line hunt's 0) are the src order (shift, then total
+    length) INTERLEAVED with the same ports short-stub-first by the estimate (alternate picks,
+    duplicates skipped), so the search window (pair_layer_bridge tries the first 64) is shared by
+    both preferences and neither crowds the other out; ports over the limit or cap follow in the
+    src order. Review fix 2026-09-30: under a delay limit the src13 partition (cap 1.0 mm) became
+    a no-op (the 70 mm search cap) and deepS/h3p035 lost their trial-2 route; a pure
+    short-stub-first sort restored it but pushed the src-order winners of p007/g1c04/h4p032 from
+    positions 5/4/11 to 42/12/49 (2-3x slower, h4p032 to trial 1). Measured at equal load
+    (runs/src15-fix/diag2), the interleave routes deepS trial 2 and keeps those three winners at
+    their src positions. ``stub_of(port)`` is the port's stub in mm (to where its copper enters
+    the pad)."""
+    if target_stub_delay is None:
+        return sorted(candidates,key=lambda az:stub_of(az[1])>target_stub_cap+1e-9)
+    estimate,limit_ps=target_stub_delay;cached={}
+    def stub_key(az):
+        if id(az[1]) not in cached:
+            mm=stub_of(az[1]);ps=estimate(mm)
+            cached[id(az[1])]=(mm>target_stub_cap+1e-9 or ps>limit_ps+1e-9,ps)
+        return cached[id(az[1])]
+    within=[az for az in candidates if not stub_key(az)[0]]
+    over=[az for az in candidates if stub_key(az)[0]]
+    short_first=sorted(within,key=lambda az:stub_key(az)[1])
+    ordered=[];seen=set()
+    for pair in zip(within,short_first):
+        for az in pair:
+            if id(az) not in seen:seen.add(id(az));ordered.append(az)
+    return ordered+over
+
+
+def pair_layer_bridge(b,pair,terminals,rules,oracle,bounds,pitch,offsets,reuse_source=None,reference_validator=None,prior_reference=(),prior_vias=(),solution_index=0,max_expansions=15000,timing_target_mm=0,head_prior_mm=0.,target_stub_cap=None,target_stub_length=None,target_stub_delay=None):
     """Matched through-via pairs and a checked B.Cu trunk, no single-leg jump.
 
     The combined surface and bridge-plane fanout obeys the original planar
@@ -1404,6 +1447,13 @@ def pair_layer_bridge(b,pair,terminals,rules,oracle,bounds,pitch,offsets,reuse_s
     leg would leave that fanout as the terminal's stub; ``target_stub_length``
     (port -> mm, default its longest fanout) is that stub as the final check
     measures it (to where the copper enters the pad).
+    ``target_stub_delay`` (PNR_BUS_CLASSES delay limit: (estimate, limit_ps), estimate =
+    planar mm -> ps on the leg layer): the src order interleaved with short-stub-first
+    by that estimate, ports over the limit (or over target_stub_cap) last
+    (order_bridge_candidates). Under a delay limit target_stub_cap is only the search
+    cap (limit / fastest layer), which no port exceeds, so without this order the
+    src13 short-stub-first steering was lost (src15 review: deepS/h3p035 lost their
+    trial-2 route).
     PNR_PAIR_RUN_BARREL=1: each via hop inside an end's run adds the barrel to it.
     Reference trimming: the legacy shared budget at both ends unless
     PNR_PAIR_REF_TRIM_PER_END=1 (then each end's own budget).
@@ -1422,7 +1472,7 @@ def pair_layer_bridge(b,pair,terminals,rules,oracle,bounds,pitch,offsets,reuse_s
     candidates=sorted(((a,z) for a in starts for z in ends),key=lambda az:(abs(az[0].get('shift_mm',0))+abs(az[1].get('shift_mm',0)),sum(az[0]['lengths'].values())+sum(az[1]['lengths'].values())+sum(math.dist(az[0]['sites'][net],az[1]['sites'][net]) for net in (p,n))))
     if target_stub_cap is not None:
         stub_of=target_stub_length or (lambda port:max(port['lengths'].values()))
-        candidates=sorted(candidates,key=lambda az:stub_of(az[1])>target_stub_cap+1e-9)
+        candidates=order_bridge_candidates(candidates,target_stub_cap,stub_of,target_stub_delay)
     per_run=per_run_uncoupled_enabled();per_end_reference=ref_trim_per_end_enabled()
     # PNR_PAIR_RUN_BARREL: the source via hop (none when the source reuses vias the
     # trunk already arrives at on this layer) and the target via hop join the runs.
@@ -1590,19 +1640,26 @@ def pair_stub_metrics(pair,bylabel,tracks,vias,thickness,barrel=None,delay=None)
         for net,key in ((pair['p'],'p'),(pair['n'],'n')):
             origin,end,pad=(xy(bylabel[label].GetPosition()) for label in (chain[0][key],chain[-1][key],node[key]))
             net_tracks=[(la,a,z) for nn,la,a,z,w in tracks if nn==net]
+            # The pad's own copper layers among those pair copper uses (F.Cu / B.Cu; a
+            # through-hole pad is on both). src15 review fix: the reading assumed F.Cu, so a
+            # bottom-side terminal was mismeasured or unmeasurable. F.Cu-only pads: unchanged.
+            pad_obj=bylabel[node[key]];pad_layers=[la for la in (k.F_Cu,k.B_Cu) if pad_obj.IsOnLayer(la)]
+            if not pad_layers:values[net]=dict(valid=False,reason='terminal pad on no outer copper layer');continue
             # Start at the pad centre and at every track vertex inside the pad's
             # copper: the stub is the shortest copper from where it leaves the pad.
-            starts=[pad]+sorted({q for la,a,z in net_tracks if la==k.F_Cu for q in (tuple(a),tuple(z)) if q!=tuple(pad) and pad_contains(bylabel[node[key]],q,k.F_Cu)})
-            found=branch_lengths(net_tracks,[(pt,[k.F_Cu,k.B_Cu]) for nn,pt in vias if nn==net],(origin,k.F_Cu),(end,k.F_Cu),[(q,k.F_Cu) for q in starts],layer_heights={k.F_Cu:0,k.B_Cu:thickness},barrel=barrel)
+            starts=[(pad,la) for la in pad_layers]+[(q,la) for la in pad_layers for q in sorted({q for l2,a,z in net_tracks if l2==la for q in (tuple(a),tuple(z)) if q!=tuple(pad) and pad_contains(pad_obj,q,la)})]
+            found=branch_lengths(net_tracks,[(pt,[k.F_Cu,k.B_Cu]) for nn,pt in vias if nn==net],(origin,k.F_Cu),(end,k.F_Cu),starts,layer_heights={k.F_Cu:0,k.B_Cu:thickness},barrel=barrel)
             if delay is not None:found_by_net[net]=(starts,found)
             if found is None:values[net]=dict(valid=False);continue
-            f=found[0]
+            centres=found[:len(pad_layers)]
+            f=min((g for g in centres if g['stub_mm'] is not None),key=lambda g:g['stub_mm'],default=centres[0])
             if f['stub_mm'] is None:values[net]=dict(on_path=f['on_path'],stub_mm=None);continue
             # The stub ends where its copper enters the pad (decision 1: "to the
             # D2 pad"); the track inside the pad's own copper is pad, not stub.
             if any(g['on_path'] for g in found):stub=0.
-            else:stub=min(g['stub_mm']-pad_copper_length(bylabel[node[key]],None,k.F_Cu,leading=g.get('path') or []) for g in found if g['stub_mm'] is not None)
+            else:stub=min(g['stub_mm']-pad_copper_length(pad_obj,None,s[1],leading=g.get('path') or []) for s,g in zip(starts,found) if g['stub_mm'] is not None)
             values[net]=dict(on_path=f['on_path'] or stub==0.,stub_mm=round(max(0.,stub),6),stub_centre_mm=round(f['stub_mm'],6))
+            if pad_layers!=[k.F_Cu]:values[net]['pad_layers']=[{k.F_Cu:'F.Cu',k.B_Cu:'B.Cu'}[la] for la in pad_layers]
         if delay is not None:
             # PNR_BUS_CLASSES delay limit: the same branches, read as copper delay to
             # the pad centre with the via barrel included.
@@ -1615,9 +1672,10 @@ def pair_stub_metrics(pair,bylabel,tracks,vias,thickness,barrel=None,delay=None)
 def stub_delay_metrics(pair,pad,found,delay,thickness):
     """stub_delay_ps (pad-centre reading, barrel included) of one terminal pad.
 
-    ``found``: (starts, branch_lengths results) of pair_stub_metrics for the pad;
-    each measured start is charged its straight distance to the pad centre on F.Cu
-    (0 for the centre itself). In line (any start on the endpoint path): 0 ps."""
+    ``found``: (starts, branch_lengths results) of pair_stub_metrics for the pad; starts
+    are (xy, layer) on the pad's own copper layers, and each measured start is charged its
+    straight distance to the pad centre on that layer (0 for the centre itself). In line
+    (any start on the endpoint path): 0 ps."""
     import pcbnew as k
     from pnr.si.bus_classes import path_delay
     if not found or found[1] is None:return dict(stub_delay_ps=None,stub_delay_limit_ps=delay['max_ps'])
@@ -1626,9 +1684,9 @@ def stub_delay_metrics(pair,pad,found,delay,thickness):
     centre=xy(pad.GetPosition());barrel_ps=float(delay['barrel_mm'])*float(delay['barrel_ps_per_mm']);best=None
     if any(g['on_path'] for g in results):
         return dict(stub_delay_ps=0.,stub_delay_limit_ps=delay['max_ps'],stub_delay_reading=delay.get('reading'))
-    for q,g in zip(starts,results):
+    for (q,start_layer),g in zip(starts,results):
         if g['stub_mm'] is None or not g.get('path'):continue
-        ps,parts=path_delay(g['path'],lambda la:names.get(la,str(la)),delay['td_ps_per_mm'],barrel_ps,lead=(k.F_Cu,math.dist(q,centre)))
+        ps,parts=path_delay(g['path'],lambda la:names.get(la,str(la)),delay['td_ps_per_mm'],barrel_ps,lead=(start_layer,math.dist(q,centre)))
         if best is None or ps<best[0]:best=(ps,parts)
     if best is None:return dict(stub_delay_ps=None,stub_delay_limit_ps=delay['max_ps'])
     return dict(stub_delay_ps=round(best[0],3),stub_delay_limit_ps=delay['max_ps'],stub_delay_path=best[1],stub_delay_reading=delay.get('reading'))
@@ -1798,6 +1856,15 @@ def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order,topology=N
         # within it can exceed; the final check is the delay (pnr.si.bus_classes).
         from pnr.si.bus_classes import router_stub_rule
         stub_cap,stub_delay,_=router_stub_rule(pair,stub_cap)
+    stub_ps=limit_ps=None
+    if stub_delay is not None:
+        # Estimated delay of a planar fanout on the leg layer plus barrels, the quantity the
+        # final check measures (it reads to the pad centre, so the estimate to the pad entry
+        # never exceeds it): orders target ports short-stub-first and prunes the via-start /
+        # via-reuse legs whose stub alone would break the delay limit (review fix 2026-09-30).
+        td_stub=stub_delay['td_ps_per_mm'];td_la=float(td_stub.get(b.GetLayerName(la),max(td_stub.values())))
+        barrel_ps=float(stub_delay['barrel_mm'])*float(stub_delay['barrel_ps_per_mm']);limit_ps=float(stub_delay['max_ps'])
+        stub_ps=lambda planar_mm,barrels=0:planar_mm*td_la+barrels*barrel_ps
     # pair_plan's in-line hunt (PNR_PAIR_EARLY_EXIT + PNR_PAIR_PREFER_INLINE after a
     # stub route): no stub (cap 0) and no more vias than the stub route has.
     limits=limits or {}
@@ -1894,11 +1961,11 @@ def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order,topology=N
             # The stub this leg would leave: the via-to-pad fanout up to where it
             # enters the pad (as pair_stub_metrics measures it).
             fanout_stub=port_stub_mm(old,stage_pads,la) if stub_cap is not None else None
-            if stub_cap is not None and fanout_stub>stub_cap+1e-9:
+            if stub_cap is not None and (fanout_stub>stub_cap+1e-9 or (stub_ps is not None and stub_ps(fanout_stub)>limit_ps+1e-9)):
                 # PNR_PAIR_STUB_MAX_MM: this leg would leave the via-to-pad
-                # fanout as the intermediate terminal's stub.
+                # fanout as the intermediate terminal's stub (PNR_BUS_CLASSES: its delay).
                 alternative=dict(status='pair_stub_limit',stub_mm=fanout_stub)
-                stub_skips.append(dict(stage=stage,start='bridge_vias',stub_mm=round(fanout_stub,6)))
+                stub_skips.append(dict(stage=stage,start='bridge_vias',stub_mm=round(fanout_stub,6),**({'stub_ps':round(stub_ps(fanout_stub),3)} if stub_ps is not None else {})))
             else:
                 if trace:oracle.progress=dict(stage=stage,step='via_start')
                 # PNR_PAIR_RUN_BARREL: the hop from the B.Cu trunk up to the leg.
@@ -1926,11 +1993,12 @@ def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order,topology=N
                 # in the connector-to-receiver timing path.
                 bridge_offsets={net:accumulated[net]-old['lengths'][net]-rules['electrical_fab']['board_thickness_mm'] for net in (p,n)}
                 if per_run:bridge_prior=arriving(old['sites'],k.B_Cu)
-                if stub_cap is not None and stub_barrel_mm(thickness)+port_stub_mm(old,stage_pads,la)>stub_cap+1e-9:
+                reuse_fanout=port_stub_mm(old,stage_pads,la) if stub_cap is not None else None
+                if stub_cap is not None and (stub_barrel_mm(thickness)+reuse_fanout>stub_cap+1e-9 or (stub_ps is not None and stub_ps(reuse_fanout,1)>limit_ps+1e-9)):
                     # PNR_PAIR_STUB_MAX_MM: reusing the vias leaves barrel +
-                    # fanout as the terminal's stub. Bridge from the terminal
-                    # pad itself instead (terminal in line).
-                    stub_skips.append(dict(stage=stage,start='via_reuse',stub_mm=round(stub_barrel_mm(thickness)+port_stub_mm(old,stage_pads,la),6)))
+                    # fanout as the terminal's stub (PNR_BUS_CLASSES: its delay). Bridge
+                    # from the terminal pad itself instead (terminal in line).
+                    stub_skips.append(dict(stage=stage,start='via_reuse',stub_mm=round(stub_barrel_mm(thickness)+reuse_fanout,6),**({'stub_ps':round(stub_ps(reuse_fanout,1),3)} if stub_ps is not None else {})))
                     reuse=None;bridge_offsets=accumulated;bridge_prior=pad_prior
             extra_bridge={}
             if per_run:extra_bridge['head_prior_mm']=bridge_prior
@@ -1938,6 +2006,7 @@ def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order,topology=N
                 extra_bridge['target_stub_cap']=stub_cap
                 target_pads={net:bylabel[last[key]] for net,key in ((p,'p'),(n,'n'))}
                 extra_bridge['target_stub_length']=lambda port,target_pads=target_pads:port_stub_mm(port,target_pads,la)
+                if stub_ps is not None:extra_bridge['target_stub_delay']=(stub_ps,limit_ps)
             if max_vias is not None and len(vias)+(2 if (reuse and reuse.get('reuse')) else 4)>max_vias:
                 # In-line hunt: this bridge would need more vias than the stub route.
                 return dict(status='pair_via_limit',failed_stage=stage,max_vias=max_vias,planned_vias=len(vias),surface_failure=surface_failure,**({'stub_skips':stub_skips} if stub_cap is not None else {}))

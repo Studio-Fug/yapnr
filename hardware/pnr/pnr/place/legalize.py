@@ -298,11 +298,14 @@ def legalize(
 
     free_cache = {}
 
-    def hull_free(comp, bw, bh):
+    def hull_free(comp, bw, bh, reserves=True):
         """Valid top-lefts of a hull slot at comp.rot (False when it cannot fit the grid).
 
         Cached on the occupancy content: selection keys and the look-ahead ask
-        again and again while nothing changed. Callers copy before mutating."""
+        again and again while nothing changed. Callers copy before mutating.
+        ``reserves=False``: ignore the landing reserves, as the look-ahead and the
+        slot-count heuristic do for every other part (src13 design; src15 review fix:
+        they saw the reserves for hull macros only)."""
         if bw > nx or bh > ny:
             return False
         import hashlib
@@ -310,7 +313,7 @@ def legalize(
         digest.update(occupancy["bottom"].tobytes())
         digest.update(occupancy["inner"].tobytes())
         avoid = ()
-        if landing:
+        if landing and reserves:
             # PNR_PAIR_LANDING_RESERVE with hull macros (src15 merge): the hull mask
             # on every side the macro is mounted on must also miss the landing
             # reserves there (as a solid macro's whole slot must, below).
@@ -393,7 +396,7 @@ def legalize(
         occ = np.logical_or.reduce([occupancy[side] for side in part_sides(comp)])
         if bw > nx or bh > ny:return 0
         if is_hull(comp):
-            free = hull_free(comp, bw, bh).copy()
+            free = hull_free(comp, bw, bh, reserves=False).copy()
         else:
             integ = np.zeros((ny+1,nx+1),dtype=np.int32)
             integ[1:,1:] = np.cumsum(np.cumsum(occ.astype(np.int32),axis=0),axis=1)
@@ -449,7 +452,7 @@ def legalize(
                     bh_ = int(math.ceil((cr.h * infl_m + clearance) / g))
                     try:
                         rr, cc = _place_part(occ_m, g, bw_, bh_, target, limits_for(m.ref),
-                                             free=hull_free(m, bw_, bh_) if is_hull(m) else None, box=edge_box(m))
+                                             free=hull_free(m, bw_, bh_, reserves=False) if is_hull(m) else None, box=edge_box(m))
                     except LegalizationError:
                         continue
                     mark_slot(m, rr, cc, bw_, bh_, sides_m)

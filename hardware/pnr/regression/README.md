@@ -67,9 +67,12 @@ retain opens, DRC types, copper length, vias, wall time and joint escape diagnos
 Verify the installed native oracle itself using a passed two-part case:
 
 ```sh
-PYTHONPATH=hardware/pnr /Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3 \
+# PNR_KICAD_PYTHON / PNR_KICAD_CLI: the headless (LSBackgroundOnly) KiCad copy, e.g.
+# ~/Applications/KiCad-headless.app/Contents/{Frameworks/Python.framework/Versions/3.9/bin/python3,MacOS/kicad-cli};
+# the /Applications/KiCad binaries register a Dock (Foreground) app on every call.
+PYTHONPATH=hardware/pnr "$PNR_KICAD_PYTHON" \
   hardware/pnr/regression/check_native_oracle.py OUTPUT/01-connector-led-2-seed-0 \
-  --kicad-cli /Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli
+  --kicad-cli "$PNR_KICAD_CLI"
 ```
 
 It saves deliberately open and shorted copies in `negative-controls`; the passed

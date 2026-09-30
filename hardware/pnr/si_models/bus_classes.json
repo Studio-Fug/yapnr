@@ -21,7 +21,8 @@
     "skew": "{max_ps | null, applies_to, cite}: intra-pair skew as time",
     "length": "optional total length {max_mm | max_delay_ps: {value | null, expr?, cite}, applies_to}; report-only in v1 (the router checks no total length)",
     "stub_k, uncoupled_k": "optional per-class overrides of the library defaults (stub rule stub_delay <= stub_k * t_rise_min; uncoupled rule uncoupled_delay <= uncoupled_k * t_rise_min)",
-    "cite": "{source: key of \"sources\", ref: section/table, quote?}"
+    "cite": "{source: key of \"sources\", ref: section/table, quote?}",
+    "basis": "impedance / skew / length entries with a value carry \"basis\": \"spec\" (the document requires it of the board pair itself) or \"interpretation\" (the document sets the figure for something else - cable, mated connector, driver - and this library applies it to the board pair; the \"interpretation\" text says how and why). Derived values copy it as spec_basis / interpretation."
   },
   "sources": {
     "usb2": {
@@ -52,29 +53,85 @@
       "title": "USB 2.0 Low-Speed (1.5 Mb/s)",
       "kind": "differential",
       "signalling": {
-        "data_rate_bps": {"value": 1500000, "cite": {"source": "usb2", "ref": "Table 7-10, TLDRATE 1.4775-1.5225 Mb/s"}},
-        "t_rise_min_ps": {"value": 75000, "cite": {"source": "usb2", "ref": "7.1.2.1 and Table 7-10 (TLR/TLF 75-300 ns, 10-90 %)", "quote": "The rise and fall time must be between 75 ns and 300 ns for any balanced, capacitive test load."}},
-        "t_rise_max_ps": {"value": 300000, "cite": {"source": "usb2", "ref": "7.1.2.1 and Table 7-10 (TLR/TLF)"}}
+        "data_rate_bps": {
+          "value": 1500000,
+          "cite": {
+            "source": "usb2",
+            "ref": "Table 7-10, TLDRATE 1.4775-1.5225 Mb/s"
+          }
+        },
+        "t_rise_min_ps": {
+          "value": 75000,
+          "cite": {
+            "source": "usb2",
+            "ref": "7.1.2.1 and Table 7-10 (TLR/TLF 75-300 ns, 10-90 %)",
+            "quote": "The rise and fall time must be between 75 ns and 300 ns for any balanced, capacitive test load."
+          }
+        },
+        "t_rise_max_ps": {
+          "value": 300000,
+          "cite": {
+            "source": "usb2",
+            "ref": "7.1.2.1 and Table 7-10 (TLR/TLF)"
+          }
+        }
       },
       "impedance": {
         "required": false,
         "differential_ohm": null,
         "note": "Table 7-12 gives the 90 ohm +/-15 % differential cable impedance for full-/high-speed only; low-speed has no impedance requirement.",
-        "cite": {"source": "usb2", "ref": "Table 7-12 (ZO, full-/high-speed)"}
+        "cite": {
+          "source": "usb2",
+          "ref": "Table 7-12 (ZO, full-/high-speed)"
+        }
       },
-      "skew": {"max_ps": null, "note": "no D+/D- skew limit is specified for low-speed signalling"},
+      "skew": {
+        "max_ps": null,
+        "note": "no D+/D- skew limit is specified for low-speed signalling"
+      },
       "length": {
-        "max_delay_ps": {"value": null, "note": "Figure 7-40 bounds the low-speed cable one-way delay (18 ns) but gives no board-trace allocation", "cite": {"source": "usb2", "ref": "7.1.16, Figure 7-40"}}
+        "max_delay_ps": {
+          "value": null,
+          "note": "Figure 7-40 bounds the low-speed cable one-way delay (18 ns) but gives no board-trace allocation",
+          "cite": {
+            "source": "usb2",
+            "ref": "7.1.16, Figure 7-40"
+          }
+        }
       }
     },
     "usb2-fs": {
       "title": "USB 2.0 Full-Speed (12 Mb/s)",
       "kind": "differential",
-      "params": {"board_delay_ns": {"default": 1, "note": "USB 2.0 7.1.16 board-trace allocation: 1 ns from the upstream-facing connector to the transceiver of any device (default), 3 ns from a host/hub downstream-facing transceiver to its connector"}},
+      "params": {
+        "board_delay_ns": {
+          "default": 1,
+          "note": "USB 2.0 7.1.16 board-trace allocation: 1 ns from the upstream-facing connector to the transceiver of any device (default), 3 ns from a host/hub downstream-facing transceiver to its connector"
+        }
+      },
       "signalling": {
-        "data_rate_bps": {"value": 12000000, "cite": {"source": "usb2", "ref": "Table 7-9, TFDRATE 11.97-12.03 Mb/s"}},
-        "t_rise_min_ps": {"value": 4000, "cite": {"source": "usb2", "ref": "7.1.2.1 and Table 7-9 (TFR/TFF 4-20 ns, 10-90 %)", "quote": "The rise and fall times must be between 4 ns and 20 ns and matched to within +/-10% to minimize RFI emissions and signal skew."}},
-        "t_rise_max_ps": {"value": 20000, "cite": {"source": "usb2", "ref": "7.1.2.1 and Table 7-9 (TFR/TFF)"}}
+        "data_rate_bps": {
+          "value": 12000000,
+          "cite": {
+            "source": "usb2",
+            "ref": "Table 7-9, TFDRATE 11.97-12.03 Mb/s"
+          }
+        },
+        "t_rise_min_ps": {
+          "value": 4000,
+          "cite": {
+            "source": "usb2",
+            "ref": "7.1.2.1 and Table 7-9 (TFR/TFF 4-20 ns, 10-90 %)",
+            "quote": "The rise and fall times must be between 4 ns and 20 ns and matched to within +/-10% to minimize RFI emissions and signal skew."
+          }
+        },
+        "t_rise_max_ps": {
+          "value": 20000,
+          "cite": {
+            "source": "usb2",
+            "ref": "7.1.2.1 and Table 7-9 (TFR/TFF)"
+          }
+        }
       },
       "impedance": {
         "required": false,
@@ -83,27 +140,69 @@
         "common_mode_ohm": 30,
         "common_mode_tolerance_pct": 30,
         "note": "The specification sets the full-/high-speed cable impedance (Table 7-12: ZO 90 ohm +/-15 %, 76.5-103.5 ohm) and a 28-44 ohm full-speed driver (Table 7-9 ZDRV); it sets no PCB impedance. With t_rise >= 4 ns board traces are electrically short, so the target is recommended, not required.",
-        "cite": {"source": "usb2", "ref": "Table 7-12 (ZO, ZCM), Table 7-9 (ZDRV)"}
+        "cite": {
+          "source": "usb2",
+          "ref": "Table 7-12 (ZO, ZCM), Table 7-9 (ZDRV)"
+        },
+        "basis": "interpretation",
+        "interpretation": "USB 2.0 sets no PCB trace impedance: 90 ohm +/-15 % is the cable ZO (Table 7-12). This library records it as the board target for FS but not as a requirement (required: false): with t_rise >= 4 ns the board traces are electrically short."
       },
       "skew": {
         "max_ps": 100,
         "applies_to": "cable: the specification allocates no separate board budget; applied to the board pair as the only differential skew figure it gives",
-        "cite": {"source": "usb2", "ref": "7.1.3 Cable Skew; Table 7-12 TSKEW", "quote": "The maximum skew introduced by the cable between the differential signaling pair (i.e., D+ and D- (TSKEW)) must be less than 100 ps"}
+        "cite": {
+          "source": "usb2",
+          "ref": "7.1.3 Cable Skew; Table 7-12 TSKEW",
+          "quote": "The maximum skew introduced by the cable between the differential signaling pair (i.e., D+ and D- (TSKEW)) must be less than 100 ps"
+        },
+        "basis": "interpretation",
+        "interpretation": "TSKEW 100 ps is a cable requirement (7.1.3, Table 7-12); USB 2.0 allocates no board skew budget. Applying the cable figure to the board pair is this library's choice."
       },
       "length": {
         "applies_to": "board traces between the transceiver and the USB connector, one way (the whole connector -> ESD -> transceiver chain)",
-        "max_delay_ps": {"value": 1000, "expr": "1000 * board_delay_ns", "cite": {"source": "usb2", "ref": "7.1.16 Cable Delay; Figure 7-39", "quote": "A maximum delay of 3 ns is allowed from a Host or Hub Controller downstream facing transceiver to its exterior downstream facing connector, while a maximum delay of 1 ns is allowed from the upstream facing connector to the upstream facing transceiver of any device."}}
+        "max_delay_ps": {
+          "value": 1000,
+          "expr": "1000 * board_delay_ns",
+          "cite": {
+            "source": "usb2",
+            "ref": "7.1.16 Cable Delay; Figure 7-39",
+            "quote": "A maximum delay of 3 ns is allowed from a Host or Hub Controller downstream facing transceiver to its exterior downstream facing connector, while a maximum delay of 1 ns is allowed from the upstream facing connector to the upstream facing transceiver of any device."
+          }
+        },
+        "basis": "spec"
       },
-      "notes": ["Full-speed source jitter budget: TDJ1 +/-3.5 ns (next transition), TDJ2 +/-4 ns (paired transitions), Table 7-9."]
+      "notes": [
+        "Full-speed source jitter budget: TDJ1 +/-3.5 ns (next transition), TDJ2 +/-4 ns (paired transitions), Table 7-9."
+      ]
     },
     "usb2-hs": {
       "title": "USB 2.0 High-Speed (480 Mb/s)",
       "kind": "differential",
-      "params": {"board_delay_ns": {"default": 1, "note": "USB 2.0 7.1.16 board-trace allocation: 1 ns from the upstream-facing connector to the transceiver of any device (default), 3 ns from a host/hub downstream-facing transceiver to its connector"}},
+      "params": {
+        "board_delay_ns": {
+          "default": 1,
+          "note": "USB 2.0 7.1.16 board-trace allocation: 1 ns from the upstream-facing connector to the transceiver of any device (default), 3 ns from a host/hub downstream-facing transceiver to its connector"
+        }
+      },
       "signalling": {
-        "data_rate_bps": {"value": 480000000, "cite": {"source": "usb2", "ref": "Table 7-8, THSDRAT 479.760-480.240 Mb/s"}},
-        "t_rise_min_ps": {"value": 500, "cite": {"source": "usb2", "ref": "7.1.2.2 and Table 7-8 (THSR/THSF >= 500 ps, 10-90 %)"}},
-        "t_rise_max_ps": {"value": null, "note": "bounded by the eye-pattern templates of 7.1.2.2, not by a rise-time maximum"}
+        "data_rate_bps": {
+          "value": 480000000,
+          "cite": {
+            "source": "usb2",
+            "ref": "Table 7-8, THSDRAT 479.760-480.240 Mb/s"
+          }
+        },
+        "t_rise_min_ps": {
+          "value": 500,
+          "cite": {
+            "source": "usb2",
+            "ref": "7.1.2.2 and Table 7-8 (THSR/THSF >= 500 ps, 10-90 %)"
+          }
+        },
+        "t_rise_max_ps": {
+          "value": null,
+          "note": "bounded by the eye-pattern templates of 7.1.2.2, not by a rise-time maximum"
+        }
       },
       "impedance": {
         "required": true,
@@ -112,110 +211,320 @@
         "common_mode_ohm": 30,
         "common_mode_tolerance_pct": 30,
         "note": "Table 7-12 cable ZO 90 ohm +/-15 % (ZCM 30 ohm +/-30 %); the high-speed driver output resistance ZHSDRV 40.5-49.5 ohm (Table 7-8) is also the 45 ohm per-line termination, i.e. a 90 ohm differential system.",
-        "cite": {"source": "usb2", "ref": "Table 7-12 (ZO, ZCM), Table 7-8 (ZHSDRV), 7.1.1.3"}
+        "cite": {
+          "source": "usb2",
+          "ref": "Table 7-12 (ZO, ZCM), Table 7-8 (ZHSDRV), 7.1.1.3"
+        },
+        "basis": "interpretation",
+        "interpretation": "USB 2.0 sets no PCB trace impedance: it specifies the cable ZO (Table 7-12, 90 ohm +/-15 %) and the 45 ohm per-line driver/termination (Table 7-8 ZHSDRV). \"required: true\" is this library's engineering choice for 480 Mb/s (a 90 ohm system end to end; ~500 ps edges make typical board runs electrically long), not a normative PCB requirement."
       },
       "skew": {
         "max_ps": 100,
         "applies_to": "cable: no separate board budget in the specification",
-        "cite": {"source": "usb2", "ref": "7.1.3 Cable Skew; Table 7-12 TSKEW"}
+        "cite": {
+          "source": "usb2",
+          "ref": "7.1.3 Cable Skew; Table 7-12 TSKEW"
+        },
+        "basis": "interpretation",
+        "interpretation": "TSKEW 100 ps is a cable requirement (7.1.3, Table 7-12); USB 2.0 allocates no board skew budget. Applying the cable figure to the board pair is this library's choice."
       },
       "length": {
         "applies_to": "board traces between the transceiver and the USB connector, one way (the whole connector -> ESD -> transceiver chain)",
-        "max_delay_ps": {"value": 1000, "expr": "1000 * board_delay_ns", "cite": {"source": "usb2", "ref": "7.1.16 Cable Delay; Figure 7-39", "quote": "A maximum delay of 3 ns is allowed from a Host or Hub Controller downstream facing transceiver to its exterior downstream facing connector, while a maximum delay of 1 ns is allowed from the upstream facing connector to the upstream facing transceiver of any device."}}
+        "max_delay_ps": {
+          "value": 1000,
+          "expr": "1000 * board_delay_ns",
+          "cite": {
+            "source": "usb2",
+            "ref": "7.1.16 Cable Delay; Figure 7-39",
+            "quote": "A maximum delay of 3 ns is allowed from a Host or Hub Controller downstream facing transceiver to its exterior downstream facing connector, while a maximum delay of 1 ns is allowed from the upstream facing connector to the upstream facing transceiver of any device."
+          }
+        },
+        "basis": "spec"
       }
     },
     "usb3-ss-gen1": {
       "title": "USB 3.2 Gen 1 SuperSpeed (5 GT/s)",
       "kind": "differential",
       "signalling": {
-        "data_rate_bps": {"value": 5000000000, "cite": {"source": "usb32", "ref": "Table 6-18, UI 199.94-200.06 ps (Gen 1)"}},
-        "t_rise_min_ps": {"value": null, "note": "USB 3.2 specifies no data-signal rise time (only LFPS tRiseFall2080 <= 4 ns, Table 6-29); a stub/uncoupled delay rule needs \"t_rise_ns\" from the PHY datasheet in the annotation", "cite": {"source": "usb32", "ref": "Table 6-18, Table 6-29"}},
-        "unit_interval_ps": {"value": 200, "cite": {"source": "usb32", "ref": "Table 6-18 (UI)"}}
+        "data_rate_bps": {
+          "value": 5000000000,
+          "cite": {
+            "source": "usb32",
+            "ref": "Table 6-18, UI 199.94-200.06 ps (Gen 1)"
+          }
+        },
+        "t_rise_min_ps": {
+          "value": null,
+          "note": "USB 3.2 specifies no data-signal rise time (only LFPS tRiseFall2080 <= 4 ns, Table 6-29); a stub/uncoupled delay rule needs \"t_rise_ns\" from the PHY datasheet in the annotation",
+          "cite": {
+            "source": "usb32",
+            "ref": "Table 6-18, Table 6-29"
+          }
+        },
+        "unit_interval_ps": {
+          "value": 200,
+          "cite": {
+            "source": "usb32",
+            "ref": "Table 6-18 (UI)"
+          }
+        }
       },
       "impedance": {
         "required": true,
         "differential_ohm": 90,
         "tolerance_ohm": 15,
         "note": "Mated connector 90 ohm +/-15 ohm and S-parameters normalised to 90 ohm differential (compliance document C.6, B-4-5, C.7); raw internal cable 90 +/-7 ohm (internal cable spec 3.3). Transmitter/receiver DC differential termination 72-120 ohm (USB 3.2 Table 6-18/6-22).",
-        "cite": {"source": "usb3-cabconn", "ref": "C.6 (mated connector TDR 90 +/-15 ohm), B-4-5, C.7"}
+        "cite": {
+          "source": "usb3-cabconn",
+          "ref": "C.6 (mated connector TDR 90 +/-15 ohm), B-4-5, C.7"
+        },
+        "basis": "interpretation",
+        "interpretation": "No PCB trace impedance is specified: 90 ohm +/-15 ohm is the mated-connector TDR limit of the connector/cable compliance document (C.6) and 90 ohm the S-parameter reference impedance. \"required: true\" and the tolerance are this library's choice for the board pair at 5/10 GT/s."
       },
       "skew": {
         "max_ps": 15,
         "applies_to": "mated cable assembly (intra-pair); applied to the board pair",
-        "cite": {"source": "usb3-internal", "ref": "2.2.2.4 Intra-Pair Skew", "quote": "The intra-pair skew of the mated cable assembly shall be controlled to be less than 15 ps."}
+        "cite": {
+          "source": "usb3-internal",
+          "ref": "2.2.2.4 Intra-Pair Skew",
+          "quote": "The intra-pair skew of the mated cable assembly shall be controlled to be less than 15 ps."
+        },
+        "basis": "interpretation",
+        "interpretation": "15 ps is the intra-pair skew of the mated cable assembly (internal cable specification 2.2.2.4); applying it to the board pair is this library's choice (no board figure was verified)."
       },
-      "length": {"max_delay_ps": {"value": null, "note": "no board-trace length or delay limit was verified in the USB 3.x documents used (the channel is specified by loss and eye compliance)"}}
+      "length": {
+        "max_delay_ps": {
+          "value": null,
+          "note": "no board-trace length or delay limit was verified in the USB 3.x documents used (the channel is specified by loss and eye compliance)"
+        }
+      }
     },
     "usb3-ss-gen2": {
       "title": "USB 3.2 Gen 2 SuperSpeedPlus (10 GT/s)",
       "kind": "differential",
       "signalling": {
-        "data_rate_bps": {"value": 10000000000, "cite": {"source": "usb32", "ref": "Table 6-18, UI 99.97-100.03 ps (Gen 2)"}},
-        "t_rise_min_ps": {"value": null, "note": "not specified for data signals (see usb3-ss-gen1); give \"t_rise_ns\" in the annotation", "cite": {"source": "usb32", "ref": "Table 6-18, Table 6-29"}},
-        "unit_interval_ps": {"value": 100, "cite": {"source": "usb32", "ref": "Table 6-18 (UI)"}}
+        "data_rate_bps": {
+          "value": 10000000000,
+          "cite": {
+            "source": "usb32",
+            "ref": "Table 6-18, UI 99.97-100.03 ps (Gen 2)"
+          }
+        },
+        "t_rise_min_ps": {
+          "value": null,
+          "note": "not specified for data signals (see usb3-ss-gen1); give \"t_rise_ns\" in the annotation",
+          "cite": {
+            "source": "usb32",
+            "ref": "Table 6-18, Table 6-29"
+          }
+        },
+        "unit_interval_ps": {
+          "value": 100,
+          "cite": {
+            "source": "usb32",
+            "ref": "Table 6-18 (UI)"
+          }
+        }
       },
       "impedance": {
         "required": true,
         "differential_ohm": 90,
         "tolerance_ohm": 15,
         "note": "as usb3-ss-gen1 (the 2010 connector/cable documents predate Gen 2; the 90 ohm reference is unchanged)",
-        "cite": {"source": "usb3-cabconn", "ref": "C.6, B-4-5, C.7"}
+        "cite": {
+          "source": "usb3-cabconn",
+          "ref": "C.6, B-4-5, C.7"
+        },
+        "basis": "interpretation",
+        "interpretation": "No PCB trace impedance is specified: 90 ohm +/-15 ohm is the mated-connector TDR limit of the connector/cable compliance document (C.6) and 90 ohm the S-parameter reference impedance. \"required: true\" and the tolerance are this library's choice for the board pair at 5/10 GT/s."
       },
       "skew": {
         "max_ps": 15,
         "applies_to": "mated cable assembly (intra-pair), Gen 1 document; no separate Gen 2 figure was verified",
-        "cite": {"source": "usb3-internal", "ref": "2.2.2.4 Intra-Pair Skew"}
+        "cite": {
+          "source": "usb3-internal",
+          "ref": "2.2.2.4 Intra-Pair Skew"
+        },
+        "basis": "interpretation",
+        "interpretation": "15 ps is the intra-pair skew of the mated cable assembly (internal cable specification 2.2.2.4); applying it to the board pair is this library's choice (no board figure was verified)."
       },
-      "length": {"max_delay_ps": {"value": null, "note": "no board-trace length or delay limit was verified in the USB 3.x documents used (the channel is specified by loss and eye compliance)"}}
+      "length": {
+        "max_delay_ps": {
+          "value": null,
+          "note": "no board-trace length or delay limit was verified in the USB 3.x documents used (the channel is specified by loss and eye compliance)"
+        }
+      }
     },
     "i2c-standard": {
       "title": "I2C Standard-mode (100 kbit/s)",
       "kind": "single-ended",
       "signalling": {
-        "data_rate_bps": {"value": 100000, "cite": {"source": "um10204", "ref": "6.1, Table 11 (fSCL 0-100 kHz)"}},
-        "t_rise_min_ps": {"value": null, "note": "Table 11 gives no minimum for tr or tf in Standard-mode (tr <= 1000 ns, tf <= 300 ns); the fastest edge is device dependent, so no delay rule is derived unless the annotation gives \"t_rise_ns\"", "cite": {"source": "um10204", "ref": "6.1, Table 11"}},
-        "t_rise_max_ps": {"value": 1000000, "cite": {"source": "um10204", "ref": "6.1, Table 11 (tr max 1000 ns)"}}
+        "data_rate_bps": {
+          "value": 100000,
+          "cite": {
+            "source": "um10204",
+            "ref": "6.1, Table 11 (fSCL 0-100 kHz)"
+          }
+        },
+        "t_rise_min_ps": {
+          "value": null,
+          "note": "Table 11 gives no minimum for tr or tf in Standard-mode (tr <= 1000 ns, tf <= 300 ns); the fastest edge is device dependent, so no delay rule is derived unless the annotation gives \"t_rise_ns\"",
+          "cite": {
+            "source": "um10204",
+            "ref": "6.1, Table 11"
+          }
+        },
+        "t_rise_max_ps": {
+          "value": 1000000,
+          "cite": {
+            "source": "um10204",
+            "ref": "6.1, Table 11 (tr max 1000 ns)"
+          }
+        }
       },
-      "impedance": {"required": false, "differential_ohm": null, "single_ended_ohm": null, "note": "open-drain bus limited by capacitance (Cb <= 400 pF, Table 11), not impedance", "cite": {"source": "um10204", "ref": "Table 11 (Cb)"}},
-      "skew": {"max_ps": null}
+      "impedance": {
+        "required": false,
+        "differential_ohm": null,
+        "single_ended_ohm": null,
+        "note": "open-drain bus limited by capacitance (Cb <= 400 pF, Table 11), not impedance",
+        "cite": {
+          "source": "um10204",
+          "ref": "Table 11 (Cb)"
+        }
+      },
+      "skew": {
+        "max_ps": null
+      }
     },
     "i2c-fast": {
       "title": "I2C Fast-mode (400 kbit/s)",
       "kind": "single-ended",
-      "params": {"vdd_v": {"default": 3.3, "note": "bus supply; sets the fall-time minimum 20 ns x (VDD / 5.5 V)"}},
-      "signalling": {
-        "data_rate_bps": {"value": 400000, "cite": {"source": "um10204", "ref": "6.1, Table 11 (fSCL 0-400 kHz)"}},
-        "t_rise_min_ps": {"value": 20000, "expr": "min(20000, 20000 * vdd_v / 5.5)", "note": "fastest specified edge: tr >= 20 ns, tf >= 20 ns x (VDD / 5.5 V)", "cite": {"source": "um10204", "ref": "6.1, Table 11 (tr 20-300 ns, tf 20 x (VDD/5.5 V)-300 ns)"}},
-        "t_rise_max_ps": {"value": 300000, "cite": {"source": "um10204", "ref": "6.1, Table 11"}}
+      "params": {
+        "vdd_v": {
+          "default": 3.3,
+          "note": "bus supply; sets the fall-time minimum 20 ns x (VDD / 5.5 V)"
+        }
       },
-      "impedance": {"required": false, "differential_ohm": null, "single_ended_ohm": null, "note": "Cb <= 400 pF (Table 11)", "cite": {"source": "um10204", "ref": "Table 11 (Cb)"}},
-      "skew": {"max_ps": null}
+      "signalling": {
+        "data_rate_bps": {
+          "value": 400000,
+          "cite": {
+            "source": "um10204",
+            "ref": "6.1, Table 11 (fSCL 0-400 kHz)"
+          }
+        },
+        "t_rise_min_ps": {
+          "value": 20000,
+          "expr": "min(20000, 20000 * vdd_v / 5.5)",
+          "note": "fastest specified edge: tr >= 20 ns, tf >= 20 ns x (VDD / 5.5 V)",
+          "cite": {
+            "source": "um10204",
+            "ref": "6.1, Table 11 (tr 20-300 ns, tf 20 x (VDD/5.5 V)-300 ns)"
+          }
+        },
+        "t_rise_max_ps": {
+          "value": 300000,
+          "cite": {
+            "source": "um10204",
+            "ref": "6.1, Table 11"
+          }
+        }
+      },
+      "impedance": {
+        "required": false,
+        "differential_ohm": null,
+        "single_ended_ohm": null,
+        "note": "Cb <= 400 pF (Table 11)",
+        "cite": {
+          "source": "um10204",
+          "ref": "Table 11 (Cb)"
+        }
+      },
+      "skew": {
+        "max_ps": null
+      }
     },
     "i2c-fast-plus": {
       "title": "I2C Fast-mode Plus (1 Mbit/s)",
       "kind": "single-ended",
-      "params": {"vdd_v": {"default": 3.3, "note": "bus supply; sets the fall-time minimum 20 ns x (VDD / 5.5 V)"}},
-      "signalling": {
-        "data_rate_bps": {"value": 1000000, "cite": {"source": "um10204", "ref": "6.1, Table 11 (fSCL 0-1000 kHz)"}},
-        "t_rise_min_ps": {"value": null, "expr": "20000 * vdd_v / 5.5", "note": "fastest specified edge: tf >= 20 ns x (VDD / 5.5 V); tr has no specified minimum (RC-limited by the pull-up)", "cite": {"source": "um10204", "ref": "6.1, Table 11 (tr <= 120 ns, tf 20 x (VDD/5.5 V)-120 ns)"}},
-        "t_rise_max_ps": {"value": 120000, "cite": {"source": "um10204", "ref": "6.1, Table 11"}}
+      "params": {
+        "vdd_v": {
+          "default": 3.3,
+          "note": "bus supply; sets the fall-time minimum 20 ns x (VDD / 5.5 V)"
+        }
       },
-      "impedance": {"required": false, "differential_ohm": null, "single_ended_ohm": null, "note": "Cb <= 550 pF (Table 11)", "cite": {"source": "um10204", "ref": "Table 11 (Cb)"}},
-      "skew": {"max_ps": null}
+      "signalling": {
+        "data_rate_bps": {
+          "value": 1000000,
+          "cite": {
+            "source": "um10204",
+            "ref": "6.1, Table 11 (fSCL 0-1000 kHz)"
+          }
+        },
+        "t_rise_min_ps": {
+          "value": null,
+          "expr": "20000 * vdd_v / 5.5",
+          "note": "fastest specified edge: tf >= 20 ns x (VDD / 5.5 V); tr has no specified minimum (RC-limited by the pull-up)",
+          "cite": {
+            "source": "um10204",
+            "ref": "6.1, Table 11 (tr <= 120 ns, tf 20 x (VDD/5.5 V)-120 ns)"
+          }
+        },
+        "t_rise_max_ps": {
+          "value": 120000,
+          "cite": {
+            "source": "um10204",
+            "ref": "6.1, Table 11"
+          }
+        }
+      },
+      "impedance": {
+        "required": false,
+        "differential_ohm": null,
+        "single_ended_ohm": null,
+        "note": "Cb <= 550 pF (Table 11)",
+        "cite": {
+          "source": "um10204",
+          "ref": "Table 11 (Cb)"
+        }
+      },
+      "skew": {
+        "max_ps": null
+      }
     },
     "spi": {
       "title": "SPI (no normative standard; parametric)",
       "kind": "single-ended",
       "params": {
-        "clock_hz": {"default": null, "note": "SCK frequency (informational: sets the data rate)"},
-        "t_rise_ns": {"default": null, "note": "fastest driver edge from the driver datasheet; required for any delay rule"}
+        "clock_hz": {
+          "default": null,
+          "note": "SCK frequency (informational: sets the data rate)"
+        },
+        "t_rise_ns": {
+          "default": null,
+          "note": "fastest driver edge from the driver datasheet; required for any delay rule"
+        }
       },
       "signalling": {
-        "data_rate_bps": {"value": null, "expr": "clock_hz"},
-        "t_rise_min_ps": {"value": null, "expr": "1000 * t_rise_ns", "note": "SPI has no normative electrical standard; edge rates come from the part datasheets"}
+        "data_rate_bps": {
+          "value": null,
+          "expr": "clock_hz"
+        },
+        "t_rise_min_ps": {
+          "value": null,
+          "expr": "1000 * t_rise_ns",
+          "note": "SPI has no normative electrical standard; edge rates come from the part datasheets"
+        }
       },
-      "impedance": {"required": false, "differential_ohm": null, "single_ended_ohm": null, "note": "no impedance requirement is defined for SPI"},
-      "skew": {"max_ps": null}
+      "impedance": {
+        "required": false,
+        "differential_ohm": null,
+        "single_ended_ohm": null,
+        "note": "no impedance requirement is defined for SPI"
+      },
+      "skew": {
+        "max_ps": null
+      }
     }
   }
 }

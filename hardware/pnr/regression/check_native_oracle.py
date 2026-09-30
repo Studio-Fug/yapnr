@@ -6,8 +6,8 @@ faults are saved to separate files; the routed result is never modified.
 import argparse,json,shutil,subprocess,hashlib,sys
 from pathlib import Path
 import pcbnew as k
-import wx
-_app=wx.App(False)
+# src15: no wx.App - headless (a wx.App registers KiCad's Python.app as a Foreground/Dock app on
+# macOS; pcbnew LoadBoard/SaveBoard and kicad-cli DRC need none).
 p=argparse.ArgumentParser();p.add_argument('case',type=Path);p.add_argument('--kicad-cli',required=True);p.add_argument('--worker');a=p.parse_args()
 out=a.case/'negative-controls';out.mkdir(exist_ok=bool(a.worker));source=a.case/'routed.kicad_pcb'
 original=hashlib.sha256(source.read_bytes()).hexdigest()

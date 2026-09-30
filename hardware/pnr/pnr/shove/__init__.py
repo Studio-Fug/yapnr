@@ -12,9 +12,10 @@ this package and all outputs stay byte-identical.
   rip-reserve-restore) run by ``python -m pnr.shove``.
 * :mod:`pnr.shove.gates` - the whole-transaction gate against the original board.
 """
+
 import os
 
 
 def enabled(env=None):
     """True when PNR_SHOVE=1 in ``env`` (default: this process)."""
-    return (os.environ if env is None else env).get('PNR_SHOVE') == '1'
+    return (os.environ if env is None else env).get("PNR_SHOVE") == "1"

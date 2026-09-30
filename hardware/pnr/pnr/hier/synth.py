@@ -10,6 +10,7 @@ same relative placement and must pass individually.
 Output per template (``<out>/<template-id>/``): ``trials.jsonl`` and
 ``library.json`` holding the ranked layouts as relative poses.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -55,6 +56,7 @@ def _trial(args):
     from pnr.place.placer import place
     from pnr.place.initial_pool import _route_metrics
     from pnr.route.detail.router import route_board
+
     t = time.monotonic()
     w, h, u, a = size
     rec = dict(blocks=names, width=w, height=h, utilisation=u, aspect=a, seed=seed, area=w * h)
@@ -69,50 +71,54 @@ def _trial(args):
         else:
             placed, report = place(sg, sc, seed=seed, iters=iters, orient=True, channel_rules=sr)
             legal = report.legal
-        rec['legal'] = legal
+        rec["legal"] = legal
         if not legal:
-            rec['status'] = 'illegal'
+            rec["status"] = "illegal"
             return rec
-        rec['placed'] = placed.to_json(indent=None)
+        rec["placed"] = placed.to_json(indent=None)
         # Relative poses keyed by local path, so the layout transfers to twins.
-        local = {local_key(rep, c.address): [c.pos[0], c.pos[1], c.rot, c.side]
-                 for c in placed.components}
-        rec['layout'] = local
+        local = {
+            local_key(rep, c.address): [c.pos[0], c.pos[1], c.rot, c.side]
+            for c in placed.components
+        }
+        rec["layout"] = local
         results = []
         for name in names:
             blk = blocks[name]
             g2, c2, r2 = instance_board(graph, constraints, rules, blk, local, w, h)
             route = route_board(g2, c2, r2, pitch=None, max_iters=route_iters)
             m = _route_metrics(route)
-            m['port_debt_mm'] = _port_debt(g2, blk.external_nets, w, h)
-            m['instance'] = name
-            m['tracks'] = [[n, la, list(p), list(q), wd] for n, la, p, q, wd in route.tracks]
-            m['vias'] = [list(v) for v in route.vias]
+            m["port_debt_mm"] = _port_debt(g2, blk.external_nets, w, h)
+            m["instance"] = name
+            m["tracks"] = [[n, la, list(p), list(q), wd] for n, la, p, q, wd in route.tracks]
+            m["vias"] = [list(v) for v in route.vias]
             results.append(m)
-        rec['instances'] = [{k: v for k, v in m.items() if k not in ('tracks', 'vias')}
-                            for m in results]
-        rec['routes'] = {m['instance']: dict(tracks=m['tracks'], vias=m['vias']) for m in results}
-        rec['missing'] = sum(m['missing_connections'] for m in results)
-        rec['port_debt_mm'] = sum(m['port_debt_mm'] for m in results)
-        rec['n_vias'] = sum(len(m['vias']) for m in results)
-        rec['copper_mm'] = sum(m['copper_length_mm'] for m in results)
-        rec['status'] = 'ok'
+        rec["instances"] = [
+            {k: v for k, v in m.items() if k not in ("tracks", "vias")} for m in results
+        ]
+        rec["routes"] = {m["instance"]: dict(tracks=m["tracks"], vias=m["vias"]) for m in results}
+        rec["missing"] = sum(m["missing_connections"] for m in results)
+        rec["port_debt_mm"] = sum(m["port_debt_mm"] for m in results)
+        rec["n_vias"] = sum(len(m["vias"]) for m in results)
+        rec["copper_mm"] = sum(m["copper_length_mm"] for m in results)
+        rec["status"] = "ok"
     except Exception as error:
-        rec.update(status='failed', error=repr(error), traceback=traceback.format_exc()[-2500:])
+        rec.update(status="failed", error=repr(error), traceback=traceback.format_exc()[-2500:])
     finally:
-        rec['seconds'] = time.monotonic() - t
+        rec["seconds"] = time.monotonic() - t
     return rec
 
 
 def local_key(block, address):
     if block.prefix and address.startswith(block.prefix):
-        return address[len(block.prefix):].lstrip('.') or '@'
-    return address or '@'
+        return address[len(block.prefix) :].lstrip(".") or "@"
+    return address or "@"
 
 
 def instance_board(graph, constraints, rules, block, local, w, h):
     """Sub-board for ``block`` posed from a template layout keyed by local path."""
     from pnr.place.geometry import set_component_side
+
     g2, c2, r2 = sub_board(graph, constraints, rules, block, w, h)
     for c in g2.components:
         x, y, rot, side = local[local_key(block, c.address)]
@@ -122,30 +128,38 @@ def instance_board(graph, constraints, rules, block, local, w, h):
 
 
 def rank_key(r):
-    return (r.get('missing', math.inf), r.get('port_debt_mm', math.inf), r.get('area', math.inf),
-            r.get('n_vias', math.inf), r.get('copper_mm', math.inf))
+    return (
+        r.get("missing", math.inf),
+        r.get("port_debt_mm", math.inf),
+        r.get("area", math.inf),
+        r.get("n_vias", math.inf),
+        r.get("copper_mm", math.inf),
+    )
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('--out', type=Path, required=True)
-    ap.add_argument('--inputs', type=Path, required=True)
-    ap.add_argument('--constraints', type=Path, required=True)
-    ap.add_argument('--block', action='append', default=[], help='restrict to blocks with these names')
-    ap.add_argument('--seeds', type=int, default=4)
-    ap.add_argument('--iters', type=int, default=600)
-    ap.add_argument('--route-iters', type=int, default=10)
-    ap.add_argument('--procs', type=int, default=6)
-    ap.add_argument('--keep', type=int, default=6)
+    ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--inputs", type=Path, required=True)
+    ap.add_argument("--constraints", type=Path, required=True)
+    ap.add_argument(
+        "--block", action="append", default=[], help="restrict to blocks with these names"
+    )
+    ap.add_argument("--seeds", type=int, default=4)
+    ap.add_argument("--iters", type=int, default=600)
+    ap.add_argument("--route-iters", type=int, default=10)
+    ap.add_argument("--procs", type=int, default=6)
+    ap.add_argument("--keep", type=int, default=6)
     a = ap.parse_args(argv)
     from pnr.mc.halving import _load
+
     graph, constraints, rules = _load(a.inputs, a.constraints)
     blocks = extract_blocks(graph, constraints)
     templates = {}
     for b in blocks:
         templates.setdefault(b.template, []).append(b)
     a.out.mkdir(parents=True, exist_ok=True)
-    (a.out / 'blocks.json').write_text(json.dumps([b.to_dict() for b in blocks], indent=2))
+    (a.out / "blocks.json").write_text(json.dumps([b.to_dict() for b in blocks], indent=2))
     jobs = []
     for template, members in templates.items():
         names = [b.name for b in members]
@@ -154,31 +168,63 @@ def main(argv=None):
         tid = _template_id(template)
         d = a.out / tid
         d.mkdir(exist_ok=True)
-        (d / 'template.json').write_text(json.dumps(dict(template_id=tid, blocks=names), indent=2))
+        (d / "template.json").write_text(json.dumps(dict(template_id=tid, blocks=names), indent=2))
         for size in aspect_sizes(graph, members[0]):
             for seed in range(a.seeds):
-                jobs.append((tid, (str(a.inputs), str(a.constraints), names, size, seed, a.iters, a.route_iters, None)))
-    print('trials', len(jobs), flush=True)
+                jobs.append(
+                    (
+                        tid,
+                        (
+                            str(a.inputs),
+                            str(a.constraints),
+                            names,
+                            size,
+                            seed,
+                            a.iters,
+                            a.route_iters,
+                            None,
+                        ),
+                    )
+                )
+    print("trials", len(jobs), flush=True)
     by_t = {}
     with cf.ProcessPoolExecutor(a.procs) as pool:
         futs = {pool.submit(_trial, args): tid for tid, args in jobs}
         for f in cf.as_completed(futs):
             tid = futs[f]
             rec = f.result()
-            rec['template_id'] = tid
-            with (a.out / tid / 'trials.jsonl').open('a') as fh:
-                fh.write(json.dumps(rec) + '\n')
+            rec["template_id"] = tid
+            with (a.out / tid / "trials.jsonl").open("a") as fh:
+                fh.write(json.dumps(rec) + "\n")
             by_t.setdefault(tid, []).append(rec)
-            print(tid, rec['blocks'][0], rec.get('status'), rec.get('missing'),
-                  '%.1fx%.1f' % (rec['width'], rec['height']), 'seed', rec['seed'],
-                  '%.0fs' % rec['seconds'], flush=True)
-            ok = sorted((r for r in by_t[tid] if r.get('status') == 'ok'), key=rank_key)
-            (a.out / tid / 'library.json').write_text(json.dumps(dict(
-                blocks=rec['blocks'], ranked=[{k: r[k] for k in r if k not in ('placed',)} for r in ok[:a.keep]],
-                placed=[r['placed'] for r in ok[:a.keep]],
-                counts=dict(total=len(by_t[tid]), ok=len(ok),
-                            complete=sum(1 for r in ok if r['missing'] == 0))), indent=1))
+            print(
+                tid,
+                rec["blocks"][0],
+                rec.get("status"),
+                rec.get("missing"),
+                "%.1fx%.1f" % (rec["width"], rec["height"]),
+                "seed",
+                rec["seed"],
+                "%.0fs" % rec["seconds"],
+                flush=True,
+            )
+            ok = sorted((r for r in by_t[tid] if r.get("status") == "ok"), key=rank_key)
+            (a.out / tid / "library.json").write_text(
+                json.dumps(
+                    dict(
+                        blocks=rec["blocks"],
+                        ranked=[{k: r[k] for k in r if k not in ("placed",)} for r in ok[: a.keep]],
+                        placed=[r["placed"] for r in ok[: a.keep]],
+                        counts=dict(
+                            total=len(by_t[tid]),
+                            ok=len(ok),
+                            complete=sum(1 for r in ok if r["missing"] == 0),
+                        ),
+                    ),
+                    indent=1,
+                )
+            )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

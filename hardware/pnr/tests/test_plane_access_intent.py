@@ -41,25 +41,38 @@ class IntentTests(unittest.TestCase):
             self.assertEqual(size_array(intent, FAB)["count"], 3)
             larger = size_array(dict(intent, rms_current_a=10, peak_current_a=20), FAB)
             self.assertGreater(larger["count"], 3)
-            self.assertLessEqual(
-                larger["per_via_loss_w"], FAB["via_barrel_loss_budget_w"]
-            )
+            self.assertLessEqual(larger["per_via_loss_w"], FAB["via_barrel_loss_budget_w"])
             self.assertLessEqual(larger["peak_drop_v"], FAB["via_array_peak_drop_v"])
 
     def test_array_space_follows_source_current_and_is_idempotent(self):
         from pnr.graph import BoardGraph, Component, Pad
         from pnr.plane_intent import reserve_array_space
-        c = Component('Q987', 'x', (5,5), 0, 'top', (2,3), (2,3),
-            pads=[Pad(str(i), 'GND', (1,y), (.7,.5)) for i,y in enumerate((-1,0,1),1)])
-        g = BoardGraph('test', [c], [])
-        intent = dict(ref='Q987', pads=['1','2','3'], kind='power_array',
-            rms_current_a=5, peak_current_a=16, max_array_span_mm=10)
-        reserve_array_space(g, [intent], FAB, .2)
+
+        c = Component(
+            "Q987",
+            "x",
+            (5, 5),
+            0,
+            "top",
+            (2, 3),
+            (2, 3),
+            pads=[Pad(str(i), "GND", (1, y), (0.7, 0.5)) for i, y in enumerate((-1, 0, 1), 1)],
+        )
+        g = BoardGraph("test", [c], [])
+        intent = dict(
+            ref="Q987",
+            pads=["1", "2", "3"],
+            kind="power_array",
+            rms_current_a=5,
+            peak_current_a=16,
+            max_array_span_mm=10,
+        )
+        reserve_array_space(g, [intent], FAB, 0.2)
         first = c.courtyard
         self.assertGreater(first[0], 2)
-        reserve_array_space(g, [intent], FAB, .2)
+        reserve_array_space(g, [intent], FAB, 0.2)
         self.assertEqual(c.courtyard, first)
-        reserve_array_space(g, [dict(intent,rms_current_a=10,peak_current_a=20)], FAB, .2)
+        reserve_array_space(g, [dict(intent, rms_current_a=10, peak_current_a=20)], FAB, 0.2)
         self.assertGreater(max(c.courtyard), max(first))
 
     def test_missing_process_data_fails_closed(self):

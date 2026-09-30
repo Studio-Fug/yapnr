@@ -74,9 +74,7 @@ class JointTest(unittest.TestCase):
     def test_time_limit_during_search_discards_transaction(self):
         ticks = iter(range(100000))
         r = Request("a", "a", [(0, 0)], [(4, 0)])
-        with patch(
-            "pnr.route.detail.layered.time.monotonic", side_effect=lambda: next(ticks)
-        ):
+        with patch("pnr.route.detail.layered.time.monotonic", side_effect=lambda: next(ticks)):
             result = solve_layered_region(
                 [r], (-1, -1, 5, 1), lambda *a: True, lambda *a: True, max_seconds=3
             )

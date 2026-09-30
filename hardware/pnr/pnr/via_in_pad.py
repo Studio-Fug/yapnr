@@ -33,6 +33,7 @@ to pcbnew pads and vias, for every engine path that places or audits a via:
 KiCad's own DRC cannot express the 5B in-pad geometry (the generated .kicad_dru
 only forbids non-0.20-drill vias within 0.127 of SMD pads), so the engine checks it.
 """
+
 import math
 import os
 from collections import defaultdict
@@ -49,16 +50,19 @@ def _xy(p):
 
 def _vec(p):
     import pcbnew
+
     return pcbnew.VECTOR2I(round(p[0] * 1e6), round(p[1] * 1e6))
 
 
 def is_smd(pad):
     import pcbnew
-    return pad.GetClass() == 'PAD' and pad.GetAttribute() == pcbnew.PAD_ATTRIB_SMD
+
+    return pad.GetClass() == "PAD" and pad.GetAttribute() == pcbnew.PAD_ATTRIB_SMD
 
 
 def pad_layer(pad):
     import pcbnew
+
     return pcbnew.F_Cu if pad.IsOnLayer(pcbnew.F_Cu) else pcbnew.B_Cu
 
 
@@ -72,6 +76,7 @@ def pad_frame(pad, layer=None):
     """
     import pcbnew as k
     from pnr.pad_entry import rectangular_custom_land
+
     layer = pad_layer(pad) if layer is None else layer
     shape = pad.GetShape()
     angle = pad.GetOrientation().AsDegrees()
@@ -116,6 +121,7 @@ def qualifies(g, pad, point, diameter, drill, layer=None):
     # General copper: the hole disk plus its margin and the via copper must lie in
     # the actual land (no "centred" relaxation without an axis).
     import pcbnew as k
+
     layer = pad_layer(pad) if layer is None else layer
     for radius in (drill / 2 + ip.hole_margin, diameter / 2):
         poly = k.SHAPE_POLY_SET()
@@ -136,7 +142,7 @@ def smd_keepout_violated(g, pad, pad_shape, via_shape, net, point, diameter, dri
     """
     if g.via_to_smd_pad is None:
         return pad_shape.Collide(via_shape, LEGACY_KEEP_NM)
-    if not pad_shape.Collide(via_shape, round((g.via_to_smd_pad + .001) * 1e6)):
+    if not pad_shape.Collide(via_shape, round((g.via_to_smd_pad + 0.001) * 1e6)):
         return False
     return not (pad.GetNetname() == net and qualifies(g, pad, point, diameter, drill, layer))
 
@@ -144,9 +150,15 @@ def smd_keepout_violated(g, pad, pad_shape, via_shape, net, point, diameter, dri
 def containing_pads(pads, point, net=None):
     """SMD pads (optionally of ``net``) whose copper contains ``point`` (mm)."""
     import pcbnew as k
+
     probe = k.SHAPE_CIRCLE(_vec(point), 1)
-    return [p for p in pads if is_smd(p) and (net is None or p.GetNetname() == net)
-            and p.GetEffectiveShape(pad_layer(p)).Collide(probe, 0)]
+    return [
+        p
+        for p in pads
+        if is_smd(p)
+        and (net is None or p.GetNetname() == net)
+        and p.GetEffectiveShape(pad_layer(p)).Collide(probe, 0)
+    ]
 
 
 def in_pad_size(g, pads, net, point):
@@ -176,6 +188,7 @@ def style_in_pad_via(g, via):
     inner antipad is hole + 2 x hole clearance (0.60) instead of pad + clearance.
     No-op for legacy and for vias outside the class. Returns True if applied."""
     import pcbnew as k
+
     ip = g.in_pad
     if ip is None or not ip.remove_unused_inner_pads:
         return False
@@ -190,8 +203,11 @@ def removes_unused_pads(item):
     (:func:`style_in_pad_via`). Pre-profile boards never have one (every via keeps
     all its pads), so legacy obstacle models are unchanged by the keepouts below."""
     import pcbnew as k
-    return (item.GetClass() == 'PCB_VIA'
-            and item.Padstack().UnconnectedLayerMode() != k.UNCONNECTED_LAYER_MODE_KEEP_ALL)
+
+    return (
+        item.GetClass() == "PCB_VIA"
+        and item.Padstack().UnconnectedLayerMode() != k.UNCONNECTED_LAYER_MODE_KEEP_ALL
+    )
 
 
 def hole_keepouts(g, item, layers):
@@ -209,7 +225,7 @@ def hole_keepouts(g, item, layers):
     if not removes_unused_pads(item):
         return []
     hole = item.GetEffectiveHoleShape()
-    gap = round(g.hole_clearance + .001, 9)
+    gap = round(g.hole_clearance + 0.001, 9)
     return [(la, hole, gap) for la in layers if item.IsOnLayer(la)]
 
 
@@ -220,10 +236,13 @@ def clearance_shapes(item, layer, gap_mm, hole_clearance_mm):
     that ``gap_mm`` from it is the via hole clearance from the drill wall. For
     obstacle checks that use one gap for every item."""
     import pcbnew as k
+
     shapes = [item.GetEffectiveShape(layer)]
     extra = hole_clearance_mm - gap_mm
     if extra > 0 and removes_unused_pads(item) and item.IsOnLayer(layer):
-        shapes.append(k.SHAPE_CIRCLE(item.GetPosition(), round(item.GetDrillValue() / 2 + extra * 1e6)))
+        shapes.append(
+            k.SHAPE_CIRCLE(item.GetPosition(), round(item.GetDrillValue() / 2 + extra * 1e6))
+        )
     return shapes
 
 
@@ -231,17 +250,29 @@ def pad_vias(board, pad, g=None, layer=None):
     """Same-net vias whose centre lies in ``pad``, with their 5B qualification:
     ``[(via, qualified)]``."""
     import pcbnew as k
+
     g = g or geometry()
     layer = pad_layer(pad) if layer is None else layer
     shape = pad.GetEffectiveShape(layer)
     out = []
     for v in board.GetTracks():
-        if v.GetClass() != 'PCB_VIA' or v.GetNetCode() != pad.GetNetCode():
+        if v.GetClass() != "PCB_VIA" or v.GetNetCode() != pad.GetNetCode():
             continue
         if not shape.Collide(k.SHAPE_CIRCLE(v.GetPosition(), 1), 0):
             continue
-        out.append((v, qualifies(g, pad, _xy(v.GetPosition()), v.GetWidth(layer) / 1e6,
-                                 v.GetDrillValue() / 1e6, layer)))
+        out.append(
+            (
+                v,
+                qualifies(
+                    g,
+                    pad,
+                    _xy(v.GetPosition()),
+                    v.GetWidth(layer) / 1e6,
+                    v.GetDrillValue() / 1e6,
+                    layer,
+                ),
+            )
+        )
     return out
 
 
@@ -249,20 +280,24 @@ def pad_policy(pad, rules):
     """The current contract of one pad: its terminal budget (the whole declared
     group budget; no implicit sharing) else a known net envelope, else None."""
     from pnr.electrical import net_policy, terminal_policy
-    if not rules.get('electrical_fab'):
+
+    if not rules.get("electrical_fab"):
         return None
     ref = pad.GetParentFootprint().GetReference()
     policy = terminal_policy(ref, [pad.GetNumber()], pad.GetNetname(), rules)
     if policy is None:
         policy = net_policy(pad.GetNetname(), rules)
-    return policy if policy.get('current_known') else None
+    return policy if policy.get("current_known") else None
 
 
 def array_requirement(policy, rules, g):
     """In-pad vias the engine's barrel model (``size_array``) needs for ``policy``
     at the in-pad drill, with the capacity of each count."""
     from pnr.plane_intent import size_array
-    fab = dict(rules['electrical_fab'], via_drill_mm=g.in_pad.drill, via_diameter_mm=g.in_pad.diameters[0])
+
+    fab = dict(
+        rules["electrical_fab"], via_drill_mm=g.in_pad.drill, via_diameter_mm=g.in_pad.diameters[0]
+    )
     return size_array(policy, fab)
 
 
@@ -276,6 +311,7 @@ def pad_array(board, pad, rules, g=None):
     layer), the only in-pad terminal attach that pad_entry qualifies.
     """
     from pnr.plane_intent import array_capacity
+
     g = g or geometry(rules)
     if g.in_pad is None:
         return None
@@ -286,18 +322,26 @@ def pad_array(board, pad, rules, g=None):
     if not vias:
         return None
     sizing = array_requirement(policy, rules, g)
-    capacity = array_capacity(rules['electrical_fab'], g.in_pad.drill, len(vias))
-    return dict(count=len(vias), required=sizing['count'], rms_current_a=policy['rms_current_a'],
-                peak_current_a=policy['peak_current_a'], carries=len(vias) >= sizing['count'], **capacity,
-                attach=array_attach(board, pad, rules, g))
+    capacity = array_capacity(rules["electrical_fab"], g.in_pad.drill, len(vias))
+    return dict(
+        count=len(vias),
+        required=sizing["count"],
+        rms_current_a=policy["rms_current_a"],
+        peak_current_a=policy["peak_current_a"],
+        carries=len(vias) >= sizing["count"],
+        **capacity,
+        attach=array_attach(board, pad, rules, g)
+    )
 
 
 # ------------------------------------------------------------------ terminal in-pad attach
 
+
 def layer_width(policy, layer):
     """The policy's full current width (mm) on copper ``layer`` (outer / inner)."""
     import pcbnew as k
-    return policy['outer_width_mm'] if layer in (k.F_Cu, k.B_Cu) else policy['inner_width_mm']
+
+    return policy["outer_width_mm"] if layer in (k.F_Cu, k.B_Cu) else policy["inner_width_mm"]
 
 
 def trunk_contact(point, diameter, a, z, width):
@@ -306,6 +350,7 @@ def trunk_contact(point, diameter, a, z, width):
     track narrower than the via must run through the via centre (contact of the
     track's own width, as :func:`pnr.pad_entry.witness` for lands smaller than it)."""
     from pnr.pad_entry import closest
+
     contact = min(diameter, width)
     return math.dist(point, closest(point, a, z)) <= (width - contact) / 2 + 1e-6
 
@@ -315,6 +360,7 @@ def full_width_groups(tracks, width):
     join only where their copper overlaps by a full ``width`` contact (as
     native_electrical.qualified_tree_pads), never by a grazing touch."""
     from pnr.route.detail.regional import segment_distance
+
     parent = list(range(len(tracks)))
 
     def find(i):
@@ -322,6 +368,7 @@ def full_width_groups(tracks, width):
             parent[i] = parent[parent[i]]
             i = parent[i]
         return i
+
     for i, (_, a, z, w) in enumerate(tracks):
         for j in range(i + 1, len(tracks)):
             _, c, d, v = tracks[j]
@@ -349,6 +396,7 @@ def array_attach(board, pad, rules, g=None):
     """
     import pcbnew as k
     from pnr.plane_intent import array_capacity
+
     g = g or geometry(rules)
     if g.in_pad is None or not is_smd(pad):
         return None
@@ -358,31 +406,62 @@ def array_attach(board, pad, rules, g=None):
     vias = [v for v, ok in pad_vias(board, pad, g) if ok and v.GetViaType() == k.VIATYPE_THROUGH]
     if not vias:
         return None
-    need = array_requirement(policy, rules, g)['count']
+    need = array_requirement(policy, rules, g)["count"]
     own = pad_layer(pad)
     best = (0, None, None, [])
     for layer in board.GetEnabledLayers().CuStack():
         if layer == own:
             continue
         width = layer_width(policy, layer)
-        tracks = [(t.m_Uuid.AsString(), _xy(t.GetStart()), _xy(t.GetEnd()), t.GetWidth() / 1e6)
-                  for t in board.GetTracks() if t.GetClass() == 'PCB_TRACK' and t.GetLayer() == layer
-                  and t.GetNetCode() == pad.GetNetCode() and t.GetWidth() / 1e6 + 1e-6 >= width]
+        tracks = [
+            (t.m_Uuid.AsString(), _xy(t.GetStart()), _xy(t.GetEnd()), t.GetWidth() / 1e6)
+            for t in board.GetTracks()
+            if t.GetClass() == "PCB_TRACK"
+            and t.GetLayer() == layer
+            and t.GetNetCode() == pad.GetNetCode()
+            and t.GetWidth() / 1e6 + 1e-6 >= width
+        ]
         for group in full_width_groups(tracks, width):
-            reached = [v for v in vias if any(
-                trunk_contact(_xy(v.GetPosition()), max(v.GetWidth(layer), v.GetWidth(k.F_Cu)) / 1e6, a, z, w)
-                for _, a, z, w in group)]
+            reached = [
+                v
+                for v in vias
+                if any(
+                    trunk_contact(
+                        _xy(v.GetPosition()),
+                        max(v.GetWidth(layer), v.GetWidth(k.F_Cu)) / 1e6,
+                        a,
+                        z,
+                        w,
+                    )
+                    for _, a, z, w in group
+                )
+            ]
             if len(reached) > best[0]:
                 best = (len(reached), layer, width, reached)
     connected, layer, width, reached = best
-    capacity = array_capacity(rules['electrical_fab'], g.in_pad.drill, connected) if connected else None
-    qualified = bool(capacity and capacity['max_rms_current_a'] + 1e-9 >= policy['rms_current_a']
-                     and capacity['max_peak_current_a'] + 1e-9 >= policy['peak_current_a'])
-    return dict(pad=pad.GetParentFootprint().GetReference() + '.' + pad.GetNumber(), pad_uuid=pad.m_Uuid.AsString(),
-                net=pad.GetNetname(), in_pad_vias=len(vias), connected=connected, required=need,
-                layer=board.GetLayerName(layer) if layer is not None else None, trunk_width_mm=width,
-                rms_current_a=policy['rms_current_a'], peak_current_a=policy['peak_current_a'],
-                capacity=capacity, vias=sorted(v.m_Uuid.AsString() for v in reached), qualified=qualified)
+    capacity = (
+        array_capacity(rules["electrical_fab"], g.in_pad.drill, connected) if connected else None
+    )
+    qualified = bool(
+        capacity
+        and capacity["max_rms_current_a"] + 1e-9 >= policy["rms_current_a"]
+        and capacity["max_peak_current_a"] + 1e-9 >= policy["peak_current_a"]
+    )
+    return dict(
+        pad=pad.GetParentFootprint().GetReference() + "." + pad.GetNumber(),
+        pad_uuid=pad.m_Uuid.AsString(),
+        net=pad.GetNetname(),
+        in_pad_vias=len(vias),
+        connected=connected,
+        required=need,
+        layer=board.GetLayerName(layer) if layer is not None else None,
+        trunk_width_mm=width,
+        rms_current_a=policy["rms_current_a"],
+        peak_current_a=policy["peak_current_a"],
+        capacity=capacity,
+        vias=sorted(v.m_Uuid.AsString() for v in reached),
+        qualified=qualified,
+    )
 
 
 def attach_axes(pad):
@@ -411,7 +490,7 @@ def attach_windows(board, pad, count, g):
     """
     ip = g.in_pad
     axes = attach_axes(pad)
-    if ip is not None and axes is None and count >= 1 and os.environ.get('PNR_SHOVE') == '1':
+    if ip is not None and axes is None and count >= 1 and os.environ.get("PNR_SHOVE") == "1":
         # General (non-analytic) custom land, e.g. an L-shaped sense pad: sample the
         # exact eroded copper (PNR_SHOVE=1 only; the default keeps returning []).
         return general_attach_sites(board, pad, count, g)
@@ -419,21 +498,32 @@ def attach_windows(board, pad, count, g):
         return []
     centre, along, across, size, corner = axes
     avoid = neighbour_offsets(board, pad)
-    rows = ([('staggered', in_pad_sites(ip, size, corner, avoid=avoid))] if avoid else []) + \
-        [('row_pitch', in_pad_sites(ip, size, corner))]
+    rows = ([("staggered", in_pad_sites(ip, size, corner, avoid=avoid))] if avoid else []) + [
+        ("row_pitch", in_pad_sites(ip, size, corner))
+    ]
     out, seen = [], set()
     for variant, sites in rows:
-        windows = [sites[i:i + count] for i in range(len(sites) - count + 1)]
+        windows = [sites[i : i + count] for i in range(len(sites) - count + 1)]
         for window in sorted(windows, key=lambda w: (round(abs(sum(w) / len(w)), 6), w)):
             if tuple(window) in seen:
                 continue
             seen.add(tuple(window))
-            points = [(round(centre[0] + u * along[0], 6), round(centre[1] + u * along[1], 6)) for u in window]
+            points = [
+                (round(centre[0] + u * along[0], 6), round(centre[1] + u * along[1], 6))
+                for u in window
+            ]
             sizes = [in_pad_size(g, [pad], pad.GetNetname(), p) for p in points]
             if any(s is None for s in sizes):
                 continue
-            out.append(dict(variant=variant, offsets_mm=list(window), across=across, neighbour_offsets_mm=avoid,
-                            vias=[(p, s[0], s[1]) for p, s in zip(points, sizes)]))
+            out.append(
+                dict(
+                    variant=variant,
+                    offsets_mm=list(window),
+                    across=across,
+                    neighbour_offsets_mm=avoid,
+                    vias=[(p, s[0], s[1]) for p, s in zip(points, sizes)],
+                )
+            )
     return out
 
 
@@ -446,9 +536,17 @@ def neighbour_offsets(board, pad, reach_mm=1.0):
     centre, size, angle, _ = frame
     wide = size[0] >= size[1]
     long_half, short_half = max(size) / 2, min(size) / 2
-    points = [(_xy(v.GetPosition()), v.GetNetCode()) for v in board.GetTracks() if v.GetClass() == 'PCB_VIA']
-    points += [(_xy(p.GetPosition()), p.GetNetCode()) for f in board.GetFootprints() for p in f.Pads()
-               if max(p.GetDrillSize().x, p.GetDrillSize().y) > 0 and p.GetNetCode() != pad.GetNetCode()]
+    points = [
+        (_xy(v.GetPosition()), v.GetNetCode())
+        for v in board.GetTracks()
+        if v.GetClass() == "PCB_VIA"
+    ]
+    points += [
+        (_xy(p.GetPosition()), p.GetNetCode())
+        for f in board.GetFootprints()
+        for p in f.Pads()
+        if max(p.GetDrillSize().x, p.GetDrillSize().y) > 0 and p.GetNetCode() != pad.GetNetCode()
+    ]
     out = []
     for point, net in points:
         if net == pad.GetNetCode():
@@ -471,6 +569,7 @@ def _rings(poly):
 def _edge_distance(point, rings):
     """Distance (mm) from ``point`` to the nearest polygon edge of ``rings``."""
     from pnr.pad_entry import closest
+
     best = math.inf
     for ring in rings:
         for a, z in zip(ring, ring[1:] + ring[:1]):
@@ -524,6 +623,7 @@ def general_attach_sites(board, pad, count, g, limit=8):
     collector/array_attach tests. Same dict shape as :func:`attach_windows`
     (``variant`` = 'general')."""
     import pcbnew as k
+
     ip = g.in_pad
     if ip is None or count < 1 or not is_smd(pad):
         return []
@@ -538,7 +638,7 @@ def general_attach_sites(board, pad, count, g, limit=8):
     if eroded.IsEmpty():
         return []
     candidates = {}
-    for point in _scan_midpoints(_rings(eroded), .025):
+    for point in _scan_midpoints(_rings(eroded), 0.025):
         point = (round(point[0], 4), round(point[1], 4))
         if point in candidates or not eroded.Contains(_vec(point)):
             continue
@@ -549,25 +649,35 @@ def general_attach_sites(board, pad, count, g, limit=8):
     if not candidates:
         return []
     centre = _xy(pad.GetPosition())
-    ranked = sorted(candidates, key=lambda p: (-round(candidates[p][0], 4), math.dist(p, centre), p))
+    ranked = sorted(
+        candidates, key=lambda p: (-round(candidates[p][0], 4), math.dist(p, centre), p)
+    )
     if count == 1:
         # Spread the offered sites so a blocked neighbourhood does not use them all.
         chosen = []
         for p in ranked:
-            if all(math.dist(p, q) >= .05 - 1e-9 for q in chosen):
+            if all(math.dist(p, q) >= 0.05 - 1e-9 for q in chosen):
                 chosen.append(p)
             if len(chosen) >= limit:
                 break
-        return [dict(variant='general', offsets_mm=[0.0], across=(0.0, 1.0), neighbour_offsets_mm=[],
-                     depth_mm=round(candidates[p][0], 4),
-                     vias=[(p, candidates[p][1][0], candidates[p][1][1])]) for p in chosen]
+        return [
+            dict(
+                variant="general",
+                offsets_mm=[0.0],
+                across=(0.0, 1.0),
+                neighbour_offsets_mm=[],
+                depth_mm=round(candidates[p][0], 4),
+                vias=[(p, candidates[p][1][0], candidates[p][1][1])],
+            )
+            for p in chosen
+        ]
     # Principal axis of the qualified sites (2x2 covariance, closed form).
     mx = sum(p[0] for p in ranked) / len(ranked)
     my = sum(p[1] for p in ranked) / len(ranked)
     sxx = sum((p[0] - mx) ** 2 for p in ranked)
     syy = sum((p[1] - my) ** 2 for p in ranked)
     sxy = sum((p[0] - mx) * (p[1] - my) for p in ranked)
-    angle = .5 * math.atan2(2 * sxy, sxx - syy)
+    angle = 0.5 * math.atan2(2 * sxy, sxx - syy)
     along = (math.cos(angle), math.sin(angle))
     across = (-along[1], along[0])
     lines = defaultdict(list)
@@ -581,16 +691,22 @@ def general_attach_sites(board, pad, count, g, limit=8):
             row = [start]
             for q in points:
                 u = (q[0] - mx) * along[0] + (q[1] - my) * along[1]
-                if abs(u - u0 - len(row) * ip.pitch) <= .0125:
+                if abs(u - u0 - len(row) * ip.pitch) <= 0.0125:
                     row.append(q)
                 if len(row) == count:
                     break
             if len(row) == count:
-                out.append(dict(variant='general', offsets_mm=[round(i * ip.pitch, 6) for i in range(count)],
-                                across=across, neighbour_offsets_mm=[],
-                                depth_mm=round(min(candidates[p][0] for p in row), 4),
-                                vias=[(p, candidates[p][1][0], candidates[p][1][1]) for p in row]))
-    out.sort(key=lambda w: -w['depth_mm'])
+                out.append(
+                    dict(
+                        variant="general",
+                        offsets_mm=[round(i * ip.pitch, 6) for i in range(count)],
+                        across=across,
+                        neighbour_offsets_mm=[],
+                        depth_mm=round(min(candidates[p][0] for p in row), 4),
+                        vias=[(p, candidates[p][1][0], candidates[p][1][1]) for p in row],
+                    )
+                )
+    out.sort(key=lambda w: -w["depth_mm"])
     return out[:limit]
 
 
@@ -599,6 +715,7 @@ def plan_pad(board, pad, rules, g=None):
     minimum pitch, and staggered against neighbouring different-net vias), what
     they carry in the engine's barrel model, and what the pad's contract needs."""
     from pnr.plane_intent import array_capacity
+
     g = g or geometry(rules)
     ip = g.in_pad
     frame = pad_frame(pad)
@@ -606,29 +723,46 @@ def plan_pad(board, pad, rules, g=None):
         return None
     _, size, _, corner = frame
     avoid = neighbour_offsets(board, pad)
-    rows = dict(row_pitch=in_pad_sites(ip, size, corner),
-                min_pitch=in_pad_sites(ip, size, corner, pitch=ip.min_pitch),
-                staggered=in_pad_sites(ip, size, corner, avoid=avoid) if avoid else None)
-    fab = rules.get('electrical_fab')
+    rows = dict(
+        row_pitch=in_pad_sites(ip, size, corner),
+        min_pitch=in_pad_sites(ip, size, corner, pitch=ip.min_pitch),
+        staggered=in_pad_sites(ip, size, corner, avoid=avoid) if avoid else None,
+    )
+    fab = rules.get("electrical_fab")
     policy = pad_policy(pad, rules)
-    out = dict(pad=pad.GetParentFootprint().GetReference() + '.' + pad.GetNumber(), net=pad.GetNetname(),
-               size_mm=list(size), via=dict(diameter_mm=ip.diameters[0], drill_mm=ip.drill),
-               neighbour_offsets_mm=avoid, sites_mm=rows)
+    out = dict(
+        pad=pad.GetParentFootprint().GetReference() + "." + pad.GetNumber(),
+        net=pad.GetNetname(),
+        size_mm=list(size),
+        via=dict(diameter_mm=ip.diameters[0], drill_mm=ip.drill),
+        neighbour_offsets_mm=avoid,
+        sites_mm=rows,
+    )
     if fab:
-        out['capacity'] = {name: dict(count=len(sites), **array_capacity(fab, ip.drill, len(sites)))
-                           for name, sites in rows.items() if sites is not None}
+        out["capacity"] = {
+            name: dict(count=len(sites), **array_capacity(fab, ip.drill, len(sites)))
+            for name, sites in rows.items()
+            if sites is not None
+        }
     if policy:
         need = array_requirement(policy, rules, g)
-        out['contract'] = dict(rms_current_a=policy['rms_current_a'], peak_current_a=policy['peak_current_a'],
-                               required_count=need['count'], sources=policy.get('terminal_sources') or policy.get('sources'))
-        out['carries'] = {name: len(sites) >= need['count'] for name, sites in rows.items() if sites is not None}
+        out["contract"] = dict(
+            rms_current_a=policy["rms_current_a"],
+            peak_current_a=policy["peak_current_a"],
+            required_count=need["count"],
+            sources=policy.get("terminal_sources") or policy.get("sources"),
+        )
+        out["carries"] = {
+            name: len(sites) >= need["count"] for name, sites in rows.items() if sites is not None
+        }
     return out
 
 
 def _via_rows(board, g):
     """``(rows, qualified pads by label)`` of :func:`audit`."""
     import pcbnew as k
-    keep = LEGACY_KEEP_NM if g.via_to_smd_pad is None else round((g.via_to_smd_pad + .001) * 1e6)
+
+    keep = LEGACY_KEEP_NM if g.via_to_smd_pad is None else round((g.via_to_smd_pad + 0.001) * 1e6)
     buckets = {}
     pads = []
     for f in board.GetFootprints():
@@ -636,7 +770,12 @@ def _via_rows(board, g):
             if not is_smd(p):
                 continue
             pb = p.GetBoundingBox()
-            box = (pb.GetLeft() - keep, pb.GetTop() - keep, pb.GetRight() + keep, pb.GetBottom() + keep)
+            box = (
+                pb.GetLeft() - keep,
+                pb.GetTop() - keep,
+                pb.GetRight() + keep,
+                pb.GetBottom() + keep,
+            )
             index = len(pads)
             pads.append((p, box))
             for x in range(math.floor(box[0] / 1e6), math.floor(box[2] / 1e6) + 1):
@@ -645,7 +784,7 @@ def _via_rows(board, g):
     rows = []
     arrays = {}
     for v in board.GetTracks():
-        if v.GetClass() != 'PCB_VIA':
+        if v.GetClass() != "PCB_VIA":
             continue
         point = _xy(v.GetPosition())
         box = v.GetBoundingBox()
@@ -656,8 +795,12 @@ def _via_rows(board, g):
         for index in sorted(near):
             pad, pb = pads[index]
             layer = pad_layer(pad)
-            if (pb[2] < box.GetLeft() or box.GetRight() < pb[0] or
-                    pb[3] < box.GetTop() or box.GetBottom() < pb[1]):
+            if (
+                pb[2] < box.GetLeft()
+                or box.GetRight() < pb[0]
+                or pb[3] < box.GetTop()
+                or box.GetBottom() < pb[1]
+            ):
                 continue
             shape = pad.GetEffectiveShape(layer)
             vshape = v.GetEffectiveShape(layer)
@@ -666,12 +809,24 @@ def _via_rows(board, g):
             d, h = v.GetWidth(layer) / 1e6, v.GetDrillValue() / 1e6
             same = v.GetNetCode() == pad.GetNetCode()
             qualified = same and qualifies(g, pad, point, d, h, layer)
-            violated = smd_keepout_violated(g, pad, shape, vshape, v.GetNetname(), point, d, h, layer)
-            label = pad.GetParentFootprint().GetReference() + '.' + pad.GetNumber()
-            rows.append(dict(pad=label, pad_net=pad.GetNetname(), via=v.m_Uuid.AsString(), via_net=v.GetNetname(),
-                             position=point, diameter_mm=d, drill_mm=h,
-                             centre_in_pad=shape.Collide(k.SHAPE_CIRCLE(v.GetPosition(), 1), 0),
-                             in_pad_qualified=qualified, allowed=not violated))
+            violated = smd_keepout_violated(
+                g, pad, shape, vshape, v.GetNetname(), point, d, h, layer
+            )
+            label = pad.GetParentFootprint().GetReference() + "." + pad.GetNumber()
+            rows.append(
+                dict(
+                    pad=label,
+                    pad_net=pad.GetNetname(),
+                    via=v.m_Uuid.AsString(),
+                    via_net=v.GetNetname(),
+                    position=point,
+                    diameter_mm=d,
+                    drill_mm=h,
+                    centre_in_pad=shape.Collide(k.SHAPE_CIRCLE(v.GetPosition(), 1), 0),
+                    in_pad_qualified=qualified,
+                    allowed=not violated,
+                )
+            )
             if qualified and label not in arrays:
                 arrays[label] = pad
     return rows, arrays
@@ -688,20 +843,26 @@ def audit(board, rules):
         report = pad_array(board, pad, rules, g)
         if report:
             current[label] = report
-    report = dict(profile_in_pad=g.in_pad is not None, via_to_smd_pad_mm=g.via_to_smd_pad,
-                  vias=rows, forbidden=sum(not r['allowed'] for r in rows),
-                  in_pad_qualified=sum(r['in_pad_qualified'] for r in rows), in_pad_arrays=current)
+    report = dict(
+        profile_in_pad=g.in_pad is not None,
+        via_to_smd_pad_mm=g.via_to_smd_pad,
+        vias=rows,
+        forbidden=sum(not r["allowed"] for r in rows),
+        in_pad_qualified=sum(r["in_pad_qualified"] for r in rows),
+        in_pad_arrays=current,
+    )
     if g.in_pad is not None:
         # Pads whose terminal is attached by its in-pad array (array_attach).
-        report['in_pad_terminal_attaches'] = sorted(label for label, r in current.items()
-                                                    if (r.get('attach') or {}).get('qualified'))
+        report["in_pad_terminal_attaches"] = sorted(
+            label for label, r in current.items() if (r.get("attach") or {}).get("qualified")
+        )
     return report
 
 
 def forbidden_vias(board, g):
     """UUIDs of vias that break the via-to-SMD-pad rule (:func:`audit` rows with
     ``allowed`` False)."""
-    return {r['via'] for r in _via_rows(board, g)[0] if not r['allowed']}
+    return {r["via"] for r in _via_rows(board, g)[0] if not r["allowed"]}
 
 
 def new_forbidden(before, after, rules):

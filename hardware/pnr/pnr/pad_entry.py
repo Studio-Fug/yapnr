@@ -36,23 +36,32 @@ def required_width(pad, rules):
     for cls in rules.get("net_classes", []):
         if pad.GetNetname() in cls.get("nets", []) and cls.get("width_mm") is not None:
             width = max(width, cls["width_mm"])
-    width = max(width, rules.get("electrical_nets", {}).get(pad.GetNetname(), {}).get("outer_width_mm", 0))
-    if rules.get('electrical_fab'):
+    width = max(
+        width, rules.get("electrical_nets", {}).get(pad.GetNetname(), {}).get("outer_width_mm", 0)
+    )
+    if rules.get("electrical_fab"):
         from pnr.electrical import terminal_policy
-        p = terminal_policy(pad.GetParentFootprint().GetReference(), [pad.GetNumber()], pad.GetNetname(), rules)
-        if p: width = p['outer_width_mm']
+
+        p = terminal_policy(
+            pad.GetParentFootprint().GetReference(), [pad.GetNumber()], pad.GetNetname(), rules
+        )
+        if p:
+            width = p["outer_width_mm"]
     contract = width_contract(pad, rules)
     if contract:  # PNR_TERMINAL_MIN_WIDTH=1: source minimum is a hard floor
-        width = max(width, contract['min_width_mm'])
+        width = max(width, contract["min_width_mm"])
     return width
 
 
 def width_contract(pad, rules):
     """The pad's @pnr-terminal-width contract (PNR_TERMINAL_MIN_WIDTH=1) or None."""
-    if not rules.get('terminal_width_intents'):
+    if not rules.get("terminal_width_intents"):
         return None
     from pnr.electrical import terminal_width
-    return terminal_width(pad.GetParentFootprint().GetReference(), [pad.GetNumber()], pad.GetNetname(), rules)
+
+    return terminal_width(
+        pad.GetParentFootprint().GetReference(), [pad.GetNumber()], pad.GetNetname(), rules
+    )
 
 
 def entry_widths(pad, rules):
@@ -64,8 +73,8 @@ def entry_widths(pad, rules):
     """
     required = required_width(pad, rules)
     contract = width_contract(pad, rules)
-    if contract and contract['preferred_width_mm'] > required + 1e-9:
-        return [contract['preferred_width_mm'], required]
+    if contract and contract["preferred_width_mm"] > required + 1e-9:
+        return [contract["preferred_width_mm"], required]
     return [required]
 
 
@@ -75,10 +84,12 @@ def width_choice(pad, rules, width_mm):
     contract = width_contract(pad, rules)
     if not contract:
         return None
-    return 'preferred' if width_mm + 1e-6 >= contract['preferred_width_mm'] else 'required'
+    return "preferred" if width_mm + 1e-6 >= contract["preferred_width_mm"] else "required"
 
 
-def widen_contract_stub(board, pad, layer, touching, rules, oracle, max_segments=4, max_length_mm=3.0):
+def widen_contract_stub(
+    board, pad, layer, touching, rules, oracle, max_segments=4, max_length_mm=3.0
+):
     """Widen an existing narrow terminal stub in place (PNR_TERMINAL_MIN_WIDTH=1).
 
     Copper reused from a block macro or an earlier pass can predate the contract.
@@ -89,8 +100,13 @@ def widen_contract_stub(board, pad, layer, touching, rules, oracle, max_segments
     Existing copper is never deleted or narrowed. Returns a record or None.
     """
     import pcbnew
-    if pad.GetShape() not in (pcbnew.PAD_SHAPE_RECT, pcbnew.PAD_SHAPE_ROUNDRECT,
-                              pcbnew.PAD_SHAPE_OVAL, pcbnew.PAD_SHAPE_CIRCLE):
+
+    if pad.GetShape() not in (
+        pcbnew.PAD_SHAPE_RECT,
+        pcbnew.PAD_SHAPE_ROUNDRECT,
+        pcbnew.PAD_SHAPE_OVAL,
+        pcbnew.PAD_SHAPE_CIRCLE,
+    ):
         return None
     required = required_width(pad, rules)
     narrow = [t for t in touching if t.GetWidth() / 1e6 + 1e-6 < required]
@@ -98,10 +114,14 @@ def widen_contract_stub(board, pad, layer, touching, rules, oracle, max_segments
         return None
     code, net, center = pad.GetNetCode(), pad.GetNetname(), xy(pad.GetPosition())
     same = [t for t in board.GetTracks() if t.GetNetCode() == code]
-    tracks = [t for t in same if t.GetClass() == 'PCB_TRACK' and t.GetLayer() == layer]
-    holes = [xy(t.GetPosition()) for t in same if t.GetClass() == 'PCB_VIA']
-    holes += [xy(q.GetPosition()) for f in board.GetFootprints() for q in f.Pads()
-              if q.GetNetCode() == code and q.GetAttribute() == pcbnew.PAD_ATTRIB_PTH]
+    tracks = [t for t in same if t.GetClass() == "PCB_TRACK" and t.GetLayer() == layer]
+    holes = [xy(t.GetPosition()) for t in same if t.GetClass() == "PCB_VIA"]
+    holes += [
+        xy(q.GetPosition())
+        for f in board.GetFootprints()
+        for q in f.Pads()
+        if q.GetNetCode() == code and q.GetAttribute() == pcbnew.PAD_ATTRIB_PTH
+    ]
     near = lambda a, b: math.dist(a, b) <= 1e-3
     ends = lambda t: (xy(t.GetStart()), xy(t.GetEnd()))
     for first in sorted(narrow, key=lambda t: min(math.dist(center, e) for e in ends(t))):
@@ -112,7 +132,11 @@ def widen_contract_stub(board, pad, layer, touching, rules, oracle, max_segments
             if any(near(far, h) for h in holes):
                 done = True
                 break
-            joined = [t for t in tracks if t.m_Uuid.AsString() not in seen and any(near(far, e) for e in ends(t))]
+            joined = [
+                t
+                for t in tracks
+                if t.m_Uuid.AsString() not in seen and any(near(far, e) for e in ends(t))
+            ]
             if len(joined) != 1:
                 break  # dead end or branch: not a simple terminal stub
             nxt = joined[0]
@@ -147,8 +171,12 @@ def widen_contract_stub(board, pad, layer, touching, rules, oracle, max_segments
                 board.Add(t)
                 t.thisown = False
                 oracle.reserve_track(net, layer, p, q, width)
-            return dict(width_mm=width, choice=width_choice(pad, rules, width), segments=len(new),
-                        length_mm=round(sum(math.dist(p, q) for p, q in zip(path, path[1:])), 4))
+            return dict(
+                width_mm=width,
+                choice=width_choice(pad, rules, width),
+                segments=len(new),
+                length_mm=round(sum(math.dist(p, q) for p, q in zip(path, path[1:])), 4),
+            )
     return None
 
 
@@ -165,10 +193,11 @@ def terminal_width_report(board, rules):
     hard-floor failures also appear as blocked entries. Empty when the flag is off.
     """
     import pcbnew
+
     rows = []
-    if not rules.get('terminal_width_intents'):
+    if not rules.get("terminal_width_intents"):
         return rows
-    tracks = [t for t in board.GetTracks() if t.GetClass() == 'PCB_TRACK']
+    tracks = [t for t in board.GetTracks() if t.GetClass() == "PCB_TRACK"]
     attached = None
     for fp in board.GetFootprints():
         for pad in fp.Pads():
@@ -179,39 +208,60 @@ def terminal_width_report(board, rules):
                 if not pad.IsOnLayer(layer):
                     continue
                 shape = pad.GetEffectiveShape(layer)
-                touching = [t for t in tracks if t.GetNetCode() == pad.GetNetCode() and t.GetLayer() == layer
-                            and shape.Collide(t.GetEffectiveShape(layer), 0)]
-                lo, hi = contract['min_width_mm'], contract['preferred_width_mm']
+                touching = [
+                    t
+                    for t in tracks
+                    if t.GetNetCode() == pad.GetNetCode()
+                    and t.GetLayer() == layer
+                    and shape.Collide(t.GetEffectiveShape(layer), 0)
+                ]
+                lo, hi = contract["min_width_mm"], contract["preferred_width_mm"]
                 qualified = [t.GetWidth() / 1e6 for t in touching if witness(pad, t, lo)]
                 width = max(qualified) if qualified else None
                 if any(witness(pad, t, hi) for t in touching):
-                    status = 'preferred'
+                    status = "preferred"
                 elif qualified:
-                    status = 'required'
+                    status = "required"
                 elif touching and all(t.GetWidth() / 1e6 + 1e-6 < lo for t in touching):
-                    status = 'below_min'
+                    status = "below_min"
                 elif touching:
-                    status = 'unqualified'
+                    status = "unqualified"
                 else:
                     if attached is None:
                         attached = array_attached_pads(board, rules)
-                    status = 'in_pad' if pad.m_Uuid.AsString() in attached else 'no_track'
-                rows.append(dict(pad=fp.GetReference() + '.' + pad.GetNumber(), net=pad.GetNetname(),
-                                 layer=board.GetLayerName(layer), status=status, entry_width_mm=width,
-                                 min_width_mm=contract['min_width_mm'],
-                                 preferred_width_mm=contract['preferred_width_mm']))
+                    status = "in_pad" if pad.m_Uuid.AsString() in attached else "no_track"
+                rows.append(
+                    dict(
+                        pad=fp.GetReference() + "." + pad.GetNumber(),
+                        net=pad.GetNetname(),
+                        layer=board.GetLayerName(layer),
+                        status=status,
+                        entry_width_mm=width,
+                        min_width_mm=contract["min_width_mm"],
+                        preferred_width_mm=contract["preferred_width_mm"],
+                    )
+                )
     return rows
 
 
-def rectangular_custom_land(pad,layer):
+def rectangular_custom_land(pad, layer):
     """Recognize actual rectangular custom copper, never its construction anchor."""
     import pcbnew as k
-    if pad.GetShape()!=k.PAD_SHAPE_CUSTOM:return None
-    poly=k.SHAPE_POLY_SET();pad.TransformShapeToPolygon(poly,layer,0,1000,k.ERROR_INSIDE)
-    if poly.OutlineCount()!=1 or poly.HoleCount(0) or poly.COutline(0).PointCount()!=4:return None
-    outline=poly.COutline(0);box=outline.BBox();points={(outline.CPoint(i).x,outline.CPoint(i).y) for i in range(4)}
-    if points!={(x,y) for x in (box.GetLeft(),box.GetRight()) for y in (box.GetTop(),box.GetBottom())}:return None
-    return xy(box.GetCenter()),(box.GetWidth()/1e6,box.GetHeight()/1e6)
+
+    if pad.GetShape() != k.PAD_SHAPE_CUSTOM:
+        return None
+    poly = k.SHAPE_POLY_SET()
+    pad.TransformShapeToPolygon(poly, layer, 0, 1000, k.ERROR_INSIDE)
+    if poly.OutlineCount() != 1 or poly.HoleCount(0) or poly.COutline(0).PointCount() != 4:
+        return None
+    outline = poly.COutline(0)
+    box = outline.BBox()
+    points = {(outline.CPoint(i).x, outline.CPoint(i).y) for i in range(4)}
+    if points != {
+        (x, y) for x in (box.GetLeft(), box.GetRight()) for y in (box.GetTop(), box.GetBottom())
+    }:
+        return None
+    return xy(box.GetCenter()), (box.GetWidth() / 1e6, box.GetHeight() / 1e6)
 
 
 def witness(pad, track, width):
@@ -219,24 +269,30 @@ def witness(pad, track, width):
 
     if track.GetClass() != "PCB_TRACK" or track.GetWidth() / 1e6 + 1e-6 < width:
         return False
-    rectangle=rectangular_custom_land(pad,track.GetLayer())
+    rectangle = rectangular_custom_land(pad, track.GetLayer())
     if rectangle:
-        center,size=rectangle;contact=min(width,min(size));q=closest(center,xy(track.GetStart()),xy(track.GetEnd()))
-        distance=math.dist(q,center);shift=min(distance,max(0.,(track.GetWidth()/1e6-contact)/2))
-        if distance:q=tuple(q[i]+(center[i]-q[i])*shift/distance for i in (0,1))
-        return disk_in_roundrect(q,center,size,0,0,contact)
+        center, size = rectangle
+        contact = min(width, min(size))
+        q = closest(center, xy(track.GetStart()), xy(track.GetEnd()))
+        distance = math.dist(q, center)
+        shift = min(distance, max(0.0, (track.GetWidth() / 1e6 - contact) / 2))
+        if distance:
+            q = tuple(q[i] + (center[i] - q[i]) * shift / distance for i in (0, 1))
+        return disk_in_roundrect(q, center, size, 0, 0, contact)
     if pad.GetShape() == pcbnew.PAD_SHAPE_CUSTOM:
         # Custom copper has a tiny construction anchor; its nominal GetSize is
         # not the conductive pad. Require the same full-width disk in its actual
         # polygon, conservatively eroded with a micron-scale geometry margin.
         polygon = pcbnew.SHAPE_POLY_SET()
         pad.TransformShapeToPolygon(polygon, track.GetLayer(), 0, 1000, pcbnew.ERROR_INSIDE)
-        polygon.Inflate(-round(width*500000)-2000,
-                        pcbnew.CORNER_STRATEGY_ROUND_ALL_CORNERS, 1000)
+        polygon.Inflate(
+            -round(width * 500000) - 2000, pcbnew.CORNER_STRATEGY_ROUND_ALL_CORNERS, 1000
+        )
         if not polygon.OutlineCount():
             return False
-        center_region = pcbnew.SHAPE_SEGMENT(track.GetStart(), track.GetEnd(),
-            max(0, track.GetWidth()-round(width*1e6)))
+        center_region = pcbnew.SHAPE_SEGMENT(
+            track.GetStart(), track.GetEnd(), max(0, track.GetWidth() - round(width * 1e6))
+        )
         return polygon.Collide(center_region, 0)
     size = xy(pad.GetSize())
     shape = pad.GetShape()
@@ -265,38 +321,73 @@ def witness(pad, track, width):
     # KiCad positive angles rotate toward negative native Y; the analytic
     # disk predicate uses Cartesian angles in these native XY coordinates.
     return disk_in_roundrect(
-        q, xy(pad.GetPosition()), size, -pad.GetOrientation().AsDegrees(), radius, min(width,min(size))
+        q,
+        xy(pad.GetPosition()),
+        size,
+        -pad.GetOrientation().AsDegrees(),
+        radius,
+        min(width, min(size)),
     )
-
 
 
 def neck_witness(pad, track, width, tracks, rules):
     """A source-authorized short neck must end in a full-current-width feed."""
-    if not rules.get('electrical_fab') or track.GetClass()!='PCB_TRACK':return False
-    from pnr.electrical import terminal_policy,neck_budget
-    policy=terminal_policy(pad.GetParentFootprint().GetReference(),[pad.GetNumber()],pad.GetNetname(),rules)
-    if not policy:return False
-    narrow=track.GetWidth()/1e6
-    if narrow>=width or narrow<rules.get('fab',{}).get('track_width_mm',.2):return False
-    if not neck_budget(policy,narrow,track.GetLength()/1e6,rules['electrical_fab']):return False
-    if not witness(pad,track,narrow):return False
-    center=xy(pad.GetPosition());a,z=xy(track.GetStart()),xy(track.GetEnd())
-    import pcbnew
-    if pad.GetShape() in (pcbnew.PAD_SHAPE_RECT,pcbnew.PAD_SHAPE_ROUNDRECT,pcbnew.PAD_SHAPE_OVAL,pcbnew.PAD_SHAPE_CIRCLE) or rectangular_custom_land(pad,track.GetLayer()):
-        probe=pcbnew.PCB_TRACK(pad.GetBoard());probe.SetLayer(track.GetLayer());probe.SetWidth(track.GetWidth())
-        qualified=[]
-        for endpoint in (track.GetStart(),track.GetEnd()):
-            probe.SetStart(endpoint);probe.SetEnd(endpoint)
-            qualified.append(witness(pad,probe,narrow))
-        if qualified[0]==qualified[1]:return False
-        far=track.GetEnd() if qualified[0] else track.GetStart()
-    else:
-        if min(math.dist(center,a),math.dist(center,z))>1e-6:return False
-        far=track.GetEnd() if math.dist(center,a)<math.dist(center,z) else track.GetStart()
-    import pcbnew
-    return any(t!=track and t.GetClass()=='PCB_TRACK' and t.GetNetCode()==track.GetNetCode() and t.GetLayer()==track.GetLayer() and t.GetWidth()/1e6+1e-6>=width and math.dist(xy(far), closest(xy(far),xy(t.GetStart()),xy(t.GetEnd()))) + narrow/2 <= t.GetWidth()/2e6 + 1e-6 for t in tracks)
+    if not rules.get("electrical_fab") or track.GetClass() != "PCB_TRACK":
+        return False
+    from pnr.electrical import terminal_policy, neck_budget
 
-def connected_land_witness(target,anchor,layer,rules):
+    policy = terminal_policy(
+        pad.GetParentFootprint().GetReference(), [pad.GetNumber()], pad.GetNetname(), rules
+    )
+    if not policy:
+        return False
+    narrow = track.GetWidth() / 1e6
+    if narrow >= width or narrow < rules.get("fab", {}).get("track_width_mm", 0.2):
+        return False
+    if not neck_budget(policy, narrow, track.GetLength() / 1e6, rules["electrical_fab"]):
+        return False
+    if not witness(pad, track, narrow):
+        return False
+    center = xy(pad.GetPosition())
+    a, z = xy(track.GetStart()), xy(track.GetEnd())
+    import pcbnew
+
+    if pad.GetShape() in (
+        pcbnew.PAD_SHAPE_RECT,
+        pcbnew.PAD_SHAPE_ROUNDRECT,
+        pcbnew.PAD_SHAPE_OVAL,
+        pcbnew.PAD_SHAPE_CIRCLE,
+    ) or rectangular_custom_land(pad, track.GetLayer()):
+        probe = pcbnew.PCB_TRACK(pad.GetBoard())
+        probe.SetLayer(track.GetLayer())
+        probe.SetWidth(track.GetWidth())
+        qualified = []
+        for endpoint in (track.GetStart(), track.GetEnd()):
+            probe.SetStart(endpoint)
+            probe.SetEnd(endpoint)
+            qualified.append(witness(pad, probe, narrow))
+        if qualified[0] == qualified[1]:
+            return False
+        far = track.GetEnd() if qualified[0] else track.GetStart()
+    else:
+        if min(math.dist(center, a), math.dist(center, z)) > 1e-6:
+            return False
+        far = track.GetEnd() if math.dist(center, a) < math.dist(center, z) else track.GetStart()
+    import pcbnew
+
+    return any(
+        t != track
+        and t.GetClass() == "PCB_TRACK"
+        and t.GetNetCode() == track.GetNetCode()
+        and t.GetLayer() == track.GetLayer()
+        and t.GetWidth() / 1e6 + 1e-6 >= width
+        and math.dist(xy(far), closest(xy(far), xy(t.GetStart()), xy(t.GetEnd()))) + narrow / 2
+        <= t.GetWidth() / 2e6 + 1e-6
+        for t in tracks
+    )
+
+
+def connected_land_witness(target, anchor, layer, rules):
     """Carry qualification across a full-width overlap with a custom pad bus.
 
     Require same package/net, explicit common current scope (or the same pin),
@@ -306,32 +397,54 @@ def connected_land_witness(target,anchor,layer,rules):
     supported. A gap or grazing overlap cannot carry qualification.
     """
     import pcbnew as k
-    if target.GetParentFootprint()!=anchor.GetParentFootprint() or target.GetNetCode()!=anchor.GetNetCode():return False
-    target_rectangle=rectangular_custom_land(target,layer)
-    anchor_rectangle=rectangular_custom_land(anchor,layer)
-    if bool(target_rectangle)==bool(anchor_rectangle):return False
-    supported=(k.PAD_SHAPE_RECT,k.PAD_SHAPE_ROUNDRECT,k.PAD_SHAPE_OVAL,k.PAD_SHAPE_CIRCLE)
-    if not target_rectangle and target.GetShape() not in supported:return False
-    if not anchor_rectangle and anchor.GetShape() not in supported:return False
-    if required_width(anchor,rules)+1e-6<required_width(target,rules):return False
-    ref=target.GetParentFootprint().GetReference()
-    if target.GetNumber()!=anchor.GetNumber() and not any(a.get('scope')=='terminal' and a['ref']==ref and a['net']==target.GetNetname() and {target.GetNumber(),anchor.GetNumber()}<=set(a['pads']) for a in rules.get('current_intents',[])):return False
+
+    if (
+        target.GetParentFootprint() != anchor.GetParentFootprint()
+        or target.GetNetCode() != anchor.GetNetCode()
+    ):
+        return False
+    target_rectangle = rectangular_custom_land(target, layer)
+    anchor_rectangle = rectangular_custom_land(anchor, layer)
+    if bool(target_rectangle) == bool(anchor_rectangle):
+        return False
+    supported = (k.PAD_SHAPE_RECT, k.PAD_SHAPE_ROUNDRECT, k.PAD_SHAPE_OVAL, k.PAD_SHAPE_CIRCLE)
+    if not target_rectangle and target.GetShape() not in supported:
+        return False
+    if not anchor_rectangle and anchor.GetShape() not in supported:
+        return False
+    if required_width(anchor, rules) + 1e-6 < required_width(target, rules):
+        return False
+    ref = target.GetParentFootprint().GetReference()
+    if target.GetNumber() != anchor.GetNumber() and not any(
+        a.get("scope") == "terminal"
+        and a["ref"] == ref
+        and a["net"] == target.GetNetname()
+        and {target.GetNumber(), anchor.GetNumber()} <= set(a["pads"])
+        for a in rules.get("current_intents", [])
+    ):
+        return False
     # The conventional land already carries its full source current when its
     # full land-width entry qualifies. The same full land-width disk must exist
     # in the pad-to-bus overlap; this is not a trace-width/current reduction.
-    target_size=target_rectangle[1] if target_rectangle else xy(target.GetSize())
-    anchor_size=anchor_rectangle[1] if anchor_rectangle else xy(anchor.GetSize())
+    target_size = target_rectangle[1] if target_rectangle else xy(target.GetSize())
+    anchor_size = anchor_rectangle[1] if anchor_rectangle else xy(anchor.GetSize())
     # Preserve the original bus-to-land criterion. A small bus must never
     # lower the required entry disk on a larger conventional land. In reverse,
     # require the entire conventional source-land contact in the overlap.
-    conventional_size=anchor_size if target_rectangle else target_size
-    contact=min(required_width(target,rules),min(conventional_size))
-    if contact<=.004:return False
-    overlap=k.SHAPE_POLY_SET();target.TransformShapeToPolygon(overlap,layer,0,1000,k.ERROR_INSIDE)
-    bus=k.SHAPE_POLY_SET();anchor.TransformShapeToPolygon(bus,layer,0,1000,k.ERROR_INSIDE);overlap.BooleanIntersection(bus)
+    conventional_size = anchor_size if target_rectangle else target_size
+    contact = min(required_width(target, rules), min(conventional_size))
+    if contact <= 0.004:
+        return False
+    overlap = k.SHAPE_POLY_SET()
+    target.TransformShapeToPolygon(overlap, layer, 0, 1000, k.ERROR_INSIDE)
+    bus = k.SHAPE_POLY_SET()
+    anchor.TransformShapeToPolygon(bus, layer, 0, 1000, k.ERROR_INSIDE)
+    overlap.BooleanIntersection(bus)
     # Up to2um tolerance for the native polygon approximation, same as existing
     # pad-land witnesses; a tiny corner overlap cannot contain this disk.
-    overlap.Inflate(-max(1,round(contact*500000)-1000),k.CORNER_STRATEGY_ROUND_ALL_CORNERS,1000)
+    overlap.Inflate(
+        -max(1, round(contact * 500000) - 1000), k.CORNER_STRATEGY_ROUND_ALL_CORNERS, 1000
+    )
     return not overlap.IsEmpty()
 
 
@@ -341,17 +454,19 @@ def array_attached_pads(board, rules, tracks=None):
     full-width trunk on another layer, combined barrel capacity >= the pad's
     budget). Empty without a via-in-pad profile policy (legacy) or electrical
     policy, so pre-profile entries are unchanged. Barrels alone never qualify."""
-    if not rules.get('electrical_fab'):
+    if not rules.get("electrical_fab"):
         return set()
     from pnr.fab_profile import geometry
+
     g = geometry(rules)
     if g.in_pad is None:
         return set()
     import pcbnew
     from pnr.via_in_pad import array_attach
+
     vias = {}
-    for t in (board.GetTracks() if tracks is None else tracks):
-        if t.GetClass() == 'PCB_VIA':
+    for t in board.GetTracks() if tracks is None else tracks:
+        if t.GetClass() == "PCB_VIA":
             vias.setdefault(t.GetNetCode(), []).append(t.GetPosition())
     out = set()
     for fp in board.GetFootprints():
@@ -362,7 +477,7 @@ def array_attached_pads(board, rules, tracks=None):
             if not any(box.Contains(p) for p in vias.get(pad.GetNetCode(), ())):
                 continue
             report = array_attach(board, pad, rules, g)
-            if report and report['qualified']:
+            if report and report["qualified"]:
                 out.add(pad.m_Uuid.AsString())
     return out
 
@@ -372,13 +487,17 @@ def inspect(board, rules):
 
     tracks = list(board.GetTracks())
     from collections import defaultdict
-    by_net_layer=defaultdict(list)
+
+    by_net_layer = defaultdict(list)
     for t in tracks:
-        if t.GetClass()=='PCB_TRACK':by_net_layer[t.GetNetCode(),t.GetLayer()].append(t)
+        if t.GetClass() == "PCB_TRACK":
+            by_net_layer[t.GetNetCode(), t.GetLayer()].append(t)
     # Profile 5B only: a terminal attached by its in-pad array (no surface trace
     # needed on its own layer) is a qualified entry; see array_attached_pads.
     attached = array_attached_pads(board, rules, tracks)
-    records = []; record_groups=[]; groups=defaultdict(set)
+    records = []
+    record_groups = []
+    groups = defaultdict(set)
     for fp in board.GetFootprints():
         for pad in fp.Pads():
             if not pad.GetNetCode() or pad.GetAttribute() != pcbnew.PAD_ATTRIB_SMD:
@@ -386,24 +505,26 @@ def inspect(board, rules):
             for layer in (pcbnew.F_Cu, pcbnew.B_Cu):
                 if not pad.IsOnLayer(layer):
                     continue
-                shape=pad.GetEffectiveShape(layer)
+                shape = pad.GetEffectiveShape(layer)
                 touching = [
                     t
-                    for t in by_net_layer[pad.GetNetCode(),layer]
-                    if shape.Collide(
-                        t.GetEffectiveShape(layer), 0
-                    )
+                    for t in by_net_layer[pad.GetNetCode(), layer]
+                    if shape.Collide(t.GetEffectiveShape(layer), 0)
                 ]
                 width = required_width(pad, rules)
-                group=(fp.m_Uuid.AsString(),pad.GetNetCode(),layer)
-                groups[group].add(len(records));record_groups.append(group)
+                group = (fp.m_Uuid.AsString(), pad.GetNetCode(), layer)
+                groups[group].add(len(records))
+                record_groups.append(group)
                 records.append(
                     (
                         pad,
                         layer,
                         touching,
                         width,
-                        any(witness(pad, t, width) or neck_witness(pad,t,width,tracks,rules) for t in touching)
+                        any(
+                            witness(pad, t, width) or neck_witness(pad, t, width, tracks, rules)
+                            for t in touching
+                        )
                         or pad.m_Uuid.AsString() in attached,
                     )
                 )
@@ -411,21 +532,31 @@ def inspect(board, rules):
     # explicit full-width pad overlaps. A cycle of bare/grazing lands cannot
     # bootstrap its own qualification. Include untracked bus pads as bridges,
     # but keep the public report scoped to actual track contacts.
-    good={i for i,row in enumerate(records) if row[4]}
+    good = {i for i, row in enumerate(records) if row[4]}
     while True:
-        added={i for i,(p,layer,_,_,_) in enumerate(records) if i not in good and
-               any(records[j][1]==layer and connected_land_witness(p,records[j][0],layer,rules) for j in groups[record_groups[i]] & good)}
-        if not added:break
+        added = {
+            i
+            for i, (p, layer, _, _, _) in enumerate(records)
+            if i not in good
+            and any(
+                records[j][1] == layer and connected_land_witness(p, records[j][0], layer, rules)
+                for j in groups[record_groups[i]] & good
+            )
+        }
+        if not added:
+            break
         good.update(added)
     # An in-pad array attach is reported even without a surface trace on the land.
-    return [(p,layer,touching,width,i in good) for i,(p,layer,touching,width,_) in enumerate(records)
-            if touching or p.m_Uuid.AsString() in attached]
+    return [
+        (p, layer, touching, width, i in good)
+        for i, (p, layer, touching, width, _) in enumerate(records)
+        if touching or p.m_Uuid.AsString() in attached
+    ]
 
 
 def snapshot(board, rules):
     return {
-        p.m_Uuid.AsString() + ":" + str(la): good
-        for p, la, ts, w, good in inspect(board, rules)
+        p.m_Uuid.AsString() + ":" + str(la): good for p, la, ts, w, good in inspect(board, rules)
     }
 
 
@@ -440,7 +571,9 @@ def repair(board, rules, only_keys=None):
     added, blocked = [], []
     oracle = None  # native clearance oracle, built only for contracted terminals
     for p, layer, touching, width, good in inspect(board, rules):
-        if good or (only_keys is not None and p.m_Uuid.AsString()+":"+str(layer) not in only_keys):
+        if good or (
+            only_keys is not None and p.m_Uuid.AsString() + ":" + str(layer) not in only_keys
+        ):
             continue
         label = p.GetParentFootprint().GetReference() + "." + p.GetNumber()
         reason = "blocked or unsupported entry"
@@ -448,20 +581,33 @@ def repair(board, rules, only_keys=None):
         if p.GetShape() == pcbnew.PAD_SHAPE_CUSTOM:
             interior = pcbnew.SHAPE_POLY_SET()
             p.TransformShapeToPolygon(interior, layer, 0, 1000, pcbnew.ERROR_INSIDE)
-            interior.Inflate(-round(width*500000)-2000,
-                             pcbnew.CORNER_STRATEGY_ROUND_ALL_CORNERS, 1000)
-            points = [xy(interior.COutline(i).CPoint(j)) for i in range(interior.OutlineCount())
-                      for j in range(interior.COutline(i).PointCount())]
+            interior.Inflate(
+                -round(width * 500000) - 2000, pcbnew.CORNER_STRATEGY_ROUND_ALL_CORNERS, 1000
+            )
+            points = [
+                xy(interior.COutline(i).CPoint(j))
+                for i in range(interior.OutlineCount())
+                for j in range(interior.COutline(i).PointCount())
+            ]
             if not points:
-                blocked.append(dict(pad=label,net=p.GetNetname(),required_width_mm=width,
-                                    reason='custom copper cannot contain required-width entry'))
+                blocked.append(
+                    dict(
+                        pad=label,
+                        net=p.GetNetname(),
+                        required_width_mm=width,
+                        reason="custom copper cannot contain required-width entry",
+                    )
+                )
                 continue
-            start = min(points, key=lambda q:min(math.dist(q, closest(q,xy(t.GetStart()),xy(t.GetEnd()))) for t in touching))
+            start = min(
+                points,
+                key=lambda q: min(
+                    math.dist(q, closest(q, xy(t.GetStart()), xy(t.GetEnd()))) for t in touching
+                ),
+            )
         choices = sorted(
             touching,
-            key=lambda t: math.dist(
-                start, closest(start, xy(t.GetStart()), xy(t.GetEnd()))
-            ),
+            key=lambda t: math.dist(start, closest(start, xy(t.GetStart()), xy(t.GetEnd()))),
         )
         # PNR_TERMINAL_MIN_WIDTH=1: a contracted terminal tries its preferred branch
         # width first, then the hard required width (entry_widths); every other pad
@@ -477,15 +623,19 @@ def repair(board, rules, only_keys=None):
             # allowance by the land radius plus the existing 1 mm local reach;
             # never lower width or bypass foreign-copper/entry/native guards.
             local_reach = 1.0
-            if p.GetShape() in (pcbnew.PAD_SHAPE_RECT, pcbnew.PAD_SHAPE_ROUNDRECT,
-                                pcbnew.PAD_SHAPE_OVAL, pcbnew.PAD_SHAPE_CIRCLE):
+            if p.GetShape() in (
+                pcbnew.PAD_SHAPE_RECT,
+                pcbnew.PAD_SHAPE_ROUNDRECT,
+                pcbnew.PAD_SHAPE_OVAL,
+                pcbnew.PAD_SHAPE_CIRCLE,
+            ):
                 local_reach += math.hypot(*xy(p.GetSize())) / 2
             if math.dist(start, end) < 1e-6 or math.dist(start, end) > local_reach:
                 continue
             placed = None
             for branch_width in widths:
                 t = pcbnew.PCB_TRACK(board)
-                t.SetStart(pcbnew.VECTOR2I(round(start[0]*1e6),round(start[1]*1e6)))
+                t.SetStart(pcbnew.VECTOR2I(round(start[0] * 1e6), round(start[1] * 1e6)))
                 t.SetEnd(pcbnew.VECTOR2I(round(end[0] * 1e6), round(end[1] * 1e6)))
                 t.SetWidth(round(branch_width * 1e6))
                 t.SetLayer(layer)
@@ -502,9 +652,7 @@ def repair(board, rules, only_keys=None):
                     for x in foreign
                 ):
                     continue
-                zones = list(board.Zones()) + [
-                    z for f in board.GetFootprints() for z in f.Zones()
-                ]
+                zones = list(board.Zones()) + [z for f in board.GetFootprints() for z in f.Zones()]
                 if any(
                     z.GetIsRuleArea()
                     and z.IsOnLayer(layer)
@@ -526,19 +674,21 @@ def repair(board, rules, only_keys=None):
                 pad=label, net=p.GetNetname(), width_mm=branch_width, start=start, end=end
             )
             if len(widths) > 1 or width_contract(p, rules):
-                record['choice'] = width_choice(p, rules, branch_width)
+                record["choice"] = width_choice(p, rules, branch_width)
             added.append(record)
             break
         else:
             if width_contract(p, rules):
                 if oracle is None:
                     from pnr.native_electrical import Oracle
+
                     oracle = Oracle(board, rules)
                 widened = widen_contract_stub(board, p, layer, touching, rules, oracle)
                 if widened:
                     added.append(dict(pad=label, net=p.GetNetname(), widened=widened))
                     continue
             from pnr.pad_entry_neck import repair_neck
+
             neck = repair_neck(board, p, layer, touching, width, rules)
             if neck:
                 added.append(dict(pad=label, net=p.GetNetname(), source_neck=neck))
@@ -559,24 +709,27 @@ def repair_changed_entries(board, rules, before):
     repairs = dict(added=[], blocked=[], passes=0)
     for _ in range(5):
         proposed = snapshot(board, rules)
-        needs_entry = {key for key, good in proposed.items() if not good
-                       and (key not in before or before[key])}
+        needs_entry = {
+            key for key, good in proposed.items() if not good and (key not in before or before[key])
+        }
         if not needs_entry:
-            repairs['blocked'] = []
+            repairs["blocked"] = []
             break
         step = repair(board, rules, only_keys=needs_entry)
-        repairs['added'].extend(step['added'])
-        repairs['blocked'] = step['blocked']
-        repairs['passes'] += 1
+        repairs["added"].extend(step["added"])
+        repairs["blocked"] = step["blocked"]
+        repairs["passes"] += 1
         board.BuildConnectivity()
-        if not step['added']:
+        if not step["added"]:
             break
     current = snapshot(board, rules)
-    return dict(entry_repairs=repairs,
-                lost_pad_entries=[key for key, good in before.items()
-                                  if good and not current.get(key, False)],
-                new_bad_entries=[key for key, good in current.items()
-                                 if not good and key not in before])
+    return dict(
+        entry_repairs=repairs,
+        lost_pad_entries=[
+            key for key, good in before.items() if good and not current.get(key, False)
+        ],
+        new_bad_entries=[key for key, good in current.items() if not good and key not in before],
+    )
 
 
 def main():
@@ -595,24 +748,21 @@ def main():
     b = pcbnew.LoadBoard(str(a.board))
     result = repair(b, rules)
     from pnr.electrical import terminal_min_width_enabled
+
     if terminal_min_width_enabled():
         # Side field (evaluation.json embeds this report): which contracted
         # terminals got the preferred width and which fell back to the minimum.
         rows = terminal_width_report(b, rules)
         counts = {}
         for row in rows:
-            counts[row['status']] = counts.get(row['status'], 0) + 1
-        result['terminal_widths'] = dict(counts=counts, pads=rows)
+            counts[row["status"]] = counts.get(row["status"], 0) + 1
+        result["terminal_widths"] = dict(counts=counts, pads=rows)
     a.report.write_text(json.dumps(result, indent=2) + "\n")
     pcbnew.SaveBoard(str(a.out), b)
     if a.out != a.board:
-        shutil.copyfile(
-            a.board.with_suffix(".kicad_pro"), a.out.with_suffix(".kicad_pro")
-        )
+        shutil.copyfile(a.board.with_suffix(".kicad_pro"), a.out.with_suffix(".kicad_pro"))
     if a.strict and result["blocked"]:
-        raise SystemExit(
-            "Unresolved pad-entry findings: " + str(len(result["blocked"]))
-        )
+        raise SystemExit("Unresolved pad-entry findings: " + str(len(result["blocked"])))
 
 
 if __name__ == "__main__":

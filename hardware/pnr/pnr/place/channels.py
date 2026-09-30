@@ -11,6 +11,7 @@ This ignores existing tracks and via obstacles, and does not prove routability.
 It deliberately exposes fixed/fixed shortages rather than hiding them in a
 placement score. A detailed router must validate any resulting placement.
 """
+
 from __future__ import annotations
 
 from itertools import combinations
@@ -21,22 +22,29 @@ from .geometry import occupied_sides, pad_rects
 
 class ChannelModel:
     def __init__(self, graph, rules):
-        fab = rules.get('fab', {})
-        self.width = float(fab.get('track_width_mm', .2))
-        self.clearance = float(rules.get('default_clearance_mm', .2))
-        self.via = float(fab.get('via_diameter_mm', .6))
+        fab = rules.get("fab", {})
+        self.width = float(fab.get("track_width_mm", 0.2))
+        self.clearance = float(rules.get("default_clearance_mm", 0.2))
+        self.via = float(fab.get("via_diameter_mm", 0.6))
         self.classes = {}
-        for cls in rules.get('net_classes', []):
-            for net in cls['nets']:
-                self.classes[net] = (cls.get('width_mm') or self.width,
-                                     cls.get('clearance_mm') or self.clearance,
-                                     bool(cls.get('plane_layer')))
-        if rules.get('electrical_fab'):
+        for cls in rules.get("net_classes", []):
+            for net in cls["nets"]:
+                self.classes[net] = (
+                    cls.get("width_mm") or self.width,
+                    cls.get("clearance_mm") or self.clearance,
+                    bool(cls.get("plane_layer")),
+                )
+        if rules.get("electrical_fab"):
             from pnr.electrical import net_policy
+
             for net in graph.nets:
-                policy=net_policy(net.name,rules)
-                self.classes[net.name]=(policy['outer_width_mm'],policy['clearance_mm'],bool(policy['plane']))
-        self.pairs = rules.get('diff_pairs', [])
+                policy = net_policy(net.name, rules)
+                self.classes[net.name] = (
+                    policy["outer_width_mm"],
+                    policy["clearance_mm"],
+                    bool(policy["plane"]),
+                )
+        self.pairs = rules.get("diff_pairs", [])
         self.refs = {n.name: {ref for ref, _ in n.pins} for n in graph.nets}
         self.geometry = {}
 
@@ -61,15 +69,21 @@ class ChannelModel:
             for _, net, r in pads:
                 if not net or not (self.refs.get(net, set()) - {comp.ref}):
                     continue
-                distances = (r.left-x+hx, hx-(r.right-x),
-                             r.bottom-y+hy, hy-(r.top-y))
+                distances = (
+                    r.left - x + hx,
+                    hx - (r.right - x),
+                    r.bottom - y + hy,
+                    hy - (r.top - y),
+                )
                 # Central exposed thermal pads need a separate fanout review;
                 # don't misclassify them as perimeter signals.
-                if min(distances) > .25:
+                if min(distances) > 0.25:
                     continue
                 for face, distance in enumerate(distances):
                     if distance <= min(distances) + 1e-7:
-                        interval = (r.bottom-y, r.top-y) if face < 2 else (r.left-x, r.right-x)
+                        interval = (
+                            (r.bottom - y, r.top - y) if face < 2 else (r.left - x, r.right - x)
+                        )
                         faces[face].setdefault(net, []).append(interval)
             result = (left, right, bottom, top, faces)
         self.geometry[key] = result
@@ -83,14 +97,25 @@ class ChannelModel:
         bundles = []
         plane_clearances = []
         for pair in self.pairs:
-            if {pair['p'], pair['n']} <= remaining.keys():
-                p, n = remaining.pop(pair['p']), remaining.pop(pair['n'])
-                clearance = max(self.classes.get(n, (self.width, self.clearance, False))[1]
-                                for n in (pair['p'], pair['n']))
+            if {pair["p"], pair["n"]} <= remaining.keys():
+                p, n = remaining.pop(pair["p"]), remaining.pop(pair["n"])
+                clearance = max(
+                    self.classes.get(n, (self.width, self.clearance, False))[1]
+                    for n in (pair["p"], pair["n"])
+                )
                 both = np.logical_and(p, n)
                 either = np.logical_or(p, n)
-                bundles.append((np.where(both, 2*pair['width_mm']+pair['gap_mm'],
-                                          np.where(either, pair['width_mm'], 0)), clearance, either))
+                bundles.append(
+                    (
+                        np.where(
+                            both,
+                            2 * pair["width_mm"] + pair["gap_mm"],
+                            np.where(either, pair["width_mm"], 0),
+                        ),
+                        clearance,
+                        either,
+                    )
+                )
         for net, present in remaining.items():
             width, clearance, plane = self.classes.get(net, (self.width, self.clearance, False))
             if plane:
@@ -99,16 +124,18 @@ class ChannelModel:
                 bundles.append((np.where(present, width, 0), clearance, present))
         # Conservative bundle spacing. Distinct ground pads share the plane,
         # but at least one via corridor is still needed on this surface.
-        track_space = 0.
+        track_space = 0.0
         if bundles:
-            clearance = 0.
+            clearance = 0.0
             for _, c, present in bundles:
                 clearance = np.maximum(clearance, np.where(present, c, 0))
-            track_space = sum(w for w, _, _ in bundles) + (sum(np.asarray(p, dtype=int)
-                            for _, _, p in bundles)+1)*clearance
-        via_space = 0.
+            track_space = (
+                sum(w for w, _, _ in bundles)
+                + (sum(np.asarray(p, dtype=int) for _, _, p in bundles) + 1) * clearance
+            )
+        via_space = 0.0
         for clearance in plane_clearances:
-            via_space = np.maximum(via_space, np.where(clearance > 0, self.via+2*clearance, 0))
+            via_space = np.maximum(via_space, np.where(clearance > 0, self.via + 2 * clearance, 0))
         return np.maximum(track_space, via_space)
 
     def interactions(self, comp, other, xs=None, ys=None):
@@ -120,24 +147,38 @@ class ChannelModel:
             return
         x, y = comp.pos if xs is None else (xs, ys)
         ox, oy = other.pos
-        ax0, ax1, ay0, ay1 = x+a[0], x+a[1], y+a[2], y+a[3]
-        bx0, bx1, by0, by1 = ox+b[0], ox+b[1], oy+b[2], oy+b[3]
+        ax0, ax1, ay0, ay1 = x + a[0], x + a[1], y + a[2], y + a[3]
+        bx0, bx1, by0, by1 = ox + b[0], ox + b[1], oy + b[2], oy + b[3]
         yover = np.minimum(ay1, by1) - np.maximum(ay0, by0)
         xover = np.minimum(ax1, bx1) - np.maximum(ax0, bx0)
         for label, face, opposite, gap, overlap in (
-            ('east', 1, 0, bx0-ax1, yover), ('west', 0, 1, ax0-bx1, yover),
-            ('north', 3, 2, by0-ay1, xover), ('south', 2, 3, ay0-by1, xover)):
+            ("east", 1, 0, bx0 - ax1, yover),
+            ("west", 0, 1, ax0 - bx1, yover),
+            ("north", 3, 2, by0 - ay1, xover),
+            ("south", 2, 3, ay0 - by1, xover),
+        ):
             row_nets = []
             for row, shift, lo, hi in (
-                (a[4][face], y if face < 2 else x, by0 if face < 2 else bx0, by1 if face < 2 else bx1),
-                (b[4][opposite], oy if face < 2 else ox, ay0 if face < 2 else ax0, ay1 if face < 2 else ax1)):
+                (
+                    a[4][face],
+                    y if face < 2 else x,
+                    by0 if face < 2 else bx0,
+                    by1 if face < 2 else bx1,
+                ),
+                (
+                    b[4][opposite],
+                    oy if face < 2 else ox,
+                    ay0 if face < 2 else ax0,
+                    ay1 if face < 2 else ax1,
+                ),
+            ):
                 active_nets = {}
                 for net, intervals in row.items():
                     if not self.refs.get(net, set()) - {comp.ref, other.ref}:
                         continue
                     active = False
                     for start, end in intervals:
-                        active = np.logical_or(active, (shift+start < hi) & (shift+end > lo))
+                        active = np.logical_or(active, (shift + start < hi) & (shift + end > lo))
                     active_nets[net] = active
                 row_nets.append(active_nets)
             nets = {}
@@ -153,7 +194,7 @@ class ChannelModel:
         score = np.zeros(np.broadcast_shapes(np.shape(xs), np.shape(ys)))
         for other in others:
             for _, gap, overlap, required, _ in self.interactions(comp, other, xs, ys):
-                shortage = np.maximum(required-gap, 0)
+                shortage = np.maximum(required - gap, 0)
                 score += np.where((gap >= 0) & (overlap > 0), shortage**2, 0)
         return score
 
@@ -161,13 +202,22 @@ class ChannelModel:
         channels = []
         for a, b in combinations(graph.components, 2):
             for direction, gap, overlap, required, nets in self.interactions(a, b):
-                if gap >= 0 and overlap > 0 and required-gap > 1e-6:
-                    channels.append(dict(refs=[a.ref, b.ref], direction=direction,
-                        gap_mm=float(gap), required_mm=float(required),
-                        shortage_mm=float(required-gap), nets=sorted(n for n, active in nets.items() if active),
-                        both_fixed=a.ref in fixed and b.ref in fixed))
-        channels.sort(key=lambda item: -item['shortage_mm'])
-        return dict(model='surface-pad-escape-v1',
-            limitation='Estimate only; excludes existing tracks, obstacles and detailed fanout.',
-            shortage_score=sum(c['shortage_mm']**2 for c in channels),
-            channels=channels)
+                if gap >= 0 and overlap > 0 and required - gap > 1e-6:
+                    channels.append(
+                        dict(
+                            refs=[a.ref, b.ref],
+                            direction=direction,
+                            gap_mm=float(gap),
+                            required_mm=float(required),
+                            shortage_mm=float(required - gap),
+                            nets=sorted(n for n, active in nets.items() if active),
+                            both_fixed=a.ref in fixed and b.ref in fixed,
+                        )
+                    )
+        channels.sort(key=lambda item: -item["shortage_mm"])
+        return dict(
+            model="surface-pad-escape-v1",
+            limitation="Estimate only; excludes existing tracks, obstacles and detailed fanout.",
+            shortage_score=sum(c["shortage_mm"] ** 2 for c in channels),
+            channels=channels,
+        )

@@ -34,7 +34,24 @@ from pnr.route.detail.joint import solve_joint_region
 from pnr.route.detail.portal_joint import solve_portal_region
 
 
-print("IMPLEMENTATION "+json.dumps({name:dict(path=sys.modules[name].__file__,sha256=hashlib.sha256(Path(sys.modules[name].__file__).read_bytes()).hexdigest()) for name in ("pnr.route.detail.keyhole","pnr.route.detail.layered","pnr.route.detail.joint")}),flush=True)
+print(
+    "IMPLEMENTATION "
+    + json.dumps(
+        {
+            name: dict(
+                path=sys.modules[name].__file__,
+                sha256=hashlib.sha256(Path(sys.modules[name].__file__).read_bytes()).hexdigest(),
+            )
+            for name in (
+                "pnr.route.detail.keyhole",
+                "pnr.route.detail.layered",
+                "pnr.route.detail.joint",
+            )
+        }
+    ),
+    flush=True,
+)
+
 
 def pad_partition(board):
     """Native connected pad components, including actual filled-plane islands.
@@ -112,9 +129,15 @@ def main():
         metavar=("NET", "X0", "Y0", "X1", "Y1"),
         help="constrain the first escape via for a selected net",
     )
-    ap.add_argument("--rules", type=Path, help="Source-resolved routing policy for generic native loop")
+    ap.add_argument(
+        "--rules", type=Path, help="Source-resolved routing policy for generic native loop"
+    )
     ap.add_argument("--annotation-source", action="append", default=[], type=Path)
-    ap.add_argument("--portal-joint", action="store_true", help="coordinate surface escapes before joint trunk routing; requires --joint --layers")
+    ap.add_argument(
+        "--portal-joint",
+        action="store_true",
+        help="coordinate surface escapes before joint trunk routing; requires --joint --layers",
+    )
     args = ap.parse_args()
     if args.portal_joint and not (args.joint and args.layers):
         ap.error("portal joint requires layered joint routing")
@@ -123,10 +146,7 @@ def main():
     if not 0 < args.max_seconds < math.inf:
         ap.error("max-seconds must be positive and finite")
     via_windows = {v[0]: tuple(map(float, v[1:])) for v in args.source_via_window}
-    if any(
-        n not in args.net or w[0] >= w[2] or w[1] >= w[3]
-        for n, w in via_windows.items()
-    ):
+    if any(n not in args.net or w[0] >= w[2] or w[1] >= w[3] for n, w in via_windows.items()):
         ap.error("invalid source-via window")
     if args.relocate_vias and not args.layers:
         ap.error("via relocation requires --layers")
@@ -135,9 +155,7 @@ def main():
         ap.error("invalid bounds")
     if args.out_dir.exists():
         ap.error("new output directory required")
-    settings = json.loads(args.board.with_suffix(".kicad_pro").read_text())[
-        "net_settings"
-    ]
+    settings = json.loads(args.board.with_suffix(".kicad_pro").read_text())["net_settings"]
     classes = {c["name"]: c for c in settings["classes"]}
 
     def policy(net):
@@ -146,11 +164,7 @@ def main():
             for p in settings["netclass_patterns"]
             if fnmatch.fnmatchcase(net, p["pattern"])
         ]
-        return (
-            min(matches, key=lambda c: c.get("priority", 999))
-            if matches
-            else classes["Default"]
-        )
+        return min(matches, key=lambda c: c.get("priority", 999)) if matches else classes["Default"]
 
     if any(policy(n)["track_width"] > 0.2 for n in args.net):
         ap.error("regional width is below project requirement")
@@ -180,9 +194,12 @@ def main():
             ap.error(
                 "ground-leaf requires preserved copper and same-package lv pads in the gnd class"
             )
-    elif not args.rules and any(policy(n)["name"] != "Default" or n not in allowed for n in args.net):
+    elif not args.rules and any(
+        policy(n)["name"] != "Default" or n not in allowed for n in args.net
+    ):
         ap.error("regional policy supports only reviewed Default-class signals")
     from pnr.fab_profile import load_board  # custom rules in force for the final refill
+
     b = load_board(args.board)
     retain_native(b)
     b.BuildConnectivity()
@@ -190,20 +207,20 @@ def main():
     # Fab numbers: the routing policy's fab block, else the selected profile
     # (PNR_FAB_PROFILE). Legacy reproduces the former 0.6/0.3 via, 0.15 clearance.
     from pnr.fab_profile import active_geometry, geometry
+
     fg = geometry(entry_rules) if entry_rules is not None else active_geometry()
     before_entries = {}
     if args.rules:
         from pnr.via_coalesce import protected
         from pnr.pad_entry import snapshot
+
         before_entries = snapshot(b, entry_rules)
         excluded, _ = protected(b, entry_rules, args.annotation_source)
         if any(n in excluded or policy(n)["name"] != "Default" for n in args.net):
             ap.error("net protected by source/routing policy")
     before_connections = pad_partition(b)
     layer = pcbnew.F_Cu
-    route_layers = (
-        [pcbnew.F_Cu, pcbnew.In2_Cu, pcbnew.B_Cu] if args.layers else [pcbnew.F_Cu]
-    )
+    route_layers = [pcbnew.F_Cu, pcbnew.In2_Cu, pcbnew.B_Cu] if args.layers else [pcbnew.F_Cu]
     pads = [p for f in b.GetFootprints() for p in f.Pads()]
     tracks = list(b.GetTracks())
     uid = lambda t: t.m_Uuid.AsString()
@@ -211,8 +228,9 @@ def main():
     vec = lambda p: pcbnew.VECTOR2I(round(p[0] * 1e6), round(p[1] * 1e6))
     inside = lambda p: x0 <= p[0] <= x1 and y0 <= p[1] <= y1
     from pnr.pad_identity import resolve_pad
-    source_pad = resolve_pad(b,args.source_pad,args.source_pad_uuid)
-    target_pad = resolve_pad(b,args.target_pad,args.target_pad_uuid)
+
+    source_pad = resolve_pad(b, args.source_pad, args.source_pad_uuid)
+    target_pad = resolve_pad(b, args.target_pad, args.target_pad_uuid)
     net = source_pad.GetNetname()
     if target_pad.GetNetname() != net or net not in args.net:
         ap.error("source and target must share a selected signal net")
@@ -222,12 +240,9 @@ def main():
         if math.dist(pt(source_pad.GetPosition()), pt(target_pad.GetPosition())) > 5:
             ap.error("ground leaf exceeds package-local distance")
         if not any(
-            p.GetNetname() == "lv" and p.GetAttribute() == pcbnew.PAD_ATTRIB_PTH
-            for p in fp.Pads()
+            p.GetNetname() == "lv" and p.GetAttribute() == pcbnew.PAD_ATTRIB_PTH for p in fp.Pads()
         ):
-            ap.error(
-                "ground leaf requires an existing same-package ground through-hole pad"
-            )
+            ap.error("ground leaf requires an existing same-package ground through-hole pad")
 
     def eligible(t):
         if args.preserve_copper or t.IsLocked() or t.GetNetname() not in args.net:
@@ -322,24 +337,25 @@ def main():
                     continue
                 anchor = min(
                     contacts,
-                    key=lambda p: min(
-                        math.dist(p, pt(t.GetStart())), math.dist(p, pt(t.GetEnd()))
-                    ),
+                    key=lambda p: min(math.dist(p, pt(t.GetStart())), math.dist(p, pt(t.GetEnd()))),
                 )
                 anchors.add(anchor)
                 anchor_items[t.GetNetname(), anchor].add(uid(other))
                 anchor_layers_map.setdefault((t.GetNetname(), anchor), set()).update(
                     route_layers.index(la)
                     for la in common_layers
-                    if other.GetEffectiveShape(la).Collide(
-                        pcbnew.SHAPE_CIRCLE(vec(anchor), 1), 0
-                    )
+                    if other.GetEffectiveShape(la).Collide(pcbnew.SHAPE_CIRCLE(vec(anchor), 1), 0)
                 )
         todo -= members
         if missing_contacts:
-            retained_components.append(dict(net=candidates[root].GetNetname(),
-                members=sorted(members), reason="attachment_outside_search_or_unsampled",
-                contacts=missing_contacts))
+            retained_components.append(
+                dict(
+                    net=candidates[root].GetNetname(),
+                    members=sorted(members),
+                    reason="attachment_outside_search_or_unsampled",
+                    contacts=missing_contacts,
+                )
+            )
             continue
         # Preserve isolated loops/stubs unchanged rather than silently deleting.
         if len(anchors) < 2:
@@ -388,8 +404,7 @@ def main():
                 component_cache[identity] = {identity} | {
                     uid(other)
                     for other in cn.GetConnectedItems(item)
-                    if uid(other) in unchanged
-                    and other.GetNetCode() == item.GetNetCode()
+                    if uid(other) in unchanged and other.GetNetCode() == item.GetNetCode()
                 }
             connected.update(component_cache[identity])
         anchor_components[key] = connected
@@ -414,9 +429,7 @@ def main():
     def accesses(group):
         points = set()
         for t in group:
-            access_layers = [
-                index for index, la in enumerate(route_layers) if t.IsOnLayer(la)
-            ]
+            access_layers = [index for index, la in enumerate(route_layers) if t.IsOnLayer(la)]
             if not access_layers:
                 continue
             ps = (
@@ -428,9 +441,7 @@ def main():
                 p = pt(position)
                 if inside(p):
                     points.add(p)
-                    anchor_layers_map.setdefault((t.GetNetname(), p), set()).update(
-                        access_layers
-                    )
+                    anchor_layers_map.setdefault((t.GetNetname(), p), set()).update(access_layers)
         return sorted(points)
 
     aa, zz = accesses(island(source_pad)), accesses(island(target_pad))
@@ -459,9 +470,7 @@ def main():
     def add(shape, box, gap, n, identity, la, smd=None):
         i = len(obstacles)
         obstacles.append((shape, gap, n, identity, la, smd))
-        for x in range(
-            math.floor(box.GetLeft() / 1e6) - 1, math.floor(box.GetRight() / 1e6) + 2
-        ):
+        for x in range(math.floor(box.GetLeft() / 1e6) - 1, math.floor(box.GetRight() / 1e6) + 2):
             for y in range(
                 math.floor(box.GetTop() / 1e6) - 1,
                 math.floor(box.GetBottom() / 1e6) + 2,
@@ -470,32 +479,47 @@ def main():
 
     copper_layers = list(b.GetEnabledLayers().CuStack())
     from pnr.via_in_pad import hole_keepouts
+
     for t in pads + remaining:
         for la in copper_layers:
             if t.IsOnLayer(la):
                 add(
                     t.GetEffectiveShape(la),
                     t.GetBoundingBox(),
-                    max(fg.clearance_gap, policy(t.GetNetname()).get("clearance", fg.clearance) + 0.001),
+                    max(
+                        fg.clearance_gap,
+                        policy(t.GetNetname()).get("clearance", fg.clearance) + 0.001,
+                    ),
                     t.GetNetname(),
                     uid(t),
                     la,
                     # SMD pads carry the pad: pnr.via_in_pad judges vias against it.
-                    t if isinstance(t, pcbnew.PAD)
-                    and t.GetAttribute() == pcbnew.PAD_ATTRIB_SMD else None,
+                    (
+                        t
+                        if isinstance(t, pcbnew.PAD) and t.GetAttribute() == pcbnew.PAD_ATTRIB_SMD
+                        else None
+                    ),
                 )
             if isinstance(t, pcbnew.PAD) and t.GetAttribute() == pcbnew.PAD_ATTRIB_NPTH:
                 add(
                     t.GetEffectiveHoleShape(),
                     t.GetBoundingBox(),
-                    0.201 if fg.npth_hole_clearance is None else round(fg.npth_hole_clearance + 0.001, 9),
+                    (
+                        0.201
+                        if fg.npth_hole_clearance is None
+                        else round(fg.npth_hole_clearance + 0.001, 9)
+                    ),
                     None,
                     uid(t),
                     la,
                 )
-            elif (fg.pth_hole_clearance is not None and isinstance(t, pcbnew.PAD)
-                  and t.GetAttribute() == pcbnew.PAD_ATTRIB_PTH and t.IsOnLayer(la)
-                  and max(t.GetDrillSize().x, t.GetDrillSize().y) > 0):
+            elif (
+                fg.pth_hole_clearance is not None
+                and isinstance(t, pcbnew.PAD)
+                and t.GetAttribute() == pcbnew.PAD_ATTRIB_PTH
+                and t.IsOnLayer(la)
+                and max(t.GetDrillSize().x, t.GetDrillSize().y) > 0
+            ):
                 # Fab profile: plated drill wall to foreign copper (own net may
                 # enter): component PTH 0.35, a footprint's via-class drill 0.20.
                 kind = fg.hole_kind(False, True, max(t.GetDrillSize().x, t.GetDrillSize().y) / 1e6)
@@ -564,9 +588,7 @@ def main():
             other, gap, n, identity, _, smd = obstacles[i]
             if n == r.net:
                 continue
-            if other.Collide(
-                shape, round(max(gap, r.clearance if n is not None else gap) * 1e6)
-            ):
+            if other.Collide(shape, round(max(gap, r.clearance if n is not None else gap) * 1e6)):
                 static_hits[identity] += 1
                 cache[key] = False
                 return False
@@ -577,7 +599,8 @@ def main():
         return clear_layer(r, 0, a, z)
 
     from pnr.reference_guard import ReferenceGuard
-    reference_guard = ReferenceGuard(b,entry_rules or {})
+
+    reference_guard = ReferenceGuard(b, entry_rules or {})
     via_cache = {}
     drilled = [
         (t.GetEffectiveHoleShape(), t.GetBoundingBox(), t)
@@ -587,14 +610,18 @@ def main():
         and max(t.GetDrillSize().x, t.GetDrillSize().y) > 0
     ]
     retain_native(drilled)
+
     # Drill gap (nm) a new via needs to each existing hole: one value (0.201)
     # before profiles; via / component PTH / NPTH differ under a fab profile, and
     # a footprint's via-class pad drill (under 0.30) counts as a via.
     def hole_kind(t):
         if isinstance(t, pcbnew.PCB_VIA):
             return fg.hole_kind(True)
-        return fg.hole_kind(False, t.GetAttribute() != pcbnew.PAD_ATTRIB_NPTH,
-                            max(t.GetDrillSize().x, t.GetDrillSize().y) / 1e6)
+        return fg.hole_kind(
+            False,
+            t.GetAttribute() != pcbnew.PAD_ATTRIB_NPTH,
+            max(t.GetDrillSize().x, t.GetDrillSize().y) / 1e6,
+        )
 
     drilled_gaps = [
         (other, bb, t, round((fg.via_hole_gap(hole_kind(t)) + 0.001) * 1e6))
@@ -610,8 +637,8 @@ def main():
             existing_vias_by_net[t.GetNetname()].append((pt(t.GetPosition()), t))
     net_codes = {pad.GetNetname(): pad.GetNetCode() for pad in pads}
 
-
     from pnr.via_in_pad import smd_keepout_violated, in_pad_size, style_in_pad_via
+
     smd_pads = [t for t in pads if t.GetAttribute() == pcbnew.PAD_ATTRIB_SMD]
     # (net, x, y) -> (diameter, drill) of a checked 5B filled in-pad via (profile only).
     in_pad_vias = {}
@@ -642,7 +669,9 @@ def main():
                 other, gap, n, identity, _, smd = obstacles[i]
                 # Legacy: no via within 0.05 mm of any SMD pad. Profile: 5A 0.127
                 # unless a qualified 5B filled in-pad via of the pad's own net.
-                if smd is not None and smd_keepout_violated(fg, smd, other, shape, r.net, p, diameter, drill, la):
+                if smd is not None and smd_keepout_violated(
+                    fg, smd, other, shape, r.net, p, diameter, drill, la
+                ):
                     return False
                 if n != r.net and other.Collide(
                     shape, round(max(gap, r.clearance if n is not None else gap) * 1e6)
@@ -682,7 +711,8 @@ def main():
         if reused:
             via_cache[key] = True
             return True
-        if not reference_guard.via_clear(r.net,p,fg.via_diameter):return False
+        if not reference_guard.via_clear(r.net, p, fg.via_diameter):
+            return False
         code = net_codes[r.net]
         if not via_fits(r, p, code):
             # Profile only: inside a same-net SMD pad the default via is refused;
@@ -719,9 +749,7 @@ def main():
     args.out_dir.mkdir(parents=True)
     baseline = args.out_dir / "baseline.kicad_pcb"
     shutil.copyfile(args.board, baseline)
-    shutil.copyfile(
-        args.board.with_suffix(".kicad_pro"), baseline.with_suffix(".kicad_pro")
-    )
+    shutil.copyfile(args.board.with_suffix(".kicad_pro"), baseline.with_suffix(".kicad_pro"))
     table = args.board.parent / "fp-lib-table"
     if table.exists():
         (args.out_dir / "fp-lib-table").write_text(
@@ -744,9 +772,7 @@ def main():
         requests=[
             dict(
                 **asdict(r),
-                access_layers={
-                    str(p): terminal_layers(r, p) for p in r.sources + r.targets
-                },
+                access_layers={str(p): terminal_layers(r, p) for p in r.sources + r.targets},
             )
             for r in requests
         ],
@@ -768,8 +794,13 @@ def main():
         flush=True,
     )
     from pnr.live import emit as live_emit
+
     if args.portal_joint:
-        live_emit('candidate_start',board=baseline,data=dict(phase='coordinated-portals',provisional=True))
+        live_emit(
+            "candidate_start",
+            board=baseline,
+            data=dict(phase="coordinated-portals", provisional=True),
+        )
     if args.layers:
 
         def record_search_event(event):
@@ -778,16 +809,46 @@ def main():
                 stream.write(line + "\n")
             print(line, flush=True)
             if args.portal_joint:
-                live_emit('search_progress',data=dict(phase='coordinated-portals',provisional=True,
-                    **{k:v for k,v in event.items() if k not in ('partial_paths','ports','choices')}))
-                for request_name,path in event.get('partial_paths',{}).items():
-                    request=next(r for r in requests if r.name==request_name)
-                    tracks=[(request.net,b.GetLayerName(route_layers[pa[2]]),pa[:2],pb[:2],request.width)
-                            for pa,pb in zip(path,path[1:]) if pa[2]==pb[2]]
-                    live_emit('signal_net_added',data=dict(net=request_name,phase='coordinated-portals',provisional=True,tracks=tracks))
+                live_emit(
+                    "search_progress",
+                    data=dict(
+                        phase="coordinated-portals",
+                        provisional=True,
+                        **{
+                            k: v
+                            for k, v in event.items()
+                            if k not in ("partial_paths", "ports", "choices")
+                        },
+                    ),
+                )
+                for request_name, path in event.get("partial_paths", {}).items():
+                    request = next(r for r in requests if r.name == request_name)
+                    tracks = [
+                        (
+                            request.net,
+                            b.GetLayerName(route_layers[pa[2]]),
+                            pa[:2],
+                            pb[:2],
+                            request.width,
+                        )
+                        for pa, pb in zip(path, path[1:])
+                        if pa[2] == pb[2]
+                    ]
+                    live_emit(
+                        "signal_net_added",
+                        data=dict(
+                            net=request_name,
+                            phase="coordinated-portals",
+                            provisional=True,
+                            tracks=tracks,
+                        ),
+                    )
 
-
-        solver = solve_portal_region if args.portal_joint else solve_joint_region if args.joint else solve_layered_region
+        solver = (
+            solve_portal_region
+            if args.portal_joint
+            else solve_joint_region if args.joint else solve_layered_region
+        )
         result = solver(
             requests,
             args.bounds,
@@ -823,9 +884,7 @@ def main():
         )
         for n in args.net
     }
-    report["static_blockers"] = dict(
-        sorted(static_hits.items(), key=lambda kv: -kv[1])[:30]
-    )
+    report["static_blockers"] = dict(sorted(static_hits.items(), key=lambda kv: -kv[1])[:30])
     report["accepted"] = False
     if result.status == "routed":
         byname = {r.name: r for r in requests}
@@ -858,39 +917,58 @@ def main():
                 t.SetWidth(round(r.width * 1e6))
                 b.Add(t)
         report["added_vias"] = len(added_vias)
-        report["added_in_pad_vias"] = sum(in_pad_key(n, (x, y)) in in_pad_vias for n, x, y in added_vias)
+        report["added_in_pad_vias"] = sum(
+            in_pad_key(n, (x, y)) in in_pad_vias for n, x, y in added_vias
+        )
         b.BuildConnectivity()
         entry_ok = True
         if entry_rules is not None:
             from pnr.pad_entry import repair_changed_entries
+
             report.update(repair_changed_entries(b, entry_rules, before_entries))
             entry_ok = not report["lost_pad_entries"] and not report["new_bad_entries"]
         pcbnew.ZONE_FILLER(b).Fill(b.Zones())
         preserved = preserves_connections(before_connections, pad_partition(b))
         output = args.out_dir / "candidate.kicad_pcb"
         pcbnew.SaveBoard(str(output), b)
-        shutil.copyfile(
-            baseline.with_suffix(".kicad_pro"), output.with_suffix(".kicad_pro")
-        )
+        shutil.copyfile(baseline.with_suffix(".kicad_pro"), output.with_suffix(".kicad_pro"))
 
         def drc(path):
             from pnr.native_drc import run_drc
-            return run_drc(args.kicad_cli,path,path.with_suffix('.drc.json'))
+
+            return run_drc(args.kicad_cli, path, path.with_suffix(".drc.json"))
 
         before, after = drc(baseline), drc(output)
         # A successful rip-up/restoration can strand an old signal via.
         # Only newly native-dangling vias are proposed, under source protection,
         # exact layer contacts and a fresh complete transaction quality gate.
-        if (args.rules is not None and preserved and entry_ok
-                and not acceptable(before, after)
-                and len(after["unconnected_items"]) < len(before["unconnected_items"])
-                and any(v["type"] == "via_dangling" for v in after["violations"])):
+        if (
+            args.rules is not None
+            and preserved
+            and entry_ok
+            and not acceptable(before, after)
+            and len(after["unconnected_items"]) < len(before["unconnected_items"])
+            and any(v["type"] == "via_dangling" for v in after["violations"])
+        ):
             cleanup = args.out_dir / "transaction-cleanup"
-            cleanup_cmd = [sys.executable, "-m", "pnr.transaction_cleanup", str(output),
-                "--baseline", str(baseline), "--rules", str(args.rules),
-                "--out-dir", str(cleanup), "--kicad-cli", args.kicad_cli,
-                "--kicad-python", sys.executable]
-            for net_name in args.net: cleanup_cmd += ["--net", net_name]
+            cleanup_cmd = [
+                sys.executable,
+                "-m",
+                "pnr.transaction_cleanup",
+                str(output),
+                "--baseline",
+                str(baseline),
+                "--rules",
+                str(args.rules),
+                "--out-dir",
+                str(cleanup),
+                "--kicad-cli",
+                args.kicad_cli,
+                "--kicad-python",
+                sys.executable,
+            ]
+            for net_name in args.net:
+                cleanup_cmd += ["--net", net_name]
             for source_file in args.annotation_source:
                 cleanup_cmd += ["--annotation-source", str(source_file)]
             # The cleanup runs bounded workers in sequence: PNR_PHASE_TIMEOUT
@@ -899,10 +977,15 @@ def main():
             # (PNR_WORKER_TIMEOUT or pnr.proc.worker_timeout) is shorter and binds
             # first. The cleanup stays in this worker's process group.
             from pnr.proc import phase_timeout, run_status
+
             with (args.out_dir / "transaction-cleanup.log").open("w") as log:
                 cleanup_code, cleanup_timed_out = run_status(
-                    cleanup_cmd, timeout=phase_timeout(), session=False,
-                    stdout=log, stderr=subprocess.STDOUT)
+                    cleanup_cmd,
+                    timeout=phase_timeout(),
+                    session=False,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                )
             report["cleanup_returncode"] = cleanup_code
             if cleanup_timed_out:
                 report["cleanup_timed_out"] = True
@@ -921,11 +1004,7 @@ def main():
     (args.out_dir / "result.json").write_text(json.dumps(report, indent=2) + "\n")
     print(
         json.dumps(
-            {
-                k: v
-                for k, v in report.items()
-                if k not in {"attempts", "paths", "static_blockers"}
-            }
+            {k: v for k, v in report.items() if k not in {"attempts", "paths", "static_blockers"}}
         ),
         flush=True,
     )
@@ -933,4 +1012,5 @@ def main():
 
 if __name__ == "__main__":
     from pnr.profile import run
-    run("keyhole-region",main)
+
+    run("keyhole-region", main)

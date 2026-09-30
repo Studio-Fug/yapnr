@@ -12,9 +12,7 @@ a = ap.parse_args()
 m = json.loads((a.directory / "manifest.json").read_text())
 r = json.loads((a.directory / "review.json").read_text())
 assert (
-    hashlib.sha256(Path(m["board"]).read_bytes()).hexdigest()
-    == m["sha256"]
-    == r["board_sha256"]
+    hashlib.sha256(Path(m["board"]).read_bytes()).hexdigest() == m["sha256"] == r["board_sha256"]
 ), "stale board/review"
 assert r["status"] == "complete", "review pending"
 expected = list(range(1, len(m["layers"]) + 1))
@@ -34,9 +32,7 @@ if annotations.exists():
         assert clean["kind"] == "clean" and annotated["kind"] == "annotated"
         assert clean["layer"] == annotated["layer"] == report["layer"]
         assert report["parts"] == len(native["parts"])
-        assert report["pads"] == sum(
-            bool(p["number"]) for f in native["parts"] for p in f["pads"]
-        )
+        assert report["pads"] == sum(bool(p["number"]) for f in native["parts"] for p in f["pads"])
         assert report["trace_segments"] == sum(
             t["layer"] == report["layer"] for t in native["tracks"]
         )

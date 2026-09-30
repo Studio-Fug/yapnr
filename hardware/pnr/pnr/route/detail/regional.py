@@ -34,12 +34,8 @@ def needs_connection(request, components):
     The adapter supplies component IDs after removing provisional copper.
     Unknown anchors remain required; proximity alone never implies connection.
     """
-    source = set().union(
-        *(components.get((request.net, tuple(p)), set()) for p in request.sources)
-    )
-    target = set().union(
-        *(components.get((request.net, tuple(p)), set()) for p in request.targets)
-    )
+    source = set().union(*(components.get((request.net, tuple(p)), set()) for p in request.sources))
+    target = set().union(*(components.get((request.net, tuple(p)), set()) for p in request.targets))
     return not source.intersection(target)
 
 
@@ -89,9 +85,7 @@ def solve_region(
     if not requests or max_orders < 1 or max_expansions < 1 or pitch <= 0:
         raise ValueError("nonempty requests and positive budgets required")
     names = [r.name for r in requests]
-    if len(set(names)) != len(names) or any(
-        r.width <= 0 or r.clearance < 0 for r in requests
-    ):
+    if len(set(names)) != len(names) or any(r.width <= 0 or r.clearance < 0 for r in requests):
         raise ValueError("unique request names and valid copper rules required")
     byname = {r.name: r for r in requests}
     initial = tuple(names)
@@ -109,10 +103,7 @@ def solve_region(
 
             def clear(a, b):
                 if any(
-                    not (
-                        bounds[0] <= p[0] <= bounds[2]
-                        and bounds[1] <= p[1] <= bounds[3]
-                    )
+                    not (bounds[0] <= p[0] <= bounds[2] and bounds[1] <= p[1] <= bounds[3])
                     for p in (a, b)
                 ):
                     return False
@@ -130,8 +121,7 @@ def solve_region(
                         for anchors in (other.sources, other.targets):
                             if (
                                 len(anchors) == 1
-                                and segment_distance(a, b, anchors[0], anchors[0])
-                                < gap - 1e-9
+                                and segment_distance(a, b, anchors[0], anchors[0]) < gap - 1e-9
                             ):
                                 return False
                 for other_name, path in paths.items():
@@ -142,15 +132,11 @@ def solve_region(
                         request.clearance, other.clearance
                     )
                     if any(
-                        segment_distance(a, b, c, d) < gap - 1e-9
-                        for c, d in zip(path, path[1:])
+                        segment_distance(a, b, c, d) < gap - 1e-9 for c, d in zip(path, path[1:])
                     ):
                         blockers[other_name] += 1
                         sites[
-                            tuple(
-                                round(v, 1)
-                                for v in ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
-                            )
+                            tuple(round(v, 1) for v in ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2))
                         ] += 1
                         return False
                 return True
@@ -169,9 +155,7 @@ def solve_region(
                     status=result.status,
                     expanded=result.expanded,
                     blockers=dict(blockers),
-                    blocked_sites=[
-                        dict(x=p[0], y=p[1], hits=n) for p, n in sites.most_common(20)
-                    ],
+                    blocked_sites=[dict(x=p[0], y=p[1], hits=n) for p, n in sites.most_common(20)],
                 )
             )
             if not result.path:
@@ -189,8 +173,7 @@ def solve_region(
             return RegionalResult("routed", paths, attempts)
     status = (
         "search_budget"
-        if queue
-        or any(e["status"] == "search_budget" for a in attempts for e in a["events"])
+        if queue or any(e["status"] == "search_budget" for a in attempts for e in a["events"])
         else "no_solution_in_orders"
     )
     return RegionalResult(status, {}, attempts)

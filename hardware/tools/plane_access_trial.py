@@ -40,17 +40,12 @@ skip = []
 if a.via:
     v = next(t for t in tracks if uid(t) == a.via)
     for p in pads:
-        if (
-            p.GetParentFootprint().GetReference() + "." + p.GetNumber()
-            not in a.dedicated
-        ):
+        if p.GetParentFootprint().GetReference() + "." + p.GetNumber() not in a.dedicated:
             continue
 
         def direct(w):
             return touch(w, p, pcbnew.F_Cu) or any(
-                t.GetClass() != "PCB_VIA"
-                and touch(t, w, pcbnew.F_Cu)
-                and touch(t, p, pcbnew.F_Cu)
+                t.GetClass() != "PCB_VIA" and touch(t, w, pcbnew.F_Cu) and touch(t, p, pcbnew.F_Cu)
                 for t in tracks
             )
 
@@ -80,9 +75,7 @@ b.BuildConnectivity()
 # Query native partition before SaveBoard / other process activity.
 partition = pad_partition(b)
 entry_after = snapshot(b, entry_rules)
-entry_lost = [
-    k for k, good in entry_before.items() if good and not entry_after.get(k, False)
-]
+entry_lost = [k for k, good in entry_before.items() if good and not entry_after.get(k, False)]
 pcbnew.SaveBoard(str(a.out), b)
 shutil.copyfile(a.source.with_suffix(".kicad_pro"), a.out.with_suffix(".kicad_pro"))
 # Original partition is serialized, so never retain wrappers from two boards.

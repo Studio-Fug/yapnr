@@ -32,9 +32,7 @@ ap.add_argument(
     help="Reviewed pad with a newly added surface route to its package ground pad; permit removing its last external leaf via",
 )
 ap.add_argument("--out-dir", type=Path, required=True)
-ap.add_argument(
-    "--kicad-cli", default="/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"
-)
+ap.add_argument("--kicad-cli", default="/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli")
 a = ap.parse_args()
 review = None
 allowed = None
@@ -135,18 +133,11 @@ for v in tracks:
     # Count surface-pad overlap as another served pad, so shared access wins.
     # Plated holes and contacts on other layers remain protected.
     overlapping = [
-        p
-        for p in pads
-        if any(touches(p, v, la) for la in b.GetEnabledLayers().CuStack())
+        p for p in pads if any(touches(p, v, la) for la in b.GetEnabledLayers().CuStack())
     ]
-    if any(
-        p not in selected or p.GetAttribute() != pcbnew.PAD_ATTRIB_SMD
-        for p in overlapping
-    ):
+    if any(p not in selected or p.GetAttribute() != pcbnew.PAD_ATTRIB_SMD for p in overlapping):
         continue
-    contacts = {
-        uid(p) for p in selected if touches(t, p, pcbnew.F_Cu) or p in overlapping
-    }
+    contacts = {uid(p) for p in selected if touches(t, p, pcbnew.F_Cu) or p in overlapping}
     # Do not discard a shared track that also serves an unreviewed pad.
     if any(touches(t, p, pcbnew.F_Cu) and uid(p) not in contacts for p in pads):
         continue
@@ -156,13 +147,10 @@ for v in tracks:
 remaining = set(branches)
 removed = []
 # Prefer shared short existing access. Never remove the last branch of any pad.
-for k in sorted(
-    branches, key=lambda k: (len(branches[k][2]), -branches[k][1].GetLength(), k)
-):
+for k in sorted(branches, key=lambda k: (len(branches[k][2]), -branches[k][1].GetLength(), k)):
     v, t, contacts = branches[k]
     if all(
-        pad in surface_ids
-        or any(other != k and pad in branches[other][2] for other in remaining)
+        pad in surface_ids or any(other != k and pad in branches[other][2] for other in remaining)
         for pad in contacts
     ):
         remaining.remove(k)
@@ -186,9 +174,7 @@ for v in tracks:
     if uid(v) not in embedded or v.GetClass() != "PCB_VIA" or v.IsLocked():
         continue
     if any(
-        t.GetClass() != "PCB_VIA"
-        and t.GetLayer() != pcbnew.F_Cu
-        and touches(t, v, t.GetLayer())
+        t.GetClass() != "PCB_VIA" and t.GetLayer() != pcbnew.F_Cu and touches(t, v, t.GetLayer())
         for t in tracks
     ):
         continue
@@ -220,9 +206,7 @@ b.BuildConnectivity()
 pcbnew.ZONE_FILLER(b).Fill(b.Zones())
 b.BuildConnectivity()
 entry_after = snapshot(b, {})
-entry_lost = [
-    k for k, good in entry_before.items() if good and not entry_after.get(k, False)
-]
+entry_lost = [k for k, good in entry_before.items() if good and not entry_after.get(k, False)]
 preserved = preserves_connections(groups, pad_partition(b)) and not entry_lost
 out = a.out_dir / "candidate.kicad_pcb"
 pcbnew.SaveBoard(str(out), b)

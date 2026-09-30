@@ -26,17 +26,17 @@ class GridBasicsTest(unittest.TestCase):
         self.assertAlmostEqual(cy, 0.25)
 
     def test_edge_inset_uses_actual_outline_for_partial_final_cells(self):
-        for width,height in [(70,55),(55,70),(10,10),(9.97,5.03)]:
-            grid=RouteGrid(width,height,.35)
-            inset=.45
+        for width, height in [(70, 55), (55, 70), (10, 10), (9.97, 5.03)]:
+            grid = RouteGrid(width, height, 0.35)
+            inset = 0.45
             grid.block_edge_inset(inset)
             for j in range(grid.ny):
                 for i in range(grid.nx):
-                    x,y=grid.center_of(i,j)
-                    safe=min(x,y,width-x,height-y)>=inset-1e-9
+                    x, y = grid.center_of(i, j)
+                    safe = min(x, y, width - x, height - y) >= inset - 1e-9
                     for layer in range(grid.nlayers):
-                        self.assertEqual(grid.passable(layer,i,j,'N'),safe)
-                        self.assertEqual(grid.via_passable(layer,i,j,'N'),safe)
+                        self.assertEqual(grid.passable(layer, i, j, "N"), safe)
+                        self.assertEqual(grid.via_passable(layer, i, j, "N"), safe)
 
     def test_side_layer(self):
         g = RouteGrid(10, 10, 0.5)
@@ -59,9 +59,10 @@ class GridBasicsTest(unittest.TestCase):
 
     def test_overlapping_pad_halos_do_not_erase_foreign_clearance(self):
         from pnr.route.detail.grid import Rect
+
         for order in (("A", "B"), ("B", "A")):
-            g = RouteGrid(10, 10, .1, clearance=.15, track_width=.2, via_radius=.3)
-            pads = {"A": Rect(5, 5, .25, .8), "B": Rect(5.4, 5, .25, .8)}
+            g = RouteGrid(10, 10, 0.1, clearance=0.15, track_width=0.2, via_radius=0.3)
+            pads = {"A": Rect(5, 5, 0.25, 0.8), "B": Rect(5.4, 5, 0.25, 0.8)}
             for net in order:
                 g.add_pad(0, net, pads[net])
             i, j = g.cell_of(5.2, 5)
@@ -130,24 +131,34 @@ class GridFixtureTest(unittest.TestCase):
 
 class SourceArrayReservationTest(unittest.TestCase):
     def test_future_current_bank_blocks_signals_on_every_crossed_layer(self):
-        from pnr.graph import BoardGraph,BoardOutline,Component,Pad
+        from pnr.graph import BoardGraph, BoardOutline, Component, Pad
         from pnr.route.detail.router import _mark_source_arrays
         from pnr.plane_intent import array_geometry
         from test_plane_access_intent import FAB
-        pads=[Pad(str(i),'return',(1,y),(.7,.5)) for i,y in enumerate((-1,0,1),1)]
-        comp=Component('RENAMED','power',(5,5),0,'top',(3,3),(3,3),pads=pads)
-        graph=BoardGraph('test',[comp],[],BoardOutline(12,12))
-        intent=dict(kind='power_array',ref=comp.ref,pads=['1','2','3'],net='return',surface='F.Cu',rms_current_a=5,peak_current_a=16,max_array_span_mm=3)
-        rules=dict(plane_access_intents=[intent],plane_access_fab=FAB)
-        grid=RouteGrid(12,12,.1,layers=('F.Cu','In1.Cu','In2.Cu','B.Cu'))
-        _mark_source_arrays(grid,graph,rules)
-        plan=array_geometry([((6,5+y),(.7,.5)) for y in (-1,0,1)],(5,5),intent,FAB)
-        for point,diameter,drill in plan['vias']:
-            i,j=grid.cell_of(*point)
+
+        pads = [Pad(str(i), "return", (1, y), (0.7, 0.5)) for i, y in enumerate((-1, 0, 1), 1)]
+        comp = Component("RENAMED", "power", (5, 5), 0, "top", (3, 3), (3, 3), pads=pads)
+        graph = BoardGraph("test", [comp], [], BoardOutline(12, 12))
+        intent = dict(
+            kind="power_array",
+            ref=comp.ref,
+            pads=["1", "2", "3"],
+            net="return",
+            surface="F.Cu",
+            rms_current_a=5,
+            peak_current_a=16,
+            max_array_span_mm=3,
+        )
+        rules = dict(plane_access_intents=[intent], plane_access_fab=FAB)
+        grid = RouteGrid(12, 12, 0.1, layers=("F.Cu", "In1.Cu", "In2.Cu", "B.Cu"))
+        _mark_source_arrays(grid, graph, rules)
+        plan = array_geometry([((6, 5 + y), (0.7, 0.5)) for y in (-1, 0, 1)], (5, 5), intent, FAB)
+        for point, diameter, drill in plan["vias"]:
+            i, j = grid.cell_of(*point)
             for layer in range(4):
-                self.assertFalse(grid.passable(layer,i,j,'signal'))
-                self.assertFalse(grid.via_passable(layer,i,j,'signal'))
-        self.assertTrue(grid.passable(0,*grid.cell_of(2,2),'signal'))
+                self.assertFalse(grid.passable(layer, i, j, "signal"))
+                self.assertFalse(grid.via_passable(layer, i, j, "signal"))
+        self.assertTrue(grid.passable(0, *grid.cell_of(2, 2), "signal"))
 
 
 if __name__ == "__main__":

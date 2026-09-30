@@ -60,9 +60,7 @@ def relax(path, clear):
                 options.sort(key=lambda p: (length(p), len(p)))
                 for candidate in options:
                     shorter = length(candidate) < length(old) - 1e-8
-                    simpler = length(candidate) <= length(old) + 1e-8 and len(
-                        candidate
-                    ) < len(old)
+                    simpler = length(candidate) <= length(old) + 1e-8 and len(candidate) < len(old)
                     if (shorter or simpler) and legal(candidate, clear):
                         path[i : j + 1] = candidate
                         changed = True
@@ -96,9 +94,7 @@ def grid_access(terminals, bounds, pitch, clear, escape_length=1.2):
                 if paths:
                     local[i, j] = min(paths, key=length)
 
-        try_nodes(
-            {(i, j) for i in range(ii - 1, ii + 2) for j in range(jj - 1, jj + 2)}
-        )
+        try_nodes({(i, j) for i in range(ii - 1, ii + 2) for j in range(jj - 1, jj + 2)})
         if not local:
             radius = math.ceil(escape_length / pitch)
             nodes = set()
@@ -155,9 +151,7 @@ def route(
         return Repair(path, "routed", expanded, raw_length, raw_corners)
 
     # Cheap exact paths first; avoid a grid entirely where possible.
-    for a, b in sorted(
-        ((a, b) for a in sources for b in targets), key=lambda ab: math.dist(*ab)
-    ):
+    for a, b in sorted(((a, b) for a in sources for b in targets), key=lambda ab: math.dist(*ab)):
         for path in sorted(elbows(a, b), key=length):
             if legal(path, clear):
                 return success(relax(path, clear), 0, length(path), len(path) - 2)
@@ -203,9 +197,7 @@ def route(
             nodes.reverse()
             path = starts[cur[:2]][:-1] + nodes + list(reversed(ends[i, j]))[1:]
             path = [p for k, p in enumerate(path) if k == 0 or p != path[k - 1]]
-            return success(
-                relax(path, clear), expanded, length(path), max(0, len(path) - 2)
-            )
+            return success(relax(path, clear), expanded, length(path), max(0, len(path) - 2))
         for nh, (di, dj) in enumerate(dirs):
             ni, nj = i + di, j + dj
             if not (0 <= ni < nx and 0 <= nj < ny):
@@ -215,11 +207,7 @@ def route(
                 edge_cache[key] = clear(point(i, j), point(ni, nj))
             if not edge_cache[key]:
                 continue
-            ng = (
-                g
-                + pitch * math.hypot(di, dj)
-                + (bend_cost if h != 8 and h != nh else 0)
-            )
+            ng = g + pitch * math.hypot(di, dj) + (bend_cost if h != 8 and h != nh else 0)
             ns = (ni, nj, nh)
             if ng >= cost.get(ns, float("inf")):
                 continue

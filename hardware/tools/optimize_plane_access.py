@@ -20,9 +20,7 @@ out = a.out_dir
 out.mkdir(parents=True, exist_ok=False)
 inv = json.loads(a.inventory.read_text())
 pol = json.loads(a.policy.read_text())
-assert (
-    hashlib.sha256(src.read_bytes()).hexdigest() == inv["sha256"]
-), "stale reviewed inventory"
+assert hashlib.sha256(src.read_bytes()).hexdigest() == inv["sha256"], "stale reviewed inventory"
 ki = "/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3"
 cli = "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"
 # Build original pad partition in an isolated process.
@@ -40,9 +38,7 @@ current = out / "baseline.kicad_pcb"
 shutil.copyfile(src, current)
 shutil.copyfile(src.with_suffix(".kicad_pro"), current.with_suffix(".kicad_pro"))
 (out / "fp-lib-table").write_text(
-    (src.parent / "fp-lib-table")
-    .read_text()
-    .replace("${KIPRJMOD}", str(src.parent.resolve()))
+    (src.parent / "fp-lib-table").read_text().replace("${KIPRJMOD}", str(src.parent.resolve()))
 )
 
 
@@ -139,9 +135,7 @@ for g in inv["clusters"]:
             edit["preserved"]
             and len(after["unconnected_items"]) <= len(before["unconnected_items"])
             and not (violation_keys(after) - violation_keys(before))
-            and all(
-                counts[k] <= oldcounts[k] for k in ["track_dangling", "via_dangling"]
-            )
+            and all(counts[k] <= oldcounts[k] for k in ["track_dangling", "via_dangling"])
         )
         e = dict(
             group=g["id"],

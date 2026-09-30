@@ -1,13 +1,29 @@
 """Integer-state A* with invocation-local caches and unchanged routing predicates."""
+
 from __future__ import annotations
 import heapq
 from functools import lru_cache
 from .grid import Cell
-_SQRT2 = 2.0 ** 0.5
+
+_SQRT2 = 2.0**0.5
 _ORTHOGONAL = ((1, 0), (-1, 0), (0, 1), (0, -1))
 _DIAGONAL = ((1, 1), (1, -1), (-1, 1), (-1, -1))
 
-def astar(grid, sources, targets, net, occ, history, via_cost, pres_fac, blocked=None, soft=None, diagonal=True, drill_sites=()):
+
+def astar(
+    grid,
+    sources,
+    targets,
+    net,
+    occ,
+    history,
+    via_cost,
+    pres_fac,
+    blocked=None,
+    soft=None,
+    diagonal=True,
+    drill_sites=(),
+):
     if not targets:
         return None
     nx, ny, nlayers = (grid.nx, grid.ny, grid.nlayers)
@@ -23,13 +39,14 @@ def astar(grid, sources, targets, net, occ, history, via_cost, pres_fac, blocked
         la, ij = divmod(key, plane)
         j, i = divmod(ij, nx)
         return (la, i, j)
+
     sources = {c for c in sources if grid.passable(c.layer, c.i, c.j, net)}
     targets = {c for c in targets if grid.passable(c.layer, c.i, c.j, net)}
     if not sources or not targets:
         return None
     raw_block = blocked or set()
-    track_halo = getattr(grid, 'routing_track_halos', {}).get(net, 0)
-    via_halo = getattr(grid, 'routing_via_keepout', 0)
+    track_halo = getattr(grid, "routing_track_halos", {}).get(net, 0)
+    via_halo = getattr(grid, "routing_via_keepout", 0)
     raw = {encode(c) for c in raw_block if inside(c.i, c.j)}
     outside = {(c.layer, c.i, c.j) for c in raw_block if not inside(c.i, c.j)}
     block = set(raw)
@@ -40,7 +57,10 @@ def astar(grid, sources, targets, net, occ, history, via_cost, pres_fac, blocked
                     i, j = (c.i + di, c.j + dj)
                     if inside(i, j):
                         block.add(c.layer * plane + j * nx + i)
-    starts = sorted((encode(c) for c in sources if encode(c) not in block), key=lambda k: (decode(k)[0], decode(k)[1], decode(k)[2]))
+    starts = sorted(
+        (encode(c) for c in sources if encode(c) not in block),
+        key=lambda k: (decode(k)[0], decode(k)[1], decode(k)[2]),
+    )
     ends = {encode(c) for c in targets if encode(c) not in block}
     if not starts or not ends:
         return None
@@ -67,7 +87,8 @@ def astar(grid, sources, targets, net, occ, history, via_cost, pres_fac, blocked
         return grid.passable(la, i, j, net)
 
     import os
-    dense_enabled = os.environ.get('PNR_DENSE_MAZE_COST') == '1'
+
+    dense_enabled = os.environ.get("PNR_DENSE_MAZE_COST") == "1"
     dense_prices = None
     price_calls = 0
 
@@ -80,8 +101,10 @@ def astar(grid, sources, targets, net, occ, history, via_cost, pres_fac, blocked
             price_calls += 1
             if dense_prices is None and price_calls >= 256:
                 from .cost_field import prices
-                dense_prices = prices(nx, ny, nlayers, counts, historic, penalties,
-                                      track_halo, via_halo, pres_fac)
+
+                dense_prices = prices(
+                    nx, ny, nlayers, counts, historic, penalties, track_halo, via_halo, pres_fac
+                )
             if dense_prices is not None:
                 return float(dense_prices[1][key % plane] if via else dense_prices[0][key])
         la, i, j = decode(key)
@@ -113,16 +136,21 @@ def astar(grid, sources, targets, net, occ, history, via_cost, pres_fac, blocked
         for layer in range(nlayers):
             if layer * plane + j * nx + i in block or not grid.via_passable(layer, i, j, net):
                 return (False, None)
-        plated = getattr(grid, 'plated_transition', lambda *args: None)(net, i, j)
+        plated = getattr(grid, "plated_transition", lambda *args: None)(net, i, j)
         if plated is None:
             for layer in range(nlayers):
                 for di in range(-via_halo, via_halo + 1):
                     for dj in range(-via_halo, via_halo + 1):
                         ni, nj = (i + di, j + dj)
-                        hit = layer * plane + nj * nx + ni in raw if inside(ni, nj) else (layer, ni, nj) in outside
+                        hit = (
+                            layer * plane + nj * nx + ni in raw
+                            if inside(ni, nj)
+                            else (layer, ni, nj) in outside
+                        )
                         if hit:
                             return (False, None)
         return (True, plated)
+
     queue = []
     distances = {}
     came = {}
@@ -134,7 +162,7 @@ def astar(grid, sources, targets, net, occ, history, via_cost, pres_fac, blocked
         heapq.heappush(queue, (heuristic(key), tie, key))
         tie += 1
     closed = set()
-    infinity = float('inf')
+    infinity = float("inf")
     while queue:
         _, _, current = heapq.heappop(queue)
         if current in closed:
@@ -171,7 +199,14 @@ def astar(grid, sources, targets, net, occ, history, via_cost, pres_fac, blocked
                 nxt = layer_base + nj * nx + ni
                 corner_a = layer_base + j * nx + ni
                 corner_b = layer_base + nj * nx + i
-                if nxt in block or not passable(nxt) or corner_a in block or (corner_b in block) or (not passable(corner_a)) or (not passable(corner_b)):
+                if (
+                    nxt in block
+                    or not passable(nxt)
+                    or corner_a in block
+                    or (corner_b in block)
+                    or (not passable(corner_a))
+                    or (not passable(corner_b))
+                ):
                     continue
                 new_distance = base + _SQRT2 * cost(nxt)
                 if new_distance < distances.get(nxt, infinity):
@@ -197,7 +232,11 @@ def astar(grid, sources, targets, net, occ, history, via_cost, pres_fac, blocked
                 if not hole_clear:
                     continue
             # A through-via price covers every layer; share one cache key per XY.
-            new_distance = base + (cost(nxt % plane, True) if plated is None else cost(nxt)) + (via_cost if plated is None else 0.0)
+            new_distance = (
+                base
+                + (cost(nxt % plane, True) if plated is None else cost(nxt))
+                + (via_cost if plated is None else 0.0)
+            )
             if new_distance < distances.get(nxt, infinity):
                 distances[nxt] = new_distance
                 came[nxt] = current

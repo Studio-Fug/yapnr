@@ -63,9 +63,7 @@ class LayeredTest(unittest.TestCase):
         self.assertEqual(sum(kind == "via" for kind, la, a, b in primitives(r.path)), 2)
 
     def test_port_decomposition_respects_transition_budget(self):
-        clear = (
-            lambda la, a, b: la != 0 or max(a[0], b[0]) < 1.9 or min(a[0], b[0]) > 2.1
-        )
+        clear = lambda la, a, b: la != 0 or max(a[0], b[0]) < 1.9 or min(a[0], b[0]) > 2.1
         result = route_layers(
             [(0, 0)],
             [(4, 0)],
@@ -79,9 +77,7 @@ class LayeredTest(unittest.TestCase):
         self.assertFalse(result.path)
 
     def test_source_escape_window_selects_first_via(self):
-        clear = (
-            lambda la, a, b: la != 0 or max(a[0], b[0]) < 1.9 or min(a[0], b[0]) > 2.1
-        )
+        clear = lambda la, a, b: la != 0 or max(a[0], b[0]) < 1.9 or min(a[0], b[0]) > 2.1
         window = lambda p: 0.3 <= p[0] <= 0.9 and 0.5 <= p[1] <= 0.9
         result = route_layers(
             [(0, 0)],
@@ -143,14 +139,10 @@ class LayeredTest(unittest.TestCase):
         )
         self.assertEqual(result.status, "routed")
         self.assertEqual(set(result.paths), {"a", "b"})
-        self.assertTrue(
-            any(kind == "via" for kind, la, a, b in primitives(result.paths["b"]))
-        )
+        self.assertTrue(any(kind == "via" for kind, la, a, b in primitives(result.paths["b"])))
         for kind, la, a, b in primitives(result.paths["a"]):
             if kind == "track":
-                self.assertFalse(
-                    copper_conflict(a, b, la, result.paths["b"], 0.2, 0.2, 0.151)
-                )
+                self.assertFalse(copper_conflict(a, b, la, result.paths["b"], 0.2, 0.2, 0.151))
 
     def test_through_via_obstructs_every_layer(self):
         p = [(1, 1, 0), (1, 1, 1)]
@@ -163,9 +155,7 @@ class LayeredTest(unittest.TestCase):
         self.assertFalse(via_conflict((1, 1), p, 0.2, 0.15, same_net=True))
 
     def test_no_legal_vias_does_not_bypass_wall(self):
-        clear = (
-            lambda la, a, b: la != 0 or max(a[0], b[0]) < 1.9 or min(a[0], b[0]) > 2.1
-        )
+        clear = lambda la, a, b: la != 0 or max(a[0], b[0]) < 1.9 or min(a[0], b[0]) > 2.1
         r = route_layers(
             [(0, 0)],
             [(4, 0)],
@@ -178,16 +168,34 @@ class LayeredTest(unittest.TestCase):
         self.assertFalse(r.path)
 
 
-
 import unittest
-from pnr.route.detail.layered import route_escape_ports,primitives
+from pnr.route.detail.layered import route_escape_ports, primitives
+
+
 class BacksidePortsTest(unittest.TestCase):
- def test_backside_terminals_escape_to_front_bridge(self):
-  def clear(layer,a,b):return layer!=1 or max(a[0],b[0])<1.9 or min(a[0],b[0])>2.1
-  r=route_escape_ports([(0.,0.)],[(4.,0.)],(-1.,-1.,5.,1.),clear,lambda p:p[0]<1.5 or p[0]>2.5,lambda p:(1,),pitch=.2,layers=2,budget=300,max_vias=2)
-  self.assertEqual(r.status,'routed');self.assertEqual(r.path[0],(0.,0.,1));self.assertEqual(r.path[-1],(4.,0.,1))
-  self.assertEqual(sum(kind=='via' for kind,_,_,_ in primitives(r.path)),2)
-  self.assertTrue(all(clear(la,a,b) for kind,la,a,b in primitives(r.path) if kind=='track'))
+    def test_backside_terminals_escape_to_front_bridge(self):
+        def clear(layer, a, b):
+            return layer != 1 or max(a[0], b[0]) < 1.9 or min(a[0], b[0]) > 2.1
+
+        r = route_escape_ports(
+            [(0.0, 0.0)],
+            [(4.0, 0.0)],
+            (-1.0, -1.0, 5.0, 1.0),
+            clear,
+            lambda p: p[0] < 1.5 or p[0] > 2.5,
+            lambda p: (1,),
+            pitch=0.2,
+            layers=2,
+            budget=300,
+            max_vias=2,
+        )
+        self.assertEqual(r.status, "routed")
+        self.assertEqual(r.path[0], (0.0, 0.0, 1))
+        self.assertEqual(r.path[-1], (4.0, 0.0, 1))
+        self.assertEqual(sum(kind == "via" for kind, _, _, _ in primitives(r.path)), 2)
+        self.assertTrue(
+            all(clear(la, a, b) for kind, la, a, b in primitives(r.path) if kind == "track")
+        )
 
 
 if __name__ == "__main__":

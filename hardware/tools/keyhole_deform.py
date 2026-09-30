@@ -34,8 +34,7 @@ def main():
     if len(selected) != len(set(args.track)) or len(selected) < 3:
         ap.error("supply a chain of at least three tracks")
     if any(
-        isinstance(t, pcbnew.PCB_VIA) or t.IsLocked() or t.GetWidth() != 200000
-        for t in selected
+        isinstance(t, pcbnew.PCB_VIA) or t.IsLocked() or t.GetWidth() != 200000 for t in selected
     ):
         ap.error("only unlocked .2 mm signal tracks supported")
     net = selected[0].GetNetCode()
@@ -90,11 +89,7 @@ def main():
         for t in tracks + pads
         if t.IsOnLayer(layer) and t.GetNetCode() != net
     ]
-    holes = [
-        p.GetEffectiveHoleShape()
-        for p in pads
-        if p.GetAttribute() == pcbnew.PAD_ATTRIB_NPTH
-    ]
+    holes = [p.GetEffectiveHoleShape() for p in pads if p.GetAttribute() == pcbnew.PAD_ATTRIB_NPTH]
     keepouts = [
         z.Outline()
         for z in b.Zones()
@@ -133,9 +128,7 @@ def main():
         elbows(path[0], interior[0]), elbows(interior[-1], path[-1])
     ):
         candidate = left + interior[1:] + right[1:]
-        candidate = [
-            p for i, p in enumerate(candidate) if i == 0 or p != candidate[i - 1]
-        ]
+        candidate = [p for i, p in enumerate(candidate) if i == 0 or p != candidate[i - 1]]
         ts = [make(a, z) for a, z in zip(candidate, candidate[1:])]
         if all(clear(t) for t in ts):
             possibilities.append((candidate, ts))
@@ -143,12 +136,23 @@ def main():
         ap.error("no clearance-legal deformation at requested displacement")
     # Preserve the displaced run: a shortest elbow can immediately return to
     # the old corridor and defeat the intended congestion relief.
-    direction=(path[-1][0]-path[-2][0],path[-1][1]-path[-2][1])
+    direction = (path[-1][0] - path[-2][0], path[-1][1] - path[-2][1])
+
     def shifted_run(candidate):
         def on_line(p):
-            return abs((p[0]-interior[-1][0])*direction[1]-(p[1]-interior[-1][1])*direction[0])<1e-8
-        return sum(length([a,z]) for a,z in zip(candidate,candidate[1:]) if on_line(a) and on_line(z))
-    new, ts = min(possibilities, key=lambda p: (-shifted_run(p[0]),len(p[0]), length(p[0])))
+            return (
+                abs(
+                    (p[0] - interior[-1][0]) * direction[1]
+                    - (p[1] - interior[-1][1]) * direction[0]
+                )
+                < 1e-8
+            )
+
+        return sum(
+            length([a, z]) for a, z in zip(candidate, candidate[1:]) if on_line(a) and on_line(z)
+        )
+
+    new, ts = min(possibilities, key=lambda p: (-shifted_run(p[0]), len(p[0]), length(p[0])))
     for t in selected:
         b.Remove(t)
     for t in ts:
@@ -156,9 +160,7 @@ def main():
     b.BuildConnectivity()
     pcbnew.ZONE_FILLER(b).Fill(b.Zones())
     pcbnew.SaveBoard(str(args.out), b)
-    shutil.copyfile(
-        args.board.with_suffix(".kicad_pro"), args.out.with_suffix(".kicad_pro")
-    )
+    shutil.copyfile(args.board.with_suffix(".kicad_pro"), args.out.with_suffix(".kicad_pro"))
     args.out.with_suffix(".deform.json").write_text(
         json.dumps(
             dict(

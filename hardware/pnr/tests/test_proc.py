@@ -6,6 +6,7 @@ groups, whose own deadlines die with it. The source scan fails on any subprocess
 call in the engine, its regression scripts or the regional worker tool that
 neither passes ``timeout=`` nor goes through pnr.proc.
 """
+
 import ast
 import math
 import os
@@ -21,23 +22,29 @@ from unittest import mock
 from pnr import proc
 
 PNR = Path(__file__).parent.parent  # hardware/pnr (also inside Bazel runfiles)
-TOOLS = PNR.parent / 'tools'
-SLEEP = [sys.executable, '-c', 'import time; time.sleep(60)']
+TOOLS = PNR.parent / "tools"
+SLEEP = [sys.executable, "-c", "import time; time.sleep(60)"]
 
 # Children that are bounded otherwise, with the reason.
 UNBOUNDED_OK = {
-    ('pnr/pnr/proc.py', 'Popen'): 'the bounded runner itself',
-    ('pnr/pnr/paired_bootstrap.py', 'Popen'): 'polled parallel trial with its own deadline (_trial)',
-    ('pnr/pnr/drc_warm/launch_host.py', 'Popen'): 'the opt-in warm DRC host daemon; DrcSession.close ends it',
+    ("pnr/pnr/proc.py", "Popen"): "the bounded runner itself",
+    (
+        "pnr/pnr/paired_bootstrap.py",
+        "Popen",
+    ): "polled parallel trial with its own deadline (_trial)",
+    (
+        "pnr/pnr/drc_warm/launch_host.py",
+        "Popen",
+    ): "the opt-in warm DRC host daemon; DrcSession.close ends it",
 }
-SUBPROCESS_CALLS = {'run', 'call', 'check_call', 'check_output', 'Popen'}
-OS_CALLS = {'system', 'popen'}
+SUBPROCESS_CALLS = {"run", "call", "check_call", "check_output", "Popen"}
+OS_CALLS = {"system", "popen"}
 
 
 def engine_sources():
-    yield from sorted(PNR.glob('pnr/**/*.py'))
-    yield from sorted(PNR.glob('regression/*.py'))
-    yield TOOLS / 'keyhole_region.py'
+    yield from sorted(PNR.glob("pnr/**/*.py"))
+    yield from sorted(PNR.glob("regression/*.py"))
+    yield TOOLS / "keyhole_region.py"
 
 
 def _bindings(tree):
@@ -47,10 +54,14 @@ def _bindings(tree):
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.name in ('subprocess', 'os'):
+                if alias.name in ("subprocess", "os"):
                     modules[alias.asname or alias.name] = alias.name
-        elif isinstance(node, ast.ImportFrom) and not node.level and node.module in ('subprocess', 'os'):
-            wanted = SUBPROCESS_CALLS if node.module == 'subprocess' else OS_CALLS
+        elif (
+            isinstance(node, ast.ImportFrom)
+            and not node.level
+            and node.module in ("subprocess", "os")
+        ):
+            wanted = SUBPROCESS_CALLS if node.module == "subprocess" else OS_CALLS
             for alias in node.names:
                 if alias.name in wanted:
                     functions[alias.asname or alias.name] = (node.module, alias.name)
@@ -67,54 +78,76 @@ def unbounded_calls(sources=None, root=PNR.parent):
             if not isinstance(node, ast.Call):
                 continue
             func = node.func
-            if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) \
-                    and func.value.id in modules:
+            if (
+                isinstance(func, ast.Attribute)
+                and isinstance(func.value, ast.Name)
+                and func.value.id in modules
+            ):
                 module, name = modules[func.value.id], func.attr
             elif isinstance(func, ast.Name) and func.id in functions:
                 module, name = functions[func.id]
             else:
                 continue
-            if module == 'os':
+            if module == "os":
                 if name in OS_CALLS:
-                    yield rel, 'os.' + name, node.lineno
-            elif name in SUBPROCESS_CALLS and not any(k.arg == 'timeout' for k in node.keywords) \
-                    and (rel, name) not in UNBOUNDED_OK:
+                    yield rel, "os." + name, node.lineno
+            elif (
+                name in SUBPROCESS_CALLS
+                and not any(k.arg == "timeout" for k in node.keywords)
+                and (rel, name) not in UNBOUNDED_OK
+            ):
                 yield rel, name, node.lineno
 
 
 class SourceScanTest(unittest.TestCase):
     def test_every_engine_subprocess_is_bounded(self):
-        self.assertEqual(list(unbounded_calls()), [],
-                         'bound the child: pnr.proc (run_status, run_checked, run_output) or timeout=')
+        self.assertEqual(
+            list(unbounded_calls()),
+            [],
+            "bound the child: pnr.proc (run_status, run_checked, run_output) or timeout=",
+        )
 
     def test_scan_sees_the_known_sites(self):
         text = {p.relative_to(PNR.parent).as_posix(): p.read_text() for p in engine_sources()}
         for rel, name in UNBOUNDED_OK:
-            self.assertIn('subprocess.' + name, text[rel], rel)
+            self.assertIn("subprocess." + name, text[rel], rel)
 
     def test_scan_catches_an_unbounded_call(self):
         with tempfile.TemporaryDirectory() as d:
-            path = Path(d) / 'x.py'
-            path.write_text('\n'.join([
-                'import os, subprocess',                    # 1
-                'import subprocess as sp',                  # 2
-                'from subprocess import run, Popen as P',   # 3
-                'from os import system',                    # 4
-                'subprocess.run(["a"], check=True)',        # 5 unbounded
-                'subprocess.run(["a"], timeout=5)',         # 6
-                'os.system("a")',                           # 7 unbounded
-                'sp.check_output(["a"])',                   # 8 unbounded
-                'run(["a"])',                               # 9 unbounded
-                'P(["a"])',                                 # 10 unbounded
-                'system("a")',                              # 11 unbounded
-                'run(["a"], timeout=1)',                    # 12
-                'from pnr.proc import run_status',          # 13
-                'run_status(["a"])',                        # 14 bounded by pnr.proc
-            ]) + '\n')
+            path = Path(d) / "x.py"
+            path.write_text(
+                "\n".join(
+                    [
+                        "import os, subprocess",  # 1
+                        "import subprocess as sp",  # 2
+                        "from subprocess import run, Popen as P",  # 3
+                        "from os import system",  # 4
+                        'subprocess.run(["a"], check=True)',  # 5 unbounded
+                        'subprocess.run(["a"], timeout=5)',  # 6
+                        'os.system("a")',  # 7 unbounded
+                        'sp.check_output(["a"])',  # 8 unbounded
+                        'run(["a"])',  # 9 unbounded
+                        'P(["a"])',  # 10 unbounded
+                        'system("a")',  # 11 unbounded
+                        'run(["a"], timeout=1)',  # 12
+                        "from pnr.proc import run_status",  # 13
+                        'run_status(["a"])',  # 14 bounded by pnr.proc
+                    ]
+                )
+                + "\n"
+            )
             found = sorted(unbounded_calls([path], Path(d)))
-            self.assertEqual(found, [('x.py', 'Popen', 10), ('x.py', 'check_output', 8),
-                                     ('x.py', 'os.system', 7), ('x.py', 'os.system', 11),
-                                     ('x.py', 'run', 5), ('x.py', 'run', 9)])
+            self.assertEqual(
+                found,
+                [
+                    ("x.py", "Popen", 10),
+                    ("x.py", "check_output", 8),
+                    ("x.py", "os.system", 7),
+                    ("x.py", "os.system", 11),
+                    ("x.py", "run", 5),
+                    ("x.py", "run", 9),
+                ],
+            )
 
 
 def _alive(pid):
@@ -125,15 +158,16 @@ def _alive(pid):
         return False
     except PermissionError:
         return True
-    if os.path.isdir('/proc/self'):
+    if os.path.isdir("/proc/self"):
         try:
-            with open('/proc/%d/stat' % pid) as stat:
-                return stat.read().rpartition(')')[2].split()[0] != 'Z'
+            with open("/proc/%d/stat" % pid) as stat:
+                return stat.read().rpartition(")")[2].split()[0] != "Z"
         except OSError:
             return False
-    state = subprocess.run(['ps', '-o', 'stat=', '-p', str(pid)], capture_output=True,
-                           text=True, timeout=30).stdout.strip()
-    return bool(state) and not state.startswith('Z')
+    state = subprocess.run(
+        ["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True, timeout=30
+    ).stdout.strip()
+    return bool(state) and not state.startswith("Z")
 
 
 def _gone(pid, seconds=10):
@@ -141,13 +175,13 @@ def _gone(pid, seconds=10):
     while time.monotonic() < deadline:
         if not _alive(pid):
             return True
-        time.sleep(.05)
+        time.sleep(0.05)
     return False
 
 
 # A child that starts a worker in its own session (as pnr.proc does by default),
 # records both pids, and outlives any deadline below.
-WITH_WORKER = r'''
+WITH_WORKER = r"""
 import os, subprocess, sys, time
 worker = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"], start_new_session=True)
 with open(sys.argv[1] + ".tmp", "w") as out:
@@ -155,85 +189,103 @@ with open(sys.argv[1] + ".tmp", "w") as out:
 os.rename(sys.argv[1] + ".tmp", sys.argv[1])
 print("started", flush=True)
 time.sleep(60)
-'''
+"""
 
 
 class RunnerTest(unittest.TestCase):
     def test_exit_code_and_deadline(self):
-        self.assertEqual(proc.run_status([sys.executable, '-c', 'raise SystemExit(3)']), (3, False))
+        self.assertEqual(proc.run_status([sys.executable, "-c", "raise SystemExit(3)"]), (3, False))
         started = time.monotonic()
-        self.assertEqual(proc.run_status(SLEEP, timeout=.5), (-9, True))
+        self.assertEqual(proc.run_status(SLEEP, timeout=0.5), (-9, True))
         self.assertLess(time.monotonic() - started, 30)
 
     def test_session_false_stays_in_the_callers_process_group(self):
-        code = 'import os,sys; sys.exit(0 if os.getpgid(0) == %d else 1)' % os.getpgid(0)
-        self.assertEqual(proc.run_status([sys.executable, '-c', code], session=False), (0, False))
-        self.assertEqual(proc.run_status([sys.executable, '-c', code]), (1, False))  # own group
-        self.assertEqual(proc.run_status(SLEEP, timeout=.5, session=False), (-9, True))
-        self.assertEqual(proc.run_output([sys.executable, '-c', code], session=False, check=False).returncode, 0)
+        code = "import os,sys; sys.exit(0 if os.getpgid(0) == %d else 1)" % os.getpgid(0)
+        self.assertEqual(proc.run_status([sys.executable, "-c", code], session=False), (0, False))
+        self.assertEqual(proc.run_status([sys.executable, "-c", code]), (1, False))  # own group
+        self.assertEqual(proc.run_status(SLEEP, timeout=0.5, session=False), (-9, True))
+        self.assertEqual(
+            proc.run_output([sys.executable, "-c", code], session=False, check=False).returncode, 0
+        )
 
     def test_run_checked(self):
-        self.assertEqual(proc.run_checked([sys.executable, '-c', 'pass'], session=False), 0)
+        self.assertEqual(proc.run_checked([sys.executable, "-c", "pass"], session=False), 0)
         with self.assertRaises(subprocess.CalledProcessError) as failed:
-            proc.run_checked([sys.executable, '-c', 'raise SystemExit(4)'])
+            proc.run_checked([sys.executable, "-c", "raise SystemExit(4)"])
         self.assertEqual(failed.exception.returncode, 4)
         self.assertNotIsInstance(failed.exception, proc.DeadlineExceeded)
         with self.assertRaises(proc.DeadlineExceeded) as late:
-            proc.run_checked(SLEEP, timeout=.5, session=False)
+            proc.run_checked(SLEEP, timeout=0.5, session=False)
         self.assertIsInstance(late.exception, subprocess.CalledProcessError)
-        self.assertEqual((late.exception.returncode, late.exception.timeout), (-9, .5))
-        self.assertIn('deadline', str(late.exception))
+        self.assertEqual((late.exception.returncode, late.exception.timeout), (-9, 0.5))
+        self.assertIn("deadline", str(late.exception))
 
     def test_run_output(self):
-        done = proc.run_output([sys.executable, '-c', 'print("hi")'])
-        self.assertEqual((done.returncode, done.stdout), (0, 'hi\n'))
+        done = proc.run_output([sys.executable, "-c", 'print("hi")'])
+        self.assertEqual((done.returncode, done.stdout), (0, "hi\n"))
         with self.assertRaises(subprocess.CalledProcessError) as failed:
-            proc.run_output([sys.executable, '-c', 'import sys; sys.stderr.write("bad"); sys.exit(2)'])
-        self.assertEqual((failed.exception.returncode, failed.exception.stderr), (2, 'bad'))
-        self.assertEqual(proc.run_output(SLEEP, timeout=.5, check=False).returncode, -9)
+            proc.run_output(
+                [sys.executable, "-c", 'import sys; sys.stderr.write("bad"); sys.exit(2)']
+            )
+        self.assertEqual((failed.exception.returncode, failed.exception.stderr), (2, "bad"))
+        self.assertEqual(proc.run_output(SLEEP, timeout=0.5, check=False).returncode, -9)
         with self.assertRaises(proc.DeadlineExceeded):
-            proc.run_output(SLEEP, timeout=.5)
+            proc.run_output(SLEEP, timeout=0.5)
 
     def test_timeouts_and_overrides(self):
-        with mock.patch.dict(os.environ, {'PNR_PHASE_TIMEOUT': '', 'PNR_EVALUATION_TIMEOUT': ''}):
+        with mock.patch.dict(os.environ, {"PNR_PHASE_TIMEOUT": "", "PNR_EVALUATION_TIMEOUT": ""}):
             self.assertEqual(proc.phase_timeout(), 14400)  # empty: the default
-            os.environ.pop('PNR_PHASE_TIMEOUT'); os.environ.pop('PNR_EVALUATION_TIMEOUT')
+            os.environ.pop("PNR_PHASE_TIMEOUT")
+            os.environ.pop("PNR_EVALUATION_TIMEOUT")
             self.assertEqual(proc.phase_timeout(), 14400)
             self.assertEqual(proc.evaluation_timeout(900), 172800)
             self.assertEqual(proc.evaluation_timeout(5400), 259200)
-        with mock.patch.dict(os.environ, {'PNR_PHASE_TIMEOUT': '7', 'PNR_EVALUATION_TIMEOUT': '9'}):
+        with mock.patch.dict(os.environ, {"PNR_PHASE_TIMEOUT": "7", "PNR_EVALUATION_TIMEOUT": "9"}):
             self.assertEqual((proc.phase_timeout(), proc.evaluation_timeout(5400)), (7, 9))
         # 0, a negative value or inf: no limit (never "kill at once").
-        for value in ('0', '-1', 'inf'):
-            with mock.patch.dict(os.environ, {'PNR_PHASE_TIMEOUT': value, 'PNR_EVALUATION_TIMEOUT': value}):
-                self.assertEqual((proc.phase_timeout(), proc.evaluation_timeout(900)), (math.inf, math.inf))
-        self.assertEqual(proc.run_status([sys.executable, '-c', 'pass'], timeout=math.inf), (0, False))
-        self.assertEqual(proc.run_output([sys.executable, '-c', 'print(1)'], timeout=math.inf).stdout, '1\n')
+        for value in ("0", "-1", "inf"):
+            with mock.patch.dict(
+                os.environ, {"PNR_PHASE_TIMEOUT": value, "PNR_EVALUATION_TIMEOUT": value}
+            ):
+                self.assertEqual(
+                    (proc.phase_timeout(), proc.evaluation_timeout(900)), (math.inf, math.inf)
+                )
+        self.assertEqual(
+            proc.run_status([sys.executable, "-c", "pass"], timeout=math.inf), (0, False)
+        )
+        self.assertEqual(
+            proc.run_output([sys.executable, "-c", "print(1)"], timeout=math.inf).stdout, "1\n"
+        )
         # The worker default is read at import, as before (PNR_WORKER_TIMEOUT, 1800 s).
-        self.assertEqual(proc.TIMEOUT, proc._seconds(os.environ.get('PNR_WORKER_TIMEOUT'), 1800))
+        self.assertEqual(proc.TIMEOUT, proc._seconds(os.environ.get("PNR_WORKER_TIMEOUT"), 1800))
         self.assertEqual(proc._seconds(None, 1800), 1800)
-        self.assertEqual(proc._seconds('0', 1800), math.inf)
-        with mock.patch.object(proc, 'TIMEOUT', 1800.0):
-            self.assertEqual(proc.worker_timeout(['python', '-m', 'pnr.x']), 1800)
-            self.assertEqual(proc.worker_timeout(['x', '--seconds', '300']), 1800)
-            self.assertEqual(proc.worker_timeout(['x', '--seconds', '1200', '--max-seconds', 5]), 3000)
-            self.assertEqual(proc.worker_timeout(['x', '--max-seconds', 'bad', '--seconds']), 1800)
-        with mock.patch.object(proc, 'TIMEOUT', math.inf):
-            self.assertEqual(proc.worker_timeout(['x', '--seconds', '300']), math.inf)
+        self.assertEqual(proc._seconds("0", 1800), math.inf)
+        with mock.patch.object(proc, "TIMEOUT", 1800.0):
+            self.assertEqual(proc.worker_timeout(["python", "-m", "pnr.x"]), 1800)
+            self.assertEqual(proc.worker_timeout(["x", "--seconds", "300"]), 1800)
+            self.assertEqual(
+                proc.worker_timeout(["x", "--seconds", "1200", "--max-seconds", 5]), 3000
+            )
+            self.assertEqual(proc.worker_timeout(["x", "--max-seconds", "bad", "--seconds"]), 1800)
+        with mock.patch.object(proc, "TIMEOUT", math.inf):
+            self.assertEqual(proc.worker_timeout(["x", "--seconds", "300"]), math.inf)
 
 
 class TreeKillTest(unittest.TestCase):
     """A deadline (or an interrupted wait) ends the child's workers too."""
 
     def pids(self, directory):
-        return tuple(int(v) for v in (Path(directory) / 'pids').read_text().split())
+        return tuple(int(v) for v in (Path(directory) / "pids").read_text().split())
 
     def test_deadline_kills_workers_in_their_own_sessions(self):
         for session in (False, True):
             with self.subTest(session=session), tempfile.TemporaryDirectory() as d:
                 code, timed_out = proc.run_status(
-                    [sys.executable, '-c', WITH_WORKER, str(Path(d) / 'pids')], timeout=3,
-                    session=session, stdout=subprocess.DEVNULL)
+                    [sys.executable, "-c", WITH_WORKER, str(Path(d) / "pids")],
+                    timeout=3,
+                    session=session,
+                    stdout=subprocess.DEVNULL,
+                )
                 self.assertEqual((code, timed_out), (-9, True))
                 child, worker = self.pids(d)
                 self.assertTrue(_gone(child) and _gone(worker), (child, worker))
@@ -242,10 +294,14 @@ class TreeKillTest(unittest.TestCase):
         # The worker inherits the pipes; only killing it lets the output end.
         with tempfile.TemporaryDirectory() as d:
             started = time.monotonic()
-            done = proc.run_output([sys.executable, '-c', WITH_WORKER, str(Path(d) / 'pids')],
-                                   timeout=3, check=False, session=False)
+            done = proc.run_output(
+                [sys.executable, "-c", WITH_WORKER, str(Path(d) / "pids")],
+                timeout=3,
+                check=False,
+                session=False,
+            )
             self.assertLess(time.monotonic() - started, 30)
-            self.assertEqual((done.returncode, done.stdout), (-9, 'started\n'))
+            self.assertEqual((done.returncode, done.stdout), (-9, "started\n"))
             child, worker = self.pids(d)
             self.assertTrue(_gone(child) and _gone(worker), (child, worker))
 
@@ -260,11 +316,15 @@ class TreeKillTest(unittest.TestCase):
         try:
             for call in (proc.run_status, proc.run_output):
                 with self.subTest(call=call.__name__), tempfile.TemporaryDirectory() as d:
-                    pids = Path(d) / 'pids'
+                    pids = Path(d) / "pids"
                     signal.setitimer(signal.ITIMER_REAL, 3)
                     with self.assertRaises(Interrupted):
-                        call([sys.executable, '-c', WITH_WORKER, str(pids)], timeout=60, session=False,
-                             **({'stdout': subprocess.DEVNULL} if call is proc.run_status else {}))
+                        call(
+                            [sys.executable, "-c", WITH_WORKER, str(pids)],
+                            timeout=60,
+                            session=False,
+                            **({"stdout": subprocess.DEVNULL} if call is proc.run_status else {})
+                        )
                     signal.setitimer(signal.ITIMER_REAL, 0)
                     child, worker = self.pids(d)
                     self.assertTrue(_gone(child) and _gone(worker), (child, worker))
@@ -274,12 +334,14 @@ class TreeKillTest(unittest.TestCase):
 
     def test_descendants(self):
         with tempfile.TemporaryDirectory() as d:
-            pids = Path(d) / 'pids'
-            child = subprocess.Popen([sys.executable, '-c', WITH_WORKER, str(pids)], stdout=subprocess.DEVNULL)
+            pids = Path(d) / "pids"
+            child = subprocess.Popen(
+                [sys.executable, "-c", WITH_WORKER, str(pids)], stdout=subprocess.DEVNULL
+            )
             try:
                 deadline = time.monotonic() + 30
                 while not pids.exists() and time.monotonic() < deadline:
-                    time.sleep(.05)
+                    time.sleep(0.05)
                 _, worker = self.pids(d)
                 self.assertIn(worker, proc.descendants(child.pid))
                 self.assertNotIn(os.getpid(), proc.descendants(child.pid))
@@ -293,16 +355,23 @@ class TrialDeadlineTest(unittest.TestCase):
     def test_parallel_pair_trial_is_bounded(self):
         import threading
         from pnr import paired_bootstrap
+
         with tempfile.TemporaryDirectory() as d:
-            log = Path(d) / 'trial.log'
-            pids = Path(d) / 'pids'
+            log = Path(d) / "trial.log"
+            pids = Path(d) / "pids"
             with self.assertRaises(proc.DeadlineExceeded):
-                paired_bootstrap._trial([sys.executable, '-c', WITH_WORKER, str(pids)], log,
-                                        dict(os.environ), threading.Event(), poll=.05, timeout=3)
-            self.assertIn('deadline', log.read_text())
+                paired_bootstrap._trial(
+                    [sys.executable, "-c", WITH_WORKER, str(pids)],
+                    log,
+                    dict(os.environ),
+                    threading.Event(),
+                    poll=0.05,
+                    timeout=3,
+                )
+            self.assertIn("deadline", log.read_text())
             child, worker = (int(v) for v in pids.read_text().split())
             self.assertTrue(_gone(child) and _gone(worker), (child, worker))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

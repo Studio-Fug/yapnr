@@ -8,6 +8,7 @@ from test_plane_access_intent import FAB
 class PowerArrayTests(unittest.TestCase):
     def fixture(self):
         import pcbnew
+
         b = pcbnew.BOARD()
         b.SetCopperLayerCount(4)
         n = pcbnew.NETINFO_ITEM(b, "lv")
@@ -71,11 +72,11 @@ class PowerArrayTests(unittest.TestCase):
         # when a board edge cuts through its required space.
         edge = pcbnew.PCB_SHAPE(b)
         edge.SetShape(pcbnew.SHAPE_T_RECT)
-        edge.SetStart(pcbnew.VECTOR2I(0,0))
-        edge.SetEnd(pcbnew.VECTOR2I(6500000,10000000))
+        edge.SetStart(pcbnew.VECTOR2I(0, 0))
+        edge.SetEnd(pcbnew.VECTOR2I(6500000, 10000000))
         edge.SetLayer(pcbnew.Edge_Cuts)
         b.Add(edge)
-        with self.assertRaisesRegex(ValueError, 'board edge'):
+        with self.assertRaisesRegex(ValueError, "board edge"):
             replace_power_array(b, intent, FAB)
         self.assertEqual(original, geometry())
 
@@ -84,31 +85,60 @@ class PowerArrayTests(unittest.TestCase):
         import math
         from pnr.plane_intent import array_geometry
         from pnr.plane_access import replace_power_array
-        for rotation in (0,90,180,270):
-            b,f,intent,n=self.fixture();f.SetOrientationDegrees(rotation)
-            pads=[((p.GetPosition().x/1e6,p.GetPosition().y/1e6),
-                   (p.GetBoundingBox().GetWidth()/1e6,p.GetBoundingBox().GetHeight()/1e6)) for p in f.Pads()]
-            plan=array_geometry(pads,(5,5),intent,FAB)
-            replace_power_array(b,intent,FAB)
-            actual=sorted((t.GetPosition().x/1e6,t.GetPosition().y/1e6) for t in b.GetTracks() if t.GetClass()=='PCB_VIA')
-            self.assertEqual(len(actual),len(plan['vias']))
-            self.assertTrue(all(math.dist(a,z)<2e-6 for a,z in zip(actual,sorted(p for p,d,h in plan['vias']))))
+
+        for rotation in (0, 90, 180, 270):
+            b, f, intent, n = self.fixture()
+            f.SetOrientationDegrees(rotation)
+            pads = [
+                (
+                    (p.GetPosition().x / 1e6, p.GetPosition().y / 1e6),
+                    (p.GetBoundingBox().GetWidth() / 1e6, p.GetBoundingBox().GetHeight() / 1e6),
+                )
+                for p in f.Pads()
+            ]
+            plan = array_geometry(pads, (5, 5), intent, FAB)
+            replace_power_array(b, intent, FAB)
+            actual = sorted(
+                (t.GetPosition().x / 1e6, t.GetPosition().y / 1e6)
+                for t in b.GetTracks()
+                if t.GetClass() == "PCB_VIA"
+            )
+            self.assertEqual(len(actual), len(plan["vias"]))
+            self.assertTrue(
+                all(
+                    math.dist(a, z) < 2e-6
+                    for a, z in zip(actual, sorted(p for p, d, h in plan["vias"]))
+                )
+            )
 
     def test_future_bank_rejects_foreign_back_copper_before_mutation(self):
         import pcbnew as k
         from pnr.plane_intent import array_geometry
         from pnr.plane_access import replace_power_array
-        b,f,intent,n=self.fixture()
-        pads=[((p.GetPosition().x/1e6,p.GetPosition().y/1e6),
-               (p.GetBoundingBox().GetWidth()/1e6,p.GetBoundingBox().GetHeight()/1e6)) for p in f.Pads()]
-        plan=array_geometry(pads,(5,5),intent,FAB);point=plan['vias'][0][0]
-        other=k.NETINFO_ITEM(b,'foreign');b.Add(other)
-        t=k.PCB_TRACK(b);t.SetLayer(k.B_Cu);t.SetWidth(200000);t.SetNetCode(other.GetNetCode())
-        t.SetStart(k.VECTOR2I(*(round(x*1e6) for x in point)));t.SetEnd(t.GetStart()+k.VECTOR2I(100000,0));b.Add(t)
-        before=[t.m_Uuid.AsString() for t in b.GetTracks()]
-        with self.assertRaisesRegex(ValueError,'foreign copper'):replace_power_array(b,intent,FAB)
-        self.assertEqual([t.m_Uuid.AsString() for t in b.GetTracks()],before)
 
+        b, f, intent, n = self.fixture()
+        pads = [
+            (
+                (p.GetPosition().x / 1e6, p.GetPosition().y / 1e6),
+                (p.GetBoundingBox().GetWidth() / 1e6, p.GetBoundingBox().GetHeight() / 1e6),
+            )
+            for p in f.Pads()
+        ]
+        plan = array_geometry(pads, (5, 5), intent, FAB)
+        point = plan["vias"][0][0]
+        other = k.NETINFO_ITEM(b, "foreign")
+        b.Add(other)
+        t = k.PCB_TRACK(b)
+        t.SetLayer(k.B_Cu)
+        t.SetWidth(200000)
+        t.SetNetCode(other.GetNetCode())
+        t.SetStart(k.VECTOR2I(*(round(x * 1e6) for x in point)))
+        t.SetEnd(t.GetStart() + k.VECTOR2I(100000, 0))
+        b.Add(t)
+        before = [t.m_Uuid.AsString() for t in b.GetTracks()]
+        with self.assertRaisesRegex(ValueError, "foreign copper"):
+            replace_power_array(b, intent, FAB)
+        self.assertEqual([t.m_Uuid.AsString() for t in b.GetTracks()], before)
 
 
 if __name__ == "__main__":

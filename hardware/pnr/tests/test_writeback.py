@@ -19,17 +19,28 @@ FIXTURE = os.path.join(HERE, "..", "testdata", "splanc_dev")
 class DuplicateDrillTextTest(unittest.TestCase):
     def test_exact_duplicate_only_and_idempotence(self):
         from pnr.writeback import normalize_duplicate_drill_text
+
         pad = '(pad "7" thru_hole circle (at 0 0) (size .45 .45) (drill .2) (layers "*.Cu") (net 1 "GND") (uuid "ID"))'
-        duplicate = pad.replace('ID', 'SECOND')
-        array = pad.replace('(at 0 0)', '(at 1 0)').replace('ID', 'ARRAY')
-        foreign = pad.replace('"GND"', '"OTHER"').replace('ID', 'OTHER')
+        duplicate = pad.replace("ID", "SECOND")
+        array = pad.replace("(at 0 0)", "(at 1 0)").replace("ID", "ARRAY")
+        foreign = pad.replace('"GND"', '"OTHER"').replace("ID", "OTHER")
         smd = '(pad "7" smd circle (at 0 0) (size 1 1) (layers "F.Cu") (net 1 "GND"))'
-        text = '(kicad_pcb (footprint "first" '+pad+duplicate+array+foreign+smd+') (footprint "second" '+pad+'))'
+        text = (
+            '(kicad_pcb (footprint "first" '
+            + pad
+            + duplicate
+            + array
+            + foreign
+            + smd
+            + ') (footprint "second" '
+            + pad
+            + "))"
+        )
         result = normalize_duplicate_drill_text(text)
-        self.assertEqual(result.count('(pad '), 5)
-        self.assertNotIn('SECOND', result)
-        self.assertIn('ARRAY', result)
-        self.assertIn('OTHER', result)
+        self.assertEqual(result.count("(pad "), 5)
+        self.assertNotIn("SECOND", result)
+        self.assertIn("ARRAY", result)
+        self.assertIn("OTHER", result)
         self.assertEqual(normalize_duplicate_drill_text(result), result)
 
 
@@ -110,10 +121,11 @@ class LiveWritebackTest(unittest.TestCase):
         import subprocess
         import sys
         import tempfile
+
         with tempfile.TemporaryDirectory() as directory:
-            graph_path = os.path.join(directory, 'placed.json')
-            output = os.path.join(directory, 'placed.kicad_pcb')
-            with open(graph_path, 'w', encoding='utf-8') as fh:
+            graph_path = os.path.join(directory, "placed.json")
+            output = os.path.join(directory, "placed.kicad_pcb")
+            with open(graph_path, "w", encoding="utf-8") as fh:
                 fh.write(g.to_json())
             script = """
 import sys, pcbnew
@@ -128,9 +140,18 @@ board.Add(t)
 assert apply_placement(board,graph,width=60.,height=50.) == len(graph.components)
 pcbnew.SaveBoard(sys.argv[3],board)
 """
-            result = subprocess.run([sys.executable, '-c', script,
-                                     os.path.join(FIXTURE, 'splanc_dev.kicad_pcb'),
-                                     graph_path, output], capture_output=True, text=True)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    script,
+                    os.path.join(FIXTURE, "splanc_dev.kicad_pcb"),
+                    graph_path,
+                    output,
+                ],
+                capture_output=True,
+                text=True,
+            )
             self.assertEqual(result.returncode, 0, result.stderr[-3000:])
             board = pcbnew.LoadBoard(output)
         moved = None
@@ -150,78 +171,94 @@ class ProjectRulesTest(unittest.TestCase):
         import tempfile
         from pathlib import Path
         from pnr.writeback import patch_project_rules
-        rules = {'fab': {'clearance_mm': .15},
-                 'net_classes': [{'name': 'power', 'nets': ['VBUS'], 'width_mm': 1.5, 'clearance_mm': .3}],
-                 'diff_pairs': [{'name': 'usb', 'p': 'DP', 'n': 'DM', 'width_mm': .2, 'gap_mm': .15}]}
+
+        rules = {
+            "fab": {"clearance_mm": 0.15},
+            "net_classes": [
+                {"name": "power", "nets": ["VBUS"], "width_mm": 1.5, "clearance_mm": 0.3}
+            ],
+            "diff_pairs": [{"name": "usb", "p": "DP", "n": "DM", "width_mm": 0.2, "gap_mm": 0.15}],
+        }
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / 'export.kicad_pro'
+            path = Path(directory) / "export.kicad_pro"
             self.assertTrue(patch_project_rules(str(path), rules))
             first = path.read_text()
             patch_project_rules(str(path), rules)
             self.assertEqual(first, path.read_text())
             project = json.loads(first)
-            self.assertEqual(project['meta']['version'], 3)
-            self.assertEqual(project['net_settings']['meta']['version'], 4)
-            classes = {c['name']: c for c in project['net_settings']['classes']}
+            self.assertEqual(project["meta"]["version"], 3)
+            self.assertEqual(project["net_settings"]["meta"]["version"], 4)
+            classes = {c["name"]: c for c in project["net_settings"]["classes"]}
             # The selected fab profile may override the fab clearance (jlc-pofv:
             # 0.127); legacy stamps the given 0.15. Explicit class values stay.
             from pnr.fab_profile import apply_fab
-            self.assertEqual(classes['Default']['clearance'], apply_fab(rules['fab'])['clearance_mm'])
-            self.assertEqual(classes['power']['clearance'], .3)
-            self.assertEqual(classes['power']['track_width'], 1.5)
-            self.assertEqual(classes['dp_usb']['diff_pair_gap'], .15)
-            self.assertIn({'netclass': 'power', 'pattern': 'VBUS'}, project['net_settings']['netclass_patterns'])
+
+            self.assertEqual(
+                classes["Default"]["clearance"], apply_fab(rules["fab"])["clearance_mm"]
+            )
+            self.assertEqual(classes["power"]["clearance"], 0.3)
+            self.assertEqual(classes["power"]["track_width"], 1.5)
+            self.assertEqual(classes["dp_usb"]["diff_pair_gap"], 0.15)
+            self.assertIn(
+                {"netclass": "power", "pattern": "VBUS"},
+                project["net_settings"]["netclass_patterns"],
+            )
+
 
 class FanoutGeometryTest(unittest.TestCase):
     def test_track_middle_blocks_via_and_crossing_escape(self):
         from pnr.writeback import _clear_segment
-        copper = [((0., 0.), (10., 0.), .2, 2)]
-        self.assertFalse(_clear_segment((5., 0.), (5., 0.), .3, 1, copper))
-        self.assertFalse(_clear_segment((5., -2.), (5., 2.), .1, 1, copper))
-        self.assertTrue(_clear_segment((5., 1.), (5., 2.), .3, 1, copper))
-        self.assertTrue(_clear_segment((5., -2.), (5., 2.), .1, 2, copper))
+
+        copper = [((0.0, 0.0), (10.0, 0.0), 0.2, 2)]
+        self.assertFalse(_clear_segment((5.0, 0.0), (5.0, 0.0), 0.3, 1, copper))
+        self.assertFalse(_clear_segment((5.0, -2.0), (5.0, 2.0), 0.1, 1, copper))
+        self.assertTrue(_clear_segment((5.0, 1.0), (5.0, 2.0), 0.3, 1, copper))
+        self.assertTrue(_clear_segment((5.0, -2.0), (5.0, 2.0), 0.1, 2, copper))
 
     def test_collinear_degenerate_and_endpoint_distances(self):
         from pnr.writeback import _segment_distance_sq as distance
-        self.assertEqual(distance((0,0), (10,0), (3,0), (4,0)), 0)
-        self.assertEqual(distance((0,0), (1,0), (3,0), (4,0)), 4)
-        self.assertEqual(distance((0,0), (0,0), (3,4), (3,4)), 25)
-        self.assertEqual(distance((0,0), (10,0), (2,3), (8,3)), 9)
 
-@unittest.skipUnless(importlib.util.find_spec('pcbnew') is not None, 'requires KiCad')
+        self.assertEqual(distance((0, 0), (10, 0), (3, 0), (4, 0)), 0)
+        self.assertEqual(distance((0, 0), (1, 0), (3, 0), (4, 0)), 4)
+        self.assertEqual(distance((0, 0), (0, 0), (3, 4), (3, 4)), 25)
+        self.assertEqual(distance((0, 0), (10, 0), (2, 3), (8, 3)), 9)
+
+
+@unittest.skipUnless(importlib.util.find_spec("pcbnew") is not None, "requires KiCad")
 class LiveFanoutTest(unittest.TestCase):
     def test_uses_fab_geometry_and_never_forces_congested_via(self):
         import pcbnew
         from pnr.writeback import _dogbone_fanout_net
+
         board = pcbnew.BOARD()
         edge = pcbnew.PCB_SHAPE(board)
         edge.SetShape(pcbnew.SHAPE_T_RECT)
-        edge.SetStart(pcbnew.VECTOR2I(0,0))
-        edge.SetEnd(pcbnew.VECTOR2I(20000000,20000000))
+        edge.SetStart(pcbnew.VECTOR2I(0, 0))
+        edge.SetEnd(pcbnew.VECTOR2I(20000000, 20000000))
         edge.SetLayer(pcbnew.Edge_Cuts)
         board.Add(edge)
-        net = pcbnew.NETINFO_ITEM(board, 'GND')
+        net = pcbnew.NETINFO_ITEM(board, "GND")
         board.Add(net)
-        foreign = pcbnew.NETINFO_ITEM(board, 'OTHER')
+        foreign = pcbnew.NETINFO_ITEM(board, "OTHER")
         board.Add(foreign)
         fp = pcbnew.FOOTPRINT(board)
         board.Add(fp)
-        fp.SetPosition(pcbnew.VECTOR2I(10000000,10000000))
+        fp.SetPosition(pcbnew.VECTOR2I(10000000, 10000000))
         pad = pcbnew.PAD(fp)
         pad.SetAttribute(pcbnew.PAD_ATTRIB_SMD)
         layers = pcbnew.LSET()
         layers.AddLayer(pcbnew.F_Cu)
         pad.SetLayerSet(layers)
-        pad.SetSize(pcbnew.VECTOR2I(500000,500000))
+        pad.SetSize(pcbnew.VECTOR2I(500000, 500000))
         pad.SetPosition(fp.GetPosition())
         pad.SetNet(net)
         fp.Add(pad)
-        rules = {'fab': {'via_diameter_mm': .8, 'via_drill_mm': .4}}
-        self.assertEqual(_dogbone_fanout_net(board,net.GetNetCode(),rules=rules),1)
-        vias = [t for t in board.GetTracks() if isinstance(t,pcbnew.PCB_VIA)]
-        self.assertEqual(vias[0].GetFrontWidth(),800000)
-        self.assertEqual(vias[0].GetDrillValue(),400000)
-        self.assertNotEqual(vias[0].GetPosition(),pad.GetPosition())
+        rules = {"fab": {"via_diameter_mm": 0.8, "via_drill_mm": 0.4}}
+        self.assertEqual(_dogbone_fanout_net(board, net.GetNetCode(), rules=rules), 1)
+        vias = [t for t in board.GetTracks() if isinstance(t, pcbnew.PCB_VIA)]
+        self.assertEqual(vias[0].GetFrontWidth(), 800000)
+        self.assertEqual(vias[0].GetDrillValue(), 400000)
+        self.assertNotEqual(vias[0].GetPosition(), pad.GetPosition())
         for t in list(board.GetTracks()):
             board.Remove(t)
         blocker = pcbnew.PAD(fp)
@@ -229,62 +266,66 @@ class LiveFanoutTest(unittest.TestCase):
         layers = pcbnew.LSET()
         layers.AddLayer(pcbnew.B_Cu)
         blocker.SetLayerSet(layers)
-        blocker.SetSize(pcbnew.VECTOR2I(18000000,18000000))
+        blocker.SetSize(pcbnew.VECTOR2I(18000000, 18000000))
         blocker.SetPosition(fp.GetPosition())
         blocker.SetNet(foreign)
         fp.Add(blocker)
-        self.assertEqual(_dogbone_fanout_net(board,net.GetNetCode(),rules=rules),0)
-        self.assertEqual(len(list(board.GetTracks())),0)
+        self.assertEqual(_dogbone_fanout_net(board, net.GetNetCode(), rules=rules), 0)
+        self.assertEqual(len(list(board.GetTracks())), 0)
 
 
-@unittest.skipUnless(importlib.util.find_spec('pcbnew') is not None, 'requires KiCad')
+@unittest.skipUnless(importlib.util.find_spec("pcbnew") is not None, "requires KiCad")
 class LiveCopperKeepoutTest(unittest.TestCase):
     def test_all_layer_keepout_tracks_placement_and_is_idempotent(self):
         import pcbnew
-        from pnr.graph import BoardGraph,Component
+        from pnr.graph import BoardGraph, Component
         from pnr.writeback import apply_copper_keepouts
-        board=pcbnew.BOARD()
+
+        board = pcbnew.BOARD()
         board.SetCopperLayerCount(4)
-        graph=BoardGraph('test',components=[Component('U1','test',(10,20),90,'top',(4,4),(4,4))])
-        rules={'copper_keepouts':[{'name':'die','ref':'U1','rect_mm':[-1,-2,1,2]}]}
-        self.assertEqual(apply_copper_keepouts(board,graph,rules,50),1)
-        self.assertEqual(apply_copper_keepouts(board,graph,rules,50),1)
-        zones=list(board.Zones())
-        self.assertEqual(len(zones),1)
-        zone=zones[0]
+        graph = BoardGraph(
+            "test", components=[Component("U1", "test", (10, 20), 90, "top", (4, 4), (4, 4))]
+        )
+        rules = {"copper_keepouts": [{"name": "die", "ref": "U1", "rect_mm": [-1, -2, 1, 2]}]}
+        self.assertEqual(apply_copper_keepouts(board, graph, rules, 50), 1)
+        self.assertEqual(apply_copper_keepouts(board, graph, rules, 50), 1)
+        zones = list(board.Zones())
+        self.assertEqual(len(zones), 1)
+        zone = zones[0]
         self.assertTrue(zone.GetDoNotAllowTracks())
         self.assertTrue(zone.GetDoNotAllowVias())
         self.assertTrue(zone.GetDoNotAllowZoneFills())
-        for layer in (pcbnew.F_Cu,pcbnew.In1_Cu,pcbnew.In2_Cu,pcbnew.B_Cu):
+        for layer in (pcbnew.F_Cu, pcbnew.In1_Cu, pcbnew.In2_Cu, pcbnew.B_Cu):
             self.assertTrue(zone.GetLayerSet().Contains(layer))
-        box=zone.GetBoundingBox()
-        self.assertEqual(box.GetCenter(),pcbnew.VECTOR2I(40000000,60000000))
-        self.assertEqual(box.GetWidth(),4000000)
-        self.assertEqual(box.GetHeight(),2000000)
+        box = zone.GetBoundingBox()
+        self.assertEqual(box.GetCenter(), pcbnew.VECTOR2I(40000000, 60000000))
+        self.assertEqual(box.GetWidth(), 4000000)
+        self.assertEqual(box.GetHeight(), 2000000)
 
 
-@unittest.skipUnless(importlib.util.find_spec('pcbnew') is not None, 'requires KiCad')
+@unittest.skipUnless(importlib.util.find_spec("pcbnew") is not None, "requires KiCad")
 class LiveUuidTest(unittest.TestCase):
     def test_duplicate_children_are_unique_and_repair_is_idempotent(self):
         import pcbnew
         from pnr.writeback import normalize_item_uuids
-        board=pcbnew.BOARD()
-        pads=[]
-        originals=[]
-        shared='12345678-1234-4234-9234-123456789012'
-        for ref in ('R1','R2'):
-            fp=pcbnew.FOOTPRINT(board)
+
+        board = pcbnew.BOARD()
+        pads = []
+        originals = []
+        shared = "12345678-1234-4234-9234-123456789012"
+        for ref in ("R1", "R2"):
+            fp = pcbnew.FOOTPRINT(board)
             fp.SetReference(ref)
             board.Add(fp)
             originals.append(fp.m_Uuid.AsString())
-            pad=pcbnew.PAD(fp)
+            pad = pcbnew.PAD(fp)
             pad.m_Uuid.Clone(pcbnew.KIID(shared))
             fp.Add(pad)
             pads.append(pad)
-        self.assertEqual(normalize_item_uuids(board),1)
-        self.assertNotEqual(pads[0].m_Uuid.AsString(),pads[1].m_Uuid.AsString())
-        self.assertEqual(normalize_item_uuids(board),0)
-        self.assertCountEqual([f.m_Uuid.AsString() for f in board.GetFootprints()],originals)
+        self.assertEqual(normalize_item_uuids(board), 1)
+        self.assertNotEqual(pads[0].m_Uuid.AsString(), pads[1].m_Uuid.AsString())
+        self.assertEqual(normalize_item_uuids(board), 0)
+        self.assertCountEqual([f.m_Uuid.AsString() for f in board.GetFootprints()], originals)
 
 
 if __name__ == "__main__":

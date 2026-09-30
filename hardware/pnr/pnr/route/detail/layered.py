@@ -22,7 +22,11 @@ _VIA_DIAMETER = _VIA_DRILL = _HOLE_GAP = _VIA_PITCH = None
 def _bind(g):
     global _VIA_DIAMETER, _VIA_DRILL, _HOLE_GAP, _VIA_PITCH
     _VIA_DIAMETER, _VIA_DRILL, _HOLE_GAP, _VIA_PITCH = (
-        g.via_diameter, g.via_drill, g.hole_gap, g.same_net_via_pitch)
+        g.via_diameter,
+        g.via_drill,
+        g.hole_gap,
+        g.same_net_via_pitch,
+    )
 
 
 bind_active(_bind)
@@ -30,11 +34,7 @@ bind_active(_bind)
 
 def primitives(path):
     for a, b in zip(path, path[1:]):
-        yield (
-            ("track", a[2], a[:2], b[:2])
-            if a[2] == b[2]
-            else ("via", None, a[:2], a[:2])
-        )
+        yield (("track", a[2], a[:2], b[:2]) if a[2] == b[2] else ("via", None, a[:2], a[:2]))
 
 
 def copper_conflict(a, b, layer, path, width, other_width, clearance, via_diameter=None):
@@ -44,17 +44,13 @@ def copper_conflict(a, b, layer, path, width, other_width, clearance, via_diamet
     for kind, la, c, d in primitives(path):
         if kind == "track" and la != layer:
             continue
-        radius = (
-            width + (other_width if kind == "track" else via_diameter)
-        ) / 2 + clearance
+        radius = (width + (other_width if kind == "track" else via_diameter)) / 2 + clearance
         if segment_distance(a, b, c, d) < radius - 1e-9:
             return True
     return False
 
 
-def via_conflict(
-    p, path, width, clearance, via_diameter=None, drill=None, same_net=False
-):
+def via_conflict(p, path, width, clearance, via_diameter=None, drill=None, same_net=False):
     # Default via and via-to-via drill gap of the fab profile (legacy 0.6/0.3/0.201).
     if via_diameter is None:
         via_diameter = _VIA_DIAMETER
@@ -65,9 +61,7 @@ def via_conflict(
             if kind == "via" and 1e-8 < math.dist(p, a) < drill + _HOLE_GAP - 1e-9:
                 return True
             continue
-        radius = (
-            via_diameter + (width if kind == "track" else via_diameter)
-        ) / 2 + clearance
+        radius = (via_diameter + (width if kind == "track" else via_diameter)) / 2 + clearance
         if segment_distance(p, p, a, b) < radius - 1e-9:
             return True
     return False
@@ -80,7 +74,9 @@ class LayerRoute:
     expanded: int = 0
 
 
-def escape_frontier(points, opposite, bounds, clear, via_clear, pitch, budget, *, port_spacing=.3, max_ports=32):
+def escape_frontier(
+    points, opposite, bounds, clear, via_clear, pitch, budget, *, port_spacing=0.3, max_ports=32
+):
     """Reachable surface via ports and their checked fanout paths."""
     x0, y0, x1, y1 = bounds
     nx = int((x1 - x0) / pitch) + 1
@@ -148,29 +144,31 @@ def escape_frontier(points, opposite, bounds, clear, via_clear, pitch, budget, *
     return chosen, expanded
 
 
-def route_bridge(sources,targets,bounds,clear,*,pitch,budget):
+def route_bridge(sources, targets, bounds, clear, *, pitch, budget):
     """Fine terminal ports, coarse-first trunk grid; exact segment checks always.
 
     Retry the original fine grid when the coarse bridge has no path. The caller's
     clearance callback carries the shared transaction deadline across both tries.
     """
-    expanded=0
-    for bridge_pitch in dict.fromkeys((max(.2,pitch),pitch)):
-        result=route(sources,targets,bounds,clear,pitch=bridge_pitch,max_expansions=budget)
-        expanded+=result.expanded
-        if result.path:break
-    result.expanded=expanded
+    expanded = 0
+    for bridge_pitch in dict.fromkeys((max(0.2, pitch), pitch)):
+        result = route(sources, targets, bounds, clear, pitch=bridge_pitch, max_expansions=budget)
+        expanded += result.expanded
+        if result.path:
+            break
+    result.expanded = expanded
     return result
 
 
 def route_escape_ports(*args, **kwargs):
     """Try local escape sites first, retaining full frontier fallback."""
-    expanded=0
-    for frontier_budget in (512,12000):
-        result=_route_escape_ports(*args,frontier_budget=frontier_budget,**kwargs)
-        expanded+=result.expanded
-        if result.path:break
-    result.expanded=expanded
+    expanded = 0
+    for frontier_budget in (512, 12000):
+        result = _route_escape_ports(*args, frontier_budget=frontier_budget, **kwargs)
+        expanded += result.expanded
+        if result.path:
+            break
+    result.expanded = expanded
     return result
 
 
@@ -189,80 +187,133 @@ def _route_escape_ports(
     frontier_budget=12000,
     first_via_allowed=lambda p: True,
     on_stage=None,
-    transition_clear=lambda p,a,b: True,
+    transition_clear=lambda p, a, b: True,
 ):
     # Keep the actual terminal layer in each surface fanout. Layer zero is not
     # privileged: backside test pads and connectors need the same escape search.
-    fronts=[];expanded=0
-    for side,(points,opposite) in enumerate(((sources,targets),(targets,sources))):
-        ports={}
+    fronts = []
+    expanded = 0
+    for side, (points, opposite) in enumerate(((sources, targets), (targets, sources))):
+        ports = {}
         for surface in sorted({la for p in points for la in terminal_layers(p)}):
-            on_surface=[p for p in points if surface in terminal_layers(p)]
-            found,n=escape_frontier(on_surface,opposite,bounds,
-                lambda a,b:clear(surface,a,b),
-                lambda p:via_clear(p) and (side!=0 or first_via_allowed(p)),
-                pitch,min(budget,frontier_budget))
-            expanded+=n
-            for pt,path in found.items():ports[surface,pt]=[(*q,surface) for q in path]
+            on_surface = [p for p in points if surface in terminal_layers(p)]
+            found, n = escape_frontier(
+                on_surface,
+                opposite,
+                bounds,
+                lambda a, b: clear(surface, a, b),
+                lambda p: via_clear(p) and (side != 0 or first_via_allowed(p)),
+                pitch,
+                min(budget, frontier_budget),
+            )
+            expanded += n
+            for pt, path in found.items():
+                ports[surface, pt] = [(*q, surface) for q in path]
             if on_stage is not None:
-                on_stage(dict(stage='escape_ports',side=side,surface=surface,expanded=n,
-                              ports=[dict(point=p,path=q) for p,q in found.items()]))
+                on_stage(
+                    dict(
+                        stage="escape_ports",
+                        side=side,
+                        surface=surface,
+                        expanded=n,
+                        ports=[dict(point=p, path=q) for p, q in found.items()],
+                    )
+                )
         fronts.append(ports)
-    def combine(prefix,middle,suffix):
-        path=prefix+middle+suffix
-        return [p for i,p in enumerate(path) if not i or p!=path[i-1]]
+
+    def combine(prefix, middle, suffix):
+        path = prefix + middle + suffix
+        return [p for i, p in enumerate(path) if not i or p != path[i - 1]]
+
     def allowed(path):
-        via_points=[a for kind,la,a,b in primitives(path) if kind=='via']
-        return (all(transition_clear(a[:2],a[2],b[2]) for a,b in zip(path,path[1:]) if a[2]!=b[2]) and
-                len(via_points)<=max_vias and
-                (not via_points or first_via_allowed(via_points[0])) and
-                all(math.dist(a,b)>=_VIA_PITCH-1e-9 for i,a in enumerate(via_points) for b in via_points[i+1:]))
+        via_points = [a for kind, la, a, b in primitives(path) if kind == "via"]
+        return (
+            all(transition_clear(a[:2], a[2], b[2]) for a, b in zip(path, path[1:]) if a[2] != b[2])
+            and len(via_points) <= max_vias
+            and (not via_points or first_via_allowed(via_points[0]))
+            and all(
+                math.dist(a, b) >= _VIA_PITCH - 1e-9
+                for i, a in enumerate(via_points)
+                for b in via_points[i + 1 :]
+            )
+        )
+
     # Try every layer with a small finite trunk search before spending the
     # full expansion allowance on a single blocked layer. Every candidate
     # still goes through exact segment, via and transition checks.
-    for trunk_budget in dict.fromkeys((min(3000,budget),budget)):
+    for trunk_budget in dict.fromkeys((min(3000, budget), budget)):
         for la in range(layers):
-            accesses=[]
-            for points,front in zip((sources,targets),fronts):
-                access={}
-                for (surface,pt),prefix in front.items():
-                    if surface!=la and not transition_clear(pt,surface,la):continue
-                    path=prefix+([(*pt,la)] if surface!=la else [])
-                    cost=length([p[:2] for p in path])+2*(surface!=la)
-                    old=access.get(pt)
-                    if old is None or cost<length([p[:2] for p in old])+2*(old[0][2]!=la):access[pt]=path
+            accesses = []
+            for points, front in zip((sources, targets), fronts):
+                access = {}
+                for (surface, pt), prefix in front.items():
+                    if surface != la and not transition_clear(pt, surface, la):
+                        continue
+                    path = prefix + ([(*pt, la)] if surface != la else [])
+                    cost = length([p[:2] for p in path]) + 2 * (surface != la)
+                    old = access.get(pt)
+                    if old is None or cost < length([p[:2] for p in old]) + 2 * (old[0][2] != la):
+                        access[pt] = path
                 for pt in points:
-                    if la in terminal_layers(pt):access[tuple(pt)]=[(*pt,la)]
+                    if la in terminal_layers(pt):
+                        access[tuple(pt)] = [(*pt, la)]
                 accesses.append(access)
-            left,right=accesses
+            left, right = accesses
             for _ in range(4):
-                if not left or not right:break
-                rr=route_bridge(list(left),list(right),bounds,lambda a,b:clear(la,a,b),pitch=pitch,budget=trunk_budget)
-                expanded+=rr.expanded
-                if not rr.path:break
-                a,z=rr.path[0],rr.path[-1]
-                path=combine(left[a],[(*p,la) for p in rr.path],list(reversed(right[z])))
-                if allowed(path):return LayerRoute(path,'routed',expanded)
+                if not left or not right:
+                    break
+                rr = route_bridge(
+                    list(left),
+                    list(right),
+                    bounds,
+                    lambda a, b: clear(la, a, b),
+                    pitch=pitch,
+                    budget=trunk_budget,
+                )
+                expanded += rr.expanded
+                if not rr.path:
+                    break
+                a, z = rr.path[0], rr.path[-1]
+                path = combine(left[a], [(*p, la) for p in rr.path], list(reversed(right[z])))
+                if allowed(path):
+                    return LayerRoute(path, "routed", expanded)
                 right.pop(z)
     # Retain three-transition support, with each outer leg on its true layer.
-    if max_vias>=3 and all(fronts) and layers>2:
-        left={};right={}
-        for target,front in ((left,fronts[0]),(right,fronts[1])):
-            for (surface,pt),path in front.items():
-                if pt not in target or length([p[:2] for p in path])<length([p[:2] for p in target[pt]]):target[pt]=path
-        excluded=set()
+    if max_vias >= 3 and all(fronts) and layers > 2:
+        left = {}
+        right = {}
+        for target, front in ((left, fronts[0]), (right, fronts[1])):
+            for (surface, pt), path in front.items():
+                if pt not in target or length([p[:2] for p in path]) < length(
+                    [p[:2] for p in target[pt]]
+                ):
+                    target[pt] = path
+        excluded = set()
         for _ in range(8):
-            if not right:break
-            middle=route_layers(list(left),list(right),bounds,clear,
-                lambda p:p not in excluded and via_clear(p),pitch=pitch,layers=layers,
-                max_expansions=budget,max_vias=1,terminal_layers=lambda p:tuple(range(layers)),transition_clear=transition_clear)
-            expanded+=middle.expanded
-            if not middle.path:break
-            a,z=middle.path[0][:2],middle.path[-1][:2]
-            path=combine(left[a],middle.path,list(reversed(right[z])))
-            if allowed(path):return LayerRoute(path,'routed',expanded)
+            if not right:
+                break
+            middle = route_layers(
+                list(left),
+                list(right),
+                bounds,
+                clear,
+                lambda p: p not in excluded and via_clear(p),
+                pitch=pitch,
+                layers=layers,
+                max_expansions=budget,
+                max_vias=1,
+                terminal_layers=lambda p: tuple(range(layers)),
+                transition_clear=transition_clear,
+            )
+            expanded += middle.expanded
+            if not middle.path:
+                break
+            a, z = middle.path[0][:2], middle.path[-1][:2]
+            path = combine(left[a], middle.path, list(reversed(right[z])))
+            if allowed(path):
+                return LayerRoute(path, "routed", expanded)
             right.pop(z)
-    return LayerRoute([],'no_escape_port_pair',expanded)
+    return LayerRoute([], "no_escape_port_pair", expanded)
 
 
 class SearchTimeout(Exception):
@@ -291,7 +342,13 @@ def route_layers(
     try:
         check()
         result = _route_layers(
-            sources, targets, bounds, checked_clear, checked_via, transition_clear=checked_transition, **options
+            sources,
+            targets,
+            bounds,
+            checked_clear,
+            checked_via,
+            transition_clear=checked_transition,
+            **options,
         )
         check()
         return result
@@ -315,7 +372,7 @@ def _route_layers(
     force_layered=False,
     first_via_allowed=lambda p: True,
     on_stage=None,
-    transition_clear=lambda p,a,b: True,
+    transition_clear=lambda p, a, b: True,
 ):
     """F.Cu terminal sets -> layered polyline (x,y,layer-index).
 
@@ -352,7 +409,9 @@ def _route_layers(
         on_stage=on_stage,
         transition_clear=transition_clear,
     )
-    if ports.path and (not force_layered or any(kind=="via" for kind,_,_,_ in primitives(ports.path))):
+    if ports.path and (
+        not force_layered or any(kind == "via" for kind, _, _, _ in primitives(ports.path))
+    ):
         ports.expanded += planar.expanded
         return ports
     via_pitch = _VIA_PITCH  # distinct drills (legacy 0.501)
@@ -377,9 +436,7 @@ def _route_layers(
 
     starts, ends = accesses(sources), accesses(targets)
     if not starts or not ends:
-        return LayerRoute(
-            [], "terminal_escape_blocked", planar.expanded + ports.expanded
-        )
+        return LayerRoute([], "terminal_escape_blocked", planar.expanded + ports.expanded)
 
     end_layers = {k[0] for k in ends}
 
@@ -439,14 +496,10 @@ def _route_layers(
                 cleaned.extend(
                     [
                         (*q, run[0][2])
-                        for q in relax(
-                            [q[:2] for q in run], lambda a, b: clear(run[0][2], a, b)
-                        )
+                        for q in relax([q[:2] for q in run], lambda a, b: clear(run[0][2], a, b))
                     ]
                 )
-            return LayerRoute(
-                cleaned, "routed", expanded + planar.expanded + ports.expanded
-            )
+            return LayerRoute(cleaned, "routed", expanded + planar.expanded + ports.expanded)
         neighbors = []
         for nh, (di, dj) in enumerate(directions):
             ni, nj = i + di, j + dj
@@ -459,8 +512,7 @@ def _route_layers(
                 neighbors.append(
                     (
                         (la, ni, nj, nh, count, vi, vj),
-                        pitch * math.hypot(di, dj)
-                        + (0.12 if h != 8 and h != nh else 0),
+                        pitch * math.hypot(di, dj) + (0.12 if h != 8 and h != nh else 0),
                     )
                 )
         if count < min(max_vias, 2) and (
@@ -470,7 +522,7 @@ def _route_layers(
                 vias[i, j] = via_clear(point(i, j))
             if vias[i, j] and (count != 0 or first_via_allowed(point(i, j))):
                 for other in range(layers):
-                    if other != la and transition_clear(point(i,j),la,other):
+                    if other != la and transition_clear(point(i, j), la, other):
                         neighbors.append(
                             (
                                 (
@@ -537,10 +589,7 @@ def solve_layered_region(
 
             def clear(la, a, b):
                 if any(
-                    not (
-                        bounds[0] <= p[0] <= bounds[2]
-                        and bounds[1] <= p[1] <= bounds[3]
-                    )
+                    not (bounds[0] <= p[0] <= bounds[2] and bounds[1] <= p[1] <= bounds[3])
                     for p in (a, b)
                 ):
                     return False
@@ -549,9 +598,7 @@ def solve_layered_region(
                 for other in requests:
                     if other.net == r.net:
                         continue
-                    gap = (r.width + other.width) / 2 + max(
-                        r.clearance, other.clearance
-                    )
+                    gap = (r.width + other.width) / 2 + max(r.clearance, other.clearance)
                     if any(
                         len(ps) == 1
                         and la in terminal_layers(other, ps[0])
@@ -576,8 +623,7 @@ def solve_layered_region(
 
             def via_clear(p):
                 if any(
-                    owner == name and math.dist(p, (x, y)) < 0.251
-                    for owner, x, y in exclusions
+                    owner == name and math.dist(p, (x, y)) < 0.251 for owner, x, y in exclusions
                 ):
                     return False
                 if not static_via_clear(r, p):
@@ -672,10 +718,7 @@ def solve_layered_region(
     return RegionalResult(
         (
             "search_budget"
-            if queue
-            or any(
-                e["status"] == "search_budget" for a in attempts for e in a["events"]
-            )
+            if queue or any(e["status"] == "search_budget" for a in attempts for e in a["events"])
             else "no_solution_in_orders"
         ),
         {},

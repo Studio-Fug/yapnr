@@ -20,6 +20,7 @@ occupancy hull (``Component.hull``, :mod:`pnr.place.hull`) so parts and other
 blocks can nest into its free space. :meth:`MacroPlan.expand` stays rigid in
 both cases (members are posed from the recorded frame origin).
 """
+
 from __future__ import annotations
 
 import copy
@@ -43,19 +44,21 @@ def _rot_size(size, deg):
 
 def shrink_enabled() -> bool:
     """PNR_MACRO_SHRINK=1: a macro is its used extent (N-0001), not its sub-board."""
-    return os.environ.get('PNR_MACRO_SHRINK') == '1'
+    return os.environ.get("PNR_MACRO_SHRINK") == "1"
 
 
 def hull_enabled() -> bool:
     """PNR_MACRO_HULL=1: a macro carries a per-side occupancy hull (N-0001)."""
-    return os.environ.get('PNR_MACRO_HULL') == '1'
+    return os.environ.get("PNR_MACRO_HULL") == "1"
 
 
 class MacroPlan:
     """Mapping between the flat graph and its macro-collapsed counterpart."""
 
     def __init__(self):
-        self.macros: Dict[str, dict] = {}      # macro ref -> {block, width, height, members:{ref:(x,y,rot,side)}}
+        self.macros: Dict[str, dict] = (
+            {}
+        )  # macro ref -> {block, width, height, members:{ref:(x,y,rot,side)}}
         self.member_of: Dict[str, str] = {}
 
     def expand(self, placed: BoardGraph, flat: BoardGraph) -> BoardGraph:
@@ -66,15 +69,17 @@ class MacroPlan:
             if comp.ref in self.member_of:
                 m = self.macros[self.member_of[comp.ref]]
                 mc = by_ref[self.member_of[comp.ref]]
-                x, y, rot, side = m['members'][comp.ref]
-                if 'origin' in m:
+                x, y, rot, side = m["members"][comp.ref]
+                if "origin" in m:
                     # Shrunk/hull macro (N-0001): the frame centre is the used-extent centre.
-                    if mc.side != 'top':
-                        raise ValueError(f'macro {self.member_of[comp.ref]} placed on {mc.side}: '
-                                         f'mirrored block macros are not supported')
-                    dx, dy = _rot(x - m['origin'][0], y - m['origin'][1], mc.rot)
+                    if mc.side != "top":
+                        raise ValueError(
+                            f"macro {self.member_of[comp.ref]} placed on {mc.side}: "
+                            f"mirrored block macros are not supported"
+                        )
+                    dx, dy = _rot(x - m["origin"][0], y - m["origin"][1], mc.rot)
                 else:
-                    dx, dy = _rot(x - m['width'] / 2, y - m['height'] / 2, mc.rot)
+                    dx, dy = _rot(x - m["width"] / 2, y - m["height"] / 2, mc.rot)
                 comp.pos = (mc.pos[0] + dx, mc.pos[1] + dy)
                 comp.rot = float((rot + mc.rot) % 360)
                 comp.side = side
@@ -92,20 +97,30 @@ def _macro_frame(geo, w, h, margin, shrink):
     With shrink and a measured geometry the courtyard is the used extent; else it
     is the full rectangle plus margin, centred on the rectangle. The hull (if any)
     is always built on the chosen courtyard."""
-    full = dict(origin=(w / 2, h / 2), courtyard=(w + 2 * margin, h + 2 * margin), shape='rect')
+    full = dict(origin=(w / 2, h / 2), courtyard=(w + 2 * margin, h + 2 * margin), shape="rect")
     if geo is None:
-        return dict(full, reason='no geometry for this block', geometry=None)
+        return dict(full, reason="no geometry for this block", geometry=None)
     if not geo.ok:
         return dict(full, reason=geo.reason, geometry=None)
     if not shrink:
-        return dict(full, reason='', geometry=geo)
+        return dict(full, reason="", geometry=geo)
     x0, y0, x1, y1 = geo.extent
-    return dict(origin=((x0 + x1) / 2, (y0 + y1) / 2), courtyard=(x1 - x0, y1 - y0), shape='used',
-                reason='', geometry=geo)
+    return dict(
+        origin=((x0 + x1) / 2, (y0 + y1) / 2),
+        courtyard=(x1 - x0, y1 - y0),
+        shape="used",
+        reason="",
+        geometry=geo,
+    )
 
 
-def collapse(flat: BoardGraph, constraints: CompiledConstraints, rules: dict,
-             layouts: List[Tuple[object, BoardGraph, float, float]], geometry: Optional[dict] = None):
+def collapse(
+    flat: BoardGraph,
+    constraints: CompiledConstraints,
+    rules: dict,
+    layouts: List[Tuple[object, BoardGraph, float, float]],
+    geometry: Optional[dict] = None,
+):
     """Build the macro graph.
 
     ``layouts`` holds (block, placed_sub_graph, width, height) for every block to
@@ -128,24 +143,31 @@ def collapse(flat: BoardGraph, constraints: CompiledConstraints, rules: dict,
     macro_graph = BoardGraph(name=flat.name + ":macro", outline=copy.deepcopy(flat.outline))
     pad_alias: Dict[Tuple[str, str], Tuple[str, str]] = {}
     # Orientation is a per-ref absolute axis: every ref of a lock counts, not just refs[0].
-    orient_locks = {r: c for c in constraints.constraints if c.kind == 'orientation' for r in c.refs}
+    orient_locks = {
+        r: c for c in constraints.constraints if c.kind == "orientation" for r in c.refs
+    }
     macro_orientation = {}
     # Routed block copper may reach the block rectangle (sub-board apron equals the
     # edge clearance), so the macro reserves that clearance on every side: it then
     # also holds from the board edge, not only from neighbouring courtyards.
-    margin = float(rules.get('fab', {}).get('edge_clearance_mm', 0.2))
-    from pnr.place.pair_landing import macro_reserves, macro_mount_record, enabled as landing_enabled
+    margin = float(rules.get("fab", {}).get("edge_clearance_mm", 0.2))
+    from pnr.place.pair_landing import (
+        macro_reserves,
+        macro_mount_record,
+        enabled as landing_enabled,
+    )
+
     shrink, with_hull = shrink_enabled(), hull_enabled()
     shaped = geometry is not None and (shrink or with_hull)
     for index, (block, sub, w, h) in enumerate(layouts):
-        mref = 'MB%02d' % index
+        mref = "MB%02d" % index
         members = {}
         pads: List[Pad] = []
         reserves: List[dict] = []
         frame = None
         if shaped:
             frame = _macro_frame(geometry.get(block.name), w, h, margin, shrink)
-            fx, fy = frame['origin']
+            fx, fy = frame["origin"]
         for c in sub.components:
             # PNR_PAIR_LANDING_RESERVE: a member's diff-pair landing reserve moves
             # onto the macro (pads '<ref>.<pad>', side relative to the macro).
@@ -155,7 +177,7 @@ def collapse(flat: BoardGraph, constraints: CompiledConstraints, rules: dict,
             for p in c.pads:
                 ox, oy = _rot(p.offset[0], p.offset[1], c.rot)
                 q = copy.deepcopy(p)
-                q.name = f'{c.ref}.{p.name}'
+                q.name = f"{c.ref}.{p.name}"
                 if frame is not None:
                     q.offset = (c.pos[0] - fx + ox, c.pos[1] - fy + oy)
                 else:
@@ -167,7 +189,7 @@ def collapse(flat: BoardGraph, constraints: CompiledConstraints, rules: dict,
             if c.ref in orient_locks:
                 # The member's absolute axis is authored; the macro may not rotate it.
                 lock = orient_locks[c.ref]
-                rot = (float(lock.params.get('rot') or 0) - c.rot) % 360
+                rot = (float(lock.params.get("rot") or 0) - c.rot) % 360
                 macro_orientation.setdefault(mref, []).append((rot, lock.enforcement, c.ref))
         if landing_enabled():
             # PNR_PAIR_LANDING_RESERVE: the macro counts as mounted where its
@@ -175,26 +197,57 @@ def collapse(flat: BoardGraph, constraints: CompiledConstraints, rules: dict,
             reserves.append(macro_mount_record(sub.components))
         plan.macros[mref] = dict(block=block.name, width=w, height=h, members=members)
         if frame is not None:
-            cw, ch = frame['courtyard']
+            cw, ch = frame["courtyard"]
             hull = None
-            if with_hull and frame['geometry'] is not None:
+            if with_hull and frame["geometry"] is not None:
                 from pnr.hier.extent import build_hull
+
                 try:
-                    hull = build_hull(frame['geometry'], frame['origin'], (cw, ch),
-                                      float(constraints.board.default_clearance_mm))
-                except ValueError as error:   # the macro keeps its solid courtyard
-                    frame['reason'] = 'no hull: %s' % error
-            plan.macros[mref].update(origin=frame['origin'], courtyard=(cw, ch), shape=frame['shape'],
-                                     reason=frame['reason'], hull=None if hull is None else hull['stats'])
-            macro_graph.components.append(Component(
-                ref=mref, footprint='block:' + block.name, pos=(0.0, 0.0), rot=0.0, side='top',
-                courtyard=(cw, ch), bbox=(cw, ch), pads=pads, address='block:' + block.name, reserves=reserves,
-                hull=hull))
+                    hull = build_hull(
+                        frame["geometry"],
+                        frame["origin"],
+                        (cw, ch),
+                        float(constraints.board.default_clearance_mm),
+                    )
+                except ValueError as error:  # the macro keeps its solid courtyard
+                    frame["reason"] = "no hull: %s" % error
+            plan.macros[mref].update(
+                origin=frame["origin"],
+                courtyard=(cw, ch),
+                shape=frame["shape"],
+                reason=frame["reason"],
+                hull=None if hull is None else hull["stats"],
+            )
+            macro_graph.components.append(
+                Component(
+                    ref=mref,
+                    footprint="block:" + block.name,
+                    pos=(0.0, 0.0),
+                    rot=0.0,
+                    side="top",
+                    courtyard=(cw, ch),
+                    bbox=(cw, ch),
+                    pads=pads,
+                    address="block:" + block.name,
+                    reserves=reserves,
+                    hull=hull,
+                )
+            )
             continue
-        macro_graph.components.append(Component(
-            ref=mref, footprint='block:' + block.name, pos=(0.0, 0.0), rot=0.0, side='top',
-            courtyard=(w + 2 * margin, h + 2 * margin), bbox=(w + 2 * margin, h + 2 * margin),
-            pads=pads, address='block:' + block.name, reserves=reserves))
+        macro_graph.components.append(
+            Component(
+                ref=mref,
+                footprint="block:" + block.name,
+                pos=(0.0, 0.0),
+                rot=0.0,
+                side="top",
+                courtyard=(w + 2 * margin, h + 2 * margin),
+                bbox=(w + 2 * margin, h + 2 * margin),
+                pads=pads,
+                address="block:" + block.name,
+                reserves=reserves,
+            )
+        )
     for c in flat.components:
         if c.ref not in plan.member_of:
             macro_graph.components.append(copy.deepcopy(c))
@@ -216,43 +269,68 @@ def collapse(flat: BoardGraph, constraints: CompiledConstraints, rules: dict,
         # member, not the macro centre; orientation of outside refs must not move
         # with (or be dropped along with) a member; a keepout is relative to the
         # member's own courtyard edge. Refuse instead of emitting a wrong constraint.
-        checked = (list(c.refs) + [c.params.get('anchor')] if c.kind == 'group' and c.enforcement == Enforcement.HARD
-                   else list(c.refs) if c.kind == 'orientation' and len(c.refs) > 1
-                   else list(c.refs) if c.kind == 'keepout' and c.params.get('extent') and not c.params.get('polygon')
-                   else [])
+        checked = (
+            list(c.refs) + [c.params.get("anchor")]
+            if c.kind == "group" and c.enforcement == Enforcement.HARD
+            else (
+                list(c.refs)
+                if c.kind == "orientation" and len(c.refs) > 1
+                else (
+                    list(c.refs)
+                    if c.kind == "keepout"
+                    and c.params.get("extent")
+                    and not c.params.get("polygon")
+                    else []
+                )
+            )
+        )
         m = straddled([r for r in checked if r])
         if m:
             inside = sorted({r for r in checked if r and plan.member_of.get(r) == m})
             outside = sorted({r for r in checked if r and plan.member_of.get(r) != m})
-            label = ('hard group' if c.kind == 'group' else c.kind) + (' %r' % c.name if c.name else '')
-            raise ValueError(f'{label} constraint straddles macro {m} (block {plan.macros[m]["block"]}): '
-                             f'members {inside} vs outside {outside}; the block extraction must keep '
-                             f'these parts together or leave the block flat')
+            label = ("hard group" if c.kind == "group" else c.kind) + (
+                " %r" % c.name if c.name else ""
+            )
+            raise ValueError(
+                f'{label} constraint straddles macro {m} (block {plan.macros[m]["block"]}): '
+                f"members {inside} vs outside {outside}; the block extraction must keep "
+                f"these parts together or leave the block flat"
+            )
         refs = tuple(dict.fromkeys(plan.member_of.get(r, r) for r in c.refs))
-        if c.kind == 'orientation' and c.refs[0] in plan.member_of:
+        if c.kind == "orientation" and c.refs[0] in plan.member_of:
             continue
-        if c.kind == 'side' and all(r in plan.member_of for r in c.refs):
+        if c.kind == "side" and all(r in plan.member_of for r in c.refs):
             continue
         params = dict(c.params)
-        anchor = params.get('anchor')
+        anchor = params.get("anchor")
         if anchor:
-            params['anchor'] = plan.member_of.get(anchor, anchor)
-        if c.kind == 'group':
-            others = [r for r in refs if r != params.get('anchor')]
+            params["anchor"] = plan.member_of.get(anchor, anchor)
+        if c.kind == "group":
+            others = [r for r in refs if r != params.get("anchor")]
             if not others:
                 continue
         kept.append(Constraint(c.kind, c.enforcement, refs, params, c.weight, c.name))
     for mref, locks in macro_orientation.items():
         rot, enforcement, _ = locks[0]
         if any(abs((rot - other + 180) % 360 - 180) > 1e-6 for other, _, _ in locks):
-            raise ValueError(f'macro {mref} ({plan.macros[mref]["block"]}): orientation locks of its members '
-                             f'need macro rotations {sorted((ref, r) for r, _, ref in locks)}; the layout '
-                             f'does not honour the authored axes')
-        kept.append(Constraint('orientation', enforcement, (mref,), {'rot': rot, 'reason': 'member axis convention'}))
+            raise ValueError(
+                f'macro {mref} ({plan.macros[mref]["block"]}): orientation locks of its members '
+                f"need macro rotations {sorted((ref, r) for r, _, ref in locks)}; the layout "
+                f"does not honour the authored axes"
+            )
+        kept.append(
+            Constraint(
+                "orientation",
+                enforcement,
+                (mref,),
+                {"rot": rot, "reason": "member axis convention"},
+            )
+        )
     con.constraints = kept
-    con.copper_keepouts = [k for k in con.copper_keepouts if k.get('ref') not in plan.member_of]
+    con.copper_keepouts = [k for k in con.copper_keepouts if k.get("ref") not in plan.member_of]
 
     place_rules = copy.deepcopy(rules)
-    place_rules['plane_access_intents'] = [i for i in rules.get('plane_access_intents', [])
-                                           if i.get('ref') not in plan.member_of]
+    place_rules["plane_access_intents"] = [
+        i for i in rules.get("plane_access_intents", []) if i.get("ref") not in plan.member_of
+    ]
     return macro_graph, con, place_rules, plan

@@ -30,6 +30,7 @@ By default a child runs in its own process group (``session=True``).
 still stops it; the child's own ``session=True`` workers are outside that group,
 as they always were.
 """
+
 import math
 import os
 import signal
@@ -41,14 +42,14 @@ _DRAIN_SECONDS = 30
 
 def _seconds(value, default):
     """A limit from the environment: ``default`` if unset or empty; <= 0 or inf means no limit."""
-    value = (value or '').strip()
+    value = (value or "").strip()
     if not value:
         return float(default)
     seconds = float(value)
     return seconds if 0 < seconds < math.inf else math.inf
 
 
-TIMEOUT = _seconds(os.environ.get('PNR_WORKER_TIMEOUT'), 1800)
+TIMEOUT = _seconds(os.environ.get("PNR_WORKER_TIMEOUT"), 1800)
 
 
 class DeadlineExceeded(subprocess.CalledProcessError):
@@ -59,7 +60,7 @@ class DeadlineExceeded(subprocess.CalledProcessError):
         self.timeout = timeout
 
     def __str__(self):
-        return 'Command %r killed after its %g s deadline' % (self.cmd, self.timeout)
+        return "Command %r killed after its %g s deadline" % (self.cmd, self.timeout)
 
 
 def worker_timeout(cmd=()):
@@ -70,7 +71,7 @@ def worker_timeout(cmd=()):
     """
     args = [str(arg) for arg in cmd]
     budget = 0.0
-    for flag in ('--seconds', '--max-seconds'):
+    for flag in ("--seconds", "--max-seconds"):
         if flag in args[:-1]:
             try:
                 budget = max(budget, float(args[args.index(flag) + 1]))
@@ -81,7 +82,7 @@ def worker_timeout(cmd=()):
 
 def phase_timeout():
     """PNR_PHASE_TIMEOUT (seconds, default 14400 = 4 h) for a sequence of bounded workers."""
-    return _seconds(os.environ.get('PNR_PHASE_TIMEOUT'), 14400)
+    return _seconds(os.environ.get("PNR_PHASE_TIMEOUT"), 14400)
 
 
 def evaluation_timeout(budget_seconds):
@@ -92,7 +93,9 @@ def evaluation_timeout(budget_seconds):
     runs H2 to H7: up to 18.3 h for a 5400 s deep budget, 12x, and 6.9 h for a
     900 s native budget, 28x), so this is a wedge guard, not a budget.
     """
-    return _seconds(os.environ.get('PNR_EVALUATION_TIMEOUT'), max(172800.0, 48.0 * float(budget_seconds)))
+    return _seconds(
+        os.environ.get("PNR_EVALUATION_TIMEOUT"), max(172800.0, 48.0 * float(budget_seconds))
+    )
 
 
 def _limit(timeout):
@@ -107,20 +110,21 @@ def _wait_seconds(limit):
 def _parents():
     """{pid: parent pid} of every process ({} if the table cannot be read)."""
     table = {}
-    if os.path.isdir('/proc/self'):  # Linux; a container may have no ps
-        for entry in os.listdir('/proc'):
+    if os.path.isdir("/proc/self"):  # Linux; a container may have no ps
+        for entry in os.listdir("/proc"):
             if not entry.isdigit():
                 continue
             try:
-                with open('/proc/%s/stat' % entry) as stat:
+                with open("/proc/%s/stat" % entry) as stat:
                     # "pid (comm) state ppid ...": comm may contain spaces and parentheses.
-                    table[int(entry)] = int(stat.read().rpartition(')')[2].split()[1])
+                    table[int(entry)] = int(stat.read().rpartition(")")[2].split()[1])
             except (OSError, ValueError, IndexError):
                 pass
         return table
     try:
-        listing = subprocess.run(['ps', '-A', '-o', 'pid=', '-o', 'ppid='],
-                                 capture_output=True, text=True, timeout=30).stdout
+        listing = subprocess.run(
+            ["ps", "-A", "-o", "pid=", "-o", "ppid="], capture_output=True, text=True, timeout=30
+        ).stdout
     except (OSError, subprocess.SubprocessError):
         return table
     for line in listing.splitlines():
@@ -241,7 +245,9 @@ def _drain(proc):
         return None, None
 
 
-def run_output(cmd, timeout=None, check=True, capture_output=True, text=True, session=True, **kwargs):
+def run_output(
+    cmd, timeout=None, check=True, capture_output=True, text=True, session=True, **kwargs
+):
     """``subprocess.run(cmd, capture_output=True, text=True, check=True)`` under a deadline.
 
     Returns the :class:`subprocess.CompletedProcess` (returncode -9 on timeout,
@@ -249,7 +255,7 @@ def run_output(cmd, timeout=None, check=True, capture_output=True, text=True, se
     so no descendant keeps the pipes open.
     """
     if capture_output:
-        kwargs['stdout'] = kwargs['stderr'] = subprocess.PIPE
+        kwargs["stdout"] = kwargs["stderr"] = subprocess.PIPE
     proc = subprocess.Popen(cmd, start_new_session=session, text=text, **kwargs)
     limit = _limit(timeout)
     try:

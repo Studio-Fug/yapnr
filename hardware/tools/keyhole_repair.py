@@ -34,9 +34,7 @@ def main():
         "--ripup-net",
         help="experimental: remove one signal net, requiring repair before acceptance",
     )
-    ap.add_argument(
-        "--vias", action="store_true", help="search checked through-via access"
-    )
+    ap.add_argument("--vias", action="store_true", help="search checked through-via access")
     ap.add_argument("--pitch", type=float, default=0.1)
     ap.add_argument("--margin", type=float, default=3)
     args = ap.parse_args()
@@ -46,9 +44,7 @@ def main():
         ap.error("protected net requires a dedicated routing policy")
     if args.width < 0.2:
         ap.error("Mini minimum track width is .2 mm")
-    settings = json.loads(args.board.with_suffix(".kicad_pro").read_text())[
-        "net_settings"
-    ]
+    settings = json.loads(args.board.with_suffix(".kicad_pro").read_text())["net_settings"]
     classes = {c["name"]: c for c in settings["classes"]}
 
     def policy(net):
@@ -57,11 +53,7 @@ def main():
             for p in settings["netclass_patterns"]
             if fnmatch.fnmatchcase(net, p["pattern"])
         ]
-        return (
-            min(matches, key=lambda c: c.get("priority", 999))
-            if matches
-            else classes["Default"]
-        )
+        return min(matches, key=lambda c: c.get("priority", 999)) if matches else classes["Default"]
 
     if args.width < policy(args.net)["track_width"]:
         ap.error("requested width is below project net-class width")
@@ -117,9 +109,7 @@ def main():
     def obstacle(la, shape, box, clearance, identity):
         index = len(owners)
         owners.append((shape, clearance, identity))
-        for x in range(
-            math.floor(box.GetLeft() / 1e6) - 1, math.floor(box.GetRight() / 1e6) + 2
-        ):
+        for x in range(math.floor(box.GetLeft() / 1e6) - 1, math.floor(box.GetRight() / 1e6) + 2):
             for y in range(
                 math.floor(box.GetTop() / 1e6) - 1,
                 math.floor(box.GetBottom() / 1e6) + 2,
@@ -136,10 +126,7 @@ def main():
                     151000,
                     uuid(item),
                 )
-        if (
-            isinstance(item, pcbnew.PAD)
-            and item.GetAttribute() == pcbnew.PAD_ATTRIB_NPTH
-        ):
+        if isinstance(item, pcbnew.PAD) and item.GetAttribute() == pcbnew.PAD_ATTRIB_NPTH:
             for la in layers:
                 obstacle(
                     la,
@@ -190,9 +177,7 @@ def main():
             shape = track.GetEffectiveShape(la)
             r = args.width / 2 + 0.201
             ids = set()
-            for x in range(
-                math.floor(min(a[0], z[0]) - r), math.floor(max(a[0], z[0]) + r) + 1
-            ):
+            for x in range(math.floor(min(a[0], z[0]) - r), math.floor(max(a[0], z[0]) + r) + 1):
                 for y in range(
                     math.floor(min(a[1], z[1]) - r), math.floor(max(a[1], z[1]) + r) + 1
                 ):
@@ -221,9 +206,7 @@ def main():
             if len(ps) == 2:
                 n = max(
                     1,
-                    math.ceil(
-                        math.hypot(ps[1].x - ps[0].x, ps[1].y - ps[0].y) / 500000
-                    ),
+                    math.ceil(math.hypot(ps[1].x - ps[0].x, ps[1].y - ps[0].y) / 500000),
                 )
                 out.update(
                     (
@@ -279,9 +262,7 @@ def main():
                                 if (
                                     item.IsOnLayer(layer)
                                     and item.GetNetCode() != code
-                                    and item.GetEffectiveShape(layer).Collide(
-                                        shape, 151000
-                                    )
+                                    and item.GetEffectiveShape(layer).Collide(shape, 151000)
                                 ):
                                     good = False
                                     break
@@ -289,9 +270,7 @@ def main():
                                     isinstance(item, pcbnew.PAD)
                                     and item.GetAttribute() == pcbnew.PAD_ATTRIB_SMD
                                     and item.IsOnLayer(layer)
-                                    and item.GetEffectiveShape(layer).Collide(
-                                        shape, 50000
-                                    )
+                                    and item.GetEffectiveShape(layer).Collide(shape, 50000)
                                 ):
                                     good = False
                                     break
@@ -314,8 +293,7 @@ def main():
                             if (
                                 isinstance(item, pcbnew.PCB_VIA)
                                 or isinstance(item, pcbnew.PAD)
-                                and max(item.GetDrillSize().x, item.GetDrillSize().y)
-                                > 0
+                                and max(item.GetDrillSize().x, item.GetDrillSize().y) > 0
                             ):
                                 if item.GetEffectiveHoleShape().Collide(
                                     via.GetEffectiveHoleShape(), 201000
@@ -381,9 +359,7 @@ def main():
     done = False
     for i in range(len(groups)):
         for j in range(i + 1, len(groups)):
-            for la in (
-                [pcbnew.In2_Cu, pcbnew.B_Cu, pcbnew.F_Cu] if args.ripup_net else layers
-            ):
+            for la in [pcbnew.In2_Cu, pcbnew.B_Cu, pcbnew.F_Cu] if args.ripup_net else layers:
                 aa, zz = accesses(groups[i], la), accesses(groups[j], la)
                 av, zv = {}, {}
                 if args.vias:
@@ -413,9 +389,7 @@ def main():
                     len(zz),
                     flush=True,
                 )
-                result = route(
-                    aa, zz, bounds, checker(la), pitch=args.pitch, max_expansions=60000
-                )
+                result = route(aa, zz, bounds, checker(la), pitch=args.pitch, max_expansions=60000)
                 original_path = list(result.path)
                 if args.align and result.path:
                     for t in sorted(tracks, key=uuid):
@@ -465,9 +439,7 @@ def main():
                     b.Add(via)
                     log["added"].append(uuid(via))
                 for a, z, track_layer in (
-                    (a, z, layer)
-                    for branch, layer in additions
-                    for a, z in zip(branch, branch[1:])
+                    (a, z, layer) for branch, layer in additions for a, z in zip(branch, branch[1:])
                 ):
                     if a == z:
                         continue
@@ -508,9 +480,7 @@ def main():
             ):
                 continue
             poly = pcbnew.SHAPE_POLY_SET()
-            item.GetEffectiveShape(la).TransformToPolygon(
-                poly, 5000, pcbnew.ERROR_OUTSIDE
-            )
+            item.GetEffectiveShape(la).TransformToPolygon(poly, 5000, pcbnew.ERROR_OUTSIDE)
             polygons = []
             for k in range(poly.OutlineCount()):
                 ps = [
@@ -557,17 +527,13 @@ def main():
                     f'<polyline points="{vertices}" fill="none" stroke="#47f3a8" stroke-width="{args.width}"/>'
                 )
         svg.append("</svg>")
-        args.out.with_suffix("." + b.GetLayerName(la) + ".svg").write_text(
-            "\n".join(svg)
-        )
+        args.out.with_suffix("." + b.GetLayerName(la) + ".svg").write_text("\n".join(svg))
     log["local_copper_geometry"] = fixtures
     args.out.parent.mkdir(parents=True, exist_ok=True)
     b.BuildConnectivity()
     pcbnew.ZONE_FILLER(b).Fill(b.Zones())
     pcbnew.SaveBoard(str(args.out), b)
-    shutil.copyfile(
-        args.board.with_suffix(".kicad_pro"), args.out.with_suffix(".kicad_pro")
-    )
+    shutil.copyfile(args.board.with_suffix(".kicad_pro"), args.out.with_suffix(".kicad_pro"))
     args.out.with_suffix(".keyhole.json").write_text(json.dumps(log, indent=2) + "\n")
     print("added", len(log["added"]), "segments; native DRC required", flush=True)
 

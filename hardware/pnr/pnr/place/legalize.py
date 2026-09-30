@@ -49,13 +49,21 @@ def _landing_blocks(comp, bw, bh, g, clearance, mounted):
     and cols c+dc0..c+dc1 (exclusive) with the slot centre at ((c+bw/2)g, (r+bh/2)g).
     """
     from .pair_landing import reserve_rects
+
     out = []
     for side, rect in reserve_rects(comp):
         dx, dy = rect.cx - comp.pos[0], rect.cy - comp.pos[1]
         w, h = rect.w + clearance, rect.h + clearance
-        out.append((side, mounted[side],
-                    int(math.floor(bh / 2 + (dy - h / 2) / g)), int(math.ceil(bh / 2 + (dy + h / 2) / g)),
-                    int(math.floor(bw / 2 + (dx - w / 2) / g)), int(math.ceil(bw / 2 + (dx + w / 2) / g))))
+        out.append(
+            (
+                side,
+                mounted[side],
+                int(math.floor(bh / 2 + (dy - h / 2) / g)),
+                int(math.ceil(bh / 2 + (dy + h / 2) / g)),
+                int(math.floor(bw / 2 + (dx - w / 2) / g)),
+                int(math.ceil(bw / 2 + (dx + w / 2) / g)),
+            )
+        )
     return out
 
 
@@ -72,8 +80,13 @@ def pad_edge_rule(constraints=None, rules=None) -> Optional[Tuple[float, float]]
     fab = dict((rules or {}).get("fab") or {})
     if not fab and constraints is not None:
         from pnr.fab_profile import apply_fab
-        fab = apply_fab({"edge_clearance_mm": constraints.fab.edge_clearance_mm,
-                         "hole_to_edge_mm": constraints.fab.hole_to_edge_mm})
+
+        fab = apply_fab(
+            {
+                "edge_clearance_mm": constraints.fab.edge_clearance_mm,
+                "hole_to_edge_mm": constraints.fab.hole_to_edge_mm,
+            }
+        )
     edge = float(fab.get("edge_clearance_mm", 0.2))
     hole = fab.get("hole_to_edge_mm")
     return (edge, 0.0 if hole is None else float(hole))
@@ -94,7 +107,15 @@ def pad_edge_box(comp, pad_edge, width: float, height: float):
             boxes.append((r.left - px, r.bottom - py, r.right - px, r.top - py, edge))
         if pad.through_hole and hole > 0 and min(pad.drill_size) > 0:
             dw, dh = (pad.drill_size[1], pad.drill_size[0]) if swap else pad.drill_size
-            boxes.append((r.cx - px - dw / 2, r.cy - py - dh / 2, r.cx - px + dw / 2, r.cy - py + dh / 2, hole))
+            boxes.append(
+                (
+                    r.cx - px - dw / 2,
+                    r.cy - py - dh / 2,
+                    r.cx - px + dw / 2,
+                    r.cy - py + dh / 2,
+                    hole,
+                )
+            )
         for x0, y0, x1, y1, m in boxes:
             x_lo = max(x_lo, m - x0)
             x_hi = min(x_hi, width - m - x1)
@@ -119,8 +140,17 @@ def _mark(occ: np.ndarray, g: float, rect: Rect) -> None:
 
 
 def _place_part(
-    occ: np.ndarray, g: float, bw: int, bh: int, target: Tuple[float, float],
-    limits=(), candidate_cost=None, forbidden=(), attached=(), free=None, box=None,
+    occ: np.ndarray,
+    g: float,
+    bw: int,
+    bh: int,
+    target: Tuple[float, float],
+    limits=(),
+    candidate_cost=None,
+    forbidden=(),
+    attached=(),
+    free=None,
+    box=None,
 ) -> Tuple[int, int]:
     """Find the free ``bh x bw`` block nearest ``target`` (returns top-left r, c).
 
@@ -163,23 +193,29 @@ def _place_part(
     cx = (cols + bw / 2.0) * g
     cy = (rows + bh / 2.0) * g
     if box is not None:
-        free &= (cx >= box[0] - 1e-9) & (cx <= box[1] + 1e-9) & (cy >= box[2] - 1e-9) & (cy <= box[3] + 1e-9)
+        free &= (
+            (cx >= box[0] - 1e-9)
+            & (cx <= box[1] + 1e-9)
+            & (cy >= box[2] - 1e-9)
+            & (cy <= box[3] + 1e-9)
+        )
         if not free.any():
             raise LegalizationError("no free slot keeping pads clear of the board edge")
     for ax, ay, radius in limits:
-        free &= (cx - ax) ** 2 + (cy - ay) ** 2 <= radius ** 2 + 1e-9
+        free &= (cx - ax) ** 2 + (cy - ay) ** 2 <= radius**2 + 1e-9
     for rr, cc in forbidden:
         # Branches must explore distinct packings, not thousands of adjacent
         # quarter-mm variants of the same obstructing pose. This is bounded
         # sampling, not an exhaustive infeasibility proof.
-        radius=max(.75, min(2., min(bw,bh)*g*.25)) / g
-        free &= (rows-rr)**2+(cols-cc)**2 > radius**2
+        radius = max(0.75, min(2.0, min(bw, bh) * g * 0.25)) / g
+        free &= (rows - rr) ** 2 + (cols - cc) ** 2 > radius**2
     if not free.any():
         raise LegalizationError("no free slot inside hard group radius")
     dist2 = (cx - target[0]) ** 2 + (cy - target[1]) ** 2
     if candidate_cost is not None:
-        dist2[free] += candidate_cost(np.broadcast_to(cx, free.shape)[free],
-                                     np.broadcast_to(cy, free.shape)[free])
+        dist2[free] += candidate_cost(
+            np.broadcast_to(cx, free.shape)[free], np.broadcast_to(cy, free.shape)[free]
+        )
     dist2 = np.where(free, dist2, np.inf)
     r, c = np.unravel_index(np.argmin(dist2), dist2.shape)
     return int(r), int(c)
@@ -255,18 +291,27 @@ def legalize(
     placed = BoardGraph.from_json(graph.to_json())  # deep copy
     by_ref = {c.ref: c for c in placed.components}
     from .pair_landing import enabled as landing_enabled
+
     landing = landing_enabled() and any(c.reserves for c in placed.components)
-    mounted = {side: np.zeros((ny, nx), dtype=bool) for side in ("top", "bottom")} if landing else None
-    reserved = {side: np.zeros((ny, nx), dtype=bool) for side in ("top", "bottom")} if landing else None
+    mounted = (
+        {side: np.zeros((ny, nx), dtype=bool) for side in ("top", "bottom")} if landing else None
+    )
+    reserved = (
+        {side: np.zeros((ny, nx), dtype=bool) for side in ("top", "bottom")} if landing else None
+    )
+
     def mounts_of(comp):
         if str(comp.footprint).startswith("block:"):
             from .pair_landing import macro_mount
+
             mount = macro_mount(comp)
             return ("top", "bottom") if mount == "both" else (mount,)
         return (comp.side,)
+
     # Per-side hull masks of block macros (PNR_MACRO_HULL=1, pnr.place.hull):
     # inert, and every path below unchanged, unless a component carries a hull.
     from . import hull as hullmod
+
     hulls = hullmod.active(placed.components)
     if hulls:
         keep_occ = np.zeros((ny, nx), dtype=bool)
@@ -279,9 +324,15 @@ def legalize(
 
     def part_sides(comp):
         """Occupancy planes a slot tests and marks (drilled parts: both sides)."""
-        sides = ('top', 'bottom') if any(p.through_hole for p in comp.pads) else occupied_sides(comp)
-        if hulls and not comp.hull and (hullmod.drilled(comp) or str(comp.footprint).startswith('block:')):
-            sides = tuple(sides) + ('inner',)
+        sides = (
+            ("top", "bottom") if any(p.through_hole for p in comp.pads) else occupied_sides(comp)
+        )
+        if (
+            hulls
+            and not comp.hull
+            and (hullmod.drilled(comp) or str(comp.footprint).startswith("block:"))
+        ):
+            sides = tuple(sides) + ("inner",)
         return sides
 
     boxes = {}
@@ -309,6 +360,7 @@ def legalize(
         if bw > nx or bh > ny:
             return False
         import hashlib
+
         digest = hashlib.blake2b(occupancy["top"].tobytes(), digest_size=16)
         digest.update(occupancy["bottom"].tobytes())
         digest.update(occupancy["inner"].tobytes())
@@ -324,7 +376,11 @@ def legalize(
         hit = free_cache.get(key)
         if hit is None:
             masks = hullmod.slot_masks(comp, g, clearance, bw, bh)
-            occ_in = occupancy if not avoid else dict(occupancy, **{m: occupancy[m] | reserved[m] for m in avoid})
+            occ_in = (
+                occupancy
+                if not avoid
+                else dict(occupancy, **{m: occupancy[m] | reserved[m] for m in avoid})
+            )
             hit = hullmod.free_map(occ_in, keep_occ, masks, bw, bh)
             hit.setflags(write=False)
             if len(free_cache) > 512:
@@ -341,13 +397,15 @@ def legalize(
         if is_hull(comp):
             masks = hullmod.slot_masks(comp, g, clearance, bw, bh)
             for side in hullmod.PLANES:
-                occupancy[side][r:r + bh, c:c + bw] |= masks[side]
+                occupancy[side][r : r + bh, c : c + bw] |= masks[side]
         else:
             for side in sides:
-                occupancy[side][r:r + bh, c:c + bw] = True
+                occupancy[side][r : r + bh, c : c + bw] = True
+
     aid = None
     if roles is not None:
         from .power_first import LOOK_AHEAD_TRIES, LegalizeAid
+
         aid = LegalizeAid(roles, placed.components)
     neighbors = []
     cost_records = []
@@ -355,15 +413,20 @@ def legalize(
     parents = {}
     for anchor, member, radius in group_edges:
         parents.setdefault(member, set()).add(anchor)
+
     def limits_for(ref):
-        points = {c.ref:c.pos for c in neighbors}
+        points = {c.ref: c.pos for c in neighbors}
         limits = list(group_limits.get(ref, ()))
         for anchor, member, radius in group_edges:
-            if member == ref and anchor in points:limits.append((*points[anchor], radius))
-            if anchor == ref and member in points:limits.append((*points[member], radius))
+            if member == ref and anchor in points:
+                limits.append((*points[anchor], radius))
+            if anchor == ref and member in points:
+                limits.append((*points[member], radius))
         return limits
+
     for ref, angle in rotations.items():
-        if ref in by_ref:by_ref[ref].rot = angle
+        if ref in by_ref:
+            by_ref[ref].rot = angle
 
     # Fixed parts: pin at their pose, mark occupied.
     for ref, (px, py) in fixed.items():
@@ -372,56 +435,79 @@ def legalize(
             continue
         comp.pos = (px, py)
         neighbors.append(comp)
-        if any(math.hypot(px - ax, py - ay) > radius + 1e-9
-               for ax, ay, radius in limits_for(ref)):
+        if any(math.hypot(px - ax, py - ay) > radius + 1e-9 for ax, ay, radius in limits_for(ref)):
             raise LegalizationError(f"fixed part {ref} lies outside hard group radius")
         for side, rect in placement_rects(comp):
             if landing and isinstance(rect, ReserveRect):
-                _mark(reserved[side], g, Rect(rect.cx, rect.cy, rect.w + clearance, rect.h + clearance))
+                _mark(
+                    reserved[side],
+                    g,
+                    Rect(rect.cx, rect.cy, rect.w + clearance, rect.h + clearance),
+                )
                 continue
             if side in occupancy:
-                _mark(occupancy[side], g, Rect(rect.cx, rect.cy, rect.w + clearance, rect.h + clearance))
+                _mark(
+                    occupancy[side],
+                    g,
+                    Rect(rect.cx, rect.cy, rect.w + clearance, rect.h + clearance),
+                )
             if landing and side in mounted and getattr(rect, "mount", None) in (side, "both"):
-                _mark(mounted[side], g, Rect(rect.cx, rect.cy, rect.w + clearance, rect.h + clearance))
+                _mark(
+                    mounted[side], g, Rect(rect.cx, rect.cy, rect.w + clearance, rect.h + clearance)
+                )
 
     # Minimum-remaining-slots ordering accounts for actual fixed obstacles and
     # intersections of group discs. Radius alone can let a flexible neighbor
     # consume the only legal site of another equally constrained component.
     movable = [c for c in placed.components if c.ref not in fixed]
+
     def available_pose(comp):
         cr = courtyard_rect(comp)
         infl = max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
         bw = int(math.ceil((cr.w * infl + clearance) / g))
         bh = int(math.ceil((cr.h * infl + clearance) / g))
         occ = np.logical_or.reduce([occupancy[side] for side in part_sides(comp)])
-        if bw > nx or bh > ny:return 0
+        if bw > nx or bh > ny:
+            return 0
         if is_hull(comp):
             free = hull_free(comp, bw, bh, reserves=False).copy()
         else:
-            integ = np.zeros((ny+1,nx+1),dtype=np.int32)
-            integ[1:,1:] = np.cumsum(np.cumsum(occ.astype(np.int32),axis=0),axis=1)
-            free = (integ[bh:,bw:]-integ[:-bh,bw:]-integ[bh:,:-bw]+integ[:-bh,:-bw]) == 0
-        cx=(np.arange(free.shape[1])[None,:]+bw/2)*g
-        cy=(np.arange(free.shape[0])[:,None]+bh/2)*g
-        for ax,ay,radius in limits_for(comp.ref):
-            free &= (cx-ax)**2+(cy-ay)**2 <= radius**2+1e-9
+            integ = np.zeros((ny + 1, nx + 1), dtype=np.int32)
+            integ[1:, 1:] = np.cumsum(np.cumsum(occ.astype(np.int32), axis=0), axis=1)
+            free = (integ[bh:, bw:] - integ[:-bh, bw:] - integ[bh:, :-bw] + integ[:-bh, :-bw]) == 0
+        cx = (np.arange(free.shape[1])[None, :] + bw / 2) * g
+        cy = (np.arange(free.shape[0])[:, None] + bh / 2) * g
+        for ax, ay, radius in limits_for(comp.ref):
+            free &= (cx - ax) ** 2 + (cy - ay) ** 2 <= radius**2 + 1e-9
         box = edge_box(comp)
         if box is not None:
-            free &= (cx >= box[0]-1e-9) & (cx <= box[1]+1e-9) & (cy >= box[2]-1e-9) & (cy <= box[3]+1e-9)
+            free &= (
+                (cx >= box[0] - 1e-9)
+                & (cx <= box[1] + 1e-9)
+                & (cy >= box[2] - 1e-9)
+                & (cy <= box[3] + 1e-9)
+            )
         return int(free.sum())
+
     def available(comp):
-        count=available_pose(comp)
-        if count or not allow_rotation or comp.ref in rotations:return count
-        if is_hull(comp):
-            previous=comp.rot
-            for turn in hull_turns(comp, previous)[1:]:
-                comp.rot=turn;count=available_pose(comp)
-                if count:break
-            comp.rot=previous
+        count = available_pose(comp)
+        if count or not allow_rotation or comp.ref in rotations:
             return count
-        previous=comp.rot;comp.rot=(previous+90)%360
-        count=available_pose(comp);comp.rot=previous
+        if is_hull(comp):
+            previous = comp.rot
+            for turn in hull_turns(comp, previous)[1:]:
+                comp.rot = turn
+                count = available_pose(comp)
+                if count:
+                    break
+            comp.rot = previous
+            return count
+        previous = comp.rot
+        comp.rot = (previous + 90) % 360
+        count = available_pose(comp)
+        comp.rot = previous
         return count
+
     def starves(comp, r, c, bw, bh, sides):
         """Power-first look-ahead: does this slot strand an unplaced hard-limited part?
 
@@ -437,22 +523,36 @@ def legalize(
             comp.pos = ((c + bw / 2.0) * g, (r + bh / 2.0) * g)
             neighbors.append(comp)
             pending = [m for m in movable if limits_for(m.ref)]
-            pending.sort(key=lambda m: (available(m), -courtyard_rect(m).w * courtyard_rect(m).h, m.ref))
+            pending.sort(
+                key=lambda m: (available(m), -courtyard_rect(m).w * courtyard_rect(m).h, m.ref)
+            )
             for m in pending:
                 sides_m = part_sides(m)
                 occ_m = np.logical_or.reduce([occupancy[side] for side in sides_m])
                 infl_m = max(1.0, spread, float(inflation.get(m.ref, 1.0)))
                 target = aid.target(m.ref, neighbors)
-                turns = ([m.rot] if not allow_rotation or m.ref in rotations else hull_turns(m, m.rot)) if is_hull(m) else \
-                    [m.rot] + ([(m.rot + 90) % 360] if allow_rotation and m.ref not in rotations else [])
+                turns = (
+                    ([m.rot] if not allow_rotation or m.ref in rotations else hull_turns(m, m.rot))
+                    if is_hull(m)
+                    else [m.rot]
+                    + ([(m.rot + 90) % 360] if allow_rotation and m.ref not in rotations else [])
+                )
                 for rot in turns:
                     m.rot = rot
                     cr = courtyard_rect(m)
                     bw_ = int(math.ceil((cr.w * infl_m + clearance) / g))
                     bh_ = int(math.ceil((cr.h * infl_m + clearance) / g))
                     try:
-                        rr, cc = _place_part(occ_m, g, bw_, bh_, target, limits_for(m.ref),
-                                             free=hull_free(m, bw_, bh_, reserves=False) if is_hull(m) else None, box=edge_box(m))
+                        rr, cc = _place_part(
+                            occ_m,
+                            g,
+                            bw_,
+                            bh_,
+                            target,
+                            limits_for(m.ref),
+                            free=hull_free(m, bw_, bh_, reserves=False) if is_hull(m) else None,
+                            box=edge_box(m),
+                        )
                     except LegalizationError:
                         continue
                     mark_slot(m, rr, cc, bw_, bh_, sides_m)
@@ -465,9 +565,11 @@ def legalize(
         finally:
             del neighbors[count:]
             for m, pos, rot in poses:
-                m.pos = pos; m.rot = rot
+                m.pos = pos
+                m.rot = rot
             for side in occupancy:
                 occupancy[side][:] = saved[side]
+
     # Finish each electrically constrained connected block before unrelated
     # footprints consume its local escape/decoupling space. Source radii remain
     # exact; this changes ordering, never legality or fixed poses.
@@ -477,13 +579,18 @@ def legalize(
         adjacency.setdefault(member, set()).add(anchor)
     blocks = {}
     for ref in sorted(adjacency):
-        if ref in blocks: continue
-        pending = [ref]; members = set()
+        if ref in blocks:
+            continue
+        pending = [ref]
+        members = set()
         while pending:
             v = pending.pop()
-            if v in members: continue
-            members.add(v); pending.extend(adjacency.get(v, ()))
-        for v in members: blocks[v] = members
+            if v in members:
+                continue
+            members.add(v)
+            pending.extend(adjacency.get(v, ()))
+        for v in members:
+            blocks[v] = members
     active_block = set()
     stack = []
     banned = {}
@@ -497,26 +604,47 @@ def legalize(
         if not active:
             grouped = [c for c in eligible if c.ref in blocks]
             if grouped:
+
                 def block_rank(c):
-                    area = sum(courtyard_rect(by_ref[v]).w * courtyard_rect(by_ref[v]).h
-                               for v in blocks[c.ref] if v not in placed_refs)
-                    return (available(c) / max(area, .01), -area, c.ref)
+                    area = sum(
+                        courtyard_rect(by_ref[v]).w * courtyard_rect(by_ref[v]).h
+                        for v in blocks[c.ref]
+                        if v not in placed_refs
+                    )
+                    return (available(c) / max(area, 0.01), -area, c.ref)
+
                 root = min(grouped, key=block_rank)
                 active_block = blocks[root.ref]
                 active = [c for c in eligible if c.ref in active_block]
         if aid is None:
-            comp = min(active or eligible,key=lambda c:(available(c),-courtyard_rect(c).w*courtyard_rect(c).h,c.ref))
+            comp = min(
+                active or eligible,
+                key=lambda c: (available(c), -courtyard_rect(c).w * courtyard_rect(c).h, c.ref),
+            )
         else:
             # Mixed-size legalization: block macros (pnr.hier.macro, footprint 'block:*') take their
             # slots before any tier, as their members' tiers are already fixed inside the layout.
-            comp = min(active or eligible,key=lambda c:(0 if str(c.footprint).startswith('block:') else aid.tier(c.ref),available(c),-courtyard_rect(c).w*courtyard_rect(c).h,c.ref))
+            comp = min(
+                active or eligible,
+                key=lambda c: (
+                    0 if str(c.footprint).startswith("block:") else aid.tier(c.ref),
+                    available(c),
+                    -courtyard_rect(c).w * courtyard_rect(c).h,
+                    c.ref,
+                ),
+            )
             comp.pos = aid.target(comp.ref, neighbors)
-        state = dict(occupancy={s:a.copy() for s,a in occupancy.items()},
-                     mounted={s:a.copy() for s,a in mounted.items()} if landing else None,
-                     reserved={s:a.copy() for s,a in reserved.items()} if landing else None,
-                     neighbors=list(neighbors), movable=list(movable), active=set(active_block),
-                     poses={c.ref:(c.pos,c.rot) for c in placed.components},
-                     records=list(cost_records), banned={k:set(v) for k,v in banned.items()})
+        state = dict(
+            occupancy={s: a.copy() for s, a in occupancy.items()},
+            mounted={s: a.copy() for s, a in mounted.items()} if landing else None,
+            reserved={s: a.copy() for s, a in reserved.items()} if landing else None,
+            neighbors=list(neighbors),
+            movable=list(movable),
+            active=set(active_block),
+            poses={c.ref: (c.pos, c.rot) for c in placed.components},
+            records=list(cost_records),
+            banned={k: set(v) for k, v in banned.items()},
+        )
         movable.remove(comp)
         infl = max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
         sides = part_sides(comp)
@@ -524,75 +652,171 @@ def legalize(
         if landing:
             occ = occ | np.logical_or.reduce([reserved[m] for m in mounts_of(comp)])
         attached = ()
-        original_rotation=comp.rot
-        error=None
+        original_rotation = comp.rot
+        error = None
         from .cost_capture import folder as cost_folder, legalizer_decision
-        capturing=cost_folder() is not None
-        captured_fields={}
-        turns=[original_rotation]+([(original_rotation+90)%360] if allow_rotation and comp.ref not in rotations else [])
+
+        capturing = cost_folder() is not None
+        captured_fields = {}
+        turns = [original_rotation] + (
+            [(original_rotation + 90) % 360] if allow_rotation and comp.ref not in rotations else []
+        )
         if is_hull(comp) and allow_rotation and comp.ref not in rotations:
-            turns=hull_turns(comp,original_rotation)
+            turns = hull_turns(comp, original_rotation)
         for rotation in turns:
-            comp.rot=rotation
-            cr=courtyard_rect(comp)
-            bw=int(math.ceil((cr.w*infl+clearance)/g))
-            bh=int(math.ceil((cr.h*infl+clearance)/g))
+            comp.rot = rotation
+            cr = courtyard_rect(comp)
+            bw = int(math.ceil((cr.w * infl + clearance) / g))
+            bh = int(math.ceil((cr.h * infl + clearance) / g))
             attached = _landing_blocks(comp, bw, bh, g, clearance, mounted) if landing else ()
             try:
-                candidate_cost = None if channel_model is None else (
-                    lambda xs, ys: channel_weight * channel_model.penalty(comp, neighbors, xs, ys))
+                candidate_cost = (
+                    None
+                    if channel_model is None
+                    else (
+                        lambda xs, ys: channel_weight
+                        * channel_model.penalty(comp, neighbors, xs, ys)
+                    )
+                )
                 if capturing:
+
                     def candidate_cost(xs, ys):
-                        channel=0. if channel_model is None else channel_model.penalty(comp,neighbors,xs,ys)
+                        channel = (
+                            0.0
+                            if channel_model is None
+                            else channel_model.penalty(comp, neighbors, xs, ys)
+                        )
                         if np.asarray(xs).ndim:
-                            xx,yy,ch=np.broadcast_arrays(xs,ys,channel)
-                            captured_fields[rotation]=np.column_stack((xx,yy,(xx-comp.pos[0])**2+(yy-comp.pos[1])**2,ch,np.zeros(xx.shape)))
-                        return channel_weight*channel
-                slot_free=hull_free(comp,bw,bh) if is_hull(comp) else None
-                r,c=_place_part(occ,g,bw,bh,comp.pos,limits_for(comp.ref),candidate_cost=candidate_cost,
-                                forbidden=[(rr,cc) for rot,rr,cc in banned.get(comp.ref,()) if rot==rotation],attached=attached,
-                                free=slot_free,box=edge_box(comp))
+                            xx, yy, ch = np.broadcast_arrays(xs, ys, channel)
+                            captured_fields[rotation] = np.column_stack(
+                                (
+                                    xx,
+                                    yy,
+                                    (xx - comp.pos[0]) ** 2 + (yy - comp.pos[1]) ** 2,
+                                    ch,
+                                    np.zeros(xx.shape),
+                                )
+                            )
+                        return channel_weight * channel
+
+                slot_free = hull_free(comp, bw, bh) if is_hull(comp) else None
+                r, c = _place_part(
+                    occ,
+                    g,
+                    bw,
+                    bh,
+                    comp.pos,
+                    limits_for(comp.ref),
+                    candidate_cost=candidate_cost,
+                    forbidden=[
+                        (rr, cc) for rot, rr, cc in banned.get(comp.ref, ()) if rot == rotation
+                    ],
+                    attached=attached,
+                    free=slot_free,
+                    box=edge_box(comp),
+                )
                 if aid is not None:
-                    tried=[(rr,cc) for rot,rr,cc in banned.get(comp.ref,()) if rot==rotation]
+                    tried = [
+                        (rr, cc) for rot, rr, cc in banned.get(comp.ref, ()) if rot == rotation
+                    ]
                     for attempt in range(LOOK_AHEAD_TRIES):
-                        if not starves(comp,r,c,bw,bh,sides):
+                        if not starves(comp, r, c, bw, bh, sides):
                             break
-                        tried.append((r,c))
-                        if attempt==LOOK_AHEAD_TRIES-1:
-                            raise LegalizationError("look-ahead: every tried slot strands a hard-limited part")
-                        r,c=_place_part(occ,g,bw,bh,comp.pos,limits_for(comp.ref),candidate_cost=candidate_cost,forbidden=tried,attached=attached,free=slot_free,box=edge_box(comp))
-                error=None
+                        tried.append((r, c))
+                        if attempt == LOOK_AHEAD_TRIES - 1:
+                            raise LegalizationError(
+                                "look-ahead: every tried slot strands a hard-limited part"
+                            )
+                        r, c = _place_part(
+                            occ,
+                            g,
+                            bw,
+                            bh,
+                            comp.pos,
+                            limits_for(comp.ref),
+                            candidate_cost=candidate_cost,
+                            forbidden=tried,
+                            attached=attached,
+                            free=slot_free,
+                            box=edge_box(comp),
+                        )
+                error = None
                 break
-            except LegalizationError as exc:error=exc
-        if error is not None and stack and (group_edges or group_limits) and backtracks < backtrack_budget:
+            except LegalizationError as exc:
+                error = exc
+        if (
+            error is not None
+            and stack
+            and (group_edges or group_limits)
+            and backtracks < backtrack_budget
+        ):
             previous, chosen_ref, chosen_pose = stack.pop()
-            occupancy = previous['occupancy']; neighbors = previous['neighbors']
-            if landing:mounted = previous['mounted']; reserved = previous['reserved']
-            movable = previous['movable']; active_block = previous['active']
-            for ref,(pos,rot) in previous['poses'].items():by_ref[ref].pos=pos;by_ref[ref].rot=rot
-            cost_records=previous['records'];banned=previous['banned']
-            banned.setdefault(chosen_ref,set()).add(chosen_pose)
+            occupancy = previous["occupancy"]
+            neighbors = previous["neighbors"]
+            if landing:
+                mounted = previous["mounted"]
+                reserved = previous["reserved"]
+            movable = previous["movable"]
+            active_block = previous["active"]
+            for ref, (pos, rot) in previous["poses"].items():
+                by_ref[ref].pos = pos
+                by_ref[ref].rot = rot
+            cost_records = previous["records"]
+            banned = previous["banned"]
+            banned.setdefault(chosen_ref, set()).add(chosen_pose)
             backtracks += 1
             continue
         if error is not None:
-            comp.rot=original_rotation
+            comp.rot = original_rotation
             import os, json
             from pathlib import Path
-            debug=os.environ.get('PNR_PLACEMENT_DIAGNOSTICS')
+
+            debug = os.environ.get("PNR_PLACEMENT_DIAGNOSTICS")
             if debug:
-                Path(debug).write_text(json.dumps(dict(failed=comp.ref,remaining=[c.ref for c in movable],placed=[c.ref for c in neighbors],graph=json.loads(placed.to_json()),limits=group_limits,grid_mm=g,backtracks=backtracks,keepouts=[vars(k) for k in keepouts]),indent=2))
+                Path(debug).write_text(
+                    json.dumps(
+                        dict(
+                            failed=comp.ref,
+                            remaining=[c.ref for c in movable],
+                            placed=[c.ref for c in neighbors],
+                            graph=json.loads(placed.to_json()),
+                            limits=group_limits,
+                            grid_mm=g,
+                            backtracks=backtracks,
+                            keepouts=[vars(k) for k in keepouts],
+                        ),
+                        indent=2,
+                    )
+                )
             raise LegalizationError(f"{comp.ref}: {error}") from error
         if capturing:
-            target=comp.pos;position=((c+bw/2)*g,(r+bh/2)*g)
-            channel=0. if channel_model is None else float(channel_model.penalty(comp,neighbors,*position))
+            target = comp.pos
+            position = ((c + bw / 2) * g, (r + bh / 2) * g)
+            channel = (
+                0.0
+                if channel_model is None
+                else float(channel_model.penalty(comp, neighbors, *position))
+            )
             # Keep only the accepted search path. Rejected branches must not
             # serialize full graphs or become displayed legalization decisions.
-            cost_records.append(dict(ref=comp.ref,target=target,position=position,
-                rotation=comp.rot,neighbors=[n.ref for n in neighbors],fields=captured_fields,
-                chosen=((position[0]-target[0])**2+(position[1]-target[1])**2,channel,0.),
-                poses={q.ref:(q.pos,q.rot) for q in placed.components}))
-        stack.append((state,comp.ref,(comp.rot,r,c)))
-        banned.pop(comp.ref,None)
+            cost_records.append(
+                dict(
+                    ref=comp.ref,
+                    target=target,
+                    position=position,
+                    rotation=comp.rot,
+                    neighbors=[n.ref for n in neighbors],
+                    fields=captured_fields,
+                    chosen=(
+                        (position[0] - target[0]) ** 2 + (position[1] - target[1]) ** 2,
+                        channel,
+                        0.0,
+                    ),
+                    poses={q.ref: (q.pos, q.rot) for q in placed.components},
+                )
+            )
+        stack.append((state, comp.ref, (comp.rot, r, c)))
+        banned.pop(comp.ref, None)
         if is_hull(comp):
             mark_slot(comp, r, c, bw, bh, sides)
         else:
@@ -608,27 +832,72 @@ def legalize(
                 for m in mounts_of(comp):
                     mounted[m][r : r + bh, c : c + bw] = True
             for side, _occ, dr0, dr1, dc0, dc1 in attached:
-                reserved[side][max(0, r + dr0):max(0, r + dr1), max(0, c + dc0):max(0, c + dc1)] = True
+                reserved[side][
+                    max(0, r + dr0) : max(0, r + dr1), max(0, c + dc0) : max(0, c + dc1)
+                ] = True
         comp.pos = ((c + bw / 2.0) * g, (r + bh / 2.0) * g)
         neighbors.append(comp)
 
     if cost_records:
-        import hashlib,json
+        import hashlib, json
         from pathlib import Path
         from .cost_capture import save
-        records=[]
-        replay=BoardGraph.from_json(placed.to_json());replay_refs={c.ref:c for c in replay.components}
+
+        records = []
+        replay = BoardGraph.from_json(placed.to_json())
+        replay_refs = {c.ref: c for c in replay.components}
         for v in cost_records:
-            for ref,(pos,rot) in v['poses'].items():replay_refs[ref].pos=pos;replay_refs[ref].rot=rot
-            records.append(legalizer_decision(replay,v['ref'],v['target'],v['position'],v['rotation'],
-                [replay_refs[ref] for ref in v['neighbors']],v['fields'],v['chosen'],g,channel_weight))
-        save('legalizer-complete',dict(graph=json.loads(placed.to_json()),decisions=[dict(path=p,sha256=hashlib.sha256(Path(p).read_bytes()).hexdigest()) for p in records],mobility=mobility or {},fixed_refs=sorted(fixed),hard_group_edges=list(group_edges),hard_rotations=rotations,backtracks=backtracks,scope='Actual per-component sequential legalizer decisions; each field retains its own previously occupied neighbors'))
+            for ref, (pos, rot) in v["poses"].items():
+                replay_refs[ref].pos = pos
+                replay_refs[ref].rot = rot
+            records.append(
+                legalizer_decision(
+                    replay,
+                    v["ref"],
+                    v["target"],
+                    v["position"],
+                    v["rotation"],
+                    [replay_refs[ref] for ref in v["neighbors"]],
+                    v["fields"],
+                    v["chosen"],
+                    g,
+                    channel_weight,
+                )
+            )
+        save(
+            "legalizer-complete",
+            dict(
+                graph=json.loads(placed.to_json()),
+                decisions=[
+                    dict(path=p, sha256=hashlib.sha256(Path(p).read_bytes()).hexdigest())
+                    for p in records
+                ],
+                mobility=mobility or {},
+                fixed_refs=sorted(fixed),
+                hard_group_edges=list(group_edges),
+                hard_rotations=rotations,
+                backtracks=backtracks,
+                scope="Actual per-component sequential legalizer decisions; each field retains its own previously occupied neighbors",
+            ),
+        )
     return placed
 
 
-def refine_channels(graph, width, height, *, fixed, keepouts, channel_model,
-                    group_limits=None, channel_weight=5., max_move_mm=2.,
-                    passes=3, clearance=.2, grid_mm=.25):
+def refine_channels(
+    graph,
+    width,
+    height,
+    *,
+    fixed,
+    keepouts,
+    channel_model,
+    group_limits=None,
+    channel_weight=5.0,
+    max_move_mm=2.0,
+    passes=3,
+    clearance=0.2,
+    grid_mm=0.25,
+):
     """Improve an already legal checkpoint without snapping every footprint.
 
     Each accepted move reduces local channel pressure and its combined movement
@@ -649,40 +918,52 @@ def refine_channels(graph, width, height, *, fixed, keepouts, channel_model,
             before = float(channel_model.penalty(comp, others, *comp.pos))
             if before <= 1e-9:
                 continue
-            occ = np.zeros((int(math.ceil(height/g)), int(math.ceil(width/g))), dtype=bool)
+            occ = np.zeros((int(math.ceil(height / g)), int(math.ceil(width / g))), dtype=bool)
             for keepout in keepouts:
                 _mark(occ, g, keepout)
             sides = set(occupied_sides(comp))
             for other in others:
                 for side, cr in placement_rects(other):
                     if side in sides:
-                        _mark(occ, g, Rect(cr.cx, cr.cy, cr.w+clearance, cr.h+clearance))
+                        _mark(occ, g, Rect(cr.cx, cr.cy, cr.w + clearance, cr.h + clearance))
             cr = courtyard_rect(comp)
-            bw, bh = (int(math.ceil((size+clearance)/g)) for size in (cr.w, cr.h))
+            bw, bh = (int(math.ceil((size + clearance) / g)) for size in (cr.w, cr.h))
             target = targets[comp.ref]
             try:
-                row, col = _place_part(occ, g, bw, bh, target,
+                row, col = _place_part(
+                    occ,
+                    g,
+                    bw,
+                    bh,
+                    target,
                     list(limits.get(comp.ref, ())) + [(*target, max_move_mm)],
-                    candidate_cost=lambda xs, ys: channel_weight*channel_model.penalty(comp, others, xs, ys))
+                    candidate_cost=lambda xs, ys: channel_weight
+                    * channel_model.penalty(comp, others, xs, ys),
+                )
             except LegalizationError:
                 continue  # Keep a valid current pose if no improved legal slot exists.
-            candidate = ((col+bw/2)*g, (row+bh/2)*g)
+            candidate = ((col + bw / 2) * g, (row + bh / 2) * g)
             if comp.reserves:
                 from .pair_landing import enabled as landing_enabled
+
                 if landing_enabled():
                     # PNR_PAIR_LANDING_RESERVE: the moved part's own landing
                     # reserves must stay clear of opposite-side bodies too.
                     saved, comp.pos = comp.pos, candidate
-                    blocked = any(side == other_side and rect.overlaps(other_rect)
-                                  for side, rect in placement_rects(comp) if isinstance(rect, ReserveRect)
-                                  for other in others for other_side, other_rect in placement_rects(other))
+                    blocked = any(
+                        side == other_side and rect.overlaps(other_rect)
+                        for side, rect in placement_rects(comp)
+                        if isinstance(rect, ReserveRect)
+                        for other in others
+                        for other_side, other_rect in placement_rects(other)
+                    )
                     comp.pos = saved
                     if blocked:
                         continue
             after = float(channel_model.penalty(comp, others, *candidate))
-            cost_before = math.dist(comp.pos, target)**2 + channel_weight*before
-            cost_after = math.dist(candidate, target)**2 + channel_weight*after
-            if after < before-1e-9 and cost_after < cost_before-1e-9:
+            cost_before = math.dist(comp.pos, target) ** 2 + channel_weight * before
+            cost_after = math.dist(candidate, target) ** 2 + channel_weight * after
+            if after < before - 1e-9 and cost_after < cost_before - 1e-9:
                 comp.pos = candidate
                 changed = True
         if not changed:

@@ -82,7 +82,10 @@ class QualityReport:
         """Fully routed AND all diff-pair + length-match checks pass."""
         return (
             self.fully_routed
-            and (not self.electrical_required or bool(self.electrical and self.electrical.get("qualified")))
+            and (
+                not self.electrical_required
+                or bool(self.electrical and self.electrical.get("qualified"))
+            )
             and all(d.ok for d in self.diff_pairs)
             and all(m.ok for m in self.length_matches)
         )
@@ -96,7 +99,15 @@ class QualityReport:
         for c, ln in sorted(self.net_class_length_mm.items()):
             lines.append(f"  net-class {c}: {ln:.0f} mm")
         for d in self.diff_pairs:
-            status = "OK" if d.ok else (("UNVERIFIED" if self.electrical_required else "UNROUTED") if not d.routed else "FAIL")
+            status = (
+                "OK"
+                if d.ok
+                else (
+                    ("UNVERIFIED" if self.electrical_required else "UNROUTED")
+                    if not d.routed
+                    else "FAIL"
+                )
+            )
             lines.append(
                 f"  diff-pair {d.name}: skew {d.skew_mm:.2f} mm " f"(tol {d.tol_mm:.2f}) [{status}]"
             )
@@ -107,7 +118,14 @@ class QualityReport:
                 f"(tol {m.tol_mm:.2f}) [{status}]"
             )
         if self.electrical_required:
-            lines.append("  electrical qualification: " + ("PASS" if self.electrical and self.electrical.get("qualified") else "PENDING / NOT QUALIFIED"))
+            lines.append(
+                "  electrical qualification: "
+                + (
+                    "PASS"
+                    if self.electrical and self.electrical.get("qualified")
+                    else "PENDING / NOT QUALIFIED"
+                )
+            )
         lines.append(f"quality: {'PASS' if self.ok else 'FAIL'}")
         return "\n".join(lines)
 
@@ -197,7 +215,9 @@ def unrouted_count(board) -> int:
         conn = board.GetConnectivity()
         return int(conn.GetUnconnectedCount(True))
     except Exception as exc:
-        raise RuntimeError("Cannot verify board connectivity; refusing to report it routed") from exc
+        raise RuntimeError(
+            "Cannot verify board connectivity; refusing to report it routed"
+        ) from exc
 
 
 def load(pcb_path: str) -> Tuple[Dict[str, float], Dict[str, int], int]:
@@ -233,6 +253,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         from pathlib import Path
         import pcbnew
         from pnr.electrical_audit import audit_board
+
         board = pcbnew.LoadBoard(args.pcb)
         board.BuildConnectivity()
         report.electrical = audit_board(board, rules, Path(args.pcb).read_text())

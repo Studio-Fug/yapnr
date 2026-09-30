@@ -96,25 +96,41 @@ def main(argv: Optional[List[str]] = None) -> int:
         action="store_true",
         help="exit 0 even if the loop did not drive overflow to 0 (for previews)",
     )
-    ap.add_argument('--initial-pool', action='store_true',
-                    help='Explore diverse legal global starts and detail-route a bounded shortlist')
-    ap.add_argument('--initial-starts', type=int, default=None)
-    ap.add_argument('--initial-finalists', type=int, default=None)
-    ap.add_argument('--initial-proxy-budget', type=int, default=None)
+    ap.add_argument(
+        "--initial-pool",
+        action="store_true",
+        help="Explore diverse legal global starts and detail-route a bounded shortlist",
+    )
+    ap.add_argument("--initial-starts", type=int, default=None)
+    ap.add_argument("--initial-finalists", type=int, default=None)
+    ap.add_argument("--initial-proxy-budget", type=int, default=None)
     args = ap.parse_args(argv)
     initial_pool = None
-    if args.initial_pool or any(v is not None for v in
-                               (args.initial_starts,args.initial_finalists,args.initial_proxy_budget)):
+    if args.initial_pool or any(
+        v is not None
+        for v in (args.initial_starts, args.initial_finalists, args.initial_proxy_budget)
+    ):
         if not args.detail_loop:
-            ap.error('--initial-pool requires --detail-loop for equal-budget finalist routing')
+            ap.error("--initial-pool requires --detail-loop for equal-budget finalist routing")
         from pnr.place.initial_pool import InitialPoolConfig
+
         inherited = InitialPoolConfig.from_environment() or InitialPoolConfig()
         starts = args.initial_starts if args.initial_starts is not None else inherited.starts
-        finalists = args.initial_finalists if args.initial_finalists is not None else min(inherited.route_finalists,starts)
+        finalists = (
+            args.initial_finalists
+            if args.initial_finalists is not None
+            else min(inherited.route_finalists, starts)
+        )
         try:
-            initial_pool = InitialPoolConfig(starts=starts,route_finalists=finalists,
-                proxy_budget=args.initial_proxy_budget if args.initial_proxy_budget is not None else starts,
-                proxy_pitch_mm=inherited.proxy_pitch_mm,proxy_passes=inherited.proxy_passes)
+            initial_pool = InitialPoolConfig(
+                starts=starts,
+                route_finalists=finalists,
+                proxy_budget=(
+                    args.initial_proxy_budget if args.initial_proxy_budget is not None else starts
+                ),
+                proxy_pitch_mm=inherited.proxy_pitch_mm,
+                proxy_passes=inherited.proxy_passes,
+            )
         except ValueError as error:
             ap.error(str(error))
 
@@ -124,29 +140,49 @@ def main(argv: Optional[List[str]] = None) -> int:
         graph = BoardGraph.from_json(fh.read())
     with open(args.constraints, encoding="utf-8") as fh:
         constraints = compile_constraints(
-            yaml.safe_load(fh), graph.refs,
+            yaml.safe_load(fh),
+            graph.refs,
             {c.address: c.ref for c in graph.components if c.address},
-            {f"{c.address}:{p.name}": p.net for c in graph.components
-             if c.address for p in c.pads if p.name},
+            {
+                f"{c.address}:{p.name}": p.net
+                for c in graph.components
+                if c.address
+                for p in c.pads
+                if p.name
+            },
         )
 
     from pnr.fab_profile import apply_fab_model, apply_rules
+
     net_names = [n.name for n in graph.nets]
     rules = compile_routing_rules(constraints, net_names)
     if args.electrical_fab:
-        from pnr.electrical import annotations,resolve_currents,compile_policy,resolve_pair_chains
-        with open(args.electrical_fab) as f: fab=apply_fab_model(json.load(f))
-        rules=compile_policy(rules,resolve_currents(annotations(args.annotation_source),graph.components),fab)
-        rules=resolve_pair_chains(rules,args.annotation_source,graph.components)
+        from pnr.electrical import (
+            annotations,
+            resolve_currents,
+            compile_policy,
+            resolve_pair_chains,
+        )
+
+        with open(args.electrical_fab) as f:
+            fab = apply_fab_model(json.load(f))
+        rules = compile_policy(
+            rules, resolve_currents(annotations(args.annotation_source), graph.components), fab
+        )
+        rules = resolve_pair_chains(rules, args.annotation_source, graph.components)
     if args.plane_access_fab:
         from pnr.plane_intent import read_annotations, resolve
-        rules["plane_access_intents"] = resolve(read_annotations(args.annotation_source), graph.components)
+
+        rules["plane_access_intents"] = resolve(
+            read_annotations(args.annotation_source), graph.components
+        )
         rules["plane_access_fab"] = apply_fab_model(json.loads(open(args.plane_access_fab).read()))
     # Fab capability profile (PNR_FAB_PROFILE; identity for legacy): every
     # downstream consumer of the dumped rules.json sees one rule set.
     rules = apply_rules(rules)
     si_dir = None
     from pnr.si import enabled as si_enabled
+
     if si_enabled():
         # PNR_SI=1 compile-time check: resolve @pnr-si bindings, simulate the ideal
         # (zero-length) board; an unwaived failure or an error fails the compile.
@@ -154,6 +190,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         import pathlib
         from pnr.si.annotations import AnnotationError
         from pnr.si.report import SIDesignError, compile_rules as si_compile
+
         si_dir = pathlib.Path(args.dump_rules).resolve().parent if args.dump_rules else None
         try:
             rules = si_compile(rules, args.annotation_source, graph.components, out_dir=si_dir)
@@ -183,6 +220,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     if si_dir is not None:
         # Report-only pre-layout estimate on the final placement (never gates).
         from pnr.si.report import placement_estimate
+
         placement_estimate(rules, placed.components, out_dir=si_dir)
 
     if args.dump_json:

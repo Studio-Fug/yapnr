@@ -4,9 +4,10 @@ The placer co-optimizes a 90° rotation per movable part (a temperature-annealed
 softmax over {0,90,180,270}). On the splanc_dev fixture this asserts that
 orientations settle to **legal discrete angles**, the result stays fully legal,
 orientation is actually exercised, the placement is deterministic, and orientation
-**costs no wirelength** against the position-only Phase 2 placement. On a small
-synthetic board whose best orientations are known, it asserts that the search
-**finds them and shortens the wires**.
+costs **at most 5 % wirelength** against the position-only Phase 2 placement (a
+coarse guard, see below). On a small synthetic board whose best orientations are
+known, it asserts that the search **finds them and shortens the wires**; that is
+the check of the search itself.
 
 The fixture's wirelength check compares means over three seeds with a margin
 (Studio-Fug/yapnr#6). A placement is deterministic on one platform, not across
@@ -14,9 +15,12 @@ platforms: the macOS and Linux torch wheels round ``exp``, ``log`` and ``addcmul
 differently in the last bit, and the non-convex global placement turns that into a
 different legal placement. One seed's final HPWL is a draw whose spread (about 5 %)
 exceeds orientation's mean gain on this fixture (1 to 2 %), so the former
-single-seed "never worse" check failed on 22 of 60 measured (platform, seed) pairs;
-the three-seed mean with a 5 % margin fails on about 2 % of seed triples.
-docs/decisions.md has the measurements.
+single-seed "never worse" check failed on 22 of 60 measured (platform, seed) pairs.
+The three-seed mean with a 5 % margin fails on about 2 % of seed triples, so it
+survives a torch or platform change; it does not prove that orientation never costs
+wirelength, and a regression of up to 5 % passes it (a 90°/270° mix-up costs 5.6 %
+and fails it only narrowly). Tighter margins fail more often on a new platform
+(2.5 %: 10 % of seed triples). docs/decisions.md has the measurements.
 """
 
 import json
@@ -86,7 +90,8 @@ class OrientationAcceptanceTest(unittest.TestCase):
 
     def test_hpwl_not_worse_than_position_only(self):
         # Design §9.3: orientation must not cost wirelength against Phase 2. Compared
-        # on the mean over SEEDS with HPWL_MARGIN (module docstring, Studio-Fug/yapnr#6).
+        # on the mean over SEEDS with HPWL_MARGIN, a coarse guard; the synthetic board
+        # checks the search (module docstring, Studio-Fug/yapnr#6).
         oriented = statistics.mean(report.hpwl_placed for _, report in self.oriented.values())
         position_only = statistics.mean(
             report.hpwl_placed for report in self.position_only.values()

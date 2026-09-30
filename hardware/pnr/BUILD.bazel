@@ -302,13 +302,15 @@ py_test(
     ],
 )
 
-# Phase 3 acceptance: orientation search yields legal discrete angles, costs no HPWL on the
-# fixture (three-seed mean, Studio-Fug/yapnr#6) and finds known best angles on a synthetic board.
+# Phase 3 acceptance: orientation search yields legal discrete angles, costs at most 5 % HPWL
+# on the fixture (three-seed mean, a coarse guard; Studio-Fug/yapnr#6) and finds known best
+# angles on a synthetic board.
 py_test(
     name = "orientation_test",
-    # Seven fixture placements plus two tiny ones: ~40 s on a dev Mac and ~50 s on two
-    # linux-aarch64 cores; slower on the shared 4-vCPU CI runners. yapnr adaptation: "medium".
-    size = "medium",
+    # Seven fixture placements plus two tiny ones: 44 s on a dev Mac and 51 s on two
+    # linux-aarch64 cores. The shared 4-vCPU CI runner took 77 s for the former three, which
+    # scales to 185 to 240 s for these, too close to medium's 300 s; large allows 900 s.
+    size = "large",
     srcs = ["tests/test_orientation.py"],
     data = glob(["testdata/splanc_dev/*"]),
     imports = ["."],

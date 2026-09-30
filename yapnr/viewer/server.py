@@ -1442,3 +1442,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 2
     serve(viewer)
     return 0
+
+
+if __name__ == "__main__":
+    # `python yapnr/viewer/server.py` from a checkout (with the repository root and the engine on
+    # PYTHONPATH) runs the same entry point as `python -m yapnr.viewer`, in the package's module.
+    sys.path[:] = [p for p in sys.path if Path(p or ".").resolve() != PACKAGE.resolve()]
+    from yapnr.viewer.server import main as package_main
+
+    raise SystemExit(package_main())

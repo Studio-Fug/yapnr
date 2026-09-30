@@ -1,15 +1,18 @@
 """The served files: the assembled dist carries the pinned third-party files byte for byte, every
 static file the pages load, and static paths are contained lexically (Bazel runfiles are
-symlinks)."""
+symlinks). Both ways of starting the server from a checkout reach its entry point."""
 
 import hashlib
 import json
 import re
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 from yapnr.viewer import server
+from yapnr.viewer.testing import child_env, module_argv
 
 # sha256 of the files served unmodified from the pinned npm tarballs (MODULE.bazel):
 # elkjs 0.9.3 lib/elk.bundled.js and three.js 0.186.1.
@@ -89,6 +92,20 @@ class DistTest(unittest.TestCase):
                 "/missing.js",
             ):
                 self.assertIsNone(server.static_path(dist, bad), bad)
+
+
+class EntryPointTest(unittest.TestCase):
+    def test_module_and_script_print_usage(self):
+        # `python -m yapnr.viewer` and `python yapnr/viewer/server.py` (the old habit) both run main
+        for argv in (
+            module_argv("yapnr.viewer", "--help"),
+            [sys.executable, str(Path(server.__file__)), "--help"],
+        ):
+            done = subprocess.run(
+                argv, env=child_env(), capture_output=True, text=True, timeout=120, check=False
+            )
+            self.assertEqual(done.returncode, 0, done.stderr[-2000:])
+            self.assertIn("usage: yapnr-viewer", done.stdout, argv)
 
 
 if __name__ == "__main__":

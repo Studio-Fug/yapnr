@@ -162,6 +162,47 @@ class TraceAdapterTest(unittest.TestCase):
             [pool + "start-00", pool + "start-02"],
         )
 
+    def test_a_local_move_after_illegal_attempts_stays_on_the_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "trace"
+            rec = trace.Recorder(root)
+            poses = [["R1", 1000, 1000, 0.0, "top"]]
+            for r, legal in ((1, True), (2, False)):
+                rec.section("round-%02d" % r, "round")
+                for k in range(2):
+                    attempt = rec.enter("attempt-%d" % k, "attempt", seed=k)
+                    rec.poses("global", poses, iter=9, iters=10)
+                    ok = legal and k == 1
+                    if ok:
+                        rec.event("legal", order=poses, backtracks=0)
+                    rec.leave(attempt, status=None if ok else "illegal")
+                    if ok:
+                        break
+                rec.poses("round", poses, local_move=not legal)
+                route = rec.enter("route", "route")
+                rec.event(
+                    "route_end", nets={}, groups={}, unrouted=[], progress=dict(done=1, total=1)
+                )
+                rec.leave(route)
+            rec.leave(type="round")
+            rec.select(
+                "best-round", ["round-01", "round-02"], "round-02", "missing-connections", {}
+            )
+            rec.close()
+            (root / "header.json").write_text(
+                json.dumps(dict(components=[], nets=[], copper_layers=["F.Cu", "B.Cu"]))
+            )
+            dag = provenance.from_trace(provenance.Trace(root))
+        order, competitors, _entry = critical_path(dag, "final")
+        path = ids(order)
+        # Round 2's route derives from its local move, which derives from round 1's route.
+        self.assertLess(path.index("round-01/route"), path.index("round-02/placement"))
+        self.assertLess(path.index("round-02/placement"), path.index("round-02/route"))
+        self.assertEqual(
+            competitors["round-02/first-legal"], ["round-02/attempt-0", "round-02/attempt-1"]
+        )
+        self.assertEqual(dag.nodes["round-02/first-legal"].chosen, "round-02/placement")
+
     def test_detect(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

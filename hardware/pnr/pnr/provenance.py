@@ -177,6 +177,7 @@ class Trace:
     def __init__(self, root=None, header=None, run=None, lanes=None, blobs=None):
         self.root = Path(root) if root is not None else None
         self.coarse = False
+        self.dag = None  # set by adapters that build their own DAG (halving_trace)
         self._blobs = dict(blobs or {})
         if root is not None:
             header = json.loads((self.root / "header.json").read_text())
@@ -344,13 +345,21 @@ def from_trace(trace):
             for attempt in attempts:
                 dag.derive(previous or "source", attempt)
             legal = [a for a in attempts if dag.nodes[a].status == "ok"]
-            if len(attempts) > 1 and legal:
+            chosen = legal[-1] if legal else None
+            if chosen is None and trace.kind(scope.id, "poses"):
+                # Every attempt was illegal: the round keeps local placement feedback moves.
+                chosen = scope.id + "/placement"
+                poses = trace.kind(scope.id, "poses")[-1]
+                dag.add(chosen, "experiment", stage="place", order=poses["seq"], scope=scope.id)
+                dag.derive(previous or "source", chosen)
+            if chosen is not None and len(attempts) + (0 if legal else 1) > 1:
                 placement = scope.id + "/first-legal"
-                dag.add(placement, "selection", order=trace.scopes[legal[-1]].end or 0)
+                end = trace.scopes[chosen].end if chosen in trace.scopes else None
+                dag.add(placement, "selection", order=end or dag.nodes[chosen].order)
                 dag.nodes[placement].criterion = "first-legal"
-                dag.select(placement, attempts, legal[-1])
-            elif legal:
-                placement = legal[-1]
+                dag.select(placement, attempts + ([] if legal else [chosen]), chosen)
+            else:
+                placement = chosen
         elif pools:
             chosen = [
                 e for e in trace.selects if e["id"].startswith(pools[0] + "/") and e is not None
@@ -606,6 +615,22 @@ def coarse_ladder_trace(case_dir):
 STAGE_ORDER = ("place", "screen", "native", "deep")
 
 
+def stage_rank(stage):
+    """Order of a halving stage: place, screen, rung1, rung2, ..., native, deep (None: not a
+    rung)."""
+    if stage in ("place", "gen-place"):
+        return (0, 0)
+    if stage == "screen":
+        return (1, 0)
+    if isinstance(stage, str) and stage.startswith("rung") and stage[4:].isdigit():
+        return (2, int(stage[4:]))
+    if stage == "native":
+        return (3, 0)
+    if stage == "deep":
+        return (4, 0)
+    return None
+
+
 def _objective_key(record):
     objective = record.get("objective")
     if isinstance(objective, list) and objective:
@@ -629,20 +654,26 @@ def read_dataset(path):
 
 
 def from_halving(run_dir):
-    """The DAG of a successive-halving run: a rung per stage, promotions as selections,
-    generation parents as derive edges; the final artifact is the best deep (else native)
-    candidate."""
+    """The DAG of a successive-halving run: a rung per stage (place, screen, rung1, rung2, ...,
+    native, deep), promotions as selections, generation parents as derive edges; the final
+    artifact is the best candidate of the last rung that has one."""
     run = Path(run_dir)
     records = read_dataset(run / "dataset.jsonl")
     dag = Dag()
     dag.add("source", "artifact", label="source board", stage="source", order=-1)
     by_stage = {}
     order = 0
+    canonical = {r.get("stage"): r.get("stage") for r in records}
+    canonical["gen-place"] = "place"
+    stages = sorted(
+        {canonical[r.get("stage")] for r in records if stage_rank(r.get("stage")) is not None},
+        key=stage_rank,
+    )
     for record in records:
         stage = record.get("stage")
         if stage == "gen-place":
             stage = "place"
-        if stage not in STAGE_ORDER or "id" not in record:
+        if stage not in stages or "id" not in record:
             continue
         order += 1
         nid = "halving:%s/%s" % (record["id"], stage)
@@ -668,7 +699,7 @@ def from_halving(run_dir):
     for record, nid in by_stage.get("place", []):
         parent = record.get("parent")
         parent_node = None
-        for stage in reversed(STAGE_ORDER):
+        for stage in reversed(stages):
             candidate = "halving:%s/%s" % (parent, stage)
             if parent and candidate in dag.nodes:
                 parent_node = candidate
@@ -676,12 +707,12 @@ def from_halving(run_dir):
         dag.derive(parent_node or "source", nid)
     # Promotion: a rung derives from the candidate's highest earlier rung (generation
     # children may skip the screen) through a selection among that rung's candidates.
-    for k, upper in enumerate(STAGE_ORDER[1:], start=1):
+    for k, upper in enumerate(stages[1:], start=1):
         for record, nid in by_stage.get(upper, []):
             lower = next(
                 (
                     stage
-                    for stage in reversed(STAGE_ORDER[:k])
+                    for stage in reversed(stages[:k])
                     if "halving:%s/%s" % (record["id"], stage) in dag.nodes
                 ),
                 None,
@@ -704,7 +735,9 @@ def from_halving(run_dir):
             )
             dag.select(sid, pool, below)
             dag.derive(sid, nid)
-    final_pool = by_stage.get("deep") or by_stage.get("native") or by_stage.get("screen") or []
+    final_pool = next(
+        (by_stage[s] for s in reversed(stages) if s != "place" and by_stage.get(s)), []
+    )
     ok = [(r, n) for r, n in final_pool if dag.nodes[n].status == "ok"]
     dag.add("final", "artifact", label="final board", stage="final", order=10**9)
     if ok:
@@ -723,6 +756,193 @@ def from_halving(run_dir):
         dag.derive(sid, "final")
         dag.nodes["final"].metrics = dict(objective=best_record.get("objective"))
     return dag
+
+
+def _halving_poses(poses):
+    """Dataset poses (``{ref: [x, y, rot, side]}`` in mm) as trace poses."""
+    from pnr.trace import angle, um
+
+    if not isinstance(poses, dict):
+        return []
+    return sorted([ref, um(p[0]), um(p[1]), angle(p[2]), p[3]] for ref, p in poses.items())
+
+
+def _phase_dirs(folder):
+    phases = Path(folder) / "phases"
+    if not phases.is_dir():
+        return []
+    return [d for d in sorted(phases.iterdir()) if (d / "diagnostic.kicad_pcb").is_file()]
+
+
+def halving_trace(run_dir):
+    """A :class:`Trace` rebuilt from what a successive-halving run saved (coarse), with its
+    provenance DAG as ``trace.dag``.
+
+    The winner's placement is shown as one move from the source board; each promotion as a
+    montage of the candidates' placements with their rung objective; the rung that produced
+    the final board is replayed from its native phases (``phases/NN-name/diagnostic.kicad_pcb``
+    with the phase's KiCad DRC), then that rung's candidates appear as a montage of their
+    final boards; the end card has the last phase's verdict. Blocks assembled from a
+    synthesis library are shown in place, not as their own montages. Only reads the run."""
+    from pnr.graph import BoardGraph
+    from pnr.trace import board_header, canonical, drc_rules, drc_summary
+    from pnr.trace_board import read, refine_header
+
+    run = Path(run_dir)
+    dag = from_halving(run)
+    order, _competitors, _entry = critical_path(dag, "final")
+    best = [n for n in order if n.kind == "selection" and n.id.startswith("halving:best-")]
+    if not best or not best[-1].chosen:
+        raise ValueError("the halving run has no evaluated candidate to animate yet")
+    winner_node = dag.nodes[best[-1].chosen]
+    winner, final_stage = winner_node.meta["candidate"], winner_node.stage
+    folder = run / "cand" / winner / final_stage
+    phases = _phase_dirs(folder)
+    if not phases:
+        raise ValueError("the winner's %s rung saved no native phases" % final_stage)
+    placed = folder / "placed.json"
+    placed = placed if placed.is_file() else run / "cand" / winner / "placed.json"
+    graph = BoardGraph.from_json(placed.read_text())
+    rules_path = folder / "rules.json"
+    rules = json.loads(rules_path.read_text()) if rules_path.is_file() else {}
+    header = board_header(graph, None, rules)
+    source_path = folder / "source.kicad_pcb"
+    if source_path.is_file():
+        source = read(source_path)
+        refine_header(header, source)
+        at = {r[0]: r for r in source["poses"]}
+        for comp in header["components"]:
+            if comp["ref"] in at:
+                comp["pos"] = [at[comp["ref"]][1], at[comp["ref"]][2]]
+                comp["rot"], comp["side"] = at[comp["ref"]][3], at[comp["ref"]][4]
+    total = header["connections_total"]
+    blobs, events, native = {}, [], []
+
+    def blob(obj):
+        import hashlib
+
+        digest = hashlib.sha256(canonical(obj)).hexdigest()
+        blobs[digest] = obj
+        return digest
+
+    def emit(stream, kind, scope, **fields):
+        fields.update(kind=kind, scope=scope, seq=len(stream))
+        stream.append(fields)
+
+    records = {}
+    for record in read_dataset(run / "dataset.jsonl"):
+        stage = "place" if record.get("stage") == "gen-place" else record.get("stage")
+        records.setdefault((record.get("id"), stage), record)
+    poses_of = {
+        cid: _halving_poses(r.get("poses")) for (cid, st), r in records.items() if st == "place"
+    }
+    for node in sorted(dag.nodes.values(), key=lambda n: (n.order, n.id)):
+        if node.kind != "experiment" or not node.id.startswith("halving:"):
+            continue
+        cid, stage = node.meta["candidate"], node.stage
+        scope = node.id[len("halving:") :]
+        node.scope = scope
+        board_scope = stage == final_stage
+        emit(
+            events,
+            "scope_begin",
+            scope,
+            type="board" if board_scope else "rung",
+            parent="",
+            meta=dict(candidate=cid, stage=stage),
+        )
+        poses = poses_of.get(cid) or []
+        if poses:
+            rows = dict(stage="legal", phase="placement")
+            if len(poses) <= 64:
+                rows["poses"] = poses
+            else:
+                rows["poses_blob"] = blob(poses)
+            emit(events, "poses", scope, **rows)
+        last = _phase_dirs(run / "cand" / cid / stage)[-1:] if board_scope else []
+        for phase in last:
+            parsed = read(phase / "diagnostic.kicad_pcb")
+            emit(
+                events,
+                "board",
+                scope,
+                stage=phase.name,
+                copper=blob(parsed["copper"]),
+                poses=parsed["poses"],
+                phase="native-phase",
+            )
+        emit(
+            events,
+            "scope_end",
+            scope,
+            type="board" if board_scope else "rung",
+            status=node.status,
+            metrics={},
+        )
+    winner_node.meta["replay"] = "native"
+    last_parsed, last_drc = None, None
+    for phase in phases:
+        parsed = read(phase / "diagnostic.kicad_pcb")
+        drc_path = phase / "diagnostic.drc.json"
+        drc = json.loads(drc_path.read_text()) if drc_path.is_file() else None
+        fields = dict(
+            stage=phase.name,
+            phase="native-phase",
+            copper=blob(parsed["copper"]),
+            poses=parsed["poses"],
+        )
+        if drc is not None:
+            summary = drc_summary(drc, parsed["frame"])
+            fields["drc"] = summary
+            fields["progress"] = dict(
+                done=max(0, total - summary["unconnected"]), total=total, source="kicad"
+            )
+        emit(native, "board", "", **fields)
+        last_parsed, last_drc = parsed, drc
+    import math as _math
+
+    tracks = last_parsed["copper"]["tracks"]
+    violations = {}
+    for item in (last_drc or {}).get("violations") or []:
+        key = str(item.get("type", "unknown"))
+        violations[key] = violations.get(key, 0) + 1
+    opens = len((last_drc or {}).get("unconnected_items") or []) if last_drc else None
+    emit(
+        native,
+        "result",
+        "",
+        phase="result",
+        passed=bool(last_drc is not None and not opens and not violations),
+        opens=opens,
+        violations=violations,
+        rules=drc_rules(last_drc) if last_drc else {},
+        vias=len(last_parsed["copper"]["vias"]),
+        copper_length_mm=round(sum(_math.dist(t[1:3], t[3:5]) for t in tracks) / 1000.0, 3),
+    )
+    status_path = run / "status.json"
+    status = json.loads(status_path.read_text()) if status_path.is_file() else {}
+    config = {
+        k: v
+        for k, v in (status.get("args") or {}).items()
+        if k in ("seed", "n0", "k1", "k2", "k3", "generations", "stop_after")
+    }
+    subject = dict(
+        kind="halving",
+        case=run.name,
+        seed=config.get("seed"),
+        description="",
+        parts=len(header["components"]),
+        layers=len(header["copper_layers"]),
+    )
+    trace = Trace(
+        header=header,
+        run=dict(subject=subject, config=config),
+        lanes=dict(engine=events, native=native),
+        blobs=blobs,
+    )
+    trace.coarse = True
+    trace.dag = dag
+    return trace
 
 
 def from_synthesis(library_dir):

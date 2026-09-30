@@ -358,8 +358,10 @@ def build(
     pacing="showcase",
     labels=None,
     title=None,
+    replay_pool=False,
 ):
-    """``(renderer, frames)`` of a comparison of two loaded traces."""
+    """``(renderer, frames)`` of a comparison of two loaded traces (``replay_pool``: each
+    half's pool shortlist replays every start's global placement, :class:`Timeline`)."""
     panel = int(width) // 2
     halves = []
     names = list(labels or ())
@@ -367,7 +369,14 @@ def build(
     names = [names[i] if i < len(names) and names[i] else defaults[i] for i in range(2)]
     for side, (trace, other) in enumerate(((left, right), (right, left))):
         board = storyboard.build(trace, title=names[side])
-        timeline = Timeline(trace, board, frame_ms=frame_ms, max_seconds=max_seconds, pacing=pacing)
+        timeline = Timeline(
+            trace,
+            board,
+            frame_ms=frame_ms,
+            max_seconds=max_seconds,
+            pacing=pacing,
+            replay_pool=replay_pool,
+        )
         reference = []
         if not highlight.constraints_of(trace.header):
             reference = highlight.constraints_of(other.header)
@@ -406,6 +415,7 @@ def render_compare(
     labels=None,
     pacing="showcase",
     allow_failed=False,
+    replay_pool=False,
 ):
     """Render one comparison file; returns its manifest entry (without file-system paths)."""
     from .cli import encoded_frames, trace_digest
@@ -434,6 +444,7 @@ def render_compare(
             pacing=pacing,
             labels=labels,
             title=title,
+            replay_pool=replay_pool,
         )
 
     data, settings, _frames, renderer = encode.encode(
@@ -459,7 +470,7 @@ def render_compare(
         seconds=seconds,
         trace_sha256={c: trace_digest(t) for c, t in zip(cases, (left, right))},
         results={c: _result_fields(r) for c, r in zip(cases, results)},
-        settings=dict(settings, pacing=pacing, max_seconds=max_seconds),
+        settings=dict(settings, pacing=pacing, max_seconds=max_seconds, replay_pool=replay_pool),
         pillow=PIL.__version__,
         captions=sorted(
             s for s in renderer.strings | renderer.left.strings | renderer.right.strings if s

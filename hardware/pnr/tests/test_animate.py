@@ -857,6 +857,143 @@ class LineGroupTest(unittest.TestCase):
         self.assertEqual(highlight.edge_order(poses, edges), [("south", ["SW1", "J1"])])
 
 
+# --- truthful motion: half-turns, poses off the board, a replayed pool -------------------
+def motion_trace(root):
+    """Two starts of a line group on the 16 x 10 mm line board: start-00 flips the line by
+    180 degrees and holds R1 off the board until legalization; start-01 moves the line."""
+    root = Path(root)
+    trace.write_run(root, dict(subject=dict(case="00-motion", seed=0, description="Motion.")))
+    rec = trace.Recorder(root)
+    rec.begin_board(line_graph(), None, {"fab": {"track_width_mm": 0.25}})
+    members = {"LG00": list(LINE)}
+    rec.section("round-01", "round")
+    rec.enter("initial-pool", "pool")
+    runs = {
+        "start-00": [
+            ((6000, 5000, 0), 30000),
+            ((6500, 5000, 180), 28000),
+            ((9000, 5000, 180), 26000),
+        ],
+        "start-01": [((5000, 4000, 90), 2000), ((6000, 5000, 90), 2500), ((8000, 5000, 90), 3000)],
+    }
+    for start, steps in runs.items():
+        rec.enter(start, "start", kind="global")
+        for step, ((x, y, rot), r1) in enumerate(steps):
+            rows, groups = line_rows(x, y, rot)
+            rec.poses(
+                "global",
+                [["R1", r1, 5000, 0.0, "top"]] + rows,
+                iter=5 * step,
+                iters=10,
+                phase="global-placement",
+                groups=groups,
+                group_members=members,
+            )
+        (x, y, rot), _r1 = steps[-1]
+        rows, groups = line_rows(x, y, rot)
+        rec.event(
+            "legal",
+            order=[["R1", 2500, 5000, 0.0, "top"]] + rows,
+            backtracks=0,
+            groups=groups,
+            group_members=members,
+        )
+        rec.leave()
+    rec.select("shortlist", list(runs), ["start-00"], "capacity-proxy", {"start-00": 1.0})
+    rec.enter("start-00-route", "route", start="start-00")
+    a = rec.blob(copper(5000))
+    rec.event(
+        "route_end",
+        nets={"B": a},
+        groups={"B": [[0, 1, 2, 3]]},
+        unrouted=[],
+        progress=dict(done=3, total=3, source="router"),
+    )
+    rec.leave()
+    rec.select("chosen", ["start-00-route"], "start-00-route", "route-objective", {})
+    rec.leave(type="pool")
+    rec.leave(rec.enter("route", "route", reused=True))
+    rec.leave(type="round")
+    rec.select("best-round", ["round-01"], "round-01", "missing-connections", {"round-01": 0})
+    rec.close()
+    return root
+
+
+class MotionTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.trace = Trace(motion_trace(Path(cls.tmp.name) / "motion" / "trace"))
+        cls.board = storyboard.build(cls.trace)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def frames(self, **options):
+        return Timeline(self.trace, self.board, max_seconds=60, **options).frames
+
+    def test_a_half_turn_flips_and_never_sweeps(self):
+        from pnr.animate.timeline import lerp_angle, lerp_body
+
+        self.assertAlmostEqual(lerp_angle(0.0, 180.0, 0.25), 315.0)  # the ladder's sweep
+        self.assertEqual(lerp_angle(0.0, 180.0, 0.25, flip=True), 0.0)
+        self.assertEqual(lerp_angle(90.0, 270.0, 0.5, flip=True), 270.0)
+        self.assertAlmostEqual(lerp_angle(0.0, 270.0, 0.5, flip=True), 315.0)  # a quarter turn
+        self.assertEqual(lerp_body((0, 0, 0.0, "top"), (10, 0, 180.0, "top"), 0.4)[2], 0.0)
+        angles = set()
+        for view, _ms in self.frames(pacing="showcase"):
+            if view.phase == "global-placement" and view.bodies:
+                angles.add(view.bodies["LG00"][2])
+                for ref in LINE:
+                    self.assertIn(view.poses[ref][2], (90.0, 270.0))
+        self.assertEqual(angles, {0.0, 180.0})
+
+    def test_the_camera_follows_parts_off_the_board(self):
+        from pnr.animate.timeline import outline_camera
+
+        outline = outline_camera(self.trace.header)
+        frames = self.frames(pacing="showcase")
+        placing = [v for v, _ms in frames if v.phase == "global-placement"]
+        wide = [v for v in placing if v.camera != outline]
+        self.assertTrue(wide)
+        self.assertTrue(all(v.camera[2] > 30000 for v in placing[len(placing) // 2 :]))
+        legal = [v for v, _ms in frames if v.phase == "legalization"]
+        self.assertTrue(legal and all(v.camera == placing[-1].camera for v in legal))
+        routed = [v for v, _ms in frames if v.caption == "start-00-route"]
+        self.assertTrue(routed and all(v.camera == outline for v in routed))
+        # The ladder's pacing keeps the outline camera (its animations are unchanged).
+        ladder = [v for v, _ms in self.frames() if v.phase == "global-placement" and v.step]
+        self.assertTrue(ladder and all(v.camera == outline for v in ladder))
+
+    def test_the_pool_replays_every_start(self):
+        text = "global placement of 2 starts, replayed"
+        frames = self.frames(pacing="showcase", replay_pool=True)
+        replay = [v for v, _ms in frames if v.montage is not None and v.caption == text]
+        self.assertGreater(len(replay), 3)
+        snaps = {
+            start: [e["poses"] for e in self.trace.kind("round-01/initial-pool/" + start, "poses")]
+            for start in ("start-00", "start-01")
+        }
+        for view in (replay[0], replay[-1]):
+            k = 0 if view is replay[0] else -1
+            for tile in view.montage["tiles"]:
+                start = tile["node"].rsplit("/", 1)[-1]
+                recorded = {r[0]: (r[1], r[2]) for r in snaps[start][k]}
+                for ref, pose in tile["view"].poses.items():
+                    self.assertLess(math.dist(pose[:2], recorded[ref]), 1.0, (start, ref))
+        self.assertEqual(replay[-1].step, (10, 10, "iteration"))
+        # The off-board start's tile gets its own wide camera; the other keeps the outline.
+        cameras = {
+            t["node"].rsplit("/", 1)[-1]: t["view"].camera for t in replay[0].montage["tiles"]
+        }
+        self.assertGreater(cameras["start-00"][2], 30000)
+        self.assertLess(cameras["start-01"][2], 17000)
+        held = [v for v, _ms in frames if v.caption == "the 2 starts, legalized"]
+        self.assertTrue(held)
+        self.assertFalse(any(v.caption == text for v, _ms in self.frames(pacing="showcase")))
+
+
 # --- comparisons -----------------------------------------------------------------------------
 class CompareTest(unittest.TestCase):
     @classmethod

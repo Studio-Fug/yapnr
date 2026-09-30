@@ -276,8 +276,14 @@ class HierTimeline(Timeline):
                     dict(type="route", scope=spec["route"], label=""),
                 ]
             )
+            # One common scale across the grid: the tiles keep their outline cameras.
             timeline = Timeline(
-                proxy, board, frame_ms=self.frame_ms, max_seconds=1e9, pacing=self.pacing
+                proxy,
+                board,
+                frame_ms=self.frame_ms,
+                max_seconds=1e9,
+                pacing=self.pacing,
+                follow_offboard=False,
             )
             runs.append((spec, timeline.frames))
         steps = self.frames_for(GRID_S)
@@ -436,7 +442,9 @@ class HierTimeline(Timeline):
             }
             poses = self._posed(bodies)
             poses.update(
-                lerp_poses({r: source[r] for r in loose}, {r: target[r] for r in loose}, t)
+                lerp_poses(
+                    {r: source[r] for r in loose}, {r: target[r] for r in loose}, t, self.flip
+                )
             )
             self.view = self.view.copy(
                 poses=poses,

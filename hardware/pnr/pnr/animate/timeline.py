@@ -10,9 +10,16 @@ routing more time (docs/design/constraint-and-hier-animations.md, section 6.5).
 Rigid bodies (a line group or a block macro, recorded as ``groups`` rows with
 ``group_members``) move as one: between two snapshots the body's centre is interpolated
 linearly and its angle along the shorter arc, and its members are posed from that pose, never
-one by one (which would shrink a line mid-turn). The legalizer's order places a body in one
+one by one (which would shrink a line mid-turn). A half-turn has no shorter arc, and the
+placer's rotation is a snapped four-way choice, so a body recorded at two opposite angles
+flips at the middle of the interval instead of sweeping through angles it never had; the
+showcase pacing does the same for single parts. The legalizer's order places a body in one
 step. ``marks`` records where each scene begins (frame index and scene type) without changing
 the frames, so a comparison can synchronize two runs by phase.
+
+The showcase pacing also widens the camera over a global placement whose recorded poses leave
+the board (the board then zooms back in after legalization), and with ``replay_pool`` a pool's
+shortlist montage first replays every start's recorded global placement in its tile.
 """
 
 from __future__ import annotations
@@ -40,8 +47,18 @@ PACING = {
     None: dict(
         global_s=GLOBAL_S, legal_part_s=LEGAL_PART_S, legal_max_s=LEGAL_MAX_S, route_s=ROUTE_S
     ),
-    "showcase": dict(global_s=(4.0, 6.0), legal_part_s=0.12, legal_max_s=2.4, route_s=(3.0, 6.0)),
+    "showcase": dict(
+        global_s=(4.0, 6.0),
+        legal_part_s=0.12,
+        legal_max_s=2.4,
+        route_s=(3.0, 6.0),
+        flip_half_turns=True,  # single parts too (rigid bodies always flip)
+        follow_offboard=True,  # widen the camera over poses that leave the board
+    ),
 }
+ZOOM_S = 0.5  # back to the board after a placement shown with a widened camera
+REPLAY_S = 4.0  # a pool's starts replayed in their montage tiles (replay_pool)
+REPLAY_LEGAL_S = 0.6
 NATIVE_S = {"writeback": 0.6, "planes": 1.2, "refill": 0.4}
 NATIVE_EMPTY_S = 0.3
 END_S = 2.8
@@ -59,19 +76,23 @@ def lerp(a, b, t):
     return a + (b - a) * t
 
 
-def lerp_angle(a, b, t):
+def lerp_angle(a, b, t, flip=False):
+    """``a`` to ``b`` along the shorter arc; with ``flip`` a half-turn (which has no shorter
+    arc) switches from ``a`` to ``b`` at the middle instead of sweeping."""
     d = (b - a + 180.0) % 360.0 - 180.0
+    if flip and abs(abs(d) - 180.0) < 1e-6:
+        return (a if t < 0.5 else b) % 360.0
     return (a + d * t) % 360.0
 
 
-def lerp_poses(a, b, t):
+def lerp_poses(a, b, t, flip=False):
     out = {}
     for ref, pb in b.items():
         pa = a.get(ref, pb)
         out[ref] = (
             lerp(pa[0], pb[0], t),
             lerp(pa[1], pb[1], t),
-            lerp_angle(pa[2], pb[2], t),
+            lerp_angle(pa[2], pb[2], t, flip),
             pb[3] if t >= 0.5 else pa[3],
         )
     for ref, pa in a.items():
@@ -132,9 +153,10 @@ def pose_members(body, offsets):
 
 
 def lerp_body(a, b, t):
-    """A rigid body's pose between two recorded poses: centre linear, angle on the shorter arc."""
+    """A rigid body's pose between two recorded poses: centre linear, angle on the shorter
+    arc; a half-turn flips at the middle (the placer records only the snapped angles)."""
     side = b[3] if t >= 0.5 else a[3]
-    return (lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp_angle(a[2], b[2], t), side)
+    return (lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp_angle(a[2], b[2], t, True), side)
 
 
 class View:
@@ -234,10 +256,63 @@ def bounds_camera(header, poses):
     return (x0 - m, y0 - m, x1 + m, y1 + m)
 
 
+def offboard(header, poses):
+    """True when a part's courtyard reaches past the outline camera (it would be cut off or
+    not drawn at all)."""
+    x0, y0, x1, y1 = outline_camera(header)
+    size = {c["ref"]: c["courtyard"] for c in header["components"]}
+    for ref, (x, y, _rot, _side) in poses.items():
+        half = max(size.get(ref, (0, 0))) / 2.0
+        if x - half < x0 or y - half < y0 or x + half > x1 or y + half > y1:
+            return True
+    return False
+
+
+def span_camera(header, poses_list):
+    """The outline camera, or when any of ``poses_list`` leaves it, a camera over all of them
+    (one camera for a whole replay, so the board never jumps)."""
+    if not any(offboard(header, poses) for poses in poses_list):
+        return outline_camera(header)
+    rects = [bounds_camera(header, poses) for poses in poses_list]
+    return (
+        min(r[0] for r in rects),
+        min(r[1] for r in rects),
+        max(r[2] for r in rects),
+        max(r[3] for r in rects),
+    )
+
+
+def sample(poses, bodies, offsets, u, flip=False):
+    """``(poses, bodies, index)`` at ``u`` in [0, len - 1] along recorded snapshots: parts
+    interpolated between the two snapshots around ``u``, rigid bodies as one (members posed from
+    the body), ``index`` the nearest snapshot."""
+    i = min(len(poses) - 2, int(math.floor(u))) if len(poses) > 1 else 0
+    frac = u - i if len(poses) > 1 else 1.0
+    j = min(i + 1, len(poses) - 1)
+    current = lerp_poses(poses[i], poses[j], frac, flip)
+    now = {}
+    for name in sorted(offsets):
+        a, b = bodies[i].get(name), bodies[j].get(name)
+        if a is None or b is None:
+            continue
+        now[name] = lerp_body(a, b, frac)
+        current.update(pose_members(now[name], offsets[name]))
+    return current, now, min(len(poses) - 1, int(round(u)))
+
+
 class Timeline:
     """Frames ``[(View, milliseconds)]`` of a storyboard over its trace."""
 
-    def __init__(self, trace, storyboard, frame_ms=60, max_seconds=22.0, pacing=None):
+    def __init__(
+        self,
+        trace,
+        storyboard,
+        frame_ms=60,
+        max_seconds=22.0,
+        pacing=None,
+        replay_pool=False,
+        follow_offboard=None,
+    ):
         self.trace = trace
         self.board = storyboard
         self.header = trace.header
@@ -252,6 +327,12 @@ class Timeline:
         preset = PACING[pacing]
         self.global_s, self.route_s = preset["global_s"], preset["route_s"]
         self.legal_part_s, self.legal_max_s = preset["legal_part_s"], preset["legal_max_s"]
+        self.flip = preset.get("flip_half_turns", False)
+        self.follow_offboard = (
+            preset.get("follow_offboard", False) if follow_offboard is None else follow_offboard
+        )
+        self.replay_pool = bool(replay_pool)
+        self._cameras = {}
         nominal = sum(self.duration(s) for s in storyboard["scenes"])
         self.scale = min(1.0, float(max_seconds) / nominal) if nominal > 0 else 1.0
         source = header_poses(self.header)
@@ -274,14 +355,17 @@ class Timeline:
         if kind == "source":
             return SOURCE_S
         if kind == "montage":
-            return MONTAGE_IN_S + MONTAGE_HOLD_S + MONTAGE_ZOOM_S
+            replay = REPLAY_S + REPLAY_LEGAL_S if self._replayed(scene) else 0.0
+            return MONTAGE_IN_S + MONTAGE_HOLD_S + MONTAGE_ZOOM_S + replay
         if kind == "attempts":
             return ATTEMPT_S * len(scene["scopes"])
         if kind == "congestion":
             return CONGESTION_S
         if kind == "placement":
             parts = len(self._legal_units(scene["scope"]))
-            return self._global_seconds(scene["scope"]) + FLY_IN_S + self._legal_seconds(parts)
+            zoom = ZOOM_S if self._widened(scene["scope"]) else 0.0
+            seconds = self._global_seconds(scene["scope"]) + FLY_IN_S + zoom
+            return seconds + self._legal_seconds(parts)
         if kind == "move":
             return MOVE_S
         if kind == "route":
@@ -295,6 +379,31 @@ class Timeline:
         if kind == "end":
             return END_S
         return 0.0
+
+    def _placement_camera(self, scope):
+        """The camera of a global placement: the outline, or (``follow_offboard``) a camera
+        over every recorded snapshot when any of them leaves the board."""
+        if scope not in self._cameras:
+            camera = outline_camera(self.header)
+            if self.follow_offboard:
+                snaps = self._snapshots(scope)
+                camera = span_camera(self.header, [event_poses(self.trace, e) for e in snaps])
+            self._cameras[scope] = camera
+        return self._cameras[scope]
+
+    def _widened(self, scope):
+        return self._placement_camera(scope) != outline_camera(self.header)
+
+    def _replayed(self, scene):
+        """True for a montage whose tiles are starts with global placement snapshots, when
+        ``replay_pool`` is set: it replays them before it holds."""
+        if not self.replay_pool or not scene.get("tiles"):
+            return False
+        for tile in scene["tiles"]:
+            scope = self.trace.scopes.get(tile["node"])
+            if scope is None or scope.type != "start" or len(self._snapshots(tile["node"])) < 2:
+                return False
+        return True
 
     def _global_seconds(self, scope):
         snaps = self._snapshots(scope)
@@ -405,20 +514,37 @@ class Timeline:
         )
         grouped = following is not None and following["type"] == "montage"
 
-        def frame(alpha, zoom, chosen_alpha=1.0):
+        def frame(alpha, zoom, shown=None, step=None, text=None):
             montage = dict(
-                tiles=tiles,
+                tiles=shown or tiles,
                 alpha=alpha,
                 zoom=zoom,
                 chosen=chosen["node"],
                 criterion=scene["criterion"],
                 more=scene["more"],
             )
-            return self.view.copy(montage=montage, phase="selection", caption=caption, step=None)
+            return self.view.copy(
+                montage=montage, phase="selection", caption=text or caption, step=step
+            )
 
         steps = self.frames_for(MONTAGE_IN_S)
-        for k in range(steps):
-            self.emit(frame(ease((k + 1) / steps), 0.0))
+        if self._replayed(scene):
+            # Every start's recorded global placement, replayed in its tile, then its
+            # legalized placement (one step): the state the tiles then hold.
+            replay = self._replay(tiles)
+            text = "global placement of %d starts, replayed" % len(tiles)
+            first, step = replay(0.0)
+            for k in range(steps):
+                self.emit(frame(ease((k + 1) / steps), 0.0, first, step, text))
+            steps = self.frames_for(REPLAY_S)
+            for k in range(steps):
+                shown, step = replay(ease((k + 1) / steps))
+                self.emit(frame(1.0, 0.0, shown, step, text))
+            text = "the %d starts, legalized" % len(tiles)
+            self.hold(REPLAY_LEGAL_S, frame(1.0, 0.0, text=text))
+        else:
+            for k in range(steps):
+                self.emit(frame(ease((k + 1) / steps), 0.0))
         self.hold(MONTAGE_HOLD_S, frame(1.0, 0.0))
         steps = self.frames_for(MONTAGE_ZOOM_S)
         if grouped:
@@ -431,6 +557,32 @@ class Timeline:
         target = self.view.copy(caption="", phase=self.view.phase)
         for k in range(2):
             self.emit(target.copy(blend=(chosen["view"], 1.0 - (k + 1) / 3.0)))
+
+    def _replay(self, tiles):
+        """A function of ``u`` in [0, 1]: ``(tiles, step)`` with every start tile at that point
+        of its recorded global placement (all tiles on one clock, each over its own snapshots;
+        a tile whose poses leave the board gets a camera over them)."""
+        runs = []
+        for tile in tiles:
+            snaps = self._snapshots(tile["node"])
+            poses = [event_poses(self.trace, e) for e in snaps]
+            camera = outline_camera(self.header)
+            if self.follow_offboard:
+                camera = span_camera(self.header, poses)
+            bodies = [event_bodies(e) for e in snaps]
+            runs.append((tile, snaps, poses, bodies, rigid_offsets(self.trace, snaps), camera))
+        clock = next((r for r in runs if r[0]["chosen"]), runs[0])[1]
+
+        def at(u):
+            shown = []
+            for tile, snaps, poses, bodies, offsets, camera in runs:
+                current, now, _i = sample(poses, bodies, offsets, u * (len(poses) - 1), self.flip)
+                view = View(camera=camera, phase="selection", poses=current, bodies=now or None)
+                shown.append(dict(tile, view=view))
+            event = clock[min(len(clock) - 1, int(round(u * (len(clock) - 1))))]
+            return shown, (event.get("iter") or 0, event.get("iters") or 0, "iteration")
+
+        return at
 
     def _attempts(self, scene, following):
         for sid in scene["scopes"]:
@@ -512,6 +664,7 @@ class Timeline:
         snaps = self._snapshots(scope)
         caption = scene.get("label") or ""
         outline = outline_camera(self.header)
+        camera = self._placement_camera(scope)
         self.view = self.view.copy(
             committed={},
             provisional={},
@@ -535,8 +688,8 @@ class Timeline:
             for k in range(steps):
                 t = ease((k + 1) / steps)
                 self.view = self.view.copy(
-                    poses=lerp_poses(start_poses, first, t),
-                    camera=lerp_rect(start_camera, outline, t),
+                    poses=lerp_poses(start_poses, first, t, self.flip),
+                    camera=lerp_rect(start_camera, camera, t),
                     step=None,
                 )
                 self.emit()
@@ -546,20 +699,10 @@ class Timeline:
             steps = self.frames_for(self._global_seconds(scope))
             for k in range(steps):
                 u = ease((k + 1) / steps) * (len(poses) - 1)
-                i = min(len(poses) - 2, int(math.floor(u))) if len(poses) > 1 else 0
-                frac = u - i if len(poses) > 1 else 1.0
-                j = min(i + 1, len(poses) - 1)
-                current = lerp_poses(poses[i], poses[j], frac)
-                iteration = snaps[min(len(snaps) - 1, int(round(u)))]
+                current, now, index = sample(poses, bodies, offsets, u, self.flip)
+                iteration = snaps[index]
                 changes = {}
                 if offsets:  # rigid bodies: members posed from the interpolated body pose
-                    now = {}
-                    for name in sorted(offsets):
-                        a, b = bodies[i].get(name), bodies[j].get(name)
-                        if a is None or b is None:
-                            continue
-                        now[name] = lerp_body(a, b, frac)
-                        current.update(pose_members(now[name], offsets[name]))
                     changes["bodies"] = now
                 self.view = self.view.copy(
                     poses=current,
@@ -569,7 +712,8 @@ class Timeline:
                 self.emit()
         order, legal = self._legal_order(scope)
         if legal:
-            self.view = self.view.copy(phase="legalization", camera=outline)
+            # A widened camera stays until every part is legal (they come in from off the board).
+            self.view = self.view.copy(phase="legalization", camera=camera)
             fixed = {c["ref"] for c in self.header["components"] if c["fixed"]}
             units = self._legal_units(scope)
             if any(name is not None for name, _refs in units):
@@ -591,6 +735,11 @@ class Timeline:
                     )
                     self.emit(ms=per)
             self.view = self.view.copy(poses=dict(legal), marked=(), step=None, phase="placement")
+        if self.view.camera != outline and camera != outline:
+            steps = self.frames_for(ZOOM_S)
+            start = self.view.camera
+            for k in range(steps):
+                self.emit(self.view.copy(camera=lerp_rect(start, outline, ease((k + 1) / steps))))
         self.view = self.view.copy(camera=outline)
 
     def _legal_bodies(self, scope, units, legal, fixed):
@@ -645,7 +794,8 @@ class Timeline:
         for k in range(steps):
             t = ease((k + 1) / steps)
             self.view = self.view.copy(
-                poses=lerp_poses(start, target, t), camera=lerp_rect(camera, outline, t)
+                poses=lerp_poses(start, target, t, self.flip),
+                camera=lerp_rect(camera, outline, t),
             )
             self.emit()
 

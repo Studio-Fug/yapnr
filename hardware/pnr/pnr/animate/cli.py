@@ -10,8 +10,9 @@ output path inside one.
 
 ``--compare LEFT RIGHT`` renders two traced runs side by side (:mod:`pnr.animate.compare`),
 each a trace, a ladder case directory or ``RUN_DIR:CASE`` (a case of a ladder run);
-``--labels`` names the halves. ``--pacing showcase`` gives placement, legalization and routing
-more time. A trace with a ``blocks`` event (a hierarchical case) gets the hierarchical
+``--labels`` names the halves; ``--replay-pool`` makes each half's pool shortlist replay every
+start's global placement in its tile. ``--pacing showcase`` gives placement, legalization and
+routing more time. A trace with a ``blocks`` event (a hierarchical case) gets the hierarchical
 storyboard (:mod:`pnr.animate.hier`).
 """
 
@@ -251,6 +252,11 @@ def main(argv=None):
     )
     ap.add_argument("--labels", nargs=2, metavar=("LEFT", "RIGHT"), help="comparison labels")
     ap.add_argument("--pacing", choices=("showcase",), help="more time per placement and route")
+    ap.add_argument(
+        "--replay-pool",
+        action="store_true",
+        help="with --compare: replay every start's global placement in the shortlist",
+    )
     a = ap.parse_args(argv)
     for text in (a.title, a.subtitle) + tuple(a.labels or ()):
         if text:
@@ -351,6 +357,7 @@ def _compare(ap, a):
         labels=a.labels,
         pacing=a.pacing or "showcase",
         allow_failed=a.allow_failed,
+        replay_pool=a.replay_pool,
     )
     print(
         "%s: %d frames, %.1f s, %d bytes"

@@ -35,6 +35,8 @@ from animate_ladder import case_result, ladder_provenance, platform_name  # noqa
 
 POOL = ["--initial-pool", "--initial-starts", "8", "--initial-finalists", "3"]
 EVERY = "5"
+# The hierarchical driver ignores the pool flags (its own block trials and top-level seeds).
+HIER_CASES = ("hier-twin-bank-32",)
 CASES = ("07-chaser-20", "line-chaser-20", "edge-io-12-free", "edge-io-12", "hier-twin-bank-32")
 SHOWCASE_TITLES = {
     "07-chaser-20": "Five-stage chaser",
@@ -43,7 +45,10 @@ SHOWCASE_TITLES = {
     "edge-io-12": "Hold-to-blink board, I/O on the south edge",
     "hier-twin-bank-32": "Twin-bank chaser, placed and routed hierarchically",
 }
-# (file, kind, cases, labels, title, format, README?)
+# (file, kind, cases, labels, title, format), rendered in this order (the README GIF, nearest
+# its budget, last); the edge comparison also replays every start of the pool in its
+# shortlist, where the order along the edge changes as the parts move.
+REPLAY_POOL = ("showcase-edge-io.webp",)
 SHOWCASES = (
     (
         "showcase-chaser-line.webp",
@@ -52,14 +57,6 @@ SHOWCASES = (
         ("LEDs placed freely", "LEDs held in a line group"),
         "Five-stage chaser: free LEDs vs. a line group",
         "webp",
-    ),
-    (
-        "showcase-chaser-line.gif",
-        "compare",
-        ("07-chaser-20", "line-chaser-20"),
-        ("LEDs placed freely", "LEDs held in a line group"),
-        "Five-stage chaser: free LEDs vs. a line group",
-        "gif",
     ),
     (
         "showcase-edge-io.webp",
@@ -76,6 +73,14 @@ SHOWCASES = (
         (),
         "Twin-bank chaser: hierarchical place and route",
         "webp",
+    ),
+    (
+        "showcase-chaser-line.gif",
+        "compare",
+        ("07-chaser-20", "line-chaser-20"),
+        ("LEDs placed freely", "LEDs held in a line group"),
+        "Five-stage chaser: free LEDs vs. a line group",
+        "gif",
     ),
 )
 README_SHOWCASE = "showcase-chaser-line.gif"
@@ -141,75 +146,89 @@ def load_cases(run):
 
 
 def render(run, out, allow_failed=False, only=None):
-    from pnr.animate.cli import render_animation
-    from pnr.animate.compare import render_compare
-
     cases = load_cases(run)
     missing = [c for c in CASES if c not in cases or cases[c][2] is None]
     if missing:
         raise SystemExit("the showcase run has no trace for: " + ", ".join(missing))
-    entries = []
+    entries, failed = [], []
     for file, kind, names, labels, title, fmt in SHOWCASES:
         if only and file not in only:
             continue
-        path = out / file
-        if kind == "compare":
-            left, right = (cases[n][2] for n in names)
-            entry = render_compare(
-                left,
-                right,
-                fmt,
-                path,
-                width=960,
-                max_seconds=COMPARE_SECONDS,
-                title=title,
-                labels=list(labels),
-                pacing=PACING,
-                allow_failed=allow_failed,
-            )
-        else:
-            trace = cases[names[0]][2]
-            entry = render_animation(
-                trace,
-                fmt,
-                path,
-                width=800,
-                max_seconds=HIER_SECONDS,
-                title=title,
-                subtitle=trace.run.get("subject", {}).get("description"),
-                allow_failed=allow_failed,
-                pacing=PACING,
-                budget_mb=HIER_BUDGET_MB,
-            )
-            entry = dict(
-                kind="hier",
-                cases=list(names),
-                labels=[],
-                title=entry["title"],
-                file=entry["file"],
-                format=entry["format"],
-                bytes=entry["bytes"],
-                sha256=entry["sha256"],
-                width=entry["width"],
-                height=entry["height"],
-                frames=entry["frames"],
-                seconds=entry["seconds"],
-                trace_sha256={names[0]: entry["trace_sha256"]},
-                results={names[0]: entry["result"]},
-                settings=dict(
-                    entry["settings"], max_seconds=HIER_SECONDS, budget_mb=HIER_BUDGET_MB
-                ),
-                pillow=entry["pillow"],
-                captions=entry["captions"],
-            )
-        entry["config"] = POOL + ["--trace-placement-every", EVERY]
+        try:
+            entry = render_one(cases, out / file, kind, names, labels, title, fmt, allow_failed)
+        except (ValueError, SystemExit) as error:
+            # One file over its budget (or a failed case) must not stop the others.
+            print("%s: not rendered: %s" % (file, error), flush=True)
+            failed.append(file)
+            continue
+        entry["config"] = config_of(names[0])
         print(
             "%s: %d frames, %.1f s, %d bytes"
             % (entry["file"], entry["frames"], entry["seconds"], entry["bytes"]),
             flush=True,
         )
         entries.append(entry)
-    return cases, entries
+    return cases, entries, failed
+
+
+def config_of(case):
+    """The run flags that shaped a case's result (the pool's apply to the flat cases only)."""
+    every = ["--trace-placement-every", EVERY]
+    return every if case in HIER_CASES else POOL + every
+
+
+def render_one(cases, path, kind, names, labels, title, fmt, allow_failed):
+    """Render one showcase file; returns its manifest entry."""
+    from pnr.animate.cli import render_animation
+    from pnr.animate.compare import render_compare
+
+    if kind == "compare":
+        left, right = (cases[n][2] for n in names)
+        return render_compare(
+            left,
+            right,
+            fmt,
+            path,
+            width=960,
+            max_seconds=COMPARE_SECONDS,
+            title=title,
+            labels=list(labels),
+            pacing=PACING,
+            allow_failed=allow_failed,
+            replay_pool=path.name in REPLAY_POOL,
+        )
+    trace = cases[names[0]][2]
+    entry = render_animation(
+        trace,
+        fmt,
+        path,
+        width=800,
+        max_seconds=HIER_SECONDS,
+        title=title,
+        subtitle=trace.run.get("subject", {}).get("description"),
+        allow_failed=allow_failed,
+        pacing=PACING,
+        budget_mb=HIER_BUDGET_MB,
+    )
+    return dict(
+        kind="hier",
+        cases=list(names),
+        labels=[],
+        title=entry["title"],
+        file=entry["file"],
+        format=entry["format"],
+        bytes=entry["bytes"],
+        sha256=entry["sha256"],
+        width=entry["width"],
+        height=entry["height"],
+        frames=entry["frames"],
+        seconds=entry["seconds"],
+        trace_sha256={names[0]: entry["trace_sha256"]},
+        results={names[0]: entry["result"]},
+        settings=dict(entry["settings"], max_seconds=HIER_SECONDS, budget_mb=HIER_BUDGET_MB),
+        pillow=entry["pillow"],
+        captions=entry["captions"],
+    )
 
 
 def write_documents(out, run, cases, entries, image=None):
@@ -245,13 +264,7 @@ def write_documents(out, run, cases, entries, image=None):
     rows = []
     for case in CASES:
         directory, result, _trace = cases[case]
-        row = case_result(
-            case,
-            directory,
-            result,
-            POOL + ["--trace-placement-every", EVERY],
-            ladder.get("fab_profile"),
-        )
+        row = case_result(case, directory, result, config_of(case), ladder.get("fab_profile"))
         row["title"] = SHOWCASE_TITLES[case]
         audit = result.get("constraint_audit")
         row["constraint_audit"] = (
@@ -285,9 +298,12 @@ def main(argv=None):
     out.mkdir(parents=True, exist_ok=True)
     if out.resolve() == run or run in out.resolve().parents:
         ap.error("refusing to write into the run directory")
-    cases, entries = render(run, out, a.allow_failed, a.only)
-    if not a.no_documents:
+    cases, entries, failed = render(run, out, a.allow_failed, a.only)
+    if not a.no_documents and entries:
         write_documents(out, run, cases, entries, a.image)
+    if failed:
+        print("not rendered: " + ", ".join(failed), flush=True)
+        return 1
     return 0
 
 

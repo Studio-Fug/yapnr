@@ -55,6 +55,7 @@ COMPARE_GIF_STEPS = (
     dict(colors=64, frame_ms=100, width=960),
     dict(colors=64, frame_ms=100, width=880),
     dict(colors=64, frame_ms=100, width=800),
+    dict(colors=64, frame_ms=100, width=720),
 )
 PALETTE_SAMPLES = 12
 # Kept exactly in every GIF palette: the colours that carry meaning in small areas, and the
@@ -69,8 +70,23 @@ SIGNAL_COLOURS = (
     theme.PAD,
     theme.VIA_RING,
 ) + tuple(theme.LAYERS[name] for name in sorted(theme.LAYERS))
-# Also kept in a comparison's palette: the constraint highlights.
-CONSTRAINT_COLOURS = (theme.CONSTRAINT, theme.REFERENCE, theme.BLOCK_OUTLINE)
+
+
+def _mix(a, b, t):
+    a, b = ImageColor.getrgb(a), ImageColor.getrgb(b)
+    return "#%02x%02x%02x" % tuple(int(round(x + (y - x) * t)) for x, y in zip(a, b))
+
+
+# Also kept in a comparison's palette: the constraint highlights, and the constraint colour
+# part-covered over the board (a thin dash, anti-aliased, would otherwise map to an unrelated
+# palette entry such as a dusty pink).
+CONSTRAINT_COLOURS = (
+    theme.CONSTRAINT,
+    theme.REFERENCE,
+    theme.BLOCK_OUTLINE,
+    _mix(theme.SUBSTRATE, theme.CONSTRAINT, 0.45),
+    _mix(theme.SUBSTRATE, theme.CONSTRAINT, 0.7),
+)
 
 
 class FrameSequence(Image.Image):

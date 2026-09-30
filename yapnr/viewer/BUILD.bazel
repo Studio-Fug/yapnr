@@ -1,0 +1,94 @@
+"""The live viewer (yapnr.viewer).
+
+- :viewer is the library; :server runs it (`bazel run //:viewer -- --root <live dir>`).
+- :dist is the directory the browser is served from: the static front end plus the pinned
+  third-party JavaScript (elkjs, three.js), fetched at build time (MODULE.bazel) and copied
+  unmodified. The server finds it next to itself in runfiles.
+- :testing holds the helpers of the viewer's tests (tests/unit/viewer, tests/e2e/viewer).
+
+The viewer is not part of //yapnr:cli or the wheel yet (the engine it imports is not; PR3b).
+"""
+
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+load("@yapnr_pypi//:requirements.bzl", "requirement")
+
+package(default_visibility = ["//visibility:public"])
+
+# Third-party files: label -> path in the served dist. Unmodified, never bundled with
+# yapnr's code; each license is served next to its files.
+THIRD_PARTY = {
+    "@elkjs//:lib/elk.bundled.js": "elk.bundled.js",
+    "@elkjs//:LICENSE.md": "third_party/elkjs/LICENSE.md",
+    "@threejs//:LICENSE": "vendor/three/LICENSE",
+    "@threejs//:build/three.core.js": "vendor/three/build/three.core.js",
+    "@threejs//:build/three.module.js": "vendor/three/build/three.module.js",
+    "@threejs//:examples/jsm/controls/OrbitControls.js": "vendor/three/examples/jsm/controls/OrbitControls.js",
+    "@threejs//:examples/jsm/loaders/GLTFLoader.js": "vendor/three/examples/jsm/loaders/GLTFLoader.js",
+    "@threejs//:examples/jsm/utils/BufferGeometryUtils.js": "vendor/three/examples/jsm/utils/BufferGeometryUtils.js",
+    "@threejs//:examples/jsm/utils/SkeletonUtils.js": "vendor/three/examples/jsm/utils/SkeletonUtils.js",
+}
+
+STATIC = glob(["static/**"])
+
+DIST = {src: "dist/" + src[len("static/"):] for src in STATIC}
+
+DIST.update({src: "dist/" + dest for src, dest in THIRD_PARTY.items()})
+
+genrule(
+    name = "dist",
+    srcs = DIST.keys(),
+    outs = DIST.values(),
+    cmd = " && ".join([
+        "mkdir -p $$(dirname $(RULEDIR)/{out}) && cp $(location {src}) $(RULEDIR)/{out}".format(
+            src = src,
+            out = out,
+        )
+        for src, out in DIST.items()
+    ]),
+)
+
+# Scripts run by KiCad's Python, by path (stdlib + pcbnew + the engine runtime only).
+filegroup(
+    name = "kicad_scripts",
+    srcs = glob(["kicad_scripts/*.py"]),
+)
+
+py_library(
+    name = "viewer",
+    srcs = glob(
+        ["**/*.py"],
+        exclude = [
+            "kicad_scripts/**",
+            "testing.py",
+        ],
+    ),
+    data = [
+        "COSTS.md",
+        "README.md",
+        ":dist",
+        ":kicad_scripts",
+    ],
+    deps = [
+        "//hardware/pnr",
+        "//hardware/pnr:pnr_hier",
+        "//hardware/pnr:pnr_place",
+        "//yapnr",
+        requirement("numpy"),
+        requirement("pyyaml"),
+        requirement("torch"),
+    ],
+)
+
+py_library(
+    name = "testing",
+    testonly = True,
+    srcs = ["testing.py"],
+    deps = [":viewer"],
+)
+
+py_binary(
+    name = "server",
+    srcs = ["__main__.py"],
+    main = "__main__.py",
+    deps = [":viewer"],
+)

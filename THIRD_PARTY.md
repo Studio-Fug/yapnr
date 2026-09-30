@@ -6,20 +6,29 @@ brought in. Update it in the same change that adds, removes or upgrades such mat
 
 ## Shipped or served with yapnr
 
-### three.js (planned, PR4d)
+### elkjs
 
-- **What:** [three.js](https://threejs.org/) r180 and its `GLTFLoader`, for the viewer's 3D view.
+- **What:** [elkjs](https://github.com/kieler/elkjs) 0.9.3 (`lib/elk.bundled.js`), the graph
+  layout engine behind the viewer's schematic view.
+- **License:** EPL-2.0; the file includes a web-worker shim under Apache-2.0 (Google LLC), with
+  its notice in the file.
+- **How:** **never vendored.** Bazel fetches the npm tarball at build time, pinned by URL and
+  sha256 (`MODULE.bazel`, repository `@elkjs`), and `//yapnr/viewer:dist` copies the file
+  unmodified to `elk.bundled.js` in the served directory. The browser loads it as a separate file;
+  it is never bundled or minified together with AGPL code. Its license text is served next to it,
+  from the same tarball, at `third_party/elkjs/LICENSE.md`.
+
+### three.js
+
+- **What:** [three.js](https://threejs.org/) 0.186.1 (r186): `build/three.module.js`,
+  `build/three.core.js` and the `OrbitControls`, `GLTFLoader`, `BufferGeometryUtils` and
+  `SkeletonUtils` add-ons, for the viewer's 3D view.
 - **License:** MIT.
-- **How:** vendored under `third_party/three/` together with its license text.
+- **How:** fetched like elkjs (repository `@threejs`, the npm tarball pinned by sha256) and copied
+  unmodified to `vendor/three/` in the served directory, with its `LICENSE`. Not vendored: the
+  build files are larger than the repository's 600 KB file limit.
 
-### elkjs (planned, PR4b)
-
-- **What:** [elkjs](https://github.com/kieler/elkjs) 0.9.3, the graph layout engine behind the
-  viewer's schematic view.
-- **License:** EPL-2.0; it includes a web-worker shim under Apache-2.0.
-- **How:** **never vendored.** It is fetched at build time and pinned by sha256, then served to the
-  browser as a separate, unmodified file, never bundled or minified together with AGPL code. Its
-  license text is kept under `third_party/elkjs/`.
+`tests/unit/viewer/test_dist.py` checks the sha256 of every served third-party file.
 
 ## In the container images
 

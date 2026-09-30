@@ -1124,7 +1124,10 @@ py_test(
     srcs = ["tests/test_trace.py"],
     imports = ["."],
     main = "tests/test_trace.py",
-    deps = [":pnr"],
+    deps = [
+        ":pnr",
+        ":pnr_hier",  # MacroPlan.trace_rows, the pose expander of rigid bodies
+    ],
 )
 
 # Tracing never changes a result: byte-identical placements and routes, unset/set/unset.

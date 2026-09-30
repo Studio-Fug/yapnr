@@ -172,19 +172,23 @@ class RecorderTest(unittest.TestCase):
 
     def test_pose_expansion_names_members_and_keeps_the_rigid_bodies(self):
         """Snapshots and the legal order of a macro graph name its members (pnr.hier.macro)."""
-        from types import SimpleNamespace
-
-        from pnr.constraints import compile_constraints
-        from pnr.hier.macro import collapse
+        from pnr.hier.macro import MacroPlan
 
         flat = _graph()
-        cc = compile_constraints({"board": {"outline": {"w": 10, "h": 8}}}, flat.refs)
-        sub = BoardGraph("line", [c for c in _graph().components])
-        sub.components[0].pos, sub.components[1].pos = (1.0, 0.6), (4.0, 0.6)
-        sub.components[1].rot = 0.0
-        mgraph, _, _, plan = collapse(
-            flat, cc, {}, [(SimpleNamespace(name="g"), sub, 5.0, 1.2)], prefix="LG", margin=0.0
+        # A hand-built plan (no torch): R1 and R2 in a 5 x 1.2 mm group frame, as LG00.
+        plan = MacroPlan()
+        plan.macros["LG00"] = dict(
+            block="line_group:g",
+            width=5.0,
+            height=1.2,
+            members={"R1": (1.0, 0.6, 0.0, "top"), "R2": (4.0, 0.6, 0.0, "top")},
         )
+        plan.member_of = {"R1": "LG00", "R2": "LG00"}
+        pads = [p for c in flat.components for p in c.pads]
+        macro = Component(
+            "LG00", "block:line_group:g", (0.0, 0.0), 0.0, "top", (5.0, 1.2), (5.0, 1.2), pads=pads
+        )
+        mgraph = BoardGraph("macro", [macro], [], BoardOutline(10.0, 8.0))
         rec = self.recorder()
         with mock.patch.dict(os.environ, {trace.ENV_DIR: str(self.root)}):
             with mock.patch.object(trace, "_RECORDER", rec):

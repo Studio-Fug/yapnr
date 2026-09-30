@@ -14,18 +14,24 @@ on:
 permissions:
   contents: read
 
-# Superseded PR runs are cancelled; runs on main always finish (they deploy).
+# Superseded PR runs are cancelled. Runs on main are never cancelled once they
+# have started, but GitHub keeps only one pending run per group: a queued main
+# run is replaced by a newer one, so the newest main commit is the one that
+# builds and deploys.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Presubmit lints: the same prek version and config as ./setup-precommit.sh,
-  # so a local commit and CI can never disagree. Also checks that every commit
-  # in the push or PR uses a GitHub noreply identity (see CONTRIBUTING.md).
+  # so a local commit and CI can never disagree. Also checks every new commit
+  # of the push or PR: a GitHub noreply identity (see CONTRIBUTING.md), and
+  # messages and patches free of private details (merge-commit PRs land every
+  # intermediate commit on main).
   lint:
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Setup repository
         uses: actions/checkout@v4
@@ -38,12 +44,8 @@ jobs:
         with:
           python-version: '3.11'
 
-      # Author and committer e-mail of every new commit, through the privacy
-      # scanner: only noreply addresses pass. The scanner redacts what it
-      # prints, so a leaked address does not end up in this public log.
-      - name: Check commit identities
-        # An explicit `shell: bash` adds -o pipefail: a failing `git log` fails the step.
-        shell: bash
+      # The new commits: the PR's commits, or the pushed range on main.
+      - name: Determine the new commits
         env:
           BASE_REF: ${{ github.base_ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -57,8 +59,26 @@ jobs:
           else
             range="origin/main..HEAD"
           fi
-          echo "Checking commit identities in ${range}"
-          git log --format="%ae %ce" "${range}" | python3 tools/privacy_scan.py --stdin
+          echo "New commits: ${range} ($(git rev-list --count "${range}") commits)"
+          echo "COMMIT_RANGE=${range}" >> "${GITHUB_ENV}"
+
+      # Author and committer address of every new commit, one per line. Only
+      # GitHub noreply addresses (and GitHub's own committer address) pass; the
+      # scanner redacts what it prints, so this public log does not leak them.
+      - name: Check commit identities
+        # An explicit `shell: bash` adds -o pipefail: a failing `git log` fails the step.
+        shell: bash
+        run: |
+          git log --format='%ae%n%ce' "${COMMIT_RANGE}" \
+            | python3 tools/privacy_scan.py --identities
+
+      # Commit messages and patches of the new commits. The tree checks see only
+      # the final tree; this also covers intermediate commits and messages.
+      - name: Scan commit messages and patches
+        shell: bash
+        run: |
+          git log -p --format='%ae %ce%n%B' "${COMMIT_RANGE}" \
+            | python3 tools/privacy_scan.py --stdin
 
       - name: Install prek
         run: python -m pip install 'prek==0.4.12'
@@ -80,15 +100,30 @@ jobs:
   test:
     if: github.event.action != 'closed'
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
     steps:
       - name: Setup repository
         uses: actions/checkout@v4
 
+      # setup-bazel's own caches are not used: their keys carry neither the CPU
+      # architecture nor the lock files, and its Bazelisk cache is not where
+      # .bazeliskrc sends Bazelisk. Both download caches are keyed below.
       - name: Setup Bazel
         uses: bazel-contrib/setup-bazel@0.15.0
+
+      # The environment overrides .bazeliskrc (./.bazelisk), so the Bazel
+      # binary lands in the cached directory.
+      - name: Point Bazelisk at the cached directory
+        run: echo "BAZELISK_HOME=${HOME}/.cache/bazelisk" >> "${GITHUB_ENV}"
+
+      - name: Cache Bazelisk and the Bazel repository cache
+        uses: actions/cache@v4
         with:
-          bazelisk-cache: true
-          repository-cache: true
+          path: |
+            ~/.cache/bazelisk
+            ~/.cache/bazel-repo
+          key: bazel-repo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'requirements.lock') }}
+          restore-keys: bazel-repo-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Cache Bazel disk cache
         uses: actions/cache@v4
@@ -116,15 +151,30 @@ jobs:
   docs:
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Setup repository
         uses: actions/checkout@v4
 
+      # setup-bazel's own caches are not used: their keys carry neither the CPU
+      # architecture nor the lock files, and its Bazelisk cache is not where
+      # .bazeliskrc sends Bazelisk. Both download caches are keyed below.
       - name: Setup Bazel
         uses: bazel-contrib/setup-bazel@0.15.0
+
+      # The environment overrides .bazeliskrc (./.bazelisk), so the Bazel
+      # binary lands in the cached directory.
+      - name: Point Bazelisk at the cached directory
+        run: echo "BAZELISK_HOME=${HOME}/.cache/bazelisk" >> "${GITHUB_ENV}"
+
+      - name: Cache Bazelisk and the Bazel repository cache
+        uses: actions/cache@v4
         with:
-          bazelisk-cache: true
-          repository-cache: true
+          path: |
+            ~/.cache/bazelisk
+            ~/.cache/bazel-repo
+          key: bazel-repo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'requirements.lock') }}
+          restore-keys: bazel-repo-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Cache Bazel disk cache
         uses: actions/cache@v4
@@ -152,13 +202,28 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # GitHub Pages. The gh-pages branch is the Pages source: main's docs at the
-  # root, and every same-repository PR gets a preview under pr-preview/pr-N/.
-  # All three jobs are gated on the repository variable YAPNR_PAGES_ENABLED,
-  # which the owner sets to 'true' after the first green build of main (and
-  # after pointing Settings > Pages at the gh-pages branch root). Until then
-  # they are skipped. They publish by pushing to gh-pages, so they need
-  # contents: write (plus pull-requests: write for the preview comment) and
-  # neither pages: nor id-token: permissions.
+  # root, and every same-repository PR gets a preview under pr-preview/pr-N/
+  # once its lint, test and docs jobs pass. All three jobs are gated on the
+  # repository variable YAPNR_PAGES_ENABLED and are skipped until it is 'true'.
+  #
+  # First deploy, once main is green (gh-pages does not exist before it):
+  #   1. gh variable set YAPNR_PAGES_ENABLED --body true
+  #   2. gh workflow run CI --ref main     (deploy-pages creates gh-pages)
+  #   3. Settings > Pages > Build and deployment: "Deploy from a branch",
+  #      branch gh-pages, folder / (root)
+  #
+  # The jobs publish by pushing to gh-pages, so they need contents: write (plus
+  # pull-requests: write for the preview comment) and neither pages: nor
+  # id-token: permissions.
+  #
+  # Concurrency: GitHub keeps one pending job per concurrency group and cancels
+  # an older pending job, even with cancel-in-progress: false. So each PR's
+  # preview and cleanup share a per-PR group (the later event wins), and the
+  # root deploy has its own group (a replaced pending deploy is superseded by a
+  # newer main). Jobs in different groups may push to gh-pages at the same
+  # time: all of them push without force and rebase on a rejected push
+  # (github-pages-deploy-action's attempt-limit). If a Pages job is ever
+  # cancelled anyway, re-run it.
   # ---------------------------------------------------------------------------
   deploy-preview:
     if: >-
@@ -166,14 +231,16 @@ jobs:
       && github.event_name == 'pull_request'
       && github.event.action != 'closed'
       && github.event.pull_request.head.repo.full_name == github.repository
-    needs: [docs]
+    # Never publish a PR that fails the lints or the privacy gates: gh-pages
+    # keeps removed previews in its history.
+    needs: [lint, test, docs]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
       pull-requests: write
-    # Serialize gh-pages writes across pipelines so pushes do not race.
     concurrency:
-      group: gh-pages-deploy
+      group: gh-pages-pr-${{ github.event.pull_request.number }}
       cancel-in-progress: false
     steps:
       # The action works on the git repository in $GITHUB_WORKSPACE, so check
@@ -201,11 +268,12 @@ jobs:
       && github.event.action == 'closed'
       && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
       pull-requests: write
     concurrency:
-      group: gh-pages-deploy
+      group: gh-pages-pr-${{ github.event.pull_request.number }}
       cancel-in-progress: false
     steps:
       - name: Setup repository
@@ -218,17 +286,19 @@ jobs:
           umbrella-dir: pr-preview
           action: remove
 
+  # Pushes to main deploy; so does a manual run on main (the first deploy).
   deploy-pages:
     if: >-
       vars.YAPNR_PAGES_ENABLED == 'true'
-      && github.event_name == 'push'
+      && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
       && github.ref == 'refs/heads/main'
     needs: [lint, test, docs]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     concurrency:
-      group: gh-pages-deploy
+      group: gh-pages-main
       cancel-in-progress: false
     steps:
       - name: Setup repository
@@ -241,6 +311,8 @@ jobs:
           path: _site
 
       # clean-exclude keeps open PRs' previews when the root is replaced.
+      # force: false rebases onto a preview pushed meanwhile instead of
+      # overwriting it (the action force-pushes by default).
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
@@ -249,3 +321,4 @@ jobs:
           clean: true
           clean-exclude: |
             pr-preview/
+          force: false

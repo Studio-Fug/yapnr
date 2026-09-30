@@ -19,10 +19,17 @@ file of the atopile environment is changed):
   is in the project's parts directory (the runner materializes them from the part cache) is
   attached from there instead of being downloaded from EasyEDA.
 - **Offline.** With ``YAPNR_ATO_OFFLINE=1``, EasyEDA is never contacted; a pick that needs it
-  fails with a message naming the missing part.
+  fails with a message naming the missing part. Nor is a git repository: atopile installs a
+  missing dependency at the start of every build, and a ``git`` one is cloned
+  (``faebryk.libs.git.clone_repo``); offline, that fails naming the dependency, and the runner
+  also limits git to local repositories (``GIT_ALLOW_PROTOCOL=file``). Registry dependencies
+  fail on their own: the packages URL is the loopback picker, which serves none.
 - **No GUI KiCad.** ``kicad-cli`` is the one in ``YAPNR_ATO_KICAD_CLI`` (the headless copy) or
   none; atopile's search of ``/Applications/KiCad`` and its ``pcbnew`` launcher are disabled.
   ``YAPNR_ATO_KICAD_FOOTPRINTS`` replaces the stock footprint directory it assumes.
+- **No running KiCad.** atopile looks for KiCad's IPC sockets (a fixed ``/tmp/kicad``, not
+  ``TMPDIR``) to reload an open board after every build and while ingesting parts; the hook
+  hands it no sockets, so a build never talks to a KiCad instance on the machine.
 
 Every patch checks that the attribute it replaces exists and fails loudly otherwise, so an
 atopile version this hook was not written for cannot build silently unpatched.
@@ -93,8 +100,10 @@ def url_problem(url: str, allowed: str) -> "str | None":
         or got_host != want_host
         or got_port != want_port
         or got.path not in ("", "/")
-        or got.username
-        or got.password
+        or got.query
+        or got.fragment
+        or "@" in got.netloc
+        or "\\" in (url or "")
     ):
         return f"{url!r} is not the runner's picker {allowed!r}"
     return None
@@ -257,17 +266,58 @@ def patch_kicadcli(module) -> None:
     module.find_kicad_cli = find_kicad_cli
 
 
+def _no_ipc_dir() -> Path:
+    """A directory with no KiCad sockets in it (private to the build; never created)."""
+    return Path(os.environ.get("TMPDIR") or "/nonexistent") / "yapnr-no-kicad-ipc"
+
+
 def patch_kicad_paths(module) -> None:
-    """faebryk.libs.kicad.paths: no pcbnew GUI; the discovered stock footprint directory."""
-    _require(module, "find_pcbnew", "GLOBAL_FP_DIR_PATH")
+    """faebryk.libs.kicad.paths: no pcbnew GUI; stock footprints; no KiCad IPC sockets."""
+    _require(module, "find_pcbnew", "GLOBAL_FP_DIR_PATH", "get_ipc_socket_path")
 
     def find_pcbnew():
         raise FileNotFoundError("pcbnew: yapnr builds never start the KiCad GUI")
 
     module.find_pcbnew = find_pcbnew
+    module.get_ipc_socket_path = _no_ipc_dir
     footprints = os.environ.get(KICAD_FOOTPRINTS)
     if footprints:
         module.GLOBAL_FP_DIR_PATH = Path(footprints)
+
+
+def patch_kicad_ipc(module) -> None:
+    """faebryk.libs.kicad.ipc: no socket of a running KiCad is ever opened."""
+    _require(module, "_kicad_socket_files", "reload_pcb")
+
+    def _kicad_socket_files():
+        return []
+
+    def reload_pcb(pcb_path, backup_path=None):
+        record("kicad-reload-skipped")
+
+    module._kicad_socket_files = _kicad_socket_files
+    module.reload_pcb = reload_pcb
+
+
+def patch_git(module) -> None:
+    """faebryk.libs.git: no clone while offline (atopile installs missing git dependencies)."""
+    _require(module, "clone_repo")
+    original = module.clone_repo
+
+    def clone_repo(repo_url, clone_target, depth=None, ref=None):
+        if _flag(OFFLINE):
+            record("git-refused", repo=str(repo_url))
+            from atopile.errors import UserException
+
+            raise UserException(
+                f"yapnr builds are offline: the git dependency {repo_url} is not installed."
+                " Install it into the project's .ato/modules before the build"
+                " (docs/frontends/atopile.md).",
+                title="Dependency fetch refused",
+            )
+        return original(repo_url, clone_target, depth=depth, ref=ref)
+
+    module.clone_repo = clone_repo
 
 
 PATCHES = {
@@ -276,6 +326,8 @@ PATCHES = {
     "faebryk.libs.part_lifecycle": patch_part_lifecycle,
     "kicadcliwrapper.lib": patch_kicadcli,
     "faebryk.libs.kicad.paths": patch_kicad_paths,
+    "faebryk.libs.kicad.ipc": patch_kicad_ipc,
+    "faebryk.libs.git": patch_git,
 }
 
 

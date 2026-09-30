@@ -14,6 +14,9 @@ keys, cloud or vendor credentials, proxies or ``PYTHONPATH``, is left out):
   locally (environment settings override ``ato.yaml``).
 - ``OPENSSL_armcap=0`` on aarch64: OpenSSL's ARMv8 capability probe raises SIGILL inside the
   ``cryptography`` wheel under Apple's virtualization (the Nix wrapper set it too).
+- ``GIT_TERMINAL_PROMPT=0``, and offline ``GIT_ALLOW_PROTOCOL=file``: git may read local
+  repositories only (atopile clones a missing git dependency during every build; the hook
+  refuses that too).
 - ``PYTHONPATH`` = the hook directory, and the hook's ``YAPNR_ATO_*`` settings
   (``hook/yapnr_atopile_hook.py``).
 """
@@ -76,6 +79,8 @@ def build_env(
             "YAPNR_ATO_LOCAL_PARTS": "1" if local_parts else "0",
         }
     )
+    if offline:
+        env["GIT_ALLOW_PROTOCOL"] = "file"
     if (machine or platform.machine()).lower() in ("arm64", "aarch64"):
         env["OPENSSL_armcap"] = "0"
     if kicad_cli is not None:

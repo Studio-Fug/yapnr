@@ -11,6 +11,8 @@ cache, and two small projects that keep no parts in their tree, only a parts loc
   runner materialized from the cache (no EasyEDA, no hosted service).
 
 Each project is built twice and must give the same input id (the UUID-normalized board).
+
+- **A git dependency:** refused while offline (the hook's ``git-refused``), never cloned.
 """
 
 from __future__ import annotations
@@ -82,6 +84,10 @@ class AtopileBuildTest(unittest.TestCase):
         self.assertFalse((self.projects[pick] / "elec/src/parts").exists())
         return results[0]
 
+    def events(self, result):
+        lines = (result.out / "hook.jsonl").read_text().splitlines()
+        return [json.loads(line) for line in lines if line]
+
     def bom(self, result):
         with open(result.out / result.outputs["bom_csv"], newline="") as handle:
             return list(csv.DictReader(handle))
@@ -96,6 +102,24 @@ class AtopileBuildTest(unittest.TestCase):
         self.assertEqual(summary["atopile"], "0.15.8")
         rows = self.bom(result)
         self.assertEqual(sum(int(r["Quantity"]) for r in rows), 2)
+        # atopile's reload of an open board in a running KiCad was skipped, not attempted.
+        self.assertIn("kicad-reload-skipped", {e["event"] for e in self.events(result)})
+
+    def test_git_dependency_is_refused_offline(self):
+        project = testing.write_project(self.root / "project-git")
+        (project / "ato.yaml").write_text(
+            (project / "ato.yaml").read_text()
+            + "\ndependencies:\n  - type: git\n    repo_url: https://example.invalid/dep.git\n"
+            "    identifier: yapnr-test/dep\n"
+        )
+        options = runner.BuildOptions(
+            project=project, out=self.root / "out-git", cache=self.cache.location, timeout=900
+        )
+        result = runner.build(options, log=lambda _text: None)
+        self.assertFalse(result.ok)
+        refused = [e for e in self.events(result) if e["event"] == "git-refused"]
+        self.assertEqual([e["repo"] for e in refused], ["https://example.invalid/dep.git"])
+        self.assertIn("offline", (result.out / "ato.log").read_text(errors="replace"))
 
     def test_one_lcsc_pick_from_the_cache(self):
         result = self.build_twice("lcsc")

@@ -127,6 +127,17 @@ class UrlGuardTest(unittest.TestCase):
             "http://user:pw@127.0.0.1:43123",
             "http://127.0.0.2:43123",
             "http://127.0.0.1.example.com:43123",
+            "http://[::ffff:127.0.0.1]:43123",
+            "http://127.1:43123",
+            "http://2130706433:43123",
+            "http://0x7f000001:43123",
+            "http://evil.example@127.0.0.1:43123",
+            "http://127.0.0.1:43123@evil.example",
+            "http://127.0.0.1:43123\\@evil.example",
+            "http://127.0.0.1:43123#@evil.example",
+            "http://127.0.0.1:43123?@evil.example",
+            "http://127.0.0.1:43123/;@evil.example",
+            "http://0.0.0.0:43123",
             "",
         ]
         for url in refused:
@@ -227,11 +238,39 @@ class PatchTest(unittest.TestCase):
         module = types.ModuleType("faebryk.libs.kicad.paths")
         module.find_pcbnew = lambda: "/Applications/KiCad/KiCad.app/Contents/MacOS/pcbnew"
         module.GLOBAL_FP_DIR_PATH = Path("/Applications/KiCad/footprints")
+        module.get_ipc_socket_path = lambda: Path("/tmp/kicad")
         with mock.patch.dict(os.environ, {hook.KICAD_FOOTPRINTS: "/opt/kicad/footprints"}):
             hook.patch_kicad_paths(module)
         with self.assertRaises(FileNotFoundError):
             module.find_pcbnew()
         self.assertEqual(module.GLOBAL_FP_DIR_PATH, Path("/opt/kicad/footprints"))
+        with mock.patch.dict(os.environ, {"TMPDIR": "/work/tmp"}):
+            self.assertEqual(module.get_ipc_socket_path(), Path("/work/tmp/yapnr-no-kicad-ipc"))
+
+    def test_running_kicad_instances_are_never_contacted(self):
+        module = types.ModuleType("faebryk.libs.kicad.ipc")
+        module._kicad_socket_files = lambda: [Path("/tmp/kicad/api.sock")]
+        module.reload_pcb = lambda pcb_path, backup_path=None: 1 / 0
+        hook.patch_kicad_ipc(module)
+        self.assertEqual(module._kicad_socket_files(), [])
+        self.assertIsNone(module.reload_pcb(Path("board.kicad_pcb"), backup_path=None))
+        with self.assertRaises(hook.HookError):
+            hook.patch_kicad_ipc(types.ModuleType("faebryk.libs.kicad.ipc"))
+
+    def test_offline_refuses_git_clones(self):
+        module = types.ModuleType("faebryk.libs.git")
+        clones = []
+        module.clone_repo = lambda url, target, depth=None, ref=None: clones.append(url) or target
+        hook.patch_git(module)
+        with mock.patch.dict(sys.modules, self.fake_atopile("")), mock.patch.dict(
+            os.environ, {hook.OFFLINE: "1"}
+        ):
+            with self.assertRaisesRegex(Exception, "offline"):
+                module.clone_repo("https://example.org/dep.git", Path("/x"), ref="v1")
+        self.assertEqual(clones, [])
+        with mock.patch.dict(os.environ, {hook.OFFLINE: "0"}):
+            self.assertEqual(module.clone_repo("file:///dep", Path("/x")), Path("/x"))
+        self.assertEqual(clones, ["file:///dep"])
 
     def lcsc_module(self):
         module = types.ModuleType("faebryk.libs.picker.lcsc")

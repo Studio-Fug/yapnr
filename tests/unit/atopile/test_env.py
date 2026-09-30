@@ -49,10 +49,14 @@ class BuildEnvTest(unittest.TestCase):
             "YAPNR_ATO_PICKER_URL": PICKER,
             "YAPNR_ATO_OFFLINE": "1",
             "YAPNR_ATO_LOCAL_PARTS": "1",
+            "GIT_TERMINAL_PROMPT": "0",
+            "GIT_ALLOW_PROTOCOL": "file",
         }
         for name, value in expected.items():
             self.assertEqual(child[name], value, name)
-        self.assertEqual(env.build_env(self.work, PICKER, offline=False)["YAPNR_ATO_OFFLINE"], "0")
+        online = env.build_env(self.work, PICKER, offline=False)
+        self.assertEqual(online["YAPNR_ATO_OFFLINE"], "0")
+        self.assertNotIn("GIT_ALLOW_PROTOCOL", online)
 
     def test_private_directories_live_in_the_work_directory(self):
         child = env.build_env(self.work, PICKER)

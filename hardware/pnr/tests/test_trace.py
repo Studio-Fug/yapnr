@@ -238,13 +238,20 @@ class DrcTest(unittest.TestCase):
             ],
             "violations": [
                 {"type": "clearance"},
-                {"type": "clearance"},
+                {
+                    "type": "clearance",
+                    "description": "Clearance violation (rule 'fab_via_to_smd_pad' clearance"
+                    " 0.1270 mm; actual 0.0000 mm)",
+                },
                 {"type": "track_dangling"},
             ],
         }
         summary = trace.drc_summary(report, (10.0, 50.0))
         self.assertEqual(summary["open_pairs"], [[1000, 2000, 3000, 3000]])
         self.assertEqual(summary["by_type"], {"clearance": 2, "track_dangling": 1})
+        self.assertEqual(
+            summary["by_rule"], {"clearance": 1, "fab_via_to_smd_pad": 1, "track_dangling": 1}
+        )
         self.assertEqual((summary["unconnected"], summary["violations"]), (1, 3))
 
 

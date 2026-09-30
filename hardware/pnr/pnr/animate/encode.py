@@ -3,7 +3,8 @@
 Frames are rendered lazily, one at a time, through :class:`FrameSequence` (a multi-frame
 Pillow image), so a long animation never holds all its RGB frames in memory. No metadata is
 written (no EXIF, XMP or comment). The GIF uses one fixed palette for all frames (median cut
-over evenly sampled frames, no dithering), so its bytes are deterministic.
+over evenly sampled frames, no dithering, plus the theme's signal colours, which a short scene
+such as the verdict would otherwise lose to the copper colours), so its bytes are deterministic.
 
 :func:`encode` steps down deterministically until an output meets its size budget: WebP
 quality 80, 70, 60, then a longer frame interval, then a narrower width; GIF 128, 96, 64
@@ -18,7 +19,9 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageColor
+
+from . import theme
 
 WEBP_STEPS = (
     dict(quality=80, frame_ms=60, width=800),
@@ -36,6 +39,8 @@ GIF_STEPS = (
     dict(colors=64, frame_ms=100, width=560),
 )
 PALETTE_SAMPLES = 12
+# Kept exactly in every GIF palette: the colours that carry meaning in small areas.
+SIGNAL_COLOURS = (theme.FAIL, theme.ACCENT, theme.NEW, theme.PROVISIONAL, theme.TEXT, theme.MUTED)
 
 
 class FrameSequence(Image.Image):
@@ -104,9 +109,15 @@ def gif_palette(renderer, frames, colors):
     for k, index in enumerate(picks):
         sheet.paste(renderer.frame(frames[index][0]), (0, first.height * k))
     small = sheet.resize((max(1, sheet.width // 2), max(1, sheet.height // 2)), Image.NEAREST)
-    return small.quantize(
-        colors=int(colors), method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE
-    )
+    fixed = [ImageColor.getrgb(c) for c in SIGNAL_COLOURS]
+    count = max(2, int(colors) - len(fixed))
+    cut = small.quantize(colors=count, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    raw = cut.getpalette() or []
+    entries = [tuple(raw[3 * i : 3 * i + 3]) for i in range(min(count, len(raw) // 3))]
+    entries += [rgb for rgb in fixed if rgb not in entries]
+    palette = Image.new("P", (1, 1))
+    palette.putpalette([v for rgb in entries for v in rgb])
+    return palette
 
 
 def gif_bytes(renderer, frames, colors=128):

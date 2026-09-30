@@ -9,9 +9,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageColor
 from pnr import trace
-from pnr.animate import encode, storyboard
+from pnr.animate import encode
+from pnr.animate import render as render_mod
+from pnr.animate import storyboard
 from pnr.animate.cli import main, render_animation
 from pnr.animate.render import Renderer, safe_text
 from pnr.animate.timeline import Timeline
@@ -35,7 +37,7 @@ def copper(net_y):
     )
 
 
-def make_trace(root):
+def make_trace(root, result=None):
     root = Path(root)
     trace.write_run(
         root,
@@ -136,7 +138,9 @@ def make_trace(root):
     )
     for stage in ("writeback", "planes", "refill"):
         native.board(stage, board, dict(unconnected_items=[], violations=[]), 2)
-    native.result(passed=True, opens=0, violations={}, vias=2, copper_length_mm=8.0)
+    native.result(
+        **(result or dict(passed=True, opens=0, violations={}, vias=2, copper_length_mm=8.0))
+    )
     native.close()
 
 
@@ -301,6 +305,32 @@ class AnimateTest(unittest.TestCase):
         image = Image.open(io.BytesIO(one))
         self.assertEqual((image.format, image.size[0]), ("WEBP", 320))
         self.assertGreater(image.n_frames, 10)
+
+    def test_end_card_names_the_failing_rules(self):
+        failed = dict(passed=False, opens=0, violations={"clearance": 3}, vias=2)
+        failed.update(copper_length_mm=8.0, rules={"fab_via_to_smd_pad": 3})
+        with tempfile.TemporaryDirectory() as tmp:
+            make_trace(Path(tmp) / "t", failed)
+            loaded = Trace(Path(tmp) / "t")
+            board = storyboard.build(loaded)
+            self.assertEqual(board["scenes"][-1]["result"]["rules"], {"fab_via_to_smd_pad": 3})
+            frames = Timeline(loaded, board, max_seconds=4).frames
+            renderer = Renderer(loaded.header, board["subject"], width=480)
+            renderer.frame(frames[-1][0])
+        self.assertIn(
+            "KiCad DRC: 0 unconnected · 3 violations (fab_via_to_smd_pad)", renderer.strings
+        )
+        self.assertEqual(render_mod._rule_names({"b": 1, "a": 4, "c": 1}), "a 4, b 1, 1 more")
+        self.assertEqual(render_mod._rule_names({"bad/name": 2}), "")
+
+    def test_gif_keeps_the_signal_colours(self):
+        board = storyboard.build(self.trace)
+        frames = Timeline(self.trace, board, frame_ms=80, max_seconds=3).frames
+        renderer = Renderer(self.trace.header, board["subject"], width=240)
+        palette = encode.gif_palette(renderer, frames, 32).getpalette()
+        entries = {tuple(palette[i : i + 3]) for i in range(0, len(palette), 3)}
+        for colour in encode.SIGNAL_COLOURS:
+            self.assertIn(ImageColor.getrgb(colour), entries)
 
     def test_gif_has_one_palette_and_no_comment(self):
         board = storyboard.build(self.trace)

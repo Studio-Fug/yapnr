@@ -155,7 +155,8 @@ def render_animation(
         trace_sha256=trace_digest(trace),
         coarse=bool(trace.coarse),
         result={
-            k: result.get(k) for k in ("passed", "opens", "violations", "vias", "copper_length_mm")
+            k: result.get(k)
+            for k in ("passed", "opens", "violations", "rules", "vias", "copper_length_mm")
         },
         settings=settings,
         pillow=PIL.__version__,

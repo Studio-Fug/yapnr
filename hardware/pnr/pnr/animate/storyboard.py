@@ -107,7 +107,7 @@ def build(trace, title=None, subtitle=None):
             rejected=rejected,
             result={
                 k: result.get(k)
-                for k in ("passed", "opens", "violations", "vias", "copper_length_mm")
+                for k in ("passed", "opens", "violations", "rules", "vias", "copper_length_mm")
             },
         )
     )

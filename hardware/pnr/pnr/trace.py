@@ -118,6 +118,8 @@ PHASES = (
 ESSENTIAL = frozenset(("scope_begin", "scope_end", "select", "board", "result", "truncated"))
 _LANE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _PATHLIKE = re.compile(r"(/[\w.~-]+){2,}|[A-Za-z]:\\")
+# KiCad names a custom (.kicad_dru) rule in a finding's description: "(rule 'name' ...".
+_DRC_RULE = re.compile(r"\(rule '([A-Za-z0-9_.-]{1,64})'")
 
 
 def um(value):
@@ -659,8 +661,18 @@ def board_event(stage, board_path, drc_report=None):
     recorder.board(stage, parsed, drc_report, total)
 
 
+def drc_rules(report):
+    """KiCad DRC findings by the custom rule they break, or by type when KiCad names none."""
+    counts = {}
+    for item in report.get("violations") or []:
+        match = _DRC_RULE.search(str(item.get("description", "")))
+        key = match.group(1) if match else str(item.get("type", "unknown"))
+        counts[key] = counts.get(key, 0) + 1
+    return dict(sorted(counts.items()))
+
+
 def drc_summary(report, frame):
-    """Counts and open pairs (engine frame) of a KiCad DRC JSON report."""
+    """Counts (by type and by rule) and open pairs (engine frame) of a KiCad DRC JSON report."""
     left, bottom = frame
     unconnected = report.get("unconnected_items") or []
     violations = report.get("violations") or []
@@ -681,6 +693,7 @@ def drc_summary(report, frame):
         unconnected=len(unconnected),
         violations=len(violations),
         by_type=by_type,
+        by_rule=drc_rules(report),
         open_pairs=pairs,
     )
 

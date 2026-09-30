@@ -119,6 +119,7 @@ class NativeTrace:
                 reasons=list(result.get("reasons") or []),
                 opens=result.get("opens"),
                 violations=result.get("violations"),
+                rules=trace.drc_rules(drc) if drc else {},
                 vias=result.get("vias"),
                 tracks=result.get("tracks"),
                 copper_length_mm=result.get("copper_length_mm"),

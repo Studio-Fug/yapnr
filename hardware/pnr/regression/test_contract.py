@@ -114,7 +114,7 @@ class NativeTraceContract(unittest.TestCase):
         self.assertEqual((board["stage"], board["drc"]["unconnected"]), ("refill", 1))
         self.assertEqual(board["drc"]["open_pairs"], [[1000, 13000, 2000, 12000]])
         self.assertEqual(board["progress"], dict(done=0, total=1, source="kicad"))
-        self.assertEqual((result["passed"], result["opens"]), (False, 1))
+        self.assertEqual((result["passed"], result["opens"], result["rules"]), (False, 1, {}))
         pad = header["components"][0]["pads"][0]
         self.assertEqual((pad["shape"], pad["corner"], header["components"][0]["value"]), ("roundrect", 244, "red"))
 

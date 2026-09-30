@@ -590,6 +590,9 @@ class Renderer:
         else:
             verdict = "KiCad DRC: %s unconnected · %s violations" % (opens, violations)
             color = theme.ACCENT if passed else theme.FAIL
+            rules = _rule_names(result.get("rules"))
+            if violations and rules:
+                verdict += " (%s)" % rules
         metrics = []
         if result.get("vias") is not None:
             metrics.append("%d vias" % result["vias"])
@@ -607,9 +610,25 @@ class Renderer:
             metrics.append("rivals set aside: " + ", ".join(parts))
         line = safe_text(" · ".join(metrics))
         verdict = safe_text(verdict)
+        size, verdict = _fit(draw, verdict, w - 28, (16, 15, 14, 13))
         self.strings.update((verdict, line))
-        draw.text((x + 14, top + 20), verdict, fill=rgb(color), font=font(16), anchor="lm")
+        draw.text((x + 14, top + 20), verdict, fill=rgb(color), font=font(size), anchor="lm")
         draw.text((x + 14, top + 44), line, fill=rgb(theme.MUTED), font=font(12), anchor="lm")
+
+
+def _rule_names(rules, most=2):
+    """The rules KiCad's findings break, most frequent first: "rule-a 10, rule-b 4, 1 more"."""
+    if not isinstance(rules, dict) or not rules:
+        return ""
+    ranked = sorted(rules.items(), key=lambda kv: (-int(kv[1]), str(kv[0])))
+    names = [str(k) for k, _n in ranked if re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", str(k))]
+    if not names:
+        return ""
+    if len(ranked) == 1:
+        return names[0]
+    text = ", ".join("%s %d" % (k, rules[k]) for k in names[:most])
+    rest = len(ranked) - min(most, len(names))
+    return text + (", %d more" % rest if rest > 0 else "")
 
 
 def _fit(draw, text, room, sizes):

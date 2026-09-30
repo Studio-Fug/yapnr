@@ -248,6 +248,35 @@ Choices made for the regression ladder in CI and the animations (branch
   and runs the checkout's engine sources. A runtime guard installs the checkout's runtime lock into
   an overlay venv when a pull request changes the pins, rather than building the image in the job.
   The lane is informational until the owner makes its `ladder` check required.
+- **The ladder routes and is judged under its fixtures' own rules.** The fixtures carry their own
+  fab block (0.2 mm clearance, 0.6/0.3 mm vias, documented in the ladder README), and RESULTS-118
+  passed under it before fabrication profiles existed. `run.py` now sets `PNR_FAB_PROFILE` for
+  every stage from `--fab-profile`, default `legacy`, which enforces exactly that block; the boards
+  are RESULTS-118's (all 16 baseline runs, seeds 0 and 1, identical vias and copper) and all eight
+  cases pass. The alternative, the engine's default `jlc-pofv` profile, overrides the fixtures'
+  numbers with JLC's (0.127 mm clearance, 0.45/0.30 mm vias) and would make the README's stated
+  rules false; it stays available as `--fab-profile jlc-pofv`, and `route_case.py` applies the
+  selected profile to the router's rules (the identity for legacy), so that configuration routes
+  under the rules KiCad judges it by. Before, the unset variable made writeback stamp `jlc-pofv`
+  while the router used the fixtures' rules, and cases 04 to 08 failed on vias touching their own
+  SMD pads. With the profile applied at the router, `jlc-pofv` passes every case as well (pool
+  seed 0 and baseline seeds 0 and 1); making it the ladder's default is the owner's call
+  (WORKLOG, "Next").
+- **The committed animations.** All eight ladder cases are animated in `docs/animations/` (not
+  `_static`, whose references the Pages step rewrites), from a traced pool run (seed 0) on the
+  development Mac; all eight pass the gate. A failed case is only rendered with `--allow-failed`,
+  and its end card then names the broken rules in red. The README shows `05-timer-led-10`, the
+  TLC555 blinker (the request's "555 flasher"), as a GIF (GitHub autoplays it); the page uses WebP.
+  `tests/unit/repo/test_animations.py` bounds the folder (WebP 2.5 MB, GIF 5 MB, 20 MB in all,
+  hashes in the manifest, no metadata) in place of the large-file hook, and prettier leaves the
+  generated JSON as written. A refresh adds about 12 MB to the history, so it is deliberate.
+- **A montage follows the winner's replay.** The timeline is one straight line: a selection's
+  candidates appear once the winner's own replay reached the state their tiles show, and the bar
+  counts committed connections only, so nothing on screen runs ahead of the process.
+- **Coarse animations of halving runs.** A successive-halving run records no trace;
+  `pnr.provenance.halving_trace` rebuilds one from its saved placements, rung objectives and the
+  winning rung's native phases, and the overlay's phases say what was saved, not more. Animations
+  of Splanc runs stay local (the board is not public).
 
 ## Pinned versions
 

@@ -638,7 +638,7 @@ class Service(Base):
         r = s.request(bs, [bp], retry=True)
         self.assertIn(r["status"], ("queued", "exporting"))
         self.assertEqual(self.ready(s, bs, bp)["status"], "ready")
-        self.assertFalse(any((self.d / "cache").glob("*.fail.json")))
+        wait(lambda: not any((self.d / "cache").glob("*.fail.json")))  # removed after 'ready'
 
     def test_timeout_kills_the_export_process_group(self):
         os.environ["FAKE_SLEEP"] = "60"
@@ -707,9 +707,10 @@ class Service(Base):
         k1 = self.ready(s, s1, p1)["key"]
         time.sleep(1.1)
         k2 = self.ready(s, s2, p2)["key"]
+        # 'ready' comes from the meta the export child writes; the worker evicts after the child
+        # exits, so wait for the eviction instead of checking once
+        wait(lambda: not any((self.d / "cache" / (k1 + x)).exists() for x in (".glb", ".json")))
         self.assertTrue((self.d / "cache" / (k2 + ".glb")).exists())
-        self.assertFalse((self.d / "cache" / (k1 + ".glb")).exists())
-        self.assertFalse((self.d / "cache" / (k1 + ".json")).exists())
 
     def test_stale_queue_entries_are_dropped(self):
         os.environ["FAKE_SLEEP"] = "1.5"
@@ -787,9 +788,8 @@ class Service(Base):
         key = s.key_of_text(BOARD)
         self.assertIsNone(s.meta(key))
         self.assertFalse((self.d / "cache" / (key + ".fail.json")).exists())
-        self.assertEqual(
-            list((self.d / "cache").glob("v3d-*")), []
-        )  # the job's scratch folder went with it
+        # the job leaves s.jobs before the worker's finally removes its scratch copies
+        wait(lambda: not list((self.d / "cache").glob("v3d-*")))
         os.environ["FAKE_SLEEP"] = "0"
         self.assertEqual(self.ready(s, bs, bp)["status"], "ready")  # asked again: exported normally
 
@@ -806,7 +806,7 @@ class Service(Base):
         self.assertEqual(b.glb(k1)[0][:4], b"glTF")
         time.sleep(1.1)
         self.assertEqual(self.ready(a, s2, p2)["status"], "ready")
-        self.assertFalse((self.d / "cache" / (k1 + ".glb")).exists())  # a evicted k1
+        wait(lambda: not (self.d / "cache" / (k1 + ".glb")).exists())  # a evicts k1 (after 'ready')
         r = b.request(s1, [p1])
         self.assertIn(
             r["status"], ("queued", "exporting"), r
@@ -887,8 +887,12 @@ class Service(Base):
         s.request(bs, [bp])  # another viewer's export sharing the cache
         wait(lambda: self.calls())
         wait(lambda: not s.jobs, timeout=10)
+        # the job leaves s.jobs before the worker's finally removes its scratch folder and log
+        wait(
+            lambda: [p.name for p in (self.d / "cache").glob("v3d-*")] == ["v3d-other-viewer"]
+            and not list((self.d / "cache").glob("*.log"))
+        )
         self.assertEqual([p.name for p in (self.d / "cache").glob("v3d-*")], ["v3d-other-viewer"])
-        self.assertEqual(list((self.d / "cache").glob("*.log")), [])
 
 
 class Http(Base):
@@ -1033,10 +1037,12 @@ class Http(Base):
                 return True
 
         wait(gone, 10)
-        self.assertEqual(
-            list((root / "viewer3d").glob("v3d-*")), []
-        )  # the fake kicad-cli's process group and its scratch folder
-        self.assertEqual(list((root / "viewer3d").glob("*.log")), [])
+        # the fake kicad-cli's process group and its scratch folder; the worker cleans up after
+        # the process is gone
+        wait(
+            lambda: not list((root / "viewer3d").glob("v3d-*"))
+            and not list((root / "viewer3d").glob("*.log"))
+        )
 
     def test_off_and_gui_cli(self):
         base, bs = self.serve("--viewer3d", "off")

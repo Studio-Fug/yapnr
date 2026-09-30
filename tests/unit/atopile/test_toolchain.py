@@ -64,6 +64,16 @@ class LockTest(unittest.TestCase):
         for name in ("hatchling", "hatch-vcs", "nanobind", "cmake", "ninja"):
             self.assertIn(name, reqs)
 
+    def test_sdist_build_lock(self):
+        path = toolchain.sdist_build_lock_path("linux-aarch64")
+        reqs = requirements(path)
+        self.assertEqual(set(reqs), {"setuptools"})
+        self.assertTrue(reqs["setuptools"][1])
+        # The same setuptools as the wheel builder's lock (one resolution date).
+        wheel_build = requirements(toolchain.LOCK_DIR / "build-requirements-linux-aarch64.lock")
+        self.assertEqual(reqs["setuptools"][0], wheel_build["setuptools"][0])
+        self.assertIsNone(toolchain.sdist_build_lock_path("darwin-arm64"))
+
     def test_lock_id(self):
         self.assertRegex(toolchain.lock_id("linux-x86_64"), r"^[0-9a-f]{12}$")
         with self.assertRaises(toolchain.ToolchainError):

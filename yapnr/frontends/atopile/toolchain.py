@@ -13,7 +13,10 @@ first 12 hex digits of the sha256 of the platform's lock and ``pins.json``:
 
 atopile 0.15.8 publishes no linux-aarch64 wheel. There the lock leaves atopile out and ``setup``
 installs a wheel built from the sha256-pinned sdist by ``tools/atopile/build_wheel.sh``
-(``--wheel``), with ``--no-deps``.
+(``--wheel``), with ``--no-deps``, and records the wheel's sha256 in the marker. zstd has no
+wheel there either: ``setup`` first installs the hashed ``sdist-build-requirements-<platform>.lock``
+(setuptools) and then installs the lock with ``--no-build-isolation``, so the sdist builds use
+only hash-pinned packages (uv would otherwise fetch their build dependencies unpinned).
 
 Discovery order for a build (``discover``), like KiCad's: ``$YAPNR_ATO_PYTHON``; ``[atopile]
 python`` in ``~/.config/yapnr/config.toml``; the container image's ``/opt/atopile``; the setup
@@ -74,10 +77,21 @@ def lock_path(platform: Optional[str] = None) -> Path:
     return LOCK_DIR / f"requirements-{platform}.lock"
 
 
+def sdist_build_lock_path(platform: Optional[str] = None) -> Optional[Path]:
+    """The hashed build dependencies of the sdists a platform's lock builds (None: no builds)."""
+    platform = platform or host_platform()
+    return (
+        LOCK_DIR / f"sdist-build-requirements-{platform}.lock" if platform in SELF_BUILT else None
+    )
+
+
 def lock_id(platform: Optional[str] = None) -> str:
     digest = hashlib.sha256()
     digest.update(lock_path(platform).read_bytes())
     digest.update(PINS_FILE.read_bytes())
+    build_lock = sdist_build_lock_path(platform)
+    if build_lock is not None:
+        digest.update(build_lock.read_bytes())
     return digest.hexdigest()[:12]
 
 
@@ -322,25 +336,24 @@ def setup(
             [str(uv_path), "venv", "--python", pin["python"], str(venv)], env, setup_log, "uv venv"
         )
         python = venv_python(venv)
+        install = [str(uv_path), "pip", "install", "--python", str(python), "--require-hashes"]
+        install += ["--no-deps"]
+        build_lock = sdist_build_lock_path(platform)
+        if build_lock is not None:
+            log(f"installing {build_lock.name} (hash-checked build dependencies)")
+            _run(
+                install + ["--requirements", str(build_lock)],
+                env,
+                setup_log,
+                "uv pip install (build dependencies)",
+            )
+            install.append("--no-build-isolation")
         log(f"installing {lock.name} (hash-checked)")
-        _run(
-            [
-                str(uv_path),
-                "pip",
-                "install",
-                "--python",
-                str(python),
-                "--require-hashes",
-                "--no-deps",
-                "--requirements",
-                str(lock),
-            ],
-            env,
-            setup_log,
-            "uv pip install",
-        )
+        _run(install + ["--requirements", str(lock)], env, setup_log, "uv pip install")
+        wheel_sha256 = None
         if platform in SELF_BUILT:
             _check_wheel(Path(wheel), pin)
+            wheel_sha256 = _file_sha256(Path(wheel))
             _run(
                 [str(uv_path), "pip", "install", "--python", str(python), "--no-deps", str(wheel)],
                 env,
@@ -361,6 +374,7 @@ def setup(
                     "pbs_release": release,
                     "uv": found_uv,
                     "self_built_wheel": wheel.name if wheel else None,
+                    "self_built_wheel_sha256": wheel_sha256,
                     "created": _dt.datetime.now(_dt.timezone.utc)
                     .replace(microsecond=0)
                     .isoformat(),
@@ -375,6 +389,14 @@ def setup(
         return env_dir
     finally:
         handle.close()
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def _check_wheel(wheel: Path, pin: Dict[str, Any]) -> None:
@@ -418,7 +440,9 @@ def static_status(environ: Optional[Mapping[str, str]] = None) -> Dict[str, Any]
     return report
 
 
-def status(environ: Optional[Mapping[str, str]] = None) -> Dict[str, Any]:
+def status(
+    environ: Optional[Mapping[str, str]] = None, root: Optional[Path] = None
+) -> Dict[str, Any]:
     """What ``yapnr atopile info`` reports (runs the interpreter to read the version)."""
     report: Dict[str, Any] = {"pinned": ATOPILE_VERSION, "platform": host_platform()}
     try:
@@ -428,7 +452,7 @@ def status(environ: Optional[Mapping[str, str]] = None) -> Dict[str, Any]:
         report["error"] = str(err)
         return report
     try:
-        report.update(discover(environ).describe())
+        report.update(discover(environ, root=root).describe())
         report["ok"] = True
     except ToolchainError as err:
         report["ok"] = False

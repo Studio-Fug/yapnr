@@ -3,14 +3,16 @@
 #
 #   yapnr/frontends/atopile/locks/requirements-<platform>.lock        for `yapnr atopile setup`
 #   yapnr/frontends/atopile/locks/build-requirements-linux-aarch64.lock for build_wheel.sh
+#   yapnr/frontends/atopile/locks/sdist-build-requirements-linux-aarch64.lock for setup's sdists
 #
 # from requirements.in and build-requirements.in, one lock per platform, all fully hashed and
 # resolved as of pins.json's exclude_newer date, so a re-run gives the same files. uv resolves
 # every platform from any host (--python-platform).
 #
 # linux-aarch64 has no atopile wheel on PyPI: its lock leaves atopile out (--no-emit-package) and
-# build_wheel.sh builds one from the sha256-pinned sdist. zstd and watchdog have no wheel there
-# either; uv installs them from their hashed sdists with the pinned build constraints.
+# build_wheel.sh builds one from the sha256-pinned sdist. zstd has no wheel there either: setup
+# installs the hashed sdist-build lock (setuptools) first and builds zstd's hashed sdist with
+# --no-build-isolation, so nothing unpinned is fetched for the build.
 #
 # Needs uv, at the version in pins.json (install it with pipx or into a private virtualenv, never
 # into the system Python). `--check` regenerates into a temporary directory and fails if any lock
@@ -61,6 +63,8 @@ compile requirements.in requirements-linux-x86_64.lock x86_64-manylinux_2_28
 compile requirements.in requirements-linux-aarch64.lock aarch64-manylinux_2_28 \
     --no-emit-package atopile
 compile build-requirements.in build-requirements-linux-aarch64.lock aarch64-manylinux_2_28
+compile sdist-build-requirements.in sdist-build-requirements-linux-aarch64.lock \
+    aarch64-manylinux_2_28
 
 if [ "${out}" != "${LOCKS}" ]; then
     status=0

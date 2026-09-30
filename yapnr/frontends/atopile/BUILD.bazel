@@ -51,6 +51,8 @@ py_library(
         "locks/requirements-darwin-x86_64.lock",
         "locks/requirements-linux-aarch64.lock",
         "locks/requirements-linux-x86_64.lock",
+        "locks/sdist-build-requirements.in",
+        "locks/sdist-build-requirements-linux-aarch64.lock",
     ],
     imports = ["../../.."],
     deps = [

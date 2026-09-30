@@ -333,6 +333,9 @@ def _native_one(inputs: Path, constraints_path: Path, cand: Path, stage: str, se
         record.update(status='ok', objective=obj, opens=obj[5], violations=obj[0],
                       subwidth=obj[3], blocked_entries=obj[1], reference_failures=obj[2],
                       unqualified_pairs=obj[4], qualified=e['qualified'])
+        # PNR_SI=1 side fields (present only when the flag produced them); si_layout_failures
+        # is a rank key with PNR_SI=1 (_rank_key), the others are recorded only.
+        record.update({k: e[k] for k in ('si_layout_failures', 'si_design_failures', 'si_errors') if k in e})
         prog = round_dir / 'electrical/native-loop/progress.json'
         if prog.exists():
             p = json.loads(prog.read_text())
@@ -354,6 +357,18 @@ def _rank_key(stage):
         return lambda r: tuple(r.get('objective') or [math.inf])
     # native/deep. objective = [violations, blocked, reference, subwidth, unqualified_pairs, unconnected]
     # key: violations, unconnected, unqualified pairs, reference failures, blocked entries, width debt, id
+    # PNR_SI=1: routed SI layout failures (pnr.si side field `si_layout_failures`) right after
+    # violations and unconnected; a record without an SI result (None: no report or the
+    # analysis crashed) ranks as the worst, like hot_loops_open in synth_native. SI design
+    # failures and errors never change the order. Flag off: the key is unchanged.
+    if os.environ.get('PNR_SI') == '1':
+        def si_key(r):
+            o = r.get('objective')
+            si = r.get('si_layout_failures')
+            si = math.inf if si is None else si
+            return (o[0], o[5], si, o[4], o[2], o[1], o[3], r['id']) if o else (math.inf,) * 7 + (r['id'],)
+        return si_key
+
     def key(r):
         o = r.get('objective')
         return (o[0], o[5], o[4], o[2], o[1], o[3], r['id']) if o else (math.inf,) * 6 + (r['id'],)

@@ -104,6 +104,9 @@ def evaluate(round_dir: Path, inputs: Path, constraints_doc: dict, sub_graph, su
         e = json.loads(ev.read_text())
         rec.update(status='ok', objective=e['objective'], opens=e['objective'][5],
                    violations=e['objective'][0], subwidth=e['objective'][3])
+        # PNR_SI=1 side fields (present only when the flag produced them); si_layout_failures
+        # is a rank key with PNR_SI=1 (pnr.hier.synth_native.rank_key), the others are recorded only.
+        rec.update({k: e[k] for k in ('si_layout_failures', 'si_design_failures', 'si_errors') if k in e})
         if os.environ.get('PNR_POWER_FIRST') == '1':
             # Routed power-path quality: one KiCad read of the final board, checked
             # against the final DRC. A failed analysis leaves hot_loops_open unset,

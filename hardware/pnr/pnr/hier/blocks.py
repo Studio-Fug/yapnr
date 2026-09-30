@@ -204,6 +204,17 @@ def sub_board(graph: BoardGraph, constraints: CompiledConstraints, rules: dict, 
         # Parent per-net current policy restricted to nets with pins here;
         # electrical.compile_policy inherits it under PNR_SUBBOARD=1.
         r["electrical_nets"] = {n: p for n, p in r["electrical_nets"].items() if n in present}
+    if "si_intents" in r:
+        # PNR_SI=1: a requirement is evaluated in a block only if its whole chain
+        # (driver, series parts, connector, return, shunt pads) is inside it.
+        def si_inside(i):
+            refs = [i["driver"]["ref"], i["connector"]["ref"]] + [s["ref"] for s in i.get("series", [])]
+            refs += [s["ref"] for s in i.get("shunts", [])] + ([i["return"]["ref"]] if i.get("return") else [])
+            return all(x in inside for x in refs)
+        r["si_intents"] = [i for i in r["si_intents"] if si_inside(i)]
+    if "terminal_width_intents" in r:
+        # PNR_TERMINAL_MIN_WIDTH=1 contracts, by ref like current_intents.
+        r["terminal_width_intents"] = [i for i in r["terminal_width_intents"] if i.get("ref") in inside]
     r["block_ports"] = block.external_nets
     return sub, con, r
 

@@ -112,7 +112,22 @@ def native_worker(a):
         from pnr.fab_profile import apply_fab_model, apply_rules
         compiled = compile_policy(rules, resolved, apply_fab_model(read(a.electrical_fab)))
         compiled = resolve_pair_chains(compiled, a.annotation_source, g.components)
-        save(a.report, apply_rules(compiled))
+        compiled = apply_rules(compiled)
+        from pnr.si import enabled as si_enabled
+        if si_enabled():
+            # PNR_SI=1: resolve @pnr-si bindings here (graph + pcbnew); the parent runs
+            # the design-time check (pnr.si.report.gate_rules_file) in the pnr runtime.
+            from pnr.si.annotations import AnnotationError
+            from pnr.si.extract import estimate_geometries
+            from pnr.si.report import resolve_intents
+            try:
+                intents = resolve_intents(a.annotation_source, g.components)
+            except AnnotationError as error:
+                sys.exit('pnr.si: @pnr-si annotation error: %s' % error)
+            compiled = dict(compiled, si_intents=intents)
+            from pnr.si.physics import stackup
+            save(a.report.parent / 'si-estimate.json', estimate_geometries(intents, g.components, st=stackup(compiled)))
+        save(a.report, compiled)
         return
     if a.worker == 'terminal-blockers':
         from pnr.terminal_repair import suggest
@@ -584,6 +599,10 @@ def controller(argv=None,nested=False):
     a.out_dir=a.out_dir.resolve();a.out_dir.mkdir(parents=True,exist_ok=False)
     worker_root=a.out_dir/'worker-source'
     shutil.copytree(Path(__file__).resolve().parent,worker_root/'hardware/pnr/pnr',ignore=shutil.ignore_patterns('__pycache__'))
+    from pnr.si import enabled as si_enabled
+    if si_enabled() and (Path(__file__).resolve().parents[1]/'si_models').is_dir():
+        # PNR_SI=1: the prepare worker resolves @pnr-si parts against the committed models.
+        shutil.copytree(Path(__file__).resolve().parents[1]/'si_models',worker_root/'hardware/pnr/si_models')
     (worker_root/'hardware/tools').mkdir(parents=True)
     shutil.copyfile(a.repo/'hardware/tools/keyhole_region.py',worker_root/'hardware/tools/keyhole_region.py')
     inputs=a.out_dir/'source-inputs';inputs.mkdir()
@@ -637,8 +656,19 @@ def controller(argv=None,nested=False):
         from pnr.native_drc import run_drc
         return run_drc(a.kicad_cli,board,report,env=env,final=final)
     if a.electrical_fab:
-        compiled=worker('prepare',current,a.out_dir/'policy',['--electrical-fab',str(a.electrical_fab.resolve())])
+        try:compiled=worker('prepare',current,a.out_dir/'policy',['--electrical-fab',str(a.electrical_fab.resolve())])
+        except subprocess.CalledProcessError:
+            log=a.out_dir/'policy'/'prepare.log'
+            why=[l for l in (log.read_text(errors='replace').splitlines() if log.exists() else []) if l.startswith('pnr.si:')]
+            if si_enabled() and why:sys.exit(why[-1])
+            raise
         a.rules=a.out_dir/'policy'/'prepare.json'
+        if si_enabled() and not nested:
+            # PNR_SI=1 compile-time check: ideal-board decks gate (unless waived), the
+            # placement estimate is report-only; writes policy/si-design.json.
+            from pnr.si.report import SIDesignError, gate_rules_file
+            try:gate_rules_file(a.rules,out_dir=a.out_dir/'policy',estimates=a.out_dir/'policy'/'si-estimate.json',save_waves=False)
+            except SIDesignError as error:sys.exit(str(error))
     def phase(name,board,metadata=None,stop=True):
         if a.phase_dir:
             from pnr.phase_capture import capture

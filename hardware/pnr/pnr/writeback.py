@@ -241,6 +241,7 @@ def apply_planes(board, rules: dict, pad_margin_mm: float = 2.0) -> int:
 
     zones = []  # (area, zone) for priority assignment
     reused = 0
+    width_log = []  # @pnr-terminal-width fanout choices (PNR_TERMINAL_MIN_WIDTH=1 only)
     for nc in rules.get("net_classes", []):
         layer = nc.get("plane_layer")
         if not layer or layer not in layer_id:
@@ -280,9 +281,12 @@ def apply_planes(board, rules: dict, pad_margin_mm: float = 2.0) -> int:
             for x, y in [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]:
                 outline.Append(pcbnew.VECTOR2I(int(x), int(y)))
             board.Add(z)
-            _dogbone_fanout_net(board, net.GetNetCode(), rules=rules)
+            _dogbone_fanout_net(board, net.GetNetCode(), rules=rules, width_log=width_log)
             zones.append(((x1 - x0) * (y1 - y0), z))
 
+    if width_log:
+        import json
+        sys.stderr.write('planes: terminal widths ' + json.dumps(width_log, sort_keys=True) + '\n')
     # Priority: smaller zones fill on top of (carve out of) larger overlapping ones.
     for rank, (_area, z) in enumerate(sorted(zones, key=lambda az: -az[0])):
         z.SetAssignedPriority(rank)
@@ -463,7 +467,7 @@ def outline_bounds(board):
     return board.GetBoardEdgesBoundingBox()
 
 
-def _dogbone_fanout_net(board, netcode: int, clearance_mm: float = 0.2, rules=None) -> int:
+def _dogbone_fanout_net(board, netcode: int, clearance_mm: float = 0.2, rules=None, width_log=None) -> int:
     """Add only checked external pad-to-plane escapes; never force via-in-pad.
 
     Under a fab profile with a filled via-in-pad policy (5B) a pad with no legal
@@ -472,6 +476,12 @@ def _dogbone_fanout_net(board, netcode: int, clearance_mm: float = 0.2, rules=No
     Leaves congested pads unrouted for the connectivity gate. Through-hole pads
     already reach the plane. Conservative obstacles include every copper layer;
     final KiCad DRC remains authoritative for zones, keepouts and board edges.
+
+    A pad with a @pnr-terminal-width contract (PNR_TERMINAL_MIN_WIDTH=1) tries its
+    preferred stub width first at each via distance and falls back to the hard
+    required width only where clearance forbids it; ``width_log`` (a list)
+    receives one record per contracted pad. Without a contract the single
+    required width reproduces the previous search order exactly.
     """
     import math
     import pcbnew
@@ -506,12 +516,26 @@ def _dogbone_fanout_net(board, netcode: int, clearance_mm: float = 0.2, rules=No
             # Plane attachment is still a current-carrying trace. Resolve its
             # required width from the same source policy as ordinary routing;
             # the fabrication minimum is not a per-net width specification.
-            from pnr.pad_entry import required_width
-            trace_w = _nm(required_width(pad, rules or {}))
+            # A terminal width contract adds a preferred width, tried first.
+            from pnr.pad_entry import entry_widths, width_choice, width_contract
+            widths = [_nm(w) for w in entry_widths(pad, rules or {})]
+            required_w = widths[-1]  # the hard required width; never narrower
+            contracted = width_log is not None and width_contract(pad, rules or {}) is not None
+            def log(how, width=None):
+                if contracted:
+                    width_log.append(dict(
+                        pad=f'{fp.GetReference()}.{pad.GetNumber()}', net=pad.GetNetname(), how=how,
+                        choice=None if width is None else width_choice(pad, rules or {}, width/1e6),
+                        width_mm=None if width is None else width/1e6,
+                        required_width_mm=required_w/1e6, preferred_width_mm=widths[0]/1e6))
             if pad.GetNetname() == 'lv' and _has_through_access(board, pad):
+                log('existing_access')
                 continue
-            if pad.GetNetname() == 'lv' and _reuse_surface_ground(board, pad, obstacles, trace_w, clr, oracle=oracle):
-                continue
+            if pad.GetNetname() == 'lv':
+                reused = next((w for w in widths if _reuse_surface_ground(board, pad, obstacles, w, clr, oracle=oracle)), None)
+                if reused is not None:
+                    log('surface', reused)
+                    continue
             surface = (pcbnew.B_Cu if pad.IsOnLayer(pcbnew.B_Cu) and not pad.IsOnLayer(pcbnew.F_Cu) else pcbnew.F_Cu)
             pos = pad.GetPosition()
             point = (pos.x,pos.y)
@@ -520,7 +544,9 @@ def _dogbone_fanout_net(board, netcode: int, clearance_mm: float = 0.2, rules=No
             base = math.hypot(size.x,size.y)/2. + via_r + clr
             angle = math.atan2(pos.y-center.y, pos.x-center.x)
             placed = False
-            for extra in (0., .25, .5, .9, 1.5):
+            # Nearest via distance first (stub length dominates inductance), then the
+            # widest allowed stub, then direction. One width: the previous order.
+            for extra, trace_w in [(e, w) for e in (0., .25, .5, .9, 1.5) for w in widths]:
                 for delta in (0, 45, -45, 90, -90, 135, -135, 180):
                     theta = angle + math.radians(delta)
                     distance = base + _nm(extra)
@@ -565,6 +591,7 @@ def _dogbone_fanout_net(board, netcode: int, clearance_mm: float = 0.2, rules=No
                     added += 1
                     board.BuildConnectivity()
                     placed = True
+                    log('dogbone', trace_w)
                     break
                 if placed:
                     break
@@ -574,8 +601,10 @@ def _dogbone_fanout_net(board, netcode: int, clearance_mm: float = 0.2, rules=No
                 if placed:
                     added += 1
                     board.BuildConnectivity()
+                    log('in_pad')
             if not placed:
                 skipped.append(f'{fp.GetReference()}.{pad.GetNumber()}')
+                log('unplaced')
     if skipped:
         sys.stderr.write('planes: no clear fanout for ' + ', '.join(skipped) + '\n')
     return added

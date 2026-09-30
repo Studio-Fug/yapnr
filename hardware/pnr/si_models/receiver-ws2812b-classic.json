@@ -1,0 +1,23 @@
+{
+  "schema": "pnr-si-receiver-v1",
+  "id": "ws2812b-classic",
+  "description": "WS2812B (classic) DIN input: input capacitance, VDD/GND clamp diodes, VIH/VIL thresholds relative to the pixel VDD.",
+  "c_in_pf": 15.0,
+  "vih_frac_vdd": 0.7,
+  "vil_frac_vdd": 0.3,
+  "abs_max": {"vi_min_v_below_gnd": 0.5, "vi_max_v_above_vdd": 0.5},
+  "input_leakage_ua": 1.0,
+  "clamps": {
+    "assumed": true,
+    "spice_model": "D(IS=1e-15 N=1 RS=10 CJO=0)",
+    "to": ["vdd", "gnd"],
+    "note": "No WS2812B datasheet specifies input clamps. ESD diodes to VDD and GND are assumed so the far end cannot ring to non-physical 7-8 V (design doc sec. 3). Overshoot/undershoot therefore depend on this assumption and are report-only."
+  },
+  "vdd": "tracks the driver corner rail (VCCB of the SN74LVC1T45 and the strip both hang off the channel's switched 5 V, chan_out); cable IR drop is not modelled",
+  "citations": [
+    {"what": "VIH 0.7 VDD min, VIL 0.3 VDD max, input capacity CI 15 pF, input voltage -0.5..VDD+0.5 V, input current +-1 uA, VDD 4.5-5.5 V characterisation range, T0H 0.4 us +-150 ns",
+     "url": "https://cdn-shop.adafruit.com/datasheets/WS2812B.pdf",
+     "sha256": "670517e400d01f76e91187e173c9bb105e5470741604f81243364c5f13d37448",
+     "section": "Electrical Characteristics / Switching characteristics / Data transfer time"}
+  ]
+}

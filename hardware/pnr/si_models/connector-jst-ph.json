@@ -1,0 +1,11 @@
+{
+  "schema": "pnr-si-connector-v1",
+  "id": "jst-ph",
+  "description": "JST PH 2.0 mm wire-to-board header (B3B-PH-K-S), one signal contact + mated crimp terminal, lumped as C/2 - L - C/2.",
+  "per_pin": {"l_nh": 5.0, "c_pf": 0.5},
+  "assumed": true,
+  "justification": "JST publishes no electrical model for PH. 5 nH / 0.5 pF is a typical order of magnitude for a ~10 mm pin + crimp at 2 mm pitch; the design's p027 sweep found the pixel-side edge insensitive to it (design sec. 12).",
+  "citations": [
+    {"what": "PH series drawing (pitch, pin length)", "url": "https://www.jst-mfg.com/product/pdf/eng/ePH.pdf"}
+  ]
+}

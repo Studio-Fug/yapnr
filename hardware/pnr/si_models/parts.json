@@ -1,0 +1,15 @@
+{
+  "schema": "pnr-si-parts-v1",
+  "description": "Part (footprint library prefix in graph.json, i.e. the elec/src/parts/<dir> name) -> SI role. Series parts need a value; drivers/connectors point at a model file id. A pad of a part not listed here gets default_pad_pf and a warning.",
+  "default_pad_pf": 0.3,
+  "parts": {
+    "Texas_Instruments_SN74LVC1T45DBVR": {"kind": "driver", "model": "sn74lvc1t45"},
+    "JST_B3B_PH_K_S_LF__SN": {"kind": "connector", "model": "jst-ph"},
+    "YAGEO_RC0402FR_0733RL": {"kind": "R", "ohm": 33.0, "esl_nh": 0.4,
+      "source": "YAGEO RC0402FR-0733RL, 33 ohm +-1 % 0402 thick film (LCSC C138002; parts/YAGEO_RC0402FR_0733RL/YAGEO_RC0402FR_0733RL.ato)",
+      "esl_note": "0402 ESL ~0.4 nH assumed (same order as 0402 MLCC ESL); not a vendor value"},
+    "UNI_ROYAL_0402WGF1000TCE": {"kind": "R", "ohm": 100.0, "esl_nh": 0.4,
+      "source": "UNI-ROYAL 0402WGF1000TCE, 100 ohm +-1 % 62.5 mW 0402 thick film (LCSC C25076; parts/UNI_ROYAL_0402WGF1000TCE .ato docstring '100 ohm (1000) +-1%')",
+      "esl_note": "0402 ESL ~0.4 nH assumed"}
+  }
+}

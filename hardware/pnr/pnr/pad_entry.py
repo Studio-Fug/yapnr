@@ -41,7 +41,166 @@ def required_width(pad, rules):
         from pnr.electrical import terminal_policy
         p = terminal_policy(pad.GetParentFootprint().GetReference(), [pad.GetNumber()], pad.GetNetname(), rules)
         if p: width = p['outer_width_mm']
+    contract = width_contract(pad, rules)
+    if contract:  # PNR_TERMINAL_MIN_WIDTH=1: source minimum is a hard floor
+        width = max(width, contract['min_width_mm'])
     return width
+
+
+def width_contract(pad, rules):
+    """The pad's @pnr-terminal-width contract (PNR_TERMINAL_MIN_WIDTH=1) or None."""
+    if not rules.get('terminal_width_intents'):
+        return None
+    from pnr.electrical import terminal_width
+    return terminal_width(pad.GetParentFootprint().GetReference(), [pad.GetNumber()], pad.GetNetname(), rules)
+
+
+def entry_widths(pad, rules):
+    """Widths to try for a new entry at this pad, widest first.
+
+    ``[preferred, required]`` when a terminal width contract prefers more than the
+    hard requirement; otherwise ``[required]`` (the pre-contract behaviour). A
+    fallback never goes below ``required_width``.
+    """
+    required = required_width(pad, rules)
+    contract = width_contract(pad, rules)
+    if contract and contract['preferred_width_mm'] > required + 1e-9:
+        return [contract['preferred_width_mm'], required]
+    return [required]
+
+
+def width_choice(pad, rules, width_mm):
+    """Label a chosen entry width: 'preferred', 'required' (fallback) or None
+    (no contract on this pad)."""
+    contract = width_contract(pad, rules)
+    if not contract:
+        return None
+    return 'preferred' if width_mm + 1e-6 >= contract['preferred_width_mm'] else 'required'
+
+
+def widen_contract_stub(board, pad, layer, touching, rules, oracle, max_segments=4, max_length_mm=3.0):
+    """Widen an existing narrow terminal stub in place (PNR_TERMINAL_MIN_WIDTH=1).
+
+    Copper reused from a block macro or an earlier pass can predate the contract.
+    Follow the narrow same-net chain from the pad centre to its via, a plated
+    hole or copper already at the required width (at most ``max_segments`` /
+    ``max_length_mm``, no branches) and overlay it at the preferred width, else
+    the required width, each segment checked by the native clearance ``oracle``.
+    Existing copper is never deleted or narrowed. Returns a record or None.
+    """
+    import pcbnew
+    if pad.GetShape() not in (pcbnew.PAD_SHAPE_RECT, pcbnew.PAD_SHAPE_ROUNDRECT,
+                              pcbnew.PAD_SHAPE_OVAL, pcbnew.PAD_SHAPE_CIRCLE):
+        return None
+    required = required_width(pad, rules)
+    narrow = [t for t in touching if t.GetWidth() / 1e6 + 1e-6 < required]
+    if not narrow:
+        return None
+    code, net, center = pad.GetNetCode(), pad.GetNetname(), xy(pad.GetPosition())
+    same = [t for t in board.GetTracks() if t.GetNetCode() == code]
+    tracks = [t for t in same if t.GetClass() == 'PCB_TRACK' and t.GetLayer() == layer]
+    holes = [xy(t.GetPosition()) for t in same if t.GetClass() == 'PCB_VIA']
+    holes += [xy(q.GetPosition()) for f in board.GetFootprints() for q in f.Pads()
+              if q.GetNetCode() == code and q.GetAttribute() == pcbnew.PAD_ATTRIB_PTH]
+    near = lambda a, b: math.dist(a, b) <= 1e-3
+    ends = lambda t: (xy(t.GetStart()), xy(t.GetEnd()))
+    for first in sorted(narrow, key=lambda t: min(math.dist(center, e) for e in ends(t))):
+        a, z = ends(first)
+        far = z if math.dist(center, z) >= math.dist(center, a) else a
+        path, seen, done = [center, far], {first.m_Uuid.AsString()}, False
+        for _ in range(max_segments):
+            if any(near(far, h) for h in holes):
+                done = True
+                break
+            joined = [t for t in tracks if t.m_Uuid.AsString() not in seen and any(near(far, e) for e in ends(t))]
+            if len(joined) != 1:
+                break  # dead end or branch: not a simple terminal stub
+            nxt = joined[0]
+            if nxt.GetWidth() / 1e6 + 1e-6 >= required:
+                done = True  # reached copper already at the required width
+                break
+            seen.add(nxt.m_Uuid.AsString())
+            far = next(e for e in ends(nxt) if not near(far, e)) if not near(*ends(nxt)) else far
+            path.append(far)
+            if sum(math.dist(p, q) for p, q in zip(path, path[1:])) > max_length_mm:
+                break
+        if not done or sum(math.dist(p, q) for p, q in zip(path, path[1:])) > max_length_mm:
+            continue
+        path = [p for i, p in enumerate(path) if i == 0 or not near(p, path[i - 1])]
+        if len(path) < 2:
+            continue
+        for width in entry_widths(pad, rules):
+            if not all(oracle.clear(net, layer, p, q, width) for p, q in zip(path, path[1:])):
+                continue
+            new = []
+            for p, q in zip(path, path[1:]):
+                t = pcbnew.PCB_TRACK(board)
+                t.SetStart(pcbnew.VECTOR2I(round(p[0] * 1e6), round(p[1] * 1e6)))
+                t.SetEnd(pcbnew.VECTOR2I(round(q[0] * 1e6), round(q[1] * 1e6)))
+                t.SetWidth(round(width * 1e6))
+                t.SetLayer(layer)
+                t.SetNetCode(code)
+                new.append(t)
+            if not witness(pad, new[0], required):
+                continue
+            for t, (p, q) in zip(new, zip(path, path[1:])):
+                board.Add(t)
+                t.thisown = False
+                oracle.reserve_track(net, layer, p, q, width)
+            return dict(width_mm=width, choice=width_choice(pad, rules, width), segments=len(new),
+                        length_mm=round(sum(math.dist(p, q) for p, q in zip(path, path[1:])), 4))
+    return None
+
+
+def terminal_width_report(board, rules):
+    """Post-route classification of every contracted terminal pad.
+
+    Per pad and copper layer, using the same full-entry :func:`witness` as
+    :func:`inspect`: ``preferred`` (a touching track witnesses an entry at the
+    preferred width), ``required`` (only at the hard minimum: clearance fallback),
+    ``below_min`` (every touching track is narrower than the minimum),
+    ``unqualified`` (wide enough but no full entry, e.g. grazing), ``in_pad``
+    (qualified in-pad via array, no surface trace) or ``no_track``.
+    ``entry_width_mm`` is the widest track witnessing the minimum entry. The
+    hard-floor failures also appear as blocked entries. Empty when the flag is off.
+    """
+    import pcbnew
+    rows = []
+    if not rules.get('terminal_width_intents'):
+        return rows
+    tracks = [t for t in board.GetTracks() if t.GetClass() == 'PCB_TRACK']
+    attached = None
+    for fp in board.GetFootprints():
+        for pad in fp.Pads():
+            contract = width_contract(pad, rules) if pad.GetNetCode() else None
+            if not contract:
+                continue
+            for layer in (pcbnew.F_Cu, pcbnew.B_Cu):
+                if not pad.IsOnLayer(layer):
+                    continue
+                shape = pad.GetEffectiveShape(layer)
+                touching = [t for t in tracks if t.GetNetCode() == pad.GetNetCode() and t.GetLayer() == layer
+                            and shape.Collide(t.GetEffectiveShape(layer), 0)]
+                lo, hi = contract['min_width_mm'], contract['preferred_width_mm']
+                qualified = [t.GetWidth() / 1e6 for t in touching if witness(pad, t, lo)]
+                width = max(qualified) if qualified else None
+                if any(witness(pad, t, hi) for t in touching):
+                    status = 'preferred'
+                elif qualified:
+                    status = 'required'
+                elif touching and all(t.GetWidth() / 1e6 + 1e-6 < lo for t in touching):
+                    status = 'below_min'
+                elif touching:
+                    status = 'unqualified'
+                else:
+                    if attached is None:
+                        attached = array_attached_pads(board, rules)
+                    status = 'in_pad' if pad.m_Uuid.AsString() in attached else 'no_track'
+                rows.append(dict(pad=fp.GetReference() + '.' + pad.GetNumber(), net=pad.GetNetname(),
+                                 layer=board.GetLayerName(layer), status=status, entry_width_mm=width,
+                                 min_width_mm=contract['min_width_mm'],
+                                 preferred_width_mm=contract['preferred_width_mm']))
+    return rows
 
 
 def rectangular_custom_land(pad,layer):
@@ -279,6 +438,7 @@ def repair(board, rules, only_keys=None):
     import pcbnew
 
     added, blocked = [], []
+    oracle = None  # native clearance oracle, built only for contracted terminals
     for p, layer, touching, width, good in inspect(board, rules):
         if good or (only_keys is not None and p.m_Uuid.AsString()+":"+str(layer) not in only_keys):
             continue
@@ -303,6 +463,10 @@ def repair(board, rules, only_keys=None):
                 start, closest(start, xy(t.GetStart()), xy(t.GetEnd()))
             ),
         )
+        # PNR_TERMINAL_MIN_WIDTH=1: a contracted terminal tries its preferred branch
+        # width first, then the hard required width (entry_widths); every other pad
+        # tries only ``width``, exactly as before.
+        widths = entry_widths(p, rules) if width_contract(p, rules) else [width]
         for old in choices:
             if old.GetWidth() / 1e6 + 1e-6 < width:
                 reason = "required width exceeds existing trace; needs current/neck policy"
@@ -318,46 +482,62 @@ def repair(board, rules, only_keys=None):
                 local_reach += math.hypot(*xy(p.GetSize())) / 2
             if math.dist(start, end) < 1e-6 or math.dist(start, end) > local_reach:
                 continue
-            t = pcbnew.PCB_TRACK(board)
-            t.SetStart(pcbnew.VECTOR2I(round(start[0]*1e6),round(start[1]*1e6)))
-            t.SetEnd(pcbnew.VECTOR2I(round(end[0] * 1e6), round(end[1] * 1e6)))
-            t.SetWidth(round(width * 1e6))
-            t.SetLayer(layer)
-            t.SetNetCode(p.GetNetCode())
-            shape = t.GetEffectiveShape(layer)
-            clr = round(rules.get("fab", {}).get("clearance_mm", 0.15) * 1e6)
-            foreign = [x for f in board.GetFootprints() for x in f.Pads()] + list(
-                board.GetTracks()
-            )
-            if any(
-                x.IsOnLayer(layer)
-                and x.GetNetCode() != p.GetNetCode()
-                and shape.Collide(x.GetEffectiveShape(layer), clr)
-                for x in foreign
-            ):
+            placed = None
+            for branch_width in widths:
+                t = pcbnew.PCB_TRACK(board)
+                t.SetStart(pcbnew.VECTOR2I(round(start[0]*1e6),round(start[1]*1e6)))
+                t.SetEnd(pcbnew.VECTOR2I(round(end[0] * 1e6), round(end[1] * 1e6)))
+                t.SetWidth(round(branch_width * 1e6))
+                t.SetLayer(layer)
+                t.SetNetCode(p.GetNetCode())
+                shape = t.GetEffectiveShape(layer)
+                clr = round(rules.get("fab", {}).get("clearance_mm", 0.15) * 1e6)
+                foreign = [x for f in board.GetFootprints() for x in f.Pads()] + list(
+                    board.GetTracks()
+                )
+                if any(
+                    x.IsOnLayer(layer)
+                    and x.GetNetCode() != p.GetNetCode()
+                    and shape.Collide(x.GetEffectiveShape(layer), clr)
+                    for x in foreign
+                ):
+                    continue
+                zones = list(board.Zones()) + [
+                    z for f in board.GetFootprints() for z in f.Zones()
+                ]
+                if any(
+                    z.GetIsRuleArea()
+                    and z.IsOnLayer(layer)
+                    and z.GetDoNotAllowTracks()
+                    and z.GetBoundingBox().Intersects(t.GetBoundingBox())
+                    for z in zones
+                ):
+                    continue
+                if not witness(p, t, width):
+                    continue
+                placed = (t, branch_width)
+                break
+            if placed is None:
                 continue
-            zones = list(board.Zones()) + [
-                z for f in board.GetFootprints() for z in f.Zones()
-            ]
-            if any(
-                z.GetIsRuleArea()
-                and z.IsOnLayer(layer)
-                and z.GetDoNotAllowTracks()
-                and z.GetBoundingBox().Intersects(t.GetBoundingBox())
-                for z in zones
-            ):
-                continue
-            if not witness(p, t, width):
-                continue
+            t, branch_width = placed
             board.Add(t)
             t.thisown = False
-            added.append(
-                dict(
-                    pad=label, net=p.GetNetname(), width_mm=width, start=start, end=end
-                )
+            record = dict(
+                pad=label, net=p.GetNetname(), width_mm=branch_width, start=start, end=end
             )
+            if len(widths) > 1 or width_contract(p, rules):
+                record['choice'] = width_choice(p, rules, branch_width)
+            added.append(record)
             break
         else:
+            if width_contract(p, rules):
+                if oracle is None:
+                    from pnr.native_electrical import Oracle
+                    oracle = Oracle(board, rules)
+                widened = widen_contract_stub(board, p, layer, touching, rules, oracle)
+                if widened:
+                    added.append(dict(pad=label, net=p.GetNetname(), widened=widened))
+                    continue
             from pnr.pad_entry_neck import repair_neck
             neck = repair_neck(board, p, layer, touching, width, rules)
             if neck:
@@ -414,6 +594,15 @@ def main():
     rules = json.loads(a.rules.read_text())
     b = pcbnew.LoadBoard(str(a.board))
     result = repair(b, rules)
+    from pnr.electrical import terminal_min_width_enabled
+    if terminal_min_width_enabled():
+        # Side field (evaluation.json embeds this report): which contracted
+        # terminals got the preferred width and which fell back to the minimum.
+        rows = terminal_width_report(b, rules)
+        counts = {}
+        for row in rows:
+            counts[row['status']] = counts.get(row['status'], 0) + 1
+        result['terminal_widths'] = dict(counts=counts, pads=rows)
     a.report.write_text(json.dumps(result, indent=2) + "\n")
     pcbnew.SaveBoard(str(a.out), b)
     if a.out != a.board:

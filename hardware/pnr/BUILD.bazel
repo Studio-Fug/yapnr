@@ -103,14 +103,28 @@ filegroup(
         "pnr/quality.py",
         "pnr/specctra.py",
         "pnr/writeback.py",
-    ],
+        # PNR_SI=1 (the prepare worker imports pnr.si even with the flag off): SI v1
+        # package + its committed models (profiles, cable, connector, receiver, parts).
+        "pnr/si/__init__.py",
+        "pnr/si/__main__.py",
+        "pnr/si/annotations.py",
+        "pnr/si/deck.py",
+        "pnr/si/extract.py",
+        "pnr/si/metrics.py",
+        "pnr/si/models.py",
+        "pnr/si/physics.py",
+        "pnr/si/report.py",
+        "pnr/si/runner.py",
+    ] + glob(["si_models/*.json"]),
 )
 
 # Core: graph + constraints + ingest. No torch/numpy — the light path that the
 # KiCad pcbnew flow and the schema tests use.
 py_library(
     name = "pnr",
-    srcs = glob(["pnr/*.py", "pnr/drc_warm/*.py", "pnr/shove/*.py"]),  # no torch/native imports at package load
+    srcs = glob(["pnr/*.py", "pnr/drc_warm/*.py", "pnr/shove/*.py", "pnr/si/*.py"]),  # no torch/native imports at package load
+    # SI v1 model library (pnr.si.models reads hardware/pnr/si_models next to the package).
+    data = glob(["si_models/*.json"]),
     imports = ["."],
     deps = [
         requirement("pyyaml"),  # constraints.py parses the sidecar YAML
@@ -543,6 +557,69 @@ py_binary(
     srcs = ["pnr/native_loop.py"],
     main = "pnr/native_loop.py",
     deps = [":pnr", ":pnr_place", ":pnr_route", ":pnr_detail"],
+)
+
+# SI v1 (PNR_SI=1): post-route SI report CLI (python -m pnr.si report|design-check|fetch).
+# The atopile_pnr(si_report = True) board rule runs it after the electrical audit.
+py_binary(
+    name = "si",
+    srcs = ["pnr/si/__main__.py"],
+    imports = ["."],
+    main = "pnr/si/__main__.py",
+    deps = [":pnr"],
+)
+
+# SI v1 unit tests: pure Python, fake KIBIS/simulator where a model or ngspice is
+# needed. runner/models also exercise the headless KiCad copy (libngspice, kicad-cli)
+# when present and skip otherwise; the live p027 cases need PNR_SI_LIVE=1.
+[py_test(
+    name = "si_%s_test" % name,
+    size = "small",
+    srcs = ["tests/test_si_%s.py" % name, "tests/test_si_annotations.py", "tests/test_si_extract.py"],
+    data = glob(["testdata/si/*"]),
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_si_%s.py" % name,
+    tags = ["no-sandbox"],
+    deps = [":pnr"],
+) for name in ["physics", "annotations", "metrics", "runner", "extract", "deck", "models", "report", "live"]]
+
+# SI wiring into the compile sites (route/__main__, native_loop prepare + parent gate)
+# and full_iteration side fields; imports the placer entry point (torch).
+py_test(
+    name = "si_integration_test",
+    size = "small",
+    srcs = [
+        "tests/test_si_integration.py",
+        "tests/test_si_annotations.py",
+        "tests/test_si_extract.py",
+        "tests/test_si_live.py",
+        "tests/test_si_report.py",
+    ],
+    data = glob(["testdata/si/*"]),
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_si_integration.py",
+    tags = ["no-sandbox"],
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("pyyaml"),
+    ],
+)
+
+# N-0002 part 1: @pnr-terminal-width parsing/policy (pure) + pcbnew geometry cases
+# (skipped without pcbnew; run with the KiCad python for the native assertions).
+py_test(
+    name = "terminal_min_width_test",
+    size = "small",
+    srcs = ["tests/test_terminal_min_width.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_terminal_min_width.py",
+    deps = [":pnr", ":pnr_detail"],
 )
 
 py_test(

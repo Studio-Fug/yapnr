@@ -17,6 +17,21 @@ def objective(drc,entries,electrical):
             len(drc['unconnected_items'])]
 
 
+def si_side_fields(board,rules,work,sources,inventory):
+    """PNR_SI=1: simulate the final board's @pnr-si requirements; evaluation side fields.
+
+    Intents come from the compiled rules (native_loop prepare); without them they are
+    resolved from the annotation sources against the evaluated graph. Never raises.
+    """
+    from pnr.si.report import candidate_side_fields
+    components=None
+    if rules.get('si_intents') is None:
+        from pnr.graph import BoardGraph
+        components=BoardGraph.from_json(json.dumps(inventory['graph'])).components
+    return candidate_side_fields(board,rules,out_dir=work,report_name='si-report.json',waves_dir=work/'si-waves',
+                                 annotation_sources=[str(Path(s).resolve()) for s in sources],components=components)
+
+
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('round',type=Path);ap.add_argument('--constraints',required=True,type=Path)
@@ -96,6 +111,12 @@ def main():
         feedback['shove']=feedback_section(work/'native-loop')
     (p/'feedback.json').write_text(json.dumps(feedback,indent=2))
     result=dict(all_phases_completed=True,score_scope='post-electrical-final-refill',objective=objective(drc,entries,audit),qualified=audit['qualified'],electrical_audit=audit,pad_entry=entries,final=last,feedback=str((p/'feedback.json').resolve()))
+    from pnr.si import enabled as si_enabled
+    if si_enabled():
+        # PNR_SI=1 post-route SI report (electrical/si-report.json): named side fields
+        # only; the 6-value objective vector above is unchanged (hot_loops_open precedent:
+        # si_layout_failures is a rank key after the legality terms in halving/synth_native).
+        result.update(si_side_fields(board,json.loads(rules.read_text()),work,sources,inventory))
     (p/'evaluation.json').write_text(json.dumps(result,indent=2)+'\n')
     emit('candidate_complete',board=board,data=result)
     print(json.dumps(dict(objective=result['objective'],qualified=result['qualified'])))

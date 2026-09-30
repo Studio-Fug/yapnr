@@ -89,6 +89,11 @@ def _feedback():
     return os.environ.get('PNR_FEEDBACK') == '1'
 
 
+def _si():
+    """PNR_SI=1: routed SI layout failures (pnr.si side fields) rank after legality."""
+    return os.environ.get('PNR_SI') == '1'
+
+
 def _loadavg():
     try:
         return [round(x, 2) for x in os.getloadavg()]
@@ -216,6 +221,11 @@ def _native(inputs, constraints_path, rec, names, out, seconds, workers, repo, r
     if _power_first():
         hot = [r.get('hot_loops_open') for r in results]
         out['hot_loops_open'] = sum(hot) if ok and all(h is not None for h in hot) else None
+    if _si():
+        # Instances sum like the objective; any instance without an SI result (no
+        # report, crashed analysis) leaves the layout unproven (None ranks worst).
+        si = [r.get('si_layout_failures') for r in results]
+        out['si_layout_failures'] = sum(si) if ok and all(x is not None for x in si) else None
     return out
 
 
@@ -289,16 +299,22 @@ def rank_key(r, band=None):
     q_band and power crossings (placement), then the remaining terms; ``band``
     (PNR_RANK_OPEN_BAND=auto) coarsens unconnected to floor(unconnected / band).
     A layout without a routed power analysis ranks as if every hot loop were open.
+
+    With PNR_SI=1 the routed SI layout failures (``si_layout_failures``, the
+    pnr.si side field; design failures and errors never count) follow the
+    legality terms (after open hot loops with PNR_POWER_FIRST=1); a layout without
+    an SI result ranks as the worst. Flag off: the key is unchanged.
     """
     o = r.get('objective')
     if not o:
         return (math.inf,)
+    si = (_num(r.get('si_layout_failures')),) if _si() else ()
     if _power_first():
         pq = r.get('power_quality') or {}
-        return (o[5] // band if band else o[5], o[0], _num(r.get('hot_loops_open')), _num(pq.get('q_band')),
-                _num(pq.get('crossings')), o[1], o[2], o[3], o[4], r.get('port_debt_mm', math.inf),
-                r.get('area', math.inf))
-    return (o[5], o[0], o[1], o[2], o[3], o[4], r.get('port_debt_mm', math.inf), r.get('area', math.inf))
+        return (o[5] // band if band else o[5], o[0], _num(r.get('hot_loops_open'))) + si + (
+            _num(pq.get('q_band')), _num(pq.get('crossings')), o[1], o[2], o[3], o[4], r.get('port_debt_mm', math.inf),
+            r.get('area', math.inf))
+    return (o[5], o[0]) + si + (o[1], o[2], o[3], o[4], r.get('port_debt_mm', math.inf), r.get('area', math.inf))
 
 
 def is_complete(r):
@@ -334,6 +350,12 @@ def aggregate(runs):
         out['hot_loops_open'] = max(hot) if all(h is not None for h in hot) else None
         for summary, r in zip(out['runs'], runs):
             summary['hot_loops_open'] = r.get('hot_loops_open')
+    if _si():
+        # SI layout failures keep the worst repeat, like the other guard terms.
+        si = [r.get('si_layout_failures') for r in runs]
+        out['si_layout_failures'] = max(si) if all(x is not None for x in si) else None
+        for summary, r in zip(out['runs'], runs):
+            summary['si_layout_failures'] = r.get('si_layout_failures')
     return out
 
 

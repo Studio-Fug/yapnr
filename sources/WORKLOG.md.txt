@@ -3,41 +3,27 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-09-30 (PR4, the viewer; PR3a merged).
+Last updated: 2026-09-30 (PR4 and #10 merged).
 
 ## In progress
 
-- **PR4, the live viewer** (branch `claude/pr4-viewer`): the deployed Splanc viewer
-  ported to `yapnr/viewer` (move, scrubbed imports, format, packaging and configuration, lint,
-  fetched JavaScript and Bazel targets, tests and docs). `bazel run //:viewer -- --root <live>`;
-  configuration by flags or a `yapnr-viewer-v1` TOML file, no machine defaults; the Ask agent,
-  its web tools and AI net labels are off unless enabled; elkjs 0.9.3 and three.js 0.186.1 are
-  fetched pinned by sha256 into `//yapnr/viewer:dist`; 11 offline unit test targets on a
-  synthetic atopile fixture, live checks manual in `tests/e2e/viewer`. Choices:
-  [docs/decisions.md](docs/decisions.md) ("Choices made in PR4"); guide:
-  [docs/viewer.md](docs/viewer.md). Checked against a copy of three lanes of a live experiment
-  (`bazel run //:viewer`, agent off): PCB, schematic, 3D (headless `kicad-cli`), Source, Inspect
-  and Notes work, and the Ask tab says it is off. Review fixes: one spend meter for Ask turns and
-  net labels (a call holds its budget while it runs; stopped turns count at their budget),
-  library defaults off, a server test of the defaults, the Apache-2.0 text served next to elkjs,
-  the Source link to the exact tree (marked modified), interface addresses on Linux, no Ask
-  buttons with the agent off, no source-index request without sources, and clearer messages (3D
-  without three.js, cost replay of a board outside the run). Merged with `main` after PR3a: the
-  old `hardware/tools/pnr_live` copies PR3a reformatted are dropped (PR4 moved and formatted
-  them itself).
-- **PR3a is merged** (#9, a merge commit): code key scheme 2 (routing-feedback code keys hash each
-  module's canonical syntax tree, so formatting does not change them; legacy records are still
-  read), black and isort over every Python file under `hardware/` as mechanical commits, and the
-  lint config (`.flake8` per-file baseline, `.isort.cfg`). Its three format commits go into
-  `.git-blame-ignore-revs` in #11. Proof and reasons: [docs/decisions.md](docs/decisions.md)
-  ("Choices made in PR3a").
+- **Merged today:** PR3a (#9, code key scheme 2 and the engine format), the viewer (#12, PR4:
+  `yapnr/viewer`, `bazel run //:viewer -- --root <live>`, paid features off by default, elkjs and
+  three.js fetched pinned; guide [docs/viewer.md](docs/viewer.md), choices in
+  [docs/decisions.md](docs/decisions.md)), and #13 (an explicit `started.json` stamp for the
+  routing-feedback staleness check, fixing #10 on Linux). The format commits of #9 and #12 are in
+  `.git-blame-ignore-revs` (#11, #14).
+- **Branches in progress:** `claude/ladder-animations` (regression ladder in CI, a PnR trace
+  recorder, critical-path animations of every ladder case, the TLC555 chaser on the README) and
+  `claude/atopile-toolchain` (atopile 0.15.8 without Nix, the offline part picker, a part cache
+  server seeded locally). Both branch from before PR3a and merge `main` before their pull
+  requests.
 
 ## Next
 
-1. Owner (PR4): review the viewer branch; decide the agent's default model (opus, $2 per turn,
-   $20 per process) and file the issue for `pnr.capacitor_intent` (the cost replay reports
-   contexts that need it as unavailable). If PR4 is merged with a merge commit, list its move and
-   format commits in `.git-blame-ignore-revs` afterwards (a squash folds them away).
+1. Owner (viewer, #12): review after the fact; decide the agent's default model (opus, $2 per
+   turn, $20 per process) and file the issue for `pnr.capacitor_intent` (the cost replay reports
+   contexts that need it as unavailable).
 2. PR4 follow-ups: `--project` and the manifest's `[viewer]` table (with PR3d), the published
    `yapnr-live-event-v1` JSON Schema, browser e2e tests (Chrome DevTools), the viewer in the wheel
    and images once the engine is (PR3b), `examples/led555` as the smoke run (PR6b).

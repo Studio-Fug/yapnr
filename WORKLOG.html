@@ -278,43 +278,29 @@
 <h1>Worklog<a class="headerlink" href="#worklog" title="Link to this heading">¶</a></h1>
 <p>A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.</p>
-<p>Last updated: 2026-09-30 (PR4, the viewer; PR3a merged).</p>
+<p>Last updated: 2026-09-30 (PR4 and #10 merged).</p>
 <section id="in-progress">
 <h2>In progress<a class="headerlink" href="#in-progress" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><strong>PR4, the live viewer</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/pr4-viewer</span></code>): the deployed Splanc viewer
-ported to <code class="docutils literal notranslate"><span class="pre">yapnr/viewer</span></code> (move, scrubbed imports, format, packaging and configuration, lint,
-fetched JavaScript and Bazel targets, tests and docs). <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">run</span> <span class="pre">//:viewer</span> <span class="pre">--</span> <span class="pre">--root</span> <span class="pre">&lt;live&gt;</span></code>;
-configuration by flags or a <code class="docutils literal notranslate"><span class="pre">yapnr-viewer-v1</span></code> TOML file, no machine defaults; the Ask agent,
-its web tools and AI net labels are off unless enabled; elkjs 0.9.3 and three.js 0.186.1 are
-fetched pinned by sha256 into <code class="docutils literal notranslate"><span class="pre">//yapnr/viewer:dist</span></code>; 11 offline unit test targets on a
-synthetic atopile fixture, live checks manual in <code class="docutils literal notranslate"><span class="pre">tests/e2e/viewer</span></code>. Choices:
-<a class="reference internal" href="docs/decisions.html"><span class="std std-doc">docs/decisions.md</span></a> (“Choices made in PR4”); guide:
-<a class="reference internal" href="docs/viewer.html"><span class="std std-doc">docs/viewer.md</span></a>. Checked against a copy of three lanes of a live experiment
-(<code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">run</span> <span class="pre">//:viewer</span></code>, agent off): PCB, schematic, 3D (headless <code class="docutils literal notranslate"><span class="pre">kicad-cli</span></code>), Source, Inspect
-and Notes work, and the Ask tab says it is off. Review fixes: one spend meter for Ask turns and
-net labels (a call holds its budget while it runs; stopped turns count at their budget),
-library defaults off, a server test of the defaults, the Apache-2.0 text served next to elkjs,
-the Source link to the exact tree (marked modified), interface addresses on Linux, no Ask
-buttons with the agent off, no source-index request without sources, and clearer messages (3D
-without three.js, cost replay of a board outside the run). Merged with <code class="docutils literal notranslate"><span class="pre">main</span></code> after PR3a: the
-old <code class="docutils literal notranslate"><span class="pre">hardware/tools/pnr_live</span></code> copies PR3a reformatted are dropped (PR4 moved and formatted
-them itself).</p></li>
-<li><p><strong>PR3a is merged</strong> (#9, a merge commit): code key scheme 2 (routing-feedback code keys hash each
-module’s canonical syntax tree, so formatting does not change them; legacy records are still
-read), black and isort over every Python file under <code class="docutils literal notranslate"><span class="pre">hardware/</span></code> as mechanical commits, and the
-lint config (<code class="docutils literal notranslate"><span class="pre">.flake8</span></code> per-file baseline, <code class="docutils literal notranslate"><span class="pre">.isort.cfg</span></code>). Its three format commits go into
-<code class="docutils literal notranslate"><span class="pre">.git-blame-ignore-revs</span></code> in #11. Proof and reasons: <a class="reference internal" href="docs/decisions.html"><span class="std std-doc">docs/decisions.md</span></a>
-(“Choices made in PR3a”).</p></li>
+<li><p><strong>Merged today:</strong> PR3a (#9, code key scheme 2 and the engine format), the viewer (#12, PR4:
+<code class="docutils literal notranslate"><span class="pre">yapnr/viewer</span></code>, <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">run</span> <span class="pre">//:viewer</span> <span class="pre">--</span> <span class="pre">--root</span> <span class="pre">&lt;live&gt;</span></code>, paid features off by default, elkjs and
+three.js fetched pinned; guide <a class="reference internal" href="docs/viewer.html"><span class="std std-doc">docs/viewer.md</span></a>, choices in
+<a class="reference internal" href="docs/decisions.html"><span class="std std-doc">docs/decisions.md</span></a>), and #13 (an explicit <code class="docutils literal notranslate"><span class="pre">started.json</span></code> stamp for the
+routing-feedback staleness check, fixing #10 on Linux). The format commits of #9 and #12 are in
+<code class="docutils literal notranslate"><span class="pre">.git-blame-ignore-revs</span></code> (#11, #14).</p></li>
+<li><p><strong>Branches in progress:</strong> <code class="docutils literal notranslate"><span class="pre">claude/ladder-animations</span></code> (regression ladder in CI, a PnR trace
+recorder, critical-path animations of every ladder case, the TLC555 chaser on the README) and
+<code class="docutils literal notranslate"><span class="pre">claude/atopile-toolchain</span></code> (atopile 0.15.8 without Nix, the offline part picker, a part cache
+server seeded locally). Both branch from before PR3a and merge <code class="docutils literal notranslate"><span class="pre">main</span></code> before their pull
+requests.</p></li>
 </ul>
 </section>
 <section id="next">
 <h2>Next<a class="headerlink" href="#next" title="Link to this heading">¶</a></h2>
 <ol class="arabic simple">
-<li><p>Owner (PR4): review the viewer branch; decide the agent’s default model (opus, $2 per turn,
-$20 per process) and file the issue for <code class="docutils literal notranslate"><span class="pre">pnr.capacitor_intent</span></code> (the cost replay reports
-contexts that need it as unavailable). If PR4 is merged with a merge commit, list its move and
-format commits in <code class="docutils literal notranslate"><span class="pre">.git-blame-ignore-revs</span></code> afterwards (a squash folds them away).</p></li>
+<li><p>Owner (viewer, #12): review after the fact; decide the agent’s default model (opus, $2 per
+turn, $20 per process) and file the issue for <code class="docutils literal notranslate"><span class="pre">pnr.capacitor_intent</span></code> (the cost replay reports
+contexts that need it as unavailable).</p></li>
 <li><p>PR4 follow-ups: <code class="docutils literal notranslate"><span class="pre">--project</span></code> and the manifest’s <code class="docutils literal notranslate"><span class="pre">[viewer]</span></code> table (with PR3d), the published
 <code class="docutils literal notranslate"><span class="pre">yapnr-live-event-v1</span></code> JSON Schema, browser e2e tests (Chrome DevTools), the viewer in the wheel
 and images once the engine is (PR3b), <code class="docutils literal notranslate"><span class="pre">examples/led555</span></code> as the smoke run (PR6b).</p></li>

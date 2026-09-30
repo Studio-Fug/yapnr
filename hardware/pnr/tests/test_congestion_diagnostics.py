@@ -1,17 +1,18 @@
 """Ensure debug artifacts preserve coordinates, units, and observed provenance."""
 
 import json
-from pathlib import Path
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
+from pathlib import Path
 from types import SimpleNamespace as NS
 from unittest.mock import patch
+
 import numpy as np
-from pnr.congestion_diagnostics import snapshot, svg, native_endpoints
+from pnr.congestion_diagnostics import native_endpoints, snapshot, svg
 from pnr.constraints import compile_constraints
-from pnr.graph import BoardGraph, BoardOutline, Component, Pad, Net
-from pnr.route.feedback import route_and_place, derive_inflation
+from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
+from pnr.route.feedback import derive_inflation, route_and_place
 
 
 def graph():

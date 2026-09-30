@@ -5,13 +5,19 @@ may be removed. Every original pad partition and qualified pad contact must
 survive the final native DRC transaction. Power/paired copper is never displaced.
 """
 
-import argparse, json, math, shutil, subprocess, sys
+import argparse
+import json
+import math
+import shutil
+import subprocess
+import sys
 from pathlib import Path
+
 import pcbnew as k
 from pnr.electrical import net_policy
-from pnr.native_electrical import xy, uid
+from pnr.native_electrical import uid, xy
 from pnr.pad_entry import snapshot
-from pnr.via_coalesce import partition, preserved, acceptable
+from pnr.via_coalesce import acceptable, partition, preserved
 
 
 def candidates(board, net, bounds, rules):

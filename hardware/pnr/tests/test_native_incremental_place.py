@@ -1,4 +1,7 @@
-import unittest, json, sys
+import json
+import sys
+import unittest
+
 import pcbnew as k
 from pnr.incremental_place import apply
 from pnr.ingest import build_graph

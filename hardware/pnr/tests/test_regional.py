@@ -1,10 +1,11 @@
 import unittest
-from pnr.route.detail.regional import preserves_connections
+
 from pnr.route.detail.regional import (
     Request,
-    solve_region,
-    segment_distance,
     needs_connection,
+    preserves_connections,
+    segment_distance,
+    solve_region,
 )
 
 

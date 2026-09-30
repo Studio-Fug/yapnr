@@ -5,9 +5,12 @@ is not the historical soft-rotation loss or the legalizer/route-probe objective.
 A counterfactual field uses whole-board delta, not an allocated component share.
 """
 
-import fnmatch, math
+import fnmatch
+import math
+
 import numpy as np
-from .geometry import keepout_rects, resolve_fixed_poses, occupied_sides, outline_size
+
+from .geometry import keepout_rects, occupied_sides, outline_size, resolve_fixed_poses
 
 TERMS = (
     "wirelength",
@@ -161,17 +164,18 @@ class Objective:
 
     def _power_first(self, roles, pf_state):
         """Final-stage staged loss factors; without pf_state the stage-3 end values are used and the guard is 0."""
+        from pnr.constraints import Enforcement
+
         from .power_first import (
-            Compiled,
             EPS,
-            OMEGA,
+            GAP_EPS2,
             GUARD_SCALE,
+            OMEGA,
             OVERLAP_RAMP,
             RHO_RAMP,
-            GAP_EPS2,
             T_SOFT,
+            Compiled,
         )
-        from pnr.constraints import Enforcement
 
         W = float(roles["W"])
         state = dict(pf_state or {})
@@ -403,8 +407,8 @@ class Objective:
         return out
 
     def field(self, ref, pitch=1.5):
+        from .geometry import courtyard_rect, hard_group_limits, placement_rects, resolve_hard_sides
         from .metrics import hard_violations
-        from .geometry import courtyard_rect, placement_rects, hard_group_limits, resolve_hard_sides
 
         if ref not in self.index:
             raise ValueError("Unknown component")

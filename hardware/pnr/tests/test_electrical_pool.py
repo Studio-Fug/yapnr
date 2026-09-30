@@ -1,9 +1,10 @@
 import copy
 import hashlib
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
+
 from pnr.electrical_pool import candidate_placements, choose_completed, validate_evaluation
 
 
@@ -123,10 +124,13 @@ class ElectricalPoolTests(unittest.TestCase):
 
 class ElectricalPoolControllerTest(unittest.TestCase):
     def test_parallel_pool_runs_all_candidates_and_preserves_source(self):
-        from unittest.mock import patch
-        from pnr.electrical_pool import main
+        import os
+        import threading
+        import time
         from types import SimpleNamespace
-        import os, threading, time
+        from unittest.mock import patch
+
+        from pnr.electrical_pool import main
 
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)

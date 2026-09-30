@@ -1,11 +1,15 @@
 """Native adapter regression: finite-width contact outside search centerline bounds."""
 
-import importlib.util, json, tempfile, unittest
+import importlib.util
+import json
+import tempfile
+import unittest
 from pathlib import Path
 from unittest.mock import patch
+
 import pcbnew as k
+from pnr.native_electrical import add_track, vec
 from test_native_electrical import board, pad
-from pnr.native_electrical import vec, add_track
 
 
 class SearchStarted(Exception):

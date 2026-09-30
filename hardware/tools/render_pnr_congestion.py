@@ -1,10 +1,12 @@
 """Package cycle SVGs as a raster PDF and contact sheets; use document Python."""
 
-from pathlib import Path
-import subprocess, json
-from reportlab.pdfgen import canvas
-from PIL import Image, ImageOps, ImageDraw
 import argparse
+import json
+import subprocess
+from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageOps
+from reportlab.pdfgen import canvas
 
 ap = argparse.ArgumentParser(description=__doc__)
 ap.add_argument("directory")

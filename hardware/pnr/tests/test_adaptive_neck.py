@@ -1,9 +1,10 @@
 import unittest
+
 import pcbnew as k
-from test_native_electrical import board, pad, vec, FAB
-from pnr.native_electrical import Oracle, power_plan, add_track
-from pnr.pad_entry import rectangular_custom_land, witness, neck_witness, snapshot
 from pnr.electrical import compile_policy, net_policy
+from pnr.native_electrical import Oracle, add_track, power_plan
+from pnr.pad_entry import neck_witness, rectangular_custom_land, snapshot, witness
+from test_native_electrical import FAB, board, pad, vec
 
 
 class AdaptiveNeckTest(unittest.TestCase):

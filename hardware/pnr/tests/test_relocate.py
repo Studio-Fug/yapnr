@@ -1,8 +1,9 @@
 import unittest
+
 import numpy as np
-from pnr.place.relocate import distance_field, propose
-from pnr.graph import BoardGraph, BoardOutline, Component, Pad, Net
 from pnr.constraints import compile_constraints
+from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
+from pnr.place.relocate import distance_field, propose
 
 
 class LayeredCostTests(unittest.TestCase):
@@ -83,8 +84,9 @@ class LayeredCostTests(unittest.TestCase):
 
 class ControllerTests(unittest.TestCase):
     def test_loop_reroutes_proposal_and_retains_best(self):
-        from unittest.mock import patch
         from types import SimpleNamespace as NS
+        from unittest.mock import patch
+
         from pnr.route.feedback import route_and_place
 
         g = BoardGraph(
@@ -131,6 +133,7 @@ class ControllerTests(unittest.TestCase):
 class AnnealingTests(unittest.TestCase):
     def test_sampling_reproducible_and_cools(self):
         import random
+
         from pnr.place.anneal import choose_cost
 
         a = random.Random(19)

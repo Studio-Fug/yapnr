@@ -4,17 +4,19 @@ Enumerated, bounded access choices are coordinated before expensive trunk search
 A failed assignment is not proof of unroutability. Never emit partial geometry.
 """
 
-from dataclasses import dataclass
-from functools import cached_property, lru_cache
 import math
 import time
+from dataclasses import dataclass
+from functools import cached_property, lru_cache
+
+from pnr.fab_profile import active_geometry
+
 from .joint import conflict, conflicts, solve_joint_region
 from .joint_access import select_joint
-from .spatial_conflicts import PrimitiveIndex
-from pnr.fab_profile import active_geometry
 from .keyhole import route
-from .layered import escape_frontier, primitives, SearchTimeout
-from .regional import Request, RegionalResult
+from .layered import SearchTimeout, escape_frontier, primitives
+from .regional import RegionalResult, Request
+from .spatial_conflicts import PrimitiveIndex
 
 
 @dataclass

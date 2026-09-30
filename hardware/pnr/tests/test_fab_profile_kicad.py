@@ -211,6 +211,7 @@ class ZoneRefillTest(unittest.TestCase):
     def pth_findings(self, folder, command):
         import subprocess
         import sys
+
         from pnr import fab_profile as fp
         from pnr.native_drc import run_drc
         from pnr.writeback import patch_project_rules

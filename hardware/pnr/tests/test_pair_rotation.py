@@ -1,8 +1,9 @@
 import unittest
+
 import pcbnew as k
-from test_native_electrical import board, pad
-from pnr.native_electrical import move_pair_support, add_track, vec
+from pnr.native_electrical import add_track, move_pair_support, vec
 from pnr.via_coalesce import partition
+from test_native_electrical import board, pad
 
 
 class RotationTest(unittest.TestCase):

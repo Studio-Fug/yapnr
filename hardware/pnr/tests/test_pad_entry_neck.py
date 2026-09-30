@@ -1,10 +1,12 @@
-import copy, unittest
+import copy
+import unittest
+
 import pcbnew as k
-from test_native_electrical import board, pad, FAB
-from pnr.native_electrical import add_track
 from pnr.electrical import compile_policy
-from pnr.pad_entry import snapshot, repair_changed_entries
+from pnr.native_electrical import add_track
+from pnr.pad_entry import repair_changed_entries, snapshot
 from pnr.pad_entry_neck import repair_neck
+from test_native_electrical import FAB, board, pad
 
 
 class PadEntryNeckTest(unittest.TestCase):
@@ -68,8 +70,8 @@ class PadEntryNeckTest(unittest.TestCase):
     def test_bootstrap_land_keeps_full_switch_envelope_at_short_escape(self):
         # Reproduces a small capacitor grazed by a wide switch trunk. The other
         # capacitor land prevents a full-width center branch; source permits 0.25mm.
+        from pnr.electrical import neck_budget, terminal_policy
         from pnr.pad_entry import repair
-        from pnr.electrical import terminal_policy, neck_budget
 
         b = board()
         p = pad(b, "C", "2", "rail", (5, 5), (0.54, 0.5))

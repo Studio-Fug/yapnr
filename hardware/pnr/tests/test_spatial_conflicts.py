@@ -1,6 +1,8 @@
-import random, unittest
-from pnr.route.detail.regional import Request
+import random
+import unittest
+
 from pnr.route.detail.joint import conflict
+from pnr.route.detail.regional import Request
 from pnr.route.detail.spatial_conflicts import PrimitiveIndex
 
 

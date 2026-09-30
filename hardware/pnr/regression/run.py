@@ -5,10 +5,19 @@ Missing tools, timeout, illegal placement, opens and *any* native DRC finding fa
 Never skips/x-fails difficult cases. Outputs persist in a new, refused-if-existing
 run directory, including rejected boards, stage logs and source hashes.
 """
-import argparse, hashlib, json, os, shutil, subprocess, sys, time, traceback
-from pathlib import Path
+import argparse
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+import traceback
 from collections import Counter
+from pathlib import Path
 from xml.etree import ElementTree as ET
+
 from designs import designs
 
 HERE = Path(__file__).resolve().parent

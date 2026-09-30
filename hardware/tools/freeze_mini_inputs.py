@@ -9,8 +9,8 @@ import argparse
 import datetime
 import hashlib
 import json
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 
 def inputs(root):

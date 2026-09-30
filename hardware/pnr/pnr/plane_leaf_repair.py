@@ -5,8 +5,12 @@ transaction closes a native connection, preserves the original pad partition,
 qualified entries/reference and has no additional native violations.
 """
 
+import json
+import shutil
+import subprocess
+import sys
+import time
 from pathlib import Path
-import json, subprocess, sys, time, shutil
 
 
 def endpoint_has_no_escape(events):

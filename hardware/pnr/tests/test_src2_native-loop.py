@@ -5,11 +5,16 @@ behaviour of reporting lib_footprint_issues for a board without fp-lib-table.
 Run: PYTHONPATH=. python tests/test_src2_native-loop.py
 """
 
-import json, os, subprocess, tempfile, unittest
+import json
+import os
+import subprocess
+import tempfile
+import unittest
 from pathlib import Path
 from unittest.mock import patch
+
 from pnr import native_loop
-from pnr.graph import BoardGraph, BoardOutline, Component, Pad, Net
+from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
 
 CLEAR = (
     "PNR_CONTROL_FILE",

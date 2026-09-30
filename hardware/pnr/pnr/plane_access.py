@@ -1,6 +1,8 @@
 """Local surface groups and deterministic, source-sized plane-access arrays."""
 
-import math, os
+import math
+import os
+
 from pnr.plane_intent import size_array
 
 # Existing-bank reuse: barrel positions may differ by assembly rounding (a few nm..um).
@@ -490,9 +492,12 @@ def replace_power_array(board, intent, fab, offset_mm=0.0):
 
 
 def main():
-    import argparse, json, shutil
+    import argparse
+    import json
+    import shutil
     from pathlib import Path
     from types import SimpleNamespace
+
     import pcbnew
     from pnr.plane_intent import read_annotations, resolve
 

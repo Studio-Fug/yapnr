@@ -10,10 +10,12 @@ import heapq
 import itertools
 import math
 import time
-from .layered import primitives, route_layers
-from .spatial_conflicts import PrimitiveIndex
-from .regional import RegionalResult, segment_distance
+
 from pnr.fab_profile import bind_active
+
+from .layered import primitives, route_layers
+from .regional import RegionalResult, segment_distance
+from .spatial_conflicts import PrimitiveIndex
 
 # Fab-profile default via (PNR_FAB_PROFILE; legacy 0.6 / 0.501), kept in module
 # globals: conflict() runs per primitive pair and must cost what the literals did.

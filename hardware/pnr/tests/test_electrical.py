@@ -1,20 +1,23 @@
 """Electrical geometry contracts: current budgets, source identity and coupling."""
 
-import math, tempfile, unittest
+import math
+import tempfile
+import unittest
 from pathlib import Path
 from types import SimpleNamespace as NS
-from pnr.electrical import (
-    current_width,
-    compile_policy,
-    resolve_currents,
-    net_policy,
-    terminal_policy,
-    neck_budget,
-)
+
 from pnr.constraints import NetClass
-from pnr.route.detail.coupled import solve_pair, offset_path, tune, geometry_ok, path_metrics
-from pnr.route.detail.keyhole import length
+from pnr.electrical import (
+    compile_policy,
+    current_width,
+    neck_budget,
+    net_policy,
+    resolve_currents,
+    terminal_policy,
+)
 from pnr.native_electrical import bank_points
+from pnr.route.detail.coupled import geometry_ok, offset_path, path_metrics, solve_pair, tune
+from pnr.route.detail.keyhole import length
 
 FAB = dict(
     outer_copper_oz=1,

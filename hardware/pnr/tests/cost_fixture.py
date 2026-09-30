@@ -1,5 +1,5 @@
-from pnr.graph import BoardGraph, BoardOutline, Component, Pad, Net
 from pnr.constraints import compile_constraints
+from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
 
 
 def fixture():

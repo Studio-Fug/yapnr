@@ -1,6 +1,8 @@
-import unittest, random
-from pnr.graph import BoardGraph, BoardOutline, Component
+import random
+import unittest
+
 from pnr.constraints import compile_constraints
+from pnr.graph import BoardGraph, BoardOutline, Component
 from pnr.place.batch_relocate import joint_configurations
 
 
@@ -49,6 +51,7 @@ class JointTests(unittest.TestCase):
 
     def test_all_batch_pads_and_incident_tracks_removed_before_probe(self):
         from unittest.mock import patch
+
         from pnr.graph import Pad
         from pnr.place.batch_relocate import propose_batches
 

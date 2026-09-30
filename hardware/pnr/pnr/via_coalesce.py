@@ -12,16 +12,16 @@ PNR_PARTIAL_CYCLE_CLEANUP=1 (:func:`pnr.track_graph.partial_cycle_cleanup_enable
 """
 
 import argparse
-from collections import Counter
 import hashlib
 import json
 import math
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tempfile
+from collections import Counter
+from pathlib import Path
 from types import SimpleNamespace
 
 from pnr.pad_entry import closest, snapshot, xy
@@ -369,7 +369,7 @@ def worker(args, rules):
 
         result = dict(cycles=cycle_candidates(b, rules, args.annotation_source, 2 * args.radius))
     elif args.worker == "cycle-trial":
-        from pnr.track_graph import cycle_candidates, apply_cycle, partial_cycle_cleanup_enabled
+        from pnr.track_graph import apply_cycle, cycle_candidates, partial_cycle_cleanup_enabled
 
         before = dict(partition=partition(b), entries=snapshot(b, rules))
         requested = json.loads(args.transaction.read_text())

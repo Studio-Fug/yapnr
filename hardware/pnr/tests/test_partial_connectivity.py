@@ -1,12 +1,13 @@
 import unittest
-from unittest.mock import patch
 from types import SimpleNamespace
+from unittest.mock import patch
+
 import numpy as np
-from pnr.route.detail.grid import Cell, RouteGrid
-from pnr.route.detail.maze import route, remaining_connections, RoutedNet, RouteResult
-from pnr.route.feedback import _place_route_loop
-from pnr.graph import BoardGraph
 from pnr.constraints import compile_constraints
+from pnr.graph import BoardGraph
+from pnr.route.detail.grid import Cell, RouteGrid
+from pnr.route.detail.maze import RoutedNet, RouteResult, remaining_connections, route
+from pnr.route.feedback import _place_route_loop
 
 
 class ScoreTest(unittest.TestCase):
@@ -70,8 +71,9 @@ class ScoreTest(unittest.TestCase):
 
 import unittest
 from collections import defaultdict
-from pnr.route.detail.grid import RouteGrid, Cell
-from pnr.route.detail.maze import _route_one, route, remaining_connections
+
+from pnr.route.detail.grid import Cell, RouteGrid
+from pnr.route.detail.maze import _route_one, remaining_connections, route
 
 
 class PartialNegotiationTest(unittest.TestCase):

@@ -4,7 +4,9 @@ Reconstruct copper, including new shared junctions; this is not cycle deletion.
 Pure geometry in mm, no board/net/ref-specific routing rules.
 """
 
-import math, heapq, itertools
+import heapq
+import itertools
+import math
 from collections import defaultdict
 
 

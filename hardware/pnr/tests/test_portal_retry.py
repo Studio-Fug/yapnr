@@ -1,5 +1,6 @@
 import unittest
 from unittest.mock import patch
+
 from pnr.portal_retry import retry_command
 from pnr.route.detail import portal_joint as p
 from pnr.route.detail.regional import Request

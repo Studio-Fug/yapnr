@@ -1,4 +1,6 @@
-import copy, unittest
+import copy
+import unittest
+
 from pnr.power_bank_stage import quality_checks
 
 

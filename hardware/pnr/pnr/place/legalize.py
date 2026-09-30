@@ -32,7 +32,6 @@ from pnr.graph import BoardGraph, Component
 
 from .geometry import Rect, ReserveRect, courtyard_rect, occupied_sides, pad_rects, placement_rects
 
-
 # PNR_PAIR_LANDING_RESERVE=1 (pnr.place.pair_landing): besides the per-side body
 # occupancy, legalize keeps two more rasters per side: ``mounted`` (bodies of parts
 # MOUNTED on that side) and ``reserved`` (diff-pair via landing reserves). A part's
@@ -654,7 +653,8 @@ def legalize(
         attached = ()
         original_rotation = comp.rot
         error = None
-        from .cost_capture import folder as cost_folder, legalizer_decision
+        from .cost_capture import folder as cost_folder
+        from .cost_capture import legalizer_decision
 
         capturing = cost_folder() is not None
         captured_fields = {}
@@ -768,7 +768,8 @@ def legalize(
             continue
         if error is not None:
             comp.rot = original_rotation
-            import os, json
+            import json
+            import os
             from pathlib import Path
 
             debug = os.environ.get("PNR_PLACEMENT_DIAGNOSTICS")
@@ -839,8 +840,10 @@ def legalize(
         neighbors.append(comp)
 
     if cost_records:
-        import hashlib, json
+        import hashlib
+        import json
         from pathlib import Path
+
         from .cost_capture import save
 
         records = []

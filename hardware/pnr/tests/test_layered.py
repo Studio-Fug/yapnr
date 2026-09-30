@@ -1,13 +1,14 @@
-import unittest
 import math
-from pnr.route.detail.layered import solve_layered_region
-from pnr.route.detail.regional import Request
+import unittest
+
 from pnr.route.detail.layered import (
-    route_layers,
-    primitives,
     copper_conflict,
+    primitives,
+    route_layers,
+    solve_layered_region,
     via_conflict,
 )
+from pnr.route.detail.regional import Request
 
 
 class LayeredTest(unittest.TestCase):
@@ -169,7 +170,8 @@ class LayeredTest(unittest.TestCase):
 
 
 import unittest
-from pnr.route.detail.layered import route_escape_ports, primitives
+
+from pnr.route.detail.layered import primitives, route_escape_ports
 
 
 class BacksidePortsTest(unittest.TestCase):

@@ -1,8 +1,9 @@
 import unittest
+
 import pcbnew as k
-from test_pair_bridge import PairBridgeTest
 from pnr.native_electrical import Oracle, pair_layer_bridge
 from pnr.route.detail.coupled import path_metrics
+from test_pair_bridge import PairBridgeTest
 
 
 class IntermediateTimingTest(PairBridgeTest):

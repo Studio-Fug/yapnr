@@ -3,10 +3,11 @@
 import cProfile
 import json
 import os
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
+
 from pnr import profile as profiling
 
 
@@ -66,8 +67,13 @@ class ProfileTests(unittest.TestCase):
                 self.assertFalse(profiling.active)
 
 
-import gc, os, tempfile, unittest, weakref
+import gc
+import os
+import tempfile
+import unittest
+import weakref
 from unittest.mock import patch
+
 from pnr import profile
 
 

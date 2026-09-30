@@ -7,10 +7,11 @@ is reported, never inferred from the width of an old trace.
 """
 
 import hashlib
-import os
 import json
 import math
+import os
 from pathlib import Path
+
 from pnr.plane_intent import positive, size_array
 
 

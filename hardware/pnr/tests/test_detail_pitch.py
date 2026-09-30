@@ -1,5 +1,7 @@
-import os, unittest
+import os
+import unittest
 from unittest.mock import patch
+
 from pnr.route.detail.router import detail_pitch, escape_reach_cells
 
 

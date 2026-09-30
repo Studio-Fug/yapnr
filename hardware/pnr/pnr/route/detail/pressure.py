@@ -7,6 +7,7 @@ observed obstructed cells (or disconnected endpoints) receive pressure.
 
 import heapq
 import math
+
 from .grid import Cell
 
 

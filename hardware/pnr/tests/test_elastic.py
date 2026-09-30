@@ -1,8 +1,9 @@
 import unittest
+
 import numpy as np
-from pnr.graph import BoardGraph, BoardOutline, Component, Pad, Net
 from pnr.constraints import compile_constraints
-from pnr.place.elastic import mesh_weights, project_collectively, deform
+from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
+from pnr.place.elastic import deform, mesh_weights, project_collectively
 from pnr.place.metrics import hard_violations
 
 
@@ -88,8 +89,9 @@ class GrowthTest(unittest.TestCase):
 
 class ElasticControllerTest(unittest.TestCase):
     def test_full_loop_uses_collective_moves_and_escalates_after_plateau(self):
-        from unittest.mock import patch
         from types import SimpleNamespace as NS
+        from unittest.mock import patch
+
         from pnr.route.feedback import route_and_place
 
         g, cc = ElasticTest().fixture()

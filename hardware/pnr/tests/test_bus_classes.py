@@ -10,7 +10,14 @@ needs pcbnew (KiCad Python) and skips elsewhere.
   KiCad:   PYTHONPATH=$PWD/..:$PWD $PNR_KICAD_PYTHON -m unittest -v test_bus_classes
 """
 
-import copy, dataclasses, json, math, os, tempfile, time, unittest
+import copy
+import dataclasses
+import json
+import math
+import os
+import tempfile
+import time
+import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -974,9 +981,9 @@ class RouterStubDelayTest(unittest.TestCase):
     """The real _pair_plan_order on the src13 J -> D -> U chain, with a class stub limit."""
 
     def plan(self, stub_limit, extra_env=None):
-        from test_pair_src13 import ChainRunAndStubTest
-        from test_pair_post_bridge import CROSSING, chain_board
         import test_pair_post_bridge as tpb
+        from test_pair_post_bridge import CROSSING, chain_board
+        from test_pair_src13 import ChainRunAndStubTest
 
         real = tpb.chain_board
 
@@ -1068,8 +1075,8 @@ class RouterStubDelayTest(unittest.TestCase):
         self.assertEqual([s["start"] for s in result["stub_skips"]], ["bridge_vias", "via_reuse"])
 
     def test_flag_off_ignores_the_limit(self):
-        from test_pair_post_bridge import CROSSING
         import test_pair_post_bridge as tpb
+        from test_pair_post_bridge import CROSSING
         from test_pair_src13 import ChainRunAndStubTest
 
         real = tpb.chain_board

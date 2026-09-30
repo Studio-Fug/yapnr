@@ -19,7 +19,6 @@ from pathlib import Path
 from unittest import mock
 
 import pcbnew as k
-
 from pnr import fab_profile as fp
 from pnr.electrical import compile_policy
 
@@ -350,7 +349,7 @@ class NeckTest(unittest.TestCase):
     nor turn), a full-width entry is not."""
 
     def test_neck_outer_vertex_is_bound_to_its_land(self):
-        from pnr.shove.world import World, FIX
+        from pnr.shove.world import FIX, World
 
         b = power_board()
         r = power_rules()

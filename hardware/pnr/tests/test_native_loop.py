@@ -2,12 +2,19 @@
 
 import json
 import math
-from pathlib import Path
 import tempfile
 import unittest
-from pnr.native_loop import route_search_seconds, scheduled_route_jobs, route_job_key
-from pnr.native_loop import gate, placements, score_failures
+from pathlib import Path
+
 from pnr.graph import BoardGraph, BoardOutline, Component, Pad
+from pnr.native_loop import (
+    gate,
+    placements,
+    route_job_key,
+    route_search_seconds,
+    scheduled_route_jobs,
+    score_failures,
+)
 
 
 class NativeLoopTest(unittest.TestCase):
@@ -41,7 +48,7 @@ class NativeLoopTest(unittest.TestCase):
         self.assertEqual(len(jobs), 6)
 
     def test_fair_sweeps_do_not_starve_longer_connections(self):
-        from pnr.native_loop import scheduled_route_jobs, route_job_key
+        from pnr.native_loop import route_job_key, scheduled_route_jobs
 
         jobs = [
             dict(net="n", source="A." + str(i), target="B." + str(i), distance=i)
@@ -169,8 +176,9 @@ class Scheduling(unittest.TestCase):
 
 
 import unittest
-from pnr.graph import BoardGraph, Component, BoardOutline
+
 from pnr.constraints import compile_constraints
+from pnr.graph import BoardGraph, BoardOutline, Component
 from pnr.place.metrics import hard_violations, translation_checker
 
 

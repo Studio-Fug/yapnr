@@ -6,20 +6,22 @@ Pressure is in stable caller-defined units, never normalized to the current peak
 """
 
 import math
+
 import numpy as np
 import torch
 from pnr.graph import BoardGraph
+
 from .channels import ChannelModel
 from .geometry import (
     courtyard_rect,
+    hard_group_limits,
+    keepout_rects,
     occupied_sides,
     outline_size,
     resolve_fixed_poses,
-    keepout_rects,
-    hard_group_limits,
 )
+from .legalize import LegalizationError, legalize
 from .metrics import hard_violations, hpwl
-from .legalize import legalize, LegalizationError
 from .placer import PlacementReport
 
 

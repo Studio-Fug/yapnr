@@ -1,8 +1,10 @@
 """Integer-state A* with invocation-local caches and unchanged routing predicates."""
 
 from __future__ import annotations
+
 import heapq
 from functools import lru_cache
+
 from .grid import Cell
 
 _SQRT2 = 2.0**0.5

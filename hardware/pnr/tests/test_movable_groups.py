@@ -1,10 +1,12 @@
-import math, unittest
-from pnr.graph import BoardGraph, BoardOutline, Component, Pad, Net
-from pnr.constraints import compile_constraints, ConstraintError
+import math
+import unittest
+
+from pnr.constraints import ConstraintError, compile_constraints
+from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
+from pnr.place.batch_relocate import joint_configurations
 from pnr.place.geometry import hard_group_edges, hard_group_limits, resolve_hard_rotations
 from pnr.place.legalize import legalize
 from pnr.place.metrics import hard_violations, translation_checker
-from pnr.place.batch_relocate import joint_configurations
 from pnr.place.model import global_place
 
 

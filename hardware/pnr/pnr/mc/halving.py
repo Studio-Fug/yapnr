@@ -152,8 +152,8 @@ def _agreement(pairs):
 
 def _load(inputs: Path, constraints_path: Path):
     import yaml
-    from pnr.graph import BoardGraph
     from pnr.constraints import compile_constraints
+    from pnr.graph import BoardGraph
 
     graph = BoardGraph.from_json((inputs / "graph.json").read_text())
     constraints = compile_constraints(
@@ -220,14 +220,14 @@ def _place_impl(
             lib, digest = _read_library(library)
             if digest:
                 record["library_sha256"] = digest
-        from pnr.place.initial_pool import (
-            preserve_source_locks,
-            _prepared_source,
-            _hard_and_source_errors,
-        )
-        from pnr.place.placer import place
-        from pnr.place.metrics import hpwl
         from pnr.place.capacity_proxy import cheap_score, score
+        from pnr.place.initial_pool import (
+            _hard_and_source_errors,
+            _prepared_source,
+            preserve_source_locks,
+        )
+        from pnr.place.metrics import hpwl
+        from pnr.place.placer import place
 
         graph, constraints, rules = _load(Path(inputs), Path(constraints_path))
         constraints = preserve_source_locks(graph, constraints)
@@ -292,9 +292,9 @@ def _place_impl(
 def _starts(inputs, constraints_path, n, seed):
     from pnr.place.initial_pool import (
         InitialPoolConfig,
+        _prepared_source,
         initial_starts,
         preserve_source_locks,
-        _prepared_source,
     )
 
     graph, constraints, rules = _load(inputs, constraints_path)
@@ -319,8 +319,8 @@ def _screen_one(args):
         if live:
             os.environ["PNR_LIVE_CANDIDATE"] = live
         from pnr.graph import BoardGraph
-        from pnr.route.detail.router import route_board
         from pnr.place.initial_pool import _route_metrics
+        from pnr.route.detail.router import route_board
 
         graph, constraints, rules = _load(Path(inputs), Path(constraints_path))
         placed = BoardGraph.from_json((cand / "placed.json").read_text())
@@ -728,7 +728,6 @@ def _generations(a, ctx):
     poses differ from the stored one stops the run (the plan changed). Returns
     the same-code native pool (ok records) that deep ranks.
     """
-    from pnr.graph import BoardGraph
     from pnr.feedback.moves import pull_children, rand_child, seed_for
     from pnr.feedback.signals import current_key, key_string, read_round
     from pnr.feedback.table import build
@@ -740,6 +739,7 @@ def _generations(a, ctx):
         source_errors,
         top_board,
     )
+    from pnr.graph import BoardGraph
 
     out, status, save_status = ctx["out"], ctx["status"], ctx["save_status"]
     done_records, native_stage, flags = ctx["done_records"], ctx["native_stage"], ctx["flags"]

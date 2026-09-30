@@ -1,14 +1,17 @@
-import json, tempfile, unittest
-from unittest.mock import patch
+import json
+import tempfile
+import unittest
 from types import SimpleNamespace as NS
+from unittest.mock import patch
+
 import numpy as np
-from pnr.graph import BoardGraph, BoardOutline, Component, Pad
 from pnr.constraints import compile_constraints
-from pnr.place.placer import PlacementReport
+from pnr.graph import BoardGraph, BoardOutline, Component, Pad
 from pnr.place.legalize import LegalizationError
 from pnr.place.metrics import hard_violations
-from pnr.route.feedback import local_feedback_placement, _place_route_loop
-from pnr.route.detail.maze import RouteResult, RoutedNet
+from pnr.place.placer import PlacementReport
+from pnr.route.detail.maze import RoutedNet, RouteResult
+from pnr.route.feedback import _place_route_loop, local_feedback_placement
 
 
 class PlacementFallback(unittest.TestCase):

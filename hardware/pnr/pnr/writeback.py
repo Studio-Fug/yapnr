@@ -344,6 +344,7 @@ def _collect_obstacles(board):
     An unreadable track collection raises instead of silently ignoring copper.
     """
     import math
+
     import pcbnew
 
     obs = []
@@ -433,8 +434,9 @@ def _reuse_surface_ground(board, pad, obstacles, trace_w, clr, max_length_mm=3.0
     Restrict reuse to the same package; do not daisy-chain unrelated ground
     returns or apply this signal-leaf policy to power-plane nets.
     """
-    import pcbnew
     import math
+
+    import pcbnew
 
     surface = (
         pcbnew.B_Cu
@@ -525,6 +527,7 @@ def _dogbone_fanout_net(
     required width reproduces the previous search order exactly.
     """
     import math
+
     import pcbnew
 
     fab = _fab(rules)
@@ -543,6 +546,7 @@ def _dogbone_fanout_net(
     oracle = None
     if bounds.GetWidth() and bounds.GetHeight():
         import copy
+
         from pnr.native_electrical import Oracle
 
         checked_rules = copy.deepcopy(rules or {})
@@ -704,10 +708,10 @@ def _in_pad_plane_via(board, pad, rules, oracle, obstacles) -> bool:
     """
     import pcbnew
     from pnr.via_in_pad import (
-        pad_frame,
-        in_pad_size,
-        pad_policy,
         array_requirement,
+        in_pad_size,
+        pad_frame,
+        pad_policy,
         style_in_pad_via,
     )
 
@@ -760,6 +764,7 @@ def normalize_item_uuids(board):
     a second pass is a no-op. Duplicate footprint IDs are rejected.
     """
     import uuid
+
     import pcbnew
 
     footprints = list(board.GetFootprints())
@@ -918,6 +923,7 @@ def patch_project_rules(pro_path: str, rules: Optional[dict] = None) -> bool:
     True if the file was patched.
     """
     import json
+
     from pnr import fab_profile
 
     # Stamp under the selected fab profile (identity for legacy rules/profile).
@@ -1123,6 +1129,7 @@ def apply_copper_keepouts(board, graph, rules, height):
     rules makes it survive that generation step and the Specctra export.
     """
     import math
+
     import pcbnew
 
     for zone in list(board.Zones()):

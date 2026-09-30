@@ -12,7 +12,6 @@ import math
 import unittest
 
 import pcbnew as k
-
 from pnr import fab_profile as fp
 from pnr.electrical import compile_policy
 from test_via_in_pad_native import FAB, V, board, pad, u5, via
@@ -61,7 +60,7 @@ def track(b, net, layer, a, z, width):
 
 
 def realize(b, net, plan, g):
-    from pnr.native_electrical import add_track, add_bank, add_in_pad_vias
+    from pnr.native_electrical import add_bank, add_in_pad_vias, add_track
 
     for la, x, y, w in plan.get("tracks", []):
         add_track(b, net, la, x, y, w)

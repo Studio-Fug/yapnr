@@ -1,9 +1,13 @@
 """Run the production placement/detail feedback API, no fixture-specific routes."""
 
-import json, os, sys, time
+import json
+import os
+import sys
+import time
 from pathlib import Path
-from pnr.graph import BoardGraph
+
 from pnr.constraints import compile_constraints, compile_routing_rules
+from pnr.graph import BoardGraph
 from pnr.route.feedback import route_and_place
 
 root = Path(sys.argv[1])

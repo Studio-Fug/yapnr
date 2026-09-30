@@ -49,8 +49,8 @@ def plans_from_rows(rows, selected_nets, bounds, *, limit=2, max_span=35):
 
 
 def inspect(board, rules, report, selected_nets, bounds, sources=()):
-    from pnr.native_electrical import uid, xy
     from pnr.electrical import net_policy
+    from pnr.native_electrical import uid, xy
     from pnr.via_coalesce import protected
 
     excluded, _ = protected(board, rules, sources)
@@ -79,8 +79,11 @@ def inspect(board, rules, report, selected_nets, bounds, sources=()):
 
 
 def main():
-    import argparse, json, pcbnew as k
+    import argparse
+    import json
     from pathlib import Path
+
+    import pcbnew as k
 
     p = argparse.ArgumentParser()
     p.add_argument("board", type=Path)

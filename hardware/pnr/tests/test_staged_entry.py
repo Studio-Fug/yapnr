@@ -1,10 +1,13 @@
-import json, tempfile, unittest
+import json
+import tempfile
+import unittest
 from pathlib import Path
+
 import pcbnew as k
-from test_native_electrical import board, pad
-from pnr.fixed_copper import export, append
+from pnr.fixed_copper import append, export
 from pnr.ingest import _board_frame
 from pnr.pad_entry import snapshot
+from test_native_electrical import board, pad
 
 
 class StagedEntryTest(unittest.TestCase):

@@ -1,5 +1,8 @@
-import json, tempfile, unittest
+import json
+import tempfile
+import unittest
 from pathlib import Path
+
 from pnr.graph import BoardGraph, BoardOutline, Component, Pad
 from pnr.native_loop import pair_placements
 

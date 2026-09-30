@@ -6,12 +6,14 @@ pose, side, orientation, group or keepout is relaxed by this module.
 """
 
 import heapq
-import os
 import math
+import os
+
 import numpy as np
 from pnr.graph import BoardGraph
-from .geometry import pin_positions, resolve_fixed_poses, outline_size
-from .metrics import translation_checker, hard_violations, hpwl
+
+from .geometry import outline_size, pin_positions, resolve_fixed_poses
+from .metrics import hard_violations, hpwl, translation_checker
 
 
 def distance_field(
@@ -77,12 +79,12 @@ def _fields(graph, comp, rules, tracks, vias, pitch, *, terms=False):
     from pnr.route.detail.grid import RouteGrid
     from pnr.route.detail.router import (
         _fab,
-        _signal_layers,
-        _mark_plane_regions,
         _mark_copper_keepouts,
+        _mark_plane_regions,
         _mark_source_arrays,
         _net_widths,
         _plane_nets,
+        _signal_layers,
     )
 
     # Remove only this component's pads from the static substrate. Keep its body
@@ -258,9 +260,10 @@ def propose(
     Declines unsupported nonrectangular outlines and moving source-array/keepout
     owners until their candidate-dependent obstacles can be rebuilt correctly.
     """
-    from .placer import PlacementReport
-    from .anneal import choose_cost
     import random
+
+    from .anneal import choose_cost
+    from .placer import PlacementReport
 
     sample_parts = rng is not None
     rng = rng or random.Random(0)

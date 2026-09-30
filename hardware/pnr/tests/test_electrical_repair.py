@@ -1,4 +1,5 @@
 import unittest
+
 import pcbnew as k
 from pnr.electrical_repair import candidates, restoration_pair
 from pnr.via_coalesce import partition

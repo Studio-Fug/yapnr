@@ -1,6 +1,13 @@
 """Start an isolated initialized KiCad host; never install into user configuration."""
 
-import argparse, json, os, shutil, subprocess, sys, time, re
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 p = argparse.ArgumentParser()

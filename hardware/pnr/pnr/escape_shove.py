@@ -4,19 +4,23 @@ Fixture arguments select pads, never alter net-specific rules. Existing vias,
 external track endpoints, widths, and all prior pad connections are anchors.
 """
 
-import argparse, json, math, itertools
-from pathlib import Path
+import argparse
+import itertools
+import json
+import math
 from collections import Counter
-from pnr.geometric_tree import tree, point, elbows
+from pathlib import Path
+
+from pnr.geometric_tree import elbows, point, tree
 from pnr.profile import span
 
 
 def main():
     import pcbnew as k
-    from pnr.native_electrical import Oracle, xy, uid, add_track, vec
-    from pnr.via_coalesce import partition, preserved, touch
-    from pnr.pad_entry import snapshot
     from pnr.electrical import net_policy
+    from pnr.native_electrical import Oracle, add_track, uid, vec, xy
+    from pnr.pad_entry import snapshot
+    from pnr.via_coalesce import partition, preserved, touch
 
     ap = argparse.ArgumentParser()
     ap.add_argument("board")

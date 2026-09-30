@@ -1,8 +1,10 @@
 """Regression: source intent survives ref renumbering and scales with current."""
 
-import tempfile, unittest
+import tempfile
+import unittest
 from pathlib import Path
 from types import SimpleNamespace as NS
+
 from pnr.plane_intent import read_annotations, resolve, size_array
 
 FAB = dict(

@@ -4,15 +4,21 @@ The model is isolated from the visible seed. No sockets or UI clicking. Full
 native checks run every request; this is NOT regional/incremental DRC.
 """
 
-import hashlib, json, os, sys, time, traceback, resource
+import hashlib
+import json
+import os
+import resource
+import sys
+import time
+import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from report import parse, item_index
-from model import split_board, synchronize
-from dependencies import library_inputs, verify
 import pcbnew as k
 import wx
+from dependencies import library_inputs, verify
+from model import split_board, synchronize
+from report import item_index, parse
 
 
 def sha(p):

@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from pnr.place.geometry import pad_rects
 from pnr.writeback import _segment_distance_sq
+
 from .grid import Cell
 from .joint_access import select_joint
 from .keyhole import elbows, length

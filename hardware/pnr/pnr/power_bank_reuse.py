@@ -6,12 +6,13 @@ with a full-current route. Inner-layer ports and unsupported copper are excluded
 """
 
 import math
-from pnr.electrical import net_policy, current_width
-from pnr.plane_intent import size_array
-from pnr.native_electrical import uid, xy, Oracle, add_track
+
+from pnr.electrical import current_width, net_policy
+from pnr.native_electrical import Oracle, add_track, uid, xy
 from pnr.pad_entry import closest
-from pnr.route.detail.regional import segment_distance
+from pnr.plane_intent import size_array
 from pnr.route.detail.keyhole import elbows, legal, length
+from pnr.route.detail.regional import segment_distance
 
 
 def connected_tracks(tracks, starts):

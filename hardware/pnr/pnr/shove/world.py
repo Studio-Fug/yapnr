@@ -27,7 +27,7 @@ are never reduced; the native worker, DRC and the whole-transaction gate decide.
 import math
 from collections import defaultdict
 
-from pnr.shove.geom import add, sub, seg_seg, point_in_poly, poly_edges, closest_on_seg
+from pnr.shove.geom import add, closest_on_seg, point_in_poly, poly_edges, seg_seg, sub
 from pnr.shove.qp import hildreth
 
 FIX = "FIX"

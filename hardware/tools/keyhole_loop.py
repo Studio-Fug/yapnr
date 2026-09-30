@@ -7,12 +7,10 @@ native result becomes the next input. This stage has no FreeRouting dependency.
 import argparse
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
-
-
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pnr"))
 from pnr.route.detail.keyhole import acceptable

@@ -1,6 +1,10 @@
-import json, tempfile, unittest, subprocess
+import json
+import subprocess
+import tempfile
+import unittest
 from pathlib import Path
 from unittest.mock import patch
+
 from pnr.native_drc import run_drc
 
 

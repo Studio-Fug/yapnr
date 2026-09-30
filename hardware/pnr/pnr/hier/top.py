@@ -146,7 +146,7 @@ def hierarchical_place(graph, constraints, rules, library, seed, iters=600, pair
 
     ``pair_weights`` (flat refs, pnr.feedback) become a pad-pair attraction on the
     macro placement; None leaves it as before."""
-    from pnr.place.initial_pool import preserve_source_locks, _prepared_source
+    from pnr.place.initial_pool import _prepared_source, preserve_source_locks
     from pnr.place.placer import place
 
     rng = random.Random(seed)

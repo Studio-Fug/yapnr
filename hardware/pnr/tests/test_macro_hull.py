@@ -24,11 +24,10 @@ from pathlib import Path
 from unittest import mock
 
 import numpy as np
-
 from pnr.graph import BoardGraph, Component, Net, Pad
 from pnr.hier import extent as E
 from pnr.place import hull as H
-from pnr.place.geometry import Rect, courtyard_rect, pad_rects, placement_rects, pin_positions
+from pnr.place.geometry import Rect, courtyard_rect, pad_rects, pin_positions, placement_rects
 from pnr.place.legalize import legalize
 from pnr.place.metrics import hard_violations, overlap_pairs
 
@@ -634,10 +633,10 @@ def _rotate_mask(mask, k):
 class RealLayoutTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        from pnr.mc.halving import _load
         from pnr.hier.blocks import extract_blocks
         from pnr.hier.synth import instance_board
-        from pnr.place.initial_pool import preserve_source_locks, _prepared_source
+        from pnr.mc.halving import _load
+        from pnr.place.initial_pool import _prepared_source, preserve_source_locks
 
         cls.env = off()
         graph, constraints, rules = _load(INPUTS, CONSTRAINTS)
@@ -1442,6 +1441,7 @@ class PadEdgeTest(unittest.TestCase):
 
     def test_row_ends_keep_pads_off_the_perpendicular_edges(self):
         import copy
+
         from pnr.constraints import compile_constraints
         from pnr.graph import BoardOutline
         from pnr.place.rows import sample_constraints, violations
@@ -1494,7 +1494,7 @@ class PadEdgeTest(unittest.TestCase):
 
     def test_place_flags_and_prevents_pad_edge_violations(self):
         from pnr.constraints import compile_constraints
-        from pnr.place.placer import place, _finish
+        from pnr.place.placer import _finish, place
 
         parts = [self.flush_part("U%d" % i, (0.5 + i, 0.5)) for i in range(4)]
         g = BoardGraph("t", parts, [Net("N1", 1, [(p.ref, "1") for p in parts])])
@@ -1713,8 +1713,8 @@ class SlowHierarchicalTest(unittest.TestCase):
         self.assertIn("error", a["6"])
 
     def test_shrink_hull_p027_is_legal_and_keeps_copper_clearance(self):
-        from pnr.mc.halving import _load
         from pnr.hier.top import hierarchical_place, load_library
+        from pnr.mc.halving import _load
 
         graph, constraints, rules = _load(INPUTS, CONSTRAINTS)
         lib = load_library(SNAPSHOT)

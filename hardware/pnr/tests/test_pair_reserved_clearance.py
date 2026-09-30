@@ -3,8 +3,8 @@ import unittest
 # src15: no wx.App here - it registered KiCad's Python.app as a Foreground (Dock) app and the
 # Oracle checks do not need it (the other native_electrical tests run without one).
 import pcbnew as k
-from test_native_electrical import board, pad
 from pnr.native_electrical import Oracle
+from test_native_electrical import board, pad
 
 
 class PairReservedTest(unittest.TestCase):

@@ -1,6 +1,8 @@
+import subprocess
+import sys
 from pathlib import Path
-import sys, subprocess
-from PIL import Image, ImageOps, ImageDraw
+
+from PIL import Image, ImageDraw, ImageOps
 
 root = Path(sys.argv[1])
 mode = sys.argv[2]

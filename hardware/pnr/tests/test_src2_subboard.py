@@ -1,7 +1,11 @@
 """Sub-board fidelity for hierarchical block evaluation (pnr.hier)."""
 
-import copy, json, os, unittest
+import copy
+import json
+import os
+import unittest
 from unittest import mock
+
 from pnr.constraints import BoardSpec, CompiledConstraints
 from pnr.electrical import compile_policy, current_width, net_policy
 from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
@@ -246,9 +250,12 @@ class SubBoardTest(unittest.TestCase):
             with_apron(g, -0.1)
 
     def test_evaluate_writes_apron_board_and_matching_constraint_outline(self):
-        import subprocess, tempfile, yaml
+        import subprocess
+        import tempfile
         from pathlib import Path
+
         import pnr.hier.native_block as nb
+        import yaml
 
         g, _, r = self.cut()
         for c in g.components:
@@ -289,8 +296,10 @@ class SubBoardTest(unittest.TestCase):
         self.assertEqual(len(calls), 4)
 
     def test_default_apron_is_edge_clearance_so_copper_stays_in_block(self):
-        import subprocess, tempfile
+        import subprocess
+        import tempfile
         from pathlib import Path
+
         import pnr.hier.native_block as nb
 
         g, _, r = self.cut()

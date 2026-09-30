@@ -4,7 +4,14 @@ No KiCad: the worker seams (_invoke for serial/inventory/screen, _trial for
 parallel trials) are replaced by scripted fakes with controlled timings.
 """
 
-import json, os, subprocess, sys, tempfile, threading, time, unittest
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import unittest
 from pathlib import Path
 from unittest import mock
 

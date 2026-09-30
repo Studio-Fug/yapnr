@@ -1,6 +1,8 @@
 """Validated, atomic live experiment controls; geometry rules are never editable."""
 
-import json, os, time
+import json
+import os
+import time
 from pathlib import Path
 
 DEFAULTS = dict(route_workers=2, candidate_workers=2, samples=4, k=4, n=4)

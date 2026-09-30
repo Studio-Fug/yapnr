@@ -1,16 +1,19 @@
 """Local copper invalidation for a candidate cloned from an accepted board."""
 
-import argparse, json, shutil, hashlib
+import argparse
+import hashlib
+import json
+import shutil
 from pathlib import Path
 
 
 def apply(board, graph, rules):
     import pcbnew as k
-    from pnr.ingest import build_graph
-    from pnr.plane_access import uid
-    from pnr.via_coalesce import touch, copper_layers
     from pnr.electrical import net_policy
+    from pnr.ingest import build_graph
     from pnr.merge_additive import signature
+    from pnr.plane_access import uid
+    from pnr.via_coalesce import copper_layers, touch
 
     old = build_graph(board)
     previous = {c.ref: c for c in old.components}

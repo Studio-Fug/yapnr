@@ -7,13 +7,13 @@ validate native DRC and reroute the blocked net before accepting the transaction
 import argparse
 import itertools
 import json
-from pathlib import Path
 import shutil
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pnr"))
-from pnr.route.detail.keyhole import elbows, length
 import pcbnew
+from pnr.route.detail.keyhole import elbows, length
 
 
 def main():

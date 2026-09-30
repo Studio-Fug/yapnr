@@ -25,14 +25,14 @@ the end we snap to the arg-max angle. Fixed parts keep their constrained angle.
 
 from __future__ import annotations
 
+import os
 from typing import Dict, List, Optional, Tuple
 
-import os
 import torch
 from pnr.constraints import CompiledConstraints
 from pnr.graph import BoardGraph
 
-from .geometry import keepout_rects, resolve_fixed_poses, occupied_sides
+from .geometry import keepout_rects, occupied_sides, resolve_fixed_poses
 
 # Reproducibility ("same inputs -> same board", design §10): run torch
 # single-threaded so the float reductions don't vary with thread scheduling.

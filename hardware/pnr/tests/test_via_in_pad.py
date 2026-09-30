@@ -253,6 +253,7 @@ class GridRuleTest(unittest.TestCase):
 
     def test_router_enables_it_only_under_a_profile(self):
         import inspect
+
         from pnr.route.detail import router
 
         source = inspect.getsource(router.route_board)

@@ -10,9 +10,17 @@ pnr.pair_joint.first_joint_hand, not assumed); PNR_PAIR_LANDING_RESERVE=1 makes
 D-move proposals respect pair via landing reserves.
 """
 
-import math, argparse, json, os, shutil, subprocess, threading, time
+import argparse
+import json
+import math
+import os
+import shutil
+import subprocess
+import threading
+import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
+
 from pnr.native_loop import copy_board, pair_placements
 from pnr.placement_trials import diverse_pair_poses
 

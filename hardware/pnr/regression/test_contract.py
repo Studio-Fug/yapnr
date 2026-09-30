@@ -1,7 +1,9 @@
 """Independent assertions for circuit intent and the fail-closed acceptance gate."""
 
-import copy, unittest
+import copy
+import unittest
 from collections import Counter
+
 from designs import designs
 from run import acceptance
 

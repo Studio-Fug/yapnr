@@ -79,7 +79,7 @@ class HardGroupTest(unittest.TestCase):
 
     def test_full_group_region_fails_instead_of_scattering(self):
         import numpy as np
-        from pnr.place.legalize import _place_part, LegalizationError
+        from pnr.place.legalize import LegalizationError, _place_part
 
         occ = np.zeros((20, 20), dtype=bool)
         occ[2:9, 2:9] = True
@@ -116,10 +116,10 @@ class HardGroupTest(unittest.TestCase):
         self.assertEqual(movable.locked_refs, ())
 
     def test_independent_metrics_detect_scattered_group(self):
-        from pnr.graph import Component, BoardOutline
-        from pnr.place.metrics import hard_violations
+        from pnr.graph import BoardOutline, Component
         from pnr.place.geometry import hard_group_limits, resolve_fixed_poses
         from pnr.place.legalize import legalize
+        from pnr.place.metrics import hard_violations
 
         g = BoardGraph(
             name="group",

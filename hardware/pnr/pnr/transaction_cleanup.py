@@ -4,7 +4,13 @@ Native reports nominate; real layer contacts, source protection and final global
 checks decide. A worker failure never replaces the input checkpoint.
 """
 
-import argparse, hashlib, json, os, shutil, subprocess, sys
+import argparse
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -46,11 +52,11 @@ def eligible(item, requested, nets, excluded, mode, contact_layers):
 
 def native_worker(a, board):
     import pcbnew as k
-    from pnr.via_coalesce import uid, partition, protected, touch, copper_layers
-    from pnr.pad_entry import snapshot
     from pnr.electrical import net_policy
-    from pnr.native_electrical import reference_failures
     from pnr.electrical_audit import audit_board
+    from pnr.native_electrical import reference_failures
+    from pnr.pad_entry import snapshot
+    from pnr.via_coalesce import copper_layers, partition, protected, touch, uid
 
     rules = read(a.rules)
     board.BuildConnectivity()
@@ -119,7 +125,7 @@ def native_worker(a, board):
 
 
 def guards(original, routed, final, before, candidate, after):
-    from pnr.via_coalesce import preserved, acceptable
+    from pnr.via_coalesce import acceptable, preserved
 
     checks = dict(
         preserved=preserved(before["partition"], after["partition"])
@@ -148,8 +154,8 @@ def guards(original, routed, final, before, candidate, after):
 
 
 def run(a):
-    from pnr.native_drc import run_drc
     from pnr.live import emit
+    from pnr.native_drc import run_drc
 
     a.out_dir.mkdir(parents=True, exist_ok=False)
     out = a.out_dir

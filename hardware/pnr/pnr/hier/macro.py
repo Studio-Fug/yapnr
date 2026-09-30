@@ -151,10 +151,10 @@ def collapse(
     # edge clearance), so the macro reserves that clearance on every side: it then
     # also holds from the board edge, not only from neighbouring courtyards.
     margin = float(rules.get("fab", {}).get("edge_clearance_mm", 0.2))
+    from pnr.place.pair_landing import enabled as landing_enabled
     from pnr.place.pair_landing import (
-        macro_reserves,
         macro_mount_record,
-        enabled as landing_enabled,
+        macro_reserves,
     )
 
     shrink, with_hull = shrink_enabled(), hull_enabled()

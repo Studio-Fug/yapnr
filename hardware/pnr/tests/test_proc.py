@@ -10,13 +10,13 @@ neither passes ``timeout=`` nor goes through pnr.proc.
 import ast
 import math
 import os
-from pathlib import Path
 import signal
 import subprocess
 import sys
 import tempfile
 import time
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from pnr import proc
@@ -354,6 +354,7 @@ class TreeKillTest(unittest.TestCase):
 class TrialDeadlineTest(unittest.TestCase):
     def test_parallel_pair_trial_is_bounded(self):
         import threading
+
         from pnr import paired_bootstrap
 
         with tempfile.TemporaryDirectory() as d:

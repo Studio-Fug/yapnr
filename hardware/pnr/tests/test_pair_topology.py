@@ -1,17 +1,20 @@
-import math, time, unittest
+import math
+import time
+import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
+
 import pcbnew as k
-from test_native_electrical import board, rules
 from pnr.native_electrical import (
-    bridge_half_plane,
-    pair_topologies,
-    pair_plan,
-    duplicate_endpoint_metrics,
-    connector_origins_qualified,
-    vec,
     Oracle,
+    bridge_half_plane,
+    connector_origins_qualified,
+    duplicate_endpoint_metrics,
+    pair_plan,
+    pair_topologies,
+    vec,
 )
+from test_native_electrical import board, rules
 
 
 class PairTopologyTest(unittest.TestCase):

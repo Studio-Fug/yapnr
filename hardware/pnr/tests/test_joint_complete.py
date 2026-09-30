@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch
-from pnr.route.detail.joint import solve_joint_region, conflicts
+
+from pnr.route.detail.joint import conflicts, solve_joint_region
 from pnr.route.detail.layered import LayerRoute
 from pnr.route.detail.regional import Request
 

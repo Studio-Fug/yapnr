@@ -1,8 +1,11 @@
-import unittest, copy, json
+import copy
+import json
+import unittest
+
 import pcbnew as k
-from test_native_electrical import board, pad
 from pnr.native_electrical import add_track, uid
-from pnr.regional_blockers import plans_from_rows, inspect
+from pnr.regional_blockers import inspect, plans_from_rows
+from test_native_electrical import board, pad
 
 
 def row(net="renamed_signal", hits=3, **kw):

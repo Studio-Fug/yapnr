@@ -1,8 +1,14 @@
 """Opt-in immutable objective/decision snapshots. No routing decisions depend on it."""
 
-from pathlib import Path
-import dataclasses, enum, hashlib, json, os, time, uuid
+import dataclasses
+import enum
+import hashlib
+import json
+import os
+import time
+import uuid
 from contextlib import contextmanager
+from pathlib import Path
 
 
 @contextmanager
@@ -109,8 +115,9 @@ def global_loss(
     pf_state=None,
 ):
     from pnr.graph import BoardGraph, BoardOutline
-    from .geometry import outline_size
+
     from .cost_inspect import Objective
+    from .geometry import outline_size
 
     g = BoardGraph.from_json(graph.to_json())
     width, height = outline_size(g, constraints)

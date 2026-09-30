@@ -1,8 +1,9 @@
 import unittest
-from unittest.mock import patch
 from types import SimpleNamespace as NS
-from pnr.graph import BoardGraph, BoardOutline, Component
+from unittest.mock import patch
+
 from pnr.constraints import compile_constraints
+from pnr.graph import BoardGraph, BoardOutline, Component
 from pnr.route.feedback import route_and_place
 
 

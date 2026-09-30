@@ -37,8 +37,8 @@ def soft_pads(board, parts):
 
 def relaxed_oracle(board, board_path, rules, soft, delta, deadline, parts=()):
     import pcbnew as k
-    from pnr.native_electrical import Oracle, uid
     from pnr.fab_profile import load_board
+    from pnr.native_electrical import Oracle, uid
 
     pads = soft_pads(board, parts) if parts else set()
     soft = set(soft) | pads
@@ -195,6 +195,7 @@ def plan_collisions(board, rules, plan, candidates, net):
     """Existing items (``candidates`` = {uid: item}) whose copper the plan's copper
     would violate at the exact net-class clearance: ``{uid: hits}``."""
     from collections import Counter
+
     from pnr.electrical import net_policy
 
     layers = list(board.GetEnabledLayers().CuStack())
@@ -218,8 +219,8 @@ def plan_collisions(board, rules, plan, candidates, net):
 def crossing_nets(plan, board, candidates):
     """Nets whose same-layer centreline the plan's centreline properly crosses:
     a topological crossing no displacement can undo (L4 rip candidates)."""
-    from pnr.shove.geom import seg_intersect
     from pnr.native_electrical import xy
+    from pnr.shove.geom import seg_intersect
 
     out = set()
     for la, a, z, w in plan.get("tracks", []):

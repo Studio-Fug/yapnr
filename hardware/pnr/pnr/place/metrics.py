@@ -12,7 +12,6 @@ translation_checker see diff-pair via landing reserves through placement_rects
 from __future__ import annotations
 
 import math
-
 from typing import Dict, List, Tuple
 
 from pnr.constraints import CompiledConstraints
@@ -21,16 +20,16 @@ from pnr.graph import BoardGraph
 from .geometry import (
     Rect,
     courtyard_rect,
-    occupied_sides,
-    placement_rects,
+    hard_group_edges,
+    hard_group_limits,
     keepout_rects,
+    occupied_sides,
     outline_size,
     pin_positions,
+    placement_rects,
     resolve_fixed_poses,
-    resolve_hard_sides,
-    hard_group_limits,
-    hard_group_edges,
     resolve_hard_rotations,
+    resolve_hard_sides,
 )
 
 

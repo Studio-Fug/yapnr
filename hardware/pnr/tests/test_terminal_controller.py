@@ -1,6 +1,9 @@
-import json, tempfile, unittest
+import json
+import tempfile
+import unittest
 from pathlib import Path
-from pnr.native_loop import terminal_repair_nets, repair_strategies_exhausted, route_job_key
+
+from pnr.native_loop import repair_strategies_exhausted, route_job_key, terminal_repair_nets
 
 
 class TerminalControllerTest(unittest.TestCase):

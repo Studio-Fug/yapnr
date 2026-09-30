@@ -11,16 +11,17 @@ legal moves possible by relaxing only the reserves it already violates.
 """
 
 import argparse
-from collections import Counter, defaultdict
 import hashlib
 import json
 import math
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
 import time
+from collections import Counter, defaultdict
+from pathlib import Path
+
 from pnr.placement_trials import diverse_pair_poses
 
 
@@ -104,11 +105,11 @@ class StopAfterPhase(Exception):
 
 def native_worker(a):
     import pcbnew as k
+    from pnr.fab_profile import load_board  # custom rules in force for the 'check' refill
     from pnr.ingest import build_graph
-    from pnr.via_coalesce import partition, preserved, protected, touch
     from pnr.pad_entry import snapshot
     from pnr.plane_access import uid
-    from pnr.fab_profile import load_board  # custom rules in force for the 'check' refill
+    from pnr.via_coalesce import partition, preserved, protected, touch
 
     b = load_board(a.board)
     b.BuildConnectivity()
@@ -131,8 +132,8 @@ def native_worker(a):
     if a.worker == "prepare":
         from pnr.electrical import (
             annotations,
-            resolve_currents,
             compile_policy,
+            resolve_currents,
             resolve_pair_chains,
         )
 
@@ -687,8 +688,8 @@ def rank_translation_channels(graph, rules, candidates):
 
 def placements(inventory, constraints_path, scores, tried, original, max_move, rules=None):
     import yaml
-    from pnr.graph import BoardGraph
     from pnr.constraints import compile_constraints
+    from pnr.graph import BoardGraph
     from pnr.place.geometry import resolve_fixed_poses
     from pnr.place.metrics import hard_violations, translation_checker
 
@@ -778,8 +779,8 @@ def pair_placements(inventory, constraints_path, pair, rules=None):
     placement over a landing, are not the proposal's and do not veto it).
     """
     import yaml
-    from pnr.graph import BoardGraph
     from pnr.constraints import compile_constraints
+    from pnr.graph import BoardGraph
     from pnr.place.geometry import resolve_fixed_poses
     from pnr.place.metrics import hard_violations
 
@@ -2280,8 +2281,8 @@ def controller(argv=None, nested=False):
         return trial_current, report, failures, accepted_count
 
     def congestion_snapshot(inventory, folder, label, summary):
+        from pnr.congestion_diagnostics import native_endpoints, snapshot, write_snapshot
         from pnr.graph import BoardGraph
-        from pnr.congestion_diagnostics import snapshot, write_snapshot, native_endpoints
 
         graph = BoardGraph.from_json(json.dumps(inventory["graph"]))
         write_snapshot(

@@ -20,8 +20,8 @@ Pure stdlib (heapq) on the grid — no numpy in the hot path, no pcbnew. Determi
 
 from __future__ import annotations
 
-import os
 import heapq
+import os
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
@@ -486,7 +486,9 @@ def _route_impl(
     routed: Dict[str, Optional[_Route]] = {n: None for n in nets}
     fps: Dict[str, Set[Cell]] = {n: set() for n in nets}
 
-    import os, time
+    import os
+    import time
+
     from pnr.live import emit
 
     def live_net(net, route, kind):
@@ -846,6 +848,7 @@ def route(grid, net_access, **kwargs):
     grid.routing_track_halos = kwargs.get("net_halo") or {}
     grid.routing_via_keepout = kwargs.get("via_keepout", 1)
     import os
+
     from pnr.runtime_controls import route_workers
 
     workers = route_workers("grid-start")

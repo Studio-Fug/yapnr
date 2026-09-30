@@ -1,11 +1,12 @@
 import unittest
+
 from pnr.route.detail.keyhole import (
-    route,
-    relax,
+    acceptable,
+    align_parallel,
     length,
     octilinear,
-    align_parallel,
-    acceptable,
+    relax,
+    route,
 )
 
 

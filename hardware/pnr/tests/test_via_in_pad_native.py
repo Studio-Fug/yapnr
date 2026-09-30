@@ -8,7 +8,6 @@ fallback, under jlc-pofv (5A/5B) and legacy rules.
 import unittest
 
 import pcbnew as k
-
 from pnr import fab_profile as fp
 from pnr.electrical import compile_policy
 
@@ -246,6 +245,7 @@ class GateTest(unittest.TestCase):
     def test_new_forbidden(self):
         import tempfile
         from pathlib import Path
+
         from pnr.via_in_pad import new_forbidden
 
         before = board()

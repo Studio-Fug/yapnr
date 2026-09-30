@@ -1,7 +1,10 @@
-import math, random, unittest
+import math
+import random
+import unittest
+
+from pnr.fab_profile import active_geometry
 from pnr.route.detail.joint import conflict
 from pnr.route.detail.regional import Request, segment_distance
-from pnr.fab_profile import active_geometry
 
 
 class ConflictBoundsTest(unittest.TestCase):

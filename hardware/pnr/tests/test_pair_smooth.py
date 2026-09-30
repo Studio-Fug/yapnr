@@ -1,5 +1,7 @@
-import unittest, math
-from pnr.route.detail.coupled import relaxed_centerlines, offset_path
+import math
+import unittest
+
+from pnr.route.detail.coupled import offset_path, relaxed_centerlines
 
 
 class PairSmoothTest(unittest.TestCase):

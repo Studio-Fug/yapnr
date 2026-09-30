@@ -170,6 +170,7 @@ class ProjectRulesTest(unittest.TestCase):
         import json
         import tempfile
         from pathlib import Path
+
         from pnr.writeback import patch_project_rules
 
         rules = {

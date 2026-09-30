@@ -1,4 +1,5 @@
 import unittest
+
 from pnr.route.detail.coupled import solve_pair
 
 

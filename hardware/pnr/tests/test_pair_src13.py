@@ -9,7 +9,12 @@ what its interpreter lacks, the pure-geometry classes run under both.
   runtime: PYTHONPATH=$PWD/..:$PWD .../pnr-regression-runtime/bin/python -m unittest -v test_pair_src13
 """
 
-import json, math, os, random, time, unittest
+import json
+import math
+import os
+import random
+import time
+import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -27,12 +32,12 @@ except Exception:
     PLACE = False
 
 from pnr.route.detail.coupled import (
-    capsule_interval,
-    uncoupled_runs,
     branch_lengths,
-    path_steps,
-    path_metrics,
+    capsule_interval,
     offset_path,
+    path_metrics,
+    path_steps,
+    uncoupled_runs,
 )
 
 W, G = 0.2, 0.15  # width/gap: nominal lane pitch .35
@@ -244,7 +249,7 @@ class CapsuleAndRunGeometryTest(unittest.TestCase):
 @unittest.skipIf(k is None, "needs pcbnew (KiCad Python)")
 class PerRunBridgeBudgetTest(unittest.TestCase):
     def setUp(self):
-        from test_native_electrical import board, FAB
+        from test_native_electrical import FAB, board
 
         self.b = board()
         self.FAB = FAB
@@ -444,8 +449,8 @@ class ExactMinimumRunTest(unittest.TestCase):
     """U6-like module edge: 1.5 x 0.9 pads at 1.26 pitch; exact min run ~ .75+.225+.127."""
 
     def ports(self, flag):
-        from test_native_electrical import board, pad, FAB
         from pnr.native_electrical import Oracle, pair_bridge_ports
+        from test_native_electrical import FAB, board, pad
 
         b = board()
         for num, net, y in (
@@ -526,9 +531,9 @@ class ChainRunAndStubTest(unittest.TestCase):
     """Real _pair_plan_order on the J -> D -> U chain of test_pair_post_bridge."""
 
     def plan(self, flags, stage1, bridge1=None):
-        from test_pair_post_bridge import chain_board, stage0_bridge, PADS
         from pnr.native_electrical import Oracle, _pair_plan_order
         from pnr.route.detail import coupled
+        from test_pair_post_bridge import PADS, chain_board, stage0_bridge
 
         b, pair, r = chain_board()
         oracle = Oracle(b, r, deadline=time.monotonic() + 60)
@@ -679,8 +684,8 @@ class ChainRunAndStubTest(unittest.TestCase):
             self.assertNotIn(key, result)
 
     def test_per_run_charges_the_arriving_run_and_measures_the_whole_route(self):
-        from test_pair_post_bridge import CLEAN, PADS, stage0_bridge
         from pnr.native_electrical import route_uncoupled_runs
+        from test_pair_post_bridge import CLEAN, PADS, stage0_bridge
 
         # First src13 convention (coupled stretches < w+g merge into runs): the
         # stage-1 pad-start leg is charged the run arriving at the D pads: the
@@ -756,8 +761,8 @@ class TwoTerminalRunLimitTest(unittest.TestCase):
     TIGHT = {"p": [(3, 5.2), (15, 5.2)], "n": [(3, 4.8), (15, 4.8)]}
 
     def plan(self, flag, leg):
-        from test_native_electrical import board, pad, FAB
         from pnr.native_electrical import Oracle, _pair_plan_order
+        from test_native_electrical import FAB, board, pad
 
         b = board()
         for ref, x in (("J", 3), ("U", 15)):
@@ -872,8 +877,8 @@ class JointContactRunTest(unittest.TestCase):
     }
 
     def plan(self, flags):
-        from test_native_electrical import board, pad, FAB
         from pnr.native_electrical import Oracle, _pair_plan_order
+        from test_native_electrical import FAB, board, pad
 
         b = board()
         for label, xy in self.PADS.items():
@@ -1014,8 +1019,9 @@ class JointContactRunTest(unittest.TestCase):
 @unittest.skipIf(k is None, "needs pcbnew (KiCad Python)")
 class EarlyExitTest(unittest.TestCase):
     def run_plan(self, flags, routes):
-        from test_native_electrical import board, rules as power_rules
         from pnr.native_electrical import Oracle, pair_plan
+        from test_native_electrical import board
+        from test_native_electrical import rules as power_rules
 
         b = board()
         o = Oracle(b, power_rules(), deadline=time.monotonic() + 30)
@@ -1186,8 +1192,9 @@ class EarlyExitTest(unittest.TestCase):
 @unittest.skipIf(k is None, "needs pcbnew (KiCad Python)")
 class TimeoutTraceTest(unittest.TestCase):
     def run_plan(self, flags):
-        from test_native_electrical import board, rules as power_rules
         from pnr.native_electrical import Oracle, pair_plan
+        from test_native_electrical import board
+        from test_native_electrical import rules as power_rules
 
         b = board()
         o = Oracle(b, power_rules(), deadline=time.monotonic() + 30)
@@ -1252,7 +1259,7 @@ class DerivedHandSwapTest(unittest.TestCase):
         self.assertIsNone(first_joint_hand(dict(self.PAIR, auxiliary_pairs=[]), self.POS))
 
     def test_swap_trial_runs_the_opposite_of_the_derived_hand(self):
-        from pnr.paired_bootstrap import trial_schedule, swap_trial_hand
+        from pnr.paired_bootstrap import swap_trial_hand, trial_schedule
 
         poses = [None, {"ref": "D", "rotation": 90}]
         inventory = {
@@ -1356,7 +1363,7 @@ class LandingReserveTest(unittest.TestCase):
         return BoardGraph("t", list(parts), [])
 
     def rects(self, comp):
-        from pnr.place.geometry import placement_rects, ReserveRect
+        from pnr.place.geometry import ReserveRect, placement_rects
 
         return [(s, r) for s, r in placement_rects(comp) if isinstance(r, ReserveRect)]
 
@@ -1449,7 +1456,7 @@ class LandingReserveTest(unittest.TestCase):
 
     def test_flag_off_placement_rects_are_unchanged(self):
         from pnr.place import pair_landing
-        from pnr.place.geometry import placement_rects, Rect
+        from pnr.place.geometry import Rect, placement_rects
 
         u = module()
         before = placement_rects(u)
@@ -1490,9 +1497,9 @@ class LandingReserveTest(unittest.TestCase):
                     )  # both vias + clearance
 
     def test_only_parts_mounted_on_the_reserve_side_conflict(self):
-        from pnr.place import pair_landing
-        from pnr.place.metrics import overlap_pairs, hard_violations
         from pnr.constraints import compile_constraints
+        from pnr.place import pair_landing
+        from pnr.place.metrics import hard_violations, overlap_pairs
 
         outward = (
             30 - 8.75 - 1.1,
@@ -1514,7 +1521,7 @@ class LandingReserveTest(unittest.TestCase):
             self.assertEqual(overlap_pairs(g), [])
 
     def test_reserve_rect_semantics(self):
-        from pnr.place.geometry import Rect, MountedRect, ReserveRect
+        from pnr.place.geometry import MountedRect, Rect, ReserveRect
 
         zone = ReserveRect(0, 0, 2, 2, side="bottom", owner="U")
         self.assertFalse(
@@ -1549,7 +1556,7 @@ class LandingReserveTest(unittest.TestCase):
 
     def test_side_flip_mirrors_the_reserve_with_the_pads(self):
         from pnr.place import pair_landing
-        from pnr.place.geometry import set_component_side, pin_positions
+        from pnr.place.geometry import pin_positions, set_component_side
 
         with env(PNR_PAIR_LANDING_RESERVE="1"):
             u = module()
@@ -1643,10 +1650,10 @@ class LandingReserveTest(unittest.TestCase):
             self.assertEqual(got, want)
 
     def test_relax_drops_only_the_reserves_an_existing_placement_violates(self):
+        from pnr.constraints import compile_constraints
         from pnr.graph import Component, Pad
         from pnr.place import pair_landing
         from pnr.place.metrics import hard_violations
-        from pnr.constraints import compile_constraints
 
         u = module(pos=(30, 25))
         tp = block_part("TP", (30 - 8.75 + 1.3, 25 - 7.62), "bottom", size=(3.0, 3.0))

@@ -5,15 +5,19 @@ A nonregressing relocation is only a precursor, not a routing improvement. Run
 regional repair afterwards and compare the complete transaction to its source.
 """
 import argparse
+import json
+import math
+import shutil
+import subprocess
+import sys
 from collections import Counter, defaultdict
-import json, math, shutil, subprocess, sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pnr"))
 import pcbnew
-from pnr.route.detail.keyhole import route, violation_keys, length
-from pnr.route.detail.regional import preserves_connections
 from keyhole_region import pad_partition
+from pnr.route.detail.keyhole import length, route, violation_keys
+from pnr.route.detail.regional import preserves_connections
 
 
 def main():

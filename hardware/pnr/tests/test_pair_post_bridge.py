@@ -8,13 +8,18 @@ Everything after that is native: real Oracle, real path_metrics, real solve_pair
 for the via-start leg, real reference-plane fill.
 """
 
-import math, os, time, unittest
+import math
+import os
+import time
+import unittest
 from unittest.mock import patch
+
 import pcbnew as k
-from test_native_electrical import board, pad, FAB, rules as power_rules
-from pnr.native_electrical import Oracle, pair_plan, _pair_plan_order, surface_leg_graph_failure
+from pnr.native_electrical import Oracle, _pair_plan_order, pair_plan, surface_leg_graph_failure
 from pnr.route.detail import coupled
 from pnr.route.detail.coupled import path_metrics
+from test_native_electrical import FAB, board, pad
+from test_native_electrical import rules as power_rules
 
 F, B = k.F_Cu, k.B_Cu
 PADS = {
@@ -486,7 +491,7 @@ class PreferInlineScoreTest(unittest.TestCase):
 
 class HandSwapTrialTest(unittest.TestCase):
     def test_schedule_inserts_one_unmoved_hand_minus_trial_only_when_enabled(self):
-        from pnr.paired_bootstrap import trial_schedule, trial_env
+        from pnr.paired_bootstrap import trial_env, trial_schedule
 
         poses = [None, {"ref": "D2", "rotation": 270}, {"ref": "D2", "rotation": 0}]
         with patch.dict(os.environ, {"PNR_PAIR_JOINT_TOPOLOGIES": "1"}):

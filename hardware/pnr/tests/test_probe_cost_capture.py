@@ -1,11 +1,16 @@
-import json, os, random, tempfile, unittest
+import json
+import os
+import random
+import tempfile
+import unittest
 from pathlib import Path
 from unittest.mock import patch
+
 import numpy as np
-from pnr.place.relocate import distance_field
-from pnr.place.batch_relocate import propose_batches
-from pnr.graph import BoardGraph, BoardOutline, Component, Pad, Net
 from pnr.constraints import compile_constraints
+from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
+from pnr.place.batch_relocate import propose_batches
+from pnr.place.relocate import distance_field
 
 
 class ProbeCapture(unittest.TestCase):

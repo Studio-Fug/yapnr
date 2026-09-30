@@ -5,15 +5,21 @@ barrels with any other layer track port are excluded. Current geometry cannot
 be narrowed. Native connectivity, entries, filled reference and DRC gate output.
 """
 
-import argparse, json, math, os, shutil, time, sys
+import argparse
+import json
+import math
+import os
+import shutil
+import sys
+import time
 from pathlib import Path
 
 
 def eligible(board, pad, rules, protected_pads=()):
     import pcbnew as k
-    from pnr.plane_access import surface_group
-    from pnr.native_electrical import uid
     from pnr.electrical import net_policy
+    from pnr.native_electrical import uid
+    from pnr.plane_access import surface_group
 
     if uid(pad) in protected_pads or pad.IsLocked() or pad.GetAttribute() != k.PAD_ATTRIB_SMD:
         return None
@@ -119,11 +125,11 @@ def plan(board, leaf, rules):
 
 def execute(a, rules, b):
     import pcbnew as k
-    from pnr.native_electrical import uid, vec, reference_failures
-    from pnr.pad_entry import snapshot
-    from pnr.via_coalesce import partition, preserved, acceptable, protected
-    from pnr.native_drc import run_drc
     from pnr.live import emit
+    from pnr.native_drc import run_drc
+    from pnr.native_electrical import reference_failures, uid, vec
+    from pnr.pad_entry import snapshot
+    from pnr.via_coalesce import acceptable, partition, preserved, protected
 
     b.BuildConnectivity()
     _, intents = protected(b, rules, a.annotation_source)

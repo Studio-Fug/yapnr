@@ -24,17 +24,18 @@ from pathlib import Path
 
 from pnr.constraints import Constraint, Enforcement
 from pnr.graph import BoardGraph, BoardOutline
+
 from .geometry import (
-    outline_size,
-    resolve_fixed_poses,
-    set_component_side,
     apply_hard_sides,
-    placement_rects,
     courtyard_rect,
-    keepout_rects,
-    hard_group_limits,
     hard_group_edges,
+    hard_group_limits,
+    keepout_rects,
+    outline_size,
+    placement_rects,
+    resolve_fixed_poses,
     resolve_hard_rotations,
+    set_component_side,
 )
 from .legalize import LegalizationError
 from .metrics import hard_violations, hpwl
@@ -418,9 +419,10 @@ def select_initial_placement(
     screen recommendation; the report has selected=None and no accepted routing
     result. This mode is for initial-placement diagnostics, not PCB acceptance.
     """
+    from pnr.route.detail.router import route_board
+
     from .capacity_proxy import cheap_score, score
     from .cost_capture import initial_start_context
-    from pnr.route.detail.router import route_board
 
     config = config or InitialPoolConfig()
     constraints = preserve_source_locks(graph, constraints)
@@ -496,8 +498,8 @@ def select_initial_placement(
                         # global arrangement and legalize the new large-scale basin.
                         # This extra bounded attempt is reported, not called a new
                         # independent optimized global placement.
-                        from .legalize import legalize, pad_edge_rule
                         from .channels import ChannelModel
+                        from .legalize import legalize, pad_edge_rule
 
                         seed_graph = copy.deepcopy(legal[0]["graph"])
                         poses = resolve_fixed_poses(seed_graph, placement_constraints)

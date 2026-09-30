@@ -1,8 +1,9 @@
 import unittest
+
 import pcbnew as k
-from test_native_electrical import board, pad
 from pnr.native_electrical import add_track
 from pnr.pair_contact_audit import audit_pair_contacts
+from test_native_electrical import board, pad
 
 
 class PairContactAuditTest(unittest.TestCase):

@@ -7,8 +7,8 @@ This stage runs before placement/routing, never as a repair of a routed board.
 
 import argparse
 import json
-from pathlib import Path
 import uuid
+from pathlib import Path
 
 
 def signature(footprint):

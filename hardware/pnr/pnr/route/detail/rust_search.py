@@ -1,6 +1,7 @@
 """Optional Rust A* backend. Never bypass Python's exact clearance oracle."""
 
-import ctypes, os
+import ctypes
+import os
 from functools import lru_cache
 
 

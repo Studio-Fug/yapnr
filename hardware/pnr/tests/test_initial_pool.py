@@ -13,15 +13,15 @@ from pnr.constraints import compile_constraints
 from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
 from pnr.place.initial_pool import (
     InitialPoolConfig,
+    diverse_shortlist,
     initial_starts,
+    pose_distance,
     preserve_source_locks,
     select_initial_placement,
-    diverse_shortlist,
-    pose_distance,
 )
 from pnr.place.model import global_place
 from pnr.place.placer import PlacementReport
-from pnr.route.detail.maze import RouteResult, RoutedNet
+from pnr.route.detail.maze import RoutedNet, RouteResult
 
 
 def fixture():
@@ -105,9 +105,9 @@ class InitialStartsTest(unittest.TestCase):
         self.assertEqual(len([c for c in new.constraints if "FIXED" in c.refs]), 1)
 
     def test_hard_bottom_side_releases_xy_and_preserves_mirrored_pad_geometry(self):
-        from pnr.place.placer import place
-        from pnr.place.metrics import hard_violations
         from pnr.constraints import ConstraintError
+        from pnr.place.metrics import hard_violations
+        from pnr.place.placer import place
 
         graph, _ = fixture()
         graph.component("A").pads[0].offset = (0.2, 0.4)

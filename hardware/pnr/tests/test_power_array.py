@@ -1,6 +1,8 @@
 """Regression: three connected pads get one deliberate bank, never per-pad banks."""
 
-import importlib.util, unittest
+import importlib.util
+import unittest
+
 from test_plane_access_intent import FAB
 
 
@@ -81,10 +83,11 @@ class PowerArrayTests(unittest.TestCase):
         self.assertEqual(original, geometry())
 
     def test_shared_array_plan_matches_native_at_every_cardinal_rotation(self):
-        import pcbnew as k
         import math
-        from pnr.plane_intent import array_geometry
+
+        import pcbnew as k
         from pnr.plane_access import replace_power_array
+        from pnr.plane_intent import array_geometry
 
         for rotation in (0, 90, 180, 270):
             b, f, intent, n = self.fixture()
@@ -113,8 +116,8 @@ class PowerArrayTests(unittest.TestCase):
 
     def test_future_bank_rejects_foreign_back_copper_before_mutation(self):
         import pcbnew as k
-        from pnr.plane_intent import array_geometry
         from pnr.plane_access import replace_power_array
+        from pnr.plane_intent import array_geometry
 
         b, f, intent, n = self.fixture()
         pads = [

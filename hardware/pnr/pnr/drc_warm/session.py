@@ -1,6 +1,11 @@
 """Lifetime for a private native host; does not change global KiCad preferences."""
 
-import json, os, signal, subprocess, sys, time
+import json
+import os
+import signal
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 

@@ -4,7 +4,10 @@ No via/pad movement, no width reduction, no pair/plane changes. Endpoint/branch
 preservation and all native guards required before testing signal closure.
 """
 
-import json, math, os, time
+import json
+import math
+import os
+import time
 from pathlib import Path
 
 
@@ -37,8 +40,8 @@ def distance_to_segment(p, a, b):
 
 
 def port_count(oracle, pad, rules):
-    from pnr.native_electrical import xy
     from pnr.electrical import net_policy
+    from pnr.native_electrical import xy
     from pnr.route.detail.keyhole import elbows
 
     net = pad.GetNetname()
@@ -66,8 +69,8 @@ def port_count(oracle, pad, rules):
 
 
 def propose(board, pad, rules):
-    from pnr.native_electrical import Oracle, uid, xy
     from pnr.electrical import net_policy
+    from pnr.native_electrical import Oracle, uid, xy
 
     start = xy(pad.GetPosition())
     oracle = Oracle(board, rules, deadline=time.monotonic() + 90)
@@ -191,10 +194,10 @@ def propose(board, pad, rules):
 
 def execute(a, board, rules):
     import pcbnew as k
-    from pnr.native_electrical import uid, vec, reference_failures
-    from pnr.pad_entry import snapshot
-    from pnr.via_coalesce import partition, preserved, acceptable
     from pnr.native_drc import run_drc
+    from pnr.native_electrical import reference_failures, uid, vec
+    from pnr.pad_entry import snapshot
+    from pnr.via_coalesce import acceptable, partition, preserved
 
     ref, num = a.focus.rsplit(".", 1)
     pad = next(
@@ -286,7 +289,9 @@ def execute(a, board, rules):
 
 
 def main():
-    import argparse, pcbnew as k
+    import argparse
+
+    import pcbnew as k
 
     p = argparse.ArgumentParser()
     p.add_argument("board", type=Path)

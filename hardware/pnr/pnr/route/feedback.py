@@ -184,6 +184,7 @@ def local_feedback_placement(graph, constraints, rules, pressure, tried):
     a subsequent complete detailed route decides whether it is an improvement.
     """
     import math
+
     from pnr.place.channels import ChannelModel
     from pnr.place.metrics import hard_violations, hpwl
 
@@ -289,8 +290,9 @@ def _place_route_loop(
     elastic_mode = os.environ.get("PNR_PLACEMENT_MODE") == "elastic"
     relocate_mode = os.environ.get("PNR_PLACEMENT_MODE") == "relocate"
     previous_route = None
-    from pnr.place.anneal import Plateau
     import random
+
+    from pnr.place.anneal import Plateau
 
     relocation_plateau = Plateau()
     relocation_rng = random.Random(seed)
@@ -298,9 +300,12 @@ def _place_route_loop(
 
     for r in range(max_rounds):
         report.rounds = r + 1
-        from pnr.place.legalize import LegalizationError
+        import json
+        import os
+        import time
         from pathlib import Path
-        import os, json, time
+
+        from pnr.place.legalize import LegalizationError
 
         started = time.monotonic()
         requested_inflation = dict(inflation)

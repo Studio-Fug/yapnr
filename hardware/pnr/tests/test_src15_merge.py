@@ -6,14 +6,18 @@ synth_native.rank_key. Each flag alone must reproduce its own line; both togethe
   PYTHONPATH=$PWD/..:$PWD .../pnr-regression-runtime/bin/python -m unittest -v test_src15_merge
 """
 
-import copy, json, math, os, unittest
+import copy
+import json
+import math
+import os
+import unittest
 from unittest import mock
 
 try:
     import numpy  # noqa: F401
-    from pnr.place.legalize import legalize
-    from pnr.place import hull as H
     from pnr.hier import extent as E
+    from pnr.place import hull as H
+    from pnr.place.legalize import legalize
 
     NUMPY = True
 except Exception:  # KiCad Python: no numpy
@@ -178,7 +182,7 @@ class PlacementRectsTest(unittest.TestCase):
         )
 
     def test_hull_alone_is_the_n0001_output(self):
-        from pnr.place.geometry import placement_rects, MountedRect, ReserveRect
+        from pnr.place.geometry import MountedRect, ReserveRect, placement_rects
 
         m = self.macro()
         with env(PNR_MACRO_HULL="1"):
@@ -187,7 +191,7 @@ class PlacementRectsTest(unittest.TestCase):
         self.assertFalse(any(isinstance(r, (MountedRect, ReserveRect)) for _, r in got))
 
     def test_landing_alone_is_the_src13_output(self):
-        from pnr.place.geometry import placement_rects, MountedRect, ReserveRect, courtyard_rect
+        from pnr.place.geometry import MountedRect, ReserveRect, courtyard_rect, placement_rects
 
         m = self.macro()
         with env(PNR_PAIR_LANDING_RESERVE="1"):
@@ -201,7 +205,7 @@ class PlacementRectsTest(unittest.TestCase):
         self.assertEqual(sum(isinstance(r, ReserveRect) for _, r in got), 2)
 
     def test_both_flags_tag_hull_rects_and_add_reserves(self):
-        from pnr.place.geometry import placement_rects, MountedRect, ReserveRect
+        from pnr.place.geometry import MountedRect, ReserveRect, placement_rects
 
         m = self.macro()
         with env(PNR_PAIR_LANDING_RESERVE="1", PNR_MACRO_HULL="1"):
@@ -266,7 +270,7 @@ class LegalizeCompositionTest(unittest.TestCase):
         self.assertLess(math.dist(out.component("B1").pos, (25.0, 16.6)), 0.3)
 
     def test_landing_moves_the_bottom_part_off_the_reserve(self):
-        from pnr.place.geometry import placement_rects, ReserveRect
+        from pnr.place.geometry import ReserveRect, placement_rects
 
         for on in (
             dict(PNR_PAIR_LANDING_RESERVE="1"),
@@ -328,8 +332,8 @@ class MacroCollapseTest(unittest.TestCase):
 
     @unittest.skipUnless(NUMPY, "needs numpy (PnR runtime)")
     def test_shaped_macro_keeps_reserves_and_mount(self):
-        from pnr.hier.macro import collapse
         from pnr.constraints import compile_constraints
+        from pnr.hier.macro import collapse
 
         member = terminal("U1", pos=(3.0, 3.0))
         sub = BoardGraph("blk", [member])
@@ -457,7 +461,8 @@ class KiCadDefaultsTest(unittest.TestCase):
     @staticmethod
     def code_lines(path):
         """(line number, code text) with comments removed (Python via tokenize; '#'-lines elsewhere)."""
-        import io, tokenize
+        import io
+        import tokenize
 
         text = path.read_text(errors="replace")
         lines = text.splitlines()
@@ -516,7 +521,8 @@ class KiCadDefaultsTest(unittest.TestCase):
         self.assertEqual(seen_sites, set(self.SITES))  # the reviewed list stays exact
 
     def test_scanner_catches_both_quote_styles_and_bzl(self):
-        import re, tempfile
+        import re
+        import tempfile
         from pathlib import Path
 
         with tempfile.TemporaryDirectory() as d:

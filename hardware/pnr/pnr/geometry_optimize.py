@@ -1,10 +1,16 @@
 """Transactional geometry cleanup phase; native refill/DRC gates each tree."""
 
-import argparse, json, os, sys, subprocess, shutil
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
 from pathlib import Path
-from pnr.native_drc import run_drc
+
 from pnr.fab_profile import copy_dru
 from pnr.live import emit
+from pnr.native_drc import run_drc
 from pnr.profile import span
 
 
@@ -27,9 +33,9 @@ def main():
     events = []
 
     def run(module, args, log):
-        from pnr.proc import (
+        from pnr.proc import (  # one KiCad worker: PNR_WORKER_TIMEOUT; stays in this process group
             run_checked,
-        )  # one KiCad worker: PNR_WORKER_TIMEOUT; stays in this process group
+        )
 
         with log.open("w") as out:
             run_checked(

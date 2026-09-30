@@ -16,14 +16,14 @@ from pnr.graph import BoardGraph, BoardOutline
 
 from . import metrics
 from .geometry import (
+    apply_hard_sides,
+    hard_group_edges,
+    hard_group_limits,
     keepout_rects,
     outline_size,
     resolve_fixed_poses,
-    hard_group_limits,
-    hard_group_edges,
     resolve_hard_rotations,
     set_component_side,
-    apply_hard_sides,
 )
 from .legalize import legalize, pad_edge_rule
 from .model import global_place
@@ -211,6 +211,7 @@ def place(
 
     # Directional copper escape demand is part of production legalization.
     from pnr.constraints import compile_routing_rules
+
     from .channels import ChannelModel
 
     channels = ChannelModel(

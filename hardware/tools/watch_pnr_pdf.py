@@ -4,8 +4,13 @@
 Use document Python. Does not write build inputs or validate a board. Start the
 PDF skill authoring marker first. Review ledger deliberately stays pending.
 """
-import argparse, hashlib, json, subprocess, time
+import argparse
+import hashlib
+import json
+import subprocess
+import time
 from pathlib import Path
+
 from reportlab.pdfgen import canvas
 
 

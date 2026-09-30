@@ -1,9 +1,12 @@
-import json, tempfile, unittest
+import json
+import tempfile
+import unittest
 from pathlib import Path
 from unittest.mock import patch
-from pnr.drc_warm.report import parse, UnsupportedReport
-from pnr.drc_warm.model import split_board
+
 from pnr.drc_warm.client import run_drc
+from pnr.drc_warm.model import split_board
+from pnr.drc_warm.report import UnsupportedReport, parse
 
 
 class Contract(unittest.TestCase):

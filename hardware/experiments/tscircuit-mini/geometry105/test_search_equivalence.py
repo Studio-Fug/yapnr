@@ -1,4 +1,7 @@
-import random, time, json
+import json
+import random
+import time
+
 from pnr.route.detail.keyhole import route
 from pnr.route.detail.keyhole_reference import route as reference
 from pnr.route.detail.regional import segment_distance

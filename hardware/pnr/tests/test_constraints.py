@@ -171,7 +171,7 @@ class NetEndpointTests(unittest.TestCase):
 
 class CopperKeepoutTest(unittest.TestCase):
     def test_anchor_resolves_and_rejects_missing_or_empty_geometry(self):
-        from pnr.constraints import compile_constraints, compile_routing_rules, ConstraintError
+        from pnr.constraints import ConstraintError, compile_constraints, compile_routing_rules
 
         doc = {
             "copper_keepout": [

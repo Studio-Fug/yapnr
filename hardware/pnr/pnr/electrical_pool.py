@@ -6,16 +6,16 @@ an observed placement plateau, and an experimental winner is not a qualified PCB
 """
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 from pnr import proc
 

@@ -1,9 +1,10 @@
 import unittest
+
 import pcbnew as k
-from test_native_electrical import board, pad, FAB
 from pnr.electrical import compile_policy
-from pnr.native_electrical import Oracle, power_plan, add_track
+from pnr.native_electrical import Oracle, add_track, power_plan
 from pnr.pad_entry import snapshot
+from test_native_electrical import FAB, board, pad
 
 
 class PowerTreeRootsTest(unittest.TestCase):

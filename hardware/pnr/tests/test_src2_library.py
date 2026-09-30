@@ -62,8 +62,8 @@ class MacroSidesTest(unittest.TestCase):
 class MiniCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        from pnr.mc.halving import _load
         from pnr.hier.blocks import extract_blocks
+        from pnr.mc.halving import _load
 
         cls.graph, cls.constraints, cls.rules = _load(INPUTS, CONSTRAINTS)
         cls.blocks = {b.name: b for b in extract_blocks(cls.graph, cls.constraints)}
@@ -395,9 +395,9 @@ class SynthNativeTest(unittest.TestCase):
 class NativeTagTest(MiniCase):
     def test_repeats_use_distinct_native_dirs(self):
         import pnr.hier.native_block as nb
+        from pnr.hier.blocks import sub_board
         from pnr.hier.synth import local_key
         from pnr.hier.synth_native import _native
-        from pnr.hier.blocks import sub_board
 
         b = self.blocks["group:board.status_led"]
         sub = sub_board(self.graph, self.constraints, self.rules, b, 6, 6)[0]
@@ -552,7 +552,7 @@ class MacroPlacementTest(MiniCase):
         from pnr.hier.macro import collapse
         from pnr.hier.synth import instance_board
         from pnr.hier.synth_native import _place, outline_sizes
-        from pnr.place.initial_pool import preserve_source_locks, _prepared_source
+        from pnr.place.initial_pool import _prepared_source, preserve_source_locks
         from pnr.place.placer import place
 
         constraints = preserve_source_locks(self.graph, self.constraints)

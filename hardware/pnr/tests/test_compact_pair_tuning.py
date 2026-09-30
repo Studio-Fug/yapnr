@@ -1,5 +1,6 @@
 import unittest
-from pnr.route.detail.coupled import tune, length
+
+from pnr.route.detail.coupled import length, tune
 
 
 class CompactPairTuningTest(unittest.TestCase):

@@ -1,8 +1,9 @@
 import unittest
-from pnr.route.detail.portal_joint import Portal, portal_conflict, solve_portal_region
-from pnr.route.detail.regional import Request
+
 from pnr.route.detail.joint import conflicts
 from pnr.route.detail.layered import primitives
+from pnr.route.detail.portal_joint import Portal, portal_conflict, solve_portal_region
+from pnr.route.detail.regional import Request
 
 
 class PortalTest(unittest.TestCase):

@@ -1,8 +1,11 @@
 """Native guarded whole-net single-layer tree proposals for ordinary signals."""
 
-import json, math, argparse
+import argparse
+import json
+import math
 from pathlib import Path
-from pnr.geometric_tree import tree, length
+
+from pnr.geometric_tree import length, tree
 from pnr.profile import span
 
 
@@ -63,9 +66,9 @@ def propose(board, rules, net, layer):
 
 def main():
     import pcbnew as k
-    from pnr.native_electrical import uid, add_track
-    from pnr.via_coalesce import partition, preserved
+    from pnr.native_electrical import add_track, uid
     from pnr.pad_entry import snapshot
+    from pnr.via_coalesce import partition, preserved
 
     ap = argparse.ArgumentParser()
     ap.add_argument("board")
@@ -79,8 +82,9 @@ def main():
     b = k.LoadBoard(a.board)
     b.BuildConnectivity()
     if a.inventory:
-        from pnr.via_coalesce import protected
         from collections import Counter
+
+        from pnr.via_coalesce import protected
 
         excluded, _ = protected(b, rules, ["hardware/splanc_dev/elec/src/splanc_mini.ato"])
         counts = Counter(

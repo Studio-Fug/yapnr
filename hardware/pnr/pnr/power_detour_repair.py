@@ -1,7 +1,12 @@
 """Bounded power detour + layered signal-blocker restoration transaction."""
 
+import json
+import math
+import shutil
+import subprocess
+import sys
+import time
 from pathlib import Path
-import json, subprocess, sys, time, shutil, math
 
 
 class DetourBudget:

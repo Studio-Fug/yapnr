@@ -1,14 +1,15 @@
 import unittest
+
+from pnr.constraints import compile_constraints
 from pnr.graph import BoardGraph, BoardOutline, Component, Pad
+from pnr.place.batch_relocate import joint_configurations
 from pnr.place.capacity_proxy import (
     CapacityGraph,
     commodities,
-    score,
     diverse_options,
     rank_candidates,
+    score,
 )
-from pnr.place.batch_relocate import joint_configurations
-from pnr.constraints import compile_constraints
 
 
 class CapacityTests(unittest.TestCase):

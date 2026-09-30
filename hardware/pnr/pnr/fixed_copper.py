@@ -5,7 +5,9 @@ only newly routed geometry; it never replaces tracks or regenerates footprints.
 Native DRC, connectivity, pad-entry and electrical gates follow the transaction.
 """
 
-import argparse, hashlib, json
+import argparse
+import hashlib
+import json
 from pathlib import Path
 
 
@@ -71,8 +73,8 @@ def export(source, folder):
 def append(source, fixed, routes, rules, out):
     import pcbnew as k
     from pnr.ingest import _board_frame
-    from pnr.writeback import _net_code_map
     from pnr.native_loop import copy_board
+    from pnr.writeback import _net_code_map
 
     source, out = Path(source), Path(out)
     if source.resolve() == out.resolve():
@@ -85,7 +87,7 @@ def append(source, fixed, routes, rules, out):
     frame, _ = _board_frame(board)
     codes = _net_code_map(board)
     fab = rules["fab"]
-    from pnr.pad_entry import snapshot, repair_changed_entries
+    from pnr.pad_entry import repair_changed_entries, snapshot
 
     board.BuildConnectivity()
     before_entries = snapshot(board, rules)
@@ -144,9 +146,9 @@ def append(source, fixed, routes, rules, out):
 
 def validate(source, candidate, rules, before_drc, after_drc, references=()):
     import pcbnew as k
-    from pnr.pad_entry import snapshot
-    from pnr.via_coalesce import partition, preserved, acceptable
     from pnr.native_electrical import pair_reference_validator
+    from pnr.pad_entry import snapshot
+    from pnr.via_coalesce import acceptable, partition, preserved
 
     a, b = (k.LoadBoard(str(p)) for p in (source, candidate))
     a.BuildConnectivity()

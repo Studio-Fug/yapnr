@@ -13,7 +13,8 @@ to the endpoint path (stub). Nothing calls them unless those flags are set.
 """
 
 import math
-from .keyhole import route, elbows, length
+
+from .keyhole import elbows, length, route
 from .regional import segment_distance
 
 
@@ -528,6 +529,7 @@ def path_metrics(tracks, vias, source, target, *, layer_heights=None):
     """
     import heapq
     from collections import defaultdict
+
     from pnr.track_graph import intersection, on_segment
 
     nm = lambda p: tuple(round(x * 1e6) for x in p)
@@ -815,6 +817,7 @@ def branch_lengths(tracks, vias, source, target, points, *, layer_heights, barre
     """
     import heapq
     from collections import defaultdict
+
     from pnr.track_graph import intersection, on_segment
 
     base = path_metrics(tracks, vias, source, target, layer_heights=layer_heights)

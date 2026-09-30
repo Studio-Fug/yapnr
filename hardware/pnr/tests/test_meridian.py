@@ -1,4 +1,5 @@
 import unittest
+
 from pnr.graph import BoardGraph, BoardOutline, Component
 from pnr.place.meridian import expand
 

@@ -2,7 +2,8 @@ import math
 import time
 import unittest
 from unittest.mock import patch
-from pnr.route.detail.joint import solve_joint_region, conflicts, conflict
+
+from pnr.route.detail.joint import conflict, conflicts, solve_joint_region
 from pnr.route.detail.layered import route_layers, solve_layered_region
 from pnr.route.detail.regional import Request
 

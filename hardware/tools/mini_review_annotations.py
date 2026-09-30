@@ -1,13 +1,14 @@
 """Native geometry metadata and vector annotation overlays for Mini review PDFs."""
 
 import io
-import math
 import json
+import math
 import subprocess
-from reportlab.pdfgen.canvas import Canvas
-from reportlab.pdfbase.pdfmetrics import stringWidth
-from pypdf import PdfReader
+
 import pdfplumber
+from pypdf import PdfReader
+from reportlab.pdfbase.pdfmetrics import stringWidth
+from reportlab.pdfgen.canvas import Canvas
 
 
 def inventory(python, board, target):

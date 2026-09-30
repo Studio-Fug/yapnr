@@ -6,16 +6,22 @@ with additional track attachments are excluded. Native DRC and pad connectivity
 are authoritative; output is a new, separately gated geometry checkpoint.
 """
 
-import argparse, hashlib, json, shutil, subprocess, sys
-from pathlib import Path
+import argparse
+import hashlib
+import json
+import shutil
+import subprocess
+import sys
 from collections import Counter
+from pathlib import Path
+
 import pcbnew
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pnr"))
 from keyhole_region import pad_partition
 from pnr.pad_entry import snapshot
-from pnr.route.detail.regional import preserves_connections
 from pnr.route.detail.keyhole import violation_keys
+from pnr.route.detail.regional import preserves_connections
 
 ap = argparse.ArgumentParser(description=__doc__)
 ap.add_argument("board", type=Path)

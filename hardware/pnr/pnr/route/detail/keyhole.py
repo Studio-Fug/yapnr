@@ -5,12 +5,12 @@ including off-grid terminal access and post-route relaxation, is checked by
  the same oracle. Failure is a search result, never a proof of unroutability.
 """
 
-from dataclasses import dataclass
-from collections import Counter
 import heapq
-import os
-from functools import lru_cache
 import math
+import os
+from collections import Counter
+from dataclasses import dataclass
+from functools import lru_cache
 from typing import Callable, List, Tuple
 
 Point = Tuple[float, float]

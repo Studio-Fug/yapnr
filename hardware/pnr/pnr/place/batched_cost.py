@@ -5,6 +5,7 @@ small Mini workloads must not silently pay MPS transfer/dispatch overhead.
 """
 
 import math
+
 import numpy as np
 import torch
 

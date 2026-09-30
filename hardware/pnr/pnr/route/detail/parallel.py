@@ -12,8 +12,9 @@ def initialize(grid):
 
 
 def solve(job):
-    from .maze import _route_one
     from pnr.profile import run
+
+    from .maze import _route_one
 
     access, net, occ, history, via_cost, pres_fac, blocked = job
     return run(

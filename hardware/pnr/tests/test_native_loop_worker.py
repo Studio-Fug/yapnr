@@ -1,11 +1,14 @@
 """Run with native KiCad Python: moved terminals retain their existing branch."""
 
-import os, subprocess, sys
 import json
-from pathlib import Path
-from types import SimpleNamespace
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
+
 import pcbnew as k
 from pnr.native_loop import native_worker
 from pnr.via_coalesce import partition, preserved

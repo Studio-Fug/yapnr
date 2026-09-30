@@ -1,6 +1,9 @@
 """Ordinary routing after native paired placement, retaining exact fixed copper."""
 
-import json, os, subprocess, time
+import json
+import os
+import subprocess
+import time
 from pathlib import Path
 
 
@@ -17,9 +20,9 @@ def run(board, rules, constraints, out, kicad_python, kicad_cli, iterations=12):
     env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parent.parent))
 
     def invoke(args, name):
-        from pnr.proc import (
+        from pnr.proc import (  # one KiCad worker: PNR_WORKER_TIMEOUT; stays in this process group
             run_checked,
-        )  # one KiCad worker: PNR_WORKER_TIMEOUT; stays in this process group
+        )
 
         with (out / name).open("w") as f:
             run_checked(args, session=False, env=env, stdout=f, stderr=subprocess.STDOUT)

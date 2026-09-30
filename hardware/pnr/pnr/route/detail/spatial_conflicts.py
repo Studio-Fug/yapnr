@@ -1,7 +1,8 @@
 """Conservative spatial broad phase for immutable regional copper primitives."""
 
-from collections import defaultdict
 import math
+from collections import defaultdict
+
 from pnr.fab_profile import bind_active
 
 _VIA_RADIUS = None  # fab-profile default via radius (PNR_FAB_PROFILE; legacy 0.3)

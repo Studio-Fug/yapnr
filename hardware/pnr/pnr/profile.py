@@ -6,9 +6,20 @@ CPU profiles measure this process only. Native subprocess wall time appears as
 wait time; profile those children independently rather than attributing to Python.
 """
 
-import argparse, cProfile, hashlib, json, os, pstats, resource, runpy, sys, time, uuid, threading
-from pathlib import Path
+import argparse
+import cProfile
+import hashlib
+import json
+import os
+import pstats
+import resource
+import runpy
+import sys
+import threading
+import time
+import uuid
 from contextlib import contextmanager
+from pathlib import Path
 
 spans = {}
 active = False

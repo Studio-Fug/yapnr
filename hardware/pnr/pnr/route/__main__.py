@@ -159,8 +159,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.electrical_fab:
         from pnr.electrical import (
             annotations,
-            resolve_currents,
             compile_policy,
+            resolve_currents,
             resolve_pair_chains,
         )
 
@@ -188,8 +188,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         # (zero-length) board; an unwaived failure or an error fails the compile.
         # si-design.json lands next to --dump-rules.
         import pathlib
+
         from pnr.si.annotations import AnnotationError
-        from pnr.si.report import SIDesignError, compile_rules as si_compile
+        from pnr.si.report import SIDesignError
+        from pnr.si.report import compile_rules as si_compile
 
         si_dir = pathlib.Path(args.dump_rules).resolve().parent if args.dump_rules else None
         try:

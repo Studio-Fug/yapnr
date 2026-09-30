@@ -5,9 +5,14 @@ vias. JSON records all pair distances and per-layer track/pad contacts. SVGs
 show local copper geometry (filled zones omitted and explicitly labeled).
 """
 
-import argparse, hashlib, html, json, math
-from pathlib import Path
+import argparse
+import hashlib
+import html
+import json
+import math
 from collections import defaultdict
+from pathlib import Path
+
 import pcbnew
 
 

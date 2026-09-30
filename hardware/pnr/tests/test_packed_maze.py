@@ -1,5 +1,8 @@
-import os, random, unittest
+import os
+import random
+import unittest
 from unittest.mock import patch
+
 from pnr.route.detail.grid import Cell, RouteGrid
 from pnr.route.detail.maze import _astar, route
 from pnr.route.detail.packed_maze import astar

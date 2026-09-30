@@ -15,11 +15,11 @@ import ast
 import importlib.util
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 
 PNR = Path(__file__).parent.parent  # hardware/pnr (also inside Bazel runfiles)
 TOOLS = PNR.parent / "tools"

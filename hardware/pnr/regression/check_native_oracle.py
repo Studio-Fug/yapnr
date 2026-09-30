@@ -4,8 +4,14 @@ Run with pcbnew Python on a PASSED two-component result directory. Deliberate
 faults are saved to separate files; the routed result is never modified.
 """
 
-import argparse, json, shutil, subprocess, hashlib, sys
+import argparse
+import hashlib
+import json
+import shutil
+import subprocess
+import sys
 from pathlib import Path
+
 import pcbnew as k
 
 # src15: no wx.App - headless (a wx.App registers KiCad's Python.app as a Foreground/Dock app on

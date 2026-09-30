@@ -6,10 +6,10 @@ from dataclasses import dataclass
 
 from pnr.graph import BoardGraph, Component, Pad
 from pnr.place.geometry import Rect
-from pnr.route.detail.grid import Cell, RouteGrid
 from pnr.route.detail.escape import plan_escapes
+from pnr.route.detail.grid import Cell, RouteGrid
 from pnr.route.detail.joint_access import select_joint
-from pnr.route.detail.joint_escape import enumerate_access, options_conflict, _make_option
+from pnr.route.detail.joint_escape import _make_option, enumerate_access, options_conflict
 
 
 @dataclass(frozen=True)

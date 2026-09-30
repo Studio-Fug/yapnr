@@ -105,6 +105,7 @@ class P027LiveTest(unittest.TestCase):
         0 m - the routed board rings above VDD + 0.5 V, the ideal board does not -> layout;
         1 m - the cable reflection overshoots on the ideal board too -> design."""
         import shutil
+
         from pnr.si import models
 
         with tempfile.TemporaryDirectory() as d:

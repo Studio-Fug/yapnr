@@ -6,6 +6,7 @@ layer, while through-vias reserve the entire stack including drill spacing.
 """
 
 import math
+
 from pnr.writeback import _segment_distance_sq
 
 

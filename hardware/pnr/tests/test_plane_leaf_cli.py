@@ -1,10 +1,16 @@
 """Exercise native owner lifetimes through process teardown, not just planning."""
 
-import json, os, subprocess, sys, tempfile, unittest
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import unittest
 from pathlib import Path
+
 import pcbnew as k
-from test_plane_leaf import PlaneLeafTest
 from pnr.native_electrical import vec
+from test_plane_leaf import PlaneLeafTest
 
 
 class NativeLifecycleTest(unittest.TestCase):

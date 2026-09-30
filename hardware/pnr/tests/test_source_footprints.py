@@ -1,9 +1,9 @@
 """A repeated terminal number must retain its distinct exposed pad and hole."""
 
 import importlib.util
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 
 @unittest.skipUnless(importlib.util.find_spec("pcbnew"), "requires native KiCad")

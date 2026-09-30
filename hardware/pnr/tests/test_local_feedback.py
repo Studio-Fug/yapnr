@@ -1,9 +1,10 @@
 import unittest
 from types import SimpleNamespace
-from pnr.route.detail.grid import RouteGrid, Cell
+
+from pnr.graph import BoardGraph, Component, Net, Pad
 from pnr.route.detail.escape import trapped_access_sites
+from pnr.route.detail.grid import Cell, RouteGrid
 from pnr.route.feedback import detail_congestion
-from pnr.graph import Component, Pad, BoardGraph, Net
 
 
 class LocalFeedbackTest(unittest.TestCase):

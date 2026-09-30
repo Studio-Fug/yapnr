@@ -4,21 +4,27 @@ Probe costs use the substrate after removing pads and net copper associated with
 all selected components. Exact native electrical reroutes rank sampled batches.
 """
 
-import itertools, math, random, json, os
+import itertools
+import json
+import math
+import os
+import random
+
 import numpy as np
 from pnr.graph import BoardGraph
+
+from .anneal import choose_cost
 from .geometry import (
-    resolve_fixed_poses,
-    outline_size,
-    keepout_rects,
-    hard_group_limits,
     courtyard_rect,
-    placement_rects,
+    hard_group_limits,
+    keepout_rects,
+    outline_size,
     pin_positions,
+    placement_rects,
+    resolve_fixed_poses,
 )
 from .metrics import hard_violations, hpwl
 from .relocate import _fields, _near, probe_cost
-from .anneal import choose_cost
 
 
 def joint_configurations(

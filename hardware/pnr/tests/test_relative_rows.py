@@ -1,8 +1,10 @@
-import unittest, math
-from pnr.constraints import compile_constraints, ConstraintError
+import math
+import unittest
+
+from pnr.constraints import ConstraintError, compile_constraints
 from pnr.graph import BoardGraph, BoardOutline, Component
+from pnr.place.geometry import keepout_rects, resolve_fixed_poses, resolve_hard_rotations
 from pnr.place.rows import sample_constraints, violations
-from pnr.place.geometry import resolve_fixed_poses, resolve_hard_rotations, keepout_rects
 
 
 class RowTest(unittest.TestCase):

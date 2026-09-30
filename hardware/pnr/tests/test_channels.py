@@ -2,7 +2,7 @@
 
 import unittest
 
-from pnr.graph import BoardGraph, Component, Pad, Net
+from pnr.graph import BoardGraph, Component, Net, Pad
 from pnr.place.channels import ChannelModel
 from pnr.place.legalize import legalize, refine_channels
 from pnr.place.metrics import overlap_pairs

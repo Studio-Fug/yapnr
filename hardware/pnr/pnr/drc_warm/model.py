@@ -1,6 +1,7 @@
 """Exact static-state check for conservative track-only native model updates."""
 
-import hashlib, re
+import hashlib
+import re
 
 
 def split_board(text):

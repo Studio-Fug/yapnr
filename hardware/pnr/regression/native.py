@@ -1,7 +1,12 @@
 """Native KiCad endpoints, always launched in a separate pcbnew process."""
 
-import argparse, hashlib, json, math, uuid
+import argparse
+import hashlib
+import json
+import math
+import uuid
 from pathlib import Path
+
 import pcbnew as k
 from pnr.ingest import load
 from pnr.writeback import frame_region, patch_project_rules

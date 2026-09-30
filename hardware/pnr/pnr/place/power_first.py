@@ -389,14 +389,15 @@ class StagedPlacer:
         pair_weights=None,
     ):
         import torch
-        from .model import ANGLES, _base_half_sizes
+        from pnr.constraints import Enforcement
+
         from .geometry import (
             keepout_rects,
             occupied_sides,
             resolve_fixed_poses,
             resolve_hard_rotations,
         )
-        from pnr.constraints import Enforcement
+        from .model import ANGLES, _base_half_sizes
 
         self.torch = torch
         self.ANGLES = ANGLES
@@ -974,8 +975,9 @@ def staged_place(
     chosen by :func:`better_attempt`: legal, then hot-loop cost
     sum_L w_L Lambda_L at the legal pose (EPS[0] tie band), then J1.
     """
-    from pnr.graph import BoardGraph
     from pnr.constraints import compile_routing_rules
+    from pnr.graph import BoardGraph
+
     from . import metrics
     from .channels import ChannelModel
     from .geometry import hard_group_edges, hard_group_limits, resolve_hard_rotations

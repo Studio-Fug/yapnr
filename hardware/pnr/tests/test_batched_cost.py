@@ -1,11 +1,12 @@
 import unittest
+
 import numpy as np
 import torch
 from pnr.place.batched_cost import (
-    PaddedWirelength,
     BucketedWirelength,
-    endpoint_cost_numpy,
+    PaddedWirelength,
     TorchEndpointCost,
+    endpoint_cost_numpy,
 )
 
 

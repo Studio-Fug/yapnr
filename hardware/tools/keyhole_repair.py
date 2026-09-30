@@ -6,17 +6,18 @@ required. Output is a NEW checkpoint requiring native DRC acceptance; never
 modifies source. Does not route coupled pairs, power trunks, or introduce vias.
 """
 import argparse
-from collections import defaultdict
-from dataclasses import asdict
+import fnmatch
 import hashlib
 import html
-import fnmatch
 import json
 import math
-from pathlib import Path
 import shutil
+from collections import defaultdict
+from dataclasses import asdict
+from pathlib import Path
+
 import pcbnew
-from pnr.route.detail.keyhole import route, elbows, legal, length, align_parallel
+from pnr.route.detail.keyhole import align_parallel, elbows, legal, length, route
 
 
 def main():

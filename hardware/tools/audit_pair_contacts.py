@@ -3,8 +3,8 @@
 import argparse
 import hashlib
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pnr"))
 from pnr.pair_contact_audit import audit_pair_contacts

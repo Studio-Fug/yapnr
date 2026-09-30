@@ -8,7 +8,9 @@ Targets are instance-address suffixes, never reference designators. Atomic pin
 numbers describe electrical terminals; ref renumbering does not change intent.
 """
 
-import hashlib, json, math
+import hashlib
+import json
+import math
 from pathlib import Path
 
 KINDS = {"power_array", "thermal_reuse", "local_return"}

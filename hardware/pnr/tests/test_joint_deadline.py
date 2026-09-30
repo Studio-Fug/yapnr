@@ -2,6 +2,7 @@
 
 import unittest
 from unittest.mock import patch
+
 from pnr.route.detail.joint import solve_joint_region
 from pnr.route.detail.regional import Request
 

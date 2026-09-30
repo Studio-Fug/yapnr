@@ -9,9 +9,11 @@ import heapq
 import math
 import time
 from collections import defaultdict
+
 import numpy as np
 from pnr.electrical import net_policy
-from .geometry import pin_positions, pad_rects, courtyard_rect
+
+from .geometry import courtyard_rect, pad_rects, pin_positions
 
 
 class CapacityGraph:

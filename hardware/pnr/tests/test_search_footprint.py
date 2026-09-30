@@ -1,6 +1,7 @@
 """A proposed search path must respect the footprint used at native commit."""
 
 import unittest
+
 from pnr.route.detail.grid import Cell, RouteGrid
 from pnr.route.detail.maze import _astar, _footprint
 

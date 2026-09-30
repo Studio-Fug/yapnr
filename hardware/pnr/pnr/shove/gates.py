@@ -155,11 +155,11 @@ def unjustified_subwidth(board, rules, audit):
 
 def facts(path, rules):
     import pcbnew as k
-    from pnr.fab_profile import load_board, geometry
-    from pnr.via_coalesce import partition
-    from pnr.pad_entry import snapshot
-    from pnr.native_electrical import reference_failures
     from pnr.electrical_audit import audit_board
+    from pnr.fab_profile import geometry, load_board
+    from pnr.native_electrical import reference_failures
+    from pnr.pad_entry import snapshot
+    from pnr.via_coalesce import partition
     from pnr.via_in_pad import forbidden_vias
 
     board = load_board(path)
@@ -203,10 +203,11 @@ def evaluate(
     placement_python=None,
     origin_board=None,
 ):
-    from pnr.via_coalesce import preserved, acceptable, violation_keys
     from pnr.connectivity_restore import lost_connections
     from pnr.native_drc import run_drc
-    from pnr.shove.placement import check as placement_check, poses
+    from pnr.shove.placement import check as placement_check
+    from pnr.shove.placement import poses
+    from pnr.via_coalesce import acceptable, preserved, violation_keys
 
     out = Path(out)
     a, b = facts(original, rules), facts(candidate, rules)

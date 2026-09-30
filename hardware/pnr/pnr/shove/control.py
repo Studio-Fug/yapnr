@@ -60,9 +60,10 @@ def nudge_candidates(inventory, constraints_path, points, radius=3.0, max_pads=4
     attach inside its land rides with it."""
     import json
     from pathlib import Path
+
     import yaml
-    from pnr.graph import BoardGraph
     from pnr.constraints import compile_constraints
+    from pnr.graph import BoardGraph
     from pnr.place.geometry import resolve_fixed_poses
 
     g = BoardGraph.from_json(json.dumps(inventory["graph"]))

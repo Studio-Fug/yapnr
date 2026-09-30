@@ -2,9 +2,10 @@
 
 import importlib.util
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
+
 from pnr.track_graph import redundant_chains
 
 
@@ -106,9 +107,9 @@ class NativeTests(unittest.TestCase):
 
     def test_native_pad_connectivity_entry_and_repeatability(self):
         import pcbnew as k
-        from pnr.track_graph import cycle_candidates, apply_cycle
-        from pnr.via_coalesce import partition, preserved
         from pnr.pad_entry import snapshot
+        from pnr.track_graph import apply_cycle, cycle_candidates
+        from pnr.via_coalesce import partition, preserved
 
         b = self.fixture()
         before = partition(b)
@@ -128,8 +129,9 @@ class NativeTests(unittest.TestCase):
             self.assertTrue(preserved(before, partition(reload)))
 
     def test_serialized_native_worker_transaction(self):
-        import pcbnew as k
         from types import SimpleNamespace
+
+        import pcbnew as k
         from pnr.track_graph import cycle_candidates
         from pnr.via_coalesce import worker
 

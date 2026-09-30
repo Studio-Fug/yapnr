@@ -98,8 +98,8 @@ def _key(value):
 
 
 def violations(graph_json, doc):
-    from pnr.graph import BoardGraph
     from pnr.constraints import compile_constraints
+    from pnr.graph import BoardGraph
     from pnr.place.metrics import hard_violations
 
     g = BoardGraph.from_json(json.dumps(graph_json))
@@ -145,6 +145,7 @@ def check(
     verifiable and is rejected."""
     import os
     import subprocess
+
     from pnr.proc import run
 
     facts = board_facts(before, after, rules, origin, cap)

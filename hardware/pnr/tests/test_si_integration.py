@@ -25,9 +25,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from pnr.si import report as R
 from pnr.si import annotations as A
 from pnr.si import extract as X
+from pnr.si import report as R
 from tests.test_si_annotations import fixture_components
 from tests.test_si_report import FakeSim, fake_kibis, intents, tmpdir
 

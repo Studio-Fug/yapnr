@@ -1,5 +1,6 @@
 import unittest
-from pnr.route.detail.grid import RouteGrid, Cell
+
+from pnr.route.detail.grid import Cell, RouteGrid
 from pnr.route.detail.maze import _astar
 
 

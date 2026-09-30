@@ -10,8 +10,15 @@ rewrites the report bytes and log a real run wrote; <cache>/stats.json counts
 hits/misses. Inputs that change while kicad-cli runs are never stored.
 """
 
-import gzip, hashlib, json, os, re, shutil, time, uuid
+import gzip
+import hashlib
+import json
+import os
+import re
+import shutil
 import subprocess
+import time
+import uuid
 from pathlib import Path
 
 _ARGS = ("pcb", "drc", "{board}", "--format", "json", "--output", "{report}")

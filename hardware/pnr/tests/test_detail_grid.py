@@ -132,8 +132,8 @@ class GridFixtureTest(unittest.TestCase):
 class SourceArrayReservationTest(unittest.TestCase):
     def test_future_current_bank_blocks_signals_on_every_crossed_layer(self):
         from pnr.graph import BoardGraph, BoardOutline, Component, Pad
-        from pnr.route.detail.router import _mark_source_arrays
         from pnr.plane_intent import array_geometry
+        from pnr.route.detail.router import _mark_source_arrays
         from test_plane_access_intent import FAB
 
         pads = [Pad(str(i), "return", (1, y), (0.7, 0.5)) for i, y in enumerate((-1, 0, 1), 1)]

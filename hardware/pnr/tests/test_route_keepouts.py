@@ -1,6 +1,7 @@
 """Real-board routing must preserve the same enclosure exclusions as writeback."""
 
 import unittest
+
 from pnr.graph import BoardGraph, Component
 from pnr.route.detail.grid import RouteGrid
 from pnr.route.detail.router import _mark_copper_keepouts, _track_halo

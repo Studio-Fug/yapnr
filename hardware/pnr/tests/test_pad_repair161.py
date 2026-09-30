@@ -1,7 +1,8 @@
 import unittest
+
 import pcbnew as k
-from pnr.pad_entry import snapshot, repair, repair_changed_entries
-from test_native_electrical import board, pad, add_track
+from pnr.pad_entry import repair, repair_changed_entries, snapshot
+from test_native_electrical import add_track, board, pad
 
 RULES = {
     "fab": {"track_width_mm": 0.2, "clearance_mm": 0.15},

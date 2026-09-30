@@ -1,10 +1,15 @@
-import sys, json, subprocess, shutil, hashlib
+import hashlib
+import json
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pnr"))
-from pnr.route.detail.keyhole import violation_keys
-from collections import Counter
 import argparse
+from collections import Counter
+
+from pnr.route.detail.keyhole import violation_keys
 
 ap = argparse.ArgumentParser(
     description="Native-gated hill climb of reviewed plane access groups; isolated KiCad edit/fill processes."

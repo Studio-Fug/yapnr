@@ -1,10 +1,15 @@
-import unittest, math, os, json, tempfile
+import json
+import math
+import os
+import tempfile
+import unittest
 from pathlib import Path
 from unittest.mock import patch
+
 from pnr.graph import BoardGraph, BoardOutline, Component
-from pnr.place.legalize import legalize, LegalizationError
 from pnr.place.geometry import Rect
-from pnr.place.metrics import overlap_pairs, outside_outline
+from pnr.place.legalize import LegalizationError, legalize
+from pnr.place.metrics import outside_outline, overlap_pairs
 
 
 class GroupBacktrackTest(unittest.TestCase):

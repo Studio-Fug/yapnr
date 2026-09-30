@@ -8,14 +8,15 @@ import argparse
 import hashlib
 import io
 import json
-from pathlib import Path
-import subprocess
 import shutil
-from pypdf import PdfReader, PdfWriter
-from reportlab.pdfgen.canvas import Canvas
-from PIL import Image, ImageOps, ImageDraw
+import subprocess
+from pathlib import Path
+
 from mini_review_annotations import inventory, overlay
+from PIL import Image, ImageDraw, ImageOps
+from pypdf import PdfReader, PdfWriter
 from rasterize_mini_review import flatten
+from reportlab.pdfgen.canvas import Canvas
 
 ap = argparse.ArgumentParser(description=__doc__)
 ap.add_argument("board", type=Path)

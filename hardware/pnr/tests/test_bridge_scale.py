@@ -1,6 +1,7 @@
 import unittest
+
+from pnr.route.detail.keyhole import legal, route
 from pnr.route.detail.layered import route_bridge
-from pnr.route.detail.keyhole import route, legal
 
 
 class BridgeScale(unittest.TestCase):

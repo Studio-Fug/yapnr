@@ -9,8 +9,8 @@ an extra test re-extracts from the ``.kicad_pcb`` and checks it matches the froz
 graph, so the bridge is exercised end-to-end there.
 """
 
-import os
 import importlib.util
+import os
 import unittest
 
 from pnr.graph import BoardGraph

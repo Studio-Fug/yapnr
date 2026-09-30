@@ -217,6 +217,7 @@ class ControlTest(unittest.TestCase):
 class NudgedLayoutTest(unittest.TestCase):
     def test_write_back_converts_to_layout_frame(self):
         from types import SimpleNamespace
+
         from pnr.hier.synth_native import _nudged_layout
 
         with tempfile.TemporaryDirectory() as d:

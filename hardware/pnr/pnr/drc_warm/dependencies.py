@@ -1,6 +1,8 @@
 """Fingerprint the exact library footprints used by this private host."""
 
-import hashlib, os, re
+import hashlib
+import os
+import re
 from pathlib import Path
 
 

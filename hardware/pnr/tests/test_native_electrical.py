@@ -1,24 +1,29 @@
 """Native geometric regressions; run under KiCad Python (no mocked copper)."""
 
-import math, json, tempfile, time, unittest
+import json
+import math
+import tempfile
+import time
+import unittest
 from pathlib import Path
 from types import SimpleNamespace as NS
+
 import pcbnew as k
+from pnr.electrical import compile_policy
 from pnr.native_electrical import (
     Oracle,
-    vec,
-    add_track,
-    power_plan,
-    bank_clear,
     add_bank,
-    pair_plan,
+    add_track,
+    bank_clear,
     move_pair_support,
+    pair_plan,
+    power_plan,
+    vec,
 )
-from pnr.electrical import compile_policy
-from pnr.pad_entry import snapshot
-from pnr.via_coalesce import partition
-from pnr.route.detail.coupled import solve_pair
 from pnr.native_loop import native_worker
+from pnr.pad_entry import snapshot
+from pnr.route.detail.coupled import solve_pair
+from pnr.via_coalesce import partition
 
 FAB = dict(
     outer_copper_oz=1,
@@ -522,8 +527,8 @@ class PowerTreeTest(unittest.TestCase):
         )
 
 
-from pnr.native_electrical import uid
 from pnr.electrical import net_policy
+from pnr.native_electrical import uid
 
 
 class PowerLandingTest(unittest.TestCase):

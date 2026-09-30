@@ -1,6 +1,8 @@
 """Collect cycle diagnostics and draw the deformation field and actual part moves."""
 
-import argparse, json, html
+import argparse
+import html
+import json
 from pathlib import Path
 
 

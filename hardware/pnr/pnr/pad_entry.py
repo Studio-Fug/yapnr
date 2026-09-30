@@ -334,7 +334,7 @@ def neck_witness(pad, track, width, tracks, rules):
     """A source-authorized short neck must end in a full-current-width feed."""
     if not rules.get("electrical_fab") or track.GetClass() != "PCB_TRACK":
         return False
-    from pnr.electrical import terminal_policy, neck_budget
+    from pnr.electrical import neck_budget, terminal_policy
 
     policy = terminal_policy(
         pad.GetParentFootprint().GetReference(), [pad.GetNumber()], pad.GetNetname(), rules
@@ -733,8 +733,11 @@ def repair_changed_entries(board, rules, before):
 
 
 def main():
-    import argparse, json, shutil
+    import argparse
+    import json
+    import shutil
     from pathlib import Path
+
     import pcbnew
 
     ap = argparse.ArgumentParser(description=__doc__)

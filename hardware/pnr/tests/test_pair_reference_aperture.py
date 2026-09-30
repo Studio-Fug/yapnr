@@ -1,7 +1,8 @@
 import unittest
+
 import pcbnew as k
-from test_native_electrical import board, rules
 from pnr.native_electrical import pair_reference_validator
+from test_native_electrical import board, rules
 
 
 class ReferenceApertureTest(unittest.TestCase):

@@ -1,6 +1,10 @@
 """Export completed seed-0 cases; exports do not constitute visual review."""
 
-import argparse, json, subprocess, sys, time
+import argparse
+import json
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 p = argparse.ArgumentParser()

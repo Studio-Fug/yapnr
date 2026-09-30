@@ -1,5 +1,7 @@
-import unittest, math
-from pnr.route.detail.coupled import solve_pair, path_metrics
+import math
+import unittest
+
+from pnr.route.detail.coupled import path_metrics, solve_pair
 
 
 class DensePortalTest(unittest.TestCase):

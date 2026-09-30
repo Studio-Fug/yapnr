@@ -6,7 +6,8 @@ tracks and ambiguous pad labels fail closed rather than inventing lengths.
 """
 
 from collections import defaultdict
-from pnr.native_electrical import duplicate_endpoint_metrics, connector_origins_qualified, xy
+
+from pnr.native_electrical import connector_origins_qualified, duplicate_endpoint_metrics, xy
 
 
 def audit_pair_contacts(board, rules):

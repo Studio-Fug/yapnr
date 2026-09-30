@@ -5,6 +5,7 @@ by the enclosing placement/routing transaction. No copper or pose is saved.
 """
 
 import math
+
 from pnr.electrical import net_policy
 from pnr.native_electrical import Oracle, uid
 

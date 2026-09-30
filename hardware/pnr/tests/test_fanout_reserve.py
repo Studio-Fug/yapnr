@@ -2,6 +2,7 @@
 
 import math
 import unittest
+
 from pnr import fanout_reserve as F
 
 G = dict(clearance=0.15, via=0.6, drill=0.3, hole=0.2)

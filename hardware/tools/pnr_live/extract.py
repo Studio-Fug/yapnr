@@ -1,7 +1,11 @@
 """Native KiCad geometry -> live viewer engine coordinates (mm, y-up)."""
 
-import json, sys, math, pcbnew as k
-from pnr.ingest import build_graph, _board_frame
+import json
+import math
+import sys
+
+import pcbnew as k
+from pnr.ingest import _board_frame, build_graph
 
 b = k.LoadBoard(sys.argv[1])
 frame, outline = _board_frame(b)

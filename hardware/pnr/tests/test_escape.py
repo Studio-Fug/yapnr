@@ -152,8 +152,9 @@ class EscapePlanTest(unittest.TestCase):
 
 
 import unittest
-from pnr.route.detail.grid import RouteGrid, Cell
+
 from pnr.route.detail.escape import _offgrid_escape
+from pnr.route.detail.grid import Cell, RouteGrid
 
 
 class ProtectedEscapeTest(unittest.TestCase):
@@ -169,8 +170,9 @@ class ProtectedEscapeTest(unittest.TestCase):
 
 
 import unittest
-from pnr.route.detail.grid import RouteGrid, Cell
+
 from pnr.route.detail.escape import trapped_access_sites
+from pnr.route.detail.grid import Cell, RouteGrid
 
 
 class BlockedTerminalTest(unittest.TestCase):

@@ -19,7 +19,6 @@ from unittest import mock
 
 import numpy as np
 import torch
-
 from pnr.constraints import BoardSpec, CompiledConstraints, Constraint, Enforcement, NetClass
 from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
 from pnr.power_topology import derive, minimum_cycle_basis

@@ -1,6 +1,7 @@
 import unittest
-from pnr.route.detail.layered import route_layers, primitives
+
 from pnr.native_electrical import bank_clear
+from pnr.route.detail.layered import primitives, route_layers
 
 
 class TransitionPorts(unittest.TestCase):

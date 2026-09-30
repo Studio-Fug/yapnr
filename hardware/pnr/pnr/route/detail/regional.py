@@ -5,9 +5,10 @@ foreign routes are checked here at their actual widths. Failed orders are fully
 rolled back. A failure is not a proof that placement is unroutable.
 """
 
+import math
 from collections import Counter, deque
 from dataclasses import dataclass, field
-import math
+
 from .keyhole import route
 
 

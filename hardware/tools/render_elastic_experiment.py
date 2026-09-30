@@ -1,9 +1,12 @@
 """Render mesh experiment comparison; all figures rasterized for fast PDF viewing."""
 
-import argparse, json, subprocess
+import argparse
+import json
+import subprocess
 from pathlib import Path
-from reportlab.pdfgen import canvas
+
 from PIL import Image, ImageDraw
+from reportlab.pdfgen import canvas
 
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument("directory", type=Path)

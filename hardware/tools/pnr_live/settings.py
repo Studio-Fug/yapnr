@@ -1,8 +1,11 @@
 """Persistent preferences and explicitly requested per-run restarts."""
 
-import json, time, uuid
+import json
+import time
+import uuid
 from pathlib import Path
-from pnr.runtime_controls import validate, DEFAULTS
+
+from pnr.runtime_controls import DEFAULTS, validate
 
 
 def atomic(path, record):

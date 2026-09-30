@@ -194,9 +194,11 @@ def _reserve_line(
 
 def _offgrid_escape(grid, net, center, pad_xy, side, part_center):
     """Bridge a fine-pitch terminal to the coarse grid using checked real geometry."""
-    from pnr.writeback import _segment_distance_sq
-    from .keyhole import elbows, length
     import math
+
+    from pnr.writeback import _segment_distance_sq
+
+    from .keyhole import elbows, length
 
     # The exact bridge oracle currently reserves signal-width corridors. Wider
     # classes use the existing conservative escape path until width-aware halos.

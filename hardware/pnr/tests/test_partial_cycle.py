@@ -4,10 +4,15 @@ The native cases run with PNR_PARTIAL_CYCLE_CLEANUP=1 (Electrical221, opt-in);
 unset, cycle_candidates proposes whole-track chains only (src15).
 """
 
-import importlib.util, os, unittest, json, tempfile
+import importlib.util
+import json
+import os
+import tempfile
+import unittest
 from pathlib import Path
 from unittest import mock
-from pnr.track_graph import redundant_chains, partial_cycle_cleanup_enabled
+
+from pnr.track_graph import partial_cycle_cleanup_enabled, redundant_chains
 
 
 class PartialFlagTests(unittest.TestCase):
@@ -89,9 +94,9 @@ class PartialNativeTests(unittest.TestCase):
         return b
 
     def test_native_partial_cycle_preserves_pads_and_no_repeat(self):
-        from pnr.track_graph import cycle_candidates, apply_cycle
-        from pnr.via_coalesce import partition, preserved
         from pnr.pad_entry import snapshot
+        from pnr.track_graph import apply_cycle, cycle_candidates
+        from pnr.via_coalesce import partition, preserved
 
         b = self.fixture()
         before = partition(b)
@@ -105,7 +110,7 @@ class PartialNativeTests(unittest.TestCase):
         self.assertEqual(len(list(b.GetTracks())), 3)
 
     def test_stale_outside_replacement_is_rejected_before_mutation(self):
-        from pnr.track_graph import cycle_candidates, apply_cycle
+        from pnr.track_graph import apply_cycle, cycle_candidates
 
         b = self.fixture()
         p = cycle_candidates(b, {}, [])[0]

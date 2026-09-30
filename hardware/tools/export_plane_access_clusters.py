@@ -4,8 +4,12 @@ Native shape connectivity on F.Cu, explicitly excluding plane connectivity.
 This is an inventory for visual review, not automatic redundancy classification.
 """
 
-import argparse, json, hashlib, sys
+import argparse
+import hashlib
+import json
+import sys
 from pathlib import Path
+
 import pcbnew
 from scan_via_proximity import render
 

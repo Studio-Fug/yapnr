@@ -1,11 +1,14 @@
-import sys, copy, unittest
+import copy
+import sys
+import unittest
 from pathlib import Path
 from unittest.mock import patch
+
 import numpy as np
 import torch
 from cost_fixture import fixture
 from pnr.constraints import Constraint, Enforcement, NetClass
-from pnr.place.cost_inspect import Objective, TERMS
+from pnr.place.cost_inspect import TERMS, Objective
 from pnr.place.model import global_place
 
 

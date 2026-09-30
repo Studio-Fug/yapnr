@@ -5,15 +5,15 @@ Workers must exit normally. A crash or failed guard retains the preceding board.
 """
 
 import argparse
-from collections import Counter
 import hashlib
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
 import time
+from collections import Counter
+from pathlib import Path
 
 
 def read(path):
@@ -40,7 +40,7 @@ def copy_board(source, target):
 
 
 def quality_checks(before, after, old, new):
-    from pnr.via_coalesce import preserved, acceptable
+    from pnr.via_coalesce import acceptable, preserved
 
     checks = dict(
         preserved=preserved(old["partition"], new["partition"]),
@@ -60,11 +60,11 @@ def quality_checks(before, after, old, new):
 
 def execute_native(a, rules, board):
     import pcbnew as k
-    from pnr.power_bank_reuse import proposals, apply
-    from pnr.native_electrical import uid, reference_failures
-    from pnr.via_coalesce import partition
-    from pnr.pad_entry import snapshot
     from pnr.electrical_audit import audit_board
+    from pnr.native_electrical import reference_failures, uid
+    from pnr.pad_entry import snapshot
+    from pnr.power_bank_reuse import apply, proposals
+    from pnr.via_coalesce import partition
 
     board.BuildConnectivity()
     if a.worker == "inventory":
@@ -113,8 +113,8 @@ def execute_native(a, rules, board):
 
 
 def consolidate(a):
-    from pnr.native_drc import run_drc
     from pnr.live import emit
+    from pnr.native_drc import run_drc
 
     if a.out is None or a.work_dir is None:
         raise ValueError("--out and --work-dir required")

@@ -1,9 +1,18 @@
 """Explicit-interface live PnR telemetry, immutable pins and annotated snapshots."""
 
-import argparse, copy, json, os, re, subprocess, threading, time, uuid, sys
+import argparse
+import copy
+import json
+import os
+import re
+import subprocess
+import sys
+import threading
+import time
+import uuid
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from urllib.parse import parse_qs, urlparse
 
 ap = argparse.ArgumentParser()
 ap.add_argument("root", type=Path)
@@ -33,9 +42,12 @@ state = dict(
 seen = set()
 cache = {}
 sys.path.insert(0, str(repo / "hardware/pnr"))
-from pnr.runtime_controls import read as read_controls, write as write_controls, LIMITS
-from settings import seed as seed_settings, save as save_settings
 from event_schema import phase_frame
+from pnr.runtime_controls import LIMITS
+from pnr.runtime_controls import read as read_controls
+from pnr.runtime_controls import write as write_controls
+from settings import save as save_settings
+from settings import seed as seed_settings
 
 preferences = repo / "output/pnr-settings.json"
 state["controls"] = seed_settings(root / "control.json", preferences)

@@ -120,6 +120,7 @@ class TwoPinTest(unittest.TestCase):
 
     def test_blocked_search_expands_each_cell_once(self):
         from unittest.mock import patch
+
         from pnr.route.detail.maze import _astar
 
         g = RouteGrid(12, 12, 1.0)

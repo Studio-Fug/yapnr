@@ -160,17 +160,23 @@ PNR_PAIR_EARLY_EXIT=1
 """
 
 import argparse
+import json
+import math
+import os
+import shutil
+import subprocess
+import time
 from collections import Counter, defaultdict
-import json, math, shutil, subprocess, time, os
 from pathlib import Path
 from types import SimpleNamespace
-from pnr.electrical import net_policy, current_width, terminal_policy, neck_budget
-from pnr.plane_intent import size_array
-from pnr.route.detail.keyhole import route, length, elbows
-from pnr.route.detail.coupled import solve_pair, path_metrics
+
+from pnr.electrical import current_width, neck_budget, net_policy, terminal_policy
 from pnr.pad_entry import snapshot, witness
-from pnr.via_coalesce import partition, preserved, acceptable
-from pnr.via_in_pad import smd_keepout_violated, hole_keepouts
+from pnr.plane_intent import size_array
+from pnr.route.detail.coupled import path_metrics, solve_pair
+from pnr.route.detail.keyhole import elbows, length, route
+from pnr.via_coalesce import acceptable, partition, preserved
+from pnr.via_in_pad import hole_keepouts, smd_keepout_violated
 
 
 def shove_enabled():
@@ -328,8 +334,8 @@ class Oracle:
         self.layers = list(b.GetEnabledLayers().CuStack())
         self.obstacles = []
         self.buckets = defaultdict(set)
-        from pnr.writeback import outline_bounds
         from pnr.fab_profile import geometry
+        from pnr.writeback import outline_bounds
 
         # Fab numbers from the rules; per-hole-kind values are None (unused) for
         # legacy rules, which keep the original single hole clearance exactly.
@@ -415,7 +421,9 @@ class Oracle:
 
     def fork(self, deadline=None):
         """Isolate provisional copper while retaining the caller's obstacles."""
-        import copy, pcbnew as k
+        import copy
+
+        import pcbnew as k
 
         clone = copy.copy(self)
         for name in ("items", "obstacles", "physical", "holes", "hole_gaps", "drilled"):
@@ -1044,7 +1052,7 @@ def power_plan(
 
     # Same-net copper is not automatically a safe attachment: a thin branch
     # grazing an otherwise bare power pad creates an unqualified pad entry.
-    from pnr.pad_entry import required_width, array_attached_pads
+    from pnr.pad_entry import array_attached_pads, required_width
 
     existing_entries = snapshot(b, rules)
     guarded_pads = [

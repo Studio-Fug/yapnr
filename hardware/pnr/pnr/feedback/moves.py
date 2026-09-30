@@ -36,7 +36,6 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, FrozenSet, Optional, Tuple
 
 import numpy as np
-
 from pnr.feedback.signals import POWER_MODES
 from pnr.place.geometry import (
     courtyard_rect,

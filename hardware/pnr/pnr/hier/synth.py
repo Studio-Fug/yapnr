@@ -51,10 +51,10 @@ def _port_debt(placed, block_ports, width, height):
 
 def _trial(args):
     inputs, constraints_path, names, size, seed, iters, route_iters, reuse = args
-    from pnr.mc.halving import _load
     from pnr.graph import BoardGraph
-    from pnr.place.placer import place
+    from pnr.mc.halving import _load
     from pnr.place.initial_pool import _route_metrics
+    from pnr.place.placer import place
     from pnr.route.detail.router import route_board
 
     t = time.monotonic()

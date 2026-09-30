@@ -78,8 +78,8 @@ class GlobalPlacePairTest(unittest.TestCase):
 class PlacePairWeightsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        from pnr.mc.halving import _load
         from pnr.hier.blocks import extract_blocks
+        from pnr.mc.halving import _load
 
         cls.g, cls.c, cls.r = _load(INPUTS, CONSTRAINTS)
         cls.blocks = {b.name: b for b in extract_blocks(cls.g, cls.c)}

@@ -1,10 +1,11 @@
 """Bottom test copper shares XY with SMD parts, but never through-hole bodies."""
 
 import unittest
+
 from pnr.graph import BoardGraph, Component, Pad
+from pnr.place.geometry import pin_positions, set_component_side
 from pnr.place.legalize import legalize
 from pnr.place.metrics import overlap_pairs
-from pnr.place.geometry import set_component_side, pin_positions
 
 
 def part(ref, side, through=False):

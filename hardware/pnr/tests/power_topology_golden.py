@@ -50,6 +50,7 @@ def compile_fixture(doc):
 
 def main(inputs=None):
     import dataclasses
+
     from pnr.hier.blocks import block_constraints_doc, extract_blocks, sub_board
     from pnr.mc.halving import _load
     from pnr.power_topology import derive

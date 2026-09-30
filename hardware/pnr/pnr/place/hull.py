@@ -471,6 +471,7 @@ def gp_bodies(components, scale=None):
     occupied sides; a hull macro is its per-side cover boxes, each rotating with
     the macro like a pin (offset) and a courtyard (half-size swap)."""
     import torch
+
     from .geometry import occupied_sides
     from .model import ANGLES
 

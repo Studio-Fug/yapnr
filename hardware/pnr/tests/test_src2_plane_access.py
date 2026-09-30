@@ -6,7 +6,12 @@ at the board clearance but inside the fab precheck gap, and banks that must not 
 kept (vias without current-sized copper, shorts, board-rule violations).
 """
 
-import importlib.util, math, os, random, unittest
+import importlib.util
+import math
+import os
+import random
+import unittest
+
 from pnr.plane_access import covering_tracks, matching_array
 from pnr.plane_intent import array_geometry
 

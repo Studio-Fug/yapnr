@@ -15,6 +15,7 @@ placement score. A detailed router must validate any resulting placement.
 from __future__ import annotations
 
 from itertools import combinations
+
 import numpy as np
 
 from .geometry import occupied_sides, pad_rects

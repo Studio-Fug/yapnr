@@ -1,9 +1,11 @@
-import unittest, json
+import json
+import unittest
+
 import pcbnew as k
-from test_native_electrical import board, pad
 from pnr.native_electrical import add_track, uid, xy
-from pnr.power_detour import shifted_path, distance_to_segment, propose
+from pnr.power_detour import distance_to_segment, propose, shifted_path
 from pnr.power_detour_repair import repair_bounds
+from test_native_electrical import board, pad
 
 
 class DetourTest(unittest.TestCase):

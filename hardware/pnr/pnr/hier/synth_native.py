@@ -45,9 +45,9 @@ def _place(args):
     pnr.feedback 'prior' attraction passed to place() as ``pair_weights``."""
     inputs, constraints_path, name, size, seed, iters, *extra = args
     pairs = extra[0] if extra else None
-    from pnr.mc.halving import _load
     from pnr.hier.blocks import extract_blocks, sub_board
-    from pnr.hier.synth import local_key, _port_debt
+    from pnr.hier.synth import _port_debt, local_key
+    from pnr.mc.halving import _load
     from pnr.place.placer import place
 
     w, h, u, a = size
@@ -130,8 +130,8 @@ def _used_area(r):
 
 def _placement_power_quality(sg, sc, sr, placed):
     """Placement-level power metrics of a legal block layout (pnr.place.power_first)."""
-    from pnr.power_topology import PowerTopologyUnavailable, derive
     from pnr.place.power_first import placement_quality
+    from pnr.power_topology import PowerTopologyUnavailable, derive
 
     try:
         roles = derive(sg, sc, sr)
@@ -175,10 +175,10 @@ def open_band(evaluated):
 
 
 def _native(inputs, constraints_path, rec, names, out, seconds, workers, repo, repeat=0):
-    from pnr.mc.halving import _load
-    from pnr.hier.blocks import extract_blocks, block_constraints_doc
-    from pnr.hier.synth import instance_board
+    from pnr.hier.blocks import block_constraints_doc, extract_blocks
     from pnr.hier.native_block import evaluate
+    from pnr.hier.synth import instance_board
+    from pnr.mc.halving import _load
 
     graph, constraints, rules = _load(Path(inputs), Path(constraints_path))
     blocks = {b.name: b for b in extract_blocks(graph, constraints)}
@@ -354,6 +354,7 @@ def _nudged_layout(round_dir, block, apron):
     differs from the placed pose (PNR_SHOVE=1 make-room nudges); None when the
     placements cannot be read (the instance's nudges are unknown)."""
     import json
+
     from pnr.hier.synth import local_key
 
     try:
@@ -784,9 +785,9 @@ def main(argv=None):
         ap.error("--import-trials needs --rounds > 0")
     if a.import_rebase < 0:
         ap.error("--import-rebase must be >= 0")
-    from pnr.mc.halving import _load
     from pnr.hier.blocks import extract_blocks
     from pnr.hier.synth import _template_id
+    from pnr.mc.halving import _load
 
     graph, constraints, rules = _load(a.inputs, a.constraints)
     blocks = extract_blocks(graph, constraints)
@@ -1051,7 +1052,7 @@ def _template_q_ref(recs):
 def _child_metrics(rec, graph, constraints, rules, block, q_ref):
     """Port debt and (PNR_POWER_FIRST=1) placement power quality of a child layout,
     banded against the template's q_ref like stage A."""
-    from pnr.hier.synth import instance_board, _port_debt
+    from pnr.hier.synth import _port_debt, instance_board
 
     g2, c2, r2 = instance_board(
         graph, constraints, rules, block, rec["layout"], rec["width"], rec["height"]

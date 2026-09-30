@@ -225,8 +225,8 @@ class HalvingGenerationsTest(unittest.TestCase):
         return fakes, json.loads((Path(out) / "status.json").read_text())
 
     def test_generations_ids_pool_deep_and_resume(self):
-        from pnr.graph import BoardGraph
         from pnr.feedback.toplevel import prepared, source_errors
+        from pnr.graph import BoardGraph
         from pnr.mc.halving import _load
 
         out = self.root / "out"

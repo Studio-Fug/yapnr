@@ -330,7 +330,7 @@ def block_geometry(
     kept inside the outline keeps both rules. The ``inner`` plane collects what a
     drilled part (or another block's inner copper) must clear: inner-layer tracks,
     every via barrel and the member drilled pads."""
-    from pnr.place.geometry import pad_rects, placement_rects, courtyard_rect
+    from pnr.place.geometry import courtyard_rect, pad_rects, placement_rects
 
     comps = list(components)
     board = read_board(board_path)
@@ -467,6 +467,7 @@ def build_hull(
     a part legalized outside the macro keeps only ``clearance`` from the
     courtyard edge, so that copper would end up closer than ``c_cu``."""
     import hashlib
+
     import numpy as np
     from pnr.place import hull as H
 

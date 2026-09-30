@@ -12,9 +12,13 @@ allowed), so phases 03-05 route around them; --release deletes exactly those
 areas. No copper is added here: native DRC and the loop's gate decide.
 """
 
-import argparse, json, math, time
+import argparse
+import json
+import math
+import time
 from collections import Counter
 from pathlib import Path
+
 from pnr.route.detail.regional import segment_distance
 
 PREFIX = "PNR fanout:"
@@ -322,10 +326,11 @@ def add_rule_area(board, name, poly, layers):
 
 def reserve(board, rules, max_pitch=0.65, node_limit=50000):
     """Plan jointly legal escapes and add their rule areas to board."""
-    import pcbnew as k
     from collections import defaultdict
-    from pnr.native_electrical import Oracle, connected_items
+
+    import pcbnew as k
     from pnr.electrical import net_policy
+    from pnr.native_electrical import Oracle, connected_items
     from pnr.pad_entry import required_width
 
     started = time.monotonic()

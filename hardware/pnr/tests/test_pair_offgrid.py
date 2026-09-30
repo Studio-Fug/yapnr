@@ -1,6 +1,8 @@
-import math, unittest
+import math
+import unittest
+
 from pnr.route.detail.coupled import route_directional
-from pnr.route.detail.keyhole import route, legal
+from pnr.route.detail.keyhole import legal, route
 from pnr.route.detail.regional import segment_distance
 
 

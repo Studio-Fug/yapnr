@@ -1,10 +1,14 @@
-import json, os, tempfile, unittest
+import json
+import os
+import tempfile
+import unittest
 from pathlib import Path
 from unittest.mock import patch
-from pnr.graph import BoardGraph, BoardOutline, Component, Pad, Net
+
 from pnr.constraints import compile_constraints
-from pnr.place.model import global_place
+from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
 from pnr.place.cost_capture import record_global_loss
+from pnr.place.model import global_place
 
 
 class CostOutlineTest(unittest.TestCase):

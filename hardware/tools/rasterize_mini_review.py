@@ -13,9 +13,10 @@ import shutil
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
 from PIL import Image, ImageChops, ImageDraw
-from reportlab.pdfgen.canvas import Canvas
 from pypdf import PdfReader, PdfWriter
+from reportlab.pdfgen.canvas import Canvas
 
 
 def flatten(source, output, specs, board, sha, pdftoppm, assets, dpi=300):

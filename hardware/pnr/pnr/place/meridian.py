@@ -9,6 +9,7 @@ intentionally moved: callers must opt into mechanically unconstrained studies.
 import bisect
 import copy
 import math
+
 from pnr.graph import BoardGraph
 
 

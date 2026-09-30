@@ -7,8 +7,9 @@ Historical runs lack failure_sites: do not reconstruct or label a proxy as measu
 import argparse
 import json
 from pathlib import Path
+
+from pnr.congestion_diagnostics import native_endpoints, snapshot, write_snapshot
 from pnr.graph import BoardGraph
-from pnr.congestion_diagnostics import snapshot, write_snapshot, native_endpoints
 
 
 def export(root, out):

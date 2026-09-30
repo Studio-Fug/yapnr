@@ -1,7 +1,8 @@
 import unittest
+
 import pcbnew as k
-from test_native_electrical import board, pad, rules
 from pnr.placement_copper import rank_native_copper
+from test_native_electrical import board, pad, rules
 
 
 class NativePlacementCopper(unittest.TestCase):

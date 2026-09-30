@@ -1,8 +1,12 @@
-import json, os, tempfile, unittest
+import json
+import os
+import tempfile
+import unittest
 from pathlib import Path
 from unittest.mock import patch
+
 from pnr import native_loop
-from pnr.graph import BoardGraph, BoardOutline, Component, Pad, Net
+from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
 
 
 class PortalControllerTest(unittest.TestCase):

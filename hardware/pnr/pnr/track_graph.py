@@ -11,10 +11,10 @@ Partial-track edits (Electrical221) are opt-in: PNR_PARTIAL_CYCLE_CLEANUP=1 (see
 are proposed, as in the src15 engine.
 """
 
-from collections import defaultdict
 import heapq
 import math
 import os
+from collections import defaultdict
 
 
 def partial_cycle_cleanup_enabled():
@@ -152,8 +152,8 @@ def redundant_chains(segments, terminals=(), max_length=3_000_000, allow_partial
 
 
 def cycle_candidates(board, rules, sources, max_length_mm=3):
-    from pnr.via_coalesce import protected, touch
     from pnr.plane_access import uid
+    from pnr.via_coalesce import protected, touch
 
     excluded, _ = protected(board, rules, sources)
     groups = defaultdict(list)

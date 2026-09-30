@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+
 from pypdf import PdfReader
 
 ap = argparse.ArgumentParser(description=__doc__)

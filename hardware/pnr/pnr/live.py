@@ -1,6 +1,11 @@
 """Optional process-safe local telemetry. No routing decisions depend on it."""
 
-import hashlib, json, os, shutil, time, uuid
+import hashlib
+import json
+import os
+import shutil
+import time
+import uuid
 from pathlib import Path
 
 

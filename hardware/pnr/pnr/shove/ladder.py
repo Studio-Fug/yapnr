@@ -91,7 +91,7 @@ class Transaction:
     def nudgeable(self, board, parts):
         """``parts`` that may move in this transaction: present, unlocked, not
         source-owned, with at least 0.02 mm of cumulative budget left."""
-        from pnr.shove.placement import protected_refs, origin_offsets, TOTAL_CAP_MM
+        from pnr.shove.placement import TOTAL_CAP_MM, origin_offsets, protected_refs
 
         footprints = {f.GetReference(): f for f in board.GetFootprints()}
         owned = protected_refs(self.rules)
@@ -436,8 +436,8 @@ class Transaction:
 
     # ------------------------------------------------------------------ rungs
     def make_room(self, rung, radius, deltas, parts):
-        from pnr.shove.world import World, soft_set
         from pnr.shove.relax import wish_plan
+        from pnr.shove.world import World, soft_set
 
         folder = self.out / ("rung-%d" % rung)
         folder.mkdir(parents=True, exist_ok=True)
@@ -599,15 +599,16 @@ class Transaction:
         local signals widens the rip set once by those neighbours (at most
         ``max_extra`` nets) and restores the trapped net first: a bounded local
         negotiation, never a global rip-up."""
+        from pnr.electrical import net_policy
         from pnr.shove.relax import (
-            ignoring_oracle,
-            plan_route,
-            plan_collisions,
             crossing_nets,
             distance_to,
+            ignoring_oracle,
+            plan_collisions,
+            plan_route,
         )
-        from pnr.electrical import net_policy
-        from pnr.via_coalesce import protected as source_protected, partition
+        from pnr.via_coalesce import partition
+        from pnr.via_coalesce import protected as source_protected
 
         folder = self.out / "rung-4"
         folder.mkdir(parents=True, exist_ok=True)
@@ -1049,8 +1050,8 @@ class Transaction:
         first) that the original board connected and the current one does not:
         ``(net, label, uuid, label, uuid, box)`` or None."""
         import pcbnew as k
-        from pnr.via_coalesce import partition
         from pnr.fab_profile import load_board
+        from pnr.via_coalesce import partition
 
         board = load_board(board_path)
         board.BuildConnectivity()
@@ -1091,8 +1092,8 @@ def run(a):
     tx.load_origin()
     tx.bounds_box = list(a.bounds) if a.bounds else tx.bounds(board)
     if a.bounds:
-        from pnr.via_coalesce import partition
         from pnr.shove.targets import runtime_bounds
+        from pnr.via_coalesce import partition
 
         source, target = tx.endpoints(board)
         tx.bounds_box = runtime_bounds(

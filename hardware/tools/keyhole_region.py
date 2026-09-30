@@ -8,31 +8,30 @@ remain immutable. A complete regional
 solve is only accepted after native global connectivity/DRC improvement.
 """
 import argparse
-from collections import defaultdict
-from dataclasses import asdict
 import fnmatch
 import hashlib
 import json
 import math
-from pathlib import Path
 import shutil
 import subprocess
 import sys
+from collections import defaultdict
+from dataclasses import asdict
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pnr"))
 import pcbnew
 from pnr.profile import retain_native
-from pnr.route.detail.regional import (
-    Request,
-    solve_region,
-    preserves_connections,
-    needs_connection,
-)
+from pnr.route.detail.joint import solve_joint_region
 from pnr.route.detail.keyhole import acceptable
 from pnr.route.detail.layered import solve_layered_region
-from pnr.route.detail.joint import solve_joint_region
 from pnr.route.detail.portal_joint import solve_portal_region
-
+from pnr.route.detail.regional import (
+    Request,
+    needs_connection,
+    preserves_connections,
+    solve_region,
+)
 
 print(
     "IMPLEMENTATION "
@@ -211,8 +210,8 @@ def main():
     fg = geometry(entry_rules) if entry_rules is not None else active_geometry()
     before_entries = {}
     if args.rules:
-        from pnr.via_coalesce import protected
         from pnr.pad_entry import snapshot
+        from pnr.via_coalesce import protected
 
         before_entries = snapshot(b, entry_rules)
         excluded, _ = protected(b, entry_rules, args.annotation_source)
@@ -637,7 +636,7 @@ def main():
             existing_vias_by_net[t.GetNetname()].append((pt(t.GetPosition()), t))
     net_codes = {pad.GetNetname(): pad.GetNetCode() for pad in pads}
 
-    from pnr.via_in_pad import smd_keepout_violated, in_pad_size, style_in_pad_via
+    from pnr.via_in_pad import in_pad_size, smd_keepout_violated, style_in_pad_via
 
     smd_pads = [t for t in pads if t.GetAttribute() == pcbnew.PAD_ATTRIB_SMD]
     # (net, x, y) -> (diameter, drill) of a checked 5B filled in-pad via (profile only).

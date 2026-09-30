@@ -1,12 +1,14 @@
 """A full-current bus may cover a small land from a clear outer landing."""
 
-import time, unittest
+import time
+import unittest
 from unittest.mock import patch
-import pnr.native_electrical as electrical
+
 import pcbnew as k
-from test_native_electrical import board, pad, rules
-from pnr.native_electrical import Oracle, power_plan, add_track, access
+import pnr.native_electrical as electrical
+from pnr.native_electrical import Oracle, access, add_track, power_plan
 from pnr.pad_entry import witness
+from test_native_electrical import board, pad, rules
 
 
 class FullLandAccess(unittest.TestCase):

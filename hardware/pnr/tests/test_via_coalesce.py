@@ -3,10 +3,11 @@
 import importlib.util
 import json
 import os
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
+
 from pnr.via_coalesce import acceptable
 
 NATIVE = importlib.util.find_spec("pcbnew") is not None
@@ -77,7 +78,7 @@ class ViaCoalesceTests(unittest.TestCase):
 
     def test_overlapping_annuli_do_not_replace_surviving_layer_bridges(self):
         import pcbnew as k
-        from pnr.via_coalesce import plan, apply, partition, preserved, vec
+        from pnr.via_coalesce import apply, partition, plan, preserved, vec
 
         b, keep, remove, tail, track = self.fixture()
         # Keep annuli overlapping, but track endpoints outside the survivor pad.
@@ -98,7 +99,7 @@ class ViaCoalesceTests(unittest.TestCase):
     @mock.patch.dict(os.environ, ELECTRICAL221)
     def test_transitively_connected_tail_keeps_native_barrel_contact(self):
         import pcbnew as k
-        from pnr.via_coalesce import plan, apply, partition, preserved, xy
+        from pnr.via_coalesce import apply, partition, plan, preserved, xy
 
         b, keep, remove, _, track = self.fixture()
         # Both back endpoints are connected through the remote pad. Removing
@@ -143,8 +144,10 @@ class ViaCoalesceTests(unittest.TestCase):
         )
 
     def test_trial_worker_exits_cleanly_after_releasing_borrowed_tracks(self):
+        import subprocess
+        import sys
+
         import pcbnew as k
-        import subprocess, sys
 
         b, keep, remove, _, _ = self.fixture()
         with tempfile.TemporaryDirectory() as directory:
@@ -183,7 +186,7 @@ class ViaCoalesceTests(unittest.TestCase):
             self.assertEqual(sum(t.GetClass() == "PCB_VIA" for t in reloaded.GetTracks()), 1)
 
     def test_three_layers_share_one_via_and_midsegment_tail_is_trimmed(self):
-        from pnr.via_coalesce import plan, apply, partition, preserved, candidates
+        from pnr.via_coalesce import apply, candidates, partition, plan, preserved
 
         b, keep, remove, tail, _ = self.fixture()
         before = partition(b)
@@ -209,8 +212,8 @@ class ViaCoalesceTests(unittest.TestCase):
     @mock.patch.dict(os.environ, SRC15)
     def test_coalescence_then_graph_cleanup_preserves_three_layer_branches_src15(self):
         import pcbnew as k
-        from pnr.via_coalesce import plan, apply, partition, preserved
-        from pnr.track_graph import cycle_candidates, apply_cycle
+        from pnr.track_graph import apply_cycle, cycle_candidates
+        from pnr.via_coalesce import apply, partition, plan, preserved
 
         b, north, south, tail, track = self.fixture()
         track((7.55, 6.5), (8, 6.95), k.F_Cu)
@@ -229,8 +232,8 @@ class ViaCoalesceTests(unittest.TestCase):
     @mock.patch.dict(os.environ, ELECTRICAL221)
     def test_coalescence_then_graph_cleanup_preserves_three_layer_branches(self):
         import pcbnew as k
-        from pnr.via_coalesce import plan, apply, partition, preserved
-        from pnr.track_graph import cycle_candidates, apply_cycle
+        from pnr.track_graph import apply_cycle, cycle_candidates
+        from pnr.via_coalesce import apply, partition, plan, preserved
 
         b, north, south, tail, track = self.fixture()
         track((7.55, 6.5), (8, 6.95), k.F_Cu)
@@ -288,8 +291,8 @@ class ViaCoalesceTests(unittest.TestCase):
             self.assertEqual(candidates(b, rules, [])[0], [])
 
     def test_source_current_array_excluded_after_ref_rename(self):
-        from pnr.via_coalesce import candidates
         import pcbnew as k
+        from pnr.via_coalesce import candidates
 
         b, *_ = self.fixture()
         f = next(f for f in b.GetFootprints() if f.GetReference() == "X1")
@@ -375,9 +378,10 @@ class StrandedSurvivorTests(unittest.TestCase):
     fixture = ViaCoalesceTests.fixture
 
     def prune_fixture(self, single=False, rules=None):
+        from types import SimpleNamespace
+
         import pcbnew as k
         from pnr.via_coalesce import uid, worker
-        from types import SimpleNamespace
 
         b, keep, remove, _, _ = self.fixture()
         wrappers = []

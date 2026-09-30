@@ -1,7 +1,8 @@
 import unittest
 from types import SimpleNamespace as NS
+
 from pnr.route.detail.grid import Cell, RouteGrid
-from pnr.route.detail.pressure import disconnected_pairs, corridor, localized_pressure
+from pnr.route.detail.pressure import corridor, disconnected_pairs, localized_pressure
 from pnr.route.feedback import detail_congestion
 
 

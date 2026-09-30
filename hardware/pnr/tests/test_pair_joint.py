@@ -1,6 +1,7 @@
 import unittest
 from types import SimpleNamespace
-from pnr.pair_joint import point_at_fraction, branch_join_port
+
+from pnr.pair_joint import branch_join_port, point_at_fraction
 
 
 class PairJointTest(unittest.TestCase):

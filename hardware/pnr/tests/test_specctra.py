@@ -2,11 +2,11 @@
 
 import importlib.util
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
-from pnr.specctra import alias_rules, net_aliases, export_session, import_session
+from pnr.specctra import alias_rules, export_session, import_session, net_aliases
 
 
 class AliasTest(unittest.TestCase):

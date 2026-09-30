@@ -1,11 +1,14 @@
-import copy, json, unittest
+import copy
+import json
+import unittest
+
 import pcbnew as k
-from test_native_electrical import board, pad, FAB
 from pnr.electrical import compile_policy
 from pnr.native_electrical import add_track, uid, vec
-from pnr.power_bank_reuse import banks, proposals, apply
-from pnr.via_coalesce import partition, preserved
 from pnr.pad_entry import snapshot
+from pnr.power_bank_reuse import apply, banks, proposals
+from pnr.via_coalesce import partition, preserved
+from test_native_electrical import FAB, board, pad
 
 
 class PowerBankTest(unittest.TestCase):

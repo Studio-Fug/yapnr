@@ -5,8 +5,8 @@ import math
 
 def suggest(board, rules, target, excluded=(), limit=2):
     import pcbnew as k
-    from pnr.native_electrical import Oracle, xy, uid
     from pnr.electrical import net_policy
+    from pnr.native_electrical import Oracle, uid, xy
     from pnr.pad_identity import resolve_pad
 
     if net_policy(target["net"], rules)["mode"] != "signal":

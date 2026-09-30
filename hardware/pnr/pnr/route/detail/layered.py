@@ -5,14 +5,16 @@ search retains the previous via position so two new holes cannot be too close.
 No implicit snapping, blind vias, or via-in-pad policy is hidden in this module.
 """
 
-from collections import Counter, deque
-from dataclasses import dataclass
 import heapq
 import math
 import time
-from .keyhole import elbows, legal, length, relax, route, grid_access
-from .regional import RegionalResult, segment_distance
+from collections import Counter, deque
+from dataclasses import dataclass
+
 from pnr.fab_profile import bind_active
+
+from .keyhole import elbows, grid_access, legal, length, relax, route
+from .regional import RegionalResult, segment_distance
 
 # Fab-profile default via and via-to-via drill gap (PNR_FAB_PROFILE; legacy
 # 0.6 / 0.3 / 0.201 / 0.501) in module globals: read per primitive, not per call.

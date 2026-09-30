@@ -5,14 +5,18 @@ The ordinary global placer optimizes all other parts around it. Whole electrical
 routing ranks the resulting placements; the sampler makes no routing claim.
 """
 
-import copy, math, random
+import copy
+import math
+import random
+
 from pnr.constraints import Constraint, Enforcement
 from pnr.graph import BoardGraph
+
 from .geometry import (
-    outline_size,
     courtyard_rect,
-    placement_rects,
     keepout_rects,
+    outline_size,
+    placement_rects,
     resolve_fixed_poses,
     resolve_hard_rotations,
 )

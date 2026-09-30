@@ -52,7 +52,7 @@ def parent_pose(placed_path, evaluated_path=None):
 
 def prepared(graph, constraints, rules):
     """(constraints with source locks, prepared source) exactly as halving stage 0 checks them."""
-    from pnr.place.initial_pool import preserve_source_locks, _prepared_source
+    from pnr.place.initial_pool import _prepared_source, preserve_source_locks
 
     con = preserve_source_locks(graph, constraints)
     return con, _prepared_source(graph, con, rules)

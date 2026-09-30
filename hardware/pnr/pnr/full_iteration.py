@@ -4,8 +4,13 @@ Run with the non-KiCad PnR runtime. Native phases use isolated KiCad subprocesse
 Intermediate signal metrics never become the acceptance or plateau objective.
 """
 
-import argparse, json, os, shutil, subprocess
+import argparse
+import json
+import os
+import shutil
+import subprocess
 from pathlib import Path
+
 from pnr.phase_capture import capture
 
 
@@ -95,7 +100,7 @@ def main():
     def run(args, name):
         emit("phase_start", data=dict(phase=name))
         # A phase runs bounded workers in sequence: PNR_PHASE_TIMEOUT; stays in this process group.
-        from pnr.proc import run_checked, phase_timeout
+        from pnr.proc import phase_timeout, run_checked
 
         with (work / (name + ".log")).open("w") as log:
             run_checked(

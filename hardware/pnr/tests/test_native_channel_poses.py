@@ -1,5 +1,6 @@
 import unittest
-from pnr.graph import BoardGraph, Component, Pad, Net
+
+from pnr.graph import BoardGraph, Component, Net, Pad
 from pnr.native_loop import rank_translation_channels
 from pnr.place.channels import ChannelModel
 

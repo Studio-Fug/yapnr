@@ -56,7 +56,9 @@ def main(argv=None):
     d.add_argument("--workers", type=int)
     sub.add_parser("fetch")
     a = ap.parse_args(argv)
-    from pnr.si import report as rep, models, annotations as ann
+    from pnr.si import annotations as ann
+    from pnr.si import models
+    from pnr.si import report as rep
 
     if a.cmd == "fetch":
         lib = models.Library()

@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """Build a portable, offline PnR viewer from native checkpoints and saved DRC."""
-import argparse, base64, hashlib, html, json, math, subprocess, tempfile
+import argparse
+import base64
+import hashlib
+import html
+import json
+import math
+import subprocess
+import tempfile
 from pathlib import Path
 
 

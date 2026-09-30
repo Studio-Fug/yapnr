@@ -251,6 +251,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     report = analyze(lengths, vias, rules, unrouted=unrouted)
     if report.electrical_required:
         from pathlib import Path
+
         import pcbnew
         from pnr.electrical_audit import audit_board
 

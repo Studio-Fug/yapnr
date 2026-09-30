@@ -6,7 +6,7 @@ try:
     import pcbnew
 except ImportError:
     pcbnew = None
-from pnr.pad_entry import witness, repair, snapshot, required_width, repair_changed_entries
+from pnr.pad_entry import repair, repair_changed_entries, required_width, snapshot, witness
 
 
 @unittest.skipIf(pcbnew is None, "requires native KiCad Python")

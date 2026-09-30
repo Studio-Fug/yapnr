@@ -49,10 +49,10 @@ import threading
 import time
 from pathlib import Path
 
-from pnr.si import SCHEMA, enabled
+from pnr.si import SCHEMA
 from pnr.si import annotations as ann
 from pnr.si import deck as deckmod
-from pnr.si import extract, metrics, models, physics, runner
+from pnr.si import enabled, extract, metrics, models, physics, runner
 
 METRICS_VERSION = "pnr-si-metrics-v1"
 MAX_WORKERS = 3  # threads per report; the machine-wide cap is pnr.si.runner.slot (PNR_SI_SLOTS)

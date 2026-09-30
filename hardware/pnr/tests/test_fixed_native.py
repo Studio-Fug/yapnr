@@ -1,8 +1,11 @@
-import json, tempfile, unittest
+import json
+import tempfile
+import unittest
 from pathlib import Path
+
 import pcbnew as k
-from test_native_electrical import board, pad, add_track
-from pnr.fixed_copper import export, append, extract
+from pnr.fixed_copper import append, export, extract
+from test_native_electrical import add_track, board, pad
 
 
 class FixedNativeTest(unittest.TestCase):

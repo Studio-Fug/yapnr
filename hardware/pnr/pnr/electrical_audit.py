@@ -5,8 +5,10 @@ net's full current. Pair lengths use actual endpoint graphs; mere nonzero copper
 is not routed. Stackup absence/inconsistency prevents impedance qualification.
 """
 
+import math
+import re
 from collections import Counter
-import math, re
+
 from pnr.electrical import net_policy
 from pnr.route.detail.coupled import path_metrics
 
@@ -160,8 +162,10 @@ def audit_board(board, rules, board_text=""):
 
 
 def main():
-    import argparse, json
+    import argparse
+    import json
     from pathlib import Path
+
     import pcbnew as k
 
     ap = argparse.ArgumentParser(description=__doc__)

@@ -1,8 +1,8 @@
 import unittest
-from pnr.route.detail.grid import RouteGrid
+
 from pnr.route.detail.fixed import reserve_fixed_copper
+from pnr.route.detail.grid import Cell, RouteGrid
 from pnr.route.detail.maze import route
-from pnr.route.detail.grid import Cell
 
 
 class FixedCopperTest(unittest.TestCase):

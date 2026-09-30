@@ -83,8 +83,10 @@ Owner decisions for the history import (PR1; [the migration plan](migration-plan
   changed: personal addresses at public top-level domains stay findings in files, `--all` and
   `--stdin`, the allowlisted commit address stays a finding in files, and `--identities` does not
   use the refinement. By construction, addresses at names outside the root zone (such as `.local`,
-  `.lan` or `.internal`) are no longer e-mail findings; hyphenated and URL `.local` machine names
-  remain findings of the `local-host` rule.
+  `.lan` or `.internal`) are no longer e-mail findings. So that `.local` machine names stay covered
+  as before, the `local-host` rule also reports a `.local` name right after `@`
+  (`user@<host>.local`, as in ssh or git's guessed identity), besides hyphenated and URL `.local`
+  names. Commit identities at any such name still fail `--identities`.
 
 Choices made in PR1 itself, following the plan; the owner reviews them with the pull request:
 

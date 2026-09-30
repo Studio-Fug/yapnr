@@ -270,9 +270,12 @@ RULES: Sequence[Rule] = (
         "local-host",
         # macOS names machines `<Owner>-Mac-mini` and the like, so a hyphenated
         # name with the `.local` suffix is a machine; so is any `.local` name
-        # right after `//` (a URL host).
+        # right after `//` (a URL host) or `@` (`user@<host>.local`, as in ssh or
+        # git's guessed identity: `local` is not in the IANA root zone, so the
+        # e-mail rule does not report it).
         re.compile(
-            r"(?<![\w.-])(?:[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+|(?<=//)[A-Za-z0-9-]+)\.local\b",
+            r"(?<![\w.-])(?:[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+|(?<=//)[A-Za-z0-9-]+"
+            r"|(?<=@)(?:[A-Za-z0-9-]+\.)*[A-Za-z0-9-]+)\.local\b",
             re.IGNORECASE,
         ),
         "mDNS *.local machine name",

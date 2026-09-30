@@ -55,7 +55,14 @@ SHOULD_FLAG = {
     ],
     "temp-path": ["/private/var" + "/folders/ab/cd1234/T/x", "/var" + "/folders/ab/cd1234"],
     "tailnet-host": ["build-box.tail0000" + TAILNET],
-    "local-host": ["Alices-Mac-mini" + MDNS, "http://buildbox" + MDNS + ":8080/"],
+    "local-host": [
+        "Alices-Mac-mini" + MDNS,
+        "http://buildbox" + MDNS + ":8080/",
+        # After `@`: not an e-mail finding (`local` is not in the root zone).
+        "ssh pi" + AT + "raspberrypi" + MDNS,
+        "+rsync -a out/ alice" + AT + "buildbox" + MDNS + ":~/x",
+        "alice" + AT + "macmini.lab" + MDNS,
+    ],
     "cgnat-address": ["100." + "64.0.1", "100." + "100.12.34", "http://100." + "127.255.1:8080/"],
     "private-address": ["192." + "168.1.23", "10." + "0.0.5", "http://172." + "20.1.2:8000/"],
     "email": ["jane.doe" + AT + "gmail.com", "Jane <jd" + AT + "corp.co.uk>"],
@@ -318,6 +325,23 @@ class EmailRuleTest(unittest.TestCase):
         ):
             with self.subTest(address=privacy_scan.redact(address)):
                 self.assertFalse(privacy_scan.identity_allowed(address))
+
+    def test_local_machine_after_at_stays_a_finding(self):
+        # `user@<host>.local` was an e-mail finding before the refinement; the
+        # machine name stays a finding (local-host) in every mode.
+        line = "ssh alice" + AT + "macmini" + MDNS + "\n"
+        self.assertEqual([f.rule for f in privacy_scan.scan_text(line)], ["local-host"])
+        code, out = _run_main(["--stdin"], "+" + line)
+        self.assertEqual(code, 1)
+        self.assertNotIn("macmini", out)
+        with tempfile.TemporaryDirectory() as root:
+            _write_tree(root, {"README.md": line})
+            for argv in (["--all", "--root", root], [os.path.join(root, "README.md")]):
+                with self.subTest(argv=argv[0]):
+                    code, out = _run_main(argv, "")
+                    self.assertEqual(code, 1)
+                    self.assertIn(": local-host:", out)
+                    self.assertNotIn("macmini", out)
 
     def test_missing_tld_list_fails_closed(self):
         # Without the list every top-level domain counts: stricter, never looser.

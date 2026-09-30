@@ -25,3 +25,6 @@ yapnr.local.toml
 # --- Local drops / OS -------------------------------------------------------
 *.zip
 .DS_Store
+
+# `yapnr atopile build` outputs (default ./yapnr-out/<project>/<build>)
+yapnr-out/

@@ -14,9 +14,11 @@ For each build the runner:
 6. runs ``python -m atopile build`` with an allowlisted environment (``env.py``), the hook on its
    ``PYTHONPATH`` (``hook/``), explicit targets (atopile's implicit ``default`` target and its
    datasheet downloads are excluded) and a deadline that kills the whole process tree;
-7. frames the board if asked (``--outline-margin-mm``), then copies the named outputs to the
-   output directory with ``result.json``: the board, BOM, variables, power tree and pinout, never
-   ``build/manifest.json`` (it holds absolute paths).
+7. frames the board if asked (``--outline-margin-mm``), then copies the named outputs with
+   ``result.json`` to the output directory (default ``./yapnr-out/<project>/<build>``; an
+   existing one is replaced only when it holds an earlier build's ``result.json``): the board,
+   BOM, variables, power tree and pinout, never ``build/manifest.json`` (it holds absolute
+   paths).
 
 ``result.json`` records the input id: the sha256 of the board with every UUID replaced by the nil
 UUID, because atopile stamps fresh UUIDs on each build. Two builds of the same sources give the
@@ -156,6 +158,20 @@ def _outputs(work_project: Path, build: str) -> Dict[str, Path]:
     return {name: path for name, path in candidates.items() if path.exists()}
 
 
+def _check_out(out: Path, project: Path) -> None:
+    """Refuse an output directory whose replacement would lose anything but an earlier output."""
+    if out == project or project.is_relative_to(out):
+        raise BuildError(f"--out {out} would replace the project itself")
+    if out.exists():
+        if not out.is_dir():
+            raise BuildError(f"--out {out} is not a directory")
+        if any(out.iterdir()) and not (out / "result.json").is_file():
+            raise BuildError(
+                f"--out {out} is not empty and holds no earlier build (result.json); refusing to"
+                " replace it"
+            )
+
+
 def _catalogs(
     lock: Optional[Dict[str, Any]], cache: Optional[PartCache], files: Sequence[Path]
 ) -> List[Dict[str, Any]]:
@@ -175,7 +191,8 @@ def build(options: BuildOptions, log=print) -> BuildResult:
     targets = _check_targets(options.targets)
     if options.stock_footprints not in ("referenced", "all", "none"):
         raise BuildError("--stock-footprints must be referenced, all or none")
-    out = Path(options.out or project / "yapnr-out" / build_name).resolve()
+    out = Path(options.out or Path("yapnr-out") / project.name / build_name).resolve()
+    _check_out(out, project)
 
     tool = toolchain.discover()
     try:
@@ -257,6 +274,7 @@ def build(options: BuildOptions, log=print) -> BuildResult:
         if code == 0 and options.outline_margin_mm > 0 and board.is_file():
             outline.frame_file(board, options.outline_margin_mm)
         produced = _outputs(work_project, build_name) if code == 0 else {}
+        _check_out(out, project)
         if out.exists():
             shutil.rmtree(out)
         out.mkdir(parents=True)

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import functools
 import json
+import os
 import secrets
 import sys
 from pathlib import Path
@@ -21,9 +23,9 @@ def _cache(args: argparse.Namespace, create: bool = False):
 
 
 def _local_store(args: argparse.Namespace):
-    from yapnr.partcache.client import LocalPartCache, default_root
+    from yapnr.partcache.client import ENV_LOCATION, LocalPartCache, default_root
 
-    location = args.cache or str(default_root())
+    location = args.cache or os.environ.get(ENV_LOCATION) or str(default_root())
     if location.startswith(("http://", "https://")):
         raise SystemExit(_err("this command works on a local cache directory only"))
     return LocalPartCache(location).store
@@ -182,6 +184,25 @@ def _cmd_token(args: argparse.Namespace) -> int:
     return 0
 
 
+def _reporting_errors(func):
+    """Report the cache's expected failures as one line instead of a traceback."""
+
+    @functools.wraps(func)
+    def run(args: argparse.Namespace) -> int:
+        from yapnr.partcache.client import CacheError
+        from yapnr.partcache.model import InvalidPart
+        from yapnr.partcache.store import NotFound, TakenDown
+
+        try:
+            return func(args)
+        except NotFound as err:
+            return _err(f"not found: {err.args[0] if err.args else err}")
+        except (CacheError, InvalidPart, TakenDown, FileExistsError, ValueError) as err:
+            return _err(str(err))
+
+    return run
+
+
 def register(commands: "argparse._SubParsersAction") -> None:
     from yapnr.partcache import server
 
@@ -190,6 +211,7 @@ def register(commands: "argparse._SubParsersAction") -> None:
 
     def add(name: str, func, help_text: str, cache: bool = True) -> argparse.ArgumentParser:
         parser = sub.add_parser(name, help=help_text)
+        func = _reporting_errors(func)
         if cache:
             parser.add_argument(
                 "--cache",

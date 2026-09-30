@@ -94,6 +94,7 @@ def _cmd_build(args: argparse.Namespace) -> int:
 def _cmd_lock_parts(args: argparse.Namespace) -> int:
     from yapnr.frontends.atopile import parts
     from yapnr.partcache.client import open_cache
+    from yapnr.partcache.importer import ImportFailed
 
     project = Path(args.project)
     cache = open_cache(args.cache, create=args.upload) if (args.cache or args.upload) else None
@@ -105,7 +106,7 @@ def _cmd_lock_parts(args: argparse.Namespace) -> int:
             imported_from=args.imported_from or project.name,
             licence_note=args.licence_note,
         )
-    except (parts.LockError, KeyError, ValueError) as err:
+    except (parts.LockError, KeyError, ValueError, ImportFailed) as err:
         return _err(str(err))
     output = Path(args.output) if args.output else project / parts.LOCK_NAME
     output.write_text(parts.dump(doc), encoding="utf-8")
@@ -151,7 +152,7 @@ def register_atopile(commands: "argparse._SubParsersAction") -> None:
     build.add_argument("project", help="the directory holding ato.yaml")
     build.add_argument("--build", "-b", default="default", help="the ato.yaml build")
     build.add_argument("--target", "-t", action="append", help="build target (repeatable)")
-    build.add_argument("--out", help="output directory (default: <project>/yapnr-out/<build>)")
+    build.add_argument("--out", help="output directory (default: ./yapnr-out/<project>/<build>)")
     build.add_argument("--cache", help="part cache: a directory or http(s) URL")
     build.add_argument("--catalog", action="append", default=[], help="extra picker catalog")
     build.add_argument("--timeout", type=float, default=1800.0, help="seconds (default 1800)")

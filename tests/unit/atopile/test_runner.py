@@ -190,6 +190,19 @@ class RunnerTest(unittest.TestCase):
             self.build()
         self.assertTrue(self.build(replace_parts=True).ok)
 
+    def test_output_directory_is_replaced_only_when_it_holds_a_build(self):
+        self.assertTrue(self.build().ok)  # the output directory now holds result.json
+        self.assertTrue(self.build().ok)
+        precious = self.root / "precious"
+        precious.mkdir()
+        (precious / "notes.txt").write_text("keep me")
+        for out in (precious, self.project, self.project.parent):
+            options = runner.BuildOptions(project=self.project, out=out, cache=self.cache.location)
+            with mock.patch.dict(os.environ, self.env):
+                with self.assertRaises(runner.BuildError, msg=str(out)):
+                    runner.build(options, log=lambda _text: None)
+        self.assertEqual((precious / "notes.txt").read_text(), "keep me")
+
     def test_disallowed_targets(self):
         for target in ("default", "all", "datasheets"):
             with self.assertRaises(runner.BuildError):

@@ -127,7 +127,9 @@ collect-manufacturing -v` with the [allowlisted environment](#the-build-environm
    killed, atopile's forkserver and workers included;
 6. frames the board if asked (`--outline-margin-mm`: parts moved into view, a fitted sheet and an
    `Edge.Cuts` rectangle; for code-only example boards);
-7. copies the named outputs and `result.json` into `--out` (default `<project>/yapnr-out/<build>`).
+7. copies the named outputs and `result.json` into `--out` (default
+   `./yapnr-out/<project>/<build>`). An existing output directory is replaced only when it holds
+   an earlier build's `result.json`; the project directory never is.
 
 The default targets are `build-design`, `bom`, `variable-report`, `power-tree` and `pinout`.
 Allowed besides: `manifest`, `stackup`, `data-interface-layout`, and the KiCad exports `mfg-data`,

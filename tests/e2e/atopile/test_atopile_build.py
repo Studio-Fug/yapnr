@@ -6,9 +6,9 @@ cache, and two small projects that keep no parts in their tree, only a parts loc
 
 - **No picks:** the parts are used directly; atopile sends no part query (the only request to
   the picker is its message of the day), and nothing is downloaded.
-- **One pick:** a ``Resistor`` constrained to 1 kohm +/- 5 % in 0603. The loopback picker answers
-  from the cache's catalog entry, and the hook attaches the part the runner materialized from
-  the cache (no EasyEDA, no hosted service).
+- **One pick:** a ``Resistor`` picked by LCSC id, or constrained to 1 kohm +/- 5 % in 0603. The
+  loopback picker answers from the cache's catalog entry, and the hook attaches the part the
+  runner materialized from the cache (no EasyEDA, no hosted service).
 
 Each project is built twice and must give the same input id (the UUID-normalized board).
 """
@@ -51,7 +51,7 @@ class AtopileBuildTest(unittest.TestCase):
         cls.cache.put_catalog(testing.catalog_entry(), {"source": "e2e test (synthetic)"})
         part_id = cls.cache.find()[0]["id"]
         cls.projects = {}
-        for pick in (None, "type"):
+        for pick in (None, "lcsc", "type"):
             project = testing.write_project(root / f"project-{pick or 'none'}", pick=pick)
             lock = {
                 "schema": parts.LOCK_SCHEMA,
@@ -96,6 +96,14 @@ class AtopileBuildTest(unittest.TestCase):
         self.assertEqual(summary["atopile"], "0.15.8")
         rows = self.bom(result)
         self.assertEqual(sum(int(r["Quantity"]) for r in rows), 2)
+
+    def test_one_lcsc_pick_from_the_cache(self):
+        result = self.build_twice("lcsc")
+        summary = json.loads((result.out / "result.json").read_text())
+        queries = [r for r in summary["picker_requests"] if r["path"].startswith("/v0/query")]
+        self.assertEqual(len(queries), 1)
+        self.assertEqual(summary["local_parts"], [testing.SYNTHETIC_LCSC])
+        self.assertEqual(sum(int(r["Quantity"]) for r in self.bom(result)), 3)
 
     def test_one_type_pick_from_the_cache(self):
         result = self.build_twice("type")

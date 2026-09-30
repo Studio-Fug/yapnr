@@ -736,3 +736,40 @@ the block copper joins}`, indices into `header.nets[].pins`), `connections_done`
   clock), which the driver checks.
 - **`pnr-report.json`** of the hierarchical case also has `hier.representatives`,
   `hier.seeds` (legality, HPWL, objective per seed), `hier.block_copper` and `hier.top_copper`.
+
+## 11. As built (implementer B)
+
+The renderer, the four animations and the docs follow §6 and §7 with these differences:
+
+- **A driver of its own.** The showcases render with `regression/animate_showcases.py`
+  (`bazel run //hardware/pnr:showcase_animations -- --render-only RUN_DIR`, a new `py_binary`),
+  not a `--showcases` flag on `animate_ladder.py`, which stays as it is. The driver reuses that
+  script's `case_result`, `ladder_provenance` and `platform_name`, and keeps the titles and the
+  file list (`SHOWCASE_TITLES`, `SHOWCASES`).
+- **Synchronization.** When both runs have the same scene sequence (the case for both
+  comparisons), the halves are synchronized scene by scene, so the shortlists and the finalists
+  appear together; the phase rule of §6.3 is the fallback. The shorter half holds its last frame
+  of each scene.
+- **Highlighting.** A line group's guide line is drawn under the copper (so pads and reference
+  labels stay readable) and its rigid body as a dashed rectangle over it. On the free half a
+  reference overlay draws the other design's target only: the dashed path through D1 to D5, or
+  the dashed target edge, with no tethers (they read like tracks). The edge order appears in the
+  caption strip of the constrained half and under each tile of its shortlist montage. "On edge"
+  is written "on edge k of 3": the overlay validator rejects "k/3" as a path.
+- **The comparison GIF.** It is 5.65 MB even at the 880 px step, so `COMPARE_GIF_STEPS` gained
+  an 800 px step; the README GIF is 800 px, 64 colours, 100 ms frames (5.00 MB). The WebPs are
+  960 px wide.
+- **The hierarchical WebP** is 2.69 MB even at 640 px, quality 60, 80 ms frames, so it uses the
+  3.5 MB showcase budget of §6.7 (3.41 MB at 800 px); `test_animations.py` states why.
+- **Chapters.** The top seeds' montage follows the winner's knit (as the ladder's finalists
+  follow the winner's route), so no tile shows routed copper while the progress bar is at 0 %.
+  The `reuse` scene shows every block instance side by side without the board (a display
+  layout, captioned) and the `lift` moves them from there to their first recorded macro poses.
+  During the top-level placement the ratsnest counts the joins the block copper already makes
+  (the winning knit's `fixed` groups, the same for every seed). Block outlines are a neutral
+  dashed grey (`BLOCK_OUTLINE`): the planned violet read like provisional routes.
+- **Live metrics** are not listed in the manifest's `captions`: they are numbers that change
+  every frame, built from references and fixed words.
+- **Unchanged output.** Besides re-rendering the eight ladder cases from the A/B run (every file's
+  SHA-256 reproduced), `animate_test` pins a digest of the ladder timelines' views, computed with
+  the branch base's renderer.

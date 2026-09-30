@@ -4,7 +4,8 @@ A short, live status board: rewritten at the end of each session, not appended t
 git and in the pull requests.
 
 Last updated: 2026-09-30 (PR4 and #10 merged; ladder animations merged with main; line groups,
-hard board edges and the hierarchical ladder driver on `claude/animations-groups-hier`).
+hard board edges, the hierarchical ladder driver and their animations on
+`claude/animations-groups-hier`).
 
 ## In progress
 
@@ -32,21 +33,27 @@ hard board edges and the hierarchical ladder driver on `claude/animations-groups
   tokens lack `read:packages`).
 
 - **Constraint and hierarchy showcases** (branch `claude/animations-groups-hier`, on top of
-  `claude/ladder-animations`; design `docs/design/constraint-and-hier-animations.md`, §10 "As
-  built"). Engine side done, all opt-in: a HARD `line_group` constraint placed as one rigid
-  macro inside `place()`, `edge_align` `hard`/`tolerance_mm`, own-net fixed copper in the
-  detail router, and `regression/hier_case.py` (blocks placed and routed on their own boards,
-  placed as macros, knitted with block copper held fixed). Traces gain `groups`,
-  `group_members`, `header.constraints`, a `fixed` event and per-template block traces.
-  `run.py --showcases` and `--trace-placement-every`; `designs.showcases()`: `line-chaser-20`,
-  `edge-io-12-free`, `edge-io-12`, `hier-twin-bank-32` (32 parts: the draft's "31" miscounted).
-  Showcase run (pool seed 0, 8 starts, 3 finalists, snapshots every 5): all five cases pass the
-  gate and the constraint audit, 0 opens, 0 findings; vias 19 (07), 20 (line), 9 (edge free),
-  8 (edge), 38 (hier); 123, 128, 65, 35 and 179 s. Placement and routes are identical across
-  two runs. A/B of the eight ladder cases (branch base against this engine, traced pool run):
-  identical `placed.json`, `routes.json` and trace digests, 8 of 8 pass. Next: implementer B
-  (renderer, comparison and hierarchical storyboard, docs page, README item, manifest,
-  `ladder.yaml` nightly step).
+  `claude/ladder-animations`; design `docs/design/constraint-and-hier-animations.md`, §10 and §11
+  "As built"). Engine, all opt-in: a HARD `line_group` constraint placed as one rigid macro
+  inside `place()`, `edge_align` `hard`/`tolerance_mm`, own-net fixed copper in the detail
+  router, and `regression/hier_case.py` (blocks placed and routed on their own boards, placed as
+  macros, knitted with block copper held fixed). Traces gain `groups`, `group_members`,
+  `header.constraints`, a `fixed` event and per-template block traces. `run.py --showcases` and
+  `--trace-placement-every`; `designs.showcases()`: `line-chaser-20`, `edge-io-12-free`,
+  `edge-io-12`, `hier-twin-bank-32`. Showcase run (pool seed 0, 8 starts, 3 finalists,
+  snapshots every 5): all five cases pass the gate and the constraint audit, 0 opens, 0
+  findings; vias 19 (07), 20 (line), 9 (edge free), 8 (edge), 38 (hier). A/B of the eight
+  ladder cases: identical `placed.json`, `routes.json` and trace digests.
+  Renderer: constraint highlighting (`pnr.animate.highlight`), rigid-body tweens, side-by-side
+  comparisons (`python -m pnr.animate --compare A B`, `pnr.animate.compare`), the hierarchical
+  chapters (`pnr.animate.hier`, `provenance.from_hier`), `--pacing showcase`, and
+  `//hardware/pnr:showcase_animations`. Four files in `docs/animations/` (13.4 MB; folder
+  budget 30 MB, the hierarchical WebP 3.5 MB), the page
+  [docs/constraints-and-hierarchy.md](docs/constraints-and-hierarchy.md), a second README item
+  (the side-by-side chaser GIF), and a nightly, informational showcase step in `ladder.yaml`
+  (never run yet). Re-rendering the eight ladder cases reproduces every committed file's
+  SHA-256; each showcase renders byte-identically twice. Next: the owner's review of the
+  decisions in `docs/decisions.md` and the pull request.
 
 ## Next
 

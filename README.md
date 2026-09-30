@@ -45,6 +45,15 @@ _The 555 flasher (a TLC555 astable blinker, 10 parts, 2 layers) from the
 [regression ladder](docs/regression-ladder.md): from unplaced footprints to 100 % routed, with the
 placement starts and routes it was chosen from, ending on KiCad's clean DRC verdict._
 
+<p align="center">
+  <img src="docs/animations/showcase-chaser-line.gif" width="800"
+    alt="Animation, side by side: an LED chaser placed and routed twice, its LEDs placed freely
+    on the left and held in one line that the placer moves and turns as a whole on the right">
+</p>
+
+_Left: LEDs placed freely. Right: the same chaser with its LEDs held in a
+[line group](docs/constraints-and-hierarchy.md); the placer moves and turns the whole line._
+
 yapnr places components and routes copper for KiCad boards. It uses a mechanical,
 Monte-Carlo-driven search: hierarchical block synthesis, power-first placement, native KiCad
 routing and DRC in the loop, and electrical contracts (current, pairs, plane access) declared

@@ -542,6 +542,9 @@ frames 80 ms (GIF delays are in 10 ms units). Motion uses ease-in-out cubic.
 Routing events are batched per frame (`k = ceil(events / frames)`); a committed net flashes for
 two frames, a ripped net fades over three. Expected lengths: about 8 to 10 s for the small cases
 and 18 to 22 s for the chasers; `--max-seconds` (default 22) scales scenes down proportionally.
+Rigid bodies (line groups, block macros), the hierarchical lift and the holds of a side-by-side
+comparison are specified in [the constraint and hierarchy design](constraint-and-hier-animations.md),
+section 6.1, which lists everything a frame may interpolate.
 
 ### 5.4 Outputs and budgets
 

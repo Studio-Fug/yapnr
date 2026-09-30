@@ -423,6 +423,29 @@ Choices made for the regression ladder in CI and the animations (branch
   winning rung's native phases, and the overlay's phases say what was saved, not more. Animations
   of Splanc runs stay local (the board is not public).
 
+Choices made for the constraint and hierarchy showcases (branch `claude/animations-groups-hier`,
+[design](design/constraint-and-hier-animations.md) §9 and §11); the owner reviews them with the
+pull request:
+
+- **`line_group`** is a new hard constraint (ordered literal members, `pitch_mm` or `gap_mm`,
+  `rot`, an optional soft `edge`), placed as one rigid macro inside `place()` with the
+  hierarchical macro code; `row` is unchanged.
+- **`edge_align` gains `hard` and `tolerance_mm`** (default false and 1.0 mm): a hard edge part
+  stays within the tolerance through legalization and the legality checks. The facing is set with
+  `orientation`, not by `edge_align`.
+- **Showcases stay outside the gate.** `designs.showcases()` is a list beside `designs()`, run
+  with `run.py --showcases`; the pull-request lane never runs them and the nightly lane runs them
+  for information.
+- **The animations folder budget is 30 MB** (was 20 MB): the four showcase files add about
+  13 MB. The hierarchical WebP may use 3.5 MB (it is 2.69 MB even at the encoder's last step);
+  every other WebP keeps 2.5 MB and every GIF 5 MB.
+- **A second media item in the README:** the side-by-side chaser GIF (free LEDs against a line
+  group), 800 px, under the 555 flasher.
+- **A showcase that fails its gate is not committed as an animation** (the page then says why),
+  rather than shown with a red end card. All five cases of the committed run pass.
+- **Follow-ups:** companion rows (an LED and its resistor as one rigid unit), a hard edge for a
+  whole line group, members on the bottom side, plane-access intents inside a line group.
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.

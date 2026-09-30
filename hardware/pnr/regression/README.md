@@ -130,11 +130,16 @@ routes and reports are byte-identical with and without it (`trace_noop_test`).
 the critical path from the unplaced board to KiCad's verdict, with the rejected
 candidates of each selection as montages (`pnr.provenance`);
 `//hardware/pnr:ladder_animations` runs the traced ladder with the initial pool
-and renders every case (`--render-only RUN_DIR` skips the ladder). Case
+and renders every case (`--render-only RUN_DIR` skips the ladder) into
+`docs/animations/`, with `manifest.json` and `ladder-results.json`. Case
 directories in `result.json`, `summary.json` and `junit.xml` are relative to the
 run directory. `provenance.json` records the fab profile, the checkout's commit
 (and whether engine files were modified), the platform and `sources_sha256`, one
-digest over the frozen sources that survives a rebase.
+digest over the frozen sources that survives a rebase. The committed animations,
+the current results of every case and how to regenerate them are on the docs page
+[Regression ladder](../../../docs/regression-ladder.md). `python -m pnr.animate`
+also takes a successive-halving run (coarse: its saved placements, rung
+objectives and the winning rung's native phases).
 
 CI (`.github/workflows/ladder.yaml`, informational) runs cases 01 to 06 on pull
 requests that change engine inputs, and all cases with seeds 0 and 1 nightly,

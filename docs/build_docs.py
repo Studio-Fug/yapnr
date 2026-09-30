@@ -14,6 +14,7 @@ the site:
     <stage>/LICENSE             so links to it resolve (served as a download)
     <stage>/docs/**/*.md        the documentation pages
     <stage>/_extra/branding/    copied verbatim into the output (README images)
+    <stage>/_extra/docs/animations/  the ladder animations, at docs/animations/ in the output
 
 ``docs/index.md`` is the root document; the output root gets a small redirect to
 it. The output is then made safe for GitHub Pages, including the per-PR
@@ -106,6 +107,11 @@ def _stage(ws: Path, stage: Path) -> None:
 
     # 5. Files copied verbatim into the output root (raw-HTML images in README).
     shutil.copytree(ws / "branding", stage / "_extra" / "branding", dirs_exist_ok=True)
+    # The ladder animations keep their repository path, so the raw-HTML images in README.md
+    # and docs/regression-ladder.md resolve the same way on GitHub and on the site.
+    animations = ws / "docs" / "animations"
+    if animations.is_dir():
+        shutil.copytree(animations, stage / "_extra" / "docs" / "animations", dirs_exist_ok=True)
 
 
 # Sphinx emits ``_``-prefixed asset directories. GitHub Pages runs Jekyll, which

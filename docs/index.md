@@ -24,6 +24,8 @@ command line currently offers `yapnr --version` and a `yapnr doctor` stub. Progr
 
 - [Container images](containers.md): run yapnr with Docker and nothing else (KiCad included).
 - [Releases and versioning](releases.md): version numbers, image tags, what a release publishes.
+- [Regression ladder](regression-ladder.md): eight boards of rising complexity, up to a TLC555 +
+  CD4017B LED chaser, with an animation of each board's place and route.
 - [Architecture](architecture.md): the planned layout of the package, the test tiers and the
   pipeline.
 - [Migration plan](migration-plan.md): how the engine moves out of Splanc, PR by PR.
@@ -57,8 +59,10 @@ releases
 :caption: Project
 
 architecture
+regression-ladder
 migration-plan
 decisions
+design/animations
 history/import-manifest
 about-the-name
 ```

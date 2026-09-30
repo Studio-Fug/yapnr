@@ -1,3 +1,5 @@
 # Lockfiles are generated.
 MODULE.bazel.lock
 requirements.lock
+# Written by //hardware/pnr:ladder_animations; kept as generated, so a refresh has no churn.
+docs/animations/

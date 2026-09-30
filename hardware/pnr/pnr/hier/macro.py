@@ -42,6 +42,30 @@ def _rot_size(size, deg):
     return (size[1], size[0]) if int(round(deg / 90)) % 2 else size
 
 
+def _member_offset(macro, x, y, deg):
+    """A member's offset from its macro's centre, for a member at (x, y) in the block
+    frame and the macro turned by ``deg``."""
+    if "origin" in macro:
+        return _rot(x - macro["origin"][0], y - macro["origin"][1], deg)
+    return _rot(x - macro["width"] / 2, y - macro["height"] / 2, deg)
+
+
+def macro_pair_weights(pair_weights, plan):
+    """Flat pad-pair weights {(ref_a, pad_a, ref_b, pad_b): w} on the macro graph.
+
+    A block member's pad is the macro pad ``'<ref>.<pad>'`` of its macro; pairs
+    inside one macro are rigid there and dropped; duplicates add up."""
+    out = {}
+    for (ra, pa, rb, pb), w in (pair_weights or {}).items():
+        ma, mb = plan.member_of.get(ra), plan.member_of.get(rb)
+        if ma is not None and ma == mb:
+            continue
+        a = (ma, "%s.%s" % (ra, pa)) if ma else (ra, pa)
+        b = (mb, "%s.%s" % (rb, pb)) if mb else (rb, pb)
+        out[(a[0], a[1], b[0], b[1])] = out.get((a[0], a[1], b[0], b[1]), 0.0) + float(w)
+    return out or None
+
+
 def shrink_enabled() -> bool:
     """PNR_MACRO_SHRINK=1: a macro is its used extent (N-0001), not its sub-board."""
     return os.environ.get("PNR_MACRO_SHRINK") == "1"
@@ -70,16 +94,13 @@ class MacroPlan:
                 m = self.macros[self.member_of[comp.ref]]
                 mc = by_ref[self.member_of[comp.ref]]
                 x, y, rot, side = m["members"][comp.ref]
-                if "origin" in m:
+                if "origin" in m and mc.side != "top":
                     # Shrunk/hull macro (N-0001): the frame centre is the used-extent centre.
-                    if mc.side != "top":
-                        raise ValueError(
-                            f"macro {self.member_of[comp.ref]} placed on {mc.side}: "
-                            f"mirrored block macros are not supported"
-                        )
-                    dx, dy = _rot(x - m["origin"][0], y - m["origin"][1], mc.rot)
-                else:
-                    dx, dy = _rot(x - m["width"] / 2, y - m["height"] / 2, mc.rot)
+                    raise ValueError(
+                        f"macro {self.member_of[comp.ref]} placed on {mc.side}: "
+                        f"mirrored block macros are not supported"
+                    )
+                dx, dy = _member_offset(m, x, y, mc.rot)
                 comp.pos = (mc.pos[0] + dx, mc.pos[1] + dy)
                 comp.rot = float((rot + mc.rot) % 360)
                 comp.side = side
@@ -89,6 +110,31 @@ class MacroPlan:
                 comp.pads = copy.deepcopy(src.pads)  # keep any side mirroring the placer applied
         out.outline = copy.deepcopy(placed.outline)
         return out
+
+    def trace_rows(self, rows):
+        """Recording only (:func:`pnr.trace.pose_expansion`): expand trace pose rows.
+
+        ``rows`` are ``[[ref, x_um, y_um, rot, side]]``. Each macro row becomes its
+        members' rows, posed as :meth:`expand` poses them (macro pose plus the rotated
+        member offset, member rotation plus the macro rotation), in member order.
+        Returns ``(rows, groups, members)``: the expanded rows, the macros' own rows
+        and ``{macro ref: [member refs]}`` of the macros present."""
+        from pnr.trace import angle as _angle
+        from pnr.trace import um as _um
+
+        out, groups, members = [], [], {}
+        for row in rows:
+            m = self.macros.get(row[0])
+            if m is None:
+                out.append(list(row))
+                continue
+            groups.append(list(row))
+            members[row[0]] = list(m["members"])
+            cx, cy, turn = row[1] / 1000.0, row[2] / 1000.0, float(row[3])
+            for ref, (x, y, rot, side) in m["members"].items():
+                dx, dy = _member_offset(m, x, y, turn)
+                out.append([ref, _um(cx + dx), _um(cy + dy), _angle(rot + turn), side])
+        return out, groups, members
 
 
 def _macro_frame(geo, w, h, margin, shrink):
@@ -120,6 +166,8 @@ def collapse(
     rules: dict,
     layouts: List[Tuple[object, BoardGraph, float, float]],
     geometry: Optional[dict] = None,
+    prefix: str = "MB",
+    margin: Optional[float] = None,
 ):
     """Build the macro graph.
 
@@ -132,6 +180,11 @@ def collapse(
     centred there) or PNR_MACRO_HULL=1 (the macro carries a per-side occupancy
     hull). A block without a measured geometry keeps the full rectangle; the plan
     records why.
+
+    ``prefix`` names the macros (``<prefix>00``, ...); ``margin`` (mm) is the
+    courtyard margin around each layout rectangle, None for the fab edge clearance
+    (routed block copper may reach the rectangle). Line groups
+    (:mod:`pnr.place.line_group`) collapse with ``prefix="LG", margin=0.0``.
 
     Raises ``ValueError`` when a relation cannot be expressed on the rigid macro:
     a HARD group, a multi-ref orientation or a ref-relative keepout that mixes
@@ -150,7 +203,9 @@ def collapse(
     # Routed block copper may reach the block rectangle (sub-board apron equals the
     # edge clearance), so the macro reserves that clearance on every side: it then
     # also holds from the board edge, not only from neighbouring courtyards.
-    margin = float(rules.get("fab", {}).get("edge_clearance_mm", 0.2))
+    if margin is None:
+        margin = float(rules.get("fab", {}).get("edge_clearance_mm", 0.2))
+    margin = float(margin)
     from pnr.place.pair_landing import enabled as landing_enabled
     from pnr.place.pair_landing import (
         macro_mount_record,
@@ -160,7 +215,7 @@ def collapse(
     shrink, with_hull = shrink_enabled(), hull_enabled()
     shaped = geometry is not None and (shrink or with_hull)
     for index, (block, sub, w, h) in enumerate(layouts):
-        mref = "MB%02d" % index
+        mref = "%s%02d" % (prefix, index)
         members = {}
         pads: List[Pad] = []
         reserves: List[dict] = []

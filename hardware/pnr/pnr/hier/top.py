@@ -27,7 +27,7 @@ from pathlib import Path
 
 from pnr.graph import BoardGraph
 from pnr.hier.blocks import extract_blocks
-from pnr.hier.macro import collapse
+from pnr.hier.macro import collapse, macro_pair_weights
 from pnr.hier.synth import instance_board, local_key
 
 
@@ -123,22 +123,6 @@ def draw_layout(tier, rng, ratio=None):
         if x < 0:
             return i, tier[i]
     return len(tier) - 1, tier[-1]
-
-
-def macro_pair_weights(pair_weights, plan):
-    """Flat pad-pair weights {(ref_a, pad_a, ref_b, pad_b): w} on the macro graph.
-
-    A block member's pad is the macro pad ``'<ref>.<pad>'`` of its macro; pairs
-    inside one macro are rigid there and dropped; duplicates add up."""
-    out = {}
-    for (ra, pa, rb, pb), w in (pair_weights or {}).items():
-        ma, mb = plan.member_of.get(ra), plan.member_of.get(rb)
-        if ma is not None and ma == mb:
-            continue
-        a = (ma, "%s.%s" % (ra, pa)) if ma else (ra, pa)
-        b = (mb, "%s.%s" % (rb, pb)) if mb else (rb, pb)
-        out[(a[0], a[1], b[0], b[1])] = out.get((a[0], a[1], b[0], b[1]), 0.0) + float(w)
-    return out or None
 
 
 def hierarchical_place(graph, constraints, rules, library, seed, iters=600, pair_weights=None):

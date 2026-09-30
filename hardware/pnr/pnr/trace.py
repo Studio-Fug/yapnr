@@ -43,6 +43,10 @@ net         ``net``, ``op`` (add, rip, commit, drop), ``pass``, ``provisional``,
             ``copper`` (blob), ``groups`` (pin indices joined by the route), ``progress``
 route_end   ``nets`` ({net: copper blob}), ``groups``, ``unrouted``, ``deferred``,
             ``progress``
+fixed       copper a route keeps as it is (the hierarchical knit's block copper):
+            ``copper`` (blob), ``groups`` ({net: pin-index groups it already joins}),
+            ``connections_done``, ``progress``; the route's progress and groups count
+            these joins from the start
 congestion  ``pitch``, ``nx``, ``ny``, ``cells`` (0 to 255), ``inflation``
 board       ``stage``, ``copper`` (blob with zones), ``poses``, ``drc`` (counts, ``open_pairs``,
             ``findings``: each violation's first item position), ``progress``
@@ -221,6 +225,7 @@ class Recorder:
         self.level = 0
         self.dropped = {}
         self.expanders = []
+        self.route_fixed = None
         self._blobs = set()
         if max_mb is None:
             max_mb = float(os.environ.get(ENV_MAX_MB) or DEFAULT_MAX_MB)
@@ -405,6 +410,7 @@ class Recorder:
         self.stack.pop()
         if scope["type"] == "route":
             self.route = None
+            self.route_fixed = None
 
     @_guarded
     def note(self, status=None, **metrics):
@@ -474,6 +480,29 @@ class Recorder:
             )
         return self._emit(
             "legal", order=ordered, backtracks=backtracks, phase="legalization", **extra
+        )
+
+    @_guarded
+    def fixed(self, copper, groups=None, **meta):
+        """Copper the open ``route`` scope keeps as it is, and the pin-index groups
+        (``{net: [[i, ...]]}``, indices into ``header.nets[].pins``) it already joins;
+        the router's progress and groups in this scope count those joins."""
+        if not (self.stack and self.stack[-1]["type"] == "route"):
+            raise ValueError("a fixed event belongs to an open route scope")
+        groups = {
+            n: sorted(sorted(int(i) for i in g) for g in gs) for n, gs in (groups or {}).items()
+        }
+        done = sum(max(0, len(self.pins.get(n, [])) - len(gs)) for n, gs in groups.items())
+        total = sum(max(0, len(p) - 1) for p in self.pins.values())
+        self.route_fixed = groups
+        return self._emit(
+            "fixed",
+            copper=self.blob(copper),
+            groups=groups,
+            connections_done=done,
+            progress=dict(done=done, total=total, source="router"),
+            phase="routed",
+            **meta,
         )
 
     # --- selections, congestion, native boards, results --------------------------------

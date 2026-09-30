@@ -181,16 +181,20 @@ def hierarchical_place(graph, constraints, rules, library, seed, iters=600, pair
         )
     else:
         mgraph, mcon, mrules, plan = collapse(source, constraints, rules, layouts)
-    placed_macro, report = place(
-        mgraph,
-        mcon,
-        seed=seed,
-        iters=iters,
-        orient=True,
-        spread=1.0,
-        channel_rules=mrules,
-        pair_weights=macro_pair_weights(pair_weights, plan),
-    )
+    from pnr import trace as _trace
+
+    # Tracing only: snapshots and the legalization order name the block members.
+    with _trace.pose_expansion(plan.trace_rows):
+        placed_macro, report = place(
+            mgraph,
+            mcon,
+            seed=seed,
+            iters=iters,
+            orient=True,
+            spread=1.0,
+            channel_rules=mrules,
+            pair_weights=macro_pair_weights(pair_weights, plan),
+        )
     flat = plan.expand(placed_macro, source)
     macros = {
         m: dict(block=v["block"], width=v["width"], height=v["height"])

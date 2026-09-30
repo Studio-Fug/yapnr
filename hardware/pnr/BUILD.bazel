@@ -1062,7 +1062,10 @@ py_test(
         "regression",
     ],
     main = "regression/test_contract.py",
-    deps = [":pnr"],
+    deps = [
+        ":pnr",
+        ":pnr_hier",  # the showcase contract extracts the twin banks' blocks
+    ],
 )
 
 py_binary(
@@ -1191,6 +1194,28 @@ py_test(
     srcs = ["tests/test_line_group.py"],
     imports = ["."],
     main = "tests/test_line_group.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_hier",
+        ":pnr_place",
+        ":pnr_route",
+    ],
+)
+
+# The hierarchical ladder driver (regression/hier_case.py) on a synthetic 10-part design.
+py_test(
+    name = "hier_case_test",
+    size = "medium",
+    srcs = [
+        "regression/hier_case.py",
+        "tests/test_hier_case.py",
+    ],
+    imports = [
+        ".",
+        "regression",
+    ],
+    main = "tests/test_hier_case.py",
     deps = [
         ":pnr",
         ":pnr_detail",

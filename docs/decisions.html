@@ -3,7 +3,7 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="History import manifest (PR1)" href="history/import-manifest.html"><link rel="prev" title="yapnr migration plan" href="migration-plan.html">
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="History import manifest" href="history/import-manifest.html"><link rel="prev" title="yapnr migration plan" href="migration-plan.html">
         <link rel="prefetch" href="../static/yapnr-logo-256.png" as="image">
         <link rel="prefetch" href="../static/yapnr-logo-light.png" as="image">
 
@@ -220,7 +220,7 @@
 <li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="migration-plan.html">yapnr migration plan</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Decisions</a></li>
-<li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest (PR1)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
@@ -382,6 +382,33 @@ Splanc’s <code class="docutils literal notranslate"><span class="pre">pnr.bzl<
 unloaded until PR8 replaces it. Tests that fail on the Splanc source commit, or run past their
 timeout, are tagged <code class="docutils literal notranslate"><span class="pre">manual</span></code> with a comment and listed in the plan’s appendix B, so CI stays
 green; the manifest records the pass set.</p></li>
+</ul>
+<p>Choices made in PR2 (the newer engine state; <a class="reference internal" href="migration-plan.html"><span class="std std-doc">migration plan</span></a> §7.3), following
+the plan; the owner reviews them with the pull request:</p>
+<ul class="simple">
+<li><p><strong>Snapshot-exact commits, with merges.</strong> Each engine snapshot becomes one commit whose engine
+tree equals the snapshot (apart from the scrubbed files), and the side lines (Electrical221, the
+USB pair engine, N-0001) join through merge commits, as they were developed. The alternative, a
+linear series with the merges applied as plain commits, would lose the side lines’ focused
+diffs. Only the head builds in yapnr, as in PR1. PR2 is merged with a merge commit.</p></li>
+<li><p><strong>Machine paths are scrubbed when a snapshot is staged, not in a later commit.</strong> Four engine
+files held absolute paths of the experiment area; a later scrub commit (the plan’s first form)
+would have published them in the history. Every commit that carries these files has the
+scrubbed version; the <a class="reference internal" href="history/import-manifest.html#content-scrub"><span class="std std-ref">import manifest</span></a> lists them.</p></li>
+<li><p><strong>No engine edits in PR2.</strong> Tests that fail with the newer engine are tagged <code class="docutils literal notranslate"><span class="pre">manual</span></code> with a
+comment, and the defects found while importing (workers without a timeout, Splanc defaults,
+Splanc data in the test fixtures) are listed for PR3 in the manifest and in the plan’s
+appendix B.</p></li>
+<li><p><strong>Electrical221 is imported as it ran in Splanc.</strong> Its <code class="docutils literal notranslate"><span class="pre">via_coalesce</span></code>/<code class="docutils literal notranslate"><span class="pre">track_graph</span></code> cleanup is
+on by default without a flag or an A/B result, unlike the rule for new engine behaviour; the H7
+run uses <code class="docutils literal notranslate"><span class="pre">src15</span></code> without it. It stays as imported (faithful to Splanc’s working tree) until the
+owner decides between gating it and an A/B run.</p></li>
+<li><p><strong>src8b’s default changes stay</strong> (the <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> fab profile, bounded workers, the
+parallel-commit fix, plane-access reuse): they predate the default-off rule and are documented,
+with their measurements, in the src8b commit.</p></li>
+<li><p><strong>The Splanc working tree’s viewer changes (<code class="docutils literal notranslate"><span class="pre">pnr_live</span></code>) go to PR4,</strong> not PR2: the cost service
+imports <code class="docutils literal notranslate"><span class="pre">pnr.capacitor_intent</span></code>, which was never committed, and the README reintroduces machine
+names that PR1 scrubbed.</p></li>
 </ul>
 </section>
 <section id="pinned-versions">
@@ -579,7 +606,7 @@ adds a separate x86_64 lock with the CPU torch index (<code class="docutils lite
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">History import manifest (PR1)</div>
+                <div class="title">History import manifest</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>

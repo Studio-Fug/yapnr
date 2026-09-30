@@ -47,9 +47,9 @@ where it was developed to lay out the Splanc Mini board. The migration plan and 
 ## Status
 
 Alpha: this repository holds the build, CI and documentation scaffolding, a command-line stub, the
-[migration plan](docs/migration-plan.md), and the engine's committed history imported from Splanc
-at its original paths under `hardware/` ([manifest](docs/history/import-manifest.md)). The newer
-engine state and the package restructuring follow. KiCad 10 only.
+[migration plan](docs/migration-plan.md), and the engine imported from Splanc at its original
+paths under `hardware/`: its committed history and its newer, uncommitted state
+([manifest](docs/history/import-manifest.md)). The package restructuring follows. KiCad 10 only.
 
 ## Quick start
 

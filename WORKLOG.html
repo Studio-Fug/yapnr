@@ -220,7 +220,7 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/architecture.html">Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/migration-plan.html">yapnr migration plan</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/decisions.html">Decisions</a></li>
-<li class="toctree-l1"><a class="reference internal" href="docs/history/import-manifest.html">History import manifest (PR1)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/about-the-name.html">About the name</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
@@ -277,32 +277,33 @@
 <h1>Worklog<a class="headerlink" href="#worklog" title="Link to this heading">¶</a></h1>
 <p>A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.</p>
-<p>Last updated: 2026-09-30 (PR1).</p>
+<p>Last updated: 2026-09-30 (PR2).</p>
 <section id="in-progress">
 <h2>In progress<a class="headerlink" href="#in-progress" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><strong>PR1, engine import with history</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/pr1-import</span></code>, not pushed): the refined e-mail
-rule of the privacy scan (owner decision in <code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code>: an <code class="docutils literal notranslate"><span class="pre">&#64;</span></code> match is an address only
-with a letter or digit in its local part, not followed by <code class="docutils literal notranslate"><span class="pre">(</span></code>, at an IANA top-level domain), then
-the committed Splanc history of the PnR paths (42 commits, filtered with <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">filter-repo</span></code> in a
-scratch clone, source code unchanged) merged with <code class="docutils literal notranslate"><span class="pre">--allow-unrelated-histories</span></code>, then an
-adaptation commit (<code class="docutils literal notranslate"><span class="pre">&#64;yapnr_pypi</span></code> load, a minimal <code class="docutils literal notranslate"><span class="pre">hardware/tools/BUILD.bazel</span></code>, four failing
-tests tagged <code class="docutils literal notranslate"><span class="pre">manual</span></code>: three fail on the Splanc source commit too, one fails and runs at or past
-its timeout),
-then the manifest and docs. Scrub, counts and checks:
-<a class="reference internal" href="docs/history/import-manifest.html"><span class="std std-doc">docs/history/import-manifest.md</span></a>. <strong>Merge with a merge
-commit</strong>, never squash.</p></li>
+<li><p><strong>PR2, newer engine state</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/pr2-hier-engine</span></code>, not pushed): the engine state that
+was never committed in Splanc, as one commit per snapshot (engine tree equal to the snapshot,
+four files scrubbed at staging): F217 (the Codex agent’s working-tree work), the hierarchical
+line src8b to src14, the USB pair (src12b, src13) and N-0001 (src12n) side lines joined by an
+octopus merge (src15.r1), src15 (the H7 engine), then Electrical221 merged in (two resolved
+conflicts), the Bazel adaptation and the docs. <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//...</span></code> 100/100; three budget tests,
+<code class="docutils literal notranslate"><span class="pre">detail_route_test</span></code> and <code class="docutils literal notranslate"><span class="pre">orientation_test</span></code> stay <code class="docutils literal notranslate"><span class="pre">manual</span></code>. Lineage, scrub, checks and the PR3
+leftovers: <a class="reference internal" href="docs/history/import-manifest.html#pr2-the-uncommitted-engine-state"><span class="std std-ref">docs/history/import-manifest.md</span></a>.
+<strong>Merge with a merge commit</strong>, never squash; the commits before the adaptation do not build.</p></li>
 </ul>
 </section>
 <section id="next">
 <h2>Next<a class="headerlink" href="#next" title="Link to this heading">¶</a></h2>
 <ol class="arabic simple">
-<li><p>Owner: review and push PR1 and open it; CI must be green (<code class="docutils literal notranslate"><span class="pre">lint</span></code> scans all its new commits).
-Merge on GitHub with a merge commit, authored with the owner’s public commit address.</p></li>
-<li><p>Owner: push Splanc’s <code class="docutils literal notranslate"><span class="pre">splanc-mini</span></code>, so the 9 newest <code class="docutils literal notranslate"><span class="pre">Imported-From</span></code> links resolve (see the
+<li><p>Owner: review and push PR2 and open it; CI must be green. Decide on Electrical221’s default-on
+cleanup (gate it or A/B it; decisions) and, optionally, on making CI’s history scan include
+merge diffs (<code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">log</span> <span class="pre">-p</span> <span class="pre">-m</span></code>): its current form shows no diff for PR2’s two merges (both were
+scanned with <code class="docutils literal notranslate"><span class="pre">-m</span></code> locally).</p></li>
+<li><p>Owner: push Splanc’s <code class="docutils literal notranslate"><span class="pre">splanc-mini</span></code>, so the 9 newest <code class="docutils literal notranslate"><span class="pre">Imported-From</span></code> links of PR1 resolve (see the
 manifest).</p></li>
-<li><p>PR2a/PR2b: the uncommitted engine state as a commit series from the snapshots (migration plan
-§7.3), with the same privacy gates as PR1.</p></li>
+<li><p>PR6a, then PR3: wire the 68 unwired engine test files with the glob macro, bound the workers
+that have no timeout, and replace the Splanc defaults and fixtures (manifest, “Known leftovers
+for PR3”). PR2e: the <code class="docutils literal notranslate"><span class="pre">board.Remove</span></code> audit.</p></li>
 <li><p>PR-R is merged (#2). Its first <code class="docutils literal notranslate"><span class="pre">main</span></code> build pushes <code class="docutils literal notranslate"><span class="pre">yapnr-kicad:10.0.6-1-src</span></code>, then
 <code class="docutils literal notranslate"><span class="pre">yapnr-kicad:10.0.6-1</span></code> (with <code class="docutils literal notranslate"><span class="pre">10.0.6</span></code> and <code class="docutils literal notranslate"><span class="pre">10.0</span></code>), then <code class="docutils literal notranslate"><span class="pre">yapnr:edge</span></code>. Then make both GHCR
 packages <strong>public</strong> (package settings &gt; Change visibility; irreversible, owner-approved). The
@@ -341,6 +342,8 @@ adds a separate x86_64 lock).</p></li>
 to refine the scan’s e-mail rule instead (<code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code>).</p></li>
 <li><p>Running <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">filter-repo</span></code> (or <code class="docutils literal notranslate"><span class="pre">gc</span></code>, or a branch switch) in the Splanc checkout: experiments run
 from it. Filter a scratch clone and remove its <code class="docutils literal notranslate"><span class="pre">origin</span></code> remote first (migration plan §7.5).</p></li>
+<li><p>Scrubbing imported machine paths in a later commit: the earlier commits would still publish them.
+Scrub each snapshot when it is staged, before its commit (PR2).</p></li>
 </ul>
 </section>
 </section>

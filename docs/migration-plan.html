@@ -220,7 +220,7 @@
 <li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">yapnr migration plan</a></li>
 <li class="toctree-l1"><a class="reference internal" href="decisions.html">Decisions</a></li>
-<li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest (PR1)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
@@ -350,6 +350,9 @@ imported commit uses the owner’s public commit address (decided, Q2 in §9).</
 progress. <code class="docutils literal notranslate"><span class="pre">src2</span></code> to <code class="docutils literal notranslate"><span class="pre">src7</span></code> no longer exist on disk.</p>
 <ul>
 <li><p>Consequence: PR2 recreates the lineage as a commit series from the surviving snapshots (§7.3).</p></li>
+<li><p>Update (PR2, 2026-09-30): <code class="docutils literal notranslate"><span class="pre">src13</span></code> and <code class="docutils literal notranslate"><span class="pre">src12n</span></code> were finished and merged into <code class="docutils literal notranslate"><span class="pre">src15</span></code> (with
+<code class="docutils literal notranslate"><span class="pre">src14</span></code>, SI v1), the engine of the H7 experiment; PR2 imports the whole lineage up to <code class="docutils literal notranslate"><span class="pre">src15</span></code>
+plus Electrical221 (§7.3, <a class="reference internal" href="history/import-manifest.html"><span class="std std-doc">import manifest</span></a>).</p></li>
 </ul>
 </li>
 <li><p><strong>Splanc CI has never been green for PnR code</strong> (lint debt; the Linux test job fails on an
@@ -1694,7 +1697,7 @@ repository cache, keyed on OS, architecture, <code class="docutils literal notra
 <p><strong>Repository settings</strong> (applied with <code class="docutils literal notranslate"><span class="pre">gh</span></code> after PR0 is pushed):</p>
 <ul class="simple">
 <li><p>Squash merge is the default. Merge commits are allowed only for the history-import PRs (PR1,
-PR2a) and for PR3b (its pure-move commit must survive). No linear-history rule.</p></li>
+PR2) and for PR3b (its pure-move commit must survive). No linear-history rule.</p></li>
 <li><p>A ruleset on <code class="docutils literal notranslate"><span class="pre">main</span></code> requires a PR and the checks <code class="docutils literal notranslate"><span class="pre">lint</span></code>, <code class="docutils literal notranslate"><span class="pre">test</span></code>, <code class="docutils literal notranslate"><span class="pre">docs</span></code> (and <code class="docutils literal notranslate"><span class="pre">kicad-integration</span></code>
 from PR6a), with 0 approvals (single-seat organization).</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">.github/CODEOWNERS</span></code>: <code class="docutils literal notranslate"><span class="pre">*</span> <span class="pre">&#64;fughilli</span></code>.</p></li>
@@ -1865,62 +1868,74 @@ see <code class="docutils literal notranslate"><span class="pre">docs/decisions.
 </section>
 <section id="landing-the-uncommitted-engine-state-pr2">
 <h3>7.3 Landing the uncommitted engine state (PR2)<a class="headerlink" href="#landing-the-uncommitted-engine-state-pr2" title="Link to this heading">¶</a></h3>
-<p>Snapshots are read-only sources. For each one: first make an APFS clone into <code class="docutils literal notranslate"><span class="pre">$SCRATCH</span></code>
-(<code class="docutils literal notranslate"><span class="pre">cp</span> <span class="pre">-c</span> <span class="pre">-R</span></code>), verify it against its <code class="docutils literal notranslate"><span class="pre">hashes.json</span></code>, and only then import it. Directories that are
-still being edited (<code class="docutils literal notranslate"><span class="pre">src12n</span></code>, <code class="docutils literal notranslate"><span class="pre">src13</span></code>) are imported only when their owner declares them done; the
-imported hash is recorded.</p>
-<p><strong>PR2a: commit series</strong> on a branch from PR1’s tip. For each snapshot in order:</p>
+<p>Snapshots are read-only sources. Each one is copied into <code class="docutils literal notranslate"><span class="pre">$SCRATCH</span></code>, checked against an engine
+digest (sha256 over the sorted <code class="docutils literal notranslate"><span class="pre">path&lt;TAB&gt;sha256</span></code> lines of <code class="docutils literal notranslate"><span class="pre">hardware/pnr</span></code> and the engine tools,
+without <code class="docutils literal notranslate"><span class="pre">__pycache__</span></code>; the snapshots’ <code class="docutils literal notranslate"><span class="pre">hashes.json</span></code> files are F217’s copied along, so they verify
+only the source freezes), scrubbed (§2.5, Appendix C), and then committed. Each snapshot commit’s
+engine tree equals its snapshot; side lines join through merge commits. What was imported, the
+digests and the checks are in the <a class="reference internal" href="history/import-manifest.html#pr2-the-uncommitted-engine-state"><span class="std std-ref">import manifest</span></a>.</p>
+<p>The lineage as verified by content on 2026-09-30 (it corrects this section’s first version):</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>main ─ F217 ─┬─ src8b ─ src10.frozen ─ src10 ─ src11 ─ src12 ─┬─ src12h ─┬─ src12i ─ src14 ─┐
+             │                                                │          └─ src12n ────────┤
+             │                                                └─ src12b ─ src13.r8 ────────┤
+             │                                                          src15.r1 (merge) ──┘
+             │                                                          src15
+             └─ Electrical221 ───────────────────────────────────────── merge, Bazel, docs
+</pre></div>
+</div>
 <ol class="arabic simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">rsync</span> <span class="pre">--delete</span></code> its <code class="docutils literal notranslate"><span class="pre">hardware/pnr/</span></code> over <code class="docutils literal notranslate"><span class="pre">hardware/pnr/</span></code> (excluding <code class="docutils literal notranslate"><span class="pre">__pycache__</span></code>, <code class="docutils literal notranslate"><span class="pre">*.orig</span></code>,
-<code class="docutils literal notranslate"><span class="pre">*.bak</span></code>, <code class="docutils literal notranslate"><span class="pre">.scratch</span></code>).</p></li>
-<li><p>Copy its engine tools (the §7.1 list).</p></li>
-<li><p>Commit, skipping snapshots identical to the previous one.</p></li>
+<li><p><strong>F217</strong>, the fresh217 freeze of Splanc’s working tree minus Electrical221: the Codex agent’s
+uncommitted work on top of <code class="docutils literal notranslate"><span class="pre">b009c945</span></code> (<code class="docutils literal notranslate"><span class="pre">pair_joint</span></code>, <code class="docutils literal notranslate"><span class="pre">portal_retry</span></code>, <code class="docutils literal notranslate"><span class="pre">power_bank_*</span></code>,
+<code class="docutils literal notranslate"><span class="pre">transaction_cleanup</span></code>, cost capture, relative rows, …), and
+<code class="docutils literal notranslate"><span class="pre">hardware/tools/audit_pair_contacts.py</span></code>.</p></li>
+<li><p><strong>Electrical221</strong> (the fresh222 freeze, byte-identical to Splanc’s working tree): the full
+electrical pool, partial-cycle cleanup in <code class="docutils literal notranslate"><span class="pre">track_graph</span></code>/<code class="docutils literal notranslate"><span class="pre">via_coalesce</span></code>, a <code class="docutils literal notranslate"><span class="pre">pnr.bzl</span></code> branch and
+3 tests. It forks from F217 and is in no hierarchical snapshot.</p></li>
+<li><p><strong>src8b</strong>: everything from <code class="docutils literal notranslate"><span class="pre">src2</span></code> to <code class="docutils literal notranslate"><span class="pre">src8</span></code> (their snapshots are gone): <code class="docutils literal notranslate"><span class="pre">fab_profile</span></code>
+(default <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code>), <code class="docutils literal notranslate"><span class="pre">fanout_reserve</span></code>, <code class="docutils literal notranslate"><span class="pre">via_in_pad</span></code>, <code class="docutils literal notranslate"><span class="pre">power_topology</span></code>, <code class="docutils literal notranslate"><span class="pre">proc</span></code> (worker
+timeouts), <code class="docutils literal notranslate"><span class="pre">place/power_first</span></code>, and the packages <code class="docutils literal notranslate"><span class="pre">hier/</span></code> and <code class="docutils literal notranslate"><span class="pre">mc/</span></code>.</p></li>
+<li><p><strong>src10.frozen</strong>: the <code class="docutils literal notranslate"><span class="pre">shove/</span></code> package (<code class="docutils literal notranslate"><span class="pre">PNR_SHOVE</span></code>). It <strong>precedes</strong> <code class="docutils literal notranslate"><span class="pre">src10</span></code>.</p></li>
+<li><p><strong>src10</strong>: the owner’s 0.15 mm stretch floor in <code class="docutils literal notranslate"><span class="pre">shove/world.py</span></code>.</p></li>
+<li><p><strong>src11</strong>: the routing-to-placement feedback loop, <code class="docutils literal notranslate"><span class="pre">feedback/</span></code> (<code class="docutils literal notranslate"><span class="pre">PNR_FEEDBACK</span></code>).</p></li>
+<li><p><strong>src12</strong>: macro-first <code class="docutils literal notranslate"><span class="pre">place/legalize.py</span></code>; pair budget overrides in <code class="docutils literal notranslate"><span class="pre">paired_bootstrap.py</span></code>.</p></li>
+<li><p><strong>src12h</strong>: <code class="docutils literal notranslate"><span class="pre">PNR_KICAD_CLI</span></code> (headless KiCad) in 5 files.</p></li>
+<li><p><strong>src12i</strong>: <code class="docutils literal notranslate"><span class="pre">fanout_reserve.release</span></code> uses <code class="docutils literal notranslate"><span class="pre">board.Delete(zone)</span></code> (teardown SIGSEGV fix).</p></li>
+<li><p><strong>src14</strong>: SI v1 (<code class="docutils literal notranslate"><span class="pre">PNR_SI</span></code>, <code class="docutils literal notranslate"><span class="pre">pnr/si/</span></code>, <code class="docutils literal notranslate"><span class="pre">si_models/</span></code>) and the terminal-width contract.</p></li>
+<li><p><strong>src12b</strong> and <strong>src13.r8</strong> (side line from src12): the USB pair engine (A-D), all flags
+default off.</p></li>
+<li><p><strong>src12n</strong> (side line from src12h): N-0001 macro shrink, per-side hull, used-area ranking.</p></li>
+<li><p><strong>src15.r1</strong>: the octopus merge of src14, src13.r8 (base src12) and src12n (base src12h), plus
+headless KiCad defaults and bus-type classes (<code class="docutils literal notranslate"><span class="pre">PNR_BUS_CLASSES</span></code>); <strong>src15</strong>: its review
+fixes, the engine of the H7 run.</p></li>
+<li><p><strong>Merge of Electrical221</strong> into src15. Two conflicts: the summary dict at the end of
+<code class="docutils literal notranslate"><span class="pre">via_coalesce.main</span></code> (keep both key sets) and two hunks of <code class="docutils literal notranslate"><span class="pre">pnr.bzl</span></code> (Electrical221’s pool
+branch with src15’s headless <code class="docutils literal notranslate"><span class="pre">$_KI_CLI</span></code>; the SI tool added to the action tools).</p></li>
+<li><p><strong>Bazel adaptation</strong>, then the docs.</p></li>
 </ol>
-<p>The engine files (<code class="docutils literal notranslate"><span class="pre">hardware/pnr</span></code>) were compared between consecutive snapshots on 2026-09-29.
-<code class="docutils literal notranslate"><span class="pre">src9.frozen</span></code>, <code class="docutils literal notranslate"><span class="pre">src10b</span></code> and <code class="docutils literal notranslate"><span class="pre">src11.frozen</span></code> are engine-identical to their predecessors (they differ
-only in design data), so they produce no commit.</p>
-<ol class="arabic simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">$FREEZE</span></code> minus Electrical221: the Codex agent’s uncommitted work on top of the Splanc branch
-tip: 12 modules (<code class="docutils literal notranslate"><span class="pre">pair_joint</span></code>, <code class="docutils literal notranslate"><span class="pre">portal_retry</span></code>, <code class="docutils literal notranslate"><span class="pre">power_bank_*</span></code>, <code class="docutils literal notranslate"><span class="pre">transaction_cleanup</span></code>, cost
-capture, …), 30 tests.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">src8b</span></code>: everything from <code class="docutils literal notranslate"><span class="pre">src2</span></code> to <code class="docutils literal notranslate"><span class="pre">src8</span></code> (their snapshots are gone). New <code class="docutils literal notranslate"><span class="pre">fab_profile</span></code>,
-<code class="docutils literal notranslate"><span class="pre">fanout_reserve</span></code>, <code class="docutils literal notranslate"><span class="pre">via_in_pad</span></code>, <code class="docutils literal notranslate"><span class="pre">power_topology</span></code>, <code class="docutils literal notranslate"><span class="pre">proc</span></code> (worker timeouts), <code class="docutils literal notranslate"><span class="pre">place/power_first</span></code>,
-and the packages <code class="docutils literal notranslate"><span class="pre">hier/</span></code> and <code class="docutils literal notranslate"><span class="pre">mc/</span></code>. About 45 modified modules (native loop, electrical,
-legalize, detail router, …) and about 15 new tests.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">src10</span></code>: shove support: new <code class="docutils literal notranslate"><span class="pre">shove/</span></code> package; <code class="docutils literal notranslate"><span class="pre">native_loop</span></code>, <code class="docutils literal notranslate"><span class="pre">native_electrical</span></code>,
-<code class="docutils literal notranslate"><span class="pre">via_in_pad</span></code>, <code class="docutils literal notranslate"><span class="pre">hier/synth_native</span></code> edits; shove tests.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">src10.frozen</span></code>: shove <code class="docutils literal notranslate"><span class="pre">world.py</span></code> fix.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">src11</span></code>: routing-to-placement feedback loop: new <code class="docutils literal notranslate"><span class="pre">feedback/</span></code> package; halving, <code class="docutils literal notranslate"><span class="pre">hier/top</span></code>,
-placement model and <code class="docutils literal notranslate"><span class="pre">power_first</span></code> edits; 7 new tests.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">src12</span></code>: macro-first <code class="docutils literal notranslate"><span class="pre">place/legalize.py</span></code>; pair budget environment in <code class="docutils literal notranslate"><span class="pre">paired_bootstrap.py</span></code>.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">src12h</span></code>: <code class="docutils literal notranslate"><span class="pre">PNR_KICAD_CLI</span></code> default (headless KiCad) in 5 files.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">src12i</span></code>: <code class="docutils literal notranslate"><span class="pre">fanout_reserve.release</span></code>: <code class="docutils literal notranslate"><span class="pre">board.Delete(zone)</span></code> (teardown SIGSEGV fix).</p></li>
-</ol>
+<p>Engine-identical directories (<code class="docutils literal notranslate"><span class="pre">src9.frozen</span></code>, <code class="docutils literal notranslate"><span class="pre">src10.base</span></code>, <code class="docutils literal notranslate"><span class="pre">src10b</span></code>, <code class="docutils literal notranslate"><span class="pre">src11.base</span></code>,
+<code class="docutils literal notranslate"><span class="pre">src11.frozen</span></code>, <code class="docutils literal notranslate"><span class="pre">src12.base</span></code>, <code class="docutils literal notranslate"><span class="pre">src12n.base</span></code>, <code class="docutils literal notranslate"><span class="pre">src14.base</span></code>, <code class="docutils literal notranslate"><span class="pre">src15.base</span></code>, <code class="docutils literal notranslate"><span class="pre">src13.base</span></code>, <code class="docutils literal notranslate"><span class="pre">src13</span></code>)
+produce no commit.</p>
 <ul class="simple">
 <li><p>Author: <code class="docutils literal notranslate"><span class="pre">Claude</span> <span class="pre">Agent</span></code> with the owner’s public commit address (owner decision). The committer
-date is now; the author date is the snapshot’s newest source mtime. Trailers:
-<code class="docutils literal notranslate"><span class="pre">Co-Authored-By:</span> <span class="pre">Claude</span> <span class="pre">...</span></code>; commit 1 notes the Codex agent in the body.</p></li>
-<li><p>Each commit body names the snapshot, the flags it introduced (and their defaults) and the
-measured results from the log (for example deepS 33/0, H6 16/0 at the native rung).</p></li>
-<li><p>The Splanc design (<code class="docutils literal notranslate"><span class="pre">hardware/splanc_dev</span></code>, <code class="docutils literal notranslate"><span class="pre">contracts/</span></code>) is never included.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">testdata/power_topology/*.json</span></code> provenance paths are scrubbed in a separate commit in this PR.</p></li>
+date is the import time; the author date is the capture time or the snapshot’s newest source
+mtime. Trailers: the session’s; the F217 and Electrical221 bodies name the Codex agent.</p></li>
+<li><p>Each commit body names the snapshot and its digest, the flags it introduced (and their
+defaults) and the measured results from the log (for example deepS 33/0, H6 12/0).</p></li>
+<li><p>The Splanc design (<code class="docutils literal notranslate"><span class="pre">hardware/splanc_dev</span></code> outside the engine’s own test data, <code class="docutils literal notranslate"><span class="pre">contracts/</span></code>) is
+never included.</p></li>
+<li><p>The four files with machine paths (<code class="docutils literal notranslate"><span class="pre">testdata/power_topology/{converter,pd}.json</span></code>,
+<code class="docutils literal notranslate"><span class="pre">tests/test_shove{,_native}.py</span></code>) are scrubbed when each snapshot is staged, so no commit carries
+the paths. (The first version of this plan scrubbed the fixtures in a separate commit, which
+would have published the paths in history.)</p></li>
+<li><p>Only the head builds in yapnr: the snapshot commits carry Splanc’s <code class="docutils literal notranslate"><span class="pre">BUILD.bazel</span></code>, as PR1’s
+imported commits do.</p></li>
 <li><p>Merged with a merge commit.</p></li>
 </ul>
-<p><strong>PR2b: Electrical221</strong> is the Codex agent’s in-tree change (<code class="docutils literal notranslate"><span class="pre">electrical_pool.py</span></code>,
-<code class="docutils literal notranslate"><span class="pre">track_graph</span></code>/<code class="docutils literal notranslate"><span class="pre">via_coalesce</span></code> cycle reduction, a <code class="docutils literal notranslate"><span class="pre">pnr.bzl</span></code> branch, 3 tests), cherry-picked onto
-<code class="docutils literal notranslate"><span class="pre">src12i</span></code>. The only conflict is the summary dict at the end of <code class="docutils literal notranslate"><span class="pre">via_coalesce.main</span></code>: keep both key
-sets.</p>
-<p><strong>PR2c: <code class="docutils literal notranslate"><span class="pre">src13</span></code> (USB pairs A-D)</strong> is applied as a 3-way merge with base <code class="docutils literal notranslate"><span class="pre">src12</span></code>, which merged
-cleanly in the dry run. It keeps the <code class="docutils literal notranslate"><span class="pre">PNR_KICAD_CLI</span></code> edits it lacked. All its flags stay default
-off. Imported when its validation runs are finished.</p>
-<p><strong>PR2d: <code class="docutils literal notranslate"><span class="pre">src12n</span></code> (N-0001 macro shrink and hull)</strong> is applied 3-way onto PR2c. Known conflicts:
-<code class="docutils literal notranslate"><span class="pre">graph.py</span></code>, <code class="docutils literal notranslate"><span class="pre">place/legalize.py</span></code> (5 hunks) and <code class="docutils literal notranslate"><span class="pre">hier/macro.py</span></code>, which are resolved with the
-placement tests plus a replay of its A/B. Flags stay default off.</p>
-<p><strong>PR2e: <code class="docutils literal notranslate"><span class="pre">board.Remove</span></code> audit.</strong> Classify the ~25 remaining <code class="docutils literal notranslate"><span class="pre">board.Remove</span></code> call sites: use <code class="docutils literal notranslate"><span class="pre">Delete</span></code>
-unless the item is re-added. <code class="docutils literal notranslate"><span class="pre">via_coalesce</span></code>’s “retry after signal 11” is a likely instance of the
-same class.</p>
-<p>If PR2c or PR2d finish after PR3a/PR3b have landed, they go through <code class="docutils literal notranslate"><span class="pre">//tools/migrate:port</span></code> (§7.4)
-instead.</p>
+<p><strong>PR2e: <code class="docutils literal notranslate"><span class="pre">board.Remove</span></code> audit</strong> (separate). Classify the ~25 remaining <code class="docutils literal notranslate"><span class="pre">board.Remove</span></code> call sites:
+use <code class="docutils literal notranslate"><span class="pre">Delete</span></code> unless the item is re-added. <code class="docutils literal notranslate"><span class="pre">via_coalesce</span></code>’s “retry after signal 11” is a likely
+instance of the same class.</p>
+<p>Engine work that starts after PR2 is made on yapnr branches; work still in Splanc snapshots after
+PR3a/PR3b have landed goes through <code class="docutils literal notranslate"><span class="pre">//tools/migrate:port</span></code> (§7.4).</p>
 </section>
 <section id="porting-in-flight-work-through-mechanical-commits">
 <h3>7.4 Porting in-flight work through mechanical commits<a class="headerlink" href="#porting-in-flight-work-through-mechanical-commits" title="Link to this heading">¶</a></h3>
@@ -1950,7 +1965,7 @@ than 15 GB free on the experiment volume).</p></li>
 before long operations, and report it rather than competing.</p></li>
 <li><p><strong>Transition of engine work:</strong></p>
 <ul>
-<li><p>Once PR2a lands, new engine changes are made on yapnr branches.</p></li>
+<li><p>Once PR2 lands, new engine changes are made on yapnr branches.</p></li>
 <li><p>Until PR3b, yapnr’s <code class="docutils literal notranslate"><span class="pre">hardware/pnr</span></code> layout is identical to a snapshot’s, so the existing
 <code class="docutils literal notranslate"><span class="pre">runx.sh</span></code> harness can run a yapnr checkout directly (<code class="docutils literal notranslate"><span class="pre">PYTHONPATH=&lt;yapnr&gt;/hardware/pnr</span></code>).</p></li>
 <li><p>Between PR3b and PR3f, experiments either stay on frozen snapshots or run
@@ -1965,8 +1980,9 @@ external store; older history is registered with <code class="docutils literal n
 </section>
 <section id="pr-sequence">
 <h2>8. PR sequence<a class="headerlink" href="#pr-sequence" title="Link to this heading">¶</a></h2>
-<p><strong>Merge order:</strong> PR0, PR1, PR2a-b, <strong>PR6a</strong>, PR3a-f, PR5, PR4a-d, PR6b, PR2c/2d/2e (when ready;
-ported via §7.4 if late), PR7, PR8, then the Splanc import-back.</p>
+<p><strong>Merge order:</strong> PR0, PR1, PR2, <strong>PR6a</strong>, PR3a-f, PR5, PR4a-d, PR6b, PR2e (ported via §7.4 if
+late), PR7, PR8, then the Splanc import-back. (PR2c and PR2d, the USB pair and N-0001 lines, were
+finished before PR2 and are part of it.)</p>
 <p>PR6 is split, and its first half moves ahead of PR3. PR3a/PR3b rewrite every file mechanically,
 and today no CI runs the native (KiCad-side) code paths, so the KiCad lane must exist first. The
 labels otherwise follow the requested numbering. Each PR updates <code class="docutils literal notranslate"><span class="pre">WORKLOG.md</span></code> and the docs pages it
@@ -2051,25 +2067,31 @@ adaptation commit.</p></li>
 </li>
 </ul>
 </section>
-<section id="pr2a-pr2b-newer-engine-state">
-<h3>PR2a/PR2b: newer engine state<a class="headerlink" href="#pr2a-pr2b-newer-engine-state" title="Link to this heading">¶</a></h3>
+<section id="pr2-newer-engine-state-merge-commit">
+<h3>PR2: newer engine state (merge commit)<a class="headerlink" href="#pr2-newer-engine-state-merge-commit" title="Link to this heading">¶</a></h3>
 <ul class="simple">
-<li><p><strong>Contents:</strong> §7.3 commits 1-8, the provenance scrub commit, and Electrical221.</p></li>
+<li><p><strong>Contents:</strong> the §7.3 series: F217, Electrical221, the hierarchical snapshots up to <code class="docutils literal notranslate"><span class="pre">src15</span></code>
+(with the USB pair and N-0001 side lines, formerly PR2c and PR2d), the Electrical221 merge, the
+Bazel adaptation, and the docs (import manifest PR2 section, this plan, decisions, worklog).</p></li>
 <li><p><strong>Acceptance:</strong></p>
 <ul>
-<li><p>each snapshot commit’s <code class="docutils literal notranslate"><span class="pre">hardware/pnr</span></code> equals its snapshot byte for byte (<code class="docutils literal notranslate"><span class="pre">diff</span> <span class="pre">-r</span></code> recorded);</p></li>
-<li><p>at the <code class="docutils literal notranslate"><span class="pre">src12i</span></code> + Electrical221 tip, the same pass set as the snapshot’s own suites, with
-known pre-existing errors listed and filed (7 errors in the KiCad-Python suite, 1 in the
-runtime suite);</p></li>
-<li><p>privacy scan clean;</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">hier/</span></code>, <code class="docutils literal notranslate"><span class="pre">mc/</span></code>, <code class="docutils literal notranslate"><span class="pre">feedback/</span></code> get Bazel targets so their tests run.</p></li>
+<li><p>each snapshot commit’s engine tree equals its snapshot, except the four scrubbed files
+(checked per commit and recorded in the manifest);</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//...</span> <span class="pre">--config=ci</span></code> green at the head, with the pass set, the skips and the
+<code class="docutils literal notranslate"><span class="pre">manual</span></code> tests recorded in the manifest; tests that newly fail are tagged <code class="docutils literal notranslate"><span class="pre">manual</span></code> with a
+comment (no engine edits in PR2) and listed in appendix B;</p></li>
+<li><p>privacy scan clean, including merge diffs (<code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">log</span> <span class="pre">-p</span> <span class="pre">-m</span></code>), and gitleaks clean;</p></li>
+<li><p>the unwired test files are counted; <code class="docutils literal notranslate"><span class="pre">hier/</span></code>, <code class="docutils literal notranslate"><span class="pre">mc/</span></code> and <code class="docutils literal notranslate"><span class="pre">feedback/</span></code> get their Bazel targets in
+PR3 with the glob macro (moved from this PR: most of their tests need KiCad or Splanc
+inputs).</p></li>
 </ul>
 </li>
 <li><p><strong>Risks:</strong></p>
 <ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">src2</span></code> to <code class="docutils literal notranslate"><span class="pre">src7</span></code> are unrecoverable, so commit 2 is large (mitigated by a detailed body and
-per-feature notes);</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">src12i</span></code> is a newly created snapshot (verify against <code class="docutils literal notranslate"><span class="pre">launch_nb8.sh</span></code>);</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">src2</span></code> to <code class="docutils literal notranslate"><span class="pre">src7</span></code> are unrecoverable, so the src8b commit is large (mitigated by a detailed body
+and per-feature notes);</p></li>
+<li><p>the commits before the adaptation do not build in yapnr (as in PR1);</p></li>
+<li><p>Electrical221’s cleanup is on by default and the H7 run does not use it (decisions);</p></li>
 <li><p>the merge-commit requirement.</p></li>
 </ul>
 </li>
@@ -2526,14 +2548,32 @@ PR3a.</p></li>
 (<code class="docutils literal notranslate"><span class="pre">test_pair_joint_dispatch</span></code> import).</p></li>
 <li><p>The <code class="docutils literal notranslate"><span class="pre">pnr_kicad_srcs</span></code> filegroup is incomplete and only works because actions run unsandboxed
 (replaced by the closure in PR3b).</p></li>
-<li><p>66 test files are not wired into Bazel (fixed by the glob macro and the wiring check). The
-committed history imported in PR1 has 29 of them.</p></li>
+<li><p>Test files not wired into Bazel (fixed by the glob macro and the wiring check in PR3): 29
+after PR1; after PR2, 68 under <code class="docutils literal notranslate"><span class="pre">hardware/pnr</span></code> (PR1’s 25 and 43 new) plus the four outside it.
+<code class="docutils literal notranslate"><span class="pre">tools/check_test_wiring.py</span> <span class="pre">--scope</span> <span class="pre">hardware/</span></code> reports five more under <code class="docutils literal notranslate"><span class="pre">hardware/pnr</span></code>: SI test
+files that only the <code class="docutils literal notranslate"><span class="pre">si_%s_test</span></code> list comprehension names, which does wire them.</p></li>
 <li><p>Three native-loop controller tests (<code class="docutils literal notranslate"><span class="pre">placement_budget_test</span></code>, <code class="docutils literal notranslate"><span class="pre">progress_budget_test</span></code>,
 <code class="docutils literal notranslate"><span class="pre">retry_controller_test</span></code>) fail on the Splanc source commit of PR1: their recorded worker fixture
-has no <code class="docutils literal notranslate"><span class="pre">graph</span></code> key, which <code class="docutils literal notranslate"><span class="pre">native_loop.congestion_snapshot</span></code> reads. PR1 tags them <code class="docutils literal notranslate"><span class="pre">manual</span></code>.</p></li>
+has no <code class="docutils literal notranslate"><span class="pre">graph</span></code> key, which <code class="docutils literal notranslate"><span class="pre">native_loop.congestion_snapshot</span></code> reads. PR1 tags them <code class="docutils literal notranslate"><span class="pre">manual</span></code>. Since
+src8b (PR2) they fail earlier, with <code class="docutils literal notranslate"><span class="pre">FileNotFoundError:</span> <span class="pre">'fixture-python'</span></code>: they patch
+<code class="docutils literal notranslate"><span class="pre">native_loop.subprocess.run</span></code>, but the native loop starts its workers through <code class="docutils literal notranslate"><span class="pre">pnr.proc.run</span></code>, so
+the fixture’s fake interpreter is executed. Still <code class="docutils literal notranslate"><span class="pre">manual</span></code>.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">detail_route_test</span></code> takes 870 to 1000 s on the development Mac, at or over its 900 s <code class="docutils literal notranslate"><span class="pre">large</span></code>
 timeout, and its <code class="docutils literal notranslate"><span class="pre">test_drc_clean_by_construction</span></code> fails: two nets share a footprint cell. PR1
-tags it <code class="docutils literal notranslate"><span class="pre">manual</span></code>.</p></li>
+tags it <code class="docutils literal notranslate"><span class="pre">manual</span></code>; unchanged with PR2’s engine (848 s, the same failure).</p></li>
+<li><p>Workers without a time bound (PR2’s engine): <code class="docutils literal notranslate"><span class="pre">electrical_pool</span></code>, <code class="docutils literal notranslate"><span class="pre">hier/native_block</span></code> (2 calls),
+<code class="docutils literal notranslate"><span class="pre">mc/halving</span></code>, <code class="docutils literal notranslate"><span class="pre">transaction_cleanup</span></code>, the parallel pair trials of <code class="docutils literal notranslate"><span class="pre">paired_bootstrap</span></code> (stopped
+only by an event) and the cleanup pass in <code class="docutils literal notranslate"><span class="pre">hardware/tools/keyhole_region.py</span></code>; from PR1’s code,
+<code class="docutils literal notranslate"><span class="pre">drc_warm</span></code>, <code class="docutils literal notranslate"><span class="pre">electrical_repair</span></code>, <code class="docutils literal notranslate"><span class="pre">full_iteration</span></code>, <code class="docutils literal notranslate"><span class="pre">geometry_optimize</span></code>, <code class="docutils literal notranslate"><span class="pre">paired_bootstrap</span></code>,
+<code class="docutils literal notranslate"><span class="pre">plane_leaf_repair</span></code>, <code class="docutils literal notranslate"><span class="pre">power_detour_repair</span></code>, <code class="docutils literal notranslate"><span class="pre">staged_signal</span></code> and <code class="docutils literal notranslate"><span class="pre">regression/run.py</span></code>. All move
+to <code class="docutils literal notranslate"><span class="pre">pnr.proc.run</span></code> (PR3).</p></li>
+<li><p>Engine code tied to the Splanc design (PR2): <code class="docutils literal notranslate"><span class="pre">feedback/signals.py</span></code> finds annotation sources by a
+<code class="docutils literal notranslate"><span class="pre">hardware/splanc_dev/elec/src/*.ato</span></code> pattern; <code class="docutils literal notranslate"><span class="pre">hier/native_block.py</span></code> and <code class="docutils literal notranslate"><span class="pre">mc/halving.py</span></code>
+default to <code class="docutils literal notranslate"><span class="pre">hardware/splanc_dev</span></code> inputs (PR3c, PR3d). Tests and test data that use Splanc
+design files are listed in the <a class="reference internal" href="history/import-manifest.html#known-leftovers-for-pr3"><span class="std std-ref">import manifest</span></a>.</p></li>
+<li><p>Electrical221’s partial-cycle cleanup and barrel-contact bridges in <code class="docutils literal notranslate"><span class="pre">via_coalesce</span></code> and
+<code class="docutils literal notranslate"><span class="pre">track_graph</span></code> are on by default, without a flag or an A/B result (PR2; decisions).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">hardware/tools/audit_pair_contacts.py</span></code> starts a <code class="docutils literal notranslate"><span class="pre">wx.App</span></code> (GUI-bound, outside the loop).</p></li>
 </ul>
 </section>
 <section id="appendix-c-privacy-scrub-checklist-gate-for-every-push">
@@ -2676,7 +2716,7 @@ committed. Input sets are created fresh by <code class="docutils literal notrans
 <li><a class="reference internal" href="#pr-sequence">8. PR sequence</a><ul>
 <li><a class="reference internal" href="#pr0-bootstrap-about-55-files-about-5-1k-lines-excluding-the-lockfiles">PR0: bootstrap (about 55 files, about 5.1k lines, excluding the lockfiles)</a></li>
 <li><a class="reference internal" href="#pr1-core-engine-import-with-history-merge-commit">PR1: core engine import with history (merge commit)</a></li>
-<li><a class="reference internal" href="#pr2a-pr2b-newer-engine-state">PR2a/PR2b: newer engine state</a></li>
+<li><a class="reference internal" href="#pr2-newer-engine-state-merge-commit">PR2: newer engine state (merge commit)</a></li>
 <li><a class="reference internal" href="#pr6a-kicad-test-lane-and-toolchain-discovery">PR6a: KiCad test lane and toolchain discovery</a></li>
 <li><a class="reference internal" href="#pr3a-mechanical-format-and-lint-fixes">PR3a: mechanical format and lint fixes</a></li>
 <li><a class="reference internal" href="#pr3b-package-rename-and-restructure">PR3b: package rename and restructure</a></li>

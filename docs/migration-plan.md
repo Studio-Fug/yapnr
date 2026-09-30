@@ -1522,7 +1522,8 @@ unchanged.
   - code keys that survive formatting (code key scheme 2: a canonical syntax tree per module),
     committed ahead of the format so no library or trial is invalidated by it;
   - black and isort on the imported trees, as format-only commits (merged with a merge commit so
-    they survive; a follow-up adds them to `.git-blame-ignore-revs`);
+    they survive; a follow-up adds them to `.git-blame-ignore-revs`), with isort's settings pinned
+    in `.isort.cfg` so its order does not depend on the directory it runs in;
   - the `.flake8` baseline: every remaining code per file, F-codes included (no hand fixes; the
     F821 in `via_coalesce` stays for its own change, Appendix B);
   - `hardware/` removed from the global exclude and `.flake8`; per-hook excludes (and

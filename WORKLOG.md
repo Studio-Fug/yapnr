@@ -9,31 +9,36 @@ Last updated: 2026-09-30 (PR3a: code keys and engine format).
 
 - **PR3a** (branch `claude/pr3a-codekey-format`, not pushed): code key scheme 2 (routing-feedback
   code keys hash each module's canonical syntax tree, so formatting does not change them; legacy
-  records are still read), then black and isort over every Python file under `hardware/` as two
+  records are still read), then black and isort over every Python file under `hardware/` as
   mechanical commits, five source-text tests made layout-independent, and the lint config:
   `hardware/` out of the global exclude, a per-file flake8 baseline in `.flake8` (479 findings in
   157 files, none fixed by hand), per-hook excludes for the non-Python files a hook would rewrite.
-  Proof and reasons: [docs/decisions.md](docs/decisions.md) ("Choices made in PR3a"). Engine
-  hygiene (#8) is merged; close #6 if it is still open (#8 re-enabled `orientation_test`).
+  The review's findings are fixed in follow-up commits: isort's settings pinned in `.isort.cfg`
+  (a third, mechanical re-sort), router key strings and reports name the key scheme, the driver
+  imports and `test_feedback_signals` run in Bazel. Proof and reasons:
+  [docs/decisions.md](docs/decisions.md) ("Choices made in PR3a"). Engine hygiene (#8) is
+  merged and #6 is closed (#8 re-enabled `orientation_test`).
 
 ## Next
 
 1. Owner: review and push PR3a and open its pull request; **merge it with a merge commit**, not a
-   squash, so the two format commits keep their hashes. After the merge, a follow-up commit adds
-   both format commits (`Format: black ...` and `Format: isort ...`, hashes as on `main`) to
-   `.git-blame-ignore-revs`. Before importing trials made by a yapnr checkout from before the
-   format (legacy code keys, no `code_key_scheme`), keep a frozen copy of that pre-format tree
-   (they re-key from it) or import with `--import-code-mismatch rebase` or `warn`; the default
-   `error` refuses them. Splanc's frozen snapshot trees are not affected.
+   squash, so the three format commits keep their hashes. After the merge, a follow-up commit adds
+   them to `.git-blame-ignore-revs`, hashes as on `main`: the commits titled "Format: black",
+   "Format: isort (black profile" and "Format: isort with its settings pinned". Before importing
+   trials made by a yapnr checkout from before the format (legacy code keys, no
+   `code_key_scheme`), keep a frozen copy of that pre-format tree (they re-key from it) or import
+   with `--import-code-mismatch rebase` or `warn`; the default `error` refuses them. Splanc's
+   frozen snapshot trees are not affected.
 2. Owner: A/B Electrical221's two flags on the hierarchical engine before turning them on.
    Before the next experiment runs this engine, one rung-1 evaluation with it (`board.Delete`
    everywhere) when the Mac is free: the replay covered 5 of the 27 changed sites, and a full
    evaluation's nested workers exceed the two-KiCad-process budget kept while H7 runs.
 3. Owner: push Splanc's `splanc-mini`, so the 9 newest `Imported-From` links of PR1 resolve (see the
    manifest).
-4. PR6a, then PR3b onwards: wire the 68 unwired engine test files with the glob macro (the two
-   hygiene tests are wired) and replace the Splanc defaults and fixtures (manifest, "Known
-   leftovers for PR3"). The KiCad-dependent tests run under the headless KiCad Python only
+4. PR6a, then PR3b onwards: wire the 67 unwired engine test files with the glob macro (the two
+   hygiene tests and PR3a's `test_feedback_signals` are wired; the two feedback generation tests
+   skip without Splanc's Mini inputs) and replace the Splanc defaults and fixtures (manifest,
+   "Known leftovers for PR3"). The KiCad-dependent tests run under the headless KiCad Python only
    (DEVELOPERS.md). PR3a landed before the KiCad lane: its format is checked by syntax-tree
    equivalence and fresh-interpreter imports, not by a KiCad-side test run. PR3b burns down the
    `.flake8` baseline and fixes the `via_coalesce` F821 with a test of its own.

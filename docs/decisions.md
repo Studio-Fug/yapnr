@@ -247,11 +247,32 @@ PR3a); the owner reviews them with the pull request:
   scheme, or re-keyed from its evaluation tree when that tree still hashes to its stamp, so
   trials of frozen snapshot trees survive the format while those of a tree reformatted since
   do not. PR3b's rename needs a scheme that applies the module map to module names and imports.
-- **The format is two mechanical commits, and the pull request is merged with a merge commit**
+  The router key string (`router_key` in statuses, tables and libraries) ends with the scheme,
+  and the feedback report names a key's scheme when it is not the current one, so a legacy key
+  and a new one cannot be mistaken for each other there.
+- **The new key has two blind spots, by design.** Reordering the imports inside a block does not
+  change it, even where the order matters at import time, so a fix to an import-order bug changes
+  the key only if it changes something else too. Whitespace at the start or end of a docstring's
+  lines does not change it either (black re-indents docstrings), although `__doc__` keeps it.
+  Both are what the format needs to leave alone. In this format, black changed docstring
+  whitespace in six files; one of them, `hier/subpcb.py`, passes its module docstring to argparse,
+  whose default formatter reflows it, so its `--help` is unchanged.
+- **Other hashes of engine source stay raw bytes**, and the format changes them:
+  `place/cost_capture.py` (`runtime_sources` and `probe_sources` in cost captures), `profile.py`
+  (`source_hashes`), `drc_warm/host.py` (`sha256` in `ready.json`) and `regression/run.py`
+  (`source_hashes` in `provenance.json`). They are diagnostic: nothing compares them across trees
+  (the regression runner checks its manifest only against its own source freeze, within one run).
+- **The format is three mechanical commits, and the pull request is merged with a merge commit**
   so their hashes reach `main` and a follow-up lists them in `.git-blame-ignore-revs` (the plan
   had a squash merge and a follow-up with the squashed hash). black 25.1.0 and isort 6.0.1, the
   pinned hooks run through prek, cover every Python file under `hardware/` (`pnr`, `tools`,
-  `experiments`): black changes 369 files, isort 294. black's own equivalence check passes for
+  `experiments`): black changes 369 files, isort 294. The third commit pins isort's settings in
+  `.isort.cfg` (black profile, 100 columns, `known_first_party = pnr,yapnr,tools`): without them
+  isort guessed first-party packages from its working directory, so `pnr` was third party when
+  run from the root (as prek runs it) and first party from `hardware/pnr`, where 117 files then
+  failed `isort --check`. Re-sorting with the pinned settings changes 130 files under `hardware/`
+  (`pnr` imports get their own block), each only inside one run of imports; the code keys and the
+  results of the 43 re-sorted test files are unchanged. black's own equivalence check passes for
   all 369 (plain `ast.dump` differs in 6, docstring whitespace only). isort's differences are all
   reorderings, splits or merges of imports inside one run of consecutive imports (each run
   compared as a multiset), so no import moved across code, and no file needed
@@ -287,6 +308,12 @@ PR3a); the owner reviews them with the pull request:
   tree. On the tree before and after the format they give the same result per test. Two of the
   `test_src15_merge` checks still fail, as before the format, on Splanc-only files and eight
   tool defaults (PR3c).
+- **What Bazel runs of the new key.** `code_key_test` covers the key, legacy records and both
+  feedback drivers' seed imports on fake records (halving's `_import_seed_runs`, synth_native's
+  `_import_code`), and `test_feedback_signals` is wired as `feedback_signals_test`. The two
+  generation tests (`test_halving_generations`, `test_synth_native_generations`) stay unwired:
+  without Splanc's Mini inputs every one of their tests skips, so they wait for PR3c's fixtures.
+  They pass by hand with the Mini inputs, with new and with legacy stamps.
 
 ## Pinned versions
 

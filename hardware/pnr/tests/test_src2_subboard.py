@@ -13,6 +13,17 @@ PARENT_SRC=dict(path='/parent/0-x.ato',line=7,sha256='abc')
 LOCAL_SRC=dict(path='/sub/0-x.ato',line=7,sha256='abc')
 
 
+import contextlib
+
+
+@contextlib.contextmanager
+def bounded(nb,run):
+    """Drive native_block's pnr.proc seams (subpcb, the evaluation) with a subprocess.run-style fake."""
+    with mock.patch.object(nb.proc,'run_output',lambda cmd,**kw:run(cmd,**kw)), \
+         mock.patch.object(nb.proc,'run_status',lambda cmd,timeout=None,session=True,**kw:(run(cmd,**kw).returncode,False)):
+        yield
+
+
 def comp(ref,address,pads,pos=(5,5)):
     return Component(ref=ref,footprint='fp',pos=pos,rot=0,side='top',courtyard=(1,1),bbox=(1,1),pads=[Pad(n,net,off) for n,net,off in pads],address=address)
 
@@ -111,7 +122,7 @@ class SubBoardTest(unittest.TestCase):
             inputs=Path(d)/'in';inputs.mkdir()
             for n in ('source.kicad_pro','fp-lib-table'):(inputs/n).write_text('x')
             doc={'board':{'outline':{'w':10.0,'h':8.0},'layers':4}}
-            with mock.patch.object(nb.subprocess,'run',run),mock.patch.dict(os.environ,{'PNR_SUBBOARD_APRON_MM':'0.15'}):
+            with bounded(nb,run),mock.patch.dict(os.environ,{'PNR_SUBBOARD_APRON_MM':'0.15'}):
                 rec=nb.evaluate(Path(d)/'round',inputs,doc,g,r,1,1,Path(d))
                 rec2=nb.evaluate(Path(d)/'round2',inputs,doc,g,r,1,1,Path(d),apron=0)
             placed=BoardGraph.from_json((Path(d)/'round/placed.json').read_text())
@@ -134,7 +145,7 @@ class SubBoardTest(unittest.TestCase):
         calls=[]
         def run(cmd,**kw):
             calls.append(cmd);return subprocess.CompletedProcess(cmd,1)
-        with tempfile.TemporaryDirectory() as d,mock.patch.object(nb.subprocess,'run',run),mock.patch.dict(os.environ):
+        with tempfile.TemporaryDirectory() as d,bounded(nb,run),mock.patch.dict(os.environ):
             os.environ.pop('PNR_SUBBOARD_APRON_MM',None)
             d=Path(d);inputs=d/'in';inputs.mkdir()
             for n in ('source.kicad_pro','fp-lib-table'):(inputs/n).write_text('x')

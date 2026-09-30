@@ -32,7 +32,8 @@ def save_board(board,src,dest):
     if table.exists():(dest.parent/'fp-lib-table').write_text(table.read_text().replace('${KIPRJMOD}',str(src.parent.resolve())))
 
 def invoke(cmd,log):
-    with log.open('w') as stream:subprocess.run(cmd,stdout=stream,stderr=stream,check=True)
+    from pnr.proc import run_checked,worker_timeout  # one worker; stays in this process group
+    with log.open('w') as stream:run_checked(cmd,timeout=worker_timeout(cmd),session=False,stdout=stream,stderr=stream)
 
 def drc(path,out,cli):
     from pnr.native_drc import run_drc

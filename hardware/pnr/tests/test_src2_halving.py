@@ -279,6 +279,7 @@ class NativeOneTest(unittest.TestCase):
         self.cand.mkdir(parents=True)
         (self.cand / 'placed.json').write_text('{}')
         self.cmds = []
+        self.bounds = []
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -289,10 +290,29 @@ class NativeOneTest(unittest.TestCase):
         (round_dir / 'evaluation.json').write_text(json.dumps(dict(objective=[0, 1, 2, 3, 4, 5], qualified=False)))
         return mock.Mock(returncode=0)
 
+    def fake_status(self, cmd, timeout=None, session=True, **kwargs):
+        """pnr.proc.run_status, the evaluation's only subprocess seam."""
+        self.bounds.append((timeout, session))
+        return self.fake_run(cmd, **kwargs).returncode, False
+
     def call(self, assemble):
-        with mock.patch.object(halving.subprocess, 'run', self.fake_run):
+        with mock.patch('pnr.proc.run_status', self.fake_status):
             return halving._native_one(self.inputs, self.root / 'c.yaml', self.cand, 'native', 10, 2, {},
                                        self.root, assemble=assemble)
+
+    def test_evaluation_is_time_bounded_in_the_callers_process_group(self):
+        from pnr import proc
+        with mock.patch.dict('os.environ', {'PNR_EVALUATION_TIMEOUT': ''}):
+            rec = self.call(False)
+        self.assertEqual(self.bounds, [(proc.evaluation_timeout(10), False)])
+        self.assertEqual(proc.evaluation_timeout(10), 172800.0)
+        self.assertNotIn('timed_out', rec)
+        with mock.patch.dict('os.environ', {'PNR_EVALUATION_TIMEOUT': '60'}):
+            self.call(False)
+        self.assertEqual(self.bounds[-1], (60.0, False))
+        with mock.patch('pnr.proc.run_status', lambda cmd, **kw: (-9, True)):
+            rec = halving._native_one(self.inputs, self.root / 'c.yaml', self.cand, 'native', 10, 2, {}, self.root)
+        self.assertEqual((rec['exit_code'], rec['timed_out'], rec['status']), (-9, True, 'failed'))
 
     def test_assemble_missing_blocks_fails_without_running(self):
         rec = self.call(True)

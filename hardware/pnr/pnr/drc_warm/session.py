@@ -15,7 +15,8 @@ class DrcSession:
   path=self.directory/'process.json'
   if not path.exists():return
   record=json.loads(path.read_text());pid=record['pid']
-  current=subprocess.run(['ps','-p',str(pid),'-o','command='],capture_output=True,text=True)
+  from pnr.proc import run_output
+  current=run_output(['ps','-p',str(pid),'-o','command='],timeout=30,check=False)
   if current.returncode==0 and current.stdout.strip()==' '.join(record['command']):
    os.kill(pid,signal.SIGTERM)
    (self.directory/'session-closed.json').write_text(json.dumps(dict(pid=pid,closed=time.time())))

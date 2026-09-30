@@ -893,10 +893,17 @@ def main():
             for net_name in args.net: cleanup_cmd += ["--net", net_name]
             for source_file in args.annotation_source:
                 cleanup_cmd += ["--annotation-source", str(source_file)]
+            # The cleanup runs bounded workers in sequence: PNR_PHASE_TIMEOUT
+            # (pnr.proc); it stays in this worker's process group.
+            from pnr.proc import phase_timeout, run_status
             with (args.out_dir / "transaction-cleanup.log").open("w") as log:
-                cleanup_process = subprocess.run(cleanup_cmd, stdout=log, stderr=subprocess.STDOUT)
-            report["cleanup_returncode"] = cleanup_process.returncode
-            if cleanup_process.returncode == 0 and (cleanup / "result.json").exists():
+                cleanup_code, cleanup_timed_out = run_status(
+                    cleanup_cmd, timeout=phase_timeout(), session=False,
+                    stdout=log, stderr=subprocess.STDOUT)
+            report["cleanup_returncode"] = cleanup_code
+            if cleanup_timed_out:
+                report["cleanup_timed_out"] = True
+            if cleanup_code == 0 and (cleanup / "result.json").exists():
                 cleanup_report = json.loads((cleanup / "result.json").read_text())
                 report["transaction_cleanup"] = cleanup_report
                 if cleanup_report.get("accepted") and cleanup_report.get("inputs_unchanged"):

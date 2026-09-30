@@ -77,8 +77,11 @@ def run(a):
     def worker(mode,board,label,*extra):
         report=out/(label+'.json');cmd=[a.kicad_python,'-m','pnr.transaction_cleanup',str(board),'--rules',str(a.rules),'--worker',mode,'--report',str(report),*map(str,extra)]
         for s in a.annotation_source:cmd+=['--annotation-source',str(s)]
-        with (out/(label+'.log')).open('w') as log:p=subprocess.run(cmd,stdout=log,stderr=subprocess.STDOUT)
-        exits.append(dict(mode=mode,returncode=p.returncode));save(out/'worker-exits.json',exits);p.check_returncode();return read(report)
+        from pnr.proc import run_status  # PNR_WORKER_TIMEOUT; stays in this process group
+        with (out/(label+'.log')).open('w') as log:code,timed_out=run_status(cmd,session=False,stdout=log,stderr=subprocess.STDOUT)
+        exits.append(dict(mode=mode,returncode=code,**(dict(timed_out=True) if timed_out else {})));save(out/'worker-exits.json',exits)
+        if code:raise subprocess.CalledProcessError(code,cmd)
+        return read(report)
     def drc(board,name):return run_drc(a.kicad_cli,board,out/(name+'.drc.json'))
     result=dict(accepted=False,source=str(source),source_sha256=initial,baseline_sha256=baseline_hash)
     try:

@@ -12,7 +12,8 @@ def run(board,rules,constraints,out,kicad_python,kicad_cli,iterations=12):
     rules=Path(rules).resolve();board=Path(board).resolve()
     env=dict(os.environ,PYTHONPATH=str(Path(__file__).resolve().parent.parent))
     def invoke(args,name):
-        with (out/name).open('w') as f:subprocess.run(args,env=env,stdout=f,stderr=subprocess.STDOUT,check=True)
+        from pnr.proc import run_checked  # one KiCad worker: PNR_WORKER_TIMEOUT; stays in this process group
+        with (out/name).open('w') as f:run_checked(args,session=False,env=env,stdout=f,stderr=subprocess.STDOUT)
     invoke([kicad_python,'-m','pnr.fixed_copper',str(board),'--export-dir',str(out)],'export.log')
     g=BoardGraph.from_json((out/'placed.json').read_text());policy=json.loads(rules.read_text())
     cc=compile_constraints(yaml.safe_load(Path(constraints).read_text()),g.refs,{c.address:c.ref for c in g.components},{f'{c.address}:{p.name}':p.net for c in g.components for p in c.pads})

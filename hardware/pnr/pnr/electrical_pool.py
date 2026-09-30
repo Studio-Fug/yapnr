@@ -16,6 +16,8 @@ import subprocess
 import sys
 import time
 
+from pnr import proc
+
 
 def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -144,9 +146,12 @@ def main(argv=None):
              data=dict(phase='full electrical finalist', native_seconds=a.seconds,
                        route_workers=a.route_workers, provisional=True))
         started = time.monotonic()
+        # Bounded (PNR_EVALUATION_TIMEOUT); the child stays in this process group.
         with (folder / 'evaluation.log').open('w') as log:
-            code = subprocess.run(cmd, env=env, stdout=log, stderr=subprocess.STDOUT).returncode
-        (folder / 'process-exit.json').write_text(json.dumps(dict(returncode=code, seconds=time.monotonic()-started)))
+            code, timed_out = proc.run_status(cmd, timeout=proc.evaluation_timeout(a.seconds), session=False,
+                                              env=env, stdout=log, stderr=subprocess.STDOUT)
+        (folder / 'process-exit.json').write_text(json.dumps(dict(
+            returncode=code, seconds=time.monotonic()-started, **(dict(timed_out=True) if timed_out else {}))))
         if code:
             raise RuntimeError(f'full electrical candidate exited{code}')
         return dict(validate_evaluation(folder), completed=True, validated=True)

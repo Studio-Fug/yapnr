@@ -47,7 +47,8 @@ class RepairBudget:
 def run(board,rules,target,out,*,native_python,cli,adapter,sources=(),seconds=40,focus=None):
  out=Path(out);out.mkdir(exist_ok=False);board=Path(board);rules=Path(rules);result=dict(accepted=False,status='not_run',source=str(board),target=target);started=time.monotonic()
  def invoke(cmd,label):
-  with (out/(label+'.log')).open('w') as f:subprocess.run(list(map(str,cmd)),stdout=f,stderr=subprocess.STDOUT,check=True)
+  from pnr.proc import run_checked,worker_timeout  # one worker; stays in this process group
+  with (out/(label+'.log')).open('w') as f:run_checked(list(map(str,cmd)),timeout=worker_timeout(cmd),session=False,stdout=f,stderr=subprocess.STDOUT)
  def finish(status):
   result.update(status=status,elapsed_seconds=time.monotonic()-started);(out/'result.json').write_text(json.dumps(result,indent=2));return result
  if target.get('mode','signal')!='signal':return finish('protected_target')

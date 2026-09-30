@@ -9,7 +9,8 @@ from pnr.profile import span
 def main():
  ap=argparse.ArgumentParser();ap.add_argument('board',type=Path);ap.add_argument('--rules',required=True,type=Path);ap.add_argument('--out-dir',required=True,type=Path);ap.add_argument('--limit',type=int,default=8);ap.add_argument('--cli',default=os.environ.get('PNR_KICAD_CLI','/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli'));a=ap.parse_args();a.out_dir.mkdir(parents=True,exist_ok=False);env=dict(os.environ,PYTHONPATH=str(Path(__file__).resolve().parent.parent));current=a.board.resolve();events=[]
  def run(module,args,log):
-  with log.open('w') as out:subprocess.run([sys.executable,'-m','pnr.profile','--label',module,'--module',module,*map(str,args)],env=env,stdout=out,stderr=subprocess.STDOUT,check=True)
+  from pnr.proc import run_checked  # one KiCad worker: PNR_WORKER_TIMEOUT; stays in this process group
+  with log.open('w') as out:run_checked([sys.executable,'-m','pnr.profile','--label',module,'--module',module,*map(str,args)],session=False,env=env,stdout=out,stderr=subprocess.STDOUT)
  with span('native_drc_initial'):before=run_drc(a.cli,current,a.out_dir/'initial.drc.json')
  run('pnr.geometric_native',[current,'--rules',a.rules,'--out',a.out_dir/'inventory.json','--inventory'],a.out_dir/'inventory.log');jobs=json.loads((a.out_dir/'inventory.json').read_text())[:a.limit]
  for i,job in enumerate(jobs):

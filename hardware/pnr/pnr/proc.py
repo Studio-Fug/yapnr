@@ -1,8 +1,24 @@
 """Headless subprocess runner with a hard wall-clock limit (stdlib only).
 
-Workers run in their own process group; on timeout the whole group is killed so a
-wedged child (or grandchild) can never stall an evaluation. PNR_WORKER_TIMEOUT
-(seconds, default 1800) sets the limit.
+Every child process of the engine goes through this module (AGENTS.md: a
+subprocess without a timeout is a bug). The limits, in seconds, are generous
+wedge guards: they end a hung child and never bind a healthy one.
+
+- ``PNR_WORKER_TIMEOUT`` (default 1800): one KiCad worker or tool process, the
+  default of every function here. Read once, at import. A worker given its own
+  search budget gets at least twice that plus 600 s (:func:`worker_timeout`).
+- ``PNR_PHASE_TIMEOUT`` (default 14400, :func:`phase_timeout`): a phase that
+  itself runs bounded workers in sequence (a ``pnr.full_iteration`` phase, the
+  transaction cleanup of the regional adapter).
+- ``PNR_EVALUATION_TIMEOUT`` (default max(172800, 48 x the native budget),
+  :func:`evaluation_timeout`): one whole ``pnr.full_iteration`` evaluation.
+
+By default a child runs in its own process group (``session=True``) and the whole
+group is killed on timeout, so a wedged child (or grandchild) can never stall an
+evaluation. ``session=False`` keeps the child in the caller's process group, as a
+plain ``subprocess.run`` does, so stopping the caller's group still stops it; on
+timeout only the child itself is killed (its own workers are bounded by their own
+deadlines). Use it only with file or null output, never with pipes.
 """
 import os
 import signal
@@ -11,7 +27,68 @@ import subprocess
 TIMEOUT = float(os.environ.get('PNR_WORKER_TIMEOUT', '1800'))
 
 
-def run_status(cmd, timeout=None, **kwargs):
+class DeadlineExceeded(subprocess.CalledProcessError):
+    """A child killed at its deadline; ``returncode`` is -9, as :func:`run` reports it."""
+
+    def __init__(self, cmd, timeout, output=None, stderr=None):
+        super().__init__(-9, cmd, output, stderr)
+        self.timeout = timeout
+
+    def __str__(self):
+        return 'Command %r killed after its %g s deadline' % (self.cmd, self.timeout)
+
+
+def worker_timeout(cmd=()):
+    """The deadline of one worker: PNR_WORKER_TIMEOUT, or 2 x its own budget + 600 s if longer.
+
+    The budget is the value after ``--seconds`` or ``--max-seconds`` in ``cmd``
+    (the larger if both); without one it is PNR_WORKER_TIMEOUT.
+    """
+    args = [str(arg) for arg in cmd]
+    budget = 0.0
+    for flag in ('--seconds', '--max-seconds'):
+        if flag in args[:-1]:
+            try:
+                budget = max(budget, float(args[args.index(flag) + 1]))
+            except ValueError:
+                pass
+    return max(TIMEOUT, 2.0 * budget + 600.0)
+
+
+def phase_timeout():
+    """PNR_PHASE_TIMEOUT (seconds, default 14400 = 4 h) for a sequence of bounded workers."""
+    return float(os.environ.get('PNR_PHASE_TIMEOUT', '14400'))
+
+
+def evaluation_timeout(budget_seconds):
+    """PNR_EVALUATION_TIMEOUT (seconds), else max(48 h, 48 x ``budget_seconds``).
+
+    Bounds one ``pnr.full_iteration`` child whose native phases get ``budget_seconds``.
+    Its wall time is far above that budget on a loaded machine (the hierarchical
+    runs H2 to H7: up to 18.3 h for a 5400 s deep budget, 12x, and 6.9 h for a
+    900 s native budget, 28x), so this is a wedge guard, not a budget.
+    """
+    value = os.environ.get('PNR_EVALUATION_TIMEOUT')
+    if value:
+        return float(value)
+    return max(172800.0, 48.0 * float(budget_seconds))
+
+
+def _limit(timeout):
+    return TIMEOUT if timeout is None else timeout
+
+
+def _kill(proc, session):
+    try:
+        if session:
+            os.killpg(proc.pid, signal.SIGKILL)
+        else:
+            proc.kill()
+    except ProcessLookupError:
+        pass
+
+
+def run_status(cmd, timeout=None, session=True, **kwargs):
     """Run ``cmd``; return ``(exit code, timed_out)``.
 
     ``timed_out`` is True only when this function killed the process group on its
@@ -19,14 +96,11 @@ def run_status(cmd, timeout=None, **kwargs):
     elsewhere (e.g. the out-of-memory killer) also exits -9, but with
     ``timed_out`` False, so callers can tell the two apart.
     """
-    proc = subprocess.Popen(cmd, start_new_session=True, **kwargs)
+    proc = subprocess.Popen(cmd, start_new_session=session, **kwargs)
     try:
-        return proc.wait(timeout=TIMEOUT if timeout is None else timeout), False
+        return proc.wait(timeout=_limit(timeout)), False
     except subprocess.TimeoutExpired:
-        try:
-            os.killpg(proc.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+        _kill(proc, session)
         proc.wait()
         return -9, True
 
@@ -34,3 +108,43 @@ def run_status(cmd, timeout=None, **kwargs):
 def run(cmd, timeout=None, **kwargs):
     """Run ``cmd``; return its exit code, or -9 after killing it on timeout."""
     return run_status(cmd, timeout=timeout, **kwargs)[0]
+
+
+def run_checked(cmd, timeout=None, **kwargs):
+    """``subprocess.run(cmd, check=True)`` under a deadline.
+
+    Raises :class:`subprocess.CalledProcessError` on a non-zero exit, and its
+    subclass :class:`DeadlineExceeded` (returncode -9) on timeout, so callers that
+    treat a failed worker as a rejected transaction keep doing so.
+    """
+    code, timed_out = run_status(cmd, timeout=timeout, **kwargs)
+    if timed_out:
+        raise DeadlineExceeded(cmd, _limit(timeout))
+    if code:
+        raise subprocess.CalledProcessError(code, cmd)
+    return code
+
+
+def run_output(cmd, timeout=None, check=True, capture_output=True, text=True, **kwargs):
+    """``subprocess.run(cmd, capture_output=True, text=True, check=True)`` under a deadline.
+
+    Returns the :class:`subprocess.CompletedProcess` (returncode -9 on timeout,
+    with the output read so far). Always a new process group, which is killed as
+    a whole, so no grandchild can hold the pipes open.
+    """
+    if capture_output:
+        kwargs['stdout'] = kwargs['stderr'] = subprocess.PIPE
+    proc = subprocess.Popen(cmd, start_new_session=True, text=text, **kwargs)
+    limit = _limit(timeout)
+    try:
+        out, err = proc.communicate(timeout=limit)
+        code, timed_out = proc.returncode, False
+    except subprocess.TimeoutExpired:
+        _kill(proc, True)
+        out, err = proc.communicate()
+        code, timed_out = -9, True
+    if check and timed_out:
+        raise DeadlineExceeded(cmd, limit, out, err)
+    if check and code:
+        raise subprocess.CalledProcessError(code, cmd, out, err)
+    return subprocess.CompletedProcess(cmd, code, out, err)

@@ -560,6 +560,17 @@ py_test(
     deps = [":pnr"],
 )
 
+# Every engine subprocess is time-bounded (pnr.proc): runner behaviour and a
+# source scan of the engine, its regression scripts and the regional worker.
+py_test(
+    name = "proc_test",
+    size = "small",
+    srcs = ["tests/test_proc.py"],
+    data = glob(["pnr/**/*.py", "regression/*.py"]) + ["//hardware/tools:keyhole_region.py"],
+    main = "tests/test_proc.py",
+    deps = [":pnr"],
+)
+
 # The board.Remove audit: discarded KiCad items are deleted (board.Delete). The
 # source scan needs no KiCad; the native cases run under KiCad's Python only.
 py_test(

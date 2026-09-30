@@ -56,8 +56,10 @@ def main():
     from pnr.live import emit
     def run(args,name):
         emit('phase_start',data=dict(phase=name))
+        # A phase runs bounded workers in sequence: PNR_PHASE_TIMEOUT; stays in this process group.
+        from pnr.proc import run_checked,phase_timeout
         with (work/(name+'.log')).open('w') as log:
-            subprocess.run([a.python,'-m','pnr.profile','--label',name,'--module',*map(str,args)],env=env,stdout=log,stderr=subprocess.STDOUT,check=True)
+            run_checked([a.python,'-m','pnr.profile','--label',name,'--module',*map(str,args)],timeout=phase_timeout(),session=False,env=env,stdout=log,stderr=subprocess.STDOUT)
     # The production order reserves pair/power corridors before ordinary signals.
     # Rebuild from the candidate placement, not a previously filled signal board.
     run(['pnr.writeback',p/'source.kicad_pcb',p/'placed.json','--out',board,'--rules',rules],'placement')

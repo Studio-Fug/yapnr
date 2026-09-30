@@ -1,0 +1,639 @@
+{
+"block": "board.converter",
+"width": 33.0,
+"height": 35.75,
+"utilisation": 0.25,
+"aspect": 0.6666666666666666,
+"seed": 1,
+"area": 1179.75,
+"legal": true,
+"layout": {
+"compensation_pole": [
+16.375,
+24.5,
+0.0,
+"top"
+],
+"output_cap6._p": [
+23.25,
+16.875,
+0.0,
+"top"
+],
+"output_cap1._p": [
+18.0,
+26.625,
+0.0,
+"top"
+],
+"ic": [
+12.625,
+16.125,
+180.0,
+"top"
+],
+"current_limit._p": [
+23.75,
+14.125,
+270.0,
+"top"
+],
+"vcc_dec._p": [
+14.0,
+19.875,
+180.0,
+"top"
+],
+"low_fet": [
+14.875,
+7.875,
+180.0,
+"top"
+],
+"fb_bottom._p": [
+14.5,
+27.875,
+90.0,
+"top"
+],
+"output_cap7._p": [
+11.875,
+27.75,
+90.0,
+"top"
+],
+"output_cap5._p": [
+14.125,
+24.5,
+90.0,
+"top"
+],
+"mode": [
+16.375,
+21.75,
+0.0,
+"top"
+],
+"output_cap2._p": [
+6.625,
+26.5,
+90.0,
+"top"
+],
+"inductor": [
+6.0,
+7.125,
+90.0,
+"top"
+],
+"output_cap0._p": [
+8.875,
+27.5,
+90.0,
+"top"
+],
+"input_cap0": [
+23.0,
+21.625,
+0.0,
+"top"
+],
+"compensation_a._p": [
+8.875,
+21.75,
+0.0,
+"top"
+],
+"bootstrap1._p": [
+9.5,
+19.625,
+270.0,
+"top"
+],
+"shunt._p": [
+4.5,
+17.875,
+180.0,
+"top"
+],
+"input_cap1": [
+19.0,
+14.375,
+180.0,
+"top"
+],
+"enable_bottom._p": [
+17.375,
+20.25,
+0.0,
+"top"
+],
+"output_cap3._p": [
+5.25,
+22.875,
+180.0,
+"top"
+],
+"enable_top._p": [
+19.375,
+18.75,
+180.0,
+"top"
+],
+"frequency1._p": [
+23.875,
+18.75,
+0.0,
+"top"
+],
+"output_cap4._p": [
+5.5,
+20.375,
+180.0,
+"top"
+],
+"fb_top._p": [
+18.75,
+24.375,
+90.0,
+"top"
+],
+"high_fet": [
+21.125,
+8.5,
+0.0,
+"top"
+],
+"compensation_r._p": [
+2.125,
+21.0,
+180.0,
+"top"
+],
+"compensation_b._p": [
+20.625,
+24.5,
+0.0,
+"top"
+],
+"bootstrap2._p": [
+11.0,
+20.625,
+90.0,
+"top"
+],
+"frequency2._p": [
+8.0,
+18.125,
+90.0,
+"top"
+],
+"output_hf._p": [
+8.75,
+14.875,
+270.0,
+"top"
+],
+"input_hf._p": [
+17.25,
+17.875,
+90.0,
+"top"
+],
+"pg_pullup._p": [
+10.125,
+23.625,
+0.0,
+"top"
+]
+},
+"port_debt_mm": 458.4550000000001,
+"power_quality": {
+"schema": "pnr-power-quality-place-v1",
+"q_place": 758.969892582061,
+"J1": 758.969892582061,
+"J2": 56.63921928679084,
+"J3": 189.9770676020721,
+"loops": [
+{
+"labels": [
+"C22|C17|C23|C21|C18|C16|C19|C20|C24",
+"U5"
+],
+"nets": [
+"lv",
+"board.converter-1-3"
+],
+"hot": true,
+"weight": 4.6875,
+"parts": [
+"C24",
+"U5"
+],
+"perimeter_mm": 11.294169548517507,
+"area_mm2": 0.8562649999999863,
+"hull_area_mm2": 2.4608950000000007,
+"gaps_mm": 8.154353518751098,
+"link_gaps_mm": [
+4.795198118951916,
+3.3591553997991825
+],
+"spans_mm": 2.566041714443773,
+"polygon": [
+[
+8.75,
+15.295
+],
+[
+8.75,
+14.455
+],
+[
+13.393,
+17.151
+],
+[
+12.005,
+16.125
+]
+]
+},
+{
+"labels": [
+"U5",
+"Q2",
+"L2"
+],
+"nets": [
+"lv",
+"board.converter-1",
+"board.converter-2"
+],
+"hot": false,
+"weight": 0.0,
+"parts": [
+"U5",
+"Q2",
+"L2"
+],
+"perimeter_mm": 40.204894647481346,
+"area_mm2": 95.80125666666665,
+"hull_area_mm2": 97.56788166666664,
+"gaps_mm": 20.664564904770593,
+"link_gaps_mm": [
+5.373862670370354,
+7.419671488684656,
+7.871030745715583
+],
+"spans_mm": 16.322071460356504,
+"polygon": [
+[
+12.625,
+16.125
+],
+[
+13.393,
+17.151
+],
+[
+15.511666666666665,
+10.845
+],
+[
+14.877,
+5.340999999999999
+],
+[
+6.0,
+2.375
+],
+[
+6.0,
+11.875
+]
+]
+},
+{
+"labels": [
+"Q2",
+"C13|C14|C15",
+"Q1"
+],
+"nets": [
+"lv",
+"negotiated-hv",
+"board.converter-1"
+],
+"hot": true,
+"weight": 7.5,
+"parts": [
+"Q2",
+"C14",
+"Q1"
+],
+"perimeter_mm": 27.266768654530843,
+"area_mm2": 45.80162749999999,
+"hull_area_mm2": 45.801627499999995,
+"gaps_mm": 9.000543790767729,
+"link_gaps_mm": [
+3.5849023696608526,
+2.9065529412002795,
+2.5090884799065973
+],
+"spans_mm": 14.260941797117752,
+"polygon": [
+[
+14.877,
+5.340999999999999
+],
+[
+15.511666666666665,
+10.845
+],
+[
+17.41,
+14.375
+],
+[
+20.59,
+14.375
+],
+[
+21.123,
+11.034
+],
+[
+20.488333333333333,
+5.5299999999999985
+]
+]
+}
+],
+"hot_loop_perimeter_mm": 38.56093820304835,
+"hot_loop_area_mm2": 46.657892499999974,
+"hot_loop_hull_area_mm2": 48.262522499999996,
+"crossings": 1,
+"power_mst_mm": 75.48461226530722,
+"series": {
+"parts": [
+"Q1",
+"L2",
+"U5",
+"R13"
+],
+"links": [
+{
+"net": "board.converter-1",
+"a": "Q1",
+"b": "L2",
+"gap_mm": 13.586399449449438
+},
+{
+"net": "board.converter-2",
+"a": "L2",
+"b": "U5",
+"gap_mm": 7.871030745715583
+},
+{
+"net": "board.converter-1-3",
+"a": "U5",
+"b": "R13",
+"gap_mm": 6.274003905003567
+}
+],
+"gaps_mm": 27.73143410016859
+},
+"stage_len": {
+"ctrl_sense": 56.252784802330766,
+"passive": 185.6417870486996
+},
+"power_part_spread": {
+"rms_mm": 9.122608943971931,
+"bbox_area_mm2": 386.71875
+},
+"hard_group_diagnostic": [
+{
+"anchor": "U5",
+"member": "C15",
+"radius_mm": 5.0,
+"member_power_nets": [
+"negotiated-hv"
+],
+"anchor_current_a": {
+"negotiated-hv": 0.1
+},
+"constraint": null,
+"finding": "hard group ties a hot-loop part to an anchor that carries none of its power current; the radius caps how compact the power stage can be"
+},
+{
+"anchor": "U5",
+"member": "Q2",
+"radius_mm": 12.0,
+"member_power_nets": [
+"board.converter-1"
+],
+"anchor_current_a": {
+"board.converter-1": 0.2
+},
+"constraint": null,
+"finding": "hard group ties a hot-loop part to an anchor that carries none of its power current; the radius caps how compact the power stage can be"
+},
+{
+"anchor": "U5",
+"member": "Q1",
+"radius_mm": 12.0,
+"member_power_nets": [
+"board.converter-1",
+"negotiated-hv"
+],
+"anchor_current_a": {
+"board.converter-1": 0.2,
+"negotiated-hv": 0.1
+},
+"constraint": null,
+"finding": "hard group ties a hot-loop part to an anchor that carries none of its power current; the radius caps how compact the power stage can be"
+},
+{
+"anchor": "U5",
+"member": "C13",
+"radius_mm": 12.0,
+"member_power_nets": [
+"negotiated-hv"
+],
+"anchor_current_a": {
+"negotiated-hv": 0.1
+},
+"constraint": null,
+"finding": "hard group ties a hot-loop part to an anchor that carries none of its power current; the radius caps how compact the power stage can be"
+},
+{
+"anchor": "U5",
+"member": "C14",
+"radius_mm": 12.0,
+"member_power_nets": [
+"negotiated-hv"
+],
+"anchor_current_a": {
+"negotiated-hv": 0.1
+},
+"constraint": null,
+"finding": "hard group ties a hot-loop part to an anchor that carries none of its power current; the radius caps how compact the power stage can be"
+},
+{
+"anchor": "U5",
+"member": "C15",
+"radius_mm": 12.0,
+"member_power_nets": [
+"negotiated-hv"
+],
+"anchor_current_a": {
+"negotiated-hv": 0.1
+},
+"constraint": null,
+"finding": "hard group ties a hot-loop part to an anchor that carries none of its power current; the radius caps how compact the power stage can be"
+}
+],
+"placer": {
+"start": 6,
+"stars": {
+"1": 719.819580078125,
+"2": 54.71452331542969,
+"3": 155.0441436767578
+},
+"j1_continuous": 722.6908923762594,
+"j1_legal": 758.969892582061,
+"hot_continuous": 87.19178671304076,
+"hot_legal": 97.99170277325896,
+"loop_ratio": 1.376562859766961,
+"retried": true,
+"retry_reason": "hot loop grew 1.377x in legalization",
+"attempts": [
+{
+"start": 6,
+"legal": true,
+"error": null,
+"j1_continuous": 722.6908923762594,
+"j1_legal": 758.969892582061,
+"hot_continuous": 87.19178671304076,
+"hot_legal": 97.99170277325896,
+"loop_ratio": 1.376562859766961,
+"loops": {
+"loop:C22|C17|C23|C21|C18|C16|C19|C20|C24>U5": [
+5.5709234213889145,
+7.668726276489867
+],
+"loop:Q2>C13|C14|C15>Q1": [
+8.143744423370697,
+8.272606446961696
+]
+}
+},
+{
+"start": 4,
+"legal": true,
+"error": null,
+"j1_continuous": 789.4650152076742,
+"j1_legal": 842.1713127620189,
+"hot_continuous": 180.8159690122655,
+"hot_legal": 191.55935369483424,
+"loop_ratio": 1.0744734352269647,
+"loops": {
+"loop:C22|C17|C23|C21|C18|C16|C19|C20|C24>U5": [
+4.835880818615798,
+4.615203785144
+],
+"loop:Q2>C13|C14|C15>Q1": [
+21.086370356667192,
+22.656744793596236
+]
+}
+}
+],
+"chosen": 0,
+"starts": [
+{
+"start": 0,
+"F1": 1158.5703125,
+"J1": 939.0130615234375
+},
+{
+"start": 1,
+"F1": 1220.2767333984375,
+"J1": 912.610107421875
+},
+{
+"start": 2,
+"F1": 2303.478515625,
+"J1": 989.24755859375
+},
+{
+"start": 3,
+"F1": 1081.1590576171875,
+"J1": 913.0234375
+},
+{
+"start": 4,
+"F1": 1019.1771240234375,
+"J1": 782.1583251953125
+},
+{
+"start": 5,
+"F1": 1747.9644775390625,
+"J1": 952.9208984375
+},
+{
+"start": 6,
+"F1": 903.1105346679688,
+"J1": 719.819580078125
+},
+{
+"start": 7,
+"F1": 1157.390380859375,
+"J1": 834.5580444335938
+}
+],
+"steps": [
+240,
+120,
+440
+]
+},
+"q_ref": 735.4170622126072,
+"q_band": 20
+},
+"place_seconds": 2.222360458050389,
+"stage": "native",
+"repeat": 0,
+"instances": [
+{
+"exit_code": 0,
+"seconds": 608.3189199999906,
+"apron_mm": 0.3,
+"status": "ok",
+"objective": [
+0,
+0,
+0,
+66,
+0,
+4
+],
+"opens": 4,
+"violations": 0,
+"subwidth": 66,
+"hot_loops_open": 0,
+"instance": "board.converter",
+"dir": "rounds/noshove-s1-33x35.75"
+}
+],
+"status": "ok",
+"objective": [
+0,
+0,
+0,
+66,
+0,
+4
+],
+"hot_loops_open": 0
+}

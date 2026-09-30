@@ -1,0 +1,12 @@
+{
+ "board": "output/hier/runs/h6-hier/cand/p027/native/electrical/board.kicad_pcb",
+ "board_sha256": "5f425ec109450fb432569f3c24bf6a6861198e663390248e9f0ebd2e73595935",
+ "board_bytes": 1546402,
+ "note": "Board (1.5 MB) not frozen; referenced by path in the opt-in live test (PNR_SI_LIVE=1, PNR_SI_E2E_BOARD overrides).",
+ "files": {
+  "p027-led-dump.json": "python -m pnr.si.extract dump (headless KiCad 10.0.6 pcbnew) of the four LED data nets: board.led0-B, data_out, board.led1-B, board.led1-data_out",
+  "p027-led-components.json": "U9/R21/CN1 (led0), U12/R26/CN2 (led1), TP1 (EOL test pads) from runs/h6-hier/cand/p027/native/placed.json",
+  "p027-si.ato": "annotation fixture"
+ },
+ "created": "2026-09-29"
+}

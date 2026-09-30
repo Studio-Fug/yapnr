@@ -43,6 +43,23 @@ torch.set_num_threads(1)
 ANGLES = (0.0, 90.0, 180.0, 270.0)
 
 
+PAIR_EPS2 = 0.01   # mm^2 inside the pad-pair distance sqrt (smooth at zero)
+
+
+def pair_tensors(pair_weights, pin_key):
+    """(a, b, w) index/weight tensors of the positive pad pairs present in
+    ``pin_key`` ({(ref, pad): pin index}), or None when there are none."""
+    if not pair_weights:
+        return None
+    rows = sorted((pin_key[(ra, pa)], pin_key[(rb, pb)], float(w))
+                  for (ra, pa, rb, pb), w in pair_weights.items()
+                  if ra != rb and float(w) > 0 and (ra, pa) in pin_key and (rb, pb) in pin_key)
+    if not rows:
+        return None
+    return (torch.tensor([r[0] for r in rows], dtype=torch.long), torch.tensor([r[1] for r in rows], dtype=torch.long),
+            torch.tensor([r[2] for r in rows], dtype=torch.float32))
+
+
 def _base_half_sizes(graph: BoardGraph) -> torch.Tensor:
     """Unrotated courtyard half-(w, h) per component (parts ingest at rot 0)."""
     hs = [(c.courtyard[0] / 2.0, c.courtyard[1] / 2.0) for c in graph.components]
@@ -70,6 +87,7 @@ def global_place(
     w_plane_sep: float = 0.35,
     initial_positions: Optional[Dict[str, Tuple[float, float]]] = None,
     initial_rotations: Optional[Dict[str, float]] = None,
+    pair_weights: Optional[Dict[Tuple[str, str, str, str], float]] = None,
 ) -> Tuple[Dict[str, Tuple[float, float]], Dict[str, float]]:
     """Optimize continuous centres (+ orientation); return positions and angles.
 
@@ -78,6 +96,10 @@ def global_place(
     spreading term*, so a component the router found in a congested region is
     pushed into lower-density space on the next placement round. Wirelength and
     the reported courtyard are unaffected.
+
+    ``pair_weights`` ({(ref_a, pad_a, ref_b, pad_b): w}) adds
+    ``sum w * sqrt(dx^2 + dy^2 + PAIR_EPS2)`` over those pad pairs (expected
+    rotated pin offsets) beside the wirelength term; None skips it entirely.
 
     Returns ``({ref: (x, y)}, {ref: angle_deg})`` for every component (angle is
     the arg-max of the relaxed rotation distribution, a legal 0/90/180/270)."""
@@ -104,6 +126,11 @@ def global_place(
     # Courtyard half-size per candidate angle: swap w/h at 90/270.
     swapped = half[:, [1, 0]]
     half4 = torch.stack([half, swapped, half, swapped], dim=1)  # (n, 4, 2)
+    # Block macros with per-side hulls (PNR_MACRO_HULL=1): overlap over per-side
+    # bodies instead of whole courtyards; None (the unchanged path) otherwise.
+    from .hull import gp_bodies, gp_overlap
+    bodies = gp_bodies(comps, [max(1.0, spread, float((inflation or {}).get(c.ref, 1.0))) for c in comps]
+                       if (inflation or spread > 1.0) else None)
 
     poses = resolve_fixed_poses(graph, constraints)
     is_fixed = torch.zeros(n, dtype=torch.bool)
@@ -119,6 +146,13 @@ def global_place(
             is_fixed[idx[ref]] = True
             fixed_xy[idx[ref]] = torch.tensor([px, py])
             fixed_angle_idx[idx[ref]] = int(round(fixed_rot.get(ref, 0.0) / 90.0)) % 4
+
+    from .geometry import resolve_hard_rotations
+    rotation_fixed = is_fixed.clone()
+    for ref, angle in resolve_hard_rotations(constraints).items():
+        if ref in idx:
+            rotation_fixed[idx[ref]] = True
+            fixed_angle_idx[idx[ref]] = int(round(angle/90)) % 4
 
     # Init movable positions spread across the interior (seeded, deterministic).
     init = torch.rand(n, 2)
@@ -158,7 +192,7 @@ def global_place(
             raw[:, 0] = 1.0
         else:
             raw = torch.softmax(rot_logits / temp, dim=1)
-        return torch.where(is_fixed.unsqueeze(1), fixed_onehot, raw)
+        return torch.where(rotation_fixed.unsqueeze(1), fixed_onehot, raw)
 
     # Pins: component index + the four rotated offsets (rot 0/90/180/270).
     pin_comp: List[int] = []
@@ -179,6 +213,7 @@ def global_place(
     pin_off4_t = torch.tensor(pin_off4, dtype=torch.float32)  # (P, 4, 2)
     net_pin_idx = [[pin_key[p] for p in net.pins if p in pin_key] for net in graph.nets]
     net_pin_idx = [pins for pins in net_pin_idx if len(pins) >= 2]
+    pairs = pair_tensors(pair_weights, pin_key)
     batched_wl = None
     if os.environ.get("PNR_BATCHED_WIRELENGTH") == "1":
         from .batched_cost import BucketedWirelength
@@ -265,13 +300,16 @@ def global_place(
         hw, hh = exp_half[:, 0], exp_half[:, 1]
 
         # Pairwise smooth overlap (spreading), upper triangle only.
-        dx = (pos[:, 0].unsqueeze(1) - pos[:, 0].unsqueeze(0)).abs()
-        dy = (pos[:, 1].unsqueeze(1) - pos[:, 1].unsqueeze(0)).abs()
-        sw = hw.unsqueeze(1) + hw.unsqueeze(0) + clearance
-        sh = hh.unsqueeze(1) + hh.unsqueeze(0) + clearance
-        ox = torch.clamp(sw - dx, min=0.0)
-        oy = torch.clamp(sh - dy, min=0.0)
-        overlap = torch.triu(ox * oy * side_overlap, diagonal=1).sum()
+        if bodies is None:
+            dx = (pos[:, 0].unsqueeze(1) - pos[:, 0].unsqueeze(0)).abs()
+            dy = (pos[:, 1].unsqueeze(1) - pos[:, 1].unsqueeze(0)).abs()
+            sw = hw.unsqueeze(1) + hw.unsqueeze(0) + clearance
+            sh = hh.unsqueeze(1) + hh.unsqueeze(0) + clearance
+            ox = torch.clamp(sw - dx, min=0.0)
+            oy = torch.clamp(sh - dy, min=0.0)
+            overlap = torch.triu(ox * oy * side_overlap, diagonal=1).sum()
+        else:
+            overlap = gp_overlap(bodies, pos, p, clearance)
 
         # Outline containment.
         cx, cy = pos[:, 0], pos[:, 1]
@@ -284,6 +322,10 @@ def global_place(
         bound = (bound * movable_f).sum()
 
         loss = wl + w_spread * overlap + w_bound * bound
+        if pairs is not None:
+            pa, pb, pw = pairs
+            loss = loss + (pw * torch.sqrt((pin_x[pa] - pin_x[pb]) ** 2 + (pin_y[pa] - pin_y[pb]) ** 2
+                                           + PAIR_EPS2)).sum()
 
         # Power-plane compactness + inter-domain separation. Each plane net gets a
         # smooth pad bbox; minimise its AREA (compact planes) and penalise overlap
@@ -334,6 +376,9 @@ def global_place(
             )
             loss = loss + w_keep * ((kox * koy) * movable_f.unsqueeze(1)).sum()
 
+        if step == iters-1 and os.environ.get('PNR_COST_CAPTURE_DIR'):
+            from .cost_capture import record_global_loss
+            record_global_loss(graph,constraints,pos.detach().tolist(),p.detach().tolist(),exp_off.detach().tolist(),exp_half.detach().tolist(),float(loss.detach()),dict(gamma=gamma,spread=spread,w_spread=w_spread,w_bound=w_bound,w_keep=w_keep,w_plane=w_plane,w_plane_sep=w_plane_sep),inflation,step)
         loss.backward()
         opt.step()
 

@@ -1,0 +1,70 @@
+* pnr-si-deck-v2 led1_data routed corner=typ cable=1m z0=120
+.include "{DRIVER_LIB}"
+XDRV 0 drv U1.SN74LVC1T45_DBV
+* seg board.led1-B 1.274mm F.Cu
+C1 drv 0 5.40657e-14
+L1 drv n4 4.99819e-10
+C2 n4 0 5.40657e-14
+* via F.Cu-In2.Cu
+C3 n4 0 2.25031e-13
+L2 n4 n5 1.02658e-09
+C4 n5 0 2.25031e-13
+* seg board.led1-B 2.883mm In2.Cu
+C5 n5 0 8.69072e-14
+L3 n5 n6 2.07317e-09
+C6 n6 0 8.69072e-14
+* via In2.Cu-F.Cu
+C7 n6 0 2.25031e-13
+L4 n6 n7 1.02658e-09
+C8 n7 0 2.25031e-13
+* seg board.led1-B 0.800mm F.Cu
+C9 n7 0 3.3951e-14
+L5 n7 n8 3.13865e-10
+C10 n8 0 3.3951e-14
+* land U12.4
+C11 drv 0 1.22208e-13
+* land R26.1
+C12 n8 0 5.69934e-14
+* series R26 YAGEO_RC0402FR_0733RL
+RS0 n8 n9 33
+* series ESL
+L6 n9 n10 4e-10
+* seg board.led1-data_out 2.289mm F.Cu
+C13 n10 0 9.71627e-14
+L7 n10 n11 8.98236e-10
+C14 n11 0 9.71627e-14
+* via F.Cu-In2.Cu
+C15 n11 0 2.25031e-13
+L8 n11 n12 1.02658e-09
+C16 n12 0 2.25031e-13
+* seg board.led1-data_out 6.841mm In2.Cu
+C17 n12 0 2.06243e-13
+L9 n12 conn 4.91992e-09
+C18 conn 0 2.06243e-13
+* land R26.2
+C19 n10 0 5.69934e-14
+* stub at board.led1-data_out
+C20 n10 0 7.48619e-15
+* connector jst-ph
+C21 conn 0 2.5e-13
+L10 conn n13 5e-09
+C22 n13 0 2.5e-13
+* cable awg24-jst-ph 1m Z0=120 nvp=0.68 R(f_ref)=6.35 ohm in 1 segment(s) skin-effect ladder (R_dc + 4 R||L stages, fit 5.0 %)
+RCAB0 n13 cabr0 0.167736
+RSK0_0 cabr0 cabs0_0 0.859155
+LSK0_0 cabr0 cabs0_0 4.55796e-08
+RSK0_1 cabs0_0 cabs0_1 1.94566
+LSK0_1 cabs0_0 cabs0_1 1.03221e-08
+RSK0_2 cabs0_1 cabs0_2 6.81665
+LSK0_2 cabs0_1 cabs0_2 3.61635e-09
+RSK0_3 cabs0_2 cabs0_3 21.3263
+LSK0_3 cabs0_2 cabs0_3 1.1314e-09
+TCAB0 cabs0_3 0 rx 0 Z0=120 TD=4.90535e-09
+* receiver ws2812b-classic
+CRX rx 0 1.5e-11
+DRXH rx vrx DCLAMP
+DRXL 0 rx DCLAMP
+.model DCLAMP D(IS=1e-15 N=1 RS=10 CJO=0)
+VRX vrx 0 5
+.tran 10p 182n 0 25p
+.end

@@ -17,6 +17,21 @@ def objective(drc,entries,electrical):
             len(drc['unconnected_items'])]
 
 
+def si_side_fields(board,rules,work,sources,inventory):
+    """PNR_SI=1: simulate the final board's @pnr-si requirements; evaluation side fields.
+
+    Intents come from the compiled rules (native_loop prepare); without them they are
+    resolved from the annotation sources against the evaluated graph. Never raises.
+    """
+    from pnr.si.report import candidate_side_fields
+    components=None
+    if rules.get('si_intents') is None:
+        from pnr.graph import BoardGraph
+        components=BoardGraph.from_json(json.dumps(inventory['graph'])).components
+    return candidate_side_fields(board,rules,out_dir=work,report_name='si-report.json',waves_dir=work/'si-waves',
+                                 annotation_sources=[str(Path(s).resolve()) for s in sources],components=components)
+
+
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('round',type=Path);ap.add_argument('--constraints',required=True,type=Path)
@@ -25,13 +40,19 @@ def main():
     ap.add_argument('--annotation-source',action='append',default=[])
     ap.add_argument('--seconds',type=int,default=600)
     ap.add_argument('--geometric-relax',action='store_true')
-    ap.add_argument('--python',default='/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3')
-    ap.add_argument('--cli',default='/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli')
+    ap.add_argument('--assemble',type=Path,help='JSON list of routed block boards to copy in after placement')
+    # PNR_KICAD_PYTHON overrides the KiCad python (e.g. the headless bundle's, which
+    # registers no Dock app); unset keeps the old default.
+    ap.add_argument('--python',default=os.environ.get('PNR_KICAD_PYTHON','/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3'))
+    ap.add_argument('--cli',default=os.environ.get('PNR_KICAD_CLI','/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli'))
     a=ap.parse_args();p=a.round.resolve();phases=p/'phases';work=p/'electrical';work.mkdir(exist_ok=False)
     env=dict(os.environ,PYTHONPATH=str(Path(__file__).resolve().parent.parent))
     sources=a.annotation_source or ['hardware/splanc_dev/elec/src/splanc_mini.ato']
     annotations=[v for source in sources for v in ['--annotation-source',str(Path(source).resolve())]]
     rules=p/'rules.json';board=work/'board.kicad_pcb'
+    # One fab profile for the whole round (PNR_FAB_PROFILE; no-op for legacy).
+    from pnr.fab_profile import apply_rules_file
+    apply_rules_file(rules)
     from pnr.live import emit
     def run(args,name):
         emit('phase_start',data=dict(phase=name))
@@ -40,6 +61,9 @@ def main():
     # The production order reserves pair/power corridors before ordinary signals.
     # Rebuild from the candidate placement, not a previously filled signal board.
     run(['pnr.writeback',p/'source.kicad_pcb',p/'placed.json','--out',board,'--rules',rules],'placement')
+    if a.assemble:
+        blocks=[x for b in json.loads(a.assemble.read_text()) for x in ('--block',b)]
+        run(['pnr.hier.assemble',board,*blocks,'--out',board],'assemble')
     table=p/'fp-lib-table'
     if not table.exists():table=Path('output/fresh-pnr-20260919/source-footprint-probe/fp-lib-table')
     shutil.copy2(table,work/'fp-lib-table')
@@ -48,7 +72,10 @@ def main():
     run(['pnr.planes',board,'--rules',rules],'planes')
     capture(phases,'01-plane-access-fill',board,rules,a.cli)
     from pnr.native_loop import main as native
-    final=native([str(board),'--repo',str(Path(__file__).resolve().parents[3]),'--rules',str(rules),'--constraints',str(a.constraints.resolve()),'--out-dir',str(work/'native-loop'),'--kicad-python',a.python,'--kicad-cli',a.cli,'--electrical-fab',a.electrical_fab,'--early-pairs','--early-pair-placement','--route-only','--cycles','12','--route-attempts','40','--placement-attempts','2','--search-seconds','90','--seconds',str(a.seconds),'--phase-dir',str(phases),*annotations])
+    # PNR_SHOVE=1 with PNR_NATIVE_PLACEMENT=1 lets the refinement loop try native
+    # placement moves (the routing-failure signal); otherwise route-only as before.
+    route_only=[] if os.environ.get('PNR_SHOVE')=='1' and os.environ.get('PNR_NATIVE_PLACEMENT')=='1' else ['--route-only']
+    final=native([str(board),'--repo',str(Path(__file__).resolve().parents[3]),'--rules',str(rules),'--constraints',str(a.constraints.resolve()),'--out-dir',str(work/'native-loop'),'--kicad-python',a.python,'--kicad-cli',a.cli,'--electrical-fab',a.electrical_fab,'--early-pairs','--early-pair-placement',*route_only,'--cycles','12','--route-attempts','40','--placement-attempts','2','--search-seconds','90','--seconds',str(a.seconds),'--phase-dir',str(phases),*annotations])
     rules=work/'native-loop/policy/prepare.json'
     run(['pnr.via_coalesce',final,'--out',board,'--rules',rules,'--report',work/'coalesce.json','--work-dir',work/'coalesce','--kicad-cli',a.cli,*annotations],'coalesce')
     capture(phases,'08-coalescing',board,rules,a.cli)
@@ -79,8 +106,19 @@ def main():
     feedback['routing_failure_scores']=native_progress.get('component_scores',{})
     for ref,score in feedback['routing_failure_scores'].items():
         if isinstance(score,(int,float)):feedback['component_scores'][ref]=feedback['component_scores'].get(ref,0)+score
+    if os.environ.get('PNR_SHOVE')=='1':
+        # Make-room transactions of every loop (early phases included): what was
+        # moved, nudged or ripped, and which parts the solver could not move.
+        from pnr.shove.control import feedback_section
+        feedback['shove']=feedback_section(work/'native-loop')
     (p/'feedback.json').write_text(json.dumps(feedback,indent=2))
     result=dict(all_phases_completed=True,score_scope='post-electrical-final-refill',objective=objective(drc,entries,audit),qualified=audit['qualified'],electrical_audit=audit,pad_entry=entries,final=last,feedback=str((p/'feedback.json').resolve()))
+    from pnr.si import enabled as si_enabled
+    if si_enabled():
+        # PNR_SI=1 post-route SI report (electrical/si-report.json): named side fields
+        # only; the 6-value objective vector above is unchanged (hot_loops_open precedent:
+        # si_layout_failures is a rank key after the legality terms in halving/synth_native).
+        result.update(si_side_fields(board,json.loads(rules.read_text()),work,sources,inventory))
     (p/'evaluation.json').write_text(json.dumps(result,indent=2)+'\n')
     emit('candidate_complete',board=board,data=result)
     print(json.dumps(dict(objective=result['objective'],qualified=result['qualified'])))

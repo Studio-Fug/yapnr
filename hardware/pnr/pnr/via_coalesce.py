@@ -11,6 +11,7 @@ from collections import Counter
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -150,8 +151,17 @@ def plan(board, keep, remove, rules):
                         and x.GetNetCode() == t.GetNetCode() and touch(x, guard, la)]
             if not contacts:
                 trims.append(dict(uuid=uid(t), endpoint='start' if a == start else 'end', point=end))
-        # The discarded annulus cannot be evidence for surviving connectivity.
-        if all(uid(t) in connected for t in attached):
+        # A transitive copper connection does not retain a track endpoint's
+        # barrel contact. Native dangling cleanup can otherwise delete that
+        # branch (and then its upstream junctions). Give untrimmed endpoints
+        # ending at the removed barrel a checked bridge to the survivor, even
+        # when they are already reachable through another route on this layer.
+        trimmed = {edit['uuid'] for edit in trims}
+        terminal_ports = [t for t in attached if t.GetClass() == 'PCB_TRACK'
+                          and uid(t) not in trimmed
+                          and any(math.dist(xy(point), start) <= 1e-6
+                                  for point in (t.GetStart(), t.GetEnd()))]
+        if all(uid(t) in connected for t in attached) and not terminal_ports:
             continue
         minimum = rules.get('fab', {}).get('track_width_mm', 0.2)
         width = max([minimum] + [t.GetWidth() / 1e6 for t in attached if t.GetClass() == 'PCB_TRACK'])
@@ -164,6 +174,12 @@ def plan(board, keep, remove, rules):
             paths.insert(0, [start, end])
         foreign = [t for t in tracks + pads if t.GetNetCode() != keep.GetNetCode() and t.IsOnLayer(la)]
         clearance = max(rules.get('default_clearance_mm', 0.2), rules.get('fab', {}).get('clearance_mm', 0.2))
+        # Foreign copper shapes, plus the hole-wall keepout of a via with removed
+        # unused pads (5B in-pad; pnr.via_in_pad.clearance_shapes).
+        from pnr.fab_profile import geometry
+        from pnr.via_in_pad import clearance_shapes
+        hole_clearance = geometry(rules).hole_clearance
+        foreign_shapes = [shape for x in foreign for shape in clearance_shapes(x, la, clearance, hole_clearance)]
         chosen = None
         for path in paths:
             segments = []
@@ -173,7 +189,7 @@ def plan(board, keep, remove, rules):
                 t = pcbnew.PCB_TRACK(board)
                 t.SetStart(vec(a)); t.SetEnd(vec(b)); t.SetLayer(la)
                 t.SetWidth(round(width * 1e6)); t.SetNetCode(keep.GetNetCode())
-                if any(t.GetEffectiveShape(la).Collide(x.GetEffectiveShape(la), round(clearance * 1e6)) for x in foreign):
+                if any(t.GetEffectiveShape(la).Collide(shape, round(clearance * 1e6)) for shape in foreign_shapes):
                     break
                 zones = list(board.Zones()) + [z for f in board.GetFootprints() for z in f.Zones()]
                 if any(z.GetIsRuleArea() and z.IsOnLayer(la) and z.GetDoNotAllowTracks()
@@ -222,7 +238,8 @@ def acceptable(before, after, checks):
 
 def worker(args, rules):
     import pcbnew
-    b = pcbnew.LoadBoard(str(args.board)); b.BuildConnectivity()
+    from pnr.fab_profile import load_board  # custom rules in force for the 'check' refill
+    b = load_board(args.board); b.BuildConnectivity()
     if args.worker == 'inventory':
         pairs, intents = candidates(b, rules, args.annotation_source, args.radius)
         result = dict(pairs=pairs, protected_intents=intents)
@@ -235,7 +252,10 @@ def worker(args, rules):
         requested = json.loads(args.transaction.read_text())
         choices = cycle_candidates(b, rules, args.annotation_source, 2 * args.radius)
         proposal = next((p for p in choices if p['remove_tracks'] == requested['remove_tracks']
-                         and p['net'] == requested['net'] and p['layer'] == requested['layer']), None)
+                         and p['net'] == requested['net'] and p['layer'] == requested['layer']
+                         and json.dumps(p.get('replacement_segments', []), sort_keys=True)
+                             == json.dumps(requested.get('replacement_segments', []), sort_keys=True)
+                         and json.dumps(p['endpoints']) == json.dumps(requested['endpoints'])), None)
         if proposal is None:
             result = dict(skipped='cycle no longer eligible')
         else:
@@ -296,7 +316,7 @@ def main():
     ap.add_argument('--annotation-source', action='append', type=Path, default=[])
     ap.add_argument('--report', required=True, type=Path)
     ap.add_argument('--work-dir', type=Path)
-    ap.add_argument('--kicad-cli', default='kicad-cli')
+    ap.add_argument('--kicad-cli', default=os.environ.get('PNR_KICAD_CLI', 'kicad-cli'))  # PNR_KICAD_CLI (src15)
     ap.add_argument('--radius', type=float, default=1.5)
     ap.add_argument('--max-trials', type=int, default=64)
     ap.add_argument('--worker', choices=['inventory', 'trial', 'check', 'prune', 'cycle-inventory', 'cycle-trial'])
@@ -323,8 +343,16 @@ def main():
     for source in args.annotation_source:
         common += ['--annotation-source', str(source)]
     def run_worker(mode, board, report, extra=()):
-        subprocess.run([sys.executable, '-m', 'pnr.via_coalesce', str(board), '--worker', mode,
-                        '--report', str(report)] + common + list(extra), check=True)
+        cmd = [sys.executable, '-m', 'pnr.via_coalesce', str(board), '--worker', mode,
+               '--report', str(report)] + common + list(extra)
+        # KiCad's python occasionally dies by signal (seen: SIGSEGV); an identical
+        # rerun succeeds, so retry once on a signal exit only.
+        from pnr.proc import run as run_bounded
+        code = run_bounded(cmd)
+        if code < 0:
+            code = run_bounded(cmd)
+        if code:
+            raise subprocess.CalledProcessError(code, cmd)
         return json.loads(report.read_text())
     def drc(board):
         report = board.with_suffix('.drc.json')
@@ -342,8 +370,14 @@ def main():
             continue
         trial = work / ('trial-%03d.kicad_pcb' % len(events))
         edit_path = trial.with_suffix('.edit.json')
-        edit = run_worker('trial', current, edit_path,
-                          ['--out', str(trial), '--keep', pair['keep'], '--remove', pair['remove']])
+        try:
+            edit = run_worker('trial', current, edit_path,
+                              ['--out', str(trial), '--keep', pair['keep'], '--remove', pair['remove']])
+        except subprocess.CalledProcessError as error:
+            # An optional simplification must not abort the evaluation: a trial whose
+            # KiCad worker keeps crashing is simply rejected; the board is unchanged.
+            events.append(dict(pair, accepted=False, worker_error=error.returncode))
+            continue
         event = dict(pair, accepted=False, **edit)
         if not edit.get('skipped'):
             shutil.copyfile(current.with_suffix('.kicad_pro'), trial.with_suffix('.kicad_pro'))
@@ -364,7 +398,11 @@ def main():
                 extra = ['--transaction', str(edit_path)]
                 for identity in sorted(dead):
                     extra += ['--prune', identity]
-                pruning = run_worker('prune', trial, trial.with_suffix('.prune.json'), extra)
+                try:
+                    pruning = run_worker('prune', trial, trial.with_suffix('.prune.json'), extra)
+                except subprocess.CalledProcessError as error:
+                    event['worker_error'] = error.returncode
+                    break
                 if not pruning['removed']:
                     break
                 pruned_vias+=pruning.get('removed_vias',[])
@@ -373,7 +411,7 @@ def main():
                 after = drc(trial)
             event.update(checks=checks, pruned_tracks=pruned, pruned_vias=pruned_vias, opens=len(after['unconnected_items']),
                          violations=dict(Counter(v['type'] for v in after['violations'])),
-                         accepted=bool(acceptable(before, after, checks)))
+                         accepted=bool(acceptable(before, after, checks)) and 'worker_error' not in event)
             if event['accepted']:
                 current, before = trial, after
                 removed.add(pair['remove']);removed.update(pruned_vias)
@@ -386,15 +424,22 @@ def main():
     # Always simplify after coalescence, including boards already coalesced by
     # an earlier run. Each graph proposal is a separate rollback-able transaction.
     cycle_events = []
-    cycle_queue = run_worker('cycle-inventory', current, work / 'cycles.json')['cycles']
+    try:
+        cycle_queue = run_worker('cycle-inventory', current, work / 'cycles.json')['cycles']
+    except subprocess.CalledProcessError:
+        cycle_queue = []
     while cycle_queue and len(events) + len(cycle_events) < args.max_trials:
         proposal = cycle_queue.pop(0)
         trial = work / ('cycle-%03d.kicad_pcb' % len(cycle_events))
         spec = trial.with_suffix('.proposal.json')
         spec.write_text(json.dumps(proposal))
         edit_path = trial.with_suffix('.edit.json')
-        edit = run_worker('cycle-trial', current, edit_path,
-                          ['--out', str(trial), '--transaction', str(spec)])
+        try:
+            edit = run_worker('cycle-trial', current, edit_path,
+                              ['--out', str(trial), '--transaction', str(spec)])
+        except subprocess.CalledProcessError as error:
+            cycle_events.append(dict(proposal, accepted=False, worker_error=error.returncode))
+            continue
         event = dict(proposal, accepted=False)
         if edit.get('skipped'):
             event['skipped'] = edit['skipped']
@@ -407,8 +452,11 @@ def main():
                          accepted=bool(acceptable(before, after, checks)))
             if event['accepted']:
                 current, before = trial, after
-                cycle_queue = run_worker('cycle-inventory', current,
-                                         work / ('cycles-%03d.json' % len(cycle_events)))['cycles']
+                try:
+                    cycle_queue = run_worker('cycle-inventory', current,
+                                             work / ('cycles-%03d.json' % len(cycle_events)))['cycles']
+                except subprocess.CalledProcessError:
+                    cycle_queue = []
         cycle_events.append(event)
         print(json.dumps(event), flush=True)
     args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -419,7 +467,9 @@ def main():
     result = dict(source_sha256=initial_sha, output_sha256=hashlib.sha256(args.out.read_bytes()).hexdigest(),
                   removed_vias=len(removed), before_opens=len(initial['unconnected_items']),
                   after_opens=len(before['unconnected_items']), events=events,
-                  cycle_events=cycle_events, removed_cycle_tracks=sum(len(e['remove_tracks']) for e in cycle_events if e['accepted']),
+                  cycle_events=cycle_events, removed_cycle_tracks=sum(len(e.get('remove_tracks', [])) for e in cycle_events if e['accepted']),
+                  reconstructed_cycle_tracks=sum(len(e.get('replacement_segments', [])) for e in cycle_events if e['accepted']),
+                  removed_cycle_length_mm=sum(e['length_mm'] for e in cycle_events if e['accepted']),
                   candidates=len(inventory['pairs']), trial_limit=args.max_trials,
                   protected_intents=inventory['protected_intents'])
     # Release borrowed track wrappers while their native board is still alive.

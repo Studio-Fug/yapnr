@@ -6,6 +6,9 @@ board-wide stratified/Latin-hypercube starts. Legal candidates are screened by
 width-aware demand and multilayer capacity, with pose diversity retained before
 an equal-budget detailed-routing comparison. Native/electrical validation remains
 downstream: this module chooses a starting placement, never a finished PCB.
+
+PNR_PAIR_LANDING_RESERVE=1 (src13, default off): the prepared source graph (flat
+MC placement and hierarchical_place) carries the diff-pair via landing reserves.
 """
 from __future__ import annotations
 
@@ -21,7 +24,7 @@ from pathlib import Path
 from pnr.constraints import Constraint, Enforcement
 from pnr.graph import BoardGraph, BoardOutline
 from .geometry import (outline_size, resolve_fixed_poses, set_component_side, apply_hard_sides,
-                       placement_rects, courtyard_rect, keepout_rects, hard_group_limits)
+                       placement_rects, courtyard_rect, keepout_rects, hard_group_limits, hard_group_edges, resolve_hard_rotations)
 from .legalize import LegalizationError
 from .metrics import hard_violations, hpwl
 from .placer import PlacementReport, place
@@ -80,6 +83,12 @@ def _prepared_source(graph, constraints, rules=None):
         from pnr.plane_intent import reserve_array_space
         reserve_array_space(source, rules["plane_access_intents"], rules["plane_access_fab"],
                             rules.get("fab", {}).get("edge_clearance_mm", .2))
+    from .pair_landing import enabled as landing_enabled
+    if rules and landing_enabled():
+        # PNR_PAIR_LANDING_RESERVE=1: the prepared source (flat MC placement and
+        # hierarchical_place's block/macro source) carries the pair landing reserves.
+        from .pair_landing import attach
+        attach(source, rules)
     width, height = outline_size(source, constraints)
     source.outline = BoardOutline(width, height)
     return source
@@ -105,7 +114,7 @@ def _opposite_body_basins(graph, constraints):
                 comp.rot=con.params.get('rot') or 0.
     fixed_components=[c for c in fixed_graph.components if c.ref in poses]
     keepouts=keepout_rects(fixed_graph,constraints,poses)
-    groups=hard_group_limits(constraints,poses)
+    groups=hard_group_limits(constraints,{c.ref:c.pos for c in graph.components})
     clearance=constraints.board.default_clearance_mm
     basins=[]
     for moving in sorted(graph.components,key=lambda c:(-len(c.pads),c.ref)):
@@ -289,6 +298,7 @@ def select_initial_placement(graph, constraints, rules, *, config=None, seed=0,
     result. This mode is for initial-placement diagnostics, not PCB acceptance.
     """
     from .capacity_proxy import cheap_score, score
+    from .cost_capture import initial_start_context
     from pnr.route.detail.router import route_board
     config = config or InitialPoolConfig()
     constraints = preserve_source_locks(graph, constraints)
@@ -311,78 +321,82 @@ def select_initial_placement(graph, constraints, rules, *, config=None, seed=0,
         if folder:
             folder.mkdir(exist_ok=True)
             (folder/'start.json').write_text(json.dumps(start, indent=2))
-        t = time.monotonic()
-        try:
-            source_errors = _hard_and_source_errors(source, source, constraints)
-            if start['kind'] == 'source-start' and not source_errors:
-                # Retain an existing legal incumbent exactly, including its chosen
-                # rotations. The optimizer would otherwise erase this baseline.
-                placed = BoardGraph.from_json(source.to_json())
-                prep = PlacementReport(placed.outline.width, placed.outline.height,
-                                       hpwl(source), hpwl(placed))
-                record['kind'] = 'source-incumbent'
-            else:
-                placement_constraints=constraints
-                if start.get('basin_anchors'):
-                    placement_constraints=copy.deepcopy(constraints)
-                    for anchor in start['basin_anchors']:
-                        placement_constraints.constraints.append(Constraint('fixed',Enforcement.HARD,
-                            (anchor['ref'],),{key:anchor[key] for key in ('at','rot','side')}))
-                try:
-                    placed, prep = place(source, placement_constraints, seed=start['seed'], iters=iters,
-                        orient=orient, spread=spread, channel_rules=rules,
-                        initial_positions=start['positions'], initial_rotations=start['rotations'])
-                except LegalizationError as error:
-                    if not start.get('basin_anchors') or not legal:
-                        raise
-                    # A difficult unrelated hard group must not erase a valid
-                    # opposite-side alternative. Reuse the first already-legal
-                    # global arrangement and legalize the new large-scale basin.
-                    # This extra bounded attempt is reported, not called a new
-                    # independent optimized global placement.
-                    from .legalize import legalize
-                    from .channels import ChannelModel
-                    seed_graph=copy.deepcopy(legal[0]['graph'])
-                    poses=resolve_fixed_poses(seed_graph,placement_constraints)
-                    for anchor in start['basin_anchors']:
-                        comp=seed_graph.component(anchor['ref'])
-                        comp.pos=anchor['at'];comp.rot=anchor['rot']
-                    record.update(global_legalization_failure=str(error),
-                                  basin_fallback_from=legal[0]['id'],
-                                  method='global_start_then_legal_incumbent_basin')
-                    placed=legalize(seed_graph,source.outline.width,source.outline.height,
-                        fixed=poses,keepouts=keepout_rects(seed_graph,placement_constraints,poses),
-                        group_limits=hard_group_limits(placement_constraints,poses),
-                        clearance=placement_constraints.board.default_clearance_mm,grid_mm=.25,
-                        allow_rotation=orient,channel_model=ChannelModel(seed_graph,rules),
-                        spread=min(spread,1.3))
-                    prep=PlacementReport(placed.outline.width,placed.outline.height,
-                        hpwl(source),hpwl(placed),**hard_violations(placed,constraints))
-            errors = _hard_and_source_errors(placed, source, constraints)
-            if errors or not prep.legal:
-                record.update(status='rejected_hard_constraints', errors=errors)
-                continue
-            identity = json.dumps(_pose(placed), sort_keys=True)
-            record.update(placement_seconds=time.monotonic()-t, poses=_pose(placed),
-                          hpwl_mm=hpwl(placed), cheap_score=cheap_score(placed,rules))
-            if identity in seen:
-                record.update(status='duplicate', duplicate_of=seen[identity])
-                continue
-            seen[identity] = start['id']
-            record['status'] = 'legal'
-            entry = dict(id=start['id'], graph=placed, prep=prep, record=record,
-                         cheap_score=record['cheap_score'])
-            legal.append(entry)
-            if folder:
-                (folder/'placed.json').write_text(placed.to_json())
-            print('Initial placement %s: %s, legal, cheap demand %.3f' %
-                  (start['id'],record['kind'],record['cheap_score']),flush=True)
-        except LegalizationError as error:
-            record.update(status='legalization_failed', error=str(error),
-                          placement_seconds=time.monotonic()-t)
-        finally:
-            if folder:
-                (folder/'placement-result.json').write_text(json.dumps(record,indent=2))
+        with initial_start_context(start):
+            t = time.monotonic()
+            try:
+                source_errors = _hard_and_source_errors(source, source, constraints)
+                if start['kind'] == 'source-start' and not source_errors:
+                    # Retain an existing legal incumbent exactly, including its chosen
+                    # rotations. The optimizer would otherwise erase this baseline.
+                    placed = BoardGraph.from_json(source.to_json())
+                    prep = PlacementReport(placed.outline.width, placed.outline.height,
+                                           hpwl(source), hpwl(placed))
+                    record['kind'] = 'source-incumbent'
+                else:
+                    placement_constraints=constraints
+                    if start.get('basin_anchors'):
+                        placement_constraints=copy.deepcopy(constraints)
+                        for anchor in start['basin_anchors']:
+                            placement_constraints.constraints.append(Constraint('fixed',Enforcement.HARD,
+                                (anchor['ref'],),{key:anchor[key] for key in ('at','rot','side')}))
+                    try:
+                        placed, prep = place(source, placement_constraints, seed=start['seed'], iters=iters,
+                            orient=orient, spread=spread, channel_rules=rules,
+                            initial_positions=start['positions'], initial_rotations=start['rotations'])
+                    except LegalizationError as error:
+                        if not start.get('basin_anchors') or not legal:
+                            raise
+                        # A difficult unrelated hard group must not erase a valid
+                        # opposite-side alternative. Reuse the first already-legal
+                        # global arrangement and legalize the new large-scale basin.
+                        # This extra bounded attempt is reported, not called a new
+                        # independent optimized global placement.
+                        from .legalize import legalize, pad_edge_rule
+                        from .channels import ChannelModel
+                        seed_graph=copy.deepcopy(legal[0]['graph'])
+                        poses=resolve_fixed_poses(seed_graph,placement_constraints)
+                        for anchor in start['basin_anchors']:
+                            comp=seed_graph.component(anchor['ref'])
+                            comp.pos=anchor['at'];comp.rot=anchor['rot']
+                        record.update(global_legalization_failure=str(error),
+                                      basin_fallback_from=legal[0]['id'],
+                                      method='global_start_then_legal_incumbent_basin')
+                        placed=legalize(seed_graph,source.outline.width,source.outline.height,
+                            fixed=poses,keepouts=keepout_rects(seed_graph,placement_constraints,poses),
+                            group_limits=hard_group_limits(placement_constraints,poses,partial=True),
+                        group_edges=hard_group_edges(placement_constraints),rotations=resolve_hard_rotations(placement_constraints),
+                            clearance=placement_constraints.board.default_clearance_mm,grid_mm=.25,
+                            allow_rotation=orient,channel_model=ChannelModel(seed_graph,rules),
+                            spread=min(spread,1.3),
+                            **({} if pad_edge_rule(placement_constraints,rules) is None else
+                               dict(pad_edge=pad_edge_rule(placement_constraints,rules))))
+                        prep=PlacementReport(placed.outline.width,placed.outline.height,
+                            hpwl(source),hpwl(placed),**hard_violations(placed,constraints))
+                errors = _hard_and_source_errors(placed, source, constraints)
+                if errors or not prep.legal:
+                    record.update(status='rejected_hard_constraints', errors=errors)
+                    continue
+                identity = json.dumps(_pose(placed), sort_keys=True)
+                record.update(placement_seconds=time.monotonic()-t, poses=_pose(placed),
+                              hpwl_mm=hpwl(placed), cheap_score=cheap_score(placed,rules))
+                if identity in seen:
+                    record.update(status='duplicate', duplicate_of=seen[identity])
+                    continue
+                seen[identity] = start['id']
+                record['status'] = 'legal'
+                entry = dict(id=start['id'], graph=placed, prep=prep, record=record,
+                             cheap_score=record['cheap_score'])
+                legal.append(entry)
+                if folder:
+                    (folder/'placed.json').write_text(placed.to_json())
+                print('Initial placement %s: %s, legal, cheap demand %.3f' %
+                      (start['id'],record['kind'],record['cheap_score']),flush=True)
+            except LegalizationError as error:
+                record.update(status='legalization_failed', error=str(error),
+                              placement_seconds=time.monotonic()-t)
+            finally:
+                if folder:
+                    (folder/'placement-result.json').write_text(json.dumps(record,indent=2))
     if not legal:
         report.update(termination='no_legal_initial_placement', elapsed_seconds=time.monotonic()-started)
         if root:

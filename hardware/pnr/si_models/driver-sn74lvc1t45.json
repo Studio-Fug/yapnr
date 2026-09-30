@@ -1,0 +1,31 @@
+{
+  "schema": "pnr-si-driver-v1",
+  "id": "sn74lvc1t45",
+  "description": "TI SN74LVC1T45 (DBV, SOT-23-6) B-port output driving 5 V logic, from TI's IBIS model converted to SPICE by KiCad KIBIS (RECTDRIVER).",
+  "vendor_files": [
+    {"id": "ibis",
+     "url": "https://www.ti.com/lit/zip/scem401c",
+     "zip_sha256": "5ccc2b04cb25f518481e9f5e90bc841497b7285461c5492d1e8712fd4c1c97f7",
+     "member": "sn74lvc1t45.ibs",
+     "member_sha256": "76896c8b74508c9d129206e9ede36b5cd895b666f5072489c644d67e097559ad",
+     "version": "SCEM401C; [File Rev] 1.4, [Date] January 08, 2015, [IBIS Ver] 4.1",
+     "license": "TI [Disclaimer]: provided solely 'as is', no warranties; [Copyright] (C)Copyright 2014 Texas Instruments Incorporated. All rights reserved. No redistribution grant: fetched into the local cache by URL + sha256, never committed; the KIBIS-derived SPICE (which contains the vendor tables) is cache-only too."}
+  ],
+  "ibis_component": "SN74LVC1T45_DBV",
+  "pins": {
+    "4": {"signal": "B", "role": "io", "by_rail": {"3.3": "LVC1T45_IO_B_33", "5.0": "LVC1T45_IO_B_50"}},
+    "3": {"signal": "A", "role": "io", "by_rail": {"3.3": "LVC1T45_IO_A_33", "5.0": "LVC1T45_IO_A_50"}}
+  },
+  "rail_v": 5.0,
+  "corners": {
+    "typ": {"vcc": "TYP", "rpin": "TYP", "lpin": "TYP", "cpin": "TYP", "c_comp": "TYP", "rail_v": 5.0},
+    "min": {"vcc": "MIN", "rpin": "TYP", "lpin": "TYP", "cpin": "TYP", "c_comp": "MAX", "rail_v": 4.5},
+    "max": {"vcc": "MAX", "rpin": "TYP", "lpin": "TYP", "cpin": "TYP", "c_comp": "MIN", "rail_v": 5.5}
+  },
+  "corner_note": "KIBIS corner strings must be upper case (KIBIS_PARAMETER::SetCornerFromString: anything but MIN/MAX silently means TYP; the rail read back from VPWR is checked against rail_v). KIBIS pairs the I-V/V-t column with [Voltage range]: LVC1T45_IO_B_50 typ/min/max = 5.0/4.5/5.5 V (slow-weak at 4.5 V, fast-strong at 5.5 V). Package: the SN74LVC1T45_DBV [Pin] row of pin 4 gives R/L/C 19 mOhm / 1.62 nH / 0.264 pF, which KIBIS applies at every corner ([Pin] overrides [Package]), so rpin/lpin/cpin stay TYP (pnr.si.models rejects any other value as a silent no-op). C_comp: KIBIS always writes the typ column (6.40 pF); pnr.si.models substitutes the corner's column (post-processing ccomp-v1). The IBIS C_comp min/max columns are the capacitance extremes, not I-V corners; they are paired pessimistically: the slow-weak corner gets the largest die capacitance (MAX 7.92 pF, slowest edge for the rise/fall gates) and the fast-strong corner the smallest (MIN 5.43 pF, fastest edge, most overshoot).",
+  "kibis": {"type": "RECTDRIVER", "min_window_ns": 30.0, "note": "ton/toff must exceed the IBIS waveform tables (25 ns for IO_B_50)."},
+  "citations": [
+    {"what": "IBIS model SCEM401C", "url": "https://www.ti.com/lit/zip/scem401c"},
+    {"what": "datasheet (pinout: DBV pin 4 = B, VCCB 1.65-5.5 V)", "url": "https://www.ti.com/lit/ds/symlink/sn74lvc1t45.pdf"}
+  ]
+}

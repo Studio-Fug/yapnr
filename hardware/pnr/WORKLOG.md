@@ -685,3 +685,262 @@ tests and 15 placement/orientation tests pass. Both 229-part factory placements
 remain clearance-clean with 499 unconnected items. The previous 360-unconnected
 partial route is obsolete after these component moves. Power classification now
 includes 21 nets; this is not a substitute for qualified power copper geometry.
+
+### Power-first placement (`PNR_POWER_FIRST=1`, opt-in)
+
+Converter trials put Q1, Q2, L2 and the input caps in a star around U5. The
+global objective weighted every net equally, and authored 12 mm / 5 mm hard
+groups anchor everything to the IC, so nothing tied the switching loop
+together. `pnr/power_topology.py` (pure Python) derives from @pnr-current
+envelopes, terminal budgets, plane classes/intents and the netlist: carrying
+pads (series bound, pad-share guard), tiers (power stage, controllers,
+passives), width weights and hot loops (Horton minimum cycle basis of the
+class/net graph, shunt class = hot). It never names refs. `pnr/place/power_first.py`
+minimises J1 (power trunks and hot loops), then J2 (controller/sense), then J3
+(passives) as lexicographic stages with epsilon guards. Stage 1 runs 8 batched
+starts. The continuous overlap reserves one legalizer grid cell, and the
+legalizer (tier order, relative targets, trial-pack look-ahead, pour channels
+on trunk nets both facing parts carry) gets one bounded retry from the stage-1
+runner-up.
+synth_native records placement and routed power quality and ranks by open hot
+loops, q_band and crossings after opens and violations. `model.py`,
+`channels.py` and `batched_cost.py` are unchanged. With the flag unset,
+placements, reports, trial/library records and capture payloads are
+byte-identical to the base (fixed PYTHONHASHSEED; captured channel fields already
+vary with the hash seed). Converter, 12 outlines x 3 seeds: legal 36/36 (default
+30/36), buck-loop pad gaps median 28.1 -> 12.2 mm, Q1-Q2 15.7 -> 7.6 mm, power-net
+MST 113 -> 79 mm, signal HPWL +18%. Routed effects (vias, single-layer power,
+opens) still need a native A/B. The SW2 pin-25 open is a router pin-access
+issue outside placement. Tests: tests/test_power_first.py; fixtures via
+tests/power_topology_golden.py.
+
+Repair after review. (1) Pour channels first dropped escape demand for any
+trunk net of either tier-1 part, so output and input caps packed against the
+16 A switch-node rows of U5 (SW2) and Q1/Q2 (SW1) at no channel cost. Copper
+pours across a gap only on a net both parts carry, so only that intersection
+is exempt now. Converter, 36 runs: layouts with a tier-1 switch-node row blocked
+<1 mm by a power part off that net 13 -> 0 (default 0/30); channel shortage
+median 36.7 -> 19.6 (default 12.1); unshared switch-node shortage 11.5 -> 2.3
+(default 3.2). (2) The retry gate compared total J1, which the VOUT trunk
+dominates, so legalization doubled the buck loop in 10/36 runs and never
+retried. Every hot loop's Lambda is now also checked (retry above RETRY_RATIO x
+its continuous value, floored at links x (clearance + grid)). The two attempts
+are ranked by legality, then sum w_L Lambda_L with an EPS[0] tie band, then J1.
+Buck gaps median/p90 12.2/19.4 -> 13.2/17.6 mm (default 28.1/38.8), and runs
+with legal gaps > 1.5x continuous 10 -> 5. Retries rise 3 -> 18 of 36; the
+median placement takes 1.8 s. The correct pour rule costs about 2% J1 and
+power MST (799 -> 817, 78.6 -> 80.5 mm); signal HPWL is unchanged (+18% vs
+default).
+
+## PNR_SHOVE=1: make-room transactions and power scheduling (converter block case)
+
+Case: blocks/nb3-pf/d5be6b6d0e99/native/board_converter-s1-35.75x27.75 (4 opens:
+U5.13->R13.2 p5v-hv, and SW2 U5.21/U5.25/C9.2/L2.2). Everything below is behind
+PNR_SHOVE=1; with it unset nothing new is imported and worker results/inventories
+are identical to src10.base (only KiCad's random UUIDs of new items differ run to
+run). New package pnr/shove (targets, geom, qp, world, relax, ladder, gates,
+control, __main__).
+
+Scheduling and access (stage A):
+* In-pad escape for trapped leaves: power_plan(_force_in_pad) retries once with the
+  terminal's in-pad array when its surface access points exist but are all walled in
+  (in_pad_skipped); via_in_pad.general_attach_sites samples non-analytic custom lands
+  (the L-shaped U5.13 ISN pin: 0.35/0.20 on y=45.025, x 51.50-51.71).
+* Trunk-first targets: inspect pre-unions the trunk hops (highest terminal contract ->
+  uncontracted bulk-cap land within 4 mm -> net-scope carrier) and marks them
+  trunk=True; scheduled_route_jobs routes trunks first. Trunks search the whole
+  board; branches search local box U root copper box + 1 mm.
+* Array-attached lands are branch roots in the 'existing' strategy (U5.21 -> U5.25
+  1.7 mm bridge instead of a 10 mm run to L2.2).
+* Sense-escape reservation: every power worker reserves, in its Oracle only, the
+  in-pad via + 1 mm stub of each still-isolated sense leaf (terminal <= 50 mA) of
+  another net. Routing sense leaves first was tried and dropped: it closed the
+  phase-03 board but cost two SW2 opens on the final board.
+* Same-net self hits are dropped from static_blockers; result.json keeps
+  forward_policy after the reversed retry.
+
+Make-room worker (python -m pnr.shove, hooked after electrical_blocker_repair for
+failed power/plane targets, <=3 per nested early loop, <=6 per refinement loop):
+L1 copper QP (delta-relaxed wish plan from power_plan, joints/welds/rigid banks,
+Hildreth dual ascent, caps signal 0.6 / power line 0.35 / power via 0.25 mm),
+L2 adds small nearby parts (<=4 pads, not locked/fixed/intent; 0.5 mm cap, soft
+lands, claim attaches ride with the part), L4 rips whole local signal nets (<=3,
+bounded negotiation) and/or one sub-trunk-width power branch, routes the target with
+native_electrical, restores signals with keyhole_region and power branches with
+native_electrical. Commits replay the plan through native_electrical --replay-plan,
+then pnr.shove.gates judges against the ORIGINAL board (partition, lost connections,
+pad entries, reference, new forbidden SMD vias, native DRC keys/dangling/per-moved-uuid,
+strictly fewer opens, no leftover PNR shove:/leaf: areas, unjustified sub-width not up).
+Failures fold the certificate's solid owners into static_blockers.
+
+Case results (src10 contracts from the prepare worker, PNR_SUBBOARD=1; scratch):
+* final board 4 -> 0 opens, 0 DRC violations before/after, all gates clean (jobs in
+  scheduler order, worker then shove as the hook runs them): SW2 trunk by L4 (rip
+  COMP+MODE, 3x0.35/0.20 in-strip array, 1.19 mm B.Cu, both restored), U5.21 by L1
+  (0.049 mm), C9.2 by L2 (C19/C24/C9/R10 nudged <= 0.083 mm), U5.13 by the forced
+  in-pad via whose escape the earlier jobs had to leave free. The user's picture (standard via beside U5.13):
+  L2 moves the VOUT bank/landing and C24 0.15 mm north (not +x: C24.1's via-to-SMD
+  keepout and FB via e5536d17 block +x), 4 -> 3, DRC clean.
+* phase-03 board 22 -> 18 (all four case opens) with stage A alone.
+* One emulated early-power sweep (worker per scheduled power job, shove on failure)
+  from the case's real phase-03 input (02b board): every power job routes with the
+  plain worker, 46 -> 18 opens, only signal targets left, 0 DRC violations.
+* One full_iteration of the layout (1 worker, 600 s, PNR_SHOVE/POWER_FIRST/
+  FANOUT_RESERVE, intermediate build without reservations/bulk-cap hop): objective
+  [0,0,0,54,0,2] vs [0,0,0,15,0,4]; SW2 and U5.13 closed (U5.13 by L2 with C24 and C9
+  nudged 0.12/0.21 mm); open: C24.1's 1.5 mm VOUT landing and ILIM (signal).
+Feedback: native placement trials are still off in hier (full_iteration passes
+--route-only unless PNR_SHOVE=1 and PNR_NATIVE_PLACEMENT=1); feedback.json gains a
+'shove' section; synth_native writes accepted nudges back into the layout so
+hier.assemble stays rigid. Tests: tests/test_shove.py, tests/test_shove_native.py.
+
+### PNR_SHOVE=1 review fixes (placement legality, necks, branch roots, template write-back)
+
+* Part nudges are checked against the hard placement constraints. New
+  pnr/shove/placement.py: the KiCad side lists moved footprints and rejects locked,
+  rotated/flipped and source-owned parts (plane-access power array / copper keepout
+  owners, as incremental_place refuses); the PnR runtime (`python -m
+  pnr.shove.placement`, needs yaml) runs place.metrics.hard_violations on both
+  build_graph graphs under the loop constraints.yaml and rejects any new violation
+  (HARD group radii, rows, keepouts, outline, fixed poses/rotations, sides, overlaps).
+  Runs as G0 inside L2 before commit and again in the whole-transaction gate;
+  without --constraints/--placement-python a nudge is unverifiable and rejected.
+  native_loop passes the loop constraints, its own interpreter and the origin board;
+  nudge_candidates also excludes source-owned parts.
+* Cumulative nudge cap: 0.5 mm from the ORIGIN placement (the outer loop's
+  baseline board, handed to nested early phases as --shove-origin-board), not from
+  each transaction's start. The QP carries 16 inscribed-polygon rows per part; the
+  ladder drops parts with < 0.02 mm budget left; invariants and the gate re-check.
+* Courtyards of both sides are QP rows (B.CrtYd too), same side only.
+* Necks are rigid: power/plane copper narrower than its land's required entry width
+  binds both vertices to the land's joint (world.rigid_necks), so it cannot stretch
+  or turn. Per moved power line |dlength| <= min(0.5 mm, 5 %) as designed (the
+  0.15 mm floor is gone) and is now also a linearised QP row family, so the solver
+  searches inside the guard instead of being rejected after the fact.
+* gates.unjustified_subwidth judges each thin power track by the terminal it
+  serves: a track entering a terminal land must be at least its outer width, a
+  source-bounded neck of it (neck_budget: length <= neck_max_length_mm, loss/drop),
+  or a branch landing on an in-pad-array-attached land; and it must be a valid neck
+  or as wide as a terminal its sub-width branch serves (joined through shared ends
+  and vias inside its copper; an in-pad via under a collector serves its land).
+* A4 branch roots: only full-current array-attached terminals (terminal rms/peak >=
+  the net envelope and the branch, as qualified_tree_pads) - a sense leaf's single
+  in-pad via (U5.13) never roots another branch; U5.25 (5 A = net) still does.
+* synth_native write-back: any disagreement between template instances, including
+  one instance not nudging a part another nudged or unreadable nudges, fails the
+  record (nudged_conflict); an agreed nudged layout must add no hard violation in
+  the block frame (instance_board: block rectangle, groups, rows, overlaps) or the
+  record fails, so no illegal pose reaches hier.assemble / top placement.
+* Case re-verification (src10 contracts, scratch): final board 4 -> 0 opens, 0 DRC
+  before/after, every gate incl. placement clean (L2 nudges C19/C24/C9/R10 <= 0.083
+  mm total from origin, no new hard violation); phase-03 board 22 -> 18 (all four
+  case opens). The user's-picture variant (standard via beside U5.13, in-pad
+  disabled) is no longer accepted: it needs a 0.148 mm (11 %) stretch of a 1.35 mm
+  VOUT branch segment, beyond the 5 % per-line guard; with the guard in the QP the
+  solver finds no feasible placement (certificate: U5.15 / FB track / VOUT track).
+
+## PNR_FEEDBACK=1: routing failures drive later placement rounds (synth_native, halving)
+
+Before: feedback.json was written for every block trial and halving candidate and read by
+nothing; in the hier flow the only routing -> placement effect was PNR_SHOVE nudges
+(<= 0.5 mm, inside one evaluation). Opt-in now (PNR_FEEDBACK=1 plus --rounds/--generations
+> 0; defaults unchanged, place() bit-identical with pair_weights=None, golden-tested):
+
+* pnr/feedback/signals.py: one evaluated round -> the failed cross-part connections keyed
+  by block-local path (template) or ref (top level), mode, shove no_make_room; same-part
+  failures counted, never acted on; per-part scores kept as diagnostics only (the signal
+  study found them IC-dominated and moving their parts goes with more opens). Router key
+  (router, stage, budget, power-first, fanout, fab profile, inputs sha); imports must match.
+* pnr/feedback/table.py: per-scope failure rates, rebuilt each round from records;
+  floor = >= 90 % of >= 6 evaluations (reported, never a target); lineage failure counts;
+  router-separated.
+* pnr/feedback/moves.py: PULL moves one non-anchor end of a failed connection (weight
+  1 + 2 x lineage failures + power + no_room, cap 5) on a 0.25 mm lattice <= 3 mm (tier-1
+  power parts only for tier1-tier1 connections, <= 1 mm), any allowed rotation; every other
+  part keeps its exact parent pose; target must shorten >= 0.25 mm, lineage cap 4 mm from
+  the root pose; legality = mover clears everything by the board clearance with plane-array
+  reservations + no new hard violation + driver check (template rigidity over all
+  instances / halving source checks) + power guard (no new power crossings, q_band <= +1).
+  RAND = matched random control. pair_weights = population attraction for 'prior' samples.
+* place(..., pair_weights=): sum w * |pad_a - pad_b| in global_place and in every
+  power-first stage (x W); hierarchical_place maps flat pads to macro pads.
+* synth_native --rounds R: round 0 = stage A/B or --import-trials (never re-evaluated);
+  parents = top ceil(P / 2^(g-1)) with a PULL child; children, RAND, prior/fresh evaluated
+  like stage B (tag suffix -g<g><arm><j>-<parent sha>); one pool, unchanged rank_key; stops
+  on --enough / --gen-plateau; resume replays the plan and skips existing tags.
+* halving --generations G: between the native rung and deep; --seed-from imports earlier
+  runs' native records (--n0 0 skips own stages); children from the parent's evaluated pose
+  (shove nudges / USB rescue included); entry rung1 (best half promoted) or native; repeat
+  child in generation 1 measures noise; deep takes the best of the whole native pool.
+  Library mode moves library blocks rigidly (translation) and glue parts alone.
+* pnr/feedback/report.py: mechanical progress report (complete per evaluation, per-arm
+  child - parent, PULL vs RAND sign test, repeat delta, load, disk).
+* Tier-1 movers: no pad moves more than 1 mm (rotations included); RAND never rotates them.
+* Offline replay (84 real block layouts nb3-pf/nb4-pf/nb5-*): 58/65 layouts with cross-part
+  failures yield a PULL child; 90/90 PULL and 62/62 RAND children pass an independent
+  legality re-check and move only the mover; median move 0.79 mm, target shortening 0.90 mm.
+* End-to-end (scratch, one native evaluation, 1 worker, 240 s budget, 382 s wall): nb5-noshove
+  converter import, round 1 parent s1-34x34 (2 opens at 600 s), PULL child moved L2 0.56 mm
+  (U5.21-L2.2 0.34 mm shorter) -> 3 opens; record carries gen/arm/parent/op_detail/fb, the
+  library ranks it among the 12 imports (none re-run). Plumbing check only (budget differs).
+* Library-mode hierarchical placement with the nb5 libraries fails legalization (MB00: no
+  free slot) for 6/6 seeds with or without weights: pre-existing, not from this change.
+
+### PNR_FEEDBACK review repairs (same day)
+
+* Code identity in the router key: `signals.eval_code_files` hashes the static import closure
+  of the evaluation entry points (full_iteration, hier.native_block/synth/blocks; function-local
+  imports, `-m pnr.x` targets and package `__main__` followed; drivers pnr.feedback, pnr.mc,
+  hier.synth_native, hier.top excluded; pnr.shove only for the shove router, every outside
+  import of it being PNR_SHOVE-gated). Records made with PNR_FEEDBACK=1 stamp `code`; imports
+  without it are traced to their tree through `electrical/native-loop/source-inputs/origins.json`
+  (the --annotation-source the driver passed), refused as unknown if any closure module is newer
+  than the round. nb5-shove = src10.frozen (d1b507fd94: shove/world.py without the 0.15 mm floor
+  + pair_weights plumbing) != src11 shove f5f699666e; h4 = src10b = src11.base (7364369252).
+* `--import-code-mismatch {error,warn,rebase}` (both drivers, default error), `--import-rebase N`:
+  rebase re-evaluates the stale imports' own router inputs (blocks: the stage-A layout or the
+  stamped `input_layout`; halving: the seed placed.json) under this code as round 0 (arm rebase,
+  tag -g0b-<sha> / id rb-<id>); stale records are never ranked, counted for --enough, pooled in the
+  failure table or taken by deep.
+* synth_native --import-trials selects only templates with imported native records (--block
+  naming another is an error); imports are round 0 (gen 0, source_gen kept).
+* Fresh/prior: a stage-A (seed, outline) already handed to any router is not spare (dedup by
+  base tag + stamped/stage-A input keys, not the nudged layout); 'prior' is skipped when the
+  table has no pair weights (both drivers), instead of reproducing the unweighted sample.
+* RAND records `matched` = the parent's k=0 PULL child; the report pairs exactly those (best-of-
+  several PULL vs one RAND favoured PULL under the null) and prints n and the smallest reachable p.
+* halving --seed-from: the seed run must have finished its native stage (status.json) unless
+  --seed-allow-running; torn dataset lines skipped with a warning; the import set and code policy
+  are frozen at the first start (a 'seed-from' dataset record); a resume whose regenerated child
+  differs in parent/arm/poses_sha from the stored gen-place record stops ("resume plan changed").
+* E2E (one native evaluation, 1 worker, 240 s, 385 s wall): nb5-noshove converter s1-34x34
+  rebased under src11 (plain): 2 -> 2 opens; input = nb5 stage-A layout; stamped code 97e9032431
+  = the code derived from the new round's origins.json; library ranks only the rebase (12 stale).
+
+## src12b (2026-09-29): USB pair chain after a via bridge (opt-in flags, default off)
+
+src12b = src12 + opt-in flags in pnr/native_electrical.py and pnr/paired_bootstrap.py (unset =
+src12 behaviour; the 336 native_electrical/paired_bootstrap tests are unchanged, +12 new in
+tests/test_pair_post_bridge.py under KiCad Python). Validation and commands: hier/pairs/fix-README.md.
+
+* PNR_PAIR_POST_BRIDGE_SURFACE=1 (_pair_plan_order): every routed surface leg is checked with the
+  exact endpoint graph (surface_leg_graph_failure -> path_metrics). Oracle.clear ignores same-net
+  copper, so the D2->U6 leg could cross the stage-0 bridge's via->D2-pad fanout; that loop was only
+  rejected at the end (pair_endpoint_graph_invalid). A looping leg is now pair_surface_leg_cycle;
+  after a bridge the next fallback is a surface leg from that bridge's via pair (offsets = measured
+  prefix - fanout; D2 fanout becomes a stub as in the old bridge->bridge reuse; 0 new vias), then
+  the old reuse bridge. Records: post_bridge_legs, segment post_bridge_start.
+* PNR_PAIR_HAND_SWAP_TRIAL=1 (paired_bootstrap, needs PNR_PAIR_JOINT_TOPOLOGIES=1): one extra
+  trial after trial 0 on the unmoved pose with PNR_PAIR_JOINT_HAND_FIRST=-1 (pair_plan runs hand
+  -1 first within each joint seed). Hand +1 alone can use the whole 60 s joint window.
+* PNR_PAIR_JOINT_FAIR=1 (pair_plan): first config per hand capped at window/hands-not-started.
+  Works at PNR_PAIR_SEARCH_SECONDS=300, but at 90 s it loses p007 (hand +1 needs 22-46 s) -> use
+  HAND_SWAP_TRIAL instead. PNR_PAIR_FALLBACK_RESERVE_SECONDS (default 30) did not change that.
+* PNR_PAIR_PREFER_INLINE=1 (pair_plan score): (vias, stub legs, length) - keeps D2 in line when
+  an equal-via in-line route exists.
+
+Recommended: POST_BRIDGE_SURFACE=1 + HAND_SWAP_TRIAL=1 at the default 90 s trial: h4p032, g1c04,
+g1c05 0/5 -> accepted (4 vias, skew 0.203-0.285 <= 0.3, 0 DRC violations, opens 266 -> 260);
+controls p007 (t0) and h3p010 (production route, one trial later) identical to production.
+Still failing (stage 1, TP1 landing blocker + shared uncoupled budget = design proposals 2/3):
+ab-h4p030, ab-deepS, ab-h5r0, h3p035, g1c00.

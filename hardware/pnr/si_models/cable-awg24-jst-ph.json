@@ -1,0 +1,58 @@
+{
+  "schema": "pnr-si-cable-v1",
+  "id": "awg24-jst-ph",
+  "description": "Three loose 24 AWG PVC-insulated leads crimped into JST PH housings (pin 1 +5 V, pin 2 DIN, pin 3 GND; DIN's return is the adjacent GND lead). Modelled per metre as a two-wire TEM line (signal + GND).",
+  "per_metre": {
+    "z0_ohm": 120.0,
+    "nvp": 0.68,
+    "l_nh": 588.6,
+    "c_pf": 40.9,
+    "td_ns": 4.905,
+    "r_dc_loop_ohm": 0.168
+  },
+  "z0_range_ohm": [
+    100.0,
+    150.0
+  ],
+  "element": "T lines (ngspice T element) with the loss model below: one lossless T per segment_m behind a lumped series R; board copper is lumped, only the cable is a transmission line",
+  "justification": [
+    "Two-wire line: Z0 = (120/sqrt(eps_eff)) acosh(D/d). 24 AWG conductor d = 0.511 mm; with the leads touching, D = insulation OD. JST PH accepts AWG #32-#24 leads (insulation OD roughly 0.8-1.5 mm; UL1061 24 AWG ~1.1 mm, UL1007 24 AWG ~1.4 mm).",
+    "PVC (er ~3-4) fills only part of the field, eps_eff ~1.5-2.3: D = 1.1 mm (acosh 1.40) -> 111-137 ohm, D = 1.4 mm (acosh 1.67) -> 132-163 ohm. Nominal 120 ohm; the profile sweeps the design's corners 100 and 150 ohm as well (100 ohm: leads pressed together in a jacket; 150 ohm: thick insulation). Leads that separate along the run raise Z0 (>= 200 ohm at 5 mm spacing); this is not a corner here.",
+    "NVP = 1/sqrt(eps_eff) ~ 0.66-0.82; 0.68 is used (design value). At 120 ohm: L' = Z0/v = 589 nH/m, C' = 1/(Z0 v) = 40.9 pF/m, TD = 4.9 ns/m (TD does not depend on the Z0 corner).",
+    "Loss: see 'loss' (skin effect, 6.35 ohm/m loop at 300 MHz, about 2.6 % amplitude loss per metre at that frequency against 2 Z0 = 240 ohm)."
+  ],
+  "citations": [
+    {
+      "what": "two-wire (twin-lead) characteristic impedance formula",
+      "url": "https://en.wikipedia.org/wiki/Twin-lead"
+    },
+    {
+      "what": "24 AWG diameter 0.511 mm, 84.2 mOhm/m",
+      "url": "https://en.wikipedia.org/wiki/American_wire_gauge"
+    },
+    {
+      "what": "JST PH applicable wire range (AWG #32-#24)",
+      "url": "https://www.jst-mfg.com/product/pdf/eng/ePH.pdf"
+    },
+    {
+      "what": "untwisted/twisted pair impedance and delay practice",
+      "url": "https://www.informit.com/articles/article.aspx?p=2916283&seqNum=10"
+    }
+  ],
+  "limitations": [
+    "Return current shares the GND lead with the pixel supply current: the resulting ground offset at the strip is not modelled.",
+    "No crosstalk from the +5 V lead. Skin effect is a 4-stage R-L ladder fit (within 5 % from 10 MHz to 900 MHz); dielectric loss (PVC tan d ~0.02-0.1) and the internal-inductance change with frequency (< 1 % of L') are neglected."
+  ],
+  "loss": {
+    "model": "skin_ladder",
+    "conductor_d_mm": 0.511,
+    "conductors": 2,
+    "rho_ohm_m": 1.72e-08,
+    "f_ref_mhz": 300.0,
+    "spacing_mm": 1.1,
+    "segment_m": 1.0,
+    "r_loop_ohm_per_m_at_f_ref": 6.35,
+    "r_loop_ohm_per_m_dc": 0.168,
+    "justification": "Series loss per metre = R_dc + skin effect. Per conductor R_ac(f) = rho / (pi d delta(f)), delta = sqrt(rho / (pi f mu0)) (3.81 um at 300 MHz: 2.81 ohm/m), x the two-wire proximity factor (D/d)/sqrt((D/d)^2-1) = 1.13 for D = 1.1 mm, x 2 conductors: 6.35 ohm/m loop at 300 MHz, growing as sqrt(f) above the DC value 0.168 ohm/m. pnr.si.physics.skin_ladder fits it with R_dc + 4 parallel R||L stages (poles 3 MHz - 3 GHz; within 5 % from 10 MHz to 900 MHz), lumped once per 1 m segment in front of a lossless T. 'model': 'flat' instead uses one frequency-flat R at f_ref (checked against ngspice LTRA, the exact lossy R-L-C line with a flat R, on p027 led1 at 3 m: 10-90 % rise 1.812 vs 1.787 ns, overshoot 1.020 vs 1.033 V; LTRA took 46-56 s per deck, the segmented line 2.3 s). The flat R over-attenuates the tens-of-MHz content that sets the level of a long line's first plateau (e.g. 19 ohm vs ~6.5 ohm at 35 MHz over 3 m), which pushed the 100 ohm / 3 m / 100 ohm-cable 10-90 % time to 21-23 ns; hence the ladder."
+  }
+}

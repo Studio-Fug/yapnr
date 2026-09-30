@@ -1,0 +1,1150 @@
+{
+"board": "runs/h6-hier/cand/p027/native/electrical/board.kicad_pcb",
+"board_sha256": "5f425ec109450fb432569f3c24bf6a6861198e663390248e9f0ebd2e73595935",
+"copper_layers": [
+"F.Cu",
+"In1.Cu",
+"In2.Cu",
+"B.Cu"
+],
+"kicad": "10.0.6",
+"nets": [
+"board.led0-B",
+"board.led1-B",
+"board.led1-data_out",
+"data_out"
+],
+"pads": [
+{
+"bbox": [
+86.633201,
+81.21,
+88.233201,
+82.81
+],
+"fpid": "JST_B3B_PH_K_S_LF__SN:CONN-TH_B3B-PH-K-S",
+"layers": [
+"F.Cu",
+"In1.Cu",
+"In2.Cu",
+"In3.Cu",
+"In4.Cu",
+"In5.Cu",
+"In6.Cu",
+"In7.Cu",
+"In8.Cu",
+"In9.Cu",
+"In10.Cu",
+"In11.Cu",
+"In12.Cu",
+"In13.Cu",
+"In14.Cu",
+"In15.Cu",
+"In16.Cu",
+"In17.Cu",
+"In18.Cu",
+"In19.Cu",
+"In20.Cu",
+"In21.Cu",
+"In22.Cu",
+"In23.Cu",
+"In24.Cu",
+"In25.Cu",
+"In26.Cu",
+"In27.Cu",
+"In28.Cu",
+"In29.Cu",
+"In30.Cu",
+"B.Cu"
+],
+"name": "2",
+"net": "board.led1-data_out",
+"ref": "CN2",
+"shape": 0,
+"smd": false,
+"x": 87.433201,
+"y": 82.01
+},
+{
+"bbox": [
+89.52,
+74.23,
+90.09,
+74.77
+],
+"fpid": "YAGEO_RC0402FR_0733RL:R0402",
+"layers": [
+"F.Cu"
+],
+"name": "1",
+"net": "board.led1-B",
+"ref": "R26",
+"shape": 1,
+"smd": true,
+"x": 89.805,
+"y": 74.5
+},
+{
+"bbox": [
+88.66,
+74.23,
+89.23,
+74.77
+],
+"fpid": "YAGEO_RC0402FR_0733RL:R0402",
+"layers": [
+"F.Cu"
+],
+"name": "2",
+"net": "board.led1-data_out",
+"ref": "R26",
+"shape": 1,
+"smd": true,
+"x": 88.945,
+"y": 74.5
+},
+{
+"bbox": [
+93.525,
+74.85,
+94.125,
+75.95
+],
+"fpid": "Texas_Instruments_SN74LVC1T45DBVR:SOT-23-6_L2.9-W1.6-P0.95-LS2.8-BR",
+"layers": [
+"F.Cu"
+],
+"name": "4",
+"net": "board.led1-B",
+"ref": "U12",
+"shape": 1,
+"smd": true,
+"x": 93.825,
+"y": 75.4
+},
+{
+"bbox": [
+76.253201,
+81.21,
+77.853201,
+82.81
+],
+"fpid": "JST_B3B_PH_K_S_LF__SN:CONN-TH_B3B-PH-K-S",
+"layers": [
+"F.Cu",
+"In1.Cu",
+"In2.Cu",
+"In3.Cu",
+"In4.Cu",
+"In5.Cu",
+"In6.Cu",
+"In7.Cu",
+"In8.Cu",
+"In9.Cu",
+"In10.Cu",
+"In11.Cu",
+"In12.Cu",
+"In13.Cu",
+"In14.Cu",
+"In15.Cu",
+"In16.Cu",
+"In17.Cu",
+"In18.Cu",
+"In19.Cu",
+"In20.Cu",
+"In21.Cu",
+"In22.Cu",
+"In23.Cu",
+"In24.Cu",
+"In25.Cu",
+"In26.Cu",
+"In27.Cu",
+"In28.Cu",
+"In29.Cu",
+"In30.Cu",
+"B.Cu"
+],
+"name": "2",
+"net": "data_out",
+"ref": "CN1",
+"shape": 0,
+"smd": false,
+"x": 77.053201,
+"y": 82.01
+},
+{
+"bbox": [
+70.23,
+82.41,
+70.77,
+82.98
+],
+"fpid": "YAGEO_RC0402FR_0733RL:R0402",
+"layers": [
+"F.Cu"
+],
+"name": "1",
+"net": "board.led0-B",
+"ref": "R21",
+"shape": 1,
+"smd": true,
+"x": 70.5,
+"y": 82.695
+},
+{
+"bbox": [
+70.23,
+83.27,
+70.77,
+83.84
+],
+"fpid": "YAGEO_RC0402FR_0733RL:R0402",
+"layers": [
+"F.Cu"
+],
+"name": "2",
+"net": "data_out",
+"ref": "R21",
+"shape": 1,
+"smd": true,
+"x": 70.5,
+"y": 83.555
+},
+{
+"bbox": [
+66.55,
+71.275,
+67.65,
+71.875
+],
+"fpid": "Texas_Instruments_SN74LVC1T45DBVR:SOT-23-6_L2.9-W1.6-P0.95-LS2.8-BR",
+"layers": [
+"F.Cu"
+],
+"name": "4",
+"net": "board.led0-B",
+"ref": "U9",
+"shape": 1,
+"smd": true,
+"x": 67.1,
+"y": 71.575
+}
+],
+"tracks": [
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.088201,
+"net": "board.led1-data_out",
+"pads1": [
+[
+"R26",
+"2"
+]
+],
+"pads2": [
+[
+"R26",
+"2"
+]
+],
+"w": 0.2,
+"x1": 88.945,
+"x2": 88.945,
+"y1": 74.588201,
+"y2": 74.5
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 1.289478511958226,
+"net": "board.led1-data_out",
+"pads1": [],
+"pads2": [
+[
+"R26",
+"2"
+]
+],
+"w": 0.2,
+"x1": 88.033201,
+"x2": 88.945,
+"y1": 75.5,
+"y2": 74.588201
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 1.0,
+"net": "board.led1-data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 87.033201,
+"x2": 88.033201,
+"y1": 75.5,
+"y2": 75.5
+},
+{
+"arc": false,
+"layer": "In2.Cu",
+"length": 3.6,
+"net": "board.led1-data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 86.833201,
+"x2": 86.833201,
+"y1": 79.3,
+"y2": 75.7
+},
+{
+"arc": false,
+"layer": "In2.Cu",
+"length": 2.11,
+"net": "board.led1-data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 86.833201,
+"x2": 86.833201,
+"y1": 81.41,
+"y2": 79.3
+},
+{
+"arc": false,
+"layer": "In2.Cu",
+"length": 0.8485281374238571,
+"net": "board.led1-data_out",
+"pads1": [
+[
+"CN2",
+"2"
+]
+],
+"pads2": [],
+"w": 0.2,
+"x1": 87.433201,
+"x2": 86.833201,
+"y1": 82.01,
+"y2": 81.41
+},
+{
+"arc": false,
+"layer": "In2.Cu",
+"length": 0.28284271247461906,
+"net": "board.led1-data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 86.833201,
+"x2": 87.033201,
+"y1": 75.7,
+"y2": 75.5
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.68,
+"net": "board.led1-B",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 93.405,
+"x2": 93.405,
+"y1": 74.3,
+"y2": 74.98
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.5939696961966999,
+"net": "board.led1-B",
+"pads1": [],
+"pads2": [
+[
+"U12",
+"4"
+]
+],
+"w": 0.2,
+"x1": 93.405,
+"x2": 93.825,
+"y1": 74.98,
+"y2": 75.4
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.8,
+"net": "board.led1-B",
+"pads1": [
+[
+"R26",
+"1"
+]
+],
+"pads2": [],
+"w": 0.2,
+"x1": 89.805,
+"x2": 90.605,
+"y1": 74.5,
+"y2": 74.5
+},
+{
+"arc": false,
+"layer": "In2.Cu",
+"length": 0.28284271247461906,
+"net": "board.led1-B",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 90.605,
+"x2": 90.805,
+"y1": 74.5,
+"y2": 74.3
+},
+{
+"arc": false,
+"layer": "In2.Cu",
+"length": 2.6,
+"net": "board.led1-B",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 90.805,
+"x2": 93.405,
+"y1": 74.3,
+"y2": 74.3
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 75.375,
+"x2": 75.125,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 74.875,
+"x2": 74.625,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 72.375,
+"x2": 72.125,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 74.375,
+"x2": 74.125,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 72.625,
+"x2": 72.375,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 71.875,
+"x2": 71.625,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.10153911956482586,
+"net": "data_out",
+"pads1": [
+[
+"CN1",
+"2"
+]
+],
+"pads2": [
+[
+"CN1",
+"2"
+]
+],
+"w": 0.2,
+"x1": 77.053201,
+"x2": 77.125,
+"y1": 82.053201,
+"y2": 82.125
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 71.125,
+"x2": 70.875,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 72.125,
+"x2": 71.875,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 73.125,
+"x2": 72.875,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 75.125,
+"x2": 74.875,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.3535533905932738,
+"net": "data_out",
+"pads1": [
+[
+"CN1",
+"2"
+]
+],
+"pads2": [
+[
+"CN1",
+"2"
+]
+],
+"w": 0.2,
+"x1": 77.125,
+"x2": 76.875,
+"y1": 82.125,
+"y2": 82.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.09899494936611666,
+"net": "data_out",
+"pads1": [
+[
+"R21",
+"2"
+]
+],
+"pads2": [
+[
+"R21",
+"2"
+]
+],
+"w": 0.2,
+"x1": 70.5,
+"x2": 70.43,
+"y1": 83.555,
+"y2": 83.625
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 75.875,
+"x2": 75.625,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [
+[
+"CN1",
+"2"
+]
+],
+"pads2": [
+[
+"CN1",
+"2"
+]
+],
+"w": 0.2,
+"x1": 76.875,
+"x2": 76.875,
+"y1": 82.375,
+"y2": 82.625
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 72.875,
+"x2": 72.625,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 75.625,
+"x2": 75.375,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 74.125,
+"x2": 73.875,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.043201,
+"net": "data_out",
+"pads1": [
+[
+"CN1",
+"2"
+]
+],
+"pads2": [
+[
+"CN1",
+"2"
+]
+],
+"w": 0.2,
+"x1": 77.053201,
+"x2": 77.053201,
+"y1": 82.01,
+"y2": 82.053201
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 76.375,
+"x2": 76.375,
+"y1": 83.125,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.3535533905932738,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 76.625,
+"x2": 76.375,
+"y1": 82.875,
+"y2": 83.125
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 74.625,
+"x2": 74.375,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 71.625,
+"x2": 71.375,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [
+[
+"R21",
+"2"
+]
+],
+"w": 0.2,
+"x1": 70.875,
+"x2": 70.625,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 73.875,
+"x2": 73.625,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 76.375,
+"x2": 76.125,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 76.125,
+"x2": 75.875,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 73.625,
+"x2": 73.375,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.055,
+"net": "data_out",
+"pads1": [
+[
+"R21",
+"2"
+]
+],
+"pads2": [
+[
+"R21",
+"2"
+]
+],
+"w": 0.2,
+"x1": 70.43,
+"x2": 70.375,
+"y1": 83.625,
+"y2": 83.625
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.3535533905932738,
+"net": "data_out",
+"pads1": [
+[
+"CN1",
+"2"
+]
+],
+"pads2": [],
+"w": 0.2,
+"x1": 76.875,
+"x2": 76.625,
+"y1": 82.625,
+"y2": 82.875
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 73.375,
+"x2": 73.125,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.3535533905932738,
+"net": "data_out",
+"pads1": [
+[
+"R21",
+"2"
+]
+],
+"pads2": [
+[
+"R21",
+"2"
+]
+],
+"w": 0.2,
+"x1": 70.625,
+"x2": 70.375,
+"y1": 83.375,
+"y2": 83.625
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.25,
+"net": "data_out",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 71.375,
+"x2": 71.125,
+"y1": 83.375,
+"y2": 83.375
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 2.5,
+"net": "board.led0-B",
+"pads1": [],
+"pads2": [
+[
+"U9",
+"4"
+]
+],
+"w": 0.2,
+"x1": 69.6,
+"x2": 67.1,
+"y1": 71.575,
+"y2": 71.575
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.7071067811865476,
+"net": "board.led0-B",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 70.1,
+"x2": 69.6,
+"y1": 71.075,
+"y2": 71.575
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 0.21213203435596428,
+"net": "board.led0-B",
+"pads1": [
+[
+"R21",
+"1"
+]
+],
+"pads2": [
+[
+"R21",
+"1"
+]
+],
+"w": 0.2,
+"x1": 70.5,
+"x2": 70.35,
+"y1": 82.695,
+"y2": 82.545
+},
+{
+"arc": false,
+"layer": "F.Cu",
+"length": 1.47,
+"net": "board.led0-B",
+"pads1": [
+[
+"R21",
+"1"
+]
+],
+"pads2": [],
+"w": 0.2,
+"x1": 70.35,
+"x2": 70.35,
+"y1": 82.545,
+"y2": 81.075
+},
+{
+"arc": false,
+"layer": "B.Cu",
+"length": 0.3535533905932738,
+"net": "board.led0-B",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 70.35,
+"x2": 70.1,
+"y1": 71.325,
+"y2": 71.075
+},
+{
+"arc": false,
+"layer": "B.Cu",
+"length": 3.0,
+"net": "board.led0-B",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 70.35,
+"x2": 70.35,
+"y1": 74.325,
+"y2": 71.325
+},
+{
+"arc": false,
+"layer": "In2.Cu",
+"length": 2.25,
+"net": "board.led0-B",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 71.1,
+"x2": 71.1,
+"y1": 77.325,
+"y2": 75.075
+},
+{
+"arc": false,
+"layer": "In2.Cu",
+"length": 0.7071067811865476,
+"net": "board.led0-B",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 71.6,
+"x2": 71.1,
+"y1": 77.825,
+"y2": 77.325
+},
+{
+"arc": false,
+"layer": "In2.Cu",
+"length": 1.767766952966369,
+"net": "board.led0-B",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 70.35,
+"x2": 71.6,
+"y1": 81.075,
+"y2": 79.825
+},
+{
+"arc": false,
+"layer": "In2.Cu",
+"length": 2.0,
+"net": "board.led0-B",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 71.6,
+"x2": 71.6,
+"y1": 79.825,
+"y2": 77.825
+},
+{
+"arc": false,
+"layer": "In2.Cu",
+"length": 1.0606601717798214,
+"net": "board.led0-B",
+"pads1": [],
+"pads2": [],
+"w": 0.2,
+"x1": 71.1,
+"x2": 70.35,
+"y1": 75.075,
+"y2": 74.325
+}
+],
+"vias": [
+{
+"bottom": "B.Cu",
+"d": 0.45,
+"drill": 0.3,
+"net": "board.led1-data_out",
+"top": "F.Cu",
+"x": 87.033201,
+"y": 75.5
+},
+{
+"bottom": "B.Cu",
+"d": 0.45,
+"drill": 0.3,
+"net": "board.led1-B",
+"top": "F.Cu",
+"x": 93.405,
+"y": 74.3
+},
+{
+"bottom": "B.Cu",
+"d": 0.45,
+"drill": 0.3,
+"net": "board.led1-B",
+"top": "F.Cu",
+"x": 90.605,
+"y": 74.5
+},
+{
+"bottom": "B.Cu",
+"d": 0.45,
+"drill": 0.3,
+"net": "board.led0-B",
+"top": "F.Cu",
+"x": 70.1,
+"y": 71.075
+},
+{
+"bottom": "B.Cu",
+"d": 0.45,
+"drill": 0.3,
+"net": "board.led0-B",
+"top": "F.Cu",
+"x": 70.35,
+"y": 74.325
+},
+{
+"bottom": "B.Cu",
+"d": 0.45,
+"drill": 0.3,
+"net": "board.led0-B",
+"top": "F.Cu",
+"x": 70.35,
+"y": 81.075
+}
+],
+"zones": []
+}

@@ -31,7 +31,7 @@ def project_collectively(graph, constraints, fixed, sweeps=160):
     """Repair simultaneous mesh poses locally without repacking the whole board."""
     candidate=BoardGraph.from_json(graph.to_json());parts=candidate.components
     width,height=outline_size(candidate,constraints)
-    limits=hard_group_limits(constraints,fixed);keepouts=keepout_rects(candidate,constraints,fixed)
+    limits=hard_group_limits(constraints,{c.ref:c.pos for c in candidate.components});keepouts=keepout_rects(candidate,constraints,fixed)
     movable={c.ref for c in parts if c.ref not in fixed}
     sides={c.ref:set(occupied_sides(c)) for c in parts}
     eps=1e-5
@@ -97,7 +97,7 @@ def deform(graph,constraints,rules,pressure,*,strength=1.,mesh_pitch=6.,max_move
     if tensors is None:return None
     rects=[courtyard_rect(c) for c in parts];half=torch.tensor([[r.w/2,r.h/2] for r in rects],dtype=dtype)
     same=torch.tensor([[i<j and bool(set(occupied_sides(a))&set(occupied_sides(b))) for j,b in enumerate(parts)] for i,a in enumerate(parts)])
-    keepouts=keepout_rects(g,constraints,fixed);limits=hard_group_limits(constraints,fixed)
+    keepouts=keepout_rects(g,constraints,fixed);limits=hard_group_limits(constraints,{c.ref:c.pos for c in g.components})
     legalizer_failures=[];candidates=[]
     diagnostics={} if diagnostics is None else diagnostics
     diagnostics["attempts"]=legalizer_failures

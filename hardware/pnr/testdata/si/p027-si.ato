@@ -1,0 +1,3 @@
+# SI v1 fixture: the @pnr-si bindings proposed for splanc_mini.ato (both LED channels).
+    # @pnr-si {"name":"led0_data","profile":"ws2812b_din","driver":"led0.shifter:4","series":"led0.term","connector":"led0.conn:2","return":"led0.conn:3"}
+    # @pnr-si {"name":"led1_data","profile":"ws2812b_din","driver":"led1.shifter:4","series":"led1.term","connector":"led1.conn:2","return":"led1.conn:3"}

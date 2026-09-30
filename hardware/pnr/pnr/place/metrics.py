@@ -3,6 +3,10 @@
 These score a :class:`pnr.graph.BoardGraph`'s current placement and back the
 Phase 2 acceptance test: half-perimeter wirelength (the quality number), plus the
 hard-legality checks (overlaps, outline containment, fixed poses, keep-outs).
+
+PNR_PAIR_LANDING_RESERVE=1 (src13): overlap_pairs / hard_violations /
+translation_checker see diff-pair via landing reserves through placement_rects
+(a bottom part over a top terminal part's landing is an overlap).
 """
 
 from __future__ import annotations
@@ -24,7 +28,7 @@ from .geometry import (
     pin_positions,
     resolve_fixed_poses,
     resolve_hard_sides,
-    hard_group_limits,
+    hard_group_limits, hard_group_edges, resolve_hard_rotations,
 )
 
 
@@ -72,6 +76,23 @@ def outside_outline(graph: BoardGraph, width: float, height: float, exclude=()) 
     ]
 
 
+def pad_edge_violations(graph: BoardGraph, width: float, height: float, pad_edge, exclude=()) -> List[str]:
+    """Refs (not in ``exclude``) whose pads come closer than ``pad_edge[0]`` or
+    whose drills closer than ``pad_edge[1]`` to the ``[0,width] x [0,height]``
+    outline (PNR_PAD_EDGE_CLEARANCE=1; see pnr.place.legalize.pad_edge_box)."""
+    from .legalize import pad_edge_box
+    ex = set(exclude)
+    out = []
+    for c in graph.components:
+        if c.ref in ex or not c.pads:
+            continue
+        x_lo, x_hi, y_lo, y_hi = pad_edge_box(c, pad_edge, width, height)
+        x, y = c.pos
+        if not (x_lo - 1e-6 <= x <= x_hi + 1e-6 and y_lo - 1e-6 <= y <= y_hi + 1e-6):
+            out.append(c.ref)
+    return out
+
+
 def in_keepout(graph: BoardGraph, keepouts: List[Rect], clearance: float = 0.0) -> List[str]:
     """Refs whose courtyard intrudes into any keep-out region."""
     out: List[str] = []
@@ -106,17 +127,18 @@ def hard_violations(
     width, height = outline_size(graph, constraints)
     poses = resolve_fixed_poses(graph, constraints)
     keepouts = keepout_rects(graph, constraints, poses)
-    limits = hard_group_limits(constraints, poses)
+    limits = hard_group_limits(constraints, {c.ref:c.pos for c in graph.components})
+    from .rows import violations as row_violations
+    rows_bad=row_violations(graph,constraints)
     return {
         "overlaps": overlap_pairs(graph, clearance),
         "outside_outline": outside_outline(graph, width, height, exclude=constraints.locked_refs),
-        "fixed_misplaced": misplaced_fixed(graph, poses),
+        "fixed_misplaced": sorted(set(misplaced_fixed(graph, poses)) | {ref for ref,angle in resolve_hard_rotations(constraints).items() if abs((graph.component(ref).rot-angle+180)%360-180)>1e-6}),
         "side_misplaced": [ref for ref,side in resolve_hard_sides(constraints).items()
                            if graph.component(ref).side != side],
         "keepout": in_keepout(graph, keepouts, clearance),
-        "group_outside": [c.ref for c in graph.components
-                          if any(math.dist(c.pos, (ax, ay)) > radius + 1e-9
-                                 for ax, ay, radius in limits.get(c.ref, ()))],
+        "group_outside": sorted(set(rows_bad) | {member for anchor, member, radius in hard_group_edges(constraints)
+                                  if math.dist(graph.component(anchor).pos, graph.component(member).pos) > radius + 1e-9}),
     }
 
 
@@ -133,11 +155,14 @@ def translation_checker(graph, constraints, clearance=0.0):
     width,height=outline_size(graph,constraints)
     poses=resolve_fixed_poses(graph,constraints)
     keepouts=keepout_rects(graph,constraints,poses)
-    limits=hard_group_limits(constraints,poses)
+    limits=hard_group_limits(constraints,{c.ref:c.pos for c in graph.components})
     geometry={c.ref:placement_rects(c) for c in graph.components}
-    sides_required=resolve_hard_sides(constraints)
+    sides_required=resolve_hard_sides(constraints); rotations_required=resolve_hard_rotations(constraints)
     def legal(comp):
+        from .rows import violations as row_violations
+        if row_violations(graph,constraints):return False
         rect=courtyard_rect(comp);sides=frozenset(occupied_sides(comp))
+        if comp.ref in rotations_required and abs((comp.rot-rotations_required[comp.ref]+180)%360-180)>1e-6:return False
         if comp.ref in sides_required and comp.side != sides_required[comp.ref]:return False
         if comp.ref in poses and any(abs(a-b)>1e-3 for a,b in zip(comp.pos,poses[comp.ref])):return False
         if comp.ref not in constraints.locked_refs and not rect.inside(width,height):return False

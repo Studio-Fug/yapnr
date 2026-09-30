@@ -109,6 +109,33 @@ Choices made in PR1 itself, following the plan; the owner reviews them with the 
   timeout, are tagged `manual` with a comment and listed in the plan's appendix B, so CI stays
   green; the manifest records the pass set.
 
+Choices made in PR2 (the newer engine state; [migration plan](migration-plan.md) §7.3), following
+the plan; the owner reviews them with the pull request:
+
+- **Snapshot-exact commits, with merges.** Each engine snapshot becomes one commit whose engine
+  tree equals the snapshot (apart from the scrubbed files), and the side lines (Electrical221, the
+  USB pair engine, N-0001) join through merge commits, as they were developed. The alternative, a
+  linear series with the merges applied as plain commits, would lose the side lines' focused
+  diffs. Only the head builds in yapnr, as in PR1. PR2 is merged with a merge commit.
+- **Machine paths are scrubbed when a snapshot is staged, not in a later commit.** Four engine
+  files held absolute paths of the experiment area; a later scrub commit (the plan's first form)
+  would have published them in the history. Every commit that carries these files has the
+  scrubbed version; the [import manifest](history/import-manifest.md#content-scrub) lists them.
+- **No engine edits in PR2.** Tests that fail with the newer engine are tagged `manual` with a
+  comment, and the defects found while importing (workers without a timeout, Splanc defaults,
+  Splanc data in the test fixtures) are listed for PR3 in the manifest and in the plan's
+  appendix B.
+- **Electrical221 is imported as it ran in Splanc.** Its `via_coalesce`/`track_graph` cleanup is
+  on by default without a flag or an A/B result, unlike the rule for new engine behaviour; the H7
+  run uses `src15` without it. It stays as imported (faithful to Splanc's working tree) until the
+  owner decides between gating it and an A/B run.
+- **src8b's default changes stay** (the `jlc-pofv` fab profile, bounded workers, the
+  parallel-commit fix, plane-access reuse): they predate the default-off rule and are documented,
+  with their measurements, in the src8b commit.
+- **The Splanc working tree's viewer changes (`pnr_live`) go to PR4,** not PR2: the cost service
+  imports `pnr.capacitor_intent`, which was never committed, and the README reintroduces machine
+  names that PR1 scrubbed.
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.

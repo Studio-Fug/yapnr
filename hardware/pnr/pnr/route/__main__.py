@@ -130,17 +130,36 @@ def main(argv: Optional[List[str]] = None) -> int:
              if c.address for p in c.pads if p.name},
         )
 
+    from pnr.fab_profile import apply_fab_model, apply_rules
     net_names = [n.name for n in graph.nets]
     rules = compile_routing_rules(constraints, net_names)
     if args.electrical_fab:
         from pnr.electrical import annotations,resolve_currents,compile_policy,resolve_pair_chains
-        with open(args.electrical_fab) as f: fab=json.load(f)
+        with open(args.electrical_fab) as f: fab=apply_fab_model(json.load(f))
         rules=compile_policy(rules,resolve_currents(annotations(args.annotation_source),graph.components),fab)
         rules=resolve_pair_chains(rules,args.annotation_source,graph.components)
     if args.plane_access_fab:
         from pnr.plane_intent import read_annotations, resolve
         rules["plane_access_intents"] = resolve(read_annotations(args.annotation_source), graph.components)
-        rules["plane_access_fab"] = json.loads(open(args.plane_access_fab).read())
+        rules["plane_access_fab"] = apply_fab_model(json.loads(open(args.plane_access_fab).read()))
+    # Fab capability profile (PNR_FAB_PROFILE; identity for legacy): every
+    # downstream consumer of the dumped rules.json sees one rule set.
+    rules = apply_rules(rules)
+    si_dir = None
+    from pnr.si import enabled as si_enabled
+    if si_enabled():
+        # PNR_SI=1 compile-time check: resolve @pnr-si bindings, simulate the ideal
+        # (zero-length) board; an unwaived failure or an error fails the compile.
+        # si-design.json lands next to --dump-rules.
+        import pathlib
+        from pnr.si.annotations import AnnotationError
+        from pnr.si.report import SIDesignError, compile_rules as si_compile
+        si_dir = pathlib.Path(args.dump_rules).resolve().parent if args.dump_rules else None
+        try:
+            rules = si_compile(rules, args.annotation_source, graph.components, out_dir=si_dir)
+        except (SIDesignError, AnnotationError) as error:
+            print("pnr.si: " + str(error), file=sys.stderr)
+            return 3
     route_pitch = args.route_pitch or None  # 0 => auto from the fab profile
 
     placed, report = route_and_place(
@@ -161,6 +180,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         initial_pool=initial_pool,
     )
     print(report.summary())
+    if si_dir is not None:
+        # Report-only pre-layout estimate on the final placement (never gates).
+        from pnr.si.report import placement_estimate
+        placement_estimate(rules, placed.components, out_dir=si_dir)
 
     if args.dump_json:
         with open(args.dump_json, "w", encoding="utf-8") as fh:

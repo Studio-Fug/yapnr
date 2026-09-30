@@ -208,6 +208,7 @@ def score(graph,rules,*,pitch=2.,passes=3,raster=.25):
         saturation=float(np.sum(np.maximum(0,ratios-.7)**2))
         value=missing*10000+overflow_units*100+saturation*10+length*.01+vias*.03
         result=dict(score=value,unreachable_branches=missing,overflow_units=overflow_units,saturation=saturation,wire_mm=length,via_demand=vias,net_failures=net_failures,pass_index=iteration)
+        result['terms']=[dict(key=key,raw=raw,weight=weight,weighted=raw*weight) for key,raw,weight in [('unreachable_branches',missing,10000.),('capacity_overflow',overflow_units,100.),('near_saturation',saturation,10.),('wirelength',length,.01),('via_demand',vias,.03)]]
         rounds.append(result)
         if best is None or value<best['score']:
             heat=np.zeros((len(mesh.layers),mesh.ny,mesh.nx))
@@ -287,7 +288,7 @@ def rank_candidates(candidates,rules,*,budget=12,pitch=2.,passes=3):
     result=[];details=[]
     for i in selected:
         c=dict(candidates[i]);proxy=score(c['graph'],rules,pitch=pitch,passes=passes)
-        c['legacy_cost']=c['cost'];c['cost']=proxy['score'];c['proxy']=proxy;result.append(c)
+        c['legacy_cost']=c['cost'];c['screen_terms']=c.pop('terms',[]);c['cost']=proxy['score'];c['terms']=proxy['terms'];c['proxy']=proxy;result.append(c)
         details.append(dict(candidate_index=i,moves=c.get('moves',[]),cheap_score=next(s for s,j in scored if j==i),**{k:v for k,v in proxy.items() if k not in ('heatmap','rounds')}))
     result.sort(key=lambda c:c['cost'])
     return result,dict(model='hierarchical-capacity-v1',available=len(candidates),evaluated=len(result),budget=budget,screen_seconds=screen_seconds,total_seconds=time.perf_counter()-started,candidates=details)

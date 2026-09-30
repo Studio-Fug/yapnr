@@ -45,6 +45,8 @@ filegroup(
         "pnr/electrical.py",
         "pnr/electrical_audit.py",
         "pnr/native_electrical.py",
+        "pnr/pair_joint.py",
+        "pnr/pair_contact_audit.py",
         "pnr/native_drc.py",
         "pnr/route_epoch.py",
         "pnr/drc_warm/__init__.py",
@@ -61,13 +63,32 @@ filegroup(
         "pnr/placement_trials.py",
         "pnr/placement_copper.py",
         "pnr/staged_signal.py",
+        "pnr/fanout_reserve.py",
         "pnr/electrical_repair.py",
         "pnr/plane_leaf.py",
         "pnr/plane_leaf_repair.py",
         "pnr/power_detour.py",
         "pnr/power_detour_repair.py",
+        "pnr/power_bank_reuse.py",
+        "pnr/power_bank_stage.py",
+        "pnr/transaction_cleanup.py",
+        "pnr/portal_retry.py",
+        "pnr/route/detail/portal_joint.py",
+        "pnr/route/detail/spatial_conflicts.py",
         "pnr/regional_blockers.py",
         "pnr/native_loop.py",
+        # PNR_SHOVE=1 make-room transactions (imported only with the flag set).
+        "pnr/shove/__init__.py",
+        "pnr/shove/control.py",
+        "pnr/shove/gates.py",
+        "pnr/shove/geom.py",
+        "pnr/shove/ladder.py",
+        "pnr/shove/__main__.py",
+        "pnr/shove/placement.py",
+        "pnr/shove/qp.py",
+        "pnr/shove/relax.py",
+        "pnr/shove/targets.py",
+        "pnr/shove/world.py",
         "pnr/route/__init__.py",
         "pnr/route/detail/__init__.py",
         "pnr/route/detail/keyhole.py",
@@ -85,14 +106,28 @@ filegroup(
         "pnr/quality.py",
         "pnr/specctra.py",
         "pnr/writeback.py",
-    ],
+        # PNR_SI=1 (the prepare worker imports pnr.si even with the flag off): SI v1
+        # package + its committed models (profiles, cable, connector, receiver, parts).
+        "pnr/si/__init__.py",
+        "pnr/si/__main__.py",
+        "pnr/si/annotations.py",
+        "pnr/si/deck.py",
+        "pnr/si/extract.py",
+        "pnr/si/metrics.py",
+        "pnr/si/models.py",
+        "pnr/si/physics.py",
+        "pnr/si/report.py",
+        "pnr/si/runner.py",
+    ] + glob(["si_models/*.json"]),
 )
 
 # Core: graph + constraints + ingest. No torch/numpy — the light path that the
 # KiCad pcbnew flow and the schema tests use.
 py_library(
     name = "pnr",
-    srcs = glob(["pnr/*.py", "pnr/drc_warm/*.py"]),  # no torch/native imports at package load
+    srcs = glob(["pnr/*.py", "pnr/drc_warm/*.py", "pnr/shove/*.py", "pnr/si/*.py"]),  # no torch/native imports at package load
+    # SI v1 model library (pnr.si.models reads hardware/pnr/si_models next to the package).
+    data = glob(["si_models/*.json"]),
     imports = ["."],
     deps = [
         requirement("pyyaml"),  # constraints.py parses the sidecar YAML
@@ -254,7 +289,7 @@ py_test(
 # Phase 2 acceptance: placement MVP is legal + beats the ato-row HPWL baseline.
 py_test(
     name = "placement_test",
-    size = "small",  # torch global placement + legalization; ~9s
+    size = "medium",  # yapnr adaptation (PR2): over the 60 s "small" timeout on 4-vCPU CI runners
     srcs = ["tests/test_placement.py"],
     data = glob(["testdata/splanc_dev/*"]),
     imports = ["."],
@@ -387,6 +422,7 @@ py_test(
     # test_drc_clean_by_construction fails (two nets share a footprint cell).
     # Manual so `bazel test //...` stays green until it is fixed and made
     # faster (migration plan, appendix B).
+    # yapnr (PR2): unchanged with the newer engine: 848 s and the same failure.
     tags = ["manual"],
     srcs = ["tests/test_detail_route.py"],
     data = glob(["testdata/splanc_dev/*"]),
@@ -440,6 +476,14 @@ py_test(
     srcs = ["tests/test_two_sided_placement.py"],
     main = "tests/test_two_sided_placement.py",
     deps = [":pnr", ":pnr_place"],
+)
+
+py_test(
+    name = "fanout_reserve_test",
+    size = "small",
+    srcs = ["tests/test_fanout_reserve.py"],
+    main = "tests/test_fanout_reserve.py",
+    deps = [":pnr", ":pnr_detail"],
 )
 
 py_test(
@@ -528,6 +572,101 @@ py_binary(
     srcs = ["pnr/native_loop.py"],
     main = "pnr/native_loop.py",
     deps = [":pnr", ":pnr_place", ":pnr_route", ":pnr_detail"],
+)
+
+# SI v1 (PNR_SI=1): post-route SI report CLI (python -m pnr.si report|design-check|fetch).
+# The atopile_pnr(si_report = True) board rule runs it after the electrical audit.
+py_binary(
+    name = "si",
+    srcs = ["pnr/si/__main__.py"],
+    imports = ["."],
+    main = "pnr/si/__main__.py",
+    deps = [":pnr"],
+)
+
+# SI v1 unit tests: pure Python, fake KIBIS/simulator where a model or ngspice is
+# needed. runner/models also exercise the headless KiCad copy (libngspice, kicad-cli)
+# when present and skip otherwise; the live p027 cases need PNR_SI_LIVE=1.
+[py_test(
+    name = "si_%s_test" % name,
+    size = "small",
+    # yapnr (PR2): each source once. Splanc listed test_si_annotations.py and
+    # test_si_extract.py twice for their own targets, which Bazel rejects as a
+    # duplicate label, so the whole package failed to load.
+    srcs = ["tests/test_si_%s.py" % name] + [
+        f
+        for f in ["tests/test_si_annotations.py", "tests/test_si_extract.py"]
+        if f != "tests/test_si_%s.py" % name
+    ],
+    data = glob(["testdata/si/*"]),
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_si_%s.py" % name,
+    tags = ["no-sandbox"],
+    deps = [":pnr"],
+) for name in ["physics", "annotations", "metrics", "runner", "extract", "deck", "models", "report", "live"]]
+
+# SI wiring into the compile sites (route/__main__, native_loop prepare + parent gate)
+# and full_iteration side fields; imports the placer entry point (torch).
+py_test(
+    name = "si_integration_test",
+    size = "small",
+    srcs = [
+        "tests/test_si_integration.py",
+        "tests/test_si_annotations.py",
+        "tests/test_si_extract.py",
+        "tests/test_si_live.py",
+        "tests/test_si_report.py",
+    ],
+    data = glob(["testdata/si/*"]),
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_si_integration.py",
+    tags = ["no-sandbox"],
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        # yapnr (PR2): the RouteMainTest cases import pnr.route.__main__, which
+        # :pnr_route excludes; it is the source of the :pnr_fab binary.
+        ":pnr_fab",
+        requirement("pyyaml"),
+    ],
+)
+
+# src15 bus-type annotation classes (PNR_BUS_CLASSES=1): si_models/bus_classes.json,
+# derivation/precedence (pure), rules compilation, and the router's stub delay check
+# (the pcbnew class skips without KiCad Python).
+py_test(
+    name = "bus_classes_test",
+    size = "small",
+    srcs = [
+        "tests/test_bus_classes.py",
+        "tests/test_native_electrical.py",
+        "tests/test_pair_post_bridge.py",
+        "tests/test_pair_src13.py",
+    ],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_bus_classes.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        requirement("pyyaml"),
+    ],
+)
+
+# N-0002 part 1: @pnr-terminal-width parsing/policy (pure) + pcbnew geometry cases
+# (skipped without pcbnew; run with the KiCad python for the native assertions).
+py_test(
+    name = "terminal_min_width_test",
+    size = "small",
+    srcs = ["tests/test_terminal_min_width.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_terminal_min_width.py",
+    deps = [":pnr", ":pnr_detail"],
 )
 
 py_test(
@@ -692,6 +831,9 @@ py_test(
     # recorded worker fixture has no 'graph' key, which
     # native_loop.congestion_snapshot reads. Manual so `bazel test //...` stays
     # green until the fixture or the code is fixed (migration plan, appendix B).
+    # yapnr (PR2): still failing, now earlier: the test patches
+    # native_loop.subprocess.run, but native_loop starts workers through
+    # pnr.proc.run (src8b), so the fake interpreter 'fixture-python' is executed.
     tags = ["manual"],
     srcs = ["tests/test_retry_controller.py"],
     main = "tests/test_retry_controller.py",
@@ -753,6 +895,9 @@ py_test(
     # recorded worker fixture has no 'graph' key, which
     # native_loop.congestion_snapshot reads. Manual so `bazel test //...` stays
     # green until the fixture or the code is fixed (migration plan, appendix B).
+    # yapnr (PR2): still failing, now earlier: the test patches
+    # native_loop.subprocess.run, but native_loop starts workers through
+    # pnr.proc.run (src8b), so the fake interpreter 'fixture-python' is executed.
     tags = ["manual"],
     srcs = ["tests/test_progress_budget.py"],
     main = "tests/test_progress_budget.py",
@@ -765,6 +910,9 @@ py_test(
     # recorded worker fixture has no 'graph' key, which
     # native_loop.congestion_snapshot reads. Manual so `bazel test //...` stays
     # green until the fixture or the code is fixed (migration plan, appendix B).
+    # yapnr (PR2): still failing, now earlier: the test patches
+    # native_loop.subprocess.run, but native_loop starts workers through
+    # pnr.proc.run (src8b), so the fake interpreter 'fixture-python' is executed.
     tags = ["manual"],
     srcs = ["tests/test_placement_budget.py"],
     main = "tests/test_placement_budget.py",
@@ -906,4 +1054,110 @@ py_test(
     srcs = ["tests/test_pair_portals.py"],
     main = "tests/test_pair_portals.py",
     deps = [":pnr", ":pnr_detail"],
+)
+
+# Cost telemetry must reconcile with the actual optimizer and not change placement.
+py_test(
+    name = "cost_inspect_test",
+    size = "small",
+    srcs = ["tests/test_cost_inspect.py", "tests/cost_fixture.py"],
+    imports = [".", "tests"],
+    legacy_create_init = False,
+    main = "tests/test_cost_inspect.py",
+    deps = [":pnr", ":pnr_place", requirement("numpy"), requirement("torch")],
+)
+
+py_test(
+    name = "cost_capture_test",
+    size = "small",
+    srcs = ["tests/test_cost_capture.py", "tests/cost_fixture.py"],
+    imports = [".", "tests"],
+    legacy_create_init = False,
+    main = "tests/test_cost_capture.py",
+    deps = [":pnr", ":pnr_place", requirement("numpy")],
+)
+
+py_test(
+    name = "cost_outline_test",
+    size = "small",
+    srcs = ["tests/test_cost_outline.py", "tests/cost_fixture.py"],
+    imports = [".", "tests"],
+    legacy_create_init = False,
+    main = "tests/test_cost_outline.py",
+    deps = [":pnr", ":pnr_place", requirement("numpy"), requirement("torch")],
+)
+
+py_test(
+    name = "cost_pool_context_test",
+    size = "small",
+    srcs = ["tests/test_cost_pool_context.py", "tests/cost_fixture.py"],
+    imports = [".", "tests"],
+    legacy_create_init = False,
+    main = "tests/test_cost_pool_context.py",
+    deps = [":pnr", ":pnr_place", ":pnr_route", ":pnr_detail", requirement("numpy"), requirement("torch")],
+)
+
+py_test(
+    name = "probe_cost_capture_test",
+    size = "small",
+    srcs = ["tests/test_probe_cost_capture.py", "tests/cost_fixture.py"],
+    imports = [".", "tests"],
+    legacy_create_init = False,
+    main = "tests/test_probe_cost_capture.py",
+    deps = [":pnr", ":pnr_place", ":pnr_route", ":pnr_detail", requirement("numpy"), requirement("torch")],
+)
+
+py_test(
+    name = "movable_groups_test",
+    size = "small",
+    srcs = ["tests/test_movable_groups.py", "tests/cost_fixture.py"],
+    imports = [".", "tests"],
+    legacy_create_init = False,
+    main = "tests/test_movable_groups.py",
+    deps = [":pnr", ":pnr_place", requirement("numpy"), requirement("torch")],
+)
+
+py_test(
+    name = "relative_rows_test",
+    size = "small",
+    srcs = ["tests/test_relative_rows.py", "tests/cost_fixture.py"],
+    imports = [".", "tests"],
+    legacy_create_init = False,
+    main = "tests/test_relative_rows.py",
+    deps = [":pnr", ":pnr_place", requirement("numpy"), requirement("torch")],
+)
+
+py_test(
+    name = "group_backtrack_test",
+    size = "small",
+    srcs = ["tests/test_group_backtrack.py", "tests/cost_fixture.py"],
+    imports = [".", "tests"],
+    legacy_create_init = False,
+    main = "tests/test_group_backtrack.py",
+    deps = [":pnr", ":pnr_place", requirement("numpy"), requirement("torch")],
+)
+
+# Evaluate all screened placements through every native electrical phase.
+py_binary(
+    name = "electrical_pool",
+    srcs = ["pnr/electrical_pool.py"],
+    main = "pnr/electrical_pool.py",
+    imports = ["."],
+    deps = [":pnr", ":pnr_place", ":pnr_detail", ":pnr_route"],
+)
+
+py_test(
+    name = "electrical_pool_test",
+    srcs = ["tests/test_electrical_pool.py"],
+    main = "tests/test_electrical_pool.py",
+    imports = ["."],
+    deps = [":pnr"],
+)
+
+py_test(
+    name = "partial_cycle_test",
+    srcs = ["tests/test_partial_cycle.py"],
+    main = "tests/test_partial_cycle.py",
+    imports = ["."],
+    deps = [":pnr"],
 )

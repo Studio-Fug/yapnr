@@ -1,8 +1,9 @@
 """Conservative same-layer cycle reduction between copper terminals.
 
 Split centerlines at intersections and terminal projections, contract unanchored
-degree-two vertices, and remove only complete original-track chains with an
-equal-or-wider, no-longer alternative. No copper is added or narrowed. Native
+degree-two vertices, and remove redundant chains with an equal-or-wider, no-longer alternative.
+Partial edits reconstruct untouched continuations on their original centerlines
+and at their original widths. Native
 connectivity, pad-entry and DRC validation remains mandatory for acceptance.
 """
 from collections import defaultdict
@@ -38,12 +39,11 @@ def intersection(a, b, c, d):
     return None
 
 
-def redundant_chains(segments, terminals=(), max_length=3_000_000):
-    """Return deterministic whole-track cycle-removal proposals (units: nm).
+def redundant_chains(segments, terminals=(), max_length=3_000_000, allow_partial=False):
+    """Return deterministic cycle-removal proposals (units: nm).
 
-    A pad/via/branch in the middle of a track is a real graph vertex. A chain
-    touching only part of an original track is deliberately not removed; doing
-    that would also delete the continuation beyond its interior junction.
+    A pad/via/branch in the middle of a track is a real graph vertex. By default, only whole-track chains are proposed. With allow_partial,
+    replacement_segments explicitly preserve all continuations outside a chain.
     """
     nodes = {tuple(p) for s in segments for p in (s['a'], s['b'])}
     anchors = {tuple(p) for p in terminals}
@@ -83,7 +83,7 @@ def redundant_chains(segments, terminals=(), max_length=3_000_000):
                 continue
             seen.add(chain)
             ids = sorted({edges[e][4] for e in chain})
-            if any(byid[i].get('locked') or not original_edges[i] <= chain for i in ids):
+            if any(byid[i].get('locked') or (not allow_partial and not original_edges[i] <= chain) for i in ids):
                 continue
             length = sum(edges[e][3] for e in chain)
             if length <= 0 or length > max_length:
@@ -109,9 +109,17 @@ def redundant_chains(segments, terminals=(), max_length=3_000_000):
                     if new < best.get(q, math.inf):
                         best[q] = new; heapq.heappush(heap, (new, q))
             if alternate is not None:
-                proposals.append(dict(remove_tracks=ids, length_mm=length / 1e6,
-                                      retained_path_mm=alternate / 1e6, width_mm=width / 1e6,
-                                      endpoints=[start, at]))
+                proposal = dict(remove_tracks=ids, length_mm=length / 1e6,
+                                retained_path_mm=alternate / 1e6, width_mm=width / 1e6,
+                                endpoints=[start, at])
+                replacements = []
+                for identity in ids:
+                    for retained in sorted(original_edges[identity] - chain):
+                        a, b, w, _, _ = edges[retained]
+                        replacements.append(dict(track=identity, a=a, b=b, width=w))
+                if replacements:
+                    proposal['replacement_segments'] = replacements
+                proposals.append(proposal)
     return sorted(proposals, key=lambda p: (-p['length_mm'], p['remove_tracks']))
 
 
@@ -142,7 +150,13 @@ def cycle_candidates(board, rules, sources, max_length_mm=3):
                 if touch(t, terminal, la):
                     p = terminal.GetPosition()
                     anchors.add(projection((p.x, p.y), a, b))
-        for proposal in redundant_chains(segments, anchors, round(max_length_mm * 1e6)):
+        choices = redundant_chains(segments, anchors, round(max_length_mm * 1e6))
+        if not choices:
+            # Only fall back to partial-track edits after whole-track cleanup.
+            # Unselected portions are explicitly reconstructed at original width.
+            choices = redundant_chains(segments, anchors, round(max_length_mm * 1e6),
+                                       allow_partial=True)
+        for proposal in choices:
             result.append(dict(proposal, net=net, layer=board.GetLayerName(la)))
     return result
 
@@ -154,7 +168,23 @@ def apply_cycle(board, proposal):
         t = items[identity]
         if t.IsLocked() or t.GetClass() != 'PCB_TRACK' or t.GetNetname() != proposal['net']:
             raise ValueError('stale or protected cycle proposal')
+    import pcbnew
+    replacements = []
+    for piece in proposal.get('replacement_segments', []):
+        source = items[piece['track']]
+        a, b = tuple(piece['a']), tuple(piece['b'])
+        ends = [(v.x, v.y) for v in (source.GetStart(), source.GetEnd())]
+        if (piece['track'] not in proposal['remove_tracks'] or source.IsLocked()
+                or piece['width'] != source.GetWidth() or a == b
+                or not all(on_segment(p, *ends) for p in (a, b))):
+            raise ValueError('invalid retained original-track segment')
+        t = pcbnew.PCB_TRACK(board)
+        t.SetStart(pcbnew.VECTOR2I(*a)); t.SetEnd(pcbnew.VECTOR2I(*b))
+        t.SetLayer(source.GetLayer()); t.SetWidth(source.GetWidth())
+        t.SetNetCode(source.GetNetCode()); replacements.append(t)
     removed = [items[identity] for identity in proposal['remove_tracks']]
+    for t in replacements:
+        board.Add(t); t.thisown = False
     for t in removed:
         board.Remove(t)
     board.BuildConnectivity()

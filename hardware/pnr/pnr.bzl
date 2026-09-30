@@ -63,16 +63,21 @@ def _pcbnew_env(info, pnr_pp_file):
     ki_py = info.kicad_python.path if info.kicad_python else ""
     ki_cli = _kicad_cli(info)
     return "\n".join([
-        '_KI_CLI="%s"' % ki_cli,
+        # PNR_KICAD_CLI / PNR_KICAD_PYTHON (src15; pass them with --action_env) override
+        # the toolchain paths, e.g. the headless KiCad bundle that registers no Dock
+        # app; when PNR_KICAD_PYTHON is set the /Applications KiCad python is never tried.
+        '_KI_CLI="${PNR_KICAD_CLI:-%s}"' % ki_cli,
         'command -v "$_KI_CLI" >/dev/null 2>&1 && _KI_CLI="$(command -v "$_KI_CLI")"',
         '_KI_ROOT="$(cd "$(dirname "$(readlink -f "$_KI_CLI")")/.." 2>/dev/null && pwd || true)"',
         '_KI_SP="$(ls -d "$_KI_ROOT"/lib/python3*/site-packages 2>/dev/null | head -1 || true)"',
         # PNR package dir: parent of the dir holding graph.py (…/hardware/pnr).
         '_PNR_PP="$(cd "$(dirname "$(dirname \'%s\')")" && pwd)"' % pnr_pp_file.path,
         '_KI_PP="${_KI_SP:+$_KI_SP:}$_PNR_PP"',
-        '_KI_PY="%s"' % ki_py,
+        '_KI_PY="${PNR_KICAD_PYTHON:-%s}"' % ki_py,
+        '_KI_GUI_PY=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3',
+        '[ -z "${PNR_KICAD_PYTHON:-}" ] || _KI_GUI_PY=""',
         'if [ -z "$_KI_PY" ] || ! PYTHONPATH="$_KI_PP" "$_KI_PY" -c "import pcbnew" >/dev/null 2>&1; then',
-        '  for _c in "${KICAD_PYTHON:-}" /Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3 python3; do',
+        '  for _c in "${KICAD_PYTHON:-}" "$_KI_GUI_PY" python3; do',
         '    if [ -n "$_c" ] && command -v "$_c" >/dev/null 2>&1 && PYTHONPATH="$_KI_PP" "$_c" -c "import pcbnew" >/dev/null 2>&1; then _KI_PY="$_c"; break; fi',
         "  done",
         "fi",
@@ -112,6 +117,19 @@ def _pnr_board_impl(ctx):
     diagnostics = ctx.actions.declare_directory(ctx.label.name + ".diagnostics")
     if ctx.file.electrical_fab and not ctx.files.annotation_sources:
         fail("electrical_fab requires annotation_sources")
+    if ctx.attr.si_report and not ctx.files.annotation_sources:
+        fail("si_report requires annotation_sources (the @pnr-si bindings)")
+
+    # SI v1 (si_report = True): PNR_SI=1 for every step, so the placer's rules compile
+    # and the native controller's prepare run the design-time @pnr-si check (fail the
+    # build unless waived; si-design.json in the diagnostics dir), and a post-route SI
+    # report (side fields only, never fails the build) runs after the electrical audit.
+    si_rpt = ctx.actions.declare_file(ctx.label.name + ".si-report.json") if ctx.attr.si_report else None
+    si_design = ctx.actions.declare_file(ctx.label.name + ".si-design.json") if ctx.attr.si_report else None
+    si_outputs = [si_rpt, si_design] if ctx.attr.si_report else []
+    # The placer sees the annotation sources through electrical_args; without an
+    # electrical fab the SI compile still needs them.
+    si_args = " ".join(['--annotation-source "%s"' % f.path for f in ctx.files.annotation_sources]) if ctx.attr.si_report and not ctx.file.electrical_fab else ""
     electrical_args = (("--electrical-fab \"%s\" " % ctx.file.electrical_fab.path) + " ".join(['--annotation-source "%s"' % f.path for f in ctx.files.annotation_sources])) if ctx.file.electrical_fab else ""
     placer = ctx.executable.placer
     graph_py = _graph_py(ctx)
@@ -126,6 +144,7 @@ def _pnr_board_impl(ctx):
         'mkdir -p "$_WORK"',
         '_WORK="$(cd "$_WORK" && pwd)"',
         'echo "PnR diagnostics: $_WORK"',
+    ] + (['export PNR_SI=1'] if ctx.attr.si_report else []) + [
         _pcbnew_env(info, graph_py),
         # Canonical source geometry preserves multi-shape terminals before ingest.
         (_ki_run('-m pnr.source_footprints "%s" --out "$_WORK/source.kicad_pcb" --report "$_WORK/source-footprints.json" %s' % (in_pcb.path, footprint_args))
@@ -140,7 +159,7 @@ def _pnr_board_impl(ctx):
             ctx.file.constraints.path,
             ctx.attr.placement_rounds,
             "--allow-unconverged" if ctx.attr.allow_unconverged or ctx.file.electrical_fab else "",
-            electrical_args + (' --plane-access-fab "%s"' % ctx.file.plane_access_fab.path if ctx.file.plane_access_fab else ""),
+            electrical_args + (' --plane-access-fab "%s"' % ctx.file.plane_access_fab.path if ctx.file.plane_access_fab else "") + (" " + si_args if si_args else ""),
         ),
         # 3. writeback: place the optimized layout + net classes + the OWN detailed
         # router's tracks/vias onto the board (replaces FreeRouting), frame
@@ -158,20 +177,35 @@ def _pnr_board_impl(ctx):
         'cp "%s" "$_WORK/board.kicad_pro"' % out_pro.path,
         _ki_run('-m pnr.library_table --out "$_WORK/fp-lib-table" %s' % footprint_args),
         # Native electrical routing and placement feedback, after actual plane fill.
-        (('"%s" "%s" --repo "$PWD" --rules "$_WORK/rules.json" --constraints "%s" --out-dir "$_WORK/native-loop" --kicad-python "$_KI_PY" --kicad-cli "%s" --early-pairs --cycles 12 --route-attempts 40 --placement-attempts 2 --search-seconds 90 --seconds %d %s' % (
-            ctx.executable._native_controller.path, "$_WORK/board.kicad_pcb", ctx.file.constraints.path, _kicad_cli(info), ctx.attr.native_seconds, electrical_args,
-        )) if ctx.file.electrical_fab else 'true'),
+        (('if [ "${PNR_FULL_ELECTRICAL_POOL:-0}" = "1" ]; then\n' +
+           ('"%s" --diagnostics "$_WORK" --out-dir "$_WORK/native-loop" --constraints "%s" --electrical-fab "%s" --plane-fab "%s" --kicad-python "$_KI_PY" --kicad-cli "%s" --seconds "${PNR_ELECTRICAL_POOL_SECONDS:-%d}" --workers "${PNR_ELECTRICAL_POOL_WORKERS:-2}" --route-workers "${PNR_ELECTRICAL_ROUTE_WORKERS:-4}" %s\n' % (
+               ctx.executable._electrical_controller.path, ctx.file.constraints.path,
+               ctx.file.electrical_fab.path, ctx.file.plane_access_fab.path,
+               "$_KI_CLI", ctx.attr.native_seconds,
+               " ".join(['--annotation-source "%s"' % f.path for f in ctx.files.annotation_sources]))) +
+           ('cp "$_WORK/native-loop/selected-plane-access.json" "%s"\n' % access_rpt.path) +
+           'else\n' + (('"%s" "%s" --repo "$PWD" --rules "$_WORK/rules.json" --constraints "%s" --out-dir "$_WORK/native-loop" --kicad-python "$_KI_PY" --kicad-cli "%s" --early-pairs --cycles 12 --route-attempts 40 --placement-attempts 2 --search-seconds 90 --seconds %d %s' % (
+            ctx.executable._native_controller.path, "$_WORK/board.kicad_pcb", ctx.file.constraints.path, "$_KI_CLI", ctx.attr.native_seconds, electrical_args,
+        )) if ctx.file.electrical_fab else 'true') + '\nfi') if ctx.file.electrical_fab else 'true'),
         (('cp "$_WORK/native-loop/best/candidate.kicad_pcb" "%s"\ncp "$_WORK/native-loop/best/candidate.kicad_pro" "%s"\ncp "$_WORK/native-loop/progress.json" "%s"\ncp "$_WORK/native-loop/policy/prepare.json" "$_WORK/rules.json"' % (out_pcb.path,out_pro.path,native_rpt.path)) if ctx.file.electrical_fab else ("echo '{}' > \"%s\"" % native_rpt.path)),
         # Reuse through-vias and reduce redundant track cycles before final pad-entry
         # validation. Each transaction is independently filled and native-DRC gated.
         _ki_run('-m pnr.via_coalesce "%s" --out "%s" --rules "$_WORK/rules.json" --report "%s" --work-dir "$_WORK/coalesce" --kicad-cli "%s" %s' % (
-            out_pcb.path, out_pcb.path, coalesce_rpt.path, _kicad_cli(info),
+            out_pcb.path, out_pcb.path, coalesce_rpt.path, "$_KI_CLI",
             " ".join(['--annotation-source "%s"' % f.path for f in ctx.files.annotation_sources]),
         )),
         # Reject unresolved grazing/undersized trace entries after all fanouts.
         _ki_run('-m pnr.pad_entry "%s" --out "%s" --rules "$_WORK/rules.json" --report "%s" --strict' % (out_pcb.path, out_pcb.path, pad_rpt.path)),
         _ki_run('-m pnr.planes "%s" --rules "$_WORK/rules.json" --refill-only' % out_pcb.path),
         (_ki_run('-m pnr.electrical_audit "%s" --rules "$_WORK/native-loop/policy/prepare.json" --out "%s"' % (out_pcb.path,electrical_rpt.path)) if ctx.file.electrical_fab else ("echo '{}' > \"%s\"" % electrical_rpt.path)),
+    ] + ([
+        # SI v1 post-route report on the final board (rules carry si_intents). The
+        # pcbnew dump runs under $_KI_PY; simulation children under the si binary's python.
+        ('PNR_SI_KICAD_PYTHON="$_KI_PY" PNR_SI_KICAD_PYTHONPATH="$_KI_PP" "%s" report "%s" --rules "$_WORK/rules.json" --out "$_WORK/si" --report-name si-report.json || echo "pnr: SI report finished with errors (see %s)" >&2\n' % (
+            ctx.executable._si_tool.path, out_pcb.path, si_rpt.short_path,
+        ) + 'cp "$_WORK/si/si-report.json" "%s"\n' % si_rpt.path +
+          'if [ -f "$_WORK/native-loop/policy/si-design.json" ]; then cp "$_WORK/native-loop/policy/si-design.json" "%s"; else cp "$_WORK/si-design.json" "%s"; fi' % (si_design.path, si_design.path)),
+    ] if ctx.attr.si_report else []) + [
         # Validate in an isolated project folder with the source libraries.
         'cp "%s" "$_WORK/board.kicad_pcb"' % out_pcb.path,
         'cp "%s" "$_WORK/board.kicad_pro"' % out_pro.path,
@@ -179,7 +213,7 @@ def _pnr_board_impl(ctx):
         _ki_run('-m pnr.library_table --portable --out "%s" %s' % (out_libs.path, footprint_args)),
         # 5. DRC report (gated iff drc_gate).
         '"%s" pcb drc "$_WORK/board.kicad_pcb" -o "%s" --format report %s || _DRC=$?' % (
-            _kicad_cli(info),
+            "$_KI_CLI",
             drc_rpt.path,
             drc_severity,
         ),
@@ -206,10 +240,10 @@ def _pnr_board_impl(ctx):
     )
 
     ctx.actions.run_shell(
-        outputs = [out_pcb, out_pro, out_libs, drc_rpt, quality_rpt, access_rpt, pad_rpt, coalesce_rpt, native_rpt, electrical_rpt, diagnostics],
+        outputs = [out_pcb, out_pro, out_libs, drc_rpt, quality_rpt, access_rpt, pad_rpt, coalesce_rpt, native_rpt, electrical_rpt, diagnostics] + si_outputs,
         inputs = inputs,
         # files_to_run stages the placer py_binary AND its runfiles tree.
-        tools = [ctx.attr.placer[DefaultInfo].files_to_run, ctx.attr._native_controller[DefaultInfo].files_to_run],
+        tools = [ctx.attr.placer[DefaultInfo].files_to_run, ctx.attr._native_controller[DefaultInfo].files_to_run, ctx.attr._electrical_controller[DefaultInfo].files_to_run] + ([ctx.attr._si_tool[DefaultInfo].files_to_run] if ctx.attr.si_report else []),
         command = cmd,
         mnemonic = "PnrBoard",
         progress_message = "PnR place+route -> %s" % out_pcb.short_path,
@@ -219,7 +253,7 @@ def _pnr_board_impl(ctx):
         execution_requirements = {"local": "1", "no-sandbox": "1"},
     )
     return [
-        DefaultInfo(files = depset([out_pcb, out_pro, out_libs, drc_rpt, quality_rpt, access_rpt, pad_rpt, coalesce_rpt, native_rpt, electrical_rpt, diagnostics])),
+        DefaultInfo(files = depset([out_pcb, out_pro, out_libs, drc_rpt, quality_rpt, access_rpt, pad_rpt, coalesce_rpt, native_rpt, electrical_rpt, diagnostics] + si_outputs)),
         AtopileLayoutInfo(pcb = out_pcb, bom = bom),
         PnrReportsInfo(drc = drc_rpt, quality = quality_rpt, project = out_pro, library_table = out_libs, footprints = ctx.files.footprints),
     ]
@@ -233,6 +267,7 @@ _pnr_board = rule(
         "native_seconds": attr.int(default = 900),
         "placement_rounds": attr.int(default = 6),
         "_native_controller": attr.label(default = "//hardware/pnr:native_loop", executable = True, cfg = "exec"),
+        "_electrical_controller": attr.label(default = "//hardware/pnr:electrical_pool", executable = True, cfg = "exec"),
         "_regional_adapter": attr.label(default = "//hardware/tools:keyhole_region.py", allow_single_file = True),
         "plane_access_fab": attr.label(allow_single_file = [".json"], doc = "Explicit plating/loss/drop/trace model required with source annotations."),
         "constraints": attr.label(allow_single_file = [".yaml", ".yml"], mandatory = True, doc = "Sidecar constraints.yaml (design §3)."),
@@ -244,6 +279,8 @@ _pnr_board = rule(
         "quality_gate": attr.bool(default = False, doc = "Fail the build if a diff-pair/length-match check fails (else report only)."),
         "require_routed": attr.bool(default = True, doc = "Fail the build if any net is left unrouted (the routing-completeness gate)."),
         "_pnr_srcs": attr.label(default = "//hardware/pnr:pnr_kicad_srcs", doc = "Stdlib pnr sources for the pcbnew steps."),
+        "si_report": attr.bool(default = False, doc = "SI v1 (PNR_SI=1): design-time @pnr-si check at rules compile (fails the build unless waived) + post-route SI report <name>.si-report.json / .si-design.json (side fields only)."),
+        "_si_tool": attr.label(default = "//hardware/pnr:si", executable = True, cfg = "exec"),
     },
     toolchains = [TOOLCHAIN_TYPE],
 )
@@ -261,7 +298,7 @@ def _pnr_fab_impl(ctx):
     project = reports.project
     library_table = reports.library_table
     outdir = ctx.actions.declare_directory(ctx.label.name)
-    kc = _kicad_cli(info)
+    kc = "${PNR_KICAD_CLI:-%s}" % _kicad_cli(info)  # PNR_KICAD_CLI override (src15)
 
     cmd = "\n".join([
         "set -euo pipefail",
@@ -319,6 +356,7 @@ def atopile_pnr(
         require_routed = True,
         allow_unconverged = True,
         board_name = None,
+        si_report = False,
         visibility = None,
         tags = []):
     """Declare the end-to-end PnR fab flow for a resolved atopile board.
@@ -337,6 +375,9 @@ def atopile_pnr(
       require_routed: fail the build if any net is left unrouted (default True).
       allow_unconverged: proceed even if the place↔route loop leaves overflow.
       board_name: board name stamped into the graph (default: `<name>.board`).
+      si_report: SI v1 (PNR_SI=1): design-time `@pnr-si` check at rules compile
+        (fails the build unless a `@pnr-si-waiver` covers it) and a post-route SI
+        report `<name>.board.si-report.json` (report only). Default off.
       visibility: standard Bazel visibility, applied to both sub-targets.
       tags: extra tags applied to both sub-targets.
     """
@@ -356,6 +397,7 @@ def atopile_pnr(
         require_routed = require_routed,
         allow_unconverged = allow_unconverged,
         board_name = board_name,
+        si_report = si_report,
         visibility = visibility,
         tags = tags,
     )

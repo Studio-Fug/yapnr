@@ -3,6 +3,11 @@
 Controller runs under the PnR Python; workers under KiCad Python. Native boards,
 not internal router estimates, are the acceptance authority. Placement moves
 are local translations with full-width terminal tethers, never a global ripup.
+
+PNR_PAIR_LANDING_RESERVE=1 (src13, default off): translation moves
+(placements) and pair D-move proposals (pair_placements) honour the diff-pair via
+landing reserves of pnr.place.pair_landing; a board placed without them keeps
+legal moves possible by relaxing only the reserves it already violates.
 """
 import argparse
 from collections import Counter, defaultdict
@@ -18,6 +23,29 @@ import time
 from pnr.placement_trials import diverse_pair_poses
 
 
+def open_net_coverage(report, item_nets):
+    """Count exact current native opens without reusing initial coverage.
+
+    Pad/item UUIDs are authoritative while present. Newly routed track UUIDs may
+    not exist in the last inventory; match their native description only against
+    known net names. Conflicting or unresolved identities retain an unknown
+    bucket so counts can never silently disappear.
+    """
+    known = {name for name in item_nets.values() if name}
+    coverage = Counter()
+    for finding in report['unconnected_items']:
+        names = set()
+        for item in finding.get('items', []):
+            name = item_nets.get(item.get('uuid'))
+            if name:
+                names.add(name)
+            else:
+                description = item.get('description', '')
+                names.update(n for n in known if '[' + n + ']' in description)
+        coverage[next(iter(names)) if len(names) == 1 else 'unknown'] += 1
+    return coverage
+
+
 def read(p):
     return json.loads(Path(p).read_text())
 
@@ -26,13 +54,40 @@ def save(p, value):
     Path(p).write_text(json.dumps(value, indent=2) + '\n')
 
 
+def copy_lib_table(source, folder):
+    """Give a board written into folder its source project's footprint table.
+
+    Without it native DRC reports every footprint as lib_footprint_issues and
+    gate() rejects the board. Returns whether source had a table to copy.
+    """
+    table = source.parent / 'fp-lib-table'
+    if not table.exists():
+        return False
+    (folder / 'fp-lib-table').write_text(table.read_text().replace('${KIPRJMOD}', str(source.parent.resolve())))
+    return True
+
+
 def copy_board(source, target):
     target.parent.mkdir(parents=True, exist_ok=True)
     for ext in ['.kicad_pcb', '.kicad_pro']:
         shutil.copyfile(source.with_suffix(ext), target.with_suffix(ext))
-    table = source.parent / 'fp-lib-table'
-    if table.exists():
-        (target.parent / 'fp-lib-table').write_text(table.read_text().replace('${KIPRJMOD}', str(source.parent.resolve())))
+    # Fab-profile custom rules travel with the project (native DRC rewrites them
+    # anyway; copying keeps warm/interactive sessions on the same policy).
+    if source.with_suffix('.kicad_dru').exists():
+        shutil.copyfile(source.with_suffix('.kicad_dru'), target.with_suffix('.kicad_dru'))
+    copy_lib_table(source, target.parent)
+
+
+# Labels passed to phase(); PNR_STOP_AFTER_PHASE must name one of them.
+PHASE_LABELS = ('02-usb-pairs', '03-early-power', '04-early-plane', '05-early-power-refine', '06-signals',
+                '06b-power-bank-consolidation', '07-native-refinement', '08b-power-bank-consolidation')
+
+
+class StopAfterPhase(Exception):
+    """PNR_STOP_AFTER_PHASE reached; result is the loop's written best board."""
+    def __init__(self, label, result):
+        super().__init__(label)
+        self.label, self.result = label, result
 
 
 def native_worker(a):
@@ -41,7 +96,8 @@ def native_worker(a):
     from pnr.via_coalesce import partition, preserved, protected, touch
     from pnr.pad_entry import snapshot
     from pnr.plane_access import uid
-    b = k.LoadBoard(str(a.board)); b.BuildConnectivity()
+    from pnr.fab_profile import load_board  # custom rules in force for the 'check' refill
+    b = load_board(a.board); b.BuildConnectivity()
     rules = read(a.rules)
     excluded, intents = protected(b, rules, a.annotation_source)
     movement_excluded=set(excluded)
@@ -58,8 +114,24 @@ def native_worker(a):
         from pnr.electrical import annotations, resolve_currents, compile_policy, resolve_pair_chains
         g = build_graph(b)
         resolved = resolve_currents(annotations(a.annotation_source), g.components)
-        compiled = compile_policy(rules, resolved, read(a.electrical_fab))
+        from pnr.fab_profile import apply_fab_model, apply_rules
+        compiled = compile_policy(rules, resolved, apply_fab_model(read(a.electrical_fab)))
         compiled = resolve_pair_chains(compiled, a.annotation_source, g.components)
+        compiled = apply_rules(compiled)
+        from pnr.si import enabled as si_enabled
+        if si_enabled():
+            # PNR_SI=1: resolve @pnr-si bindings here (graph + pcbnew); the parent runs
+            # the design-time check (pnr.si.report.gate_rules_file) in the pnr runtime.
+            from pnr.si.annotations import AnnotationError
+            from pnr.si.extract import estimate_geometries
+            from pnr.si.report import resolve_intents
+            try:
+                intents = resolve_intents(a.annotation_source, g.components)
+            except AnnotationError as error:
+                sys.exit('pnr.si: @pnr-si annotation error: %s' % error)
+            compiled = dict(compiled, si_intents=intents)
+            from pnr.si.physics import stackup
+            save(a.report.parent / 'si-estimate.json', estimate_geometries(intents, g.components, st=stackup(compiled)))
         save(a.report, compiled)
         return
     if a.worker == 'terminal-blockers':
@@ -76,6 +148,7 @@ def native_worker(a):
             if p.GetNetCode() and (rules.get('electrical_fab') or p.GetNetname() not in excluded):
                 bynet[p.GetNetname()].append(p)
         targets = []
+        shove=os.environ.get('PNR_SHOVE')=='1'
         for net, ps in bynet.items():
             choices = []
             for i, p in enumerate(ps):
@@ -88,7 +161,17 @@ def native_worker(a):
             def root(i):
                 while roots[i]!=i:i=roots[i]
                 return i
-            for distance, _, _, p, q in sorted(choices, key=lambda c: (not restores_connection(restoration,c[1],c[2]),c[:3])):
+            ordered=sorted(choices, key=lambda c: (not restores_connection(restoration,c[1],c[2]),c[:3]))
+            trunk_ids=[]
+            if shove and rules.get('electrical_fab'):
+                # PNR_SHOVE=1 (A2): the full-current trunk (highest terminal contract,
+                # via a bulk capacitor hop, to the net-scope carrier) is targeted first,
+                # so leaf branches later attach to it instead of racing it.
+                from pnr.shove.targets import trunk_pairs
+                trunk_ids=[{uid(x),uid(y)} for x,y in trunk_pairs(net,ps,rules,lambda t:membership[uid(t)])]
+                if trunk_ids:
+                    ordered=[c for ids in trunk_ids for c in ordered if {c[1],c[2]}==ids]+[c for c in ordered if {c[1],c[2]} not in trunk_ids]
+            for distance, _, _, p, q in ordered:
                 x,y=root(membership[uid(p)]),root(membership[uid(q)])
                 if x==y:continue
                 roots[x]=y
@@ -99,6 +182,15 @@ def native_worker(a):
                 if policy['mode']=='pair':
                     related=sorted({v.rsplit('.',1)[0] for t in policy['pair'].get('terminal_chain',[]) for v in t.values()})
                 targets.append(dict(restoration_required=restores_connection(restoration,uid(p),uid(q)), net=net, source=label(p), target=label(q), source_uuid=uid(p), target_uuid=uid(q), source_xy=xy(p.GetPosition()), target_xy=xy(q.GetPosition()), distance=distance, mode=policy['mode'], pair_name=policy.get('pair',{}).get('name'), related_refs=related))
+                if shove and policy['mode'] in ('power','plane'):
+                    # A3: the root copper a branch may attach to (both groups' pads and
+                    # copper), so the search box can include it.
+                    from pnr.shove.targets import group_box
+                    targets[-1]['root_box']=group_box(b,[membership[uid(p)],membership[uid(q)]],groups,net)
+                    if {uid(p),uid(q)} in trunk_ids:targets[-1]['trunk']=True
+                    from pnr.shove.targets import leaf_current
+                    leaf=leaf_current(net,[p,q],rules)
+                    if leaf is not None:targets[-1]['leaf_rms_a']=leaf
         g = build_graph(b)
         physical_locks = sorted(c.ref for c in g.components if c.locked)
         for c in g.components:
@@ -253,6 +345,13 @@ def route_search_seconds(maximum, attempt):
 
 def scheduled_route_jobs(targets, attempts):
     """Untested terminal pairs precede repeat failures; keep shortest-first ties."""
+    if os.environ.get('PNR_SHOVE')=='1':
+        # A2: full-current trunks first; their copper roots every later branch.
+        from pnr.shove.targets import schedule_key
+        return sorted(unique_route_jobs(targets),
+                      key=lambda t: (schedule_key(t), attempts.get(route_job_key(t), 0),
+                                     not t.get('restoration_required',False),
+                                     t.get('distance', 0), route_job_key(t)))
     return sorted(unique_route_jobs(targets),
                   key=lambda t: (attempts.get(route_job_key(t), 0),
                                  not t.get('restoration_required',False),
@@ -336,6 +435,16 @@ def placements(inventory, constraints_path, scores, tried, original, max_move, r
     fixed=resolve_fixed_poses(g,cc)
     holes={h['name'] for h in cc.mounting_holes}
     g.components=[c for c in g.components if c.ref not in holes]
+    from pnr.place.pair_landing import enabled as landing_enabled
+    if rules and landing_enabled():
+        # PNR_PAIR_LANDING_RESERVE=1: moves also keep diff-pair via landings clear.
+        # A board placed without the reserve may already violate one; the
+        # translation checker needs a legal baseline, so only the recipes of the
+        # parts in those overlaps are dropped (the others stay enforced).
+        from pnr.place.pair_landing import attach,relax_violated
+        attach(g,rules)
+        relaxed=relax_violated(g,lambda:hard_violations(g,cc))
+        if relaxed:print('pair landing reserve relaxed for pre-existing overlaps: '+','.join(relaxed),file=sys.stderr)
     base=hard_violations(g,cc)
     if any(base.values()):
         raise ValueError('baseline hard placement violations: '+json.dumps(base))
@@ -362,11 +471,16 @@ def placements(inventory, constraints_path, scores, tried, original, max_move, r
 
 
 
-def pair_placements(inventory,constraints_path,pair):
+def pair_placements(inventory,constraints_path,pair,rules=None):
     """Legal source-topology proposals near the connector for intermediate ICs.
 
     This is a separate atomic coupled transaction, not a sequence of accepted
     1-mm moves dragging long USB traces across the board.
+
+    rules (PNR_PAIR_LANDING_RESERVE=1 only): the diff-pair via landing reserves
+    of pnr.place.pair_landing are part of legality; a proposal may not add a
+    hard violation (violations already present on the board, e.g. a legacy
+    placement over a landing, are not the proposal's and do not veto it).
     """
     import yaml
     from pnr.graph import BoardGraph
@@ -381,6 +495,16 @@ def pair_placements(inventory,constraints_path,pair):
     cc=compile_constraints(yaml.safe_load(Path(constraints_path).read_text()),g.refs,{c.address:c.ref for c in g.components},{f'{c.address}:{p.name}':p.net for c in g.components for p in c.pads})
     fixed=resolve_fixed_poses(g,cc);holes={h['name'] for h in cc.mounting_holes}
     g.components=[c for c in g.components if c.ref not in holes]
+    from pnr.place.pair_landing import enabled as landing_enabled
+    baseline=None
+    if rules and landing_enabled():
+        from pnr.place.pair_landing import attach
+        attach(g,rules)
+        baseline={kind:{json.dumps(v,sort_keys=True) for v in values} for kind,values in hard_violations(g,cc).items()}
+    def violates():
+        bad=hard_violations(g,cc)
+        if baseline is None:return any(bad.values())
+        return any(json.dumps(v,sort_keys=True) not in baseline.get(kind,()) for kind,values in bad.items() for v in values)
     chain=pair.get('terminal_chain',[])
     if len(chain)<3:return []
     source_ref=chain[0]['p'].rsplit('.',1)[0]
@@ -415,7 +539,7 @@ def pair_placements(inventory,constraints_path,pair):
                 c.pos=tuple(source_center[i]+axis[i]*distance+normal[i]*lateral for i in (0,1))
                 for rotation in (0,90,180,270):
                     c.rot=rotation
-                    if any(hard_violations(g,cc).values()):continue
+                    if violates():continue
                     points={key:terminal(node[key]) for key in ('p','n')}
                     lead=sum(math.dist(terminal(effective_source[key]),points[key]) for key in ('p','n'))
                     downstream=sum(math.dist(points[key],terminal(chain[-1][key])) for key in ('p','n'))
@@ -446,6 +570,15 @@ def terminal_repair_nets(worker,board,route_dir,target):
     return worker('terminal-blockers',board,folder/'probe',['--spec',str(spec)])['reopen']
 
 
+def electrical_search_bounds(mode, attempt, local, board, enabled=False):
+    # Local retries can exclude a legal full-current path around dense packages.
+    # Widen only later power attempts; the oracle still enforces exact edges,
+    # copper/current constraints, pad entries and whole-board native acceptance.
+    if mode == 'pair' or (enabled and mode == 'power' and attempt >= 3):
+        return list(board)
+    return list(local)
+
+
 def route_search_pitch(attempt):
     """Spend initial retries on broad channels before the finest pad grid.
 
@@ -460,7 +593,13 @@ def gate(before, after, checks, strict=True):
     return bool(not checks.get("reference_failures") and acceptable(before,after,checks) and (not strict or len(after['unconnected_items'])<len(before['unconnected_items'])))
 
 
-def main(argv=None):
+def main(argv=None,nested=False):
+    """Controller/worker entry. PNR_STOP_AFTER_PHASE returns its stopped best board."""
+    try:return controller(argv,nested)
+    except StopAfterPhase as stop:return stop.result
+
+
+def controller(argv=None,nested=False):
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('board',type=Path);ap.add_argument('--rules',required=True,type=Path)
     ap.add_argument('--annotation-source',action='append',default=[],type=Path)
@@ -477,15 +616,24 @@ def main(argv=None):
     ap.add_argument('--placement-attempts',type=int,default=8);ap.add_argument('--max-move',type=float,default=2)
     ap.add_argument('--search-seconds',type=float,default=20);ap.add_argument('--seconds',type=float,default=1200)
     ap.add_argument('--worker',choices=['prepare','inspect','move','unmove','check','terminal-blockers','placement-copper']);ap.add_argument('--report',type=Path);ap.add_argument('--spec',type=Path);ap.add_argument('--out',type=Path)
+    ap.add_argument('--shove-origin-board',type=Path,help='PNR_SHOVE=1: the flow origin placement (make-room nudges are capped against it); nested phases get the outer baseline')
     a=ap.parse_args(argv)
     from pnr.live import emit
     if a.worker:return native_worker(a)
     a.repo=a.repo.resolve();os.chdir(a.repo)
     if not all([a.constraints,a.out_dir,a.kicad_python,a.kicad_cli]):ap.error('controller requires constraints, out-dir and KiCad runtimes')
     if min(a.cycles,a.route_attempts,a.placement_attempts,a.max_move,a.search_seconds,a.seconds)<=0:ap.error('positive budgets required')
+    # Recursive early subphases share os.environ; only the outer loop stops.
+    stop_label=None if nested else os.environ.get('PNR_STOP_AFTER_PHASE') or None
+    if stop_label and stop_label not in PHASE_LABELS:ap.error('PNR_STOP_AFTER_PHASE must be one of: '+', '.join(PHASE_LABELS))
     a.out_dir=a.out_dir.resolve();a.out_dir.mkdir(parents=True,exist_ok=False)
     worker_root=a.out_dir/'worker-source'
     shutil.copytree(Path(__file__).resolve().parent,worker_root/'hardware/pnr/pnr',ignore=shutil.ignore_patterns('__pycache__'))
+    from pnr.si import enabled as si_enabled
+    if (si_enabled() or os.environ.get('PNR_BUS_CLASSES')=='1') and (Path(__file__).resolve().parents[1]/'si_models').is_dir():
+        # PNR_SI=1: the prepare worker resolves @pnr-si parts against the committed models;
+        # PNR_BUS_CLASSES=1: it reads si_models/bus_classes.json (pnr.si.bus_classes).
+        shutil.copytree(Path(__file__).resolve().parents[1]/'si_models',worker_root/'hardware/pnr/si_models')
     (worker_root/'hardware/tools').mkdir(parents=True)
     shutil.copyfile(a.repo/'hardware/tools/keyhole_region.py',worker_root/'hardware/tools/keyhole_region.py')
     inputs=a.out_dir/'source-inputs';inputs.mkdir()
@@ -495,6 +643,10 @@ def main(argv=None):
         origins.append(dict(original=str(source.resolve()),snapshot=str(target),sha256=hashlib.sha256(target.read_bytes()).hexdigest()));sources.append(target)
     a.annotation_source=sources
     save(inputs/'origins.json',origins)
+    # Standalone runs may pass pre-profile rules: workers get the profiled copy.
+    from pnr.fab_profile import apply_rules
+    source_rules=read(a.rules);profiled=apply_rules(source_rules)
+    if profiled is not source_rules:a.rules=inputs/'rules.fab-profile.json';save(a.rules,profiled)
     env=dict(os.environ,PYTHONPATH=str(worker_root/'hardware/pnr'))
     from pnr.phase_budget import PhaseClock
     phase_clock=PhaseClock();started=phase_clock.started;events=[];rounds=[];history={};tried=set();seq=0;failure_history={};job_attempts={};job_budget_hints={};electrical_repair_attempts=set()
@@ -502,10 +654,29 @@ def main(argv=None):
     plane_leaf_budget=RepairBudget()
     from pnr.power_detour_repair import DetourBudget
     power_detour_budget=DetourBudget()
+    if os.environ.get('PNR_SHOVE')=='1':
+        from pnr.shove.control import ShoveBudget
+        shove_budget=ShoveBudget(3 if nested else 6)
     current=a.out_dir/'baseline.kicad_pcb';copy_board(a.board.resolve(),current)
+    if os.environ.get('PNR_SHOVE')=='1':
+        # Make-room nudges are capped (0.5 mm in total) against the placement the
+        # whole flow started from, not each transaction's own start.
+        shove_origin=(a.shove_origin_board or current).resolve()
+    if profiled is not source_rules:
+        # The input project may predate the profile; the DRC gate must see the same
+        # board constraints the workers route with.
+        from pnr.writeback import patch_project_rules
+        patch_project_rules(str(current.with_suffix('.kicad_pro')),profiled)
     def invoke(cmd,log):
         with Path(log).open('w') as f:
-            subprocess.run(cmd,env=env,stdout=f,stderr=subprocess.STDOUT,check=True)
+            # KiCad's python occasionally dies by signal (seen: SIGSEGV at teardown);
+            # an identical rerun succeeds, so retry once on a signal exit only.
+            for attempt in (0,1):
+                from pnr.proc import run as run_bounded
+                code=run_bounded(cmd,env=env,stdout=f,stderr=subprocess.STDOUT)
+                if code>=0 or attempt:break
+                f.write('\n[retry after signal %d]\n'%-code);f.flush()
+            if code:raise subprocess.CalledProcessError(code,cmd)
     def worker(mode,board,folder,extra=()):
         folder.mkdir(parents=True,exist_ok=True);report=folder/(mode+'.json')
         cmd=[a.kicad_python,'-m','pnr.native_loop',str(board),'--worker',mode,'--rules',str(a.rules.resolve()),'--report',str(report)]
@@ -516,24 +687,105 @@ def main(argv=None):
         from pnr.native_drc import run_drc
         return run_drc(a.kicad_cli,board,report,env=env,final=final)
     if a.electrical_fab:
-        compiled=worker('prepare',current,a.out_dir/'policy',['--electrical-fab',str(a.electrical_fab.resolve())])
+        try:compiled=worker('prepare',current,a.out_dir/'policy',['--electrical-fab',str(a.electrical_fab.resolve())])
+        except subprocess.CalledProcessError:
+            log=a.out_dir/'policy'/'prepare.log'
+            why=[l for l in (log.read_text(errors='replace').splitlines() if log.exists() else []) if l.startswith('pnr.si:')]
+            if si_enabled() and why:sys.exit(why[-1])
+            raise
         a.rules=a.out_dir/'policy'/'prepare.json'
-    def phase(name,board,metadata=None):
+        if si_enabled() and not nested:
+            # PNR_SI=1 compile-time check: ideal-board decks gate (unless waived), the
+            # placement estimate is report-only; writes policy/si-design.json.
+            from pnr.si.report import SIDesignError, gate_rules_file
+            try:gate_rules_file(a.rules,out_dir=a.out_dir/'policy',estimates=a.out_dir/'policy'/'si-estimate.json',save_waves=False)
+            except SIDesignError as error:sys.exit(str(error))
+    def phase(name,board,metadata=None,stop=True):
         if a.phase_dir:
             from pnr.phase_capture import capture
             capture(a.phase_dir,name,board,a.rules,a.kicad_cli,metadata=metadata)
+        if stop:stop_after(name,board)
+    def stop_after(name,board):
+        # Opt-in diagnostic cut. Publish this phase's board with the normal
+        # termination contract (best copy, final DRC, progress.json, returned
+        # path) so full_iteration still coalesces, audits and scores it.
+        if name!=stop_label:return
+        result=a.out_dir/'best'/'candidate.kicad_pcb';board=Path(board)
+        if board.resolve()!=result.resolve():copy_board(board,result)
+        report=drc(result,final=True);opens=len(report['unconnected_items']);progress_path=a.out_dir/'progress.json'
+        inventory=worker('inspect',result,a.out_dir/'stopped-inventory');coverage=open_net_coverage(report,inventory['item_nets'])
+        progress=read(progress_path) if progress_path.exists() else dict(source=str(a.board.resolve()),source_sha256=hashlib.sha256(a.board.read_bytes()).hexdigest(),initial_opens=opens,elapsed_seconds=0.,prerequisite_seconds=round(phase_clock.now()-phase_clock.overall_started,2),electrical_modes_enabled=bool(a.electrical_fab),budgets=dict(cycles=a.cycles,route_attempts=a.route_attempts,placement_attempts=a.placement_attempts,seconds=a.seconds))
+        # Post-refinement phases (07/08b) keep the loop's own reason alongside.
+        if 'termination' in progress:progress.update(loop_termination=progress['termination'],elapsed_seconds=round(time.monotonic()-started,2))
+        progress.update(best=str(result),best_sha256=hashlib.sha256(result.read_bytes()).hexdigest(),opens=opens,rounds=rounds,events=events,component_scores=history,native_open_nets=dict(coverage),protected_open_nets={n:c for n,c in coverage.items() if n in inventory['excluded']},termination='stopped_after_phase',stopped_after_phase=name)
+        save(progress_path,progress)
+        print(json.dumps(dict(best=str(result),opens=opens,cycles=len(rounds),termination='stopped_after_phase')))
+        raise StopAfterPhase(name,result)
+    def bank_consolidation(board, label):
+        # Source-current bank geometry only; independent workers preserve pad
+        # partitions, qualified entries, reference and whole-current budgets.
+        # Do not multiply this pass in the recursive electrical subphases.
+        if os.environ.get('PNR_POWER_BANK_REUSE')!='1' or a.only_mode or not a.electrical_fab:
+            return board
+        folder=a.out_dir/label;folder.mkdir()
+        output=folder/'candidate.kicad_pcb'
+        previous=drc(board)
+        worker('inspect',board,folder/'reference')
+        cmd=[a.kicad_python,'-m','pnr.power_bank_stage',str(board),
+             '--rules',str(a.rules.resolve()),'--out',str(output),
+             '--report',str(folder/'result.json'),'--work-dir',str(folder/'trials'),
+             '--kicad-python',a.kicad_python,'--kicad-cli',a.kicad_cli,'--max-trials','4']
+        event=dict(stage='power_bank_consolidation',phase=label,accepted=False,folder=str(folder))
+        try:
+            invoke(cmd,folder/'run.log');summary=read(folder/'result.json')
+            checks=worker('check',output,folder/'checks',['--spec',str(folder/'reference/inspect.json')])
+            after=drc(output)
+            event.update(summary=summary,accepted=bool(summary['accepted_transactions'] and gate(previous,after,checks,strict=False)))
+        except subprocess.CalledProcessError as error:
+            event.update(status='worker_error',returncode=error.returncode)
+        events.append(event)
+        result=output if event['accepted'] else board
+        phase(label,result,event)
+        emit('route_result',board=result,data=dict(**event,opens=len(drc(result)['unconnected_items'])))
+        return result
+    def fanout(board,action,label):
+        # PNR_FANOUT_RESERVE=1: named all-net rule areas keep planned fine-pitch
+        # signal escapes free through phases 03-05; release deletes exactly them
+        # before staged signals. Both pass the partition/pad-entry/DRC gate.
+        folder=a.out_dir/('fanout-'+action);base=folder/'baseline.kicad_pcb';output=folder/'candidate.kicad_pcb'
+        copy_board(board,base);copy_board(board,output);previous=drc(base);worker('inspect',base,folder/'reference')
+        event=dict(stage='fanout_'+action,accepted=False,folder=str(folder))
+        try:
+            invoke([a.kicad_python,'-m','pnr.fanout_reserve',str(base),'--rules',str(a.rules.resolve()),'--out',str(output),
+                    '--report',str(folder/'result.json')]+(['--release'] if action=='release' else []),folder/'run.log')
+            checks=worker('check',output,folder/'checks',['--spec',str(folder/'reference/inspect.json')])
+            summary=read(folder/'result.json')
+            event.update(summary={k:summary[k] for k in ('eligible','reserved','rule_areas','released','packages','seconds') if k in summary},
+                         accepted=gate(previous,drc(output),checks,strict=False))
+        except subprocess.CalledProcessError as error:
+            event.update(status='worker_error',returncode=error.returncode)
+        events.append(event)
+        if action=='release' and not event['accepted']:raise RuntimeError('fanout release rejected; see '+str(folder))
+        result=output if event['accepted'] else board
+        phase(label,result,event,stop=False)
+        return result
     emit('phase_start',board=current,data=dict(phase='usb-pairs' if a.early_pairs else (a.only_mode or 'native-refinement'),budget_seconds=a.seconds))
     if a.early_pairs:
         if not a.electrical_fab:raise ValueError('early pairs require source electrical policy')
         from pnr.paired_bootstrap import run as route_pairs
         from pnr.staged_signal import run as route_signals
         paired=route_pairs(current,a.rules,a.constraints,a.out_dir/'early-pairs',a.kicad_python,a.kicad_cli,allow_placement=(not a.route_only or a.early_pair_placement))
-        phase('02-usb-pairs',paired)
+        phase('02-usb-pairs',paired,stop=False)
         policy=read(a.rules);policy['routed_pair_references']=read(paired.parent/'paired-reference.json');save(a.rules,policy)
+        # A stop here must still publish the routed pair references to the policy.
+        stop_after('02-usb-pairs',paired)
         # Complete high-priority electrical work before the ordinary maze can
         # consume its escape corridors. Ground access is a distinct native mode.
         # The second power sweep can reuse copper added by the earlier phases.
         powered=paired
+        reserved=os.environ.get('PNR_FANOUT_RESERVE')=='1'
+        if reserved:
+            powered=fanout(paired,'reserve','02b-fanout-reserve');reserved=powered!=paired
         for phase_index,(name,mode,cycles,attempts,seconds) in enumerate((
                 ('early-power','power',2,40,600),
                 ('early-plane','plane',1,40,180),
@@ -546,18 +798,24 @@ def main(argv=None):
                 '--out-dir',str((a.out_dir/name).resolve()),
                 '--kicad-python',a.kicad_python,'--kicad-cli',a.kicad_cli]
             if a.route_only:phase_args+=['--route-only']
+            if os.environ.get('PNR_SHOVE')=='1':phase_args+=['--shove-origin-board',str(shove_origin)]
             for source in a.annotation_source:phase_args+=['--annotation-source',str(source.resolve())]
             # No early-pairs flag: phases cannot recursively bootstrap.
-            powered=main(phase_args)
-            phase(f'{phase_index:02d}-{name}',powered,read(a.out_dir/name/'progress.json'))
+            powered=main(phase_args,nested=True)
+            label=f'{phase_index:02d}-{name}'
+            if reserved and label==stop_label:powered=fanout(powered,'release',f'{phase_index:02d}b-fanout-release');reserved=False
+            phase(label,powered,read(a.out_dir/name/'progress.json'))
+        if reserved:powered=fanout(powered,'release','05b-fanout-release')
         current=route_signals(powered,a.rules,a.constraints,a.out_dir/'staged-signal',a.kicad_python,a.kicad_cli)
         phase('06-signals',current)
+    current=bank_consolidation(current,'06b-power-bank-consolidation')
     started=phase_clock.begin_refinement()
     before=drc(current);initial=before
     inv=worker('inspect',current,a.out_dir/'initial');original=inv['footprint_poses']
-    coverage=Counter(inv['item_nets'].get(u['items'][0]['uuid'],'unknown') for u in initial['unconnected_items'])
     def record(reason='running'):
+        coverage=open_net_coverage(before,inv['item_nets'])
         save(a.out_dir/'progress.json',dict(source=str(a.board.resolve()),source_sha256=hashlib.sha256(a.board.read_bytes()).hexdigest(),best=str(current),best_sha256=hashlib.sha256(current.read_bytes()).hexdigest(),initial_opens=len(initial['unconnected_items']),opens=len(before['unconnected_items']),rounds=rounds,events=events,component_scores=history,termination=reason,elapsed_seconds=round(time.monotonic()-started,2),prerequisite_seconds=round(phase_clock.prerequisite_seconds,2),native_open_nets=dict(coverage),protected_open_nets={n:c for n,c in coverage.items() if n in inv['excluded']},electrical_modes_enabled=bool(a.electrical_fab),budgets=dict(cycles=a.cycles,route_attempts=a.route_attempts,placement_attempts=a.placement_attempts,seconds=a.seconds)))
+    portal_trials=set()
     def route_sweep(source,inventory,folder,targets=None):
         nonlocal seq
         trial_current=source;report=drc(source); failures=[];accepted_count=0
@@ -599,6 +857,13 @@ def main(argv=None):
                     if not proposal.get('accepted') or time.monotonic()-started>=a.seconds:return None
                     rd=paths[route_job_key(target)];merged=rd/'merged.kicad_pcb'
                     invoke([a.kicad_python,'-m','pnr.merge_additive',str(base),str(rd/'proposal/candidate.kicad_pcb'),str(current),str(merged)],rd/'merge.log')
+                    # merge_additive writes .kicad_pcb/.kicad_pro (+ the fab-profile
+                    # .kicad_dru, which pnr.planes also writes before it refills: KiCad
+                    # fills zones under the rules it reads at load). Without the
+                    # footprint table every footprint is a lib_footprint_issues DRC
+                    # violation and gate() rejects every parallel merge.
+                    for origin in (current,base,rd/'proposal/candidate.kicad_pcb'):
+                        if copy_lib_table(Path(origin),rd):break
                     invoke([a.kicad_python,'-m','pnr.planes',str(merged),'--rules',str(a.rules.resolve()),'--refill-only'],rd/'refill.log')
                     checks=worker('check',merged,rd/'checks',['--spec',str(folder/'reference.json')]);after=drc(merged)
                     if not gate(report,after,checks):return None
@@ -645,10 +910,13 @@ def main(argv=None):
             for s in a.annotation_source:cmd+=['--annotation-source',str(s.resolve())]
             if a.electrical_fab and target.get('mode','signal')!='signal':
                 cmd=[a.kicad_python,'-m','pnr.native_electrical',str(trial_current),'--rules',str(a.rules.resolve()),'--out-dir',str(rd),'--net',target['net'],'--source-pad',target['source'],'--target-pad',target['target'],'--bounds',*map(str,box),'--seconds',str(search_seconds),'--pitch',str(search_pitch),'--kicad-cli',a.kicad_cli]
-                if target.get('mode')=='pair':
-                    # A coupled pair transaction includes its complete source
-                    # terminal chain, not only the nearest missing-pad rectangle.
-                    index=cmd.index('--bounds');cmd[index+1:index+5]=list(map(str,bounds))
+                electrical_box=electrical_search_bounds(target.get('mode'),attempt,box,bounds,
+                    enabled=os.environ.get('PNR_WIDE_POWER_SEARCH')=='1')
+                if os.environ.get('PNR_SHOVE')=='1' and electrical_box==list(box):
+                    # A3: trunks search the board; branches include their root copper.
+                    from pnr.shove.targets import search_bounds
+                    electrical_box=search_bounds(target,attempt,box,bounds)
+                index=cmd.index('--bounds');cmd[index+1:index+5]=list(map(str,electrical_box))
                 reopened=[]
             for end in ('source','target'):
                 if target.get(end+'_uuid'):
@@ -660,7 +928,7 @@ def main(argv=None):
                 outcome=dict(status='worker_error',accepted=False)
             if a.electrical_fab and target.get('mode')=='pair' and not outcome.get('accepted'):
                 policy=read(a.rules);pair=next(p for p in policy['diff_pairs'] if target['net'] in (p['p'],p['n']))
-                proposals=pair_placements(inventory,a.constraints,pair)
+                proposals=pair_placements(inventory,a.constraints,pair,rules=policy) if os.environ.get('PNR_PAIR_LANDING_RESERVE')=='1' else pair_placements(inventory,a.constraints,pair)
                 save(folder/f'pair-proposals-{seq:03d}.json',proposals)
                 for pi,proposal in enumerate(diverse_pair_poses(proposals,4)):
                     if time.monotonic()-started>=a.seconds:break
@@ -712,6 +980,35 @@ def main(argv=None):
                             status=repair_outcome['status'],accepted=repair_outcome.get('accepted',False),folder=str(trial)))
                         if repair_outcome.get('accepted'):
                             rd=trial;outcome=repair_outcome;break
+            # PNR_SHOVE=1: make room for a blocked power/plane route (pnr.shove):
+            # copper shove, small part nudges, or a bounded signal rip-reroute. The
+            # candidate still passes the unchanged outer gate below.
+            if os.environ.get('PNR_SHOVE')=='1':
+                from pnr.shove import control as shove_control
+                if shove_control.eligible(target,outcome,True,a.electrical_fab,placement_trial,a.seconds-(time.monotonic()-started)):
+                    import hashlib
+                    board_hash=hashlib.sha256(trial_current.read_bytes()).hexdigest()
+                    if shove_budget.reserve(board_hash,route_job_key(target)):
+                        trial=folder/f'shove-{seq:03d}';spec=folder/f'shove-target-{seq:03d}.json'
+                        save(spec,dict(target,static_blockers=outcome.get('static_blockers',{}),via_blockers=outcome.get('via_blockers',{})))
+                        from pnr.shove.placement import protected_refs
+                        parts=shove_control.nudge_candidates(inventory,a.constraints,[target['source_xy'],target['target_xy']],
+                                                             exclude=protected_refs(read(a.rules)))
+                        remaining=a.seconds-(time.monotonic()-started)
+                        rcmd=[a.kicad_python,'-m','pnr.shove',str(trial_current),'--rules',str(a.rules.resolve()),
+                              '--target-json',str(spec),'--out-dir',str(trial),'--kicad-cli',a.kicad_cli,
+                              '--adapter',str(worker_root/'hardware/tools/keyhole_region.py'),
+                              '--seconds',str(max(30.,min(150.,remaining-60))),'--parts',','.join(parts),
+                              '--constraints',str(a.constraints.resolve()),'--placement-python',sys.executable,
+                              '--origin-board',str(shove_origin),
+                              '--bounds',*map(str,electrical_box if a.electrical_fab and target.get('mode','signal')!='signal' else box)]
+                        for source in a.annotation_source:rcmd+=['--annotation-source',str(source.resolve())]
+                        try:invoke(rcmd,trial.with_suffix('.log'));shove_outcome=read(trial/'result.json')
+                        except (subprocess.CalledProcessError,FileNotFoundError):shove_outcome=dict(status='worker_error',accepted=False)
+                        shove_budget.record(shove_outcome)
+                        events.append(shove_control.event(target,shove_outcome,trial,shove_budget))
+                        if shove_outcome.get('accepted'):rd=trial;outcome=shove_outcome
+                        else:outcome=shove_control.merge_failure(outcome,shove_outcome,inventory.get('owners',{}))
             # Explicit opt-in experiment: restore an ordinary plane-return leaf
             # atomically with a trapped signal, not an unchecked clearance waiver.
             if (os.environ.get('PNR_PLANE_LEAF_REPAIR')=='1' and not placement_trial
@@ -764,6 +1061,21 @@ def main(argv=None):
                     events.append(dict(stage='power_detour_repair',target=target,focus=focus,
                         status=repair_outcome['status'],accepted=repair_outcome.get('accepted',False),folder=str(trial),budget=power_detour_budget.summary()))
                     if repair_outcome.get('accepted'):rd=trial;outcome=repair_outcome;break
+            if (os.environ.get('PNR_PORTAL_REPAIR')=='1' and not placement_trial
+                    and target.get('mode','signal')=='signal' and not outcome.get('accepted')
+                    and len(portal_trials)<3):
+                from pnr.portal_retry import retry_command
+                portal_key=route_job_key(target)
+                remaining=a.seconds-(time.monotonic()-started)
+                trial=folder/f'portal-repair-{seq:03d}'
+                retry=retry_command(cmd,trial,remaining)
+                if portal_key not in portal_trials and retry:
+                    portal_trials.add(portal_key)
+                    try:invoke(retry,trial.with_suffix('.log'));portal_outcome=read(trial/'result.json')
+                    except subprocess.CalledProcessError:portal_outcome=dict(status='worker_error',accepted=False)
+                    events.append(dict(stage='portal_repair',target=target,status=portal_outcome['status'],
+                        accepted=portal_outcome.get('accepted',False),folder=str(trial),command=retry))
+                    if portal_outcome.get('accepted'):rd=trial;outcome=portal_outcome
             if not placement_trial and not terminal_repair and target.get('mode','signal')=='signal':
                 hint=progress_budget_hint(outcome,search_seconds,a.search_seconds)
                 if hint:job_budget_hints[route_job_key(target)]=hint
@@ -862,6 +1174,7 @@ def main(argv=None):
         accepted=gate(before,after,checks,strict=False)
         events.append(dict(stage='coalesce_and_graph',accepted=accepted,folder=str(cleanup)))
         if accepted:current,before=out,after
+    current=bank_consolidation(current,'08b-power-bank-consolidation')
     result=a.out_dir/'best'/'candidate.kicad_pcb';copy_board(current,result);current=result;before=drc(current,final=True);record(reason)
     print(json.dumps(dict(best=str(current),opens=len(before['unconnected_items']),cycles=len(rounds),termination=reason)))
     phase('07-native-refinement',result,read(a.out_dir/'progress.json'))

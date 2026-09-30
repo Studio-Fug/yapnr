@@ -217,6 +217,20 @@ def _component(fp, frame: _Frame) -> Component:
             through = attr in (pcbnew.PAD_ATTRIB_PTH, pcbnew.PAD_ATTRIB_NPTH)
         except Exception:  # pragma: no cover - version shim
             through = pad.GetDrillSize().x > 0
+        # Exact SMD land (Pad.land_corner): an analytic shape, drawn on its anchor,
+        # at a pad-local quarter turn, so the stored rectangle is its copper outline.
+        land_corner = None
+        quarter = (pad.GetOrientationDegrees() - fp.GetOrientationDegrees()) / 90.0
+        offset = pad.GetOffset()
+        if (not through and not is_custom and abs(quarter - round(quarter)) < 1e-6
+                and not offset.x and not offset.y and min(w_mm, h_mm) > 0):
+            shape = pad.GetShape()
+            if shape == pcbnew.PAD_SHAPE_RECT:
+                land_corner = 0.0
+            elif shape == pcbnew.PAD_SHAPE_ROUNDRECT:
+                land_corner = _mm(pad.GetRoundRectCornerRadius())
+            elif shape in (pcbnew.PAD_SHAPE_OVAL, pcbnew.PAD_SHAPE_CIRCLE):
+                land_corner = min(w_mm, h_mm) / 2
         pads.append(
             Pad(
                 name=_pad_name(pad),
@@ -230,6 +244,7 @@ def _component(fp, frame: _Frame) -> Component:
                     if pad.GetAttribute() == pcbnew.PAD_ATTRIB_PTH and pad.GetShape() in
                     (pcbnew.PAD_SHAPE_CIRCLE, pcbnew.PAD_SHAPE_OVAL,
                      pcbnew.PAD_SHAPE_RECT, pcbnew.PAD_SHAPE_ROUNDRECT) else 0.0),
+                land_corner=land_corner,
             )
         )
 

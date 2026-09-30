@@ -1,0 +1,91 @@
+{
+  "schema": "pnr-si-profile-v1",
+  "id": "ws2812b_din",
+  "description": "5 V WS2812B data from an on-board driver through the series termination, a JST PH connector and 0/1/3 m of 24 AWG lead into the first pixel's DIN.",
+  "receiver": "ws2812b-classic",
+  "connector": "jst-ph",
+  "cable": "awg24-jst-ph",
+  "measure_at": "receiver",
+  "corners": {
+    "driver": [
+      "typ",
+      "min",
+      "max"
+    ],
+    "cable_m": [
+      0.0,
+      1.0,
+      3.0
+    ],
+    "cable_z0_ohm": [
+      120.0,
+      100.0,
+      150.0
+    ]
+  },
+  "stimulus": {
+    "kind": "one rising and one falling edge (KIBIS RECTDRIVER n=1)",
+    "td_ns": 2.0,
+    "window_ns": {
+      "base": 40.0,
+      "per_cable_td": 10.0,
+      "round_to": 10.0
+    },
+    "note": "Each edge gets its own window of base + 10 x cable delay (>= 5 source round trips, 33 ohm mismatch settles to < 1 %); the pulse is high for exactly one window."
+  },
+  "analysis": {
+    "tstep_ps": 10.0,
+    "max_step_ps": 25.0
+  },
+  "limits": {
+    "rise_10_90_ns": {
+      "max": 25.0,
+      "gate": true
+    },
+    "fall_10_90_ns": {
+      "max": 25.0,
+      "gate": true
+    },
+    "nonmonotonic_edges": {
+      "max": 0,
+      "gate": true
+    },
+    "overshoot_v": {
+      "max": 0.5,
+      "gate": false,
+      "why": "report only until the via/clamp models are calibrated"
+    },
+    "undershoot_v": {
+      "max": 0.5,
+      "gate": false,
+      "why": "report only until the via/clamp models are calibrated"
+    },
+    "delay_ns": {
+      "max": 50.0,
+      "gate": false,
+      "why": "report only"
+    },
+    "pulse_width_error_ns": {
+      "max": 50.0,
+      "gate": false,
+      "why": "report only"
+    },
+    "ringback_margin_v": {
+      "min": 0.0,
+      "gate": false,
+      "why": "report only (a ringback into the band is already a nonmonotonic edge)"
+    }
+  },
+  "justification": "Levels are the nominal rails 0 V and the corner rail (receiver VDD tracks the driver rail). 10-90 % <= 25 ns is 10 % of the classic WS2812B minimum T0H (0.4 us - 150 ns = 250 ns). A monotonic pass through VIL = 0.3 VDD and VIH = 0.7 VDD (one crossing of each per edge) is required. Overshoot/undershoot are compared with the WS2812B input abs-max (VDD + 0.5 V / -0.5 V) but only reported. Measured at the first pixel's DIN: at the connector a cable reflection makes a staircase whose 10-90 % time is not what the pixel sees.",
+  "citations": [
+    {
+      "what": "WS2812B classic VIH/VIL/CI/abs-max/T0H",
+      "url": "https://cdn-shop.adafruit.com/datasheets/WS2812B.pdf"
+    },
+    {
+      "what": "design + critique",
+      "path": "output/hier/docs/si-inductance-design.md"
+    }
+  ],
+  "corner_note": "Every driver corner x cable length; lengths > 0 also sweep the cable impedance (nominal first, then the cable's z0_range_ohm corners): 3 + 2 x 3 x 3 = 21 decks per requirement. Pre-layout placement estimates use the nominal impedance only (report only)."
+}

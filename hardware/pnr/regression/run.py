@@ -14,6 +14,14 @@ HERE=Path(__file__).resolve().parent
 REPO=HERE.parents[2]
 KI='/Applications/KiCad/KiCad.app/Contents'
 
+def kicad_footprints():
+ """Footprint library default (src15): PNR_KICAD_FOOTPRINTS, else the SharedSupport of the app bundle
+ PNR_KICAD_CLI lives in (~/Applications/KiCad-headless.app via hier/env2.json), else the system KiCad.app."""
+ if os.environ.get('PNR_KICAD_FOOTPRINTS'):return Path(os.environ['PNR_KICAD_FOOTPRINTS'])
+ cli=Path(os.environ.get('PNR_KICAD_CLI') or KI+'/MacOS/kicad-cli')
+ if cli.parent.name=='MacOS' and cli.parent.parent.name=='Contents':return cli.parent.parent/'SharedSupport/footprints'
+ return Path(KI+'/SharedSupport/footprints')
+
 def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
 def acceptance(pnr,audit,drc):
@@ -28,6 +36,11 @@ def acceptance(pnr,audit,drc):
   if drc['unconnected_items']:reasons.append('native_unconnected_items')
   if drc['violations']:reasons.append('native_drc_violations')
  return reasons
+
+def source_inputs(repo):
+ scanner=repo/'hardware/tools/scan_via_proximity.py'
+ if not scanner.is_file():raise FileNotFoundError('Native regression requires '+str(scanner))
+ return sorted((repo/'hardware/pnr/pnr').rglob('*.py'))+sorted((repo/'hardware/pnr/regression').glob('*.py'))+[scanner]
 
 def main():
  global REPO
@@ -44,14 +57,14 @@ def main():
  ap.add_argument('--initial-pool',action='store_true',help='Compare a bounded set of legal global placements before round one')
  ap.add_argument('--initial-starts',type=int,default=8)
  ap.add_argument('--initial-finalists',type=int,default=3)
- ap.add_argument('--kicad-python',default=KI+'/Frameworks/Python.framework/Versions/3.9/bin/python3')
- ap.add_argument('--kicad-cli',default=KI+'/MacOS/kicad-cli')
- ap.add_argument('--library',type=Path,default=Path(KI+'/SharedSupport/footprints'))
+ ap.add_argument('--kicad-python',default=os.environ.get('PNR_KICAD_PYTHON',KI+'/Frameworks/Python.framework/Versions/3.9/bin/python3'))  # PNR_KICAD_PYTHON: headless bundle (src15)
+ ap.add_argument('--kicad-cli',default=os.environ.get('PNR_KICAD_CLI',KI+'/MacOS/kicad-cli'))  # PNR_KICAD_CLI: headless bundle (src15)
+ ap.add_argument('--library',type=Path,default=kicad_footprints())  # PNR_KICAD_FOOTPRINTS / PNR_KICAD_CLI bundle (src15)
  args=ap.parse_args();REPO=args.repo.resolve();args.python=args.python or str(REPO/'output/pnr-regression-runtime/bin/python')
  out=args.out.resolve();out.mkdir(parents=True,exist_ok=False)
  allcases=designs();cases=[c for c in allcases if not args.case or c['name'] in args.case]
  if not cases or (set(args.case)-{c['name'] for c in cases}):raise SystemExit('Unknown/empty case selection')
- source_files=sorted((REPO/'hardware/pnr/pnr').rglob('*.py'))+sorted((REPO/'hardware/pnr/regression').glob('*.py'))
+ source_files=source_inputs(REPO)
  manifest={str(p.relative_to(REPO)):sha(p) for p in source_files}
  freeze=out/'source-freeze'
  for source_path in source_files:
@@ -104,7 +117,7 @@ def main():
     run('refill',[args.kicad_python,'-m','pnr.planes',board,'--rules',root/'rules.json','--refill-only'])
     run('audit',[args.kicad_python,frozen_here/'native.py','audit',root,'--pcb',board])
     run('drc',[args.kicad_cli,'pcb','drc',board,'--format','json','--output',root/'drc.json'])
-    run('via-scan',[args.kicad_python,REPO/'hardware/tools/scan_via_proximity.py',board,'--radius-mm','5','--out-dir',root/'via-scan'])
+    run('via-scan',[args.kicad_python,freeze/'hardware/tools/scan_via_proximity.py',board,'--radius-mm','5','--out-dir',root/'via-scan'])
     pnr=json.loads((root/'pnr-report.json').read_text());audit=json.loads((root/'native-audit.json').read_text());drc=json.loads((root/'drc.json').read_text())
     result.update(reasons=acceptance(pnr,audit,drc),opens=len(drc['unconnected_items']),violations=dict(Counter(x['type'] for x in drc['violations'])),
      tracks=audit['tracks'],vias=audit['vias'],copper_length_mm=audit['copper_length_mm'],pnr=pnr,

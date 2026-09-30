@@ -35,7 +35,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     with open(args.rules, encoding="utf-8") as fh:
         rules = json.load(fh)
 
-    board = pcbnew.LoadBoard(args.pcb)
+    # The fab profile's custom rules must be beside the board *before* it is
+    # loaded: the zone filler applies the rules KiCad reads at load time.
+    from pnr.fab_profile import load_board
+    board = load_board(args.pcb)
     board.BuildConnectivity()
     if args.refill_only:
         pcbnew.ZONE_FILLER(board).Fill(board.Zones())

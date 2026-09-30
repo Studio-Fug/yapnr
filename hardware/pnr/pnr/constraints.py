@@ -21,6 +21,7 @@ are warnings, not errors, so the file can grow without breaking older boards.
 from __future__ import annotations
 
 import fnmatch
+import os
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
@@ -64,6 +65,12 @@ class FabProfile:
     router's via/track geometry, and the ``.kicad_pro`` DRC rules — one source of
     truth. ``min_through_drill`` / ``via_annular`` are loosened only to *tolerate
     source footprints* (vendor parts with sub-spec drills / annuli), not routing.
+
+    The optional fields (None = not distinguished, the pre-profile behaviour) are
+    the per-hole-kind rules a fab capability profile adds; they are emitted into
+    ``rules.json`` only when set. The selected profile (``pnr.fab_profile``,
+    ``PNR_FAB_PROFILE``) overrides these capability values at the pipeline
+    boundaries; ``track_width_mm`` (the default signal track) stays the design's.
     """
 
     track_width_mm: float = 0.15
@@ -74,6 +81,18 @@ class FabProfile:
     edge_clearance_mm: float = 0.20
     min_through_drill_mm: float = 0.20
     via_annular_mm: float = 0.0
+    min_track_width_mm: Optional[float] = None
+    smd_pad_clearance_mm: Optional[float] = None
+    pth_hole_clearance_mm: Optional[float] = None
+    npth_hole_clearance_mm: Optional[float] = None
+    hole_to_hole_mm: Optional[float] = None
+    pth_hole_to_hole_mm: Optional[float] = None
+    filled_via_hole_to_hole_mm: Optional[float] = None
+    hole_to_edge_mm: Optional[float] = None
+    min_via_diameter_mm: Optional[float] = None
+    min_npth_drill_mm: Optional[float] = None
+    component_pth_min_drill_mm: Optional[float] = None
+    via_to_smd_pad_mm: Optional[float] = None
 
     @property
     def pitch_floor_mm(self) -> float:
@@ -171,6 +190,9 @@ class DiffPair:
     width_mm: Optional[float] = None
     gap_mm: Optional[float] = None
     skew_mm: float = 0.5  # max acceptable + / - routed-length difference
+    # PNR_BUS_CLASSES=1 only: ``_defaulted`` (a plain attribute, not a dataclass
+    # field, so asdict() is unchanged) names the fields the constraint file left to
+    # their defaults; a bus class (pnr.si.bus_classes) may derive those.
 
 
 @dataclass
@@ -308,6 +330,8 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
             "edge_clearance_mm": fab.edge_clearance_mm,
             "min_through_drill_mm": fab.min_through_drill_mm,
             "via_annular_mm": fab.via_annular_mm,
+            # Per-hole-kind distinctions only when the fab block sets them.
+            **{k: getattr(fab, k) for k in _OPTIONAL_FAB if getattr(fab, k) is not None},
         },
         "net_classes": [
             {
@@ -332,6 +356,7 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
                 "width_mm": dp.width_mm,
                 "gap_mm": dp.gap_mm,
                 "skew_mm": dp.skew_mm,
+                **({"defaulted": list(dp._defaulted)} if getattr(dp, "_defaulted", ()) else {}),
             }
             for dp in compiled.diff_pairs
             if dp.p in names and dp.n in names
@@ -358,6 +383,22 @@ def _parse_board(raw: Dict) -> BoardSpec:
     )
 
 
+_OPTIONAL_FAB = (
+    "min_track_width_mm",
+    "smd_pad_clearance_mm",
+    "pth_hole_clearance_mm",
+    "npth_hole_clearance_mm",
+    "hole_to_hole_mm",
+    "pth_hole_to_hole_mm",
+    "filled_via_hole_to_hole_mm",
+    "hole_to_edge_mm",
+    "min_via_diameter_mm",
+    "min_npth_drill_mm",
+    "component_pth_min_drill_mm",
+    "via_to_smd_pad_mm",
+)
+
+
 def _parse_fab(raw: Dict) -> FabProfile:
     """Parse the optional ``fab:`` block; any omitted field keeps its default."""
     d = FabProfile()
@@ -370,7 +411,7 @@ def _parse_fab(raw: Dict) -> FabProfile:
         "edge_clearance_mm",
         "min_through_drill_mm",
         "via_annular_mm",
-    )
+    ) + _OPTIONAL_FAB
     for k in fields:
         if k in raw:
             setattr(d, k, float(raw[k]))
@@ -495,6 +536,8 @@ def compile_constraints(doc: Dict, known_refs: Sequence[str], addresses=None, pi
         "board",
         "fab",
         "fixed",
+        "orientation",
+        "row",
         "edge_align",
         "keepout",
         "side_pref",
@@ -531,6 +574,20 @@ def compile_constraints(doc: Dict, known_refs: Sequence[str], addresses=None, pi
                 },
             )
         )
+
+    # Orientation is independent of XY; sensor axes do not require fixed centres.
+    import math
+    for selector, spec in (doc.get("orientation") or {}).items():
+        angle = spec.get("rot") if isinstance(spec, dict) else spec
+        if (isinstance(angle, bool) or not isinstance(angle, (int, float))
+                or not math.isfinite(angle) or abs(angle / 90 - round(angle / 90)) > 1e-8):
+            raise ConstraintError("orientation requires a finite cardinal rotation")
+        refs = _expand_refs([selector], known_refs, warnings, "orientation")
+        for con in constraints:
+            if con.kind == "fixed" and set(refs).intersection(con.refs) and (con.params.get("rot") or 0) % 360 != angle % 360:
+                raise ConstraintError("orientation conflicts with fixed rotation")
+        constraints.append(Constraint("orientation", Enforcement.HARD, refs,
+                           {"rot": angle % 360, "reason": spec.get("reason") if isinstance(spec,dict) else None}))
 
     # edge_align: SOFT — pull the part to a board edge; snap orientation.
     for ref, spec in (doc.get("edge_align") or {}).items():
@@ -602,6 +659,26 @@ def compile_constraints(doc: Dict, known_refs: Sequence[str], addresses=None, pi
             )
         )
 
+    # Relative rows have no global origin. Each global start samples a joint
+    # legal edge configuration; the final source guard validates the relation.
+    row_members = set()
+    for entry in doc.get("row") or []:
+        members = tuple(entry.get("members") or ())
+        if not members or len(set(members)) != len(members) or any(r not in known_refs for r in members):
+            raise ConstraintError("row requires known unique ordered members")
+        if row_members.intersection(members):raise ConstraintError("component occurs in multiple rows")
+        if any(c.kind == "fixed" and set(members).intersection(c.refs) for c in constraints):
+            raise ConstraintError("row cannot silently override an authored absolute pose")
+        row_members.update(members)
+        if entry.get("edge") != "any":raise ConstraintError("row currently requires edge: any")
+        facing = entry.get("facing")
+        if facing not in (None, "north", "south"):raise ConstraintError("row facing must be a local north/south normal")
+        gap = entry.get("gap_mm", float(board.default_clearance_mm))
+        if isinstance(gap,bool) or not isinstance(gap,(int,float)) or not math.isfinite(gap) or gap < float(board.default_clearance_mm):
+            raise ConstraintError("row gap must meet placement clearance")
+        constraints.append(Constraint("row", Enforcement.HARD, members,
+            dict(edge="any",facing=facing,gap_mm=gap,reason=entry.get("reason","User-authored relative row")),name=entry.get("name")))
+
     # Groups are soft by default; hard groups survive legalization.
     for entry in doc.get("group") or []:
         entry = entry or {}
@@ -618,9 +695,8 @@ def compile_constraints(doc: Dict, known_refs: Sequence[str], addresses=None, pi
             radius = entry.get("radius_mm")
             if isinstance(radius, bool) or not isinstance(radius, (int, float)) or not 0 < radius < float("inf"):
                 raise ConstraintError("hard group requires a finite positive radius_mm")
-            fixed_refs = {r for c in constraints if c.kind == "fixed" for r in c.refs}
-            if anchor not in fixed_refs:
-                raise ConstraintError("hard group requires an explicitly fixed anchor")
+            if anchor not in known_refs:
+                raise ConstraintError("hard group requires a known anchor")
         if anchor is not None and anchor not in known_refs:
             warnings.append(f"group.anchor: unknown component ref {anchor!r}")
         constraints.append(
@@ -658,16 +734,17 @@ def compile_constraints(doc: Dict, known_refs: Sequence[str], addresses=None, pi
         entry = entry or {}
         if not entry.get("p") or not entry.get("n"):
             raise ConstraintError(f"diff_pair {entry.get('name')!r}: needs 'p' and 'n' nets")
-        diff_pairs.append(
-            DiffPair(
-                name=str(entry.get("name") or f"{entry['p']}/{entry['n']}"),
-                p=str(entry["p"]),
-                n=str(entry["n"]),
-                width_mm=_opt_float(entry.get("width_mm")),
-                gap_mm=_opt_float(entry.get("gap_mm")),
-                skew_mm=float(entry.get("skew_mm", 0.5)),
-            )
+        dp = DiffPair(
+            name=str(entry.get("name") or f"{entry['p']}/{entry['n']}"),
+            p=str(entry["p"]),
+            n=str(entry["n"]),
+            width_mm=_opt_float(entry.get("width_mm")),
+            gap_mm=_opt_float(entry.get("gap_mm")),
+            skew_mm=float(entry.get("skew_mm", 0.5)),
         )
+        if os.environ.get("PNR_BUS_CLASSES") == "1":
+            dp._defaulted = tuple(k for k in ("skew_mm",) if k not in entry)
+        diff_pairs.append(dp)
 
     # length_match: groups whose routed lengths must agree within a tolerance.
     length_matches: List[LengthMatch] = []

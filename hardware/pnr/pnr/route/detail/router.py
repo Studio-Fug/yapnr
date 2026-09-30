@@ -311,9 +311,30 @@ def route_board(
         via_radius=via_radius_mm,
     )
     grid.net_widths = net_width
-    grid.via_spacing = fab['via_drill_mm'] + fab.get('hole_clearance_mm', .2)
+    # Fab-profile per-hole-kind rules ride in rules['fab'] beside the 5 keys
+    # _fab() keeps; absent (legacy rules) they leave the original model intact.
+    extra = dict((rules or {}).get('fab') or {})
+    grid.via_spacing = fab['via_drill_mm'] + extra.get('hole_to_hole_mm', fab.get('hole_clearance_mm', .2))
     grid.via_drill_radius = fab['via_drill_mm'] / 2
     grid.hole_clearance = fab.get('hole_clearance_mm', .2)
+    if extra.get('component_pth_min_drill_mm') is not None:
+        # Footprint via-class drills (under 5A Component PTH hole 0.30) get via rules.
+        grid.component_pth_min_drill = float(extra['component_pth_min_drill_mm'])
+        grid.via_hole_gap = float(extra.get('hole_to_hole_mm', grid.hole_clearance))
+    if extra.get('pth_hole_to_hole_mm') is not None:
+        grid.pth_hole_gap = float(extra['pth_hole_to_hole_mm'])
+        grid.npth_hole_gap = float(extra.get('filled_via_hole_to_hole_mm', extra['pth_hole_to_hole_mm']))
+    if extra.get('pth_hole_clearance_mm') is not None:
+        grid.mark_pth_hole_keepouts(float(extra['pth_hole_clearance_mm']), grid.hole_clearance)
+    if extra.get('via_to_smd_pad_mm') is not None:
+        # Fab profile: 5A via copper 0.127 from any SMD pad; inside an own-net pad
+        # only a 5B filled in-pad via (sized at emission, pnr.fixed_copper).
+        from pnr.fab_profile import in_pad_policy
+        grid.restrict_smd_vias(in_pad_policy(extra), float(extra['via_to_smd_pad_mm']))
+    if extra.get('hole_to_edge_mm') is not None:
+        edge = float(extra.get('edge_clearance_mm', .2))
+        grid.block_edge_inset_split(edge + track_width_mm / 2,
+                                    max(edge + via_radius_mm, float(extra['hole_to_edge_mm']) + fab['via_drill_mm'] / 2))
     # Split planes on the inner layers become obstacles the signals route around
     # (matching the 2 mm writeback pour margin).
     _mark_plane_regions(grid, graph, rules, margin=2.0)

@@ -1,7 +1,13 @@
-"""Placement orchestrator: global placement → legalization → report."""
+"""Placement orchestrator: global placement → legalization → report.
+
+PNR_PAIR_LANDING_RESERVE=1 (src13, default off): place() attaches the diff-pair
+via landing reserves of pnr.place.pair_landing (from ``channel_rules``) before
+legalization; legality/report then include them through placement_rects.
+"""
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
@@ -9,8 +15,8 @@ from pnr.constraints import CompiledConstraints
 from pnr.graph import BoardGraph, BoardOutline
 
 from . import metrics
-from .geometry import keepout_rects, outline_size, resolve_fixed_poses, hard_group_limits, set_component_side, apply_hard_sides
-from .legalize import legalize
+from .geometry import keepout_rects, outline_size, resolve_fixed_poses, hard_group_limits, hard_group_edges, resolve_hard_rotations, set_component_side, apply_hard_sides
+from .legalize import legalize, pad_edge_rule
 from .model import global_place
 
 
@@ -72,6 +78,7 @@ def place(
     channel_rules: Optional[dict] = None,
     initial_positions: Optional[Dict[str, Tuple[float, float]]] = None,
     initial_rotations: Optional[Dict[str, float]] = None,
+    pair_weights: Optional[Dict[Tuple[str, str, str, str], float]] = None,
 ) -> Tuple[BoardGraph, PlacementReport]:
     """Place ``graph`` under ``constraints``; return the placed graph + report.
 
@@ -79,13 +86,29 @@ def place(
     so the report shows the improvement. With ``orient`` the placer also picks a
     90° rotation per movable part (Phase 3). ``inflation`` (ref → spreading
     multiplier) is the routing-feedback hook (§6): the place↔route loop grows the
-    footprint of congested parts so the next round spreads them. Deterministic
-    under a fixed ``seed``.
+    footprint of congested parts so the next round spreads them.
+    ``pair_weights`` ({(ref_a, pad_a, ref_b, pad_b): w}) adds a pad-pair
+    attraction ``w * |pad_a - pad_b|`` to the global objective (pnr.feedback:
+    connections that often fail routing); None leaves the objective untouched.
+    Deterministic under a fixed ``seed``.
     """
+    # Edge rows are optimized across complete global starts. These temporary
+    # search choices are distinct from authored absolute locks.
+    # PNR_PAD_EDGE_CLEARANCE=1: pads/drills keep the fab edge rules (None = off).
+    pad_edge = pad_edge_rule(constraints, channel_rules)
+    if any(c.kind == "row" and not c.params.get("trial_resolved") for c in constraints.constraints):
+        from .rows import sample_constraints
+        constraints = sample_constraints(graph,constraints,seed,**({} if pad_edge is None else dict(pad_edge=pad_edge)))
     # The source compiler emits every footprint on top. Apply physical side
     # constraints before any obstacle/HPWL calculations, including pad mirroring.
     graph = BoardGraph.from_json(graph.to_json())
     apply_hard_sides(graph, constraints)
+    from .pair_landing import enabled as landing_enabled
+    if channel_rules and landing_enabled():
+        # PNR_PAIR_LANDING_RESERVE=1: diff-pair via landings become placement
+        # reservations (pnr.place.pair_landing); legalize and the report honour them.
+        from .pair_landing import attach
+        attach(graph, channel_rules)
     if channel_rules and channel_rules.get("plane_access_intents"):
         from pnr.plane_intent import reserve_array_space
         reserve_array_space(graph, channel_rules["plane_access_intents"],
@@ -97,6 +120,24 @@ def place(
     poses = resolve_fixed_poses(graph, constraints)
     keepouts = keepout_rects(graph, constraints, poses)
     clearance = float(constraints.board.default_clearance_mm)
+
+    roles = None
+    if os.environ.get("PNR_POWER_FIRST") == "1":
+        # Power-first placement: derive tiers/loops, staged lexicographic global
+        # placement, then power-first legalization (pnr.place.power_first).
+        from .power_first import roles_for, staged_place
+        roles = roles_for(graph, constraints, channel_rules)
+    if roles is not None:
+        placed = staged_place(
+            graph, constraints, roles, width, height, seed=seed, iters=iters, orient=orient,
+            inflation=inflation, spread=spread, channel_rules=channel_rules,
+            initial_positions=initial_positions, initial_rotations=initial_rotations, poses=poses,
+            keepouts=keepouts, clearance=clearance, grid_mm=grid_mm,
+            legalize_spread=min(spread, _LEGALIZE_SPREAD_CAP), pair_weights=pair_weights,
+            mobility={ref:dict(source_fixed=not bool(c.params.get('row_trial')),row_trial=c.params.get('row_trial'))
+                      for c in constraints.constraints if c.kind=='fixed' for ref in c.refs},
+            **({} if pad_edge is None else dict(pad_edge=pad_edge)))
+        return _finish(placed, graph, constraints, width, height, baseline, pad_edge)
 
     # 1. Global placement (continuous position + orientation).
     positions, rotations = global_place(
@@ -111,6 +152,7 @@ def place(
         spread=spread,
         initial_positions=initial_positions,
         initial_rotations=initial_rotations,
+        pair_weights=pair_weights,
     )
     cont = BoardGraph.from_json(graph.to_json())
     for comp in cont.components:
@@ -129,7 +171,11 @@ def place(
         fixed=poses,
         allow_rotation=orient,
         channel_model=channels,
-        group_limits=hard_group_limits(constraints, poses),
+        group_limits=hard_group_limits(constraints, poses, partial=True),
+        group_edges=hard_group_edges(constraints),
+        rotations=resolve_hard_rotations(constraints),
+        mobility={ref:dict(source_fixed=not bool(c.params.get('row_trial')),row_trial=c.params.get('row_trial'))
+                  for c in constraints.constraints if c.kind=='fixed' for ref in c.refs},
         keepouts=keepouts,
         clearance=clearance,
         grid_mm=grid_mm,
@@ -139,8 +185,12 @@ def place(
         # full spread here would over-reserve and fail to fit on a tight outline
         # (grow the outline via the rubber-band instead).
         spread=min(spread, _LEGALIZE_SPREAD_CAP),
+        **({} if pad_edge is None else dict(pad_edge=pad_edge)),
     )
+    return _finish(placed, graph, constraints, width, height, baseline, pad_edge)
 
+
+def _finish(placed, graph, constraints, width, height, baseline, pad_edge=None):
     # Stamp the *placement region* as the placed board's outline, so downstream
     # steps (writeback framing, route SVG) use the constraint-resolved region
     # rather than the incoming atopile-framed one.
@@ -148,6 +198,13 @@ def place(
 
     # 3. Score (hard checks at zero tolerance — strict no-overlap / in-outline).
     v = metrics.hard_violations(placed, constraints, clearance=0.0)
+    if pad_edge is not None:
+        # PNR_PAD_EDGE_CLEARANCE=1: copper/drills of a movable part too close to
+        # the outline count as outside it (the legalizer never produces this).
+        exempt = set(constraints.locked_refs) | set(resolve_fixed_poses(placed, constraints))
+        bad = metrics.pad_edge_violations(placed, width, height, pad_edge, exclude=exempt)
+        if bad:
+            v["outside_outline"] = sorted(set(v["outside_outline"]) | set(bad))
     report = PlacementReport(
         width=width,
         height=height,

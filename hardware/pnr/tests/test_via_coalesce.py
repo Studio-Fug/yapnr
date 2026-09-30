@@ -57,6 +57,27 @@ class ViaCoalesceTests(unittest.TestCase):
         self.assertTrue(preserved(before,partition(b)))
         self.assertEqual(sum(t.GetClass()=='PCB_VIA' for t in b.GetTracks()),1)
 
+    def test_transitively_connected_tail_keeps_native_barrel_contact(self):
+        import pcbnew as k
+        import subprocess
+        from pnr.via_coalesce import plan, apply, partition, preserved, xy
+        b, keep, remove, _, track = self.fixture()
+        # Both back endpoints are connected through the remote pad. Removing
+        # the second via must not strand the old tail for cleanup to eat.
+        track(xy(keep.GetPosition()), (9.5, 9.2), k.B_Cu)
+        b.BuildConnectivity(); before = partition(b)
+        apply(b, plan(b, keep, remove, {}))
+        self.assertTrue(preserved(before, partition(b)))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); board = root/'candidate.kicad_pcb'
+            k.SaveBoard(str(board), b)
+            report = root/'drc.json'
+            subprocess.run(['/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli',
+                            'pcb', 'drc', str(board), '--format', 'json',
+                            '--output', str(report)], check=True, capture_output=True)
+            findings = json.loads(report.read_text())['violations']
+            self.assertFalse([v for v in findings if v['type'] == 'track_dangling'])
+
     def test_trial_worker_exits_cleanly_after_releasing_borrowed_tracks(self):
         import pcbnew as k
         import subprocess,sys
@@ -105,10 +126,16 @@ class ViaCoalesceTests(unittest.TestCase):
         b.BuildConnectivity(); before = partition(b)
         apply(b, plan(b, south, north, {}))
         choices = cycle_candidates(b, {}, [])
-        self.assertEqual(len(choices), 1)
-        self.assertEqual(len(choices[0]['remove_tracks']), 2)
-        removed = apply_cycle(b, choices[0])
-        self.assertTrue(preserved(before, partition(b)))
+        self.assertTrue(choices)
+        self.assertTrue(any(len(choice['remove_tracks']) == 2 for choice in choices))
+        # A retained barrel-contact bridge can create a second cycle. Simplify
+        # to a fixed point while checking every intermediate pad partition.
+        for _ in range(8):
+            if not choices:
+                break
+            apply_cycle(b, choices[0])
+            self.assertTrue(preserved(before, partition(b)))
+            choices = cycle_candidates(b, {}, [])
         self.assertEqual(sum(t.GetClass() == 'PCB_VIA' for t in b.GetTracks()), 1)
         self.assertEqual(cycle_candidates(b, {}, []), [])
 

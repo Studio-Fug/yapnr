@@ -440,7 +440,8 @@ Struck items were done after PR2, in the engine hygiene change (branch `claude/e
   `plane_leaf_repair`, `power_detour_repair`, `staged_signal` and `regression/run.py`. Two of
   PR1's are fixed by src8b (`native_loop`, `via_coalesce` through `pnr.proc.run`). All move to
   `pnr.proc.run`.~~ Done: every one runs under a `pnr.proc` deadline (`PNR_WORKER_TIMEOUT`,
-  `PNR_PHASE_TIMEOUT` or `PNR_EVALUATION_TIMEOUT`, [decisions](../decisions.md)), and
+  `PNR_PHASE_TIMEOUT` or `PNR_EVALUATION_TIMEOUT`, [decisions](../decisions.md)); a timeout
+  kills the child's whole process tree, so the workers of a killed evaluation go with it, and
   `//hardware/pnr:proc_test` fails on a new unbounded call. Left by design: the opt-in warm DRC
   host daemon of `drc_warm/launch_host.py` (ended by its session).
 - **Engine code tied to the Splanc design.** New in PR2: `pnr/feedback/signals.py` recognizes
@@ -476,8 +477,9 @@ Struck items were done after PR2, in the engine hygiene change (branch `claude/e
   `PNR_BARREL_CONTACT_BRIDGES=1`, both default off, so the default is src15 again; the A/B that
   would turn them on is still open.
 - Unchanged from the plan: ~~the `board.Remove` audit (PR2e)~~ (done: 27 calls now use
-  `board.Delete`, 3 stay, `//hardware/pnr:board_delete_test` guards it) and the missing
-  `pnr.capacitor_intent` (PR4b).
+  `board.Delete`, 3 stay, `//hardware/pnr:board_delete_test` guards each call; replayed on the H7
+  boards for five sites with identical results, a full rung-1 evaluation with it is still open)
+  and the missing `pnr.capacitor_intent` (PR4b).
 
 ### Reproducing the series
 

@@ -10,12 +10,16 @@ Last updated: 2026-09-30 (engine hygiene).
 - **Engine hygiene** (branch `claude/engine-hygiene`, not pushed), the PR3 leftovers of PR2
   (merged, #7): Electrical221's cleanup gated default off (`PNR_PARTIAL_CYCLE_CLEANUP`,
   `PNR_BARREL_CONTACT_BRIDGES`; the default is src15 again), the `board.Remove` audit (27 calls
-  now `board.Delete`, 3 kept; `board_delete_test`), every engine subprocess bounded through
-  `pnr.proc` (`PNR_WORKER_TIMEOUT`, `PNR_PHASE_TIMEOUT`, `PNR_EVALUATION_TIMEOUT`; `proc_test`),
-  CI's history scan with merge diffs (`git log -p -m`), and `orientation_test` re-enabled (#6:
-  placement is deterministic per platform only, so it compares a three-seed mean with a 5 % margin
-  and checks known best angles on a synthetic board; passes on macOS and linux-aarch64). Reasons
-  and limits: [docs/decisions.md](docs/decisions.md); struck leftovers:
+  now `board.Delete`, 3 kept; `board_delete_test` checks each call; replayed on H7's real boards
+  for five sites with identical results), every engine subprocess bounded through `pnr.proc`
+  (`PNR_WORKER_TIMEOUT`, `PNR_PHASE_TIMEOUT`, `PNR_EVALUATION_TIMEOUT`; 0 means no limit; a
+  timeout kills the child's whole process tree; a deadline kill is not retried; `proc_test`),
+  CI's history scan with merge diffs (`git log -p --diff-merges=separate`), and
+  `orientation_test` re-enabled as `large` (#6: placement is deterministic per platform only, so
+  it compares a three-seed mean with a 5 % margin, a coarse guard, and checks known best angles
+  on a synthetic board; passes on macOS and linux-aarch64). The review's findings are fixed in
+  follow-up commits on the branch. Reasons and limits: [docs/decisions.md](docs/decisions.md);
+  struck leftovers:
   [docs/history/import-manifest.md](docs/history/import-manifest.md#known-leftovers-for-pr3).
 
 ## Next
@@ -23,6 +27,9 @@ Last updated: 2026-09-30 (engine hygiene).
 1. Owner: review and push the hygiene branch and open its PR; CI must be green (it runs
    `orientation_test` again; close #6 with it).
 2. Owner: A/B Electrical221's two flags on the hierarchical engine before turning them on.
+   Before the next experiment runs this engine, one rung-1 evaluation with it (`board.Delete`
+   everywhere) when the Mac is free: the replay covered 5 of the 27 changed sites, and a full
+   evaluation's nested workers exceed the two-KiCad-process budget kept while H7 runs.
 3. Owner: push Splanc's `splanc-mini`, so the 9 newest `Imported-From` links of PR1 resolve (see the
    manifest).
 4. PR6a, then PR3: wire the 68 unwired engine test files with the glob macro (the two hygiene tests
@@ -66,6 +73,10 @@ Last updated: 2026-09-30 (engine hygiene).
   Scrub each snapshot when it is staged, before its commit (PR2).
 - Reproducing the `board.Remove` teardown SIGSEGV on synthetic boards: `Remove` and `Delete` both
   exit 0 there (zones, footprints, tracks, vias, any free order); the evidence is src12i's run.
+  On H7's real boards `Remove` did not crash either (it leaks: SWIG's "no destructor found").
+- Using SWIG's "memory leak ... no destructor found" messages in H7 logs to find the `Remove`
+  sites a run reached: only some item types print it (shove's messages are `SHAPE_SEGMENT`,
+  not `Remove`). Trace `BOARD.Delete`/`BOARD.Remove` calls instead.
 - Making placement bitwise identical across macOS and Linux (thread count, deterministic
   algorithms, float64 `exp`/`log`): the thread count is already 1, deterministic mode changes
   nothing, and Adam's `addcmul` also rounds differently between the torch builds (#6).

@@ -1808,7 +1808,7 @@ Still open:
   PR3a.
 - ~~About 25 `board.Remove` call sites may detach items that crash KiCad Python at teardown
   (PR2e).~~ Done: 27 discarded-item calls use `board.Delete`; 3 `Remove` calls stay (kept alive
-  or detached with `thisown=False`), guarded by `//hardware/pnr:board_delete_test`.
+  or detached with `thisown=False`), guarded per call by `//hardware/pnr:board_delete_test`.
 - `pnr.capacitor_intent` is imported by the viewer's cost service but was never committed (PR4b).
 - Pre-existing errors: 7 in the KiCad-Python suite (torch/env imports), 1 in the runtime suite
   (`test_pair_joint_dispatch` import).

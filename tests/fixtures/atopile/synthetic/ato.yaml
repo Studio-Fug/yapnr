@@ -1,0 +1,5 @@
+requires-atopile: '>=0.15.0,<0.16.0'
+
+builds:
+  default:
+    entry: elec/src/main.ato:Main

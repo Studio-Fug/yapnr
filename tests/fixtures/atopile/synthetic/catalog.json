@@ -1,0 +1,23 @@
+{
+  "parts": [
+    {
+      "basic": true,
+      "description": "synthetic 1 kohm 1 % 0603 resistor",
+      "kind": "resistor",
+      "lcsc": "C900001",
+      "manufacturer": "yapnr-synthetic",
+      "mpn": "SR1K",
+      "package": "0603",
+      "params": {
+        "power_max_w": 0.1,
+        "resistance_ohm": 1000.0,
+        "tolerance_pct": 1.0,
+        "voltage_max_v": 75.0
+      }
+    }
+  ],
+  "provenance": {
+    "source": "yapnr test fixture (synthetic)"
+  },
+  "schema": "yapnr-picker-catalog-v1"
+}

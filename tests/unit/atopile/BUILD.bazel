@@ -4,6 +4,7 @@ load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
 # atopile runs in //tests/e2e/atopile.
 yapnr_py_tests(
     overrides = {
+        "test_fixture": {"data": ["//tests/fixtures/atopile:synthetic_files"]},
         # Starts interpreters that use multiprocessing (spawn and forkserver).
         "test_hook": {"size": "medium"},
         # Builds with a fake atopile, including a deadline kill after 3 s.

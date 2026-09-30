@@ -1,0 +1,21 @@
+import ElectricPower
+import Resistor
+
+from "parts/Yapnr_Synthetic_SR1K/Yapnr_Synthetic_SR1K.ato" import Yapnr_Synthetic_SR1K_package
+
+
+module Main:
+    """A synthetic voltage divider."""
+    power = new ElectricPower
+    signal mid
+    r_top = new Yapnr_Synthetic_SR1K_package
+    r_bot = new Yapnr_Synthetic_SR1K_package
+    r_top.p1 ~ power.hv
+    r_top.p2 ~ mid
+    r_bot.p1 ~ mid
+    r_bot.p2 ~ power.lv
+    r_pick = new Resistor
+    r_pick.resistance = 1kohm +/- 5%
+    r_pick.package = "0603"
+    r_pick.unnamed[0] ~ mid
+    r_pick.unnamed[1] ~ power.lv

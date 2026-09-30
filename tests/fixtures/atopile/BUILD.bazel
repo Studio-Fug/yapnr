@@ -1,0 +1,26 @@
+load("//bazel/atopile:defs.bzl", "yapnr_atopile_build")
+
+package(default_visibility = ["//visibility:public"])
+
+# A synthetic atopile project (yapnr/frontends/atopile/testing.py writes the same files;
+# //tests/unit/atopile:test_fixture keeps them equal): two parts used directly and one resistor
+# picked by type from catalog.json. The part is drawn by hand, not generated from any library.
+filegroup(
+    name = "synthetic_files",
+    srcs = glob(["synthetic/**"]),
+)
+
+# A real atopile build through the registered toolchain (`yapnr atopile setup` first). Manual:
+# it needs the atopile environment on this machine.
+#
+#   bazel build //tests/fixtures/atopile:synthetic
+yapnr_atopile_build(
+    name = "synthetic",
+    srcs = glob(["synthetic/elec/**"]),
+    ato_yaml = "synthetic/ato.yaml",
+    catalogs = ["synthetic/catalog.json"],
+    tags = [
+        "atopile",
+        "manual",
+    ],
+)

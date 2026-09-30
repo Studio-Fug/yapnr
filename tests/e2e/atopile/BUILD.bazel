@@ -1,0 +1,30 @@
+load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+
+# A real atopile 0.15.8 build (docs/frontends/atopile.md, "Tests"). Needs the environment of
+# `yapnr atopile setup` (or YAPNR_ATO_PYTHON) and runs outside the sandbox, so it is tagged
+# `atopile` and `manual`; it skips when no environment is found:
+#
+#   bazel test //tests/e2e/atopile:all --test_env=YAPNR_ATO_PYTHON=<path>
+#
+# (or --test_env=YAPNR_ATOPILE_HOME / HOME, where setup put it). KiCad is optional here.
+yapnr_py_tests(
+    size = "medium",
+    env_inherit = [
+        "HOME",
+        "XDG_CACHE_HOME",
+        "YAPNR_ATO_PYTHON",
+        "YAPNR_ATOPILE_HOME",
+        "YAPNR_KICAD_CLI",
+    ],
+    tags = [
+        "atopile",
+        "external",
+        "local",
+        "manual",
+        "no-remote",
+    ],
+    deps = [
+        "//yapnr",
+        "//yapnr/frontends/atopile:testing",
+    ],
+)

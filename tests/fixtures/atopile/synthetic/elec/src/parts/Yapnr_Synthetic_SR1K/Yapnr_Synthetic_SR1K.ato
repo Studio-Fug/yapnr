@@ -1,0 +1,16 @@
+import has_designator_prefix
+import has_part_picked
+import is_atomic_part
+
+component Yapnr_Synthetic_SR1K_package:
+    """Synthetic 1 kohm 0603 resistor (a yapnr test part, not a real product)"""
+
+    trait is_atomic_part<manufacturer="yapnr-synthetic", partnumber="SR1K", footprint="SYN_R0603.kicad_mod", symbol="SR1K.kicad_sym">
+    trait has_part_picked::by_supplier<supplier_id="lcsc", supplier_partno="C900001", manufacturer="yapnr-synthetic", partno="SR1K">
+    trait has_designator_prefix<prefix="R">
+
+    # pins
+    pin 1
+    signal p1 ~ pin 1
+    pin 2
+    signal p2 ~ pin 2

@@ -9,6 +9,7 @@ import json
 import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 from pnr.phase_capture import capture
@@ -84,6 +85,9 @@ def main():
     phases = p / "phases"
     work = p / "electrical"
     work.mkdir(exist_ok=False)
+    # When this evaluation started, for pnr.feedback.signals: module files newer than this
+    # mean the tree changed during the run (a directory's creation time is macOS only).
+    (p / "started.json").write_text(json.dumps(dict(started=time.time())) + "\n")
     env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parent.parent))
     sources = a.annotation_source or ["hardware/splanc_dev/elec/src/splanc_mini.ato"]
     annotations = [

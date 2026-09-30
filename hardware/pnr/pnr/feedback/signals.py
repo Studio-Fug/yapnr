@@ -517,13 +517,30 @@ def evaluation_tree(round_dir):
     return Path(trees.pop()) if len(trees) == 1 else None
 
 
-def _started(round_dir):
-    d = Path(round_dir)
+STARTED_FILE = "started.json"  # written by pnr.full_iteration when an evaluation starts
+
+
+def _birthtime(path):
+    """The creation time of ``path``, where the file system reports one (macOS), else None."""
     try:
-        st = d.stat()
+        return getattr(Path(path).stat(), "st_birthtime", None) or None
     except OSError:
         return None
-    start = getattr(st, "st_birthtime", None)
+
+
+def _started(round_dir):
+    """When the evaluation of ``round_dir`` started (seconds since the epoch), or None.
+
+    The round's started.json stamp; for rounds from before the stamp, the
+    directory's creation time (macOS only), else the mtime of evaluation.json.
+    That file is written when the evaluation ends, so edits made during the run
+    go unnoticed; without it the staleness check is skipped."""
+    d = Path(round_dir)
+    try:
+        return float(json.loads((d / STARTED_FILE).read_text())["started"])
+    except (OSError, ValueError, TypeError, KeyError):
+        pass
+    start = _birthtime(d)
     if start:
         return start
     try:

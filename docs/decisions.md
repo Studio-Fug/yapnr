@@ -373,6 +373,56 @@ applies; the owner reviews them with the pull request:
   discovers only the headless copy, never `PATH`; and it does not check for KiCad 10.x (the
   toolchain module will).
 
+Choices made for the regression ladder in CI and the animations (branch
+`claude/ladder-animations`); the owner reviews them with the pull request:
+
+- **Tracing is opt-in and observational.** `PNR_TRACE_DIR` enables `pnr.trace` (format
+  `pnr-trace-v1`); unset, each hook is one environment lookup. Hooks use no random number
+  generator, add no torch operation and change no engine state; the first recorder error disables
+  recording for the process. `trace_noop_test` requires byte-identical placements, routes and
+  reports with tracing unset, set and unset again (baseline loop and initial pool), and a traced
+  and an untraced ladder run give identical `placed.json`, `routes.json` and reports.
+- **The legalizer's accepted order, not its backtracking.** A trace records the order in which the
+  legalizer placed each part on the path it kept (`legal`), not the branches it rejected, as the
+  cost capture keeps only the accepted search path.
+- **Animations follow the critical path** (`pnr.provenance`): the ancestry of the final board,
+  where a selection contributes only its chosen candidate; the rejected candidates appear as
+  montages. Rendering is pure Python and Pillow (no numpy, torch or KiCad); the `.kicad_pcb` reader
+  (`pnr.trace_board`) needs no KiCad process.
+- **The ladder lane runs in the published image, resolved to a digest,** on `ubuntu-24.04-arm`,
+  and runs the checkout's engine sources. A runtime guard installs the checkout's runtime lock into
+  an overlay venv when a pull request changes the pins, rather than building the image in the job.
+  The lane is informational until the owner makes its `ladder` check required.
+- **The ladder routes and is judged under its fixtures' own rules.** The fixtures carry their own
+  fab block (0.2 mm clearance, 0.6/0.3 mm vias, documented in the ladder README), and RESULTS-118
+  passed under it before fabrication profiles existed. `run.py` now sets `PNR_FAB_PROFILE` for
+  every stage from `--fab-profile`, default `legacy`, which enforces exactly that block; the boards
+  are RESULTS-118's (all 16 baseline runs, seeds 0 and 1, identical vias and copper) and all eight
+  cases pass. The alternative, the engine's default `jlc-pofv` profile, overrides the fixtures'
+  numbers with JLC's (0.127 mm clearance, 0.45/0.30 mm vias) and would make the README's stated
+  rules false; it stays available as `--fab-profile jlc-pofv`, and `route_case.py` applies the
+  selected profile to the router's rules (the identity for legacy), so that configuration routes
+  under the rules KiCad judges it by. Before, the unset variable made writeback stamp `jlc-pofv`
+  while the router used the fixtures' rules, and cases 04 to 08 failed on vias touching their own
+  SMD pads. With the profile applied at the router, `jlc-pofv` passes every case as well (pool
+  seed 0 and baseline seeds 0 and 1); making it the ladder's default is the owner's call
+  (WORKLOG, "Next").
+- **The committed animations.** All eight ladder cases are animated in `docs/animations/` (not
+  `_static`, whose references the Pages step rewrites), from a traced pool run (seed 0) on the
+  development Mac; all eight pass the gate. A failed case is only rendered with `--allow-failed`,
+  and its end card then names the broken rules in red. The README shows `05-timer-led-10`, the
+  TLC555 blinker (the request's "555 flasher"), as a GIF (GitHub autoplays it); the page uses WebP.
+  `tests/unit/repo/test_animations.py` bounds the folder (WebP 2.5 MB, GIF 5 MB, 20 MB in all,
+  hashes in the manifest, no metadata) in place of the large-file hook, and prettier leaves the
+  generated JSON as written. A refresh adds about 12 MB to the history, so it is deliberate.
+- **A montage follows the winner's replay.** The timeline is one straight line: a selection's
+  candidates appear once the winner's own replay reached the state their tiles show, and the bar
+  counts committed connections only, so nothing on screen runs ahead of the process.
+- **Coarse animations of halving runs.** A successive-halving run records no trace;
+  `pnr.provenance.halving_trace` rebuilds one from its saved placements, rung objectives and the
+  winning rung's native phases, and the overlay's phases say what was saved, not more. Animations
+  of Splanc runs stay local (the board is not public).
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.
@@ -386,6 +436,7 @@ Update a pin together with the file that holds it, and note why here.
 | torch            | `>=2.2,<2.4` (lock: 2.3.1) | `requirements.in`, lock                |
 | numpy            | `>=1.26,<2` (lock: 1.26.4) | `requirements.in`, lock                |
 | pyyaml           | `>=6` (lock: 6.0.3)        | `requirements.in`, lock                |
+| Pillow           | `>=12,<13` (lock: 12.3.0)  | `requirements.in`, lock                |
 | Sphinx stack     | see below                  | `requirements.in`                      |
 | mermaid (JS)     | `11.4.1`                   | `docs/_sphinx/conf.py`                 |
 | prek             | `0.4.12`                   | `setup-precommit.sh`, `ci.yaml`        |
@@ -416,6 +467,11 @@ Rationale:
 - **numpy 1.x:** torch 2.3 wheels are built against the numpy 1 ABI, and the engine was tuned on
   numpy 1.26. (Splanc's lock pairs torch 2.3.1 with numpy 2, which this avoids.) The interop smoke
   test in `tests/unit/interop` guards it.
+- **Pillow below 13:** the renderer of the place-and-route animations (`pnr.animate`), a
+  contributor and docs tool: it is in `requirements.in` only, not in `requirements-runtime.in`, so
+  the wheel's dependencies and the image's runtime locks do not change. The bytes of an animation
+  depend on the libwebp, zlib and FreeType that the Pillow wheels bundle, so the major version is
+  capped and the animations' manifest records the exact version.
 - **Sphinx stack:** sphinx 9.0.4, myst-parser 5.1.0, furo 2025.12.19, sphinx-copybutton 0.5.2,
   sphinx-design 0.7.0 and sphinxcontrib-mermaid 2.1.0, exactly Splanc's locked versions, so both
   sites build the same way. matplotlib is left out until a page needs generated figures.

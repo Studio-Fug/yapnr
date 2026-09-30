@@ -298,9 +298,14 @@ def _place_route_loop(
     relocation_plateau = Plateau()
     relocation_rng = random.Random(seed)
     mesh_reference_scale = None
+    from pnr import trace as _trace
+
+    tracer = _trace.current()  # None unless PNR_TRACE_DIR is set; observational only
 
     for r in range(max_rounds):
         report.rounds = r + 1
+        if tracer is not None:
+            tracer.section("round-%02d" % (r + 1), "round", inflated_parts=len(inflation))
         import json
         import os
         import time
@@ -318,19 +323,20 @@ def _place_route_loop(
             from pnr.place.initial_pool import select_initial_placement
 
             diagnostic = os.environ.get("PNR_ROUND_DIAGNOSTICS")
-            placed, prep, initial_route, pool_report = select_initial_placement(
-                graph,
-                constraints,
-                detail_rules,
-                config=pool_config,
-                seed=seed,
-                iters=iters,
-                orient=orient,
-                spread=spread,
-                pitch=detail_pitch_mm,
-                route_iters=detail_iters,
-                output=Path(diagnostic) / "initial-pool" if diagnostic else None,
-            )
+            with _trace.scope("initial-pool", "pool"):
+                placed, prep, initial_route, pool_report = select_initial_placement(
+                    graph,
+                    constraints,
+                    detail_rules,
+                    config=pool_config,
+                    seed=seed,
+                    iters=iters,
+                    orient=orient,
+                    spread=spread,
+                    pitch=detail_pitch_mm,
+                    route_iters=detail_iters,
+                    output=Path(diagnostic) / "initial-pool" if diagnostic else None,
+                )
             report.initial_pool = pool_report
             placement_attempt_log = pool_report["candidates"]
             damping = 1.0
@@ -412,16 +418,22 @@ def _place_route_loop(
         ):
             for damping in (1.0, 0.5, 0.25, 0.0) if inflation else (1.0,):
                 try:
-                    placed, prep = place(
-                        graph,
-                        constraints,
+                    with _trace.scope(
+                        "attempt-%d" % len(placement_attempt_log),
+                        "attempt",
                         seed=trial_seed,
-                        iters=iters,
-                        orient=orient,
-                        inflation={k: 1 + (v - 1) * damping for k, v in inflation.items()},
-                        spread=spread,
-                        channel_rules=detail_rules,
-                    )
+                        damping=damping,
+                    ):
+                        placed, prep = place(
+                            graph,
+                            constraints,
+                            seed=trial_seed,
+                            iters=iters,
+                            orient=orient,
+                            inflation={k: 1 + (v - 1) * damping for k, v in inflation.items()},
+                            spread=spread,
+                            channel_rules=detail_rules,
+                        )
                     placement_attempt_log.append(dict(seed=trial_seed, damping=damping, legal=True))
                     last_error = None
                     break
@@ -446,6 +458,8 @@ def _place_route_loop(
             trial_seed = None
             local_only = True
             print("PnR local placement feedback: " + json.dumps(local_move), flush=True)
+        if tracer is not None:
+            tracer.poses("round", placed, local_move=local_move is not None)
         diagnostic = os.environ.get("PNR_ROUND_DIAGNOSTICS")
         folder = Path(diagnostic) / ("round-%02d" % (r + 1)) if diagnostic else None
         if folder:
@@ -474,13 +488,18 @@ def _place_route_loop(
 
             # The selected initial finalist already used this exact routing
             # budget; retain its result instead of giving the winner a second run.
-            broute = (
-                initial_route
-                if initial_route is not None
-                else route_board(
-                    placed, constraints, detail_rules, pitch=detail_pitch_mm, max_iters=detail_iters
+            with _trace.scope("route", "route", reused=initial_route is not None):
+                broute = (
+                    initial_route
+                    if initial_route is not None
+                    else route_board(
+                        placed,
+                        constraints,
+                        detail_rules,
+                        pitch=detail_pitch_mm,
+                        max_iters=detail_iters,
+                    )
                 )
-            )
             if folder and getattr(broute, "pressure_events", None) is not None:
                 (folder / "pressure-events.json").write_text(
                     json.dumps(broute.pressure_events, indent=2)
@@ -617,6 +636,8 @@ def _place_route_loop(
             mesh_reference_scale = max(1.0, float(cell.max()))
         accum = accum + cell
         inflation = derive_inflation(placed, accum, gcell_mm, fixed=fixed)
+        if tracer is not None:
+            tracer.congestion(accum, gcell_mm, inflation)
 
         # Track the BEST placement seen — the inflation feedback can overshoot and
         # oscillate (round N+1 worse than round N), so we must not return the last
@@ -649,6 +670,16 @@ def _place_route_loop(
 
     if relocate_mode and report.termination == "round_limit":
         report.termination = "relocation_round_budget_exhausted"
+    if tracer is not None:
+        tracer.leave(type="round")
+        rounds = ["round-%02d" % (i + 1) for i in range(report.rounds)]
+        tracer.select(
+            "best-round",
+            rounds,
+            "round-%02d" % report.best_round if report.best_round else None,
+            "missing-connections",
+            dict(zip(rounds, report.connection_history or report.overflow_history)),
+        )
     return best_placed, report
 
 
@@ -696,6 +727,11 @@ def route_and_place(
     Deterministic under a fixed ``seed``.
     """
     base_w, base_h = outline_size(graph, constraints)
+    from pnr import trace as _trace
+
+    tracer = _trace.current()  # None unless PNR_TRACE_DIR is set; observational only
+    if tracer is not None:
+        tracer.begin_board(graph, constraints, detail_rules)
     scale = 1.0
     placed: BoardGraph = graph
     report = FeedbackReport(rounds=0)

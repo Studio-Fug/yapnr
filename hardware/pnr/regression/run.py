@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -76,8 +77,57 @@ def source_inputs(repo):
     )
 
 
-def main():
-    global REPO
+# The fabrication profile the ladder routes and is judged under (pnr.fab_profile). The fixtures
+# carry their own fab block (0.2 mm clearance, 0.6/0.3 mm vias; README), which is exactly what the
+# legacy profile enforces; the engine's default (jlc-pofv) overrides it with JLC capability values.
+FAB_PROFILES = ("legacy", "jlc-pofv")
+DEFAULT_FAB_PROFILE = "legacy"
+
+
+def engine_revision(repo):
+    """``(commit, dirty)`` of the checkout the sources are frozen from; ``(None, None)`` without git."""
+
+    def git(*args):
+        return subprocess.run(
+            ["git", "-C", str(repo), *args], capture_output=True, text=True, timeout=60, check=True
+        ).stdout
+
+    try:
+        commit = git("rev-parse", "HEAD").strip()
+        dirty = bool(git("status", "--porcelain", "--", "hardware/pnr", "hardware/tools").strip())
+        return commit, dirty
+    except (OSError, subprocess.SubprocessError):
+        return None, None
+
+
+def sources_digest(manifest):
+    """One SHA-256 over the frozen sources (path and content hash): the engine, rebase-proof."""
+    digest = hashlib.sha256()
+    for path in sorted(manifest):
+        digest.update((path + "\0" + manifest[path] + "\n").encode())
+    return digest.hexdigest()
+
+
+# Lists the installed distributions without pip (a uv-built venv, as in the image, has none).
+LISTING = (
+    "import importlib.metadata as m;"
+    "print('\\n'.join(sorted('%s==%s'%(d.metadata['Name'],d.version) for d in m.distributions())))"
+)
+
+
+def new_result(spec, seed, root):
+    """A case's result record; ``directory`` is relative to the run directory."""
+    return dict(
+        case=spec["name"],
+        seed=seed,
+        components=spec["expected_components"],
+        passed=False,
+        stages={},
+        directory=root.name,
+    )
+
+
+def parser():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
         "--repo", type=Path, default=Path(os.environ.get("BUILD_WORKSPACE_DIRECTORY", REPO))
@@ -110,6 +160,20 @@ def main():
     ap.add_argument("--initial-starts", type=int, default=8)
     ap.add_argument("--initial-finalists", type=int, default=3)
     ap.add_argument(
+        "--trace",
+        action="store_true",
+        help="Record a pnr-trace-v1 trace per case (CASE/trace) for pnr.animate; observational only",
+    )
+    ap.add_argument(
+        "--fab-profile",
+        choices=FAB_PROFILES,
+        default=DEFAULT_FAB_PROFILE,
+        help=(
+            "PNR_FAB_PROFILE for every stage (default legacy: the fixtures' own fab block); "
+            "jlc-pofv routes and judges under the engine's default profile"
+        ),
+    )
+    ap.add_argument(
         "--kicad-python",
         default=os.environ.get(
             "PNR_KICAD_PYTHON", KI + "/Frameworks/Python.framework/Versions/3.9/bin/python3"
@@ -121,7 +185,12 @@ def main():
     ap.add_argument(
         "--library", type=Path, default=kicad_footprints()
     )  # PNR_KICAD_FOOTPRINTS / PNR_KICAD_CLI bundle (src15)
-    args = ap.parse_args()
+    return ap
+
+
+def main():
+    global REPO
+    args = parser().parse_args()
     REPO = args.repo.resolve()
     args.python = args.python or str(REPO / "output/pnr-regression-runtime/bin/python")
     out = args.out.resolve()
@@ -155,6 +224,9 @@ def main():
         env["PNR_DETAIL_PITCH_MM"] = str(args.detail_pitch_mm)
     if args.batched_wirelength:
         env["PNR_BATCHED_WIRELENGTH"] = "1"
+    env["PNR_FAB_PROFILE"] = (
+        args.fab_profile
+    )  # routed and judged under one profile (route_case.py, writeback)
     if args.initial_pool:
         if not 2 <= args.initial_starts <= 128 or not 1 <= args.initial_finalists <= min(
             args.initial_starts, 16
@@ -166,30 +238,44 @@ def main():
             PNR_INITIAL_FINALISTS=str(args.initial_finalists),
             PNR_INITIAL_PROXY_BUDGET=str(args.initial_starts),
         )
+    commit, dirty = engine_revision(REPO)
     provenance = dict(
         schema="pnr-regression-v1",
         source_hashes=manifest,
+        sources_sha256=sources_digest(manifest),
+        engine_revision=commit,
+        engine_dirty=dirty,
+        fab_profile=args.fab_profile,
+        platform="%s-%s" % (sys.platform, platform.machine().lower()),
         seeds=args.seed or [0],
+        trace=bool(args.trace),
         arguments={k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
         pnr_environment={k: v for k, v in env.items() if k.startswith("PNR_")},
     )
     (out / "provenance.json").write_text(json.dumps(provenance, indent=2))
     for key, cmd in [
-        ("python", [args.python, "-m", "pip", "freeze"]),
+        ("python", [args.python, "-c", LISTING]),
         ("kicad", [args.kicad_cli, "version"]),
     ]:
         (out / (key + "-version.txt")).write_text(
             subprocess.check_output(cmd, text=True, timeout=300)
         )  # a version query
+    tracing = None
+    if args.trace:
+        sys.path[:0] = [
+            str(frozen_here),
+            str(freeze / "hardware/pnr"),
+        ]  # frozen, stdlib-only trace modules
+        import trace_native as tracing
     results = []
 
-    def stage(root, name, cmd):
+    def stage(root, name, cmd, extra=None):
         t = time.monotonic()
         with (root / (name + ".log")).open("w") as log:
             subprocess.run(
                 list(map(str, cmd)),
                 cwd=REPO,
-                env=env,
+                env=dict(env, **(extra or {})),
                 stdout=log,
                 stderr=subprocess.STDOUT,
                 check=True,
@@ -202,21 +288,15 @@ def main():
             root = out / (spec["name"] + "-seed-" + str(seed))
             root.mkdir()
             (root / "design.json").write_text(json.dumps(spec, indent=2))
-            result = dict(
-                case=spec["name"],
-                seed=seed,
-                components=spec["expected_components"],
-                passed=False,
-                stages={},
-                directory=str(root),
-            )
+            result = new_result(spec, seed, root)
             t = time.monotonic()
             print("START " + root.name, flush=True)
             try:
 
-                def run(name, cmd):
-                    result["stages"][name] = stage(root, name, cmd)
+                def run(name, cmd, extra=None):
+                    result["stages"][name] = stage(root, name, cmd, extra)
 
+                native = tracing.NativeTrace(root, spec, seed, args, out.name) if tracing else None
                 run(
                     "generate",
                     [
@@ -238,6 +318,7 @@ def main():
                 run(
                     "place-route",
                     [args.python, frozen_here / "route_case.py", root, seed, args.rounds],
+                    native.environment() if native else None,
                 )
                 board = root / "routed.kicad_pcb"
                 run(
@@ -256,10 +337,16 @@ def main():
                         root / "routes.json",
                     ],
                 )
+                if native:
+                    native.snapshot(
+                        "writeback", board, args.kicad_cli, args.timeout
+                    )  # a copy with its own DRC
                 run(
                     "planes",
                     [args.kicad_python, "-m", "pnr.planes", board, "--rules", root / "rules.json"],
                 )
+                if native:
+                    native.snapshot("planes", board, args.kicad_cli, args.timeout)
                 run(
                     "refill",
                     [
@@ -319,6 +406,8 @@ def main():
                 if source != sha(root / "source.kicad_pcb"):
                     result["reasons"].append("source_changed")
                 result["passed"] = not result["reasons"]
+                if native:
+                    native.finish(board, drc, result)  # the saved board with the runner's final DRC
             except Exception as ex:
                 result.update(
                     error=str(ex), traceback=traceback.format_exc(), reasons=["stage_failure"]

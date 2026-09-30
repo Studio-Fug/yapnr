@@ -21,6 +21,7 @@ for r in summary["results"]:
     if r["seed"] != 0:
         continue
     root = Path(r["directory"])
+    root = root if root.is_absolute() else a.run / root  # run-relative in newer runs
     board = root / "routed.kicad_pcb"
     if not board.exists():
         continue

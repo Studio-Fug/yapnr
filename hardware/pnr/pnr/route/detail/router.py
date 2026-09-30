@@ -405,6 +405,12 @@ def route_board(
         for n, cells in plan.net_access.items()
         if len(cells) >= 2 and n not in plan.blocked_nets
     }
+    # PNR_TRACE_DIR only: records this route inside a traced route scope (pnr.trace).
+    from .trace_route import start as trace_start
+
+    route_trace = trace_start(
+        graph, grid, plan, net_width, track_width_mm, planes, deferred, max_iters
+    )
 
     # Price a layer transition in physical distance so finer grids do not
     # accidentally make short via excursions cheaper than surface detours.
@@ -474,6 +480,8 @@ def route_board(
     # Zero-length pad-to-grid stubs add no connection and become dangling items.
     board.tracks = [t for t in board.tracks if math.dist(t[2], t[3]) >= 1e-6]
     board.vias = list(dict.fromkeys(board.vias))
+    if route_trace is not None:
+        route_trace.end(board)
     return board
 
 

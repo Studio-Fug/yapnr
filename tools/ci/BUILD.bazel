@@ -1,0 +1,22 @@
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Helpers of the regression ladder lane (.github/workflows/ladder.yaml). Stdlib-only and
+# Python 3.9 compatible: CI runs them with the runner's python3.
+py_library(
+    name = "ci_lib",
+    srcs = [
+        "__init__.py",
+        "ladder_summary.py",
+    ],
+    imports = ["../.."],
+)
+
+# `bazel run //tools/ci:ladder_summary -- RUN_DIR`
+py_binary(
+    name = "ladder_summary",
+    srcs = ["ladder_summary.py"],
+    main = "ladder_summary.py",
+    deps = [":ci_lib"],
+)

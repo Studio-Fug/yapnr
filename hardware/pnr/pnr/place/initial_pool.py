@@ -22,6 +22,7 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from pnr import trace as _trace
 from pnr.constraints import Constraint, Enforcement
 from pnr.graph import BoardGraph, BoardOutline
 
@@ -453,7 +454,7 @@ def select_initial_placement(
         if folder:
             folder.mkdir(exist_ok=True)
             (folder / "start.json").write_text(json.dumps(start, indent=2))
-        with initial_start_context(start):
+        with initial_start_context(start), _trace.scope(start["id"], "start", kind=start["kind"]):
             t = time.monotonic()
             try:
                 source_errors = _hard_and_source_errors(source, source, constraints)
@@ -581,6 +582,14 @@ def select_initial_placement(
             finally:
                 if folder:
                     (folder / "placement-result.json").write_text(json.dumps(record, indent=2))
+                if _trace.current() is not None:  # PNR_TRACE_DIR only
+                    _trace.note(
+                        status={"legal": "ok", "duplicate": "dropped"}.get(
+                            record["status"], "illegal"
+                        ),
+                        hpwl_mm=record.get("hpwl_mm"),
+                        cheap_score=record.get("cheap_score"),
+                    )
     if not legal:
         report.update(
             termination="no_legal_initial_placement", elapsed_seconds=time.monotonic() - started
@@ -623,6 +632,14 @@ def select_initial_placement(
         mandatory=mandatory,
         refs=movable_refs,
     )
+    if _trace.current() is not None:  # PNR_TRACE_DIR only
+        _trace.select(
+            "shortlist",
+            [c["id"] for c in legal],
+            [c["id"] for c in finalists],
+            "capacity-proxy",
+            {c["id"]: c.get("proxy_score", c["cheap_score"]) for c in legal},
+        )
     report.update(
         baseline=baseline["id"],
         legal_count=len(legal),
@@ -691,9 +708,10 @@ def select_initial_placement(
                     budget=dict(pitch_mm=pitch, max_iters=route_iters),
                 ),
             )
-            route = route_board(
-                candidate["graph"], constraints, rules, pitch=pitch, max_iters=route_iters
-            )
+            with _trace.scope(name + "-route", "route", start=name):
+                route = route_board(
+                    candidate["graph"], constraints, rules, pitch=pitch, max_iters=route_iters
+                )
             emit(
                 "candidate_complete",
                 data=dict(
@@ -742,6 +760,14 @@ def select_initial_placement(
                 )
             )
     chosen = min(evaluated, key=lambda c: (c["metrics"]["objective"], c["id"]))
+    if _trace.current() is not None:  # PNR_TRACE_DIR only
+        _trace.select(
+            "chosen",
+            [c["id"] + "-route" for c in evaluated],
+            chosen["id"] + "-route",
+            "route-objective",
+            {c["id"] + "-route": c["metrics"]["objective"] for c in evaluated},
+        )
     report.update(
         selected=chosen["id"],
         detailed_evaluations=len(evaluated),

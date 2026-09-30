@@ -1048,9 +1048,19 @@ py_test(
 
 py_test(
     name = "regression_contract_test",
-    srcs = ["regression/test_contract.py", "regression/designs.py", "regression/run.py"],
+    srcs = [
+        "regression/animate_ladder.py",
+        "regression/designs.py",
+        "regression/run.py",
+        "regression/test_contract.py",
+        "regression/trace_native.py",
+    ],
+    imports = [
+        ".",
+        "regression",
+    ],
     main = "regression/test_contract.py",
-    imports = ["regression"],
+    deps = [":pnr"],
 )
 
 py_binary(
@@ -1060,6 +1070,116 @@ py_binary(
     imports = ["regression"],
     data = glob(["regression/*.py"]),
     tags = ["manual", "requires-kicad"],
+)
+
+# --- Traces, provenance and animations (pnr.trace, pnr.provenance, pnr.animate) -----------
+# pnr.trace, pnr.trace_board and pnr.provenance are stdlib-only members of :pnr (its glob);
+# pnr.route.detail.trace_route belongs to :pnr_detail. The renderer needs Pillow only (no
+# torch), so building it fetches no torch wheel.
+py_library(
+    name = "pnr_animate",
+    srcs = glob(
+        ["pnr/animate/*.py"],
+        exclude = ["pnr/animate/__main__.py"],
+    ),
+    imports = ["."],
+    deps = [
+        ":pnr",
+        requirement("pillow"),
+    ],
+)
+
+# bazel run //hardware/pnr:animate -- SOURCE --out PATH (python -m pnr.animate).
+py_binary(
+    name = "animate",
+    srcs = ["pnr/animate/__main__.py"],
+    imports = ["."],
+    main = "pnr/animate/__main__.py",
+    deps = [":pnr_animate"],
+)
+
+# Runs the traced ladder (initial pool, seed 0) and renders docs/animations; with
+# --render-only RUN_DIR it only renders (no KiCad).
+py_binary(
+    name = "ladder_animations",
+    srcs = ["regression/animate_ladder.py"],
+    data = glob(["regression/*.py"]),
+    imports = ["."],
+    main = "regression/animate_ladder.py",
+    tags = [
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr_animate"],
+)
+
+py_test(
+    name = "trace_test",
+    size = "small",
+    srcs = ["tests/test_trace.py"],
+    imports = ["."],
+    main = "tests/test_trace.py",
+    deps = [":pnr"],
+)
+
+# Tracing never changes a result: byte-identical placements and routes, unset/set/unset.
+py_test(
+    name = "trace_noop_test",
+    size = "medium",
+    srcs = ["tests/test_trace_noop.py"],
+    imports = ["."],
+    main = "tests/test_trace_noop.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+    ],
+)
+
+py_test(
+    name = "trace_board_test",
+    size = "small",
+    srcs = ["tests/test_trace_board.py"],
+    imports = ["."],
+    main = "tests/test_trace_board.py",
+    deps = [":pnr"],
+)
+
+# Parity of the .kicad_pcb reader with pcbnew; run it under KiCad's Python by hand.
+py_test(
+    name = "trace_board_kicad_test",
+    size = "small",
+    srcs = ["tests/test_trace_board_kicad.py"],
+    imports = ["."],
+    main = "tests/test_trace_board_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
+)
+
+py_test(
+    name = "provenance_test",
+    size = "small",
+    srcs = ["tests/test_provenance.py"],
+    imports = ["."],
+    main = "tests/test_provenance.py",
+    deps = [":pnr"],
+)
+
+py_test(
+    name = "animate_test",
+    size = "medium",
+    srcs = ["tests/test_animate.py"],
+    imports = ["."],
+    main = "tests/test_animate.py",
+    deps = [
+        ":pnr",
+        ":pnr_animate",
+    ],
 )
 
 py_test(

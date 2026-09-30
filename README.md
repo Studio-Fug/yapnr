@@ -35,6 +35,16 @@
 
 **Yet another place and route** engine for printed circuit boards.
 
+<p align="center">
+  <img src="docs/animations/05-timer-led-10.gif" width="640"
+    alt="Animation: yapnr places and routes a TLC555 LED flasher, from unplaced footprints to a
+    fully routed board that passes KiCad's DRC">
+</p>
+
+_The 555 flasher (a TLC555 astable blinker, 10 parts, 2 layers) from the
+[regression ladder](docs/regression-ladder.md): from unplaced footprints to 100 % routed, with the
+placement starts and routes it was chosen from, ending on KiCad's clean DRC verdict._
+
 yapnr places components and routes copper for KiCad boards. It uses a mechanical,
 Monte-Carlo-driven search: hierarchical block synthesis, power-first placement, native KiCad
 routing and DRC in the loop, and electrical contracts (current, pairs, plane access) declared

@@ -27,6 +27,15 @@ numpy>=1.26,<2
 # Sidecar constraints and rules files (constraints.yaml, annotations.yaml).
 pyyaml>=6
 
+# --- Tooling ------------------------------------------------------------------
+# Contributor and documentation tools, not runtime dependencies (they stay out of
+# requirements-runtime.in and the container image).
+#
+# Pillow renders the place-and-route animations (pnr.animate, //hardware/pnr:animate)
+# for docs/animations/. The output bytes depend on its bundled libwebp, zlib and
+# FreeType, so the major version is capped; the manifest records the exact version.
+pillow>=12,<13
+
 # --- Documentation (//docs:build) ---------------------------------------------
 # Pinned to the versions Splanc's docs site builds with, so the two sites
 # behave the same; bump together.

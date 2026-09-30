@@ -85,8 +85,9 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
         args: [--maxkb=600]
-        # Vendored upstream files are reviewed for size when vendored.
-        exclude: ^third_party/
+        # Vendored upstream files are reviewed for size when vendored. The ladder animations
+        # have their own budget (tests/unit/repo/test_animations.py).
+        exclude: ^(third_party/|docs/animations/)
       - id: check-merge-conflict
       - id: check-case-conflict
       - id: check-json

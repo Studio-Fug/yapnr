@@ -490,6 +490,9 @@ def _route_impl(
     import time
 
     from pnr.live import emit
+    from pnr.trace import route_hook
+
+    trace_hook = route_hook()  # None unless a traced route scope is open (pnr.trace)
 
     def live_net(net, route, kind):
         if not os.environ.get("PNR_LIVE_DIR"):
@@ -522,6 +525,8 @@ def _route_impl(
 
     def _place(net, route):
         live_net(net, route, "signal_net_added")
+        if trace_hook:
+            trace_hook.net(net, route, "add", True, iters)
         routed[net] = route
         fp = (
             _footprint(grid, route.cells, via_keepout, _h(net), edges=route.edges, net=net)
@@ -535,6 +540,8 @@ def _route_impl(
 
     def _rip(net):
         live_net(net, None, "signal_net_removed")
+        if trace_hook:
+            trace_hook.net(net, None, "rip", True, iters)
         for c in fps[net]:
             owner[c].discard(net)
             occ[c] -= 1
@@ -611,6 +618,8 @@ def _route_impl(
 
     def _commit(net: str, route: _Route) -> None:
         live_net(net, route, "signal_net_added")
+        if trace_hook:
+            trace_hook.net(net, route, "commit", False, iters)
         for c in _footprint(grid, route.cells, via_keepout, _h(net), edges=route.edges, net=net):
             occupied[c] = net
             committed.add(c)
@@ -621,6 +630,8 @@ def _route_impl(
         result_nets[net] = rn
 
     def _drop(net: str) -> None:
+        if trace_hook:
+            trace_hook.net(net, None, "drop", False, iters)
         rn = _to_geometry(_Route())
         rn.name = net
         rn.routed = False

@@ -22,6 +22,13 @@ manufacturing designs.
 
 Signal width is 0.25 mm, supply/return width at least 0.4 mm, clearance 0.2 mm,
 and vias 0.6/0.3 mm. Resolved supply policy includes a 0.1 A current budget.
+These are the fixtures' own fabrication rules: the runner routes and judges every
+stage under `PNR_FAB_PROFILE=legacy` (`--fab-profile`, default `legacy`), which
+enforces exactly them. `--fab-profile jlc-pofv` routes and judges under the
+engine's default JLCPCB profile instead (`pnr.fab_profile`: 0.127 mm clearance,
+0.45/0.30 mm vias, vias kept 0.127 mm off SMD pads); `route_case.py` applies the
+profile to the rules the router uses, as `writeback` does to the rules KiCad
+checks.
 Each manifest retains explicit intentionally unused pins. Pin mappings and timer
 connections were checked against [TLC555](https://www.ti.com/lit/ds/symlink/tlc555.pdf),
 [CD4017B](https://www.ti.com/lit/ds/symlink/cd4017b.pdf), and the KiCad library
@@ -110,6 +117,34 @@ variables do not silently enable this mode in the runner.
 
 See [RESULTS-118.md](RESULTS-118.md) for the frozen ladder, native comparisons,
 actual PDF review evidence and remaining placement/route-quality findings.
+
+## Traces and animations
+
+`--trace` records a `pnr-trace-v1` trace per case in `CASE/trace` (`pnr.trace`):
+the engine lane (global placement snapshots, the legalization order, every net
+the detailed router adds, rips or commits, the pool's selections) and the native
+lane (copies of the board after `writeback` and `planes` with their own KiCad
+DRC, the saved board and the verdict). Tracing is observational: placements,
+routes and reports are byte-identical with and without it (`trace_noop_test`).
+`python -m pnr.animate CASE --out case.webp` (`//hardware/pnr:animate`) renders
+the critical path from the unplaced board to KiCad's verdict, with the rejected
+candidates of each selection as montages (`pnr.provenance`);
+`//hardware/pnr:ladder_animations` runs the traced ladder with the initial pool
+and renders every case (`--render-only RUN_DIR` skips the ladder) into
+`docs/animations/`, with `manifest.json` and `ladder-results.json`. Case
+directories in `result.json`, `summary.json` and `junit.xml` are relative to the
+run directory. `provenance.json` records the fab profile, the checkout's commit
+(and whether engine files were modified), the platform and `sources_sha256`, one
+digest over the frozen sources that survives a rebase. The committed animations,
+the current results of every case and how to regenerate them are on the docs page
+[Regression ladder](../../../docs/regression-ladder.md). `python -m pnr.animate`
+also takes a successive-halving run (coarse: its saved placements, rung
+objectives and the winning rung's native phases).
+
+CI (`.github/workflows/ladder.yaml`, informational) runs cases 01 to 06 on pull
+requests that change engine inputs, and all cases with seeds 0 and 1 nightly,
+inside the arm64 image, plus a traced pool run whose animations are uploaded as
+an artifact.
 
 Performance opt-ins can be tested explicitly with `--packed-maze` and
 `--batched-wirelength`. They are recorded in provenance; ambient variables are

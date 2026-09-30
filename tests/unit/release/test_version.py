@@ -261,6 +261,16 @@ class GitTest(unittest.TestCase):
         self.assertEqual(after.base_tag, "v0.1.0")
         self.assertRegex(after.pep440, r"^0\.1\.1\.dev1\+g[0-9a-f]{7}$")
 
+        # Tags that match describe's glob but are not release tags are skipped:
+        # the nearest release tag below them is the base.
+        self._commit("four")
+        self._git("tag", "-a", "v0.2.0-beta.1", "-m", "not a release tag")
+        self._git("tag", "v1.0.0-rc1")
+        skipped = self._info(MAIN)
+        self.assertEqual(skipped.base_tag, "v0.1.0")
+        self.assertRegex(skipped.pep440, r"^0\.1\.1\.dev2\+g[0-9a-f]{7}$")
+        self.assertEqual(skipped.oci_tags, ["edge", "sha-" + skipped.sha[:7]])
+
         with open(os.path.join(self.repo, "file.txt"), "a", encoding="utf-8") as handle:
             handle.write("uncommitted\n")
         self.assertTrue(self._info().pep440.endswith(".dirty"))

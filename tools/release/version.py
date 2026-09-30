@@ -56,7 +56,9 @@ TAG_PATTERN = re.compile(
     r"^v(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)"
     r"(?:-rc\.(?P<rc>[1-9]\d*))?$"
 )
-# `git describe --match` takes a glob; TAG_PATTERN is applied to what it finds.
+# `git describe --match` takes a glob, which also matches tags such as
+# v0.2.0-beta.1 or v1.0.0-rc1; from_git excludes every tag that TAG_PATTERN
+# rejects, so such a tag never becomes the base of a version.
 DESCRIBE_GLOB = "v[0-9]*.[0-9]*.[0-9]*"
 MAIN_REF = "refs/heads/main"
 TAG_REF_PREFIX = "refs/tags/"
@@ -265,8 +267,24 @@ def from_git(repo: str = ".", ref: str = "") -> VersionInfo:
     """Gather the facts for ``compute`` from the git checkout at ``repo``."""
     sha = _git(repo, "rev-parse", "HEAD")
     head_tags = _git(repo, "tag", "--points-at", "HEAD").split()
+    all_tags = _git(repo, "tag", "--list", "v*").split()
+    # The nearest release tag: tags that match the glob but are not release tags
+    # (v0.2.0-beta.1, v1.0.0-rc1) are skipped, so describe falls back to the
+    # nearest one that is.
+    excludes = []
+    for name in all_tags:
+        if parse_tag(name) is None:
+            excludes += ["--exclude", name]
     base_tag = _git(
-        repo, "describe", "--tags", "--abbrev=0", "--match", DESCRIBE_GLOB, "HEAD", check=False
+        repo,
+        "describe",
+        "--tags",
+        "--abbrev=0",
+        "--match",
+        DESCRIBE_GLOB,
+        *excludes,
+        "HEAD",
+        check=False,
     )
     if base_tag:
         # Several tags on the base commit (an RC and its final release): take the highest.
@@ -281,7 +299,7 @@ def from_git(repo: str = ".", ref: str = "") -> VersionInfo:
         distance=distance,
         commit_count=int(_git(repo, "rev-list", "--count", "HEAD")),
         dirty=bool(_git(repo, "status", "--porcelain", "--untracked-files=no")),
-        all_tags=_git(repo, "tag", "--list", "v*").split(),
+        all_tags=all_tags,
     )
 
 

@@ -5,10 +5,27 @@ degree-two vertices, and remove redundant chains with an equal-or-wider, no-long
 Partial edits reconstruct untouched continuations on their original centerlines
 and at their original widths. Native
 connectivity, pad-entry and DRC validation remains mandatory for acceptance.
+
+Partial-track edits (Electrical221) are opt-in: PNR_PARTIAL_CYCLE_CLEANUP=1 (see
+:func:`partial_cycle_cleanup_enabled`). Unset, only complete original-track chains
+are proposed, as in the src15 engine.
 """
 from collections import defaultdict
 import heapq
 import math
+import os
+
+
+def partial_cycle_cleanup_enabled():
+    """PNR_PARTIAL_CYCLE_CLEANUP=1: Electrical221's partial-track cycle edits.
+
+    When no whole-track cycle is left on a net and layer, a cycle may remove part of
+    an original track, with the continuations outside the chain rebuilt at their
+    original width; via_coalesce's cycle trial then also matches the replacement
+    segments and endpoints. Default off (src15 behaviour): Electrical221 has no
+    A/B result on the hierarchical engine.
+    """
+    return os.environ.get('PNR_PARTIAL_CYCLE_CLEANUP')=='1'
 
 
 def point(p):
@@ -151,7 +168,7 @@ def cycle_candidates(board, rules, sources, max_length_mm=3):
                     p = terminal.GetPosition()
                     anchors.add(projection((p.x, p.y), a, b))
         choices = redundant_chains(segments, anchors, round(max_length_mm * 1e6))
-        if not choices:
+        if not choices and partial_cycle_cleanup_enabled():
             # Only fall back to partial-track edits after whole-track cleanup.
             # Unselected portions are explicitly reconstructed at original width.
             choices = redundant_chains(segments, anchors, round(max_length_mm * 1e6),

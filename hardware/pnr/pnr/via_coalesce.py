@@ -5,6 +5,10 @@ all track/pad ports are retained at their original coordinates and connected to
 one existing barrel. Source-authored arrays/returns, power-width classes, plane
 nets, differential pairs, blind/micro vias and locked copper are excluded.
 The coordinator never holds pcbnew wrappers while spawning native DRC/fill.
+
+Opt-in Electrical221 cleanup (default off, the src15 behaviour):
+PNR_BARREL_CONTACT_BRIDGES=1 (:func:`barrel_contact_bridges_enabled`) and
+PNR_PARTIAL_CYCLE_CLEANUP=1 (:func:`pnr.track_graph.partial_cycle_cleanup_enabled`).
 """
 import argparse
 from collections import Counter
@@ -22,6 +26,17 @@ from types import SimpleNamespace
 from pnr.pad_entry import closest, snapshot, xy
 from pnr.plane_access import surface_group, uid
 from pnr.plane_intent import read_annotations, resolve
+
+
+def barrel_contact_bridges_enabled():
+    """PNR_BARREL_CONTACT_BRIDGES=1: Electrical221's bridges for barrel-contact tails.
+
+    An untrimmed track ending at the removed barrel gets a checked bridge to the
+    surviving via even when another path on its layer already reaches the survivor.
+    Default off (src15 behaviour): a layer whose ports all reach the survivor
+    gets no bridge.
+    """
+    return os.environ.get('PNR_BARREL_CONTACT_BRIDGES')=='1'
 
 
 def vec(p):
@@ -156,11 +171,13 @@ def plan(board, keep, remove, rules):
         # branch (and then its upstream junctions). Give untrimmed endpoints
         # ending at the removed barrel a checked bridge to the survivor, even
         # when they are already reachable through another route on this layer.
+        # PNR_BARREL_CONTACT_BRIDGES=1 only; unset, the discarded annulus alone
+        # decides (src15): a layer whose ports all reach the survivor is skipped.
         trimmed = {edit['uuid'] for edit in trims}
         terminal_ports = [t for t in attached if t.GetClass() == 'PCB_TRACK'
                           and uid(t) not in trimmed
                           and any(math.dist(xy(point), start) <= 1e-6
-                                  for point in (t.GetStart(), t.GetEnd()))]
+                                  for point in (t.GetStart(), t.GetEnd()))] if barrel_contact_bridges_enabled() else []
         if all(uid(t) in connected for t in attached) and not terminal_ports:
             continue
         minimum = rules.get('fab', {}).get('track_width_mm', 0.2)
@@ -247,15 +264,18 @@ def worker(args, rules):
         from pnr.track_graph import cycle_candidates
         result = dict(cycles=cycle_candidates(b, rules, args.annotation_source, 2 * args.radius))
     elif args.worker == 'cycle-trial':
-        from pnr.track_graph import cycle_candidates, apply_cycle
+        from pnr.track_graph import cycle_candidates, apply_cycle, partial_cycle_cleanup_enabled
         before = dict(partition=partition(b), entries=snapshot(b, rules))
         requested = json.loads(args.transaction.read_text())
         choices = cycle_candidates(b, rules, args.annotation_source, 2 * args.radius)
+        # With PNR_PARTIAL_CYCLE_CLEANUP=1 the replacement segments and endpoints
+        # must match too; unset, tracks, net and layer identify a proposal (src15).
+        exact = partial_cycle_cleanup_enabled()
         proposal = next((p for p in choices if p['remove_tracks'] == requested['remove_tracks']
                          and p['net'] == requested['net'] and p['layer'] == requested['layer']
-                         and json.dumps(p.get('replacement_segments', []), sort_keys=True)
+                         and (not exact or (json.dumps(p.get('replacement_segments', []), sort_keys=True)
                              == json.dumps(requested.get('replacement_segments', []), sort_keys=True)
-                         and json.dumps(p['endpoints']) == json.dumps(requested['endpoints'])), None)
+                         and json.dumps(p['endpoints']) == json.dumps(requested['endpoints'])))), None)
         if proposal is None:
             result = dict(skipped='cycle no longer eligible')
         else:

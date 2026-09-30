@@ -908,7 +908,12 @@ their own targets, which Bazel rejects as a duplicate label, so the whole packag
 load; each source is now listed once;</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">si_integration_test</span></code> depends on <code class="docutils literal notranslate"><span class="pre">:pnr_fab</span></code>: its <code class="docutils literal notranslate"><span class="pre">RouteMainTest</span></code> cases import
 <code class="docutils literal notranslate"><span class="pre">pnr.route.__main__</span></code>, which <code class="docutils literal notranslate"><span class="pre">:pnr_route</span></code> excludes;</p></li>
-<li><p>PR1’s <code class="docutils literal notranslate"><span class="pre">manual</span></code> tags, re-applied with an updated comment (below).</p></li>
+<li><p>PR1’s <code class="docutils literal notranslate"><span class="pre">manual</span></code> tags, re-applied with an updated comment (below);</p></li>
+<li><p>CI runner fixes found on the PR’s first run: <code class="docutils literal notranslate"><span class="pre">placement_test</span></code> is size <code class="docutils literal notranslate"><span class="pre">medium</span></code> (over the 60 s
+<code class="docutils literal notranslate"><span class="pre">small</span></code> timeout on the 4-vCPU macOS runner), and <code class="docutils literal notranslate"><span class="pre">test_si_runner</span></code>’s nice check is relative to
+the test process (GitHub’s macOS runners start jobs at nice -10, so the absolute <code class="docutils literal notranslate"><span class="pre">&gt;=</span> <span class="pre">5</span></code> check
+failed although the +5 increment works). That test file is the only non-BUILD edit in PR2; it
+is yapnr’s own SI test, not Splanc-imported history.</p></li>
 </ul>
 <p>Pass set, from <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//...</span> <span class="pre">--config=ci</span></code> with <code class="docutils literal notranslate"><span class="pre">--config=lowmem</span></code> and
 <code class="docutils literal notranslate"><span class="pre">--nocache_test_results</span></code> on the development Mac (hermetic Python 3.11, torch 2.3.1, numpy 1.26.4):</p>

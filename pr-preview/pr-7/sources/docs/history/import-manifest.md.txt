@@ -382,7 +382,12 @@ The adaptation commit re-applies PR1's adaptation to Splanc's newer `BUILD.bazel
   load; each source is now listed once;
 - `si_integration_test` depends on `:pnr_fab`: its `RouteMainTest` cases import
   `pnr.route.__main__`, which `:pnr_route` excludes;
-- PR1's `manual` tags, re-applied with an updated comment (below).
+- PR1's `manual` tags, re-applied with an updated comment (below);
+- CI runner fixes found on the PR's first run: `placement_test` is size `medium` (over the 60 s
+  `small` timeout on the 4-vCPU macOS runner), and `test_si_runner`'s nice check is relative to
+  the test process (GitHub's macOS runners start jobs at nice -10, so the absolute `>= 5` check
+  failed although the +5 increment works). That test file is the only non-BUILD edit in PR2; it
+  is yapnr's own SI test, not Splanc-imported history.
 
 Pass set, from `bazel test //... --config=ci` with `--config=lowmem` and
 `--nocache_test_results` on the development Mac (hermetic Python 3.11, torch 2.3.1, numpy 1.26.4):

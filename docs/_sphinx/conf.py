@@ -89,6 +89,10 @@ html_theme_options = {
 # Pin the mermaid runtime (sphinxcontrib-mermaid loads it from a CDN), as in
 # Splanc, so diagrams render the same way everywhere.
 mermaid_version = "11.4.1"
+# sphinxcontrib-mermaid gives every diagram a fixed 500px-tall box, which
+# shrinks wide diagrams to unreadable text and pads them with blank space.
+# Size diagrams by their aspect ratio instead; custom.css caps the height.
+mermaid_height = "auto"
 
 # Copy button: strip shell and REPL prompts.
 copybutton_prompt_text = r">>> |\.\.\. |\$ "

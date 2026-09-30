@@ -12,11 +12,16 @@ article h1 {
   box-shadow: inset 3px 0 0 var(--color-yapnr-accent);
 }
 
-/* Diagrams: centred with some room. */
+/* Diagrams: centred with some room. conf.py sizes them by aspect ratio
+ * (mermaid_height = "auto"); cap tall ones so they fit on one screen. */
 pre.mermaid,
 div.mermaid {
   text-align: center;
   margin: 1.5rem auto;
+}
+
+article pre.mermaid > svg {
+  max-height: 45rem;
 }
 
 /* Tables with long code spans: let them scroll instead of overflowing. */

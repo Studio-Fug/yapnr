@@ -7,15 +7,15 @@ architecture pages are written in PR7 once the engine has landed (see the
 ## Pipeline
 
 ```mermaid
-flowchart LR
-    design["Design input<br/>KiCad or atopile frontend"] --> inputs["Frozen input set<br/>board, rules, annotations"]
+flowchart TB
+    design["Design input<br/>KiCad or atopile frontend"]
+    design --> inputs["Frozen input set<br/>board, rules, annotations"]
     inputs --> place["Placement<br/>differentiable, power-first"]
     place --> route["Global routing"]
     route --> native["Native KiCad stages<br/>detail routing, electrical"]
     native --> drc["KiCad DRC<br/>(the judge)"]
     drc --> evaluation["Evaluation<br/>objective vector"]
-    evaluation --> feedback["Feedback to placement"]
-    feedback --> place
+    evaluation -- "feedback to placement" --> place
     evaluation --> select["Mechanical selection<br/>Monte Carlo, successive halving"]
 ```
 

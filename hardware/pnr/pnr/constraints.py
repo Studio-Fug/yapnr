@@ -535,6 +535,9 @@ def _expand_layout_arrays(doc):
 
 
 LINE_GROUP_EDGES = ("none",) + EDGES
+# Hard edge alignment: the largest courtyard-to-edge distance, default and floor (mm).
+EDGE_TOLERANCE_MM = 1.0
+MIN_EDGE_TOLERANCE_MM = 0.5
 
 
 def _finite_number(value) -> bool:
@@ -739,7 +742,9 @@ def compile_constraints(
             )
         )
 
-    # edge_align: SOFT — pull the part to a board edge; snap orientation.
+    # edge_align: SOFT — pull the part to a board edge during global placement (the
+    # facing is set with ``orientation``). Opt-in ``hard: true`` also keeps the part's
+    # courtyard within ``tolerance_mm`` of that edge through legalization.
     for ref, spec in (doc.get("edge_align") or {}).items():
         spec = spec or {}
         refs = _expand_refs([ref], known_refs, warnings, f"edge_align.{ref}")
@@ -747,12 +752,24 @@ def compile_constraints(
         if edge is None:
             raise ConstraintError(f"edge_align.{ref}: 'edge' is required")
         _require_enum(spec.get("side"), SIDES, f"edge_align.{ref}.side")
+        hard = spec.get("hard", False)
+        if not isinstance(hard, bool):
+            raise ConstraintError(f"edge_align.{ref}.hard must be a boolean")
+        tolerance = spec.get("tolerance_mm", EDGE_TOLERANCE_MM)
+        if not _finite_number(tolerance) or tolerance < MIN_EDGE_TOLERANCE_MM:
+            raise ConstraintError(
+                f"edge_align.{ref}.tolerance_mm must be finite and at least "
+                f"{MIN_EDGE_TOLERANCE_MM} mm"
+            )
+        params = {"edge": edge, "side": spec.get("side")}
+        if hard:
+            params.update(hard=True, tolerance_mm=float(tolerance))
         constraints.append(
             Constraint(
                 kind="edge_align",
-                enforcement=Enforcement.SOFT,
+                enforcement=Enforcement.HARD if hard else Enforcement.SOFT,
                 refs=refs,
-                params={"edge": edge, "side": spec.get("side")},
+                params=params,
                 weight=float(spec.get("weight", DEFAULT_WEIGHTS["edge_align"])),
             )
         )

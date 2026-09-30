@@ -20,6 +20,9 @@ from pnr.graph import BoardGraph
 from .geometry import (
     Rect,
     courtyard_rect,
+    edge_band_violations,
+    edge_distance,
+    hard_edge_bands,
     hard_group_edges,
     hard_group_limits,
     keepout_rects,
@@ -144,6 +147,7 @@ def hard_violations(
 
     rows_bad = row_violations(graph, constraints)
     rows_bad = rows_bad + line_violations(graph, constraints)
+    rows_bad = rows_bad + edge_band_violations(graph, constraints, width, height)
     return {
         "overlaps": overlap_pairs(graph, clearance),
         "outside_outline": outside_outline(graph, width, height, exclude=constraints.locked_refs),
@@ -190,6 +194,7 @@ def translation_checker(graph, constraints, clearance=0.0):
     geometry = {c.ref: placement_rects(c) for c in graph.components}
     sides_required = resolve_hard_sides(constraints)
     rotations_required = resolve_hard_rotations(constraints)
+    bands = hard_edge_bands(constraints)
 
     def legal(comp):
         from .line_group import violations as line_violations
@@ -205,6 +210,11 @@ def translation_checker(graph, constraints, clearance=0.0):
         ):
             return False
         if comp.ref in sides_required and comp.side != sides_required[comp.ref]:
+            return False
+        if (
+            comp.ref in bands
+            and edge_distance(comp, bands[comp.ref][0], width, height) > bands[comp.ref][1] + 1e-6
+        ):
             return False
         if comp.ref in poses and any(abs(a - b) > 1e-3 for a, b in zip(comp.pos, poses[comp.ref])):
             return False

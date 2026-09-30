@@ -29,6 +29,7 @@ from pnr.graph import BoardGraph, BoardOutline
 from .geometry import (
     apply_hard_sides,
     courtyard_rect,
+    hard_edge_bands,
     hard_group_edges,
     hard_group_limits,
     keepout_rects,
@@ -535,6 +536,11 @@ def select_initial_placement(
                                 {}
                                 if pad_edge_rule(placement_constraints, rules) is None
                                 else dict(pad_edge=pad_edge_rule(placement_constraints, rules))
+                            ),
+                            **(
+                                {}
+                                if not hard_edge_bands(placement_constraints)
+                                else dict(edge_bands=hard_edge_bands(placement_constraints))
                             ),
                         )
                         prep = PlacementReport(

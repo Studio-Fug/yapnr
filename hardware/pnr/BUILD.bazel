@@ -1200,6 +1200,19 @@ py_test(
     ],
 )
 
+# Opt-in hard edge alignment: parser, legalizer band, violations, unchanged soft path.
+py_test(
+    name = "edge_hard_test",
+    size = "small",
+    srcs = ["tests/test_edge_hard.py"],
+    imports = ["."],
+    main = "tests/test_edge_hard.py",
+    deps = [
+        ":pnr",
+        ":pnr_place",
+    ],
+)
+
 py_test(
     name = "initial_pool_test",
     srcs = ["tests/test_initial_pool.py"],

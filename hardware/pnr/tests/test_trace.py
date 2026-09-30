@@ -228,6 +228,12 @@ class RecorderTest(unittest.TestCase):
                 dict(kind="group", refs=["R2"], hard=False, anchor="R1", radius_um=3000),
             ],
         )
+        doc = {"edge_align": {"R2": {"edge": "north", "hard": True, "tolerance_mm": 1.5}}}
+        header = trace.board_header(graph, compile_constraints(doc, graph.refs))
+        self.assertEqual(
+            header["constraints"],
+            [dict(kind="edge_align", refs=["R2"], hard=True, edge="north", tolerance_um=1500)],
+        )
         doc = {"line_group": [{"name": "pair", "members": ["R1", "R2"], "pitch_mm": 2.5}]}
         header = trace.board_header(graph, compile_constraints(doc, graph.refs))
         self.assertEqual(

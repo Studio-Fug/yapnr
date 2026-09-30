@@ -124,6 +124,22 @@ def pad_edge_box(comp, pad_edge, width: float, height: float):
     return (x_lo, x_hi, y_lo, y_hi)
 
 
+def _band_box(box, rect, band, width, height):
+    """Narrow a centre box (x_lo, x_hi, y_lo, y_hi) so a courtyard ``rect`` (at the
+    tried rotation) stays within ``band`` = (edge, tolerance) of its board edge."""
+    x_lo, x_hi, y_lo, y_hi = box
+    edge, tolerance = band
+    if edge == "south":
+        y_hi = min(y_hi, rect.h / 2 + tolerance)
+    elif edge == "north":
+        y_lo = max(y_lo, height - rect.h / 2 - tolerance)
+    elif edge == "west":
+        x_hi = min(x_hi, rect.w / 2 + tolerance)
+    else:
+        x_lo = max(x_lo, width - rect.w / 2 - tolerance)
+    return (x_lo, x_hi, y_lo, y_hi)
+
+
 class LegalizationError(RuntimeError):
     """Raised when a part cannot be placed (outline too small / too full)."""
 
@@ -242,6 +258,7 @@ def legalize(
     mobility=None,
     roles=None,
     pad_edge: Optional[Tuple[float, float]] = None,
+    edge_bands: Optional[Dict[str, Tuple[str, float]]] = None,
 ) -> BoardGraph:
     """Return a copy of ``graph`` with movable parts snapped to a legal layout.
 
@@ -270,6 +287,11 @@ def legalize(
     ``pad_edge`` ((copper, hole) mm, :func:`pad_edge_rule`; None = off) keeps
     every movable part's pads and drills that far from the outline, not only its
     courtyard ``clearance / 2`` inside it.
+
+    ``edge_bands`` ({ref: (edge, tolerance mm)}, hard ``edge_align``; None = off)
+    keeps each listed part's courtyard within the tolerance of its edge: its slot
+    centre is bounded like ``pad_edge`` does, per tried rotation, and its spreading
+    factor is capped so the reserved slot still fits the band.
 
     With hull macros (``PNR_MACRO_HULL=1``) the occupancy gains an ``inner`` plane:
     hull macros mark their inner-layer mask there, drilled parts and solid block
@@ -336,16 +358,36 @@ def legalize(
         return sides
 
     boxes = {}
+    bands = edge_bands or {}
 
     def edge_box(comp):
-        """pad_edge_box at comp.rot (None when the pad-edge rule is off)."""
-        if pad_edge is None:
+        """pad_edge_box at comp.rot, narrowed to the part's hard edge band (None when
+        neither the pad-edge rule nor a band applies)."""
+        band = bands.get(comp.ref)
+        if pad_edge is None and band is None:
             return None
         key = (comp.ref, round(comp.rot % 360, 6))
         hit = boxes.get(key)
         if hit is None:
-            hit = boxes[key] = pad_edge_box(comp, pad_edge, width, height)
+            if pad_edge is None:
+                hit = (-math.inf, math.inf, -math.inf, math.inf)
+            else:
+                hit = pad_edge_box(comp, pad_edge, width, height)
+            if band is not None:
+                hit = _band_box(hit, courtyard_rect(comp), band, width, height)
+            boxes[key] = hit
         return hit
+
+    def spreading(comp):
+        """The part's slot inflation: the spread floor or its feedback inflation, capped
+        for a hard edge part so the slot fits its band."""
+        infl = max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
+        band = bands.get(comp.ref)
+        if band is not None:
+            cr = courtyard_rect(comp)
+            normal = cr.h if band[0] in ("south", "north") else cr.w
+            infl = min(infl, max(1.0, 1.0 + (2 * band[1] - clearance - g) / normal))
+        return infl
 
     free_cache = {}
 
@@ -463,7 +505,7 @@ def legalize(
 
     def available_pose(comp):
         cr = courtyard_rect(comp)
-        infl = max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
+        infl = spreading(comp) if bands else max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
         bw = int(math.ceil((cr.w * infl + clearance) / g))
         bh = int(math.ceil((cr.h * infl + clearance) / g))
         occ = np.logical_or.reduce([occupancy[side] for side in part_sides(comp)])
@@ -529,7 +571,9 @@ def legalize(
             for m in pending:
                 sides_m = part_sides(m)
                 occ_m = np.logical_or.reduce([occupancy[side] for side in sides_m])
-                infl_m = max(1.0, spread, float(inflation.get(m.ref, 1.0)))
+                infl_m = (
+                    spreading(m) if bands else max(1.0, spread, float(inflation.get(m.ref, 1.0)))
+                )
                 target = aid.target(m.ref, neighbors)
                 turns = (
                     ([m.rot] if not allow_rotation or m.ref in rotations else hull_turns(m, m.rot))
@@ -647,6 +691,7 @@ def legalize(
         )
         movable.remove(comp)
         infl = max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
+        banded = comp.ref in bands
         sides = part_sides(comp)
         occ = np.logical_or.reduce([occupancy[side] for side in sides])
         if landing:
@@ -667,6 +712,8 @@ def legalize(
         for rotation in turns:
             comp.rot = rotation
             cr = courtyard_rect(comp)
+            if banded:
+                infl = spreading(comp)  # capped per tried rotation (hard edge band)
             bw = int(math.ceil((cr.w * infl + clearance) / g))
             bh = int(math.ceil((cr.h * infl + clearance) / g))
             attached = _landing_blocks(comp, bw, bh, g, clearance, mounted) if landing else ()

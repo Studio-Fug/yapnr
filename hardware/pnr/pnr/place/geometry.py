@@ -48,6 +48,38 @@ def hard_group_limits(constraints, poses, *, partial=False):
     return limits
 
 
+def hard_edge_bands(constraints):
+    """``{ref: (edge, tolerance_mm)}`` of the opt-in hard ``edge_align`` constraints."""
+    return {
+        ref: (con.params["edge"], float(con.params["tolerance_mm"]))
+        for con in constraints.constraints
+        if con.kind == "edge_align" and con.enforcement == Enforcement.HARD
+        for ref in con.refs
+    }
+
+
+def edge_distance(comp, edge, width, height):
+    """Distance (mm) from ``comp``'s placed courtyard to the named board edge (negative
+    when the courtyard crosses it)."""
+    r = courtyard_rect(comp)
+    return {
+        "south": r.bottom,
+        "north": height - r.top,
+        "west": r.left,
+        "east": width - r.right,
+    }[edge]
+
+
+def edge_band_violations(graph, constraints, width, height):
+    """Refs of hard edge-aligned parts whose courtyard is farther from their edge than
+    the tolerance."""
+    return [
+        ref
+        for ref, (edge, tolerance) in hard_edge_bands(constraints).items()
+        if edge_distance(graph.component(ref), edge, width, height) > tolerance + 1e-6
+    ]
+
+
 def resolve_hard_rotations(constraints):
     rotations = {}
     for con in constraints.hard:

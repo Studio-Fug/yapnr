@@ -17,6 +17,7 @@ from pnr.graph import BoardGraph, BoardOutline
 from . import metrics
 from .geometry import (
     apply_hard_sides,
+    hard_edge_bands,
     hard_group_edges,
     hard_group_limits,
     keepout_rects,
@@ -234,6 +235,7 @@ def place(
         cont, channel_rules or compile_routing_rules(constraints, [n.name for n in graph.nets])
     )
     # 2. Legalization (snap to a non-overlapping, in-outline layout).
+    bands = hard_edge_bands(constraints)
     placed = legalize(
         cont,
         width,
@@ -263,6 +265,8 @@ def place(
         # (grow the outline via the rubber-band instead).
         spread=min(spread, _LEGALIZE_SPREAD_CAP),
         **({} if pad_edge is None else dict(pad_edge=pad_edge)),
+        # Hard edge_align (opt-in): only passed when a design declares one.
+        **({} if not bands else dict(edge_bands=bands)),
     )
     return _finish(placed, graph, constraints, width, height, baseline, pad_edge)
 

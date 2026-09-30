@@ -39,8 +39,18 @@ GIF_STEPS = (
     dict(colors=64, frame_ms=100, width=560),
 )
 PALETTE_SAMPLES = 12
-# Kept exactly in every GIF palette: the colours that carry meaning in small areas.
-SIGNAL_COLOURS = (theme.FAIL, theme.ACCENT, theme.NEW, theme.PROVISIONAL, theme.TEXT, theme.MUTED)
+# Kept exactly in every GIF palette: the colours that carry meaning in small areas, and the
+# copper layers' own (median cut would otherwise pull F.Cu towards the failure red).
+SIGNAL_COLOURS = (
+    theme.FAIL,
+    theme.ACCENT,
+    theme.NEW,
+    theme.PROVISIONAL,
+    theme.TEXT,
+    theme.MUTED,
+    theme.PAD,
+    theme.VIA_RING,
+) + tuple(theme.LAYERS[name] for name in sorted(theme.LAYERS))
 
 
 class FrameSequence(Image.Image):

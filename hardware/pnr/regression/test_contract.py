@@ -214,5 +214,26 @@ class LadderResultsContract(unittest.TestCase):
         self.assertEqual((entry["copper_length_mm"], entry["seconds"], entry["selected_start"]), (120.12, 32.4, "start-05"))
         self.assertNotIn(tmp, json.dumps(entry))
 
+    def test_manifest_provenance_comes_from_the_ladder_run(self):
+        from animate_ladder import README_CASES, case_result, ladder_provenance
+
+        self.assertEqual(README_CASES[0], "05-timer-led-10")  # the 555 flasher
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / "run"
+            run.mkdir()
+            doc = dict(engine_revision="abc", engine_dirty=False, sources_sha256="f" * 64, fab_profile="legacy",
+                       platform="linux-aarch64", arguments=dict(python=tmp + "/venv/bin/python"))
+            (run / "provenance.json").write_text(json.dumps(doc))
+            info = ladder_provenance(run, image="ghcr.io/example/yapnr@sha256:" + "0" * 64, kicad="10.0.6")
+            spec = designs()[0]
+            root = run / (spec["name"] + "-seed-0")
+            root.mkdir()
+            (root / "design.json").write_text(json.dumps(spec))
+            entry = case_result(spec["name"], root, dict(new_result(spec, 0, root), passed=True), [], "legacy")
+        self.assertEqual((info["engine_revision"], info["engine_dirty"], info["fab_profile"]), ("abc", False, "legacy"))
+        self.assertEqual((info["platform"], info["kicad"]), ("linux-aarch64", "10.0.6"))
+        self.assertNotIn(tmp, json.dumps(info))
+        self.assertEqual(entry["fab_profile"], "legacy")  # no .kicad_dru: the run's profile
+
 
 if __name__=='__main__':unittest.main()

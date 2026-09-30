@@ -2,8 +2,9 @@
 
 SOURCE is a trace directory, a ladder case directory (its ``trace/``, or with ``--coarse``
 what it saved), a ladder run directory (``--case NAME --seed N``, or every case when
-``--out`` is a directory), a successive-halving run or a synthesis library (DAG only:
-``--storyboard``). ``--out`` is a file (``.webp``, ``.gif``, ``.mp4``) or a directory
+``--out`` is a directory), a successive-halving run (always coarse: its saved placements,
+rung objectives and the winning rung's native phases) or a synthesis library (critical path
+only: ``--storyboard``). ``--out`` is a file (``.webp``, ``.gif``, ``.mp4``) or a directory
 (``<case>.<ext>`` per ``--format``). The animator only reads its sources and refuses an
 output path inside one.
 """
@@ -66,10 +67,16 @@ def load(source, case=None, seed=None, coarse=False):
         if not out:
             raise SystemExit("no matching case in the ladder run")
         return out
-    if kind in ("halving", "synthesis"):
+    if kind == "halving":
+        try:
+            trace = provenance.halving_trace(source)
+        except ValueError as error:
+            raise SystemExit("%s: %s" % (source.name, error))
+        return [(_label(trace, source.name), trace)]
+    if kind == "synthesis":
         raise SystemExit(
-            "%s runs have no board trace to animate here yet; use --storyboard for their "
-            "provenance DAG" % kind
+            "a synthesis library has no top-level board to animate; --storyboard writes its "
+            "critical path (the chosen layout of each template and its rivals)"
         )
     raise SystemExit("not an animation source: " + source.name)
 
@@ -128,6 +135,7 @@ def render_animation(
             return None
         data = Path(path).read_bytes()
         settings = dict(frame_ms=60, width=width, crf=23)
+        count, seconds = len(frames), round(sum(ms for _v, ms in frames) / 1000.0, 2)
     else:
         steps = [
             dict(s, width=min(s["width"], width))
@@ -137,6 +145,7 @@ def render_animation(
             fmt, make, int(budget_mb * 1024 * 1024), steps
         )
         Path(path).write_bytes(data)
+        count, seconds = encoded_frames(data)
     import PIL
 
     return dict(
@@ -150,8 +159,8 @@ def render_animation(
         sha256=hashlib.sha256(data).hexdigest(),
         width=renderer.width,
         height=renderer.height,
-        frames=len(frames),
-        seconds=round(sum(ms for _v, ms in frames) / 1000.0, 2),
+        frames=count,
+        seconds=seconds,
         trace_sha256=trace_digest(trace),
         coarse=bool(trace.coarse),
         result={
@@ -162,6 +171,22 @@ def render_animation(
         pillow=PIL.__version__,
         captions=sorted(s for s in renderer.strings if s),
     )
+
+
+def encoded_frames(data):
+    """``(frames, seconds)`` of an encoded WebP or GIF, as a player sees it (the encoder merges
+    identical consecutive frames)."""
+    import io
+
+    from PIL import Image
+
+    image = Image.open(io.BytesIO(data))
+    total = 0
+    for index in range(image.n_frames):
+        image.seek(index)
+        image.load()  # WebP sets a frame's duration when it decodes it
+        total += int(image.info.get("duration") or 0)
+    return image.n_frames, round(total / 1000.0, 2)
 
 
 def update_manifest(path, entries):
@@ -203,10 +228,8 @@ def main(argv=None):
         docs = []
         for source in a.sources:
             kind = provenance.detect(source)
-            if kind == "halving":
-                docs.append(provenance.from_halving(source).to_json())
-            elif kind == "synthesis":
-                docs.append(provenance.from_synthesis(source).to_json())
+            if kind == "synthesis":
+                docs.append(storyboard.from_dag(provenance.from_synthesis(source), "synthesis"))
             else:
                 for _label_, trace in load(source, a.case, a.seed, a.coarse):
                     docs.append(storyboard.build(trace, title=a.title, subtitle=a.subtitle))
@@ -224,8 +247,7 @@ def main(argv=None):
         formats = [a.out.suffix.lstrip(".")]
     if single and len(items) > 1:
         ap.error("several sources need a directory --out")
-    if not single:
-        a.out.mkdir(parents=True, exist_ok=True)
+    (a.out if not single else a.out.parent).mkdir(parents=True, exist_ok=True)
     for label, trace in items:
         for fmt in [a.out.suffix.lstrip(".")] if single else formats:
             path = a.out if single else a.out / ("%s.%s" % (label, fmt))

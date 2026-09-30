@@ -5,7 +5,7 @@ Scenes, in path order:
 ``title``       case title, description, parts, nets, layers
 ``source``      the unplaced board (the generator's row), full ratsnest, 0 %
 ``montage``     a selection's candidates as tiles (up to 7 rivals and the winner), placed
-                before the winner's own replay; consecutive selections in stage order
+                right after the winner's own replay reached the state the tiles show
 ``attempts``    placement attempts that failed legalization (at most 3)
 ``congestion``  the previous round's routing pressure before a new placement
 ``placement``   a global placement (snapshots) and its legalization (accepted order)
@@ -62,17 +62,23 @@ def subject(trace, title=None, subtitle=None):
 
 def build(trace, title=None, subtitle=None):
     """The storyboard of a loaded :class:`pnr.provenance.Trace`."""
-    dag = from_trace(trace)
+    dag = trace.dag if getattr(trace, "dag", None) is not None else from_trace(trace)
     order, competitors, entry = critical_path(dag, "final")
     index = {n.id: i for i, n in enumerate(order)}
-    # A selection's rivals appear where the winner's own ancestry begins.
-    inserts = {}
+    # Failed placement attempts flash where the winner's own ancestry begins (they came
+    # first). A selection's rivals appear once the winner's own replay has reached the state
+    # their tiles show (its legal placement, its routed board), so the montage zooms into the
+    # frame on screen and the timeline never jumps ahead of itself or back.
+    before, after = {}, {}
     for node in order:
         if node.kind != "selection" or not node.chosen or not competitors.get(node.id):
             continue
         if node.criterion in ("missing-connections",):
             continue  # later rounds: named on the end card, not replayed
-        inserts.setdefault(entry.get(node.chosen, index[node.id]), []).append(node)
+        if node.criterion == "first-legal":
+            before.setdefault(entry.get(node.chosen, index[node.id]), []).append(node)
+        else:
+            after.setdefault(index.get(node.chosen, index[node.id]), []).append(node)
     scenes = [dict(type="title")]
     last_round = None
     for i, node in enumerate(order):
@@ -87,19 +93,15 @@ def build(trace, title=None, subtitle=None):
             and trace.kind(last_round, "congestion")
         ):
             scenes.append(dict(type="congestion", scope=last_round))
-        for selection in sorted(inserts.get(i, []), key=lambda s: index[s.id]):
-            if selection.criterion == "first-legal":
-                failed = [c for c in selection.candidates if dag.nodes[c].status != "ok"]
+        for selection in sorted(before.get(i, []), key=lambda s: index[s.id]):
+            failed = [c for c in selection.candidates if dag.nodes[c].status != "ok"]
+            if failed:
                 scenes.append(dict(type="attempts", scopes=failed[:MAX_ATTEMPTS]))
-            else:
-                scenes.append(_montage(dag, selection, competitors[selection.id], trace))
         scenes.extend(_scenes_for(trace, dag, node))
+        for selection in sorted(after.get(i, []), key=lambda s: index[s.id]):
+            scenes.append(_montage(dag, selection, competitors[selection.id], trace))
         last_round = this_round or last_round
-    rejected = {}
-    for node in order:
-        if node.kind == "selection" and competitors.get(node.id):
-            if node.criterion != "first-legal":  # failed attempts are not rivals
-                rejected[node.criterion or node.label] = len(competitors[node.id])
+    rejected = set_aside(order, index)
     result = trace.results[-1] if trace.results else {}
     scenes.append(
         dict(
@@ -118,6 +120,49 @@ def build(trace, title=None, subtitle=None):
         path=[n.id for n in order],
         scenes=scenes,
     )
+
+
+def from_dag(dag, kind):
+    """The critical path of a DAG without a board to draw (a synthesis library): the path, the
+    competitors of each selection on it and its montages as data."""
+    order, competitors, _entry = critical_path(dag, "final")
+    index = {n.id: i for i, n in enumerate(order)}
+    montages = [
+        _montage(dag, n, competitors[n.id], None)
+        for n in order
+        if n.kind == "selection" and n.chosen and competitors.get(n.id)
+    ]
+    return dict(
+        schema=SCHEMA,
+        kind=kind,
+        path=[n.id for n in order],
+        competitors={k: v for k, v in sorted(competitors.items()) if v},
+        scenes=montages,
+        rejected=set_aside(order, index),
+    )
+
+
+def set_aside(order, on_path):
+    """Per criterion, how many candidates a selection on the path turned down.
+
+    A shortlist is one selection event recorded as one node per member (``id[member]``);
+    it turned down the candidates outside its selected members, counted once per event.
+    Candidates on the path (earlier feedback rounds) and failed placement attempts are not
+    rivals."""
+    events = {}
+    for node in order:
+        if node.kind != "selection" or node.criterion == "first-legal":
+            continue
+        base = node.id.split("[", 1)[0]
+        kept = set(node.selected) | ({node.chosen} if node.chosen else set())
+        lost = {c for c in node.candidates if c not in kept and c not in on_path}
+        key = node.criterion or node.label
+        events.setdefault((key, base), set()).update(lost)
+    rejected = {}
+    for (key, _base), lost in sorted(events.items()):
+        if lost:
+            rejected[key] = rejected.get(key, 0) + len(lost)
+    return rejected
 
 
 def _round(trace, scope_id):
@@ -140,7 +185,7 @@ def _montage(dag, selection, rivals, trace):
         node = dag.nodes[cid]
         tiles.append(
             dict(
-                node=cid,
+                node=node.scope or cid,
                 label=node.label,
                 stage=node.stage,
                 score=scores.get(cid),
@@ -164,14 +209,24 @@ def _scenes_for(trace, dag, node):
         return [dict(type="source")]
     if node.kind == "selection" or node.id == "final":
         return []
-    if node.stage == "native":
+    if node.id.startswith("native:"):
         return [dict(type="native", stage=node.label, seq=node.meta.get("event"))]
+    if node.meta.get("replay") == "native":
+        # A coarse run's winning rung: its saved native phases, in order.
+        return [
+            dict(type="native", stage=e["stage"], seq=e["seq"])
+            for e in trace.events("native")
+            if e["kind"] == "board"
+        ]
     out = []
-    if node.stage == "place":
+    if node.stage == "place" and node.scope:
+        global_poses = [e for e in trace.kind(node.scope, "poses") if e.get("stage") == "global"]
         if node.id.endswith("/placement"):
             out.append(dict(type="move", scope=node.scope))
-        elif trace.kind(node.scope, "poses") or trace.kind(node.scope, "legal"):
+        elif global_poses or trace.kind(node.scope, "legal"):
             out.append(dict(type="placement", scope=node.scope, label=node.label))
+        elif trace.kind(node.scope, "poses"):
+            out.append(dict(type="move", scope=node.scope, label=node.label))
         return out
     if node.stage == "route":
         events = [e for e in trace.scopes[node.scope].events if e["kind"] in ("net", "route_end")]

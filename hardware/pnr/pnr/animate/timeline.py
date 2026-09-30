@@ -13,7 +13,7 @@ import copy
 import math
 
 from .storyboard import score_key
-from .theme import MONTAGE_TEXT, PHASE_TEXT
+from .theme import MONTAGE_TEXT, PHASE_TEXT, criterion_text
 
 TITLE_S = 1.0
 SOURCE_S = 0.8
@@ -86,6 +86,8 @@ class View:
         "marked",
         "failed",
         "progress",
+        "ghost",
+        "findings",
         "phase",
         "caption",
         "step",
@@ -110,6 +112,8 @@ class View:
         self.marked = ()
         self.failed = False
         self.progress = (0, 0, "none")
+        self.ghost = None  # provisional (negotiation) progress, drawn behind the bar
+        self.findings = ()  # KiCad DRC finding positions (native frames)
         self.phase = "source"
         self.caption = ""
         self.step = None
@@ -248,7 +252,7 @@ class Timeline:
 
     # --- scenes -------------------------------------------------------------------------
     def final_view(self):
-        """The end state (the last saved board, else the last route) for the title backdrop."""
+        """The end state (the last saved board, else the last route)."""
         boards = [e for e in self.trace.events("native") if e["kind"] == "board"]
         camera = outline_camera(self.header)
         if boards:
@@ -274,7 +278,8 @@ class Timeline:
         return None
 
     def _title(self, scene, following):
-        card = dict(kind="title", backdrop=self.final_view())
+        # The backdrop is the unplaced board the timeline starts from, never the result.
+        card = dict(kind="title", backdrop=self.view)
         self.hold(TITLE_S, self.view.copy(card=card, phase="title"))
 
     def _source(self, scene, following):
@@ -287,6 +292,17 @@ class Timeline:
         base = View(camera=outline_camera(self.header), phase="selection")
         if scope is None:
             return base
+        if scope.type == "board":  # a saved board (a coarse run's candidate)
+            boards = [e for e in scope.events if e["kind"] == "board"]
+            if boards:
+                poses = {r[0]: (r[1], r[2], r[3], r[4]) for r in boards[-1].get("poses", [])}
+                copper = self.trace.blob(boards[-1]["copper"])
+                return base.copy(
+                    poses=poses or self._final_poses(node),
+                    native=copper,
+                    native_mix=1.0,
+                    open_pairs=[],
+                )
         if scope.type == "route":
             start = scope.meta.get("start")
             poses_scope = node.rsplit("/", 1)[0] + "/" + start if start else scope.parent
@@ -303,9 +319,7 @@ class Timeline:
     def _montage(self, scene, following):
         tiles = [dict(t, view=self._tile_view(t)) for t in scene["tiles"]]
         chosen = next((t for t in tiles if t["chosen"]), tiles[-1])
-        caption = MONTAGE_TEXT.get(scene["criterion"], "{among} candidates").format(
-            among=scene["among"], selected=scene["selected"]
-        )
+        caption = montage_caption(scene["criterion"], scene["among"], scene["selected"])
         grouped = following is not None and following["type"] == "montage"
 
         def frame(alpha, zoom, chosen_alpha=1.0):
@@ -343,7 +357,15 @@ class Timeline:
                 poses=poses,
                 committed={},
                 provisional={},
+                flash={},
+                ripped={},
                 groups={},
+                native=None,
+                native_mix=0.0,
+                open_pairs=None,
+                findings=(),
+                progress=(0, self.total, "none"),
+                ghost=None,
                 failed=True,
                 phase="attempts",
                 caption=sid.rsplit("/", 1)[-1],
@@ -400,7 +422,9 @@ class Timeline:
             native=None,
             native_mix=0.0,
             open_pairs=None,
+            findings=(),
             progress=(0, self.total, "none"),
+            ghost=None,
             phase="global-placement",
             caption=caption,
         )
@@ -457,12 +481,29 @@ class Timeline:
             return
         target = event_poses(self.trace, events[-1])
         start = self.view.poses
+        outline = outline_camera(self.header)
+        camera = self.view.camera
         self.view = self.view.copy(
-            committed={}, provisional={}, groups={}, phase="placement", caption="local move"
+            committed={},
+            provisional={},
+            flash={},
+            ripped={},
+            groups={},
+            native=None,
+            native_mix=0.0,
+            open_pairs=None,
+            findings=(),
+            progress=(0, self.total, "none"),
+            ghost=None,
+            phase="placement",
+            caption=scene.get("label") or "local move",
         )
         steps = self.frames_for(MOVE_S)
         for k in range(steps):
-            self.view = self.view.copy(poses=lerp_poses(start, target, ease((k + 1) / steps)))
+            t = ease((k + 1) / steps)
+            self.view = self.view.copy(
+                poses=lerp_poses(start, target, t), camera=lerp_rect(camera, outline, t)
+            )
             self.emit()
 
     def _route(self, scene, following):
@@ -516,6 +557,7 @@ class Timeline:
                 provisional={},
                 groups=groups,
                 progress=_progress(event, self.total),
+                ghost=None,
             )
             return
         net, op = event["net"], event["op"]
@@ -538,13 +580,20 @@ class Timeline:
             old = committed.pop(net, None) or provisional.pop(net, None)
             if old is not None and event.get("op") in ("drop", "rip"):
                 ripped[net] = (old, RIP_FRAMES)
+        # The bar counts committed connections only: negotiation (overlaps allowed) fills a
+        # lighter bar behind it, so the number never runs ahead of the copper.
+        if event.get("provisional"):
+            progress, ghost = v.progress, _progress(event, self.total)
+        else:
+            progress, ghost = _progress(event, self.total), None
         self.view = v.copy(
             committed=committed,
             provisional=provisional,
             flash=flash,
             ripped=ripped,
             groups=groups,
-            progress=_progress(event, self.total),
+            progress=progress,
+            ghost=ghost,
         )
 
     def _native_event(self, scene):
@@ -565,9 +614,11 @@ class Timeline:
         base = self.view.copy(
             poses=poses or self.view.poses,
             open_pairs=drc.get("open_pairs", []) if drc else None,
+            findings=tuple(tuple(f) for f in drc.get("findings") or []) if drc else (),
             progress=progress,
-            phase=stage if stage in PHASE_TEXT else "drc",
-            caption="",
+            ghost=None,
+            phase=stage if stage in PHASE_TEXT else "native-phase",
+            caption="" if stage in PHASE_TEXT else stage,
             step=None,
             flash={},
             ripped={},
@@ -610,6 +661,16 @@ def _progress(event, total):
     return (done, progress.get("total", total) or total, progress.get("source", "router"))
 
 
+def montage_caption(criterion, among, selected):
+    """The caption of a montage: the ladder's fixed texts, else a rung's promotion."""
+    if criterion in MONTAGE_TEXT:
+        return MONTAGE_TEXT[criterion].format(among=among, selected=selected)
+    name = criterion_text(criterion)
+    if selected > 1:
+        return "%d candidates, %d promoted by %s" % (among, selected, name)
+    return "%d candidates, the best by %s chosen" % (among, name)
+
+
 def montage_score_text(criterion, score):
     """A short display of a candidate's score in its selection's criterion."""
     if score is None:
@@ -622,6 +683,10 @@ def montage_score_text(criterion, score):
         return "proxy %.3g" % score
     if criterion == "missing-connections" and isinstance(score, (int, float)):
         return "%d missing" % score
+    if str(criterion).endswith("-objective") and isinstance(score, list) and len(score) >= 6:
+        return "%d open" % int(score[-1])  # a halving rung's objective ends with native opens
+    if isinstance(score, list) and len(score) == 1 and isinstance(score[0], (int, float)):
+        score = score[0]
     if isinstance(score, (int, float)):
         return "%.3g" % score
     return ""

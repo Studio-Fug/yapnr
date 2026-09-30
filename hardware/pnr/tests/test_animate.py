@@ -37,8 +37,9 @@ def copper(net_y):
     )
 
 
-def make_trace(root, result=None):
+def make_trace(root, result=None, starts=("start-00", "start-01"), shortlist=None):
     root = Path(root)
+    shortlist = list(shortlist or starts)
     trace.write_run(
         root,
         dict(
@@ -52,7 +53,7 @@ def make_trace(root, result=None):
     rec.begin_board(graph(), None, {"fab": {"track_width_mm": 0.25}})
     rec.section("round-01", "round")
     rec.enter("initial-pool", "pool")
-    for index, start in enumerate(("start-00", "start-01")):
+    for index, start in enumerate(starts):
         rec.enter(start, "start", kind="global")
         for step in (0, 5, 9):
             x = 3000 + 400 * step + index * 500
@@ -71,12 +72,12 @@ def make_trace(root, result=None):
         rec.leave()
     rec.select(
         "shortlist",
-        ["start-00", "start-01"],
-        ["start-00", "start-01"],
+        list(starts),
+        shortlist,
         "capacity-proxy",
-        {"start-00": 1.0, "start-01": 2.0},
+        {s: 1.0 + i for i, s in enumerate(starts)},
     )
-    for start in ("start-00", "start-01"):
+    for start in shortlist:
         rec.enter(start + "-route", "route", start=start)
         rec.event("route_begin", progress=dict(done=0, total=2, source="router"))
         a, b = rec.blob(copper(3000)), rec.blob(copper(5000))
@@ -117,10 +118,10 @@ def make_trace(root, result=None):
         rec.leave()
     rec.select(
         "chosen",
-        ["start-00-route", "start-01-route"],
-        "start-00-route",
+        [s + "-route" for s in shortlist],
+        shortlist[0] + "-route",
         "route-objective",
-        {"start-00-route": [0, 0, 2, 8.0], "start-01-route": [0, 0, 2, 9.0]},
+        {s + "-route": [0, 0, 2, 8.0 + i] for i, s in enumerate(shortlist)},
     )
     rec.leave(type="pool")
     with_route = rec.enter("route", "route", reused=True)
@@ -195,6 +196,80 @@ def rounds_trace(root):
     rec.close()
 
 
+def board_text(r1_x, segments):
+    """A two-resistor KiCad board (outline 12 x 8 mm at KiCad (10, 20)) with ``segments``."""
+
+    def part(ref, x):
+        pads = "".join(
+            '(pad "%s" smd roundrect (at %s 0) (size 0.9 1.2) (layers "F.Cu") '
+            '(roundrect_rratio 0.25) (net "%s"))' % (n, dx, net)
+            for n, dx, net in (("1", -0.9, "A"), ("2", 0.9, "B"))
+        )
+        return (
+            '(footprint "R_0805" (layer "F.Cu") (at %s 24 0) (property "Reference" "%s") '
+            '(property "Value" "1k") %s)' % (x, ref, pads)
+        )
+
+    tracks = "".join(
+        '(segment (start %s %s) (end %s %s) (width 0.25) (layer "F.Cu") (net "%s"))' % seg
+        for seg in segments
+    )
+    return (
+        '(kicad_pcb (version 20260206) (layers (0 "F.Cu" signal) (2 "B.Cu" signal) '
+        '(25 "Edge.Cuts" user)) (gr_rect (start 10 20) (end 22 28) (layer "Edge.Cuts")) '
+        + part("R1", 10 + r1_x)
+        + part("R2", 18)
+        + tracks
+        + ")"
+    )
+
+
+def halving_run(root):
+    """A successive-halving run: 4 starts (one illegal), 3 in rung 1, 2 native; p001 wins."""
+    root = Path(root)
+    records = []
+    for i in range(4):
+        record = dict(id="p%03d" % i, stage="place", status="legal" if i < 3 else "failed")
+        if i < 3:
+            record.update(
+                proxy_score=10.0 - i,
+                poses={"R1": [4.0 + i * 0.5, 4.0, 0.0, "top"], "R2": [8.0, 4.0, 0.0, "top"]},
+            )
+        records.append(record)
+    for i, opens in ((0, 2), (1, 1), (2, 3)):
+        records.append(
+            dict(id="p%03d" % i, stage="rung1", status="ok", objective=[0, 0, 0, 0, 0, opens])
+        )
+    for i, opens in ((0, 1), (1, 0)):
+        records.append(
+            dict(id="p%03d" % i, stage="native", status="ok", objective=[0, 0, 0, 0, 0, opens])
+        )
+    (root / "cand").mkdir(parents=True)
+    (root / "dataset.jsonl").write_text("\n".join(json.dumps(r) for r in records) + "\n")
+    for i in range(3):
+        cand = root / "cand" / ("p%03d" % i)
+        cand.mkdir()
+        (cand / "placed.json").write_text(graph().to_json())
+        if i > 1:
+            continue
+        native = cand / "native"
+        steps = (
+            ("00-placement", [], 2),
+            ("01-signals", [(14, 24, 18, 24, "A")], 1),
+            ("02-final", [(14, 24, 18, 24, "A"), (16, 24, 20, 24, "B")], 1 - i),
+        )
+        for name, segments, opens in steps:
+            phase = native / "phases" / name
+            phase.mkdir(parents=True)
+            (phase / "diagnostic.kicad_pcb").write_text(board_text(4.0 + i * 0.5, segments))
+            unconnected = [dict(items=[dict(pos=dict(x=14, y=24)), dict(pos=dict(x=18, y=24))])]
+            (phase / "diagnostic.drc.json").write_text(
+                json.dumps(dict(unconnected_items=unconnected * opens, violations=[]))
+            )
+        (native / "source.kicad_pcb").write_text(board_text(1.0, []))
+    return root
+
+
 def riff_chunks(data):
     chunks, pos = [], 12
     while pos + 8 <= len(data):
@@ -219,15 +294,16 @@ class AnimateTest(unittest.TestCase):
     def test_storyboard(self):
         board = storyboard.build(self.trace, title="Tiny")
         types = [s["type"] for s in board["scenes"]]
+        # Each montage follows the winner's own replay up to the state its tiles show.
         self.assertEqual(
             types,
             [
                 "title",
                 "source",
-                "montage",
-                "montage",
                 "placement",
+                "montage",
                 "route",
+                "montage",
                 "native",
                 "native",
                 "native",
@@ -236,13 +312,82 @@ class AnimateTest(unittest.TestCase):
         )
         self.assertEqual(board["subject"]["title"], "Tiny")
         self.assertEqual(board["subject"]["connections"], 2)
-        montage = board["scenes"][3]
+        self.assertEqual(board["scenes"][3]["criterion"], "capacity-proxy")
+        montage = board["scenes"][5]
         self.assertEqual(
             [t["label"] for t in montage["tiles"]], ["start-00-route", "start-01-route"]
         )
         self.assertEqual([t["chosen"] for t in montage["tiles"]], [True, False])
         self.assertEqual(board["scenes"][-1]["result"]["vias"], 2)
+        # Both starts were shortlisted: the proxy set none aside; the route objective one.
+        self.assertEqual(board["scenes"][-1]["rejected"], {"route-objective": 1})
         self.assertNotIn(self.tmp.name, json.dumps(board))
+
+    def test_rivals_are_counted_once_per_selection(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            starts = ("start-00", "start-01", "start-02", "start-03")
+            make_trace(Path(tmp) / "t", starts=starts, shortlist=["start-02", "start-00"])
+            board = storyboard.build(Trace(Path(tmp) / "t"))
+        # 4 legal starts, 2 shortlisted (2 set aside by the proxy); 1 finalist lost the route.
+        self.assertEqual(
+            board["scenes"][-1]["rejected"], {"capacity-proxy": 2, "route-objective": 1}
+        )
+
+    def test_the_timeline_runs_straight_from_zero_to_routed(self):
+        board = storyboard.build(self.trace)
+        frames = [v for v, _ms in Timeline(self.trace, board, max_seconds=30).frames]
+        title = frames[0]
+        self.assertEqual(title.card["kind"], "title")
+        backdrop = title.card["backdrop"]
+        self.assertFalse(backdrop.committed or backdrop.native)  # the unplaced board
+        done = [v.progress[0] for v in frames]
+        self.assertEqual(done, sorted(done))  # one round: the bar never goes back
+        self.assertEqual(done[-1], 2)
+        first_copper = next(i for i, v in enumerate(frames) if v.committed or v.provisional)
+        self.assertTrue(all(v.progress[0] == 0 for v in frames[:first_copper]))
+        tiles = [t for v in frames[:first_copper] if v.montage for t in v.montage["tiles"]]
+        self.assertTrue(tiles and not any(t["view"].committed for t in tiles))
+        # Negotiation fills the lighter bar only; the number counts committed connections.
+        negotiation = [v for v in frames if v.phase == "negotiation"]
+        self.assertTrue(negotiation)
+        self.assertTrue(all(v.progress[0] == 0 and v.ghost[0] == 1 for v in negotiation))
+        routed_montage = [
+            v for v in frames if v.montage and v.montage["criterion"] == "route-objective"
+        ]
+        self.assertTrue(routed_montage and all(v.progress[0] == 2 for v in routed_montage))
+
+    def test_vias_are_drawn_over_pads_and_findings_are_marked(self):
+        board = storyboard.build(self.trace)
+        renderer = Renderer(self.trace.header, board["subject"], width=480)
+        poses = {"R1": (4000, 4000, 0.0, "top"), "R2": (8000, 4000, 0.0, "top")}
+        via = dict(tracks=[], vias=[[3100, 4000, 600, 300]], zones=[])  # on R1's pad 1
+        view = (
+            Timeline(self.trace, board, max_seconds=3)
+            .frames[-1][0]
+            .copy(
+                poses=poses,
+                committed={"A": via},
+                native=None,
+                native_mix=0.0,
+                card=None,
+                findings=(),
+                open_pairs=[],
+                flash={},
+                ripped={},
+                provisional={},
+                camera=(0, 0, 12000, 8000),
+            )
+        )
+        image = renderer.board(view, 480, 320)
+        x, y = 3100 * 480 / 12000.0, 320 - 4000 * 320 / 8000.0
+        pixel = image.getpixel((int(x), int(y)))
+        hole, pad = ImageColor.getrgb(render_mod.theme.VIA_HOLE), ImageColor.getrgb(
+            render_mod.theme.PAD
+        )
+        near = lambda c: sum((a - b) ** 2 for a, b in zip(pixel, c))  # noqa: E731
+        self.assertLess(near(hole), near(pad))
+        marked = renderer.board(view.copy(findings=((3100, 4000),)), 480, 320)
+        self.assertNotEqual(image.tobytes(), marked.tobytes())
 
     def test_rounds_attempts_and_congestion(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -381,6 +526,8 @@ class AnimateTest(unittest.TestCase):
             )
             self.assertEqual(entry["file"], "tiny.webp")
             self.assertEqual(entry["bytes"], (out / "tiny.webp").stat().st_size)
+            with Image.open(out / "tiny.webp") as encoded:
+                self.assertEqual(entry["frames"], encoded.n_frames)  # as a player sees it
             self.assertEqual(entry["result"]["passed"], True)
             self.assertIn("2 parts \u00b7 2 nets \u00b7 2 layers", entry["captions"])
             self.assertNotIn(tmp, json.dumps(entry))
@@ -413,6 +560,64 @@ class AnimateTest(unittest.TestCase):
             story = out / "story.json"
             main([str(self.root), "--storyboard", str(story)])
             self.assertEqual(json.loads(story.read_text())["schema"], "pnr-storyboard-v1")
+
+
+class CoarseRunTest(unittest.TestCase):
+    def test_a_halving_run_is_animated_along_its_winner(self):
+        from pnr import provenance
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = halving_run(Path(tmp) / "h1")
+            before = {p: p.stat().st_mtime_ns for p in run.rglob("*")}
+            loaded = provenance.halving_trace(run)
+            board = storyboard.build(loaded, title="Halving")
+            types = [s["type"] for s in board["scenes"]]
+            self.assertEqual(
+                types,
+                ["title", "source", "move", "montage", "montage"]
+                + ["native"] * 3
+                + ["montage", "end"],
+            )
+            self.assertEqual(
+                board["path"][1:3], ["halving:p001/place", "halving:promote-rung1[p001]"]
+            )
+            self.assertEqual(
+                [s["criterion"] for s in board["scenes"] if s["type"] == "montage"],
+                ["place-objective", "rung1-objective", "native-objective"],
+            )
+            end = board["scenes"][-1]
+            self.assertEqual((end["result"]["passed"], end["result"]["opens"]), (True, 0))
+            # 3 legal starts all went on (none set aside), rung 1 dropped p002, native p000.
+            self.assertEqual(end["rejected"], {"native-objective": 1, "rung1-objective": 1})
+            frames = Timeline(loaded, board, max_seconds=8).frames
+            done = [v.progress[0] for v, _ms in frames]
+            self.assertEqual(done, sorted(done))
+            self.assertEqual(frames[-1][0].progress[:2], (2, 2))
+            out = Path(tmp) / "out"
+            code = main(
+                [str(run), "--out", str(out / "h1.webp"), "--width", "240", "--max-seconds", "3"]
+            )
+            self.assertEqual(code, 0)
+            self.assertTrue((out / "h1.webp").is_file())
+            self.assertEqual(before, {p: p.stat().st_mtime_ns for p in run.rglob("*")})
+
+    def test_a_synthesis_library_gives_its_critical_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "lib"
+            for template in ("ldo", "usb"):
+                (root / template).mkdir(parents=True)
+                ranked = [dict(tag="%s-%d" % (template, k), objective=[0, k]) for k in range(3)]
+                (root / template / "library.json").write_text(
+                    json.dumps(dict(template_id=template, ranked=ranked))
+                )
+            story = Path(tmp) / "story.json"
+            self.assertEqual(main([str(root), "--storyboard", str(story)]), 0)
+            doc = json.loads(story.read_text())
+            with self.assertRaises(SystemExit):
+                main([str(root), "--out", str(Path(tmp) / "x.webp")])
+        self.assertEqual(doc["kind"], "synthesis")
+        self.assertIn("block:usb/usb-0", doc["path"])
+        self.assertEqual(doc["rejected"], {"native-rank": 4})
 
 
 if __name__ == "__main__":

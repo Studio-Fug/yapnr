@@ -2,8 +2,9 @@
 
 Frames are drawn at ``SUPERSAMPLE`` times the output size and reduced with a Lanczos filter
 (Pillow draws without anti-aliasing). Draw order: background, substrate, zones (bottom layer
-first), tracks (``B.Cu``, ``In2.Cu``, ``In1.Cu``, ``F.Cu``), vias, pads, courtyards, reference
-labels (only when legible), ratsnest, highlights, outline, overlay. Translucent colours are
+first), tracks (``B.Cu``, ``In2.Cu``, ``In1.Cu``, ``F.Cu``), pads, vias (on top, as KiCad draws
+them, so a via on a pad stays visible), courtyards, reference labels (only when legible), KiCad
+DRC finding markers, ratsnest, highlights, outline, overlay. Translucent colours are
 blended with the substrate up front, so a frame needs no alpha compositing except for the
 congestion heat map and zone reveals.
 
@@ -156,13 +157,18 @@ class Renderer:
         if view.native is not None and view.native_mix >= 1.0:
             self._zones(big, tf, view.native.get("zones", []), view.zone_reveal)
             draw = ImageDraw.Draw(big)
-            self._copper(draw, tf, {"": view.native}, {}, ss)
+            layers = [({"": view.native}, {})]
         else:
-            self._engine_copper(draw, tf, view, ss)
+            layers = self._engine_copper(view)
+        for nets, styles in layers:
+            self._copper(draw, tf, nets, styles, ss)
         self._pads(draw, tf, view.poses, ss)
+        for nets, styles in layers:
+            self._vias(draw, tf, nets, styles)
         self._courtyards(draw, tf, view, ss)
         if labels:
             self._labels(draw, tf, view.poses, ss)
+        self._findings(draw, tf, view.findings, ss)
         self._ratsnest(draw, tf, view, ss)
         self._outline(draw, tf, ss)
         if view.heat is not None:
@@ -205,15 +211,20 @@ class Renderer:
     def _layer_name(self, index):
         return self.layers[index] if 0 <= index < len(self.layers) else "F.Cu"
 
-    def _engine_copper(self, draw, tf, view, ss):
+    @staticmethod
+    def _engine_copper(view):
+        """``[(nets, styles)]`` of the engine's copper in draw order: committed, ripped,
+        provisional."""
         styles = {}
         for net in view.committed:
             styles[net] = "flash" if view.flash.get(net) else "solid"
-        self._copper(draw, tf, view.committed, styles, ss)
         ripped = {n: c for n, (c, _k) in view.ripped.items()}
-        self._copper(draw, tf, ripped, {n: "ripped" for n in ripped}, ss)
         provisional = {n: c for n, c in view.provisional.items() if n not in view.committed}
-        self._copper(draw, tf, provisional, {n: "provisional" for n in provisional}, ss)
+        return [
+            (view.committed, styles),
+            (ripped, {n: "ripped" for n in ripped}),
+            (provisional, {n: "provisional" for n in provisional}),
+        ]
 
     def _copper(self, draw, tf, nets, styles, ss):
         rank = {name: i for i, name in enumerate(LAYER_ORDER)}
@@ -241,6 +252,8 @@ class Renderer:
                 self._dashed(draw, a, b, w, color, tf, ss)
                 continue
             self._segment(draw, a, b, w, color)
+
+    def _vias(self, draw, tf, nets, styles):
         for net in sorted(nets):
             copper = nets[net] or {}
             style = styles.get(net, "solid")
@@ -328,6 +341,16 @@ class Renderer:
             if pad.get("drill"):
                 r = max(0.75, tf.length(min(pad["drill"])) / 2.0)
                 draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=hole)
+
+    def _findings(self, draw, tf, findings, ss):
+        """A ring around each KiCad DRC finding (its first item, e.g. the via)."""
+        color = rgb(theme.FAIL)
+        r = max(4.0 * ss, tf.length(700))
+        for x, y in findings or ():
+            cx, cy = tf(x, y)
+            draw.ellipse(
+                (cx - r, cy - r, cx + r, cy + r), outline=color, width=max(1, int(1.5 * ss))
+            )
 
     def _courtyard_box(self, tf, ref, pose):
         comp = self.components[ref]
@@ -494,7 +517,9 @@ class Renderer:
             image.paste(picture, (int(bx[0]), int(bx[1])))
         alpha = m.get("alpha", 1.0)
         if alpha < 1.0:
-            image = Image.blend(Image.new("RGB", image.size, rgb(theme.BACKGROUND)), image, alpha)
+            # Cross-fade with the board on screen (never through an empty frame).
+            under = self.board(view.copy(montage=None), width, height)
+            image = Image.blend(under, image, max(0.0, alpha))
         return image
 
     def _fit_box(self, width, height):
@@ -534,6 +559,15 @@ class Renderer:
         color = theme.PROVISIONAL if source == "router-provisional" else theme.ACCENT
         if view.phase == "result" and done < total:
             color = theme.FAIL
+        if view.ghost is not None:
+            g_done, g_total, _source = view.ghost
+            ghost = 0.0 if not g_total else max(0.0, min(1.0, g_done / float(g_total)))
+            if ghost > fraction:  # negotiation: provisional connections, lighter, behind
+                draw.rounded_rectangle(
+                    (bx, by, bx + max(bar_h, bar_w * ghost), by + bar_h),
+                    radius=4,
+                    fill=mix(theme.BACKGROUND, theme.PROVISIONAL, 0.45),
+                )
         if fraction > 0:
             draw.rounded_rectangle(
                 (bx, by, bx + max(bar_h, bar_w * fraction), by + bar_h), radius=4, fill=rgb(color)
@@ -604,9 +638,7 @@ class Renderer:
         if rejected:
             parts = []
             for key in sorted(rejected):
-                parts.append(
-                    "%d by %s" % (rejected[key], safe_text(theme.CRITERION_TEXT.get(key, key)))
-                )
+                parts.append("%d by %s" % (rejected[key], safe_text(theme.criterion_text(key))))
             metrics.append("rivals set aside: " + ", ".join(parts))
         line = safe_text(" · ".join(metrics))
         verdict = safe_text(verdict)

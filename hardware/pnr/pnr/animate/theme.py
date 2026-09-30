@@ -50,6 +50,7 @@ PHASE_TEXT = {
     "planes": "KiCad: planes",
     "refill": "KiCad: zone refill",
     "drc": "KiCad DRC",
+    "native-phase": "Native loop",
     "result": "KiCad DRC verdict",
 }
 
@@ -59,6 +60,12 @@ CRITERION_TEXT = {
     "missing-connections": "missing connections",
     "first-legal": "first legal attempt",
 }
+
+
+def criterion_text(criterion):
+    """Display name of a selection criterion (a rung's is its name: "rung1 objective")."""
+    return CRITERION_TEXT.get(criterion, str(criterion or "").replace("-", " "))
+
 
 MONTAGE_TEXT = {
     "capacity-proxy": "{among} legal starts, {selected} shortlisted by capacity proxy",

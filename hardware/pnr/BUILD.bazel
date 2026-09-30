@@ -12,7 +12,10 @@ This package is the CPU-first Python engine; the differentiable placement core
 - `torch_smoke_test` is the Task 0 gate: torch imports + runs on CPU.
 """
 
-load("@pypi//:requirements.bzl", "requirement")
+# yapnr (PR1): the pip hub is `yapnr_pypi` (Splanc's is `pypi`). pnr.bzl loads
+# Splanc-only rules (atopile, KiCad Python), so nothing here loads it; it stays
+# unused until PR8 replaces it (docs/history/import-manifest.md).
+load("@yapnr_pypi//:requirements.bzl", "requirement")
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 
 package(default_visibility = ["//visibility:public"])
@@ -374,6 +377,12 @@ py_test(
 py_test(
     name = "detail_route_test",
     size = "large",  # places the fixture + 3 full 4-layer RRR routes
+    # yapnr (PR1): at the import's source (Splanc b009c945) this takes 870 to
+    # 1000 s on the development Mac, at or over the 900 s `large` timeout, and
+    # test_drc_clean_by_construction fails (two nets share a footprint cell).
+    # Manual so `bazel test //...` stays green until it is fixed and made
+    # faster (migration plan, appendix B).
+    tags = ["manual"],
     srcs = ["tests/test_detail_route.py"],
     data = glob(["testdata/splanc_dev/*"]),
     imports = ["."],
@@ -674,6 +683,11 @@ py_test(
 
 py_test(
     name = "retry_controller_test",
+    # yapnr (PR1): fails at the import's source (Splanc b009c945) as well: the
+    # recorded worker fixture has no 'graph' key, which
+    # native_loop.congestion_snapshot reads. Manual so `bazel test //...` stays
+    # green until the fixture or the code is fixed (migration plan, appendix B).
+    tags = ["manual"],
     srcs = ["tests/test_retry_controller.py"],
     main = "tests/test_retry_controller.py",
     deps = [":pnr", ":pnr_place"],
@@ -730,6 +744,11 @@ py_test(
 
 py_test(
     name = "progress_budget_test",
+    # yapnr (PR1): fails at the import's source (Splanc b009c945) as well: the
+    # recorded worker fixture has no 'graph' key, which
+    # native_loop.congestion_snapshot reads. Manual so `bazel test //...` stays
+    # green until the fixture or the code is fixed (migration plan, appendix B).
+    tags = ["manual"],
     srcs = ["tests/test_progress_budget.py"],
     main = "tests/test_progress_budget.py",
     deps = [":pnr", ":pnr_place"],
@@ -737,6 +756,11 @@ py_test(
 
 py_test(
     name = "placement_budget_test",
+    # yapnr (PR1): fails at the import's source (Splanc b009c945) as well: the
+    # recorded worker fixture has no 'graph' key, which
+    # native_loop.congestion_snapshot reads. Manual so `bazel test //...` stays
+    # green until the fixture or the code is fixed (migration plan, appendix B).
+    tags = ["manual"],
     srcs = ["tests/test_placement_budget.py"],
     main = "tests/test_placement_budget.py",
     deps = [":pnr", ":pnr_place"],

@@ -119,11 +119,14 @@ def sign_line(w, l, t):
 
 
 def _codes(recs):
-    codes = sorted({r.get("code") for r in recs if r.get("code")})
+    """The evaluation code keys of ``recs``; a key of an older scheme names its scheme."""
+    from pnr.feedback.signals import CODE_KEY_SCHEME, code_key_scheme
+
+    codes = sorted({(r["code"], code_key_scheme(r)) for r in recs if r.get("code")}, key=str)
     if not codes:
         return ""
     return "evaluation code %s%s" % (
-        ", ".join(codes),
+        ", ".join(c if s == CODE_KEY_SCHEME else "%s (key scheme %s)" % (c, s) for c, s in codes),
         " (MIXED: code changed during the run)" if len(codes) > 1 else "",
     )
 

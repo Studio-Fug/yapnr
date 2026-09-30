@@ -958,7 +958,7 @@ def _import_code(r, router, cache):
     """observed_code of an imported layout record: its stamped code (an older key scheme's
     re-keyed through its first instance dir when that tree is unchanged), else the one tree
     all its instance dirs name (disagreeing or unknown instances make it unknown)."""
-    from pnr.feedback.signals import observed_code
+    from pnr.feedback.signals import CODE_KEY_SCHEME, observed_code
 
     dirs = [i["dir"] for i in r.get("instances") or [] if i.get("dir")]
     if r.get("code"):
@@ -971,7 +971,13 @@ def _import_code(r, router, cache):
         )
     obs = [observed_code(d, router, cache=cache) for d in dirs]
     if not obs:
-        return dict(code=None, tree=None, files=None, reason="no instance dirs")
+        return dict(
+            code=None,
+            code_key_scheme=CODE_KEY_SCHEME,
+            tree=None,
+            files=None,
+            reason="no instance dirs",
+        )
     codes = {o["code"] for o in obs}
     if len(codes) == 1:
         return obs[0]
@@ -979,7 +985,13 @@ def _import_code(r, router, cache):
     return (
         unknown[0]
         if unknown
-        else dict(code=None, tree=None, files=None, reason="instances disagree")
+        else dict(
+            code=None,
+            code_key_scheme=CODE_KEY_SCHEME,
+            tree=None,
+            files=None,
+            reason="instances disagree",
+        )
     )
 
 

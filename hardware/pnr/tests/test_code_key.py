@@ -5,7 +5,9 @@ module name, so black and isort output keys like its input and any change to
 what the code does changes the key. Records without ``code_key_scheme`` carry a
 legacy (scheme 1, raw file bytes) key and are compared under that scheme, or
 re-keyed from their evaluation tree while it still hashes to their stamp.
-Stdlib only; the black/isort round trip runs where both are importable.
+The halving and synth_native imports keep each record's scheme, and router
+key strings and reports name it. Stdlib and PyYAML (pnr.hier.synth_native);
+the black/isort round trip runs where both are importable.
 """
 
 import ast
@@ -374,6 +376,107 @@ class SchemeTest(unittest.TestCase):
         k = signals.current_key("block", 600)
         self.assertEqual(
             (k["code"], k["code_key_scheme"]), (signals.code_key(signals.PNR_ROOT, k["router"]), 2)
+        )
+
+
+class DriverImportTest(unittest.TestCase):
+    """The two feedback drivers import records of either key scheme (real tree, fake records)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.d = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def seed_run(self, records):
+        """A finished halving run whose native records are ``records`` ({id: code fields})."""
+        run = self.d / "seed"
+        (run / "status.json").parent.mkdir(parents=True)
+        (run / "status.json").write_text(json.dumps(dict(finished=True)))
+        lines = []
+        for rid, code in records.items():
+            (run / "cand" / rid / "native").mkdir(parents=True)
+            (run / "cand" / rid / "placed.json").write_text("{}")
+            lines.append(
+                json.dumps(dict(code, id=rid, stage="native", status="ok", objective=[0, 0, 1]))
+            )
+        (run / "dataset.jsonl").write_text("\n".join(lines) + "\n")
+        return run
+
+    def halving_import(self, run, code_policy="error"):
+        from pnr.mc import halving
+
+        out = self.d / ("out-" + code_policy)
+        out.mkdir()
+        return halving._import_seed_runs(
+            [run],
+            out,
+            dict(router="plain"),
+            "error",
+            {},
+            out / "dataset.jsonl",
+            code_policy=code_policy,
+        )
+
+    def test_halving_seed_import_keeps_each_records_scheme(self):
+        run = self.seed_run(
+            {
+                "new": signals.code_stamp(signals.PNR_ROOT, "plain"),
+                "legacy": dict(code=signals.code_key(signals.PNR_ROOT, "plain", scheme=1)),
+            }
+        )
+        recs, errors, _ = self.halving_import(run)
+        self.assertEqual(errors, [])
+        self.assertEqual(
+            {r["source_id"]: r["import_code"]["code_key_scheme"] for r in recs},
+            {"new": 2, "legacy": 1},
+        )
+        self.assertFalse(any(r.get("stale_code") for r in recs))
+
+    def test_halving_seed_import_refuses_another_legacy_code(self):
+        run = self.seed_run({"old": dict(code="0123456789")})
+        _, errors, _ = self.halving_import(run)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("(code key scheme 1)", errors[0])
+        recs, errors, warnings = self.halving_import(run, "rebase")
+        self.assertEqual((errors, [r.get("stale_code") for r in recs]), ([], [True]))
+
+    def test_synth_native_import_code(self):
+        from pnr.hier.synth_native import _import_code
+
+        legacy = signals.code_key(signals.PNR_ROOT, "plain", scheme=1)
+        obs = _import_code(dict(code=legacy), "plain", {})
+        self.assertEqual((obs["code"], obs["code_key_scheme"]), (legacy, 1))
+        self.assertEqual(
+            signals.check_code(obs, signals.TreeCode(signals.PNR_ROOT, "plain")), ([], [], False)
+        )
+        obs = _import_code(signals.code_stamp(signals.PNR_ROOT, "plain"), "plain", {})
+        self.assertEqual(obs["code_key_scheme"], 2)
+        # no stamp: the instance dirs' trees; none, or disagreeing ones, leave the code unknown
+        obs = _import_code(dict(instances=[]), "shove", {})
+        self.assertEqual((obs["code"], obs["code_key_scheme"]), (None, 2))
+        make_tree(self.d / "a")
+        make_tree(self.d / "b")
+        (self.d / "b/hardware/pnr/pnr/shove/world.py").write_text(WORLD_FROZEN)
+        dirs = [str(make_round(self.d / ("round-" + t), self.d / t)) for t in "ab"]
+        obs = _import_code(dict(instances=[dict(dir=d) for d in dirs]), "shove", {})
+        self.assertEqual((obs["code"], obs["code_key_scheme"]), (None, 2))
+        self.assertEqual(obs["reason"], "instances disagree")
+
+
+class ReportTest(unittest.TestCase):
+    def test_router_key_string_names_the_scheme(self):
+        k = signals.current_key("block", 600)
+        self.assertTrue(signals.key_string(k).endswith("|%s|2" % k["code"]))
+
+    def test_report_names_older_schemes(self):
+        from pnr.feedback import report
+
+        self.assertEqual(report._codes([dict(code="a1", code_key_scheme=2)]), "evaluation code a1")
+        self.assertEqual(
+            report._codes([dict(code="a1", code_key_scheme=2), dict(code="b2"), dict(code=None)]),
+            "evaluation code a1, b2 (key scheme 1) (MIXED: code changed during the run)",
         )
 
 

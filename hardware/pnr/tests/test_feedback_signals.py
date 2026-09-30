@@ -247,7 +247,7 @@ class CodeKeyTest(unittest.TestCase):
             self.assertNotIn("pnr.hier.top", f)
         k = signals.current_key("block", 600)
         self.assertEqual(k["code"], signals.code_key(signals.PNR_ROOT, k["router"]))
-        self.assertTrue(signals.key_string(k).endswith("|" + k["code"]))
+        self.assertTrue(signals.key_string(k).endswith("|%s|2" % k["code"]))
 
     def test_observed_code_from_the_round(self):
         import os

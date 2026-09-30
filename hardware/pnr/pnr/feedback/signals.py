@@ -211,8 +211,12 @@ def file_sha(path, n=8):
 # 2: sha1 of each module's canonical syntax tree (:func:`canonical_source`),
 #   keyed by module name. Comments, layout, quoting, blank lines and import
 #   order within a block of imports do not change it (black and isort output
-#   keys like its input); any change to what the code does, docstrings
-#   included, does.
+#   keys like its input); any other change to the code does, docstring text
+#   included. Two blind spots, by design: reordering imports inside a block
+#   does not change it even where the order matters at import time (a side
+#   effect of one import that another depends on), and neither does
+#   whitespace at the start or end of a docstring's lines (black re-indents
+#   docstrings), although ``__doc__`` holds it.
 
 PNR_ROOT = Path(__file__).resolve().parents[2]  # .../hardware/pnr of this tree
 EVAL_ENTRIES = ("pnr.full_iteration", "pnr.hier.native_block", "pnr.hier.synth", "pnr.hier.blocks")
@@ -657,6 +661,11 @@ def current_key(stage, budget_seconds, inputs=None):
 
 
 def key_string(key):
+    """The router key as one string (``router_key`` in statuses, tables and libraries).
+
+    The code key's scheme is the last field, so a key string names the scheme of
+    its code key; strings written before schemes existed have one field less (and
+    a legacy code key)."""
     return "|".join(
         str(key.get(f))
         for f in (
@@ -668,6 +677,7 @@ def key_string(key):
             "fab_profile",
             "inputs",
             "code",
+            "code_key_scheme",
         )
     )
 

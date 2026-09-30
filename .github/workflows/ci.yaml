@@ -1,0 +1,251 @@
+name: CI
+
+on:
+  # `closed` is needed so the per-PR docs preview is removed when the PR is
+  # merged or closed (cleanup-preview). Every other job skips that event.
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Least privilege: jobs that publish to gh-pages widen this for themselves.
+permissions:
+  contents: read
+
+# Superseded PR runs are cancelled; runs on main always finish (they deploy).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Presubmit lints: the same prek version and config as ./setup-precommit.sh,
+  # so a local commit and CI can never disagree. Also checks that every commit
+  # in the push or PR uses a GitHub noreply identity (see CONTRIBUTING.md).
+  lint:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup repository
+        uses: actions/checkout@v4
+        with:
+          # Full history, so the commit range below can be inspected.
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Author and committer e-mail of every new commit, through the privacy
+      # scanner: only noreply addresses pass. The scanner redacts what it
+      # prints, so a leaked address does not end up in this public log.
+      - name: Check commit identities
+        # An explicit `shell: bash` adds -o pipefail: a failing `git log` fails the step.
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            range="origin/${BASE_REF}..${HEAD_SHA}"
+          elif [ -n "${BEFORE_SHA}" ] && ! echo "${BEFORE_SHA}" | grep -qE '^0+$' \
+              && git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+            range="${BEFORE_SHA}..${GITHUB_SHA}"
+          else
+            range="origin/main..HEAD"
+          fi
+          echo "Checking commit identities in ${range}"
+          git log --format="%ae %ce" "${range}" | python3 tools/privacy_scan.py --stdin
+
+      - name: Install prek
+        run: python -m pip install 'prek==0.4.12'
+
+      # prek keeps its hook environments under ~/.cache/prek.
+      - name: Cache prek hook environments
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/prek
+          key: prek-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: prek-${{ runner.os }}-
+
+      - name: Run lints (prek)
+        run: prek run --all-files --show-diff-on-failure --color=always
+
+  # Unit tests and repo checks. The runner is aarch64 because requirements.lock
+  # carries CPU-only torch wheels for darwin-arm64 and linux-aarch64 only (see
+  # MODULE.bazel). This is also the single job that checks the lock is fresh.
+  test:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Setup repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bazel
+        uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+
+      - name: Cache Bazel disk cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel-disk
+          key: bazel-disk-test-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('MODULE.bazel.lock', 'requirements.lock') }}
+          restore-keys: bazel-disk-test-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Test
+        run: >-
+          bazel test //... --config=ci
+          --disk_cache="$HOME/.cache/bazel-disk"
+          --repository_cache="$HOME/.cache/bazel-repo"
+
+      # requirements.test re-resolves requirements.in and diffs the result
+      # against requirements.lock. It needs the network and is tagged manual,
+      # so it runs here and nowhere else.
+      - name: Check requirements.lock is fresh
+        run: >-
+          bazel test //:requirements.test --config=ci
+          --disk_cache="$HOME/.cache/bazel-disk"
+          --repository_cache="$HOME/.cache/bazel-repo"
+
+  # Build the Sphinx site and hand it to the deploy jobs as an artifact.
+  docs:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bazel
+        uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+
+      - name: Cache Bazel disk cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel-disk
+          key: bazel-disk-docs-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('MODULE.bazel.lock', 'requirements.lock') }}
+          restore-keys: bazel-disk-docs-${{ runner.os }}-${{ runner.arch }}-
+
+      # `bazel run` sets BUILD_WORKSPACE_DIRECTORY to the checkout, so the site
+      # lands in $GITHUB_WORKSPACE/docs/site/html.
+      - name: Build docs
+        run: >-
+          bazel run //docs:build --config=ci
+          --disk_cache="$HOME/.cache/bazel-disk"
+          --repository_cache="$HOME/.cache/bazel-repo"
+
+      - name: Upload site artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: docs/site/html
+          include-hidden-files: true
+          retention-days: 3
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # GitHub Pages. The gh-pages branch is the Pages source: main's docs at the
+  # root, and every same-repository PR gets a preview under pr-preview/pr-N/.
+  # All three jobs are gated on the repository variable YAPNR_PAGES_ENABLED,
+  # which the owner sets to 'true' after the first green build of main (and
+  # after pointing Settings > Pages at the gh-pages branch root). Until then
+  # they are skipped. They publish by pushing to gh-pages, so they need
+  # contents: write (plus pull-requests: write for the preview comment) and
+  # neither pages: nor id-token: permissions.
+  # ---------------------------------------------------------------------------
+  deploy-preview:
+    if: >-
+      vars.YAPNR_PAGES_ENABLED == 'true'
+      && github.event_name == 'pull_request'
+      && github.event.action != 'closed'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    needs: [docs]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    # Serialize gh-pages writes across pipelines so pushes do not race.
+    concurrency:
+      group: gh-pages-deploy
+      cancel-in-progress: false
+    steps:
+      # The action works on the git repository in $GITHUB_WORKSPACE, so check
+      # out first; checkout cleans the directory, so download the site after.
+      - name: Setup repository
+        uses: actions/checkout@v4
+
+      - name: Download site artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: _site
+
+      - name: Deploy PR preview
+        uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: _site
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview
+
+  cleanup-preview:
+    if: >-
+      vars.YAPNR_PAGES_ENABLED == 'true'
+      && github.event_name == 'pull_request'
+      && github.event.action == 'closed'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: gh-pages-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Setup repository
+        uses: actions/checkout@v4
+
+      - name: Remove PR preview
+        uses: rossjrw/pr-preview-action@v1
+        with:
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview
+          action: remove
+
+  deploy-pages:
+    if: >-
+      vars.YAPNR_PAGES_ENABLED == 'true'
+      && github.event_name == 'push'
+      && github.ref == 'refs/heads/main'
+    needs: [lint, test, docs]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: gh-pages-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Setup repository
+        uses: actions/checkout@v4
+
+      - name: Download site artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: _site
+
+      # clean-exclude keeps open PRs' previews when the root is replaced.
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: _site
+          branch: gh-pages
+          clean: true
+          clean-exclude: |
+            pr-preview/

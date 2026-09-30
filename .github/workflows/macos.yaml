@@ -1,0 +1,49 @@
+name: macOS
+
+# Keeps yapnr building and testing on Apple silicon, the main development
+# platform (darwin wheels; later the .dylib search backend). Informational:
+# this workflow is NOT a required check. A nightly macOS KiCad lane joins it in
+# PR6b (docs/migration-plan.md, section 5.2).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# macOS runner minutes cost about ten times Linux minutes: cancel superseded
+# runs on the same ref.
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Setup repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bazel
+        uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+
+      # Per-OS disk cache namespace: never share Linux-built outputs.
+      - name: Cache Bazel disk cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel-disk
+          key: bazel-disk-macos-test-${{ hashFiles('MODULE.bazel.lock', 'requirements.lock') }}
+          restore-keys: bazel-disk-macos-test-
+
+      - name: Test
+        run: >-
+          bazel test //... --config=ci
+          --disk_cache="$HOME/.cache/bazel-disk"
+          --repository_cache="$HOME/.cache/bazel-repo"

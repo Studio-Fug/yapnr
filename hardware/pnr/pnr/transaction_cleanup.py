@@ -52,11 +52,12 @@ def native_worker(a, board):
         allowed=eligible(item,spec['requested'],spec['nets'],excluded,net_policy(net,rules)['mode'],layers)
         decisions.append(dict(**item,layers=[board.GetLayerName(la) for la in layers],removed=allowed))
         if allowed: removed.append(via)
-    for via in removed: board.Remove(via)
-    # Keep owning board in caller and all removed SWIG wrappers in this scope
-    # through connectivity rebuild/save. Normal interpreter exit is mandatory.
+    removed_ids=[uid(t) for t in removed]
+    # Discarded: Delete, not Remove (a Removed via outlives its board; see
+    # pnr.fanout_reserve.release). Normal interpreter exit is mandatory.
+    for via in removed: board.Delete(via)
     board.BuildConnectivity();k.SaveBoard(str(a.out),board)
-    save(a.report,dict(removed=[uid(t) for t in removed],decisions=decisions))
+    save(a.report,dict(removed=removed_ids,decisions=decisions))
 
 def guards(original, routed, final, before, candidate, after):
     from pnr.via_coalesce import preserved, acceptable
@@ -76,8 +77,11 @@ def run(a):
     def worker(mode,board,label,*extra):
         report=out/(label+'.json');cmd=[a.kicad_python,'-m','pnr.transaction_cleanup',str(board),'--rules',str(a.rules),'--worker',mode,'--report',str(report),*map(str,extra)]
         for s in a.annotation_source:cmd+=['--annotation-source',str(s)]
-        with (out/(label+'.log')).open('w') as log:p=subprocess.run(cmd,stdout=log,stderr=subprocess.STDOUT)
-        exits.append(dict(mode=mode,returncode=p.returncode));save(out/'worker-exits.json',exits);p.check_returncode();return read(report)
+        from pnr.proc import run_status  # PNR_WORKER_TIMEOUT; stays in this process group
+        with (out/(label+'.log')).open('w') as log:code,timed_out=run_status(cmd,session=False,stdout=log,stderr=subprocess.STDOUT)
+        exits.append(dict(mode=mode,returncode=code,**(dict(timed_out=True) if timed_out else {})));save(out/'worker-exits.json',exits)
+        if code:raise subprocess.CalledProcessError(code,cmd)
+        return read(report)
     def drc(board,name):return run_drc(a.kicad_cli,board,out/(name+'.drc.json'))
     result=dict(accepted=False,source=str(source),source_sha256=initial,baseline_sha256=baseline_hash)
     try:

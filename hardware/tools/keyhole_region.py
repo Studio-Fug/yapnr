@@ -366,11 +366,14 @@ def main():
             tree.append(target)
             pending.remove(target)
     ids = {uid(t) for t in selected}
+    remaining = [t for t in tracks if uid(t) not in ids]
+    # The ripped copper is discarded: Delete, not Remove (a Removed item outlives
+    # its board; see pnr.fanout_reserve.release). Only uuids and len(selected)
+    # are read afterwards; tracks keeps invalid wrappers, so use remaining.
     for t in selected:
-        b.Remove(t)
+        b.Delete(t)
     b.BuildConnectivity()
     cn = b.GetConnectivity()
-    remaining = [t for t in tracks if uid(t) not in ids]
     # Multiple contacts on one unchanged via/track island do not need new
     # traces between them. Such edge-of-copper contacts may not even support a
     # fresh full-width centerline. Query native connectivity AFTER removal.
@@ -890,10 +893,20 @@ def main():
             for net_name in args.net: cleanup_cmd += ["--net", net_name]
             for source_file in args.annotation_source:
                 cleanup_cmd += ["--annotation-source", str(source_file)]
+            # The cleanup runs bounded workers in sequence: PNR_PHASE_TIMEOUT
+            # (pnr.proc) bounds it when this tool runs on its own. Under the native
+            # loop and the repair adapters, the deadline of this whole worker
+            # (PNR_WORKER_TIMEOUT or pnr.proc.worker_timeout) is shorter and binds
+            # first. The cleanup stays in this worker's process group.
+            from pnr.proc import phase_timeout, run_status
             with (args.out_dir / "transaction-cleanup.log").open("w") as log:
-                cleanup_process = subprocess.run(cleanup_cmd, stdout=log, stderr=subprocess.STDOUT)
-            report["cleanup_returncode"] = cleanup_process.returncode
-            if cleanup_process.returncode == 0 and (cleanup / "result.json").exists():
+                cleanup_code, cleanup_timed_out = run_status(
+                    cleanup_cmd, timeout=phase_timeout(), session=False,
+                    stdout=log, stderr=subprocess.STDOUT)
+            report["cleanup_returncode"] = cleanup_code
+            if cleanup_timed_out:
+                report["cleanup_timed_out"] = True
+            if cleanup_code == 0 and (cleanup / "result.json").exists():
                 cleanup_report = json.loads((cleanup / "result.json").read_text())
                 report["transaction_cleanup"] = cleanup_report
                 if cleanup_report.get("accepted") and cleanup_report.get("inputs_unchanged"):

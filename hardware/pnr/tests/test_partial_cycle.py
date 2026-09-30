@@ -1,7 +1,17 @@
-"""Cycle cleanup must preserve original copper outside interior junctions."""
-import importlib.util,unittest,json,tempfile
+"""Cycle cleanup must preserve original copper outside interior junctions.
+
+The native cases run with PNR_PARTIAL_CYCLE_CLEANUP=1 (Electrical221, opt-in);
+unset, cycle_candidates proposes whole-track chains only (src15).
+"""
+import importlib.util,os,unittest,json,tempfile
 from pathlib import Path
-from pnr.track_graph import redundant_chains
+from unittest import mock
+from pnr.track_graph import redundant_chains,partial_cycle_cleanup_enabled
+
+class PartialFlagTests(unittest.TestCase):
+ def test_flag_is_opt_in(self):
+  with mock.patch.dict(os.environ,{'PNR_PARTIAL_CYCLE_CLEANUP':''}):self.assertFalse(partial_cycle_cleanup_enabled())
+  with mock.patch.dict(os.environ,{'PNR_PARTIAL_CYCLE_CLEANUP':'1'}):self.assertTrue(partial_cycle_cleanup_enabled())
 
 def fixture():
  def s(i,a,b):return dict(id=i,a=tuple(round((v+10)*1e6) for v in a),b=tuple(round((v+10)*1e6) for v in b),width=200000)
@@ -18,6 +28,7 @@ class PartialGraphTests(unittest.TestCase):
   ss[0]['locked']=True;self.assertEqual(redundant_chains(ss,allow_partial=True),[])
 
 @unittest.skipUnless(importlib.util.find_spec('pcbnew'),'native KiCad required')
+@mock.patch.dict(os.environ,{'PNR_PARTIAL_CYCLE_CLEANUP':'1'})
 class PartialNativeTests(unittest.TestCase):
  def fixture(self):
   import pcbnew as k
@@ -37,4 +48,9 @@ class PartialNativeTests(unittest.TestCase):
   from pnr.track_graph import cycle_candidates,apply_cycle
   b=self.fixture();p=cycle_candidates(b,{},[])[0];p['replacement_segments'][0]['a']=(50000000,50000000)
   with self.assertRaisesRegex(ValueError,'invalid retained'):apply_cycle(b,p)
+  self.assertEqual(len(list(b.GetTracks())),3)
+ def test_src15_default_proposes_no_partial_edit(self):
+  from pnr.track_graph import cycle_candidates
+  b=self.fixture()
+  with mock.patch.dict(os.environ,{'PNR_PARTIAL_CYCLE_CLEANUP':''}):self.assertEqual(cycle_candidates(b,{},[]),[])
   self.assertEqual(len(list(b.GetTracks())),3)

@@ -64,7 +64,7 @@ def main():
   if solved:break
  if solved:
   candidate,new,options=solved;removed=candidate['items'];width=removed[0].GetWidth()/1e6
-  for t in removed:b.Remove(t);t.thisown=False
+  for t in removed:b.Remove(t);t.thisown=False  # detached, never freed (tests/test_board_delete.py)
   for x,y in new:
    t=add_track(b,candidate['net'],layer,x,y,width);t.thisown=False
   diagnostics['reservations']=options

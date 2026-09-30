@@ -323,9 +323,14 @@ def _native_one(inputs: Path, constraints_path: Path, cand: Path, stage: str, se
            '--seconds', str(seconds), *(['--assemble', str(blocks)] if assemble else [])]
     run_env = dict(env, PNR_SINGLE_TRACK_WORKERS=str(workers),
                    PNR_LIVE_CANDIDATE=f"{env.get('PNR_LIVE_CANDIDATE', 'hier')}/{cand.name}/{stage}")
+    # A whole evaluation: PNR_EVALUATION_TIMEOUT; the child stays in this process group.
+    from pnr import proc
     with (round_dir / 'run.log').open('w') as log:
-        code = subprocess.run(cmd, cwd=repo, env=run_env, stdout=log, stderr=subprocess.STDOUT).returncode
+        code, timed_out = proc.run_status(cmd, timeout=proc.evaluation_timeout(seconds), session=False,
+                                          cwd=repo, env=run_env, stdout=log, stderr=subprocess.STDOUT)
     record.update(exit_code=code, loadavg_end=_loadavg())
+    if timed_out:
+        record['timed_out'] = True
     evaluation = round_dir / 'evaluation.json'
     if evaluation.exists():
         e = json.loads(evaluation.read_text())

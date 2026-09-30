@@ -90,7 +90,7 @@ def main():
                  pnr_environment={k:v for k,v in env.items() if k.startswith('PNR_')})
  (out/'provenance.json').write_text(json.dumps(provenance,indent=2))
  for key,cmd in [('python',[args.python,'-m','pip','freeze']),('kicad',[args.kicad_cli,'version'])]:
-  (out/(key+'-version.txt')).write_text(subprocess.check_output(cmd,text=True))
+  (out/(key+'-version.txt')).write_text(subprocess.check_output(cmd,text=True,timeout=300))  # a version query
  results=[]
  def stage(root,name,cmd):
   t=time.monotonic()

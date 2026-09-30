@@ -302,15 +302,15 @@ py_test(
     ],
 )
 
-# Phase 3 acceptance: orientation search yields legal discrete angles + better HPWL.
+# Phase 3 acceptance: orientation search yields legal discrete angles, costs at most 5 % HPWL
+# on the fixture (three-seed mean, a coarse guard; Studio-Fug/yapnr#6) and finds known best
+# angles on a synthetic board.
 py_test(
     name = "orientation_test",
-    # Runs the placer twice (orient on/off): ~14 s on a dev Mac, but over the 60 s "small"
-    # timeout on 4-vCPU CI runners. yapnr adaptation (PR1): "medium" (300 s).
-    size = "medium",
-    # yapnr adaptation (PR1): the HPWL acceptance check fails on linux-aarch64 (oriented 1839 vs
-    # position-only 1804) and passes on macOS; tracked in Studio-Fug/yapnr#6. Re-enable in PR3/PR6.
-    tags = ["manual"],
+    # Seven fixture placements plus two tiny ones: 44 s on a dev Mac and 51 s on two
+    # linux-aarch64 cores. The shared 4-vCPU CI runner took 77 s for the former three, which
+    # scales to 185 to 240 s for these, too close to medium's 300 s; large allows 900 s.
+    size = "large",
     srcs = ["tests/test_orientation.py"],
     data = glob(["testdata/splanc_dev/*"]),
     imports = ["."],
@@ -557,6 +557,28 @@ py_test(
     name = "via_coalesce_test",
     srcs = ["tests/test_via_coalesce.py"],
     main = "tests/test_via_coalesce.py",
+    deps = [":pnr"],
+)
+
+# Every engine subprocess is time-bounded (pnr.proc): runner behaviour and a
+# source scan of the engine, its regression scripts and the regional worker.
+py_test(
+    name = "proc_test",
+    size = "small",
+    srcs = ["tests/test_proc.py"],
+    data = glob(["pnr/**/*.py", "regression/*.py"]) + ["//hardware/tools:keyhole_region.py"],
+    main = "tests/test_proc.py",
+    deps = [":pnr"],
+)
+
+# The board.Remove audit: discarded KiCad items are deleted (board.Delete). The
+# source scan needs no KiCad; the native cases run under KiCad's Python only.
+py_test(
+    name = "board_delete_test",
+    size = "small",
+    srcs = ["tests/test_board_delete.py"],
+    data = glob(["pnr/**/*.py", "regression/*.py"]) + ["//hardware/tools:keyhole_region.py"],
+    main = "tests/test_board_delete.py",
     deps = [":pnr"],
 )
 

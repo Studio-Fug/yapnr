@@ -37,7 +37,16 @@ class CleanupTest(unittest.TestCase):
   with tempfile.TemporaryDirectory() as td:
    root=Path(td);src=root/'candidate.kicad_pcb';src.write_text('candidate');base=root/'base.kicad_pcb';base.write_text('baseline')
    a=SimpleNamespace(out_dir=root/'out',baseline=base,board=src,rules=root/'rules',kicad_python='fake',kicad_cli='fake',annotation_source=[],net=['s'])
-   failed=__import__('subprocess').CompletedProcess(['fake'],23)
-   with patch('pnr.native_drc.run_drc',return_value=dict(violations=[],unconnected_items=[{}])),patch.object(c.subprocess,'run',return_value=failed):c.run(a)
+   with patch('pnr.native_drc.run_drc',return_value=dict(violations=[],unconnected_items=[{}])),patch('pnr.proc.run_status',return_value=(23,False)):c.run(a)
    result=c.read(a.out_dir/'result.json');self.assertFalse(result['accepted']);self.assertEqual(result['status'],'worker_error');self.assertTrue(result['inputs_unchanged']);self.assertFalse((a.out_dir/'candidate.kicad_pcb').exists())
+ def test_worker_timeout_is_a_worker_error(self):
+  with tempfile.TemporaryDirectory() as td:
+   root=Path(td);src=root/'candidate.kicad_pcb';src.write_text('candidate');base=root/'base.kicad_pcb';base.write_text('baseline')
+   a=SimpleNamespace(out_dir=root/'out',baseline=base,board=src,rules=root/'rules',kicad_python='fake',kicad_cli='fake',annotation_source=[],net=['s'])
+   calls=[]
+   def bounded(cmd,timeout=None,session=True,**kwargs):calls.append((timeout,session));return -9,True
+   with patch('pnr.native_drc.run_drc',return_value=dict(violations=[],unconnected_items=[{}])),patch('pnr.proc.run_status',bounded):c.run(a)
+   result=c.read(a.out_dir/'result.json');self.assertEqual((result['status'],result['returncode']),('worker_error',-9))
+   self.assertEqual(calls,[(None,False)])  # the worker default, PNR_WORKER_TIMEOUT, in this process group
+   self.assertEqual(c.read(a.out_dir/'worker-exits.json'),[dict(mode='audit',returncode=-9,timed_out=True)])
 if __name__=='__main__':unittest.main()

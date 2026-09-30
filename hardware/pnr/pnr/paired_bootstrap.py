@@ -66,11 +66,19 @@ def trial_env(env,hand_first):
 
 
 def _invoke(args,log,env):
-    with log.open('w') as f:subprocess.run(args,env=env,stdout=f,stderr=subprocess.STDOUT,check=True)
+    from pnr.proc import run_checked,worker_timeout  # stays in this process group
+    with log.open('w') as f:run_checked(args,timeout=worker_timeout(args),session=False,env=env,stdout=f,stderr=subprocess.STDOUT)
 
 
-def _trial(args,log,env,stop,poll=.2):
-    """Cancellable _invoke for parallel trials: True if the worker finished, False if stopped."""
+def _trial(args,log,env,stop,poll=.2,timeout=None):
+    """Cancellable _invoke for parallel trials: True if the worker finished, False if stopped.
+
+    Bounded like _invoke (``timeout``, default pnr.proc.worker_timeout of the trial's
+    own --seconds): a trial still running at its deadline is killed and raises
+    pnr.proc.DeadlineExceeded (-9).
+    """
+    from pnr import proc as bounded
+    limit=bounded.worker_timeout(args) if timeout is None else timeout;deadline=time.monotonic()+limit
     with log.open('w') as f:
         proc=subprocess.Popen(args,env=env,stdout=f,stderr=subprocess.STDOUT)
         try:
@@ -78,6 +86,10 @@ def _trial(args,log,env,stop,poll=.2):
                 try:code=proc.wait(timeout=poll);break
                 except subprocess.TimeoutExpired:
                     if stop.is_set():return False
+                    if time.monotonic()>=deadline:
+                        bounded.kill_tree(proc);proc.wait()  # the trial and every worker it started
+                        f.write('\n[paired_bootstrap] trial killed after its %g s deadline\n'%limit)
+                        raise bounded.DeadlineExceeded(args,limit)
         finally:
             if proc.poll() is None:
                 proc.terminate()

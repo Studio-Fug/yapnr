@@ -90,7 +90,9 @@ def place(
     ``pair_weights`` ({(ref_a, pad_a, ref_b, pad_b): w}) adds a pad-pair
     attraction ``w * |pad_a - pad_b|`` to the global objective (pnr.feedback:
     connections that often fail routing); None leaves the objective untouched.
-    Deterministic under a fixed ``seed``.
+    Deterministic under a fixed ``seed`` on one platform (OS, architecture and
+    torch build); another platform gives a different placement of the same
+    quality on average (pnr.place.model).
     """
     # Edge rows are optimized across complete global starts. These temporary
     # search choices are distinct from authored absolute locks.

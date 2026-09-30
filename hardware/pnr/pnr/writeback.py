@@ -656,7 +656,7 @@ def _clear_tracks(board) -> int:
     re-routes from a clean placed board. Returns the count removed."""
     n = 0
     for t in list(board.GetTracks()):  # PCB_TRACK and PCB_VIA
-        board.Remove(t)
+        board.Delete(t)  # discarded (Delete, not Remove: see pnr.fanout_reserve.release)
         n += 1
     return n
 
@@ -1010,7 +1010,7 @@ def apply_copper_keepouts(board, graph, rules, height):
     import pcbnew
     for zone in list(board.Zones()):
         if zone.GetZoneName().startswith('PNR keepout:'):
-            board.Remove(zone)
+            board.Delete(zone)  # recreated below; the old area is discarded
     frame = _WriteFrame(height)
     for spec in rules.get('copper_keepouts', []):
         comp = graph.component(spec['ref'])
@@ -1042,10 +1042,10 @@ def apply_mounting_holes(board, rules, height):
     frame = _WriteFrame(height)
     for fp in list(board.GetFootprints()):
         if fp.GetValue() == 'PNR mounting hole':
-            board.Remove(fp)
+            board.Delete(fp)  # recreated below; the old hole is discarded
     for zone in list(board.Zones()):
         if zone.GetZoneName().startswith('PNR mounting:'):
-            board.Remove(zone)
+            board.Delete(zone)
     for spec in rules.get('mounting_holes', []):
         x,y = spec['at']
         radius = spec['clearance_diameter_mm']/2

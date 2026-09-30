@@ -147,12 +147,11 @@ def apply(board, proposal, rules):
     items = {uid(t):t for t in board.GetTracks()}
     removed = [items[u] for u in match['removed_vias']]
     for item in removed:
-        board.Remove(item)
+        board.Delete(item)  # discarded bank vias (Delete, not Remove)
     for a,b in zip(match['path'],match['path'][1:]):
         item = add_track(board,match['net'],k.B_Cu,a,b,match['width'])
         if item:
             item.thisown = False
     items.clear()
-    # Keep removed wrappers alive until the calling mutation is saved. No
-    # destructor suppression or changed native settings are used.
-    return removed
+    # The vias are deleted: return their uuids, never the (invalid) wrappers.
+    return list(match['removed_vias'])

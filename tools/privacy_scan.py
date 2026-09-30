@@ -28,7 +28,7 @@ Usage::
 
     tools/privacy_scan.py FILE...          # what the pre-commit hook runs
     tools/privacy_scan.py --all [--root R] # every tracked or untracked file
-    git log -p origin/main..HEAD | tools/privacy_scan.py --stdin
+    git log -p --diff-merges=separate origin/main..HEAD | tools/privacy_scan.py --stdin
     git log --format='%ae%n%ce' origin/main..HEAD | tools/privacy_scan.py --identities
 
 ``--identities`` is stricter than the text rules: it reads one commit e-mail

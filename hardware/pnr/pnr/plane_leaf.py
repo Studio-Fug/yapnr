@@ -75,7 +75,8 @@ def execute(a,rules,b):
  else:
   # One transactional leaf per invocation; rerun inventory after acceptance.
   leaf,proposal=min(leaves,key=lambda x:x[1]['length']-x[0]['old_length']);via=leaf['via'];oldvia=(via.GetPosition().x/1e6,via.GetPosition().y/1e6)
-  for t in leaf['tracks']:b.Remove(t)
+  removed_tracks=[uid(t) for t in leaf['tracks']]
+  for t in leaf['tracks']:b.Delete(t)  # replaced by the new path; uuids read first
   if leaf['shared']:
    new=k.PCB_VIA(b);new.SetNetCode(via.GetNetCode());new.SetWidth(via.GetWidth(leaf['layer']));new.SetDrill(via.GetDrill());new.SetViaType(k.VIATYPE_THROUGH);new.SetLayerPair(k.F_Cu,k.B_Cu);new.SetPosition(vec(proposal['via']));b.Add(new);new.thisown=False;via=new
   else:via.SetPosition(vec(proposal['via']))
@@ -85,7 +86,7 @@ def execute(a,rules,b):
   k.ZONE_FILLER(b).Fill(b.Zones());b.BuildConnectivity();out=a.out_dir/'candidate.kicad_pcb';k.SaveBoard(str(out),b);shutil.copy2(a.board.with_suffix('.kicad_pro'),out.with_suffix('.kicad_pro'))
   if (a.board.parent/'fp-lib-table').exists():(out.parent/'fp-lib-table').write_text((a.board.parent/'fp-lib-table').read_text().replace('${KIPRJMOD}',str(a.board.parent.resolve())))
   after=run_drc(cli,out,a.out_dir/'candidate.drc.json');entry=snapshot(b,rules);checks=dict(preserved=preserved(before_part,partition(b)),lost_pad_entries=[u for u,good in before_entry.items() if good and not entry.get(u)],new_bad_entries=[u for u,good in entry.items() if not good and u not in before_entry],reference_failures=reference_failures(b,rules))
-  result.update(status='native_guard',before_opens=len(before['unconnected_items']),after_opens=len(after['unconnected_items']),before_violations=len(before['violations']),after_violations=len(after['violations']),checks=checks,old_length=leaf['old_length'],new_length=proposal['length'],old_via=oldvia,new_via=proposal['via'],removed_tracks=[uid(t) for t in leaf['tracks']],via_uuid=uid(via),width_mm=leaf['width'],added_vias=int(leaf['shared']))
+  result.update(status='native_guard',before_opens=len(before['unconnected_items']),after_opens=len(after['unconnected_items']),before_violations=len(before['violations']),after_violations=len(after['violations']),checks=checks,old_length=leaf['old_length'],new_length=proposal['length'],old_via=oldvia,new_via=proposal['via'],removed_tracks=removed_tracks,via_uuid=uid(via),width_mm=leaf['width'],added_vias=int(leaf['shared']))
   result['guards_pass']=bool(acceptable(before,after,checks) and not checks['new_bad_entries'] and not checks['reference_failures'] and result['after_opens']<=result['before_opens'] and result['new_length']<result['old_length'])
   result['accepted']=result['guards_pass'] and not leaf['shared']
   result['status']='needs_signal_closure_before_acceptance' if leaf['shared'] else result['status']

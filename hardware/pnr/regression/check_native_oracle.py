@@ -20,8 +20,8 @@ for mode in ([a.worker] if a.worker else ['open','short']):
   continue
  b=k.LoadBoard(str(source))
  if mode=='open':
-  for track in list(b.GetTracks()):b.Remove(track)
-  for zone in list(b.Zones()):b.Remove(zone)
+  for track in list(b.GetTracks()):b.Delete(track)  # discarded (Delete, not Remove)
+  for zone in list(b.Zones()):b.Delete(zone)
  else:
   pads=[p for f in b.GetFootprints() if f.GetReference()=='J1' for p in f.Pads()]
   assert len(pads)==2 and pads[0].GetNetCode()!=pads[1].GetNetCode()

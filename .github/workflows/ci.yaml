@@ -81,10 +81,14 @@ jobs:
       # the final tree; this also covers intermediate commits and messages. The
       # allowlisted commit addresses pass here (every commit header carries
       # them); in files they are findings like any other personal address.
+      # `--diff-merges=separate` also prints a merge commit's diff against each
+      # parent (plain `git log -p` prints none), so a conflict resolution or any
+      # other change made in a merge is scanned too. It is explicit where `-m`
+      # would follow the `log.diffMerges` setting (`first-parent` drops diffs).
       - name: Scan commit messages and patches
         shell: bash
         run: |
-          git log -p --format='%ae %ce%n%B' "${COMMIT_RANGE}" \
+          git log -p --diff-merges=separate --format='%ae %ce%n%B' "${COMMIT_RANGE}" \
             | python3 tools/privacy_scan.py --stdin
 
       - name: Install prek

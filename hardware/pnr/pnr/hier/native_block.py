@@ -12,6 +12,8 @@ from pathlib import Path
 
 import yaml
 
+from pnr import proc
+
 # PNR_KICAD_PYTHON overrides the KiCad python (headless bundle); unset keeps the old default.
 KI_PY = os.environ.get('PNR_KICAD_PYTHON', '/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3')
 PNR_ROOT = Path(__file__).resolve().parents[2]
@@ -79,9 +81,11 @@ def evaluate(round_dir: Path, inputs: Path, constraints_doc: dict, sub_graph, su
     refs = [c.ref for c in sub_graph.components]
     (round_dir / 'keep.json').write_text(json.dumps(refs))
     env = dict(os.environ, PYTHONPATH=str(PNR_ROOT), PNR_SUBBOARD='1')
-    subprocess.run([KI_PY, '-m', 'pnr.hier.subpcb', str(inputs / 'source.kicad_pcb'),
-                    str(round_dir / 'source.kicad_pcb'), '--keep', str(round_dir / 'keep.json')],
-                   env=env, check=True, capture_output=True, text=True)
+    # One KiCad load/save: the worker deadline (PNR_WORKER_TIMEOUT); the child stays
+    # in this process group, as with the subprocess.run it replaces.
+    proc.run_output([KI_PY, '-m', 'pnr.hier.subpcb', str(inputs / 'source.kicad_pcb'),
+                     str(round_dir / 'source.kicad_pcb'), '--keep', str(round_dir / 'keep.json')],
+                    session=False, env=env)
     for name in ('source.kicad_pro', 'fp-lib-table'):
         shutil.copy2(inputs / name, round_dir / name)
     (round_dir / 'rules.json').write_text(json.dumps(sub_rules, indent=1, sort_keys=True))
@@ -97,9 +101,13 @@ def evaluate(round_dir: Path, inputs: Path, constraints_doc: dict, sub_graph, su
     run_env = dict(env, PNR_SINGLE_TRACK_WORKERS=str(workers), PNR_SUBBOARD='1')
     if live_lane:
         run_env['PNR_LIVE_CANDIDATE'] = live_lane
+    # A whole evaluation: PNR_EVALUATION_TIMEOUT; the child stays in this process group.
     with (round_dir / 'run.log').open('w') as log:
-        code = subprocess.run(cmd, cwd=repo, env=run_env, stdout=log, stderr=subprocess.STDOUT).returncode
+        code, timed_out = proc.run_status(cmd, timeout=proc.evaluation_timeout(seconds), session=False,
+                                          cwd=repo, env=run_env, stdout=log, stderr=subprocess.STDOUT)
     rec = dict(exit_code=code, seconds=time.monotonic() - t, apron_mm=apron)
+    if timed_out:
+        rec['timed_out'] = True
     ev = round_dir / 'evaluation.json'
     if ev.exists():
         e = json.loads(ev.read_text())

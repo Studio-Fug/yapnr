@@ -65,7 +65,7 @@ class ElectricalPoolControllerTest(unittest.TestCase):
         from unittest.mock import patch
         from pnr.electrical_pool import main
         from types import SimpleNamespace
-        import threading,time
+        import os,threading,time
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);diag=root/'diagnostics';diag.mkdir();out=root/'run'
             for name,value in [('source.kicad_pcb','source'),('source.kicad_pro','project'),('rules.json','{}'),('fp-lib-table','table'),('placed.json','{"placement":0}')]:
@@ -90,8 +90,12 @@ class ElectricalPoolControllerTest(unittest.TestCase):
                 with lock:active[0]-=1
                 return SimpleNamespace(returncode=0)
             args=['--diagnostics',str(diag),'--out-dir',str(out),'--constraints',str(root/'constraints.yaml'),'--electrical-fab',str(root/'electrical.json'),'--plane-fab',str(root/'plane.json'),'--annotation-source',str(root/'source.ato'),'--seconds','123','--workers','2','--route-workers','4','--kicad-python','ki-python','--kicad-cli','ki-cli']
-            with patch('pnr.electrical_pool.subprocess.run',side_effect=execute),patch('pnr.live.emit'):
+            bounds=[]
+            def bounded(cmd,timeout=None,session=True,**kwargs):
+                bounds.append((timeout,session));return execute(cmd,**kwargs).returncode,False
+            with patch('pnr.proc.run_status',bounded),patch('pnr.live.emit'),patch.dict(os.environ,{'PNR_EVALUATION_TIMEOUT':''}):
                 selected=main(args)
+            self.assertEqual(bounds,[(172800.0,False)]*2)  # PNR_EVALUATION_TIMEOUT default, caller's process group
             progress=json.loads((out/'progress.json').read_text());self.assertEqual(progress['opens'],7);self.assertEqual(progress['native_pre_cleanup_opens'],8);self.assertEqual(progress['best'],str(selected));self.assertEqual(progress['best_sha256'],hashlib.sha256(selected.read_bytes()).hexdigest())
             self.assertTrue(selected.exists());self.assertEqual(active[1],2);self.assertEqual(len(seen),2)
             self.assertEqual(original,{p:hashlib.sha256(p.read_bytes()).hexdigest() for p in original})

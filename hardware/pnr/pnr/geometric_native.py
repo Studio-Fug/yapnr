@@ -42,7 +42,7 @@ def main():
  result=propose(b,rules,a.net,b.GetLayerID(a.layer))
  if 'edges' in result:
   removed=[t for t in b.GetTracks() if uid(t) in result['remove']]
-  for t in removed:b.Remove(t);t.thisown=False
+  for t in removed:b.Remove(t);t.thisown=False  # detached, never freed (tests/test_board_delete.py)
   for x,y in result['edges']:
    t=add_track(b,a.net,result['layer'],x,y,result['width_mm']);t.thisown=False
   b.BuildConnectivity();after=snapshot(b,rules);result['connectivity_preserved']=preserved(before,partition(b));result['lost_pad_entries']=[key for key,v in entries.items() if v and not after.get(key,False)]

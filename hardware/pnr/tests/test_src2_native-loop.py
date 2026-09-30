@@ -64,7 +64,8 @@ class Harness:
     for key in CLEAR:
      if key not in (env or {}):os.environ.pop(key,None)
     bounded=lambda cmd,**kw:(self.invoke(cmd,**kw),0)[1]  # pnr.proc.run returns an exit code
-    with patch.object(native_loop.subprocess,'run',side_effect=self.invoke),patch('pnr.proc.run',side_effect=bounded),patch('pnr.native_drc.run_drc',side_effect=self.drc):
+    status=lambda cmd,**kw:(self.invoke(cmd,**kw),(0,False))[1]  # pnr.proc.run_status: (code, timed_out)
+    with patch.object(native_loop.subprocess,'run',side_effect=self.invoke),patch('pnr.proc.run',side_effect=bounded),patch('pnr.proc.run_status',side_effect=status),patch('pnr.native_drc.run_drc',side_effect=self.drc):
      for p in patches:p.start()
      try:return native_loop.main(argv)
      finally:

@@ -1,12 +1,17 @@
 """Regression for one barrel serving three layers, without sacrificing branches."""
 import importlib.util
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 from pnr.via_coalesce import acceptable
 
 NATIVE = importlib.util.find_spec('pcbnew') is not None
+# Electrical221's cleanup is opt-in; unset (src15) unless a test sets it.
+ELECTRICAL221 = dict(PNR_BARREL_CONTACT_BRIDGES='1', PNR_PARTIAL_CYCLE_CLEANUP='1')
+SRC15 = {name: '' for name in ELECTRICAL221}
 
 
 @unittest.skipUnless(NATIVE, 'requires native KiCad Python')
@@ -57,26 +62,41 @@ class ViaCoalesceTests(unittest.TestCase):
         self.assertTrue(preserved(before,partition(b)))
         self.assertEqual(sum(t.GetClass()=='PCB_VIA' for t in b.GetTracks()),1)
 
+    @mock.patch.dict(os.environ, ELECTRICAL221)
     def test_transitively_connected_tail_keeps_native_barrel_contact(self):
         import pcbnew as k
-        import subprocess
         from pnr.via_coalesce import plan, apply, partition, preserved, xy
         b, keep, remove, _, track = self.fixture()
         # Both back endpoints are connected through the remote pad. Removing
         # the second via must not strand the old tail for cleanup to eat.
         track(xy(keep.GetPosition()), (9.5, 9.2), k.B_Cu)
         b.BuildConnectivity(); before = partition(b)
-        apply(b, plan(b, keep, remove, {}))
+        proposal = plan(b, keep, remove, {})
+        self.assertTrue([s for s in proposal['additions'] if s['layer'] == k.B_Cu])
+        apply(b, proposal)
         self.assertTrue(preserved(before, partition(b)))
+        # Native DRC needs the headless kicad-cli (PNR_KICAD_CLI); never the stock bundle.
+        cli = os.environ.get('PNR_KICAD_CLI')
+        if not cli or not Path(cli).exists():
+            self.skipTest('PNR_KICAD_CLI (headless kicad-cli) required for the DRC check')
+        import subprocess
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory); board = root/'candidate.kicad_pcb'
             k.SaveBoard(str(board), b)
             report = root/'drc.json'
-            subprocess.run(['/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli',
-                            'pcb', 'drc', str(board), '--format', 'json',
-                            '--output', str(report)], check=True, capture_output=True)
+            subprocess.run([cli, 'pcb', 'drc', str(board), '--format', 'json', '--output', str(report)],
+                           check=True, capture_output=True, timeout=300)
             findings = json.loads(report.read_text())['violations']
             self.assertFalse([v for v in findings if v['type'] == 'track_dangling'])
+
+    @mock.patch.dict(os.environ, SRC15)
+    def test_src15_default_adds_no_bridge_when_every_port_reaches_the_survivor(self):
+        import pcbnew as k
+        from pnr.via_coalesce import plan, xy
+        b, keep, remove, _, track = self.fixture()
+        track(xy(keep.GetPosition()), (9.5, 9.2), k.B_Cu)
+        b.BuildConnectivity()
+        self.assertEqual([s for s in plan(b, keep, remove, {})['additions'] if s['layer'] == k.B_Cu], [])
 
     def test_trial_worker_exits_cleanly_after_releasing_borrowed_tracks(self):
         import pcbnew as k
@@ -116,6 +136,25 @@ class ViaCoalesceTests(unittest.TestCase):
             self.assertEqual(candidates(reloaded, {}, [])[0], [])
             self.assertTrue(preserved(before, partition(reloaded)))
 
+    @mock.patch.dict(os.environ, SRC15)
+    def test_coalescence_then_graph_cleanup_preserves_three_layer_branches_src15(self):
+        import pcbnew as k
+        from pnr.via_coalesce import plan, apply, partition, preserved
+        from pnr.track_graph import cycle_candidates, apply_cycle
+        b, north, south, tail, track = self.fixture()
+        track((7.55, 6.5), (8, 6.95), k.F_Cu)
+        track((8, 6.95), (8, 7.7), k.F_Cu)
+        b.BuildConnectivity(); before = partition(b)
+        apply(b, plan(b, south, north, {}))
+        choices = cycle_candidates(b, {}, [])
+        self.assertEqual(len(choices), 1)
+        self.assertEqual(len(choices[0]['remove_tracks']), 2)
+        apply_cycle(b, choices[0])
+        self.assertTrue(preserved(before, partition(b)))
+        self.assertEqual(sum(t.GetClass() == 'PCB_VIA' for t in b.GetTracks()), 1)
+        self.assertEqual(cycle_candidates(b, {}, []), [])
+
+    @mock.patch.dict(os.environ, ELECTRICAL221)
     def test_coalescence_then_graph_cleanup_preserves_three_layer_branches(self):
         import pcbnew as k
         from pnr.via_coalesce import plan, apply, partition, preserved

@@ -1163,7 +1163,7 @@ def main():
     if policy['mode']=='pair':
         pair=policy['pair'];removed=[t for t in b.GetTracks() if t.GetNetname() in (pair['p'],pair['n'])]
         if any(t.IsLocked() for t in removed):raise ValueError('pair copper locked')
-        for t in removed:b.Remove(t)
+        for t in removed:b.Delete(t)  # the pair is rerouted; old copper is discarded
         b.BuildConnectivity()
         if a.placement_spec:
             try:placement=move_pair_support(b,pair,json.loads(a.placement_spec.read_text()))
@@ -2089,7 +2089,9 @@ def screen_pair_placements(board_path,rules,pair,proposals,bounds):
     for proposal in proposals:
         b=k.LoadBoard(str(board_path));removed=[t for t in b.GetTracks() if t.GetNetname() in (pair['p'],pair['n'])]
         if any(t.IsLocked() for t in removed):raise ValueError('pair copper locked')
-        for t in removed:b.Remove(t)
+        # Delete, not Remove: b and removed are rebound per proposal, which freed
+        # each board before its Removed items.
+        for t in removed:b.Delete(t)
         b.BuildConnectivity()
         try:move_pair_support(b,pair,proposal)
         except ValueError:continue

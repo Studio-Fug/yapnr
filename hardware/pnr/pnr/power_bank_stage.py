@@ -53,8 +53,7 @@ def execute_native(a,rules,board):
     elif a.worker=='apply':
         transaction=read(a.transaction)
         if transaction['sha256']!=digest(a.board):raise ValueError('stale source board')
-        # Retain removed SWIG wrappers through connectivity rebuild and save;
-        # owning board is held by caller until this scope has returned.
+        # apply deletes the reused bank's vias and returns their uuids.
         removed=apply(board,transaction['proposal'],rules)
         board.BuildConnectivity();k.SaveBoard(str(a.out),board)
         result=dict(removed_vias=len(removed),proposal=transaction['proposal'])
@@ -63,7 +62,7 @@ def execute_native(a,rules,board):
         cut=[t for t in board.GetTracks() if uid(t) in dead and t.GetClass()=='PCB_TRACK'
              and not t.IsLocked() and t.GetNetname()==net and t.GetLength()/1e6<2.]
         result=dict(removed=[uid(t) for t in cut])
-        for item in cut:board.Remove(item)
+        for item in cut:board.Delete(item)  # discarded dead tails (Delete, not Remove)
         board.BuildConnectivity();k.SaveBoard(str(a.out),board)
     elif a.worker=='fill':
         k.ZONE_FILLER(board).Fill(board.Zones());board.BuildConnectivity();k.SaveBoard(str(a.out),board)

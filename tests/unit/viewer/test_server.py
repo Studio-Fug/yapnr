@@ -1,10 +1,8 @@
-"""HTTP ingestion regression; no KiCad process or routing changes required."""
+"""HTTP regression of the viewer server: ingestion, pins and snapshots, the source browser, notes
+and the Ask agent with a fake claude CLI (no KiCad, no model calls, no cost)."""
 
 import gzip
 import json
-import os
-import subprocess
-import sys
 import tempfile
 import threading
 import time
@@ -13,12 +11,16 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+from yapnr.viewer.notes import mcp as notes_mcp
+from yapnr.viewer.notes.store import NotesStore
+from yapnr.viewer.testing import fixture_copy, start_viewer, stop, write_fake
+
+DESIGN = fixture_copy("design")
+GRAPH = DESIGN / "graph.json"
+
 
 class ServerIngestionTest(unittest.TestCase):
     def test_missing_label_replays_as_inspectable_phase_and_snapshots_work(self):
-        repo = Path(os.environ.get("PNR_VIEWER_TEST_REPO", Path(__file__).resolve().parents[3]))
-        prefs = repo / "output/pnr-settings.json"
-        before = prefs.read_bytes()
         with tempfile.TemporaryDirectory(prefix="viewer-schema-") as tmp:
             root = Path(tmp) / "live"
             for directory in ("events", "geometry"):
@@ -40,28 +42,8 @@ class ServerIngestionTest(unittest.TestCase):
                 data=dict(opens=181, violations=0, scope="Signal-only screening"),
             )
             (root / "events/event-01.json").write_text(json.dumps(event))
-            process = subprocess.Popen(
-                [
-                    sys.executable,
-                    str(Path(__file__).with_name("server.py")),
-                    str(root),
-                    "--port",
-                    "0",
-                    "--repo",
-                    str(repo),
-                    "--cost-runtime",
-                    os.environ.get("PNR_COST_TEST_RUNTIME", str(repo / "hardware/pnr")),
-                    "--net-summaries",
-                    "off",
-                    "--agent",
-                    "off",
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
+            process, base = start_viewer(root, "--net-summaries", "off", "--agent", "off")
             try:
-                base = process.stdout.readline().strip().removeprefix("Live PnR: ")
                 self.assertTrue(base.startswith("http://127.0.0.1:"), base)
 
                 def request(path, body=None):
@@ -123,8 +105,10 @@ class ServerIngestionTest(unittest.TestCase):
                 self.assertEqual(lane["phase"], "native-final")
                 self.assertEqual(lane["opens"], 0)
                 self.assertEqual(len(lane["frames"]), 2)
-                self.assertEqual(prefs.read_bytes(), before)
-                # --agent off: no assistant, but the notes store (default <root>/../notes) still serves the Notes tab
+                # nothing was written outside the experiment folder; preferences only on a save
+                self.assertFalse((Path(tmp) / "viewer-preferences.json").exists())
+                # --agent off: no assistant, but the notes store (default <root>/../notes) still
+                # serves the Notes tab
                 status = request("/api/agent/status")
                 self.assertEqual(
                     (status["available"], status["web"], status["notes"]), (False, False, True)
@@ -134,7 +118,7 @@ class ServerIngestionTest(unittest.TestCase):
                     urlopen(
                         Request(
                             base + "/api/notes",
-                            data=json.dumps(dict(title="Check C17 ESR")).encode(),
+                            data=json.dumps(dict(title="Check C2 ESR")).encode(),
                             headers={"Content-Type": "application/json", "Origin": base},
                         ),
                         timeout=5,
@@ -149,58 +133,66 @@ class ServerIngestionTest(unittest.TestCase):
                     urlopen(base + "/api/agent/conversations", timeout=5)
                 self.assertEqual(cm.exception.code, 503)
             finally:
-                process.terminate()
-                process.wait(timeout=5)
-                process.stdout.close()
-                process.stderr.close()
+                stop(process)
 
 
-HIER = Path(__file__).resolve().parent.parent
-RUNTIME = Path(os.environ.get("PNR_SCHEMATIC_TEST_RUNTIME", HIER / "src11.frozen/hardware/pnr"))
-SOURCES = RUNTIME.parent / "splanc_dev/elec/src"
-GRAPH = HIER / "inputs10b/graph.json"
-# Stand-in for the Claude CLI: stream-json with one text delta that reports whether the
-# selection dossier reached the prompt; sleeps so the test can prove the server stays responsive.
-# Notes: with a notes MCP server in --mcp-config the init event reports it connected (the server kills the turn otherwise); a
-# prompt asking to "record a note" runs add_note through the real notes_mcp tool code with the per-turn env, as the CLI would.
-FAKE_CLAUDE = (
-    """#!%s
-import json,sys,time
+# Stand-in for the Claude CLI: stream-json with one text delta that reports whether the selection
+# dossier reached the prompt; sleeps so the test can prove the server stays responsive. Notes: with
+# a notes MCP server in --mcp-config the init event reports it connected (the server kills the turn
+# otherwise); a prompt asking to "record a note" runs add_note through the real notes MCP tool code
+# with the per-turn env, as the CLI would.
+FAKE_CLAUDE = """import json,os,sys,time
 from pathlib import Path
 a=sys.argv[1:];sid=a[a.index('--session-id')+1] if '--session-id' in a else a[a.index('--resume')+1];prompt=a[a.index('-p')+1]
 with open(Path(__file__).with_name('argv.jsonl'),'a') as f:f.write(json.dumps(a)+'\\n')
-srv=json.loads(Path(a[a.index('--mcp-config')+1]).read_text()).get('mcpServers',{}).get('splanc_notes')
+srv=json.loads(Path(a[a.index('--mcp-config')+1]).read_text()).get('mcpServers',{}).get('yapnr_notes')
 out=lambda d:print(json.dumps(dict(d,session_id=sid)),flush=True)
 ev=lambda e:out(dict(type='stream_event',parent_tool_use_id=None,event=e))
-tools=a[a.index('--tools')+1].split(',')+(['mcp__splanc_notes__'+t for t in ('add_note','list_notes','get_note','comment_note','update_note')] if srv else [])
-out(dict(type='system',subtype='init',tools=tools,mcp_servers=[dict(name='splanc_notes',status='connected')] if srv else [],model='fake',cwd='.'))
+tools=a[a.index('--tools')+1].split(',')+(['mcp__yapnr_notes__'+t for t in ('add_note','list_notes','get_note','comment_note','update_note')] if srv else [])
+out(dict(type='system',subtype='init',tools=tools,mcp_servers=[dict(name='yapnr_notes',status='connected')] if srv else [],model='fake',cwd='.'))
 if srv and 'record a note' in prompt:
- sys.path.insert(0,str(Path(srv['args'][0]).parent));import notes_mcp
- args=dict(title='C17 is the 5 V output bulk capacitor',kind='observation',targets=[dict(kind='component',ref='C17')],sources=[dict(url='https://www.ti.com/product/TPS552882',title='TPS552882 product page')])
+ sys.path[:0]=srv['env']['PYTHONPATH'].split(os.pathsep);from yapnr.viewer.notes import mcp as notes_mcp
+ args=dict(title='C2 is the 3.3 V output capacitor',kind='observation',targets=[dict(kind='component',ref='C2')],sources=[dict(url='https://example.com/datasheets/reg-33',title='REG-33 datasheet')])
  text,err=notes_mcp.Server(env=srv['env']).call('add_note',args)
- out(dict(type='assistant',parent_tool_use_id=None,message=dict(id='m0',role='assistant',content=[dict(type='tool_use',id='t1',name='mcp__splanc_notes__add_note',input=args)])))
+ out(dict(type='assistant',parent_tool_use_id=None,message=dict(id='m0',role='assistant',content=[dict(type='tool_use',id='t1',name='mcp__yapnr_notes__add_note',input=args)])))
  out(dict(type='user',parent_tool_use_id=None,message=dict(role='user',content=[dict(type='tool_result',tool_use_id='t1',content=[dict(type='text',text=text)],is_error=err)])))
 ev(dict(type='message_start',message=dict(id='m1')));ev(dict(type='content_block_start',index=0,content_block=dict(type='text',text='')))
 time.sleep(1.2)
-ev(dict(type='content_block_delta',index=0,delta=dict(type='text_delta',text='dossier ok [[ref:C17]]' if 'output_cap1 = new C22u' in prompt and 'lane state:' in prompt else 'dossier missing')))
+ev(dict(type='content_block_delta',index=0,delta=dict(type='text_delta',text='dossier ok [[ref:C2]]' if 'output_cap = new Capacitor' in prompt and 'lane state:' in prompt else 'dossier missing')))
 out(dict(type='result',subtype='success',is_error=False,result='done',total_cost_usd=0,duration_ms=5,num_turns=1))
-"""
-    % sys.executable
-)
+"""  # noqa: E501 (one fake program)
 
 
-@unittest.skipUnless(SOURCES.is_dir() and GRAPH.is_file(), "splanc design sources not present")
+def start_with_agent(root, fake):
+    return start_viewer(
+        root,
+        "--graph",
+        str(GRAPH),
+        "--atopile-root",
+        str(DESIGN),
+        "--atopile-build",
+        "default",
+        "--viewer3d",
+        "off",
+        "--agent",
+        "on",
+        "--agent-web",
+        "on",
+        "--claude",
+        str(fake),
+        "--agent-model",
+        "sonnet",
+    )
+
+
 class SourceAgentHttpTest(unittest.TestCase):
     """/api/source/* and /api/agent/* with a fake CLI: no model calls, no cost."""
 
     def test_source_and_agent_routes(self):
-        repo = Path(os.environ.get("PNR_VIEWER_TEST_REPO", Path(__file__).resolve().parents[3]))
         with tempfile.TemporaryDirectory(prefix="viewer-agent-") as tmp:
             root = Path(tmp) / "live"
             (root / "events").mkdir(parents=True)
-            fake = Path(tmp) / "claude"
-            fake.write_text(FAKE_CLAUDE)
-            fake.chmod(0o755)
+            fake = write_fake(Path(tmp) / "claude", FAKE_CLAUDE)
             event = dict(
                 schema="pnr-live-event-v1",
                 id="1-aa",
@@ -212,32 +204,8 @@ class SourceAgentHttpTest(unittest.TestCase):
                 data={},
             )
             (root / "events/1-aa.json").write_text(json.dumps(event))
-            p = subprocess.Popen(
-                [
-                    sys.executable,
-                    str(Path(__file__).with_name("server.py")),
-                    str(root),
-                    "--port",
-                    "0",
-                    "--repo",
-                    str(repo),
-                    "--cost-runtime",
-                    str(RUNTIME),
-                    "--schematic-graph",
-                    str(GRAPH),
-                    "--net-summaries",
-                    "off",
-                    "--agent-claude",
-                    str(fake),
-                    "--agent-model",
-                    "sonnet",
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
+            p, base = start_with_agent(root, fake)
             try:
-                base = p.stdout.readline().strip().removeprefix("Live PnR: ")
                 origin = base.replace("127.0.0.1", "127.0.0.1")
 
                 def call(path, body=None, headers=None, raw=False):
@@ -264,9 +232,9 @@ class SourceAgentHttpTest(unittest.TestCase):
                 self.assertEqual(status, 200)
                 self.assertEqual(
                     (index["version"], index["validation"]["nets_matched"], len(index["nets"])),
-                    (1, 93, 93),
+                    (1, 4, 4),
                 )
-                self.assertEqual(index["components"]["C17"]["text"], "output_cap1 = new C22u")
+                self.assertEqual(index["components"]["C2"]["text"], "output_cap = new Capacitor")
                 status, headers, gz = call(
                     "/api/source/index", headers={"Accept-Encoding": "gzip"}, raw=True
                 )
@@ -278,16 +246,16 @@ class SourceAgentHttpTest(unittest.TestCase):
                     ],
                     304,
                 )
-                status, _, f = call("/api/source/file?path=system_5v.ato")
+                status, _, f = call("/api/source/file?path=demo.ato")
                 self.assertEqual(status, 200)
-                self.assertIn("output_cap1 = new C22u", f["text"])
+                self.assertIn("output_cap = new Capacitor", f["text"])
                 for bad in (
                     "../x.ato",
                     "/etc/passwd",
                     "parts/../../../x.ato",
                     "%2e%2e/server.ato",
                     "..%2Fx.ato",
-                    "system_5v.ato%00.ato",
+                    "demo.ato%00.ato",
                     "ato.yaml",
                 ):
                     self.assertEqual(call("/api/source/file?path=" + bad)[0], 400, bad)
@@ -296,13 +264,13 @@ class SourceAgentHttpTest(unittest.TestCase):
                 self.assertTrue(st["available"])
                 self.assertEqual((st["default"], st["net_summaries"]["state"]), ("sonnet", "off"))
                 body = dict(
-                    message="What is C17 for?",
+                    message="What is C2 for?",
                     model="sonnet",
                     context=dict(
                         lane="t1/lane",
                         phase="live",
                         view="pcb",
-                        selection=[dict(kind="component", ref="C17"), dict(kind="net", name="hv")],
+                        selection=[dict(kind="component", ref="C2"), dict(kind="net", name="lv")],
                     ),
                 )
                 self.assertEqual(
@@ -343,7 +311,7 @@ class SourceAgentHttpTest(unittest.TestCase):
                     for b in raw.decode().strip().split("\n\n")
                 ]
                 self.assertEqual([e for e, _ in events], ["session", "delta", "done"])
-                self.assertEqual(events[1][1]["text"], "dossier ok [[ref:C17]]")
+                self.assertEqual(events[1][1]["text"], "dossier ok [[ref:C2]]")
                 self.assertEqual(events[2][1]["session"], events[0][1]["id"])
                 self.assertEqual(
                     call("/api/agent/cancel", dict(session=events[0][1]["id"]), {"Origin": origin})[
@@ -363,7 +331,7 @@ class SourceAgentHttpTest(unittest.TestCase):
                 )
                 rebind = {"Host": "rebind.attacker.example:" + base.rsplit(":", 1)[1]}
                 for path in (
-                    "/api/source/file?path=system_5v.ato",
+                    "/api/source/file?path=demo.ato",
                     "/api/source/index",
                     "/api/state",
                     "/",
@@ -373,7 +341,7 @@ class SourceAgentHttpTest(unittest.TestCase):
                     )  # DNS-rebinding guard
                 self.assertEqual(call("/api/agent/chat", body, dict(rebind, Origin=origin))[0], 421)
                 self.assertEqual(
-                    call("/api/source/file?path=system_5v.ato", headers={"Host": "localhost:1"})[0],
+                    call("/api/source/file?path=demo.ato", headers={"Host": "localhost:1"})[0],
                     200,
                 )
                 st = call("/api/agent/status")[2]
@@ -382,27 +350,18 @@ class SourceAgentHttpTest(unittest.TestCase):
                 self.assertNotIn("source", state["lanes"]["t1/lane"])
                 self.assertNotIn("lane_meta", state)
             finally:
-                p.terminate()
-                p.wait(10)
-                p.stdout.close()
-                p.stderr.close()
+                stop(p)
 
     def test_notes_and_conversation_routes(self):
-        """/api/notes* (user actor only, Origin required, export md/json), agent notes through the per-turn MCP server,
-        /api/agent/conversations* and the web flag passthrough; fake CLI, no model calls."""
+        """/api/notes* (user actor only, Origin required, export md/json), agent notes through the
+        per-turn MCP server, /api/agent/conversations* and the web flag passthrough; fake CLI, no
+        model calls."""
         import uuid
 
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
-        import notes_mcp
-        from notes_store import NotesStore
-
-        repo = Path(os.environ.get("PNR_VIEWER_TEST_REPO", Path(__file__).resolve().parents[3]))
         with tempfile.TemporaryDirectory(prefix="viewer-notes-") as tmp:
             root = Path(tmp) / "live"
             (root / "events").mkdir(parents=True)
-            fake = Path(tmp) / "claude"
-            fake.write_text(FAKE_CLAUDE)
-            fake.chmod(0o755)
+            fake = write_fake(Path(tmp) / "claude", FAKE_CLAUDE)
             event = dict(
                 schema="pnr-live-event-v1",
                 id="1-aa",
@@ -414,32 +373,8 @@ class SourceAgentHttpTest(unittest.TestCase):
                 data={},
             )
             (root / "events/1-aa.json").write_text(json.dumps(event))
-            p = subprocess.Popen(
-                [
-                    sys.executable,
-                    str(Path(__file__).with_name("server.py")),
-                    str(root),
-                    "--port",
-                    "0",
-                    "--repo",
-                    str(repo),
-                    "--cost-runtime",
-                    str(RUNTIME),
-                    "--schematic-graph",
-                    str(GRAPH),
-                    "--net-summaries",
-                    "off",
-                    "--agent-claude",
-                    str(fake),
-                    "--agent-model",
-                    "sonnet",
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
+            p, base = start_with_agent(root, fake)
             try:
-                base = p.stdout.readline().strip().removeprefix("Live PnR: ")
                 port = int(base.rsplit(":", 1)[1])
                 origin = {"Origin": base}
                 notes_dir = Path(tmp) / "notes"  # default: <root>/../notes
@@ -471,18 +406,20 @@ class SourceAgentHttpTest(unittest.TestCase):
                         for b in raw.decode().strip().split("\n\n")
                     ]
 
-                argv = lambda: [
-                    json.loads(l) for l in (Path(tmp) / "argv.jsonl").read_text().splitlines()
-                ]
+                def argv():
+                    lines = (Path(tmp) / "argv.jsonl").read_text().splitlines()
+                    return [json.loads(line) for line in lines]
+
                 st = call("/api/agent/status")[2]
                 self.assertEqual((st["available"], st["web"], st["notes"]), (True, True, True))
                 self.assertEqual(call("/api/notes")[2], dict(rev=0, notes=[]))
                 self.assertEqual(call("/api/notes?since=0")[2], dict(rev=0, unchanged=True))
-                # writes: allowlisted Origin required (a missing one too), Host guard, user actor only
+                # writes: allowlisted Origin required (a missing one too), Host guard, user actor
+                # only
                 user = dict(
-                    title="Is C17 enough for the ripple current?",
+                    title="Is C2 enough for the load step?",
                     kind="question",
-                    targets=[dict(kind="component", ref="C17")],
+                    targets=[dict(kind="component", ref="C2")],
                     provenance=dict(lane="t1/lane", viewer_port=port),
                 )
                 self.assertEqual(call("/api/notes", user)[0], 403)
@@ -525,15 +462,16 @@ class SourceAgentHttpTest(unittest.TestCase):
                     json.loads((notes_dir / "notes.jsonl").read_text().splitlines()[0])["actor"],
                     dict(kind="user", remote="127.0.0.1"),
                 )
-                # an agent turn that records a note: tool + note events, done.notes_created, provenance from the per-turn env
+                # an agent turn that records a note: tool + note events, done.notes_created,
+                # provenance from the per-turn env
                 body = dict(
-                    message="What is C17 for? Please record a note.",
+                    message="What is C2 for? Please record a note.",
                     model="sonnet",
                     context=dict(
                         lane="t1/lane",
                         phase="live",
                         view="pcb",
-                        selection=[dict(kind="component", ref="C17")],
+                        selection=[dict(kind="component", ref="C2")],
                     ),
                 )
                 events = chat(body)
@@ -547,8 +485,8 @@ class SourceAgentHttpTest(unittest.TestCase):
                 self.assertEqual(
                     events[1][1],
                     dict(
-                        name="mcp__splanc_notes__add_note",
-                        detail="observation: C17 is the 5 V output bulk capacitor",
+                        name="mcp__yapnr_notes__add_note",
+                        detail="observation: C2 is the 3.3 V output capacitor",
                     ),
                 )
                 self.assertEqual(
@@ -561,7 +499,7 @@ class SourceAgentHttpTest(unittest.TestCase):
                 )
                 a = argv()[-1]
                 self.assertEqual(a[a.index("--tools") + 1], "Read,Grep,Glob,WebSearch,WebFetch")
-                self.assertIn("mcp__splanc_notes__add_note", a[a.index("--allowedTools") + 1])
+                self.assertIn("mcp__yapnr_notes__add_note", a[a.index("--allowedTools") + 1])
                 self.assertNotIn(
                     "WebFetch", a[a.index("--allowedTools") + 1]
                 )  # approved only by the web_guard.py hook
@@ -572,7 +510,7 @@ class SourceAgentHttpTest(unittest.TestCase):
                 )
                 self.assertIn(
                     "## Design notes on this selection (1", a[a.index("-p") + 1]
-                )  # N-0001 targets C17: in the dossier
+                )  # N-0001 targets C2: in the dossier
                 listing = call("/api/notes?since=1")[2]
                 self.assertEqual(
                     (listing["rev"], listing["changed"], [n["id"] for n in listing["notes"]]),
@@ -589,8 +527,8 @@ class SourceAgentHttpTest(unittest.TestCase):
                     (
                         "agent",
                         "open",
-                        [dict(kind="component", ref="C17")],
-                        "https://www.ti.com/product/TPS552882",
+                        [dict(kind="component", ref="C2")],
+                        "https://example.com/datasheets/reg-33",
                     ),
                 )
                 self.assertEqual(
@@ -600,8 +538,9 @@ class SourceAgentHttpTest(unittest.TestCase):
                     },
                     dict(session=sid, turn=1, lane="t1/lane", phase="live", viewer_port=port),
                 )
-                # authority: the agent (its MCP tools or the store with an agent actor) cannot accept or delete; the user can
-                env = dict(SPLANC_NOTES_DIR=str(notes_dir), SPLANC_SESSION=sid)
+                # authority: the agent (its MCP tools or the store with an agent actor) cannot accept
+                # or delete; the user can
+                env = dict(YAPNR_NOTES_DIR=str(notes_dir), YAPNR_SESSION=sid)
                 text, err = notes_mcp.Server(env=env).call(
                     "update_note", dict(id="N-0002", status="accepted")
                 )
@@ -676,10 +615,10 @@ class SourceAgentHttpTest(unittest.TestCase):
                 md = md.decode()
                 for needle in (
                     "## Accepted (to apply) (1)",
-                    "### N-0002 · observation · C17 is the 5 V output bulk capacitor",
+                    "### N-0002 · observation · C2 is the 3.3 V output capacitor",
                     "(set by user",
-                    "[TPS552882 product page](https://www.ti.com/product/TPS552882)",
-                    "C17: C22u board.converter.output_cap1 (system_5v.ato:",
+                    "[REG-33 datasheet](https://example.com/datasheets/reg-33)",
+                    "C2: Capacitor board.supply.output_cap (demo.ato:",
                     "## Open questions / observations (1)",
                     "agent: Datasheet section 8.2 agrees.",
                 ):
@@ -695,7 +634,7 @@ class SourceAgentHttpTest(unittest.TestCase):
                 )
                 self.assertEqual(
                     ([n["id"] for n in js["notes"]], js["notes"][1]["targets_resolved"][0][:4]),
-                    (["N-0001", "N-0002"], "C17:"),
+                    (["N-0001", "N-0002"], "C2: "),
                 )
                 self.assertEqual(call("/api/notes/export?format=xml")[0], 400)
                 # delete (user) and the since delta
@@ -708,7 +647,8 @@ class SourceAgentHttpTest(unittest.TestCase):
                 self.assertEqual(
                     (delta["deleted"], [n["id"] for n in delta["notes"]]), (["N-0001"], ["N-0002"])
                 )
-                # conversations: listing, one conversation, resume after the stored turn, web off for this turn
+                # conversations: listing, one conversation, resume after the stored turn, web off for
+                # this turn
                 convs = call("/api/agent/conversations")[2]["conversations"]
                 self.assertEqual(
                     [
@@ -722,7 +662,7 @@ class SourceAgentHttpTest(unittest.TestCase):
                         )
                         for c in convs
                     ],
-                    [(sid, 1, "What is C17 for? Please record a note.", "t1/lane", 1, True)],
+                    [(sid, 1, "What is C2 for? Please record a note.", "t1/lane", 1, True)],
                 )
                 conv = call("/api/agent/conversations/" + sid)[2]
                 t1 = conv["turns"][0]
@@ -739,10 +679,10 @@ class SourceAgentHttpTest(unittest.TestCase):
                     (
                         1,
                         body["message"],
-                        "dossier ok [[ref:C17]]",
+                        "dossier ok [[ref:C2]]",
                         ["N-0002"],
                         True,
-                        [dict(kind="component", ref="C17")],
+                        [dict(kind="component", ref="C2")],
                         "sonnet",
                     ),
                 )
@@ -750,8 +690,8 @@ class SourceAgentHttpTest(unittest.TestCase):
                     t1["tools"],
                     [
                         dict(
-                            name="mcp__splanc_notes__add_note",
-                            detail="observation: C17 is the 5 V output bulk capacitor",
+                            name="mcp__yapnr_notes__add_note",
+                            detail="observation: C2 is the 3.3 V output capacitor",
                         )
                     ],
                 )
@@ -759,7 +699,7 @@ class SourceAgentHttpTest(unittest.TestCase):
                 self.assertEqual(call("/api/agent/conversations/not-a-uuid")[0], 400)
                 self.assertEqual(call("/api/agent/conversations/" + str(uuid.uuid4()))[0], 404)
                 self.assertEqual(call("/api/agent/conversations/" + sid + "/x")[0], 400)
-                events = chat(dict(body, message="And C18?", session=sid, web=False))
+                events = chat(dict(body, message="And C1?", session=sid, web=False))
                 self.assertEqual([e for e, _ in events], ["session", "delta", "done"], events)
                 self.assertEqual(
                     (events[0][1]["id"], events[0][1]["turn"], events[0][1]["web"]), (sid, 2, False)
@@ -775,10 +715,7 @@ class SourceAgentHttpTest(unittest.TestCase):
                 )
                 self.assertEqual(call("/api/agent/chat", dict(body, web="yes"), origin)[0], 400)
             finally:
-                p.terminate()
-                p.wait(10)
-                p.stdout.close()
-                p.stderr.close()
+                stop(p)
 
 
 if __name__ == "__main__":

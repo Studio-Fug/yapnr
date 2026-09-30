@@ -1,0 +1,9 @@
+# Synthetic atopile project for the viewer's tests (written for yapnr; not a real board).
+requires-atopile: ^0.3.0
+paths:
+  src: ./elec/src
+builds:
+  default:
+    entry: elec/src/demo.ato:Demo
+  other:
+    entry: elec/src/demo.ato:Board

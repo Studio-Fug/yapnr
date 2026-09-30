@@ -1,0 +1,7 @@
+import is_atomic_part
+
+component Res_package:
+    """Resistor, 0402."""
+    trait is_atomic_part<manufacturer="Example", partnumber="R-10K", footprint="R0402.kicad_mod", symbol="Res.kicad_sym">
+    signal p1 ~ pin 1
+    signal p2 ~ pin 2

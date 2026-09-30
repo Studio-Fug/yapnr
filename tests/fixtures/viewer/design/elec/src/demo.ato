@@ -1,0 +1,46 @@
+import ElectricPower
+from "parts/Regulator/Regulator.ato" import Regulator_package
+from "parts/Res/Res.ato" import Res_package
+from "parts/Cap/Cap.ato" import Cap_package
+
+module Resistor:
+    """Resistor wrapper."""
+    _p = new Res_package
+    signal p1 ~ _p.p1
+    signal p2 ~ _p.p2
+
+module Capacitor:
+    """Capacitor wrapper."""
+    _p = new Cap_package
+    signal p1 ~ _p.p1
+    signal p2 ~ _p.p2
+
+module Supply:
+    """3.3 V supply from the input rail."""
+    vin = new ElectricPower   # input rail
+    vin.voltage = 5V +/- 5%
+    vout = new ElectricPower  # regulated output
+    vout.voltage = 3.3V +/- 3%
+    ic = new Regulator_package
+    ic.VIN ~ vin.hv
+    ic.GND ~ vin.lv
+    ic.VOUT ~ vout.hv
+    vin.lv ~ vout.lv
+    input_cap = new Capacitor
+    input_cap.p1 ~ vin.hv
+    input_cap.p2 ~ vin.lv
+    output_cap = new Capacitor
+    output_cap.p1 ~ vout.hv
+    output_cap.p2 ~ vout.lv
+    # Regulator output envelope.
+    # @pnr-current {"target":"ic","pads":["3"],"scope":"net","rms_current_a":0.5,"peak_current_a":1}
+
+module Board:
+    """Demo board: a regulator and an enable pull-up."""
+    supply = new Supply
+    pullup = new Resistor
+    pullup.p1 ~ supply.vout.hv
+    signal EN ~ pullup.p2  # enable input, pulled up to 3.3 V
+
+module Demo:
+    board = new Board

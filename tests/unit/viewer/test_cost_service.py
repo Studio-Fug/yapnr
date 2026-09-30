@@ -3,30 +3,26 @@
 import hashlib
 import json
 import os
-import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from cost_service import CostService
+from pnr.constraints import compile_constraints
+from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
+from pnr.place import place
+
+from yapnr.viewer import runtime
+from yapnr.viewer.services.cost import CostService
 
 
 class CostBindingTest(unittest.TestCase):
     def setUp(self):
-        self.repo = Path(
-            os.environ.get("PNR_VIEWER_TEST_REPO", Path(__file__).resolve().parents[3])
-        )
-        self.runtime = Path(os.environ.get("PNR_COST_TEST_RUNTIME", self.repo / "hardware/pnr"))
-        sys.path.insert(0, str(self.runtime))
-        from pnr.constraints import compile_constraints
-        from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
-        from pnr.place import place
-
-        (self.repo / "output").mkdir(exist_ok=True)
-        self.tmp = tempfile.TemporaryDirectory(prefix="cost-binding-", dir=self.repo / "output")
-        self.root = Path(self.tmp.name)
+        self.runtime = runtime.imported_runtime()
+        self.tmp = tempfile.TemporaryDirectory(prefix="cost-binding-")
+        self.root = Path(self.tmp.name) / "live"
+        self.root.mkdir()
         (self.root / "events").mkdir()
         parts = [
             Component(
@@ -66,9 +62,7 @@ class CostBindingTest(unittest.TestCase):
             for p in (self.root / "records").glob("*.json")
             if json.loads(p.read_text())["kind"] == "global-objective"
         )
-        self.service = CostService(
-            self.root, self.repo, Path(__file__).parent, runtime=self.runtime
-        )
+        self.service = CostService(self.root, runtime=self.runtime, capture_root=self.root)
         self.capture = dict(
             path=str(self.record), sha256=hashlib.sha256(self.record.read_bytes()).hexdigest()
         )
@@ -146,6 +140,19 @@ class CostBindingTest(unittest.TestCase):
         self.event("6-abc")
         with self.assertRaisesRegex(ValueError, "Invalid routing-probe source"):
             self.service.request("6-abc", "C61")
+
+    def test_capture_outside_the_capture_root_is_rejected(self):
+        service = CostService(self.root, runtime=self.runtime, capture_root=self.root / "events")
+        self.event("8-abc")
+        with self.assertRaisesRegex(ValueError, "capture root"):
+            service.request("8-abc", "C61")
+        service.pool.shutdown(wait=True)
+
+    def test_without_the_engine_cost_model_the_service_is_off(self):
+        service = CostService(self.root, runtime=self.root / "no-engine")
+        self.assertIn("no engine cost model", service.disabled)
+        self.assertEqual(service.request("9-abc", "C61")["status"], "unavailable")
+        service.pool.shutdown(wait=True)
 
     def test_record_requires_matching_replay_model(self):
         d = json.loads(self.record.read_text())

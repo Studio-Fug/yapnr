@@ -217,7 +217,7 @@ function showNet(name){let n=net(name);if(!n)return load().then(()=>net(name)&&s
 
 // ------------------------------------------------------------------ Inspect tab
 P.insp.innerHTML='';
-const IB={head:h('form',{class:'insp-find'}),body:h('div',{class:'insp-body'})},findIn=h('input',{class:'dk-input',list:'dk-find-list',placeholder:'Find part, net or pad (C17, hv, 5V, U5.13)…',spellcheck:'false',autocomplete:'off'}),findList=h('datalist',{id:'dk-find-list'}),btnIBack=h('button',{type:'button',class:'insp-back',title:'Previous item',disabled:true},'‹');
+const IB={head:h('form',{class:'insp-find'}),body:h('div',{class:'insp-body'})},findIn=h('input',{class:'dk-input',list:'dk-find-list',placeholder:'Find part, net or pad (C1, GND, 3V3, U1.2)…',spellcheck:'false',autocomplete:'off'}),findList=h('datalist',{id:'dk-find-list'}),btnIBack=h('button',{type:'button',class:'insp-back',title:'Previous item',disabled:true},'‹');
 IB.head.append(btnIBack,findIn,findList,h('button',{type:'submit'},'Go'));P.insp.append(IB.head,IB.body);
 btnIBack.onclick=()=>{let it=S.ihist.pop();if(it){S.item=null;inspect(it,{nohist:true,focus:true})}btnIBack.disabled=!S.ihist.length};
 IB.head.onsubmit=e=>{e.preventDefault();let q=findIn.value.trim();if(!q)return;let x=IX(),Q=q.toUpperCase(),lq=q.toLowerCase();

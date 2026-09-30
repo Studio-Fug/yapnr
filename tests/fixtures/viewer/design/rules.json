@@ -1,0 +1,12 @@
+{
+  "fab": { "track_width_mm": 0.2, "clearance_mm": 0.15 },
+  "net_classes": [
+    { "name": "gnd", "nets": ["lv"], "width_mm": 0.4 },
+    { "name": "power", "nets": ["vin-hv", "vout-hv"], "width_mm": 0.3 }
+  ],
+  "electrical_nets": {
+    "vin-hv": { "rms_current_a": 0.5, "peak_current_a": 1.0 },
+    "vout-hv": { "rms_current_a": 0.5, "peak_current_a": 1.0 },
+    "lv": { "rms_current_a": 0.5, "peak_current_a": 1.0 }
+  }
+}

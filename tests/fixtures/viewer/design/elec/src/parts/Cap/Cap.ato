@@ -1,0 +1,7 @@
+import is_atomic_part
+
+component Cap_package:
+    """Capacitor, 10 uF, 0603."""
+    trait is_atomic_part<manufacturer="Example", partnumber="C-10U", footprint="C0603.kicad_mod", symbol="Cap.kicad_sym">
+    signal p1 ~ pin 1
+    signal p2 ~ pin 2

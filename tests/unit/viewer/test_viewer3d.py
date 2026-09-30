@@ -1,10 +1,11 @@
-"""viewer3d_service: placement cache keys (routing-only revisions share one; untented vias, the CLI / 3D library and
-project model files change it), model-path rewrite, GLB compaction into the viewer frame, queue / time / size bounds,
-failure caching, one export at a time (also across two services sharing a lock), two services sharing one cache folder
-(eviction by the other one, only its own scratch folder removed), mutable boards exported from a snapshot, leftover
-sweep, eviction, SIGTERM during an export, the Host guard, and that the GUI KiCad CLI (or any non-background app
-bundle) is never used. Offline: a fake kicad-cli writes a synthetic KiCad-like GLB. SPLANC_V3D_LIVE=1 adds a
-real headless export of a live board (about 20-40 s and 2 GB)."""
+"""The 3D view: placement cache keys (routing-only revisions share one; untented vias, the CLI / 3D
+library and project model files change it), model-path rewrite, GLB compaction into the viewer
+frame, queue / time / size bounds, failure caching, one export at a time (also across two services
+sharing a lock), two services sharing one cache folder (eviction by the other one, only its own
+scratch folder removed), mutable boards exported from a snapshot, leftover sweep, eviction, SIGTERM
+during an export, the Host guard, and that the GUI KiCad CLI (or any non-background app bundle) is
+never used. Offline: a fake kicad-cli writes a synthetic KiCad-like GLB. The real headless export is
+in tests/e2e/viewer."""
 
 import array
 import gzip
@@ -12,13 +13,16 @@ import json
 import math
 import os
 import struct
+import subprocess
 import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
-import viewer3d_service as v
+from yapnr.viewer.services import viewer3d as v
+from yapnr.viewer.testing import start_viewer, stop, write_fake
 
 BOARD = """(kicad_pcb
 \t(version 20241229)
@@ -72,7 +76,7 @@ def box(x0, y0, z0, x1, y1, z1):
     """Positions/normals/indices of an axis-aligned box (glTF units, metres)."""
     P = []
     N = []
-    I = []
+    IDX = []
     for axis in range(3):
         for s in (0, 1):
             n = [0, 0, 0]
@@ -89,12 +93,13 @@ def box(x0, y0, z0, x1, y1, z1):
             k = len(P)
             P += quad
             N += [n] * 4
-            I += [k, k + 1, k + 3, k, k + 3, k + 2]
-    return P, N, I
+            IDX += [k, k + 1, k + 3, k, k + 3, k + 2]
+    return P, N, IDX
 
 
 def kicad_like_glb():
-    """Unnamed root -> R1 (translated, with a nested translated child like KiCad's VRML shells), board_PCB, two silkscreens."""
+    """Unnamed root -> R1 (translated, with a nested translated child like KiCad's VRML shells),
+    board_PCB, two silkscreens."""
     js = dict(
         asset=dict(version="2.0", generator="test"),
         scene=0,
@@ -115,12 +120,12 @@ def kicad_like_glb():
     )
     blob = bytearray()
 
-    def mesh(name, P, N, I, mat):
+    def mesh(name, P, N, IDX, mat):
         acc = []
         for data, fmt, kind, ct, target in (
             (sum(P, []), "f", "VEC3", 5126, 34962),
             (sum(N, []), "f", "VEC3", 5126, 34962),
-            (I, "H", "SCALAR", 5123, 34963),
+            (IDX, "H", "SCALAR", 5123, 34963),
         ):
             blob.extend(b"\0" * (-len(blob) % 4))
             a = array.array(fmt, data)
@@ -191,8 +196,7 @@ def kicad_like_glb():
     )
 
 
-FAKE = """#!{py}
-import json,os,shutil,sys,time
+FAKE = """import json,os,shutil,sys,time
 a=sys.argv[1:];out=a[a.index('-o')+1];board=a[-1]
 with open(os.environ['FAKE_LOG'],'a') as f:f.write(json.dumps(dict(argv=a,start=time.time(),pid=os.getpid(),cwd=os.getcwd()))+'\\n')
 if os.environ.get('FAKE_COPY'):shutil.copy(board,os.environ['FAKE_COPY'])
@@ -202,7 +206,7 @@ if int(os.environ.get('FAKE_EXIT','0')):sys.stderr.write('fake failure\\n');sys.
 if os.environ.get('FAKE_JUNK'):open(out,'wb').write(b'not a glb')
 else:shutil.copy(os.environ['FAKE_GLB'],out)
 with open(os.environ['FAKE_LOG'],'a') as f:f.write(json.dumps(dict(end=time.time(),pid=os.getpid()))+'\\n')
-"""
+"""  # noqa: E501 (one fake program)
 
 
 def sha(text):
@@ -226,9 +230,7 @@ class Base(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(prefix="v3d-test-")
         self.d = Path(self.tmp.name)
         (self.d / "bin").mkdir()
-        self.cli = self.d / "bin/kicad-cli"
-        self.cli.write_text(FAKE.format(py=sys.executable))
-        self.cli.chmod(0o755)
+        self.cli = write_fake(self.d / "bin/kicad-cli", FAKE.format())
         (self.d / "parts/Res").mkdir(parents=True)
         (self.d / "parts/Res/R0402.step").write_text("step")
         (self.d / "boards").mkdir()
@@ -244,10 +246,18 @@ class Base(unittest.TestCase):
                 "FAKE_COPY",
                 "FAKE_JUNK",
                 "PNR_KICAD_CLI",
+                "YAPNR_KICAD_CLI",
             )
         }
         os.environ.update(FAKE_LOG=str(self.d / "calls.jsonl"), FAKE_GLB=str(self.glb))
-        for k in ("FAKE_SLEEP", "FAKE_EXIT", "FAKE_COPY", "FAKE_JUNK", "PNR_KICAD_CLI"):
+        for k in (
+            "FAKE_SLEEP",
+            "FAKE_EXIT",
+            "FAKE_COPY",
+            "FAKE_JUNK",
+            "PNR_KICAD_CLI",
+            "YAPNR_KICAD_CLI",
+        ):
             os.environ.pop(k, None)
         self.services = []
 
@@ -276,7 +286,7 @@ class Base(unittest.TestCase):
 
     def calls(self):
         f = self.d / "calls.jsonl"
-        return [json.loads(l) for l in f.read_text().splitlines()] if f.exists() else []
+        return [json.loads(line) for line in f.read_text().splitlines()] if f.exists() else []
 
     def ready(self, s, board_sha, path, **kw):
         r = wait(
@@ -310,9 +320,13 @@ class KeysAndRewrite(unittest.TestCase):
         )  # unformatted text: hashed whole
 
     def test_untented_vias_and_mask_zones_stay_in_the_key(self):
-        # --include-soldermask: an untented via opens the mask, which the GLB shows; so does a zone on a mask layer
+        # --include-soldermask: an untented via opens the mask, which the GLB shows; so does a zone
+        # on a mask layer
         parts = Path("/p")
-        moved_via = lambda t: t.replace("(at 5 5)", "(at 6 6)")
+
+        def moved_via(t):
+            return t.replace("(at 5 5)", "(at 6 6)")
+
         self.assertEqual(v.cache_key(BOARD, parts), v.cache_key(moved_via(BOARD), parts))
         self.assertNotEqual(v.cache_key(UNTENTED, parts), v.cache_key(moved_via(UNTENTED), parts))
         self.assertIn("(via", v.placement_text(UNTENTED))
@@ -398,7 +412,8 @@ class Compaction(unittest.TestCase):
         self.assertAlmostEqual(info["board"]["z1"], 1.51, 6)
         r1 = info["refs"]["R1"]
         b = r1["bbox"]
-        # KiCad (11, 21) mm -> engine x = 11-10, y = 30-21 (Edge.Cuts bbox bottom-left, y up); body 0.5 mm tall from 1.595 mm
+        # KiCad (11, 21) mm -> engine x = 11-10, y = 30-21 (Edge.Cuts bbox bottom-left, y up); body
+        # 0.5 mm tall from 1.595 mm
         self.assertAlmostEqual((b[0] + b[3]) / 2, 1, 3)
         self.assertAlmostEqual((b[1] + b[4]) / 2, 9, 3)
         self.assertAlmostEqual(b[2], 1.595, 3)
@@ -448,7 +463,7 @@ class Headless(Base):
         os.environ["PNR_KICAD_CLI"] = GUI
         s = v.Viewer3DService(self.d / "c2", parts=self.d / "parts")
         self.services.append(s)
-        self.assertIn("refusing the GUI KiCad CLI", s.disabled)
+        self.assertIn("refusing the GUI KiCad", s.disabled)
         bs, bp = self.board(BOARD)
         r = s.request(bs, [bp])
         self.assertEqual(r["status"], "unavailable")
@@ -492,22 +507,32 @@ class Headless(Base):
         s = v.Viewer3DService(self.d / "c3", cli=gui, parts=self.d / "parts")
         self.services.append(s)
         self.assertIn("background-only", s.disabled)
-        if v.HEADLESS_CLI.is_file():
-            self.assertTrue(
-                v.background_only(v.bundle_info(v.app_bundle(v.HEADLESS_CLI)))
-            )  # this Mac's headless copy passes
+        headless = v.HEADLESS_CLI.expanduser()
+        if headless.is_file():  # a machine's headless copy passes
+            self.assertTrue(v.background_only(v.bundle_info(v.app_bundle(headless))))
 
     def test_default_is_the_headless_copy(self):
         os.environ.pop("PNR_KICAD_CLI", None)
+        os.environ.pop("YAPNR_KICAD_CLI", None)
         self.assertEqual(
-            str(v.HEADLESS_CLI),
-            str(Path("~/Applications/KiCad-headless.app/Contents/MacOS/kicad-cli").expanduser()),
+            v.HEADLESS_CLI, Path("~/Applications/KiCad-headless.app/Contents/MacOS/kicad-cli")
         )
-        if v.HEADLESS_CLI.is_file():
-            self.assertEqual(v.headless_cli(), v.HEADLESS_CLI)
-        else:
-            with self.assertRaises(v.Unavailable):
+        headless = v.HEADLESS_CLI.expanduser()
+        if sys.platform == "darwin" and headless.is_file():
+            self.assertEqual(v.headless_cli(), headless)
+        elif sys.platform == "darwin":
+            with self.assertRaisesRegex(v.Unavailable, "no headless kicad-cli"):
                 v.headless_cli()
+        with mock.patch.object(
+            v.kicad_cli.__globals__["sys"], "platform", "linux"
+        ), mock.patch.dict(os.environ, {"PATH": str(self.cli.parent)}):
+            self.assertEqual(v.headless_cli(), self.cli)  # on Linux: kicad-cli on PATH
+        # the environment wins, YAPNR_KICAD_CLI first, PNR_KICAD_CLI as its alias
+        os.environ["PNR_KICAD_CLI"] = str(self.cli)
+        self.assertEqual(v.headless_cli(), self.cli)
+        os.environ["YAPNR_KICAD_CLI"] = GUI
+        with self.assertRaisesRegex(v.Unavailable, "refusing the GUI KiCad"):
+            v.headless_cli()
 
     def test_job_refuses_gui_cli(self):
         bs, bp = self.board(BOARD)
@@ -703,8 +728,9 @@ class Service(Base):
         self.assertNotIn(s.key_of_text(MOVED), keys)
 
     def test_placements_nobody_waits_for_are_not_exported(self):
-        # the pane polls every 1.5 s while it waits: a checkpoint flicked past (asked once) must not cost an export later,
-        # neither from this viewer's queue nor while waiting for the machine-wide lock held by another viewer's export
+        # the pane polls every 1.5 s while it waits: a checkpoint flicked past (asked once) must not
+        # cost an export later, neither from this viewer's queue nor while waiting for the
+        # machine-wide lock held by another viewer's export
         os.environ["FAKE_SLEEP"] = "1.2"
         lock = self.d / "shared.lock"
         a = self.service(lock_path=lock, stale_s=0.6)
@@ -768,7 +794,8 @@ class Service(Base):
         self.assertEqual(self.ready(s, bs, bp)["status"], "ready")  # asked again: exported normally
 
     def test_two_services_sharing_one_cache_dir(self):
-        # prod and dev viewers on one root share <root>/viewer3d: one evicts a key the other has seen 'ready'
+        # prod and dev viewers on one root share <root>/viewer3d: one evicts a key the other has seen
+        # 'ready'
         lock = self.d / "shared.lock"
         a = self.service(lock_path=lock, max_files=1)
         b = self.service(lock_path=lock, max_files=1)
@@ -796,7 +823,8 @@ class Service(Base):
         self.assertEqual(self.ready(b, s1, p1)["status"], "ready")
 
     def test_mutable_board_is_hashed_every_time_and_exported_from_a_snapshot(self):
-        # the lane's working board (no boards/<sha> copy): PnR may rewrite it between the request and the export
+        # the lane's working board (no boards/<sha> copy): PnR may rewrite it between the request and
+        # the export
         os.environ["FAKE_COPY"] = str(self.d / "copy.kicad_pcb")
         s = self.service()
         nat = self.d / "native.kicad_pcb"
@@ -862,12 +890,10 @@ class Service(Base):
 
 
 class Http(Base):
-    """server.py routes: /api/3d (peek, enqueue, ready), /api/3d/glb/<key> (gzip, immutable), /api/3d/status, errors."""
+    """server.py routes: /api/3d (peek, enqueue, ready), /api/3d/glb/<key> (gzip, immutable),
+    /api/3d/status, errors."""
 
     def serve(self, *extra):
-        import subprocess
-
-        repo = Path(os.environ.get("PNR_VIEWER_TEST_REPO", Path(__file__).resolve().parents[3]))
         root = self.d / "live"
         for d in ("events", "geometry", "boards"):
             (root / d).mkdir(parents=True, exist_ok=True)
@@ -893,42 +919,27 @@ class Http(Base):
                 )
             )
         )
-        p = subprocess.Popen(
-            [
-                sys.executable,
-                str(Path(__file__).with_name("server.py")),
-                str(root),
-                "--port",
-                "0",
-                "--repo",
-                str(repo),
-                "--cost-runtime",
-                os.environ.get("PNR_COST_TEST_RUNTIME", str(repo / "hardware/pnr")),
-                "--net-summaries",
-                "off",
-                "--agent",
-                "off",
-                "--viewer3d-cli",
-                str(self.cli),
-                "--viewer3d-parts",
-                str(self.d / "parts"),
-                *extra,
-            ],
-            stdout=subprocess.PIPE,
+        p, base = start_viewer(
+            root,
+            "--net-summaries",
+            "off",
+            "--agent",
+            "off",
+            "--kicad-cli",
+            str(self.cli),
+            "--parts",
+            str(self.d / "parts"),
+            *extra,
             stderr=subprocess.DEVNULL,
-            text=True,
         )
         self.procs = getattr(self, "procs", []) + [p]
-        base = p.stdout.readline().strip().removeprefix("Live PnR: ")
         self.assertTrue(base.startswith("http://127.0.0.1:"), base)
         wait(lambda: self.get(base, "/api/state")[1]["revision"], timeout=10)
         return base, bs
 
     def tearDown(self):
         for p in getattr(self, "procs", []):
-            p.terminate()
-            p.wait(10)
-            p.stdout.close()
+            stop(p)
         super().tearDown()
 
     def get(self, base, path, headers=None):
@@ -983,12 +994,13 @@ class Http(Base):
         st = self.get(base, "/api/3d/status")[1]
         self.assertTrue(st["available"])
         self.assertEqual(st["cli"], str(self.cli))
-        code, raw, h = self.get(base, "/vendor/three/build/three.module.js")
-        self.assertEqual(code, 200)
-        self.assertIn("max-age", h["Cache-Control"])
-        self.assertEqual(h["Content-Type"], "application/javascript")
-        code, raw, h = self.get(base, "/vendor/three/LICENSE")
-        self.assertEqual((code, h["Content-Type"]), (200, "text/plain; charset=utf-8"))
+        if not self.get(base, "/api/about")[1]["missing_assets"]:  # the assembled dist
+            code, raw, h = self.get(base, "/vendor/three/build/three.module.js")
+            self.assertEqual(code, 200)
+            self.assertIn("max-age", h["Cache-Control"])
+            self.assertEqual(h["Content-Type"], "application/javascript")
+            code, raw, h = self.get(base, "/vendor/three/LICENSE")
+            self.assertEqual((code, h["Content-Type"]), (200, "text/plain; charset=utf-8"))
         self.assertEqual(self.get(base, "/viewer3d.js")[2]["Cache-Control"], "no-store")
         for path in (q + "&peek=1", r["url"], "/api/3d/status"):
             self.assertEqual(
@@ -1009,7 +1021,7 @@ class Http(Base):
         p = self.procs.pop()
         p.send_signal(signal.SIGTERM)
         self.assertEqual(p.wait(10), 128 + signal.SIGTERM)
-        p.stdout.close()
+        stop(p)
 
         def gone():
             try:
@@ -1029,40 +1041,10 @@ class Http(Base):
         self.assertEqual(
             self.get(base, f"/api/3d?lane=lane/a&sha={bs}")[1]["status"], "unavailable"
         )
-        base, bs = self.serve("--viewer3d-cli", GUI)
+        base, bs = self.serve("--kicad-cli", GUI)
         r = self.get(base, f"/api/3d?lane=lane/a&sha={bs}")[1]
         self.assertEqual(r["status"], "unavailable")
         self.assertIn("headless", r["error"])
-
-
-@unittest.skipUnless(
-    os.environ.get("SPLANC_V3D_LIVE") == "1",
-    "set SPLANC_V3D_LIVE=1 for a real headless KiCad export (~30 s, ~2 GB)",
-)
-class Live(unittest.TestCase):
-    def test_real_board(self):
-        hier = Path(__file__).resolve().parent.parent
-        boards = sorted((hier / "live/boards").glob("*.kicad_pcb"), key=lambda p: p.stat().st_mtime)
-        parts = hier / "src11.frozen/hardware/splanc_dev/elec/src/parts"
-        if not boards or not parts.is_dir():
-            self.skipTest("no live boards / parts")
-        with tempfile.TemporaryDirectory() as t:
-            s = v.Viewer3DService(t, parts=parts, timeout=300)
-            b = boards[-1]
-            h = b.stem
-            try:
-                r = wait(
-                    lambda: (lambda r: r if r["status"] not in ("queued", "exporting") else None)(
-                        s.request(h, [b])
-                    ),
-                    320,
-                    1,
-                )
-            finally:
-                s.shutdown()
-            self.assertEqual(r["status"], "ready", r)
-            self.assertGreater(len(r["meta"]["refs"]), 50)
-            self.assertEqual(r["missing"], [])
 
 
 if __name__ == "__main__":

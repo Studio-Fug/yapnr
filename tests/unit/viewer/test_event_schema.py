@@ -1,7 +1,7 @@
 import copy
 import unittest
 
-from event_schema import phase_frame
+from yapnr.viewer.event_schema import phase_frame
 
 
 class PhaseFrameTest(unittest.TestCase):

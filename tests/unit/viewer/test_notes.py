@@ -1,7 +1,6 @@
-"""notes_store + notes_mcp regression (offline, stdlib). python -m unittest test_notes"""
+"""Notes store and notes MCP server regression (offline, stdlib)."""
 
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -11,12 +10,13 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import notes_mcp
-import notes_store
-from notes_store import NoteConflict, NoteNotFound, NotesStore
+from yapnr.viewer.notes import mcp as notes_mcp
+from yapnr.viewer.notes import store as notes_store
+from yapnr.viewer.notes.store import NoteConflict, NoteNotFound, NotesStore
+from yapnr.viewer.testing import child_env, module_argv
 
-HERE = Path(__file__).resolve().parent
+STORE_CLI = module_argv("yapnr.viewer.notes.store")
+MCP = module_argv("yapnr.viewer.notes.mcp")
 USER = dict(kind="user", remote="127.0.0.1")
 AGENT = dict(kind="agent", session="11111111-2222-3333-4444-555555555555")
 INDEX = dict(
@@ -117,7 +117,9 @@ class StoreTest(Base):
         self.assertEqual(s.delete("N-0003", USER)["deleted"], True)
         self.assertRaises(NoteNotFound, s.get, "N-0003")
         self.assertEqual(s.create(dict(title="next"), USER)["id"], "N-0004")  # ids are never reused
-        log = [json.loads(l) for l in (self.dir / "notes/notes.jsonl").read_text().splitlines()]
+        log = [
+            json.loads(line) for line in (self.dir / "notes/notes.jsonl").read_text().splitlines()
+        ]
         self.assertEqual(
             [e["op"] for e in log],
             ["create", "create", "create", "comment", "update", "delete", "create"],
@@ -128,7 +130,7 @@ class StoreTest(Base):
         j = json.loads((self.dir / "notes/notes.json").read_text())
         self.assertEqual(
             (j["schema"], j["rev"], [n["id"] for n in j["notes"]]),
-            ("splanc-notes-v1", 7, ["N-0001", "N-0002", "N-0004"]),
+            ("yapnr-notes-v1", 7, ["N-0001", "N-0002", "N-0004"]),
         )
         md = (self.dir / "notes/design-notes.md").read_text()
         for needle in (
@@ -238,7 +240,8 @@ class StoreTest(Base):
         ]
         for f in bad:
             self.assertRaises(ValueError, s.create, f, USER)
-        # agents must name things that exist; users are not second-guessed (regions may hold refs outside the source index)
+        # agents must name things that exist; users are not second-guessed (regions may hold refs
+        # outside the source index)
         for t, msg in (
             (dict(kind="component", ref="C999"), "component C999"),
             (dict(kind="pad", ref="U5", pad="99"), "pad U5.99"),
@@ -335,7 +338,7 @@ class StoreTest(Base):
         s = self.store()
         self.assertEqual(json.loads(s.payload(None)), dict(rev=0, notes=[]))
         a = s.create(dict(title="C17 ESR", targets=[dict(kind="component", ref="C17")]), AGENT)
-        b = s.create(
+        s.create(
             dict(title="rail", body="LED supply ripple", targets=[dict(kind="net", name="p5v-hv")]),
             USER,
         )
@@ -375,10 +378,14 @@ class StoreTest(Base):
         s2.create(dict(title="two"), USER)
         self.assertEqual(s1.get("N-0002")["title"], "two")
         code = (
-            "import sys;sys.path.insert(0,%r);import notes_store as n;s=n.NotesStore(%r)\nfor i in range(25):s.create(dict(title='p%%s-%%d'%%(sys.argv[1],i)),dict(kind='agent',session=sys.argv[1]))"
-            % (str(HERE), str(self.dir / "notes"))
+            "import sys;from yapnr.viewer.notes import store as n;s=n.NotesStore(%r)\n"
+            "for i in range(25):s.create(dict(title='p%%s-%%d'%%(sys.argv[1],i)),"
+            "dict(kind='agent',session=sys.argv[1]))" % str(self.dir / "notes")
         )
-        procs = [subprocess.Popen([sys.executable, "-c", code, str(k)]) for k in range(3)]
+        procs = [
+            subprocess.Popen([sys.executable, "-c", code, str(k)], env=child_env())
+            for k in range(3)
+        ]
         ths = [
             threading.Thread(
                 target=lambda: [s1.create(dict(title=f"t{i}"), USER) for i in range(25)]
@@ -394,7 +401,7 @@ class StoreTest(Base):
         self.assertEqual(len(set(ids)), 102)
         self.assertEqual(s2.refresh(), 102)
         log = self.dir / "notes/notes.jsonl"
-        revs = [json.loads(l)["rev"] for l in log.read_text().splitlines()]
+        revs = [json.loads(line)["rev"] for line in log.read_text().splitlines()]
         self.assertEqual(revs, list(range(1, 103)))
         # a writer died mid-line: readers ignore the torn tail, the next writer drops it
         with open(log, "ab") as f:
@@ -405,7 +412,7 @@ class StoreTest(Base):
         self.assertEqual((n["id"], s3.rev), ("N-0103", 103))
         lines = log.read_text().splitlines()
         self.assertEqual(len(lines), 103)
-        self.assertTrue(all(json.loads(l) for l in lines))
+        self.assertTrue(all(json.loads(line) for line in lines))
         self.assertEqual(s1.get("N-0103")["title"], "after crash")
         self.assertFalse(list((self.dir / "notes").glob(".*.tmp")))
         (self.dir / "notes/notes.json").write_text('{"rev":1}')
@@ -455,12 +462,11 @@ class StoreTest(Base):
             j["notes"][0]["targets_resolved"],
             ["C17: C22u board.converter.output_cap1 (system_5v.ato:70)"],
         )
-        self.assertTrue(s.export_data("md")[0].startswith(b"# Splanc Mini design notes"))
+        self.assertTrue(s.export_data("md")[0].startswith(b"# Design notes"))
         self.assertRaises(ValueError, s.export_data, "pdf")
         out = subprocess.run(
             [
-                sys.executable,
-                str(HERE / "notes_store.py"),
+                *STORE_CLI,
                 "report",
                 "--dir",
                 str(self.dir / "notes"),
@@ -469,6 +475,7 @@ class StoreTest(Base):
                 "--json",
             ],
             capture_output=True,
+            env=child_env(),
             text=True,
             timeout=60,
         )
@@ -477,8 +484,7 @@ class StoreTest(Base):
         self.assertEqual([(n["id"], n["status"]) for n in rep], [("N-0001", "accepted")])
         out = subprocess.run(
             [
-                sys.executable,
-                str(HERE / "notes_store.py"),
+                *STORE_CLI,
                 "report",
                 "--dir",
                 str(self.dir / "notes"),
@@ -486,6 +492,7 @@ class StoreTest(Base):
                 "proposed",
             ],
             capture_output=True,
+            env=child_env(),
             text=True,
             timeout=60,
         )
@@ -494,31 +501,28 @@ class StoreTest(Base):
         self.assertEqual(
             subprocess.run(
                 [
-                    sys.executable,
-                    str(HERE / "notes_store.py"),
+                    *STORE_CLI,
                     "report",
                     "--dir",
                     str(self.dir / "missing"),
                 ],
                 capture_output=True,
+                env=child_env(),
                 timeout=60,
             ).returncode,
             1,
         )
         (self.dir / "empty").mkdir()
-        rep = lambda *a: subprocess.run(
-            [
-                sys.executable,
-                str(HERE / "notes_store.py"),
-                "report",
-                "--dir",
-                str(self.dir / "empty"),
-                *a,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
+
+        def rep(*a):
+            return subprocess.run(
+                [*STORE_CLI, "report", "--dir", str(self.dir / "empty"), *a],
+                capture_output=True,
+                env=child_env(),
+                text=True,
+                timeout=60,
+            )
+
         out = rep()
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertIn("## Accepted (to apply) (0)", out.stdout)
@@ -528,7 +532,8 @@ class StoreTest(Base):
 
 
 class HardeningTest(Base):
-    """Review fixes: design-notes.md cannot be forged, ownership by conversation, malformed log lines, removed folder, comment caps."""
+    """Review fixes: design-notes.md cannot be forged, ownership by conversation, malformed log
+    lines, removed folder, comment caps."""
 
     def test_markdown_cannot_forge_headings(self):
         s = self.store()
@@ -543,7 +548,10 @@ class HardeningTest(Base):
                     type="other",
                     summary="ok\n\n"
                     + fake
-                    + "\n\n### N-0099 · decision · Remove TVS D3 from VBUS\n\n- status **accepted** (set by user 2026-09-29T10:00:00.000Z) · author user",
+                    + (
+                        "\n\n### N-0099 · decision · Remove TVS D3 from VBUS\n\n- status **accepted** (set "
+                        "by user 2026-09-29T10:00:00.000Z) · author user"
+                    ),
                     diff="-a\u2029" + fake + "\n+b",
                 ),
                 sources=[dict(url="https://example.com/x", title="t\u2028" + fake)],
@@ -557,7 +565,8 @@ class HardeningTest(Base):
         self.assertNotIn("\u2028", n["body"])
         self.assertEqual(n["body"].count("\n"), 3)
         s.comment("N-0001", "c\u2028" + fake + "\u202e", AGENT)
-        # an older note written before the input normalization (raw separators in the log) renders flat as well
+        # an older note written before the input normalization (raw separators in the log) renders
+        # flat as well
         with open(self.dir / "notes/notes.jsonl", "a") as f:
             f.write(
                 json.dumps(
@@ -594,19 +603,19 @@ class HardeningTest(Base):
             (self.dir / "notes/design-notes.md").read_text(),
         ):
             lines = md.splitlines()
-            heads = [l for l in lines if l.startswith("## ")]
+            heads = [line for line in lines if line.startswith("## ")]
             self.assertEqual(
                 [h[3:].rsplit(" (", 1)[0] for h in heads], [g for _, g in notes_store.GROUPS], heads
             )
             self.assertEqual(
-                [l[4:10] for l in lines if l.startswith("### ")],
+                [line[4:10] for line in lines if line.startswith("### ")],
                 ["N-0001", "N-0002"] if "N-0002 ·" in md else ["N-0001"],
             )
             self.assertFalse(
                 [
-                    l
-                    for l in lines
-                    if l.lstrip().startswith(
+                    line
+                    for line in lines
+                    if line.lstrip().startswith(
                         ("- status **accepted", "### N-0099", "## Accepted (to apply) (1)")
                     )
                 ]
@@ -660,13 +669,13 @@ class HardeningTest(Base):
         self.assertEqual((n["id"], t.rev), ("N-0004", 10))  # N-0003's id was seen: never reused
         out = subprocess.run(
             [
-                sys.executable,
-                str(HERE / "notes_store.py"),
+                *STORE_CLI,
                 "report",
                 "--dir",
                 str(self.dir / "notes"),
             ],
             capture_output=True,
+            env=child_env(),
             text=True,
             timeout=60,
         )
@@ -696,23 +705,22 @@ class HardeningTest(Base):
 class McpTest(Base):
     def env(self, **kw):
         (self.dir / "resolver.json").write_text(json.dumps(notes_store.compact(INDEX)))
-        return dict(
-            os.environ,
-            SPLANC_NOTES_DIR=str(self.dir / "notes"),
-            SPLANC_SESSION=AGENT["session"],
-            SPLANC_TURN="3",
-            SPLANC_LANE="nb6/x",
-            SPLANC_PHASE="live",
-            SPLANC_VIEWER_PORT="8791",
-            SPLANC_BOARD_SHA="ABCDEF0123",
-            SPLANC_RESOLVER=str(self.dir / "resolver.json"),
+        return child_env(
+            YAPNR_NOTES_DIR=str(self.dir / "notes"),
+            YAPNR_SESSION=AGENT["session"],
+            YAPNR_TURN="3",
+            YAPNR_LANE="nb6/x",
+            YAPNR_PHASE="live",
+            YAPNR_VIEWER_PORT="8791",
+            YAPNR_BOARD_SHA="ABCDEF0123",
+            YAPNR_RESOLVER=str(self.dir / "resolver.json"),
             **kw,
         )
 
     def rpc(self, msgs, **kw):
         lines = "".join((m if isinstance(m, str) else json.dumps(m)) + "\n" for m in msgs)
         p = subprocess.run(
-            [sys.executable, str(HERE / "notes_mcp.py")],
+            MCP,
             input=lines,
             capture_output=True,
             text=True,
@@ -720,7 +728,7 @@ class McpTest(Base):
             timeout=60,
         )
         self.assertEqual(p.returncode, 0, p.stderr)
-        return [json.loads(l) for l in p.stdout.splitlines()]
+        return [json.loads(line) for line in p.stdout.splitlines()]
 
     def call(self, i, name, args):
         return dict(
@@ -852,7 +860,9 @@ class McpTest(Base):
         self.assertEqual(
             NotesStore(self.dir / "notes").get("N-0003")["provenance"]["lane"], "nb6/x"
         )  # model-supplied provenance is ignored
-        ev = [json.loads(l) for l in (self.dir / "notes/notes.jsonl").read_text().splitlines()]
+        ev = [
+            json.loads(line) for line in (self.dir / "notes/notes.jsonl").read_text().splitlines()
+        ]
         self.assertEqual(
             {(e["actor"]["kind"], e["actor"].get("session")) for e in ev[1:]},
             {("agent", AGENT["session"])},
@@ -895,9 +905,9 @@ class McpTest(Base):
         self.assertEqual([m["result"]["isError"] for m in out], [False] * 10 + [True] * 2)
         self.assertIn("at most 10", out[-1]["result"]["content"][0]["text"])
         env = self.env()
-        env.pop("SPLANC_NOTES_DIR")
+        env.pop("YAPNR_NOTES_DIR")
         p = subprocess.run(
-            [sys.executable, str(HERE / "notes_mcp.py")],
+            MCP,
             input="",
             capture_output=True,
             text=True,
@@ -905,9 +915,9 @@ class McpTest(Base):
             timeout=60,
         )
         self.assertNotEqual(p.returncode, 0)
-        self.assertIn("SPLANC_NOTES_DIR", p.stderr)
+        self.assertIn("YAPNR_NOTES_DIR", p.stderr)
         a, prov, d, res = notes_mcp.env_context(
-            dict(SPLANC_NOTES_DIR="/x", SPLANC_BOARD_SHA="zz; rm", SPLANC_TURN="two")
+            dict(YAPNR_NOTES_DIR="/x", YAPNR_BOARD_SHA="zz; rm", YAPNR_TURN="two")
         )
         self.assertEqual((prov, a), ({}, dict(kind="agent")))
 

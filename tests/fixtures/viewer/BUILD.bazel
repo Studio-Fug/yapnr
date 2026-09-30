@@ -1,0 +1,12 @@
+# Synthetic inputs of the viewer's tests: a small atopile project (ato.yaml, sources, two symbol
+# libraries), its netlist graph, rules and placement constraints. Written for yapnr; not a real
+# board.
+filegroup(
+    name = "viewer",
+    testonly = True,
+    srcs = glob(
+        ["**"],
+        exclude = ["BUILD.bazel"],
+    ),
+    visibility = ["//tests:__subpackages__"],
+)

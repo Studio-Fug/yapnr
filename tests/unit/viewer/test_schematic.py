@@ -1,16 +1,13 @@
 """Schematic view: symbol parsing, the mechanical builder, lane scoping and the HTTP routes.
 
-Run with the viewer's python:  python -m unittest test_schematic
-Paths default to the splanc hier layout next to this file; override with
-PNR_SCHEMATIC_TEST_HIER (experiment output root) and PNR_SCHEMATIC_TEST_RUNTIME
-(frozen pnr runtime holding pnr.power_topology and pnr.hier).
+Runs on the synthetic atopile project in tests/fixtures/viewer/design (a regulator, two
+capacitors without a symbol library and a pull-up resistor) with the engine runtime on the path.
 """
 
 import json
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import time
 import unittest
@@ -18,65 +15,77 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
-HERE = Path(__file__).resolve().parent
-HIER = Path(os.environ.get("PNR_SCHEMATIC_TEST_HIER", HERE.parent))
-RUNTIME = Path(os.environ.get("PNR_SCHEMATIC_TEST_RUNTIME", HIER / "src11.frozen/hardware/pnr"))
-DESIGN = RUNTIME.parent / "splanc_dev"
-GRAPH = HIER / "inputs10b/graph.json"
-PARTS = DESIGN / "elec/src/parts"
-sys.path.insert(0, str(HERE))
-from schematic_service import SchematicService  # noqa: E402
-from schematic_sym import cached_part_symbol, generic_symbol  # noqa: E402
+from yapnr.viewer import runtime
+from yapnr.viewer.services.schematic import SchematicService
+from yapnr.viewer.services.schematic_sym import cached_part_symbol, generic_symbol
+from yapnr.viewer.testing import (
+    child_env,
+    fixture_copy,
+    module_argv,
+    start_viewer,
+    stop,
+    wait_for,
+)
 
-AVAILABLE = GRAPH.is_file() and PARTS.is_dir() and (RUNTIME / "pnr/power_topology.py").is_file()
+DESIGN = fixture_copy("design")
+GRAPH = DESIGN / "graph.json"
+CONSTRAINTS = DESIGN / "constraints.yaml"
+SRC = DESIGN / "elec/src"
+PARTS = SRC / "parts"
+RUNTIME = runtime.imported_runtime()
+SUPPLY = ["C1", "C2", "U1"]
 
 
-def build(refs, runtime=RUNTIME, parts=PARTS, cache=None):
+def no_engine_env():
+    """A child environment whose import path has no `pnr` package."""
+    env = child_env()
+    env["PYTHONPATH"] = os.pathsep.join(
+        p for p in env["PYTHONPATH"].split(os.pathsep) if not (Path(p) / "pnr").is_dir()
+    )
+    return env
+
+
+def build(refs, parts=PARTS, cache=None, env=None):
     with tempfile.TemporaryDirectory(prefix="schematic-test-") as tmp:
         req, out = Path(tmp) / "req.json", Path(tmp) / "out.json"
         req.write_text(
             json.dumps(
                 dict(
                     graph=str(GRAPH),
-                    rules=str(GRAPH.parent / "rules.json"),
-                    constraints=str(DESIGN / "mini-constraints.yaml"),
+                    rules=str(DESIGN / "rules.json"),
+                    constraints=str(CONSTRAINTS),
                     parts=str(parts),
-                    ato_src=str(PARTS.parent),
+                    ato_src=str(SRC),
                     symbol_cache=cache,
                     refs=refs,
                 )
             )
         )
-        env = dict(os.environ, PYTHONPATH=str(runtime))
         subprocess.run(
-            [sys.executable, str(HERE / "schematic_build.py"), str(req), str(out)],
-            env=env,
+            module_argv("yapnr.viewer.services.schematic_build", str(req), str(out)),
+            env=env or child_env(),
             check=False,
             timeout=120,
         )
         return json.loads(out.read_text())
 
 
-def block_refs(name):
-    blocks = json.loads((HIER / "blocks/nb6-fb/blocks.json").read_text())
-    return next(b["refs"] for b in blocks if b["name"] == name)
-
-
-@unittest.skipUnless(AVAILABLE, "splanc design inputs not present")
 class SymbolTest(unittest.TestCase):
-    def test_every_part_library_parses(self):
-        libs = sorted(p.name for p in PARTS.iterdir() if p.is_dir())
-        self.assertGreaterEqual(len(libs), 90)
+    def test_part_libraries(self):
         with tempfile.TemporaryDirectory() as cache:
-            failed = [
-                (lib, why)
-                for lib in libs
-                for sym, _, why in [cached_part_symbol(PARTS, lib, cache)]
-                if sym is None
-            ]
-            self.assertEqual(failed, [])
-            # second pass is served from the per-library cache
-            self.assertEqual(len(list(Path(cache).glob("*.json"))), len(libs))
+            got = {
+                lib: cached_part_symbol(PARTS, lib, cache) for lib in ("Regulator", "Res", "Cap")
+            }
+            self.assertEqual(
+                [p["number"] for p in got["Regulator"][0]["units"][0]["pins"]], ["1", "2", "3"]
+            )
+            self.assertEqual(got["Regulator"][1], {"1": "VIN", "2": "GND", "3": "VOUT"})
+            self.assertEqual(got["Res"][0]["ref_prefix"], "R")
+            self.assertIsNone(got["Cap"][0])  # no .kicad_sym: the builder draws a generic box
+            self.assertIn("no unique .kicad_sym", got["Cap"][2])
+            # parsed libraries are cached per library
+            self.assertEqual(len(list(Path(cache).glob("*.json"))), 2)
+            self.assertEqual(cached_part_symbol(PARTS, "../x", cache)[0], None)
 
     def test_generic_symbol_names_pins_from_atopile(self):
         sym = generic_symbol("X", ["1", "2", "3", "3", ""], {"1": "VIN", "2": "GND"})
@@ -86,7 +95,6 @@ class SymbolTest(unittest.TestCase):
         self.assertTrue(sym["generic"])
 
 
-@unittest.skipUnless(AVAILABLE, "splanc design inputs not present")
 class BuilderTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -96,113 +104,70 @@ class BuilderTest(unittest.TestCase):
         d = self.board
         self.assertNotIn("error", d, d.get("trace"))
         self.assertEqual(d["scope"]["kind"], "board")
-        self.assertEqual(len(d["components"]), 137)
-        u5 = next(c for c in d["components"] if c["ref"] == "U5")
-        self.assertEqual(
-            next(p["net"] for p in u5["pins"] if p["number"] == "23"), "board.converter-1"
-        )
-        self.assertEqual(
-            next(p["pads"] for p in u5["pins"] if p["number"] == "24"), 2
-        )  # stacked pads, one pin
-        for c in d["components"]:  # only unnamed mechanical pads stay unmapped
-            self.assertTrue(
-                all(u["pad"] == "" and not u["net"] for u in c["unmapped_pads"]), c["ref"]
-            )
-        self.assertEqual(
-            {m["id"]: m["type"] for m in d["modules"]},
-            {
-                "board.converter": "System5V",
-                "board.led0": "LedChannel",
-                "board.led1": "LedChannel",
-                "board.pd": "PdInput",
-            },
-        )
-        self.assertEqual(
-            next(m for m in d["modules"] if m["id"] == "board.led0")["twins"], ["board.led1"]
-        )
-        self.assertEqual(len([h for h in d["highlights"] if h["style"] == "block"]), 13)
-        self.assertEqual(next(n for n in d["nets"] if n["name"] == "lv")["draw"], "rail")
-        self.assertEqual(next(n for n in d["nets"] if n["name"] == "20")["alias"], "U5.BOOT2")
-        units = {r for u in d["units"] for r in u["refs"]}
-        self.assertEqual(len(units), 137)
+        self.assertEqual(sorted(c["ref"] for c in d["components"]), ["C1", "C2", "R1", "U1"])
+        u1 = next(c for c in d["components"] if c["ref"] == "U1")
+        self.assertEqual(next(p["net"] for p in u1["pins"] if p["number"] == "3"), "vout-hv")
+        self.assertEqual((u1["lib"], u1["value"]), ("Regulator", "REG-33"))
+        self.assertEqual({m["id"]: m["type"] for m in d["modules"]}, {"board.supply": "Supply"})
+        c1 = next(c for c in d["components"] if c["ref"] == "C1")
+        self.assertTrue(d["symbols"][c1["lib"]]["generic"])
+        self.assertTrue(any("Cap: generic symbol" in w for w in d["warnings"]))
+        self.assertIsNotNone(d["power"])
+        self.assertEqual({r for u in d["units"] for r in u["refs"]}, {"C1", "C2", "R1", "U1"})
 
-    def test_converter_block(self):
-        d = build(block_refs("board.converter"))
+    def test_block_scope(self):
+        d = build(SUPPLY)
         self.assertEqual(
             (d["scope"]["kind"], d["scope"]["name"], d["scope"]["match"]),
-            ("block", "board.converter", "exact"),
+            ("block", "board.supply", "exact"),
         )
-        self.assertEqual(len(d["components"]), 33)
-        loops = [h for h in d["highlights"] if h["style"] in ("hot-loop", "power-path")]
-        self.assertEqual(len(loops), 3)
-        self.assertEqual(sum(h["style"] == "hot-loop" for h in loops), 2)
-        tiers = {h["id"]: len(h["refs"]) for h in d["highlights"] if h["style"] == "tier"}
-        self.assertEqual(sum(tiers.values()), 33)
-        self.assertIn(
-            ["C16", "C17", "C18", "C19", "C20", "C21", "C22", "C23"],
-            [a["refs"] for a in d["arrays"]],
-        )
-        c19 = next(c for c in d["components"] if c["ref"] == "C19")
-        self.assertEqual((c19["value"], c19["local"]), ("22 uF 0805", "output_cap3"))
+        self.assertEqual(sorted(c["ref"] for c in d["components"]), SUPPLY)
 
     def test_subset_and_unknown_parts_do_not_fail(self):
-        d = build(["C49", "U19", "NOPE1"])
-        self.assertEqual(d["scope"]["match"], "none")
-        self.assertEqual(len(d["components"]), 2)
+        d = build(["R1", "U1", "NOPE1"])
+        self.assertNotIn("error", d, d.get("trace"))
+        self.assertEqual(sorted(c["ref"] for c in d["components"]), ["R1", "U1"])
         self.assertTrue(any("NOPE1" in w for w in d["warnings"]))
 
-    def test_missing_and_broken_symbols_fall_back_to_boxes(self):
+    def test_broken_symbols_fall_back_to_boxes(self):
         with tempfile.TemporaryDirectory() as tmp:
             parts = Path(tmp) / "parts"
-            shutil.copytree(
-                PARTS,
-                parts,
-                ignore=lambda d, names: [
-                    n
-                    for n in names
-                    if (Path(d) / n).is_file() and not n.endswith((".ato", ".kicad_sym"))
-                ],
-            )
-            shutil.rmtree(parts / "Texas_Instruments_TPS552882RPMR")
-            for f in (parts / "Samsung_CL21A226MOQNNNE").glob("*.kicad_sym"):
-                f.write_text('(kicad_symbol_lib (symbol "broken"')
-            d = build(block_refs("board.converter"), parts=parts)
-            self.assertNotIn("error", d, d.get("trace"))
-            u5 = next(c for c in d["components"] if c["ref"] == "U5")
-            sym = d["symbols"][u5["lib"]]
-            self.assertTrue(sym["generic"])
-            self.assertEqual(len(sym["units"][0]["pins"]), 26)
-            c16 = next(c for c in d["components"] if c["ref"] == "C16")
-            self.assertTrue(d["symbols"][c16["lib"]]["generic"])
-            self.assertTrue(any("generic" in w for w in d["warnings"]))
+            shutil.copytree(PARTS, parts)
+            (parts / "Regulator/Regulator.kicad_sym").write_text('(kicad_symbol_lib (symbol "x"')
+            d = build(None, parts=parts)
+        self.assertNotIn("error", d, d.get("trace"))
+        u1 = next(c for c in d["components"] if c["ref"] == "U1")
+        sym = d["symbols"][u1["lib"]]
+        self.assertTrue(sym["generic"])
+        self.assertEqual([p["name"] for p in sym["units"][0]["pins"]], ["VIN", "GND", "VOUT"])
 
     def test_without_runtime_degrades_to_modules_only(self):
-        with tempfile.TemporaryDirectory() as empty:
-            d = build(None, runtime=Path(empty))
+        d = build(None, env=no_engine_env())
         self.assertNotIn("error", d, d.get("trace"))
         self.assertIsNone(d["power"])
-        self.assertEqual(len(d["components"]), 137)
-        self.assertEqual(
-            {m["id"] for m in d["modules"]},
-            {"board.converter", "board.led0", "board.led1", "board.pd"},
-        )
+        self.assertEqual(len(d["components"]), 4)
+        self.assertEqual({m["id"] for m in d["modules"]}, {"board.supply"})
         self.assertTrue(any("runtime unavailable" in w for w in d["warnings"]))
 
 
-@unittest.skipUnless(AVAILABLE, "splanc design inputs not present")
 class ServiceTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix="schematic-service-")
-        root = Path(self.tmp.name) / "live"
+        self.experiment = Path(self.tmp.name)
+        root = self.experiment / "live"
         root.mkdir()
+        # a block trial run: blocks/<run>/<block>/native/<tag>/keep.json plus its library.json
+        trial = self.experiment / "blocks/r1/board_supply/native/s1"
+        trial.mkdir(parents=True)
+        (trial / "keep.json").write_text(json.dumps(SUPPLY))
+        (trial.parent.parent / "library.json").write_text(json.dumps(dict(template_id="t0123")))
         self.svc = SchematicService(
             root,
             graph=GRAPH,
-            constraints=DESIGN / "mini-constraints.yaml",
+            constraints=CONSTRAINTS,
             parts=PARTS,
             runtime=RUNTIME,
-            hier=HIER,
-            assets=HERE,
+            experiment=self.experiment,
         )
 
     def tearDown(self):
@@ -218,23 +183,23 @@ class ServiceTest(unittest.TestCase):
             time.sleep(0.05)
         self.fail("schematic build did not finish")
 
-    def test_old_blocks_lane_resolves_from_keep_json(self):
-        r = self.wait("blocks/board_pd-s1-18.5x18.5", [], None)
+    def test_blocks_lane_resolves_from_keep_json(self):
+        r = self.wait("blocks/s1", [], None)
         self.assertEqual(r["status"], "ready", r)
         self.assertEqual(r["scope"], "block")
-        self.assertEqual(r["overlay"]["template"], "eb028a7b17aa")
+        self.assertEqual(r["overlay"]["template"], "t0123")
         doc = json.loads(self.svc.payload(r["key"]))
-        self.assertEqual(doc["scope"]["name"], "board.pd")
-        # same parts, other trial: same content-addressed payload
-        again = self.svc.request("blocks/board_pd-s1-18.5x18.5", sorted(doc["scope"]["refs"]), None)
+        self.assertEqual(doc["scope"]["name"], "board.supply")
+        # same parts, another trial: the same content-addressed payload
+        again = self.svc.request("blocks/s1", sorted(doc["scope"]["refs"]), None)
         self.assertEqual(again["key"], r["key"])
-        board = self.wait("blocks/board_pd-s1-18.5x18.5", [], None, "board")
+        board = self.wait("blocks/s1", [], None, "board")
         self.assertEqual(board["scope"], "board")
         self.assertEqual(board["overlay"]["lane_refs"], doc["scope"]["refs"])
 
     def test_whole_board_lane_and_path_confinement(self):
         refs = [c["ref"] for c in json.loads(GRAPH.read_text())["components"]]
-        r = self.wait("h9/p001/rung1", refs, "/etc/passwd")
+        r = self.wait("h1/p001/rung1", refs, "/etc/passwd")
         self.assertEqual(
             (r["status"], r["scope"], r["overlay"]["run_dir"]), ("ready", "board", None)
         )
@@ -242,14 +207,15 @@ class ServiceTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.svc.payload("../" + "a" * 61)
 
+    def test_unconfigured(self):
+        svc = SchematicService(self.experiment / "live")
+        self.assertEqual(svc.request("x", [], None)["status"], "unavailable")
 
-@unittest.skipUnless(AVAILABLE, "splanc design inputs not present")
+
 class HttpTest(unittest.TestCase):
     def test_routes(self):
-        repo = Path(os.environ.get("PNR_VIEWER_TEST_REPO", HERE.parents[2]))
         graph = json.loads(GRAPH.read_text())
-        refs = set(block_refs("board.pd"))
-        layout = dict(graph, components=[c for c in graph["components"] if c["ref"] in refs])
+        layout = dict(graph, components=[c for c in graph["components"] if c["ref"] in SUPPLY])
         with tempfile.TemporaryDirectory(prefix="viewer-schematic-") as tmp:
             root = Path(tmp) / "live"
             (root / "events").mkdir(parents=True)
@@ -258,65 +224,56 @@ class HttpTest(unittest.TestCase):
                 id="1-aa",
                 time=1,
                 kind="signal_start",
-                candidate="t1/board_pd-x",
+                candidate="t1/board_supply-x",
                 iteration=None,
                 layout=layout,
-                source=str(HIER / "blocks/nope"),
+                source=str(Path(tmp) / "blocks/nope"),
                 data={},
             )
             (root / "events/1-aa.json").write_text(json.dumps(event))
-            p = subprocess.Popen(
-                [
-                    sys.executable,
-                    str(HERE / "server.py"),
-                    str(root),
-                    "--port",
-                    "0",
-                    "--repo",
-                    str(repo),
-                    "--cost-runtime",
-                    str(RUNTIME),
-                    "--schematic-graph",
-                    str(GRAPH),
-                    "--schematic-hier",
-                    str(HIER),
-                    "--net-summaries",
-                    "off",
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
+            p, base = start_viewer(
+                root,
+                "--graph",
+                str(GRAPH),
+                "--constraints",
+                str(CONSTRAINTS),
+                "--atopile-root",
+                str(DESIGN),
+                "--atopile-build",
+                "default",
+                "--viewer3d",
+                "off",
             )
             try:
-                base = p.stdout.readline().strip().removeprefix("Live PnR: ")
-                get = lambda path: json.load(urlopen(base + path, timeout=10))
-                end = time.monotonic() + 10
-                while not get("/api/state")["revision"] and time.monotonic() < end:
-                    time.sleep(0.05)
+
+                def get(path):
+                    return json.load(urlopen(base + path, timeout=10))
+
+                wait_for(lambda: get("/api/state")["revision"], 10)
                 state = get("/api/state")
-                self.assertNotIn("source", state["lanes"]["t1/board_pd-x"])  # /api/state unchanged
+                self.assertNotIn("source", state["lanes"]["t1/board_supply-x"])
                 with self.assertRaises(HTTPError) as err:
                     get("/api/schematic?lane=missing")
                 self.assertEqual(err.exception.code, 404)
-                end = time.monotonic() + 60
-                while (r := get("/api/schematic?lane=t1/board_pd-x"))["status"] in (
-                    "pending",
-                    "busy",
-                ) and time.monotonic() < end:
-                    time.sleep(0.1)
+
+                def ready():
+                    r = get("/api/schematic?lane=t1/board_supply-x")
+                    return r if r["status"] not in ("pending", "busy") else None
+
+                r = wait_for(ready, 60, 0.1)
                 self.assertEqual((r["status"], r["scope"]), ("ready", "block"), r)
                 with urlopen(base + r["url"], timeout=10) as resp:
                     self.assertIn("immutable", resp.headers["Cache-Control"])
                     doc = json.load(resp)
-                self.assertEqual(sorted(doc["scope"]["refs"]), sorted(refs))
+                self.assertEqual(sorted(doc["scope"]["refs"]), SUPPLY)
                 with urlopen(base + "/schematic.js", timeout=10) as resp:
                     self.assertEqual(resp.headers["Content-Type"], "application/javascript")
                     self.assertEqual(resp.headers["Cache-Control"], "no-store")
-                with urlopen(base + "/elk.bundled.js", timeout=10) as resp:
-                    self.assertIn("max-age", resp.headers["Cache-Control"])
+                if not get("/api/about")["missing_assets"]:  # the assembled dist
+                    with urlopen(base + "/elk.bundled.js", timeout=10) as resp:
+                        self.assertIn("max-age", resp.headers["Cache-Control"])
             finally:
-                p.terminate()
-                p.wait(10)
+                stop(p)
 
 
 if __name__ == "__main__":

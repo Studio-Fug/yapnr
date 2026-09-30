@@ -242,6 +242,7 @@ class DrcTest(unittest.TestCase):
                     "type": "clearance",
                     "description": "Clearance violation (rule 'fab_via_to_smd_pad' clearance"
                     " 0.1270 mm; actual 0.0000 mm)",
+                    "items": [{"pos": {"x": 12.5, "y": 49.0}}, {"pos": {"x": 12.0, "y": 49.0}}],
                 },
                 {"type": "track_dangling"},
             ],
@@ -253,6 +254,17 @@ class DrcTest(unittest.TestCase):
             summary["by_rule"], {"clearance": 1, "fab_via_to_smd_pad": 1, "track_dangling": 1}
         )
         self.assertEqual((summary["unconnected"], summary["violations"]), (1, 3))
+        # A finding is marked at its first item (the via of a via-to-pad finding).
+        self.assertEqual(summary["findings"], [[2500, 1000]])
+
+    def test_placement_tracer_errors_disable_the_recorder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            recorder = trace.Recorder(Path(tmp) / "t")
+            tracer = trace.PlacementTracer(recorder, [], 4)
+            tracer.snapshot(0, object(), object())  # not tensors: must not raise
+            self.assertFalse(recorder.active)
+            tracer.finish({}, {})
+            self.assertTrue((Path(tmp) / "t" / "errors.json").is_file())
 
 
 if __name__ == "__main__":

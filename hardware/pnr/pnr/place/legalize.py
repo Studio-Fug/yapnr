@@ -612,9 +612,10 @@ def legalize(
         comp.pos = ((c + bw / 2.0) * g, (r + bh / 2.0) * g)
         neighbors.append(comp)
 
-    from pnr.trace import legal as trace_legal
+    from pnr import trace as _trace
 
-    trace_legal([ref for _state, ref, _pose in stack], placed, backtracks)  # PNR_TRACE_DIR only
+    if _trace.current() is not None:  # PNR_TRACE_DIR only
+        _trace.legal([ref for _state, ref, _pose in stack], placed, backtracks)
     if cost_records:
         import hashlib,json
         from pathlib import Path

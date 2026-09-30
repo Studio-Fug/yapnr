@@ -135,6 +135,49 @@ class NativeTraceContract(unittest.TestCase):
         pad = header["components"][0]["pads"][0]
         self.assertEqual((pad["shape"], pad["corner"], header["components"][0]["value"]), ("roundrect", 244, "red"))
 
+    def test_snapshot_judges_with_the_custom_rules_and_keeps_no_library_paths(self):
+        from pnr import trace
+        from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
+        from trace_native import NativeTrace
+
+        # A stand-in kicad-cli: the DRC report says which of the board's side files it saw.
+        cli_source = (
+            "import json,sys\nfrom pathlib import Path\n"
+            "board=Path(sys.argv[3]);out=Path(sys.argv[sys.argv.index('--output')+1])\n"
+            "seen=[s for s in ('.kicad_pro','.kicad_dru') if board.with_suffix(s).is_file()]\n"
+            "seen+=['fp-lib-table'] if (board.parent/'fp-lib-table').is_file() else []\n"
+            "out.write_text(json.dumps(dict(unconnected_items=[],violations=[dict(type=s) for s in seen])))\n"
+        )
+        pads = [Pad("1", "GND", (-0.9375, 0.0), (0.975, 1.4)), Pad("2", "LED_A", (0.9375, 0.0), (0.975, 1.4))]
+        graph = BoardGraph(
+            "led",
+            [Component("D1", "LED", (5.0, 5.0), 0.0, "top", (3.0, 1.8), (3.0, 1.8), pads=pads)],
+            [Net("LED_A", 1, [("D1", "1"), ("D1", "2")])],
+            BoardOutline(18.0, 14.0),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "case"
+            (root / "trace").mkdir(parents=True)
+            cli = Path(tmp) / "kicad-cli"
+            cli.write_text("#!" + sys.executable + "\n" + cli_source)
+            cli.chmod(0o755)
+            (root / "source.kicad_pcb").write_text(BOARD)
+            (root / "routed.kicad_pcb").write_text(BOARD)
+            (root / "routed.kicad_pro").write_text("{}")
+            (root / "routed.kicad_dru").write_text("(version 1)\n")
+            (root / "fp-lib-table").write_text('(fp_lib_table (lib (name "X") (uri "/abs/X.pretty")))\n')
+            native = NativeTrace(root, designs()[0], 0, parser().parse_args(["--out", "x", "--trace"]), "run")
+            recorder = trace.Recorder(root / "trace")
+            recorder.begin_board(graph)
+            recorder.close()
+            native.snapshot("writeback", root / "routed.kicad_pcb", str(cli), 60)
+            folder = root / "trace" / "native" / "writeback"
+            self.assertFalse((root / "trace" / "errors.json").exists())
+            self.assertTrue((folder / "board.kicad_dru").is_file())
+            self.assertFalse((folder / "fp-lib-table").exists())
+            events = [json.loads(line) for line in (root / "trace" / "streams" / "native.jsonl").read_text().splitlines()]
+        self.assertEqual(events[0]["drc"]["by_type"], {".kicad_pro": 1, ".kicad_dru": 1, "fp-lib-table": 1})
+
     def test_tracing_errors_never_fail_a_case(self):
         from trace_native import NativeTrace
 

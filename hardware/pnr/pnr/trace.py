@@ -43,7 +43,8 @@ net         ``net``, ``op`` (add, rip, commit, drop), ``pass``, ``provisional``,
 route_end   ``nets`` ({net: copper blob}), ``groups``, ``unrouted``, ``deferred``,
             ``progress``
 congestion  ``pitch``, ``nx``, ``ny``, ``cells`` (0 to 255), ``inflation``
-board       ``stage``, ``copper`` (blob with zones), ``poses``, ``drc``, ``progress``
+board       ``stage``, ``copper`` (blob with zones), ``poses``, ``drc`` (counts, ``open_pairs``,
+            ``findings``: each violation's first item position), ``progress``
 result      the acceptance fields of the ladder's ``result.json``
 truncated   ``bytes``, ``level``, ``dropped_kinds``
 ========== ==============================================================================
@@ -607,6 +608,12 @@ class PlacementTracer:
         return self.recorder.active and (step % self.every == 0 or step == self.iters - 1)
 
     def snapshot(self, step, pos, probs):
+        try:
+            self._snapshot(step, pos, probs)
+        except Exception as error:  # noqa: BLE001 - diagnostics never fail the engine
+            self.recorder._disable("placement_snapshot", error)
+
+    def _snapshot(self, step, pos, probs):
         xy = pos.detach().tolist()
         rot = [ANGLES[max(range(len(row)), key=row.__getitem__)] for row in probs.detach().tolist()]
         poses = [
@@ -618,6 +625,14 @@ class PlacementTracer:
         )
 
     def finish(self, positions, rotations):
+        if not self.recorder.active:
+            return
+        try:
+            self._finish(positions, rotations)
+        except Exception as error:  # noqa: BLE001 - diagnostics never fail the engine
+            self.recorder._disable("placement_finish", error)
+
+    def _finish(self, positions, rotations):
         poses = [
             [ref, um(positions[ref][0]), um(positions[ref][1]), angle(rotations[ref]), side]
             for ref, side in zip(self.refs, self.sides)
@@ -632,7 +647,11 @@ def placement_tracer(components, iters):
     recorder = current()
     if recorder is None:
         return None
-    return PlacementTracer(recorder, components, iters)
+    try:
+        return PlacementTracer(recorder, components, iters)
+    except Exception as error:  # noqa: BLE001 - diagnostics never fail the engine
+        recorder._disable("placement_tracer", error)
+        return None
 
 
 def legal(order, placed, backtracks=0):
@@ -677,9 +696,13 @@ def drc_summary(report, frame):
     unconnected = report.get("unconnected_items") or []
     violations = report.get("violations") or []
     by_type = {}
+    findings = []
     for item in violations:
         key = str(item.get("type", "unknown"))
         by_type[key] = by_type.get(key, 0) + 1
+        where = [i["pos"] for i in item.get("items", []) if isinstance(i.get("pos"), dict)]
+        if where:
+            findings.append([um(float(where[0]["x"]) - left), um(bottom - float(where[0]["y"]))])
     pairs = []
     for item in unconnected:
         points = [
@@ -695,6 +718,7 @@ def drc_summary(report, frame):
         by_type=by_type,
         by_rule=drc_rules(report),
         open_pairs=pairs,
+        findings=sorted(findings),
     )
 
 

@@ -1,9 +1,11 @@
 """The ladder runner's side of :mod:`pnr.trace` (``run.py --trace``): one traced case.
 
 The ``place-route`` stage records the engine lane (``PNR_TRACE_DIR=CASE/trace``, set for that
-stage only). After ``writeback`` and ``planes`` the runner copies the board, with its project
-and library table, to ``CASE/trace/native/<stage>/``, runs ``kicad-cli pcb drc`` on the copy
-(never on the saved board) and appends a ``board`` event to the ``native`` lane; after the
+stage only). After ``writeback`` and ``planes`` the runner copies the board, with its project,
+custom rules (``.kicad_dru``) and library table, to ``CASE/trace/native/<stage>/``, runs
+``kicad-cli pcb drc`` on the copy (never on the saved board), removes the copied library table
+again (it holds absolute library paths; the trace stays path-free) and appends a ``board``
+event to the ``native`` lane; after the
 final DRC it records the saved board as the ``refill`` stage with the runner's own report, and
 the acceptance fields as a ``result`` event. Failures here never fail a case: they disable the
 native lane and are written to ``CASE/trace/errors.json``.
@@ -39,6 +41,7 @@ class NativeTrace:
             packed_maze=bool(args.packed_maze),
             batched_wirelength=bool(args.batched_wirelength),
             dense_maze_cost=bool(args.dense_maze_cost),
+            fab_profile=getattr(args, "fab_profile", None),
         )
         subject = dict(
             kind="ladder-case",
@@ -92,14 +95,22 @@ class NativeTrace:
             folder.mkdir(parents=True)
             copy = folder / "board.kicad_pcb"
             shutil.copy2(board, copy)
-            shutil.copy2(Path(board).with_suffix(".kicad_pro"), copy.with_suffix(".kicad_pro"))
+            # KiCad reads <board>.kicad_pro and <board>.kicad_dru: the copy judges like the board.
+            for suffix in (".kicad_pro", ".kicad_dru"):
+                if Path(board).with_suffix(suffix).exists():
+                    shutil.copy2(Path(board).with_suffix(suffix), copy.with_suffix(suffix))
+            table = folder / "fp-lib-table"
             if (Path(board).parent / "fp-lib-table").exists():
-                shutil.copy2(Path(board).parent / "fp-lib-table", folder / "fp-lib-table")
+                shutil.copy2(Path(board).parent / "fp-lib-table", table)
             report = folder / "drc.json"
             command = [kicad_cli, "pcb", "drc", str(copy), "--format", "json", "--output"]
-            subprocess.run(
-                command + [str(report)], check=True, timeout=timeout, capture_output=True
-            )
+            try:
+                subprocess.run(
+                    command + [str(report)], check=True, timeout=timeout, capture_output=True
+                )
+            finally:
+                if table.exists():
+                    table.unlink()  # absolute library paths stay out of the trace
             self._record(stage, copy, json.loads(report.read_text()))
 
         self._guard("native_" + stage, action)

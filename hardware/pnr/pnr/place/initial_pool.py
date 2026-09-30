@@ -398,8 +398,9 @@ def select_initial_placement(graph, constraints, rules, *, config=None, seed=0,
             finally:
                 if folder:
                     (folder/'placement-result.json').write_text(json.dumps(record,indent=2))
-                _trace.note(status={'legal': 'ok', 'duplicate': 'dropped'}.get(record['status'], 'illegal'),
-                            hpwl_mm=record.get('hpwl_mm'), cheap_score=record.get('cheap_score'))
+                if _trace.current() is not None:  # PNR_TRACE_DIR only
+                    _trace.note(status={'legal': 'ok', 'duplicate': 'dropped'}.get(record['status'], 'illegal'),
+                                hpwl_mm=record.get('hpwl_mm'), cheap_score=record.get('cheap_score'))
     if not legal:
         report.update(termination='no_legal_initial_placement', elapsed_seconds=time.monotonic()-started)
         if root:
@@ -431,8 +432,9 @@ def select_initial_placement(graph, constraints, rules, *, config=None, seed=0,
         record['proxy_evaluated'] = True
     finalists = diverse_shortlist(proxy_candidates, config.route_finalists, 'proxy_score',
                                    mandatory=mandatory, refs=movable_refs)
-    _trace.select('shortlist', [c['id'] for c in legal], [c['id'] for c in finalists], 'capacity-proxy',
-                  {c['id']: c.get('proxy_score', c['cheap_score']) for c in legal})
+    if _trace.current() is not None:  # PNR_TRACE_DIR only
+        _trace.select('shortlist', [c['id'] for c in legal], [c['id'] for c in finalists], 'capacity-proxy',
+                      {c['id']: c.get('proxy_score', c['cheap_score']) for c in legal})
     report.update(baseline=baseline['id'], legal_count=len(legal),
                   unique_placement_count=len(seen), proxy_evaluations=len(proxy_candidates),
                   detailed_evaluations=0, fixed_refs=sorted(fixed),
@@ -491,8 +493,9 @@ def select_initial_placement(graph, constraints, rules, *, config=None, seed=0,
                 escape_diagnostics=route.escape_diagnostics,seconds=record['routing_seconds'],
                 budget=record['routing_budget']),indent=2))
     chosen = min(evaluated, key=lambda c:(c['metrics']['objective'], c['id']))
-    _trace.select('chosen', [c['id'] + '-route' for c in evaluated], chosen['id'] + '-route', 'route-objective',
-                  {c['id'] + '-route': c['metrics']['objective'] for c in evaluated})
+    if _trace.current() is not None:  # PNR_TRACE_DIR only
+        _trace.select('chosen', [c['id'] + '-route' for c in evaluated], chosen['id'] + '-route', 'route-objective',
+                      {c['id'] + '-route': c['metrics']['objective'] for c in evaluated})
     report.update(selected=chosen['id'], detailed_evaluations=len(evaluated),
                   termination='initial_pool_budget_completed', elapsed_seconds=time.monotonic()-started)
     if root:

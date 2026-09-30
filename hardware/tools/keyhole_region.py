@@ -894,7 +894,10 @@ def main():
             for source_file in args.annotation_source:
                 cleanup_cmd += ["--annotation-source", str(source_file)]
             # The cleanup runs bounded workers in sequence: PNR_PHASE_TIMEOUT
-            # (pnr.proc); it stays in this worker's process group.
+            # (pnr.proc) bounds it when this tool runs on its own. Under the native
+            # loop and the repair adapters, the deadline of this whole worker
+            # (PNR_WORKER_TIMEOUT or pnr.proc.worker_timeout) is shorter and binds
+            # first. The cleanup stays in this worker's process group.
             from pnr.proc import phase_timeout, run_status
             with (args.out_dir / "transaction-cleanup.log").open("w") as log:
                 cleanup_code, cleanup_timed_out = run_status(

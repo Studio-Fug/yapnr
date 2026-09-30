@@ -16,11 +16,19 @@ LOCAL_SRC=dict(path='/sub/0-x.ato',line=7,sha256='abc')
 import contextlib
 
 
+def _callers_group(session):
+    # Both children stay in the caller's process group, as with subprocess.run.
+    if session is not False:raise AssertionError('native_block children run with session=False')
+
+
 @contextlib.contextmanager
 def bounded(nb,run):
     """Drive native_block's pnr.proc seams (subpcb, the evaluation) with a subprocess.run-style fake."""
-    with mock.patch.object(nb.proc,'run_output',lambda cmd,**kw:run(cmd,**kw)), \
-         mock.patch.object(nb.proc,'run_status',lambda cmd,timeout=None,session=True,**kw:(run(cmd,**kw).returncode,False)):
+    def output(cmd,session=True,**kw):
+        _callers_group(session);return run(cmd,**kw)
+    def status(cmd,timeout=None,session=True,**kw):
+        _callers_group(session);return run(cmd,**kw).returncode,False
+    with mock.patch.object(nb.proc,'run_output',output),mock.patch.object(nb.proc,'run_status',status):
         yield
 
 

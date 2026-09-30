@@ -87,7 +87,7 @@ def _trial(args,log,env,stop,poll=.2,timeout=None):
                 except subprocess.TimeoutExpired:
                     if stop.is_set():return False
                     if time.monotonic()>=deadline:
-                        proc.kill();proc.wait()
+                        bounded.kill_tree(proc);proc.wait()  # the trial and every worker it started
                         f.write('\n[paired_bootstrap] trial killed after its %g s deadline\n'%limit)
                         raise bounded.DeadlineExceeded(args,limit)
         finally:

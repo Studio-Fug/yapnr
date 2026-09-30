@@ -81,10 +81,11 @@ def evaluate(round_dir: Path, inputs: Path, constraints_doc: dict, sub_graph, su
     refs = [c.ref for c in sub_graph.components]
     (round_dir / 'keep.json').write_text(json.dumps(refs))
     env = dict(os.environ, PYTHONPATH=str(PNR_ROOT), PNR_SUBBOARD='1')
-    # One KiCad load/save: the worker deadline (PNR_WORKER_TIMEOUT).
+    # One KiCad load/save: the worker deadline (PNR_WORKER_TIMEOUT); the child stays
+    # in this process group, as with the subprocess.run it replaces.
     proc.run_output([KI_PY, '-m', 'pnr.hier.subpcb', str(inputs / 'source.kicad_pcb'),
                      str(round_dir / 'source.kicad_pcb'), '--keep', str(round_dir / 'keep.json')],
-                    env=env)
+                    session=False, env=env)
     for name in ('source.kicad_pro', 'fp-lib-table'):
         shutil.copy2(inputs / name, round_dir / name)
     (round_dir / 'rules.json').write_text(json.dumps(sub_rules, indent=1, sort_keys=True))

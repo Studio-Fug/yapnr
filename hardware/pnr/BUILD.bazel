@@ -150,6 +150,18 @@ py_library(
     ],
 )
 
+# Hierarchical PnR (blocks, macros, sub-boards). Only the viewer's schematic builder
+# (pnr.hier.blocks) depends on it so far; PR3b re-homes it under //yapnr/hier.
+py_library(
+    name = "pnr_hier",
+    srcs = glob(["pnr/hier/*.py"]),
+    imports = ["."],
+    deps = [
+        ":pnr",
+        requirement("pyyaml"),
+    ],
+)
+
 # Runnable placer: python -m pnr.place graph.json constraints.yaml [--dump-svg ...]
 py_binary(
     name = "place",

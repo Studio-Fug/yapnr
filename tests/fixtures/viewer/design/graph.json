@@ -1,0 +1,199 @@
+{
+  "components": [
+    {
+      "address": "board.supply.ic",
+      "bbox": [3.4, 3.2],
+      "courtyard": [3.4, 3.2],
+      "footprint": "Regulator:SOT-23",
+      "locked": false,
+      "pads": [
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": null,
+          "name": "1",
+          "net": "vin-hv",
+          "offset": [-0.95, -1.1],
+          "plated": null,
+          "plated_land_radius": 0.0,
+          "size": [0.6, 1.0],
+          "through_hole": false
+        },
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": null,
+          "name": "2",
+          "net": "lv",
+          "offset": [0.95, -1.1],
+          "plated": null,
+          "plated_land_radius": 0.0,
+          "size": [0.6, 1.0],
+          "through_hole": false
+        },
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": null,
+          "name": "3",
+          "net": "vout-hv",
+          "offset": [0.0, 1.1],
+          "plated": null,
+          "plated_land_radius": 0.0,
+          "size": [0.6, 1.0],
+          "through_hole": false
+        }
+      ],
+      "pos": [10.0, 8.0],
+      "ref": "U1",
+      "rot": 0,
+      "side": "top",
+      "smd_body": false
+    },
+    {
+      "address": "board.supply.input_cap._p",
+      "bbox": [2.0, 1.2],
+      "courtyard": [2.0, 1.2],
+      "footprint": "Cap:C0603",
+      "locked": false,
+      "pads": [
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": null,
+          "name": "1",
+          "net": "vin-hv",
+          "offset": [-0.5, 0.0],
+          "plated": null,
+          "plated_land_radius": 0.0,
+          "size": [0.5, 0.6],
+          "through_hole": false
+        },
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": null,
+          "name": "2",
+          "net": "lv",
+          "offset": [0.5, 0.0],
+          "plated": null,
+          "plated_land_radius": 0.0,
+          "size": [0.5, 0.6],
+          "through_hole": false
+        }
+      ],
+      "pos": [5.0, 8.0],
+      "ref": "C1",
+      "rot": 0,
+      "side": "top",
+      "smd_body": false
+    },
+    {
+      "address": "board.supply.output_cap._p",
+      "bbox": [2.0, 1.2],
+      "courtyard": [2.0, 1.2],
+      "footprint": "Cap:C0603",
+      "locked": false,
+      "pads": [
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": null,
+          "name": "1",
+          "net": "vout-hv",
+          "offset": [-0.5, 0.0],
+          "plated": null,
+          "plated_land_radius": 0.0,
+          "size": [0.5, 0.6],
+          "through_hole": false
+        },
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": null,
+          "name": "2",
+          "net": "lv",
+          "offset": [0.5, 0.0],
+          "plated": null,
+          "plated_land_radius": 0.0,
+          "size": [0.5, 0.6],
+          "through_hole": false
+        }
+      ],
+      "pos": [15.0, 8.0],
+      "ref": "C2",
+      "rot": 0,
+      "side": "top",
+      "smd_body": false
+    },
+    {
+      "address": "board.pullup._p",
+      "bbox": [2.0, 1.2],
+      "courtyard": [2.0, 1.2],
+      "footprint": "Res:R0402",
+      "locked": false,
+      "pads": [
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": null,
+          "name": "1",
+          "net": "vout-hv",
+          "offset": [-0.5, 0.0],
+          "plated": null,
+          "plated_land_radius": 0.0,
+          "size": [0.5, 0.6],
+          "through_hole": false
+        },
+        {
+          "drill_size": [0.0, 0.0],
+          "land_corner": null,
+          "name": "2",
+          "net": "EN",
+          "offset": [0.5, 0.0],
+          "plated": null,
+          "plated_land_radius": 0.0,
+          "size": [0.5, 0.6],
+          "through_hole": false
+        }
+      ],
+      "pos": [15.0, 12.0],
+      "ref": "R1",
+      "rot": 0,
+      "side": "top",
+      "smd_body": false
+    }
+  ],
+  "name": "viewer-fixture",
+  "nets": [
+    {
+      "code": 1,
+      "name": "vin-hv",
+      "pins": [
+        ["U1", "1"],
+        ["C1", "1"]
+      ]
+    },
+    {
+      "code": 2,
+      "name": "lv",
+      "pins": [
+        ["U1", "2"],
+        ["C1", "2"],
+        ["C2", "2"]
+      ]
+    },
+    {
+      "code": 3,
+      "name": "vout-hv",
+      "pins": [
+        ["U1", "3"],
+        ["C2", "1"],
+        ["R1", "1"]
+      ]
+    },
+    {
+      "code": 4,
+      "name": "EN",
+      "pins": [["R1", "2"]]
+    }
+  ],
+  "outline": {
+    "height": 15.0,
+    "polygon": [],
+    "width": 20.0
+  },
+  "schema": "v0"
+}

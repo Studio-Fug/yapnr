@@ -143,7 +143,7 @@ yapnr/                          repository root
 ├── examples/
 │   ├── led555/                 KiCad-native example project (CI fixture, frontend "kicad")
 │   └── atopile-blinky/         atopile-frontend fixture (sources + prebuilt board)
-├── third_party/                three/ (MIT, vendored); elkjs/ (EPL-2.0, license text only)
+├── third_party/                image-licenses/ (the viewer's elkjs and three.js are fetched)
 ├── tools/                      privacy_scan.py, check_test_wiring.py, repo_root.py,
 │                               bazel/py_tests.bzl (PR0); kicad_test_runner.sh, migrate/
 └── docs/                       Sphinx (MyST) site; see §6
@@ -233,12 +233,13 @@ Tests stay `unittest`-style (no current test uses pytest). Four files need both 
 - **Network use (AGPL section 13).** The viewer is served over a network. It gets an About/Source
   link showing the repository URL and the exact engine commit of the run being viewed.
 - **Third-party material** is listed in `THIRD_PARTY.md`:
-  - three.js r180 plus `GLTFLoader` (MIT), vendored under `third_party/three/` with its license
-    (PR4d).
+  - three.js 0.186.1 plus `GLTFLoader` and the add-ons the 3D view imports (MIT). Updated in PR4:
+    fetched at build time like elkjs (its build files exceed the 600 KB limit), served with its
+    license under `vendor/three/`.
   - elkjs 0.9.3 (EPL-2.0, which contains an Apache-2.0 web-worker shim). It is **never
-    committed**: it is fetched with a sha256-pinned `http_file` and served as a separate,
-    unmodified file (never bundled or minified with AGPL code). Its license text is kept under
-    `third_party/elkjs/` (PR4b).
+    committed**: it is fetched with a sha256-pinned archive and served as a separate, unmodified
+    file (never bundled or minified with AGPL code). Its license text is served next to it from
+    the same archive (PR4; [decisions](decisions.md)).
   - KiCad stock footprints and 3D models (CC-BY-SA-4.0 with the KiCad library exception) are
     referenced, not vendored.
 - **README.md:** what yapnr is, status (alpha, KiCad 10 only), quick start (`bazel run //:yapnr`),
@@ -751,8 +752,7 @@ bazel_dep(name = "rules_shell", version = "0.6.1")                      # PR6a (
 bazel_dep(name = "rules_rust", version = "0.71.3")                      # PR5
 # release tarballs, later:
 bazel_dep(name = "rules_pkg", version = "1.2.0", dev_dependency = True)
-# viewer JS tests (PR4):
-bazel_dep(name = "rules_nodejs", version = "<pin in PR4>", dev_dependency = True)
+# viewer JS tests: not added in PR4 (no node toolchain; browser checks move to tests/e2e)
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 python.toolchain(python_version = "3.11", is_default = True)
@@ -1657,8 +1657,14 @@ unchanged.
 - **4c:**
   - the notes store and MCP, the optional agent and AI net labels (**off by default**; CLI via
     `shutil.which`, spend caps, web guard), schema and env renames, test literals replaced.
-- **4d:** the 3D view (three.js r180 + GLTFLoader vendored, GLB through the headless `kicad-cli`),
-  once the in-progress viewer-dev work lands.
+- **4d:** the 3D view (three.js 0.186.1 + GLTFLoader, fetched and pinned like elkjs; GLB through
+  the headless `kicad-cli`).
+- **Done as one branch (`claude/pr4-viewer`):** the four parts are one commit series (move,
+  imports, format, packaging and configuration, lint, fetched JavaScript and Bazel targets, tests
+  and docs); the choices that differ from this section are in [decisions](decisions.md) ("Choices
+  made in PR4"). Still open: `--project` and the manifest's `[viewer]` table (with PR3d), the
+  published `yapnr-live-event-v1` JSON Schema, the browser (e2e) tests, `examples/led555` as the
+  smoke run (PR6b).
 - **Acceptance:**
   - viewer tests pass;
   - `bazel run //:viewer -- --project examples/led555` shows the smoke run;

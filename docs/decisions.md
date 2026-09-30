@@ -315,6 +315,64 @@ PR3a); the owner reviews them with the pull request:
   without Splanc's Mini inputs every one of their tests skips, so they wait for PR3c's fixtures.
   They pass by hand with the Mini inputs, with new and with legacy stamps.
 
+Choices made in PR4 (the viewer; branch `claude/pr4-viewer`), following the plan where it
+applies; the owner reviews them with the pull request:
+
+- **One branch instead of four sub-PRs (4a to 4d).** The deployed viewer is one program whose
+  parts import each other (the server wires the cost, schematic, source, notes, agent and 3D
+  services together), so it is ported as one commit series: a pure move, the imports (privacy
+  scrubbed while staging), a mechanical format, then packaging, lint, the build and the tests.
+- **Imported from the deployed viewer only,** after checking it is a superset of Splanc's
+  `pnr_live` working tree (plan risk "four diverging viewer copies"). The Splanc working tree's
+  uncommitted `pnr_live` changes are imported first, as their own commit.
+- **three.js is fetched, not vendored** (this replaces "vendored under `third_party/three/`" in
+  the plan and in `THIRD_PARTY.md`): `three.core.js` (1.46 MB) and `three.module.js` (0.66 MB)
+  exceed the 600 KB file limit, and the version the viewer uses is 0.186.1 (r186), not r180. It
+  is pinned by sha256 like elkjs.
+- **elkjs's license is served from the pinned tarball** (`third_party/elkjs/LICENSE.md` in the
+  served directory) instead of a copy under `third_party/elkjs/` in the repository: the text then
+  always matches the fetched version.
+- **The third-party files come in through `use_repo_rule(http_archive)` in `MODULE.bazel`,** not a
+  new `bazel_dep` (no rules_js); a genrule copies them unmodified into `//yapnr/viewer:dist`.
+  Repositories are fetched lazily, so a build that does not need the viewer never downloads them.
+- **No node toolchain.** The two node tests (`test_ui.cjs`, `test_controls_ui.cjs`) read Splanc's
+  paths and a captured state; they are dropped, not ported. Browser checks become `tests/e2e`
+  (Chrome DevTools) in a later change; until then the viewer's behaviour is covered by the Python
+  unit tests and manual screenshots.
+- **The Ask agent needs `--agent on` also on loopback** (it was on by default there), its web tools
+  need `--agent-web on`, and AI net labels need `--net-summaries on` (they followed the agent).
+  The default agent model stays opus with a $2 per-turn and $20 per-process cap; the owner may
+  prefer sonnet as the default.
+- **Configuration is flags plus a TOML file (`yapnr-viewer-v1`), not the project manifest yet.**
+  The manifest's `[viewer]` table and `--project` arrive with the project abstraction (PR3d);
+  until then no setting defaults to a machine path, and machine tool paths come from flags,
+  `YAPNR_*` variables or `~/.config/yapnr/config.toml`.
+- **`pnr.capacitor_intent` is not recreated.** It exists in no snapshot; the cost replay reports a
+  placement context that needs it as unavailable. The owner files the issue.
+- **The viewer stays out of the wheel and the images** until the engine it imports is in them
+  (PR3b); `//yapnr:cli` has no viewer dependency.
+- **One spend cap per server process for every paid call** (`--agent-total-usd`, default $20):
+  Ask turns and AI net labels draw from the same meter (`yapnr/viewer/agent/spend.py`). A call
+  holds its whole budget (`--agent-budget-usd`, default $2; `--net-summary-budget-usd`, default $1)
+  while it runs and starts only if the cap covers it, so concurrent calls cannot pass the cap; a
+  call without a cost report from the CLI (timeout, cancel, killed) is charged its whole budget.
+  The meter is in memory: a restart resets it.
+- **The Apache-2.0 license text is kept in the repository** (`third_party/licenses/`), byte for
+  byte as published: elkjs's bundle includes an Apache-2.0 web-worker shim, and its tarball has
+  only the EPL-2.0 text. It is served next to `elk.bundled.js`; the code itself stays fetched.
+- **The Source link names the viewer's own revision,** not the engine commit of the run being
+  viewed (plan §1.4, "Network use"): it links the repository tree of the commit the server runs
+  and marks a checkout with uncommitted changes as modified. Runs do not record the engine commit
+  yet; showing it per run waits for the run manifests (PR3d).
+- **No `//yapnr/viewer:dev` target.** There is no auto-reload server: a development viewer is
+  `bazel run //:viewer -- --root <live dir> --port <spare port>`, rebuilt after edits to
+  `static/`.
+- **The viewer's KiCad lookup is stricter than plan §2.3** until `yapnr.kicad.toolchain` replaces
+  it (PR6a): it follows AGENTS.md and refuses everything inside `KiCad.app` or
+  `/Applications/KiCad`, KiCad's Python included (the plan allows the stock Python); on macOS it
+  discovers only the headless copy, never `PATH`; and it does not check for KiCad 10.x (the
+  toolchain module will).
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.
@@ -339,6 +397,8 @@ Update a pin together with the file that holds it, and note why here.
 | uv (image build) | `0.12.21`, by digest       | `docker/yapnr/Dockerfile`              |
 | PBS (image)      | `20260807`, by sha256      | `docker/yapnr/Dockerfile`              |
 | Runtime locks    | from `requirements.lock`   | `docker/yapnr/runtime-*.lock`          |
+| elkjs (viewer)   | `0.9.3`, by sha256         | `MODULE.bazel`                         |
+| three (viewer)   | `0.186.1`, by sha256       | `MODULE.bazel`                         |
 | Image, release   | every action by commit SHA | `.github/actions/`, `image.yaml`, ...  |
 
 Rationale:
@@ -363,6 +423,12 @@ Rationale:
   shellcheck-py v0.9.0.6, buildifier 8.2.0, prettier v3.1.0, markdownlint-cli v0.38.0,
   pre-commit-hooks v4.5.0), minus `nixpkgs-fmt`, plus the local privacy scan.
 - **mermaid, prek, `setup-bazel`:** the same as Splanc.
+- **elkjs 0.9.3 and three.js 0.186.1:** the versions the Splanc viewer shipped and was tested
+  with. The npm tarballs are pinned by sha256 (elkjs
+  `b95b224bd1ab71fd40f6d9a6365c28d989745dff6b0d514407bc1eb68f2f561e`, three
+  `8cd068708ea44f2c73c944b1cead2ba2f0d5c15c8fc194e5700f4e4f4a033fe7`), and the served files by
+  `tests/unit/viewer/test_dist.py`. An upgrade changes both and gets a browser check of the
+  schematic and 3D views.
 - **GitHub Actions majors** (`actions/checkout@v4`, `setup-python@v5`, `cache@v4`,
   `upload-artifact@v4`, `download-artifact@v4`, `setup-bazel@0.15.0`): Splanc's. They declare Node
   20, which GitHub now runs on Node 24 with a deprecation warning. Move to the Node 24 majors

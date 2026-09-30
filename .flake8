@@ -167,8 +167,6 @@ per-file-ignores =
     hardware/tools/mini_review_annotations.py: E501,E741
     hardware/tools/optimize_plane_access.py: E402,E501
     hardware/tools/plane_access_trial.py: E402,E731
-    hardware/tools/pnr_live/extract.py: E731,E741,F401
-    hardware/tools/pnr_live/server.py: E402,F401
     hardware/tools/pnr_viewer/build.py: E501
     hardware/tools/rasterize_mini_review.py: E501
     hardware/tools/render_elastic_experiment.py: F401

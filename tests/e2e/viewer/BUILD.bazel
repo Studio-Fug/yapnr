@@ -1,0 +1,21 @@
+load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+
+# Live checks of the viewer's optional services, run by hand only (tagged manual). The agent and
+# net-label tests make paid Claude CLI calls on the operator's account and need
+# YAPNR_AGENT_LIVE=1 or YAPNR_NET_LLM_LIVE=1; the 3D test needs a headless kicad-cli, a board
+# (YAPNR_V3D_BOARD) and YAPNR_V3D_LIVE=1. Pass the variables with --test_env, for example:
+#   bazel test //tests/e2e/viewer:test_live_agent --test_env=YAPNR_AGENT_LIVE=1 \
+#     --test_env=HOME --test_env=PATH
+yapnr_py_tests(
+    size = "large",
+    data = ["//tests/fixtures/viewer"],
+    tags = [
+        "external",
+        "manual",
+        "no-sandbox",
+    ],
+    deps = [
+        "//yapnr/viewer",
+        "//yapnr/viewer:testing",
+    ],
+)

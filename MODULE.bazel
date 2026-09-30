@@ -53,3 +53,43 @@ pip.parse(
     requirements_lock = "//:requirements.lock",
 )
 use_repo(pip, "yapnr_pypi")
+
+# ---------------------------------------------------------------------------
+# Third-party JavaScript for the viewer (//yapnr/viewer:dist), fetched at
+# build time and pinned by sha256; never vendored (docs/decisions.md). The
+# files are served to the browser unmodified and separately, never bundled or
+# minified with yapnr's own code (elkjs is EPL-2.0). Repositories are fetched
+# lazily: only a build of the viewer downloads them. Licenses: THIRD_PARTY.md.
+# ---------------------------------------------------------------------------
+
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+# elkjs 0.9.3 (EPL-2.0, with an Apache-2.0 web-worker shim): the schematic
+# view's layered graph layout.
+http_archive(
+    name = "elkjs",
+    build_file_content = 'exports_files(["lib/elk.bundled.js", "LICENSE.md"], visibility = ["//visibility:public"])',
+    sha256 = "b95b224bd1ab71fd40f6d9a6365c28d989745dff6b0d514407bc1eb68f2f561e",
+    strip_prefix = "package",
+    urls = ["https://registry.npmjs.org/elkjs/-/elkjs-0.9.3.tgz"],
+)
+
+# three.js 0.186.1 (MIT) with the loaders and controls the 3D view imports.
+http_archive(
+    name = "threejs",
+    build_file_content = """exports_files(
+    [
+        "LICENSE",
+        "build/three.core.js",
+        "build/three.module.js",
+        "examples/jsm/controls/OrbitControls.js",
+        "examples/jsm/loaders/GLTFLoader.js",
+        "examples/jsm/utils/BufferGeometryUtils.js",
+        "examples/jsm/utils/SkeletonUtils.js",
+    ],
+    visibility = ["//visibility:public"],
+)""",
+    sha256 = "8cd068708ea44f2c73c944b1cead2ba2f0d5c15c8fc194e5700f4e4f4a033fe7",
+    strip_prefix = "package",
+    urls = ["https://registry.npmjs.org/three/-/three-0.186.1.tgz"],
+)

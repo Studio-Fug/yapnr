@@ -110,7 +110,9 @@ class ShowcaseContract(unittest.TestCase):
         compiled = compile_constraints(line["constraints"], sorted(refs))
         self.assertEqual([c.kind for c in compiled.constraints][-1], "line_group")
 
-    def test_edge_parts_lie_along_their_edge(self):
+    def test_edge_orientations_follow_the_pad_axis_table(self):
+        """The edge showcase turns J1, SW1 and D1 so that PAD_AXIS's row runs along the
+        south edge; test_pad_axis_table_matches_the_footprints checks the table itself."""
         free, edge = showcases()[1:3]
         self.assertEqual(free["parts"], edge["parts"])
         for c in (free, edge):
@@ -127,6 +129,43 @@ class ShowcaseContract(unittest.TestCase):
             axis = PAD_AXIS[kinds[ref]]
             along = {"x": "y", "y": "x"}[axis] if turned else axis
             self.assertEqual(along, "x", ref)  # the pad row runs along the south edge
+
+    def test_pad_axis_table_matches_the_footprints(self):
+        """PAD_AXIS against the KiCad footprint files themselves: the axis along which the
+        pad centres spread, which is also the courtyard's long axis. Reads the
+        .kicad_mod text only; skipped where the footprint library is not installed."""
+        from run import kicad_footprints
+
+        library = kicad_footprints()
+        if not library.is_dir():
+            self.skipTest("no KiCad footprint library at %s" % library)
+        number = r"(-?[0-9.]+)"
+        for kind, axis in PAD_AXIS.items():
+            with self.subTest(kind=kind):
+                lib, name = LIBRARY[kind].split(":")
+                text = (library / (lib + ".pretty") / (name + ".kicad_mod")).read_text()
+                items = re.split(r"\n\t\(", text)
+                pads = [
+                    tuple(float(v) for v in m.groups())
+                    for item in items
+                    if item.startswith("pad ")
+                    for m in [re.search(r"\(at %s %s" % (number, number), item)]
+                ]
+                court = [
+                    tuple(float(v) for v in m.groups())
+                    for item in items
+                    if '(layer "F.CrtYd")' in item
+                    for m in re.finditer(r"\((?:start|end) %s %s\)" % (number, number), item)
+                ]
+                self.assertGreaterEqual(len(pads), 2)
+                self.assertGreaterEqual(len(court), 2)
+
+                def spread(points, i):
+                    return max(p[i] for p in points) - min(p[i] for p in points)
+
+                pad_axis = "x" if spread(pads, 0) > spread(pads, 1) else "y"
+                court_axis = "x" if spread(court, 0) > spread(court, 1) else "y"
+                self.assertEqual((pad_axis, court_axis), (axis, axis))
 
     def test_twin_banks_share_a_template(self):
         from pnr.constraints import compile_constraints

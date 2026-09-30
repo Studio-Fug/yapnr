@@ -20,7 +20,8 @@ LIB = {
 
 # The axis of each footprint's pad row at rotation 0 (from the KiCad footprints: the
 # header's pins run along y, the button's, LED's and passives' pads along x). An edge
-# part is turned so its pad row, its long axis, runs along the edge (the contract test).
+# part is turned so its pad row, its long axis, runs along the edge. The contract tests
+# check the table against the .kicad_mod files and the edge case's turns against it.
 PAD_AXIS = {"connector": "y", "button": "x", "led": "x", "resistor": "x", "capacitor": "x"}
 
 

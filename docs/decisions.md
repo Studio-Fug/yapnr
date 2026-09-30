@@ -447,7 +447,14 @@ Owner decisions for the atopile toolchain and part data (2026-09-30;
   environment and a deadline, and records a UUID-normalized input id. A hook loaded into every
   atopile interpreter (forkserver workers included) replaces the Nix source patches: the picker
   token only for a parsed loopback URL of the runner's port, empty queries answered locally, picks
-  attached from the project's parts, no EasyEDA, no GUI KiCad.
+  attached from the project's parts, no EasyEDA, no git clone of a dependency, no GUI KiCad and no
+  contact with a running one.
+- **The part cache serves part files only.** A file must match its type, is served only while a
+  stored part uses it, and is removed when no part took it up within a grace period; a takedown
+  also blocks the part's own files under any name. Tokens are checked before a body is read, sent
+  by the clients only to the server named (no redirects) over https or loopback, and the write
+  token never with reads. Parts can be marked local-only; a public server refuses a cache that
+  holds one.
 - **Ordering stays staging-only** (for the later ordering PRs): cart, quote or payment page; the
   human pays on the vendor's page.
 

@@ -39,6 +39,11 @@ digits of the sha256 of the platform's lock and `pins.json`, so a new lock gets 
   `yapnr/frontends/atopile/locks/requirements-<platform>.lock`. Every file is one the lock names
   by sha256; nothing is resolved at install time.
 - `yapnr-atopile-env.json`: written last. An environment without it is incomplete and is rebuilt.
+  It records the platform, the lock, the versions, and on linux-aarch64 the name and sha256 of the
+  self-built atopile wheel.
+
+With `setup --root DIR`, builds find the environment with `YAPNR_ATOPILE_HOME=DIR` (or
+`YAPNR_ATO_PYTHON`), and `yapnr atopile info --root DIR` reports it.
 
 `setup` never runs atopile's command line (the version is read from package metadata), so it
 cannot touch the user's KiCad or atopile configuration.
@@ -49,13 +54,14 @@ atopile 0.15.8 requires Python `>=3.14,<3.15` and declares 49 dependencies, near
 open-ended, with no lock of its own. yapnr pins one line (`locks/requirements.in`:
 `atopile==0.15.8`) and keeps one fully hashed lock per platform:
 
-| Lock                                    | Platform                               |
-| --------------------------------------- | -------------------------------------- |
-| `requirements-darwin-arm64.lock`        | macOS on Apple silicon                 |
-| `requirements-darwin-x86_64.lock`       | macOS on Intel                         |
-| `requirements-linux-x86_64.lock`        | Linux x86_64 (manylinux 2.28)          |
-| `requirements-linux-aarch64.lock`       | Linux aarch64, without atopile (below) |
-| `build-requirements-linux-aarch64.lock` | the wheel builder's dependencies       |
+| Lock                                          | Platform                               |
+| --------------------------------------------- | -------------------------------------- |
+| `requirements-darwin-arm64.lock`              | macOS on Apple silicon                 |
+| `requirements-darwin-x86_64.lock`             | macOS on Intel                         |
+| `requirements-linux-x86_64.lock`              | Linux x86_64 (manylinux 2.28)          |
+| `requirements-linux-aarch64.lock`             | Linux aarch64, without atopile (below) |
+| `build-requirements-linux-aarch64.lock`       | the wheel builder's dependencies       |
+| `sdist-build-requirements-linux-aarch64.lock` | what `setup` builds zstd's sdist with  |
 
 They are resolved as of `exclude_newer` in `pins.json` (2026-09-20): that date reproduces, package
 for package, the environment Splanc's Nix build resolved and built its boards with. All four
@@ -85,10 +91,16 @@ tools/atopile/build_wheel.sh /tmp/atopile-wheel
 yapnr atopile setup --wheel /tmp/atopile-wheel/atopile-0.15.8-*.whl
 ```
 
-`zstd` and `watchdog` have no wheel there either; uv builds them from their hashed sdists, so a C
-toolchain is needed on linux-aarch64 hosts. Checked on Ubuntu 24.04 arm64 under Apple's
-virtualization (two cores): the wheel builds in about 3 minutes, `setup --wheel` takes about
-30 s, and the end-to-end test below passes.
+`zstd` has no cp314 wheel there either, so a C toolchain is needed on linux-aarch64 hosts. uv
+would fetch the build dependencies of its hashed sdist unpinned (build isolation; hashes in build
+constraints are checked only for the packages listed). `setup` therefore installs the hashed
+`sdist-build-requirements-linux-aarch64.lock` (setuptools, all a `setup.py`-only sdist needs)
+into the environment first and installs the lock with `--no-build-isolation`: a build can use
+nothing that is not hash-pinned, and one that needs more fails instead of downloading it (checked
+with the pinned CPython: zstd 1.5.7.2 builds from its hashed sdist with the pinned setuptools, and
+without it the build stops). Checked on Ubuntu 24.04 arm64 under Apple's virtualization (two
+cores), before this change: the wheel builds in about 3 minutes, `setup --wheel` takes about
+30 s, and the end-to-end tests below pass.
 
 ### Discovery
 
@@ -111,9 +123,11 @@ yapnr atopile build path/to/project -b mini --out out/mini
 
 For each build the runner:
 
-1. copies the project into a fresh work directory (without `build/`, `.git` or atopile's caches;
-   `.ato/modules` is kept). The source tree is never written; `--update-layout` copies the new
-   layout back, and nothing else does;
+1. copies the project into a fresh work directory (without the top-level `build/`,
+   `manufacturing/` and `yapnr-out/`, any `.git` or `__pycache__`, or atopile's caches;
+   `.ato/modules` is kept). With `--files-from LIST` it copies exactly the files the list names
+   (paths relative to the project; the Bazel rule passes its declared inputs). The source tree is
+   never written; `--update-layout` copies the new layout back, and nothing else does;
 2. writes every part of the project's parts lock (`yapnr-parts.lock.json`) into the copy, each file
    checked against the cache's sha256. A part directory already in the tree with other content is
    an error (`--replace-parts` overwrites it);
@@ -135,6 +149,13 @@ The default targets are `build-design`, `bom`, `variable-report`, `power-tree` a
 Allowed besides: `manifest`, `stackup`, `data-interface-layout`, and the KiCad exports `mfg-data`,
 `step`, `glb`, `2d-image` and `3d-image`. atopile always adds its `default` target, whose
 datasheet downloads reach the network; the runner excludes it, and `datasheets`.
+
+The board, its `fp-lib-table` and the outputs are wherever atopile puts them for the project's
+`ato.yaml`: `paths.layout` and `paths.build`, and a build's own `paths.layout`, `fp_lib_table` and
+`output_base`. As in atopile, a layout directory holding one board of another name (KiCad's
+autosaves aside) is that build's board, and two are an error. Every path must stay inside the
+project. The outputs are named after the build whatever the board's file name; `result.json`
+records the board's path in the project (`layout`).
 
 | Output     | File                                                   |
 | ---------- | ------------------------------------------------------ |
@@ -160,14 +181,14 @@ use it only while authoring.
 
 ### Designators and the layout
 
-atopile updates an existing layout (`elec/layout/<build>/<build>.kicad_pcb`) instead of starting a
-new one. It keeps that layout's designators and positions, and gives new parts the next free
+atopile updates an existing layout (by default `elec/layout/<build>/<build>.kicad_pcb`) instead of
+starting a new one. It keeps that layout's designators and positions, and gives new parts the next free
 designator. Without a layout, it numbers every part afresh and places it in a row. If a project
 does not commit its layout (Splanc ignores `elec/layout/`), a clean checkout and a developer's
 tree can build different designators and positions from the same sources. The nets, footprints
 and pads per `atopile_address` stay the same. To compare two builds, start both from the same
 layout, or compare them by `atopile_address`. Bazel's `glob(["elec/**"])` also picks up an
-uncommitted layout that is present on disk.
+uncommitted layout that is present on disk; the Bazel action sees no other file of the project.
 
 ### The build environment
 
@@ -182,6 +203,7 @@ inherited (no API keys, cloud or vendor credentials, proxies or `PYTHONPATH`):
 | `CI=1`, `FBRK_TELEMETRY=0`                                 | no datasheet downloads, no telemetry                                                                                                                                                                            |
 | `ATO_SERVICES_COMPONENTS_URL`, `ATO_SERVICES_PACKAGES_URL` | the loopback picker (they override `ato.yaml`): part queries, atopile's message of the day (fetched on every command) and package-registry requests are all answered locally                                    |
 | `OPENSSL_armcap=0` (aarch64)                               | OpenSSL's ARMv8 capability probe raises SIGILL in the `cryptography` wheel under Apple's virtualization                                                                                                         |
+| `GIT_TERMINAL_PROMPT=0`, `GIT_ALLOW_PROTOCOL=file`         | no prompts; offline, git reads local repositories only (atopile clones a missing git dependency during every build)                                                                                             |
 | `PYTHONPATH`, `YAPNR_ATO_*`                                | the hook, below                                                                                                                                                                                                 |
 
 ### The hook
@@ -203,9 +225,16 @@ atopile's modules as they are imported and changes no file of the environment:
   directory (`supplier_partno="C..."`) is attached from there instead of being downloaded from
   EasyEDA. That is how a pick is served from the part cache.
 - **Offline.** EasyEDA is never contacted (unless `--online`); a pick that would need it fails and
-  names the missing part.
+  names the missing part. Nor is a git repository: atopile installs missing dependencies at the
+  start of every build, cloning `git` ones; offline, the clone is refused and the build fails
+  naming the dependency (install it into `.ato/modules` first). Registry dependencies fail on
+  their own: the package registry URL is the loopback picker, which serves no packages.
 - **No GUI KiCad.** `kicad-cli` is the discovered headless one or none: atopile's search of
   `/Applications/KiCad` and its `pcbnew` launcher are disabled.
+- **No running KiCad.** After every build (and while attaching parts) atopile looks for the IPC
+  sockets of running KiCad instances in a fixed `/tmp/kicad` to reload an open board. The hook
+  hands it none (`kicad-reload-skipped` in `hook.jsonl`), so a build never talks to a KiCad on the
+  machine.
 
 Every patch checks that what it replaces exists, so an atopile it was not written for fails
 loudly instead of building unpatched.
@@ -322,17 +351,22 @@ load("@yapnr//bazel/atopile:defs.bzl", "yapnr_atopile_build")
 yapnr_atopile_build(
     name = "board",
     ato_yaml = "ato.yaml",
-    srcs = glob(["elec/src/**"]) + ["yapnr-parts.lock.json"],
+    srcs = glob(["elec/src/**", "elec/layout/**"]) + ["yapnr-parts.lock.json"],
     build = "default",
+    cache = "https://parts.example.org",  # or --action_env=YAPNR_PART_CACHE=<dir or URL>
 )
 ```
 
 It produces `board.kicad_pcb`, `board.bom.csv`, `board.result.json`, the `board.out/` directory
 and a `YapnrAtopileBuildInfo` provider. The action is `local` and `no-remote` (it uses an
-environment and a cache Bazel does not track) and not `requires-network`. The part cache is the
-`cache` attribute, else `--action_env=YAPNR_PART_CACHE`, else the default local cache. Without an
-atopile environment only such targets fail, with the reason; after `yapnr atopile setup`, refetch
-with `bazel fetch --force @yapnr_atopile//...` (or change one of the discovery variables).
+environment and a cache Bazel does not track) and not `requires-network`. It copies only the
+declared `srcs` (which must lie inside the project's directory) into its work directory, so an
+undeclared file next to them (an untracked layout, say) can neither change the build nor make a
+cached result stale. The part cache is the `cache` attribute, else
+`--action_env=YAPNR_PART_CACHE`; there is no default inside Bazel (the strict action environment
+has no `HOME`), and a project with a parts lock and neither fails at once. Without an atopile
+environment only such targets fail, with the reason; after `yapnr atopile setup`, refetch with
+`bazel fetch --force @yapnr_atopile//...` (or change one of the discovery variables).
 `//tests/fixtures/atopile:synthetic` is a manual example.
 
 ## Versions
@@ -350,9 +384,11 @@ with `bazel fetch --force @yapnr_atopile//...` (or change one of the discovery v
   runner runs against a fake atopile interpreter (isolation, environment, outputs, input ids, a
   deadline kill of a process tree); the hook against fake atopile modules, including in `spawn`
   and `forkserver` workers.
-- `//tests/e2e/atopile:test_atopile_build` (tags `atopile`, `manual`): a real atopile 0.15.8
-  build of a synthetic project, twice without any pick and twice with one type pick served by the
-  picker from a temporary part cache. Run it after `yapnr atopile setup`:
+- `//tests/e2e/atopile:test_atopile_build` (tags `atopile`, `manual`): real atopile 0.15.8
+  builds of a synthetic project, each twice with the same input id: without any pick, with one
+  pick by LCSC id and with one type pick, both served by the picker from a temporary part cache.
+  A project with a git dependency must fail offline without cloning it, and every build skips
+  atopile's reload of an open board in a running KiCad. Run it after `yapnr atopile setup`:
 
   ```sh
   bazel test //tests/e2e/atopile:all --test_env=YAPNR_ATOPILE_HOME="$HOME/.cache/yapnr/atopile"
@@ -376,6 +412,8 @@ with `bazel fetch --force @yapnr_atopile//...` (or change one of the discovery v
 
 - The `/opt/atopile` environment in the `yapnr` image (A4): the builder stage for the aarch64
   wheel, the notices, the size measurement.
-- An A/B of KiCad 9 against KiCad 10 on netlists and DRC.
+- An A/B of KiCad 9 against KiCad 10 on netlists and DRC. No end-to-end project references a
+  stock `Library:Footprint` yet, so whether atopile 0.15.8 reads every KiCad 10 stock footprint
+  is unchecked; the referenced-library scan reads `.ato` text only.
 - `yapnr parts add` (the port of `gen_parts_robust.sh`, A6), catalog builders (A7) and the board
   macro (A8).

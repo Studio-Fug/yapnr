@@ -3,7 +3,8 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-09-30 (PR4, #10 and the ladder animations merged; atopile toolchain branch).
+Last updated: 2026-09-30 (PR4, #10 and the ladder animations merged; atopile toolchain branch,
+review fixes).
 
 ## In progress
 
@@ -16,14 +17,20 @@ Last updated: 2026-09-30 (PR4, #10 and the ladder animations merged; atopile too
 - **Merged since:** the regression ladder in CI and the PnR animations (#15: `pnr.trace`,
   `pnr.provenance`, `pnr.animate`, `ladder.yaml`, `docs/regression-ladder.md`) and two viewer
   test race fixes (#16, #17).
-- **atopile toolchain and part cache** (branch `claude/atopile-toolchain`, on `main` after #14,
-  not pushed; A1 and A2 of the end-to-end plan): `yapnr atopile setup` (hashed per-platform
-  locks, atopile 0.15.8 on Python 3.14.7), `yapnr atopile build` (offline, isolated, bounded; a
-  hook in every atopile interpreter), the loopback picker (catalog schema v1), the part cache
-  (store, HTTP server with tokens and takedowns, clients, importer, container), the Bazel
-  toolchain and `yapnr_atopile_build`. A real build of a synthetic project passes twice without
-  picks and twice with one type pick from the cache (`//tests/e2e/atopile`, manual). Not done:
-  the image's `/opt/atopile` (A4) and a KiCad 9 against 10 A/B
+- **atopile toolchain and part cache** (branch `claude/atopile-toolchain`, rebased on `main`
+  after #17, not pushed; A1 and A2 of the end-to-end plan): `yapnr atopile setup` (hashed
+  per-platform locks, atopile 0.15.8 on Python 3.14.7), `yapnr atopile build` (offline,
+  isolated, bounded; a hook in every atopile interpreter), the loopback picker (catalog schema
+  v1), the part cache (store, HTTP server with tokens and takedowns, clients, importer,
+  container), the Bazel toolchain and `yapnr_atopile_build`. The adversarial review's findings
+  are fixed: a lock pins its part; client tokens go only to the named server (no redirects, https
+  or loopback, the write token never with reads); the server checks tokens before bodies, bounds
+  its connections, serves only files a part uses, collects orphans, checks file types, and a
+  takedown blocks the part's files; local-only parts; no git clone offline and no contact with a
+  running KiCad; ato.yaml's layout paths; the Bazel action copies only its declared inputs and
+  needs an explicit cache; hashed sdist builds on linux-aarch64. Real atopile: 4 end-to-end cases
+  (7 builds) pass on darwin-arm64; `bazel test //...` 137 of 137. Not done: the image's
+  `/opt/atopile` (A4) and a KiCad 9 against 10 A/B
   ([docs/frontends/atopile.md](docs/frontends/atopile.md#not-done-yet)).
 - **Splanc's parts in a local part cache** (local-machine note; Splanc is not modified): the
   committed parts of `splanc`, `splanc_dev`, `splanc_max` and `splanc_eol_tester` (276
@@ -31,11 +38,13 @@ Last updated: 2026-09-30 (PR4, #10 and the ladder animations merged; atopile too
   in the development Mac's default cache, `<part-cache>` = `$XDG_DATA_HOME/yapnr/part-cache`.
   One lock per board is in `$XDG_DATA_HOME/yapnr/splanc-locks/`. Neither is in any repository.
   Each part records `splanc@<commit>:<path>`, its LCSC id, its generator (`easyeda:C<id>` or
-  hand-authored) and a licence note. `splanc_max`'s `OUT` also has a local-only version with
-  the git-ignored DEGSON STEP model (`splanc_max.local-cad` lock); do not upload it anywhere.
-  Every lock materializes the committed files byte-identically.
+  hand-authored) and a licence note. `splanc_max`'s `OUT` also has a version with the
+  git-ignored DEGSON STEP model (`splanc_max.local-cad` lock), marked `local-only` (never
+  uploaded; a public server refuses the cache). Every lock materializes the committed files
+  byte-identically (rechecked after the review fixes, also over HTTP).
   Mini, built from a scratch copy with its parts directory emptied, has the same input id as a
-  build from its committed parts, both from the directory and over HTTP. Seeded with the same
+  build from its committed parts, both from the directory and over HTTP, before and after the
+  review fixes. Seeded with the same
   local layout, it equals rules_atopile's last Nix-built board in nets, footprints, pads,
   positions and outline. `splanc_eol_tester` fails on 0.15.8 with or without the cache: atopile
   rejects its `elec/footprints/` directory as deprecated.
@@ -58,50 +67,63 @@ Last updated: 2026-09-30 (PR4, #10 and the ladder animations merged; atopile too
    evaluation's nested workers exceed the two-KiCad-process budget kept while H7 runs.
 5. Owner: push Splanc's `splanc-mini`, so the 9 newest `Imported-From` links of PR1 resolve (see the
    manifest).
-6. Owner: move Splanc's builds to the part cache. Commit each board's `yapnr-parts.lock.json`
+6. atopile follow-up PRs (docs/frontends/atopile.md, "Not done yet"): A4 `/opt/atopile` in the
+   `yapnr` image (the aarch64 wheel builder stage, notices, size), a KiCad 9 against 10 A/B and
+   an end-to-end project that uses a stock `Library:Footprint`, then A5 to A8; after them the
+   spec and checks (S1 to S4), the agents (R1 to R3, off by default) and fab outputs and ordering
+   (F1, F2, O1 to O3; ordering stays staging-only: cart, quote or payment page).
+7. Owner: move Splanc's builds to the part cache. Commit each board's `yapnr-parts.lock.json`
    (from the local locks), build with `yapnr atopile build` or `yapnr_atopile_build`, and only then
    remove the committed `elec/src/parts/`. Also commit or decide on `elec/layout/` (it seeds
    designators), and move `splanc_eol_tester`'s footprint into a part.
-7. PR6a, then PR3b onwards: wire the 67 unwired engine test files with the glob macro (the two
+8. PR6a, then PR3b onwards: wire the 67 unwired engine test files with the glob macro (the two
    hygiene tests and PR3a's `test_feedback_signals` are wired; the two feedback generation tests
    skip without Splanc's Mini inputs) and replace the Splanc defaults and fixtures (manifest,
    "Known leftovers for PR3"). The KiCad-dependent tests run under the headless KiCad Python only
    (DEVELOPERS.md). PR3a landed before the KiCad lane: its format is checked by syntax-tree
    equivalence and fresh-interpreter imports, not by a KiCad-side test run. PR3b burns down the
    `.flake8` baseline and fixes the `via_coalesce` F821 with a test of its own.
-8. PR-R is merged (#2). Its first `main` build pushes `yapnr-kicad:10.0.6-1-src`, then
+9. PR-R is merged (#2). Its first `main` build pushes `yapnr-kicad:10.0.6-1-src`, then
    `yapnr-kicad:10.0.6-1` (with `10.0.6` and `10.0`), then `yapnr:edge`. Then make both GHCR
    packages **public** (package settings > Change visibility; irreversible, owner-approved). The
    organization must allow public packages first (Organization settings > Packages > Package
    creation: Public), or the option is missing. Check that an anonymous
    `docker pull ghcr.io/studio-fug/yapnr:edge` (and `yapnr-kicad:10.0.6-1-src` on arm64) works and
    that `gh attestation verify oci://ghcr.io/studio-fug/yapnr:edge -R Studio-Fug/yapnr` passes.
-9. Create the release-note labels (`tools/release/create_labels.sh`), label open pull requests,
-   and run the release dry run once (`gh workflow run release.yaml --ref main`); read the notes
-   preview in its summary.
-10. Uncomment the container and release badges in `README.md` once the image is public and v0.1.0
+10. Create the release-note labels (`tools/release/create_labels.sh`), label open pull requests,
+    and run the release dry run once (`gh workflow run release.yaml --ref main`); read the notes
+    preview in its summary.
+11. Uncomment the container and release badges in `README.md` once the image is public and v0.1.0
     exists; decide on immutable releases (docs/releases.md).
-11. PR6a: the KiCad-side workers run under `/usr/bin/python3` (3.12), which cannot import yapnr
+12. PR6a: the KiCad-side workers run under `/usr/bin/python3` (3.12), which cannot import yapnr
     (installed in the 3.11 venv only). Give them an import path with yapnr's pure-Python modules
     and none of the venv's compiled packages, and add a smoke check for it.
-12. First release tag `v0.1.0` (owner) once the engine runs end to end inside the published image on
+13. First release tag `v0.1.0` (owner) once the engine runs end to end inside the published image on
     both architectures (the PR6b example), after the `Image` run of that commit on `main` is green;
     make the `image` check required then.
-13. Owner: decide whether the ladder should default to `--fab-profile jlc-pofv` (the engine's
+14. Owner: decide whether the ladder should default to `--fab-profile jlc-pofv` (the engine's
     default JLCPCB profile) instead of `legacy` (the fixtures' own rules; `docs/decisions.md`).
     With `route_case.py` applying the profile, `jlc-pofv` passes every case too (2026-09-30:
     pool seed 0, 8 of 8; baseline seeds 0 and 1, 16 of 16; other boards than legacy's, e.g. case
     07 with 17 vias instead of 19). Flipping it changes the rules the ladder README states and
     needs a refresh of `docs/animations/`. The first `ladder.yaml` run (the pull request of
     `claude/ladder-animations`) is the first run of its container path.
-14. Rebuild the KiCad base monthly (bump `docker/yapnr-kicad/TAG` to the next `-N`), or with the
+15. Rebuild the KiCad base monthly (bump `docker/yapnr-kicad/TAG` to the next `-N`), or with the
     Dependabot `ubuntu` digest update (docs/releases.md, "Maintaining the images").
 
 ## Blockers
 
-None.
+- The Docker VM on the development Mac has a full disk (158 GB, 100 %), so the linux-aarch64
+  container run of the atopile review fixes (wheel build, `setup` with the hashed sdist-build
+  lock, end-to-end tests) and the part cache image smoke test could not run; the images there
+  belong to other projects and were not pruned. The no-isolation sdist build was checked with
+  the pinned CPython on macOS instead.
 
 ## Do not retry
+
+- Letting a Bazel library under `yapnr/` go without `//yapnr:package`: rules_python then
+  auto-creates empty `yapnr/__init__.py` files in its runfiles, and Bazel 7's sandbox reuse once
+  wrote one through a symlink into the source tree (the file was truncated; six tests failed).
 
 - Serving the viewer's static files after `Path.resolve()`: in Bazel runfiles every file is a
   symlink, so a resolved-path containment check rejects all of them. Check containment lexically.

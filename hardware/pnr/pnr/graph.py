@@ -99,6 +99,10 @@ class Component:
     pads: List[Pad] = field(default_factory=list)
     address: str = ""  # Stable atopile path, independent of generated designators.
     smd_body: bool = False  # Explicit native footprint attribute, never inferred from hole size.
+    # Per-side occupancy hull of a hierarchical block macro (pnr.hier.extent /
+    # pnr.place.hull; only set with PNR_MACRO_HULL=1). None for every ordinary
+    # part, and then omitted from the JSON so default graphs stay byte-identical.
+    hull: Optional[dict] = None
 
     def __post_init__(self):
         self.pos = _fpair(self.pos)
@@ -170,7 +174,11 @@ class BoardGraph:
     # -- serialization (the ingest -> place seam) --------------------------
 
     def to_dict(self) -> Dict:
-        return asdict(self)
+        d = asdict(self)
+        for c in d["components"]:
+            if c.get("hull") is None:
+                c.pop("hull", None)
+        return d
 
     def to_json(self, *, indent: Optional[int] = 2) -> str:
         return json.dumps(self.to_dict(), indent=indent, sort_keys=True)
@@ -191,6 +199,7 @@ class BoardGraph:
                 bbox=c["bbox"],
                 locked=bool(c.get("locked", False)),
                 smd_body=bool(c.get("smd_body", False)),
+                hull=c.get("hull"),
                 pads=[
                     Pad(
                         name=p["name"],

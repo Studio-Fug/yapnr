@@ -342,7 +342,7 @@ def select_initial_placement(graph, constraints, rules, *, config=None, seed=0,
                         # global arrangement and legalize the new large-scale basin.
                         # This extra bounded attempt is reported, not called a new
                         # independent optimized global placement.
-                        from .legalize import legalize
+                        from .legalize import legalize, pad_edge_rule
                         from .channels import ChannelModel
                         seed_graph=copy.deepcopy(legal[0]['graph'])
                         poses=resolve_fixed_poses(seed_graph,placement_constraints)
@@ -358,7 +358,9 @@ def select_initial_placement(graph, constraints, rules, *, config=None, seed=0,
                         group_edges=hard_group_edges(placement_constraints),rotations=resolve_hard_rotations(placement_constraints),
                             clearance=placement_constraints.board.default_clearance_mm,grid_mm=.25,
                             allow_rotation=orient,channel_model=ChannelModel(seed_graph,rules),
-                            spread=min(spread,1.3))
+                            spread=min(spread,1.3),
+                            **({} if pad_edge_rule(placement_constraints,rules) is None else
+                               dict(pad_edge=pad_edge_rule(placement_constraints,rules))))
                         prep=PlacementReport(placed.outline.width,placed.outline.height,
                             hpwl(source),hpwl(placed),**hard_violations(placed,constraints))
                 errors = _hard_and_source_errors(placed, source, constraints)

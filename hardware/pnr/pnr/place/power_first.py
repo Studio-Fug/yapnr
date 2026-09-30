@@ -322,6 +322,10 @@ class StagedPlacer:
             half = half * scale
         self.half = half
         self.half4 = torch.stack([half, half[:, [1, 0]], half, half[:, [1, 0]]], dim=1)
+        # Hull macros (PNR_MACRO_HULL=1): per-side overlap bodies; None otherwise.
+        from .hull import gp_bodies
+        self.bodies = gp_bodies(comps, [max(1.0, spread, float((inflation or {}).get(c.ref, 1.0))) for c in comps]
+                                if (inflation or spread > 1.0) else None)
         poses = resolve_fixed_poses(graph, constraints)
         self.is_fixed = torch.zeros(n, dtype=torch.bool)
         self.fixed_xy = torch.zeros(n, 2)
@@ -448,11 +452,15 @@ class StagedPlacer:
             guard = guard + torch_guard(self.cost(j, xy), stars[j], EPS[j - 1])
         exp_half = (p.unsqueeze(-1) * self.half4[None]).sum(2)                 # (K, n, 2)
         hw, hh = exp_half[..., 0], exp_half[..., 1]
-        dx = (pos[:, :, None, 0] - pos[:, None, :, 0]).abs()
-        dy = (pos[:, :, None, 1] - pos[:, None, :, 1]).abs()
-        ox = torch.clamp(hw[:, :, None] + hw[:, None, :] + self.overlap_clearance - dx, min=0.0)
-        oy = torch.clamp(hh[:, :, None] + hh[:, None, :] + self.overlap_clearance - dy, min=0.0)
-        overlap = torch.triu(ox * oy * self.side_overlap, diagonal=1).sum((1, 2))
+        if self.bodies is None:
+            dx = (pos[:, :, None, 0] - pos[:, None, :, 0]).abs()
+            dy = (pos[:, :, None, 1] - pos[:, None, :, 1]).abs()
+            ox = torch.clamp(hw[:, :, None] + hw[:, None, :] + self.overlap_clearance - dx, min=0.0)
+            oy = torch.clamp(hh[:, :, None] + hh[:, None, :] + self.overlap_clearance - dy, min=0.0)
+            overlap = torch.triu(ox * oy * self.side_overlap, diagonal=1).sum((1, 2))
+        else:
+            from .hull import gp_overlap
+            overlap = gp_overlap(self.bodies, pos, p, self.overlap_clearance)
         a, b = OVERLAP_RAMP[stage - 1]
         w_ov = w["w_spread"] * (W if OVERLAP_TIMES_W[stage - 1] else 1.0) * a * (b / a) ** frac
         cx, cy = pos[..., 0], pos[..., 1]
@@ -731,7 +739,7 @@ def better_attempt(a, b):
 
 def staged_place(graph, constraints, roles, width, height, *, seed, iters, orient, inflation, spread,
                  channel_rules, initial_positions, initial_rotations, poses, keepouts, clearance, grid_mm,
-                 legalize_spread, mobility, pair_weights=None):
+                 legalize_spread, mobility, pair_weights=None, pad_edge=None):
     """Staged global placement, power-first legalization, one bounded retry.
 
     Returns the legal graph. Legalization can undo a hot loop while barely
@@ -781,7 +789,8 @@ def staged_place(graph, constraints, roles, width, height, *, seed, iters, orien
                 group_limits=hard_group_limits(constraints, poses, partial=True),
                 group_edges=hard_group_edges(constraints), rotations=resolve_hard_rotations(constraints),
                 mobility=mobility, keepouts=keepouts, clearance=clearance, grid_mm=grid_mm,
-                inflation=inflation, spread=legalize_spread, roles=roles)
+                inflation=inflation, spread=legalize_spread, roles=roles,
+                **({} if pad_edge is None else dict(pad_edge=pad_edge)))
         except LegalizationError as exc:
             out["error"] = exc
             return out

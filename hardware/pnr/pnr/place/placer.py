@@ -11,7 +11,7 @@ from pnr.graph import BoardGraph, BoardOutline
 
 from . import metrics
 from .geometry import keepout_rects, outline_size, resolve_fixed_poses, hard_group_limits, hard_group_edges, resolve_hard_rotations, set_component_side, apply_hard_sides
-from .legalize import legalize
+from .legalize import legalize, pad_edge_rule
 from .model import global_place
 
 
@@ -89,9 +89,11 @@ def place(
     """
     # Edge rows are optimized across complete global starts. These temporary
     # search choices are distinct from authored absolute locks.
+    # PNR_PAD_EDGE_CLEARANCE=1: pads/drills keep the fab edge rules (None = off).
+    pad_edge = pad_edge_rule(constraints, channel_rules)
     if any(c.kind == "row" and not c.params.get("trial_resolved") for c in constraints.constraints):
         from .rows import sample_constraints
-        constraints = sample_constraints(graph,constraints,seed)
+        constraints = sample_constraints(graph,constraints,seed,**({} if pad_edge is None else dict(pad_edge=pad_edge)))
     # The source compiler emits every footprint on top. Apply physical side
     # constraints before any obstacle/HPWL calculations, including pad mirroring.
     graph = BoardGraph.from_json(graph.to_json())
@@ -122,8 +124,9 @@ def place(
             keepouts=keepouts, clearance=clearance, grid_mm=grid_mm,
             legalize_spread=min(spread, _LEGALIZE_SPREAD_CAP), pair_weights=pair_weights,
             mobility={ref:dict(source_fixed=not bool(c.params.get('row_trial')),row_trial=c.params.get('row_trial'))
-                      for c in constraints.constraints if c.kind=='fixed' for ref in c.refs})
-        return _finish(placed, graph, constraints, width, height, baseline)
+                      for c in constraints.constraints if c.kind=='fixed' for ref in c.refs},
+            **({} if pad_edge is None else dict(pad_edge=pad_edge)))
+        return _finish(placed, graph, constraints, width, height, baseline, pad_edge)
 
     # 1. Global placement (continuous position + orientation).
     positions, rotations = global_place(
@@ -171,11 +174,12 @@ def place(
         # full spread here would over-reserve and fail to fit on a tight outline
         # (grow the outline via the rubber-band instead).
         spread=min(spread, _LEGALIZE_SPREAD_CAP),
+        **({} if pad_edge is None else dict(pad_edge=pad_edge)),
     )
-    return _finish(placed, graph, constraints, width, height, baseline)
+    return _finish(placed, graph, constraints, width, height, baseline, pad_edge)
 
 
-def _finish(placed, graph, constraints, width, height, baseline):
+def _finish(placed, graph, constraints, width, height, baseline, pad_edge=None):
     # Stamp the *placement region* as the placed board's outline, so downstream
     # steps (writeback framing, route SVG) use the constraint-resolved region
     # rather than the incoming atopile-framed one.
@@ -183,6 +187,13 @@ def _finish(placed, graph, constraints, width, height, baseline):
 
     # 3. Score (hard checks at zero tolerance — strict no-overlap / in-outline).
     v = metrics.hard_violations(placed, constraints, clearance=0.0)
+    if pad_edge is not None:
+        # PNR_PAD_EDGE_CLEARANCE=1: copper/drills of a movable part too close to
+        # the outline count as outside it (the legalizer never produces this).
+        exempt = set(constraints.locked_refs) | set(resolve_fixed_poses(placed, constraints))
+        bad = metrics.pad_edge_violations(placed, width, height, pad_edge, exclude=exempt)
+        if bad:
+            v["outside_outline"] = sorted(set(v["outside_outline"]) | set(bad))
     report = PlacementReport(
         width=width,
         height=height,

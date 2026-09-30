@@ -12,7 +12,8 @@ from pathlib import Path
 
 import yaml
 
-KI_PY = '/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3'
+# PNR_KICAD_PYTHON overrides the KiCad python (headless bundle); unset keeps the old default.
+KI_PY = os.environ.get('PNR_KICAD_PYTHON', '/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3')
 PNR_ROOT = Path(__file__).resolve().parents[2]
 SRC_ROOT = Path(__file__).resolve().parents[4]
 

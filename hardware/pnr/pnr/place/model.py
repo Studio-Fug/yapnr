@@ -126,6 +126,11 @@ def global_place(
     # Courtyard half-size per candidate angle: swap w/h at 90/270.
     swapped = half[:, [1, 0]]
     half4 = torch.stack([half, swapped, half, swapped], dim=1)  # (n, 4, 2)
+    # Block macros with per-side hulls (PNR_MACRO_HULL=1): overlap over per-side
+    # bodies instead of whole courtyards; None (the unchanged path) otherwise.
+    from .hull import gp_bodies, gp_overlap
+    bodies = gp_bodies(comps, [max(1.0, spread, float((inflation or {}).get(c.ref, 1.0))) for c in comps]
+                       if (inflation or spread > 1.0) else None)
 
     poses = resolve_fixed_poses(graph, constraints)
     is_fixed = torch.zeros(n, dtype=torch.bool)
@@ -295,13 +300,16 @@ def global_place(
         hw, hh = exp_half[:, 0], exp_half[:, 1]
 
         # Pairwise smooth overlap (spreading), upper triangle only.
-        dx = (pos[:, 0].unsqueeze(1) - pos[:, 0].unsqueeze(0)).abs()
-        dy = (pos[:, 1].unsqueeze(1) - pos[:, 1].unsqueeze(0)).abs()
-        sw = hw.unsqueeze(1) + hw.unsqueeze(0) + clearance
-        sh = hh.unsqueeze(1) + hh.unsqueeze(0) + clearance
-        ox = torch.clamp(sw - dx, min=0.0)
-        oy = torch.clamp(sh - dy, min=0.0)
-        overlap = torch.triu(ox * oy * side_overlap, diagonal=1).sum()
+        if bodies is None:
+            dx = (pos[:, 0].unsqueeze(1) - pos[:, 0].unsqueeze(0)).abs()
+            dy = (pos[:, 1].unsqueeze(1) - pos[:, 1].unsqueeze(0)).abs()
+            sw = hw.unsqueeze(1) + hw.unsqueeze(0) + clearance
+            sh = hh.unsqueeze(1) + hh.unsqueeze(0) + clearance
+            ox = torch.clamp(sw - dx, min=0.0)
+            oy = torch.clamp(sh - dy, min=0.0)
+            overlap = torch.triu(ox * oy * side_overlap, diagonal=1).sum()
+        else:
+            overlap = gp_overlap(bodies, pos, p, clearance)
 
         # Outline containment.
         cx, cy = pos[:, 0], pos[:, 1]

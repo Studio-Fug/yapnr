@@ -8,6 +8,7 @@ bottom-left (see :mod:`pnr.graph`).
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
@@ -305,10 +306,23 @@ def placement_rects(comp):
     KiCad's explicit SMD attribute distinguishes a surface body containing
     thermal holes from a through-hole body/connector. Holes still exclude
     opposite components at their actual pad extents, not the whole body.
+
+    A block macro with a per-side hull (PNR_MACRO_HULL=1, :mod:`pnr.place.hull`)
+    reserves only its hull cover rectangles, each on its own side, plus its
+    inner-layer cover on the ``inner`` plane; with that flag drilled pads and
+    solid block macros also reserve the ``inner`` plane
+    (:func:`pnr.place.hull.inner_rects`), so drilled parts clear block inner copper.
     """
+    if getattr(comp, "hull", None):
+        from .hull import enabled, hull_placement_rects
+        if enabled():
+            return hull_placement_rects(comp)
     result=[(side,courtyard_rect(comp)) for side in occupied_sides(comp)]
     if comp.smd_body:
         opposite='bottom' if comp.side=='top' else 'top'
         for pad,(_,_,rect) in zip(comp.pads,pad_rects(comp)):
             if pad.through_hole:result.append((opposite,rect))
+    if os.environ.get("PNR_MACRO_HULL") == "1":
+        from .hull import inner_rects
+        result += inner_rects(comp)
     return result

@@ -86,13 +86,13 @@ def hubs(graph, blocks):
 
 def default_anchors(graph, constraints, hub_refs=()):
     """Parts no move may touch: hubs, fixed/locked/source-locked parts and board-level
-    interface parts (rows, edge alignment)."""
+    interface parts (rows, edge alignment, line groups)."""
     fixed = set(resolve_fixed_poses(graph, constraints)) | set(constraints.locked_refs)
     fixed |= {c.ref for c in graph.components if c.locked}
     fixed |= {
         r
         for con in constraints.constraints
-        if con.kind in ("row", "fixed", "edge_align")
+        if con.kind in ("row", "fixed", "edge_align", "line_group")
         for r in con.refs
     }
     return frozenset(fixed | set(hub_refs))

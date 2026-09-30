@@ -145,6 +145,8 @@ py_library(
     imports = ["."],
     deps = [
         ":pnr",
+        # Line groups (pnr.place.line_group) collapse into pnr.hier.macro macros.
+        ":pnr_hier",
         requirement("torch"),
         requirement("numpy"),
     ],
@@ -1179,6 +1181,22 @@ py_test(
     deps = [
         ":pnr",
         ":pnr_animate",
+    ],
+)
+
+# Line groups: parser, group layout, rigid placement, legality, macro collapse defaults.
+py_test(
+    name = "line_group_test",
+    size = "medium",
+    srcs = ["tests/test_line_group.py"],
+    imports = ["."],
+    main = "tests/test_line_group.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_hier",
+        ":pnr_place",
+        ":pnr_route",
     ],
 )
 

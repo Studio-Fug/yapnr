@@ -139,9 +139,11 @@ def hard_violations(
     poses = resolve_fixed_poses(graph, constraints)
     keepouts = keepout_rects(graph, constraints, poses)
     limits = hard_group_limits(constraints, {c.ref: c.pos for c in graph.components})
+    from .line_group import violations as line_violations
     from .rows import violations as row_violations
 
     rows_bad = row_violations(graph, constraints)
+    rows_bad = rows_bad + line_violations(graph, constraints)
     return {
         "overlaps": overlap_pairs(graph, clearance),
         "outside_outline": outside_outline(graph, width, height, exclude=constraints.locked_refs),
@@ -190,9 +192,10 @@ def translation_checker(graph, constraints, clearance=0.0):
     rotations_required = resolve_hard_rotations(constraints)
 
     def legal(comp):
+        from .line_group import violations as line_violations
         from .rows import violations as row_violations
 
-        if row_violations(graph, constraints):
+        if row_violations(graph, constraints) or line_violations(graph, constraints):
             return False
         rect = courtyard_rect(comp)
         sides = frozenset(occupied_sides(comp))

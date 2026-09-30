@@ -87,6 +87,12 @@ Owner decisions for the history import (PR1; [the migration plan](migration-plan
   as before, the `local-host` rule also reports a `.local` name right after `@`
   (`user@<host>.local`, as in ssh or git's guessed identity), besides hyphenated and URL `.local`
   names. Commit identities at any such name still fail `--identities`.
+- **Privacy scan: GitHub's service addresses on trailers** (decided 2026-09-30). Dependabot signs
+  its commits off with GitHub's support address (`support` at `github.com`), so both of its pull
+  requests failed the history scan. The owner chose to accept GitHub's own service addresses
+  (`GITHUB_SERVICE_ADDRESSES`, today only that address) only on a `Signed-off-by:` or `Co-authored-by:`
+  trailer line of the `--stdin` history scan. A patch line (it starts with its diff marker), any
+  other line, and every file scan still report it; personal addresses on trailers stay findings.
 
 Choices made in PR1 itself, following the plan; the owner reviews them with the pull request:
 

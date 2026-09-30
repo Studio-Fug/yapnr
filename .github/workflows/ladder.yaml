@@ -5,8 +5,10 @@ name: Ladder
 #
 #   pull request      cases 01 to 06, seed 0, baseline configuration, when engine inputs changed
 #   nightly (main)    all 8 cases, seeds 0 and 1, baseline; then all 8, seed 0, with the initial
-#                     placement pool and traces, rendered to animations (artifacts only)
-#   manual            cases, seeds and animations as given
+#                     placement pool and traces, rendered to animations (artifacts only); then
+#                     the showcases (designs.showcases() and 07-chaser-20, traced), rendered too
+#                     (informational: a showcase never decides the job)
+#   manual            cases, seeds, animations and showcases as given
 #
 # The ladder runs the checkout's engine sources (run.py freezes them), not the image's wheel. A
 # pull request can change the runtime pins, so a runtime guard compares the image's /opt/venv
@@ -36,6 +38,10 @@ on:
         description: Also run the traced pool ladder and render its animations
         type: boolean
         default: false
+      showcases:
+        description: Also run the showcase cases traced and render their animations
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -59,9 +65,11 @@ jobs:
       cases: ${{ steps.plan.outputs.cases }}
       seeds: ${{ steps.plan.outputs.seeds }}
       animate: ${{ steps.plan.outputs.animate }}
+      showcases: ${{ steps.plan.outputs.showcases }}
       timeout: ${{ steps.plan.outputs.timeout }}
       baseline_minutes: ${{ steps.plan.outputs.baseline_minutes }}
       traced_minutes: ${{ steps.plan.outputs.traced_minutes }}
+      showcase_minutes: ${{ steps.plan.outputs.showcase_minutes }}
     steps:
       - name: Setup repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -78,11 +86,13 @@ jobs:
           INPUT_CASES: ${{ inputs.cases }}
           INPUT_SEEDS: ${{ inputs.seeds }}
           INPUT_ANIMATE: ${{ inputs.animate }}
+          INPUT_SHOWCASES: ${{ inputs.showcases }}
         run: |
           run=true
           cases=""
           seeds="0"
           animate=false
+          showcases=false
           if [ "${EVENT}" = pull_request ]; then
             cases="${PR_CASES}"
             changed="$(git diff --name-only "${PR_BASE}...${PR_HEAD}")"
@@ -98,10 +108,12 @@ jobs:
           elif [ "${EVENT}" = schedule ]; then
             seeds="0 1"
             animate=true
+            showcases=true
           else
             cases="${INPUT_CASES}"
             seeds="${INPUT_SEEDS:-0}"
             animate="${INPUT_ANIMATE:-false}"
+            showcases="${INPUT_SHOWCASES:-false}"
           fi
           # Step budgets (minutes) that fit the job's: the runtime guard may take up to 20,
           # the image pull, summaries and uploads about 10.
@@ -118,6 +130,13 @@ jobs:
             traced_minutes=0
             timeout=150
           fi
+          # The showcases (about 10 minutes on the development Mac; never measured on the
+          # runner) have their own budget, added to the job's only when they run.
+          showcase_minutes=0
+          if [ "${showcases}" = true ]; then
+            showcase_minutes=45
+            timeout=$((timeout + showcase_minutes))
+          fi
           if [ "${run}" = true ] && [ "${EVENT}" = pull_request ] \
               && echo "${changed}" | grep -E '^docker/yapnr-kicad/' | grep -qvE '\.md$'; then
             echo "::notice::docker/yapnr-kicad changed: the new KiCad base is not published yet," \
@@ -130,9 +149,11 @@ jobs:
             echo "cases=${cases}"
             echo "seeds=${seeds}"
             echo "animate=${animate}"
+            echo "showcases=${showcases}"
             echo "timeout=${timeout}"
             echo "baseline_minutes=${baseline_minutes}"
             echo "traced_minutes=${traced_minutes}"
+            echo "showcase_minutes=${showcase_minutes}"
           } | tee -a "${GITHUB_OUTPUT}"
 
   ladder:
@@ -241,13 +262,39 @@ jobs:
           python3 tools/ci/ladder_summary.py out/traced --title "Regression ladder (traced, initial pool)" \
             >> "${GITHUB_STEP_SUMMARY}"
 
+      # Informational: the showcases (designs.showcases(), outside the ladder) and 07-chaser-20, the
+      # free half of the line-group comparison. A failure or a timeout is a notice, never the job.
+      - name: Run the showcases (traced, informational)
+        if: always() && needs.plan.outputs.showcases == 'true'
+        env:
+          MINUTES: ${{ needs.plan.outputs.showcase_minutes }}
+        run: |
+          status=0
+          timeout --kill-after=60 "${MINUTES}m" \
+            docker run --rm --init -u "$(id -u):$(id -g)" -v "${PWD}:/work" -w /work \
+              --shm-size 1g --entrypoint /usr/local/bin/yapnr-kicad-env "${LADDER_IMAGE}" \
+              "${LADDER_PY}" hardware/pnr/regression/run.py --repo /work --out /work/out/showcases \
+                --python "${LADDER_PY}" --kicad-python /usr/bin/python3 \
+                --kicad-cli /usr/bin/kicad-cli --library /usr/share/kicad/footprints \
+                --timeout 1200 --seed 0 --trace --trace-placement-every 5 --initial-pool \
+                --initial-starts 8 --initial-finalists 3 --showcases \
+                --case 07-chaser-20 --case line-chaser-20 --case edge-io-12-free \
+                --case edge-io-12 --case hier-twin-bank-32 || status=$?
+          mkdir -p out/showcases
+          echo "${LADDER_IMAGE}" > out/showcases/image.txt
+          python3 tools/ci/ladder_summary.py out/showcases --title "Showcases (traced, informational)" \
+            >> "${GITHUB_STEP_SUMMARY}" || true
+          if [ "${status}" != 0 ]; then
+            echo "::notice::the showcases did not all pass (informational: they never decide the job)"
+          fi
+
       - name: Collect the boards of failed cases
         if: always()
         run: |
           python3 - <<'EOF'
           import json, shutil
           from pathlib import Path
-          for run in (Path("out/ladder"), Path("out/traced")):
+          for run in (Path("out/ladder"), Path("out/traced"), Path("out/showcases")):
               path = run / "summary.json"
               if not path.is_file():
                   continue
@@ -294,6 +341,21 @@ jobs:
             out/traced/*/result.json
             out/traced/*/trace/
 
+      - name: Upload the showcase run
+        if: always() && needs.plan.outputs.showcases == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ladder-showcases
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            out/showcases/summary.json
+            out/showcases/provenance.json
+            out/showcases/image.txt
+            out/showcases/*-version.txt
+            out/showcases/*/result.json
+            out/showcases/*/trace/
+
       - name: The baseline ladder decides the job
         env:
           STATUS: ${{ steps.baseline.outputs.status }}
@@ -301,7 +363,9 @@ jobs:
 
   animations:
     needs: [plan, ladder]
-    if: always() && needs.plan.outputs.animate == 'true' && needs.ladder.result != 'skipped'
+    if: >-
+      always() && needs.ladder.result != 'skipped'
+      && (needs.plan.outputs.animate == 'true' || needs.plan.outputs.showcases == 'true')
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
     steps:
@@ -325,12 +389,14 @@ jobs:
           restore-keys: bazel-repo-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Download the traced run
+        if: needs.plan.outputs.animate == 'true'
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ladder-traced
           path: out/traced
 
       - name: Render the animations
+        if: needs.plan.outputs.animate == 'true'
         run: |
           image="$(cat out/traced/image.txt 2>/dev/null || true)"
           bazel run //hardware/pnr:ladder_animations --config=ci \
@@ -338,8 +404,29 @@ jobs:
             --render-only "${GITHUB_WORKSPACE}/out/traced" --out "${GITHUB_WORKSPACE}/out/animations" \
             --allow-failed --image "${image}"
 
+      - name: Download the showcase run
+        if: needs.plan.outputs.showcases == 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ladder-showcases
+          path: out/showcases
+
+      # Informational: a showcase that failed or cannot be rendered is a notice.
+      - name: Render the showcase animations
+        if: needs.plan.outputs.showcases == 'true'
+        run: |
+          image="$(cat out/showcases/image.txt 2>/dev/null || true)"
+          mkdir -p out/animations
+          bazel run //hardware/pnr:showcase_animations --config=ci \
+            --repository_cache="$HOME/.cache/bazel-repo" -- \
+            --render-only "${GITHUB_WORKSPACE}/out/showcases" --out "${GITHUB_WORKSPACE}/out/animations" \
+            --allow-failed --image "${image}" \
+            || echo "::notice::the showcase animations could not be rendered (informational)"
+
       # Refreshing docs/animations stays a deliberate change; a drift is a notice, never a failure.
       - name: Compare with the committed animations
+        if: needs.plan.outputs.animate == 'true'
         run: |
           python3 - <<'EOF'
           import json

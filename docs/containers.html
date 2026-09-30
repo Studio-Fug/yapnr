@@ -346,9 +346,12 @@ so <code class="docutils literal notranslate"><span class="pre">edge</span></cod
 release <code class="docutils literal notranslate"><span class="pre">vX.Y.Z</span></code>, <code class="docutils literal notranslate"><span class="pre">X.Y.Zrc(K+1).devN+g&lt;sha&gt;</span></code> after the release candidate <code class="docutils literal notranslate"><span class="pre">vX.Y.Z-rc.K</span></code>, and
 <code class="docutils literal notranslate"><span class="pre">0.0.0.devN+g&lt;sha&gt;</span></code> before the first release.</p>
 <p>Pin <code class="docutils literal notranslate"><span class="pre">X.Y</span></code>, or a digest (<code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr&#64;sha256:...</span></code>) for reproducible runs. Results can
-change between minor versions (see <a class="reference internal" href="releases.html"><span class="std std-doc">releases</span></a>). The KiCad version is part of the
-image, not of the tag: a KiCad patch update ships as a yapnr patch release. The image label
-<code class="docutils literal notranslate"><span class="pre">io.github.studio-fug.yapnr.kicad.version</span></code> and the release notes name it.</p>
+change between minor versions (see <a class="reference internal" href="releases.html"><span class="std std-doc">releases</span></a>). They also differ between platforms
+(operating system and architecture, for example the arm64 image and a Mac): the same inputs and
+seed give a different board, of the same quality on average, because the torch builds round a few
+float operations differently (<a class="reference internal" href="decisions.html"><span class="std std-doc">decisions</span></a>). Compare runs on one platform. The KiCad
+version is part of the image, not of the tag: a KiCad patch update ships as a yapnr patch release.
+The image label <code class="docutils literal notranslate"><span class="pre">io.github.studio-fug.yapnr.kicad.version</span></code> and the release notes name it.</p>
 <p><code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr-kicad</span></code> is tagged <code class="docutils literal notranslate"><span class="pre">&lt;KiCad</span> <span class="pre">version&gt;-&lt;N&gt;</span></code> (for example <code class="docutils literal notranslate"><span class="pre">10.0.6-1</span></code>; <code class="docutils literal notranslate"><span class="pre">N</span></code>
 counts rebuilds of one KiCad version, and such a tag is never overwritten), plus the moving
 <code class="docutils literal notranslate"><span class="pre">10.0.6</span></code> and <code class="docutils literal notranslate"><span class="pre">10.0</span></code>. <code class="docutils literal notranslate"><span class="pre">10.0.6-1-src</span></code> holds the source packages of that KiCad build (see

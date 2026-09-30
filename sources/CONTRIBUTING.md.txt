@@ -47,8 +47,8 @@ Never commit machine paths, host names, network addresses, personal e-mail addre
 logs or conversation transcripts. The allowlisted commit addresses are no exception in file
 contents: only the allowlist file may name them. The privacy scan (`tools/privacy_scan.py`) runs
 as a pre-commit hook, as a Bazel test over the whole tree, and in CI over the messages and patches
-of every new commit (where the allowlisted commit addresses pass, since every commit header
-carries them).
+of every new commit, merge commits' diffs included (where the allowlisted commit addresses pass,
+since every commit header carries them).
 
 ## Reporting security issues
 

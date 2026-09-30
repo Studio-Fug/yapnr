@@ -277,33 +277,40 @@
 <h1>Worklog<a class="headerlink" href="#worklog" title="Link to this heading">¶</a></h1>
 <p>A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.</p>
-<p>Last updated: 2026-09-30 (PR2).</p>
+<p>Last updated: 2026-09-30 (engine hygiene).</p>
 <section id="in-progress">
 <h2>In progress<a class="headerlink" href="#in-progress" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><strong>PR2, newer engine state</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/pr2-hier-engine</span></code>, not pushed): the engine state that
-was never committed in Splanc, as one commit per snapshot (engine tree equal to the snapshot,
-four files scrubbed at staging): F217 (the Codex agent’s working-tree work), the hierarchical
-line src8b to src14, the USB pair (src12b, src13) and N-0001 (src12n) side lines joined by an
-octopus merge (src15.r1), src15 (the H7 engine), then Electrical221 merged in (two resolved
-conflicts), the Bazel adaptation and the docs. <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//...</span></code> 100/100; three budget tests,
-<code class="docutils literal notranslate"><span class="pre">detail_route_test</span></code> and <code class="docutils literal notranslate"><span class="pre">orientation_test</span></code> stay <code class="docutils literal notranslate"><span class="pre">manual</span></code>. Lineage, scrub, checks and the PR3
-leftovers: <a class="reference internal" href="docs/history/import-manifest.html#pr2-the-uncommitted-engine-state"><span class="std std-ref">docs/history/import-manifest.md</span></a>.
-<strong>Merge with a merge commit</strong>, never squash; the commits before the adaptation do not build.</p></li>
+<li><p><strong>Engine hygiene</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/engine-hygiene</span></code>, not pushed), the PR3 leftovers of PR2
+(merged, #7): Electrical221’s cleanup gated default off (<code class="docutils literal notranslate"><span class="pre">PNR_PARTIAL_CYCLE_CLEANUP</span></code>,
+<code class="docutils literal notranslate"><span class="pre">PNR_BARREL_CONTACT_BRIDGES</span></code>; the default is src15 again), the <code class="docutils literal notranslate"><span class="pre">board.Remove</span></code> audit (27 calls
+now <code class="docutils literal notranslate"><span class="pre">board.Delete</span></code>, 3 kept; <code class="docutils literal notranslate"><span class="pre">board_delete_test</span></code> checks each call; replayed on H7’s real boards
+for five sites with identical results), every engine subprocess bounded through <code class="docutils literal notranslate"><span class="pre">pnr.proc</span></code>
+(<code class="docutils literal notranslate"><span class="pre">PNR_WORKER_TIMEOUT</span></code>, <code class="docutils literal notranslate"><span class="pre">PNR_PHASE_TIMEOUT</span></code>, <code class="docutils literal notranslate"><span class="pre">PNR_EVALUATION_TIMEOUT</span></code>; 0 means no limit; a
+timeout kills the child’s whole process tree; a deadline kill is not retried; <code class="docutils literal notranslate"><span class="pre">proc_test</span></code>),
+CI’s history scan with merge diffs (<code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">log</span> <span class="pre">-p</span> <span class="pre">--diff-merges=separate</span></code>), and
+<code class="docutils literal notranslate"><span class="pre">orientation_test</span></code> re-enabled as <code class="docutils literal notranslate"><span class="pre">large</span></code> (#6: placement is deterministic per platform only, so
+it compares a three-seed mean with a 5 % margin, a coarse guard, and checks known best angles
+on a synthetic board; passes on macOS and linux-aarch64). The review’s findings are fixed in
+follow-up commits on the branch. Reasons and limits: <a class="reference internal" href="docs/decisions.html"><span class="std std-doc">docs/decisions.md</span></a>;
+struck leftovers:
+<a class="reference internal" href="docs/history/import-manifest.html#known-leftovers-for-pr3"><span class="std std-ref">docs/history/import-manifest.md</span></a>.</p></li>
 </ul>
 </section>
 <section id="next">
 <h2>Next<a class="headerlink" href="#next" title="Link to this heading">¶</a></h2>
 <ol class="arabic simple">
-<li><p>Owner: review and push PR2 and open it; CI must be green. Decide on Electrical221’s default-on
-cleanup (gate it or A/B it; decisions) and, optionally, on making CI’s history scan include
-merge diffs (<code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">log</span> <span class="pre">-p</span> <span class="pre">-m</span></code>): its current form shows no diff for PR2’s two merges (both were
-scanned with <code class="docutils literal notranslate"><span class="pre">-m</span></code> locally).</p></li>
+<li><p>Owner: review and push the hygiene branch and open its PR; CI must be green (it runs
+<code class="docutils literal notranslate"><span class="pre">orientation_test</span></code> again; close #6 with it).</p></li>
+<li><p>Owner: A/B Electrical221’s two flags on the hierarchical engine before turning them on.
+Before the next experiment runs this engine, one rung-1 evaluation with it (<code class="docutils literal notranslate"><span class="pre">board.Delete</span></code>
+everywhere) when the Mac is free: the replay covered 5 of the 27 changed sites, and a full
+evaluation’s nested workers exceed the two-KiCad-process budget kept while H7 runs.</p></li>
 <li><p>Owner: push Splanc’s <code class="docutils literal notranslate"><span class="pre">splanc-mini</span></code>, so the 9 newest <code class="docutils literal notranslate"><span class="pre">Imported-From</span></code> links of PR1 resolve (see the
 manifest).</p></li>
-<li><p>PR6a, then PR3: wire the 68 unwired engine test files with the glob macro, bound the workers
-that have no timeout, and replace the Splanc defaults and fixtures (manifest, “Known leftovers
-for PR3”). PR2e: the <code class="docutils literal notranslate"><span class="pre">board.Remove</span></code> audit.</p></li>
+<li><p>PR6a, then PR3: wire the 68 unwired engine test files with the glob macro (the two hygiene tests
+are wired) and replace the Splanc defaults and fixtures (manifest, “Known leftovers for PR3”).
+The KiCad-dependent tests run under the headless KiCad Python only (DEVELOPERS.md).</p></li>
 <li><p>PR-R is merged (#2). Its first <code class="docutils literal notranslate"><span class="pre">main</span></code> build pushes <code class="docutils literal notranslate"><span class="pre">yapnr-kicad:10.0.6-1-src</span></code>, then
 <code class="docutils literal notranslate"><span class="pre">yapnr-kicad:10.0.6-1</span></code> (with <code class="docutils literal notranslate"><span class="pre">10.0.6</span></code> and <code class="docutils literal notranslate"><span class="pre">10.0</span></code>), then <code class="docutils literal notranslate"><span class="pre">yapnr:edge</span></code>. Then make both GHCR
 packages <strong>public</strong> (package settings &gt; Change visibility; irreversible, owner-approved). The
@@ -344,6 +351,17 @@ to refine the scan’s e-mail rule instead (<code class="docutils literal notran
 from it. Filter a scratch clone and remove its <code class="docutils literal notranslate"><span class="pre">origin</span></code> remote first (migration plan §7.5).</p></li>
 <li><p>Scrubbing imported machine paths in a later commit: the earlier commits would still publish them.
 Scrub each snapshot when it is staged, before its commit (PR2).</p></li>
+<li><p>Reproducing the <code class="docutils literal notranslate"><span class="pre">board.Remove</span></code> teardown SIGSEGV on synthetic boards: <code class="docutils literal notranslate"><span class="pre">Remove</span></code> and <code class="docutils literal notranslate"><span class="pre">Delete</span></code> both
+exit 0 there (zones, footprints, tracks, vias, any free order); the evidence is src12i’s run.
+On H7’s real boards <code class="docutils literal notranslate"><span class="pre">Remove</span></code> did not crash either (it leaks: SWIG’s “no destructor found”).</p></li>
+<li><p>Using SWIG’s “memory leak … no destructor found” messages in H7 logs to find the <code class="docutils literal notranslate"><span class="pre">Remove</span></code>
+sites a run reached: only some item types print it (shove’s messages are <code class="docutils literal notranslate"><span class="pre">SHAPE_SEGMENT</span></code>,
+not <code class="docutils literal notranslate"><span class="pre">Remove</span></code>). Trace <code class="docutils literal notranslate"><span class="pre">BOARD.Delete</span></code>/<code class="docutils literal notranslate"><span class="pre">BOARD.Remove</span></code> calls instead.</p></li>
+<li><p>Making placement bitwise identical across macOS and Linux (thread count, deterministic
+algorithms, float64 <code class="docutils literal notranslate"><span class="pre">exp</span></code>/<code class="docutils literal notranslate"><span class="pre">log</span></code>): the thread count is already 1, deterministic mode changes
+nothing, and Adam’s <code class="docutils literal notranslate"><span class="pre">addcmul</span></code> also rounds differently between the torch builds (#6).</p></li>
+<li><p>Comparing one seed’s HPWL between placer variants, or across platforms: the per-seed spread
+(about 100 mm, 5 %) exceeds most effects; compare means over seeds on one platform (#6).</p></li>
 </ul>
 </section>
 </section>

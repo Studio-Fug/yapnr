@@ -402,13 +402,105 @@ appendix B.</p></li>
 <li><p><strong>Electrical221 is imported as it ran in Splanc.</strong> Its <code class="docutils literal notranslate"><span class="pre">via_coalesce</span></code>/<code class="docutils literal notranslate"><span class="pre">track_graph</span></code> cleanup is
 on by default without a flag or an A/B result, unlike the rule for new engine behaviour; the H7
 run uses <code class="docutils literal notranslate"><span class="pre">src15</span></code> without it. It stays as imported (faithful to Splanc’s working tree) until the
-owner decides between gating it and an A/B run.</p></li>
+owner decides between gating it and an A/B run. (Superseded: gated, default off, in the engine
+hygiene change below.)</p></li>
 <li><p><strong>src8b’s default changes stay</strong> (the <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> fab profile, bounded workers, the
 parallel-commit fix, plane-access reuse): they predate the default-off rule and are documented,
 with their measurements, in the src8b commit.</p></li>
 <li><p><strong>The Splanc working tree’s viewer changes (<code class="docutils literal notranslate"><span class="pre">pnr_live</span></code>) go to PR4,</strong> not PR2: the cost service
 imports <code class="docutils literal notranslate"><span class="pre">pnr.capacitor_intent</span></code>, which was never committed, and the README reintroduces machine
 names that PR1 scrubbed.</p></li>
+</ul>
+<p>Choices made in the engine hygiene change after PR2 (branch <code class="docutils literal notranslate"><span class="pre">claude/engine-hygiene</span></code>; the PR3
+leftovers of the <a class="reference internal" href="history/import-manifest.html#known-leftovers-for-pr3"><span class="std std-ref">import manifest</span></a>); the owner
+reviews them with the pull request:</p>
+<ul class="simple">
+<li><p><strong>Electrical221’s cleanup is gated, default off,</strong> which makes the default engine behave as
+<code class="docutils literal notranslate"><span class="pre">src15</span></code>, the engine of the H7 experiment, again. <code class="docutils literal notranslate"><span class="pre">PNR_PARTIAL_CYCLE_CLEANUP=1</span></code> enables the
+partial-track cycle edits (and the stricter cycle-trial match); <code class="docutils literal notranslate"><span class="pre">PNR_BARREL_CONTACT_BRIDGES=1</span></code>
+enables the bridges for barrel-contact tails. Two flags rather than one, so an A/B can separate
+them. Turning them on needs an A/B on the hierarchical engine (the rule for new behaviour);
+Electrical221’s own evidence is in its import commit. The full electrical pool was already
+opt-in (<code class="docutils literal notranslate"><span class="pre">PNR_FULL_ELECTRICAL_POOL=1</span></code>). The coalesce report keeps Electrical221’s two summary
+keys, which are reporting only.</p></li>
+<li><p><strong>Discarded KiCad items are deleted with <code class="docutils literal notranslate"><span class="pre">board.Delete</span></code>, never <code class="docutils literal notranslate"><span class="pre">board.Remove</span></code>.</strong> <code class="docutils literal notranslate"><span class="pre">Remove</span></code> makes
+the Python wrapper the item’s owner, so the item can be freed after its board (the teardown
+SIGSEGV of <code class="docutils literal notranslate"><span class="pre">fanout_reserve.release</span></code>, fixed in src12i). <code class="docutils literal notranslate"><span class="pre">Remove</span></code> stays only for an item that is
+re-added, kept alive on purpose (the warm DRC keepalive arena) or detached with
+<code class="docutils literal notranslate"><span class="pre">thisown=False</span></code>. Code must not use a wrapper of a deleted item, so it reads uuids and sizes
+first. <code class="docutils literal notranslate"><span class="pre">//hardware/pnr:board_delete_test</span></code> fails on any <code class="docutils literal notranslate"><span class="pre">Remove</span></code> call beyond the three it lists
+(per call, so a new one in a kept file fails too). The signal retries of <code class="docutils literal notranslate"><span class="pre">via_coalesce</span></code> and
+<code class="docutils literal notranslate"><span class="pre">native_loop</span></code> and the <code class="docutils literal notranslate"><span class="pre">os._exit(0)</span></code> of the hier workers stay as a second line of defence.
+Replayed on the H7 experiment’s real boards against the pre-audit code, the five sites those
+steps reach (<code class="docutils literal notranslate"><span class="pre">hier.subpcb</span></code>, <code class="docutils literal notranslate"><span class="pre">electrical_repair</span></code>’s blocker segments, <code class="docutils literal notranslate"><span class="pre">via_coalesce.apply</span></code>,
+<code class="docutils literal notranslate"><span class="pre">track_graph.apply_cycle</span></code>, <code class="docutils literal notranslate"><span class="pre">shove.ladder</span></code>’s rip-up; 176 items) give the same boards and
+reports, exit cleanly, and no longer print SWIG’s “memory leak … no destructor found”
+messages. The Delete run’s placement, plane-access and coalesce geometry equals H7’s own
+(src15) boards. A full rung-1 evaluation, which reaches the other sites, is left for a quiet
+machine: its nested workers exceed the two-process KiCad budget kept while H7 runs.</p></li>
+<li><p><strong>Every engine subprocess has a deadline, through <code class="docutils literal notranslate"><span class="pre">pnr.proc</span></code>,</strong> with three env-overridable
+limits sized as wedge guards from the H2 to H7 records: <code class="docutils literal notranslate"><span class="pre">PNR_WORKER_TIMEOUT</span></code> (1800 s, unchanged;
+a worker with its own <code class="docutils literal notranslate"><span class="pre">--seconds</span></code> budget gets at least twice that plus 600 s),
+<code class="docutils literal notranslate"><span class="pre">PNR_PHASE_TIMEOUT</span></code> (4 h, a phase of bounded workers; the longest observed phase took 90 s) and
+<code class="docutils literal notranslate"><span class="pre">PNR_EVALUATION_TIMEOUT</span></code> (max(48 h, 48 x the native budget), one <code class="docutils literal notranslate"><span class="pre">pnr.full_iteration</span></code>; the
+longest observed evaluation took 18.3 h for a 5400 s budget). <code class="docutils literal notranslate"><span class="pre">0</span></code>, a negative value or <code class="docutils literal notranslate"><span class="pre">inf</span></code>
+means no limit (an explicit opt-out; <code class="docutils literal notranslate"><span class="pre">0</span></code> does not mean “kill at once”). A timed-out child
+counts as a failed worker (exit -9), as a crash did before, and the signal retries of
+<code class="docutils literal notranslate"><span class="pre">native_loop</span></code> and <code class="docutils literal notranslate"><span class="pre">via_coalesce</span></code> do not rerun it (a wedge, not a crash). Only the parent
+enforces a deadline, so a timeout kills the child’s whole process tree: the child, every
+descendant (stopped with SIGSTOP first, so nothing forks away) and every process group a
+descendant leads. The workers of a killed <code class="docutils literal notranslate"><span class="pre">pnr.full_iteration</span></code> run in their own groups and
+would otherwise outlive it without a deadline. An interrupted wait (Ctrl-C) kills the tree
+too, as <code class="docutils literal notranslate"><span class="pre">subprocess.run</span></code> kills its child. The converted calls, the subpcb cut included, keep
+the child in the caller’s process group (<code class="docutils literal notranslate"><span class="pre">session=False</span></code>), as their plain <code class="docutils literal notranslate"><span class="pre">subprocess.run</span></code>
+did, so stopping a run’s process group still stops them; the existing <code class="docutils literal notranslate"><span class="pre">pnr.proc</span></code> callers keep
+their own groups. A nested deadline only binds when it is shorter than its parent’s: the
+4 h <code class="docutils literal notranslate"><span class="pre">PNR_PHASE_TIMEOUT</span></code> of <code class="docutils literal notranslate"><span class="pre">keyhole_region</span></code>’s cleanup pass applies when the tool runs on its
+own, while under the native loop and the repair adapters the 1800 s (or <code class="docutils literal notranslate"><span class="pre">worker_timeout</span></code>)
+deadline of the whole <code class="docutils literal notranslate"><span class="pre">keyhole_region</span></code> worker comes first. <code class="docutils literal notranslate"><span class="pre">//hardware/pnr:proc_test</span></code> fails on
+any new subprocess call without a deadline (aliased imports included); the opt-in warm DRC
+host daemon is the one exception (its session ends it).</p></li>
+<li><p><strong>CI’s history scan includes merge diffs</strong> (<code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">log</span> <span class="pre">-p</span> <span class="pre">--diff-merges=separate</span></code>): a merge
+commit’s diff against each parent is scanned, so a conflict resolution cannot bypass the scan
+(PR2’s two merges were checked this way only locally). The explicit option, not <code class="docutils literal notranslate"><span class="pre">-m</span></code>, because
+<code class="docutils literal notranslate"><span class="pre">-m</span></code> follows <code class="docutils literal notranslate"><span class="pre">log.diffMerges</span></code>, and <code class="docutils literal notranslate"><span class="pre">first-parent</span></code> there drops the second parent’s diff.</p></li>
+<li><p><strong>The docs enable MyST’s <code class="docutils literal notranslate"><span class="pre">strikethrough</span></code> extension</strong> so status lists (the manifest’s PR3
+leftovers, the plan’s appendix B) can strike done items instead of deleting them.</p></li>
+<li><p><strong>Placement is reproducible per platform, not across platforms</strong> (Studio-Fug/yapnr#6). The same
+inputs and seed give one board on macOS arm64 and another on linux-aarch64 (the CI runner and
+the images). Measured with torch 2.3.1 and numpy 1.26.4 on both: the seeded start, the thread
+count (1) and the legalizer agree bit for bit (each platform’s global placement legalizes to
+the other’s board exactly), and <code class="docutils literal notranslate"><span class="pre">torch.use_deterministic_algorithms(True)</span></code> changes nothing. The
+two torch wheels round float32 <code class="docutils literal notranslate"><span class="pre">exp</span></code> (0.6 % of inputs), <code class="docutils literal notranslate"><span class="pre">log</span></code> (0.1 %) and <code class="docutils literal notranslate"><span class="pre">addcmul</span></code> (0.07 %,
+Adam’s second moment) differently by one ulp. The first gradient difference appears at the
+second optimizer step; the non-convex placement grows it to millimetres by step 200, and
+legalization turns that into another legal placement. Evaluating <code class="docutils literal notranslate"><span class="pre">exp</span></code> and <code class="docutils literal notranslate"><span class="pre">log</span></code> in float64
+removes the gradient difference but not Adam’s. The engine is not changed: bitwise
+cross-platform results would need torch’s transcendental and fused kernels replaced, would
+change every result, and would break again with the next torch build or on x86_64. Both
+platforms draw from the same distribution (30 seeds each; mean final HPWL with orientation
+1846 mm on macOS and 1838 mm on Linux, without 1862 mm and 1873 mm), so a run is reproducible
+on one image digest or one Mac environment, and comparisons between runs stay on one platform.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">orientation_test</span></code> checks what the placer guarantees.</strong> Its former check, oriented HPWL at
+most the position-only HPWL for seed 0, held on macOS by 3.6 mm (0.2 %) and failed on
+linux-aarch64 by 35 mm. Over those 30 seeds orientation beat position-only on 18 (macOS) and 20
+(Linux), a mean gain of 16 ± 18 mm and 36 ± 19 mm (± one standard error) against a per-seed
+spread of about 100 mm: the single-seed check fails on 22 of the 60 (platform, seed) pairs, and
+a median over three or five seeds on 27 to 32 % of the seed sets. The test now requires the
+mean HPWL of seeds 0 to 2 with orientation to be at most 5 % above the position-only mean
+(fails on 2.3 % of the seed triples of the measured pairs; the ratio is 0.997 on macOS and
+0.987 on Linux). That is a coarse guard, not proof that orientation costs no wirelength: a
+regression of up to 5 % passes, and the 90°/270° mix-up below fails it by 0.6 %. A tighter
+margin fails more seed triples on a new platform or torch build (2.5 %: 10.5 %; 3 %: 8.1 %;
+4 %: 4.4 %), so the margin stays and the synthetic board is the guard of the search. A
+synthetic board with known best angles, started from explicit positions so the seed does not
+matter, checks that the search finds them (22.5 mm against 42 mm); this well-conditioned
+problem gives the same result on both platforms. A 90°/270° mix-up in the
+rotation convention fails three of the checks. A golden result per platform was rejected: it
+pins numbers that every torch bump changes and cannot state the orientation claim (Linux’s
+seed 0 is worse than position-only). Nine placements take 44 s on the development Mac and 51 s
+on two linux-aarch64 cores; the shared CI runner, which took 77 s for the former three, needs
+an estimated 185 to 240 s, so the target is <code class="docutils literal notranslate"><span class="pre">large</span></code> (900 s) and no longer <code class="docutils literal notranslate"><span class="pre">manual</span></code>.</p></li>
 </ul>
 </section>
 <section id="pinned-versions">

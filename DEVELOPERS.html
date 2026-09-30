@@ -457,7 +457,8 @@ regenerate the image’s runtime locks with <code class="docutils literal notran
 <li><p><code class="docutils literal notranslate"><span class="pre">lint</span></code>: prek on all files; every new commit must use an address listed in
 <code class="docutils literal notranslate"><span class="pre">tools/privacy/allowed_identities.txt</span></code> (the owner’s public commit address) or a GitHub noreply
 address (<code class="docutils literal notranslate"><span class="pre">privacy_scan.py</span> <span class="pre">--identities</span></code>), and the new commits’ messages and patches are
-privacy-scanned.</p></li>
+privacy-scanned (<code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">log</span> <span class="pre">-p</span> <span class="pre">--diff-merges=separate</span></code>, so a merge commit’s diff against each parent
+is included).</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">test</span></code>: <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//...</span> <span class="pre">--config=ci</span></code> on <code class="docutils literal notranslate"><span class="pre">ubuntu-24.04-arm</span></code>, and the lock freshness check.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">docs</span></code>: builds the site and uploads it as an artifact.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">deploy-preview</span></code>, <code class="docutils literal notranslate"><span class="pre">cleanup-preview</span></code>, <code class="docutils literal notranslate"><span class="pre">deploy-pages</span></code>: publish to GitHub Pages (previews under

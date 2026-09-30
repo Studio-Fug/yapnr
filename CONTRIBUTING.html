@@ -322,8 +322,8 @@ address to the allowlist is an owner decision (<a class="reference internal" hre
 logs or conversation transcripts. The allowlisted commit addresses are no exception in file
 contents: only the allowlist file may name them. The privacy scan (<code class="docutils literal notranslate"><span class="pre">tools/privacy_scan.py</span></code>) runs
 as a pre-commit hook, as a Bazel test over the whole tree, and in CI over the messages and patches
-of every new commit (where the allowlisted commit addresses pass, since every commit header
-carries them).</p>
+of every new commit, merge commits’ diffs included (where the allowlisted commit addresses pass,
+since every commit header carries them).</p>
 </section>
 <section id="reporting-security-issues">
 <h2>Reporting security issues<a class="headerlink" href="#reporting-security-issues" title="Link to this heading">¶</a></h2>

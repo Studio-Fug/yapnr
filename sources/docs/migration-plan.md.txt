@@ -1049,9 +1049,10 @@ Jobs in `ci.yaml`:
     `tools/privacy_scan.py --identities`, so only the owner's public commit address (listed in
     `tools/privacy/allowed_identities.txt`), GitHub noreply addresses and `noreply@github.com`
     (GitHub's committer for web merges) pass;
-  - the **history scan**: `git log -p --format='%ae %ce%n%B' <range>` piped through
-    `tools/privacy_scan.py --stdin`, which covers commit messages and intermediate commits
-    (merge-commit PRs land them all on `main`).
+  - the **history scan**: `git log -p --diff-merges=separate --format='%ae %ce%n%B' <range>`
+    piped through `tools/privacy_scan.py --stdin`, which covers commit messages and intermediate
+    commits (merge-commit PRs land them all on `main`), and the diff of every merge commit
+    against each parent (plain `git log -p` shows none; `-m` would depend on `log.diffMerges`).
 - `test` (`ubuntu-24.04-arm`; required): `bazel test //... --config=ci`, then
   `bazel test //:requirements.test` (the one job that checks the lock). The aarch64 runner matches
   the CPU-only torch lock. Moves to ubuntu-latest once the x86_64 lock exists, if faster.
@@ -1350,7 +1351,9 @@ produce no commit.
 
 **PR2e: `board.Remove` audit** (separate). Classify the ~25 remaining `board.Remove` call sites:
 use `Delete` unless the item is re-added. `via_coalesce`'s "retry after signal 11" is a likely
-instance of the same class.
+instance of the same class. Done after PR2 in the engine hygiene change, together with the worker
+time bounds and the Electrical221 gate ([decisions](decisions.md)); the retries stay as a second
+line of defence.
 
 Engine work that starts after PR2 is made on yapnr branches; work still in Splanc snapshots after
 PR3a/PR3b have landed goes through `//tools/migrate:port` (§7.4).
@@ -1803,7 +1806,9 @@ Still open:
 
 - `via_coalesce.main` calls `items.clear()` but `items` exists only in `worker()` (F821). Fixed in
   PR3a.
-- About 25 `board.Remove` call sites may detach items that crash KiCad Python at teardown (PR2e).
+- ~~About 25 `board.Remove` call sites may detach items that crash KiCad Python at teardown
+  (PR2e).~~ Done: 27 discarded-item calls use `board.Delete`; 3 `Remove` calls stay (kept alive
+  or detached with `thisown=False`), guarded per call by `//hardware/pnr:board_delete_test`.
 - `pnr.capacitor_intent` is imported by the viewer's cost service but was never committed (PR4b).
 - Pre-existing errors: 7 in the KiCad-Python suite (torch/env imports), 1 in the runtime suite
   (`test_pair_joint_dispatch` import).
@@ -1822,18 +1827,20 @@ Still open:
 - `detail_route_test` takes 870 to 1000 s on the development Mac, at or over its 900 s `large`
   timeout, and its `test_drc_clean_by_construction` fails: two nets share a footprint cell. PR1
   tags it `manual`; unchanged with PR2's engine (848 s, the same failure).
-- Workers without a time bound (PR2's engine): `electrical_pool`, `hier/native_block` (2 calls),
+- ~~Workers without a time bound (PR2's engine): `electrical_pool`, `hier/native_block` (2 calls),
   `mc/halving`, `transaction_cleanup`, the parallel pair trials of `paired_bootstrap` (stopped
   only by an event) and the cleanup pass in `hardware/tools/keyhole_region.py`; from PR1's code,
   `drc_warm`, `electrical_repair`, `full_iteration`, `geometry_optimize`, `paired_bootstrap`,
   `plane_leaf_repair`, `power_detour_repair`, `staged_signal` and `regression/run.py`. All move
-  to `pnr.proc.run` (PR3).
+  to `pnr.proc.run` (PR3).~~ Done: all bounded through `pnr.proc`; `//hardware/pnr:proc_test`
+  scans for new unbounded calls.
 - Engine code tied to the Splanc design (PR2): `feedback/signals.py` finds annotation sources by a
   `hardware/splanc_dev/elec/src/*.ato` pattern; `hier/native_block.py` and `mc/halving.py`
   default to `hardware/splanc_dev` inputs (PR3c, PR3d). Tests and test data that use Splanc
   design files are listed in the [import manifest](history/import-manifest.md#known-leftovers-for-pr3).
-- Electrical221's partial-cycle cleanup and barrel-contact bridges in `via_coalesce` and
-  `track_graph` are on by default, without a flag or an A/B result (PR2; decisions).
+- ~~Electrical221's partial-cycle cleanup and barrel-contact bridges in `via_coalesce` and
+  `track_graph` are on by default, without a flag or an A/B result (PR2; decisions).~~ Gated,
+  default off (`PNR_PARTIAL_CYCLE_CLEANUP`, `PNR_BARREL_CONTACT_BRIDGES`); the A/B is open.
 - `hardware/tools/audit_pair_contacts.py` starts a `wx.App` (GUI-bound, outside the loop).
 
 ## Appendix C: privacy scrub checklist (gate for every push)

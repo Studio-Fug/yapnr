@@ -1628,9 +1628,10 @@ checks over the new commits (the PR’s range, or the pushed range on <code clas
 <code class="docutils literal notranslate"><span class="pre">tools/privacy_scan.py</span> <span class="pre">--identities</span></code>, so only the owner’s public commit address (listed in
 <code class="docutils literal notranslate"><span class="pre">tools/privacy/allowed_identities.txt</span></code>), GitHub noreply addresses and <code class="docutils literal notranslate"><span class="pre">noreply&#64;github.com</span></code>
 (GitHub’s committer for web merges) pass;</p></li>
-<li><p>the <strong>history scan</strong>: <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">log</span> <span class="pre">-p</span> <span class="pre">--format='%ae</span> <span class="pre">%ce%n%B'</span> <span class="pre">&lt;range&gt;</span></code> piped through
-<code class="docutils literal notranslate"><span class="pre">tools/privacy_scan.py</span> <span class="pre">--stdin</span></code>, which covers commit messages and intermediate commits
-(merge-commit PRs land them all on <code class="docutils literal notranslate"><span class="pre">main</span></code>).</p></li>
+<li><p>the <strong>history scan</strong>: <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">log</span> <span class="pre">-p</span> <span class="pre">--diff-merges=separate</span> <span class="pre">--format='%ae</span> <span class="pre">%ce%n%B'</span> <span class="pre">&lt;range&gt;</span></code>
+piped through <code class="docutils literal notranslate"><span class="pre">tools/privacy_scan.py</span> <span class="pre">--stdin</span></code>, which covers commit messages and intermediate
+commits (merge-commit PRs land them all on <code class="docutils literal notranslate"><span class="pre">main</span></code>), and the diff of every merge commit
+against each parent (plain <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">log</span> <span class="pre">-p</span></code> shows none; <code class="docutils literal notranslate"><span class="pre">-m</span></code> would depend on <code class="docutils literal notranslate"><span class="pre">log.diffMerges</span></code>).</p></li>
 </ul>
 </li>
 <li><p><code class="docutils literal notranslate"><span class="pre">test</span></code> (<code class="docutils literal notranslate"><span class="pre">ubuntu-24.04-arm</span></code>; required): <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//...</span> <span class="pre">--config=ci</span></code>, then
@@ -1933,7 +1934,9 @@ imported commits do.</p></li>
 </ul>
 <p><strong>PR2e: <code class="docutils literal notranslate"><span class="pre">board.Remove</span></code> audit</strong> (separate). Classify the ~25 remaining <code class="docutils literal notranslate"><span class="pre">board.Remove</span></code> call sites:
 use <code class="docutils literal notranslate"><span class="pre">Delete</span></code> unless the item is re-added. <code class="docutils literal notranslate"><span class="pre">via_coalesce</span></code>’s “retry after signal 11” is a likely
-instance of the same class.</p>
+instance of the same class. Done after PR2 in the engine hygiene change, together with the worker
+time bounds and the Electrical221 gate (<a class="reference internal" href="decisions.html"><span class="std std-doc">decisions</span></a>); the retries stay as a second
+line of defence.</p>
 <p>Engine work that starts after PR2 is made on yapnr branches; work still in Splanc snapshots after
 PR3a/PR3b have landed goes through <code class="docutils literal notranslate"><span class="pre">//tools/migrate:port</span></code> (§7.4).</p>
 </section>
@@ -2542,7 +2545,9 @@ pypdf, Pillow, pdftoppm, rsvg-convert).</p></li>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">via_coalesce.main</span></code> calls <code class="docutils literal notranslate"><span class="pre">items.clear()</span></code> but <code class="docutils literal notranslate"><span class="pre">items</span></code> exists only in <code class="docutils literal notranslate"><span class="pre">worker()</span></code> (F821). Fixed in
 PR3a.</p></li>
-<li><p>About 25 <code class="docutils literal notranslate"><span class="pre">board.Remove</span></code> call sites may detach items that crash KiCad Python at teardown (PR2e).</p></li>
+<li><p><s>About 25 <code class="docutils literal notranslate"><span class="pre">board.Remove</span></code> call sites may detach items that crash KiCad Python at teardown
+(PR2e).</s> Done: 27 discarded-item calls use <code class="docutils literal notranslate"><span class="pre">board.Delete</span></code>; 3 <code class="docutils literal notranslate"><span class="pre">Remove</span></code> calls stay (kept alive
+or detached with <code class="docutils literal notranslate"><span class="pre">thisown=False</span></code>), guarded per call by <code class="docutils literal notranslate"><span class="pre">//hardware/pnr:board_delete_test</span></code>.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">pnr.capacitor_intent</span></code> is imported by the viewer’s cost service but was never committed (PR4b).</p></li>
 <li><p>Pre-existing errors: 7 in the KiCad-Python suite (torch/env imports), 1 in the runtime suite
 (<code class="docutils literal notranslate"><span class="pre">test_pair_joint_dispatch</span></code> import).</p></li>
@@ -2561,18 +2566,20 @@ the fixture’s fake interpreter is executed. Still <code class="docutils litera
 <li><p><code class="docutils literal notranslate"><span class="pre">detail_route_test</span></code> takes 870 to 1000 s on the development Mac, at or over its 900 s <code class="docutils literal notranslate"><span class="pre">large</span></code>
 timeout, and its <code class="docutils literal notranslate"><span class="pre">test_drc_clean_by_construction</span></code> fails: two nets share a footprint cell. PR1
 tags it <code class="docutils literal notranslate"><span class="pre">manual</span></code>; unchanged with PR2’s engine (848 s, the same failure).</p></li>
-<li><p>Workers without a time bound (PR2’s engine): <code class="docutils literal notranslate"><span class="pre">electrical_pool</span></code>, <code class="docutils literal notranslate"><span class="pre">hier/native_block</span></code> (2 calls),
+<li><p><s>Workers without a time bound (PR2’s engine): <code class="docutils literal notranslate"><span class="pre">electrical_pool</span></code>, <code class="docutils literal notranslate"><span class="pre">hier/native_block</span></code> (2 calls),
 <code class="docutils literal notranslate"><span class="pre">mc/halving</span></code>, <code class="docutils literal notranslate"><span class="pre">transaction_cleanup</span></code>, the parallel pair trials of <code class="docutils literal notranslate"><span class="pre">paired_bootstrap</span></code> (stopped
 only by an event) and the cleanup pass in <code class="docutils literal notranslate"><span class="pre">hardware/tools/keyhole_region.py</span></code>; from PR1’s code,
 <code class="docutils literal notranslate"><span class="pre">drc_warm</span></code>, <code class="docutils literal notranslate"><span class="pre">electrical_repair</span></code>, <code class="docutils literal notranslate"><span class="pre">full_iteration</span></code>, <code class="docutils literal notranslate"><span class="pre">geometry_optimize</span></code>, <code class="docutils literal notranslate"><span class="pre">paired_bootstrap</span></code>,
 <code class="docutils literal notranslate"><span class="pre">plane_leaf_repair</span></code>, <code class="docutils literal notranslate"><span class="pre">power_detour_repair</span></code>, <code class="docutils literal notranslate"><span class="pre">staged_signal</span></code> and <code class="docutils literal notranslate"><span class="pre">regression/run.py</span></code>. All move
-to <code class="docutils literal notranslate"><span class="pre">pnr.proc.run</span></code> (PR3).</p></li>
+to <code class="docutils literal notranslate"><span class="pre">pnr.proc.run</span></code> (PR3).</s> Done: all bounded through <code class="docutils literal notranslate"><span class="pre">pnr.proc</span></code>; <code class="docutils literal notranslate"><span class="pre">//hardware/pnr:proc_test</span></code>
+scans for new unbounded calls.</p></li>
 <li><p>Engine code tied to the Splanc design (PR2): <code class="docutils literal notranslate"><span class="pre">feedback/signals.py</span></code> finds annotation sources by a
 <code class="docutils literal notranslate"><span class="pre">hardware/splanc_dev/elec/src/*.ato</span></code> pattern; <code class="docutils literal notranslate"><span class="pre">hier/native_block.py</span></code> and <code class="docutils literal notranslate"><span class="pre">mc/halving.py</span></code>
 default to <code class="docutils literal notranslate"><span class="pre">hardware/splanc_dev</span></code> inputs (PR3c, PR3d). Tests and test data that use Splanc
 design files are listed in the <a class="reference internal" href="history/import-manifest.html#known-leftovers-for-pr3"><span class="std std-ref">import manifest</span></a>.</p></li>
-<li><p>Electrical221’s partial-cycle cleanup and barrel-contact bridges in <code class="docutils literal notranslate"><span class="pre">via_coalesce</span></code> and
-<code class="docutils literal notranslate"><span class="pre">track_graph</span></code> are on by default, without a flag or an A/B result (PR2; decisions).</p></li>
+<li><p><s>Electrical221’s partial-cycle cleanup and barrel-contact bridges in <code class="docutils literal notranslate"><span class="pre">via_coalesce</span></code> and
+<code class="docutils literal notranslate"><span class="pre">track_graph</span></code> are on by default, without a flag or an A/B result (PR2; decisions).</s> Gated,
+default off (<code class="docutils literal notranslate"><span class="pre">PNR_PARTIAL_CYCLE_CLEANUP</span></code>, <code class="docutils literal notranslate"><span class="pre">PNR_BARREL_CONTACT_BRIDGES</span></code>); the A/B is open.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">hardware/tools/audit_pair_contacts.py</span></code> starts a <code class="docutils literal notranslate"><span class="pre">wx.App</span></code> (GUI-bound, outside the loop).</p></li>
 </ul>
 </section>

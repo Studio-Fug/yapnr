@@ -40,9 +40,12 @@ release `vX.Y.Z`, `X.Y.Zrc(K+1).devN+g<sha>` after the release candidate `vX.Y.Z
 `0.0.0.devN+g<sha>` before the first release.
 
 Pin `X.Y`, or a digest (`ghcr.io/studio-fug/yapnr@sha256:...`) for reproducible runs. Results can
-change between minor versions (see [releases](releases.md)). The KiCad version is part of the
-image, not of the tag: a KiCad patch update ships as a yapnr patch release. The image label
-`io.github.studio-fug.yapnr.kicad.version` and the release notes name it.
+change between minor versions (see [releases](releases.md)). They also differ between platforms
+(operating system and architecture, for example the arm64 image and a Mac): the same inputs and
+seed give a different board, of the same quality on average, because the torch builds round a few
+float operations differently ([decisions](decisions.md)). Compare runs on one platform. The KiCad
+version is part of the image, not of the tag: a KiCad patch update ships as a yapnr patch release.
+The image label `io.github.studio-fug.yapnr.kicad.version` and the release notes name it.
 
 `ghcr.io/studio-fug/yapnr-kicad` is tagged `<KiCad version>-<N>` (for example `10.0.6-1`; `N`
 counts rebuilds of one KiCad version, and such a tag is never overwritten), plus the moving

@@ -363,14 +363,16 @@ operator's scratch directory. No other file differs from its snapshot.
 | ----------------------------------------------------------------- | ---------------------------- |
 | `--identities`, author and committer of every PR2 commit          | 0 rejected                   |
 | `--stdin` over `git log -p` of the PR2 commits, CI's format       | 0 findings                   |
-| the same with `-m` (CI's form shows no diff for merge commits)    | 0 findings                   |
+| the same with `-m` (CI's form then showed no merge diffs)         | 0 findings                   |
 | `--all` on the head tree                                          | 0 findings                   |
 | every blob of every PR2 commit's tree                             | 0 findings                   |
 | gitleaks 8.30.1, PR2 commits and the head's `hardware` tree       | 0 leaks                      |
 | each snapshot commit's engine tree against its snapshot directory | equal, except the four above |
 
 Authors and committers are `Claude Agent` with the owner's public commit address; the author dates
-are those in the source table. Every message ends with the session's two trailers.
+are those in the source table. Every message ends with the session's two trailers. CI's history
+scan has included merge diffs (`git log -p --diff-merges=separate`) since the engine hygiene
+change, so they are now scanned in CI too.
 
 ### Bazel adaptation and pass set
 
@@ -407,8 +409,11 @@ Pass set, from `bazel test //... --config=ci` with `--config=lowmem` and
     is unchanged in this PR; the tests are fixed with the fixtures in PR3.
   - `detail_route_test`: unchanged, 848 s on the development Mac and
     `test_drc_clean_by_construction` fails as at PR1.
-  - `orientation_test`: size `medium` and `manual` as at PR1 (Studio-Fug/yapnr#6; it passes on
-    macOS).
+  - ~~`orientation_test`: size `medium` and `manual` as at PR1 (Studio-Fug/yapnr#6; it passes on
+    macOS).~~ Re-enabled after PR2, in the engine hygiene change: placement is deterministic per
+    platform only, so its HPWL check now compares the three-seed mean with a 5 % margin, and a
+    synthetic board checks that the search finds known best angles
+    ([decisions](../decisions.md)). Still `medium`.
 - `pnr.bzl` stays unloaded, and `hardware/tools/BUILD.bazel` is unchanged: `keyhole_region.py`
   is still the only tool a test needs.
 
@@ -423,9 +428,10 @@ which wires them. They stay unwired until PR3 moves the tests under `tests/`.
 
 ### Known leftovers for PR3
 
-No engine code changes in this PR; these are carried forward (plan appendix B lists the defects):
+No engine code changes in this PR; these are carried forward (plan appendix B lists the defects).
+Struck items were done after PR2, in the engine hygiene change (branch `claude/engine-hygiene`):
 
-- **Workers without a time bound** (AGENTS.md: a subprocess without a timeout is a bug). New in
+- ~~**Workers without a time bound** (AGENTS.md: a subprocess without a timeout is a bug). New in
   PR2: `pnr/electrical_pool.py` (the pool workers), `pnr/hier/native_block.py` (two calls),
   `pnr/mc/halving.py` (one), `pnr/transaction_cleanup.py` (one), the parallel pair trials in
   `pnr/paired_bootstrap.py` (polled until a stop event, no deadline) and the cleanup pass of
@@ -433,7 +439,11 @@ No engine code changes in this PR; these are carried forward (plan appendix B li
   `electrical_repair`, `full_iteration`, `geometry_optimize`, `paired_bootstrap`,
   `plane_leaf_repair`, `power_detour_repair`, `staged_signal` and `regression/run.py`. Two of
   PR1's are fixed by src8b (`native_loop`, `via_coalesce` through `pnr.proc.run`). All move to
-  `pnr.proc.run`.
+  `pnr.proc.run`.~~ Done: every one runs under a `pnr.proc` deadline (`PNR_WORKER_TIMEOUT`,
+  `PNR_PHASE_TIMEOUT` or `PNR_EVALUATION_TIMEOUT`, [decisions](../decisions.md)); a timeout
+  kills the child's whole process tree, so the workers of a killed evaluation go with it, and
+  `//hardware/pnr:proc_test` fails on a new unbounded call. Left by design: the opt-in warm DRC
+  host daemon of `drc_warm/launch_host.py` (ended by its session).
 - **Engine code tied to the Splanc design.** New in PR2: `pnr/feedback/signals.py` recognizes
   annotation sources by a `hardware/splanc_dev/elec/src/*.ato` pattern, and
   `pnr/hier/native_block.py` and `pnr/mc/halving.py` default to `hardware/splanc_dev`, its `.ato`
@@ -461,11 +471,15 @@ No engine code changes in this PR; these are carried forward (plan appendix B li
   toolchain discovery (PR6a, PR3c).
 - **GUI-bound tool:** `hardware/tools/audit_pair_contacts.py` starts a `wx.App` (outside the
   loop): make it headless or drop it (PR3b).
-- **Default-on behaviour:** Electrical221's `via_coalesce`/`track_graph` changes (partial-cycle
+- ~~**Default-on behaviour:** Electrical221's `via_coalesce`/`track_graph` changes (partial-cycle
   cleanup, barrel-contact bridges) are unflagged and now yapnr's default; the H7 run uses src15
-  without them. Gate or A/B them (decisions).
-- Unchanged from the plan: the `board.Remove` audit (PR2e) and the missing
-  `pnr.capacitor_intent` (PR4b).
+  without them. Gate or A/B them (decisions).~~ Gated: `PNR_PARTIAL_CYCLE_CLEANUP=1` and
+  `PNR_BARREL_CONTACT_BRIDGES=1`, both default off, so the default is src15 again; the A/B that
+  would turn them on is still open.
+- Unchanged from the plan: ~~the `board.Remove` audit (PR2e)~~ (done: 27 calls now use
+  `board.Delete`, 3 stay, `//hardware/pnr:board_delete_test` guards each call; replayed on the H7
+  boards for five sites with identical results, a full rung-1 evaluation with it is still open)
+  and the missing `pnr.capacitor_intent` (PR4b).
 
 ### Reproducing the series
 

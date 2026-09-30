@@ -877,7 +877,7 @@ operator’s scratch directory. No other file differs from its snapshot.</p>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--stdin</span></code> over <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">log</span> <span class="pre">-p</span></code> of the PR2 commits, CI’s format</p></td>
 <td><p>0 findings</p></td>
 </tr>
-<tr class="row-even"><td><p>the same with <code class="docutils literal notranslate"><span class="pre">-m</span></code> (CI’s form shows no diff for merge commits)</p></td>
+<tr class="row-even"><td><p>the same with <code class="docutils literal notranslate"><span class="pre">-m</span></code> (CI’s form then showed no merge diffs)</p></td>
 <td><p>0 findings</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--all</span></code> on the head tree</p></td>
@@ -896,7 +896,9 @@ operator’s scratch directory. No other file differs from its snapshot.</p>
 </table>
 </div>
 <p>Authors and committers are <code class="docutils literal notranslate"><span class="pre">Claude</span> <span class="pre">Agent</span></code> with the owner’s public commit address; the author dates
-are those in the source table. Every message ends with the session’s two trailers.</p>
+are those in the source table. Every message ends with the session’s two trailers. CI’s history
+scan has included merge diffs (<code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">log</span> <span class="pre">-p</span> <span class="pre">--diff-merges=separate</span></code>) since the engine hygiene
+change, so they are now scanned in CI too.</p>
 </section>
 <section id="bazel-adaptation-and-pass-set">
 <h3>Bazel adaptation and pass set<a class="headerlink" href="#bazel-adaptation-and-pass-set" title="Link to this heading">¶</a></h3>
@@ -934,8 +936,11 @@ than at PR1 with <code class="docutils literal notranslate"><span class="pre">Fi
 is unchanged in this PR; the tests are fixed with the fixtures in PR3.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">detail_route_test</span></code>: unchanged, 848 s on the development Mac and
 <code class="docutils literal notranslate"><span class="pre">test_drc_clean_by_construction</span></code> fails as at PR1.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">orientation_test</span></code>: size <code class="docutils literal notranslate"><span class="pre">medium</span></code> and <code class="docutils literal notranslate"><span class="pre">manual</span></code> as at PR1 (Studio-Fug/yapnr#6; it passes on
-macOS).</p></li>
+<li><p><s><code class="docutils literal notranslate"><span class="pre">orientation_test</span></code>: size <code class="docutils literal notranslate"><span class="pre">medium</span></code> and <code class="docutils literal notranslate"><span class="pre">manual</span></code> as at PR1 (Studio-Fug/yapnr#6; it passes on
+macOS).</s> Re-enabled after PR2, in the engine hygiene change: placement is deterministic per
+platform only, so its HPWL check now compares the three-seed mean with a 5 % margin, and a
+synthetic board checks that the search finds known best angles
+(<a class="reference internal" href="../decisions.html"><span class="std std-doc">decisions</span></a>). Still <code class="docutils literal notranslate"><span class="pre">medium</span></code>.</p></li>
 </ul>
 </li>
 <li><p><code class="docutils literal notranslate"><span class="pre">pnr.bzl</span></code> stays unloaded, and <code class="docutils literal notranslate"><span class="pre">hardware/tools/BUILD.bazel</span></code> is unchanged: <code class="docutils literal notranslate"><span class="pre">keyhole_region.py</span></code>
@@ -953,9 +958,10 @@ which wires them. They stay unwired until PR3 moves the tests under <code class=
 </section>
 <section id="known-leftovers-for-pr3">
 <h3>Known leftovers for PR3<a class="headerlink" href="#known-leftovers-for-pr3" title="Link to this heading">¶</a></h3>
-<p>No engine code changes in this PR; these are carried forward (plan appendix B lists the defects):</p>
+<p>No engine code changes in this PR; these are carried forward (plan appendix B lists the defects).
+Struck items were done after PR2, in the engine hygiene change (branch <code class="docutils literal notranslate"><span class="pre">claude/engine-hygiene</span></code>):</p>
 <ul class="simple">
-<li><p><strong>Workers without a time bound</strong> (AGENTS.md: a subprocess without a timeout is a bug). New in
+<li><p><s><strong>Workers without a time bound</strong> (AGENTS.md: a subprocess without a timeout is a bug). New in
 PR2: <code class="docutils literal notranslate"><span class="pre">pnr/electrical_pool.py</span></code> (the pool workers), <code class="docutils literal notranslate"><span class="pre">pnr/hier/native_block.py</span></code> (two calls),
 <code class="docutils literal notranslate"><span class="pre">pnr/mc/halving.py</span></code> (one), <code class="docutils literal notranslate"><span class="pre">pnr/transaction_cleanup.py</span></code> (one), the parallel pair trials in
 <code class="docutils literal notranslate"><span class="pre">pnr/paired_bootstrap.py</span></code> (polled until a stop event, no deadline) and the cleanup pass of
@@ -963,7 +969,11 @@ PR2: <code class="docutils literal notranslate"><span class="pre">pnr/electrical
 <code class="docutils literal notranslate"><span class="pre">electrical_repair</span></code>, <code class="docutils literal notranslate"><span class="pre">full_iteration</span></code>, <code class="docutils literal notranslate"><span class="pre">geometry_optimize</span></code>, <code class="docutils literal notranslate"><span class="pre">paired_bootstrap</span></code>,
 <code class="docutils literal notranslate"><span class="pre">plane_leaf_repair</span></code>, <code class="docutils literal notranslate"><span class="pre">power_detour_repair</span></code>, <code class="docutils literal notranslate"><span class="pre">staged_signal</span></code> and <code class="docutils literal notranslate"><span class="pre">regression/run.py</span></code>. Two of
 PR1’s are fixed by src8b (<code class="docutils literal notranslate"><span class="pre">native_loop</span></code>, <code class="docutils literal notranslate"><span class="pre">via_coalesce</span></code> through <code class="docutils literal notranslate"><span class="pre">pnr.proc.run</span></code>). All move to
-<code class="docutils literal notranslate"><span class="pre">pnr.proc.run</span></code>.</p></li>
+<code class="docutils literal notranslate"><span class="pre">pnr.proc.run</span></code>.</s> Done: every one runs under a <code class="docutils literal notranslate"><span class="pre">pnr.proc</span></code> deadline (<code class="docutils literal notranslate"><span class="pre">PNR_WORKER_TIMEOUT</span></code>,
+<code class="docutils literal notranslate"><span class="pre">PNR_PHASE_TIMEOUT</span></code> or <code class="docutils literal notranslate"><span class="pre">PNR_EVALUATION_TIMEOUT</span></code>, <a class="reference internal" href="../decisions.html"><span class="std std-doc">decisions</span></a>); a timeout
+kills the child’s whole process tree, so the workers of a killed evaluation go with it, and
+<code class="docutils literal notranslate"><span class="pre">//hardware/pnr:proc_test</span></code> fails on a new unbounded call. Left by design: the opt-in warm DRC
+host daemon of <code class="docutils literal notranslate"><span class="pre">drc_warm/launch_host.py</span></code> (ended by its session).</p></li>
 <li><p><strong>Engine code tied to the Splanc design.</strong> New in PR2: <code class="docutils literal notranslate"><span class="pre">pnr/feedback/signals.py</span></code> recognizes
 annotation sources by a <code class="docutils literal notranslate"><span class="pre">hardware/splanc_dev/elec/src/*.ato</span></code> pattern, and
 <code class="docutils literal notranslate"><span class="pre">pnr/hier/native_block.py</span></code> and <code class="docutils literal notranslate"><span class="pre">pnr/mc/halving.py</span></code> default to <code class="docutils literal notranslate"><span class="pre">hardware/splanc_dev</span></code>, its <code class="docutils literal notranslate"><span class="pre">.ato</span></code>
@@ -991,11 +1001,15 @@ mode 100755 from PR1.</p></li>
 toolchain discovery (PR6a, PR3c).</p></li>
 <li><p><strong>GUI-bound tool:</strong> <code class="docutils literal notranslate"><span class="pre">hardware/tools/audit_pair_contacts.py</span></code> starts a <code class="docutils literal notranslate"><span class="pre">wx.App</span></code> (outside the
 loop): make it headless or drop it (PR3b).</p></li>
-<li><p><strong>Default-on behaviour:</strong> Electrical221’s <code class="docutils literal notranslate"><span class="pre">via_coalesce</span></code>/<code class="docutils literal notranslate"><span class="pre">track_graph</span></code> changes (partial-cycle
+<li><p><s><strong>Default-on behaviour:</strong> Electrical221’s <code class="docutils literal notranslate"><span class="pre">via_coalesce</span></code>/<code class="docutils literal notranslate"><span class="pre">track_graph</span></code> changes (partial-cycle
 cleanup, barrel-contact bridges) are unflagged and now yapnr’s default; the H7 run uses src15
-without them. Gate or A/B them (decisions).</p></li>
-<li><p>Unchanged from the plan: the <code class="docutils literal notranslate"><span class="pre">board.Remove</span></code> audit (PR2e) and the missing
-<code class="docutils literal notranslate"><span class="pre">pnr.capacitor_intent</span></code> (PR4b).</p></li>
+without them. Gate or A/B them (decisions).</s> Gated: <code class="docutils literal notranslate"><span class="pre">PNR_PARTIAL_CYCLE_CLEANUP=1</span></code> and
+<code class="docutils literal notranslate"><span class="pre">PNR_BARREL_CONTACT_BRIDGES=1</span></code>, both default off, so the default is src15 again; the A/B that
+would turn them on is still open.</p></li>
+<li><p>Unchanged from the plan: <s>the <code class="docutils literal notranslate"><span class="pre">board.Remove</span></code> audit (PR2e)</s> (done: 27 calls now use
+<code class="docutils literal notranslate"><span class="pre">board.Delete</span></code>, 3 stay, <code class="docutils literal notranslate"><span class="pre">//hardware/pnr:board_delete_test</span></code> guards each call; replayed on the H7
+boards for five sites with identical results, a full rung-1 evaluation with it is still open)
+and the missing <code class="docutils literal notranslate"><span class="pre">pnr.capacitor_intent</span></code> (PR4b).</p></li>
 </ul>
 </section>
 <section id="reproducing-the-series">

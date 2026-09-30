@@ -1,0 +1,23 @@
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Version and image tags from git (docs/releases.md). Stdlib-only and Python
+# 3.9 compatible: CI runs these scripts with the runner's python3.
+py_library(
+    name = "release_lib",
+    srcs = [
+        "__init__.py",
+        "version.py",
+    ],
+    imports = ["../.."],
+    deps = ["//tools:repo_checks"],
+)
+
+# `bazel run //tools/release:version -- --repo "$PWD" --field pep440`
+py_binary(
+    name = "version",
+    srcs = ["version.py"],
+    main = "version.py",
+    deps = [":release_lib"],
+)

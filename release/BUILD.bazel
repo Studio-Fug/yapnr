@@ -1,0 +1,42 @@
+"""The yapnr wheel: what the container image installs and what releases attach.
+
+    bazel build //release:wheel.dist --stamp --embed_label="$(tools/release/version.py --field pep440)"
+    # -> bazel-bin/release/wheel_dist/yapnr-<version>-py3-none-any.whl
+
+The version comes from the release tag only (docs/releases.md), so :wheel is
+always stamped with --embed_label and is tagged manual: `bazel build //...`
+never builds it without a version. :wheel_for_test is the same wheel with a
+fixed placeholder version; tests/unit/release/test_wheel.py checks its
+contents and metadata.
+
+The wheel is pure Python (py3-none-any) until the native search backend lands
+(PR5). Requires-Dist comes from requirements-runtime.in; the image installs
+the pinned runtime locks with --no-deps instead (docker/yapnr/Dockerfile).
+"""
+
+load("@rules_python//python:packaging.bzl", "py_package")
+load(":wheel.bzl", "yapnr_wheel")
+
+package(default_visibility = ["//visibility:public"])
+
+py_package(
+    name = "yapnr_package",
+    packages = ["yapnr"],
+    deps = ["//yapnr"],
+)
+
+yapnr_wheel(
+    name = "wheel",
+    stamp = 1,
+    tags = ["manual"],
+    version = "{BUILD_EMBED_LABEL}",
+    deps = [":yapnr_package"],
+)
+
+yapnr_wheel(
+    name = "wheel_for_test",
+    testonly = True,
+    stamp = 0,
+    version = "0.0.0.dev0",
+    deps = [":yapnr_package"],
+)

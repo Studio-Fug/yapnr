@@ -2,6 +2,8 @@
 
 - //:yapnr and //:doctor are the user-facing entry points
   (`bazel run //:yapnr -- --version`, `bazel run //:doctor`).
+- //release:wheel is the yapnr wheel (stamped with the release version; see
+  release/BUILD.bazel and docs/releases.md).
 - //:requirements.update regenerates requirements.lock from requirements.in.
   //:requirements.test checks the lock is fresh; it needs network access and
   is tagged manual, so it runs only where asked for (one CI job, see
@@ -20,6 +22,7 @@ exports_files([
     "LICENSE",
     "MODULE.bazel",
     "requirements.in",
+    "requirements-runtime.in",
     "requirements.lock",
 ])
 

@@ -13,6 +13,7 @@ import tempfile
 import unittest
 from unittest import mock
 
+import yapnr
 from yapnr import __version__, cli
 
 
@@ -39,12 +40,28 @@ class VersionTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(out.strip(), f"yapnr {__version__}")
 
-    def test_version_matches_module_bazel(self):
+    def test_module_bazel_has_no_version(self):
+        # The release tag is the only version source (docs/releases.md).
         with open(_module_bazel_path(), encoding="utf-8") as handle:
             text = handle.read()
-        match = re.search(r'module\(\s*name = "yapnr",\s*version = "([^"]+)"', text)
-        self.assertIsNotNone(match, 'module(name = "yapnr", version = ...) not found')
-        self.assertEqual(match.group(1), __version__)
+        match = re.search(r"^module\((.*?)\)", text, re.MULTILINE | re.DOTALL)
+        self.assertIsNotNone(match, "module(...) not found in MODULE.bazel")
+        self.assertIn('name = "yapnr"', match.group(1))
+        self.assertNotIn("version", match.group(1))
+
+    def test_uninstalled_source_tree_version(self):
+        # Under Bazel the package is not installed, so there is no metadata.
+        self.assertEqual(__version__, yapnr.UNINSTALLED_VERSION)
+
+    def test_installed_version_comes_from_metadata(self):
+        from importlib import metadata
+
+        with mock.patch.object(metadata, "version", return_value="0.3.1") as version:
+            self.assertEqual(yapnr._installed_version(), "0.3.1")
+        version.assert_called_once_with("yapnr")
+        missing = mock.Mock(side_effect=metadata.PackageNotFoundError("yapnr"))
+        with mock.patch.object(metadata, "version", missing):
+            self.assertEqual(yapnr._installed_version(), "0.0.0.dev0")
 
     def test_no_command_prints_usage(self):
         code, out, err = _run([])
@@ -102,6 +119,16 @@ class KicadCliStatusTest(unittest.TestCase):
             self.assertTrue(status["executable"])
 
 
+class KicadPythonStatusTest(unittest.TestCase):
+    def test_not_configured(self):
+        self.assertFalse(cli.kicad_python_status({})["configured"])
+
+    def test_configured(self):
+        status = cli.kicad_python_status({"YAPNR_KICAD_PYTHON": sys.executable})
+        self.assertEqual(status["source"], "YAPNR_KICAD_PYTHON")
+        self.assertTrue(status["executable"])
+
+
 class DoctorTest(unittest.TestCase):
     def _doctor(self, argv, environ):
         # The doctor must never start KiCad (or anything else): a stray
@@ -121,12 +148,31 @@ class DoctorTest(unittest.TestCase):
         self.assertIn("numpy", report)
         self.assertIn("torch", report)
         self.assertEqual(report["kicad_cli"]["source"], "YAPNR_KICAD_CLI")
+        self.assertFalse(report["kicad_python"]["configured"])
+        self.assertIsNone(report["source_revision"])
+
+    def test_container_report(self):
+        environ = {
+            "YAPNR_KICAD_CLI": "/usr/bin/kicad-cli",
+            "YAPNR_KICAD_PYTHON": "/usr/bin/python3",
+            "YAPNR_SOURCE_REVISION": "0123456789abcdef0123456789abcdef01234567",
+        }
+        code, out, _ = self._doctor(["doctor", "--json"], environ)
+        self.assertEqual(code, 0)
+        report = json.loads(out)
+        self.assertEqual(report["source_revision"], environ["YAPNR_SOURCE_REVISION"])
+        self.assertEqual(report["kicad_python"]["path"], "/usr/bin/python3")
+        code, out, _ = self._doctor(["doctor"], environ)
+        self.assertIn("revision  0123456789abcdef", out)
+        self.assertIn("kicad-py  configured via YAPNR_KICAD_PYTHON", out)
 
     def test_text_report_when_unconfigured(self):
         code, out, _ = self._doctor(["doctor"], {})
         self.assertEqual(code, 0)
         self.assertIn(f"yapnr     {__version__}", out)
         self.assertIn("kicad-cli not configured (set YAPNR_KICAD_CLI or PNR_KICAD_CLI)", out)
+        self.assertIn("kicad-py  not configured (set YAPNR_KICAD_PYTHON)", out)
+        self.assertNotIn("revision", out)
 
     def test_text_report_flags_non_executable(self):
         code, out, _ = self._doctor(["doctor"], {"PNR_KICAD_CLI": "/nonexistent/kicad-cli"})

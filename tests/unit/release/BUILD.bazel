@@ -1,0 +1,15 @@
+load("@yapnr_pypi//:requirements.bzl", "requirement")
+load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+
+# test_wheel inspects the unstamped wheel //release:wheel_for_test, which has
+# the same contents and metadata as the release wheel apart from the version.
+yapnr_py_tests(
+    data = [
+        "//:requirements-runtime.in",
+        "//release:wheel_for_test",
+    ],
+    deps = [
+        "//tools/release:release_lib",
+        requirement("packaging"),
+    ],
+)

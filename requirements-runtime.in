@@ -1,0 +1,12 @@
+# yapnr: the runtime dependencies of the yapnr package, and nothing else.
+#
+# These lines are the `Requires-Dist` of the yapnr wheel (//release:wheel) and
+# the input of the container image's runtime locks (docker/yapnr/runtime-*.lock,
+# regenerated with tools/image/update_runtime_locks.sh). Each line also appears,
+# character for character, in requirements.in, which Bazel resolves into
+# requirements.lock; the runtime locks are constrained to those pins, so the
+# image runs exactly the versions `bazel test` runs. A repository test
+# (tests/unit/repo/test_images.py) keeps the three files consistent.
+torch>=2.2,<2.4
+numpy>=1.26,<2
+pyyaml>=6

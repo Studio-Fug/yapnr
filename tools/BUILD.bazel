@@ -1,0 +1,35 @@
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Repository checks. Stdlib-only and Python 3.9 compatible: the pre-commit hook
+# runs tools/privacy_scan.py directly with the system python3.
+py_library(
+    name = "repo_checks",
+    srcs = [
+        "__init__.py",
+        "check_test_wiring.py",
+        "privacy_scan.py",
+        "repo_root.py",
+    ],
+    # The commit addresses `privacy_scan.py --identities` accepts besides
+    # GitHub noreply addresses; read next to privacy_scan.py.
+    data = ["privacy/allowed_identities.txt"],
+    imports = [".."],
+)
+
+# `bazel run //tools:privacy_scan -- --all --root "$PWD"`
+py_binary(
+    name = "privacy_scan",
+    srcs = ["privacy_scan.py"],
+    main = "privacy_scan.py",
+    deps = [":repo_checks"],
+)
+
+# `bazel run //tools:check_test_wiring -- --root "$PWD"`
+py_binary(
+    name = "check_test_wiring",
+    srcs = ["check_test_wiring.py"],
+    main = "check_test_wiring.py",
+    deps = [":repo_checks"],
+)

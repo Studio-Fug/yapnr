@@ -1,0 +1,12 @@
+# flake8 settings (Splanc's hook arguments, moved into a config file). black
+# formats to 100 columns; flake8 only rejects lines longer than 120.
+[flake8]
+max-line-length = 120
+extend-ignore = E203
+extend-exclude =
+    bazel-*,
+    .bazel-*,
+    .bazelisk,
+    docs/site,
+    hardware,
+    third_party

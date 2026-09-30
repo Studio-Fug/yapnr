@@ -1,0 +1,90 @@
+# Presubmit hooks, run by prek (https://github.com/j178/prek), a drop-in
+# reimplementation of pre-commit that reads this file. Set up a checkout with
+# ./setup-precommit.sh; CI runs the same version (.github/workflows/ci.yaml).
+#
+# Hooks and pinned versions are Splanc's, minus nixpkgs-fmt (no Nix here) and
+# Splanc-specific excludes, plus the yapnr privacy scan.
+#
+# The global exclude is RESERVED for these prefixes only; do not add others:
+#   hardware/, docs/hardware/  the verbatim Splanc import (PR1/PR2), formatted
+#                              and linted in PR3a and moved out in PR3b
+#   third_party/               vendored upstream files, kept byte-identical
+# The privacy scan also runs as a Bazel test over the whole tree
+# (//tests/unit/repo:test_privacy_scan), so excluded paths are still scanned.
+exclude: ^(hardware/|docs/hardware/|third_party/)
+
+repos:
+  # Python formatting and linting (flake8 settings live in .flake8)
+  - repo: https://github.com/psf/black
+    rev: 25.1.0
+    hooks:
+      - id: black
+        language_version: python3
+        types: [python]
+        args: [--line-length=100]
+
+  - repo: https://github.com/pycqa/isort
+    rev: 6.0.1
+    hooks:
+      - id: isort
+        args: [--profile=black, --line-length=100]
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+
+  # Shell script linting (shellcheck-py: no docker dependency)
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.6
+    hooks:
+      - id: shellcheck
+        args: [--severity=warning]
+
+  # BUILD / .bzl formatting and lint
+  - repo: https://github.com/keith/pre-commit-buildifier
+    rev: 8.2.0
+    hooks:
+      - id: buildifier
+      - id: buildifier-lint
+
+  # Markdown/JSON/YAML formatting and linting
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.1.0
+    hooks:
+      - id: prettier
+        types_or: [markdown, json, yaml]
+
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.38.0
+    hooks:
+      - id: markdownlint
+        args: [--fix]
+
+  # General hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: [--maxkb=600]
+        # Vendored upstream files are reviewed for size when vendored.
+        exclude: ^third_party/
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-json
+      - id: debug-statements
+      - id: name-tests-test
+        args: [--pytest-test-first]
+
+  # Keep machine paths, tailnet hosts and addresses, personal e-mail
+  # addresses and credentials out of this public repository. Stdlib-only.
+  - repo: local
+    hooks:
+      - id: yapnr-privacy-scan
+        name: privacy scan (paths, hosts, addresses, e-mail, tokens)
+        language: system
+        entry: python3 tools/privacy_scan.py
+        types: [text]

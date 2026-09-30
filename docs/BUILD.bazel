@@ -1,0 +1,34 @@
+"""Documentation: the Sphinx (MyST) site.
+
+    bazel run //docs:build      # -> docs/site/html/index.html
+    bazel run //docs:serve      # preview over HTTP on 127.0.0.1
+
+The content (Markdown under docs/ and the top-level documents, plus the Sphinx
+project in docs/_sphinx/) is read live from the working tree at build time, so
+the pip toolchain is the only thing Bazel provides here.
+"""
+
+load("@rules_python//python:defs.bzl", "py_binary")
+load("@yapnr_pypi//:requirements.bzl", "requirement")
+
+package(default_visibility = ["//visibility:public"])
+
+py_binary(
+    name = "build",
+    srcs = ["build_docs.py"],
+    main = "build_docs.py",
+    deps = [
+        requirement("furo"),
+        requirement("myst-parser"),
+        requirement("sphinx"),
+        requirement("sphinx-copybutton"),
+        requirement("sphinx-design"),
+        requirement("sphinxcontrib-mermaid"),
+    ],
+)
+
+py_binary(
+    name = "serve",
+    srcs = ["serve.py"],
+    main = "serve.py",
+)

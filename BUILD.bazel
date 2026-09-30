@@ -1,0 +1,41 @@
+"""Repository root package.
+
+- //:yapnr and //:doctor are the user-facing entry points
+  (`bazel run //:yapnr -- --version`, `bazel run //:doctor`).
+- //:requirements.update regenerates requirements.lock from requirements.in.
+  //:requirements.test checks the lock is fresh; it needs network access and
+  is tagged manual, so it runs only where asked for (one CI job, see
+  .github/workflows/ci.yaml).
+
+License metadata is deliberately not modelled in Bazel yet (see
+docs/decisions.md): LICENSE plus the SPDX identifier AGPL-3.0-or-later in the
+README and docs is the declaration.
+"""
+
+load("@rules_python//python:pip.bzl", "compile_pip_requirements")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "LICENSE",
+    "MODULE.bazel",
+    "requirements.in",
+    "requirements.lock",
+])
+
+alias(
+    name = "yapnr",
+    actual = "//yapnr:cli",
+)
+
+alias(
+    name = "doctor",
+    actual = "//yapnr:doctor",
+)
+
+compile_pip_requirements(
+    name = "requirements",
+    src = "requirements.in",
+    requirements_txt = "requirements.lock",
+    tags = ["manual"],
+)

@@ -1,0 +1,64 @@
+name: macOS
+
+# Keeps yapnr building and testing on Apple silicon, the main development
+# platform (darwin wheels; later the .dylib search backend). Informational:
+# this workflow is NOT a required check. A nightly macOS KiCad lane joins it in
+# PR6b (docs/migration-plan.md, section 5.2).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# macOS runner minutes cost about ten times Linux minutes: cancel superseded
+# runs on the same ref.
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-macos:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - name: Setup repository
+        uses: actions/checkout@v4
+
+      # setup-bazel's own caches are not used: their keys carry neither the CPU
+      # architecture nor the lock files, and its Bazelisk cache is not where
+      # .bazeliskrc sends Bazelisk. Both download caches are keyed below.
+      - name: Setup Bazel
+        uses: bazel-contrib/setup-bazel@0.15.0
+
+      # The environment overrides .bazeliskrc (./.bazelisk), so the Bazel
+      # binary lands in the cached directory.
+      - name: Point Bazelisk at the cached directory
+        run: echo "BAZELISK_HOME=${HOME}/.cache/bazelisk" >> "${GITHUB_ENV}"
+
+      - name: Cache Bazelisk and the Bazel repository cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/bazelisk
+            ~/.cache/bazel-repo
+          key: bazel-repo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'requirements.lock') }}
+          restore-keys: bazel-repo-${{ runner.os }}-${{ runner.arch }}-
+
+      # Per-OS disk cache namespace: never share Linux-built outputs.
+      - name: Cache Bazel disk cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel-disk
+          key: bazel-disk-macos-test-${{ hashFiles('MODULE.bazel.lock', 'requirements.lock') }}
+          restore-keys: bazel-disk-macos-test-
+
+      - name: Test
+        run: >-
+          bazel test //... --config=ci
+          --disk_cache="$HOME/.cache/bazel-disk"
+          --repository_cache="$HOME/.cache/bazel-repo"

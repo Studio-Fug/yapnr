@@ -1,17 +1,27 @@
-# Bazel
-bazel-*
-.bazel-*-cache/
-user.bazelrc
-# Python
+# --- Bazel ------------------------------------------------------------------
+# Convenience symlinks (--symlink_prefix=bazel- in .bazelrc).
+/bazel-*
+# Project-local content-addressed caches (.bazelrc) and bazelisk downloads
+# (.bazeliskrc). MODULE.bazel.lock IS committed.
+/.bazel-disk-cache/
+/.bazel-repo-cache/
+/.bazelisk/
+# Per-user Bazel settings (output_base, lowmem, ...); see DEVELOPERS.md.
+/user.bazelrc
+
+# --- Python -----------------------------------------------------------------
 __pycache__/
 *.py[cod]
 .venv/
-# yapnr project stores and local settings
+
+# --- yapnr project stores and local settings --------------------------------
 .yapnr/
 yapnr.local.toml
-# Docs build output
-docs/site/
-docs/_build/
-# Local drops
+
+# --- Docs build output (bazel run //docs:build) -----------------------------
+/docs/site/
+/docs/_build/
+
+# --- Local drops / OS -------------------------------------------------------
 *.zip
 .DS_Store

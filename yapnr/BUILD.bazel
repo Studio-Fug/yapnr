@@ -1,0 +1,38 @@
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+load("@yapnr_pypi//:requirements.bzl", "requirement")
+
+package(default_visibility = ["//visibility:public"])
+
+py_library(
+    name = "yapnr",
+    srcs = [
+        "__init__.py",
+        "__main__.py",
+        "cli.py",
+    ],
+    imports = [".."],
+)
+
+# The engine's numerical stack. `yapnr doctor` reports its versions, and every
+# engine subpackage imported in later PRs depends on it.
+_NUMERIC_DEPS = [
+    requirement("numpy"),
+    requirement("torch"),
+]
+
+# `bazel run //:yapnr -- <args>` (alias in the root package).
+py_binary(
+    name = "cli",
+    srcs = ["cli.py"],
+    main = "cli.py",
+    deps = [":yapnr"] + _NUMERIC_DEPS,
+)
+
+# `bazel run //:doctor`: the same binary with the doctor command preset.
+py_binary(
+    name = "doctor",
+    srcs = ["cli.py"],
+    args = ["doctor"],
+    main = "cli.py",
+    deps = [":yapnr"] + _NUMERIC_DEPS,
+)

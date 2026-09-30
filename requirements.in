@@ -1,0 +1,38 @@
+# yapnr: top-level Python dependencies for the whole repository.
+#
+# This is the only place to add a direct dependency. requirements.lock is fully
+# resolved (with hashes) from this file and is what Bazel consumes through
+# pip.parse(hub_name = "yapnr_pypi") in MODULE.bazel. Regenerate it with:
+#
+#     bazel run //:requirements.update
+#
+# The lock is resolved with the hermetic Python 3.11 toolchain on darwin-arm64
+# and is also valid on linux-aarch64; see MODULE.bazel and docs/decisions.md.
+# Pins are bumped intentionally and recorded in docs/decisions.md.
+
+# --- Engine -------------------------------------------------------------------
+# Differentiable placement is a PyTorch autograd program, CPU-first by design
+# (determinism, no GPU in CI).
+#
+# The <2.4 ceiling is Splanc's, and the experiment environment the engine was
+# tuned in runs torch 2.3.1 with numpy 1.26 (numpy 1 ABI); the lock matches it
+# (torch 2.3.1). Lifting the ceiling is a measured change of its own.
+torch>=2.2,<2.4
+
+# numpy 1.x: torch 2.3 wheels are built against the numpy 1 ABI, and the
+# experiment environment the engine was tuned in runs numpy 1.26. The interop
+# smoke test (tests/unit/interop) guards torch <-> numpy conversion.
+numpy>=1.26,<2
+
+# Sidecar constraints and rules files (constraints.yaml, annotations.yaml).
+pyyaml>=6
+
+# --- Documentation (//docs:build) ---------------------------------------------
+# Pinned to the versions Splanc's docs site builds with, so the two sites
+# behave the same; bump together.
+sphinx==9.0.4
+myst-parser==5.1.0
+furo==2025.12.19
+sphinx-copybutton==0.5.2
+sphinx-design==0.7.0
+sphinxcontrib-mermaid==2.1.0

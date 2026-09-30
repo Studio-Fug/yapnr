@@ -3,7 +3,8 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-09-30 (PR4 and #10 merged; ladder animations merged with main).
+Last updated: 2026-09-30 (PR4 and #10 merged; ladder animations merged with main; line groups,
+hard board edges and the hierarchical ladder driver on `claude/animations-groups-hier`).
 
 ## In progress
 
@@ -29,6 +30,23 @@ Last updated: 2026-09-30 (PR4 and #10 merged; ladder animations merged with main
   configuration: 16 of 16, the vias and copper of RESULTS-118). The review's findings are fixed;
   the container path of `ladder.yaml` has still never run (the image is private and the Mac's
   tokens lack `read:packages`).
+
+- **Constraint and hierarchy showcases** (branch `claude/animations-groups-hier`, on top of
+  `claude/ladder-animations`; design `docs/design/constraint-and-hier-animations.md`, §10 "As
+  built"). Engine side done, all opt-in: a HARD `line_group` constraint placed as one rigid
+  macro inside `place()`, `edge_align` `hard`/`tolerance_mm`, own-net fixed copper in the
+  detail router, and `regression/hier_case.py` (blocks placed and routed on their own boards,
+  placed as macros, knitted with block copper held fixed). Traces gain `groups`,
+  `group_members`, `header.constraints`, a `fixed` event and per-template block traces.
+  `run.py --showcases` and `--trace-placement-every`; `designs.showcases()`: `line-chaser-20`,
+  `edge-io-12-free`, `edge-io-12`, `hier-twin-bank-32` (32 parts: the draft's "31" miscounted).
+  Showcase run (pool seed 0, 8 starts, 3 finalists, snapshots every 5): all five cases pass the
+  gate and the constraint audit, 0 opens, 0 findings; vias 19 (07), 20 (line), 9 (edge free),
+  8 (edge), 38 (hier); 123, 128, 65, 35 and 179 s. Placement and routes are identical across
+  two runs. A/B of the eight ladder cases (branch base against this engine, traced pool run):
+  identical `placed.json`, `routes.json` and trace digests, 8 of 8 pass. Next: implementer B
+  (renderer, comparison and hierarchical storyboard, docs page, README item, manifest,
+  `ladder.yaml` nightly step).
 
 ## Next
 
@@ -86,6 +104,12 @@ Last updated: 2026-09-30 (PR4 and #10 merged; ladder animations merged with main
 ## Blockers
 
 None.
+
+## Known issues
+
+- `detail_route_test` (large, not in the PR lane) fails `test_drc_clean_by_construction` on the
+  Mac at the branch base as well (a shared footprint cell on the `splanc_dev` fixture); not
+  caused by this branch.
 
 ## Do not retry
 

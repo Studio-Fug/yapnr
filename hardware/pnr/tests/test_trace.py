@@ -170,6 +170,81 @@ class RecorderTest(unittest.TestCase):
         self.assertEqual([p[0] for p in events[2]["order"]], ["R2", "R1"])
         self.assertEqual(events[2]["backtracks"], 2)
 
+    def test_pose_expansion_names_members_and_keeps_the_rigid_bodies(self):
+        """Snapshots and the legal order of a macro graph name its members (pnr.hier.macro)."""
+        from types import SimpleNamespace
+
+        from pnr.constraints import compile_constraints
+        from pnr.hier.macro import collapse
+
+        flat = _graph()
+        cc = compile_constraints({"board": {"outline": {"w": 10, "h": 8}}}, flat.refs)
+        sub = BoardGraph("line", [c for c in _graph().components])
+        sub.components[0].pos, sub.components[1].pos = (1.0, 0.6), (4.0, 0.6)
+        sub.components[1].rot = 0.0
+        mgraph, _, _, plan = collapse(
+            flat, cc, {}, [(SimpleNamespace(name="g"), sub, 5.0, 1.2)], prefix="LG", margin=0.0
+        )
+        rec = self.recorder()
+        with mock.patch.dict(os.environ, {trace.ENV_DIR: str(self.root)}):
+            with mock.patch.object(trace, "_RECORDER", rec):
+                with trace.pose_expansion(plan.trace_rows):
+                    tracer = trace.PlacementTracer(rec, mgraph.components, 10)
+                    tracer.snapshot(0, _Tensor([[5.0, 4.0]]), _Tensor([[0.0, 1.0, 0.0, 0.0]]))
+                    placed = BoardGraph.from_json(mgraph.to_json())
+                    placed.component("LG00").pos = (5.0, 4.0)
+                    placed.component("LG00").rot = 90.0
+                    rec.legal(["LG00"], placed)
+                rec.poses("round", [["R1", 1, 2, 0.0, "top"]])
+        events = _events(self.root)
+        expanded = plan.expand(placed, flat)
+        rows = [
+            [c.ref, trace.um(c.pos[0]), trace.um(c.pos[1]), c.rot, c.side]
+            for c in expanded.components
+        ]
+        self.assertEqual(events[0]["poses"], rows)
+        self.assertEqual(events[0]["groups"], [["LG00", 5000, 4000, 90.0, "top"]])
+        self.assertEqual(events[0]["group_members"], {"LG00": ["R1", "R2"]})
+        self.assertEqual(events[1]["order"], rows)
+        self.assertEqual(events[1]["groups"], [["LG00", 5000, 4000, 90.0, "top"]])
+        self.assertNotIn("groups", events[2])
+        self.assertEqual(rec.expanders, [])
+
+    def test_header_constraints_only_when_declared(self):
+        from pnr.constraints import compile_constraints
+
+        graph = _graph()
+        plain = trace.board_header(graph, compile_constraints({}, graph.refs))
+        self.assertNotIn("constraints", plain)
+        doc = {
+            "edge_align": {"R1": {"edge": "south"}},
+            "group": [{"members": ["R2"], "anchor": "R1", "radius_mm": 3}],
+        }
+        header = trace.board_header(graph, compile_constraints(doc, graph.refs))
+        self.assertEqual(
+            header["constraints"],
+            [
+                dict(kind="edge_align", refs=["R1"], hard=False, edge="south"),
+                dict(kind="group", refs=["R2"], hard=False, anchor="R1", radius_um=3000),
+            ],
+        )
+        doc = {"line_group": [{"name": "pair", "members": ["R1", "R2"], "pitch_mm": 2.5}]}
+        header = trace.board_header(graph, compile_constraints(doc, graph.refs))
+        self.assertEqual(
+            header["constraints"],
+            [
+                dict(
+                    kind="line_group",
+                    refs=["R1", "R2"],
+                    hard=True,
+                    name="pair",
+                    edge="none",
+                    pitch_um=2500,
+                    rot=0.0,
+                )
+            ],
+        )
+
     def test_size_budget_drops_provisional_then_all_but_essentials(self):
         rec = self.recorder(max_mb=0.01)  # 10 KiB
         for i in range(400):

@@ -168,7 +168,11 @@ def make_tree(root):
 
 
 def make_round(d, tree, via="origins"):
+    """A round dir whose evaluation 'started' now: an evaluation.json is written as well, because
+    Linux has no st_birthtime and observed_code then falls back to that file's mtime (see #10)."""
     ato = str(Path(tree) / "hardware/splanc_dev/elec/src/splanc_mini.ato")
+    Path(d).mkdir(parents=True, exist_ok=True)
+    (Path(d) / "evaluation.json").write_text("{}")
     if via == "origins":
         o = Path(d) / "electrical" / "native-loop" / "source-inputs"
         o.mkdir(parents=True)

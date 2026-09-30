@@ -8,21 +8,20 @@ import argparse
 import hashlib
 import io
 import json
-from pathlib import Path
-import subprocess
 import shutil
-from pypdf import PdfReader, PdfWriter
-from reportlab.pdfgen.canvas import Canvas
-from PIL import Image, ImageOps, ImageDraw
+import subprocess
+from pathlib import Path
+
 from mini_review_annotations import inventory, overlay
+from PIL import Image, ImageDraw, ImageOps
+from pypdf import PdfReader, PdfWriter
 from rasterize_mini_review import flatten
+from reportlab.pdfgen.canvas import Canvas
 
 ap = argparse.ArgumentParser(description=__doc__)
 ap.add_argument("board", type=Path)
 ap.add_argument("--out-dir", type=Path, required=True)
-ap.add_argument(
-    "--kicad-cli", default="/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"
-)
+ap.add_argument("--kicad-cli", default="/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli")
 ap.add_argument(
     "--kicad-python",
     default="/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3",
@@ -70,9 +69,7 @@ preferred = [
     "F.Fab",
     "B.Fab",
 ]
-layers = [n for n in preferred if n in layers] + [
-    n for n in layers if n not in preferred
-]
+layers = [n for n in preferred if n in layers] + [n for n in layers if n not in preferred]
 metadata = inventory(a.kicad_python, a.board, raw / "annotations.json")
 writer = PdfWriter()
 page_specs = []
@@ -100,9 +97,7 @@ for i, layer in enumerate(layers, 1):
         "--no-property-popups",
     ]
     # mode-single ignores common layers: explicitly include the board outline.
-    command[command.index("--layers") + 1] = (
-        layer if layer == "Edge.Cuts" else layer + ",Edge.Cuts"
-    )
+    command[command.index("--layers") + 1] = layer if layer == "Edge.Cuts" else layer + ",Edge.Cuts"
     if a.native_source:
         cached_names = list(dict.fromkeys(p["layer"] for p in cached["layers"]))
         assert cached_names == layers
@@ -126,9 +121,7 @@ for i, layer in enumerate(layers, 1):
         canvas = writer.add_blank_page(w, h)
         canvas.merge_transformed_page(
             page,
-            Transformation().translate(
-                (w - float(page.mediabox.width)) / 2, 35 * factor
-            ),
+            Transformation().translate((w - float(page.mediabox.width)) / 2, 35 * factor),
         )
         label = io.BytesIO()
         c = Canvas(label, pagesize=(w, h))
@@ -141,9 +134,7 @@ for i, layer in enumerate(layers, 1):
             f"{number:02} / {len(layers)*2:02}   {layer} | {kind}",
         )
         c.setFont("Helvetica", 8 * factor)
-        c.drawRightString(
-            w - 24 * factor, h - 25 * factor, "Splanc Mini | top-view | not mirrored"
-        )
+        c.drawRightString(w - 24 * factor, h - 25 * factor, "Splanc Mini | top-view | not mirrored")
         c.drawString(
             24 * factor,
             15 * factor,
@@ -202,9 +193,7 @@ manifest = dict(
     visual_review="pending",
     orientation="top-view, unmirrored; Edge.Cuts overlaid",
 )
-(a.out_dir / "annotations.json").write_text(
-    json.dumps(annotation_reports, indent=2) + "\n"
-)
+(a.out_dir / "annotations.json").write_text(json.dumps(annotation_reports, indent=2) + "\n")
 (a.out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 (a.out_dir / "review.json").write_text(
     json.dumps(
@@ -213,6 +202,4 @@ manifest = dict(
     )
     + "\n"
 )
-print(
-    json.dumps(dict(pdf=str(output.resolve()), pages=len(page_specs), review="pending"))
-)
+print(json.dumps(dict(pdf=str(output.resolve()), pages=len(page_specs), review="pending")))

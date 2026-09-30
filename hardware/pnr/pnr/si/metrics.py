@@ -17,6 +17,7 @@ Levels are the nominal rails 0 V and ``rail`` (not the settled values).
 * ``pulse_width_error_ns``: receiver high time (VIH up to VIL down) minus the stimulus
   high time.
 """
+
 from __future__ import annotations
 
 import bisect
@@ -67,38 +68,43 @@ def edge_metrics(t, rx, drv, *, rail, vih, vil, t_rise, t_fall, t_end):
     # 10-90 on each edge
     up90 = _first(crossings(t, rx, hi90, t_rise, t_fall), 1)
     if up90 is None:
-        m['rise_10_90_ns'] = None
+        m["rise_10_90_ns"] = None
     else:
         ups10 = [x for x, s in crossings(t, rx, lo10, t_rise, up90) if s == 1]
-        m['rise_10_90_ns'] = (up90 - ups10[-1]) * ns if ups10 else None
+        m["rise_10_90_ns"] = (up90 - ups10[-1]) * ns if ups10 else None
     dn10 = _first(crossings(t, rx, lo10, t_fall, t_end), -1)
     if dn10 is None:
-        m['fall_10_90_ns'] = None
+        m["fall_10_90_ns"] = None
     else:
         dns90 = [x for x, s in crossings(t, rx, hi90, t_fall, dn10) if s == -1]
-        m['fall_10_90_ns'] = (dn10 - dns90[-1]) * ns if dns90 else None
+        m["fall_10_90_ns"] = (dn10 - dns90[-1]) * ns if dns90 else None
     # threshold band per edge
     edges = {}
     for name, (a, b, d) in dict(rise=(t_rise, t_fall, 1), fall=(t_fall, t_end, -1)).items():
         c_il, c_ih = crossings(t, rx, vil, a, b), crossings(t, rx, vih, a, b)
-        edges[name] = dict(vil_crossings=len(c_il), vih_crossings=len(c_ih),
-                           monotonic=len(c_il) == 1 and len(c_ih) == 1)
-    m['band_crossings'] = edges
-    m['nonmonotonic_edges'] = sum(not e['monotonic'] for e in edges.values())
+        edges[name] = dict(
+            vil_crossings=len(c_il),
+            vih_crossings=len(c_ih),
+            monotonic=len(c_il) == 1 and len(c_ih) == 1,
+        )
+    m["band_crossings"] = edges
+    m["nonmonotonic_edges"] = sum(not e["monotonic"] for e in edges.values())
     # delays
     d_r = _first(crossings(t, drv, mid, t_rise, t_fall), 1)
     d_f = _first(crossings(t, drv, mid, t_fall, t_end), -1)
     r_ih = _first(crossings(t, rx, vih, t_rise, t_fall), 1)
     r_il = _first(crossings(t, rx, vil, t_fall, t_end), -1)
-    delays = [(r - d) * ns for r, d in ((r_ih, d_r), (r_il, d_f)) if r is not None and d is not None]
-    m['delay_rise_ns'] = (r_ih - d_r) * ns if r_ih is not None and d_r is not None else None
-    m['delay_fall_ns'] = (r_il - d_f) * ns if r_il is not None and d_f is not None else None
-    m['delay_ns'] = max(delays) if len(delays) == 2 else None
+    delays = [
+        (r - d) * ns for r, d in ((r_ih, d_r), (r_il, d_f)) if r is not None and d is not None
+    ]
+    m["delay_rise_ns"] = (r_ih - d_r) * ns if r_ih is not None and d_r is not None else None
+    m["delay_fall_ns"] = (r_il - d_f) * ns if r_il is not None and d_f is not None else None
+    m["delay_ns"] = max(delays) if len(delays) == 2 else None
     # levels
-    m['vmax_v'] = max(rx)
-    m['vmin_v'] = min(rx)
-    m['overshoot_v'] = m['vmax_v'] - rail
-    m['undershoot_v'] = -m['vmin_v']
+    m["vmax_v"] = max(rx)
+    m["vmin_v"] = min(rx)
+    m["overshoot_v"] = m["vmax_v"] - rail
+    m["undershoot_v"] = -m["vmin_v"]
     # ringback: from the edge's arrival (90 % / 10 % crossing, else the band crossing)
     margins = []
     if r_ih is not None:
@@ -107,10 +113,12 @@ def edge_metrics(t, rx, drv, *, rail, vih, vil, t_rise, t_fall, t_end):
     if r_il is not None:
         after = _window(t, rx, dn10 if dn10 is not None else r_il, t_end)
         margins.append(vil - (max(after) if len(after) else vil))
-    m['ringback_margin_v'] = min(margins) if len(margins) == 2 else None
-    m['pulse_width_error_ns'] = ((r_il - r_ih) - (t_fall - t_rise)) * ns if r_ih is not None and r_il is not None else None
-    m['v_end_high_v'] = value_at(t, rx, t_fall)
-    m['v_end_low_v'] = value_at(t, rx, t_end)
+    m["ringback_margin_v"] = min(margins) if len(margins) == 2 else None
+    m["pulse_width_error_ns"] = (
+        ((r_il - r_ih) - (t_fall - t_rise)) * ns if r_ih is not None and r_il is not None else None
+    )
+    m["v_end_high_v"] = value_at(t, rx, t_fall)
+    m["v_end_low_v"] = value_at(t, rx, t_end)
     return m
 
 
@@ -118,18 +126,18 @@ def sanity(t, rx, drv, *, rail, t_rise, t_fall, t_end, tol=0.1):
     """Reason string when the run is garbage (driver pin never reaches its rail, flat
     receiver, empty windows); None when plausible. Garbage counts as an error."""
     if len(t) < 20 or t[-1] < t_fall:
-        return 'waveform too short'
+        return "waveform too short"
     hi = value_at(t, drv, t_fall)
     lo = value_at(t, drv, t_end)
     if abs(hi - rail) > tol * rail:
-        return 'driver pin at %.3f V at the end of the rising window, rail %.3f V' % (hi, rail)
+        return "driver pin at %.3f V at the end of the rising window, rail %.3f V" % (hi, rail)
     if abs(lo) > tol * rail:
-        return 'driver pin at %.3f V at the end of the falling window' % lo
+        return "driver pin at %.3f V at the end of the falling window" % lo
     if max(rx) - min(rx) < 0.2 * rail:
-        return 'flat receiver waveform (swing %.3f V)' % (max(rx) - min(rx))
+        return "flat receiver waveform (swing %.3f V)" % (max(rx) - min(rx))
     for x in (hi, lo):
         if not math.isfinite(x):
-            return 'non-finite driver level'
+            return "non-finite driver level"
     return None
 
 
@@ -146,20 +154,26 @@ def judge(metrics, limits):
         if val is None:
             ok = False
         else:
-            if 'max' in lim:
-                margin = lim['max'] - val
-                ok = ok and val <= lim['max']
-            if 'min' in lim:
-                mm = val - lim['min']
+            if "max" in lim:
+                margin = lim["max"] - val
+                ok = ok and val <= lim["max"]
+            if "min" in lim:
+                mm = val - lim["min"]
                 margin = mm if margin is None else min(margin, mm)
-                ok = ok and val >= lim['min']
-            if 'eq' in lim:
-                ok = ok and val == lim['eq']
-        rec = dict(metric=name, value=val, limit={k: v for k, v in lim.items() if k in ('max', 'min', 'eq')},
-                   gate=bool(lim.get('gate', True)), ok=ok, margin=margin)
+                ok = ok and val >= lim["min"]
+            if "eq" in lim:
+                ok = ok and val == lim["eq"]
+        rec = dict(
+            metric=name,
+            value=val,
+            limit={k: v for k, v in lim.items() if k in ("max", "min", "eq")},
+            gate=bool(lim.get("gate", True)),
+            ok=ok,
+            margin=margin,
+        )
         checks.append(rec)
         if not ok:
-            (gate if rec['gate'] else report).append(rec)
+            (gate if rec["gate"] else report).append(rec)
     return dict(passed=not gate, gate_failures=gate, report_violations=report, checks=checks)
 
 

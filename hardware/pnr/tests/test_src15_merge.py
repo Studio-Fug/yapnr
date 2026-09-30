@@ -5,22 +5,36 @@ synth_native.rank_key. Each flag alone must reproduce its own line; both togethe
 
   PYTHONPATH=$PWD/..:$PWD .../pnr-regression-runtime/bin/python -m unittest -v test_src15_merge
 """
-import copy, json, math, os, unittest
+
+import copy
+import json
+import math
+import os
+import unittest
 from unittest import mock
 
 try:
     import numpy  # noqa: F401
-    from pnr.place.legalize import legalize
-    from pnr.place import hull as H
+
     from pnr.hier import extent as E
+    from pnr.place import hull as H
+    from pnr.place.legalize import legalize
+
     NUMPY = True
 except Exception:  # KiCad Python: no numpy
     NUMPY = False
 
 from pnr.graph import BoardGraph, Component, Pad
 
-FLAGS = ('PNR_PAIR_LANDING_RESERVE', 'PNR_MACRO_SHRINK', 'PNR_MACRO_HULL', 'PNR_LIBRARY_RANK_USED', 'PNR_SI',
-         'PNR_POWER_FIRST', 'PNR_PAD_EDGE_CLEARANCE')
+FLAGS = (
+    "PNR_PAIR_LANDING_RESERVE",
+    "PNR_MACRO_SHRINK",
+    "PNR_MACRO_HULL",
+    "PNR_LIBRARY_RANK_USED",
+    "PNR_SI",
+    "PNR_POWER_FIRST",
+    "PNR_PAD_EDGE_CLEARANCE",
+)
 
 
 def env(**on):
@@ -31,113 +45,185 @@ def env(**on):
         def __enter__(self):
             self.saved = {k: os.environ.get(k) for k in values}
             for k, v in values.items():
-                if v is None: os.environ.pop(k, None)
-                else: os.environ[k] = str(v)
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = str(v)
+
         def __exit__(self, *exc):
             for k, v in self.saved.items():
-                if v is None: os.environ.pop(k, None)
-                else: os.environ[k] = v
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+
     return _Env()
 
 
-RESERVE = dict(kind='pair_landing', pair='usb', pads=['U1.1', 'U1.2'], side='opposite',
-               runs_mm={'-1': 0.8, '1': 0.8}, via_radius_mm=0.35, half_width_mm=0.6)
-MOUNT = dict(kind='macro_mount', sides=['top'])
+RESERVE = dict(
+    kind="pair_landing",
+    pair="usb",
+    pads=["U1.1", "U1.2"],
+    side="opposite",
+    runs_mm={"-1": 0.8, "1": 0.8},
+    via_radius_mm=0.35,
+    half_width_mm=0.6,
+)
+MOUNT = dict(kind="macro_mount", sides=["top"])
 
 
-def terminal(ref='T1', pos=(5.0, 5.0), reserves=True):
-    return Component(ref, 'QFN', pos, 0.0, 'top', (2.0, 2.0), (2.0, 2.0),
-                     pads=[Pad('1', 'Dp', (-0.25, 0.9), (0.2, 0.4)), Pad('2', 'Dn', (0.25, 0.9), (0.2, 0.4))],
-                     reserves=[dict(RESERVE, pads=['1', '2'])] if reserves else [])
+def terminal(ref="T1", pos=(5.0, 5.0), reserves=True):
+    return Component(
+        ref,
+        "QFN",
+        pos,
+        0.0,
+        "top",
+        (2.0, 2.0),
+        (2.0, 2.0),
+        pads=[Pad("1", "Dp", (-0.25, 0.9), (0.2, 0.4)), Pad("2", "Dn", (0.25, 0.9), (0.2, 0.4))],
+        reserves=[dict(RESERVE, pads=["1", "2"])] if reserves else [],
+    )
 
 
 class GraphJsonTest(unittest.TestCase):
     def test_default_graph_has_neither_key(self):
-        g = BoardGraph('t', [terminal(reserves=False)])
-        c = json.loads(g.to_json())['components'][0]
-        self.assertNotIn('reserves', c); self.assertNotIn('hull', c)
+        g = BoardGraph("t", [terminal(reserves=False)])
+        c = json.loads(g.to_json())["components"][0]
+        self.assertNotIn("reserves", c)
+        self.assertNotIn("hull", c)
 
     def test_both_fields_round_trip(self):
-        comp = terminal(); comp.hull = {'version': 2, 'top': [[0, 0, 1, 1]]}
-        back = BoardGraph.from_json(BoardGraph('t', [comp]).to_json()).components[0]
-        self.assertEqual(back.reserves, comp.reserves); self.assertEqual(back.hull, comp.hull)
+        comp = terminal()
+        comp.hull = {"version": 2, "top": [[0, 0, 1, 1]]}
+        back = BoardGraph.from_json(BoardGraph("t", [comp]).to_json()).components[0]
+        self.assertEqual(back.reserves, comp.reserves)
+        self.assertEqual(back.hull, comp.hull)
 
 
 try:
     import yaml  # noqa: F401  (pnr.hier.synth_native imports it; KiCad Python lacks it)
+
     YAML = True
 except ImportError:
     YAML = False
 
 
-@unittest.skipUnless(YAML, 'needs yaml (PnR runtime)')
+@unittest.skipUnless(YAML, "needs yaml (PnR runtime)")
 class RankKeyTest(unittest.TestCase):
-    REC = dict(objective=[1, 2, 3, 4.5, 5, 6], si_layout_failures=7, used_band=8, used={'area_mm2': 9.0},
-               port_debt_mm=10.0, area=11.0, hot_loops_open=12, power_quality={'q_band': 13, 'crossings': 14})
+    REC = dict(
+        objective=[1, 2, 3, 4.5, 5, 6],
+        si_layout_failures=7,
+        used_band=8,
+        used={"area_mm2": 9.0},
+        port_debt_mm=10.0,
+        area=11.0,
+        hot_loops_open=12,
+        power_quality={"q_band": 13, "crossings": 14},
+    )
 
     def key(self, **on):
         from pnr.hier.synth_native import rank_key
+
         with env(**on):
             return rank_key(dict(self.REC))
 
     def test_each_flag_alone_is_its_line(self):
         self.assertEqual(self.key(), (6, 1, 2, 3, 4.5, 5, 10.0, 11.0))
-        self.assertEqual(self.key(PNR_SI='1'), (6, 1, 7, 2, 3, 4.5, 5, 10.0, 11.0))                      # src14
-        self.assertEqual(self.key(PNR_LIBRARY_RANK_USED='1'), (6, 1, 2, 3, 8, 4.5, 5, 10.0, 9.0, 11.0))   # src12n
-        self.assertEqual(self.key(PNR_POWER_FIRST='1', PNR_LIBRARY_RANK_USED='1'),
-                         (6, 1, 12, 13, 14, 2, 3, 8, 4.5, 5, 10.0, 9.0, 11.0))
+        self.assertEqual(self.key(PNR_SI="1"), (6, 1, 7, 2, 3, 4.5, 5, 10.0, 11.0))  # src14
+        self.assertEqual(
+            self.key(PNR_LIBRARY_RANK_USED="1"), (6, 1, 2, 3, 8, 4.5, 5, 10.0, 9.0, 11.0)
+        )  # src12n
+        self.assertEqual(
+            self.key(PNR_POWER_FIRST="1", PNR_LIBRARY_RANK_USED="1"),
+            (6, 1, 12, 13, 14, 2, 3, 8, 4.5, 5, 10.0, 9.0, 11.0),
+        )
 
     def test_si_and_used_band_compose(self):
-        self.assertEqual(self.key(PNR_SI='1', PNR_LIBRARY_RANK_USED='1'), (6, 1, 7, 2, 3, 8, 4.5, 5, 10.0, 9.0, 11.0))
-        self.assertEqual(self.key(PNR_SI='1', PNR_LIBRARY_RANK_USED='1', PNR_POWER_FIRST='1'),
-                         (6, 1, 12, 7, 13, 14, 2, 3, 8, 4.5, 5, 10.0, 9.0, 11.0))
+        self.assertEqual(
+            self.key(PNR_SI="1", PNR_LIBRARY_RANK_USED="1"),
+            (6, 1, 7, 2, 3, 8, 4.5, 5, 10.0, 9.0, 11.0),
+        )
+        self.assertEqual(
+            self.key(PNR_SI="1", PNR_LIBRARY_RANK_USED="1", PNR_POWER_FIRST="1"),
+            (6, 1, 12, 7, 13, 14, 2, 3, 8, 4.5, 5, 10.0, 9.0, 11.0),
+        )
 
 
-@unittest.skipUnless(NUMPY, 'needs numpy (PnR runtime)')
+@unittest.skipUnless(NUMPY, "needs numpy (PnR runtime)")
 class PlacementRectsTest(unittest.TestCase):
     def macro(self):
-        geo = E.BlockGeometry(ok=True, extent=(-5.0, -3.0, 5.0, 3.0),
-                              shapes=dict(top=dict(rect=[[-5.0, -3.0, -1.0, 3.0]], cap=[[-4.6, 1.5, 4.6, 1.5, 0.45]]),
-                                          bottom=dict(rect=[], cap=[[3.0, 2.4, 3.0, 2.4, 0.575]])),
-                              c_cu=0.35, margin=0.3, track_width=0.2)
+        geo = E.BlockGeometry(
+            ok=True,
+            extent=(-5.0, -3.0, 5.0, 3.0),
+            shapes=dict(
+                top=dict(rect=[[-5.0, -3.0, -1.0, 3.0]], cap=[[-4.6, 1.5, 4.6, 1.5, 0.45]]),
+                bottom=dict(rect=[], cap=[[3.0, 2.4, 3.0, 2.4, 0.575]]),
+            ),
+            c_cu=0.35,
+            margin=0.3,
+            track_width=0.2,
+        )
         hull = E.build_hull(geo, (0.0, 0.0), (10.0, 6.0), 0.2)
-        return Component('MB00', 'block:test', (15.125, 10.125), 0.0, 'top', (10.0, 6.0), (10.0, 6.0),
-                         pads=[Pad('U1.1', 'Dp', (-3.25, 0.0), (0.2, 0.4)), Pad('U1.2', 'Dn', (-2.75, 0.0), (0.2, 0.4))],
-                         address='block:test', hull=hull, reserves=[dict(RESERVE), dict(MOUNT)])
+        return Component(
+            "MB00",
+            "block:test",
+            (15.125, 10.125),
+            0.0,
+            "top",
+            (10.0, 6.0),
+            (10.0, 6.0),
+            pads=[
+                Pad("U1.1", "Dp", (-3.25, 0.0), (0.2, 0.4)),
+                Pad("U1.2", "Dn", (-2.75, 0.0), (0.2, 0.4)),
+            ],
+            address="block:test",
+            hull=hull,
+            reserves=[dict(RESERVE), dict(MOUNT)],
+        )
 
     def test_hull_alone_is_the_n0001_output(self):
-        from pnr.place.geometry import placement_rects, MountedRect, ReserveRect
+        from pnr.place.geometry import MountedRect, ReserveRect, placement_rects
+
         m = self.macro()
-        with env(PNR_MACRO_HULL='1'):
+        with env(PNR_MACRO_HULL="1"):
             got = placement_rects(m)
         self.assertEqual(got, H.hull_placement_rects(m))
         self.assertFalse(any(isinstance(r, (MountedRect, ReserveRect)) for _, r in got))
 
     def test_landing_alone_is_the_src13_output(self):
-        from pnr.place.geometry import placement_rects, MountedRect, ReserveRect, courtyard_rect
+        from pnr.place.geometry import MountedRect, ReserveRect, courtyard_rect, placement_rects
+
         m = self.macro()
-        with env(PNR_PAIR_LANDING_RESERVE='1'):
+        with env(PNR_PAIR_LANDING_RESERVE="1"):
             got = placement_rects(m)
         bodies = [(s, r) for s, r in got if not isinstance(r, ReserveRect)]
         # a block macro's courtyard occupies both sides; both body rects carry its mount side
-        cr = MountedRect(*[getattr(courtyard_rect(m), a) for a in ('cx', 'cy', 'w', 'h')], mount='top')
-        self.assertEqual(sorted(bodies), [('bottom', cr), ('top', cr)])
+        cr = MountedRect(
+            *[getattr(courtyard_rect(m), a) for a in ("cx", "cy", "w", "h")], mount="top"
+        )
+        self.assertEqual(sorted(bodies), [("bottom", cr), ("top", cr)])
         self.assertEqual(sum(isinstance(r, ReserveRect) for _, r in got), 2)
 
     def test_both_flags_tag_hull_rects_and_add_reserves(self):
-        from pnr.place.geometry import placement_rects, MountedRect, ReserveRect
+        from pnr.place.geometry import MountedRect, ReserveRect, placement_rects
+
         m = self.macro()
-        with env(PNR_PAIR_LANDING_RESERVE='1', PNR_MACRO_HULL='1'):
+        with env(PNR_PAIR_LANDING_RESERVE="1", PNR_MACRO_HULL="1"):
             got = placement_rects(m)
         hull = H.hull_placement_rects(m)
         bodies = [(s, r) for s, r in got if not isinstance(r, ReserveRect)]
-        self.assertEqual([(s, (r.cx, r.cy, r.w, r.h)) for s, r in bodies], [(s, (r.cx, r.cy, r.w, r.h)) for s, r in hull])
-        self.assertTrue(all(isinstance(r, MountedRect) and r.mount == 'top' for _, r in bodies))
+        self.assertEqual(
+            [(s, (r.cx, r.cy, r.w, r.h)) for s, r in bodies],
+            [(s, (r.cx, r.cy, r.w, r.h)) for s, r in hull],
+        )
+        self.assertTrue(all(isinstance(r, MountedRect) and r.mount == "top" for _, r in bodies))
         reserves = [r for _, r in got if isinstance(r, ReserveRect)]
-        self.assertEqual(len(reserves), 2); self.assertTrue(all(r.side == 'bottom' for r in reserves))
+        self.assertEqual(len(reserves), 2)
+        self.assertTrue(all(r.side == "bottom" for r in reserves))
 
 
-@unittest.skipUnless(NUMPY, 'needs numpy (PnR runtime)')
+@unittest.skipUnless(NUMPY, "needs numpy (PnR runtime)")
 class LegalizeCompositionTest(unittest.TestCase):
     """A top terminal part with bottom landing reserves, a bottom part aimed at them and a
     hull macro: each flag alone and both together legalize with no overlap."""
@@ -145,35 +231,67 @@ class LegalizeCompositionTest(unittest.TestCase):
     def graph(self):
         macro = PlacementRectsTest.macro(self)
         macro.reserves = [dict(MOUNT)]
-        return BoardGraph('t', [macro, terminal(pos=(25.0, 15.0)),
-                                Component('B1', 'R0402', (25.0, 16.6), 0.0, 'bottom', (1.0, 0.6), (1.0, 0.6),
-                                          pads=[Pad('1', 'x', (0.0, 0.0), (0.4, 0.4))])])
+        return BoardGraph(
+            "t",
+            [
+                macro,
+                terminal(pos=(25.0, 15.0)),
+                Component(
+                    "B1",
+                    "R0402",
+                    (25.0, 16.6),
+                    0.0,
+                    "bottom",
+                    (1.0, 0.6),
+                    (1.0, 0.6),
+                    pads=[Pad("1", "x", (0.0, 0.0), (0.4, 0.4))],
+                ),
+            ],
+        )
 
     def run_(self, **on):
         from pnr.place.metrics import overlap_pairs
+
         with env(**on):
-            out = legalize(self.graph(), 30.0, 20.0, fixed={'T1': (25.0, 15.0)}, keepouts=[], clearance=0.2, grid_mm=0.25,
-                           rotations={'MB00': 0.0})
+            out = legalize(
+                self.graph(),
+                30.0,
+                20.0,
+                fixed={"T1": (25.0, 15.0)},
+                keepouts=[],
+                clearance=0.2,
+                grid_mm=0.25,
+                rotations={"MB00": 0.0},
+            )
             return out, overlap_pairs(out)
 
     def test_flags_off_bottom_part_stays_on_the_landing(self):
         out, pairs = self.run_()
         self.assertEqual(pairs, [])
-        self.assertLess(math.dist(out.component('B1').pos, (25.0, 16.6)), 0.3)
+        self.assertLess(math.dist(out.component("B1").pos, (25.0, 16.6)), 0.3)
 
     def test_landing_moves_the_bottom_part_off_the_reserve(self):
-        from pnr.place.geometry import placement_rects, ReserveRect
-        for on in (dict(PNR_PAIR_LANDING_RESERVE='1'), dict(PNR_PAIR_LANDING_RESERVE='1', PNR_MACRO_HULL='1')):
+        from pnr.place.geometry import ReserveRect, placement_rects
+
+        for on in (
+            dict(PNR_PAIR_LANDING_RESERVE="1"),
+            dict(PNR_PAIR_LANDING_RESERVE="1", PNR_MACRO_HULL="1"),
+        ):
             out, pairs = self.run_(**on)
             self.assertEqual(pairs, [], on)
             with env(**on):
-                res = [r for s, r in placement_rects(out.component('T1')) if isinstance(r, ReserveRect)]
-                body = [r for s, r in placement_rects(out.component('B1')) if s == 'bottom']
+                res = [
+                    r for s, r in placement_rects(out.component("T1")) if isinstance(r, ReserveRect)
+                ]
+                body = [r for s, r in placement_rects(out.component("B1")) if s == "bottom"]
             self.assertTrue(res and body)
             self.assertFalse(any(r.overlaps(b) for r in res for b in body), on)
 
     def test_hull_alone_and_with_landing_keep_the_macro_legal(self):
-        for on in (dict(PNR_MACRO_HULL='1'), dict(PNR_MACRO_HULL='1', PNR_PAIR_LANDING_RESERVE='1')):
+        for on in (
+            dict(PNR_MACRO_HULL="1"),
+            dict(PNR_MACRO_HULL="1", PNR_PAIR_LANDING_RESERVE="1"),
+        ):
             out, pairs = self.run_(**on)
             self.assertEqual(pairs, [], on)
 
@@ -182,52 +300,90 @@ class LegalizeCompositionTest(unittest.TestCase):
         (starves) ignore landing reserves for every part (src13 design); the hull free map they
         use must too. Only the hull macro's actual slot search avoids them."""
         import inspect
+
         calls = []
         real = H.free_map
 
         def spy(*args, **kw):
-            frame = inspect.currentframe().f_back            # hull_free
-            calls.append((frame.f_back.f_code.co_name, frame.f_locals.get('reserves'), frame.f_locals.get('avoid')))
+            frame = inspect.currentframe().f_back  # hull_free
+            calls.append(
+                (
+                    frame.f_back.f_code.co_name,
+                    frame.f_locals.get("reserves"),
+                    frame.f_locals.get("avoid"),
+                )
+            )
             return real(*args, **kw)
-        with mock.patch.object(H, 'free_map', spy):
-            out, pairs = self.run_(PNR_MACRO_HULL='1', PNR_PAIR_LANDING_RESERVE='1')
+
+        with mock.patch.object(H, "free_map", spy):
+            out, pairs = self.run_(PNR_MACRO_HULL="1", PNR_PAIR_LANDING_RESERVE="1")
         self.assertEqual(pairs, [])
         callers = {c for c, _, _ in calls}
-        self.assertIn('available_pose', callers)
+        self.assertIn("available_pose", callers)
         for caller, reserves, avoid in calls:
-            if caller in ('available_pose', 'starves'):
+            if caller in ("available_pose", "starves"):
                 self.assertEqual((reserves, avoid), (False, ()), caller)
             else:
-                self.assertEqual((caller, reserves), ('legalize', True))
-                self.assertTrue(avoid)                         # the macro's mount side(s)
+                self.assertEqual((caller, reserves), ("legalize", True))
+                self.assertTrue(avoid)  # the macro's mount side(s)
 
 
 class MacroCollapseTest(unittest.TestCase):
     """collapse() carries member landing reserves onto shaped (shrink/hull) macros too."""
 
-    @unittest.skipUnless(NUMPY, 'needs numpy (PnR runtime)')
+    @unittest.skipUnless(NUMPY, "needs numpy (PnR runtime)")
     def test_shaped_macro_keeps_reserves_and_mount(self):
-        from pnr.hier.macro import collapse
         from pnr.constraints import compile_constraints
-        member = terminal('U1', pos=(3.0, 3.0))
-        sub = BoardGraph('blk', [member])
-        flat = BoardGraph('top', [copy.deepcopy(member), Component('R9', 'R', (1, 1), 0, 'top', (1, 1), (1, 1))])
-        cons = compile_constraints({'board': {'outline': {'w': 30, 'h': 20}}}, flat.refs)
-        geo = E.BlockGeometry(ok=True, extent=(1.0, 1.0, 5.0, 5.0), shapes=dict(top=dict(rect=[[1.0, 1.0, 5.0, 5.0]], cap=[]),
-                                                                              bottom=dict(rect=[], cap=[])),
-                              c_cu=0.35, margin=0.3, track_width=0.2)
-        block = type('B', (), {'name': 'blk'})()
-        for on in (dict(PNR_PAIR_LANDING_RESERVE='1'), dict(PNR_PAIR_LANDING_RESERVE='1', PNR_MACRO_SHRINK='1'),
-                   dict(PNR_PAIR_LANDING_RESERVE='1', PNR_MACRO_SHRINK='1', PNR_MACRO_HULL='1')):
+        from pnr.hier.macro import collapse
+
+        member = terminal("U1", pos=(3.0, 3.0))
+        sub = BoardGraph("blk", [member])
+        flat = BoardGraph(
+            "top", [copy.deepcopy(member), Component("R9", "R", (1, 1), 0, "top", (1, 1), (1, 1))]
+        )
+        cons = compile_constraints({"board": {"outline": {"w": 30, "h": 20}}}, flat.refs)
+        geo = E.BlockGeometry(
+            ok=True,
+            extent=(1.0, 1.0, 5.0, 5.0),
+            shapes=dict(
+                top=dict(rect=[[1.0, 1.0, 5.0, 5.0]], cap=[]), bottom=dict(rect=[], cap=[])
+            ),
+            c_cu=0.35,
+            margin=0.3,
+            track_width=0.2,
+        )
+        block = type("B", (), {"name": "blk"})()
+        for on in (
+            dict(PNR_PAIR_LANDING_RESERVE="1"),
+            dict(PNR_PAIR_LANDING_RESERVE="1", PNR_MACRO_SHRINK="1"),
+            dict(PNR_PAIR_LANDING_RESERVE="1", PNR_MACRO_SHRINK="1", PNR_MACRO_HULL="1"),
+        ):
             with env(**on):
-                mg, *_, plan = collapse(flat, cons, {'fab': {'edge_clearance_mm': 0.3}}, [(block, sub, 6.0, 6.0)], geometry={'blk': geo})
-            mb = mg.component('MB00')
-            kinds = sorted(r['kind'] for r in mb.reserves)
-            self.assertEqual(kinds, ['macro_mount', 'pair_landing'], on)
-            self.assertEqual(next(r for r in mb.reserves if r['kind'] == 'pair_landing')['pads'], ['U1.1', 'U1.2'])
+                mg, *_, plan = collapse(
+                    flat,
+                    cons,
+                    {"fab": {"edge_clearance_mm": 0.3}},
+                    [(block, sub, 6.0, 6.0)],
+                    geometry={"blk": geo},
+                )
+            mb = mg.component("MB00")
+            kinds = sorted(r["kind"] for r in mb.reserves)
+            self.assertEqual(kinds, ["macro_mount", "pair_landing"], on)
+            self.assertEqual(
+                next(r for r in mb.reserves if r["kind"] == "pair_landing")["pads"],
+                ["U1.1", "U1.2"],
+            )
         with env():
-            mg, *_ = collapse(flat, cons, {'fab': {'edge_clearance_mm': 0.3}}, [(block, sub, 6.0, 6.0)], geometry={'blk': geo})
-        self.assertEqual([r['kind'] for r in mg.component('MB00').reserves], ['pair_landing'])  # member recipe only
+            mg, *_ = collapse(
+                flat,
+                cons,
+                {"fab": {"edge_clearance_mm": 0.3}},
+                [(block, sub, 6.0, 6.0)],
+                geometry={"blk": geo},
+            )
+        self.assertEqual(
+            [r["kind"] for r in mg.component("MB00").reserves], ["pair_landing"]
+        )  # member recipe only
 
 
 class KiCadDefaultsTest(unittest.TestCase):
@@ -240,45 +396,87 @@ class KiCadDefaultsTest(unittest.TestCase):
     'PNR_KICAD_PYTHON', ...)`` or a shell ``${PNR_KICAD_CLI:-...}`` / ``${PNR_KICAD_PYTHON:-...}``),
     as a GUI-python fallback that the very next line disables when ``PNR_KICAD_PYTHON`` is set,
     in a comment, or at one of the reviewed SITES below (each with its reason)."""
-    SRC = __import__('pathlib').Path(__file__).resolve().parents[3]
-    SUFFIXES = {'.py', '.bzl', '.bazel', '.sh', '.patch'}
-    ENV_DEFAULT = (r"os\.environ\.get\(\s*['\"]PNR_KICAD_(CLI|PYTHON)['\"]\s*,\s*['\"]/Applications/KiCad/",
-                   r"\$\{PNR_KICAD_(CLI|PYTHON):-/Applications/KiCad/")
+
+    SRC = __import__("pathlib").Path(__file__).resolve().parents[3]
+    SUFFIXES = {".py", ".bzl", ".bazel", ".sh", ".patch"}
+    ENV_DEFAULT = (
+        r"os\.environ\.get\(\s*['\"]PNR_KICAD_(CLI|PYTHON)['\"]\s*,\s*['\"]/Applications/KiCad/",
+        r"\$\{PNR_KICAD_(CLI|PYTHON):-/Applications/KiCad/",
+    )
     # (relative path, fragment of the line): reason. Nothing here chooses a /Applications binary
     # while PNR_KICAD_CLI / PNR_KICAD_PYTHON are set.
     SITES = {
-        ('hardware/pnr/pnr/si/models.py', "GUI_BUNDLE = '/Applications/KiCad/'"): 'refusal constant (kicad-cli inside it is refused)',
-        ('hardware/pnr/pnr/si/runner.py', "GUI_BUNDLE = '/Applications/KiCad/'"): 'refusal constant (interpreters inside it are refused)',
-        ('hardware/pnr/pnr/si/extract.py', "GUI_PY = '/Applications/KiCad/"): 'last-resort fallback, refused when PNR_KICAD_PYTHON is set (test_si_extract)',
-        ('hardware/pnr/pnr/mc/halving.py', "KI = '/Applications/KiCad/"): 'unused constant (test_halving_ki_unused)',
-        ('hardware/pnr/pnr/drc_warm/launch_host.py', "exe='/Applications/KiCad/"): 'GUI-bound warm-DRC host (pcbnew.app), off by design',
-        ('hardware/pnr/regression/run.py', "KI='/Applications/KiCad/"): 'bundle root; every use is env-first (test_regression_ki_uses)',
-        ('hardware/pnr/tests/test_si_runner.py', "'/Applications/KiCad/"): 'test: the GUI bundle is refused',
-        ('hardware/pnr/tests/test_si_models.py', "'/Applications/KiCad/"): 'test: a PNR_KICAD_CLI inside the GUI bundle is refused',
-        ('hardware/pnr/tests/test_macro_hull.py', "'/Applications/KiCad/"): 'test: the unset-env fallback of src12n',
+        (
+            "hardware/pnr/pnr/si/models.py",
+            "GUI_BUNDLE = '/Applications/KiCad/'",
+        ): "refusal constant (kicad-cli inside it is refused)",
+        (
+            "hardware/pnr/pnr/si/runner.py",
+            "GUI_BUNDLE = '/Applications/KiCad/'",
+        ): "refusal constant (interpreters inside it are refused)",
+        (
+            "hardware/pnr/pnr/si/extract.py",
+            "GUI_PY = '/Applications/KiCad/",
+        ): "last-resort fallback, refused when PNR_KICAD_PYTHON is set (test_si_extract)",
+        (
+            "hardware/pnr/pnr/mc/halving.py",
+            "KI = '/Applications/KiCad/",
+        ): "unused constant (test_halving_ki_unused)",
+        (
+            "hardware/pnr/pnr/drc_warm/launch_host.py",
+            "exe='/Applications/KiCad/",
+        ): "GUI-bound warm-DRC host (pcbnew.app), off by design",
+        (
+            "hardware/pnr/regression/run.py",
+            "KI='/Applications/KiCad/",
+        ): "bundle root; every use is env-first (test_regression_ki_uses)",
+        (
+            "hardware/pnr/tests/test_si_runner.py",
+            "'/Applications/KiCad/",
+        ): "test: the GUI bundle is refused",
+        (
+            "hardware/pnr/tests/test_si_models.py",
+            "'/Applications/KiCad/",
+        ): "test: a PNR_KICAD_CLI inside the GUI bundle is refused",
+        (
+            "hardware/pnr/tests/test_macro_hull.py",
+            "'/Applications/KiCad/",
+        ): "test: the unset-env fallback of src12n",
     }
-    SELF = 'hardware/pnr/tests/test_src15_merge.py'
+    SELF = "hardware/pnr/tests/test_src15_merge.py"
 
     def files(self):
-        roots = [self.SRC / 'hardware', self.SRC / 'patches']
-        out = [self.SRC / 'MODULE.bazel'] if (self.SRC / 'MODULE.bazel').exists() else []
+        roots = [self.SRC / "hardware", self.SRC / "patches"]
+        out = [self.SRC / "MODULE.bazel"] if (self.SRC / "MODULE.bazel").exists() else []
         for root in roots:
             if root.is_dir():
-                out += [p for p in root.rglob('*') if p.is_file() and '__pycache__' not in p.parts
-                        and (p.suffix in self.SUFFIXES or p.name in ('BUILD', 'BUILD.bazel'))]
+                out += [
+                    p
+                    for p in root.rglob("*")
+                    if p.is_file()
+                    and "__pycache__" not in p.parts
+                    and (p.suffix in self.SUFFIXES or p.name in ("BUILD", "BUILD.bazel"))
+                ]
         return sorted(set(out))
 
     @staticmethod
     def code_lines(path):
         """(line number, code text) with comments removed (Python via tokenize; '#'-lines elsewhere)."""
-        import io, tokenize
-        text = path.read_text(errors='replace')
+        import io
+        import tokenize
+
+        text = path.read_text(errors="replace")
         lines = text.splitlines()
-        if path.suffix == '.patch':
+        if path.suffix == ".patch":
             # the patched result: added and context lines, without the diff marker
-            return [(n, l[1:]) for n, l in enumerate(lines, 1)
-                    if l[:1] in ('+', ' ') and not l.startswith('+++') and not l[1:].lstrip().startswith('#')]
-        if path.suffix == '.py':
+            return [
+                (n, l[1:])
+                for n, l in enumerate(lines, 1)
+                if l[:1] in ("+", " ")
+                and not l.startswith("+++")
+                and not l[1:].lstrip().startswith("#")
+            ]
+        if path.suffix == ".py":
             comments = {}
             try:
                 for tok in tokenize.generate_tokens(io.StringIO(text).readline):
@@ -286,11 +484,17 @@ class KiCadDefaultsTest(unittest.TestCase):
                         comments[tok.start[0]] = tok.start[1]
             except (tokenize.TokenError, IndentationError, SyntaxError):
                 pass
-            return [(n, l[:comments[n]] if n in comments else l) for n, l in enumerate(lines, 1)]
-        return [(n, l) for n, l in enumerate(lines, 1) if not l.lstrip().startswith('#')]
+            return [(n, l[: comments[n]] if n in comments else l) for n, l in enumerate(lines, 1)]
+        return [(n, l) for n, l in enumerate(lines, 1) if not l.lstrip().startswith("#")]
 
     def test_no_bare_applications_default(self):
         import re
+
+        def flat(text):
+            """Site matching ignores black's layout: whitespace and wrapping parentheses
+            dropped, either quote style."""
+            return re.sub(r"[\s(]+", "", text).replace('"', "'")
+
         bad, seen_sites = [], set()
         for path in self.files():
             rel = str(path.relative_to(self.SRC))
@@ -298,80 +502,126 @@ class KiCadDefaultsTest(unittest.TestCase):
                 continue
             lines = self.code_lines(path)
             for i, (n, line) in enumerate(lines):
-                if re.search(r"default='kicad-cli'|default=\"kicad-cli\"|default=sys\.executable", line):
-                    bad.append('%s:%d bare default' % (rel, n))
+                if re.search(
+                    r"default='kicad-cli'|default=\"kicad-cli\"|default=sys\.executable", line
+                ):
+                    bad.append("%s:%d bare default" % (rel, n))
                 if not re.search(r"(?<![\w~}])/Applications/KiCad/", line):
                     continue
-                if any(re.search(p, line) for p in self.ENV_DEFAULT):
+                # a call black wrapped: the env-first default may start up to two lines above,
+                # but its /Applications/KiCad/ path must be the one on this line
+                window = " ".join(l for _, l in lines[max(0, i - 2) : i + 1])
+                if any(
+                    m.end() > len(window) - len(line)
+                    for p in self.ENV_DEFAULT
+                    for m in re.finditer(p, window)
+                ):
                     continue
-                if '_KI_GUI_PY=' in line and i + 1 < len(lines) and \
-                        re.search(r'\[ -z "\$\{PNR_KICAD_PYTHON:-\}" \] \|\| _KI_GUI_PY=""', lines[i + 1][1]):
+                if (
+                    "_KI_GUI_PY=" in line
+                    and i + 1 < len(lines)
+                    and re.search(
+                        r'\[ -z "\$\{PNR_KICAD_PYTHON:-\}" \] \|\| _KI_GUI_PY=""', lines[i + 1][1]
+                    )
+                ):
                     continue
-                site = next((k for k in self.SITES if k[0] == rel and k[1] in line), None)
+                # a site's fragment may start up to two lines above but must end on this line
+                before = flat(" ".join(l for _, l in lines[max(0, i - 2) : i]))
+                here = before + flat(line)
+                site = next(
+                    (
+                        k
+                        for k in self.SITES
+                        if k[0] == rel
+                        and here.find(flat(k[1]), max(0, len(before) - len(flat(k[1])) + 1)) >= 0
+                    ),
+                    None,
+                )
                 if site:
                     seen_sites.add(site)
                     continue
-                bad.append('%s:%d %s' % (rel, n, line.strip()[:100]))
+                bad.append("%s:%d %s" % (rel, n, line.strip()[:100]))
         self.assertEqual(bad, [])
-        self.assertEqual(seen_sites, set(self.SITES))      # the reviewed list stays exact
+        self.assertEqual(seen_sites, set(self.SITES))  # the reviewed list stays exact
 
     def test_scanner_catches_both_quote_styles_and_bzl(self):
-        import re, tempfile
+        import re
+        import tempfile
         from pathlib import Path
+
         with tempfile.TemporaryDirectory() as d:
-            for name, text in (('a.py', 'X = "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"\n'),
-                               ('b.bzl', 'K = "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"\n'),
-                               ('c.py', "# /Applications/KiCad/ in a comment\nY = 1\n"),
-                               ('d.py', "Z = os.environ.get('PNR_KICAD_CLI', \"/Applications/KiCad/x\")\n")):
+            for name, text in (
+                ("a.py", 'X = "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"\n'),
+                ("b.bzl", 'K = "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"\n'),
+                ("c.py", "# /Applications/KiCad/ in a comment\nY = 1\n"),
+                ("d.py", "Z = os.environ.get('PNR_KICAD_CLI', \"/Applications/KiCad/x\")\n"),
+            ):
                 (Path(d) / name).write_text(text)
             hits = {}
             for p in sorted(Path(d).iterdir()):
-                hits[p.name] = [l for _, l in self.code_lines(p) if re.search(r"(?<![\w~}])/Applications/KiCad/", l)
-                                and not any(re.search(q, l) for q in self.ENV_DEFAULT)]
-        self.assertEqual({k: len(v) for k, v in hits.items()}, {'a.py': 1, 'b.bzl': 1, 'c.py': 0, 'd.py': 0})
+                hits[p.name] = [
+                    l
+                    for _, l in self.code_lines(p)
+                    if re.search(r"(?<![\w~}])/Applications/KiCad/", l)
+                    and not any(re.search(q, l) for q in self.ENV_DEFAULT)
+                ]
+        self.assertEqual(
+            {k: len(v) for k, v in hits.items()}, {"a.py": 1, "b.bzl": 1, "c.py": 0, "d.py": 0}
+        )
 
     def test_halving_ki_unused(self):
         import re
-        text = (self.SRC / 'hardware/pnr/pnr/mc/halving.py').read_text()
-        self.assertEqual(len(re.findall(r'\bKI\b', text)), 1)
+
+        text = (self.SRC / "hardware/pnr/pnr/mc/halving.py").read_text()
+        self.assertEqual(len(re.findall(r"\bKI\b", text)), 1)
 
     def test_regression_ki_uses(self):
         # every KI+ use is env-first: os.environ.get('PNR_KICAD_*', KI+...) / os.environ.get(...) or KI+...,
         # or the footprint fallback of kicad_footprints() (PNR_KICAD_FOOTPRINTS, then the PNR_KICAD_CLI bundle)
         import re
-        uses = 0
-        for n, line in self.code_lines(self.SRC / 'hardware/pnr/regression/run.py'):
-            if re.search(r'\bKI\s*\+', line):
-                uses += 1
-                self.assertTrue(re.search(r"os\.environ\.get\('PNR_KICAD_(CLI|PYTHON)'(\)\s*or\s*|,)KI\s*\+", line) or
-                                line == " return Path(KI+'/SharedSupport/footprints')", (n, line))
-        self.assertEqual(uses, 4)
+
+        # Layout-independent (black may wrap a call or change quotes): the code as one
+        # line, whitespace runs as one space, double quotes as single quotes.
+        lines = self.code_lines(self.SRC / "hardware/pnr/regression/run.py")
+        code = re.sub(r"\s+", " ", " ".join(line for _, line in lines)).replace('"', "'")
+        uses = re.findall(r"\bKI ?\+", code)
+        env_first = re.findall(
+            r"os\.environ\.get\( ?'PNR_KICAD_(?:CLI|PYTHON)' ?(?:\) ?or ?|, ?)KI ?\+", code
+        )
+        fallback = re.findall(r"return Path\(KI ?\+ ?'/SharedSupport/footprints'\)", code)
+        self.assertEqual(len(env_first) + len(fallback), len(uses), (env_first, fallback))
+        self.assertEqual(len(uses), 4)
 
     def test_kicad_path_constants_follow_the_environment(self):
-        text = (self.SRC / 'hardware/pnr/regression/run.py').read_text()
+        import re
+
+        # whitespace removed and quotes normalized, so the check does not depend on layout
+        text = (self.SRC / "hardware/pnr/regression/run.py").read_text()
+        text = re.sub(r"\s+", "", text).replace('"', "'")
         self.assertIn("os.environ.get('PNR_KICAD_PYTHON',KI+", text)
         self.assertIn("os.environ.get('PNR_KICAD_CLI',KI+", text)
         self.assertIn("PNR_KICAD_FOOTPRINTS", text)
-        bzl = (self.SRC / 'hardware/pnr/pnr.bzl').read_text()
-        self.assertIn('${PNR_KICAD_CLI:-', bzl)
-        self.assertIn('${PNR_KICAD_PYTHON:-', bzl)
-        atopile = (self.SRC / 'hardware/atopile/BUILD.bazel').read_text()
+        bzl = (self.SRC / "hardware/pnr/pnr.bzl").read_text()
+        self.assertIn("${PNR_KICAD_CLI:-", bzl)
+        self.assertIn("${PNR_KICAD_PYTHON:-", bzl)
+        atopile = (self.SRC / "hardware/atopile/BUILD.bazel").read_text()
         self.assertIn('DARWIN_KICAD_CLI = "${PNR_KICAD_CLI:-/Applications/KiCad/', atopile)
-        patch = (self.SRC / 'patches/rules_atopile-autoroute-kicad-python.patch').read_text()
+        patch = (self.SRC / "patches/rules_atopile-autoroute-kicad-python.patch").read_text()
         self.assertIn('"${PNR_KICAD_PYTHON:-}" "%s" "${KICAD_PYTHON:-}" "$_KI_GUI_PY"', patch)
 
     def test_no_wx_app_outside_the_gui_host(self):
         import re
+
         bad = []
         for path in self.files():
             rel = str(path.relative_to(self.SRC))
-            if path.suffix != '.py' or rel in (self.SELF, 'hardware/pnr/pnr/drc_warm/host.py'):
+            if path.suffix != ".py" or rel in (self.SELF, "hardware/pnr/pnr/drc_warm/host.py"):
                 continue
             for n, line in self.code_lines(path):
-                if re.search(r'\bwx\.App\s*\(', line):
-                    bad.append('%s:%d' % (rel, n))
+                if re.search(r"\bwx\.App\s*\(", line):
+                    bad.append("%s:%d" % (rel, n))
         self.assertEqual(bad, [])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

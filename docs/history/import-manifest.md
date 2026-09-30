@@ -170,8 +170,11 @@ Pass set, from `bazel test //... --config=ci` with `--config=lowmem` on the deve
   `tools/check_test_wiring.py --scope hardware/` lists them). The wiring check covers `tests/`
   only; `hardware/` gets wired when PR3 moves the engine's tests there
   ([decisions](../decisions.md)).
-- **Lint.** `hardware/` and `docs/hardware/` are under the presubmit's reserved global exclude
-  until PR3a formats them. The privacy scan still covers them (the Bazel repo check and CI).
+- ~~**Lint.** `hardware/` and `docs/hardware/` are under the presubmit's reserved global exclude
+  until PR3a formats them. The privacy scan still covers them (the Bazel repo check and CI).~~
+  PR3a formatted the Python under `hardware/` (black, isort) and lifted `hardware/` from the
+  global exclude; flake8 checks it with a per-file baseline, and some non-Python files keep
+  per-hook excludes ([decisions](../decisions.md)). `docs/hardware/` stays excluded until PR7.
 - **Fixture.** The 3D model paths in `splanc_dev.kicad_pcb` point into Splanc's layout and do not
   resolve here; routing does not need them.
 - **Splanc-specific defaults and install paths** are removed in PR3c.

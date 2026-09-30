@@ -19,7 +19,9 @@ repository is licensed under the same terms (inbound = outbound).
 ## How changes are made
 
 - Every change is a pull request against `main`. PRs are squash-merged; the only exceptions are the
-  history-import PRs, which are merged with a merge commit so the imported history survives.
+  history-import PRs, which are merged with a merge commit so the imported history survives, and
+  the engine's mechanical format and move PRs (PR3a, PR3b), whose commits must keep their hashes
+  for `.git-blame-ignore-revs`.
 - Commit and PR titles follow `<Area>: <summary> (#N)`, where `#N` is a GitHub issue. The body
   explains why, and carries measured results for any engine change.
 - New engine behaviour lands behind a default-off flag with an A/B result (see

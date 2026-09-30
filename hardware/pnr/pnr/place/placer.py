@@ -15,7 +15,16 @@ from pnr.constraints import CompiledConstraints
 from pnr.graph import BoardGraph, BoardOutline
 
 from . import metrics
-from .geometry import keepout_rects, outline_size, resolve_fixed_poses, hard_group_limits, hard_group_edges, resolve_hard_rotations, set_component_side, apply_hard_sides
+from .geometry import (
+    apply_hard_sides,
+    hard_group_edges,
+    hard_group_limits,
+    keepout_rects,
+    outline_size,
+    resolve_fixed_poses,
+    resolve_hard_rotations,
+    set_component_side,
+)
 from .legalize import legalize, pad_edge_rule
 from .model import global_place
 
@@ -38,7 +47,14 @@ class PlacementReport:
 
     @property
     def legal(self) -> bool:
-        return not (self.overlaps or self.outside_outline or self.fixed_misplaced or self.keepout or self.group_outside or self.side_misplaced)
+        return not (
+            self.overlaps
+            or self.outside_outline
+            or self.fixed_misplaced
+            or self.keepout
+            or self.group_outside
+            or self.side_misplaced
+        )
 
     @property
     def hpwl_improvement(self) -> float:
@@ -100,22 +116,31 @@ def place(
     pad_edge = pad_edge_rule(constraints, channel_rules)
     if any(c.kind == "row" and not c.params.get("trial_resolved") for c in constraints.constraints):
         from .rows import sample_constraints
-        constraints = sample_constraints(graph,constraints,seed,**({} if pad_edge is None else dict(pad_edge=pad_edge)))
+
+        constraints = sample_constraints(
+            graph, constraints, seed, **({} if pad_edge is None else dict(pad_edge=pad_edge))
+        )
     # The source compiler emits every footprint on top. Apply physical side
     # constraints before any obstacle/HPWL calculations, including pad mirroring.
     graph = BoardGraph.from_json(graph.to_json())
     apply_hard_sides(graph, constraints)
     from .pair_landing import enabled as landing_enabled
+
     if channel_rules and landing_enabled():
         # PNR_PAIR_LANDING_RESERVE=1: diff-pair via landings become placement
         # reservations (pnr.place.pair_landing); legalize and the report honour them.
         from .pair_landing import attach
+
         attach(graph, channel_rules)
     if channel_rules and channel_rules.get("plane_access_intents"):
         from pnr.plane_intent import reserve_array_space
-        reserve_array_space(graph, channel_rules["plane_access_intents"],
-                            channel_rules["plane_access_fab"],
-                            channel_rules.get("fab", {}).get("edge_clearance_mm", .2))
+
+        reserve_array_space(
+            graph,
+            channel_rules["plane_access_intents"],
+            channel_rules["plane_access_fab"],
+            channel_rules.get("fab", {}).get("edge_clearance_mm", 0.2),
+        )
     width, height = outline_size(graph, constraints)
     baseline = metrics.hpwl(graph)
 
@@ -128,17 +153,40 @@ def place(
         # Power-first placement: derive tiers/loops, staged lexicographic global
         # placement, then power-first legalization (pnr.place.power_first).
         from .power_first import roles_for, staged_place
+
         roles = roles_for(graph, constraints, channel_rules)
     if roles is not None:
         placed = staged_place(
-            graph, constraints, roles, width, height, seed=seed, iters=iters, orient=orient,
-            inflation=inflation, spread=spread, channel_rules=channel_rules,
-            initial_positions=initial_positions, initial_rotations=initial_rotations, poses=poses,
-            keepouts=keepouts, clearance=clearance, grid_mm=grid_mm,
-            legalize_spread=min(spread, _LEGALIZE_SPREAD_CAP), pair_weights=pair_weights,
-            mobility={ref:dict(source_fixed=not bool(c.params.get('row_trial')),row_trial=c.params.get('row_trial'))
-                      for c in constraints.constraints if c.kind=='fixed' for ref in c.refs},
-            **({} if pad_edge is None else dict(pad_edge=pad_edge)))
+            graph,
+            constraints,
+            roles,
+            width,
+            height,
+            seed=seed,
+            iters=iters,
+            orient=orient,
+            inflation=inflation,
+            spread=spread,
+            channel_rules=channel_rules,
+            initial_positions=initial_positions,
+            initial_rotations=initial_rotations,
+            poses=poses,
+            keepouts=keepouts,
+            clearance=clearance,
+            grid_mm=grid_mm,
+            legalize_spread=min(spread, _LEGALIZE_SPREAD_CAP),
+            pair_weights=pair_weights,
+            mobility={
+                ref: dict(
+                    source_fixed=not bool(c.params.get("row_trial")),
+                    row_trial=c.params.get("row_trial"),
+                )
+                for c in constraints.constraints
+                if c.kind == "fixed"
+                for ref in c.refs
+            },
+            **({} if pad_edge is None else dict(pad_edge=pad_edge)),
+        )
         return _finish(placed, graph, constraints, width, height, baseline, pad_edge)
 
     # 1. Global placement (continuous position + orientation).
@@ -163,8 +211,12 @@ def place(
 
     # Directional copper escape demand is part of production legalization.
     from pnr.constraints import compile_routing_rules
+
     from .channels import ChannelModel
-    channels=ChannelModel(cont,channel_rules or compile_routing_rules(constraints,[n.name for n in graph.nets]))
+
+    channels = ChannelModel(
+        cont, channel_rules or compile_routing_rules(constraints, [n.name for n in graph.nets])
+    )
     # 2. Legalization (snap to a non-overlapping, in-outline layout).
     placed = legalize(
         cont,
@@ -176,8 +228,15 @@ def place(
         group_limits=hard_group_limits(constraints, poses, partial=True),
         group_edges=hard_group_edges(constraints),
         rotations=resolve_hard_rotations(constraints),
-        mobility={ref:dict(source_fixed=not bool(c.params.get('row_trial')),row_trial=c.params.get('row_trial'))
-                  for c in constraints.constraints if c.kind=='fixed' for ref in c.refs},
+        mobility={
+            ref: dict(
+                source_fixed=not bool(c.params.get("row_trial")),
+                row_trial=c.params.get("row_trial"),
+            )
+            for c in constraints.constraints
+            if c.kind == "fixed"
+            for ref in c.refs
+        },
         keepouts=keepouts,
         clearance=clearance,
         grid_mm=grid_mm,

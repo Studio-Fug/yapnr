@@ -47,9 +47,7 @@ class ViaProximityTest(unittest.TestCase):
         self.assertEqual(r["pair_count"], 5)  # 1 via-via plus 4 via-hole, no hole-hole.
         self.assertEqual(r["cluster_count"], 1)
         self.assertEqual(len(r["clusters"][0]["nodes"]), 4)
-        self.assertEqual(
-            sum(n["kind"] == "plated_pad" for n in r["clusters"][0]["nodes"]), 2
-        )
+        self.assertEqual(sum(n["kind"] == "plated_pad" for n in r["clusters"][0]["nodes"]), 2)
 
 
 if __name__ == "__main__":

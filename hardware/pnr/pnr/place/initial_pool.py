@@ -21,6 +21,7 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from pnr import trace as _trace
 from pnr.constraints import Constraint, Enforcement
 from pnr.graph import BoardGraph, BoardOutline
 from .geometry import (outline_size, resolve_fixed_poses, set_component_side, apply_hard_sides,
@@ -321,7 +322,7 @@ def select_initial_placement(graph, constraints, rules, *, config=None, seed=0,
         if folder:
             folder.mkdir(exist_ok=True)
             (folder/'start.json').write_text(json.dumps(start, indent=2))
-        with initial_start_context(start):
+        with initial_start_context(start), _trace.scope(start['id'], 'start', kind=start['kind']):
             t = time.monotonic()
             try:
                 source_errors = _hard_and_source_errors(source, source, constraints)
@@ -397,6 +398,8 @@ def select_initial_placement(graph, constraints, rules, *, config=None, seed=0,
             finally:
                 if folder:
                     (folder/'placement-result.json').write_text(json.dumps(record,indent=2))
+                _trace.note(status={'legal': 'ok', 'duplicate': 'dropped'}.get(record['status'], 'illegal'),
+                            hpwl_mm=record.get('hpwl_mm'), cheap_score=record.get('cheap_score'))
     if not legal:
         report.update(termination='no_legal_initial_placement', elapsed_seconds=time.monotonic()-started)
         if root:
@@ -428,6 +431,8 @@ def select_initial_placement(graph, constraints, rules, *, config=None, seed=0,
         record['proxy_evaluated'] = True
     finalists = diverse_shortlist(proxy_candidates, config.route_finalists, 'proxy_score',
                                    mandatory=mandatory, refs=movable_refs)
+    _trace.select('shortlist', [c['id'] for c in legal], [c['id'] for c in finalists], 'capacity-proxy',
+                  {c['id']: c.get('proxy_score', c['cheap_score']) for c in legal})
     report.update(baseline=baseline['id'], legal_count=len(legal),
                   unique_placement_count=len(seen), proxy_evaluations=len(proxy_candidates),
                   detailed_evaluations=0, fixed_refs=sorted(fixed),
@@ -464,7 +469,8 @@ def select_initial_placement(graph, constraints, rules, *, config=None, seed=0,
             emit('candidate_start', layout=json.loads(candidate['graph'].to_json()),
                  data=dict(phase='initial-placement signals', provisional=True,
                            finalist=name, proxy=record.get('proxy'), budget=dict(pitch_mm=pitch,max_iters=route_iters)))
-            route = route_board(candidate['graph'], constraints, rules, pitch=pitch, max_iters=route_iters)
+            with _trace.scope(name + '-route', 'route', start=name):
+                route = route_board(candidate['graph'], constraints, rules, pitch=pitch, max_iters=route_iters)
             emit('candidate_complete', data=dict(phase='initial-placement screening complete',
                  provisional=True, **_route_metrics(route)))
         finally:
@@ -485,6 +491,8 @@ def select_initial_placement(graph, constraints, rules, *, config=None, seed=0,
                 escape_diagnostics=route.escape_diagnostics,seconds=record['routing_seconds'],
                 budget=record['routing_budget']),indent=2))
     chosen = min(evaluated, key=lambda c:(c['metrics']['objective'], c['id']))
+    _trace.select('chosen', [c['id'] + '-route' for c in evaluated], chosen['id'] + '-route', 'route-objective',
+                  {c['id'] + '-route': c['metrics']['objective'] for c in evaluated})
     report.update(selected=chosen['id'], detailed_evaluations=len(evaluated),
                   termination='initial_pool_budget_completed', elapsed_seconds=time.monotonic()-started)
     if root:

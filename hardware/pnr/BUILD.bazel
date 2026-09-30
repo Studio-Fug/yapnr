@@ -1022,6 +1022,33 @@ py_binary(
     tags = ["manual", "requires-kicad"],
 )
 
+# --- Traces and provenance (pnr.trace, pnr.provenance) -------------------------------------
+# pnr.trace, pnr.trace_board and pnr.provenance are stdlib-only members of :pnr (its glob);
+# pnr.route.detail.trace_route belongs to :pnr_detail.
+py_test(
+    name = "trace_test",
+    size = "small",
+    srcs = ["tests/test_trace.py"],
+    imports = ["."],
+    main = "tests/test_trace.py",
+    deps = [":pnr"],
+)
+
+# Tracing never changes a result: byte-identical placements and routes, unset/set/unset.
+py_test(
+    name = "trace_noop_test",
+    size = "medium",
+    srcs = ["tests/test_trace_noop.py"],
+    imports = ["."],
+    main = "tests/test_trace_noop.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+    ],
+)
+
 py_test(
     name = "initial_pool_test",
     srcs = ["tests/test_initial_pool.py"],

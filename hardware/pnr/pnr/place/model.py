@@ -272,6 +272,9 @@ def global_place(
     movable_f = (~is_fixed).float()
     clearance = float(constraints.board.default_clearance_mm)
     opt = torch.optim.Adam(params, lr=lr)
+    from pnr.trace import placement_tracer
+
+    tracer = placement_tracer(comps, iters)  # None unless PNR_TRACE_DIR is set (pnr.trace)
 
     for step in range(iters):
         temp = 2.0 - (2.0 - 0.2) * (step / max(1, iters - 1))  # anneal 2.0 -> 0.2
@@ -382,6 +385,8 @@ def global_place(
         if step == iters-1 and os.environ.get('PNR_COST_CAPTURE_DIR'):
             from .cost_capture import record_global_loss
             record_global_loss(graph,constraints,pos.detach().tolist(),p.detach().tolist(),exp_off.detach().tolist(),exp_half.detach().tolist(),float(loss.detach()),dict(gamma=gamma,spread=spread,w_spread=w_spread,w_bound=w_bound,w_keep=w_keep,w_plane=w_plane,w_plane_sep=w_plane_sep),inflation,step)
+        if tracer is not None and tracer.due(step):
+            tracer.snapshot(step, pos, p)
         loss.backward()
         opt.step()
 
@@ -390,4 +395,6 @@ def global_place(
     angle_idx = torch.argmax(p, dim=1)
     positions = {c.ref: (float(pos[i, 0]), float(pos[i, 1])) for i, c in enumerate(comps)}
     rotations = {c.ref: float(ANGLES[int(angle_idx[i])]) for i, c in enumerate(comps)}
+    if tracer is not None:
+        tracer.finish(positions, rotations)
     return positions, rotations

@@ -1,8 +1,8 @@
 # yapnr migration plan
 
-Status: **approved plan, PR0 in progress** (2026-09-29). This file is committed to the public yapnr
-repository. It contains no machine paths, host names, network addresses or personal e-mail
-addresses; operators bind the path variables below locally.
+Status: **approved plan; PR0 and PR-R merged, PR1 in review** (2026-09-30). This file is committed
+to the public yapnr repository. It contains no machine paths, host names, network addresses or
+personal e-mail addresses; operators bind the path variables below locally.
 
 | Variable   | Meaning                                                              |
 | ---------- | -------------------------------------------------------------------- |
@@ -1273,9 +1273,10 @@ The filtered branch is fetched into `$YAPNR` and merged with
 `git merge --allow-unrelated-histories` onto PR0's `main`. **PR1 must be merged with a merge
 commit** (squash would destroy the history). A follow-up commit in the same PR adapts
 `BUILD.bazel` loads to `@yapnr_pypi` and adds a minimal `hardware/tools/BUILD.bazel`. Files stay
-at their Splanc paths until PR3b, so blame and `git log --follow` survive the later `git mv`. PR1
-also extends the test-wiring check to `hardware/` with a baseline of the known unwired files
-(Appendix B) that only shrinks.
+at their Splanc paths until PR3b, so blame and `git log --follow` survive the later `git mv`. The
+test-wiring check keeps its `tests/` scope; `hardware/` is wired when PR3 moves the engine's tests
+under `tests/`, and the manifest counts the unwired files of the import until then (decided in PR1,
+see `docs/decisions.md`; this replaces a shrink-only baseline for `hardware/`).
 
 ### 7.3 Landing the uncommitted engine state (PR2)
 
@@ -1424,10 +1425,13 @@ unchanged.
 ### PR1: core engine import with history (merge commit)
 
 - **Contents:**
-  - the filtered history (§7.1-7.2) at Splanc paths;
+  - the filtered history (§7.1-7.2) at Splanc paths, source code unchanged;
+  - the privacy scan's refined e-mail rule (owner decision, `docs/decisions.md`): the imported
+    history holds decorators, a matrix product and constraint endpoints that the old rule read as
+    addresses;
   - one adaptation commit (Bazel loads to `@yapnr_pypi`, tools BUILD, stale `pnr.bzl` kept but
-    unloaded, the test-wiring baseline for `hardware/`);
-  - `docs/history/import-manifest.md`.
+    unloaded, the four failing tests of appendix B tagged `manual`);
+  - `docs/history/import-manifest.md`, and the PR1 decisions in `docs/decisions.md`.
 - **Acceptance:**
   - `git log --follow` works on sample files, and the original commit count is preserved minus
     empty commits;
@@ -1729,7 +1733,8 @@ Resolved on 2026-09-29 (see §0.2 and `docs/decisions.md`):
 Still open:
 
 - **Q2b, full-history import** (left over from Q2): confirm that a full-history import is wanted
-  rather than a single snapshot commit.
+  rather than a single snapshot commit. PR1 implements the full-history import (§0.3, item 7);
+  merging it with a merge commit answers this question.
 
 ## Appendix A: module map (old to new)
 
@@ -1783,7 +1788,14 @@ Still open:
   (`test_pair_joint_dispatch` import).
 - The `pnr_kicad_srcs` filegroup is incomplete and only works because actions run unsandboxed
   (replaced by the closure in PR3b).
-- 66 test files are not wired into Bazel (fixed by the glob macro and the wiring check).
+- 66 test files are not wired into Bazel (fixed by the glob macro and the wiring check). The
+  committed history imported in PR1 has 29 of them.
+- Three native-loop controller tests (`placement_budget_test`, `progress_budget_test`,
+  `retry_controller_test`) fail on the Splanc source commit of PR1: their recorded worker fixture
+  has no `graph` key, which `native_loop.congestion_snapshot` reads. PR1 tags them `manual`.
+- `detail_route_test` takes 870 to 1000 s on the development Mac, at or over its 900 s `large`
+  timeout, and its `test_drc_clean_by_construction` fails: two nets share a footprint cell. PR1
+  tags it `manual`.
 
 ## Appendix C: privacy scrub checklist (gate for every push)
 

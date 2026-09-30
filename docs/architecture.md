@@ -56,4 +56,6 @@ Today the package holds only `yapnr/__init__.py` and the command line (`yapnr/cl
 `bazel test //...` runs the unit tier and the repo checks; the KiCad lane (`--config=kicad`)
 arrives in PR6a. Every `test_*.py` under `tests/` must be wired to a Bazel target; the
 `yapnr_py_tests()` macro (`tools/bazel/py_tests.bzl`) does that from a glob, and
-`//tests/unit/repo:test_wiring` fails on stragglers.
+`//tests/unit/repo:test_wiring` fails on stragglers. Until PR3 moves it, the imported engine keeps
+its Splanc layout under `hardware/`: its own Bazel targets run in `bazel test //...`, and the wiring
+check does not cover it yet ([decisions](decisions.md)).

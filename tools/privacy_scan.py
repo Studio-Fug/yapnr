@@ -6,10 +6,12 @@ This scanner is the gate that keeps local details out of commits, history
 imports and bundles. It looks for generic patterns only, so the scanner itself
 never needs to name the details it protects:
 
-- absolute home-directory paths (macOS, Linux, Windows) and mounted-volume
-  paths (macOS volumes, Linux removable media);
-- Tailscale ``*.ts.net`` host names;
-- carrier-grade NAT addresses (``100.64.0.0/10``, used by tailnets);
+- absolute home-directory paths (macOS, Linux, Windows, WSL), mounted-volume
+  paths (macOS volumes, Linux removable media), macOS per-user temporary
+  directories, and absolute paths that agent tooling encodes with dashes;
+- Tailscale ``*.ts.net`` host names and mDNS ``*.local`` machine names;
+- carrier-grade NAT addresses (``100.64.0.0/10``, used by tailnets) and
+  private (RFC 1918) addresses;
 - e-mail addresses, except GitHub noreply addresses, ``noreply``/``no-reply``
   mailboxes, the git SSH user of code hosts, and reserved example domains;
 - API keys, access tokens and private-key blocks.
@@ -21,7 +23,12 @@ Usage::
 
     tools/privacy_scan.py FILE...          # what the pre-commit hook runs
     tools/privacy_scan.py --all [--root R] # every tracked or untracked file
-    git log --format='%ae %ce' origin/main..HEAD | tools/privacy_scan.py --stdin
+    git log -p origin/main..HEAD | tools/privacy_scan.py --stdin
+    git log --format='%ae%n%ce' origin/main..HEAD | tools/privacy_scan.py --identities
+
+``--identities`` is stricter than the text rules: it reads one commit e-mail
+address per line and accepts only GitHub noreply addresses (see
+``check_identities``). The CI ``lint`` job runs it on every new commit.
 
 A line that must contain a match (for example documentation of a pattern) can
 carry the marker ``privacy-scan: allow``. Use it sparingly; reviewers see it.
@@ -61,11 +68,22 @@ _SKIP_FILES = frozenset({"user.bazelrc", "yapnr.local.toml"})
 
 _MAX_BYTES = 8 * 1024 * 1024
 
-# Placeholder account names that are fine in documentation and CI paths.
-_PLACEHOLDER_USERS = "Shared|runner|user|username|example|you|me|USER|USERNAME"
+# Placeholder account names that are fine in documentation and CI paths. A
+# placeholder must be the whole path component: `user` passes, `user.x` does not.
+_PLACEHOLDER_USERS = "Shared|runner|user|username|example|you|me"
+_NOT_PLACEHOLDER = r"(?!(?:" + _PLACEHOLDER_USERS + r")(?![A-Za-z0-9._-]))"
+_NOT_WINDOWS_PLACEHOLDER = r"(?!(?:Public|Default|" + _PLACEHOLDER_USERS + r")(?![A-Za-z0-9._-]))"
+# An account name starts with a letter, digit or underscore, so `/Users/...`
+# (an ellipsis in prose) is not a path.
+_ACCOUNT = r"[A-Za-z0-9_][A-Za-z0-9._-]*"
 
 # A path must start a token: not glued to a word, a URL host or a relative path.
 _PATH_START = r"(?<![\w.~-])"
+
+_OCTET = r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"
+# An IPv4 address must not be glued to a longer dotted number on either side.
+_IP_START = r"(?<![\d.])"
+_IP_END = r"(?![\d.]*\d)"
 
 _EXAMPLE_DOMAINS = re.compile(
     r"(?:^|\.)(?:example\.(?:com|net|org)|[a-z0-9-]+\.(?:example|invalid|test|localhost))$"
@@ -107,25 +125,40 @@ class Rule:
 RULES: Sequence[Rule] = (
     Rule(
         "home-path",
-        re.compile(_PATH_START + r"/Users/(?!(?:" + _PLACEHOLDER_USERS + r")\b)[A-Za-z0-9._-]+"),
+        re.compile(_PATH_START + r"/Users/" + _NOT_PLACEHOLDER + _ACCOUNT, re.IGNORECASE),
         "absolute macOS home directory path",
     ),
     Rule(
         "home-path",
-        re.compile(_PATH_START + r"/home/(?!(?:" + _PLACEHOLDER_USERS + r")\b)[A-Za-z0-9._-]+"),
+        re.compile(_PATH_START + r"/home/" + _NOT_PLACEHOLDER + _ACCOUNT, re.IGNORECASE),
         "absolute Linux home directory path",
     ),
     Rule(
         "home-path",
         re.compile(
-            r"\b[A-Za-z]:\\\\?Users\\\\?(?!(?:Public|Default|" + _PLACEHOLDER_USERS + r")\b)"
-            r"[A-Za-z0-9._-]+"
+            r"\b[A-Za-z]:(?:\\\\?|/)Users(?:\\\\?|/)" + _NOT_WINDOWS_PLACEHOLDER + _ACCOUNT,
+            re.IGNORECASE,
         ),
         "absolute Windows home directory path",
     ),
     Rule(
+        "home-path",
+        re.compile(
+            _PATH_START + r"/mnt/[A-Za-z]/Users/" + _NOT_WINDOWS_PLACEHOLDER + _ACCOUNT,
+            re.IGNORECASE,
+        ),
+        "Windows home directory path under WSL",
+    ),
+    Rule(
+        "encoded-path",
+        # Agent tooling names per-project directories after the absolute path
+        # with every `/` replaced by `-` (for example under ~/.claude/projects).
+        re.compile(r"(?<![A-Za-z0-9._-])-(?:Users|home|Volumes)-[A-Za-z0-9._]+-", re.IGNORECASE),
+        "absolute path encoded with dashes (agent project directory)",
+    ),
+    Rule(
         "volume-path",
-        re.compile(_PATH_START + r"/Volumes/[A-Za-z0-9][A-Za-z0-9._-]*"),
+        re.compile(_PATH_START + r"/Volumes/[A-Za-z0-9][A-Za-z0-9._-]*", re.IGNORECASE),
         "absolute macOS volume path",
     ),
     Rule(
@@ -134,19 +167,55 @@ RULES: Sequence[Rule] = (
         "absolute Linux removable-media path",
     ),
     Rule(
+        "temp-path",
+        re.compile(_PATH_START + r"/(?:private/)?var/folders/[A-Za-z0-9_+-]+"),
+        "macOS per-user temporary directory",
+    ),
+    Rule(
         "tailnet-host",
         re.compile(r"\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+ts\.net\b", re.IGNORECASE),
         "Tailscale *.ts.net host name",
     ),
     Rule(
+        "local-host",
+        # macOS names machines `<Owner>-Mac-mini` and the like, so a hyphenated
+        # name with the `.local` suffix is a machine; so is any `.local` name
+        # right after `//` (a URL host).
+        re.compile(
+            r"(?<![\w.-])(?:[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+|(?<=//)[A-Za-z0-9-]+)\.local\b",
+            re.IGNORECASE,
+        ),
+        "mDNS *.local machine name",
+    ),
+    Rule(
         "cgnat-address",
         re.compile(
-            r"(?<![\d.])100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])"
-            r"\.(?:25[0-5]|2[0-4]\d|1?\d?\d)\.(?:25[0-5]|2[0-4]\d|1?\d?\d)(?![\d.]*\d)"
+            _IP_START
+            + r"100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\."
+            + _OCTET
+            + r"\."
+            + _OCTET
+            + _IP_END
         ),
         "carrier-grade NAT address (100.64.0.0/10, tailnets)",
         # The network address itself names the range; it is not a host.
         allowed=lambda match: match.group(0) == "100.64.0.0",
+    ),
+    Rule(
+        "private-address",
+        re.compile(
+            _IP_START
+            + r"(?:10\."
+            + _OCTET
+            + r"|172\.(?:1[6-9]|2\d|3[01])|192\.168)\."
+            + _OCTET
+            + r"\."
+            + _OCTET
+            + _IP_END
+        ),
+        "private network address (RFC 1918)",
+        # Network addresses (x.x.x.0, as in 192.168.1.0/24) name a range, not a host.
+        allowed=lambda match: match.group(0).endswith(".0"),
     ),
     Rule(
         "email",
@@ -207,6 +276,42 @@ def redact(text: str) -> str:
     """Show only enough of a match to find it again, never the full value."""
     keep = 4 if len(text) > 12 else 2
     return f"{text[:keep]}...({len(text)} chars)"
+
+
+# Commit identities the CI `lint` job accepts: a GitHub noreply address
+# (`<id>+<login>@users.noreply.github.com`, the older `<login>@...` form, or a
+# GitHub App's `<id>+<app>[bot]@...`), and GitHub's own committer address,
+# which GitHub uses when it creates a commit (web merges and squashes). Anything
+# else fails, including git's guessed `user@host` identity and empty addresses.
+_NOREPLY_IDENTITY = re.compile(
+    r"(?:[0-9]+\+)?[A-Za-z0-9-]+(?:\[bot\])?@users\.noreply\.github\.com"
+)
+_GITHUB_COMMITTER = "noreply@github.com"
+IDENTITIES_PATH = "<identities>"
+
+
+def identity_allowed(address: str) -> bool:
+    return address == _GITHUB_COMMITTER or bool(_NOREPLY_IDENTITY.fullmatch(address))
+
+
+def check_identities(text: str) -> List[Finding]:
+    """One commit e-mail address per line (`git log --format='%ae%n%ce'`)."""
+    findings: List[Finding] = []
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        address = line.strip()
+        if identity_allowed(address):
+            continue
+        findings.append(
+            Finding(
+                path=IDENTITIES_PATH,
+                line=lineno,
+                column=1,
+                rule="identity",
+                description="commit address is not a GitHub noreply address",
+                redacted=redact(address) if address else "empty",
+            )
+        )
+    return findings
 
 
 def scan_text(text: str, path: str = "<text>") -> List[Finding]:
@@ -304,9 +409,19 @@ def scan_tree(root: str) -> List[Finding]:
 def _iter_report(findings: Sequence[Finding]) -> Iterator[str]:
     for finding in findings:
         yield finding.format()
-    if findings:
+    identities = [finding for finding in findings if finding.rule == "identity"]
+    if identities:
         yield (
-            f"privacy scan: {len(findings)} finding(s). Replace machine paths with "
+            f"privacy scan: {len(identities)} commit address(es) rejected. Commits must be "
+            "authored and committed with a GitHub noreply address "
+            "(<id>+<login>@users.noreply.github.com): set it with `git config user.email`, "
+            "then rewrite the commits (for example `git rebase -r <base> --exec "
+            "'git commit --amend --no-edit --reset-author'`). See CONTRIBUTING.md."
+        )
+    content = [finding for finding in findings if finding.rule != "identity"]
+    if content:
+        yield (
+            f"privacy scan: {len(content)} finding(s). Replace machine paths with "
             "repository-relative or ~ paths, host names and addresses with documentation "
             "values (example.com, 192.0.2.0/24), and e-mail addresses with GitHub noreply "
             "addresses. See CONTRIBUTING.md."
@@ -317,6 +432,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("files", nargs="*", help="files to scan (repository-relative)")
     parser.add_argument("--stdin", action="store_true", help="scan standard input")
+    parser.add_argument(
+        "--identities",
+        action="store_true",
+        help="read one commit e-mail address per line from standard input; "
+        "accept only GitHub noreply addresses",
+    )
     parser.add_argument("--all", action="store_true", help="scan every file in the repository")
     parser.add_argument("--root", default=None, help="repository root for --all (default: cwd)")
     parser.add_argument("--list-rules", action="store_true", help="print the rules and exit")
@@ -327,15 +448,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(f"{rule.name:14} {rule.description}")
         return 0
 
+    if args.stdin and args.identities:
+        parser.error("--stdin and --identities both read standard input; pass one")
+
     findings: List[Finding] = []
+    if args.identities:
+        findings.extend(check_identities(sys.stdin.read()))
     if args.stdin:
         findings.extend(scan_text(sys.stdin.read(), "<stdin>"))
     if args.all:
         findings.extend(scan_tree(os.path.abspath(args.root or os.getcwd())))
     if args.files:
         findings.extend(scan_files(args.files, root=args.root))
-    if not (args.stdin or args.all or args.files):
-        parser.error("nothing to scan: pass FILE..., --stdin or --all")
+    if not (args.stdin or args.identities or args.all or args.files):
+        parser.error("nothing to scan: pass FILE..., --stdin, --identities or --all")
 
     for line in _iter_report(findings):
         print(line)

@@ -13,7 +13,8 @@ Relative command-line paths are relative to the directory ``bazel run`` was star
 
 The paid features are off unless enabled explicitly: the Ask agent (``--agent on``, also on a
 loopback listener), its web tools (``--agent-web on``) and the AI net labels
-(``--net-summaries on``). See the viewer README for their cost and exposure.
+(``--net-summaries on``). Their calls share one spend cap per server process
+(``--agent-total-usd``). See docs/viewer.md for their cost and exposure.
 
 Example file (every key is optional)::
 
@@ -53,7 +54,7 @@ Example file (every key is optional)::
     enabled = false
     model = "opus"
     turn_budget_usd = 2.0
-    total_budget_usd = 20.0
+    total_budget_usd = 20.0      # this server: Ask turns and AI net labels together; 0: no cap
     web = false
     cwd = ""
     read_dirs = []
@@ -62,6 +63,7 @@ Example file (every key is optional)::
     [net_summaries]
     enabled = false
     model = "sonnet"
+    call_budget_usd = 1.0
 """
 
 from __future__ import annotations
@@ -127,6 +129,7 @@ class ViewerConfig:
     agent_description: str = ""
     net_summaries: bool = False
     net_summary_model: str = "sonnet"
+    net_summary_budget_usd: float = 1.0
 
     def cache_dir(self, name: str) -> Path:
         return Path(self.cache) / name
@@ -264,14 +267,15 @@ _OPTIONS = (
         "agent_budget_usd",
         "agent.turn_budget_usd",
         "float",
-        "spend cap per Ask turn",
+        "spend cap per Ask turn (default 2)",
     ),
     (
         "--agent-total-usd",
         "agent_total_usd",
         "agent.total_budget_usd",
         "float",
-        "spend cap for this server process (all turns); 0 disables the cap",
+        "spend cap for this server process: Ask turns and AI net labels together (default 20;"
+        " a call starts only while the cap covers its whole budget; 0 disables the cap)",
     ),
     (
         "--agent-web",
@@ -316,6 +320,13 @@ _OPTIONS = (
         "net_summaries.model",
         "str",
         "model for the AI net labels: sonnet, opus or haiku",
+    ),
+    (
+        "--net-summary-budget-usd",
+        "net_summary_budget_usd",
+        "net_summaries.call_budget_usd",
+        "float",
+        "spend cap per AI net-label call, one call per ~60k characters of netlist (default 1)",
     ),
 )
 
@@ -497,9 +508,18 @@ def finish(cfg: ViewerConfig) -> ViewerConfig:
         raise ConfigError(f"agent model must be one of {', '.join(AGENT_MODELS)}")
     if cfg.net_summary_model not in SUMMARY_MODELS:
         raise ConfigError(f"net summary model must be one of {', '.join(SUMMARY_MODELS)}")
-    for name in ("agent_budget_usd", "agent_total_usd", "viewer3d_timeout", "viewer3d_max_mb"):
+    for name in (
+        "agent_budget_usd",
+        "agent_total_usd",
+        "net_summary_budget_usd",
+        "viewer3d_timeout",
+        "viewer3d_max_mb",
+    ):
         if getattr(cfg, name) < 0:
             raise ConfigError(f"{name} must not be negative")
+    for name in ("agent_budget_usd", "net_summary_budget_usd"):
+        if getattr(cfg, name) == 0:
+            raise ConfigError(f"{name} must be positive (it is the CLI's --max-budget-usd)")
     for origin in cfg.allow_origin:
         if not re.fullmatch(r"https?://[^/\s]+", origin):
             raise ConfigError(f"--allow-origin {origin!r}: expected scheme://host[:port]")

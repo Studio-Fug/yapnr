@@ -694,7 +694,8 @@ class StreamTest(Base):
             self.assertEqual(events[-1], "ping" if not gone else "session")
 
     def test_spend_cap(self):
-        s = self.svc(max_total_usd=0.01)
+        # a turn starts only while the cap covers its whole budget on top of the spend so far
+        s = self.svc(max_total_usd=2.01, max_budget_usd=2.0)
         self.scenario([init(), *text_msg("m1", ["ok"]), result("ok", cost=0.0172)])
         self.assertEqual(self.run_chat(s, dict(message="one", model="sonnet"))[-1][0], "done")
         st = s.status()
@@ -703,6 +704,55 @@ class StreamTest(Base):
         ev = self.run_chat(s, dict(message="two", model="sonnet"))
         self.assertEqual((ev[0][0], ev[0][1]["kind"]), ("error", "capped"))
         self.assertEqual(len(self.argv()), 1)
+        # a cap below one turn's budget never starts the CLI
+        s = self.svc(max_total_usd=1.0, max_budget_usd=2.0, cache_dir=self.dir / "c2")
+        self.assertFalse(s.status()["available"])
+        self.assertEqual(
+            self.run_chat(s, dict(message="x", model="sonnet"))[0][1]["kind"], "capped"
+        )
+        self.assertEqual(len(self.argv()), 1)
+
+    def test_spend_cap_counts_stopped_turns(self):
+        # a turn that ends without the CLI's cost report is charged its whole budget
+        s = self.svc(max_total_usd=5.0, max_budget_usd=2.0, turn_timeout=1)
+        self.scenario([init(), dict(sleep=30)])
+        ev = self.run_chat(s, dict(message="x", model="sonnet"))
+        self.assertEqual(ev[-1][1]["kind"], "timeout")
+        self.assertEqual(s.status()["spent_usd"], 2.0)
+        self.assertEqual(self.log(s)[-1]["charged_usd"], 2.0)
+        self.scenario([init(tools=("Bash", "Read")), dict(sleep=30)])
+        self.assertEqual(
+            self.run_chat(s, dict(message="x", model="sonnet"))[-1][1]["kind"], "unsafe"
+        )
+        st = s.status()
+        self.assertEqual((st["spent_usd"], st["available"]), (4.0, False))
+        # turns that never started the CLI cost nothing
+        s = self.svc(max_total_usd=5.0, max_budget_usd=2.0, cache_dir=self.dir / "c3")
+        ev = self.run_chat(s, dict(message="x", model="sonnet"), stop_after=1)
+        self.assertEqual([e for e, _, _ in ev], ["session"])  # the browser left before the CLI
+        self.assertEqual((s.status()["spent_usd"], s.meter.snapshot()["held_usd"]), (0.0, 0.0))
+
+    def test_spend_cap_holds_running_turns(self):
+        # concurrent turns cannot pass the cap together: each holds its budget while it runs
+        s = self.svc(max_total_usd=3.0, max_budget_usd=2.0, max_concurrent=2)
+        self.assertTrue(s.meter.reserve(2.0))  # another turn (or a net-label call) running
+        ev = self.run_chat(s, dict(message="x", model="sonnet"))
+        self.assertEqual((ev[0][0], ev[0][1]["kind"]), ("error", "busy"))
+        self.assertIn("held", ev[0][1]["error"])
+        self.assertFalse((self.dir / "argv.jsonl").exists())
+        self.assertTrue(s.status()["available"])  # not used up: it frees when the turn ends
+        s.meter.settle(2.0, 0.5)
+        self.scenario([init(), *text_msg("m1", ["ok"]), result("ok", cost=0.25)])
+        self.assertEqual(self.run_chat(s, dict(message="x", model="sonnet"))[-1][0], "done")
+        self.assertEqual(s.status()["spent_usd"], 0.75)
+
+    def test_library_defaults_are_off(self):
+        # AgentService used directly (not through the server): no web tools, a process cap
+        s = AgentService(REPO, claude_bin=self.fake, cache_dir=self.dir / "cd", source=FakeSource())
+        self.assertFalse(s.web)
+        self.assertFalse(s.status()["web"])
+        self.assertEqual(s.max_total_usd, 20.0)
+        self.assertIsNone(self.svc(max_total_usd=None, cache_dir=self.dir / "cn").max_total_usd)
 
     def test_loopback(self):
         # the server enables the agent only with --agent on; it warns for non-loopback listeners
@@ -1541,6 +1591,98 @@ class NetLLMTest(Base):
         self.assertFalse(net_llm.usable(dict(doc, prompt_version=0), doc["source_sha"]))
         self.assertFalse(net_llm.settled(dict(doc, attempted_ts=0), doc["source_sha"], "sonnet"))
         self.assertTrue(net_llm.settled(doc, doc["source_sha"], "sonnet"))
+
+    def test_spend_meter(self):
+        from yapnr.viewer.agent.spend import SpendMeter
+
+        m = SpendMeter(3.0)
+        self.assertTrue(m.reserve(2.0))
+        self.assertFalse(m.reserve(2.0))  # held by the running call
+        self.assertFalse(m.exhausted(2.0))
+        self.assertEqual(m.settle(2.0, 0.5), 0.5)
+        self.assertTrue(m.reserve(2.0))
+        self.assertEqual(m.settle(2.0, None), 2.0)  # no report: the whole budget
+        self.assertEqual(m.settle(0.0, "x"), 0.0)
+        self.assertTrue(m.exhausted(2.0))
+        self.assertTrue(m.reserve(0.5))
+        self.assertEqual(m.snapshot(), dict(spent_usd=2.5, held_usd=0.5, cap_usd=3.0, calls=3))
+        unlimited = SpendMeter(0)
+        self.assertTrue(all(unlimited.reserve(100.0) for _ in range(5)))
+        self.assertFalse(unlimited.exhausted(1e9))
+
+    def test_generate_counts_against_the_meter(self):
+        from yapnr.viewer.agent.spend import SpendMeter
+
+        calls = []
+
+        def runner(prompt):
+            calls.append(prompt)
+            return json.dumps(dict(nets={})), 0.02
+
+        # one call per net (chunk=100): reported costs are charged
+        meter = SpendMeter(10.0)
+        doc = net_llm.generate(
+            FakeSource(),
+            self.dir / "a.json",
+            runner=runner,
+            chunk=100,
+            budget=1.0,
+            meter=meter,
+            log=lambda *_: None,
+        )
+        self.assertEqual((len(calls), doc["capped"], doc["cost_usd"]), (2, False, 0.04))
+        self.assertEqual(meter.snapshot()["spent_usd"], 0.04)
+
+        # a failed call's reported cost counts; then the cap cannot cover another $1 call
+        def failing(prompt):
+            calls.append(prompt)
+            raise net_llm.CallError("claude error: overloaded", cost=0.03)
+
+        calls.clear()
+        meter = SpendMeter(1.02)
+        doc = net_llm.generate(
+            FakeSource(),
+            self.dir / "b.json",
+            runner=failing,
+            chunk=100,
+            budget=1.0,
+            meter=meter,
+            log=lambda *_: None,
+        )
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(doc["capped"])
+        self.assertEqual(sorted(doc["missing"]), ["lv", "p5v-hv"])
+        self.assertEqual(doc["cost_usd"], 0.03)
+        self.assertEqual(
+            meter.snapshot(), dict(spent_usd=0.03, held_usd=0.0, cap_usd=1.02, calls=1)
+        )
+
+        # a timed-out call is charged its whole budget
+        def slow(prompt):
+            raise TimeoutError("claude call exceeded 600s")
+
+        meter = SpendMeter(10.0)
+        doc = net_llm.generate(
+            FakeSource(),
+            self.dir / "t.json",
+            runner=slow,
+            budget=1.5,
+            meter=meter,
+            log=lambda *_: None,
+        )
+        self.assertFalse(doc["capped"])
+        self.assertEqual(meter.snapshot()["spent_usd"], 1.5)
+
+    def test_call_budget_and_error_cost(self):
+        line = dict(
+            type="result", subtype="error_max_budget_usd", is_error=True, total_cost_usd=0.4
+        )
+        self.scenario([dict(raw=json.dumps(line))])
+        with self.assertRaises(net_llm.CallError) as caught:
+            net_llm.call("Label nets", "sonnet", self.fake, budget=0.4, cache=self.dir / "c")
+        self.assertEqual(caught.exception.cost, 0.4)
+        argv = self.argv()[0]
+        self.assertEqual(argv[argv.index("--max-budget-usd") + 1], "0.4")
 
     def test_tidy_keeps_identifiers(self):
         self.assertEqual(

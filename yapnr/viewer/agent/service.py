@@ -2,21 +2,23 @@
 
 One CLI process per turn in its own process group, no settings files, restricted to cwd + add_dirs.
 Tools: Read/Grep/Glob; WebSearch/WebFetch when the request asks for web (body.web, default true) and
-the server allows it (web=True); and, with a notes store, the design-notes tools of exactly one MCP
-server (notes/mcp.py via a strict per-turn --mcp-config whose env names this session, turn, lane,
-phase, viewer port and board sha; the only write capability). WebFetch is never pre-approved: only
-the PreToolUse hook web_guard.py (stdlib only) approves it, for public hosts; a crashed, missing or
-slow hook leaves it to --permission-prompts none, i.e. denied. CLI deny rules for local
-names/literals (and this machine's addresses) apply on top and win over the hook. The init event
-must show exactly the configured tools and MCP server (connected), or the turn is killed. chat(body,
-emit) streams session/delta/tool/tool_error/note/done/error (plus 'ping' keepalives when nothing was
-sent for `heartbeat` s); emit(event, data) returns False once the client is gone, and the optional
-gone() is polled every 0.25 s so a closed browser stops the turn even while the CLI only streams
-thinking. Spend is capped per turn (--max-budget-usd) and per process (max_total_usd). Every turn is
-stored in <conversations>/<session>.jsonl (message, selection, answer, tools, notes created, full
-web URLs and queries); sessions found there or in turns.jsonl can be resumed after a restart, also
-from the other viewer sharing the folder: a per-session lock file serializes turns across viewers
-and numbers them from the file."""
+the server allows it (web=True, default off); and, with a notes store, the design-notes tools of
+exactly one MCP server (notes/mcp.py via a strict per-turn --mcp-config whose env names this
+session, turn, lane, phase, viewer port and board sha; the only write capability). WebFetch is never
+pre-approved: only the PreToolUse hook web_guard.py (stdlib only) approves it, for public hosts; a
+crashed, missing or slow hook leaves it to --permission-prompts none, i.e. denied. CLI deny rules
+for local names/literals (and this machine's addresses) apply on top and win over the hook. The init
+event must show exactly the configured tools and MCP server (connected), or the turn is killed.
+chat(body, emit) streams session/delta/tool/tool_error/note/done/error (plus 'ping' keepalives when
+nothing was sent for `heartbeat` s); emit(event, data) returns False once the client is gone, and
+the optional gone() is polled every 0.25 s so a closed browser stops the turn even while the CLI
+only streams thinking. Spend is capped per turn (--max-budget-usd) and per process (a
+spend.SpendMeter shared with the AI net labels: each turn holds its whole budget while it runs and
+is charged the reported cost, or the whole budget when the CLI reported none, as after a timeout or
+a cancel). Every turn is stored in <conversations>/<session>.jsonl (message, selection, answer,
+tools, notes created, full web URLs and queries); sessions found there or in turns.jsonl can be
+resumed after a restart, also from the other viewer sharing the folder: a per-session lock file
+serializes turns across viewers and numbers them from the file."""
 
 import fcntl
 import hashlib
@@ -37,6 +39,7 @@ import uuid
 from pathlib import Path
 
 from yapnr.viewer import runtime as viewer_runtime
+from yapnr.viewer.agent.spend import SpendMeter
 from yapnr.viewer.agent.web_guard import MAX_URL as WEB_MAX_URL  # noqa: F401 (re-exported)
 from yapnr.viewer.agent.web_guard import public_ip, web_block_reason  # noqa: F401 (re-exported)
 from yapnr.viewer.notes import store as notes_store
@@ -410,9 +413,9 @@ class AgentService:
         max_context=24000,
         max_items=40,
         event_fn=None,
-        max_total_usd=None,
+        max_total_usd=20.0,
         notes=None,
-        web=True,
+        web=False,
         python=None,
         viewer_port=None,
         conversations_dir=None,
@@ -423,9 +426,13 @@ class AgentService:
         graph=None,
         rules=None,
         engine_runtime=None,
+        meter=None,
     ):
         """notes: a notes_store.NotesStore (shared with the server's /api/notes) or its directory;
-        None = no notes tools. web: --agent-web (requests may still turn it off per conversation).
+        None = no notes tools. web: --agent-web, default off (requests may still turn it off per
+        conversation). max_total_usd: the process spend cap (None or 0: none); meter: a
+        spend.SpendMeter to share with other paid calls (it then holds the cap and max_total_usd is
+        ignored).
         viewer_port: int or callable (the server binds after this). conversations_dir: default
         <notes dir>/conversations (else <cache>/conversations). local_names: the server's own host
         names and addresses (listen, allow-origin, allow-host), added to the WebFetch deny rules
@@ -436,8 +443,8 @@ class AgentService:
         self.source = source
         self.state_fn = state_fn
         self.event_fn = event_fn
-        self.max_total_usd = float(max_total_usd) if max_total_usd else None
-        self.spent = 0.0
+        self.meter = meter if meter is not None else SpendMeter(max_total_usd)
+        self.max_total_usd = self.meter.cap
         self.max_concurrent, self.turn_timeout, self.max_budget_usd, self.effort, self.heartbeat = (
             int(max_concurrent),
             float(turn_timeout),
@@ -631,8 +638,13 @@ class AgentService:
             ]
         )
 
+    @property
+    def spent(self):
+        return self.meter.spent
+
     def capped(self):
-        return self.max_total_usd is not None and self.spent >= self.max_total_usd
+        """The process cap cannot cover another turn's budget (until a restart)."""
+        return self.meter.exhausted(self.max_budget_usd)
 
     def web_status(self):
         """(on, reason). Web tools need web=True and a guard hook that passed its self-test (it must
@@ -700,6 +712,7 @@ class AgentService:
             active=n,
             spent_usd=round(self.spent, 4),
             max_total_usd=self.max_total_usd,
+            held_usd=self.meter.snapshot()["held_usd"],
             web=web,
             notes=self.notes is not None,
         )
@@ -711,8 +724,9 @@ class AgentService:
             )
         if self.capped():
             out["reason"] = (
-                f"The assistant spend cap for this server (${self.max_total_usd:g}, --agent-total-usd) "
-                "is used up; restart the viewer to reset it."
+                f"The spend cap for this server (${self.max_total_usd:g}, --agent-total-usd)"
+                f" cannot cover another turn (${self.max_budget_usd:g} each, --agent-budget-usd);"
+                " restart the viewer to reset it."
             )
         return out
 
@@ -1526,17 +1540,40 @@ class AgentService:
             msg_chars=len(req["message"]),
             web=web,
         )
+        budget = self.max_budget_usd
         with self.lock:
             sid = req["session"]
             if len(self.running) >= self.max_concurrent or (sid and sid in self.running):
-                self._record(dict(rec, session=sid, status="busy"))
+                refused = "busy"
+            elif not self.meter.reserve(budget):  # held until the finally below settles it
+                refused = "capped" if self.meter.exhausted(budget) else "held"
+            else:
+                refused = None
+                sid = sid or str(uuid.uuid4())
+                turn = dict(proc=None, cancel=False)
+                self.running[sid] = turn
+        if refused:
+            self._record(dict(rec, session=sid, status="busy" if refused == "held" else refused))
+            if refused == "capped":
+                emit("error", dict(error=self.status()["reason"], kind="capped"))
+            elif refused == "held":
+                emit(
+                    "error",
+                    dict(
+                        error=(
+                            "busy: the rest of this server's spend cap is held by the paid calls"
+                            " running now (Ask turns, AI net labels); ask again when they finish"
+                        ),
+                        session=sid,
+                        kind="busy",
+                    ),
+                )
+            else:
                 emit("error", dict(error="busy", session=sid))
-                return
-            sid = sid or str(uuid.uuid4())
-            turn = dict(proc=None, cancel=False)
-            self.running[sid] = turn
+            return
         claim = self._claim(sid)
         if claim is None:
+            self.meter.settle(budget, 0.0)
             with self.lock:
                 self.running.pop(sid, None)
             self._record(dict(rec, session=sid, status="busy"))
@@ -1736,17 +1773,19 @@ class AgentService:
                 except OSError:
                     pass
             r = tr.result or {}
-            try:
-                with self.lock:
-                    self.spent += float(r.get("total_cost_usd") or 0)
-            except (TypeError, ValueError):
-                pass
+            # The reported cost; unknown (no result line: timeout, cancel, unsafe, a dead CLI) is
+            # charged the whole turn budget, since the CLI may have spent it; nothing when the CLI
+            # never started.
+            charged = self.meter.settle(
+                budget, 0.0 if proc is None else r.get("total_cost_usd") if r else None
+            )
             made = [n["id"] for n in self._created(sid, turn_no, since, tr.note_ids)]
             owned = sid in self.sessions and status != "unsafe"
             rec.update(
                 status=status,
                 cli_session=tr.cli_session,
                 cost_usd=r.get("total_cost_usd"),
+                charged_usd=round(charged, 6),
                 duration_ms=r.get("duration_ms"),
                 num_turns=r.get("num_turns"),
                 wall_s=round(time.time() - t0, 2),

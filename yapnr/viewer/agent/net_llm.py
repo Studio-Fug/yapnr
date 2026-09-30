@@ -7,8 +7,11 @@ when the dossier, PROMPT_VERSION or model changes; nets left missing by a failed
 alone, with backoff (usable()/settled() are the cache checks the viewer server and SourceService
 share). Entries are grounded in the dossier: labels <=6 words, summaries <=2 sentences, and an entry
 naming a component ref absent from the dossier is dropped. Usage: python -m
-yapnr.viewer.agent.net_llm OUT.json [--index FILE|URL] [--model sonnet] [--force] [--dry-run] Each
-call is paid (on the operator's Claude account): the viewer runs it only with --net-summaries on.
+yapnr.viewer.agent.net_llm OUT.json [--index FILE|URL] [--model sonnet] [--budget-usd 1] [--force]
+[--dry-run] Each call is paid (on the operator's Claude account): the viewer runs it only with
+--net-summaries on. Every call has a budget (--max-budget-usd, the viewer's --net-summary-budget-usd);
+in the viewer the calls also count against the server's spend cap (spend.SpendMeter, shared with the
+Ask agent), and a run the cap stops leaves the remaining nets missing.
 """
 
 import argparse
@@ -31,6 +34,7 @@ CHUNK = 60000
 PROMPT_VERSION = 3  # 3: the prompt no longer names a particular board
 RETRIES = 4
 BACKOFF = 600
+BUDGET = 1.0  # USD per call (--max-budget-usd)
 CLAUDE = "claude"
 REF = re.compile(r"\b([A-Z]{1,3})(\d{1,3})\b")
 PREFIXES = {
@@ -315,8 +319,17 @@ def validate(raw, names, allowed, prefixes):
     return nets, dropped, [n for n in names if n not in nets and n not in dropped]
 
 
-def call(prompt, model, claude_bin=CLAUDE, timeout=600, budget=1.0, cache=None):
-    """One tool-less CLI call -> (result text, cost_usd)."""
+class CallError(RuntimeError):
+    """A CLI call that failed after it started; cost is what the CLI reported (None: unknown)."""
+
+    def __init__(self, message, cost=None):
+        super().__init__(message)
+        self.cost = cost
+
+
+def call(prompt, model, claude_bin=CLAUDE, timeout=600, budget=BUDGET, cache=None):
+    """One tool-less CLI call -> (result text, cost_usd). Raises CallError (with the reported
+    cost, if any) or TimeoutError."""
     if model not in MODELS:
         raise ValueError("model must be one of " + ", ".join(MODELS))
     mcp = Path(cache or Path(__file__).parent / ".cache/agent")
@@ -375,9 +388,14 @@ def call(prompt, model, claude_bin=CLAUDE, timeout=600, budget=1.0, cache=None):
     try:
         r = json.loads(out.strip().splitlines()[-1])
     except (ValueError, IndexError):
-        raise RuntimeError(f"claude exited {p.returncode}: " + clip((err or out).strip(), 400))
+        raise CallError(f"claude exited {p.returncode}: " + clip((err or out).strip(), 400))
+    if not isinstance(r, dict):
+        raise CallError(f"claude exited {p.returncode}: unexpected output")
     if r.get("is_error") or r.get("subtype") != "success":
-        raise RuntimeError("claude error: " + clip(r.get("result") or r.get("subtype"), 400))
+        raise CallError(
+            "claude error: " + clip(r.get("result") or r.get("subtype"), 400),
+            cost=r.get("total_cost_usd"),
+        )
     return r.get("result") or "", r.get("total_cost_usd")
 
 
@@ -403,9 +421,13 @@ def generate(
     runner=None,
     log=print,
     cache=None,
+    budget=BUDGET,
+    meter=None,
 ):
     """Label every net (or only the nets a previous run left missing, when due); returns the written
-    or current document."""
+    or current document. budget: USD per call; meter: a spend.SpendMeter each call reserves its
+    budget from and is charged to (the reported cost, else the whole budget). When the meter's cap
+    cannot cover the next call, the remaining nets stay missing and the document says capped."""
     if model not in MODELS:
         raise ValueError("model must be one of " + ", ".join(MODELS))
     src_sha, entries, refs = collect(source_service)
@@ -443,19 +465,42 @@ def generate(
     prefixes = {
         m.group(1) for r in refs if (m := REF.fullmatch(r))
     } or PREFIXES  # real designator prefixes when the index is known
-    runner = runner or (lambda prompt: call(prompt, model, claude_bin, timeout, cache=cache))
+    runner = runner or (
+        lambda prompt: call(prompt, model, claude_bin, timeout, budget=budget, cache=cache)
+    )
     nets, dropped, missing, cost, t0 = ({}, {}, [], 0.0, time.time())
     parts = chunks(entries, chunk)
+    capped = False
     for i, part in enumerate(parts):
+        if meter is not None and not meter.reserve(budget):
+            capped = True
+            left = [n for p in parts[i:] for n, _ in p]
+            log(
+                f"net_llm: the server's spend cap cannot cover another call (${budget:g});"
+                f" {len(left)} net(s) left unlabelled"
+            )
+            missing += left
+            break
         prompt = ASK % (len(part), ", ".join(n for n, _ in part), "\n\n".join(t for _, t in part))
+        c = None  # the reported cost; None: unknown (the meter then charges the whole budget)
         try:
             out, c = runner(prompt)
-            cost += c or 0
             raw = extract_json(out)
         except (ValueError, RuntimeError, TimeoutError, OSError) as ex:
+            if c is None:
+                c = getattr(ex, "cost", None)
+                if c is None and isinstance(ex, OSError) and not isinstance(ex, TimeoutError):
+                    c = 0.0  # the CLI did not start
             log(f"net_llm: chunk {i+1}/{len(parts)} failed: {ex}")
             missing += [n for n, _ in part]
             continue
+        finally:
+            if meter is not None:
+                meter.settle(budget, c)
+            try:
+                cost += float(c or 0)
+            except (TypeError, ValueError):
+                pass
         n, d, m = validate(raw, [n for n, _ in part], allowed, prefixes)
         nets.update(n)
         dropped.update(d)
@@ -479,6 +524,7 @@ def generate(
         missing=missing,
         dropped=dropped,
         calls=len(parts),
+        capped=capped,
         cost_usd=round(cost, 6),
         duration_s=round(time.time() - t0, 1),
         attempts=attempts,
@@ -508,6 +554,7 @@ if __name__ == "__main__":
     ap.add_argument("--claude", default=CLAUDE)
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--timeout", type=int, default=600)
+    ap.add_argument("--budget-usd", type=float, default=BUDGET, help="spend cap per CLI call")
     ap.add_argument(
         "--dry-run", action="store_true", help="print dossier size and chunking; no model call"
     )
@@ -528,4 +575,4 @@ if __name__ == "__main__":
             )
         )
         sys.exit(0)
-    generate(svc, a.out, a.model, a.claude, a.force, timeout=a.timeout)
+    generate(svc, a.out, a.model, a.claude, a.force, timeout=a.timeout, budget=a.budget_usd)

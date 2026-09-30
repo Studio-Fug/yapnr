@@ -40,6 +40,11 @@ class ConfigTest(unittest.TestCase):
     def test_paid_features_are_off_by_default(self):
         cfg = self.load(str(self.dir / "live"))
         self.assertEqual((cfg.agent, cfg.agent_web, cfg.net_summaries), (False, False, False))
+        # spend caps: $2 per Ask turn, $1 per net-label call, $20 per process for both
+        self.assertEqual(
+            (cfg.agent_budget_usd, cfg.net_summary_budget_usd, cfg.agent_total_usd),
+            (2.0, 1.0, 20.0),
+        )
         on = self.load(
             str(self.dir / "live"), "--agent", "on", "--agent-web", "on", "--net-summaries", "on"
         )
@@ -58,7 +63,7 @@ class ConfigTest(unittest.TestCase):
             '[design]\ngraph = "inputs/graph.json"\n'
             '[design.atopile]\nroot = "../design"\nbuild = "default"\n'
             "[agent]\nenabled = true\nturn_budget_usd = 0.5\n"
-            '[net_summaries]\nmodel = "haiku"\n'
+            '[net_summaries]\nmodel = "haiku"\ncall_budget_usd = 0.25\n'
         )
         cfg = self.load("--config", str(cfg_file), "--port", "9001")
         self.assertEqual(cfg.root, self.dir / "runs/live")  # relative to the file
@@ -68,7 +73,7 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(cfg.rules, self.dir / "conf/inputs/rules.json")  # next to the graph
         self.assertEqual((cfg.atopile_root, cfg.atopile_build), (self.dir / "design", "default"))
         self.assertEqual((cfg.agent, cfg.agent_budget_usd), (True, 0.5))
-        self.assertEqual(cfg.net_summary_model, "haiku")
+        self.assertEqual((cfg.net_summary_model, cfg.net_summary_budget_usd), ("haiku", 0.25))
         # relative flags are relative to where `bazel run` started
         cfg = self.load("rel/live", "--graph", "g.json", env={"BUILD_WORKING_DIRECTORY": "/w"})
         self.assertEqual((cfg.root, cfg.graph), (Path("/w/rel/live"), Path("/w/g.json")))
@@ -90,6 +95,11 @@ class ConfigTest(unittest.TestCase):
             self.load("x", "--allow-origin", "viewer.example.com")
         with self.assertRaisesRegex(config.ConfigError, "agent model"):
             self.load("x", "--agent-model", "gpt")
+        for flag in ("--agent-budget-usd", "--net-summary-budget-usd"):
+            with self.assertRaisesRegex(config.ConfigError, "must be positive"):
+                self.load("x", flag, "0")
+        with self.assertRaisesRegex(config.ConfigError, "must not be negative"):
+            self.load("x", "--agent-total-usd", "-1")
 
     def test_machine_config(self):
         machine = self.dir / "machine.toml"

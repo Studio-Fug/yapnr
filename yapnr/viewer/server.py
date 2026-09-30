@@ -350,8 +350,11 @@ class Viewer:
 
     def _init_agent(self):
         from yapnr.viewer.agent.service import is_loopback
+        from yapnr.viewer.agent.spend import SpendMeter
 
         cfg = self.cfg
+        # One spend cap for every paid CLI call of this process: Ask turns and AI net labels.
+        self.spend = SpendMeter(cfg.agent_total_usd or None)
         self.listen_hosts = list(cfg.listen)
         exposed = [h for h in self.listen_hosts if not is_loopback(h)]
         self.agent_service = None
@@ -391,7 +394,7 @@ class Viewer:
                 graph=cfg.graph,
                 rules=cfg.rules,
                 engine_runtime=self.runtime,
-                max_total_usd=cfg.agent_total_usd or None,
+                meter=self.spend,
                 notes=self.notes,
                 web=cfg.agent_web,
                 viewer_port=lambda: self.port,
@@ -401,6 +404,7 @@ class Viewer:
         self.net_summary_status = dict(
             enabled=cfg.net_summaries,
             model=cfg.net_summary_model,
+            budget_usd=cfg.net_summary_budget_usd,
             state="pending" if on else "off",
         )
         if not cfg.net_summaries:
@@ -517,6 +521,8 @@ class Viewer:
             )
         return dict(
             s,
+            enabled=self.agent_service is not None,
+            spend=self.spend.snapshot(),
             net_summaries=self.net_summary_status,
             source=bool(self.source_service),
             src_root=str(self.sources.src) if self.sources.src else None,
@@ -562,15 +568,24 @@ class Viewer:
                             claude_bin=self.cfg.claude or "claude",
                             cache=self.cfg.cache_dir("agent"),
                             log=self.log,
+                            budget=self.cfg.net_summary_budget_usd,
+                            meter=self.spend,
                         )
             try:
-                missing = len(json.loads(out.read_text()).get("missing") or [])
+                doc = json.loads(out.read_text())
+                missing, capped = len(doc.get("missing") or []), bool(doc.get("capped"))
             except (OSError, ValueError, AttributeError):
-                missing = None
+                missing, capped = None, False
             if current(out):
                 state = "incomplete" if missing else "current"
             else:
                 state = "failed"
+            if missing and capped:
+                state = "capped"
+                status["reason"] = (
+                    "the spend cap (--agent-total-usd) stopped the labelling; restart to retry the"
+                    " missing nets"
+                )
             status.update(state=state, missing=missing, nets=source.merge_llm())
         except Exception as ex:
             status.update(state="failed", error=f"{type(ex).__name__}: {ex}"[:400])

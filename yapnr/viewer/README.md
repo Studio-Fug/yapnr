@@ -14,22 +14,22 @@ bazel run //:viewer -- --help
 
 ## Layout
 
-| Path              | What                                                                |
-| ----------------- | ------------------------------------------------------------------- |
-| `server.py`       | the HTTP server (`Viewer`, the request handler, `main`)             |
-| `config.py`       | flags and the `yapnr-viewer-v1` TOML file; no machine defaults      |
-| `toolchain.py`    | the headless `kicad-cli` and KiCad's Python; the GUI app is refused |
-| `runtime.py`      | the engine runtime and the environments of child processes          |
-| `event_schema.py` | normalization of completed-phase events                             |
-| `settings.py`     | runtime control requests and saved preferences                      |
-| `services/`       | cost replay, schematic builder and symbols, 3D export queue         |
-| `sources/`        | the atopile source index (entry from the ato.yaml build target)     |
-| `notes/`          | the design notes store and the Ask agent's notes MCP server         |
-| `agent/`          | the Ask agent, AI net labels and the WebFetch guard hook            |
-| `kicad_scripts/`  | geometry and graph extraction, run by path under KiCad's Python     |
-| `static/`         | the front end (plain JavaScript, no build step)                     |
-| `testing.py`      | helpers for the tests (not used by the viewer)                      |
-| `COSTS.md`        | what the placement cost panel shows (also offered to the Ask agent) |
+| Path              | What                                                                   |
+| ----------------- | ---------------------------------------------------------------------- |
+| `server.py`       | the HTTP server (`Viewer`, the request handler, `main`)                |
+| `config.py`       | flags and the `yapnr-viewer-v1` TOML file; no machine defaults         |
+| `toolchain.py`    | the headless `kicad-cli` and KiCad's Python; the GUI app is refused    |
+| `runtime.py`      | the engine runtime and the environments of child processes             |
+| `event_schema.py` | normalization of completed-phase events                                |
+| `settings.py`     | runtime control requests and saved preferences                         |
+| `services/`       | cost replay, schematic builder and symbols, 3D export queue            |
+| `sources/`        | the atopile source index (entry from the ato.yaml build target)        |
+| `notes/`          | the design notes store and the Ask agent's notes MCP server            |
+| `agent/`          | the Ask agent, AI net labels, their spend cap, the WebFetch guard hook |
+| `kicad_scripts/`  | geometry and graph extraction, run by path under KiCad's Python        |
+| `static/`         | the front end (plain JavaScript, no build step)                        |
+| `testing.py`      | helpers for the tests (not used by the viewer)                         |
+| `COSTS.md`        | what the placement cost panel shows (also offered to the Ask agent)    |
 
 Processes and interpreters:
 

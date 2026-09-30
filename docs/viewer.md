@@ -150,13 +150,21 @@ Both are **off unless you turn them on**, also on a loopback listener:
   (parts, nets, pads, regions, source lines, lanes, events). Each question is one headless
   `claude -p` run. `--agent-web on` also lets it use WebSearch and WebFetch.
 - `--net-summaries on` adds **AI net labels**: one tool-less `claude` call per changed netlist
-  dossier (about $0.20 for a hundred nets with sonnet), labelled as AI output in Inspect.
+  dossier (per ~60k characters of it; about $0.20 for a hundred nets with sonnet), labelled as AI
+  output in Inspect.
 
 What that means:
 
 - **Cost.** Every turn and every labelling call is paid on the operator's Claude account (the
-  `claude` CLI's login). Spend is capped per turn (`--agent-budget-usd`, default $2) and per server
-  process (`--agent-total-usd`, default $20; the assistant stops when it is used up). The default
+  `claude` CLI's login). Each call has a budget that the CLI enforces (`--max-budget-usd`): an Ask
+  turn `--agent-budget-usd` (default $2), a net-label call `--net-summary-budget-usd` (default $1).
+  Both kinds count against one cap per server process, `--agent-total-usd` (default $20; `0` turns
+  the cap off). A call starts only while the cap still covers its whole budget on top of what was
+  spent and what the running calls hold, so concurrent turns cannot pass it together; a call that
+  ends without a cost report from the CLI (timeout, cancel, a stopped unsafe turn) is counted at
+  its whole budget. When the cap cannot cover another call, Ask says so and the remaining net
+  labels stay missing until a restart, which resets the count (it is kept in memory). The CLI
+  checks its budget as the turn runs, so one call can end slightly above its budget. The default
   model is opus (`--agent-model sonnet` is cheaper).
 - **Reads.** The agent can read the working directory (`--agent-cwd`, default the experiment
   folder) and the folders you allow (`--agent-read-dir`, default the atopile sources and the

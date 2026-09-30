@@ -1,0 +1,56 @@
+# Bazel configuration for yapnr. Pins and rationale: docs/decisions.md.
+
+# Workaround (kept from Splanc): Bazel 7.7.1's bundled JDK 21 emits SVE
+# instructions in its startup stubs that crash with SIGILL on some aarch64
+# hosts. IgnoreUnrecognizedVMOptions comes first because UseSVE only exists on
+# aarch64 JVMs and an unknown flag would abort the server JVM on x86_64.
+startup --host_jvm_args=-XX:+IgnoreUnrecognizedVMOptions
+startup --host_jvm_args=-XX:UseSVE=0
+
+# bzlmod is the source of truth; there is no WORKSPACE file.
+common --enable_bzlmod
+common --registry=https://bcr.bazel.build
+
+# Hermetic action environment, so caching is correct across machines. Tests
+# that need KiCad get explicit --test_env pass-through (config:kicad, PR6a).
+build --incompatible_strict_action_env
+
+# Content-addressed caches in the project tree (gitignored, dot-prefixed).
+# Hashed file names make them safe on case-insensitive volumes, unlike a full
+# output base (see DEVELOPERS.md: keep the output base on a case-sensitive,
+# internal disk). CI overrides both paths on the command line.
+build --disk_cache=.bazel-disk-cache
+common --repository_cache=.bazel-repo-cache
+
+# Avoid `//...` descending into the convenience symlinks.
+build --symlink_prefix=bazel-
+
+# Test ergonomics: only show output for failing tests.
+test --test_output=errors
+
+# Quieter status for agents and CI.
+common --color=yes
+common --show_timestamps
+
+# --- Test lanes --------------------------------------------------------------
+# The default lane needs no KiCad. `kicad` and `slow` are the tier tags from
+# docs/migration-plan.md section 1.2; the KiCad lane itself arrives in PR6a.
+test --test_tag_filters=-kicad
+test:quick --test_tag_filters=-kicad,-slow
+test:all --test_tag_filters=
+
+# --- Shared, busy machines ---------------------------------------------------
+# Use with `--config=lowmem` (and `nice`) on a workstation that is also running
+# long place-and-route experiments.
+build:lowmem --jobs=2
+build:lowmem --local_resources=cpu=2
+build:lowmem --local_resources=memory=HOST_RAM*.25
+
+# --- CI ----------------------------------------------------------------------
+# MODULE.bazel.lock must be up to date in CI; fix it locally with a plain
+# `bazel mod deps` (or any build) and commit the result.
+common:ci --lockfile_mode=error
+build:ci --verbose_failures
+
+# Per-user settings (output base, lowmem by default, ...). Gitignored.
+try-import %workspace%/user.bazelrc

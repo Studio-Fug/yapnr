@@ -1,0 +1,5 @@
+.venv
+.bazelisk
+.bazel-disk-cache
+.bazel-repo-cache
+docs/site

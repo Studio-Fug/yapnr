@@ -220,6 +220,7 @@
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="migration-plan.html">yapnr migration plan</a></li>
 <li class="toctree-l1"><a class="reference internal" href="decisions.html">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest (PR1)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
@@ -389,7 +390,9 @@ and branches are never picked by hand.</p>
 <p><code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//...</span></code> runs the unit tier and the repo checks; the KiCad lane (<code class="docutils literal notranslate"><span class="pre">--config=kicad</span></code>)
 arrives in PR6a. Every <code class="docutils literal notranslate"><span class="pre">test_*.py</span></code> under <code class="docutils literal notranslate"><span class="pre">tests/</span></code> must be wired to a Bazel target; the
 <code class="docutils literal notranslate"><span class="pre">yapnr_py_tests()</span></code> macro (<code class="docutils literal notranslate"><span class="pre">tools/bazel/py_tests.bzl</span></code>) does that from a glob, and
-<code class="docutils literal notranslate"><span class="pre">//tests/unit/repo:test_wiring</span></code> fails on stragglers.</p>
+<code class="docutils literal notranslate"><span class="pre">//tests/unit/repo:test_wiring</span></code> fails on stragglers. Until PR3 moves it, the imported engine keeps
+its Splanc layout under <code class="docutils literal notranslate"><span class="pre">hardware/</span></code>: its own Bazel targets run in <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//...</span></code>, and the wiring
+check does not cover it yet (<a class="reference internal" href="decisions.html"><span class="std std-doc">decisions</span></a>).</p>
 </section>
 </section>
 

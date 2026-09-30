@@ -68,6 +68,47 @@ Owner decisions for releases and container images (PR-R; [releases](releases.md)
   the notices (`LICENSE`, `THIRD_PARTY.md`, `SOURCES`) under `/usr/share/doc/yapnr`. (The snapshot
   is recorded inside the image rather than as a label; see "Container images" below.)
 
+Owner decisions for the history import (PR1; [the migration plan](migration-plan.md), §7):
+
+- **Privacy scan: what counts as an e-mail address** (decided 2026-09-29). The imported engine
+  history holds 21 matches of the address pattern that are code: top-level test decorators on added
+  or removed patch lines (`+@unittest.skipIf(`, where the diff marker is the local part), a matrix
+  product (`W@field.reshape(`) and endpoints in the engine's constraint syntax
+  (`net@board.usbc:A6`). The owner chose to refine the rule rather than change imported code or add
+  allow markers: an `@` match counts as an e-mail address only if its local part contains a letter
+  or digit, it is not immediately followed by `(` (a call), and its top-level domain is in the IANA
+  root zone, compared in lower case. The list is a static copy in `tools/privacy/iana_tlds.txt`,
+  whose header gives the source URL, the retrieval date and the upstream checksum, followed by the
+  upstream file with its version line; refresh it by replacing it with a new download. Nothing else
+  changed: personal addresses at public top-level domains stay findings in files, `--all` and
+  `--stdin`, the allowlisted commit address stays a finding in files, and `--identities` does not
+  use the refinement. By construction, addresses at names outside the root zone (such as `.local`,
+  `.lan` or `.internal`) are no longer e-mail findings. So that `.local` machine names stay covered
+  as before, the `local-host` rule also reports a `.local` name right after `@`
+  (`user@<host>.local`, as in ssh or git's guessed identity), besides hyphenated and URL `.local`
+  names. Commit identities at any such name still fail `--identities`.
+
+Choices made in PR1 itself, following the plan; the owner reviews them with the pull request:
+
+- **Full-history import of the engine paths** (plan §0.3, item 7). The committed Splanc history of
+  the PnR paths is imported with `git filter-repo` (42 commits) rather than as one snapshot commit,
+  so blame and `git log --follow` keep the reasons behind the engine's heuristics; the history is
+  small (486 blobs, none over 600 KB). Merging PR1 with a merge commit answers the plan's open
+  question Q2b. What was imported, how it was rewritten and how it was checked is in the
+  [history import manifest](history/import-manifest.md).
+- **The test-wiring check keeps its `tests/` scope until PR3.** This replaces the plan's first form
+  (extend the check to `hardware/` with a shrink-only baseline in PR1): PR2 replaces
+  `hardware/pnr` from the engine snapshots, and PR3 moves its tests under `tests/`, where the glob
+  macro wires them and the check covers them, so a baseline for a tree that is replaced twice would
+  only be churn. `tools/check_test_wiring.py --scope hardware/` lists the 29 unwired test files of
+  the import, and the manifest counts them.
+- **The imported Bazel targets run in `bazel test //...`.** `hardware/pnr/BUILD.bazel` loads
+  `@yapnr_pypi`, and a minimal `hardware/tools/BUILD.bazel` exports the one tool a test needs.
+  Splanc's `pnr.bzl` (atopile and KiCad Python rules, which yapnr does not have) stays in the tree
+  unloaded until PR8 replaces it. Tests that fail on the Splanc source commit, or run past their
+  timeout, are tagged `manual` with a comment and listed in the plan's appendix B, so CI stays
+  green; the manifest records the pass set.
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.

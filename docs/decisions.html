@@ -3,7 +3,7 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="About the name" href="about-the-name.html"><link rel="prev" title="yapnr migration plan" href="migration-plan.html">
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="History import manifest (PR1)" href="history/import-manifest.html"><link rel="prev" title="yapnr migration plan" href="migration-plan.html">
         <link rel="prefetch" href="../static/yapnr-logo-256.png" as="image">
         <link rel="prefetch" href="../static/yapnr-logo-light.png" as="image">
 
@@ -220,6 +220,7 @@
 <li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="migration-plan.html">yapnr migration plan</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest (PR1)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
@@ -340,6 +341,47 @@ irreversible switch after the first push).</p></li>
 <code class="docutils literal notranslate"><span class="pre">yapnr-kicad:&lt;tag&gt;-src</span></code> images (never pruned), the Ubuntu snapshot recorded with the image, and
 the notices (<code class="docutils literal notranslate"><span class="pre">LICENSE</span></code>, <code class="docutils literal notranslate"><span class="pre">THIRD_PARTY.md</span></code>, <code class="docutils literal notranslate"><span class="pre">SOURCES</span></code>) under <code class="docutils literal notranslate"><span class="pre">/usr/share/doc/yapnr</span></code>. (The snapshot
 is recorded inside the image rather than as a label; see “Container images” below.)</p></li>
+</ul>
+<p>Owner decisions for the history import (PR1; <a class="reference internal" href="migration-plan.html"><span class="std std-doc">the migration plan</span></a>, §7):</p>
+<ul class="simple">
+<li><p><strong>Privacy scan: what counts as an e-mail address</strong> (decided 2026-09-29). The imported engine
+history holds 21 matches of the address pattern that are code: top-level test decorators on added
+or removed patch lines (<code class="docutils literal notranslate"><span class="pre">+&#64;unittest.skipIf(</span></code>, where the diff marker is the local part), a matrix
+product (<code class="docutils literal notranslate"><span class="pre">W&#64;field.reshape(</span></code>) and endpoints in the engine’s constraint syntax
+(<code class="docutils literal notranslate"><span class="pre">net&#64;board.usbc:A6</span></code>). The owner chose to refine the rule rather than change imported code or add
+allow markers: an <code class="docutils literal notranslate"><span class="pre">&#64;</span></code> match counts as an e-mail address only if its local part contains a letter
+or digit, it is not immediately followed by <code class="docutils literal notranslate"><span class="pre">(</span></code> (a call), and its top-level domain is in the IANA
+root zone, compared in lower case. The list is a static copy in <code class="docutils literal notranslate"><span class="pre">tools/privacy/iana_tlds.txt</span></code>,
+whose header gives the source URL, the retrieval date and the upstream checksum, followed by the
+upstream file with its version line; refresh it by replacing it with a new download. Nothing else
+changed: personal addresses at public top-level domains stay findings in files, <code class="docutils literal notranslate"><span class="pre">--all</span></code> and
+<code class="docutils literal notranslate"><span class="pre">--stdin</span></code>, the allowlisted commit address stays a finding in files, and <code class="docutils literal notranslate"><span class="pre">--identities</span></code> does not
+use the refinement. By construction, addresses at names outside the root zone (such as <code class="docutils literal notranslate"><span class="pre">.local</span></code>,
+<code class="docutils literal notranslate"><span class="pre">.lan</span></code> or <code class="docutils literal notranslate"><span class="pre">.internal</span></code>) are no longer e-mail findings. So that <code class="docutils literal notranslate"><span class="pre">.local</span></code> machine names stay covered
+as before, the <code class="docutils literal notranslate"><span class="pre">local-host</span></code> rule also reports a <code class="docutils literal notranslate"><span class="pre">.local</span></code> name right after <code class="docutils literal notranslate"><span class="pre">&#64;</span></code>
+(<code class="docutils literal notranslate"><span class="pre">user&#64;&lt;host&gt;.local</span></code>, as in ssh or git’s guessed identity), besides hyphenated and URL <code class="docutils literal notranslate"><span class="pre">.local</span></code>
+names. Commit identities at any such name still fail <code class="docutils literal notranslate"><span class="pre">--identities</span></code>.</p></li>
+</ul>
+<p>Choices made in PR1 itself, following the plan; the owner reviews them with the pull request:</p>
+<ul class="simple">
+<li><p><strong>Full-history import of the engine paths</strong> (plan §0.3, item 7). The committed Splanc history of
+the PnR paths is imported with <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">filter-repo</span></code> (42 commits) rather than as one snapshot commit,
+so blame and <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">log</span> <span class="pre">--follow</span></code> keep the reasons behind the engine’s heuristics; the history is
+small (486 blobs, none over 600 KB). Merging PR1 with a merge commit answers the plan’s open
+question Q2b. What was imported, how it was rewritten and how it was checked is in the
+<a class="reference internal" href="history/import-manifest.html"><span class="std std-doc">history import manifest</span></a>.</p></li>
+<li><p><strong>The test-wiring check keeps its <code class="docutils literal notranslate"><span class="pre">tests/</span></code> scope until PR3.</strong> This replaces the plan’s first form
+(extend the check to <code class="docutils literal notranslate"><span class="pre">hardware/</span></code> with a shrink-only baseline in PR1): PR2 replaces
+<code class="docutils literal notranslate"><span class="pre">hardware/pnr</span></code> from the engine snapshots, and PR3 moves its tests under <code class="docutils literal notranslate"><span class="pre">tests/</span></code>, where the glob
+macro wires them and the check covers them, so a baseline for a tree that is replaced twice would
+only be churn. <code class="docutils literal notranslate"><span class="pre">tools/check_test_wiring.py</span> <span class="pre">--scope</span> <span class="pre">hardware/</span></code> lists the 29 unwired test files of
+the import, and the manifest counts them.</p></li>
+<li><p><strong>The imported Bazel targets run in <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//...</span></code>.</strong> <code class="docutils literal notranslate"><span class="pre">hardware/pnr/BUILD.bazel</span></code> loads
+<code class="docutils literal notranslate"><span class="pre">&#64;yapnr_pypi</span></code>, and a minimal <code class="docutils literal notranslate"><span class="pre">hardware/tools/BUILD.bazel</span></code> exports the one tool a test needs.
+Splanc’s <code class="docutils literal notranslate"><span class="pre">pnr.bzl</span></code> (atopile and KiCad Python rules, which yapnr does not have) stays in the tree
+unloaded until PR8 replaces it. Tests that fail on the Splanc source commit, or run past their
+timeout, are tagged <code class="docutils literal notranslate"><span class="pre">manual</span></code> with a comment and listed in the plan’s appendix B, so CI stays
+green; the manifest records the pass set.</p></li>
 </ul>
 </section>
 <section id="pinned-versions">
@@ -532,12 +574,12 @@ adds a separate x86_64 lock with the CPU torch index (<code class="docutils lite
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="about-the-name.html">
+          <a class="next-page" href="history/import-manifest.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">About the name</div>
+                <div class="title">History import manifest (PR1)</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>

@@ -98,8 +98,11 @@ paths (also in the dash-encoded form agent tooling uses for project directories)
 `.local` host names, tailnet and private network addresses, personal e-mail addresses and
 credentials. Use repository-relative or `~` paths, documentation values (`example.com`,
 `192.0.2.0/24`) and GitHub noreply addresses instead. The owner's public commit address is no
-exception in files; only `tools/privacy/allowed_identities.txt` names it. `--list-rules` prints
-the rules.
+exception in files; only `tools/privacy/allowed_identities.txt` names it. An `@` match counts as
+an e-mail address only if its local part has a letter or digit, it is not a call (followed by
+`(`) and its top-level domain is in the IANA root zone (the static copy in
+`tools/privacy/iana_tlds.txt`), so decorators, matrix products and endpoints such as
+`net@board.usbc:A6` in code are not findings. `--list-rules` prints the rules.
 
 ## KiCad
 

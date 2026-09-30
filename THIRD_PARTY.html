@@ -220,6 +220,7 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/architecture.html">Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/migration-plan.html">yapnr migration plan</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/decisions.html">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/history/import-manifest.html">History import manifest (PR1)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/about-the-name.html">About the name</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
@@ -374,6 +375,15 @@ BSD, with some files under other licenses). Each package’s own metadata is aut
 generated site; mermaid 11.4.1 (MIT) is loaded from a CDN.</p></li>
 </ul>
 </section>
+<section id="in-the-repository-only">
+<h2>In the repository only<a class="headerlink" href="#in-the-repository-only" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>IANA root zone list</strong> (<code class="docutils literal notranslate"><span class="pre">tools/privacy/iana_tlds.txt</span></code>): a static copy of IANA’s list of
+top-level domains (<a class="reference external" href="https://data.iana.org/TLD/tlds-alpha-by-domain.txt">https://data.iana.org/TLD/tlds-alpha-by-domain.txt</a>), public data, with its
+source, retrieval date and version in the file header. The privacy scan reads it; it is not part
+of the wheel or the container images.</p></li>
+</ul>
+</section>
 <section id="project-assets">
 <h2>Project assets<a class="headerlink" href="#project-assets" title="Link to this heading">¶</a></h2>
 <p>The yapnr logo, mark and favicons in <code class="docutils literal notranslate"><span class="pre">branding/</span></code> are project assets created for yapnr (see
@@ -444,6 +454,7 @@ generated site; mermaid 11.4.1 (MIT) is loaded from a CDN.</p></li>
 </li>
 <li><a class="reference internal" href="#in-the-container-images">In the container images</a></li>
 <li><a class="reference internal" href="#referenced-not-included">Referenced, not included</a></li>
+<li><a class="reference internal" href="#in-the-repository-only">In the repository only</a></li>
 <li><a class="reference internal" href="#project-assets">Project assets</a></li>
 </ul>
 </li>

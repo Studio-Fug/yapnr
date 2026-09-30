@@ -220,6 +220,7 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/architecture.html">Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/migration-plan.html">yapnr migration plan</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/decisions.html">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/history/import-manifest.html">History import manifest (PR1)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/about-the-name.html">About the name</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
@@ -363,8 +364,11 @@ paths (also in the dash-encoded form agent tooling uses for project directories)
 <code class="docutils literal notranslate"><span class="pre">.local</span></code> host names, tailnet and private network addresses, personal e-mail addresses and
 credentials. Use repository-relative or <code class="docutils literal notranslate"><span class="pre">~</span></code> paths, documentation values (<code class="docutils literal notranslate"><span class="pre">example.com</span></code>,
 <code class="docutils literal notranslate"><span class="pre">192.0.2.0/24</span></code>) and GitHub noreply addresses instead. The owner’s public commit address is no
-exception in files; only <code class="docutils literal notranslate"><span class="pre">tools/privacy/allowed_identities.txt</span></code> names it. <code class="docutils literal notranslate"><span class="pre">--list-rules</span></code> prints
-the rules.</p>
+exception in files; only <code class="docutils literal notranslate"><span class="pre">tools/privacy/allowed_identities.txt</span></code> names it. An <code class="docutils literal notranslate"><span class="pre">&#64;</span></code> match counts as
+an e-mail address only if its local part has a letter or digit, it is not a call (followed by
+<code class="docutils literal notranslate"><span class="pre">(</span></code>) and its top-level domain is in the IANA root zone (the static copy in
+<code class="docutils literal notranslate"><span class="pre">tools/privacy/iana_tlds.txt</span></code>), so decorators, matrix products and endpoints such as
+<code class="docutils literal notranslate"><span class="pre">net&#64;board.usbc:A6</span></code> in code are not findings. <code class="docutils literal notranslate"><span class="pre">--list-rules</span></code> prints the rules.</p>
 </section>
 <section id="kicad">
 <h2>KiCad<a class="headerlink" href="#kicad" title="Link to this heading">¶</a></h2>

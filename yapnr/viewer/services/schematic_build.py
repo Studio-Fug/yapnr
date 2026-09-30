@@ -12,6 +12,7 @@ Request keys: graph, rules, constraints, parts, ato_src, symbol_cache, refs
 (list or null for the whole board). Everything here is derived mechanically
 from the netlist, the part libraries, the atopile source and the constraints.
 """
+
 import hashlib
 import json
 import os
@@ -26,8 +27,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from schematic_sym import cached_part_symbol, generic_symbol  # noqa: E402
 
 SCHEMA = "pnr-schematic-v1"
-LABEL_MIN_PARTS = 7   # signal net with at least this many parts in scope -> named labels
-RAIL_MIN_PARTS = 5    # power net with at least this many parts in scope -> rail labels
+LABEL_MIN_PARTS = 7  # signal net with at least this many parts in scope -> named labels
+RAIL_MIN_PARTS = 5  # power net with at least this many parts in scope -> rail labels
 WARN = []
 
 
@@ -37,10 +38,11 @@ def warn(msg):
 
 try:  # frozen pnr runtime (optional)
     import yaml
-    from pnr.graph import BoardGraph
     from pnr.constraints import compile_constraints
-    from pnr.hier.blocks import extract_blocks, sub_board, aspect_sizes
+    from pnr.graph import BoardGraph
+    from pnr.hier.blocks import aspect_sizes, extract_blocks, sub_board
     from pnr.power_topology import derive
+
     HAVE_PNR = True
 except Exception as _ex:  # pragma: no cover - exercised only without the runtime
     HAVE_PNR = False
@@ -58,7 +60,7 @@ def instance(address):
 
 def local_name(address, prefix):
     a = instance(address)
-    return a[len(prefix) + 1:] if prefix and a.startswith(prefix + ".") else a.split(".")[-1]
+    return a[len(prefix) + 1 :] if prefix and a.startswith(prefix + ".") else a.split(".")[-1]
 
 
 def module_of(address):
@@ -68,6 +70,7 @@ def module_of(address):
 
 # ------------------------------------------------------------------ atopile source
 
+
 def parse_ato(src_dir):
     """{module: {base, doc, inst: {name: type}}} from the design's *.ato files."""
     mods = {}
@@ -76,7 +79,9 @@ def parse_ato(src_dir):
         for line in f.read_text(errors="replace").splitlines():
             m = re.match(r"^(module|component|interface)\s+(\w+)(?:\s+from\s+(\w+))?\s*:", line)
             if m:
-                cur = mods.setdefault(m.group(2), dict(base=m.group(3), doc="", inst={}, file=f.name))
+                cur = mods.setdefault(
+                    m.group(2), dict(base=m.group(3), doc="", inst={}, file=f.name)
+                )
                 want_doc = True
                 continue
             if cur is None:
@@ -97,6 +102,7 @@ def parse_ato(src_dir):
 
 def ato_types(mods, addresses):
     """address -> [type per path segment]; the root is the module instantiating 'board'."""
+
     def child(t, name):
         seen = set()
         while t in mods and t not in seen:
@@ -140,7 +146,11 @@ def part_doc(parts_dir, lib, cache={}):
         d = Path(parts_dir or "") / lib
         if lib and "/" not in lib and d.is_dir():
             for f in sorted(d.glob("*.ato")):
-                m = re.search(r'^component\s+\w+\s*:\s*\n\s*"""(.*?)"""', f.read_text(errors="replace"), re.M | re.S)
+                m = re.search(
+                    r'^component\s+\w+\s*:\s*\n\s*"""(.*?)"""',
+                    f.read_text(errors="replace"),
+                    re.M | re.S,
+                )
                 if m:
                     doc = " ".join(m.group(1).split())
                     break
@@ -163,6 +173,7 @@ def value_text(address, types, mods, sym_value, pkg_doc):
 
 
 # ------------------------------------------------------------------ grouping (tree)
+
 
 def stem_tokens(name):
     toks = [re.sub(r"\d+$", "", t) for t in name.split("_") if t]
@@ -189,11 +200,20 @@ def trie_groups(members, prefix_id):
                     fams.append(sub[0])
                 else:
                     key = "_".join(p)
-                    fams.append(dict(kind="stem", id="stem:%s/%s" % (prefix_id, key), key=key, label=key,
-                                     refs=sorted(ch["refs"], key=natural), children=sub))
+                    fams.append(
+                        dict(
+                            kind="stem",
+                            id="stem:%s/%s" % (prefix_id, key),
+                            key=key,
+                            label=key,
+                            refs=sorted(ch["refs"], key=natural),
+                            children=sub,
+                        )
+                    )
             else:
                 fams.extend(sub)
         return fams
+
     fams = walk(root, [])
     while len(fams) == 1 and set(fams[0]["refs"]) == set(members):
         fams = fams[0]["children"]
@@ -212,9 +232,15 @@ def hard_groups(cc, refs):
             members.append(anchor)
         if len(members) < 2:
             continue
-        out.append(dict(name=con.name, anchor=anchor, refs=sorted(members),
-                        radius_mm=con.params.get("radius_mm"),
-                        hard=getattr(con.enforcement, "name", str(con.enforcement)) == "HARD"))
+        out.append(
+            dict(
+                name=con.name,
+                anchor=anchor,
+                refs=sorted(members),
+                radius_mm=con.params.get("radius_mm"),
+                hard=getattr(con.enforcement, "name", str(con.enforcement)) == "HARD",
+            )
+        )
     return out
 
 
@@ -250,19 +276,37 @@ def tree_for(by, refs, prefix, hard):
         kids = [node_for(j) for j in range(len(groups)) if parent.get(j) == i]
         loose = [r for r in h["refs"] if assigned.get(r) == i]
         fams = trie_groups({r: local_name(by[r].get("address"), prefix) for r in loose}, gid)
-        anchor_name = local_name(by[h["anchor"]].get("address"), prefix) if anchor_ok else (h["name"] or "group")
+        anchor_name = (
+            local_name(by[h["anchor"]].get("address"), prefix)
+            if anchor_ok
+            else (h["name"] or "group")
+        )
         label = anchor_name + " group"
         if h.get("satellite_of") and h.get("radius_mm"):
-            label += " · r%g mm" % h["radius_mm"]  # constraint groups are unnamed; the radius tells them apart
-        return dict(kind="group", id=gid, label=label, anchor=h["anchor"], satellite_of=h.get("satellite_of"),
-                    radius_mm=h["radius_mm"], hard=h["hard"], refs=sorted(h["refs"], key=natural),
-                    children=kids + fams)
+            label += (
+                " · r%g mm" % h["radius_mm"]
+            )  # constraint groups are unnamed; the radius tells them apart
+        return dict(
+            kind="group",
+            id=gid,
+            label=label,
+            anchor=h["anchor"],
+            satellite_of=h.get("satellite_of"),
+            radius_mm=h["radius_mm"],
+            hard=h["hard"],
+            refs=sorted(h["refs"], key=natural),
+            children=kids + fams,
+        )
+
     top = [node_for(i) for i in range(len(groups)) if parent[i] is None]
     loose = [r for r in refs if r not in assigned]
-    return top + trie_groups({r: local_name(by[r].get("address"), prefix) for r in loose}, prefix or "board")
+    return top + trie_groups(
+        {r: local_name(by[r].get("address"), prefix) for r in loose}, prefix or "board"
+    )
 
 
 # ------------------------------------------------------------------ build
+
 
 def sha_file(p):
     try:
@@ -282,7 +326,11 @@ def auto_named(net):
 def build(req):
     t0 = time.time()
     raw = json.loads(Path(req["graph"]).read_text())
-    rules = json.loads(Path(req["rules"]).read_text()) if req.get("rules") and Path(req["rules"]).is_file() else {}
+    rules = (
+        json.loads(Path(req["rules"]).read_text())
+        if req.get("rules") and Path(req["rules"]).is_file()
+        else {}
+    )
     comps_raw = {c["ref"]: c for c in raw["components"]}
     board_refs = sorted(comps_raw, key=natural)
     g = cc = None
@@ -290,15 +338,26 @@ def build(req):
     if HAVE_PNR:
         try:
             g = BoardGraph.from_json(Path(req["graph"]).read_text())
-            doc = yaml.safe_load(Path(req["constraints"]).read_text()) if req.get("constraints") else {}
-            holes = {v["name"] for v in (doc or {}).get("mounting_hole", []) if isinstance(v, dict) and "name" in v}
+            doc = (
+                yaml.safe_load(Path(req["constraints"]).read_text())
+                if req.get("constraints")
+                else {}
+            )
+            holes = {
+                v["name"]
+                for v in (doc or {}).get("mounting_hole", [])
+                if isinstance(v, dict) and "name" in v
+            }
             if holes:
                 g.components = [c for c in g.components if c.ref not in holes]
                 for net in g.nets:
                     net.pins = [p for p in net.pins if p[0] not in holes]
-            cc = compile_constraints(doc or {}, g.refs, {c.address: c.ref for c in g.components if c.address},
-                                     {f"{c.address}:{p.name}": p.net for c in g.components for p in c.pads
-                                      if c.address})
+            cc = compile_constraints(
+                doc or {},
+                g.refs,
+                {c.address: c.ref for c in g.components if c.address},
+                {f"{c.address}:{p.name}": p.net for c in g.components for p in c.pads if c.address},
+            )
             blocks = extract_blocks(g, cc)
         except Exception as ex:
             warn("constraints/blocks unavailable: %s" % ex)
@@ -307,8 +366,14 @@ def build(req):
 
     # ---- scope -------------------------------------------------------------------
     want = req.get("refs")
-    scope = dict(kind="board", name=raw.get("name") or "board", refs=board_refs, prefix="", ports=[],
-                 match="board")
+    scope = dict(
+        kind="board",
+        name=raw.get("name") or "board",
+        refs=board_refs,
+        prefix="",
+        ports=[],
+        match="board",
+    )
     match = None
     if want is not None:
         want = [r for r in want if isinstance(r, str)]
@@ -318,26 +383,44 @@ def build(req):
             warn("lane parts not in the netlist: " + " ".join(extra))
         if inside and len(inside) < 0.95 * len(board_refs):
             ws = set(inside)
-            best = max(blocks, key=lambda b: len(ws & set(b.refs)) / len(ws | set(b.refs)), default=None)
+            best = max(
+                blocks, key=lambda b: len(ws & set(b.refs)) / len(ws | set(b.refs)), default=None
+            )
             jac = len(ws & set(best.refs)) / len(ws | set(best.refs)) if best else 0
             if best and jac >= 0.5:
                 match = best
-                scope = dict(kind="block", name=best.name, refs=inside, prefix=best.prefix, source=best.source,
-                             ports=list(best.external_nets), internal_nets=list(best.internal_nets),
-                             match="exact" if jac == 1 else "approximate",
-                             missing_refs=sorted(set(best.refs) - ws, key=natural),
-                             extra_refs=sorted(ws - set(best.refs), key=natural),
-                             template_key=hashlib.sha256(best.template.encode()).hexdigest()[:12])
+                scope = dict(
+                    kind="block",
+                    name=best.name,
+                    refs=inside,
+                    prefix=best.prefix,
+                    source=best.source,
+                    ports=list(best.external_nets),
+                    internal_nets=list(best.internal_nets),
+                    match="exact" if jac == 1 else "approximate",
+                    missing_refs=sorted(set(best.refs) - ws, key=natural),
+                    extra_refs=sorted(ws - set(best.refs), key=natural),
+                    template_key=hashlib.sha256(best.template.encode()).hexdigest()[:12],
+                )
                 if jac < 1:
-                    warn("lane parts differ from block %s (missing %s, extra %s)" % (
-                        best.name, scope["missing_refs"], scope["extra_refs"]))
+                    warn(
+                        "lane parts differ from block %s (missing %s, extra %s)"
+                        % (best.name, scope["missing_refs"], scope["extra_refs"])
+                    )
             else:
                 mods = defaultdict(int)
                 for r in inside:
                     mods[module_of(comps_raw[r].get("address")) or "board"] += 1
                 name = max(mods, key=mods.get) if mods else "parts"
-                scope = dict(kind="block", name=name, refs=inside, prefix=name if name != "board" else "",
-                             source="subset", ports=[], match="none")
+                scope = dict(
+                    kind="block",
+                    name=name,
+                    refs=inside,
+                    prefix=name if name != "board" else "",
+                    source="subset",
+                    ports=[],
+                    match="none",
+                )
                 warn("lane parts match no source block; showing them as a subset")
     inside = set(scope["refs"])
     by = {r: comps_raw[r] for r in inside}
@@ -368,10 +451,23 @@ def build(req):
             modules.setdefault(m, []).append(r)
     module_list = []
     for m, rs in sorted(modules.items()):
-        t = next((types.get(by[r].get("address"), [None, None])[1] for r in rs
-                  if len(types.get(by[r].get("address"), [])) > 1), None)
-        module_list.append(dict(id=m, label=m.split(".", 1)[1], type=t,
-                                doc=(mods.get(t) or {}).get("doc", "") if t else "", refs=sorted(rs, key=natural)))
+        t = next(
+            (
+                types.get(by[r].get("address"), [None, None])[1]
+                for r in rs
+                if len(types.get(by[r].get("address"), [])) > 1
+            ),
+            None,
+        )
+        module_list.append(
+            dict(
+                id=m,
+                label=m.split(".", 1)[1],
+                type=t,
+                doc=(mods.get(t) or {}).get("doc", "") if t else "",
+                refs=sorted(rs, key=natural),
+            )
+        )
     by_type = defaultdict(list)
     for m in module_list:
         if m["type"]:
@@ -383,20 +479,37 @@ def build(req):
     hard = hard_groups(cc, scope["refs"]) if cc is not None else []
     if scope["kind"] == "block":
         tree = tree_for(by, scope["refs"], scope.get("prefix") or "", hard)
-        units = [dict(id="unit:" + scope["name"], label=scope["name"], kind="block", refs=scope["refs"])]
+        units = [
+            dict(id="unit:" + scope["name"], label=scope["name"], kind="block", refs=scope["refs"])
+        ]
     else:
         tree = []
         top = [r for r in scope["refs"] if not module_of(by[r].get("address"))]
         for m in module_list:
-            tree.append(dict(kind="module", id=m["id"], label=m["label"] + (" · " + m["type"] if m["type"] else ""),
-                             type=m["type"], refs=m["refs"], children=tree_for(by, m["refs"], m["id"], hard)))
+            tree.append(
+                dict(
+                    kind="module",
+                    id=m["id"],
+                    label=m["label"] + (" · " + m["type"] if m["type"] else ""),
+                    type=m["type"],
+                    refs=m["refs"],
+                    children=tree_for(by, m["refs"], m["id"], hard),
+                )
+            )
         tree.extend(tree_for(by, top, "board", hard))
         units = []
         placed = set()
         for nd in tree:
             if nd["kind"] in ("module", "group"):
-                units.append(dict(id="unit:" + nd["id"], label=nd["label"], kind=nd["kind"], node=nd["id"],
-                                  refs=nd["refs"]))
+                units.append(
+                    dict(
+                        id="unit:" + nd["id"],
+                        label=nd["label"],
+                        kind=nd["kind"],
+                        node=nd["id"],
+                        refs=nd["refs"],
+                    )
+                )
                 placed.update(nd["refs"])
         rest = [r for r in scope["refs"] if r not in placed]
         if rest:
@@ -412,7 +525,11 @@ def build(req):
         pads = [p["name"] for p in c.get("pads", [])]
         key = lib
         if key not in symbols:
-            sym, signals, reason = cached_part_symbol(req["parts"], lib, cache_dir) if req.get("parts") else (None, {}, "no parts dir")
+            sym, signals, reason = (
+                cached_part_symbol(req["parts"], lib, cache_dir)
+                if req.get("parts")
+                else (None, {}, "no parts dir")
+            )
             if sym is None:
                 warn("%s: generic symbol (%s)" % (lib or r, reason))
             symbols[key] = sym
@@ -421,13 +538,17 @@ def build(req):
         if sym is None or not (sym["units"][0]["pins"]):
             key = "generic:" + (lib or r) + ":" + str(len(set(pads)))
             if key not in symbols:
-                symbols[key] = generic_symbol(lib or r, pads, sigs.get(lib), reason="missing or unparsable symbol")
+                symbols[key] = generic_symbol(
+                    lib or r, pads, sigs.get(lib), reason="missing or unparsable symbol"
+                )
             sym = symbols[key]
         pinnums = {p["number"] for u in sym["units"] for p in u["pins"]}
         if not pinnums & {p for p in pads if p} and pads:
             key = "generic:" + (lib or r) + ":" + str(len(set(pads)))
             if key not in symbols:
-                symbols[key] = generic_symbol(lib or r, pads, sigs.get(lib), reason="no symbol pin matches a pad")
+                symbols[key] = generic_symbol(
+                    lib or r, pads, sigs.get(lib), reason="no symbol pin matches a pad"
+                )
             warn("%s: symbol pins do not match pads; generic symbol" % r)
             sym = symbols[key]
             pinnums = {p["number"] for u in sym["units"] for p in u["pins"]}
@@ -437,23 +558,46 @@ def build(req):
                 cur = pins.setdefault(p["name"], dict(number=p["name"], net=p["net"], pads=0))
                 cur["pads"] += 1
                 if cur["net"] != p["net"]:
-                    issues.append(dict(ref=r, pin=p["name"], kind="pad_net_conflict", nets=[cur["net"], p["net"]]))
+                    issues.append(
+                        dict(
+                            ref=r,
+                            pin=p["name"],
+                            kind="pad_net_conflict",
+                            nets=[cur["net"], p["net"]],
+                        )
+                    )
             else:
                 unmapped.append(dict(pad=p["name"], net=p["net"]))
         nc = sorted(pinnums - set(pins), key=natural)
         t = types.get(c.get("address") or "", [])
         pdoc = part_doc(req.get("parts"), lib)
         val, wrapper = value_text(c.get("address") or "", t, mods, sym.get("value") or "", pdoc)
-        comps.append(dict(ref=r, address=c.get("address"), instance=instance(c.get("address")),
-                          local=local_name(c.get("address"), scope.get("prefix") or ""),
-                          module=module_of(c.get("address")), lib=key, unit=1, value=val, type=wrapper,
-                          mpn=sym.get("value"), doc=pdoc, ref_prefix=sym.get("ref_prefix"),
-                          footprint=(c.get("footprint") or ":").split(":", 1)[1],
-                          pins=sorted(pins.values(), key=lambda x: natural(x["number"])),
-                          unmapped_pads=unmapped, pins_without_pad=nc,
-                          power=dict(tier=tier.get(r), mixed=r in (roles or {}).get("mixed", []),
-                                     controller=r in (roles or {}).get("controllers", []),
-                                     carrying=(roles or {}).get("carrying", {}).get(r, {}))))
+        comps.append(
+            dict(
+                ref=r,
+                address=c.get("address"),
+                instance=instance(c.get("address")),
+                local=local_name(c.get("address"), scope.get("prefix") or ""),
+                module=module_of(c.get("address")),
+                lib=key,
+                unit=1,
+                value=val,
+                type=wrapper,
+                mpn=sym.get("value"),
+                doc=pdoc,
+                ref_prefix=sym.get("ref_prefix"),
+                footprint=(c.get("footprint") or ":").split(":", 1)[1],
+                pins=sorted(pins.values(), key=lambda x: natural(x["number"])),
+                unmapped_pads=unmapped,
+                pins_without_pad=nc,
+                power=dict(
+                    tier=tier.get(r),
+                    mixed=r in (roles or {}).get("mixed", []),
+                    controller=r in (roles or {}).get("controllers", []),
+                    carrying=(roles or {}).get("carrying", {}).get(r, {}),
+                ),
+            )
+        )
         if unmapped and any(u["net"] for u in unmapped):
             issues.append(dict(ref=r, kind="pad_without_pin", pads=unmapped))
     pin_name = {}
@@ -461,7 +605,9 @@ def build(req):
         s = symbols[cp["lib"]]
         names = {p["number"]: p["name"] for u in s["units"] for p in u["pins"]}
         for p in cp["pins"]:
-            pin_name[(cp["ref"], p["number"])] = pin_label(names.get(p["number"], "")) or p["number"]
+            pin_name[(cp["ref"], p["number"])] = (
+                pin_label(names.get(p["number"], "")) or p["number"]
+            )
 
     # ---- nets ------------------------------------------------------------------------
     P = set((roles or {}).get("power_nets", []))
@@ -470,7 +616,9 @@ def build(req):
         for n in raw["nets"]:
             if n["name"] in ("lv", "gnd", "GND") or n["name"].endswith("-lv"):
                 R.add(n["name"])
-            elif n["name"].endswith("hv") or n["name"].startswith("p") and n["name"].endswith("-hv"):
+            elif (
+                n["name"].endswith("hv") or n["name"].startswith("p") and n["name"].endswith("-hv")
+            ):
                 P.add(n["name"])
     loop_nets = {n for l in (roles or {}).get("loops", []) for n in l["nets"]}
     unit_of = {}
@@ -481,7 +629,10 @@ def build(req):
     npins = {cp["ref"]: len(cp["pins"]) for cp in comps}
     nets = []
     for n in raw["nets"]:
-        pins = sorted({(r, p) for r, p in n["pins"] if r in inside}, key=lambda x: (natural(x[0]), natural(x[1])))
+        pins = sorted(
+            {(r, p) for r, p in n["pins"] if r in inside},
+            key=lambda x: (natural(x[0]), natural(x[1])),
+        )
         if not pins:
             continue
         total = len({(r, p) for r, p in n["pins"]})
@@ -509,9 +660,20 @@ def build(req):
         if auto_named(n["name"]) and kind != "ground":
             hub = max(pins, key=lambda x: (npins.get(x[0], 0), natural(x[0])))
             alias = "%s.%s" % (hub[0], pin_name.get(hub, hub[1]))
-        nets.append(dict(name=n["name"], label="GND" if kind == "ground" else (alias or n["name"]), alias=alias,
-                         kind=kind, draw=draw, pins=[list(p) for p in pins], pins_total=total, port=port,
-                         span=span, loop=n["name"] in loop_nets))
+        nets.append(
+            dict(
+                name=n["name"],
+                label="GND" if kind == "ground" else (alias or n["name"]),
+                alias=alias,
+                kind=kind,
+                draw=draw,
+                pins=[list(p) for p in pins],
+                pins_total=total,
+                port=port,
+                span=span,
+                loop=n["name"] in loop_nets,
+            )
+        )
 
     # ---- twins: parallel identical parts (same family, footprint, pin->net map) -------------
     arrays = []
@@ -526,66 +688,145 @@ def build(req):
                     sig[(cp["lib"], tuple((p["number"], p["net"]) for p in cp["pins"]))].append(r)
                 for key, rs in sig.items():
                     if len(rs) >= 2:
-                        arrays.append(dict(id="array:%s:%s" % (nd["id"], rs[0]), refs=sorted(rs, key=natural),
-                                           lib=key[0], stem=nd["key"]))
+                        arrays.append(
+                            dict(
+                                id="array:%s:%s" % (nd["id"], rs[0]),
+                                refs=sorted(rs, key=natural),
+                                lib=key[0],
+                                stem=nd["key"],
+                            )
+                        )
             walk(nd.get("children", []))
+
     walk(tree)
 
     # ---- highlights ----------------------------------------------------------------------
     highlights = []
     if scope["kind"] == "block":
-        highlights.append(dict(id="block:" + scope["name"], label="Block " + scope["name"], style="block",
-                               refs=scope["refs"], nets=sorted(ports)))
+        highlights.append(
+            dict(
+                id="block:" + scope["name"],
+                label="Block " + scope["name"],
+                style="block",
+                refs=scope["refs"],
+                nets=sorted(ports),
+            )
+        )
     else:
         tkey = defaultdict(list)
         for b in blocks:
             tkey[b.template].append(b.name)
         for b in blocks:
-            highlights.append(dict(id="block:" + b.name, label="Block " + b.name, style="block",
-                                   source=b.source, refs=sorted(b.refs, key=natural), nets=list(b.external_nets),
-                                   template_key=hashlib.sha256(b.template.encode()).hexdigest()[:12],
-                                   twins=[x for x in tkey[b.template] if x != b.name]))
+            highlights.append(
+                dict(
+                    id="block:" + b.name,
+                    label="Block " + b.name,
+                    style="block",
+                    source=b.source,
+                    refs=sorted(b.refs, key=natural),
+                    nets=list(b.external_nets),
+                    template_key=hashlib.sha256(b.template.encode()).hexdigest()[:12],
+                    twins=[x for x in tkey[b.template] if x != b.name],
+                )
+            )
     classes = (roles or {}).get("classes", [])
     for i, l in enumerate((roles or {}).get("loops", [])):
         members = [classes[k]["members"] for k in l["classes"]]
-        highlights.append(dict(id="loop:%d" % i, label=("Hot loop " if l["hot"] else "Conduction path ") +
-                               " › ".join(short_class(classes[k]["members"]) for k in l["classes"]),
-                               style="hot-loop" if l["hot"] else "power-path",
-                               refs=sorted({r for m in members for r in m if r in inside}, key=natural),
-                               nets=l["nets"], peak_a=l.get("peak_a"), weight=round(l.get("weight", 0), 4),
-                               labels=l.get("labels"), classes=[sorted(m, key=natural) for m in members],
-                               links=[dict(net=x["net"], a=sorted(classes[x["a"]]["members"], key=natural),
-                                           b=sorted(classes[x["b"]]["members"], key=natural)) for x in l["links"]]))
-    tier_names = {1: "Power stage (tier 1)", 2: "Controller (tier 2)", 3: "Support passives (tier 3)"}
+        highlights.append(
+            dict(
+                id="loop:%d" % i,
+                label=("Hot loop " if l["hot"] else "Conduction path ")
+                + " › ".join(short_class(classes[k]["members"]) for k in l["classes"]),
+                style="hot-loop" if l["hot"] else "power-path",
+                refs=sorted({r for m in members for r in m if r in inside}, key=natural),
+                nets=l["nets"],
+                peak_a=l.get("peak_a"),
+                weight=round(l.get("weight", 0), 4),
+                labels=l.get("labels"),
+                classes=[sorted(m, key=natural) for m in members],
+                links=[
+                    dict(
+                        net=x["net"],
+                        a=sorted(classes[x["a"]]["members"], key=natural),
+                        b=sorted(classes[x["b"]]["members"], key=natural),
+                    )
+                    for x in l["links"]
+                ],
+            )
+        )
+    tier_names = {
+        1: "Power stage (tier 1)",
+        2: "Controller (tier 2)",
+        3: "Support passives (tier 3)",
+    }
     for t in (1, 2, 3):
         rs = sorted((r for r, v in tier.items() if v == t and r in inside), key=natural)
         if rs:
-            highlights.append(dict(id="tier:%d" % t, label=tier_names[t], style="tier", tier=t, refs=rs, nets=[]))
+            highlights.append(
+                dict(id="tier:%d" % t, label=tier_names[t], style="tier", tier=t, refs=rs, nets=[])
+            )
 
-    symbols = {k: s for k, s in symbols.items() if s is not None}  # libraries replaced by generic boxes
+    symbols = {
+        k: s for k, s in symbols.items() if s is not None
+    }  # libraries replaced by generic boxes
     payload = dict(
-        schema=SCHEMA, built_at=time.time(),
-        source=dict(graph=req["graph"], graph_sha256=sha_file(req["graph"]), rules=req.get("rules"),
-                    constraints=req.get("constraints"), parts=req.get("parts"), ato_src=req.get("ato_src"),
-                    runtime=os.environ.get("PYTHONPATH", ""), power_topology=(roles or {}).get("schema")),
-        scope=scope, modules=module_list, units=units, symbols=symbols, components=comps, nets=nets, tree=tree,
+        schema=SCHEMA,
+        built_at=time.time(),
+        source=dict(
+            graph=req["graph"],
+            graph_sha256=sha_file(req["graph"]),
+            rules=req.get("rules"),
+            constraints=req.get("constraints"),
+            parts=req.get("parts"),
+            ato_src=req.get("ato_src"),
+            runtime=os.environ.get("PYTHONPATH", ""),
+            power_topology=(roles or {}).get("schema"),
+        ),
+        scope=scope,
+        modules=module_list,
+        units=units,
+        symbols=symbols,
+        components=comps,
+        nets=nets,
+        tree=tree,
         arrays=arrays,
-        power=dict(power_nets=sorted(P), return_nets=sorted(R), envelope=(roles or {}).get("envelope", {}),
-                   classes=[dict(id="class:%d" % i, members=k["members"], nets=k["nets"], shunt=k["shunt"])
-                            for i, k in enumerate(classes)],
-                   series=(roles or {}).get("series"), controllers=(roles or {}).get("controllers", []),
-                   mixed=(roles or {}).get("mixed", [])) if roles else None,
-        highlights=highlights, issues=issues, warnings=WARN,
-        layout_hints=dict(label_min_parts=LABEL_MIN_PARTS, rail_min_parts=RAIL_MIN_PARTS,
-                          input_ports=((roles or {}).get("series") or {}).get("ports", [None])[:1],
-                          output_ports=((roles or {}).get("series") or {}).get("ports", [None, None])[1:]),
-        seconds=round(time.time() - t0, 3))
+        power=(
+            dict(
+                power_nets=sorted(P),
+                return_nets=sorted(R),
+                envelope=(roles or {}).get("envelope", {}),
+                classes=[
+                    dict(id="class:%d" % i, members=k["members"], nets=k["nets"], shunt=k["shunt"])
+                    for i, k in enumerate(classes)
+                ],
+                series=(roles or {}).get("series"),
+                controllers=(roles or {}).get("controllers", []),
+                mixed=(roles or {}).get("mixed", []),
+            )
+            if roles
+            else None
+        ),
+        highlights=highlights,
+        issues=issues,
+        warnings=WARN,
+        layout_hints=dict(
+            label_min_parts=LABEL_MIN_PARTS,
+            rail_min_parts=RAIL_MIN_PARTS,
+            input_ports=((roles or {}).get("series") or {}).get("ports", [None])[:1],
+            output_ports=((roles or {}).get("series") or {}).get("ports", [None, None])[1:],
+        ),
+        seconds=round(time.time() - t0, 3),
+    )
     return payload
 
 
 def short_class(members):
     ms = sorted(members, key=natural)
-    return ms[0] if len(ms) == 1 else "%s…%s (%d)" % (ms[0], ms[-1], len(ms)) if len(ms) > 3 else "|".join(ms)
+    return (
+        ms[0]
+        if len(ms) == 1
+        else "%s…%s (%d)" % (ms[0], ms[-1], len(ms)) if len(ms) > 3 else "|".join(ms)
+    )
 
 
 def main(argv):
@@ -594,8 +835,12 @@ def main(argv):
     try:
         payload = build(req)
     except Exception as ex:
-        payload = dict(schema=SCHEMA, error="%s: %s" % (type(ex).__name__, ex), trace=traceback.format_exc(),
-                       warnings=WARN)
+        payload = dict(
+            schema=SCHEMA,
+            error="%s: %s" % (type(ex).__name__, ex),
+            trace=traceback.format_exc(),
+            warnings=WARN,
+        )
     tmp = out.with_name(out.name + ".tmp%d" % os.getpid())
     tmp.write_text(json.dumps(payload, separators=(",", ":")))
     tmp.replace(out)

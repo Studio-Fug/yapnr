@@ -37,6 +37,7 @@ browser can draw them into SVG without a flip. A pin at KiCad angle 0 points fro
 its connection point towards +x (into the body), so it leaves the body on the
 WEST side; 180 -> EAST; 90 (towards +y, i.e. up in KiCad) -> SOUTH; 270 -> NORTH.
 """
+
 from __future__ import annotations
 
 import math
@@ -60,7 +61,7 @@ def parse_sexpr(text: str):
         if not m or m.end() == pos:
             if text[pos:].strip() == "":
                 break
-            raise ValueError("s-expr syntax error at %d: %r" % (pos, text[pos:pos + 40]))
+            raise ValueError("s-expr syntax error at %d: %r" % (pos, text[pos : pos + 40]))
         pos = m.end()
         if m.group(1):
             stack.append(cur)
@@ -69,7 +70,7 @@ def parse_sexpr(text: str):
             done, cur = cur, stack.pop()
             cur.append(done)
         elif m.group(3) is not None:
-            cur.append(Q(re.sub(r'\\(.)', r'\1', m.group(3))))
+            cur.append(Q(re.sub(r"\\(.)", r"\1", m.group(3))))
         else:
             cur.append(m.group(4))
     if stack:
@@ -155,10 +156,19 @@ def _graphic(node):
         at = _child(node, "at")
         eff = _child(node, "effects")
         size = 1.27
-        if eff is not None and _child(eff, "font") is not None and _child(_child(eff, "font"), "size"):
+        if (
+            eff is not None
+            and _child(eff, "font") is not None
+            and _child(_child(eff, "font"), "size")
+        ):
             size = float(_child(_child(eff, "font"), "size")[1])
-        return dict(t="text", at=[float(at[1]), -float(at[2])], rot=float(at[3]) if len(at) > 3 else 0.0,
-                    text=str(node[1]), size=size)
+        return dict(
+            t="text",
+            at=[float(at[1]), -float(at[2])],
+            rot=float(at[3]) if len(at) > 3 else 0.0,
+            text=str(node[1]),
+            size=size,
+        )
     return None
 
 
@@ -170,28 +180,41 @@ def _pin(node):
     tip_k = (x + length * math.cos(math.radians(rot)), y + length * math.sin(math.radians(rot)))
     name = _child(node, "name")
     number = _child(node, "number")
-    return dict(number=str(number[1]) if number else "", name=str(name[1]) if name else "",
-                etype=str(node[1]) if len(node) > 1 and not isinstance(node[1], list) else "unspecified",
-                shape=str(node[2]) if len(node) > 2 and not isinstance(node[2], list) else "line",
-                at=[x, -y], tip=[round(tip_k[0], 4), round(-tip_k[1], 4)], len=length, rot=rot,
-                side=_SIDE.get(rot, "W"), hidden=_flag(node, "hide"))
+    return dict(
+        number=str(number[1]) if number else "",
+        name=str(name[1]) if name else "",
+        etype=str(node[1]) if len(node) > 1 and not isinstance(node[1], list) else "unspecified",
+        shape=str(node[2]) if len(node) > 2 and not isinstance(node[2], list) else "line",
+        at=[x, -y],
+        tip=[round(tip_k[0], 4), round(-tip_k[1], 4)],
+        len=length,
+        rot=rot,
+        side=_SIDE.get(rot, "W"),
+        hidden=_flag(node, "hide"),
+    )
 
 
 def _bbox(graphics, pins):
     xs, ys = [], []
     for g in graphics:
         if g["t"] == "rect":
-            xs += [g["a"][0], g["b"][0]]; ys += [g["a"][1], g["b"][1]]
+            xs += [g["a"][0], g["b"][0]]
+            ys += [g["a"][1], g["b"][1]]
         elif g["t"] in ("poly", "bezier"):
-            xs += [p[0] for p in g["pts"]]; ys += [p[1] for p in g["pts"]]
+            xs += [p[0] for p in g["pts"]]
+            ys += [p[1] for p in g["pts"]]
         elif g["t"] == "circle":
-            xs += [g["c"][0] - g["r"], g["c"][0] + g["r"]]; ys += [g["c"][1] - g["r"], g["c"][1] + g["r"]]
+            xs += [g["c"][0] - g["r"], g["c"][0] + g["r"]]
+            ys += [g["c"][1] - g["r"], g["c"][1] + g["r"]]
         elif g["t"] == "arc":
-            xs += [g["s"][0], g["m"][0], g["e"][0]]; ys += [g["s"][1], g["m"][1], g["e"][1]]
+            xs += [g["s"][0], g["m"][0], g["e"][0]]
+            ys += [g["s"][1], g["m"][1], g["e"][1]]
         elif g["t"] == "text":
-            xs.append(g["at"][0]); ys.append(g["at"][1])
+            xs.append(g["at"][0])
+            ys.append(g["at"][1])
     for p in pins:
-        xs += [p["at"][0], p["tip"][0]]; ys += [p["at"][1], p["tip"][1]]
+        xs += [p["at"][0], p["tip"][0]]
+        ys += [p["at"][1], p["tip"][1]]
     if not xs:
         return [0.0, 0.0, 0.0, 0.0]
     return [round(min(xs), 4), round(min(ys), 4), round(max(xs), 4), round(max(ys), 4)]
@@ -247,12 +270,20 @@ def parse_library(text: str, lib: str = ""):
         offset = 0.508
         if pn is not None and _child(pn, "offset") is not None:
             offset = float(_child(pn, "offset")[1])
-        out.append(dict(schema="schematic-symbol-v1", lib=lib, name=name,
-                        ref_prefix=_prop(sym, "Reference") or "", value=_prop(sym, "Value") or name,
-                        lcsc=_prop(sym, "LCSC Part"),
-                        pin_numbers_hidden=bool(pnum is not None and _flag(pnum, "hide")),
-                        pin_names_hidden=bool(pn is not None and _flag(pn, "hide")),
-                        pin_name_offset=offset, units=unit_list))
+        out.append(
+            dict(
+                schema="schematic-symbol-v1",
+                lib=lib,
+                name=name,
+                ref_prefix=_prop(sym, "Reference") or "",
+                value=_prop(sym, "Value") or name,
+                lcsc=_prop(sym, "LCSC Part"),
+                pin_numbers_hidden=bool(pnum is not None and _flag(pnum, "hide")),
+                pin_names_hidden=bool(pn is not None and _flag(pn, "hide")),
+                pin_name_offset=offset,
+                units=unit_list,
+            )
+        )
     return out
 
 
@@ -287,7 +318,9 @@ def load_part_signals(part_dir: Path):
     """atopile signal names per pad number from the part .ato (``signal X ~ pin N`` / ``X ~ pin N``)."""
     out = {}
     for ato in Path(part_dir).glob("*.ato"):
-        for m in re.finditer(r"^\s*(?:signal\s+)?([A-Za-z_][\w]*)\s*~\s*pin\s+(\S+)", ato.read_text(), re.M):
+        for m in re.finditer(
+            r"^\s*(?:signal\s+)?([A-Za-z_][\w]*)\s*~\s*pin\s+(\S+)", ato.read_text(), re.M
+        ):
             out.setdefault(m.group(2), m.group(1))
     return out
 
@@ -320,9 +353,20 @@ def generic_symbol(lib, pads, signals=None, reason=""):
             x = -GRID if i == 0 else GRID
             side = "W" if i == 0 else "E"
             tip = [-1.27, 0.0] if i == 0 else [1.27, 0.0]
-            pins.append(dict(number=n, name=signals.get(n, ""), etype="passive", shape="line",
-                             at=[x * 1.5, 0.0], tip=tip, len=abs(x * 1.5 - tip[0]), rot=0 if i == 0 else 180,
-                             side=side, hidden=False))
+            pins.append(
+                dict(
+                    number=n,
+                    name=signals.get(n, ""),
+                    etype="passive",
+                    shape="line",
+                    at=[x * 1.5, 0.0],
+                    tip=tip,
+                    len=abs(x * 1.5 - tip[0]),
+                    rot=0 if i == 0 else 180,
+                    side=side,
+                    hidden=False,
+                )
+            )
         names_hidden = True
     else:
         half = (len(numbers) + 1) // 2
@@ -336,14 +380,37 @@ def generic_symbol(lib, pads, signals=None, reason=""):
             for i, n in enumerate(col):
                 y = y0 + GRID * (i + 1)
                 at = [xs - GRID, y] if side == "W" else [xs + GRID, y]
-                pins.append(dict(number=n, name=signals.get(n, n), etype="unspecified", shape="line",
-                                 at=at, tip=[xs, y], len=GRID, rot=0 if side == "W" else 180, side=side,
-                                 hidden=False))
+                pins.append(
+                    dict(
+                        number=n,
+                        name=signals.get(n, n),
+                        etype="unspecified",
+                        shape="line",
+                        at=at,
+                        tip=[xs, y],
+                        len=GRID,
+                        rot=0 if side == "W" else 180,
+                        side=side,
+                        hidden=False,
+                    )
+                )
         names_hidden = False
     unit = dict(unit=1, bbox=_bbox(graphics, pins), graphics=graphics, pins=pins)
-    return dict(schema="schematic-symbol-v1", lib=lib, name=lib, ref_prefix="", value=lib, lcsc=None,
-                pin_numbers_hidden=False, pin_names_hidden=names_hidden, pin_name_offset=0.508,
-                units=[unit], file=None, generic=True, generic_reason=reason)
+    return dict(
+        schema="schematic-symbol-v1",
+        lib=lib,
+        name=lib,
+        ref_prefix="",
+        value=lib,
+        lcsc=None,
+        pin_numbers_hidden=False,
+        pin_names_hidden=names_hidden,
+        pin_name_offset=0.508,
+        units=[unit],
+        file=None,
+        generic=True,
+        generic_reason=reason,
+    )
 
 
 def _symbol_file(part_dir):
@@ -366,6 +433,7 @@ def cached_part_symbol(parts_dir, lib, cache_dir=None):
     """
     import hashlib
     import json
+
     part_dir = Path(parts_dir) / lib
     if not lib or "/" in lib or lib.startswith(".") or not part_dir.is_dir():
         return None, {}, "no part folder %r" % lib

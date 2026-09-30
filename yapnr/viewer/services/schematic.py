@@ -8,6 +8,7 @@ the scope's refs, so every trial of one block template shares one payload and
 one browser layout. Lane-specific data (trial run dir, routed hot-loop quality)
 is returned separately as a small overlay.
 """
+
 import hashlib
 import json
 import os
@@ -20,16 +21,36 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 NAME = re.compile(r"[A-Za-z0-9_.:+@-]{1,200}")
-RUNTIME_FILES = ("pnr/power_topology.py", "pnr/hier/blocks.py", "pnr/constraints.py", "pnr/graph.py",
-                 "pnr/electrical.py")
+RUNTIME_FILES = (
+    "pnr/power_topology.py",
+    "pnr/hier/blocks.py",
+    "pnr/constraints.py",
+    "pnr/graph.py",
+    "pnr/electrical.py",
+)
 
 
 class SchematicService:
-    def __init__(self, root, *, graph=None, rules=None, constraints=None, parts=None, ato_src=None,
-                 runtime=None, hier=None, cache_dir=None, assets=None, python=None):
+    def __init__(
+        self,
+        root,
+        *,
+        graph=None,
+        rules=None,
+        constraints=None,
+        parts=None,
+        ato_src=None,
+        runtime=None,
+        hier=None,
+        cache_dir=None,
+        assets=None,
+        python=None
+    ):
         self.root = Path(root)
         self.graph = Path(graph) if graph else None
-        self.rules = Path(rules) if rules else (self.graph.parent / "rules.json" if self.graph else None)
+        self.rules = (
+            Path(rules) if rules else (self.graph.parent / "rules.json" if self.graph else None)
+        )
         self.constraints = Path(constraints) if constraints else None
         self.parts = Path(parts) if parts else None
         self.ato_src = Path(ato_src) if ato_src else (self.parts.parent if self.parts else None)
@@ -50,10 +71,15 @@ class SchematicService:
         return bool(self.graph and self.graph.is_file())
 
     def describe(self):
-        return dict(graph=str(self.graph) if self.graph else None, rules=str(self.rules) if self.rules else None,
-                    constraints=str(self.constraints) if self.constraints else None,
-                    parts=str(self.parts) if self.parts else None, runtime=str(self.runtime) if self.runtime else None,
-                    cache=str(self.cache), configured=self.configured())
+        return dict(
+            graph=str(self.graph) if self.graph else None,
+            rules=str(self.rules) if self.rules else None,
+            constraints=str(self.constraints) if self.constraints else None,
+            parts=str(self.parts) if self.parts else None,
+            runtime=str(self.runtime) if self.runtime else None,
+            cache=str(self.cache),
+            configured=self.configured(),
+        )
 
     @staticmethod
     def _sha(path):
@@ -74,11 +100,18 @@ class SchematicService:
                     for f in sorted(base.glob(pat)):
                         st = f.stat()
                         stats.append((str(f.relative_to(base)), st.st_size, st.st_mtime_ns))
-        fp = dict(graph=self._sha(self.graph), rules=self._sha(self.rules) if self.rules else None,
-                  constraints=self._sha(self.constraints) if self.constraints else None,
-                  libraries=hashlib.sha256(json.dumps(stats).encode()).hexdigest(),
-                  builder={n: self._sha(self.assets / n) for n in ("schematic_build.py", "schematic_sym.py")},
-                  runtime={n: self._sha(self.runtime / n) for n in RUNTIME_FILES} if self.runtime else None)
+        fp = dict(
+            graph=self._sha(self.graph),
+            rules=self._sha(self.rules) if self.rules else None,
+            constraints=self._sha(self.constraints) if self.constraints else None,
+            libraries=hashlib.sha256(json.dumps(stats).encode()).hexdigest(),
+            builder={
+                n: self._sha(self.assets / n) for n in ("schematic_build.py", "schematic_sym.py")
+            },
+            runtime=(
+                {n: self._sha(self.runtime / n) for n in RUNTIME_FILES} if self.runtime else None
+            ),
+        )
         self._fp = (now, fp)
         return fp
 
@@ -106,7 +139,13 @@ class SchematicService:
                     return p
                 p = p.parent
         run, _, tag = lane_id.partition("/")
-        if not tag or not NAME.fullmatch(run) or not NAME.fullmatch(tag) or "/" in tag or {run, tag} & {".", ".."}:
+        if (
+            not tag
+            or not NAME.fullmatch(run)
+            or not NAME.fullmatch(tag)
+            or "/" in tag
+            or {run, tag} & {".", ".."}
+        ):
             return None
         pattern = ("*" if run == "blocks" else run) + "/*/native/" + tag
         hits = [d for d in (self.hier / "blocks").glob(pattern) if (d / "keep.json").is_file()]
@@ -133,15 +172,38 @@ class SchematicService:
             if not cached or cached[0] != st:
                 try:
                     doc = json.loads(pq.read_text())
-                    loops = [dict(labels=l.get("labels"), nets=l.get("nets"), parts=l.get("parts"),
-                                  routed_mm=l.get("routed_mm"), vias=l.get("vias"), open_links=l.get("open_links"),
-                                  complete=l.get("complete"),
-                                  links=[dict(net=k.get("net"), length_mm=k.get("length_mm"),
-                                              straight_mm=k.get("straight_mm"), vias=k.get("vias"),
-                                              open=k.get("open"), a=k.get("a"), b=k.get("b"))
-                                         for k in l.get("links", [])]) for l in doc.get("loops", [])]
-                    cached = (st, dict(valid=doc.get("valid"), hot_loops_open=doc.get("hot_loops_open"),
-                                       loops=loops))
+                    loops = [
+                        dict(
+                            labels=l.get("labels"),
+                            nets=l.get("nets"),
+                            parts=l.get("parts"),
+                            routed_mm=l.get("routed_mm"),
+                            vias=l.get("vias"),
+                            open_links=l.get("open_links"),
+                            complete=l.get("complete"),
+                            links=[
+                                dict(
+                                    net=k.get("net"),
+                                    length_mm=k.get("length_mm"),
+                                    straight_mm=k.get("straight_mm"),
+                                    vias=k.get("vias"),
+                                    open=k.get("open"),
+                                    a=k.get("a"),
+                                    b=k.get("b"),
+                                )
+                                for k in l.get("links", [])
+                            ],
+                        )
+                        for l in doc.get("loops", [])
+                    ]
+                    cached = (
+                        st,
+                        dict(
+                            valid=doc.get("valid"),
+                            hot_loops_open=doc.get("hot_loops_open"),
+                            loops=loops,
+                        ),
+                    )
                 except (OSError, ValueError):
                     cached = (st, None)
                 if len(self._pq) > 256:
@@ -167,7 +229,9 @@ class SchematicService:
     # ------------------------------------------------------------------ requests
     def request(self, lane_id, lane_refs, source, scope="auto"):
         if not self.configured():
-            return dict(status="unavailable", reason="Schematic source not configured (--schematic-graph).")
+            return dict(
+                status="unavailable", reason="Schematic source not configured (--schematic-graph)."
+            )
         run_dir = self.run_dir(lane_id, source)
         refs = self.scope_refs(lane_id, lane_refs, run_dir)
         overlay = self.overlay(lane_id, run_dir)
@@ -186,7 +250,9 @@ class SchematicService:
             job = self.pending.get(key)
             if job is None or job.done():
                 if sum(not f.done() for f in self.pending.values()) >= 4:
-                    return dict(out, status="busy", reason="Earlier schematic builds are still running.")
+                    return dict(
+                        out, status="busy", reason="Earlier schematic builds are still running."
+                    )
                 self.pending[key] = self.pool.submit(self.build, key, refs)
         return dict(out, status="pending")
 
@@ -195,11 +261,24 @@ class SchematicService:
         req = self.cache / (key + ".request.json")
         out = self.cache / (key + ".json")
         tmp = self.cache / (key + ".partial.json")
-        req.write_text(json.dumps(dict(
-            graph=str(self.graph), rules=str(self.rules) if self.rules and self.rules.is_file() else None,
-            constraints=str(self.constraints) if self.constraints and self.constraints.is_file() else None,
-            parts=str(self.parts) if self.parts else None, ato_src=str(self.ato_src) if self.ato_src else None,
-            symbol_cache=str(self.cache / "symbols"), refs=refs), indent=1))
+        req.write_text(
+            json.dumps(
+                dict(
+                    graph=str(self.graph),
+                    rules=str(self.rules) if self.rules and self.rules.is_file() else None,
+                    constraints=(
+                        str(self.constraints)
+                        if self.constraints and self.constraints.is_file()
+                        else None
+                    ),
+                    parts=str(self.parts) if self.parts else None,
+                    ato_src=str(self.ato_src) if self.ato_src else None,
+                    symbol_cache=str(self.cache / "symbols"),
+                    refs=refs,
+                ),
+                indent=1,
+            )
+        )
         env = dict(os.environ, OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1")
         env.pop("PNR_LIVE_DIR", None)
         env.pop("PNR_PROFILE_DIR", None)
@@ -207,8 +286,14 @@ class SchematicService:
             env["PYTHONPATH"] = str(self.runtime)
         try:
             with (self.cache / (key + ".log")).open("w") as log:
-                subprocess.run([self.python, str(self.assets / "schematic_build.py"), str(req), str(tmp)], env=env,
-                               stdout=log, stderr=subprocess.STDOUT, timeout=90, check=False)
+                subprocess.run(
+                    [self.python, str(self.assets / "schematic_build.py"), str(req), str(tmp)],
+                    env=env,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    timeout=90,
+                    check=False,
+                )
             raw = tmp.read_bytes()
             doc = json.loads(raw)
         except Exception as ex:

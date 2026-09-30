@@ -1,0 +1,11 @@
+load("@yapnr_pypi//:requirements.bzl", "requirement")
+load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+
+# Importing torch takes a few seconds, hence medium.
+yapnr_py_tests(
+    size = "medium",
+    deps = [
+        requirement("numpy"),
+        requirement("torch"),
+    ],
+)

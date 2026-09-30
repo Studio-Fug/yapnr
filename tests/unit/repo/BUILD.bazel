@@ -1,0 +1,13 @@
+load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+
+# These checks read the whole working tree, which is not a declared input, so
+# they are tagged `external`: Bazel always runs them and never caches a result.
+# See tools/repo_root.py.
+yapnr_py_tests(
+    data = ["//:MODULE.bazel"],
+    tags = [
+        "external",
+        "no-remote",
+    ],
+    deps = ["//tools:repo_checks"],
+)

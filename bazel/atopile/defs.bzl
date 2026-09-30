@@ -10,13 +10,17 @@
     )
 
 The action runs `yapnr atopile build` (yapnr/frontends/atopile/runner.py) with the atopile
-environment of the registered toolchain (bazel/atopile/repo.bzl): the project is copied into a
-work directory, the parts of its lock come from the part cache, the loopback picker answers from
-their catalog entries and any `catalogs`, and nothing is fetched from the network. The part cache
-is `cache`, else `--action_env=YAPNR_PART_CACHE`, else the default local cache.
+environment of the registered toolchain (bazel/atopile/repo.bzl): the declared `srcs` (and
+nothing else of the project's directory) are copied into a work directory, the parts of its lock
+come from the part cache, the loopback picker answers from their catalog entries and any
+`catalogs`, and atopile's network access is refused (EasyEDA, git dependencies, the package
+registry). The part cache is `cache`, else `--action_env=YAPNR_PART_CACHE=<directory or URL>`;
+a project with a parts lock and neither fails at once (the action has no `HOME`, so there is no
+default cache).
 
 It is `local` and `no-remote`: it reads an environment and a cache that Bazel does not track. It
-is not `requires-network`: a build that would need the network fails instead.
+is not `requires-network`: a build that would need the network fails instead. List every input
+in `srcs`, the seed layout under `elec/layout/` included; the action sees nothing else.
 
 Outputs: `<name>.kicad_pcb` (the board), `<name>.bom.csv`, `<name>.result.json` (versions,
 hashes, the UUID-normalized input id, the picker requests) and `<name>.out/` (everything).
@@ -43,8 +47,19 @@ def _impl(ctx):
     bom = ctx.actions.declare_file(ctx.label.name + ".bom.csv")
     result = ctx.actions.declare_file(ctx.label.name + ".result.json")
 
+    # The declared inputs, relative to the project: the runner copies these and nothing else.
+    prefix = project + "/" if project else ""
+    listed = []
+    for f in ctx.files.srcs:
+        if not f.path.startswith(prefix):
+            fail("{}: srcs must be inside the project directory {}".format(f.path, project or "."))
+        listed.append(f.path[len(prefix):])
+    files_list = ctx.actions.declare_file(ctx.label.name + ".inputs")
+    ctx.actions.write(files_list, "\n".join(listed) + "\n")
+    has_lock = "yapnr-parts.lock.json" in listed
+
     args = [project or ".", "--out", out.path, "--build", ctx.attr.build]
-    args += ["--timeout", str(ctx.attr.timeout_s)]
+    args += ["--timeout", str(ctx.attr.timeout_s), "--files-from", files_list.path]
     for target in ctx.attr.targets:
         args += ["--target", target]
     for catalog in ctx.files.catalogs:
@@ -62,9 +77,20 @@ def _impl(ctx):
     if toolchain.kicad_footprints:
         env["YAPNR_KICAD_FOOTPRINTS"] = toolchain.kicad_footprints
 
-    command = "\n".join([
-        "set -euo pipefail",
-        'export HOME="${HOME:-$(mktemp -d)}"',
+    preamble = ["set -euo pipefail"]
+    if has_lock and not ctx.attr.cache:
+        preamble.append(
+            'if [ -z "${YAPNR_PART_CACHE:-}" ]; then echo "' + str(ctx.label) + ": the project" +
+            " has a parts lock: set the rule's cache attribute or" +
+            ' --action_env=YAPNR_PART_CACHE=<directory or URL>" >&2; exit 1; fi',
+        )
+    preamble.append(
+        # kicad-cli needs a HOME; the strict action environment has none. The runner gives
+        # atopile its own private one.
+        'if [ -z "${HOME:-}" ]; then HOME="$(mktemp -d)"; export HOME;' +
+        ' trap \'rm -rf "$HOME"\' EXIT; fi',
+    )
+    command = "\n".join(preamble + [
         '"{tool}" "$@" || {{ tail -n 60 "{out}/ato.log" >&2 || true; exit 1; }}'.format(
             tool = ctx.executable._tool.path,
             out = out.path,
@@ -80,7 +106,7 @@ def _impl(ctx):
 
     ctx.actions.run_shell(
         outputs = [out, pcb, bom, result],
-        inputs = depset(ctx.files.srcs + [ctx.file.ato_yaml] + ctx.files.catalogs),
+        inputs = depset(ctx.files.srcs + [ctx.file.ato_yaml, files_list] + ctx.files.catalogs),
         tools = [ctx.executable._tool],
         command = command,
         arguments = args,
@@ -105,7 +131,10 @@ yapnr_atopile_build = rule(
     implementation = _impl,
     attrs = {
         "ato_yaml": attr.label(allow_single_file = ["ato.yaml"], mandatory = True),
-        "srcs": attr.label_list(allow_files = True, doc = "The project's sources and parts lock."),
+        "srcs": attr.label_list(
+            allow_files = True,
+            doc = "Every input of the build (sources, parts lock, seed layout), inside the project.",
+        ),
         "build": attr.string(default = "default", doc = "The ato.yaml build."),
         "targets": attr.string_list(doc = "atopile targets (default: the runner's set)."),
         "catalogs": attr.label_list(allow_files = [".json"], doc = "Extra picker catalogs."),

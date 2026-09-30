@@ -38,6 +38,29 @@ class FrameTest(unittest.TestCase):
         self.assertIn("(via (at 7.0000 4.0000)", framed)
         self.assertTrue(framed.rstrip().endswith(")"))
 
+    def test_arcs_and_zones_move_whole(self):
+        board = BOARD.replace(
+            "\t(via",
+            '\t(arc (start -5 -2) (mid 0 -3) (end 5 3) (width 0.2) (layer "F.Cu"))\n'
+            '\t(zone (net 1) (net_name "GND") (layer "F.Cu")\n'
+            "\t\t(polygon (pts (xy -5 -2) (xy 5 -2) (arc (start 5 3) (mid 0 4) (end -5 3))))\n"
+            '\t\t(filled_polygon (layer "F.Cu") (pts (xy -4 -1) (xy 4 -1) (xy 4 2)))\n'
+            "\t)\n"
+            '\t(gr_text "keep (at 9 9)" (at 1 1) (layer "F.SilkS"))\n'
+            "\t(via",
+        )
+        framed = outline.frame(board, 2.0)
+        self.assertIn(
+            "(arc (start 2.0000 2.0000) (mid 7.0000 1.0000) (end 12.0000 7.0000) (width", framed
+        )
+        self.assertIn(
+            "(pts (xy 2.0000 2.0000) (xy 12.0000 2.0000) (arc (start 12.0000 7.0000)", framed
+        )
+        self.assertIn("(mid 7.0000 8.0000) (end 2.0000 7.0000))))", framed)
+        self.assertIn("(pts (xy 3.0000 3.0000) (xy 11.0000 3.0000) (xy 11.0000 6.0000))", framed)
+        # The board's graphics (and strings) stay; so does footprint-local geometry.
+        self.assertIn('(gr_text "keep (at 9 9)" (at 1 1)', framed)
+
     def test_idempotent(self):
         once = outline.frame(BOARD, 2.0)
         twice = outline.frame(once, 2.0)

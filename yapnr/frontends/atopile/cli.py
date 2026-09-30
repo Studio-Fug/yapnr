@@ -32,13 +32,19 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     except toolchain.ToolchainError as err:
         return _err(str(err))
     print(toolchain.venv_python(env_dir / "venv"))
+    if args.root and Path(args.root).resolve() != toolchain.default_root().resolve():
+        print(
+            f"builds find this environment with {toolchain.ENV_HOME}={args.root}"
+            f" (or {toolchain.ENV_PYTHON}={toolchain.venv_python(env_dir / 'venv')})",
+            file=sys.stderr,
+        )
     return 0
 
 
 def _cmd_info(args: argparse.Namespace) -> int:
     from yapnr.frontends.atopile import kicad, toolchain
 
-    report = toolchain.status()
+    report = toolchain.status(root=Path(args.root) if args.root else None)
     try:
         cli = kicad.find_cli()
         report["kicad_cli"] = str(cli)
@@ -52,6 +58,11 @@ def _cmd_info(args: argparse.Namespace) -> int:
         for key in sorted(report):
             print(f"{key:18} {report[key]}")
     return 0 if report.get("ok") else 1
+
+
+def _read_list(path: str) -> list:
+    lines = Path(path).read_text(encoding="utf-8").splitlines()
+    return [line.strip() for line in lines if line.strip() and not line.startswith("#")]
 
 
 def _cmd_build(args: argparse.Namespace) -> int:
@@ -77,6 +88,7 @@ def _cmd_build(args: argparse.Namespace) -> int:
         kicad_cli=args.kicad_cli,
         replace_parts=args.replace_parts,
         offline=not args.online,
+        files=_read_list(args.files_from) if args.files_from else None,
     )
     try:
         result = runner.build(options, log=lambda text: print(text, file=sys.stderr))
@@ -146,6 +158,7 @@ def register_atopile(commands: "argparse._SubParsersAction") -> None:
 
     info = sub.add_parser("info", help="report the atopile environment and KiCad found")
     info.add_argument("--json", action="store_true")
+    info.add_argument("--root", help="environments directory, as given to setup --root")
     info.set_defaults(func=_cmd_info)
 
     build = sub.add_parser("build", help="build an atopile project offline, in isolation")
@@ -169,6 +182,10 @@ def register_atopile(commands: "argparse._SubParsersAction") -> None:
     )
     build.add_argument("--kicad-cli", help="the headless kicad-cli")
     build.add_argument("--replace-parts", action="store_true", help="overwrite differing parts")
+    build.add_argument(
+        "--files-from",
+        help="copy only these files of the project (one path per line, relative to it)",
+    )
     build.add_argument(
         "--online",
         action="store_true",

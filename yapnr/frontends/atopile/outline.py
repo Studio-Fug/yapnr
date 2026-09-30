@@ -4,8 +4,9 @@ atopile places parts around the origin and draws no board outline, so exports of
 board are a nearly blank A4 page. ``frame`` (``yapnr atopile build --outline-margin-mm M``):
 
 1. takes the bounding box of every footprint placement;
-2. moves the footprints (and any top-level tracks and vias) so the box sits ``margin`` inside the
-   origin;
+2. moves the footprints and the board's own tracks, arcs, vias and zones (every point of them)
+   so the box sits ``margin`` inside the origin; footprint-local geometry and the board's
+   graphics stay as they are;
 3. sets a custom sheet (``paper "User" W H``) of the box plus the margins;
 4. draws an ``Edge.Cuts`` rectangle just inside the sheet.
 
@@ -33,17 +34,64 @@ _OWN_LINE = re.compile(
 )
 
 
-def _placements(text: str) -> List[Tuple[int, int, float, float, str]]:
-    """(start, end, x, y, rest) of each footprint's own ``(at x y [rot])``."""
-    spans = []
-    for match in re.finditer(r"\(footprint\b", text):
-        at = re.search(
-            r"\(at\s+(-?[\d.]+)\s+(-?[\d.]+)([^\)]*)\)", text[match.end() : match.end() + 4000]
-        )
-        if at:
-            start, end = match.end() + at.start(), match.end() + at.end()
-            spans.append((start, end, float(at.group(1)), float(at.group(2)), at.group(3)))
-    return spans
+_NUMBER = r"(-?\d+(?:\.\d*)?(?:[eE][-+]?\d+)?)"
+_HEAD = re.compile(r"\(([A-Za-z_][A-Za-z0-9_]*)")
+# What moves in each of the board's own items: every such point in the block, or the first.
+_MOVES = {
+    "footprint": (("at",), True),
+    "segment": (("start", "end"), False),
+    "arc": (("start", "mid", "end"), False),
+    "via": (("at",), True),
+    "zone": (("xy", "start", "mid", "end"), False),
+}
+
+
+def _items(text: str) -> List[Tuple[int, int, str]]:
+    """(start, end, head) of the board's own items: the blocks directly inside ``kicad_pcb``."""
+    items: List[Tuple[int, int, str]] = []
+    depth, index, length, opened = 0, 0, len(text), None
+    in_string = False
+    while index < length:
+        char = text[index]
+        if in_string:
+            if char == "\\":
+                index += 1
+            elif char == '"':
+                in_string = False
+        elif char == '"':
+            in_string = True
+        elif char == "(":
+            depth += 1
+            if depth == 2:
+                match = _HEAD.match(text, index)
+                opened = (index, match.group(1) if match else "")
+        elif char == ")":
+            if depth == 2 and opened is not None:
+                items.append((opened[0], index + 1, opened[1]))
+                opened = None
+            depth -= 1
+        index += 1
+    return items
+
+
+def _points(block: str, names: Tuple[str, ...]) -> "re.Pattern[str]":
+    return re.compile(r"\((" + "|".join(names) + r")\s+" + _NUMBER + r"\s+" + _NUMBER)
+
+
+def _placement(block: str) -> "Tuple[float, float] | None":
+    """The footprint's own ``(at x y)``: the first one in its block."""
+    match = _points(block, ("at",)).search(block)
+    return (float(match.group(2)), float(match.group(3))) if match else None
+
+
+def _move(block: str, head: str, dx: float, dy: float) -> str:
+    names, first_only = _MOVES[head]
+
+    def shift(match: "re.Match[str]") -> str:
+        x, y = float(match.group(2)) + dx, float(match.group(3)) + dy
+        return f"({match.group(1)} {x:.4f} {y:.4f}"
+
+    return _points(block, names).sub(shift, block, count=1 if first_only else 0)
 
 
 def _outline(x0: float, y0: float, x1: float, y1: float) -> str:
@@ -62,25 +110,23 @@ def _outline(x0: float, y0: float, x1: float, y1: float) -> str:
 def frame(text: str, margin: float) -> str:
     """The board text with an outline ``margin`` mm around its parts (unchanged if none)."""
     text = _OWN_LINE.sub("", text)
-    spans = _placements(text)
-    if not spans:
+    items = [item for item in _items(text) if item[2] in _MOVES]
+    placed = [
+        at
+        for start, end, head in items
+        if head == "footprint"
+        for at in [_placement(text[start:end])]
+        if at
+    ]
+    if not placed:
         return text
-    xs = [s[2] for s in spans]
-    ys = [s[3] for s in spans]
+    xs = [x for x, _y in placed]
+    ys = [y for _x, y in placed]
     dx, dy = margin - min(xs), margin - min(ys)
     width = max(xs) - min(xs) + 2 * margin
     height = max(ys) - min(ys) + 2 * margin
-    for start, end, x, y, rest in sorted(spans, key=lambda s: s[0], reverse=True):
-        text = text[:start] + f"(at {x + dx:.4f} {y + dy:.4f}{rest})" + text[end:]
-
-    def shift(match: "re.Match[str]") -> str:
-        x, y = float(match.group(2)) + dx, float(match.group(3)) + dy
-        return f"{match.group(1)}{x:.4f} {y:.4f}{match.group(4)}"
-
-    # Routed geometry at the top level moves with the parts; footprint-local geometry does not.
-    text = re.sub(r"(\(segment\s+\(start\s+)(-?[\d.]+)\s+(-?[\d.]+)(\))", shift, text)
-    text = re.sub(r"(\(end\s+)(-?[\d.]+)\s+(-?[\d.]+)(\)\s*\(width)", shift, text)
-    text = re.sub(r"(\(via\s+\(at\s+)(-?[\d.]+)\s+(-?[\d.]+)(\))", shift, text)
+    for start, end, head in reversed(items):
+        text = text[:start] + _move(text[start:end], head, dx, dy) + text[end:]
     text = re.sub(
         r'\(paper\s+"[^"]*"(?:\s+[\d.]+\s+[\d.]+)?\)',
         f'(paper "User" {width:.3f} {height:.3f})',

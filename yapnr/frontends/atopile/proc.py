@@ -7,7 +7,9 @@ bug), kept here as a small stdlib module until PR3 moves ``pnr.proc`` to ``yapnr
 - on its deadline, or when the wait is interrupted, every process of the tree is stopped
   (SIGSTOP, repeated until no new process appears, so nothing can fork away), then killed with
   SIGKILL, with every process group one of them leads. atopile's forkserver and build workers are
-  part of the tree, so none outlives a killed build.
+  part of the tree, so none outlives a killed build;
+- after a normal exit, whatever is left in the child's process group (a worker the child did not
+  reap) is killed too, so nothing outlives a finished build either.
 """
 
 from __future__ import annotations
@@ -88,6 +90,12 @@ def kill_tree(proc: subprocess.Popen) -> None:
         _signal(pid, signal.SIGKILL)
 
 
+def _reap_group(pgid: int) -> None:
+    """SIGKILL what remains of the process group ``pgid`` (the exited child led it)."""
+    if pgid != os.getpgid(0):
+        _signal(pgid, signal.SIGKILL, group=True)
+
+
 def run(
     cmd: Sequence[str],
     timeout: float,
@@ -111,7 +119,9 @@ def run(
             start_new_session=True,
         )
         try:
-            return proc.wait(timeout=timeout), False
+            code = proc.wait(timeout=timeout)
+            _reap_group(proc.pid)
+            return code, False
         except subprocess.TimeoutExpired:
             kill_tree(proc)
             proc.wait()

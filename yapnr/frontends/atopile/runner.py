@@ -5,7 +5,8 @@ For each build the runner:
 
 1. finds the atopile environment (``toolchain.discover``) and the headless KiCad (``kicad``);
 2. copies the project into a fresh work directory (the source tree is never written, except by
-   ``--update-layout``, which copies the new layout back);
+   ``--update-layout``, which copies the new layout back); with ``--files-from`` (the Bazel
+   rule's declared inputs) only the listed files;
 3. writes every part of the project's parts lock into the copy, verified against the part cache;
 4. writes the stock KiCad footprint libraries the sources reference into the build's
    ``fp-lib-table`` (atopile 0.15.8 resolves ``Library:Footprint`` only there);
@@ -16,9 +17,13 @@ For each build the runner:
    datasheet downloads are excluded) and a deadline that kills the whole process tree;
 7. frames the board if asked (``--outline-margin-mm``), then copies the named outputs with
    ``result.json`` to the output directory (default ``./yapnr-out/<project>/<build>``; an
-   existing one is replaced only when it holds an earlier build's ``result.json``): the board,
-   BOM, variables, power tree and pinout, never ``build/manifest.json`` (it holds absolute
-   paths).
+   existing one is replaced only when it holds an earlier build's ``result.json``): the board
+   (as ``<build>.kicad_pcb``), BOM, variables, power tree and pinout, never
+   ``build/manifest.json`` (it holds absolute paths).
+
+The board, its ``fp-lib-table`` and the outputs are where atopile 0.15.8 puts them for the
+project's ``ato.yaml`` (``build_paths``: ``paths.layout``, ``paths.build`` and a build's
+``paths.layout``, ``fp_lib_table`` and ``output_base``), not a fixed ``elec/layout/<build>``.
 
 ``result.json`` records the input id: the sha256 of the board with every UUID replaced by the nil
 UUID, because atopile stamps fresh UUIDs on each build. Two builds of the same sources give the
@@ -27,8 +32,10 @@ same id.
 
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import json
+import os
 import re
 import shutil
 import tempfile
@@ -53,7 +60,10 @@ ALLOWED_TARGETS = frozenset(
 )
 ALWAYS_EXCLUDED = ("default", "datasheets", "collect-manufacturing")
 DEFAULT_TIMEOUT = 1800.0
-COPY_IGNORE = ("build", "manufacturing", ".git", "__pycache__", ".DS_Store", "yapnr-out")
+# Left out of the work copy: anywhere in the tree, and (build outputs) at the project's top only.
+COPY_IGNORE = (".git", "__pycache__", ".DS_Store")
+COPY_IGNORE_TOP = ("build", "manufacturing", "yapnr-out", ".ato")
+AUTOSAVE_PATTERNS = ("_autosave-*", "*-save.kicad_pcb")
 _UUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 NIL_UUID = "00000000-0000-0000-0000-000000000000"
 
@@ -80,6 +90,7 @@ class BuildOptions:
     kicad_cli: Optional[str] = None
     replace_parts: bool = False
     offline: bool = True
+    files: Optional[Sequence[str]] = None
 
 
 @dataclass
@@ -126,11 +137,36 @@ def _check_targets(targets: Sequence[str]) -> List[str]:
     return list(dict.fromkeys(targets))
 
 
-def _copy_project(source: Path, dest: Path) -> None:
+def _inside(project: Path, rel: Any, what: str) -> Path:
+    """``project / rel``, refused unless it stays inside the project (checked lexically)."""
+    if not isinstance(rel, str) or not rel.strip():
+        raise BuildError(f"ato.yaml: {what} must be a path")
+    path = Path(os.path.normpath(project / rel))
+    if path != project and not path.is_relative_to(project):
+        raise BuildError(f"ato.yaml: {what} {rel!r} is outside the project")
+    return path
+
+
+def _copy_project(source: Path, dest: Path, files: Optional[Sequence[str]] = None) -> None:
+    """Copy the project; with ``files`` (paths relative to it), exactly those."""
+    if files is not None:
+        dest.mkdir(parents=True)
+        for rel in dict.fromkeys(list(files) + ["ato.yaml"]):
+            src = _inside(source, rel, "an input")
+            if not src.exists():
+                raise BuildError(f"input {rel!r} does not exist in {source}")
+            target = dest / src.relative_to(source)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if src.is_dir():
+                shutil.copytree(src, target, symlinks=False, dirs_exist_ok=True)
+            else:
+                shutil.copy2(src, target)
+        return
+
     def ignore(directory: str, names: List[str]) -> List[str]:
         skip = [n for n in names if n in COPY_IGNORE]
         if Path(directory) == source:
-            skip += [n for n in names if n == ".ato"]
+            skip += [n for n in names if n in COPY_IGNORE_TOP]
         return skip
 
     shutil.copytree(source, dest, ignore=ignore, symlinks=False)
@@ -139,23 +175,94 @@ def _copy_project(source: Path, dest: Path) -> None:
         shutil.copytree(modules, dest / ".ato" / "modules", symlinks=False)
 
 
-def _outputs(work_project: Path, build: str) -> Dict[str, Path]:
-    base = work_project / "build" / "builds" / build
+def _ato_yaml(project: Path) -> Dict[str, Any]:
+    text = (project / "ato.yaml").read_text(encoding="utf-8")
+    try:
+        import yaml  # type: ignore[import-untyped]
+    except ImportError:
+        if re.search(r"^\s*(paths|layout|build|output_base|fp_lib_table)\s*:", text, re.M):
+            raise BuildError("ato.yaml sets paths: reading it needs PyYAML")
+        return {}
+    doc = yaml.safe_load(text) or {}
+    return doc if isinstance(doc, dict) else {}
+
+
+def _find_layout(base: Path) -> Path:
+    """atopile 0.15.8's ``BuildTargetPaths.find_layout``."""
+    if base.with_suffix(".kicad_pcb").exists():
+        return base.with_suffix(".kicad_pcb")
+    if base.is_dir():
+        found = [
+            path
+            for path in sorted(base.glob("*.kicad_pcb"))
+            if not any(fnmatch.fnmatch(path.name, p) for p in AUTOSAVE_PATTERNS)
+        ]
+        if len(found) == 1:
+            return found[0]
+        if len(found) > 1:
+            raise BuildError(f"{base} holds {len(found)} layouts; atopile needs exactly one")
+    return base / f"{base.name}.kicad_pcb"
+
+
+@dataclass
+class BuildPaths:
+    layout: Path  # the board atopile reads and writes
+    fp_lib_table: Path
+    output_base: Path  # outputs are <output_base>.<suffix> and siblings of it
+
+
+def build_paths(project: Path, build: str) -> BuildPaths:
+    """Where atopile 0.15.8 keeps a build's board and outputs (``atopile/config.py``)."""
+    project = Path(project)
+    doc = _ato_yaml(project)
+    top = doc.get("paths") or {}
+    own = ((doc.get("builds") or {}).get(build) or {}).get("paths") or {}
+    if not isinstance(top, dict) or not isinstance(own, dict):
+        raise BuildError("ato.yaml: paths must be a mapping")
+    if own.get("layout"):
+        base = _inside(project, own["layout"], f"builds.{build}.paths.layout")
+    else:
+        base = _inside(project, top.get("layout", "elec/layout"), "paths.layout") / build
+    layout = _find_layout(base)
+    if own.get("fp_lib_table"):
+        table = _inside(project, own["fp_lib_table"], f"builds.{build}.paths.fp_lib_table")
+    else:
+        table = layout.parent / "fp-lib-table"
+    if own.get("output_base"):
+        output_base = _inside(project, own["output_base"], f"builds.{build}.paths.output_base")
+    else:
+        build_dir = _inside(project, top.get("build", "build"), "paths.build")
+        output_base = build_dir / "builds" / build / build
+    return BuildPaths(layout=layout, fp_lib_table=table, output_base=output_base)
+
+
+def _outputs(paths: BuildPaths) -> Dict[str, Path]:
+    base, stem = paths.output_base.parent, paths.output_base.name
     candidates = {
-        "pcb": work_project / "elec" / "layout" / build / f"{build}.kicad_pcb",
-        "bom_csv": base / f"{build}.bom.csv",
-        "bom_json": base / f"{build}.bom.json",
-        "variables": base / f"{build}.variables.ato.json",
-        "power_tree": base / f"{build}.power_tree.ato.json",
+        "pcb": paths.layout,
+        "bom_csv": base / f"{stem}.bom.csv",
+        "bom_json": base / f"{stem}.bom.json",
+        "variables": base / f"{stem}.variables.ato.json",
+        "power_tree": base / f"{stem}.power_tree.ato.json",
         "power_tree_md": base / "power_tree.md",
         "pinout": base / "pinout",
-        "stackup": base / f"{build}.stackup.json",
-        "gerbers": base / f"{build}.gerber.zip",
-        "pick_and_place": base / f"{build}.pick_and_place.csv",
-        "step": base / f"{build}.pcba.step",
-        "glb": base / f"{build}.pcba.glb",
+        "stackup": base / f"{stem}.stackup.json",
+        "gerbers": base / f"{stem}.gerber.zip",
+        "pick_and_place": base / f"{stem}.pick_and_place.csv",
+        "step": base / f"{stem}.pcba.step",
+        "glb": base / f"{stem}.pcba.glb",
     }
     return {name: path for name, path in candidates.items() if path.exists()}
+
+
+def _output_name(name: str, path: Path, paths: BuildPaths, build: str) -> str:
+    """Outputs are named after the build: ``<build>.kicad_pcb``, ``<build>.bom.csv``, ..."""
+    if name == "pcb":
+        return f"{build}.kicad_pcb"
+    stem = paths.output_base.name
+    if path.name.startswith(stem + "."):
+        return build + path.name[len(stem) :]
+    return path.name
 
 
 def _check_out(out: Path, project: Path) -> None:
@@ -217,7 +324,8 @@ def build(options: BuildOptions, log=print) -> BuildResult:
     started = time.monotonic()
     try:
         work_project = work / "project"
-        _copy_project(project, work_project)
+        _copy_project(project, work_project, options.files)
+        paths = build_paths(work_project, build_name)
         logs = work / "logs"
         logs.mkdir()
         materialized = []
@@ -228,9 +336,11 @@ def build(options: BuildOptions, log=print) -> BuildResult:
             log(f"atopile: {len(materialized)} parts from {cache.location}")
         stock = []
         if footprints is not None:
-            table = work_project / "elec" / "layout" / build_name / "fp-lib-table"
             stock = kicad.write_fp_lib_table(
-                table, footprints, work_project / "elec", options.stock_footprints == "all"
+                paths.fp_lib_table,
+                footprints,
+                work_project / "elec",
+                options.stock_footprints == "all",
             )
         docs = _catalogs(lock, cache, options.catalogs)
         catalog_snapshot = logs / "catalog.json"
@@ -270,10 +380,10 @@ def build(options: BuildOptions, log=print) -> BuildResult:
                 cwd=str(work_project),
                 log_path=str(ato_log),
             )
-        board = work_project / "elec" / "layout" / build_name / f"{build_name}.kicad_pcb"
+        board = paths.layout
         if code == 0 and options.outline_margin_mm > 0 and board.is_file():
             outline.frame_file(board, options.outline_margin_mm)
-        produced = _outputs(work_project, build_name) if code == 0 else {}
+        produced = _outputs(paths) if code == 0 else {}
         _check_out(out, project)
         if out.exists():
             shutil.rmtree(out)
@@ -281,7 +391,7 @@ def build(options: BuildOptions, log=print) -> BuildResult:
         copied: Dict[str, str] = {}
         hashes: Dict[str, str] = {}
         for name, path in produced.items():
-            dest = out / path.name
+            dest = out / _output_name(name, path, paths, build_name)
             if path.is_dir():
                 shutil.copytree(path, dest)
             else:
@@ -306,6 +416,7 @@ def build(options: BuildOptions, log=print) -> BuildResult:
             "outputs": copied,
             "sha256": hashes,
             "input_id": board_id,
+            "layout": board.relative_to(work_project).as_posix(),
             "parts_lock": _sha256(project / parts.LOCK_NAME) if lock else None,
             "parts": [e["name"] for e in lock["parts"]] if lock else [],
             "catalog_sha256": _sha256(catalog_snapshot),
@@ -321,7 +432,7 @@ def build(options: BuildOptions, log=print) -> BuildResult:
         }
         (out / "result.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
         if options.update_layout and code == 0 and board.is_file():
-            dest = project / "elec" / "layout" / build_name / board.name
+            dest = project / board.relative_to(work_project)
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(board, dest)
             log(f"atopile: updated {dest.relative_to(project)}")

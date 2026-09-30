@@ -215,8 +215,11 @@ line_group:
 
 A member may not also be `fixed`, in a `row`, `edge_align`, `orientation` or
 `side`, the part of a ref-relative `keepout`, or in a hard `group`: a rigid line
-cannot honour those. A soft `group` pulls the whole line. Members stay on the top
-side and carry no plane-access intents.
+cannot honour those. A member locked in the source board is refused too, when
+placement starts. A soft `group` pulls the whole line. Members stay on the top
+side and carry no plane-access intents. The line occupies the sides its members
+occupy: a line of SMD parts may sit above a bottom-side part, and a drilled
+member reserves both sides of the whole line.
 
 ### `net_class` / `diff_pair` / `length_match` — routing rules
 

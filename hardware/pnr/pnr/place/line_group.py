@@ -75,15 +75,34 @@ def collapse(graph, constraints, rules):
     """``(macro graph, macro constraints, macro rules, plan)`` with every line group a macro.
 
     The macros are ``LG00``, ``LG01``, ... in declaration order, with no courtyard
-    margin (the legalizer keeps the usual clearance around them). The ``line_group``
-    constraints are dropped from the macro constraints (the inner placement must not
-    collapse again); a group with an ``edge`` gets a soft ``edge_align`` on its macro.
+    margin (the legalizer keeps the usual clearance around them) and the footprint
+    ``line:<name>``: unlike an assembled ``block:`` macro a line carries no copper, so
+    it occupies only its members' sides (:func:`pnr.place.geometry.occupied_sides`:
+    top for SMD members, both sides with a drilled one) and an SMD line may sit above a
+    bottom-side part. The ``line_group`` constraints are dropped from the macro
+    constraints (the inner placement must not collapse again); a group with an
+    ``edge`` gets a soft ``edge_align`` on its macro.
+
+    Raises ``ValueError`` when a member is locked in place (a ``fixed`` constraint,
+    including one :func:`pnr.place.initial_pool.preserve_source_locks` adds for a
+    source-locked part): one member's lock would pin the whole line, and the parser
+    rejects an authored one for that reason.
     """
     from pnr.hier.macro import collapse as collapse_macros
 
     clearance = float(constraints.board.default_clearance_mm)
     lines = groups(constraints)
     members = {ref for con in lines for ref in con.refs}
+    locked = set(constraints.locked_refs) | {
+        c.ref for c in graph.components if c.locked and c.ref in members
+    }
+    for con in lines:
+        for ref in con.refs:
+            if ref in locked:
+                raise ValueError(
+                    "line_group %r: member %s also has a fixed constraint (an authored pose "
+                    "or a source lock), which a rigid line cannot honour" % (con.name, ref)
+                )
     for intent in (rules or {}).get("plane_access_intents", []) or []:
         if intent.get("ref") in members:
             raise ValueError(
@@ -107,6 +126,12 @@ def collapse(graph, constraints, rules):
     mgraph, mcon, mrules, plan = collapse_macros(
         graph, constraints, rules or {}, layouts, prefix="LG", margin=0.0
     )
+    for index, (con, (_, sub, _, _)) in enumerate(zip(lines, layouts)):
+        macro = mgraph.component("LG%02d" % index)
+        macro.footprint = macro.address = "line:" + con.name
+        macro.smd_body = all(
+            m.smd_body or not any(p.through_hole for p in m.pads) for m in sub.components
+        )
     kept = [c for c in mcon.constraints if c.kind != "line_group"]
     for index, con in enumerate(lines):
         edge = con.params.get("edge") or "none"

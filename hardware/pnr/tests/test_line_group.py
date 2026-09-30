@@ -269,6 +269,69 @@ class PlaceTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "plane-access"):
             line_group.collapse(graph, cc, rules)
 
+    def test_an_smd_line_may_sit_above_a_bottom_side_part(self):
+        """A line reserves its members' sides only, not both sides like a block macro."""
+        from pnr.place.geometry import courtyard_rect, occupied_sides
+
+        def with_cell(size):
+            graph = board()
+            cell = Component(
+                "BT1",
+                "coin",
+                (18.5, 12.0),
+                0.0,
+                "bottom",
+                size,
+                size,
+                pads=[Pad("1", "VCC", (-5.0, 0.0), (2.0, 2.0)), Pad("2", "GND", (5.0, 0.0))],
+                smd_body=True,
+            )
+            graph.components.append(cell)
+            for net in graph.nets:
+                if net.name in ("VCC", "GND"):
+                    net.pins.append(("BT1", "1" if net.name == "VCC" else "2"))
+            fixed = {
+                "J1": dict(at=[3, 12], rot=0, side="top"),
+                "BT1": dict(at=[18.5, 12], rot=0, side="bottom"),
+            }
+            return graph, compiled(graph, line_group=[LINE], fixed=fixed)
+
+        graph, cc = with_cell((22.0, 16.0))
+        macro = line_group.collapse(graph, cc, {})[0].component("LG00")
+        self.assertEqual(macro.footprint, "line:leds")
+        self.assertEqual(occupied_sides(macro), ("top",))
+        over = 0
+        for seed in range(2):
+            placed, _ = placed_line(self, graph, cc, seed=seed)
+            cell = courtyard_rect(placed.component("BT1"))
+            over += any(
+                courtyard_rect(placed.component("D%d" % i)).overlaps(cell) for i in range(1, 5)
+            )
+        self.assertGreater(over, 0)
+        # A 26 x 20 mm cell leaves no slot off it: the line still places, above the cell.
+        graph, cc = with_cell((26.0, 20.0))
+        placed_line(self, graph, cc, seed=0)
+        # A drilled member reserves both sides again.
+        graph, cc = with_cell((22.0, 16.0))
+        d3 = graph.component("D3")
+        d3.smd_body = False
+        for pad in d3.pads:
+            pad.through_hole, pad.drill_size = True, (0.8, 0.8)
+        macro = line_group.collapse(graph, cc, {})[0].component("LG00")
+        self.assertEqual(occupied_sides(macro), ("top", "bottom"))
+
+    def test_a_locked_member_raises(self):
+        """A source lock (preserve_source_locks) on a member would pin the whole line."""
+        from pnr.place.initial_pool import preserve_source_locks
+
+        graph = board()
+        d2 = graph.component("D2")
+        d2.pos, d2.rot, d2.locked = (16.0, 12.0), 90.0, True
+        cc = preserve_source_locks(graph, compiled(graph, line_group=[LINE]))
+        for con in (cc, compiled(graph, line_group=[LINE])):
+            with self.assertRaisesRegex(ValueError, "member D2 also has a fixed constraint"):
+                place(graph, con, iters=20)
+
     def test_violations_and_translation_checker(self):
         graph = board()
         cc = compiled(graph, line_group=[LINE])

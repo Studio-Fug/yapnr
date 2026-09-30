@@ -150,8 +150,18 @@ licence is recorded as `NOASSERTION`, with a note that points at the source's te
 parts; `--licence-note` adds to it. Import refuses parts it cannot check (no atomic-part trait, a
 missing footprint or symbol) and imports the rest.
 
-Splanc's boards were moved this way into a local cache on the development machine: 276 part
-directories of four boards (`splanc`, `splanc_dev`, `splanc_max`, `splanc_eol_tester`), 248
-distinct versions of 163 parts, 90 MB, and the 103 entries of its picker catalog. The locks
-written for its boards materialize every file byte-identically, and Splanc Mini builds from the
-locked parts with the same input id as from its committed parts.
+Import from a clean export of the commit that `--imported-from` names
+(`git archive <commit> <dir> | tar -x -C <scratch>`), not from a working tree. A working tree can
+hold git-ignored files, and they would be uploaded under a commit that does not contain them.
+Splanc, for example, keeps a manufacturer's STEP model for one part out of git that way.
+
+Splanc's boards were moved this way into a local cache on the development machine: the 276
+committed part directories of four boards (`splanc`, `splanc_dev`, `splanc_max`,
+`splanc_eol_tester`; 957 files, 248 distinct versions of 163 parts, about 90 MB) and the 103 entries
+of its picker catalog. One more version of one part adds the git-ignored manufacturer model. Its
+licence note says to keep it out of shared instances, and no board lock uses it. Each board's lock
+materializes every committed file byte-identically. A Splanc Mini build from its lock, with the
+parts directory emptied, gives the same input id as a build from the committed parts. Its board
+matches rules_atopile's last Nix build of Mini (nets, footprints, pads, positions, outline) when
+both start from the same layout
+([designators](frontends/atopile.md#designators-and-the-layout)).

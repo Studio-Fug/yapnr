@@ -158,6 +158,17 @@ of the same sources give the same input id.
 `ato create part` does). Such a build depends on a third-party service and is not reproducible;
 use it only while authoring.
 
+### Designators and the layout
+
+atopile updates an existing layout (`elec/layout/<build>/<build>.kicad_pcb`) instead of starting a
+new one. It keeps that layout's designators and positions, and gives new parts the next free
+designator. Without a layout, it numbers every part afresh and places it in a row. If a project
+does not commit its layout (Splanc ignores `elec/layout/`), a clean checkout and a developer's
+tree can build different designators and positions from the same sources. The nets, footprints
+and pads per `atopile_address` stay the same. To compare two builds, start both from the same
+layout, or compare them by `atopile_address`. Bazel's `glob(["elec/**"])` also picks up an
+uncommitted layout that is present on disk.
+
 ### The build environment
 
 The child's environment is built from an allowlist; nothing of the caller's environment is

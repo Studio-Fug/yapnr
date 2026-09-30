@@ -1,6 +1,7 @@
 """The atopile toolchain without Nix (docs/frontends/atopile.md).
 
 - :picker is the offline picker and the catalog schema. Stdlib only.
+- :testing writes synthetic parts and projects for tests.
 """
 
 load("@rules_python//python:defs.bzl", "py_library")
@@ -18,4 +19,13 @@ py_library(
         "picker/server.py",
     ],
     imports = ["../../.."],
+)
+
+# Synthetic parts and projects for tests (never real product data); not in the wheel.
+py_library(
+    name = "testing",
+    testonly = True,
+    srcs = ["testing.py"],
+    imports = ["../../.."],
+    deps = [":picker"],
 )

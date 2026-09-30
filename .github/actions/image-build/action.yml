@@ -11,16 +11,26 @@ inputs:
     description: amd64 or arm64 (the runner's own architecture)
     required: true
   base-mode:
-    description: build (the base tag is new, or docker/yapnr-kicad changed) or registry (pull it)
+    description: build (the base tag is not published yet) or registry (use the published base)
     required: true
   base-tag:
     description: the base image tag, docker/yapnr-kicad/TAG
     required: true
+  base-ref:
+    description: >-
+      registry mode: the published base by tag and digest (<name>:<tag>@sha256:...), which the
+      yapnr image is built FROM
+    required: false
+    default: ''
+  base-digest:
+    description: "registry mode: the digest of the published base's index"
+    required: false
+    default: ''
+  base-context:
+    description: tools/image/base_context.sh, recorded in the base as a label
+    required: true
   kicad-version:
     description: the KiCad version the images must report
-    required: true
-  ubuntu-snapshot:
-    description: snapshot.ubuntu.com ID recorded in the base (UTC, YYYYMMDDTHHMMSSZ)
     required: true
   version:
     description: the yapnr version (PEP 440) the wheel is stamped with
@@ -64,6 +74,7 @@ runs:
 
     # --- the KiCad base, when it is built here -------------------------------------------
     - name: Build the KiCad base (local registry, not published)
+      id: base-local
       if: inputs.base-mode == 'build' && inputs.push-base != 'true'
       uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
       with:
@@ -72,7 +83,7 @@ runs:
         platforms: linux/${{ inputs.arch }}
         build-args: |
           BASE_TAG=${{ inputs.base-tag }}
-          UBUNTU_SNAPSHOT=${{ inputs.ubuntu-snapshot }}
+          BASE_CONTEXT=${{ inputs.base-context }}
           VCS_REF=${{ inputs.revision }}
         tags: localhost:5000/yapnr-kicad:ci
         push: true
@@ -93,7 +104,7 @@ runs:
         platforms: linux/${{ inputs.arch }}
         build-args: |
           BASE_TAG=${{ inputs.base-tag }}
-          UBUNTU_SNAPSHOT=${{ inputs.ubuntu-snapshot }}
+          BASE_CONTEXT=${{ inputs.base-context }}
           VCS_REF=${{ inputs.revision }}
         outputs: type=image,name=ghcr.io/studio-fug/yapnr-kicad,push-by-digest=true,name-canonical=true,push=true
         provenance: mode=max
@@ -101,8 +112,10 @@ runs:
         cache-from: type=gha,scope=yapnr-kicad-${{ inputs.arch }}
         cache-to: type=gha,mode=min,scope=yapnr-kicad-${{ inputs.arch }},ignore-error=true
 
-    # The source packages of the KiCad build (published as <tag>-src by the publish job). Built
-    # here once, on amd64, so a pull request that changes the base finds a broken src stage.
+    # The source packages of the KiCad build (published as <tag>-src by the publish job, for
+    # both platforms). Built here once, in the amd64 job, so that a pull request that changes
+    # the base finds a broken src stage. The packages are fetched on the build platform, so the
+    # arm64 variant needs no emulation.
     - name: Check that the KiCad source image builds
       if: inputs.base-mode == 'build' && inputs.push-base != 'true' && inputs.arch == 'amd64'
       uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -110,27 +123,38 @@ runs:
         context: .
         file: docker/yapnr-kicad/Dockerfile
         target: src
-        platforms: linux/${{ inputs.arch }}
+        platforms: linux/amd64,linux/arm64
         outputs: type=cacheonly
         provenance: false
         sbom: false
 
+    # Always by digest: the yapnr image is built FROM exactly the base that was smoke-tested
+    # (or resolved by the plan job), never from a tag that may have moved in between.
     - name: Select the base
       id: base
       shell: bash
       env:
         BASE_MODE: ${{ inputs.base-mode }}
         PUSH_BASE: ${{ inputs.push-base }}
-        BASE_TAG: ${{ inputs.base-tag }}
-        BASE_DIGEST: ${{ steps.base-push.outputs.digest }}
+        BASE_REF: ${{ inputs.base-ref }}
+        BASE_DIGEST: ${{ inputs.base-digest }}
+        PUSHED_DIGEST: ${{ steps.base-push.outputs.digest }}
+        LOCAL_DIGEST: ${{ steps.base-local.outputs.digest }}
       run: |
         case "${BASE_MODE}:${PUSH_BASE}" in
-          build:true) ref="ghcr.io/studio-fug/yapnr-kicad@${BASE_DIGEST}" ;;
-          build:*) ref="localhost:5000/yapnr-kicad:ci" ;;
-          *) ref="ghcr.io/studio-fug/yapnr-kicad:${BASE_TAG}" ;;
+          build:true) digest="${PUSHED_DIGEST}"; ref="ghcr.io/studio-fug/yapnr-kicad@${digest}" ;;
+          build:*) digest="${LOCAL_DIGEST}"; ref="localhost:5000/yapnr-kicad@${digest}" ;;
+          *) digest="${BASE_DIGEST}"; ref="${BASE_REF}" ;;
         esac
+        if ! echo "${digest}" | grep -qE '^sha256:[0-9a-f]{64}$' || [[ "${ref}" != *"@${digest}" ]]; then
+          echo "::error::no base digest (mode ${BASE_MODE}, ref '${ref}', digest '${digest}')"
+          exit 1
+        fi
         echo "Base image: ${ref}"
-        echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+        {
+          echo "ref=${ref}"
+          echo "digest=${digest}"
+        } >> "${GITHUB_OUTPUT}"
 
     - name: Smoke-test the KiCad base
       if: inputs.base-mode == 'build'
@@ -152,6 +176,7 @@ runs:
         platforms: linux/${{ inputs.arch }}
         build-args: |
           KICAD_BASE=${{ steps.base.outputs.ref }}
+          KICAD_BASE_DIGEST=${{ steps.base.outputs.digest }}
           YAPNR_VERSION=${{ inputs.version }}
           VCS_REF=${{ inputs.revision }}
         tags: yapnr:ci
@@ -183,6 +208,7 @@ runs:
         platforms: linux/${{ inputs.arch }}
         build-args: |
           KICAD_BASE=${{ steps.base.outputs.ref }}
+          KICAD_BASE_DIGEST=${{ steps.base.outputs.digest }}
           YAPNR_VERSION=${{ inputs.version }}
           VCS_REF=${{ inputs.revision }}
         outputs: type=image,name=ghcr.io/studio-fug/yapnr,push-by-digest=true,name-canonical=true,push=true
@@ -205,7 +231,7 @@ runs:
 
     - name: Upload the digests
       if: inputs.push == 'true' || inputs.push-base == 'true'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
         name: digests-${{ inputs.arch }}
         path: ${{ runner.temp }}/digests

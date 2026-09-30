@@ -47,7 +47,7 @@ if [ -z "${BASE}" ]; then
         --file docker/yapnr-kicad/Dockerfile \
         --tag yapnr-kicad:local \
         --build-arg BASE_TAG="${base_tag}" \
-        --build-arg UBUNTU_SNAPSHOT="$(date -u +%Y%m%dT%H%M%SZ)" \
+        --build-arg BASE_CONTEXT="$(tools/image/base_context.sh)" \
         --build-arg VCS_REF="${revision}" \
         .
     BASE=yapnr-kicad:local

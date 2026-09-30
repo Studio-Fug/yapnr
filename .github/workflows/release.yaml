@@ -13,8 +13,11 @@ name: Release
 #            .github/release.yml), published last
 #
 # A manual run (Actions > Release > Run workflow, on any branch) is a dry run: it verifies,
-# tests and builds everything, uploads the release files as a workflow artifact and publishes
-# nothing.
+# tests and builds everything, uploads the release files as a workflow artifact, renders the
+# release notes (the header for a placeholder tag, and GitHub's generated notes through the API)
+# into the run summary, and publishes nothing.
+#
+# Every action here is pinned by commit: these jobs publish and sign.
 on:
   push:
     tags:
@@ -42,9 +45,10 @@ jobs:
       prerelease: ${{ steps.version.outputs.prerelease }}
       latest: ${{ steps.version.outputs.latest }}
       previous_stable: ${{ steps.version.outputs.previous_stable }}
+      base_tag: ${{ steps.version.outputs.base_tag }}
     steps:
       - name: Setup repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
 
@@ -129,19 +133,19 @@ jobs:
       PEP440: ${{ needs.verify.outputs.pep440 }}
     steps:
       - name: Setup repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
 
       # Built earlier in this run: the wheel by image.yaml, the site by ci.yaml.
       - name: Download the wheel
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: wheel
           path: ${{ runner.temp }}/wheel
 
       - name: Download the documentation site
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: site
           path: ${{ runner.temp }}/site
@@ -163,7 +167,7 @@ jobs:
           cat out/SHA256SUMS
 
       - name: Upload the release files
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release
           path: out/
@@ -176,23 +180,53 @@ jobs:
         with:
           subject-path: out/*
 
+      # Also in a dry run, on placeholders (tag v0.0.0, a zero digest), so that the first real
+      # release is not the first run of this step.
       - name: Write the release notes header
-        if: env.DRY_RUN == 'false'
         env:
           DIGEST: ${{ needs.image.outputs.digest }}
           KICAD_VERSION: ${{ needs.image.outputs.kicad-version }}
         run: |
+          tag="${TAG}"
+          digest="${DIGEST}"
+          if [ "${DRY_RUN}" = true ]; then
+            tag=v0.0.0
+            digest="sha256:$(printf '%064d' 0)"
+          fi
           major_minor="$(echo "${VERSION}" | cut -d. -f1,2)"
           upgrade=()
           if [ -f "docs/releases/v${major_minor}.md" ]; then
             upgrade=(--upgrade-notes "docs/releases/v${major_minor}.md")
           fi
           wheels=(out/yapnr-*.whl)
-          python3 tools/release/notes_header.py --tag "${TAG}" --pep440 "${PEP440}" \
-            --digest "${DIGEST}" --kicad-version "${KICAD_VERSION}" \
-            --archive "out/yapnr-${TAG}.tar.gz" --wheel "${wheels[0]}" \
+          python3 tools/release/notes_header.py --tag "${tag}" --pep440 "${PEP440}" \
+            --digest "${digest}" --kicad-version "${KICAD_VERSION}" \
+            --archive "out/yapnr-${TAG:-${PEP440}}.tar.gz" --wheel "${wheels[0]}" \
             ${upgrade[@]+"${upgrade[@]}"} > "${RUNNER_TEMP}/notes.md"
           cat "${RUNNER_TEMP}/notes.md" >> "${GITHUB_STEP_SUMMARY}"
+
+      # The notes GitHub generates for the release (grouped by .github/release.yml), without
+      # creating anything: the same configuration and API that `gh release create
+      # --generate-notes` uses.
+      - name: Preview the generated release notes
+        if: env.DRY_RUN == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_TAG: ${{ needs.verify.outputs.base_tag }}
+        run: |
+          args=(-f tag_name=v0.0.0-dry-run -f target_commitish="${GITHUB_SHA}"
+            -f configuration_file_path=.github/release.yml)
+          if [ -n "${BASE_TAG}" ]; then args+=(-f previous_tag_name="${BASE_TAG}"); fi
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" "${args[@]}" \
+            --jq .body > "${RUNNER_TEMP}/generated.md"
+          {
+            echo
+            echo "---"
+            echo
+            echo "_Generated notes (dry run; since ${BASE_TAG:-the latest GitHub release, if any}):_"
+            echo
+            cat "${RUNNER_TEMP}/generated.md"
+          } >> "${GITHUB_STEP_SUMMARY}"
 
       # Draft first, with every file attached; publishing is the last step. With immutable
       # releases a published release can no longer change, so nothing may follow it.

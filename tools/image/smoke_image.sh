@@ -10,7 +10,8 @@
 #
 # Every image:
 #   - runs as UID 1000 by default, with tini as PID 1, and without DISPLAY/WAYLAND_DISPLAY;
-#   - carries the notices in /usr/share/doc/yapnr (SOURCES, THIRD_PARTY.md);
+#   - carries the notices in /usr/share/doc/yapnr (SOURCES, THIRD_PARTY.md) and records the
+#     Ubuntu archive snapshot its packages come from (/etc/yapnr/ubuntu-snapshot, in SOURCES);
 #   - the build left nothing in /tmp, /root/.cache or /root/.local;
 #   - `kicad-cli version` prints the expected KiCad version;
 #   - tools/image/pcbnew_smoke.py: pcbnew loads a footprint through the seeded global
@@ -22,7 +23,10 @@
 #     docker/yapnr/runtime-<arch>.lock, kicad-cli and KiCad's Python configured and executable,
 #     the source revision; the default command (doctor) succeeds;
 #   - the controller Python imports torch and numpy and converts between them, and cannot
-#     import pcbnew (KiCad-side code runs under YAPNR_KICAD_PYTHON).
+#     import pcbnew (KiCad-side code runs under YAPNR_KICAD_PYTHON);
+#   - the license texts of the bundled native code: python-build-standalone's in
+#     /usr/share/doc/yapnr/licenses/python-build-standalone, third_party/image-licenses in
+#     /usr/share/doc/yapnr/licenses, GPL-3 and LGPL-2.1 in /usr/share/common-licenses.
 # The image must be present locally (docker pull, or a build with --load).
 set -euo pipefail
 
@@ -87,15 +91,34 @@ else
     pass "no DISPLAY or WAYLAND_DISPLAY"
 fi
 
-notices="SOURCES THIRD_PARTY.md"
-[ "${KICAD_ONLY}" = 1 ] || notices="${notices} LICENSE"
+notices="/usr/share/doc/yapnr/SOURCES /usr/share/doc/yapnr/THIRD_PARTY.md"
+if [ "${KICAD_ONLY}" = 0 ]; then
+    notices="${notices} /usr/share/doc/yapnr/LICENSE /usr/share/common-licenses/GPL-3"
+    notices="${notices} /usr/share/common-licenses/LGPL-2.1"
+    for text in "${ROOT}"/third_party/image-licenses/*; do
+        notices="${notices} /usr/share/doc/yapnr/licenses/$(basename "${text}")"
+    done
+    for name in cpython openssl-3 sqlite tcl ncurses libedit libffi zlib; do
+        notices="${notices} /usr/share/doc/yapnr/licenses/python-build-standalone/LICENSE.${name}.txt"
+    done
+fi
 for notice in ${notices}; do
-    if docker run --rm --entrypoint test "${IMAGE}" -s "/usr/share/doc/yapnr/${notice}"; then
-        pass "/usr/share/doc/yapnr/${notice}"
+    if docker run --rm --entrypoint test "${IMAGE}" -s "${notice}"; then
+        pass "${notice}"
     else
-        fail "/usr/share/doc/yapnr/${notice} is missing or empty"
+        fail "${notice} is missing or empty"
     fi
 done
+
+snapshot="$(docker run --rm --entrypoint cat "${IMAGE}" /etc/yapnr/ubuntu-snapshot 2>/dev/null || true)"
+if echo "${snapshot}" | grep -Eq '^[0-9]{8}T[0-9]{6}Z$' \
+    && docker run --rm --entrypoint grep "${IMAGE}" -q \
+        "snapshot.ppa.launchpadcontent.net/kicad/kicad-10.0-releases/ubuntu/${snapshot}/" \
+        /usr/share/doc/yapnr/SOURCES; then
+    pass "Ubuntu archive snapshot ${snapshot}, in SOURCES"
+else
+    fail "no Ubuntu archive snapshot in /etc/yapnr/ubuntu-snapshot and SOURCES ('${snapshot}')"
+fi
 
 # The build leaves nothing behind in /tmp or in root's caches (KiCad's instance locks, uv).
 if leftovers="$(docker run --rm --user 0 --entrypoint sh "${IMAGE}" -c '

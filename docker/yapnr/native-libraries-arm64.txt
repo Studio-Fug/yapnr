@@ -1,0 +1,22 @@
+Native libraries in the numpy and torch wheels (linux/arm64), under /opt/venv/lib/python3.11/
+site-packages. The GCC runtime libraries were identified by their GNU build IDs or their
+compiler notes (the manylinux2014 build images the wheels were built in, CentOS 7 AltArch).
+License texts: GPL-3.0 in /usr/share/common-licenses; the GCC runtime library exception in
+/usr/share/doc/yapnr/licenses/GCC-COPYING.RUNTIME.
+
+  numpy.libs/libopenblas64_p-*.so
+      OpenBLAS 0.3.23.dev, BSD-3-Clause (numpy-1.26.4.dist-info/LICENSE.txt).
+  numpy.libs/libgfortran-*.so.5.0.0 and torch.libs/libgfortran-*.so.5.0.0 (the same file)
+      libgfortran from GCC 8.3.1, GPL-3.0-or-later WITH GCC-exception-3.1: CentOS 7 AltArch
+      libgfortran5-8.3.1-2.1.1.el7. Source:
+      https://vault.centos.org/7.9.2009/os/Source/SPackages/gcc-libraries-8.3.1-2.1.1.el7.src.rpm
+  torch.libs/libopenblasp-r0-*.3.25.so
+      OpenBLAS 0.3.25, BSD-3-Clause: /usr/share/doc/yapnr/licenses/OpenBLAS-LICENSE. Source:
+      https://github.com/OpenMathLib/OpenBLAS/releases/tag/v0.3.25
+  torch.libs/libarm_compute-*.so, libarm_compute_core-*.so, libarm_compute_graph-*.so
+      Arm Compute Library 23.08, MIT: /usr/share/doc/yapnr/licenses/ComputeLibrary-LICENSE.
+      Source: https://github.com/ARM-software/ComputeLibrary/releases/tag/v23.08
+  torch.libs/libgomp-*.so.1.0.0
+      libgomp from GCC 13.2.0 as built by conda-forge (gcc 13.2.0-6), GPL-3.0-or-later WITH
+      GCC-exception-3.1. Source: https://ftp.gnu.org/gnu/gcc/gcc-13.2.0/ and the build recipe
+      https://github.com/conda-forge/ctng-compilers-feedstock

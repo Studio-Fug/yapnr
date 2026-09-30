@@ -1,0 +1,23 @@
+Native libraries in the numpy and torch wheels (linux/amd64), under /opt/venv/lib/python3.11/
+site-packages. The GCC runtime libraries were identified by their GNU build IDs, which match the
+CentOS 7 packages named below (the manylinux2014 build images the wheels were built in).
+License texts: GPL-3.0 and LGPL-2.1 in /usr/share/common-licenses; the GCC runtime library
+exception in /usr/share/doc/yapnr/licenses/GCC-COPYING.RUNTIME.
+
+  numpy.libs/libopenblas64_p-*.so
+      OpenBLAS 0.3.23.dev, BSD-3-Clause (numpy-1.26.4.dist-info/LICENSE.txt).
+  numpy.libs/libgfortran-*.so.5.0.0
+      libgfortran from GCC 8.3.1, GPL-3.0-or-later WITH GCC-exception-3.1: CentOS 7
+      libgfortran5-8.3.1-2.1.1.el7. Source:
+      https://vault.centos.org/7.9.2009/os/Source/SPackages/gcc-libraries-8.3.1-2.1.1.el7.src.rpm
+  numpy.libs/libquadmath-*.so.0.0.0
+      libquadmath from GCC 4.8.5, LGPL-2.1-or-later: CentOS 7 libquadmath-4.8.5-44.el7. Source:
+      https://vault.centos.org/7.9.2009/os/Source/SPackages/gcc-4.8.5-44.el7.src.rpm
+  torch/lib/libgomp-*.so.1
+      libgomp from GCC 4.8.5, GPL-3.0-or-later WITH GCC-exception-3.1: CentOS 7
+      libgomp-4.8.5-44.el7. Source:
+      https://vault.centos.org/7.9.2009/os/Source/SPackages/gcc-4.8.5-44.el7.src.rpm
+  torch/lib/libtorch_cpu.so
+      links Intel oneAPI Math Kernel Library (oneMKL) statically, under the Intel Simplified
+      Software License: /usr/share/doc/yapnr/licenses/Intel-Simplified-Software-License.txt.
+      The other libraries it contains are listed in torch-2.3.1+cpu.dist-info/LICENSE.

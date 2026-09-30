@@ -1,0 +1,28 @@
+# Update proposals for what the workflows and the container images pin (docs/releases.md,
+# "Maintaining the images"). Python packages are not here: requirements.lock is Bazel's
+# (bazel run //:requirements.update), and the image's runtime locks follow it.
+version: 2
+updates:
+  # The actions, including the ones pinned by commit (Dependabot updates the SHA and the
+  # version comment together).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ['*']
+    labels: [dependencies, ci]
+
+  # ubuntu:24.04 and ghcr.io/astral-sh/uv, pinned by digest in the FROM lines. An ubuntu update in
+  # docker/yapnr-kicad needs a new docker/yapnr-kicad/TAG in the same pull request.
+  - package-ecosystem: docker
+    directories:
+      - /docker/yapnr-kicad
+      - /docker/yapnr
+    schedule:
+      interval: monthly
+    groups:
+      images:
+        patterns: ['*']
+    labels: [dependencies]

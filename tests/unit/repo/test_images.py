@@ -5,8 +5,13 @@
   the image runs what `bazel test` runs (tools/image/update_runtime_locks.sh).
 - requirements-runtime.in is a subset of requirements.in.
 - docker/yapnr-kicad/TAG, the KiCad version in its Dockerfile and the base
-  image the application Dockerfile builds on name the same KiCad release.
+  image the application Dockerfile builds on name the same KiCad release, and
+  the KiCad pins are declared once.
 - The image's controller Python is the patch release of Bazel's hermetic 3.11.
+- The build arguments that change with every commit are declared after the
+  expensive layers (the KiCad install, the runtime), so the build cache keeps
+  those layers.
+- Every architecture has its notes on the native libraries in its wheels.
 """
 
 from __future__ import annotations
@@ -60,10 +65,27 @@ def _requirement_lines(rel: str) -> List[str]:
 
 
 def _dockerfile_arg(rel: str, name: str) -> str:
-    match = re.search(rf"^ARG {name}=(\S+)$", _read(rel), re.MULTILINE)
-    if not match:
-        raise AssertionError(f"ARG {name}=... not found in {rel}")
-    return match.group(1)
+    matches = re.findall(rf"^ARG {name}=(\S+)$", _read(rel), re.MULTILINE)
+    if len(matches) != 1:
+        raise AssertionError(f"expected one ARG {name}=... in {rel}, found {matches}")
+    return matches[0]
+
+
+def _stage(rel: str, name: str) -> List[str]:
+    """The instruction lines of one build stage (`FROM ... AS name`, or the last stage for "")."""
+    stages: List[Tuple[str, List[str]]] = []
+    for line in _read(rel).splitlines():
+        match = re.match(r"^FROM\s.*?(?:\sAS\s+(\S+))?$", line, re.IGNORECASE)
+        if match:
+            stages.append((match.group(1) or "", []))
+        elif stages and re.match(r"^[A-Z]+\s", line):
+            stages[-1][1].append(line)
+    if not name:
+        return stages[-1][1]
+    for stage, lines in stages:
+        if stage == name:
+            return lines
+    raise AssertionError(f"no stage {name!r} in {rel}")
 
 
 class ParseLockTest(unittest.TestCase):
@@ -127,6 +149,12 @@ class RuntimeLockTest(unittest.TestCase):
 
 
 class KicadBaseTest(unittest.TestCase):
+    def test_kicad_pins_are_declared_once(self):
+        # _dockerfile_arg insists on exactly one declaration with a value: every stage
+        # (the base and the source image) takes the global one.
+        for name in ("KICAD_SERIES", "KICAD_VERSION", "KICAD_DEB"):
+            _dockerfile_arg("docker/yapnr-kicad/Dockerfile", name)
+
     def test_tag_names_the_dockerfile_kicad_version(self):
         tag = _read("docker/yapnr-kicad/TAG").strip()
         match = re.fullmatch(r"(\d+\.\d+\.\d+)-([1-9]\d*)", tag)
@@ -146,6 +174,39 @@ class KicadBaseTest(unittest.TestCase):
             _dockerfile_arg("docker/yapnr/Dockerfile", "PYTHON_VERSION"),
             platform.python_version(),
         )
+
+    def test_native_library_notes_for_every_architecture(self):
+        for arch in LOCKS:
+            text = _read(f"docker/yapnr/native-libraries-{arch}.txt")
+            self.assertIn(f"linux/{arch}", text)
+            self.assertIn("libgfortran", text)
+
+
+class BuildCacheTest(unittest.TestCase):
+    """Per-commit build arguments come after the expensive RUN of their stage."""
+
+    PER_COMMIT = {"BASE_TAG", "BASE_CONTEXT", "VCS_REF", "YAPNR_VERSION", "KICAD_BASE"}
+    PER_COMMIT |= {"KICAD_BASE_DIGEST"}
+
+    def _check(self, rel: str, stage: str):
+        lines = _stage(rel, stage)
+        first_run = next(i for i, line in enumerate(lines) if line.startswith("RUN "))
+        early = [
+            line
+            for line in lines[:first_run]
+            if line.startswith("ARG ") and re.split(r"[ =]", line)[1] in self.PER_COMMIT
+        ]
+        self.assertEqual(early, [], f"{rel}: declared before the first RUN of its stage")
+        self.assertTrue(
+            any(line.startswith("ARG VCS_REF") for line in lines[first_run:]),
+            f"{rel}: VCS_REF not found in the stage",
+        )
+
+    def test_kicad_base(self):
+        self._check("docker/yapnr-kicad/Dockerfile", "base")
+
+    def test_yapnr(self):
+        self._check("docker/yapnr/Dockerfile", "")
 
 
 if __name__ == "__main__":

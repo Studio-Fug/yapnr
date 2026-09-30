@@ -17,12 +17,15 @@ done, this repository holds the project scaffolding (build, CI, documentation) a
 Alpha. The engine's committed history (PR1) and its newer, never committed state (PR2) are
 imported from Splanc at their original paths under `hardware/` (see the
 [history import manifest](history/import-manifest.md)); the package restructuring follows. The
-command line currently offers `yapnr --version` and a `yapnr doctor` stub. Progress is tracked in
+command line currently offers `yapnr --version` and a `yapnr doctor` stub; the live viewer
+(PR4) runs with `bazel run //:viewer`. Progress is tracked in
 [WORKLOG.md](../WORKLOG.md) and in GitHub issues.
 
 ## Start here
 
 - [Container images](containers.md): run yapnr with Docker and nothing else (KiCad included).
+- [The live viewer](viewer.md): watch experiments in a browser; its configuration, optional
+  services and the cost and security of the (off by default) Ask agent.
 - [Releases and versioning](releases.md): version numbers, image tags, what a release publishes.
 - [Architecture](architecture.md): the planned layout of the package, the test tiers and the
   pipeline.
@@ -49,6 +52,7 @@ any later version (`AGPL-3.0-or-later`). See [LICENSE](../LICENSE).
 :caption: Using yapnr
 
 containers
+viewer
 releases
 ```
 

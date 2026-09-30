@@ -41,7 +41,8 @@ and branches are never picked by hand.
 | `native/search`                  | Rust search backend (heading-aware A\*)                      |
 | `bazel/`                         | headless ruleset for downstream repositories (Splanc)        |
 
-Today the package holds only `yapnr/__init__.py` and the command line (`yapnr/cli.py`).
+Today the package holds `yapnr/__init__.py`, the command line (`yapnr/cli.py`) and the live
+viewer (`yapnr/viewer`, PR4; [the viewer](viewer.md)).
 
 ## Test tiers
 

@@ -3,57 +3,57 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-09-30 (engine hygiene).
+Last updated: 2026-09-30 (PR4, the viewer).
 
 ## In progress
 
-- **Engine hygiene** (branch `claude/engine-hygiene`, not pushed), the PR3 leftovers of PR2
-  (merged, #7): Electrical221's cleanup gated default off (`PNR_PARTIAL_CYCLE_CLEANUP`,
-  `PNR_BARREL_CONTACT_BRIDGES`; the default is src15 again), the `board.Remove` audit (27 calls
-  now `board.Delete`, 3 kept; `board_delete_test` checks each call; replayed on H7's real boards
-  for five sites with identical results), every engine subprocess bounded through `pnr.proc`
-  (`PNR_WORKER_TIMEOUT`, `PNR_PHASE_TIMEOUT`, `PNR_EVALUATION_TIMEOUT`; 0 means no limit; a
-  timeout kills the child's whole process tree; a deadline kill is not retried; `proc_test`),
-  CI's history scan with merge diffs (`git log -p --diff-merges=separate`), and
-  `orientation_test` re-enabled as `large` (#6: placement is deterministic per platform only, so
-  it compares a three-seed mean with a 5 % margin, a coarse guard, and checks known best angles
-  on a synthetic board; passes on macOS and linux-aarch64). The review's findings are fixed in
-  follow-up commits on the branch. Reasons and limits: [docs/decisions.md](docs/decisions.md);
-  struck leftovers:
-  [docs/history/import-manifest.md](docs/history/import-manifest.md#known-leftovers-for-pr3).
+- **PR4, the live viewer** (branch `claude/pr4-viewer`, not pushed): the deployed Splanc viewer
+  ported to `yapnr/viewer` (move, scrubbed imports, format, packaging and configuration, lint,
+  fetched JavaScript and Bazel targets, tests and docs). `bazel run //:viewer -- --root <live>`;
+  configuration by flags or a `yapnr-viewer-v1` TOML file, no machine defaults; the Ask agent,
+  its web tools and AI net labels are off unless enabled; elkjs 0.9.3 and three.js 0.186.1 are
+  fetched pinned by sha256 into `//yapnr/viewer:dist`; 11 offline unit test targets on a
+  synthetic atopile fixture, live checks manual in `tests/e2e/viewer`. Choices:
+  [docs/decisions.md](docs/decisions.md) ("Choices made in PR4"); guide:
+  [docs/viewer.md](docs/viewer.md). The engine hygiene branch is merged (#8).
 
 ## Next
 
-1. Owner: review and push the hygiene branch and open its PR; CI must be green (it runs
-   `orientation_test` again; close #6 with it).
-2. Owner: A/B Electrical221's two flags on the hierarchical engine before turning them on.
+1. Owner (PR4): review the viewer branch; decide the agent's default model (opus, $2 per turn,
+   $20 per process) and file the issue for `pnr.capacitor_intent` (the cost replay reports
+   contexts that need it as unavailable). After merging, list the move and format commits in
+   `.git-blame-ignore-revs` (a merge commit keeps them; a squash folds them away).
+2. PR4 follow-ups: `--project` and the manifest's `[viewer]` table (with PR3d), the published
+   `yapnr-live-event-v1` JSON Schema, browser e2e tests (Chrome DevTools), the viewer in the wheel
+   and images once the engine is (PR3b), `examples/led555` as the smoke run (PR6b).
+3. Owner: A/B Electrical221's two flags on the hierarchical engine before turning them on.
    Before the next experiment runs this engine, one rung-1 evaluation with it (`board.Delete`
    everywhere) when the Mac is free: the replay covered 5 of the 27 changed sites, and a full
    evaluation's nested workers exceed the two-KiCad-process budget kept while H7 runs.
-3. Owner: push Splanc's `splanc-mini`, so the 9 newest `Imported-From` links of PR1 resolve (see the
+4. Owner: push Splanc's `splanc-mini`, so the 9 newest `Imported-From` links of PR1 resolve (see the
    manifest).
-4. PR6a, then PR3: wire the 68 unwired engine test files with the glob macro (the two hygiene tests
+5. PR6a, then PR3: wire the 68 unwired engine test files with the glob macro (the two hygiene tests
    are wired) and replace the Splanc defaults and fixtures (manifest, "Known leftovers for PR3").
    The KiCad-dependent tests run under the headless KiCad Python only (DEVELOPERS.md).
-5. PR-R is merged (#2). Its first `main` build pushes `yapnr-kicad:10.0.6-1-src`, then
+6. PR-R is merged (#2). Its first `main` build pushes `yapnr-kicad:10.0.6-1-src`, then
    `yapnr-kicad:10.0.6-1` (with `10.0.6` and `10.0`), then `yapnr:edge`. Then make both GHCR
    packages **public** (package settings > Change visibility; irreversible, owner-approved). The
    organization must allow public packages first (Organization settings > Packages > Package
    creation: Public), or the option is missing. Check that an anonymous
    `docker pull ghcr.io/studio-fug/yapnr:edge` (and `yapnr-kicad:10.0.6-1-src` on arm64) works and
    that `gh attestation verify oci://ghcr.io/studio-fug/yapnr:edge -R Studio-Fug/yapnr` passes.
-6. Create the release-note labels (`tools/release/create_labels.sh`), label open pull requests,
+7. Create the release-note labels (`tools/release/create_labels.sh`), label open pull requests,
    and run the release dry run once (`gh workflow run release.yaml --ref main`); read the notes
    preview in its summary.
-7. Uncomment the container and release badges in `README.md` once the image is public and v0.1.0
+8. Uncomment the container and release badges in `README.md` once the image is public and v0.1.0
    exists; decide on immutable releases (docs/releases.md).
-8. PR6a: the KiCad-side workers run under `/usr/bin/python3` (3.12), which cannot import yapnr
+9. PR6a: the KiCad-side workers run under `/usr/bin/python3` (3.12), which cannot import yapnr
    (installed in the 3.11 venv only). Give them an import path with yapnr's pure-Python modules
    and none of the venv's compiled packages, and add a smoke check for it.
-9. First release tag `v0.1.0` (owner) once the engine runs end to end inside the published image on
-   both architectures (the PR6b example), after the `Image` run of that commit on `main` is green;
-   make the `image` check required then.
-10. Rebuild the KiCad base monthly (bump `docker/yapnr-kicad/TAG` to the next `-N`), or with the
+10. First release tag `v0.1.0` (owner) once the engine runs end to end inside the published image on
+    both architectures (the PR6b example), after the `Image` run of that commit on `main` is green;
+    make the `image` check required then.
+11. Rebuild the KiCad base monthly (bump `docker/yapnr-kicad/TAG` to the next `-N`), or with the
     Dependabot `ubuntu` digest update (docs/releases.md, "Maintaining the images").
 
 ## Blockers
@@ -62,6 +62,10 @@ Last updated: 2026-09-30 (engine hygiene).
 
 ## Do not retry
 
+- Serving the viewer's static files after `Path.resolve()`: in Bazel runfiles every file is a
+  symlink, so a resolved-path containment check rejects all of them. Check containment lexically.
+- Pointing the atopile source index at Bazel runfiles: it skips symlinked `.ato` files on purpose;
+  tests copy the fixture (`yapnr.viewer.testing.fixture_copy`).
 - Resolving `requirements.lock` on linux-x86_64 with the default PyPI index: the torch wheel there
   needs CUDA libraries the lock does not carry. Resolve on darwin-arm64 or linux-aarch64 (PR6a
   adds a separate x86_64 lock).

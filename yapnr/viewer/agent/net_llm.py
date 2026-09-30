@@ -1,11 +1,14 @@
-"""LLM net labels: one tool-less `claude -p` call (per ~60k-char chunk) over SourceService.dossier().
+"""LLM net labels: one tool-less `claude -p` call (per ~60k-char chunk) over
+SourceService.dossier().
 
-Output {schema, dossier_sha, source_sha, prompt_version, model, generated_at, nets:{name:{label,summary}}, missing, dropped, cost_usd}
-is written atomically and regenerated only when the dossier, PROMPT_VERSION or model changes; nets left missing by a failed
-chunk are retried alone, with backoff (usable()/settled() are the cache checks the viewer server and SourceService share). Entries are grounded in the
-dossier: labels <=6 words, summaries <=2 sentences, and an entry naming a component ref absent from the dossier
-is dropped. Usage: python -m yapnr.viewer.agent.net_llm OUT.json [--index FILE|URL] [--model sonnet] [--force] [--dry-run]
-Each call is paid (on the operator's Claude account): the viewer runs it only with --net-summaries on.
+Output {schema, dossier_sha, source_sha, prompt_version, model, generated_at,
+nets:{name:{label,summary}}, missing, dropped, cost_usd} is written atomically and regenerated only
+when the dossier, PROMPT_VERSION or model changes; nets left missing by a failed chunk are retried
+alone, with backoff (usable()/settled() are the cache checks the viewer server and SourceService
+share). Entries are grounded in the dossier: labels <=6 words, summaries <=2 sentences, and an entry
+naming a component ref absent from the dossier is dropped. Usage: python -m
+yapnr.viewer.agent.net_llm OUT.json [--index FILE|URL] [--model sonnet] [--force] [--dry-run] Each
+call is paid (on the operator's Claude account): the viewer runs it only with --net-summaries on.
 """
 
 import argparse
@@ -55,20 +58,31 @@ PREFIXES = {
     "M",
     "MH",
 }
-SYSTEM = "You label nets of a PCB netlist for an engineering viewer. You are given a mechanical dossier derived from the design source and netlist. Reply with one JSON object only."
-ASK = """Write a label and a summary for EVERY net in the dossier below (a PCB described in atopile).
-- label: at most 6 words, human meaningful (role plus voltage where stated), e.g. "5V LED supply rail", "USB-C CC1 line", "Buck switch node".
-- summary: at most 2 sentences: what the net carries and which modules/ICs/pins it joins.
-- Use only facts stated in the dossier. Never invent component references, values, voltages or currents; mention a component ref only if it appears in the dossier.
-- Do not mention the dossier itself, its truncation or pin counts.
-- Keys must be the exact net names given after "### net:" (case and punctuation preserved).
-Return ONLY this JSON, no prose and no code fences:
-{"nets":{"<net name>":{"label":"...","summary":"..."}}}
-Nets in this batch (%d): %s
-
-<dossier>
-%s
-</dossier>"""
+SYSTEM = (
+    "You label nets of a PCB netlist for an engineering viewer. You are given a mechanical "
+    "dossier derived from the design source and netlist. Reply with one JSON object only."
+)
+ASK = (
+    "Write a label and a summary for EVERY net in the dossier below (a PCB described "
+    "in atopile).\n"
+    "- label: at most 6 words, human meaningful (role plus voltage where stated), "
+    'e.g. "5V LED supply rail", "USB-C CC1 line", "Buck switch node".\n'
+    "- summary: at most 2 sentences: what the net carries and which modules/ICs/pins "
+    "it joins.\n"
+    "- Use only facts stated in the dossier. Never invent component references, "
+    "values, voltages or currents; mention a component ref only if it appears in the "
+    "dossier.\n"
+    "- Do not mention the dossier itself, its truncation or pin counts.\n"
+    '- Keys must be the exact net names given after "### net:" (case and punctuation '
+    "preserved).\n"
+    "Return ONLY this JSON, no prose and no code fences:\n"
+    '{"nets":{"<net name>":{"label":"...","summary":"..."}}}\n'
+    "Nets in this batch (%d): %s\n"
+    "\n"
+    "<dossier>\n"
+    "%s\n"
+    "</dossier>"
+)
 
 
 class IndexSource:
@@ -90,12 +104,16 @@ class IndexSource:
 
 
 def net_text(name, n, comps):
-    """Compact per-net dossier from an index net entry or a SourceService.dossier() entry (items may be dicts or strings)."""
-    s = lambda x, keys: (
-        x
-        if isinstance(x, str)
-        else " ".join(str(x[k]) for k in keys if isinstance(x, dict) and x.get(k) not in (None, ""))
-    )
+    """Compact per-net dossier from an index net entry or a SourceService.dossier() entry (items may
+    be dicts or strings)."""
+
+    def s(x, keys):
+        if isinstance(x, str):
+            return x
+        return " ".join(
+            str(x[k]) for k in keys if isinstance(x, dict) and x.get(k) not in (None, "")
+        )
+
     out = [
         f"### net: {name}",
         f"title: {n.get('title') or name} | kind: {n.get('kind') or '?'}"
@@ -120,7 +138,10 @@ def net_text(name, n, comps):
             + (
                 c
                 if isinstance(c, str)
-                else f"{c.get('rms_current_a')} A rms / {c.get('peak_current_a')} A peak ({c.get('scope')}, target {c.get('target')})"
+                else (
+                    f"{c.get('rms_current_a')} A rms / {c.get('peak_current_a')} A peak ({c.get('scope')}, "
+                    f"target {c.get('target')})"
+                )
             )
         )
     st = [s(x, ("file", "line", "text")) for x in (n.get("statements") or [])]
@@ -155,7 +176,8 @@ def net_text(name, n, comps):
 
 
 def collect(svc):
-    """(source_sha, [(net, text)], known_refs) from svc.dossier() when present, else from svc.index()."""
+    """(source_sha, [(net, text)], known_refs) from svc.dossier() when present, else from
+    svc.index()."""
     idx = None
     if hasattr(svc, "index"):
         try:
@@ -215,7 +237,8 @@ def extract_json(text):
 
 
 def tidy(s):
-    """Strip markdown markup only; identifier underscores (EN_UVLO, C_CC1, sink_enabled_n) are kept."""
+    """Strip markdown markup only; identifier underscores (EN_UVLO, C_CC1, sink_enabled_n) are
+    kept."""
     s = re.sub(r"[*`#]|\[\[|\]\]", "", s)
     for m in ("__", "_"):
         s = re.sub(
@@ -225,7 +248,8 @@ def tidy(s):
 
 
 def usable(doc, mech_sha, model=None):
-    """Labels in doc were made for this mechanical dossier (source_sha), this prompt and (when given) this model."""
+    """Labels in doc were made for this mechanical dossier (source_sha), this prompt and (when
+    given) this model."""
     return (
         isinstance(doc, dict)
         and bool(mech_sha)
@@ -236,7 +260,8 @@ def usable(doc, mech_sha, model=None):
 
 
 def due(doc, now=None):
-    """A doc with missing nets gets a retry of those nets only, at most RETRIES attempts, BACKOFF*2^n apart."""
+    """A doc with missing nets gets a retry of those nets only, at most RETRIES attempts,
+    BACKOFF*2^n apart."""
     n = int(doc.get("attempts") or 1)
     return (
         bool(doc.get("missing"))
@@ -246,7 +271,8 @@ def due(doc, now=None):
 
 
 def settled(doc, mech_sha, model):
-    """Nothing to generate automatically: usable, and complete or not yet due for a retry of its missing nets."""
+    """Nothing to generate automatically: usable, and complete or not yet due for a retry of its
+    missing nets."""
     return usable(doc, mech_sha, model) and not due(doc)
 
 
@@ -378,7 +404,8 @@ def generate(
     log=print,
     cache=None,
 ):
-    """Label every net (or only the nets a previous run left missing, when due); returns the written or current document."""
+    """Label every net (or only the nets a previous run left missing, when due); returns the written
+    or current document."""
     if model not in MODELS:
         raise ValueError("model must be one of " + ", ".join(MODELS))
     src_sha, entries, refs = collect(source_service)
@@ -399,7 +426,10 @@ def generate(
     )
     if same and not due(old):
         log(
-            f'net_llm: {out_path} current ({len(old.get("nets") or {})} nets, {len(old.get("missing") or [])} missing, dossier {sha[:12]})'
+            (
+                f'net_llm: {out_path} current ({len(old.get("nets") or {})} nets, {len(old.get("missing") or [])} '
+                f"missing, dossier {sha[:12]})"
+            )
         )
         return old
     retry = set(old["missing"]) if same else None
@@ -456,7 +486,10 @@ def generate(
     )
     write_atomic(out_path, doc)
     log(
-        f"net_llm: {len(nets)}/{len(names)} nets labelled, {len(dropped)} dropped, {len(missing)} missing, {len(parts)} call(s), ${cost:.4f} -> {out_path}"
+        (
+            f"net_llm: {len(nets)}/{len(names)} nets labelled, {len(dropped)} dropped, {len(missing)} "
+            f"missing, {len(parts)} call(s), ${cost:.4f} -> {out_path}"
+        )
     )
     return doc
 

@@ -1,4 +1,4 @@
-"""Viewer configuration: command-line flags, an optional TOML file, and values derived from the root.
+"""Viewer configuration: flags, an optional TOML file and values derived from the root.
 
 Precedence, per setting: a command-line flag, then the ``--config`` file (TOML; relative paths
 are relative to the file), then a default derived from the live telemetry directory (``--root``).
@@ -399,7 +399,8 @@ def _convert(kind: str, value: Any, base: Path, where: str) -> Any:
         if not isinstance(v, (str, os.PathLike)):
             raise ConfigError(f"{where}: expected a path, got {v!r}")
         p = Path(v).expanduser()
-        return p if p.is_absolute() else base / p
+        # Lexically normalized ("a/../b" -> "b"); symlinks are kept as given.
+        return Path(os.path.normpath(p if p.is_absolute() else base / p))
 
     if value is None:
         return None

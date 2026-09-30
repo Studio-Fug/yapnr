@@ -1,16 +1,18 @@
-"""Minimal MCP stdio server: the Ask agent's design-notes tools (JSON-RPC 2.0, one message per line, stdlib only).
+"""Minimal MCP stdio server: the Ask agent's design-notes tools (JSON-RPC 2.0, one message per line,
+stdlib only).
 
-The agent service starts it per turn (``python -m yapnr.viewer.notes.mcp``) through a strict --mcp-config (server name
-yapnr_notes, so the CLI names the tools mcp__yapnr_notes__add_note, ...). Every write goes through the notes store as actor
-{kind:'agent', session}; provenance comes from the environment the agent service sets, never from model input:
-YAPNR_NOTES_DIR (required), YAPNR_SESSION, YAPNR_TURN, YAPNR_LANE, YAPNR_PHASE, YAPNR_VIEWER_PORT, YAPNR_BOARD_SHA, and
-YAPNR_RESOLVER (compact source index: targets must name existing refs/pads/nets/lines) or YAPNR_GRAPH (graph.json
-fallback). Authority lives in the notes store (no accept/reject/apply, no deletes; edits only of notes this conversation
-(YAPNR_SESSION) wrote, while open/proposed). Per process (= per turn): at most
-10 new notes and 40 comments/updates. Arguments of the wrong type come back as tool errors the model can fix, not RPC errors.
-Methods: initialize (protocol version negotiation: the client's version when supported, else the newest), notifications/*,
-ping, tools/list, tools/call; batches (an empty one is an Invalid Request).
-"""
+The agent service starts it per turn (``python -m yapnr.viewer.notes.mcp``) through a strict
+--mcp-config (server name yapnr_notes, so the CLI names the tools mcp__yapnr_notes__add_note, ...).
+Every write goes through the notes store as actor {kind:'agent', session}; provenance comes from the
+environment the agent service sets, never from model input: YAPNR_NOTES_DIR (required),
+YAPNR_SESSION, YAPNR_TURN, YAPNR_LANE, YAPNR_PHASE, YAPNR_VIEWER_PORT, YAPNR_BOARD_SHA, and
+YAPNR_RESOLVER (compact source index: targets must name existing refs/pads/nets/lines) or
+YAPNR_GRAPH (graph.json fallback). Authority lives in the notes store (no accept/reject/apply, no
+deletes; edits only of notes this conversation (YAPNR_SESSION) wrote, while open/proposed). Per
+process (= per turn): at most 10 new notes and 40 comments/updates. Arguments of the wrong type come
+back as tool errors the model can fix, not RPC errors. Methods: initialize (protocol version
+negotiation: the client's version when supported, else the newest), notifications/*, ping,
+tools/list, tools/call; batches (an empty one is an Invalid Request)."""
 
 import json
 import os
@@ -26,14 +28,19 @@ VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
 LIMITS = dict(create=10, write=40)
 MAX_LINE = 2 << 20
 INSTRUCTIONS = (
-    "Design notes for the board in this viewer. Record what the user and you conclude (observations, questions, requirements, decisions the user "
-    'states, todos, proposals) so the design loop can act on it. You can only propose: a design change stays "proposed" until the user accepts or rejects '
-    "it in the viewer Notes tab; you can never accept, reject, apply, resolve or delete notes, and must never say a note was accepted or applied."
+    "Design notes for the board in this viewer. Record what the user and you conclude "
+    "(observations, questions, requirements, decisions the user "
+    "states, todos, proposals) so the design loop can act on it. You can only propose: "
+    'a design change stays "proposed" until the user accepts or rejects '
+    "it in the viewer Notes tab; you can never accept, reject, apply, resolve or delete "
+    "notes, and must never say a note was accepted or applied."
 )
 ITEM = {
     "type": "object",
-    "description": "Board item, same schema as the viewer context: component {kind,ref}, net {kind,name}, pad {kind,ref,pad}, "
-    "source {kind,file,line,end} (atopile path relative to src, e.g. power.ato), region {kind,lane,bbox,refs,nets}, group {kind,id,label,refs,nets}, lane {kind,lane}.",
+    "description": "Board item, same schema as the viewer context: component {kind,ref}, net {kind,name}, "
+    "pad {kind,ref,pad}, "
+    "source {kind,file,line,end} (atopile path relative to src, e.g. power.ato), region "
+    "{kind,lane,bbox,refs,nets}, group {kind,id,label,refs,nets}, lane {kind,lane}.",
     "properties": {
         "kind": {"type": "string", "enum": list(ITEMS)},
         "ref": {"type": "string"},
@@ -96,14 +103,19 @@ ID = {"type": "string", "pattern": "^N-[0-9]{4,6}$", "description": "Note id, e.
 TOOLS = [
     dict(
         name="add_note",
-        description="Record a design note from this conversation (observation, question, requirement, decision the user stated, todo, or proposal). "
-        "Give targets for every board item it concerns and sources for anything from the web. A design change (atopile source, PnR annotation, constraint, engine) "
+        description="Record a design note from this conversation (observation, question, requirement, "
+        "decision the user stated, todo, or proposal). "
+        "Give targets for every board item it concerns and sources for anything from the "
+        "web. A design change (atopile source, PnR annotation, constraint, engine) "
         'must be kind "proposal" with a proposal object; it stays "proposed" until the user decides in the Notes tab.',
         inputSchema={"type": "object", "properties": FIELDS, "required": ["title"]},
     ),
     dict(
         name="list_notes",
-        description="Search existing design notes (newest first): free text, a component ref or net name among the targets, status, kind, author.",
+        description=(
+            "Search existing design notes (newest first): free text, a component ref or net name "
+            "among the targets, status, kind, author."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -124,7 +136,10 @@ TOOLS = [
     ),
     dict(
         name="comment_note",
-        description="Add a comment to any note (new evidence, an answer to a question, a caveat). Use this for notes you may not edit.",
+        description=(
+            "Add a comment to any note (new evidence, an answer to a question, a caveat). Use "
+            "this for notes you may not edit."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -136,8 +151,10 @@ TOOLS = [
     ),
     dict(
         name="update_note",
-        description="Edit a note written in this conversation while it is still open or proposed (title, body, kind, tags, targets, proposal, sources). "
-        "Status cannot be changed here; notes by the user, from other conversations or already decided cannot be edited (comment instead).",
+        description="Edit a note written in this conversation while it is still open or proposed (title, "
+        "body, kind, tags, targets, proposal, sources). "
+        "Status cannot be changed here; notes by the user, from other conversations or already "
+        "decided cannot be edited (comment instead).",
         inputSchema={"type": "object", "properties": {"id": ID, **FIELDS}, "required": ["id"]},
     ),
 ]
@@ -158,6 +175,7 @@ ARG_TYPES = dict(
     sources=list,
     proposal=dict,
 )
+TYPE_NAMES = {str: "a string", list: "an array", dict: "an object"}
 
 
 def env_context(env=None):
@@ -227,7 +245,7 @@ class Server:
         if not isinstance(a, dict):
             return "arguments must be an object", True
         bad = [
-            f'{k} must be {ARG_TYPES[k].__name__.replace("str","a string").replace("list","an array").replace("dict","an object")}'
+            f"{k} must be {TYPE_NAMES[ARG_TYPES[k]]}"
             for k, v in a.items()
             if k in ARG_TYPES
             and v is not None
@@ -239,14 +257,20 @@ class Server:
         if bad:
             return "invalid: " + "; ".join(bad), True
         s = self.store
-        pick = lambda *ks: {k: a[k] for k in ks if k in a}
+
+        def pick(*ks):
+            return {k: a[k] for k in ks if k in a}
+
         if name in ("add_note", "update_note") and a.get("status") not in (
             None,
             "open",
             "proposed",
         ):
             return (
-                f"not allowed: only the user can mark a note {a['status']} (viewer Notes tab); you can only record notes and proposals",
+                (
+                    f"not allowed: only the user can mark a note {a['status']} (viewer Notes tab); you "
+                    "can only record notes and proposals"
+                ),
                 True,
             )
         if name == "update_note" and "status" in a:
@@ -268,7 +292,10 @@ class Server:
                             kind=n["kind"],
                             title=n["title"],
                             targets=len(n["targets"]),
-                            note="Recorded. The user sees it in the Notes tab; only the user can accept, reject or apply it.",
+                            note=(
+                                "Recorded. The user sees it in the Notes tab; only the user can accept, reject or "
+                                "apply it."
+                            ),
                         ),
                         ensure_ascii=False,
                     ),
@@ -342,7 +369,10 @@ class Server:
             return None  # a response to something we never send
         if "id" not in m:
             return None  # notifications/initialized, notifications/cancelled, ...
-        ok = lambda r: dict(jsonrpc="2.0", id=mid, result=r)
+
+        def ok(r):
+            return dict(jsonrpc="2.0", id=mid, result=r)
+
         if method == "initialize":
             v = p.get("protocolVersion") if isinstance(p, dict) else None
             return ok(

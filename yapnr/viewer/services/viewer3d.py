@@ -1,24 +1,29 @@
 """3D board view: headless KiCad GLB export queue, cache and compaction (stdlib only).
 
-Server side (Viewer3DService, used by server.py): GET /api/3d resolves a board by its sha256 (the immutable
-<root>/boards/<sha>.kicad_pcb copy, else the lane's native board when it still hashes to that sha: re-hashed on every
-request and exported from a snapshot of those bytes), keys it by its *placement fingerprint* (the board text without
-top-level segment/arc items, copper zones and tented vias) plus everything else the GLB depends on (export version and
-flags, the resolved kicad-cli and its 3D library, the parts folder and the size/mtime of the project model files the
-board references) and queues at most one export at a time (one worker thread; a machine-wide flock shared by the
-viewers under one experiment folder). Viewers may share one cache folder (prod and dev on one root): a cached "ready" is
-re-checked on disk, and a viewer only ever removes its own export's scratch folder. Routing-only revisions therefore share one GLB: copper is drawn in the browser from
-the viewer's own geometry, which carries nets for picking. The export runs as `python viewer3d_service.py export
-...` in its own process group (nice 10), killed on timeout or server stop; requests only enqueue and return.
+Server side (Viewer3DService, used by server.py): GET /api/3d resolves a board by its sha256 (the
+immutable
+<root>/boards/<sha>.kicad_pcb copy, else the lane's native board when it still hashes to that sha:
+  re-hashed on every
+request and exported from a snapshot of those bytes), keys it by its *placement fingerprint* (the
+board text without top-level segment/arc items, copper zones and tented vias) plus everything else
+the GLB depends on (export version and flags, the resolved kicad-cli and its 3D library, the parts
+folder and the size/mtime of the project model files the board references) and queues at most one
+export at a time (one worker thread; a machine-wide flock shared by the viewers under one experiment
+folder). Viewers may share one cache folder (prod and dev on one root): a cached "ready" is
+re-checked on disk, and a viewer only ever removes its own export's scratch folder. Routing-only
+revisions therefore share one GLB: copper is drawn in the browser from the viewer's own geometry,
+which carries nets for picking. The export runs as `python viewer3d_service.py export ...` in its
+own process group (nice 10), killed on timeout or server stop; requests only enqueue and return.
 
-Job side: the board is copied into a scratch folder with every `.../parts/<Part>/<file>` model path pointed at the
-atopile parts folder (so `${KIPRJMOD}/../../src/parts` resolves wherever the board copy lives), then
-`kicad-cli pcb export glb` runs with the *headless* CLI only (never /Applications/KiCad: that copy puts an icon in
-the Dock). The GLB is compacted: one node per footprint (named by ref) and one primitive per material, vertices
-baked into the viewer's engine frame (mm; x, y as the PCB canvas, origin at the Edge.Cuts bbox bottom-left; z up,
-0 = bottom of the board body), board body / silkscreen / soldermask as `__board`, `__silk_F`, `__mask_B`, ...
-Footprints whose models are missing simply have no node; the meta lists them and the browser draws boxes.
-"""
+Job side: the board is copied into a scratch folder with every `.../parts/<Part>/<file>` model path
+pointed at the atopile parts folder (so `${KIPRJMOD}/../../src/parts` resolves wherever the board
+copy lives), then `kicad-cli pcb export glb` runs with the *headless* CLI only (never
+/Applications/KiCad: that copy puts an icon in the Dock). The GLB is compacted: one node per
+footprint (named by ref) and one primitive per material, vertices baked into the viewer's engine
+frame (mm; x, y as the PCB canvas, origin at the Edge.Cuts bbox bottom-left; z up, 0 = bottom of the
+board body), board body / silkscreen / soldermask as `__board`, `__silk_F`, `__mask_B`, ...
+Footprints whose models are missing simply have no node; the meta lists them and the browser draws
+boxes."""
 
 import argparse
 import array
@@ -71,13 +76,13 @@ REFS = re.compile(r'\(property\s+"Reference"\s+"([^"]+)"')
 
 def headless_cli(path=None):
     """The kicad-cli to use (``yapnr.viewer.toolchain.kicad_cli``): the explicit path, else
-    ``$YAPNR_KICAD_CLI`` (alias ``$PNR_KICAD_CLI``), else the headless copy on macOS or ``kicad-cli``
-    on ``PATH`` elsewhere. Refuses the GUI application's CLI (anything inside KiCad.app or
-    /Applications/KiCad, also through a symlink) and a CLI inside any .app bundle whose Info.plist
-    is not background-only (LSBackgroundOnly / LSUIElement), such as a renamed copy of the GUI
-    application: LaunchServices registers that bundle as a regular application, which puts an icon
-    in the Dock. (The headless bundle still registers, as BackgroundOnly: no Dock icon, never
-    frontmost.)"""
+    ``$YAPNR_KICAD_CLI`` (alias ``$PNR_KICAD_CLI``), else the headless copy on macOS or
+    ``kicad-cli`` on ``PATH`` elsewhere. Refuses the GUI application's CLI (anything inside
+    KiCad.app or /Applications/KiCad, also through a symlink) and a CLI inside any .app bundle whose
+    Info.plist is not background-only (LSBackgroundOnly / LSUIElement), such as a renamed copy of
+    the GUI application: LaunchServices registers that bundle as a regular application, which puts
+    an icon in the Dock. (The headless bundle still registers, as BackgroundOnly: no Dock icon,
+    never frontmost.)"""
     return kicad_cli(explicit=path)
 
 
@@ -95,10 +100,11 @@ def model_env(cli):
 
 
 def export_env(cli):
-    """What the GLB depends on besides the board and the parts folder: the resolved kicad-cli (path, size, mtime,
-    bundle version) and the KICADn_3DMODEL_DIR library it resolves stock models from (the server's environment wins
-    over the CLI's own bundle). Part of every cache key: another KiCad or another library means new GLBs (and new
-    URLs, which the browser caches as immutable)."""
+    """What the GLB depends on besides the board and the parts folder: the resolved kicad-cli (path,
+    size, mtime, bundle version) and the KICADn_3DMODEL_DIR library it resolves stock models from
+    (the server's environment wins over the CLI's own bundle). Part of every cache key: another
+    KiCad or another library means new GLBs (and new URLs, which the browser caches as
+    immutable)."""
     p = Path(cli).resolve()
     st = p.stat()
     b = app_bundle(p)
@@ -129,9 +135,10 @@ def tented(t):
 
 
 def placement_text(text):
-    """The board without what its GLB never shows (KiCad writes each top-level item at one tab): segment/arc items,
-    copper zones and vias, unless a via is untented (board setup, or its own tenting): its soldermask opening is in the
-    GLB (--include-soldermask), so it stays in the fingerprint; so does a zone on a mask layer."""
+    """The board without what its GLB never shows (KiCad writes each top-level item at one tab):
+    segment/arc items, copper zones and vias, unless a via is untented (board setup, or its own
+    tenting): its soldermask opening is in the GLB (--include-soldermask), so it stays in the
+    fingerprint; so does a zone on a mask layer."""
     parts = text.split("\n\t(")
     if len(parts) < 3:
         return text
@@ -157,7 +164,8 @@ def model_rels(text):
 
 
 def models_digest(parts, rels):
-    """Size and mtime of each referenced project model file (or its absence): an edited model means a new GLB."""
+    """Size and mtime of each referenced project model file (or its absence): an edited model means
+    a new GLB."""
     h = hashlib.sha256()
     for r in rels:
         try:
@@ -180,13 +188,14 @@ def placement_sha(text):
 
 
 def cache_key(text, parts=None, env=None):
-    """The GLB cache key of a board: placement fingerprint + export version/flags + parts folder and its model files +
-    export environment (export_env)."""
+    """The GLB cache key of a board: placement fingerprint + export version/flags + parts folder and
+    its model files + export environment (export_env)."""
     return key_of(placement_sha(text), model_rels(text), parts, env)
 
 
 def rewrite_models(text, parts):
-    """Point `.../parts/<Part>/<file>` model paths at the parts folder when that file exists there."""
+    """Point `.../parts/<Part>/<file>` model paths at the parts folder when that file exists
+    there."""
     if not parts or '"' in str(parts) or "\\" in str(parts):
         return text
     parts = Path(parts)
@@ -265,9 +274,9 @@ IDENTITY = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
 
 
 def compact(data):
-    """KiCad GLB -> (compact GLB bytes, info). One node per top-level item (footprint ref or board part), one primitive
-    per material, positions/normals baked into the engine frame (mm, y up in the board plane, z = height).
-    """
+    """KiCad GLB -> (compact GLB bytes, info). One node per top-level item (footprint ref or board
+    part), one primitive per material, positions/normals baked into the engine frame (mm, y up in
+    the board plane, z = height)."""
     if sys.byteorder != "little":
         raise RuntimeError("big-endian hosts are not supported")
     js, binary = read_glb(data)
@@ -311,7 +320,8 @@ def compact(data):
                 )
             )
 
-    # the engine frame: Edge.Cuts bbox from the board body (min X, max Z in metres), else from everything
+    # the engine frame: Edge.Cuts bbox from the board body (min X, max Z in metres), else from
+    # everything
     def bounds(its):
         lo = [math.inf] * 3
         hi = [-math.inf] * 3
@@ -419,7 +429,7 @@ def compact(data):
                     if "NORMAL" in p["attributes"]
                     else None
                 )
-                I = (
+                idx_in = (
                     accessor(js, binary, p["indices"])
                     if "indices" in p
                     else array.array("I", range(nv))
@@ -454,18 +464,17 @@ def compact(data):
                             c10 * x + c11 * y + c12 * z,
                             c20 * x + c21 * y + c22 * z,
                         )
-                        l = math.sqrt(u * u + v * v + w * w) or 1.0
-                        l = sg / l
-                        o.extend((u * l, v * l, w * l))
+                        scale = sg / (math.sqrt(u * u + v * v + w * w) or 1.0)
+                        o.extend((u * scale, v * scale, w * scale))
                 else:
                     g["N"].extend([0.0, 0.0, 1.0] * nv)
                 base = g["n"]
                 o = g["I"]
                 if sg > 0:
-                    o.extend(i + base for i in I)
+                    o.extend(i + base for i in idx_in)
                 else:
-                    for j in range(0, len(I) - 2, 3):
-                        o.extend((I[j] + base, I[j + 2] + base, I[j + 1] + base))
+                    for j in range(0, len(idx_in) - 2, 3):
+                        o.extend((idx_in[j] + base, idx_in[j + 2] + base, idx_in[j + 1] + base))
                 g["n"] += nv
         if not groups:
             continue
@@ -527,10 +536,14 @@ def compact(data):
         q.get("pbrMetallicRoughness", {}).pop("metallicRoughnessTexture", None)
         mats.append(q)
     info["triangles"] = tris
+    source_asset = js.get("asset", {})
+    source_generator = source_asset.get("extras", {}).get("generator") or source_asset.get(
+        "generator", "KiCad"
+    )
     doc = dict(
         asset=dict(
             version="2.0",
-            generator=f'yapnr viewer3d v{EXPORT_VERSION} (compacted from {js.get("asset",{}).get("extras",{}).get("generator") or js.get("asset",{}).get("generator","KiCad")})',
+            generator=f"yapnr viewer3d v{EXPORT_VERSION} (compacted from {source_generator})",
             extras=dict(
                 schema=SCHEMA,
                 frame="engine mm, x/y as the PCB canvas (y up), z up; 0 = board body bottom",
@@ -584,9 +597,9 @@ def run_job(
     key=None,
     work=None,
 ):
-    """Export + compact one board. Writes out (.glb), out.gz and, last, meta_path (its presence means ready). work: the
-    scratch folder to create (the service names it, so it can remove exactly this one if it has to kill the job).
-    """
+    """Export + compact one board. Writes out (.glb), out.gz and, last, meta_path (its presence
+    means ready). work: the scratch folder to create (the service names it, so it can remove exactly
+    this one if it has to kill the job)."""
     try:
         os.nice(10)
     except OSError:
@@ -627,7 +640,9 @@ def run_job(
             raise RuntimeError(
                 f"kicad-cli exit {r.returncode}: "
                 + " | ".join(
-                    l for l in log.strip().splitlines()[-6:] if "NSCocoaErrorDomain" not in l
+                    line
+                    for line in log.strip().splitlines()[-6:]
+                    if "NSCocoaErrorDomain" not in line
                 )[:600]
             )
         size = raw.stat().st_size
@@ -671,16 +686,17 @@ def run_job(
 
 # ------------------------------------------------------------------ service (server process)
 class Viewer3DService:
-    """Queue + cache of compacted GLBs under cache_dir, keyed by placement fingerprint. request() never blocks on an
-    export: it enqueues (at most max_queue pending, newest first) and reports queued / exporting / ready / failed.
-    The 3D pane polls every 1.5 s while it waits, so a key nobody polled for stale_s (12 s) is dropped before it starts
-    and a running export nobody polled for abandon_s (20 s) is killed: flicking through checkpoints or lanes (or a
-    viewer replaying its events after a restart) does not leave a trail of 2 GB exports behind. peek=True reports
-    without enqueueing ('idle' when nothing is cached or running): the pane peeks first and enqueues once its board
-    has stayed the same for a moment. One worker; a flock on lock_path caps exports across viewers. Several viewers
-    may share cache_dir (prod and dev on one root): 'ready' is re-checked on disk (the other one may have evicted it),
-    each removes only its own scratch folders, and leftovers (logs, failure records) are swept after retry_s.
-    """
+    """Queue + cache of compacted GLBs under cache_dir, keyed by placement fingerprint. request()
+    never blocks on an export: it enqueues (at most max_queue pending, newest first) and reports
+    queued / exporting / ready / failed. The 3D pane polls every 1.5 s while it waits, so a key
+    nobody polled for stale_s (12 s) is dropped before it starts and a running export nobody polled
+    for abandon_s (20 s) is killed: flicking through checkpoints or lanes (or a viewer replaying its
+    events after a restart) does not leave a trail of 2 GB exports behind. peek=True reports without
+    enqueueing ('idle' when nothing is cached or running): the pane peeks first and enqueues once
+    its board has stayed the same for a moment. One worker; a flock on lock_path caps exports across
+    viewers. Several viewers may share cache_dir (prod and dev on one root): 'ready' is re-checked
+    on disk (the other one may have evicted it), each removes only its own scratch folders, and
+    leftovers (logs, failure records) are swept after retry_s."""
 
     def __init__(
         self,
@@ -742,9 +758,9 @@ class Viewer3DService:
         self.sweep()
 
     def sweep(self, age=1800):
-        """Leftovers older than age: scratch folders and board snapshots (v3d-*), *.tmp; logs and failure records older
-        than retry_s (a failure record is ignored after that anyway; a running export is < timeout old).
-        """
+        """Leftovers older than age: scratch folders and board snapshots (v3d-*), *.tmp; logs and
+        failure records older than retry_s (a failure record is ignored after that anyway; a running
+        export is < timeout old)."""
         now = time.time()
         self.swept = now
         for pats, old in (
@@ -768,8 +784,8 @@ class Viewer3DService:
         )
 
     def key_of(self, psha, rels):
-        """Cache key from a placement sha and the model files it references (their size/mtime digest cached for 5 s: the
-        pane polls every 1.5 s)."""
+        """Cache key from a placement sha and the model files it references (their size/mtime digest
+        cached for 5 s: the pane polls every 1.5 s)."""
         digest = ""
         if self.parts and rels:
             now = time.time()
@@ -785,10 +801,10 @@ class Viewer3DService:
         return self.key_of(placement_sha(text), model_rels(text))
 
     def key_for(self, sha, candidates):
-        """(key, board path, bytes or None) for a board sha: the first candidate whose content hashes to sha. The
-        content-addressed <sha>.kicad_pcb copy is remembered by sha; any other candidate (the lane's working board, which PnR
-        rewrites) is re-read and re-hashed on every request, and its bytes come back so the export uses exactly them.
-        """
+        """(key, board path, bytes or None) for a board sha: the first candidate whose content
+        hashes to sha. The content-addressed <sha>.kicad_pcb copy is remembered by sha; any other
+        candidate (the lane's working board, which PnR rewrites) is re-read and re-hashed on every
+        request, and its bytes come back so the export uses exactly them."""
         hit = self.keys.get(sha)
         if hit and hit[2].is_file():
             return self.key_of(hit[0], hit[1]), hit[2], None
@@ -801,7 +817,10 @@ class Viewer3DService:
                     continue
                 if p.stat().st_size > self.board_cap:
                     raise Unavailable(
-                        f"board too large for 3D export ({p.stat().st_size/1e6:.0f} MB > {self.board_cap/1e6:.0f} MB cap)"
+                        (
+                            f"board too large for 3D export ({p.stat().st_size/1e6:.0f} MB > {self.board_cap/1e6:.0f} "
+                            "MB cap)"
+                        )
                     )
                 data = p.read_bytes()
             except OSError:
@@ -819,9 +838,9 @@ class Viewer3DService:
         return None
 
     def meta(self, key, fresh=False):
-        """The meta of a ready key, else None. A remembered meta is only trusted while its files exist: a viewer sharing
-        this cache may have evicted them (or someone removed them); fresh=True re-reads it from disk.
-        """
+        """The meta of a ready key, else None. A remembered meta is only trusted while its files
+        exist: a viewer sharing this cache may have evicted them (or someone removed them);
+        fresh=True re-reads it from disk."""
         glb, meta, _, _ = self.paths(key)
         m = None if fresh else self.metas.get(key)
         if not (glb.is_file() and meta.is_file()):
@@ -909,8 +928,11 @@ class Viewer3DService:
                     stage="queued",
                 )
                 if (
-                    data is not None
-                ):  # a mutable board (the lane's own file): export these very bytes, whatever PnR writes there meanwhile
+                    data
+                    is not None
+                    # a mutable board (the lane's own file): export these very bytes, whatever PnR
+                    # writes there meanwhile
+                ):
                     snap = self.cache / f"v3d-src-{uuid.uuid4().hex[:16]}.kicad_pcb"
                     try:
                         write_atomic(snap, data)
@@ -1087,9 +1109,9 @@ class Viewer3DService:
                     m = self.meta(key, fresh=True)
                     if code or not m:
                         tail = [
-                            l
-                            for l in logf.read_text(errors="replace").strip().splitlines()
-                            if l.strip()
+                            line
+                            for line in logf.read_text(errors="replace").strip().splitlines()
+                            if line.strip()
                         ][-3:]
                         raise RuntimeError(
                             (tail[-1] if tail else f"export exited with {code}")[:600]
@@ -1117,8 +1139,8 @@ class Viewer3DService:
                 Path(job["snap"]).unlink(missing_ok=True)
 
     def evict(self, keep=None):
-        """LRU by mtime (serving touches it): at most max_files GLBs and max_total bytes. Tolerates files vanishing under
-        it (another viewer sharing the cache evicts too)."""
+        """LRU by mtime (serving touches it): at most max_files GLBs and max_total bytes. Tolerates
+        files vanishing under it (another viewer sharing the cache evicts too)."""
         files = []
         for f in self.cache.glob("*.glb"):
             try:
@@ -1148,8 +1170,8 @@ class Viewer3DService:
                 total -= size
 
     def glb(self, key, gzip_ok=False):
-        """(bytes, content-encoding or None) for a ready key; FileNotFoundError otherwise (then the key is no longer
-        'ready' here either: the next request exports it again)."""
+        """(bytes, content-encoding or None) for a ready key; FileNotFoundError otherwise (then the
+        key is no longer 'ready' here either: the next request exports it again)."""
         if not isinstance(key, str) or not HEX64.fullmatch(key):
             raise ValueError("invalid key")
         f, meta, _, _ = self.paths(key)
@@ -1171,8 +1193,8 @@ class Viewer3DService:
             raise
 
     def kill(self):
-        """Kill the running export's process group and remove its scratch folder (only that one: another viewer sharing
-        this cache may be exporting into its own)."""
+        """Kill the running export's process group and remove its scratch folder (only that one:
+        another viewer sharing this cache may be exporting into its own)."""
         p, job = self.proc, self.cur
         if p and p.poll() is None:
             try:
@@ -1187,8 +1209,8 @@ class Viewer3DService:
             shutil.rmtree(job["work"], ignore_errors=True)
 
     def shutdown(self):
-        """Server stop: kill a running export (process group + scratch folder) and drop its log (the server exits right
-        after, before the worker thread could)."""
+        """Server stop: kill a running export (process group + scratch folder) and drop its log (the
+        server exits right after, before the worker thread could)."""
         job = self.cur
         self.stopped = True
         self.kill()

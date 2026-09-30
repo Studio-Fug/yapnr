@@ -176,7 +176,8 @@ class SourceService:
 
     # ------------------------------------------------------------ LLM summaries
     def dossier(self):
-        """(sha, [per-net compact dossier]) - the only facts an LLM summary may be generated from."""
+        """(sha, [per-net compact dossier]) - the only facts an LLM summary may be generated
+        from."""
         with self.lock:
             self.index()
             if self._dossier is None:
@@ -192,7 +193,8 @@ class SourceService:
             return None
 
     def _attach(self, data):
-        """Copy-on-write view of the mechanical index with LLM summaries; the mechanical dicts are never mutated."""
+        """Copy-on-write view of the mechanical index with LLM summaries; the mechanical dicts are
+        never mutated."""
         mech = self._mech
         self._bytes = None
         if not data:
@@ -225,10 +227,10 @@ class SourceService:
         return k
 
     def merge_llm(self, path=None):
-        """Attach summaries from an LLM cache JSON {source_sha, prompt_version, model, generated_at, nets:{name:{label, summary}}}.
-        source_sha must equal dossier()[0], prompt_version net_llm.PROMPT_VERSION and model the configured llm_model.
-        Returns the number of nets attached (0 when stale). The path is remembered and re-read when it changes.
-        """
+        """Attach summaries from an LLM cache JSON {source_sha, prompt_version, model, generated_at,
+        nets:{name:{label, summary}}}. source_sha must equal dossier()[0], prompt_version
+        net_llm.PROMPT_VERSION and model the configured llm_model. Returns the number of nets
+        attached (0 when stale). The path is remembered and re-read when it changes."""
         with self.lock:
             if path:
                 self.llm_path = Path(path)
@@ -237,7 +239,8 @@ class SourceService:
 
     # ------------------------------------------------------------ files
     def file(self, rel):
-        """{path, text, sha, lines} for one .ato file under the source dir; ValueError for anything else."""
+        """{path, text, sha, lines} for one .ato file under the source dir; ValueError for anything
+        else."""
         if (
             not isinstance(rel, str)
             or not rel

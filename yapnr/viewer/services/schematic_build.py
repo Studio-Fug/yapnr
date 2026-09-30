@@ -618,7 +618,7 @@ def build(req):
                 n["name"].endswith("hv") or n["name"].startswith("p") and n["name"].endswith("-hv")
             ):
                 P.add(n["name"])
-    loop_nets = {n for l in (roles or {}).get("loops", []) for n in l["nets"]}
+    loop_nets = {n for loop in (roles or {}).get("loops", []) for n in loop["nets"]}
     unit_of = {}
     if scope["kind"] == "board":
         for u in units:

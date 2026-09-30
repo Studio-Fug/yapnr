@@ -79,7 +79,10 @@ class CostService:
         if context is None:
             return dict(
                 status="unavailable",
-                reason="No placement objective was recorded for this routed checkpoint. Select its recorded global or legalization phase.",
+                reason=(
+                    "No placement objective was recorded for this routed checkpoint. Select its recorded "
+                    "global or legalization phase."
+                ),
             )
         if context.get("annotation_sources"):
             return dict(status="unavailable", reason=NO_CAPACITOR_INTENT)

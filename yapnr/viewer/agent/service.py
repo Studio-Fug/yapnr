@@ -1,19 +1,23 @@
 """Read-only 'Ask' agent: selection dossier -> headless Claude CLI turn -> SSE events.
 
-One CLI process per turn in its own process group, no settings files, restricted to cwd + add_dirs. Tools: Read/Grep/Glob;
-WebSearch/WebFetch when the request asks for web (body.web, default true) and the server allows it (web=True); and, with a
-notes store, the design-notes tools of exactly one MCP server (notes/mcp.py via a strict per-turn --mcp-config whose env names
-this session, turn, lane, phase, viewer port and board sha; the only write capability). WebFetch is never pre-approved: only the
-PreToolUse hook web_guard.py (stdlib only) approves it, for public hosts; a crashed, missing or slow hook leaves it to
---permission-prompts none, i.e. denied. CLI deny rules for local names/literals (and this machine's addresses) apply on top and
-win over the hook. The init event must show exactly the configured tools and MCP server (connected), or the turn is killed.
-chat(body, emit) streams session/delta/tool/tool_error/note/done/error (plus 'ping' keepalives when nothing
-was sent for `heartbeat` s); emit(event, data) returns False once the client is gone, and the optional gone() is polled every
-0.25 s so a closed browser stops the turn even while the CLI only streams thinking. Spend is capped per turn (--max-budget-usd)
-and per process (max_total_usd). Every turn is stored in <conversations>/<session>.jsonl (message, selection, answer, tools,
-notes created, full web URLs and queries); sessions found there or in turns.jsonl can be resumed after a restart, also from the
-other viewer sharing the folder: a per-session lock file serializes turns across viewers and numbers them from the file.
-"""
+One CLI process per turn in its own process group, no settings files, restricted to cwd + add_dirs.
+Tools: Read/Grep/Glob; WebSearch/WebFetch when the request asks for web (body.web, default true) and
+the server allows it (web=True); and, with a notes store, the design-notes tools of exactly one MCP
+server (notes/mcp.py via a strict per-turn --mcp-config whose env names this session, turn, lane,
+phase, viewer port and board sha; the only write capability). WebFetch is never pre-approved: only
+the PreToolUse hook web_guard.py (stdlib only) approves it, for public hosts; a crashed, missing or
+slow hook leaves it to
+--permission-prompts none, i.e. denied. CLI deny rules for local names/literals (and this machine's
+  addresses) apply on top and
+win over the hook. The init event must show exactly the configured tools and MCP server (connected),
+or the turn is killed. chat(body, emit) streams session/delta/tool/tool_error/note/done/error (plus
+'ping' keepalives when nothing was sent for `heartbeat` s); emit(event, data) returns False once the
+client is gone, and the optional gone() is polled every 0.25 s so a closed browser stops the turn
+even while the CLI only streams thinking. Spend is capped per turn (--max-budget-usd) and per
+process (max_total_usd). Every turn is stored in <conversations>/<session>.jsonl (message,
+selection, answer, tools, notes created, full web URLs and queries); sessions found there or in
+turns.jsonl can be resumed after a restart, also from the other viewer sharing the folder: a
+per-session lock file serializes turns across viewers and numbers them from the file."""
 
 import fcntl
 import hashlib
@@ -49,8 +53,9 @@ NOTE_TOOLS = tuple(
     f"mcp__{NOTES_SERVER}__{t}"
     for t in ("add_note", "list_notes", "get_note", "comment_note", "update_note")
 )
-# CLI deny rules (verified with claude 2.1.284: exact hosts, IP literals, [::1] and *.suffix wildcards; they win over a hook's allow). IP ranges
-# and resolved names are the guard hook's job (web_guard.py), which must answer allow: WebFetch is never in --allowedTools.
+# CLI deny rules (verified with claude 2.1.284: exact hosts, IP literals, [::1] and *.suffix
+# wildcards; they win over a hook's allow). IP ranges and resolved names are the guard hook's job
+# (web_guard.py), which must answer allow: WebFetch is never in --allowedTools.
 WEB_DENY = tuple(
     f"WebFetch(domain:{d})"
     for d in (
@@ -91,7 +96,8 @@ def is_loopback(host):
 
 
 def child_env():
-    """Parent env minus Claude Code session plumbing (a nested CLI must not attach to our session/socket)."""
+    """Parent env minus Claude Code session plumbing (a nested CLI must not attach to our
+    session/socket)."""
     return {
         k: v
         for k, v in os.environ.items()
@@ -113,7 +119,8 @@ def clean(s):
 
 
 def note(s, n=2000):
-    """Viewer-supplied text (event/probe summaries): one line, no control characters, no [ ] markers."""
+    """Viewer-supplied text (event/probe summaries): one line, no control characters, no [ ]
+    markers."""
     return clip(re.sub(r"[\x00-\x1f\x7f]", " ", str(s)).replace("[", "(").replace("]", ")"), n)
 
 
@@ -122,16 +129,17 @@ def loc(x):
 
 
 def quote(s, n=300):
-    """Stored note text for the context block: one line, no control characters, cannot close the [Viewer context] block."""
+    """Stored note text for the context block: one line, no control characters, cannot close the
+    [Viewer context] block."""
     return clip(
         re.sub(r"[\x00-\x1f\x7f]+", " ", str(s)).replace("Viewer context]", "Viewer context)"), n
     )
 
 
 def local_hosts(extra=()):
-    """This machine's IPv4 interface addresses and host names plus extra (the server's --listen / --allow-origin / --allow-host
-    names): WebFetch deny rules on top of the guard hook (deny rules win over the hook's allow; verified with claude 2.1.284).
-    """
+    """This machine's IPv4 interface addresses and host names plus extra (the server's --listen /
+    --allow-origin / --allow-host names): WebFetch deny rules on top of the guard hook (deny rules
+    win over the hook's allow; verified with claude 2.1.284)."""
     out = set()
     try:
         out |= set(
@@ -162,9 +170,10 @@ def local_hosts(extra=()):
 
 
 class Translator:
-    """stream-json lines -> [(event, data)]. Text comes from partial text_delta events; complete 'assistant' messages only
-    supply tool_use blocks and text for messages that were never streamed. Tool results: errors -> 'tool_error'; successful
-    notes writes -> 'note' {id, op, note?} (the stored note when a notes store is given)."""
+    """stream-json lines -> [(event, data)]. Text comes from partial text_delta events; complete
+    'assistant' messages only supply tool_use blocks and text for messages that were never streamed.
+    Tool results: errors -> 'tool_error'; successful notes writes -> 'note' {id, op, note?} (the
+    stored note when a notes store is given)."""
 
     def __init__(self, session, cwd=None, notes=None):
         self.session = session
@@ -225,7 +234,8 @@ class Translator:
         return d[:4000]
 
     def label(self, name, inp):
-        """(label for the tool line, full text): WebFetch URLs and WebSearch queries are kept whole (the guard caps URLs at 2000)."""
+        """(label for the tool line, full text): WebFetch URLs and WebSearch queries are kept whole
+        (the guard caps URLs at 2000)."""
         d = self.detail(name, inp)
         return clip(d, 240), d
 
@@ -244,7 +254,8 @@ class Translator:
         return "".join(self.chunks) or str((self.result or {}).get("result") or "")
 
     def _note(self, name, text):
-        """'note' event for a successful notes write (the MCP server answers with JSON carrying the note id)."""
+        """'note' event for a successful notes write (the MCP server answers with JSON carrying the
+        note id)."""
         op = {"add_note": "create", "comment_note": "comment", "update_note": "update"}.get(
             name.rsplit("__", 1)[-1]
         )
@@ -414,11 +425,12 @@ class AgentService:
         rules=None,
         engine_runtime=None,
     ):
-        """notes: a notes_store.NotesStore (shared with the server's /api/notes) or its directory; None = no notes tools.
-        web: --agent-web (requests may still turn it off per conversation). viewer_port: int or callable (the server binds after this).
-        conversations_dir: default <notes dir>/conversations (else <cache>/conversations). local_names: the server's own host names and
-        addresses (listen, allow-origin, allow-host), added to the WebFetch deny rules with this machine's interface addresses.
-        """
+        """notes: a notes_store.NotesStore (shared with the server's /api/notes) or its directory;
+        None = no notes tools. web: --agent-web (requests may still turn it off per conversation).
+        viewer_port: int or callable (the server binds after this). conversations_dir: default
+        <notes dir>/conversations (else <cache>/conversations). local_names: the server's own host
+        names and addresses (listen, allow-origin, allow-host), added to the WebFetch deny rules
+        with this machine's interface addresses."""
         # The CLI by name on PATH (shutil.which) or by path; never a machine default.
         self.claude = shutil.which(str(claude_bin)) or str(claude_bin)
         self.cwd = Path(cwd).resolve()
@@ -624,7 +636,8 @@ class AgentService:
         return self.max_total_usd is not None and self.spent >= self.max_total_usd
 
     def web_status(self):
-        """(on, reason). Web tools need web=True and a guard hook that passed its self-test (it must deny a loopback URL); checked once."""
+        """(on, reason). Web tools need web=True and a guard hook that passed its self-test (it must
+        deny a loopback URL); checked once."""
         if not self.web:
             return False, "Web access is disabled on this server (--agent-web off)."
         try:
@@ -699,7 +712,8 @@ class AgentService:
             )
         if self.capped():
             out["reason"] = (
-                f"The assistant spend cap for this server (${self.max_total_usd:g}, --agent-total-usd) is used up; restart the viewer to reset it."
+                f"The assistant spend cap for this server (${self.max_total_usd:g}, --agent-total-usd) "
+                "is used up; restart the viewer to reset it."
             )
         return out
 
@@ -709,9 +723,9 @@ class AgentService:
         )
 
     def command(self, prompt, model, session, resume=False, web=False, mcp_config=None):
-        """argv for one turn. web adds WebSearch (allowed) and WebFetch (approved only by the guard hook; local hosts also denied by
-        rules); mcp_config = the per-turn notes server config (its tools allowed by name); without it an empty strict MCP config.
-        """
+        """argv for one turn. web adds WebSearch (allowed) and WebFetch (approved only by the guard
+        hook; local hosts also denied by rules); mcp_config = the per-turn notes server config (its
+        tools allowed by name); without it an empty strict MCP config."""
         if model not in MODELS:
             raise ValueError("model must be one of " + ", ".join(MODELS))
         if not isinstance(session, str) or not UUID.fullmatch(session):
@@ -762,7 +776,8 @@ class AgentService:
         return cmd + (["--resume", session] if resume else ["--session-id", session])
 
     def _resolver_env(self):
-        """How the MCP server checks targets: a compact copy of the source index (written once per index sha) or graph.json."""
+        """How the MCP server checks targets: a compact copy of the source index (written once per
+        index sha) or graph.json."""
         ix = None
         if self.source is not None and callable(getattr(self.source, "index", None)):
             try:
@@ -788,7 +803,8 @@ class AgentService:
         return dict(YAPNR_GRAPH=str(self.graph)) if self.graph and self.graph.is_file() else {}
 
     def mcp_config(self, sid, turn, ctx):
-        """Per-turn strict MCP config: only the notes server, its env naming this session/turn/lane/phase/port/board."""
+        """Per-turn strict MCP config: only the notes server, its env naming this
+        session/turn/lane/phase/port/board."""
         lane = ctx.get("lane")
         sha = None
         if lane and self.state_fn:
@@ -880,7 +896,10 @@ class AgentService:
         if not isinstance(c, dict):
             return [f"## Component {ref}: not in the source index (Grep graph.json / .ato sources)"]
         out = [
-            f"## Component {ref}: {c.get('instance') or c.get('address')} (type {c.get('type') or '?'}, part {c.get('part') or '?'})"
+            (
+                f"## Component {ref}: {c.get('instance') or c.get('address')} (type {c.get('type') or '?'}, "
+                f"part {c.get('part') or '?'})"
+            )
         ]
         if c.get("doc"):
             out.append("doc: " + clip(c["doc"], 300))
@@ -894,14 +913,15 @@ class AgentService:
         pins = c.get("pins") or {}
         items = [(pad, pins.get(pad))] if pad is not None else list(pins.items())
         if items:
+
+            def pin_text(p, v):
+                v = v or {}
+                net = self._net_title(v.get("net")) if v.get("net") else "unconnected"
+                return f"{p} {v.get('pin') or ''} -> {net}".replace("  ", " ")
+
             out.append(
                 "pins: "
-                + "; ".join(
-                    f"{p} {(v or {}).get('pin') or ''} -> {self._net_title((v or {}).get('net')) if (v or {}).get('net') else 'unconnected'}".replace(
-                        "  ", " "
-                    )
-                    for p, v in items[:48]
-                )
+                + "; ".join(pin_text(p, v) for p, v in items[:48])
                 + (f" (+{len(items)-48} more)" if len(items) > 48 else "")
             )
         st = c.get("statements") or []
@@ -928,8 +948,10 @@ class AgentService:
         if n.get("summary"):
             out.append("summary: " + clip(n["summary"], 500))
         if isinstance(n.get("llm"), dict) and n["llm"].get("summary"):
+            llm = n["llm"]
+            label = clip(llm.get("label", ""), 60)
             out.append(
-                f"AI summary ({n['llm'].get('model','?')}): {clip(n['llm'].get('label',''),60)}: {clip(n['llm']['summary'],300)}"
+                f"AI summary ({llm.get('model', '?')}): {label}: {clip(llm['summary'], 300)}"
             )
         al = n.get("aliases") or []
         if al:
@@ -952,7 +974,11 @@ class AgentService:
             )
         for c in (n.get("currents") or [])[:6]:
             out.append(
-                f"current contract {loc(c)}: target {c.get('target')} pads {c.get('pads')} rms {c.get('rms_current_a')} A peak {c.get('peak_current_a')} A scope {c.get('scope')}"
+                (
+                    f"current contract {loc(c)}: target {c.get('target')} pads {c.get('pads')}"
+                    f" rms {c.get('rms_current_a')} A peak {c.get('peak_current_a')} A"
+                    f" scope {c.get('scope')}"
+                )
             )
         pins = n.get("pins") or []
         if pins:
@@ -991,7 +1017,8 @@ class AgentService:
     def _lane(self, ctx):
         out = [
             "[Viewer context]",
-            f"lane: {ctx.get('lane') or '-'} | phase: {ctx.get('phase') if ctx.get('phase') is not None else '-'} | view: {ctx.get('view') or '-'}"
+            f"lane: {ctx.get('lane') or '-'} | phase: {ctx.get('phase') if ctx.get('phase') is not None else '-'} "
+            f"| view: {ctx.get('view') or '-'}"
             f" | web: {'on' if ctx.get('web') else 'off'} | notes: {'on' if self.notes is not None else 'off'}",
         ]
         if self.state_fn and ctx.get("lane"):
@@ -1049,7 +1076,10 @@ class AgentService:
                 except Exception:
                     e = None
             out.append(
-                f"## Event {clean(it['id'])} ({clean(it.get('event_kind') or (e or {}).get('kind') or '?')}, lane {clean(it.get('lane') or (e or {}).get('candidate') or '-')})"
+                (
+                    f"## Event {clean(it['id'])} ({clean(it.get('event_kind') or (e or {}).get('kind') or '?')}, "
+                    f"lane {clean(it.get('lane') or (e or {}).get('candidate') or '-')})"
+                )
             )
             out.append(
                 "event: " + clip(json.dumps(e, separators=(",", ":"), default=str), 1500)
@@ -1123,7 +1153,8 @@ class AgentService:
         )
 
     def _notes_context(self, ctx):
-        """Recorded design notes on the selection (and open/proposed ones of the lane) for the dossier."""
+        """Recorded design notes on the selection (and open/proposed ones of the lane) for the
+        dossier."""
         if self.notes is None:
             return []
         try:
@@ -1178,8 +1209,13 @@ class AgentService:
         sel = ctx.get("selection") or []
         if not isinstance(sel, list) or len(sel) > self.max_items:
             raise ValueError(f"selection must be a list of at most {self.max_items} items")
-        ok = lambda v: isinstance(v, str) and NAME.fullmatch(v)
-        names = lambda v, n: isinstance(v, list) and len(v) <= n and all(ok(x) for x in v)
+
+        def ok(v):
+            return isinstance(v, str) and NAME.fullmatch(v)
+
+        def names(v, n):
+            return isinstance(v, list) and len(v) <= n and all(ok(x) for x in v)
+
         for it in sel:
             k = it.get("kind") if isinstance(it, dict) else None
             if k not in KINDS:
@@ -1312,7 +1348,8 @@ class AgentService:
         return rows
 
     def _owned(self, sid):
-        """sid was created by an AgentService (this one, before a restart, or another viewer sharing the conversations folder)."""
+        """sid was created by an AgentService (this one, before a restart, or another viewer sharing
+        the conversations folder)."""
         if not (isinstance(sid, str) and UUID.fullmatch(sid)):
             return False
         with self.lock:
@@ -1332,9 +1369,10 @@ class AgentService:
         return bool(cs)
 
     def _claim(self, sid):
-        """Hold <conversations>/<sid>.lock (fcntl) for the whole turn and number it max(stored turn)+1: two viewers sharing the folder
-        can neither run one conversation at the same time nor repeat a turn number. -> (fd or None when the folder is unusable, turn),
-        or None while another viewer holds the lock."""
+        """Hold <conversations>/<sid>.lock (fcntl) for the whole turn and number it max(stored
+        turn)+1: two viewers sharing the folder can neither run one conversation at the same time
+        nor repeat a turn number. -> (fd or None when the folder is unusable, turn), or None while
+        another viewer holds the lock."""
         fd = None
         try:
             self.conv_dir.mkdir(parents=True, exist_ok=True)
@@ -1390,7 +1428,8 @@ class AgentService:
             pass
 
     def conversations(self, limit=200):
-        """GET /api/agent/conversations: {conversations:[{session, started, updated, turns, title, lane, model, cost_usd, notes_created, resumable, running}]} newest first."""
+        """GET /api/agent/conversations: {conversations:[{session, started, updated, turns, title,
+        lane, model, cost_usd, notes_created, resumable, running}]} newest first."""
         out = []
         for f in self.conv_dir.glob("*.jsonl") if self.conv_dir.is_dir() else []:
             if not UUID.fullmatch(f.stem):
@@ -1424,7 +1463,8 @@ class AgentService:
         return dict(conversations=out[:limit])
 
     def conversation(self, session):
-        """GET /api/agent/conversations/<session>: {session, turns:[...], resumable, running}; ValueError (400) / KeyError (404)."""
+        """GET /api/agent/conversations/<session>: {session, turns:[...], resumable, running};
+        ValueError (400) / KeyError (404)."""
         if not isinstance(session, str) or not UUID.fullmatch(session):
             raise ValueError("invalid session id")
         f = self.conv_dir / f"{session}.jsonl"
@@ -1442,9 +1482,10 @@ class AgentService:
         )
 
     def _created(self, sid, turn, since, ids=()):
-        """Notes this turn created: the ids its notes tool calls returned, plus agent notes stamped with this session and turn number
-        created since the turn started (turn numbers are unique per session while the turn holds its lock; `since` excludes a crashed
-        earlier turn that never stored its row)."""
+        """Notes this turn created: the ids its notes tool calls returned, plus agent notes stamped
+        with this session and turn number created since the turn started (turn numbers are unique
+        per session while the turn holds its lock; `since` excludes a crashed earlier turn that
+        never stored its row)."""
         if self.notes is None:
             return []
         try:
@@ -1565,7 +1606,7 @@ class AgentService:
                 target=pump,
                 args=(
                     proc.stderr,
-                    lambda l: (tail.append(l), tail.__delitem__(slice(0, -20))),
+                    lambda line: (tail.append(line), tail.__delitem__(slice(0, -20))),
                     False,
                 ),
                 daemon=True,
@@ -1582,7 +1623,8 @@ class AgentService:
                 if now > deadline:
                     status = "timeout"
                     break
-                # every iteration, not only when the CLI is silent: thinking/tool-input deltas produce no SSE event
+                # every iteration, not only when the CLI is silent: thinking/tool-input deltas
+                # produce no SSE event
                 if gone and now - probe >= 0.25:
                     probe = now
                     if gone():
@@ -1750,9 +1792,3 @@ class AgentService:
                 self._release(lock_fd)
                 with self.lock:
                     self.running.pop(sid, None)
-
-
-if __name__ == "__main__" and sys.argv[1:2] == ["web-guard"]:  # old hook command line: same guard
-    import web_guard
-
-    sys.exit(web_guard.main())

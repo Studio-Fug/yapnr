@@ -315,7 +315,8 @@ def load_part_symbol(part_dir: Path):
 
 
 def load_part_signals(part_dir: Path):
-    """atopile signal names per pad number from the part .ato (``signal X ~ pin N`` / ``X ~ pin N``)."""
+    """atopile signal names per pad number from the part .ato (``signal X ~ pin N`` / ``X ~ pin
+    N``)."""
     out = {}
     for ato in Path(part_dir).glob("*.ato"):
         for m in re.finditer(

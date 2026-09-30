@@ -1,26 +1,33 @@
-"""Design notes shared by the viewer servers, the Ask agent's MCP notes server (notes/mcp.py) and the design loop.
+"""Design notes shared by the viewer servers, the Ask agent's MCP notes server (notes/mcp.py) and
+the design loop.
 
 <dir>/notes.jsonl      append-only event log, the source of truth: one line per change
-                       {rev, op:create|update|comment|delete, id, ts, actor:{kind:user|agent, session?, remote?}, fields}
-<dir>/notes.json       materialized {schema, rev, updated, notes:[...]} (rewritten atomically after every write)
-<dir>/design-notes.md  export for the design loop: Accepted (to apply) / Proposed / Open / Applied / Rejected / Resolved
-Writers hold an fcntl lock on <dir>/notes.lock, catch up with lines other processes appended, drop a torn last line left by a
-crash (it was never acknowledged), append one line (one write + fsync) and rewrite the derived files (tmp + fsync + rename).
-Readers consume complete lines only, so two viewers and any number of per-turn MCP servers can share one directory.
+                       {rev, op:create|update|comment|delete, id, ts, actor:{kind:user|agent,
+                       session?, remote?}, fields}
+<dir>/notes.json       materialized {schema, rev, updated, notes:[...]} (rewritten atomically after
+                       every write)
+<dir>/design-notes.md  export for the design loop: Accepted (to apply) / Proposed / Open / Applied /
+                       Rejected / Resolved
+Writers hold an fcntl lock on <dir>/notes.lock, catch up with lines other processes appended, drop a
+torn last line left by a crash (it was never acknowledged), append one line (one write + fsync) and
+rewrite the derived files (tmp + fsync + rename). Readers consume complete lines only, so two
+viewers and any number of per-turn MCP servers can share one directory.
 
-Authority (enforced here, whatever the client): an agent creates notes (status open, or proposed when it is a proposal),
-comments on any note and edits title/body/kind/tags/targets/proposal/sources/related links of notes written in its own
-conversation (same session) while they are open or proposed. Only a user sets accepted/rejected/applied/resolved (or reopens),
-deletes, or edits other notes; over HTTP, accepting or applying needs the rev the user saw (expect_rev), so an edit made
-meanwhile is never accepted unseen. Every update records updated_by {kind, session?}.
-Text is normalized on the way in (every Unicode line break becomes \n or, in one-line fields, a space; C1 controls and bidi
-overrides are dropped) and design-notes.md renders one-line fields flat and bodies as quotes, so no note can forge a heading.
-Targets use the Ask context item schema; with a resolver (SourceService, a source index or graph.json) an agent's refs, pads,
-nets and source lines must exist.
+Authority (enforced here, whatever the client): an agent creates notes (status open, or proposed
+when it is a proposal), comments on any note and edits
+title/body/kind/tags/targets/proposal/sources/related links of notes written in its own conversation
+(same session) while they are open or proposed. Only a user sets accepted/rejected/applied/resolved
+(or reopens), deletes, or edits other notes; over HTTP, accepting or applying needs the rev the user
+saw (expect_rev), so an edit made meanwhile is never accepted unseen. Every update records
+updated_by {kind, session?}. Text is normalized on the way in (every Unicode line break becomes \n
+or, in one-line fields, a space; C1 controls and bidi overrides are dropped) and design-notes.md
+renders one-line fields flat and bodies as quotes, so no note can forge a heading. Targets use the
+Ask context item schema; with a resolver (SourceService, a source index or graph.json) an agent's
+refs, pads, nets and source lines must exist.
 
-CLI for the engineering loop: python -m yapnr.viewer.notes.store report --dir DIR [--index FILE] [--status accepted]
-[--kind proposal] [--json] (an empty or not yet used store prints empty groups, or [] with --json, and exits 0).
-"""
+CLI for the engineering loop: python -m yapnr.viewer.notes.store report --dir DIR [--index FILE]
+[--status accepted] [--kind proposal] [--json] (an empty or not yet used store prints empty groups,
+or [] with --json, and exits 0)."""
 
 import argparse
 import contextlib
@@ -29,7 +36,6 @@ import json
 import math
 import os
 import re
-import socket
 import sys
 import threading
 from datetime import datetime, timezone
@@ -101,8 +107,9 @@ def num(i):
     return int(i[2:]) if isinstance(i, str) and ID.fullmatch(i) else 0
 
 
-# every line boundary str.splitlines() knows (a reader splitting design-notes.md on these must not see a forged line), and
-# characters that hide or reorder text: C0/C1 controls, bidi embeddings/overrides/isolates, marks
+# every line boundary str.splitlines() knows (a reader splitting design-notes.md on these must not
+# see a forged line), and characters that hide or reorder text: C0/C1 controls, bidi
+# embeddings/overrides/isolates, marks
 BREAKS = re.compile("\r\n|[\r\n\x0b\x0c\x1c-\x1e\x85\u2028\u2029]")
 HIDDEN = re.compile("[\x00-\x08\x0e-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]")
 
@@ -122,9 +129,9 @@ def text(v, n, what, oneline=False, empty=False):
 
 # ------------------------------------------------------------------ targets
 def item(it, resolver=None):
-    """One target in the Ask context item schema, normalized to its known fields. With a resolver the refs, pads, nets and
-    source lines must exist (agent writes: a hallucinated C999 is refused with a message the model can act on).
-    """
+    """One target in the Ask context item schema, normalized to its known fields. With a resolver
+    the refs, pads, nets and source lines must exist (agent writes: a hallucinated C999 is refused
+    with a message the model can act on)."""
     if not isinstance(it, dict) or it.get("kind") not in ITEMS:
         raise ValueError("target kind must be one of " + ", ".join(ITEMS))
     k = it["kind"]
@@ -248,9 +255,9 @@ def check(it, r):
 
 
 class IndexResolver:
-    """component(ref) / net(name) / lines(file) over a source index {components, nets, files} (the /api/source/index shape or
-    compact() of it) or a callable returning one (SourceService.index). lines() is inf when the index has no file table.
-    """
+    """component(ref) / net(name) / lines(file) over a source index {components, nets, files} (the
+    /api/source/index shape or compact() of it) or a callable returning one (SourceService.index).
+    lines() is inf when the index has no file table."""
 
     def __init__(self, index):
         self._ix = index
@@ -287,7 +294,8 @@ class IndexResolver:
 
 
 def compact(ix):
-    """The resolver facts of a source index (a few hundred kB less): what agent_service hands the MCP server per index sha."""
+    """The resolver facts of a source index (a few hundred kB less): what agent_service hands the
+    MCP server per index sha."""
     comps = {}
     for r, c in (ix.get("components") or {}).items():
         if isinstance(c, dict):
@@ -348,7 +356,8 @@ def graph_index(path):
 
 
 def resolver_for(obj):
-    """None | resolver | SourceService-like (index()) | index dict | path to an index/compact/graph JSON -> resolver or None."""
+    """None | resolver | SourceService-like (index()) | index dict | path to an index/compact/graph
+    JSON -> resolver or None."""
     if obj is None or all(hasattr(obj, m) for m in ("component", "net", "lines")):
         return obj
     if isinstance(obj, dict):
@@ -363,7 +372,9 @@ def resolver_for(obj):
 def describe(it, r=None):
     """One-line human description of a target (design-notes.md, report)."""
     k = it.get("kind")
-    g = lambda f, *a: (getattr(r, f)(*a) if r is not None else None)
+
+    def g(f, *a):
+        return getattr(r, f)(*a) if r is not None else None
 
     def comp(ref):
         c = g("component", ref)
@@ -434,7 +445,8 @@ def describe(it, r=None):
 
 
 def short_target(it):
-    """Compact label: C17, net hv, U5.13, system_5v.ato:112-118, region (12 parts), group Hot loop, lane x."""
+    """Compact label: C17, net hv, U5.13, system_5v.ato:112-118, region (12 parts), group Hot loop,
+    lane x."""
     k = it.get("kind")
     if k == "component":
         return str(it.get("ref"))
@@ -454,7 +466,8 @@ def short_target(it):
 
 
 def target_keys(items, r=None):
-    """(refs, nets, source ranges, lanes) an item list touches; a pad also touches its part and (with a resolver) its net."""
+    """(refs, nets, source ranges, lanes) an item list touches; a pad also touches its part and
+    (with a resolver) its net."""
     refs, nets, src, lanes = set(), set(), [], set()
     for it in items or []:
         if not isinstance(it, dict):
@@ -508,8 +521,8 @@ def write_atomic(path, data):
 
 
 def bad_event(e):
-    """Why a notes.jsonl line cannot be applied (None: fine). The log is ours, but a hand edit or another tool must not take the
-    store (and with it both viewers and every agent turn) down."""
+    """Why a notes.jsonl line cannot be applied (None: fine). The log is ours, but a hand edit or
+    another tool must not take the store (and with it both viewers and every agent turn) down."""
     if not isinstance(e, dict):
         return "not an object"
     op, i, f = e.get("op"), e.get("id"), e.get("fields")
@@ -703,7 +716,8 @@ class NotesStore:
                     fcntl.flock(lk, fcntl.LOCK_UN)
 
     def _append(self, op, i, fields, actor, derive=True):
-        """Under _locked(): one event line, then the derived files (derive=False: another line follows in the same lock). Returns the event."""
+        """Under _locked(): one event line, then the derived files (derive=False: another line
+        follows in the same lock). Returns the event."""
         e = dict(rev=self.rev + 1, op=op, id=i, ts=now(), actor=actor, fields=fields)
         line = (json.dumps(e, ensure_ascii=False, separators=(",", ":")) + "\n").encode()
         fd = os.open(self.log, os.O_RDWR | os.O_CREAT | os.O_APPEND, 0o644)
@@ -752,7 +766,8 @@ class NotesStore:
             return copy(n)
 
     def listing(self, since=None):
-        """{rev, unchanged:true} when since == rev, else {rev, notes, changed?, deleted?} (changed/deleted: ids touched after since)."""
+        """{rev, unchanged:true} when since == rev, else {rev, notes, changed?, deleted?}
+        (changed/deleted: ids touched after since)."""
         with self.tlock:
             self.refresh()
             if since is not None and since == self.rev:
@@ -769,7 +784,8 @@ class NotesStore:
             return out
 
     def payload(self, since=None):
-        """GET /api/notes?since=REV body (bytes). The notes array is serialized once per rev; only the small header varies with since."""
+        """GET /api/notes?since=REV body (bytes). The notes array is serialized once per rev; only
+        the small header varies with since."""
         with self.tlock:
             self.refresh()
             if since == self.rev:
@@ -863,7 +879,8 @@ class NotesStore:
         return out
 
     def relevant(self, selection, lane=None, limit=8, lane_limit=5):
-        """([(note, why)] whose targets meet the selection, [recent open/proposed notes of the lane]) for the Ask dossier."""
+        """([(note, why)] whose targets meet the selection, [recent open/proposed notes of the
+        lane]) for the Ask dossier."""
         refs, nets, src, lanes = target_keys(selection, self.resolver)
         hits = []
         pri = {"accepted": 0, "proposed": 1, "open": 2, "applied": 3, "resolved": 4, "rejected": 5}
@@ -1048,7 +1065,8 @@ class NotesStore:
         return out
 
     def create(self, fields, actor, provenance=None):
-        """New note; returns it. provenance= is trusted caller data (the MCP server's per-turn environment), never model input."""
+        """New note; returns it. provenance= is trusted caller data (the MCP server's per-turn
+        environment), never model input."""
         actor = self.actor(actor)
         agent = actor["kind"] == "agent"
         if not isinstance(fields, dict):
@@ -1102,9 +1120,9 @@ class NotesStore:
             return copy(self.notes[i])
 
     def update(self, nid, fields, actor, expect_rev=None, comment=None, need_rev=False):
-        """Edit fields and/or add a comment in one locked step (both validated before anything is written). expect_rev: 409
-        (NoteConflict) when the note changed since; need_rev: a user accepting or applying must send it (HTTP).
-        """
+        """Edit fields and/or add a comment in one locked step (both validated before anything is
+        written). expect_rev: 409 (NoteConflict) when the note changed since; need_rev: a user
+        accepting or applying must send it (HTTP)."""
         actor = self.actor(actor)
         agent = actor["kind"] == "agent"
         if not isinstance(fields, dict) or (not fields and comment is None):
@@ -1114,7 +1132,10 @@ class NotesStore:
         if agent and fields:
             if "status" in fields:
                 raise PermissionError(
-                    "the assistant cannot change a note's status: only the user accepts, rejects, applies or resolves notes (Notes tab)"
+                    (
+                        "the assistant cannot change a note's status: only the user accepts, rejects, applies "
+                        "or resolves notes (Notes tab)"
+                    )
                 )
             bad = [k for k in fields if k not in AGENT_FIELDS]
             if bad:
@@ -1142,7 +1163,10 @@ class NotesStore:
                 and f["status"] != n.get("status")
             ):
                 raise ValueError(
-                    f'expect_rev is required to mark a note {f["status"]}: send the rev you reviewed (the Notes tab does)'
+                    (
+                        f'expect_rev is required to mark a note {f["status"]}: send the rev you reviewed (the '
+                        "Notes tab does)"
+                    )
                 )
             changes = {}
             if f:
@@ -1199,9 +1223,10 @@ class NotesStore:
             return dict(id=nid, deleted=True, rev=self.rev)
 
     def request(self, nid, body, actor):
-        """POST /api/notes/<id> body: note fields at top level or under 'fields' (status included), optional 'comment' text and
-        'expect_rev' (409 when the note changed meanwhile; required to accept or apply). Fields and comment are applied together or
-        not at all. Returns the note."""
+        """POST /api/notes/<id> body: note fields at top level or under 'fields' (status included),
+        optional 'comment' text and 'expect_rev' (409 when the note changed meanwhile; required to
+        accept or apply). Fields and comment are applied together or not at all. Returns the
+        note."""
         if not isinstance(body, dict):
             raise ValueError("invalid body")
         fields = dict(body.get("fields") or {}) if isinstance(body.get("fields"), dict) else {}
@@ -1229,8 +1254,10 @@ class NotesStore:
         out = [
             "# Design notes",
             "",
-            f"Generated {now()} from notes.jsonl rev {self.rev}: {len(notes)} note(s). Only a person sets accepted, rejected, applied or "
-            "resolved (viewer Notes tab); the assistant records observations, questions and proposals. Apply the accepted notes, then mark them applied in the viewer.",
+            f"Generated {now()} from notes.jsonl rev {self.rev}: {len(notes)} note(s). Only a "
+            "person sets accepted, rejected, applied or "
+            "resolved (viewer Notes tab); the assistant records observations, questions and proposals. "
+            "Apply the accepted notes, then mark them applied in the viewer.",
             "",
         ]
         for st, head in GROUPS:
@@ -1251,17 +1278,28 @@ def fence(s, ch="`"):
 
 
 def one(v):
-    """A value that must stay on its markdown line: line breaks flattened, hidden characters dropped (also for older notes)."""
+    """A value that must stay on its markdown line: line breaks flattened, hidden characters dropped
+    (also for older notes)."""
     return HIDDEN.sub("", BREAKS.sub(" ", "" if v is None else str(v)))
 
 
+def source_link(s):
+    """A markdown link for a note source that cannot break out of its list line."""
+    title = one(s.get("title", "")).replace("]", ")").replace("[", "(")
+    url = one(s.get("url", "")).replace(")", "%29").replace(" ", "%20")
+    return f"[{title}]({url})"
+
+
 def note_md(n, r=None):
-    """One note in design-notes.md. Only one-line fields go on list lines (flattened by one()); the diff is a fence and the body text,
-    both inside a quote (every line starts with '>'), so nothing a note says can start a heading or list line of its own.
-    """
+    """One note in design-notes.md. Only one-line fields go on list lines (flattened by one()); the
+    diff is a fence and the body text, both inside a quote (every line starts with '>'), so nothing
+    a note says can start a heading or list line of its own."""
     p = n.get("provenance") or {}
     out = [f"### {one(n.get('id'))} · {one(n.get('kind'))} · {one(n.get('title'))}", ""]
-    sess = lambda x: f" (session {one(x)[:8]}"
+
+    def sess(x):
+        return f" (session {one(x)[:8]}"
+
     who = one(n.get("author", "?")) + (
         sess(p["session"]) + (f", turn {one(p['turn'])}" if p.get("turn") else "") + ")"
         if p.get("session")
@@ -1307,17 +1345,11 @@ def note_md(n, r=None):
             fc = fence(d)
             out += ["", *("> " + x if x else ">" for x in [fc + "diff", *d.split("\n"), fc]), ""]
     if n.get("sources"):
+        out.append("- sources: " + ", ".join(source_link(s) for s in n["sources"]))
+    for link in n.get("links") or []:
         out.append(
-            "- sources: "
-            + ", ".join(
-                f"[{one(s.get('title','')).replace(']',')').replace('[','(')}]({one(s.get('url','')).replace(')','%29').replace(' ','%20')})"
-                for s in n["sources"]
-            )
-        )
-    for l in n.get("links") or []:
-        out.append(
-            f"- {one(l.get('kind'))}: `{one(l.get('ref')).replace('`',chr(39))}`"
-            + (f" ({one(l['note'])})" if l.get("note") else "")
+            f"- {one(link.get('kind'))}: `{one(link.get('ref')).replace('`', chr(39))}`"
+            + (f" ({one(link['note'])})" if link.get("note") else "")
         )
     body = HIDDEN.sub("", n.get("body") or "").strip()
     if body:

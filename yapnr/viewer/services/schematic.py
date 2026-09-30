@@ -174,13 +174,13 @@ class SchematicService:
                     doc = json.loads(pq.read_text())
                     loops = [
                         dict(
-                            labels=l.get("labels"),
-                            nets=l.get("nets"),
-                            parts=l.get("parts"),
-                            routed_mm=l.get("routed_mm"),
-                            vias=l.get("vias"),
-                            open_links=l.get("open_links"),
-                            complete=l.get("complete"),
+                            labels=loop.get("labels"),
+                            nets=loop.get("nets"),
+                            parts=loop.get("parts"),
+                            routed_mm=loop.get("routed_mm"),
+                            vias=loop.get("vias"),
+                            open_links=loop.get("open_links"),
+                            complete=loop.get("complete"),
                             links=[
                                 dict(
                                     net=k.get("net"),
@@ -191,10 +191,10 @@ class SchematicService:
                                     a=k.get("a"),
                                     b=k.get("b"),
                                 )
-                                for k in l.get("links", [])
+                                for k in loop.get("links", [])
                             ],
                         )
-                        for l in doc.get("loops", [])
+                        for loop in doc.get("loops", [])
                     ]
                     cached = (
                         st,

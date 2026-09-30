@@ -95,7 +95,8 @@ def ref(s):
 
 
 def parse_file(path, rel):
-    """One .ato file -> {path, kind, lines, sha, imports, defs, annotations, comments, pragmas, unparsed}."""
+    """One .ato file -> {path, kind, lines, sha, imports, defs, annotations, comments, pragmas,
+    unparsed}."""
     raw = path.read_bytes()
     lines = raw.decode("utf-8", "replace").splitlines()
     f = dict(
@@ -365,7 +366,10 @@ class Design:
         )
         if parent is not None:
             self.inst[parent]["children"].append(addr)
-        j = lambda n: f"{addr}.{n}" if addr else n
+
+        def j(n):
+            return f"{addr}.{n}" if addr else n
+
         if d["kind"] == "stdlib":
             for m in d["members"]:
                 self._node(j(m), "member", addr, st, iface=d["name"], member=m)
@@ -396,7 +400,10 @@ class Design:
 
     def _resolve(self, addr, r, prov):
         kind, v = r
-        j = lambda n: f"{addr}.{n}" if addr else n
+
+        def j(n):
+            return f"{addr}.{n}" if addr else n
+
         if kind == "pin":
             if self.inst[addr]["kind"] != "component":
                 self.notes.append(f"pin outside component at {prov['file']}:{prov['line']}")
@@ -425,7 +432,6 @@ class Design:
     def _connect(self, addr, it):
         d = it["d"]
         level = "part" if d["kind"] == "component" else "wrapper" if it["wrapper"] else "design"
-        j = lambda n: f"{addr}.{n}" if addr else n
         for s in self.body(d):
             prov = dict(file=s["file"], line=s["line"], text=s["text"], scope=addr, level=level)
             if s.get("comment"):
@@ -515,7 +521,10 @@ def build_index(src, graph, rules=None, entry=None):
     rel = D.rel
     ref_of = {c["address"]: c["ref"] for c in g.get("components", [])}
     comp_of = {c["ref"]: c for c in g.get("components", [])}
-    pad_node = lambda r, pad: f"{comp_of[r]['address']}.pin{pad}"
+
+    def pad_node(r, pad):
+        return f"{comp_of[r]['address']}.pin{pad}"
+
     notes = list(dict.fromkeys(D.notes))
     for f in D.files.values():
         if f["kind"] == "design" and f["unparsed"]:
@@ -718,7 +727,8 @@ def build_index(src, graph, rules=None, entry=None):
                             )
             anns.append(rec)
 
-    # comment paragraphs (consecutive comment lines) per def, for mention lookup: never a half-sentence line
+    # comment paragraphs (consecutive comment lines) per def, for mention lookup: never a
+    # half-sentence line
     def_comments = defaultdict(list)
     for f in D.files.values():
         last = None
@@ -773,8 +783,12 @@ def build_index(src, graph, rules=None, entry=None):
         return NEG.sub(" ", t or "")
 
     def mention(text, pin, others):
-        """Sentences of a comment paragraph for pin: drops sentences about other pins of the part; None if pin is not named."""
-        hit = lambda x, n: re.search(r"(?<!\w)" + re.escape(n) + r"(?!\w)", said(x))
+        """Sentences of a comment paragraph for pin: drops sentences about other pins of the part;
+        None if pin is not named."""
+
+        def hit(x, n):
+            return re.search(r"(?<!\w)" + re.escape(n) + r"(?!\w)", said(x))
+
         keep = [
             x
             for x in re.split(r"(?<=[.!?])\s+", text)
@@ -790,7 +804,9 @@ def build_index(src, graph, rules=None, entry=None):
                     out |= {x.lower(), x.lower()[1:] if re.fullmatch(r"p\d\w*", x) else x.lower()}
         return out
 
-    order = lambda e: (e["scope"].count("."), e["file"], e["line"])
+    def order(e):
+        return (e["scope"].count("."), e["file"], e["line"])
+
     nets = {}
     for gn in g.get("nets", []):
         name = gn["name"]
@@ -902,7 +918,8 @@ def build_index(src, graph, rules=None, entry=None):
                 else None
             )
         )
-        # comments: declarations and statement comments first; paragraph/instance/module comments only when they name this net
+        # comments: declarations and statement comments first; paragraph/instance/module comments
+        # only when they name this net
         tk = toks(
             [s for r in by_ref for s in by_ref[r]]
             + [a["rel"] for a in al]
@@ -910,8 +927,12 @@ def build_index(src, graph, rules=None, entry=None):
             + [rel(comp_inst(comp_of[r])).rsplit(".", 1)[-1] for r in by_ref]
             + ([name] if not AUTO.match(name) else [])
         )
-        ok = lambda t: bool(t) and bool(words(said(t)) & tk)
-        # a comment that names this net only inside a negated clause ('never ground or VBUS') is about something else
+
+        def ok(t):
+            return bool(t) and bool(words(said(t)) & tk)
+
+        # a comment that names this net only inside a negated clause ('never ground or VBUS') is
+        # about something else
         tks, own = tk - {x.lower() for x in GENERIC}, tk | (
             {"ground", "gnd"} if kind == "ground" else set()
         )
@@ -972,9 +993,11 @@ def build_index(src, graph, rules=None, entry=None):
             or next((e["comment"] for e in dsn if e.get("comment")), None)
         )
         anchors = actives[:2] or passives[:2]
-        lab = (
-            lambda r: f"{rel(comp_inst(comp_of[r]))}.{'/'.join(by_ref[r]) or 'pad ' + next(p['pad'] for p in pins if p['ref'] == r)}"
-        )
+
+        def lab(r):
+            named = "/".join(by_ref[r]) or "pad " + next(p["pad"] for p in pins if p["ref"] == r)
+            return f"{rel(comp_inst(comp_of[r]))}.{named}"
+
         if kind == "ground":
             title = (
                 "GND (common return)"
@@ -990,7 +1013,9 @@ def build_index(src, graph, rules=None, entry=None):
             pre = os.path.commonprefix([a.split("."), b.split(".")])
             title = f"{a} ↔ {'.'.join(b.split('.')[len(pre):]) if len(pre) < len(b.split('.')) - 1 else b}"
         elif anchors:
-            title = f"{lab(anchors[0]).replace('.pad ', ' pad ')} ({part_label(anchors[0])}{', unconnected' if kind == 'unconnected' else ''})"
+            unconnected = ", unconnected" if kind == "unconnected" else ""
+            label = lab(anchors[0]).replace(".pad ", " pad ")
+            title = f"{label} ({part_label(anchors[0])}{unconnected})"
         else:
             title = name
         if kind == "unconnected" and not title.endswith("unconnected)"):
@@ -1010,13 +1035,21 @@ def build_index(src, graph, rules=None, entry=None):
         sd = D.inst.get(scope, {}).get("d") or {}
         if kind == "ground":
             ifs = list(dict.fromkeys(a["interface"] for a in lv))
-            s1 = f"Common return joining {len(ifs)} ElectricPower grounds ({', '.join(ifs[:6])}{', …' if len(ifs) > 6 else ''})."
+            more = ", …" if len(ifs) > 6 else ""
+            s1 = (
+                f"Common return joining {len(ifs)} ElectricPower grounds"
+                f" ({', '.join(ifs[:6])}{more})."
+            )
         elif kind == "unconnected":
             p = pins[0]
-            s1 = f"Single pad, connected to nothing else in source: {p['part']} {p['pin'] or 'pad ' + p['pad']} ({p['instance']}, {p['ref']}.{p['pad']})."
+            s1 = (
+                f"Single pad, connected to nothing else in source: {p['part']} {p['pin'] or 'pad ' + p['pad']} "
+                f"({p['instance']}, {p['ref']}.{p['pad']})."
+            )
         elif best:
             s1 = (
-                f"{'Power rail' if kind == 'power' else 'Signal'} {best.get('interface') if best.get('member') == 'hv' else best['rel']}"
+                ("Power rail " if kind == "power" else "Signal ")
+                + str(best.get("interface") if best.get("member") == "hv" else best["rel"])
                 + (f" ({pretty(voltage)})" if voltage else "")
                 + (f", merged with {', '.join(others)}" if others else "")
                 + "."
@@ -1025,7 +1058,10 @@ def build_index(src, graph, rules=None, entry=None):
             s1 = f"Pins joined inside the {sd.get('mpn') or sd.get('name')} package definition ({rel(scope)})."
         else:
             s1 = (
-                f"Unnamed {'power ' if kind == 'power' else ''}net inside {rel(scope) or 'the board'} ({sd.get('name', '?')}"
+                (
+                    f"Unnamed {'power ' if kind == 'power' else ''}net inside {rel(scope) or 'the board'} "
+                    f"({sd.get('name', '?')}"
+                )
                 + (f": {clip(sd['doc'].split(chr(10))[0], 80)}" if sd.get("doc") else "")
                 + ")"
                 + "."
@@ -1055,7 +1091,10 @@ def build_index(src, graph, rules=None, entry=None):
         )
         netc = [c for c in currents if c["scope"] == "net"]
         s3 = (
-            f" Net current envelope {max(c['rms_current_a'] for c in netc)} A rms / {max(c['peak_current_a'] for c in netc)} A peak."
+            (
+                f" Net current envelope {max(c['rms_current_a'] for c in netc)} A rms"
+                f" / {max(c['peak_current_a'] for c in netc)} A peak."
+            )
             if netc
             else ""
         ) + (f" Note: {clip(comments[0], 160)}" if comments and comments[0] != qual else "")
@@ -1148,12 +1187,11 @@ def build_index(src, graph, rules=None, entry=None):
 
     # (file, line) -> refs/nets, for source-to-board navigation
     lines = defaultdict(lambda: defaultdict(lambda: dict(refs=[], nets=[])))
-    add = (
-        lambda f, l, k, v: f
-        and l
-        and v not in lines[f][str(l)][k]
-        and lines[f][str(l)][k].append(v)
-    )
+
+    def add(f, line, k, v):
+        if f and line and v not in lines[f][str(line)][k]:
+            lines[f][str(line)][k].append(v)
+
     for r, c in comps.items():
         for x in c.get("chain", []) + c.get("statements", []) + c.get("currents", []):
             add(x.get("file"), x.get("line"), "refs", r)
@@ -1227,7 +1265,8 @@ def dossier(index):
                 more_pins=max(0, len(n["pins"]) - 14),
                 comments=n["comments"][:5],
                 currents=[
-                    f"{c['scope']} {c['rms_current_a']}A rms/{c['peak_current_a']}A pk at {c['target']}:{','.join(c['pads'])}"
+                    f"{c['scope']} {c['rms_current_a']}A rms/{c['peak_current_a']}A pk"
+                    f" at {c['target']}:{','.join(c['pads'])}"
                     for c in n["currents"]
                 ][:5],
                 current_notes=list(

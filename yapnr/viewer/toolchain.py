@@ -30,7 +30,7 @@ from yapnr.cli import KICAD_CLI_ENV_VARS, KICAD_PYTHON_ENV_VARS
 HEADLESS_APP = Path("~/Applications/KiCad-headless.app")
 HEADLESS_CLI = HEADLESS_APP / "Contents/MacOS/kicad-cli"
 HEADLESS_PYTHON = HEADLESS_APP / "Contents/Frameworks/Python.framework/Versions/Current/bin/python3"
-RECIPE = "see DEVELOPERS.md#kicad for the headless copy"
+RECIPE = "the headless copy: DEVELOPERS.md#kicad"
 PROBE_TIMEOUT = 30.0
 
 
@@ -61,7 +61,7 @@ def background_only(info: Mapping) -> bool:
 
 
 def refuse_gui(path: Path, what: str = "KiCad program") -> None:
-    """Raise Unavailable for a program of the GUI application, or of a bundle that shows in the Dock.
+    """Raise Unavailable for a GUI application's program, or one in a bundle shown in the Dock.
 
     Checked for the given path and its symlink target: the stock bundle (anything inside
     ``KiCad.app`` or ``/Applications/KiCad``) and any ``.app`` whose Info.plist is not
@@ -71,15 +71,13 @@ def refuse_gui(path: Path, what: str = "KiCad program") -> None:
     """
     for q in (path, path.resolve()):
         if "KiCad.app" in q.parts or str(q).startswith("/Applications/KiCad/"):
-            raise Unavailable(
-                f"refusing the GUI KiCad {what} {path}: use a headless copy ({RECIPE})"
-            )
+            raise Unavailable(f"refusing the GUI KiCad {what} {path}: use {RECIPE}")
         bundle = app_bundle(q)
         if bundle and not background_only(bundle_info(bundle)):
             raise Unavailable(
                 f"refusing {path}: {bundle.name} is not a background-only app bundle (no"
                 f" LSBackgroundOnly or LSUIElement in its Info.plist), so its {what} would put an"
-                f" icon in the Dock ({RECIPE})"
+                f" icon in the Dock; use {RECIPE}"
             )
 
 

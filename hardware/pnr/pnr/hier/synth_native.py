@@ -169,8 +169,8 @@ def _native(inputs, constraints_path, rec, names, out, seconds, workers, repo, r
         # was given (before nudges are merged) and the machine load: an import of
         # this record needs no tree lookup, dedup sees the input layout.
         from pnr.feedback.blocks import layout_key
-        from pnr.feedback.signals import code_key
-        stamp = dict(code=code_key(), input_layout_key=layout_key(rec), loadavg_start=_loadavg())
+        from pnr.feedback.signals import code_stamp
+        stamp = dict(code_stamp(), input_layout_key=layout_key(rec), loadavg_start=_loadavg())
     results = []
     for name in names:
         blk = blocks[name]
@@ -686,12 +686,15 @@ def _read_jsonl(path):
 
 
 def _import_code(r, router, cache):
-    """observed_code of an imported layout record: its stamped code, else the one tree
+    """observed_code of an imported layout record: its stamped code (an older key scheme's
+    re-keyed through its first instance dir when that tree is unchanged), else the one tree
     all its instance dirs name (disagreeing or unknown instances make it unknown)."""
     from pnr.feedback.signals import observed_code
+    dirs = [i['dir'] for i in r.get('instances') or [] if i.get('dir')]
     if r.get('code'):
-        return observed_code(None, router, stamped=r['code'])
-    obs = [observed_code(i['dir'], router, cache=cache) for i in r.get('instances') or [] if i.get('dir')]
+        return observed_code(dirs[0] if dirs else None, router, stamped=r['code'], cache=cache,
+                             scheme=r.get('code_key_scheme'))
+    obs = [observed_code(d, router, cache=cache) for d in dirs]
     if not obs:
         return dict(code=None, tree=None, files=None, reason='no instance dirs')
     codes = {o['code'] for o in obs}
@@ -711,10 +714,10 @@ def _load_imports(paths, templates, current, policy, blocks, code_policy='error'
     'rebase': then the record is marked ``stale_code`` (re-evaluated under this
     code before round 1 and never ranked itself)."""
     from pnr.feedback.blocks import layout_fb, tag_of
-    from pnr.feedback.signals import PNR_ROOT, check_code, check_import, eval_code_files, observed_key
+    from pnr.feedback.signals import PNR_ROOT, TreeCode, check_code, check_import, observed_key
     by_block = {n: tid for tid, names in templates.items() for n in names}
     out, cache = {}, {}
-    current_files = eval_code_files(PNR_ROOT, current['router'])
+    current_code = TreeCode(PNR_ROOT, current['router'])
     for path in paths:
         for r in _read_jsonl(path):
             tid = by_block.get(r.get('block'))
@@ -740,10 +743,11 @@ def _load_imports(paths, templates, current, policy, blocks, code_policy='error'
                 if r.get('status') == 'ok':
                     # Failed imports are never ranked (they only mark layouts as tried).
                     obs = _import_code(r, current['router'], cache)
-                    errs, warns, stale = check_code(obs, current.get('code'), current_files, code_policy)
+                    errs, warns, stale = check_code(obs, current_code, policy=code_policy)
                     slot['errors'] += ['%s %s: %s' % (path, tag_of(r), e) for e in errs]
                     slot['warnings'] += ['%s: %s' % (tag_of(r), w) for w in warns]
-                    r['import_code'] = dict(code=obs.get('code'), tree=obs.get('tree'), reason=obs.get('reason'))
+                    r['import_code'] = dict(code=obs.get('code'), code_key_scheme=obs.get('code_key_scheme'),
+                                            tree=obs.get('tree'), reason=obs.get('reason'))
                     if stale:
                         r['stale_code'] = True
                 slot['native'].append(r)

@@ -300,8 +300,8 @@ def _native_one(inputs: Path, constraints_path: Path, cand: Path, stage: str, se
                   assembled=False, loadavg_start=_loadavg())
     if env.get('PNR_FEEDBACK') == '1':
         # the evaluation code at launch: an import of this record needs no tree lookup
-        from pnr.feedback.signals import code_key
-        record['code'] = code_key(router='shove' if env.get('PNR_SHOVE') == '1' else 'plain')
+        from pnr.feedback.signals import code_stamp
+        record.update(code_stamp(router='shove' if env.get('PNR_SHOVE') == '1' else 'plain'))
     if assemble:
         boards, error = _assemble_boards(blocks, repo)
         if error:
@@ -432,8 +432,8 @@ def _import_seed_runs(runs, out, current, policy, done_native, dataset, code_pol
     The import set is frozen at the first start (a 'seed-from' dataset record):
     a resume uses exactly those records, whatever the seed runs did since, so the
     generation plan and its positional child ids cannot shift."""
-    from pnr.feedback.signals import (PNR_ROOT, check_code, check_import, eval_code_files, observed_code,
-                                      observed_key, read_round)
+    from pnr.feedback.signals import (PNR_ROOT, TreeCode, check_code, check_import, observed_code, observed_key,
+                                      read_round)
     resolved = sorted(str(Path(r).resolve()) for r in runs)
     if frozen is not None:
         errors = []
@@ -448,7 +448,7 @@ def _import_seed_runs(runs, out, current, policy, done_native, dataset, code_pol
             errors.append('frozen imports missing from dataset.jsonl: %s' % missing[:5])
         return [done_native[i] for i in frozen.get('native') or [] if i in done_native], errors, []
     recs, errors, warnings = [], [], []
-    current_files = eval_code_files(PNR_ROOT, current['router'])
+    current_code = TreeCode(PNR_ROOT, current['router'])
     cache = {}
     for run in runs:
         run = Path(run).resolve()
@@ -481,16 +481,17 @@ def _import_seed_runs(runs, out, current, policy, done_native, dataset, code_pol
                 errs, warns = check_import(observed_key(fb, stage='native'), current, policy)
                 errors += [f'{new_id}: {e}' for e in errs]
                 warnings += [f'{new_id}: {w}' for w in warns]
-            obs = observed_code(src / 'native', current['router'], stamped=r.get('code'), cache=cache)
-            errs, warns, stale = check_code(obs, current.get('code'), current_files, code_policy)
+            obs = observed_code(src / 'native', current['router'], stamped=r.get('code'), cache=cache,
+                                scheme=r.get('code_key_scheme'))
+            errs, warns, stale = check_code(obs, current_code, policy=code_policy)
             errors += [f'{new_id}: {e}' for e in errs]
             warnings += [f'{new_id}: {w}' for w in warns]
             if not (src / 'placed.json').exists():
                 warnings.append(f'{new_id}: no placed.json, skipped')
                 continue
             rec = dict(r, id=new_id, source_id=rid, imported_from=str(run), native_dir=str(src / 'native'),
-                       gen=0, fb=fb, import_code=dict(code=obs.get('code'), tree=obs.get('tree'),
-                                                      reason=obs.get('reason')))
+                       gen=0, fb=fb, import_code=dict(code=obs.get('code'), code_key_scheme=obs.get('code_key_scheme'),
+                                                      tree=obs.get('tree'), reason=obs.get('reason')))
             for k in ('parent', 'root', 'arm', 'k', 'matched', 'lineage_depth', 'promoted_from'):
                 rec.pop(k, None)        # the source run's lineage is not this run's
             if stale:

@@ -154,20 +154,19 @@ class CodeKeyTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             root = make_tree(d)
             plain = set(signals.eval_code_files(root, 'plain'))
-            self.assertEqual(plain, {'pnr/__init__.py', 'pnr/full_iteration.py', 'pnr/native_loop.py',
-                                     'pnr/helpers.py', 'pnr/hier/__init__.py', 'pnr/hier/native_block.py',
-                                     'pnr/hier/blocks.py', 'pnr/hier/synth.py'})
+            self.assertEqual(plain, {'pnr', 'pnr.full_iteration', 'pnr.native_loop', 'pnr.helpers', 'pnr.hier',
+                                     'pnr.hier.native_block', 'pnr.hier.blocks', 'pnr.hier.synth'})
             shove = set(signals.eval_code_files(root, 'shove'))
             # ``-m pnr.shove`` runs the package __main__, which reaches world.py through the ladder
-            self.assertEqual(shove - plain, {'pnr/shove/__init__.py', 'pnr/shove/__main__.py', 'pnr/shove/ladder.py',
-                                             'pnr/shove/world.py', 'pnr/shove/targets.py'})
+            self.assertEqual(shove - plain, {'pnr.shove', 'pnr.shove.__main__', 'pnr.shove.ladder',
+                                             'pnr.shove.world', 'pnr.shove.targets'})
             before = (signals.code_key(root, 'plain'), signals.code_key(root, 'shove'))
             files = signals.eval_code_files(root, 'shove')
             # src10.frozen's world.py: the shove key changes, the plain key does not
             (root / 'pnr/shove/world.py').write_text('def line_length_limit(n):\n    return min(.5, .05 * n)\n')
             self.assertEqual(signals.code_key(root, 'plain'), before[0])
             self.assertNotEqual(signals.code_key(root, 'shove'), before[1])
-            self.assertEqual(signals.code_diff(files, signals.eval_code_files(root, 'shove')), ['pnr/shove/world.py'])
+            self.assertEqual(signals.code_diff(files, signals.eval_code_files(root, 'shove')), ['pnr.shove.world'])
             # a driver-only edit changes neither key
             (root / 'pnr/hier/synth_native.py').write_text('# edited\n')
             (root / 'pnr/feedback/signals.py').write_text('# edited\n')
@@ -176,14 +175,14 @@ class CodeKeyTest(unittest.TestCase):
     def test_real_tree(self):
         shove = signals.eval_code_files(signals.PNR_ROOT, 'shove')
         plain = signals.eval_code_files(signals.PNR_ROOT, 'plain')
-        for rel in ('pnr/full_iteration.py', 'pnr/native_loop.py', 'pnr/native_electrical.py', 'pnr/hier/native_block.py'):
-            self.assertIn(rel, plain)
-        self.assertIn('pnr/shove/world.py', shove)
-        self.assertFalse(any(k.startswith('pnr/shove/') for k in plain))
+        for module in ('pnr.full_iteration', 'pnr.native_loop', 'pnr.native_electrical', 'pnr.hier.native_block'):
+            self.assertIn(module, plain)
+        self.assertIn('pnr.shove.world', shove)
+        self.assertFalse(any(k.split('.')[:2] == ['pnr', 'shove'] for k in plain))
         for f in (shove, plain):
-            self.assertFalse(any(k.startswith(('pnr/feedback/', 'pnr/mc/')) for k in f))
-            self.assertNotIn('pnr/hier/synth_native.py', f)
-            self.assertNotIn('pnr/hier/top.py', f)
+            self.assertFalse(any(k.split('.')[:2] in (['pnr', 'feedback'], ['pnr', 'mc']) for k in f))
+            self.assertNotIn('pnr.hier.synth_native', f)
+            self.assertNotIn('pnr.hier.top', f)
         k = signals.current_key('block', 600)
         self.assertEqual(k['code'], signals.code_key(signals.PNR_ROOT, k['router']))
         self.assertTrue(signals.key_string(k).endswith('|' + k['code']))
@@ -216,11 +215,10 @@ class CodeKeyTest(unittest.TestCase):
     def test_check_code_policies(self):
         same = dict(code='abc')
         self.assertEqual(signals.check_code(same, 'abc'), ([], [], False))
-        other = dict(code='old', files={'pnr/a.py': '1', 'pnr/shove/world.py': '2'})
-        cur = {'pnr/a.py': '1', 'pnr/shove/world.py': '3'}
+        other = dict(code='old', code_key_scheme=2, files={'pnr.a': '1', 'pnr.shove.world': '2'})
+        cur = {'pnr.a': '1', 'pnr.shove.world': '3'}
         errors, _, stale = signals.check_code(other, 'new', cur)
-        self.assertEqual(len(errors), 1)
-        self.assertIn('differs: pnr/shove/world.py', errors[0])
+        self.assertEqual(errors, ['code old != this run new (differs: pnr.shove.world)'])
         self.assertFalse(stale)
         errors, warnings, stale = signals.check_code(other, 'new', cur, 'warn')
         self.assertEqual((errors, len(warnings), stale), ([], 1, False))

@@ -228,6 +228,26 @@ reviews them with the pull request:
   on two linux-aarch64 cores; the shared CI runner, which took 77 s for the former three, needs
   an estimated 185 to 240 s, so the target is `large` (900 s) and no longer `manual`.
 
+Choices made in PR3a (the mechanical format of the imported engine; [migration plan](migration-plan.md)
+PR3a); the owner reviews them with the pull request:
+
+- **Code keys hash each module's canonical syntax tree, not its bytes** (code key scheme 2), so
+  the format commits do not invalidate the libraries and trials that routing feedback imports.
+  `pnr.feedback.signals` hashes every module of the evaluation closure by module name; comments
+  and layout are not in the tree, and on top of that it applies what black's own AST check
+  allows (docstrings compared stripped line by line, the `u` prefix, `del (a, b)` as
+  `del a, b`) and what isort does: each block of consecutive imports counts as a sorted set of
+  imported names, unless the order can matter (a star import, or a name bound twice). An import
+  never moves across other code in that form, and a docstring's text still counts. Fields are
+  named and empty ones left out, so Python 3.9, 3.11 and 3.12 give the same key for the engine.
+  Measured on the engine: black and isort change 338 files, 226 of them in their plain
+  `ast.dump` (import order, docstring indentation), none in the canonical form, and both routers'
+  keys stay the same. New records stamp `code_key_scheme` next to `code`. A record without it
+  is legacy (scheme 1, raw file bytes by path, the exact former key): it is compared under that
+  scheme, or re-keyed from its evaluation tree when that tree still hashes to its stamp, so
+  trials of frozen snapshot trees survive the format while those of a tree reformatted since
+  do not. PR3b's rename needs a scheme that applies the module map to module names and imports.
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.

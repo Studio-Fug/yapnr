@@ -109,11 +109,11 @@ class HalvingGenerationsTest(unittest.TestCase):
     def write_seed(self, code='stamped', tree=None, ready=True):
         """Seed run h9: p000 (38 opens), p001 (45), p002 failed.
 
-        ``code``: 'stamped' records carry this tree's code key (records made by this
+        ``code``: 'stamped' records carry this tree's code stamp (records made by this
         code do), None leaves it unknown; ``tree`` writes the native rounds'
         annotation-source origin (the tree that evaluated them). ``ready``: status.json
         says the native stage finished."""
-        from pnr.feedback.signals import code_key
+        from pnr.feedback.signals import code_stamp
         if self.seed_run.exists():
             shutil.rmtree(self.seed_run)
         targets = json.loads((DATA / 'board-targets.json').read_text())['targets']
@@ -125,7 +125,7 @@ class HalvingGenerationsTest(unittest.TestCase):
             write_round(cand / 'native', tg, opens, cand / 'placed.json', tree=tree)
             recs.append(dict(id=rid, stage='native', status='ok', objective=[0, 0, 0, 150, 0, opens], opens=opens))
             if code == 'stamped':
-                recs[-1]['code'] = code_key(router='plain')
+                recs[-1].update(code_stamp(router='plain'))
         recs.append(dict(id='p002', stage='native', status='failed'))
         (self.seed_run / 'dataset.jsonl').write_text(''.join(json.dumps(r) + '\n' for r in recs))
         stages = dict(place={}, native={}) if ready else dict(place={}, screen={})    # still in its rung (like h4)

@@ -102,11 +102,11 @@ class SynthGenerationsTest(unittest.TestCase):
     def write_trials(self, code=True, nudge=False):
         """Import file: the two parents' stage-A and native records plus one unevaluated stage-A layout.
 
-        ``code``: the native records carry this tree's code key (as records made by
+        ``code``: the native records carry this tree's code stamp (as records made by
         this code do); False leaves the code unknown (fixture rounds record no tree).
         ``nudge``: the first parent's native layout has one part moved 0.1 mm (an
         accepted shove nudge), so it differs from its stage-A layout."""
-        from pnr.feedback.signals import code_key
+        from pnr.feedback.signals import code_stamp
         ps = parents()
         extra = dict(ps[1], stage='place', seed=9)
         extra['layout'] = {k: [v[0] + 0.25, v[1], v[2], v[3]] for k, v in ps[1]['layout'].items()}
@@ -117,7 +117,7 @@ class SynthGenerationsTest(unittest.TestCase):
         natives = [dict(p) for p in ps]
         for rec in natives:
             if code:
-                rec['code'] = code_key(router='plain')
+                rec.update(code_stamp(router='plain'))
         if nudge:
             layout = {k: list(v) for k, v in natives[0]['layout'].items()}
             layout['inductor'][0] += 0.1

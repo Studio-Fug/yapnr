@@ -1,0 +1,11 @@
+"""Engine worker tools imported from Splanc with history (PR1).
+
+Only what //hardware/pnr needs is exported: the KiCad-side region worker is a
+data dependency of the native power-access test bundle. Splanc's own
+hardware/tools/BUILD.bazel also covered its atopile board tools and was not
+imported (migration plan §7.1). The tools here get real targets when they move
+into the `yapnr` package in PR3b (appendix A of the plan); until then their
+test files are not wired (the test-wiring check covers `tests/` only).
+"""
+
+exports_files(["keyhole_region.py"])

@@ -14,9 +14,11 @@ done, this repository holds the project scaffolding (build, CI, documentation) a
 
 ## Status
 
-Alpha, pre-import. The engine arrives with history in PR1 and PR2; the command line currently
-offers `yapnr --version` and a `yapnr doctor` stub. Progress is tracked in
-[WORKLOG.md](../WORKLOG.md) and in GitHub issues.
+Alpha. The engine's committed history is imported from Splanc at its original paths under
+`hardware/` (PR1, see the [history import manifest](history/import-manifest.md)); the newer engine
+state follows in PR2, and the package restructuring after that. The command line currently offers
+`yapnr --version` and a `yapnr doctor` stub. Progress is tracked in [WORKLOG.md](../WORKLOG.md) and
+in GitHub issues.
 
 ## Start here
 
@@ -26,6 +28,8 @@ offers `yapnr --version` and a `yapnr doctor` stub. Progress is tracked in
   pipeline.
 - [Migration plan](migration-plan.md): how the engine moves out of Splanc, PR by PR.
 - [Decisions](decisions.md): the owner's decisions and the pinned tool versions.
+- [History import manifest](history/import-manifest.md): what PR1 imported from Splanc, and how it
+  was rewritten and checked.
 - [About the name](about-the-name.md): "yet another place and route", and the circuit tree.
 
 For contributors and agents:
@@ -55,6 +59,7 @@ releases
 architecture
 migration-plan
 decisions
+history/import-manifest
 about-the-name
 ```
 

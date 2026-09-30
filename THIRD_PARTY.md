@@ -93,6 +93,13 @@ image, and this file is at `/usr/share/doc/yapnr/THIRD_PARTY.md`.
 - **Documentation site assets:** the furo theme's CSS and JavaScript (MIT) are part of the
   generated site; mermaid 11.4.1 (MIT) is loaded from a CDN.
 
+## In the repository only
+
+- **IANA root zone list** (`tools/privacy/iana_tlds.txt`): a static copy of IANA's list of
+  top-level domains (<https://data.iana.org/TLD/tlds-alpha-by-domain.txt>), public data, with its
+  source, retrieval date and version in the file header. The privacy scan reads it; it is not part
+  of the wheel or the container images.
+
 ## Project assets
 
 The yapnr logo, mark and favicons in `branding/` are project assets created for yapnr (see

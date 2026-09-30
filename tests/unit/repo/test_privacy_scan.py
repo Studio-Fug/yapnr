@@ -8,8 +8,10 @@ scan pushes for token shapes). The file is also allowlisted in the scanner.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import os
+import re
 import tempfile
 import unittest
 from unittest import mock
@@ -167,6 +169,176 @@ class RuleTest(unittest.TestCase):
             self.assertNotIn(OWNER, out)
 
 
+# What counts as an e-mail address (owner decision, docs/decisions.md): an `@`
+# match whose local part has a letter or digit, that is not a call (followed by
+# `(`), and whose top-level domain is in the IANA root zone.
+#
+# The imported engine history (PR1) as `git log -p` prints it: each line is a
+# real line of that history, and together they held all 21 matches of the
+# address pattern that are code, not addresses.
+SKIP = AT + "unittest.skip"
+IMPORTED_CODE_HISTORY = (
+    # 17 top-level test decorators on added lines and one on a removed line:
+    # the diff marker is the whole local part, and each is a call.
+    ["+" + SKIP + 'If(pcbnew is None, "requires native KiCad Python")'] * 2
+    + ["+" + SKIP + "Unless("] * 2
+    + ["+" + SKIP + "Unless(importlib.util.find_spec('pcbnew'), 'requires native KiCad')"] * 11
+    + ["+" + SKIP + "Unless(NATIVE, 'requires native KiCad Python')"] * 2
+    + ["-" + SKIP + "Unless(importlib.util.find_spec('pcbnew'), 'requires KiCad')"]
+    # A matrix product: a call, at a top-level domain that does not exist.
+    + [
+        "+        optimizer.zero_grad();field=max_move*torch.tanh(nodes);"
+        "delta=W" + AT + "field.reshape(-1,2);pos=xy+delta"
+    ]
+    # Two endpoints in the engine's constraint syntax, at a top-level domain
+    # that does not exist.
+    + [
+        '+        doc = {"diff_pair": [{"name": "usb", "p": "net' + AT + 'board.usbc:A6", '
+        '"n": "net' + AT + 'board.usbc:A7"}]}'
+    ]
+)
+IMPORTED_CODE_MATCHES = 21
+
+# Each shape is rejected by exactly one condition of the refinement.
+NOT_AN_ADDRESS = {
+    "no letter or digit in the local part": ["+" + AT + "gmail.com", "x = ._" + AT + "corp.co.uk"],
+    "a call": ["y = W" + AT + "x.to(device)", "jane.doe" + AT + "gmail.com(x)"],
+    "no such top-level domain": ["net" + AT + "board.usbc:A6", "a" + AT + "b.skipif"],
+}
+
+# Personal addresses stay findings in files, in --stdin and in --all.
+PERSONAL_ADDRESSES = [
+    "jane.doe" + AT + "gmail.com",
+    "someone" + AT + "corp.co.uk",
+    "x" + AT + "example.io",  # only example.com/.net/.org are reserved
+    "JANE.DOE" + AT + "GMAIL.COM",  # top-level domains compare in lower case
+    "12345" + AT + "qq.com",  # a local part of digits only
+    "jane.doe" + AT + "gmail.com (work)",  # a space before `(`: not a call
+    "mailto:jane.doe" + AT + "gmail.com",
+    "jane.doe" + AT + "gmail.com.",  # end of a sentence
+    "jane" + AT + "mail.co",
+    "jane" + AT + "fastmail.fm",
+]
+# The same addresses on added and removed lines of a patch: a diff marker glued
+# to a real address leaves a letter or digit in the local part.
+PERSONAL_PATCH_LINES = ["+" + a for a in PERSONAL_ADDRESSES] + ["-" + a for a in PERSONAL_ADDRESSES]
+
+
+def _assert_redacted(test, out):
+    for address in PERSONAL_ADDRESSES:
+        test.assertNotIn(address.split(AT)[1].split(" ")[0].lower(), out.lower())
+
+
+def _write_tree(root, files):
+    for rel, text in files.items():
+        path = os.path.join(root, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(text)
+
+
+class EmailRuleTest(unittest.TestCase):
+    def test_imported_code_matches_the_address_pattern(self):
+        # The fixture exercises the refinement: without it, every match is a finding.
+        (email,) = [rule for rule in privacy_scan.RULES if rule.name == "email"]
+        matches = [m for line in IMPORTED_CODE_HISTORY for m in email.pattern.finditer(line)]
+        self.assertEqual(len(matches), IMPORTED_CODE_MATCHES)
+        self.assertEqual([m for m in matches if email.allowed(m)], [])
+
+    def test_imported_code_is_not_an_address(self):
+        history = "\n".join(IMPORTED_CODE_HISTORY) + "\n"
+        self.assertEqual(privacy_scan.scan_text(history, "<stdin>"), [])
+        self.assertEqual(_run_main(["--stdin"], history), (0, ""))
+        # The same lines as file contents (no diff marker), in files and --all.
+        contents = "".join(line[1:] + "\n" for line in IMPORTED_CODE_HISTORY)
+        with tempfile.TemporaryDirectory() as root:
+            _write_tree(root, {"pnr/elastic.py": contents})
+            self.assertEqual(privacy_scan.scan_tree(root), [])
+            self.assertEqual(_run_main(["--all", "--root", root], ""), (0, ""))
+            self.assertEqual(_run_main([os.path.join(root, "pnr/elastic.py")], ""), (0, ""))
+
+    def test_each_condition_rejects_on_its_own(self):
+        for condition, samples in NOT_AN_ADDRESS.items():
+            for sample in samples:
+                with self.subTest(condition=condition, sample=sample):
+                    self.assertEqual(privacy_scan.scan_text(sample), [])
+
+    def test_personal_addresses_are_findings(self):
+        for sample in PERSONAL_ADDRESSES:
+            with self.subTest(sample=privacy_scan.redact(sample)):
+                findings = privacy_scan.scan_text(sample, "README.md")
+                self.assertEqual([f.rule for f in findings], ["email"])
+        for sample in PERSONAL_PATCH_LINES:
+            with self.subTest(sample=privacy_scan.redact(sample)):
+                findings = privacy_scan.scan_text(
+                    sample, "<stdin>", privacy_scan.allowed_identities()
+                )
+                self.assertEqual([f.rule for f in findings], ["email"])
+
+    def test_personal_addresses_fail_every_mode(self):
+        # Mixed with the imported code: only the addresses are findings.
+        history = "\n".join(IMPORTED_CODE_HISTORY + PERSONAL_PATCH_LINES) + "\n"
+        code, out = _run_main(["--stdin"], history)
+        self.assertEqual(code, 1)
+        self.assertEqual(out.count(": email:"), len(PERSONAL_PATCH_LINES))
+        _assert_redacted(self, out)
+        contents = "".join(line[1:] + "\n" for line in IMPORTED_CODE_HISTORY)
+        contents += "\n".join(PERSONAL_ADDRESSES) + "\n"
+        with tempfile.TemporaryDirectory() as root:
+            _write_tree(root, {"README.md": contents})
+            findings = privacy_scan.scan_tree(root)
+            self.assertEqual([f.rule for f in findings], ["email"] * len(PERSONAL_ADDRESSES))
+            first = len(IMPORTED_CODE_HISTORY) + 1
+            self.assertEqual(
+                [f.line for f in findings], list(range(first, first + len(PERSONAL_ADDRESSES)))
+            )
+            for argv in (["--all", "--root", root], [os.path.join(root, "README.md")]):
+                with self.subTest(argv=argv[0]):
+                    code, out = _run_main(argv, "")
+                    self.assertEqual(code, 1)
+                    self.assertEqual(out.count(": email:"), len(PERSONAL_ADDRESSES))
+                    _assert_redacted(self, out)
+
+    def test_allowlisted_commit_address_is_unchanged(self):
+        # Accepted in history (--stdin), a finding in files and in --all.
+        history = OWNER + " " + OWNER + "\n+" + OWNER + "\n-" + OWNER + "\n"
+        self.assertEqual(_run_main(["--stdin"], history), (0, ""))
+        with tempfile.TemporaryDirectory() as root:
+            _write_tree(root, {"README.md": OWNER + "\n"})
+            self.assertEqual(_run_main(["--all", "--root", root], "")[0], 1)
+            self.assertEqual(_run_main([os.path.join(root, "README.md")], "")[0], 1)
+
+    def test_identity_gate_does_not_use_the_refinement(self):
+        # `--identities` accepts only its allowlist, whatever the text rule thinks.
+        for address in (
+            "+" + AT + "gmail.com",
+            "net" + AT + "board.usbc",
+            "jane.doe" + AT + "gmail.com(",
+            "alice" + AT + "buildbox.lan",
+        ):
+            with self.subTest(address=privacy_scan.redact(address)):
+                self.assertFalse(privacy_scan.identity_allowed(address))
+
+    def test_missing_tld_list_fails_closed(self):
+        # Without the list every top-level domain counts: stricter, never looser.
+        with tempfile.TemporaryDirectory() as root:
+            self.assertEqual(privacy_scan.load_public_tlds(os.path.join(root, "none.txt")), set())
+        with mock.patch.object(privacy_scan, "public_tlds", return_value=frozenset()):
+            findings = privacy_scan.scan_text("net" + AT + "board.usbc:A6")
+            self.assertEqual([f.rule for f in findings], ["email"])
+            # The other two conditions do not depend on the list.
+            self.assertEqual(privacy_scan.scan_text("+" + AT + "gmail.com"), [])
+            self.assertEqual(privacy_scan.scan_text("W" + AT + "x.to(device)"), [])
+
+    def test_parse_tld_list(self):
+        text = "# Version 1\n\nCOM\n  io  # comment\nXN--P1AI\n"
+        self.assertEqual(privacy_scan.parse_public_tlds(text), frozenset({"com", "io", "xn--p1ai"}))
+        for bad in ("co.uk", "c m", AT + "com", "*"):
+            with self.subTest(bad=bad):
+                with self.assertRaisesRegex(ValueError, r"iana_tlds\.txt:2:"):
+                    privacy_scan.parse_public_tlds("# ok\n" + bad + "\n")
+
+
 # Commit identities (`--identities`, the CI lint job). Only GitHub noreply
 # addresses, GitHub's own committer address and the addresses in
 # tools/privacy/allowed_identities.txt pass.
@@ -287,6 +459,38 @@ class TreeTest(unittest.TestCase):
             in_checkout = privacy_scan.parse_allowed_identities(handle.read())
         self.assertEqual(privacy_scan.allowed_identities(), in_checkout)
         self.assertIn(OWNER, in_checkout)
+
+    def test_tld_list_is_loaded(self):
+        # The copy next to the scanner is the checkout's file: the IANA root zone.
+        path = os.path.join(self.root, privacy_scan.PUBLIC_TLDS_FILE)
+        with open(path, encoding="utf-8") as handle:
+            in_checkout = privacy_scan.parse_public_tlds(handle.read())
+        tlds = privacy_scan.public_tlds()
+        self.assertEqual(tlds, in_checkout)
+        self.assertGreater(len(tlds), 1000)
+        for tld in ("com", "net", "org", "uk", "io", "de", "to", "arpa", "xn--p1ai"):
+            with self.subTest(tld=tld):
+                self.assertIn(tld, tlds)
+        # Names from code, and special-use names that are not in the root zone.
+        for name in ("skipif", "skipunless", "reshape", "usbc", "local", "localhost", "test"):
+            with self.subTest(name=name):
+                self.assertNotIn(name, tlds)
+
+    def test_tld_list_is_the_upstream_file(self):
+        # A provenance header, then the upstream file byte for byte from its
+        # version line; the header records the upstream checksum.
+        with open(os.path.join(self.root, privacy_scan.PUBLIC_TLDS_FILE), "rb") as handle:
+            data = handle.read()
+        header, version, upstream_rest = data.partition(b"\n# Version ")
+        self.assertTrue(version, "no IANA version line")
+        upstream = version[1:] + upstream_rest
+        self.assertRegex(upstream.split(b"\n", 1)[0], rb"^# Version \d{10}, Last Updated ")
+        header = header.decode("utf-8")
+        self.assertIn("# Source: https://data.iana.org/TLD/tlds-alpha-by-domain.txt\n", header)
+        self.assertRegex(header, r"\n# Retrieved: \d{4}-\d{2}-\d{2} \(UTC\)\n")
+        checksum = re.search(r"\n# SHA-256 of the upstream file: ([0-9a-f]{64})\n", header)
+        self.assertIsNotNone(checksum, "no upstream checksum")
+        self.assertEqual(hashlib.sha256(upstream).hexdigest(), checksum.group(1))
 
     def test_tree_is_clean(self):
         files = privacy_scan.list_repo_files(self.root)

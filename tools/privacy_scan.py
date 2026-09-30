@@ -13,7 +13,12 @@ never needs to name the details it protects:
 - carrier-grade NAT addresses (``100.64.0.0/10``, used by tailnets) and
   private (RFC 1918) addresses;
 - e-mail addresses, except GitHub noreply addresses, ``noreply``/``no-reply``
-  mailboxes, the git SSH user of code hosts, and reserved example domains;
+  mailboxes, the git SSH user of code hosts, and reserved example domains. An
+  ``@`` match counts as an address only if its local part has a letter or
+  digit, it is not a call (followed by ``(``), and its top-level domain is in
+  the IANA root zone (``tools/privacy/iana_tlds.txt``), so code such as a
+  decorator on an added patch line, a matrix product or an ``x@y.z`` endpoint
+  is not an address;
 - API keys, access tokens and private-key blocks.
 
 Findings are printed with the matched text redacted, so running the scan in a
@@ -69,6 +74,11 @@ from typing import (
 # The commit addresses `--identities` accepts besides GitHub noreply addresses
 # (repository-relative; read next to this file, so it also works under Bazel).
 ALLOWED_IDENTITIES_FILE = "tools/privacy/allowed_identities.txt"
+
+# The top-level domains of the IANA root zone, a vendored static copy with its
+# source and retrieval date (repository-relative; read next to this file). An
+# `@` match counts as an e-mail address only if its top-level domain is listed.
+PUBLIC_TLDS_FILE = "tools/privacy/iana_tlds.txt"
 
 # Repository-relative files that are exempt: the scanner (its patterns), its
 # test (synthetic samples), the migration plan (which describes the scrub) and
@@ -129,6 +139,60 @@ def _email_allowed(match: "re.Match[str]") -> bool:
     return bool(_EXAMPLE_DOMAINS.search(domain))
 
 
+def parse_public_tlds(text: str, path: str = PUBLIC_TLDS_FILE) -> FrozenSet[str]:
+    """Top-level domains of a root zone list (lower case): one per line, `#` starts a comment."""
+    tlds = set()
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        entry = line.split("#", 1)[0].strip()
+        if not entry:
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9-]+", entry):
+            raise ValueError(f"{path}:{lineno}: expected one top-level domain per line")
+        tlds.add(entry.lower())
+    return frozenset(tlds)
+
+
+def load_public_tlds(path: str) -> FrozenSet[str]:
+    """The top-level domains listed in ``path``; empty if the file is missing."""
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return parse_public_tlds(handle.read(), path)
+    except FileNotFoundError:
+        return frozenset()
+
+
+@functools.lru_cache(maxsize=None)
+def public_tlds() -> FrozenSet[str]:
+    """The vendored IANA root zone top-level domains, read next to this file.
+
+    Empty if the file is missing, and then every top-level domain counts (the
+    scan fails closed: stricter, never looser).
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    return load_public_tlds(os.path.join(here, "privacy", os.path.basename(PUBLIC_TLDS_FILE)))
+
+
+def _is_address(match: "re.Match[str]") -> bool:
+    """Whether an `@` match is an e-mail address at all (owner decision, docs/decisions.md).
+
+    Code glues names to `@` too: a top-level decorator on an added or removed
+    patch line (`+@unittest.skipIf(`, with the diff marker as the local part),
+    a matrix product (`W@field.reshape(`) or an endpoint (`net@board.usbc:A6`).
+    A match counts only if all of these hold:
+
+    1. its local part contains a letter or digit;
+    2. it is not immediately followed by `(` (a call);
+    3. its top-level domain is in the IANA root zone (``public_tlds()``),
+       compared in lower case.
+    """
+    if not re.search(r"[A-Za-z0-9]", match.group(1)):
+        return False
+    if match.string[match.end() : match.end() + 1] == "(":
+        return False
+    tlds = public_tlds()
+    return not tlds or match.group(2).rsplit(".", 1)[-1].lower() in tlds
+
+
 def _looks_random(match: "re.Match[str]") -> bool:
     value = match.group("value")
     if any(marker in value for marker in ("${", "$(", "<", "{{", "...")):
@@ -143,7 +207,8 @@ class Rule:
     description: str
     # Return True when a regex match is acceptable after all (allowlist).
     allowed: Optional[Callable[["re.Match[str]"], bool]] = None
-    # For rules that must NOT match (e.g. random-looking values), False = skip.
+    # Return False when a regex match is not what the rule looks for after all
+    # (a credential that is not random-looking, an `@` that is not an address).
     confirm: Optional[Callable[["re.Match[str]"], bool]] = None
 
 
@@ -247,6 +312,7 @@ RULES: Sequence[Rule] = (
         re.compile(r"(?<![\w.+%-])([A-Za-z0-9._%+-]+)@((?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,})(?![\w-])"),
         "personal e-mail address (use a users.noreply.github.com address)",
         allowed=_email_allowed,
+        confirm=_is_address,
     ),
     Rule(
         "token",

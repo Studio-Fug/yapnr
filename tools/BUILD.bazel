@@ -12,9 +12,13 @@ py_library(
         "privacy_scan.py",
         "repo_root.py",
     ],
-    # The commit addresses `privacy_scan.py --identities` accepts besides
-    # GitHub noreply addresses; read next to privacy_scan.py.
-    data = ["privacy/allowed_identities.txt"],
+    # Read next to privacy_scan.py: the commit addresses `--identities` accepts
+    # besides GitHub noreply addresses, and the IANA root zone top-level
+    # domains (an `@` match is an e-mail address only at one of them).
+    data = [
+        "privacy/allowed_identities.txt",
+        "privacy/iana_tlds.txt",
+    ],
     imports = [".."],
 )
 

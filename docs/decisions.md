@@ -68,6 +68,24 @@ Owner decisions for releases and container images (PR-R; [releases](releases.md)
   the notices (`LICENSE`, `THIRD_PARTY.md`, `SOURCES`) under `/usr/share/doc/yapnr`. (The snapshot
   is recorded inside the image rather than as a label; see "Container images" below.)
 
+Owner decisions for the history import (PR1; [the migration plan](migration-plan.md), §7):
+
+- **Privacy scan: what counts as an e-mail address** (decided 2026-09-29). The imported engine
+  history holds 21 matches of the address pattern that are code: top-level test decorators on added
+  or removed patch lines (`+@unittest.skipIf(`, where the diff marker is the local part), a matrix
+  product (`W@field.reshape(`) and endpoints in the engine's constraint syntax
+  (`net@board.usbc:A6`). The owner chose to refine the rule rather than change imported code or add
+  allow markers: an `@` match counts as an e-mail address only if its local part contains a letter
+  or digit, it is not immediately followed by `(` (a call), and its top-level domain is in the IANA
+  root zone, compared in lower case. The list is a static copy in `tools/privacy/iana_tlds.txt`,
+  whose header gives the source URL, the retrieval date and the upstream checksum, followed by the
+  upstream file with its version line; refresh it by replacing it with a new download. Nothing else
+  changed: personal addresses at public top-level domains stay findings in files, `--all` and
+  `--stdin`, the allowlisted commit address stays a finding in files, and `--identities` does not
+  use the refinement. By construction, addresses at names outside the root zone (such as `.local`,
+  `.lan` or `.internal`) are no longer e-mail findings; hyphenated and URL `.local` machine names
+  remain findings of the `local-host` rule.
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.

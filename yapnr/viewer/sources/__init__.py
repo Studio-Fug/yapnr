@@ -3,9 +3,9 @@
 atopile is the one frontend today (``atopile.py``; it moves to ``yapnr.frontends.atopile`` in PR3e).
 Its entry module comes from the project's ``ato.yaml``: ``builds.<build>.entry`` for the configured
 build target, else every build's entry (the one that covers the netlist best wins). Without
-atopile sources, or without a netlist to join them to, the viewer runs without a Source tab: the
-schematic draws generic symbols, notes resolve against the netlist alone and 3D model paths are
-used as the board has them.
+atopile sources, or without a netlist to join them to, there is no source index: the Source tab
+says why (``reason``, also in ``/api/about``), the schematic draws generic symbols, notes resolve
+against the netlist alone and 3D model paths are used as the board has them.
 """
 
 from __future__ import annotations

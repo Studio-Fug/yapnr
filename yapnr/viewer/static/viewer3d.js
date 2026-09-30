@@ -77,7 +77,12 @@ let T,renderer,scene,cam,controls,loader,ray,G={};
 function boot(){return S.boot||=(async()=>{
  status('Loading the 3D engine…');
  try{
-  const [three,{OrbitControls},{GLTFLoader}]=await Promise.all([import('./vendor/three/build/three.module.js'),import('./vendor/three/examples/jsm/controls/OrbitControls.js'),import('./vendor/three/examples/jsm/loaders/GLTFLoader.js')]);
+  // three.js is not in the repository: the assembled dist (//yapnr/viewer:dist) carries the pinned copy
+  const noThree='three.js (vendor/three/) is not on this server: serve the assembled dist (bazel run //:viewer)';
+  const miss=await fetch('/api/about').then(r=>r.json()).then(a=>a.missing_assets||[]).catch(()=>[]);
+  if(miss.some(m=>m.startsWith('vendor/three/')))throw Error(noThree);
+  const [three,{OrbitControls},{GLTFLoader}]=await Promise.all([import('./vendor/three/build/three.module.js'),import('./vendor/three/examples/jsm/controls/OrbitControls.js'),import('./vendor/three/examples/jsm/loaders/GLTFLoader.js')])
+   .catch(e=>{throw Error(noThree+' · '+(e?.message||e))});
   T=S.T=three;const cv=$('v3-canvas');
   renderer=new T.WebGLRenderer({canvas:cv,antialias:true,preserveDrawingBuffer:Q.get('v3shot')==='1'});renderer.setPixelRatio(Math.min(2,devicePixelRatio||1));
   scene=new T.Scene();scene.background=new T.Color(0x0c1418);

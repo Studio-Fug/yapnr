@@ -89,9 +89,13 @@ jumpToComponent=function(query){
 function schOutside(ref){let blk=sch.data?.scope?.kind==='block'||sch.overlay?.lane_refs;return blk&&sch.data?.components?.length?`${ref} is outside this block trial's board.`:`No component ${ref} in this checkpoint.`}
 
 // ------------------------------------------------------------------ loading
+// elkjs is not in the repository: the assembled dist carries the pinned copy (/api/about lists what this server lacks)
+const SCH_NO_ELK='layout engine (elk.bundled.js) failed to load: serve the assembled dist (bazel run //:viewer)';
 function schLoadElk(){
  if(window.ELK)return Promise.resolve();if(sch.elkP)return sch.elkP;
- sch.elkP=new Promise((res,rej)=>{let s=document.createElement('script');s.src='elk.bundled.js';s.onload=()=>res();s.onerror=()=>{sch.elkP=null;rej(Error('layout engine (elk.bundled.js) failed to load: serve the assembled dist (bazel run //:viewer)'))};document.head.append(s)});
+ sch.elkP=fetch('/api/about').then(r=>r.json()).then(a=>a.missing_assets||[]).catch(()=>[]).then(miss=>{if(miss.includes('elk.bundled.js'))throw Error(SCH_NO_ELK);
+  return new Promise((res,rej)=>{let s=document.createElement('script');s.src='elk.bundled.js';s.onload=()=>res();s.onerror=()=>rej(Error(SCH_NO_ELK));document.head.append(s)})})
+  .catch(e=>{sch.elkP=null;throw e});
  return sch.elkP;
 }
 async function schEnsure(force){

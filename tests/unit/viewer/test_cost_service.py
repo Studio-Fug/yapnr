@@ -154,6 +154,16 @@ class CostBindingTest(unittest.TestCase):
         self.assertEqual(service.request("9-abc", "C61")["status"], "unavailable")
         service.pool.shutdown(wait=True)
 
+    def test_board_outside_the_run_is_unavailable(self):
+        e = dict(id="7-abc", kind="phase_complete", candidate="test", board="/elsewhere.kicad_pcb")
+        (self.root / "events/7-abc.json").write_text(json.dumps(dict(e, board_sha256="a" * 64)))
+        answer = self.service.request("7-abc", "C61")
+        self.assertEqual(answer["status"], "unavailable")
+        self.assertIn("boards/", answer["reason"])
+        (self.root / "events/7-abc.json").write_text(json.dumps(dict(e, board_sha256="x")))
+        with self.assertRaisesRegex(ValueError, "Invalid board checksum"):
+            self.service.request("7-abc", "C61")
+
     def test_record_requires_matching_replay_model(self):
         d = json.loads(self.record.read_text())
         self.assertEqual(d["runtime_sources"]["cost_inspect.py"], self.service.model_hash)

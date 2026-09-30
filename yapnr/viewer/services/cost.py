@@ -68,11 +68,17 @@ class CostService:
                 reason="This draft has no immutable native board checkpoint yet.",
             )
         sha = event["board_sha256"]
-        board = Path(event["board"])
-        if not board.resolve().is_relative_to((self.root / "boards").resolve()) or not re.fullmatch(
-            "[a-f0-9]{64}", sha
-        ):
-            raise ValueError("Invalid board binding")
+        if not isinstance(sha, str) or not re.fullmatch("[a-f0-9]{64}", sha):
+            raise ValueError("Invalid board checksum in the event")
+        board = Path(event.get("board") or "")
+        if not board.resolve().is_relative_to((self.root / "boards").resolve()):
+            return dict(
+                status="unavailable",
+                reason=(
+                    "Component costs replay only the run's immutable board copies (the boards/"
+                    " folder of the live directory); this checkpoint names a board elsewhere."
+                ),
+            )
         if self._model_hash() != self.model_hash:
             raise ValueError("Cost model changed; restart viewer to preserve cache provenance")
         context = self.contexts.get(event["candidate"], self.contexts.get("*"))

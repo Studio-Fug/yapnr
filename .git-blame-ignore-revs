@@ -8,3 +8,8 @@
 # PR branch never reaches main: land a mechanical change as its own PR and add
 # the resulting main commit here in a follow-up PR. (A merge-commit PR keeps
 # its commits, so it may list them directly.)
+
+# PR #9 (merge commit): black, then isort, then isort with pinned settings.
+e8fe0ffe3ad36d9d224d96571879fa76b501d034
+16de54a7fed0b8807cfa7c2aa010a02e2af9c67d
+4b7b295e5cbb2f39138e5d34e98c6b3c474b5dac

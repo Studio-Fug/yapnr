@@ -1057,6 +1057,21 @@ py_binary(
     deps = [":pnr_animate"],
 )
 
+# Runs the traced ladder (initial pool, seed 0) and renders docs/animations; with
+# --render-only RUN_DIR it only renders (no KiCad).
+py_binary(
+    name = "ladder_animations",
+    srcs = ["regression/animate_ladder.py"],
+    data = glob(["regression/*.py"]),
+    imports = ["."],
+    main = "regression/animate_ladder.py",
+    tags = [
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr_animate"],
+)
+
 py_test(
     name = "trace_test",
     size = "small",

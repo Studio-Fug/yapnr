@@ -1,0 +1,207 @@
+"""Run the regression ladder traced and render one animation per case for the docs.
+
+``bazel run //hardware/pnr:ladder_animations -- --python PY --kicad-python KPY --kicad-cli CLI
+--library LIB`` runs ``run.py --trace --initial-pool --initial-starts 8 --initial-finalists 3
+--seed 0`` into ``.yapnr/ladder/<run-id>`` (git-ignored), reruns a case that fails in pool mode
+in the baseline configuration, renders every passing case to ``docs/animations/<case>.webp``
+(800 px, at most 2.5 MB), the README case to ``<case>.gif`` (640 px, at most 5 MB) and writes
+``docs/animations/manifest.json``. ``--render-only RUN_DIR [RUN_DIR ...]`` skips the ladder
+(no KiCad needed). A failed case is not rendered into the docs unless ``--allow-failed``.
+The case titles live here, so the fixtures stay unchanged.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime
+import json
+import os
+import platform
+import subprocess
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+
+TITLES = {
+    "01-connector-led-2": "Connector + LED",
+    "02-resistor-led-3": "Resistor + LED",
+    "03-branched-leds-5": "Two LEDs",
+    "04-inverter-leds-8": "Inverter indicators",
+    "05-timer-led-10": "TLC555 blinker",
+    "06-chaser-14": "Two-stage chaser",
+    "07-chaser-20": "Five-stage chaser",
+    "08-chaser-20-plane": "Five-stage chaser with plane",
+}
+README_CASES = ("07-chaser-20", "06-chaser-14", "05-timer-led-10")
+POOL = ["--initial-pool", "--initial-starts", "8", "--initial-finalists", "3"]
+RENDERER_VERSION = 1
+
+
+def repo_root():
+    workspace = os.environ.get("BUILD_WORKSPACE_DIRECTORY")
+    return Path(workspace) if workspace else HERE.parents[2]
+
+
+def run_ladder(repo, out, args, extra, cases):
+    command = [args.python, str(repo / "hardware/pnr/regression/run.py"), "--repo", str(repo)]
+    command += ["--out", str(out), "--python", args.python, "--kicad-python", args.kicad_python]
+    command += ["--kicad-cli", args.kicad_cli, "--library", str(args.library)]
+    command += ["--timeout", str(args.timeout), "--seed", "0", "--trace"] + extra
+    for case in cases:
+        command += ["--case", case]
+    # The runner bounds each stage; this bounds the whole ladder.
+    budget = args.timeout * 8 * max(1, len(cases))
+    return subprocess.run(command, cwd=repo, timeout=budget).returncode
+
+
+def cases_of(run):
+    summary = json.loads((Path(run) / "summary.json").read_text())
+    out = {}
+    for result in summary["results"]:
+        if result["seed"] != 0:
+            continue
+        directory = Path(result["directory"])
+        out[result["case"]] = (
+            directory if directory.is_absolute() else Path(run) / directory,
+            result,
+        )
+    return out
+
+
+def platform_name():
+    return "%s-%s" % (sys.platform, platform.machine().lower())
+
+
+def engine_revision(repo):
+    try:
+        output = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=True,
+        )
+        return output.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--render-only", type=Path, nargs="+", metavar="RUN_DIR")
+    ap.add_argument("--python", help="numerical Python (torch, numpy, pyyaml) for run.py")
+    ap.add_argument("--kicad-python")
+    ap.add_argument("--kicad-cli")
+    ap.add_argument("--library", type=Path)
+    ap.add_argument("--timeout", type=float, default=900)
+    ap.add_argument("--case", action="append", default=[])
+    ap.add_argument("--out", type=Path, help="animations directory (default docs/animations)")
+    ap.add_argument("--run-dir", type=Path, help="ladder output (default .yapnr/ladder/<run-id>)")
+    ap.add_argument("--no-baseline-fallback", action="store_true")
+    ap.add_argument("--allow-failed", action="store_true")
+    ap.add_argument("--max-seconds", type=float, default=22.0)
+    ap.add_argument("--image", help="container image digest the ladder ran in (manifest)")
+    a = ap.parse_args(argv)
+    from pnr.animate.cli import render_animation
+    from pnr.provenance import Trace
+
+    repo = repo_root()
+    runs = a.render_only
+    if not runs:
+        missing = [
+            k for k in ("python", "kicad_python", "kicad_cli", "library") if not getattr(a, k)
+        ]
+        if missing:
+            ap.error("the ladder needs --" + ", --".join(m.replace("_", "-") for m in missing))
+        stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")
+        pool_run = a.run_dir or repo / ".yapnr" / "ladder" / ("animations-" + stamp)
+        run_ladder(repo, pool_run, a, POOL, a.case)
+        runs = [pool_run]
+        failed = [c for c, (_d, r) in cases_of(pool_run).items() if not r["passed"]]
+        if failed and not a.no_baseline_fallback:
+            baseline = pool_run.parent / (pool_run.name + "-baseline")
+            run_ladder(repo, baseline, a, [], failed)
+            runs.append(baseline)
+    chosen = {}
+    for run in runs:
+        provenance = json.loads((Path(run) / "provenance.json").read_text())
+        pool = bool(provenance.get("arguments", {}).get("initial_pool"))
+        for case, (directory, result) in sorted(cases_of(run).items()):
+            if a.case and case not in a.case:
+                continue
+            if case in chosen and (chosen[case][1]["passed"] or not result["passed"]):
+                continue
+            chosen[case] = (directory, result, POOL if pool else [], run)
+    out = a.out or repo / "docs" / "animations"
+    out.mkdir(parents=True, exist_ok=True)
+    entries, kicad = [], None
+    for case in sorted(chosen):
+        directory, result, config, run = chosen[case]
+        if not result["passed"] and not a.allow_failed:
+            print("skip %s: failed the gate (%s)" % (case, ", ".join(result.get("reasons", []))))
+            continue
+        version = Path(run) / "kicad-version.txt"
+        kicad = kicad or (version.read_text().strip() if version.is_file() else None)
+        trace = Trace(Path(directory) / "trace")
+        title = TITLES.get(case, case)
+        entry = render_animation(
+            trace,
+            "webp",
+            out / (case + ".webp"),
+            width=800,
+            max_seconds=a.max_seconds,
+            budget_mb=2.5,
+            title=title,
+            allow_failed=a.allow_failed,
+        )
+        entry["config"] = config
+        entries.append(entry)
+        print(
+            "%s: %d frames, %.1f s, %d bytes"
+            % (entry["file"], entry["frames"], entry["seconds"], entry["bytes"])
+        )
+    readme = None
+    for case in README_CASES:
+        if case in chosen and (chosen[case][1]["passed"] or a.allow_failed):
+            directory, _result, config, _run = chosen[case]
+            entry = render_animation(
+                Trace(Path(directory) / "trace"),
+                "gif",
+                out / (case + ".gif"),
+                width=640,
+                max_seconds=a.max_seconds,
+                budget_mb=5.0,
+                title=TITLES[case],
+                allow_failed=a.allow_failed,
+            )
+            entry["config"] = config
+            entries.append(entry)
+            readme = dict(case=case, file=entry["file"])
+            print(
+                "%s: %d frames, %.1f s, %d bytes"
+                % (entry["file"], entry["frames"], entry["seconds"], entry["bytes"])
+            )
+            break
+    import PIL
+
+    manifest = dict(
+        schema="yapnr-animations-v1",
+        generated=dict(
+            date=datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d"),
+            engine_revision=engine_revision(repo),
+            renderer=RENDERER_VERSION,
+            pillow=PIL.__version__,
+            platform=platform_name(),
+            image=a.image,
+            kicad=kicad,
+        ),
+        animations=sorted(entries, key=lambda e: e["file"]),
+        readme=readme,
+    )
+    (out / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    return 0 if entries else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

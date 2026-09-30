@@ -12,7 +12,7 @@ Relaxes a continuous placement by gradient descent on a smooth loss:
 Positions of ``fixed`` parts are held constant (they still anchor the wirelength);
 everything else is an optimized parameter. This is the DREAMPlace reframing —
 "placement is training a network" — in plain PyTorch on CPU, deterministic under a
-fixed seed. It produces good *continuous* positions; :mod:`pnr.place.legalize`
+fixed seed on one platform. It produces good *continuous* positions; :mod:`pnr.place.legalize`
 removes the residual overlaps.
 
 **Orientation** (``orient=True``): each movable part also carries a categorical
@@ -37,6 +37,9 @@ from .geometry import keepout_rects, resolve_fixed_poses, occupied_sides
 # Reproducibility ("same inputs -> same board", design §10): run torch
 # single-threaded so the float reductions don't vary with thread scheduling.
 # Set at import, before any parallel work sizes the intra-op pool.
+# Bitwise reproducible per platform (OS, architecture, torch build) only: the
+# macOS and Linux torch wheels round exp, log and addcmul differently in the last
+# bit, and the non-convex placement amplifies that (Studio-Fug/yapnr#6).
 torch.set_num_threads(1)
 
 # The discrete rotation set (degrees) the placer chooses from.

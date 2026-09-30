@@ -173,6 +173,36 @@ reviews them with the pull request:
   checked this way only locally).
 - **The docs enable MyST's `strikethrough` extension** so status lists (the manifest's PR3
   leftovers, the plan's appendix B) can strike done items instead of deleting them.
+- **Placement is reproducible per platform, not across platforms** (Studio-Fug/yapnr#6). The same
+  inputs and seed give one board on macOS arm64 and another on linux-aarch64 (the CI runner and
+  the images). Measured with torch 2.3.1 and numpy 1.26.4 on both: the seeded start, the thread
+  count (1) and the legalizer agree bit for bit (each platform's global placement legalizes to
+  the other's board exactly), and `torch.use_deterministic_algorithms(True)` changes nothing. The
+  two torch wheels round float32 `exp` (0.6 % of inputs), `log` (0.1 %) and `addcmul` (0.07 %,
+  Adam's second moment) differently by one ulp. The first gradient difference appears at the
+  second optimizer step; the non-convex placement grows it to millimetres by step 200, and
+  legalization turns that into another legal placement. Evaluating `exp` and `log` in float64
+  removes the gradient difference but not Adam's. The engine is not changed: bitwise
+  cross-platform results would need torch's transcendental and fused kernels replaced, would
+  change every result, and would break again with the next torch build or on x86_64. Both
+  platforms draw from the same distribution (30 seeds each; mean final HPWL with orientation
+  1846 mm on macOS and 1838 mm on Linux, without 1862 mm and 1873 mm), so a run is reproducible
+  on one image digest or one Mac environment, and comparisons between runs stay on one platform.
+- **`orientation_test` checks what the placer guarantees.** Its former check, oriented HPWL at
+  most the position-only HPWL for seed 0, held on macOS by 3.6 mm (0.2 %) and failed on
+  linux-aarch64 by 35 mm. Over those 30 seeds orientation beat position-only on 18 (macOS) and 20
+  (Linux), a mean gain of 16 ± 18 mm and 36 ± 19 mm (± one standard error) against a per-seed
+  spread of about 100 mm: the single-seed check fails on 22 of the 60 (platform, seed) pairs, and
+  a median over three or five seeds on 27 to 32 % of the seed sets. The test now requires the
+  mean HPWL of seeds 0 to 2 with orientation to be at most 5 % above the position-only mean
+  (fails on 2.3 % of the seed triples of the measured pairs; the ratio is 0.997 on macOS and
+  0.987 on Linux). A synthetic board with known best angles, started from explicit positions so
+  the seed does not matter, checks that the search finds them (22.5 mm against 42 mm); this
+  well-conditioned problem gives the same result on both platforms. A 90°/270° mix-up in the
+  rotation convention fails three of the checks. A golden result per platform was rejected: it
+  pins numbers that every torch bump changes and cannot state the orientation claim (Linux's
+  seed 0 is worse than position-only). Nine placements take about 40 s on the development Mac and
+  50 s on two linux-aarch64 cores; the target stays `medium` and is no longer `manual`.
 
 ## Pinned versions
 

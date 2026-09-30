@@ -409,8 +409,11 @@ Pass set, from `bazel test //... --config=ci` with `--config=lowmem` and
     is unchanged in this PR; the tests are fixed with the fixtures in PR3.
   - `detail_route_test`: unchanged, 848 s on the development Mac and
     `test_drc_clean_by_construction` fails as at PR1.
-  - `orientation_test`: size `medium` and `manual` as at PR1 (Studio-Fug/yapnr#6; it passes on
-    macOS).
+  - ~~`orientation_test`: size `medium` and `manual` as at PR1 (Studio-Fug/yapnr#6; it passes on
+    macOS).~~ Re-enabled after PR2, in the engine hygiene change: placement is deterministic per
+    platform only, so its HPWL check now compares the three-seed mean with a 5 % margin, and a
+    synthetic board checks that the search finds known best angles
+    ([decisions](../decisions.md)). Still `medium`.
 - `pnr.bzl` stays unloaded, and `hardware/tools/BUILD.bazel` is unchanged: `keyhole_region.py`
   is still the only tool a test needs.
 

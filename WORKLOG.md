@@ -12,13 +12,16 @@ Last updated: 2026-09-30 (engine hygiene).
   `PNR_BARREL_CONTACT_BRIDGES`; the default is src15 again), the `board.Remove` audit (27 calls
   now `board.Delete`, 3 kept; `board_delete_test`), every engine subprocess bounded through
   `pnr.proc` (`PNR_WORKER_TIMEOUT`, `PNR_PHASE_TIMEOUT`, `PNR_EVALUATION_TIMEOUT`; `proc_test`),
-  and CI's history scan with merge diffs (`git log -p -m`). Reasons and limits:
-  [docs/decisions.md](docs/decisions.md); struck leftovers:
+  CI's history scan with merge diffs (`git log -p -m`), and `orientation_test` re-enabled (#6:
+  placement is deterministic per platform only, so it compares a three-seed mean with a 5 % margin
+  and checks known best angles on a synthetic board; passes on macOS and linux-aarch64). Reasons
+  and limits: [docs/decisions.md](docs/decisions.md); struck leftovers:
   [docs/history/import-manifest.md](docs/history/import-manifest.md#known-leftovers-for-pr3).
 
 ## Next
 
-1. Owner: review and push the hygiene branch and open its PR; CI must be green.
+1. Owner: review and push the hygiene branch and open its PR; CI must be green (it runs
+   `orientation_test` again; close #6 with it).
 2. Owner: A/B Electrical221's two flags on the hierarchical engine before turning them on.
 3. Owner: push Splanc's `splanc-mini`, so the 9 newest `Imported-From` links of PR1 resolve (see the
    manifest).
@@ -63,3 +66,8 @@ Last updated: 2026-09-30 (engine hygiene).
   Scrub each snapshot when it is staged, before its commit (PR2).
 - Reproducing the `board.Remove` teardown SIGSEGV on synthetic boards: `Remove` and `Delete` both
   exit 0 there (zones, footprints, tracks, vias, any free order); the evidence is src12i's run.
+- Making placement bitwise identical across macOS and Linux (thread count, deterministic
+  algorithms, float64 `exp`/`log`): the thread count is already 1, deterministic mode changes
+  nothing, and Adam's `addcmul` also rounds differently between the torch builds (#6).
+- Comparing one seed's HPWL between placer variants, or across platforms: the per-seed spread
+  (about 100 mm, 5 %) exceeds most effects; compare means over seeds on one platform (#6).

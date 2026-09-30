@@ -256,7 +256,7 @@ class GridRuleTest(unittest.TestCase):
 
         from pnr.route.detail import router
 
-        source = inspect.getsource(router.route_board)
+        source = inspect.getsource(router.route_board).replace('"', "'")  # quote style-free
         self.assertIn("extra.get('via_to_smd_pad_mm') is not None", source)
 
 

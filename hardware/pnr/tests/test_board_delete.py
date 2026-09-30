@@ -122,16 +122,35 @@ class RemoveAuditTests(unittest.TestCase):
             self.assertEqual(missing, [])
 
     def test_detached_items_are_never_owned_by_python(self):
+        # The statement right after the Remove call is ``<item>.thisown = False``,
+        # checked on the syntax tree so that the layout does not matter.
         for (name, source), reason in KEPT.items():
             if "thisown" not in reason:
                 continue
-            lines = [
-                line.replace(" ", "")
-                for line in (PNR / name).read_text().splitlines()
-                if source in line
-            ]
-            self.assertEqual(len(lines), 1, name)
-            self.assertIn("thisown=False", lines[0], name)
+            text = (PNR / name).read_text()
+            disowned = []
+            for node in ast.walk(ast.parse(text)):
+                for field in ("body", "orelse", "finalbody"):
+                    body = getattr(node, field, None)
+                    if not isinstance(body, list):
+                        continue
+                    for stmt, after in zip(body, body[1:] + [None]):
+                        if not (
+                            isinstance(stmt, ast.Expr)
+                            and ast.get_source_segment(text, stmt.value) == source
+                        ):
+                            continue
+                        item = ast.dump(stmt.value.args[0])
+                        disowned.append(
+                            isinstance(after, ast.Assign)
+                            and len(after.targets) == 1
+                            and isinstance(after.targets[0], ast.Attribute)
+                            and after.targets[0].attr == "thisown"
+                            and ast.dump(after.targets[0].value) == item
+                            and isinstance(after.value, ast.Constant)
+                            and after.value.value is False
+                        )
+            self.assertEqual(disowned, [True], name)
 
 
 # Child process: build a fixture, run engine code that discards items, save,

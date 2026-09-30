@@ -489,6 +489,11 @@ class KiCadDefaultsTest(unittest.TestCase):
     def test_no_bare_applications_default(self):
         import re
 
+        def flat(text):
+            """Site matching ignores black's layout: whitespace and wrapping parentheses
+            dropped, either quote style."""
+            return re.sub(r"[\s(]+", "", text).replace('"', "'")
+
         bad, seen_sites = [], set()
         for path in self.files():
             rel = str(path.relative_to(self.SRC))
@@ -502,7 +507,14 @@ class KiCadDefaultsTest(unittest.TestCase):
                     bad.append("%s:%d bare default" % (rel, n))
                 if not re.search(r"(?<![\w~}])/Applications/KiCad/", line):
                     continue
-                if any(re.search(p, line) for p in self.ENV_DEFAULT):
+                # a call black wrapped: the env-first default may start up to two lines above,
+                # but its /Applications/KiCad/ path must be the one on this line
+                window = " ".join(l for _, l in lines[max(0, i - 2) : i + 1])
+                if any(
+                    m.end() > len(window) - len(line)
+                    for p in self.ENV_DEFAULT
+                    for m in re.finditer(p, window)
+                ):
                     continue
                 if (
                     "_KI_GUI_PY=" in line
@@ -512,7 +524,18 @@ class KiCadDefaultsTest(unittest.TestCase):
                     )
                 ):
                     continue
-                site = next((k for k in self.SITES if k[0] == rel and k[1] in line), None)
+                # a site's fragment may start up to two lines above but must end on this line
+                before = flat(" ".join(l for _, l in lines[max(0, i - 2) : i]))
+                here = before + flat(line)
+                site = next(
+                    (
+                        k
+                        for k in self.SITES
+                        if k[0] == rel
+                        and here.find(flat(k[1]), max(0, len(before) - len(flat(k[1])) + 1)) >= 0
+                    ),
+                    None,
+                )
                 if site:
                     seen_sites.add(site)
                     continue
@@ -556,21 +579,24 @@ class KiCadDefaultsTest(unittest.TestCase):
         # or the footprint fallback of kicad_footprints() (PNR_KICAD_FOOTPRINTS, then the PNR_KICAD_CLI bundle)
         import re
 
-        uses = 0
-        for n, line in self.code_lines(self.SRC / "hardware/pnr/regression/run.py"):
-            if re.search(r"\bKI\s*\+", line):
-                uses += 1
-                self.assertTrue(
-                    re.search(
-                        r"os\.environ\.get\('PNR_KICAD_(CLI|PYTHON)'(\)\s*or\s*|,)KI\s*\+", line
-                    )
-                    or line == " return Path(KI+'/SharedSupport/footprints')",
-                    (n, line),
-                )
-        self.assertEqual(uses, 4)
+        # Layout-independent (black may wrap a call or change quotes): the code as one
+        # line, whitespace runs as one space, double quotes as single quotes.
+        lines = self.code_lines(self.SRC / "hardware/pnr/regression/run.py")
+        code = re.sub(r"\s+", " ", " ".join(line for _, line in lines)).replace('"', "'")
+        uses = re.findall(r"\bKI ?\+", code)
+        env_first = re.findall(
+            r"os\.environ\.get\( ?'PNR_KICAD_(?:CLI|PYTHON)' ?(?:\) ?or ?|, ?)KI ?\+", code
+        )
+        fallback = re.findall(r"return Path\(KI ?\+ ?'/SharedSupport/footprints'\)", code)
+        self.assertEqual(len(env_first) + len(fallback), len(uses), (env_first, fallback))
+        self.assertEqual(len(uses), 4)
 
     def test_kicad_path_constants_follow_the_environment(self):
+        import re
+
+        # whitespace removed and quotes normalized, so the check does not depend on layout
         text = (self.SRC / "hardware/pnr/regression/run.py").read_text()
+        text = re.sub(r"\s+", "", text).replace('"', "'")
         self.assertIn("os.environ.get('PNR_KICAD_PYTHON',KI+", text)
         self.assertIn("os.environ.get('PNR_KICAD_CLI',KI+", text)
         self.assertIn("PNR_KICAD_FOOTPRINTS", text)

@@ -1346,7 +1346,7 @@ labels otherwise follow the requested numbering. Each PR updates `WORKLOG.md` an
 touches. "Same pass set" means the recorded list of passing, skipped and known-failing tests is
 unchanged.
 
-### PR0: bootstrap (about 45 files, about 3k lines, excluding LICENSE and locks)
+### PR0: bootstrap (about 55 files, about 4.7k lines, excluding the lockfiles)
 
 - **Contents:**
   - `README.md` (updated), `AGENTS.md`, `DEVELOPERS.md`, `CONTRIBUTING.md` (owner-only policy),

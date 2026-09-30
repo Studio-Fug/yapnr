@@ -718,5 +718,145 @@ class SourceAgentHttpTest(unittest.TestCase):
                 stop(p)
 
 
+# A `claude` on PATH that only records that something ran it.
+MARKER_CLAUDE = """import sys
+from pathlib import Path
+with open(Path(__file__).with_name('claude-ran.txt'), 'a') as f:
+    f.write(' '.join(sys.argv[1:])[:200] + '\\n')
+"""
+
+
+class DefaultsTest(unittest.TestCase):
+    """A viewer started without --agent / --net-summaries (with design inputs, and a `claude` on
+    PATH) runs no paid call: Ask answers 503, the AI net labels stay off, and nothing starts the
+    CLI."""
+
+    def test_paid_features_off_without_flags(self):
+        import os
+
+        from yapnr.viewer.testing import child_env
+
+        with tempfile.TemporaryDirectory(prefix="viewer-defaults-") as tmp:
+            root = Path(tmp) / "live"
+            (root / "events").mkdir(parents=True)
+            bin_dir = Path(tmp) / "bin"
+            bin_dir.mkdir()
+            write_fake(bin_dir / "claude", MARKER_CLAUDE)
+            env = child_env()
+            env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+            p, base = start_viewer(
+                root,
+                "--graph",
+                str(GRAPH),
+                "--atopile-root",
+                str(DESIGN),
+                "--atopile-build",
+                "default",
+                "--viewer3d",
+                "off",
+                env=env,
+            )
+            try:
+
+                def call(path, body=None, headers=None):
+                    req = Request(
+                        base + path,
+                        data=None if body is None else json.dumps(body).encode(),
+                        headers=dict(
+                            {"Content-Type": "application/json"} if body is not None else {},
+                            **(headers or {})
+                        ),
+                    )
+                    try:
+                        with urlopen(req, timeout=20) as r:
+                            return r.status, json.loads(r.read())
+                    except HTTPError as e:
+                        return e.code, json.loads(e.read() or b"{}")
+
+                status, st = call("/api/agent/status")
+                self.assertEqual(status, 200)
+                self.assertEqual(
+                    (st["available"], st["enabled"], st["web"], st["max_concurrent"]),
+                    (False, False, False, 0),
+                )
+                self.assertIn("--agent on", st["reason"])
+                self.assertEqual(
+                    (st["net_summaries"]["enabled"], st["net_summaries"]["state"]), (False, "off")
+                )
+                self.assertTrue(st["source"])  # the design inputs are there: only the flags are off
+                body = dict(
+                    message="What is C2 for?",
+                    model="sonnet",
+                    context=dict(lane=None, phase="live", view="pcb", selection=[]),
+                )
+                self.assertEqual(call("/api/agent/chat", body, {"Origin": base})[0], 503)
+                self.assertEqual(
+                    call("/api/agent/cancel", dict(session="x"), {"Origin": base})[0], 503
+                )
+                self.assertEqual(call("/api/agent/conversations")[0], 503)
+                about = call("/api/about")[1]
+                self.assertEqual(
+                    about["features"],
+                    dict(source=True, source_reason=None, agent=False, viewer3d=False),
+                )
+                time.sleep(1.5)  # the net-label thread would have started by now
+                self.assertFalse((bin_dir / "claude-ran.txt").exists())
+            finally:
+                stop(p)
+
+    def test_about_without_sources(self):
+        with tempfile.TemporaryDirectory(prefix="viewer-bare-") as tmp:
+            root = Path(tmp) / "live"
+            (root / "events").mkdir(parents=True)
+            p, base = start_viewer(root, "--viewer3d", "off")
+            try:
+                with urlopen(base + "/api/about", timeout=10) as r:
+                    about = json.load(r)
+                self.assertFalse(about["features"]["source"])
+                self.assertTrue(about["features"]["source_reason"])
+                self.assertIsInstance(about["modified"], bool)
+                with self.assertRaises(HTTPError) as cm:
+                    urlopen(base + "/api/source/index", timeout=10)
+                self.assertEqual(cm.exception.code, 503)
+            finally:
+                stop(p)
+
+
+class AboutTest(unittest.TestCase):
+    def test_source_link(self):
+        from yapnr.viewer.server import source_link
+
+        rev = "0123456789abcdef0123456789abcdef01234567"
+        self.assertEqual(
+            source_link("https://github.com/example/yapnr", rev),
+            "https://github.com/example/yapnr/tree/" + rev,
+        )
+        self.assertEqual(
+            source_link("https://github.com/example/yapnr/", None),
+            "https://github.com/example/yapnr/",
+        )
+        self.assertEqual(
+            source_link("https://git.example.com/yapnr", rev), "https://git.example.com/yapnr"
+        )
+        self.assertIsNone(source_link("", rev))
+
+    def test_remote_clients_get_no_machine_paths(self):
+        from types import SimpleNamespace
+
+        from yapnr.viewer.server import Handler
+
+        doc = dict(
+            available=True, cli="/opt/kicad/bin/kicad-cli", parts=None, env=dict(x=1), jobs=[]
+        )
+        keys = ("cli", "parts", "env")
+        local = SimpleNamespace(client_address=("127.0.0.1", 1))
+        remote = SimpleNamespace(client_address=("192.0.2.10", 1))
+        self.assertEqual(Handler.local_only(local, doc, keys), doc)
+        self.assertEqual(
+            Handler.local_only(remote, doc, keys),
+            dict(available=True, cli=None, parts=None, env=None, jobs=[]),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

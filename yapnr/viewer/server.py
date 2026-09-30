@@ -31,7 +31,7 @@ import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Tuple
 from urllib.parse import parse_qs, urlparse
 
 import yapnr
@@ -177,24 +177,42 @@ def find_dist(explicit: Optional[Path] = None):
     return PACKAGE / "static", ["elk.bundled.js", "vendor/three/build/three.module.js"]
 
 
-def source_revision() -> Optional[str]:
-    """The source commit of this viewer (AGPL section 13): the image's stamp, else git."""
+def source_revision() -> Tuple[Optional[str], bool]:
+    """(the source commit of this viewer, whether the checkout has uncommitted changes) for the
+    Source link (AGPL section 13): the image's stamp, else git (tracked files only)."""
     stamped = os.environ.get("YAPNR_SOURCE_REVISION", "").strip()
     if stamped:
-        return stamped
-    try:
+        return stamped, False
+
+    def git(*args):
         here = Path(__file__).resolve().parent
-        done = subprocess.run(
-            ["git", "-C", str(here), "rev-parse", "HEAD"],
+        return subprocess.run(
+            ["git", "-C", str(here), *args],
             capture_output=True,
             text=True,
             timeout=5,
             check=False,
         )
+
+    try:
+        done = git("rev-parse", "HEAD")
+        rev = done.stdout.strip()
+        if done.returncode or not re.fullmatch(r"[0-9a-f]{40,64}", rev):
+            return None, False
+        changed = git("status", "--porcelain", "--untracked-files=no")
+        return rev, changed.returncode == 0 and bool(changed.stdout.strip())
     except (OSError, subprocess.SubprocessError):
+        return None, False
+
+
+def source_link(url: Optional[str], revision: Optional[str]) -> Optional[str]:
+    """The browsable tree of ``revision`` for a GitHub repository URL, else the URL itself."""
+    if not url:
         return None
-    rev = done.stdout.strip()
-    return rev if done.returncode == 0 and re.fullmatch(r"[0-9a-f]{40,64}", rev) else None
+    base = url.rstrip("/")
+    if revision and re.fullmatch(r"https://github\.com/[\w.-]+/[\w.-]+", base):
+        return f"{base}/tree/{revision}"
+    return url
 
 
 def static_path(dist: Path, url_path: str) -> Optional[Path]:
@@ -253,7 +271,7 @@ class Viewer:
             machine_cli=cfg.machine_kicad_cli,
             machine_python=cfg.machine_kicad_python,
         )
-        self.revision = source_revision()
+        self.revision, self.revision_modified = source_revision()
         self._pins = functools.lru_cache(maxsize=16)(self._pin_summary)
         self._init_controls()
         self._init_cost()
@@ -450,9 +468,23 @@ class Viewer:
             title=self.cfg.title,
             version=yapnr.__version__,
             revision=self.revision,
+            # The checkout has uncommitted changes: the revision alone is not the running source.
+            modified=self.revision_modified,
             source_url=self.cfg.source_url,
+            source_link=source_link(self.cfg.source_url, self.revision),
             license=LICENSE,
             missing_assets=self.dist_missing,
+            # What the front end should offer (it skips requests that could only fail).
+            features=dict(
+                source=self.source_service is not None,
+                source_reason=(
+                    None
+                    if self.source_service is not None
+                    else self.sources.reason or "no atopile source configured"
+                ),
+                agent=self.agent_service is not None,
+                viewer3d=self.viewer3d is not None,
+            ),
         )
 
     def lane_brief(self, lane_id):
@@ -1110,6 +1142,14 @@ class Handler(BaseHTTPRequestHandler):
         except KeyError:
             return self.send({"error": "no such conversation"}, 404)
 
+    def local_only(self, doc, keys):
+        """doc without the machine paths under keys for a client that is not on this machine."""
+        from yapnr.viewer.agent.service import is_loopback
+
+        if is_loopback(self.client_address[0]):
+            return doc
+        return {k: (None if k in keys else v) for k, v in doc.items()}
+
     def get_agent_status(self, path):
         return self.send(self.viewer.agent_status())
 
@@ -1122,7 +1162,7 @@ class Handler(BaseHTTPRequestHandler):
                 dict(status="unavailable", error="3D view disabled on this server (--viewer3d off)")
             )
         if path == "/api/3d/status":
-            return self.send(v.viewer3d.status())
+            return self.send(self.local_only(v.viewer3d.status(), ("cli", "parts", "env")))
         q = self.query()
         lane_id = q.get("lane", [""])[0]
         ph = q.get("phase", ["live"])[0]

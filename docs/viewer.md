@@ -207,7 +207,11 @@ prints it (`--status accepted`, `--json`).
 
 ## Source code and license
 
-The page header links to the viewer's source (AGPL-3.0-or-later, section 13), with the revision
-the server runs (`YAPNR_SOURCE_REVISION`, or the git checkout). The front end loads two
-third-party libraries, served unmodified next to their licenses: elkjs (EPL-2.0) and three.js
-(MIT); see [THIRD_PARTY.md](../THIRD_PARTY.md).
+The page header links to the viewer's source (AGPL-3.0-or-later, section 13): the source tree of
+the revision the server runs (`YAPNR_SOURCE_REVISION`, or the git checkout's `HEAD`), marked
+"modified" when the checkout has uncommitted changes to tracked files. If you serve a modified
+viewer to other people, publish your changes and point `--source-url` at them. The revision is the
+viewer's own; runs do not record the engine commit that produced them yet. The front end loads two
+third-party libraries, served unmodified next to their licenses: elkjs (EPL-2.0, with an
+Apache-2.0 web-worker shim; both texts are served) and three.js (MIT); see
+[THIRD_PARTY.md](../THIRD_PARTY.md).

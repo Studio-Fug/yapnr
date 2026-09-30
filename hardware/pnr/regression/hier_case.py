@@ -410,8 +410,13 @@ def route_metrics(route):
     return _route_metrics(route)
 
 
-def knit(case, k, flat, reps, choice=None):
-    """Route the nets between blocks for one placed seed; returns its record."""
+def knit(case, k, flat, reps, choice=None, attempt=0):
+    """Route the nets between blocks for one placed seed; returns its record.
+
+    ``attempt`` numbers the representative-pad retries of a seed: each attempt routes in
+    its own trace scope (``top-NN-route``, then ``top-NN-route-r1``, ...), and the record's
+    ``id`` is the scope id the recorder assigned, so a selection names exactly the route
+    whose copper the record carries."""
     from pnr.route.detail.router import route_board
 
     frames, fab, budget = case["frames"], case["rules"]["fab"], case["budget"]
@@ -425,10 +430,12 @@ def knit(case, k, flat, reps, choice=None):
     top = top_graph(flat, frames, reps, choice)
     fixed = fixed_copper(tracks, vias, fab)
     groups = pin_groups(flat, tracks, vias, float(fab["via_diameter_mm"]))
-    label = "top-%02d-route" % k
-    with trace.scope(label, "route", start="top-%02d" % k):
+    label = "top-%02d-route" % k + ("-r%d" % attempt if attempt else "")
+    retry = dict(attempt=attempt) if attempt else {}
+    with trace.scope(label, "route", start="top-%02d" % k, **retry):
         recorder = trace.current()
         if recorder is not None:
+            label = recorder.scope_id
             joined = {n: g for n, g in groups.items() if len(g) < len(flat.net(n).pins)}
             recorder.fixed(copper_blob(tracks, vias, case["layers"], fab), groups=joined)
         route = route_board(
@@ -573,7 +580,7 @@ def run(root, seed):
             }
             if not choice:
                 break
-            retry = knit(case, k, flat, reps, choice)
+            retry = knit(case, k, flat, reps, choice, attempt=tries)
             if retry["objective"] < result["objective"]:
                 result = retry
         record.update(

@@ -275,5 +275,62 @@ class HierCaseTest(unittest.TestCase):
             sub.write_text(text)
 
 
+class RetryTest(unittest.TestCase):
+    """A representative-pad retry that wins: the top-seed selection names the retry's own
+    route scope, whose recorded copper is the top copper in routes.json."""
+
+    def test_the_winning_retry_is_the_selected_route(self):
+        real = hier_case.knit
+
+        def knit(case, k, flat, reps, choice=None, attempt=0):
+            result = real(case, k, flat, reps, choice, attempt)
+            if attempt == 0:  # pretend the first knit left GND split
+                result.update(
+                    split_nets=["GND"],
+                    missing=result["missing"] + 1,
+                    objective=[result["objective"][0] + 1] + result["objective"][1:],
+                )
+            return result
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "case"
+            root.mkdir()
+            (root / "design.json").write_text(json.dumps(design()))
+            (root / "source-graph.json").write_text(graph().to_json())
+            clean = {k: v for k, v in os.environ.items() if not k.startswith("PNR_")}
+            clean[trace.ENV_DIR] = str(root / "trace")
+            with mock.patch.dict(os.environ, clean, clear=True), mock.patch.object(
+                hier_case, "knit", side_effect=knit
+            ):
+                report, _case = hier_case.run(root, 0)
+                recorder = trace.current()
+                if recorder is not None:
+                    recorder.close()
+            self.assertEqual(report["hier"]["seeds"][0]["representative_retries"], 1)
+            case = provenance.Trace(root / "trace")
+            routes = [s.id for s in case.of_type("route")]
+            self.assertEqual(routes, ["top-00-route", "top-00-route-r1"])
+            (select,) = [s for s in case.selects if s["id"] == "top-seed"]
+            self.assertEqual(select["chosen"], "top-00-route-r1")
+            (end,) = case.kind(select["chosen"], "route_end")
+            recorded = sorted(
+                tuple(t[1:5])
+                for digest in end["nets"].values()
+                for t in (case.blob(digest) or {}).get("tracks", [])
+            )
+            saved = json.loads((root / "routes.json").read_text())["tracks"]
+            top = saved[len(saved) - report["hier"]["top_copper"]["tracks"] :]
+            um = trace.um
+            self.assertEqual(
+                recorded, sorted((um(a[0]), um(a[1]), um(b[0]), um(b[1])) for *_, a, b, _w in top)
+            )
+            # The animation's critical path runs through the retry, not the first knit.
+            order, _competitors, _entry = provenance.critical_path(
+                provenance.from_hier(case), "final"
+            )
+            ids = [n.id for n in order]
+            self.assertIn("top-00-route-r1", ids)
+            self.assertNotIn("top-00-route", ids)
+
 if __name__ == "__main__":
     unittest.main()

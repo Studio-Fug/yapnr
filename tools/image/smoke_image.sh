@@ -11,6 +11,7 @@
 # Every image:
 #   - runs as UID 1000 by default, with tini as PID 1, and without DISPLAY/WAYLAND_DISPLAY;
 #   - carries the notices in /usr/share/doc/yapnr (SOURCES, THIRD_PARTY.md);
+#   - the build left nothing in /tmp, /root/.cache or /root/.local;
 #   - `kicad-cli version` prints the expected KiCad version;
 #   - tools/image/pcbnew_smoke.py: pcbnew loads a footprint through the seeded global
 #     footprint table, saves a board, and `kicad-cli pcb drc` checks it;
@@ -95,6 +96,20 @@ for notice in ${notices}; do
         fail "/usr/share/doc/yapnr/${notice} is missing or empty"
     fi
 done
+
+# The build leaves nothing behind in /tmp or in root's caches (KiCad's instance locks, uv).
+if leftovers="$(docker run --rm --user 0 --entrypoint sh "${IMAGE}" -c '
+    for d in /tmp /root/.cache /root/.local; do
+        if [ -d "$d" ]; then find "$d" -mindepth 1 -maxdepth 1; fi
+    done')"; then
+    if [ -z "${leftovers}" ]; then
+        pass "no build leftovers in /tmp, /root/.cache or /root/.local"
+    else
+        fail "build leftovers in the image: $(echo "${leftovers}" | tr '\n' ' ')"
+    fi
+else
+    fail "cannot list /tmp and root's HOME in the image"
+fi
 
 cli="$(kicad_run "${IMAGE}" kicad-cli version 2>/dev/null | tail -n 1)"
 case "${cli}" in

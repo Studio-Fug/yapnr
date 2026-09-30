@@ -83,11 +83,13 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*; \
     \
     # KiCad runs headless and reports the pinned version, from the CLI and from Python. (With
-    # a scratch HOME: KiCad writes its settings there, and the image user's HOME stays clean.)
+    # a scratch HOME and TMPDIR: KiCad writes its settings and its instance locks
+    # (org.kicad.kicad) there, so neither the image user's HOME nor /tmp keeps them.)
     test -z "${DISPLAY:-}"; \
     scratch_home="$(mktemp -d)"; \
-    cli="$(HOME="${scratch_home}" kicad-cli version)"; \
-    py="$(HOME="${scratch_home}" python3 -c 'import pcbnew; print(pcbnew.Version())')"; \
+    cli="$(HOME="${scratch_home}" TMPDIR="${scratch_home}" kicad-cli version)"; \
+    py="$(HOME="${scratch_home}" TMPDIR="${scratch_home}" \
+      python3 -c 'import pcbnew; print(pcbnew.Version())')"; \
     for v in "${cli}" "${py}"; do \
       case "${v}" in "${KICAD_VERSION}"|"${KICAD_VERSION}"[-+~]*) ;; \
         *) echo "KiCad reports '${v}', expected ${KICAD_VERSION}" >&2; exit 1 ;; esac; \

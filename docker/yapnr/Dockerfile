@@ -82,7 +82,8 @@ RUN --mount=from=uv,source=/uv,target=/usr/local/bin/uv \
 COPY --chmod=0755 docker/yapnr/yapnr.sh /usr/local/bin/yapnr
 COPY LICENSE THIRD_PARTY.md /usr/share/doc/yapnr/
 
-# Append this layer's sources to the base image's SOURCES (THIRD_PARTY.md).
+# Append this layer's sources to the base image's SOURCES (THIRD_PARTY.md). (`--no-cache`: no
+# uv cache is left in /root.)
 RUN --mount=from=uv,source=/uv,target=/usr/local/bin/uv \
     set -eu; \
     export HOME=/root; \
@@ -98,7 +99,7 @@ RUN --mount=from=uv,source=/uv,target=/usr/local/bin/uv \
       echo "https://download.pytorch.org/whl/cpu); each carries its license in its .dist-info"; \
       echo "directory. Installed packages:"; \
       echo; \
-      uv pip list --python /opt/venv/bin/python --format freeze | sed 's/^/  /'; \
+      uv pip list --no-cache --python /opt/venv/bin/python --format freeze | sed 's/^/  /'; \
     } >> /usr/share/doc/yapnr/SOURCES
 
 ENV VIRTUAL_ENV=/opt/venv \

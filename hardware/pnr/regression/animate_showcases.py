@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -88,7 +89,9 @@ PACING = "showcase"
 
 
 def repo_root():
-    return HERE.parent.parent.parent
+    """The workspace (``bazel run`` sets BUILD_WORKSPACE_DIRECTORY), else this checkout."""
+    workspace = os.environ.get("BUILD_WORKSPACE_DIRECTORY")
+    return Path(workspace) if workspace else HERE.parent.parent.parent
 
 
 def run_showcases(args):

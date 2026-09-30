@@ -210,7 +210,12 @@
   <input type="hidden" name="area" value="default">
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">Project</span></p>
+  <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="docs/containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/releases.html">Releases and versioning</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="docs/architecture.html">Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/migration-plan.html">yapnr migration plan</a></li>
@@ -280,6 +285,18 @@
   <a href="https://github.com/Studio-Fug/yapnr/actions/workflows/macos.yaml?query=branch%3Amain"><img
     src="https://github.com/Studio-Fug/yapnr/actions/workflows/macos.yaml/badge.svg?branch=main"
     alt="macOS"></a>
+  <a href="https://studio-fug.github.io/yapnr/"><img
+    src="https://img.shields.io/github/deployments/Studio-Fug/yapnr/github-pages?label=docs"
+    alt="Docs"></a>
+  <!-- Enable once the first public image (after the GHCR visibility switch) and the first
+  release (v0.1.0) exist; see docs/releases.md.
+  <a href="https://github.com/Studio-Fug/yapnr/releases/latest"><img
+    src="https://img.shields.io/github/v/release/Studio-Fug/yapnr?sort=semver&display_name=tag"
+    alt="Latest release"></a>
+  <a href="https://github.com/Studio-Fug/yapnr/pkgs/container/yapnr"><img
+    src="https://img.shields.io/badge/ghcr-amd64%20%7C%20arm64-2496ED?logo=docker&logoColor=white"
+    alt="Container image ghcr.io/studio-fug/yapnr (amd64, arm64)"></a>
+  -->
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg"
     alt="License: AGPL-3.0-or-later"></a>
   <img src="https://img.shields.io/badge/python-3.11-3776ab.svg" alt="Python 3.11">
@@ -312,6 +329,17 @@ bazel<span class="w"> </span>run<span class="w"> </span>//docs:build<span class=
 </div>
 <p>See <a class="reference internal" href="DEVELOPERS.html"><span class="std std-doc">DEVELOPERS.md</span></a> for setup (including the headless KiCad copy on macOS) and
 <a class="reference internal" href="CONTRIBUTING.html"><span class="std std-doc">CONTRIBUTING.md</span></a> for the contribution policy.</p>
+</section>
+<section id="container-image">
+<h2>Container image<a class="headerlink" href="#container-image" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr</span></code> bundles KiCad 10, CPython 3.11 with CPU-only torch, and yapnr, for
+linux/amd64 and linux/arm64, so running yapnr needs Docker and nothing else:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>ghcr.io/studio-fug/yapnr:edge<span class="w"> </span>doctor
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">edge</span></code> follows <code class="docutils literal notranslate"><span class="pre">main</span></code>; release tags (<code class="docutils literal notranslate"><span class="pre">X.Y.Z</span></code>, <code class="docutils literal notranslate"><span class="pre">X.Y</span></code>, <code class="docutils literal notranslate"><span class="pre">latest</span></code>) start with v0.1.0. See
+<a class="reference internal" href="docs/containers.html"><span class="std std-doc">docs/containers.md</span></a> for projects, UID mapping, resource limits and Apple
+Silicon, and <a class="reference internal" href="docs/releases.html"><span class="std std-doc">docs/releases.md</span></a> for versioning and releases.</p>
 </section>
 <section id="license">
 <h2>License<a class="headerlink" href="#license" title="Link to this heading">¶</a></h2>
@@ -371,6 +399,7 @@ bazel<span class="w"> </span>run<span class="w"> </span>//docs:build<span class=
 <li><a class="reference internal" href="#">yapnr</a><ul>
 <li><a class="reference internal" href="#status">Status</a></li>
 <li><a class="reference internal" href="#quick-start">Quick start</a></li>
+<li><a class="reference internal" href="#container-image">Container image</a></li>
 <li><a class="reference internal" href="#license">License</a></li>
 </ul>
 </li>

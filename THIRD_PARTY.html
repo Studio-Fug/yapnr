@@ -210,7 +210,12 @@
   <input type="hidden" name="area" value="default">
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">Project</span></p>
+  <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="docs/containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/releases.html">Releases and versioning</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="docs/architecture.html">Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/migration-plan.html">yapnr migration plan</a></li>
@@ -294,16 +299,74 @@ license text is kept under <code class="docutils literal notranslate"><span clas
 </ul>
 </section>
 </section>
+<section id="in-the-container-images">
+<h2>In the container images<a class="headerlink" href="#in-the-container-images" title="Link to this heading">¶</a></h2>
+<p>The images <code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr-kicad</span></code> and <code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr</span></code>
+(<a class="reference internal" href="docs/containers.html"><span class="std std-doc">docs/containers.md</span></a>) redistribute the following, unmodified. Inside an image,
+<code class="docutils literal notranslate"><span class="pre">/usr/share/doc/yapnr/SOURCES</span></code> says where the source of each part is and lists the exact package
+versions, <code class="docutils literal notranslate"><span class="pre">/usr/share/doc/yapnr/licenses/</span></code> holds the license texts that are not elsewhere in the
+image, and this file is at <code class="docutils literal notranslate"><span class="pre">/usr/share/doc/yapnr/THIRD_PARTY.md</span></code>.</p>
+<ul>
+<li><p><strong>Ubuntu 24.04</strong> (the <code class="docutils literal notranslate"><span class="pre">ubuntu:24.04</span></code> image, pinned by digest, upgraded at build time, plus the
+packages KiCad depends on): various free-software licenses, with each package’s license text in
+<code class="docutils literal notranslate"><span class="pre">/usr/share/doc/&lt;package&gt;/copyright</span></code> and the common ones in <code class="docutils literal notranslate"><span class="pre">/usr/share/common-licenses</span></code>. The
+archive state the packages come from is recorded at build time (<code class="docutils literal notranslate"><span class="pre">/etc/yapnr/ubuntu-snapshot</span></code>, a
+<a class="reference external" href="https://snapshot.ubuntu.com/">snapshot.ubuntu.com</a> ID); their sources are on Launchpad
+(<code class="docutils literal notranslate"><span class="pre">https://launchpad.net/ubuntu/+source/&lt;package&gt;/&lt;version&gt;</span></code>) and in that snapshot.</p></li>
+<li><p><strong>KiCad</strong> 10.0 (<code class="docutils literal notranslate"><span class="pre">kicad-cli</span></code>, <code class="docutils literal notranslate"><span class="pre">pcbnew</span></code> and the rest of the <code class="docutils literal notranslate"><span class="pre">kicad</span></code> package; GPL-3.0-or-later) and
+its <strong>footprint, symbol and template libraries</strong> (CC-BY-SA-4.0 with the KiCad library exception),
+from the KiCad team’s PPA (<code class="docutils literal notranslate"><span class="pre">ppa:kicad/kicad-10.0-releases</span></code>). The PPA deletes superseded builds,
+so the complete source packages of every published KiCad build are kept as the image
+<code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr-kicad:&lt;tag&gt;-src</span></code> (linux/amd64 and linux/arm64), which is never deleted;
+<code class="docutils literal notranslate"><span class="pre">SOURCES</span></code> also points at Launchpad’s PPA snapshot of the build date and at the source files on
+Launchpad. No 3D models are included.</p></li>
+<li><p><strong>tini</strong> (MIT): the init process (PID 1), from Ubuntu.</p></li>
+<li><p><strong>CPython 3.11</strong> (PSF-2.0) as built by
+<a class="reference external" href="https://github.com/astral-sh/python-build-standalone">python-build-standalone</a> (the release is
+pinned in <code class="docutils literal notranslate"><span class="pre">docker/yapnr/Dockerfile</span></code>), installed by uv under <code class="docutils literal notranslate"><span class="pre">/opt/python</span></code>. It bundles OpenSSL
+(Apache-2.0), SQLite (public domain), Tcl/Tk, ncurses, libedit, libffi, mpdecimal, expat, zlib,
+bzip2, xz (liblzma), libuuid, Berkeley DB and libX11/libxcb, each under its own license; the
+image build copies their license texts from that release’s full archive (checksum-pinned) into
+<code class="docutils literal notranslate"><span class="pre">/usr/share/doc/yapnr/licenses/python-build-standalone/</span></code>. uv itself is used during the build only
+and is not in the image.</p></li>
+<li><p><strong>Python packages</strong> from <code class="docutils literal notranslate"><span class="pre">docker/yapnr/runtime-&lt;arch&gt;.lock</span></code> (the runtime subset of
+<code class="docutils literal notranslate"><span class="pre">requirements.lock</span></code>: numpy, torch, PyYAML and their dependencies) under <code class="docutils literal notranslate"><span class="pre">/opt/venv</span></code>, from PyPI
+and, for torch on linux/amd64, the PyTorch CPU index. Mostly BSD, MIT and Apache-2.0 licensed;
+each package’s <code class="docutils literal notranslate"><span class="pre">.dist-info</span></code> directory holds its license files. The numpy and torch wheels also
+bundle native libraries, listed per architecture in
+<code class="docutils literal notranslate"><span class="pre">docker/yapnr/native-libraries-&lt;arch&gt;.txt</span></code> (appended to <code class="docutils literal notranslate"><span class="pre">SOURCES</span></code>) with the exact source of each
+GCC runtime library, which the wheels’ own notices do not give:</p>
+<ul class="simple">
+<li><p><strong>OpenBLAS</strong> (BSD-3-Clause): 0.3.23 in numpy, 0.3.25 in torch on linux/arm64;</p></li>
+<li><p><strong>GCC runtime libraries</strong>: <code class="docutils literal notranslate"><span class="pre">libgfortran</span></code> (GCC 8.3.1) and <code class="docutils literal notranslate"><span class="pre">libgomp</span></code> (GCC 4.8.5 on
+linux/amd64, a conda-forge GCC 13.2.0 build on linux/arm64), GPL-3.0-or-later with the GCC
+runtime library exception, and on linux/amd64 <code class="docutils literal notranslate"><span class="pre">libquadmath</span></code> (GCC 4.8.5, LGPL-2.1-or-later).
+Their GNU build IDs match CentOS 7 packages, whose source RPMs stay on vault.centos.org;</p></li>
+<li><p><strong>Arm Compute Library</strong> 23.08 (MIT) in torch on linux/arm64;</p></li>
+<li><p><strong>Intel oneMKL</strong>, linked statically into torch’s <code class="docutils literal notranslate"><span class="pre">libtorch_cpu.so</span></code> on linux/amd64, under the
+Intel Simplified Software License.</p></li>
+</ul>
+<p>The license texts torch’s own <code class="docutils literal notranslate"><span class="pre">LICENSE</span></code> lacks (OpenBLAS, Arm Compute Library, Intel’s license)
+and the GCC runtime library exception are vendored byte for byte under
+<code class="docutils literal notranslate"><span class="pre">third_party/image-licenses/</span></code> and copied to <code class="docutils literal notranslate"><span class="pre">/usr/share/doc/yapnr/licenses/</span></code>; the GPL-3.0 and
+LGPL-2.1 texts are Ubuntu’s, in <code class="docutils literal notranslate"><span class="pre">/usr/share/common-licenses</span></code>.</p>
+</li>
+<li><p><strong>yapnr</strong> itself (AGPL-3.0-or-later; <code class="docutils literal notranslate"><span class="pre">/usr/share/doc/yapnr/LICENSE</span></code>). The image records the
+commit it was built from (<code class="docutils literal notranslate"><span class="pre">YAPNR_SOURCE_REVISION</span></code> and the <code class="docutils literal notranslate"><span class="pre">org.opencontainers.image.revision</span></code>
+label), and every release attaches its source archive.</p></li>
+</ul>
+</section>
 <section id="referenced-not-included">
 <h2>Referenced, not included<a class="headerlink" href="#referenced-not-included" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><strong>KiCad</strong> (<code class="docutils literal notranslate"><span class="pre">kicad-cli</span></code>, <code class="docutils literal notranslate"><span class="pre">pcbnew</span></code>; GPL-3.0-or-later): used as an external tool through the
-discovered toolchain; not distributed.</p></li>
+<li><p><strong>KiCad</strong> (<code class="docutils literal notranslate"><span class="pre">kicad-cli</span></code>, <code class="docutils literal notranslate"><span class="pre">pcbnew</span></code>; GPL-3.0-or-later): outside the container images, used as an
+external tool through the discovered toolchain; not distributed with the source or the wheel.</p></li>
 <li><p><strong>KiCad footprint and 3D model libraries</strong> (CC-BY-SA-4.0 with the KiCad library exception):
 referenced by board files. A future <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">export</span> <span class="pre">kicad</span> <span class="pre">--with-3d</span></code> copies the models a board uses
 into the exported project.</p></li>
 <li><p><strong>Python packages</strong> (numpy, torch, PyYAML, Sphinx and its extensions, …): installed from PyPI
-at build time as pinned in <code class="docutils literal notranslate"><span class="pre">requirements.lock</span></code>; not vendored. Their licenses are various
+at build time as pinned in <code class="docutils literal notranslate"><span class="pre">requirements.lock</span></code>; not vendored (the container images include the
+runtime subset, above). Their licenses are various
 open-source licenses, mostly BSD, MIT and Apache-2.0, plus a few others: certifi (MPL-2.0),
 typing_extensions (PSF-2.0), roman-numerals (0BSD or CC0-1.0) and docutils (public domain and
 BSD, with some files under other licenses). Each package’s own metadata is authoritative.</p></li>
@@ -379,6 +442,7 @@ generated site; mermaid 11.4.1 (MIT) is loaded from a CDN.</p></li>
 <li><a class="reference internal" href="#elkjs-planned-pr4b">elkjs (planned, PR4b)</a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#in-the-container-images">In the container images</a></li>
 <li><a class="reference internal" href="#referenced-not-included">Referenced, not included</a></li>
 <li><a class="reference internal" href="#project-assets">Project assets</a></li>
 </ul>

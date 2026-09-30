@@ -210,7 +210,12 @@
   <input type="hidden" name="area" value="default">
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">Project</span></p>
+  <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="docs/containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/releases.html">Releases and versioning</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="docs/architecture.html">Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/migration-plan.html">yapnr migration plan</a></li>
@@ -271,31 +276,49 @@
 <h1>Worklog<a class="headerlink" href="#worklog" title="Link to this heading">¶</a></h1>
 <p>A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.</p>
-<p>Last updated: 2026-09-29 (PR0).</p>
+<p>Last updated: 2026-09-29 (PR-R).</p>
 <section id="in-progress">
 <h2>In progress<a class="headerlink" href="#in-progress" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><strong>PR0, bootstrap</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/pr0-bootstrap</span></code>): Bazel skeleton with the hermetic Python 3.11
-toolchain and the <code class="docutils literal notranslate"><span class="pre">yapnr_pypi</span></code> lock, presubmit hooks with the privacy scan, CI (lint, test,
-docs, gated Pages deploy), the Sphinx docs skeleton, the CLI stub (<code class="docutils literal notranslate"><span class="pre">--version</span></code>, <code class="docutils literal notranslate"><span class="pre">doctor</span></code>) and
-repo-check tests. New commits use the owner’s public commit address (owner decision,
-<code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code>); the earlier PR0 commits keep their noreply address, which still passes.</p></li>
+<li><p><strong>PR-R, releases and container images</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/pr-r-release-container</span></code>): the release
+tag as the only version source (<code class="docutils literal notranslate"><span class="pre">tools/release/version.py</span></code>, no version in <code class="docutils literal notranslate"><span class="pre">MODULE.bazel</span></code>), the
+stamped wheel (<code class="docutils literal notranslate"><span class="pre">//release:wheel</span></code>), the images <code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr-kicad</span></code> and
+<code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr</span></code> (<code class="docutils literal notranslate"><span class="pre">docker/</span></code>, smoke test <code class="docutils literal notranslate"><span class="pre">tools/image/smoke_image.sh</span></code>), the <code class="docutils literal notranslate"><span class="pre">Image</span></code>
+and <code class="docutils literal notranslate"><span class="pre">Release</span></code> workflows, release-note categories, Dependabot, and <a class="reference internal" href="docs/releases.html"><span class="std std-doc">releases</span></a>
+and <a class="reference internal" href="docs/containers.html"><span class="std std-doc">containers</span></a> docs. Review fixes are in: re-runnable publishing with the
+<code class="docutils literal notranslate"><span class="pre">-src</span></code> image first (both platforms), the base-context label check in every run, the base by
+digest, the Ubuntu snapshot taken inside the build, notices for the native code in CPython and
+the wheels, actions pinned by commit. Both images were built and smoke-tested locally on arm64;
+amd64 is first built by CI on the pull request.</p></li>
+<li><p><strong>PR1, engine import with history</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/pr1-engine-history</span></code>).</p></li>
 </ul>
 </section>
 <section id="next">
 <h2>Next<a class="headerlink" href="#next" title="Link to this heading">¶</a></h2>
 <ol class="arabic simple">
-<li><p>Push PR0 and get CI green on <code class="docutils literal notranslate"><span class="pre">main</span></code>. Then, in this order: set the repository variable
-<code class="docutils literal notranslate"><span class="pre">YAPNR_PAGES_ENABLED=true</span></code>; run CI manually on <code class="docutils literal notranslate"><span class="pre">main</span></code> (<code class="docutils literal notranslate"><span class="pre">gh</span> <span class="pre">workflow</span> <span class="pre">run</span> <span class="pre">CI</span> <span class="pre">--ref</span> <span class="pre">main</span></code>), which
-creates the <code class="docutils literal notranslate"><span class="pre">gh-pages</span></code> branch; set Settings &gt; Pages to deploy from <code class="docutils literal notranslate"><span class="pre">gh-pages</span></code>, <code class="docutils literal notranslate"><span class="pre">/</span> <span class="pre">(root)</span></code>.</p></li>
-<li><p>Configure repository settings: squash merge by default; a ruleset on <code class="docutils literal notranslate"><span class="pre">main</span></code> requiring <code class="docutils literal notranslate"><span class="pre">lint</span></code>,
-<code class="docutils literal notranslate"><span class="pre">test</span></code> and <code class="docutils literal notranslate"><span class="pre">docs</span></code>; private vulnerability reporting on (CONTRIBUTING.md points to it). Merges
-made on GitHub are authored with the owner’s public commit address (the one in
-<code class="docutils literal notranslate"><span class="pre">tools/privacy/allowed_identities.txt</span></code>); any other author address fails the identity check on
-<code class="docutils literal notranslate"><span class="pre">main</span></code>.</p></li>
+<li><p>Merge PR-R; its first <code class="docutils literal notranslate"><span class="pre">main</span></code> build pushes <code class="docutils literal notranslate"><span class="pre">yapnr-kicad:10.0.6-1-src</span></code>, then
+<code class="docutils literal notranslate"><span class="pre">yapnr-kicad:10.0.6-1</span></code> (with <code class="docutils literal notranslate"><span class="pre">10.0.6</span></code> and <code class="docutils literal notranslate"><span class="pre">10.0</span></code>), then <code class="docutils literal notranslate"><span class="pre">yapnr:edge</span></code>. Then make both GHCR
+packages <strong>public</strong> (package settings &gt; Change visibility; irreversible, owner-approved). The
+organization must allow public packages first (Organization settings &gt; Packages &gt; Package
+creation: Public), or the option is missing. Check that an anonymous
+<code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">pull</span> <span class="pre">ghcr.io/studio-fug/yapnr:edge</span></code> (and <code class="docutils literal notranslate"><span class="pre">yapnr-kicad:10.0.6-1-src</span></code> on arm64) works and
+that <code class="docutils literal notranslate"><span class="pre">gh</span> <span class="pre">attestation</span> <span class="pre">verify</span> <span class="pre">oci://ghcr.io/studio-fug/yapnr:edge</span> <span class="pre">-R</span> <span class="pre">Studio-Fug/yapnr</span></code> passes.</p></li>
+<li><p>Create the release-note labels (<code class="docutils literal notranslate"><span class="pre">tools/release/create_labels.sh</span></code>), label open pull requests,
+and run the release dry run once (<code class="docutils literal notranslate"><span class="pre">gh</span> <span class="pre">workflow</span> <span class="pre">run</span> <span class="pre">release.yaml</span> <span class="pre">--ref</span> <span class="pre">main</span></code>); read the notes
+preview in its summary.</p></li>
+<li><p>Uncomment the container and release badges in <code class="docutils literal notranslate"><span class="pre">README.md</span></code> once the image is public and v0.1.0
+exists; decide on immutable releases (docs/releases.md).</p></li>
 <li><p>PR1: import the engine with history from Splanc (<code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">filter-repo</span></code> on a scratch clone, privacy
 scan over the whole filtered history before any push). See the
 <a class="reference internal" href="docs/migration-plan.html#pr-sequence"><span class="std std-ref">migration plan</span></a>.</p></li>
+<li><p>PR6a: the KiCad-side workers run under <code class="docutils literal notranslate"><span class="pre">/usr/bin/python3</span></code> (3.12), which cannot import yapnr
+(installed in the 3.11 venv only). Give them an import path with yapnr’s pure-Python modules
+and none of the venv’s compiled packages, and add a smoke check for it.</p></li>
+<li><p>First release tag <code class="docutils literal notranslate"><span class="pre">v0.1.0</span></code> (owner) once the engine runs end to end inside the published image on
+both architectures (the PR6b example), after the <code class="docutils literal notranslate"><span class="pre">Image</span></code> run of that commit on <code class="docutils literal notranslate"><span class="pre">main</span></code> is green;
+make the <code class="docutils literal notranslate"><span class="pre">image</span></code> check required then.</p></li>
+<li><p>Rebuild the KiCad base monthly (bump <code class="docutils literal notranslate"><span class="pre">docker/yapnr-kicad/TAG</span></code> to the next <code class="docutils literal notranslate"><span class="pre">-N</span></code>), or with the
+Dependabot <code class="docutils literal notranslate"><span class="pre">ubuntu</span></code> digest update (docs/releases.md, “Maintaining the images”).</p></li>
 </ol>
 </section>
 <section id="blockers">

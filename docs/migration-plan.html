@@ -210,7 +210,12 @@
   <input type="hidden" name="area" value="default">
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">Project</span></p>
+  <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html">Releases and versioning</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">yapnr migration plan</a></li>
@@ -1291,7 +1296,7 @@ placement constraints. <code class="docutils literal notranslate"><span class="p
 bumped together later. <code class="docutils literal notranslate"><span class="pre">.bazeliskrc</span></code> is copied. <code class="docutils literal notranslate"><span class="pre">MODULE.bazel.lock</span></code> is committed and CI runs with
 <code class="docutils literal notranslate"><span class="pre">--lockfile_mode=error</span></code>.</p>
 <p>PR0 declares only <code class="docutils literal notranslate"><span class="pre">rules_python</span></code>; the other dependencies arrive with the PRs that use them:</p>
-<div class="highlight-starlark notranslate"><div class="highlight"><pre><span></span><span class="n">module</span><span class="p">(</span><span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;yapnr&quot;</span><span class="p">,</span> <span class="n">version</span> <span class="o">=</span> <span class="s2">&quot;0.0.0&quot;</span><span class="p">)</span>
+<div class="highlight-starlark notranslate"><div class="highlight"><pre><span></span><span class="n">module</span><span class="p">(</span><span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;yapnr&quot;</span><span class="p">)</span>  <span class="c1"># no version since PR-R: the release tag is the version (docs/releases.md)</span>
 
 <span class="n">bazel_dep</span><span class="p">(</span><span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;rules_python&quot;</span><span class="p">,</span> <span class="n">version</span> <span class="o">=</span> <span class="s2">&quot;2.0.3&quot;</span><span class="p">)</span>                     <span class="c1"># PR0</span>
 <span class="n">bazel_dep</span><span class="p">(</span><span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;bazel_skylib&quot;</span><span class="p">,</span> <span class="n">version</span> <span class="o">=</span> <span class="s2">&quot;1.9.0&quot;</span><span class="p">)</span>                     <span class="c1"># PR5 (string_flag)</span>

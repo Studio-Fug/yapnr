@@ -210,7 +210,12 @@
   <input type="hidden" name="area" value="default">
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">Project</span></p>
+  <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="docs/containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/releases.html">Releases and versioning</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="docs/architecture.html">Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/migration-plan.html">yapnr migration plan</a></li>
@@ -291,6 +296,8 @@ bazel<span class="w"> </span><span class="nb">test</span><span class="w"> </span
 bazel<span class="w"> </span>run<span class="w"> </span>//docs:build<span class="w">                </span><span class="c1"># docs -&gt; docs/site/html/</span>
 bazel<span class="w"> </span>run<span class="w"> </span>//docs:serve<span class="w">                </span><span class="c1"># preview on http://127.0.0.1:8000/</span>
 prek<span class="w"> </span>run<span class="w"> </span>--all-files<span class="w">                  </span><span class="c1"># presubmit lints</span>
+tools/release/version.py<span class="w"> </span>--field<span class="w"> </span>pep440<span class="w">   </span><span class="c1"># the version of this checkout (from git)</span>
+tools/image/build_local.sh<span class="w">            </span><span class="c1"># build and smoke-test the container images (Docker)</span>
 </pre></div>
 </div>
 <p>Test tiers and tags are described in <a class="reference internal" href="docs/architecture.html#test-tiers"><span class="std std-ref">docs/architecture.md</span></a>.
@@ -386,6 +393,17 @@ match the stock bundle. KiCad’s Python workers do not register with the Dock. 
 <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">kicad</span> <span class="pre">make-headless</span></code> command automates this (PR3d). Redo the copy after upgrading KiCad.</p>
 </section>
 </section>
+<section id="container-images-and-releases">
+<h2>Container images and releases<a class="headerlink" href="#container-images-and-releases" title="Link to this heading">¶</a></h2>
+<p>The container images (<code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr</span></code> and its KiCad base) are described in
+<a class="reference internal" href="docs/containers.html"><span class="std std-doc">docs/containers.md</span></a>, including how to build them locally
+(<code class="docutils literal notranslate"><span class="pre">tools/image/build_local.sh</span></code>, which needs Docker and a few GB of disk). Versions come from git tags
+only; <a class="reference internal" href="docs/releases.html"><span class="std std-doc">docs/releases.md</span></a> has the versioning rules, the pull request labels that
+group the release notes, and the owner’s release checklist. Agents never create tags or releases.</p>
+<p>After changing a runtime pin (torch, numpy, pyyaml or their dependencies) in <code class="docutils literal notranslate"><span class="pre">requirements.lock</span></code>,
+regenerate the image’s runtime locks with <code class="docutils literal notranslate"><span class="pre">tools/image/update_runtime_locks.sh</span></code> (needs <code class="docutils literal notranslate"><span class="pre">uv</span></code>);
+<code class="docutils literal notranslate"><span class="pre">tests/unit/repo/test_images.py</span></code> fails until they agree.</p>
+</section>
 <section id="repository-layout">
 <h2>Repository layout<a class="headerlink" href="#repository-layout" title="Link to this heading">¶</a></h2>
 <div class="table-wrapper colwidths-auto docutils container">
@@ -405,13 +423,22 @@ match the stock bundle. KiCad’s Python workers do not register with the Dock. 
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tools/</span></code></p></td>
 <td><p>privacy scan, test-wiring check, internal Bazel macros</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">docs/</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">tools/release/</span></code>, <code class="docutils literal notranslate"><span class="pre">tools/image/</span></code></p></td>
+<td><p>version derivation, release notes, image build and smoke test</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">release/</span></code></p></td>
+<td><p>the yapnr wheel (<code class="docutils literal notranslate"><span class="pre">//release:wheel</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">docker/</span></code></p></td>
+<td><p>the container images: <code class="docutils literal notranslate"><span class="pre">yapnr-kicad</span></code> (base) and <code class="docutils literal notranslate"><span class="pre">yapnr</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">docs/</span></code></p></td>
 <td><p>documentation (Sphinx with MyST); the site is built by <code class="docutils literal notranslate"><span class="pre">//docs:build</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">branding/</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">branding/</span></code></p></td>
 <td><p>logo, mark, favicons and palette</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">.github/</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">.github/</span></code></p></td>
 <td><p>CI workflows, CODEOWNERS, pull request template</p></td>
 </tr>
 </tbody>
@@ -436,6 +463,12 @@ creates the <code class="docutils literal notranslate"><span class="pre">gh-page
 </ul>
 <p><code class="docutils literal notranslate"><span class="pre">lint</span></code>, <code class="docutils literal notranslate"><span class="pre">test</span></code> and <code class="docutils literal notranslate"><span class="pre">docs</span></code> are the required checks. <code class="docutils literal notranslate"><span class="pre">.github/workflows/macos.yaml</span></code> runs the tests on
 <code class="docutils literal notranslate"><span class="pre">macos-latest</span></code> for information only.</p>
+<p><code class="docutils literal notranslate"><span class="pre">.github/workflows/image.yaml</span></code> builds and smoke-tests the container images for linux/amd64 and
+linux/arm64 on pull requests that change what goes into them, and publishes <code class="docutils literal notranslate"><span class="pre">edge</span></code> from such
+merges to <code class="docutils literal notranslate"><span class="pre">main</span></code> (informational until v0.1.0).
+<code class="docutils literal notranslate"><span class="pre">.github/workflows/release.yaml</span></code> runs on release tags (and as a dry run on demand): CI at the tag,
+the images with the release tags, and the GitHub release. See
+<a class="reference internal" href="docs/releases.html#what-the-workflows-do"><span class="std std-ref">docs/releases.md</span></a>.</p>
 </section>
 </section>
 
@@ -508,6 +541,7 @@ creates the <code class="docutils literal notranslate"><span class="pre">gh-page
 <li><a class="reference internal" href="#macos-use-a-headless-copy-no-dock-icons">macOS: use a headless copy (no Dock icons)</a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#container-images-and-releases">Container images and releases</a></li>
 <li><a class="reference internal" href="#repository-layout">Repository layout</a></li>
 <li><a class="reference internal" href="#ci">CI</a></li>
 </ul>

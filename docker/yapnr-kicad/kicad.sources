@@ -1,0 +1,9 @@
+# ppa:kicad/kicad-10.0-releases, the KiCad team's Ubuntu packages. Plain HTTP is
+# fine: apt checks the signature against kicad-ppa.asc (fingerprint
+# FDA8 54F6 1C4D 0D95 72BB  95E5 245D 5502 FAD7 A805, Launchpad's signing key for
+# this PPA), and the image has no CA certificates before this install.
+Types: deb
+URIs: http://ppa.launchpadcontent.net/kicad/kicad-10.0-releases/ubuntu
+Suites: noble
+Components: main
+Signed-By: /etc/apt/keyrings/kicad-ppa.asc

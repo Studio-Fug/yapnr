@@ -8,11 +8,12 @@ PR0 ships two commands:
     Print the package version.
 
 ``yapnr doctor [--json]``
-    Report the Python, numpy and torch versions and whether a KiCad command-line
-    tool is configured. This is a stub of the full toolchain report planned in
-    docs/migration-plan.md (section 2.3). It only reads environment variables and
-    checks the configured path on disk; it never starts KiCad, so it cannot
-    trigger a GUI or a Dock icon.
+    Report the Python, numpy and torch versions, whether the KiCad command-line
+    tool and KiCad's Python are configured, and the source revision the
+    container image was built from. This is a stub of the full toolchain report
+    planned in docs/migration-plan.md (section 2.3). It only reads environment
+    variables and checks the configured paths on disk; it never starts KiCad,
+    so it cannot trigger a GUI or a Dock icon.
 """
 
 from __future__ import annotations
@@ -32,6 +33,14 @@ from yapnr import __version__
 # an alias (docs/migration-plan.md, section 2.3).
 KICAD_CLI_ENV_VARS = ("YAPNR_KICAD_CLI", "PNR_KICAD_CLI")
 
+# The Python interpreter that can `import pcbnew`, for KiCad-side workers. The
+# container image sets it to /usr/bin/python3 (docs/containers.md).
+KICAD_PYTHON_ENV_VARS = ("YAPNR_KICAD_PYTHON",)
+
+# The commit a container image was built from (AGPL section 13: the image and
+# the viewer it serves name their exact source). Set by the image build.
+SOURCE_REVISION_ENV_VAR = "YAPNR_SOURCE_REVISION"
+
 
 def _module_version(name: str) -> Optional[str]:
     """Return the installed version of ``name``, or None if it cannot be imported."""
@@ -42,14 +51,9 @@ def _module_version(name: str) -> Optional[str]:
     return str(getattr(module, "__version__", "unknown"))
 
 
-def kicad_cli_status(environ: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-    """Describe the configured KiCad CLI without running it.
-
-    Only the environment is consulted in PR0. Discovery of installed KiCad
-    bundles arrives with ``yapnr.kicad.toolchain`` (PR6a).
-    """
+def _tool_status(env_vars: Sequence[str], environ: Optional[Dict[str, str]]) -> Dict[str, Any]:
     env = os.environ if environ is None else environ
-    for var in KICAD_CLI_ENV_VARS:
+    for var in env_vars:
         value = env.get(var, "").strip()
         if value:
             return {
@@ -68,34 +72,55 @@ def kicad_cli_status(environ: Optional[Dict[str, str]] = None) -> Dict[str, Any]
     }
 
 
+def kicad_cli_status(environ: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    """Describe the configured KiCad CLI without running it.
+
+    Only the environment is consulted in PR0. Discovery of installed KiCad
+    bundles arrives with ``yapnr.kicad.toolchain`` (PR6a).
+    """
+    return _tool_status(KICAD_CLI_ENV_VARS, environ)
+
+
+def kicad_python_status(environ: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    """Describe the configured KiCad Python (the one with ``pcbnew``) without running it."""
+    return _tool_status(KICAD_PYTHON_ENV_VARS, environ)
+
+
 def doctor_report(environ: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     """Collect the facts that ``yapnr doctor`` prints."""
+    env = os.environ if environ is None else environ
     return {
         "yapnr": __version__,
+        "source_revision": env.get(SOURCE_REVISION_ENV_VAR, "").strip() or None,
         "python": platform.python_version(),
         "python_implementation": platform.python_implementation(),
         "platform": f"{sys.platform}-{platform.machine()}",
         "numpy": _module_version("numpy"),
         "torch": _module_version("torch"),
         "kicad_cli": kicad_cli_status(environ),
+        "kicad_python": kicad_python_status(environ),
     }
 
 
+def _tool_line(status: Dict[str, Any], env_vars: Sequence[str]) -> str:
+    if status["configured"]:
+        state = "ok" if status["executable"] else "NOT EXECUTABLE"
+        return f"configured via {status['source']} ({state})"
+    return f"not configured (set {' or '.join(env_vars)})"
+
+
 def _format_report(report: Dict[str, Any]) -> List[str]:
-    kicad = report["kicad_cli"]
-    if kicad["configured"]:
-        state = "ok" if kicad["executable"] else "NOT EXECUTABLE"
-        kicad_line = f"configured via {kicad['source']} ({state})"
-    else:
-        names = " or ".join(KICAD_CLI_ENV_VARS)
-        kicad_line = f"not configured (set {names})"
-    return [
-        f"yapnr     {report['yapnr']}",
+    lines = [f"yapnr     {report['yapnr']}"]
+    if report["source_revision"]:
+        lines.append(f"revision  {report['source_revision']}")
+    lines += [
         f"python    {report['python']} ({report['python_implementation']}, {report['platform']})",
         f"numpy     {report['numpy'] or 'not installed'}",
         f"torch     {report['torch'] or 'not installed'}",
-        f"kicad-cli {kicad_line}",
+        f"kicad-cli {_tool_line(report['kicad_cli'], KICAD_CLI_ENV_VARS)}",
+        f"kicad-py  {_tool_line(report['kicad_python'], KICAD_PYTHON_ENV_VARS)}",
     ]
+    return lines
 
 
 def _cmd_doctor(args: argparse.Namespace) -> int:

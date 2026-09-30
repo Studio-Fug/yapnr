@@ -739,7 +739,7 @@ bumped together later. `.bazeliskrc` is copied. `MODULE.bazel.lock` is committed
 PR0 declares only `rules_python`; the other dependencies arrive with the PRs that use them:
 
 ```starlark
-module(name = "yapnr", version = "0.0.0")
+module(name = "yapnr")  # no version since PR-R: the release tag is the version (docs/releases.md)
 
 bazel_dep(name = "rules_python", version = "2.0.3")                     # PR0
 bazel_dep(name = "bazel_skylib", version = "1.9.0")                     # PR5 (string_flag)

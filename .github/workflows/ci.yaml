@@ -9,6 +9,8 @@ on:
     branches:
       - main
   workflow_dispatch:
+  # The release workflow runs all of CI at the tag being released (release.yaml).
+  workflow_call:
 
 # Least privilege: jobs that publish to gh-pages widen this for themselves.
 permissions:
@@ -291,10 +293,13 @@ jobs:
           umbrella-dir: pr-preview
           action: remove
 
-  # Pushes to main deploy; so does a manual run on main (the first deploy).
+  # Pushes to main deploy; so does a manual run on main (the first deploy). Not when the
+  # release workflow calls CI (github.workflow is then the caller's name), including its dry
+  # run on main.
   deploy-pages:
     if: >-
       vars.YAPNR_PAGES_ENABLED == 'true'
+      && github.workflow == 'CI'
       && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
       && github.ref == 'refs/heads/main'
     needs: [lint, test, docs]

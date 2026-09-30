@@ -12,12 +12,14 @@ see docs/migration-plan.md section 4.3):
     module's default wins over ours, so nothing here may assume it owns the
     default interpreter.
   - No root-module-only extension tags outside dev_dependency.
+
+No `version` here: the release tag is the only version source (docs/releases.md).
+Consumers pin yapnr with a non-registry override (git_override, archive_override),
+which ignores the module version; the BCR copy gets its version patched in when
+it is published.
 """
 
-module(
-    name = "yapnr",
-    version = "0.0.0",
-)
+module(name = "yapnr")
 
 bazel_dep(name = "rules_python", version = "2.0.3")
 

@@ -138,9 +138,11 @@ Rationale:
   from python-build-standalone, with the runtime locks pinned to `requirements.lock` (versions and
   hashes; `tests/unit/repo/test_images.py`). On amd64, torch is `2.3.1+cpu` from the PyTorch CPU
   index; PyPI's x86_64 wheel pulls in the CUDA stack. uv resolves both locks from any host.
-- **Measured on linux/arm64 (2026-09-29):** the base is 1.98 GB unpacked (the KiCad install adds
-  1.4 GB to Ubuntu); the yapnr layers add about 0.65 GB (CPython 0.12 GB, the runtime 0.52 GB with
-  byte-compiled sources). The KiCad install takes about a minute on a native arm64 host.
+- **Measured on linux/arm64 (2026-09-29):** the base is 1.6 GB unpacked and 390 MB compressed (the
+  KiCad install adds 1.5 GB to Ubuntu's 0.11 GB); the yapnr layers add about 0.67 GB (CPython
+  0.12 GB, the runtime 0.55 GB with byte-compiled sources), 2.3 GB unpacked and 570 MB compressed
+  in all. (`docker image ls` with the containerd image store shows 1.98 GB and 2.83 GB: unpacked
+  plus compressed.) The KiCad install takes about a minute on a native arm64 host.
 - **Actions on the image and release paths that push or sign are pinned by commit SHA**
   (`docker/*`, `actions/attest`), since those jobs can write packages and attestations. The other
   `actions/*` stay on the major tags the rest of the workflows use.

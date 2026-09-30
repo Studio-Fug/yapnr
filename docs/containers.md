@@ -222,8 +222,9 @@ these environment variables, which the image sets:
 `yapnr export kicad --with-3d` or GLB export, mount a host 3D library read-only:
 `-v /path/to/3dmodels:/usr/share/kicad/3dmodels:ro`.
 
-Sizes (unpacked, linux/arm64): the KiCad base is about 2.0 GB and the yapnr image adds about
-0.65 GB (CPython 0.12 GB, the runtime 0.52 GB). On linux/amd64 the CPU torch build is larger.
+Sizes (linux/arm64): the KiCad base is about 1.6 GB unpacked, a 390 MB download; the yapnr image
+adds about 0.67 GB (CPython 0.12 GB, the runtime 0.55 GB), 2.3 GB unpacked and a 570 MB download in
+all. On linux/amd64 the CPU torch build is larger.
 
 ## Verifying an image
 

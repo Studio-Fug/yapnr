@@ -247,6 +247,46 @@ PR3a); the owner reviews them with the pull request:
   scheme, or re-keyed from its evaluation tree when that tree still hashes to its stamp, so
   trials of frozen snapshot trees survive the format while those of a tree reformatted since
   do not. PR3b's rename needs a scheme that applies the module map to module names and imports.
+- **The format is two mechanical commits, and the pull request is merged with a merge commit**
+  so their hashes reach `main` and a follow-up lists them in `.git-blame-ignore-revs` (the plan
+  had a squash merge and a follow-up with the squashed hash). black 25.1.0 and isort 6.0.1, the
+  pinned hooks run through prek, cover every Python file under `hardware/` (`pnr`, `tools`,
+  `experiments`): black changes 369 files, isort 294. black's own equivalence check passes for
+  all 369 (plain `ast.dump` differs in 6, docstring whitespace only). isort's differences are all
+  reorderings, splits or merges of imports inside one run of consecutive imports (each run
+  compared as a multiset), so no import moved across code, and no file needed
+  `# isort: skip_file`. isort changes the syntax tree of 250 files (the other 44 only in
+  layout); no torch/numpy pair changes order, the engine's import-time effects
+  (`torch.set_num_threads(1)` in `pnr.place.model`, three `fab_profile.bind_active` callbacks
+  that each set their own module's globals) do not depend on order, and each of 344 modules of
+  `hardware/pnr` imports in a fresh interpreter with the same outcome before and after (import
+  cycles would show there).
+- **No hand lint fixes; a per-file flake8 baseline instead.** After black and isort, flake8 finds
+  479 issues in 157 files, 112 of them unused imports. Every fix changes a syntax tree, and 155
+  of the findings (27 unused imports, the F821) are in the 127 modules an evaluation runs, where
+  any change alters the code key and so invalidates routing-feedback libraries and trials, which
+  is what the new key scheme avoids. Outside them an unused import is still a module attribute
+  that tests patch or other modules import (`subprocess` in `native_electrical`), so proving one
+  unused takes a per-name search. `.flake8` therefore lists each file's remaining codes in
+  `per-file-ignores`; new files and codes are checked in full, the list only shrinks, and PR3b's
+  codemod (which changes every import anyway) is where it shrinks.
+- **Non-Python files under `hardware/` keep per-hook excludes** where a hook would rewrite or
+  reject them, measured with the global exclude lifted: prettier rewrites 42 files (SI model and
+  test-data JSON, the engine's Markdown), markdownlint fails on 3 Markdown files, buildifier
+  rewrites `BUILD.bazel` and `pnr.bzl` (regenerated in PR3b), end-of-file-fixer adds a final
+  newline to 28 byte-exact test-data files and trailing-whitespace changes the built viewer's
+  CSS. `name-tests-test` rejects two test helpers (`cost_fixture.py`,
+  `power_topology_golden.py`), which PR3b moves. Every other hook passes on `hardware/` and now
+  covers it.
+- **Five tests that read engine source as text now ignore its layout.** `test_via_in_pad` and
+  three `test_src15_merge` checks matched Splanc's single quotes and one-line calls, so the
+  format changed their results; they now compare with quotes and whitespace normalized (a
+  wrapped call's first two lines count as context). `board_delete_test` required
+  `thisown=False` on the line of the kept `b.Remove(t)` calls (`a; b` joins that black splits);
+  it now requires the next statement to set that item's `thisown` to `False`, on the syntax
+  tree. On the tree before and after the format they give the same result per test. Two of the
+  `test_src15_merge` checks still fail, as before the format, on Splanc-only files and eight
+  tool defaults (PR3c).
 
 ## Pinned versions
 

@@ -9,6 +9,13 @@ complete layouts) and the Monte Carlo draw is geometric in that rank: tier
 entry ``i`` is drawn with probability proportional to ``0.5 ** i`` from the
 seeded rng, so better-measured layouts are preferred while every tier member
 stays reachable. ``PNR_HIER_RANK_DECAY`` overrides the ratio (1 = uniform).
+
+N-0001 flags (all default off; unset they change nothing):
+``PNR_LIBRARY_RANK_USED=1`` ranks the tier with the used-extent area band
+(:func:`pnr.hier.extent.stamp_used`, :func:`pnr.hier.synth_native.rank_key`);
+``PNR_MACRO_SHRINK=1`` / ``PNR_MACRO_HULL=1`` measure each drawn layout's routed
+board and pass it to :func:`pnr.hier.macro.collapse` (used-extent courtyard /
+per-side occupancy hull).
 """
 from __future__ import annotations
 
@@ -87,7 +94,11 @@ def load_library(source: Path):
         if not ranked:
             continue
         best = min(r['missing'] for r in ranked)
-        tier = sorted((r for r in ranked if r['missing'] == best), key=rank_key)
+        tier = [r for r in ranked if r['missing'] == best]
+        if os.environ.get('PNR_LIBRARY_RANK_USED') == '1':
+            from pnr.hier.extent import stamp_used
+            tier = stamp_used(tier)
+        tier = sorted(tier, key=rank_key)
         for name in data['blocks']:
             lib[name] = tier
     return lib
@@ -139,6 +150,8 @@ def hierarchical_place(graph, constraints, rules, library, seed, iters=600, pair
     by_template = {}
     for b in blocks:
         by_template.setdefault(b.template, []).append(b)
+    shaped = os.environ.get('PNR_MACRO_SHRINK') == '1' or os.environ.get('PNR_MACRO_HULL') == '1'
+    geometry = {} if shaped else None
     layouts, choice = [], {}
     for template, members in sorted(by_template.items(), key=lambda kv: kv[1][0].name):
         tier = library[members[0].name]
@@ -152,10 +165,45 @@ def hierarchical_place(graph, constraints, rules, library, seed, iters=600, pair
                                   missing=rec['missing'], port_debt_mm=rec['port_debt_mm'],
                                   objective=rec.get('objective'), tier_rank=rank, tier_size=len(tier),
                                   native_dir=boards.get(b.name))
-    mgraph, mcon, mrules, plan = collapse(source, constraints, rules, layouts)
+            if shaped:
+                # Each instance (twins included) is measured on its own routed board.
+                from pnr.hier.extent import safe_geometry
+                d = boards.get(b.name)
+                geometry[b.name] = safe_geometry(sub.components, d and os.path.join(d, 'electrical', 'board.kicad_pcb'),
+                                                 rules)
+    if shaped:
+        mgraph, mcon, mrules, plan = collapse(source, constraints, rules, layouts, geometry=geometry)
+    else:
+        mgraph, mcon, mrules, plan = collapse(source, constraints, rules, layouts)
     placed_macro, report = place(mgraph, mcon, seed=seed, iters=iters, orient=True, spread=1.0,
                                  channel_rules=mrules, pair_weights=macro_pair_weights(pair_weights, plan))
     flat = plan.expand(placed_macro, source)
-    return flat, report, dict(blocks=choice, macro_legal=report.legal,
-                              macros={m: dict(block=v['block'], width=v['width'], height=v['height'])
-                                      for m, v in plan.macros.items()})
+    macros = {m: dict(block=v['block'], width=v['width'], height=v['height']) for m, v in plan.macros.items()}
+    out = dict(blocks=choice, macro_legal=report.legal, macros=macros)
+    if shaped:
+        by_ref = {c.ref: c for c in placed_macro.components}
+        for m, v in plan.macros.items():
+            mc = by_ref[m]
+            macros[m].update(courtyard=list(v.get('courtyard', ())), origin=list(v.get('origin', ())),
+                             shape=v.get('shape'), reason=v.get('reason'), hull=v.get('hull'),
+                             pose=[mc.pos[0], mc.pos[1], mc.rot, mc.side])
+            geo = geometry.get(v['block'])
+            if geo is not None and geo.ok:
+                macros[m]['extent'] = [round(x, 4) for x in geo.extent]
+        out['nested'] = nested_parts(placed_macro, plan)
+    return flat, report, out
+
+
+def nested_parts(placed_macro, plan):
+    """{macro ref: [[ref, side], ...]} top-level parts whose courtyard meets a placed macro's courtyard."""
+    from pnr.place.geometry import courtyard_rect, occupied_sides
+    comps = placed_macro.components
+    out = {}
+    for m in plan.macros:
+        mc = next(c for c in comps if c.ref == m)
+        box = courtyard_rect(mc)
+        hits = [[c.ref, '+'.join(occupied_sides(c))] for c in comps
+                if c.ref not in plan.macros and courtyard_rect(c).overlaps(box)]
+        if hits:
+            out[m] = sorted(hits)
+    return out

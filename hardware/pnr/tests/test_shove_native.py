@@ -28,7 +28,7 @@ FAB = dict(outer_copper_oz=1, inner_copper_oz=1, delta_t_c=40, via_drill_mm=.3, 
            via_barrel_loss_budget_w=.01, via_array_peak_drop_v=.01, neck_loss_budget_w=.01, neck_peak_drop_v=.005)
 CASE = Path('<repo>/output/hier/'
             'blocks/nb3-pf/d5be6b6d0e99/native/board_converter-s1-35.75x27.75')
-CLI = '/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli'
+CLI = os.environ.get('PNR_KICAD_CLI', '/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli')  # headless via PNR_KICAD_CLI (src15)
 PNR_PYTHON = '<repo>/output/pnr-regression-runtime/bin/python'
 
 

@@ -63,16 +63,21 @@ def _pcbnew_env(info, pnr_pp_file):
     ki_py = info.kicad_python.path if info.kicad_python else ""
     ki_cli = _kicad_cli(info)
     return "\n".join([
-        '_KI_CLI="%s"' % ki_cli,
+        # PNR_KICAD_CLI / PNR_KICAD_PYTHON (src15; pass them with --action_env) override
+        # the toolchain paths, e.g. the headless KiCad bundle that registers no Dock
+        # app; when PNR_KICAD_PYTHON is set the /Applications KiCad python is never tried.
+        '_KI_CLI="${PNR_KICAD_CLI:-%s}"' % ki_cli,
         'command -v "$_KI_CLI" >/dev/null 2>&1 && _KI_CLI="$(command -v "$_KI_CLI")"',
         '_KI_ROOT="$(cd "$(dirname "$(readlink -f "$_KI_CLI")")/.." 2>/dev/null && pwd || true)"',
         '_KI_SP="$(ls -d "$_KI_ROOT"/lib/python3*/site-packages 2>/dev/null | head -1 || true)"',
         # PNR package dir: parent of the dir holding graph.py (…/hardware/pnr).
         '_PNR_PP="$(cd "$(dirname "$(dirname \'%s\')")" && pwd)"' % pnr_pp_file.path,
         '_KI_PP="${_KI_SP:+$_KI_SP:}$_PNR_PP"',
-        '_KI_PY="%s"' % ki_py,
+        '_KI_PY="${PNR_KICAD_PYTHON:-%s}"' % ki_py,
+        '_KI_GUI_PY=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3',
+        '[ -z "${PNR_KICAD_PYTHON:-}" ] || _KI_GUI_PY=""',
         'if [ -z "$_KI_PY" ] || ! PYTHONPATH="$_KI_PP" "$_KI_PY" -c "import pcbnew" >/dev/null 2>&1; then',
-        '  for _c in "${KICAD_PYTHON:-}" /Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3 python3; do',
+        '  for _c in "${KICAD_PYTHON:-}" "$_KI_GUI_PY" python3; do',
         '    if [ -n "$_c" ] && command -v "$_c" >/dev/null 2>&1 && PYTHONPATH="$_KI_PP" "$_c" -c "import pcbnew" >/dev/null 2>&1; then _KI_PY="$_c"; break; fi',
         "  done",
         "fi",
@@ -173,13 +178,13 @@ def _pnr_board_impl(ctx):
         _ki_run('-m pnr.library_table --out "$_WORK/fp-lib-table" %s' % footprint_args),
         # Native electrical routing and placement feedback, after actual plane fill.
         (('"%s" "%s" --repo "$PWD" --rules "$_WORK/rules.json" --constraints "%s" --out-dir "$_WORK/native-loop" --kicad-python "$_KI_PY" --kicad-cli "%s" --early-pairs --cycles 12 --route-attempts 40 --placement-attempts 2 --search-seconds 90 --seconds %d %s' % (
-            ctx.executable._native_controller.path, "$_WORK/board.kicad_pcb", ctx.file.constraints.path, _kicad_cli(info), ctx.attr.native_seconds, electrical_args,
+            ctx.executable._native_controller.path, "$_WORK/board.kicad_pcb", ctx.file.constraints.path, "$_KI_CLI", ctx.attr.native_seconds, electrical_args,
         )) if ctx.file.electrical_fab else 'true'),
         (('cp "$_WORK/native-loop/best/candidate.kicad_pcb" "%s"\ncp "$_WORK/native-loop/best/candidate.kicad_pro" "%s"\ncp "$_WORK/native-loop/progress.json" "%s"\ncp "$_WORK/native-loop/policy/prepare.json" "$_WORK/rules.json"' % (out_pcb.path,out_pro.path,native_rpt.path)) if ctx.file.electrical_fab else ("echo '{}' > \"%s\"" % native_rpt.path)),
         # Reuse through-vias and reduce redundant track cycles before final pad-entry
         # validation. Each transaction is independently filled and native-DRC gated.
         _ki_run('-m pnr.via_coalesce "%s" --out "%s" --rules "$_WORK/rules.json" --report "%s" --work-dir "$_WORK/coalesce" --kicad-cli "%s" %s' % (
-            out_pcb.path, out_pcb.path, coalesce_rpt.path, _kicad_cli(info),
+            out_pcb.path, out_pcb.path, coalesce_rpt.path, "$_KI_CLI",
             " ".join(['--annotation-source "%s"' % f.path for f in ctx.files.annotation_sources]),
         )),
         # Reject unresolved grazing/undersized trace entries after all fanouts.
@@ -201,7 +206,7 @@ def _pnr_board_impl(ctx):
         _ki_run('-m pnr.library_table --portable --out "%s" %s' % (out_libs.path, footprint_args)),
         # 5. DRC report (gated iff drc_gate).
         '"%s" pcb drc "$_WORK/board.kicad_pcb" -o "%s" --format report %s || _DRC=$?' % (
-            _kicad_cli(info),
+            "$_KI_CLI",
             drc_rpt.path,
             drc_severity,
         ),
@@ -285,7 +290,7 @@ def _pnr_fab_impl(ctx):
     project = reports.project
     library_table = reports.library_table
     outdir = ctx.actions.declare_directory(ctx.label.name)
-    kc = _kicad_cli(info)
+    kc = "${PNR_KICAD_CLI:-%s}" % _kicad_cli(info)  # PNR_KICAD_CLI override (src15)
 
     cmd = "\n".join([
         "set -euo pipefail",

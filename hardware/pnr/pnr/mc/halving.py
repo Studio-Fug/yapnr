@@ -888,6 +888,12 @@ def main(argv=None):
         ap.error('--generations > 0 needs PNR_FEEDBACK=1')
     if a.seed_from and not a.generations:
         ap.error('--seed-from needs --generations > 0')
+    if a.generations and a.library and os.environ.get('PNR_MACRO_HULL') == '1':
+        # N-0001: generation moves (pnr.feedback.moves) and their relocations test
+        # flat member courtyards only; they do not see assembled block copper
+        # around nested parts, so the combination is refused, not warned about.
+        ap.error('PNR_MACRO_HULL=1 does not support --generations (feedback moves ignore block copper '
+                 'around nested parts); run generations without the hull flag')
     if a.import_rebase < 0:
         ap.error('--import-rebase must be >= 0')
     if a.gen_entry == 'rung1' and not a.rung1_stop:

@@ -610,6 +610,28 @@ py_test(
     ],
 )
 
+# src15 bus-type annotation classes (PNR_BUS_CLASSES=1): si_models/bus_classes.json,
+# derivation/precedence (pure), rules compilation, and the router's stub delay check
+# (the pcbnew class skips without KiCad Python).
+py_test(
+    name = "bus_classes_test",
+    size = "small",
+    srcs = [
+        "tests/test_bus_classes.py",
+        "tests/test_native_electrical.py",
+        "tests/test_pair_post_bridge.py",
+        "tests/test_pair_src13.py",
+    ],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_bus_classes.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        requirement("pyyaml"),
+    ],
+)
+
 # N-0002 part 1: @pnr-terminal-width parsing/policy (pure) + pcbnew geometry cases
 # (skipped without pcbnew; run with the KiCad python for the native assertions).
 py_test(

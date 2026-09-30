@@ -201,10 +201,24 @@ def resolve_pair_chains(rules, paths, components):
                 return out
             pair['terminal_chain']=[endpoint(t) for t in a['terminal_chain']]
             pair['auxiliary_pairs']=[dict(source=endpoint(t['source']),target=endpoint(t['target']),max_length_mm=positive(t['max_length_mm'],'auxiliary max length')) for t in a.get('auxiliary_pairs',[])]
-            pair['max_uncoupled_mm']=positive(a['max_uncoupled_mm'],'max_uncoupled_mm')
+            classed=bus_classes_enabled() and bool(a.get('class'))
+            if classed and 'max_uncoupled_mm' not in a:pair.pop('max_uncoupled_mm',None)  # the class derives it
+            else:pair['max_uncoupled_mm']=positive(a['max_uncoupled_mm'],'max_uncoupled_mm')
             pair['reference_layer']=a['reference_layer']
             pair['source']=dict(path=str(path),line=line,sha256=hashlib.sha256(raw).hexdigest())
+            if classed:
+                # PNR_BUS_CLASSES=1: numeric limits derived from the bus class and the
+                # stackup; explicit annotation / constraint values win (pnr.si.bus_classes).
+                from pnr.si.bus_classes import apply_class
+                if 'max_uncoupled_mm' in a:a=dict(a,max_uncoupled_mm=pair['max_uncoupled_mm'])
+                apply_class(pair,a,result,where=dict(path=str(path),line=line))
     return result
+
+
+def bus_classes_enabled():
+    """PNR_BUS_CLASSES=1: the optional @pnr-pair "class" is resolved (default off:
+    the key is ignored and the compiled rules are unchanged)."""
+    return os.environ.get('PNR_BUS_CLASSES')=='1'
 
 
 def terminal_policy(ref, pad_numbers, net, rules):

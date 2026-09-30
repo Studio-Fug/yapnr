@@ -9,6 +9,146 @@ Under a fab profile with a filled via-in-pad policy (jlc-pofv, 5B) a terminal
 land without any budgeted surface attach may instead be attached by a
 current-sized in-pad via array whose trunk continues on another layer
 (:func:`power_plan`, pnr.via_in_pad.array_attach); legacy rules never do.
+
+Pair-chain opt-in flags (environment, default off; unset/any other value keeps
+the original behaviour exactly):
+
+PNR_PAIR_POST_BRIDGE_SURFACE=1
+    Every routed surface leg of a pair chain is checked with the exact endpoint
+    graph (path_metrics from the declared origin to this leg's end, over all
+    planned copper plus the new leg) before it is committed. Oracle.clear ignores
+    same-net copper, so a leg can cross an earlier same-net stub (e.g. the
+    via-to-pad fanout of a preceding layer bridge) and close a loop that the
+    final check could only reject as pair_endpoint_graph_invalid after the whole
+    chain was planned. A leg whose graph is not a valid tree is treated as
+    unrouted (status pair_surface_leg_cycle) and the stage falls back. When the
+    previous stage ended on a via bridge, the first fallback is a surface leg
+    that starts at that bridge's via pair (offsets = measured prefix minus the
+    via-to-pad fanout), so the intermediate pad fanout becomes a stub: the same
+    topology the existing bridge-to-bridge via reuse already produces, with no
+    new vias. Only if that also fails does the stage use the existing via-reuse
+    layer bridge. No electrical limit (uncoupled budget, skew, clearance,
+    reference plane, via geometry) is changed; every leg is still judged by
+    solve_pair, the reference validator and the final endpoint/skew checks.
+PNR_PAIR_JOINT_FAIR=1
+    Joint-topology scheduling in pair_plan: the first joint configuration of each
+    bridge hand is capped at (joint window remaining)/(hands not yet tried), so
+    the second hand is not starved when the first one uses the whole window
+    (60 s of the default 90 s trial). Later configurations are unchanged.
+PNR_PAIR_FALLBACK_RESERVE_SECONDS=<s>   (default 30 = unchanged)
+    Upper bound of the time pair_plan keeps after the joint-topology window for
+    the ten legacy topologies (min(<s>, remaining/3)). With the default 90 s trial
+    those get 3 s each and, on the Splanc USB chain, never route; a smaller value
+    widens the joint window that PNR_PAIR_JOINT_FAIR splits between the hands.
+PNR_PAIR_JOINT_HAND_FIRST=+1|-1   (normally set by paired_bootstrap, see
+    PNR_PAIR_HAND_SWAP_TRIAL there): the named bridge hand runs first within each
+    joint seed, and so gets the whole first-config window instead of the other hand.
+PNR_PAIR_PREFER_INLINE=1
+    Route choice in pair_plan: the score (vias, copper length) becomes (vias,
+    stub legs, copper length), so among complete routes with equal via count one
+    that keeps every intermediate device (ESD) in line beats one that leaves its
+    pad fanout as a stub. Selection only; no route is added or relaxed.
+
+src13 flags (same convention: unset = src12b behaviour, byte for byte):
+
+PNR_PAIR_PER_RUN_UNCOUPLED=1
+    max_uncoupled_mm bounds each CONTINUOUS uncoupled run separately (owner
+    decision 2026-09-29), not one budget shared by both ends of a layer bridge.
+    pair_layer_bridge gives the bridge head cap-(source surface fanout+entry
+    budget+uncoupled run already arriving at the start junction) and the tail
+    cap-(target surface fanout); a candidate with no budget left at an end is
+    skipped. The search first runs exactly the legacy search (shared budget),
+    then, if that finds nothing, a second pass where solve_pair bounds each end
+    by its own budget; surface legs keep the legacy fanout bound. Budgets only
+    bound fanout geometry; the exact run measurement accepts or rejects. Every
+    leg (surface or bridge) that starts where the previous leg ended (an
+    intermediate pad, or the previous bridge's via pair) is charged the
+    uncoupled run already present there (measured on the planned copper, so no
+    continuous run through a pad or via exceeds the cap). Reference-plane
+    trimming stays the legacy one (PNR_PAIR_REF_TRIM_PER_END below changes it);
+    a surface leg is judged with the clearance apertures of the vias already
+    planned, as the post-fill check sees the plane. Each leg is re-measured
+    (pnr.route.detail.coupled.uncoupled_runs) before acceptance and the whole
+    endpoint path of each net is measured at the end: a run above the cap is
+    pair_uncoupled_run_limit; results carry uncoupled_run_metrics (max
+    continuous run and every run per net). The measured path starts at the
+    declared connector origin and nothing on it is exempt: under the joint
+    topology the declared contact's own leg to the join via is part of the
+    first run (and is charged to the stage-0 bridge head as arriving run); only
+    the duplicate contact's leg to the join (never on that path) keeps its own
+    authored max_length_mm. A run ends at any coupled stretch (literal reading;
+    PNR_PAIR_RUN_MIN_COUPLED_MM restores the earlier merge of short ones).
+    pair_bridge_ports adds the exact minimum legal via run
+    (bisection between the last illegal and the first legal grid run, oracle.via
+    is the judge) to the run grid. Via geometry/clearances still come from rules.
+PNR_PAIR_REF_TRIM_PER_END=1   (only with PNR_PAIR_PER_RUN_UNCOUPLED=1)
+    Reference-plane trimming follows the per-end uncoupled budgets (surface leg:
+    max_uncoupled - arriving run at its start; bridge: each end's own budget)
+    instead of the legacy trim (max_uncoupled at both ends of a surface leg, the
+    shared bridge budget at both ends of a bridge). Stricter than src12b near a
+    leg start that inherits an arriving run; an owner decision, not part of A.
+PNR_PAIR_RUN_MIN_COUPLED_MM=<mm>   (only with PNR_PAIR_PER_RUN_UNCOUPLED=1)
+    A coupled stretch shorter than this does not end a continuous uncoupled run
+    (it is counted into it). Default 0.001 (numerical floor: any coupled copper
+    ends a run, the literal reading); 0.35 (= width + gap) reproduces the first
+    src13 convention.
+PNR_PAIR_RUN_BARREL=1   (only with PNR_PAIR_PER_RUN_UNCOUPLED=1)
+    Copper reading of decision 2: a via hop adds the barrel (board thickness) to
+    the continuous uncoupled run it lies in (a pair via pair is always farther
+    apart than the coupled pitch), in the final measurement and in every per-end
+    search budget. Default: barrels add 0 to runs. The consistent readings are
+    STUB_PLANAR=1 (barrel 0 in stubs and runs) or RUN_BARREL=1 with the default
+    stub (barrel counted in both).
+PNR_PAIR_RUN_BREAK_AT_PADS=1   (only with PNR_PAIR_PER_RUN_UNCOUPLED=1)
+    Alternative reading of the owner decision: an intermediate terminal pad of
+    terminal_chain (the in-line ESD pad) ends a continuous uncoupled run, so the
+    breakout arriving at the pad and the one leaving it are budgeted separately
+    (as the two ends of a bridge are). Default (unset): the copper through the
+    pad is one continuous run, charged to the departing leg.
+PNR_PAIR_STUB_MAX_MM=<mm>   (unset = no cap)
+    Maximum copper length from the pair trunk (endpoint path) to an intermediate
+    terminal pad of terminal_chain that the route leaves as a branch (ESD stub),
+    measured on the exact copper graph (path_metrics), via barrels included
+    (graph via hops use the board thickness), from the junction on the trunk to
+    where the copper enters the pad (the part of the track inside the pad's own
+    copper is pad, not stub; stub_metrics also report stub_centre_mm, the length
+    to the pad centre). In-line terminals have 0. The
+    post-bridge via-start leg (stub = its via-to-pad fanout) and the via-reuse
+    bridge (stub = barrel + fanout) are skipped when their stub exceeds the cap;
+    when the reuse bridge is skipped, a bridge from the intermediate pad itself
+    (D in line) is tried instead. A stage-0 bridge that ends at an intermediate
+    terminal prefers target ports whose fanout fits the cap. The final check
+    rejects any route above the cap (pair_stub_limit); results carry
+    stub_metrics. PNR_PAIR_PREFER_INLINE ranking is unchanged.
+PNR_PAIR_STUB_PLANAR=1   (only with PNR_PAIR_STUB_MAX_MM)
+    Alternative reading of the stub decision: only planar copper counts, a via
+    barrel between a B.Cu trunk and the F.Cu fanout adds 0 (default: the board
+    thickness, since that copper is part of the branch).
+PNR_BUS_CLASSES=1   (src15; the pair carries a bus class, pnr.si.bus_classes)
+    The pair's rules entry (compiled from the @pnr-pair "class") may carry a
+    stub_limit. kind 'delay' (class-derived stub_k * t_rise_min, or an explicit
+    annotation stub_delay_max_ps): the final check measures every intermediate
+    terminal's stub as copper DELAY - per-layer ps/mm from the stackup, the via
+    barrel INCLUDED (board thickness x barrel ps/mm, PNR_PAIR_STUB_PLANAR does not
+    apply), measured to the pad CENTRE (from the copper's entry vertex, plus the
+    straight entry-to-centre distance when the track does not end at the centre);
+    stub_metrics add stub_delay_ps and its breakdown; above the limit (or
+    unmeasurable) is pair_stub_limit. The search keeps the src13 machinery with an
+    mm cap no stub within the delay limit can exceed (limit / fastest layer ps/mm),
+    so pruning never rejects a route the delay check accepts. kind 'mm' (annotation
+    stub_max_mm) behaves exactly as PNR_PAIR_STUB_MAX_MM. PNR_PAIR_STUB_MAX_MM, when
+    set, overrides both (explicit mm override).
+PNR_PAIR_EARLY_EXIT=1
+    pair_plan returns as soon as one configuration yields a route that passed
+    every _pair_plan_order check (endpoint graph, skew, duplicate origins and the
+    src13 run/stub checks) instead of spending the rest of the joint window and
+    the legacy topologies. With PNR_PAIR_PREFER_INLINE=1 a route with no stub
+    legs stops it at once; after a stub route (V vias) the remaining joint
+    configurations only look for an in-line route with at most V vias (stub
+    legs skipped, bridges that would exceed V vias skipped) within a grace
+    budget equal to the time the stub route's configuration took, then stop
+    (the stub route stays the fallback best). Legacy topologies are not run
+    after a route was found.
 """
 import argparse
 from collections import Counter,defaultdict
@@ -27,6 +167,113 @@ from pnr.via_in_pad import smd_keepout_violated,hole_keepouts
 def shove_enabled():
     """PNR_SHOVE=1 enables the make-room/scheduling extensions; unset is the default path."""
     return os.environ.get('PNR_SHOVE')=='1'
+
+
+def post_bridge_surface_enabled():
+    """PNR_PAIR_POST_BRIDGE_SURFACE=1: loop-checked surface legs + via-start after a bridge."""
+    return os.environ.get('PNR_PAIR_POST_BRIDGE_SURFACE')=='1'
+
+
+def joint_fair_enabled():
+    """PNR_PAIR_JOINT_FAIR=1: first joint config of each bridge hand gets a fair share."""
+    return os.environ.get('PNR_PAIR_JOINT_FAIR')=='1'
+
+
+def fallback_reserve_seconds():
+    """PNR_PAIR_FALLBACK_RESERVE_SECONDS: legacy-topology reserve after the joint window (default 30)."""
+    value=float(os.environ.get('PNR_PAIR_FALLBACK_RESERVE_SECONDS','30'))
+    if not math.isfinite(value) or value<0:raise ValueError('invalid pair fallback reserve seconds')
+    return value
+
+
+def hand_first_order(joint,first):
+    """PNR_PAIR_JOINT_HAND_FIRST=+1|-1 (set per trial by paired_bootstrap under
+    PNR_PAIR_HAND_SWAP_TRIAL=1): within each (join fraction, timing target) seed
+    the named bridge hand runs first. Unset/empty keeps the enumeration order.
+    (Implementation shared with the controller: pnr.pair_joint.hand_first_order.)"""
+    from pnr.pair_joint import hand_first_order as order
+    return order(joint,first)
+
+
+def per_run_uncoupled_enabled():
+    """PNR_PAIR_PER_RUN_UNCOUPLED=1: max_uncoupled_mm per continuous uncoupled run."""
+    return os.environ.get('PNR_PAIR_PER_RUN_UNCOUPLED')=='1'
+
+
+def run_break_at_pads_enabled():
+    """PNR_PAIR_RUN_BREAK_AT_PADS=1 (with PNR_PAIR_PER_RUN_UNCOUPLED): an intermediate
+    terminal pad (ESD) ends a continuous uncoupled run."""
+    return os.environ.get('PNR_PAIR_RUN_BREAK_AT_PADS')=='1'
+
+
+def ref_trim_per_end_enabled():
+    """PNR_PAIR_REF_TRIM_PER_END=1 (with PNR_PAIR_PER_RUN_UNCOUPLED): reference-plane
+    trimming follows the per-end uncoupled budgets instead of the legacy trim."""
+    return per_run_uncoupled_enabled() and os.environ.get('PNR_PAIR_REF_TRIM_PER_END')=='1'
+
+
+RUN_MIN_COUPLED_FLOOR=.001  # mm: numerical floor, any real coupled copper ends a run
+
+
+def run_min_coupled_mm():
+    """PNR_PAIR_RUN_MIN_COUPLED_MM: shortest coupled stretch that ends a continuous
+    uncoupled run (default RUN_MIN_COUPLED_FLOOR, i.e. any coupled copper)."""
+    raw=os.environ.get('PNR_PAIR_RUN_MIN_COUPLED_MM')
+    if raw is None or raw=='':return RUN_MIN_COUPLED_FLOOR
+    value=float(raw)
+    if not math.isfinite(value) or value<0:raise ValueError('invalid PNR_PAIR_RUN_MIN_COUPLED_MM')
+    return max(value,RUN_MIN_COUPLED_FLOOR)
+
+
+def run_barrel_mm(thickness):
+    """Via barrel length a continuous uncoupled run includes (PNR_PAIR_RUN_BARREL=1:
+    the board thickness; default 0)."""
+    return thickness if os.environ.get('PNR_PAIR_RUN_BARREL')=='1' else 0.
+
+
+def src13_trace_enabled():
+    """Any src13 pair flag set: attempts also record where a timed-out search was."""
+    return per_run_uncoupled_enabled() or stub_max_mm() is not None or early_exit_enabled()
+
+
+def stub_max_mm():
+    """PNR_PAIR_STUB_MAX_MM: cap on intermediate-terminal stubs (None = no cap)."""
+    raw=os.environ.get('PNR_PAIR_STUB_MAX_MM')
+    if raw is None or raw=='':return None
+    value=float(raw)
+    if not math.isfinite(value) or value<0:raise ValueError('invalid PNR_PAIR_STUB_MAX_MM')
+    return value
+
+
+def stub_barrel_mm(thickness):
+    """Via barrel length counted in an intermediate-terminal stub (PNR_PAIR_STUB_MAX_MM).
+
+    Default: the full barrel (board thickness) - copper from a B.Cu trunk up to
+    an F.Cu fanout. PNR_PAIR_STUB_PLANAR=1: 0 (only planar copper is measured)."""
+    return 0. if os.environ.get('PNR_PAIR_STUB_PLANAR')=='1' else thickness
+
+
+def early_exit_enabled():
+    """PNR_PAIR_EARLY_EXIT=1: pair_plan stops at the first fully checked route."""
+    return os.environ.get('PNR_PAIR_EARLY_EXIT')=='1'
+
+
+def prefer_inline_enabled():
+    """PNR_PAIR_PREFER_INLINE=1: among equal-via routes prefer fewer intermediate-pad stubs."""
+    return os.environ.get('PNR_PAIR_PREFER_INLINE')=='1'
+
+
+def stub_legs(segments):
+    """Chain legs that start at the previous bridge's vias (its pad fanout is left as a stub).
+
+    That is a surface leg started there (PNR_PAIR_POST_BRIDGE_SURFACE) or a layer
+    bridge reusing those vias (its source fanout lengths are all zero).
+    """
+    count=0
+    for index,segment in enumerate(segments):
+        if 'post_bridge_start' in segment:count+=1
+        elif index and segments[index-1].get('bridge_target') and segment.get('fanout_lengths') and not any(segment['fanout_lengths'][0].values()):count+=1
+    return count
 
 
 def xy(p):return (p.x/1e6,p.y/1e6)
@@ -731,39 +978,94 @@ def pair_plan(b,pair,rules,oracle,bounds,pitch):
         if not math.isfinite(joint_trial_seconds) or joint_trial_seconds<=0:raise ValueError('invalid joint topology trial seconds')
         positions={f.GetReference()+'.'+pad.GetNumber():xy(pad.GetPosition()) for f in b.GetFootprints() for pad in f.Pads()}
         joint=joint_topologies(pair,positions,max_trials=int(os.environ.get('PNR_PAIR_JOINT_MAX_TRIALS','6')),budget_scope=os.environ.get('PNR_PAIR_AUXILIARY_SCOPE','separate'))
+        joint=hand_first_order(joint,os.environ.get('PNR_PAIR_JOINT_HAND_FIRST'))
         joint_count=len(joint);configs=joint+configs
         now=time.monotonic();remaining=max(0.,deadline-now)
         # Keep a bounded fallback reserve. Do not divide one viable 60-second
         # joint search into eighteen subsecond trials merely to exhaust seeds.
-        joint_deadline=now+(remaining-min(30.,remaining/3) if math.isfinite(remaining) else joint_count*joint_trial_seconds)
+        # PNR_PAIR_FALLBACK_RESERVE_SECONDS (default 30) bounds that reserve.
+        reserve=fallback_reserve_seconds()
+        joint_deadline=now+(remaining-min(reserve,remaining/3) if math.isfinite(remaining) else joint_count*joint_trial_seconds)
+    fair=joint_fair_enabled();started_hands=set();prefer_inline=prefer_inline_enabled();early_exit=early_exit_enabled();stopped=None
+    # PNR_PAIR_EARLY_EXIT + PNR_PAIR_PREFER_INLINE: after a stub route, the rest of
+    # the joint configurations only hunt for an in-line route with no more vias,
+    # within a grace budget equal to the successful configuration's time.
+    hunt=None
     for index,config in enumerate(configs):
         now=time.monotonic()
         if now>=deadline:break
+        if hunt is not None and (index>=joint_count or now>=hunt['deadline']):
+            stopped=dict(config_index=hunt['config_index'],configs=len(configs),joint_configs=joint_count,reason='inline_grace' if index<joint_count else 'joint_configs_done',inline_configs_tried=hunt['tried'],grace_seconds=round(hunt['grace'],3));break
         if index<joint_count:
             if now>=joint_deadline:
                 attempts.append(dict(config,status='joint_phase_budget',elapsed_seconds=0.));continue
             trial_deadline=min(deadline,joint_deadline,now+joint_trial_seconds)
+            hand=config.get('bridge_hand')
+            if fair and hand not in started_hands:
+                # PNR_PAIR_JOINT_FAIR: the first config of a hand must leave an
+                # equal share of the joint window to every hand not yet started.
+                waiting={c.get('bridge_hand') for c in configs[index:joint_count]}-started_hands
+                trial_deadline=min(trial_deadline,now+max(0.,joint_deadline-now)/max(1,len(waiting)))
+                started_hands.add(hand)
         else:trial_deadline=now+(deadline-now)/(len(configs)-index)
+        extra_order={}
+        if hunt is not None:
+            trial_deadline=min(trial_deadline,hunt['deadline']);hunt['tried']+=1
+            extra_order['limits']=dict(stub_cap=0.,max_vias=hunt['max_vias'])
         trial=oracle.fork(trial_deadline);retained.append(trial)
         order=config['auxiliary_order']
         try:
             if config['bridge_hand']:
-                result=_pair_plan_order(b,pair,rules,trial,bounds,pitch,order,config)
-            else:result=_pair_plan_order(b,pair,rules,trial,bounds,pitch,order)
-        except TimeoutError:result=dict(status='time_budget',mode='pair')
+                result=_pair_plan_order(b,pair,rules,trial,bounds,pitch,order,config,**extra_order)
+            else:result=_pair_plan_order(b,pair,rules,trial,bounds,pitch,order,**extra_order)
+        except TimeoutError:
+            result=dict(status='time_budget',mode='pair')
+            if src13_trace_enabled() and getattr(trial,'progress',None):result['progress']=dict(trial.progress)
         last=result;hits.update(trial.hits);via_hits.update(trial.via_hits)
         attempt=dict(config,status=result['status'],elapsed_seconds=time.monotonic()-now);attempts.append(attempt)
-        for key in ('failed_stage','endpoint_metrics','connector_endpoint_metrics'):
+        if extra_order:attempt['inline_only']=dict(extra_order['limits'])
+        if fair and index<joint_count:attempt['budget_seconds']=trial_deadline-now
+        for key in ('failed_stage','endpoint_metrics','connector_endpoint_metrics','post_bridge_legs','uncoupled_run_metrics','stub_metrics','stub_skips','progress'):
             if key in result:attempt[key]=result[key]
+        if src13_trace_enabled():
+            # Why the failing stage failed (bridge port counts, solve failure tallies).
+            for key in ('source_ports','target_ports','failures'):
+                if key in result:attempt[key]=result[key]
         if result['status']=='routed':
             score=(len(result.get('pair_vias',[])),sum(math.dist(a,z) for _,_,a,z,_ in result.get('pair_tracks',[])))
+            if prefer_inline:score=(score[0],stub_legs(result.get('segments',[])),score[1])
             attempt['route_score']=score
             if best is None or score<best[0]:best=(score,result,trial)
+            # PNR_PAIR_EARLY_EXIT: this route passed every check of the plan;
+            # with PNR_PAIR_PREFER_INLINE only a route without stub legs ends
+            # the search (the ranking could still prefer a later in-line one).
+            if early_exit and (not prefer_inline or best[0][1]==0):
+                stopped=dict(config_index=index,configs=len(configs),joint_configs=joint_count)
+                if hunt is not None:stopped.update(reason='inline_route',stub_route_config_index=hunt['config_index'],inline_configs_tried=hunt['tried'])
+                break
+            if early_exit and hunt is None:
+                # Stub route: an equal-via in-line route would still be preferred.
+                grace=max(0.,time.monotonic()-now)
+                hunt=dict(deadline=time.monotonic()+grace,grace=grace,max_vias=best[0][0],config_index=index,tried=0)
+    if hunt is not None and stopped is None:
+        stopped=dict(config_index=hunt['config_index'],configs=len(configs),joint_configs=joint_count,reason='configs_exhausted',inline_configs_tried=hunt['tried'],grace_seconds=round(hunt['grace'],3))
+    flags={name:True for name,on in (('PNR_PAIR_POST_BRIDGE_SURFACE',post_bridge_surface_enabled()),('PNR_PAIR_JOINT_FAIR',fair),('PNR_PAIR_PREFER_INLINE',prefer_inline),('PNR_PAIR_PER_RUN_UNCOUPLED',per_run_uncoupled_enabled()),('PNR_PAIR_RUN_BREAK_AT_PADS',per_run_uncoupled_enabled() and run_break_at_pads_enabled()),('PNR_PAIR_EARLY_EXIT',early_exit),('PNR_PAIR_REF_TRIM_PER_END',ref_trim_per_end_enabled()),('PNR_PAIR_RUN_BARREL',per_run_uncoupled_enabled() and run_barrel_mm(1.)>0)) if on}
+    if per_run_uncoupled_enabled() and os.environ.get('PNR_PAIR_RUN_MIN_COUPLED_MM'):flags['PNR_PAIR_RUN_MIN_COUPLED_MM']=run_min_coupled_mm()
+    if stub_max_mm() is not None:flags['PNR_PAIR_STUB_MAX_MM']=stub_max_mm()
+    if stub_max_mm() is not None and os.environ.get('PNR_PAIR_STUB_PLANAR')=='1':flags['PNR_PAIR_STUB_PLANAR']=True
+    if os.environ.get('PNR_BUS_CLASSES')=='1' and pair.get('bus_class'):
+        limit=pair.get('stub_limit') or {}
+        flags['PNR_BUS_CLASSES']=dict(bus_class=pair['bus_class'].get('id'),stub_limit=None if stub_max_mm() is not None or not limit else {k:limit[k] for k in ('kind','max_ps','max_mm','source') if k in limit},
+                                      stub_override_mm=stub_max_mm())
+    if os.environ.get('PNR_PAIR_JOINT_HAND_FIRST'):flags['PNR_PAIR_JOINT_HAND_FIRST']=int(os.environ['PNR_PAIR_JOINT_HAND_FIRST'])
+    if 'PNR_PAIR_FALLBACK_RESERVE_SECONDS' in os.environ:flags['PNR_PAIR_FALLBACK_RESERVE_SECONDS']=fallback_reserve_seconds()
+    extra=dict(pair_engine_flags=flags) if flags else {}
+    if stopped:extra['early_exit']=stopped
     if best:
         _,result,trial=best;oracle.__dict__.update(trial.__dict__);oracle.deadline=deadline;oracle.hits=hits;oracle.via_hits=via_hits
-        return dict(result,order_attempts=attempts)
+        return dict(result,order_attempts=attempts,**extra)
     oracle.hits.update(hits);oracle.via_hits.update(via_hits)
-    return dict(last or dict(status='time_budget',mode='pair'),order_attempts=attempts)
+    return dict(last or dict(status='time_budget',mode='pair'),order_attempts=attempts,**extra)
 
 
 
@@ -984,23 +1286,49 @@ def pair_bridge_ports(pair,terminals,rules,oracle,bounds,index):
     if distance<1e-8:return []
     axis=((a[0]-z[0])/distance,(a[1]-z[1])/distance)
     tangent=(-axis[1],axis[0]);mid=tuple((a[i]+z[i])/2 for i in (0,1));found=[]
-    for run in sorted(set((.8,1.,1.2,1.5,1.75)) | {round(i*.1,10) for i in range(4,18)}):
+    def sites_at(run,sign,spacing,shift):
+        center=tuple(mid[i]+sign*tangent[i]*run+shift*axis[i] for i in (0,1))
+        sites={net:tuple(center[i]+side*axis[i]*spacing/2 for i in (0,1)) for net,side in ((p,1),(n,-1))}
+        if any(not(bounds[0]<=v[0]<=bounds[2] and bounds[1]<=v[1]<=bounds[3]) for v in sites.values()):return None
+        if not all(oracle.via(net,point,diameter,drill) for net,point in sites.items()):return None
+        return sites
+    def port(sites,shift):
+        choices={net:[path for path in elbows(terminals[net][index],sites[net]) if length(path)<cap-.15 and all(oracle.clear(net,k.F_Cu,x,y,width,pair=pair) for x,y in zip(path,path[1:]))] for net in (p,n)}
+        for pp in choices[p]:
+            for nn in choices[n]:
+                paths={p:pp,n:nn}
+                if not geometry_ok(paths,width,gap,lambda net,x,y,w:oracle.clear(net,k.F_Cu,x,y,w,pair=pair)):continue
+                if any(segment_distance(sites[other],sites[other],x,y)<(diameter+width)/2+clearance+.001 for net,other in ((p,n),(n,p)) for x,y in zip(paths[net],paths[net][1:])):continue
+                return dict(shift_mm=shift,sites=sites,paths=paths,lengths={net:length(path) for net,path in paths.items()})
+        return None
+    grid=sorted(set((.8,1.,1.2,1.5,1.75)) | {round(i*.1,10) for i in range(4,18)});legal={}
+    for run in grid:
         for sign in (-1,1):
             for spacing in sorted({via_spacing,max(via_spacing,distance)}):
                 for shift in (0,-.25,.25,-.5,.5):
-                    center=tuple(mid[i]+sign*tangent[i]*run+shift*axis[i] for i in (0,1))
-                    sites={net:tuple(center[i]+side*axis[i]*spacing/2 for i in (0,1)) for net,side in ((p,1),(n,-1))}
-                    if any(not(bounds[0]<=v[0]<=bounds[2] and bounds[1]<=v[1]<=bounds[3]) for v in sites.values()):continue
-                    if not all(oracle.via(net,point,diameter,drill) for net,point in sites.items()):continue
-                    choices={net:[path for path in elbows(terminals[net][index],sites[net]) if length(path)<cap-.15 and all(oracle.clear(net,k.F_Cu,x,y,width,pair=pair) for x,y in zip(path,path[1:]))] for net in (p,n)}
-                    for pp in choices[p]:
-                        for nn in choices[n]:
-                            paths={p:pp,n:nn}
-                            if not geometry_ok(paths,width,gap,lambda net,x,y,w:oracle.clear(net,k.F_Cu,x,y,w,pair=pair)):continue
-                            if any(segment_distance(sites[other],sites[other],x,y)<(diameter+width)/2+clearance+.001 for net,other in ((p,n),(n,p)) for x,y in zip(paths[net],paths[net][1:])):continue
-                            found.append(dict(shift_mm=shift,sites=sites,paths=paths,lengths={net:length(path) for net,path in paths.items()}));break
-                        else:continue
-                        break
+                    sites=sites_at(run,sign,spacing,shift);legal[run,sign,spacing,shift]=sites is not None
+                    if sites is None:continue
+                    entry=port(sites,shift)
+                    if entry:found.append(entry)
+    if per_run_uncoupled_enabled():
+        # PNR_PAIR_PER_RUN_UNCOUPLED: the 0.1 mm grid overshoots the exact
+        # minimum legal run (e.g. 1.2 instead of 1.103 next to a module pad),
+        # which the fanout pays out of the uncoupled budget. Bisect between the
+        # last illegal and the first legal grid run; oracle.via stays the judge.
+        # An exact run within 10 um of the grid run adds nothing but a duplicate.
+        for sign in (-1,1):
+            for spacing in sorted({via_spacing,max(via_spacing,distance)}):
+                for shift in (0,-.25,.25,-.5,.5):
+                    first=next((i for i,run in enumerate(grid) if legal[run,sign,spacing,shift]),None)
+                    if not first:continue
+                    lo,hi=grid[first-1],grid[first];sites=None
+                    while hi-lo>1e-4:
+                        middle=(lo+hi)/2;trial=sites_at(middle,sign,spacing,shift)
+                        if trial is None:lo=middle
+                        else:hi,sites=middle,trial
+                    if sites is None or grid[first]-hi<.01:continue
+                    entry=port(sites,shift)
+                    if entry:found.append(dict(entry,run_mm=hi,exact_min_run=True))
     return found
 
 def pair_reference_validator(board,pair,rules,prospective_vias=(),base_center=None):
@@ -1036,10 +1364,12 @@ def pair_reference_validator(board,pair,rules,prospective_vias=(),base_center=No
         probe=k.PCB_TRACK(board);probe.SetLayer(k.F_Cu);probe.SetStart(vec(a));probe.SetEnd(vec(z));probe.SetWidth(round(width*1e6))
         poly=k.SHAPE_POLY_SET();probe.TransformShapeToPolygon(poly,k.F_Cu,0,1000,k.ERROR_OUTSIDE);poly.BooleanSubtract(fill)
         return poly.IsEmpty()
-    def valid(paths,cap):
+    def valid(paths,cap,tail_cap=None):
+        # tail_cap (PNR_PAIR_PER_RUN_UNCOUPLED): the target end has its own
+        # uncoupled budget; unset trims both ends by cap as before.
         if fill.IsEmpty():return False
         for path in paths.values():
-            trimmed=trim_path(path,cap,cap)
+            trimmed=trim_path(path,cap,cap if tail_cap is None else tail_cap)
             if any(not center(tuple(a),tuple(z),pair['width_mm']+pair['gap_mm']) for a,z in zip(trimmed,trimmed[1:])):return False
         return True
     valid.available=not fill.IsEmpty()
@@ -1056,12 +1386,27 @@ def reference_failures(board,rules):
     return failures
 
 
-def pair_layer_bridge(b,pair,terminals,rules,oracle,bounds,pitch,offsets,reuse_source=None,reference_validator=None,prior_reference=(),prior_vias=(),solution_index=0,max_expansions=15000,timing_target_mm=0):
+def pair_layer_bridge(b,pair,terminals,rules,oracle,bounds,pitch,offsets,reuse_source=None,reference_validator=None,prior_reference=(),prior_vias=(),solution_index=0,max_expansions=15000,timing_target_mm=0,head_prior_mm=0.,target_stub_cap=None,target_stub_length=None):
     """Matched through-via pairs and a checked B.Cu trunk, no single-leg jump.
 
     The combined surface and bridge-plane fanout obeys the original planar
     uncoupled budget. Equal barrel lengths enter endpoint timing. Impedance and
     transition qualification remain explicitly pending the actual stackup.
+
+    PNR_PAIR_PER_RUN_UNCOUPLED=1: the head (source fanout + B.Cu lead, plus
+    ``head_prior_mm`` = uncoupled run already arriving at the source junction)
+    and the tail (B.Cu lead + target fanout) are separate continuous runs, each
+    bounded by max_uncoupled_mm; otherwise both B.Cu leads share
+    cap - max(source, target fanout). That shared value stays solve_pair's
+    max_uncoupled (lane-shape scale) either way. ``target_stub_cap`` (PNR_PAIR_STUB_MAX_MM,
+    only when the target is an intermediate terminal) moves target ports whose
+    surface fanout exceeds the cap behind the others, since a later via-start
+    leg would leave that fanout as the terminal's stub; ``target_stub_length``
+    (port -> mm, default its longest fanout) is that stub as the final check
+    measures it (to where the copper enters the pad).
+    PNR_PAIR_RUN_BARREL=1: each via hop inside an end's run adds the barrel to it.
+    Reference trimming: the legacy shared budget at both ends unless
+    PNR_PAIR_REF_TRIM_PER_END=1 (then each end's own budget).
     """
     import pcbnew as k
     from pnr.route.detail.coupled import geometry_ok
@@ -1075,19 +1420,79 @@ def pair_layer_bridge(b,pair,terminals,rules,oracle,bounds,pitch,offsets,reuse_s
     ports=lambda index:pair_bridge_ports(pair,terminals,rules,oracle,bounds,index)
     starts,ends=([reuse_source] if reuse_source else ports(0)),ports(1)
     candidates=sorted(((a,z) for a in starts for z in ends),key=lambda az:(abs(az[0].get('shift_mm',0))+abs(az[1].get('shift_mm',0)),sum(az[0]['lengths'].values())+sum(az[1]['lengths'].values())+sum(math.dist(az[0]['sites'][net],az[1]['sites'][net]) for net in (p,n))))
+    if target_stub_cap is not None:
+        stub_of=target_stub_length or (lambda port:max(port['lengths'].values()))
+        candidates=sorted(candidates,key=lambda az:stub_of(az[1])>target_stub_cap+1e-9)
+    per_run=per_run_uncoupled_enabled();per_end_reference=ref_trim_per_end_enabled()
+    # PNR_PAIR_RUN_BARREL: the source via hop (none when the source reuses vias the
+    # trunk already arrives at on this layer) and the target via hop join the runs.
+    barrel=run_barrel_mm(rules['electrical_fab']['board_thickness_mm']) if per_run else 0.
+    head_barrel=lambda a:0. if a.get('reuse') else barrel
     bridge_failures=Counter();examples=[];successful=0
-    for a,z in candidates[:64]:
+    def legacy_budget(a,z):return cap-max(max(a['lengths'].values())+a.get('entry_budget_mm',0),max(z['lengths'].values()))
+    def end_budgets(a,z):return cap-(max(a['lengths'].values())+a.get('entry_budget_mm',0)+head_prior_mm+head_barrel(a)),cap-(max(z['lengths'].values())+barrel)
+    def jobs():
+        # Legacy: every candidate once with the shared budget. PNR_PAIR_PER_RUN_UNCOUPLED:
+        # pass 1 = exactly the legacy search (grid ports, shared budget at both
+        # ends, legacy effort); pass 2 (only if pass 1 found nothing) = all
+        # candidates, exact-run ports included, with the full per-end budgets.
+        # The search budgets only bound fanout/lead GEOMETRY (an upper bound of the
+        # uncoupled length); every route is accepted only if the exact measurement
+        # of its continuous runs (leg_uncoupled_ok, with the arriving run) passes,
+        # so A never narrows the legacy search (src13 review fix: pass 1 used
+        # min(shared, per-end), which excluded compliant routes whose lead-in is
+        # partly coupled). Larger fanout budgets widen (and slow) solve_pair's
+        # fanout search, so they are spent only where the shared budget cannot route.
+        if not per_run:
+            for a,z in candidates[:64]:yield a,z,None
+            return
+        done=set()
+        for a,z in [(a,z) for a,z in candidates if not a.get('exact_min_run') and not z.get('exact_min_run')][:64]:
+            shared=legacy_budget(a,z)
+            if shared<=0:continue
+            done.add((id(a),id(z),round(shared,9),round(shared,9)));yield a,z,(shared,shared,1)
+        for a,z in candidates[:64]:
+            head_rem,tail_rem=end_budgets(a,z)
+            if (id(a),id(z),round(head_rem,9),round(tail_rem,9)) not in done:yield a,z,(head_rem,tail_rem,2)
+    trace=src13_trace_enabled()  # count the silent candidate skips too (diagnostics only)
+    budget_skipped=set()
+    for a,z,budget in jobs():
         vias=[(net,group['sites'][net]) for group in (a,z) for net in (p,n)]
-        if any(math.dist(v,q)+1e-6<(via_spacing if net!=other else drill+hole_gap+.002) for i,(net,v) in enumerate(vias) for other,q in vias[i+1:]):continue
+        if any(math.dist(v,q)+1e-6<(via_spacing if net!=other else drill+hole_gap+.002) for i,(net,v) in enumerate(vias) for other,q in vias[i+1:]):
+            if trace:bridge_failures['via_pair_spacing']+=1
+            continue
         def clear(net,x,y,w):
             return oracle.clear(net,k.B_Cu,x,y,w,pair=pair) and all(other==net or segment_distance(x,y,pt,pt)>=(diameter+w)/2+clearance+.001 for other,pt in vias)
         candidate_reference=pair_reference_validator(b,pair,rules,list(prior_vias)+vias,base_center=reference_validator.center) if reference_validator else None
-        if candidate_reference and any(not candidate_reference(paths,0) for paths in prior_reference):continue
-        remaining=cap-max(max(a['lengths'].values())+a.get('entry_budget_mm',0),max(z['lengths'].values()))
-        if remaining<=0:continue
+        if candidate_reference and any(not candidate_reference(paths,0) for paths in prior_reference):
+            if trace:bridge_failures['prior_reference_aperture']+=1
+            continue
+        if per_run:
+            head_prior=max(a['lengths'].values())+a.get('entry_budget_mm',0)+head_prior_mm+head_barrel(a);tail_after=max(z['lengths'].values())+barrel
+            search_head,search_tail,budget_pass=budget
+            # Each end's own run budget (exact arriving run, via port fanouts are
+            # never coupled): nothing left means no compliant bridge here.
+            head_rem,tail_rem=end_budgets(a,z)
+            if head_rem<=1e-6 or tail_rem<=1e-6:
+                if (id(a),id(z)) not in budget_skipped:bridge_failures['uncoupled_budget']+=1;budget_skipped.add((id(a),id(z)))
+                continue
+            # solve_pair's lane-shape scale stays the legacy shared value (its
+            # straight leads grow with it); the search budgets bound the fanouts.
+            remaining=legacy_budget(a,z)
+            if remaining<=0:remaining=min(head_rem,tail_rem)
+            # Reference trim: the legacy shared value at both ends (as src12b)
+            # unless PNR_PAIR_REF_TRIM_PER_END.
+            trim=(head_rem,tail_rem) if per_end_reference else (remaining,remaining)
+        else:
+            remaining=cap-max(max(a['lengths'].values())+a.get('entry_budget_mm',0),max(z['lengths'].values()))
+            if remaining<=0:continue
         totals={net:offsets.get(net,0)+a['lengths'][net]+z['lengths'][net]+(1 if a.get('reuse') else 2)*rules['electrical_fab']['board_thickness_mm'] for net in (p,n)}
         tuning_offsets=dict(totals);tuning_offsets[n]+=timing_target_mm
-        rr=solve_pair(p,n,{net:(a['sites'][net],z['sites'][net]) for net in (p,n)},bounds,clear,lambda x,y,w:oracle.clear(p,k.B_Cu,x,y,w,ignore_nets=(p,n)) and (candidate_reference is None or candidate_reference.center(tuple(x),tuple(y),w+gap)),width,gap,pair['skew_mm'],pitch=pitch,max_expansions=max_expansions,max_uncoupled=remaining,max_tuning_length=cap,offsets=tuning_offsets,accept_paths=(lambda paths:candidate_reference(paths,remaining)) if candidate_reference else None)
+        if per_run:
+            def accept(paths,trim=trim,head_prior=head_prior,tail_after=tail_after,reference=candidate_reference):
+                return (reference is None or reference(paths,*trim)) and leg_uncoupled_ok(pair,paths,head_prior,tail_after)
+            rr=solve_pair(p,n,{net:(a['sites'][net],z['sites'][net]) for net in (p,n)},bounds,clear,lambda x,y,w:oracle.clear(p,k.B_Cu,x,y,w,ignore_nets=(p,n)) and (candidate_reference is None or candidate_reference.center(tuple(x),tuple(y),w+gap)),width,gap,pair['skew_mm'],pitch=pitch,max_expansions=max_expansions,max_uncoupled=remaining,max_uncoupled_head=search_head,max_uncoupled_tail=search_tail,max_tuning_length=cap,offsets=tuning_offsets,accept_paths=accept)
+        else:rr=solve_pair(p,n,{net:(a['sites'][net],z['sites'][net]) for net in (p,n)},bounds,clear,lambda x,y,w:oracle.clear(p,k.B_Cu,x,y,w,ignore_nets=(p,n)) and (candidate_reference is None or candidate_reference.center(tuple(x),tuple(y),w+gap)),width,gap,pair['skew_mm'],pitch=pitch,max_expansions=max_expansions,max_uncoupled=remaining,max_tuning_length=cap,offsets=tuning_offsets,accept_paths=(lambda paths:candidate_reference(paths,remaining)) if candidate_reference else None)
         if rr['status']!='routed':
             bridge_failures.update(rr.get('failures',{}))
             if len(examples)<8:examples.append(dict(source=a,target=z,remaining=remaining,result=rr))
@@ -1102,10 +1507,176 @@ def pair_layer_bridge(b,pair,terminals,rules,oracle,bounds,pitch,offsets,reuse_s
             for group in (a,z):tracks.extend((net,k.F_Cu,x,y,width) for x,y in zip(group['paths'][net],group['paths'][net][1:]))
             tracks.extend((net,k.B_Cu,x,y,width) for x,y in zip(rr['paths'][net],rr['paths'][net][1:]))
         from pnr.route.detail.coupled import trim_path
-        rr['reference_paths']={net:trim_path(path,remaining,remaining) for net,path in rr['paths'].items()}
+        if per_run:
+            rr['reference_paths']={net:trim_path(path,*trim) for net,path in rr['paths'].items()}
+            rr['uncoupled_budget_mm']=dict(head=head_rem,tail=tail_rem,head_prior=head_prior,tail_after=tail_after,arriving=head_prior_mm,search_pass=budget_pass,search=[search_head,search_tail],reference_trim=list(trim))
+        else:rr['reference_paths']={net:trim_path(path,remaining,remaining) for net,path in rr['paths'].items()}
         rr.update(pair_tracks=tracks,pair_vias=[(net,group['sites'][net]) for group in (a,z) if not group.get('reuse') for net in (p,n)],bridge_target=z,selected_port_rank=successful,layer='B.Cu',via_diameter_mm=diameter,via_drill_mm=drill,fanout_lengths=[a['lengths'],z['lengths']])
         return rr
     return dict(status='pair_no_matched_layer_bridge',source_ports=len(starts),target_ports=len(ends),attempts=min(len(candidates),64),failures=dict(bridge_failures),examples=examples)
+
+def leg_uncoupled_ok(pair,paths,head_prior,tail_after):
+    """PNR_PAIR_PER_RUN_UNCOUPLED: re-measure one leg's continuous uncoupled runs.
+
+    paths: net -> centerline of this leg (one layer). The run leaving the leg's
+    source continues the head_prior mm already uncoupled there (arriving run and/or
+    source fanout); the run entering its target continues into tail_after mm
+    (target fanout). Every continuous run must stay within max_uncoupled_mm.
+    """
+    from pnr.route.detail.coupled import uncoupled_runs
+    cap=pair.get('max_uncoupled_mm',2);min_coupled=run_min_coupled_mm()
+    measured=uncoupled_runs({net:[(0,a,z) for a,z in zip(path,path[1:])] for net,path in paths.items()},pair['width_mm'],pair['gap_mm'],min_coupled=min_coupled)
+    for net,metric in measured.items():
+        runs=metric['runs']
+        for index,run in enumerate(runs):
+            total=run['length_mm']
+            if index==0 and metric['leading_mm']>0:total+=head_prior
+            if index==len(runs)-1 and metric['trailing_mm']>0:total+=tail_after
+            if total>cap+1e-6:return False
+        # No uncoupled stretch at all: the arriving and the departing runs only
+        # join through a leg shorter than the coupled length that separates runs.
+        span=sum(math.dist(a,z) for a,z in zip(paths[net],paths[net][1:]))
+        if not runs and span<min_coupled and head_prior+span+tail_after>cap+1e-6:return False
+    return True
+
+
+def route_uncoupled_runs(pair,tracks,vias,origins,ends,thickness,exempt=(),breaks=()):
+    """Continuous uncoupled runs along each net's exact endpoint path (src13).
+
+    tracks/vias as in _pair_plan_order; origins: net -> xy (F.Cu); ends: net ->
+    (xy, layer). exempt: tracks judged by their own limit (separately budgeted
+    connector branch); they end a run and are not counted. breaks: F.Cu points
+    (intermediate terminal pads, PNR_PAIR_RUN_BREAK_AT_PADS) where a run ends.
+    None if either endpoint graph is not a valid tree.
+    """
+    import pcbnew as k
+    from pnr.route.detail.coupled import path_steps,uncoupled_runs
+    from pnr.track_graph import on_segment
+    heights={k.F_Cu:0,k.B_Cu:thickness};steps={}
+    for net in (pair['p'],pair['n']):
+        metric=path_metrics([(la,a,z) for nn,la,a,z,w in tracks if nn==net],[(pt,[k.F_Cu,k.B_Cu]) for nn,pt in vias if nn==net],(tuple(origins[net]),k.F_Cu),(tuple(ends[net][0]),ends[net][1]),layer_heights=heights)
+        if not metric.get('valid'):return None
+        steps[net]=path_steps(metric['path'])
+    nm=lambda q:tuple(round(v*1e6) for v in q)
+    segments=[(la,nm(a),nm(z)) for nn,la,a,z,w in exempt]
+    def exempted(la,a,b):
+        a,b=nm(a),nm(b)
+        return any(la==el and on_segment(a,ea,eb) and on_segment(b,ea,eb) for el,ea,eb in segments)
+    stops={(k.F_Cu,*nm(q)) for q in breaks}
+    return uncoupled_runs(steps,pair['width_mm'],pair['gap_mm'],exempt=exempted if segments else None,breaks=(lambda la,q:(la,*nm(q)) in stops) if stops else None,min_coupled=run_min_coupled_mm(),barrel=run_barrel_mm(thickness))
+
+
+def run_report(runs):
+    """JSON form of route_uncoupled_runs: per net max and every run (mm, layer ids)."""
+    if runs is None:return None
+    def point(q):return None if q is None else [q[0],round(q[1],6),round(q[2],6)]
+    return {net:dict(max_mm=round(m['max_mm'],6),leading_mm=round(m['leading_mm'],6),trailing_mm=round(m['trailing_mm'],6),runs=[dict(length_mm=round(r['length_mm'],6),start=point(r['start']),end=point(r['end'])) for r in m['runs']]) for net,m in runs.items()}
+
+
+def pair_stub_metrics(pair,bylabel,tracks,vias,thickness,barrel=None,delay=None):
+    """Copper length from the trunk to each intermediate terminal pad (src13).
+
+    For every terminal_chain node between the first and the last: per net,
+    on_path (in line) and stub_mm = exact graph length from the endpoint path
+    (declared origin -> receiver) to the pad, a via barrel counting ``barrel``
+    mm (default: the board thickness; 0 under PNR_PAIR_STUB_PLANAR=1). The
+    endpoint path itself is always found with the real barrel lengths.
+    """
+    import pcbnew as k
+    from pnr.route.detail.coupled import branch_lengths
+    chain=pair['terminal_chain'];result={}
+    for node in chain[1:-1]:
+        values={};found_by_net={}
+        for net,key in ((pair['p'],'p'),(pair['n'],'n')):
+            origin,end,pad=(xy(bylabel[label].GetPosition()) for label in (chain[0][key],chain[-1][key],node[key]))
+            net_tracks=[(la,a,z) for nn,la,a,z,w in tracks if nn==net]
+            # Start at the pad centre and at every track vertex inside the pad's
+            # copper: the stub is the shortest copper from where it leaves the pad.
+            starts=[pad]+sorted({q for la,a,z in net_tracks if la==k.F_Cu for q in (tuple(a),tuple(z)) if q!=tuple(pad) and pad_contains(bylabel[node[key]],q,k.F_Cu)})
+            found=branch_lengths(net_tracks,[(pt,[k.F_Cu,k.B_Cu]) for nn,pt in vias if nn==net],(origin,k.F_Cu),(end,k.F_Cu),[(q,k.F_Cu) for q in starts],layer_heights={k.F_Cu:0,k.B_Cu:thickness},barrel=barrel)
+            if delay is not None:found_by_net[net]=(starts,found)
+            if found is None:values[net]=dict(valid=False);continue
+            f=found[0]
+            if f['stub_mm'] is None:values[net]=dict(on_path=f['on_path'],stub_mm=None);continue
+            # The stub ends where its copper enters the pad (decision 1: "to the
+            # D2 pad"); the track inside the pad's own copper is pad, not stub.
+            if any(g['on_path'] for g in found):stub=0.
+            else:stub=min(g['stub_mm']-pad_copper_length(bylabel[node[key]],None,k.F_Cu,leading=g.get('path') or []) for g in found if g['stub_mm'] is not None)
+            values[net]=dict(on_path=f['on_path'] or stub==0.,stub_mm=round(max(0.,stub),6),stub_centre_mm=round(f['stub_mm'],6))
+        if delay is not None:
+            # PNR_BUS_CLASSES delay limit: the same branches, read as copper delay to
+            # the pad centre with the via barrel included.
+            for net,key in ((pair['p'],'p'),(pair['n'],'n')):
+                values.setdefault(net,{}).update(stub_delay_metrics(pair,bylabel[node[key]],found_by_net.get(net),delay,thickness))
+        result[node['p']+'/'+node['n']]=values
+    return result
+
+
+def stub_delay_metrics(pair,pad,found,delay,thickness):
+    """stub_delay_ps (pad-centre reading, barrel included) of one terminal pad.
+
+    ``found``: (starts, branch_lengths results) of pair_stub_metrics for the pad;
+    each measured start is charged its straight distance to the pad centre on F.Cu
+    (0 for the centre itself). In line (any start on the endpoint path): 0 ps."""
+    import pcbnew as k
+    from pnr.si.bus_classes import path_delay
+    if not found or found[1] is None:return dict(stub_delay_ps=None,stub_delay_limit_ps=delay['max_ps'])
+    starts,results=found
+    names={k.F_Cu:'F.Cu',k.B_Cu:'B.Cu'}
+    centre=xy(pad.GetPosition());barrel_ps=float(delay['barrel_mm'])*float(delay['barrel_ps_per_mm']);best=None
+    if any(g['on_path'] for g in results):
+        return dict(stub_delay_ps=0.,stub_delay_limit_ps=delay['max_ps'],stub_delay_reading=delay.get('reading'))
+    for q,g in zip(starts,results):
+        if g['stub_mm'] is None or not g.get('path'):continue
+        ps,parts=path_delay(g['path'],lambda la:names.get(la,str(la)),delay['td_ps_per_mm'],barrel_ps,lead=(k.F_Cu,math.dist(q,centre)))
+        if best is None or ps<best[0]:best=(ps,parts)
+    if best is None:return dict(stub_delay_ps=None,stub_delay_limit_ps=delay['max_ps'])
+    return dict(stub_delay_ps=round(best[0],3),stub_delay_limit_ps=delay['max_ps'],stub_delay_path=best[1],stub_delay_reading=delay.get('reading'))
+
+
+def stub_over_delay(metrics,limit_ps):
+    return [name for name,values in metrics.items() for v in values.values() if v.get('stub_delay_ps') is None or v['stub_delay_ps']>limit_ps+1e-6]
+
+
+def pad_contains(pad,point,layer):
+    """True if ``point`` (mm) lies in the pad's copper on ``layer``."""
+    try:return bool(pad.GetEffectiveShape(layer).Collide(vec(point),0))
+    except Exception:return bool(pad.HitTest(vec(point)))
+
+
+def pad_copper_length(pad,points,layer,leading=None):
+    """Length of the polyline ``points`` (mm, starting inside the pad) that runs
+    inside the pad's copper on ``layer`` before it first leaves it (0 if it does
+    not start inside). ``leading``: the same path as graph nodes (layer, x_nm,
+    y_nm); only its leading run on ``layer`` is used (a via hop ends the walk)."""
+    if leading is not None:
+        points=[]
+        for la,x,y in leading:
+            if la!=layer:break
+            points.append((x/1e6,y/1e6))
+    total=0.
+    for a,z in zip(points,points[1:]):
+        span=math.dist(a,z)
+        if span<1e-12:continue
+        if not pad_contains(pad,a,layer):break
+        if pad_contains(pad,z,layer):total+=span;continue
+        lo,hi=0.,1.
+        for _ in range(40):
+            middle=(lo+hi)/2
+            if pad_contains(pad,(a[0]+middle*(z[0]-a[0]),a[1]+middle*(z[1]-a[1])),layer):lo=middle
+            else:hi=middle
+        total+=lo*span;break
+    return total
+
+
+def port_stub_mm(port,pads,layer):
+    """Stub a bridge port's surface fanout would leave (to where it enters the pad)."""
+    return max(port['lengths'][net]-(pad_copper_length(pads[net],port['paths'][net],layer) if port['paths'].get(net) else 0.) for net in pads)
+
+
+def stub_over_cap(metrics,cap):
+    return [name for name,values in metrics.items() for v in values.values() if v.get('stub_mm') is None or v['stub_mm']>cap+1e-6]
+
 
 def duplicate_endpoint_metrics(pair,bylabel,tracks,vias,thickness):
     """Measure every declared connector contact, including actual branch joins."""
@@ -1129,7 +1700,23 @@ def connector_origins_qualified(pair,metrics):
     return bool(metrics) and all(all(m.get('valid',False) for m in values.values()) and abs(values[pair['p']]['length_mm']-values[pair['n']]['length_mm'])<=pair['skew_mm']+1e-6 for values in metrics.values())
 
 
-def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order,topology=None):
+def surface_leg_graph_failure(pair,tracks,vias,paths,layer,origins,ends,thickness):
+    """None if planned pair copper plus one surface leg is a valid endpoint tree.
+
+    Same exact graph as the final endpoint check (pnr.route.detail.coupled.
+    path_metrics): tracks are (net,layer,a,z,width), vias (net,point), paths the
+    leg centerlines per net on `layer`; origins/ends are the declared chain origin
+    and this leg's end per net. Otherwise the first failing metric plus its net.
+    """
+    import pcbnew as k
+    for net in (pair['p'],pair['n']):
+        leg=[(layer,a,z) for a,z in zip(paths[net],paths[net][1:])]
+        metric=path_metrics([(la,a,z) for nn,la,a,z,w in tracks if nn==net]+leg,[(pt,[k.F_Cu,k.B_Cu]) for nn,pt in vias if nn==net],(tuple(origins[net]),k.F_Cu),(tuple(ends[net]),k.F_Cu),layer_heights={k.F_Cu:0,k.B_Cu:thickness})
+        if not metric.get('valid'):return dict(net=net,reason=metric.get('reason'),connected=metric.get('connected'))
+    return None
+
+
+def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order,topology=None,limits=None):
     import pcbnew as k
     topology=topology or {};hand=topology.get('bridge_hand',0);takeoff=topology.get('takeoff','auxiliary_source')
     p,n=pair['p'],pair['n'];pads=[pad for f in b.GetFootprints() for pad in f.Pads() if pad.GetNetname() in (p,n)]
@@ -1187,6 +1774,7 @@ def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order,topology=N
                     vias.append((net,a[:2]));oracle.reserve_via(net,a[:2],diameter,drill)
         if abs(lengths[p]-lengths[n])>pair['skew_mm']:return dict(status='pair_auxiliary_skew',lengths=lengths)
         auxiliary.append(lengths);branch_paths.append(group_paths)
+    auxiliary_tracks=list(tracks)
     routing_endpoints=[dict(t) for t in endpoints]
     for group,branch_lengths in zip(pair.get('auxiliary_pairs',[]),auxiliary):
         if group['target']==routing_endpoints[0]:
@@ -1200,7 +1788,37 @@ def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order,topology=N
         if found is None:return dict(status='pair_joint_missing_connector_group')
         joint=branch_join_port(pair,found,oracle,rules,topology.get('join_fraction',.5),budget_scope=topology.get('auxiliary_budget_scope','combined'))
         if joint['status']!='routed':return joint
-        joint_source_port=joint['port'];accumulated=joint['declared_offsets']
+        joint_source_port=joint['port'];accumulated=joint['declared_offsets'];join_paths=found
+    post_bridge=post_bridge_surface_enabled();post_bridge_legs=[]
+    per_run=per_run_uncoupled_enabled();stub_cap=stub_max_mm();cap=pair.get('max_uncoupled_mm',2);thickness=rules['electrical_fab']['board_thickness_mm']
+    stub_delay=None
+    if os.environ.get('PNR_BUS_CLASSES')=='1':
+        # PNR_BUS_CLASSES: the pair's class/annotation stub limit (PNR_PAIR_STUB_MAX_MM
+        # is the explicit override). A delay limit searches with an mm cap no stub
+        # within it can exceed; the final check is the delay (pnr.si.bus_classes).
+        from pnr.si.bus_classes import router_stub_rule
+        stub_cap,stub_delay,_=router_stub_rule(pair,stub_cap)
+    # pair_plan's in-line hunt (PNR_PAIR_EARLY_EXIT + PNR_PAIR_PREFER_INLINE after a
+    # stub route): no stub (cap 0) and no more vias than the stub route has.
+    limits=limits or {}
+    if 'stub_cap' in limits:stub_cap=limits['stub_cap'] if stub_cap is None else min(stub_cap,limits['stub_cap'])
+    max_vias=limits.get('max_vias')
+    barrel=run_barrel_mm(thickness) if per_run else 0.  # PNR_PAIR_RUN_BARREL
+    trace=src13_trace_enabled()  # where a timed-out search was (pair_plan reports it)
+    # PNR_PAIR_RUN_BREAK_AT_PADS: intermediate terminal pads end a continuous run.
+    breaks=[xy(bylabel[node[key]].GetPosition()) for node in endpoints[1:-1] for key in ('p','n')] if per_run and run_break_at_pads_enabled() else []
+    origins={net:xy(bylabel[endpoints[0][key]].GetPosition()) for net,key in ((p,'p'),(n,'n'))}
+    # PNR_PAIR_PER_RUN_UNCOUPLED measures the declared origin's endpoint path in
+    # full: nothing on it is exempt. The duplicate contact's own leg (auxiliary
+    # source -> join) is never on that path and keeps its authored max_length_mm;
+    # the declared contact's leg to the join via is part of the first continuous
+    # run (review fix: every auxiliary track was exempt before, that leg included).
+    exempt_tracks=[]
+    def arriving(points,layer):
+        # PNR_PAIR_PER_RUN_UNCOUPLED: uncoupled run already present at a junction.
+        runs=route_uncoupled_runs(pair,tracks,vias,origins,{net:(points[net],layer) for net in (p,n)},thickness,exempt_tracks,breaks)
+        return cap if runs is None else max(runs[net]['trailing_mm'] for net in (p,n))
+    stub_skips=[]
     for stage,(first,last) in enumerate(zip(routing_endpoints,routing_endpoints[1:])):
         if stage:
             actual={} 
@@ -1222,18 +1840,110 @@ def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order,topology=N
             terminals[net]=(xy(a.GetPosition()),xy(z.GetPosition()))
         def clear(net,a,z,width):return oracle.clear(net,la,a,z,width,pair=pair)
         def envelope(a,z,width):return oracle.clear(p,la,a,z,width,ignore_nets=(p,n)) and reference_validator.center(tuple(a),tuple(z),width+pair['gap_mm'])
-        result=dict(status='joint_source_via_requested') if (stage==0 and joint_source_port) else solve_pair(p,n,terminals,bounds,clear,envelope,pair['width_mm'],pair['gap_mm'],pair['skew_mm'] if stage==len(endpoints)-2 else 1e9,pitch=pitch,max_expansions=30000,max_attempts=128,max_uncoupled=pair.get('max_uncoupled_mm',2),offsets=accumulated,accept_paths=lambda paths:reference_validator(paths,pair.get('max_uncoupled_mm',2)))
+        def surface(leg_terminals,leg_offsets,prior=0.):
+            if not per_run:
+                return solve_pair(p,n,leg_terminals,bounds,clear,envelope,pair['width_mm'],pair['gap_mm'],pair['skew_mm'] if stage==len(endpoints)-2 else 1e9,pitch=pitch,max_expansions=30000,max_attempts=128,max_uncoupled=pair.get('max_uncoupled_mm',2),offsets=leg_offsets,accept_paths=lambda paths:reference_validator(paths,pair.get('max_uncoupled_mm',2)))
+            # PNR_PAIR_PER_RUN_UNCOUPLED: the source fanout continues the run of
+            # `prior` mm already uncoupled at the start junction.
+            head_cap=cap-prior
+            if head_cap<=1e-6:return dict(status='pair_uncoupled_budget',arriving_mm=prior)
+            # The leg is judged against the plane as the post-fill check will
+            # see it: with the clearance apertures of the vias already planned
+            # (a bridge's vias next to the pad), as pair_layer_bridge judges its
+            # own candidates. This rejects only legs the post-fill check would.
+            validator=pair_reference_validator(b,pair,rules,list(vias),base_center=reference_validator.center) if vias else reference_validator
+            def leg_envelope(a,z,width):return oracle.clear(p,la,a,z,width,ignore_nets=(p,n)) and validator.center(tuple(a),tuple(z),width+pair['gap_mm'])
+            # Reference trim: legacy (cap at both ends) unless PNR_PAIR_REF_TRIM_PER_END.
+            ref_trim=(head_cap,cap) if ref_trim_per_end_enabled() else (cap,cap)
+            # The fanout search keeps the legacy geometric bound (cap at both ends):
+            # a fanout is only partly uncoupled, so head_cap would exclude
+            # compliant legs (review fix: g1c04's in-line leg). The exact
+            # measurement with the arriving run decides (leg_uncoupled_ok).
+            leg=solve_pair(p,n,leg_terminals,bounds,clear,leg_envelope,pair['width_mm'],pair['gap_mm'],pair['skew_mm'] if stage==len(endpoints)-2 else 1e9,pitch=pitch,max_expansions=30000,max_attempts=128,max_uncoupled=cap,max_uncoupled_head=cap,max_uncoupled_tail=cap,offsets=leg_offsets,accept_paths=lambda paths:validator(paths,*ref_trim) and leg_uncoupled_ok(pair,paths,prior,0.))
+            if leg['status']=='routed':leg['uncoupled_budget_mm']=dict(head=head_cap,tail=cap,arriving=prior);leg['reference_trim_mm']=list(ref_trim)
+            return leg
+        # The run arriving at this stage's source pad (none at a run-breaking pad).
+        pad_prior=arriving({net:terminals[net][0] for net in (p,n)},la) if per_run and stage and not breaks else 0.
+        if per_run and stage==0 and joint_source_port and joint_source_port.get('auxiliary_budget_scope')=='separate':
+            # The declared contact's own leg to the join via arrives at the join
+            # (its measured trailing uncoupled run; the whole leg if unmeasurable)
+            # and continues into the stage-0 bridge head.
+            join_layer={net:(k.F_Cu,k.B_Cu)[join_paths[net][0][2]] for net in (p,n)}
+            runs=route_uncoupled_runs(pair,tracks,vias,origins,{net:(joint_source_port['sites'][net],join_layer[net]) for net in (p,n)},thickness,exempt_tracks,breaks)
+            pad_prior=max(runs[net]['trailing_mm'] for net in (p,n)) if runs is not None else max(accumulated.values())
+        stage_pads={net:bylabel[first[key]] for net,key in ((p,'p'),(n,'n'))}
+        if trace:oracle.progress=dict(stage=stage,step='surface')
+        def leg_graph_failure(leg):
+            # PNR_PAIR_POST_BRIDGE_SURFACE: the leg must leave the planned copper
+            # a valid endpoint tree (the final check would reject a loop anyway).
+            return surface_leg_graph_failure(pair,tracks,vias,leg['paths'],la,{net:xy(bylabel[endpoints[0][key]].GetPosition()) for net,key in ((p,'p'),(n,'n'))},{net:terminals[net][1] for net in (p,n)},rules['electrical_fab']['board_thickness_mm'])
+        result=dict(status='joint_source_via_requested') if (stage==0 and joint_source_port) else surface(terminals,accumulated,pad_prior)
+        if post_bridge and result['status']=='routed':
+            broken=leg_graph_failure(result)
+            if broken:
+                post_bridge_legs.append(dict(stage=stage,start='pad',status='pair_surface_leg_cycle',net=broken['net'],reason=broken.get('reason')))
+                result=dict(status='pair_surface_leg_cycle',net=broken['net'],reason=broken.get('reason'))
+            elif metrics and metrics[-1].get('bridge_target'):post_bridge_legs.append(dict(stage=stage,start='pad',status='routed'))
+        if post_bridge and result['status']!='routed' and metrics and metrics[-1].get('bridge_target'):
+            # Start the surface leg at the previous bridge's via pair; its
+            # via-to-pad fanout stays as the intermediate device's stub (the
+            # topology of the bridge-to-bridge reuse below, without new vias).
+            old=metrics[-1]['bridge_target']
+            via_terminals={net:(tuple(old['sites'][net]),terminals[net][1]) for net in (p,n)}
+            via_offsets={net:accumulated[net]-old['lengths'][net] for net in (p,n)}
+            # The stub this leg would leave: the via-to-pad fanout up to where it
+            # enters the pad (as pair_stub_metrics measures it).
+            fanout_stub=port_stub_mm(old,stage_pads,la) if stub_cap is not None else None
+            if stub_cap is not None and fanout_stub>stub_cap+1e-9:
+                # PNR_PAIR_STUB_MAX_MM: this leg would leave the via-to-pad
+                # fanout as the intermediate terminal's stub.
+                alternative=dict(status='pair_stub_limit',stub_mm=fanout_stub)
+                stub_skips.append(dict(stage=stage,start='bridge_vias',stub_mm=round(fanout_stub,6)))
+            else:
+                if trace:oracle.progress=dict(stage=stage,step='via_start')
+                # PNR_PAIR_RUN_BARREL: the hop from the B.Cu trunk up to the leg.
+                alternative=surface(via_terminals,via_offsets,arriving(old['sites'],k.B_Cu)+barrel if per_run else 0.)
+            record=dict(stage=stage,start='bridge_vias',status=alternative['status'],sites={net:via_terminals[net][0] for net in (p,n)})
+            if alternative['status']=='routed':
+                broken=leg_graph_failure(alternative)
+                if broken:
+                    record.update(status='pair_surface_leg_cycle',net=broken['net'],reason=broken.get('reason'))
+                    alternative=dict(status='pair_surface_leg_cycle')
+            else:record['failures']=alternative.get('failures',{})
+            post_bridge_legs.append(record)
+            if alternative['status']=='routed':
+                alternative['post_bridge_start']=dict(sites={net:via_terminals[net][0] for net in (p,n)},stub_lengths=dict(old['lengths']))
+                result=alternative
+            else:result=dict(result,post_bridge_via_start=record)
         if result['status']!='routed':
             surface_failure=result
             reuse=(joint_source_port if stage==0 else None);bridge_offsets=accumulated
+            bridge_prior=pad_prior
             if metrics and metrics[-1].get('bridge_target'):
                 old=metrics[-1]['bridge_target']
                 reuse=dict(sites=old['sites'],paths={net:[] for net in (p,n)},lengths={net:0 for net in (p,n)},reuse=True)
                 # The prior surface leg becomes an ESD stub, not a round trip
                 # in the connector-to-receiver timing path.
                 bridge_offsets={net:accumulated[net]-old['lengths'][net]-rules['electrical_fab']['board_thickness_mm'] for net in (p,n)}
-            result=pair_layer_bridge(b,pair,terminals,rules,oracle,bounds,pitch,bridge_offsets,reuse_source=reuse,reference_validator=reference_validator,prior_reference=[m["reference_paths"] for m in metrics],prior_vias=vias,solution_index=topology.get("target_port_rank",0) if stage==0 else 0,max_expansions=60000 if stage and takeoff=='bridge_join_via' else 15000,timing_target_mm=topology.get("prefix_timing_target_mm",0) if stage==0 else 0)
-            if result['status']!='routed':return dict(result,failed_stage=stage,terminals=terminals,surface_failure=surface_failure,planned_tracks=tracks,joint_source_port=joint_source_port)
+                if per_run:bridge_prior=arriving(old['sites'],k.B_Cu)
+                if stub_cap is not None and stub_barrel_mm(thickness)+port_stub_mm(old,stage_pads,la)>stub_cap+1e-9:
+                    # PNR_PAIR_STUB_MAX_MM: reusing the vias leaves barrel +
+                    # fanout as the terminal's stub. Bridge from the terminal
+                    # pad itself instead (terminal in line).
+                    stub_skips.append(dict(stage=stage,start='via_reuse',stub_mm=round(stub_barrel_mm(thickness)+port_stub_mm(old,stage_pads,la),6)))
+                    reuse=None;bridge_offsets=accumulated;bridge_prior=pad_prior
+            extra_bridge={}
+            if per_run:extra_bridge['head_prior_mm']=bridge_prior
+            if stub_cap is not None and stage<len(routing_endpoints)-2:
+                extra_bridge['target_stub_cap']=stub_cap
+                target_pads={net:bylabel[last[key]] for net,key in ((p,'p'),(n,'n'))}
+                extra_bridge['target_stub_length']=lambda port,target_pads=target_pads:port_stub_mm(port,target_pads,la)
+            if max_vias is not None and len(vias)+(2 if (reuse and reuse.get('reuse')) else 4)>max_vias:
+                # In-line hunt: this bridge would need more vias than the stub route.
+                return dict(status='pair_via_limit',failed_stage=stage,max_vias=max_vias,planned_vias=len(vias),surface_failure=surface_failure,**({'stub_skips':stub_skips} if stub_cap is not None else {}))
+            if trace:oracle.progress=dict(stage=stage,step='bridge',reuse=bool(reuse and reuse.get('reuse')),joint=bool(stage==0 and joint_source_port))
+            result=pair_layer_bridge(b,pair,terminals,rules,oracle,bounds,pitch,bridge_offsets,reuse_source=reuse,reference_validator=reference_validator,prior_reference=[m["reference_paths"] for m in metrics],prior_vias=vias,solution_index=topology.get("target_port_rank",0) if stage==0 else 0,max_expansions=60000 if stage and takeoff=='bridge_join_via' else 15000,timing_target_mm=topology.get("prefix_timing_target_mm",0) if stage==0 else 0,**extra_bridge)
+            if result['status']!='routed':return dict(result,failed_stage=stage,terminals=terminals,surface_failure=surface_failure,planned_tracks=tracks,joint_source_port=joint_source_port,**({'post_bridge_legs':post_bridge_legs} if post_bridge else {}),**({'stub_skips':stub_skips} if stub_cap is not None else {}))
         if result.get('pair_tracks'):
             metrics.append(result);accumulated=dict(result['lengths'])
             tracks.extend(result['pair_tracks']);vias.extend(result['pair_vias'])
@@ -1242,7 +1952,8 @@ def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order,topology=N
             continue
         from pnr.route.detail.coupled import trim_path
         cap=pair.get('max_uncoupled_mm',2)
-        result['reference_paths']={net:trim_path(path,cap,cap) for net,path in result['paths'].items()}
+        if per_run and ref_trim_per_end_enabled():result['reference_paths']={net:trim_path(path,result['uncoupled_budget_mm']['head'],result['uncoupled_budget_mm']['tail']) for net,path in result['paths'].items()}
+        else:result['reference_paths']={net:trim_path(path,cap,cap) for net,path in result['paths'].items()}
         metrics.append(result)
         accumulated=dict(result['lengths'])
         for net,path in result['paths'].items():
@@ -1274,11 +1985,29 @@ def _pair_plan_order(b,pair,rules,oracle,bounds,pitch,auxiliary_order,topology=N
     for net,key in ((p,'p'),(n,'n')):
         first,last=bylabel[endpoints[0][key]],bylabel[endpoints[-1][key]]
         endpoint_metrics[net]=path_metrics([(la,a,z) for nn,la,a,z,w in tracks if nn==net],[(pt,[k.F_Cu,k.B_Cu]) for nn,pt in vias if nn==net],(xy(first.GetPosition()),k.F_Cu),(xy(last.GetPosition()),k.F_Cu),layer_heights={k.F_Cu:0,k.B_Cu:rules['electrical_fab']['board_thickness_mm']})
-    if not all(v.get('valid') for v in endpoint_metrics.values()):return dict(status='pair_endpoint_graph_invalid',endpoint_metrics=endpoint_metrics)
-    if abs(endpoint_metrics[p]['length_mm']-endpoint_metrics[n]['length_mm'])>pair['skew_mm']+1e-6:return dict(status='pair_endpoint_skew',endpoint_metrics=endpoint_metrics)
+    trace={'post_bridge_legs':post_bridge_legs} if post_bridge else {}
+    if stub_cap is not None:trace['stub_skips']=stub_skips
+    if not all(v.get('valid') for v in endpoint_metrics.values()):return dict(status='pair_endpoint_graph_invalid',endpoint_metrics=endpoint_metrics,**trace)
+    if abs(endpoint_metrics[p]['length_mm']-endpoint_metrics[n]['length_mm'])>pair['skew_mm']+1e-6:return dict(status='pair_endpoint_skew',endpoint_metrics=endpoint_metrics,**trace)
     duplicate_metrics=duplicate_endpoint_metrics(pair,bylabel,tracks,vias,rules['electrical_fab']['board_thickness_mm'])
-    if not connector_origins_qualified(pair,duplicate_metrics):return dict(status='pair_duplicate_endpoint_skew',endpoint_metrics=endpoint_metrics,connector_endpoint_metrics=duplicate_metrics)
-    return dict(status='routed',pair_tracks=tracks,pair_vias=vias,segments=metrics,auxiliary=auxiliary,topology=topology,joint_source_port=joint_source_port,endpoint_metrics=endpoint_metrics,connector_endpoint_metrics=duplicate_metrics,mode='pair',via_diameter_mm=diameter,via_drill_mm=drill,impedance_qualified=False)
+    if not connector_origins_qualified(pair,duplicate_metrics):return dict(status='pair_duplicate_endpoint_skew',endpoint_metrics=endpoint_metrics,connector_endpoint_metrics=duplicate_metrics,**trace)
+    if per_run:
+        # PNR_PAIR_PER_RUN_UNCOUPLED: every continuous uncoupled run of the
+        # final endpoint path (connector origin -> receiver) within the cap.
+        runs=route_uncoupled_runs(pair,tracks,vias,origins,{net:(xy(bylabel[endpoints[-1][key]].GetPosition()),k.F_Cu) for net,key in ((p,'p'),(n,'n'))},thickness,exempt_tracks,breaks)
+        trace['uncoupled_run_metrics']=run_report(runs)
+        if runs is None or any(m['max_mm']>cap+1e-6 for m in runs.values()):return dict(status='pair_uncoupled_run_limit',endpoint_metrics=endpoint_metrics,connector_endpoint_metrics=duplicate_metrics,**trace)
+    if stub_cap is not None and stub_delay is not None:
+        # PNR_BUS_CLASSES delay limit (barrel included, pad centre); the in-line hunt's
+        # mm cap (limits['stub_cap'] = 0) still applies on top.
+        trace['stub_metrics']=pair_stub_metrics(pair,bylabel,tracks,vias,thickness,barrel=thickness,delay=stub_delay)
+        over=stub_over_delay(trace['stub_metrics'],float(stub_delay['max_ps']))
+        if 'stub_cap' in limits:over=over or stub_over_cap(trace['stub_metrics'],limits['stub_cap'])
+        if over:return dict(status='pair_stub_limit',endpoint_metrics=endpoint_metrics,connector_endpoint_metrics=duplicate_metrics,**trace)
+    elif stub_cap is not None:
+        trace['stub_metrics']=pair_stub_metrics(pair,bylabel,tracks,vias,thickness,barrel=stub_barrel_mm(thickness))
+        if stub_over_cap(trace['stub_metrics'],stub_cap):return dict(status='pair_stub_limit',endpoint_metrics=endpoint_metrics,connector_endpoint_metrics=duplicate_metrics,**trace)
+    return dict(status='routed',pair_tracks=tracks,pair_vias=vias,segments=metrics,auxiliary=auxiliary,topology=topology,joint_source_port=joint_source_port,endpoint_metrics=endpoint_metrics,connector_endpoint_metrics=duplicate_metrics,mode='pair',via_diameter_mm=diameter,via_drill_mm=drill,impedance_qualified=False,**trace)
 
 def screen_pair_placements(board_path,rules,pair,proposals,bounds):
     """Order legal placement proposals by exact paired escape availability.

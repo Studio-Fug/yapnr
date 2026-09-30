@@ -1,4 +1,8 @@
-"""Candidate junctions for a duplicated-contact differential connector tree."""
+"""Candidate junctions for a duplicated-contact differential connector tree.
+
+src13: hand_first_order / first_joint_hand expose the worker's joint ordering so
+paired_bootstrap (PNR_PAIR_HAND_SWAP_TRIAL) derives which hand runs first.
+"""
 import math
 
 
@@ -90,3 +94,30 @@ def joint_topologies(pair, positions, *, max_trials=6, budget_scope="separate"):
                     join_fraction=fraction, prefix_timing_target_mm=target,
                     auxiliary_budget_scope=budget_scope))
     return candidates[:max_trials]
+
+
+def hand_first_order(joint, first):
+    """PNR_PAIR_JOINT_HAND_FIRST=+1|-1: within each (join fraction, timing target)
+    seed the named bridge hand runs first. Empty/None keeps the enumeration order
+    (pnr.native_electrical.pair_plan applies this to joint_topologies)."""
+    if not first:
+        return joint
+    hand = int(first)
+    if hand not in (-1, 1):
+        raise ValueError('PNR_PAIR_JOINT_HAND_FIRST must be +1 or -1')
+    seeds = {}
+    for c in joint:
+        seeds.setdefault((c.get('join_fraction'), c.get('prefix_timing_target_mm')), len(seeds))
+    return sorted(joint, key=lambda c: (seeds[c.get('join_fraction'), c.get('prefix_timing_target_mm')], c.get('bridge_hand') != hand))
+
+
+def first_joint_hand(pair, positions, *, hand_first=None, max_trials=6, budget_scope="separate"):
+    """Bridge hand of the first joint configuration pair_plan will run, or None.
+
+    Derived from the same enumeration and ordering the worker uses
+    (joint_topologies + hand_first_order), so a caller that wants the other hand
+    first (paired_bootstrap PNR_PAIR_HAND_SWAP_TRIAL) never has to assume it.
+    None when the pair has no joint-topology configuration at all.
+    """
+    joint = hand_first_order(joint_topologies(pair, positions, max_trials=max_trials, budget_scope=budget_scope), hand_first)
+    return joint[0]['bridge_hand'] if joint else None

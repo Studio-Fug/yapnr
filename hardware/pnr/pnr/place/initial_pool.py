@@ -6,6 +6,9 @@ board-wide stratified/Latin-hypercube starts. Legal candidates are screened by
 width-aware demand and multilayer capacity, with pose diversity retained before
 an equal-budget detailed-routing comparison. Native/electrical validation remains
 downstream: this module chooses a starting placement, never a finished PCB.
+
+PNR_PAIR_LANDING_RESERVE=1 (src13, default off): the prepared source graph (flat
+MC placement and hierarchical_place) carries the diff-pair via landing reserves.
 """
 from __future__ import annotations
 
@@ -80,6 +83,12 @@ def _prepared_source(graph, constraints, rules=None):
         from pnr.plane_intent import reserve_array_space
         reserve_array_space(source, rules["plane_access_intents"], rules["plane_access_fab"],
                             rules.get("fab", {}).get("edge_clearance_mm", .2))
+    from .pair_landing import enabled as landing_enabled
+    if rules and landing_enabled():
+        # PNR_PAIR_LANDING_RESERVE=1: the prepared source (flat MC placement and
+        # hierarchical_place's block/macro source) carries the pair landing reserves.
+        from .pair_landing import attach
+        attach(source, rules)
     width, height = outline_size(source, constraints)
     source.outline = BoardOutline(width, height)
     return source
@@ -342,7 +351,7 @@ def select_initial_placement(graph, constraints, rules, *, config=None, seed=0,
                         # global arrangement and legalize the new large-scale basin.
                         # This extra bounded attempt is reported, not called a new
                         # independent optimized global placement.
-                        from .legalize import legalize
+                        from .legalize import legalize, pad_edge_rule
                         from .channels import ChannelModel
                         seed_graph=copy.deepcopy(legal[0]['graph'])
                         poses=resolve_fixed_poses(seed_graph,placement_constraints)
@@ -358,7 +367,9 @@ def select_initial_placement(graph, constraints, rules, *, config=None, seed=0,
                         group_edges=hard_group_edges(placement_constraints),rotations=resolve_hard_rotations(placement_constraints),
                             clearance=placement_constraints.board.default_clearance_mm,grid_mm=.25,
                             allow_rotation=orient,channel_model=ChannelModel(seed_graph,rules),
-                            spread=min(spread,1.3))
+                            spread=min(spread,1.3),
+                            **({} if pad_edge_rule(placement_constraints,rules) is None else
+                               dict(pad_edge=pad_edge_rule(placement_constraints,rules))))
                         prep=PlacementReport(placed.outline.width,placed.outline.height,
                             hpwl(source),hpwl(placed),**hard_violations(placed,constraints))
                 errors = _hard_and_source_errors(placed, source, constraints)

@@ -11,6 +11,7 @@ from collections import Counter
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -303,7 +304,7 @@ def main():
     ap.add_argument('--annotation-source', action='append', type=Path, default=[])
     ap.add_argument('--report', required=True, type=Path)
     ap.add_argument('--work-dir', type=Path)
-    ap.add_argument('--kicad-cli', default='kicad-cli')
+    ap.add_argument('--kicad-cli', default=os.environ.get('PNR_KICAD_CLI', 'kicad-cli'))  # PNR_KICAD_CLI (src15)
     ap.add_argument('--radius', type=float, default=1.5)
     ap.add_argument('--max-trials', type=int, default=64)
     ap.add_argument('--worker', choices=['inventory', 'trial', 'check', 'prune', 'cycle-inventory', 'cycle-trial'])

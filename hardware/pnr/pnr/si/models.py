@@ -107,6 +107,8 @@ class Library:
                 self.parts, self.parts_sha = data, sha256_bytes(raw)
                 self.parts_path = path
                 continue
+            if schema == 'pnr-bus-classes':
+                continue  # src15: bus-type classes (pnr.si.bus_classes), not a simulation model
             m = re.match(r'pnr-si-(\w+)-v1$', schema)
             if not m or m.group(1) not in KINDS:
                 raise ModelError('unknown SI model schema %r in %s' % (schema, path))

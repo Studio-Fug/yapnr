@@ -21,6 +21,7 @@ are warnings, not errors, so the file can grow without breaking older boards.
 from __future__ import annotations
 
 import fnmatch
+import os
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
@@ -189,6 +190,9 @@ class DiffPair:
     width_mm: Optional[float] = None
     gap_mm: Optional[float] = None
     skew_mm: float = 0.5  # max acceptable + / - routed-length difference
+    # PNR_BUS_CLASSES=1 only: ``_defaulted`` (a plain attribute, not a dataclass
+    # field, so asdict() is unchanged) names the fields the constraint file left to
+    # their defaults; a bus class (pnr.si.bus_classes) may derive those.
 
 
 @dataclass
@@ -352,6 +356,7 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
                 "width_mm": dp.width_mm,
                 "gap_mm": dp.gap_mm,
                 "skew_mm": dp.skew_mm,
+                **({"defaulted": list(dp._defaulted)} if getattr(dp, "_defaulted", ()) else {}),
             }
             for dp in compiled.diff_pairs
             if dp.p in names and dp.n in names
@@ -729,16 +734,17 @@ def compile_constraints(doc: Dict, known_refs: Sequence[str], addresses=None, pi
         entry = entry or {}
         if not entry.get("p") or not entry.get("n"):
             raise ConstraintError(f"diff_pair {entry.get('name')!r}: needs 'p' and 'n' nets")
-        diff_pairs.append(
-            DiffPair(
-                name=str(entry.get("name") or f"{entry['p']}/{entry['n']}"),
-                p=str(entry["p"]),
-                n=str(entry["n"]),
-                width_mm=_opt_float(entry.get("width_mm")),
-                gap_mm=_opt_float(entry.get("gap_mm")),
-                skew_mm=float(entry.get("skew_mm", 0.5)),
-            )
+        dp = DiffPair(
+            name=str(entry.get("name") or f"{entry['p']}/{entry['n']}"),
+            p=str(entry["p"]),
+            n=str(entry["n"]),
+            width_mm=_opt_float(entry.get("width_mm")),
+            gap_mm=_opt_float(entry.get("gap_mm")),
+            skew_mm=float(entry.get("skew_mm", 0.5)),
         )
+        if os.environ.get("PNR_BUS_CLASSES") == "1":
+            dp._defaulted = tuple(k for k in ("skew_mm",) if k not in entry)
+        diff_pairs.append(dp)
 
     # length_match: groups whose routed lengths must agree within a tolerance.
     length_matches: List[LengthMatch] = []

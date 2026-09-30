@@ -33,6 +33,20 @@ def bounds(graph,row,rotation):
     return (min(x.left for x in rs),min(x.bottom for x in rs),max(x.right for x in rs),max(x.top for x in rs))
 
 
+def pad_edge_along(graph,row,rotation,edge,lo,hi,pad_edge,width,height):
+    """PNR_PAD_EDGE_CLEARANCE=1: narrow the along-edge interval [lo, hi] of the row
+    centre so every member's pads and drills keep the fab edge rules from the two
+    perpendicular edges (a row end at a corner). The facing edge stays flush, as
+    the row relation requires."""
+    from .legalize import pad_edge_box
+    for ref,(dx,dy) in offsets(graph,row,rotation).items():
+        c=copy.copy(graph.component(ref));c.pos=(dx,dy);c.rot=float(rotation)
+        x_lo,x_hi,y_lo,y_hi=pad_edge_box(c,pad_edge,width,height)
+        if edge in ('north','south'):lo,hi=max(lo,x_lo-dx),min(hi,x_hi-dx)
+        else:lo,hi=max(lo,y_lo-dy),min(hi,y_hi-dy)
+    return lo,hi
+
+
 def violations(graph,constraints,tolerance=.250001):
     """Validate original source relationships after sampling, routing or moves."""
     width,height=outline_size(graph,constraints);bad=[]
@@ -48,12 +62,14 @@ def violations(graph,constraints,tolerance=.250001):
     return sorted(set(bad))
 
 
-def sample_constraints(graph,constraints,seed,attempts=96):
+def sample_constraints(graph,constraints,seed,attempts=96,pad_edge=None):
     """Sample a collision-free joint edge configuration; deterministic by seed.
 
     Covers every cardinal edge across consecutive seeds. Within an edge it samples
     the legal translation interval; different seeds supply different combinations.
     No design source is mutated and no exact source fixed pose is released here.
+    ``pad_edge`` ((copper, hole) mm, PNR_PAD_EDGE_CLEARANCE=1; None = off) keeps
+    row-end pads and drills off the perpendicular edges (:func:`pad_edge_along`).
     """
     from .legalize import LegalizationError
     rows=[c for c in constraints.constraints if c.kind=='row']
@@ -70,6 +86,9 @@ def sample_constraints(graph,constraints,seed,attempts=96):
             edge=rng.choice(edges(row,rotation));left,bottom,right,top=bounds(work,row,rotation)
             if right-left>width or top-bottom>height:ok=False;break
             lo,hi=(-left,width-right) if edge in ('north','south') else (-bottom,height-top)
+            if pad_edge is not None:
+                lo,hi=pad_edge_along(work,row,rotation,edge,lo,hi,pad_edge,width,height)
+                if lo>hi+1e-9:ok=False;break
             along=lo+(hi-lo)*rng.random()
             center=(along,-bottom if edge=='south' else height-top) if edge in ('north','south') else (-left if edge=='west' else width-right,along)
             off=offsets(work,row,rotation);new=[]

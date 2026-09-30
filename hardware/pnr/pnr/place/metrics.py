@@ -3,6 +3,10 @@
 These score a :class:`pnr.graph.BoardGraph`'s current placement and back the
 Phase 2 acceptance test: half-perimeter wirelength (the quality number), plus the
 hard-legality checks (overlaps, outline containment, fixed poses, keep-outs).
+
+PNR_PAIR_LANDING_RESERVE=1 (src13): overlap_pairs / hard_violations /
+translation_checker see diff-pair via landing reserves through placement_rects
+(a bottom part over a top terminal part's landing is an overlap).
 """
 
 from __future__ import annotations
@@ -70,6 +74,23 @@ def outside_outline(graph: BoardGraph, width: float, height: float, exclude=()) 
         for c in graph.components
         if c.ref not in ex and not courtyard_rect(c).inside(width, height)
     ]
+
+
+def pad_edge_violations(graph: BoardGraph, width: float, height: float, pad_edge, exclude=()) -> List[str]:
+    """Refs (not in ``exclude``) whose pads come closer than ``pad_edge[0]`` or
+    whose drills closer than ``pad_edge[1]`` to the ``[0,width] x [0,height]``
+    outline (PNR_PAD_EDGE_CLEARANCE=1; see pnr.place.legalize.pad_edge_box)."""
+    from .legalize import pad_edge_box
+    ex = set(exclude)
+    out = []
+    for c in graph.components:
+        if c.ref in ex or not c.pads:
+            continue
+        x_lo, x_hi, y_lo, y_hi = pad_edge_box(c, pad_edge, width, height)
+        x, y = c.pos
+        if not (x_lo - 1e-6 <= x <= x_hi + 1e-6 and y_lo - 1e-6 <= y <= y_hi + 1e-6):
+            out.append(c.ref)
+    return out
 
 
 def in_keepout(graph: BoardGraph, keepouts: List[Rect], clearance: float = 0.0) -> List[str]:

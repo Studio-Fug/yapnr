@@ -4,6 +4,12 @@ Route a clearance envelope, offset BOTH traces, then validate their exact
 geometry. No independently routed pair legs, silent gap changes or unmatched
 vias. Length tuning inserts a bounded 45-degree trombone on the shorter leg;
 every candidate is checked against its mate, itself and static obstacles.
+
+src13 (PNR_PAIR_PER_RUN_UNCOUPLED / PNR_PAIR_STUB_MAX_MM in pnr.native_electrical):
+solve_pair takes optional per-end fanout budgets (max_uncoupled_head/_tail; unset =
+max_uncoupled, unchanged search); uncoupled_runs measures continuous uncoupled
+runs along an ordered pair path and branch_lengths the copper length from a pad
+to the endpoint path (stub). Nothing calls them unless those flags are set.
 """
 import math
 from .keyhole import route, elbows, length
@@ -142,21 +148,33 @@ def route_directional(a,z,ds,de,bounds,clear,pitch,max_uncoupled,max_expansions)
     return result
 
 
-def solve_pair(p,n,terminals,bounds,clear,envelope_clear,width,gap,skew,*,pitch=.2,max_expansions=20000,max_uncoupled=2.0,offsets=None,max_attempts=32,signs=(-1,1),accept_paths=None,max_tuning_length=None):
+def solve_pair(p,n,terminals,bounds,clear,envelope_clear,width,gap,skew,*,pitch=.2,max_expansions=20000,max_uncoupled=2.0,offsets=None,max_attempts=32,signs=(-1,1),accept_paths=None,max_tuning_length=None,max_uncoupled_head=None,max_uncoupled_tail=None):
     """Terminals map net -> (exact source, exact target); same-layer geometry.
 
     envelope_clear checks a center trace of width 2*width+gap against every
     foreign obstacle. Terminal fanout is bounded and exact, not a snap shortcut.
     The adapter must native-check pad connectivity, layer/reference continuity
     and any retained external branches before acceptance.
+
+    ``max_uncoupled_head`` / ``max_uncoupled_tail`` (default: ``max_uncoupled``)
+    bound the source and target fanouts separately: each end is its own
+    continuous uncoupled run (PNR_PAIR_PER_RUN_UNCOUPLED in the native adapter).
+    They set the lead-point candidates and the pad-to-lane fanout bounds only;
+    the lane-shape heuristics (length of the straight directional leads and of
+    the straight endpoint approach) keep using ``max_uncoupled``, so a larger
+    per-end budget never makes the lane search stricter. Unset, both equal
+    ``max_uncoupled`` and the search is unchanged.
     """
-    if min(width,gap,skew,pitch,max_uncoupled)<=0:raise ValueError('positive pair rules required')
+    head_cap=max_uncoupled if max_uncoupled_head is None else max_uncoupled_head
+    tail_cap=max_uncoupled if max_uncoupled_tail is None else max_uncoupled_tail
+    if min(width,gap,skew,pitch,max_uncoupled,head_cap,tail_cap)<=0:raise ValueError('positive pair rules required')
     start=tuple((terminals[p][0][i]+terminals[n][0][i])/2 for i in (0,1))
     end=tuple((terminals[p][1][i]+terminals[n][1][i])/2 for i in (0,1))
     # Escape endpoints may not admit the wide envelope. Try cardinal leadouts,
     # but validate each individual pad-to-lane lead below, with bounded length.
-    lead_distances=sorted(set((.25,.5,.75,1.,1.25,1.5,1.75)) | {round(i*.1,10) for i in range(1,21) if i*.1<=max_uncoupled+1e-9})
-    options=lambda q:[q]+[(q[0]+dx*d,q[1]+dy*d) for d in lead_distances if d<=max_uncoupled for dx,dy in ((1,0),(0,1),(-1,0),(0,-1))]
+    leads=lambda cap:sorted(set((.25,.5,.75,1.,1.25,1.5,1.75)) | {round(i*.1,10) for i in range(1,21) if i*.1<=cap+1e-9})
+    head_leads,tail_leads=leads(head_cap),leads(tail_cap)
+    options=lambda q,cap,distances:[q]+[(q[0]+dx*d,q[1]+dy*d) for d in distances if d<=cap for dx,dy in ((1,0),(0,1),(-1,0),(0,-1))]
     attempts=0
     fanout_debug=[]
     failures={}
@@ -173,7 +191,7 @@ def solve_pair(p,n,terminals,bounds,clear,envelope_clear,width,gap,skew,*,pitch=
         if len(headings)!=2:
             continue
         ds,de=headings
-        for head,tail in sorted(((x,y) for x in lead_distances for y in lead_distances),key=lambda xy:sum(xy)):
+        for head,tail in sorted(((x,y) for x in head_leads for y in tail_leads),key=lambda xy:sum(xy)):
             a=tuple(start[i]+ds[i]*head for i in (0,1))
             z=tuple(end[i]-de[i]*tail for i in (0,1))
             candidates.append((a,z,sign,ds,de))
@@ -181,7 +199,7 @@ def solve_pair(p,n,terminals,bounds,clear,envelope_clear,width,gap,skew,*,pitch=
     # not spend all attempts on the first lane orientation.
     candidates=candidates[:1]+sorted(candidates[1:],key=lambda v:(round(math.dist(start,v[0])+math.dist(end,v[1]),8),math.dist(v[0],v[1])))
     candidates += [(a,z,None,None,None) for a,z in sorted(
-        ((a,z) for a in options(start) for z in options(end)),
+        ((a,z) for a in options(start,head_cap,head_leads) for z in options(end,tail_cap,tail_leads)),
         key=lambda az:math.dist(start,az[0])+math.dist(end,az[1]))]
     for a,z,forced_sign,ds,de in candidates:
         if not envelope_clear(a,a,2*width+gap) or not envelope_clear(z,z,2*width+gap):continue
@@ -189,11 +207,12 @@ def solve_pair(p,n,terminals,bounds,clear,envelope_clear,width,gap,skew,*,pitch=
             viable=True
             for index,point,heading in ((0,a,ds),(1,z,de)):
                 fanouts={}
+                end_cap=(head_cap,tail_cap)[index]
                 for net,side in ((p,1),(n,-1)):
                     portal=(point[0]-heading[1]*forced_sign*side*(width+gap)/2,
                             point[1]+heading[0]*forced_sign*side*(width+gap)/2)
                     fanouts[net]=[path for path in elbows(terminals[net][index],portal)
-                                  if length(path)<=max_uncoupled and
+                                  if length(path)<=end_cap and
                                   all(clear(net,x,y,width) for x,y in zip(path,path[1:]))]
                 if not any(geometry_ok({p:pp,n:nn},width,gap,clear)
                            for pp in fanouts[p] for nn in fanouts[n]):
@@ -265,8 +284,8 @@ def solve_pair(p,n,terminals,bounds,clear,envelope_clear,width,gap,skew,*,pitch=
                     fanouts={}
                     for net in (p,n):
                         path=lanes[net];s,t=terminals[net]
-                        heads=[x for x in elbows(s,path[0]) if length(x)<=max_uncoupled and all(clear(net,a,b,width) for a,b in zip(x,x[1:]))]
-                        tails=[x for x in elbows(path[-1],t) if length(x)<=max_uncoupled and all(clear(net,a,b,width) for a,b in zip(x,x[1:]))]
+                        heads=[x for x in elbows(s,path[0]) if length(x)<=head_cap and all(clear(net,a,b,width) for a,b in zip(x,x[1:]))]
+                        tails=[x for x in elbows(path[-1],t) if length(x)<=tail_cap and all(clear(net,a,b,width) for a,b in zip(x,x[1:]))]
                         if forced_sign is not None and head_trim==tail_trim==0 and len(fanout_debug)<8:
                             fanout_debug.append(dict(net=net,sign=sign,a=a,z=z,centerline=centerline,heads=len(heads),tails=len(tails),lane=path))
                         fanouts[net]=[simplify(h[:-1]+path+tail[1:]) for h in heads for tail in tails]
@@ -333,3 +352,205 @@ def path_metrics(tracks, vias, source, target, *, layer_heights=None):
     path=[end]
     while path[-1]!=start:path.append(parent[path[-1]])
     return dict(connected=True,valid=True,length_mm=best[end],path=list(reversed(path)),branch_vertices=len(reached-set(path)))
+
+
+# --- continuous uncoupled runs and stub branches (PNR_PAIR_PER_RUN_UNCOUPLED /
+# PNR_PAIR_STUB_MAX_MM in pnr.native_electrical). Pure geometry; nothing above
+# calls these, so the default search is unchanged.
+
+COUPLED_TOLERANCE = .1  # relative: a 45-degree outer lane corner is 8.2 % farther
+
+
+def capsule_interval(a, b, c, d, r):
+    """Parameters u in [0,1] where a+u(b-a) lies within r of segment c-d, or None.
+
+    The capsule around c-d is convex, so the admitted set is one interval: the
+    hull of the line's intersections with both end discs and the side slab.
+    """
+    vx, vy = b[0]-a[0], b[1]-a[1]
+    pieces = []
+    for q in (c, d):
+        fx, fy = a[0]-q[0], a[1]-q[1]
+        A = vx*vx+vy*vy; B = 2*(fx*vx+fy*vy); C = fx*fx+fy*fy-r*r
+        if A < 1e-18:
+            if C <= 0: pieces.append((0., 1.))
+            continue
+        disc = B*B-4*A*C
+        if disc < 0: continue
+        root = math.sqrt(disc); pieces.append(((-B-root)/(2*A), (-B+root)/(2*A)))
+    span = math.dist(c, d)
+    if span > 1e-12:
+        ex, ey = (d[0]-c[0])/span, (d[1]-c[1])/span
+        lo, hi = -math.inf, math.inf
+        for p0, dp, mn, mx in (((a[0]-c[0])*ex+(a[1]-c[1])*ey, vx*ex+vy*ey, 0., span),
+                               (-(a[0]-c[0])*ey+(a[1]-c[1])*ex, -vx*ey+vy*ex, -r, r)):
+            if abs(dp) < 1e-15:
+                if p0 < mn or p0 > mx: lo, hi = 1., 0.; break
+                continue
+            u1, u2 = (mn-p0)/dp, (mx-p0)/dp
+            lo, hi = max(lo, min(u1, u2)), min(hi, max(u1, u2))
+        if lo <= hi: pieces.append((lo, hi))
+    if not pieces: return None
+    lo, hi = max(0., min(x for x, _ in pieces)), min(1., max(y for _, y in pieces))
+    return (lo, hi) if lo <= hi else None
+
+
+def path_steps(node_path):
+    """path_metrics' node path -> [(layer, a_mm, b_mm)]; a via hop has layer None."""
+    steps = []
+    for (la, ax, ay), (lb, bx, by) in zip(node_path, node_path[1:]):
+        a, b = (ax/1e6, ay/1e6), (bx/1e6, by/1e6)
+        steps.append((la if la == lb else None, a, b))
+    return steps
+
+
+def uncoupled_runs(steps, width, gap, *, exempt=None, tolerance=COUPLED_TOLERANCE, min_coupled=None, breaks=None, barrel=0.):
+    """Continuous uncoupled runs along each net's ordered path (two nets).
+
+    ``steps`` maps net -> [(layer, a, b)] in path order (layer None = via hop).
+    A point of one net is coupled where its mate's path on the same layer lies
+    within (width+gap)*(1+tolerance) of it (nominal pitch; the tolerance admits
+    45-degree lane corners). A run continues through via hops (a hop adds
+    ``barrel`` mm, default 0 = planar length only, as in the fanout budgets; a
+    pair's via pair is never within the coupled pitch) and through coupled stretches
+    shorter than ``min_coupled`` (default width+gap), which are counted into
+    the adjacent run (also at either end of the path, e.g. pads at lane pitch).
+    A coupled stretch of at least ``min_coupled`` ends it. Steps for
+    which ``exempt(layer, a, b)`` is true (independently bounded copper, e.g.
+    a separately budgeted connector branch) end a run and are not counted.
+    ``breaks(layer, point)`` true at a step's start point ends the run there
+    (an intermediate terminal pad treated as a run boundary).
+    Returns net -> {max_mm, leading_mm, trailing_mm, runs:[{length_mm, start, end}]}.
+    """
+    nets = list(steps)
+    if len(nets) != 2: raise ValueError('uncoupled_runs needs exactly two nets')
+    r = (width+gap)*(1+tolerance)
+    min_coupled = width+gap if min_coupled is None else min_coupled
+    out = {}
+    for net in nets:
+        mate = nets[1] if net == nets[0] else nets[0]
+        layers = {}
+        for la, c, d in steps[mate]:
+            if la is not None and math.dist(c, d) > 1e-12: layers.setdefault(la, []).append((c, d))
+        runs = []; state = dict(current=0., start=None, coupled=0., coupled_from=None)
+        def close(at):
+            if state['current'] > 1e-9:
+                runs.append(dict(length_mm=state['current'], start=state['start'], end=at))
+            state.update(current=0., start=None)
+        def sliver():
+            # A pending coupled stretch shorter than min_coupled is part of the
+            # adjacent run (also at the path start, a pad at lane pitch).
+            if state['coupled'] and state['coupled'] < min_coupled:
+                if state['start'] is None: state['start'] = state['coupled_from']
+                state['current'] += state['coupled']
+            state.update(coupled=0., coupled_from=None)
+        def uncoupled(length_mm, begin):
+            if state['coupled']: sliver()
+            if state['start'] is None: state['start'] = begin
+            state['current'] += length_mm
+        def coupled(length_mm, begin):
+            if not state['coupled']: state['coupled_from'] = begin
+            state['coupled'] += length_mm
+            if state['coupled'] >= min_coupled and state['start'] is not None:
+                close(state['coupled_from'])
+        origin = next(((la, a[0], a[1]) for la, a, b in steps[net] if la is not None), None)
+        end = None
+        for la, a, b in steps[net]:
+            if la is None:
+                if barrel > 0: uncoupled(barrel, (None, a[0], a[1]))
+                continue
+            span = math.dist(a, b)
+            if span < 1e-12: continue
+            if breaks is not None and breaks(la, a):
+                if state['start'] is not None: sliver()
+                close((la, a[0], a[1])); state.update(coupled=0., coupled_from=None)
+            if exempt is not None and exempt(la, a, b):
+                if state['start'] is not None: sliver()
+                close((la, a[0], a[1])); state.update(coupled=0., coupled_from=None)
+                end = (la, b[0], b[1]); continue
+            box = (min(a[0], b[0])-r, min(a[1], b[1])-r, max(a[0], b[0])+r, max(a[1], b[1])+r)
+            hits = []
+            for c, d in layers.get(la, ()):
+                if max(c[0], d[0]) < box[0] or min(c[0], d[0]) > box[2] or max(c[1], d[1]) < box[1] or min(c[1], d[1]) > box[3]: continue
+                q = capsule_interval(a, b, c, d, r)
+                if q is not None: hits.append(q)
+            hits.sort(); merged = []
+            for lo, hi in hits:
+                if merged and lo <= merged[-1][1]+1e-12: merged[-1][1] = max(merged[-1][1], hi)
+                else: merged.append([lo, hi])
+            at = lambda u: (la, a[0]+u*(b[0]-a[0]), a[1]+u*(b[1]-a[1]))
+            u = 0.
+            for lo, hi in merged + [[1., 1.]]:
+                lo = max(lo, u)
+                if lo > u+1e-12: uncoupled((lo-u)*span, at(u))
+                if hi > lo: coupled((hi-lo)*span, at(lo))
+                u = max(u, hi)
+            end = at(1.)
+        trailing = 0.
+        if state['start'] is not None:
+            sliver(); trailing = state['current']
+        close(end)
+        leading = runs[0]['length_mm'] if runs and runs[0]['start'] == origin else 0.
+        out[net] = dict(max_mm=max([x['length_mm'] for x in runs], default=0.), leading_mm=leading,
+                        trailing_mm=trailing, runs=runs)
+    return out
+
+
+def branch_lengths(tracks, vias, source, target, points, *, layer_heights, barrel=None):
+    """Copper length from each point to the source->target endpoint path.
+
+    Same exact graph as :func:`path_metrics` (intersections split, via hops by
+    layer height). ``points`` are (xy, layer) nodes such as an intermediate
+    terminal pad. Returns one dict per point: on_path, stub_mm (graph length to
+    the nearest endpoint-path node: 0 in line, None if disconnected), the
+    junction node and path (the nodes from the point to the junction; None if
+    disconnected). Returns None when the endpoint graph itself is not valid.
+    ``barrel`` (mm): length a via hop counts in the branch search (default: the
+    layer-height difference, as the endpoint path).
+    """
+    import heapq
+    from collections import defaultdict
+    from pnr.track_graph import intersection, on_segment
+    base = path_metrics(tracks, vias, source, target, layer_heights=layer_heights)
+    if not base.get('valid'): return None
+    nm = lambda p: tuple(round(x*1e6) for x in p)
+    segments = [(la, nm(a), nm(b)) for la, a, b in tracks]
+    nodes = defaultdict(set)
+    for la, a, b in segments: nodes[la].update((a, b))
+    for i, (la, a, b) in enumerate(segments):
+        for lb, c, d in segments[i+1:]:
+            if la == lb:
+                q = intersection(a, b, c, d)
+                if q is not None: nodes[la].add(q)
+    for p, layers in vias:
+        for la in layers: nodes[la].add(nm(p))
+    for p, la in [source, target]+list(points): nodes[la].add(nm(p))
+    graph = defaultdict(dict)
+    def add(a, b, d):
+        if a != b: graph[a][b] = min(graph[a].get(b, math.inf), d); graph[b][a] = graph[a][b]
+    for la, a, b in segments:
+        ordered = sorted((p for p in nodes[la] if on_segment(p, a, b)), key=lambda p: math.dist(p, a))
+        for x, y in zip(ordered, ordered[1:]): add((la, *x), (la, *y), math.dist(x, y)/1e6)
+    for p, layers in vias:
+        ordered = sorted(layers, key=lambda la: layer_heights[la])
+        for a, b in zip(ordered, ordered[1:]): add((a, *nm(p)), (b, *nm(p)), abs(layer_heights[a]-layer_heights[b]) if barrel is None else barrel)
+    main = set(base['path']); result = []
+    for p, la in points:
+        start = (la, *nm(p))
+        if start in main:
+            result.append(dict(on_path=True, stub_mm=0., junction=start, path=[start])); continue
+        heap = [(0., start)]; best = {start: 0.}; parent = {}; found = None
+        while heap:
+            dist, a = heapq.heappop(heap)
+            if dist != best[a]: continue
+            if a in main: found = (dist, a); break
+            for b, w in graph[a].items():
+                if dist+w < best.get(b, math.inf): best[b] = dist+w; parent[b] = a; heapq.heappush(heap, (dist+w, b))
+        path = None
+        if found:
+            # Nodes (layer, x_nm, y_nm) from the point to the junction.
+            path = [found[1]]
+            while path[-1] != start: path.append(parent[path[-1]])
+            path.reverse()
+        result.append(dict(on_path=False, stub_mm=found[0] if found else None, junction=found[1] if found else None, path=path))
+    return result

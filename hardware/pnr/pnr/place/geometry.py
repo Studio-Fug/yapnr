@@ -3,11 +3,17 @@
 Everything here is stdlib-only (math + dataclasses) and works off the neutral
 :class:`pnr.graph.BoardGraph`. Frame: mm, y-up, origin at the outline's
 bottom-left (see :mod:`pnr.graph`).
+
+PNR_PAIR_LANDING_RESERVE=1 (src13, default off): :func:`placement_rects` also
+returns the component's diff-pair via landing reserves (:class:`ReserveRect`, see
+:mod:`pnr.place.pair_landing`) and tags body rects with their mount side
+(:class:`MountedRect`); unset, it returns exactly the plain rects as before.
 """
 
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
@@ -74,7 +80,11 @@ class Rect:
         return self.cy + self.h / 2
 
     def overlaps(self, other: "Rect", gap: float = 0.0) -> bool:
-        """True if the two rectangles overlap when each is grown by ``gap/2``."""
+        """True if the two rectangles overlap when each is grown by ``gap/2``.
+
+        A :class:`ReserveRect` decides its own conflicts (see there)."""
+        if isinstance(other, ReserveRect) and not isinstance(self, ReserveRect):
+            return other.overlaps(self, gap)
         return (
             self.left - gap / 2 < other.right + gap / 2
             and self.right + gap / 2 > other.left - gap / 2
@@ -90,6 +100,41 @@ class Rect:
             and self.right <= width + eps
             and self.top <= height + eps
         )
+
+
+@dataclass(frozen=True)
+class MountedRect(Rect):
+    """A body/hole reservation that knows the side its owner is mounted on.
+
+    Only produced by :func:`placement_rects` under PNR_PAIR_LANDING_RESERVE=1
+    (an assembled block macro: the sides its members are mounted on,
+    pair_landing.macro_mount, 'both' when unrecorded); plain :class:`Rect` otherwise."""
+
+    mount: str = ""
+
+
+@dataclass(frozen=True)
+class ReserveRect(Rect):
+    """A routing reservation (diff-pair via landing, :mod:`pnr.place.pair_landing`).
+
+    It excludes the bodies of parts MOUNTED on its side (an opposite-side part
+    such as a bottom test-point array), never another reservation, and never a
+    part that is only present on that side through its plated holes (a top THT
+    connector's pins; the landing is routing space of the pair itself). A
+    plain Rect of unknown owner is treated as mounted there (conservative).
+    """
+
+    side: str = ""
+    owner: str = ""
+    label: str = ""
+
+    def overlaps(self, other: "Rect", gap: float = 0.0) -> bool:
+        if isinstance(other, ReserveRect):
+            return False
+        mount = getattr(other, "mount", None)
+        if mount is not None and mount not in (self.side, "both"):
+            return False
+        return Rect.overlaps(Rect(self.cx, self.cy, self.w, self.h), Rect(other.cx, other.cy, other.w, other.h), gap)
 
 
 def set_component_side(comp: Component, side: str):
@@ -305,10 +350,38 @@ def placement_rects(comp):
     KiCad's explicit SMD attribute distinguishes a surface body containing
     thermal holes from a through-hole body/connector. Holes still exclude
     opposite components at their actual pad extents, not the whole body.
+
+    A block macro with a per-side hull (PNR_MACRO_HULL=1, :mod:`pnr.place.hull`)
+    reserves only its hull cover rectangles, each on its own side, plus its
+    inner-layer cover on the ``inner`` plane; with that flag drilled pads and
+    solid block macros also reserve the ``inner`` plane
+    (:func:`pnr.place.hull.inner_rects`), so drilled parts clear block inner copper.
+
+    With both PNR_MACRO_HULL=1 and PNR_PAIR_LANDING_RESERVE=1 (src15 merge) the
+    hull/inner rects are tagged with the macro's mount side like any body rect and
+    the component's landing reserves are appended; each flag alone returns exactly
+    what its own line (src12n / src13) returned.
     """
-    result=[(side,courtyard_rect(comp)) for side in occupied_sides(comp)]
-    if comp.smd_body:
-        opposite='bottom' if comp.side=='top' else 'top'
-        for pad,(_,_,rect) in zip(comp.pads,pad_rects(comp)):
-            if pad.through_hole:result.append((opposite,rect))
+    result=None
+    if getattr(comp, "hull", None):
+        from .hull import enabled, hull_placement_rects
+        if enabled():
+            result=hull_placement_rects(comp)
+    if result is None:
+        result=[(side,courtyard_rect(comp)) for side in occupied_sides(comp)]
+        if comp.smd_body:
+            opposite='bottom' if comp.side=='top' else 'top'
+            for pad,(_,_,rect) in zip(comp.pads,pad_rects(comp)):
+                if pad.through_hole:result.append((opposite,rect))
+        if os.environ.get("PNR_MACRO_HULL") == "1":
+            from .hull import inner_rects
+            result += inner_rects(comp)
+    if _landing.enabled():
+        # PNR_PAIR_LANDING_RESERVE=1: bodies carry their mount side and the
+        # component's diff-pair via landings are added as ReserveRects.
+        mount=_landing.macro_mount(comp) if (comp.footprint or '').startswith('block:') else comp.side
+        result=[(side,MountedRect(r.cx,r.cy,r.w,r.h,mount=mount)) for side,r in result]+_landing.reserve_rects(comp)
     return result
+
+
+from . import pair_landing as _landing  # noqa: E402  (stdlib-only; imports this module)

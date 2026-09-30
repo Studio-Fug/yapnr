@@ -7,6 +7,7 @@ import argparse
 from collections import Counter
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -157,7 +158,7 @@ def consolidate(a):
 def main():
     p=argparse.ArgumentParser();p.add_argument('board',type=Path);p.add_argument('--rules',required=True,type=Path)
     p.add_argument('--out',type=Path);p.add_argument('--report',required=True,type=Path);p.add_argument('--work-dir',type=Path)
-    p.add_argument('--kicad-python',default=sys.executable);p.add_argument('--kicad-cli',default='kicad-cli')
+    p.add_argument('--kicad-python',default=os.environ.get('PNR_KICAD_PYTHON',sys.executable));p.add_argument('--kicad-cli',default=os.environ.get('PNR_KICAD_CLI','kicad-cli'))  # PNR_KICAD_PYTHON/PNR_KICAD_CLI (src15)
     p.add_argument('--radius',type=float,default=5.);p.add_argument('--max-trials',type=int,default=12)
     p.add_argument('--worker',choices=['inventory','apply','prune','fill','audit'])
     p.add_argument('--transaction',type=Path);p.add_argument('--prune',action='append',default=[]);a=p.parse_args()

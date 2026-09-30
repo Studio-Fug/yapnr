@@ -13,7 +13,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-CLI = os.environ.get('KICAD_CLI', '/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli')
+CLI = os.environ.get('KICAD_CLI') or os.environ.get('PNR_KICAD_CLI', '/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli')  # PNR_KICAD_CLI (src15)
 NATIVE = importlib.util.find_spec('pcbnew') is not None and Path(CLI).exists()
 
 

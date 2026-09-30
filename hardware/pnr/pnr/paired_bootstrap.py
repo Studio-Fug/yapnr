@@ -3,6 +3,11 @@
 Controller uses the PnR interpreter; each exact geometry/DRC transaction runs
 in a fresh KiCad process. Only legal intermediate-package proposals are tried.
 An unsuccessful pair remains explicitly pending for the final completeness gate.
+
+src13: with PNR_PAIR_HAND_SWAP_TRIAL=1 the swap trial runs the opposite of the
+bridge hand the worker's joint search runs first (derived through
+pnr.pair_joint.first_joint_hand, not assumed); PNR_PAIR_LANDING_RESERVE=1 makes
+D-move proposals respect pair via landing reserves.
 """
 import math,argparse,json,os,shutil,subprocess,threading,time
 from concurrent.futures import FIRST_COMPLETED,ThreadPoolExecutor,wait
@@ -11,6 +16,53 @@ from pnr.native_loop import copy_board,pair_placements
 from pnr.placement_trials import diverse_pair_poses
 # PNR_PAIR_PARALLEL=1 runs a pair's trials concurrently (PNR_PAIR_PARALLEL_WORKERS,
 # default 3) and commits the lowest-index accepted trial, exactly as the serial scan.
+# PNR_PAIR_HAND_SWAP_TRIAL=1 (only with PNR_PAIR_JOINT_TOPOLOGIES=1; default off) inserts
+# one extra trial right after trial 0: the unmoved pose again, with the worker told
+# (PNR_PAIR_JOINT_HAND_FIRST=-1, see pnr.native_electrical) to run bridge hand -1 first.
+# The default joint order runs hand +1 first and it can use the whole joint window
+# (60 s of a 90 s trial), so hand -1 is otherwise never tried on the unmoved pose.
+# src13: the swap trial's hand is derived, not assumed: run() asks
+# pnr.pair_joint.first_joint_hand (the worker's own enumeration + ordering, with the
+# trial-0 environment) which hand the joint search runs first, and the swap trial
+# runs the opposite one first. No joint configuration -> no swap trial.
+# PNR_PAIR_LANDING_RESERVE=1: pair_placements checks D-moves against pair via
+# landing reserves (pnr.place.pair_landing); see pnr.native_loop.
+
+
+def trial_schedule(poses,first_hand=1):
+    """[(pose, hand_first)] for the trials of one pair; hand_first None = worker default.
+
+    first_hand: the bridge hand the worker's joint search runs first on trial 0
+    (derived by swap_trial_hand); the swap trial runs -first_hand first. None
+    (the pair has no joint configuration) inserts no swap trial."""
+    schedule=[(pose,None) for pose in poses]
+    if os.environ.get('PNR_PAIR_HAND_SWAP_TRIAL')=='1' and os.environ.get('PNR_PAIR_JOINT_TOPOLOGIES','0')=='1' and schedule and first_hand:
+        schedule.insert(1,(schedule[0][0],-first_hand))
+    return schedule
+
+
+def swap_trial_hand(pair,inventory):
+    """First joint bridge hand of an unmoved default trial (None: no joint search).
+
+    Same enumeration/ordering/environment the worker uses for trial 0 (trial_env
+    drops PNR_PAIR_JOINT_HAND_FIRST there); pad positions from the inventory graph
+    (joint_topologies only needs contact distances, so the y-up frame is fine)."""
+    if os.environ.get('PNR_PAIR_HAND_SWAP_TRIAL')!='1' or os.environ.get('PNR_PAIR_JOINT_TOPOLOGIES','0')!='1':return None
+    from pnr.pair_joint import first_joint_hand
+    positions={}
+    for c in inventory['graph'].get('components',[]):
+        # Pad centre = pose + rotated pad offset (pnr.place.geometry.pin_positions,
+        # kept import-free here: the controller must not need torch/yaml for this).
+        th=math.radians(float(c['rot']));ct,st=math.cos(th),math.sin(th)
+        for pad in c.get('pads',[]):
+            ox,oy=pad['offset'];positions[c['ref']+'.'+pad['name']]=(c['pos'][0]+ox*ct-oy*st,c['pos'][1]+ox*st+oy*ct)
+    return first_joint_hand(pair,positions,hand_first=None,max_trials=int(os.environ.get('PNR_PAIR_JOINT_MAX_TRIALS','6')),budget_scope=os.environ.get('PNR_PAIR_AUXILIARY_SCOPE','separate'))
+
+
+def trial_env(env,hand_first):
+    trial=dict(env);trial.pop('PNR_PAIR_JOINT_HAND_FIRST',None)
+    if hand_first:trial['PNR_PAIR_JOINT_HAND_FIRST']=str(hand_first)
+    return trial
 
 
 def _invoke(args,log,env):
@@ -99,14 +151,15 @@ def run(board,rules,constraints,out,kicad_python,kicad_cli,seconds=600,attempts=
             events.append(dict(pair=pair['name'],status='already_connected'));continue
         target=jobs[0]
         base=[kicad_python,'-m','pnr.native_electrical',str(current),'--rules',str(rules),'--net',target['net'],'--source-pad',target['source'],'--target-pad',target['target'],'--bounds',*map(str,inventory['bounds']),'--kicad-cli',kicad_cli]
-        proposals=pair_placements(inventory,constraints,pair) if allow_placement else []
+        proposals=(pair_placements(inventory,constraints,pair,rules=policy) if os.environ.get('PNR_PAIR_LANDING_RESERVE')=='1' else pair_placements(inventory,constraints,pair)) if allow_placement else []
+        first_hand=swap_trial_hand(pair,inventory)
         pp=folder/'proposals.json';pp.write_text(json.dumps(proposals,indent=2))
         if proposals:
             screen=folder/'screen'
             invoke(base+['--out-dir',str(screen),'--placement-candidates',str(pp)],folder/'screen.log')
             proposals=json.loads((screen/'result.json').read_text())['proposals']
         if parallel:
-            poses=[None]+diverse_pair_poses(proposals,attempts-1);finished={}
+            schedule=trial_schedule([None]+diverse_pair_poses(proposals,attempts-1),first_hand);poses=[pose for pose,_ in schedule];finished={}
             def launch(ti,stop):
                 if stop.is_set():return dict(status='cancelled')
                 remaining=seconds-(time.monotonic()-started)
@@ -119,11 +172,12 @@ def run(board,rules,constraints,out,kicad_python,kicad_cli,seconds=600,attempts=
                 if poses[ti] is not None:
                     spec=folder/f'pose-{ti:02}.json';spec.write_text(json.dumps(poses[ti]));cmd+=['--placement-spec',str(spec)]
                 t0=time.monotonic()
-                if not _trial(cmd,folder/f'trial-{ti:02}.log',env,stop):return dict(status='cancelled',wall_seconds=time.monotonic()-t0)
+                if not _trial(cmd,folder/f'trial-{ti:02}.log',trial_env(env,schedule[ti][1]),stop):return dict(status='cancelled',wall_seconds=time.monotonic()-t0)
                 return dict(result=json.loads((trial/'result.json').read_text()),wall_seconds=time.monotonic()-t0)
             def trial_event(ti,outcome,winner=None):
                 outcome=outcome or dict(status='cancelled');result=outcome.get('result')
                 event=dict(pair=pair['name'],trial=ti,proposal=poses[ti],status=result.get('status') if result else outcome['status'],accepted=result.get('accepted',False) if result else False,folder=str(folder/f'trial-{ti:02}'),parallel=True)
+                if schedule[ti][1]:event['hand_first']=schedule[ti][1]
                 if 'wall_seconds' in outcome:event['wall_seconds']=outcome['wall_seconds']
                 if 'error' in outcome:event['error']=outcome['error']
                 if winner is not None and ti>winner:event['ignored']=True  # superseded by a lower-index acceptance
@@ -142,16 +196,17 @@ def run(board,rules,constraints,out,kicad_python,kicad_cli,seconds=600,attempts=
                 references.append(dict(pair=pair['name'],segments=result['segments']))
                 policy['routed_pair_references']=references;rules.write_text(json.dumps(policy,indent=2))
             continue
-        for ti,proposal in enumerate([None]+diverse_pair_poses(proposals,attempts-1)):
+        for ti,(proposal,hand_first) in enumerate(trial_schedule([None]+diverse_pair_poses(proposals,attempts-1),first_hand)):
             remaining=seconds-(time.monotonic()-started)
             if remaining<=0:break
             trial=folder/f'trial-{ti:02}'
             cmd=base+['--out-dir',str(trial),'--seconds',str(min(search_seconds,remaining))]
             if proposal is not None:
                 spec=folder/f'pose-{ti:02}.json';spec.write_text(json.dumps(proposal));cmd+=['--placement-spec',str(spec)]
-            invoke(cmd,folder/f'trial-{ti:02}.log')
+            _invoke(cmd,folder/f'trial-{ti:02}.log',trial_env(env,hand_first))
             result=json.loads((trial/'result.json').read_text())
             events.append(dict(pair=pair['name'],trial=ti,proposal=proposal,status=result['status'],accepted=result.get('accepted',False),folder=str(trial)))
+            if hand_first:events[-1]['hand_first']=hand_first
             (out/'progress.json').write_text(json.dumps(dict(events=events,seconds=time.monotonic()-started),indent=2))
             if result.get('accepted'):
                 current=trial/'candidate.kicad_pcb'

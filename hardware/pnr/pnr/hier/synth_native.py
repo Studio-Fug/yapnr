@@ -105,6 +105,15 @@ def _num(value):
     return math.inf if value is None else value
 
 
+def _rank_used():
+    """PNR_LIBRARY_RANK_USED=1 (N-0001): rank by the used-extent area band."""
+    return os.environ.get('PNR_LIBRARY_RANK_USED') == '1'
+
+
+def _used_area(r):
+    return _num((r.get('used') or {}).get('area_mm2'))
+
+
 def _placement_power_quality(sg, sc, sr, placed):
     """Placement-level power metrics of a legal block layout (pnr.place.power_first)."""
     from pnr.power_topology import PowerTopologyUnavailable, derive
@@ -304,11 +313,26 @@ def rank_key(r, band=None):
     pnr.si side field; design failures and errors never count) follow the
     legality terms (after open hot loops with PNR_POWER_FIRST=1); a layout without
     an SI result ranks as the worst. Flag off: the key is unchanged.
+
+    With PNR_LIBRARY_RANK_USED=1 the used-extent area band ``used_band`` (stamped
+    by :func:`pnr.hier.extent.stamp_used` in ``load_library``; inf when absent) is
+    inserted right before subwidth, and the used area breaks ties before w*h.
+    Both flags compose (src15 merge): the SI term sits where PNR_SI puts it, the
+    used band and area where PNR_LIBRARY_RANK_USED puts them.
     """
     o = r.get('objective')
     if not o:
         return (math.inf,)
     si = (_num(r.get('si_layout_failures')),) if _si() else ()
+    if _rank_used():
+        band_used = _num(r.get('used_band'))
+        if _power_first():
+            pq = r.get('power_quality') or {}
+            return (o[5] // band if band else o[5], o[0], _num(r.get('hot_loops_open'))) + si + (
+                _num(pq.get('q_band')), _num(pq.get('crossings')), o[1], o[2], band_used, o[3], o[4],
+                r.get('port_debt_mm', math.inf), _used_area(r), r.get('area', math.inf))
+        return (o[5], o[0]) + si + (o[1], o[2], band_used, o[3], o[4], r.get('port_debt_mm', math.inf), _used_area(r),
+                                    r.get('area', math.inf))
     if _power_first():
         pq = r.get('power_quality') or {}
         return (o[5] // band if band else o[5], o[0], _num(r.get('hot_loops_open'))) + si + (

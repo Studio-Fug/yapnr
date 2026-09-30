@@ -1083,6 +1083,15 @@ py_test(
 )
 
 py_test(
+    name = "provenance_test",
+    size = "small",
+    srcs = ["tests/test_provenance.py"],
+    imports = ["."],
+    main = "tests/test_provenance.py",
+    deps = [":pnr"],
+)
+
+py_test(
     name = "initial_pool_test",
     srcs = ["tests/test_initial_pool.py"],
     main = "tests/test_initial_pool.py",

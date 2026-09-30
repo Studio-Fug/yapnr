@@ -2,7 +2,7 @@
 
 Run it with ``bazel run //:yapnr -- <args>`` or ``python -m yapnr <args>``.
 
-PR0 ships two commands:
+The commands:
 
 ``yapnr --version``
     Print the package version.
@@ -14,6 +14,15 @@ PR0 ships two commands:
     planned in docs/migration-plan.md (section 2.3). It only reads environment
     variables and checks the configured paths on disk; it never starts KiCad,
     so it cannot trigger a GUI or a Dock icon.
+
+``yapnr atopile setup|info|build|lock-parts|materialize``
+    The atopile toolchain without Nix (docs/frontends/atopile.md).
+
+``yapnr picker serve|catalog``
+    The offline atopile part picker and its catalogs.
+
+``yapnr part-cache ...``
+    The part cache: local directory or server (docs/part-cache.md).
 """
 
 from __future__ import annotations
@@ -99,7 +108,25 @@ def doctor_report(environ: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         "torch": _module_version("torch"),
         "kicad_cli": kicad_cli_status(environ),
         "kicad_python": kicad_python_status(environ),
+        "atopile": atopile_status(environ),
     }
+
+
+def atopile_status(environ: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    """The atopile environment, found as a build would find it, without running it."""
+    from yapnr.frontends.atopile import toolchain
+
+    try:
+        return toolchain.static_status(environ)
+    except Exception as err:  # a broken lock or config must not break the doctor
+        return {"configured": False, "ok": False, "error": str(err)}
+
+
+def _atopile_line(status: Dict[str, Any]) -> str:
+    if not status.get("configured"):
+        return "not set up (run `yapnr atopile setup`)"
+    state = "ok" if status.get("ok") else f"NEEDS {status.get('pinned')}"
+    return f"{status.get('atopile') or 'missing'} via {status.get('source')} ({state})"
 
 
 def _tool_line(status: Dict[str, Any], env_vars: Sequence[str]) -> str:
@@ -119,6 +146,7 @@ def _format_report(report: Dict[str, Any]) -> List[str]:
         f"torch     {report['torch'] or 'not installed'}",
         f"kicad-cli {_tool_line(report['kicad_cli'], KICAD_CLI_ENV_VARS)}",
         f"kicad-py  {_tool_line(report['kicad_python'], KICAD_PYTHON_ENV_VARS)}",
+        f"atopile   {_atopile_line(report['atopile'])}",
     ]
     return lines
 
@@ -143,6 +171,13 @@ def build_parser() -> argparse.ArgumentParser:
     doctor = commands.add_parser("doctor", help="report the environment and toolchain")
     doctor.add_argument("--json", action="store_true", help="machine-readable output")
     doctor.set_defaults(func=_cmd_doctor)
+
+    from yapnr.frontends.atopile.cli import register_atopile, register_picker
+    from yapnr.partcache.cli import register as register_part_cache
+
+    register_atopile(commands)
+    register_picker(commands)
+    register_part_cache(commands)
     return parser
 
 

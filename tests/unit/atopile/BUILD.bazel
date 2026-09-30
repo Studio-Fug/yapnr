@@ -1,9 +1,16 @@
 load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
 
-# Hermetic: synthetic parts and catalogs, fake interpreters; no network, no uv.
+# Hermetic: synthetic parts, a fake atopile interpreter and fake atopile modules. The real
+# atopile runs in //tests/e2e/atopile.
 yapnr_py_tests(
+    overrides = {
+        # Starts interpreters that use multiprocessing (spawn and forkserver).
+        "test_hook": {"size": "medium"},
+        # Builds with a fake atopile, including a deadline kill after 3 s.
+        "test_runner": {"size": "medium"},
+    },
     deps = [
         "//yapnr",
-        "//yapnr/frontends/atopile",
+        "//yapnr/frontends/atopile:testing",
     ],
 )

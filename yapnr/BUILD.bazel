@@ -12,6 +12,11 @@ py_library(
         "frontends/__init__.py",
     ],
     imports = [".."],
+    # The `atopile`, `picker` and `part-cache` commands (imported when the parser is built).
+    deps = [
+        "//yapnr/frontends/atopile",
+        "//yapnr/partcache",
+    ],
 )
 
 # The engine's numerical stack. `yapnr doctor` reports its versions, and every

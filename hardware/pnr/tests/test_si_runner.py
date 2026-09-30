@@ -175,7 +175,8 @@ class RunnerTest(unittest.TestCase):
         self.assertLess(time.monotonic() - t0, 15)
         out = subprocess.run(runner.bounded_cmd(['/bin/sh', '-c', 'ps -o nice= -p $$'], 30.0, {'PNR_SI_NICE': '5'}),
                              capture_output=True, text=True, timeout=30)
-        self.assertGreaterEqual(int(out.stdout.strip()), 5)
+        # Relative to this process: CI runners may start jobs at a negative nice (e.g. -10 on macOS).
+        self.assertGreaterEqual(int(out.stdout.strip()), min(19, os.nice(0) + 5))
 
     def test_library_resolution_refuses_gui_bundle(self):
         with self.assertRaises(RuntimeError):

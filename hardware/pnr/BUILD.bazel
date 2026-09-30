@@ -289,7 +289,7 @@ py_test(
 # Phase 2 acceptance: placement MVP is legal + beats the ato-row HPWL baseline.
 py_test(
     name = "placement_test",
-    size = "small",  # torch global placement + legalization; ~9s
+    size = "medium",  # yapnr adaptation (PR2): over the 60 s "small" timeout on 4-vCPU CI runners
     srcs = ["tests/test_placement.py"],
     data = glob(["testdata/splanc_dev/*"]),
     imports = ["."],

@@ -494,28 +494,16 @@ def generate(
     return doc
 
 
-def service(args):
-    if args.index:
-        return IndexSource(args.index)
-    try:
-        from source_service import SourceService
-    except ImportError:
-        sys.exit(
-            "net_llm: source_service.py not importable; pass --index FILE|http://127.0.0.1:PORT/api/source/index"
-        )
-    make = getattr(SourceService, "from_defaults", None)
-    try:
-        return make() if make else SourceService()
-    except TypeError:
-        sys.exit("net_llm: SourceService needs arguments; pass --index FILE|URL instead")
-
-
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("out", type=Path)
-    ap.add_argument("--index", help="saved /api/source/index JSON or its URL")
+    ap.add_argument(
+        "--index",
+        required=True,
+        help="a saved /api/source/index JSON, or its URL on a running viewer",
+    )
     ap.add_argument("--model", default="sonnet", choices=MODELS)
     ap.add_argument("--claude", default=CLAUDE)
     ap.add_argument("--force", action="store_true")
@@ -524,7 +512,7 @@ if __name__ == "__main__":
         "--dry-run", action="store_true", help="print dossier size and chunking; no model call"
     )
     a = ap.parse_args()
-    svc = service(a)
+    svc = IndexSource(a.index)
     if a.dry_run:
         sha, entries, refs = collect(svc)
         print(

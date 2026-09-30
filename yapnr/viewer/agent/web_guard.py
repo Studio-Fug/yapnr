@@ -2,15 +2,14 @@
 imports nothing from this folder.
 
 It is the only thing that approves WebFetch. agent_service leaves WebFetch out of --allowedTools and
-runs the CLI with
---permission-prompts none, so a fetch goes ahead only when this hook answers permissionDecision
-  "allow" for a vetted public URL.
-Everything else fails closed: a private/local/tailnet host gets "deny"; an exception while checking
-gets "deny"; and a hook that cannot run at all (broken file, missing interpreter, timeout, non-zero
-exit) gives the CLI no decision, which leaves the un-allowed WebFetch to --permission-prompts none:
-denied. Only plain http(s) URLs of at most MAX_URL characters to public hosts pass: IP literals in
-any notation must be global, local and tailnet suffixes and single-label names are refused, and
-every address a name resolves to must be global."""
+runs the CLI with --permission-prompts none, so a fetch goes ahead only when this hook answers
+permissionDecision "allow" for a vetted public URL. Everything else fails closed: a
+private/local/tailnet host gets "deny"; an exception while checking gets "deny"; and a hook that
+cannot run at all (broken file, missing interpreter, timeout, non-zero exit) gives the CLI no
+decision, which leaves the un-allowed WebFetch to --permission-prompts none: denied. Only plain
+http(s) URLs of at most MAX_URL characters to public hosts pass: IP literals in any notation must be
+global, local and tailnet suffixes and single-label names are refused, and every address a name
+resolves to must be global."""
 
 import ipaddress
 import json

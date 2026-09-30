@@ -6,18 +6,17 @@ the server allows it (web=True); and, with a notes store, the design-notes tools
 server (notes/mcp.py via a strict per-turn --mcp-config whose env names this session, turn, lane,
 phase, viewer port and board sha; the only write capability). WebFetch is never pre-approved: only
 the PreToolUse hook web_guard.py (stdlib only) approves it, for public hosts; a crashed, missing or
-slow hook leaves it to
---permission-prompts none, i.e. denied. CLI deny rules for local names/literals (and this machine's
-  addresses) apply on top and
-win over the hook. The init event must show exactly the configured tools and MCP server (connected),
-or the turn is killed. chat(body, emit) streams session/delta/tool/tool_error/note/done/error (plus
-'ping' keepalives when nothing was sent for `heartbeat` s); emit(event, data) returns False once the
-client is gone, and the optional gone() is polled every 0.25 s so a closed browser stops the turn
-even while the CLI only streams thinking. Spend is capped per turn (--max-budget-usd) and per
-process (max_total_usd). Every turn is stored in <conversations>/<session>.jsonl (message,
-selection, answer, tools, notes created, full web URLs and queries); sessions found there or in
-turns.jsonl can be resumed after a restart, also from the other viewer sharing the folder: a
-per-session lock file serializes turns across viewers and numbers them from the file."""
+slow hook leaves it to --permission-prompts none, i.e. denied. CLI deny rules for local
+names/literals (and this machine's addresses) apply on top and win over the hook. The init event
+must show exactly the configured tools and MCP server (connected), or the turn is killed. chat(body,
+emit) streams session/delta/tool/tool_error/note/done/error (plus 'ping' keepalives when nothing was
+sent for `heartbeat` s); emit(event, data) returns False once the client is gone, and the optional
+gone() is polled every 0.25 s so a closed browser stops the turn even while the CLI only streams
+thinking. Spend is capped per turn (--max-budget-usd) and per process (max_total_usd). Every turn is
+stored in <conversations>/<session>.jsonl (message, selection, answer, tools, notes created, full
+web URLs and queries); sessions found there or in turns.jsonl can be resumed after a restart, also
+from the other viewer sharing the folder: a per-session lock file serializes turns across viewers
+and numbers them from the file."""
 
 import fcntl
 import hashlib

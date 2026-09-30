@@ -1,19 +1,18 @@
 """3D board view: headless KiCad GLB export queue, cache and compaction (stdlib only).
 
 Server side (Viewer3DService, used by server.py): GET /api/3d resolves a board by its sha256 (the
-immutable
-<root>/boards/<sha>.kicad_pcb copy, else the lane's native board when it still hashes to that sha:
-  re-hashed on every
-request and exported from a snapshot of those bytes), keys it by its *placement fingerprint* (the
-board text without top-level segment/arc items, copper zones and tented vias) plus everything else
-the GLB depends on (export version and flags, the resolved kicad-cli and its 3D library, the parts
-folder and the size/mtime of the project model files the board references) and queues at most one
-export at a time (one worker thread; a machine-wide flock shared by the viewers under one experiment
-folder). Viewers may share one cache folder (prod and dev on one root): a cached "ready" is
-re-checked on disk, and a viewer only ever removes its own export's scratch folder. Routing-only
-revisions therefore share one GLB: copper is drawn in the browser from the viewer's own geometry,
-which carries nets for picking. The export runs as `python viewer3d_service.py export ...` in its
-own process group (nice 10), killed on timeout or server stop; requests only enqueue and return.
+immutable <root>/boards/<sha>.kicad_pcb copy, else the lane's native board when it still hashes to
+that sha: re-hashed on every request and exported from a snapshot of those bytes), keys it by its
+*placement fingerprint* (the board text without top-level segment/arc items, copper zones and tented
+vias) plus everything else the GLB depends on (export version and flags, the resolved kicad-cli and
+its 3D library, the parts folder and the size/mtime of the project model files the board references)
+and queues at most one export at a time (one worker thread; a machine-wide flock shared by the
+viewers under one experiment folder). Viewers may share one cache folder (prod and dev on one root):
+a cached "ready" is re-checked on disk, and a viewer only ever removes its own export's scratch
+folder. Routing-only revisions therefore share one GLB: copper is drawn in the browser from the
+viewer's own geometry, which carries nets for picking. The export runs as
+`python -m yapnr.viewer.services.viewer3d export ...` in its own process group (nice 10), killed on
+timeout or server stop; requests only enqueue and return.
 
 Job side: the board is copied into a scratch folder with every `.../parts/<Part>/<file>` model path
 pointed at the atopile parts folder (so `${KIPRJMOD}/../../src/parts` resolves wherever the board

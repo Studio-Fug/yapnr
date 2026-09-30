@@ -675,11 +675,12 @@ def controller(argv=None,nested=False):
     def invoke(cmd,log):
         with Path(log).open('w') as f:
             # KiCad's python occasionally dies by signal (seen: SIGSEGV at teardown);
-            # an identical rerun succeeds, so retry once on a signal exit only.
+            # an identical rerun succeeds, so retry once on a signal exit only, not
+            # after a kill at the worker deadline (a wedge, not a crash).
             for attempt in (0,1):
-                from pnr.proc import run as run_bounded
-                code=run_bounded(cmd,env=env,stdout=f,stderr=subprocess.STDOUT)
-                if code>=0 or attempt:break
+                from pnr.proc import run_status
+                code,timed_out=run_status(cmd,env=env,stdout=f,stderr=subprocess.STDOUT)
+                if code>=0 or attempt or timed_out:break
                 f.write('\n[retry after signal %d]\n'%-code);f.flush()
             if code:raise subprocess.CalledProcessError(code,cmd)
     def worker(mode,board,folder,extra=()):

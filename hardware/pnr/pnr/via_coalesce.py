@@ -368,11 +368,12 @@ def main():
         cmd = [sys.executable, '-m', 'pnr.via_coalesce', str(board), '--worker', mode,
                '--report', str(report)] + common + list(extra)
         # KiCad's python occasionally dies by signal (seen: SIGSEGV); an identical
-        # rerun succeeds, so retry once on a signal exit only.
-        from pnr.proc import run as run_bounded
-        code = run_bounded(cmd)
-        if code < 0:
-            code = run_bounded(cmd)
+        # rerun succeeds, so retry once on a signal exit only, not after a kill at
+        # the worker deadline (a wedge, not a crash).
+        from pnr.proc import run_status
+        code, timed_out = run_status(cmd)
+        if code < 0 and not timed_out:
+            code = run_status(cmd)[0]
         if code:
             raise subprocess.CalledProcessError(code, cmd)
         return json.loads(report.read_text())

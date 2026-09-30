@@ -1,0 +1,17 @@
+# Bazel
+bazel-*
+.bazel-*-cache/
+user.bazelrc
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+# yapnr project stores and local settings
+.yapnr/
+yapnr.local.toml
+# Docs build output
+docs/site/
+docs/_build/
+# Local drops
+*.zip
+.DS_Store

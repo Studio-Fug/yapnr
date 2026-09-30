@@ -59,7 +59,7 @@ done
 
 echo "==> exercising ${url}"
 python3 - "${url}" "${write_token}" "${admin_token}" "${work}" <<'PY'
-import json, sys, urllib.request
+import json, sys, urllib.error, urllib.request
 from pathlib import Path
 from yapnr.frontends.atopile import testing
 from yapnr.partcache.client import CacheError, HttpPartCache, materialize, read_part_dir
@@ -83,6 +83,18 @@ assert (target / f"{testing.SYNTHETIC_PART}.ato").is_file()
 with urllib.request.urlopen(f"{url}/v1/blobs/{manifest['files'][0]['sha256']}") as response:
     assert response.headers["X-Content-Type-Options"] == "nosniff"
     assert response.headers["Content-Disposition"] == "attachment"
+# A file no part uses is accepted (a part upload sends its files first) but never served.
+import hashlib
+orphan = b"not a part file"
+blob_url = f"{url}/v1/blobs/{hashlib.sha256(orphan).hexdigest()}"
+put = urllib.request.Request(blob_url, data=orphan, method="PUT")
+put.add_header("Authorization", f"Bearer {write}")
+urllib.request.urlopen(put).close()
+try:
+    urllib.request.urlopen(blob_url)
+    raise SystemExit("an unused file was served")
+except urllib.error.HTTPError as err:
+    assert err.code == 404, err
 HttpPartCache(url, token=admin).delete_part(manifest["id"], "smoke test takedown")
 print("part cache smoke test passed:", manifest["id"][:12])
 PY

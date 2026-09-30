@@ -6,14 +6,18 @@ Layout of a cache root (created by ``Store.open(root, create=True)``)::
     <root>/blobs/sha256/ab/<sha256>       file contents, named by their sha256; immutable
     <root>/parts/ab/<id>.json             part manifests, named by the part id; immutable
     <root>/catalog/C<digits>.json         the current catalog entry of each LCSC id
-    <root>/takedowns.jsonl                append-only log of deleted parts and catalog entries
+    <root>/takedowns.jsonl                append-only log of taken-down parts, files and entries
     <root>/index.sqlite                   an index over the above; rebuilt by ``reindex``
     <root>/tmp/                           staging for atomic writes
 
 The files are the source of truth; the SQLite index can always be rebuilt from them. Writes go
 through a temporary file and an atomic rename, so a reader never sees half a blob or manifest.
-A deleted (taken down) part keeps a line in ``takedowns.jsonl``: its manifest and every blob no
-other part uses are removed, and an upload of the same id is refused from then on.
+
+A taken-down part keeps a line in ``takedowns.jsonl``: its manifest and every blob no other part
+uses are removed, and an upload of the same id is refused from then on. The files it blocks
+(by default every file no other part used) get a line each too, and are refused from then on
+under any part name. A blob that no part uses is served by nobody (``read_published_blob``) and
+removed by ``gc`` once it is older than the grace period the server gives an upload in progress.
 
 Stdlib only.
 """
@@ -21,18 +25,20 @@ Stdlib only.
 from __future__ import annotations
 
 import datetime as _dt
+import hashlib
 import json
 import os
 import sqlite3
 import tempfile
 import threading
+import time
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional
+from typing import Any, BinaryIO, Dict, Iterable, Iterator, List, Optional, Union
 
 from yapnr.frontends.atopile.picker import catalog as catalog_mod
 from yapnr.partcache import model
 
-_INDEX_VERSION = 1
+_INDEX_VERSION = 2
 
 
 class NotFound(KeyError):
@@ -40,7 +46,7 @@ class NotFound(KeyError):
 
 
 class TakenDown(Exception):
-    """An upload of a part or catalog entry that was deleted by a takedown."""
+    """An upload of a part, file or catalog entry that a takedown blocked."""
 
 
 def utc_now() -> str:
@@ -152,14 +158,19 @@ class Store:
             db.executescript(
                 """
                 DROP TABLE IF EXISTS parts;
+                DROP TABLE IF EXISTS part_files;
                 DROP TABLE IF EXISTS catalog;
                 DROP TABLE IF EXISTS takedowns;
                 CREATE TABLE parts (
                     id TEXT PRIMARY KEY, name TEXT NOT NULL, lcsc TEXT, manufacturer TEXT,
-                    mpn TEXT, mfr_key TEXT, uploaded_at TEXT, size INTEGER);
+                    mpn TEXT, mfr_key TEXT, uploaded_at TEXT, size INTEGER,
+                    local_only INTEGER NOT NULL DEFAULT 0);
                 CREATE INDEX parts_lcsc ON parts (lcsc, uploaded_at);
                 CREATE INDEX parts_mfr ON parts (mfr_key, uploaded_at);
                 CREATE INDEX parts_name ON parts (name);
+                CREATE TABLE part_files (part_id TEXT NOT NULL, sha256 TEXT NOT NULL,
+                    PRIMARY KEY (part_id, sha256));
+                CREATE INDEX part_files_sha ON part_files (sha256);
                 CREATE TABLE catalog (
                     lcsc TEXT PRIMARY KEY, kind TEXT, mfr_key TEXT, updated_at TEXT, doc TEXT);
                 CREATE TABLE takedowns (kind TEXT, key TEXT, at TEXT, reason TEXT,
@@ -175,6 +186,7 @@ class Store:
             db = self._db()
             with db:
                 db.execute("DELETE FROM parts")
+                db.execute("DELETE FROM part_files")
                 db.execute("DELETE FROM catalog")
                 db.execute("DELETE FROM takedowns")
                 for path in sorted((self.root / "parts").glob("*/*.json")):
@@ -194,10 +206,16 @@ class Store:
 
     def _stats(self) -> Dict[str, int]:
         db = self._db()
+
+        def count(sql: str) -> int:
+            return db.execute(sql).fetchone()[0]
+
         return {
-            "parts": db.execute("SELECT COUNT(*) FROM parts").fetchone()[0],
-            "catalog": db.execute("SELECT COUNT(*) FROM catalog").fetchone()[0],
-            "takedowns": db.execute("SELECT COUNT(*) FROM takedowns").fetchone()[0],
+            "parts": count("SELECT COUNT(*) FROM parts"),
+            "catalog": count("SELECT COUNT(*) FROM catalog"),
+            "takedowns": count("SELECT COUNT(*) FROM takedowns WHERE kind != 'blob'"),
+            "blocked_files": count("SELECT COUNT(*) FROM takedowns WHERE kind = 'blob'"),
+            "local_only": count("SELECT COUNT(*) FROM parts WHERE local_only = 1"),
         }
 
     @staticmethod
@@ -206,7 +224,7 @@ class Store:
 
     def _index_part(self, db: sqlite3.Connection, manifest: Dict[str, Any]) -> None:
         db.execute(
-            "INSERT OR REPLACE INTO parts VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO parts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 manifest["id"],
                 manifest["name"],
@@ -216,7 +234,13 @@ class Store:
                 self._mfr_key(manifest.get("manufacturer"), manifest.get("mpn")),
                 (manifest.get("uploaded") or {}).get("at", ""),
                 sum(f["size"] for f in manifest["files"]),
+                1 if model.is_local_only(manifest) else 0,
             ),
+        )
+        db.execute("DELETE FROM part_files WHERE part_id = ?", (manifest["id"],))
+        db.executemany(
+            "INSERT OR IGNORE INTO part_files VALUES (?, ?)",
+            [(manifest["id"], f["sha256"]) for f in manifest["files"]],
         )
 
     def _index_catalog(self, db: sqlite3.Connection, entry: Dict[str, Any]) -> None:
@@ -256,20 +280,90 @@ class Store:
         except NotFound:
             return False
 
+    def _refuse_blocked(self, sha: str) -> None:
+        blocked = self.taken_down("blob", sha)
+        if blocked:
+            raise TakenDown(f"file {sha} was taken down on {blocked['at']}")
+
+    def _keep(self, path: Path) -> bool:
+        """Whether ``path`` exists; refreshes its time so ``gc`` gives it a new grace period."""
+        try:
+            os.utime(path)
+            return True
+        except FileNotFoundError:
+            return False
+
     def put_blob(self, data: bytes, expected: Optional[str] = None) -> str:
         sha = model.sha256_bytes(data)
         if expected is not None and expected != sha:
             raise model.InvalidPart(f"blob content hashes to {sha}, not {expected}")
+        self._refuse_blocked(sha)
         path = self.blob_path(sha)
-        if not path.is_file():
+        with self._lock:
+            if self._keep(path):
+                return sha
             _atomic_write(self._tmp, path, data)
         return sha
+
+    def put_blob_stream(self, stream: BinaryIO, length: int, expected: str) -> str:
+        """Store ``length`` bytes read from ``stream`` in chunks (the server's uploads)."""
+        if not model.is_sha256(expected):
+            raise model.InvalidPart(f"{expected!r} is not a sha256")
+        self._refuse_blocked(expected)
+        fd, name = tempfile.mkstemp(dir=self._tmp, prefix=".u-")
+        staged: Optional[str] = name
+        try:
+            digest = hashlib.sha256()
+            with os.fdopen(fd, "wb") as out:
+                remaining = length
+                while remaining > 0:
+                    chunk = stream.read(min(1 << 20, remaining))
+                    if not chunk:
+                        raise model.InvalidPart("the upload ended before its Content-Length")
+                    digest.update(chunk)
+                    out.write(chunk)
+                    remaining -= len(chunk)
+                out.flush()
+                os.fsync(out.fileno())
+            sha = digest.hexdigest()
+            if sha != expected:
+                raise model.InvalidPart(f"blob content hashes to {sha}, not {expected}")
+            path = self.blob_path(sha)
+            with self._lock:
+                if not self._keep(path):
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    os.chmod(name, 0o644)
+                    os.replace(name, path)
+                    staged = None
+            return sha
+        finally:
+            if staged is not None:
+                try:
+                    os.unlink(staged)
+                except OSError:
+                    pass
 
     def read_blob(self, sha: str) -> bytes:
         try:
             return self.blob_path(sha).read_bytes()
         except FileNotFoundError as err:
             raise NotFound(sha) from err
+
+    def is_used(self, sha: str) -> bool:
+        """Whether a stored part uses blob ``sha``."""
+        with self._lock:
+            row = (
+                self._db()
+                .execute("SELECT 1 FROM part_files WHERE sha256 = ? LIMIT 1", (sha,))
+                .fetchone()
+            )
+        return row is not None
+
+    def read_published_blob(self, sha: str) -> bytes:
+        """A file that a stored part uses (what a server serves); NotFound for any other blob."""
+        if not model.is_sha256(sha) or not self.is_used(sha):
+            raise NotFound(sha)
+        return self.read_blob(sha)
 
     # --- parts ------------------------------------------------------------------------------
 
@@ -279,21 +373,12 @@ class Store:
         uploaded_by: str = "local",
         max_file_bytes: int = model.DEFAULT_MAX_FILE_BYTES,
     ) -> "tuple[Dict[str, Any], bool]":
-        """Store a part whose blobs are already present; returns (manifest, created)."""
+        """Store a part whose blobs are already present; returns (manifest, created).
+
+        The blobs are checked (present, sizes, content types, not taken down) under the store's
+        lock, which ``gc`` and takedowns take too, so a part never names a missing file.
+        """
         request = model.check_manifest_request(request, max_file_bytes=max_file_bytes)
-        for entry in request["files"]:
-            path = self.blob_path(entry["sha256"])
-            if not path.is_file():
-                raise model.InvalidPart(f"blob {entry['sha256']} ({entry['path']}) is missing")
-            if path.stat().st_size != entry["size"]:
-                raise model.InvalidPart(f"{entry['path']}: size does not match its blob")
-        ato_sha = next(
-            f["sha256"] for f in request["files"] if f["path"] == f"{request['name']}.ato"
-        )
-        try:
-            ato_text = self.read_blob(ato_sha).decode("utf-8")
-        except UnicodeDecodeError as err:
-            raise model.InvalidPart(f"{request['name']}.ato is not UTF-8 text") from err
         pid = model.part_id(request["name"], request["files"])
         with self._lock:
             takedown = self.taken_down("part", pid)
@@ -302,6 +387,21 @@ class Store:
             existing = self.manifest_path(pid)
             if existing.is_file():
                 return json.loads(existing.read_text(encoding="utf-8")), False
+            ato_text = ""
+            for entry in request["files"]:
+                self._refuse_blocked(entry["sha256"])
+                path = self.blob_path(entry["sha256"])
+                if not path.is_file():
+                    raise model.InvalidPart(f"blob {entry['sha256']} ({entry['path']}) is missing")
+                if path.stat().st_size != entry["size"]:
+                    raise model.InvalidPart(f"{entry['path']}: size does not match its blob")
+                with open(path, "rb") as handle:
+                    data = handle.read(
+                        -1 if model.needs_full_content(entry["path"]) else model.CONTENT_HEAD_BYTES
+                    )
+                model.check_file_content(entry["path"], data)
+                if entry["path"] == f"{request['name']}.ato":
+                    ato_text = data.decode("utf-8")
             manifest = model.build_manifest(
                 request, ato_text, uploaded={"at": utc_now(), "by": uploaded_by}
             )
@@ -369,21 +469,60 @@ class Store:
             raise NotFound(lcsc)
         return self.manifest(found[0]["id"])
 
-    def delete_part(self, pid: str, reason: str) -> Dict[str, Any]:
-        """Take a part down: remove its manifest and unshared blobs; refuse it from now on."""
+    def delete_part(
+        self, pid: str, reason: str, block: Union[str, List[str]] = "unshared"
+    ) -> Dict[str, Any]:
+        """Take a part down: remove its manifest and unshared blobs; refuse it from now on.
+
+        ``block`` names the files that are refused from now on under any part name:
+        ``"unshared"`` (every file of the part that no other part uses; the default), ``"none"``,
+        or a list of the part's file names, each of which no other part may use (take those
+        parts down first).
+        """
         with self._lock:
             manifest = self.manifest(pid)
-            self._log_takedown("part", pid, reason)
-            self.manifest_path(pid).unlink()
+            by_path = {f["path"]: f["sha256"] for f in manifest["files"]}
             db = self._db()
+            others = {
+                row[0]
+                for row in db.execute(
+                    "SELECT sha256 FROM part_files WHERE part_id != ?", (pid,)
+                ).fetchall()
+            }
+            unshared = {sha for sha in by_path.values() if sha not in others}
+            if block == "unshared":
+                blocked = sorted(unshared)
+            elif block == "none":
+                blocked = []
+            elif isinstance(block, list) and all(isinstance(p, str) for p in block):
+                unknown = sorted(set(block) - set(by_path))
+                if unknown:
+                    raise model.InvalidPart(f"part {pid} has no files {unknown}")
+                shared = sorted(p for p in block if by_path[p] not in unshared)
+                if shared:
+                    raise model.InvalidPart(
+                        f"{shared}: other parts use these files too; take them down first"
+                    )
+                blocked = sorted({by_path[p] for p in block})
+            else:
+                raise model.InvalidPart("block must be 'unshared', 'none' or a list of file names")
+            self._log_takedown("part", pid, reason)
+            for sha in blocked:
+                self._log_takedown("blob", sha, f"{reason} (a file of part {pid})")
+            self.manifest_path(pid).unlink()
             with db:
                 db.execute("DELETE FROM parts WHERE id = ?", (pid,))
+                db.execute("DELETE FROM part_files WHERE part_id = ?", (pid,))
                 db.execute(
                     "INSERT OR REPLACE INTO takedowns VALUES ('part', ?, ?, ?)",
                     (pid, utc_now(), reason),
                 )
-            removed = self.gc(candidates=[f["sha256"] for f in manifest["files"]])
-            return {"id": pid, "removed_blobs": removed}
+                db.executemany(
+                    "INSERT OR REPLACE INTO takedowns VALUES ('blob', ?, ?, ?)",
+                    [(sha, utc_now(), reason) for sha in blocked],
+                )
+            removed = self.gc(candidates=list(by_path.values()))
+            return {"id": pid, "removed_blobs": removed, "blocked_files": blocked}
 
     def _log_takedown(self, kind: str, key: str, reason: str) -> None:
         line = json.dumps({"kind": kind, "key": key, "at": utc_now(), "reason": reason})
@@ -399,20 +538,54 @@ class Store:
                 refs.add(entry["sha256"])
         return refs
 
-    def gc(self, candidates: Optional[Iterable[str]] = None) -> int:
-        """Delete blobs no manifest references (only ``candidates`` when given)."""
+    def gc(self, candidates: Optional[Iterable[str]] = None, min_age: float = 0.0) -> int:
+        """Delete blobs no manifest references (only ``candidates`` when given).
+
+        ``min_age`` (seconds) spares blobs written or re-uploaded more recently: the server
+        collects orphans with a grace period, so an upload between its files and its part is
+        not cut short.
+        """
         with self._lock:
             refs = self.referenced_blobs()
             if candidates is None:
                 candidates = [p.name for p in (self.root / "blobs" / "sha256").glob("*/*")]
+            now = time.time()
             removed = 0
             for sha in set(candidates) - refs:
                 try:
-                    self.blob_path(sha).unlink()
+                    path = self.blob_path(sha)
+                    if min_age > 0 and now - path.stat().st_mtime < min_age:
+                        continue
+                    path.unlink()
                     removed += 1
                 except (FileNotFoundError, NotFound):
                     pass
             return removed
+
+    # --- distribution -----------------------------------------------------------------------
+
+    def local_only_parts(self) -> List[str]:
+        """The ids of the stored parts marked ``licence.distribution: local-only``."""
+        with self._lock:
+            rows = self._db().execute("SELECT id FROM parts WHERE local_only = 1 ORDER BY id")
+            return [row[0] for row in rows.fetchall()]
+
+    def set_distribution(self, pid: str, distribution: str) -> Dict[str, Any]:
+        """Correct a part's ``licence.distribution`` (the licence is not part of its id)."""
+        if distribution not in model.DISTRIBUTIONS:
+            raise model.InvalidPart(f"distribution must be one of {', '.join(model.DISTRIBUTIONS)}")
+        with self._lock:
+            manifest = self.manifest(pid)
+            licence = dict(manifest.get("licence") or {})
+            licence["distribution"] = distribution
+            manifest["licence"] = licence
+            model.check_manifest(manifest)
+            data = json.dumps(manifest, indent=2, sort_keys=True).encode() + b"\n"
+            _atomic_write(self._tmp, self.manifest_path(pid), data)
+            db = self._db()
+            with db:
+                self._index_part(db, manifest)
+            return manifest
 
     def verify(self) -> List[str]:
         """Every problem found by re-hashing blobs and re-checking manifests."""
@@ -431,6 +604,13 @@ class Store:
             for entry in manifest["files"]:
                 if not self.has_blob(entry["sha256"]):
                     problems.append(f"part {manifest['id']}: blob of {entry['path']} is missing")
+                    continue
+                try:
+                    model.check_file_content(entry["path"], self.read_blob(entry["sha256"]))
+                except model.InvalidPart as err:
+                    problems.append(f"part {manifest['id']}: {err}")
+                if self.taken_down("blob", entry["sha256"]):
+                    problems.append(f"part {manifest['id']}: {entry['path']} was taken down")
         return problems
 
     # --- catalog ----------------------------------------------------------------------------

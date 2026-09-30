@@ -8,7 +8,7 @@ always public)::
                                               {"parts": [summary, ...]}
     GET    /v1/parts/<id>                     the part manifest
     GET    /v1/lcsc/<C123>                    the newest part manifest for an LCSC id
-    GET    /v1/blobs/<sha256>                 file bytes (application/octet-stream, immutable)
+    GET    /v1/blobs/<sha256>                 a file of a stored part (application/octet-stream)
     GET    /v1/catalog[?lcsc=C1,C2]           a yapnr-picker-catalog-v1 document
     GET    /v1/catalog/<C123>                 one catalog entry with its provenance
     GET    /v0/component/..., POST /v0/query  atopile's components API, answered from the catalog
@@ -19,14 +19,17 @@ Write API (``Authorization: Bearer <token>``; scopes ``write`` and ``admin``)::
     POST   /v1/parts                          {"name", "files": [{path, sha256, size}],
                                                "provenance": {...}, "licence": {...}}
     PUT    /v1/catalog/<C123>                 {"part": {...catalog v1 part...}, "provenance": {...}}
-    DELETE /v1/parts/<id>                     admin; {"reason": "..."}: a takedown
+    DELETE /v1/parts/<id>                     admin; {"reason": "...", "block": ...}: a takedown
     DELETE /v1/catalog/<C123>                 admin; {"reason": "..."}
 
 Tokens live in a file of ``<sha256 of token> <scope> <label>`` lines; the server never sees a
-token in the clear except in a request, and compares hashes in constant time. The service is
-meant to run behind a TLS-terminating reverse proxy that also limits request rates
-(docs/part-cache.md, "Running a public instance"). It binds the loopback interface unless
-``--public`` is given.
+token in the clear except in a request, and compares hashes in constant time. A request's token
+is checked from its headers before its body is read, and uploads are streamed to disk. A file is
+served only while a stored part uses it; an uploaded file that no part takes up is removed after
+``--orphan-grace-s``. At most ``--max-connections`` requests are handled at once (others get
+503). The service is meant to run behind a TLS-terminating reverse proxy that also limits request
+rates (docs/part-cache.md, "Running a public instance"). It binds the loopback interface unless
+``--public`` is given, and then refuses a cache that holds local-only parts.
 """
 
 from __future__ import annotations
@@ -40,6 +43,7 @@ import re
 import socket
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -52,6 +56,9 @@ from yapnr.partcache.store import NotFound, Store, TakenDown
 
 SCOPES = ("read", "write", "admin")
 MAX_JSON = 1 << 20
+DEFAULT_MAX_CONNECTIONS = 32
+DEFAULT_ORPHAN_GRACE_S = 3600
+GC_INTERVAL_S = 600
 _BLOB = re.compile(r"^/v1/blobs/([0-9a-f]{64})$")
 _PART = re.compile(r"^/v1/parts/([0-9a-f]{64})$")
 _LCSC = re.compile(r"^/v1/lcsc/([^/]+)$")
@@ -120,6 +127,19 @@ class CacheService:
                 raise HttpError(403, f"this token lacks the {need!r} scope")
         raise HttpError(401, "unknown token")
 
+    @staticmethod
+    def required_scope(method: str, path: str) -> Optional[str]:
+        """The scope a request needs, from its method and path alone (None: no token)."""
+        if method == "GET" and path == "/v1/health":
+            return None
+        if method == "GET" or path.startswith("/v0/"):
+            return "read"
+        if method in ("PUT", "POST"):
+            return "write"
+        if method == "DELETE":
+            return "admin"
+        return None
+
     # --- catalog for the components API ---------------------------------------------------
 
     def catalog(self) -> catalog_mod.Catalog:
@@ -156,14 +176,18 @@ class CacheService:
             if method == "POST" and path == "/v1/parts":
                 who = self.authorize(auth, "write")
                 request = self._json(body)
+                licence = request.get("licence")
+                if isinstance(licence, dict) and licence.get("distribution") == model.LOCAL_ONLY:
+                    raise HttpError(400, "local-only parts stay in local caches")
                 manifest, created = self.store.put_part(request, who, self.max_file_bytes)
                 return (201 if created else 200), manifest, "application/json"
             if method == "DELETE":
                 self.authorize(auth, "admin")
-                reason = str(self._json(body).get("reason", "")).strip()
+                doc = self._json(body)
+                reason = str(doc.get("reason", "")).strip()
                 if not reason:
                     raise HttpError(400, "a takedown needs a reason")
-                return self._delete(path, reason)
+                return self._delete(path, reason, doc.get("block", "unshared"))
             raise HttpError(404 if method in ("GET", "POST") else 405, "not found")
         except HttpError as err:
             return err.status, {"detail": err.detail}, "application/json"
@@ -218,7 +242,7 @@ class CacheService:
             return 200, store.current(unquote(match.group(1))), "application/json"
         match = _BLOB.match(path)
         if match:
-            return 200, store.read_blob(match.group(1)), "application/octet-stream"
+            return 200, store.read_published_blob(match.group(1)), "application/octet-stream"
         if path == "/v1/catalog":
             wanted = query.get("lcsc")
             lcsc = [x for v in wanted for x in v.split(",") if x] if wanted else None
@@ -251,10 +275,27 @@ class CacheService:
             return 200, entry, "application/json"
         raise HttpError(404, "not found")
 
-    def _delete(self, path: str, reason: str) -> Tuple[int, Any, str]:
+    def put_blob_stream(self, path: str, stream, length: int) -> Tuple[int, Any, str]:
+        """A blob upload read from the connection in chunks (after ``authorize``)."""
+        try:
+            match = _BLOB.match(path)
+            if not match:
+                raise HttpError(404, "not found")
+            existed = self.store.has_blob(match.group(1))
+            sha = self.store.put_blob_stream(stream, length, match.group(1))
+            return (200 if existed else 201), {"sha256": sha, "size": length}, "application/json"
+        except HttpError as err:
+            return err.status, {"detail": err.detail}, "application/json"
+        except TakenDown as err:
+            return 410, {"detail": str(err)}, "application/json"
+        except model.InvalidPart as err:
+            return 400, {"detail": str(err)}, "application/json"
+
+    def _delete(self, path: str, reason: str, block: Any = "unshared") -> Tuple[int, Any, str]:
         match = _PART.match(path)
         if match:
-            return 200, self.store.delete_part(match.group(1), reason), "application/json"
+            result = self.store.delete_part(match.group(1), reason, block=block)
+            return 200, result, "application/json"
         match = _CATALOG_ENTRY.match(path)
         if match:
             self.store.delete_catalog(unquote(match.group(1)), reason)
@@ -269,21 +310,38 @@ def make_handler(service: CacheService, request_timeout: float = 60.0):
         timeout = request_timeout
 
         def _dispatch(self, method: str) -> None:
+            auth = self.headers.get("Authorization")
+            path = urlsplit(self.path).path
             body = None
             if method in ("PUT", "POST", "DELETE"):
+                # The token first, from the headers alone: an unauthorized request never gets
+                # its body read.
+                scope = service.required_scope(method, path)
+                if scope is not None:
+                    try:
+                        service.authorize(auth, scope)
+                    except HttpError as err:
+                        self._reply(err.status, {"detail": err.detail}, "application/json")
+                        self.close_connection = True
+                        return
                 try:
                     length = int(self.headers.get("Content-Length") or 0)
                 except ValueError:
                     length = -1
-                limit = service.max_file_bytes if method == "PUT" else MAX_JSON
+                blob = method == "PUT" and _BLOB.match(path) is not None
+                limit = service.max_file_bytes if blob else MAX_JSON
                 if length < 0 or length > limit:
                     self._reply(413, {"detail": "request body too large"}, "application/json")
                     self.close_connection = True
                     return
+                if blob:
+                    status, payload, ctype = service.put_blob_stream(path, self.rfile, length)
+                    if status >= 400:
+                        self.close_connection = True
+                    self._reply(status, payload, ctype)
+                    return
                 body = self.rfile.read(length)
-            status, payload, ctype = service.handle(
-                method, self.path, self.headers.get("Authorization"), body
-            )
+            status, payload, ctype = service.handle(method, self.path, auth, body)
             self._reply(status, payload, ctype)
 
         def _reply(self, status: int, payload: Any, ctype: str) -> None:
@@ -322,19 +380,91 @@ def make_handler(service: CacheService, request_timeout: float = 60.0):
     return Handler
 
 
-def make_server(service: CacheService, host: str, port: int, public: bool) -> ThreadingHTTPServer:
+class BoundedServer(ThreadingHTTPServer):
+    """A thread per request, at most ``max_connections`` at once; the rest get 503 at once."""
+
+    daemon_threads = True
+    max_connections = DEFAULT_MAX_CONNECTIONS
+
+    def server_activate(self) -> None:
+        self._slots = threading.BoundedSemaphore(self.max_connections)
+        super().server_activate()
+
+    def process_request(self, request, client_address) -> None:
+        if not self._slots.acquire(blocking=False):
+            try:
+                request.settimeout(1.0)
+                body = b'{"detail": "the part cache is busy; retry later"}'
+                request.sendall(
+                    b"HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json\r\n"
+                    b"Retry-After: 5\r\nConnection: close\r\nContent-Length: "
+                    + str(len(body)).encode()
+                    + b"\r\n\r\n"
+                    + body
+                )
+            except OSError:
+                pass
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._slots.release()
+
+
+def is_loopback_host(host: str) -> bool:
     try:
-        loopback = ipaddress.ip_address(host.strip("[]")).is_loopback
+        return ipaddress.ip_address(host.strip("[]")).is_loopback
     except ValueError:
-        loopback = host == "localhost"
+        return host == "localhost"
+
+
+def make_server(
+    service: CacheService,
+    host: str,
+    port: int,
+    public: bool,
+    max_connections: int = DEFAULT_MAX_CONNECTIONS,
+) -> ThreadingHTTPServer:
+    loopback = is_loopback_host(host)
     if not loopback and not public:
         raise ValueError(f"refusing to bind {host}: pass --public to serve beyond this machine")
-    server_class = ThreadingHTTPServer
+    if not loopback:
+        local_only = service.store.local_only_parts()
+        if local_only:
+            raise ValueError(
+                f"refusing to serve beyond this machine: {len(local_only)} parts are local-only"
+                f" (e.g. {local_only[0][:12]}); serve this cache on loopback only"
+            )
+    attrs = {"max_connections": max(1, int(max_connections))}
     if ":" in host:
-        server_class = type("Server6", (ThreadingHTTPServer,), {"address_family": socket.AF_INET6})
-    httpd = server_class((host.strip("[]"), port), make_handler(service))
-    httpd.daemon_threads = True
-    return httpd
+        attrs["address_family"] = socket.AF_INET6
+    server_class = type("PartCacheServer", (BoundedServer,), attrs)
+    return server_class((host.strip("[]"), port), make_handler(service))
+
+
+def collect_orphans(store: Store, grace_s: float, interval_s: float = GC_INTERVAL_S) -> None:
+    """Remove, every ``interval_s``, uploaded files that no part took up within ``grace_s``."""
+
+    def loop() -> None:
+        while True:
+            time.sleep(interval_s)
+            try:
+                removed = store.gc(min_age=grace_s)
+            except Exception as err:  # keep serving; report and retry next round
+                sys.stderr.write(f"part-cache: orphan collection failed: {err}\n")
+                continue
+            if removed:
+                sys.stderr.write(f"part-cache: removed {removed} unused uploaded files\n")
+
+    threading.Thread(target=loop, name="part-cache-gc", daemon=True).start()
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -355,6 +485,18 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
         "--private-reads", action="store_true", help="reads need a token with the read scope"
     )
     parser.add_argument("--max-file-mb", type=int, default=model.DEFAULT_MAX_FILE_BYTES >> 20)
+    parser.add_argument(
+        "--max-connections",
+        type=int,
+        default=DEFAULT_MAX_CONNECTIONS,
+        help="requests handled at once; more get 503",
+    )
+    parser.add_argument(
+        "--orphan-grace-s",
+        type=int,
+        default=DEFAULT_ORPHAN_GRACE_S,
+        help="remove uploaded files that no part uses after this long",
+    )
     parser.add_argument("--create", action="store_true", help="create the cache if missing")
     parser.add_argument("--port-file", help="write the bound port here once listening")
 
@@ -368,7 +510,8 @@ def serve(args: argparse.Namespace) -> int:
         public_reads=not args.private_reads,
         max_file_bytes=args.max_file_mb << 20,
     )
-    httpd = make_server(service, args.host, args.port, args.public)
+    httpd = make_server(service, args.host, args.port, args.public, args.max_connections)
+    collect_orphans(store, args.orphan_grace_s)
     port = httpd.server_address[1]
     if args.port_file:
         Path(args.port_file).write_text(f"{port}\n", encoding="utf-8")

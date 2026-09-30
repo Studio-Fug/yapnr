@@ -10,6 +10,8 @@
 #                                   they hold hashes, never the tokens
 #   YAPNR_PART_CACHE_PRIVATE_READS  1: reads need a token with the read scope as well
 #   YAPNR_PART_CACHE_MAX_FILE_MB    largest accepted file (default 64)
+#   YAPNR_PART_CACHE_MAX_CONNECTIONS  requests handled at once; more get 503 (default 32)
+#   YAPNR_PART_CACHE_ORPHAN_GRACE_S   remove uploaded files no part uses after this (default 3600)
 # Extra arguments are passed to `yapnr part-cache serve`.
 set -eu
 
@@ -19,7 +21,9 @@ if [ -n "${YAPNR_PART_CACHE_TOKEN_HASHES:-}" ]; then
     printf '%s\n' "${YAPNR_PART_CACHE_TOKEN_HASHES}" >"${tokens}"
 fi
 set -- --root /data --create --host 0.0.0.0 --public --port 8780 \
-    --max-file-mb "${YAPNR_PART_CACHE_MAX_FILE_MB:-64}" "$@"
+    --max-file-mb "${YAPNR_PART_CACHE_MAX_FILE_MB:-64}" \
+    --max-connections "${YAPNR_PART_CACHE_MAX_CONNECTIONS:-32}" \
+    --orphan-grace-s "${YAPNR_PART_CACHE_ORPHAN_GRACE_S:-3600}" "$@"
 if [ -f "${tokens}" ]; then
     set -- "$@" --tokens "${tokens}"
 fi

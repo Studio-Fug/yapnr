@@ -25,9 +25,21 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 PART_SCHEMA = "yapnr-part-v1"
 CACHE_SCHEMA = "yapnr-part-cache-v1"
 
-# File types a part may carry. Case-insensitive; anything else is refused on upload, so the
-# cache cannot be used to distribute arbitrary content.
+# File types a part may carry (case-insensitive). Anything else is refused on upload, and each
+# file's content must match its type (``check_file_content``). With the server's other rules
+# (it serves a file only while a part uses it, and removes files no part took up), the cache
+# holds part files, not arbitrary content.
 ALLOWED_SUFFIXES = (".ato", ".kicad_mod", ".kicad_sym", ".step", ".stp", ".wrl", ".md", ".txt")
+TEXT_SUFFIXES = (".ato", ".kicad_mod", ".kicad_sym", ".md", ".txt")
+# What a file of each type starts with (after an optional byte-order mark and white space).
+_MAGIC = {
+    ".kicad_mod": (b"(footprint", b"(module"),
+    ".kicad_sym": (b"(kicad_symbol_lib",),
+    ".step": (b"ISO-10303-21",),
+    ".stp": (b"ISO-10303-21",),
+    ".wrl": (b"#VRML",),
+}
+CONTENT_HEAD_BYTES = 4096
 MAX_FILES = 32
 DEFAULT_MAX_FILE_BYTES = 64 << 20
 
@@ -37,7 +49,11 @@ _SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 _TRAIT_RE = re.compile(r"^\s*trait\s+([A-Za-z_][A-Za-z0-9_:]*)\s*<(.*)>\s*$", re.M)
 _ARG_RE = re.compile(r'([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"((?:[^"\\]|\\.)*)"')
 
-LICENCE_KEYS = ("spdx", "notes", "terms_url")
+LICENCE_KEYS = ("spdx", "notes", "terms_url", "distribution")
+# licence.distribution: "shareable" (the default when absent) or "local-only". A local-only part
+# is never uploaded to a server, and a server bound beyond loopback refuses a root holding one.
+DISTRIBUTIONS = ("shareable", "local-only")
+LOCAL_ONLY = "local-only"
 PROVENANCE_KEYS = ("source", "generator", "created", "imported_from", "notes")
 
 
@@ -72,6 +88,38 @@ def check_file_path(path: Any) -> str:
     if not path.lower().endswith(ALLOWED_SUFFIXES):
         raise InvalidPart(f"file {path!r}: only {', '.join(ALLOWED_SUFFIXES)} files are stored")
     return path
+
+
+def _suffix(path: str) -> str:
+    lower = path.lower()
+    return next((s for s in ALLOWED_SUFFIXES if lower.endswith(s)), "")
+
+
+def needs_full_content(path: str) -> bool:
+    """Whether ``check_file_content`` needs the whole file (text types) or only its head."""
+    return _suffix(path) in TEXT_SUFFIXES
+
+
+def check_file_content(path: str, data: bytes) -> None:
+    """Refuse a file whose content does not match its type.
+
+    ``data`` is the whole file for text types (``needs_full_content``), else at least its first
+    ``CONTENT_HEAD_BYTES`` bytes. Text types must be UTF-8; KiCad files must be S-expressions of
+    their kind; STEP and VRML models must start with their format's header.
+    """
+    suffix = _suffix(path)
+    if suffix in TEXT_SUFFIXES:
+        try:
+            data.decode("utf-8")
+        except UnicodeDecodeError as err:
+            raise InvalidPart(f"file {path!r} is not UTF-8 text") from err
+    magic = _MAGIC.get(suffix)
+    if magic and not data.lstrip(b"\xef\xbb\xbf \t\r\n").startswith(magic):
+        raise InvalidPart(f"file {path!r} does not start like a {suffix} file")
+
+
+def is_local_only(manifest: Mapping[str, Any]) -> bool:
+    return (manifest.get("licence") or {}).get("distribution") == LOCAL_ONLY
 
 
 def part_id(name: str, files: Iterable[Mapping[str, Any]]) -> str:
@@ -172,6 +220,8 @@ def check_manifest_request(
         raise InvalidPart(f"a part named {name} must include {name}.ato")
     provenance = check_text_map(doc.get("provenance"), PROVENANCE_KEYS, "provenance", "source")
     licence = check_text_map(doc.get("licence"), LICENCE_KEYS, "licence", "spdx")
+    if licence.get("distribution", DISTRIBUTIONS[0]) not in DISTRIBUTIONS:
+        raise InvalidPart(f"licence.distribution must be one of {', '.join(DISTRIBUTIONS)}")
     return {
         "name": name,
         "files": sorted(clean, key=lambda f: f["path"]),

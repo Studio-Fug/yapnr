@@ -145,6 +145,45 @@ class ManifestTest(unittest.TestCase):
         with self.assertRaises(model.InvalidPart):
             model.check_manifest(tampered)
 
+    def test_distribution(self):
+        for value in ("shareable", "local-only"):
+            doc = request(licence={"spdx": "NOASSERTION", "distribution": value})
+            self.assertEqual(model.check_manifest_request(doc)["licence"]["distribution"], value)
+        with self.assertRaisesRegex(model.InvalidPart, "distribution"):
+            model.check_manifest_request(request(licence={"spdx": "MIT", "distribution": "x"}))
+        self.assertTrue(model.is_local_only({"licence": {"distribution": "local-only"}}))
+        self.assertFalse(model.is_local_only({"licence": {"spdx": "MIT"}}))
+
+
+class FileContentTest(unittest.TestCase):
+    def test_files_must_match_their_type(self):
+        good = {
+            "P.ato": b"component P:\n",
+            "fp.kicad_mod": testing.FOOTPRINT.encode(),
+            "old.kicad_mod": b"(module old (layer F.Cu))",
+            "s.kicad_sym": testing.SYMBOL.encode(),
+            "Model.STEP": b"ISO-10303-21;\nHEADER;",
+            "bom.stp": b"\xef\xbb\xbf\r\nISO-10303-21;",
+            "body.wrl": b"#VRML V2.0 utf8\n",
+            "NOTES.md": "notes \u00b5\n".encode(),
+            "empty.txt": b"",
+        }
+        for path, data in good.items():
+            model.check_file_content(path, data)
+        bad = {
+            "P.ato": b"\xff\xfe not utf-8",
+            "fp.kicad_mod": b"<html><script>alert(1)</script>",
+            "s.kicad_sym": b"(footprint x)",
+            "Model.step": b"<html>ISO-10303-21",
+            "body.wrl": b"MZ\x90\x00",
+            "NOTES.md": b"\x89PNG\r\n",
+        }
+        for path, data in bad.items():
+            with self.assertRaises(model.InvalidPart, msg=path):
+                model.check_file_content(path, data)
+        self.assertTrue(model.needs_full_content("x.kicad_sym"))
+        self.assertFalse(model.needs_full_content("x.STEP"))
+
 
 if __name__ == "__main__":
     unittest.main()

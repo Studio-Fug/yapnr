@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
 from yapnr.frontends.atopile import testing
 from yapnr.partcache import importer, model
-from yapnr.partcache.client import LocalPartCache, materialize, read_part_dir
+from yapnr.partcache.client import CacheError, LocalPartCache, materialize, read_part_dir
 from yapnr.partcache.store import NotFound, Store, TakenDown
 
 PROVENANCE = {"source": "self", "notes": "unit test"}
@@ -90,7 +92,109 @@ class StoreTest(unittest.TestCase):
         self.store.reindex()
         with self.assertRaises(TakenDown):
             self.upload()
-        self.assertEqual(self.store.stats(), {"parts": 1, "catalog": 0, "takedowns": 1})
+        self.assertEqual(
+            self.store.stats(),
+            {"parts": 1, "catalog": 0, "takedowns": 1, "blocked_files": 1, "local_only": 0},
+        )
+
+    def renamed_copy(self, source, name):
+        """The files of ``source`` as a part named ``name`` (the same model file, byte for byte)."""
+        target = self.root / "renamed" / name
+        target.mkdir(parents=True)
+        for path in source.iterdir():
+            data = path.read_bytes()
+            if path.suffix != ".step":
+                data = data.replace(source.name.encode(), name.encode())
+            (target / path.name.replace(source.name, name)).write_bytes(data)
+        return target
+
+    def test_takedown_blocks_its_files_under_any_name(self):
+        (self.part_dir / "MODEL.step").write_bytes(b"ISO-10303-21; synthetic model\n")
+        manifest = self.upload()
+        step = next(f["sha256"] for f in manifest["files"] if f["path"] == "MODEL.step")
+        result = self.cache.delete_part(manifest["id"], "vendor request")
+        self.assertIn(step, result["blocked_files"])
+        self.assertFalse(self.store.has_blob(step))
+        with self.assertRaises(TakenDown):
+            self.upload(self.renamed_copy(self.part_dir, "Renamed_Part"))
+        self.assertFalse(self.store.has_blob(step))
+        with self.assertRaises(TakenDown):
+            self.store.put_blob((self.part_dir / "MODEL.step").read_bytes())
+        # The block survives a rebuilt index.
+        self.store.reindex()
+        with self.assertRaises(TakenDown):
+            self.store.put_blob((self.part_dir / "MODEL.step").read_bytes())
+
+    def test_takedown_block_choices(self):
+        (self.part_dir / "MODEL.step").write_bytes(b"ISO-10303-21; another model\n")
+        first = self.upload()
+        other = self.upload(self.renamed_copy(self.part_dir, "Other_Part"))
+        with self.assertRaisesRegex(model.InvalidPart, "other parts use"):
+            self.cache.delete_part(first["id"], "x", block=["MODEL.step"])
+        with self.assertRaisesRegex(model.InvalidPart, "no files"):
+            self.cache.delete_part(first["id"], "x", block=["missing.md"])
+        result = self.cache.delete_part(first["id"], "wrong .ato only", block="none")
+        self.assertEqual(result["blocked_files"], [])
+        self.assertTrue(self.store.has_blob(other["files"][0]["sha256"]))
+        again = self.cache.delete_part(other["id"], "the model", block=["MODEL.step"])
+        self.assertEqual(len(again["blocked_files"]), 1)
+
+    def test_unused_blobs_are_not_published_and_are_collected(self):
+        data = b"<html><script>not a part file</script>"
+        sha = self.store.put_blob(data)
+        with self.assertRaises(NotFound):
+            self.store.read_published_blob(sha)
+        self.assertEqual(self.store.gc(min_age=3600), 0)  # an upload in progress is spared
+        old = time.time() - 7200
+        os.utime(self.store.blob_path(sha), (old, old))
+        self.assertEqual(self.store.gc(min_age=3600), 1)
+        manifest = self.upload()
+        used = manifest["files"][0]["sha256"]
+        self.assertEqual(self.store.read_published_blob(used), self.store.read_blob(used))
+        os.utime(self.store.blob_path(used), (old, old))
+        self.assertEqual(self.store.gc(min_age=3600), 0)
+
+    def test_part_files_must_match_their_types(self):
+        (self.part_dir / "MODEL.step").write_bytes(b"<html>not a model</html>")
+        with self.assertRaisesRegex(model.InvalidPart, "MODEL.step"):
+            self.upload()
+        (self.part_dir / "MODEL.step").unlink()
+        (self.part_dir / "NOTES.md").write_bytes(b"\x89PNG\r\n\x1a\n")
+        with self.assertRaisesRegex(model.InvalidPart, "UTF-8"):
+            self.upload()
+
+    def test_local_only_parts(self):
+        records = importer.import_part_dirs(
+            self.cache, [self.part_dir], "unit test", local_only=True
+        )
+        manifest = self.store.manifest(records[0]["id"])
+        self.assertEqual(manifest["licence"]["distribution"], "local-only")
+        self.assertEqual(self.store.local_only_parts(), [manifest["id"]])
+        self.store.set_distribution(manifest["id"], "shareable")
+        self.assertEqual(self.store.local_only_parts(), [])
+        self.assertEqual(
+            model.check_manifest(self.store.manifest(manifest["id"]))["id"], manifest["id"]
+        )
+        self.store.set_distribution(manifest["id"], "local-only")
+        self.store.reindex()
+        self.assertEqual(self.store.stats()["local_only"], 1)
+
+    def test_materialize_refuses_another_part_for_the_id(self):
+        first = self.upload()
+        (self.part_dir / "NOTES.md").write_text("a self-consistent other version\n")
+        second = self.upload()
+        store = self.store
+
+        class Substituting(LocalPartCache):
+            def __init__(self):
+                self.store, self.location = store, "substituting"
+
+            def manifest(self, part_id):
+                return store.manifest(second["id"])
+
+        with self.assertRaisesRegex(CacheError, "returned"):
+            materialize(Substituting(), first["id"], self.root / "project/parts")
+        self.assertFalse((self.root / "project/parts" / first["name"]).exists())
 
     def test_reindex_and_verify(self):
         manifest = self.upload()

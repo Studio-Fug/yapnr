@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import http.client
+import http.server
 import json
+import socket
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -67,8 +70,16 @@ class ServerTest(unittest.TestCase):
         parsed = json.loads(payload) if ctype == "application/json" and payload else payload
         return response.status, parsed, dict(response.getheaders())
 
-    def client(self, token):
-        return HttpPartCache(self.url, token=token, blob_dir=self.root / "blob-cache")
+    def client(self, token, read_token=None):
+        return HttpPartCache(
+            self.url, token=token, read_token=read_token, blob_dir=self.root / "blob-cache"
+        )
+
+    def raw(self, request: bytes, wait: float = 5.0) -> bytes:
+        """The status line the server answers ``request`` (bytes sent as they are) with."""
+        with socket.create_connection(("127.0.0.1", self.port), timeout=wait) as conn:
+            conn.sendall(request)
+            return conn.recv(4096).split(b"\r\n")[0]
 
 
 class PublicReadsTest(ServerTest):
@@ -135,6 +146,50 @@ class PublicReadsTest(ServerTest):
         )
         self.assertEqual(status, 400)
 
+    def test_the_token_is_checked_before_the_body_is_read(self):
+        # 60 MiB announced, none sent: the answer must come from the headers alone.
+        start = time.monotonic()
+        line = self.raw(
+            f"PUT /v1/blobs/{'0' * 64} HTTP/1.1\r\nHost: x\r\nContent-Length: 62914560\r\n\r\n".encode()
+        )
+        self.assertIn(b" 401 ", line)
+        self.assertLess(time.monotonic() - start, 4)
+        line = self.raw(
+            b"POST /v1/parts HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer "
+            + READ.encode()
+            + b"\r\nContent-Length: 1000\r\n\r\n"
+        )
+        self.assertIn(b" 403 ", line)
+
+    def test_unused_uploads_are_never_served(self):
+        data = b"<html><script>arbitrary content</script>"
+        sha = model.sha256_bytes(data)
+        self.assertEqual(self.call("PUT", f"/v1/blobs/{sha}", raw=data, token=WRITE)[0], 201)
+        self.assertEqual(self.call("GET", f"/v1/blobs/{sha}")[0], 404)
+        manifest = self.client(WRITE).upload_part(
+            *read_part_dir(self.part_dir, PROVENANCE, LICENCE)
+        )
+        used = manifest["files"][0]["sha256"]
+        self.assertEqual(self.call("GET", f"/v1/blobs/{used}")[0], 200)
+
+    def test_takedown_blocks_the_files(self):
+        (self.part_dir / "MODEL.step").write_bytes(b"ISO-10303-21; synthetic model\n")
+        request, blobs = read_part_dir(self.part_dir, PROVENANCE, LICENCE)
+        manifest = self.client(WRITE).upload_part(request, blobs)
+        step = next(f["sha256"] for f in manifest["files"] if f["path"] == "MODEL.step")
+        result = self.client(ADMIN).delete_part(manifest["id"], "vendor request")
+        self.assertIn(step, result["blocked_files"])
+        status, _body, _ = self.call("PUT", f"/v1/blobs/{step}", raw=blobs[step], token=WRITE)
+        self.assertEqual(status, 410)
+        self.assertEqual(self.call("GET", f"/v1/blobs/{step}")[0], 404)
+
+    def test_local_only_parts_are_refused(self):
+        licence = {**LICENCE, "distribution": "local-only"}
+        request, blobs = read_part_dir(self.part_dir, PROVENANCE, licence)
+        with self.assertRaisesRegex(CacheError, "local-only"):
+            self.client(WRITE).upload_part(request, blobs)
+        self.assertEqual(self.call("POST", "/v1/parts", request, token=WRITE)[0], 400)
+
     def test_tampered_blob_is_rejected_by_the_client(self):
         request, blobs = read_part_dir(self.part_dir, PROVENANCE, LICENCE)
         manifest = self.client(WRITE).upload_part(request, blobs)
@@ -172,6 +227,94 @@ class PrivateReadsTest(ServerTest):
         self.assertEqual(self.call("GET", "/v0/motd")[0], 401)
 
 
+class _Recorder(http.server.BaseHTTPRequestHandler):
+    """Records each request's Authorization header; redirects /redirect elsewhere."""
+
+    seen: list = []
+    target = ""
+
+    def do_GET(self):  # noqa: N802
+        type(self).seen.append((self.path, self.headers.get("Authorization")))
+        if self.path.startswith("/redirect"):
+            self.send_response(302)
+            self.send_header("Location", type(self).target + "/v1/catalog")
+        else:
+            self.send_response(200)
+        body = b'{"schema": "yapnr-picker-catalog-v1", "provenance": {}, "parts": []}'
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args):
+        pass
+
+
+class ClientTokenTest(unittest.TestCase):
+    """Where the client sends its tokens (loopback recorders, no cache server)."""
+
+    def serve(self, handler):
+        httpd = http.server.HTTPServer(("127.0.0.1", 0), handler)
+        thread = threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.05})
+        thread.daemon = True
+        thread.start()
+        self.addCleanup(httpd.server_close)
+        self.addCleanup(httpd.shutdown)
+        return f"http://127.0.0.1:{httpd.server_address[1]}"
+
+    def test_redirects_are_refused_and_carry_no_token(self):
+        sink = type("Sink", (_Recorder,), {"seen": []})
+        redirector = type("Redirector", (_Recorder,), {"seen": [], "target": self.serve(sink)})
+        client = HttpPartCache(self.serve(redirector) + "/redirect", read_token=READ, token=WRITE)
+        with self.assertRaisesRegex(CacheError, "redirected"):
+            client.catalog()
+        self.assertEqual(sink.seen, [])
+
+    def test_reads_send_the_read_token_only(self):
+        recorder = type("Recorder", (_Recorder,), {"seen": []})
+        url = self.serve(recorder)
+        HttpPartCache(url, token=WRITE, read_token="").catalog()
+        HttpPartCache(url, token=WRITE, read_token=READ).catalog()
+        self.assertEqual([auth for _path, auth in recorder.seen], [None, f"Bearer {READ}"])
+
+    def test_no_token_over_plain_http_beyond_loopback(self):
+        client = HttpPartCache("http://parts.example.org", token=WRITE, read_token="")
+        with self.assertRaisesRegex(CacheError, "plain http"):
+            client.put_catalog(testing.catalog_entry(), {"source": "unit test"})
+        HttpPartCache("https://parts.example.org", token=WRITE)  # https is fine
+        with self.assertRaisesRegex(CacheError, "query"):
+            HttpPartCache("https://parts.example.org/?x=1")
+
+
+class BusyTest(ServerTest):
+    def setUp(self):
+        super().setUp()
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        self.httpd = server.make_server(self.service, "127.0.0.1", 0, False, max_connections=1)
+        self.port = self.httpd.server_address[1]
+        thread = threading.Thread(target=self.httpd.serve_forever, kwargs={"poll_interval": 0.05})
+        thread.daemon = True
+        thread.start()
+        self.addCleanup(self.httpd.server_close)
+        self.addCleanup(self.httpd.shutdown)
+
+    def test_requests_beyond_the_limit_get_503(self):
+        with socket.create_connection(("127.0.0.1", self.port), timeout=5) as held:
+            held.sendall(b"GET /v1/health HTTP/1.1\r\n")  # never finished: holds the only slot
+            deadline = time.monotonic() + 5
+            line = b""
+            while time.monotonic() < deadline and b" 503 " not in line:
+                line = self.raw(b"GET /v1/health HTTP/1.1\r\nHost: x\r\n\r\n")
+                time.sleep(0.05)
+            self.assertIn(b" 503 ", line)
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and b" 200 " not in line:
+            line = self.raw(b"GET /v1/health HTTP/1.1\r\nHost: x\r\n\r\n")
+            time.sleep(0.05)
+        self.assertIn(b" 200 ", line)
+
+
 class BindTest(unittest.TestCase):
     def test_public_bind_needs_the_flag(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -179,6 +322,20 @@ class BindTest(unittest.TestCase):
             service = server.CacheService(store)
             with self.assertRaisesRegex(ValueError, "--public"):
                 server.make_server(service, "0.0.0.0", 0, public=False)
+
+    def test_local_only_parts_stay_on_loopback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = LocalPartCache(Path(tmp) / "cache", create=True)
+            part = testing.write_part(Path(tmp) / "parts")
+            request, blobs = read_part_dir(
+                part, PROVENANCE, {**LICENCE, "distribution": "local-only"}
+            )
+            cache.upload_part(request, blobs)
+            service = server.CacheService(cache.store)
+            with self.assertRaisesRegex(ValueError, "local-only"):
+                server.make_server(service, "0.0.0.0", 0, public=True)
+            httpd = server.make_server(service, "127.0.0.1", 0, public=False)
+            httpd.server_close()
 
     def test_token_file(self):
         with tempfile.TemporaryDirectory() as tmp:

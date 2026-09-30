@@ -6,14 +6,19 @@ without that the default local cache (``default_root()``).
 
 Both clients offer the same calls: look parts up, fetch manifests and files, read the catalog,
 upload a part directory, and take parts down. ``materialize`` writes a part into a project
-after checking every file against its sha256, so a cache (or the network) cannot put anything
-into a build that the project's parts lock did not name.
+after checking that the manifest is the one the id names and every file against its sha256, so
+a cache (or the network) cannot put anything into a build that the project's parts lock did not
+name.
 
-Stdlib only. A server token comes from ``$YAPNR_PART_CACHE_TOKEN`` and is never printed.
+Stdlib only. Tokens are never printed. ``$YAPNR_PART_CACHE_TOKEN`` (write or admin scope) is
+sent with writes only; ``$YAPNR_PART_CACHE_READ_TOKEN`` with reads, for a server that keeps its
+reads private. A token goes only to the server named (redirects are refused, not followed) and
+only over ``https://``, or ``http://`` to a loopback address.
 """
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import shutil
@@ -28,6 +33,7 @@ from yapnr.partcache.store import NotFound, Store
 
 ENV_LOCATION = "YAPNR_PART_CACHE"
 ENV_TOKEN = "YAPNR_PART_CACHE_TOKEN"
+ENV_READ_TOKEN = "YAPNR_PART_CACHE_READ_TOKEN"
 HTTP_TIMEOUT = 120.0
 
 
@@ -69,7 +75,7 @@ class PartCache:
     def put_catalog(self, part: Dict[str, Any], provenance: Dict[str, Any]) -> Dict[str, Any]:
         raise NotImplementedError
 
-    def delete_part(self, part_id: str, reason: str) -> Dict[str, Any]:
+    def delete_part(self, part_id: str, reason: str, block: Any = "unshared") -> Dict[str, Any]:
         raise NotImplementedError
 
 
@@ -100,26 +106,59 @@ class LocalPartCache(PartCache):
             self.store.put_blob(data, expected=sha)
         return self.store.put_part(request, uploaded_by="local")[0]
 
+    def local_only_parts(self) -> List[str]:
+        return self.store.local_only_parts()
+
     def put_catalog(self, part: Dict[str, Any], provenance: Dict[str, Any]) -> Dict[str, Any]:
         return self.store.put_catalog(part, provenance)
 
-    def delete_part(self, part_id: str, reason: str) -> Dict[str, Any]:
-        return self.store.delete_part(part_id, reason)
+    def delete_part(self, part_id: str, reason: str, block: Any = "unshared") -> Dict[str, Any]:
+        return self.store.delete_part(part_id, reason, block=block)
+
+
+class _NoRedirects(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects: a token must reach the server it was given for and no other."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None  # urllib then raises HTTPError with the 3xx status
+
+
+_OPENER = urllib.request.build_opener(_NoRedirects)
+
+
+def _is_loopback(host: str) -> bool:
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return host == "localhost"
 
 
 class HttpPartCache(PartCache):
     """A cache server. Downloaded files are kept in a local content-addressed directory."""
 
-    def __init__(self, url: str, token: Optional[str] = None, blob_dir: Optional[Path] = None):
+    def __init__(
+        self,
+        url: str,
+        token: Optional[str] = None,
+        blob_dir: Optional[Path] = None,
+        read_token: Optional[str] = None,
+    ):
         parts = urllib.parse.urlsplit(url)
-        if parts.scheme not in ("http", "https") or not parts.netloc:
+        if parts.scheme not in ("http", "https") or not parts.hostname:
             raise CacheError(f"not a cache server URL: {url!r}")
         if parts.username or parts.password:
             raise CacheError("put the token in $YAPNR_PART_CACHE_TOKEN, not in the URL")
+        if parts.query or parts.fragment:
+            raise CacheError(f"a cache server URL has no query or fragment: {url!r}")
         self.base = url.rstrip("/")
         self.location = self.base
         self.token = token if token is not None else os.environ.get(ENV_TOKEN) or None
+        self.read_token = (
+            read_token if read_token is not None else os.environ.get(ENV_READ_TOKEN) or None
+        )
         self.blob_dir = blob_dir
+        # A token crosses the network only encrypted, or not at all.
+        self._token_ok = parts.scheme == "https" or _is_loopback(parts.hostname)
 
     def _request(
         self, method: str, path: str, body: Optional[bytes] = None, ctype: str = "application/json"
@@ -127,10 +166,16 @@ class HttpPartCache(PartCache):
         request = urllib.request.Request(self.base + path, data=body, method=method)
         if body is not None:
             request.add_header("Content-Type", ctype)
-        if self.token:
-            request.add_header("Authorization", f"Bearer {self.token}")
+        token = self.read_token if method == "GET" else self.token
+        if token:
+            if not self._token_ok:
+                raise CacheError(
+                    f"refusing to send a token to {self.base} over plain http; use https"
+                )
+            # Not copied onto a redirected request (and redirects are refused anyway).
+            request.add_unredirected_header("Authorization", f"Bearer {token}")
         try:
-            with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT) as response:
+            with _OPENER.open(request, timeout=HTTP_TIMEOUT) as response:
                 return response.read()
         except urllib.error.HTTPError as err:
             try:
@@ -139,6 +184,13 @@ class HttpPartCache(PartCache):
                 detail = ""
             if err.code == 404:
                 raise NotFound(path) from err
+            if 300 <= err.code < 400:
+                raise CacheError(
+                    f"{method} {path}: the server redirected (HTTP {err.code}); a part cache URL"
+                    " must name the server itself"
+                ) from err
+            if err.code == 401 and method == "GET" and not token:
+                detail = f"{detail} (this server keeps reads private: set ${ENV_READ_TOKEN})"
             raise CacheError(f"{method} {path}: HTTP {err.code} {detail}".strip()) from err
         except urllib.error.URLError as err:
             raise CacheError(f"{method} {self.base}{path}: {err.reason}") from err
@@ -194,6 +246,8 @@ class HttpPartCache(PartCache):
         return self._json("GET", f"/v1/catalog{suffix}")
 
     def upload_part(self, request: Dict[str, Any], blobs: Dict[str, bytes]) -> Dict[str, Any]:
+        if (request.get("licence") or {}).get("distribution") == model.LOCAL_ONLY:
+            raise CacheError(f"{request.get('name')}: local-only parts are never uploaded")
         for sha, data in blobs.items():
             self._request("PUT", f"/v1/blobs/{sha}", data, "application/octet-stream")
         return self._json("POST", "/v1/parts", request)
@@ -202,8 +256,10 @@ class HttpPartCache(PartCache):
         lcsc = urllib.parse.quote(str(part.get("lcsc", "")))
         return self._json("PUT", f"/v1/catalog/{lcsc}", {"part": part, "provenance": provenance})
 
-    def delete_part(self, part_id: str, reason: str) -> Dict[str, Any]:
-        return self._json("DELETE", f"/v1/parts/{part_id}", {"reason": reason})
+    def delete_part(self, part_id: str, reason: str, block: Any = "unshared") -> Dict[str, Any]:
+        if not model.is_sha256(part_id):
+            raise NotFound(part_id)
+        return self._json("DELETE", f"/v1/parts/{part_id}", {"reason": reason, "block": block})
 
 
 def open_cache(location: "str | os.PathLike | None" = None, create: bool = False) -> PartCache:
@@ -265,6 +321,10 @@ def materialize(cache: PartCache, part_id: str, parts_dir: Path, replace: bool =
     error unless ``replace``, which rewrites it.
     """
     manifest = model.check_manifest(cache.manifest(part_id))
+    if manifest["id"] != part_id:
+        # check_manifest proves the manifest matches its own id; this, that it is the part asked
+        # for, so a cache cannot substitute another (self-consistent) part.
+        raise CacheError(f"asked for part {part_id}, the cache returned {manifest['id']}")
     target = Path(parts_dir) / manifest["name"]
     if target.exists():
         if target.is_dir() and not target.is_symlink() and dir_part_id(target) == part_id:

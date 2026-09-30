@@ -39,7 +39,9 @@ def provenance_for(
     return provenance
 
 
-def licence_for(provenance: Dict[str, str], note: Optional[str] = None) -> Dict[str, str]:
+def licence_for(
+    provenance: Dict[str, str], note: Optional[str] = None, local_only: bool = False
+) -> Dict[str, str]:
     source = provenance.get("source", "")
     if source.startswith("easyeda:"):
         licence = {
@@ -55,6 +57,8 @@ def licence_for(provenance: Dict[str, str], note: Optional[str] = None) -> Dict[
         }
     if note:
         licence["notes"] = f"{licence['notes']} {note}"
+    if local_only:
+        licence["distribution"] = model.LOCAL_ONLY
     return licence
 
 
@@ -64,8 +68,12 @@ def import_part_dirs(
     imported_from: str,
     licence_note: Optional[str] = None,
     notes: Optional[str] = None,
+    local_only: bool = False,
 ) -> List[Dict[str, Any]]:
     """Upload each part directory; returns one record per part (name, id, lcsc, source).
+
+    ``local_only`` marks the parts ``licence.distribution: local-only`` (files that must not
+    leave this machine, such as a manufacturer's model under restrictive terms).
 
     Raises ImportFailed, after importing every other part, when some parts are refused.
     """
@@ -74,7 +82,7 @@ def import_part_dirs(
         part_dir = Path(part_dir)
         try:
             provenance = provenance_for(part_dir, f"{imported_from}/{part_dir.name}", notes)
-            licence = licence_for(provenance, licence_note)
+            licence = licence_for(provenance, licence_note, local_only=local_only)
             request, blobs = read_part_dir(part_dir, provenance, licence)
             before = model.part_id(request["name"], request["files"])
             manifest = cache.upload_part(request, blobs)

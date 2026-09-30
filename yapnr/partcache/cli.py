@@ -56,7 +56,12 @@ def _cmd_import_parts(args: argparse.Namespace) -> int:
     failures = []
     try:
         records = importer.import_part_dirs(
-            cache, dirs, args.imported_from, licence_note=args.licence_note, notes=args.notes
+            cache,
+            dirs,
+            args.imported_from,
+            licence_note=args.licence_note,
+            notes=args.notes,
+            local_only=args.local_only,
         )
     except importer.ImportFailed as err:
         records, failures = err.imported, err.failures
@@ -151,8 +156,15 @@ def _cmd_catalog(args: argparse.Namespace) -> int:
 
 
 def _cmd_delete(args: argparse.Namespace) -> int:
-    result = _cache(args).delete_part(args.part_id, args.reason)
+    block = args.block if args.block in ("unshared", "none") else args.block.split(",")
+    result = _cache(args).delete_part(args.part_id, args.reason, block=block)
     print(json.dumps(result))
+    return 0
+
+
+def _cmd_distribution(args: argparse.Namespace) -> int:
+    manifest = _local_store(args).set_distribution(args.part_id, args.distribution)
+    print(f"{manifest['id'][:12]}  {manifest['name']}  {manifest['licence']['distribution']}")
     return 0
 
 
@@ -230,6 +242,11 @@ def register(commands: "argparse._SubParsersAction") -> None:
     imp.add_argument("--imported-from", required=True, help="where the parts come from")
     imp.add_argument("--licence-note", help="appended to each part's licence note")
     imp.add_argument("--notes", help="provenance notes")
+    imp.add_argument(
+        "--local-only",
+        action="store_true",
+        help="mark the parts local-only: never uploaded to, or served by, a shared server",
+    )
 
     cat = add("import-catalog", _cmd_import_catalog, "add catalog entries from a catalog file")
     cat.add_argument("catalog")
@@ -261,6 +278,16 @@ def register(commands: "argparse._SubParsersAction") -> None:
     delete = add("delete", _cmd_delete, "take a part down (admin)")
     delete.add_argument("part_id")
     delete.add_argument("--reason", required=True)
+    delete.add_argument(
+        "--block",
+        default="unshared",
+        help="files refused from now on: 'unshared' (default: every file no other part uses),"
+        " 'none', or comma-separated file names of the part",
+    )
+
+    dist = add("set-distribution", _cmd_distribution, "mark a part shareable or local-only")
+    dist.add_argument("part_id")
+    dist.add_argument("distribution", choices=("shareable", "local-only"))
 
     add("verify", _cmd_verify, "re-hash every file of a local cache")
     add("gc", _cmd_gc, "remove unreferenced files of a local cache")

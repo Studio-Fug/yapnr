@@ -112,7 +112,12 @@ def run_showcases(args):
     for case in CASES:
         command += ["--case", case]
     print("running:", " ".join(command[:4]), "...", flush=True)
-    subprocess.run(command, check=False)
+    # run.py bounds each case by --timeout; this bounds the whole run (the cases, one at a
+    # time, and the runner's own set-up).
+    try:
+        subprocess.run(command, check=False, timeout=args.timeout * (len(CASES) + 1))
+    except subprocess.TimeoutExpired:
+        print("the showcase run timed out; rendering what it finished", flush=True)
     return run
 
 

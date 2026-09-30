@@ -22,6 +22,8 @@ bazel test --config=quick //...       # skip tests tagged slow
 bazel run //docs:build                # docs -> docs/site/html/
 bazel run //docs:serve                # preview on http://127.0.0.1:8000/
 prek run --all-files                  # presubmit lints
+tools/release/version.py --field pep440   # the version of this checkout (from git)
+tools/image/build_local.sh            # build and smoke-test the container images (Docker)
 ```
 
 Test tiers and tags are described in [docs/architecture.md](docs/architecture.md#test-tiers).
@@ -128,16 +130,31 @@ The copy's `kicad-cli` registers as background-only and never shows a Dock icon;
 match the stock bundle. KiCad's Python workers do not register with the Dock. A future
 `yapnr kicad make-headless` command automates this (PR3d). Redo the copy after upgrading KiCad.
 
+## Container images and releases
+
+The container images (`ghcr.io/studio-fug/yapnr` and its KiCad base) are described in
+[docs/containers.md](docs/containers.md), including how to build them locally
+(`tools/image/build_local.sh`, which needs Docker and a few GB of disk). Versions come from git tags
+only; [docs/releases.md](docs/releases.md) has the versioning rules, the pull request labels that
+group the release notes, and the owner's release checklist. Agents never create tags or releases.
+
+After changing a runtime pin (torch, numpy, pyyaml or their dependencies) in `requirements.lock`,
+regenerate the image's runtime locks with `tools/image/update_runtime_locks.sh` (needs `uv`);
+`tests/unit/repo/test_images.py` fails until they agree.
+
 ## Repository layout
 
-| Path          | What                                                                  |
-| ------------- | --------------------------------------------------------------------- |
-| `yapnr/`      | the Python package (today: version and CLI)                           |
-| `tests/unit/` | hermetic unit tests and repo checks                                   |
-| `tools/`      | privacy scan, test-wiring check, internal Bazel macros                |
-| `docs/`       | documentation (Sphinx with MyST); the site is built by `//docs:build` |
-| `branding/`   | logo, mark, favicons and palette                                      |
-| `.github/`    | CI workflows, CODEOWNERS, pull request template                       |
+| Path                             | What                                                                  |
+| -------------------------------- | --------------------------------------------------------------------- |
+| `yapnr/`                         | the Python package (today: version and CLI)                           |
+| `tests/unit/`                    | hermetic unit tests and repo checks                                   |
+| `tools/`                         | privacy scan, test-wiring check, internal Bazel macros                |
+| `tools/release/`, `tools/image/` | version derivation, release notes, image build and smoke test         |
+| `release/`                       | the yapnr wheel (`//release:wheel`)                                   |
+| `docker/`                        | the container images: `yapnr-kicad` (base) and `yapnr`                |
+| `docs/`                          | documentation (Sphinx with MyST); the site is built by `//docs:build` |
+| `branding/`                      | logo, mark, favicons and palette                                      |
+| `.github/`                       | CI workflows, CODEOWNERS, pull request template                       |
 
 The planned full layout is in [docs/migration-plan.md](docs/migration-plan.md#1-repository-layout).
 
@@ -158,3 +175,9 @@ The planned full layout is in [docs/migration-plan.md](docs/migration-plan.md#1-
 
 `lint`, `test` and `docs` are the required checks. `.github/workflows/macos.yaml` runs the tests on
 `macos-latest` for information only.
+
+`.github/workflows/image.yaml` builds and smoke-tests the container images for linux/amd64 and
+linux/arm64 on every pull request and publishes `edge` from `main` (informational until v0.1.0).
+`.github/workflows/release.yaml` runs on release tags (and as a dry run on demand): CI at the tag,
+the images with the release tags, and the GitHub release. See
+[docs/releases.md](docs/releases.md#what-the-workflows-do).

@@ -20,6 +20,8 @@ offers `yapnr --version` and a `yapnr doctor` stub. Progress is tracked in
 
 ## Start here
 
+- [Container images](containers.md): run yapnr with Docker and nothing else (KiCad included).
+- [Releases and versioning](releases.md): version numbers, image tags, what a release publishes.
 - [Architecture](architecture.md): the planned layout of the package, the test tiers and the
   pipeline.
 - [Migration plan](migration-plan.md): how the engine moves out of Splanc, PR by PR.
@@ -37,6 +39,14 @@ For contributors and agents:
 
 yapnr is free software under the GNU Affero General Public License, version 3 or (at your option)
 any later version (`AGPL-3.0-or-later`). See [LICENSE](../LICENSE).
+
+```{toctree}
+:hidden:
+:caption: Using yapnr
+
+containers
+releases
+```
 
 ```{toctree}
 :hidden:

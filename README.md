@@ -12,6 +12,18 @@
   <a href="https://github.com/Studio-Fug/yapnr/actions/workflows/macos.yaml?query=branch%3Amain"><img
     src="https://github.com/Studio-Fug/yapnr/actions/workflows/macos.yaml/badge.svg?branch=main"
     alt="macOS"></a>
+  <a href="https://studio-fug.github.io/yapnr/"><img
+    src="https://img.shields.io/github/deployments/Studio-Fug/yapnr/github-pages?label=docs"
+    alt="Docs"></a>
+  <!-- Enable once the first public image (after the GHCR visibility switch) and the first
+  release (v0.1.0) exist; see docs/releases.md.
+  <a href="https://github.com/Studio-Fug/yapnr/releases/latest"><img
+    src="https://img.shields.io/github/v/release/Studio-Fug/yapnr?sort=semver&display_name=tag"
+    alt="Latest release"></a>
+  <a href="https://github.com/Studio-Fug/yapnr/pkgs/container/yapnr"><img
+    src="https://img.shields.io/badge/ghcr-amd64%20%7C%20arm64-2496ED?logo=docker&logoColor=white"
+    alt="Container image ghcr.io/studio-fug/yapnr (amd64, arm64)"></a>
+  -->
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg"
     alt="License: AGPL-3.0-or-later"></a>
   <img src="https://img.shields.io/badge/python-3.11-3776ab.svg" alt="Python 3.11">
@@ -50,6 +62,19 @@ bazel run //docs:build            # documentation -> docs/site/html/
 
 See [DEVELOPERS.md](DEVELOPERS.md) for setup (including the headless KiCad copy on macOS) and
 [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution policy.
+
+## Container image
+
+`ghcr.io/studio-fug/yapnr` bundles KiCad 10, CPython 3.11 with CPU-only torch, and yapnr, for
+linux/amd64 and linux/arm64, so running yapnr needs Docker and nothing else:
+
+```sh
+docker run --rm ghcr.io/studio-fug/yapnr:edge doctor
+```
+
+`edge` follows `main`; release tags (`X.Y.Z`, `X.Y`, `latest`) start with v0.1.0. See
+[docs/containers.md](docs/containers.md) for projects, UID mapping, resource limits and Apple
+Silicon, and [docs/releases.md](docs/releases.md) for versioning and releases.
 
 ## License
 

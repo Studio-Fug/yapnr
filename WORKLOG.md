@@ -3,29 +3,35 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-09-29 (PR0).
+Last updated: 2026-09-29 (PR-R).
 
 ## In progress
 
-- **PR0, bootstrap** (branch `claude/pr0-bootstrap`): Bazel skeleton with the hermetic Python 3.11
-  toolchain and the `yapnr_pypi` lock, presubmit hooks with the privacy scan, CI (lint, test,
-  docs, gated Pages deploy), the Sphinx docs skeleton, the CLI stub (`--version`, `doctor`) and
-  repo-check tests. New commits use the owner's public commit address (owner decision,
-  `docs/decisions.md`); the earlier PR0 commits keep their noreply address, which still passes.
+- **PR-R, releases and container images** (branch `claude/pr-r-release-container`): the release
+  tag as the only version source (`tools/release/version.py`, no version in `MODULE.bazel`), the
+  stamped wheel (`//release:wheel`), the images `ghcr.io/studio-fug/yapnr-kicad` and
+  `ghcr.io/studio-fug/yapnr` (`docker/`, smoke test `tools/image/smoke_image.sh`), the `Image`
+  and `Release` workflows, release-note categories, and [releases](docs/releases.md) and
+  [containers](docs/containers.md) docs. Both images were built and smoke-tested locally on arm64;
+  amd64 is first built by CI on the pull request.
+- **PR1, engine import with history** (branch `claude/pr1-engine-history`).
 
 ## Next
 
-1. Push PR0 and get CI green on `main`. Then, in this order: set the repository variable
-   `YAPNR_PAGES_ENABLED=true`; run CI manually on `main` (`gh workflow run CI --ref main`), which
-   creates the `gh-pages` branch; set Settings > Pages to deploy from `gh-pages`, `/ (root)`.
-2. Configure repository settings: squash merge by default; a ruleset on `main` requiring `lint`,
-   `test` and `docs`; private vulnerability reporting on (CONTRIBUTING.md points to it). Merges
-   made on GitHub are authored with the owner's public commit address (the one in
-   `tools/privacy/allowed_identities.txt`); any other author address fails the identity check on
-   `main`.
-3. PR1: import the engine with history from Splanc (`git filter-repo` on a scratch clone, privacy
+1. Merge PR-R; its first `main` build pushes `yapnr-kicad:10.0.6-1`, `yapnr-kicad:10.0.6-1-src`
+   and `yapnr:edge`. Then make both GHCR packages **public** (package settings > Change
+   visibility; irreversible, owner-approved), and check that an anonymous
+   `docker pull ghcr.io/studio-fug/yapnr:edge` works and that
+   `gh attestation verify oci://ghcr.io/studio-fug/yapnr:edge -R Studio-Fug/yapnr` passes.
+2. Create the release-note labels (`tools/release/create_labels.sh`), label open pull requests,
+   and run the release dry run once (`gh workflow run release.yaml --ref main`).
+3. Uncomment the container and release badges in `README.md` once the image is public and v0.1.0
+   exists; decide on immutable releases (docs/releases.md).
+4. PR1: import the engine with history from Splanc (`git filter-repo` on a scratch clone, privacy
    scan over the whole filtered history before any push). See the
    [migration plan](docs/migration-plan.md#8-pr-sequence).
+5. First release tag `v0.1.0` (owner) once the engine runs end to end inside the published image on
+   both architectures (the PR6b example); make the `image` check required then.
 
 ## Blockers
 

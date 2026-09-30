@@ -48,24 +48,49 @@ Owner decisions of 2026-09-29, taken while planning the migration (see
 - **Required CI test job on `ubuntu-24.04-arm`;** the macOS job is informational. The lock is
   CPU-only for darwin-arm64 and linux-aarch64 (below).
 
+Owner decisions for releases and container images (PR-R; [releases](releases.md),
+[containers](containers.md)):
+
+- **Versions: SemVer tags `vX.Y.Z`,** release candidates `vX.Y.Z-rc.N`. While 0.x, a breaking or
+  results-changing release bumps MINOR; the `results-change` label marks such pull requests.
+- **The tag is the only version source.** No `version` in `MODULE.bazel`; the wheel is stamped at
+  build time and `__version__` reads the installed metadata.
+- **Only the owner creates `v*` tags** (a tag ruleset); agents never create tags or releases. The
+  release workflow runs on the tag push and has a dry-run dispatch.
+- **Release notes are GitHub's generated notes,** grouped by pull request label
+  (`.github/release.yml`). No Conventional Commits, no release-please.
+- **Public images on GHCR:** `ghcr.io/studio-fug/yapnr-kicad` (Ubuntu 24.04 with KiCad from the
+  KiCad team's PPA) and `ghcr.io/studio-fug/yapnr`, native linux/amd64 and linux/arm64 builds with
+  SBOM, provenance and attestations. Owner approved making the packages public (a one-time,
+  irreversible switch after the first push).
+- **Redistributing KiCad in the images is approved,** with the source offer as permanent
+  `yapnr-kicad:<tag>-src` images (never pruned), the Ubuntu snapshot recorded in a label, and the
+  notices (`LICENSE`, `THIRD_PARTY.md`, `SOURCES`) under `/usr/share/doc/yapnr`.
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.
 
-| Component       | Pin                        | Held in                         |
-| --------------- | -------------------------- | ------------------------------- |
-| Bazel           | `7.7.1`                    | `.bazelversion`                 |
-| `rules_python`  | `2.0.3`                    | `MODULE.bazel`                  |
-| Python          | `3.11` (hermetic)          | `MODULE.bazel`                  |
-| pip hub         | `yapnr_pypi`               | `MODULE.bazel`                  |
-| torch           | `>=2.2,<2.4` (lock: 2.3.1) | `requirements.in`, lock         |
-| numpy           | `>=1.26,<2` (lock: 1.26.4) | `requirements.in`, lock         |
-| pyyaml          | `>=6` (lock: 6.0.3)        | `requirements.in`, lock         |
-| Sphinx stack    | see below                  | `requirements.in`               |
-| mermaid (JS)    | `11.4.1`                   | `docs/_sphinx/conf.py`          |
-| prek            | `0.4.12`                   | `setup-precommit.sh`, `ci.yaml` |
-| presubmit hooks | see below                  | `.pre-commit-config.yaml`       |
-| `setup-bazel`   | `0.15.0`                   | `.github/workflows/`            |
+| Component        | Pin                        | Held in                                  |
+| ---------------- | -------------------------- | ---------------------------------------- |
+| Bazel            | `7.7.1`                    | `.bazelversion`                          |
+| `rules_python`   | `2.0.3`                    | `MODULE.bazel`                           |
+| Python           | `3.11` (hermetic)          | `MODULE.bazel`                           |
+| pip hub          | `yapnr_pypi`               | `MODULE.bazel`                           |
+| torch            | `>=2.2,<2.4` (lock: 2.3.1) | `requirements.in`, lock                  |
+| numpy            | `>=1.26,<2` (lock: 1.26.4) | `requirements.in`, lock                  |
+| pyyaml           | `>=6` (lock: 6.0.3)        | `requirements.in`, lock                  |
+| Sphinx stack     | see below                  | `requirements.in`                        |
+| mermaid (JS)     | `11.4.1`                   | `docs/_sphinx/conf.py`                   |
+| prek             | `0.4.12`                   | `setup-precommit.sh`, `ci.yaml`          |
+| presubmit hooks  | see below                  | `.pre-commit-config.yaml`                |
+| `setup-bazel`    | `0.15.0`                   | `.github/workflows/`                     |
+| Ubuntu (images)  | `24.04`, by digest         | `docker/yapnr-kicad/Dockerfile`          |
+| KiCad (images)   | `10.0.6~ubuntu24.04.1`     | `docker/yapnr-kicad/Dockerfile`, `TAG`   |
+| Python (image)   | `3.11.15` (uv-managed)     | `docker/yapnr/Dockerfile`                |
+| uv (image build) | `0.12.21`, by digest       | `docker/yapnr/Dockerfile`                |
+| Runtime locks    | from `requirements.lock`   | `docker/yapnr/runtime-*.lock`            |
+| Docker actions   | by commit SHA              | `.github/actions/`, `.github/workflows/` |
 
 Rationale:
 
@@ -97,6 +122,28 @@ Rationale:
   downloads and the Bazel repository cache, keyed on OS, CPU architecture, `.bazelversion`,
   `MODULE.bazel`, `MODULE.bazel.lock` and `requirements.lock`; the disk cache is per job. CI sets
   `BAZELISK_HOME`, which takes precedence over `.bazeliskrc`.
+
+### Container images
+
+- **Base: Ubuntu 24.04 plus `ppa:kicad/kicad-10.0-releases`, on both architectures.** One
+  Dockerfile gives the same distribution, KiCad build and worker Python (3.12) everywhere. The
+  official `kicad/kicad` image is amd64-only from 10.0 on and ships 341 MB of demos and a
+  passwordless `sudo`; building KiCad from source costs about an hour per architecture and
+  release. The PPA key is checked in (`docker/yapnr-kicad/kicad-ppa.asc`, fingerprint
+  `FDA8 54F6 1C4D 0D95 72BB 95E5 245D 5502 FAD7 A805`, confirmed against Launchpad).
+- **The base is published once per `docker/yapnr-kicad/TAG` and never overwritten,** because the
+  PPA deletes superseded builds within days (and its snapshot service does not reach back). CI
+  refuses a change to `docker/yapnr-kicad/` that keeps a published tag.
+- **Controller Python: the patch release of Bazel's hermetic 3.11** (`3.11.15`), installed by uv
+  from python-build-standalone, with the runtime locks pinned to `requirements.lock` (versions and
+  hashes; `tests/unit/repo/test_images.py`). On amd64, torch is `2.3.1+cpu` from the PyTorch CPU
+  index; PyPI's x86_64 wheel pulls in the CUDA stack. uv resolves both locks from any host.
+- **Measured on linux/arm64 (2026-09-29):** the base is 1.98 GB unpacked (the KiCad install adds
+  1.4 GB to Ubuntu); the yapnr layers add about 0.65 GB (CPython 0.12 GB, the runtime 0.52 GB with
+  byte-compiled sources). The KiCad install takes about a minute on a native arm64 host.
+- **Actions on the image and release paths that push or sign are pinned by commit SHA**
+  (`docker/*`, `actions/attest`), since those jobs can write packages and attestations. The other
+  `actions/*` stay on the major tags the rest of the workflows use.
 
 ### The requirements lock
 

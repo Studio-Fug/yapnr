@@ -42,8 +42,14 @@ def source_inputs(repo):
  if not scanner.is_file():raise FileNotFoundError('Native regression requires '+str(scanner))
  return sorted((repo/'hardware/pnr/pnr').rglob('*.py'))+sorted((repo/'hardware/pnr/regression').glob('*.py'))+[scanner]
 
-def main():
- global REPO
+# Lists the installed distributions without pip (a uv-built venv, as in the image, has none).
+LISTING="import importlib.metadata as m;print('\\n'.join(sorted('%s==%s'%(d.metadata['Name'],d.version) for d in m.distributions())))"
+
+def new_result(spec,seed,root):
+ """A case's result record; ``directory`` is relative to the run directory."""
+ return dict(case=spec['name'],seed=seed,components=spec['expected_components'],passed=False,stages={},directory=root.name)
+
+def parser():
  ap=argparse.ArgumentParser(description=__doc__)
  ap.add_argument('--repo',type=Path,default=Path(os.environ.get('BUILD_WORKSPACE_DIRECTORY',REPO)))
  ap.add_argument('--out',type=Path,required=True);ap.add_argument('--case',action='append',default=[])
@@ -57,10 +63,15 @@ def main():
  ap.add_argument('--initial-pool',action='store_true',help='Compare a bounded set of legal global placements before round one')
  ap.add_argument('--initial-starts',type=int,default=8)
  ap.add_argument('--initial-finalists',type=int,default=3)
+ ap.add_argument('--trace',action='store_true',help='Record a pnr-trace-v1 trace per case (CASE/trace) for pnr.animate; observational only')
  ap.add_argument('--kicad-python',default=os.environ.get('PNR_KICAD_PYTHON',KI+'/Frameworks/Python.framework/Versions/3.9/bin/python3'))  # PNR_KICAD_PYTHON: headless bundle (src15)
  ap.add_argument('--kicad-cli',default=os.environ.get('PNR_KICAD_CLI',KI+'/MacOS/kicad-cli'))  # PNR_KICAD_CLI: headless bundle (src15)
  ap.add_argument('--library',type=Path,default=kicad_footprints())  # PNR_KICAD_FOOTPRINTS / PNR_KICAD_CLI bundle (src15)
- args=ap.parse_args();REPO=args.repo.resolve();args.python=args.python or str(REPO/'output/pnr-regression-runtime/bin/python')
+ return ap
+
+def main():
+ global REPO
+ args=parser().parse_args();REPO=args.repo.resolve();args.python=args.python or str(REPO/'output/pnr-regression-runtime/bin/python')
  out=args.out.resolve();out.mkdir(parents=True,exist_ok=False)
  allcases=designs();cases=[c for c in allcases if not args.case or c['name'] in args.case]
  if not cases or (set(args.case)-{c['name'] for c in cases}):raise SystemExit('Unknown/empty case selection')
@@ -85,35 +96,42 @@ def main():
   if not 2 <= args.initial_starts <= 128 or not 1 <= args.initial_finalists <= min(args.initial_starts,16):
    raise ValueError('Invalid initial placement pool size/finalist budget')
   env.update(PNR_INITIAL_POOL='1',PNR_INITIAL_STARTS=str(args.initial_starts),PNR_INITIAL_FINALISTS=str(args.initial_finalists),PNR_INITIAL_PROXY_BUDGET=str(args.initial_starts))
- provenance=dict(schema='pnr-regression-v1',source_hashes=manifest,seeds=args.seed or [0],
+ provenance=dict(schema='pnr-regression-v1',source_hashes=manifest,seeds=args.seed or [0],trace=bool(args.trace),
                  arguments={k:str(v) if isinstance(v,Path) else v for k,v in vars(args).items()},
                  pnr_environment={k:v for k,v in env.items() if k.startswith('PNR_')})
  (out/'provenance.json').write_text(json.dumps(provenance,indent=2))
- for key,cmd in [('python',[args.python,'-m','pip','freeze']),('kicad',[args.kicad_cli,'version'])]:
+ for key,cmd in [('python',[args.python,'-c',LISTING]),('kicad',[args.kicad_cli,'version'])]:
   (out/(key+'-version.txt')).write_text(subprocess.check_output(cmd,text=True,timeout=300))  # a version query
+ tracing=None
+ if args.trace:
+  sys.path[:0]=[str(frozen_here),str(freeze/'hardware/pnr')]  # frozen, stdlib-only trace modules
+  import trace_native as tracing
  results=[]
- def stage(root,name,cmd):
+ def stage(root,name,cmd,extra=None):
   t=time.monotonic()
   with (root/(name+'.log')).open('w') as log:
-   subprocess.run(list(map(str,cmd)),cwd=REPO,env=env,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=args.timeout)
+   subprocess.run(list(map(str,cmd)),cwd=REPO,env=dict(env,**(extra or {})),stdout=log,stderr=subprocess.STDOUT,check=True,timeout=args.timeout)
   return time.monotonic()-t
  for spec in cases:
   for seed in args.seed or [0]:
    root=out/(spec['name']+'-seed-'+str(seed));root.mkdir()
    (root/'design.json').write_text(json.dumps(spec,indent=2))
-   result=dict(case=spec['name'],seed=seed,components=spec['expected_components'],passed=False,stages={},directory=str(root));t=time.monotonic()
+   result=new_result(spec,seed,root);t=time.monotonic()
    print('START '+root.name,flush=True)
    try:
-    def run(name,cmd):result['stages'][name]=stage(root,name,cmd)
+    def run(name,cmd,extra=None):result['stages'][name]=stage(root,name,cmd,extra)
+    native=tracing.NativeTrace(root,spec,seed,args,out.name) if tracing else None
     run('generate',[args.kicad_python,frozen_here/'native.py','make',root,'--library',args.library])
     source=sha(root/'source.kicad_pcb')
     graph=json.loads((root/'source-graph.json').read_text())
     assert len(graph['components'])==spec['expected_components']
     assert sum(bool(p['net']) for c in graph['components'] for p in c['pads'])==spec['expected_connected_pads']
-    run('place-route',[args.python,frozen_here/'route_case.py',root,seed,args.rounds])
+    run('place-route',[args.python,frozen_here/'route_case.py',root,seed,args.rounds],native.environment() if native else None)
     board=root/'routed.kicad_pcb'
     run('writeback',[args.kicad_python,'-m','pnr.writeback',root/'source.kicad_pcb',root/'placed.json','--out',board,'--rules',root/'rules.json','--routes',root/'routes.json'])
+    if native:native.snapshot('writeback',board,args.kicad_cli,args.timeout)  # a copy with its own DRC
     run('planes',[args.kicad_python,'-m','pnr.planes',board,'--rules',root/'rules.json'])
+    if native:native.snapshot('planes',board,args.kicad_cli,args.timeout)
     run('refill',[args.kicad_python,'-m','pnr.planes',board,'--rules',root/'rules.json','--refill-only'])
     run('audit',[args.kicad_python,frozen_here/'native.py','audit',root,'--pcb',board])
     run('drc',[args.kicad_cli,'pcb','drc',board,'--format','json','--output',root/'drc.json'])
@@ -124,6 +142,7 @@ def main():
      source_board_sha256=source,board_sha256=sha(board),project_sha256=sha(board.with_suffix('.kicad_pro')))
     if source!=sha(root/'source.kicad_pcb'):result['reasons'].append('source_changed')
     result['passed']=not result['reasons']
+    if native:native.finish(board,drc,result)  # the saved board with the runner's final DRC
    except Exception as ex:
     result.update(error=str(ex),traceback=traceback.format_exc(),reasons=['stage_failure'])
    result['elapsed_seconds']=time.monotonic()-t

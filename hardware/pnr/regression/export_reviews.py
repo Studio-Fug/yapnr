@@ -6,7 +6,8 @@ repo=Path(__file__).resolve().parents[3];a.out.mkdir(parents=True,exist_ok=a.res
 summary=json.loads((a.run/'summary.json').read_text())
 for r in summary['results']:
  if r['seed']!=0:continue
- root=Path(r['directory']);board=root/'routed.kicad_pcb'
+ root=Path(r['directory']);root=root if root.is_absolute() else a.run/root  # run-relative in newer runs
+ board=root/'routed.kicad_pcb'
  if not board.exists():continue
  target=a.out/r['case']
  if target.exists():

@@ -1,8 +1,9 @@
 """Independent assertions for circuit intent and the fail-closed acceptance gate."""
-import copy,unittest
+import copy,json,re,subprocess,sys,tempfile,unittest
 from collections import Counter
+from pathlib import Path
 from designs import designs
-from run import acceptance
+from run import LISTING,acceptance,new_result,parser
 
 class CircuitContract(unittest.TestCase):
  def test_ladder_and_multiterminal_networks(self):
@@ -46,5 +47,86 @@ class GateContract(unittest.TestCase):
   self.p['deferred']=['VCC'];self.assertIn('incomplete_pnr',acceptance(self.p,self.a,self.d))
  def test_undersized_copper_rejected(self):
   self.a['subwidth_tracks']=['track'];self.assertIn('undersized_copper',acceptance(self.p,self.a,self.d))
+
+BOARD = """(kicad_pcb (version 20260206)
+  (layers (0 "F.Cu" signal) (2 "B.Cu" signal) (25 "Edge.Cuts" user))
+  (gr_rect (start 10 20) (end 28 34) (layer "Edge.Cuts"))
+  (footprint "LED_SMD:LED_0805_2012Metric" (layer "F.Cu") (at 20 27 90)
+    (property "Reference" "D1") (property "Value" "red")
+    (pad "1" smd roundrect (at -0.9375 0 90) (size 0.975 1.4) (layers "F.Cu") (roundrect_rratio 0.25)
+      (net "GND"))
+    (pad "2" smd roundrect (at 0.9375 0 90) (size 0.975 1.4) (layers "F.Cu") (roundrect_rratio 0.25)
+      (net "LED_A")))
+  (segment (start 20 26) (end 24 26) (width 0.25) (layer "F.Cu") (net "LED_A")))
+"""
+
+
+class RunnerContract(unittest.TestCase):
+    def test_trace_is_opt_in(self):
+        self.assertFalse(parser().parse_args(["--out", "x"]).trace)
+        self.assertTrue(parser().parse_args(["--out", "x", "--trace"]).trace)
+
+    def test_version_listing_needs_no_pip(self):
+        out = subprocess.run([sys.executable, "-c", LISTING], capture_output=True, text=True, timeout=120, check=True)
+        lines = out.stdout.splitlines()
+        self.assertTrue(all(re.match(r"^[^=\s]+==\S+$", line) for line in lines), lines[:3])
+
+    def test_case_directories_are_run_relative(self):
+        spec = designs()[0]
+        result = new_result(spec, 1, Path("somewhere/run") / (spec["name"] + "-seed-1"))
+        self.assertEqual(result["directory"], spec["name"] + "-seed-1")
+        self.assertFalse(result["passed"])
+
+
+class NativeTraceContract(unittest.TestCase):
+    def test_native_lane_records_the_saved_board_and_the_verdict(self):
+        from pnr import trace
+        from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
+        from trace_native import NativeTrace
+
+        spec = designs()[0]
+        pads = [Pad("1", "GND", (-0.9375, 0.0), (0.975, 1.4)), Pad("2", "LED_A", (0.9375, 0.0), (0.975, 1.4))]
+        graph = BoardGraph(
+            "led",
+            [Component("D1", "LED", (5.0, 5.0), 0.0, "top", (3.0, 1.8), (3.0, 1.8), pads=pads)],
+            [Net("LED_A", 1, [("D1", "1"), ("D1", "2")])],
+            BoardOutline(18.0, 14.0),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "case"
+            (root / "trace").mkdir(parents=True)
+            (root / "source.kicad_pcb").write_text(BOARD)
+            (root / "routed.kicad_pcb").write_text(BOARD)
+            native = NativeTrace(root, spec, 0, parser().parse_args(["--out", "x", "--trace"]), "run")
+            self.assertEqual(native.environment(), dict(PNR_TRACE_DIR=str(root / "trace"), PNR_TRACE_LANE="engine"))
+            run = json.loads((root / "trace" / "run.json").read_text())
+            self.assertEqual((run["subject"]["case"], run["config"]["initial_pool"]), (spec["name"], False))
+            recorder = trace.Recorder(root / "trace")
+            recorder.begin_board(graph)
+            recorder.close()
+            drc = dict(unconnected_items=[dict(items=[dict(pos=dict(x=11, y=21)), dict(pos=dict(x=12, y=22))])], violations=[])
+            native.finish(root / "routed.kicad_pcb", drc, dict(case=spec["name"], seed=0, passed=False, reasons=["native_unconnected_items"], opens=1, violations={}, vias=0, copper_length_mm=4.0))
+            events = [json.loads(line) for line in (root / "trace" / "streams" / "native.jsonl").read_text().splitlines()]
+            header = json.loads((root / "trace" / "header.json").read_text())
+            self.assertFalse((root / "trace" / "errors.json").exists())
+        self.assertEqual([e["kind"] for e in events], ["board", "result"])
+        board, result = events
+        self.assertEqual((board["stage"], board["drc"]["unconnected"]), ("refill", 1))
+        self.assertEqual(board["drc"]["open_pairs"], [[1000, 13000, 2000, 12000]])
+        self.assertEqual(board["progress"], dict(done=0, total=1, source="kicad"))
+        self.assertEqual((result["passed"], result["opens"]), (False, 1))
+        pad = header["components"][0]["pads"][0]
+        self.assertEqual((pad["shape"], pad["corner"], header["components"][0]["value"]), ("roundrect", 244, "red"))
+
+    def test_tracing_errors_never_fail_a_case(self):
+        from trace_native import NativeTrace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "case"
+            native = NativeTrace(root, designs()[0], 0, parser().parse_args(["--out", "x", "--trace"]), "run")
+            native.snapshot("writeback", root / "missing.kicad_pcb", "kicad-cli", 5)
+            self.assertTrue((root / "trace" / "errors.json").is_file())
+            native.finish(root / "missing.kicad_pcb", {}, {})
+
 
 if __name__=='__main__':unittest.main()

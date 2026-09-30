@@ -18,4 +18,6 @@ def capture(root, name, board, rules, cli, *, metadata=None):
     (folder/'phase.json').write_text(json.dumps(item,indent=2)+'\n')
     from pnr.live import emit
     emit('phase_complete',board=target,data=item)
+    from pnr.trace import board_event
+    board_event(name, target, report)  # PNR_TRACE_DIR only (pnr.trace)
     return item

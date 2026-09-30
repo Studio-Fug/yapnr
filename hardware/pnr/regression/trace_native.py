@@ -1,0 +1,143 @@
+"""The ladder runner's side of :mod:`pnr.trace` (``run.py --trace``): one traced case.
+
+The ``place-route`` stage records the engine lane (``PNR_TRACE_DIR=CASE/trace``, set for that
+stage only). After ``writeback`` and ``planes`` the runner copies the board, with its project
+and library table, to ``CASE/trace/native/<stage>/``, runs ``kicad-cli pcb drc`` on the copy
+(never on the saved board) and appends a ``board`` event to the ``native`` lane; after the
+final DRC it records the saved board as the ``refill`` stage with the runner's own report, and
+the acceptance fields as a ``result`` event. Failures here never fail a case: they disable the
+native lane and are written to ``CASE/trace/errors.json``.
+"""
+
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+from pathlib import Path
+
+from pnr import trace
+from pnr.trace_board import read, refine_header
+
+STAGES = ["generate", "place-route", "writeback", "planes", "refill", "audit", "drc", "via-scan"]
+
+
+class NativeTrace:
+    """The native lane of one case's trace directory."""
+
+    def __init__(self, root, spec, seed, args, run_name):
+        self.root = Path(root)
+        self.dir = self.root / "trace"
+        self.recorder = None
+        self.total = None
+        config = dict(
+            rounds=args.rounds,
+            initial_pool=bool(args.initial_pool),
+            initial_starts=args.initial_starts if args.initial_pool else None,
+            initial_finalists=args.initial_finalists if args.initial_pool else None,
+            detail_pitch_mm=args.detail_pitch_mm,
+            packed_maze=bool(args.packed_maze),
+            batched_wirelength=bool(args.batched_wirelength),
+            dense_maze_cost=bool(args.dense_maze_cost),
+        )
+        subject = dict(
+            kind="ladder-case",
+            case=spec["name"],
+            seed=seed,
+            description=spec["description"],
+            parts=len(spec["parts"]),
+            layers=spec["constraints"]["board"]["layers"],
+        )
+        trace.write_run(
+            self.dir,
+            dict(schema="pnr-trace-run-v1", subject=subject, stages=STAGES, config=config),
+        )
+
+    def environment(self):
+        """The variables of the ``place-route`` stage (the runner strips ambient ones)."""
+        return dict(PNR_TRACE_DIR=str(self.dir), PNR_TRACE_LANE="engine")
+
+    def _open(self):
+        if self.recorder is None:
+            header_path = self.dir / "header.json"
+            header = json.loads(header_path.read_text())
+            source = read(self.root / "source.kicad_pcb")
+            refine_header(header, source)
+            header_path.write_text(json.dumps(header, indent=1, sort_keys=True) + "\n")
+            self.total = header.get("connections_total")
+            self.recorder = trace.Recorder(self.dir, lane="native")
+        return self.recorder
+
+    def _record(self, stage, board, report):
+        recorder = self._open()
+        recorder.board(stage, read(board), report, self.total)
+
+    def _guard(self, where, action):
+        try:
+            action()
+        except Exception as error:  # noqa: BLE001 - tracing never fails a case
+            trace.record_error(self.dir, "native", where, error)
+            if self.recorder is not None:
+                self.recorder.close()
+            self.recorder = _Off()
+
+    def snapshot(self, stage, board, kicad_cli, timeout):
+        """Record a copy of ``board`` after ``stage`` with its own KiCad DRC."""
+
+        def action():
+            recorder = self._open()
+            if not recorder.active:
+                return
+            folder = self.dir / "native" / stage
+            folder.mkdir(parents=True)
+            copy = folder / "board.kicad_pcb"
+            shutil.copy2(board, copy)
+            shutil.copy2(Path(board).with_suffix(".kicad_pro"), copy.with_suffix(".kicad_pro"))
+            if (Path(board).parent / "fp-lib-table").exists():
+                shutil.copy2(Path(board).parent / "fp-lib-table", folder / "fp-lib-table")
+            report = folder / "drc.json"
+            command = [kicad_cli, "pcb", "drc", str(copy), "--format", "json", "--output"]
+            subprocess.run(
+                command + [str(report)], check=True, timeout=timeout, capture_output=True
+            )
+            self._record(stage, copy, json.loads(report.read_text()))
+
+        self._guard("native_" + stage, action)
+
+    def finish(self, board, drc, result):
+        """The saved board (``refill``) with the runner's DRC report, and the verdict."""
+
+        def action():
+            recorder = self._open()
+            if not recorder.active:
+                return
+            self._record("refill", board, drc)
+            recorder.result(
+                case=result["case"],
+                seed=result["seed"],
+                passed=bool(result["passed"]),
+                reasons=list(result.get("reasons") or []),
+                opens=result.get("opens"),
+                violations=result.get("violations"),
+                vias=result.get("vias"),
+                tracks=result.get("tracks"),
+                copper_length_mm=result.get("copper_length_mm"),
+            )
+            recorder.close()
+
+        self._guard("native_finish", action)
+
+
+class _Off:
+    """A closed native lane."""
+
+    active = False
+
+    def board(self, *args, **kwargs):
+        return None
+
+    def result(self, **kwargs):
+        return None
+
+    def close(self):
+        return None

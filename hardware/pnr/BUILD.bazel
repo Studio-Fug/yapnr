@@ -1008,9 +1008,18 @@ py_test(
 
 py_test(
     name = "regression_contract_test",
-    srcs = ["regression/test_contract.py", "regression/designs.py", "regression/run.py"],
+    srcs = [
+        "regression/designs.py",
+        "regression/run.py",
+        "regression/test_contract.py",
+        "regression/trace_native.py",
+    ],
+    imports = [
+        ".",
+        "regression",
+    ],
     main = "regression/test_contract.py",
-    imports = ["regression"],
+    deps = [":pnr"],
 )
 
 py_binary(
@@ -1047,6 +1056,30 @@ py_test(
         ":pnr_place",
         ":pnr_route",
     ],
+)
+
+py_test(
+    name = "trace_board_test",
+    size = "small",
+    srcs = ["tests/test_trace_board.py"],
+    imports = ["."],
+    main = "tests/test_trace_board.py",
+    deps = [":pnr"],
+)
+
+# Parity of the .kicad_pcb reader with pcbnew; run it under KiCad's Python by hand.
+py_test(
+    name = "trace_board_kicad_test",
+    size = "small",
+    srcs = ["tests/test_trace_board_kicad.py"],
+    imports = ["."],
+    main = "tests/test_trace_board_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
 )
 
 py_test(

@@ -57,7 +57,7 @@ nice -n 10 bazel test --config=lowmem //...
 ```
 
 `--config=lowmem` sets `--jobs=2 --local_resources=cpu=2 --local_resources=memory=HOST_RAM*.25`.
-Put `common --config=lowmem` in `user.bazelrc` to make it the default. Run one Bazel server at a
+Put `build --config=lowmem` in `user.bazelrc` to make it the default. Run one Bazel server at a
 time (`bazel shutdown` when done) and check free disk space before large fetches (torch alone is
 several hundred MB).
 

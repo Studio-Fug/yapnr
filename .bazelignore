@@ -3,3 +3,4 @@
 .bazel-disk-cache
 .bazel-repo-cache
 docs/site
+.yapnr

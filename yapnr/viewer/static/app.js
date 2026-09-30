@@ -46,7 +46,7 @@ function render(){let [c,w,h]=resize(canvas);c.clearRect(0,0,w,h);c.fillStyle='#
 let treeHits=[],spaceHits=[];
 function renderSearch(){let s=display();if(!s)return;let [c,w,h]=resize($('tree'));c.clearRect(0,0,w,h);treeHits=[];let all=Object.values(s.lanes).filter(l=>!l.id.endsWith('/search')),rounds=[...new Set(all.map(l=>l.iteration))].slice(-6);rounds.forEach((r,ri)=>{let ls=all.filter(l=>l.iteration===r),y=22+ri*25;c.fillStyle='#8da9b6';c.font='10px system-ui';c.fillText('R'+r,4,y+3);ls.forEach((l,i)=>{let x=60+i*49;c.strokeStyle='#405965';c.beginPath();c.moveTo(30,y);c.lineTo(x,y);c.stroke();c.fillStyle=l.status==='accepted'?'#9ee6d1':l.status==='failed'?'#ed6d70':l.status==='complete'?'#719be8':l.status==='queued'?'#53636d':'#f3c875';c.beginPath();c.arc(x,y,l.id===laneId?7:5,0,7);c.fill();treeHits.push({x,y,id:l.id})})});
  let [d,sw,sh]=resize($('space'));d.clearRect(0,0,sw,sh);spaceHits=[];let audit=s.search[String(lane()?.iteration)]||Object.values(s.search).slice(-1)[0];if(!audit)return;let options=audit.alternatives||[],bad=audit.rejections||[],items=[...options,...bad],costs=options.map(x=>x.cost),mi=Math.min(...costs),ma=Math.max(...costs),sampled=new Set((audit.sampled||[]).map(JSON.stringify));let columns=Math.ceil(Math.sqrt(items.length||1));items.forEach((p,i)=>{let x=9+(i%columns)*(sw-18)/columns,y=9+Math.floor(i/columns)*(sh-18)/columns;d.fillStyle=p.reason?'#52616a':`hsl(${150-(p.cost-mi)/(ma-mi||1)*150},70%,65%)`;d.beginPath();d.arc(x,y,2,0,7);d.fill();if(sampled.has(JSON.stringify(p.indices))){d.strokeStyle='#fff';d.beginPath();d.arc(x,y,4,0,7);d.stroke()}spaceHits.push({x,y,p})});$('spaceinfo').textContent=`${audit.enumerated} / ${audit.combinatorial_space} combinations · ${audit.legal_configurations} legal · ${(audit.sampled||[]).length} sampled. Held out: ${(audit.held_out||[]).join(', ')}`;}
-function select(id){laneId=id;revision=-1;phase='live';phaseGeo=null;preview=null;updateControls();render();if(!fitted)fit();document.dispatchEvent(new CustomEvent('splanc:lane',{detail:{lane:id}}))}
+function select(id){laneId=id;revision=-1;phase='live';phaseGeo=null;preview=null;updateControls();render();if(!fitted)fit();document.dispatchEvent(new CustomEvent('yapnr:lane',{detail:{lane:id}}))}
 function updateControls(){let s=display();if(!s)return;let ls=Object.values(s.lanes);if(!laneId&&ls.length)laneId=ls.find(l=>!l.id.endsWith('/search'))?.id||ls[0].id;$('lanes').replaceChildren();for(let l of ls.slice(-24)){let b=document.createElement('button');b.className='lane'+(l.id===laneId?' active':'');b.textContent=l.id+' · '+(l.status||l.kind);let sub=document.createElement('span');sub.textContent=(l.phase||'placement probes')+(l.opens!=null?` · ${l.opens} opens / ${l.violations??'?'} violations`:'');b.append(sub);b.title='Click: show this lane · Shift+click: add it to the Ask context';b.onclick=e=>e.shiftKey?askAdd({kind:'lane',lane:l.id}):select(l.id);$('lanes').append(b)}let ph=$('phase');ph.replaceChildren(new Option('Live transaction','live'));for(let [i,f] of (lane()?.frames||[]).entries())ph.add(new Option(`${f.name}${f.opens==null?' · native DRC not run':' · '+f.opens+' opens'}`,String(i)));ph.value=phase;$('headline').textContent=`${laneId||'Waiting'} · ${phase==='live'?(lane()?.phase||'initialization'):(lane()?.frames[Number(phase)]?.name||'selected checkpoint')}`;$('headline').title=$('headline').textContent;$('detail').textContent=`Revision ${s.revision} · ${pinned?'PINNED':'LIVE'} · ${lane()?.kind||''} · ${annotations.length} rectangles`;$('events').replaceChildren();for(let e of s.events.slice(-35).reverse()){let div=document.createElement('div');div.className='event';div.textContent=new Date(e.time*1000).toLocaleTimeString()+' '+e.candidate+' '+e.kind+' '+JSON.stringify(e.data).slice(0,190);div.title='Click: inspect · Shift+click: add to the Ask context';div.onclick=ev=>{let it=eventItem(e);ev.shiftKey?askAdd(it):inspectItem(it)};$('events').append(div)}}
 let pinPromise=null,draftRevision=0,draftSavedRevision=-1,finalizedRevision=-1,draftTimer=null,draftRestored=false;
 const hasAnnotation=()=>annotations.length>0||$('note').value.trim().length>0;
@@ -80,9 +80,9 @@ async function saveSnapshot(){await pin();let body=annotationBody();backupDraft(
 $('snapshot').onclick=async()=>{try{await saveSnapshot()}catch(e){$('saved').textContent='Snapshot failed: '+e.message}};
 canvas.onwheel=e=>{e.preventDefault();let r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,p=point(x,y),s=Math.max(1,Math.min(250,view.scale*Math.exp(-e.deltaY*.001)));view={scale:s,x:x-p[0]*s,y:y+p[1]*s};render()};
 canvas.onpointerdown=e=>{canvas.setPointerCapture(e.pointerId);let r=canvas.getBoundingClientRect(),p=[e.clientX-r.left,e.clientY-r.top];drag={start:p,last:p,world:point(...p),view:{...view},draw:drawing,region:regionMode&&!drawing}};
-canvas.onpointermove=e=>{let r=canvas.getBoundingClientRect(),p=[e.clientX-r.left,e.clientY-r.top],q=point(...p);$('coords').textContent=q.map(v=>v.toFixed(2)).join(', ')+' mm';if(drag){drag.last=p;if(!drag.draw&&!drag.region){view.x=drag.view.x+p[0]-drag.start[0];view.y=drag.view.y+p[1]-drag.start[1]}render();return}if(!geo())return;let nb=window.SplancNotes?.badgeAt?.(p[0],p[1]);if(nb&&canvas.style.cursor!=='pointer'){canvas.dataset.cur=canvas.style.cursor;canvas.style.cursor='pointer'}else if(!nb&&canvas.style.cursor==='pointer')canvas.style.cursor=canvas.dataset.cur||'';if(nb){$('hover').style.display='block';$('hover').textContent=nb.text;return}let hit=hoverText(boardHit(q));$('hover').style.display=hit?'block':'none';$('hover').textContent=hit||''};
+canvas.onpointermove=e=>{let r=canvas.getBoundingClientRect(),p=[e.clientX-r.left,e.clientY-r.top],q=point(...p);$('coords').textContent=q.map(v=>v.toFixed(2)).join(', ')+' mm';if(drag){drag.last=p;if(!drag.draw&&!drag.region){view.x=drag.view.x+p[0]-drag.start[0];view.y=drag.view.y+p[1]-drag.start[1]}render();return}if(!geo())return;let nb=window.YapnrNotes?.badgeAt?.(p[0],p[1]);if(nb&&canvas.style.cursor!=='pointer'){canvas.dataset.cur=canvas.style.cursor;canvas.style.cursor='pointer'}else if(!nb&&canvas.style.cursor==='pointer')canvas.style.cursor=canvas.dataset.cur||'';if(nb){$('hover').style.display='block';$('hover').textContent=nb.text;return}let hit=hoverText(boardHit(q));$('hover').style.display=hit?'block':'none';$('hover').textContent=hit||''};
 canvas.addEventListener('pointerleave',()=>{if(!drag)$('hover').style.display='none'});  // the hover box (part, pad or note badge) does not outlive the pointer
-canvas.onpointerup=e=>{if(drag&&!drag.draw&&!drag.region&&Math.hypot(drag.last[0]-drag.start[0],drag.last[1]-drag.start[1])<3){let nb=window.SplancNotes?.badgeAt?.(drag.last[0],drag.last[1]);if(nb){if(e.shiftKey)askAdd(nb.item,' (note badge)');else window.SplancNotes.showFor(nb.item);drag=null;render();return}}if(drag?.region)finishRegion();else if(drag&&!drag.draw&&Math.hypot(drag.last[0]-drag.start[0],drag.last[1]-drag.start[1])<3)boardClick(point(...drag.last),e.shiftKey);if(drag?.draw){let a=drag.world,b=point(...drag.last);if(Math.hypot(a[0]-b[0],a[1]-b[1])>.05)annotations.push({bounds:[Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[0],b[0]),Math.max(a[1],b[1])],text:$('note').value||`Issue ${annotations.length+1}`,lane:laneId,phase,board_sha256:phase==='live'?lane()?.board_sha256:lane()?.frames[Number(phase)]?.board_sha256,event_id:lane()?.event_id});annotationChanged();}drag=null;render()};
+canvas.onpointerup=e=>{if(drag&&!drag.draw&&!drag.region&&Math.hypot(drag.last[0]-drag.start[0],drag.last[1]-drag.start[1])<3){let nb=window.YapnrNotes?.badgeAt?.(drag.last[0],drag.last[1]);if(nb){if(e.shiftKey)askAdd(nb.item,' (note badge)');else window.YapnrNotes.showFor(nb.item);drag=null;render();return}}if(drag?.region)finishRegion();else if(drag&&!drag.draw&&Math.hypot(drag.last[0]-drag.start[0],drag.last[1]-drag.start[1])<3)boardClick(point(...drag.last),e.shiftKey);if(drag?.draw){let a=drag.world,b=point(...drag.last);if(Math.hypot(a[0]-b[0],a[1]-b[1])>.05)annotations.push({bounds:[Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[0],b[0]),Math.max(a[1],b[1])],text:$('note').value||`Issue ${annotations.length+1}`,lane:laneId,phase,board_sha256:phase==='live'?lane()?.board_sha256:lane()?.frames[Number(phase)]?.board_sha256,event_id:lane()?.event_id});annotationChanged();}drag=null;render()};
 $('tree').onclick=e=>{let r=$('tree').getBoundingClientRect(),p=treeHits.find(p=>Math.hypot(p.x-e.clientX+r.left,p.y-e.clientY+r.top)<10);if(p)e.shiftKey?askAdd({kind:'lane',lane:p.id},' (Shift+click)'):select(p.id)};
 $('space').onmousemove=e=>{let r=$('space').getBoundingClientRect(),p=spaceHits.find(p=>Math.hypot(p.x-e.clientX+r.left,p.y-e.clientY+r.top)<5);if(p)$('space').title=JSON.stringify(p.p)};
 $('space').onclick=e=>{let r=$('space').getBoundingClientRect(),p=spaceHits.find(p=>Math.hypot(p.x-e.clientX+r.left,p.y-e.clientY+r.top)<5);if(e.shiftKey){if(p)askAdd(probeItem(p.p));return}preview=p?.p.moves?p.p:null;render()};
@@ -120,11 +120,11 @@ $('controls-restart').onclick=()=>saveControls('restart_round');
 $('controls-cancel').onclick=()=>{pendingControls=null;$('restart-choice').hidden=true;controlMessage='Cancelled; saved settings unchanged.';showControls()};
 
 // ------------------------------------------------------------------ Inspect / Source / Ask integration
-// window.SplancView for dist/source.js and dist/agent.js (both optional). Board clicks select into
+// window.YapnrView for dist/source.js and dist/agent.js (both optional). Board clicks select into
 // Inspect, Shift+click adds to the Ask context, the region tool adds a {kind:'region'} item, and
 // highlight() draws a pink selection (dimming the rest) that schematic.js mirrors.
 let viewHl=null,regionMode=false;
-const SRC=()=>window.SplancSource||null,AGENT=()=>window.SplancAgent||null,natural=(a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true});
+const SRC=()=>window.YapnrSource||null,AGENT=()=>window.YapnrAgent||null,natural=(a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true});
 const HL='#ff7ad9';
 function netTitle(name){let n=SRC()?.index?.()?.nets?.[name];return n&&n.low_info&&n.title&&n.title!==name?n.title:null}
 function pinName(ref,pad){let p=SRC()?.index?.()?.components?.[ref]?.pins?.[pad]?.pin;return p&&p!==pad?p:null}
@@ -135,7 +135,7 @@ viewChip.id='view-chip';viewChip.hidden=true;boardTools.prepend(viewChip,regionB
 function setRegionMode(on){regionMode=on;if(on&&drawing){drawing=false;$('rect').textContent='Draw rectangle · pins state'}regionBtn.classList.toggle('on',on);regionBtn.textContent=on?'Drag… (Esc)':'Ask region';canvas.style.cursor=on?'crosshair':'grab'}
 regionBtn.onclick=()=>setRegionMode(!regionMode);
 $('rect').addEventListener('click',()=>{if(regionMode)setRegionMode(false)});
-addEventListener('keydown',e=>{if(e.key!=='Escape'||e.target?.closest?.('input,textarea,select'))return;if(regionMode){setRegionMode(false);drag=null;render()}else if(viewHl)window.SplancView.clear()});
+addEventListener('keydown',e=>{if(e.key!=='Escape'||e.target?.closest?.('input,textarea,select'))return;if(regionMode){setRegionMode(false);drag=null;render()}else if(viewHl)window.YapnrView.clear()});
 function padContains(p,q,tol){let t=-(p.angle||0)*Math.PI/180,dx=q[0]-p.xy[0],dy=q[1]-p.xy[1],x=dx*Math.cos(t)-dy*Math.sin(t),y=dx*Math.sin(t)+dy*Math.cos(t);return Math.abs(x)<=p.size[0]/2+tol&&Math.abs(y)<=p.size[1]/2+tol}
 function inPoly(q,path){let inside=false;for(let i=0,j=path.length-1;i<path.length;j=i++){let a=path[i],b=path[j];if((a[1]>q[1])!==(b[1]>q[1])&&q[0]<(b[0]-a[0])*(q[1]-a[1])/(b[1]-a[1])+a[0])inside=!inside}return inside}
 // The one hit test for hover, click, Shift+click and the cost panel: pad > part outline > track > via > filled zone.
@@ -156,10 +156,10 @@ function hoverText(h){if(!h)return '';let o=h.obj;
  if(h.kind==='via')return `${h.net} · via\n`+hoverExtra(h.net)+`Diameter ${(+o.diameter).toFixed(2)} mm`;
  return `${h.net} · ${o.layer} zone\n`+hoverExtra(h.net).trimEnd()}
 function itemText(it){return it.kind==='component'?it.ref:it.kind==='pad'?it.ref+'.'+it.pad:it.kind==='net'?(SRC()?.netLabel?.(it.name)||it.name):it.kind==='lane'?'lane '+it.lane:it.kind==='event'?'event '+it.event_kind:it.kind==='probe'?it.label:it.kind}
-function inspectItem(item){let S=SRC();if(S?.inspect)S.inspect(item);else document.dispatchEvent(new CustomEvent('splanc:select',{detail:item}))}
+function inspectItem(item){let S=SRC();if(S?.inspect)S.inspect(item);else document.dispatchEvent(new CustomEvent('yapnr:select',{detail:item}))}
 // Short confirmation over the board: the status line sits far down the sidebar and the dock may be collapsed.
 let toastT=0;function boardToast(msg){let el=$('board-toast');if(!el){el=document.createElement('div');el.id='board-toast';el.setAttribute('role','status');$('boardwrap').append(el)}el.textContent=msg;el.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{el.hidden=true},2600)}
-function askAdd(item,where){let A=AGENT();if(!A){boardToast('The Ask panel is not loaded.');return}A.addContext(item);window.SplancDock?.badge?.('ask',true);let n=A.context?.().length,msg='Added '+itemText(item)+' to the Ask context'+(where||'')+(n?' · '+n+' item'+(n>1?'s':''):'');$('component-status').textContent=msg+'.';boardToast(msg)}
+function askAdd(item,where){let A=AGENT();if(!A){boardToast('The Ask panel is not loaded.');return}A.addContext(item);window.YapnrDock?.badge?.('ask',true);let n=A.context?.().length,msg='Added '+itemText(item)+' to the Ask context'+(where||'')+(n?' · '+n+' item'+(n>1?'s':''):'');$('component-status').textContent=msg+'.';boardToast(msg)}
 function eventItem(e){return {kind:'event',id:String(e.id),lane:e.candidate||undefined,event_kind:e.kind,summary:JSON.stringify({time:e.time,iteration:e.iteration,data:e.data}).slice(0,1500)}}
 function probeItem(p){return {kind:'probe',label:'Placement alternative · '+(p.reason?'rejected':'cost '+(+p.cost).toFixed(3)),lane:laneId||undefined,summary:JSON.stringify(p).slice(0,1500)}}
 function boardClick(q,shift){let h=boardHit(q);if(!h)return null;
@@ -168,8 +168,8 @@ function boardClick(q,shift){let h=boardHit(q);if(!h)return null;
  inspectItem(item);
  // pads and parts also drive the cost panel (cost-inspector.js): one hit test, one selected part
  if(h.kind==='pad'||h.kind==='component'){selectedPartRef=h.ref;$('component-query').value=h.ref;$('component-status').textContent=h.ref+' selected'}
- if(h.kind==='component')window.SplancView.clear(true);
- else window.SplancView.highlight(h.kind==='pad'?{pads:[h.ref+'.'+h.pad],nets:h.net?[h.net]:[]}:{nets:[h.net]},{frame:false,label:h.kind==='pad'?h.ref+'.'+h.pad+(h.net?' · '+(netTitle(h.net)||h.net):''):null});
+ if(h.kind==='component')window.YapnrView.clear(true);
+ else window.YapnrView.highlight(h.kind==='pad'?{pads:[h.ref+'.'+h.pad],nets:h.net?[h.net]:[]}:{nets:[h.net]},{frame:false,label:h.kind==='pad'?h.ref+'.'+h.pad+(h.net?' · '+(netTitle(h.net)||h.net):''):null});
  return h}
 function finishRegion(){let a=drag.world,b=point(...drag.last);setRegionMode(false);if(Math.hypot(a[0]-b[0],a[1]-b[1])<.3)return;
  let bb=[Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[0],b[0]),Math.max(a[1],b[1])].map(v=>+v.toFixed(3)),g=geo(),inside=p=>p&&p[0]>=bb[0]&&p[0]<=bb[2]&&p[1]>=bb[1]&&p[1]<=bb[3],refs=new Set(),nets=new Set();
@@ -177,7 +177,7 @@ function finishRegion(){let a=drag.world,b=point(...drag.last);setRegionMode(fal
  for(let t of g?.tracks||[])if(t[0]&&layers.has(t[1])&&(inside(t[2])||inside(t[3])))nets.add(t[0]);
  for(let v of g?.vias||[])if(v.net&&inside(v.xy))nets.add(v.net);
  let item={kind:'region',lane:laneId,bbox:bb,refs:[...refs].sort(natural).slice(0,400),nets:[...nets].sort(natural).slice(0,400)};
- window.SplancView.highlight({refs:item.refs,nets:[],pads:[],bbox:bb},{frame:false,label:`Region · ${item.refs.length} parts · ${item.nets.length} nets`});
+ window.YapnrView.highlight({refs:item.refs,nets:[],pads:[],bbox:bb},{frame:false,label:`Region · ${item.refs.length} parts · ${item.nets.length} nets`});
  let A=AGENT();if(A){A.addContext(item);A.open?.()}else $('component-status').textContent='The Ask panel is not loaded.'}
 function padShape(p,color){ctx.fillStyle=color;if(p.polys?.length){ctx.beginPath();for(let poly of p.polys){poly.forEach((q,i)=>{let [sx,sy]=screen(q);i?ctx.lineTo(sx,sy):ctx.moveTo(sx,sy)});ctx.closePath()}ctx.fill();return}
  let [x,y]=screen(p.xy);ctx.save();ctx.translate(x,y);ctx.rotate(-p.angle*Math.PI/180);if(p.shape==='circle'){ctx.beginPath();ctx.ellipse(0,0,p.size[0]*view.scale/2,p.size[1]*view.scale/2,0,0,Math.PI*2);ctx.fill()}else ctx.fillRect(-p.size[0]*view.scale/2,-p.size[1]*view.scale/2,p.size[0]*view.scale,p.size[1]*view.scale);ctx.restore()}
@@ -199,10 +199,10 @@ function frameViewHl(){let H=viewHl,g=geo(),w=canvas.clientWidth,h=canvas.client
  let a=screen([b[0],b[3]]),c=screen([b[2],b[1]]);if(a[0]>=0&&a[1]>=0&&c[0]<=w&&c[1]<=h)return false;
  let scale=Math.max(1,Math.min(120,(w-80)/Math.max(4,b[2]-b[0]),(h-80)/Math.max(4,b[3]-b[1])));view={scale,x:w/2-(b[0]+b[2])/2*scale,y:h/2+(b[1]+b[3])/2*scale};fitted=true;return true}
 function hlLabel(refs,nets,pads){let all=[...refs,...pads,...[...nets].map(n=>{let t=netTitle(n);return t?t.split(' — ')[0]+' ('+n+')':n})];return all.slice(0,3).join(', ')+(all.length>3?` +${all.length-3}`:'')}
-function updateViewChip(){viewChip.hidden=!viewHl;if(!viewHl)return;let x=document.createElement('button');x.textContent='×';x.title='Clear this highlight';x.onclick=()=>window.SplancView.clear();let l=document.createElement('span');l.className='chip-l';l.textContent=viewHl.label;viewChip.replaceChildren(l,x);viewChip.title='Highlighted on the board: '+viewHl.label}
+function updateViewChip(){viewChip.hidden=!viewHl;if(!viewHl)return;let x=document.createElement('button');x.textContent='×';x.title='Clear this highlight';x.onclick=()=>window.YapnrView.clear();let l=document.createElement('span');l.className='chip-l';l.textContent=viewHl.label;viewChip.replaceChildren(l,x);viewChip.title='Highlighted on the board: '+viewHl.label}
 const renderBeforeView=render;render=function(){renderBeforeView();if(viewHl?.pendingFrame&&frameViewHl())renderBeforeView();if(viewHl&&!viewHl.named&&SRC()?.index?.()){viewHl.named=true;if(!viewHl.fixed){viewHl.label=hlLabel(viewHl.refs,viewHl.nets,viewHl.pads);updateViewChip()}}};
-window.SplancView={
- highlight(sel={},opt={}){let refs=new Set(sel.refs||[]),nets=new Set(sel.nets||[]),pads=new Set(sel.pads||[]);if(!refs.size&&!nets.size&&!pads.size&&!sel.bbox)return window.SplancView.clear();
+window.YapnrView={
+ highlight(sel={},opt={}){let refs=new Set(sel.refs||[]),nets=new Set(sel.nets||[]),pads=new Set(sel.pads||[]);if(!refs.size&&!nets.size&&!pads.size&&!sel.bbox)return window.YapnrView.clear();
   viewHl={refs,nets,pads,region:sel.bbox||null,label:opt.label||hlLabel(refs,nets,pads),fixed:!!opt.label,named:!!SRC()?.index?.(),pendingFrame:opt.frame!==false};updateViewChip();
   let one=refs.size===1&&!nets.size&&!pads.size?[...refs][0]:pads.size===1&&!refs.size?[...pads][0].split('.')[0]:null;
   if(one&&opt.frame!==false){viewHl.pendingFrame=false;jumpToComponent(one)}else render();return true},
@@ -214,15 +214,17 @@ window.SplancView={
   return {tracks:ts.length,vias:(g.vias||[]).filter(v=>v.net===name).length,length_mm:ts.reduce((s,t)=>s+Math.hypot(t[3][0]-t[2][0],t[3][1]-t[2][1]),0),pads}}};
 // URL parameters for sharing / headless checks: dock=inspect|source|ask, src=<file>:<line>[-end],
 // inspect=ref:<REF>|net:<NAME>|pad:<REF.PAD>, ask=<comma list of ref:/net:/pad:/src: items>.
-function splancUrl(){let q=new URLSearchParams(location.search),S=SRC(),A=AGENT(),K=window.SplancDock;
+function urlState(){let q=new URLSearchParams(location.search),S=SRC(),A=AGENT(),K=window.YapnrDock;
  const item=(k,v)=>{let i=v.indexOf('.');return k==='ref'||k==='component'?{kind:'component',ref:v.toUpperCase()}:k==='net'?{kind:'net',name:v}:k==='pad'&&i>0?{kind:'pad',ref:v.slice(0,i).toUpperCase(),pad:v.slice(i+1)}:k==='src'&&S?.srcParse?(s=>({kind:'source',file:s.file,line:s.line,end:s.end}))(S.srcParse(v)):null};
  const parse=s=>{let i=s.indexOf(':');return i>0?item(s.slice(0,i).trim(),s.slice(i+1).trim()):null};
  for(let s of (q.get('ask')||'').split(',')){let it=s.trim()&&parse(s);if(it)A?.addContext(it)}
  let it=q.get('inspect')&&parse(q.get('inspect')),dock=q.get('dock');
- if(it){S?.inspect?.(it,{focus:!dock&&!q.get('src')});window.SplancView.highlight(it.kind==='component'?{refs:[it.ref]}:it.kind==='net'?{nets:[it.name]}:it.kind==='pad'?{pads:[it.ref+'.'+it.pad],nets:[]}:{})}
+ if(it){S?.inspect?.(it,{focus:!dock&&!q.get('src')});window.YapnrView.highlight(it.kind==='component'?{refs:[it.ref]}:it.kind==='net'?{nets:[it.name]}:it.kind==='pad'?{pads:[it.ref+'.'+it.pad],nets:[]}:{})}
  let src=q.get('src')&&S?.srcParse?.(q.get('src'));
  if(src)S.open(src.file,src.line,src.end);else if(it&&dock==='source')it.kind==='net'?S?.showNet?.(it.name):it.kind!=='source'&&S?.showComponent?.(it.ref);
  dock=dock||(q.get('ask')?'ask':null);if(dock&&K)K.tab(dock)}
-document.addEventListener('DOMContentLoaded',splancUrl);
+document.addEventListener('DOMContentLoaded',urlState);
 // notes.js: badges are drawn last by the outermost render wrapper (schematic.js); redraw when the notes set or the toggle changes
-document.addEventListener('splanc:notes',()=>render());
+document.addEventListener('yapnr:notes',()=>render());
+// About / Source (AGPL-3.0 section 13): the configured title, the source repository and the exact revision.
+fetch('/api/about').then(r=>r.json()).then(a=>{let b=$('brand'),s=$('about');if(a.title){if(b)b.textContent=String(a.title).toUpperCase();document.title=a.title+' · Live routing laboratory'}if(s){if(a.source_url)s.href=a.source_url;s.textContent='Source'+(a.revision?' · '+a.revision.slice(0,7):'');s.title=['yapnr',a.version,a.revision,a.license,'source code'].filter(Boolean).join(' · ')}if(a.missing_assets?.length)console.warn('viewer: third-party files missing from this server:',a.missing_assets.join(', '))}).catch(()=>{});

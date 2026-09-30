@@ -6,7 +6,7 @@ request and exported from a snapshot of those bytes), keys it by its *placement 
 top-level segment/arc items, copper zones and tented vias) plus everything else the GLB depends on (export version and
 flags, the resolved kicad-cli and its 3D library, the parts folder and the size/mtime of the project model files the
 board references) and queues at most one export at a time (one worker thread; a machine-wide flock shared by the
-viewers under one hier folder). Viewers may share one cache folder (prod and dev on one root): a cached "ready" is
+viewers under one experiment folder). Viewers may share one cache folder (prod and dev on one root): a cached "ready" is
 re-checked on disk, and a viewer only ever removes its own export's scratch folder. Routing-only revisions therefore share one GLB: copper is drawn in the browser from
 the viewer's own geometry, which carries nets for picking. The export runs as `python viewer3d_service.py export
 ...` in its own process group (nice 10), killed on timeout or server stop; requests only enqueue and return.
@@ -28,7 +28,6 @@ import hashlib
 import json
 import math
 import os
-import plistlib
 import re
 import shutil
 import signal
@@ -41,13 +40,26 @@ import time
 import uuid
 from pathlib import Path
 
-EXPORT_VERSION = 1  # bump when the flags, the compaction or the meta change: new cache keys
+from yapnr.viewer import runtime as viewer_runtime
+from yapnr.viewer.toolchain import (  # noqa: F401 (re-exported for the job side and tests)
+    HEADLESS_CLI,
+    Unavailable,
+    app_bundle,
+    background_only,
+    bundle_info,
+    kicad_cli,
+)
+
+JOB = "yapnr.viewer.services.viewer3d"
+PYTHON_ENV = ("PYTHONPATH", "PYTHONHOME", "PYTHONSAFEPATH")
+SCHEMA = "yapnr-viewer3d-v1"
+# Bump when the flags, the compaction or the meta change: new cache keys. 2: yapnr schema names.
+EXPORT_VERSION = 2
 FLAGS = (
     "--subst-models",
     "--include-silkscreen",
     "--include-soldermask",
 )  # no copper: the viewer draws it from geometry
-HEADLESS_CLI = Path("~/Applications/KiCad-headless.app/Contents/MacOS/kicad-cli").expanduser()
 HEX64 = re.compile("[0-9a-f]{64}")
 ROUTING = re.compile(r"(segment|arc|via|zone)[\s)]")
 TENTING = re.compile(r"\(tenting\b((?:[^()]|\([^()]*\))*)\)")
@@ -57,57 +69,24 @@ MISSING = re.compile(r"Could not add 3D model for (\S+?)\.?\s*\n\s*File not foun
 REFS = re.compile(r'\(property\s+"Reference"\s+"([^"]+)"')
 
 
-class Unavailable(Exception):
-    pass
-
-
-def app_bundle(p):
-    """The .app bundle folder a path lies in, else None."""
-    for q in (p, *p.parents):
-        if q.suffix == ".app":
-            return q
-    return None
-
-
-def bundle_info(b):
-    try:
-        return plistlib.loads((b / "Contents/Info.plist").read_bytes())
-    except (OSError, ValueError):
-        return {}
-
-
-def background_only(info):
-    return any(
-        v is True or v == 1 or str(v).strip().lower() in ("1", "yes", "true")
-        for v in (info.get("LSBackgroundOnly"), info.get("LSUIElement"))
-    )
-
-
 def headless_cli(path=None):
-    """The kicad-cli to use: explicit path, else $PNR_KICAD_CLI, else the headless copy. Refuses the GUI app's CLI
-    (anything inside KiCad.app or /Applications/KiCad, also through a symlink), and a CLI inside any .app bundle whose
-    Info.plist is not background-only (LSBackgroundOnly / LSUIElement), such as a renamed copy of the GUI app:
-    LaunchServices registers that bundle as a regular app, which puts an icon in the Dock on this Mac. (The headless
-    bundle still registers, as BackgroundOnly: no Dock icon, never frontmost.)"""
-    p = Path(path or os.environ.get("PNR_KICAD_CLI") or HEADLESS_CLI).expanduser()
-    for q in (p, p.resolve()):
-        if "KiCad.app" in q.parts or str(q).startswith("/Applications/KiCad/"):
-            raise Unavailable(
-                f"refusing the GUI KiCad CLI {p}: use the headless copy ({HEADLESS_CLI}) or set PNR_KICAD_CLI"
-            )
-        b = app_bundle(q)
-        if b and not background_only(bundle_info(b)):
-            raise Unavailable(
-                f"refusing {p}: {b.name} is not a background-only app bundle (no LSBackgroundOnly / LSUIElement in its Info.plist), so its kicad-cli would put an icon in the Dock; use the headless copy ({HEADLESS_CLI}) or set PNR_KICAD_CLI"
-            )
-    if not p.is_file() or not os.access(p, os.X_OK):
-        raise Unavailable(f"headless kicad-cli not found: {p}")
-    return p
+    """The kicad-cli to use (``yapnr.viewer.toolchain.kicad_cli``): the explicit path, else
+    ``$YAPNR_KICAD_CLI`` (alias ``$PNR_KICAD_CLI``), else the headless copy on macOS or ``kicad-cli``
+    on ``PATH`` elsewhere. Refuses the GUI application's CLI (anything inside KiCad.app or
+    /Applications/KiCad, also through a symlink) and a CLI inside any .app bundle whose Info.plist
+    is not background-only (LSBackgroundOnly / LSUIElement), such as a renamed copy of the GUI
+    application: LaunchServices registers that bundle as a regular application, which puts an icon
+    in the Dock. (The headless bundle still registers, as BackgroundOnly: no Dock icon, never
+    frontmost.)"""
+    return kicad_cli(explicit=path)
 
 
 def model_env(cli):
-    """KiCad's stock 3D library for ${KICADn_3DMODEL_DIR} references, from the CLI's own bundle."""
-    env = dict(os.environ)
+    """KiCad's stock 3D library for ${KICADn_3DMODEL_DIR} references, from the CLI's own bundle.
+
+    The viewer's Python path is not passed on: KiCad embeds its own Python.
+    """
+    env = {k: v for k, v in os.environ.items() if k not in PYTHON_ENV}
     lib = Path(cli).parent.parent / "SharedSupport/3dmodels"
     if lib.is_dir():
         for v in (6, 7, 8, 9, 10):
@@ -551,9 +530,9 @@ def compact(data):
     doc = dict(
         asset=dict(
             version="2.0",
-            generator=f'splanc viewer3d_service v{EXPORT_VERSION} (compacted from {js.get("asset",{}).get("extras",{}).get("generator") or js.get("asset",{}).get("generator","KiCad")})',
+            generator=f'yapnr viewer3d v{EXPORT_VERSION} (compacted from {js.get("asset",{}).get("extras",{}).get("generator") or js.get("asset",{}).get("generator","KiCad")})',
             extras=dict(
-                schema="splanc-viewer3d-v1",
+                schema=SCHEMA,
                 frame="engine mm, x/y as the PCB canvas (y up), z up; 0 = board body bottom",
                 board=info["board"],
             ),
@@ -667,7 +646,7 @@ def run_job(
         missing = [dict(ref=m[1], file=m[2].strip()) for m in MISSING.finditer(log)]
         refs = sorted(set(REFS.findall(text)))
         info.update(
-            schema="splanc-viewer3d-v1",
+            schema=SCHEMA,
             key=key,
             board_sha=sha,
             version=EXPORT_VERSION,
@@ -721,7 +700,10 @@ class Viewer3DService:
         max_queue=4,
         lock_path=None,
         python=None,
+        unavailable=None,
     ):
+        """cli: the kicad-cli to use (checked again here); None resolves it from the environment,
+        unless ``unavailable`` already says why there is none."""
         self.cache = Path(cache_dir)
         self.parts = Path(parts) if parts else None
         self.timeout = timeout
@@ -737,6 +719,8 @@ class Viewer3DService:
         self.python = python or sys.executable
         self.lock_path = Path(lock_path) if lock_path else self.cache / "export.lock"
         try:
+            if cli is None and unavailable:
+                raise Unavailable(unavailable)
             self.cli = headless_cli(cli)
             self.env = export_env(self.cli)
             self.disabled = None
@@ -1003,7 +987,7 @@ class Viewer3DService:
         self.cur = job
         try:
             with open(self.lock_path, "a") as lk:
-                while True:  # machine-wide: the viewers under one hier folder share this lock
+                while True:  # machine-wide: the viewers under one experiment folder share this lock
                     try:
                         fcntl.flock(lk, fcntl.LOCK_EX | fcntl.LOCK_NB)
                         break
@@ -1029,7 +1013,8 @@ class Viewer3DService:
                     fail.unlink(missing_ok=True)  # a (re)try supersedes the recorded failure
                     cmd = [
                         self.python,
-                        str(Path(__file__).resolve()),
+                        "-m",
+                        JOB,
                         "export",
                         "--board",
                         job["board"],
@@ -1055,6 +1040,7 @@ class Viewer3DService:
                     with open(logf, "w") as log:
                         p = self.proc = subprocess.Popen(
                             cmd,
+                            env=viewer_runtime.hermetic_env(threads=False),
                             stdout=subprocess.PIPE,
                             stderr=log,
                             text=True,

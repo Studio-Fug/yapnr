@@ -1,19 +1,19 @@
 'use strict';
 // Right-hand dock (Inspect | Source | Ask | Notes) and the atopile source browser / inspector.
 // Data: GET /api/source/index, GET /api/source/file?path=. Talks to app.js only through
-// window.SplancView (highlight/clear/lane/phase/view/netInfo/componentInfo), to agent.js
-// through window.SplancAgent and to notes.js through window.SplancNotes (Inspect notes, Add note,
-// Source gutter markers), all optional. Exposes window.SplancDock and window.SplancSource.
+// window.YapnrView (highlight/clear/lane/phase/view/netInfo/componentInfo), to agent.js
+// through window.YapnrAgent and to notes.js through window.YapnrNotes (Inspect notes, Add note,
+// Source gutter markers), all optional. Exposes window.YapnrDock and window.YapnrSource.
 (function(){
 const D=document,store={get(k,d){try{let v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const nat=(a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true});
-const V=()=>window.SplancView||null,AG=()=>window.SplancAgent||null;
+const V=()=>window.YapnrView||null,AG=()=>window.YapnrAgent||null;
 function h(t,a,...k){let e=D.createElement(t);if(a)for(let [x,v] of Object.entries(a)){if(v==null||v===false)continue;if(x==='class')e.className=v;else if(x.startsWith('on'))e[x]=v;else e.setAttribute(x,v===true?'':v)}for(let c of k.flat(9))if(c!=null&&c!==false)e.append(c.nodeType?c:String(c));return e}
 
 // ------------------------------------------------------------------ dock
-const DOCK=window.SplancDock||(function(){
- const TABS=[['inspect','Inspect'],['source','Source'],['ask','Ask'],['notes','Notes']],pref=store.get('splanc-dock',{}),wide=()=>innerWidth>1360;
+const DOCK=window.YapnrDock||(function(){
+ const TABS=[['inspect','Inspect'],['source','Source'],['ask','Ask'],['notes','Notes']],pref=store.get('yapnr-dock',{}),wide=()=>innerWidth>1360;
  let cur=TABS.some(t=>t[0]===pref.tab)?pref.tab:'inspect',open=wide()&&pref.open!==false,w=+pref.w||380,kt=0;
  const el=h('aside',{id:'dock','aria-label':'Inspect, source, assistant and notes'},
   h('div',{class:'dk-grip',title:'Drag to resize'}),
@@ -23,13 +23,13 @@ const DOCK=window.SplancDock||(function(){
  const fab=h('button',{id:'dk-fab',title:'Open the Inspect / Source / Ask / Notes panel'},'Inspect · Source · Ask · Notes');
  (D.querySelector('main')||D.body).append(el);D.body.append(fab);D.body.classList.add('dk-on');
  const maxW=()=>wide()?Math.max(300,innerWidth-245-310-400):Math.round(innerWidth*.94),clampW=v=>Math.round(Math.max(280,Math.min(maxW(),v)));
- const save=()=>store.set('splanc-dock',{tab:cur,open:wide()?open:(pref.open!==false),w});
+ const save=()=>store.set('yapnr-dock',{tab:cur,open:wide()?open:(pref.open!==false),w});
  // resize only when the layout really changes: a plain tab switch must not make the schematic re-fit
  let lastLay='';const kick=()=>{let lay=open+'|'+clampW(w)+'|'+wide();if(lay===lastLay)return;lastLay=lay;cancelAnimationFrame(kt);kt=requestAnimationFrame(()=>dispatchEvent(new Event('resize')))};
  function apply(resize=true){D.body.classList.toggle('dk-min',!open);D.documentElement.style.setProperty('--dk-w',clampW(w)+'px');
   for(let b of el.querySelectorAll('[data-tab]')){b.classList.toggle('on',b.dataset.tab===cur);b.setAttribute('aria-selected',b.dataset.tab===cur)}
   for(let p of el.querySelectorAll('.dk-panel'))p.hidden=p.dataset.p!==cur;if(open)api.badge(cur,false);if(resize)kick()}
- const fire=()=>D.dispatchEvent(new CustomEvent('splanc:dock',{detail:{tab:cur,open}}));
+ const fire=()=>D.dispatchEvent(new CustomEvent('yapnr:dock',{detail:{tab:cur,open}}));
  const api={el:n=>el.querySelector(`.dk-panel[data-p="${n}"]`),root:el,current:()=>cur,isOpen:()=>open,
   tab(n,show=true){if(n&&TABS.some(t=>t[0]===n))cur=n;if(show)open=true;save();apply(show);fire();return api.el(cur)},
   open(){open=true;save();apply();fire()},close(){open=false;save();apply();fire()},toggle(){open?api.close():api.open()},
@@ -44,12 +44,12 @@ const DOCK=window.SplancDock||(function(){
  grip.ondblclick=()=>{w=380;save();apply()};
  let wasWide=wide();addEventListener('resize',()=>{let now=wide();if(now!==wasWide){wasWide=now;if(!now&&open){open=false;apply(false)}}D.documentElement.style.setProperty('--dk-w',clampW(w)+'px')});
  addEventListener('keydown',e=>{if(e.key==='Escape'&&open&&!wide()&&!el.contains(D.activeElement))api.close()});
- apply(false);lastLay=open+'|'+clampW(w)+'|'+wide();return window.SplancDock=api;
+ apply(false);lastLay=open+'|'+clampW(w)+'|'+wide();return window.YapnrDock=api;
 })();
 
 // ------------------------------------------------------------------ state + index
 const S={idx:null,p:null,err:null,at:0,look:null,files:new Map(),file:null,sel:null,marks:new Set(),hist:[],item:null,ihist:[],needScroll:0};
-const P={insp:DOCK.el('inspect'),src:DOCK.el('source')},NT=()=>window.SplancNotes||null;
+const P={insp:DOCK.el('inspect'),src:DOCK.el('source')},NT=()=>window.YapnrNotes||null;
 if(DOCK.el('notes')&&!DOCK.el('notes').childNodes.length)DOCK.el('notes').append(h('div',{class:'dk-empty'},'Notes panel not loaded (dist/notes.js).'));
 function load(force){
  if(S.p&&!force)return S.p;
@@ -103,7 +103,7 @@ function resolve(file,line,tok){
  if(!r.refs.size&&!r.nets.size){let o=L.line.get(file+':'+line);if(o)for(let x of o.nets)r.nets.add(x)}
  return r}
 function lineHits(file,a,b){let r={refs:new Set(),nets:new Set()};if(!S.look)return r;for(let l=a;l<=(b||a);l++){let o=S.look.line.get(file+':'+l);if(o){o.refs.forEach(x=>r.refs.add(x));o.nets.forEach(x=>r.nets.add(x))}}return r}
-function highlight(sel){let v=V();try{v?.highlight?.({refs:[...(sel.refs||[])],nets:[...(sel.nets||[])],pads:[...(sel.pads||[])]})}catch(e){console.warn('SplancView.highlight',e)}}
+function highlight(sel){let v=V();try{v?.highlight?.({refs:[...(sel.refs||[])],nets:[...(sel.nets||[])],pads:[...(sel.pads||[])]})}catch(e){console.warn('YapnrView.highlight',e)}}
 
 // ------------------------------------------------------------------ chips (shared with agent.js)
 function srcParse(v){let m=/^(.*?):(\d+)(?:\s*[-–]\s*(\d+))?$/.exec(String(v).trim());return m?{file:m[1],line:+m[2],end:m[3]?+m[3]:+m[2]}:{file:String(v),line:1,end:1}}
@@ -329,11 +329,11 @@ function onIndex(){fillFind();if(S.item)IB.body.replaceChildren(...withNotes(S.i
   S.idx?.entry?h('button',{onclick:()=>{let e=String(S.idx.entry).split(':');let m=S.idx.modules?.[e[1]];open(e[0],m?.line||1,m?.line||1)}},'Open entry '+S.idx.entry):null]))}}
 
 // ------------------------------------------------------------------ wiring
-D.addEventListener('splanc:select',e=>{if(e.detail)inspect(e.detail,{focus:false})});
-D.addEventListener('splanc:lane',()=>{if(Date.now()-S.at>30000)load(true).catch(()=>{})});
-D.addEventListener('splanc:dock',e=>{if(e.detail?.open&&e.detail.tab==='source'&&S.needScroll)requestAnimationFrame(scrollTo)});
-D.addEventListener('splanc:notes',()=>{if(S.item&&noteSig(S.item)!==S.noteSig){let top=IB.body.scrollTop;IB.body.replaceChildren(...withNotes(S.item));IB.body.scrollTop=top}markNotes()});
+D.addEventListener('yapnr:select',e=>{if(e.detail)inspect(e.detail,{focus:false})});
+D.addEventListener('yapnr:lane',()=>{if(Date.now()-S.at>30000)load(true).catch(()=>{})});
+D.addEventListener('yapnr:dock',e=>{if(e.detail?.open&&e.detail.tab==='source'&&S.needScroll)requestAnimationFrame(scrollTo)});
+D.addEventListener('yapnr:notes',()=>{if(S.item&&noteSig(S.item)!==S.noteSig){let top=IB.body.scrollTop;IB.body.replaceChildren(...withNotes(S.item));IB.body.scrollTop=top}markNotes()});
 emptyInspect();setTimeout(()=>load().catch(()=>{}),0);
-window.SplancSource={open,showComponent,showNet,inspect,act,chip,resolve,netLabel,netTip,reload:()=>load(true),ready:()=>load(),index:()=>S.idx,item:()=>S.item,
+window.YapnrSource={open,showComponent,showNet,inspect,act,chip,resolve,netLabel,netTip,reload:()=>load(true),ready:()=>load(),index:()=>S.idx,item:()=>S.item,
  escape:esc,srcParse,chipLabel,chipTip};
 })();

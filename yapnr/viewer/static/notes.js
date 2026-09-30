@@ -6,10 +6,10 @@
 // marks applied, resolves or deletes; the assistant can only create, comment and edit open notes of its own conversation.
 // Status buttons send the rev the card shows (expect_rev): a note the assistant edited meanwhile answers 409 and is redrawn
 // for a fresh decision; accepting a proposal with a diff first shows the diff and asks once more.
-// Exposes window.SplancNotes (list/get/open/newNote/forItem/badgesFor/drawBadges/badgeAt/…) and fires
-// 'splanc:notes' on document when the set changes (board badges, Inspect, Source gutter, Ask cards).
+// Exposes window.YapnrNotes (list/get/open/newNote/forItem/badgesFor/drawBadges/badgeAt/…) and fires
+// 'yapnr:notes' on document when the set changes (board badges, Inspect, Source gutter, Ask cards).
 (function(){
-const D=document,V=()=>window.SplancView||null,SS=()=>window.SplancSource||null,AG=()=>window.SplancAgent||null,DK=()=>window.SplancDock||null;
+const D=document,V=()=>window.YapnrView||null,SS=()=>window.YapnrSource||null,AG=()=>window.YapnrAgent||null,DK=()=>window.YapnrDock||null;
 const store={get(k,d){try{let v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 function h(t,a,...k){let e=D.createElement(t);if(a)for(let [x,v] of Object.entries(a)){if(v==null||v===false)continue;if(x==='class')e.className=v;else if(x.startsWith('on'))e[x]=v;else e.setAttribute(x,v===true?'':v)}for(let c of k.flat(9))if(c!=null&&c!==false)e.append(c.nodeType?c:String(c));return e}
@@ -24,7 +24,7 @@ const GROUPS=[['proposed','Awaiting your decision'],['open','Open'],['accepted',
 const PTYPES=['ato','pnr-annotation','constraint','engine','other'],PL={ato:'atopile source','pnr-annotation':'PnR annotation',constraint:'Constraint',engine:'Engine',other:'Other'};
 const BADGE={proposed:'#ffd166',open:'#8ec5ff',accepted:'#9ee6d1'},LIVE=['open','proposed','accepted'];
 const N={list:[],by:new Map(),rev:-1,ok:null,err:null,timer:0,tok:0,fast:false,loaded:false,removed:new Set(),seen:new Set(),open:new Set(),form:{},drafts:{},msg:{},
- flt:Object.assign({status:'all',kind:'',author:''},store.get('splanc-notes-filter',{}),{q:''}),forItem:null,ui:null,ed:null,hits:[],dirty:false,badges:store.get('splanc-notes-badges',true)!==false};
+ flt:Object.assign({status:'all',kind:'',author:''},store.get('yapnr-notes-filter',{}),{q:''}),forItem:null,ui:null,ed:null,hits:[],dirty:false,badges:store.get('yapnr-notes-badges',true)!==false};
 const st=n=>n?.status||'open',upd=n=>tms(n.updated)||tms(n.created)||0;
 // as the assistant left it: nobody decided, edited or answered it yet (the inline Undo of a live Ask turn is only offered then)
 const pristine=n=>!!n&&n.author==='agent'&&(st(n)==='open'||st(n)==='proposed')&&!n.status_by&&n.updated_by?.kind!=='user'&&!(n.comments||[]).some(c=>c.author==='user');
@@ -61,7 +61,7 @@ function commit(m,first){let changed=[],fresh=[];
  if(!changed.length&&!first){renderState();return}
  N.by=m;N.list=[...m.values()];
  if(fresh.some(n=>n.author==='agent'))DK()?.badge?.('notes',true);
- render();D.dispatchEvent(new CustomEvent('splanc:notes',{detail:{rev:N.rev,changed}}))}
+ render();D.dispatchEvent(new CustomEvent('yapnr:notes',{detail:{rev:N.rev,changed}}))}
 
 // ------------------------------------------------------------------ matching (targets use the Ask context item schema)
 const sameFile=(a,b)=>{a=String(a||'');b=String(b||'');return !!a&&!!b&&(a===b||a.endsWith('/'+b)||b.endsWith('/'+a))};
@@ -119,7 +119,7 @@ function drawBadges(c,screen,g,lane){N.hits=[];if(!N.badges||!c||!g||!N.list.len
  c.restore();return n}
 function badgeAt(x,y){for(let i=N.hits.length-1;i>=0;i--){let q=N.hits[i];if(x>=q.x0&&x<=q.x1&&y>=q.y0&&y<=q.y1){let b=q.b;
  return {ids:b.ids.slice(),item:b.item,status:b.status,text:b.ids.map(id=>{let n=N.by.get(id);return n?`${id} · ${SL[st(n)]} ${(KL[n.kind]||n.kind||'').toLowerCase()} · ${n.title}`:id}).join('\n')+'\nClick: show in Notes'}}}return null}
-function badges(on){if(on!==undefined){N.badges=!!on;store.set('splanc-notes-badges',N.badges);let el=D.getElementById('note-badges');if(el)el.checked=N.badges;D.dispatchEvent(new CustomEvent('splanc:notes',{detail:{rev:N.rev,changed:[],badges:true}}))}return N.badges}
+function badges(on){if(on!==undefined){N.badges=!!on;store.set('yapnr-notes-badges',N.badges);let el=D.getElementById('note-badges');if(el)el.checked=N.badges;D.dispatchEvent(new CustomEvent('yapnr:notes',{detail:{rev:N.rev,changed:[],badges:true}}))}return N.badges}
 function wireToggle(){let el=D.getElementById('note-badges');
  if(!el){let costs=D.getElementById('costs')?.closest('label');if(!costs)return;el=h('input',{type:'checkbox',id:'note-badges'});costs.after(h('label',{title:'Sticky-note badges on parts and regions with open, proposed or accepted notes; click one to show its notes'},el,' Note badges'))}
  el.checked=N.badges;el.addEventListener('change',()=>badges(el.checked))}
@@ -216,11 +216,11 @@ function build(){const K=DK(),panel=K?.el('notes');if(!panel||N.ui)return;panel.
  u.exp=h('span',{class:'nt-exp'},'Export ',h('a',{href:'/api/notes/export?format=md',target:'_blank',rel:'noopener',title:'design-notes.md: accepted (to apply), proposed, open, applied, rejected — the feed for the design loop'},'md'),' · ',h('a',{href:'/api/notes/export?format=json',target:'_blank',rel:'noopener',title:'All notes as JSON'},'json'));
  u.head=h('div',{class:'nt-bar'},h('div',{class:'nt-r1'},u.q,u.newb),h('div',{class:'nt-r2'},u.st,u.kind,u.au),h('div',{class:'nt-r3'},u.cnt,h('span',{class:'dk-sp'}),u.exp));
  panel.append(h('div',{class:'nt'},u.head,u.forRow,u.state,u.list,u.ed));
- const saveF=()=>store.set('splanc-notes-filter',{status:N.flt.status,kind:N.flt.kind,author:N.flt.author});
+ const saveF=()=>store.set('yapnr-notes-filter',{status:N.flt.status,kind:N.flt.kind,author:N.flt.author});
  u.q.oninput=()=>{N.flt.q=u.q.value;renderList(true)};u.st.onchange=()=>{N.flt.status=u.st.value;saveF();renderList(true)};u.kind.onchange=()=>{N.flt.kind=u.kind.value;saveF();renderList(true)};u.au.onchange=()=>{N.flt.author=u.au.value;saveF();renderList(true)};
  u.newb.onclick=()=>newNote();
  u.list.addEventListener('focusout',()=>setTimeout(()=>{if(N.dirty&&!u.list.contains(D.activeElement))renderList()},0));
- D.addEventListener('splanc:dock',e=>{if(e.detail?.tab==='notes'&&e.detail.open)refresh().catch(()=>{})});
+ D.addEventListener('yapnr:dock',e=>{if(e.detail?.tab==='notes'&&e.detail.open)refresh().catch(()=>{})});
  D.addEventListener('visibilitychange',()=>{if(!D.hidden)refresh().catch(()=>{})});
  D.addEventListener('keydown',e=>{if(!N.ed||!u.ed.contains(e.target))return;if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();u.ed.querySelector('.nt-save')?.click()}else if(e.key==='Escape'){e.preventDefault();closeEditor()}});
  render()}
@@ -292,7 +292,7 @@ function renderEditor(){let u=N.ui,E=N.ed;if(!u||!E)return;let f=E.f,base=E.id?N
   h('div',{class:'nt-ef'},err,h('span',{class:'dk-sp'}),cancel,save));
  setTimeout(()=>(E.id?body:title).focus(),0)}
 
-// ------------------------------------------------------------------ Inspect section (source.js calls SplancNotes.inspectSection(item))
+// ------------------------------------------------------------------ Inspect section (source.js calls YapnrNotes.inspectSection(item))
 function inspectSection(item){if(!item)return null;let list=forItem(item),live=list.filter(n=>LIVE.includes(st(n)));if(!list.length)return null;
  let show=list.slice(0,4);
  return h('div',{class:'dk-sec nt-insp'},h('h3',null,'Notes · '+list.length+(live.length&&live.length<list.length?' ('+live.length+' open)':'')),show.map(n=>card(n,{compact:true,discuss:true})),
@@ -301,8 +301,8 @@ function inspectSection(item){if(!item)return null;let list=forItem(item),live=l
 // ------------------------------------------------------------------ init
 function start(){build();wireToggle();poll();
  let q=new URLSearchParams(location.search).get('note');if(q){let tries=0,go=()=>{if(N.by.has(q))openNote(q);else if(tries++<20)setTimeout(go,300)};go()}}
-window.SplancNotes={list:()=>N.list.slice(),get:id=>N.by.get(id)||null,ids:()=>[...N.by.keys()],rev:()=>N.rev,available:()=>N.ok!==false,
+window.YapnrNotes={list:()=>N.list.slice(),get:id=>N.by.get(id)||null,ids:()=>[...N.by.keys()],rev:()=>N.rev,available:()=>N.ok!==false,
  open:openNote,newNote,edit:id=>editor(null,id),showFor,forItem,matches,sourceLines,badgesFor,drawBadges,badgeAt,badges,
  create,update,setStatus,comment,remove,refresh,upsert,fast(on){N.fast=!!on;schedule()},card,inspectSection,labels:{kind:KL,status:SL}};
-if(DK())start();else D.addEventListener('DOMContentLoaded',()=>DK()?start():console.warn('notes.js: window.SplancDock missing (load source.js before notes.js)'));
+if(DK())start();else D.addEventListener('DOMContentLoaded',()=>DK()?start():console.warn('notes.js: window.YapnrDock missing (load source.js before notes.js)'));
 })();

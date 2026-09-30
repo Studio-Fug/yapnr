@@ -2,21 +2,21 @@
 // Ask tab: design assistant backed by POST /api/agent/chat (server-sent events: session, delta, tool,
 // note, done, error). It reads the design, may search/fetch the public web (per-conversation Web toggle,
 // body.web) and may record notes through the notes MCP server; it never edits design files.
-// Context chips come from SplancAgent.addContext(item). Answer markup [[ref:C17]] [[net:hv]] [[pad:U5.13]]
+// Context chips come from YapnrAgent.addContext(item). Answer markup [[ref:C17]] [[net:hv]] [[pad:U5.13]]
 // [[src:file.ato:12-18]] [[note:N-0003]] becomes buttons, [text](https://…) links open in a new tab.
 // History: GET /api/agent/conversations[/<session>]. Notes created in a turn (SSE 'note', done.notes_created,
-// or new agent notes carrying this session in provenance, seen through window.SplancNotes) appear inline; Undo only on a
+// or new agent notes carrying this session in provenance, seen through window.YapnrNotes) appear inline; Undo only on a
 // live turn while the note is untouched. Tool lines carry the full WebFetch URL / WebSearch query (tool.full) in the link and
 // tooltip, with a length marker when it is long. Save as note opens the Notes editor prefilled (you write the title).
 (function(){
-const D=document,V=()=>window.SplancView||null,SS=()=>window.SplancSource||null,NS=()=>window.SplancNotes||null;
+const D=document,V=()=>window.YapnrView||null,SS=()=>window.YapnrSource||null,NS=()=>window.YapnrNotes||null;
 const store={get(k,d){try{let v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const unesc=s=>String(s).replace(/&(amp|lt|gt|quot|#39);/g,(m,k)=>({amp:'&',lt:'<',gt:'>',quot:'"','#39':"'"})[k]);
 function h(t,a,...k){let e=D.createElement(t);if(a)for(let [x,v] of Object.entries(a)){if(v==null||v===false)continue;if(x==='class')e.className=v;else if(x.startsWith('on'))e[x]=v;else e.setAttribute(x,v===true?'':v)}for(let c of k.flat(9))if(c!=null&&c!==false)e.append(c.nodeType?c:String(c));return e}
-const G={session:null,busy:false,ctl:null,turn:null,ctx:[],turns:[],status:null,statusAt:0,model:store.get('splanc-agent-model',null),ui:null,web:true,claimed:new Set()};
-// Web toggle per conversation (default on): remembered per session id in this browser.
-const webPref={get(s){let m=store.get('splanc-agent-web',{});return s&&typeof m[s]==='boolean'?m[s]:null},set(s,v){if(!s)return;let m=store.get('splanc-agent-web',{});delete m[s];m[s]=!!v;let k=Object.keys(m);for(let i=0;i<k.length-300;i++)delete m[k[i]];store.set('splanc-agent-web',m)}};
+const G={session:null,busy:false,ctl:null,turn:null,ctx:[],turns:[],status:null,statusAt:0,model:store.get('yapnr-agent-model',null),ui:null,web:false,claimed:new Set()};
+// Web toggle per conversation (default: the server's --agent-web): remembered per session id in this browser.
+const webPref={get(s){let m=store.get('yapnr-agent-web',{});return s&&typeof m[s]==='boolean'?m[s]:null},set(s,v){if(!s)return;let m=store.get('yapnr-agent-web',{});delete m[s];m[s]=!!v;let k=Object.keys(m);for(let i=0;i<k.length-300;i++)delete m[k[i]];store.set('yapnr-agent-web',m)}};
 const tms=v=>{if(v==null||v==='')return NaN;if(typeof v==='number')return v<1e12?v*1000:v;let n=+v;return isFinite(n)&&String(v).trim()!==''&&!/[-:T]/.test(v)?(n<1e12?n*1000:n):Date.parse(v)};
 function ago(v){let t=tms(v);if(!isFinite(t))return '';let s=(Date.now()-t)/1000;if(s<45)return 'just now';if(s<3600)return Math.round(s/60)+' min ago';if(s<86400)return Math.round(s/3600)+' h ago';if(s<6*86400)return Math.round(s/86400)+' d ago';return new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric'})}
 
@@ -81,7 +81,7 @@ function showItem(x){const S=SS(),v=V();
  try{v?.highlight?.({refs:[],nets:[],pads:[],...hl})}catch(e){}S?.inspect?.(x,{focus:false})}
 function addContext(item){if(!item||!item.kind)return;let k=ctxKey(item);if(!G.ctx.some(x=>ctxKey(x)===k))G.ctx.push(JSON.parse(JSON.stringify(item)));renderCtx();}
 function removeContext(i){if(i>=0&&i<G.ctx.length)G.ctx.splice(i,1);renderCtx()}
-function renderCtx(){window.SplancDock?.count?.(G.ctx.length);let u=G.ui;if(!u)return;u.ctx.replaceChildren(...G.ctx.map((x,i)=>ctxChip(x,i,true)));u.ctxRow.hidden=!G.ctx.length;
+function renderCtx(){window.YapnrDock?.count?.(G.ctx.length);let u=G.ui;if(!u)return;u.ctx.replaceChildren(...G.ctx.map((x,i)=>ctxChip(x,i,true)));u.ctxRow.hidden=!G.ctx.length;
  if(G.ctx.length>1)u.ctx.append(h('button',{class:'dk-more ctx-clear',type:'button',onclick:()=>{G.ctx=[];renderCtx()}},'Clear'))}
 
 // ------------------------------------------------------------------ status
@@ -89,7 +89,7 @@ async function status(force){
  if(!force&&G.status&&Date.now()-G.statusAt<20000)return G.status;
  try{let r=await fetch('/api/agent/status'),j=await r.json().catch(()=>null);if(!r.ok||!j)throw Error(j?.error||'HTTP '+r.status);G.status=j}
  catch(e){G.status={available:false,reason:'Assistant endpoint unreachable ('+e.message+').',models:[]}}
- G.statusAt=Date.now();renderStatus();return G.status}
+ G.statusAt=Date.now();if(!G.session&&!G.turns.length)G.web=!!G.status.web;renderStatus();return G.status}
 function renderStatus(){let u=G.ui,s=G.status;if(!u||!s)return;
  let models=s.models?.length?s.models:['opus','sonnet'];if(!models.includes(G.model))G.model=models.includes(s.default)?s.default:models[0];
  u.model.replaceChildren(...models.map(m=>h('option',{value:m,selected:m===G.model||undefined},m)));
@@ -106,8 +106,8 @@ function ui(){let u=G.ui;if(!u)return;let off=G.status&&!G.status.available;u.se
  u.newc.title=(G.session?'Session '+G.session+' · '+G.turns.length+' question'+(G.turns.length!==1?'s':'')+'\n':'')+'Start a new conversation (this one stays in History)';renderWeb()}
 const TOOLVERB={Read:'Reading',Grep:'Searching',Glob:'Listing',LS:'Listing',WebFetch:'Fetching',WebSearch:'Searching the web for',Bash:'Running',Task:'Delegating',TodoWrite:'Planning'};
 const NOTEVERB={add_note:'Recording a note:',list_notes:'Looking up notes:',get_note:'Reading note',comment_note:'Commenting on note',update_note:'Updating note'};
-const noteTool=n=>(/^mcp__splanc_notes__(\w+)$/.exec(n||'')||[])[1]||null;
-function toolText(t){let n=t.name,d=String(t.detail??'').trim().replace(/^.*\/elec\/src\//,'').replace(/^.*\/(?=[^/]+\.ato\b)/,''),m=noteTool(n);
+const noteTool=n=>(/^mcp__\w+?_notes__(\w+)$/.exec(n||'')||[])[1]||null;
+function toolText(t){let n=t.name,sr=G.status?.src_root,d=String(t.detail??'').trim(),m=noteTool(n);if(sr&&d.startsWith(sr+'/'))d=d.slice(sr.length+1);d=d.replace(/^.*\/(?=[^/]+\.ato\b)/,'');
  if(n==='WebSearch'&&d)d='“'+d.replace(/^["“]|["”]$/g,'')+'”';if(n==='WebFetch'){let u=/https?:\/\/\S+/.exec(d);if(u)d=shortUrl(u[0])}
  return (m?NOTEVERB[m]||'Notes: '+m:TOOLVERB[n]||n||'Tool')+(d?' '+d.replace(/…$/,''):'')+'…'}
 // full: the whole URL / query (the server clips detail to 240 characters); a long one is flagged, it can carry data out
@@ -191,7 +191,7 @@ function cancel(){if(!G.busy)return;let s=G.session;if(G.turn)G.turn.cancelled=t
  if(s)fetch('/api/agent/cancel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session:s})}).catch(()=>{});
  G.ctl?.abort()}
 function clearLog(){let u=G.ui;if(!u)return;for(let el of [...u.log.children])if(el!==u.intro)el.remove()}
-function newConversation(){if(G.busy)cancel();G.session=null;G.turns=[];G.web=true;let u=G.ui;if(!u)return;closeHistory();clearLog();u.intro.hidden=false;ui();u.ta.focus()}
+function newConversation(){if(G.busy)cancel();G.session=null;G.turns=[];G.web=!!G.status?.web;let u=G.ui;if(!u)return;closeHistory();clearLog();u.intro.hidden=false;ui();u.ta.focus()}
 function autosize(){let ta=G.ui?.ta;if(!ta)return;ta.style.height='auto';ta.style.height=Math.min(220,Math.max(58,ta.scrollHeight+2))+'px'}
 function draft(text,append){let u=G.ui;if(!u)return;openAsk();u.ta.value=append&&u.ta.value.trim()?u.ta.value.replace(/\s*$/,' ')+text:text;autosize();ui();setTimeout(()=>{u.ta.focus();u.ta.setSelectionRange(u.ta.value.length,u.ta.value.length)},0)}
 
@@ -215,14 +215,14 @@ async function loadConversation(sid){let u=G.ui;if(!u||G.busy)return false;
  try{let j=await jget('/api/agent/conversations/'+encodeURIComponent(sid)),rows=Array.isArray(j)?j:j.turns||[];
   clearLog();u.intro.hidden=true;G.session=sid;G.turns=[];
   for(let [i,r] of rows.entries()){let t=storedTurn(r,sid,i);for(let id of t.noteIds)G.claimed.add(id);G.turns.push(t);u.log.append(question(t),turnShell(t));renderTurn(t);renderNotes(t)}
-  let last=rows[rows.length-1],p=webPref.get(sid);G.web=p??(last&&typeof last.web==='boolean'?last.web:true);
+  let last=rows[rows.length-1],p=webPref.get(sid);G.web=p??(last&&typeof last.web==='boolean'?last.web:!!G.status?.web);
   u.log.append(h('div',{class:'ask-resumed'},'Reopened conversation · '+rows.length+' turn'+(rows.length===1?'':'s')+' · your next question continues it'));
   closeHistory();ui();G.stick=true;scroll(true);u.ta.focus();return true}
  catch(e){let m=h('div',{class:'ask-err'},'Cannot open conversation '+String(sid).slice(0,8)+': '+e.message);if(u.histEl.hidden){u.intro.hidden=true;u.log.append(m);scroll(true)}else u.histEl.append(m);return false}}
 
 // ------------------------------------------------------------------ build
 function build(){
- const K=window.SplancDock,panel=K?.el('ask');if(!panel||G.ui)return;panel.innerHTML='';
+ const K=window.YapnrDock,panel=K?.el('ask');if(!panel||G.ui)return;panel.innerHTML='';
  const ex=['What does this part do in the circuit, and why is it here?','Check the datasheet: is this capacitor bank adequate for the converter’s ripple current?','Record what we concluded as notes, with the sources you used.'];
  const u=G.ui={note:h('div',{class:'ask-note',hidden:true}),log:h('div',{class:'ask-log','aria-live':'polite'}),ctx:h('div',{class:'ask-ctx'}),histEl:h('div',{class:'ask-hist',hidden:true}),
   ta:h('textarea',{class:'ask-ta',rows:'2',placeholder:'Ask about the design, a part or a net…  (Enter sends · Shift+Enter new line)'}),
@@ -240,18 +240,18 @@ function build(){
  panel.append(h('div',{class:'ask'},u.note,u.log,u.histEl,h('div',{class:'ask-compose'},u.ctxRow,u.ta,h('div',{class:'ask-row'},u.model,u.web,u.hist,u.newc,h('span',{class:'dk-sp'}),u.cancel,u.send))));
  u.ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229){e.preventDefault();send()}});
  u.ta.addEventListener('input',()=>{autosize();ui()});
- u.send.onclick=()=>send();u.cancel.onclick=cancel;u.newc.onclick=newConversation;u.model.onchange=()=>{G.model=u.model.value;store.set('splanc-agent-model',G.model)};
+ u.send.onclick=()=>send();u.cancel.onclick=cancel;u.newc.onclick=newConversation;u.model.onchange=()=>{G.model=u.model.value;store.set('yapnr-agent-model',G.model)};
  u.web.onclick=()=>{G.web=!G.web;webPref.set(G.session,G.web);renderWeb()};u.hist.onclick=openHistory;
  u.log.addEventListener('click',e=>{let b=e.target.closest('button.dk-chip');if(!b||!u.log.contains(b))return;let k=b.dataset.k,v=b.dataset.v,S=SS();
   if(k==='note')return NS()?.open?.(v);
   if(S?.act)return S.act(k,v,{focus:false});try{V()?.highlight?.({refs:k==='ref'?[v]:[],nets:k==='net'?[v]:[],pads:k==='pad'?[v]:[]})}catch(err){}});
- D.addEventListener('splanc:dock',e=>{if(e.detail?.tab==='ask'&&e.detail.open){status();if(u.histEl.hidden)setTimeout(()=>u.ta.focus(),0)}});
- D.addEventListener('splanc:notes',()=>{claimNew();for(let t of G.turns){if(t.noteIds?.length)renderNotes(t);if(t.end)renderFoot(t)}}); // inline cards, Undo, "Saved · N-…"
+ D.addEventListener('yapnr:dock',e=>{if(e.detail?.tab==='ask'&&e.detail.open){status();if(u.histEl.hidden)setTimeout(()=>u.ta.focus(),0)}});
+ D.addEventListener('yapnr:notes',()=>{claimNew();for(let t of G.turns){if(t.noteIds?.length)renderNotes(t);if(t.end)renderFoot(t)}}); // inline cards, Undo, "Saved · N-…"
  renderCtx();ui();status();
  SS()?.ready?.().then(()=>renderCtx()).catch(()=>{}); // chip labels need the source index (types, net titles)
 }
-function openAsk(){let K=window.SplancDock;if(!K)return;K.tab('ask');if(G.ui)setTimeout(()=>G.ui.ta.focus(),0)}
-window.SplancAgent={addContext,removeContext,context:()=>G.ctx.slice(),ask(text){openAsk();return send(text)},open:openAsk,cancel,newConversation,status:()=>G.status,markdown:md,
+function openAsk(){let K=window.YapnrDock;if(!K)return;K.tab('ask');if(G.ui)setTimeout(()=>G.ui.ta.focus(),0)}
+window.YapnrAgent={addContext,removeContext,context:()=>G.ctx.slice(),ask(text){openAsk();return send(text)},open:openAsk,cancel,newConversation,status:()=>G.status,markdown:md,
  chip:itemChip,label:ctxLabel,show:showItem,key:ctxKey,draft,session:()=>G.session,busy:()=>G.busy,web:()=>!!(webAvail()&&G.web),history:openHistory,load:loadConversation,sources:mdSources,titleOf};
-if(window.SplancDock)build();else D.addEventListener('DOMContentLoaded',()=>window.SplancDock?build():console.warn('agent.js: window.SplancDock missing (load source.js before agent.js)'));
+if(window.YapnrDock)build();else D.addEventListener('DOMContentLoaded',()=>window.YapnrDock?build():console.warn('agent.js: window.YapnrDock missing (load source.js before agent.js)'));
 })();

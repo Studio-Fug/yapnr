@@ -8,7 +8,7 @@
 // Model: GET /api/schematic?lane= -> {status,key,overlay}; the payload at
 // /api/schematic/payload/<key> is content addressed, so every trial of one block
 // template shares one payload and one layout (cached here by key).
-// Layout: ELK layered (vendored dist/elk.bundled.js, lazy loaded), mechanical from the
+// Layout: ELK layered (elkjs, fetched pinned at build time into the dist, lazy loaded), mechanical from the
 // netlist: symbol pins are FIXED_POS ports, wired nets are star edges from the pin of
 // the part with most pins, rails / ground / labels are drawn in place at the pin.
 // ELK runs in 0.01 mm units and wire ends are snapped onto the pins (see SCH_ELK_SCALE).
@@ -65,7 +65,7 @@ function schSetMode(mode,save=true){
   if(sch.mode!=='sch'&&mode!=='3d'){if(!fitted&&geo())fit();if(sch.pendingCenter){let r=sch.pendingCenter;sch.pendingCenter=null;jumpToComponent(r)}}
   render();if(sch.mode!=='pcb'){schEnsure();schFitIfNeeded()}
  });
- window.Splanc3D?.show(m3?mode:null);
+ window.Yapnr3D?.show(m3?mode:null);
 }
 for(let b of $('viewswitch').children)b.onclick=()=>schSetMode(b.dataset.v);
 for(let b of $('sch-scope').children)b.onclick=()=>{sch.scopePref=b.dataset.s;sch.focusKey=null;schEnsure(true)};
@@ -91,7 +91,7 @@ function schOutside(ref){let blk=sch.data?.scope?.kind==='block'||sch.overlay?.l
 // ------------------------------------------------------------------ loading
 function schLoadElk(){
  if(window.ELK)return Promise.resolve();if(sch.elkP)return sch.elkP;
- sch.elkP=new Promise((res,rej)=>{let s=document.createElement('script');s.src='elk.bundled.js';s.onload=()=>res();s.onerror=()=>{sch.elkP=null;rej(Error('layout engine failed to load'))};document.head.append(s)});
+ sch.elkP=new Promise((res,rej)=>{let s=document.createElement('script');s.src='elk.bundled.js';s.onload=()=>res();s.onerror=()=>{sch.elkP=null;rej(Error('layout engine (elk.bundled.js) failed to load: serve the assembled dist (bazel run //:viewer)'))};document.head.append(s)});
  return sch.elkP;
 }
 async function schEnsure(force){
@@ -425,7 +425,7 @@ function schApplyClasses(){
 }
 function schWireInside(el,F){let n=sch.data.nets.find(x=>x.name===el.dataset.net);if(!n)return false;let inside=n.pins.filter(([r])=>F.raw.has(r)).length;return inside>=2}
 function schNetLabel(net){let n=sch.data?.nets.find(x=>x.name===net);return n?(n.alias?`${n.alias} (${n.name})`:n.name):net}
-function schToggleFocus(h){sch.focus=sch.focus?.id===h.id?null:h;sch.net=null;if(sch.focus){schInspect(schGroupItem(h));if(viewHl)window.SplancView.clear(true)}schApplyClasses();schLegend();if(sch.focus&&sch.focus.refs.length){schFit(true,true);schPcbFrame(sch.focus.refs)}render()}
+function schToggleFocus(h){sch.focus=sch.focus?.id===h.id?null:h;sch.net=null;if(sch.focus){schInspect(schGroupItem(h));if(viewHl)window.YapnrView.clear(true)}schApplyClasses();schLegend();if(sch.focus&&sch.focus.refs.length){schFit(true,true);schPcbFrame(sch.focus.refs)}render()}
 // Bring highlighted parts into the PCB view only when some are off-screen (keeps the user's view otherwise).
 function schPcbFrame(refs){let g=geo(),w=canvas.clientWidth,h=canvas.clientHeight;if(!g||w<80||h<80)return;
  let bs=(g.parts||[]).filter(p=>refs.includes(p.ref)).map(componentBounds).filter(Boolean);if(!bs.length)return;
@@ -504,7 +504,7 @@ function schDescribePart(ref){let d=sch.data,c=d.components.find(x=>x.ref===ref)
  return [`${arr?arr.join(', '):ref} · ${c.value}`,`${c.instance}`+(c.mpn&&c.mpn!==c.value?` · ${c.mpn}`:''),`${c.footprint}`+(role?' · '+role:''),
   Object.keys(c.power?.carrying||{}).length?'carrying '+Object.entries(c.power.carrying).map(([n,p])=>`${n}[${p.join(',')}]`).join(' '):''].filter(Boolean).join('\n')}
 function schHover(e){let t=schTarget(e),box=$('sch-hover'),text='';
- if(t.nbadge){let N=window.SplancNotes;text=t.ids.map(id=>{let n=N?.get?.(id);return n?`${id} · ${N.labels?.status?.[n.status]||n.status} ${(N.labels?.kind?.[n.kind]||n.kind||'').toLowerCase()} · ${n.title}`:id}).join('\n')+'\nClick: show in Notes'}
+ if(t.nbadge){let N=window.YapnrNotes;text=t.ids.map(id=>{let n=N?.get?.(id);return n?`${id} · ${N.labels?.status?.[n.status]||n.status} ${(N.labels?.kind?.[n.kind]||n.kind||'').toLowerCase()} · ${n.title}`:id}).join('\n')+'\nClick: show in Notes'}
  else if(t.ref&&t.pin){let c=sch.data.components.find(x=>x.ref===t.ref),g=sch.built.idx.parts.get(t.ref)?.geom,p=g?.pins.find(q=>q.number===t.pin);text=`${t.ref}.${t.pin}`+(p?.name&&p.name!==t.pin?` ${p.name.replace(/~\{([^}]*)\}/g,'/$1')}`:'')+(t.net?`\nnet ${schNetLabel(t.net)}`+schSem(t.net):'\nnot connected')}
  else if(t.net){let n=sch.data.nets.find(x=>x.name===t.net);text=`net ${schNetLabel(t.net)}`+schSem(t.net)+`\n${n?n.kind+' · '+n.pins.length+' pins here'+(n.pins_total>n.pins.length?` of ${n.pins_total} on the board`:'')+(n.port?' · leaves this block':''):''}`}
  else if(t.ref)text=schDescribePart(t.ref);
@@ -513,9 +513,9 @@ function schHover(e){let t=schTarget(e),box=$('sch-hover'),text='';
  box.style.display=text?'block':'none';box.textContent=text;schSetHoverNet(t.net||null);
  if(text){let r=schSvg.getBoundingClientRect(),x=e.clientX-r.left+14,y=e.clientY-r.top+14;box.style.left=Math.min(x,r.width-box.offsetWidth-6)+'px';box.style.top=Math.min(y,r.height-box.offsetHeight-6)+'px'}}
 function schClick(e){let t=schTarget(e);
- if(t.nbadge){let r=t.refs;if(e.shiftKey)schAsk({ref:r[0]});else window.SplancNotes?.showFor?.(r.length===1?{kind:'component',ref:r[0]}:{kind:'group',id:'parallel:'+t.nbadge,label:r.join(' · '),refs:r});return}
+ if(t.nbadge){let r=t.refs;if(e.shiftKey)schAsk({ref:r[0]});else window.YapnrNotes?.showFor?.(r.length===1?{kind:'component',ref:r[0]}:{kind:'group',id:'parallel:'+t.nbadge,label:r.join(' · '),refs:r});return}
  if(e.shiftKey){schAsk(t);return}
- if(t.net&&(t.pin||!t.ref)){sch.net=sch.net===t.net?null:t.net;if(sch.net&&viewHl)window.SplancView.clear(true);schApplyClasses();render();schInspect(t.pin&&t.ref?{kind:'pad',ref:t.ref,pad:t.pin}:{kind:'net',name:t.net});return}
+ if(t.net&&(t.pin||!t.ref)){sch.net=sch.net===t.net?null:t.net;if(sch.net&&viewHl)window.YapnrView.clear(true);schApplyClasses();render();schInspect(t.pin&&t.ref?{kind:'pad',ref:t.ref,pad:t.pin}:{kind:'net',name:t.net});return}
  if(t.ref){let g=geo(),geoPart=g?.parts?.find(p=>p.ref===t.ref);schInspect({kind:'component',ref:t.ref});
   // No checkpoint yet (lane just switched): queue the jump like the Jump box does.
   if(!g){schMarkSelected(t.ref);sch.selRef=selectedPartRef;jumpToComponent(t.ref);$('component-status').textContent='Loading checkpoint; will locate '+t.ref+'…';return}
@@ -568,7 +568,7 @@ function schPcbLabel(text,col,y){ctx.font='bold 12px system-ui';let w=ctx.measur
 // ------------------------------------------------------------------ render hook
 const renderBeforeSchematic=render;
 render=function(){
- renderBeforeSchematic();schPcbOverlay();window.SplancNotes?.drawBadges?.(ctx,screen,geo(),laneId);
+ renderBeforeSchematic();schPcbOverlay();window.YapnrNotes?.drawBadges?.(ctx,screen,geo(),laneId);
  if(sch.urlLane&&display()?.lanes?.[sch.urlLane]){let id=sch.urlLane;sch.urlLane=null;if(laneId!==id){select(id);return}}
  if(sch.urlRef&&geo()){let r=sch.urlRef;sch.urlRef=null;jumpToComponent(r)}
  if(sch.mode!=='pcb'){
@@ -587,7 +587,7 @@ render=function(){
 // A sticky note on the top-left corner of each part (collapsed parallel parts: their representative) that has open,
 // proposed or accepted notes; hover lists them, click opens them in the Notes tab, Shift+click adds the part to Ask.
 const SCH_NOTE={proposed:'#ffd166',open:'#8ec5ff',accepted:'#9ee6d1'};
-function schNoteBadges(){let b=sch.built;if(!b)return;schRoot.querySelector(':scope>.nbadges')?.remove();let N=window.SplancNotes;if(!N?.badgesFor||N.badges?.()===false)return;
+function schNoteBadges(){let b=sch.built;if(!b)return;schRoot.querySelector(':scope>.nbadges')?.remove();let N=window.YapnrNotes;if(!N?.badgesFor||N.badges?.()===false)return;
  let per=new Map();
  for(let x of N.badgesFor(laneId)){if(x.kind!=='component')continue;let d=b.L.M.R(x.ref),p=d&&b.idx.parts.get(d);if(!p)continue;
   let e=per.get(d);if(!e)per.set(d,e={p,ids:[],sts:new Set(),refs:new Set()});e.refs.add(x.ref);for(let id of x.ids)if(!e.ids.includes(id))e.ids.push(id);e.sts.add(x.status)}
@@ -596,19 +596,19 @@ function schNoteBadges(){let b=sch.built;if(!b)return;schRoot.querySelector(':sc
   let bg=schEl('g',{class:'nbadge s-'+st},g);bg.dataset.ref=ref;bg.dataset.refs=[...e.refs].join(' ');bg.dataset.ids=e.ids.join(' ');
   schEl('path',{d:`M${x},${y}h${s-f}l${f},${f}v${s-f}h${-s}z`,fill:SCH_NOTE[st]},bg);schEl('path',{d:`M${x+s-f},${y}v${f}h${f}`,class:'nbf'},bg);
   schText(bg,x+s/2-.05,y+s*.76,e.ids.length>9?'9+':String(e.ids.length),'nbt','middle')}}
-document.addEventListener('splanc:notes',schNoteBadges);
+document.addEventListener('yapnr:notes',schNoteBadges);
 
 // ------------------------------------------------------------------ Inspect / Ask (source.js, agent.js; both optional)
-function schSem(net){let n=window.SplancSource?.index?.()?.nets?.[net];return n&&n.low_info&&n.title&&n.title!==net?'\n'+n.title:''}
-function schInspect(item){let S=window.SplancSource;if(S?.inspect)S.inspect(item);else document.dispatchEvent(new CustomEvent('splanc:select',{detail:item}))}
+function schSem(net){let n=window.YapnrSource?.index?.()?.nets?.[net];return n&&n.low_info&&n.title&&n.title!==net?'\n'+n.title:''}
+function schInspect(item){let S=window.YapnrSource;if(S?.inspect)S.inspect(item);else document.dispatchEvent(new CustomEvent('yapnr:select',{detail:item}))}
 function schGroupItem(h){return {kind:'group',id:h.id,label:h.label,refs:[...new Set(h.refs||[])]}}
 let schToastT=0;function schToast(msg){$('component-status').textContent=msg;let el=$('sch-toast');if(!el){el=document.createElement('div');el.id='sch-toast';$('sch-main').append(el)}el.textContent=msg;el.hidden=false;clearTimeout(schToastT);schToastT=setTimeout(()=>{el.hidden=true},2500)}
-function schAsk(t){let A=window.SplancAgent;if(!A){schToast('The Ask panel is not loaded.');return}
+function schAsk(t){let A=window.YapnrAgent;if(!A){schToast('The Ask panel is not loaded.');return}
  let grp=t.group&&typeof t.group==='object'?t.group:t.loop?sch.data?.highlights?.find(x=>x.id===t.loop):typeof t.group==='string'?schHighlights().find(x=>x.id===t.group):null;
  let item=t.ref&&t.pin?{kind:'pad',ref:t.ref,pad:t.pin}:t.net?{kind:'net',name:t.net}:t.ref?{kind:'component',ref:t.ref}:grp?schGroupItem(grp):null;if(!item)return;
- A.addContext(item);window.SplancDock?.badge?.('ask',true);
+ A.addContext(item);window.YapnrDock?.badge?.('ask',true);
  schToast('Added '+(item.kind==='group'?item.label:item.kind==='net'?schNetLabel(item.name):item.kind==='pad'?item.ref+'.'+item.pad:item.ref)+' to the Ask context')}
-// SplancView.highlight (app.js) mirrored here: pink parts / pins / nets; pans the schematic when asked to frame.
+// YapnrView.highlight (app.js) mirrored here: pink parts / pins / nets; pans the schematic when asked to frame.
 function schAskApply(pan){let b=sch.built;if(!b)return;for(let el of schRoot.querySelectorAll('.ask'))el.classList.remove('ask');let H=viewHl;if(!H)return;
  let hit=new Set();const part=(r,mark)=>{let p=b.idx.parts.get(b.L.M.R(r));if(p){if(mark)p.g.classList.add('ask');hit.add(p)}return p};
  for(let r of H.refs)part(r,true);
@@ -618,6 +618,6 @@ function schAskApply(pan){let b=sch.built;if(!b)return;for(let el of schRoot.que
  let hs=[...hit].map(p=>p.halo),x0=Math.min(...hs.map(h=>h[0])),y0=Math.min(...hs.map(h=>h[1])),x1=Math.max(...hs.map(h=>h[2])),y1=Math.max(...hs.map(h=>h[3]));
  let {x,y,k}=sch.v,w=schSvg.clientWidth/k,h=schSvg.clientHeight/k;if(x0>=x&&y0>=y+40/k&&x1<=x+w&&y1<=y+h)return;
  if(x1-x0>w*.9||y1-y0>h*.8)schFitBox([x0-4,y0-6,x1+4,y1+4]);else{sch.v={k,x:(x0+x1)/2-w/2,y:(y0+y1)/2-h/2};schApplyView()}}
-(function(){const V=window.SplancView;if(!V)return;const hl=V.highlight,cl=V.clear;
+(function(){const V=window.YapnrView;if(!V)return;const hl=V.highlight,cl=V.clear;
  V.highlight=function(sel,opt){if(sch.focus||sch.net){sch.focus=null;sch.net=null;schApplyClasses();schLegend()}let r=hl.call(V,sel,opt);schAskApply(!opt||opt.frame!==false);return r};
  V.clear=function(keep){let r=cl.call(V,keep);schAskApply(false);return r}})();

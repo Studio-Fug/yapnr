@@ -1,4 +1,4 @@
-"""Design notes shared by the viewer servers, the Ask agent's MCP notes server (notes_mcp.py) and the design loop.
+"""Design notes shared by the viewer servers, the Ask agent's MCP notes server (notes/mcp.py) and the design loop.
 
 <dir>/notes.jsonl      append-only event log, the source of truth: one line per change
                        {rev, op:create|update|comment|delete, id, ts, actor:{kind:user|agent, session?, remote?}, fields}
@@ -18,8 +18,8 @@ overrides are dropped) and design-notes.md renders one-line fields flat and bodi
 Targets use the Ask context item schema; with a resolver (SourceService, a source index or graph.json) an agent's refs, pads,
 nets and source lines must exist.
 
-CLI for the engineering loop: python notes_store.py report [--status accepted] [--kind proposal] [--json] [--dir DIR]
-(an empty or not yet used store prints empty groups, or [] with --json, and exits 0).
+CLI for the engineering loop: python -m yapnr.viewer.notes.store report --dir DIR [--index FILE] [--status accepted]
+[--kind proposal] [--json] (an empty or not yet used store prints empty groups, or [] with --json, and exits 0).
 """
 
 import argparse
@@ -36,11 +36,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
-HERE = Path(__file__).resolve().parent
-HIER = HERE.parent
-DEFAULT_DIR = HIER / "notes"
-DEFAULT_GRAPH = HIER / "inputs10b/graph.json"
-SCHEMA = "splanc-notes-v1"
+SCHEMA = "yapnr-notes-v1"
 KINDS = ("observation", "question", "requirement", "decision", "todo", "proposal")
 STATUSES = ("open", "proposed", "accepted", "rejected", "applied", "resolved")
 USER_ONLY = ("accepted", "rejected", "applied", "resolved")
@@ -318,7 +314,7 @@ def compact(ix):
         else fl
     )
     return dict(
-        schema="splanc-notes-resolver-v1",
+        schema="yapnr-notes-resolver-v1",
         sha=ix.get("sha"),
         components=comps,
         nets=nets,
@@ -567,8 +563,8 @@ def bad_event(e):
 
 
 class NotesStore:
-    def __init__(self, directory=None, resolver=None, export=True):
-        self.dir = Path(directory or DEFAULT_DIR)
+    def __init__(self, directory, resolver=None, export=True):
+        self.dir = Path(directory)
         self.dir.mkdir(parents=True, exist_ok=True)
         self.log = self.dir / "notes.jsonl"
         self.json_path = self.dir / "notes.json"
@@ -1231,7 +1227,7 @@ class NotesStore:
         notes = self.all() if notes is None else notes
         r = self.resolver
         out = [
-            "# Splanc Mini design notes",
+            "# Design notes",
             "",
             f"Generated {now()} from notes.jsonl rev {self.rev}: {len(notes)} note(s). Only a person sets accepted, rejected, applied or "
             "resolved (viewer Notes tab); the assistant records observations, questions and proposals. Apply the accepted notes, then mark them applied in the viewer.",
@@ -1340,41 +1336,28 @@ def note_md(n, r=None):
 
 
 # ------------------------------------------------------------------ CLI
-def default_resolver():
-    """Newest cached viewer source index (types, titles, source lines) under the hier output, else graph.json."""
-    idx = sorted(
-        HIER.glob("*/source/source-index-*.json"), key=lambda p: p.stat().st_mtime, reverse=True
-    )
-    for p in idx + [DEFAULT_GRAPH]:
-        try:
-            return resolver_for(p)
-        except (OSError, ValueError, AttributeError, TypeError):
-            continue
-    return None
-
-
 def main(argv=None):
     ap = argparse.ArgumentParser(
-        description="Splanc design notes (read-only reports; status changes are made by a person in the viewer)."
+        description="Design notes (read-only reports; status changes are made by a person in the viewer)."
     )
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser(
         "report", help="notes for the design loop (default: every status, grouped markdown)"
     )
-    r.add_argument("--dir", type=Path, default=DEFAULT_DIR)
+    r.add_argument("--dir", type=Path, required=True, help="the notes folder")
     r.add_argument("--status", action="append", choices=STATUSES)
     r.add_argument("--kind", action="append", choices=KINDS)
     r.add_argument("--json", action="store_true", help="JSON list with resolved targets")
     r.add_argument(
         "--index",
         type=Path,
-        help="source index / graph.json used to describe targets (default: newest viewer source index)",
+        help="source index (a viewer's source/source-index-*.json) or graph.json used to describe targets",
     )
     a = ap.parse_args(argv)
     if not a.dir.is_dir():
         print(f"no notes folder {a.dir}", file=sys.stderr)
         return 1  # a typo; an unused store just prints empty groups
-    s = NotesStore(a.dir, resolver=a.index or default_resolver(), export=False)
+    s = NotesStore(a.dir, resolver=a.index, export=False)
     notes = [
         n
         for n in s.all()

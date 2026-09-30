@@ -124,9 +124,9 @@ def decision(why):
         hookEventName="PreToolUse",
         permissionDecision="deny" if why else "allow",
         permissionDecisionReason=(
-            f"Blocked by the Splanc viewer: {why}. Only public web pages can be fetched."
+            f"Blocked by the yapnr viewer: {why}. Only public web pages can be fetched."
             if why
-            else "Public host (checked by the Splanc viewer web guard)."
+            else "Public host (checked by the yapnr viewer web guard)."
         ),
     )
     return dict(hookSpecificOutput=d)

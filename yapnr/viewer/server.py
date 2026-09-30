@@ -1,12 +1,25 @@
-"""Explicit-interface live PnR telemetry, immutable pins and annotated snapshots."""
+"""The live viewer's HTTP server: explicit-interface PnR telemetry, immutable pins and snapshots.
 
-import argparse
+A ``Viewer`` reads one live telemetry directory (the *root*: ``events/``, ``geometry/``,
+``boards/``, ``control.json``) that a running experiment writes, replays its events into lanes and
+serves them with the static front end. Optional services hang off it: component-cost replay,
+the schematic view, the atopile source browser, design notes, the Ask agent (off by default,
+paid), AI net labels (off by default, paid) and the 3D view.
+
+Run it with ``bazel run //:viewer -- --root <live dir>`` or ``python -m yapnr.viewer``; the flags
+and the config file are described in :mod:`yapnr.viewer.config`.
+"""
+
+from __future__ import annotations
+
 import copy
 import functools
+import gzip
 import hashlib
 import json
 import math
 import os
+import posixpath
 import re
 import select
 import signal
@@ -18,138 +31,59 @@ import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Optional, Sequence
 from urllib.parse import parse_qs, urlparse
 
-ap = argparse.ArgumentParser()
-ap.add_argument("root", type=Path)
-ap.add_argument("--port", type=int, default=8766)
-ap.add_argument("--listen", action="append")
-ap.add_argument("--allow-origin", action="append", default=[])
-ap.add_argument(
-    "--repo",
-    type=Path,
-    help="Repository for runtime imports and persistent preferences (isolated viewer deployment)",
+import yapnr
+from yapnr.viewer import config as viewer_config
+from yapnr.viewer import runtime
+from yapnr.viewer.event_schema import phase_frame
+from yapnr.viewer.settings import save as save_settings
+from yapnr.viewer.settings import seed as seed_settings
+from yapnr.viewer.toolchain import Toolchain
+
+PACKAGE = Path(__file__).parent
+EXTRACT_SCRIPT = PACKAGE / "kicad_scripts" / "extract.py"
+EXTRACT_TIMEOUT = 40
+LICENSE = "AGPL-3.0-or-later"
+# Third-party files served unmodified from the assembled dist; the browser may cache them.
+PINNED_PREFIXES = ("elk.bundled.js", "vendor/", "third_party/")
+CONTENT_TYPES = {
+    ".html": "text/html",
+    ".js": "application/javascript",
+    ".mjs": "application/javascript",
+    ".css": "text/css",
+    ".json": "application/json",
+}
+OBJECTIVE_KEYS = (
+    "violations",
+    "blocked",
+    "reference",
+    "subwidth",
+    "unqualified_pairs",
+    "unconnected",
 )
-ap.add_argument(
-    "--cost-runtime",
-    type=Path,
-    help="Frozen PnR package parent for cost replay; defaults to repository hardware/pnr",
+# Event data too large for the event stream summary.
+BULKY_EVENT_KEYS = (
+    "tracks",
+    "candidates",
+    "alternatives",
+    "probes",
+    "electrical_audit",
+    "pad_entry",
+    "final",
 )
-ap.add_argument("--cost-contexts", type=Path, help="Optional explicit retrospective contexts JSON")
-for flag, text in (
-    ("--schematic-graph", "Board netlist graph.json for the schematic view"),
-    ("--schematic-rules", "rules.json with current envelopes (default: next to the graph)"),
-    ("--schematic-constraints", "Placement constraints YAML (hard groups)"),
-    ("--schematic-parts", "atopile parts folder holding the .kicad_sym symbols"),
-    (
-        "--schematic-runtime",
-        "Frozen pnr runtime with pnr.power_topology and pnr.hier (default: --cost-runtime)",
-    ),
-    (
-        "--schematic-hier",
-        "Experiment output root that trial run directories must lie under (default: parent of root)",
-    ),
-    ("--schematic-cache", "Schematic payload cache directory (default: <root>/schematic)"),
-    (
-        "--source-dir",
-        "atopile src folder for Inspect/Source/Ask (default: <cost-runtime>/../splanc_dev/elec/src)",
-    ),
-    ("--source-cache", "Source index and AI net-summary cache (default: <root>/source)"),
-):
-    ap.add_argument(flag, type=Path, help=text)
-ap.add_argument(
-    "--agent",
-    choices=("auto", "on", "off"),
-    default="auto",
-    help="Ask tab: headless Claude CLI turns with read-only tools. auto (default): on only when every --listen address is loopback; tailnet/LAN listeners need an explicit --agent on",
-)
-ap.add_argument(
-    "--agent-read-dir",
-    action="append",
-    type=Path,
-    help="Folder the assistant may read (repeatable; replaces the default: atopile src, the hier folder and the transfer folder holding HANDOFF-PROGRESS.md)",
-)
-ap.add_argument(
-    "--agent-total-usd",
-    type=float,
-    default=20.0,
-    help="Assistant spend cap for this server process (all turns); 0 disables the cap",
-)
-ap.add_argument(
-    "--allow-host",
-    action="append",
-    default=[],
-    help="Extra Host header name accepted (DNS-rebinding guard; loopback names, --listen addresses and --allow-origin hosts are always accepted)",
-)
-ap.add_argument(
-    "--agent-model", choices=("opus", "sonnet"), default="opus", help="Default Ask model"
-)
-ap.add_argument("--agent-budget-usd", type=float, default=2.0, help="Per-turn CLI spend cap")
-ap.add_argument("--agent-claude", type=Path, default=Path("claude"), help="Claude CLI binary")
-ap.add_argument(
-    "--net-summaries",
-    choices=("auto", "on", "off"),
-    default="auto",
-    help="AI net labels (one CLI call per changed dossier, about $0.20): on generates them in a background thread when the cache for the current dossier/prompt/model is missing; auto = on only while the assistant is enabled",
-)
-ap.add_argument(
-    "--net-summary-model",
-    choices=("sonnet", "opus", "haiku"),
-    default="sonnet",
-    help="Model for the AI net labels",
-)
-ap.add_argument(
-    "--viewer3d",
-    choices=("on", "off"),
-    default="on",
-    help="3D view: headless kicad-cli GLB export of the selected board (one at a time, cached by placement)",
-)
-ap.add_argument(
-    "--viewer3d-cli",
-    type=Path,
-    help="Headless kicad-cli for GLB export (default: $PNR_KICAD_CLI, else ~/Applications/KiCad-headless.app; the /Applications/KiCad GUI copy is refused)",
-)
-ap.add_argument(
-    "--viewer3d-parts",
-    type=Path,
-    help="atopile parts folder holding the 3D models (default: <source-dir>/parts)",
-)
-ap.add_argument("--viewer3d-cache", type=Path, help="GLB cache (default: <root>/viewer3d)")
-ap.add_argument("--viewer3d-timeout", type=float, default=240.0, help="Seconds per 3D export")
-ap.add_argument("--viewer3d-max-mb", type=float, default=64.0, help="Largest compacted GLB kept")
-ap.add_argument(
-    "--notes-dir",
-    type=Path,
-    help="Design notes store (notes.jsonl, notes.json, design-notes.md, conversations/) shared by viewers and the Ask agent (default: <root>/../notes)",
-)
-ap.add_argument(
-    "--agent-web",
-    choices=("on", "off"),
-    default="on",
-    help="Ask turns may use WebSearch/WebFetch (public hosts only; loopback, private, link-local, CGNAT/tailnet and *.ts.net/*.local are refused); the UI toggles it per conversation",
-)
-a = ap.parse_args()
-root = a.root.resolve()
-root.mkdir(parents=True, exist_ok=True)
-repo = (a.repo or Path(__file__).resolve().parents[3]).resolve()
-assets = Path(__file__).parent / "dist"
-lock = threading.RLock()
-state = dict(
-    schema="pnr-live-state-v1",
-    run=str(root.parent),
-    revision=0,
-    lanes={},
-    events=[],
-    search={},
-    errors=[],
-)
-seen = set()
-cache = None
+
+
+class GeometryUnavailable(Exception):
+    """Board geometry cannot be extracted here (no KiCad Python)."""
 
 
 class Recent(dict):
-    """Geometry cache holding the newest 48 boards: a full replay (thousands of boards) no longer keeps
-    every one in memory. Lanes keep their own references; /api/geometry re-reads evicted files from disk.
+    """Geometry cache holding the newest 48 boards.
+
+    A full replay (thousands of boards) no longer keeps every one in memory. Lanes keep their own
+    references; /api/geometry re-reads evicted files from disk.
     """
 
     def __setitem__(self, k, v):
@@ -162,372 +96,21 @@ class Recent(dict):
                 break
 
 
-cache = Recent()
-sys.path.insert(0, str(repo / "hardware/pnr"))
-from cost_service import CostService
-from event_schema import phase_frame
-from pnr.runtime_controls import LIMITS
-from pnr.runtime_controls import read as read_controls
-from pnr.runtime_controls import write as write_controls
-from settings import save as save_settings
-from settings import seed as seed_settings
-
-cost_service = CostService(
-    root, repo, Path(__file__).parent, runtime=a.cost_runtime, contexts=a.cost_contexts
-)
-from schematic_service import SchematicService
-
-
-def schematic_defaults():
-    runtimes = [
-        p
-        for p in (a.schematic_runtime, a.cost_runtime, repo / "hardware/pnr")
-        if p and (p / "pnr/power_topology.py").is_file() and (p / "pnr/hier/blocks.py").is_file()
-    ]
-    runtime = runtimes[0].resolve() if runtimes else None
-    design = runtime.parent / "splanc_dev" if runtime else None
-    graphs = [
-        p
-        for p in (
-            a.schematic_graph,
-            root.parent / "inputs10b/graph.json",
-            runtime and runtime.parents[2] / "inputs10b/graph.json",
-        )
-        if p and Path(p).is_file()
-    ]
-    pick = lambda given, fallback: given or (
-        fallback if fallback and Path(fallback).exists() else None
-    )
-    return dict(
-        graph=graphs[0] if graphs else None,
-        rules=a.schematic_rules,
-        constraints=pick(a.schematic_constraints, design and design / "mini-constraints.yaml"),
-        parts=pick(a.schematic_parts, design and design / "elec/src/parts"),
-        runtime=runtime,
-        hier=a.schematic_hier or root.parent,
-        cache_dir=a.schematic_cache or root / "schematic",
-    )
-
-
-schematic_service = SchematicService(root, assets=Path(__file__).parent, **schematic_defaults())
-# Trial source paths stay out of /api/state; the schematic route alone reads them.
-lane_sources = {}
-# Native board paths / final objectives per lane, also outside /api/state: the Ask context reads them.
-lane_meta = {}
-from source_service import SourceNotFound, SourceService
-
-
-def source_defaults():
-    d = schematic_defaults()
-    rt = d["runtime"]
-    src = a.source_dir or next(
-        (
-            p.resolve()
-            for p in (
-                a.cost_runtime and a.cost_runtime / "../splanc_dev/elec/src",
-                rt and rt.parent / "splanc_dev/elec/src",
-            )
-            if p and p.is_dir()
-        ),
-        None,
-    )
-    return src, d["graph"], d["rules"]
-
-
-source_dir, source_graph, source_rules = source_defaults()
-source_cache = a.source_cache or root / "source"
-source_service = (
-    SourceService(
-        source_dir,
-        source_graph,
-        rules=source_rules,
-        cache_dir=source_cache,
-        llm_model=a.net_summary_model,
-    )
-    if source_dir and source_graph
-    else None
-)
-if source_service and not source_service.configured():
-    source_service = None
-
-
-def lane_brief(lane_id):
-    """Compact lane facts for the Ask context: objective, opens, run dir, native board path."""
-    with lock:
-        l = state["lanes"].get(lane_id)
-        if l is None:
-            return dict(error="unknown lane")
-        out = {
-            k: l[k]
-            for k in ("status", "kind", "iteration", "phase", "opens", "violations", "board_sha256")
-            if l.get(k) is not None
-        }
-        if l.get("target"):
-            out["routing_target"] = l["target"]
-        if l.get("last_route"):
-            out["last_route"] = {
-                k: l["last_route"][k]
-                for k in ("accepted", "opens", "phase", "stage", "status", "scope")
-                if k in l["last_route"]
-            }
-        frames = l.get("frames") or []
-        out["checkpoints"] = len(frames)
-        if frames:
-            out["last_checkpoint"] = {k: frames[-1].get(k) for k in ("name", "opens", "violations")}
-        meta = dict(lane_meta.get(lane_id) or {})
-        source = lane_sources.get(lane_id)
-    o = meta.get("objective")
-    if isinstance(o, list) and len(o) == 6:
-        o = dict(
-            zip(
-                (
-                    "violations",
-                    "blocked",
-                    "reference",
-                    "subwidth",
-                    "unqualified_pairs",
-                    "unconnected",
-                ),
-                o,
-            )
-        )
-    if o is not None:
-        out.update(
-            objective=o, objective_scope=meta.get("score_scope"), qualified=meta.get("qualified")
-        )
-    out.update(native_board=meta.get("board"), working_board=source)
+def write_json_atomic(path, value):
+    path.parent.mkdir(exist_ok=True)
+    temporary = path.with_name(path.name + "." + uuid.uuid4().hex + ".tmp")
     try:
-        run = schematic_service.run_dir(lane_id, source)
-    except (OSError, ValueError):
-        run = None
-    out["run_dir"] = str(run) if run else None
-    return out
-
-
-from viewer3d_service import Viewer3DService
-
-v3_parts = a.viewer3d_parts or (
-    source_dir / "parts"
-    if source_dir and (source_dir / "parts").is_dir()
-    else schematic_defaults()["parts"]
-)
-# One export at a time per viewer, and across the viewers of one hier folder (flock); requests never wait for it.
-viewer3d = (
-    Viewer3DService(
-        a.viewer3d_cache or root / "viewer3d",
-        cli=a.viewer3d_cli,
-        parts=v3_parts,
-        timeout=a.viewer3d_timeout,
-        max_bytes=int(a.viewer3d_max_mb * (1 << 20)),
-        lock_path=root.parent / "viewer3d-export.lock",
-    )
-    if a.viewer3d == "on"
-    else None
-)
-if viewer3d and viewer3d.disabled:
-    print("3D view: " + viewer3d.disabled, file=sys.stderr, flush=True)
-from agent_service import AgentService, agent_mode, is_loopback
-from notes_store import NoteConflict, NoteNotFound, NotesStore
-
-# Design notes: always on (also with --agent off); the Ask agent writes them only through its per-turn MCP server (notes_mcp.py).
-notes_dir = (a.notes_dir or root.parent / "notes").resolve()
-try:
-    notes = NotesStore(notes_dir, resolver=source_service)
-except Exception as ex:
-    notes = None
-    print(
-        f"notes store unavailable ({notes_dir}): {type(ex).__name__}: {ex}",
-        file=sys.stderr,
-        flush=True,
-    )  # the viewer still starts
-listen_hosts = a.listen or ["127.0.0.1"]
-exposed = [h for h in listen_hosts if not is_loopback(h)]
-# Paid turns that can read the transfer folder: never enabled implicitly on a tailnet/LAN listener (the Origin check stops browsers, not forged headers).
-agent_on, agent_off_reason = agent_mode(a.agent, listen_hosts)
-if a.agent == "on" and exposed:
-    print(
-        f"WARNING: --agent on with non-loopback listeners {exposed}: any client that reaches them (and sends an allowlisted Origin header) can run paid assistant turns",
-        file=sys.stderr,
-        flush=True,
-    )
-own_names = [
-    *listen_hosts,
-    *a.allow_host,
-    *(urlparse(o).hostname or "" for o in a.allow_origin),
-]  # WebFetch deny rules (with this machine's addresses)
-agent_service = (
-    AgentService(
-        repo,
-        claude_bin=a.agent_claude,
-        default_model=a.agent_model,
-        max_budget_usd=a.agent_budget_usd,
-        source=source_service,
-        state_fn=lane_brief,
-        event_fn=lambda i: event_brief(i),
-        cache_dir=root / "agent",
-        src_root=source_dir,
-        add_dirs=a.agent_read_dir,
-        max_total_usd=a.agent_total_usd or None,
-        notes=notes,
-        web=a.agent_web == "on",
-        viewer_port=lambda: a.port,
-        local_names=own_names,
-    )
-    if agent_on
-    else None
-)
-summaries_on = a.net_summaries == "on" or (a.net_summaries == "auto" and agent_service is not None)
-net_summary_status = dict(
-    mode=a.net_summaries,
-    model=a.net_summary_model,
-    state="pending" if summaries_on and source_service else "off",
-)
-if source_service and not summaries_on:
-    net_summary_status["reason"] = (
-        "--net-summaries off"
-        if a.net_summaries == "off"
-        else "assistant disabled (--net-summaries auto follows --agent); pass --net-summaries on to generate anyway"
-    )
-
-
-def net_summaries():
-    """Background: label nets once per mechanical dossier, prompt version and model (one CLI call); nets a failed chunk
-    left missing are retried alone with backoff, never a full re-run per restart. Never blocks serving.
-    """
-    import fcntl
-
-    import net_llm
-
-    def current(f):
-        try:
-            doc = json.loads(f.read_text())
-        except (OSError, ValueError):
-            return False
-        return net_llm.settled(doc, source_service.index()["dossier_sha"], a.net_summary_model)
-
-    try:
-        out = source_service.llm_path
-        out.parent.mkdir(parents=True, exist_ok=True)
-        if not current(out):
-            net_summary_status.update(state="waiting")
-            with open(out.parent / "source-llm.lock", "w") as lk:
-                fcntl.flock(
-                    lk, fcntl.LOCK_EX
-                )  # a second viewer on the same cache waits, then finds it current
-                if not current(out):
-                    net_summary_status.update(state="generating")
-                    print(
-                        f"net summaries: generating with {a.net_summary_model} ->",
-                        out,
-                        file=sys.stderr,
-                        flush=True,
-                    )
-                    net_llm.generate(
-                        source_service,
-                        out,
-                        model=a.net_summary_model,
-                        claude_bin=a.agent_claude,
-                        cache=root / "agent",
-                        log=lambda m: print(m, file=sys.stderr, flush=True),
-                    )
-        try:
-            missing = len(json.loads(out.read_text()).get("missing") or [])
-        except (OSError, ValueError, AttributeError):
-            missing = None
-        net_summary_status.update(
-            state=(
-                "current"
-                if current(out) and not missing
-                else "incomplete" if current(out) else "failed"
-            ),
-            missing=missing,
-            nets=source_service.merge_llm(),
-        )
-    except Exception as ex:
-        net_summary_status.update(state="failed", error=f"{type(ex).__name__}: {ex}"[:400])
-        print("net summaries failed:", net_summary_status["error"], file=sys.stderr, flush=True)
-
-
-def event_brief(event_id):
-    """One event from the live stream for the Ask context (the summarised data /api/state shows)."""
-    with lock:
-        e = next((x for x in reversed(state["events"]) if x.get("id") == event_id), None)
-    return copy.deepcopy(e) if e else None
-
-
-def agent_status():
-    s = (
-        agent_service.status()
-        if agent_service
-        else dict(
-            available=False,
-            reason=agent_off_reason,
-            models=["opus", "sonnet"],
-            default=a.agent_model,
-            busy=False,
-            max_concurrent=0,
-            web=False,
-            notes=notes is not None,
-        )
-    )
-    return dict(s, net_summaries=net_summary_status, source=bool(source_service))
-
-
-sse_origins = lambda: [f"http://127.0.0.1:{a.port}", f"http://localhost:{a.port}", *a.allow_origin]
-# DNS-rebinding guard: a page on attacker.example that re-resolves to this address still sends Host: attacker.example.
-allowed_hosts = {
-    "127.0.0.1",
-    "localhost",
-    "::1",
-    *(h.lower().strip("[]") for h in listen_hosts),
-    *(h.lower() for h in a.allow_host),
-}
-for o in a.allow_origin:
-    h = (urlparse(o).hostname or "").lower()
-    if h:
-        allowed_hosts |= {
-            h,
-            h.split(".")[0],
-        }  # also the MagicDNS short name (host for host.<tailnet>)
-
-
-def host_allowed(value):
-    if value is None:
-        return True  # HTTP/1.0 clients; browsers always send Host
-    v = value.strip().lower()
-    host = (
-        v[1 : v.find("]")] if v.startswith("[") else v.rsplit(":", 1)[0] if v.count(":") == 1 else v
-    )
-    return host in allowed_hosts
-
-
-gzip_cache = {}
-
-
-def gzipped(raw):
-    import gzip
-
-    c = gzip_cache.get("v")  # one (raw, gz, etag) tuple, swapped atomically between request threads
-    if c is None or c[0] is not raw:
-        c = gzip_cache["v"] = (
-            raw,
-            gzip.compress(raw, 6),
-            '"' + hashlib.sha256(raw).hexdigest()[:32] + '"',
-        )
-    return c[1], c[2]
-
-
-preferences = repo / "output/pnr-settings.json"
-state["controls"] = seed_settings(root / "control.json", preferences)
-state["active_controls"] = None
-ki = "/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3"
-extracting = (
-    {}
-)  # running KiCad extractor -> its temporary output; killed and removed when this server is stopped
+        temporary.write_text(json.dumps(value, indent=2))
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def sweep_tmp(folder, age=600):
-    """Remove temporary geometry files older than age s (left when a viewer was killed mid-extraction; extraction times out at 40 s)."""
+    """Remove temporary geometry files older than age s.
+
+    They are left when a viewer was killed mid-extraction; extraction times out at 40 s.
+    """
     now = time.time()
     for t in folder.glob("*.tmp"):
         try:
@@ -537,57 +120,8 @@ def sweep_tmp(folder, age=600):
             pass
 
 
-last_sweep = [0.0]
-
-
-def geometry(event):
-    sha = event["board_sha256"]
-    if sha not in cache:
-        folder = root / "geometry"
-        folder.mkdir(exist_ok=True)
-        f = folder / (sha + ".json")
-        if time.time() - last_sweep[0] > 600:
-            last_sweep[0] = time.time()
-            sweep_tmp(folder)
-        if not f.exists():
-            tmp = folder / (sha + "." + uuid.uuid4().hex + ".tmp")
-            try:
-                with (folder / (sha + ".log")).open("w") as log:
-                    proc = subprocess.Popen(
-                        [ki, str(Path(__file__).parent / "extract.py"), event["board"], str(tmp)],
-                        env=dict(os.environ, PYTHONPATH=str(repo / "hardware/pnr")),
-                        stdout=log,
-                        stderr=subprocess.STDOUT,
-                    )
-                    extracting[proc] = tmp
-                    try:
-                        code = proc.wait(timeout=40)
-                    except subprocess.TimeoutExpired:
-                        proc.kill()
-                        proc.wait()
-                        raise
-                    finally:
-                        extracting.pop(proc, None)
-                    if code:
-                        raise subprocess.CalledProcessError(code, "extract.py")
-                tmp.replace(f)
-            finally:
-                tmp.unlink(missing_ok=True)
-        # Another viewer on the same root may still be writing f (older viewers write it in place).
-        for attempt in range(40):
-            try:
-                cache[sha] = json.loads(f.read_text())
-                break
-            except ValueError:
-                if attempt == 39:
-                    raise
-                time.sleep(0.25)
-    return cache[sha]
-
-
 def from_graph(g):
-    import math
-
+    """Viewer geometry (parts and pads only) from a placement layout (a graph.json document)."""
     parts = []
     for c in g["components"]:
         angle = math.radians(c["rot"])
@@ -621,292 +155,780 @@ def from_graph(g):
     )
 
 
-def ingest():
-    event_dir = root / "events"
-    event_dir.mkdir(exist_ok=True)
-    last_mtime = None
-    last_restart = None
-    while True:
-        restart_file = root.parent / "restart-status.json"
-        if restart_file.exists():
-            stamp_restart = restart_file.stat().st_mtime_ns
-            if stamp_restart != last_restart:
-                with lock:
-                    state["restart_status"] = json.loads(restart_file.read_text())
-                    state["revision"] += 1
-                last_restart = stamp_restart
-        stamp = event_dir.stat().st_mtime_ns
-        if stamp == last_mtime:
-            time.sleep(0.25)
-            continue
-        # Files are atomically renamed into this immutable event directory. A rename
-        # during this scan changes mtime and is discovered on the next pass.
-        last_mtime = stamp
-        with os.scandir(event_dir) as entries:
-            pending = sorted(
-                entry.name
-                for entry in entries
-                if entry.name.endswith(".json") and entry.name not in seen
-            )
-        for name in pending:
-            f = event_dir / name
-            if f.name in seen:
-                continue
-            try:
-                e = json.loads(f.read_text())
-                frame = phase_frame(e) if e["kind"] == "phase_complete" else None
-                geo = (
-                    geometry(e)
-                    if "board" in e
-                    else (from_graph(e["layout"]) if "layout" in e else None)
-                )
-                layout_sha = None
-                if e["kind"] == "placement_cost_capture":
-                    layout_sha = hashlib.sha256(
-                        json.dumps(e["layout"], sort_keys=True, separators=(",", ":")).encode()
-                    ).hexdigest()
-                    cache[layout_sha] = geo
-                    write_json_atomic(root / "geometry" / (layout_sha + ".json"), geo)
-                    frame = dict(
-                        name=e["data"]["phase"] + " · recorded placement cost",
-                        kind="placement-cost",
-                        layout_sha256=layout_sha,
-                        event_id=e["id"],
-                        opens=None,
-                        violations=None,
-                        label_source="data.phase",
-                        metric_sources={},
-                        cost_capture=e["data"]["cost_capture"],
-                    )
-                with lock:
-                    lane = state["lanes"].setdefault(
-                        e["candidate"], dict(id=e["candidate"], draft={}, costs={}, frames=[])
-                    )
-                    lane.update(
-                        event_id=e["id"], time=e["time"], iteration=e["iteration"], kind=e["kind"]
-                    )
-                    if isinstance(e.get("source"), str):
-                        lane_sources[e["candidate"]] = e["source"]
-                    if isinstance(e.get("board"), str):
-                        lane_meta.setdefault(e["candidate"], {})["board"] = e["board"]
-                    if e["kind"] == "candidate_complete":
-                        lane_meta.setdefault(e["candidate"], {}).update(
-                            {k: e["data"].get(k) for k in ("objective", "qualified", "score_scope")}
-                        )
-                    if e["data"].get("phase"):
-                        lane["phase"] = e["data"]["phase"]
-                    if e["kind"] == "controls_applied":
-                        state["active_controls"] = e["data"]
-                    if e["kind"] == "worker_config_applied":
-                        lane["worker_config"] = e["data"]
-                    if frame:
-                        lane["phase"] = frame["name"]
-                        lane["opens"] = frame["opens"]
-                        lane["violations"] = frame["violations"]
-                        lane["phase_label_source"] = frame["label_source"]
-                        lane["phase_metric_sources"] = frame["metric_sources"]
-                        lane["phase_accepted"] = frame.get("accepted")
-                    if geo:
-                        if lane.get("geometry") and e.get("board_sha256") != lane.get(
-                            "board_sha256"
-                        ):
-                            lane["previous"] = lane["geometry"]
-                        lane["geometry"] = geo
-                        lane["board_sha256"] = e.get("board_sha256")
-                        lane["layout_sha256"] = layout_sha
-                        lane["geometry_event_id"] = e["id"]
-                        lane["draft"] = {}
-                    if frame:
-                        lane["frames"].append(frame)
-                    if e["kind"] == "route_result":
-                        lane["opens"] = e["data"].get("opens")
-                        lane["last_route"] = e["data"]
-                        lane["copper_changed_at"] = (
-                            time.time()
-                            if e["data"].get("accepted")
-                            else lane.get("copper_changed_at", 0)
-                        )
-                    if e["kind"] == "candidate_queued":
-                        lane["moves"] = e["data"].get("moves", [])
-                        lane["cost"] = e["data"].get("cost")
-                    if e["kind"] == "route_start":
-                        lane["target"] = e["data"]["target"]
-                    if e["kind"] == "signal_net_added":
-                        lane["draft"][e["data"]["net"]] = e["data"]["tracks"]
-                    if e["kind"] == "signal_net_removed":
-                        lane["draft"].pop(e["data"]["net"], None)
-                    if e["kind"] == "placement_costs":
-                        lane["costs"][e["data"]["ref"]] = e["data"]
-                    if e["kind"] == "batch_alternatives":
-                        state["search"][str(e["iteration"])] = e["data"]
-                    if e["kind"] in (
-                        "candidate_queued",
-                        "candidate_start",
-                        "candidate_complete",
-                        "candidate_failed",
-                    ):
-                        lane["status"] = e["kind"].removeprefix("candidate_")
-                    if e["kind"] == "iteration_complete":
-                        lane["status"] = "accepted" if e["data"].get("accepted") else "rejected"
-                    summary = {k: e[k] for k in ("id", "time", "kind", "candidate", "iteration")}
-                    summary["data"] = {
-                        k: v
-                        for k, v in e["data"].items()
-                        if k
-                        not in (
-                            "tracks",
-                            "candidates",
-                            "alternatives",
-                            "probes",
-                            "electrical_audit",
-                            "pad_entry",
-                            "final",
-                        )
-                    }
-                    state["events"].append(summary)
-                    state["events"] = state["events"][-300:]
-                    state["revision"] += 1
-                seen.add(f.name)
-            except Exception as ex:
-                with lock:
-                    state["errors"].append(dict(file=f.name, error=str(ex)))
-                    state["errors"] = state["errors"][-10:]
-                    state["revision"] += 1
-                seen.add(f.name)
-        time.sleep(0.25)
+def find_dist(explicit: Optional[Path] = None):
+    """(directory with the static files, missing third-party parts or None).
+
+    The assembled dist (``//yapnr/viewer:dist``: the static files plus the pinned elkjs and
+    three.js) is next to this package in Bazel runfiles; ``--dist`` names another copy (for example
+    ``bazel-bin/yapnr/viewer/dist`` from a plain checkout). Without either, the bare static files
+    are served and the schematic layout and the 3D view report that their libraries are missing.
+    """
+    candidates = [Path(explicit)] if explicit else [PACKAGE / "dist"]
+    for d in candidates:
+        if (d / "index.html").is_file():
+            missing = [
+                name
+                for name in ("elk.bundled.js", "vendor/three/build/three.module.js")
+                if not (d / name).is_file()
+            ]
+            return d, missing or None
+    if explicit:
+        raise viewer_config.ConfigError(f"--dist {explicit}: no index.html there")
+    return PACKAGE / "static", ["elk.bundled.js", "vendor/three/build/three.module.js"]
 
 
-def current(selected=None, full=True):
-    with lock:
-        if full:
-            return copy.deepcopy(dict(state, server_time=time.time()))
-        # Filter before copying: unselected board geometry never enters the copy.
-        lanes = {
-            key: {
-                k: v
-                for k, v in lane.items()
-                if key == selected or k not in ("geometry", "previous", "draft")
-            }
-            for key, lane in state["lanes"].items()
-        }
-        return copy.deepcopy(dict(state, lanes=lanes, server_time=time.time()))
-
-
-response_cache = {}
-
-
-def state_response(query):
-    with lock:
-        selected = query.get("lane", [None])[0]
-        selected = selected or next((k for k in state["lanes"] if not k.endswith("/search")), None)
-        rev = state["revision"]
-        if (
-            query.get("since", [None])[0] == str(rev)
-            and query.get("run", [None])[0] == state["run"]
-        ):
-            return json.dumps(
-                dict(unchanged=True, revision=rev, run=state["run"]), separators=(",", ":")
-            ).encode()
-        key = (rev, selected)
-        if key not in response_cache:
-            # Cache only the current revision; no retained historical geometry copies.
-            for old in list(response_cache):
-                if old[0] != rev:
-                    del response_cache[old]
-            response_cache[key] = json.dumps(
-                current(selected, full=False), separators=(",", ":")
-            ).encode()
-        return response_cache[key]
-
-
-def write_json_atomic(path, value):
-    path.parent.mkdir(exist_ok=True)
-    temporary = path.with_name(path.name + "." + uuid.uuid4().hex + ".tmp")
+def source_revision() -> Optional[str]:
+    """The source commit of this viewer (AGPL section 13): the image's stamp, else git."""
+    stamped = os.environ.get("YAPNR_SOURCE_REVISION", "").strip()
+    if stamped:
+        return stamped
     try:
-        temporary.write_text(json.dumps(value, indent=2))
-        temporary.replace(path)
-    finally:
-        temporary.unlink(missing_ok=True)
+        here = Path(__file__).resolve().parent
+        done = subprocess.run(
+            ["git", "-C", str(here), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    rev = done.stdout.strip()
+    return rev if done.returncode == 0 and re.fullmatch(r"[0-9a-f]{40,64}", rev) else None
 
 
-@functools.lru_cache(maxsize=16)
-def pin_summary(pin):
-    # Immutable pins can be large; repeated keystrokes need only compact identity
-    # metadata. Bound this cache and load full geometry only for a final bundle.
-    snapshot = json.loads((root / "pins" / (pin + ".json")).read_text())
-    return dict(
-        run=snapshot["run"],
-        lanes={
-            key: dict(board_sha256=lane.get("board_sha256"), frames=lane.get("frames", []))
-            for key, lane in snapshot["lanes"].items()
-        },
-    )
+def static_path(dist: Path, url_path: str) -> Optional[Path]:
+    """The file a URL path names inside dist, or None.
+
+    Containment is checked lexically, never by resolving symlinks: in Bazel runfiles every file
+    is a symlink into the source tree or the output tree.
+    """
+    rel = "index.html" if url_path in ("", "/") else url_path.lstrip("/")
+    if "\\" in rel or "\0" in rel:
+        return None
+    parts = rel.split("/")
+    if any(p in ("", ".", "..") for p in parts) or posixpath.normpath(rel) != rel:
+        return None
+    f = dist.joinpath(*parts)
+    return f if f.is_file() else None
 
 
-def read_annotation(body, full=False):
-    pin = body["pin_id"]
-    if not isinstance(pin, str) or not re.fullmatch("[a-f0-9]{32}", pin):
-        raise ValueError("invalid pin")
-    summary = pin_summary(pin)
-    snapshot = json.loads((root / "pins" / (pin + ".json")).read_text()) if full else None
-    selected = body.get("view", {})
-    lane = summary["lanes"].get(selected.get("lane"))
-    phase = selected.get("phase", "live")
-    if lane is None:
-        raise ValueError("selected lane is absent from the immutable pin")
-    if phase != "live":
-        if (
-            not isinstance(phase, str)
-            or not phase.isdigit()
-            or int(phase) >= len(lane.get("frames", []))
-        ):
-            raise ValueError("selected phase is absent from the immutable pin")
-        frame = lane["frames"][int(phase)]
-        sha = frame.get("board_sha256") or frame["layout_sha256"]
-        # A server restart may not have replayed this old frame yet. The exact
-        # immutable geometry is already on disk; never substitute a live board.
-        if full:
-            snapshot["selected_geometry"] = cache.get(sha) or json.loads(
-                (root / "geometry" / (sha + ".json")).read_text()
+class Viewer:
+    """State and services of one viewer process (one live root)."""
+
+    def __init__(self, cfg: viewer_config.ViewerConfig, log=None):
+        self.cfg = cfg
+        self.log = log or (lambda msg: print(msg, file=sys.stderr, flush=True))
+        self.root = Path(cfg.root).absolute()
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.experiment = Path(cfg.experiment).absolute()
+        self.port = cfg.port
+        self.lock = threading.RLock()
+        self.state = dict(
+            schema="pnr-live-state-v1",
+            run=str(self.root.parent),
+            revision=0,
+            lanes={},
+            events=[],
+            search={},
+            errors=[],
+        )
+        self.seen = set()
+        self.cache = Recent()
+        self.response_cache = {}
+        self.gzip_cache = {}
+        self.extracting = {}  # KiCad extractor -> its temporary output; removed on stop
+        self.last_sweep = 0.0
+        self.geometry_notice = None
+        # Trial source paths stay out of /api/state; the schematic route alone reads them.
+        self.lane_sources = {}
+        # Native board paths / final objectives per lane, also outside /api/state: the Ask
+        # context reads them.
+        self.lane_meta = {}
+        self.dist, self.dist_missing = find_dist(cfg.dist)
+        self.runtime = runtime.engine_runtime(cfg.engine_runtime)
+        self.toolchain = Toolchain(
+            cli=cfg.kicad_cli,
+            python=cfg.kicad_python,
+            machine_cli=cfg.machine_kicad_cli,
+            machine_python=cfg.machine_kicad_python,
+        )
+        self.revision = source_revision()
+        self._pins = functools.lru_cache(maxsize=16)(self._pin_summary)
+        self._init_controls()
+        self._init_cost()
+        self._init_design()
+        self._init_viewer3d()
+        self._init_notes()
+        self._init_agent()
+        self._init_origins()
+
+    # ------------------------------------------------------------------ services
+    def _init_controls(self):
+        from pnr.runtime_controls import LIMITS
+        from pnr.runtime_controls import read as read_controls
+
+        self.limits = LIMITS
+        self.read_controls = read_controls
+        self.preferences = Path(self.cfg.preferences)
+        self.state["controls"] = seed_settings(self.root / "control.json", self.preferences)
+        self.state["active_controls"] = None
+
+    def _init_cost(self):
+        from yapnr.viewer.services.cost import CostService
+
+        self.cost_service = CostService(
+            self.root,
+            runtime=self.runtime,
+            contexts=self.cfg.cost_contexts,
+            capture_root=self.cfg.capture_root,
+            toolchain=self.toolchain,
+        )
+        if self.cost_service.disabled:
+            self.log("component costs: " + self.cost_service.disabled)
+
+    def _init_design(self):
+        from yapnr.viewer.services.schematic import SchematicService
+        from yapnr.viewer.sources import open_sources
+
+        cfg = self.cfg
+        self.sources = open_sources(cfg)
+        if self.sources.reason:
+            self.log("source browser: " + self.sources.reason)
+        self.source_service = self.sources.service
+        parts = cfg.parts or self.sources.parts
+        self.parts = Path(parts) if parts else None
+        self.schematic_service = SchematicService(
+            self.root,
+            graph=cfg.graph,
+            rules=cfg.rules,
+            constraints=cfg.constraints,
+            parts=self.parts,
+            ato_src=self.sources.src,
+            runtime=self.runtime,
+            experiment=self.experiment,
+            cache_dir=cfg.cache_dir("schematic"),
+        )
+
+    def _init_viewer3d(self):
+        from yapnr.viewer.services.viewer3d import Viewer3DService
+
+        self.viewer3d = None
+        if not self.cfg.viewer3d:
+            return
+        cli, why = self.toolchain.cli()
+        # One export at a time per viewer, and across the viewers of one experiment folder
+        # (flock); requests never wait for it.
+        self.viewer3d = Viewer3DService(
+            self.cfg.cache_dir("viewer3d"),
+            cli=cli,
+            unavailable=why,
+            parts=self.parts,
+            timeout=self.cfg.viewer3d_timeout,
+            max_bytes=int(self.cfg.viewer3d_max_mb * (1 << 20)),
+            lock_path=self.experiment / "viewer3d-export.lock",
+        )
+        if self.viewer3d.disabled:
+            self.log("3D view: " + self.viewer3d.disabled)
+        if self.dist_missing and "vendor/three/build/three.module.js" in self.dist_missing:
+            self.log("3D view: three.js is missing from the served files (use the Bazel dist)")
+
+    def _init_notes(self):
+        from yapnr.viewer.notes.store import NotesStore
+
+        # Design notes: always on (also with the agent off); the Ask agent writes them only
+        # through its per-turn MCP server (notes/mcp.py).
+        self.notes_dir = Path(self.cfg.notes).absolute()
+        resolver = self.source_service or (
+            str(self.cfg.graph) if self.cfg.graph and Path(self.cfg.graph).is_file() else None
+        )
+        try:
+            self.notes = NotesStore(self.notes_dir, resolver=resolver)
+        except Exception as ex:  # the viewer still starts
+            self.notes = None
+            self.log(f"notes store unavailable ({self.notes_dir}): {type(ex).__name__}: {ex}")
+
+    def _init_agent(self):
+        from yapnr.viewer.agent.service import is_loopback
+
+        cfg = self.cfg
+        self.listen_hosts = list(cfg.listen)
+        exposed = [h for h in self.listen_hosts if not is_loopback(h)]
+        self.agent_service = None
+        self.agent_off_reason = (
+            "The assistant is off on this server (start it with --agent on; paid turns)."
+        )
+        if cfg.agent:
+            from yapnr.viewer.agent.service import AgentService
+
+            if exposed:
+                self.log(
+                    f"WARNING: --agent on with non-loopback listeners {exposed}: any client that"
+                    " reaches them (and sends an allowlisted Origin header) can run paid"
+                    " assistant turns"
+                )
+            # WebFetch deny rules, with this machine's addresses.
+            own_names = [
+                *self.listen_hosts,
+                *cfg.allow_host,
+                *(urlparse(o).hostname or "" for o in cfg.allow_origin),
+            ]
+            read_dirs = cfg.agent_read_dirs or [d for d in (self.sources.src, self.experiment) if d]
+            self.agent_service = AgentService(
+                cfg.agent_cwd,
+                claude_bin=cfg.claude or "claude",
+                default_model=cfg.agent_model,
+                max_budget_usd=cfg.agent_budget_usd,
+                source=self.source_service,
+                state_fn=self.lane_brief,
+                event_fn=self.event_brief,
+                cache_dir=cfg.cache_dir("agent"),
+                src_root=self.sources.src,
+                entry=self.sources.entry_label,
+                add_dirs=read_dirs,
+                docs=cfg.agent_docs,
+                description=cfg.agent_description,
+                graph=cfg.graph,
+                rules=cfg.rules,
+                engine_runtime=self.runtime,
+                max_total_usd=cfg.agent_total_usd or None,
+                notes=self.notes,
+                web=cfg.agent_web,
+                viewer_port=lambda: self.port,
+                local_names=own_names,
             )
-    rects = body.get("annotations", [])
-    if not isinstance(rects, list) or len(rects) > 500:
-        raise ValueError("invalid rectangle list")
-    for rect in rects:
-        if len(rect["bounds"]) != 4 or not all(
-            type(v) in (int, float) and math.isfinite(v) and abs(v) < 100000 for v in rect["bounds"]
+        on = cfg.net_summaries and self.source_service is not None
+        self.net_summary_status = dict(
+            enabled=cfg.net_summaries,
+            model=cfg.net_summary_model,
+            state="pending" if on else "off",
+        )
+        if not cfg.net_summaries:
+            self.net_summary_status["reason"] = "off (start the viewer with --net-summaries on)"
+        elif self.source_service is None:
+            self.net_summary_status["reason"] = "no atopile source index to label"
+
+    def _init_origins(self):
+        cfg = self.cfg
+        # DNS-rebinding guard: a page on attacker.example that re-resolves to this address still
+        # sends Host: attacker.example.
+        hosts = {"127.0.0.1", "localhost", "::1"}
+        hosts |= {h.lower().strip("[]") for h in self.listen_hosts}
+        hosts |= {h.lower() for h in cfg.allow_host}
+        for o in cfg.allow_origin:
+            h = (urlparse(o).hostname or "").lower()
+            if h:
+                hosts |= {h, h.split(".")[0]}  # also a short name (host for host.example.com)
+        self.allowed_hosts = hosts
+
+    # ------------------------------------------------------------------ origin checks
+    def origins(self):
+        return [f"http://127.0.0.1:{self.port}", f"http://localhost:{self.port}"] + list(
+            self.cfg.allow_origin
+        )
+
+    def host_allowed(self, value):
+        if value is None:
+            return True  # HTTP/1.0 clients; browsers always send Host
+        v = value.strip().lower()
+        if v.startswith("["):
+            host = v[1 : v.find("]")]
+        elif v.count(":") == 1:
+            host = v.rsplit(":", 1)[0]
+        else:
+            host = v
+        return host in self.allowed_hosts
+
+    # ------------------------------------------------------------------ status
+    def about(self):
+        return dict(
+            name="yapnr",
+            title=self.cfg.title,
+            version=yapnr.__version__,
+            revision=self.revision,
+            source_url=self.cfg.source_url,
+            license=LICENSE,
+            missing_assets=self.dist_missing,
+        )
+
+    def lane_brief(self, lane_id):
+        """Compact lane facts for the Ask context: objective, opens, run dir, native board path."""
+        with self.lock:
+            lane = self.state["lanes"].get(lane_id)
+            if lane is None:
+                return dict(error="unknown lane")
+            keys = ("status", "kind", "iteration", "phase", "opens", "violations", "board_sha256")
+            out = {k: lane[k] for k in keys if lane.get(k) is not None}
+            if lane.get("target"):
+                out["routing_target"] = lane["target"]
+            if lane.get("last_route"):
+                out["last_route"] = {
+                    k: lane["last_route"][k]
+                    for k in ("accepted", "opens", "phase", "stage", "status", "scope")
+                    if k in lane["last_route"]
+                }
+            frames = lane.get("frames") or []
+            out["checkpoints"] = len(frames)
+            if frames:
+                out["last_checkpoint"] = {
+                    k: frames[-1].get(k) for k in ("name", "opens", "violations")
+                }
+            meta = dict(self.lane_meta.get(lane_id) or {})
+            source = self.lane_sources.get(lane_id)
+        o = meta.get("objective")
+        if isinstance(o, list) and len(o) == 6:
+            o = dict(zip(OBJECTIVE_KEYS, o))
+        if o is not None:
+            out.update(
+                objective=o,
+                objective_scope=meta.get("score_scope"),
+                qualified=meta.get("qualified"),
+            )
+        out.update(native_board=meta.get("board"), working_board=source)
+        try:
+            run = self.schematic_service.run_dir(lane_id, source)
+        except (OSError, ValueError):
+            run = None
+        out["run_dir"] = str(run) if run else None
+        return out
+
+    def event_brief(self, event_id):
+        """One event from the live stream for the Ask context (the data /api/state shows)."""
+        with self.lock:
+            e = next(
+                (x for x in reversed(self.state["events"]) if x.get("id") == event_id),
+                None,
+            )
+        return copy.deepcopy(e) if e else None
+
+    def agent_status(self):
+        if self.agent_service:
+            s = self.agent_service.status()
+        else:
+            s = dict(
+                available=False,
+                reason=self.agent_off_reason,
+                models=list(viewer_config.AGENT_MODELS),
+                default=self.cfg.agent_model,
+                busy=False,
+                max_concurrent=0,
+                web=False,
+                notes=self.notes is not None,
+            )
+        return dict(
+            s,
+            net_summaries=self.net_summary_status,
+            source=bool(self.source_service),
+            src_root=str(self.sources.src) if self.sources.src else None,
+        )
+
+    # ------------------------------------------------------------------ AI net labels
+    def net_summaries(self):
+        """Background: label nets once per mechanical dossier, prompt version and model.
+
+        One CLI call; nets a failed chunk left missing are retried alone with backoff, never a
+        full re-run per restart. Never blocks serving.
+        """
+        import fcntl
+
+        from yapnr.viewer.agent import net_llm
+
+        status = self.net_summary_status
+        source = self.source_service
+        model = self.cfg.net_summary_model
+
+        def current(f):
+            try:
+                doc = json.loads(f.read_text())
+            except (OSError, ValueError):
+                return False
+            return net_llm.settled(doc, source.index()["dossier_sha"], model)
+
+        try:
+            out = source.llm_path
+            out.parent.mkdir(parents=True, exist_ok=True)
+            if not current(out):
+                status.update(state="waiting")
+                with open(out.parent / "source-llm.lock", "w") as lk:
+                    # A second viewer on the same cache waits, then finds it current.
+                    fcntl.flock(lk, fcntl.LOCK_EX)
+                    if not current(out):
+                        status.update(state="generating")
+                        self.log(f"net summaries: generating with {model} -> {out}")
+                        net_llm.generate(
+                            source,
+                            out,
+                            model=model,
+                            claude_bin=self.cfg.claude or "claude",
+                            cache=self.cfg.cache_dir("agent"),
+                            log=self.log,
+                        )
+            try:
+                missing = len(json.loads(out.read_text()).get("missing") or [])
+            except (OSError, ValueError, AttributeError):
+                missing = None
+            if current(out):
+                state = "incomplete" if missing else "current"
+            else:
+                state = "failed"
+            status.update(state=state, missing=missing, nets=source.merge_llm())
+        except Exception as ex:
+            status.update(state="failed", error=f"{type(ex).__name__}: {ex}"[:400])
+            self.log("net summaries failed: " + status["error"])
+
+    # ------------------------------------------------------------------ geometry
+    def gzipped(self, raw):
+        # One (raw, gz, etag) tuple, swapped atomically between request threads.
+        c = self.gzip_cache.get("v")
+        if c is None or c[0] is not raw:
+            etag = '"' + hashlib.sha256(raw).hexdigest()[:32] + '"'
+            c = self.gzip_cache["v"] = (raw, gzip.compress(raw, 6), etag)
+        return c[1], c[2]
+
+    def extract(self, board, out, log):
+        python, why = self.toolchain.python()
+        if python is None:
+            raise GeometryUnavailable(
+                "board geometry needs KiCad's Python (--kicad-python or YAPNR_KICAD_PYTHON): "
+                + str(why)
+            )
+        proc = subprocess.Popen(
+            [str(python), str(EXTRACT_SCRIPT), str(board), str(out)],
+            env=runtime.kicad_env(self.runtime),
+            stdout=log,
+            stderr=subprocess.STDOUT,
+        )
+        self.extracting[proc] = out
+        try:
+            code = proc.wait(timeout=EXTRACT_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+            raise
+        finally:
+            self.extracting.pop(proc, None)
+        if code:
+            raise subprocess.CalledProcessError(code, "extract.py")
+
+    def geometry(self, event):
+        sha = event["board_sha256"]
+        if sha not in self.cache:
+            folder = self.root / "geometry"
+            folder.mkdir(exist_ok=True)
+            f = folder / (sha + ".json")
+            if time.time() - self.last_sweep > 600:
+                self.last_sweep = time.time()
+                sweep_tmp(folder)
+            if not f.exists():
+                tmp = folder / (sha + "." + uuid.uuid4().hex + ".tmp")
+                try:
+                    with (folder / (sha + ".log")).open("w") as log:
+                        self.extract(event["board"], tmp, log)
+                    tmp.replace(f)
+                finally:
+                    tmp.unlink(missing_ok=True)
+            # Another viewer on the same root may still be writing f (older viewers write it in
+            # place).
+            for attempt in range(40):
+                try:
+                    self.cache[sha] = json.loads(f.read_text())
+                    break
+                except ValueError:
+                    if attempt == 39:
+                        raise
+                    time.sleep(0.25)
+        return self.cache[sha]
+
+    def event_geometry(self, e):
+        """(geometry or None, notice or None) for an event."""
+        try:
+            if "board" in e:
+                return self.geometry(e), None
+        except GeometryUnavailable as ex:
+            if "layout" not in e:
+                return None, str(ex)
+        return (from_graph(e["layout"]) if "layout" in e else None), None
+
+    # ------------------------------------------------------------------ ingest
+    def ingest(self):
+        event_dir = self.root / "events"
+        event_dir.mkdir(exist_ok=True)
+        last_mtime = None
+        last_restart = None
+        restart_file = self.experiment / "restart-status.json"
+        while True:
+            if restart_file.exists():
+                stamp_restart = restart_file.stat().st_mtime_ns
+                if stamp_restart != last_restart:
+                    with self.lock:
+                        self.state["restart_status"] = json.loads(restart_file.read_text())
+                        self.state["revision"] += 1
+                    last_restart = stamp_restart
+            stamp = event_dir.stat().st_mtime_ns
+            if stamp == last_mtime:
+                time.sleep(0.25)
+                continue
+            # Files are atomically renamed into this immutable event directory. A rename during
+            # this scan changes mtime and is discovered on the next pass.
+            last_mtime = stamp
+            with os.scandir(event_dir) as entries:
+                pending = sorted(
+                    entry.name
+                    for entry in entries
+                    if entry.name.endswith(".json") and entry.name not in self.seen
+                )
+            for name in pending:
+                if name not in self.seen:
+                    self.ingest_file(event_dir / name)
+            time.sleep(0.25)
+
+    def ingest_file(self, f):
+        try:
+            e = json.loads(f.read_text())
+            frame = phase_frame(e) if e["kind"] == "phase_complete" else None
+            geo, notice = self.event_geometry(e)
+            if notice and notice != self.geometry_notice:
+                self.geometry_notice = notice
+                self.log(notice)
+                with self.lock:
+                    self.state["errors"].append(dict(file=f.name, error=notice))
+            layout_sha = None
+            if e["kind"] == "placement_cost_capture":
+                layout_sha = hashlib.sha256(
+                    json.dumps(e["layout"], sort_keys=True, separators=(",", ":")).encode()
+                ).hexdigest()
+                self.cache[layout_sha] = geo
+                write_json_atomic(self.root / "geometry" / (layout_sha + ".json"), geo)
+                frame = dict(
+                    name=e["data"]["phase"] + " · recorded placement cost",
+                    kind="placement-cost",
+                    layout_sha256=layout_sha,
+                    event_id=e["id"],
+                    opens=None,
+                    violations=None,
+                    label_source="data.phase",
+                    metric_sources={},
+                    cost_capture=e["data"]["cost_capture"],
+                )
+            with self.lock:
+                self.apply_event(e, frame, geo, layout_sha)
+            self.seen.add(f.name)
+        except Exception as ex:
+            with self.lock:
+                self.state["errors"].append(dict(file=f.name, error=str(ex)))
+                self.state["errors"] = self.state["errors"][-10:]
+                self.state["revision"] += 1
+            self.seen.add(f.name)
+
+    def apply_event(self, e, frame, geo, layout_sha):
+        """Fold one event into its lane (lock held)."""
+        state = self.state
+        cand = e["candidate"]
+        kind = e["kind"]
+        data = e["data"]
+        lane = state["lanes"].setdefault(cand, dict(id=cand, draft={}, costs={}, frames=[]))
+        lane.update(event_id=e["id"], time=e["time"], iteration=e["iteration"], kind=kind)
+        if isinstance(e.get("source"), str):
+            self.lane_sources[cand] = e["source"]
+        if isinstance(e.get("board"), str):
+            self.lane_meta.setdefault(cand, {})["board"] = e["board"]
+        if kind == "candidate_complete":
+            self.lane_meta.setdefault(cand, {}).update(
+                {k: data.get(k) for k in ("objective", "qualified", "score_scope")}
+            )
+        if data.get("phase"):
+            lane["phase"] = data["phase"]
+        if kind == "controls_applied":
+            state["active_controls"] = data
+        if kind == "worker_config_applied":
+            lane["worker_config"] = data
+        if frame:
+            lane["phase"] = frame["name"]
+            lane["opens"] = frame["opens"]
+            lane["violations"] = frame["violations"]
+            lane["phase_label_source"] = frame["label_source"]
+            lane["phase_metric_sources"] = frame["metric_sources"]
+            lane["phase_accepted"] = frame.get("accepted")
+        if geo:
+            if lane.get("geometry") and e.get("board_sha256") != lane.get("board_sha256"):
+                lane["previous"] = lane["geometry"]
+            lane["geometry"] = geo
+            lane["board_sha256"] = e.get("board_sha256")
+            lane["layout_sha256"] = layout_sha
+            lane["geometry_event_id"] = e["id"]
+            lane["draft"] = {}
+        if frame:
+            lane["frames"].append(frame)
+        if kind == "route_result":
+            lane["opens"] = data.get("opens")
+            lane["last_route"] = data
+            if data.get("accepted"):
+                lane["copper_changed_at"] = time.time()
+            else:
+                lane["copper_changed_at"] = lane.get("copper_changed_at", 0)
+        if kind == "candidate_queued":
+            lane["moves"] = data.get("moves", [])
+            lane["cost"] = data.get("cost")
+        if kind == "route_start":
+            lane["target"] = data["target"]
+        if kind == "signal_net_added":
+            lane["draft"][data["net"]] = data["tracks"]
+        if kind == "signal_net_removed":
+            lane["draft"].pop(data["net"], None)
+        if kind == "placement_costs":
+            lane["costs"][data["ref"]] = data
+        if kind == "batch_alternatives":
+            state["search"][str(e["iteration"])] = data
+        if kind in (
+            "candidate_queued",
+            "candidate_start",
+            "candidate_complete",
+            "candidate_failed",
         ):
-            raise ValueError("invalid bounds")
-    note = body.get("note", "")
-    if not isinstance(note, str):
-        raise ValueError("invalid note")
-    revision = body.get("draft_revision", 0)
-    if type(revision) is not int or revision < 0:
-        raise ValueError("invalid draft revision")
-    return (
-        pin,
-        snapshot,
-        dict(
+            lane["status"] = kind.removeprefix("candidate_")
+        if kind == "iteration_complete":
+            lane["status"] = "accepted" if data.get("accepted") else "rejected"
+        summary = {k: e[k] for k in ("id", "time", "kind", "candidate", "iteration")}
+        summary["data"] = {k: v for k, v in data.items() if k not in BULKY_EVENT_KEYS}
+        state["events"].append(summary)
+        state["events"] = state["events"][-300:]
+        state["revision"] += 1
+
+    # ------------------------------------------------------------------ state
+    def current(self, selected=None, full=True):
+        with self.lock:
+            if full:
+                return copy.deepcopy(dict(self.state, server_time=time.time()))
+            # Filter before copying: unselected board geometry never enters the copy.
+            lanes = {
+                key: {
+                    k: v
+                    for k, v in lane.items()
+                    if key == selected or k not in ("geometry", "previous", "draft")
+                }
+                for key, lane in self.state["lanes"].items()
+            }
+            return copy.deepcopy(dict(self.state, lanes=lanes, server_time=time.time()))
+
+    def state_response(self, query):
+        with self.lock:
+            selected = query.get("lane", [None])[0]
+            selected = selected or next(
+                (k for k in self.state["lanes"] if not k.endswith("/search")), None
+            )
+            rev = self.state["revision"]
+            run = self.state["run"]
+            if query.get("since", [None])[0] == str(rev) and query.get("run", [None])[0] == run:
+                return json.dumps(
+                    dict(unchanged=True, revision=rev, run=run), separators=(",", ":")
+                ).encode()
+            key = (rev, selected)
+            if key not in self.response_cache:
+                # Cache only the current revision; no retained historical geometry copies.
+                for old in list(self.response_cache):
+                    if old[0] != rev:
+                        del self.response_cache[old]
+                self.response_cache[key] = json.dumps(
+                    self.current(selected, full=False), separators=(",", ":")
+                ).encode()
+            return self.response_cache[key]
+
+    # ------------------------------------------------------------------ pins and snapshots
+    def _pin_summary(self, pin):
+        # Immutable pins can be large; repeated keystrokes need only compact identity metadata.
+        # Bound this cache and load full geometry only for a final bundle.
+        snapshot = json.loads((self.root / "pins" / (pin + ".json")).read_text())
+        return dict(
+            run=snapshot["run"],
+            lanes={
+                key: dict(board_sha256=lane.get("board_sha256"), frames=lane.get("frames", []))
+                for key, lane in snapshot["lanes"].items()
+            },
+        )
+
+    def read_annotation(self, body, full=False):
+        pin = body["pin_id"]
+        if not isinstance(pin, str) or not re.fullmatch("[a-f0-9]{32}", pin):
+            raise ValueError("invalid pin")
+        summary = self._pins(pin)
+        snapshot = None
+        if full:
+            snapshot = json.loads((self.root / "pins" / (pin + ".json")).read_text())
+        selected = body.get("view", {})
+        lane = summary["lanes"].get(selected.get("lane"))
+        phase = selected.get("phase", "live")
+        if lane is None:
+            raise ValueError("selected lane is absent from the immutable pin")
+        if phase != "live":
+            frames = lane.get("frames", [])
+            if not isinstance(phase, str) or not phase.isdigit() or int(phase) >= len(frames):
+                raise ValueError("selected phase is absent from the immutable pin")
+            frame = frames[int(phase)]
+            sha = frame.get("board_sha256") or frame["layout_sha256"]
+            # A server restart may not have replayed this old frame yet. The exact immutable
+            # geometry is already on disk; never substitute a live board.
+            if full:
+                snapshot["selected_geometry"] = self.cache.get(sha) or json.loads(
+                    (self.root / "geometry" / (sha + ".json")).read_text()
+                )
+        rects = body.get("annotations", [])
+        if not isinstance(rects, list) or len(rects) > 500:
+            raise ValueError("invalid rectangle list")
+        for rect in rects:
+            bounds = rect["bounds"]
+            if len(bounds) != 4 or not all(
+                type(v) in (int, float) and math.isfinite(v) and abs(v) < 100000 for v in bounds
+            ):
+                raise ValueError("invalid bounds")
+        note = body.get("note", "")
+        if not isinstance(note, str):
+            raise ValueError("invalid note")
+        revision = body.get("draft_revision", 0)
+        if type(revision) is not int or revision < 0:
+            raise ValueError("invalid draft revision")
+        payload = dict(
             pin_id=pin,
             run=summary["run"],
             annotations=rects,
             view=selected,
             note=note[:10000],
             draft_revision=revision,
-        ),
-    )
+        )
+        return pin, snapshot, payload
+
+    # ------------------------------------------------------------------ lifecycle
+    def stop(self, signum, frame):
+        # Kill a running KiCad extractor and drop its temporary file (a SIGKILLed viewer leaves
+        # them to the next sweep).
+        for proc, tmp in list(self.extracting.items()):
+            try:
+                proc.kill()
+            except OSError:
+                pass
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
+        if self.agent_service:
+            self.agent_service.shutdown()
+        if self.viewer3d:
+            self.viewer3d.shutdown()  # kills a running export's process group (kicad-cli too)
+        os._exit(128 + signum)
 
 
 class Handler(BaseHTTPRequestHandler):
+    viewer: Viewer  # set on the per-server subclass
+
     def log_message(self, *args):
         pass
 
     def misdirected(self):
-        if host_allowed(self.headers.get("Host")):
+        if self.viewer.host_allowed(self.headers.get("Host")):
             return False
         self.send(
             {
-                "error": "unexpected Host header (DNS-rebinding guard); add --allow-host NAME for another name of this server"
+                "error": "unexpected Host header (DNS-rebinding guard); add --allow-host NAME"
+                " for another name of this server"
             },
             421,
         )
@@ -921,284 +943,285 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(raw)
 
-    def do_GET(self):
-        if self.misdirected():
-            return
-        path = self.path.split("?")[0]
-        if path == "/api/component-cost":
-            q = parse_qs(urlparse(self.path).query)
-            try:
-                return self.send(
-                    cost_service.request(q.get("event_id", [""])[0], q.get("ref", [None])[0])
-                )
-            except (ValueError, KeyError, IndexError, TypeError, FileNotFoundError) as ex:
-                return self.send(dict(error=str(ex)), 400)
-        if path == "/api/schematic":
-            q = parse_qs(urlparse(self.path).query)
-            lane_id = q.get("lane", [""])[0]
-            scope = q.get("scope", ["auto"])[0]
-            with lock:
-                entry = state["lanes"].get(lane_id)
-                if entry is None:
-                    return self.send({"error": "unknown lane"}, 404)
-                refs = [
-                    p["ref"]
-                    for p in (entry.get("geometry") or {}).get("parts", [])
-                    if isinstance(p.get("ref"), str)
-                ]
-                source = lane_sources.get(lane_id)
-            try:
-                return self.send(
-                    schematic_service.request(
-                        lane_id, refs, source, "board" if scope == "board" else "auto"
-                    )
-                )
-            except (ValueError, KeyError, IndexError, TypeError, OSError) as ex:
-                return self.send(dict(error=str(ex)), 400)
-        if path.startswith("/api/schematic/payload/"):
-            try:
-                raw = schematic_service.payload(path.rsplit("/", 1)[-1])
-            except ValueError as ex:
-                return self.send({"error": str(ex)}, 400)
-            except FileNotFoundError as ex:
-                return self.send({"error": str(ex)}, 404)
-            # Content-addressed by every build input: safe to cache in the browser.
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Cache-Control", "private, max-age=86400, immutable")
-            self.send_header("Content-Length", str(len(raw)))
-            self.end_headers()
-            self.wfile.write(raw)
-            return
-        if path == "/api/source/index":
-            if source_service is None:
-                return self.send({"error": "no atopile source configured (--source-dir)"}, 503)
-            try:
-                raw = source_service.index_bytes()
-            except Exception as ex:
-                return self.send(
-                    {"error": f"source index failed: {type(ex).__name__}: {ex}"[:400]}, 500
-                )
-            gz, etag = gzipped(raw)
-            if self.headers.get("If-None-Match") == etag:
-                self.send_response(304)
-                self.send_header("ETag", etag)
-                self.send_header("Cache-Control", "no-cache")
-                self.end_headers()
-                return
-            zipped = "gzip" in (self.headers.get("Accept-Encoding") or "")
-            body = gz if zipped else raw
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Cache-Control", "no-cache")
-            self.send_header("ETag", etag)
-            self.send_header("Vary", "Accept-Encoding")
-            if zipped:
-                self.send_header("Content-Encoding", "gzip")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
-        if path == "/api/source/file":
-            if source_service is None:
-                return self.send({"error": "no atopile source configured (--source-dir)"}, 503)
-            try:
-                return self.send(
-                    source_service.file(parse_qs(urlparse(self.path).query).get("path", [""])[0])
-                )
-            except SourceNotFound as ex:
-                return self.send({"error": str(ex)}, 404)
-            except (ValueError, OSError) as ex:
-                return self.send({"error": str(ex)}, 400)
-        if path == "/api/notes" or path == "/api/notes/export":
-            if notes is None:
-                return self.send({"error": "the notes store is not available on this server"}, 404)
-            q = parse_qs(urlparse(self.path).query)
-            if (
-                path == "/api/notes"
-            ):  # {rev, unchanged:true} when since == rev: the 4 s poll costs one stat
-                try:
-                    since = int(q.get("since", [""])[0])
-                except ValueError:
-                    since = None
-                return self.send(notes.payload(since))
-            fmt = q.get("format", ["md"])[0]
-            try:
-                raw, ctype = notes.export_data(fmt)
-            except ValueError as ex:
-                return self.send({"error": str(ex)}, 400)
-            self.send_response(200)
-            self.send_header("Content-Type", ctype)
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("Content-Disposition", f'inline; filename="design-notes.{fmt}"')
-            self.send_header("X-Content-Type-Options", "nosniff")
-            self.send_header("Content-Length", str(len(raw)))
-            self.end_headers()
-            self.wfile.write(raw)
-            return
-        if path == "/api/agent/conversations" or path.startswith("/api/agent/conversations/"):
-            if agent_service is None:
-                return self.send(
-                    {"error": "the assistant is disabled on this server (--agent off)"}, 503
-                )
-            if path == "/api/agent/conversations":
-                return self.send(agent_service.conversations())
-            try:
-                return self.send(
-                    agent_service.conversation(path[len("/api/agent/conversations/") :])
-                )
-            except ValueError as ex:
-                return self.send({"error": str(ex)}, 400)
-            except KeyError:
-                return self.send({"error": "no such conversation"}, 404)
-        if path == "/api/agent/status":
-            return self.send(agent_status())
-        # 3D: ?peek=1 reports without enqueueing ('idle'): the pane enqueues once its board has stayed put for a moment
-        if path == "/api/3d" or path == "/api/3d/status":
-            if viewer3d is None:
-                return self.send(
-                    dict(
-                        status="unavailable",
-                        error="3D view disabled on this server (--viewer3d off)",
-                    )
-                )
-            if path == "/api/3d/status":
-                return self.send(viewer3d.status())
-            q = parse_qs(urlparse(self.path).query)
-            lane_id = q.get("lane", [""])[0]
-            ph = q.get("phase", ["live"])[0]
-            sha = q.get("sha", [""])[0]
-            if sha and not re.fullmatch("[a-f0-9]{64}", sha):
-                return self.send({"error": "invalid sha"}, 400)
-            with lock:
-                l = state["lanes"].get(lane_id)
-                boards = [(lane_meta.get(lane_id) or {}).get("board"), lane_sources.get(lane_id)]
-                if not sha and l is not None:
-                    sha = (
-                        l.get("board_sha256")
-                        if ph == "live"
-                        else (
-                            l["frames"][int(ph)].get("board_sha256")
-                            if ph.isdigit() and int(ph) < len(l.get("frames") or [])
-                            else None
-                        )
-                    )
-            if not sha and l is None:
-                return self.send({"status": "unavailable", "error": "unknown lane"}, 404)
-            # sha from the browser (pinned/phase state) or the lane: the immutable boards/<sha> copy, else the lane's board if it still hashes to sha
-            return self.send(
-                viewer3d.request(
-                    sha or "",
-                    [root / "boards" / (sha + ".kicad_pcb") if sha else None, *boards],
-                    retry=q.get("retry", [""])[0] == "1",
-                    peek=q.get("peek", [""])[0] == "1",
-                )
-            )
-        if path.startswith("/api/3d/glb/"):
-            if viewer3d is None:
-                return self.send({"error": "3D view disabled"}, 404)
-            try:
-                raw, enc = viewer3d.glb(
-                    path.rsplit("/", 1)[-1], "gzip" in (self.headers.get("Accept-Encoding") or "")
-                )
-            except ValueError as ex:
-                return self.send({"error": str(ex)}, 400)
-            except FileNotFoundError as ex:
-                return self.send({"error": str(ex)}, 404)
-            # content addressed (placement fingerprint + export version): immutable in the browser
-            self.send_response(200)
-            self.send_header("Content-Type", "model/gltf-binary")
-            self.send_header("Cache-Control", "private, max-age=86400, immutable")
-            self.send_header("Vary", "Accept-Encoding")
-            if enc:
-                self.send_header("Content-Encoding", enc)
-            self.send_header("Content-Length", str(len(raw)))
-            self.end_headers()
-            self.wfile.write(raw)
-            return
-        if path == "/api/controls":
-            return self.send(
-                dict(
-                    requested=read_controls(root / "control.json"),
-                    active=state.get("active_controls"),
-                    limits=LIMITS,
-                    max_total_workers=16,
-                )
-            )
-        if path == "/api/state":
-            return self.send(state_response(parse_qs(urlparse(self.path).query)))
-        if path.startswith("/api/geometry/"):
-            sha = path.rsplit("/", 1)[-1]
-            if not re.fullmatch("[a-f0-9]{64}", sha):
-                return self.send({"error": "not found"}, 404)
-            if sha not in cache:
-                f = root / "geometry" / (sha + ".json")
-                if not f.exists():
-                    return self.send({"error": "not found"}, 404)
-                cache[sha] = json.loads(f.read_text())
-            return self.send(cache[sha])
-        for prefix, directory in (("/api/pins/", "pins"), ("/api/drafts/", "drafts")):
-            if path.startswith(prefix):
-                name = path[len(prefix) :]
-                if not re.fullmatch("[a-f0-9]{32}", name):
-                    return self.send({"error": "invalid id"}, 400)
-                f = root / directory / (name + ".json")
-                return (
-                    self.send(json.loads(f.read_text()))
-                    if f.exists()
-                    else self.send({"error": "not found"}, 404)
-                )
-        if path.startswith("/api/snapshots/"):
-            name = path.rsplit("/", 1)[-1]
-            if not re.fullmatch("[a-f0-9]{32}", name):
-                return self.send({"error": "invalid id"}, 400)
-            p = root / "snapshots" / (name + ".json")
-            return (
-                self.send(json.loads(p.read_text()))
-                if p.exists()
-                else self.send({"error": "not found"}, 404)
-            )
-        f = assets / ("index.html" if path == "/" else path.lstrip("/"))
-        if not f.resolve().is_relative_to(assets.resolve()) or not f.is_file():
-            return self.send({"error": "not found"}, 404)
-        # pinned third-party bundles (elk, vendor/three) may be cached; our own files never are
-        raw = f.read_bytes()
+    def send_raw(self, raw, content_type, cache, extra=()):
         self.send_response(200)
-        self.send_header(
-            "Cache-Control",
-            (
-                "private, max-age=86400"
-                if f.name == "elk.bundled.js" or path.startswith("/vendor/")
-                else "no-store"
-            ),
-        )
-        self.send_header(
-            "Content-Type",
-            (
-                "text/html"
-                if f.suffix == ".html"
-                else (
-                    "application/javascript"
-                    if f.suffix in (".js", ".mjs")
-                    else "text/css" if f.suffix == ".css" else "text/plain; charset=utf-8"
-                )
-            ),
-        )
+        self.send_header("Content-Type", content_type)
+        self.send_header("Cache-Control", cache)
+        for name, value in extra:
+            self.send_header(name, value)
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
         self.wfile.write(raw)
 
+    def query(self):
+        return parse_qs(urlparse(self.path).query)
+
+    # ------------------------------------------------------------------ GET
+    def do_GET(self):
+        if self.misdirected():
+            return
+        path = self.path.split("?")[0]
+        route = GET_ROUTES.get(path)
+        if route:
+            return route(self, path)
+        for prefix, route in GET_PREFIXES:
+            if path.startswith(prefix):
+                return route(self, path)
+        return self.get_static(path)
+
+    def get_about(self, path):
+        return self.send(self.viewer.about())
+
+    def get_component_cost(self, path):
+        q = self.query()
+        try:
+            return self.send(
+                self.viewer.cost_service.request(
+                    q.get("event_id", [""])[0], q.get("ref", [None])[0]
+                )
+            )
+        except (ValueError, KeyError, IndexError, TypeError, FileNotFoundError) as ex:
+            return self.send(dict(error=str(ex)), 400)
+
+    def get_schematic(self, path):
+        v = self.viewer
+        q = self.query()
+        lane_id = q.get("lane", [""])[0]
+        scope = q.get("scope", ["auto"])[0]
+        with v.lock:
+            entry = v.state["lanes"].get(lane_id)
+            if entry is None:
+                return self.send({"error": "unknown lane"}, 404)
+            refs = [
+                p["ref"]
+                for p in (entry.get("geometry") or {}).get("parts", [])
+                if isinstance(p.get("ref"), str)
+            ]
+            source = v.lane_sources.get(lane_id)
+        try:
+            return self.send(
+                v.schematic_service.request(
+                    lane_id, refs, source, "board" if scope == "board" else "auto"
+                )
+            )
+        except (ValueError, KeyError, IndexError, TypeError, OSError) as ex:
+            return self.send(dict(error=str(ex)), 400)
+
+    def get_schematic_payload(self, path):
+        try:
+            raw = self.viewer.schematic_service.payload(path.rsplit("/", 1)[-1])
+        except ValueError as ex:
+            return self.send({"error": str(ex)}, 400)
+        except FileNotFoundError as ex:
+            return self.send({"error": str(ex)}, 404)
+        # Content-addressed by every build input: safe to cache in the browser.
+        return self.send_raw(raw, "application/json", "private, max-age=86400, immutable")
+
+    def no_sources(self):
+        reason = self.viewer.sources.reason or "no atopile source configured"
+        return self.send({"error": reason}, 503)
+
+    def get_source_index(self, path):
+        source = self.viewer.source_service
+        if source is None:
+            return self.no_sources()
+        try:
+            raw = source.index_bytes()
+        except Exception as ex:
+            return self.send(
+                {"error": f"source index failed: {type(ex).__name__}: {ex}"[:400]}, 500
+            )
+        gz, etag = self.viewer.gzipped(raw)
+        if self.headers.get("If-None-Match") == etag:
+            self.send_response(304)
+            self.send_header("ETag", etag)
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            return
+        zipped = "gzip" in (self.headers.get("Accept-Encoding") or "")
+        extra = [("ETag", etag), ("Vary", "Accept-Encoding")]
+        if zipped:
+            extra.append(("Content-Encoding", "gzip"))
+        return self.send_raw(gz if zipped else raw, "application/json", "no-cache", extra)
+
+    def get_source_file(self, path):
+        from yapnr.viewer.sources.service import SourceNotFound
+
+        source = self.viewer.source_service
+        if source is None:
+            return self.no_sources()
+        try:
+            return self.send(source.file(self.query().get("path", [""])[0]))
+        except SourceNotFound as ex:
+            return self.send({"error": str(ex)}, 404)
+        except (ValueError, OSError) as ex:
+            return self.send({"error": str(ex)}, 400)
+
+    def get_notes(self, path):
+        notes = self.viewer.notes
+        if notes is None:
+            return self.send({"error": "the notes store is not available on this server"}, 404)
+        q = self.query()
+        if path == "/api/notes":  # {rev, unchanged:true} when since == rev: one stat per poll
+            try:
+                since = int(q.get("since", [""])[0])
+            except ValueError:
+                since = None
+            return self.send(notes.payload(since))
+        fmt = q.get("format", ["md"])[0]
+        try:
+            raw, ctype = notes.export_data(fmt)
+        except ValueError as ex:
+            return self.send({"error": str(ex)}, 400)
+        extra = [
+            ("Content-Disposition", f'inline; filename="design-notes.{fmt}"'),
+            ("X-Content-Type-Options", "nosniff"),
+        ]
+        return self.send_raw(raw, ctype, "no-store", extra)
+
+    def agent_disabled(self):
+        return self.send({"error": self.viewer.agent_off_reason}, 503)
+
+    def get_conversations(self, path):
+        agent = self.viewer.agent_service
+        if agent is None:
+            return self.agent_disabled()
+        if path == "/api/agent/conversations":
+            return self.send(agent.conversations())
+        try:
+            return self.send(agent.conversation(path[len("/api/agent/conversations/") :]))
+        except ValueError as ex:
+            return self.send({"error": str(ex)}, 400)
+        except KeyError:
+            return self.send({"error": "no such conversation"}, 404)
+
+    def get_agent_status(self, path):
+        return self.send(self.viewer.agent_status())
+
+    def get_3d(self, path):
+        # ?peek=1 reports without enqueueing ('idle'): the pane enqueues once its board has
+        # stayed put for a moment.
+        v = self.viewer
+        if v.viewer3d is None:
+            return self.send(
+                dict(status="unavailable", error="3D view disabled on this server (--viewer3d off)")
+            )
+        if path == "/api/3d/status":
+            return self.send(v.viewer3d.status())
+        q = self.query()
+        lane_id = q.get("lane", [""])[0]
+        ph = q.get("phase", ["live"])[0]
+        sha = q.get("sha", [""])[0]
+        if sha and not re.fullmatch("[a-f0-9]{64}", sha):
+            return self.send({"error": "invalid sha"}, 400)
+        with v.lock:
+            lane = v.state["lanes"].get(lane_id)
+            boards = [(v.lane_meta.get(lane_id) or {}).get("board"), v.lane_sources.get(lane_id)]
+            if not sha and lane is not None:
+                frames = lane.get("frames") or []
+                if ph == "live":
+                    sha = lane.get("board_sha256")
+                elif ph.isdigit() and int(ph) < len(frames):
+                    sha = frames[int(ph)].get("board_sha256")
+                else:
+                    sha = None
+        if not sha and lane is None:
+            return self.send({"status": "unavailable", "error": "unknown lane"}, 404)
+        # sha from the browser (pinned/phase state) or the lane: the immutable boards/<sha> copy,
+        # else the lane's board if it still hashes to sha.
+        return self.send(
+            v.viewer3d.request(
+                sha or "",
+                [v.root / "boards" / (sha + ".kicad_pcb") if sha else None, *boards],
+                retry=q.get("retry", [""])[0] == "1",
+                peek=q.get("peek", [""])[0] == "1",
+            )
+        )
+
+    def get_glb(self, path):
+        v = self.viewer
+        if v.viewer3d is None:
+            return self.send({"error": "3D view disabled"}, 404)
+        try:
+            raw, enc = v.viewer3d.glb(
+                path.rsplit("/", 1)[-1], "gzip" in (self.headers.get("Accept-Encoding") or "")
+            )
+        except ValueError as ex:
+            return self.send({"error": str(ex)}, 400)
+        except FileNotFoundError as ex:
+            return self.send({"error": str(ex)}, 404)
+        # Content addressed (placement fingerprint + export version): immutable in the browser.
+        extra = [("Vary", "Accept-Encoding")] + ([("Content-Encoding", enc)] if enc else [])
+        return self.send_raw(raw, "model/gltf-binary", "private, max-age=86400, immutable", extra)
+
+    def get_controls(self, path):
+        v = self.viewer
+        return self.send(
+            dict(
+                requested=v.read_controls(v.root / "control.json"),
+                active=v.state.get("active_controls"),
+                limits=v.limits,
+                max_total_workers=16,
+            )
+        )
+
+    def get_state(self, path):
+        return self.send(self.viewer.state_response(self.query()))
+
+    def get_geometry(self, path):
+        v = self.viewer
+        sha = path.rsplit("/", 1)[-1]
+        if not re.fullmatch("[a-f0-9]{64}", sha):
+            return self.send({"error": "not found"}, 404)
+        if sha not in v.cache:
+            f = v.root / "geometry" / (sha + ".json")
+            if not f.exists():
+                return self.send({"error": "not found"}, 404)
+            v.cache[sha] = json.loads(f.read_text())
+        return self.send(v.cache[sha])
+
+    def get_stored(self, path):
+        for prefix, directory in (
+            ("/api/pins/", "pins"),
+            ("/api/drafts/", "drafts"),
+            ("/api/snapshots/", "snapshots"),
+        ):
+            if path.startswith(prefix):
+                name = path[len(prefix) :]
+                if not re.fullmatch("[a-f0-9]{32}", name):
+                    return self.send({"error": "invalid id"}, 400)
+                f = self.viewer.root / directory / (name + ".json")
+                if not f.exists():
+                    return self.send({"error": "not found"}, 404)
+                return self.send(json.loads(f.read_text()))
+        return self.send({"error": "not found"}, 404)
+
+    def get_static(self, path):
+        f = static_path(self.viewer.dist, path)
+        if f is None:
+            return self.send({"error": "not found"}, 404)
+        rel = path.lstrip("/")
+        # Pinned third-party files may be cached; our own files never are.
+        pinned = rel.startswith(PINNED_PREFIXES)
+        ctype = CONTENT_TYPES.get(f.suffix, "text/plain; charset=utf-8")
+        return self.send_raw(
+            f.read_bytes(), ctype, "private, max-age=86400" if pinned else "no-store"
+        )
+
+    # ------------------------------------------------------------------ POST
     def do_POST(self):
         if self.misdirected():
             return
-        # The assistant and every notes write need an allowlisted Origin; a missing one is rejected too (other POSTs allow it).
-        if self.path == "/api/agent/chat" and self.headers.get("Origin") not in sse_origins():
+        v = self.viewer
+        origin = self.headers.get("Origin")
+        # The assistant and every notes write need an allowlisted Origin; a missing one is
+        # rejected too (other POSTs allow it).
+        if self.path == "/api/agent/chat" and origin not in v.origins():
             return self.send({"error": "origin required for the assistant"}, 403)
-        if (self.path == "/api/notes" or self.path.startswith("/api/notes/")) and self.headers.get(
-            "Origin"
-        ) not in sse_origins():
+        notes_path = self.path == "/api/notes" or self.path.startswith("/api/notes/")
+        if notes_path and origin not in v.origins():
             return self.send({"error": "origin required for notes"}, 403)
-        if self.headers.get("Origin") not in [None, *sse_origins()]:
+        if origin not in [None, *v.origins()]:
             return self.send({"error": "origin rejected"}, 403)
         size = int(self.headers.get("Content-Length", 0))
         if size > 1000000:
@@ -1209,65 +1232,23 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send({"error": "invalid body"}, 400)
             if self.path == "/api/agent/chat":
                 return self.chat(body)
-            if self.path == "/api/notes" or self.path.startswith("/api/notes/"):
+            if notes_path:
                 return self.notes_write(body)
             if self.path == "/api/agent/cancel":
-                if agent_service is None:
-                    return self.send({"error": "assistant disabled"}, 503)
-                return self.send(agent_service.cancel(body.get("session")))
+                if v.agent_service is None:
+                    return self.agent_disabled()
+                return self.send(v.agent_service.cancel(body.get("session")))
             if self.path == "/api/controls":
-                with lock:
-                    updated = save_settings(
-                        root / "control.json",
-                        preferences,
-                        body["values"],
-                        body.get("expected_revision"),
-                        body.get("apply_mode", "boundary"),
-                    )
-                    state["controls"] = updated
-                    state["revision"] += 1
-                    folder = root / "control-history"
-                    folder.mkdir(exist_ok=True)
-                    (folder / (str(updated["revision"]) + ".json")).write_text(
-                        json.dumps(updated, indent=2)
-                    )
-                return self.send(updated)
+                return self.post_controls(body)
             if self.path == "/api/pin":
                 key = uuid.uuid4().hex
-                snapshot = current()
-                folder = root / "pins"
+                snapshot = v.current()
+                folder = v.root / "pins"
                 folder.mkdir(exist_ok=True)
                 (folder / (key + ".json")).write_text(json.dumps(snapshot))
                 return self.send(dict(pin_id=key, state=snapshot))
             if self.path in ("/api/draft", "/api/snapshot"):
-                pin, snapshot, payload = read_annotation(body, full=self.path == "/api/snapshot")
-                if self.path == "/api/draft":
-                    path = root / "drafts" / (pin + ".json")
-                    with lock:
-                        old = json.loads(path.read_text()) if path.exists() else {}
-                        if old.get("draft_revision", -1) > payload["draft_revision"]:
-                            return self.send({"error": "newer draft already saved"}, 409)
-                        draft = dict(
-                            payload, schema="pnr-annotation-draft-v1", updated_at=time.time()
-                        )
-                        write_json_atomic(path, draft)
-                    return self.send(
-                        dict(pin_id=pin, draft_revision=payload["draft_revision"], path=str(path))
-                    )
-                key = uuid.uuid4().hex
-                bundle = dict(
-                    schema="pnr-annotated-snapshot-v1",
-                    id=key,
-                    created_at=time.time(),
-                    coordinate_frame="mm-y-up",
-                    state=snapshot,
-                    annotations=payload["annotations"],
-                    view=payload["view"],
-                    note=payload["note"],
-                )
-                dest = root / "snapshots" / (key + ".json")
-                write_json_atomic(dest, bundle)
-                return self.send(dict(id=key, path=str(dest), url="/api/snapshots/" + key))
+                return self.post_annotation(body)
             self.send({"error": "not found"}, 404)
         except (
             ValueError,
@@ -1279,10 +1260,64 @@ class Handler(BaseHTTPRequestHandler):
         ) as ex:
             self.send({"error": str(ex)}, 400)
 
+    def post_controls(self, body):
+        v = self.viewer
+        with v.lock:
+            updated = save_settings(
+                v.root / "control.json",
+                v.preferences,
+                body["values"],
+                body.get("expected_revision"),
+                body.get("apply_mode", "boundary"),
+            )
+            v.state["controls"] = updated
+            v.state["revision"] += 1
+            folder = v.root / "control-history"
+            folder.mkdir(exist_ok=True)
+            (folder / (str(updated["revision"]) + ".json")).write_text(
+                json.dumps(updated, indent=2)
+            )
+        return self.send(updated)
+
+    def post_annotation(self, body):
+        v = self.viewer
+        pin, snapshot, payload = v.read_annotation(body, full=self.path == "/api/snapshot")
+        if self.path == "/api/draft":
+            path = v.root / "drafts" / (pin + ".json")
+            with v.lock:
+                old = json.loads(path.read_text()) if path.exists() else {}
+                if old.get("draft_revision", -1) > payload["draft_revision"]:
+                    return self.send({"error": "newer draft already saved"}, 409)
+                draft = dict(payload, schema="pnr-annotation-draft-v1", updated_at=time.time())
+                write_json_atomic(path, draft)
+            return self.send(
+                dict(pin_id=pin, draft_revision=payload["draft_revision"], path=str(path))
+            )
+        key = uuid.uuid4().hex
+        bundle = dict(
+            schema="pnr-annotated-snapshot-v1",
+            id=key,
+            created_at=time.time(),
+            coordinate_frame="mm-y-up",
+            state=snapshot,
+            annotations=payload["annotations"],
+            view=payload["view"],
+            note=payload["note"],
+        )
+        dest = v.root / "snapshots" / (key + ".json")
+        write_json_atomic(dest, bundle)
+        return self.send(dict(id=key, path=str(dest), url="/api/snapshots/" + key))
+
     def notes_write(self, body):
-        """POST /api/notes (create), /api/notes/<id> ({fields}, {comment}, expect_rev), /api/notes/<id>/delete. Always a user actor:
-        the assistant writes only through its MCP server, so nothing here can act as the agent (or set its provenance).
+        """POST /api/notes (create), /api/notes/<id> (fields, comment, expect_rev) and
+        /api/notes/<id>/delete.
+
+        Always a user actor: the assistant writes only through its MCP server, so nothing here can
+        act as the agent (or set its provenance).
         """
+        from yapnr.viewer.notes.store import NoteConflict, NoteNotFound
+
+        notes = self.viewer.notes
         if notes is None:
             return self.send({"error": "the notes store is not available on this server"}, 404)
         m = re.fullmatch(r"/api/notes(?:/(N-\d{4,6})(/delete)?)?", self.path)
@@ -1294,8 +1329,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(dict(ok=True, **notes.delete(m[1], actor)))
             n = notes.request(m[1], body, actor) if m[1] else notes.create(body, actor)
             return self.send(dict(ok=True, rev=notes.rev, note=n))
-        except NoteConflict as ex:
-            return self.send({"error": str(ex)}, 409)  # subclasses ValueError
+        except NoteConflict as ex:  # subclasses ValueError
+            return self.send({"error": str(ex)}, 409)
         except PermissionError as ex:
             return self.send({"error": str(ex)}, 403)
         except NoteNotFound as ex:
@@ -1304,14 +1339,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.send({"error": str(ex)}, 400)
 
     def chat(self, body):
-        """SSE: one CLI turn on this request thread (ThreadingHTTPServer: other requests keep flowing)."""
-        if agent_service is None:
-            return self.send(
-                {"error": "the assistant is disabled on this server (--agent off)"}, 503
-            )
-        agent_service._validate(
-            body
-        )  # ValueError -> 400 before the stream starts; chat() validates again
+        """SSE: one CLI turn on this request thread (other requests keep flowing)."""
+        agent = self.viewer.agent_service
+        if agent is None:
+            return self.agent_disabled()
+        agent._validate(body)  # ValueError -> 400 before the stream starts; chat() validates again
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
@@ -1321,10 +1353,9 @@ class Handler(BaseHTTPRequestHandler):
         self.close_connection = True
 
         def emit(event, data):
+            payload = json.dumps(data, separators=(",", ":"))
             try:
-                self.wfile.write(
-                    f'event: {event}\ndata: {json.dumps(data,separators=(",",":"))}\n\n'.encode()
-                )
+                self.wfile.write(f"event: {event}\ndata: {payload}\n\n".encode())
                 self.wfile.flush()
                 return True
             except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
@@ -1333,7 +1364,7 @@ class Handler(BaseHTTPRequestHandler):
         sock = self.connection
 
         def gone():
-            """The browser closed the stream: the socket reads as EOF (the request body was already consumed)."""
+            """The browser closed the stream: the socket reads as EOF (the body was consumed)."""
             try:
                 if not select.select([sock], [], [], 0)[0]:
                     return False
@@ -1343,49 +1374,71 @@ class Handler(BaseHTTPRequestHandler):
             except (OSError, ValueError):
                 return True
 
-        agent_service.chat(body, emit, gone=gone)
+        agent.chat(body, emit, gone=gone)
+
+
+GET_ROUTES = {
+    "/api/about": Handler.get_about,
+    "/api/component-cost": Handler.get_component_cost,
+    "/api/schematic": Handler.get_schematic,
+    "/api/source/index": Handler.get_source_index,
+    "/api/source/file": Handler.get_source_file,
+    "/api/notes": Handler.get_notes,
+    "/api/notes/export": Handler.get_notes,
+    "/api/agent/conversations": Handler.get_conversations,
+    "/api/agent/status": Handler.get_agent_status,
+    "/api/3d": Handler.get_3d,
+    "/api/3d/status": Handler.get_3d,
+    "/api/controls": Handler.get_controls,
+    "/api/state": Handler.get_state,
+}
+GET_PREFIXES = (
+    ("/api/schematic/payload/", Handler.get_schematic_payload),
+    ("/api/agent/conversations/", Handler.get_conversations),
+    ("/api/3d/glb/", Handler.get_glb),
+    ("/api/geometry/", Handler.get_geometry),
+    ("/api/pins/", Handler.get_stored),
+    ("/api/drafts/", Handler.get_stored),
+    ("/api/snapshots/", Handler.get_stored),
+)
 
 
 class Server(ThreadingHTTPServer):
-    request_queue_size = (
-        64  # default 5: a page load's parallel fetches were reset under heavy machine load
-    )
+    # Default 5: a page load's parallel fetches were reset under heavy machine load.
+    request_queue_size = 64
 
 
-def stop(signum, frame):
-    # Kill a running KiCad extractor and drop its temporary file (a SIGKILLed viewer leaves them to the next sweep).
-    for proc, tmp in list(extracting.items()):
-        try:
-            proc.kill()
-        except OSError:
-            pass
-        try:
-            tmp.unlink(missing_ok=True)
-        except OSError:
-            pass
-    if agent_service:
-        agent_service.shutdown()
-    if viewer3d:
-        viewer3d.shutdown()  # kills a running export's process group (kicad-cli included)
-    os._exit(128 + signum)
+def serve(viewer: Viewer):
+    """Bind every listener, start the background threads and serve until stopped."""
+    handler = type("BoundHandler", (Handler,), {"viewer": viewer})
+    for sig in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
+        signal.signal(sig, viewer.stop)
+    geometry = viewer.root / "geometry"
+    geometry.mkdir(exist_ok=True)
+    sweep_tmp(geometry)
+    servers = [Server((host, viewer.port), handler) for host in viewer.listen_hosts]
+    viewer.port = servers[0].server_address[1]  # --port 0: the origin allowlist uses it
+    threading.Thread(target=viewer.ingest, daemon=True).start()
+    for server in servers[:-1]:
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+    for server in servers:
+        host, port = server.server_address[:2]
+        print(f"yapnr viewer: http://{host}:{port}", flush=True)
+    if viewer.net_summary_status["state"] == "pending":
+        threading.Thread(target=viewer.net_summaries, daemon=True).start()
+    if viewer.agent_service:
+        # The WebFetch guard's self-test, off the first /api/agent/status request.
+        threading.Thread(target=viewer.agent_service.web_status, daemon=True).start()
+    viewer.log(f"notes: {viewer.notes_dir}" if viewer.notes else "notes: off")
+    servers[-1].serve_forever()
 
 
-for sig in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
-    signal.signal(sig, stop)
-(root / "geometry").mkdir(exist_ok=True)
-sweep_tmp(root / "geometry")
-servers = [Server((host, a.port), Handler) for host in listen_hosts]
-a.port = servers[0].server_address[1]  # --port 0: origin allowlist uses the bound port
-threading.Thread(target=ingest, daemon=True).start()
-for server in servers[:-1]:
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-for server in servers:
-    print(f"Live PnR: http://{server.server_address[0]}:{server.server_address[1]}", flush=True)
-if net_summary_status["state"] == "pending":
-    threading.Thread(target=net_summaries, daemon=True).start()
-if agent_service:
-    threading.Thread(
-        target=agent_service.web_status, daemon=True
-    ).start()  # WebFetch guard self-test off the first /api/agent/status request
-print(f"notes: {notes_dir}" if notes else "notes: off", file=sys.stderr, flush=True)
-servers[-1].serve_forever()
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    try:
+        cfg = viewer_config.load(argv)
+        viewer = Viewer(cfg)
+    except viewer_config.ConfigError as ex:
+        print(f"yapnr viewer: {ex}", file=sys.stderr)
+        return 2
+    serve(viewer)
+    return 0

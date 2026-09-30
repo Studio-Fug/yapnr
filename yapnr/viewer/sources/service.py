@@ -15,11 +15,12 @@ import threading
 import time
 from pathlib import Path
 
-import ato_index
-import net_llm
+from yapnr.viewer.agent import net_llm
+from yapnr.viewer.sources import atopile as ato_index
 
-CODE = ("ato_index.py", "source_service.py")
-# hashed once, as imported: a running viewer must never file an index built by its (older) in-memory code under the key of newer files on disk
+CODE = ("atopile.py", "service.py")
+# Hashed once, as imported: a running viewer must never file an index built by its (older)
+# in-memory code under the key of newer files on disk.
 CODE_SHA = {n: hashlib.sha256((Path(__file__).parent / n).read_bytes()).digest() for n in CODE}
 MAX_FILE = 2 << 20
 
@@ -45,20 +46,10 @@ class SourceService:
         self.llm_model = llm_model  # None: any model
         self.code = Path(__file__).parent
         self.lock = threading.RLock()
-        self._checked, self._stat, self._key = 0.0, None, None
+        # -inf, not 0: time.monotonic() may start near 0 in a fresh process.
+        self._checked, self._stat, self._key = float("-inf"), None, None
         self._mech = self._view = self._bytes = self._dossier = None
         self._llm_stamp, self.error = None, None
-
-    @classmethod
-    def from_defaults(cls, runtime=None, graph=None, **kw):
-        """Viewer defaults: SPLANC_ATO_SRC / SPLANC_GRAPH, else the frozen runtime's design (<runtime>/../splanc_dev/elec/src,
-        default src11.frozen) and <hier>/inputs10b/graph.json."""
-        hier = Path(__file__).resolve().parents[1]
-        rt = Path(runtime) if runtime else hier / "src11.frozen/hardware/pnr"
-        src = os.environ.get("SPLANC_ATO_SRC") or rt.parent / "splanc_dev/elec/src"
-        return cls(
-            src, graph or os.environ.get("SPLANC_GRAPH") or hier / "inputs10b/graph.json", **kw
-        )
 
     def configured(self):
         return self.src.is_dir() and self.graph.is_file()
@@ -241,7 +232,7 @@ class SourceService:
         with self.lock:
             if path:
                 self.llm_path = Path(path)
-            self._checked, self._stat, self._llm_stamp = 0.0, None, object()
+            self._checked, self._stat, self._llm_stamp = float("-inf"), None, object()
             return (self.index().get("llm") or {}).get("nets", 0)
 
     # ------------------------------------------------------------ files

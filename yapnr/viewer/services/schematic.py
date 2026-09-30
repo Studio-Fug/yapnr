@@ -11,14 +11,17 @@ is returned separately as a small overlay.
 
 import hashlib
 import json
-import os
 import re
 import subprocess
-import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+from yapnr.viewer import runtime as viewer_runtime
+
+HERE = Path(__file__).parent
+BUILDER = "yapnr.viewer.services.schematic_build"
 
 NAME = re.compile(r"[A-Za-z0-9_.:+@-]{1,200}")
 RUNTIME_FILES = (
@@ -41,11 +44,10 @@ class SchematicService:
         parts=None,
         ato_src=None,
         runtime=None,
-        hier=None,
+        experiment=None,
         cache_dir=None,
-        assets=None,
-        python=None
     ):
+        """experiment: trial run directories must lie under it (default: the root's parent)."""
         self.root = Path(root)
         self.graph = Path(graph) if graph else None
         self.rules = (
@@ -55,10 +57,8 @@ class SchematicService:
         self.parts = Path(parts) if parts else None
         self.ato_src = Path(ato_src) if ato_src else (self.parts.parent if self.parts else None)
         self.runtime = Path(runtime) if runtime else None
-        self.hier = Path(hier or self.root.parent).resolve()
+        self.experiment = Path(experiment or self.root.parent).resolve()
         self.cache = Path(cache_dir or self.root / "schematic")
-        self.assets = Path(assets or Path(__file__).parent)
-        self.python = python or sys.executable
         self.pool = ThreadPoolExecutor(max_workers=1)
         self.lock = threading.RLock()
         self.pending, self.failed, self.memo = {}, {}, {}
@@ -105,9 +105,7 @@ class SchematicService:
             rules=self._sha(self.rules) if self.rules else None,
             constraints=self._sha(self.constraints) if self.constraints else None,
             libraries=hashlib.sha256(json.dumps(stats).encode()).hexdigest(),
-            builder={
-                n: self._sha(self.assets / n) for n in ("schematic_build.py", "schematic_sym.py")
-            },
+            builder={n: self._sha(HERE / n) for n in ("schematic_build.py", "schematic_sym.py")},
             runtime=(
                 {n: self._sha(self.runtime / n) for n in RUNTIME_FILES} if self.runtime else None
             ),
@@ -129,12 +127,12 @@ class SchematicService:
         if isinstance(source, str) and source:
             p = Path(source)
             if not p.is_absolute():
-                p = self.hier / p
+                p = self.experiment / p
             try:
                 p = p.resolve()
             except OSError:
                 p = None
-            while p is not None and p.is_relative_to(self.hier) and p != self.hier:
+            while p is not None and p.is_relative_to(self.experiment) and p != self.experiment:
                 if (p / "placed.json").is_file():
                     return p
                 p = p.parent
@@ -148,15 +146,17 @@ class SchematicService:
         ):
             return None
         pattern = ("*" if run == "blocks" else run) + "/*/native/" + tag
-        hits = [d for d in (self.hier / "blocks").glob(pattern) if (d / "keep.json").is_file()]
-        hits = [d for d in hits if d.resolve().is_relative_to(self.hier)]
+        hits = [
+            d for d in (self.experiment / "blocks").glob(pattern) if (d / "keep.json").is_file()
+        ]
+        hits = [d for d in hits if d.resolve().is_relative_to(self.experiment)]
         return max(hits, key=lambda d: d.stat().st_mtime) if hits else None
 
     def overlay(self, lane_id, run_dir):
         out = dict(lane=lane_id, run_dir=None, template=None, tag=lane_id.partition("/")[2] or None)
         if run_dir is None:
             return out
-        out["run_dir"] = str(run_dir.relative_to(self.hier))
+        out["run_dir"] = str(run_dir.relative_to(self.experiment))
         lib = run_dir.parent.parent / "library.json"
         if (run_dir / "keep.json").is_file() and lib.is_file():
             try:
@@ -230,7 +230,7 @@ class SchematicService:
     def request(self, lane_id, lane_refs, source, scope="auto"):
         if not self.configured():
             return dict(
-                status="unavailable", reason="Schematic source not configured (--schematic-graph)."
+                status="unavailable", reason="No netlist configured for the schematic (--graph)."
             )
         run_dir = self.run_dir(lane_id, source)
         refs = self.scope_refs(lane_id, lane_refs, run_dir)
@@ -279,15 +279,11 @@ class SchematicService:
                 indent=1,
             )
         )
-        env = dict(os.environ, OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1")
-        env.pop("PNR_LIVE_DIR", None)
-        env.pop("PNR_PROFILE_DIR", None)
-        if self.runtime:
-            env["PYTHONPATH"] = str(self.runtime)
+        env = viewer_runtime.hermetic_env(self.runtime)
         try:
             with (self.cache / (key + ".log")).open("w") as log:
                 subprocess.run(
-                    [self.python, str(self.assets / "schematic_build.py"), str(req), str(tmp)],
+                    viewer_runtime.module_command(BUILDER, str(req), str(tmp)),
                     env=env,
                     stdout=log,
                     stderr=subprocess.STDOUT,

@@ -1,11 +1,10 @@
 """Build the schematic model (schema ``pnr-schematic-v1``) for one scope.
 
-usage: python schematic_build.py <request.json> <out.json>
+usage: python -m yapnr.viewer.services.schematic_build <request.json> <out.json>
 
-Runs as a subprocess with PYTHONPATH=<frozen pnr runtime> (like cost_compute.py):
-the viewer's own ``pnr`` import path is the repository tree, which lacks
-``pnr.power_topology`` and ``pnr.hier``. Every stage degrades rather than fails:
-without the runtime there are no power roles or hard groups; a part folder
+Runs as a subprocess with the engine runtime first on PYTHONPATH (like cost_compute), so a
+frozen engine can be used. Every stage degrades rather than fails: without the runtime
+(``pnr.power_topology``, ``pnr.hier``) there are no power roles or hard groups; a part folder
 without a parsable symbol is drawn as a generic box with its pad names.
 
 Request keys: graph, rules, constraints, parts, ato_src, symbol_cache, refs
@@ -23,8 +22,7 @@ import traceback
 from collections import defaultdict
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from schematic_sym import cached_part_symbol, generic_symbol  # noqa: E402
+from yapnr.viewer.services.schematic_sym import cached_part_symbol, generic_symbol
 
 SCHEMA = "pnr-schematic-v1"
 LABEL_MIN_PARTS = 7  # signal net with at least this many parts in scope -> named labels

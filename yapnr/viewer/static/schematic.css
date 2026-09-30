@@ -112,7 +112,7 @@ body:not(.sch-nolegend) #sch-legend-toggle{background:#26453f;border-color:#9ee6
 /* level of detail */
 #sch-svg.lod1 .pq,#sch-svg.lod1 .it{display:none}
 #sch-svg.lod0 .pn,#sch-svg.lod0 .vl,#sch-svg.lod0 .lbl.mini{display:none}
-/* Inspect / Ask highlight (SplancView.highlight), pink like the PCB overlay */
+/* Inspect / Ask highlight (YapnrView.highlight), pink like the PCB overlay */
 #sch-root .p.ask .b{stroke:#ff7ad9}
 #sch-root .p.ask .selbox{display:block;stroke:#ff7ad9;stroke-dasharray:none}
 #sch-root .w.ask,#sch-root .stub.ask,#sch-root .ask .stub,#sch-root .pin.ask{stroke:#ff7ad9!important;stroke-width:3px!important;opacity:1!important}

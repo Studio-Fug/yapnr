@@ -1,4 +1,4 @@
-"""Atopile source resolver for the design subset used by the Splanc boards.
+"""atopile source resolver for the subset of the language the viewer needs.
 
 Parses every .ato file (defs, docstrings, trailing/paragraph comments, imports,
 @pnr annotations), elaborates the instance tree from the entry module, unions
@@ -6,6 +6,11 @@ connected nodes (signals, ElectricPower members, package pins) with provenance
 per edge, then joins the result to graph.json: components by address, nets by
 their exact pad set. Net semantics are mechanical and deterministic; nothing
 here guesses from reference designators or net names.
+
+The entry module is given (the configured ato.yaml build target), else it is
+chosen among every build entry of the nearest ato.yaml and every module that
+instantiates ``board``: the candidate whose instance tree covers the most
+netlist addresses wins.
 """
 
 import hashlib

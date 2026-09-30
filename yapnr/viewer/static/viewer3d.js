@@ -1,9 +1,9 @@
 'use strict';
 // 3D board view. Toolbar `3D` next to PCB | Split | Schematic; the pane stands alone or sits beside the PCB or the
-// schematic (views 3d, 3d-pcb, 3d-sch: schematic.js schSetMode shows the panes and calls Splanc3D.show).
+// schematic (views 3d, 3d-pcb, 3d-sch: schematic.js schSetMode shows the panes and calls Yapnr3D.show).
 // Extends app.js like schematic.js: shared globals (geo, laneId, phase, render, viewHl, HL, selectedPartRef, colors,
-// componentBounds, padContains, inPoly, hoverText, askAdd, inspectItem, api) and window.SplancView (mirrored here).
-// three.js 0.186.1 is vendored (dist/vendor/three, import map in index.html) and loaded on first use.
+// componentBounds, padContains, inPoly, hoverText, askAdd, inspectItem, api) and window.YapnrView (mirrored here).
+// three.js 0.186.1 is fetched pinned at build time (dist/vendor/three, import map in index.html) and loaded on first use.
 // Board body, silkscreen, soldermask and footprint models: GET /api/3d -> /api/3d/glb/<key>, a headless KiCad GLB the
 // server compacts into the PCB canvas frame (mm, x/y as the canvas, z up) with one node per ref. Copper, pads, vias and
 // zones are built here from the geometry the PCB canvas draws: every item keeps its net (picking, highlighting) and the
@@ -14,7 +14,7 @@
 // intersecting each layer plane and testing a 2 mm grid of items, the board body occluding inner layers); Alt+click
 // looks through models and boxes to the copper (the PCB canvas picks pads first).
 (function(){
-const D=document,Q=new URLSearchParams(location.search),V=()=>window.SplancView,N3=()=>window.SplancNotes;
+const D=document,Q=new URLSearchParams(location.search),V=()=>window.YapnrView,N3=()=>window.YapnrNotes;
 const PREF_KEY='pnr-3d-prefs',EXPLODE_MM=10,CELL=2,BODY={z0:0,z1:1.51},CU=.035,LIVE_GAP=5*60e3,BADGE_PX=20,BADGE_MM=2.4;
 // within a layer: zone < track < via < pad (mm above the layer plane, outward). Real offsets, not polygonOffset: a
 // slope-scaled offset pulls inner layers through the 0.5 mm of board above them at iso angles or when zoomed out.
@@ -245,7 +245,7 @@ const variants=new Map();
 // material variants: hl (emissive), sel (selected part: white glow), dim (ghost), body (darker: linear colour under strong
 // lights, .12 reads ~40 %)
 function variant(m0,kind,col){let k=m0.uuid+kind+(col||''),m=variants.get(k);if(!m){m=m0.clone();if(kind==='hl'){m.emissive=C(col||HL);m.emissiveIntensity=.7}else if(kind==='sel'){m.emissive=C('#ffffff');m.emissiveIntensity=.32}else if(kind==='body')m.color?.multiplyScalar(.12);else{m.transparent=true;m.opacity=Math.min(m0.opacity,.14);m.depthWrite=false}variants.set(k,m)}return m}
-// The active highlight: SplancView's (pink) or, without one, the schematic's own net / group focus (schematic.js sch.net in
+// The active highlight: YapnrView's (pink) or, without one, the schematic's own net / group focus (schematic.js sch.net in
 // yellow, sch.focus in its colour), which the PCB mirrors in its overlay too.
 function schKey(){return typeof sch!=='undefined'?(sch.net||'')+'|'+(sch.focus?.id||''):''}
 function curHl(){if(typeof viewHl!=='undefined'&&viewHl)return {H:viewHl,col:HL};let s=typeof sch!=='undefined'?sch:null,f=s?.focus;if(!s||!(s.net||f))return null;
@@ -370,7 +370,7 @@ function hover(ev){if(!S.visible||!ev||S.down)return;let h=pickAt(ev),el=$('v3-h
  let r=$('v3-main').getBoundingClientRect();el.textContent=txt;el.style.display='block';let x=ev.clientX-r.left+14,y=ev.clientY-r.top+14;if(x+el.offsetWidth>r.width-6)x=Math.max(4,ev.clientX-r.left-14-el.offsetWidth);if(y+el.offsetHeight>r.height-6)y=Math.max(4,ev.clientY-r.top-14-el.offsetHeight);el.style.left=x+'px';el.style.top=y+'px'}
 function hideHover(){let el=$('v3-hover');if(el)el.style.display='none'}
 
-// ------------------------------------------------------------------ sync with app.js / SplancView
+// ------------------------------------------------------------------ sync with app.js / YapnrView
 function sync(force){if(!S.visible||!T)return;let g=geo()||null,sha=V()?.boardSha?.()||null;if(g)mark('geo');
  if(laneId!==S.lane&&S.lane!==undefined)S.fitted='fit';  // another lane (another board size): fit again, same direction; phases of one lane keep the camera
  if(g!==S.geo||force&&!S.built){S.geo=g;let wait=1000-(performance.now()-S.built);clearTimeout(S.buildT);if(wait>0&&S.built&&!force)S.buildT=setTimeout(build,wait);else build()}
@@ -392,8 +392,8 @@ const toastBefore3D=boardToast;boardToast=function(msg){if(S.visible&&(S.toastHe
 (function(){const VV=V();if(!VV)return;const h0=VV.highlight,c0=VV.clear;
  VV.highlight=function(sel,opt){let r=h0.call(VV,sel,opt);hl(!opt||opt.frame!==false);return r};
  VV.clear=function(keep){let r=c0.call(VV,keep);hl(false);return r}})();
-D.addEventListener('splanc:notes',()=>{if(S.badgeBox)S.badgeBox.checked=N3()?.badges?.()!==false;if(S.visible&&T){badges();draw()}});
-window.Splanc3D={show,visible:()=>S.visible,camera,status:()=>S.status,ready:()=>!!S.glb,layerZ,solo:L=>solo(L||null),panel,autoAt:S.autoAt,  // autoAt: lane -> last live auto-export (ms), for headless checks
+D.addEventListener('yapnr:notes',()=>{if(S.badgeBox)S.badgeBox.checked=N3()?.badges?.()!==false;if(S.visible&&T){badges();draw()}});
+window.Yapnr3D={show,visible:()=>S.visible,camera,status:()=>S.status,ready:()=>!!S.glb,layerZ,solo:L=>solo(L||null),panel,autoAt:S.autoAt,  // autoAt: lane -> last live auto-export (ms), for headless checks
 
  explode(v){P.explode=Math.max(0,Math.min(100,+v||0));$('v3-explode').value=P.explode;explode();draw()},
  set(k,v){if(k in P&&typeof P[k]==='boolean')P[k]=!!v;else if(v)delete P.off[k];else P.off[k]=true;layersPanel();vis();draw()},

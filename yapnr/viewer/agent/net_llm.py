@@ -4,7 +4,8 @@ Output {schema, dossier_sha, source_sha, prompt_version, model, generated_at, ne
 is written atomically and regenerated only when the dossier, PROMPT_VERSION or model changes; nets left missing by a failed
 chunk are retried alone, with backoff (usable()/settled() are the cache checks the viewer server and SourceService share). Entries are grounded in the
 dossier: labels <=6 words, summaries <=2 sentences, and an entry naming a component ref absent from the dossier
-is dropped. Usage: python net_llm.py OUT.json [--index FILE|URL] [--model sonnet] [--force] [--dry-run]
+is dropped. Usage: python -m yapnr.viewer.agent.net_llm OUT.json [--index FILE|URL] [--model sonnet] [--force] [--dry-run]
+Each call is paid (on the operator's Claude account): the viewer runs it only with --net-summaries on.
 """
 
 import argparse
@@ -20,11 +21,11 @@ import uuid
 from pathlib import Path
 from urllib.request import urlopen
 
-from agent_service import child_env, clip
+from yapnr.viewer.agent.service import child_env, clip
 
 MODELS = ("sonnet", "opus", "haiku")
 CHUNK = 60000
-PROMPT_VERSION = 2
+PROMPT_VERSION = 3  # 3: the prompt no longer names a particular board
 RETRIES = 4
 BACKOFF = 600
 CLAUDE = "claude"
@@ -55,7 +56,7 @@ PREFIXES = {
     "MH",
 }
 SYSTEM = "You label nets of a PCB netlist for an engineering viewer. You are given a mechanical dossier derived from the design source and netlist. Reply with one JSON object only."
-ASK = """Write a label and a summary for EVERY net in the dossier below (Splanc Mini board, atopile design).
+ASK = """Write a label and a summary for EVERY net in the dossier below (a PCB described in atopile).
 - label: at most 6 words, human meaningful (role plus voltage where stated), e.g. "5V LED supply rail", "USB-C CC1 line", "Buck switch node".
 - summary: at most 2 sentences: what the net carries and which modules/ICs/pins it joins.
 - Use only facts stated in the dossier. Never invent component references, values, voltages or currents; mention a component ref only if it appears in the dossier.
@@ -438,7 +439,7 @@ def generate(
             cost + float(old.get("cost_usd") or 0),
         )
     doc = dict(
-        schema="splanc-net-llm-v1",
+        schema="yapnr-net-llm-v1",
         dossier_sha=sha,
         source_sha=src_sha,
         prompt_version=PROMPT_VERSION,

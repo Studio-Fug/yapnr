@@ -1,11 +1,12 @@
 """Minimal MCP stdio server: the Ask agent's design-notes tools (JSON-RPC 2.0, one message per line, stdlib only).
 
-agent_service starts it per turn through a strict --mcp-config (server name splanc_notes, so the CLI names the tools
-mcp__splanc_notes__add_note, ...). Every write goes through notes_store as actor {kind:'agent', session}; provenance comes from
-the environment agent_service sets, never from model input: SPLANC_NOTES_DIR (required), SPLANC_SESSION, SPLANC_TURN,
-SPLANC_LANE, SPLANC_PHASE, SPLANC_VIEWER_PORT, SPLANC_BOARD_SHA, and SPLANC_RESOLVER (compact source index: targets must name
-existing refs/pads/nets/lines) or SPLANC_GRAPH (graph.json fallback). Authority lives in notes_store (no accept/reject/apply,
-no deletes; edits only of notes this conversation (SPLANC_SESSION) wrote, while open/proposed). Per process (= per turn): at most
+The agent service starts it per turn (``python -m yapnr.viewer.notes.mcp``) through a strict --mcp-config (server name
+yapnr_notes, so the CLI names the tools mcp__yapnr_notes__add_note, ...). Every write goes through the notes store as actor
+{kind:'agent', session}; provenance comes from the environment the agent service sets, never from model input:
+YAPNR_NOTES_DIR (required), YAPNR_SESSION, YAPNR_TURN, YAPNR_LANE, YAPNR_PHASE, YAPNR_VIEWER_PORT, YAPNR_BOARD_SHA, and
+YAPNR_RESOLVER (compact source index: targets must name existing refs/pads/nets/lines) or YAPNR_GRAPH (graph.json
+fallback). Authority lives in the notes store (no accept/reject/apply, no deletes; edits only of notes this conversation
+(YAPNR_SESSION) wrote, while open/proposed). Per process (= per turn): at most
 10 new notes and 40 comments/updates. Arguments of the wrong type come back as tool errors the model can fix, not RPC errors.
 Methods: initialize (protocol version negotiation: the client's version when supported, else the newest), notifications/*,
 ping, tools/list, tools/call; batches (an empty one is an Invalid Request).
@@ -17,23 +18,22 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import notes_store
-from notes_store import ITEMS, KINDS, PROPOSALS, STATUSES, NoteNotFound
+from yapnr.viewer.notes import store as notes_store
+from yapnr.viewer.notes.store import ITEMS, KINDS, PROPOSALS, STATUSES, NoteNotFound
 
-SERVER = "splanc_notes"
+SERVER = "yapnr_notes"
 VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
 LIMITS = dict(create=10, write=40)
 MAX_LINE = 2 << 20
 INSTRUCTIONS = (
-    "Design notes for the Splanc Mini board. Record what the user and you conclude (observations, questions, requirements, decisions the user "
+    "Design notes for the board in this viewer. Record what the user and you conclude (observations, questions, requirements, decisions the user "
     'states, todos, proposals) so the design loop can act on it. You can only propose: a design change stays "proposed" until the user accepts or rejects '
     "it in the viewer Notes tab; you can never accept, reject, apply, resolve or delete notes, and must never say a note was accepted or applied."
 )
 ITEM = {
     "type": "object",
     "description": "Board item, same schema as the viewer context: component {kind,ref}, net {kind,name}, pad {kind,ref,pad}, "
-    "source {kind,file,line,end} (atopile path relative to src, e.g. system_5v.ato), region {kind,lane,bbox,refs,nets}, group {kind,id,label,refs,nets}, lane {kind,lane}.",
+    "source {kind,file,line,end} (atopile path relative to src, e.g. power.ato), region {kind,lane,bbox,refs,nets}, group {kind,id,label,refs,nets}, lane {kind,lane}.",
     "properties": {
         "kind": {"type": "string", "enum": list(ITEMS)},
         "ref": {"type": "string"},
@@ -163,18 +163,18 @@ ARG_TYPES = dict(
 def env_context(env=None):
     """(actor, provenance, notes dir, resolver source) from the per-turn environment."""
     e = os.environ if env is None else env
-    d = e.get("SPLANC_NOTES_DIR")
+    d = e.get("YAPNR_NOTES_DIR")
     if not d:
-        raise SystemExit("SPLANC_NOTES_DIR is not set")
-    sess = e.get("SPLANC_SESSION") or None
-    turn = e.get("SPLANC_TURN")
-    port = e.get("SPLANC_VIEWER_PORT")
+        raise SystemExit("YAPNR_NOTES_DIR is not set")
+    sess = e.get("YAPNR_SESSION") or None
+    turn = e.get("YAPNR_TURN")
+    port = e.get("YAPNR_VIEWER_PORT")
     prov = dict(
         session=sess,
         turn=int(turn) if turn and turn.isdigit() else None,
-        lane=e.get("SPLANC_LANE") or None,
-        phase=e.get("SPLANC_PHASE") or None,
-        board_sha=(e.get("SPLANC_BOARD_SHA") or "").lower() or None,
+        lane=e.get("YAPNR_LANE") or None,
+        phase=e.get("YAPNR_PHASE") or None,
+        board_sha=(e.get("YAPNR_BOARD_SHA") or "").lower() or None,
         viewer_port=int(port) if port and port.isdigit() else None,
     )
     if prov["board_sha"] and not re.fullmatch(r"[0-9a-f]{8,64}", prov["board_sha"]):
@@ -186,7 +186,7 @@ def env_context(env=None):
         **({"turn": prov["turn"]} if "turn" in prov else {}),
     )
     res = next(
-        (p for p in (e.get("SPLANC_RESOLVER"), e.get("SPLANC_GRAPH")) if p and Path(p).is_file()),
+        (p for p in (e.get("YAPNR_RESOLVER"), e.get("YAPNR_GRAPH")) if p and Path(p).is_file()),
         None,
     )
     return actor, prov, d, res
@@ -349,7 +349,7 @@ class Server:
                 dict(
                     protocolVersion=v if v in VERSIONS else VERSIONS[0],
                     capabilities=dict(tools=dict(listChanged=False)),
-                    serverInfo=dict(name="splanc-notes", version="1.0.0"),
+                    serverInfo=dict(name="yapnr-notes", version="1.0.0"),
                     instructions=INSTRUCTIONS,
                 )
             )

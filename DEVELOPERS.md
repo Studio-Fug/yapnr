@@ -177,7 +177,8 @@ The planned full layout is in [docs/migration-plan.md](docs/migration-plan.md#1-
 `macos-latest` for information only.
 
 `.github/workflows/image.yaml` builds and smoke-tests the container images for linux/amd64 and
-linux/arm64 on every pull request and publishes `edge` from `main` (informational until v0.1.0).
+linux/arm64 on pull requests that change what goes into them, and publishes `edge` from such
+merges to `main` (informational until v0.1.0).
 `.github/workflows/release.yaml` runs on release tags (and as a dry run on demand): CI at the tag,
 the images with the release tags, and the GitHub release. See
 [docs/releases.md](docs/releases.md#what-the-workflows-do).

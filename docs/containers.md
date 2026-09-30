@@ -13,10 +13,11 @@ Both are built natively for **linux/amd64** and **linux/arm64** (Apple Silicon r
 image without emulation), run as an unprivileged user (UID 1000), and carry an SBOM, build
 provenance and a GitHub attestation.
 
-> **Status:** the images are built and smoke-tested on every pull request, and `edge` is published
-> from `main`. The engine commands (`init`, `import`, `run`, `export`, the viewer) arrive with the
-> migration pull requests; until then the image runs `yapnr --version` and `yapnr doctor`. The
-> examples below that need those commands are marked as planned.
+> **Status:** the images are built and smoke-tested on every pull request that changes what goes
+> into them, and `edge` is published from `main` whenever a merge changes it. The engine commands
+> (`init`, `import`, `run`, `export`, the viewer) arrive with the migration pull requests; until
+> then the image runs `yapnr --version` and `yapnr doctor`. The examples below that need those
+> commands are marked as planned.
 
 ## Tags
 
@@ -28,9 +29,15 @@ provenance and a GitHub attestation.
 | `X.Y`        | the newest patch release of `X.Y`: **pin this** (or a digest)                    |
 | `latest`     | the newest stable release                                                        |
 | `X.Y.Z-rc.N` | a release candidate                                                              |
-| `edge`       | the newest build of `main`; its version is `X.Y.(Z+1).devN+g<sha>`               |
-| `sha-<7>`    | the build of one `main` commit                                                   |
+| `edge`       | the newest image build of `main` (versions below)                                |
+| `sha-<7>`    | the image of one `main` commit that changed the image (see below)                |
 | `X`          | from 1.0 on: the newest release of major version `X` (never published while 0.x) |
+
+`edge` and `sha-<7>` are published only for the `main` commits that change what goes into an image
+(the code, the Dockerfiles, the locks, the notices); a documentation-only merge publishes nothing,
+so `edge` stays on the last image build. Their version is `X.Y.(Z+1).devN+g<sha>` after the
+release `vX.Y.Z`, `X.Y.Zrc(K+1).devN+g<sha>` after the release candidate `vX.Y.Z-rc.K`, and
+`0.0.0.devN+g<sha>` before the first release.
 
 Pin `X.Y`, or a digest (`ghcr.io/studio-fug/yapnr@sha256:...`) for reproducible runs. Results can
 change between minor versions (see [releases](releases.md)). The KiCad version is part of the
@@ -40,7 +47,8 @@ image, not of the tag: a KiCad patch update ships as a yapnr patch release. The 
 `ghcr.io/studio-fug/yapnr-kicad` is tagged `<KiCad version>-<N>` (for example `10.0.6-1`; `N`
 counts rebuilds of one KiCad version, and such a tag is never overwritten), plus the moving
 `10.0.6` and `10.0`. `10.0.6-1-src` holds the source packages of that KiCad build (see
-[Licenses and source](#licenses-and-source)).
+[Licenses and source](#licenses-and-source)). The base is rebuilt under a new `N` for Ubuntu
+security updates (see [releases](releases.md#maintaining-the-images)).
 
 ## Quick start
 
@@ -157,8 +165,13 @@ the viewer service brings its own.
   same holds for `docker exec <container> yapnr ...`: `/usr/local/bin/yapnr` is the wrapper.
 - **Linux hosts:** pass `-u "$(id -u):$(id -g)"` so that files written to the project belong to
   you rather than to UID 1000.
-- **Docker Desktop, colima and OrbStack on macOS** map ownership through their file sharing
-  (virtiofs); `-u` is not needed.
+- **macOS:** Docker Desktop and OrbStack map ownership through their file sharing: files the
+  container writes belong to your macOS user, and `-u` is not needed. The same holds for colima
+  with virtiofs mounts (`colima start --vm-type vz --mount-type virtiofs`; checked with colima on
+  2026-09-29: containers running as UID 1000 and 4242 both wrote to a project owned by the macOS
+  user, and the files belonged to that user). colima's sshfs and 9p mounts behave differently:
+  there, write a test file first, and pass `-u "$(id -u):$(id -g)"` if it fails or lands with the
+  wrong owner.
 - **Rootless Podman:** `--userns=keep-id`. **SELinux hosts:** add `:Z` to the bind mount
   (`-v "$PWD":/project:Z`).
 - **Read-only root file system:** supported: `--read-only --tmpfs /tmp`.
@@ -182,7 +195,8 @@ the viewer service brings its own.
 
 - Use the native **arm64** image (the default on an Apple Silicon host). It runs under Docker
   Desktop, colima, OrbStack or Podman without emulation.
-- An amd64-only image, such as the official KiCad image the CI's KiCad lane uses, needs emulation:
+- An amd64-only image, such as the official `kicad/kicad` image (its `9.0` and `10.0` tags are
+  amd64-only, checked 2026-09-29; the planned CI KiCad lane of PR6a runs it), needs emulation:
   enable Rosetta (Docker Desktop: on by default from macOS 14.1; colima:
   `colima start --vm-type vz --vz-rosetta`). Rosetta costs about 20%; QEMU without it was measured
   six to eight times slower on KiCad work.
@@ -202,12 +216,14 @@ the viewer service brings its own.
 | `/usr/bin/python3`       | KiCad's Python 3.12 with `pcbnew`, for KiCad-side workers              |
 | `/usr/share/kicad/`      | footprints, symbols and templates (no 3D models)                       |
 | `/etc/yapnr/kicad-seed/` | the global library tables every user starts from                       |
-| `/usr/share/doc/yapnr/`  | `LICENSE`, `THIRD_PARTY.md` and `SOURCES`                              |
+| `/usr/share/doc/yapnr/`  | `LICENSE`, `THIRD_PARTY.md`, `SOURCES` and `licenses/`                 |
 | `/project`               | the working directory; mount the project here                          |
 
 The controller Python and KiCad's Python are separate on purpose: the controller runs Bazel's
 exact interpreter and wheel versions (the runtime locks are pinned to `requirements.lock`), and
-KiCad-side code runs under KiCad's own Python without torch. `/opt/venv/bin` comes before
+KiCad-side code runs under KiCad's own Python without torch. (KiCad's Python cannot import
+`yapnr` from `/opt/venv` yet; the KiCad-side workers of PR6a get their own import path, with only
+yapnr's pure-Python modules on it, and a smoke check.) `/opt/venv/bin` comes before
 `/usr/bin` on `PATH`, so a plain `python3` in the image is the controller; yapnr finds KiCad through
 these environment variables, which the image sets:
 
@@ -239,22 +255,33 @@ docker buildx imagetools inspect ghcr.io/studio-fug/yapnr:0.1.0 --format '{{json
 yapnr is `AGPL-3.0-or-later`; the image records its exact source (`YAPNR_SOURCE_REVISION`, the
 `org.opencontainers.image.revision` label), and release source archives are attached to each GitHub
 release. KiCad is `GPL-3.0-or-later` and its libraries are `CC-BY-SA-4.0` with the KiCad library
-exception. [THIRD_PARTY.md](../THIRD_PARTY.md) lists everything the images redistribute;
-`/usr/share/doc/yapnr/SOURCES` in the image says where each part's source is, and
+exception; the image label `org.opencontainers.image.licenses` names the three.
+[THIRD_PARTY.md](../THIRD_PARTY.md) lists everything the images redistribute, including the native
+libraries inside the numpy and torch wheels and the libraries in the bundled CPython;
+`/usr/share/doc/yapnr/SOURCES` in the image says where each part's source is,
+`/usr/share/doc/yapnr/licenses/` holds the license texts that are not elsewhere in the image, and
 `/usr/share/doc/<package>/copyright` holds the Ubuntu packages' license texts.
 
 The KiCad team's PPA deletes superseded builds, so pointing at it would not keep the corresponding
 source available. Every published base tag therefore has a companion image with the complete source
-packages of its KiCad build, which is never deleted:
+packages of its KiCad build, for linux/amd64 and linux/arm64, which is never deleted. CI publishes
+it before the base tag, and a later run publishes it if it is ever missing:
 
 ```sh
 docker create --name kicad-src ghcr.io/studio-fug/yapnr-kicad:10.0.6-1-src none
 docker cp kicad-src:/src ./kicad-src && docker rm kicad-src
 ```
 
-The Ubuntu packages' sources stay available from the Ubuntu snapshot service at the time the base
-was built (label `io.github.studio-fug.yapnr.ubuntu.snapshot`; the exact source package versions
-are listed in `SOURCES`).
+`SOURCES` also names Launchpad's snapshot of the PPA at the build time and the source files on
+Launchpad. The Ubuntu packages come from the archive state recorded at build time in
+`/etc/yapnr/ubuntu-snapshot` (a [snapshot.ubuntu.com](https://snapshot.ubuntu.com/) ID, taken right
+after `apt-get update`, with every package upgraded to that state); `SOURCES` lists the exact source
+package versions, each of which Launchpad keeps at
+`https://launchpad.net/ubuntu/+source/<package>/<version>`:
+
+```sh
+docker run --rm --entrypoint cat ghcr.io/studio-fug/yapnr-kicad:10.0.6-1 /usr/share/doc/yapnr/SOURCES
+```
 
 ## Building the images locally
 
@@ -270,7 +297,9 @@ Each image is a few GB; remove them afterwards (`docker image rm yapnr:local yap
 The pieces:
 
 - `docker/yapnr-kicad/Dockerfile`: the base. Its tag is `docker/yapnr-kicad/TAG`; any change to the
-  directory needs a new tag, and CI refuses to overwrite a published one.
+  directory needs a new tag. CI refuses to overwrite a published one: every run compares
+  `tools/image/base_context.sh` with the published base's `io.github.studio-fug.yapnr.kicad.context`
+  label.
 - `docker/yapnr/Dockerfile`: the application image. The yapnr wheel comes from Bazel
   (`bazel build //release:wheel.dist --stamp --embed_label=<version>`) through the named build
   context `dist`.
@@ -281,6 +310,6 @@ The pieces:
   (Python 3.11, the numpy and torch pins, KiCad configured, the source revision),
   `kicad-cli version`, and `pcbnew` loading a footprint through the seeded library table, saving a
   board and running `kicad-cli pcb drc` on it; as UID 1000, as an arbitrary UID, and with a
-  read-only root file system.
+  read-only root file system; and the notices, license texts and recorded Ubuntu snapshot.
 
 CI: `.github/workflows/image.yaml` (see [releases](releases.md#what-the-workflows-do)).

@@ -26,26 +26,53 @@ brought in. Update it in the same change that adds, removes or upgrades such mat
 The images `ghcr.io/studio-fug/yapnr-kicad` and `ghcr.io/studio-fug/yapnr`
 ([docs/containers.md](docs/containers.md)) redistribute the following, unmodified. Inside an image,
 `/usr/share/doc/yapnr/SOURCES` says where the source of each part is and lists the exact package
-versions; this file is at `/usr/share/doc/yapnr/THIRD_PARTY.md`.
+versions, `/usr/share/doc/yapnr/licenses/` holds the license texts that are not elsewhere in the
+image, and this file is at `/usr/share/doc/yapnr/THIRD_PARTY.md`.
 
-- **Ubuntu 24.04** (the `ubuntu:24.04` image, pinned by digest, plus the packages KiCad depends
-  on): various free-software licenses, with each package's license text in
-  `/usr/share/doc/<package>/copyright`. Their sources are available from the Ubuntu snapshot
-  service at the time the base was built (image label `io.github.studio-fug.yapnr.ubuntu.snapshot`).
+- **Ubuntu 24.04** (the `ubuntu:24.04` image, pinned by digest, upgraded at build time, plus the
+  packages KiCad depends on): various free-software licenses, with each package's license text in
+  `/usr/share/doc/<package>/copyright` and the common ones in `/usr/share/common-licenses`. The
+  archive state the packages come from is recorded at build time (`/etc/yapnr/ubuntu-snapshot`, a
+  [snapshot.ubuntu.com](https://snapshot.ubuntu.com/) ID); their sources are on Launchpad
+  (`https://launchpad.net/ubuntu/+source/<package>/<version>`) and in that snapshot.
 - **KiCad** 10.0 (`kicad-cli`, `pcbnew` and the rest of the `kicad` package; GPL-3.0-or-later) and
   its **footprint, symbol and template libraries** (CC-BY-SA-4.0 with the KiCad library exception),
   from the KiCad team's PPA (`ppa:kicad/kicad-10.0-releases`). The PPA deletes superseded builds,
   so the complete source packages of every published KiCad build are kept as the image
-  `ghcr.io/studio-fug/yapnr-kicad:<tag>-src`, which is never deleted. No 3D models are included.
+  `ghcr.io/studio-fug/yapnr-kicad:<tag>-src` (linux/amd64 and linux/arm64), which is never deleted;
+  `SOURCES` also points at Launchpad's PPA snapshot of the build date and at the source files on
+  Launchpad. No 3D models are included.
 - **tini** (MIT): the init process (PID 1), from Ubuntu.
-- **CPython 3.11** (PSF-2.0, with the licenses of the libraries it bundles) as built by
-  [python-build-standalone](https://github.com/astral-sh/python-build-standalone), installed by uv
-  under `/opt/python`. uv itself is used during the build only and is not in the image.
+- **CPython 3.11** (PSF-2.0) as built by
+  [python-build-standalone](https://github.com/astral-sh/python-build-standalone) (the release is
+  pinned in `docker/yapnr/Dockerfile`), installed by uv under `/opt/python`. It bundles OpenSSL
+  (Apache-2.0), SQLite (public domain), Tcl/Tk, ncurses, libedit, libffi, mpdecimal, expat, zlib,
+  bzip2, xz (liblzma), libuuid, Berkeley DB and libX11/libxcb, each under its own license; the
+  image build copies their license texts from that release's full archive (checksum-pinned) into
+  `/usr/share/doc/yapnr/licenses/python-build-standalone/`. uv itself is used during the build only
+  and is not in the image.
 - **Python packages** from `docker/yapnr/runtime-<arch>.lock` (the runtime subset of
   `requirements.lock`: numpy, torch, PyYAML and their dependencies) under `/opt/venv`, from PyPI
   and, for torch on linux/amd64, the PyTorch CPU index. Mostly BSD, MIT and Apache-2.0 licensed;
-  the numpy and torch wheels bundle native libraries under their own licenses. Each package's
-  `.dist-info` directory holds its license files and is authoritative.
+  each package's `.dist-info` directory holds its license files. The numpy and torch wheels also
+  bundle native libraries, listed per architecture in
+  `docker/yapnr/native-libraries-<arch>.txt` (appended to `SOURCES`) with the exact source of each
+  GCC runtime library, which the wheels' own notices do not give:
+
+  - **OpenBLAS** (BSD-3-Clause): 0.3.23 in numpy, 0.3.25 in torch on linux/arm64;
+  - **GCC runtime libraries**: `libgfortran` (GCC 8.3.1) and `libgomp` (GCC 4.8.5 on
+    linux/amd64, a conda-forge GCC 13.2.0 build on linux/arm64), GPL-3.0-or-later with the GCC
+    runtime library exception, and on linux/amd64 `libquadmath` (GCC 4.8.5, LGPL-2.1-or-later).
+    Their GNU build IDs match CentOS 7 packages, whose source RPMs stay on vault.centos.org;
+  - **Arm Compute Library** 23.08 (MIT) in torch on linux/arm64;
+  - **Intel oneMKL**, linked statically into torch's `libtorch_cpu.so` on linux/amd64, under the
+    Intel Simplified Software License.
+
+  The license texts torch's own `LICENSE` lacks (OpenBLAS, Arm Compute Library, Intel's license)
+  and the GCC runtime library exception are vendored byte for byte under
+  `third_party/image-licenses/` and copied to `/usr/share/doc/yapnr/licenses/`; the GPL-3.0 and
+  LGPL-2.1 texts are Ubuntu's, in `/usr/share/common-licenses`.
+
 - **yapnr** itself (AGPL-3.0-or-later; `/usr/share/doc/yapnr/LICENSE`). The image records the
   commit it was built from (`YAPNR_SOURCE_REVISION` and the `org.opencontainers.image.revision`
   label), and every release attaches its source archive.

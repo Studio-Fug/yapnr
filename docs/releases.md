@@ -9,8 +9,9 @@ images are described in [containers](containers.md). Release notes live on
 
 - **Release tags** are annotated `vMAJOR.MINOR.PATCH` tags ([SemVer 2.0](https://semver.org/)) on a
   commit of `main`. **Release candidates** are `vX.Y.Z-rc.N` (N from 1), always in that hyphen-dot
-  form: a bare `vX.Y.Zrc1` would sort _above_ `vX.Y.Z` in SemVer and in Bazel. There are no alpha
-  or beta tags.
+  form: a bare `vX.Y.Zrc1` is not a SemVer version at all, and Bazel's version ordering would put
+  it _above_ `vX.Y.Z`. There are no alpha or beta tags; the workflows ignore tags of any other
+  shape (`tools/release/version.py` skips them when it looks for the nearest release).
 - **The tag is the only version source.** `MODULE.bazel` has no `version`, and the sources carry
   none: the wheel is stamped at build time (`--stamp --embed_label=<version>` on
   `//release:wheel.dist`), and `yapnr --version` reads the installed wheel's metadata. A source
@@ -109,11 +110,17 @@ archive_override(                              # moving to the BCR = deleting th
 - **Pull requests:** build both images for both architectures on native runners (no push) and
   smoke-test them. A `plan` job skips the rest when nothing that goes into an image changed, so
   the workflow always reports. Not a required check until v0.1.0.
-- **Pushes to `main`:** the same, then push `ghcr.io/studio-fug/yapnr:edge` and `:sha-<7>`, with
-  the version `X.Y.(Z+1).devN+g<sha>` (`0.0.0.devN+g<sha>` before the first tag). The KiCad base is
-  pushed the first time its tag (`docker/yapnr-kicad/TAG`) is built, with its `-src` image, and is
-  never overwritten.
+- **Pushes to `main`** that change what goes into an image: the same, then push
+  `ghcr.io/studio-fug/yapnr:edge` and `:sha-<7>`, with the version `X.Y.(Z+1).devN+g<sha>`
+  (`X.Y.Zrc(K+1).devN+g<sha>` after a release candidate, `0.0.0.devN+g<sha>` before the first
+  tag). The KiCad base is pushed the first time its tag (`docker/yapnr-kicad/TAG`) is built: first
+  its `-src` image (both platforms), then the tags, then the attestation. The publish job can be
+  re-run after a failure, and a later run publishes a missing `-src` image.
 - **Releases** (called by `release.yaml`): the same, with the release tags.
+- **Every run** compares `docker/yapnr-kicad` (`tools/image/base_context.sh`) with the
+  `io.github.studio-fug.yapnr.kicad.context` label of the published base and fails if they
+  differ: a published base tag is never overwritten, and a release never ships a base that does
+  not match the tagged commit. The yapnr image is built FROM the base by digest.
 
 `release.yaml` runs when a `v*` tag is pushed:
 
@@ -129,7 +136,9 @@ archive_override(                              # moving to the BCR = deleting th
 
 **Dry run:** Actions > Release > Run workflow (on any branch), or
 `gh workflow run release.yaml --ref <branch>`. It runs every job and uploads the release files as a
-workflow artifact, and publishes nothing: no image tags, no GitHub release.
+workflow artifact, writes the release notes into the run summary (the header for the placeholder
+tag `v0.0.0`, and the notes GitHub would generate, through the same API and `.github/release.yml`),
+and publishes nothing: no image tags, no GitHub release.
 
 ## Release checklist (owner)
 
@@ -140,7 +149,9 @@ and never create or push tags.
    upgrade notes in `docs/releases/vX.Y.md` for `breaking` and `results-change` items, the new
    `X.Y` tag in the README and the container docs' examples, and a `WORKLOG.md` entry.
 2. **Dry run** on `main` after it merges: `gh workflow run release.yaml --ref main`; it must be
-   green.
+   green. Wait as well for the `Image` run of the commit you are about to tag to finish green on
+   `main`: if that commit introduced a new base tag, `main` publishes the base, and a release run
+   racing it would try to publish the same base tag and fail.
 3. **Release candidate** (required for a MINOR with `breaking` or `results-change` items, or a
    store layout change; patches go straight to step 5):
 
@@ -175,8 +186,32 @@ on `main`; a `release/X.Y` branch is created only when a backport is actually ne
 - **Package visibility:** new GHCR packages start **private**. After the first push of
   `ghcr.io/studio-fug/yapnr` and `ghcr.io/studio-fug/yapnr-kicad` (the first `main` build after
   this workflow lands), make both public (package settings > Danger Zone > Change visibility).
-  The switch cannot be undone. Until then, anonymous `docker pull` fails.
+  The organization must allow public packages (Organization settings > Packages > Package
+  creation: Public), or the option is missing. The switch cannot be undone. Until then, anonymous
+  `docker pull` fails.
+- **Dependabot** (`.github/dependabot.yml`) proposes updates of the pinned actions and of the
+  `ubuntu` and `uv` image digests once a month; see
+  [maintaining the images](#maintaining-the-images).
 - **Labels:** `tools/release/create_labels.sh`.
 - **Immutable releases** (Settings > General > Releases): recommended. The release workflow
   publishes last, so it works with them on.
 - **The `image` check** becomes required with v0.1.0 (it summarizes `image.yaml`).
+
+## Maintaining the images
+
+- **The KiCad base is frozen per tag.** `yapnr-kicad:<KiCad version>-<N>` keeps the Ubuntu
+  packages of the day it was built (every package upgraded to the archive state recorded in
+  `/etc/yapnr/ubuntu-snapshot`). Security fixes arrive by rebuilding under the next `N`: bump
+  `docker/yapnr-kicad/TAG` (and nothing else, or together with a Dependabot `ubuntu` digest update)
+  in a pull request, and the merge publishes the new base.
+- **When:** at least once a month, when a KiCad patch release lands in the PPA (a new KiCad
+  version, `N` back to 1), and soon after an Ubuntu security notice for a package in the base.
+  The next yapnr patch release then ships the new base; `edge` has it right away.
+- **Dependabot** proposes the `ubuntu:24.04` and `ghcr.io/astral-sh/uv` digests monthly. An
+  `ubuntu` update changes `docker/yapnr-kicad`, so its pull request fails the `Image` check until
+  `docker/yapnr-kicad/TAG` is bumped in it. A uv update may install a newer python-build-standalone
+  release: the build then fails until `PBS_RELEASE` and the two `PBS_FULL_SHA256_*` checksums in
+  `docker/yapnr/Dockerfile` are updated (from that release's `SHA256SUMS`).
+- **The runtime locks** follow `requirements.lock` (`tools/image/update_runtime_locks.sh`); after a
+  numpy or torch update, check the native libraries the new wheels bundle and update
+  `docker/yapnr/native-libraries-<arch>.txt`, `THIRD_PARTY.md` and `third_party/image-licenses/`.

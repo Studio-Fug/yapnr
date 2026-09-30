@@ -3,30 +3,31 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-09-30 (PR1).
+Last updated: 2026-09-30 (PR2).
 
 ## In progress
 
-- **PR1, engine import with history** (branch `claude/pr1-import`, not pushed): the refined e-mail
-  rule of the privacy scan (owner decision in `docs/decisions.md`: an `@` match is an address only
-  with a letter or digit in its local part, not followed by `(`, at an IANA top-level domain), then
-  the committed Splanc history of the PnR paths (42 commits, filtered with `git filter-repo` in a
-  scratch clone, source code unchanged) merged with `--allow-unrelated-histories`, then an
-  adaptation commit (`@yapnr_pypi` load, a minimal `hardware/tools/BUILD.bazel`, four failing
-  tests tagged `manual`: three fail on the Splanc source commit too, one fails and runs at or past
-  its timeout),
-  then the manifest and docs. Scrub, counts and checks:
-  [docs/history/import-manifest.md](docs/history/import-manifest.md). **Merge with a merge
-  commit**, never squash.
+- **PR2, newer engine state** (branch `claude/pr2-hier-engine`, not pushed): the engine state that
+  was never committed in Splanc, as one commit per snapshot (engine tree equal to the snapshot,
+  four files scrubbed at staging): F217 (the Codex agent's working-tree work), the hierarchical
+  line src8b to src14, the USB pair (src12b, src13) and N-0001 (src12n) side lines joined by an
+  octopus merge (src15.r1), src15 (the H7 engine), then Electrical221 merged in (two resolved
+  conflicts), the Bazel adaptation and the docs. `bazel test //...` 100/100; three budget tests,
+  `detail_route_test` and `orientation_test` stay `manual`. Lineage, scrub, checks and the PR3
+  leftovers: [docs/history/import-manifest.md](docs/history/import-manifest.md#pr2-the-uncommitted-engine-state).
+  **Merge with a merge commit**, never squash; the commits before the adaptation do not build.
 
 ## Next
 
-1. Owner: review and push PR1 and open it; CI must be green (`lint` scans all its new commits).
-   Merge on GitHub with a merge commit, authored with the owner's public commit address.
-2. Owner: push Splanc's `splanc-mini`, so the 9 newest `Imported-From` links resolve (see the
+1. Owner: review and push PR2 and open it; CI must be green. Decide on Electrical221's default-on
+   cleanup (gate it or A/B it; decisions) and, optionally, on making CI's history scan include
+   merge diffs (`git log -p -m`): its current form shows no diff for PR2's two merges (both were
+   scanned with `-m` locally).
+2. Owner: push Splanc's `splanc-mini`, so the 9 newest `Imported-From` links of PR1 resolve (see the
    manifest).
-3. PR2a/PR2b: the uncommitted engine state as a commit series from the snapshots (migration plan
-   §7.3), with the same privacy gates as PR1.
+3. PR6a, then PR3: wire the 68 unwired engine test files with the glob macro, bound the workers
+   that have no timeout, and replace the Splanc defaults and fixtures (manifest, "Known leftovers
+   for PR3"). PR2e: the `board.Remove` audit.
 4. PR-R is merged (#2). Its first `main` build pushes `yapnr-kicad:10.0.6-1-src`, then
    `yapnr-kicad:10.0.6-1` (with `10.0.6` and `10.0`), then `yapnr:edge`. Then make both GHCR
    packages **public** (package settings > Change visibility; irreversible, owner-approved). The
@@ -61,3 +62,5 @@ Last updated: 2026-09-30 (PR1).
   to refine the scan's e-mail rule instead (`docs/decisions.md`).
 - Running `git filter-repo` (or `gc`, or a branch switch) in the Splanc checkout: experiments run
   from it. Filter a scratch clone and remove its `origin` remote first (migration plan §7.5).
+- Scrubbing imported machine paths in a later commit: the earlier commits would still publish them.
+  Scrub each snapshot when it is staged, before its commit (PR2).

@@ -42,6 +42,9 @@ yapnr as a **headless Bazel ruleset**.
   `src12`, `src12h`, `src12i` are done; `src12b`/`src13` (USB pairs) and `src12n` (N-0001) are in
   progress. `src2` to `src7` no longer exist on disk.
   - Consequence: PR2 recreates the lineage as a commit series from the surviving snapshots (§7.3).
+  - Update (PR2, 2026-09-30): `src13` and `src12n` were finished and merged into `src15` (with
+    `src14`, SI v1), the engine of the H7 experiment; PR2 imports the whole lineage up to `src15`
+    plus Electrical221 (§7.3, [import manifest](history/import-manifest.md)).
 - **Splanc CI has never been green for PnR code** (lint debt; the Linux test job fails on an
   unrelated Nix package), and CI never runs the native (KiCad-side) code paths.
   - Consequence: yapnr gets a lint baseline and a real KiCad test lane **before** the big
@@ -1114,7 +1117,7 @@ Nix caching and runner-space actions from Splanc are not needed.
 **Repository settings** (applied with `gh` after PR0 is pushed):
 
 - Squash merge is the default. Merge commits are allowed only for the history-import PRs (PR1,
-  PR2a) and for PR3b (its pure-move commit must survive). No linear-history rule.
+  PR2) and for PR3b (its pure-move commit must survive). No linear-history rule.
 - A ruleset on `main` requires a PR and the checks `lint`, `test`, `docs` (and `kicad-integration`
   from PR6a), with 0 approvals (single-seat organization).
 - `.github/CODEOWNERS`: `* @fughilli`.
@@ -1280,66 +1283,77 @@ see `docs/decisions.md`; this replaces a shrink-only baseline for `hardware/`).
 
 ### 7.3 Landing the uncommitted engine state (PR2)
 
-Snapshots are read-only sources. For each one: first make an APFS clone into `$SCRATCH`
-(`cp -c -R`), verify it against its `hashes.json`, and only then import it. Directories that are
-still being edited (`src12n`, `src13`) are imported only when their owner declares them done; the
-imported hash is recorded.
+Snapshots are read-only sources. Each one is copied into `$SCRATCH`, checked against an engine
+digest (sha256 over the sorted `path<TAB>sha256` lines of `hardware/pnr` and the engine tools,
+without `__pycache__`; the snapshots' `hashes.json` files are F217's copied along, so they verify
+only the source freezes), scrubbed (§2.5, Appendix C), and then committed. Each snapshot commit's
+engine tree equals its snapshot; side lines join through merge commits. What was imported, the
+digests and the checks are in the [import manifest](history/import-manifest.md#pr2-the-uncommitted-engine-state).
 
-**PR2a: commit series** on a branch from PR1's tip. For each snapshot in order:
+The lineage as verified by content on 2026-09-30 (it corrects this section's first version):
 
-1. `rsync --delete` its `hardware/pnr/` over `hardware/pnr/` (excluding `__pycache__`, `*.orig`,
-   `*.bak`, `.scratch`).
-2. Copy its engine tools (the §7.1 list).
-3. Commit, skipping snapshots identical to the previous one.
+```text
+main ─ F217 ─┬─ src8b ─ src10.frozen ─ src10 ─ src11 ─ src12 ─┬─ src12h ─┬─ src12i ─ src14 ─┐
+             │                                                │          └─ src12n ────────┤
+             │                                                └─ src12b ─ src13.r8 ────────┤
+             │                                                          src15.r1 (merge) ──┘
+             │                                                          src15
+             └─ Electrical221 ───────────────────────────────────────── merge, Bazel, docs
+```
 
-The engine files (`hardware/pnr`) were compared between consecutive snapshots on 2026-09-29.
-`src9.frozen`, `src10b` and `src11.frozen` are engine-identical to their predecessors (they differ
-only in design data), so they produce no commit.
+1. **F217**, the fresh217 freeze of Splanc's working tree minus Electrical221: the Codex agent's
+   uncommitted work on top of `b009c945` (`pair_joint`, `portal_retry`, `power_bank_*`,
+   `transaction_cleanup`, cost capture, relative rows, ...), and
+   `hardware/tools/audit_pair_contacts.py`.
+2. **Electrical221** (the fresh222 freeze, byte-identical to Splanc's working tree): the full
+   electrical pool, partial-cycle cleanup in `track_graph`/`via_coalesce`, a `pnr.bzl` branch and
+   3 tests. It forks from F217 and is in no hierarchical snapshot.
+3. **src8b**: everything from `src2` to `src8` (their snapshots are gone): `fab_profile`
+   (default `jlc-pofv`), `fanout_reserve`, `via_in_pad`, `power_topology`, `proc` (worker
+   timeouts), `place/power_first`, and the packages `hier/` and `mc/`.
+4. **src10.frozen**: the `shove/` package (`PNR_SHOVE`). It **precedes** `src10`.
+5. **src10**: the owner's 0.15 mm stretch floor in `shove/world.py`.
+6. **src11**: the routing-to-placement feedback loop, `feedback/` (`PNR_FEEDBACK`).
+7. **src12**: macro-first `place/legalize.py`; pair budget overrides in `paired_bootstrap.py`.
+8. **src12h**: `PNR_KICAD_CLI` (headless KiCad) in 5 files.
+9. **src12i**: `fanout_reserve.release` uses `board.Delete(zone)` (teardown SIGSEGV fix).
+10. **src14**: SI v1 (`PNR_SI`, `pnr/si/`, `si_models/`) and the terminal-width contract.
+11. **src12b** and **src13.r8** (side line from src12): the USB pair engine (A-D), all flags
+    default off.
+12. **src12n** (side line from src12h): N-0001 macro shrink, per-side hull, used-area ranking.
+13. **src15.r1**: the octopus merge of src14, src13.r8 (base src12) and src12n (base src12h), plus
+    headless KiCad defaults and bus-type classes (`PNR_BUS_CLASSES`); **src15**: its review
+    fixes, the engine of the H7 run.
+14. **Merge of Electrical221** into src15. Two conflicts: the summary dict at the end of
+    `via_coalesce.main` (keep both key sets) and two hunks of `pnr.bzl` (Electrical221's pool
+    branch with src15's headless `$_KI_CLI`; the SI tool added to the action tools).
+15. **Bazel adaptation**, then the docs.
 
-1. `$FREEZE` minus Electrical221: the Codex agent's uncommitted work on top of the Splanc branch
-   tip: 12 modules (`pair_joint`, `portal_retry`, `power_bank_*`, `transaction_cleanup`, cost
-   capture, ...), 30 tests.
-2. `src8b`: everything from `src2` to `src8` (their snapshots are gone). New `fab_profile`,
-   `fanout_reserve`, `via_in_pad`, `power_topology`, `proc` (worker timeouts), `place/power_first`,
-   and the packages `hier/` and `mc/`. About 45 modified modules (native loop, electrical,
-   legalize, detail router, ...) and about 15 new tests.
-3. `src10`: shove support: new `shove/` package; `native_loop`, `native_electrical`,
-   `via_in_pad`, `hier/synth_native` edits; shove tests.
-4. `src10.frozen`: shove `world.py` fix.
-5. `src11`: routing-to-placement feedback loop: new `feedback/` package; halving, `hier/top`,
-   placement model and `power_first` edits; 7 new tests.
-6. `src12`: macro-first `place/legalize.py`; pair budget environment in `paired_bootstrap.py`.
-7. `src12h`: `PNR_KICAD_CLI` default (headless KiCad) in 5 files.
-8. `src12i`: `fanout_reserve.release`: `board.Delete(zone)` (teardown SIGSEGV fix).
+Engine-identical directories (`src9.frozen`, `src10.base`, `src10b`, `src11.base`,
+`src11.frozen`, `src12.base`, `src12n.base`, `src14.base`, `src15.base`, `src13.base`, `src13`)
+produce no commit.
 
 - Author: `Claude Agent` with the owner's public commit address (owner decision). The committer
-  date is now; the author date is the snapshot's newest source mtime. Trailers:
-  `Co-Authored-By: Claude ...`; commit 1 notes the Codex agent in the body.
-- Each commit body names the snapshot, the flags it introduced (and their defaults) and the
-  measured results from the log (for example deepS 33/0, H6 16/0 at the native rung).
-- The Splanc design (`hardware/splanc_dev`, `contracts/`) is never included.
-- `testdata/power_topology/*.json` provenance paths are scrubbed in a separate commit in this PR.
+  date is the import time; the author date is the capture time or the snapshot's newest source
+  mtime. Trailers: the session's; the F217 and Electrical221 bodies name the Codex agent.
+- Each commit body names the snapshot and its digest, the flags it introduced (and their
+  defaults) and the measured results from the log (for example deepS 33/0, H6 12/0).
+- The Splanc design (`hardware/splanc_dev` outside the engine's own test data, `contracts/`) is
+  never included.
+- The four files with machine paths (`testdata/power_topology/{converter,pd}.json`,
+  `tests/test_shove{,_native}.py`) are scrubbed when each snapshot is staged, so no commit carries
+  the paths. (The first version of this plan scrubbed the fixtures in a separate commit, which
+  would have published the paths in history.)
+- Only the head builds in yapnr: the snapshot commits carry Splanc's `BUILD.bazel`, as PR1's
+  imported commits do.
 - Merged with a merge commit.
 
-**PR2b: Electrical221** is the Codex agent's in-tree change (`electrical_pool.py`,
-`track_graph`/`via_coalesce` cycle reduction, a `pnr.bzl` branch, 3 tests), cherry-picked onto
-`src12i`. The only conflict is the summary dict at the end of `via_coalesce.main`: keep both key
-sets.
+**PR2e: `board.Remove` audit** (separate). Classify the ~25 remaining `board.Remove` call sites:
+use `Delete` unless the item is re-added. `via_coalesce`'s "retry after signal 11" is a likely
+instance of the same class.
 
-**PR2c: `src13` (USB pairs A-D)** is applied as a 3-way merge with base `src12`, which merged
-cleanly in the dry run. It keeps the `PNR_KICAD_CLI` edits it lacked. All its flags stay default
-off. Imported when its validation runs are finished.
-
-**PR2d: `src12n` (N-0001 macro shrink and hull)** is applied 3-way onto PR2c. Known conflicts:
-`graph.py`, `place/legalize.py` (5 hunks) and `hier/macro.py`, which are resolved with the
-placement tests plus a replay of its A/B. Flags stay default off.
-
-**PR2e: `board.Remove` audit.** Classify the ~25 remaining `board.Remove` call sites: use `Delete`
-unless the item is re-added. `via_coalesce`'s "retry after signal 11" is a likely instance of the
-same class.
-
-If PR2c or PR2d finish after PR3a/PR3b have landed, they go through `//tools/migrate:port` (§7.4)
-instead.
+Engine work that starts after PR2 is made on yapnr branches; work still in Splanc snapshots after
+PR3a/PR3b have landed goes through `//tools/migrate:port` (§7.4).
 
 ### 7.4 Porting in-flight work through mechanical commits
 
@@ -1367,7 +1381,7 @@ The tool runs in CI on a fixture pair so it cannot rot.
 - Check for another agent's activity (new handoff entries, processes this session did not start)
   before long operations, and report it rather than competing.
 - **Transition of engine work:**
-  - Once PR2a lands, new engine changes are made on yapnr branches.
+  - Once PR2 lands, new engine changes are made on yapnr branches.
   - Until PR3b, yapnr's `hardware/pnr` layout is identical to a snapshot's, so the existing
     `runx.sh` harness can run a yapnr checkout directly (`PYTHONPATH=<yapnr>/hardware/pnr`).
   - Between PR3b and PR3f, experiments either stay on frozen snapshots or run
@@ -1378,8 +1392,9 @@ The tool runs in CI on a fixture pair so it cannot rot.
 
 ## 8. PR sequence
 
-**Merge order:** PR0, PR1, PR2a-b, **PR6a**, PR3a-f, PR5, PR4a-d, PR6b, PR2c/2d/2e (when ready;
-ported via §7.4 if late), PR7, PR8, then the Splanc import-back.
+**Merge order:** PR0, PR1, PR2, **PR6a**, PR3a-f, PR5, PR4a-d, PR6b, PR2e (ported via §7.4 if
+late), PR7, PR8, then the Splanc import-back. (PR2c and PR2d, the USB pair and N-0001 lines, were
+finished before PR2 and are part of it.)
 
 PR6 is split, and its first half moves ahead of PR3. PR3a/PR3b rewrite every file mechanically,
 and today no CI runs the native (KiCad-side) code paths, so the KiCad lane must exist first. The
@@ -1444,20 +1459,26 @@ unchanged.
   - the reviewer cannot read 28k lines, so review focuses on the manifest, scrub report and the
     adaptation commit.
 
-### PR2a/PR2b: newer engine state
+### PR2: newer engine state (merge commit)
 
-- **Contents:** §7.3 commits 1-8, the provenance scrub commit, and Electrical221.
+- **Contents:** the §7.3 series: F217, Electrical221, the hierarchical snapshots up to `src15`
+  (with the USB pair and N-0001 side lines, formerly PR2c and PR2d), the Electrical221 merge, the
+  Bazel adaptation, and the docs (import manifest PR2 section, this plan, decisions, worklog).
 - **Acceptance:**
-  - each snapshot commit's `hardware/pnr` equals its snapshot byte for byte (`diff -r` recorded);
-  - at the `src12i` + Electrical221 tip, the same pass set as the snapshot's own suites, with
-    known pre-existing errors listed and filed (7 errors in the KiCad-Python suite, 1 in the
-    runtime suite);
-  - privacy scan clean;
-  - `hier/`, `mc/`, `feedback/` get Bazel targets so their tests run.
+  - each snapshot commit's engine tree equals its snapshot, except the four scrubbed files
+    (checked per commit and recorded in the manifest);
+  - `bazel test //... --config=ci` green at the head, with the pass set, the skips and the
+    `manual` tests recorded in the manifest; tests that newly fail are tagged `manual` with a
+    comment (no engine edits in PR2) and listed in appendix B;
+  - privacy scan clean, including merge diffs (`git log -p -m`), and gitleaks clean;
+  - the unwired test files are counted; `hier/`, `mc/` and `feedback/` get their Bazel targets in
+    PR3 with the glob macro (moved from this PR: most of their tests need KiCad or Splanc
+    inputs).
 - **Risks:**
-  - `src2` to `src7` are unrecoverable, so commit 2 is large (mitigated by a detailed body and
-    per-feature notes);
-  - `src12i` is a newly created snapshot (verify against `launch_nb8.sh`);
+  - `src2` to `src7` are unrecoverable, so the src8b commit is large (mitigated by a detailed body
+    and per-feature notes);
+  - the commits before the adaptation do not build in yapnr (as in PR1);
+  - Electrical221's cleanup is on by default and the H7 run does not use it (decisions);
   - the merge-commit requirement.
 
 ### PR6a: KiCad test lane and toolchain discovery
@@ -1788,14 +1809,32 @@ Still open:
   (`test_pair_joint_dispatch` import).
 - The `pnr_kicad_srcs` filegroup is incomplete and only works because actions run unsandboxed
   (replaced by the closure in PR3b).
-- 66 test files are not wired into Bazel (fixed by the glob macro and the wiring check). The
-  committed history imported in PR1 has 29 of them.
+- Test files not wired into Bazel (fixed by the glob macro and the wiring check in PR3): 29
+  after PR1; after PR2, 68 under `hardware/pnr` (PR1's 25 and 43 new) plus the four outside it.
+  `tools/check_test_wiring.py --scope hardware/` reports five more under `hardware/pnr`: SI test
+  files that only the `si_%s_test` list comprehension names, which does wire them.
 - Three native-loop controller tests (`placement_budget_test`, `progress_budget_test`,
   `retry_controller_test`) fail on the Splanc source commit of PR1: their recorded worker fixture
-  has no `graph` key, which `native_loop.congestion_snapshot` reads. PR1 tags them `manual`.
+  has no `graph` key, which `native_loop.congestion_snapshot` reads. PR1 tags them `manual`. Since
+  src8b (PR2) they fail earlier, with `FileNotFoundError: 'fixture-python'`: they patch
+  `native_loop.subprocess.run`, but the native loop starts its workers through `pnr.proc.run`, so
+  the fixture's fake interpreter is executed. Still `manual`.
 - `detail_route_test` takes 870 to 1000 s on the development Mac, at or over its 900 s `large`
   timeout, and its `test_drc_clean_by_construction` fails: two nets share a footprint cell. PR1
-  tags it `manual`.
+  tags it `manual`; unchanged with PR2's engine (848 s, the same failure).
+- Workers without a time bound (PR2's engine): `electrical_pool`, `hier/native_block` (2 calls),
+  `mc/halving`, `transaction_cleanup`, the parallel pair trials of `paired_bootstrap` (stopped
+  only by an event) and the cleanup pass in `hardware/tools/keyhole_region.py`; from PR1's code,
+  `drc_warm`, `electrical_repair`, `full_iteration`, `geometry_optimize`, `paired_bootstrap`,
+  `plane_leaf_repair`, `power_detour_repair`, `staged_signal` and `regression/run.py`. All move
+  to `pnr.proc.run` (PR3).
+- Engine code tied to the Splanc design (PR2): `feedback/signals.py` finds annotation sources by a
+  `hardware/splanc_dev/elec/src/*.ato` pattern; `hier/native_block.py` and `mc/halving.py`
+  default to `hardware/splanc_dev` inputs (PR3c, PR3d). Tests and test data that use Splanc
+  design files are listed in the [import manifest](history/import-manifest.md#known-leftovers-for-pr3).
+- Electrical221's partial-cycle cleanup and barrel-contact bridges in `via_coalesce` and
+  `track_graph` are on by default, without a flag or an A/B result (PR2; decisions).
+- `hardware/tools/audit_pair_contacts.py` starts a `wx.App` (GUI-bound, outside the loop).
 
 ## Appendix C: privacy scrub checklist (gate for every push)
 

@@ -213,6 +213,7 @@
   <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="docs/containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/viewer.html">The live viewer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/releases.html">Releases and versioning</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
@@ -277,34 +278,50 @@
 <h1>Worklog<a class="headerlink" href="#worklog" title="Link to this heading">¶</a></h1>
 <p>A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.</p>
-<p>Last updated: 2026-09-30 (PR3a: code keys and engine format).</p>
+<p>Last updated: 2026-09-30 (PR4, the viewer; PR3a merged).</p>
 <section id="in-progress">
 <h2>In progress<a class="headerlink" href="#in-progress" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><strong>PR3a</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/pr3a-codekey-format</span></code>, not pushed): code key scheme 2 (routing-feedback
-code keys hash each module’s canonical syntax tree, so formatting does not change them; legacy
-records are still read), then black and isort over every Python file under <code class="docutils literal notranslate"><span class="pre">hardware/</span></code> as
-mechanical commits, five source-text tests made layout-independent, and the lint config:
-<code class="docutils literal notranslate"><span class="pre">hardware/</span></code> out of the global exclude, a per-file flake8 baseline in <code class="docutils literal notranslate"><span class="pre">.flake8</span></code> (479 findings in
-157 files, none fixed by hand), per-hook excludes for the non-Python files a hook would rewrite.
-The review’s findings are fixed in follow-up commits: isort’s settings pinned in <code class="docutils literal notranslate"><span class="pre">.isort.cfg</span></code>
-(a third, mechanical re-sort), router key strings and reports name the key scheme, the driver
-imports and <code class="docutils literal notranslate"><span class="pre">test_feedback_signals</span></code> run in Bazel. Proof and reasons:
-<a class="reference internal" href="docs/decisions.html"><span class="std std-doc">docs/decisions.md</span></a> (“Choices made in PR3a”). Engine hygiene (#8) is
-merged and #6 is closed (#8 re-enabled <code class="docutils literal notranslate"><span class="pre">orientation_test</span></code>).</p></li>
+<li><p><strong>PR4, the live viewer</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/pr4-viewer</span></code>): the deployed Splanc viewer
+ported to <code class="docutils literal notranslate"><span class="pre">yapnr/viewer</span></code> (move, scrubbed imports, format, packaging and configuration, lint,
+fetched JavaScript and Bazel targets, tests and docs). <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">run</span> <span class="pre">//:viewer</span> <span class="pre">--</span> <span class="pre">--root</span> <span class="pre">&lt;live&gt;</span></code>;
+configuration by flags or a <code class="docutils literal notranslate"><span class="pre">yapnr-viewer-v1</span></code> TOML file, no machine defaults; the Ask agent,
+its web tools and AI net labels are off unless enabled; elkjs 0.9.3 and three.js 0.186.1 are
+fetched pinned by sha256 into <code class="docutils literal notranslate"><span class="pre">//yapnr/viewer:dist</span></code>; 11 offline unit test targets on a
+synthetic atopile fixture, live checks manual in <code class="docutils literal notranslate"><span class="pre">tests/e2e/viewer</span></code>. Choices:
+<a class="reference internal" href="docs/decisions.html"><span class="std std-doc">docs/decisions.md</span></a> (“Choices made in PR4”); guide:
+<a class="reference internal" href="docs/viewer.html"><span class="std std-doc">docs/viewer.md</span></a>. Checked against a copy of three lanes of a live experiment
+(<code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">run</span> <span class="pre">//:viewer</span></code>, agent off): PCB, schematic, 3D (headless <code class="docutils literal notranslate"><span class="pre">kicad-cli</span></code>), Source, Inspect
+and Notes work, and the Ask tab says it is off. Review fixes: one spend meter for Ask turns and
+net labels (a call holds its budget while it runs; stopped turns count at their budget),
+library defaults off, a server test of the defaults, the Apache-2.0 text served next to elkjs,
+the Source link to the exact tree (marked modified), interface addresses on Linux, no Ask
+buttons with the agent off, no source-index request without sources, and clearer messages (3D
+without three.js, cost replay of a board outside the run). Merged with <code class="docutils literal notranslate"><span class="pre">main</span></code> after PR3a: the
+old <code class="docutils literal notranslate"><span class="pre">hardware/tools/pnr_live</span></code> copies PR3a reformatted are dropped (PR4 moved and formatted
+them itself).</p></li>
+<li><p><strong>PR3a is merged</strong> (#9, a merge commit): code key scheme 2 (routing-feedback code keys hash each
+module’s canonical syntax tree, so formatting does not change them; legacy records are still
+read), black and isort over every Python file under <code class="docutils literal notranslate"><span class="pre">hardware/</span></code> as mechanical commits, and the
+lint config (<code class="docutils literal notranslate"><span class="pre">.flake8</span></code> per-file baseline, <code class="docutils literal notranslate"><span class="pre">.isort.cfg</span></code>). Its three format commits go into
+<code class="docutils literal notranslate"><span class="pre">.git-blame-ignore-revs</span></code> in #11. Proof and reasons: <a class="reference internal" href="docs/decisions.html"><span class="std std-doc">docs/decisions.md</span></a>
+(“Choices made in PR3a”).</p></li>
 </ul>
 </section>
 <section id="next">
 <h2>Next<a class="headerlink" href="#next" title="Link to this heading">¶</a></h2>
 <ol class="arabic simple">
-<li><p>Owner: review and push PR3a and open its pull request; <strong>merge it with a merge commit</strong>, not a
-squash, so the three format commits keep their hashes. After the merge, a follow-up commit adds
-them to <code class="docutils literal notranslate"><span class="pre">.git-blame-ignore-revs</span></code>, hashes as on <code class="docutils literal notranslate"><span class="pre">main</span></code>: the commits titled “Format: black”,
-“Format: isort (black profile” and “Format: isort with its settings pinned”. Before importing
-trials made by a yapnr checkout from before the format (legacy code keys, no
-<code class="docutils literal notranslate"><span class="pre">code_key_scheme</span></code>), keep a frozen copy of that pre-format tree (they re-key from it) or import
-with <code class="docutils literal notranslate"><span class="pre">--import-code-mismatch</span> <span class="pre">rebase</span></code> or <code class="docutils literal notranslate"><span class="pre">warn</span></code>; the default <code class="docutils literal notranslate"><span class="pre">error</span></code> refuses them. Splanc’s
-frozen snapshot trees are not affected.</p></li>
+<li><p>Owner (PR4): review the viewer branch; decide the agent’s default model (opus, $2 per turn,
+$20 per process) and file the issue for <code class="docutils literal notranslate"><span class="pre">pnr.capacitor_intent</span></code> (the cost replay reports
+contexts that need it as unavailable). If PR4 is merged with a merge commit, list its move and
+format commits in <code class="docutils literal notranslate"><span class="pre">.git-blame-ignore-revs</span></code> afterwards (a squash folds them away).</p></li>
+<li><p>PR4 follow-ups: <code class="docutils literal notranslate"><span class="pre">--project</span></code> and the manifest’s <code class="docutils literal notranslate"><span class="pre">[viewer]</span></code> table (with PR3d), the published
+<code class="docutils literal notranslate"><span class="pre">yapnr-live-event-v1</span></code> JSON Schema, browser e2e tests (Chrome DevTools), the viewer in the wheel
+and images once the engine is (PR3b), <code class="docutils literal notranslate"><span class="pre">examples/led555</span></code> as the smoke run (PR6b).</p></li>
+<li><p>Before importing trials made by a yapnr checkout from before PR3a’s format (legacy code keys,
+no <code class="docutils literal notranslate"><span class="pre">code_key_scheme</span></code>), keep a frozen copy of that pre-format tree (they re-key from it) or
+import with <code class="docutils literal notranslate"><span class="pre">--import-code-mismatch</span> <span class="pre">rebase</span></code> or <code class="docutils literal notranslate"><span class="pre">warn</span></code>; the default <code class="docutils literal notranslate"><span class="pre">error</span></code> refuses them.
+Splanc’s frozen snapshot trees are not affected.</p></li>
 <li><p>Owner: A/B Electrical221’s two flags on the hierarchical engine before turning them on.
 Before the next experiment runs this engine, one rung-1 evaluation with it (<code class="docutils literal notranslate"><span class="pre">board.Delete</span></code>
 everywhere) when the Mac is free: the replay covered 5 of the 27 changed sites, and a full
@@ -349,6 +366,10 @@ Dependabot <code class="docutils literal notranslate"><span class="pre">ubuntu</
 <section id="do-not-retry">
 <h2>Do not retry<a class="headerlink" href="#do-not-retry" title="Link to this heading">¶</a></h2>
 <ul class="simple">
+<li><p>Serving the viewer’s static files after <code class="docutils literal notranslate"><span class="pre">Path.resolve()</span></code>: in Bazel runfiles every file is a
+symlink, so a resolved-path containment check rejects all of them. Check containment lexically.</p></li>
+<li><p>Pointing the atopile source index at Bazel runfiles: it skips symlinked <code class="docutils literal notranslate"><span class="pre">.ato</span></code> files on purpose;
+tests copy the fixture (<code class="docutils literal notranslate"><span class="pre">yapnr.viewer.testing.fixture_copy</span></code>).</p></li>
 <li><p>Resolving <code class="docutils literal notranslate"><span class="pre">requirements.lock</span></code> on linux-x86_64 with the default PyPI index: the torch wheel there
 needs CUDA libraries the lock does not carry. Resolve on darwin-arm64 or linux-aarch64 (PR6a
 adds a separate x86_64 lock).</p></li>

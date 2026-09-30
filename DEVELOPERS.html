@@ -213,6 +213,7 @@
   <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="docs/containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/viewer.html">The live viewer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/releases.html">Releases and versioning</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
@@ -292,6 +293,7 @@ and caches Bazel under <code class="docutils literal notranslate"><span class="p
 <h2>Everyday commands<a class="headerlink" href="#everyday-commands" title="Link to this heading">¶</a></h2>
 <div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>bazel<span class="w"> </span>run<span class="w"> </span>//:yapnr<span class="w"> </span>--<span class="w"> </span>--version<span class="w">       </span><span class="c1"># the CLI</span>
 bazel<span class="w"> </span>run<span class="w"> </span>//:doctor<span class="w">                   </span><span class="c1"># environment report (Python, numpy, torch, KiCad CLI)</span>
+bazel<span class="w"> </span>run<span class="w"> </span>//:viewer<span class="w"> </span>--<span class="w"> </span>--root<span class="w"> </span>&lt;live&gt;<span class="w">  </span><span class="c1"># the live viewer on http://127.0.0.1:8766</span>
 bazel<span class="w"> </span><span class="nb">test</span><span class="w"> </span>//...<span class="w">                      </span><span class="c1"># unit tests and repo checks (no KiCad needed)</span>
 bazel<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--config<span class="o">=</span>quick<span class="w"> </span>//...<span class="w">       </span><span class="c1"># skip tests tagged slow</span>
 bazel<span class="w"> </span>run<span class="w"> </span>//docs:build<span class="w">                </span><span class="c1"># docs -&gt; docs/site/html/</span>
@@ -397,6 +399,27 @@ match the stock bundle. KiCad’s Python workers do not register with the Dock. 
 <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">kicad</span> <span class="pre">make-headless</span></code> command automates this (PR3d). Redo the copy after upgrading KiCad.</p>
 </section>
 </section>
+<section id="the-live-viewer">
+<h2>The live viewer<a class="headerlink" href="#the-live-viewer" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">yapnr/viewer</span></code> is the web front end for experiments (<a class="reference internal" href="docs/viewer.html"><span class="std std-doc">docs/viewer.md</span></a>; code
+layout and tests in <a class="reference internal" href="#yapnr/viewer/README.md"><span class="xref myst">yapnr/viewer/README.md</span></a>). Notes for working on it:</p>
+<ul class="simple">
+<li><p>Run a development copy on a spare loopback port, never on the ports of viewers other people
+use: <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">run</span> <span class="pre">//:viewer</span> <span class="pre">--</span> <span class="pre">--root</span> <span class="pre">&lt;live&gt;</span> <span class="pre">--port</span> <span class="pre">8795</span></code>. It reads the same live directory
+safely (writes only pins, drafts, snapshots and control requests you make).</p></li>
+<li><p>The served files are <code class="docutils literal notranslate"><span class="pre">//yapnr/viewer:dist</span></code>: <code class="docutils literal notranslate"><span class="pre">static/</span></code> plus elkjs and three.js, fetched pinned
+by sha256 at build time (never vendored; <a class="reference internal" href="THIRD_PARTY.html"><span class="std std-doc">THIRD_PARTY.md</span></a>). To upgrade one,
+change its URL and sha256 in <code class="docutils literal notranslate"><span class="pre">MODULE.bazel</span></code> and the file hashes in
+<code class="docutils literal notranslate"><span class="pre">tests/unit/viewer/test_dist.py</span></code>, and check the schematic and 3D views in a browser.</p></li>
+<li><p>KiCad for the viewer comes from <code class="docutils literal notranslate"><span class="pre">--kicad-cli</span></code>/<code class="docutils literal notranslate"><span class="pre">--kicad-python</span></code>, <code class="docutils literal notranslate"><span class="pre">YAPNR_KICAD_CLI</span></code>
+(<code class="docutils literal notranslate"><span class="pre">PNR_KICAD_CLI</span></code>) and <code class="docutils literal notranslate"><span class="pre">YAPNR_KICAD_PYTHON</span></code>, or <code class="docutils literal notranslate"><span class="pre">~/.config/yapnr/config.toml</span></code>; see <a class="reference internal" href="#kicad">KiCad</a>
+for the headless copy. The Ask agent and AI net labels make paid Claude calls and are off unless
+<code class="docutils literal notranslate"><span class="pre">--agent</span> <span class="pre">on</span></code> / <code class="docutils literal notranslate"><span class="pre">--net-summaries</span> <span class="pre">on</span></code>; the unit tests use fake CLIs, and the live checks in
+<code class="docutils literal notranslate"><span class="pre">tests/e2e/viewer</span></code> are manual.</p></li>
+<li><p>The front end is plain JavaScript without a build step or a node toolchain; there is no
+JavaScript test runner yet, so check changes to <code class="docutils literal notranslate"><span class="pre">static/</span></code> in a browser (headless Chrome works).</p></li>
+</ul>
+</section>
 <section id="container-images-and-releases">
 <h2>Container images and releases<a class="headerlink" href="#container-images-and-releases" title="Link to this heading">¶</a></h2>
 <p>The container images (<code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr</span></code> and its KiCad base) are described in
@@ -419,10 +442,16 @@ regenerate the image’s runtime locks with <code class="docutils literal notran
 </thead>
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/</span></code></p></td>
-<td><p>the Python package (today: version and CLI)</p></td>
+<td><p>the Python package (today: version, CLI and the live viewer)</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">tests/unit/</span></code></p></td>
 <td><p>hermetic unit tests and repo checks</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tests/e2e/</span></code></p></td>
+<td><p>manual live checks (paid agent calls, real KiCad exports)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">tests/fixtures/</span></code></p></td>
+<td><p>synthetic test inputs (the viewer’s small atopile project)</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tools/</span></code></p></td>
 <td><p>privacy scan, test-wiring check, internal Bazel macros</p></td>
@@ -546,6 +575,7 @@ the images with the release tags, and the GitHub release. See
 <li><a class="reference internal" href="#macos-use-a-headless-copy-no-dock-icons">macOS: use a headless copy (no Dock icons)</a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#the-live-viewer">The live viewer</a></li>
 <li><a class="reference internal" href="#container-images-and-releases">Container images and releases</a></li>
 <li><a class="reference internal" href="#repository-layout">Repository layout</a></li>
 <li><a class="reference internal" href="#ci">CI</a></li>

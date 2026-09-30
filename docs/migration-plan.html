@@ -213,6 +213,7 @@
   <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="viewer.html">The live viewer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="releases.html">Releases and versioning</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
@@ -461,7 +462,7 @@ imported with history but deleted during restructuring. They remain recoverable 
 ├── examples/
 │   ├── led555/                 KiCad-native example project (CI fixture, frontend &quot;kicad&quot;)
 │   └── atopile-blinky/         atopile-frontend fixture (sources + prebuilt board)
-├── third_party/                three/ (MIT, vendored); elkjs/ (EPL-2.0, license text only)
+├── third_party/                image-licenses/ (the viewer&#39;s elkjs and three.js are fetched)
 ├── tools/                      privacy_scan.py, check_test_wiring.py, repo_root.py,
 │                               bazel/py_tests.bzl (PR0); kicad_test_runner.sh, migrate/
 └── docs/                       Sphinx (MyST) site; see §6
@@ -585,12 +586,13 @@ the root package.</p></li>
 link showing the repository URL and the exact engine commit of the run being viewed.</p></li>
 <li><p><strong>Third-party material</strong> is listed in <code class="docutils literal notranslate"><span class="pre">THIRD_PARTY.md</span></code>:</p>
 <ul class="simple">
-<li><p>three.js r180 plus <code class="docutils literal notranslate"><span class="pre">GLTFLoader</span></code> (MIT), vendored under <code class="docutils literal notranslate"><span class="pre">third_party/three/</span></code> with its license
-(PR4d).</p></li>
+<li><p>three.js 0.186.1 plus <code class="docutils literal notranslate"><span class="pre">GLTFLoader</span></code> and the add-ons the 3D view imports (MIT). Updated in PR4:
+fetched at build time like elkjs (its build files exceed the 600 KB limit), served with its
+license under <code class="docutils literal notranslate"><span class="pre">vendor/three/</span></code>.</p></li>
 <li><p>elkjs 0.9.3 (EPL-2.0, which contains an Apache-2.0 web-worker shim). It is <strong>never
-committed</strong>: it is fetched with a sha256-pinned <code class="docutils literal notranslate"><span class="pre">http_file</span></code> and served as a separate,
-unmodified file (never bundled or minified with AGPL code). Its license text is kept under
-<code class="docutils literal notranslate"><span class="pre">third_party/elkjs/</span></code> (PR4b).</p></li>
+committed</strong>: it is fetched with a sha256-pinned archive and served as a separate, unmodified
+file (never bundled or minified with AGPL code). Its license text is served next to it from
+the same archive (PR4; <a class="reference internal" href="decisions.html"><span class="std std-doc">decisions</span></a>).</p></li>
 <li><p>KiCad stock footprints and 3D models (CC-BY-SA-4.0 with the KiCad library exception) are
 referenced, not vendored.</p></li>
 </ul>
@@ -1309,8 +1311,7 @@ bumped together later. <code class="docutils literal notranslate"><span class="p
 <span class="n">bazel_dep</span><span class="p">(</span><span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;rules_rust&quot;</span><span class="p">,</span> <span class="n">version</span> <span class="o">=</span> <span class="s2">&quot;0.71.3&quot;</span><span class="p">)</span>                      <span class="c1"># PR5</span>
 <span class="c1"># release tarballs, later:</span>
 <span class="n">bazel_dep</span><span class="p">(</span><span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;rules_pkg&quot;</span><span class="p">,</span> <span class="n">version</span> <span class="o">=</span> <span class="s2">&quot;1.2.0&quot;</span><span class="p">,</span> <span class="n">dev_dependency</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span>
-<span class="c1"># viewer JS tests (PR4):</span>
-<span class="n">bazel_dep</span><span class="p">(</span><span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;rules_nodejs&quot;</span><span class="p">,</span> <span class="n">version</span> <span class="o">=</span> <span class="s2">&quot;&lt;pin in PR4&gt;&quot;</span><span class="p">,</span> <span class="n">dev_dependency</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span>
+<span class="c1"># viewer JS tests: not added in PR4 (no node toolchain; browser checks move to tests/e2e)</span>
 
 <span class="n">python</span> <span class="o">=</span> <span class="n">use_extension</span><span class="p">(</span><span class="s2">&quot;@rules_python//python/extensions:python.bzl&quot;</span><span class="p">,</span> <span class="s2">&quot;python&quot;</span><span class="p">)</span>
 <span class="n">python</span><span class="o">.</span><span class="n">toolchain</span><span class="p">(</span><span class="n">python_version</span> <span class="o">=</span> <span class="s2">&quot;3.11&quot;</span><span class="p">,</span> <span class="n">is_default</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span>
@@ -2353,8 +2354,14 @@ sha256-pinned, separately served file; never vendored), source browser through
 <code class="docutils literal notranslate"><span class="pre">shutil.which</span></code>, spend caps, web guard), schema and env renames, test literals replaced.</p></li>
 </ul>
 </li>
-<li><p><strong>4d:</strong> the 3D view (three.js r180 + GLTFLoader vendored, GLB through the headless <code class="docutils literal notranslate"><span class="pre">kicad-cli</span></code>),
-once the in-progress viewer-dev work lands.</p></li>
+<li><p><strong>4d:</strong> the 3D view (three.js 0.186.1 + GLTFLoader, fetched and pinned like elkjs; GLB through
+the headless <code class="docutils literal notranslate"><span class="pre">kicad-cli</span></code>).</p></li>
+<li><p><strong>Done as one branch (<code class="docutils literal notranslate"><span class="pre">claude/pr4-viewer</span></code>):</strong> the four parts are one commit series (move,
+imports, format, packaging and configuration, lint, fetched JavaScript and Bazel targets, tests
+and docs); the choices that differ from this section are in <a class="reference internal" href="decisions.html"><span class="std std-doc">decisions</span></a> (“Choices
+made in PR4”). Still open: <code class="docutils literal notranslate"><span class="pre">--project</span></code> and the manifest’s <code class="docutils literal notranslate"><span class="pre">[viewer]</span></code> table (with PR3d), the
+published <code class="docutils literal notranslate"><span class="pre">yapnr-live-event-v1</span></code> JSON Schema, the browser (e2e) tests, <code class="docutils literal notranslate"><span class="pre">examples/led555</span></code> as the
+smoke run (PR6b).</p></li>
 <li><p><strong>Acceptance:</strong></p>
 <ul>
 <li><p>viewer tests pass;</p></li>

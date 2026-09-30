@@ -213,6 +213,7 @@
   <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="viewer.html">The live viewer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="releases.html">Releases and versioning</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
@@ -589,6 +590,64 @@ generation tests (<code class="docutils literal notranslate"><span class="pre">t
 without Splanc’s Mini inputs every one of their tests skips, so they wait for PR3c’s fixtures.
 They pass by hand with the Mini inputs, with new and with legacy stamps.</p></li>
 </ul>
+<p>Choices made in PR4 (the viewer; branch <code class="docutils literal notranslate"><span class="pre">claude/pr4-viewer</span></code>), following the plan where it
+applies; the owner reviews them with the pull request:</p>
+<ul class="simple">
+<li><p><strong>One branch instead of four sub-PRs (4a to 4d).</strong> The deployed viewer is one program whose
+parts import each other (the server wires the cost, schematic, source, notes, agent and 3D
+services together), so it is ported as one commit series: a pure move, the imports (privacy
+scrubbed while staging), a mechanical format, then packaging, lint, the build and the tests.</p></li>
+<li><p><strong>Imported from the deployed viewer only,</strong> after checking it is a superset of Splanc’s
+<code class="docutils literal notranslate"><span class="pre">pnr_live</span></code> working tree (plan risk “four diverging viewer copies”). The Splanc working tree’s
+uncommitted <code class="docutils literal notranslate"><span class="pre">pnr_live</span></code> changes are imported first, as their own commit.</p></li>
+<li><p><strong>three.js is fetched, not vendored</strong> (this replaces “vendored under <code class="docutils literal notranslate"><span class="pre">third_party/three/</span></code>” in
+the plan and in <code class="docutils literal notranslate"><span class="pre">THIRD_PARTY.md</span></code>): <code class="docutils literal notranslate"><span class="pre">three.core.js</span></code> (1.46 MB) and <code class="docutils literal notranslate"><span class="pre">three.module.js</span></code> (0.66 MB)
+exceed the 600 KB file limit, and the version the viewer uses is 0.186.1 (r186), not r180. It
+is pinned by sha256 like elkjs.</p></li>
+<li><p><strong>elkjs’s license is served from the pinned tarball</strong> (<code class="docutils literal notranslate"><span class="pre">third_party/elkjs/LICENSE.md</span></code> in the
+served directory) instead of a copy under <code class="docutils literal notranslate"><span class="pre">third_party/elkjs/</span></code> in the repository: the text then
+always matches the fetched version.</p></li>
+<li><p><strong>The third-party files come in through <code class="docutils literal notranslate"><span class="pre">use_repo_rule(http_archive)</span></code> in <code class="docutils literal notranslate"><span class="pre">MODULE.bazel</span></code>,</strong> not a
+new <code class="docutils literal notranslate"><span class="pre">bazel_dep</span></code> (no rules_js); a genrule copies them unmodified into <code class="docutils literal notranslate"><span class="pre">//yapnr/viewer:dist</span></code>.
+Repositories are fetched lazily, so a build that does not need the viewer never downloads them.</p></li>
+<li><p><strong>No node toolchain.</strong> The two node tests (<code class="docutils literal notranslate"><span class="pre">test_ui.cjs</span></code>, <code class="docutils literal notranslate"><span class="pre">test_controls_ui.cjs</span></code>) read Splanc’s
+paths and a captured state; they are dropped, not ported. Browser checks become <code class="docutils literal notranslate"><span class="pre">tests/e2e</span></code>
+(Chrome DevTools) in a later change; until then the viewer’s behaviour is covered by the Python
+unit tests and manual screenshots.</p></li>
+<li><p><strong>The Ask agent needs <code class="docutils literal notranslate"><span class="pre">--agent</span> <span class="pre">on</span></code> also on loopback</strong> (it was on by default there), its web tools
+need <code class="docutils literal notranslate"><span class="pre">--agent-web</span> <span class="pre">on</span></code>, and AI net labels need <code class="docutils literal notranslate"><span class="pre">--net-summaries</span> <span class="pre">on</span></code> (they followed the agent).
+The default agent model stays opus with a $2 per-turn and $20 per-process cap; the owner may
+prefer sonnet as the default.</p></li>
+<li><p><strong>Configuration is flags plus a TOML file (<code class="docutils literal notranslate"><span class="pre">yapnr-viewer-v1</span></code>), not the project manifest yet.</strong>
+The manifest’s <code class="docutils literal notranslate"><span class="pre">[viewer]</span></code> table and <code class="docutils literal notranslate"><span class="pre">--project</span></code> arrive with the project abstraction (PR3d);
+until then no setting defaults to a machine path, and machine tool paths come from flags,
+<code class="docutils literal notranslate"><span class="pre">YAPNR_*</span></code> variables or <code class="docutils literal notranslate"><span class="pre">~/.config/yapnr/config.toml</span></code>.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">pnr.capacitor_intent</span></code> is not recreated.</strong> It exists in no snapshot; the cost replay reports a
+placement context that needs it as unavailable. The owner files the issue.</p></li>
+<li><p><strong>The viewer stays out of the wheel and the images</strong> until the engine it imports is in them
+(PR3b); <code class="docutils literal notranslate"><span class="pre">//yapnr:cli</span></code> has no viewer dependency.</p></li>
+<li><p><strong>One spend cap per server process for every paid call</strong> (<code class="docutils literal notranslate"><span class="pre">--agent-total-usd</span></code>, default $20):
+Ask turns and AI net labels draw from the same meter (<code class="docutils literal notranslate"><span class="pre">yapnr/viewer/agent/spend.py</span></code>). A call
+holds its whole budget (<code class="docutils literal notranslate"><span class="pre">--agent-budget-usd</span></code>, default $2; <code class="docutils literal notranslate"><span class="pre">--net-summary-budget-usd</span></code>, default $1)
+while it runs and starts only if the cap covers it, so concurrent calls cannot pass the cap; a
+call without a cost report from the CLI (timeout, cancel, killed) is charged its whole budget.
+The meter is in memory: a restart resets it.</p></li>
+<li><p><strong>The Apache-2.0 license text is kept in the repository</strong> (<code class="docutils literal notranslate"><span class="pre">third_party/licenses/</span></code>), byte for
+byte as published: elkjs’s bundle includes an Apache-2.0 web-worker shim, and its tarball has
+only the EPL-2.0 text. It is served next to <code class="docutils literal notranslate"><span class="pre">elk.bundled.js</span></code>; the code itself stays fetched.</p></li>
+<li><p><strong>The Source link names the viewer’s own revision,</strong> not the engine commit of the run being
+viewed (plan §1.4, “Network use”): it links the repository tree of the commit the server runs
+and marks a checkout with uncommitted changes as modified. Runs do not record the engine commit
+yet; showing it per run waits for the run manifests (PR3d).</p></li>
+<li><p><strong>No <code class="docutils literal notranslate"><span class="pre">//yapnr/viewer:dev</span></code> target.</strong> There is no auto-reload server: a development viewer is
+<code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">run</span> <span class="pre">//:viewer</span> <span class="pre">--</span> <span class="pre">--root</span> <span class="pre">&lt;live</span> <span class="pre">dir&gt;</span> <span class="pre">--port</span> <span class="pre">&lt;spare</span> <span class="pre">port&gt;</span></code>, rebuilt after edits to
+<code class="docutils literal notranslate"><span class="pre">static/</span></code>.</p></li>
+<li><p><strong>The viewer’s KiCad lookup is stricter than plan §2.3</strong> until <code class="docutils literal notranslate"><span class="pre">yapnr.kicad.toolchain</span></code> replaces
+it (PR6a): it follows AGENTS.md and refuses everything inside <code class="docutils literal notranslate"><span class="pre">KiCad.app</span></code> or
+<code class="docutils literal notranslate"><span class="pre">/Applications/KiCad</span></code>, KiCad’s Python included (the plan allows the stock Python); on macOS it
+discovers only the headless copy, never <code class="docutils literal notranslate"><span class="pre">PATH</span></code>; and it does not check for KiCad 10.x (the
+toolchain module will).</p></li>
+</ul>
 </section>
 <section id="pinned-versions">
 <h2>Pinned versions<a class="headerlink" href="#pinned-versions" title="Link to this heading">¶</a></h2>
@@ -674,6 +733,14 @@ They pass by hand with the Mini inputs, with new and with legacy stamps.</p></li
 <td><p>from <code class="docutils literal notranslate"><span class="pre">requirements.lock</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">docker/yapnr/runtime-*.lock</span></code></p></td>
 </tr>
+<tr class="row-even"><td><p>elkjs (viewer)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.9.3</span></code>, by sha256</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">MODULE.bazel</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>three (viewer)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.186.1</span></code>, by sha256</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">MODULE.bazel</span></code></p></td>
+</tr>
 <tr class="row-even"><td><p>Image, release</p></td>
 <td><p>every action by commit SHA</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">.github/actions/</span></code>, <code class="docutils literal notranslate"><span class="pre">image.yaml</span></code>, …</p></td>
@@ -703,6 +770,12 @@ sites build the same way. matplotlib is left out until a page needs generated fi
 shellcheck-py v0.9.0.6, buildifier 8.2.0, prettier v3.1.0, markdownlint-cli v0.38.0,
 pre-commit-hooks v4.5.0), minus <code class="docutils literal notranslate"><span class="pre">nixpkgs-fmt</span></code>, plus the local privacy scan.</p></li>
 <li><p><strong>mermaid, prek, <code class="docutils literal notranslate"><span class="pre">setup-bazel</span></code>:</strong> the same as Splanc.</p></li>
+<li><p><strong>elkjs 0.9.3 and three.js 0.186.1:</strong> the versions the Splanc viewer shipped and was tested
+with. The npm tarballs are pinned by sha256 (elkjs
+<code class="docutils literal notranslate"><span class="pre">b95b224bd1ab71fd40f6d9a6365c28d989745dff6b0d514407bc1eb68f2f561e</span></code>, three
+<code class="docutils literal notranslate"><span class="pre">8cd068708ea44f2c73c944b1cead2ba2f0d5c15c8fc194e5700f4e4f4a033fe7</span></code>), and the served files by
+<code class="docutils literal notranslate"><span class="pre">tests/unit/viewer/test_dist.py</span></code>. An upgrade changes both and gets a browser check of the
+schematic and 3D views.</p></li>
 <li><p><strong>GitHub Actions majors</strong> (<code class="docutils literal notranslate"><span class="pre">actions/checkout&#64;v4</span></code>, <code class="docutils literal notranslate"><span class="pre">setup-python&#64;v5</span></code>, <code class="docutils literal notranslate"><span class="pre">cache&#64;v4</span></code>,
 <code class="docutils literal notranslate"><span class="pre">upload-artifact&#64;v4</span></code>, <code class="docutils literal notranslate"><span class="pre">download-artifact&#64;v4</span></code>, <code class="docutils literal notranslate"><span class="pre">setup-bazel&#64;0.15.0</span></code>): Splanc’s. They declare Node
 20, which GitHub now runs on Node 24 with a deprecation warning. Move to the Node 24 majors

@@ -213,6 +213,7 @@
   <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="viewer.html">The live viewer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="releases.html">Releases and versioning</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
@@ -291,13 +292,16 @@ done, this repository holds the project scaffolding (build, CI, documentation) a
 <p>Alpha. The engine’s committed history (PR1) and its newer, never committed state (PR2) are
 imported from Splanc at their original paths under <code class="docutils literal notranslate"><span class="pre">hardware/</span></code> (see the
 <a class="reference internal" href="history/import-manifest.html"><span class="std std-doc">history import manifest</span></a>); the package restructuring follows. The
-command line currently offers <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">--version</span></code> and a <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">doctor</span></code> stub. Progress is tracked in
+command line currently offers <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">--version</span></code> and a <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">doctor</span></code> stub; the live viewer
+(PR4) runs with <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">run</span> <span class="pre">//:viewer</span></code>. Progress is tracked in
 <a class="reference internal" href="../WORKLOG.html"><span class="std std-doc">WORKLOG.md</span></a> and in GitHub issues.</p>
 </section>
 <section id="start-here">
 <h2>Start here<a class="headerlink" href="#start-here" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p><a class="reference internal" href="containers.html"><span class="std std-doc">Container images</span></a>: run yapnr with Docker and nothing else (KiCad included).</p></li>
+<li><p><a class="reference internal" href="viewer.html"><span class="std std-doc">The live viewer</span></a>: watch experiments in a browser; its configuration, optional
+services and the cost and security of the (off by default) Ask agent.</p></li>
 <li><p><a class="reference internal" href="releases.html"><span class="std std-doc">Releases and versioning</span></a>: version numbers, image tags, what a release publishes.</p></li>
 <li><p><a class="reference internal" href="architecture.html"><span class="std std-doc">Architecture</span></a>: the planned layout of the package, the test tiers and the
 pipeline.</p></li>

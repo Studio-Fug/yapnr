@@ -213,6 +213,7 @@
   <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="docs/containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/viewer.html">The live viewer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/releases.html">Releases and versioning</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
@@ -280,24 +281,36 @@ material that is, or will be, part of what yapnr ships or serves, with its licen
 brought in. Update it in the same change that adds, removes or upgrades such material.</p>
 <section id="shipped-or-served-with-yapnr">
 <h2>Shipped or served with yapnr<a class="headerlink" href="#shipped-or-served-with-yapnr" title="Link to this heading">¶</a></h2>
-<section id="three-js-planned-pr4d">
-<h3>three.js (planned, PR4d)<a class="headerlink" href="#three-js-planned-pr4d" title="Link to this heading">¶</a></h3>
+<section id="elkjs">
+<h3>elkjs<a class="headerlink" href="#elkjs" title="Link to this heading">¶</a></h3>
 <ul class="simple">
-<li><p><strong>What:</strong> <a class="reference external" href="https://threejs.org/">three.js</a> r180 and its <code class="docutils literal notranslate"><span class="pre">GLTFLoader</span></code>, for the viewer’s 3D view.</p></li>
-<li><p><strong>License:</strong> MIT.</p></li>
-<li><p><strong>How:</strong> vendored under <code class="docutils literal notranslate"><span class="pre">third_party/three/</span></code> together with its license text.</p></li>
+<li><p><strong>What:</strong> <a class="reference external" href="https://github.com/kieler/elkjs">elkjs</a> 0.9.3 (<code class="docutils literal notranslate"><span class="pre">lib/elk.bundled.js</span></code>), the graph
+layout engine behind the viewer’s schematic view.</p></li>
+<li><p><strong>License:</strong> EPL-2.0; the file includes a web-worker shim under Apache-2.0 (Google LLC), with
+its notice in the file.</p></li>
+<li><p><strong>How:</strong> <strong>never vendored.</strong> Bazel fetches the npm tarball at build time, pinned by URL and
+sha256 (<code class="docutils literal notranslate"><span class="pre">MODULE.bazel</span></code>, repository <code class="docutils literal notranslate"><span class="pre">&#64;elkjs</span></code>), and <code class="docutils literal notranslate"><span class="pre">//yapnr/viewer:dist</span></code> copies the file
+unmodified to <code class="docutils literal notranslate"><span class="pre">elk.bundled.js</span></code> in the served directory. The browser loads it as a separate file;
+it is never bundled or minified together with AGPL code. Its license texts are served next to
+it: the EPL-2.0 from the same tarball at <code class="docutils literal notranslate"><span class="pre">third_party/elkjs/LICENSE.md</span></code>, and the Apache-2.0
+(which the tarball lacks) at <code class="docutils literal notranslate"><span class="pre">third_party/elkjs/Apache-2.0.txt</span></code>. That text is the one file
+of elkjs’s material kept in this repository: <code class="docutils literal notranslate"><span class="pre">third_party/licenses/Apache-2.0.txt</span></code>, byte for
+byte as published at <a class="reference external" href="https://www.apache.org/licenses/LICENSE-2.0.txt">https://www.apache.org/licenses/LICENSE-2.0.txt</a> (sha256
+<code class="docutils literal notranslate"><span class="pre">cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30</span></code>).</p></li>
 </ul>
 </section>
-<section id="elkjs-planned-pr4b">
-<h3>elkjs (planned, PR4b)<a class="headerlink" href="#elkjs-planned-pr4b" title="Link to this heading">¶</a></h3>
+<section id="three-js">
+<h3>three.js<a class="headerlink" href="#three-js" title="Link to this heading">¶</a></h3>
 <ul class="simple">
-<li><p><strong>What:</strong> <a class="reference external" href="https://github.com/kieler/elkjs">elkjs</a> 0.9.3, the graph layout engine behind the
-viewer’s schematic view.</p></li>
-<li><p><strong>License:</strong> EPL-2.0; it includes a web-worker shim under Apache-2.0.</p></li>
-<li><p><strong>How:</strong> <strong>never vendored.</strong> It is fetched at build time and pinned by sha256, then served to the
-browser as a separate, unmodified file, never bundled or minified together with AGPL code. Its
-license text is kept under <code class="docutils literal notranslate"><span class="pre">third_party/elkjs/</span></code>.</p></li>
+<li><p><strong>What:</strong> <a class="reference external" href="https://threejs.org/">three.js</a> 0.186.1 (r186): <code class="docutils literal notranslate"><span class="pre">build/three.module.js</span></code>,
+<code class="docutils literal notranslate"><span class="pre">build/three.core.js</span></code> and the <code class="docutils literal notranslate"><span class="pre">OrbitControls</span></code>, <code class="docutils literal notranslate"><span class="pre">GLTFLoader</span></code>, <code class="docutils literal notranslate"><span class="pre">BufferGeometryUtils</span></code> and
+<code class="docutils literal notranslate"><span class="pre">SkeletonUtils</span></code> add-ons, for the viewer’s 3D view.</p></li>
+<li><p><strong>License:</strong> MIT.</p></li>
+<li><p><strong>How:</strong> fetched like elkjs (repository <code class="docutils literal notranslate"><span class="pre">&#64;threejs</span></code>, the npm tarball pinned by sha256) and copied
+unmodified to <code class="docutils literal notranslate"><span class="pre">vendor/three/</span></code> in the served directory, with its <code class="docutils literal notranslate"><span class="pre">LICENSE</span></code>. Not vendored: the
+build files are larger than the repository’s 600 KB file limit.</p></li>
 </ul>
+<p><code class="docutils literal notranslate"><span class="pre">tests/unit/viewer/test_dist.py</span></code> checks the sha256 of every served third-party file.</p>
 </section>
 </section>
 <section id="in-the-container-images">
@@ -448,8 +461,8 @@ of the wheel or the container images.</p></li>
             <ul>
 <li><a class="reference internal" href="#">Third-party material</a><ul>
 <li><a class="reference internal" href="#shipped-or-served-with-yapnr">Shipped or served with yapnr</a><ul>
-<li><a class="reference internal" href="#three-js-planned-pr4d">three.js (planned, PR4d)</a></li>
-<li><a class="reference internal" href="#elkjs-planned-pr4b">elkjs (planned, PR4b)</a></li>
+<li><a class="reference internal" href="#elkjs">elkjs</a></li>
+<li><a class="reference internal" href="#three-js">three.js</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#in-the-container-images">In the container images</a></li>

@@ -76,7 +76,7 @@ except CacheError as err:
 manifest = HttpPartCache(url, token=write).upload_part(request, blobs)
 assert anonymous.current(testing.SYNTHETIC_LCSC)["id"] == manifest["id"]
 HttpPartCache(url, token=write).put_catalog(testing.catalog_entry(), {"source": "smoke test"})
-components = json.load(urllib.request.urlopen(f"{url}/v0/component/lcsc/900001"))["components"]
+components = json.load(urllib.request.urlopen(f"{url}/v0/component/lcsc/990000001"))["components"]
 assert components[0]["part_number"] == "SR1K", components
 target = materialize(anonymous, manifest["id"], Path(work) / "project")
 assert (target / f"{testing.SYNTHETIC_PART}.ato").is_file()

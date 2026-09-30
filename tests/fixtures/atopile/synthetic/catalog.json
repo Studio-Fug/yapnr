@@ -4,7 +4,7 @@
       "basic": true,
       "description": "synthetic 1 kohm 1 % 0603 resistor",
       "kind": "resistor",
-      "lcsc": "C900001",
+      "lcsc": "C990000001",
       "manufacturer": "yapnr-synthetic",
       "mpn": "SR1K",
       "package": "0603",

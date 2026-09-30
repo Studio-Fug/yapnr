@@ -74,7 +74,7 @@ class AtoFactsTest(unittest.TestCase):
             testing.part_ato()
             .replace(
                 "    trait is_atomic_part",
-                '    trait is_auto_generated<system="ato_part", source="easyeda:C900001",'
+                '    trait is_auto_generated<system="ato_part", source="easyeda:C990000001",'
                 ' date="2026-01-01T00:00:00+00:00", checksum="00">\n    trait is_atomic_part',
             )
             .replace(
@@ -82,7 +82,7 @@ class AtoFactsTest(unittest.TestCase):
             )
         )
         facts = model.ato_facts(testing.SYNTHETIC_PART, text)
-        self.assertEqual(facts["generated_from"], "easyeda:C900001")
+        self.assertEqual(facts["generated_from"], "easyeda:C990000001")
         self.assertEqual(facts["manufacturer"], 'A "B"')
 
     def test_a_part_file_needs_a_component_and_an_atomic_part(self):

@@ -46,9 +46,9 @@ class SchemaTest(unittest.TestCase):
                 C.normalize_lcsc(bad)
 
     def test_valid_catalog_is_normalized(self):
-        out = C.validate(doc(part(900001, resistance_ohm=1000)))
+        out = C.validate(doc(part(990000001, resistance_ohm=1000)))
         entry = out["parts"][0]
-        self.assertEqual(entry["lcsc"], "C900001")
+        self.assertEqual(entry["lcsc"], "C990000001")
         self.assertEqual(entry["stock"], "unknown")
         self.assertFalse(entry["basic"])
         self.assertEqual(entry["params"], {"resistance_ohm": 1000.0})

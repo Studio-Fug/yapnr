@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Optional
 
-SYNTHETIC_LCSC = "C900001"
+SYNTHETIC_LCSC = "C990000001"
 SYNTHETIC_PART = "Yapnr_Synthetic_SR1K"
 
 FOOTPRINT = """(footprint "SYN_R0603"

@@ -49,7 +49,7 @@ board = '(kicad_pcb\n\t(version 20241229)\n\t(footprint "X:Y"\n\t\t(at 1 2)\n\t\
 (layout / f"{{build}}.kicad_pcb").write_text(board % uuid.uuid4())
 out = Path("build/builds") / build
 out.mkdir(parents=True, exist_ok=True)
-(out / f"{{build}}.bom.csv").write_text("Designator,LCSC\nR1,C900001\n")
+(out / f"{{build}}.bom.csv").write_text("Designator,LCSC\nR1,C990000001\n")
 (out / f"{{build}}.variables.ato.json").write_text("{{}}")
 Path("build/manifest.json").write_text(json.dumps({{"path": str(Path.cwd())}}))
 sys.exit(plan.get("exit", 0))
@@ -139,12 +139,12 @@ class RunnerTest(unittest.TestCase):
 
     def test_picker_answers_from_the_locked_parts_catalog(self):
         (self.project / "fake.json").write_text(
-            json.dumps({"query": [{"lcsc": 900001, "quantity": 1}, {"lcsc": 42, "quantity": 1}]})
+            json.dumps({"query": [{"lcsc": 990000001, "quantity": 1}, {"lcsc": 42, "quantity": 1}]})
         )
         result = self.build(keep_work=True)
         answer = json.loads((result.work / "project/answer.json").read_text())
         found = [[c["lcsc"] for c in r["components"]] for r in answer["results"]]
-        self.assertEqual(found, [[900001], []])
+        self.assertEqual(found, [[990000001], []])
         self.assertEqual(result.summary["catalog_parts"], 1)
         paths = [r["path"] for r in result.summary["picker_requests"]]
         self.assertEqual(paths, ["/v0/query"])

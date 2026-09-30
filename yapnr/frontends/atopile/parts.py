@@ -5,7 +5,7 @@
     {
       "schema": "yapnr-atopile-parts-lock-v1",
       "parts_dir": "elec/src/parts",
-      "parts": [{"name": "Yapnr_Synthetic_SR1K", "id": "<sha256>", "lcsc": "C900001"}]
+      "parts": [{"name": "Yapnr_Synthetic_SR1K", "id": "<sha256>", "lcsc": "C990000001"}]
     }
 
 Before each build the runner writes every locked part into ``<parts_dir>/<name>/`` of its copy

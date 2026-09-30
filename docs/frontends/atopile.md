@@ -235,7 +235,7 @@ part by content id, and the build materializes them from the [part cache](../par
   "parts": [
     {
       "id": "211d87d939ed74ac0b1ff2b144459c44792c3acaa40496cebd4e3d57af14780b",
-      "lcsc": "C900001",
+      "lcsc": "C990000001",
       "name": "Yapnr_Synthetic_SR1K"
     }
   ],
@@ -281,7 +281,7 @@ Catalogs use the `yapnr-picker-catalog-v1` schema (JSON; YAML when PyYAML is ava
   "provenance": { "source": "...", "retrieved": "2026-09-30", "licence_note": "..." },
   "parts": [
     {
-      "lcsc": "C900001",
+      "lcsc": "C990000001",
       "mpn": "SR1K",
       "manufacturer": "yapnr-synthetic",
       "package": "0603",

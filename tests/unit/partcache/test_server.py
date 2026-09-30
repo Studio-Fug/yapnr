@@ -126,9 +126,9 @@ class PublicReadsTest(ServerTest):
         writer.put_catalog(testing.catalog_entry(), {"source": "unit test"})
         catalog = self.client(None).catalog([testing.SYNTHETIC_LCSC])
         self.assertEqual([p["lcsc"] for p in catalog["parts"]], [testing.SYNTHETIC_LCSC])
-        status, body, _ = self.call("GET", "/v0/component/lcsc/900001")
+        status, body, _ = self.call("GET", "/v0/component/lcsc/990000001")
         self.assertEqual((status, body["components"][0]["part_number"]), (200, "SR1K"))
-        status, body, _ = self.call("POST", "/v0/query", {"queries": [{"lcsc": 900001}]})
+        status, body, _ = self.call("POST", "/v0/query", {"queries": [{"lcsc": 990000001}]})
         self.assertEqual(len(body["results"][0]["components"]), 1)
         status, body, _ = self.call(
             "PUT", "/v1/catalog/C5", {"part": testing.catalog_entry()}, token=WRITE

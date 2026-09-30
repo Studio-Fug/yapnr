@@ -51,9 +51,13 @@ const DOCK=window.YapnrDock||(function(){
 const S={idx:null,p:null,err:null,at:0,look:null,files:new Map(),file:null,sel:null,marks:new Set(),hist:[],item:null,ihist:[],needScroll:0};
 const P={insp:DOCK.el('inspect'),src:DOCK.el('source')},NT=()=>window.YapnrNotes||null;
 if(DOCK.el('notes')&&!DOCK.el('notes').childNodes.length)DOCK.el('notes').append(h('div',{class:'dk-empty'},'Notes panel not loaded (dist/notes.js).'));
+// /api/about says whether this server has a source index (features.source): without one the index is
+// never requested (its 503 would only add console errors), and the Source tab shows the reason.
+let about=null;const features=()=>about||(about=fetch('/api/about').then(r=>r.ok?r.json():null).then(a=>a?.features||{}).catch(()=>({})));
 function load(force){
  if(S.p&&!force)return S.p;
- S.p=fetch('/api/source/index').then(async r=>{let j=await r.json().catch(()=>null);if(!r.ok||!j)throw Error(j?.error||'HTTP '+r.status);return j})
+ S.p=features().then(f=>{if(f.source===false)throw Error(f.source_reason||'no atopile source configured');return fetch('/api/source/index')})
+  .then(async r=>{let j=await r.json().catch(()=>null);if(!r.ok||!j)throw Error(j?.error||'HTTP '+r.status);return j})
   .then(j=>{S.err=null;S.at=Date.now();if(!S.idx||S.idx.sha!==j.sha||force==='always'){S.idx=j;prep(j);onIndex()}return S.idx})
   .catch(e=>{S.err=e.message;S.p=null;onIndex();throw e});
  return S.p;
@@ -191,7 +195,7 @@ function showRes({title,hits,range,note}){
  SB.res.replaceChildren(h('div',{class:'src-rh'},h('b',null,title),note?h('span',{class:'dk-muted'},note):null,h('span',{class:'dk-sp'}),
   refs.length||nets.length||pads.length?h('button',{onclick:()=>highlight({refs,nets,pads}),title:'Highlight on the board'},'Show'):null,
   NT()&&NT().available?.()!==false?h('button',{title:'New note about these lines',onclick:()=>NT().newNote({targets:[{kind:'source',file:S.file,line:r[0],end:r[1]}]})},'Note'):null,
-  h('button',{class:'dk-ask',title:'Add these lines to the Ask context',onclick:()=>askAbout({kind:'source',file:S.file,line:r[0],end:r[1]})},'Ask'),h('button',{class:'dk-xs',title:'Close',onclick:()=>{SB.res.hidden=true}},'×')),
+  h('button',{class:'dk-ask ask-entry',title:'Add these lines to the Ask context',onclick:()=>askAbout({kind:'source',file:S.file,line:r[0],end:r[1]})},'Ask'),h('button',{class:'dk-xs',title:'Close',onclick:()=>{SB.res.hidden=true}},'×')),
   h('div',{class:'src-rc'},refs.length||nets.length||pads.length?[cap(refs,24,'ref'),cap(pads,12,'pad'),cap(nets,12,'net')]:h('span',{class:'dk-muted'},'No board objects map to this location.')));
  SB.res.hidden=false}
 SB.code.addEventListener('click',e=>{
@@ -246,9 +250,9 @@ const loc=(f,l,end,text,tip)=>h('button',{class:'dk-loc',title:tip||('Open '+f+'
 function more(list,n,fn,label){let out=list.slice(0,n).map(fn);if(list.length>n){let b=h('button',{type:'button',class:'dk-more',onclick:()=>b.replaceWith(...list.slice(n).map(fn))},(label||'Show all')+' · '+list.length);out.push(b)}return out}
 function moreRows(list,n,fn,cols,label){let out=list.slice(0,n).map(fn);if(list.length>n){let tr=h('tr',{class:'dk-morer'},h('td',{colspan:cols},h('button',{type:'button',class:'dk-more',onclick:()=>tr.replaceWith(...list.slice(n).map(fn))},(label||'Show all')+' · '+list.length)));out.push(tr)}return out}
 function actions(item,extra){let hl=item.kind==='component'?{refs:[item.ref]}:item.kind==='net'?{nets:[item.name]}:item.kind==='pad'?{pads:[item.ref+'.'+item.pad]}:{refs:item.refs||[],nets:item.nets||[]};
- return h('div',{class:'dk-actions'},h('button',{type:'button',onclick:()=>highlight(hl)},'Show on board'),extra,h('span',{class:'dk-sp'}),noteBtn(item),h('button',{type:'button',class:'dk-ask',onclick:()=>askAbout(item)},'Ask about this'))}
+ return h('div',{class:'dk-actions'},h('button',{type:'button',onclick:()=>highlight(hl)},'Show on board'),extra,h('span',{class:'dk-sp'}),noteBtn(item),h('button',{type:'button',class:'dk-ask ask-entry',onclick:()=>askAbout(item)},'Ask about this'))}
 const noteBtn=item=>NT()&&NT().available?.()!==false?h('button',{type:'button',class:'dk-note',title:'New note about this (you can edit targets, kind and status before saving)',onclick:()=>NT().newNote({targets:[JSON.parse(JSON.stringify(item))]})},'Add note'):null;
-function askAbout(item){let a=AG();if(!a){alert('The Ask panel (agent.js) is not loaded.');return}a.addContext(item);a.open?a.open():DOCK.tab('ask')}
+function askAbout(item){let a=AG();if(!a){alert('The Ask panel (agent.js) is not loaded.');return}if(a.enabled?.()===false){DOCK.tab('ask');return}a.addContext(item);a.open?a.open():DOCK.tab('ask')}
 function currentsTable(list){if(!list.length)return null;return h('table',{class:'dk-tab'},h('thead',null,h('tr',null,['Target','Pads','RMS','Peak','Scope',''].map(x=>h('th',null,x)))),
  h('tbody',null,list.map(c=>h('tr',null,h('td',{class:'mono'},c.target||''),h('td',{class:'mono'},(c.pads||[]).join(', ')),h('td',null,c.rms_current_a!=null?c.rms_current_a+' A':'—'),h('td',null,c.peak_current_a!=null?c.peak_current_a+' A':'—'),h('td',null,c.scope||''),h('td',null,c.file?h('button',{class:'dk-lnk',title:(c.file+':'+c.line),onclick:()=>open(c.file,c.line,c.line)},'L'+c.line):'')))))}
 function boardInfo(o){if(!o||typeof o!=='object')return null;let b=[],f=v=>typeof v==='number'?(Math.abs(v)>=100?v.toFixed(0):+v.toFixed(2)):v,xy=o.xy||o.position;
@@ -299,11 +303,11 @@ function rInspect(item){
   body.push(hd('Board region',`${Math.abs(b[2]-b[0]).toFixed(1)} × ${Math.abs(b[3]-b[1]).toFixed(1)} mm at ${(+b[0]).toFixed(1)}, ${(+b[1]).toFixed(1)}`+(item.lane?' · '+item.lane:'')),actions(item));
   body.push(sec('Parts · '+refs.length,h('div',{class:'dk-row'},more(refs,60,r=>chip('ref',r)))),sec('Nets · '+nets.length,h('div',{class:'dk-row'},more(nets,40,n=>chip('net',n)))));return body}
  if(item.kind==='group'){let refs=(item.refs||[]).slice().sort(nat);body.push(hd(item.label||item.id||'Group',refs.length+' parts'),actions(item),sec('Parts',h('div',{class:'dk-row'},more(refs,80,r=>chip('ref',r)))));return body}
- if(item.kind==='source'){body.push(hd(fileName(item.file)+':'+item.line+(item.end>item.line?'–'+item.end:''),modAt(item.file,item.line)?.name||''),h('div',{class:'dk-actions'},h('button',{type:'button',onclick:()=>open(item.file,item.line,item.end)},'Open in Source'),h('span',{class:'dk-sp'}),noteBtn(item),h('button',{type:'button',class:'dk-ask',onclick:()=>askAbout(item)},'Ask about this')));
+ if(item.kind==='source'){body.push(hd(fileName(item.file)+':'+item.line+(item.end>item.line?'–'+item.end:''),modAt(item.file,item.line)?.name||''),h('div',{class:'dk-actions'},h('button',{type:'button',onclick:()=>open(item.file,item.line,item.end)},'Open in Source'),h('span',{class:'dk-sp'}),noteBtn(item),h('button',{type:'button',class:'dk-ask ask-entry',onclick:()=>askAbout(item)},'Ask about this')));
   let hits=lineHits(item.file,item.line,item.end||item.line);if(hits.refs.size||hits.nets.size)body.push(sec('Maps to',h('div',{class:'dk-row'},[...hits.refs].sort(nat).slice(0,60).map(r=>chip('ref',r)),[...hits.nets].sort(nat).slice(0,30).map(n=>chip('net',n)))));return body}
- if(item.kind==='lane'){body.push(hd('Lane '+item.lane,'Experiment lane'),h('div',{class:'dk-actions'},h('button',{type:'button',onclick:()=>V()?.selectLane?.(item.lane)},'Show lane'),h('span',{class:'dk-sp'}),noteBtn(item),h('button',{type:'button',class:'dk-ask',onclick:()=>askAbout(item)},'Ask about this')));return body}
+ if(item.kind==='lane'){body.push(hd('Lane '+item.lane,'Experiment lane'),h('div',{class:'dk-actions'},h('button',{type:'button',onclick:()=>V()?.selectLane?.(item.lane)},'Show lane'),h('span',{class:'dk-sp'}),noteBtn(item),h('button',{type:'button',class:'dk-ask ask-entry',onclick:()=>askAbout(item)},'Ask about this')));return body}
  if(item.kind==='event'||item.kind==='probe'){let pretty=t=>{try{return JSON.stringify(JSON.parse(t),null,1)}catch(e){return t||''}};
-  body.push(hd(item.kind==='event'?'Event · '+(item.event_kind||item.id):item.label,[item.lane?'lane '+item.lane:'',item.kind==='event'?' · id '+item.id:''].join('')),h('div',{class:'dk-actions'},item.lane?h('button',{type:'button',onclick:()=>V()?.selectLane?.(item.lane)},'Show lane'):null,h('span',{class:'dk-sp'}),noteBtn(item),h('button',{type:'button',class:'dk-ask',onclick:()=>askAbout(item)},'Ask about this')),
+  body.push(hd(item.kind==='event'?'Event · '+(item.event_kind||item.id):item.label,[item.lane?'lane '+item.lane:'',item.kind==='event'?' · id '+item.id:''].join('')),h('div',{class:'dk-actions'},item.lane?h('button',{type:'button',onclick:()=>V()?.selectLane?.(item.lane)},'Show lane'):null,h('span',{class:'dk-sp'}),noteBtn(item),h('button',{type:'button',class:'dk-ask ask-entry',onclick:()=>askAbout(item)},'Ask about this')),
    h('pre',{class:'dk-pre'},pretty(item.summary)));return body}
  body.push(hd('Unknown selection',JSON.stringify(item)));return body}
 function emptyInspect(){IB.body.replaceChildren(h('div',{class:'dk-empty'},h('b',null,'Nothing selected'),h('p',null,'Select a part on the board or schematic, click a chip in an answer or a name in Source, or search above.'),

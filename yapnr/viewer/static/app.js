@@ -130,7 +130,7 @@ function netTitle(name){let n=SRC()?.index?.()?.nets?.[name];return n&&n.low_inf
 function pinName(ref,pad){let p=SRC()?.index?.()?.components?.[ref]?.pins?.[pad]?.pin;return p&&p!==pad?p:null}
 function hoverExtra(net,pin){let t=[pin,net&&netTitle(net)].filter(Boolean).join(' · ');return t?t+'\n':''}
 const boardTools=$('pause').parentElement,regionBtn=document.createElement('button'),viewChip=document.createElement('span');
-regionBtn.id='region-ask';regionBtn.title='Drag a rectangle on the board: its parts and nets become Ask context';regionBtn.textContent='Ask region';
+regionBtn.id='region-ask';regionBtn.className='ask-entry';regionBtn.title='Drag a rectangle on the board: its parts and nets become Ask context';regionBtn.textContent='Ask region';
 viewChip.id='view-chip';viewChip.hidden=true;boardTools.prepend(viewChip,regionBtn);
 function setRegionMode(on){regionMode=on;if(on&&drawing){drawing=false;$('rect').textContent='Draw rectangle · pins state'}regionBtn.classList.toggle('on',on);regionBtn.textContent=on?'Drag… (Esc)':'Ask region';canvas.style.cursor=on?'crosshair':'grab'}
 regionBtn.onclick=()=>setRegionMode(!regionMode);
@@ -159,7 +159,7 @@ function itemText(it){return it.kind==='component'?it.ref:it.kind==='pad'?it.ref
 function inspectItem(item){let S=SRC();if(S?.inspect)S.inspect(item);else document.dispatchEvent(new CustomEvent('yapnr:select',{detail:item}))}
 // Short confirmation over the board: the status line sits far down the sidebar and the dock may be collapsed.
 let toastT=0;function boardToast(msg){let el=$('board-toast');if(!el){el=document.createElement('div');el.id='board-toast';el.setAttribute('role','status');$('boardwrap').append(el)}el.textContent=msg;el.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{el.hidden=true},2600)}
-function askAdd(item,where){let A=AGENT();if(!A){boardToast('The Ask panel is not loaded.');return}A.addContext(item);window.YapnrDock?.badge?.('ask',true);let n=A.context?.().length,msg='Added '+itemText(item)+' to the Ask context'+(where||'')+(n?' · '+n+' item'+(n>1?'s':''):'');$('component-status').textContent=msg+'.';boardToast(msg)}
+function askAdd(item,where){let A=AGENT();if(!A){boardToast('The Ask panel is not loaded.');return}if(A.enabled?.()===false){boardToast(A.offText);return}A.addContext(item);window.YapnrDock?.badge?.('ask',true);let n=A.context?.().length,msg='Added '+itemText(item)+' to the Ask context'+(where||'')+(n?' · '+n+' item'+(n>1?'s':''):'');$('component-status').textContent=msg+'.';boardToast(msg)}
 function eventItem(e){return {kind:'event',id:String(e.id),lane:e.candidate||undefined,event_kind:e.kind,summary:JSON.stringify({time:e.time,iteration:e.iteration,data:e.data}).slice(0,1500)}}
 function probeItem(p){return {kind:'probe',label:'Placement alternative · '+(p.reason?'rejected':'cost '+(+p.cost).toFixed(3)),lane:laneId||undefined,summary:JSON.stringify(p).slice(0,1500)}}
 function boardClick(q,shift){let h=boardHit(q);if(!h)return null;
@@ -178,7 +178,7 @@ function finishRegion(){let a=drag.world,b=point(...drag.last);setRegionMode(fal
  for(let v of g?.vias||[])if(v.net&&inside(v.xy))nets.add(v.net);
  let item={kind:'region',lane:laneId,bbox:bb,refs:[...refs].sort(natural).slice(0,400),nets:[...nets].sort(natural).slice(0,400)};
  window.YapnrView.highlight({refs:item.refs,nets:[],pads:[],bbox:bb},{frame:false,label:`Region · ${item.refs.length} parts · ${item.nets.length} nets`});
- let A=AGENT();if(A){A.addContext(item);A.open?.()}else $('component-status').textContent='The Ask panel is not loaded.'}
+ let A=AGENT();if(A?.enabled?.()===false)$('component-status').textContent=A.offText;else if(A){A.addContext(item);A.open?.()}else $('component-status').textContent='The Ask panel is not loaded.'}
 function padShape(p,color){ctx.fillStyle=color;if(p.polys?.length){ctx.beginPath();for(let poly of p.polys){poly.forEach((q,i)=>{let [sx,sy]=screen(q);i?ctx.lineTo(sx,sy):ctx.moveTo(sx,sy)});ctx.closePath()}ctx.fill();return}
  let [x,y]=screen(p.xy);ctx.save();ctx.translate(x,y);ctx.rotate(-p.angle*Math.PI/180);if(p.shape==='circle'){ctx.beginPath();ctx.ellipse(0,0,p.size[0]*view.scale/2,p.size[1]*view.scale/2,0,0,Math.PI*2);ctx.fill()}else ctx.fillRect(-p.size[0]*view.scale/2,-p.size[1]*view.scale/2,p.size[0]*view.scale,p.size[1]*view.scale);ctx.restore()}
 function drawViewHl(g){let H=viewHl;if(!H||!g)return;

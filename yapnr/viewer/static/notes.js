@@ -180,7 +180,7 @@ function card(x,opt={}){let id=typeof x==='string'?x:x?.id,n=typeof x==='string'
  // actions
  if(opt.compact){el.append(h('div',{class:'nt-act'},h('button',{class:'dk-lnk',type:'button',onclick:()=>openNote(n.id)},'Open in Notes'),
    opt.undo&&pristine(n)?h('button',{class:'dk-lnk nt-undo',type:'button',title:'Delete this note the assistant just recorded (your action)',onclick:async e=>{let b=e.currentTarget;b.disabled=true;b.textContent='Removing…';try{await remove(n.id)}catch(err){b.disabled=false;b.textContent='Undo failed: '+err.message}}},'Undo'):null,
-   opt.discuss&&AG()?h('button',{class:'dk-lnk',type:'button',title:'Discuss this note in Ask',onclick:()=>discuss(n)},'Discuss'):null));return el}
+   opt.discuss&&AG()?h('button',{class:'dk-lnk ask-entry',type:'button',title:'Discuss this note in Ask',onclick:()=>discuss(n)},'Discuss'):null));return el}
  if(form&&form.type!=='comment'){let q=form.type==='delete'||form.type==='accept',inp=q?null:h('input',{class:'dk-input',maxlength:'400',placeholder:form.type==='rejected'?'Reason (optional, kept as a comment)':'Applied in: commit, file or run (optional)'}),errEl=h('span',{class:'dk-err'});
   const rev={expect_rev:n.rev}; // the version this card shows: 409 if it changed since
   const go=async()=>{try{ok.disabled=true;if(form.type==='delete')await remove(n.id);else if(form.type==='accept')await setStatus(n.id,'accepted',null,rev);
@@ -190,7 +190,7 @@ function card(x,opt={}){let id=typeof x==='string'?x:x?.id,n=typeof x==='string'
   if(inp)inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();go()}else if(e.key==='Escape'){N.form[n.id]=null;rer()}};
   el.append(h('div',{class:'nt-mini'},form.type==='delete'?h('span',{class:'nt-q'},'Delete '+n.id+' permanently?'):form.type==='accept'?h('span',{class:'nt-q ok'},'Accept '+n.id+' with the diff shown above?'):inp,ok,h('button',{type:'button',onclick:()=>{N.form[n.id]=null;rer()}},'Cancel'),errEl));if(inp)setTimeout(()=>inp.focus(),0)}
  else el.append(h('div',{class:'nt-act'},flow(n).map(([to,l,cls,tip])=>h('button',{type:'button',class:'nt-sb '+cls,title:tip,onclick:()=>statusAction(n,to,rer)},l)),h('span',{class:'dk-sp'}),
-  AG()?h('button',{class:'dk-lnk',type:'button',title:'Discuss this note in Ask (adds its targets to the context)',onclick:()=>discuss(n)},'Discuss'):null,
+  AG()?h('button',{class:'dk-lnk ask-entry',type:'button',title:'Discuss this note in Ask (adds its targets to the context)',onclick:()=>discuss(n)},'Discuss'):null,
   h('button',{class:'dk-lnk',type:'button',onclick:()=>editor(n,n.id)},'Edit'),h('button',{class:'dk-lnk nt-del',type:'button',onclick:()=>{N.form[n.id]={type:'delete'};rer()}},'Delete')));
  if(opt.err||N.msg[n.id])el.append(h('div',{class:'dk-err nt-e'},opt.err||N.msg[n.id]));
  return el}
@@ -201,7 +201,7 @@ async function statusAction(n,to,rer){N.msg[n.id]=null;if(to==='rejected'||to===
 async function stale(n){N.form[n.id]=null;try{await refresh()}catch(e){}let m=N.by.get(n.id),ub=m?.updated_by?.kind==='agent'?' by Claude':'';
  N.msg[n.id]=`${n.id} changed${ub} after you opened it; nothing was decided. Review the current version and decide again.`;N.open.add(n.id);renderList(true)}
 function copyRef(n,btn){let t=`[[note:${n.id}]] ${n.title}`;if(!navigator.clipboard){prompt('Note reference (plain http page: copy it by hand)',t);return}navigator.clipboard.writeText(t).then(()=>{btn.textContent='copied';setTimeout(()=>{btn.textContent=n.id},900)},()=>prompt('Note reference',t))}
-function discuss(n){let A=AG();if(!A)return;for(let t of (n.targets||[]).slice(0,40))A.addContext(t);A.draft(`About note ${n.id} (“${n.title}”): `)}
+function discuss(n){let A=AG();if(!A||A.enabled?.()===false)return;for(let t of (n.targets||[]).slice(0,40))A.addContext(t);A.draft(`About note ${n.id} (“${n.title}”): `)}
 
 // ------------------------------------------------------------------ Notes tab
 function textOf(n){return [n.id,n.title,n.body,KL[n.kind],SL[st(n)],(n.tags||[]).join(' '),(n.targets||[]).map(t=>[tLabel(t),t.ref,t.name,t.file].join(' ')).join(' '),(n.comments||[]).map(c=>c.text).join(' '),n.proposal?.summary,n.author==='agent'?'claude agent':'you user',(n.sources||[]).map(s=>s.title+' '+s.url).join(' ')].join('\n').toLowerCase()}

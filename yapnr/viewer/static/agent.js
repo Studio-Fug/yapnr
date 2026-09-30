@@ -90,19 +90,22 @@ async function status(force){
  try{let r=await fetch('/api/agent/status'),j=await r.json().catch(()=>null);if(!r.ok||!j)throw Error(j?.error||'HTTP '+r.status);G.status=j}
  catch(e){G.status={available:false,reason:'Assistant endpoint unreachable ('+e.message+').',models:[]}}
  G.statusAt=Date.now();if(!G.session&&!G.turns.length)G.web=!!G.status.web;renderStatus();return G.status}
-function renderStatus(){let u=G.ui,s=G.status;if(!u||!s)return;
+// status.enabled false: this server runs no assistant (--agent off). The page then hides every Ask entry
+// point (class ask-entry, see dock.css) and Shift+click explains instead of collecting context.
+const absent=()=>G.status?.enabled===false;
+function renderStatus(){let u=G.ui,s=G.status;if(!u||!s)return;D.documentElement.classList.toggle('ask-off',absent());
  let models=s.models?.length?s.models:['opus','sonnet'];if(!models.includes(G.model))G.model=models.includes(s.default)?s.default:models[0];
  u.model.replaceChildren(...models.map(m=>h('option',{value:m,selected:m===G.model||undefined},m)));
  let off=!s.available;u.ta.disabled=off;u.note.hidden=!off&&!s.busy;
  u.note.textContent=off?(s.reason||s.error||'The assistant is unavailable on this server: the Claude CLI backend is missing or disabled.')+' Inspect, Source and Notes still work.':s.busy?`Assistant busy (${s.max_concurrent||1} concurrent answer${(s.max_concurrent||1)>1?'s':''} max); your question may wait or be refused.`:'';
- u.note.className='ask-note'+(off?' off':'');ui()}
+ u.note.className='ask-note'+(off?' off':'');u.ex.hidden=u.hint.hidden=off;ui()}
 // status.web: true = the server lets turns use WebSearch/WebFetch (--agent-web on); false = off; absent = old server (toggle hidden)
 const webAvail=()=>G.status?.web;
 function renderWeb(){let u=G.ui;if(!u)return;let a=webAvail(),on=a!==false&&G.web;u.web.hidden=a==null;u.web.disabled=a===false||G.busy;u.web.classList.toggle('on',!!on);u.web.setAttribute('aria-pressed',on?'true':'false');
  u.web.title=a===false?'Web access is disabled on this server (--agent-web off).':on?'Web on for this conversation: the assistant may search the web and fetch public pages (never local, private or tailnet addresses). Every query and URL is shown. Click to turn off.':'Web off for this conversation: design files and notes only. Click to allow web search and fetch.'}
 
 // ------------------------------------------------------------------ conversation
-function ui(){let u=G.ui;if(!u)return;let off=G.status&&!G.status.available;u.send.hidden=G.busy;u.cancel.hidden=!G.busy;u.send.disabled=off||!u.ta.value.trim();u.model.disabled=G.busy;u.hist.disabled=G.busy;
+function ui(){let u=G.ui;if(!u)return;let off=G.status&&!G.status.available;u.send.hidden=G.busy;u.cancel.hidden=!G.busy;u.send.disabled=off||!u.ta.value.trim();u.model.disabled=G.busy||off;u.hist.disabled=G.busy||absent();u.newc.disabled=absent();
  u.newc.title=(G.session?'Session '+G.session+' · '+G.turns.length+' question'+(G.turns.length!==1?'s':'')+'\n':'')+'Start a new conversation (this one stays in History)';renderWeb()}
 const TOOLVERB={Read:'Reading',Grep:'Searching',Glob:'Listing',LS:'Listing',WebFetch:'Fetching',WebSearch:'Searching the web for',Bash:'Running',Task:'Delegating',TodoWrite:'Planning'};
 const NOTEVERB={add_note:'Recording a note:',list_notes:'Looking up notes:',get_note:'Reading note',comment_note:'Commenting on note',update_note:'Updating note'};
@@ -233,8 +236,8 @@ function build(){
  u.intro=h('div',{class:'ask-intro'},h('b',null,'Ask Claude about this board'),
   h('p',null,'Answers come from the atopile sources, the netlist, your selection and existing notes; with Web on it can also search the web and fetch public pages (datasheets, app notes) and cites them as links.'),
   h('p',null,'It never edits design files, routes copper or drives KiCad. When you ask, it records conclusions, requirements, questions and proposals as notes in the Notes tab; only you accept, reject or apply them.'),
-  h('p',{class:'dk-muted'},'Add context with “Ask about this” in Inspect or Source. Chips in answers highlight the part, net or pad on the board.'),
-  h('div',{class:'ask-ex'},ex.map(q=>h('button',{type:'button',onclick:()=>{u.ta.value=q;autosize();ui();u.ta.focus()}},q))));
+  u.hint=h('p',{class:'dk-muted'},'Add context with “Ask about this” in Inspect or Source. Chips in answers highlight the part, net or pad on the board.'),
+  u.ex=h('div',{class:'ask-ex'},ex.map(q=>h('button',{type:'button',onclick:()=>{u.ta.value=q;autosize();ui();u.ta.focus()}},q))));
  u.log.append(u.intro);
  u.ctxRow=h('div',{class:'ask-ctxrow',hidden:true},h('span',{class:'ask-lbl'},'Context'),u.ctx);
  panel.append(h('div',{class:'ask'},u.note,u.log,u.histEl,h('div',{class:'ask-compose'},u.ctxRow,u.ta,h('div',{class:'ask-row'},u.model,u.web,u.hist,u.newc,h('span',{class:'dk-sp'}),u.cancel,u.send))));
@@ -251,7 +254,7 @@ function build(){
  SS()?.ready?.().then(()=>renderCtx()).catch(()=>{}); // chip labels need the source index (types, net titles)
 }
 function openAsk(){let K=window.YapnrDock;if(!K)return;K.tab('ask');if(G.ui)setTimeout(()=>G.ui.ta.focus(),0)}
-window.YapnrAgent={addContext,removeContext,context:()=>G.ctx.slice(),ask(text){openAsk();return send(text)},open:openAsk,cancel,newConversation,status:()=>G.status,markdown:md,
+window.YapnrAgent={enabled:()=>!absent(),offText:'The assistant is off on this server (start the viewer with --agent on).',addContext,removeContext,context:()=>G.ctx.slice(),ask(text){openAsk();return send(text)},open:openAsk,cancel,newConversation,status:()=>G.status,markdown:md,
  chip:itemChip,label:ctxLabel,show:showItem,key:ctxKey,draft,session:()=>G.session,busy:()=>G.busy,web:()=>!!(webAvail()&&G.web),history:openHistory,load:loadConversation,sources:mdSources,titleOf};
 if(window.YapnrDock)build();else D.addEventListener('DOMContentLoaded',()=>window.YapnrDock?build():console.warn('agent.js: window.YapnrDock missing (load source.js before agent.js)'));
 })();

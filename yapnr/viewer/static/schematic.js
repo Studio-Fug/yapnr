@@ -421,7 +421,7 @@ function schApplyClasses(){
  if(F)for(let el of schRoot.querySelectorAll('.wires .w,.wires .jn'))if(!F.nets.has(el.dataset.net))el.classList.toggle('in',schWireInside(el,F));
  let chip=$('sch-chip'),label=sch.focus?sch.focus.label:sch.net?'Net '+schNetLabel(sch.net):'';chip.hidden=!label;
  if(label){let cl=document.createElement('span');cl.className='chip-l';cl.textContent=label;chip.title='Highlighted in the schematic: '+label;chip.replaceChildren(cl);let x=document.createElement('button');x.textContent='×';x.title='Clear highlight';x.onclick=()=>{sch.focus=null;sch.net=null;schApplyClasses();schLegend();render()};
-  let q=document.createElement('button');q.textContent='Ask';q.className='sch-ask';q.title='Add this highlight to the Ask context';q.onclick=()=>schAsk(sch.focus?{group:sch.focus}:{net:sch.net});chip.append(q,x)}
+  let q=document.createElement('button');q.textContent='Ask';q.className='sch-ask ask-entry';q.title='Add this highlight to the Ask context';q.onclick=()=>schAsk(sch.focus?{group:sch.focus}:{net:sch.net});chip.append(q,x)}
 }
 function schWireInside(el,F){let n=sch.data.nets.find(x=>x.name===el.dataset.net);if(!n)return false;let inside=n.pins.filter(([r])=>F.raw.has(r)).length;return inside>=2}
 function schNetLabel(net){let n=sch.data?.nets.find(x=>x.name===net);return n?(n.alias?`${n.alias} (${n.name})`:n.name):net}
@@ -603,7 +603,7 @@ function schSem(net){let n=window.YapnrSource?.index?.()?.nets?.[net];return n&&
 function schInspect(item){let S=window.YapnrSource;if(S?.inspect)S.inspect(item);else document.dispatchEvent(new CustomEvent('yapnr:select',{detail:item}))}
 function schGroupItem(h){return {kind:'group',id:h.id,label:h.label,refs:[...new Set(h.refs||[])]}}
 let schToastT=0;function schToast(msg){$('component-status').textContent=msg;let el=$('sch-toast');if(!el){el=document.createElement('div');el.id='sch-toast';$('sch-main').append(el)}el.textContent=msg;el.hidden=false;clearTimeout(schToastT);schToastT=setTimeout(()=>{el.hidden=true},2500)}
-function schAsk(t){let A=window.YapnrAgent;if(!A){schToast('The Ask panel is not loaded.');return}
+function schAsk(t){let A=window.YapnrAgent;if(!A){schToast('The Ask panel is not loaded.');return}if(A.enabled?.()===false){schToast(A.offText);return}
  let grp=t.group&&typeof t.group==='object'?t.group:t.loop?sch.data?.highlights?.find(x=>x.id===t.loop):typeof t.group==='string'?schHighlights().find(x=>x.id===t.group):null;
  let item=t.ref&&t.pin?{kind:'pad',ref:t.ref,pad:t.pin}:t.net?{kind:'net',name:t.net}:t.ref?{kind:'component',ref:t.ref}:grp?schGroupItem(grp):null;if(!item)return;
  A.addContext(item);window.YapnrDock?.badge?.('ask',true);

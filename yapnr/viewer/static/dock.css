@@ -40,6 +40,8 @@ body.dk-min #dock .dk-rail{display:flex}
 .dk-empty{padding:22px 16px;color:#8a9ea7;line-height:1.6;font-size:12px}.dk-empty b{color:#dce5e9;font-size:13px}.dk-empty p{margin:6px 0}.dk-empty button{margin-top:6px}
 #dock button.dk-ask{background:#26453f;border-color:#6fbfaa;color:#bff5e6}
 #dock button.dk-ask:hover{border-color:#9ee6d1}
+/* the server runs no assistant (--agent off; agent.js sets .ask-off on <html>): no Ask entry points */
+.ask-off .ask-entry{display:none!important}
 #dock button.dk-more{background:transparent;border:1px dashed #40606b;color:#9eb3bf;font-size:10.5px;padding:3px 8px;margin:4px 0}
 #dock button.dk-lnk{background:transparent;border:0;padding:0 2px;color:#9ee6d1;font:10.5px ui-monospace,monospace}
 #dock button.dk-lnk:hover{text-decoration:underline}

@@ -43,6 +43,9 @@ class NativeTrace:
             dense_maze_cost=bool(args.dense_maze_cost),
             fab_profile=getattr(args, "fab_profile", None),
         )
+        self.every = getattr(args, "trace_placement_every", None)
+        if self.every:
+            config["trace_placement_every"] = int(self.every)  # recorded only when set
         subject = dict(
             kind="ladder-case",
             case=spec["name"],
@@ -58,7 +61,10 @@ class NativeTrace:
 
     def environment(self):
         """The variables of the ``place-route`` stage (the runner strips ambient ones)."""
-        return dict(PNR_TRACE_DIR=str(self.dir), PNR_TRACE_LANE="engine")
+        env = dict(PNR_TRACE_DIR=str(self.dir), PNR_TRACE_LANE="engine")
+        if self.every:
+            env[trace.ENV_PLACEMENT_EVERY] = str(int(self.every))
+        return env
 
     def _open(self):
         if self.recorder is None:

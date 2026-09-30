@@ -1,6 +1,7 @@
 """Independent assertions for circuit intent and the fail-closed acceptance gate."""
 
 import copy
+import hashlib
 import json
 import re
 import subprocess
@@ -10,8 +11,17 @@ import unittest
 from collections import Counter
 from pathlib import Path
 
-from designs import designs
-from run import LISTING, acceptance, engine_revision, new_result, parser, sources_digest
+from designs import LIB as LIBRARY
+from designs import PAD_AXIS, designs, showcases
+from run import (
+    LISTING,
+    acceptance,
+    constraint_reasons,
+    engine_revision,
+    new_result,
+    parser,
+    sources_digest,
+)
 
 
 class CircuitContract(unittest.TestCase):
@@ -57,6 +67,141 @@ class CircuitContract(unittest.TestCase):
         self.assertIn("current source", c["description"])
         for c in designs()[1:]:
             self.assertTrue(any(p["ref"].startswith("R") for p in c["parts"]))
+
+
+class ShowcaseContract(unittest.TestCase):
+    """The showcases (run.py --showcases) sit beside the ladder and leave it unchanged."""
+
+    def test_the_ladder_designs_are_unchanged(self):
+        digest = hashlib.sha256(json.dumps(designs(), sort_keys=True).encode()).hexdigest()
+        self.assertEqual(digest, "da91e07a7174377f83191f272edf741f1dd6a7e0f463921c6f0327915e608e21")
+
+    def test_names_stay_out_of_the_ladder(self):
+        cases = showcases()
+        names = [c["name"] for c in cases]
+        self.assertEqual(
+            names, ["line-chaser-20", "edge-io-12-free", "edge-io-12", "hier-twin-bank-32"]
+        )
+        self.assertFalse(set(names) & {c["name"] for c in designs()})
+        for c in cases:
+            self.assertIsNone(re.match(r"^\d\d-", c["name"]))
+            self.assertEqual(int(re.search(r"-(\d+)(-|$)", c["name"]).group(1)), len(c["parts"]))
+
+    def test_pins_are_consistent(self):
+        for c in showcases():
+            with self.subTest(c=c["name"]):
+                self.assertEqual(len({p["ref"] for p in c["parts"]}), len(c["parts"]))
+                counts = Counter(n for p in c["parts"] for n in p["pins"].values() if n)
+                self.assertTrue(all(v >= 2 for v in counts.values()), counts)
+                self.assertEqual(c["expected_components"], len(c["parts"]))
+
+    def test_the_line_group_is_the_only_difference_from_the_ladder_chaser(self):
+        from pnr.constraints import compile_constraints
+
+        line, chaser = showcases()[0], designs()[6]
+        self.assertEqual(chaser["name"], "07-chaser-20")
+        self.assertEqual(line["parts"], chaser["parts"])
+        group = line["constraints"].pop("line_group")
+        self.assertEqual(line["constraints"], chaser["constraints"])
+        refs = {p["ref"] for p in line["parts"]}
+        self.assertEqual(group[0]["members"], ["D1", "D2", "D3", "D4", "D5"])
+        self.assertTrue(set(group[0]["members"]) <= refs)
+        line["constraints"]["line_group"] = group
+        compiled = compile_constraints(line["constraints"], sorted(refs))
+        self.assertEqual([c.kind for c in compiled.constraints][-1], "line_group")
+
+    def test_edge_parts_lie_along_their_edge(self):
+        free, edge = showcases()[1:3]
+        self.assertEqual(free["parts"], edge["parts"])
+        for c in (free, edge):
+            self.assertNotIn("fixed", c["constraints"])
+        self.assertFalse({"edge_align", "orientation"} & set(free["constraints"]))
+        kinds = {
+            p["ref"]: k for p in edge["parts"] for k, f in LIBRARY.items() if f == p["footprint"]
+        }
+        rules = edge["constraints"]["edge_align"]
+        self.assertEqual(set(rules), {"J1", "SW1", "D1"})
+        for ref, rule in rules.items():
+            self.assertEqual((rule["edge"], rule["hard"]), ("south", True))
+            turned = int(edge["constraints"]["orientation"][ref]) // 90 % 2
+            axis = PAD_AXIS[kinds[ref]]
+            along = {"x": "y", "y": "x"}[axis] if turned else axis
+            self.assertEqual(along, "x", ref)  # the pad row runs along the south edge
+
+    def test_twin_banks_share_a_template(self):
+        from pnr.constraints import compile_constraints
+        from pnr.graph import BoardGraph, Component, Net, Pad
+        from pnr.hier.blocks import extract_blocks
+
+        spec = showcases()[3]
+        self.assertEqual(spec["driver"], "hier")
+        comps, nets = [], {}
+        for p in spec["parts"]:
+            pads = [Pad(pin, net, (0.0, 0.0), (0.5, 0.5)) for pin, net in p["pins"].items()]
+            comps.append(
+                Component(
+                    p["ref"],
+                    p["footprint"],
+                    (0.0, 0.0),
+                    0.0,
+                    "top",
+                    (1, 1),
+                    (1, 1),
+                    pads=pads,
+                    address=p["address"],
+                )
+            )
+            for pin, net in p["pins"].items():
+                if net:
+                    nets.setdefault(net, []).append((p["ref"], pin))
+        graph = BoardGraph(
+            "pins", comps, [Net(n, i, pins) for i, (n, pins) in enumerate(sorted(nets.items()))]
+        )
+        compiled = compile_constraints(spec["constraints"], graph.refs)
+        blocks = {b.name: b for b in extract_blocks(graph, compiled)}
+        self.assertEqual(set(blocks), {"top.clock", "top.bank_a", "top.bank_b"})
+        self.assertEqual(blocks["top.bank_a"].template, blocks["top.bank_b"].template)
+        self.assertNotEqual(blocks["top.bank_a"].template, blocks["top.clock"].template)
+        for b in blocks.values():
+            self.assertEqual(b.external_nets, ["CLOCK", "GND", "VCC"])
+
+    def test_runner_options(self):
+        args = parser().parse_args(
+            ["--out", "x", "--showcases", "--trace", "--trace-placement-every", "5"]
+        )
+        self.assertEqual((args.showcases, args.trace_placement_every), (True, 5))
+        plain = parser().parse_args(["--out", "x"])
+        self.assertEqual((plain.showcases, plain.trace_placement_every), (False, None))
+
+    def test_constraint_audit(self):
+        line = showcases()[0]
+        comps = [
+            dict(
+                ref="D%d" % (i + 1),
+                pos=[10.0, 4.0 + 3.0 * i],
+                rot=180.0,
+                side="top",
+                courtyard=[3.49, 2.04],
+            )
+            for i in range(5)
+        ]
+        placed = dict(components=comps)
+        checked, findings = constraint_reasons(line, placed)
+        self.assertEqual((checked, findings), (["line_group chaser_leds"], []))
+        comps[3]["pos"] = [10.2, 13.0]
+        self.assertEqual(len(constraint_reasons(line, placed)[1]), 2)
+        comps[3]["pos"] = [10.0, 13.0]
+        comps[4]["rot"] = 0.0
+        self.assertIn("D5", constraint_reasons(line, placed)[1][0])
+        edge = showcases()[2]
+        comps = [
+            dict(ref="J1", pos=[10.0, 1.9], rot=90.0, side="top", courtyard=[3.63, 8.73]),
+            dict(ref="SW1", pos=[20.0, 2.5], rot=0.0, side="top", courtyard=[7.9, 4.0]),
+            dict(ref="D1", pos=[30.0, 2.3], rot=0.0, side="top", courtyard=[3.49, 2.04]),
+        ]
+        checked, findings = constraint_reasons(edge, dict(components=comps))
+        self.assertEqual(len(checked), 3)
+        self.assertEqual(findings, ["D1: 1.280 mm from the south edge"])
 
 
 class GateContract(unittest.TestCase):
@@ -187,10 +332,21 @@ class NativeTraceContract(unittest.TestCase):
                 native.environment(),
                 dict(PNR_TRACE_DIR=str(root / "trace"), PNR_TRACE_LANE="engine"),
             )
+            dense = NativeTrace(
+                Path(tmp) / "dense",
+                spec,
+                0,
+                parser().parse_args(["--out", "x", "--trace", "--trace-placement-every", "5"]),
+                "run",
+            )
+            self.assertEqual(dense.environment()["PNR_TRACE_PLACEMENT_EVERY"], "5")
+            dense_run = json.loads((Path(tmp) / "dense" / "trace" / "run.json").read_text())
+            self.assertEqual(dense_run["config"]["trace_placement_every"], 5)
             run = json.loads((root / "trace" / "run.json").read_text())
             self.assertEqual(
                 (run["subject"]["case"], run["config"]["initial_pool"]), (spec["name"], False)
             )
+            self.assertNotIn("trace_placement_every", run["config"])  # recorded only when set
             recorder = trace.Recorder(root / "trace")
             recorder.begin_board(graph)
             recorder.close()

@@ -15,7 +15,13 @@ LIB = {
     "timer": "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm",
     "counter": "Package_SO:SOIC-16_3.9x9.9mm_P1.27mm",
     "inverter": "Package_TO_SOT_SMD:SOT-23-5",
+    "button": "Button_Switch_SMD:SW_SPST_EVQPE1",
 }
+
+# The axis of each footprint's pad row at rotation 0 (from the KiCad footprints: the
+# header's pins run along y, the button's, LED's and passives' pads along x). An edge
+# part is turned so its pad row, its long axis, runs along the edge (the contract test).
+PAD_AXIS = {"connector": "y", "button": "x", "led": "x", "resistor": "x", "capacitor": "x"}
 
 
 def part(ref, kind, value, nets):
@@ -195,3 +201,141 @@ def designs():
     plane["name"] = "08-chaser-20-plane"
     out.append(plane)
     return deepcopy(out)
+
+
+# ----------------------------------------------------------------------- showcases
+# Demonstrations of placement constraints and hierarchy, run with ``run.py --showcases``.
+# They sit outside the ladder: no NN- prefix, never gated, animated in
+# docs/constraints-and-hierarchy.md.
+
+
+def line_chaser():
+    """07-chaser-20 with its five LEDs held in one rigid line (the only difference)."""
+    spec = chaser(5)
+    spec["name"] = "line-chaser-20"
+    spec["description"] = (
+        "The 07-chaser-20 chaser with LEDs D1 to D5 held in one line group (3.0 mm pitch), "
+        "so the sequence reads as a row."
+    )
+    spec["constraints"]["line_group"] = [
+        dict(
+            name="chaser_leds",
+            members=["D1", "D2", "D3", "D4", "D5"],
+            pitch_mm=3.0,
+            rot=90,
+            reason="Chaser LEDs in one row, so the sequence reads as a line",
+        )
+    ]
+    return spec
+
+
+EDGE_PARTS = {"J1": "connector", "SW1": "button", "D1": "led"}
+
+
+def edge_io(hard=True):
+    """A "hold to blink" front panel: a TLC555 astable whose RESET a pushbutton pulls high.
+
+    With ``hard`` the supply connector, the button and the LED sit on the south edge
+    (hard edge_align, each turned so its long axis runs along the edge); without it the
+    same parts are free. Nothing is fixed."""
+    p = [
+        part("J1", "connector", "5V input", ["VCC", "GND"]),
+        part(
+            "U1",
+            "timer",
+            "TLC555",
+            ["GND", "TIMING", "CLOCK", "RESET", "CONTROL", "TIMING", "DISCHARGE", "VCC"],
+        ),
+        part("R1", "resistor", "10k", ["VCC", "DISCHARGE"]),
+        part("R2", "resistor", "100k", ["DISCHARGE", "TIMING"]),
+        part("C1", "capacitor", "4.7u", ["TIMING", "GND"]),
+        part("C2", "capacitor", "10n", ["CONTROL", "GND"]),
+        part("C3", "capacitor", "100n", ["VCC", "GND"]),
+        part("SW1", "button", "Hold to blink", ["VCC", "RESET"]),
+        part("R4", "resistor", "100k", ["RESET", "GND"]),
+        part("R3", "resistor", "2.2k", ["CLOCK", "LED_A"]),
+        part("D1", "led", "red", ["GND", "LED_A"]),
+        part("C4", "capacitor", "10u", ["VCC", "GND"]),
+    ]
+    spec = circuit(
+        "edge-io-12" if hard else "edge-io-12-free",
+        "TLC555 blinker that runs while SW1 is held; supply connector, button and LED "
+        + ("on the south edge (hard edge alignment)." if hard else "placed freely."),
+        p,
+        (36, 26),
+    )
+    del spec["constraints"]["fixed"]  # nothing fixed: the edge parts choose their order
+    if hard:
+        spec["constraints"]["edge_align"] = {
+            ref: dict(edge="south", hard=True, tolerance_mm=1.0) for ref in EDGE_PARTS
+        }
+        # Pad row along the south edge: the header's y row turns by 90 degrees.
+        spec["constraints"]["orientation"] = {
+            ref: 90 if PAD_AXIS[kind] == "y" else 0 for ref, kind in EDGE_PARTS.items()
+        }
+    return spec
+
+
+def hier_twin_bank():
+    """A 555 clock driving two identical CD4017B LED banks, built from atopile-style
+    module addresses: three blocks (top.clock, top.bank_a, top.bank_b), two templates,
+    placed and routed hierarchically (regression/hier_case.py)."""
+
+    def at(address, spec):
+        return dict(spec, address=address)
+
+    p = [
+        at("top.j1", part("J1", "connector", "5V input", ["VCC", "GND"])),
+        at("top.c_bulk", part("C4", "capacitor", "10u", ["VCC", "GND"])),
+    ]
+    clock = timer_parts()[1:]  # U1, R1, R2, C1, C2, C3; the 555's RESET is tied to VCC
+    for local, spec in zip(["u", "r1", "r2", "c1", "c2", "c3"], clock):
+        p.append(at("top.clock." + local, spec))
+    # CD4017 pin1..16: Q5,Q1,Q0,Q2,Q6,Q7,Q3,GND,Q8,Q4,Q9,CO,CE,CLK,RESET,VDD (as in chaser(5)).
+    qpins = {0: 3, 1: 2, 2: 4, 3: 7, 4: 10, 5: 1}
+    refs = dict(A=dict(u="U2", c="C5", r=3, d=1), B=dict(u="U3", c="C6", r=8, d=6))
+    for bank, ref in refs.items():
+        prefix = "top.bank_" + bank.lower()
+        pins = [""] * 16
+        for i in range(5):
+            pins[qpins[i] - 1] = "Q%s%d" % (bank, i)
+        pins[qpins[5] - 1] = "RESET" + bank
+        for pin, net in {8: "GND", 13: "GND", 14: "CLOCK", 15: "RESET" + bank, 16: "VCC"}.items():
+            pins[pin - 1] = net
+        p.append(at(prefix + ".u", part(ref["u"], "counter", "CD4017B", pins)))
+        p.append(at(prefix + ".c", part(ref["c"], "capacitor", "100n", ["VCC", "GND"])))
+        for i in range(5):
+            led = "LED%s%d" % (bank, i)
+            p.append(
+                at(
+                    "%s.r%d" % (prefix, i),
+                    part("R%d" % (ref["r"] + i), "resistor", "2.2k", ["Q%s%d" % (bank, i), led]),
+                )
+            )
+            p.append(
+                at("%s.d%d" % (prefix, i), part("D%d" % (ref["d"] + i), "led", "red", ["GND", led]))
+            )
+    spec = circuit(
+        "hier-twin-bank-%d" % len(p),
+        "TLC555 clock and two CD4017B five-LED banks as three blocks (two templates), "
+        "placed and routed hierarchically.",
+        p,
+        (56, 40),
+    )
+    spec["driver"] = "hier"
+    spec["hier"] = dict(
+        utilisations=[0.3, 0.4],
+        aspects=[1.5, 1 / 1.5],
+        trial_seeds=[0, 1],
+        block_iters=350,
+        route_pitch_mm=0.25,
+        route_iters=8,
+        top_seeds=4,
+        top_iters=350,
+        representative_retries=3,
+    )
+    return spec
+
+
+def showcases():
+    return deepcopy([line_chaser(), edge_io(hard=False), edge_io(hard=True), hier_twin_bank()])

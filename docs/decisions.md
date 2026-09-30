@@ -228,6 +228,27 @@ reviews them with the pull request:
   on two linux-aarch64 cores; the shared CI runner, which took 77 s for the former three, needs
   an estimated 185 to 240 s, so the target is `large` (900 s) and no longer `manual`.
 
+Choices made for the regression ladder in CI and the animations (branch
+`claude/ladder-animations`); the owner reviews them with the pull request:
+
+- **Tracing is opt-in and observational.** `PNR_TRACE_DIR` enables `pnr.trace` (format
+  `pnr-trace-v1`); unset, each hook is one environment lookup. Hooks use no random number
+  generator, add no torch operation and change no engine state; the first recorder error disables
+  recording for the process. `trace_noop_test` requires byte-identical placements, routes and
+  reports with tracing unset, set and unset again (baseline loop and initial pool), and a traced
+  and an untraced ladder run give identical `placed.json`, `routes.json` and reports.
+- **The legalizer's accepted order, not its backtracking.** A trace records the order in which the
+  legalizer placed each part on the path it kept (`legal`), not the branches it rejected, as the
+  cost capture keeps only the accepted search path.
+- **Animations follow the critical path** (`pnr.provenance`): the ancestry of the final board,
+  where a selection contributes only its chosen candidate; the rejected candidates appear as
+  montages. Rendering is pure Python and Pillow (no numpy, torch or KiCad); the `.kicad_pcb` reader
+  (`pnr.trace_board`) needs no KiCad process.
+- **The ladder lane runs in the published image, resolved to a digest,** on `ubuntu-24.04-arm`,
+  and runs the checkout's engine sources. A runtime guard installs the checkout's runtime lock into
+  an overlay venv when a pull request changes the pins, rather than building the image in the job.
+  The lane is informational until the owner makes its `ladder` check required.
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.

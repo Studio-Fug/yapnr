@@ -294,7 +294,9 @@ repository is licensed under the same terms (inbound = outbound).</p>
 <h2>How changes are made<a class="headerlink" href="#how-changes-are-made" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Every change is a pull request against <code class="docutils literal notranslate"><span class="pre">main</span></code>. PRs are squash-merged; the only exceptions are the
-history-import PRs, which are merged with a merge commit so the imported history survives.</p></li>
+history-import PRs, which are merged with a merge commit so the imported history survives, and
+the engine’s mechanical format and move PRs (PR3a, PR3b), whose commits must keep their hashes
+for <code class="docutils literal notranslate"><span class="pre">.git-blame-ignore-revs</span></code>.</p></li>
 <li><p>Commit and PR titles follow <code class="docutils literal notranslate"><span class="pre">&lt;Area&gt;:</span> <span class="pre">&lt;summary&gt;</span> <span class="pre">(#N)</span></code>, where <code class="docutils literal notranslate"><span class="pre">#N</span></code> is a GitHub issue. The body
 explains why, and carries measured results for any engine change.</p></li>
 <li><p>New engine behaviour lands behind a default-off flag with an A/B result (see

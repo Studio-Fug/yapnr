@@ -505,8 +505,11 @@ rules once <code class="docutils literal notranslate"><span class="pre">pnr.bzl<
 <code class="docutils literal notranslate"><span class="pre">tools/check_test_wiring.py</span> <span class="pre">--scope</span> <span class="pre">hardware/</span></code> lists them). The wiring check covers <code class="docutils literal notranslate"><span class="pre">tests/</span></code>
 only; <code class="docutils literal notranslate"><span class="pre">hardware/</span></code> gets wired when PR3 moves the engine’s tests there
 (<a class="reference internal" href="../decisions.html"><span class="std std-doc">decisions</span></a>).</p></li>
-<li><p><strong>Lint.</strong> <code class="docutils literal notranslate"><span class="pre">hardware/</span></code> and <code class="docutils literal notranslate"><span class="pre">docs/hardware/</span></code> are under the presubmit’s reserved global exclude
-until PR3a formats them. The privacy scan still covers them (the Bazel repo check and CI).</p></li>
+<li><p><s><strong>Lint.</strong> <code class="docutils literal notranslate"><span class="pre">hardware/</span></code> and <code class="docutils literal notranslate"><span class="pre">docs/hardware/</span></code> are under the presubmit’s reserved global exclude
+until PR3a formats them. The privacy scan still covers them (the Bazel repo check and CI).</s>
+PR3a formatted the Python under <code class="docutils literal notranslate"><span class="pre">hardware/</span></code> (black, isort) and lifted <code class="docutils literal notranslate"><span class="pre">hardware/</span></code> from the
+global exclude; flake8 checks it with a per-file baseline, and some non-Python files keep
+per-hook excludes (<a class="reference internal" href="../decisions.html"><span class="std std-doc">decisions</span></a>). <code class="docutils literal notranslate"><span class="pre">docs/hardware/</span></code> stays excluded until PR7.</p></li>
 <li><p><strong>Fixture.</strong> The 3D model paths in <code class="docutils literal notranslate"><span class="pre">splanc_dev.kicad_pcb</span></code> point into Splanc’s layout and do not
 resolve here; routing does not need them.</p></li>
 <li><p><strong>Splanc-specific defaults and install paths</strong> are removed in PR3c.</p></li>

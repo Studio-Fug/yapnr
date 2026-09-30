@@ -228,6 +228,93 @@ reviews them with the pull request:
   on two linux-aarch64 cores; the shared CI runner, which took 77 s for the former three, needs
   an estimated 185 to 240 s, so the target is `large` (900 s) and no longer `manual`.
 
+Choices made in PR3a (the mechanical format of the imported engine; [migration plan](migration-plan.md)
+PR3a); the owner reviews them with the pull request:
+
+- **Code keys hash each module's canonical syntax tree, not its bytes** (code key scheme 2), so
+  the format commits do not invalidate the libraries and trials that routing feedback imports.
+  `pnr.feedback.signals` hashes every module of the evaluation closure by module name; comments
+  and layout are not in the tree, and on top of that it applies what black's own AST check
+  allows (docstrings compared stripped line by line, the `u` prefix, `del (a, b)` as
+  `del a, b`) and what isort does: each block of consecutive imports counts as a sorted set of
+  imported names, unless the order can matter (a star import, or a name bound twice). An import
+  never moves across other code in that form, and a docstring's text still counts. Fields are
+  named and empty ones left out, so Python 3.9, 3.11 and 3.12 give the same key for the engine.
+  Measured on the engine: black and isort change 338 files, 226 of them in their plain
+  `ast.dump` (import order, docstring indentation), none in the canonical form, and both routers'
+  keys stay the same. New records stamp `code_key_scheme` next to `code`. A record without it
+  is legacy (scheme 1, raw file bytes by path, the exact former key): it is compared under that
+  scheme, or re-keyed from its evaluation tree when that tree still hashes to its stamp, so
+  trials of frozen snapshot trees survive the format while those of a tree reformatted since
+  do not. PR3b's rename needs a scheme that applies the module map to module names and imports.
+  The router key string (`router_key` in statuses, tables and libraries) ends with the scheme,
+  and the feedback report names a key's scheme when it is not the current one, so a legacy key
+  and a new one cannot be mistaken for each other there.
+- **The new key has two blind spots, by design.** Reordering the imports inside a block does not
+  change it, even where the order matters at import time, so a fix to an import-order bug changes
+  the key only if it changes something else too. Whitespace at the start or end of a docstring's
+  lines does not change it either (black re-indents docstrings), although `__doc__` keeps it.
+  Both are what the format needs to leave alone. In this format, black changed docstring
+  whitespace in six files; one of them, `hier/subpcb.py`, passes its module docstring to argparse,
+  whose default formatter reflows it, so its `--help` is unchanged.
+- **Other hashes of engine source stay raw bytes**, and the format changes them:
+  `place/cost_capture.py` (`runtime_sources` and `probe_sources` in cost captures), `profile.py`
+  (`source_hashes`), `drc_warm/host.py` (`sha256` in `ready.json`) and `regression/run.py`
+  (`source_hashes` in `provenance.json`). They are diagnostic: nothing compares them across trees
+  (the regression runner checks its manifest only against its own source freeze, within one run).
+- **The format is three mechanical commits, and the pull request is merged with a merge commit**
+  so their hashes reach `main` and a follow-up lists them in `.git-blame-ignore-revs` (the plan
+  had a squash merge and a follow-up with the squashed hash). black 25.1.0 and isort 6.0.1, the
+  pinned hooks run through prek, cover every Python file under `hardware/` (`pnr`, `tools`,
+  `experiments`): black changes 369 files, isort 294. The third commit pins isort's settings in
+  `.isort.cfg` (black profile, 100 columns, `known_first_party = pnr,yapnr,tools`): without them
+  isort guessed first-party packages from its working directory, so `pnr` was third party when
+  run from the root (as prek runs it) and first party from `hardware/pnr`, where 117 files then
+  failed `isort --check`. Re-sorting with the pinned settings changes 130 files under `hardware/`
+  (`pnr` imports get their own block), each only inside one run of imports; the code keys and the
+  results of the 43 re-sorted test files are unchanged. black's own equivalence check passes for
+  all 369 (plain `ast.dump` differs in 6, docstring whitespace only). isort's differences are all
+  reorderings, splits or merges of imports inside one run of consecutive imports (each run
+  compared as a multiset), so no import moved across code, and no file needed
+  `# isort: skip_file`. isort changes the syntax tree of 250 files (the other 44 only in
+  layout); no torch/numpy pair changes order, the engine's import-time effects
+  (`torch.set_num_threads(1)` in `pnr.place.model`, three `fab_profile.bind_active` callbacks
+  that each set their own module's globals) do not depend on order, and each of 344 modules of
+  `hardware/pnr` imports in a fresh interpreter with the same outcome before and after (import
+  cycles would show there).
+- **No hand lint fixes; a per-file flake8 baseline instead.** After black and isort, flake8 finds
+  479 issues in 157 files, 112 of them unused imports. Every fix changes a syntax tree, and 155
+  of the findings (27 unused imports, the F821) are in the 127 modules an evaluation runs, where
+  any change alters the code key and so invalidates routing-feedback libraries and trials, which
+  is what the new key scheme avoids. Outside them an unused import is still a module attribute
+  that tests patch or other modules import (`subprocess` in `native_electrical`), so proving one
+  unused takes a per-name search. `.flake8` therefore lists each file's remaining codes in
+  `per-file-ignores`; new files and codes are checked in full, the list only shrinks, and PR3b's
+  codemod (which changes every import anyway) is where it shrinks.
+- **Non-Python files under `hardware/` keep per-hook excludes** where a hook would rewrite or
+  reject them, measured with the global exclude lifted: prettier rewrites 42 files (SI model and
+  test-data JSON, the engine's Markdown), markdownlint fails on 3 Markdown files, buildifier
+  rewrites `BUILD.bazel` and `pnr.bzl` (regenerated in PR3b), end-of-file-fixer adds a final
+  newline to 28 byte-exact test-data files and trailing-whitespace changes the built viewer's
+  CSS. `name-tests-test` rejects two test helpers (`cost_fixture.py`,
+  `power_topology_golden.py`), which PR3b moves. Every other hook passes on `hardware/` and now
+  covers it.
+- **Five tests that read engine source as text now ignore its layout.** `test_via_in_pad` and
+  three `test_src15_merge` checks matched Splanc's single quotes and one-line calls, so the
+  format changed their results; they now compare with quotes and whitespace normalized (a
+  wrapped call's first two lines count as context). `board_delete_test` required
+  `thisown=False` on the line of the kept `b.Remove(t)` calls (`a; b` joins that black splits);
+  it now requires the next statement to set that item's `thisown` to `False`, on the syntax
+  tree. On the tree before and after the format they give the same result per test. Two of the
+  `test_src15_merge` checks still fail, as before the format, on Splanc-only files and eight
+  tool defaults (PR3c).
+- **What Bazel runs of the new key.** `code_key_test` covers the key, legacy records and both
+  feedback drivers' seed imports on fake records (halving's `_import_seed_runs`, synth_native's
+  `_import_code`), and `test_feedback_signals` is wired as `feedback_signals_test`. The two
+  generation tests (`test_halving_generations`, `test_synth_native_generations`) stay unwired:
+  without Splanc's Mini inputs every one of their tests skips, so they wait for PR3c's fixtures.
+  They pass by hand with the Mini inputs, with new and with legacy stamps.
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.

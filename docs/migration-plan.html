@@ -401,7 +401,8 @@ infrastructure variables use <code class="docutils literal notranslate"><span cl
 a commit series, landed with merge commits (everything else is squash-merged).</p></li>
 <li><p>Mechanical changes (format, rename, moves) are separate commits, and their commits on <code class="docutils literal notranslate"><span class="pre">main</span></code> are
 listed in <code class="docutils literal notranslate"><span class="pre">.git-blame-ignore-revs</span></code>. Squash merging rehashes, so a hash is added in a follow-up
-after the merge (PR3b, whose pure-move commit must survive, is merged with a merge commit).
+after the merge (PR3a and PR3b, whose format and pure-move commits must survive, are merged
+with a merge commit).
 In-flight engine work is ported through them with a checked-in tool.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">drc_warm</span></code> (GUI-bound) and the old <code class="docutils literal notranslate"><span class="pre">keyhole_{repair,loop,shift_via,deform}</span></code> adapters are
 imported with history but deleted during restructuring. They remain recoverable from history.</p></li>
@@ -1563,8 +1564,8 @@ debug-statements, name-tests-test <code class="docutils literal notranslate"><sp
 <ul>
 <li><p>Dropped: <code class="docutils literal notranslate"><span class="pre">nixpkgs-fmt</span></code> (no <code class="docutils literal notranslate"><span class="pre">.nix</span></code> files), the container-overlay local hook, and Splanc-specific
 excludes.</p></li>
-<li><p><strong>Global exclude reserved</strong> for <code class="docutils literal notranslate"><span class="pre">^(hardware/|docs/hardware/|third_party/)</span></code>: the verbatim Splanc
-import (until PR3a/PR3b) and vendored upstream files. No other paths go there.</p></li>
+<li><p><strong>Global exclude reserved</strong> for <code class="docutils literal notranslate"><span class="pre">^(docs/hardware/|third_party/)</span></code> (<code class="docutils literal notranslate"><span class="pre">hardware/</span></code> too until PR3a):
+the verbatim Splanc import (until PR7) and vendored upstream files. No other paths go there.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">check-added-large-files</span></code> excludes <code class="docutils literal notranslate"><span class="pre">third_party/</span></code> explicitly (vendored files are size-reviewed
 when vendored).</p></li>
 <li><p>Added local hook <code class="docutils literal notranslate"><span class="pre">yapnr-privacy-scan</span></code> (<code class="docutils literal notranslate"><span class="pre">tools/privacy_scan.py</span></code>, stdlib only) with generic
@@ -1599,12 +1600,18 @@ helpers land (PR3b), either add a narrow per-hook exclude for exactly those file
 one) or move the helpers out of <code class="docutils literal notranslate"><span class="pre">tests/</span></code>.</p></li>
 <li><p><strong>Lint baseline for imported code.</strong> Until PR3a, <code class="docutils literal notranslate"><span class="pre">hardware/</span></code> and <code class="docutils literal notranslate"><span class="pre">docs/hardware/</span></code> (the verbatim
 import) are skipped by all hooks through the reserved global exclude (and by <code class="docutils literal notranslate"><span class="pre">.flake8</span></code>
-<code class="docutils literal notranslate"><span class="pre">extend-exclude</span></code> and <code class="docutils literal notranslate"><span class="pre">.markdownlintignore</span></code>). PR3a formats <code class="docutils literal notranslate"><span class="pre">hardware/</span></code> and drops it from those
-excludes; PR3b moves the code out; PR7 splits <code class="docutils literal notranslate"><span class="pre">docs/hardware/</span></code> into the docs pages. After PR3a,
-flake8 uses <code class="docutils literal notranslate"><span class="pre">per-file-ignores</span></code> in <code class="docutils literal notranslate"><span class="pre">.flake8</span></code> for the remaining E501/E731/E402 findings, and that
-list only shrinks. The measured debt: about 1,378 lines over 120 characters, about 2,000 lines
-with <code class="docutils literal notranslate"><span class="pre">;</span></code> joins, and 149 real F-codes in the committed code, including one genuine <code class="docutils literal notranslate"><span class="pre">F821</span></code> in
-<code class="docutils literal notranslate"><span class="pre">via_coalesce.py</span></code> (<code class="docutils literal notranslate"><span class="pre">items.clear()</span></code> in <code class="docutils literal notranslate"><span class="pre">main</span></code>).</p></li>
+<code class="docutils literal notranslate"><span class="pre">extend-exclude</span></code> and <code class="docutils literal notranslate"><span class="pre">.markdownlintignore</span></code>). PR3a formats the Python under <code class="docutils literal notranslate"><span class="pre">hardware/</span></code> and drops
+<code class="docutils literal notranslate"><span class="pre">hardware/</span></code> from the global exclude and from <code class="docutils literal notranslate"><span class="pre">.flake8</span></code>; PR3b moves the code out; PR7 splits
+<code class="docutils literal notranslate"><span class="pre">docs/hardware/</span></code> into the docs pages. The measured debt before PR3a: about 1,378 lines over 120
+characters, about 2,000 lines with <code class="docutils literal notranslate"><span class="pre">;</span></code> joins, and 149 real F-codes in the committed code,
+including one genuine <code class="docutils literal notranslate"><span class="pre">F821</span></code> in <code class="docutils literal notranslate"><span class="pre">via_coalesce.py</span></code> (<code class="docutils literal notranslate"><span class="pre">items.clear()</span></code> in <code class="docutils literal notranslate"><span class="pre">main</span></code>). After black and
+isort, 479 findings in 157 files remain (F401 112, E731 106, E741 64, E402 63, E501 60, F841 46,
+F811 17, F402 6, E721 2, F821 1, F541 1, E262 1). PR3a fixes none by hand (every fix changes a
+syntax tree, and inside the evaluation modules a code key); <code class="docutils literal notranslate"><span class="pre">.flake8</span></code> lists each file’s codes in
+<code class="docutils literal notranslate"><span class="pre">per-file-ignores</span></code>, and that list only shrinks. The non-Python files under <code class="docutils literal notranslate"><span class="pre">hardware/</span></code> keep
+per-hook excludes where a hook would rewrite or reject them (prettier, markdownlint, buildifier,
+and the whitespace hooks for test data and the built viewer bundle); the comment in
+<code class="docutils literal notranslate"><span class="pre">.pre-commit-config.yaml</span></code> lists them.</p></li>
 </ul>
 <p><code class="docutils literal notranslate"><span class="pre">setup-precommit.sh</span></code> follows Splanc’s (prek 0.4.12, then <code class="docutils literal notranslate"><span class="pre">prek</span> <span class="pre">install</span></code> and
 <code class="docutils literal notranslate"><span class="pre">prek</span> <span class="pre">run</span> <span class="pre">--all-files</span></code>), except that prek is installed in isolation: a <code class="docutils literal notranslate"><span class="pre">prek</span></code> on <code class="docutils literal notranslate"><span class="pre">PATH</span></code> is used
@@ -2141,22 +2148,29 @@ results in the PR.</p></li>
 <ul class="simple">
 <li><p><strong>Contents:</strong></p>
 <ul>
-<li><p>black and isort on the imported trees, as a format-only PR of its own (squash-merged; a
-follow-up adds its <code class="docutils literal notranslate"><span class="pre">main</span></code> commit to <code class="docutils literal notranslate"><span class="pre">.git-blame-ignore-revs</span></code>);</p></li>
-<li><p>hand fixes for F-codes (F821 in <code class="docutils literal notranslate"><span class="pre">via_coalesce</span></code>, F401/F841/F811/F402);</p></li>
-<li><p>the <code class="docutils literal notranslate"><span class="pre">.flake8</span></code> baseline for E501/E731/E402;</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">hardware/</span></code> removed from the global exclude, <code class="docutils literal notranslate"><span class="pre">.flake8</span></code> and <code class="docutils literal notranslate"><span class="pre">.markdownlintignore</span></code>.</p></li>
+<li><p>code keys that survive formatting (code key scheme 2: a canonical syntax tree per module),
+committed ahead of the format so no library or trial is invalidated by it;</p></li>
+<li><p>black and isort on the imported trees, as format-only commits (merged with a merge commit so
+they survive; a follow-up adds them to <code class="docutils literal notranslate"><span class="pre">.git-blame-ignore-revs</span></code>), with isort’s settings pinned
+in <code class="docutils literal notranslate"><span class="pre">.isort.cfg</span></code> so its order does not depend on the directory it runs in;</p></li>
+<li><p>the <code class="docutils literal notranslate"><span class="pre">.flake8</span></code> baseline: every remaining code per file, F-codes included (no hand fixes; the
+F821 in <code class="docutils literal notranslate"><span class="pre">via_coalesce</span></code> stays for its own change, Appendix B);</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">hardware/</span></code> removed from the global exclude and <code class="docutils literal notranslate"><span class="pre">.flake8</span></code>; per-hook excludes (and
+<code class="docutils literal notranslate"><span class="pre">.markdownlintignore</span></code>) keep only the non-Python files a hook would rewrite or reject.</p></li>
 </ul>
 </li>
 <li><p><strong>Acceptance:</strong></p>
 <ul>
-<li><p>black’s AST-equivalence check;</p></li>
+<li><p>black’s AST-equivalence check, and for isort a check that every difference is a
+reordering inside one run of imports;</p></li>
+<li><p>code keys unchanged by the format;</p></li>
 <li><p>same pass set in both lanes;</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">prek</span> <span class="pre">run</span> <span class="pre">--all-files</span></code> clean with no path excludes for <code class="docutils literal notranslate"><span class="pre">hardware/</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">prek</span> <span class="pre">run</span> <span class="pre">--all-files</span></code> clean with <code class="docutils literal notranslate"><span class="pre">hardware/</span></code> Python covered.</p></li>
 </ul>
 </li>
 <li><p><strong>Risks:</strong> isort moving imports across <code class="docutils literal notranslate"><span class="pre">sys.path</span></code> bootstrap code in worker scripts. Such files
-get <code class="docutils literal notranslate"><span class="pre">#</span> <span class="pre">isort:</span> <span class="pre">skip_file</span></code> and are removed in PR3b anyway.</p></li>
+get <code class="docutils literal notranslate"><span class="pre">#</span> <span class="pre">isort:</span> <span class="pre">skip_file</span></code> and are removed in PR3b anyway. (Measured in PR3a: isort 6 moves no
+import across code, so no file needed it.)</p></li>
 </ul>
 </section>
 <section id="pr3b-package-rename-and-restructure">
@@ -2543,8 +2557,9 @@ pypdf, Pillow, pdftoppm, rsvg-convert).</p></li>
 <section id="appendix-b-known-defects-to-carry-as-issues">
 <h2>Appendix B: known defects to carry as issues<a class="headerlink" href="#appendix-b-known-defects-to-carry-as-issues" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">via_coalesce.main</span></code> calls <code class="docutils literal notranslate"><span class="pre">items.clear()</span></code> but <code class="docutils literal notranslate"><span class="pre">items</span></code> exists only in <code class="docutils literal notranslate"><span class="pre">worker()</span></code> (F821). Fixed in
-PR3a.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">via_coalesce.main</span></code> calls <code class="docutils literal notranslate"><span class="pre">items.clear()</span></code> but <code class="docutils literal notranslate"><span class="pre">items</span></code> exists only in <code class="docutils literal notranslate"><span class="pre">worker()</span></code> (F821). Kept
+(baselined) in PR3a, which makes no semantic edits: the fix changes the evaluation code key, so
+it lands with a test of its own in PR3b or later.</p></li>
 <li><p><s>About 25 <code class="docutils literal notranslate"><span class="pre">board.Remove</span></code> call sites may detach items that crash KiCad Python at teardown
 (PR2e).</s> Done: 27 discarded-item calls use <code class="docutils literal notranslate"><span class="pre">board.Delete</span></code>; 3 <code class="docutils literal notranslate"><span class="pre">Remove</span></code> calls stay (kept alive
 or detached with <code class="docutils literal notranslate"><span class="pre">thisown=False</span></code>), guarded per call by <code class="docutils literal notranslate"><span class="pre">//hardware/pnr:board_delete_test</span></code>.</p></li>

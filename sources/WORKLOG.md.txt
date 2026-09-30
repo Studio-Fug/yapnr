@@ -3,38 +3,45 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-09-30 (engine hygiene).
+Last updated: 2026-09-30 (PR3a: code keys and engine format).
 
 ## In progress
 
-- **Engine hygiene** (branch `claude/engine-hygiene`, not pushed), the PR3 leftovers of PR2
-  (merged, #7): Electrical221's cleanup gated default off (`PNR_PARTIAL_CYCLE_CLEANUP`,
-  `PNR_BARREL_CONTACT_BRIDGES`; the default is src15 again), the `board.Remove` audit (27 calls
-  now `board.Delete`, 3 kept; `board_delete_test` checks each call; replayed on H7's real boards
-  for five sites with identical results), every engine subprocess bounded through `pnr.proc`
-  (`PNR_WORKER_TIMEOUT`, `PNR_PHASE_TIMEOUT`, `PNR_EVALUATION_TIMEOUT`; 0 means no limit; a
-  timeout kills the child's whole process tree; a deadline kill is not retried; `proc_test`),
-  CI's history scan with merge diffs (`git log -p --diff-merges=separate`), and
-  `orientation_test` re-enabled as `large` (#6: placement is deterministic per platform only, so
-  it compares a three-seed mean with a 5 % margin, a coarse guard, and checks known best angles
-  on a synthetic board; passes on macOS and linux-aarch64). The review's findings are fixed in
-  follow-up commits on the branch. Reasons and limits: [docs/decisions.md](docs/decisions.md);
-  struck leftovers:
-  [docs/history/import-manifest.md](docs/history/import-manifest.md#known-leftovers-for-pr3).
+- **PR3a** (branch `claude/pr3a-codekey-format`, not pushed): code key scheme 2 (routing-feedback
+  code keys hash each module's canonical syntax tree, so formatting does not change them; legacy
+  records are still read), then black and isort over every Python file under `hardware/` as
+  mechanical commits, five source-text tests made layout-independent, and the lint config:
+  `hardware/` out of the global exclude, a per-file flake8 baseline in `.flake8` (479 findings in
+  157 files, none fixed by hand), per-hook excludes for the non-Python files a hook would rewrite.
+  The review's findings are fixed in follow-up commits: isort's settings pinned in `.isort.cfg`
+  (a third, mechanical re-sort), router key strings and reports name the key scheme, the driver
+  imports and `test_feedback_signals` run in Bazel. Proof and reasons:
+  [docs/decisions.md](docs/decisions.md) ("Choices made in PR3a"). Engine hygiene (#8) is
+  merged and #6 is closed (#8 re-enabled `orientation_test`).
 
 ## Next
 
-1. Owner: review and push the hygiene branch and open its PR; CI must be green (it runs
-   `orientation_test` again; close #6 with it).
+1. Owner: review and push PR3a and open its pull request; **merge it with a merge commit**, not a
+   squash, so the three format commits keep their hashes. After the merge, a follow-up commit adds
+   them to `.git-blame-ignore-revs`, hashes as on `main`: the commits titled "Format: black",
+   "Format: isort (black profile" and "Format: isort with its settings pinned". Before importing
+   trials made by a yapnr checkout from before the format (legacy code keys, no
+   `code_key_scheme`), keep a frozen copy of that pre-format tree (they re-key from it) or import
+   with `--import-code-mismatch rebase` or `warn`; the default `error` refuses them. Splanc's
+   frozen snapshot trees are not affected.
 2. Owner: A/B Electrical221's two flags on the hierarchical engine before turning them on.
    Before the next experiment runs this engine, one rung-1 evaluation with it (`board.Delete`
    everywhere) when the Mac is free: the replay covered 5 of the 27 changed sites, and a full
    evaluation's nested workers exceed the two-KiCad-process budget kept while H7 runs.
 3. Owner: push Splanc's `splanc-mini`, so the 9 newest `Imported-From` links of PR1 resolve (see the
    manifest).
-4. PR6a, then PR3: wire the 68 unwired engine test files with the glob macro (the two hygiene tests
-   are wired) and replace the Splanc defaults and fixtures (manifest, "Known leftovers for PR3").
-   The KiCad-dependent tests run under the headless KiCad Python only (DEVELOPERS.md).
+4. PR6a, then PR3b onwards: wire the 67 unwired engine test files with the glob macro (the two
+   hygiene tests and PR3a's `test_feedback_signals` are wired; the two feedback generation tests
+   skip without Splanc's Mini inputs) and replace the Splanc defaults and fixtures (manifest,
+   "Known leftovers for PR3"). The KiCad-dependent tests run under the headless KiCad Python only
+   (DEVELOPERS.md). PR3a landed before the KiCad lane: its format is checked by syntax-tree
+   equivalence and fresh-interpreter imports, not by a KiCad-side test run. PR3b burns down the
+   `.flake8` baseline and fixes the `via_coalesce` F821 with a test of its own.
 5. PR-R is merged (#2). Its first `main` build pushes `yapnr-kicad:10.0.6-1-src`, then
    `yapnr-kicad:10.0.6-1` (with `10.0.6` and `10.0`), then `yapnr:edge`. Then make both GHCR
    packages **public** (package settings > Change visibility; irreversible, owner-approved). The

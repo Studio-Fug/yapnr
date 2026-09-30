@@ -214,6 +214,8 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="docs/containers.html">Container images</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/viewer.html">The live viewer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/frontends/atopile.html">The atopile toolchain</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/part-cache.html">The part cache</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/releases.html">Releases and versioning</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
@@ -280,7 +282,8 @@
 <h1>Worklog<a class="headerlink" href="#worklog" title="Link to this heading">¶</a></h1>
 <p>A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.</p>
-<p>Last updated: 2026-09-30 (PR4 and #10 merged; ladder animations merged with main).</p>
+<p>Last updated: 2026-09-30 (PR4, #10 and the ladder animations merged; atopile toolchain branch,
+review fixes).</p>
 <section id="in-progress">
 <h2>In progress<a class="headerlink" href="#in-progress" title="Link to this heading">¶</a></h2>
 <ul class="simple">
@@ -290,22 +293,40 @@ three.js fetched pinned; guide <a class="reference internal" href="docs/viewer.h
 <a class="reference internal" href="docs/decisions.html"><span class="std std-doc">docs/decisions.md</span></a>), and #13 (an explicit <code class="docutils literal notranslate"><span class="pre">started.json</span></code> stamp for the
 routing-feedback staleness check, fixing #10 on Linux). The format commits of #9 and #12 are in
 <code class="docutils literal notranslate"><span class="pre">.git-blame-ignore-revs</span></code> (#11, #14).</p></li>
-<li><p><strong>Branch in progress:</strong> <code class="docutils literal notranslate"><span class="pre">claude/atopile-toolchain</span></code> (atopile 0.15.8 without Nix, the offline
-part picker, a part cache server seeded locally); it branches from before PR3a and merges
-<code class="docutils literal notranslate"><span class="pre">main</span></code> before its pull request.</p></li>
-<li><p><strong>Regression ladder in CI and PnR animations</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/ladder-animations</span></code>; <code class="docutils literal notranslate"><span class="pre">main</span></code>
-merged in, the engine files it hooks re-formatted as PR3a did): <code class="docutils literal notranslate"><span class="pre">pnr.trace</span></code> (opt-in
-<code class="docutils literal notranslate"><span class="pre">PNR_TRACE_DIR</span></code>, format <code class="docutils literal notranslate"><span class="pre">pnr-trace-v1</span></code>; <code class="docutils literal notranslate"><span class="pre">trace_noop_test</span></code> and a traced/untraced ladder A/B show
-byte-identical results), <code class="docutils literal notranslate"><span class="pre">pnr.trace_board</span></code> (stdlib
-<code class="docutils literal notranslate"><span class="pre">.kicad_pcb</span></code> reader), <code class="docutils literal notranslate"><span class="pre">pnr.provenance</span></code> (critical path; halving runs in coarse mode),
-<code class="docutils literal notranslate"><span class="pre">pnr.animate</span></code> (Pillow; WebP, GIF, optional MP4), <code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--trace</span></code> and <code class="docutils literal notranslate"><span class="pre">--fab-profile</span></code> (default
-<code class="docutils literal notranslate"><span class="pre">legacy</span></code>, the fixtures’ own rules), <code class="docutils literal notranslate"><span class="pre">//hardware/pnr:animate</span></code> and <code class="docutils literal notranslate"><span class="pre">:ladder_animations</span></code>, the
-informational <code class="docutils literal notranslate"><span class="pre">ladder.yaml</span></code> lane, and the docs: <code class="docutils literal notranslate"><span class="pre">docs/regression-ladder.md</span></code> with all eight
-animations in <code class="docutils literal notranslate"><span class="pre">docs/animations/</span></code> and the 555 flasher (<code class="docutils literal notranslate"><span class="pre">05-timer-led-10</span></code>) GIF in <code class="docutils literal notranslate"><span class="pre">README.md</span></code>.
-All eight cases pass (traced pool run, seed 0; baseline seeds 0 and 1, the nightly lane’s
-configuration: 16 of 16, the vias and copper of RESULTS-118). The review’s findings are fixed;
-the container path of <code class="docutils literal notranslate"><span class="pre">ladder.yaml</span></code> has still never run (the image is private and the Mac’s
-tokens lack <code class="docutils literal notranslate"><span class="pre">read:packages</span></code>).</p></li>
+<li><p><strong>Merged since:</strong> the regression ladder in CI and the PnR animations (#15: <code class="docutils literal notranslate"><span class="pre">pnr.trace</span></code>,
+<code class="docutils literal notranslate"><span class="pre">pnr.provenance</span></code>, <code class="docutils literal notranslate"><span class="pre">pnr.animate</span></code>, <code class="docutils literal notranslate"><span class="pre">ladder.yaml</span></code>, <code class="docutils literal notranslate"><span class="pre">docs/regression-ladder.md</span></code>) and two viewer
+test race fixes (#16, #17).</p></li>
+<li><p><strong>atopile toolchain and part cache</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/atopile-toolchain</span></code>, rebased on <code class="docutils literal notranslate"><span class="pre">main</span></code>
+after #17, not pushed; A1 and A2 of the end-to-end plan): <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">setup</span></code> (hashed
+per-platform locks, atopile 0.15.8 on Python 3.14.7), <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">build</span></code> (offline,
+isolated, bounded; a hook in every atopile interpreter), the loopback picker (catalog schema
+v1), the part cache (store, HTTP server with tokens and takedowns, clients, importer,
+container), the Bazel toolchain and <code class="docutils literal notranslate"><span class="pre">yapnr_atopile_build</span></code>. The adversarial review’s findings
+are fixed: a lock pins its part; client tokens go only to the named server (no redirects, https
+or loopback, the write token never with reads); the server checks tokens before bodies, bounds
+its connections, serves only files a part uses, collects orphans, checks file types, and a
+takedown blocks the part’s files; local-only parts; no git clone offline and no contact with a
+running KiCad; ato.yaml’s layout paths; the Bazel action copies only its declared inputs and
+needs an explicit cache; hashed sdist builds on linux-aarch64. Real atopile: 4 end-to-end cases
+(7 builds) pass on darwin-arm64; <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//...</span></code> 137 of 137. Not done: the image’s
+<code class="docutils literal notranslate"><span class="pre">/opt/atopile</span></code> (A4) and a KiCad 9 against 10 A/B
+(<a class="reference internal" href="docs/frontends/atopile.html#not-done-yet"><span class="std std-ref">docs/frontends/atopile.md</span></a>).</p></li>
+<li><p><strong>Splanc’s parts in a local part cache</strong> (local-machine note; Splanc is not modified): the
+committed parts of <code class="docutils literal notranslate"><span class="pre">splanc</span></code>, <code class="docutils literal notranslate"><span class="pre">splanc_dev</span></code>, <code class="docutils literal notranslate"><span class="pre">splanc_max</span></code> and <code class="docutils literal notranslate"><span class="pre">splanc_eol_tester</span></code> (276
+directories, 248 versions of 163 parts) and the 103 entries of <code class="docutils literal notranslate"><span class="pre">picker_catalog.json</span></code>. They are
+in the development Mac’s default cache, <code class="docutils literal notranslate"><span class="pre">&lt;part-cache&gt;</span></code> = <code class="docutils literal notranslate"><span class="pre">$XDG_DATA_HOME/yapnr/part-cache</span></code>.
+One lock per board is in <code class="docutils literal notranslate"><span class="pre">$XDG_DATA_HOME/yapnr/splanc-locks/</span></code>. Neither is in any repository.
+Each part records <code class="docutils literal notranslate"><span class="pre">splanc&#64;&lt;commit&gt;:&lt;path&gt;</span></code>, its LCSC id, its generator (<code class="docutils literal notranslate"><span class="pre">easyeda:C&lt;id&gt;</span></code> or
+hand-authored) and a licence note. <code class="docutils literal notranslate"><span class="pre">splanc_max</span></code>’s <code class="docutils literal notranslate"><span class="pre">OUT</span></code> also has a version with the
+git-ignored DEGSON STEP model (<code class="docutils literal notranslate"><span class="pre">splanc_max.local-cad</span></code> lock), marked <code class="docutils literal notranslate"><span class="pre">local-only</span></code> (never
+uploaded; a public server refuses the cache). Every lock materializes the committed files
+byte-identically (rechecked after the review fixes, also over HTTP).
+Mini, built from a scratch copy with its parts directory emptied, has the same input id as a
+build from its committed parts, both from the directory and over HTTP, before and after the
+review fixes. Seeded with the same
+local layout, it equals rules_atopile’s last Nix-built board in nets, footprints, pads,
+positions and outline. <code class="docutils literal notranslate"><span class="pre">splanc_eol_tester</span></code> fails on 0.15.8 with or without the cache: atopile
+rejects its <code class="docutils literal notranslate"><span class="pre">elec/footprints/</span></code> directory as deprecated.</p></li>
 </ul>
 </section>
 <section id="next">
@@ -327,6 +348,15 @@ everywhere) when the Mac is free: the replay covered 5 of the 27 changed sites, 
 evaluation’s nested workers exceed the two-KiCad-process budget kept while H7 runs.</p></li>
 <li><p>Owner: push Splanc’s <code class="docutils literal notranslate"><span class="pre">splanc-mini</span></code>, so the 9 newest <code class="docutils literal notranslate"><span class="pre">Imported-From</span></code> links of PR1 resolve (see the
 manifest).</p></li>
+<li><p>atopile follow-up PRs (docs/frontends/atopile.md, “Not done yet”): A4 <code class="docutils literal notranslate"><span class="pre">/opt/atopile</span></code> in the
+<code class="docutils literal notranslate"><span class="pre">yapnr</span></code> image (the aarch64 wheel builder stage, notices, size), a KiCad 9 against 10 A/B and
+an end-to-end project that uses a stock <code class="docutils literal notranslate"><span class="pre">Library:Footprint</span></code>, then A5 to A8; after them the
+spec and checks (S1 to S4), the agents (R1 to R3, off by default) and fab outputs and ordering
+(F1, F2, O1 to O3; ordering stays staging-only: cart, quote or payment page).</p></li>
+<li><p>Owner: move Splanc’s builds to the part cache. Commit each board’s <code class="docutils literal notranslate"><span class="pre">yapnr-parts.lock.json</span></code>
+(from the local locks), build with <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">build</span></code> or <code class="docutils literal notranslate"><span class="pre">yapnr_atopile_build</span></code>, and only then
+remove the committed <code class="docutils literal notranslate"><span class="pre">elec/src/parts/</span></code>. Also commit or decide on <code class="docutils literal notranslate"><span class="pre">elec/layout/</span></code> (it seeds
+designators), and move <code class="docutils literal notranslate"><span class="pre">splanc_eol_tester</span></code>’s footprint into a part.</p></li>
 <li><p>PR6a, then PR3b onwards: wire the 67 unwired engine test files with the glob macro (the two
 hygiene tests and PR3a’s <code class="docutils literal notranslate"><span class="pre">test_feedback_signals</span></code> are wired; the two feedback generation tests
 skip without Splanc’s Mini inputs) and replace the Splanc defaults and fixtures (manifest,
@@ -365,11 +395,20 @@ Dependabot <code class="docutils literal notranslate"><span class="pre">ubuntu</
 </section>
 <section id="blockers">
 <h2>Blockers<a class="headerlink" href="#blockers" title="Link to this heading">¶</a></h2>
-<p>None.</p>
+<ul class="simple">
+<li><p>The Docker VM on the development Mac has a full disk (158 GB, 100 %), so the linux-aarch64
+container run of the atopile review fixes (wheel build, <code class="docutils literal notranslate"><span class="pre">setup</span></code> with the hashed sdist-build
+lock, end-to-end tests) and the part cache image smoke test could not run; the images there
+belong to other projects and were not pruned. The no-isolation sdist build was checked with
+the pinned CPython on macOS instead.</p></li>
+</ul>
 </section>
 <section id="do-not-retry">
 <h2>Do not retry<a class="headerlink" href="#do-not-retry" title="Link to this heading">¶</a></h2>
 <ul class="simple">
+<li><p>Letting a Bazel library under <code class="docutils literal notranslate"><span class="pre">yapnr/</span></code> go without <code class="docutils literal notranslate"><span class="pre">//yapnr:package</span></code>: rules_python then
+auto-creates empty <code class="docutils literal notranslate"><span class="pre">yapnr/__init__.py</span></code> files in its runfiles, and Bazel 7’s sandbox reuse once
+wrote one through a symlink into the source tree (the file was truncated; six tests failed).</p></li>
 <li><p>Serving the viewer’s static files after <code class="docutils literal notranslate"><span class="pre">Path.resolve()</span></code>: in Bazel runfiles every file is a
 symlink, so a resolved-path containment check rejects all of them. Check containment lexically.</p></li>
 <li><p>Pointing the atopile source index at Bazel runfiles: it skips symlinked <code class="docutils literal notranslate"><span class="pre">.ato</span></code> files on purpose;

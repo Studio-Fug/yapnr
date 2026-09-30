@@ -106,8 +106,19 @@ image, and this file is at `/usr/share/doc/yapnr/THIRD_PARTY.md`.
 - **Documentation site assets:** the furo theme's CSS and JavaScript (MIT) are part of the
   generated site; mermaid 11.4.1 (MIT) is loaded from a CDN.
 
+- **atopile** 0.15.8 (MIT) and its dependencies, among them **atopile-easyeda2kicad**
+  (AGPL-3.0): installed from PyPI by `yapnr atopile setup` into the user's cache, as pinned by the
+  hashed locks in `yapnr/frontends/atopile/locks/`; not vendored and not in the images yet. The
+  locks list the exact versions; each package's own metadata states its license.
+- **Part data** (footprints, symbols, 3D models, catalog facts): never in the repository, the
+  wheel or the images. It lives in a user's or a server's part cache, with provenance and licence
+  metadata per part ([docs/part-cache.md](docs/part-cache.md)).
+
 ## In the repository only
 
+- **Synthetic test parts** (`tests/fixtures/atopile/`, `yapnr/frontends/atopile/testing.py`):
+  a footprint, symbol and atopile part drawn for yapnr's tests (not a real product), under the
+  repository license.
 - **IANA root zone list** (`tools/privacy/iana_tlds.txt`): a static copy of IANA's list of
   top-level domains (<https://data.iana.org/TLD/tlds-alpha-by-domain.txt>), public data, with its
   source, retrieval date and version in the file header. The privacy scan reads it; it is not part

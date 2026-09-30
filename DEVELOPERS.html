@@ -214,6 +214,8 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="docs/containers.html">Container images</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/viewer.html">The live viewer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/frontends/atopile.html">The atopile toolchain</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/part-cache.html">The part cache</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/releases.html">Releases and versioning</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
@@ -303,8 +305,15 @@ bazel<span class="w"> </span>run<span class="w"> </span>//docs:serve<span class=
 prek<span class="w"> </span>run<span class="w"> </span>--all-files<span class="w">                  </span><span class="c1"># presubmit lints</span>
 tools/release/version.py<span class="w"> </span>--field<span class="w"> </span>pep440<span class="w">   </span><span class="c1"># the version of this checkout (from git)</span>
 tools/image/build_local.sh<span class="w">            </span><span class="c1"># build and smoke-test the container images (Docker)</span>
+yapnr<span class="w"> </span>atopile<span class="w"> </span>setup<span class="w">                   </span><span class="c1"># the pinned atopile environment (needs uv 0.12.21)</span>
+tools/atopile/update_locks.sh<span class="w"> </span>--check<span class="w"> </span><span class="c1"># the atopile locks are current (network)</span>
+tools/image/smoke_part_cache.sh<span class="w">       </span><span class="c1"># build and smoke-test the part cache image (Docker)</span>
 </pre></div>
 </div>
+<p>The atopile toolchain and its tests are described in
+<a class="reference internal" href="docs/frontends/atopile.html"><span class="std std-doc">docs/frontends/atopile.md</span></a>; the part cache in
+<a class="reference internal" href="docs/part-cache.html"><span class="std std-doc">docs/part-cache.md</span></a>. Tests that run a real atopile build are tagged
+<code class="docutils literal notranslate"><span class="pre">atopile</span></code> and <code class="docutils literal notranslate"><span class="pre">manual</span></code>.</p>
 <p>Test tiers and tags are described in <a class="reference internal" href="docs/architecture.html#test-tiers"><span class="std std-ref">docs/architecture.md</span></a>.
 New test files go under <code class="docutils literal notranslate"><span class="pre">tests/&lt;tier&gt;/&lt;area&gt;/test_*.py</span></code> in a package whose <code class="docutils literal notranslate"><span class="pre">BUILD.bazel</span></code> calls
 <code class="docutils literal notranslate"><span class="pre">yapnr_py_tests()</span></code>; the wiring check fails on test files no target runs.</p>
@@ -446,34 +455,43 @@ regenerate the image’s runtime locks with <code class="docutils literal notran
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/</span></code></p></td>
 <td><p>the Python package (today: version, CLI and the live viewer)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">tests/unit/</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/frontends/atopile/</span></code></p></td>
+<td><p>the atopile toolchain: setup, runner, hook, offline picker, locks</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/partcache/</span></code></p></td>
+<td><p>the part cache: store, server, clients, importer</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">bazel/atopile/</span></code></p></td>
+<td><p>the atopile toolchain discovery and <code class="docutils literal notranslate"><span class="pre">yapnr_atopile_build</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tests/unit/</span></code></p></td>
 <td><p>hermetic unit tests and repo checks</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tests/e2e/</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">tests/e2e/</span></code></p></td>
 <td><p>manual live checks (paid agent calls, real KiCad exports)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">tests/fixtures/</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tests/fixtures/</span></code></p></td>
 <td><p>synthetic test inputs (the viewer’s small atopile project)</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tools/</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">tools/</span></code></p></td>
 <td><p>privacy scan, test-wiring check, internal Bazel macros</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">tools/release/</span></code>, <code class="docutils literal notranslate"><span class="pre">tools/image/</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tools/release/</span></code>, <code class="docutils literal notranslate"><span class="pre">tools/image/</span></code></p></td>
 <td><p>version derivation, release notes, image build and smoke test</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">release/</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">release/</span></code></p></td>
 <td><p>the yapnr wheel (<code class="docutils literal notranslate"><span class="pre">//release:wheel</span></code>)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">docker/</span></code></p></td>
-<td><p>the container images: <code class="docutils literal notranslate"><span class="pre">yapnr-kicad</span></code> (base) and <code class="docutils literal notranslate"><span class="pre">yapnr</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">docker/</span></code></p></td>
+<td><p>the container images: <code class="docutils literal notranslate"><span class="pre">yapnr-kicad</span></code> (base), <code class="docutils literal notranslate"><span class="pre">yapnr</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr-part-cache</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">docs/</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">docs/</span></code></p></td>
 <td><p>documentation (Sphinx with MyST); the site is built by <code class="docutils literal notranslate"><span class="pre">//docs:build</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">branding/</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">branding/</span></code></p></td>
 <td><p>logo, mark, favicons and palette</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">.github/</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">.github/</span></code></p></td>
 <td><p>CI workflows, CODEOWNERS, pull request template</p></td>
 </tr>
 </tbody>

@@ -214,6 +214,8 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="containers.html">Container images</a></li>
 <li class="toctree-l1"><a class="reference internal" href="viewer.html">The live viewer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="frontends/atopile.html">The atopile toolchain</a></li>
+<li class="toctree-l1"><a class="reference internal" href="part-cache.html">The part cache</a></li>
 <li class="toctree-l1"><a class="reference internal" href="releases.html">Releases and versioning</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
@@ -700,6 +702,41 @@ counts committed connections only, so nothing on screen runs ahead of the proces
 winning rung’s native phases, and the overlay’s phases say what was saved, not more. Animations
 of Splanc runs stay local (the board is not public).</p></li>
 </ul>
+<p>Owner decisions for the atopile toolchain and part data (2026-09-30;
+<a class="reference internal" href="frontends/atopile.html"><span class="std std-doc">the atopile toolchain</span></a>, <a class="reference internal" href="part-cache.html"><span class="std std-doc">the part cache</span></a>):</p>
+<ul class="simple">
+<li><p><strong>The atopile tooling is imported under <code class="docutils literal notranslate"><span class="pre">AGPL-3.0-or-later</span></code>:</strong> the offline picker server and
+the board-outline script (from rules_atopile, the owner’s repository, which declared no license
+when they were copied) and Splanc’s scripts (AGPL-3.0). The imports name their source in the
+commit message and the module docstring.</p></li>
+<li><p><strong>No EasyEDA-derived part files and no vendor-API data in yapnr.</strong> Parts and catalogs live in a
+<strong>part cache</strong> outside every repository: a local directory, or a server the owner may run in
+public (user-generated content, with provenance and licence metadata per part and takedowns).
+<code class="docutils literal notranslate"><span class="pre">tools/check_part_data.py</span></code> fails on generated part files in the repository; tests use synthetic
+parts only. Splanc’s committed parts and picker catalog were moved into a local cache on the
+development machine, so Splanc builds from a parts lock without them.</p></li>
+<li><p><strong>atopile via a hashed lock; “No Nix” stays.</strong> atopile 0.15.8 is pinned. <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">setup</span></code>
+installs it with uv from one fully hashed lock per platform (Python 3.14.7 from
+python-build-standalone), resolved as of the date that reproduces the environment Splanc’s
+Nix build used. linux-aarch64 has no atopile wheel on PyPI; its wheel is built from the
+sha256-pinned sdist with pinned build dependencies (the scikit-build-core fork by commit). A
+0.15.9 bump comes through an A/B. The <code class="docutils literal notranslate"><span class="pre">yapnr</span></code> image bundles the environment later (A4).</p></li>
+<li><p><strong>Builds are offline and isolated.</strong> A build copies the project, materializes its locked parts
+from the cache, answers part queries from a loopback picker, runs atopile with an allowlisted
+environment and a deadline, and records a UUID-normalized input id. A hook loaded into every
+atopile interpreter (forkserver workers included) replaces the Nix source patches: the picker
+token only for a parsed loopback URL of the runner’s port, empty queries answered locally, picks
+attached from the project’s parts, no EasyEDA, no git clone of a dependency, no GUI KiCad and no
+contact with a running one.</p></li>
+<li><p><strong>The part cache serves part files only.</strong> A file must match its type, is served only while a
+stored part uses it, and is removed when no part took it up within a grace period; a takedown
+also blocks the part’s own files under any name. Tokens are checked before a body is read, sent
+by the clients only to the server named (no redirects) over https or loopback, and the write
+token never with reads. Parts can be marked local-only; a public server refuses a cache that
+holds one.</p></li>
+<li><p><strong>Ordering stays staging-only</strong> (for the later ordering PRs): cart, quote or payment page; the
+human pays on the vendor’s page.</p></li>
+</ul>
 </section>
 <section id="pinned-versions">
 <h2>Pinned versions<a class="headerlink" href="#pinned-versions" title="Link to this heading">¶</a></h2>
@@ -789,15 +826,27 @@ of Splanc runs stay local (the board is not public).</p></li>
 <td><p>from <code class="docutils literal notranslate"><span class="pre">requirements.lock</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">docker/yapnr/runtime-*.lock</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p>elkjs (viewer)</p></td>
+<tr class="row-odd"><td><p>atopile</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.15.8</span></code>, hashed locks</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr/frontends/atopile/locks/</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Python (atopile)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">3.14.7</span></code>, PBS <code class="docutils literal notranslate"><span class="pre">20260929</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr/frontends/atopile/locks/pins.json</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>uv (atopile)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.12.21</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr/frontends/atopile/locks/pins.json</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>elkjs (viewer)</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">0.9.3</span></code>, by sha256</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">MODULE.bazel</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p>three (viewer)</p></td>
+<tr class="row-odd"><td><p>three (viewer)</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">0.186.1</span></code>, by sha256</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">MODULE.bazel</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p>Image, release</p></td>
+<tr class="row-even"><td><p>Image, release</p></td>
 <td><p>every action by commit SHA</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">.github/actions/</span></code>, <code class="docutils literal notranslate"><span class="pre">image.yaml</span></code>, …</p></td>
 </tr>
@@ -831,6 +880,11 @@ sites build the same way. matplotlib is left out until a page needs generated fi
 shellcheck-py v0.9.0.6, buildifier 8.2.0, prettier v3.1.0, markdownlint-cli v0.38.0,
 pre-commit-hooks v4.5.0), minus <code class="docutils literal notranslate"><span class="pre">nixpkgs-fmt</span></code>, plus the local privacy scan.</p></li>
 <li><p><strong>mermaid, prek, <code class="docutils literal notranslate"><span class="pre">setup-bazel</span></code>:</strong> the same as Splanc.</p></li>
+<li><p><strong>atopile 0.15.8, Python 3.14.7, uv 0.12.21:</strong> atopile is the version Splanc’s boards were
+built with; it requires Python 3.14. The locks resolve as of 2026-09-20 (<code class="docutils literal notranslate"><span class="pre">exclude_newer</span></code>), the
+date that reproduces Splanc’s Nix environment package for package. uv is the version the image
+build already pins; python-build-standalone 20260929 is the release that uv installs 3.14.7
+from, checked by <code class="docutils literal notranslate"><span class="pre">setup</span></code>. Regenerate with <code class="docutils literal notranslate"><span class="pre">tools/atopile/update_locks.sh</span></code>.</p></li>
 <li><p><strong>elkjs 0.9.3 and three.js 0.186.1:</strong> the versions the Splanc viewer shipped and was tested
 with. The npm tarballs are pinned by sha256 (elkjs
 <code class="docutils literal notranslate"><span class="pre">b95b224bd1ab71fd40f6d9a6365c28d989745dff6b0d514407bc1eb68f2f561e</span></code>, three

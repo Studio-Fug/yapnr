@@ -214,6 +214,8 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="docs/containers.html">Container images</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/viewer.html">The live viewer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/frontends/atopile.html">The atopile toolchain</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/part-cache.html">The part cache</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/releases.html">Releases and versioning</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
@@ -388,11 +390,21 @@ typing_extensions (PSF-2.0), roman-numerals (0BSD or CC0-1.0) and docutils (publ
 BSD, with some files under other licenses). Each package’s own metadata is authoritative.</p></li>
 <li><p><strong>Documentation site assets:</strong> the furo theme’s CSS and JavaScript (MIT) are part of the
 generated site; mermaid 11.4.1 (MIT) is loaded from a CDN.</p></li>
+<li><p><strong>atopile</strong> 0.15.8 (MIT) and its dependencies, among them <strong>atopile-easyeda2kicad</strong>
+(AGPL-3.0): installed from PyPI by <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">setup</span></code> into the user’s cache, as pinned by the
+hashed locks in <code class="docutils literal notranslate"><span class="pre">yapnr/frontends/atopile/locks/</span></code>; not vendored and not in the images yet. The
+locks list the exact versions; each package’s own metadata states its license.</p></li>
+<li><p><strong>Part data</strong> (footprints, symbols, 3D models, catalog facts): never in the repository, the
+wheel or the images. It lives in a user’s or a server’s part cache, with provenance and licence
+metadata per part (<a class="reference internal" href="docs/part-cache.html"><span class="std std-doc">docs/part-cache.md</span></a>).</p></li>
 </ul>
 </section>
 <section id="in-the-repository-only">
 <h2>In the repository only<a class="headerlink" href="#in-the-repository-only" title="Link to this heading">¶</a></h2>
 <ul class="simple">
+<li><p><strong>Synthetic test parts</strong> (<code class="docutils literal notranslate"><span class="pre">tests/fixtures/atopile/</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr/frontends/atopile/testing.py</span></code>):
+a footprint, symbol and atopile part drawn for yapnr’s tests (not a real product), under the
+repository license.</p></li>
 <li><p><strong>IANA root zone list</strong> (<code class="docutils literal notranslate"><span class="pre">tools/privacy/iana_tlds.txt</span></code>): a static copy of IANA’s list of
 top-level domains (<a class="reference external" href="https://data.iana.org/TLD/tlds-alpha-by-domain.txt">https://data.iana.org/TLD/tlds-alpha-by-domain.txt</a>), public data, with its
 source, retrieval date and version in the file header. The privacy scan reads it; it is not part

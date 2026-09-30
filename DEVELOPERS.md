@@ -168,7 +168,8 @@ The planned full layout is in [docs/migration-plan.md](docs/migration-plan.md#1-
 - `lint`: prek on all files; every new commit must use an address listed in
   `tools/privacy/allowed_identities.txt` (the owner's public commit address) or a GitHub noreply
   address (`privacy_scan.py --identities`), and the new commits' messages and patches are
-  privacy-scanned (`git log -p -m`, so a merge commit's diff against each parent is included).
+  privacy-scanned (`git log -p --diff-merges=separate`, so a merge commit's diff against each parent
+  is included).
 - `test`: `bazel test //... --config=ci` on `ubuntu-24.04-arm`, and the lock freshness check.
 - `docs`: builds the site and uploads it as an artifact.
 - `deploy-preview`, `cleanup-preview`, `deploy-pages`: publish to GitHub Pages (previews under

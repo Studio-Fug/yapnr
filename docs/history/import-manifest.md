@@ -371,8 +371,8 @@ operator's scratch directory. No other file differs from its snapshot.
 
 Authors and committers are `Claude Agent` with the owner's public commit address; the author dates
 are those in the source table. Every message ends with the session's two trailers. CI's history
-scan has used `git log -p -m` since the engine hygiene change, so merge diffs are now scanned in
-CI too.
+scan has included merge diffs (`git log -p --diff-merges=separate`) since the engine hygiene
+change, so they are now scanned in CI too.
 
 ### Bazel adaptation and pass set
 

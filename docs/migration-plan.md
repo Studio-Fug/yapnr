@@ -1049,10 +1049,10 @@ Jobs in `ci.yaml`:
     `tools/privacy_scan.py --identities`, so only the owner's public commit address (listed in
     `tools/privacy/allowed_identities.txt`), GitHub noreply addresses and `noreply@github.com`
     (GitHub's committer for web merges) pass;
-  - the **history scan**: `git log -p -m --format='%ae %ce%n%B' <range>` piped through
-    `tools/privacy_scan.py --stdin`, which covers commit messages and intermediate commits
-    (merge-commit PRs land them all on `main`), and with `-m` the diff of every merge commit
-    against each parent (plain `git log -p` shows none).
+  - the **history scan**: `git log -p --diff-merges=separate --format='%ae %ce%n%B' <range>`
+    piped through `tools/privacy_scan.py --stdin`, which covers commit messages and intermediate
+    commits (merge-commit PRs land them all on `main`), and the diff of every merge commit
+    against each parent (plain `git log -p` shows none; `-m` would depend on `log.diffMerges`).
 - `test` (`ubuntu-24.04-arm`; required): `bazel test //... --config=ci`, then
   `bazel test //:requirements.test` (the one job that checks the lock). The aarch64 runner matches
   the CPU-only torch lock. Moves to ubuntu-latest once the x86_64 lock exists, if faster.

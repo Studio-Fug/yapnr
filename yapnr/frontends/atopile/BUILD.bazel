@@ -1,0 +1,21 @@
+"""The atopile toolchain without Nix (docs/frontends/atopile.md).
+
+- :picker is the offline picker and the catalog schema. Stdlib only.
+"""
+
+load("@rules_python//python:defs.bzl", "py_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The offline picker and the catalog schema, on their own: the part cache (//yapnr/partcache)
+# serves the same components API and catalogs.
+py_library(
+    name = "picker",
+    srcs = [
+        "__init__.py",
+        "picker/__init__.py",
+        "picker/catalog.py",
+        "picker/server.py",
+    ],
+    imports = ["../../.."],
+)

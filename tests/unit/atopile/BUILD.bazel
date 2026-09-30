@@ -1,0 +1,9 @@
+load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+
+# Hermetic: synthetic parts and catalogs.
+yapnr_py_tests(
+    deps = [
+        "//yapnr",
+        "//yapnr/frontends/atopile:picker",
+    ],
+)

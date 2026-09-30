@@ -9,6 +9,7 @@ py_library(
         "__init__.py",
         "__main__.py",
         "cli.py",
+        "frontends/__init__.py",
     ],
     imports = [".."],
 )

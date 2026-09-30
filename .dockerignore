@@ -1,0 +1,7 @@
+# The image builds (docker/*/Dockerfile) use the repository root as their build context and read
+# only what is listed here; everything else stays out of the context. The yapnr wheel comes in
+# through the named build context `dist` instead (docker/yapnr/Dockerfile).
+*
+!docker/
+!LICENSE
+!THIRD_PARTY.md

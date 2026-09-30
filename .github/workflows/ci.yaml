@@ -25,9 +25,10 @@ concurrency:
 jobs:
   # Presubmit lints: the same prek version and config as ./setup-precommit.sh,
   # so a local commit and CI can never disagree. Also checks every new commit
-  # of the push or PR: a GitHub noreply identity (see CONTRIBUTING.md), and
-  # messages and patches free of private details (merge-commit PRs land every
-  # intermediate commit on main).
+  # of the push or PR: an allowed identity (the owner's public commit address
+  # or a GitHub noreply address; see CONTRIBUTING.md), and messages and patches
+  # free of private details (merge-commit PRs land every intermediate commit on
+  # main).
   lint:
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
@@ -63,8 +64,10 @@ jobs:
           echo "COMMIT_RANGE=${range}" >> "${GITHUB_ENV}"
 
       # Author and committer address of every new commit, one per line. Only
-      # GitHub noreply addresses (and GitHub's own committer address) pass; the
-      # scanner redacts what it prints, so this public log does not leak them.
+      # the addresses in tools/privacy/allowed_identities.txt (the owner's
+      # public commit address), GitHub noreply addresses and GitHub's own
+      # committer address pass; the scanner redacts what it prints, so this
+      # public log does not leak a rejected address.
       - name: Check commit identities
         # An explicit `shell: bash` adds -o pipefail: a failing `git log` fails the step.
         shell: bash
@@ -73,7 +76,9 @@ jobs:
             | python3 tools/privacy_scan.py --identities
 
       # Commit messages and patches of the new commits. The tree checks see only
-      # the final tree; this also covers intermediate commits and messages.
+      # the final tree; this also covers intermediate commits and messages. The
+      # allowlisted commit addresses pass here (every commit header carries
+      # them); in files they are findings like any other personal address.
       - name: Scan commit messages and patches
         shell: bash
         run: |

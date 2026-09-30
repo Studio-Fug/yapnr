@@ -10,6 +10,7 @@ from __future__ import annotations
 import contextlib
 import io
 import os
+import tempfile
 import unittest
 from unittest import mock
 
@@ -24,6 +25,8 @@ TAILNET = ".ts" + ".net"
 MDNS = ".lo" + "cal"
 AT = "@"
 NOREPLY = AT + "users.noreply" + ".github.com"
+# The owner's public commit address, listed in tools/privacy/allowed_identities.txt.
+OWNER = "fughilli" + AT + "gmail" + ".com"
 
 SHOULD_FLAG = {
     "home-path": [
@@ -131,14 +134,49 @@ class RuleTest(unittest.TestCase):
             with self.subTest(expected=expected):
                 self.assertEqual(_run_main(["--stdin"], text)[0], expected)
 
+    def test_stdin_mode_accepts_allowlisted_commit_addresses(self):
+        # `git log -p --format='%ae %ce%n%B'`: the identity header, a trailer and
+        # the patch that adds the allowlist entry all carry the owner's address.
+        history = (
+            OWNER + " " + OWNER + "\n"
+            "Co-Authored-By: Kevin <" + OWNER.upper() + ">\n"
+            "+" + OWNER + "\n"
+        )
+        self.assertEqual(_run_main(["--stdin"], history), (0, ""))
+        # Any other personal address in the history is still a finding.
+        code, out = _run_main(["--stdin"], history + "+jane.doe" + AT + "gmail.com\n")
+        self.assertEqual(code, 1)
+        self.assertIn("<stdin>:4:1: email:", out)
+        self.assertNotIn("jane.doe", out)
+
+    def test_allowlisted_commit_address_in_file_contents_is_a_finding(self):
+        for sample in (OWNER, "Kevin <" + OWNER + ">", "mailto:" + OWNER):
+            with self.subTest(sample=privacy_scan.redact(sample)):
+                findings = privacy_scan.scan_text(sample, "README.md")
+                self.assertEqual([f.rule for f in findings], ["email"])
+        with tempfile.TemporaryDirectory() as root:
+            for rel in ("README.md", privacy_scan.ALLOWED_IDENTITIES_FILE):
+                os.makedirs(os.path.dirname(os.path.join(root, rel)), exist_ok=True)
+                with open(os.path.join(root, rel), "w", encoding="utf-8") as handle:
+                    handle.write(OWNER + "\n")
+            findings = privacy_scan.scan_tree(root)
+            # Only the allowlist file itself is exempt.
+            self.assertEqual([(f.path, f.rule) for f in findings], [("README.md", "email")])
+            code, out = _run_main([os.path.join(root, "README.md")], "")
+            self.assertEqual(code, 1)
+            self.assertNotIn(OWNER, out)
+
 
 # Commit identities (`--identities`, the CI lint job). Only GitHub noreply
-# addresses and GitHub's own committer address pass.
+# addresses, GitHub's own committer address and the addresses in
+# tools/privacy/allowed_identities.txt pass.
 IDENTITY_OK = [
     "6869039+fughilli" + NOREPLY,
     "fughilli" + NOREPLY,
     "41898282+github-actions[bot]" + NOREPLY,
     "noreply" + AT + "github.com",
+    OWNER,
+    OWNER.upper(),  # addresses are matched without regard to case
 ]
 IDENTITY_BAD = [
     "",  # user.email unset and no guess
@@ -150,9 +188,15 @@ IDENTITY_BAD = [
     "someone" + AT + "example.com",
     "noreply" + AT + "example-isp.net",
     "jane.doe" + AT + "gmail.com",
+    "fughilli.x" + AT + "gmail.com",  # a different address at the same provider
+    "xfughilli" + AT + "gmail.com",
+    "fughilli" + AT + "gmail.co",
+    "fughilli" + AT + "googlemail.com",
+    OWNER + ".example.net",
     "6869039+fughilli" + NOREPLY + ".example.net",
     "evil" + AT + "x.users.noreply.github.com",
     "6869039+fughilli" + NOREPLY + " 6869039+fughilli" + NOREPLY,  # two per line
+    OWNER + " " + OWNER,
 ]
 
 
@@ -183,13 +227,43 @@ class IdentityTest(unittest.TestCase):
         self.assertEqual(_run_main(["--identities"], ""), (0, ""))  # empty range
         code, out = _run_main(["--identities"], good + "alice" + AT + "macmini\n\n")
         self.assertEqual(code, 1)
-        self.assertIn(":5:1: identity:", out)
-        self.assertIn(":6:1: identity:", out)
+        bad_line = len(IDENTITY_OK) + 1
+        self.assertIn(f":{bad_line}:1: identity:", out)
+        self.assertIn(f":{bad_line + 1}:1: identity:", out)
         self.assertNotIn("macmini", out)
 
     def test_identities_and_stdin_are_exclusive(self):
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
             _run_main(["--identities", "--stdin"], "")
+
+    def test_allowlist_is_the_only_extra_source(self):
+        # With an empty allowlist only the GitHub addresses pass.
+        self.assertFalse(privacy_scan.identity_allowed(OWNER, allowed=frozenset()))
+        self.assertTrue(privacy_scan.identity_allowed("noreply" + AT + "github.com", frozenset()))
+        other = "jane.doe" + AT + "gmail.com"
+        self.assertTrue(privacy_scan.identity_allowed(other, allowed=frozenset({other})))
+        self.assertEqual(privacy_scan.check_identities(other + "\n", frozenset({other})), [])
+
+    def test_parse_allowlist(self):
+        text = (
+            "# comment\n"
+            "\n"
+            "  " + OWNER.upper() + "  # trailing comment\n"
+            "other" + AT + "example.org\n"
+        )
+        self.assertEqual(
+            privacy_scan.parse_allowed_identities(text),
+            frozenset({OWNER, "other" + AT + "example.org"}),
+        )
+        for bad in (
+            "not-an-address",
+            OWNER + " " + OWNER,
+            "*" + AT + "gmail.com",
+            AT + "gmail.com",
+        ):
+            with self.subTest(bad=privacy_scan.redact(bad)):
+                with self.assertRaisesRegex(ValueError, r"allowed_identities\.txt:2:"):
+                    privacy_scan.parse_allowed_identities("# ok\n" + bad + "\n")
 
 
 class TreeTest(unittest.TestCase):
@@ -203,6 +277,16 @@ class TreeTest(unittest.TestCase):
         for rel in sorted(privacy_scan.ALLOWLISTED_FILES):
             with self.subTest(path=rel):
                 self.assertTrue(os.path.isfile(os.path.join(self.root, rel)), "stale allowlist")
+
+    def test_identity_allowlist_is_loaded(self):
+        # The copy next to the scanner (under Bazel: a data dependency) is the
+        # checkout's file, and it names the owner's public commit address.
+        with open(
+            os.path.join(self.root, privacy_scan.ALLOWED_IDENTITIES_FILE), encoding="utf-8"
+        ) as handle:
+            in_checkout = privacy_scan.parse_allowed_identities(handle.read())
+        self.assertEqual(privacy_scan.allowed_identities(), in_checkout)
+        self.assertIn(OWNER, in_checkout)
 
     def test_tree_is_clean(self):
         files = privacy_scan.list_repo_files(self.root)

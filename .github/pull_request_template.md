@@ -14,7 +14,8 @@
 - [ ] New engine behaviour is behind a default-off flag, with a measured A/B result in the commit
       body (or: no engine behaviour change)
 - [ ] Privacy: no machine paths, host names, addresses, personal e-mail or credentials
-      (`tools/privacy_scan.py`); commits use a GitHub noreply identity
+      (`tools/privacy_scan.py`); commits use the owner's public commit address
+      (`tools/privacy/allowed_identities.txt`) or a GitHub noreply address
 - [ ] Docs and `WORKLOG.md` updated where this PR changes behaviour, layout or status
 - [ ] Mechanical-only changes (format, rename, move) are a PR of their own; after it is merged, its
       commit on `main` goes into `.git-blame-ignore-revs` in a follow-up (or: none)

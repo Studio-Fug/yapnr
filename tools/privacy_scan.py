@@ -27,8 +27,16 @@ Usage::
     git log --format='%ae%n%ce' origin/main..HEAD | tools/privacy_scan.py --identities
 
 ``--identities`` is stricter than the text rules: it reads one commit e-mail
-address per line and accepts only GitHub noreply addresses (see
-``check_identities``). The CI ``lint`` job runs it on every new commit.
+address per line and accepts only GitHub noreply addresses, GitHub's own
+committer address and the addresses listed in
+``tools/privacy/allowed_identities.txt`` (the owner's public commit address;
+see ``check_identities``). The CI ``lint`` job runs it on every new commit.
+
+File contents stay strict: an allowlisted commit address in a file is a
+finding like any other personal address (only the allowlist file itself is
+exempt). ``--stdin`` scans commit history (``git log -p`` with the identity
+header, messages and patches), where these addresses appear by design, so it
+accepts them.
 
 A line that must contain a match (for example documentation of a pattern) can
 carry the marker ``privacy-scan: allow``. Use it sparingly; reviewers see it.
@@ -40,20 +48,37 @@ KiCad's bundled Python and on bare CI runners.
 from __future__ import annotations
 
 import argparse
+import functools
 import os
 import re
 import subprocess
 import sys
 from dataclasses import dataclass
-from typing import Callable, Iterable, Iterator, List, Optional, Pattern, Sequence
+from typing import (
+    AbstractSet,
+    Callable,
+    FrozenSet,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Pattern,
+    Sequence,
+)
+
+# The commit addresses `--identities` accepts besides GitHub noreply addresses
+# (repository-relative; read next to this file, so it also works under Bazel).
+ALLOWED_IDENTITIES_FILE = "tools/privacy/allowed_identities.txt"
 
 # Repository-relative files that are exempt: the scanner (its patterns), its
-# test (synthetic samples) and the migration plan (which describes the scrub).
+# test (synthetic samples), the migration plan (which describes the scrub) and
+# the commit address allowlist (which must name the addresses).
 ALLOWLISTED_FILES = frozenset(
     {
         "tools/privacy_scan.py",
         "tests/unit/repo/test_privacy_scan.py",
         "docs/migration-plan.md",
+        ALLOWED_IDENTITIES_FILE,
     }
 )
 
@@ -280,26 +305,58 @@ def redact(text: str) -> str:
 
 # Commit identities the CI `lint` job accepts: a GitHub noreply address
 # (`<id>+<login>@users.noreply.github.com`, the older `<login>@...` form, or a
-# GitHub App's `<id>+<app>[bot]@...`), and GitHub's own committer address,
-# which GitHub uses when it creates a commit (web merges and squashes). Anything
-# else fails, including git's guessed `user@host` identity and empty addresses.
+# GitHub App's `<id>+<app>[bot]@...`), GitHub's own committer address, which
+# GitHub uses when it creates a commit (web merges and squashes), and the
+# addresses in ALLOWED_IDENTITIES_FILE (the owner's public commit address).
+# Anything else fails, including git's guessed `user@host` identity and empty
+# addresses.
 _NOREPLY_IDENTITY = re.compile(
     r"(?:[0-9]+\+)?[A-Za-z0-9-]+(?:\[bot\])?@users\.noreply\.github\.com"
 )
 _GITHUB_COMMITTER = "noreply@github.com"
+# One whole address, as the `email` rule matches it.
+_ADDRESS = re.compile(r"[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}")
 IDENTITIES_PATH = "<identities>"
 
 
-def identity_allowed(address: str) -> bool:
-    return address == _GITHUB_COMMITTER or bool(_NOREPLY_IDENTITY.fullmatch(address))
+def parse_allowed_identities(text: str, path: str = ALLOWED_IDENTITIES_FILE) -> FrozenSet[str]:
+    """Addresses of an allowlist file (lower case): one per line, `#` starts a comment."""
+    addresses = set()
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        entry = line.split("#", 1)[0].strip()
+        if not entry:
+            continue
+        if not _ADDRESS.fullmatch(entry):
+            raise ValueError(f"{path}:{lineno}: expected one e-mail address per line")
+        addresses.add(entry.lower())
+    return frozenset(addresses)
 
 
-def check_identities(text: str) -> List[Finding]:
+@functools.lru_cache(maxsize=None)
+def allowed_identities() -> FrozenSet[str]:
+    """The repository's allowlisted commit addresses; empty if the file is missing."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(here, "privacy", os.path.basename(ALLOWED_IDENTITIES_FILE))
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return parse_allowed_identities(handle.read())
+    except FileNotFoundError:
+        return frozenset()  # fail closed: only noreply addresses pass
+
+
+def identity_allowed(address: str, allowed: Optional[AbstractSet[str]] = None) -> bool:
+    """Whether a commit address passes; ``allowed`` defaults to ``allowed_identities()``."""
+    if address == _GITHUB_COMMITTER or _NOREPLY_IDENTITY.fullmatch(address):
+        return True
+    return address.lower() in (allowed_identities() if allowed is None else allowed)
+
+
+def check_identities(text: str, allowed: Optional[AbstractSet[str]] = None) -> List[Finding]:
     """One commit e-mail address per line (`git log --format='%ae%n%ce'`)."""
     findings: List[Finding] = []
     for lineno, line in enumerate(text.splitlines(), start=1):
         address = line.strip()
-        if identity_allowed(address):
+        if identity_allowed(address, allowed):
             continue
         findings.append(
             Finding(
@@ -307,14 +364,25 @@ def check_identities(text: str) -> List[Finding]:
                 line=lineno,
                 column=1,
                 rule="identity",
-                description="commit address is not a GitHub noreply address",
+                description="commit address is neither a GitHub noreply address nor allowlisted",
                 redacted=redact(address) if address else "empty",
             )
         )
     return findings
 
 
-def scan_text(text: str, path: str = "<text>") -> List[Finding]:
+def _address_in(address: str, addresses: AbstractSet[str]) -> bool:
+    return bool(addresses) and address.lstrip("+-").lower() in addresses
+
+
+def scan_text(
+    text: str, path: str = "<text>", commit_addresses: AbstractSet[str] = frozenset()
+) -> List[Finding]:
+    """Scan text line by line.
+
+    ``commit_addresses`` (lower case) are e-mail addresses to accept; only the
+    commit history scan (``--stdin``) passes the allowlisted commit addresses.
+    """
     findings: List[Finding] = []
     for lineno, line in enumerate(text.splitlines(), start=1):
         if INLINE_ALLOW_MARKER in line:
@@ -322,6 +390,10 @@ def scan_text(text: str, path: str = "<text>") -> List[Finding]:
         for rule in RULES:
             for match in rule.pattern.finditer(line):
                 if rule.allowed is not None and rule.allowed(match):
+                    continue
+                # A `git log -p` line starts with its diff marker (`+`, `-`), which
+                # the address pattern takes into the local part.
+                if rule.name == "email" and _address_in(match.group(0), commit_addresses):
                     continue
                 if rule.confirm is not None and not rule.confirm(match):
                     continue
@@ -413,10 +485,12 @@ def _iter_report(findings: Sequence[Finding]) -> Iterator[str]:
     if identities:
         yield (
             f"privacy scan: {len(identities)} commit address(es) rejected. Commits must be "
-            "authored and committed with a GitHub noreply address "
-            "(<id>+<login>@users.noreply.github.com): set it with `git config user.email`, "
-            "then rewrite the commits (for example `git rebase -r <base> --exec "
-            "'git commit --amend --no-edit --reset-author'`). See CONTRIBUTING.md."
+            "authored and committed with an address listed in "
+            f"{ALLOWED_IDENTITIES_FILE} (the owner's public commit address) or a GitHub "
+            "noreply address (<id>+<login>@users.noreply.github.com): set it with "
+            "`git config user.email`, then rewrite the commits (for example `git rebase -r "
+            "<base> --exec 'git commit --amend --no-edit --reset-author'`). "
+            "See CONTRIBUTING.md."
         )
     content = [finding for finding in findings if finding.rule != "identity"]
     if content:
@@ -424,19 +498,26 @@ def _iter_report(findings: Sequence[Finding]) -> Iterator[str]:
             f"privacy scan: {len(content)} finding(s). Replace machine paths with "
             "repository-relative or ~ paths, host names and addresses with documentation "
             "values (example.com, 192.0.2.0/24), and e-mail addresses with GitHub noreply "
-            "addresses. See CONTRIBUTING.md."
+            "addresses (allowlisted commit addresses belong in commits, not in files). "
+            "See CONTRIBUTING.md."
         )
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("files", nargs="*", help="files to scan (repository-relative)")
-    parser.add_argument("--stdin", action="store_true", help="scan standard input")
+    parser.add_argument(
+        "--stdin",
+        action="store_true",
+        help="scan standard input as commit history (`git log -p`), which may carry the "
+        f"commit addresses listed in {ALLOWED_IDENTITIES_FILE}",
+    )
     parser.add_argument(
         "--identities",
         action="store_true",
-        help="read one commit e-mail address per line from standard input; "
-        "accept only GitHub noreply addresses",
+        help="read one commit e-mail address per line from standard input; accept only "
+        "GitHub noreply addresses, noreply@github.com and the addresses in "
+        f"{ALLOWED_IDENTITIES_FILE}",
     )
     parser.add_argument("--all", action="store_true", help="scan every file in the repository")
     parser.add_argument("--root", default=None, help="repository root for --all (default: cwd)")
@@ -455,7 +536,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.identities:
         findings.extend(check_identities(sys.stdin.read()))
     if args.stdin:
-        findings.extend(scan_text(sys.stdin.read(), "<stdin>"))
+        findings.extend(scan_text(sys.stdin.read(), "<stdin>", allowed_identities()))
     if args.all:
         findings.extend(scan_tree(os.path.abspath(args.root or os.getcwd())))
     if args.files:

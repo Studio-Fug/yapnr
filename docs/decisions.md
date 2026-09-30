@@ -19,11 +19,20 @@ Owner decisions of 2026-09-29, taken while planning the migration (see
   before anything consumes it.
 - **Contributions: owner only, for now.** Outside contributions are not accepted yet;
   `CONTRIBUTING.md` says so. Revisit together with the inbound license terms (CLA or DCO).
-- **Commit identity: GitHub noreply addresses only,** for new commits and for imported history.
-  The CI `lint` job checks the author and committer address of every new commit with
-  `tools/privacy_scan.py --identities`, which accepts only `users.noreply.github.com` addresses
-  and `noreply@github.com` (GitHub's committer for web merges). It also scans the messages and
-  patches of the new commits.
+- **Commit identity: the owner's public commit address** (decided 2026-09-29; it replaces the
+  earlier "GitHub noreply addresses only" rule), for new commits and for imported history: the
+  owner's commits under the owner's name, agent commits as `Claude Agent`, and every identity in
+  the imported Splanc history mapped to it (migration plan §7.2). The address is listed in
+  `tools/privacy/allowed_identities.txt`, the only file that may name it. Reason: GitHub accepts
+  only an address verified on the account as the author of a merge made on the website, so a
+  noreply address cannot author the merges into `main`; the owner chose to publish this address
+  on commits. The CI `lint` job checks the author and committer address of every new commit with
+  `tools/privacy_scan.py --identities`, which accepts the allowlisted addresses,
+  `users.noreply.github.com` addresses (the earlier PR0 commits keep theirs) and
+  `noreply@github.com` (GitHub's committer for web merges). It also scans the messages and
+  patches of the new commits, where the allowlisted addresses pass; in file contents they remain
+  findings like any other personal address. Adding an address to the allowlist is an owner
+  decision recorded here.
 - **Issue tracking: GitHub issues** (`#N`); Splanc's `FUG-NNN` keys are not used here.
 - **Docs on GitHub Pages, with per-PR previews.** Wired like Splanc and gated on the repository
   variable `YAPNR_PAGES_ENABLED == 'true'`, which the owner sets after the first green build of

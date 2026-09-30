@@ -95,7 +95,9 @@ The privacy scan (`tools/privacy_scan.py`) rejects absolute home, volume and tem
 paths (also in the dash-encoded form agent tooling uses for project directories), tailnet and
 `.local` host names, tailnet and private network addresses, personal e-mail addresses and
 credentials. Use repository-relative or `~` paths, documentation values (`example.com`,
-`192.0.2.0/24`) and GitHub noreply addresses instead. `--list-rules` prints the rules.
+`192.0.2.0/24`) and GitHub noreply addresses instead. The owner's public commit address is no
+exception in files; only `tools/privacy/allowed_identities.txt` names it. `--list-rules` prints
+the rules.
 
 ## KiCad
 
@@ -143,8 +145,10 @@ The planned full layout is in [docs/migration-plan.md](docs/migration-plan.md#1-
 
 `.github/workflows/ci.yaml` runs on pull requests, pushes to `main` and on demand:
 
-- `lint`: prek on all files; every new commit must use a GitHub noreply identity
-  (`privacy_scan.py --identities`), and the new commits' messages and patches are privacy-scanned.
+- `lint`: prek on all files; every new commit must use an address listed in
+  `tools/privacy/allowed_identities.txt` (the owner's public commit address) or a GitHub noreply
+  address (`privacy_scan.py --identities`), and the new commits' messages and patches are
+  privacy-scanned.
 - `test`: `bazel test //... --config=ci` on `ubuntu-24.04-arm`, and the lock freshness check.
 - `docs`: builds the site and uploads it as an artifact.
 - `deploy-preview`, `cleanup-preview`, `deploy-pages`: publish to GitHub Pages (previews under

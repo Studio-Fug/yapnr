@@ -23,9 +23,11 @@ conflict, stop and ask the owner.
 - **Public repository.** No machine paths, host names, network addresses, personal e-mail
   addresses, credentials, conversation logs or run logs. `tools/privacy_scan.py` runs as a
   pre-commit hook and as a Bazel test; its findings block the change.
-- **Commit identity:** a GitHub noreply address only (`<id>+<user>@users.noreply.github.com`).
-  Never change the configured git identity. Agent commits end with the trailers the session
-  provides (for example `Co-Authored-By:`).
+- **Commit identity:** the owner's public commit address, listed in
+  `tools/privacy/allowed_identities.txt` (or a GitHub noreply address). Agents commit as
+  `Claude Agent` with that address; never change the configured git identity otherwise, and never
+  write the address into files other than the allowlist. Agent commits end with the trailers the
+  session provides (for example `Co-Authored-By:`).
 - **Issues:** GitHub issues, referenced as `#N`.
 - **Keep the WORKLOG convention.** `WORKLOG.md` is a short status board (in progress, next,
   blockers, do-not-retry), rewritten at the end of each session, not a diary.

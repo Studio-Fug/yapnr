@@ -1,0 +1,12 @@
+# Commit addresses that `tools/privacy_scan.py --identities` accepts in addition to GitHub noreply
+# addresses (<id>+<login>@users.noreply.github.com) and noreply@github.com, GitHub's committer for
+# merges made on the website. One address per line; `#` starts a comment. Matching ignores case.
+#
+# Every address listed here is public: it is published in the header of every commit that uses
+# it. Adding one is an owner decision (docs/decisions.md). File contents stay strict: the privacy
+# scan still rejects these addresses anywhere else in the tree, and this file is exempt.
+
+# The owner's public commit address (owner decision, 2026-09-29): the author of the owner's commits
+# and of agent commits ("Claude Agent"), and of merges made on GitHub, which accepts only an
+# address verified on the account.
+fughilli@gmail.com

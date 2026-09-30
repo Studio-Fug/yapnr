@@ -34,7 +34,7 @@ yapnr as a **headless Bazel ruleset**.
   - Consequence: yapnr declares one identifier consistently (§1.4).
 - **Imported history has several author identities, not all of them noreply addresses.**
   - Consequence: the history import rewrites identities with a mailmap (§7.2) so that every
-    imported commit uses a GitHub noreply address; the exact mapping is open question Q2 (§9).
+    imported commit uses the owner's public commit address (decided, Q2 in §9).
 - **History under the PnR paths is small:** 516 blobs, 5.5 MB; the largest blob is 554 KB
   (`testdata/splanc_dev/splanc_dev.kicad_pcb`).
   - Consequence: a full-history import is cheap and passes the 600 KB large-file hook.
@@ -52,8 +52,12 @@ yapnr as a **headless Bazel ruleset**.
 1. **License `AGPL-3.0-or-later`** (SPDX), matching Splanc's declaration.
 2. **Owner-only contributions for now.** `CONTRIBUTING.md` states that outside contributions are
    not accepted yet.
-3. **Commit identity: GitHub noreply addresses only**, for new commits and for imported history.
-   CI checks every new commit.
+3. **Commit identity: the owner's public commit address**, listed in
+   `tools/privacy/allowed_identities.txt`, for new commits and for imported history; GitHub
+   noreply addresses remain accepted. This replaces the first form of the decision (noreply
+   addresses only): GitHub accepts only an address verified on the account as the author of a
+   merge made on the website, and the owner chose to publish this address on commits. CI checks
+   every new commit.
 4. **Viewer Ask agent and AI summaries ship off by default** (PR4c).
 5. **elkjs is fetched at build time, pinned by sha256, never vendored** (PR4b). `THIRD_PARTY.md`
    lists it and three.js.
@@ -242,7 +246,7 @@ Tests stay `unittest`-style (no current test uses pytest). Four files need both 
   - every worker is time-bounded;
   - native KiCad DRC is the judge: never suppress DRC or delete nets to claim completion;
   - new engine behaviour lands behind a default-off flag with an A/B result in the commit body;
-  - public-repository privacy rules and noreply commit identities;
+  - public-repository privacy rules and the commit identity (the owner's public commit address);
   - do not disturb running experiments; check for other agents before long runs;
   - keep the WORKLOG convention.
 - **DEVELOPERS.md** covers:
@@ -255,7 +259,7 @@ Tests stay `unittest`-style (no current test uses pytest). Four files need both 
   - the policy: outside contributions are not accepted yet (owner decision);
   - squash-merged PRs; commit style `<Area>: <summary> (#N)` with measured results in the body;
   - `prek run --all-files` before pushing;
-  - noreply commit identities and the privacy rules;
+  - the commit identity rule and the privacy rules;
   - the inbound license terms (inbound = outbound).
 - **WORKLOG.md:** short live status board (in progress, next, blockers, do-not-retry), rewritten at
   the end of each session, not a diary.
@@ -991,17 +995,21 @@ Changes from Splanc:
   - `*.ts.net` host names and hyphenated or URL `*.local` machine names;
   - 100.64.0.0/10 (CGNAT, tailnet) and RFC 1918 private addresses;
   - e-mail addresses other than `users.noreply.github.com`, `noreply`/`no-reply` mailboxes, the
-    git user of code hosts and reserved example domains;
+    git user of code hosts and reserved example domains (the allowlisted commit addresses are
+    findings in files too);
   - API keys and tokens (GitHub, Anthropic, OpenAI, AWS, Slack, Google, GitLab, Tailscale) and
     private-key blocks.
 
-  The scanner allowlists itself, its test and this plan, supports a `privacy-scan: allow` line
-  marker, and redacts what it prints (CI logs are public). The same scanner runs as a Bazel test
-  over the whole working tree (`//tests/unit/repo:test_privacy_scan`), including the globally
-  excluded paths, and in CI over the messages and patches of every new commit, where the file
-  allowlist does not apply (so the allowlisted files must scan clean as patches too). Its
-  `--identities` mode is the commit identity gate: one address per line, and only GitHub
-  noreply addresses and `noreply@github.com` pass.
+  The scanner allowlists itself, its test, this plan and the commit address allowlist
+  (`tools/privacy/allowed_identities.txt`), supports a `privacy-scan: allow` line marker, and
+  redacts what it prints (CI logs are public). The same scanner runs as a Bazel test over the
+  whole working tree (`//tests/unit/repo:test_privacy_scan`), including the globally excluded
+  paths, and in CI over the messages and patches of every new commit, where the file allowlist
+  does not apply (so the allowlisted files must scan clean as patches too) and the allowlisted
+  commit addresses pass (every commit header carries them). Its `--identities` mode is the
+  commit identity gate: one address per line, and only the addresses in
+  `tools/privacy/allowed_identities.txt` (the owner's public commit address), GitHub noreply
+  addresses and `noreply@github.com` pass.
 
 - `name-tests-test` (`--pytest-test-first`) applies to `tests/`; helpers live in `tools/`. When
   the regression helpers (`tests/regression/{designs,run,native}.py`) and the `tests/fixtures/*.py`
@@ -1035,8 +1043,9 @@ Jobs in `ci.yaml`:
   prek cache keyed on the config hash, `prek run --all-files --show-diff-on-failure`), plus two
   checks over the new commits (the PR's range, or the pushed range on `main`):
   - the **commit identity check**: `git log --format='%ae%n%ce' <range>` piped through
-    `tools/privacy_scan.py --identities`, so only GitHub noreply addresses (and
-    `noreply@github.com`, GitHub's committer for web merges) pass;
+    `tools/privacy_scan.py --identities`, so only the owner's public commit address (listed in
+    `tools/privacy/allowed_identities.txt`), GitHub noreply addresses and `noreply@github.com`
+    (GitHub's committer for web merges) pass;
   - the **history scan**: `git log -p --format='%ae %ce%n%B' <range>` piped through
     `tools/privacy_scan.py --stdin`, which covers commit messages and intermediate commits
     (merge-commit PRs land them all on `main`).
@@ -1113,7 +1122,7 @@ Nix caching and runner-space actions from Splanc are not needed.
   - tests run and which tier;
   - new behaviour behind a default-off flag;
   - measured result;
-  - privacy scan and noreply identity;
+  - privacy scan and commit identity;
   - docs and WORKLOG updated.
 - Pages source: the `gh-pages` branch root. Publishing is approved; until `YAPNR_PAGES_ENABLED`
   is `true` the deploy jobs are skipped. The first deploy, after the first green build of `main`:
@@ -1234,9 +1243,11 @@ Not imported:
 
 ### 7.2 Rewrites during filtering
 
-- `--mailmap` (a file kept in `$SCRATCH`, never committed) maps every identity to a GitHub noreply
-  address (owner decision): the machine-local identity to the owner's noreply identity, and the
-  agent identity per open question Q2 (§9). Co-Authored-By trailers are preserved.
+- `--mailmap` (a file kept in `$SCRATCH`, never committed) maps every identity to the owner's
+  public commit address, the one listed in `tools/privacy/allowed_identities.txt` (owner decision,
+  Q2 in §9): the machine-local (tailnet-derived) addresses, the other personal addresses and the
+  noreply addresses alike, each with the matching name (the owner's name for the owner's
+  identities, `Claude Agent` for agent identities). Co-Authored-By trailers are preserved.
 - `--replace-text` and `--replace-message` (a patterns file in `$SCRATCH`, never committed)
   replace:
 
@@ -1252,8 +1263,8 @@ Not imported:
 **Gate:** before the filtered history is ever pushed, two checks must pass on it:
 
 - `git log -p --all | tools/privacy_scan.py --stdin` is clean;
-- `git log --all --format='%ae%n%ce' | tools/privacy_scan.py --identities` passes (only noreply
-  addresses).
+- `git log --all --format='%ae%n%ce' | tools/privacy_scan.py --identities` passes (every
+  imported commit carries the owner's public commit address).
 
 The scan report (counts only) goes into `docs/history/import-manifest.md` together with the paths
 list, source commit, filter-repo version and the commit map size.
@@ -1300,9 +1311,9 @@ only in design data), so they produce no commit.
 7. `src12h`: `PNR_KICAD_CLI` default (headless KiCad) in 5 files.
 8. `src12i`: `fanout_reserve.release`: `board.Delete(zone)` (teardown SIGSEGV fix).
 
-- Author: a GitHub noreply identity (owner decision). The committer date is now; the author date
-  is the snapshot's newest source mtime. Trailers: `Co-Authored-By: Claude ...`; commit 1 notes
-  the Codex agent in the body.
+- Author: `Claude Agent` with the owner's public commit address (owner decision). The committer
+  date is now; the author date is the snapshot's newest source mtime. Trailers:
+  `Co-Authored-By: Claude ...`; commit 1 notes the Codex agent in the body.
 - Each commit body names the snapshot, the flags it introduced (and their defaults) and the
   measured results from the log (for example deepS 33/0, H6 16/0 at the native rung).
 - The Splanc design (`hardware/splanc_dev`, `contracts/`) is never included.
@@ -1403,7 +1414,8 @@ unchanged.
   - `bazel run //docs:build` produces `docs/site/html`;
   - deploy jobs are skipped until `YAPNR_PAGES_ENABLED` is set;
   - GitHub shows AGPL-3.0;
-  - privacy scan clean, and every commit uses a noreply identity.
+  - privacy scan clean, and every commit uses an accepted identity (the owner's public commit
+    address; the earlier PR0 commits keep a noreply address, which also passes).
 - **Risks:**
   - everything pushed is public (the privacy gates above);
   - the Bazel output base on a case-insensitive external volume (use the documented location);
@@ -1423,7 +1435,7 @@ unchanged.
   - `bazel test //hardware/pnr/...` gives the same pass set as Splanc HEAD (recorded in the PR);
   - no file over 600 KB.
 - **Risks:**
-  - the identity mapping (open question Q2 (§9));
+  - an identity the mailmap misses (the history-wide identity check rejects it);
   - a missed scrub pattern (mitigated by the history-wide scan);
   - the reviewer cannot read 28k lines, so review focuses on the manifest, scrub report and the
     adaptation commit.
@@ -1706,13 +1718,18 @@ Resolved on 2026-09-29 (see §0.2 and `docs/decisions.md`):
 - **Q5, elkjs:** acceptable as a separately fetched, sha256-pinned, unmodified asset; never
   vendored.
 - **Q6, issue keys:** GitHub issues (`#N`).
+- **Q2, identity mapping in the imported history:** decided. Every identity in the imported
+  history (machine-local addresses, other personal addresses and noreply addresses) maps to the
+  owner's public commit address, listed in `tools/privacy/allowed_identities.txt`, with the
+  matching name (the owner's, or `Claude Agent` for agent identities); new commits use the same
+  address. GitHub accepts only an address verified on the account as the author of a merge made
+  on the website, which rules out a noreply address for the merges into `main`, and the owner
+  chose to publish this address on commits. The mailmap stays in `$SCRATCH`, never committed.
 
 Still open:
 
-- **Q2, identity mapping in the imported history.** Every imported commit must use a GitHub
-  noreply address (decided). Open: map the agent identity to the agent's noreply identity or to the
-  owner's with a Co-Authored-By trailer; and confirm that a full-history import is wanted rather
-  than a single snapshot commit.
+- **Q2b, full-history import** (left over from Q2): confirm that a full-history import is wanted
+  rather than a single snapshot commit.
 
 ## Appendix A: module map (old to new)
 

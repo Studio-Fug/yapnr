@@ -33,14 +33,22 @@ repository is licensed under the same terms (inbound = outbound).
 
 ## Commit identity and privacy
 
-This repository is public. Commits must use a GitHub noreply address
-(`<id>+<user>@users.noreply.github.com`) as both author and committer. CI checks every new commit
-with `tools/privacy_scan.py --identities` and rejects any other address, including git's guessed
-`user@host` identity and an empty one; the only exception is `noreply@github.com`, the committer
-GitHub itself uses for merges made on the website. Never commit machine paths, host names, network
-addresses, personal e-mail addresses, credentials, logs or conversation transcripts. The privacy
-scan (`tools/privacy_scan.py`) runs as a pre-commit hook, as a Bazel test over the whole tree, and
-in CI over the messages and patches of every new commit.
+This repository is public. Commits use the owner's public commit address, listed in
+`tools/privacy/allowed_identities.txt`, as both author and committer: the owner's commits under the
+owner's name, agent commits as `Claude Agent`. GitHub accepts only an address verified on the
+account as the author of a merge made on the website, which rules out a noreply address there.
+GitHub noreply addresses (`<id>+<user>@users.noreply.github.com`) remain accepted. CI checks every
+new commit with `tools/privacy_scan.py --identities` and rejects any other address, including
+git's guessed `user@host` identity and an empty one; the only other exception is
+`noreply@github.com`, the committer GitHub itself uses for merges made on the website. Adding an
+address to the allowlist is an owner decision ([docs/decisions.md](docs/decisions.md)).
+
+Never commit machine paths, host names, network addresses, personal e-mail addresses, credentials,
+logs or conversation transcripts. The allowlisted commit addresses are no exception in file
+contents: only the allowlist file may name them. The privacy scan (`tools/privacy_scan.py`) runs
+as a pre-commit hook, as a Bazel test over the whole tree, and in CI over the messages and patches
+of every new commit (where the allowlisted commit addresses pass, since every commit header
+carries them).
 
 ## Reporting security issues
 

@@ -18,7 +18,7 @@ def apply(board,graph,rules):
  for ref in moved:
   if desired[ref].locked or previous[ref].locked:raise ValueError('Locked placement '+ref)
  pads=[p for f in board.GetFootprints() for p in f.Pads()];moving=[p for ref in moved for p in fps[ref].Pads()];stationary=[p for p in pads if p not in moving]
- tracks=list(board.GetTracks());before={uid(t):signature(t) for t in tracks};removed={};keep=[]
+ tracks=list(board.GetTracks());before={uid(t):signature(t) for t in tracks};removed={}
  def touches(a,b):
   return a.GetBoundingBox().Intersects(b.GetBoundingBox()) and any(touch(a,b,la) for la in layers)
  # Peel the moved-pad leaf back to its first shared copper junction or fixed pad.
@@ -77,7 +77,7 @@ def apply(board,graph,rules):
   for t in tracks:
    if uid(t) in removed and t.GetClass()=='PCB_VIA' and t.GetNetname()==intent['net'] and any((t.GetPosition()-p.GetPosition()).EuclideanNorm()<=radius for p in f.Pads() if p.GetNumber() in intent['pads']):raise ValueError('Move conflicts with source-sized via array')
  for t in tracks:
-  if uid(t) in removed:board.Remove(t);keep.append(t)
+  if uid(t) in removed:board.Delete(t)  # invalidated copper is discarded (Delete, not Remove)
  board.BuildConnectivity();k.ZONE_FILLER(board).Fill(board.Zones());board.BuildConnectivity()
  after={uid(t):signature(t) for t in board.GetTracks()}
  assert all(after.get(u)==s for u,s in before.items() if u not in removed),'Unaffected copper changed'

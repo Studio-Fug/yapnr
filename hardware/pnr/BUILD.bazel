@@ -560,6 +560,17 @@ py_test(
     deps = [":pnr"],
 )
 
+# The board.Remove audit: discarded KiCad items are deleted (board.Delete). The
+# source scan needs no KiCad; the native cases run under KiCad's Python only.
+py_test(
+    name = "board_delete_test",
+    size = "small",
+    srcs = ["tests/test_board_delete.py"],
+    data = glob(["pnr/**/*.py", "regression/*.py"]) + ["//hardware/tools:keyhole_region.py"],
+    main = "tests/test_board_delete.py",
+    deps = [":pnr"],
+)
+
 py_test(
     name = "track_graph_test",
     srcs = ["tests/test_track_graph.py"],

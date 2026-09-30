@@ -52,7 +52,9 @@ def main():
     def finish(status):
         result['status']=status;(a.out_dir/'result.json').write_text(json.dumps(result,indent=2));print(json.dumps(result));return
     if not removed:return finish('no_local_signal_segments')
-    for t in removed:b.Remove(t)
+    # Delete, not Remove: the ripped segments are discarded, and b is rebound
+    # below, so Removed items would outlive their board (see fanout_reserve.release).
+    for t in removed:b.Delete(t)
     b.BuildConnectivity();input_board=a.out_dir/'input.kicad_pcb';save_board(b,a.board,input_board)
     power=a.out_dir/'power'
     identities=[]
@@ -78,8 +80,8 @@ def main():
     old_dangling={i['uuid'] for v in before['violations'] if v['type']=='via_dangling' for i in v['items']}
     stranded={i['uuid'] for v in current_drc['violations'] if v['type']=='via_dangling' for i in v['items']}-old_dangling
     wrappers=[t for t in b.GetTracks() if uid(t) in stranded and t.GetClass()=='PCB_VIA' and t.GetNetname()==a.blocker_net and not t.IsLocked()]
-    for t in wrappers:b.Remove(t)
     result['removed_stranded_vias']=[uid(t) for t in wrappers]
+    for t in wrappers:b.Delete(t)  # discarded; uuids read first
     k.ZONE_FILLER(b).Fill(b.Zones());b.BuildConnectivity();out=a.out_dir/'candidate.kicad_pcb';save_board(b,a.board,out)
     after=drc(out,out.with_suffix('.drc.json'),a.kicad_cli);cur=snapshot(b,rules)
     checks=dict(preserved=preserved(original,partition(b)),lost_pad_entries=[i for i,v in entries.items() if v and not cur.get(i,False)],new_bad_entries=[i for i,v in cur.items() if not v and i not in entries])

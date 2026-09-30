@@ -366,11 +366,14 @@ def main():
             tree.append(target)
             pending.remove(target)
     ids = {uid(t) for t in selected}
+    remaining = [t for t in tracks if uid(t) not in ids]
+    # The ripped copper is discarded: Delete, not Remove (a Removed item outlives
+    # its board; see pnr.fanout_reserve.release). Only uuids and len(selected)
+    # are read afterwards; tracks keeps invalid wrappers, so use remaining.
     for t in selected:
-        b.Remove(t)
+        b.Delete(t)
     b.BuildConnectivity()
     cn = b.GetConnectivity()
-    remaining = [t for t in tracks if uid(t) not in ids]
     # Multiple contacts on one unchanged via/track island do not need new
     # traces between them. Such edge-of-copper contacts may not even support a
     # fresh full-width centerline. Query native connectivity AFTER removal.

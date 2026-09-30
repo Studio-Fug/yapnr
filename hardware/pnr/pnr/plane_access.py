@@ -316,7 +316,9 @@ def replace_power_array(board, intent, fab, offset_mm=0.0):
     if any(t.GetClass()!='PAD' and t.IsLocked() for t in group):
         raise ValueError('locked group copper')
     for t in group:
-        if t.GetClass()!='PAD':board.Remove(t)
+        # Replaced by the planned array: discarded (Delete, not Remove; see
+        # pnr.fanout_reserve.release). Only len(vias) is read afterwards.
+        if t.GetClass()!='PAD':board.Delete(t)
     for item in planned:
         board.Add(item);item.thisown=False
     board.BuildConnectivity()

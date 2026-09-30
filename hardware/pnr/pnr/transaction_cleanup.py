@@ -52,11 +52,12 @@ def native_worker(a, board):
         allowed=eligible(item,spec['requested'],spec['nets'],excluded,net_policy(net,rules)['mode'],layers)
         decisions.append(dict(**item,layers=[board.GetLayerName(la) for la in layers],removed=allowed))
         if allowed: removed.append(via)
-    for via in removed: board.Remove(via)
-    # Keep owning board in caller and all removed SWIG wrappers in this scope
-    # through connectivity rebuild/save. Normal interpreter exit is mandatory.
+    removed_ids=[uid(t) for t in removed]
+    # Discarded: Delete, not Remove (a Removed via outlives its board; see
+    # pnr.fanout_reserve.release). Normal interpreter exit is mandatory.
+    for via in removed: board.Delete(via)
     board.BuildConnectivity();k.SaveBoard(str(a.out),board)
-    save(a.report,dict(removed=[uid(t) for t in removed],decisions=decisions))
+    save(a.report,dict(removed=removed_ids,decisions=decisions))
 
 def guards(original, routed, final, before, candidate, after):
     from pnr.via_coalesce import preserved, acceptable

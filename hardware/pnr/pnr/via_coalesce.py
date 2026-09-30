@@ -236,7 +236,9 @@ def apply(board, proposal):
         t.SetStart(vec(s['start'])); t.SetEnd(vec(s['end']))
         t.SetLayer(s['layer']); t.SetWidth(round(s['width_mm'] * 1e6)); t.SetNetCode(net)
         board.Add(t); t.thisown = False
-    board.Remove(items[proposal['remove']])
+    # Delete, not Remove: the discarded via must not outlive the board (KiCad
+    # Python teardown; see pnr.fanout_reserve.release).
+    board.Delete(items[proposal['remove']])
     board.BuildConnectivity()
 
 
@@ -311,7 +313,7 @@ def worker(args, rules):
                     if t.GetClass()=='PCB_TRACK' or is_survivor:
                         removed.append(uid(t))
                         if is_survivor:removed_vias.append(uid(t))
-                        b.Remove(t)
+                        b.Delete(t)  # discarded: never touched again
         pcbnew.SaveBoard(str(args.board), b)
         result = dict(removed=removed,removed_vias=removed_vias)
     else:

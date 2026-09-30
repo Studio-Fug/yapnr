@@ -103,7 +103,8 @@ def restore(board, files):
             target.SetLayer(field.GetLayer())
             target.SetPosition(field.GetPosition())
         namespace = uuid.UUID(old.m_Uuid.AsString())
-        board.Remove(old)
+        old_pads = len(list(old.Pads()))
+        board.Delete(old)  # replaced by the canonical footprint (Delete, not Remove)
         board.Add(new)  # A board owner is required before assigning pad nets.
         for index,pad in enumerate(new.Pads()):
             pad.SetNetCode(nets[pad.GetNumber()])
@@ -111,7 +112,7 @@ def restore(board, files):
             if pad.GetNetCode() != nets[pad.GetNumber()]:
                 raise ValueError('source net assignment failed')
         changes.append(dict(ref=new.GetReference(),library=str(path),
-                            old_pads=len(list(old.Pads())),canonical_pads=len(list(new.Pads())),
+                            old_pads=old_pads,canonical_pads=len(list(new.Pads())),
                             preserved_terminal_nets=nets))
     board.BuildConnectivity()
     return changes

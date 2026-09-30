@@ -37,7 +37,7 @@ def synchronize(old,new,previous,target,k,keepalive):
  remove=[uid for uid,node in old_nodes.items() if new_nodes.get(uid)!=node]
  add=[uid for uid,node in new_nodes.items() if old_nodes.get(uid)!=node]
  retired=[old_items[uid] for uid in remove]
- for item in retired:old.Remove(item)
+ for item in retired:old.Remove(item)  # kept alive in the keepalive arena below (not Delete)
  clones=[]
  for uid in add:
   item=new_items[uid];clone=item.Duplicate();clone.SetUuid(item.m_Uuid)

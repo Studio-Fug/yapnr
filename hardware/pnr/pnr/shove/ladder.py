@@ -579,10 +579,11 @@ class Transaction:
         removed = [t for t in board.GetTracks() if not t.IsLocked()
                    and (t.GetNetname() in rip or t.m_Uuid.AsString() in branch_ids)]
         out['ripped_items'] = len(removed)
+        ripped_nets = [t.GetNetname() for t in removed]
         for t in removed:
-            board.Remove(t)
+            board.Delete(t)  # ripped copper is discarded (Delete, not Remove)
         ripped = self.save(board, folder / 'ripped.kicad_pcb')
-        self.result['ripped'] = [dict(net=n, items=sum(1 for t in removed if t.GetNetname() == n),
+        self.result['ripped'] = [dict(net=n, items=ripped_nets.count(n),
                                       kind='power_branch' if n in power_items else 'signal_net')
                                  for n in list(rip) + sorted(power_items)]
         rip = list(rip) + sorted(power_items)

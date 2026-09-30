@@ -75,9 +75,11 @@ def execute(a,board,rules):
   result['plans']=[x for x in result['considered'] if x['legal'] and abs(x['offset']-a.probe_offset)<1e-6]
  if not result['plans']:print(json.dumps(dict(status='no_improving_detour',baseline_ports=result['baseline_ports'],trials=len(result['considered']))));return
  if a.plan_only:print(json.dumps(dict(status='planned',plans=len(result['plans']))));return
- chosen=result['plans'][a.plan_index];track=next(t for t in board.GetTracks() if uid(t)==chosen['track']);original=partition(board);entries=snapshot(board,rules);before=run_drc(a.kicad_cli,a.board,a.out_dir/'baseline.drc.json');board.Remove(track)
+ chosen=result['plans'][a.plan_index];track=next(t for t in board.GetTracks() if uid(t)==chosen['track']);original=partition(board);entries=snapshot(board,rules);before=run_drc(a.kicad_cli,a.board,a.out_dir/'baseline.drc.json')
+ # The detoured track is discarded: read what the new path copies, then Delete (not Remove).
+ net,layer,width=track.GetNetCode(),track.GetLayer(),track.GetWidth();board.Delete(track)
  for p,q in zip(chosen['path'],chosen['path'][1:]):
-  t=k.PCB_TRACK(board);t.SetNetCode(track.GetNetCode());t.SetLayer(track.GetLayer());t.SetWidth(track.GetWidth());t.SetStart(vec(p));t.SetEnd(vec(q));board.Add(t);t.thisown=False
+  t=k.PCB_TRACK(board);t.SetNetCode(net);t.SetLayer(layer);t.SetWidth(width);t.SetStart(vec(p));t.SetEnd(vec(q));board.Add(t);t.thisown=False
  k.ZONE_FILLER(board).Fill(board.Zones());board.BuildConnectivity();dest=a.out_dir/'candidate.kicad_pcb';k.SaveBoard(str(dest),board)
  import shutil
  shutil.copy2(a.board.with_suffix('.kicad_pro'),dest.with_suffix('.kicad_pro'));table=a.board.parent/'fp-lib-table'

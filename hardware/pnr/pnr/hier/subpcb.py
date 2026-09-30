@@ -24,7 +24,7 @@ def main():
         if ref in keep:
             present.add(ref)
         else:
-            board.Remove(fp)
+            board.Delete(fp)  # discarded; a Removed footprint would outlive the board
             removed += 1
     # Source boards carry no copper; pnr.writeback clears tracks on placement anyway.
     missing = keep - present
@@ -34,7 +34,7 @@ def main():
     pcbnew.SaveBoard(a.out, board)
     print(json.dumps(dict(kept=len(keep), removed=removed)), flush=True)
     import os
-    os._exit(0)  # KiCad's python can crash during interpreter teardown
+    os._exit(0)  # belt and braces: KiCad's python can crash during interpreter teardown
 
 
 if __name__ == '__main__':

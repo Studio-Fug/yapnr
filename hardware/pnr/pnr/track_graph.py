@@ -179,6 +179,11 @@ def cycle_candidates(board, rules, sources, max_length_mm=3):
 
 
 def apply_cycle(board, proposal):
+    """Apply a cycle proposal; return the uuids of the deleted tracks.
+
+    The removed tracks are deleted (board.Delete), so no wrapper of them may be
+    used afterwards; callers get their uuids.
+    """
     from pnr.plane_access import uid
     items = {uid(t): t for t in board.GetTracks()}
     for identity in proposal['remove_tracks']:
@@ -203,7 +208,6 @@ def apply_cycle(board, proposal):
     for t in replacements:
         board.Add(t); t.thisown = False
     for t in removed:
-        board.Remove(t)
+        board.Delete(t)  # discarded; a Removed track would outlive its board
     board.BuildConnectivity()
-    # Keep native wrappers alive through SaveBoard in transaction callers.
-    return removed
+    return list(proposal['remove_tracks'])

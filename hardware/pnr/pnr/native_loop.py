@@ -223,8 +223,9 @@ def native_worker(a):
             return (t.GetClass(),t.GetNetname(),t.GetLayer(),xy(t.GetStart()),xy(t.GetEnd()),t.GetWidth() if t.GetClass()=='PCB_TRACK' else t.GetWidth(k.F_Cu))
         if not added<=set(now) or removed & set(now) or any(geometry(now[i])!=geometry(mid[i]) for i in added):
             save(a.report,dict(skipped='placement copper was changed by routing'));return
-        retained_wrappers=[now[i] for i in added]
-        for t in retained_wrappers:b.Remove(t)
+        # The placement tethers are discarded: Delete, not Remove (a Removed item
+        # outlives its board; see pnr.fanout_reserve.release).
+        for t in [now[i] for i in added]:b.Delete(t)
         clones=[]
         for i in removed:
             clone=old[i].Duplicate();clone.SetUuid(old[i].m_Uuid);b.Add(clone)
@@ -253,12 +254,15 @@ def native_worker(a):
             contacts=[t for t in tracks if any(touch(t,p,la) for la in b.GetEnabledLayers().CuStack())]
             old.append((p,p.GetPosition(),contacts,p.GetBoundingBox()))
         f.SetPosition(f.GetPosition()+delta)
-        added=[];removed=[];handled=set()
+        added=[];removed=[];handled=set();contact_ids={id(t):uid(t) for t in tracks}
         for p,origin,contacts,box in old:
             if not contacts or not p.GetNetCode():continue
             if p.GetNetname() in movement_excluded-plane_nets:continue
             for contact in contacts:
-                if uid(contact) in handled:continue
+                # Contacts are shared between pads, and a replaced one is deleted:
+                # identify it by the uuid read before any deletion.
+                key=contact_ids[id(contact)]
+                if key in handled:continue
                 layers=[la for la in (k.F_Cu,k.In2_Cu,k.B_Cu) if p.IsOnLayer(la) and contact.IsOnLayer(la)]
                 if not layers:continue
                 la=layers[0];anchor=xy(origin)
@@ -271,14 +275,15 @@ def native_worker(a):
                     end_local=any(q.GetNetCode()==contact.GetNetCode() and q.IsOnLayer(la) and qb.Contains(contact.GetEnd()) for q,qo,qc,qb in old)
                     if start_local and end_local and not contact.IsLocked():
                         clone=contact.Duplicate();clone.SetStart(contact.GetStart()+delta);clone.SetEnd(contact.GetEnd()+delta)
-                        b.Remove(contact);removed.append(contact);handled.add(uid(contact));b.Add(clone);added.append(clone)
+                        b.Delete(contact);removed.append(key);handled.add(key);b.Add(clone);added.append(clone)
                         continue
                     width=contact.GetWidth()
                     at_start=box.Contains(contact.GetStart());at_end=box.Contains(contact.GetEnd())
                     if not contact.IsLocked() and at_start != at_end:
                         anchor=xy(contact.GetEnd() if at_start else contact.GetStart())
-                        b.Remove(contact);removed.append(contact);handled.add(uid(contact))
-                if contact.GetClass()=='PCB_VIA':anchor=xy(contact.GetPosition())
+                        b.Delete(contact);removed.append(key);handled.add(key)
+                        contact=None  # deleted; a track, so the via case below does not apply
+                if contact is not None and contact.GetClass()=='PCB_VIA':anchor=xy(contact.GetPosition())
                 if rules.get('electrical_fab'):
                     from pnr.pad_entry import required_width
                     width=max(width,round(required_width(p,rules)*1e6))
@@ -288,7 +293,7 @@ def native_worker(a):
                     t=k.PCB_TRACK(b);t.SetNetCode(p.GetNetCode());t.SetLayer(la);t.SetWidth(width)
                     t.SetStart(k.VECTOR2I(*[round(v*1e6) for v in start]));t.SetEnd(k.VECTOR2I(*[round(v*1e6) for v in end]));b.Add(t);added.append(t)
         k.SaveBoard(str(a.out),b)
-        save(a.report,dict(move=spec,added_tracks=len(added),removed_tracks=[uid(t) for t in removed]))
+        save(a.report,dict(move=spec,added_tracks=len(added),removed_tracks=removed))
         return
     if a.worker == 'check':
         k.ZONE_FILLER(b).Fill(b.Zones());b.BuildConnectivity()

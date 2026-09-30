@@ -17,5 +17,8 @@
       (`tools/privacy_scan.py`); commits use the owner's public commit address
       (`tools/privacy/allowed_identities.txt`) or a GitHub noreply address
 - [ ] Docs and `WORKLOG.md` updated where this PR changes behaviour, layout or status
+- [ ] Labels (release notes, `docs/releases.md`): one area label (`engine`, `viewer`, `cli`,
+      `bazel`, `release`, `docs`, `ci`, `dependencies`), plus `breaking` and `results-change`
+      when they apply
 - [ ] Mechanical-only changes (format, rename, move) are a PR of their own; after it is merged, its
       commit on `main` goes into `.git-blame-ignore-revs` in a follow-up (or: none)

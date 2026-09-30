@@ -1,0 +1,479 @@
+name: Image
+
+# The container images (docs/containers.md):
+#   ghcr.io/studio-fug/yapnr-kicad  Ubuntu 24.04 + KiCad 10 (tag: docker/yapnr-kicad/TAG)
+#   ghcr.io/studio-fug/yapnr        that base + CPython 3.11, numpy, CPU torch + the yapnr wheel
+# Built natively on ubuntu-24.04 (linux/amd64) and ubuntu-24.04-arm (linux/arm64), no QEMU, and
+# smoke-tested on both (tools/image/smoke_image.sh) before anything is tagged.
+#
+#   pull request        build and smoke-test both architectures; push nothing
+#   push to main        also push :edge and :sha-<7>, and the base tag the first time it is built
+#   release.yaml        (tags, through workflow_call) push the release tags: X.Y.Z, X.Y and
+#                       latest (tools/release/version.py decides; RCs get X.Y.Z-rc.N only)
+#
+# Pushes are by digest from each architecture's job and are tagged as one multi-architecture
+# index by the publish job, with SBOM and provenance (BuildKit) and a GitHub attestation. A
+# published base tag is never overwritten: a change under docker/yapnr-kicad needs a new TAG.
+#
+# The workflow runs on every pull request, and the plan job skips the rest when nothing that
+# goes into an image changed, so a future required check never waits for a workflow that did
+# not start. The `image` job summarizes the run. Informational for now: not a required check
+# until the v0.1.0 release (docs/releases.md).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      mode:
+        description: release (push the release tags of the tag being built) or dry-run
+        type: string
+        required: true
+    outputs:
+      digest:
+        description: Digest of the published ghcr.io/studio-fug/yapnr index (empty in a dry run)
+        value: ${{ jobs.publish.outputs.digest }}
+      kicad-version:
+        description: The KiCad version in the images
+        value: ${{ jobs.plan.outputs.kicad_version }}
+
+# Least privilege: jobs widen this for themselves.
+permissions:
+  contents: read
+
+# github.workflow is the caller's name under workflow_call, so a release (or its dry run on
+# main) never shares a group with, or gets replaced by, the image runs of pushes to main.
+concurrency:
+  group: image-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE: ghcr.io/studio-fug/yapnr
+  BASE_IMAGE: ghcr.io/studio-fug/yapnr-kicad
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: read # does the base tag exist yet?
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      publish: ${{ steps.plan.outputs.publish }}
+      base_mode: ${{ steps.plan.outputs.base_mode }}
+      publish_base: ${{ steps.plan.outputs.publish_base }}
+      base_tag: ${{ steps.plan.outputs.base_tag }}
+      kicad_version: ${{ steps.plan.outputs.kicad_version }}
+      ubuntu_snapshot: ${{ steps.plan.outputs.ubuntu_snapshot }}
+      version: ${{ steps.version.outputs.pep440 }}
+      oci_tags: ${{ steps.version.outputs.oci_tags }}
+      sha: ${{ steps.version.outputs.sha }}
+    steps:
+      - name: Setup repository
+        uses: actions/checkout@v4
+        with:
+          # Full history and tags: tools/release/version.py runs git describe.
+          fetch-depth: 0
+
+      - name: Compute the version and image tags
+        id: version
+        run: python3 tools/release/version.py --ref "${GITHUB_REF}" --github-output "${GITHUB_OUTPUT}"
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Decide what to build and publish
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          MODE: ${{ inputs.mode }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          BEFORE: ${{ github.event.before }}
+          OCI_TAGS: ${{ steps.version.outputs.oci_tags }}
+        run: |
+          base_tag="$(cat docker/yapnr-kicad/TAG)"
+          kicad_version="${base_tag%-*}"
+
+          # What changed. Anything that goes into an image, or builds or tests one, counts.
+          range=""
+          if [ -z "${MODE}" ] && [ "${EVENT}" = pull_request ]; then
+            range="${PR_BASE}...${PR_HEAD}"
+          elif [ -z "${MODE}" ] && [ "${EVENT}" = push ] && [ -n "${BEFORE}" ] \
+              && ! echo "${BEFORE}" | grep -qE '^0+$' \
+              && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            range="${BEFORE}...${GITHUB_SHA}"
+          fi
+          if [ -n "${range}" ]; then
+            changed="$(git diff --name-only "${range}")"
+            echo "Changed files (${range}):"
+            while IFS= read -r file; do echo "  ${file}"; done <<< "${changed}"
+            relevant='^(docker/|yapnr/|release/|tools/image/|tools/release/|\.github/actions/image-build/|\.github/workflows/image\.yaml$|\.dockerignore$|BUILD\.bazel$|MODULE\.bazel|\.bazel|requirements|LICENSE$|THIRD_PARTY\.md$)'
+            build=false
+            if echo "${changed}" | grep -qE "${relevant}"; then build=true; fi
+            base_changed=false
+            if echo "${changed}" | grep -E '^docker/yapnr-kicad/' | grep -qvE '\.md$'; then
+              base_changed=true
+            fi
+          else
+            # Manual runs, release builds and pushes without a usable range build everything.
+            build=true
+            base_changed=false
+          fi
+
+          # Is the base tag published? A published tag is never overwritten.
+          # GHCR answers "denied" rather than "not found" for a package that does not exist
+          # yet. Treating that as absent is safe: publishing never overwrites (see publish).
+          if out="$(docker buildx imagetools inspect "${BASE_IMAGE}:${base_tag}" 2>&1)"; then
+            base_exists=true
+          elif echo "${out}" | grep -qiE 'not found|manifest unknown|name unknown|denied|unauthorized'; then
+            base_exists=false
+            echo "${BASE_IMAGE}:${base_tag} is not published: $(echo "${out}" | tail -n 1)"
+          else
+            echo "::error::cannot tell whether ${BASE_IMAGE}:${base_tag} exists: ${out}"
+            exit 1
+          fi
+          if [ "${base_changed}" = true ] && [ "${base_exists}" = true ]; then
+            echo "::error file=docker/yapnr-kicad/TAG::docker/yapnr-kicad changed, but" \
+              "${BASE_IMAGE}:${base_tag} is already published and is never overwritten." \
+              "Bump docker/yapnr-kicad/TAG (the -N suffix, or the KiCad version)."
+            exit 1
+          fi
+          base_mode=registry
+          if [ "${base_exists}" = false ] || [ "${base_changed}" = true ]; then base_mode=build; fi
+
+          # Publishing: :edge from main pushes, the release tags from release.yaml.
+          # (A manual run on main publishes too, like a push: a way to retry.)
+          publish=false
+          if [ "${MODE}" = release ]; then
+            publish=true
+          elif [ -z "${MODE}" ] && [ "${GITHUB_REF}" = refs/heads/main ] \
+              && { [ "${EVENT}" = push ] || [ "${EVENT}" = workflow_dispatch ]; }; then
+            publish=true
+          fi
+          if [ "${publish}" = true ] && [ -z "${OCI_TAGS}" ]; then
+            echo "::error::nothing to tag: tools/release/version.py gave no image tags for ${GITHUB_REF}"
+            exit 1
+          fi
+          publish_base=false
+          if [ "${publish}" = true ] && [ "${base_exists}" = false ]; then publish_base=true; fi
+          if [ "${build}" = false ]; then publish=false; publish_base=false; fi
+
+          {
+            echo "build=${build}"
+            echo "publish=${publish}"
+            echo "base_mode=${base_mode}"
+            echo "publish_base=${publish_base}"
+            echo "base_tag=${base_tag}"
+            echo "kicad_version=${kicad_version}"
+            echo "ubuntu_snapshot=$(date -u +%Y%m%dT%H%M%SZ)"
+          } | tee -a "${GITHUB_OUTPUT}"
+          {
+            echo "### Image plan"
+            echo "- build: ${build}, publish: ${publish} (tags: ${OCI_TAGS:-none})"
+            echo "- base ${BASE_IMAGE}:${base_tag}: ${base_mode} (published: ${base_exists};" \
+              "publish now: ${publish_base})"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  # The yapnr wheel, stamped with the version from git. Pure Python: built once.
+  wheel:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - name: Setup repository
+        uses: actions/checkout@v4
+
+      # setup-bazel's own caches are not used: see ci.yaml.
+      - name: Setup Bazel
+        uses: bazel-contrib/setup-bazel@0.15.0
+
+      - name: Point Bazelisk at the cached directory
+        run: echo "BAZELISK_HOME=${HOME}/.cache/bazelisk" >> "${GITHUB_ENV}"
+
+      - name: Cache Bazelisk and the Bazel repository cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/bazelisk
+            ~/.cache/bazel-repo
+          key: bazel-repo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'requirements.lock') }}
+          restore-keys: bazel-repo-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Build the wheel
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          bazel build //release:wheel.dist --config=ci --stamp --embed_label="${VERSION}" \
+            --repository_cache="$HOME/.cache/bazel-repo"
+          mkdir -p dist
+          cp "$(bazel info --config=ci bazel-bin)"/release/wheel_dist/yapnr-*.whl dist/
+          ls -l dist
+          test "$(find dist -name 'yapnr-*.whl' | wc -l)" -eq 1
+
+      - name: Upload the wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  # Build and smoke-test without publishing (pull requests, dry runs).
+  build:
+    needs: [plan, wheel]
+    if: needs.plan.outputs.build == 'true' && needs.plan.outputs.publish != 'true'
+    name: build (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read
+    services:
+      registry:
+        image: registry:3
+        ports:
+          - 5000:5000
+    steps:
+      - name: Setup repository
+        uses: actions/checkout@v4
+
+      - name: Download the wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: wheel
+          path: dist
+
+      - name: Build and smoke-test
+        uses: ./.github/actions/image-build
+        with:
+          arch: ${{ matrix.arch }}
+          base-mode: ${{ needs.plan.outputs.base_mode }}
+          base-tag: ${{ needs.plan.outputs.base_tag }}
+          kicad-version: ${{ needs.plan.outputs.kicad_version }}
+          ubuntu-snapshot: ${{ needs.plan.outputs.ubuntu_snapshot }}
+          version: ${{ needs.plan.outputs.version }}
+          revision: ${{ needs.plan.outputs.sha }}
+          push: 'false'
+          push-base: 'false'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  # The same, then push by digest (main, releases). Only this job and publish write packages.
+  build-publish:
+    needs: [plan, wheel]
+    if: needs.plan.outputs.build == 'true' && needs.plan.outputs.publish == 'true'
+    name: build and push (${{ matrix.arch }})
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    services:
+      registry:
+        image: registry:3
+        ports:
+          - 5000:5000
+    steps:
+      - name: Setup repository
+        uses: actions/checkout@v4
+
+      - name: Download the wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: wheel
+          path: dist
+
+      - name: Build, smoke-test and push by digest
+        uses: ./.github/actions/image-build
+        with:
+          arch: ${{ matrix.arch }}
+          base-mode: ${{ needs.plan.outputs.base_mode }}
+          base-tag: ${{ needs.plan.outputs.base_tag }}
+          kicad-version: ${{ needs.plan.outputs.kicad_version }}
+          ubuntu-snapshot: ${{ needs.plan.outputs.ubuntu_snapshot }}
+          version: ${{ needs.plan.outputs.version }}
+          revision: ${{ needs.plan.outputs.sha }}
+          push: 'true'
+          push-base: ${{ needs.plan.outputs.publish_base }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  # Tag the multi-architecture indexes and attest them. Runs only when every architecture
+  # passed its smoke test.
+  publish:
+    needs: [plan, build-publish]
+    if: needs.plan.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    outputs:
+      digest: ${{ steps.index.outputs.digest }}
+    steps:
+      - name: Setup repository
+        uses: actions/checkout@v4
+
+      - name: Download the digests
+        uses: actions/download-artifact@v4
+        with:
+          pattern: digests-*
+          path: ${{ runner.temp }}/digests
+          merge-multiple: true
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # --- the KiCad base, the first time its tag is built ---------------------------------
+      - name: Tag the KiCad base
+        id: base-index
+        if: needs.plan.outputs.publish_base == 'true'
+        env:
+          BASE_TAG: ${{ needs.plan.outputs.base_tag }}
+          KICAD_VERSION: ${{ needs.plan.outputs.kicad_version }}
+          REVISION: ${{ needs.plan.outputs.sha }}
+        run: |
+          # Never overwrite a published base tag, even if one appeared since the plan job.
+          if docker buildx imagetools inspect "${BASE_IMAGE}:${BASE_TAG}" >/dev/null 2>&1; then
+            echo "::error::${BASE_IMAGE}:${BASE_TAG} exists already; not overwriting it"
+            exit 1
+          fi
+          sources=()
+          for digest in "${RUNNER_TEMP}"/digests/yapnr-kicad/*; do
+            sources+=("${BASE_IMAGE}@sha256:$(basename "${digest}")")
+          done
+          test "${#sources[@]}" -eq 2
+          # <kicad>-<N> is immutable; <kicad> and <major.minor> follow the newest base.
+          docker buildx imagetools create \
+            --tag "${BASE_IMAGE}:${BASE_TAG}" \
+            --tag "${BASE_IMAGE}:${KICAD_VERSION}" \
+            --tag "${BASE_IMAGE}:${KICAD_VERSION%.*}" \
+            --annotation "index:org.opencontainers.image.description=Ubuntu 24.04 with KiCad ${KICAD_VERSION} for headless use; the base of ${IMAGE}" \
+            --annotation "index:org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --annotation "index:org.opencontainers.image.licenses=GPL-3.0-or-later AND CC-BY-SA-4.0" \
+            --annotation "index:org.opencontainers.image.revision=${REVISION}" \
+            "${sources[@]}"
+          digest="$(docker buildx imagetools inspect "${BASE_IMAGE}:${BASE_TAG}" --format '{{json .Manifest}}' | jq -r .digest)"
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
+          docker buildx imagetools inspect "${BASE_IMAGE}:${BASE_TAG}"
+
+      - name: Attest the KiCad base
+        if: needs.plan.outputs.publish_base == 'true'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.BASE_IMAGE }}
+          subject-digest: ${{ steps.base-index.outputs.digest }}
+          push-to-registry: true
+
+      # The corresponding source of the bundled KiCad (docs/containers.md). Never deleted.
+      - name: Publish the KiCad source image
+        if: needs.plan.outputs.publish_base == 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: docker/yapnr-kicad/Dockerfile
+          target: src
+          platforms: linux/amd64
+          tags: ${{ env.BASE_IMAGE }}:${{ needs.plan.outputs.base_tag }}-src
+          labels: |
+            org.opencontainers.image.title=yapnr-kicad sources
+            org.opencontainers.image.description=Source packages of KiCad in ${{ env.BASE_IMAGE }}:${{ needs.plan.outputs.base_tag }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ needs.plan.outputs.sha }}
+          push: true
+          provenance: mode=max
+          sbom: false
+
+      # --- the yapnr image ---------------------------------------------------------------
+      - name: Tag the yapnr image
+        id: index
+        env:
+          OCI_TAGS: ${{ needs.plan.outputs.oci_tags }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          REVISION: ${{ needs.plan.outputs.sha }}
+          KICAD_VERSION: ${{ needs.plan.outputs.kicad_version }}
+        run: |
+          sources=()
+          for digest in "${RUNNER_TEMP}"/digests/yapnr/*; do
+            sources+=("${IMAGE}@sha256:$(basename "${digest}")")
+          done
+          test "${#sources[@]}" -eq 2
+          tags=()
+          IFS=',' read -r -a names <<< "${OCI_TAGS}"
+          for name in "${names[@]}"; do tags+=(--tag "${IMAGE}:${name}"); done
+          docker buildx imagetools create "${tags[@]}" \
+            --annotation "index:org.opencontainers.image.description=yapnr (yet another place and route) with KiCad ${KICAD_VERSION} and the Python runtime" \
+            --annotation "index:org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --annotation "index:org.opencontainers.image.licenses=AGPL-3.0-or-later" \
+            --annotation "index:org.opencontainers.image.version=${VERSION}" \
+            --annotation "index:org.opencontainers.image.revision=${REVISION}" \
+            "${sources[@]}"
+          digest="$(docker buildx imagetools inspect "${IMAGE}:${names[0]}" --format '{{json .Manifest}}' | jq -r .digest)"
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
+          docker buildx imagetools inspect "${IMAGE}:${names[0]}"
+          {
+            echo "### Published ${IMAGE}"
+            echo "- tags: ${OCI_TAGS}"
+            echo "- digest: \`${digest}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Attest the yapnr image
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.index.outputs.digest }}
+          push-to-registry: true
+
+  # One result for the whole workflow (skipped jobs count as success), so that a single
+  # check can become required later without depending on which jobs ran.
+  image:
+    needs: [plan, wheel, build, build-publish, publish]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check the results
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: ${RESULTS}"
+          for result in ${RESULTS}; do
+            case "${result}" in
+              success | skipped) ;;
+              *) echo "::error::an image job ended with '${result}'"; exit 1 ;;
+            esac
+          done

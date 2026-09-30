@@ -1,0 +1,222 @@
+name: Release
+
+# Publishes a release when the owner pushes a release tag (docs/releases.md). Only the owner
+# creates v* tags (a tag ruleset enforces it); agents never do.
+#
+#   verify   the tag is annotated, well formed and on main (or a release/X.Y branch); version,
+#            previous stable tag and `latest` from tools/release/version.py
+#   ci       the whole CI workflow at the tag (ci.yaml; its Pages jobs skip themselves)
+#   image    both images for both architectures, smoke-tested, pushed with the release tags
+#            (image.yaml: X.Y.Z, X.Y, latest; X.Y.Z-rc.N only for release candidates)
+#   release  source archive, wheel, docs tarball, SHA256SUMS, attestations, then the GitHub
+#            release: a draft with every file and the generated notes (grouped by PR label,
+#            .github/release.yml), published last
+#
+# A manual run (Actions > Release > Run workflow, on any branch) is a dry run: it verifies,
+# tests and builds everything, uploads the release files as a workflow artifact and publishes
+# nothing.
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+'
+  workflow_dispatch:
+
+# Least privilege: jobs widen this for themselves.
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      dry_run: ${{ steps.mode.outputs.dry_run }}
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+      pep440: ${{ steps.version.outputs.pep440 }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      latest: ${{ steps.version.outputs.latest }}
+      previous_stable: ${{ steps.version.outputs.previous_stable }}
+    steps:
+      - name: Setup repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Release or dry run
+        id: mode
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = push ] && [ "${GITHUB_REF_TYPE}" = tag ]; then
+            echo "dry_run=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "dry_run=true" >> "${GITHUB_OUTPUT}"
+            echo "::notice::Dry run at ${GITHUB_REF}: everything is built and tested, nothing is published."
+          fi
+
+      - name: Check the tag
+        if: steps.mode.outputs.dry_run == 'false'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          # The tag object itself (checkout may leave a lightweight ref behind).
+          git fetch --force origin "refs/tags/${TAG}:refs/tags/${TAG}"
+          if [ "$(git cat-file -t "refs/tags/${TAG}")" != tag ]; then
+            echo "::error::${TAG} is a lightweight tag; release tags are annotated (git tag -a or -s)"
+            exit 1
+          fi
+          commit="$(git rev-parse "refs/tags/${TAG}^{commit}")"
+          on_branch=""
+          for branch in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/main 'refs/remotes/origin/release/*'); do
+            if git merge-base --is-ancestor "${commit}" "${branch}"; then on_branch="${branch}"; break; fi
+          done
+          if [ -z "${on_branch}" ]; then
+            echo "::error::${TAG} (${commit}) is not on main or a release/X.Y branch"
+            exit 1
+          fi
+          echo "${TAG} is ${commit}, on ${on_branch}"
+          git checkout --quiet --detach "${commit}"
+          python3 tools/release/version.py --ref "${GITHUB_REF}" --expect-tag "${TAG}" >/dev/null
+
+      - name: Compute the version
+        id: version
+        run: |
+          python3 tools/release/version.py --ref "${GITHUB_REF}" --github-output "${GITHUB_OUTPUT}"
+          {
+            echo '```json'
+            python3 tools/release/version.py --ref "${GITHUB_REF}"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  ci:
+    needs: verify
+    uses: ./.github/workflows/ci.yaml
+    # ci.yaml's Pages jobs request these; they skip themselves outside pushes to main and pull
+    # requests. Its lint, test and docs jobs keep ci.yaml's own `contents: read`.
+    permissions:
+      contents: write
+      pull-requests: write
+
+  image:
+    needs: [verify, ci]
+    uses: ./.github/workflows/image.yaml
+    with:
+      mode: ${{ needs.verify.outputs.dry_run == 'true' && 'dry-run' || 'release' }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+
+  release:
+    needs: [verify, ci, image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    env:
+      DRY_RUN: ${{ needs.verify.outputs.dry_run }}
+      TAG: ${{ needs.verify.outputs.tag }}
+      VERSION: ${{ needs.verify.outputs.version }}
+      PEP440: ${{ needs.verify.outputs.pep440 }}
+    steps:
+      - name: Setup repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Built earlier in this run: the wheel by image.yaml, the site by ci.yaml.
+      - name: Download the wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: wheel
+          path: ${{ runner.temp }}/wheel
+
+      - name: Download the documentation site
+        uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: ${{ runner.temp }}/site
+
+      - name: Assemble the release files
+        run: |
+          ref="${TAG:-HEAD}"
+          mkdir -p out
+          # The source archive: stable bytes for Bazel's archive_override (integrity) and the
+          # AGPL source. GitHub's own /archive/ tarballs are not guaranteed to be stable.
+          git archive --format=tar --prefix="yapnr-${VERSION}/" "${ref}" \
+            | gzip -n > "out/yapnr-${TAG:-${PEP440}}.tar.gz"
+          cp "${RUNNER_TEMP}"/wheel/yapnr-*.whl out/
+          mtime="$(git log -1 --format=%ct "${ref}")"
+          tar --sort=name --owner=0 --group=0 --numeric-owner --mtime="@${mtime}" \
+            -C "${RUNNER_TEMP}/site" -cf - . | gzip -n > "out/yapnr-docs-${VERSION}.tar.gz"
+          (cd out && sha256sum -- * > SHA256SUMS)
+          ls -l out
+          cat out/SHA256SUMS
+
+      - name: Upload the release files
+        uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: out/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Attest the release files
+        if: env.DRY_RUN == 'false'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: out/*
+
+      - name: Write the release notes header
+        if: env.DRY_RUN == 'false'
+        env:
+          DIGEST: ${{ needs.image.outputs.digest }}
+          KICAD_VERSION: ${{ needs.image.outputs.kicad-version }}
+        run: |
+          major_minor="$(echo "${VERSION}" | cut -d. -f1,2)"
+          upgrade=()
+          if [ -f "docs/releases/v${major_minor}.md" ]; then
+            upgrade=(--upgrade-notes "docs/releases/v${major_minor}.md")
+          fi
+          wheels=(out/yapnr-*.whl)
+          python3 tools/release/notes_header.py --tag "${TAG}" --pep440 "${PEP440}" \
+            --digest "${DIGEST}" --kicad-version "${KICAD_VERSION}" \
+            --archive "out/yapnr-${TAG}.tar.gz" --wheel "${wheels[0]}" \
+            ${upgrade[@]+"${upgrade[@]}"} > "${RUNNER_TEMP}/notes.md"
+          cat "${RUNNER_TEMP}/notes.md" >> "${GITHUB_STEP_SUMMARY}"
+
+      # Draft first, with every file attached; publishing is the last step. With immutable
+      # releases a published release can no longer change, so nothing may follow it.
+      - name: Create the GitHub release
+        if: env.DRY_RUN == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+          LATEST: ${{ needs.verify.outputs.latest }}
+          PREVIOUS_STABLE: ${{ needs.verify.outputs.previous_stable }}
+        run: |
+          # A draft left behind by a failed earlier attempt is replaced; a published release
+          # is never touched.
+          if draft="$(gh release view "${TAG}" --json isDraft --jq .isDraft 2>/dev/null)"; then
+            if [ "${draft}" != true ]; then
+              echo "::error::release ${TAG} is already published"
+              exit 1
+            fi
+            gh release delete "${TAG}" --yes
+          fi
+          args=(--draft --verify-tag --title "yapnr ${VERSION}" --notes-file "${RUNNER_TEMP}/notes.md" --generate-notes)
+          if [ -n "${PREVIOUS_STABLE}" ]; then args+=(--notes-start-tag "${PREVIOUS_STABLE}"); fi
+          if [ "${PRERELEASE}" = true ]; then args+=(--prerelease); fi
+          gh release create "${TAG}" "${args[@]}" out/*
+          gh release edit "${TAG}" --verify-tag --draft=false --latest="${LATEST}"
+          gh release view "${TAG}" --json url --jq .url

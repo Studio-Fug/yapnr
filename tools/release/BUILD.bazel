@@ -2,12 +2,14 @@ load("@rules_python//python:defs.bzl", "py_binary", "py_library")
 
 package(default_visibility = ["//visibility:public"])
 
-# Version and image tags from git (docs/releases.md). Stdlib-only and Python
-# 3.9 compatible: CI runs these scripts with the runner's python3.
+# Version and image tags from git, and the release notes header
+# (docs/releases.md). Stdlib-only and Python 3.9 compatible: CI runs these
+# scripts with the runner's python3.
 py_library(
     name = "release_lib",
     srcs = [
         "__init__.py",
+        "notes_header.py",
         "version.py",
     ],
     imports = ["../.."],
@@ -19,5 +21,12 @@ py_binary(
     name = "version",
     srcs = ["version.py"],
     main = "version.py",
+    deps = [":release_lib"],
+)
+
+py_binary(
+    name = "notes_header",
+    srcs = ["notes_header.py"],
+    main = "notes_header.py",
     deps = [":release_lib"],
 )

@@ -1,0 +1,39 @@
+# Categories of the release notes GitHub generates (gh release create --generate-notes, run by
+# .github/workflows/release.yaml). A pull request lands in the first category whose labels it
+# carries, so breaking and results-changing work is listed first. Labels: docs/releases.md.
+changelog:
+  exclude:
+    labels:
+      - skip-changelog
+  categories:
+    - title: Breaking changes
+      labels:
+        - breaking
+    - title: Results changes (same inputs, seed and flags give a different board)
+      labels:
+        - results-change
+    - title: Engine
+      labels:
+        - engine
+    - title: Viewer
+      labels:
+        - viewer
+    - title: Projects and CLI
+      labels:
+        - cli
+    - title: Bazel ruleset
+      labels:
+        - bazel
+    - title: Container images and releases
+      labels:
+        - release
+    - title: Documentation
+      labels:
+        - docs
+    - title: CI and dependencies
+      labels:
+        - ci
+        - dependencies
+    - title: Other changes
+      labels:
+        - '*'

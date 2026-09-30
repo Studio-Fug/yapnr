@@ -1,0 +1,213 @@
+name: Build and smoke-test the images for one architecture
+description: >-
+  Builds ghcr.io/studio-fug/yapnr (and, when it is new, its KiCad base ghcr.io/studio-fug/yapnr-kicad)
+  natively for one architecture, smoke-tests them with tools/image/smoke_image.sh and, when asked
+  to, pushes them by digest. .github/workflows/image.yaml calls it from its per-architecture
+  build jobs; the job must check out the repository, put the yapnr wheel into ./dist and run a
+  registry service on localhost:5000 (for a base that is built but not pushed).
+
+inputs:
+  arch:
+    description: amd64 or arm64 (the runner's own architecture)
+    required: true
+  base-mode:
+    description: build (the base tag is new, or docker/yapnr-kicad changed) or registry (pull it)
+    required: true
+  base-tag:
+    description: the base image tag, docker/yapnr-kicad/TAG
+    required: true
+  kicad-version:
+    description: the KiCad version the images must report
+    required: true
+  ubuntu-snapshot:
+    description: snapshot.ubuntu.com ID recorded in the base (UTC, YYYYMMDDTHHMMSSZ)
+    required: true
+  version:
+    description: the yapnr version (PEP 440) the wheel is stamped with
+    required: true
+  revision:
+    description: the yapnr commit
+    required: true
+  push:
+    description: push the yapnr image by digest after the smoke test ('true' or 'false')
+    required: true
+  push-base:
+    description: push the newly built base by digest ('true' or 'false')
+    required: true
+  github-token:
+    description: token for ghcr.io (packages read; packages write to push)
+    required: true
+
+outputs:
+  digest:
+    description: digest of the pushed yapnr image (empty unless pushed)
+    value: ${{ steps.push.outputs.digest }}
+  base-digest:
+    description: digest of the pushed base image (empty unless pushed)
+    value: ${{ steps.base-push.outputs.digest }}
+
+runs:
+  using: composite
+  steps:
+    # network=host lets BuildKit reach the job's registry service on localhost:5000.
+    - name: Set up Buildx
+      uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      with:
+        driver-opts: network=host
+
+    - name: Log in to ghcr.io
+      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ inputs.github-token }}
+
+    # --- the KiCad base, when it is built here -------------------------------------------
+    - name: Build the KiCad base (local registry, not published)
+      if: inputs.base-mode == 'build' && inputs.push-base != 'true'
+      uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      with:
+        context: .
+        file: docker/yapnr-kicad/Dockerfile
+        platforms: linux/${{ inputs.arch }}
+        build-args: |
+          BASE_TAG=${{ inputs.base-tag }}
+          UBUNTU_SNAPSHOT=${{ inputs.ubuntu-snapshot }}
+          VCS_REF=${{ inputs.revision }}
+        tags: localhost:5000/yapnr-kicad:ci
+        push: true
+        provenance: false
+        sbom: false
+        cache-from: type=gha,scope=yapnr-kicad-${{ inputs.arch }}
+        cache-to: type=gha,mode=min,scope=yapnr-kicad-${{ inputs.arch }},ignore-error=true
+
+    # Pushed untagged; the publish job tags the multi-architecture index only after every
+    # architecture passed its smoke test.
+    - name: Build the KiCad base and push it by digest
+      id: base-push
+      if: inputs.base-mode == 'build' && inputs.push-base == 'true'
+      uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      with:
+        context: .
+        file: docker/yapnr-kicad/Dockerfile
+        platforms: linux/${{ inputs.arch }}
+        build-args: |
+          BASE_TAG=${{ inputs.base-tag }}
+          UBUNTU_SNAPSHOT=${{ inputs.ubuntu-snapshot }}
+          VCS_REF=${{ inputs.revision }}
+        outputs: type=image,name=ghcr.io/studio-fug/yapnr-kicad,push-by-digest=true,name-canonical=true,push=true
+        provenance: mode=max
+        sbom: true
+        cache-from: type=gha,scope=yapnr-kicad-${{ inputs.arch }}
+        cache-to: type=gha,mode=min,scope=yapnr-kicad-${{ inputs.arch }},ignore-error=true
+
+    # The source packages of the KiCad build (published as <tag>-src by the publish job). Built
+    # here once, on amd64, so a pull request that changes the base finds a broken src stage.
+    - name: Check that the KiCad source image builds
+      if: inputs.base-mode == 'build' && inputs.push-base != 'true' && inputs.arch == 'amd64'
+      uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      with:
+        context: .
+        file: docker/yapnr-kicad/Dockerfile
+        target: src
+        platforms: linux/${{ inputs.arch }}
+        outputs: type=cacheonly
+        provenance: false
+        sbom: false
+
+    - name: Select the base
+      id: base
+      shell: bash
+      env:
+        BASE_MODE: ${{ inputs.base-mode }}
+        PUSH_BASE: ${{ inputs.push-base }}
+        BASE_TAG: ${{ inputs.base-tag }}
+        BASE_DIGEST: ${{ steps.base-push.outputs.digest }}
+      run: |
+        case "${BASE_MODE}:${PUSH_BASE}" in
+          build:true) ref="ghcr.io/studio-fug/yapnr-kicad@${BASE_DIGEST}" ;;
+          build:*) ref="localhost:5000/yapnr-kicad:ci" ;;
+          *) ref="ghcr.io/studio-fug/yapnr-kicad:${BASE_TAG}" ;;
+        esac
+        echo "Base image: ${ref}"
+        echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+
+    - name: Smoke-test the KiCad base
+      if: inputs.base-mode == 'build'
+      shell: bash
+      env:
+        BASE_REF: ${{ steps.base.outputs.ref }}
+        KICAD_VERSION: ${{ inputs.kicad-version }}
+      run: |
+        docker pull --quiet "${BASE_REF}"
+        tools/image/smoke_image.sh --kicad-only --kicad-version "${KICAD_VERSION}" "${BASE_REF}"
+
+    # --- the yapnr image -------------------------------------------------------------------
+    - name: Build the yapnr image
+      uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      with:
+        context: .
+        file: docker/yapnr/Dockerfile
+        build-contexts: dist=./dist
+        platforms: linux/${{ inputs.arch }}
+        build-args: |
+          KICAD_BASE=${{ steps.base.outputs.ref }}
+          YAPNR_VERSION=${{ inputs.version }}
+          VCS_REF=${{ inputs.revision }}
+        tags: yapnr:ci
+        load: true
+        provenance: false
+        sbom: false
+        cache-from: type=gha,scope=yapnr-${{ inputs.arch }}
+        cache-to: type=gha,mode=min,scope=yapnr-${{ inputs.arch }},ignore-error=true
+
+    - name: Smoke-test the yapnr image
+      shell: bash
+      env:
+        KICAD_VERSION: ${{ inputs.kicad-version }}
+        VERSION: ${{ inputs.version }}
+        REVISION: ${{ inputs.revision }}
+      run: >-
+        tools/image/smoke_image.sh --kicad-version "${KICAD_VERSION}" --version "${VERSION}"
+        --revision "${REVISION}" yapnr:ci
+
+    # The same build (all cache hits) with SBOM and provenance, pushed untagged.
+    - name: Push the yapnr image by digest
+      id: push
+      if: inputs.push == 'true'
+      uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      with:
+        context: .
+        file: docker/yapnr/Dockerfile
+        build-contexts: dist=./dist
+        platforms: linux/${{ inputs.arch }}
+        build-args: |
+          KICAD_BASE=${{ steps.base.outputs.ref }}
+          YAPNR_VERSION=${{ inputs.version }}
+          VCS_REF=${{ inputs.revision }}
+        outputs: type=image,name=ghcr.io/studio-fug/yapnr,push-by-digest=true,name-canonical=true,push=true
+        provenance: mode=max
+        sbom: true
+        cache-from: type=gha,scope=yapnr-${{ inputs.arch }}
+
+    - name: Record the pushed digests
+      if: inputs.push == 'true' || inputs.push-base == 'true'
+      shell: bash
+      env:
+        DIGEST: ${{ steps.push.outputs.digest }}
+        BASE_DIGEST: ${{ steps.base-push.outputs.digest }}
+      run: |
+        dir="${RUNNER_TEMP}/digests"
+        mkdir -p "${dir}/yapnr" "${dir}/yapnr-kicad"
+        if [ -n "${DIGEST}" ]; then touch "${dir}/yapnr/${DIGEST#sha256:}"; fi
+        if [ -n "${BASE_DIGEST}" ]; then touch "${dir}/yapnr-kicad/${BASE_DIGEST#sha256:}"; fi
+        find "${dir}" -type f
+
+    - name: Upload the digests
+      if: inputs.push == 'true' || inputs.push-base == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: digests-${{ inputs.arch }}
+        path: ${{ runner.temp }}/digests
+        if-no-files-found: error
+        retention-days: 1

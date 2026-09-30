@@ -1,0 +1,360 @@
+name: Ladder
+
+# The native regression ladder (hardware/pnr/regression/README.md) inside the published arm64
+# image ghcr.io/studio-fug/yapnr:edge, resolved to a digest:
+#
+#   pull request      cases 01 to 06, seed 0, baseline configuration, when engine inputs changed
+#   nightly (main)    all 8 cases, seeds 0 and 1, baseline; then all 8, seed 0, with the initial
+#                     placement pool and traces, rendered to animations (artifacts only)
+#   manual            cases, seeds and animations as given
+#
+# The ladder runs the checkout's engine sources (run.py freezes them), not the image's wheel. A
+# pull request can change the runtime pins, so a runtime guard compares the image's /opt/venv
+# with docker/yapnr/runtime-arm64.lock and, if they differ, installs the checkout's lock into
+# an overlay venv from the image's own CPython. A change to docker/yapnr-kicad (a KiCad base
+# that is not published yet) skips the ladder with a notice; image.yaml tests the new base.
+#
+# Informational: not a required check yet. The final `ladder` job always reports, so the check
+# can become required later without a path filter leaving it pending. While the GHCR packages
+# are private, pull requests from forks skip the ladder (no package access).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+    inputs:
+      cases:
+        description: Space-separated case names (empty = all 8)
+        type: string
+        default: ''
+      seeds:
+        description: Space-separated seeds
+        type: string
+        default: '0'
+      animate:
+        description: Also run the traced pool ladder and render its animations
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ladder-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE: ghcr.io/studio-fug/yapnr
+  PR_CASES: >-
+    01-connector-led-2 02-resistor-led-3 03-branched-leds-5 04-inverter-leds-8 05-timer-led-10
+    06-chaser-14
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      run: ${{ steps.plan.outputs.run }}
+      cases: ${{ steps.plan.outputs.cases }}
+      seeds: ${{ steps.plan.outputs.seeds }}
+      animate: ${{ steps.plan.outputs.animate }}
+      timeout: ${{ steps.plan.outputs.timeout }}
+    steps:
+      - name: Setup repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Decide what to run
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          INPUT_CASES: ${{ inputs.cases }}
+          INPUT_SEEDS: ${{ inputs.seeds }}
+          INPUT_ANIMATE: ${{ inputs.animate }}
+        run: |
+          run=true
+          cases=""
+          seeds="0"
+          animate=false
+          timeout=150
+          if [ "${EVENT}" = pull_request ]; then
+            cases="${PR_CASES}"
+            timeout=45
+            changed="$(git diff --name-only "${PR_BASE}...${PR_HEAD}")"
+            relevant='^(hardware/pnr/|hardware/tools/scan_via_proximity\.py$|requirements|docker/|tools/ci/|\.github/workflows/ladder\.yaml$)'
+            if ! echo "${changed}" | grep -qE "${relevant}"; then
+              echo "No engine input changed; the ladder is skipped."
+              run=false
+            fi
+            if [ "${HEAD_REPO}" != "${GITHUB_REPOSITORY}" ]; then
+              echo "::notice::Pull requests from forks skip the ladder while the image is private."
+              run=false
+            fi
+          elif [ "${EVENT}" = schedule ]; then
+            seeds="0 1"
+            animate=true
+          else
+            cases="${INPUT_CASES}"
+            seeds="${INPUT_SEEDS:-0}"
+            animate="${INPUT_ANIMATE:-false}"
+          fi
+          if [ "${run}" = true ] && [ "${EVENT}" = pull_request ] \
+              && echo "${changed}" | grep -E '^docker/yapnr-kicad/' | grep -qvE '\.md$'; then
+            echo "::notice::docker/yapnr-kicad changed: the new KiCad base is not published yet," \
+              "so the ladder is skipped here (image.yaml smoke-tests the base; the nightly run on" \
+              "main covers the ladder after the merge)."
+            run=false
+          fi
+          {
+            echo "run=${run}"
+            echo "cases=${cases}"
+            echo "seeds=${seeds}"
+            echo "animate=${animate}"
+            echo "timeout=${timeout}"
+          } | tee -a "${GITHUB_OUTPUT}"
+
+  ladder:
+    needs: plan
+    if: needs.plan.outputs.run == 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: ${{ fromJSON(needs.plan.outputs.timeout) }}
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Setup repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve the image to a digest
+        run: |
+          digest="$(docker buildx imagetools inspect "${IMAGE}:edge" --format '{{json .Manifest}}' \
+            | jq -r .digest)"
+          ref="${IMAGE}@${digest}"
+          docker pull --platform linux/arm64 "${ref}"
+          echo "LADDER_IMAGE=${ref}" >> "${GITHUB_ENV}"
+          echo "Ladder image: \`${ref}\`" >> "${GITHUB_STEP_SUMMARY}"
+
+      # The ladder runs the checkout's sources on the image's runtime. When this checkout pins
+      # other versions than the image was built with, install exactly the checkout's lock
+      # (hashes, no dependencies) into an overlay venv made from the image's own CPython.
+      - name: Runtime guard
+        run: |
+          mkdir -p out
+          listing="import importlib.metadata as m; print('\n'.join(sorted('%s==%s' % (d.metadata['Name'].lower().replace('_', '-'), d.version) for d in m.distributions())))"
+          docker run --rm --entrypoint /opt/venv/bin/python "${LADDER_IMAGE}" -c "${listing}" \
+            | sort > out/image-runtime.txt
+          grep -E '^[A-Za-z0-9_.-]+==' docker/yapnr/runtime-arm64.lock | sed -E 's/ .*//' \
+            | tr 'A-Z_' 'a-z-' | sort > out/checkout-runtime.txt
+          missing="$(comm -13 out/image-runtime.txt out/checkout-runtime.txt)"
+          if [ -z "${missing}" ]; then
+            echo "LADDER_PY=/opt/venv/bin/python" >> "${GITHUB_ENV}"
+            echo "The image's runtime matches docker/yapnr/runtime-arm64.lock."
+          else
+            echo "::notice::The checkout pins other runtime versions than the image;" \
+              "installing the checkout's lock into an overlay venv: ${missing//$'\n'/ }"
+            timeout 20m docker run --rm -u "$(id -u):$(id -g)" -v "${PWD}:/work" -w /work \
+              --entrypoint /bin/sh "${LADDER_IMAGE}" -c '
+                set -eu
+                python="$(ls -d /opt/python/cpython-3.11.*/bin/python3 | head -n 1)"
+                "${python}" -m venv /work/out/venv
+                /work/out/venv/bin/python -m pip install --quiet --no-cache-dir \
+                  --require-hashes --no-deps -r docker/yapnr/runtime-arm64.lock'
+            echo "LADDER_PY=/work/out/venv/bin/python" >> "${GITHUB_ENV}"
+          fi
+
+      - name: Run the ladder (baseline)
+        id: baseline
+        env:
+          CASES: ${{ needs.plan.outputs.cases }}
+          SEEDS: ${{ needs.plan.outputs.seeds }}
+          JOB_MINUTES: ${{ needs.plan.outputs.timeout }}
+        run: |
+          args=()
+          for case in ${CASES}; do args+=(--case "${case}"); done
+          for seed in ${SEEDS}; do args+=(--seed "${seed}"); done
+          status=0
+          # Leave the job time to upload the results after a hang.
+          timeout --kill-after=60 "$(( JOB_MINUTES - 15 ))m" \
+            docker run --rm --init -u "$(id -u):$(id -g)" -v "${PWD}:/work" -w /work \
+              --shm-size 1g --entrypoint /usr/local/bin/yapnr-kicad-env "${LADDER_IMAGE}" \
+              "${LADDER_PY}" hardware/pnr/regression/run.py --repo /work --out /work/out/ladder \
+                --python "${LADDER_PY}" --kicad-python /usr/bin/python3 \
+                --kicad-cli /usr/bin/kicad-cli --library /usr/share/kicad/footprints \
+                --timeout 600 "${args[@]}" || status=$?
+          echo "status=${status}" >> "${GITHUB_OUTPUT}"
+
+      - name: Summary (baseline)
+        if: always()
+        run: python3 tools/ci/ladder_summary.py out/ladder --title "Regression ladder (baseline)" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Run the ladder with traces (initial pool, seed 0)
+        if: always() && needs.plan.outputs.animate == 'true'
+        env:
+          CASES: ${{ needs.plan.outputs.cases }}
+        run: |
+          args=()
+          for case in ${CASES}; do args+=(--case "${case}"); done
+          timeout --kill-after=60 60m \
+            docker run --rm --init -u "$(id -u):$(id -g)" -v "${PWD}:/work" -w /work \
+              --shm-size 1g --entrypoint /usr/local/bin/yapnr-kicad-env "${LADDER_IMAGE}" \
+              "${LADDER_PY}" hardware/pnr/regression/run.py --repo /work --out /work/out/traced \
+                --python "${LADDER_PY}" --kicad-python /usr/bin/python3 \
+                --kicad-cli /usr/bin/kicad-cli --library /usr/share/kicad/footprints \
+                --timeout 600 --seed 0 --trace --initial-pool --initial-starts 8 \
+                --initial-finalists 3 "${args[@]}" || true
+          mkdir -p out/traced
+          echo "${LADDER_IMAGE}" > out/traced/image.txt
+          python3 tools/ci/ladder_summary.py out/traced --title "Regression ladder (traced, initial pool)" \
+            >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Collect the boards of failed cases
+        if: always()
+        run: |
+          python3 - <<'EOF'
+          import json, shutil
+          from pathlib import Path
+          for run in (Path("out/ladder"), Path("out/traced")):
+              path = run / "summary.json"
+              if not path.is_file():
+                  continue
+              for result in json.loads(path.read_text()).get("results", []):
+                  if result.get("passed"):
+                      continue
+                  case = run / Path(result["directory"]).name
+                  target = Path("out/failed") / run.name / case.name
+                  for name in ("routed.kicad_pcb", "routed.kicad_pro", "source.kicad_pcb", "placed.json", "routes.json"):
+                      if (case / name).is_file():
+                          target.mkdir(parents=True, exist_ok=True)
+                          shutil.copy2(case / name, target / name)
+          EOF
+
+      - name: Upload the results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ladder-results
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            out/ladder/summary.json
+            out/ladder/junit.xml
+            out/ladder/provenance.json
+            out/ladder/*-version.txt
+            out/ladder/*/result.json
+            out/ladder/*/drc.json
+            out/ladder/*/*.log
+            out/failed/
+
+      - name: Upload the traced run
+        if: always() && needs.plan.outputs.animate == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ladder-traced
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            out/traced/summary.json
+            out/traced/provenance.json
+            out/traced/image.txt
+            out/traced/*-version.txt
+            out/traced/*/result.json
+            out/traced/*/trace/
+
+      - name: The baseline ladder decides the job
+        run: exit "${{ steps.baseline.outputs.status }}"
+
+  animations:
+    needs: [plan, ladder]
+    if: always() && needs.plan.outputs.animate == 'true' && needs.ladder.result != 'skipped'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    steps:
+      - name: Setup repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # setup-bazel's own caches are not used: see ci.yaml.
+      - name: Setup Bazel
+        uses: bazel-contrib/setup-bazel@4fd964a13a440a8aeb0be47350db2fc640f19ca8 # 0.15.0
+
+      - name: Point Bazelisk at the cached directory
+        run: echo "BAZELISK_HOME=${HOME}/.cache/bazelisk" >> "${GITHUB_ENV}"
+
+      - name: Cache Bazelisk and the Bazel repository cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cache/bazelisk
+            ~/.cache/bazel-repo
+          key: bazel-repo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'requirements.lock') }}
+          restore-keys: bazel-repo-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Download the traced run
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ladder-traced
+          path: out/traced
+
+      - name: Render the animations
+        run: |
+          image="$(cat out/traced/image.txt 2>/dev/null || true)"
+          bazel run //hardware/pnr:ladder_animations --config=ci \
+            --repository_cache="$HOME/.cache/bazel-repo" -- \
+            --render-only "${GITHUB_WORKSPACE}/out/traced" --out "${GITHUB_WORKSPACE}/out/animations" \
+            --allow-failed --image "${image}"
+
+      # Refreshing docs/animations stays a deliberate change; a drift is a notice, never a failure.
+      - name: Compare with the committed animations
+        run: |
+          python3 - <<'EOF'
+          import json
+          from pathlib import Path
+          committed = Path("docs/animations/manifest.json")
+          fresh = json.loads(Path("out/animations/manifest.json").read_text())
+          if not committed.is_file():
+              print("::notice::docs/animations/manifest.json does not exist yet")
+              raise SystemExit(0)
+          old = {a["file"]: a.get("trace_sha256") for a in json.loads(committed.read_text())["animations"]}
+          new = {a["file"]: a.get("trace_sha256") for a in fresh["animations"]}
+          drift = sorted(f for f in new if old.get(f) != new[f])
+          if drift:
+              print("::notice::the engine's traces differ from the committed animations: " + ", ".join(drift))
+          EOF
+
+      - name: Upload the animations
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ladder-animations
+          retention-days: 14
+          path: out/animations/
+
+  # One result for the workflow (skipped jobs count as success).
+  ladder-result:
+    name: ladder
+    needs: [plan, ladder, animations]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check the results
+        env:
+          RESULTS: ${{ needs.plan.result }} ${{ needs.ladder.result }}
+        run: |
+          echo "Job results: ${RESULTS}"
+          for result in ${RESULTS}; do
+            case "${result}" in
+              success | skipped) ;;
+              *) echo "::error::a ladder job ended with '${result}'"; exit 1 ;;
+            esac
+          done

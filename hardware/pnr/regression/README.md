@@ -111,6 +111,27 @@ variables do not silently enable this mode in the runner.
 See [RESULTS-118.md](RESULTS-118.md) for the frozen ladder, native comparisons,
 actual PDF review evidence and remaining placement/route-quality findings.
 
+## Traces and animations
+
+`--trace` records a `pnr-trace-v1` trace per case in `CASE/trace` (`pnr.trace`):
+the engine lane (global placement snapshots, the legalization order, every net
+the detailed router adds, rips or commits, the pool's selections) and the native
+lane (copies of the board after `writeback` and `planes` with their own KiCad
+DRC, the saved board and the verdict). Tracing is observational: placements,
+routes and reports are byte-identical with and without it (`trace_noop_test`).
+`python -m pnr.animate CASE --out case.webp` (`//hardware/pnr:animate`) renders
+the critical path from the unplaced board to KiCad's verdict, with the rejected
+candidates of each selection as montages (`pnr.provenance`);
+`//hardware/pnr:ladder_animations` runs the traced ladder with the initial pool
+and renders every case (`--render-only RUN_DIR` skips the ladder). Case
+directories in `result.json`, `summary.json` and `junit.xml` are relative to the
+run directory.
+
+CI (`.github/workflows/ladder.yaml`, informational) runs cases 01 to 06 on pull
+requests that change engine inputs, and all cases with seeds 0 and 1 nightly,
+inside the arm64 image, plus a traced pool run whose animations are uploaded as
+an artifact.
+
 Performance opt-ins can be tested explicitly with `--packed-maze` and
 `--batched-wirelength`. They are recorded in provenance; ambient variables are
 still cleared, so a baseline invocation keeps its original algorithms.

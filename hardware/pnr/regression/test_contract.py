@@ -3,7 +3,7 @@ import copy,json,re,subprocess,sys,tempfile,unittest
 from collections import Counter
 from pathlib import Path
 from designs import designs
-from run import LISTING,acceptance,new_result,parser
+from run import LISTING,acceptance,engine_revision,new_result,parser,sources_digest
 
 class CircuitContract(unittest.TestCase):
  def test_ladder_and_multiterminal_networks(self):
@@ -70,6 +70,23 @@ class RunnerContract(unittest.TestCase):
         out = subprocess.run([sys.executable, "-c", LISTING], capture_output=True, text=True, timeout=120, check=True)
         lines = out.stdout.splitlines()
         self.assertTrue(all(re.match(r"^[^=\s]+==\S+$", line) for line in lines), lines[:3])
+
+    def test_the_ladder_is_judged_under_the_fixtures_own_rules_by_default(self):
+        self.assertEqual(parser().parse_args(["--out", "x"]).fab_profile, "legacy")
+        self.assertEqual(parser().parse_args(["--out", "x", "--fab-profile", "jlc-pofv"]).fab_profile, "jlc-pofv")
+        with self.assertRaises(SystemExit):
+            parser().parse_args(["--out", "x", "--fab-profile", "other"])
+
+    def test_route_case_routes_under_the_profile_it_is_judged_by(self):
+        source = (Path(__file__).resolve().parent / "route_case.py").read_text()
+        self.assertIn("rules=apply_rules(compile_routing_rules(", source)
+
+    def test_sources_digest_and_revision(self):
+        a = sources_digest({"b.py": "2", "a.py": "1"})
+        self.assertEqual(a, sources_digest({"a.py": "1", "b.py": "2"}))
+        self.assertNotEqual(a, sources_digest({"a.py": "1", "b.py": "3"}))
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(engine_revision(Path(tmp) / "not-a-checkout"), (None, None))
 
     def test_case_directories_are_run_relative(self):
         spec = designs()[0]

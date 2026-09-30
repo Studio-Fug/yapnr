@@ -5,7 +5,7 @@ Missing tools, timeout, illegal placement, opens and *any* native DRC finding fa
 Never skips/x-fails difficult cases. Outputs persist in a new, refused-if-existing
 run directory, including rejected boards, stage logs and source hashes.
 """
-import argparse,hashlib,json,os,shutil,subprocess,sys,time,traceback
+import argparse,hashlib,json,os,platform,shutil,subprocess,sys,time,traceback
 from pathlib import Path
 from collections import Counter
 from xml.etree import ElementTree as ET
@@ -42,6 +42,29 @@ def source_inputs(repo):
  if not scanner.is_file():raise FileNotFoundError('Native regression requires '+str(scanner))
  return sorted((repo/'hardware/pnr/pnr').rglob('*.py'))+sorted((repo/'hardware/pnr/regression').glob('*.py'))+[scanner]
 
+# The fabrication profile the ladder routes and is judged under (pnr.fab_profile). The fixtures
+# carry their own fab block (0.2 mm clearance, 0.6/0.3 mm vias; README), which is exactly what the
+# legacy profile enforces; the engine's default (jlc-pofv) overrides it with JLC capability values.
+FAB_PROFILES=('legacy','jlc-pofv')
+DEFAULT_FAB_PROFILE='legacy'
+
+def engine_revision(repo):
+ """``(commit, dirty)`` of the checkout the sources are frozen from; ``(None, None)`` without git."""
+ def git(*args):
+  return subprocess.run(['git','-C',str(repo),*args],capture_output=True,text=True,timeout=60,check=True).stdout
+ try:
+  commit=git('rev-parse','HEAD').strip()
+  dirty=bool(git('status','--porcelain','--','hardware/pnr','hardware/tools').strip())
+  return commit,dirty
+ except (OSError,subprocess.SubprocessError):
+  return None,None
+
+def sources_digest(manifest):
+ """One SHA-256 over the frozen sources (path and content hash): the engine, rebase-proof."""
+ digest=hashlib.sha256()
+ for path in sorted(manifest):digest.update((path+'\0'+manifest[path]+'\n').encode())
+ return digest.hexdigest()
+
 # Lists the installed distributions without pip (a uv-built venv, as in the image, has none).
 LISTING="import importlib.metadata as m;print('\\n'.join(sorted('%s==%s'%(d.metadata['Name'],d.version) for d in m.distributions())))"
 
@@ -64,6 +87,7 @@ def parser():
  ap.add_argument('--initial-starts',type=int,default=8)
  ap.add_argument('--initial-finalists',type=int,default=3)
  ap.add_argument('--trace',action='store_true',help='Record a pnr-trace-v1 trace per case (CASE/trace) for pnr.animate; observational only')
+ ap.add_argument('--fab-profile',choices=FAB_PROFILES,default=DEFAULT_FAB_PROFILE,help='PNR_FAB_PROFILE for every stage (default legacy: the fixtures\' own fab block); jlc-pofv routes and judges under the engine\'s default profile')
  ap.add_argument('--kicad-python',default=os.environ.get('PNR_KICAD_PYTHON',KI+'/Frameworks/Python.framework/Versions/3.9/bin/python3'))  # PNR_KICAD_PYTHON: headless bundle (src15)
  ap.add_argument('--kicad-cli',default=os.environ.get('PNR_KICAD_CLI',KI+'/MacOS/kicad-cli'))  # PNR_KICAD_CLI: headless bundle (src15)
  ap.add_argument('--library',type=Path,default=kicad_footprints())  # PNR_KICAD_FOOTPRINTS / PNR_KICAD_CLI bundle (src15)
@@ -92,11 +116,15 @@ def main():
   if not math.isfinite(args.detail_pitch_mm) or args.detail_pitch_mm < 0:raise ValueError('Detail pitch must be finite and nonnegative')
   env['PNR_DETAIL_PITCH_MM']=str(args.detail_pitch_mm)
  if args.batched_wirelength:env['PNR_BATCHED_WIRELENGTH']='1'
+ env['PNR_FAB_PROFILE']=args.fab_profile  # routed and judged under one profile (route_case.py, writeback)
  if args.initial_pool:
   if not 2 <= args.initial_starts <= 128 or not 1 <= args.initial_finalists <= min(args.initial_starts,16):
    raise ValueError('Invalid initial placement pool size/finalist budget')
   env.update(PNR_INITIAL_POOL='1',PNR_INITIAL_STARTS=str(args.initial_starts),PNR_INITIAL_FINALISTS=str(args.initial_finalists),PNR_INITIAL_PROXY_BUDGET=str(args.initial_starts))
- provenance=dict(schema='pnr-regression-v1',source_hashes=manifest,seeds=args.seed or [0],trace=bool(args.trace),
+ commit,dirty=engine_revision(REPO)
+ provenance=dict(schema='pnr-regression-v1',source_hashes=manifest,sources_sha256=sources_digest(manifest),
+                 engine_revision=commit,engine_dirty=dirty,fab_profile=args.fab_profile,
+                 platform='%s-%s'%(sys.platform,platform.machine().lower()),seeds=args.seed or [0],trace=bool(args.trace),
                  arguments={k:str(v) if isinstance(v,Path) else v for k,v in vars(args).items()},
                  pnr_environment={k:v for k,v in env.items() if k.startswith('PNR_')})
  (out/'provenance.json').write_text(json.dumps(provenance,indent=2))

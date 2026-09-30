@@ -3,10 +3,13 @@ import json,os,sys,time
 from pathlib import Path
 from pnr.graph import BoardGraph
 from pnr.constraints import compile_constraints,compile_routing_rules
+from pnr.fab_profile import apply_rules
 from pnr.route.feedback import route_and_place
 root=Path(sys.argv[1]);seed=int(sys.argv[2]);rounds=int(sys.argv[3])
 spec=json.loads((root/'design.json').read_text());g=BoardGraph.from_json((root/'source-graph.json').read_text())
-c=compile_constraints(spec['constraints'],g.refs);rules=compile_routing_rules(c,[n.name for n in g.nets])
+c=compile_constraints(spec['constraints'],g.refs)
+# Route under the fab profile writeback stamps and KiCad judges (PNR_FAB_PROFILE; legacy: unchanged).
+rules=apply_rules(compile_routing_rules(c,[n.name for n in g.nets]))
 (root/'rules.json').write_text(json.dumps(rules,indent=2))
 os.environ['PNR_ROUND_DIAGNOSTICS']=str(root/'rounds')
 t=time.monotonic()

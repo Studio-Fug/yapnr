@@ -22,6 +22,13 @@ manufacturing designs.
 
 Signal width is 0.25 mm, supply/return width at least 0.4 mm, clearance 0.2 mm,
 and vias 0.6/0.3 mm. Resolved supply policy includes a 0.1 A current budget.
+These are the fixtures' own fabrication rules: the runner routes and judges every
+stage under `PNR_FAB_PROFILE=legacy` (`--fab-profile`, default `legacy`), which
+enforces exactly them. `--fab-profile jlc-pofv` routes and judges under the
+engine's default JLCPCB profile instead (`pnr.fab_profile`: 0.127 mm clearance,
+0.45/0.30 mm vias, vias kept 0.127 mm off SMD pads); `route_case.py` applies the
+profile to the rules the router uses, as `writeback` does to the rules KiCad
+checks.
 Each manifest retains explicit intentionally unused pins. Pin mappings and timer
 connections were checked against [TLC555](https://www.ti.com/lit/ds/symlink/tlc555.pdf),
 [CD4017B](https://www.ti.com/lit/ds/symlink/cd4017b.pdf), and the KiCad library
@@ -125,7 +132,9 @@ candidates of each selection as montages (`pnr.provenance`);
 `//hardware/pnr:ladder_animations` runs the traced ladder with the initial pool
 and renders every case (`--render-only RUN_DIR` skips the ladder). Case
 directories in `result.json`, `summary.json` and `junit.xml` are relative to the
-run directory.
+run directory. `provenance.json` records the fab profile, the checkout's commit
+(and whether engine files were modified), the platform and `sources_sha256`, one
+digest over the frozen sources that survives a rebase.
 
 CI (`.github/workflows/ladder.yaml`, informational) runs cases 01 to 06 on pull
 requests that change engine inputs, and all cases with seeds 0 and 1 nightly,

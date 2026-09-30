@@ -6,6 +6,9 @@ board-wide stratified/Latin-hypercube starts. Legal candidates are screened by
 width-aware demand and multilayer capacity, with pose diversity retained before
 an equal-budget detailed-routing comparison. Native/electrical validation remains
 downstream: this module chooses a starting placement, never a finished PCB.
+
+PNR_PAIR_LANDING_RESERVE=1 (src13, default off): the prepared source graph (flat
+MC placement and hierarchical_place) carries the diff-pair via landing reserves.
 """
 from __future__ import annotations
 
@@ -80,6 +83,12 @@ def _prepared_source(graph, constraints, rules=None):
         from pnr.plane_intent import reserve_array_space
         reserve_array_space(source, rules["plane_access_intents"], rules["plane_access_fab"],
                             rules.get("fab", {}).get("edge_clearance_mm", .2))
+    from .pair_landing import enabled as landing_enabled
+    if rules and landing_enabled():
+        # PNR_PAIR_LANDING_RESERVE=1: the prepared source (flat MC placement and
+        # hierarchical_place's block/macro source) carries the pair landing reserves.
+        from .pair_landing import attach
+        attach(source, rules)
     width, height = outline_size(source, constraints)
     source.outline = BoardOutline(width, height)
     return source

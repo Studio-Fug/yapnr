@@ -13,6 +13,12 @@ each part's block is ``ceil((size + clearance)/g)`` cells, disjoint blocks keep
 courtyards at least ``clearance`` apart. Placing biggest-first avoids stranding
 large parts once the board fills; the nearest-to-target rule preserves the
 wirelength structure the global stage found.
+
+PNR_PAIR_LANDING_RESERVE=1 (src13, default off; only when some component carries
+pair_landing reserves): legalization keeps two more rasters per side (bodies
+mounted there, landing reserves) so no part body is snapped onto a reserve of its
+mount side and no terminal part is snapped where its own reserve lies under an
+opposite-side body; refine_channels rejects moves that would do the same.
 """
 
 from __future__ import annotations
@@ -23,7 +29,33 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 from pnr.graph import BoardGraph, Component
 
-from .geometry import Rect, courtyard_rect, occupied_sides, placement_rects
+from .geometry import Rect, ReserveRect, courtyard_rect, occupied_sides, placement_rects
+
+
+# PNR_PAIR_LANDING_RESERVE=1 (pnr.place.pair_landing): besides the per-side body
+# occupancy, legalize keeps two more rasters per side: ``mounted`` (bodies of parts
+# MOUNTED on that side) and ``reserved`` (diff-pair via landing reserves). A part's
+# body must avoid the reserves on its mount side(s); each of its own reserves must
+# avoid the bodies mounted on the reserve's side. Reserves never exclude each other.
+# The look-ahead (power-first) and slot-count heuristics ignore reserves; the final
+# hard_violations check (metrics.overlap_pairs) sees them through placement_rects.
+
+
+def _landing_blocks(comp, bw, bh, g, clearance, mounted):
+    """Reserve blocks of ``comp`` relative to its slot's top-left cell (r, c).
+
+    Returns [(side, occupancy-to-avoid, dr0, dr1, dc0, dc1)]: rows r+dr0..r+dr1
+    and cols c+dc0..c+dc1 (exclusive) with the slot centre at ((c+bw/2)g, (r+bh/2)g).
+    """
+    from .pair_landing import reserve_rects
+    out = []
+    for side, rect in reserve_rects(comp):
+        dx, dy = rect.cx - comp.pos[0], rect.cy - comp.pos[1]
+        w, h = rect.w + clearance, rect.h + clearance
+        out.append((side, mounted[side],
+                    int(math.floor(bh / 2 + (dy - h / 2) / g)), int(math.ceil(bh / 2 + (dy + h / 2) / g)),
+                    int(math.floor(bw / 2 + (dx - w / 2) / g)), int(math.ceil(bw / 2 + (dx + w / 2) / g))))
+    return out
 
 
 class LegalizationError(RuntimeError):
@@ -43,9 +75,13 @@ def _mark(occ: np.ndarray, g: float, rect: Rect) -> None:
 
 def _place_part(
     occ: np.ndarray, g: float, bw: int, bh: int, target: Tuple[float, float],
-    limits=(), candidate_cost=None, forbidden=(),
+    limits=(), candidate_cost=None, forbidden=(), attached=(),
 ) -> Tuple[int, int]:
-    """Find the free ``bh x bw`` block nearest ``target`` (returns top-left r, c)."""
+    """Find the free ``bh x bw`` block nearest ``target`` (returns top-left r, c).
+
+    ``attached`` (landing reserves): [(side, occupancy, dr0, dr1, dc0, dc1)] blocks
+    at fixed cell offsets from the slot that must be free as well (clamped to the
+    grid; a block entirely off the board is trivially free)."""
     ny, nx = occ.shape
     if bw > nx or bh > ny:
         raise LegalizationError(f"part {bw}x{bh} cells exceeds grid {nx}x{ny}")
@@ -55,6 +91,15 @@ def _place_part(
     integ[1:, 1:] = np.cumsum(np.cumsum(occ.astype(np.int32), axis=0), axis=1)
     block = integ[bh:, bw:] - integ[:-bh, bw:] - integ[bh:, :-bw] + integ[:-bh, :-bw]
     free = block == 0
+    if attached:
+        rr_ = np.arange(free.shape[0])[:, None]
+        cc_ = np.arange(free.shape[1])[None, :]
+        for _side, occ2, dr0, dr1, dc0, dc1 in attached:
+            integ2 = np.zeros((ny + 1, nx + 1), dtype=np.int32)
+            integ2[1:, 1:] = np.cumsum(np.cumsum(occ2.astype(np.int32), axis=0), axis=1)
+            r0, r1 = np.clip(rr_ + dr0, 0, ny), np.clip(rr_ + dr1, 0, ny)
+            c0, c1 = np.clip(cc_ + dc0, 0, nx), np.clip(cc_ + dc1, 0, nx)
+            free &= (integ2[r1, c1] - integ2[r0, c1] - integ2[r1, c0] + integ2[r0, c0]) == 0
     if not free.any():
         raise LegalizationError("no free slot for part")
 
@@ -141,6 +186,16 @@ def legalize(
 
     placed = BoardGraph.from_json(graph.to_json())  # deep copy
     by_ref = {c.ref: c for c in placed.components}
+    from .pair_landing import enabled as landing_enabled
+    landing = landing_enabled() and any(c.reserves for c in placed.components)
+    mounted = {side: np.zeros((ny, nx), dtype=bool) for side in ("top", "bottom")} if landing else None
+    reserved = {side: np.zeros((ny, nx), dtype=bool) for side in ("top", "bottom")} if landing else None
+    def mounts_of(comp):
+        if str(comp.footprint).startswith("block:"):
+            from .pair_landing import macro_mount
+            mount = macro_mount(comp)
+            return ("top", "bottom") if mount == "both" else (mount,)
+        return (comp.side,)
     aid = None
     if roles is not None:
         from .power_first import LOOK_AHEAD_TRIES, LegalizeAid
@@ -172,7 +227,12 @@ def legalize(
                for ax, ay, radius in limits_for(ref)):
             raise LegalizationError(f"fixed part {ref} lies outside hard group radius")
         for side, rect in placement_rects(comp):
+            if landing and isinstance(rect, ReserveRect):
+                _mark(reserved[side], g, Rect(rect.cx, rect.cy, rect.w + clearance, rect.h + clearance))
+                continue
             _mark(occupancy[side], g, Rect(rect.cx, rect.cy, rect.w + clearance, rect.h + clearance))
+            if landing and getattr(rect, "mount", None) in (side, "both"):
+                _mark(mounted[side], g, Rect(rect.cx, rect.cy, rect.w + clearance, rect.h + clearance))
 
     # Minimum-remaining-slots ordering accounts for actual fixed obstacles and
     # intersections of group discs. Radius alone can let a flexible neighbor
@@ -288,6 +348,8 @@ def legalize(
             comp = min(active or eligible,key=lambda c:(0 if str(c.footprint).startswith('block:') else aid.tier(c.ref),available(c),-courtyard_rect(c).w*courtyard_rect(c).h,c.ref))
             comp.pos = aid.target(comp.ref, neighbors)
         state = dict(occupancy={s:a.copy() for s,a in occupancy.items()},
+                     mounted={s:a.copy() for s,a in mounted.items()} if landing else None,
+                     reserved={s:a.copy() for s,a in reserved.items()} if landing else None,
                      neighbors=list(neighbors), movable=list(movable), active=set(active_block),
                      poses={c.ref:(c.pos,c.rot) for c in placed.components},
                      records=list(cost_records), banned={k:set(v) for k,v in banned.items()})
@@ -295,6 +357,9 @@ def legalize(
         infl = max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
         sides = ('top','bottom') if any(p.through_hole for p in comp.pads) else occupied_sides(comp)
         occ = np.logical_or.reduce([occupancy[side] for side in sides])
+        if landing:
+            occ = occ | np.logical_or.reduce([reserved[m] for m in mounts_of(comp)])
+        attached = ()
         original_rotation=comp.rot
         error=None
         from .cost_capture import folder as cost_folder, legalizer_decision
@@ -305,6 +370,7 @@ def legalize(
             cr=courtyard_rect(comp)
             bw=int(math.ceil((cr.w*infl+clearance)/g))
             bh=int(math.ceil((cr.h*infl+clearance)/g))
+            attached = _landing_blocks(comp, bw, bh, g, clearance, mounted) if landing else ()
             try:
                 candidate_cost = None if channel_model is None else (
                     lambda xs, ys: channel_weight * channel_model.penalty(comp, neighbors, xs, ys))
@@ -316,7 +382,7 @@ def legalize(
                             captured_fields[rotation]=np.column_stack((xx,yy,(xx-comp.pos[0])**2+(yy-comp.pos[1])**2,ch,np.zeros(xx.shape)))
                         return channel_weight*channel
                 r,c=_place_part(occ,g,bw,bh,comp.pos,limits_for(comp.ref),candidate_cost=candidate_cost,
-                                forbidden=[(rr,cc) for rot,rr,cc in banned.get(comp.ref,()) if rot==rotation])
+                                forbidden=[(rr,cc) for rot,rr,cc in banned.get(comp.ref,()) if rot==rotation],attached=attached)
                 if aid is not None:
                     tried=[(rr,cc) for rot,rr,cc in banned.get(comp.ref,()) if rot==rotation]
                     for attempt in range(LOOK_AHEAD_TRIES):
@@ -325,13 +391,14 @@ def legalize(
                         tried.append((r,c))
                         if attempt==LOOK_AHEAD_TRIES-1:
                             raise LegalizationError("look-ahead: every tried slot strands a hard-limited part")
-                        r,c=_place_part(occ,g,bw,bh,comp.pos,limits_for(comp.ref),candidate_cost=candidate_cost,forbidden=tried)
+                        r,c=_place_part(occ,g,bw,bh,comp.pos,limits_for(comp.ref),candidate_cost=candidate_cost,forbidden=tried,attached=attached)
                 error=None
                 break
             except LegalizationError as exc:error=exc
         if error is not None and stack and (group_edges or group_limits) and backtracks < backtrack_budget:
             previous, chosen_ref, chosen_pose = stack.pop()
             occupancy = previous['occupancy']; neighbors = previous['neighbors']
+            if landing:mounted = previous['mounted']; reserved = previous['reserved']
             movable = previous['movable']; active_block = previous['active']
             for ref,(pos,rot) in previous['poses'].items():by_ref[ref].pos=pos;by_ref[ref].rot=rot
             cost_records=previous['records'];banned=previous['banned']
@@ -359,6 +426,11 @@ def legalize(
         banned.pop(comp.ref,None)
         for side in sides:
             occupancy[side][r : r + bh, c : c + bw] = True
+        if landing:
+            for m in mounts_of(comp):
+                mounted[m][r : r + bh, c : c + bw] = True
+            for side, _occ, dr0, dr1, dc0, dc1 in attached:
+                reserved[side][max(0, r + dr0):max(0, r + dr1), max(0, c + dc0):max(0, c + dc1)] = True
         comp.pos = ((c + bw / 2.0) * g, (r + bh / 2.0) * g)
         neighbors.append(comp)
 
@@ -417,6 +489,18 @@ def refine_channels(graph, width, height, *, fixed, keepouts, channel_model,
             except LegalizationError:
                 continue  # Keep a valid current pose if no improved legal slot exists.
             candidate = ((col+bw/2)*g, (row+bh/2)*g)
+            if comp.reserves:
+                from .pair_landing import enabled as landing_enabled
+                if landing_enabled():
+                    # PNR_PAIR_LANDING_RESERVE: the moved part's own landing
+                    # reserves must stay clear of opposite-side bodies too.
+                    saved, comp.pos = comp.pos, candidate
+                    blocked = any(side == other_side and rect.overlaps(other_rect)
+                                  for side, rect in placement_rects(comp) if isinstance(rect, ReserveRect)
+                                  for other in others for other_side, other_rect in placement_rects(other))
+                    comp.pos = saved
+                    if blocked:
+                        continue
             after = float(channel_model.penalty(comp, others, *candidate))
             cost_before = math.dist(comp.pos, target)**2 + channel_weight*before
             cost_after = math.dist(candidate, target)**2 + channel_weight*after

@@ -3,6 +3,10 @@
 These score a :class:`pnr.graph.BoardGraph`'s current placement and back the
 Phase 2 acceptance test: half-perimeter wirelength (the quality number), plus the
 hard-legality checks (overlaps, outline containment, fixed poses, keep-outs).
+
+PNR_PAIR_LANDING_RESERVE=1 (src13): overlap_pairs / hard_violations /
+translation_checker see diff-pair via landing reserves through placement_rects
+(a bottom part over a top terminal part's landing is an overlap).
 """
 
 from __future__ import annotations

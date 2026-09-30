@@ -64,6 +64,13 @@ def top_board(parent, graph, constraints, rules, *, library_blocks=(), origin=No
     from pnr.feedback.moves import MoveBoard, default_anchors, hubs, plane_nets, power_guard
     from pnr.hier.blocks import extract_blocks
     con, source = prepared(graph, constraints, rules)
+    from pnr.place.pair_landing import enabled as landing_enabled
+    if landing_enabled():
+        # PNR_PAIR_LANDING_RESERVE=1: moves keep diff-pair via landings clear (a
+        # parent placed without the reserve keeps its existing violations; the
+        # MoveBoard only forbids new ones).
+        from pnr.place.pair_landing import attach
+        attach(parent, rules)
     blocks = extract_blocks(source, con)
     lib = set(library_blocks or ())
     units = {b.name: tuple(sorted(b.refs)) for b in blocks if b.name in lib}

@@ -17,6 +17,10 @@ torch, numpy, or yaml here.
 Units: all coordinates and lengths are **millimetres**; ``rot`` is degrees CCW.
 The frame matches the constraint file: origin at the board-outline bottom-left.
 (``pcbnew`` reports nanometres with y pointing down; :mod:`pnr.ingest` converts.)
+
+src13: ``Component.reserves`` (placement reservations derived from routing rules,
+PNR_PAIR_LANDING_RESERVE) round-trips through JSON and is omitted when empty, so
+graphs without reservations serialize byte-identically to before.
 """
 
 from __future__ import annotations
@@ -99,6 +103,11 @@ class Component:
     pads: List[Pad] = field(default_factory=list)
     address: str = ""  # Stable atopile path, independent of generated designators.
     smd_body: bool = False  # Explicit native footprint attribute, never inferred from hole size.
+    # Placement reservations derived from routing rules (pnr.place.pair_landing,
+    # PNR_PAIR_LANDING_RESERVE=1): JSON dicts naming this component's own pads, so
+    # rotation, side mirroring and macro collapse carry them. Empty (the default)
+    # is omitted from JSON, keeping graphs without reservations byte-identical.
+    reserves: List[dict] = field(default_factory=list)
 
     def __post_init__(self):
         self.pos = _fpair(self.pos)
@@ -170,7 +179,11 @@ class BoardGraph:
     # -- serialization (the ingest -> place seam) --------------------------
 
     def to_dict(self) -> Dict:
-        return asdict(self)
+        d = asdict(self)
+        for c in d["components"]:
+            if not c.get("reserves"):
+                c.pop("reserves", None)
+        return d
 
     def to_json(self, *, indent: Optional[int] = 2) -> str:
         return json.dumps(self.to_dict(), indent=indent, sort_keys=True)
@@ -191,6 +204,7 @@ class BoardGraph:
                 bbox=c["bbox"],
                 locked=bool(c.get("locked", False)),
                 smd_body=bool(c.get("smd_body", False)),
+                reserves=[dict(r) for r in c.get("reserves", [])],
                 pads=[
                     Pad(
                         name=p["name"],

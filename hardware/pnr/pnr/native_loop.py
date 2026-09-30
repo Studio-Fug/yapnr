@@ -3,6 +3,11 @@
 Controller runs under the PnR Python; workers under KiCad Python. Native boards,
 not internal router estimates, are the acceptance authority. Placement moves
 are local translations with full-width terminal tethers, never a global ripup.
+
+PNR_PAIR_LANDING_RESERVE=1 (src13, default off): translation moves
+(placements) and pair D-move proposals (pair_placements) honour the diff-pair via
+landing reserves of pnr.place.pair_landing; a board placed without them keeps
+legal moves possible by relaxing only the reserves it already violates.
 """
 import argparse
 from collections import Counter, defaultdict
@@ -415,6 +420,16 @@ def placements(inventory, constraints_path, scores, tried, original, max_move, r
     fixed=resolve_fixed_poses(g,cc)
     holes={h['name'] for h in cc.mounting_holes}
     g.components=[c for c in g.components if c.ref not in holes]
+    from pnr.place.pair_landing import enabled as landing_enabled
+    if rules and landing_enabled():
+        # PNR_PAIR_LANDING_RESERVE=1: moves also keep diff-pair via landings clear.
+        # A board placed without the reserve may already violate one; the
+        # translation checker needs a legal baseline, so only the recipes of the
+        # parts in those overlaps are dropped (the others stay enforced).
+        from pnr.place.pair_landing import attach,relax_violated
+        attach(g,rules)
+        relaxed=relax_violated(g,lambda:hard_violations(g,cc))
+        if relaxed:print('pair landing reserve relaxed for pre-existing overlaps: '+','.join(relaxed),file=sys.stderr)
     base=hard_violations(g,cc)
     if any(base.values()):
         raise ValueError('baseline hard placement violations: '+json.dumps(base))
@@ -441,11 +456,16 @@ def placements(inventory, constraints_path, scores, tried, original, max_move, r
 
 
 
-def pair_placements(inventory,constraints_path,pair):
+def pair_placements(inventory,constraints_path,pair,rules=None):
     """Legal source-topology proposals near the connector for intermediate ICs.
 
     This is a separate atomic coupled transaction, not a sequence of accepted
     1-mm moves dragging long USB traces across the board.
+
+    rules (PNR_PAIR_LANDING_RESERVE=1 only): the diff-pair via landing reserves
+    of pnr.place.pair_landing are part of legality; a proposal may not add a
+    hard violation (violations already present on the board, e.g. a legacy
+    placement over a landing, are not the proposal's and do not veto it).
     """
     import yaml
     from pnr.graph import BoardGraph
@@ -460,6 +480,16 @@ def pair_placements(inventory,constraints_path,pair):
     cc=compile_constraints(yaml.safe_load(Path(constraints_path).read_text()),g.refs,{c.address:c.ref for c in g.components},{f'{c.address}:{p.name}':p.net for c in g.components for p in c.pads})
     fixed=resolve_fixed_poses(g,cc);holes={h['name'] for h in cc.mounting_holes}
     g.components=[c for c in g.components if c.ref not in holes]
+    from pnr.place.pair_landing import enabled as landing_enabled
+    baseline=None
+    if rules and landing_enabled():
+        from pnr.place.pair_landing import attach
+        attach(g,rules)
+        baseline={kind:{json.dumps(v,sort_keys=True) for v in values} for kind,values in hard_violations(g,cc).items()}
+    def violates():
+        bad=hard_violations(g,cc)
+        if baseline is None:return any(bad.values())
+        return any(json.dumps(v,sort_keys=True) not in baseline.get(kind,()) for kind,values in bad.items() for v in values)
     chain=pair.get('terminal_chain',[])
     if len(chain)<3:return []
     source_ref=chain[0]['p'].rsplit('.',1)[0]
@@ -494,7 +524,7 @@ def pair_placements(inventory,constraints_path,pair):
                 c.pos=tuple(source_center[i]+axis[i]*distance+normal[i]*lateral for i in (0,1))
                 for rotation in (0,90,180,270):
                     c.rot=rotation
-                    if any(hard_violations(g,cc).values()):continue
+                    if violates():continue
                     points={key:terminal(node[key]) for key in ('p','n')}
                     lead=sum(math.dist(terminal(effective_source[key]),points[key]) for key in ('p','n'))
                     downstream=sum(math.dist(points[key],terminal(chain[-1][key])) for key in ('p','n'))
@@ -867,7 +897,7 @@ def controller(argv=None,nested=False):
                 outcome=dict(status='worker_error',accepted=False)
             if a.electrical_fab and target.get('mode')=='pair' and not outcome.get('accepted'):
                 policy=read(a.rules);pair=next(p for p in policy['diff_pairs'] if target['net'] in (p['p'],p['n']))
-                proposals=pair_placements(inventory,a.constraints,pair)
+                proposals=pair_placements(inventory,a.constraints,pair,rules=policy) if os.environ.get('PNR_PAIR_LANDING_RESERVE')=='1' else pair_placements(inventory,a.constraints,pair)
                 save(folder/f'pair-proposals-{seq:03d}.json',proposals)
                 for pi,proposal in enumerate(diverse_pair_poses(proposals,4)):
                     if time.monotonic()-started>=a.seconds:break

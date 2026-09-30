@@ -1,4 +1,9 @@
-"""Placement orchestrator: global placement → legalization → report."""
+"""Placement orchestrator: global placement → legalization → report.
+
+PNR_PAIR_LANDING_RESERVE=1 (src13, default off): place() attaches the diff-pair
+via landing reserves of pnr.place.pair_landing (from ``channel_rules``) before
+legalization; legality/report then include them through placement_rects.
+"""
 
 from __future__ import annotations
 
@@ -96,6 +101,12 @@ def place(
     # constraints before any obstacle/HPWL calculations, including pad mirroring.
     graph = BoardGraph.from_json(graph.to_json())
     apply_hard_sides(graph, constraints)
+    from .pair_landing import enabled as landing_enabled
+    if channel_rules and landing_enabled():
+        # PNR_PAIR_LANDING_RESERVE=1: diff-pair via landings become placement
+        # reservations (pnr.place.pair_landing); legalize and the report honour them.
+        from .pair_landing import attach
+        attach(graph, channel_rules)
     if channel_rules and channel_rules.get("plane_access_intents"):
         from pnr.plane_intent import reserve_array_space
         reserve_array_space(graph, channel_rules["plane_access_intents"],

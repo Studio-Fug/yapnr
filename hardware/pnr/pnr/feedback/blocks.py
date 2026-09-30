@@ -72,6 +72,11 @@ def block_board(graph, constraints, rules, blocks, names, layout, w, h, *, origi
     from pnr.hier.synth_native import _layout_violations
     rep = blocks[names[0]]
     g2, c2, r2 = instance_board(graph, constraints, rules, rep, layout, w, h)
+    from pnr.place.pair_landing import enabled as landing_enabled
+    if landing_enabled():
+        # PNR_PAIR_LANDING_RESERVE=1: block moves keep diff-pair via landings clear.
+        from pnr.place.pair_landing import attach
+        attach(g2, r2)
     if r2.get('plane_access_intents'):
         from pnr.plane_intent import reserve_array_space
         reserve_array_space(g2, r2['plane_access_intents'], r2['plane_access_fab'],

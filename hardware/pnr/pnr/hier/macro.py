@@ -4,6 +4,12 @@ A macro is an ordinary :class:`Component` whose courtyard is the block outline
 and whose pads are the member pads in the block frame, so the unmodified global
 placer and legalizer can place it. Internal nets become intra-component and
 exert no pull; external nets pull the macro toward its neighbours.
+
+PNR_PAIR_LANDING_RESERVE (src13): a member's pair_landing reserves move onto its
+macro (pads '<ref>.<pad>', side relative to the macro), so macro placement keeps
+them clear; they are only present when the source graph carries them. With the
+flag set the macro also records the sides its members are mounted on
+(pair_landing.macro_mount), so another part's landing treats it like those parts.
 """
 from __future__ import annotations
 
@@ -77,11 +83,16 @@ def collapse(flat: BoardGraph, constraints: CompiledConstraints, rules: dict,
     # edge clearance), so the macro reserves that clearance on every side: it then
     # also holds from the board edge, not only from neighbouring courtyards.
     margin = float(rules.get('fab', {}).get('edge_clearance_mm', 0.2))
+    from pnr.place.pair_landing import macro_reserves, macro_mount_record, enabled as landing_enabled
     for index, (block, sub, w, h) in enumerate(layouts):
         mref = 'MB%02d' % index
         members = {}
         pads: List[Pad] = []
+        reserves: List[dict] = []
         for c in sub.components:
+            # PNR_PAIR_LANDING_RESERVE: a member's diff-pair landing reserve moves
+            # onto the macro (pads '<ref>.<pad>', side relative to the macro).
+            reserves.extend(macro_reserves(c))
             members[c.ref] = (c.pos[0], c.pos[1], c.rot, c.side)
             plan.member_of[c.ref] = mref
             for p in c.pads:
@@ -98,11 +109,15 @@ def collapse(flat: BoardGraph, constraints: CompiledConstraints, rules: dict,
                 lock = orient_locks[c.ref]
                 rot = (float(lock.params.get('rot') or 0) - c.rot) % 360
                 macro_orientation.setdefault(mref, []).append((rot, lock.enforcement, c.ref))
+        if landing_enabled():
+            # PNR_PAIR_LANDING_RESERVE: the macro counts as mounted where its
+            # members are (a landing excludes bodies mounted on its side).
+            reserves.append(macro_mount_record(sub.components))
         plan.macros[mref] = dict(block=block.name, width=w, height=h, members=members)
         macro_graph.components.append(Component(
             ref=mref, footprint='block:' + block.name, pos=(0.0, 0.0), rot=0.0, side='top',
             courtyard=(w + 2 * margin, h + 2 * margin), bbox=(w + 2 * margin, h + 2 * margin),
-            pads=pads, address='block:' + block.name))
+            pads=pads, address='block:' + block.name, reserves=reserves))
     for c in flat.components:
         if c.ref not in plan.member_of:
             macro_graph.components.append(copy.deepcopy(c))

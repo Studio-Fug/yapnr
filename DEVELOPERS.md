@@ -25,7 +25,15 @@ bazel run //docs:serve                # preview on http://127.0.0.1:8000/
 prek run --all-files                  # presubmit lints
 tools/release/version.py --field pep440   # the version of this checkout (from git)
 tools/image/build_local.sh            # build and smoke-test the container images (Docker)
+yapnr atopile setup                   # the pinned atopile environment (needs uv 0.12.21)
+tools/atopile/update_locks.sh --check # the atopile locks are current (network)
+tools/image/smoke_part_cache.sh       # build and smoke-test the part cache image (Docker)
 ```
+
+The atopile toolchain and its tests are described in
+[docs/frontends/atopile.md](docs/frontends/atopile.md); the part cache in
+[docs/part-cache.md](docs/part-cache.md). Tests that run a real atopile build are tagged
+`atopile` and `manual`.
 
 Test tiers and tags are described in [docs/architecture.md](docs/architecture.md#test-tiers).
 New test files go under `tests/<tier>/<area>/test_*.py` in a package whose `BUILD.bazel` calls
@@ -168,19 +176,22 @@ regenerate the image's runtime locks with `tools/image/update_runtime_locks.sh` 
 
 ## Repository layout
 
-| Path                             | What                                                                  |
-| -------------------------------- | --------------------------------------------------------------------- |
-| `yapnr/`                         | the Python package (today: version, CLI and the live viewer)          |
-| `tests/unit/`                    | hermetic unit tests and repo checks                                   |
-| `tests/e2e/`                     | manual live checks (paid agent calls, real KiCad exports)             |
-| `tests/fixtures/`                | synthetic test inputs (the viewer's small atopile project)            |
-| `tools/`                         | privacy scan, test-wiring check, internal Bazel macros                |
-| `tools/release/`, `tools/image/` | version derivation, release notes, image build and smoke test         |
-| `release/`                       | the yapnr wheel (`//release:wheel`)                                   |
-| `docker/`                        | the container images: `yapnr-kicad` (base) and `yapnr`                |
-| `docs/`                          | documentation (Sphinx with MyST); the site is built by `//docs:build` |
-| `branding/`                      | logo, mark, favicons and palette                                      |
-| `.github/`                       | CI workflows, CODEOWNERS, pull request template                       |
+| Path                             | What                                                                    |
+| -------------------------------- | ----------------------------------------------------------------------- |
+| `yapnr/`                         | the Python package (today: version, CLI and the live viewer)            |
+| `yapnr/frontends/atopile/`       | the atopile toolchain: setup, runner, hook, offline picker, locks       |
+| `yapnr/partcache/`               | the part cache: store, server, clients, importer                        |
+| `bazel/atopile/`                 | the atopile toolchain discovery and `yapnr_atopile_build`               |
+| `tests/unit/`                    | hermetic unit tests and repo checks                                     |
+| `tests/e2e/`                     | manual live checks (paid agent calls, real KiCad exports)               |
+| `tests/fixtures/`                | synthetic test inputs (the viewer's small atopile project)              |
+| `tools/`                         | privacy scan, test-wiring check, internal Bazel macros                  |
+| `tools/release/`, `tools/image/` | version derivation, release notes, image build and smoke test           |
+| `release/`                       | the yapnr wheel (`//release:wheel`)                                     |
+| `docker/`                        | the container images: `yapnr-kicad` (base), `yapnr`, `yapnr-part-cache` |
+| `docs/`                          | documentation (Sphinx with MyST); the site is built by `//docs:build`   |
+| `branding/`                      | logo, mark, favicons and palette                                        |
+| `.github/`                       | CI workflows, CODEOWNERS, pull request template                         |
 
 The planned full layout is in [docs/migration-plan.md](docs/migration-plan.md#1-repository-layout).
 

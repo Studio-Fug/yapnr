@@ -3,7 +3,7 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-09-30 (PR4 and #10 merged; ladder animations merged with main).
+Last updated: 2026-09-30 (PR4, #10 and the ladder animations merged; atopile toolchain branch).
 
 ## In progress
 
@@ -13,22 +13,20 @@ Last updated: 2026-09-30 (PR4 and #10 merged; ladder animations merged with main
   [docs/decisions.md](docs/decisions.md)), and #13 (an explicit `started.json` stamp for the
   routing-feedback staleness check, fixing #10 on Linux). The format commits of #9 and #12 are in
   `.git-blame-ignore-revs` (#11, #14).
-- **Branch in progress:** `claude/atopile-toolchain` (atopile 0.15.8 without Nix, the offline
-  part picker, a part cache server seeded locally); it branches from before PR3a and merges
-  `main` before its pull request.
-- **Regression ladder in CI and PnR animations** (branch `claude/ladder-animations`; `main`
-  merged in, the engine files it hooks re-formatted as PR3a did): `pnr.trace` (opt-in
-  `PNR_TRACE_DIR`, format `pnr-trace-v1`; `trace_noop_test` and a traced/untraced ladder A/B show
-  byte-identical results), `pnr.trace_board` (stdlib
-  `.kicad_pcb` reader), `pnr.provenance` (critical path; halving runs in coarse mode),
-  `pnr.animate` (Pillow; WebP, GIF, optional MP4), `run.py --trace` and `--fab-profile` (default
-  `legacy`, the fixtures' own rules), `//hardware/pnr:animate` and `:ladder_animations`, the
-  informational `ladder.yaml` lane, and the docs: `docs/regression-ladder.md` with all eight
-  animations in `docs/animations/` and the 555 flasher (`05-timer-led-10`) GIF in `README.md`.
-  All eight cases pass (traced pool run, seed 0; baseline seeds 0 and 1, the nightly lane's
-  configuration: 16 of 16, the vias and copper of RESULTS-118). The review's findings are fixed;
-  the container path of `ladder.yaml` has still never run (the image is private and the Mac's
-  tokens lack `read:packages`).
+- **Merged since:** the regression ladder in CI and the PnR animations (#15: `pnr.trace`,
+  `pnr.provenance`, `pnr.animate`, `ladder.yaml`, `docs/regression-ladder.md`) and two viewer
+  test race fixes (#16, #17).
+- **atopile toolchain and part cache** (branch `claude/atopile-toolchain`, on `main` after #14,
+  not pushed; A1 and A2 of the end-to-end plan): `yapnr atopile setup` (hashed per-platform
+  locks, atopile 0.15.8 on Python 3.14.7), `yapnr atopile build` (offline, isolated, bounded; a
+  hook in every atopile interpreter), the loopback picker (catalog schema v1), the part cache
+  (store, HTTP server with tokens and takedowns, clients, importer, container), the Bazel
+  toolchain and `yapnr_atopile_build`. A real build of a synthetic project passes twice without
+  picks and twice with one type pick from the cache (`//tests/e2e/atopile`, manual). Splanc's
+  parts and picker catalog are in the local cache of the development Mac, outside every
+  repository; the locks written for its four boards materialize byte-identically, and Splanc Mini
+  builds from them with the same input id. Not done: the image's `/opt/atopile` (A4), a KiCad 9
+  against 10 A/B ([docs/frontends/atopile.md](docs/frontends/atopile.md#not-done-yet)).
 
 ## Next
 

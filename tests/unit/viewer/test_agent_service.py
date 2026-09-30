@@ -877,6 +877,26 @@ class WebNotesTest(Base):
             sorted(set(agent_service.local_hosts()) | {"host.example", "host", LAN_IP}),
         )
 
+    def test_interface_addresses(self):
+        # `ip` (Linux, where ifconfig is often missing), `ifconfig` in both formats; the first
+        # listing that works wins; the default route's address needs no tool
+        bin_ = self.dir / "bin"
+        bin_.mkdir()
+        ip_out = f"1: lo    inet 127.0.0.1/8 scope host lo\n2: eth0    inet {LAN_IP}/8 brd x\n"
+        write_fake(bin_ / "ip", f"import sys\nsys.stdout.write({ip_out!r})\n")
+        write_fake(bin_ / "ifconfig", f"print('eth1 inet addr:{HOME_IP}  Bcast:x')\n")
+        tools = (("ip", "-4", "-o", "addr", "show"), ("ifconfig",))
+        with mock.patch.dict(os.environ, {"PATH": str(bin_)}):
+            got = agent_service.interface_addresses(tools)
+            self.assertTrue({"127.0.0.1", LAN_IP} <= got, got)
+            self.assertNotIn(HOME_IP, got)
+            (bin_ / "ip").unlink()
+            self.assertIn(HOME_IP, agent_service.interface_addresses(tools))
+            (bin_ / "ifconfig").unlink()
+            got = agent_service.interface_addresses(tools)  # no tool at all
+            self.assertLessEqual(len(got), 1)
+            self.assertTrue(all(ipaddress.ip_address(a).version == 4 for a in got))
+
     def test_init_validation(self):
         s = self.svc(notes=self.dir / "notes")
         base = ["Glob", "Grep", "Read"]

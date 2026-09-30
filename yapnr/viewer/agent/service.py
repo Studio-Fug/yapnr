@@ -138,22 +138,41 @@ def quote(s, n=300):
     )
 
 
+# Interface listings, first found wins: iproute2 (Linux), then ifconfig (macOS, BSD, net-tools).
+ADDRESS_TOOLS = (("ip", "-4", "-o", "addr", "show"), ("ifconfig",), ("/sbin/ifconfig",))
+
+
+def interface_addresses(tools=ADDRESS_TOOLS):
+    """This machine's IPv4 addresses: the first interface listing that works (`ip` on Linux,
+    `ifconfig` elsewhere), plus the source address of the default route (a UDP socket's connect
+    sends nothing), which needs no tool at all."""
+    out = set()
+    for cmd in tools:
+        exe = shutil.which(cmd[0])
+        if not exe:
+            continue
+        try:
+            text = subprocess.run([exe, *cmd[1:]], capture_output=True, text=True, timeout=3).stdout
+        except (OSError, subprocess.SubprocessError):
+            continue
+        found = set(re.findall(r"\binet (?:addr:)?(\d+\.\d+\.\d+\.\d+)", text))
+        if found:
+            out |= found
+            break
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("192.0.2.1", 9))  # TEST-NET-1: only picks the route, no packet
+            out.add(s.getsockname()[0])
+    except OSError:
+        pass
+    return out
+
+
 def local_hosts(extra=()):
     """This machine's IPv4 interface addresses and host names plus extra (the server's --listen /
     --allow-origin / --allow-host names): WebFetch deny rules on top of the guard hook (deny rules
     win over the hook's allow; verified with claude 2.1.284)."""
-    out = set()
-    try:
-        out |= set(
-            re.findall(
-                r"\binet (\d+\.\d+\.\d+\.\d+)",
-                subprocess.run(
-                    ["/sbin/ifconfig"], capture_output=True, text=True, timeout=3
-                ).stdout,
-            )
-        )
-    except (OSError, subprocess.SubprocessError):
-        pass
+    out = set(interface_addresses())
     try:
         h = socket.gethostname().lower()
         out |= {h, h.split(".")[0]}

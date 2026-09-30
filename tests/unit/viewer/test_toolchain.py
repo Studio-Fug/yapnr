@@ -75,6 +75,9 @@ class ToolchainTest(unittest.TestCase):
             "os.environ", {"PATH": str(self.dir / "bin")}
         ):
             self.assertEqual(toolchain.kicad_cli(environ={}), self.cli)
+            # a python3 on PATH is probed (also where /usr/bin/python3 is missing, as in slim
+            # container images)
+            write_fake(self.dir / "bin/python3", "print('fake')\n")
             probe = mock.Mock(return_value=False)
             with self.assertRaisesRegex(toolchain.Unavailable, "imports pcbnew"):
                 toolchain.kicad_python(environ={}, probe=probe)

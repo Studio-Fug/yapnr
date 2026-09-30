@@ -270,7 +270,9 @@ py_test(
 # Phase 3 acceptance: orientation search yields legal discrete angles + better HPWL.
 py_test(
     name = "orientation_test",
-    size = "small",  # runs the placer twice (orient on/off); ~14s
+    # Runs the placer twice (orient on/off): ~14 s on a dev Mac, but over the 60 s "small"
+    # timeout on 4-vCPU CI runners. yapnr adaptation (PR1): "medium" (300 s).
+    size = "medium",
     srcs = ["tests/test_orientation.py"],
     data = glob(["testdata/splanc_dev/*"]),
     imports = ["."],

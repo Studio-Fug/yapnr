@@ -5,6 +5,20 @@
   </picture>
 </p>
 
+<p align="center">
+  <a href="https://github.com/Studio-Fug/yapnr/actions/workflows/ci.yaml?query=branch%3Amain"><img
+    src="https://github.com/Studio-Fug/yapnr/actions/workflows/ci.yaml/badge.svg?branch=main"
+    alt="CI"></a>
+  <a href="https://github.com/Studio-Fug/yapnr/actions/workflows/macos.yaml?query=branch%3Amain"><img
+    src="https://github.com/Studio-Fug/yapnr/actions/workflows/macos.yaml/badge.svg?branch=main"
+    alt="macOS"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg"
+    alt="License: AGPL-3.0-or-later"></a>
+  <img src="https://img.shields.io/badge/python-3.11-3776ab.svg" alt="Python 3.11">
+  <a href="https://github.com/j178/prek"><img
+    src="https://img.shields.io/badge/pre--commit-prek-brightgreen.svg" alt="pre-commit: prek"></a>
+</p>
+
 # yapnr
 
 **Yet another place and route** engine for printed circuit boards.

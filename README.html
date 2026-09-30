@@ -219,8 +219,10 @@
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="docs/architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/regression-ladder.html">Regression ladder</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/migration-plan.html">yapnr migration plan</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/decisions.html">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/about-the-name.html">About the name</a></li>
 </ul>
@@ -308,6 +310,14 @@
 <section id="yapnr">
 <h1>yapnr<a class="headerlink" href="#yapnr" title="Link to this heading">¶</a></h1>
 <p><strong>Yet another place and route</strong> engine for printed circuit boards.</p>
+<p align="center">
+  <img src="docs/animations/05-timer-led-10.gif" width="640"
+    alt="Animation: yapnr places and routes a TLC555 LED flasher, from unplaced footprints to a
+    fully routed board that passes KiCad's DRC">
+</p>
+<p><em>The 555 flasher (a TLC555 astable blinker, 10 parts, 2 layers) from the
+<a class="reference internal" href="docs/regression-ladder.html"><span class="std std-doc">regression ladder</span></a>: from unplaced footprints to 100 % routed, with the
+placement starts and routes it was chosen from, ending on KiCad’s clean DRC verdict.</em></p>
 <p>yapnr places components and routes copper for KiCad boards. It uses a mechanical,
 Monte-Carlo-driven search: hierarchical block synthesis, power-first placement, native KiCad
 routing and DRC in the loop, and electrical contracts (current, pairs, plane access) declared

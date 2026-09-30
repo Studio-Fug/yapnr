@@ -203,6 +203,14 @@ The planned full layout is in [docs/migration-plan.md](docs/migration-plan.md#1-
 `lint`, `test` and `docs` are the required checks. `.github/workflows/macos.yaml` runs the tests on
 `macos-latest` for information only.
 
+`.github/workflows/ladder.yaml` runs the native regression ladder (`hardware/pnr/regression`) inside
+the published arm64 image `ghcr.io/studio-fug/yapnr:edge`, resolved to a digest: cases 01 to 06 with
+seed 0 on pull requests that change engine inputs, and nightly all 8 cases with seeds 0 and 1 plus
+a traced run with the initial placement pool, whose animations (`//hardware/pnr:ladder_animations`)
+are uploaded as an artifact. A runtime guard installs the checkout's runtime lock into an overlay
+venv when it differs from the image's. `tools/ci/ladder_summary.py` writes the step summary. The
+lane is informational: its `ladder` check is not required yet.
+
 `.github/workflows/image.yaml` builds and smoke-tests the container images for linux/amd64 and
 linux/arm64 on pull requests that change what goes into them, and publishes `edge` from such
 merges to `main` (informational until v0.1.0).

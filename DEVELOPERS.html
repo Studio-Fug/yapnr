@@ -219,8 +219,10 @@
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="docs/architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/regression-ladder.html">Regression ladder</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/migration-plan.html">yapnr migration plan</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/decisions.html">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/about-the-name.html">About the name</a></li>
 </ul>
@@ -497,6 +499,13 @@ creates the <code class="docutils literal notranslate"><span class="pre">gh-page
 </ul>
 <p><code class="docutils literal notranslate"><span class="pre">lint</span></code>, <code class="docutils literal notranslate"><span class="pre">test</span></code> and <code class="docutils literal notranslate"><span class="pre">docs</span></code> are the required checks. <code class="docutils literal notranslate"><span class="pre">.github/workflows/macos.yaml</span></code> runs the tests on
 <code class="docutils literal notranslate"><span class="pre">macos-latest</span></code> for information only.</p>
+<p><code class="docutils literal notranslate"><span class="pre">.github/workflows/ladder.yaml</span></code> runs the native regression ladder (<code class="docutils literal notranslate"><span class="pre">hardware/pnr/regression</span></code>) inside
+the published arm64 image <code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr:edge</span></code>, resolved to a digest: cases 01 to 06 with
+seed 0 on pull requests that change engine inputs, and nightly all 8 cases with seeds 0 and 1 plus
+a traced run with the initial placement pool, whose animations (<code class="docutils literal notranslate"><span class="pre">//hardware/pnr:ladder_animations</span></code>)
+are uploaded as an artifact. A runtime guard installs the checkout’s runtime lock into an overlay
+venv when it differs from the image’s. <code class="docutils literal notranslate"><span class="pre">tools/ci/ladder_summary.py</span></code> writes the step summary. The
+lane is informational: its <code class="docutils literal notranslate"><span class="pre">ladder</span></code> check is not required yet.</p>
 <p><code class="docutils literal notranslate"><span class="pre">.github/workflows/image.yaml</span></code> builds and smoke-tests the container images for linux/amd64 and
 linux/arm64 on pull requests that change what goes into them, and publishes <code class="docutils literal notranslate"><span class="pre">edge</span></code> from such
 merges to <code class="docutils literal notranslate"><span class="pre">main</span></code> (informational until v0.1.0).

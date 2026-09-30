@@ -219,8 +219,10 @@
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="docs/architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/regression-ladder.html">Regression ladder</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/migration-plan.html">yapnr migration plan</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/decisions.html">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/about-the-name.html">About the name</a></li>
 </ul>
@@ -278,7 +280,7 @@
 <h1>Worklog<a class="headerlink" href="#worklog" title="Link to this heading">¶</a></h1>
 <p>A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.</p>
-<p>Last updated: 2026-09-30 (PR4 and #10 merged).</p>
+<p>Last updated: 2026-09-30 (PR4 and #10 merged; ladder animations merged with main).</p>
 <section id="in-progress">
 <h2>In progress<a class="headerlink" href="#in-progress" title="Link to this heading">¶</a></h2>
 <ul class="simple">
@@ -288,11 +290,22 @@ three.js fetched pinned; guide <a class="reference internal" href="docs/viewer.h
 <a class="reference internal" href="docs/decisions.html"><span class="std std-doc">docs/decisions.md</span></a>), and #13 (an explicit <code class="docutils literal notranslate"><span class="pre">started.json</span></code> stamp for the
 routing-feedback staleness check, fixing #10 on Linux). The format commits of #9 and #12 are in
 <code class="docutils literal notranslate"><span class="pre">.git-blame-ignore-revs</span></code> (#11, #14).</p></li>
-<li><p><strong>Branches in progress:</strong> <code class="docutils literal notranslate"><span class="pre">claude/ladder-animations</span></code> (regression ladder in CI, a PnR trace
-recorder, critical-path animations of every ladder case, the TLC555 chaser on the README) and
-<code class="docutils literal notranslate"><span class="pre">claude/atopile-toolchain</span></code> (atopile 0.15.8 without Nix, the offline part picker, a part cache
-server seeded locally). Both branch from before PR3a and merge <code class="docutils literal notranslate"><span class="pre">main</span></code> before their pull
-requests.</p></li>
+<li><p><strong>Branch in progress:</strong> <code class="docutils literal notranslate"><span class="pre">claude/atopile-toolchain</span></code> (atopile 0.15.8 without Nix, the offline
+part picker, a part cache server seeded locally); it branches from before PR3a and merges
+<code class="docutils literal notranslate"><span class="pre">main</span></code> before its pull request.</p></li>
+<li><p><strong>Regression ladder in CI and PnR animations</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/ladder-animations</span></code>; <code class="docutils literal notranslate"><span class="pre">main</span></code>
+merged in, the engine files it hooks re-formatted as PR3a did): <code class="docutils literal notranslate"><span class="pre">pnr.trace</span></code> (opt-in
+<code class="docutils literal notranslate"><span class="pre">PNR_TRACE_DIR</span></code>, format <code class="docutils literal notranslate"><span class="pre">pnr-trace-v1</span></code>; <code class="docutils literal notranslate"><span class="pre">trace_noop_test</span></code> and a traced/untraced ladder A/B show
+byte-identical results), <code class="docutils literal notranslate"><span class="pre">pnr.trace_board</span></code> (stdlib
+<code class="docutils literal notranslate"><span class="pre">.kicad_pcb</span></code> reader), <code class="docutils literal notranslate"><span class="pre">pnr.provenance</span></code> (critical path; halving runs in coarse mode),
+<code class="docutils literal notranslate"><span class="pre">pnr.animate</span></code> (Pillow; WebP, GIF, optional MP4), <code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--trace</span></code> and <code class="docutils literal notranslate"><span class="pre">--fab-profile</span></code> (default
+<code class="docutils literal notranslate"><span class="pre">legacy</span></code>, the fixtures’ own rules), <code class="docutils literal notranslate"><span class="pre">//hardware/pnr:animate</span></code> and <code class="docutils literal notranslate"><span class="pre">:ladder_animations</span></code>, the
+informational <code class="docutils literal notranslate"><span class="pre">ladder.yaml</span></code> lane, and the docs: <code class="docutils literal notranslate"><span class="pre">docs/regression-ladder.md</span></code> with all eight
+animations in <code class="docutils literal notranslate"><span class="pre">docs/animations/</span></code> and the 555 flasher (<code class="docutils literal notranslate"><span class="pre">05-timer-led-10</span></code>) GIF in <code class="docutils literal notranslate"><span class="pre">README.md</span></code>.
+All eight cases pass (traced pool run, seed 0; baseline seeds 0 and 1, the nightly lane’s
+configuration: 16 of 16, the vias and copper of RESULTS-118). The review’s findings are fixed;
+the container path of <code class="docutils literal notranslate"><span class="pre">ladder.yaml</span></code> has still never run (the image is private and the Mac’s
+tokens lack <code class="docutils literal notranslate"><span class="pre">read:packages</span></code>).</p></li>
 </ul>
 </section>
 <section id="next">
@@ -339,15 +352,20 @@ and none of the venv’s compiled packages, and add a smoke check for it.</p></l
 <li><p>First release tag <code class="docutils literal notranslate"><span class="pre">v0.1.0</span></code> (owner) once the engine runs end to end inside the published image on
 both architectures (the PR6b example), after the <code class="docutils literal notranslate"><span class="pre">Image</span></code> run of that commit on <code class="docutils literal notranslate"><span class="pre">main</span></code> is green;
 make the <code class="docutils literal notranslate"><span class="pre">image</span></code> check required then.</p></li>
+<li><p>Owner: decide whether the ladder should default to <code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">jlc-pofv</span></code> (the engine’s
+default JLCPCB profile) instead of <code class="docutils literal notranslate"><span class="pre">legacy</span></code> (the fixtures’ own rules; <code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code>).
+With <code class="docutils literal notranslate"><span class="pre">route_case.py</span></code> applying the profile, <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> passes every case too (2026-09-30:
+pool seed 0, 8 of 8; baseline seeds 0 and 1, 16 of 16; other boards than legacy’s, e.g. case
+07 with 17 vias instead of 19). Flipping it changes the rules the ladder README states and
+needs a refresh of <code class="docutils literal notranslate"><span class="pre">docs/animations/</span></code>. The first <code class="docutils literal notranslate"><span class="pre">ladder.yaml</span></code> run (the pull request of
+<code class="docutils literal notranslate"><span class="pre">claude/ladder-animations</span></code>) is the first run of its container path.</p></li>
 <li><p>Rebuild the KiCad base monthly (bump <code class="docutils literal notranslate"><span class="pre">docker/yapnr-kicad/TAG</span></code> to the next <code class="docutils literal notranslate"><span class="pre">-N</span></code>), or with the
 Dependabot <code class="docutils literal notranslate"><span class="pre">ubuntu</span></code> digest update (docs/releases.md, “Maintaining the images”).</p></li>
 </ol>
 </section>
 <section id="blockers">
 <h2>Blockers<a class="headerlink" href="#blockers" title="Link to this heading">¶</a></h2>
-<ul class="simple">
-<li><p>None.</p></li>
-</ul>
+<p>None.</p>
 </section>
 <section id="do-not-retry">
 <h2>Do not retry<a class="headerlink" href="#do-not-retry" title="Link to this heading">¶</a></h2>

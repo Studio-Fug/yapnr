@@ -3,7 +3,7 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-09-30 (PR4 and #10 merged).
+Last updated: 2026-09-30 (PR4 and #10 merged; ladder animations merged with main).
 
 ## In progress
 
@@ -13,11 +13,22 @@ Last updated: 2026-09-30 (PR4 and #10 merged).
   [docs/decisions.md](docs/decisions.md)), and #13 (an explicit `started.json` stamp for the
   routing-feedback staleness check, fixing #10 on Linux). The format commits of #9 and #12 are in
   `.git-blame-ignore-revs` (#11, #14).
-- **Branches in progress:** `claude/ladder-animations` (regression ladder in CI, a PnR trace
-  recorder, critical-path animations of every ladder case, the TLC555 chaser on the README) and
-  `claude/atopile-toolchain` (atopile 0.15.8 without Nix, the offline part picker, a part cache
-  server seeded locally). Both branch from before PR3a and merge `main` before their pull
-  requests.
+- **Branch in progress:** `claude/atopile-toolchain` (atopile 0.15.8 without Nix, the offline
+  part picker, a part cache server seeded locally); it branches from before PR3a and merges
+  `main` before its pull request.
+- **Regression ladder in CI and PnR animations** (branch `claude/ladder-animations`; `main`
+  merged in, the engine files it hooks re-formatted as PR3a did): `pnr.trace` (opt-in
+  `PNR_TRACE_DIR`, format `pnr-trace-v1`; `trace_noop_test` and a traced/untraced ladder A/B show
+  byte-identical results), `pnr.trace_board` (stdlib
+  `.kicad_pcb` reader), `pnr.provenance` (critical path; halving runs in coarse mode),
+  `pnr.animate` (Pillow; WebP, GIF, optional MP4), `run.py --trace` and `--fab-profile` (default
+  `legacy`, the fixtures' own rules), `//hardware/pnr:animate` and `:ladder_animations`, the
+  informational `ladder.yaml` lane, and the docs: `docs/regression-ladder.md` with all eight
+  animations in `docs/animations/` and the 555 flasher (`05-timer-led-10`) GIF in `README.md`.
+  All eight cases pass (traced pool run, seed 0; baseline seeds 0 and 1, the nightly lane's
+  configuration: 16 of 16, the vias and copper of RESULTS-118). The review's findings are fixed;
+  the container path of `ladder.yaml` has still never run (the image is private and the Mac's
+  tokens lack `read:packages`).
 
 ## Next
 
@@ -62,12 +73,19 @@ Last updated: 2026-09-30 (PR4 and #10 merged).
 11. First release tag `v0.1.0` (owner) once the engine runs end to end inside the published image on
     both architectures (the PR6b example), after the `Image` run of that commit on `main` is green;
     make the `image` check required then.
-12. Rebuild the KiCad base monthly (bump `docker/yapnr-kicad/TAG` to the next `-N`), or with the
+12. Owner: decide whether the ladder should default to `--fab-profile jlc-pofv` (the engine's
+    default JLCPCB profile) instead of `legacy` (the fixtures' own rules; `docs/decisions.md`).
+    With `route_case.py` applying the profile, `jlc-pofv` passes every case too (2026-09-30:
+    pool seed 0, 8 of 8; baseline seeds 0 and 1, 16 of 16; other boards than legacy's, e.g. case
+    07 with 17 vias instead of 19). Flipping it changes the rules the ladder README states and
+    needs a refresh of `docs/animations/`. The first `ladder.yaml` run (the pull request of
+    `claude/ladder-animations`) is the first run of its container path.
+13. Rebuild the KiCad base monthly (bump `docker/yapnr-kicad/TAG` to the next `-N`), or with the
     Dependabot `ubuntu` digest update (docs/releases.md, "Maintaining the images").
 
 ## Blockers
 
-- None.
+None.
 
 ## Do not retry
 

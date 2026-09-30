@@ -3,7 +3,7 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="History import manifest" href="history/import-manifest.html"><link rel="prev" title="yapnr migration plan" href="migration-plan.html">
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Design: the regression ladder in CI, PnR traces and critical-path animations" href="design/animations.html"><link rel="prev" title="yapnr migration plan" href="migration-plan.html">
         <link rel="prefetch" href="../static/yapnr-logo-256.png" as="image">
         <link rel="prefetch" href="../static/yapnr-logo-light.png" as="image">
 
@@ -219,8 +219,10 @@
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="regression-ladder.html">Regression ladder</a></li>
 <li class="toctree-l1"><a class="reference internal" href="migration-plan.html">yapnr migration plan</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
 </ul>
@@ -648,6 +650,56 @@ it (PR6a): it follows AGENTS.md and refuses everything inside <code class="docut
 discovers only the headless copy, never <code class="docutils literal notranslate"><span class="pre">PATH</span></code>; and it does not check for KiCad 10.x (the
 toolchain module will).</p></li>
 </ul>
+<p>Choices made for the regression ladder in CI and the animations (branch
+<code class="docutils literal notranslate"><span class="pre">claude/ladder-animations</span></code>); the owner reviews them with the pull request:</p>
+<ul class="simple">
+<li><p><strong>Tracing is opt-in and observational.</strong> <code class="docutils literal notranslate"><span class="pre">PNR_TRACE_DIR</span></code> enables <code class="docutils literal notranslate"><span class="pre">pnr.trace</span></code> (format
+<code class="docutils literal notranslate"><span class="pre">pnr-trace-v1</span></code>); unset, each hook is one environment lookup. Hooks use no random number
+generator, add no torch operation and change no engine state; the first recorder error disables
+recording for the process. <code class="docutils literal notranslate"><span class="pre">trace_noop_test</span></code> requires byte-identical placements, routes and
+reports with tracing unset, set and unset again (baseline loop and initial pool), and a traced
+and an untraced ladder run give identical <code class="docutils literal notranslate"><span class="pre">placed.json</span></code>, <code class="docutils literal notranslate"><span class="pre">routes.json</span></code> and reports.</p></li>
+<li><p><strong>The legalizer’s accepted order, not its backtracking.</strong> A trace records the order in which the
+legalizer placed each part on the path it kept (<code class="docutils literal notranslate"><span class="pre">legal</span></code>), not the branches it rejected, as the
+cost capture keeps only the accepted search path.</p></li>
+<li><p><strong>Animations follow the critical path</strong> (<code class="docutils literal notranslate"><span class="pre">pnr.provenance</span></code>): the ancestry of the final board,
+where a selection contributes only its chosen candidate; the rejected candidates appear as
+montages. Rendering is pure Python and Pillow (no numpy, torch or KiCad); the <code class="docutils literal notranslate"><span class="pre">.kicad_pcb</span></code> reader
+(<code class="docutils literal notranslate"><span class="pre">pnr.trace_board</span></code>) needs no KiCad process.</p></li>
+<li><p><strong>The ladder lane runs in the published image, resolved to a digest,</strong> on <code class="docutils literal notranslate"><span class="pre">ubuntu-24.04-arm</span></code>,
+and runs the checkout’s engine sources. A runtime guard installs the checkout’s runtime lock into
+an overlay venv when a pull request changes the pins, rather than building the image in the job.
+The lane is informational until the owner makes its <code class="docutils literal notranslate"><span class="pre">ladder</span></code> check required.</p></li>
+<li><p><strong>The ladder routes and is judged under its fixtures’ own rules.</strong> The fixtures carry their own
+fab block (0.2 mm clearance, 0.6/0.3 mm vias, documented in the ladder README), and RESULTS-118
+passed under it before fabrication profiles existed. <code class="docutils literal notranslate"><span class="pre">run.py</span></code> now sets <code class="docutils literal notranslate"><span class="pre">PNR_FAB_PROFILE</span></code> for
+every stage from <code class="docutils literal notranslate"><span class="pre">--fab-profile</span></code>, default <code class="docutils literal notranslate"><span class="pre">legacy</span></code>, which enforces exactly that block; the boards
+are RESULTS-118’s (all 16 baseline runs, seeds 0 and 1, identical vias and copper) and all eight
+cases pass. The alternative, the engine’s default <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> profile, overrides the fixtures’
+numbers with JLC’s (0.127 mm clearance, 0.45/0.30 mm vias) and would make the README’s stated
+rules false; it stays available as <code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">jlc-pofv</span></code>, and <code class="docutils literal notranslate"><span class="pre">route_case.py</span></code> applies the
+selected profile to the router’s rules (the identity for legacy), so that configuration routes
+under the rules KiCad judges it by. Before, the unset variable made writeback stamp <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code>
+while the router used the fixtures’ rules, and cases 04 to 08 failed on vias touching their own
+SMD pads. With the profile applied at the router, <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> passes every case as well (pool
+seed 0 and baseline seeds 0 and 1); making it the ladder’s default is the owner’s call
+(WORKLOG, “Next”).</p></li>
+<li><p><strong>The committed animations.</strong> All eight ladder cases are animated in <code class="docutils literal notranslate"><span class="pre">docs/animations/</span></code> (not
+<code class="docutils literal notranslate"><span class="pre">static</span></code>, whose references the Pages step rewrites), from a traced pool run (seed 0) on the
+development Mac; all eight pass the gate. A failed case is only rendered with <code class="docutils literal notranslate"><span class="pre">--allow-failed</span></code>,
+and its end card then names the broken rules in red. The README shows <code class="docutils literal notranslate"><span class="pre">05-timer-led-10</span></code>, the
+TLC555 blinker (the request’s “555 flasher”), as a GIF (GitHub autoplays it); the page uses WebP.
+<code class="docutils literal notranslate"><span class="pre">tests/unit/repo/test_animations.py</span></code> bounds the folder (WebP 2.5 MB, GIF 5 MB, 20 MB in all,
+hashes in the manifest, no metadata) in place of the large-file hook, and prettier leaves the
+generated JSON as written. A refresh adds about 12 MB to the history, so it is deliberate.</p></li>
+<li><p><strong>A montage follows the winner’s replay.</strong> The timeline is one straight line: a selection’s
+candidates appear once the winner’s own replay reached the state their tiles show, and the bar
+counts committed connections only, so nothing on screen runs ahead of the process.</p></li>
+<li><p><strong>Coarse animations of halving runs.</strong> A successive-halving run records no trace;
+<code class="docutils literal notranslate"><span class="pre">pnr.provenance.halving_trace</span></code> rebuilds one from its saved placements, rung objectives and the
+winning rung’s native phases, and the overlay’s phases say what was saved, not more. Animations
+of Splanc runs stay local (the board is not public).</p></li>
+</ul>
 </section>
 <section id="pinned-versions">
 <h2>Pinned versions<a class="headerlink" href="#pinned-versions" title="Link to this heading">¶</a></h2>
@@ -689,59 +741,63 @@ toolchain module will).</p></li>
 <td><p><code class="docutils literal notranslate"><span class="pre">&gt;=6</span></code> (lock: 6.0.3)</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">requirements.in</span></code>, lock</p></td>
 </tr>
-<tr class="row-odd"><td><p>Sphinx stack</p></td>
+<tr class="row-odd"><td><p>Pillow</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&gt;=12,&lt;13</span></code> (lock: 12.3.0)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">requirements.in</span></code>, lock</p></td>
+</tr>
+<tr class="row-even"><td><p>Sphinx stack</p></td>
 <td><p>see below</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">requirements.in</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p>mermaid (JS)</p></td>
+<tr class="row-odd"><td><p>mermaid (JS)</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">11.4.1</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">docs/_sphinx/conf.py</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p>prek</p></td>
+<tr class="row-even"><td><p>prek</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">0.4.12</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">setup-precommit.sh</span></code>, <code class="docutils literal notranslate"><span class="pre">ci.yaml</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p>presubmit hooks</p></td>
+<tr class="row-odd"><td><p>presubmit hooks</p></td>
 <td><p>see below</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">.pre-commit-config.yaml</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">setup-bazel</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">setup-bazel</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">0.15.0</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">.github/workflows/</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p>Ubuntu (images)</p></td>
+<tr class="row-odd"><td><p>Ubuntu (images)</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">24.04</span></code>, by digest</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">docker/yapnr-kicad/Dockerfile</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p>KiCad (images)</p></td>
+<tr class="row-even"><td><p>KiCad (images)</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">10.0.6~ubuntu24.04.1</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">docker/yapnr-kicad/Dockerfile</span></code>, <code class="docutils literal notranslate"><span class="pre">TAG</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p>Python (image)</p></td>
+<tr class="row-odd"><td><p>Python (image)</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">3.11.15</span></code> (uv-managed)</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">docker/yapnr/Dockerfile</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p>uv (image build)</p></td>
+<tr class="row-even"><td><p>uv (image build)</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">0.12.21</span></code>, by digest</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">docker/yapnr/Dockerfile</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p>PBS (image)</p></td>
+<tr class="row-odd"><td><p>PBS (image)</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">20260807</span></code>, by sha256</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">docker/yapnr/Dockerfile</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p>Runtime locks</p></td>
+<tr class="row-even"><td><p>Runtime locks</p></td>
 <td><p>from <code class="docutils literal notranslate"><span class="pre">requirements.lock</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">docker/yapnr/runtime-*.lock</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p>elkjs (viewer)</p></td>
+<tr class="row-odd"><td><p>elkjs (viewer)</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">0.9.3</span></code>, by sha256</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">MODULE.bazel</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p>three (viewer)</p></td>
+<tr class="row-even"><td><p>three (viewer)</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">0.186.1</span></code>, by sha256</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">MODULE.bazel</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p>Image, release</p></td>
+<tr class="row-odd"><td><p>Image, release</p></td>
 <td><p>every action by commit SHA</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">.github/actions/</span></code>, <code class="docutils literal notranslate"><span class="pre">image.yaml</span></code>, …</p></td>
 </tr>
@@ -763,6 +819,11 @@ restrict their <code class="docutils literal notranslate"><span class="pre">nvid
 <li><p><strong>numpy 1.x:</strong> torch 2.3 wheels are built against the numpy 1 ABI, and the engine was tuned on
 numpy 1.26. (Splanc’s lock pairs torch 2.3.1 with numpy 2, which this avoids.) The interop smoke
 test in <code class="docutils literal notranslate"><span class="pre">tests/unit/interop</span></code> guards it.</p></li>
+<li><p><strong>Pillow below 13:</strong> the renderer of the place-and-route animations (<code class="docutils literal notranslate"><span class="pre">pnr.animate</span></code>), a
+contributor and docs tool: it is in <code class="docutils literal notranslate"><span class="pre">requirements.in</span></code> only, not in <code class="docutils literal notranslate"><span class="pre">requirements-runtime.in</span></code>, so
+the wheel’s dependencies and the image’s runtime locks do not change. The bytes of an animation
+depend on the libwebp, zlib and FreeType that the Pillow wheels bundle, so the major version is
+capped and the animations’ manifest records the exact version.</p></li>
 <li><p><strong>Sphinx stack:</strong> sphinx 9.0.4, myst-parser 5.1.0, furo 2025.12.19, sphinx-copybutton 0.5.2,
 sphinx-design 0.7.0 and sphinxcontrib-mermaid 2.1.0, exactly Splanc’s locked versions, so both
 sites build the same way. matplotlib is left out until a page needs generated figures.</p></li>
@@ -853,12 +914,12 @@ adds a separate x86_64 lock with the CPU torch index (<code class="docutils lite
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="history/import-manifest.html">
+          <a class="next-page" href="design/animations.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">History import manifest</div>
+                <div class="title">Design: the regression ladder in CI, PnR traces and critical-path animations</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>

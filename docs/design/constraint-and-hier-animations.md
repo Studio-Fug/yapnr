@@ -14,7 +14,7 @@ The owner's request (2026-09-30), in three demos:
 2. **Board edges.** A small "front panel" board (`edge-io-12`: supply connector, pushbutton and LED
    on the south edge) next to its unconstrained twin (`edge-io-12-free`). The three edge parts
    slide along the edge and change order between starts.
-3. **Hierarchical PnR.** A twin-bank chaser (`hier-twin-bank-31`, 31 parts, three blocks, two
+3. **Hierarchical PnR.** A twin-bank chaser (`hier-twin-bank-32`, 32 parts, three blocks, two
    templates): each block template is placed and routed on its own board, the bank layout is
    reused for both banks, the top level places the blocks as rigid macros and then routes the few
    nets between them ("knitting"), and KiCad judges the result.
@@ -262,7 +262,7 @@ needs file inputs, top-level placement (`hier/top.py`) only places, copper assem
 (`hier/assemble.py`) runs only inside KiCad and leads into the native loop, and `route_and_place`
 has no fixed-copper input. The driver below fills exactly these gaps with existing functions.
 
-### 4.1 The design: `hier-twin-bank-31`
+### 4.1 The design: `hier-twin-bank-32`
 
 Ladder footprints only (SOIC-8, SOIC-16, 0805, the 1x02 header); 2 layers; board 56 x 40 mm;
 the ladder's fab block and net classes. Each part carries an `address`; the driver copies it onto
@@ -386,7 +386,7 @@ identical 3-part blocks and a fixed connector, tiny budgets (2 trials, 1 seed, 8
 | `line-chaser-20`    |    20 | 42 x 32 | flat   | `07-chaser-20` plus `line_group` D1 to D5, `pitch_mm: 3.0`, `rot: 90`                  | right panel       |
 | `edge-io-12-free`   |    12 | 36 x 26 | flat   | none (nothing fixed)                                                                   | left panel        |
 | `edge-io-12`        |    12 | 36 x 26 | flat   | `edge_align` south, `hard: true`, for J1, SW1, D1; `orientation` so each lies along it | right panel       |
-| `hier-twin-bank-31` |    31 | 56 x 40 | hier   | J1 fixed west; addresses (§4.1)                                                        | single, chaptered |
+| `hier-twin-bank-32` |    32 | 56 x 40 | hier   | J1 fixed west; addresses (§4.1)                                                        | single, chaptered |
 
 - `line-chaser-20`: `rot: 90` turns every LED so its cathode faces one side of the line (a GND
   side) and its anode the other (the resistor side); 3.0 mm pitch leaves 0.96 mm between the 2.04
@@ -669,7 +669,7 @@ nice -n 10 $PY hardware/pnr/regression/run.py --repo . --out .yapnr/ladder/ab-ne
 nice -n 10 $PY hardware/pnr/regression/run.py --repo . --out .yapnr/ladder/showcase-1 \
   $KI $POOL --trace-placement-every 5 --timeout 1200 --showcases \
   --case 07-chaser-20 --case line-chaser-20 --case edge-io-12-free --case edge-io-12 \
-  --case hier-twin-bank-31
+  --case hier-twin-bank-32
 
 # Render (B; no KiCad)
 nice -n 10 bazel run --config=lowmem --local_cpu_resources=2 \
@@ -692,7 +692,7 @@ nice -n 10 bazel run --config=lowmem --local_cpu_resources=2 \
       3 candidates, deterministic order);
    2. Option A (`design["hier"]["knit"] = "full"`): blocks route internal nets only, the top level
       routes VCC, GND and CLOCK in full around the block copper; if 2 layers are too tight, a
-      4-layer GND-plane variant `hier-twin-bank-31-plane`;
+      4-layer GND-plane variant `hier-twin-bank-32-plane`;
    3. the scoped version: hierarchical placement (blocks synthesized and placed as macros) with a
       flat top-level route of every net, titled "Hierarchical placement, flat routing".
 6. **Runtime:** the hierarchical case stays out of the PR lane; nightly budget 45 minutes.
@@ -704,3 +704,35 @@ Owner decisions, recorded in `docs/decisions.md`: the `line_group` name and sche
 `hard`/`tolerance_mm`; the showcase list outside the gate; the 30 MB folder budget; the README's
 second media item; that a failing showcase is not committed (default) rather than shown with a
 red end card; companion rows (LED plus resistor) as a follow-up.
+
+## 10. As built (implementer A)
+
+The engine, the cases, the traces and the runs follow §2 to §5 with these differences and
+details:
+
+- **The hierarchical case has 32 parts** (J1, the bulk capacitor, six clock parts, two banks of
+  twelve), so it is `hier-twin-bank-32`; an earlier draft of this document counted 31.
+- **One layout per template.** The template's tier passed to `hierarchical_place()` is its single
+  best trial (fewest missing connections, then `rank_key`), so the `block-rank` choice is the
+  layout every top seed uses; the top seeds explore the macro placement only.
+- **Every legal top seed is knitted and scored**, each in its own `route` scope `top-NN-route`
+  that opens with a `fixed` event; `top-seed` selects among those route scopes (criterion
+  `route-objective`), like the pool's `chosen`. The representative retries (§9.5.1) run only
+  for nets a seed leaves split.
+- **Rigid bodies in events:** `poses` and `legal` events carry `groups` (the macros' own rows) and
+  `group_members` (`{macro: [member refs]}`, members in layout order), so a renderer can pose the
+  members from the body.
+- **The `fixed` event** carries `copper` (a blob, board frame), `groups` (`{net: pin-index groups
+the block copper joins}`, indices into `header.nets[].pins`), `connections_done` and
+  `progress`. In that route scope every header net counts towards `progress.total`, and the
+  router's `net` and `route_end` groups include the fixed joins, so progress starts at
+  `connections_done` and ends at `total`.
+- **Block traces** (`blocks/<template-id>/`): `start-NN` scopes carry `kind: block-trial`,
+  `outline` (µm) and `seed`; routes are `start-NN-<block>` scopes (also with `outline`); the
+  header is the representative instance's sub-board at the first trial's outline.
+- **The `blocks` event** (scope `hier-blocks`, type `block`) lists per instance `block`,
+  `template`, `trace`, `trial`, `macro`, `size_um`, `members` and `copper`; macro refs follow
+  `hierarchical_place()` (templates by first block name: `MB00` bank A, `MB01` bank B, `MB02` the
+  clock), which the driver checks.
+- **`pnr-report.json`** of the hierarchical case also has `hier.representatives`,
+  `hier.seeds` (legality, HPWL, objective per seed), `hier.block_copper` and `hier.top_copper`.

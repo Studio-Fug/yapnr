@@ -1009,6 +1009,7 @@ py_test(
 py_test(
     name = "regression_contract_test",
     srcs = [
+        "regression/animate_ladder.py",
         "regression/designs.py",
         "regression/run.py",
         "regression/test_contract.py",

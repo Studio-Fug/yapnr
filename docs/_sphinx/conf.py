@@ -26,6 +26,7 @@ myst_enable_extensions = [
     "deflist",
     "fieldlist",
     "html_image",
+    "strikethrough",  # ~~done~~ items in status lists (HTML builders only)
     "substitution",
     "tasklist",
 ]
@@ -35,6 +36,8 @@ myst_fence_as_directive = ["mermaid"]
 
 suppress_warnings = [
     "myst.header",
+    # MyST warns on every ~~strikethrough~~, even for HTML, the only builder used here.
+    "myst.strikethrough",
     "myst.xref_missing",
     "toc.not_readable",
     "misc.highlighting_failure",

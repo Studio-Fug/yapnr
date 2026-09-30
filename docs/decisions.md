@@ -128,13 +128,51 @@ the plan; the owner reviews them with the pull request:
 - **Electrical221 is imported as it ran in Splanc.** Its `via_coalesce`/`track_graph` cleanup is
   on by default without a flag or an A/B result, unlike the rule for new engine behaviour; the H7
   run uses `src15` without it. It stays as imported (faithful to Splanc's working tree) until the
-  owner decides between gating it and an A/B run.
+  owner decides between gating it and an A/B run. (Superseded: gated, default off, in the engine
+  hygiene change below.)
 - **src8b's default changes stay** (the `jlc-pofv` fab profile, bounded workers, the
   parallel-commit fix, plane-access reuse): they predate the default-off rule and are documented,
   with their measurements, in the src8b commit.
 - **The Splanc working tree's viewer changes (`pnr_live`) go to PR4,** not PR2: the cost service
   imports `pnr.capacitor_intent`, which was never committed, and the README reintroduces machine
   names that PR1 scrubbed.
+
+Choices made in the engine hygiene change after PR2 (branch `claude/engine-hygiene`; the PR3
+leftovers of the [import manifest](history/import-manifest.md#known-leftovers-for-pr3)); the owner
+reviews them with the pull request:
+
+- **Electrical221's cleanup is gated, default off,** which makes the default engine behave as
+  `src15`, the engine of the H7 experiment, again. `PNR_PARTIAL_CYCLE_CLEANUP=1` enables the
+  partial-track cycle edits (and the stricter cycle-trial match); `PNR_BARREL_CONTACT_BRIDGES=1`
+  enables the bridges for barrel-contact tails. Two flags rather than one, so an A/B can separate
+  them. Turning them on needs an A/B on the hierarchical engine (the rule for new behaviour);
+  Electrical221's own evidence is in its import commit. The full electrical pool was already
+  opt-in (`PNR_FULL_ELECTRICAL_POOL=1`). The coalesce report keeps Electrical221's two summary
+  keys, which are reporting only.
+- **Discarded KiCad items are deleted with `board.Delete`, never `board.Remove`.** `Remove` makes
+  the Python wrapper the item's owner, so the item can be freed after its board (the teardown
+  SIGSEGV of `fanout_reserve.release`, fixed in src12i). `Remove` stays only for an item that is
+  re-added, kept alive on purpose (the warm DRC keepalive arena) or detached with
+  `thisown=False`. Code must not use a wrapper of a deleted item, so it reads uuids and sizes
+  first. `//hardware/pnr:board_delete_test` fails on any other `Remove` call. The signal retries
+  of `via_coalesce` and `native_loop` and the `os._exit(0)` of the hier workers stay as a second
+  line of defence.
+- **Every engine subprocess has a deadline, through `pnr.proc`,** with three env-overridable
+  limits sized as wedge guards from the H2 to H7 records: `PNR_WORKER_TIMEOUT` (1800 s, unchanged;
+  a worker with its own `--seconds` budget gets at least twice that plus 600 s),
+  `PNR_PHASE_TIMEOUT` (4 h, a phase of bounded workers; the longest observed phase took 90 s) and
+  `PNR_EVALUATION_TIMEOUT` (max(48 h, 48 x the native budget), one `pnr.full_iteration`; the
+  longest observed evaluation took 18.3 h for a 5400 s budget). A timed-out child counts as a
+  failed worker (exit -9), as a crash did before. The converted calls keep the child in the
+  caller's process group (`session=False`), as their plain `subprocess.run` did, so stopping a
+  run's process group still stops them; the existing `pnr.proc` callers keep their own groups.
+  `//hardware/pnr:proc_test` fails on any new subprocess call without a deadline; the opt-in
+  warm DRC host daemon is the one exception (its session ends it).
+- **CI's history scan includes merge diffs** (`git log -p -m`): a merge commit's diff against
+  each parent is scanned, so a conflict resolution cannot bypass the scan (PR2's two merges were
+  checked this way only locally).
+- **The docs enable MyST's `strikethrough` extension** so status lists (the manifest's PR3
+  leftovers, the plan's appendix B) can strike done items instead of deleting them.
 
 ## Pinned versions
 

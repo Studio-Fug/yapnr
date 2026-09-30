@@ -111,6 +111,7 @@ def zones_of(k, b, xy):
 
 def main(argv):
     import pcbnew as k
+
     from pnr.ingest import _board_frame
 
     b = k.LoadBoard(argv[1])

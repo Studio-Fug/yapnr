@@ -25,6 +25,7 @@ def main(argv):
     runtime = Path(os.environ["PNR_COST_RUNTIME"]).resolve()
     sys.path.insert(0, str(runtime))
     import yaml
+
     from pnr.constraints import compile_constraints
     from pnr.graph import BoardGraph
     from pnr.place.cost_inspect import Objective

@@ -12,6 +12,7 @@ from pathlib import Path
 
 def main(argv):
     import pcbnew
+
     from pnr.ingest import build_graph
 
     board = Path(argv[1])

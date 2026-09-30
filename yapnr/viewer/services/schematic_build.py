@@ -36,6 +36,7 @@ def warn(msg):
 
 try:  # frozen pnr runtime (optional)
     import yaml
+
     from pnr.constraints import compile_constraints
     from pnr.graph import BoardGraph
     from pnr.hier.blocks import aspect_sizes, extract_blocks, sub_board

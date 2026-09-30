@@ -12,7 +12,6 @@ from unittest.mock import patch
 from pnr.constraints import compile_constraints
 from pnr.graph import BoardGraph, BoardOutline, Component, Net, Pad
 from pnr.place import place
-
 from yapnr.viewer import runtime
 from yapnr.viewer.services.cost import CostService
 

@@ -1118,6 +1118,25 @@ py_binary(
     deps = [":pnr_animate"],
 )
 
+# Renders the showcases (docs/design/constraint-and-hier-animations.md): the side-by-side
+# line-group and board-edge comparisons and the hierarchical chapters, from a traced showcase
+# run (--render-only RUN_DIR: no KiCad).
+py_binary(
+    name = "showcase_animations",
+    srcs = ["regression/animate_showcases.py"],
+    data = glob(["regression/*.py"]),
+    imports = [
+        ".",
+        "regression",
+    ],
+    main = "regression/animate_showcases.py",
+    tags = [
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr_animate"],
+)
+
 py_test(
     name = "trace_test",
     size = "small",

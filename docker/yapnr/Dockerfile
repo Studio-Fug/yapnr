@@ -37,7 +37,7 @@ FROM ghcr.io/astral-sh/uv:0.12.21@sha256:a7aed3216253ee804de3e2d8afa5073baa1a177
 FROM scratch AS dist
 
 # --- the license texts of the libraries in python-build-standalone's CPython ----------------
-FROM --platform=$BUILDPLATFORM ubuntu:24.04@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3 AS python-licenses
+FROM --platform=$BUILDPLATFORM ubuntu:26.04@sha256:da6fc2be547864451aa253836dd926da33623312df4a9a243e35dc877c378a78 AS python-licenses
 ARG TARGETARCH
 ARG PYTHON_VERSION
 ARG PBS_RELEASE

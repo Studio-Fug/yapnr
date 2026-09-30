@@ -264,6 +264,27 @@ applies; the owner reviews them with the pull request:
   placement context that needs it as unavailable. The owner files the issue.
 - **The viewer stays out of the wheel and the images** until the engine it imports is in them
   (PR3b); `//yapnr:cli` has no viewer dependency.
+- **One spend cap per server process for every paid call** (`--agent-total-usd`, default $20):
+  Ask turns and AI net labels draw from the same meter (`yapnr/viewer/agent/spend.py`). A call
+  holds its whole budget (`--agent-budget-usd`, default $2; `--net-summary-budget-usd`, default $1)
+  while it runs and starts only if the cap covers it, so concurrent calls cannot pass the cap; a
+  call without a cost report from the CLI (timeout, cancel, killed) is charged its whole budget.
+  The meter is in memory: a restart resets it.
+- **The Apache-2.0 license text is kept in the repository** (`third_party/licenses/`), byte for
+  byte as published: elkjs's bundle includes an Apache-2.0 web-worker shim, and its tarball has
+  only the EPL-2.0 text. It is served next to `elk.bundled.js`; the code itself stays fetched.
+- **The Source link names the viewer's own revision,** not the engine commit of the run being
+  viewed (plan §1.4, "Network use"): it links the repository tree of the commit the server runs
+  and marks a checkout with uncommitted changes as modified. Runs do not record the engine commit
+  yet; showing it per run waits for the run manifests (PR3d).
+- **No `//yapnr/viewer:dev` target.** There is no auto-reload server: a development viewer is
+  `bazel run //:viewer -- --root <live dir> --port <spare port>`, rebuilt after edits to
+  `static/`.
+- **The viewer's KiCad lookup is stricter than plan §2.3** until `yapnr.kicad.toolchain` replaces
+  it (PR6a): it follows AGENTS.md and refuses everything inside `KiCad.app` or
+  `/Applications/KiCad`, KiCad's Python included (the plan allows the stock Python); on macOS it
+  discovers only the headless copy, never `PATH`; and it does not check for KiCad 10.x (the
+  toolchain module will).
 
 ## Pinned versions
 

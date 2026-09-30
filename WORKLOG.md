@@ -18,6 +18,12 @@ Last updated: 2026-09-30 (PR4, the viewer).
   [docs/viewer.md](docs/viewer.md). The engine hygiene branch is merged (#8). Checked against a
   copy of three lanes of a live experiment (`bazel run //:viewer`, agent off): PCB, schematic,
   3D (headless `kicad-cli`), Source, Inspect and Notes work, and the Ask tab says it is off.
+  Review fixes: one spend meter for Ask turns and net labels (a call holds its budget while it
+  runs; stopped turns count at their budget), library defaults off, a server test of the
+  defaults, the Apache-2.0 text served next to elkjs, the Source link to the exact tree (marked
+  modified), interface addresses on Linux, no Ask buttons with the agent off, no source-index
+  request without sources, and clearer messages (3D without three.js, cost replay of a board
+  outside the run). The viewer's tests have run on macOS only; CI runs them on Linux.
 
 ## Next
 

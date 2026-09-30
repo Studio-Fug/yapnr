@@ -423,34 +423,72 @@ Choices made for the regression ladder in CI and the animations (branch
   winning rung's native phases, and the overlay's phases say what was saved, not more. Animations
   of Splanc runs stay local (the board is not public).
 
+Owner decisions for the atopile toolchain and part data (2026-09-30;
+[the atopile toolchain](frontends/atopile.md), [the part cache](part-cache.md)):
+
+- **The atopile tooling is imported under `AGPL-3.0-or-later`:** the offline picker server and
+  the board-outline script (from rules_atopile, the owner's repository, which declared no license
+  when they were copied) and Splanc's scripts (AGPL-3.0). The imports name their source in the
+  commit message and the module docstring.
+- **No EasyEDA-derived part files and no vendor-API data in yapnr.** Parts and catalogs live in a
+  **part cache** outside every repository: a local directory, or a server the owner may run in
+  public (user-generated content, with provenance and licence metadata per part and takedowns).
+  `tools/check_part_data.py` fails on generated part files in the repository; tests use synthetic
+  parts only. Splanc's committed parts and picker catalog were moved into a local cache on the
+  development machine, so Splanc builds from a parts lock without them.
+- **atopile via a hashed lock; "No Nix" stays.** atopile 0.15.8 is pinned. `yapnr atopile setup`
+  installs it with uv from one fully hashed lock per platform (Python 3.14.7 from
+  python-build-standalone), resolved as of the date that reproduces the environment Splanc's
+  Nix build used. linux-aarch64 has no atopile wheel on PyPI; its wheel is built from the
+  sha256-pinned sdist with pinned build dependencies (the scikit-build-core fork by commit). A
+  0.15.9 bump comes through an A/B. The `yapnr` image bundles the environment later (A4).
+- **Builds are offline and isolated.** A build copies the project, materializes its locked parts
+  from the cache, answers part queries from a loopback picker, runs atopile with an allowlisted
+  environment and a deadline, and records a UUID-normalized input id. A hook loaded into every
+  atopile interpreter (forkserver workers included) replaces the Nix source patches: the picker
+  token only for a parsed loopback URL of the runner's port, empty queries answered locally, picks
+  attached from the project's parts, no EasyEDA, no git clone of a dependency, no GUI KiCad and no
+  contact with a running one.
+- **The part cache serves part files only.** A file must match its type, is served only while a
+  stored part uses it, and is removed when no part took it up within a grace period; a takedown
+  also blocks the part's own files under any name. Tokens are checked before a body is read, sent
+  by the clients only to the server named (no redirects) over https or loopback, and the write
+  token never with reads. Parts can be marked local-only; a public server refuses a cache that
+  holds one.
+- **Ordering stays staging-only** (for the later ordering PRs): cart, quote or payment page; the
+  human pays on the vendor's page.
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.
 
-| Component        | Pin                        | Held in                                |
-| ---------------- | -------------------------- | -------------------------------------- |
-| Bazel            | `7.7.1`                    | `.bazelversion`                        |
-| `rules_python`   | `2.0.3`                    | `MODULE.bazel`                         |
-| Python           | `3.11` (hermetic)          | `MODULE.bazel`                         |
-| pip hub          | `yapnr_pypi`               | `MODULE.bazel`                         |
-| torch            | `>=2.2,<2.4` (lock: 2.3.1) | `requirements.in`, lock                |
-| numpy            | `>=1.26,<2` (lock: 1.26.4) | `requirements.in`, lock                |
-| pyyaml           | `>=6` (lock: 6.0.3)        | `requirements.in`, lock                |
-| Pillow           | `>=12,<13` (lock: 12.3.0)  | `requirements.in`, lock                |
-| Sphinx stack     | see below                  | `requirements.in`                      |
-| mermaid (JS)     | `11.4.1`                   | `docs/_sphinx/conf.py`                 |
-| prek             | `0.4.12`                   | `setup-precommit.sh`, `ci.yaml`        |
-| presubmit hooks  | see below                  | `.pre-commit-config.yaml`              |
-| `setup-bazel`    | `0.15.0`                   | `.github/workflows/`                   |
-| Ubuntu (images)  | `24.04`, by digest         | `docker/yapnr-kicad/Dockerfile`        |
-| KiCad (images)   | `10.0.6~ubuntu24.04.1`     | `docker/yapnr-kicad/Dockerfile`, `TAG` |
-| Python (image)   | `3.11.15` (uv-managed)     | `docker/yapnr/Dockerfile`              |
-| uv (image build) | `0.12.21`, by digest       | `docker/yapnr/Dockerfile`              |
-| PBS (image)      | `20260807`, by sha256      | `docker/yapnr/Dockerfile`              |
-| Runtime locks    | from `requirements.lock`   | `docker/yapnr/runtime-*.lock`          |
-| elkjs (viewer)   | `0.9.3`, by sha256         | `MODULE.bazel`                         |
-| three (viewer)   | `0.186.1`, by sha256       | `MODULE.bazel`                         |
-| Image, release   | every action by commit SHA | `.github/actions/`, `image.yaml`, ...  |
+| Component        | Pin                        | Held in                                   |
+| ---------------- | -------------------------- | ----------------------------------------- |
+| Bazel            | `7.7.1`                    | `.bazelversion`                           |
+| `rules_python`   | `2.0.3`                    | `MODULE.bazel`                            |
+| Python           | `3.11` (hermetic)          | `MODULE.bazel`                            |
+| pip hub          | `yapnr_pypi`               | `MODULE.bazel`                            |
+| torch            | `>=2.2,<2.4` (lock: 2.3.1) | `requirements.in`, lock                   |
+| numpy            | `>=1.26,<2` (lock: 1.26.4) | `requirements.in`, lock                   |
+| pyyaml           | `>=6` (lock: 6.0.3)        | `requirements.in`, lock                   |
+| Pillow           | `>=12,<13` (lock: 12.3.0)  | `requirements.in`, lock                   |
+| Sphinx stack     | see below                  | `requirements.in`                         |
+| mermaid (JS)     | `11.4.1`                   | `docs/_sphinx/conf.py`                    |
+| prek             | `0.4.12`                   | `setup-precommit.sh`, `ci.yaml`           |
+| presubmit hooks  | see below                  | `.pre-commit-config.yaml`                 |
+| `setup-bazel`    | `0.15.0`                   | `.github/workflows/`                      |
+| Ubuntu (images)  | `24.04`, by digest         | `docker/yapnr-kicad/Dockerfile`           |
+| KiCad (images)   | `10.0.6~ubuntu24.04.1`     | `docker/yapnr-kicad/Dockerfile`, `TAG`    |
+| Python (image)   | `3.11.15` (uv-managed)     | `docker/yapnr/Dockerfile`                 |
+| uv (image build) | `0.12.21`, by digest       | `docker/yapnr/Dockerfile`                 |
+| PBS (image)      | `20260807`, by sha256      | `docker/yapnr/Dockerfile`                 |
+| Runtime locks    | from `requirements.lock`   | `docker/yapnr/runtime-*.lock`             |
+| atopile          | `0.15.8`, hashed locks     | `yapnr/frontends/atopile/locks/`          |
+| Python (atopile) | `3.14.7`, PBS `20260929`   | `yapnr/frontends/atopile/locks/pins.json` |
+| uv (atopile)     | `0.12.21`                  | `yapnr/frontends/atopile/locks/pins.json` |
+| elkjs (viewer)   | `0.9.3`, by sha256         | `MODULE.bazel`                            |
+| three (viewer)   | `0.186.1`, by sha256       | `MODULE.bazel`                            |
+| Image, release   | every action by commit SHA | `.github/actions/`, `image.yaml`, ...     |
 
 Rationale:
 
@@ -479,6 +517,11 @@ Rationale:
   shellcheck-py v0.9.0.6, buildifier 8.2.0, prettier v3.1.0, markdownlint-cli v0.38.0,
   pre-commit-hooks v4.5.0), minus `nixpkgs-fmt`, plus the local privacy scan.
 - **mermaid, prek, `setup-bazel`:** the same as Splanc.
+- **atopile 0.15.8, Python 3.14.7, uv 0.12.21:** atopile is the version Splanc's boards were
+  built with; it requires Python 3.14. The locks resolve as of 2026-09-20 (`exclude_newer`), the
+  date that reproduces Splanc's Nix environment package for package. uv is the version the image
+  build already pins; python-build-standalone 20260929 is the release that uv installs 3.14.7
+  from, checked by `setup`. Regenerate with `tools/atopile/update_locks.sh`.
 - **elkjs 0.9.3 and three.js 0.186.1:** the versions the Splanc viewer shipped and was tested
   with. The npm tarballs are pinned by sha256 (elkjs
   `b95b224bd1ab71fd40f6d9a6365c28d989745dff6b0d514407bc1eb68f2f561e`, three

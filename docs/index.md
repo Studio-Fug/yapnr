@@ -26,6 +26,8 @@ command line currently offers `yapnr --version` and a `yapnr doctor` stub; the l
 - [Container images](containers.md): run yapnr with Docker and nothing else (KiCad included).
 - [The live viewer](viewer.md): watch experiments in a browser; its configuration, optional
   services and the cost and security of the (off by default) Ask agent.
+- [The atopile toolchain](frontends/atopile.md): build atopile projects offline, without Nix.
+- [The part cache](part-cache.md): where part data lives instead of the repository.
 - [Releases and versioning](releases.md): version numbers, image tags, what a release publishes.
 - [Regression ladder](regression-ladder.md): eight boards of rising complexity, up to a TLC555 +
   CD4017B LED chaser, with an animation of each board's place and route.
@@ -55,6 +57,8 @@ any later version (`AGPL-3.0-or-later`). See [LICENSE](../LICENSE).
 
 containers
 viewer
+frontends/atopile
+part-cache
 releases
 ```
 

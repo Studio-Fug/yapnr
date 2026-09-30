@@ -9,6 +9,26 @@ py_library(
         "__init__.py",
         "__main__.py",
         "cli.py",
+        "frontends/__init__.py",
+    ],
+    imports = [".."],
+    # The `atopile`, `picker` and `part-cache` commands (imported when the parser is built).
+    deps = [
+        "//yapnr/frontends/atopile",
+        "//yapnr/partcache",
+    ],
+)
+
+# The package markers alone, for libraries that need no CLI (the picker, the part cache and the
+# atopile frontend depend on it). Without it their runfiles get auto-created, empty
+# `__init__.py` files where other targets have these real ones, and Bazel 7's sandbox reuse
+# (on by default) once wrote such an empty file through a reused symlink, truncating
+# yapnr/__init__.py in the source tree.
+py_library(
+    name = "package",
+    srcs = [
+        "__init__.py",
+        "frontends/__init__.py",
     ],
     imports = [".."],
 )

@@ -1,0 +1,16 @@
+{
+  "atopile": "0.15.8",
+  "atopile_sdist": {
+    "sha256": "76c42f33f151947dbe533d4d0a04b60623b84c38ced6e40d17c3099e5f59b955",
+    "url": "https://files.pythonhosted.org/packages/source/a/atopile/atopile-0.15.8.tar.gz"
+  },
+  "exclude_newer": "2026-09-20T00:00:00Z",
+  "pbs_release": "20260929",
+  "python": "3.14.7",
+  "scikit_build_core": {
+    "branch": "feature/allow_editable",
+    "commit": "3959f35e212b7af24e9383ea5d7c43cedc8f804b",
+    "repository": "https://github.com/atopile/scikit-build-core.git"
+  },
+  "uv": "0.12.21"
+}

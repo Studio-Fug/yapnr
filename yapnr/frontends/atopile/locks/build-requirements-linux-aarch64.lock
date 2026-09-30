@@ -1,0 +1,108 @@
+cmake==4.4.3 \
+    --hash=sha256:09edc3fe8cee225bb2e7f3386199be7832cf5b65ef454827e001c02ec928298e \
+    --hash=sha256:25a61850847c46e3268bb54058daa8a9043c91167909203ed19f8fa28223cc31 \
+    --hash=sha256:3c2a6c250c411c0529c997de5d3ce18c3d98635cc0725efafb083dc475f3572b \
+    --hash=sha256:520ff2ba3afb7a1e34a0ab222c0f4e89ad334dc7462814886e099bdf6ba8cbb3 \
+    --hash=sha256:6558aa24eadc83315b0a66ae7570cb24a95147f35a3fff19771e574cecbfe23c \
+    --hash=sha256:6bff4e826b3a0e153cfbf53d496f457b9b7d2ad3f16b327686b752609f2a562f \
+    --hash=sha256:6c95b37116bb5c714656e4f76931ebdcb739209a1aee91cf51408ccfe137694e \
+    --hash=sha256:708ad6b662ee89d3eb2eac02a1afba20ca653139cbe769fed046124d0c6bc050 \
+    --hash=sha256:7f1916f8064c9593abf7fd9de6a7be22d826dbef17925e50a161df5196aabd88 \
+    --hash=sha256:92a93bc9941cd5f5c8cc9a7da5c40a53f7643fcd2ac75d6c850510cb44945271 \
+    --hash=sha256:a21c9f60d530d678659f100445b9c0828467a67d4bb5e8eb76343aca91e80e90 \
+    --hash=sha256:a4e0a067f12a8b7869daf7090086029356fc641a0702eddc185cd4477583730a \
+    --hash=sha256:ad3b88073f215841ef3eb45e7c7bab4ee3e7f33b7001e1d1b5454ed3f4eb9c9c \
+    --hash=sha256:b0c2703ec0a624649dd184c0ac5ee4c7f5fe5ef35eb82f9da44f5a0903adb2b6 \
+    --hash=sha256:bae3c4954623ec4d62e62c70443f0da7988b733111c2871fcc6a31ead5137e20 \
+    --hash=sha256:c0d2ccd8f83605fedfd688bb37b4cb4008a7ddf6c32321b9c804168031a3cc74 \
+    --hash=sha256:cd58e9d3d6b4372d2456da43f2eb74e4ff5fe7d700bbcaede290a09db3790b1e \
+    --hash=sha256:d36c9bb471a67970b031d45b29c3b852f14bc8b64ac46b39ccc046fdf652f36d \
+    --hash=sha256:f5aead3c09bfa662da5d1d65f6c526a449966314913039ce6de3c0ff82ea9266
+    # via -r yapnr/frontends/atopile/locks/build-requirements.in
+hatch-vcs==0.5.0 \
+    --hash=sha256:0395fa126940340215090c344a2bf4e2a77bcbe7daab16f41b37b98c95809ff9 \
+    --hash=sha256:b49677dbdc597460cc22d01b27ab3696f5e16a21ecf2700fb01bc28e1f2a04a7
+    # via -r yapnr/frontends/atopile/locks/build-requirements.in
+hatchling==1.32.3 \
+    --hash=sha256:acdd4436d84d829c6e7ae6df723241d8f0bca9c5bad5a6148bd41f2ea6b8a792 \
+    --hash=sha256:d05b350af5d9aa5bf7b34b434a45a742b99e67d0b48ea67d240cfeab98e13945
+    # via
+    #   -r yapnr/frontends/atopile/locks/build-requirements.in
+    #   hatch-vcs
+nanobind==2.15.0 \
+    --hash=sha256:3eace37a3b8cdadd531fcc6145263985b29821467161d34ff722b0644cf445b5 \
+    --hash=sha256:91dae9305c6242cf63ab11a5c41594e234e7a22fd9fcc2c5c4ba80724abc1787
+    # via -r yapnr/frontends/atopile/locks/build-requirements.in
+ninja==1.13.2 \
+    --hash=sha256:09de9ab04f7352f51570c73fd4913acb1e6c24be0a72cd8b80243d4d3ed04925 \
+    --hash=sha256:0e083700470c02ca154a855ae6d692d03564f5064cae52e113896f9ccc078418 \
+    --hash=sha256:1293f4078278b70d0ee4b6cc8f3a9e030656c9b2f59909970343c4fe76070118 \
+    --hash=sha256:1684c60d031c54c1d049541b64243c0c567dca5463dbd77682a8901780af293d \
+    --hash=sha256:1db9852e528efa7702f5123969f86678663e46d57ff28ab13f5fd84d64a85fb1 \
+    --hash=sha256:227cbc3ae3e5e429692388103cae8c09451df086cd2d342dae0795af0d162547 \
+    --hash=sha256:525bfa3fc88aa30a4467df270fd5be6f9fcae8061d54d4df74ea1dc5abd5a975 \
+    --hash=sha256:59d71c3e15b6b6f3d903eb0c27285544e0747ca59925ada7037bb1af781ad4b3 \
+    --hash=sha256:65a24341b5ac09fcadcc37082660be40a94174e51a937fabf6e2cae26225fa2c \
+    --hash=sha256:6a87bf42b123abe2f37737300185f0a303a891899da85d73a3613ee80547e578 \
+    --hash=sha256:792cadbb9decfd1f776d4d0a6930feb46d08302eb57c176bcf26b09de5748e9f \
+    --hash=sha256:81d95081c0ad7c95f67bf682220361ed2a32659d7861b4766b03433c58f22516 \
+    --hash=sha256:915bd482c4be41c75120fd67a22e0bb3f0fbb3bbc5f95b89787deadd59e27ef2 \
+    --hash=sha256:919572cbc3f233261ecd41fe1f3efc9d44aa02464a4588867e06a8b4f6f416ea \
+    --hash=sha256:aa3d2ae5706a2c4d1e93edc951d1c6cbb45107413c404f8fde1741239efbc9a0 \
+    --hash=sha256:b2f687437fac460b27b7eadc99039b1163016fb4ba7276e2782a192d9f24ee0e \
+    --hash=sha256:d775a5e43e9088f507a6250d57fcf5678eb31268c545feb5064ffeee33735622 \
+    --hash=sha256:f90f84affc441e219f15fe52532806c1c9dbd22fb66c3addddce88a3deaabab7 \
+    --hash=sha256:fd82e26c0706ad4ab88e5fdd26f3fab0a987a90f810160f6c322e752c6af298b
+    # via -r yapnr/frontends/atopile/locks/build-requirements.in
+packaging==26.3 \
+    --hash=sha256:94edc256424af38762eb31306eed28beb9f0efc50a8837492c9d6fd6004aed79 \
+    --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
+    # via
+    #   -r yapnr/frontends/atopile/locks/build-requirements.in
+    #   hatchling
+    #   setuptools-scm
+    #   vcs-versioning
+pathspec==1.1.1 \
+    --hash=sha256:17db5ecd524104a120e173814c90367a96a98d07c45b2e10c2f3919fff91bf5a \
+    --hash=sha256:a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189
+    # via
+    #   -r yapnr/frontends/atopile/locks/build-requirements.in
+    #   hatchling
+pluggy==1.6.0 \
+    --hash=sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3 \
+    --hash=sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746
+    # via hatchling
+setuptools==84.0.0 \
+    --hash=sha256:51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670 \
+    --hash=sha256:f4695c21257f0d9b537ec2692c941d02ee143b7cc1276941349a546573b2ef73
+    # via setuptools-scm
+setuptools-scm==10.2.3 \
+    --hash=sha256:7fcf8ff55c95eb8b572a23c81495e5559b9b90f3e82fcf0952bb76c37de27a81 \
+    --hash=sha256:f179ed3e2a63cf5823e5ee9aa9ca08386219400443a0553224d72dde3f206b44
+    # via hatch-vcs
+tomlkit==0.15.1 \
+    --hash=sha256:177a05aece5a8ca5266fd3c448abb47b8d352f09d477d3ca8332db4d89b24304 \
+    --hash=sha256:e25bbf38843005246210a12982776f27f99cb9be67160e14434d0c0d21ee1e97
+    # via hatchling
+trove-classifiers==2026.6.1.19 \
+    --hash=sha256:ab4c4ec93cc4a4e7815fa759906e05e6bb3f2fbd92ea0f897288c6a43efd15b3 \
+    --hash=sha256:c5132b4b61a829d11cfbd2d72e97f20a45ed6edb95e45c5efdeb5e00836b2745
+    # via hatchling
+vcs-versioning==2.4.1 \
+    --hash=sha256:b7089ec9bef67b2cad82148366e8eac4d63173f440ec62628282b59eb96bbcb0 \
+    --hash=sha256:d4575de3115ec9434393c87c80ffb0eb98a16056bfe2b11ce0f3a97aff67fe0a
+    # via setuptools-scm
+ziglang==0.16.0 \
+    --hash=sha256:089a16a4eb5a2f45151993342f8fabad24ff1a0723dc146642895c29208a3939 \
+    --hash=sha256:0fd671c599f6961638cc302cf1f9461486696385311d4c0276171dcf7d2b67f5 \
+    --hash=sha256:18e14f6b25678d7b7c65708c82501ee6090fe39ed5c783477d56267af1fa5629 \
+    --hash=sha256:7249779f0f916cfd2d1a9d54eb7600f3901384dc8dcbe1eea226bd32a8237fb5 \
+    --hash=sha256:8b83661247430aa335b3cbc29569084900412dde5633b02c80a6d2ff734de3d2 \
+    --hash=sha256:9fcda73f62b851dd72a54b710ad40a209896db14cfb13649e62191243556342b \
+    --hash=sha256:b61e5413c49508d9d62e5dcea543e3af491594154d74a00ff52f84ed508260cc \
+    --hash=sha256:d4bd8197344fffe276e1d6446e4ef7bc38637d821b4685fe96a936503d4b0619 \
+    --hash=sha256:df0e6599e41d087c912b0d3d7cedef6c9cb1f0032465c8fc820e9986772d11e4 \
+    --hash=sha256:e27d409812b11e0fb89ed0200cf2e55b6464d43f9461553104e4a4f9a94a1fd5 \
+    --hash=sha256:e44a5271f7b72f7980017bb615823ed52e765f96b6482d93a2fd338cd53101bf \
+    --hash=sha256:f978c12b5337cf418034964de00023b7ec5ec484383dc97c6a6585f4a9105840
+    # via -r yapnr/frontends/atopile/locks/build-requirements.in

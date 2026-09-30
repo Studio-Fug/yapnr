@@ -7,9 +7,12 @@ objective, the native budget and the fab profile, as the runs wrote them.
 """
 
 import json
+import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from pnr.feedback import signals
 from pnr.feedback.blocks import block_key
@@ -168,10 +171,10 @@ def make_tree(root):
 
 
 def make_round(d, tree, via="origins"):
-    """A round dir whose evaluation 'started' now: an evaluation.json is written as well, because
-    Linux has no st_birthtime and observed_code then falls back to that file's mtime (see #10)."""
+    """A round dir whose evaluation started now (its started.json stamp) and has ended."""
     ato = str(Path(tree) / "hardware/splanc_dev/elec/src/splanc_mini.ato")
     Path(d).mkdir(parents=True, exist_ok=True)
+    (Path(d) / signals.STARTED_FILE).write_text(json.dumps(dict(started=time.time())))
     (Path(d) / "evaluation.json").write_text("{}")
     if via == "origins":
         o = Path(d) / "electrical" / "native-loop" / "source-inputs"
@@ -182,6 +185,51 @@ def make_round(d, tree, via="origins"):
         (Path(d) / "electrical" / "coalesce.json").write_text(
             json.dumps(dict(protected_intents=[dict(source=dict(path=ato))]))
         )
+
+
+class StartedTest(unittest.TestCase):
+    """When a round's evaluation started: its stamp, else the fallbacks of older rounds (#10)."""
+
+    def test_stamp_wins_over_creation_and_end_times(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "evaluation.json").write_text("{}")
+            (Path(d) / signals.STARTED_FILE).write_text(json.dumps(dict(started=1000.5)))
+            self.assertEqual(signals._started(d), 1000.5)
+
+    def test_fallbacks_without_creation_times(self):
+        # as on Linux: the file system reports no creation time
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(
+            signals, "_birthtime", return_value=None
+        ):
+            self.assertIsNone(signals._started(d))  # nothing to go by: not checked
+            end = Path(d) / "evaluation.json"
+            end.write_text("{}")
+            os.utime(end, (2000, 2000))
+            self.assertEqual(signals._started(d), 2000)
+            (Path(d) / signals.STARTED_FILE).write_text("not json")
+            self.assertEqual(signals._started(d), 2000)  # a broken stamp falls back
+            self.assertIsNone(signals._started(Path(d) / "missing"))
+
+    def test_edit_during_the_run_without_creation_times(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(
+            signals, "_birthtime", return_value=None
+        ):
+            tree = Path(d) / "srcX"
+            root = make_tree(tree)
+            rnd = Path(d) / "round"
+            make_round(rnd, tree)
+            now = time.time()
+            for f in root.rglob("*.py"):
+                os.utime(f, (now - 200, now - 200))
+            (rnd / signals.STARTED_FILE).write_text(json.dumps(dict(started=now - 100)))
+            os.utime(root / "pnr/shove/world.py", (now - 50, now - 50))  # during the run
+            os.utime(rnd / "evaluation.json", (now, now))  # the run ends
+            o = signals.observed_code(rnd, "shove")
+            self.assertIsNone(o["code"])
+            self.assertIn("changed after the evaluation (pnr/shove/world.py)", o["reason"])
+            # a round from before the stamp: only the end time is known, so the edit goes unseen
+            (rnd / signals.STARTED_FILE).unlink()
+            self.assertEqual(signals.observed_code(rnd, "shove")["reason"], "tree")
 
 
 class CodeKeyTest(unittest.TestCase):

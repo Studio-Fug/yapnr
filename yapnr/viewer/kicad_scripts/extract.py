@@ -11,7 +11,17 @@ for t in b.GetTracks():
 parts=[]
 for f in b.GetFootprints():
  pads=[]
- for p in f.Pads():pads.append(dict(number=p.GetNumber(),net=p.GetNetname(),xy=xy(p.GetPosition()),size=[p.GetSize().x/1e6,p.GetSize().y/1e6],angle=p.GetOrientationDegrees(),shape='circle' if p.GetShape()==k.PAD_SHAPE_CIRCLE else 'rect',layers=[k.BOARD.GetStandardLayerName(l) for l in p.GetLayerSet().Seq() if k.IsCopperLayer(l)]))
+ for p in f.Pads():
+  cu=[l for l in p.GetLayerSet().Seq() if k.IsCopperLayer(l)]
+  pad=dict(number=p.GetNumber(),net=p.GetNetname(),xy=xy(p.GetPosition()),size=[p.GetSize().x/1e6,p.GetSize().y/1e6],angle=p.GetOrientationDegrees(),shape='circle' if p.GetShape()==k.PAD_SHAPE_CIRCLE else 'rect',layers=[k.BOARD.GetStandardLayerName(l) for l in cu])
+  if cu:
+   # Real copper outline (custom/L-shaped, round-rect, oval, chamfered pads); size alone
+   # is only the anchor for custom pads (e.g. 0.01 mm), which rendered as a speck.
+   ps=k.SHAPE_POLY_SET();p.TransformShapeToPolygon(ps,cu[0],0,b.GetDesignSettings().m_MaxError,k.ERROR_INSIDE)
+   pad['polys']=[[xy(ps.Outline(j).CPoint(i)) for i in range(ps.Outline(j).PointCount())] for j in range(ps.OutlineCount())]
+   if p.GetShape()==k.PAD_SHAPE_CUSTOM:
+    bb=ps.BBox();pad.update(size=[bb.GetWidth()/1e6,bb.GetHeight()/1e6],angle=0.0,xy=xy(bb.Centre()))
+  pads.append(pad)
  parts.append(dict(ref=f.GetReference(),xy=xy(f.GetPosition()),pads=pads))
 zones=[]
 for z in b.Zones():

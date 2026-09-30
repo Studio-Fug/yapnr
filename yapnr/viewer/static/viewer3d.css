@@ -1,0 +1,39 @@
+/* 3D board view (viewer3d.js). Views: 3d (alone), 3d-pcb, 3d-sch (beside the PCB / schematic). */
+#v3wrap{flex:1 1 0;min-width:0;min-height:0;position:relative;overflow:hidden;display:none;background:#0c1418;border-left:1px solid #2c3a41}
+body[data-view^="3d"] #v3wrap{display:flex}
+body[data-view="3d"] #v3wrap{border-left:0}
+body[data-view="3d"] #boardwrap,body[data-view="3d-sch"] #boardwrap{display:none}
+body[data-view="3d-sch"] #schwrap{display:flex}
+body[data-view="3d"] #fit,body[data-view="3d-sch"] #fit{display:none}
+body[data-view="3d-sch"] #sch-legend{position:absolute;top:44px;right:8px;bottom:8px;width:236px;background:#101b20ee;border:1px solid #2f4149;border-radius:6px;z-index:2}
+#v3-main{flex:1 1 0;min-width:0;min-height:0;position:relative;overflow:hidden}
+#v3-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none;outline:none}
+#v3-bar{position:absolute;top:8px;left:10px;right:10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;pointer-events:none;z-index:2}
+#v3-bar>*{pointer-events:auto}
+#v3-bar>button{font-size:11px;padding:6px 10px}
+#v3-bar>button.on{background:#9ee6d1;color:#102b25}
+#v3-explode-l{display:inline-flex;align-items:center;gap:6px;font-size:11px;background:#1d2b33;border:1px solid #425762;border-radius:6px;padding:3px 8px;color:#b8c9d0}
+#v3-explode-l.on{border-color:#9ee6d1;color:#dff7ef}
+#v3-explode{width:110px;accent-color:#9ee6d1}
+/* top is set from the toolbar's height when it opens (the bar wraps in a half-width pane) */
+#v3-layers{position:absolute;top:44px;right:10px;z-index:3;background:#101b20f2;border:1px solid #2f4149;border-radius:6px;padding:6px 10px 10px 12px;display:flex;flex-direction:column;gap:3px;font-size:11.5px;min-width:150px;max-width:calc(100% - 20px);max-height:calc(100% - 110px);overflow:auto;box-shadow:0 6px 18px #0008}
+#v3-layers .v3-lh{display:flex;align-items:center;justify-content:space-between;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#a7bdc8;padding-bottom:2px;border-bottom:1px solid #2f4149;margin-bottom:2px}
+#v3-layers .v3-x{background:none;border:0;color:#a7bdc8;font-size:16px;line-height:1;padding:2px 4px;margin-right:-4px}
+#v3-layers .v3-x:hover{color:#fff}
+#v3-layers b{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#7f97a2;margin-top:6px}
+#v3-layers label{display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;margin:0;padding:2px 0;line-height:1.3}
+#v3-layers input{margin:0}
+#v3-layers .v3-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+#v3-layers .v3-solo{font-size:10px;padding:1px 6px;border-radius:4px;color:#a7bdc8;background:#1d2b33}
+#v3-layers .v3-solo.on{background:#9ee6d1;color:#102b25;border-color:#9ee6d1}
+#v3-foot{position:absolute;left:12px;right:12px;bottom:12px;z-index:2;display:flex;flex-wrap:wrap-reverse;align-items:flex-end;justify-content:space-between;gap:6px;pointer-events:none}
+#v3-status{background:#10191de6;border:1px solid #2f4149;padding:6px 10px;border-radius:5px;font-size:11px;color:#b8c9d0;max-width:100%;pointer-events:auto}
+#v3-status.busy{border-color:#6f93a8;color:#d6e6ee}
+#v3-status.busy::before{content:'';display:inline-block;width:8px;height:8px;margin-right:7px;border-radius:50%;background:#8ec5ff;animation:v3pulse 1.1s ease-in-out infinite}
+#v3-status.err{border-color:#a8646c;color:#f3c5ca}
+#v3-status button{font-size:11px;padding:2px 8px;margin-left:4px}
+#v3-hint{margin-left:auto;font-size:10px;color:#91a5ae;line-height:1.6;background:#10191dd9;padding:5px 8px;border-radius:5px;max-width:100%;transition:opacity .8s}
+#v3-hint.gone{opacity:0}
+#v3-toast{position:absolute;left:50%;transform:translateX(-50%);bottom:60px;background:#10191ded;border:1px solid #6fbfaa;color:#bff5e6;padding:6px 10px;border-radius:5px;font-size:11px;pointer-events:none;z-index:4;max-width:80%}
+@keyframes v3pulse{50%{opacity:.25}}
+#v3-hover{position:absolute;display:none;pointer-events:none;background:#223540f0;border:1px solid #557383;padding:7px 9px;white-space:pre-line;font-size:11px;line-height:1.5;max-width:360px;z-index:4;border-radius:4px}

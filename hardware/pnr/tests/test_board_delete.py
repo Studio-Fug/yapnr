@@ -24,11 +24,15 @@ PNR = Path(__file__).parent.parent  # hardware/pnr (also inside Bazel runfiles)
 TOOLS = PNR.parent / 'tools'
 NATIVE = importlib.util.find_spec('pcbnew') is not None
 
-# The Remove calls the audit kept, and why each is safe.
+# The Remove calls the audit kept, one entry per call (file, call source), and why
+# each is safe. A new Remove call fails the test even in one of these files.
 KEPT = {
-    'pnr/drc_warm/model.py': 'retired copper lives in the session keepalive arena until the host exits',
-    'pnr/escape_shove.py': 'detached with thisown=False: never freed, so never after its board',
-    'pnr/geometric_native.py': 'detached with thisown=False: never freed, so never after its board',
+    ('pnr/drc_warm/model.py', 'old.Remove(item)'):
+        'retired copper lives in the session keepalive arena until the host exits',
+    ('pnr/escape_shove.py', 'b.Remove(t)'):
+        'detached with thisown=False: never freed, so never after its board',
+    ('pnr/geometric_native.py', 'b.Remove(t)'):
+        'detached with thisown=False: never freed, so never after its board',
 }
 
 
@@ -38,14 +42,26 @@ def engine_sources():
     yield TOOLS / 'keyhole_region.py'
 
 
-def remove_calls():
-    """(path relative to hardware/, line) of every ``<x>.Remove(...)`` call."""
-    for path in engine_sources():
-        tree = ast.parse(path.read_text(), str(path))
-        for node in ast.walk(tree):
+def remove_calls(sources=None, root=PNR.parent):
+    """(path relative to ``root``, call source, line) of every ``<x>.Remove(...)`` call."""
+    for path in engine_sources() if sources is None else sources:
+        text = path.read_text()
+        for node in ast.walk(ast.parse(text, str(path))):
             if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
                     and node.func.attr == 'Remove'):
-                yield path.relative_to(PNR.parent).as_posix(), node.lineno
+                yield path.relative_to(root).as_posix(), ast.get_source_segment(text, node), node.lineno
+
+
+def unaudited(calls):
+    """The calls beyond KEPT: every call not listed, and any extra copy of a listed one."""
+    budget = {('pnr/' + name, source): 1 for name, source in KEPT}
+    extra = []
+    for path, source, line in sorted(calls):
+        if budget.get((path, source), 0):
+            budget[path, source] -= 1
+        else:
+            extra.append((path, source, line))
+    return extra, sorted(key for key, left in budget.items() if left)
 
 
 class RemoveAuditTests(unittest.TestCase):
@@ -56,21 +72,37 @@ class RemoveAuditTests(unittest.TestCase):
             self.assertIn(name, names)
 
     def test_only_audited_remove_calls_remain(self):
-        found = sorted({path for path, _ in remove_calls()})
-        self.assertEqual(found, sorted('pnr/' + name for name in KEPT),
+        extra, missing = unaudited(remove_calls())
+        self.assertEqual(extra, [],
                          'a discarded KiCad item must be deleted with board.Delete (see this '
                          'module); keep Remove only for an item that is re-added or kept alive, '
-                         'and list it in KEPT')
+                         'and list the call in KEPT')
+        self.assertEqual(missing, [], 'a KEPT call is gone: remove its entry')
+
+    def test_a_new_remove_in_a_kept_file_fails(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            for name, _ in KEPT:
+                (root / 'pnr' / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / 'pnr' / name).write_text((PNR / name).read_text())
+            sources = sorted(root.glob('pnr/**/*.py'))
+            self.assertEqual(unaudited(remove_calls(sources, root)), ([], []))
+            shove = root / 'pnr/pnr/escape_shove.py'
+            shove.write_text(shove.read_text() + '\ndef drop(b, z):\n    b.Remove(z)\n'
+                             '\ndef again(b, t):\n    b.Remove(t)\n')
+            extra, missing = unaudited(remove_calls(sources, root))
+            self.assertEqual([(path, source) for path, source, _ in extra],
+                             [('pnr/pnr/escape_shove.py', 'b.Remove(t)'), ('pnr/pnr/escape_shove.py', 'b.Remove(z)')])
+            self.assertEqual(missing, [])
 
     def test_detached_items_are_never_owned_by_python(self):
-        for name, reason in KEPT.items():
+        for (name, source), reason in KEPT.items():
             if 'thisown' not in reason:
                 continue
             lines = [line.replace(' ', '') for line in (PNR / name).read_text().splitlines()
-                     if '.Remove(' in line]
-            self.assertTrue(lines, name)
-            for line in lines:
-                self.assertIn('thisown=False', line, name)
+                     if source in line]
+            self.assertEqual(len(lines), 1, name)
+            self.assertIn('thisown=False', lines[0], name)
 
 
 # Child process: build a fixture, run engine code that discards items, save,

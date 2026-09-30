@@ -19,6 +19,8 @@ package(default_visibility = ["//visibility:public"])
 THIRD_PARTY = {
     "@elkjs//:lib/elk.bundled.js": "elk.bundled.js",
     "@elkjs//:LICENSE.md": "third_party/elkjs/LICENSE.md",
+    # elk.bundled.js includes a web-worker shim under Apache-2.0, whose text the tarball lacks.
+    "//third_party/licenses:Apache-2.0.txt": "third_party/elkjs/Apache-2.0.txt",
     "@threejs//:LICENSE": "vendor/three/LICENSE",
     "@threejs//:build/three.core.js": "vendor/three/build/three.core.js",
     "@threejs//:build/three.module.js": "vendor/three/build/three.module.js",

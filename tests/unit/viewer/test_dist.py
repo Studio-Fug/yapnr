@@ -15,9 +15,13 @@ from yapnr.viewer import server
 from yapnr.viewer.testing import child_env, module_argv
 
 # sha256 of the files served unmodified from the pinned npm tarballs (MODULE.bazel):
-# elkjs 0.9.3 lib/elk.bundled.js and three.js 0.186.1.
+# elkjs 0.9.3 lib/elk.bundled.js and three.js 0.186.1; and of the Apache-2.0 text
+# (third_party/licenses, as published at apache.org) for elkjs's web-worker shim.
 PINNED = {
     "elk.bundled.js": "b0745abd7f23cd91690a1587e377edbe19fd7233c783300290936720546216d4",
+    "third_party/elkjs/Apache-2.0.txt": (
+        "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    ),
     "vendor/three/LICENSE": "8b378ebe60e2fe500158cb0ac71cb5e8b7d92953c2abcc63a0eb90499653b5bc",
     "vendor/three/build/three.core.js": (
         "9edde002b066a9a05676a6127f67735b62baf399bdea529f2f7e31657da769e6"
@@ -56,6 +60,12 @@ class DistTest(unittest.TestCase):
             "Eclipse Public License", (self.dist / "third_party/elkjs/LICENSE.md").read_text()
         )
         self.assertIn("MIT", (self.dist / "vendor/three/LICENSE").read_text())
+        # elkjs's Apache-2.0 part: the notice is in the file, the license text next to it
+        self.assertIn("Apache License, Version 2.0", (self.dist / "elk.bundled.js").read_text())
+        self.assertIn(
+            "Apache License\n                           Version 2.0",
+            (self.dist / "third_party/elkjs/Apache-2.0.txt").read_text(),
+        )
 
     def test_pages_load_only_served_files(self):
         index = (self.dist / "index.html").read_text()

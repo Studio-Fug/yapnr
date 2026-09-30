@@ -1,0 +1,12 @@
+"""License texts that a served or shipped file requires but its own package does not carry.
+
+Kept byte for byte as published (see THIRD_PARTY.md for each file's source and checksum).
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+# The Apache License 2.0, https://www.apache.org/licenses/LICENSE-2.0.txt (sha256
+# cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30). elkjs's
+# lib/elk.bundled.js includes a web-worker shim under it (Google LLC); the
+# viewer serves this text next to the file (//yapnr/viewer:dist).
+exports_files(["Apache-2.0.txt"])

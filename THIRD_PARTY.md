@@ -15,8 +15,12 @@ brought in. Update it in the same change that adds, removes or upgrades such mat
 - **How:** **never vendored.** Bazel fetches the npm tarball at build time, pinned by URL and
   sha256 (`MODULE.bazel`, repository `@elkjs`), and `//yapnr/viewer:dist` copies the file
   unmodified to `elk.bundled.js` in the served directory. The browser loads it as a separate file;
-  it is never bundled or minified together with AGPL code. Its license text is served next to it,
-  from the same tarball, at `third_party/elkjs/LICENSE.md`.
+  it is never bundled or minified together with AGPL code. Its license texts are served next to
+  it: the EPL-2.0 from the same tarball at `third_party/elkjs/LICENSE.md`, and the Apache-2.0
+  (which the tarball lacks) at `third_party/elkjs/Apache-2.0.txt`. That text is the one file
+  of elkjs's material kept in this repository: `third_party/licenses/Apache-2.0.txt`, byte for
+  byte as published at <https://www.apache.org/licenses/LICENSE-2.0.txt> (sha256
+  `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30`).
 
 ### three.js
 

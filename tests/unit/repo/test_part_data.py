@@ -50,6 +50,24 @@ class FindPartDataTest(unittest.TestCase):
                 ),
             )
 
+    def test_converted_files_are_found_without_their_ato(self):
+        converter = "faebryk" + "_convert"
+        with tempfile.TemporaryDirectory() as root:
+            files = [
+                _write(
+                    root, "p/Q/fp.kicad_mod", f'(footprint "fp"\n\t(generator "{converter}")\n)'
+                ),
+                _write(root, "p/Q/model.step", "ISO-10303-21;"),
+                _write(root, "p/Q/Q.ato", "component Q_package:\n"),  # the trait was removed
+                _write(root, "p/S/s.kicad_sym", f"(kicad_symbol_lib (generator {EASY}2kicad))"),
+                _write(root, "p/Mine/fp.kicad_mod", '(footprint "fp" (generator "yapnr"))'),
+                _write(root, "p/Mine/model.step", "ISO-10303-21;"),
+            ]
+            found = dict(check_part_data.find_part_data(root, files))
+            self.assertEqual(
+                sorted(found), ["p/Q/fp.kicad_mod", "p/Q/model.step", "p/S/s.kicad_sym"]
+            )
+
 
 class RepositoryTest(unittest.TestCase):
     def test_repository_has_no_part_data(self):

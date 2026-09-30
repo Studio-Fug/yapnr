@@ -2,4 +2,9 @@
 # `git blame` skips them with:
 #   git config blame.ignoreRevsFile .git-blame-ignore-revs
 # GitHub's blame view reads this file automatically. Add one full commit hash
-# per line, with a comment naming the change, in the PR that lands it.
+# per line, with a comment naming the change.
+#
+# Only hashes that exist on main work. PRs are squash-merged, so a hash from a
+# PR branch never reaches main: land a mechanical change as its own PR and add
+# the resulting main commit here in a follow-up PR. (A merge-commit PR keeps
+# its commits, so it may list them directly.)

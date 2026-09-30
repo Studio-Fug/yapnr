@@ -28,8 +28,11 @@ brought in. Update it in the same change that adds, removes or upgrades such mat
 - **KiCad footprint and 3D model libraries** (CC-BY-SA-4.0 with the KiCad library exception):
   referenced by board files. A future `yapnr export kicad --with-3d` copies the models a board uses
   into the exported project.
-- **Python packages** (numpy, torch, PyYAML, Sphinx and its extensions, ...; various permissive
-  licenses): installed from PyPI at build time as pinned in `requirements.lock`; not vendored.
+- **Python packages** (numpy, torch, PyYAML, Sphinx and its extensions, ...): installed from PyPI
+  at build time as pinned in `requirements.lock`; not vendored. Their licenses are various
+  open-source licenses, mostly BSD, MIT and Apache-2.0, plus a few others: certifi (MPL-2.0),
+  typing_extensions (PSF-2.0), roman-numerals (0BSD or CC0-1.0) and docutils (public domain and
+  BSD, with some files under other licenses). Each package's own metadata is authoritative.
 - **Documentation site assets:** the furo theme's CSS and JavaScript (MIT) are part of the
   generated site; mermaid 11.4.1 (MIT) is loaded from a CDN.
 

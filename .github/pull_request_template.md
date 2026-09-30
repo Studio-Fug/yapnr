@@ -16,4 +16,5 @@
 - [ ] Privacy: no machine paths, host names, addresses, personal e-mail or credentials
       (`tools/privacy_scan.py`); commits use a GitHub noreply identity
 - [ ] Docs and `WORKLOG.md` updated where this PR changes behaviour, layout or status
-- [ ] Mechanical-only commits (format, rename, move) are listed in `.git-blame-ignore-revs`
+- [ ] Mechanical-only changes (format, rename, move) are a PR of their own; after it is merged, its
+      commit on `main` goes into `.git-blame-ignore-revs` in a follow-up (or: none)

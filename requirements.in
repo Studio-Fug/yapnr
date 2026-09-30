@@ -14,9 +14,9 @@
 # Differentiable placement is a PyTorch autograd program, CPU-first by design
 # (determinism, no GPU in CI).
 #
-# The <2.4 ceiling keeps the lock CPU-only and cross-platform: from 2.4 on,
-# PyTorch ships CUDA-enabled aarch64 wheels, which would pull linux-only
-# nvidia-*/triton wheels into the single, markerless lock.
+# The <2.4 ceiling is Splanc's, and the experiment environment the engine was
+# tuned in runs torch 2.3.1 with numpy 1.26 (numpy 1 ABI); the lock matches it
+# (torch 2.3.1). Lifting the ceiling is a measured change of its own.
 torch>=2.2,<2.4
 
 # numpy 1.x: torch 2.3 wheels are built against the numpy 1 ABI, and the

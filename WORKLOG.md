@@ -14,8 +14,9 @@ Last updated: 2026-09-29 (PR0).
 
 ## Next
 
-1. Push PR0 and get CI green; then set the repository variable `YAPNR_PAGES_ENABLED=true` and
-   point Pages at the `gh-pages` branch root.
+1. Push PR0 and get CI green on `main`. Then, in this order: set the repository variable
+   `YAPNR_PAGES_ENABLED=true`; run CI manually on `main` (`gh workflow run CI --ref main`), which
+   creates the `gh-pages` branch; set Settings > Pages to deploy from `gh-pages`, `/ (root)`.
 2. Configure repository settings: squash merge by default; a ruleset on `main` requiring `lint`,
    `test` and `docs`; private vulnerability reporting on (CONTRIBUTING.md points to it). Squash
    merges must be authored with a noreply address (GitHub's "keep my email addresses private"),

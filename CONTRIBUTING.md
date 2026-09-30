@@ -24,8 +24,9 @@ repository is licensed under the same terms (inbound = outbound).
   explains why, and carries measured results for any engine change.
 - New engine behaviour lands behind a default-off flag with an A/B result (see
   [AGENTS.md](AGENTS.md)).
-- Mechanical commits (formatting, renames, moves) stay separate from behaviour changes and are
-  listed in `.git-blame-ignore-revs`.
+- Mechanical changes (formatting, renames, moves) stay separate from behaviour changes, as a PR
+  of their own. Once it is merged, a follow-up adds its commit on `main` to
+  `.git-blame-ignore-revs` (squash merging gives it a new hash).
 - Before pushing: `prek run --all-files` and `bazel test //...` (see
   [DEVELOPERS.md](DEVELOPERS.md)). CI must be green: `lint`, `test` and `docs` are required.
 - Update `WORKLOG.md` and the documentation pages the change touches.
@@ -33,10 +34,13 @@ repository is licensed under the same terms (inbound = outbound).
 ## Commit identity and privacy
 
 This repository is public. Commits must use a GitHub noreply address
-(`<id>+<user>@users.noreply.github.com`) as both author and committer; CI rejects any other
-address. Never commit machine paths, host names, network addresses, personal e-mail addresses,
-credentials, logs or conversation transcripts. The privacy scan (`tools/privacy_scan.py`) runs as a
-pre-commit hook and as a Bazel test.
+(`<id>+<user>@users.noreply.github.com`) as both author and committer. CI checks every new commit
+with `tools/privacy_scan.py --identities` and rejects any other address, including git's guessed
+`user@host` identity and an empty one; the only exception is `noreply@github.com`, the committer
+GitHub itself uses for merges made on the website. Never commit machine paths, host names, network
+addresses, personal e-mail addresses, credentials, logs or conversation transcripts. The privacy
+scan (`tools/privacy_scan.py`) runs as a pre-commit hook, as a Bazel test over the whole tree, and
+in CI over the messages and patches of every new commit.
 
 ## Reporting security issues
 

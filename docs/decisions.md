@@ -20,11 +20,16 @@ Owner decisions of 2026-09-29, taken while planning the migration (see
 - **Contributions: owner only, for now.** Outside contributions are not accepted yet;
   `CONTRIBUTING.md` says so. Revisit together with the inbound license terms (CLA or DCO).
 - **Commit identity: GitHub noreply addresses only,** for new commits and for imported history.
-  The CI `lint` job checks the author and committer address of every new commit.
+  The CI `lint` job checks the author and committer address of every new commit with
+  `tools/privacy_scan.py --identities`, which accepts only `users.noreply.github.com` addresses
+  and `noreply@github.com` (GitHub's committer for web merges). It also scans the messages and
+  patches of the new commits.
 - **Issue tracking: GitHub issues** (`#N`); Splanc's `FUG-NNN` keys are not used here.
 - **Docs on GitHub Pages, with per-PR previews.** Wired like Splanc and gated on the repository
   variable `YAPNR_PAGES_ENABLED == 'true'`, which the owner sets after the first green build of
-  `main`. The repository is public, so publishing is approved.
+  `main`; a manual run of CI on `main` then creates the `gh-pages` branch, and Pages is pointed at
+  it (the order is in `ci.yaml` and `WORKLOG.md`). Previews are published only after `lint`,
+  `test` and `docs` pass. The repository is public, so publishing is approved.
 - **Viewer agent features off by default.** The viewer's Ask agent and AI summaries ship in a later
   PR (PR4c) as optional features, disabled unless explicitly enabled.
 - **elkjs is fetched at build time, pinned by sha256, never vendored.** It is served as a
@@ -60,8 +65,11 @@ Rationale:
 - **Python 3.11:** Splanc's hermetic toolchain. Code that runs inside KiCad must additionally stay
   stdlib-only and parse under Python 3.9 (KiCad's bundled Python on macOS).
 - **`yapnr_pypi`:** pip hub names must be unique across modules; Splanc's hub is `pypi`.
-- **torch below 2.4:** from 2.4 on, aarch64 wheels are CUDA-enabled and would drag linux-only
-  `nvidia-*` wheels into the single, markerless lock.
+- **torch below 2.4:** the same ceiling as Splanc's `requirements.in`, and the version the engine
+  was tuned on: the experiment environment runs torch 2.3.1 with numpy 1.26 (numpy 1 ABI), and the
+  lock resolves torch 2.3.1. Lifting the ceiling is a separate change with a measured regression
+  comparison. The ceiling is not what keeps the aarch64 lock CPU-only: torch 2.4 to 2.9 also
+  restrict their `nvidia-*` and `triton` dependencies to x86_64.
 - **numpy 1.x:** torch 2.3 wheels are built against the numpy 1 ABI, and the engine was tuned on
   numpy 1.26. (Splanc's lock pairs torch 2.3.1 with numpy 2, which this avoids.) The interop smoke
   test in `tests/unit/interop` guards it.
@@ -72,6 +80,14 @@ Rationale:
   shellcheck-py v0.9.0.6, buildifier 8.2.0, prettier v3.1.0, markdownlint-cli v0.38.0,
   pre-commit-hooks v4.5.0), minus `nixpkgs-fmt`, plus the local privacy scan.
 - **mermaid, prek, `setup-bazel`:** the same as Splanc.
+- **GitHub Actions majors** (`actions/checkout@v4`, `setup-python@v5`, `cache@v4`,
+  `upload-artifact@v4`, `download-artifact@v4`, `setup-bazel@0.15.0`): Splanc's. They declare Node
+  20, which GitHub now runs on Node 24 with a deprecation warning. Move to the Node 24 majors
+  together with Splanc, and record it here.
+- **CI caches:** `setup-bazel`'s own caches are off. One `actions/cache` entry holds Bazelisk's
+  downloads and the Bazel repository cache, keyed on OS, CPU architecture, `.bazelversion`,
+  `MODULE.bazel`, `MODULE.bazel.lock` and `requirements.lock`; the disk cache is per job. CI sets
+  `BAZELISK_HOME`, which takes precedence over `.bazeliskrc`.
 
 ### The requirements lock
 

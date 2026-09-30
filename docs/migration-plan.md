@@ -32,9 +32,7 @@ yapnr as a **headless Bazel ruleset**.
 - **Splanc's declarations are inconsistent.** Its Sphinx `conf.py` says `AGPL-3.0-or-later`, its
   `package.json` says `UNLICENSED`, and there are no SPDX headers.
   - Consequence: yapnr declares one identifier consistently (§1.4).
-- **Imported history has three author identities.** One embeds a machine-local tailnet host name
-  (10 commits, 1 already public in Splanc); one is an agent identity using a personal address (30
-  commits, already public).
+- **Imported history has several author identities, not all of them noreply addresses.**
   - Consequence: the history import rewrites identities with a mailmap (§7.2) so that every
     imported commit uses a GitHub noreply address; the exact mapping is open question Q2 (§9).
 - **History under the PnR paths is small:** 516 blobs, 5.5 MB; the largest blob is 554 KB
@@ -77,8 +75,10 @@ yapnr as a **headless Bazel ruleset**.
    infrastructure variables use `YAPNR_*`.
 7. History: full history of the PnR paths via `git filter-repo`, then the uncommitted snapshots as
    a commit series, landed with merge commits (everything else is squash-merged).
-8. Mechanical changes (format, rename, moves) are separate commits listed in
-   `.git-blame-ignore-revs`; in-flight engine work is ported through them with a checked-in tool.
+8. Mechanical changes (format, rename, moves) are separate commits, and their commits on `main` are
+   listed in `.git-blame-ignore-revs`. Squash merging rehashes, so a hash is added in a follow-up
+   after the merge (PR3b, whose pure-move commit must survive, is merged with a merge commit).
+   In-flight engine work is ported through them with a checked-in tool.
 9. `drc_warm` (GUI-bound) and the old `keyhole_{repair,loop,shift_via,deform}` adapters are
    imported with history but deleted during restructuring. They remain recoverable from history.
 
@@ -406,8 +406,7 @@ canonical schema, so both frontends get them.
 - `cost_compute.py:13` imports `pnr.capacitor_intent`, which was never committed anywhere.
   - Recover the module if it exists in a snapshot; otherwise remove the code path and file an
     issue. [4b]
-- Tests use tailnet addresses and host names as literals; static HTML fixtures embed absolute
-  source roots.
+- Some tests and fixtures embed machine-local values (network literals, absolute source roots).
   - Documentation-range values; fixtures regenerated from `examples/`. [4a/4c]
 
 ## 3. Project abstraction
@@ -771,7 +770,9 @@ register_toolchains("@yapnr_kicad//:all")
 ```
 
 - **Python deps** (`requirements.in`):
-  - `torch>=2.2,<2.4` (CPU; the ceiling keeps aarch64 wheels CUDA-free);
+  - `torch>=2.2,<2.4` (CPU): Splanc's ceiling, and the experiment environment runs torch 2.3.1
+    with numpy 1.26 (numpy 1 ABI). It is not what keeps the aarch64 lock CUDA-free: torch 2.4 to
+    2.9 also restrict their `nvidia-*` and `triton` dependencies to x86_64;
   - `numpy>=1.26,<2` (torch 2.3 wheels use the numpy 1 ABI, and the experiment environment runs
     numpy 1.26); a unit test checks `torch.as_tensor(numpy.zeros(3)).numpy()`;
   - `pyyaml>=6`;
@@ -983,10 +984,12 @@ Changes from Splanc:
 - Added local hook `yapnr-privacy-scan` (`tools/privacy_scan.py`, stdlib only) with generic
   patterns:
 
-  - absolute home paths (macOS `/Users/<name>`, Linux `/home/<name>`, Windows) and volume paths
-    (macOS volumes, Linux removable media), with placeholders such as `<name>` allowed;
-  - `*.ts.net` host names;
-  - 100.64.0.0/10 (CGNAT, tailnet) addresses;
+  - absolute home paths (macOS `/Users/<name>` in any case, Linux `/home/<name>`, Windows with
+    either slash, WSL), volume paths (macOS volumes, Linux removable media), macOS per-user
+    temporary directories, and the dash-encoded form agent tooling uses for project directories
+    (`-Users-<name>-...`), with placeholders such as `<name>` allowed only as a whole component;
+  - `*.ts.net` host names and hyphenated or URL `*.local` machine names;
+  - 100.64.0.0/10 (CGNAT, tailnet) and RFC 1918 private addresses;
   - e-mail addresses other than `users.noreply.github.com`, `noreply`/`no-reply` mailboxes, the
     git user of code hosts and reserved example domains;
   - API keys and tokens (GitHub, Anthropic, OpenAI, AWS, Slack, Google, GitLab, Tailscale) and
@@ -995,9 +998,15 @@ Changes from Splanc:
   The scanner allowlists itself, its test and this plan, supports a `privacy-scan: allow` line
   marker, and redacts what it prints (CI logs are public). The same scanner runs as a Bazel test
   over the whole working tree (`//tests/unit/repo:test_privacy_scan`), including the globally
-  excluded paths, and over commit identities in CI.
+  excluded paths, and in CI over the messages and patches of every new commit, where the file
+  allowlist does not apply (so the allowlisted files must scan clean as patches too). Its
+  `--identities` mode is the commit identity gate: one address per line, and only GitHub
+  noreply addresses and `noreply@github.com` pass.
 
-- `name-tests-test` applies to `tests/`; helpers live in `tools/`.
+- `name-tests-test` (`--pytest-test-first`) applies to `tests/`; helpers live in `tools/`. When
+  the regression helpers (`tests/regression/{designs,run,native}.py`) and the `tests/fixtures/*.py`
+  helpers land (PR3b), either add a narrow per-hook exclude for exactly those files (Splanc has
+  one) or move the helpers out of `tests/`.
 - **Lint baseline for imported code.** Until PR3a, `hardware/` and `docs/hardware/` (the verbatim
   import) are skipped by all hooks through the reserved global exclude (and by `.flake8`
   `extend-exclude` and `.markdownlintignore`). PR3a formats `hardware/` and drops it from those
@@ -1008,23 +1017,29 @@ Changes from Splanc:
   `via_coalesce.py` (`items.clear()` in `main`).
 
 `setup-precommit.sh` follows Splanc's (prek 0.4.12, then `prek install` and
-`prek run --all-files`), except that prek is installed in isolation: with `uv` or `pipx`, or into
-a private virtualenv under `.venv/prek`, never into the system Python.
+`prek run --all-files`), except that prek is installed in isolation: a `prek` on `PATH` is used
+only at the pinned version (with a warning otherwise), and else the pinned version goes into a
+private virtualenv under `.venv/prek` (with `uv` when available), never into the system Python.
 
 ### 5.2 GitHub Actions
 
 `ci.yaml` triggers on `push: main`, `pull_request` (`opened, synchronize, reopened, closed`) and
 `workflow_dispatch`. It has top-level `permissions: contents: read`; only the Pages jobs widen it,
 for themselves. `concurrency` groups runs per PR (or ref) with `cancel-in-progress` for pull
-requests; runs on `main` always finish.
+requests. A started run on `main` is never cancelled, but GitHub keeps one pending run per group,
+so a queued `main` run is replaced by a newer one. Every job has a `timeout-minutes`.
 
 Jobs in `ci.yaml`:
 
 - `lint` (ubuntu-latest; required): Splanc's job (setup-python 3.11, `pip install prek==0.4.12`,
-  prek cache keyed on the config hash, `prek run --all-files --show-diff-on-failure`), plus the
-  **commit identity check**: `git log --format="%ae %ce" origin/main..HEAD` (the PR's range, or
-  the pushed range on `main`) piped through `tools/privacy_scan.py --stdin`, so only noreply
-  addresses pass.
+  prek cache keyed on the config hash, `prek run --all-files --show-diff-on-failure`), plus two
+  checks over the new commits (the PR's range, or the pushed range on `main`):
+  - the **commit identity check**: `git log --format='%ae%n%ce' <range>` piped through
+    `tools/privacy_scan.py --identities`, so only GitHub noreply addresses (and
+    `noreply@github.com`, GitHub's committer for web merges) pass;
+  - the **history scan**: `git log -p --format='%ae %ce%n%B' <range>` piped through
+    `tools/privacy_scan.py --stdin`, which covers commit messages and intermediate commits
+    (merge-commit PRs land them all on `main`).
 - `test` (`ubuntu-24.04-arm`; required): `bazel test //... --config=ci`, then
   `bazel test //:requirements.test` (the one job that checks the lock). The aarch64 runner matches
   the CPU-only torch lock. Moves to ubuntu-latest once the x86_64 lock exists, if faster.
@@ -1035,13 +1050,18 @@ Jobs in `ci.yaml`:
   regression smoke and the example end to end.
 - `docs` (ubuntu-latest; required): `bazel run //docs:build`, upload the site as an artifact.
 - `deploy-preview` / `cleanup-preview` (ubuntu-latest; not required):
-  `rossjrw/pr-preview-action@v1` into `gh-pages` under `pr-preview/pr-N/`;
+  `rossjrw/pr-preview-action@v1` into `gh-pages` under `pr-preview/pr-N/`; the preview only after
+  `lint`, `test` and `docs` pass (`gh-pages` keeps removed previews in its history);
   `if: vars.YAPNR_PAGES_ENABLED == 'true'` and a same-repository head; job-level
-  `contents: write` and `pull-requests: write`; a shared `gh-pages-deploy` concurrency group.
-- `deploy-pages` (ubuntu-latest; not required): on push to `main`, after `lint`, `test` and `docs`:
-  `JamesIves/github-pages-deploy-action@v4` with `clean-exclude: pr-preview/`; same gate;
-  job-level `contents: write`. Publishing by pushing to `gh-pages` needs neither `pages:` nor
-  `id-token:` permissions.
+  `contents: write` and `pull-requests: write`; a per-PR concurrency group.
+- `deploy-pages` (ubuntu-latest; not required): on push to `main` and on a manual run on `main`
+  (the first deploy, which creates `gh-pages`), after `lint`, `test` and `docs`:
+  `JamesIves/github-pages-deploy-action@v4` with `clean-exclude: pr-preview/` and `force: false`;
+  same gate; job-level `contents: write`; its own concurrency group. Publishing by pushing to
+  `gh-pages` needs neither `pages:` nor `id-token:` permissions.
+- The Pages jobs use separate concurrency groups because GitHub cancels an older pending job in a
+  group even with `cancel-in-progress: false`; pushes from different groups race, and both
+  actions rebase a rejected push instead of forcing it.
 - `downstream` (`ubuntu-24.04-arm`; required from PR8): `bazel test //...` in `tests/downstream`
   with `--override_module=yapnr=$GITHUB_WORKSPACE`.
 
@@ -1072,8 +1092,11 @@ Alternatives considered:
 
 **Caching:**
 
-- `bazel-contrib/setup-bazel@0.15.0` with `bazelisk-cache` and `repository-cache`, plus a per-job
-  disk cache keyed on `MODULE.bazel.lock` and the requirements locks;
+- `bazel-contrib/setup-bazel@0.15.0` without its own caches (their keys carry neither the CPU
+  architecture nor the lock files, and its Bazelisk cache path is not where `.bazeliskrc` points).
+  Instead, one `actions/cache` entry for Bazelisk's downloads (`BAZELISK_HOME` set in CI) and the
+  repository cache, keyed on OS, architecture, `.bazelversion`, `MODULE.bazel`,
+  `MODULE.bazel.lock` and `requirements.lock`, plus a per-job disk cache keyed on the locks;
 - the prek cache;
 - the Homebrew download cache (nightly).
 
@@ -1082,7 +1105,7 @@ Nix caching and runner-space actions from Splanc are not needed.
 **Repository settings** (applied with `gh` after PR0 is pushed):
 
 - Squash merge is the default. Merge commits are allowed only for the history-import PRs (PR1,
-  PR2a). No linear-history rule.
+  PR2a) and for PR3b (its pure-move commit must survive). No linear-history rule.
 - A ruleset on `main` requires a PR and the checks `lint`, `test`, `docs` (and `kicad-integration`
   from PR6a), with 0 approvals (single-seat organization).
 - `.github/CODEOWNERS`: `* @fughilli`.
@@ -1092,8 +1115,10 @@ Nix caching and runner-space actions from Splanc are not needed.
   - measured result;
   - privacy scan and noreply identity;
   - docs and WORKLOG updated.
-- Pages source: the `gh-pages` branch root. Publishing is approved; `YAPNR_PAGES_ENABLED` is set
-  to `true` after the first green build of `main`, and until then the deploy jobs are skipped.
+- Pages source: the `gh-pages` branch root. Publishing is approved; until `YAPNR_PAGES_ENABLED`
+  is `true` the deploy jobs are skipped. The first deploy, after the first green build of `main`:
+  set the variable, run CI manually on `main` (this creates `gh-pages`), then point Settings >
+  Pages at `gh-pages`, `/ (root)`.
 
 ## 6. Documentation
 
@@ -1224,10 +1249,14 @@ Not imported:
 - A `--commit-callback` appends `Imported-From: fughilli/splanc@<original sha>` for provenance.
 - `--prune-empty always`.
 
-**Gate:** `git log -p --all | tools/privacy_scan.py --stdin` must be clean on the filtered history
-before it is ever pushed, and `git log --format="%ae %ce"` over it must show only noreply
-addresses. The scan report (counts only) goes into `docs/history/import-manifest.md` together with
-the paths list, source commit, filter-repo version and the commit map size.
+**Gate:** before the filtered history is ever pushed, two checks must pass on it:
+
+- `git log -p --all | tools/privacy_scan.py --stdin` is clean;
+- `git log --all --format='%ae%n%ce' | tools/privacy_scan.py --identities` passes (only noreply
+  addresses).
+
+The scan report (counts only) goes into `docs/history/import-manifest.md` together with the paths
+list, source commit, filter-repo version and the commit map size.
 
 The filtered branch is fetched into `$YAPNR` and merged with
 `git merge --allow-unrelated-histories` onto PR0's `main`. **PR1 must be merged with a merge
@@ -1346,7 +1375,7 @@ labels otherwise follow the requested numbering. Each PR updates `WORKLOG.md` an
 touches. "Same pass set" means the recorded list of passing, skipped and known-failing tests is
 unchanged.
 
-### PR0: bootstrap (about 55 files, about 4.7k lines, excluding the lockfiles)
+### PR0: bootstrap (about 55 files, about 5.1k lines, excluding the lockfiles)
 
 - **Contents:**
   - `README.md` (updated), `AGENTS.md`, `DEVELOPERS.md`, `CONTRIBUTING.md` (owner-only policy),
@@ -1443,7 +1472,8 @@ unchanged.
 ### PR3a: mechanical format and lint fixes
 
 - **Contents:**
-  - black and isort on the imported trees (one commit, listed in `.git-blame-ignore-revs`);
+  - black and isort on the imported trees, as a format-only PR of its own (squash-merged; a
+    follow-up adds its `main` commit to `.git-blame-ignore-revs`);
   - hand fixes for F-codes (F821 in `via_coalesce`, F401/F841/F811/F402);
   - the `.flake8` baseline for E501/E731/E402;
   - `hardware/` removed from the global exclude, `.flake8` and `.markdownlintignore`.
@@ -1458,7 +1488,9 @@ unchanged.
 
 - **Contents:**
   - `tools/migrate/module_map.toml` plus a codemod;
-  - commit 1: pure `git mv` to the §1 layout (100% similarity);
+  - commit 1: pure `git mv` to the §1 layout (100% similarity); PR3b is merged with a merge
+    commit so this commit survives, and a follow-up lists both commits in
+    `.git-blame-ignore-revs`;
   - commit 2: import and `-m` string rewrite (about 1,272 import statements, about 100 module
     strings), `feedback/signals.py` regexes, BUILD files regenerated per subpackage;
   - tests moved to `tests/unit|kicad`, the four mixed files split, the hyphenated test renamed;
@@ -1668,7 +1700,8 @@ Resolved on 2026-09-29 (see §0.2 and `docs/decisions.md`):
   because outside contributions are not accepted; revisit (CLA or DCO) before opening
   contributions.
 - **Q3, public docs:** approved. The Pages deploy and previews are wired and gated on
-  `YAPNR_PAGES_ENABLED`, which is set after the first green build of `main`.
+  `YAPNR_PAGES_ENABLED`, which is set after the first green build of `main` (then a manual run on
+  `main` creates `gh-pages`).
 - **Q4, agent features:** they ship in yapnr as optional features, off by default.
 - **Q5, elkjs:** acceptable as a separately fetched, sha256-pinned, unmodified asset; never
   vendored.
@@ -1745,7 +1778,7 @@ Still open:
   - tools: review, render and plane-access scripts;
   - the viewer: `server.py`, `agent_service.py`, `net_llm.py`, `.scratch/*`, static HTML
     fixtures.
-- Tailnet names and addresses in viewer READMEs and test literals.
+- Machine-local network names and addresses in documentation and test literals.
 - Never migrated:
   - conversation logs;
   - agent turn logs;
@@ -1754,5 +1787,3 @@ Still open:
   - the handoff and continuation documents.
 - Inputs with absolute library URIs (`inputs*/fp-lib-table`, `rules.json` `path` entries) are not
   committed. Input sets are created fresh by `yapnr import`, which writes relative paths.
-- Not in yapnr's scope, but worth fixing in Splanc: a tailnet address and host name are already
-  public in Splanc's `hardware/tools/pnr_live/README.md`.

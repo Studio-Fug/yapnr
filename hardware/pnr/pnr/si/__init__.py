@@ -24,12 +24,13 @@ subprocess), :mod:`metrics`, :mod:`report` (orchestration + ``pnr-si-report-v1``
 This package module stays stdlib-only and Python 3.9 compatible: ``pnr.si.extract``
 runs under KiCad's interpreter as a pcbnew worker.
 """
+
 import os
 
-ENV = 'PNR_SI'
-SCHEMA = 'pnr-si-report-v1'
+ENV = "PNR_SI"
+SCHEMA = "pnr-si-report-v1"
 
 
 def enabled(env=None):
     """``PNR_SI=1`` turns on the compile-time check and the post-route report."""
-    return ((os.environ if env is None else env).get(ENV) or '').strip() == '1'
+    return ((os.environ if env is None else env).get(ENV) or "").strip() == "1"

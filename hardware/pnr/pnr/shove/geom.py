@@ -1,12 +1,26 @@
 """Pure-Python 2-D geometry for the make-room model (KiCad Python 3.9: no numpy)."""
+
 import math
 
 
-def sub(a, b): return (a[0] - b[0], a[1] - b[1])
-def add(a, b): return (a[0] + b[0], a[1] + b[1])
-def mul(a, s): return (a[0] * s, a[1] * s)
-def dot(a, b): return a[0] * b[0] + a[1] * b[1]
-def cross(a, b): return a[0] * b[1] - a[1] * b[0]
+def sub(a, b):
+    return (a[0] - b[0], a[1] - b[1])
+
+
+def add(a, b):
+    return (a[0] + b[0], a[1] + b[1])
+
+
+def mul(a, s):
+    return (a[0] * s, a[1] * s)
+
+
+def dot(a, b):
+    return a[0] * b[0] + a[1] * b[1]
+
+
+def cross(a, b):
+    return a[0] * b[1] - a[1] * b[0]
 
 
 def closest_on_seg(p, a, z):
@@ -21,7 +35,10 @@ def closest_on_seg(p, a, z):
 
 def seg_intersect(a, b, c, d):
     """Proper crossing of segments a-b and c-d (touching is not a crossing)."""
-    def orient(p, q, r): return cross(sub(q, p), sub(r, p))
+
+    def orient(p, q, r):
+        return cross(sub(q, p), sub(r, p))
+
     o1, o2, o3, o4 = orient(a, b, c), orient(a, b, d), orient(c, d, a), orient(c, d, b)
     return (o1 * o2 < 0) and (o3 * o4 < 0)
 

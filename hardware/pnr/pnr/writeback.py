@@ -42,17 +42,17 @@ def normalize_duplicate_drill_text(text):
     stack, seen, deletions = [], {}, []
     for i, match in enumerate(tokens):
         value = match.group()
-        if value == '(':
+        if value == "(":
             stack.append((tokens[i + 1].group(), match.start()))
-        elif value == ')':
+        elif value == ")":
             head, start = stack.pop()
-            if head != 'pad' or not stack or stack[-1][0] != 'footprint':
+            if head != "pad" or not stack or stack[-1][0] != "footprint":
                 continue
-            block = text[start:match.end()]
+            block = text[start : match.end()]
             words = token.findall(block)
-            if len(words) < 4 or words[3] not in ('thru_hole', 'np_thru_hole'):
+            if len(words) < 4 or words[3] not in ("thru_hole", "np_thru_hole"):
                 continue
-            canonical = tuple(token.findall(re.sub(r'\(uuid\s+"[^"\n]+"\)', '', block)))
+            canonical = tuple(token.findall(re.sub(r'\(uuid\s+"[^"\n]+"\)', "", block)))
             footprint = stack[-1][1]
             definitions = seen.setdefault(footprint, set())
             if canonical in definitions:
@@ -254,9 +254,13 @@ def apply_planes(board, rules: dict, pad_margin_mm: float = 2.0) -> int:
             # Specctra import into the private board preserves existing pours.
             # A refill must not stack duplicate planes or add more dogbones
             # around pads that were already fanned out on the previous pass.
-            existing = [z for z in board.Zones()
-                        if not z.GetIsRuleArea() and z.GetNetCode() == net.GetNetCode()
-                        and z.IsOnLayer(layer_id[layer])]
+            existing = [
+                z
+                for z in board.Zones()
+                if not z.GetIsRuleArea()
+                and z.GetNetCode() == net.GetNetCode()
+                and z.IsOnLayer(layer_id[layer])
+            ]
             if existing:
                 reused += len(existing)
                 continue
@@ -286,7 +290,8 @@ def apply_planes(board, rules: dict, pad_margin_mm: float = 2.0) -> int:
 
     if width_log:
         import json
-        sys.stderr.write('planes: terminal widths ' + json.dumps(width_log, sort_keys=True) + '\n')
+
+        sys.stderr.write("planes: terminal widths " + json.dumps(width_log, sort_keys=True) + "\n")
     # Priority: smaller zones fill on top of (carve out of) larger overlapping ones.
     for rank, (_area, z) in enumerate(sorted(zones, key=lambda az: -az[0])):
         z.SetAssignedPriority(rank)
@@ -295,7 +300,7 @@ def apply_planes(board, rules: dict, pad_margin_mm: float = 2.0) -> int:
         try:
             pcbnew.ZONE_FILLER(board).Fill(board.Zones())
         except Exception as exc:  # pragma: no cover - version shim
-            raise RuntimeError('Copper plane fill failed') from exc
+            raise RuntimeError("Copper plane fill failed") from exc
     return len(zones) + reused
 
 
@@ -316,20 +321,19 @@ def _type_plane_layers(board, rules: dict) -> None:
 
 def _segment_distance_sq(a, b, c, d):
     """Squared minimum separation of two closed 2D line segments."""
+
     def cross(p, q, r):
-        return (q[0]-p[0])*(r[1]-p[1]) - (q[1]-p[1])*(r[0]-p[0])
+        return (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
 
     def point_dist(p, u, v):
-        dx, dy = v[0]-u[0], v[1]-u[1]
-        den = dx*dx + dy*dy
-        t = max(0., min(1., ((p[0]-u[0])*dx+(p[1]-u[1])*dy)/den)) if den else 0.
-        return (p[0]-u[0]-t*dx)**2 + (p[1]-u[1]-t*dy)**2
+        dx, dy = v[0] - u[0], v[1] - u[1]
+        den = dx * dx + dy * dy
+        t = max(0.0, min(1.0, ((p[0] - u[0]) * dx + (p[1] - u[1]) * dy) / den)) if den else 0.0
+        return (p[0] - u[0] - t * dx) ** 2 + (p[1] - u[1] - t * dy) ** 2
 
-    if (cross(a, b, c)*cross(a, b, d) < 0 and
-            cross(c, d, a)*cross(c, d, b) < 0):
-        return 0.
-    return min(point_dist(a,c,d), point_dist(b,c,d),
-               point_dist(c,a,b), point_dist(d,a,b))
+    if cross(a, b, c) * cross(a, b, d) < 0 and cross(c, d, a) * cross(c, d, b) < 0:
+        return 0.0
+    return min(point_dist(a, c, d), point_dist(b, c, d), point_dist(c, a, b), point_dist(d, a, b))
 
 
 def _collect_obstacles(board):
@@ -340,19 +344,21 @@ def _collect_obstacles(board):
     An unreadable track collection raises instead of silently ignoring copper.
     """
     import math
+
     import pcbnew
+
     obs = []
     for fp in board.GetFootprints():
         for pad in fp.Pads():
             box = pad.GetBoundingBox()
             center = box.GetCenter()
             point = (center.x, center.y)
-            radius = math.hypot(box.GetWidth(), box.GetHeight()) / 2.
+            radius = math.hypot(box.GetWidth(), box.GetHeight()) / 2.0
             obs.append((point, point, radius, pad.GetNetCode()))
             drill = pad.GetDrillSize()
             if drill.x or drill.y:
                 point = (pad.GetPosition().x, pad.GetPosition().y)
-                obs.append((point, point, max(drill.x, drill.y)/2., -1))
+                obs.append((point, point, max(drill.x, drill.y) / 2.0, -1))
     zones = list(board.Zones())
     for fp in board.GetFootprints():
         zones.extend(fp.Zones())
@@ -361,20 +367,27 @@ def _collect_obstacles(board):
             box = zone.GetBoundingBox()
             center = box.GetCenter()
             point = (center.x, center.y)
-            obs.append((point, point, math.hypot(box.GetWidth(),box.GetHeight())/2., -1))
+            obs.append((point, point, math.hypot(box.GetWidth(), box.GetHeight()) / 2.0, -1))
     for track in list(board.GetTracks()):
         if isinstance(track, pcbnew.PCB_ARC):
             box = track.GetBoundingBox()
             center = box.GetCenter()
             point = (center.x, center.y)
-            obs.append((point, point, math.hypot(box.GetWidth(), box.GetHeight())/2., track.GetNetCode()))
+            obs.append(
+                (
+                    point,
+                    point,
+                    math.hypot(box.GetWidth(), box.GetHeight()) / 2.0,
+                    track.GetNetCode(),
+                )
+            )
         else:
             start, end = track.GetStart(), track.GetEnd()
             width = track.GetFrontWidth() if isinstance(track, pcbnew.PCB_VIA) else track.GetWidth()
-            obs.append(((start.x,start.y), (end.x,end.y), width/2., track.GetNetCode()))
+            obs.append(((start.x, start.y), (end.x, end.y), width / 2.0, track.GetNetCode()))
             if isinstance(track, pcbnew.PCB_VIA):
                 point = (start.x, start.y)
-                obs.append((point, point, track.GetDrillValue()/2., -1))
+                obs.append((point, point, track.GetDrillValue() / 2.0, -1))
     return obs
 
 
@@ -403,11 +416,12 @@ def _has_through_access(board, pad):
     Native DRC still decides the latter. Footprint thermal holes count as access.
     """
     import pcbnew
+
     for item in [pad] + list(board.GetConnectivity().GetConnectedItems(pad)):
         if item.GetNetCode() != pad.GetNetCode():
             continue
         # GetConnectedItems may expose a via through a base SWIG wrapper.
-        if item.GetClass() == 'PCB_VIA':
+        if item.GetClass() == "PCB_VIA":
             return True
         if isinstance(item, pcbnew.PAD) and item.GetAttribute() == pcbnew.PAD_ATTRIB_PTH:
             return True
@@ -420,16 +434,29 @@ def _reuse_surface_ground(board, pad, obstacles, trace_w, clr, max_length_mm=3.0
     Restrict reuse to the same package; do not daisy-chain unrelated ground
     returns or apply this signal-leaf policy to power-plane nets.
     """
-    import pcbnew
     import math
-    surface = pcbnew.B_Cu if pad.IsOnLayer(pcbnew.B_Cu) and not pad.IsOnLayer(pcbnew.F_Cu) else pcbnew.F_Cu
+
+    import pcbnew
+
+    surface = (
+        pcbnew.B_Cu
+        if pad.IsOnLayer(pcbnew.B_Cu) and not pad.IsOnLayer(pcbnew.F_Cu)
+        else pcbnew.F_Cu
+    )
     p = pad.GetPosition()
     point = (p.x, p.y)
     choices = []
     for other in pad.GetParentFootprint().Pads():
-        if other.m_Uuid == pad.m_Uuid or other.GetNetCode() != pad.GetNetCode() or not other.IsOnLayer(surface):
+        if (
+            other.m_Uuid == pad.m_Uuid
+            or other.GetNetCode() != pad.GetNetCode()
+            or not other.IsOnLayer(surface)
+        ):
             continue
-        if other.GetAttribute() not in (pcbnew.PAD_ATTRIB_SMD, pcbnew.PAD_ATTRIB_PTH) or not _has_through_access(board, other):
+        if other.GetAttribute() not in (
+            pcbnew.PAD_ATTRIB_SMD,
+            pcbnew.PAD_ATTRIB_PTH,
+        ) or not _has_through_access(board, other):
             continue
         q = other.GetPosition()
         target = (q.x, q.y)
@@ -437,9 +464,17 @@ def _reuse_surface_ground(board, pad, obstacles, trace_w, clr, max_length_mm=3.0
             choices.append(target)
     for target in sorted(choices, key=lambda q: math.dist(point, q)):
         # Native fanout's conservative obstacle model applies unchanged.
-        clear = (oracle.clear(pad.GetNetname(),surface,tuple(x/1e6 for x in point),
-                              tuple(x/1e6 for x in target),trace_w/1e6) if oracle else
-                 _clear_segment(point,target,trace_w/2.+clr,pad.GetNetCode(),obstacles))
+        clear = (
+            oracle.clear(
+                pad.GetNetname(),
+                surface,
+                tuple(x / 1e6 for x in point),
+                tuple(x / 1e6 for x in target),
+                trace_w / 1e6,
+            )
+            if oracle
+            else _clear_segment(point, target, trace_w / 2.0 + clr, pad.GetNetCode(), obstacles)
+        )
         if not clear:
             continue
         track = pcbnew.PCB_TRACK(board)
@@ -449,10 +484,15 @@ def _reuse_surface_ground(board, pad, obstacles, trace_w, clr, max_length_mm=3.0
         track.SetLayer(surface)
         track.SetNetCode(pad.GetNetCode())
         board.Add(track)
-        obstacles.append((point, target, trace_w/2., pad.GetNetCode()))
+        obstacles.append((point, target, trace_w / 2.0, pad.GetNetCode()))
         if oracle:
-            oracle.reserve_track(pad.GetNetname(),surface,tuple(x/1e6 for x in point),
-                                 tuple(x/1e6 for x in target),trace_w/1e6)
+            oracle.reserve_track(
+                pad.GetNetname(),
+                surface,
+                tuple(x / 1e6 for x in point),
+                tuple(x / 1e6 for x in target),
+                trace_w / 1e6,
+            )
         board.BuildConnectivity()
         return True
     return False
@@ -461,13 +501,16 @@ def _reuse_surface_ground(board, pad, obstacles, trace_w, clr, max_length_mm=3.0
 def outline_bounds(board):
     """Physical outline bounds, excluding Edge.Cuts drawing stroke width."""
     import pcbnew
+
     contour = pcbnew.SHAPE_POLY_SET()
     if board.GetBoardPolygonOutlines(contour, False) and contour.OutlineCount():
         return contour.BBox()
     return board.GetBoardEdgesBoundingBox()
 
 
-def _dogbone_fanout_net(board, netcode: int, clearance_mm: float = 0.2, rules=None, width_log=None) -> int:
+def _dogbone_fanout_net(
+    board, netcode: int, clearance_mm: float = 0.2, rules=None, width_log=None
+) -> int:
     """Add only checked external pad-to-plane escapes; never force via-in-pad.
 
     Under a fab profile with a filled via-in-pad policy (5B) a pad with no legal
@@ -484,28 +527,34 @@ def _dogbone_fanout_net(board, netcode: int, clearance_mm: float = 0.2, rules=No
     required width reproduces the previous search order exactly.
     """
     import math
+
     import pcbnew
+
     fab = _fab(rules)
-    via_d = _nm(fab['via_diameter_mm'])
-    via_r = via_d/2.
-    drill_d = _nm(fab['via_drill_mm'])
-    clr = _nm(max(clearance_mm, fab['clearance_mm']))
-    trace_w = _nm(fab['track_width_mm'])
-    via_keep = max(via_r+clr, drill_d/2.+_nm(fab['hole_clearance_mm']))
+    via_d = _nm(fab["via_diameter_mm"])
+    via_r = via_d / 2.0
+    drill_d = _nm(fab["via_drill_mm"])
+    clr = _nm(max(clearance_mm, fab["clearance_mm"]))
+    trace_w = _nm(fab["track_width_mm"])
+    via_keep = max(via_r + clr, drill_d / 2.0 + _nm(fab["hole_clearance_mm"]))
     obstacles = _collect_obstacles(board)
     bounds = outline_bounds(board)
-    edge = via_r + _nm(fab['edge_clearance_mm'])
-    hole_edge = ((rules or {}).get('fab') or {}).get('hole_to_edge_mm')
+    edge = via_r + _nm(fab["edge_clearance_mm"])
+    hole_edge = ((rules or {}).get("fab") or {}).get("hole_to_edge_mm")
     if hole_edge is not None:  # fab profile: drill wall to outline as well
-        edge = max(edge, drill_d/2. + _nm(hole_edge))
+        edge = max(edge, drill_d / 2.0 + _nm(hole_edge))
     oracle = None
     if bounds.GetWidth() and bounds.GetHeight():
         import copy
+
         from pnr.native_electrical import Oracle
-        checked_rules=copy.deepcopy(rules or {})
+
+        checked_rules = copy.deepcopy(rules or {})
         # Keep the fab profile's per-hole-kind keys (hole-to-hole, PTH/NPTH, edge).
-        checked_rules['fab']=dict((rules or {}).get('fab') or {},**dict(fab,clearance_mm=clr/1e6))
-        oracle=Oracle(board,checked_rules)
+        checked_rules["fab"] = dict(
+            (rules or {}).get("fab") or {}, **dict(fab, clearance_mm=clr / 1e6)
+        )
+        oracle = Oracle(board, checked_rules)
     added, skipped = 0, []
     board.BuildConnectivity()
     for fp in board.GetFootprints():
@@ -518,80 +567,118 @@ def _dogbone_fanout_net(board, netcode: int, clearance_mm: float = 0.2, rules=No
             # the fabrication minimum is not a per-net width specification.
             # A terminal width contract adds a preferred width, tried first.
             from pnr.pad_entry import entry_widths, width_choice, width_contract
+
             widths = [_nm(w) for w in entry_widths(pad, rules or {})]
             required_w = widths[-1]  # the hard required width; never narrower
             contracted = width_log is not None and width_contract(pad, rules or {}) is not None
+
             def log(how, width=None):
                 if contracted:
-                    width_log.append(dict(
-                        pad=f'{fp.GetReference()}.{pad.GetNumber()}', net=pad.GetNetname(), how=how,
-                        choice=None if width is None else width_choice(pad, rules or {}, width/1e6),
-                        width_mm=None if width is None else width/1e6,
-                        required_width_mm=required_w/1e6, preferred_width_mm=widths[0]/1e6))
-            if pad.GetNetname() == 'lv' and _has_through_access(board, pad):
-                log('existing_access')
+                    width_log.append(
+                        dict(
+                            pad=f"{fp.GetReference()}.{pad.GetNumber()}",
+                            net=pad.GetNetname(),
+                            how=how,
+                            choice=(
+                                None
+                                if width is None
+                                else width_choice(pad, rules or {}, width / 1e6)
+                            ),
+                            width_mm=None if width is None else width / 1e6,
+                            required_width_mm=required_w / 1e6,
+                            preferred_width_mm=widths[0] / 1e6,
+                        )
+                    )
+
+            if pad.GetNetname() == "lv" and _has_through_access(board, pad):
+                log("existing_access")
                 continue
-            if pad.GetNetname() == 'lv':
-                reused = next((w for w in widths if _reuse_surface_ground(board, pad, obstacles, w, clr, oracle=oracle)), None)
+            if pad.GetNetname() == "lv":
+                reused = next(
+                    (
+                        w
+                        for w in widths
+                        if _reuse_surface_ground(board, pad, obstacles, w, clr, oracle=oracle)
+                    ),
+                    None,
+                )
                 if reused is not None:
-                    log('surface', reused)
+                    log("surface", reused)
                     continue
-            surface = (pcbnew.B_Cu if pad.IsOnLayer(pcbnew.B_Cu) and not pad.IsOnLayer(pcbnew.F_Cu) else pcbnew.F_Cu)
+            surface = (
+                pcbnew.B_Cu
+                if pad.IsOnLayer(pcbnew.B_Cu) and not pad.IsOnLayer(pcbnew.F_Cu)
+                else pcbnew.F_Cu
+            )
             pos = pad.GetPosition()
-            point = (pos.x,pos.y)
+            point = (pos.x, pos.y)
             size = pad.GetSize()
             # Via outside the complete pad, avoiding unsupported via-in-pad fab.
-            base = math.hypot(size.x,size.y)/2. + via_r + clr
-            angle = math.atan2(pos.y-center.y, pos.x-center.x)
+            base = math.hypot(size.x, size.y) / 2.0 + via_r + clr
+            angle = math.atan2(pos.y - center.y, pos.x - center.x)
             placed = False
             # Nearest via distance first (stub length dominates inductance), then the
             # widest allowed stub, then direction. One width: the previous order.
-            for extra, trace_w in [(e, w) for e in (0., .25, .5, .9, 1.5) for w in widths]:
+            for extra, trace_w in [(e, w) for e in (0.0, 0.25, 0.5, 0.9, 1.5) for w in widths]:
                 for delta in (0, 45, -45, 90, -90, 135, -135, 180):
                     theta = angle + math.radians(delta)
                     distance = base + _nm(extra)
-                    target = (round(pos.x+math.cos(theta)*distance), round(pos.y+math.sin(theta)*distance))
-                    x,y = target
-                    if not (bounds.GetLeft()+edge <= x <= bounds.GetRight()-edge and
-                            bounds.GetTop()+edge <= y <= bounds.GetBottom()-edge):
+                    target = (
+                        round(pos.x + math.cos(theta) * distance),
+                        round(pos.y + math.sin(theta) * distance),
+                    )
+                    x, y = target
+                    if not (
+                        bounds.GetLeft() + edge <= x <= bounds.GetRight() - edge
+                        and bounds.GetTop() + edge <= y <= bounds.GetBottom() - edge
+                    ):
                         continue
                     if oracle:
-                        a,z=tuple(v/1e6 for v in point),tuple(v/1e6 for v in target)
-                        if not oracle.via(pad.GetNetname(),z,via_d/1e6,drill_d/1e6):continue
-                        if not oracle.clear(pad.GetNetname(),surface,a,z,trace_w/1e6):continue
+                        a, z = tuple(v / 1e6 for v in point), tuple(v / 1e6 for v in target)
+                        if not oracle.via(pad.GetNetname(), z, via_d / 1e6, drill_d / 1e6):
+                            continue
+                        if not oracle.clear(pad.GetNetname(), surface, a, z, trace_w / 1e6):
+                            continue
                     else:
-                        if not _clear_segment(target,target,via_keep,netcode,obstacles):continue
-                        if not _clear_segment(point,target,trace_w/2.+clr,netcode,obstacles):continue
+                        if not _clear_segment(target, target, via_keep, netcode, obstacles):
+                            continue
+                        if not _clear_segment(
+                            point, target, trace_w / 2.0 + clr, netcode, obstacles
+                        ):
+                            continue
                     via = pcbnew.PCB_VIA(board)
-                    via.SetPosition(pcbnew.VECTOR2I(x,y))
+                    via.SetPosition(pcbnew.VECTOR2I(x, y))
                     via.SetViaType(pcbnew.VIATYPE_THROUGH)
-                    via.SetLayerPair(pcbnew.F_Cu,pcbnew.B_Cu)
+                    via.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
                     via.SetFrontWidth(via_d)
                     via.SetDrill(drill_d)
                     via.SetNetCode(netcode)
                     board.Add(via)
                     track = pcbnew.PCB_TRACK(board)
                     track.SetStart(pos)
-                    track.SetEnd(pcbnew.VECTOR2I(x,y))
+                    track.SetEnd(pcbnew.VECTOR2I(x, y))
                     track.SetWidth(trace_w)
                     # PAD.GetLayer() is not the copper layer of a flipped pad
                     # on every KiCad version. Consult its actual layer set.
-                    surface = (pcbnew.B_Cu if pad.IsOnLayer(pcbnew.B_Cu)
-                               and not pad.IsOnLayer(pcbnew.F_Cu) else pcbnew.F_Cu)
+                    surface = (
+                        pcbnew.B_Cu
+                        if pad.IsOnLayer(pcbnew.B_Cu) and not pad.IsOnLayer(pcbnew.F_Cu)
+                        else pcbnew.F_Cu
+                    )
                     track.SetLayer(surface)
                     track.SetNetCode(netcode)
                     board.Add(track)
-                    obstacles.append((target,target,via_r,netcode))
+                    obstacles.append((target, target, via_r, netcode))
                     # Hole spacing applies even between vias on the same net.
-                    obstacles.append((target,target,drill_d/2.,-1))
-                    obstacles.append((point,target,trace_w/2.,netcode))
+                    obstacles.append((target, target, drill_d / 2.0, -1))
+                    obstacles.append((point, target, trace_w / 2.0, netcode))
                     if oracle:
-                        oracle.reserve_via(pad.GetNetname(),z,via_d/1e6,drill_d/1e6)
-                        oracle.reserve_track(pad.GetNetname(),surface,a,z,trace_w/1e6)
+                        oracle.reserve_via(pad.GetNetname(), z, via_d / 1e6, drill_d / 1e6)
+                        oracle.reserve_track(pad.GetNetname(), surface, a, z, trace_w / 1e6)
                     added += 1
                     board.BuildConnectivity()
                     placed = True
-                    log('dogbone', trace_w)
+                    log("dogbone", trace_w)
                     break
                 if placed:
                     break
@@ -601,12 +688,12 @@ def _dogbone_fanout_net(board, netcode: int, clearance_mm: float = 0.2, rules=No
                 if placed:
                     added += 1
                     board.BuildConnectivity()
-                    log('in_pad')
+                    log("in_pad")
             if not placed:
-                skipped.append(f'{fp.GetReference()}.{pad.GetNumber()}')
-                log('unplaced')
+                skipped.append(f"{fp.GetReference()}.{pad.GetNumber()}")
+                log("unplaced")
     if skipped:
-        sys.stderr.write('planes: no clear fanout for ' + ', '.join(skipped) + '\n')
+        sys.stderr.write("planes: no clear fanout for " + ", ".join(skipped) + "\n")
     return added
 
 
@@ -620,7 +707,15 @@ def _in_pad_plane_via(board, pad, rules, oracle, obstacles) -> bool:
     contract in the engine's via model (no current is inferred or shared).
     """
     import pcbnew
-    from pnr.via_in_pad import pad_frame, in_pad_size, pad_policy, array_requirement, style_in_pad_via
+
+    from pnr.via_in_pad import (
+        array_requirement,
+        in_pad_size,
+        pad_frame,
+        pad_policy,
+        style_in_pad_via,
+    )
+
     g = oracle.geometry
     frame = pad_frame(pad)
     if frame is None:
@@ -630,7 +725,7 @@ def _in_pad_plane_via(board, pad, rules, oracle, obstacles) -> bool:
     if size is None:
         return False
     policy = pad_policy(pad, rules)
-    if policy is not None and array_requirement(policy, rules, g)['count'] > 1:
+    if policy is not None and array_requirement(policy, rules, g)["count"] > 1:
         return False
     if not oracle.via(pad.GetNetname(), point, *size):
         return False
@@ -644,8 +739,8 @@ def _in_pad_plane_via(board, pad, rules, oracle, obstacles) -> bool:
     style_in_pad_via(g, via)
     board.Add(via)
     target = (via.GetPosition().x, via.GetPosition().y)
-    obstacles.append((target, target, _nm(size[0]) / 2., pad.GetNetCode()))
-    obstacles.append((target, target, _nm(size[1]) / 2., -1))
+    obstacles.append((target, target, _nm(size[0]) / 2.0, pad.GetNetCode()))
+    obstacles.append((target, target, _nm(size[1]) / 2.0, -1))
     oracle.reserve_via(pad.GetNetname(), point, size[0], size[1])
     return True
 
@@ -670,22 +765,26 @@ def normalize_item_uuids(board):
     a second pass is a no-op. Duplicate footprint IDs are rejected.
     """
     import uuid
+
     import pcbnew
+
     footprints = list(board.GetFootprints())
     footprint_ids = [fp.m_Uuid.AsString() for fp in footprints]
     if len(set(footprint_ids)) != len(footprint_ids):
-        raise ValueError('Duplicate footprint UUIDs: source identity is ambiguous')
+        raise ValueError("Duplicate footprint UUIDs: source identity is ambiguous")
     seen = set(footprint_ids)
     changed = 0
     for fp in footprints:
         namespace = uuid.UUID(fp.m_Uuid.AsString())
-        children = list(fp.Pads()) + list(fp.GraphicalItems()) + list(fp.GetFields()) + list(fp.Zones())
-        for index,item in enumerate(children):
+        children = (
+            list(fp.Pads()) + list(fp.GraphicalItems()) + list(fp.GetFields()) + list(fp.Zones())
+        )
+        for index, item in enumerate(children):
             original = item.m_Uuid.AsString()
             if original in seen:
-                candidate = str(uuid.uuid5(namespace, f'{original}:{item.GetClass()}:{index}'))
+                candidate = str(uuid.uuid5(namespace, f"{original}:{item.GetClass()}:{index}"))
                 if candidate in seen:
-                    raise ValueError('Unable to assign unique footprint child UUID')
+                    raise ValueError("Unable to assign unique footprint child UUID")
                 item.m_Uuid.Clone(pcbnew.KIID(candidate))
                 changed += 1
             seen.add(item.m_Uuid.AsString())
@@ -825,6 +924,7 @@ def patch_project_rules(pro_path: str, rules: Optional[dict] = None) -> bool:
     True if the file was patched.
     """
     import json
+
     from pnr import fab_profile
 
     # Stamp under the selected fab profile (identity for legacy rules/profile).
@@ -845,7 +945,8 @@ def patch_project_rules(pro_path: str, rules: Optional[dict] = None) -> bool:
         # Pre-defined via sizes for interactive work: the profile's via classes.
         pro["board"]["design_settings"]["via_dimensions"] = [
             {"diameter": v["diameter_mm"], "drill": v["drill_mm"]}
-            for v in extra["via_classes"].values()]
+            for v in extra["via_classes"].values()
+        ]
     settings = pro.setdefault("net_settings", {})
     # Without the version marker KiCad migrates this as an old project and can
     # silently reset the supplied Default clearance to 0.2mm.
@@ -858,8 +959,12 @@ def patch_project_rules(pro_path: str, rules: Optional[dict] = None) -> bool:
         classes.append(default)
         by_name["Default"] = default
     default.setdefault("priority", 2147483647)
-    default.update(clearance=fab["clearance_mm"], track_width=fab["track_width_mm"],
-                   via_diameter=fab["via_diameter_mm"], via_drill=fab["via_drill_mm"])
+    default.update(
+        clearance=fab["clearance_mm"],
+        track_width=fab["track_width_mm"],
+        via_diameter=fab["via_diameter_mm"],
+        via_drill=fab["via_drill_mm"],
+    )
     patterns = settings.setdefault("netclass_patterns", [])
 
     def add_class(name, spec, nets, priority):
@@ -888,13 +993,17 @@ def patch_project_rules(pro_path: str, rules: Optional[dict] = None) -> bool:
         json.dump(pro, fh, indent=2)
     # KiCad custom rules (PTH/NPTH/filled-via distinctions) next to the project;
     # legacy writes none (and removes only a stale generated one).
-    fab_profile.write_dru(pro_path, fab=dict(fab, **extra),
-                          name=(rules or {}).get(fab_profile.MARKER) or fab_profile.LEGACY)
+    fab_profile.write_dru(
+        pro_path,
+        fab=dict(fab, **extra),
+        name=(rules or {}).get(fab_profile.MARKER) or fab_profile.LEGACY,
+    )
     return True
 
 
-def _set_design_rules(board, clearance_mm: float = 0.13, track_mm: float = 0.15,
-                      fab: Optional[dict] = None) -> None:
+def _set_design_rules(
+    board, clearance_mm: float = 0.13, track_mm: float = 0.15, fab: Optional[dict] = None
+) -> None:
     """Best-effort in-board mirror of :func:`patch_project_rules` (set the live
     board settings so an in-process DRC sees them). NOT authoritative — the JSON
     patch is (see that function's note on the project/board detach). Fully guarded.
@@ -903,9 +1012,16 @@ def _set_design_rules(board, clearance_mm: float = 0.13, track_mm: float = 0.15,
     ds = board.GetDesignSettings()
     if fab is not None:
         from pnr.fab_profile import board_constraints
+
         c = board_constraints(fab)
-        values = (c["min_via_diameter"], c["min_via_annular_width"], c["min_through_hole_diameter"],
-                  c["min_hole_clearance"], c["min_hole_to_hole"], c["min_copper_edge_clearance"])
+        values = (
+            c["min_via_diameter"],
+            c["min_via_annular_width"],
+            c["min_through_hole_diameter"],
+            c["min_hole_clearance"],
+            c["min_hole_to_hole"],
+            c["min_copper_edge_clearance"],
+        )
         track_mm = c["min_track_width"]
     else:
         values = (0.45, 0.0, 0.20, 0.20, 0.20, 0.20)
@@ -982,6 +1098,7 @@ def emit_routes(
     # reports. Legacy rules keep every via at the fab default.
     from pnr.fab_profile import geometry
     from pnr.via_in_pad import in_pad_size, style_in_pad_via
+
     g = geometry(rules) if rules else None
     smd = [p for f in board.GetFootprints() for p in f.Pads()] if g is not None and g.in_pad else []
     for net, x, y in routes.get("vias", []):
@@ -989,8 +1106,14 @@ def emit_routes(
         v.SetPosition(frame.point(x, y))
         v.SetViaType(pcbnew.VIATYPE_THROUGH)
         v.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
-        size = in_pad_size(g, smd, net, (v.GetPosition().x / 1e6, v.GetPosition().y / 1e6)) if smd else None
-        v.SetFrontWidth(_nm(size[0]) if size else via_d)  # from the fab profile; radius-1 keep-out ⇒ DRC-clean
+        size = (
+            in_pad_size(g, smd, net, (v.GetPosition().x / 1e6, v.GetPosition().y / 1e6))
+            if smd
+            else None
+        )
+        v.SetFrontWidth(
+            _nm(size[0]) if size else via_d
+        )  # from the fab profile; radius-1 keep-out ⇒ DRC-clean
         v.SetDrill(_nm(size[1]) if size else via_drill)  # via-via + via-track at the grid pitch
         v.SetNetCode(code(net))
         if size:
@@ -1007,19 +1130,21 @@ def apply_copper_keepouts(board, graph, rules, height):
     rules makes it survive that generation step and the Specctra export.
     """
     import math
+
     import pcbnew
+
     for zone in list(board.Zones()):
-        if zone.GetZoneName().startswith('PNR keepout:'):
+        if zone.GetZoneName().startswith("PNR keepout:"):
             board.Delete(zone)  # recreated below; the old area is discarded
     frame = _WriteFrame(height)
-    for spec in rules.get('copper_keepouts', []):
-        comp = graph.component(spec['ref'])
-        x0,y0,x1,y1 = spec['rect_mm']
+    for spec in rules.get("copper_keepouts", []):
+        comp = graph.component(spec["ref"])
+        x0, y0, x1, y1 = spec["rect_mm"]
         angle = math.radians(comp.rot)
-        co,si = math.cos(angle),math.sin(angle)
+        co, si = math.cos(angle), math.sin(angle)
         zone = pcbnew.ZONE(board)
         zone.SetIsRuleArea(True)
-        zone.SetZoneName('PNR keepout:'+spec['name'])
+        zone.SetZoneName("PNR keepout:" + spec["name"])
         zone.SetLayerSet(pcbnew.LSET.AllCuMask(board.GetCopperLayerCount()))
         zone.SetDoNotAllowTracks(True)
         zone.SetDoNotAllowVias(True)
@@ -1028,57 +1153,60 @@ def apply_copper_keepouts(board, graph, rules, height):
         zone.SetDoNotAllowFootprints(False)
         polygon = zone.Outline()
         polygon.NewOutline()
-        for x,y in ((x0,y0),(x1,y0),(x1,y1),(x0,y1)):
+        for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1)):
             if comp.side == SIDE_BOTTOM:
                 x = -x
-            polygon.Append(frame.point(comp.pos[0]+co*x-si*y,comp.pos[1]+si*x+co*y))
+            polygon.Append(
+                frame.point(comp.pos[0] + co * x - si * y, comp.pos[1] + si * x + co * y)
+            )
         board.Add(zone)
-    return len(rules.get('copper_keepouts', []))
+    return len(rules.get("copper_keepouts", []))
 
 
 def apply_mounting_holes(board, rules, height):
     """Create unplated enclosure holes and all-layer screw/boss keepouts."""
     import pcbnew
+
     frame = _WriteFrame(height)
     for fp in list(board.GetFootprints()):
-        if fp.GetValue() == 'PNR mounting hole':
+        if fp.GetValue() == "PNR mounting hole":
             board.Delete(fp)  # recreated below; the old hole is discarded
     for zone in list(board.Zones()):
-        if zone.GetZoneName().startswith('PNR mounting:'):
+        if zone.GetZoneName().startswith("PNR mounting:"):
             board.Delete(zone)
-    for spec in rules.get('mounting_holes', []):
-        x,y = spec['at']
-        radius = spec['clearance_diameter_mm']/2
+    for spec in rules.get("mounting_holes", []):
+        x, y = spec["at"]
+        radius = spec["clearance_diameter_mm"] / 2
         fp = pcbnew.FOOTPRINT(board)
-        fp.SetReference(spec['name'])
-        fp.SetValue('PNR mounting hole')
+        fp.SetReference(spec["name"])
+        fp.SetValue("PNR mounting hole")
         fp.SetAttributes(pcbnew.FP_EXCLUDE_FROM_BOM | pcbnew.FP_EXCLUDE_FROM_POS_FILES)
         fp.Reference().SetVisible(False)
         fp.Value().SetVisible(False)
-        fp.SetPosition(frame.point(x,y))
+        fp.SetPosition(frame.point(x, y))
         pad = pcbnew.PAD(fp)
-        pad.SetNumber('')
+        pad.SetNumber("")
         pad.SetAttribute(pcbnew.PAD_ATTRIB_NPTH)
         pad.SetShape(pcbnew.PAD_SHAPE_CIRCLE)
-        diameter = _nm(spec['drill_mm'])
-        pad.SetSize(pcbnew.VECTOR2I(diameter,diameter))
-        pad.SetDrillSize(pcbnew.VECTOR2I(diameter,diameter))
+        diameter = _nm(spec["drill_mm"])
+        pad.SetSize(pcbnew.VECTOR2I(diameter, diameter))
+        pad.SetDrillSize(pcbnew.VECTOR2I(diameter, diameter))
         pad.SetLayerSet(pcbnew.LSET.AllCuMask(board.GetCopperLayerCount()))
-        pad.SetPosition(frame.point(x,y))
+        pad.SetPosition(frame.point(x, y))
         fp.Add(pad)
         # Matching top/bottom courtyards encode the reserved boss/head envelope.
         for layer in (pcbnew.F_CrtYd, pcbnew.B_CrtYd):
             circle = pcbnew.PCB_SHAPE(fp)
             circle.SetShape(pcbnew.SHAPE_T_CIRCLE)
-            circle.SetCenter(frame.point(x,y))
-            circle.SetEnd(frame.point(x+radius,y))
+            circle.SetCenter(frame.point(x, y))
+            circle.SetEnd(frame.point(x + radius, y))
             circle.SetLayer(layer)
             circle.SetWidth(_nm(0.05))
             fp.Add(circle)
         board.Add(fp)
         zone = pcbnew.ZONE(board)
         zone.SetIsRuleArea(True)
-        zone.SetZoneName('PNR mounting:'+spec['name'])
+        zone.SetZoneName("PNR mounting:" + spec["name"])
         zone.SetLayerSet(pcbnew.LSET.AllCuMask(board.GetCopperLayerCount()))
         zone.SetDoNotAllowTracks(True)
         zone.SetDoNotAllowVias(True)
@@ -1089,11 +1217,15 @@ def apply_mounting_holes(board, rules, height):
         zone.SetDoNotAllowFootprints(False)
         polygon = zone.Outline()
         polygon.NewOutline()
-        for px,py in ((x-radius,y-radius),(x+radius,y-radius),
-                      (x+radius,y+radius),(x-radius,y+radius)):
-            polygon.Append(frame.point(px,py))
+        for px, py in (
+            (x - radius, y - radius),
+            (x + radius, y - radius),
+            (x + radius, y + radius),
+            (x - radius, y + radius),
+        ):
+            polygon.Append(frame.point(px, py))
         board.Add(zone)
-    return len(rules.get('mounting_holes', []))
+    return len(rules.get("mounting_holes", []))
 
 
 def writeback(
@@ -1122,7 +1254,7 @@ def writeback(
     # applying them afterwards does not persist through the save).
     if rules:
         apply_net_classes(board, rules)
-    if rules and rules.get('references_on_fab'):
+    if rules and rules.get("references_on_fab"):
         for fp in board.GetFootprints():
             fp.Reference().SetLayer(pcbnew.B_Fab if fp.IsFlipped() else pcbnew.F_Fab)
     n = apply_placement(board, graph, width=width, height=height, layers=layers)
@@ -1135,9 +1267,15 @@ def writeback(
     # Emit the own detailed router's signal tracks/vias (replaces FreeRouting).
     if routes:
         fab = _fab(rules)
-        profiled = dict((rules or {}).get("fab") or {}) if (rules or {}).get("fab_profile") else None
-        _set_design_rules(board, clearance_mm=fab["clearance_mm"], track_mm=fab["track_width_mm"],
-                          fab=dict(fab, **profiled) if profiled else None)
+        profiled = (
+            dict((rules or {}).get("fab") or {}) if (rules or {}).get("fab_profile") else None
+        )
+        _set_design_rules(
+            board,
+            clearance_mm=fab["clearance_mm"],
+            track_mm=fab["track_width_mm"],
+            fab=dict(fab, **profiled) if profiled else None,
+        )
         emit_routes(board, routes, height, net_code, fab=fab, rules=rules)
     pcbnew.SaveBoard(out_pcb, board)
     # Text pass: strip all (stale) Edge.Cuts — pcbnew reformats gr_lines into
@@ -1149,7 +1287,7 @@ def writeback(
     with open(out_pcb, "w", encoding="utf-8") as fh:
         fh.write(text)
     if rules and out_pcb.endswith(".kicad_pcb"):
-        patch_project_rules(out_pcb[:-len(".kicad_pcb")] + ".kicad_pro", rules)
+        patch_project_rules(out_pcb[: -len(".kicad_pcb")] + ".kicad_pro", rules)
     # NB: planes are poured *after* the detailed route (see pnr.planes) — a
     # FreeRouting DSN/SES round-trip drops pre-poured zones.
     return n

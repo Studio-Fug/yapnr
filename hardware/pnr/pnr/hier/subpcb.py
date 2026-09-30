@@ -1,17 +1,19 @@
 """Write a copy of a source board containing only the listed footprints (KiCad python).
 
-    python -m pnr.hier.subpcb source.kicad_pcb out.kicad_pcb --keep refs.json
+python -m pnr.hier.subpcb source.kicad_pcb out.kicad_pcb --keep refs.json
 """
+
 import argparse
 import json
 
 
 def main():
     import pcbnew
+
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('source')
-    ap.add_argument('out')
-    ap.add_argument('--keep', required=True)
+    ap.add_argument("source")
+    ap.add_argument("out")
+    ap.add_argument("--keep", required=True)
     a = ap.parse_args()
     keep = set(json.load(open(a.keep)))
     board = pcbnew.LoadBoard(a.source)
@@ -29,13 +31,14 @@ def main():
     # Source boards carry no copper; pnr.writeback clears tracks on placement anyway.
     missing = keep - present
     if missing:
-        raise SystemExit('missing footprints: %s' % sorted(missing))
+        raise SystemExit("missing footprints: %s" % sorted(missing))
     board.BuildConnectivity()
     pcbnew.SaveBoard(a.out, board)
     print(json.dumps(dict(kept=len(keep), removed=removed)), flush=True)
     import os
+
     os._exit(0)  # belt and braces: KiCad's python can crash during interpreter teardown
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

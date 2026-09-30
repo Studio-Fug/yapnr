@@ -23,6 +23,7 @@ runner-up for one bounded legalization retry).
 
 ``model.global_place`` is untouched; everything here runs only behind the flag.
 """
+
 from __future__ import annotations
 
 import fnmatch
@@ -35,34 +36,38 @@ import numpy as np
 
 log = logging.getLogger(__name__)
 
-T_SOFT = 0.5            # mm: pad-pair / member-choice softmin temperature
-GAP_EPS2 = 0.01         # mm^2 inside the pad distance sqrt
-GAMMA = 1.0             # mm: LSE-HPWL smoothing
+T_SOFT = 0.5  # mm: pad-pair / member-choice softmin temperature
+GAP_EPS2 = 0.01  # mm^2 inside the pad distance sqrt
+GAMMA = 1.0  # mm: LSE-HPWL smoothing
 SPLIT = (0.3, 0.15, 0.55)
 ITER_SCALE = 4.0 / 3.0
 STARTS = 8
 EPS = (0.03, 0.05)
 OMEGA = 10.0
 GUARD_SCALE = 0.01
-OVERLAP_RAMP = ((0.02, 4.0), (1.0, 10.0), (1.0, 10.0))   # geometric within each stage
-OVERLAP_TIMES_W = (True, False, False)                    # stage 1 ramps 0.02W -> 4W; stages 2-3 1 -> 10
-RHO_RAMP = (1.0, 20.0)                                   # linear within each stage
+OVERLAP_RAMP = ((0.02, 4.0), (1.0, 10.0), (1.0, 10.0))  # geometric within each stage
+OVERLAP_TIMES_W = (True, False, False)  # stage 1 ramps 0.02W -> 4W; stages 2-3 1 -> 10
+RHO_RAMP = (1.0, 20.0)  # linear within each stage
 TEMP_HI = (2.0, 1.0, 1.0)
 TEMP_LO = 0.2
 GHOST_TEMP = 2.0
 PRIOR_LOGIT = 2.0
-RETRY_RATIO = 1.25      # legal/continuous growth of J1, or of any hot loop's Lambda, that triggers the retry
+RETRY_RATIO = (
+    1.25  # legal/continuous growth of J1, or of any hot loop's Lambda, that triggers the retry
+)
 LOOK_AHEAD_TRIES = 40
 
 
 def enabled() -> bool:
     from pnr.power_topology import enabled as flag
+
     return flag()
 
 
 def roles_for(graph, constraints, channel_rules):
     """Power-first roles, or None (with a warning) when the default path must run."""
     from pnr.power_topology import PowerTopologyUnavailable, derive
+
     if not channel_rules:
         log.warning("PNR_POWER_FIRST=1 but place() received no channel_rules; default placement")
         return None
@@ -70,6 +75,7 @@ def roles_for(graph, constraints, channel_rules):
         log.warning("PNR_POWER_FIRST=1 but rules lack electrical_nets; default placement")
         return None
     from pnr.hier.blocks import extract_blocks
+
     # At top level a loop through parts of different blocks is a conduction path.
     block_of = {r: b.name for b in extract_blocks(graph, constraints) for r in b.refs}
     try:
@@ -84,6 +90,7 @@ def roles_for(graph, constraints, channel_rules):
 
 
 # ----------------------------------------------------------------- cost elements
+
 
 class Compiled:
     """Power-first cost elements as index arrays over the global pad order.
@@ -113,34 +120,59 @@ class Compiled:
                         out.append(j)
             return out
 
-        self.bbox = {1: [], 2: [], 3: []}     # (pad idx, weight, name, role, owners)
-        self.taps = {1: [], 2: [], 3: []}     # (A idx, B idx, weight, name, owners)
-        self.loops = {1: [], 2: [], 3: []}    # (weight, name, [[(A idx, B idx) per link] per combo], owners)
+        self.bbox = {1: [], 2: [], 3: []}  # (pad idx, weight, name, role, owners)
+        self.taps = {1: [], 2: [], 3: []}  # (A idx, B idx, weight, name, owners)
+        self.loops = {
+            1: [],
+            2: [],
+            3: [],
+        }  # (weight, name, [[(A idx, B idx) per link] per combo], owners)
         for e in roles["elements"]:
             s = e["stage"]
             if e["kind"] == "bbox":
                 idx = pads(e["pins"], e["net"])
                 if len(idx) >= 2:
-                    self.bbox[s].append((idx, float(e["weight"]), e["name"], e["role"],
-                                         sorted({self.index[r] for r, _ in e["pins"]})))
+                    self.bbox[s].append(
+                        (
+                            idx,
+                            float(e["weight"]),
+                            e["name"],
+                            e["role"],
+                            sorted({self.index[r] for r, _ in e["pins"]}),
+                        )
+                    )
             elif e["kind"] == "tap":
                 a, b = pads([e["pin"]], e["net"]), pads(e["targets"], e["net"])
                 if a and b:
-                    self.taps[s].append((a, b, float(e["weight"]), e["name"],
-                                         sorted({self.index[e["pin"][0]]} | {self.index[r] for r, _ in e["targets"]})))
+                    self.taps[s].append(
+                        (
+                            a,
+                            b,
+                            float(e["weight"]),
+                            e["name"],
+                            sorted(
+                                {self.index[e["pin"][0]]} | {self.index[r] for r, _ in e["targets"]}
+                            ),
+                        )
+                    )
             else:
                 members, nets, pins = e["members"], e["nets"], e["pins"]
                 k_ = len(members)
 
                 def link(j, ra, rb):
                     n = nets[j]
-                    return (pads([[r, p] for r in ra for p in pins[r].get(n, [])], n),
-                            pads([[r, p] for r in rb for p in pins[r].get(n, [])], n))
+                    return (
+                        pads([[r, p] for r in ra for p in pins[r].get(n, [])], n),
+                        pads([[r, p] for r in rb for p in pins[r].get(n, [])], n),
+                    )
+
                 if e["capped"]:
                     combos = [[link(j, members[j], members[(j + 1) % k_]) for j in range(k_)]]
                 else:
-                    combos = [[link(j, [pick[j]], [pick[(j + 1) % k_]]) for j in range(k_)]
-                              for pick in itertools.product(*members)]
+                    combos = [
+                        [link(j, [pick[j]], [pick[(j + 1) % k_]]) for j in range(k_)]
+                        for pick in itertools.product(*members)
+                    ]
                 owners = sorted({self.index[r] for m in members for r in m})
                 self.loops[s].append((float(e["weight"]), e["name"], combos, owners))
 
@@ -161,22 +193,56 @@ class Compiled:
         def dt(a, b):
             d = np.sqrt(((pp[:, a, None, :] - pp[:, None, b, :]) ** 2).sum(-1) + GAP_EPS2)
             return -t * lse((-d / t).reshape(len(pp), -1), 1)
+
         out = []
         for s in (1, 2, 3):
             for idx, w, name, role, owners in self.bbox[s]:
-                out.append(dict(stage=s, kind="bbox", role=role, name=name, weight=w, owners=owners, value=hpwl(idx)))
+                out.append(
+                    dict(
+                        stage=s,
+                        kind="bbox",
+                        role=role,
+                        name=name,
+                        weight=w,
+                        owners=owners,
+                        value=hpwl(idx),
+                    )
+                )
             for a, b, w, name, owners in self.taps[s]:
-                out.append(dict(stage=s, kind="tap", role="tap", name=name, weight=w, owners=owners, value=dt(a, b)))
+                out.append(
+                    dict(
+                        stage=s,
+                        kind="tap",
+                        role="tap",
+                        name=name,
+                        weight=w,
+                        owners=owners,
+                        value=dt(a, b),
+                    )
+                )
             for w, name, combos, owners in self.loops[s]:
                 per = np.stack([sum(dt(a, b) for a, b in links) for links in combos], axis=1)
-                out.append(dict(stage=s, kind="loop", role="loop", name=name, weight=w, owners=owners,
-                                value=-t * lse(-per / t, 1)))
+                out.append(
+                    dict(
+                        stage=s,
+                        kind="loop",
+                        role="loop",
+                        name=name,
+                        weight=w,
+                        owners=owners,
+                        value=-t * lse(-per / t, 1),
+                    )
+                )
         return out
 
     def numpy_j(self, pp, gamma=GAMMA):
         """(J1, J2, J3) arrays of shape (B,) at pad positions ``pp``."""
         terms = self.numpy_terms(pp, gamma)
-        b = terms[0]["value"].shape[0] if terms else np.asarray(pp).reshape((-1, self.npads, 2)).shape[0]
+        b = (
+            terms[0]["value"].shape[0]
+            if terms
+            else np.asarray(pp).reshape((-1, self.npads, 2)).shape[0]
+        )
         j = {s: np.zeros(b) for s in (1, 2, 3)}
         for e in terms:
             j[e["stage"]] = j[e["stage"]] + e["weight"] * e["value"]
@@ -203,10 +269,12 @@ def rigid_j(graph, roles, compiled=None):
 
 # ----------------------------------------------------------------- torch side
 
+
 def torch_gap(xy, a, am, b, bm, t=T_SOFT):
     """D_t per pad-group pair: -t log sum exp(-sqrt(d^2 + GAP_EPS2) / t); xy (K, P, 2) -> (K, Q)."""
     import torch
-    pa, pb = xy[:, a, :], xy[:, b, :]                               # (K, Q, ma, 2), (K, Q, mb, 2)
+
+    pa, pb = xy[:, a, :], xy[:, b, :]  # (K, Q, ma, 2), (K, Q, mb, 2)
     d = torch.sqrt(((pa[:, :, :, None, :] - pb[:, :, None, :, :]) ** 2).sum(-1) + GAP_EPS2)
     z = (-d / t).masked_fill(~(am[:, :, None] & bm[:, None, :])[None], -math.inf)
     return -t * torch.logsumexp(z.flatten(2), dim=2)
@@ -215,6 +283,7 @@ def torch_gap(xy, a, am, b, bm, t=T_SOFT):
 def torch_guard(value, star, eps):
     """Lexicographic guard Omega s softplus((J - (1 + eps) J*) / s), s = GUARD_SCALE J*."""
     import torch
+
     s = GUARD_SCALE * star + 1e-6
     return OMEGA * s * torch.nn.functional.softplus((value - (1 + eps) * star) / s)
 
@@ -222,6 +291,7 @@ def torch_guard(value, star, eps):
 class _TorchCost:
     def __init__(self, compiled, gamma):
         import torch
+
         self.torch = torch
         self.gamma = gamma
         self.stage = {}
@@ -236,7 +306,13 @@ class _TorchCost:
             if taps:
                 a, am = self._pad([e[0] for e in taps])
                 b, bm = self._pad([e[1] for e in taps])
-                entry["taps"] = (a, am, b, bm, torch.tensor([e[2] for e in taps], dtype=torch.float32))
+                entry["taps"] = (
+                    a,
+                    am,
+                    b,
+                    bm,
+                    torch.tensor([e[2] for e in taps], dtype=torch.float32),
+                )
             if loops:
                 pairs, spec = [], []
                 for w, _, combos, _ in loops:
@@ -256,8 +332,8 @@ class _TorchCost:
         idx = np.zeros((len(groups), m), dtype=np.int64)
         mask = np.zeros((len(groups), m), dtype=bool)
         for i, g in enumerate(groups):
-            idx[i, :len(g)] = g
-            mask[i, :len(g)] = True
+            idx[i, : len(g)] = g
+            mask[i, : len(g)] = True
         return torch.as_tensor(idx), torch.as_tensor(mask)
 
     def __call__(self, stage, xy):
@@ -267,7 +343,7 @@ class _TorchCost:
         total = xy.new_zeros(xy.shape[0])
         if e["bbox"] is not None:
             idx, mask, w = e["bbox"]
-            q = xy[:, idx, :] / self.gamma                               # (K, E, M, 2)
+            q = xy[:, idx, :] / self.gamma  # (K, E, M, 2)
             signed = torch.cat((q, -q), dim=-1).masked_fill(~mask[None, :, :, None], -math.inf)
             total = total + (self.gamma * torch.logsumexp(signed, dim=2).sum(-1) * w).sum(-1)
         if e["taps"] is not None:
@@ -277,7 +353,7 @@ class _TorchCost:
             a, am, b, bm, spec = e["loops"]
             d = torch_gap(xy, a, am, b, bm)
             for w, rows in spec:
-                per = d[:, rows].sum(-1)                                     # (K, C)
+                per = d[:, rows].sum(-1)  # (K, C)
                 total = total + w * (-T_SOFT * torch.logsumexp(-per / T_SOFT, dim=1))
         return total
 
@@ -285,14 +361,45 @@ class _TorchCost:
 class StagedPlacer:
     """Staged lexicographic global placement; mirrors ``model.global_place`` set-up."""
 
-    def __init__(self, graph, constraints, width, height, roles, *, seed=0, iters=800, lr=0.3, gamma=GAMMA,
-                 orient=True, inflation=None, spread=1.0, w_spread=1.0, w_bound=20.0, w_keep=40.0,
-                 w_group=0.5, w_plane=0.05, w_plane_sep=0.35, initial_positions=None,
-                 initial_rotations=None, starts=STARTS, grid_mm=0.0, pair_weights=None):
+    def __init__(
+        self,
+        graph,
+        constraints,
+        width,
+        height,
+        roles,
+        *,
+        seed=0,
+        iters=800,
+        lr=0.3,
+        gamma=GAMMA,
+        orient=True,
+        inflation=None,
+        spread=1.0,
+        w_spread=1.0,
+        w_bound=20.0,
+        w_keep=40.0,
+        w_group=0.5,
+        w_plane=0.05,
+        w_plane_sep=0.35,
+        initial_positions=None,
+        initial_rotations=None,
+        starts=STARTS,
+        grid_mm=0.0,
+        pair_weights=None,
+    ):
         import torch
-        from .model import ANGLES, _base_half_sizes
-        from .geometry import keepout_rects, occupied_sides, resolve_fixed_poses, resolve_hard_rotations
+
         from pnr.constraints import Enforcement
+
+        from .geometry import (
+            keepout_rects,
+            occupied_sides,
+            resolve_fixed_poses,
+            resolve_hard_rotations,
+        )
+        from .model import ANGLES, _base_half_sizes
+
         self.torch = torch
         self.ANGLES = ANGLES
         torch.manual_seed(seed)
@@ -300,8 +407,14 @@ class StagedPlacer:
         self.width, self.height = width, height
         self.seed, self.lr, self.gamma, self.orient = seed, lr, gamma, orient
         self.inflation, self.spread = inflation, spread
-        self.w = dict(w_spread=w_spread, w_bound=w_bound, w_keep=w_keep, w_group=w_group,
-                      w_plane=w_plane, w_plane_sep=w_plane_sep)
+        self.w = dict(
+            w_spread=w_spread,
+            w_bound=w_bound,
+            w_keep=w_keep,
+            w_group=w_group,
+            w_plane=w_plane,
+            w_plane_sep=w_plane_sep,
+        )
         comps = graph.components
         n = self.n = len(comps)
         idx = {c.ref: i for i, c in enumerate(comps)}
@@ -313,19 +426,30 @@ class StagedPlacer:
         tier = [roles["tier"].get(c.ref, 3) for c in comps]
         self.tier = torch.tensor(tier)
         self.mixed = torch.tensor([c.ref in mixed for c in comps])
-        self.side_overlap = torch.tensor([[bool(set(occupied_sides(a)) & set(occupied_sides(b))) for b in comps]
-                                          for a in comps], dtype=torch.float32)
+        self.side_overlap = torch.tensor(
+            [[bool(set(occupied_sides(a)) & set(occupied_sides(b))) for b in comps] for a in comps],
+            dtype=torch.float32,
+        )
         half = _base_half_sizes(graph)
         if inflation or spread > 1.0:
-            scale = torch.tensor([[max(1.0, spread, float((inflation or {}).get(c.ref, 1.0)))] for c in comps],
-                                 dtype=torch.float32)
+            scale = torch.tensor(
+                [[max(1.0, spread, float((inflation or {}).get(c.ref, 1.0)))] for c in comps],
+                dtype=torch.float32,
+            )
             half = half * scale
         self.half = half
         self.half4 = torch.stack([half, half[:, [1, 0]], half, half[:, [1, 0]]], dim=1)
         # Hull macros (PNR_MACRO_HULL=1): per-side overlap bodies; None otherwise.
         from .hull import gp_bodies
-        self.bodies = gp_bodies(comps, [max(1.0, spread, float((inflation or {}).get(c.ref, 1.0))) for c in comps]
-                                if (inflation or spread > 1.0) else None)
+
+        self.bodies = gp_bodies(
+            comps,
+            (
+                [max(1.0, spread, float((inflation or {}).get(c.ref, 1.0))) for c in comps]
+                if (inflation or spread > 1.0)
+                else None
+            ),
+        )
         poses = resolve_fixed_poses(graph, constraints)
         self.is_fixed = torch.zeros(n, dtype=torch.bool)
         self.fixed_xy = torch.zeros(n, 2)
@@ -365,8 +489,15 @@ class StagedPlacer:
         inits = [init]
         for _ in range(1, max(1, starts)):
             r = torch.rand(n, 2, generator=gen)
-            inits.append(torch.stack([half[:, 0] + r[:, 0] * (width - 2 * half[:, 0]),
-                                      half[:, 1] + r[:, 1] * (height - 2 * half[:, 1])], dim=1))
+            inits.append(
+                torch.stack(
+                    [
+                        half[:, 0] + r[:, 0] * (width - 2 * half[:, 0]),
+                        half[:, 1] + r[:, 1] * (height - 2 * half[:, 1]),
+                    ],
+                    dim=1,
+                )
+            )
         self.inits = torch.stack(inits)
         self.init_logits = torch.zeros(len(inits), n, 4)
         for ref, angle in (initial_rotations or {}).items():
@@ -389,6 +520,7 @@ class StagedPlacer:
         self.pin_comp = torch.tensor(pin_comp, dtype=torch.long)
         self.pin_off4 = torch.tensor(off4, dtype=torch.float32).reshape((-1, 4, 2))
         from .model import pair_tensors
+
         self.pairs = pair_tensors(pair_weights, pin_key)
         pats = [p for nc in constraints.net_classes if nc.plane_layer for p in nc.nets]
         self.plane_pins = []
@@ -403,7 +535,14 @@ class StagedPlacer:
                 edge = con.params.get("edge")
                 for ref in con.refs:
                     if ref in idx:
-                        self.edges.append((idx[ref], 1 if edge in ("south", "north") else 0, edge, con.weight or 1.0))
+                        self.edges.append(
+                            (
+                                idx[ref],
+                                1 if edge in ("south", "north") else 0,
+                                edge,
+                                con.weight or 1.0,
+                            )
+                        )
         self.groups = []
         for con in constraints.constraints:
             if con.kind != "group" or con.params.get("anchor") not in idx:
@@ -412,10 +551,20 @@ class StagedPlacer:
             if members:
                 radius = float(con.params.get("radius_mm") or 5.0)
                 margin = min(0.5, radius / 4) if con.enforcement is Enforcement.HARD else 0.0
-                self.groups.append((torch.tensor(members, dtype=torch.long), idx[con.params["anchor"]],
-                                    radius - margin, con.weight or 1.0))
+                self.groups.append(
+                    (
+                        torch.tensor(members, dtype=torch.long),
+                        idx[con.params["anchor"]],
+                        radius - margin,
+                        con.weight or 1.0,
+                    )
+                )
         keep = keepout_rects(graph, constraints, poses)
-        self.keep = torch.tensor([[k.cx, k.cy, k.w / 2, k.h / 2] for k in keep], dtype=torch.float32) if keep else None
+        self.keep = (
+            torch.tensor([[k.cx, k.cy, k.w / 2, k.h / 2] for k in keep], dtype=torch.float32)
+            if keep
+            else None
+        )
         self.movable = (~self.is_fixed).float()
         # Courtyards separate by the board clearance plus one legalizer grid cell:
         # the legalizer rounds every block up to whole cells, so a continuous
@@ -437,7 +586,7 @@ class StagedPlacer:
         return self.torch.where(frozen[None, :, None], frozen_oh, raw)
 
     def _pins(self, pos, p):
-        off = (p[:, self.pin_comp, :, None] * self.pin_off4[None]).sum(2)   # (K, P, 2)
+        off = (p[:, self.pin_comp, :, None] * self.pin_off4[None]).sum(2)  # (K, P, 2)
         return pos[:, self.pin_comp, :] + off, off
 
     def objective(self, stage, pos, p, frac, stars):
@@ -450,7 +599,7 @@ class StagedPlacer:
         guard = torch.zeros_like(J)
         for j in range(1, stage):
             guard = guard + torch_guard(self.cost(j, xy), stars[j], EPS[j - 1])
-        exp_half = (p.unsqueeze(-1) * self.half4[None]).sum(2)                 # (K, n, 2)
+        exp_half = (p.unsqueeze(-1) * self.half4[None]).sum(2)  # (K, n, 2)
         hw, hh = exp_half[..., 0], exp_half[..., 1]
         if self.bodies is None:
             dx = (pos[:, :, None, 0] - pos[:, None, :, 0]).abs()
@@ -460,42 +609,62 @@ class StagedPlacer:
             overlap = torch.triu(ox * oy * self.side_overlap, diagonal=1).sum((1, 2))
         else:
             from .hull import gp_overlap
+
             overlap = gp_overlap(self.bodies, pos, p, self.overlap_clearance)
         a, b = OVERLAP_RAMP[stage - 1]
         w_ov = w["w_spread"] * (W if OVERLAP_TIMES_W[stage - 1] else 1.0) * a * (b / a) ** frac
         cx, cy = pos[..., 0], pos[..., 1]
-        bound = (torch.clamp(hw - cx, min=0.0) ** 2 + torch.clamp(cx + hw - self.width, min=0.0) ** 2
-                 + torch.clamp(hh - cy, min=0.0) ** 2 + torch.clamp(cy + hh - self.height, min=0.0) ** 2)
+        bound = (
+            torch.clamp(hw - cx, min=0.0) ** 2
+            + torch.clamp(cx + hw - self.width, min=0.0) ** 2
+            + torch.clamp(hh - cy, min=0.0) ** 2
+            + torch.clamp(cy + hh - self.height, min=0.0) ** 2
+        )
         bound = (bound * self.movable).sum(-1)
         rho = RHO_RAMP[0] + (RHO_RAMP[1] - RHO_RAMP[0]) * frac
         group = torch.zeros_like(J)
         for members, anchor, reach, weight in self.groups:
-            d = torch.linalg.vector_norm(pos[:, members] - pos[:, anchor:anchor + 1], dim=-1)
+            d = torch.linalg.vector_norm(pos[:, members] - pos[:, anchor : anchor + 1], dim=-1)
             group = group + weight * (torch.clamp(d - reach, min=0.0) ** 2).sum(-1)
-        loss = J + guard + w_ov * overlap + w["w_bound"] * W * bound + w["w_group"] * W * rho * group
+        loss = (
+            J + guard + w_ov * overlap + w["w_bound"] * W * bound + w["w_group"] * W * rho * group
+        )
         if self.pairs is not None:
             from .model import PAIR_EPS2
+
             pa, pb, pw = self.pairs
-            d = torch.sqrt(((xy[:, pa] - xy[:, pb]) ** 2).sum(-1) + PAIR_EPS2)       # (K, pairs)
+            d = torch.sqrt(((xy[:, pa] - xy[:, pb]) ** 2).sum(-1) + PAIR_EPS2)  # (K, pairs)
             loss = loss + W * (pw[None] * d).sum(-1)
         if self.plane_pins and (w["w_plane"] > 0.0 or w["w_plane_sep"] > 0.0):
             boxes = []
             g = self.gamma
             for pins in self.plane_pins:
                 px, py = xy[:, pins, 0], xy[:, pins, 1]
-                box = (-g * torch.logsumexp(-px / g, 1), g * torch.logsumexp(px / g, 1),
-                       -g * torch.logsumexp(-py / g, 1), g * torch.logsumexp(py / g, 1))
+                box = (
+                    -g * torch.logsumexp(-px / g, 1),
+                    g * torch.logsumexp(px / g, 1),
+                    -g * torch.logsumexp(-py / g, 1),
+                    g * torch.logsumexp(py / g, 1),
+                )
                 boxes.append(box)
                 loss = loss + w["w_plane"] * (box[1] - box[0]) * (box[3] - box[2])
             for i in range(len(boxes)):
                 for k in range(i + 1, len(boxes)):
                     A, B = boxes[i], boxes[k]
-                    ox_ = torch.clamp(torch.minimum(A[1], B[1]) - torch.maximum(A[0], B[0]), min=0.0)
-                    oy_ = torch.clamp(torch.minimum(A[3], B[3]) - torch.maximum(A[2], B[2]), min=0.0)
+                    ox_ = torch.clamp(
+                        torch.minimum(A[1], B[1]) - torch.maximum(A[0], B[0]), min=0.0
+                    )
+                    oy_ = torch.clamp(
+                        torch.minimum(A[3], B[3]) - torch.maximum(A[2], B[2]), min=0.0
+                    )
                     loss = loss + w["w_plane_sep"] * ox_ * oy_
         for i, axis, edge, weight in self.edges:
             extent = hh[:, i] if axis == 1 else hw[:, i]
-            target = extent if edge in ("south", "west") else (self.height if axis == 1 else self.width) - extent
+            target = (
+                extent
+                if edge in ("south", "west")
+                else (self.height if axis == 1 else self.width) - extent
+            )
             loss = loss + weight * (pos[:, i, axis] - target) ** 2
         if self.keep is not None:
             k = self.keep
@@ -504,7 +673,9 @@ class StagedPlacer:
             kox = torch.clamp(hw[:, :, None] + k[None, None, :, 2] + self.clearance - kdx, min=0.0)
             koy = torch.clamp(hh[:, :, None] + k[None, None, :, 3] + self.clearance - kdy, min=0.0)
             loss = loss + w["w_keep"] * (kox * koy * self.movable[None, :, None]).sum((1, 2))
-        factors = dict(w_ov=float(w_ov), bound=float(w["w_bound"] * W), group=float(w["w_group"] * W * rho))
+        factors = dict(
+            w_ov=float(w_ov), bound=float(w["w_bound"] * W), group=float(w["w_group"] * W * rho)
+        )
         return loss, J, dict(off=off, exp_half=exp_half, factors=factors)
 
     def _pos(self, move):
@@ -539,17 +710,39 @@ class StagedPlacer:
             loss, J, extra = self.objective(stage, pos, p, frac, stars)
             if capture and t == steps - 1 and os.environ.get("PNR_COST_CAPTURE_DIR"):
                 from .cost_capture import record_global_loss
-                record_global_loss(self.graph, self.constraints, pos[0].detach().tolist(), p[0].detach().tolist(),
-                                   extra["off"][0].detach().tolist(), extra["exp_half"][0].detach().tolist(),
-                                   float(loss[0].detach()),
-                                   dict(gamma=self.gamma, spread=self.spread, w_spread=self.w["w_spread"],
-                                        w_bound=self.w["w_bound"], w_keep=self.w["w_keep"],
-                                        w_plane=self.w["w_plane"], w_plane_sep=self.w["w_plane_sep"]),
-                                   self.inflation, sum(self.steps) - 1, roles=self.roles,
-                                   pf_state=dict(stage=3, stars={str(k): v for k, v in stars.items()},
-                                                 eps=list(EPS), omega=OMEGA, guard_scale=GUARD_SCALE,
-                                                 t=T_SOFT, gap_eps2=GAP_EPS2, overlap_clearance=self.overlap_clearance,
-                                                 **extra["factors"]))
+
+                record_global_loss(
+                    self.graph,
+                    self.constraints,
+                    pos[0].detach().tolist(),
+                    p[0].detach().tolist(),
+                    extra["off"][0].detach().tolist(),
+                    extra["exp_half"][0].detach().tolist(),
+                    float(loss[0].detach()),
+                    dict(
+                        gamma=self.gamma,
+                        spread=self.spread,
+                        w_spread=self.w["w_spread"],
+                        w_bound=self.w["w_bound"],
+                        w_keep=self.w["w_keep"],
+                        w_plane=self.w["w_plane"],
+                        w_plane_sep=self.w["w_plane_sep"],
+                    ),
+                    self.inflation,
+                    sum(self.steps) - 1,
+                    roles=self.roles,
+                    pf_state=dict(
+                        stage=3,
+                        stars={str(k): v for k, v in stars.items()},
+                        eps=list(EPS),
+                        omega=OMEGA,
+                        guard_scale=GUARD_SCALE,
+                        t=T_SOFT,
+                        gap_eps2=GAP_EPS2,
+                        overlap_clearance=self.overlap_clearance,
+                        **extra["factors"],
+                    ),
+                )
             loss.sum().backward()
             opt.step()
             last = frac
@@ -570,8 +763,16 @@ class StagedPlacer:
             p = self._probs(logits, self._temps(1, 1.0, active), frozen, frozen_oh)
             f1, j1, _ = self.objective(1, self._pos(move), p, 1.0, {})
         order = sorted(range(K), key=lambda k: (float(f1[k]), k))
-        states = [dict(start=k, F1=float(f1[k]), J1_soft=float(j1[k]), move=move[k].detach().clone(),
-                       logits=logits[k].detach().clone()) for k in order[:2]]
+        states = [
+            dict(
+                start=k,
+                F1=float(f1[k]),
+                J1_soft=float(j1[k]),
+                move=move[k].detach().clone(),
+                logits=logits[k].detach().clone(),
+            )
+            for k in order[:2]
+        ]
         self.start_scores = [dict(start=k, F1=float(f1[k]), J1=float(j1[k])) for k in range(K)]
         return states[0], (states[1] if len(states) > 1 else None)
 
@@ -587,7 +788,7 @@ class StagedPlacer:
         with torch.no_grad():
             frozen, frozen_oh = self._snap(logits, frozen, frozen_oh, tier1 & ~mixed)
             am = torch.argmax(logits, dim=2)
-            reopen = (mixed & ~frozen)
+            reopen = mixed & ~frozen
             logits[0, reopen] = 0.0
             logits[0, reopen, am[0, reopen]] = PRIOR_LOGIT
             fresh = (self.tier == 2) & ~frozen
@@ -612,6 +813,7 @@ class StagedPlacer:
 
 
 # ----------------------------------------------------------------- legalization
+
 
 class PourChannels:
     """Channel model where a power trunk shared by two parts pours across their gap.
@@ -646,9 +848,11 @@ class PourChannels:
             shared = self.poured(comp.ref, other.ref)
             for _, gap, overlap, required, nets in self.base.interactions(comp, other, xs, ys):
                 if shared:
-                    required = self.base.active_demand({k: v for k, v in nets.items() if k not in shared})
+                    required = self.base.active_demand(
+                        {k: v for k, v in nets.items() if k not in shared}
+                    )
                 shortage = np.maximum(required - gap, 0)
-                score += np.where((gap >= 0) & (overlap > 0), shortage ** 2, 0)
+                score += np.where((gap >= 0) & (overlap > 0), shortage**2, 0)
         return score
 
 
@@ -737,9 +941,30 @@ def better_attempt(a, b):
     return a["j_legal"] < b["j_legal"]
 
 
-def staged_place(graph, constraints, roles, width, height, *, seed, iters, orient, inflation, spread,
-                 channel_rules, initial_positions, initial_rotations, poses, keepouts, clearance, grid_mm,
-                 legalize_spread, mobility, pair_weights=None, pad_edge=None):
+def staged_place(
+    graph,
+    constraints,
+    roles,
+    width,
+    height,
+    *,
+    seed,
+    iters,
+    orient,
+    inflation,
+    spread,
+    channel_rules,
+    initial_positions,
+    initial_rotations,
+    poses,
+    keepouts,
+    clearance,
+    grid_mm,
+    legalize_spread,
+    mobility,
+    pair_weights=None,
+    pad_edge=None,
+):
     """Staged global placement, power-first legalization, one bounded retry.
 
     Returns the legal graph. Legalization can undo a hot loop while barely
@@ -751,15 +976,30 @@ def staged_place(graph, constraints, roles, width, height, *, seed, iters, orien
     chosen by :func:`better_attempt`: legal, then hot-loop cost
     sum_L w_L Lambda_L at the legal pose (EPS[0] tie band), then J1.
     """
-    from pnr.graph import BoardGraph
     from pnr.constraints import compile_routing_rules
+    from pnr.graph import BoardGraph
+
     from . import metrics
     from .channels import ChannelModel
     from .geometry import hard_group_edges, hard_group_limits, resolve_hard_rotations
     from .legalize import LegalizationError, legalize
-    sp = StagedPlacer(graph, constraints, width, height, roles, seed=seed, iters=iters, orient=orient,
-                      inflation=inflation, spread=spread, initial_positions=initial_positions,
-                      initial_rotations=initial_rotations, grid_mm=grid_mm, pair_weights=pair_weights)
+
+    sp = StagedPlacer(
+        graph,
+        constraints,
+        width,
+        height,
+        roles,
+        seed=seed,
+        iters=iters,
+        orient=orient,
+        inflation=inflation,
+        spread=spread,
+        initial_positions=initial_positions,
+        initial_rotations=initial_rotations,
+        grid_mm=grid_mm,
+        pair_weights=pair_weights,
+    )
     best, runner = sp.stage1()
     compiled = sp.compiled
     links = {name: len(combos[0]) for _, name, combos, _ in compiled.loops[1]}
@@ -778,32 +1018,66 @@ def staged_place(graph, constraints, roles, width, height, *, seed, iters, orien
         for comp in cont.components:
             comp.pos = positions[comp.ref]
             comp.rot = rotations[comp.ref]
-        channels = PourChannels(ChannelModel(cont, channel_rules or compile_routing_rules(
-            constraints, [n.name for n in graph.nets])), roles)
+        channels = PourChannels(
+            ChannelModel(
+                cont,
+                channel_rules or compile_routing_rules(constraints, [n.name for n in graph.nets]),
+            ),
+            roles,
+        )
         j_cont, loops_cont, hot_cont = rigid(cont)
-        out = dict(info=info, j_cont=j_cont, loops_cont=loops_cont, hot_cont=hot_cont, placed=None, error=None,
-                   legal=False, continuous={c.ref: [c.pos[0], c.pos[1], c.rot] for c in cont.components})
+        out = dict(
+            info=info,
+            j_cont=j_cont,
+            loops_cont=loops_cont,
+            hot_cont=hot_cont,
+            placed=None,
+            error=None,
+            legal=False,
+            continuous={c.ref: [c.pos[0], c.pos[1], c.rot] for c in cont.components},
+        )
         try:
             out["placed"] = legalize(
-                cont, width, height, fixed=poses, allow_rotation=orient, channel_model=channels,
+                cont,
+                width,
+                height,
+                fixed=poses,
+                allow_rotation=orient,
+                channel_model=channels,
                 group_limits=hard_group_limits(constraints, poses, partial=True),
-                group_edges=hard_group_edges(constraints), rotations=resolve_hard_rotations(constraints),
-                mobility=mobility, keepouts=keepouts, clearance=clearance, grid_mm=grid_mm,
-                inflation=inflation, spread=legalize_spread, roles=roles,
-                **({} if pad_edge is None else dict(pad_edge=pad_edge)))
+                group_edges=hard_group_edges(constraints),
+                rotations=resolve_hard_rotations(constraints),
+                mobility=mobility,
+                keepouts=keepouts,
+                clearance=clearance,
+                grid_mm=grid_mm,
+                inflation=inflation,
+                spread=legalize_spread,
+                roles=roles,
+                **({} if pad_edge is None else dict(pad_edge=pad_edge)),
+            )
         except LegalizationError as exc:
             out["error"] = exc
             return out
         out["j_legal"], out["loops_legal"], out["hot_legal"] = rigid(out["placed"])
         out["loop_ratio"] = loop_ratio(loops_cont, out["loops_legal"], links, sp.overlap_clearance)
-        out["legal"] = not any(metrics.hard_violations(out["placed"], constraints, clearance=0.0).values())
+        out["legal"] = not any(
+            metrics.hard_violations(out["placed"], constraints, clearance=0.0).values()
+        )
         return out
 
     def summary(a):
-        return dict(start=a["info"]["start"], legal=a["legal"], error=None if a["error"] is None else str(a["error"]),
-                    j1_continuous=a["j_cont"], j1_legal=a.get("j_legal"), hot_continuous=a["hot_cont"],
-                    hot_legal=a.get("hot_legal"), loop_ratio=a.get("loop_ratio"),
-                    loops={k: [v, (a.get("loops_legal") or {}).get(k)] for k, v in a["loops_cont"].items()})
+        return dict(
+            start=a["info"]["start"],
+            legal=a["legal"],
+            error=None if a["error"] is None else str(a["error"]),
+            j1_continuous=a["j_cont"],
+            j1_legal=a.get("j_legal"),
+            hot_continuous=a["hot_cont"],
+            hot_legal=a.get("hot_legal"),
+            loop_ratio=a.get("loop_ratio"),
+            loops={k: [v, (a.get("loops_legal") or {}).get(k)] for k, v in a["loops_cont"].items()},
+        )
 
     first = attempt(best)
     chosen, attempts, reason = first, [first], None
@@ -821,16 +1095,27 @@ def staged_place(graph, constraints, roles, width, height, *, seed, iters, orien
     if chosen["placed"] is None:
         raise first["error"]
     placed = chosen["placed"]
-    placed.power_first = dict(start=chosen["info"]["start"], stars=chosen["info"]["stars"],
-                              j1_continuous=chosen["j_cont"], j1_legal=chosen["j_legal"],
-                              hot_continuous=chosen["hot_cont"], hot_legal=chosen["hot_legal"],
-                              loop_ratio=chosen["loop_ratio"], retried=len(attempts) > 1, retry_reason=reason,
-                              attempts=[summary(a) for a in attempts], chosen=attempts.index(chosen),
-                              starts=sp.start_scores, steps=list(sp.steps), continuous=chosen["continuous"])
+    placed.power_first = dict(
+        start=chosen["info"]["start"],
+        stars=chosen["info"]["stars"],
+        j1_continuous=chosen["j_cont"],
+        j1_legal=chosen["j_legal"],
+        hot_continuous=chosen["hot_cont"],
+        hot_legal=chosen["hot_legal"],
+        loop_ratio=chosen["loop_ratio"],
+        retried=len(attempts) > 1,
+        retry_reason=reason,
+        attempts=[summary(a) for a in attempts],
+        chosen=attempts.index(chosen),
+        starts=sp.start_scores,
+        steps=list(sp.steps),
+        continuous=chosen["continuous"],
+    )
     return placed
 
 
 # ----------------------------------------------------------------- placement metrics
+
 
 def _centroid(pts):
     return (sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))
@@ -900,7 +1185,9 @@ def placement_quality(graph, roles, compiled=None):
     carrying = roles["carrying"]
 
     def pads(ref, net):
-        return [xy for name in carrying.get(ref, {}).get(net, []) for xy in at.get((ref, name, net), [])]
+        return [
+            xy for name in carrying.get(ref, {}).get(net, []) for xy in at.get((ref, name, net), [])
+        ]
 
     def gap(a, b, net):
         pa, pb = pads(a, net), pads(b, net)
@@ -913,7 +1200,11 @@ def placement_quality(graph, roles, compiled=None):
         nets = l["nets"]
         m = len(members)
         best = None
-        choices = itertools.product(*members) if math.prod(map(len, members)) <= 4096 else [tuple(x[0] for x in members)]
+        choices = (
+            itertools.product(*members)
+            if math.prod(map(len, members)) <= 4096
+            else [tuple(x[0] for x in members)]
+        )
         for pick in choices:
             pts = []
             for i, ref in enumerate(pick):
@@ -921,14 +1212,32 @@ def placement_quality(graph, roles, compiled=None):
                 pts.append(_centroid(pads(ref, nets[i])))
             per = sum(math.dist(pts[i], pts[(i + 1) % len(pts)]) for i in range(len(pts)))
             if best is None or per < best[0]:
-                area = abs(sum(x1 * y2 - x2 * y1 for (x1, y1), (x2, y2) in zip(pts, pts[1:] + pts[:1]))) / 2
+                area = (
+                    abs(
+                        sum(x1 * y2 - x2 * y1 for (x1, y1), (x2, y2) in zip(pts, pts[1:] + pts[:1]))
+                    )
+                    / 2
+                )
                 gaps = [gap(pick[i], pick[(i + 1) % m], nets[i]) for i in range(m)]
                 spans = sum(math.dist(pts[2 * i], pts[2 * i + 1]) for i in range(m))
                 best = (per, area, gaps, spans, pick, _hull_area(pts), pts)
         per, area, gaps, spans, pick, hull, pts = best
-        loops.append(dict(labels=l["labels"], nets=nets, hot=l["hot"], weight=l["weight"], parts=list(pick),
-                          perimeter_mm=per, area_mm2=area, hull_area_mm2=hull, gaps_mm=sum(gaps), link_gaps_mm=gaps,
-                          spans_mm=spans, polygon=[list(p) for p in pts]))
+        loops.append(
+            dict(
+                labels=l["labels"],
+                nets=nets,
+                hot=l["hot"],
+                weight=l["weight"],
+                parts=list(pick),
+                perimeter_mm=per,
+                area_mm2=area,
+                hull_area_mm2=hull,
+                gaps_mm=sum(gaps),
+                link_gaps_mm=gaps,
+                spans_mm=spans,
+                polygon=[list(p) for p in pts],
+            )
+        )
     tier1 = roles["tier1"]
     power_mst, segments = 0.0, []
     for net in roles["power_nets"]:
@@ -936,8 +1245,11 @@ def placement_quality(graph, roles, compiled=None):
         length, edges = _mst(pts)
         power_mst += length
         segments += [(net, pts[i], pts[j]) for i, j in edges]
-    crossings = sum(1 for a, b in itertools.combinations(segments, 2)
-                    if a[0] != b[0] and _crosses(a[1], a[2], b[1], b[2]))
+    crossings = sum(
+        1
+        for a, b in itertools.combinations(segments, 2)
+        if a[0] != b[0] and _crosses(a[1], a[2], b[1], b[2])
+    )
     series = None
     if roles.get("series"):
         s = roles["series"]
@@ -961,12 +1273,28 @@ def placement_quality(graph, roles, compiled=None):
         for a, b, w, *_ in compiled.taps[s]:
             stage_len[s] += float(min(math.dist(pp[i], pp[k]) for i in a for k in b))
     centres = np.array([graph.component(r).pos for r in tier1]) if tier1 else np.zeros((0, 2))
-    spread = dict(rms_mm=float(np.sqrt(((centres - centres.mean(0)) ** 2).sum(1).mean())) if len(centres) else 0.0,
-                  bbox_area_mm2=float(np.ptp(centres[:, 0]) * np.ptp(centres[:, 1])) if len(centres) else 0.0)
-    return dict(schema="pnr-power-quality-place-v1", q_place=j1, J1=j1, J2=j2, J3=j3, loops=loops,
-                hot_loop_perimeter_mm=sum(l["perimeter_mm"] for l in loops if l["hot"]),
-                hot_loop_area_mm2=sum(l["area_mm2"] for l in loops if l["hot"]),
-                hot_loop_hull_area_mm2=sum(l["hull_area_mm2"] for l in loops if l["hot"]),
-                crossings=crossings, power_mst_mm=power_mst, series=series,
-                stage_len=dict(ctrl_sense=stage_len[2], passive=stage_len[3]),
-                power_part_spread=spread, hard_group_diagnostic=roles["hard_group_diagnostic"])
+    spread = dict(
+        rms_mm=(
+            float(np.sqrt(((centres - centres.mean(0)) ** 2).sum(1).mean()))
+            if len(centres)
+            else 0.0
+        ),
+        bbox_area_mm2=float(np.ptp(centres[:, 0]) * np.ptp(centres[:, 1])) if len(centres) else 0.0,
+    )
+    return dict(
+        schema="pnr-power-quality-place-v1",
+        q_place=j1,
+        J1=j1,
+        J2=j2,
+        J3=j3,
+        loops=loops,
+        hot_loop_perimeter_mm=sum(l["perimeter_mm"] for l in loops if l["hot"]),
+        hot_loop_area_mm2=sum(l["area_mm2"] for l in loops if l["hot"]),
+        hot_loop_hull_area_mm2=sum(l["hull_area_mm2"] for l in loops if l["hot"]),
+        crossings=crossings,
+        power_mst_mm=power_mst,
+        series=series,
+        stage_len=dict(ctrl_sense=stage_len[2], passive=stage_len[3]),
+        power_part_spread=spread,
+        hard_group_diagnostic=roles["hard_group_diagnostic"],
+    )

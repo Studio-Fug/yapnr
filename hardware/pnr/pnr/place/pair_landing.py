@@ -49,6 +49,7 @@ mirrored by set_component_side), block-macro collapse (pads renamed
 side opposite the owner; see ReserveRect for what they exclude. Stdlib only
 (plus pnr.fab_profile, itself stdlib-only).
 """
+
 from __future__ import annotations
 
 import math
@@ -70,6 +71,7 @@ def router_rules(rules):
     carry a profile marker are used as they are.
     """
     from pnr import fab_profile
+
     if rules.get(fab_profile.MARKER) is not None or fab_profile.is_legacy():
         return rules
     out = dict(rules)
@@ -79,9 +81,10 @@ def router_rules(rules):
 
 def via_geometry(rules):
     """(diameter, drill) exactly as pnr.native_electrical.pair_via_geometry."""
-    fab = rules.get("fab", {}); electrical = rules.get("electrical_fab", {})
-    diameter = float(fab.get("via_diameter_mm", electrical.get("via_diameter_mm", .6)))
-    drill = float(fab.get("via_drill_mm", electrical.get("via_drill_mm", .3)))
+    fab = rules.get("fab", {})
+    electrical = rules.get("electrical_fab", {})
+    diameter = float(fab.get("via_diameter_mm", electrical.get("via_diameter_mm", 0.6)))
+    drill = float(fab.get("via_drill_mm", electrical.get("via_drill_mm", 0.3)))
     if not 0 < drill < diameter:
         raise ValueError("invalid pair via dimensions")
     return diameter, drill
@@ -96,7 +99,8 @@ def terminal_groups(rules):
             nodes += [group[side] for side in ("source", "target") if side in group]
         for node in nodes:
             try:
-                pref, ppad = node["p"].rsplit(".", 1); nref, npad = node["n"].rsplit(".", 1)
+                pref, ppad = node["p"].rsplit(".", 1)
+                nref, npad = node["n"].rsplit(".", 1)
             except (KeyError, ValueError):
                 continue
             if pref != nref:
@@ -116,6 +120,7 @@ def _rect_distance(point, center, size):
 def recipe(comp, pair, ppad, npad, rules):
     """Landing recipe for one pad pair of ``comp`` (None if the pads are missing)."""
     from pnr.electrical import net_policy
+
     rules = router_rules(rules)
     pads = {p.name: p for p in comp.pads}
     if ppad not in pads or npad not in pads:
@@ -127,35 +132,45 @@ def recipe(comp, pair, ppad, npad, rules):
     diameter, drill = via_geometry(rules)
     fab = rules.get("fab", {})
     nets = [pads[ppad].net, pads[npad].net]
-    net_clearance = max([net_policy(net, rules)["clearance_mm"] for net in nets if net] or [fab.get("clearance_mm", .15)])
+    net_clearance = max(
+        [net_policy(net, rules)["clearance_mm"] for net in nets if net]
+        or [fab.get("clearance_mm", 0.15)]
+    )
     pad_clearance = max(net_clearance, float(fab.get("via_to_smd_pad_mm", 0) or 0))
-    hole_gap = fab.get("hole_to_hole_mm", fab.get("hole_clearance_mm", .2))
-    spacings = sorted({max(diameter + net_clearance + .002, drill + hole_gap + .002),
-                       max(diameter + net_clearance + .002, drill + hole_gap + .002, distance)})
+    hole_gap = fab.get("hole_to_hole_mm", fab.get("hole_clearance_mm", 0.2))
+    spacings = sorted(
+        {
+            max(diameter + net_clearance + 0.002, drill + hole_gap + 0.002),
+            max(diameter + net_clearance + 0.002, drill + hole_gap + 0.002, distance),
+        }
+    )
     cap = float(pair.get("max_uncoupled_mm", 2))
-    envelope = 2 * float(pair.get("width_mm", .2)) + float(pair.get("gap_mm", .15))
+    envelope = 2 * float(pair.get("width_mm", 0.2)) + float(pair.get("gap_mm", 0.15))
     axis = ((P[0] - N[0]) / distance, (P[1] - N[1]) / distance)
-    tangent = (-axis[1], axis[0]); mid = ((P[0] + N[0]) / 2, (P[1] + N[1]) / 2)
+    tangent = (-axis[1], axis[0])
+    mid = ((P[0] + N[0]) / 2, (P[1] + N[1]) / 2)
     radius = diameter / 2 + pad_clearance
     others = [(p.offset, p.size) for p in comp.pads]
 
     def legal(run, sign, spacing):
         for side in (1, -1):
-            v = tuple(mid[i] + sign * tangent[i] * run + side * axis[i] * spacing / 2 for i in (0, 1))
+            v = tuple(
+                mid[i] + sign * tangent[i] * run + side * axis[i] * spacing / 2 for i in (0, 1)
+            )
             if any(_rect_distance(v, c, s) < radius - 1e-9 for c, s in others):
                 return False
         return True
 
     runs = {}
-    limit = cap - .15
+    limit = cap - 0.15
     for sign in (-1, 1):
         best = None
         for spacing in spacings:
-            steps = int(math.ceil(limit / .01))
-            first = next((i for i in range(steps + 1) if legal(i * .01, sign, spacing)), None)
+            steps = int(math.ceil(limit / 0.01))
+            first = next((i for i in range(steps + 1) if legal(i * 0.01, sign, spacing)), None)
             if first is None:
                 continue
-            lo, hi = max(0.0, (first - 1) * .01), first * .01
+            lo, hi = max(0.0, (first - 1) * 0.01), first * 0.01
             if first:
                 while hi - lo > 1e-5:
                     middle = (lo + hi) / 2
@@ -166,9 +181,15 @@ def recipe(comp, pair, ppad, npad, rules):
     if not runs:
         return None
     half_width = max(max(spacings) / 2 + radius, envelope / 2 + pad_clearance)
-    return dict(kind=KIND, pair=pair.get("name", ""), pads=[ppad, npad], side="opposite",
-                runs_mm={str(sign): round(run, 6) for sign, run in sorted(runs.items())},
-                via_radius_mm=round(radius, 6), half_width_mm=round(half_width, 6))
+    return dict(
+        kind=KIND,
+        pair=pair.get("name", ""),
+        pads=[ppad, npad],
+        side="opposite",
+        runs_mm={str(sign): round(run, 6) for sign, run in sorted(runs.items())},
+        via_radius_mm=round(radius, 6),
+        half_width_mm=round(half_width, 6),
+    )
 
 
 def attach(graph, rules):
@@ -208,8 +229,14 @@ def relax_violated(graph, violations):
     by_ref = {c.ref: c for c in graph.components}
     while True:
         bad = violations()
-        refs = sorted({ref for pair in bad.get("overlaps", []) for ref in pair
-                       if ref not in relaxed and any(r.get("kind") == KIND for r in by_ref[ref].reserves)})
+        refs = sorted(
+            {
+                ref
+                for pair in bad.get("overlaps", [])
+                for ref in pair
+                if ref not in relaxed and any(r.get("kind") == KIND for r in by_ref[ref].reserves)
+            }
+        )
         if not refs:
             return relaxed
         for ref in refs:
@@ -239,9 +266,17 @@ def macro_reserves(member, macro_side="top"):
     """A block member's recipes re-expressed on its macro (pads '<ref>.<pad>')."""
     out = []
     for r in member.reserves:
-        absolute = member.side if r.get("side") == "same" else ("bottom" if member.side == "top" else "top")
-        q = dict(r, pads=[f"{member.ref}.{name}" for name in r["pads"]],
-                 side="same" if absolute == macro_side else "opposite", member=member.ref)
+        absolute = (
+            member.side
+            if r.get("side") == "same"
+            else ("bottom" if member.side == "top" else "top")
+        )
+        q = dict(
+            r,
+            pads=[f"{member.ref}.{name}" for name in r["pads"]],
+            side="same" if absolute == macro_side else "opposite",
+            member=member.ref,
+        )
         out.append(q)
     return out
 
@@ -249,10 +284,12 @@ def macro_reserves(member, macro_side="top"):
 def reserve_rects(comp):
     """[(side, ReserveRect)] of the component's recipes at its current pose."""
     from .geometry import ReserveRect
+
     if not comp.reserves:
         return []
     pads = {p.name: p.offset for p in comp.pads}
-    th = math.radians(comp.rot); ct, st = math.cos(th), math.sin(th)
+    th = math.radians(comp.rot)
+    ct, st = math.cos(th), math.sin(th)
     out = []
     for r in comp.reserves:
         if r.get("kind") != KIND or r["pads"][0] not in pads or r["pads"][1] not in pads:
@@ -262,7 +299,8 @@ def reserve_rects(comp):
         if distance < 1e-9:
             continue
         axis = ((P[0] - N[0]) / distance, (P[1] - N[1]) / distance)
-        tangent = (-axis[1], axis[0]); mid = ((P[0] + N[0]) / 2, (P[1] + N[1]) / 2)
+        tangent = (-axis[1], axis[0])
+        mid = ((P[0] + N[0]) / 2, (P[1] + N[1]) / 2)
         side = comp.side if r.get("side") == "same" else ("bottom" if comp.side == "top" else "top")
         for key, run in sorted(r["runs_mm"].items()):
             sign = int(key)
@@ -272,7 +310,20 @@ def reserve_rects(comp):
                     x = mid[0] + sign * tangent[0] * t + axis[0] * a
                     y = mid[1] + sign * tangent[1] * t + axis[1] * a
                     corners.append((comp.pos[0] + x * ct - y * st, comp.pos[1] + x * st + y * ct))
-            xs = [c[0] for c in corners]; ys = [c[1] for c in corners]
-            out.append((side, ReserveRect((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2, max(xs) - min(xs), max(ys) - min(ys),
-                                          side=side, owner=comp.ref, label=f"{r.get('pair', '')}:{'/'.join(r['pads'])}:{'+' if sign > 0 else '-'}")))
+            xs = [c[0] for c in corners]
+            ys = [c[1] for c in corners]
+            out.append(
+                (
+                    side,
+                    ReserveRect(
+                        (min(xs) + max(xs)) / 2,
+                        (min(ys) + max(ys)) / 2,
+                        max(xs) - min(xs),
+                        max(ys) - min(ys),
+                        side=side,
+                        owner=comp.ref,
+                        label=f"{r.get('pair', '')}:{'/'.join(r['pads'])}:{'+' if sign > 0 else '-'}",
+                    ),
+                )
+            )
     return out

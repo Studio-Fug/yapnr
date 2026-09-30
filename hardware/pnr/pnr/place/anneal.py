@@ -3,6 +3,7 @@
 A plateau is an observed lack of improvement under this search budget, not a
 proof of a global optimum. Budget exhaustion must be reported separately.
 """
+
 import math
 import random
 from dataclasses import dataclass
@@ -11,11 +12,11 @@ from dataclasses import dataclass
 def choose_cost(costs, temperature, rng):
     """Boltzmann sample; temperature is in the same units as costs."""
     if not costs:
-        raise ValueError('empty candidate distribution')
+        raise ValueError("empty candidate distribution")
     if temperature <= 0:
         return min(range(len(costs)), key=lambda i: costs[i])
     low = min(costs)
-    weights = [math.exp(max(-700., -(c-low)/temperature)) for c in costs]
+    weights = [math.exp(max(-700.0, -(c - low) / temperature)) for c in costs]
     return rng.choices(range(len(costs)), weights=weights, k=1)[0]
 
 
@@ -23,7 +24,7 @@ def choose_cost(costs, temperature, rng):
 class Plateau:
     warmup: int = 6
     patience: int = 6
-    initial_temperature: float = .15
+    initial_temperature: float = 0.15
     observations: int = 0
     cold_stale: int = 0
     best: float = math.inf
@@ -31,7 +32,7 @@ class Plateau:
     @property
     def temperature(self):
         # Reach zero explicitly; exponential cooling alone never does.
-        return self.initial_temperature * max(0., 1.-self.observations/self.warmup)
+        return self.initial_temperature * max(0.0, 1.0 - self.observations / self.warmup)
 
     def observe(self, objective):
         cold = self.temperature == 0

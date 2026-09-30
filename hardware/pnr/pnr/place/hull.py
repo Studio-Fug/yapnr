@@ -36,6 +36,7 @@ overlap check). Mirrored (bottom-side) macros swap the sides and map y -> -y
 before rotating, like :func:`pnr.place.geometry.set_component_side`; the
 hierarchical flow only places macros on top.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -48,12 +49,12 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 SIDES = ("top", "bottom")
-PLANES = ("top", "bottom", "inner")   # legalizer occupancy planes when hulls are active
+PLANES = ("top", "bottom", "inner")  # legalizer occupancy planes when hulls are active
 TOL = 1e-9
 HULL_VERSION = 2
-BODY_GRID_MM = 1.0       # global-placement cover resolution
+BODY_GRID_MM = 1.0  # global-placement cover resolution
 BODY_MAX_PER_SIDE = 32
-BODY_MIN_FILL = 0.5      # a cover block counts when at least this fraction is hull
+BODY_MIN_FILL = 0.5  # a cover block counts when at least this fraction is hull
 
 
 def enabled() -> bool:
@@ -66,6 +67,7 @@ def active(components) -> bool:
 
 
 # ------------------------------------------------------------------ transforms
+
 
 def quarter(rot: float) -> int:
     k = rot / 90.0
@@ -120,14 +122,21 @@ def transformed(hull: dict, rot: float, mirror: bool = False) -> dict:
 def hull_placement_rects(comp):
     """[(plane, Rect)] of the hull cover rectangles at the component's pose."""
     from .geometry import Rect
+
     mirror = comp.side == "bottom"
     k = quarter(comp.rot)
     out = []
     for side in PLANES:
         for r in comp.hull.get(side, []):
             x0, y0, x1, y1 = xf_rect(r, k, mirror)
-            out.append((_side(side, mirror),
-                        Rect(comp.pos[0] + (x0 + x1) / 2, comp.pos[1] + (y0 + y1) / 2, x1 - x0, y1 - y0)))
+            out.append(
+                (
+                    _side(side, mirror),
+                    Rect(
+                        comp.pos[0] + (x0 + x1) / 2, comp.pos[1] + (y0 + y1) / 2, x1 - x0, y1 - y0
+                    ),
+                )
+            )
     return out
 
 
@@ -143,6 +152,7 @@ def inner_rects(comp):
     drilled part its drilled pads (pad or drill extent, whichever is larger);
     every other part reserves nothing there."""
     from .geometry import Rect, courtyard_rect, pad_rects
+
     if getattr(comp, "hull", None):
         return []
     if (comp.footprint or "").startswith("block:"):
@@ -160,6 +170,7 @@ def inner_rects(comp):
 
 
 # ------------------------------------------------------------------ rasterization
+
 
 def lattice(n: int, g: float) -> np.ndarray:
     """Cell edges of an ``n``-cell slot axis, relative to the slot centre."""
@@ -182,8 +193,8 @@ def raster_rects(mask, rects, grow, xe, ye):
         r0, r1 = _window(y0 - grow, y1 + grow, ye)
         if c1 <= c0 or r1 <= r0:
             continue
-        cl, ch = xe[c0:c1], xe[c0 + 1:c1 + 1]
-        rl, rh = ye[r0:r1], ye[r0 + 1:r1 + 1]
+        cl, ch = xe[c0:c1], xe[c0 + 1 : c1 + 1]
+        rl, rh = ye[r0:r1], ye[r0 + 1 : r1 + 1]
         okx = (x0 - grow < ch - TOL) & (x1 + grow > cl + TOL)
         oky = (y0 - grow < rh - TOL) & (y1 + grow > rl + TOL)
         hit = oky[:, None] & okx[None, :]
@@ -217,20 +228,27 @@ def raster_caps(mask, caps, grow, xe, ye):
         if c1 <= c0 or r1 <= r0:
             continue
         X0 = xe[c0:c1][None, :]
-        X1 = xe[c0 + 1:c1 + 1][None, :]
+        X1 = xe[c0 + 1 : c1 + 1][None, :]
         Y0 = ye[r0:r1][:, None]
-        Y1 = ye[r0 + 1:r1 + 1][:, None]
+        Y1 = ye[r0 + 1 : r1 + 1][:, None]
         X0, X1, Y0, Y1 = np.broadcast_arrays(X0, X1, Y0, Y1)
 
         def pt_box(px, py):
-            return np.hypot(np.maximum(0.0, np.maximum(X0 - px, px - X1)),
-                            np.maximum(0.0, np.maximum(Y0 - py, py - Y1)))
+            return np.hypot(
+                np.maximum(0.0, np.maximum(X0 - px, px - X1)),
+                np.maximum(0.0, np.maximum(Y0 - py, py - Y1)),
+            )
+
         d = np.minimum(pt_box(ax, ay), pt_box(bx, by))
         for cx, cy in ((X0, Y0), (X1, Y0), (X0, Y1), (X1, Y1)):
             d = np.minimum(d, _pt_seg(cx, cy, ax, ay, bx, by))
         # separating axes: x, y and the segment normal
-        inter = (np.minimum(ax, bx) <= X1) & (np.maximum(ax, bx) >= X0) & \
-                (np.minimum(ay, by) <= Y1) & (np.maximum(ay, by) >= Y0)
+        inter = (
+            (np.minimum(ax, bx) <= X1)
+            & (np.maximum(ax, bx) >= X0)
+            & (np.minimum(ay, by) <= Y1)
+            & (np.maximum(ay, by) >= Y0)
+        )
         nx, ny = -(by - ay), (bx - ax)
         if nx or ny:
             s = nx * ax + ny * ay
@@ -267,7 +285,7 @@ def fill_pockets(mask: np.ndarray, erode_cells: int = 0) -> Tuple[np.ndarray, in
         core = np.ones_like(free)
         for dy in range(-k, k + 1):
             for dx in range(-k, k + 1):
-                core &= pad[k + dy:k + dy + free.shape[0], k + dx:k + dx + free.shape[1]]
+                core &= pad[k + dy : k + dy + free.shape[0], k + dx : k + dx + free.shape[1]]
     reach = np.zeros_like(free)
     reach[0, :] = core[0, :]
     reach[-1, :] = core[-1, :]
@@ -289,7 +307,7 @@ def fill_pockets(mask: np.ndarray, erode_cells: int = 0) -> Tuple[np.ndarray, in
         grown = np.zeros_like(reach)
         for dy in range(-k, k + 1):
             for dx in range(-k, k + 1):
-                grown |= pad[k + dy:k + dy + reach.shape[0], k + dx:k + dx + reach.shape[1]]
+                grown |= pad[k + dy : k + dy + reach.shape[0], k + dx : k + dx + reach.shape[1]]
         reach = grown & free
     filled = free & ~reach
     return mask | filled, int(filled.sum())
@@ -374,7 +392,7 @@ def correlate(occ: np.ndarray, mask: np.ndarray) -> np.ndarray:
     F = np.fft.rfft2(occ.astype(np.float64), s=(ny, nx))
     M = np.fft.rfft2(mask.astype(np.float64), s=(ny, nx))
     corr = np.fft.irfft2(F * np.conj(M), s=(ny, nx))
-    return corr[:ny - bh + 1, :nx - bw + 1]
+    return corr[: ny - bh + 1, : nx - bw + 1]
 
 
 def correlate_brute(occ: np.ndarray, mask: np.ndarray) -> np.ndarray:
@@ -382,12 +400,17 @@ def correlate_brute(occ: np.ndarray, mask: np.ndarray) -> np.ndarray:
     bh, bw = mask.shape
     out = np.zeros((ny - bh + 1, nx - bw + 1))
     for i, j in zip(*np.nonzero(mask)):
-        out += occ[i:i + ny - bh + 1, j:j + nx - bw + 1]
+        out += occ[i : i + ny - bh + 1, j : j + nx - bw + 1]
     return out
 
 
-def free_map(occupancy: Dict[str, np.ndarray], keep_occ: np.ndarray, masks: Dict[str, np.ndarray],
-             bw: int, bh: int) -> Optional[np.ndarray]:
+def free_map(
+    occupancy: Dict[str, np.ndarray],
+    keep_occ: np.ndarray,
+    masks: Dict[str, np.ndarray],
+    bw: int,
+    bh: int,
+) -> Optional[np.ndarray]:
     """Valid top-lefts (r, c) of a hull slot: per-plane masks miss that plane's
     occupancy (``inner`` only when the legalizer keeps one) and the whole slot
     misses the keep-outs. None when it cannot fit."""
@@ -406,6 +429,7 @@ def free_map(occupancy: Dict[str, np.ndarray], keep_occ: np.ndarray, masks: Dict
 
 
 # ------------------------------------------------------------------ global placement bodies
+
 
 def cover_boxes(hull: dict, side: str, grid: float = BODY_GRID_MM, limit: int = BODY_MAX_PER_SIDE):
     """(boxes [x0, y0, x1, y1] in the macro frame, covered fraction) for one side.
@@ -447,8 +471,10 @@ def gp_bodies(components, scale=None):
     occupied sides; a hull macro is its per-side cover boxes, each rotating with
     the macro like a pin (offset) and a courtyard (half-size swap)."""
     import torch
+
     from .geometry import occupied_sides
     from .model import ANGLES
+
     if not active(components):
         return None
     owner, off4, half4, sides = [], [], [], []
@@ -483,17 +509,22 @@ def gp_bodies(components, scale=None):
     own = torch.tensor(owner)
     pair = ((own[:, None] != own[None, :]) & ((bits[:, None] & bits[None, :]) != 0)).float()
     pair = torch.triu(pair, diagonal=1)
-    return dict(owner=torch.tensor(owner, dtype=torch.long), off4=torch.tensor(off4, dtype=torch.float32),
-                half4=torch.tensor(half4, dtype=torch.float32), pair=pair)
+    return dict(
+        owner=torch.tensor(owner, dtype=torch.long),
+        off4=torch.tensor(off4, dtype=torch.float32),
+        half4=torch.tensor(half4, dtype=torch.float32),
+        pair=pair,
+    )
 
 
 def gp_overlap(bodies, pos, p, clearance):
     """Smooth pairwise overlap over bodies; ``pos`` (..., n, 2), ``p`` (..., n, 4)."""
     import torch
+
     own = bodies["owner"]
-    pb = p[..., own, :]                                                # (..., B, 4)
-    off = (pb.unsqueeze(-1) * bodies["off4"]).sum(-2)                  # (..., B, 2)
-    half = (pb.unsqueeze(-1) * bodies["half4"]).sum(-2)                # (..., B, 2)
+    pb = p[..., own, :]  # (..., B, 4)
+    off = (pb.unsqueeze(-1) * bodies["off4"]).sum(-2)  # (..., B, 2)
+    half = (pb.unsqueeze(-1) * bodies["half4"]).sum(-2)  # (..., B, 2)
     xy = pos[..., own, :] + off
     dx = (xy[..., :, None, 0] - xy[..., None, :, 0]).abs()
     dy = (xy[..., :, None, 1] - xy[..., None, :, 1]).abs()

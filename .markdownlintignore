@@ -1,4 +1,5 @@
-# Imported verbatim from Splanc; reformatted with the code in PR3a.
+# Imported verbatim from Splanc. PR3a formats only the engine's Python; its
+# Markdown (notes, READMEs) moves or goes with PR3b, docs/hardware/ with PR7.
 hardware/
 docs/hardware/
 third_party/

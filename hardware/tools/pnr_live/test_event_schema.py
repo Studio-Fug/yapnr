@@ -1,16 +1,28 @@
 import copy
 import unittest
+
 from event_schema import phase_frame
+
 
 class PhaseFrameTest(unittest.TestCase):
     def setUp(self):
-        self.event = dict(id="event-01", board_sha256="a" * 64,
-                          data=dict(name="power", opens=0, violations=0))
+        self.event = dict(
+            id="event-01", board_sha256="a" * 64, data=dict(name="power", opens=0, violations=0)
+        )
 
     def test_named_phase_preserves_zero_counts_and_identity(self):
         frame = phase_frame(self.event)
-        self.assertEqual(frame, dict(name="power", label_source="name",
-                         board_sha256="a" * 64, event_id="event-01", opens=0, violations=0))
+        self.assertEqual(
+            frame,
+            dict(
+                name="power",
+                label_source="name",
+                board_sha256="a" * 64,
+                event_id="event-01",
+                opens=0,
+                violations=0,
+            ),
+        )
 
     def test_probe_without_name_keeps_native_results(self):
         del self.event["data"]["name"]
@@ -38,6 +50,7 @@ class PhaseFrameTest(unittest.TestCase):
         del self.event["board_sha256"]
         with self.assertRaises(KeyError):
             phase_frame(self.event)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,8 +4,12 @@ Native shape connectivity on F.Cu, explicitly excluding plane connectivity.
 This is an inventory for visual review, not automatic redundancy classification.
 """
 
-import argparse, json, hashlib, sys
+import argparse
+import hashlib
+import json
+import sys
 from pathlib import Path
+
 import pcbnew
 from scan_via_proximity import render
 
@@ -18,9 +22,7 @@ b = pcbnew.LoadBoard(str(a.board))
 plane_nets = {
     z.GetNetname()
     for z in b.Zones()
-    if z.GetNetname()
-    and z.GetLayer() not in [pcbnew.F_Cu, pcbnew.B_Cu]
-    and not z.GetIsRuleArea()
+    if z.GetNetname() and z.GetLayer() not in [pcbnew.F_Cu, pcbnew.B_Cu] and not z.GetIsRuleArea()
 }
 items = [p for f in b.GetFootprints() for p in f.Pads()] + list(b.GetTracks())
 items = [t for t in items if t.GetNetname() in plane_nets and t.IsOnLayer(pcbnew.F_Cu)]
@@ -48,9 +50,7 @@ for members in groups.values():
     pads = [t for t in members if t.GetClass() == "PAD"]
     if len(vias) < 2 or not pads:
         continue
-    labels = sorted(
-        {p.GetParentFootprint().GetReference() + "." + p.GetNumber() for p in pads}
-    )
+    labels = sorted({p.GetParentFootprint().GetReference() + "." + p.GetNumber() for p in pads})
     holes = [p for p in pads if p.GetAttribute() == pcbnew.PAD_ATTRIB_PTH]
     nodes = [
         dict(

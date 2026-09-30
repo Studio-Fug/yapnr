@@ -7,12 +7,10 @@ native result becomes the next input. This stage has no FreeRouting dependency.
 import argparse
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
-
-
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pnr"))
 from pnr.route.detail.keyhole import acceptable
@@ -24,9 +22,7 @@ def main():
     ap.add_argument("--out-dir", type=Path, required=True)
     ap.add_argument("--kicad-python", required=True)
     ap.add_argument("--kicad-cli", required=True)
-    ap.add_argument(
-        "--net", action="append", default=[], help="signal net; repeat for several"
-    )
+    ap.add_argument("--net", action="append", default=[], help="signal net; repeat for several")
     ap.add_argument("--width", type=float, default=0.2)
     ap.add_argument("--rounds", type=int, default=4)
     ap.add_argument("--pitch", type=float, default=0.1)
@@ -60,15 +56,11 @@ def main():
     args.out_dir.mkdir(parents=True, exist_ok=False)
     current = args.out_dir / "baseline.kicad_pcb"
     shutil.copyfile(args.board, current)
-    shutil.copyfile(
-        args.board.with_suffix(".kicad_pro"), current.with_suffix(".kicad_pro")
-    )
+    shutil.copyfile(args.board.with_suffix(".kicad_pro"), current.with_suffix(".kicad_pro"))
     table = args.board.parent / "fp-lib-table"
     if table.exists():
         # Expand relative library references against the SOURCE project.
-        text = table.read_text().replace(
-            "${KIPRJMOD}", str(args.board.parent.resolve())
-        )
+        text = table.read_text().replace("${KIPRJMOD}", str(args.board.parent.resolve()))
         (args.out_dir / "fp-lib-table").write_text(text)
     script = Path(__file__).with_name("keyhole_repair.py")
     env = dict(os.environ, PYTHONPATH=str(script.parent.parent / "pnr"))
@@ -111,9 +103,7 @@ def main():
         for ref in args.consolidate_ground_ref:
             command.extend(["--ref", ref])
         with (args.out_dir / "ground-consolidation.log").open("w") as log:
-            subprocess.run(
-                command, env=env, check=True, stdout=log, stderr=subprocess.STDOUT
-            )
+            subprocess.run(command, env=env, check=True, stdout=log, stderr=subprocess.STDOUT)
         result = json.loads((cleanup / "result.json").read_text())
         # This distinct gate permits equal opens only for a verified via-count
         # reduction. It does not weaken the strict routing-improvement gate.
@@ -189,9 +179,7 @@ def main():
                 opens=len(report["unconnected_items"]),
                 events=events,
             )
-            (args.out_dir / "progress.json").write_text(
-                json.dumps(manifest, indent=2) + "\n"
-            )
+            (args.out_dir / "progress.json").write_text(json.dumps(manifest, indent=2) + "\n")
             print(json.dumps(events[-1]), flush=True)
         for region in regions:
             sequence += 1
@@ -233,9 +221,7 @@ def main():
             for net in region["nets"]:
                 command.extend(["--net", net])
             with (args.out_dir / f"region-{sequence:03}.log").open("w") as log:
-                subprocess.run(
-                    command, env=env, check=True, stdout=log, stderr=subprocess.STDOUT
-                )
+                subprocess.run(command, env=env, check=True, stdout=log, stderr=subprocess.STDOUT)
             outcome = json.loads((region_dir / "result.json").read_text())
             accepted = False
             if outcome["accepted"]:

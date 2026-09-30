@@ -14,9 +14,13 @@ def lost_connections(before, after):
         original = set(group)
         if any(original <= now for now in current):
             continue
-        result.append(dict(original=sorted(original),
-                           fragments=sorted([sorted(original & now) for now in current if original & now]),
-                           missing=sorted(original - present)))
+        result.append(
+            dict(
+                original=sorted(original),
+                fragments=sorted([sorted(original & now) for now in current if original & now]),
+                missing=sorted(original - present),
+            )
+        )
     return result
 
 

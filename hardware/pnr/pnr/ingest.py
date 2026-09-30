@@ -102,14 +102,17 @@ def _phys_bbox_mm(fp) -> Tuple[float, float]:
     for the text-excluded box (the arg signature varies across KiCad versions)."""
     # Measure in the local frame; placement applies rotation separately.
     import pcbnew
+
     fp = pcbnew.FOOTPRINT(fp)
     fp.SetOrientationDegrees(0)
     origin = fp.GetPosition()
     for args in ((False, False), (False,), ()):
         try:
             bb = fp.GetBoundingBox(*args)
-            return (2 * _mm(max(abs(bb.GetLeft() - origin.x), abs(bb.GetRight() - origin.x))),
-                    2 * _mm(max(abs(bb.GetTop() - origin.y), abs(bb.GetBottom() - origin.y))))
+            return (
+                2 * _mm(max(abs(bb.GetLeft() - origin.x), abs(bb.GetRight() - origin.x))),
+                2 * _mm(max(abs(bb.GetTop() - origin.y), abs(bb.GetBottom() - origin.y))),
+            )
         except Exception:  # pragma: no cover - version shim
             continue
     raise RuntimeError("GetBoundingBox unavailable")
@@ -144,8 +147,10 @@ def _component(fp, frame: _Frame) -> Component:
         local_fp.SetOrientationDegrees(0)
         cyard = local_fp.GetCourtyard(layer).BBox()
         origin = local_fp.GetPosition()
-        courtyard_mm = (2 * _mm(max(abs(cyard.GetLeft() - origin.x), abs(cyard.GetRight() - origin.x))),
-                        2 * _mm(max(abs(cyard.GetTop() - origin.y), abs(cyard.GetBottom() - origin.y))))
+        courtyard_mm = (
+            2 * _mm(max(abs(cyard.GetLeft() - origin.x), abs(cyard.GetRight() - origin.x))),
+            2 * _mm(max(abs(cyard.GetTop() - origin.y), abs(cyard.GetBottom() - origin.y))),
+        )
         if cyard.GetWidth() <= 0 or cyard.GetHeight() <= 0:
             courtyard_mm = bbox_mm
         if courtyard_mm[0] <= 0 or courtyard_mm[1] <= 0:
@@ -159,14 +164,19 @@ def _component(fp, frame: _Frame) -> Component:
     local_fp = pcbnew.FOOTPRINT(fp)
     local_fp.SetOrientationDegrees(0)
     origin = local_fp.GetPosition()
-    items = list(local_fp.Pads()) + [item for item in local_fp.GraphicalItems()
-             if item.GetLayer() in (pcbnew.F_SilkS, pcbnew.B_SilkS)
-             and isinstance(item, pcbnew.PCB_SHAPE)]
+    items = list(local_fp.Pads()) + [
+        item
+        for item in local_fp.GraphicalItems()
+        if item.GetLayer() in (pcbnew.F_SilkS, pcbnew.B_SilkS)
+        and isinstance(item, pcbnew.PCB_SHAPE)
+    ]
     for item in items:
         box = item.GetBoundingBox()
-        extent = (2*_mm(max(abs(box.GetLeft()-origin.x),abs(box.GetRight()-origin.x))),
-                  2*_mm(max(abs(box.GetTop()-origin.y),abs(box.GetBottom()-origin.y))))
-        courtyard_mm = tuple(max(a,b) for a,b in zip(courtyard_mm,extent))
+        extent = (
+            2 * _mm(max(abs(box.GetLeft() - origin.x), abs(box.GetRight() - origin.x))),
+            2 * _mm(max(abs(box.GetTop() - origin.y), abs(box.GetBottom() - origin.y))),
+        )
+        courtyard_mm = tuple(max(a, b) for a, b in zip(courtyard_mm, extent))
 
     pads: List[Pad] = []
     for pad in fp.Pads():
@@ -185,9 +195,10 @@ def _component(fp, frame: _Frame) -> Component:
         # Preserve the pad-local rotation before the component rotation is
         # reapplied by pad_rects. AABB conservatively bounds non-cardinal pads.
         import math
+
         angle = math.radians(pad.GetOrientationDegrees() - fp.GetOrientationDegrees())
         ca, sa = abs(math.cos(angle)), abs(math.sin(angle))
-        w_mm, h_mm = ca*w_mm + sa*h_mm, sa*w_mm + ca*h_mm
+        w_mm, h_mm = ca * w_mm + sa * h_mm, sa * w_mm + ca * h_mm
         # Custom-shape pads (exposed thermal die-pads etc.) report a tiny anchor for
         # GetSize() but their real copper is the primitive set — use the copper
         # bounding box instead, else the router models a big pad as a point and
@@ -204,8 +215,8 @@ def _component(fp, frame: _Frame) -> Component:
             # The custom primitive set need not be centered on its construction
             # anchor. The graph stores an anchor-centered rectangle, so bound
             # both sides relative to that anchor, not just the bbox dimensions.
-            bw = 2 * _mm(max(abs(anchor.x-bb.GetLeft()),abs(bb.GetRight()-anchor.x)))
-            bh = 2 * _mm(max(abs(anchor.y-bb.GetTop()),abs(bb.GetBottom()-anchor.y)))
+            bw = 2 * _mm(max(abs(anchor.x - bb.GetLeft()), abs(bb.GetRight() - anchor.x)))
+            bh = 2 * _mm(max(abs(anchor.y - bb.GetTop()), abs(bb.GetBottom() - anchor.y)))
             if int(round(fp.GetOrientationDegrees())) % 180 == 90:
                 bw, bh = bh, bw
             w_mm, h_mm = max(w_mm, bw), max(h_mm, bh)
@@ -222,8 +233,14 @@ def _component(fp, frame: _Frame) -> Component:
         land_corner = None
         quarter = (pad.GetOrientationDegrees() - fp.GetOrientationDegrees()) / 90.0
         offset = pad.GetOffset()
-        if (not through and not is_custom and abs(quarter - round(quarter)) < 1e-6
-                and not offset.x and not offset.y and min(w_mm, h_mm) > 0):
+        if (
+            not through
+            and not is_custom
+            and abs(quarter - round(quarter)) < 1e-6
+            and not offset.x
+            and not offset.y
+            and min(w_mm, h_mm) > 0
+        ):
             shape = pad.GetShape()
             if shape == pcbnew.PAD_SHAPE_RECT:
                 land_corner = 0.0
@@ -240,10 +257,18 @@ def _component(fp, frame: _Frame) -> Component:
                 through_hole=bool(through),
                 drill_size=(_mm(pad.GetDrillSize().x), _mm(pad.GetDrillSize().y)),
                 plated=bool(pad.GetAttribute() == pcbnew.PAD_ATTRIB_PTH),
-                plated_land_radius=(min(_mm(sz.x), _mm(sz.y)) / 2
-                    if pad.GetAttribute() == pcbnew.PAD_ATTRIB_PTH and pad.GetShape() in
-                    (pcbnew.PAD_SHAPE_CIRCLE, pcbnew.PAD_SHAPE_OVAL,
-                     pcbnew.PAD_SHAPE_RECT, pcbnew.PAD_SHAPE_ROUNDRECT) else 0.0),
+                plated_land_radius=(
+                    min(_mm(sz.x), _mm(sz.y)) / 2
+                    if pad.GetAttribute() == pcbnew.PAD_ATTRIB_PTH
+                    and pad.GetShape()
+                    in (
+                        pcbnew.PAD_SHAPE_CIRCLE,
+                        pcbnew.PAD_SHAPE_OVAL,
+                        pcbnew.PAD_SHAPE_RECT,
+                        pcbnew.PAD_SHAPE_ROUNDRECT,
+                    )
+                    else 0.0
+                ),
                 land_corner=land_corner,
             )
         )

@@ -1,10 +1,11 @@
 import unittest
-from pnr.route.detail.regional import preserves_connections
+
 from pnr.route.detail.regional import (
     Request,
-    solve_region,
-    segment_distance,
     needs_connection,
+    preserves_connections,
+    segment_distance,
+    solve_region,
 )
 
 
@@ -20,9 +21,7 @@ class RegionalTest(unittest.TestCase):
         self.assertTrue(needs_connection(r, components))
         self.assertTrue(needs_connection(r, {}))
         self.assertTrue(
-            needs_connection(
-                Request("other", "other-net", r.sources, r.targets), components
-            )
+            needs_connection(Request("other", "other-net", r.sources, r.targets), components)
         )
 
     def test_conflict_order_repairs_both_nets(self):
@@ -74,15 +73,11 @@ class RegionalTest(unittest.TestCase):
             Request("a", "n", [(0, 0)], [(2, 0)]),
             Request("b", "n", [(1, 0)], [(1, 1)]),
         ]
-        self.assertEqual(
-            solve_region(r, (0, 0, 2, 1), lambda *a: True).status, "routed"
-        )
+        self.assertEqual(solve_region(r, (0, 0, 2, 1), lambda *a: True).status, "routed")
 
     def test_connectivity_gate_catches_tradeoff_between_nets(self):
         self.assertFalse(
-            preserves_connections(
-                [["a", "b"], ["c"], ["d"]], [["a"], ["b"], ["c", "d"]]
-            )
+            preserves_connections([["a", "b"], ["c"], ["d"]], [["a"], ["b"], ["c", "d"]])
         )
         self.assertTrue(preserves_connections([["a", "b"], ["c"]], [["a", "b", "c"]]))
 

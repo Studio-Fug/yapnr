@@ -141,8 +141,8 @@ def width_for_current(
     0.024 internal. Lets a net class be specified by *amperage* instead of a raw
     width, so power rails get sized for their expected current."""
     from pnr.electrical import current_width
-    return current_width(current_a, copper_oz, delta_t_c, external)
 
+    return current_width(current_a, copper_oz, delta_t_c, external)
 
 
 @dataclass
@@ -173,10 +173,17 @@ class NetClass:
         candidates = [floor_mm]
         if self.width_mm is not None:
             from pnr.plane_intent import positive
+
             candidates.append(positive(self.width_mm, "width_mm"))
         if self.current_a is not None:
-            candidates.append(width_for_current(self.current_a, copper_oz=self.copper_oz,
-                                                delta_t_c=self.delta_t_c, external=self.external))
+            candidates.append(
+                width_for_current(
+                    self.current_a,
+                    copper_oz=self.copper_oz,
+                    delta_t_c=self.delta_t_c,
+                    external=self.external,
+                )
+            )
         return max(candidates) if self.width_mm is not None or self.current_a is not None else None
 
 
@@ -424,9 +431,9 @@ def _resolve_addresses(doc, addresses, pin_nets):
     Lists may contain globs (e.g. @board.converter.*). Scalar values and mapping
     keys must resolve to one component. Never silently drop a source constraint.
     """
+
     def matches(value):
-        result = [ref for path, ref in addresses.items()
-                  if fnmatch.fnmatchcase(path, value[1:])]
+        result = [ref for path, ref in addresses.items() if fnmatch.fnmatchcase(path, value[1:])]
         if not result:
             raise ConstraintError(f"unknown component address {value!r}")
         return sorted(set(result))
@@ -459,6 +466,7 @@ def _resolve_addresses(doc, addresses, pin_nets):
                 result[resolved] = visit(item)
             return result
         return value
+
     return visit(doc)
 
 
@@ -466,52 +474,69 @@ def _expand_layout_arrays(doc):
     """Instantiate one local placement template at evenly spaced module origins."""
     import copy
     import math
+
     doc = copy.deepcopy(doc)
-    arrays = doc.pop('layout_array', [])
+    arrays = doc.pop("layout_array", [])
     if not isinstance(arrays, list):
-        raise ConstraintError('layout_array must be a list')
-    fixed = doc.setdefault('fixed', {})
+        raise ConstraintError("layout_array must be a list")
+    fixed = doc.setdefault("fixed", {})
     if not isinstance(fixed, dict):
-        raise ConstraintError('fixed must be a mapping')
+        raise ConstraintError("fixed must be a mapping")
 
     def xy(value, label):
-        if (not isinstance(value, (list, tuple)) or len(value) != 2
-                or any(isinstance(v, bool) or not isinstance(v, (int, float))
-                       or not math.isfinite(v) for v in value)):
-            raise ConstraintError(f'{label} requires two finite coordinates')
+        if (
+            not isinstance(value, (list, tuple))
+            or len(value) != 2
+            or any(
+                isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v)
+                for v in value
+            )
+        ):
+            raise ConstraintError(f"{label} requires two finite coordinates")
         return value
 
     for array in arrays:
         if not isinstance(array, dict):
-            raise ConstraintError('layout_array entry must be a mapping')
-        instances = array.get('instances')
-        members = array.get('members')
-        if (not isinstance(instances, list) or not instances
-                or any(not isinstance(s, str) or not s or any(c in s for c in '@*?[]')
-                       for s in instances) or len(set(instances)) != len(instances)):
-            raise ConstraintError('layout_array requires unique, literal module paths')
+            raise ConstraintError("layout_array entry must be a mapping")
+        instances = array.get("instances")
+        members = array.get("members")
+        if (
+            not isinstance(instances, list)
+            or not instances
+            or any(
+                not isinstance(s, str) or not s or any(c in s for c in "@*?[]") for s in instances
+            )
+            or len(set(instances)) != len(instances)
+        ):
+            raise ConstraintError("layout_array requires unique, literal module paths")
         if not isinstance(members, dict) or not members:
-            raise ConstraintError('layout_array requires a nonempty members template')
-        origin = xy(array.get('origin'), 'layout_array.origin')
-        step = xy(array.get('step'), 'layout_array.step')
+            raise ConstraintError("layout_array requires a nonempty members template")
+        origin = xy(array.get("origin"), "layout_array.origin")
+        step = xy(array.get("step"), "layout_array.step")
         if len(instances) > 1 and all(v == 0 for v in step):
-            raise ConstraintError('layout_array instances require nonzero spacing')
+            raise ConstraintError("layout_array instances require nonzero spacing")
         for index, instance in enumerate(instances):
             for member, spec in members.items():
-                if (not isinstance(member, str) or not member
-                        or any(c in member for c in '@*?[]') or not isinstance(spec, dict)):
-                    raise ConstraintError('layout_array members require literal paths and poses')
-                local = xy(spec.get('at'), 'layout_array member.at')
-                selector = '@' + instance + '.' + member
+                if (
+                    not isinstance(member, str)
+                    or not member
+                    or any(c in member for c in "@*?[]")
+                    or not isinstance(spec, dict)
+                ):
+                    raise ConstraintError("layout_array members require literal paths and poses")
+                local = xy(spec.get("at"), "layout_array member.at")
+                selector = "@" + instance + "." + member
                 if selector in fixed:
-                    raise ConstraintError(f'layout_array duplicates fixed pose {selector}')
+                    raise ConstraintError(f"layout_array duplicates fixed pose {selector}")
                 pose = copy.deepcopy(spec)
-                pose['at'] = [origin[k] + index * step[k] + local[k] for k in range(2)]
+                pose["at"] = [origin[k] + index * step[k] + local[k] for k in range(2)]
                 fixed[selector] = pose
     return doc
 
 
-def compile_constraints(doc: Dict, known_refs: Sequence[str], addresses=None, pin_nets=None) -> CompiledConstraints:
+def compile_constraints(
+    doc: Dict, known_refs: Sequence[str], addresses=None, pin_nets=None
+) -> CompiledConstraints:
     """Compile a parsed constraints document against a netlist's refs.
 
     ``doc`` is the already-parsed YAML mapping (see :func:`load_constraints` for
@@ -577,17 +602,35 @@ def compile_constraints(doc: Dict, known_refs: Sequence[str], addresses=None, pi
 
     # Orientation is independent of XY; sensor axes do not require fixed centres.
     import math
+
     for selector, spec in (doc.get("orientation") or {}).items():
         angle = spec.get("rot") if isinstance(spec, dict) else spec
-        if (isinstance(angle, bool) or not isinstance(angle, (int, float))
-                or not math.isfinite(angle) or abs(angle / 90 - round(angle / 90)) > 1e-8):
+        if (
+            isinstance(angle, bool)
+            or not isinstance(angle, (int, float))
+            or not math.isfinite(angle)
+            or abs(angle / 90 - round(angle / 90)) > 1e-8
+        ):
             raise ConstraintError("orientation requires a finite cardinal rotation")
         refs = _expand_refs([selector], known_refs, warnings, "orientation")
         for con in constraints:
-            if con.kind == "fixed" and set(refs).intersection(con.refs) and (con.params.get("rot") or 0) % 360 != angle % 360:
+            if (
+                con.kind == "fixed"
+                and set(refs).intersection(con.refs)
+                and (con.params.get("rot") or 0) % 360 != angle % 360
+            ):
                 raise ConstraintError("orientation conflicts with fixed rotation")
-        constraints.append(Constraint("orientation", Enforcement.HARD, refs,
-                           {"rot": angle % 360, "reason": spec.get("reason") if isinstance(spec,dict) else None}))
+        constraints.append(
+            Constraint(
+                "orientation",
+                Enforcement.HARD,
+                refs,
+                {
+                    "rot": angle % 360,
+                    "reason": spec.get("reason") if isinstance(spec, dict) else None,
+                },
+            )
+        )
 
     # edge_align: SOFT — pull the part to a board edge; snap orientation.
     for ref, spec in (doc.get("edge_align") or {}).items():
@@ -638,12 +681,16 @@ def compile_constraints(doc: Dict, known_refs: Sequence[str], addresses=None, pi
             raise ConstraintError(f"side: {side!r} not one of {SIDES}")
         refs = _expand_refs(patterns or [], known_refs, warnings, f"side.{side}")
         for ref in refs:
-            prior = [c.params['side'] for c in constraints if ref in c.refs
-                     and c.kind in ('fixed', 'side') and c.params.get('side')]
+            prior = [
+                c.params["side"]
+                for c in constraints
+                if ref in c.refs and c.kind in ("fixed", "side") and c.params.get("side")
+            ]
             if any(value != side for value in prior):
                 raise ConstraintError(f"conflicting hard side rules for {ref}")
-        constraints.append(Constraint(kind="side", enforcement=Enforcement.HARD,
-                                      refs=refs, params={"side": side}))
+        constraints.append(
+            Constraint(kind="side", enforcement=Enforcement.HARD, refs=refs, params={"side": side})
+        )
 
     # side_pref: SOFT — bias a set of parts to a side.
     for side, patterns in (doc.get("side_pref") or {}).items():
@@ -664,20 +711,44 @@ def compile_constraints(doc: Dict, known_refs: Sequence[str], addresses=None, pi
     row_members = set()
     for entry in doc.get("row") or []:
         members = tuple(entry.get("members") or ())
-        if not members or len(set(members)) != len(members) or any(r not in known_refs for r in members):
+        if (
+            not members
+            or len(set(members)) != len(members)
+            or any(r not in known_refs for r in members)
+        ):
             raise ConstraintError("row requires known unique ordered members")
-        if row_members.intersection(members):raise ConstraintError("component occurs in multiple rows")
+        if row_members.intersection(members):
+            raise ConstraintError("component occurs in multiple rows")
         if any(c.kind == "fixed" and set(members).intersection(c.refs) for c in constraints):
             raise ConstraintError("row cannot silently override an authored absolute pose")
         row_members.update(members)
-        if entry.get("edge") != "any":raise ConstraintError("row currently requires edge: any")
+        if entry.get("edge") != "any":
+            raise ConstraintError("row currently requires edge: any")
         facing = entry.get("facing")
-        if facing not in (None, "north", "south"):raise ConstraintError("row facing must be a local north/south normal")
+        if facing not in (None, "north", "south"):
+            raise ConstraintError("row facing must be a local north/south normal")
         gap = entry.get("gap_mm", float(board.default_clearance_mm))
-        if isinstance(gap,bool) or not isinstance(gap,(int,float)) or not math.isfinite(gap) or gap < float(board.default_clearance_mm):
+        if (
+            isinstance(gap, bool)
+            or not isinstance(gap, (int, float))
+            or not math.isfinite(gap)
+            or gap < float(board.default_clearance_mm)
+        ):
             raise ConstraintError("row gap must meet placement clearance")
-        constraints.append(Constraint("row", Enforcement.HARD, members,
-            dict(edge="any",facing=facing,gap_mm=gap,reason=entry.get("reason","User-authored relative row")),name=entry.get("name")))
+        constraints.append(
+            Constraint(
+                "row",
+                Enforcement.HARD,
+                members,
+                dict(
+                    edge="any",
+                    facing=facing,
+                    gap_mm=gap,
+                    reason=entry.get("reason", "User-authored relative row"),
+                ),
+                name=entry.get("name"),
+            )
+        )
 
     # Groups are soft by default; hard groups survive legalization.
     for entry in doc.get("group") or []:
@@ -693,7 +764,11 @@ def compile_constraints(doc: Dict, known_refs: Sequence[str], addresses=None, pi
             if not refs or len(warnings) != warnings_before_group:
                 raise ConstraintError("hard group requires known, nonempty members")
             radius = entry.get("radius_mm")
-            if isinstance(radius, bool) or not isinstance(radius, (int, float)) or not 0 < radius < float("inf"):
+            if (
+                isinstance(radius, bool)
+                or not isinstance(radius, (int, float))
+                or not 0 < radius < float("inf")
+            ):
                 raise ConstraintError("hard group requires a finite positive radius_mm")
             if anchor not in known_refs:
                 raise ConstraintError("hard group requires a known anchor")
@@ -763,46 +838,74 @@ def compile_constraints(doc: Dict, known_refs: Sequence[str], addresses=None, pi
 
     # Mechanical fastener envelopes reserve both faces and every copper layer.
     import math
+
     mounting_holes = []
     hole_names = set()
-    for entry in doc.get('mounting_hole') or []:
-        name = entry.get('name')
-        at = entry.get('at', [])
-        drill = entry.get('drill_mm')
-        diameter = entry.get('clearance_diameter_mm')
+    for entry in doc.get("mounting_hole") or []:
+        name = entry.get("name")
+        at = entry.get("at", [])
+        drill = entry.get("drill_mm")
+        diameter = entry.get("clearance_diameter_mm")
         values = list(at) + [drill, diameter] if isinstance(at, (list, tuple)) else []
-        if (not isinstance(name, str) or not name or name in hole_names
-                or len(values) != 4 or any(isinstance(v, bool)
-                    or not isinstance(v, (int, float)) or not math.isfinite(v) for v in values)
-                or not 0 < drill < diameter):
-            raise ConstraintError('mounting_hole requires unique name, finite XY and 0 < drill < clearance diameter')
+        if (
+            not isinstance(name, str)
+            or not name
+            or name in hole_names
+            or len(values) != 4
+            or any(
+                isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v)
+                for v in values
+            )
+            or not 0 < drill < diameter
+        ):
+            raise ConstraintError(
+                "mounting_hole requires unique name, finite XY and 0 < drill < clearance diameter"
+            )
         radius = diameter / 2
         if board.width is None or board.height is None:
-            raise ConstraintError('mounting_hole requires explicit board dimensions')
-        if (at[0]-radius < 0 or at[1]-radius < 0
-                or at[0]+radius > board.width or at[1]+radius > board.height):
-            raise ConstraintError('mounting_hole clearance envelope must fit inside board')
+            raise ConstraintError("mounting_hole requires explicit board dimensions")
+        if (
+            at[0] - radius < 0
+            or at[1] - radius < 0
+            or at[0] + radius > board.width
+            or at[1] + radius > board.height
+        ):
+            raise ConstraintError("mounting_hole clearance envelope must fit inside board")
         hole_names.add(name)
-        mounting_holes.append({'name': name, 'at': list(at), 'drill_mm': drill,
-                               'clearance_diameter_mm': diameter})
+        mounting_holes.append(
+            {"name": name, "at": list(at), "drill_mm": drill, "clearance_diameter_mm": diameter}
+        )
         x, y = at
-        constraints.append(Constraint(kind='keepout', enforcement=Enforcement.HARD,
-            refs=(), name='mount:'+name, params={'polygon': [
-                [x-radius,y-radius],[x+radius,y-radius],
-                [x+radius,y+radius],[x-radius,y+radius]]}))
+        constraints.append(
+            Constraint(
+                kind="keepout",
+                enforcement=Enforcement.HARD,
+                refs=(),
+                name="mount:" + name,
+                params={
+                    "polygon": [
+                        [x - radius, y - radius],
+                        [x + radius, y - radius],
+                        [x + radius, y + radius],
+                        [x - radius, y + radius],
+                    ]
+                },
+            )
+        )
 
     copper_keepouts = []
-    for entry in doc.get('copper_keepout') or []:
-        ref = entry.get('ref')
-        rect = entry.get('rect_mm', [])
+    for entry in doc.get("copper_keepout") or []:
+        ref = entry.get("ref")
+        rect = entry.get("rect_mm", [])
         if ref not in known_refs:
-            raise ConstraintError(f'copper_keepout: unknown ref {ref!r}')
-        if len(rect) != 4 or not all(isinstance(x, (int,float)) for x in rect):
-            raise ConstraintError('copper_keepout: rect_mm needs four numbers')
+            raise ConstraintError(f"copper_keepout: unknown ref {ref!r}")
+        if len(rect) != 4 or not all(isinstance(x, (int, float)) for x in rect):
+            raise ConstraintError("copper_keepout: rect_mm needs four numbers")
         if rect[0] >= rect[2] or rect[1] >= rect[3]:
-            raise ConstraintError('copper_keepout: rectangle must have positive area')
-        copper_keepouts.append({'name':str(entry.get('name') or ref),
-                                'ref':ref, 'rect_mm':list(rect)})
+            raise ConstraintError("copper_keepout: rectangle must have positive area")
+        copper_keepouts.append(
+            {"name": str(entry.get("name") or ref), "ref": ref, "rect_mm": list(rect)}
+        )
 
     return CompiledConstraints(
         board=board,

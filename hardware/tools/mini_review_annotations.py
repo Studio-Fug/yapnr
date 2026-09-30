@@ -1,13 +1,14 @@
 """Native geometry metadata and vector annotation overlays for Mini review PDFs."""
 
 import io
-import math
 import json
+import math
 import subprocess
-from reportlab.pdfgen.canvas import Canvas
-from reportlab.pdfbase.pdfmetrics import stringWidth
-from pypdf import PdfReader
+
 import pdfplumber
+from pypdf import PdfReader
+from reportlab.pdfbase.pdfmetrics import stringWidth
+from reportlab.pdfgen.canvas import Canvas
 
 
 def inventory(python, board, target):
@@ -31,9 +32,7 @@ ends=[xy(p) for d in b.GetDrawings() if d.GetLayer()==pcbnew.Edge_Cuts and d.Get
 bounds=[min(p[0] for p in ends),min(p[1] for p in ends),max(p[0] for p in ends),max(p[1] for p in ends)]
 open(sys.argv[2],'w').write(json.dumps(dict(parts=parts,tracks=tracks,bounds=bounds),indent=2))
 """
-    subprocess.run(
-        [python, "-c", script, str(board), str(target)], check=True, capture_output=True
-    )
+    subprocess.run([python, "-c", script, str(board), str(target)], check=True, capture_output=True)
     return json.loads(target.read_text())
 
 
@@ -68,12 +67,8 @@ def overlay(native_path, data, layer):
         p = doc.pages[0]
         w, h = p.width, p.height
         black = [l for l in p.lines if l["stroking_color"] in [(0, 0, 0), 0]]
-        horizontal = max(
-            (l for l in black if l["height"] < 1e-5), key=lambda l: l["width"]
-        )
-        vertical = max(
-            (l for l in black if l["width"] < 1e-5), key=lambda l: l["height"]
-        )
+        horizontal = max((l for l in black if l["height"] < 1e-5), key=lambda l: l["width"])
+        vertical = max((l for l in black if l["width"] < 1e-5), key=lambda l: l["height"])
     bx0, by0, bx1, by1 = data["bounds"]
     x0, x1 = horizontal["x0"], horizontal["x1"]
     y0, y1 = vertical["y0"], vertical["y1"]
@@ -111,8 +106,7 @@ def overlay(native_path, data, layer):
             and b[2] < w - 3
             and b[3] < h - 3
             and not any(
-                b[0] < o[2] and b[2] > o[0] and b[1] < o[3] and b[3] > o[1]
-                for o in occupied
+                b[0] < o[2] and b[2] > o[0] and b[1] < o[3] and b[3] > o[1] for o in occupied
             )
         )
 

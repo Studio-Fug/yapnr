@@ -6,6 +6,7 @@ net-class totals.
 """
 
 import unittest
+from unittest.mock import Mock
 
 from pnr.constraints import (
     DiffPair,
@@ -15,7 +16,6 @@ from pnr.constraints import (
     compile_routing_rules,
 )
 from pnr.quality import analyze, unrouted_count
-from unittest.mock import Mock
 
 
 class ConnectivityFailureTest(unittest.TestCase):

@@ -1,0 +1,12 @@
+# Build dependencies of atopile's sdist, for tools/atopile/build_wheel.sh (platforms without an
+# atopile wheel, linux-aarch64 today). atopile's pyproject.toml asks for these plus a fork of
+# scikit-build-core pinned to a git branch, which the script installs from a pinned commit
+# (pins.json) with --no-deps; its own dependencies are listed here.
+hatchling
+hatch-vcs
+nanobind>=2.6.1,<3.0
+ziglang==0.16.0
+cmake
+ninja
+packaging
+pathspec

@@ -1,0 +1,3 @@
+# The atopile environment of `yapnr atopile setup` (docs/frontends/atopile.md). One pin; the
+# per-platform locks next to this file are generated from it by tools/atopile/update_locks.sh.
+atopile==0.15.8

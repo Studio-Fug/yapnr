@@ -222,9 +222,11 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="docs/architecture.html">Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/regression-ladder.html">Regression ladder</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/migration-plan.html">yapnr migration plan</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/decisions.html">Decisions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/about-the-name.html">About the name</a></li>
 </ul>
@@ -320,6 +322,13 @@
 <p><em>The 555 flasher (a TLC555 astable blinker, 10 parts, 2 layers) from the
 <a class="reference internal" href="docs/regression-ladder.html"><span class="std std-doc">regression ladder</span></a>: from unplaced footprints to 100 % routed, with the
 placement starts and routes it was chosen from, ending on KiCad’s clean DRC verdict.</em></p>
+<p align="center">
+  <img src="docs/animations/showcase-chaser-line.gif" width="800"
+    alt="Animation, side by side: an LED chaser placed and routed twice, its LEDs placed freely
+    on the left and held in one line that the placer moves and turns as a whole on the right">
+</p>
+<p><em>Left: LEDs placed freely. Right: the same chaser with its LEDs held in a
+<a class="reference internal" href="docs/constraints-and-hierarchy.html"><span class="std std-doc">line group</span></a>; the placer moves and turns the whole line.</em></p>
 <p>yapnr places components and routes copper for KiCad boards. It uses a mechanical,
 Monte-Carlo-driven search: hierarchical block synthesis, power-first placement, native KiCad
 routing and DRC in the loop, and electrical contracts (current, pairs, plane access) declared

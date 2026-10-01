@@ -3,7 +3,7 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="yapnr migration plan" href="migration-plan.html"><link rel="prev" title="Architecture" href="architecture.html">
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Constraints and hierarchy" href="constraints-and-hierarchy.html"><link rel="prev" title="Architecture" href="architecture.html">
         <link rel="prefetch" href="../static/yapnr-logo-256.png" as="image">
         <link rel="prefetch" href="../static/yapnr-logo-light.png" as="image">
 
@@ -222,9 +222,11 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Regression ladder</a></li>
+<li class="toctree-l1"><a class="reference internal" href="constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
 <li class="toctree-l1"><a class="reference internal" href="migration-plan.html">yapnr migration plan</a></li>
 <li class="toctree-l1"><a class="reference internal" href="decisions.html">Decisions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
 <li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
 </ul>
@@ -440,6 +442,16 @@ pad entries, and zero KiCad unconnected items and findings, warnings included. S
 fabrication block, which the runner routes and judges under (<code class="docutils literal notranslate"><span class="pre">PNR_FAB_PROFILE=legacy</span></code> for every
 stage). <code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">jlc-pofv</span></code> routes and judges under the engine’s default JLCPCB profile
 instead (0.127 mm clearance, 0.45/0.30 mm vias, vias 0.127 mm off SMD pads).</p>
+<section id="showcases">
+<h3>Showcases<a class="headerlink" href="#showcases" title="Link to this heading">¶</a></h3>
+<p>Four more cases show what the engine does with placement constraints and with hierarchy: the
+five-stage chaser with its LEDs held in a line group, a small board with its connector, button
+and LED held on the south edge (each beside a twin without the constraint), and a twin-bank
+chaser placed and routed as blocks. They run through the same runner and gate, but they are not
+ladder cases: they are outside the gate and the pull-request lane (the nightly lane runs them for
+information). Their animations and results are on
+<a class="reference internal" href="constraints-and-hierarchy.html"><span class="std std-doc">Constraints and hierarchy</span></a>.</p>
+</section>
 </section>
 <section id="reading-an-animation">
 <h2>Reading an animation<a class="headerlink" href="#reading-an-animation" title="Link to this heading">¶</a></h2>
@@ -569,10 +581,13 @@ phases (<code class="docutils literal notranslate"><span class="pre">phases/NN-n
 rung’s final boards, then the verdict. Blocks assembled from a synthesis library appear in place;
 a library itself has no board to draw, and <code class="docutils literal notranslate"><span class="pre">--storyboard</span> <span class="pre">FILE</span></code> writes its critical path (the
 chosen layout per template and its rivals) instead. The animator only reads its sources.</p>
-<p>Rendering is deterministic: the same trace gives the same bytes. Budgets: WebP at most 2.5 MB
-(800 px), the README GIF at most 5 MB (640 px), the folder at most 20 MB
-(<code class="docutils literal notranslate"><span class="pre">tests/unit/repo/test_animations.py</span></code>). Refresh the committed animations deliberately, after a
-notable engine change, not on every pull request: each refresh adds about 12 MB to the history.</p>
+<p>Rendering is deterministic: the same trace gives the same bytes. Budgets: the ladder’s WebPs at
+most 2.5 MB (800 px), its README GIF at most 5 MB (640 px), the folder at most 30 MB with the
+showcases, whose own widths and budgets are on
+<a class="reference internal" href="constraints-and-hierarchy.html#regenerating"><span class="std std-ref">Constraints and hierarchy</span></a>
+(<code class="docutils literal notranslate"><span class="pre">tests/unit/repo/test_animations.py</span></code> checks them all). Refresh the committed animations
+deliberately, after a notable engine change, not on every pull request: each refresh adds about
+12 MB to the history.</p>
 </section>
 <section id="in-ci">
 <h2>In CI<a class="headerlink" href="#in-ci" title="Link to this heading">¶</a></h2>
@@ -590,12 +605,12 @@ is a notice). The lane is informational, not a required check yet; its aggregate
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="migration-plan.html">
+          <a class="next-page" href="constraints-and-hierarchy.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">yapnr migration plan</div>
+                <div class="title">Constraints and hierarchy</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
@@ -641,7 +656,10 @@ is a notice). The lane is informational, not a required check yet; its aggregate
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Regression ladder</a><ul>
-<li><a class="reference internal" href="#the-cases">The cases</a></li>
+<li><a class="reference internal" href="#the-cases">The cases</a><ul>
+<li><a class="reference internal" href="#showcases">Showcases</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#reading-an-animation">Reading an animation</a></li>
 <li><a class="reference internal" href="#animations">Animations</a><ul>
 <li><a class="reference internal" href="#connector-led">01 Connector + LED</a></li>

@@ -222,9 +222,11 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="docs/architecture.html">Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/regression-ladder.html">Regression ladder</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/migration-plan.html">yapnr migration plan</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/decisions.html">Decisions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/about-the-name.html">About the name</a></li>
 </ul>
@@ -282,8 +284,9 @@
 <h1>Worklog<a class="headerlink" href="#worklog" title="Link to this heading">¶</a></h1>
 <p>A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.</p>
-<p>Last updated: 2026-09-30 (PR4, #10 and the ladder animations merged; atopile toolchain branch,
-review fixes).</p>
+<p>Last updated: 2026-09-30 (PR4, #10, the ladder animations, the atopile toolchain and the privacy-scan
+trailer rule merged; line groups, hard board edges, the hierarchical ladder driver and their
+animations on <code class="docutils literal notranslate"><span class="pre">claude/animations-groups-hier</span></code>).</p>
 <section id="in-progress">
 <h2>In progress<a class="headerlink" href="#in-progress" title="Link to this heading">¶</a></h2>
 <ul class="simple">
@@ -296,20 +299,19 @@ routing-feedback staleness check, fixing #10 on Linux). The format commits of #9
 <li><p><strong>Merged since:</strong> the regression ladder in CI and the PnR animations (#15: <code class="docutils literal notranslate"><span class="pre">pnr.trace</span></code>,
 <code class="docutils literal notranslate"><span class="pre">pnr.provenance</span></code>, <code class="docutils literal notranslate"><span class="pre">pnr.animate</span></code>, <code class="docutils literal notranslate"><span class="pre">ladder.yaml</span></code>, <code class="docutils literal notranslate"><span class="pre">docs/regression-ladder.md</span></code>) and two viewer
 test race fixes (#16, #17).</p></li>
-<li><p><strong>atopile toolchain and part cache</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/atopile-toolchain</span></code>, rebased on <code class="docutils literal notranslate"><span class="pre">main</span></code>
-after #17, not pushed; A1 and A2 of the end-to-end plan): <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">setup</span></code> (hashed
-per-platform locks, atopile 0.15.8 on Python 3.14.7), <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">build</span></code> (offline,
-isolated, bounded; a hook in every atopile interpreter), the loopback picker (catalog schema
-v1), the part cache (store, HTTP server with tokens and takedowns, clients, importer,
-container), the Bazel toolchain and <code class="docutils literal notranslate"><span class="pre">yapnr_atopile_build</span></code>. The adversarial review’s findings
-are fixed: a lock pins its part; client tokens go only to the named server (no redirects, https
-or loopback, the write token never with reads); the server checks tokens before bodies, bounds
-its connections, serves only files a part uses, collects orphans, checks file types, and a
-takedown blocks the part’s files; local-only parts; no git clone offline and no contact with a
-running KiCad; ato.yaml’s layout paths; the Bazel action copies only its declared inputs and
-needs an explicit cache; hashed sdist builds on linux-aarch64. Real atopile: 4 end-to-end cases
-(7 builds) pass on darwin-arm64; <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//...</span></code> 137 of 137. Not done: the image’s
-<code class="docutils literal notranslate"><span class="pre">/opt/atopile</span></code> (A4) and a KiCad 9 against 10 A/B
+<li><p><strong>atopile toolchain and part cache</strong> (merged as #18; A1 and A2 of the end-to-end plan):
+<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">setup</span></code> (hashed per-platform locks, atopile 0.15.8 on Python 3.14.7),
+<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">build</span></code> (offline, isolated, bounded; a hook in every atopile interpreter), the
+loopback picker (catalog schema v1), the part cache (store, HTTP server with tokens and takedowns,
+clients, importer, container), the Bazel toolchain and <code class="docutils literal notranslate"><span class="pre">yapnr_atopile_build</span></code>. The adversarial
+review’s findings are fixed: a lock pins its part; client tokens go only to the named server (no
+redirects, https or loopback, the write token never with reads); the server checks tokens before
+bodies, bounds its connections, serves only files a part uses, collects orphans, checks file
+types, and a takedown blocks the part’s files; local-only parts; no git clone offline and no
+contact with a running KiCad; ato.yaml’s layout paths; the Bazel action copies only its declared
+inputs and needs an explicit cache; hashed sdist builds on linux-aarch64. Real atopile: 4
+end-to-end cases (7 builds) pass on darwin-arm64; <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//...</span></code> 137 of 137. Not done: the
+image’s <code class="docutils literal notranslate"><span class="pre">/opt/atopile</span></code> (A4) and a KiCad 9 against 10 A/B
 (<a class="reference internal" href="docs/frontends/atopile.html#not-done-yet"><span class="std std-ref">docs/frontends/atopile.md</span></a>).</p></li>
 <li><p><strong>Splanc’s parts in a local part cache</strong> (local-machine note; Splanc is not modified): the
 committed parts of <code class="docutils literal notranslate"><span class="pre">splanc</span></code>, <code class="docutils literal notranslate"><span class="pre">splanc_dev</span></code>, <code class="docutils literal notranslate"><span class="pre">splanc_max</span></code> and <code class="docutils literal notranslate"><span class="pre">splanc_eol_tester</span></code> (276
@@ -327,6 +329,34 @@ review fixes. Seeded with the same
 local layout, it equals rules_atopile’s last Nix-built board in nets, footprints, pads,
 positions and outline. <code class="docutils literal notranslate"><span class="pre">splanc_eol_tester</span></code> fails on 0.15.8 with or without the cache: atopile
 rejects its <code class="docutils literal notranslate"><span class="pre">elec/footprints/</span></code> directory as deprecated.</p></li>
+<li><p><strong>Constraint and hierarchy showcases</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/animations-groups-hier</span></code>, on top of
+<code class="docutils literal notranslate"><span class="pre">claude/ladder-animations</span></code>; design <code class="docutils literal notranslate"><span class="pre">docs/design/constraint-and-hier-animations.md</span></code>, §10 and §11
+“As built”). Engine, all opt-in: a HARD <code class="docutils literal notranslate"><span class="pre">line_group</span></code> constraint placed as one rigid macro
+inside <code class="docutils literal notranslate"><span class="pre">place()</span></code>, <code class="docutils literal notranslate"><span class="pre">edge_align</span></code> <code class="docutils literal notranslate"><span class="pre">hard</span></code>/<code class="docutils literal notranslate"><span class="pre">tolerance_mm</span></code>, own-net fixed copper in the detail
+router, and <code class="docutils literal notranslate"><span class="pre">regression/hier_case.py</span></code> (blocks placed and routed on their own boards, placed as
+macros, knitted with block copper held fixed). Traces gain <code class="docutils literal notranslate"><span class="pre">groups</span></code>, <code class="docutils literal notranslate"><span class="pre">group_members</span></code>,
+<code class="docutils literal notranslate"><span class="pre">header.constraints</span></code>, a <code class="docutils literal notranslate"><span class="pre">fixed</span></code> event and per-template block traces. <code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--showcases</span></code> and
+<code class="docutils literal notranslate"><span class="pre">--trace-placement-every</span></code>; <code class="docutils literal notranslate"><span class="pre">designs.showcases()</span></code>: <code class="docutils literal notranslate"><span class="pre">line-chaser-20</span></code>, <code class="docutils literal notranslate"><span class="pre">edge-io-12-free</span></code>,
+<code class="docutils literal notranslate"><span class="pre">edge-io-12</span></code>, <code class="docutils literal notranslate"><span class="pre">hier-twin-bank-32</span></code>. Showcase run (pool seed 0, 8 starts, 3 finalists,
+snapshots every 5): all five cases pass the gate and the constraint audit, 0 opens, 0
+findings; vias 19 (07), 20 (line), 9 (edge free), 8 (edge), 38 (hier). A/B of the eight
+ladder cases: identical <code class="docutils literal notranslate"><span class="pre">placed.json</span></code>, <code class="docutils literal notranslate"><span class="pre">routes.json</span></code> and trace digests.
+Renderer: constraint highlighting (<code class="docutils literal notranslate"><span class="pre">pnr.animate.highlight</span></code>), rigid-body tweens, side-by-side
+comparisons (<code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">pnr.animate</span> <span class="pre">--compare</span> <span class="pre">A</span> <span class="pre">B</span></code>, <code class="docutils literal notranslate"><span class="pre">pnr.animate.compare</span></code>), the hierarchical
+chapters (<code class="docutils literal notranslate"><span class="pre">pnr.animate.hier</span></code>, <code class="docutils literal notranslate"><span class="pre">provenance.from_hier</span></code>), <code class="docutils literal notranslate"><span class="pre">--pacing</span> <span class="pre">showcase</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">//hardware/pnr:showcase_animations</span></code>. Four files in <code class="docutils literal notranslate"><span class="pre">docs/animations/</span></code> (13.1 MB; folder
+budget 30 MB, the hierarchical WebP 3.5 MB), the page
+<a class="reference internal" href="docs/constraints-and-hierarchy.html"><span class="std std-doc">docs/constraints-and-hierarchy.md</span></a>, a second README item
+(the side-by-side chaser GIF), and a nightly, informational showcase step in <code class="docutils literal notranslate"><span class="pre">ladder.yaml</span></code>
+(never run yet). Re-rendering the eight ladder cases reproduces every committed file’s
+SHA-256; each showcase renders byte-identically twice.
+Review fixes (design §12): line-group macros reserve their members’ sides (<code class="docutils literal notranslate"><span class="pre">line:&lt;name&gt;</span></code>) and
+refuse source-locked members; knit retries trace in their own scopes; <code class="docutils literal notranslate"><span class="pre">PAD_AXIS</span></code> is checked
+against the footprints; half-turns are drawn as flips, off-board poses widen the camera, the
+edge comparison replays its pool’s eight starts; GIF palette and per-file renders. Rerun
+<code class="docutils literal notranslate"><span class="pre">.yapnr/ladder/showcase-2</span></code> (engine <code class="docutils literal notranslate"><span class="pre">c4db5fb</span></code>): the five cases’ <code class="docutils literal notranslate"><span class="pre">placed.json</span></code>, <code class="docutils literal notranslate"><span class="pre">routes.json</span></code> and
+trace digests are identical to the first run; all pass. Next: the owner’s review of the
+decisions in <code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code> and the pull request.</p></li>
 </ul>
 </section>
 <section id="next">
@@ -391,6 +421,11 @@ needs a refresh of <code class="docutils literal notranslate"><span class="pre">
 <code class="docutils literal notranslate"><span class="pre">claude/ladder-animations</span></code>) is the first run of its container path.</p></li>
 <li><p>Rebuild the KiCad base monthly (bump <code class="docutils literal notranslate"><span class="pre">docker/yapnr-kicad/TAG</span></code> to the next <code class="docutils literal notranslate"><span class="pre">-N</span></code>), or with the
 Dependabot <code class="docutils literal notranslate"><span class="pre">ubuntu</span></code> digest update (docs/releases.md, “Maintaining the images”).</p></li>
+<li><p>Showcases (<code class="docutils literal notranslate"><span class="pre">claude/animations-groups-hier</span></code>): the first nightly showcase step on the arm64
+runner (its runtime and its placements are unmeasured; <code class="docutils literal notranslate"><span class="pre">showcase-edge-io.webp</span></code> fits its
+2.5 MB budget at quality 70 by 450 bytes here, the encoder steps down where it must). The
+ladder’s own animations still sweep single parts through half-turns (their timelines are
+pinned); move them to flips with the next deliberate refresh of <code class="docutils literal notranslate"><span class="pre">docs/animations/</span></code>.</p></li>
 </ol>
 </section>
 <section id="blockers">
@@ -401,6 +436,14 @@ container run of the atopile review fixes (wheel build, <code class="docutils li
 lock, end-to-end tests) and the part cache image smoke test could not run; the images there
 belong to other projects and were not pruned. The no-isolation sdist build was checked with
 the pinned CPython on macOS instead.</p></li>
+</ul>
+</section>
+<section id="known-issues">
+<h2>Known issues<a class="headerlink" href="#known-issues" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">detail_route_test</span></code> (large, not in the PR lane) fails <code class="docutils literal notranslate"><span class="pre">test_drc_clean_by_construction</span></code> on the
+Mac at the branch base as well (a shared footprint cell on the <code class="docutils literal notranslate"><span class="pre">splanc_dev</span></code> fixture); not
+caused by this branch.</p></li>
 </ul>
 </section>
 <section id="do-not-retry">
@@ -496,6 +539,7 @@ nothing, and Adam’s <code class="docutils literal notranslate"><span class="pr
 <li><a class="reference internal" href="#in-progress">In progress</a></li>
 <li><a class="reference internal" href="#next">Next</a></li>
 <li><a class="reference internal" href="#blockers">Blockers</a></li>
+<li><a class="reference internal" href="#known-issues">Known issues</a></li>
 <li><a class="reference internal" href="#do-not-retry">Do not retry</a></li>
 </ul>
 </li>

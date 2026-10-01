@@ -464,6 +464,41 @@ Owner decisions for the atopile toolchain and part data (2026-09-30;
 - **Ordering stays staging-only** (for the later ordering PRs): cart, quote or payment page; the
   human pays on the vendor's page.
 
+Choices made for the constraint and hierarchy showcases (branch `claude/animations-groups-hier`,
+[design](design/constraint-and-hier-animations.md) §9, §11 and §12); the owner reviews them with
+the pull request:
+
+- **`line_group`** is a new hard constraint (ordered literal members, `pitch_mm` or `gap_mm`,
+  `rot`, an optional soft `edge`), placed as one rigid macro inside `place()` with the
+  hierarchical macro code; `row` is unchanged.
+- **`edge_align` gains `hard` and `tolerance_mm`** (default false and 1.0 mm): a hard edge part
+  stays within the tolerance through legalization and the legality checks. The facing is set with
+  `orientation`, not by `edge_align`.
+- **Showcases stay outside the gate.** `designs.showcases()` is a list beside `designs()`, run
+  with `run.py --showcases`; the pull-request lane never runs them and the nightly lane runs them
+  for information.
+- **The animations folder budget is 30 MB** (was 20 MB): the four showcase files add about
+  13 MB. The hierarchical WebP may use 3.5 MB (it is 2.69 MB even at the encoder's last step);
+  every other WebP keeps 2.5 MB and every GIF 5 MB.
+- **A second media item in the README:** the side-by-side chaser GIF (free LEDs against a line
+  group), 800 px, under the 555 flasher.
+- **A showcase that fails its gate is not committed as an animation** (the page then says why),
+  rather than shown with a red end card. All five cases of the committed run pass.
+- **Half-turns are flips.** The placer records only its snapped four-way rotation, so a body or
+  part recorded at opposite angles switches at the middle of the interval instead of sweeping
+  through angles it never had; quarter turns keep the labelled shorter-arc tween. The ladder's
+  own animations keep their sweeps (their timelines are pinned unchanged); only the showcase
+  pacing and rigid bodies flip.
+- **Off-board poses widen the camera** over that global placement (showcase pacing only), and the
+  board zooms back in after legalization, rather than clamping parts to the panel edge.
+- **The edge comparison replays its pool.** The followed start never changes its edge order, so
+  its shortlist replays all eight starts' recorded global placements before the tiles hold;
+  the chaser comparison keeps static tiles (its README GIF is near its 5 MB budget).
+- **A line group reserves its members' sides** (`line:<name>`, not a `block:` macro) and refuses a
+  source-locked member rather than pinning the whole line to it.
+- **Follow-ups:** companion rows (an LED and its resistor as one rigid unit), a hard edge for a
+  whole line group, members on the bottom side, plane-access intents inside a line group.
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.

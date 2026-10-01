@@ -1,0 +1,10 @@
+"""The atopile rules (defs.bzl) and the toolchain they run with (repo.bzl, toolchain.bzl)."""
+
+package(default_visibility = ["//visibility:public"])
+
+toolchain_type(name = "toolchain_type")
+
+exports_files([
+    "defs.bzl",
+    "toolchain.bzl",
+])

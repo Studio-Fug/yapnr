@@ -1,0 +1,21 @@
+"""The part cache (docs/part-cache.md): stdlib only, so the server runs in a minimal container."""
+
+load("@rules_python//python:defs.bzl", "py_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The cache serves the picker's catalog schema and components API (//yapnr/frontends/atopile:picker).
+py_library(
+    name = "partcache",
+    srcs = [
+        "__init__.py",
+        "cli.py",
+        "client.py",
+        "importer.py",
+        "model.py",
+        "server.py",
+        "store.py",
+    ],
+    imports = ["../.."],
+    deps = ["//yapnr/frontends/atopile:picker"],
+)

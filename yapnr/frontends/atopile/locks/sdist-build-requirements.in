@@ -1,0 +1,6 @@
+# Build dependencies of the sdists that `yapnr atopile setup` builds while installing a lock
+# (platforms where a locked package has no wheel: zstd on linux-aarch64). zstd has no
+# pyproject.toml, so its PEP 517 build needs setuptools alone. setup installs this hashed lock
+# into the environment first and then builds with --no-build-isolation, so a build can use
+# nothing that is not hash-pinned here; tools/atopile/update_locks.sh regenerates it.
+setuptools

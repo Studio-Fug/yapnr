@@ -8,6 +8,7 @@ py_library(
     name = "repo_checks",
     srcs = [
         "__init__.py",
+        "check_part_data.py",
         "check_test_wiring.py",
         "privacy_scan.py",
         "repo_root.py",

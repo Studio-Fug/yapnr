@@ -266,6 +266,88 @@ def _like(w: np.ndarray, x):
     return torch.as_tensor(w, dtype=torch.float64).to(x.dtype)
 
 
+# -- lumped ports ----------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class LumpedPort:
+    """A resistive port on Ez columns from the ground to the copper plane (design §5.5).
+
+    `nodes` are the (x, y) coordinates of the columns (grid nodes); the port resistance R is
+    split over the columns in parallel and the substrate edges of each column in series. A
+    Thevenin source V_s(t) in series with R drives it; with V the column voltage (strip over
+    ground) and I the current into the network,
+
+        a = V̂_s / (2√R),   b = (2V̂ − V̂_s) / (2√R)
+
+    with the reference plane at the port. It is the fallback port and the model of lumped
+    elements; the case ports are line ports.
+    """
+
+    number: int
+    nodes: tuple
+    resistance: float = 50.0
+
+    def on(self, grid: Grid) -> "LumpedPortGeometry":
+        return LumpedPortGeometry(self, grid)
+
+
+class LumpedPortGeometry:
+    """A `LumpedPort` placed on a grid."""
+
+    def __init__(self, port: LumpedPort, grid: Grid):
+        self.port = port
+        self.grid = grid
+        kc = grid.k_c
+        cols = [(grid.x.node(x), grid.y.node(y)) for x, y in port.nodes]
+        self.columns = cols
+        idx = [grid.flat_index("ez", i, j, k)[0] for i, j in cols for k in range(kc)]
+        self.index = np.array(idx)
+        dz = grid.z.primary[:kc]
+        self.v_probe = Probe(f"p{port.number}_vl", "ez", self.index)
+        self.v_weights = np.tile(-dz, len(cols)) / len(cols)
+        # σ_e = n L_e / (m R A_e) on every column edge (n = k_c in series, m columns).
+        vol = grid.volume("ez").reshape(-1)[self.index]
+        length = np.tile(dz, len(cols))
+        area = vol / length
+        n, m = kc, len(cols)
+        self.sigma = n * length / (m * port.resistance * area)
+        # J = σ_e V_s / (n L_e) is the Norton current of the source across each edge.
+        self.amplitude = self.sigma / (n * length)
+
+    @property
+    def probes(self) -> list[Probe]:
+        return [self.v_probe]
+
+    def apply(self, structure) -> None:
+        """Add the port resistance to the structure (every port, excited or not)."""
+        p = self.port
+        structure.add_resistor("ez", self.index, p.resistance, self.grid.k_c, len(self.columns))
+
+    def source(self, waveform, dt: float) -> PulseSource:
+        """The Thevenin source V_s(t) = waveform(t) (volts) as Norton currents."""
+        return PulseSource("ez", self.index, self.amplitude, waveform, dt)
+
+    def voltage(self, dft):
+        x = dft[self.v_probe.name]
+        return x @ _like(self.v_weights, x)
+
+    def waves(self, dft, vs_hat):
+        """(a, b) at the port; `vs_hat` is the source DTFT (zero for a passive port)."""
+        root = 2.0 * math.sqrt(self.port.resistance)
+        v = self.voltage(dft)
+        return vs_hat / root, (2.0 * v - vs_hat) / root
+
+
+def source_dtft(waveform, omega, dt: float, magnetic: bool = False, end_step: int | None = None):
+    """Δt Σ_n w(t_n) e^{iω t_n} of a waveform sampled like a J (half steps) or K source."""
+    from yapnr.rf.fdtd.sources import source_time
+
+    n_end = end_step if end_step is not None else int(math.ceil(waveform.t_end / dt)) + 1
+    t = source_time(np.arange(n_end + 1), dt, magnetic)
+    return dt * np.exp(1j * np.outer(np.asarray(omega), t)) @ waveform(t)
+
+
 # -- calibration -----------------------------------------------------------------------------
 
 

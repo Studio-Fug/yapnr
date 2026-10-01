@@ -8,10 +8,12 @@ and projected density on the copper plane, and an epigraph minimax solved by MMA
 a KiCad footprint, a Touchstone file and a JSON report. The method and its choices are in the
 [design](design/rf-topology-optimization.md) (issue #29).
 
-Status: the solver, the optimizer and the end-to-end cases are implemented. Of the three cases,
-the power divider meets its targets on the optimization grid and on a finer grid; the antenna
-and the diplexer do not (the optimizer's local search stalls on resonant structures); the
-results and the reasons are [below](#end-to-end-cases).
+Status: the solver, the optimizer and five end-to-end cases are implemented. The power divider
+meets its criteria on the optimization grid and on two finer grids; the diplexer comes close;
+the Wilkinson-type combiner, the three-channel bank and the antenna do not, and the antenna's
+copper is the closed-form patch it started from (the optimizer did not change it). The results
+and the reasons are [below](#end-to-end-cases); what the numbers are worth is in
+[accuracy](#accuracy).
 
 ## A spec
 
@@ -33,8 +35,8 @@ bands:
   pass: { ghz: [8.5, 11.5], points: 7 }
 requirements:
   - { s: [1, 1], max_db: -20, band: pass }
-  - { s: [2, 1], min_db: -3.28, band: pass }
-  - { s: [3, 1], min_db: -3.28, band: pass }
+  - { s: [2, 1], min_db: -3.4, band: pass }
+  - { s: [3, 1], min_db: -3.4, band: pass }
 optimizer: { betas: [8, 16, 32, 64, 128], iterations_per_beta: 30, budget_min: 45 }
 ```
 
@@ -100,22 +102,27 @@ bazel run //yapnr/rf:animate -- runs/divider --out divider.webp
 
 ## End-to-end cases
 
-Three cases exercise the whole method on the common tasks: a power divider (combiner), an
-antenna and a filter bank (a diplexer). Each optimizes its spec from its starting point
-([below](#starting-points-and-repairs)), binarizes, repairs the minimum width and space on the
-pixel grid, exports the footprint, and is then re-validated from the exported `.kicad_mod` (not
-from the optimizer's arrays) twice:
+Five cases exercise the whole method on the common tasks: a power divider and a Wilkinson-type
+combiner, an antenna, and two filter banks (a diplexer and a three-channel bank). Each
+optimizes its spec from its starting point ([below](#starting-points-and-repairs)), exports the
+best binarized design of the run (width and space repaired on the pixel grid) as a footprint,
+and is then re-validated from the exported `.kicad_mod` (not from the optimizer's arrays) on
+three grids:
 
 - **on the optimization grid ("coarse"):** the footprint must reproduce the exported design
   pixel for pixel and stay within 0.5 dB (transmissions) and 0.05 in |S| of the optimizer's
-  binary design;
-- **on a finer grid ("fine"):** half the pitch in-plane and 1.5 times the substrate cells, the
-  feeds recalibrated from the pad widths, every port excited, the S-matrix renormalized to
-  50 Ω.
+  evaluation of it;
+- **at half the pitch ("fine") and at a third of it ("finer"):** with 1.5 and 2 times the
+  substrate cells, the feeds recalibrated from the pad widths, every port excited, S = B A⁻¹,
+  renormalized to 50 Ω. The fine criteria apply on both, and the report lists every check's
+  trend over the three grids ([accuracy](#accuracy): resonant designs are not converged).
 
-The criteria are judged on dense in-band sweeps and are slightly looser on the fine grid than on
-the coarse one (design §11). The presets, criteria and the runner are in `yapnr.rf.cases`; the
-validator is `yapnr.rf.validate`.
+The criteria are judged on dense in-band sweeps and are slightly looser on the finer grids than
+on the coarse one (design §11). The antenna also has a power balance check (the port's net
+input power against the flux out of a box closed by the ground and the dissipation inside,
+within 2 %), which validates the radiated fraction it is judged by. The presets, criteria and
+the runner are in `yapnr.rf.cases` (`python -m yapnr.rf.cases criteria CASE` prints the
+criteria); the validator is `yapnr.rf.validate`.
 
 ```sh
 # optimize, export and re-validate (4 threads; start it niced on a shared machine)
@@ -132,124 +139,200 @@ bazel test //tests/e2e/rf:test_divider_smoke
 there is only exported and re-validated again. The smoke variants run the same topologies on
 tiny grids for four iterations and check the pipeline, not the RF targets.
 
-All cases use a substrate of εr 3.55 and tan δ 0.0027 (a Rogers 4003C-like laminate) over a
-solid ground, copper as a sheet with the surface resistance of smooth copper at 10 GHz, torch
-float32 on 4 threads, and the β schedule 8 → 128 (8 → 64 for the antenna). Times are wall times
-on the development Mac (Apple silicon), niced, next to other work.
+All cases use a substrate of εr 3.55 and tan δ 0.0027 (a Rogers 4003C-like laminate; S1 0.813 mm,
+S2 1.524 mm) over a solid ground, copper as a sheet with the surface resistance of smooth copper
+at 10 GHz, 50 Ω feeds (6 cells on S1, Z_c 49.5 Ω; 11 cells on S2), the V/I planes 6h from the
+reference plane and the source, torch float32 on 4 threads. Times are wall times on the
+development Mac (Apple silicon), niced, next to other work.
 
-| Case                        | Ports, substrate   | Optimization grid (cells, Δt, cells per λ_d at f_max) | Fine grid      | Window (pixels)  | Start       | Iterations, wall time | Coarse | Fine |
-| --------------------------- | ------------------ | ----------------------------------------------------- | -------------- | ---------------- | ----------- | --------------------- | ------ | ---- |
-| [divider](#a-power-divider) | 3, S1 (h 0.813 mm) | 92 × 74 × 22 = 150k, 0.465 ps, 46                     | 494k, 0.265 ps | 32 × 40 @ 0.3 mm | uniform 0.3 | 121, 13 min           | pass   | pass |
-| [antenna](#b-antenna)       | 1, S2 (h 1.524 mm) | 99 × 81 × 27 = 217k, 0.599 ps, 39                     | 757k, 0.344 ps | 45 × 45 @ 0.4 mm | tuned patch | 16, 11 min            | fail   | fail |
-| [diplexer](#c-diplexer)     | 3, S1              | 110 × 84 × 22 = 203k, 0.465 ps, 42                    | 731k, 0.265 ps | 50 × 50 @ 0.3 mm | junction    | 102, 17 min           | fail   | fail |
+| Case                                                | Ports, substrate   | Optimization grid (cells, Δt)  | Fine, finer cells | Window (pixels)  | Start               | Iterations, wall time | Coarse | Fine | Finer |
+| --------------------------------------------------- | ------------------ | ------------------------------ | ----------------- | ---------------- | ------------------- | --------------------- | ------ | ---- | ----- |
+| [divider](#a-power-divider)                         | 3, S1 (h 0.813 mm) | 124 × 74 × 22 = 202k, 0.465 ps | 689k, 1.62M       | 32 × 40 @ 0.3 mm | uniform 0.3, robust | 137, 42 min           | pass   | pass | pass  |
+| [Wilkinson](#a2-wilkinson-type-combiner)            | 3 + 100 Ω, S1      | 132 × 74 × 22 = 215k, 0.465 ps | 738k, 1.74M       | 40 × 40 @ 0.3 mm | uniform 0.3         | 150, 48 min           | fail   | fail | fail  |
+| [antenna](#b-antenna)                               | 1, S2 (h 1.524 mm) | 121 × 81 × 27 = 265k, 0.599 ps | 957k, 2.13M       | 45 × 45 @ 0.4 mm | tuned patch         | 20, 11 min            | fail   | fail | fail  |
+| [diplexer](#c-diplexer)                             | 3, S1              | 142 × 84 × 22 = 262k, 0.465 ps | 967k, 2.22M       | 50 × 50 @ 0.3 mm | stubs               | 91, 18 min            | fail   | fail | fail  |
+| [three-channel bank](#c2-three-channel-filter-bank) | 4, S1              | 152 × 94 × 22 = 314k, 0.465 ps | 1.19M, 2.75M      | 60 × 60 @ 0.3 mm | stubs               | 96, 31 min            | fail   | fail | fail  |
 
-S1 and S2 are the same material (εr 3.55); the fine grids have half the pitch in-plane and 6 or
-9 substrate cells. One iteration is one forward and one adjoint FDTD run (the antenna's
-conservative steps add up to four forward runs); a run's re-validation takes 1–2 minutes.
+The re-validation takes 2–3 minutes on the fine grid and 5–15 on the finer one per case (the
+antenna also runs the power balance). The finer grids have 0.265 and 0.184 ps steps on S1,
+0.344 and 0.24 ps on S2.
+
+One iteration is one forward and one adjoint FDTD run per excitation (the divider's robust
+variant doubles it; the antenna's conservative steps add forward runs), plus a forward run of
+the binarized design every five iterations.
 
 The artifacts of each case are in [`docs/rf/`](rf/): the footprints form one KiCad library,
 [`yapnr-rf-examples.pretty`](rf/yapnr-rf-examples.pretty/); each case directory holds
-`spec.json`, `result.json` (`yapnr-rf-result/1`), `validation.json` (both re-simulations, with
-the criteria and the |S| tables), `coarse.sNp` (the exported design on the optimization grid,
-101 points over the source band) and `fine.sNp` (the fine re-simulation at the validation
-frequencies), the animation of the optimization and the figure.
+`spec.json`, `result.json` (`yapnr-rf-result/1`), `validation.json` (the three
+re-simulations with the criteria, the |S| tables, the trend and, for the antenna, the power
+balance), `coarse.sNp` (the exported design on the optimization grid, 101 points over the source
+band), `fine.sNp` and `finer.sNp` (the finer re-simulations at the validation frequencies), the
+animation of the optimization and the figure.
 
 ### (a) Power divider
 
-<img src="rf/divider/divider.png" alt="The divider's copper and its |S_i1| on both grids" width="800">
+<img src="rf/divider/divider.png" alt="The divider's copper and its |S_i1| on three grids" width="800">
 
 Three ports on S1 (h 0.813 mm), a 9.6 × 12 mm window (32 × 40 pixels at 0.3 mm, mirror
-symmetric about y = 0), 50 Ω feeds of 6 cells (Z_c 49.3 Ω calibrated), port 1 on the west edge
-and ports 2 and 3 on the east edge 8.4 mm apart. Targets over 8.5–11.5 GHz (7 points):
-|S11| ≤ −20 dB and |S21|, |S31| ≥ −3.28 dB. The optimizer met them from iteration 54 (β = 16)
-and ended at t = −0.002 after 121 iterations (6.5 s each, 13 min). The β = 32 epoch ran to its
-30-iteration cap with t flat while a few boundary pixels kept changing (the epoch's convergence
-test also needs max |Δx| < 0.01).
+symmetric about y = 0), port 1 on the west edge and ports 2 and 3 on the east edge 8.4 mm apart.
+Targets over 8.5–11.5 GHz (7 points): |S11| ≤ −20 dB and |S21|, |S31| ≥ −3.4 dB, robust: the
+epigraph also holds the eroded design (projection threshold 0.55), because the finer grids see
+the copper smaller. The exported design is iteration 80's (β = 32, robust t = 0.10); plain MMA
+later lost it (the last binarized design was at t = 13.7: a broken arm).
 
-| Check (dense sweep, 61 points) | Spec target | Coarse criterion | Coarse   | Fine criterion | Fine     |
-| ------------------------------ | ----------- | ---------------- | -------- | -------------- | -------- |
-| \|S11\| max, 8.5–11.5 GHz      | −20 dB      | ≤ −17 dB         | −19.3 dB | ≤ −15 dB       | −18.0 dB |
-| \|S21\| = \|S31\| min          | −3.28 dB    | ≥ −3.45 dB       | −3.22 dB | ≥ −3.6 dB      | −3.27 dB |
-| \|\|S21\| − \|S31\|\| max      | —           | —                | 0        | ≤ 0.25 dB      | 0        |
-| passivity, min eig(I − SᴴS)    | —           | ≥ −0.01          | −0.005   | ≥ −0.01        | −0.006   |
+| Check (dense sweep, 61 points) | Target  | Criterion (coarse; fine and finer) | Coarse 0.3 mm | Fine 0.15 mm | Finer 0.1 mm |
+| ------------------------------ | ------- | ---------------------------------- | ------------- | ------------ | ------------ |
+| \|S11\| max, 8.5–11.5 GHz      | −20 dB  | ≤ −17 dB; ≤ −15 dB                 | −19.6 dB      | −20.3 dB     | −17.7 dB     |
+| \|S21\| = \|S31\| min          | −3.4 dB | ≥ −3.45 dB; ≥ −3.6 dB              | −3.33 dB      | −3.31 dB     | −3.34 dB     |
+| \|\|S21\| − \|S31\|\| max      | —       | —; ≤ 0.25 dB                       | 0             | 0            | 0            |
+| passivity, min eig(I − SᴴS)    | —       | ≥ −1e-3                            | 0.033         | 0.032        | 0.033        |
 
-The design is a junction with a small ring at the input, four short open stubs on the input
-line and two 45° arms to the outputs: one copper island joining all three pads (a net tie),
-manufacturable at 0.6 mm width and space after the repair (10 pixels changed; the transmission
-moved by 0.02 dB, |S11| by 0.04). The output ports are not isolated or matched (|S22| ≈ −6 dB,
-|S32| ≈ −6 to −8 dB), as for any lossless reciprocal three-port; the isolated (Wilkinson)
-variant needs a lumped resistor, which specs cannot place yet. On the fine grid (0.15 mm,
-6 substrate cells, 494k cells, Z_c 50.7 Ω) the deepest match moves from 9.55 to 10.0 GHz.
-The imbalance is zero by construction (the design is mirror symmetric).
+It meets every criterion on all three grids, but not its −20 dB target everywhere: |S11| reaches
+−19.6 dB on the optimization grid and −17.7 dB at a third of the pitch. The design is a junction
+with a slot on its axis, short stubs beside the input line and wide arms to the outputs, one
+copper island joining all three pads (a net tie), manufacturable at 0.6 mm width and space
+after the repair (4 pixels). The match's null moves from 9.55 (coarse) to 9.95 and 9.7 GHz. The
+outputs are not matched or isolated (|S22| ≈ −6 dB, |S32| ≈ −6 dB), as for any lossless
+reciprocal three-port: that is the Wilkinson case below. The imbalance is zero by construction
+(mirror symmetry).
+
+Without the robust variant (and with the design's −3.28 dB target, which the corrected port
+extraction makes unreachable: the ideal split is −3.01 dB and transmissions read 0.1–0.2 dB
+low) the run oscillated (t up to 13), its best design reached |S11| −17.5 dB and |S21| −3.45 dB
+on the coarse grid, and |S11| fell by 1.8 dB per refinement (−17.5, −15.7, −13.9 dB): the
+robust formulation is what keeps the margin on the finer grids.
 
 <img src="rf/divider/divider.webp" alt="The divider's optimization" width="800">
 
+### (a2) Wilkinson-type combiner
+
+<img src="rf/wilkinson/wilkinson.png" alt="The combiner's copper and its |S_i1| on three grids" width="800">
+
+**This case does not meet its targets.** The divider's three ports on a 12 × 12 mm window
+(40 × 40 pixels, mirror symmetric) with a 100 Ω isolation resistor across a 0.6 mm gap on the
+symmetry line, 4.8–5.4 mm from port 1 (an 0402-sized body, `lumped`; its pads are copper, the
+optimizer connects them). Targets over 9–11 GHz (5 points, excitations 1 and 2): |S11|,
+|S22| = |S33| and |S32| ≤ −20 dB, |S21| = |S31| ≥ −3.4 dB. Criteria: −17, −3.6, −17, −17 dB
+coarse; −15, −3.8, −15, −15 dB fine and finer.
+
+| Check (dense sweep, 41 points) | Coarse 0.3 mm   | Fine 0.15 mm    | Finer 0.1 mm    |
+| ------------------------------ | --------------- | --------------- | --------------- |
+| \|S11\| max                    | −18.3 dB        | −17.0 dB        | −15.2 dB        |
+| \|S21\| = \|S31\| min          | −3.30 dB        | −3.33 dB        | −3.38 dB        |
+| \|S22\| = \|S33\| max          | −11.1 dB (fail) | −11.3 dB (fail) | −11.4 dB (fail) |
+| \|S32\| max (isolation)        | −12.8 dB (fail) | −12.3 dB (fail) | −12.0 dB (fail) |
+| passivity                      | 0.033           | 0.032           | 0.033           |
+
+The input match and the split pass; the outputs reach −11 dB of match and −12 to −16 dB of
+isolation over the band (−16 dB at the centre), a combiner that works but misses the −15 dB
+criteria. The exported design is iteration 70's (t 0.90) of 150 (19 s each, 48 min; two
+excitations per iteration); plain MMA oscillated from β = 16 on. Its footprint also fails the
+width and space check: two 0.14 mm necks on the arms (a diagonal pinch the pixel repair did not
+widen), so `export_ok` is false. A first run with the resistor at 7.2–7.8 mm (three eighths of a
+wave from port 1) ended with |S22| −8 dB and |S32| −16 dB.
+
+<img src="rf/wilkinson/wilkinson.webp" alt="The combiner's optimization" width="800">
+
 ### (b) Antenna
 
-<img src="rf/antenna/antenna.png" alt="The antenna's copper, |S11| and η on both grids" width="800">
+<img src="rf/antenna/antenna.png" alt="The antenna's copper, |S11| and η on three grids" width="800">
 
-**This case does not meet its targets.** One port on S2 (h 1.524 mm), an 18 × 18 mm window
-(45 × 45 pixels at 0.4 mm, mirror symmetric), a 9-cell feed (3.6 mm, Z_c 52.3 Ω; 10 cells cannot
-sit symmetrically on the window's centre line), and a radiated-power box 2.4 mm beyond the
-window and 8 mm high with windows where the feed crosses it. Targets over 9.8–10.2 GHz
-(4 points): |S11| ≤ −12 dB and a radiated fraction η ≥ 0.70 (the design's band was
-9.7–10.3 GHz; see [starting points](#starting-points-and-repairs)). The tuned patch seed starts
-at t = 0.35 (|S11| −8.6 dB and η 0.69 at 9.8 GHz); the first conservative step raised t to 1.07
-and the run settled at t = 0.535 after 16 iterations (41 s each with the inner forward runs,
-11 min): the slots got shallower and the resonance moved up, out of the band's low edge.
+**This case does not meet its targets, and its geometry is not the optimizer's.** One port on
+S2 (h 1.524 mm), an 18 × 18 mm window (45 × 45 pixels at 0.4 mm, mirror symmetric), an 11-cell
+feed (4.4 mm, Z_c 47.2 Ω), a radiated-power box 2.4 mm beyond the window and 8 mm high with
+windows where the feed crosses it. Targets over 9.8–10.2 GHz (4 points): |S11| ≤ −12 dB and a
+radiated fraction η ≥ 0.70.
 
-| Check (dense sweep)            | Spec target | Coarse criterion         | Coarse         | Fine criterion             | Fine           |
-| ------------------------------ | ----------- | ------------------------ | -------------- | -------------------------- | -------------- |
-| \|S11\| max                    | −12 dB      | ≤ −10 dB (9.8–10.2)      | −7.0 dB (fail) | ≤ −10 dB (9.85–10.15)      | −5.8 dB (fail) |
-| η min at the check frequencies | 0.70        | ≥ 0.65 (9.8, 10.0, 10.2) | 0.650          | ≥ 0.60 (9.85, 10.0, 10.15) | 0.588 (fail)   |
-| passivity                      | —           | ≥ −0.01                  | 0.74           | ≥ −0.01                    | 0.66           |
+The exported copper is the closed-form inset-fed patch (`seed: patch`: W 10.0 mm, L 7.2 mm,
+inset 2.4 mm, then the best of its 27 whole-pixel neighbours, here one pixel longer), pixel for
+pixel: 20 conservative MMA iterations lowered t at β = 16 and 64 from 0.270 to 0.212 through gray
+boundary pixels, but the binarized design never changed (t 0.278 at every evaluation), so the
+optimizer did not form or reshape the radiator. (An earlier version of this guide said the
+optimizer made the slots shallower; it had changed two corner pixels of the slots' mouths.)
 
-The copper is a plausible inset-fed patch (one island with the port's pad, no width or space
-violation). On the coarse grid its match is best at 10.14 GHz (−10.6 dB) and η runs 0.65–0.77
-over the band; the fine grid moves the match to about 10.3 GHz and η to 0.56–0.74, the same
-1 % shift as the plain patch. The optimizer did not improve on its seed, in any of the variants
-tried: plain MMA left the tuned seed on its first step and wandered at t 0.7–2.8, the
-conservative variant with a 0.1 move rose to 0.5–0.8, and with a 0.05 move it settled at 0.535.
-On this grid a pixel moves a resonance by about 5 %, and every boundary step through gray
-copper first adds loss, which the first-order model does not see; the 4 % band also leaves no
-margin for the coarse-to-fine shift. A finer optimization grid (0.2 mm, about eight times the
-cost) and a robust formulation over eroded and dilated designs (design §14) are the next steps.
+| Check (dense sweep)            | Target | Criterion (coarse; fine and finer) | Coarse 0.4 mm  | Fine 0.2 mm    | Finer 0.133 mm |
+| ------------------------------ | ------ | ---------------------------------- | -------------- | -------------- | -------------- |
+| \|S11\| max                    | −12 dB | ≤ −10 dB (9.8–10.2; 9.85–10.15)    | −9.1 dB (fail) | −6.1 dB (fail) | −5.1 dB (fail) |
+| η min at the check frequencies | 0.70   | ≥ 0.65; ≥ 0.60                     | 0.735          | 0.653          | 0.592 (fail)   |
+| power balance error            | —      | ≤ 2 %                              | 11 % (fail)    | 6.7 % (fail)   | 6.0 % (fail)   |
+| passivity                      | —      | ≥ −1e-3                            | 0.77           | 0.62           | 0.56           |
+
+On the optimization grid the patch's match is best at 10.02 GHz (−25 dB) with a −10 dB band of
+9.83–10.22 GHz (4 %) and η up to 0.84; the band is the band of the spec, so the edges miss by
+0.9 dB. The finer grids move the resonance up by 1.9 % (10.21 GHz) and 2.4 % (10.26 GHz), the
+copper-edge effect of the [accuracy](#accuracy) section. A single patch on this substrate has
+about 4 % of bandwidth: no centring passes the coarse criterion and the finer ones together.
+The power balance closes to −5 to −11 %: the field accounting finds that much less power than
+the port reports, because the feed window of the box leaves out the radiation leaving near the
+feed and the excited port's incident wave reads about 3 % high in power; the radiated fraction
+is uncertain by that much (on the low side).
+
+What was tried to let the optimizer form the radiator (none met the targets):
+
+- uniform starts with the resistive sheet (0.3, 0.5, 0.7, also from β = 32): the bare feed or a
+  plate (η 0.15–0.4); gray copper absorbs before it radiates;
+- uniform 0.5 with the reactive (inductive) sheet, with and without a fixed feed stub: an
+  unfed or barely fed plate (η 0.1–0.4, |S11| about −1 to −5 dB after 12 iterations); the gray
+  inductive sheet guides surface waves and its damping still dissipates;
+- the untuned closed-form rectangle fed at its edge (`seed: patch_edge`, |S11| −2.3 dB): the
+  conservative steps moved it by a few hundredths in 3 iterations of a minute each.
+
+Passing this case needs one of: a broader-band topology the local search can reach (two coupled
+resonators), a thicker or lower-εr substrate (a patch on 1.575 mm of εr 2.2 measured 4.5 %, so
+roughly twice the thickness), a band (or criteria) that allows the 2 % coarse-to-fine shift, or
+a copper-edge correction in the solver that removes the shift. These change the case and are
+the owner's call.
 
 <img src="rf/antenna/antenna.webp" alt="The antenna's optimization" width="800">
 
 ### (c) Diplexer
 
-<img src="rf/diplexer/diplexer.png" alt="The diplexer's copper and its |S_i1| on both grids" width="800">
+<img src="rf/diplexer/diplexer.png" alt="The diplexer's copper and its |S_i1| on three grids" width="800">
 
-**This case does not meet its targets.** Three ports on S1, a 15 × 15 mm window (50 × 50 pixels,
-no symmetry), the common port 1 on the west edge, channel A (7.6–8.4 GHz) to port 2 and channel
-B (11.6–12.4 GHz) to port 3 on the east edge 9 mm apart. Targets at 7.4–8.6 and 11.4–12.6 GHz
-(4 points each, the channels widened by 0.2 GHz): in-channel |S| ≥ −1 dB, the other port
-≤ −22 dB, |S11| ≤ −12 dB. From the junction seed the optimizer split the channels within ten
-iterations (each branch passing its own band at about −2.5 dB) and then stalled: t = 1.83 after
-102 iterations (9.8 s each, 17 min); a 60-iteration first epoch stayed at t = 1.8 ± 0.1 from
-iteration 20 to 59.
+**This case does not meet its targets, but comes close.** Three ports on S1, a 15 × 15 mm window
+(50 × 50 pixels, no symmetry), the common port 1 on the west edge, channel A (7.6–8.4 GHz) to
+port 2 and channel B (11.6–12.4 GHz) to port 3 on the east edge 9 mm apart. Targets at 7.4–8.6
+and 11.4–12.6 GHz (4 points each, the channels widened by 0.2 GHz): in-channel |S| ≥ −1 dB, the
+other port ≤ −22 dB, |S11| ≤ −12 dB. It starts from the stub seed: the junction of the ports
+with a 12 GHz quarter-wave stub on the channel-A arm and an 8 GHz one on the channel-B arm
+(t 5.95). The optimizer reshaped it to t 0.79 within 20 iterations (β = 8), the exported design;
+from β = 16 on plain MMA lost it (t 1.84 at the end; 91 iterations, 11.5 s each, 18 min).
 
-| Check (0.05 GHz steps)     | Spec target | Coarse criterion | Coarse          | Fine criterion | Fine            |
-| -------------------------- | ----------- | ---------------- | --------------- | -------------- | --------------- |
-| A: \|S21\| min (7.6–8.4)   | −1 dB       | ≥ −1.5 dB        | −2.7 dB (fail)  | ≥ −2 dB        | −2.7 dB (fail)  |
-| B: \|S31\| min (11.6–12.4) | −1 dB       | ≥ −1.5 dB        | −2.6 dB (fail)  | ≥ −2 dB        | −2.5 dB (fail)  |
-| A: \|S31\| max (rejection) | −22 dB      | ≤ −18 dB         | −9.4 dB (fail)  | ≤ −15 dB       | −9.0 dB (fail)  |
-| B: \|S21\| max (rejection) | −22 dB      | ≤ −18 dB         | −11.8 dB (fail) | ≤ −15 dB       | −10.0 dB (fail) |
-| \|S11\| max, A / B         | −12 dB      | ≤ −10 dB         | −4.3 / −4.8 dB  | ≤ −8 dB        | −4.4 / −5.3 dB  |
-| passivity                  | —           | ≥ −0.01          | 0.021           | ≥ −0.01        | 0.021           |
+| Check (0.05 GHz steps)     | Target | Criterion (coarse; fine and finer) | Coarse 0.3 mm   | Fine 0.15 mm    | Finer 0.1 mm    |
+| -------------------------- | ------ | ---------------------------------- | --------------- | --------------- | --------------- |
+| A: \|S21\| min (7.6–8.4)   | −1 dB  | ≥ −1.5 dB; ≥ −2 dB                 | −0.74 dB        | −0.76 dB        | −0.79 dB        |
+| B: \|S31\| min (11.6–12.4) | −1 dB  | ≥ −1.5 dB; ≥ −2 dB                 | −1.63 dB (fail) | −1.51 dB        | −1.42 dB        |
+| A: \|S31\| max (rejection) | −22 dB | ≤ −18 dB; ≤ −15 dB                 | −15.4 dB (fail) | −15.7 dB        | −15.4 dB        |
+| B: \|S21\| max (rejection) | −22 dB | ≤ −18 dB; ≤ −15 dB                 | −16.2 dB (fail) | −14.8 dB (fail) | −13.9 dB (fail) |
+| A: \|S11\| max             | −12 dB | ≤ −10 dB; ≤ −8 dB                  | −11.3 dB        | −10.7 dB        | −10.4 dB        |
+| B: \|S11\| max             | −12 dB | ≤ −10 dB; ≤ −8 dB                  | −7.9 dB (fail)  | −8.6 dB         | −9.3 dB         |
+| passivity                  | —      | ≥ −1e-3                            | 0.043           | 0.044           | 0.045           |
 
-The result is a junction whose branches act as a low-pass (to port 2) and a high-pass split,
-rolling off monotonically rather than notching the other channel: rejection is 9–12 dB and
-the common port is mismatched (|S11| −4 to −8 dB), most of the in-channel loss. A diplexer that
-meets the targets needs resonant stubs about a quarter wave long (3.8 mm at 12 GHz, 5.7 mm at
-8 GHz) placed a quarter wave from the junction, and a stub only works once it is long enough:
-the gradient from the junction does not lead there. The export and the re-validation work as
-for the other cases (one island, no width or space violation, the fine grid agreeing with the
-coarse one within 2 dB), so the case documents a limit of the optimizer's local search, not of the
-pipeline. The three-channel bank (`filterbank3`, stretch) was not run for this reason.
+Channel A is good (−0.7 dB in band, 15 dB of rejection of A at port 3); channel B passes at
+−1.4 to −1.6 dB with 14–16 dB of rejection at port 2, and the common port's match in B is the
+weak point. On the fine grid every check but B's rejection (0.2 dB short) passes. The
+channel-B arm keeps the seed's collinear 8 GHz stub; on the channel-A arm the seed's stub
+merged into a wider section and a new open stub grew further along the arm (the pendant in the
+figure). A second run with smaller moves (0.15/0.05) did worse (best t 1.84). From the plain
+junction (`seed: star`) the branches only rolled off (rejection 5–12 dB, t 1.8–2.4).
 
 <img src="rf/diplexer/diplexer.webp" alt="The diplexer's optimization" width="800">
+
+### (c2) Three-channel filter bank
+
+<img src="rf/filterbank3/filterbank3.png" alt="The bank's copper and its |S_i1| on three grids" width="800">
+
+**This case does not meet its targets.** Four ports on S1, an 18 × 18 mm window (60 × 60
+pixels), channels A 7.0–7.6, B 9.7–10.3 and C 12.4–13.0 GHz from port 1 to ports 2, 3 and 4 (the
+objectives at 6.8–7.8, 9.5–10.5 and 12.2–13.2 GHz, 3 points each): in-channel ≥ −1.5 dB, the
+other ports ≤ −20 dB, |S11| ≤ −10 dB; criteria in-channel ≥ −2.5 dB, rejection ≤ −15 dB, |S11|
+≤ −8 dB (coarse; −3, −12, −6 dB fine). From the stub seed (six stubs) the best binarized design
+came at iteration 5 (t 2.72) and the run stayed near t 3.2 for 96 iterations (19 s each,
+31 min): in-channel −2.9 to −3.6 dB, rejection −6.5 to −19 dB, |S11| −3.5 to −9.4 dB; the finer
+grids agree within 1 dB. Six interacting stubs and a four-way junction in 18 × 18 mm under a
+0.6 mm width and space rule are beyond what the local search found.
+
+<img src="rf/filterbank3/filterbank3.webp" alt="The bank's optimization" width="800">
 
 ### Starting points and repairs
 
@@ -258,15 +341,24 @@ window, and adding or removing conductance anywhere first changes how much it ab
 therefore start differently (`optimizer.init`, `optimizer.seed`), each choice computed from the
 spec alone:
 
-| Case     | Start                                                                         | Uniform starts tried                                                                                                                                  |
-| -------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| divider  | uniform x = 0.3 (ρ̄ ≈ 0.04 at β = 8: an almost transparent 3.3 kΩ/sq sheet)    | 0.5 grew into one radiating copper plate with holes: at β = 32 \|S21\| fell to −5.5 dB at 11.5 GHz and t rose from 1.1 to 2.5                         |
-| diplexer | `seed: star`, every port's feed continued to the window's centre (a junction) | 0.3: the transmissions stayed below −30 dB for 15 iterations (the window absorbed); at iteration 30 a radiating copper mass, t = 8.5                  |
-| antenna  | `seed: patch`, the closed-form inset-fed patch, tuned by whole pixels (below) | 0.3 and 0.5 fell back to the bare open-ended feed (η ≈ 0.15, \|S11\| ≈ −0.8 dB); 0.7 (a near-copper plate, also from β = 32) stayed a plate (η ≈ 0.4) |
+| Case                         | Start                                                                                                        | Uniform starts tried                                                                                                                                                                                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| divider, Wilkinson           | uniform x = 0.3 (ρ̄ ≈ 0.04 at β = 8: an almost transparent 3.3 kΩ/sq sheet)                                   | 0.5 grew into one radiating copper plate with holes: at β = 32 \|S21\| fell to −5.5 dB at 11.5 GHz and t rose from 1.1 to 2.5                                                                                                                    |
+| diplexer, three-channel bank | `seed: stubs`, the junction of the ports plus a quarter-wave open stub per other channel on every output arm | 0.3: the transmissions stayed below −30 dB for 15 iterations (the window absorbed); at iteration 30 a radiating copper mass, t = 8.5. From the plain junction (`seed: star`) the branches only learned to roll off: rejection 5–12 dB, t 1.8–2.4 |
+| antenna                      | `seed: patch`, the closed-form inset-fed patch, tuned by whole pixels (below)                                | 0.3 and 0.5 fell back to the bare open-ended feed (η ≈ 0.15, \|S11\| ≈ −0.8 dB); 0.7 (a near-copper plate, also from β = 32) stayed a plate (η ≈ 0.4); the reactive sheet, [above](#b-antenna)                                                   |
 
 For a radiated-power target the uniform starts are local optima: gray copper absorbs before it
-radiates. The seeds are the textbook starting points (a junction, Balanis' patch); the
-optimizer then reshapes them freely, with every pixel of the window a design variable.
+radiates. The seeds are textbook starting points (a junction with stubs, Balanis' patch); every
+pixel of the window stays a design variable, and the optimizer reshaped the stub seeds heavily
+(the diplexer's t fell from 6.0 to 0.79) but left the patch as it was.
+
+The stub seed (`yapnr.rf.seeds.stub_mask`) takes the channels from the spec (each output port's
+pass band, from its S(k, 1) ≥ requirement) and, longest first, places on the arm of each
+output port an open stub λ_g/4 long at every other channel's centre (Kirschning–Jansen ε_eff,
+Hammerstad's open-end extension subtracted): along the arm where its path from the junction is
+closest to λ_g/4 or 3λ_g/4 (where the stub's short circuit appears at the junction as an open),
+perpendicular to the arm, straight or with one bend, at least the minimum space from all other
+copper.
 
 The patch seed is W, L and the inset depth from the transmission-line model at the band
 centre, then the best of its 27 whole-pixel neighbours (length ±1, width ±2, inset ±1) by the
@@ -274,15 +366,10 @@ spec's epigraph value on the grid, 27 forward runs (`yapnr.rf.seeds.tuned_patch`
 length moves the resonance by about 5 %, so the closed form lands between pixels. Its copper
 and void start at x = 0.9 and 0.1 with slots 1.5 times the minimum space, and its β schedule
 starts at 16: at x 0.7/0.3, two-pixel slots and β = 8 the slots blurred into a lossy 32 Ω/sq and
-the first step closed them, and at β = 32 every pixel saturated and nothing moved.
-
-On the antenna's grid, the closed-form patch alone (W 10.0 mm, L 7.2 mm, inset 2.4 mm with
-0.8 mm gaps, 4 mm from the port) reaches |S11| = −21 dB at 10.15 GHz and a radiated fraction
-of 0.80, with a −10 dB band of 9.90–10.35 GHz; on the fine grid the same pixels resonate 1 %
-higher (10.25 GHz). That sets the scale of what a single-layer patch on this substrate can do:
-refining it for the design's 9.7–10.3 GHz (6 %) froze at t = 1.40 (η 0.56 and |S11| −5.3 dB at
-9.7 GHz; MMA alternated between two designs, then stopped moving), so the antenna case asks for
-9.8–10.2 GHz (4 %) at the same levels (|S11| ≤ −12 dB, η ≥ 0.7).
+the first step closed them, and at β = 32 every pixel saturated and nothing moved. The design's
+band was 9.7–10.3 GHz (6 %); refining the patch for it froze at t = 1.40, so the case asks for
+9.8–10.2 GHz (4 %) at the same levels, which is still the patch's whole bandwidth
+([above](#b-antenna)).
 
 **Minimum width and space:** with the rules' two-pixel filter radius the Zhou constraints read as
 met while the binary divider kept two one-pixel holes and two diagonal one-pixel nubs. The
@@ -333,25 +420,29 @@ t ≈ 0.7 at iteration 70, where the two-pixel run was at −0.002.
 
 Solver (unit tests; design Δ = 0.3 mm on εr 3.55, h 0.813 mm):
 
-| Check                                         | Measured                                       |
-| --------------------------------------------- | ---------------------------------------------- |
-| adjoint gradient against finite differences   | 2.4e-9 to 1.5e-8 relative                      |
-| CPML reflection, 10 cells                     | −66.6 dB (substrate), −79.6 dB (air)           |
-| Z_c against Hammerstad–Jensen, 6 cells/width  | −6.4 % (2 GHz) to −5.8 % (4 GHz); −3.3 % at 12 |
-| ε_eff against Kirschning–Jansen, 2–12 GHz     | within 0.5 %                                   |
-| matched line through a 9.6 mm region          | \|S11\| ≤ −41.8 dB, \|S21\| ≥ −0.13 dB         |
-| throughput, torch float32, 4 threads          | 263 M cell-updates/s (157k cells)              |
-| divider iteration (forward + adjoint, 7 freq) | 6.7 s                                          |
+| Check                                                   | Measured                                                                             |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| adjoint gradient against finite differences             | 2.4e-9 to 1.5e-8 relative                                                            |
+| CPML reflection, 10 cells                               | −66.6 dB (substrate), −79.6 dB (air)                                                 |
+| Z_c against Hammerstad–Jensen, 6 cells/width            | −6.4 % (2 GHz) to −5.8 % (4 GHz); −3.3 % at 12                                       |
+| ε_eff against Kirschning–Jansen, 2–12 GHz               | within 0.5 %                                                                         |
+| matched line through a 9.6 mm region                    | \|S11\| ≤ −42 dB, \|S21\| −0.07 (2 GHz) to −0.30 dB (12 GHz) ([accuracy](#accuracy)) |
+| inductive sheet: discrete frequency-domain identity     | residual < 1e-10                                                                     |
+| power balance of the tiny two-port                      | line within 0.2 %, a lossy gray sheet within 2.6 %                                   |
+| throughput, torch float32, 4 threads                    | 263 M cell-updates/s (157k cells)                                                    |
+| divider iteration (forward + adjoint, 7 freq, 6h feeds) | 9.4 s (18.6 s with the robust variant)                                               |
 
 Optimizer (unit tests):
 
-| Check                                                                          | Measured                                 |
-| ------------------------------------------------------------------------------ | ---------------------------------------- |
-| whole-pipeline gradient (x → ρ̄ → FDTD → objectives) against finite differences | 1e-10 relative                           |
-| MMA on Svanberg's toy problem                                                  | KKT residual < 1e-6, x within 1e-5       |
-| tiny two-port (6 × 6 pixels): t from the uniform start                         | 0.31 → −0.28 (the matched straight line) |
-| contour → polygons → pixels, 200 random masks                                  | exact                                    |
-| KiCad 10 (`kicad-cli fp upgrade`, `fp export svg`)                             | loads and plots, every polygon kept      |
+| Check                                                                          | Measured                                    |
+| ------------------------------------------------------------------------------ | ------------------------------------------- |
+| whole-pipeline gradient (x → ρ̄ → FDTD → objectives) against finite differences | 1e-10 relative (resistive), 1e-6 (reactive) |
+| conservative MMA with one subproblem per call (non-convex functions)           | rejected steps keep x; t never rises        |
+| best binarized design exported after a bad last iterate                        | the tracked iteration is exported           |
+| MMA on Svanberg's toy problem                                                  | KKT residual < 1e-6, x within 1e-5          |
+| tiny two-port (6 × 6 pixels): t from the uniform start                         | 0.31 → −0.28 (the matched straight line)    |
+| contour → polygons → pixels, 200 random masks                                  | exact                                       |
+| KiCad 10 (`kicad-cli fp upgrade`, `fp export svg`)                             | loads and plots, every polygon kept         |
 
 On the tiny problem the conservative MMA variant (`optimizer.conservative: true`, NLopt's
 CCSA as used by Hammond et al.) never lets t rise, but it needed 96 forward runs against 18 for
@@ -382,9 +473,10 @@ divider's footprint:
   distance from the source and P_inc uses it.
 - **Reciprocity.** The discrete system is exactly reciprocal; the port-wave extraction is not.
   With the V/I plane 6h from the discontinuity and from the source (the default) and S = B A⁻¹
-  from all excitations, |S21 − S12| on the divider is 0.003–0.007 (it was 0.009–0.013 at 3h)
-  and the passivity margin min eig(I − SᴴS) is +0.03 to +0.05; the criteria require −1e-3.
-  Taken together, transmissions are uncertain by about ±0.1 dB plus the low bias above.
+  from all excitations, |S21 − S12| on the old divider footprint at 8.5, 10 and 11.5 GHz is
+  0.003–0.007 (it was 0.009–0.013 at 3h); the largest over a whole re-validation sweep is about
+  0.01. The passivity margin min eig(I − SᴴS) of the divider is +0.03 (the criteria require
+  −1e-3). Taken together, transmissions are uncertain by about ±0.1 dB plus the low bias above.
 - **Copper edges and resolution.** A zero-thickness sheet's edge field is under-resolved: on
   a 6-cell line the impedance is 6 % below Hammerstad–Jensen, and an open end's extension at
   10 GHz is 0.49 mm at 0.3 mm pitch and 0.44 mm at 0.15 mm against 0.35 mm (Kirschning–Jansen–

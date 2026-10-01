@@ -67,12 +67,12 @@
     },
     {
       "s": [2, 1],
-      "min_db": -3.28,
+      "min_db": -3.4,
       "band": "pass"
     },
     {
       "s": [3, 1],
-      "min_db": -3.28,
+      "min_db": -3.4,
       "band": "pass"
     }
   ],
@@ -81,17 +81,21 @@
     "betas": [8.0, 16.0, 32.0, 64.0, 128.0],
     "iterations_per_beta": 30,
     "min_iterations": 8,
-    "budget_min": 45,
+    "budget_min": 75,
     "move": 0.2,
-    "move_late": 0.1,
+    "move_late": 0.05,
     "init": 0.3,
     "eta": 0.5,
     "tau": 0.05,
     "aggregate": "excitation",
     "damping": 0.0,
+    "interpolation": "resistive",
+    "reactive_damping": 0.1,
     "conservative": false,
     "max_inner": 5,
-    "filter_radius_mm": null
+    "filter_radius_mm": null,
+    "binary_every": 5,
+    "eta_variants": [0.55]
   },
   "solver": {
     "backend": "torch",

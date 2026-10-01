@@ -3,9 +3,9 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-10-01 (the RF inverse design cases on `claude/rf-topopt`; before that PR4, #10,
-the ladder animations, the atopile toolchain and the privacy-scan trailer rule merged; line groups,
-hard board edges, the hierarchical ladder driver and their animations on
+Last updated: 2026-10-01 (the RF review fixes and re-run cases on `claude/rf-topopt`; before
+that PR4, #10, the ladder animations, the atopile toolchain and the privacy-scan trailer rule
+merged; line groups, hard board edges, the hierarchical ladder driver and their animations on
 `claude/animations-groups-hier`).
 
 ## In progress
@@ -15,15 +15,19 @@ hard board edges, the hierarchical ladder driver and their animations on
   [docs/rf-inverse-design.md](docs/rf-inverse-design.md), choices in
   [docs/decisions.md](docs/decisions.md)). Done: the solver (`yapnr.rf`: Yee FDTD, CPML, line
   ports, exact adjoint; gradients to 1.5e-8), the optimizer (material grid, conic filter, tanh
-  projection, Zhou length scale, own MMA with the epigraph, specs, checkpoints, net-tie
-  `.kicad_mod`, Touchstone, result JSON, the animation) and the end-to-end cases
-  (`yapnr.rf.cases`, `yapnr.rf.validate`, `tests/e2e/rf`: optimize, repair width and space,
-  export, re-simulate the footprint on the optimization grid and on a finer one). The divider
-  meets its targets on both grids (|S11| ≤ −18 dB, |S21| = |S31| ≥ −3.27 dB on the fine grid);
-  the antenna (t 0.535: |S11| −7 dB at the band edge) and the diplexer (t 1.83: rejection
-  9–12 dB) do not: the local search stalls on resonant structures. Artifacts in `docs/rf/`.
-  Next: lumped elements in specs (a Wilkinson divider), a `yapnr rf` CLI, an external (Meep or
-  openEMS) cross-check, footprints in PnR.
+  projection, Zhou length scale, own MMA with the epigraph, robust variants, a reactive
+  interpolation, specs with lumped resistors, checkpoints, the best binarized design exported,
+  net-tie `.kicad_mod` with rule areas, Touchstone, result JSON, the animation) and five
+  end-to-end cases re-validated from the footprint on three grids. After the physics and design
+  reviews (port de-embedding, conservative MMA, export of the best design, validation) the
+  divider passes its criteria on all three grids (|S11| ≤ −17.7 dB, |S21| ≥ −3.34 dB);
+  the diplexer from the stub seed comes close (on the fine grid all but channel B's rejection,
+  0.2 dB short), but the Wilkinson-type combiner (output match −11 dB, isolation −13 dB), the
+  three-channel bank and the antenna do not. The antenna's export is the tuned closed-form
+  patch (the optimizer did not change it) and the patch class cannot meet its band on S2 with
+  the 2 % coarse-to-fine shift: a re-scope is the owner's call. Artifacts in `docs/rf/`.
+  Next: the antenna's scope, a copper-edge correction in the solver, a `yapnr rf` CLI, an
+  external (Meep or openEMS) cross-check, footprints in PnR.
 
 - **Merged today:** PR3a (#9, code key scheme 2 and the engine format), the viewer (#12, PR4:
   `yapnr/viewer`, `bazel run //:viewer -- --root <live>`, paid features off by default, elkjs and

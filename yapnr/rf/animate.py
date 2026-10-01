@@ -12,7 +12,7 @@ the final frame held, frames rendered lazily, no metadata, deterministic for the
 
 `figure` draws a still of a validated run (`validation.json`, `yapnr.rf.validate`): the
 exported footprint's copper on the left and, on the right, |S_ij| of excitation 1 over the
-re-validation sweep on the optimization grid (thin) and the finer grid (thick) with the fine
+re-validation sweeps on the optimization grid (thin) and the finer grids (thicker) with the fine
 criteria, and the radiated fraction when the case has one.
 
     python -m yapnr.rf.animate RUN_DIR --out run.webp
@@ -439,7 +439,7 @@ def figure(run_dir: str, out: str, *, width: int = 1000) -> dict:
     img = Image.new("RGB", (w, h), _rgb(BACKGROUND))
     draw = ImageDraw.Draw(img)
     verdict = []
-    for level in ("coarse", "fine"):
+    for level in ("coarse", "fine", "finer"):
         if level in val:
             verdict.append(f"{level} {'pass' if val[level]['ok'] else 'FAIL'}")
     draw.text(
@@ -498,14 +498,21 @@ def figure(run_dir: str, out: str, *, width: int = 1000) -> dict:
     crit = cases.CRITERIA.get(val["case"], {}).get("fine", [])
     self = _Plot(draw, k)
     tables = [
-        (val[lv]["table"], width_) for lv, width_ in (("coarse", 1), ("fine", 2)) if lv in val
+        (val[lv]["table"], width_)
+        for lv, width_ in (("coarse", 1), ("fine", 2), ("finer", 3))
+        if lv in val
     ]
     ghz = tables[-1][0]["ghz"]
     names = sorted(key for key in tables[-1][0] if key.startswith("S") and key.endswith("1"))
     lo = min(-40.0, math.floor(min(min(tables[-1][0][n]) for n in names) / 10.0) * 10.0)
     lo = max(lo, -60.0)
     self.frame(
-        s_box, ghz[0], ghz[-1], lo, 0.0, "|S_i1| (dB)   thin: optimization grid, thick: fine"
+        s_box,
+        ghz[0],
+        ghz[-1],
+        lo,
+        0.0,
+        "|S_i1| (dB)   thin to thick: optimization pitch, 1/2, 1/3",
     )
     for c in crit:
         if c.kind in ("s_max", "s_min") and c.ghz is not None:

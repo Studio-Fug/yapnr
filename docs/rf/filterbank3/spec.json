@@ -1,6 +1,6 @@
 {
   "schema": "yapnr-rf-spec/1",
-  "name": "diplexer-x8x12",
+  "name": "filterbank3-x7x10x13",
   "stackup": {
     "er": 3.55,
     "tan_delta": 0.0027,
@@ -24,8 +24,8 @@
     "f_max_ghz": null
   },
   "design_region": {
-    "x_mm": [0.0, 15.0],
-    "y_mm": [-7.5, 7.5]
+    "x_mm": [0.0, 18.0],
+    "y_mm": [-9.0, 9.0]
   },
   "symmetry": "none",
   "rules": {
@@ -42,58 +42,99 @@
     {
       "n": 2,
       "side": "E",
-      "at_mm": 4.5,
+      "at_mm": 6.0,
       "width_cells": null
     },
     {
       "n": 3,
       "side": "E",
-      "at_mm": -4.5,
+      "at_mm": 0.0,
+      "width_cells": null
+    },
+    {
+      "n": 4,
+      "side": "E",
+      "at_mm": -6.0,
       "width_cells": null
     }
   ],
   "bands": {
     "A": {
-      "lo_ghz": 7.4,
-      "hi_ghz": 8.6,
-      "points": 4
+      "lo_ghz": 6.8,
+      "hi_ghz": 7.8,
+      "points": 3
     },
     "B": {
-      "lo_ghz": 11.4,
-      "hi_ghz": 12.6,
-      "points": 4
+      "lo_ghz": 9.5,
+      "hi_ghz": 10.5,
+      "points": 3
+    },
+    "C": {
+      "lo_ghz": 12.2,
+      "hi_ghz": 13.2,
+      "points": 3
     }
   },
   "requirements": [
     {
       "s": [2, 1],
-      "min_db": -1.0,
+      "min_db": -1.5,
       "band": "A"
     },
     {
       "s": [3, 1],
-      "max_db": -22.0,
+      "max_db": -20.0,
+      "band": "A"
+    },
+    {
+      "s": [4, 1],
+      "max_db": -20.0,
       "band": "A"
     },
     {
       "s": [1, 1],
-      "max_db": -12.0,
+      "max_db": -10.0,
       "band": "A"
     },
     {
       "s": [3, 1],
-      "min_db": -1.0,
+      "min_db": -1.5,
       "band": "B"
     },
     {
       "s": [2, 1],
-      "max_db": -22.0,
+      "max_db": -20.0,
+      "band": "B"
+    },
+    {
+      "s": [4, 1],
+      "max_db": -20.0,
       "band": "B"
     },
     {
       "s": [1, 1],
-      "max_db": -12.0,
+      "max_db": -10.0,
       "band": "B"
+    },
+    {
+      "s": [4, 1],
+      "min_db": -1.5,
+      "band": "C"
+    },
+    {
+      "s": [2, 1],
+      "max_db": -20.0,
+      "band": "C"
+    },
+    {
+      "s": [3, 1],
+      "max_db": -20.0,
+      "band": "C"
+    },
+    {
+      "s": [1, 1],
+      "max_db": -10.0,
+      "band": "C"
     }
   ],
   "fixed": [],
@@ -101,9 +142,9 @@
     "betas": [8.0, 16.0, 32.0, 64.0, 128.0],
     "iterations_per_beta": 25,
     "min_iterations": 8,
-    "budget_min": 55,
+    "budget_min": 90,
     "move": 0.2,
-    "move_late": 0.1,
+    "move_late": 0.05,
     "init": 0.5,
     "eta": 0.5,
     "tau": 0.05,

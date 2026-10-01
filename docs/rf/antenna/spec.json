@@ -72,10 +72,14 @@
     "tau": 0.05,
     "aggregate": "excitation",
     "damping": 0.0,
+    "interpolation": "resistive",
+    "reactive_damping": 0.1,
     "conservative": true,
     "max_inner": 4,
     "filter_radius_mm": null,
-    "seed": "patch"
+    "seed": "patch",
+    "binary_every": 5,
+    "eta_variants": []
   },
   "solver": {
     "backend": "torch",

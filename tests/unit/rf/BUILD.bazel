@@ -13,6 +13,10 @@ yapnr_py_tests(
     env = _ENV,
     overrides = {
         "test_adjoint_gradients": {"size": "medium"},
+        "test_balance": {
+            "deps": ["//yapnr/rf:testing"],
+            "size": "medium",
+        },
         "test_animate": {
             "deps": [
                 "//yapnr/rf:animate_lib",

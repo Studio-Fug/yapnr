@@ -530,8 +530,9 @@ owner reviews them with the pull request:
 - **The cases do not start from the paper's uniform 0.5.** With copper, ρ̄ = 0.5 is a 377 Ω/sq
   absorber over the whole window: from it the divider grew into one radiating plate. The
   divider starts from a uniform x = 0.3 (an almost transparent sheet on the steep part of the
-  projection); the diplexer from a junction of its ports (`optimizer.seed: star`), since from
-  0.3 its window absorbed for 15 iterations and then formed a radiating mass; the antenna from
+  projection); the filter banks from a junction of their ports with quarter-wave stubs
+  (`optimizer.seed: stubs`, below), since from 0.3 the diplexer's window absorbed for 15
+  iterations and then formed a radiating mass; the antenna from
   the closed-form inset-fed patch (`seed: patch`), since every uniform start (0.3, 0.5, 0.7,
   0.7 at β = 32) stayed at the bare feed or a plate. Gray copper absorbs before it radiates.
   The seeds are computed from the spec alone; every pixel stays a design variable.
@@ -602,6 +603,22 @@ Review fixes (the physics and design reviews of the cases; [guide](rf-inverse-de
 - **Footprints carry KiCad rule areas** for the simulated margin: no pour, vias or other
   footprints, and no tracks outside a corridor along each feed.
 - **`export_ok` is `None` when the pixel check could not run** (no checkpoint).
+- **The divider's transmission target is −3.4 dB (was −3.28) and it is optimized robustly**
+  (the eroded design, projection threshold 0.55, in the epigraph). With the extraction
+  corrected, −3.28 dB was out of reach (the ideal split is −3.01 dB and transmissions read
+  0.1–0.2 dB low) and the run oscillated; without the eroded design |S11| lost 1.8 dB per
+  refinement. With both it passes on all three grids. The criteria are unchanged.
+- **The filter banks start from the stub seed** (`seed: stubs`), as the design review
+  suggested: from the plain junction the diplexer only learned to roll off (rejection 5–12 dB).
+- **Moves of 0.05 from β = 32** for the divider, the Wilkinson case and the banks: at 0.1 a
+  near-binary design flipped boundary pixels back and forth (t alternating between 0.7 and 8,
+  a broken arm each time). The best-design export keeps such excursions out of the footprints.
+- **The antenna case is unchanged and fails; changing it is the owner's call.** On S2 the patch
+  class has about 4 % of −10 dB bandwidth, the band itself, and the finer grids shift it up by
+  2 %; uniform starts (resistive or reactive) and an untuned rectangle did not lead the
+  optimizer to a radiator, so the export is the tuned closed-form patch, which the optimizer did
+  not change. Options: a broader-band topology, a thicker or lower-εr substrate, a band or
+  criteria that allow the shift, or a copper-edge correction in the solver.
 
 ## Pinned versions
 

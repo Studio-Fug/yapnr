@@ -87,14 +87,20 @@ def _check_scale(scale: str) -> None:
 
 
 def divider(scale: str = "full") -> Spec:
-    """(a) Equal-split 3-port divider: |S11| ≤ −20 dB, |S21|, |S31| ≥ −3.28 dB over 8.5–11.5
-    GHz, mirror symmetric about y = 0 (design §11.2)."""
+    """(a) Equal-split 3-port divider: |S11| ≤ −20 dB, |S21|, |S31| ≥ −3.4 dB over 8.5–11.5
+    GHz, mirror symmetric about y = 0 (design §11.2).
+
+    The design's transmission target was −3.28 dB. With the de-embedding corrected (Re k only)
+    the port extraction reads transmissions 0.1–0.2 dB low at 8–12 GHz (the guide's
+    "Accuracy"), so −3.28 dB left no room above the ideal −3.01 dB split plus the line loss: a
+    run aiming at it oscillated (t up to 13) and its best binary design reached −3.46 dB. The
+    target is −3.4 dB; the criteria (−3.45 and −3.6 dB) are unchanged."""
     _check_scale(scale)
     band = {"pass": Band(8.5, 11.5, 7)}
     reqs = (
         S(1, 1).at_most_db(-20, band="pass"),
-        S(2, 1).at_least_db(-3.28, band="pass"),
-        S(3, 1).at_least_db(-3.28, band="pass"),
+        S(2, 1).at_least_db(-3.4, band="pass"),
+        S(3, 1).at_least_db(-3.4, band="pass"),
     )
     if scale == "smoke":
         return Spec(
@@ -120,7 +126,17 @@ def divider(scale: str = "full") -> Spec:
         ports=(Port(1, "W", 0.0), Port(2, "E", 4.2), Port(3, "E", -4.2)),
         bands=band,
         requirements=reqs,
-        optimizer=OptimizerSpec(iterations_per_beta=30, budget_min=45, init=INIT),
+        # Robust against the finer grids: on them the copper acts smaller (the zero-thickness
+        # edge, guide "Accuracy") and a run without this lost 1.8 dB of |S11| per refinement
+        # (−17.5, −15.7, −13.9 dB at 0.3, 0.15, 0.1 mm), so the epigraph also holds the eroded
+        # design (projection threshold 0.55).
+        optimizer=OptimizerSpec(
+            iterations_per_beta=30,
+            budget_min=75,
+            init=INIT,
+            eta_variants=(0.55,),
+            move_late=0.05,
+        ),
     )
 
 
@@ -163,8 +179,11 @@ def wilkinson(scale: str = "full") -> Spec:
         ports=(Port(1, "W", 0.0), Port(2, "E", 4.2), Port(3, "E", -4.2)),
         bands=band,
         requirements=reqs,
-        lumped=(Lumped("R1", (7.2, 7.8), (-0.3, 0.3), "y", 100.0, 0.6),),
-        optimizer=OptimizerSpec(iterations_per_beta=30, budget_min=90, init=INIT),
+        # The resistor sits about a quarter wave (4.5–5 mm of a 70 Ω line) from port 1, where a
+        # Wilkinson's arms end; at 7.2–7.8 mm (a first try) the arms were three eighths of a
+        # wave long and the run ended with |S22| −8 dB.
+        lumped=(Lumped("R1", (4.8, 5.4), (-0.3, 0.3), "y", 100.0, 0.6),),
+        optimizer=OptimizerSpec(iterations_per_beta=30, budget_min=90, init=INIT, move_late=0.05),
     )
 
 
@@ -267,7 +286,9 @@ def diplexer(scale: str = "full") -> Spec:
         requirements=reqs,
         # From the plain junction (`seed: star`) the branches only learned to roll off (rejection
         # 9–12 dB, t 1.8–2.4); the stub seed puts a quarter-wave open stub for the other channel
-        # on each branch (`seeds.stub_mask`), which the optimizer then reshapes.
+        # on each branch (`seeds.stub_mask`), which the optimizer then reshapes. Its best
+        # binarized design comes at β = 8 (t 0.79) and plain MMA loses it from β = 16 on (t 1.84;
+        # the export keeps the best); moves of 0.15/0.05 did worse (best t 1.84).
         optimizer=OptimizerSpec(iterations_per_beta=25, budget_min=55, seed="stubs"),
     )
 
@@ -312,7 +333,11 @@ def filterbank3(scale: str = "full") -> Spec:
         ports=(Port(1, "W", 0.0), Port(2, "E", 6.0), Port(3, "E", 0.0), Port(4, "E", -6.0)),
         bands=bands,
         requirements=tuple(reqs),
-        optimizer=OptimizerSpec(iterations_per_beta=25, budget_min=90, seed="stubs"),
+        # Moves of 0.05 from β = 32 on: with 0.1 the near-binary designs of the other cases
+        # flipped boundary pixels back and forth (t alternating between 0.7 and 8).
+        optimizer=OptimizerSpec(
+            iterations_per_beta=25, budget_min=90, seed="stubs", move_late=0.05
+        ),
     )
 
 
@@ -419,6 +444,11 @@ class Check:
 # (`sparams`) and the 6h feeds the divider's margin is +0.02 to +0.05.
 PASSIVITY = -1e-3
 
+# Power balance of radiators (design §11.3, `validate.power_balance`): the port's net input
+# power against the flux out of a box closed by the ground, the other ports' power and the
+# dissipation inside it, within 2 %.
+BALANCE = 0.02
+
 
 def _divider_checks(r11, t, imb=None):
     out = [
@@ -487,11 +517,13 @@ CRITERIA = {
         "coarse": [
             Check("|S11| max dB", "s_max", (1, 1), -10.0, (9.8, 10.2)),
             Check("eta min", "eta_min", (1,), 0.65, at_ghz=(9.8, 10.0, 10.2)),
+            Check("power balance", "balance", (1,), BALANCE, at_ghz=(9.8, 10.0, 10.2)),
             Check("passivity", "passivity", limit=PASSIVITY),
         ],
         "fine": [
             Check("|S11| max dB", "s_max", (1, 1), -10.0, (9.85, 10.15)),
             Check("eta min", "eta_min", (1,), 0.60, at_ghz=(9.85, 10.0, 10.15)),
+            Check("power balance", "balance", (1,), BALANCE, at_ghz=(9.85, 10.0, 10.15)),
             Check("passivity", "passivity", limit=PASSIVITY),
         ],
     },

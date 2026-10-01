@@ -1089,6 +1089,43 @@ the validation, and over-statements in the reports. What changed (choices in
 
 Results after the fixes are in §20.
 
+## 20. Results after the review fixes
+
+All cases re-run with the fixes (details, figures and tables in the
+[guide](../rf-inverse-design.md#end-to-end-cases)); "coarse" is the exported footprint on the
+optimization grid, "fine" and "finer" at a half and a third of its pitch.
+
+| Case               | Iterations, wall time | Exported (iteration, t) | Coarse                                                                     | Fine                                          | Finer                                         | Verdict |
+| ------------------ | --------------------- | ----------------------- | -------------------------------------------------------------------------- | --------------------------------------------- | --------------------------------------------- | ------- |
+| divider (robust)   | 137, 42 min           | 80, 0.10                | \|S11\| ≤ −19.6 dB, \|S21\| ≥ −3.33 dB                                     | −20.3 dB, −3.31 dB                            | −17.7 dB, −3.34 dB                            | pass    |
+| Wilkinson          | 150, 48 min           | 70, 0.90                | \|S11\| −18.3, \|S22\| −11.1, \|S32\| −12.8, \|S21\| −3.30 dB              | −17.0, −11.3, −12.3, −3.33 dB                 | −15.2, −11.4, −12.0, −3.38 dB                 | fail    |
+| antenna            | 20, 11 min            | 20, 0.28 (the seed)     | \|S11\| −9.1 dB, η ≥ 0.735, balance −11 %                                  | −6.1 dB, η ≥ 0.653                            | −5.1 dB, η ≥ 0.592                            | fail    |
+| diplexer           | 91, 18 min            | 20, 0.79                | in-channel −0.74 / −1.63, rejection −15.4 / −16.2, \|S11\| −11.3 / −7.9 dB | −0.76 / −1.51, −15.7 / −14.8, −10.7 / −8.6 dB | −0.79 / −1.42, −15.4 / −13.9, −10.4 / −9.3 dB | fail    |
+| three-channel bank | 96, 31 min            | 5, 2.72                 | in-channel −2.9 to −3.6, rejection −6.5 to −19 dB                          | similar                                       | similar                                       | fail    |
+
+- **Divider:** the robust formulation (the eroded design in the epigraph) and the −3.4 dB
+  transmission target (the corrected extraction reads transmissions 0.1–0.2 dB low, so the
+  design's −3.28 dB was out of reach) made it pass on all three grids; without them |S11| lost
+  1.8 dB per refinement.
+- **Antenna:** fails, and its export is the tuned closed-form patch, unchanged by the optimizer
+  (the binarized design never moved). The patch's −10 dB bandwidth (4 %) is the band itself and
+  the finer grids shift it up 2 %; uniform starts with either interpolation and the untuned
+  edge-fed rectangle did not lead the optimizer to a radiator. Passing needs a broader-band
+  topology, another substrate, another band or criteria, or a copper-edge correction: the
+  owner's call.
+- **Three-channel bank:** fails (t 2.7 from the stub seed).
+
+- **Wilkinson-type combiner** (new, lumped 100 Ω resistor): the input match and the split pass,
+  the outputs' match (−11 dB) and isolation (−12 to −16 dB) do not; its footprint also has two
+  0.14 mm necks the pixel repair missed.
+- **Diplexer:** from the stub seed it came close (fine grid: everything but channel B's
+  rejection, 0.2 dB short); from the plain junction it only rolled off.
+- **Optimizer behaviour.** Plain MMA oscillated in every case once β reached 16–32 (a boundary
+  pixel flipping and breaking an arm: t alternating between about 0.7 and 8–15); the best-design
+  export kept those excursions out of the footprints, and moves of 0.05 from β = 32 reduced
+  them. The conservative variant does not oscillate but costs a forward run per subproblem and
+  barely moved the antenna.
+
 ## References
 
 1. A. M. Hammond, A. Oskooi, M. Chen, Z. Lin, S. G. Johnson, S. E. Ralph, "High-performance hybrid

@@ -148,12 +148,6 @@ def resimulate(
     }
 
 
-# Power balance of radiators (design §11.3): the port's net input power against what leaves a
-# box closed by the ground (side faces from the ground up, the top face, the feed windows left
-# out), the power the other ports take and the dissipation inside the box.
-BALANCE = 0.02
-
-
 def power_balance(prob, rho: np.ndarray, freqs, port: int = 1) -> dict:
     """The power balance of the design `rho` with `port` excited, at `freqs` (Hz).
 

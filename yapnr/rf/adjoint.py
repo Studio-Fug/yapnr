@@ -49,6 +49,7 @@ from yapnr.rf.fdtd.monitors import Probe
 from yapnr.rf.fdtd.sources import NuttallFit, SpectralSource
 from yapnr.rf.fdtd.stop import StopRule
 from yapnr.rf.materials import edges_to_pixels
+from yapnr.rf.numerics import make_complex
 
 
 def wirtinger(fn, dft: dict, names):
@@ -92,7 +93,9 @@ def adjoint_sources(sim: Simulation, probes: list[Probe], grads: dict, omega) ->
             continue
         vol = sim.grid.volume(p.comp).reshape(-1)[p.index]
         sign = 1.0 if p.comp[0] == "e" else -1.0
-        req = sign * g / (1j * big_omega[:, None] * vol[None, :])  # (M, P)
+        # g / (iΩV) = −i g / (ΩV), in real arithmetic (see numerics).
+        scale = sign / (big_omega[:, None] * vol[None, :])
+        req = make_complex(g.imag * scale, -g.real * scale)  # (M, P)
         by_comp.setdefault(p.comp, []).append((p.index, req))
     out = []
     fits: dict[bool, NuttallFit] = {}
@@ -158,7 +161,9 @@ def gradient(
     d_gy = np.zeros((omega.size, nx + 1, ny))
     for p in design_probes:
         vol = grid.volume(p.comp).reshape(-1)[p.index][None, :]
-        ds = 2.0 * np.real(1j * big_omega * c * vol * adj.dft[p.name] * forward.dft[p.name])
+        # 2 Re[iΩ c V Ê^adj Ê] = −2 Ω c V Im(Ê^adj Ê), in real arithmetic (see numerics).
+        ea, ef = adj.dft[p.name], forward.dft[p.name]
+        ds = -2.0 * big_omega * c * vol * (ea.real * ef.imag + ea.imag * ef.real)
         d_sigma[p.name] = ds
         if p.comp in ("ex", "ey"):
             i, j, k = grid.unravel(p.comp, p.index)

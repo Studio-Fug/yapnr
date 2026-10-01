@@ -34,6 +34,7 @@ from yapnr.rf.fdtd.sources import GaussianPulse, PulseSource
 from yapnr.rf.fdtd.stop import StopRule
 from yapnr.rf.materials import Structure
 from yapnr.rf.mesh import Grid, PMLCells, graded_axis, substrate_z_axis
+from yapnr.rf.numerics import wsum
 from yapnr.rf.stackup import Stackup
 
 _SIDES = {"W": (0, 1), "E": (0, -1), "S": (1, 1), "N": (1, -1)}
@@ -100,7 +101,9 @@ class PortGeometry:
             raise ValueError(f"port {port.number}: source or measurement plane in the CPML")
         # Strip nodes ta..tb across the feed.
         width = port.width_cells
-        ta = tx.nearest_node(port.center - 0.5 * width * float(np.median(tx.primary)))
+        # The pitch where the strip lies (not the axis median, which grading can change).
+        local = float(tx.primary[tx.cell(port.center)])
+        ta = tx.nearest_node(port.center - 0.5 * width * local)
         tb = ta + width
         pitches = tx.primary[ta:tb]
         if tb > tx.n or not np.allclose(pitches, pitches[0], rtol=1e-9):
@@ -164,13 +167,13 @@ class PortGeometry:
     def voltage(self, dft):
         """V̂_m (M,) from the probe DTFTs (numpy arrays or torch tensors)."""
         x = dft[self.v_probe.name]
-        return x @ _like(self.v_weights, x)
+        return wsum(x, self.v_weights)
 
     def current(self, dft):
         """Î (M,) flowing inward, from the probe DTFTs."""
         xt = dft[self.it_probe.name]
         xz = dft[self.iz_probe.name]
-        return xt @ _like(self.it_weights, xt) + xz @ _like(self.iz_weights, xz)
+        return wsum(xt, self.it_weights) + wsum(xz, self.iz_weights)
 
     def source(self, waveform: GaussianPulse, dt: float, amplitude: float = 1.0) -> PulseSource:
         """The soft J_z source of this port (uniform under the strip)."""
@@ -258,14 +261,6 @@ def quasi_tem_air(grid: Grid, taxis: int, ta: int, tb: int, tol: float = 1e-10):
     return ez, et
 
 
-def _like(w: np.ndarray, x):
-    if isinstance(x, np.ndarray):
-        return w
-    import torch
-
-    return torch.as_tensor(w, dtype=torch.float64).to(x.dtype)
-
-
 # -- lumped ports ----------------------------------------------------------------------------
 
 
@@ -330,7 +325,7 @@ class LumpedPortGeometry:
 
     def voltage(self, dft):
         x = dft[self.v_probe.name]
-        return x @ _like(self.v_weights, x)
+        return wsum(x, self.v_weights)
 
     def waves(self, dft, vs_hat):
         """(a, b) at the port; `vs_hat` is the source DTFT (zero for a passive port)."""

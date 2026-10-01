@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from yapnr.rf.numerics import cmul
+
 
 def _as(x, ref):
     """`x` (numpy) as the array type of `ref`."""
@@ -31,8 +33,9 @@ def waves(v, i, zc, k, d_m: float):
     zc_ = _as(np.asarray(zc, dtype=np.complex128), v)
     root = _as(2.0 * np.sqrt(np.asarray(zc).real), v)
     ph = _as(np.exp(1j * np.asarray(k) * d_m), v)
-    a = (v + zc_ * i) / root * ph
-    b = (v - zc_ * i) / root / ph
+    zi = cmul(zc_, i)
+    a = cmul((v + zi) / root, ph)
+    b = (v - zi) / root / ph
     return a, b
 
 

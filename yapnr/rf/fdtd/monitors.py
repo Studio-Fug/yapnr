@@ -17,6 +17,7 @@ import numpy as np
 
 from yapnr.rf.fdtd.dtft import conductance_factor
 from yapnr.rf.mesh import E_COMPONENTS, Grid
+from yapnr.rf.numerics import re_conj_product
 
 
 @dataclass(frozen=True)
@@ -176,10 +177,11 @@ class FluxBox:
         for face in self.faces:
             for pair, w in enumerate(face.weights):
                 e, h_lo, h_hi = (dft[p.name] for p in face.probes[3 * pair : 3 * pair + 3])
-                h = 0.5 * (h_lo + h_hi)
+                h = (h_lo + h_hi) / 2.0
                 # pair 0: E_t1 × H_t2 (+); pair 1: E_t2 × H_t1 (−).
                 s = 1.0 if pair == 0 else -1.0
-                total = total + face.sign * s * 0.5 * ((e * h.conj()).real @ _to_like(w, e))
+                prod = re_conj_product(e, h) * _to_like(w, e)  # not @: see numerics
+                total = total + face.sign * s * 0.5 * prod.sum(-1)
         return total
 
 
@@ -211,5 +213,5 @@ def dissipated_power(structure, probes, dft, omega, dt: float, weights=None) -> 
         vol = grid.volume(p.comp).reshape(-1)[p.index]
         w = 1.0 if weights is None else weights[n]
         e = np.asarray(dft[p.name])
-        total += 0.5 * c * (np.abs(e) ** 2 @ (sig * vol * w))
+        total += 0.5 * c * (np.abs(e) ** 2 * (sig * vol * w)).sum(-1)
     return total

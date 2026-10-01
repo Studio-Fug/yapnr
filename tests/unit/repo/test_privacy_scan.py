@@ -143,6 +143,23 @@ class RuleTest(unittest.TestCase):
             with self.subTest(expected=expected):
                 self.assertEqual(_run_main(["--stdin"], text)[0], expected)
 
+    def test_stdin_mode_accepts_github_service_addresses_on_trailers_only(self):
+        support = "support" + AT + "github.com"
+        signoff = "    Signed-off-by: dependabot[bot] <" + support + ">\n"
+        self.assertEqual(_run_main(["--stdin"], signoff), (0, ""))
+        self.assertEqual(
+            _run_main(["--stdin"], signoff.replace("Signed-off-by", "Co-authored-by")), (0, "")
+        )
+        for text in (
+            "+Signed-off-by: dependabot[bot] <" + support + ">\n",  # a patch line: file content
+            "    Contact " + support + " for help\n",  # not a trailer
+            "    Signed-off-by: Jane <jane.doe" + AT + "gmail.com>\n",  # a personal address
+        ):
+            with self.subTest(text=text[:20]):
+                self.assertEqual(_run_main(["--stdin"], text)[0], 1)
+        # File scans never accept it, trailer or not.
+        self.assertEqual(len(privacy_scan.scan_text(signoff, "NOTES.md")), 1)
+
     def test_stdin_mode_accepts_allowlisted_commit_addresses(self):
         # `git log -p --format='%ae %ce%n%B'`: the identity header, a trailer and
         # the patch that adds the allowlist entry all carry the owner's address.

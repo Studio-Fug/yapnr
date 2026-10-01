@@ -41,7 +41,9 @@ File contents stay strict: an allowlisted commit address in a file is a
 finding like any other personal address (only the allowlist file itself is
 exempt). ``--stdin`` scans commit history (``git log -p`` with the identity
 header, messages and patches), where these addresses appear by design, so it
-accepts them.
+accepts them. It also accepts GitHub's own service addresses (``GITHUB_SERVICE_ADDRESSES``,
+Dependabot's sign-off) on a ``Signed-off-by:``/``Co-authored-by:`` trailer line, and
+nowhere else.
 
 A line that must contain a match (for example documentation of a pattern) can
 carry the marker ``privacy-scan: allow``. Use it sparingly; reviewers see it.
@@ -383,6 +385,14 @@ _NOREPLY_IDENTITY = re.compile(
     r"(?:[0-9]+\+)?[A-Za-z0-9-]+(?:\[bot\])?@users\.noreply\.github\.com"
 )
 _GITHUB_COMMITTER = "noreply@github.com"
+
+# GitHub's own service addresses, accepted only on a commit-message trailer line in the history
+# scan (``--stdin``): Dependabot signs its commits off with GitHub's support address (owner
+# decision 2026-09-30). The address is assembled so this file's own patches pass the scan. A
+# message line in ``git log`` output is indented; patch lines start with their diff marker, so
+# the same text inside a file is still a finding.
+GITHUB_SERVICE_ADDRESSES = frozenset({"support" + "@" + "github.com"})
+_TRAILER = re.compile(r"^\s*(?:Signed-off-by|Co-authored-by):\s", re.IGNORECASE)
 # One whole address, as the `email` rule matches it.
 _ADDRESS = re.compile(r"[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}")
 IDENTITIES_PATH = "<identities>"
@@ -445,12 +455,17 @@ def _address_in(address: str, addresses: AbstractSet[str]) -> bool:
 
 
 def scan_text(
-    text: str, path: str = "<text>", commit_addresses: AbstractSet[str] = frozenset()
+    text: str,
+    path: str = "<text>",
+    commit_addresses: AbstractSet[str] = frozenset(),
+    trailer_addresses: AbstractSet[str] = frozenset(),
 ) -> List[Finding]:
     """Scan text line by line.
 
     ``commit_addresses`` (lower case) are e-mail addresses to accept; only the
     commit history scan (``--stdin``) passes the allowlisted commit addresses.
+    ``trailer_addresses`` (lower case) are accepted only on a ``Signed-off-by:`` or
+    ``Co-authored-by:`` trailer line; the history scan passes GitHub's service addresses.
     """
     findings: List[Finding] = []
     for lineno, line in enumerate(text.splitlines(), start=1):
@@ -463,6 +478,12 @@ def scan_text(
                 # A `git log -p` line starts with its diff marker (`+`, `-`), which
                 # the address pattern takes into the local part.
                 if rule.name == "email" and _address_in(match.group(0), commit_addresses):
+                    continue
+                if (
+                    rule.name == "email"
+                    and _address_in(match.group(0), trailer_addresses)
+                    and _TRAILER.match(line)
+                ):
                     continue
                 if rule.confirm is not None and not rule.confirm(match):
                     continue
@@ -605,7 +626,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.identities:
         findings.extend(check_identities(sys.stdin.read()))
     if args.stdin:
-        findings.extend(scan_text(sys.stdin.read(), "<stdin>", allowed_identities()))
+        findings.extend(
+            scan_text(sys.stdin.read(), "<stdin>", allowed_identities(), GITHUB_SERVICE_ADDRESSES)
+        )
     if args.all:
         findings.extend(scan_tree(os.path.abspath(args.root or os.getcwd())))
     if args.files:

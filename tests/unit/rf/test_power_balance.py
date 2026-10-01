@@ -131,18 +131,8 @@ class FeedWindowTest(unittest.TestCase):
         dt = 0.95 * g.courant_dt()
         sim = Simulation(g, dom.structure(gd), dt=dt, backend="torch", dtype=np.float64)
         kc = g.k_c
-        h = S1.h
-        x0, x1, y0, y1 = (g.x.nodes[i0], g.x.nodes[i1], g.y.nodes[j0], g.y.nodes[j1])
-        half = 0.5 * p1.width + 2 * h
-        windows = [((x - 1e-9, x + 1e-9), (-half, half), (0.0, 3 * h)) for x in (x0, x1)]
-        box = FluxBox(
-            g,
-            "rad",
-            ((i0, i1), (j0, j1), (kc, kc + 8)),
-            faces=("x-", "x+", "y-", "y+", "z+"),
-            windows=windows,
-        )
-        self.assertAlmostEqual(g.y.nodes[j1] - g.y.nodes[j0], y1 - y0)
+        box = dom.radiation_box(0.0, float(g.z.nodes[kc + 8] - S1.h))
+        self.assertEqual(box.node_box, ((i0, i1), (j0, j1), (kc, kc + 8)))
         res = sim.run(
             p1.mode_sources(GaussianPulse.for_band(8e9, 12e9), dt),
             p1.probes + box.probes,

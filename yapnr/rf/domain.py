@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from yapnr.rf.constants import C0
-from yapnr.rf.fdtd.monitors import design_plane_probes
+from yapnr.rf.fdtd.monitors import FluxBox, design_plane_probes
 from yapnr.rf.materials import Structure
 from yapnr.rf.mesh import Grid, PMLCells, graded_axis, substrate_z_axis
 from yapnr.rf.ports import LinePort, PortGeometry
@@ -161,6 +161,42 @@ class Domain:
     def design_probes(self, prefix: str = "design"):
         i0, i1, j0, j1 = self.window
         return design_plane_probes(self.grid, i0, i1, j0, j1, prefix)
+
+    def radiation_box(
+        self,
+        offset: float,
+        height: float,
+        *,
+        name: str = "rad",
+        window_margin: float | None = None,
+        window_height: float | None = None,
+    ) -> FluxBox:
+        """The radiated-power box of design §5.6: the four side faces from the copper plane up
+        and the top face, `offset` beyond the design region and `height` above the copper
+        (both snapped to grid nodes). Where a feed crosses a side face, a window
+        |t − t_feed| ≤ w/2 + window_margin (default 2h), z ≤ window_height (default 3h above
+        the ground) is left out."""
+        g = self.grid
+        h = self.spec.stackup.h
+        x0, x1, y0, y1 = self.spec.design
+        margin = 2.0 * h if window_margin is None else window_margin
+        top_z = 3.0 * h if window_height is None else window_height
+        box = (
+            (g.x.nearest_node(x0 - offset), g.x.nearest_node(x1 + offset)),
+            (g.y.nearest_node(y0 - offset), g.y.nearest_node(y1 + offset)),
+            (g.k_c, g.z.nearest_node(h + height)),
+        )
+        windows = []
+        for p in self.ports:
+            half = 0.5 * p.width + margin
+            centre = p.port.center
+            if p.axis == 0:
+                xf = g.x.nodes[box[0][0] if p.sign > 0 else box[0][1]]
+                windows.append(((xf - 1e-9, xf + 1e-9), (centre - half, centre + half), (0, top_z)))
+            else:
+                yf = g.y.nodes[box[1][0] if p.sign > 0 else box[1][1]]
+                windows.append(((centre - half, centre + half), (yf - 1e-9, yf + 1e-9), (0, top_z)))
+        return FluxBox(g, name, box, faces=("x-", "x+", "y-", "y+", "z+"), windows=windows)
 
     def window_pixels(self, full: np.ndarray) -> np.ndarray:
         """The design-window part (…, ni, nj) of a whole-plane pixel array (…, Nx, Ny)."""

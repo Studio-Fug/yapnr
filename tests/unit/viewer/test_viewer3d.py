@@ -264,6 +264,11 @@ class Base(unittest.TestCase):
     def tearDown(self):
         for s in self.services:
             s.shutdown()
+        # shutdown() does not wait for the worker (the server exits right after it); a test must,
+        # or the worker's finally blocks write into the cache while the temp dir is removed
+        for s in self.services:
+            if s.worker is not None:
+                s.worker.join(10)
         for k, val in self.env.items():
             if val is None:
                 os.environ.pop(k, None)

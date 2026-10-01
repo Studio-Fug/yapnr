@@ -37,13 +37,13 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Setup repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # Full history, so the commit range below can be inspected.
           fetch-depth: 0
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
@@ -96,7 +96,7 @@ jobs:
 
       # prek keeps its hook environments under ~/.cache/prek.
       - name: Cache prek hook environments
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/prek
           key: prek-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
@@ -114,13 +114,13 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Setup repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # setup-bazel's own caches are not used: their keys carry neither the CPU
       # architecture nor the lock files, and its Bazelisk cache is not where
       # .bazeliskrc sends Bazelisk. Both download caches are keyed below.
       - name: Setup Bazel
-        uses: bazel-contrib/setup-bazel@0.15.0
+        uses: bazel-contrib/setup-bazel@0.19.0
 
       # The environment overrides .bazeliskrc (./.bazelisk), so the Bazel
       # binary lands in the cached directory.
@@ -128,7 +128,7 @@ jobs:
         run: echo "BAZELISK_HOME=${HOME}/.cache/bazelisk" >> "${GITHUB_ENV}"
 
       - name: Cache Bazelisk and the Bazel repository cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/bazelisk
@@ -137,7 +137,7 @@ jobs:
           restore-keys: bazel-repo-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Cache Bazel disk cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/bazel-disk
           key: bazel-disk-test-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('MODULE.bazel.lock', 'requirements.lock') }}
@@ -165,13 +165,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Setup repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # setup-bazel's own caches are not used: their keys carry neither the CPU
       # architecture nor the lock files, and its Bazelisk cache is not where
       # .bazeliskrc sends Bazelisk. Both download caches are keyed below.
       - name: Setup Bazel
-        uses: bazel-contrib/setup-bazel@0.15.0
+        uses: bazel-contrib/setup-bazel@0.19.0
 
       # The environment overrides .bazeliskrc (./.bazelisk), so the Bazel
       # binary lands in the cached directory.
@@ -179,7 +179,7 @@ jobs:
         run: echo "BAZELISK_HOME=${HOME}/.cache/bazelisk" >> "${GITHUB_ENV}"
 
       - name: Cache Bazelisk and the Bazel repository cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/bazelisk
@@ -188,7 +188,7 @@ jobs:
           restore-keys: bazel-repo-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Cache Bazel disk cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/bazel-disk
           key: bazel-disk-docs-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('MODULE.bazel.lock', 'requirements.lock') }}
@@ -203,7 +203,7 @@ jobs:
           --repository_cache="$HOME/.cache/bazel-repo"
 
       - name: Upload site artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: site
           path: docs/site/html
@@ -257,10 +257,10 @@ jobs:
       # The action works on the git repository in $GITHUB_WORKSPACE, so check
       # out first; checkout cleans the directory, so download the site after.
       - name: Setup repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download site artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: site
           path: _site
@@ -288,7 +288,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Setup repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Remove PR preview
         uses: rossjrw/pr-preview-action@v1
@@ -316,10 +316,10 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Setup repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download site artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: site
           path: _site

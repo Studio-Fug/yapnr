@@ -988,6 +988,73 @@ Implemented as designed in §7–§10 (`yapnr/rf/design/`, `optim/`, `spec.py`, 
 - Not yet: lumped elements in specs (the Wilkinson variant), the `yapnr rf` CLI, the fine-grid
   validator (`validate.py`) and the case presets (`cases.py`).
 
+## 18. As built: the end-to-end cases
+
+`yapnr/rf/cases.py` (the presets of §11 at full and smoke scale, their criteria and the runner,
+`python -m yapnr.rf.cases run|validate CASE --out DIR`), `yapnr/rf/validate.py` (§11.5),
+`yapnr/rf/export/repair.py`, `yapnr/rf/seeds.py` and `tests/e2e/rf/` (one manual target per
+case, a smoke variant of each in CI, and the stretch three-channel bank). Results and figures
+are in the [guide](../rf-inverse-design.md#end-to-end-cases); the differences from §11:
+
+- **Starting points.** The uniform ρ = 0.5 of §8.3 is, with copper, a 377 Ω/sq absorber over
+  the window; from it the divider grew into one radiating plate (t 1.1 → 2.5 at β = 32). The
+  divider starts from x = 0.3 (an almost transparent sheet on the steep part of the
+  projection). The diplexer starts from a junction of its ports (`optimizer.seed: star`): from
+  0.3 its window absorbed for 15 iterations, then formed a radiating mass (t = 8.5 at
+  iteration 30). For the antenna every uniform start was a local optimum of the radiated
+  fraction (0.3 and 0.5: the bare open-ended feed, η ≈ 0.15; 0.7, also from β = 32: a plate,
+  η ≈ 0.4): gray copper absorbs before it radiates. It starts from the closed-form inset-fed
+  patch (`seed: patch`; W, L and the inset from the spec), crisp (x 0.9/0.1, slots 1.5 times
+  the minimum space, β from 16: at β = 8 the slots blurred into lossy gray and the first step
+  closed them) and chosen among its 27 whole-pixel neighbours by the spec's epigraph value
+  (one pixel of length is about 5 % of resonance; the closed form resonated 1.5 % high on the
+  grid and the optimizer alone did not move it). On the case's grid the closed-form patch
+  reaches |S11| = −21 dB at 10.15 GHz and η = 0.80, with a −10 dB band of 9.90–10.35 GHz
+  (4.5 %); on the fine grid the same pixels resonate 1 % higher.
+- **Antenna band.** 9.8–10.2 GHz (4 %) instead of 9.7–10.3 GHz (6 %): refining the patch for
+  6 % froze at t = 1.40 (η 0.56 and |S11| −5.3 dB at 9.7 GHz), since a second resonance would
+  have to appear from nothing. Same target levels; the criteria bands narrow with it (coarse
+  9.8–10.2, fine 9.85–10.15 GHz).
+- **Width and space.** With the rules' two-pixel filter radius the Zhou constraints read as met
+  while the binary divider kept one-pixel holes and nubs. The export repairs the binary design
+  on the pixel grid (an opening of copper and of void with a square of the minimum width and
+  space, corner contacts bridged) before tracing it; §11's "matches the optimizer within
+  0.5 dB" became "the footprint reproduces the exported design pixel for pixel, its
+  transmissions stay within 0.5 dB of the optimizer's binary design and every |S| within 0.05".
+  A four-pixel filter (with the constraint thresholds following the filter radius,
+  `LengthScale.from_rules(radius=…)`) was tried and stalled (t ≈ 0.7 at iteration 70).
+- **Passivity** is judged at −0.01, not −1e-3: near-lossless binary designs carry the port-wave
+  extraction's error (reciprocity |S_ij − S_ji| ≤ 0.015), which the divider's even mode turns
+  into −0.005.
+- **Auto feed widths** respect the port's position: an odd width needs a centre on a cell
+  centre, an even one on a node (the antenna's symmetric port picked 10 cells, which cannot sit
+  symmetrically at a cell centre, before this).
+- **Custom pads** keep a rectangular anchor the size of the port pad (KiCad 10 keeps it), so the
+  validator reads every feed width from the footprint.
+- **Re-validation raster:** a fine pixel is copper when at least two of four points at ±10⁻⁴
+  pixel around its centre lie inside a polygon (the "inside or on" rule, mirror symmetric: a
+  pixel that a 45° chamfer halves is copper).
+
+- **Optimizer settings per case.** The antenna uses the conservative MMA variant with a 0.05
+  move and the schedule (16, 64) × 10: plain MMA left the tuned seed (t 0.35) on its first step
+  and wandered at t 0.7–2.8; the conservative variant with a 0.1 move rose to 0.5–0.8. The
+  diplexer kept 25 iterations per epoch; a 60-iteration first epoch stayed at t = 1.8 ± 0.1.
+
+Results (details, figures and tables in the guide):
+
+| Case     | Iterations, wall time | Final t | Coarse re-simulation                                             | Fine re-simulation                                               | Verdict |
+| -------- | --------------------- | ------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- | ------- |
+| divider  | 121, 13 min           | −0.002  | \|S11\| ≤ −19.3 dB, \|S21\| = \|S31\| ≥ −3.22 dB                 | \|S11\| ≤ −18.0 dB, ≥ −3.27 dB, imbalance 0                      | pass    |
+| antenna  | 16, 11 min            | 0.535   | \|S11\| ≤ −7.0 dB over 9.8–10.2 GHz, η ≥ 0.650                   | \|S11\| ≤ −5.8 dB over 9.85–10.15 GHz, η ≥ 0.588                 | fail    |
+| diplexer | 102, 17 min           | 1.83    | in-channel ≥ −2.7 dB, rejection 9.4 / 11.8 dB, \|S11\| ≤ −4.3 dB | in-channel ≥ −2.7 dB, rejection 9.0 / 10.0 dB, \|S11\| ≤ −4.4 dB | fail    |
+
+Every export reproduced its design pixel for pixel on the optimization grid, passed the width
+and space check and joined all ports in one island; the fine re-simulations agree with the
+coarse ones within about 1 % in frequency and 2 dB in level. The local search reached the
+divider's targets from a uniform start, but not resonant structures: the antenna stayed at (or
+below) its seed and the diplexer did not grow the quarter-wave stubs its rejection needs. Next
+steps: a finer antenna grid, robust (eroded/dilated) minimax, multi-start, lumped elements.
+
 ## References
 
 1. A. M. Hammond, A. Oskooi, M. Chen, Z. Lin, S. G. Johnson, S. E. Ralph, "High-performance hybrid

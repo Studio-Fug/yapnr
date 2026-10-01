@@ -524,7 +524,44 @@ owner reviews them with the pull request:
 - **Footprints are KiCad 10 net ties:** one SMD pad per port, the copper as keyholed `fp_poly`
   islands with `net_tie_pad_groups` (an island on one pad becomes that pad's custom shape), the
   stackup the design assumes in the description; KiCad's own `kicad-cli` loads them (KiCad lane).
-- **The end-to-end design cases are manual and slow;** they never run in CI.
+- **The end-to-end design cases are manual and slow;** they never run in CI. Each has a smoke
+  variant that does (the same topology on a tiny grid for four iterations; it checks the
+  pipeline, not the RF targets).
+- **The cases do not start from the paper's uniform 0.5.** With copper, ρ̄ = 0.5 is a 377 Ω/sq
+  absorber over the whole window: from it the divider grew into one radiating plate. The
+  divider starts from a uniform x = 0.3 (an almost transparent sheet on the steep part of the
+  projection); the diplexer from a junction of its ports (`optimizer.seed: star`), since from
+  0.3 its window absorbed for 15 iterations and then formed a radiating mass; the antenna from
+  the closed-form inset-fed patch (`seed: patch`), since every uniform start (0.3, 0.5, 0.7,
+  0.7 at β = 32) stayed at the bare feed or a plate. Gray copper absorbs before it radiates.
+  The seeds are computed from the spec alone; every pixel stays a design variable.
+- **A width and space repair on the pixel grid before export.** With the rules' two-pixel
+  filter radius the Zhou constraints read as met while the binary divider kept one-pixel holes
+  and diagonal one-pixel nubs (four violations). The export opens the copper and the void with
+  a square of the minimum width (space) and bridges corner contacts (the divider: 10 of 1280
+  pixels); the result records the change and the validator compares the repaired footprint with
+  the optimizer's binary design. A four-pixel filter instead (thresholds from the filter radius,
+  now supported) gave smoother shapes but stalled (t ≈ 0.7 at iteration 70, against −0.002 at
+  iteration 60 with two pixels).
+- **Re-validation reads the exported footprint**, not the optimizer's arrays: it rasterizes the
+  KiCad polygons ("inside or on" at pixel centres), recalibrates the feeds from the pad
+  widths, excites every port and renormalizes to 50 Ω, once on the optimization grid (which
+  must reproduce the binary design pixel for pixel) and once at half the pitch with 1.5 times
+  the substrate cells. The criteria live with the presets (`yapnr.rf.cases`).
+- **The antenna's band is 9.8–10.2 GHz (4 %), not the design's 9.7–10.3 GHz (6 %).** On the
+  case's grid the closed-form inset patch has a −10 dB band of 4.5 % and a radiated fraction of
+  0.80 at its peak; refining it for 6 % froze at t = 1.40 (η 0.56 and |S11| −5.3 dB at
+  9.7 GHz), since a second resonance would have to appear from nothing. The target levels
+  (−12 dB, η ≥ 0.7) and the criteria's form are unchanged; the criteria bands narrow with it
+  (coarse 9.8–10.2, fine 9.85–10.15 GHz).
+- **The antenna refines its seed with the conservative MMA variant and a 0.05 move** (schedule
+  16, 64): plain MMA left the tuned seed on its first step. It still did not improve on the
+  seed; the case is recorded as failing rather than tuned further by hand.
+- **Passivity is judged at −0.01** (no excitation gains more than 1 % of its power), not the
+  design's −1e-3: near-lossless binary designs carry the port-wave extraction's error
+  (|S_ij − S_ji| up to 0.015), which the divider's even mode turns into −0.005.
+- **Custom pads keep a rectangular anchor of the port pad's size** (KiCad 10 keeps it), so a
+  one-port footprint still says how wide its feed is.
 
 ## Pinned versions
 

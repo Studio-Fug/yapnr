@@ -161,11 +161,19 @@ def antenna(scale: str = "full") -> Spec:
         radiation=RadiationBox(offset_mm=2.4, height_mm=8.0),
         # The seed is a working patch to refine: β starts at 16, where its inset slots stay void
         # (at β = 8 they blurred into lossy gray and the first step closed them; at β = 32 every
-        # pixel saturated and nothing moved).
+        # pixel saturated and nothing moved). Conservative MMA with a 0.05 move: plain MMA left
+        # the tuned seed (t 0.35) on its first step and wandered at t 0.7–2.8 for 12 steps, and
+        # the conservative variant with a 0.1 move still rose to 0.5–0.8 (its four inner
+        # iterations did not always reach a conservative approximation).
         optimizer=OptimizerSpec(
-            betas=(16, 32, 64, 128),
-            iterations_per_beta=25,
-            budget_min=55,
+            betas=(16, 64),
+            iterations_per_beta=10,
+            min_iterations=5,
+            budget_min=30,
+            move=0.05,
+            move_late=0.05,
+            conservative=True,
+            max_inner=4,
             seed="patch",
         ),
     )
@@ -210,11 +218,8 @@ def diplexer(scale: str = "full") -> Spec:
         ports=(Port(1, "W", 0.0), Port(2, "E", 4.5), Port(3, "E", -4.5)),
         bands=bands,
         requirements=reqs,
-        # A longer β = 8 epoch: with 25 iterations per epoch the topology froze at t ≈ 1.8
-        # (|S21| −2.7 dB in channel A, rejection 9–12 dB, |S11| −4 dB).
-        optimizer=OptimizerSpec(
-            iterations_per_beta=(60, 40, 25, 25, 25), budget_min=55, seed="star"
-        ),
+        # A 60-iteration first epoch was tried: t stayed at 1.8 ± 0.1 from iteration 20 to 59.
+        optimizer=OptimizerSpec(iterations_per_beta=25, budget_min=55, seed="star"),
     )
 
 

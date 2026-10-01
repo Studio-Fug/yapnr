@@ -1,0 +1,168 @@
+{
+  "schema": "yapnr-rf-result/1",
+  "spec": "diplexer-x8x12",
+  "spec_sha256": "63307173505ba46e2ab6278dcbeec576e64e831780c32a9e1b599c19cc20e1f6",
+  "solver": {
+    "grid_cells": [110, 84, 22],
+    "cells": 203280,
+    "pitch_mm": 0.3,
+    "substrate_cells": 4,
+    "dt_ps": 0.4650586643949098,
+    "courant": 0.95,
+    "cpml_cells": [10, 10, 10, 10, 8],
+    "design_pixels": [50, 50],
+    "port_width_cells": {
+      "1": 6,
+      "2": 6,
+      "3": 6
+    },
+    "port_zc_at_fc_ohm": {
+      "1": [49.261614409412736, 0.7791042917961349],
+      "2": [49.261614409412736, 0.7791042917961349],
+      "3": [49.261614409412736, 0.7791042917961349]
+    },
+    "pulse_ghz": [10.0, 3.38],
+    "objective_ghz": [7.4, 7.8, 8.2, 8.6, 11.4, 11.8, 12.2, 12.6],
+    "decimation": 48,
+    "tol": 0.001,
+    "adjoint_tol": 0.001,
+    "backend": "torch",
+    "dtype": "float32",
+    "threads": 4,
+    "filter_radius_mm": 0.6,
+    "material_grid": {
+      "shape": [50, 50],
+      "ring_width": 3,
+      "symmetry": [],
+      "n_dof": 2464,
+      "fixed_pixels": 36
+    },
+    "groups": [
+      {
+        "name": "x1",
+        "excitation": 1,
+        "requirements": 6
+      }
+    ]
+  },
+  "optimizer": {
+    "schedule": {
+      "betas": [8.0, 16.0, 32.0, 64.0, 128.0],
+      "iterations": 25,
+      "min_iterations": 8,
+      "lookback": 5,
+      "t_tol": 0.001,
+      "drho_tol": 0.01,
+      "move": 0.2,
+      "move_late": 0.1,
+      "late_beta": 32.0
+    },
+    "iterations": 102,
+    "stop_reason": "schedule",
+    "final_beta": 128.0,
+    "gray": 0.00041029373789881605,
+    "gray_ok": true,
+    "t_last": 1.834715566150909
+  },
+  "coarse_binary": {
+    "frequencies_ghz": [7.4, 7.8, 8.2, 8.6, 11.4, 11.8, 12.2, 12.6],
+    "t": 1.8360642916821832,
+    "f": [
+      1.3452444286081804, 1.3160182501484783, 1.5725686579987352, 1.7940106205244435,
+      1.2071755512968088, 1.145959953534317, 1.436811902376343, 1.8360642916821832
+    ],
+    "s_db": {
+      "S11": [
+        -7.252232168787134, -5.6530876539211565, -4.6536728779514815, -4.08509653890059,
+        -9.722334720565616, -6.926816042143832, -5.306286567950126, -4.371433784538252
+      ],
+      "S21": [
+        -2.064101357907199, -2.3141505150015016, -2.5725685715699327, -2.794010621248009,
+        -9.969974065359384, -13.757571283331986, -18.31723860998657, -22.724905138495643
+      ],
+      "S31": [
+        -8.549366146619148, -10.49279161825848, -12.919235917398257, -15.589995383743656,
+        -2.0809336812230512, -2.1458794744021317, -2.436811892320209, -2.8360642924927824
+      ]
+    },
+    "eta": {},
+    "requirements": [
+      {
+        "requirement": "|S21| \u2265 -1 dB @ A",
+        "worst_phi": 1.7940106204216204,
+        "met": false
+      },
+      {
+        "requirement": "|S31| \u2264 -22 dB @ A",
+        "worst_phi": 1.345063385649057,
+        "met": false
+      },
+      {
+        "requirement": "|S11| \u2264 -12 dB @ A",
+        "worst_phi": 0.7914903462211895,
+        "met": false
+      },
+      {
+        "requirement": "|S31| \u2265 -1 dB @ B",
+        "worst_phi": 1.836064291658349,
+        "met": false
+      },
+      {
+        "requirement": "|S21| \u2264 -22 dB @ B",
+        "worst_phi": 1.2030025938953637,
+        "met": false
+      },
+      {
+        "requirement": "|S11| \u2264 -12 dB @ B",
+        "worst_phi": 0.7628566216650052,
+        "met": false
+      }
+    ],
+    "all_met": false
+  },
+  "sweep": {
+    "file": "coarse.s3p",
+    "points": 101,
+    "ghz": [6.62, 13.38],
+    "passivity_margin_min": 0.020713502241981586,
+    "steps": {
+      "1": 4374,
+      "2": 4374,
+      "3": 4374
+    }
+  },
+  "footprint": {
+    "file": "footprint.kicad_mod",
+    "islands": 1,
+    "net_ties": 1,
+    "repair": {
+      "changed_pixels": 0,
+      "added": 0,
+      "removed": 0,
+      "rounds": 1
+    }
+  },
+  "drc": {
+    "min_width_mm": 0.6,
+    "min_space_mm": 0.6,
+    "resolution_mm": 0.0375,
+    "ok": true,
+    "violations": []
+  },
+  "provenance": {
+    "yapnr": "0.0.0.dev0",
+    "python": "3.11.15",
+    "numpy": "1.26.4",
+    "torch": "2.3.1",
+    "system": "Darwin",
+    "machine": "arm64",
+    "backend": "torch",
+    "dtype": "float32",
+    "threads": 4
+  },
+  "wall_s": {
+    "optimization": 996.8932798714377,
+    "export": 10.564376416965388,
+    "total": 1026.2060061669908
+  }
+}

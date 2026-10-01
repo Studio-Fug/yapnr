@@ -1,0 +1,130 @@
+{
+  "schema": "yapnr-rf-result/1",
+  "spec": "antenna-x10",
+  "spec_sha256": "a10b8c875bdec8b1faa705e6470c9bbcefe734e0f847f45090124ca79af5aaa0",
+  "solver": {
+    "grid_cells": [99, 81, 27],
+    "cells": 216513,
+    "pitch_mm": 0.4,
+    "substrate_cells": 6,
+    "dt_ps": 0.598857711406662,
+    "courant": 0.95,
+    "cpml_cells": [10, 10, 10, 10, 8],
+    "design_pixels": [45, 45],
+    "port_width_cells": {
+      "1": 9
+    },
+    "port_zc_at_fc_ohm": {
+      "1": [52.31679485274674, 2.1343277722598626]
+    },
+    "pulse_ghz": [10.0, 2.0],
+    "objective_ghz": [9.8, 9.933333333333334, 10.066666666666666, 10.2],
+    "decimation": 46,
+    "tol": 0.001,
+    "adjoint_tol": 0.001,
+    "backend": "torch",
+    "dtype": "float32",
+    "threads": 4,
+    "filter_radius_mm": 0.8,
+    "material_grid": {
+      "shape": [45, 45],
+      "ring_width": 3,
+      "symmetry": ["y"],
+      "n_dof": 1025,
+      "fixed_pixels": 18
+    },
+    "groups": [
+      {
+        "name": "x1",
+        "excitation": 1,
+        "requirements": 2
+      }
+    ]
+  },
+  "optimizer": {
+    "schedule": {
+      "betas": [16.0, 64.0],
+      "iterations": 10,
+      "min_iterations": 5,
+      "lookback": 5,
+      "t_tol": 0.001,
+      "drho_tol": 0.01,
+      "move": 0.05,
+      "move_late": 0.05,
+      "late_beta": 32.0
+    },
+    "iterations": 16,
+    "stop_reason": "schedule",
+    "final_beta": 64.0,
+    "gray": 3.448961589037376e-6,
+    "gray_ok": true,
+    "t_last": 0.5354497327797499
+  },
+  "coarse_binary": {
+    "frequencies_ghz": [9.8, 9.933333333333334, 10.066666666666666, 10.2],
+    "t": 0.5354496134669606,
+    "f": [0.5354496134669606, 0.3038607727893714, 0.11176588168788922, 0.10541614789819516],
+    "s_db": {
+      "S11": [-6.953018235585679, -8.961450247361451, -10.882341803912945, -10.9458386935942]
+    },
+    "eta": {
+      "1": [0.6503444846120175, 0.714926242938829, 0.7568620728696285, 0.7640137295240347]
+    },
+    "requirements": [
+      {
+        "requirement": "|S11| \u2264 -12 dB @ main",
+        "worst_phi": 0.5046981766567529,
+        "met": false
+      },
+      {
+        "requirement": "eta1 \u2265 0.7 @ main",
+        "worst_phi": 0.4965551538798241,
+        "met": false
+      }
+    ],
+    "all_met": false
+  },
+  "sweep": {
+    "file": "coarse.s1p",
+    "points": 101,
+    "ghz": [8.0, 12.0],
+    "passivity_margin_min": 0.17206334779318433,
+    "steps": {
+      "1": 5288
+    }
+  },
+  "footprint": {
+    "file": "footprint.kicad_mod",
+    "islands": 1,
+    "net_ties": 0,
+    "repair": {
+      "changed_pixels": 0,
+      "added": 0,
+      "removed": 0,
+      "rounds": 1
+    }
+  },
+  "drc": {
+    "min_width_mm": 0.8,
+    "min_space_mm": 0.8,
+    "resolution_mm": 0.05,
+    "ok": true,
+    "violations": []
+  },
+  "provenance": {
+    "yapnr": "0.0.0.dev0",
+    "python": "3.11.15",
+    "numpy": "1.26.4",
+    "torch": "2.3.1",
+    "system": "Darwin",
+    "machine": "arm64",
+    "backend": "torch",
+    "dtype": "float32",
+    "threads": 4
+  },
+  "wall_s": {
+    "optimization": 656.8219193329569,
+    "export": 5.71278674993664,
+    "total": 691.7748966250801
+  }
+}

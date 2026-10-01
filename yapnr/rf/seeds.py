@@ -150,19 +150,31 @@ def star_mask(problem) -> np.ndarray:
 PATCH_FAMILY = [(dl, dw, di) for dl in (-1, 0, 1) for dw in (-2, 0, 2) for di in (-1, 0, 1)]
 
 
+def _geometry_sha(spec) -> str:
+    """A hash of the spec without its optimizer settings (the seed does not depend on them)."""
+    import hashlib
+    import json
+
+    d = spec.to_dict()
+    d.pop("optimizer", None)
+    blob = json.dumps(d, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(blob.encode()).hexdigest()
+
+
 def tuned_patch(problem, cache_dir: str | None = None, log=None) -> tuple[np.ndarray, dict]:
     """The best binary patch of `PATCH_FAMILY` by the spec's epigraph value max_k f_k on the
     problem's grid (one forward run each, no gradients), and the choice. With `cache_dir` the
-    choice is kept in `seed.json` (keyed by the spec hash) so a resumed run does not repeat it."""
+    choice is kept in `seed.json` (keyed by a hash of the spec without its optimizer settings)
+    so a resumed or re-tuned run does not repeat it."""
     import json
     import os
 
-    sha = problem.spec.sha256()
+    sha = _geometry_sha(problem.spec)
     path = os.path.join(cache_dir, "seed.json") if cache_dir else None
     if path and os.path.exists(path):
         with open(path, encoding="utf-8") as fh:
             saved = json.load(fh)
-        if saved.get("spec_sha256") == sha:
+        if saved.get("spec_geometry_sha256") == sha:
             dl, dw, di = saved["choice"]
             return patch_mask(problem, dl, dw, di), saved
     log = log or (lambda *_: None)
@@ -174,7 +186,7 @@ def tuned_patch(problem, cache_dir: str | None = None, log=None) -> tuple[np.nda
         log(f"patch seed {(dl, dw, di)}: t {t:+.3f}")
     choice, t = min(scores, key=lambda c: (c[1], [abs(v) for v in c[0]]))
     info = {
-        "spec_sha256": sha,
+        "spec_geometry_sha256": sha,
         "seed": "patch",
         "choice": list(choice),
         "t": t,

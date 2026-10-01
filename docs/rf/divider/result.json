@@ -1,0 +1,153 @@
+{
+  "schema": "yapnr-rf-result/1",
+  "spec": "divider-x10",
+  "spec_sha256": "5323bd63a4370030b963821ea183a5234b26d7890e8fa324fa47404a87a69f45",
+  "solver": {
+    "grid_cells": [92, 74, 22],
+    "cells": 149776,
+    "pitch_mm": 0.3,
+    "substrate_cells": 4,
+    "dt_ps": 0.4650586643949105,
+    "courant": 0.95,
+    "cpml_cells": [10, 10, 10, 10, 8],
+    "design_pixels": [32, 40],
+    "port_width_cells": {
+      "1": 6,
+      "2": 6,
+      "3": 6
+    },
+    "port_zc_at_fc_ohm": {
+      "1": [49.31922534069983, 0.7679275972445374],
+      "2": [49.31922534069983, 0.7679275972445374],
+      "3": [49.31922534069983, 0.7679275972445374]
+    },
+    "pulse_ghz": [10.0, 2.0],
+    "objective_ghz": [8.5, 9.0, 9.5, 10.0, 10.5, 11.0, 11.5],
+    "decimation": 59,
+    "tol": 0.001,
+    "adjoint_tol": 0.001,
+    "backend": "torch",
+    "dtype": "float32",
+    "threads": 4,
+    "filter_radius_mm": 0.6,
+    "material_grid": {
+      "shape": [32, 40],
+      "ring_width": 3,
+      "symmetry": ["y"],
+      "n_dof": 622,
+      "fixed_pixels": 36
+    },
+    "groups": [
+      {
+        "name": "x1",
+        "excitation": 1,
+        "requirements": 3
+      }
+    ]
+  },
+  "optimizer": {
+    "schedule": {
+      "betas": [8.0, 16.0, 32.0, 64.0, 128.0],
+      "iterations": 30,
+      "min_iterations": 8,
+      "lookback": 5,
+      "t_tol": 0.001,
+      "drho_tol": 0.01,
+      "move": 0.2,
+      "move_late": 0.1,
+      "late_beta": 32.0
+    },
+    "iterations": 121,
+    "stop_reason": "schedule",
+    "final_beta": 128.0,
+    "gray": 6.533989418936408e-5,
+    "gray_ok": true,
+    "t_last": -0.0020655435207825646
+  },
+  "coarse_binary": {
+    "frequencies_ghz": [8.5, 9.0, 9.5, 10.0, 10.5, 11.0, 11.5],
+    "t": -0.002064972888816086,
+    "f": [
+      -0.002064972888816086, -0.05762092297362829, -0.07101319603057717, -0.07419583126155727,
+      -0.07068729500723044, -0.06299962736929508, -0.05257596278871427
+    ],
+    "s_db": {
+      "S11": [
+        -20.429485216840206, -23.55951039720893, -25.505690253785115, -24.94340169998842,
+        -23.61117528611196, -22.858332771981402, -23.00830376211868
+      ],
+      "S21": [
+        -3.214156103763403, -3.187593350814348, -3.174325857558784, -3.1711355302899955,
+        -3.1745051699956743, -3.181759977049254, -3.1924168162772415
+      ],
+      "S31": [
+        -3.2141565683976414, -3.1875934644837227, -3.174326200584014, -3.171135666501461,
+        -3.174504910750407, -3.181759180688376, -3.1924163627552824
+      ]
+    },
+    "eta": {},
+    "requirements": [
+      {
+        "requirement": "|S11| \u2264 -20 dB @ pass",
+        "worst_phi": -0.04294851688963597,
+        "met": true
+      },
+      {
+        "requirement": "|S21| \u2265 -3.28 dB @ pass",
+        "worst_phi": -0.06584389714692884,
+        "met": true
+      },
+      {
+        "requirement": "|S31| \u2265 -3.28 dB @ pass",
+        "worst_phi": -0.06584343251269065,
+        "met": true
+      }
+    ],
+    "all_met": true
+  },
+  "sweep": {
+    "file": "coarse.s3p",
+    "points": 101,
+    "ghz": [8.0, 12.0],
+    "passivity_margin_min": -0.005472298912682216,
+    "steps": {
+      "1": 6002,
+      "2": 6002,
+      "3": 6002
+    }
+  },
+  "footprint": {
+    "file": "footprint.kicad_mod",
+    "islands": 1,
+    "net_ties": 1,
+    "repair": {
+      "changed_pixels": 10,
+      "added": 6,
+      "removed": 4,
+      "rounds": 2
+    }
+  },
+  "drc": {
+    "min_width_mm": 0.6,
+    "min_space_mm": 0.6,
+    "resolution_mm": 0.0375,
+    "ok": true,
+    "violations": []
+  },
+  "provenance": {
+    "yapnr": "0.0.0.dev0",
+    "python": "3.11.15",
+    "numpy": "1.26.4",
+    "torch": "2.3.1",
+    "system": "Darwin",
+    "machine": "arm64",
+    "backend": "torch",
+    "dtype": "float32",
+    "threads": 4
+  },
+  "wall_s": {
+    "optimization": 789.5354744504439,
+    "export": 21.73578920797445,
+    "total": 29.855375749990344
+  }
+}

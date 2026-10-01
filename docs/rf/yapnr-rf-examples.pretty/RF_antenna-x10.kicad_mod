@@ -1,0 +1,103 @@
+(footprint "RF_antenna-x10"
+	(version 20260206)
+	(generator "yapnr")
+	(generator_version "rf")
+	(layer "F.Cu")
+	(descr "yapnr RF inverse design 'antenna-x10': microstrip copper on er 3.55, tan_delta 0.0027, h 1.524 mm with a solid ground on the next copper layer; spec sha256 a10b8c875bdec8b1faa705e6470c9bbcefe734e0f847f45090124ca79af5aaa0")
+	(tags "rf microstrip inverse-design")
+	(property "Reference" "REF**"
+		(at 0 -10.2 0)
+		(layer "F.SilkS")
+		(uuid "21534033-8723-5f63-996a-be574e062491")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Value" "RF_antenna-x10"
+		(at 0 10.2 0)
+		(layer "F.Fab")
+		(uuid "85de855f-4ac8-52f0-a284-eeb7c64b728b")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "37c8b085-b57f-5ec3-a79d-343a6cf108ad")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" "yapnr RF inverse design 'antenna-x10': microstrip copper on er 3.55, tan_delta 0.0027, h 1.524 mm with a solid ground on the next copper layer; spec sha256 a10b8c875bdec8b1faa705e6470c9bbcefe734e0f847f45090124ca79af5aaa0"
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "5a30c25d-2445-5726-8beb-226bac760244")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr smd exclude_from_pos_files exclude_from_bom)
+	(duplicate_pad_numbers_are_jumpers no)
+	(fp_rect
+		(start -9 -9)
+		(end 9 9)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.CrtYd")
+		(uuid "a3858a39-73f1-5ff1-a1b8-fa5207cf5776")
+	)
+	(fp_rect
+		(start -9 -9)
+		(end 9 9)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.Fab")
+		(uuid "bc1d7ce1-3823-570f-8abc-33da95bcd50e")
+	)
+	(pad "1" smd custom
+		(at -8.6 0)
+		(size 0.8 3.6)
+		(layers "F.Cu")
+		(options
+			(clearance outline)
+			(anchor rect)
+		)
+		(primitives
+			(gr_poly
+				(pts
+					(xy -0.4 1.6) (xy -0.2 1.8) (xy 7 1.8) (xy 7.2 2) (xy 7.2 2.8) (xy 7 3)
+					(xy 5.4 3) (xy 4.8 3.6) (xy 4.8 4.4) (xy 5 4.6) (xy 12.2 4.6) (xy 12.4 4.4)
+					(xy 12.4 -4.4) (xy 12.2 -4.6) (xy 5 -4.6) (xy 4.8 -4.4) (xy 4.8 -3.6) (xy 5.4 -3)
+					(xy 7 -3) (xy 7.2 -2.8) (xy 7.2 -2) (xy 7 -1.8) (xy -0.2 -1.8) (xy -0.4 -1.6)
+				)
+				(width 0)
+				(fill yes)
+			)
+		)
+		(uuid "9b59ee91-07ba-5168-b091-6abcd15aad91")
+	)
+	(embedded_fonts no)
+)

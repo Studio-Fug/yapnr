@@ -10,8 +10,9 @@ The showcase cases (`designs.showcases()` in
 [`hardware/pnr/regression/designs.py`][designs]) run through the ladder's runner and its gate, but
 they are not ladder cases: they sit outside the ladder's gate and its pull-request lane (the
 nightly lane runs them for information). All five cases below come from one traced run: seed 0,
-the initial placement pool (8 starts, 3 routed finalists), a placement snapshot every 5
-iterations, the legacy fabrication profile, KiCad 10.0.6 on the development Mac (darwin-arm64).
+a placement snapshot every 5 iterations, the legacy fabrication profile, KiCad 10.0.6 on the
+development Mac (darwin-arm64). The four flat cases use the initial placement pool (8 starts, 3
+routed finalists); the hierarchical case uses its own block trials and four top-level seeds.
 Every case passes the gate: 100 % routed, no open connections and no findings in KiCad's DRC.
 
 ## Line groups
@@ -40,9 +41,10 @@ the legalizer places it in one step; afterwards the members are posed from the l
 
 What to watch:
 
-- **Global placement:** the dashed rectangle is the rigid line. It slides and turns as one body
-  while the other parts spread around it; the placer's four-way rotation settles on one
-  direction.
+- **Global placement:** the dashed rectangle is the rigid line. It slides as one body while the
+  other parts spread around it. The placer's rotation is a four-way choice, and here it keeps
+  the line vertical, flipping it end for end a few times (a half-turn is drawn as a flip: the
+  engine records only the chosen direction, never the angles in between).
 - **Legalization:** the line is placed in one step, not five (15 steps instead of 19).
 - **The pool's shortlist:** the eight starts put the line in different places and directions
   (vertical in seven starts, horizontal in one, both ways round).
@@ -53,8 +55,8 @@ What to watch:
 
 | Case             | Parts | Routed | Opens | Findings | Vias | Copper (mm) | HPWL (mm) | Time (s) |
 | ---------------- | ----: | :----: | ----: | -------: | ---: | ----------: | --------: | -------: |
-| `07-chaser-20`   |    20 | 100 %  |     0 |        0 |   19 |      310.75 |       271 |    123.4 |
-| `line-chaser-20` |    20 | 100 %  |     0 |        0 |   20 |      322.49 |       272 |    127.8 |
+| `07-chaser-20`   |    20 | 100 %  |     0 |        0 |   19 |      310.75 |       271 |    114.3 |
+| `line-chaser-20` |    20 | 100 %  |     0 |        0 |   20 |      322.49 |       272 |    121.6 |
 
 The line costs one via, 12 mm of copper and 1 mm of HPWL here. Caveats: a line turned by 180°
 reverses the sequence on the board, which a human would accept either way, so the placer may
@@ -93,16 +95,22 @@ What to watch:
 - **Tethers:** a line from each held part to the edge, red while it is farther than its
   tolerance, mint once it is within it. During global placement the pull is soft, so parts
   approach the edge; the legalizer's band then holds them there.
-- **The order along the edge:** the caption strip reads it live ("south: D1 · J1 · SW1"). Within
-  one start the parts slide along the edge past the others; across starts the order changes: the
-  shortlist's tiles name each start's order, and the eight starts give four different orders.
+- **The order along the edge:** the caption strip reads it live ("south: D1 · J1 · SW1"). In the
+  start the animation follows, the order stays D1, J1, SW1: the parts approach the edge and SW1
+  slides about 4 mm along it. The order changes in other starts, so the shortlist first replays
+  the global placement of all eight starts side by side (recorded snapshots, one clock), with each
+  tile's order under it: in three starts two edge parts pass each other during global placement,
+  and in two the legalizer changes the order. The tiles then hold each start's legalized order:
+  four different orders among the eight.
 - **The free board:** the dashed edge is the other board's target, drawn for reference; "on edge
-  0 of 3" counts its parts within 1 mm of it.
+  0 of 3" counts its parts within 1 mm of it. In the start it follows, D1 and three other parts
+  stay off the board until the legalizer places them, so the camera widens over its global
+  placement and zooms back to the board after legalization.
 
 | Case              | Parts | Routed | Opens | Findings | Vias | Copper (mm) | HPWL (mm) | Time (s) |
 | ----------------- | ----: | :----: | ----: | -------: | ---: | ----------: | --------: | -------: |
-| `edge-io-12-free` |    12 | 100 %  |     0 |        0 |    9 |      176.87 |       139 |     64.7 |
-| `edge-io-12`      |    12 | 100 %  |     0 |        0 |    8 |      198.47 |       169 |     35.2 |
+| `edge-io-12-free` |    12 | 100 %  |     0 |        0 |    9 |      176.87 |       139 |     61.9 |
+| `edge-io-12`      |    12 | 100 %  |     0 |        0 |    8 |      198.47 |       169 |     34.2 |
 
 Holding the three parts on the edge costs 30 mm of HPWL and 22 mm of copper, and saves a via.
 
@@ -125,8 +133,9 @@ What to watch:
    scale. The bank template's trials follow with their rank (opens, port debt, area, vias,
    copper), and both banks reuse the chosen layout: one layout, two instances.
 2. **Top level.** The blocks become rigid macros (their outline is dashed) and move onto the
-   board; the top-level placer places them like parts, turning a whole block with its copper,
-   and legalizes one macro per step.
+   board; the top-level placer places them like parts, moving a whole block with its copper and
+   flipping it end for end (the placer records a block only at 0° or 180° here; a half-turn is
+   drawn as a flip), and legalizes one macro per step.
 3. **Knitting.** The block copper is kept as it is (drawn dimmed): the progress bar starts at the
    50 of 60 connections the blocks already make. The router adds the nets between blocks, the
    connector and the bulk capacitor (full colour). Four top-level seeds were knitted; their
@@ -134,7 +143,7 @@ What to watch:
 
 | Case                | Parts | Routed | Opens | Findings | Vias | Copper (mm) | HPWL (mm) | Time (s) |
 | ------------------- | ----: | :----: | ----: | -------: | ---: | ----------: | --------: | -------: |
-| `hier-twin-bank-32` |    32 | 100 %  |     0 |        0 |   38 |      598.02 |       437 |    179.2 |
+| `hier-twin-bank-32` |    32 | 100 %  |     0 |        0 |   38 |      598.02 |       437 |    175.5 |
 
 ## What is interpolated
 
@@ -145,7 +154,14 @@ states:
   interpolated linearly, as in the ladder's animations.
 - **Rigid bodies.** A line group or a block macro moves as one: its centre is interpolated
   linearly and its angle along the shorter arc between two snapshots, and its members are posed
-  from that pose (never one by one, which would shrink a line mid-turn).
+  from that pose (never one by one, which would shrink a line mid-turn). A half-turn has no
+  shorter arc, and the placer records only its snapped four-way choice, so a body (or, in these
+  animations, a single part) recorded at opposite angles flips at the middle of the interval: a
+  half-turn is shown as a flip, not a rotation.
+- **The camera.** When recorded poses leave the board during global placement, the camera
+  widens over all of that placement's snapshots and zooms back to the board after legalization.
+- **The pool replay (board edges).** The shortlist's tiles replay each start's recorded global
+  placement snapshots on one clock, then show its legalized placement in one step.
 - **The lift ("Blocks become macros", 0.8 s).** The blocks move from their display layout to
   their first recorded macro poses; the connector and the bulk capacitor fly in from the unplaced
   row. The display layout before it (the blocks side by side, without the board) is a
@@ -179,7 +195,8 @@ bazel run //hardware/pnr:showcase_animations -- --render-only "$PWD/.yapnr/ladde
 
 One comparison of any two traced runs renders with
 `bazel run //hardware/pnr:animate -- --compare LEFT RIGHT --out FILE.webp --labels A B` (a trace,
-a case directory or `RUN_DIR:CASE` each); a hierarchical case directory renders like any other
+a case directory or `RUN_DIR:CASE` each; `--replay-pool` replays the pool's starts in the
+shortlist, as the board-edge file does); a hierarchical case directory renders like any other
 case (`--pacing showcase` gives placement and routing more time). Budgets: 2.5 MB per WebP (the
 hierarchical one 3.5 MB), 5 MB per GIF, 30 MB for `docs/animations/` in all
 (`tests/unit/repo/test_animations.py`). The provenance of each file (the run's engine commit,

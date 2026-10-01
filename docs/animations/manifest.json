@@ -545,7 +545,7 @@
   "schema": "yapnr-animations-v1",
   "showcases": [
     {
-      "bytes": 4998405,
+      "bytes": 4915934,
       "captions": [
         "19 vias \u00b7 310.8 mm copper \u00b7 HPWL 271 mm",
         "19 vias, 311 mm",
@@ -662,9 +662,10 @@
         "frame_ms": 100,
         "max_seconds": 30.0,
         "pacing": "showcase",
+        "replay_pool": false,
         "width": 800
       },
-      "sha256": "676d69be9154af4e8b0bf706b8fba63bd3fb8b4be998d6360b5472e0947b676f",
+      "sha256": "19515ff67d16a731a0e8a4c61faa98400fddf2ba783d3ae4b024ed454879b1b0",
       "title": "Five-stage chaser: free LEDs vs. a line group",
       "trace_sha256": {
         "07-chaser-20": "014284f9678febb4b453e1feb2c951f1d7764978c141b526904af00384c5164e",
@@ -673,7 +674,7 @@
       "width": 800
     },
     {
-      "bytes": 2485802,
+      "bytes": 2415854,
       "captions": [
         "19 vias \u00b7 310.8 mm copper \u00b7 HPWL 271 mm",
         "19 vias, 311 mm",
@@ -758,7 +759,7 @@
       ],
       "file": "showcase-chaser-line.webp",
       "format": "webp",
-      "frames": 178,
+      "frames": 177,
       "height": 494,
       "kind": "compare",
       "labels": [
@@ -790,9 +791,10 @@
         "max_seconds": 30.0,
         "pacing": "showcase",
         "quality": 60,
+        "replay_pool": false,
         "width": 960
       },
-      "sha256": "5abb3170dd0fe541acccce86cc0a20433ececc82fa6f073dbbdfd7e671782bf8",
+      "sha256": "bb5c707b65a1317a6bea92361e747b13a8da5487057cc556c24b290939f0d6a5",
       "title": "Five-stage chaser: free LEDs vs. a line group",
       "trace_sha256": {
         "07-chaser-20": "014284f9678febb4b453e1feb2c951f1d7764978c141b526904af00384c5164e",
@@ -801,7 +803,7 @@
       "width": 960
     },
     {
-      "bytes": 2527506,
+      "bytes": 2620990,
       "captions": [
         "12 parts \u00b7 8 nets \u00b7 2 layers",
         "12 parts \u00b7 8 nets \u00b7 2 layers \u00b7 seed 0",
@@ -828,6 +830,8 @@
         "Legalization \u00b7 start-05",
         "Placed freely",
         "Placement",
+        "Placement \u00b7 start-01",
+        "Placement \u00b7 start-05",
         "Routed",
         "Routed \u00b7 start-01-route",
         "Routed \u00b7 start-05-route",
@@ -843,8 +847,12 @@
         "chosen \u00b7 start-05",
         "chosen \u00b7 start-05-route",
         "edge_align south (hard): J1, SW1, D1",
+        "global placement of 8 starts, replayed",
         "proxy 116 \u00b7 D1\u00b7J1\u00b7SW1",
         "proxy 116 \u00b7 J1\u00b7D1\u00b7SW1",
+        "proxy 116 \u00b7 J1\u00b7SW1\u00b7D1",
+        "proxy 138 \u00b7 D1\u00b7J1\u00b7SW1",
+        "proxy 138 \u00b7 J1\u00b7D1\u00b7SW1",
         "proxy 138 \u00b7 J1\u00b7SW1\u00b7D1",
         "proxy 183",
         "proxy 25.4",
@@ -855,6 +863,7 @@
         "proxy 54.2",
         "proxy 67.3",
         "proxy 69.9",
+        "proxy 70.2 \u00b7 J1\u00b7D1\u00b7SW1",
         "proxy 70.2 \u00b7 J1\u00b7SW1\u00b7D1",
         "proxy 71.4 \u00b7 SW1\u00b7J1\u00b7D1",
         "proxy 94.9 \u00b7 D1\u00b7J1\u00b7SW1",
@@ -869,7 +878,8 @@
         "start-05",
         "start-06",
         "start-07",
-        "target, not constrained here"
+        "target, not constrained here",
+        "the 8 starts, legalized"
       ],
       "cases": [
         "edge-io-12-free",
@@ -886,7 +896,7 @@
       ],
       "file": "showcase-edge-io.webp",
       "format": "webp",
-      "frames": 207,
+      "frames": 281,
       "height": 476,
       "kind": "compare",
       "labels": [
@@ -912,15 +922,16 @@
           "violations": {}
         }
       },
-      "seconds": 22.55,
+      "seconds": 27.65,
       "settings": {
         "frame_ms": 60,
         "max_seconds": 30.0,
         "pacing": "showcase",
-        "quality": 80,
+        "quality": 70,
+        "replay_pool": true,
         "width": 960
       },
-      "sha256": "5f77f2f4646e8c1e692852e349863c5f780375277e2c48bae3072928fd2f5a5b",
+      "sha256": "6ec854f3dfbc8433224d5e370cf42782d0db9c13882e812c1172a587d738e787",
       "title": "Hold-to-blink board: free vs. hard board-edge constraints",
       "trace_sha256": {
         "edge-io-12": "b783dea4c5265e90c0b6e0a1b452537d7c1da9043e068ea0d6248c3532eb5e56",
@@ -929,7 +940,7 @@
       "width": 960
     },
     {
-      "bytes": 3408746,
+      "bytes": 3195254,
       "captions": [
         "1 \u00b7 Blocks",
         "2 \u00b7 Top level",
@@ -1002,17 +1013,12 @@
         "hier-twin-bank-32"
       ],
       "config": [
-        "--initial-pool",
-        "--initial-starts",
-        "8",
-        "--initial-finalists",
-        "3",
         "--trace-placement-every",
         "5"
       ],
       "file": "showcase-hier-twin-bank.webp",
       "format": "webp",
-      "frames": 215,
+      "frames": 214,
       "height": 662,
       "kind": "hier",
       "labels": [],
@@ -1036,7 +1042,7 @@
         "quality": 60,
         "width": 800
       },
-      "sha256": "14b107e6bb83430e5f708d73858b3c9714cd0c78189e330f69d239d68e403ff5",
+      "sha256": "6a963f53362a24740571e051122dbf0a469a32ddce9e1e982178fee610b490d0",
       "title": "Twin-bank chaser: hierarchical place and route",
       "trace_sha256": {
         "hier-twin-bank-32": "0fdf5a428a4451f8f4a319060ea04b2dcba25856feb3f5bf1af254956da01d60"
@@ -1047,12 +1053,12 @@
   "showcases_generated": {
     "ladder": {
       "engine_dirty": false,
-      "engine_revision": "03e433b396e0522d4b7e19961c89b34db2ea4fb8",
+      "engine_revision": "c4db5fbe6b1f859cff8f880e7e71234b75d79cc6",
       "fab_profile": "legacy",
       "image": null,
       "kicad": "10.0.6",
       "platform": "darwin-arm64",
-      "sources_sha256": "fd35a4cdc0aca4640fe2dfbe21be826f1bcd1951c91e90a7550669acb0a5c22a"
+      "sources_sha256": "7a374be8ad44f5ae68b5ec8b111b5f48881cf50952ab77654edb03d3bd24d099"
     },
     "render": {
       "date": "2026-09-30",

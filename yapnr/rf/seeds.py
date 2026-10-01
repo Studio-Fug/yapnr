@@ -10,14 +10,22 @@ reshapes freely:
 - width W = c/(2 f0) √(2/(εr + 1)), ε_eff of a strip of width W (Hammerstad–Jensen), the
   fringing extension ΔL (Hammerstad) and the length L = c/(2 f0 √ε_eff) − 2ΔL;
 - the edge resistance R_e = 1/(2 G1) with G1 = W/(120 λ0) (1 − (k0 h)²/24), and the inset
-  depth y0 = (L/π) arccos √(Z_feed/R_e) for the port's 50 Ω feed, with gaps of the minimum
-  space beside the feed;
+  depth y0 = (L/π) arccos √(Z_feed/R_e) for the port's 50 Ω feed, with slots of 1.5 times the
+  minimum space beside the feed;
 - f0 the centre of the bands the requirements use; the patch is centred in the design region
   (on the port's axis) and fed by a straight line from the port pad, all rounded to pixels
-  (W to an odd or even count matching the feed, so a mirror-symmetric spec stays symmetric).
+  (W to an odd or even count matching the feed, so a mirror-symmetric spec stays symmetric);
+- then the best of its whole-pixel neighbours (length ±1, width ±2, inset ±1 pixels) by the
+  spec's epigraph value on the problem's grid (`tuned_patch`, 27 forward runs): one pixel of
+  length moves the resonance by about 5 %, so the closed form lands between pixels (on the
+  antenna case's grid it resonates 1.5 % high and the optimizer alone did not move it).
 
-Copper pixels get x = 0.7 and void x = 0.3: near binary after the β = 8 projection (ρ̄ ≈ 0.96
-and 0.04) but on its steep part, so every boundary can move from the first iteration.
+`seed: star` joins every port with feed-width lines to the window's centre (a plain junction),
+a lossless start for multi-port specs whose uniform start stays absorbing.
+
+Copper pixels get x = 0.7 and void x = 0.3 (the star): near binary after the β = 8 projection
+(ρ̄ ≈ 0.96 and 0.04) but on its steep part, so every boundary can move from the first
+iteration. The patch's seed is 0.9/0.1 and its schedule starts at β = 16 (`VALUES`).
 """
 
 from __future__ import annotations
@@ -29,7 +37,12 @@ import numpy as np
 from yapnr.rf.constants import C0
 from yapnr.rf.stackup import hammerstad_jensen
 
-COPPER, VOID = 0.7, 0.3
+# x of copper and void pixels per seed. The star's feed-width lines survive the β = 8 filter
+# and projection at 0.7/0.3 (ρ̄ ≈ 0.96/0.04). The patch's inset slots are narrow: at 0.7/0.3,
+# two pixels wide and β = 8 they blurred to ρ̄ ≈ 0.42 (a lossy 32 Ω/sq) and the first step
+# closed them; at 0.9/0.1 and β = 32 every pixel saturated and nothing moved. The patch uses
+# 0.9/0.1, three-pixel slots and a schedule from β = 16.
+VALUES = {"patch": (0.9, 0.1), "star": (0.7, 0.3)}
 
 
 def patch_dimensions(er: float, h: float, f0: float, z_feed: float = 50.0) -> dict:
@@ -47,8 +60,9 @@ def patch_dimensions(er: float, h: float, f0: float, z_feed: float = 50.0) -> di
     return {"w": w, "l": length, "inset": inset, "r_edge": r_edge, "eps_eff": eeff}
 
 
-def patch_mask(problem) -> np.ndarray:
-    """The inset-fed patch as window pixels (1 copper, 0 void) for a one-port spec."""
+def patch_mask(problem, dl: int = 0, dw: int = 0, di: int = 0) -> np.ndarray:
+    """The inset-fed patch as window pixels (1 copper, 0 void) for a one-port spec; `dl`, `dw`
+    and `di` change its length, width and inset depth by whole pixels."""
     spec = problem.spec
     if len(spec.ports) != 1:
         raise ValueError("the patch seed needs a one-port spec")
@@ -71,9 +85,11 @@ def patch_mask(problem) -> np.ndarray:
     n_w = int(round(dims["w"] / pitch))
     if (n_w - wf) % 2:
         n_w += 1  # centred on the feed's centre line
-    n_l = max(1, int(round(dims["l"] / pitch)))
-    n_in = int(round(dims["inset"] / pitch))
-    gap = max(1, int(math.ceil(spec.rules.min_space_mm * 1e-3 / pitch - 1e-6)))
+    n_w = max(wf, n_w + int(dw))
+    n_l = max(1, int(round(dims["l"] / pitch)) + int(dl))
+    n_in = max(0, min(n_l - 1, int(round(dims["inset"] / pitch)) + int(di)))
+    # Slots of 1.5 times the minimum space, so they stay void through the filter at β = 16.
+    gap = max(1, int(math.ceil(1.5 * spec.rules.min_space_mm * 1e-3 / pitch - 1e-6)))
     start = max(0, (along_n - n_l) // 2)
     m = np.zeros((along_n, across_n))
     m[:start, f_lo : f_lo + wf] = 1.0  # the feed line
@@ -87,12 +103,99 @@ def patch_mask(problem) -> np.ndarray:
     return m if port.side in ("W", "E") else m.T
 
 
-def initial_x(problem) -> np.ndarray:
+def star_mask(problem) -> np.ndarray:
+    """Every port's feed continued straight to the window's centre line across its axis, then
+    along that line to the centre: a junction of feed-width lines joining all ports."""
+    spec = problem.spec
+    pitch = problem.pitch
+    ni, nj = problem.design_shape
+    x0, _, y0, _ = (v * 1e-3 for v in spec.design_region)
+    m = np.zeros((ni, nj))
+    ic, jc = ni / 2.0, nj / 2.0
+    for port in spec.ports:
+        w = problem.widths[port.n]
+        if port.side in ("W", "E"):
+            t_lo = int(round((port.at_mm * 1e-3 - y0) / pitch - 0.5 * w))
+            a_lo, a_hi = (
+                (0, int(round(ic + 0.5 * w)))
+                if port.side == "W"
+                else (
+                    int(round(ic - 0.5 * w)),
+                    ni,
+                )
+            )
+            m[a_lo:a_hi, t_lo : t_lo + w] = 1.0
+            c_lo = int(round(ic - 0.5 * w))
+            lo, hi = sorted((t_lo, int(round(jc - 0.5 * w))))
+            m[c_lo : c_lo + w, lo : hi + w] = 1.0
+        else:
+            t_lo = int(round((port.at_mm * 1e-3 - x0) / pitch - 0.5 * w))
+            a_lo, a_hi = (
+                (0, int(round(jc + 0.5 * w)))
+                if port.side == "S"
+                else (
+                    int(round(jc - 0.5 * w)),
+                    nj,
+                )
+            )
+            m[t_lo : t_lo + w, a_lo:a_hi] = 1.0
+            c_lo = int(round(jc - 0.5 * w))
+            lo, hi = sorted((t_lo, int(round(ic - 0.5 * w))))
+            m[lo : hi + w, c_lo : c_lo + w] = 1.0
+    return m
+
+
+# The whole-pixel neighbours of the closed-form patch that `tuned_patch` compares: one pixel of
+# length is about 5 % of resonance at the cases' pitch, so the closed form lands between pixels.
+PATCH_FAMILY = [(dl, dw, di) for dl in (-1, 0, 1) for dw in (-2, 0, 2) for di in (-1, 0, 1)]
+
+
+def tuned_patch(problem, cache_dir: str | None = None, log=None) -> tuple[np.ndarray, dict]:
+    """The best binary patch of `PATCH_FAMILY` by the spec's epigraph value max_k f_k on the
+    problem's grid (one forward run each, no gradients), and the choice. With `cache_dir` the
+    choice is kept in `seed.json` (keyed by the spec hash) so a resumed run does not repeat it."""
+    import json
+    import os
+
+    sha = problem.spec.sha256()
+    path = os.path.join(cache_dir, "seed.json") if cache_dir else None
+    if path and os.path.exists(path):
+        with open(path, encoding="utf-8") as fh:
+            saved = json.load(fh)
+        if saved.get("spec_sha256") == sha:
+            dl, dw, di = saved["choice"]
+            return patch_mask(problem, dl, dw, di), saved
+    log = log or (lambda *_: None)
+    scores = []
+    for dl, dw, di in PATCH_FAMILY:
+        m = patch_mask(problem, dl, dw, di)
+        t = float(np.max(problem.evaluate(m, gradients=False).values))
+        scores.append(((dl, dw, di), t))
+        log(f"patch seed {(dl, dw, di)}: t {t:+.3f}")
+    choice, t = min(scores, key=lambda c: (c[1], [abs(v) for v in c[0]]))
+    info = {
+        "spec_sha256": sha,
+        "seed": "patch",
+        "choice": list(choice),
+        "t": t,
+        "family": [[list(c), v] for c, v in scores],
+    }
+    if path:
+        os.makedirs(cache_dir, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(info, fh, indent=1)
+    return patch_mask(problem, *choice), info
+
+
+def initial_x(problem, cache_dir: str | None = None, log=None) -> np.ndarray:
     """The design variables of the spec's seed (`optimizer.seed`)."""
     seed = problem.spec.optimizer.seed
     if seed == "patch":
-        mask = patch_mask(problem)
+        mask, _ = tuned_patch(problem, cache_dir, log)
+    elif seed == "star":
+        mask = star_mask(problem)
     else:
         raise ValueError(f"unknown seed {seed!r}")
-    rho = VOID + (COPPER - VOID) * mask
+    copper, void = VALUES[seed]
+    rho = void + (copper - void) * mask
     return problem.param.grid.restrict(rho)

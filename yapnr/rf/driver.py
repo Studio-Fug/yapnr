@@ -161,7 +161,7 @@ class Optimizer:
         if spec.optimizer.seed:
             from yapnr.rf.seeds import initial_x
 
-            x0 = initial_x(problem)
+            x0 = initial_x(problem, cache_dir=out_dir, log=self.log)
         else:
             x0 = self.param.grid.initial(spec.optimizer.init)
         self.state = LoopState(x=x0)

@@ -242,5 +242,185 @@
       "renderer": 2
     }
   },
-  "schema": "yapnr-ladder-results-v1"
+  "schema": "yapnr-ladder-results-v1",
+  "showcases": [
+    {
+      "case": "07-chaser-20",
+      "config": [
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3",
+        "--trace-placement-every",
+        "5"
+      ],
+      "constraint_audit": null,
+      "copper_length_mm": 310.75,
+      "description": "TLC555 clock + CD4017B modulo-5 LED chaser; unused counter outputs intentionally NC.",
+      "drc_rules": {},
+      "fab_profile": "legacy",
+      "layers": 2,
+      "nets": 17,
+      "opens": 0,
+      "parts": 20,
+      "passed": true,
+      "reasons": [],
+      "routed": true,
+      "seconds": 114.3,
+      "seed": 0,
+      "selected_start": "start-05",
+      "title": "Five-stage chaser",
+      "tracks": 1149,
+      "vias": 19,
+      "violations": {}
+    },
+    {
+      "case": "line-chaser-20",
+      "config": [
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3",
+        "--trace-placement-every",
+        "5"
+      ],
+      "constraint_audit": {
+        "checked": [
+          "line_group chaser_leds"
+        ],
+        "findings": 0
+      },
+      "copper_length_mm": 322.49,
+      "description": "The 07-chaser-20 chaser with LEDs D1 to D5 held in one line group (3.0 mm pitch), so the sequence reads as a row.",
+      "drc_rules": {},
+      "fab_profile": "legacy",
+      "layers": 2,
+      "nets": 17,
+      "opens": 0,
+      "parts": 20,
+      "passed": true,
+      "reasons": [],
+      "routed": true,
+      "seconds": 121.6,
+      "seed": 0,
+      "selected_start": "start-07",
+      "title": "Five-stage chaser, LEDs in a line group",
+      "tracks": 1210,
+      "vias": 20,
+      "violations": {}
+    },
+    {
+      "case": "edge-io-12-free",
+      "config": [
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3",
+        "--trace-placement-every",
+        "5"
+      ],
+      "constraint_audit": null,
+      "copper_length_mm": 176.87,
+      "description": "TLC555 blinker that runs while SW1 is held; supply connector, button and LED placed freely.",
+      "drc_rules": {},
+      "fab_profile": "legacy",
+      "layers": 2,
+      "nets": 8,
+      "opens": 0,
+      "parts": 12,
+      "passed": true,
+      "reasons": [],
+      "routed": true,
+      "seconds": 61.9,
+      "seed": 0,
+      "selected_start": "start-01",
+      "title": "Hold-to-blink board, parts placed freely",
+      "tracks": 667,
+      "vias": 9,
+      "violations": {}
+    },
+    {
+      "case": "edge-io-12",
+      "config": [
+        "--initial-pool",
+        "--initial-starts",
+        "8",
+        "--initial-finalists",
+        "3",
+        "--trace-placement-every",
+        "5"
+      ],
+      "constraint_audit": {
+        "checked": [
+          "edge_align D1",
+          "edge_align J1",
+          "edge_align SW1"
+        ],
+        "findings": 0
+      },
+      "copper_length_mm": 198.47,
+      "description": "TLC555 blinker that runs while SW1 is held; supply connector, button and LED on the south edge (hard edge alignment).",
+      "drc_rules": {},
+      "fab_profile": "legacy",
+      "layers": 2,
+      "nets": 8,
+      "opens": 0,
+      "parts": 12,
+      "passed": true,
+      "reasons": [],
+      "routed": true,
+      "seconds": 34.2,
+      "seed": 0,
+      "selected_start": "start-05",
+      "title": "Hold-to-blink board, I/O on the south edge",
+      "tracks": 724,
+      "vias": 8,
+      "violations": {}
+    },
+    {
+      "case": "hier-twin-bank-32",
+      "config": [
+        "--trace-placement-every",
+        "5"
+      ],
+      "constraint_audit": null,
+      "copper_length_mm": 598.02,
+      "description": "TLC555 clock and two CD4017B five-LED banks as three blocks (two templates), placed and routed hierarchically.",
+      "drc_rules": {},
+      "fab_profile": "legacy",
+      "layers": 2,
+      "nets": 28,
+      "opens": 0,
+      "parts": 32,
+      "passed": true,
+      "reasons": [],
+      "routed": true,
+      "seconds": 175.5,
+      "seed": 0,
+      "selected_start": null,
+      "title": "Twin-bank chaser, placed and routed hierarchically",
+      "tracks": 2284,
+      "vias": 38,
+      "violations": {}
+    }
+  ],
+  "showcases_generated": {
+    "ladder": {
+      "engine_dirty": false,
+      "engine_revision": "c4db5fbe6b1f859cff8f880e7e71234b75d79cc6",
+      "fab_profile": "legacy",
+      "image": null,
+      "kicad": "10.0.6",
+      "platform": "darwin-arm64",
+      "sources_sha256": "7a374be8ad44f5ae68b5ec8b111b5f48881cf50952ab77654edb03d3bd24d099"
+    },
+    "render": {
+      "date": "2026-09-30",
+      "pillow": "12.3.0",
+      "platform": "darwin-arm64"
+    }
+  }
 }

@@ -222,9 +222,11 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="regression-ladder.html">Regression ladder</a></li>
+<li class="toctree-l1"><a class="reference internal" href="constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
 <li class="toctree-l1"><a class="reference internal" href="migration-plan.html">yapnr migration plan</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Decisions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
 <li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
 </ul>
@@ -366,6 +368,12 @@ use the refinement. By construction, addresses at names outside the root zone (s
 as before, the <code class="docutils literal notranslate"><span class="pre">local-host</span></code> rule also reports a <code class="docutils literal notranslate"><span class="pre">.local</span></code> name right after <code class="docutils literal notranslate"><span class="pre">&#64;</span></code>
 (<code class="docutils literal notranslate"><span class="pre">user&#64;&lt;host&gt;.local</span></code>, as in ssh or git’s guessed identity), besides hyphenated and URL <code class="docutils literal notranslate"><span class="pre">.local</span></code>
 names. Commit identities at any such name still fail <code class="docutils literal notranslate"><span class="pre">--identities</span></code>.</p></li>
+<li><p><strong>Privacy scan: GitHub’s service addresses on trailers</strong> (decided 2026-09-30). Dependabot signs
+its commits off with GitHub’s support address (<code class="docutils literal notranslate"><span class="pre">support</span></code> at <code class="docutils literal notranslate"><span class="pre">github.com</span></code>), so both of its pull
+requests failed the history scan. The owner chose to accept GitHub’s own service addresses
+(<code class="docutils literal notranslate"><span class="pre">GITHUB_SERVICE_ADDRESSES</span></code>, today only that address) only on a <code class="docutils literal notranslate"><span class="pre">Signed-off-by:</span></code> or <code class="docutils literal notranslate"><span class="pre">Co-authored-by:</span></code>
+trailer line of the <code class="docutils literal notranslate"><span class="pre">--stdin</span></code> history scan. A patch line (it starts with its diff marker), any
+other line, and every file scan still report it; personal addresses on trailers stay findings.</p></li>
 </ul>
 <p>Choices made in PR1 itself, following the plan; the owner reviews them with the pull request:</p>
 <ul class="simple">
@@ -736,6 +744,41 @@ token never with reads. Parts can be marked local-only; a public server refuses 
 holds one.</p></li>
 <li><p><strong>Ordering stays staging-only</strong> (for the later ordering PRs): cart, quote or payment page; the
 human pays on the vendor’s page.</p></li>
+</ul>
+<p>Choices made for the constraint and hierarchy showcases (branch <code class="docutils literal notranslate"><span class="pre">claude/animations-groups-hier</span></code>,
+<a class="reference internal" href="design/constraint-and-hier-animations.html"><span class="std std-doc">design</span></a> §9, §11 and §12); the owner reviews them with
+the pull request:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">line_group</span></code></strong> is a new hard constraint (ordered literal members, <code class="docutils literal notranslate"><span class="pre">pitch_mm</span></code> or <code class="docutils literal notranslate"><span class="pre">gap_mm</span></code>,
+<code class="docutils literal notranslate"><span class="pre">rot</span></code>, an optional soft <code class="docutils literal notranslate"><span class="pre">edge</span></code>), placed as one rigid macro inside <code class="docutils literal notranslate"><span class="pre">place()</span></code> with the
+hierarchical macro code; <code class="docutils literal notranslate"><span class="pre">row</span></code> is unchanged.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">edge_align</span></code> gains <code class="docutils literal notranslate"><span class="pre">hard</span></code> and <code class="docutils literal notranslate"><span class="pre">tolerance_mm</span></code></strong> (default false and 1.0 mm): a hard edge part
+stays within the tolerance through legalization and the legality checks. The facing is set with
+<code class="docutils literal notranslate"><span class="pre">orientation</span></code>, not by <code class="docutils literal notranslate"><span class="pre">edge_align</span></code>.</p></li>
+<li><p><strong>Showcases stay outside the gate.</strong> <code class="docutils literal notranslate"><span class="pre">designs.showcases()</span></code> is a list beside <code class="docutils literal notranslate"><span class="pre">designs()</span></code>, run
+with <code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--showcases</span></code>; the pull-request lane never runs them and the nightly lane runs them
+for information.</p></li>
+<li><p><strong>The animations folder budget is 30 MB</strong> (was 20 MB): the four showcase files add about
+13 MB. The hierarchical WebP may use 3.5 MB (it is 2.69 MB even at the encoder’s last step);
+every other WebP keeps 2.5 MB and every GIF 5 MB.</p></li>
+<li><p><strong>A second media item in the README:</strong> the side-by-side chaser GIF (free LEDs against a line
+group), 800 px, under the 555 flasher.</p></li>
+<li><p><strong>A showcase that fails its gate is not committed as an animation</strong> (the page then says why),
+rather than shown with a red end card. All five cases of the committed run pass.</p></li>
+<li><p><strong>Half-turns are flips.</strong> The placer records only its snapped four-way rotation, so a body or
+part recorded at opposite angles switches at the middle of the interval instead of sweeping
+through angles it never had; quarter turns keep the labelled shorter-arc tween. The ladder’s
+own animations keep their sweeps (their timelines are pinned unchanged); only the showcase
+pacing and rigid bodies flip.</p></li>
+<li><p><strong>Off-board poses widen the camera</strong> over that global placement (showcase pacing only), and the
+board zooms back in after legalization, rather than clamping parts to the panel edge.</p></li>
+<li><p><strong>The edge comparison replays its pool.</strong> The followed start never changes its edge order, so
+its shortlist replays all eight starts’ recorded global placements before the tiles hold;
+the chaser comparison keeps static tiles (its README GIF is near its 5 MB budget).</p></li>
+<li><p><strong>A line group reserves its members’ sides</strong> (<code class="docutils literal notranslate"><span class="pre">line:&lt;name&gt;</span></code>, not a <code class="docutils literal notranslate"><span class="pre">block:</span></code> macro) and refuses a
+source-locked member rather than pinning the whole line to it.</p></li>
+<li><p><strong>Follow-ups:</strong> companion rows (an LED and its resistor as one rigid unit), a hard edge for a
+whole line group, members on the bottom side, plane-access intents inside a line group.</p></li>
 </ul>
 </section>
 <section id="pinned-versions">

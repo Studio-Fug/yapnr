@@ -50,6 +50,16 @@ fabrication block, which the runner routes and judges under (`PNR_FAB_PROFILE=le
 stage). `--fab-profile jlc-pofv` routes and judges under the engine's default JLCPCB profile
 instead (0.127 mm clearance, 0.45/0.30 mm vias, vias 0.127 mm off SMD pads).
 
+### Showcases
+
+Four more cases show what the engine does with placement constraints and with hierarchy: the
+five-stage chaser with its LEDs held in a line group, a small board with its connector, button
+and LED held on the south edge (each beside a twin without the constraint), and a twin-bank
+chaser placed and routed as blocks. They run through the same runner and gate, but they are not
+ladder cases: they are outside the gate and the pull-request lane (the nightly lane runs them for
+information). Their animations and results are on
+[Constraints and hierarchy](constraints-and-hierarchy.md).
+
 ## Reading an animation
 
 - **Header:** the case, and its parts, connected nets and copper layers.
@@ -187,10 +197,13 @@ rung's final boards, then the verdict. Blocks assembled from a synthesis library
 a library itself has no board to draw, and `--storyboard FILE` writes its critical path (the
 chosen layout per template and its rivals) instead. The animator only reads its sources.
 
-Rendering is deterministic: the same trace gives the same bytes. Budgets: WebP at most 2.5 MB
-(800 px), the README GIF at most 5 MB (640 px), the folder at most 20 MB
-(`tests/unit/repo/test_animations.py`). Refresh the committed animations deliberately, after a
-notable engine change, not on every pull request: each refresh adds about 12 MB to the history.
+Rendering is deterministic: the same trace gives the same bytes. Budgets: the ladder's WebPs at
+most 2.5 MB (800 px), its README GIF at most 5 MB (640 px), the folder at most 30 MB with the
+showcases, whose own widths and budgets are on
+[Constraints and hierarchy](constraints-and-hierarchy.md#regenerating)
+(`tests/unit/repo/test_animations.py` checks them all). Refresh the committed animations
+deliberately, after a notable engine change, not on every pull request: each refresh adds about
+12 MB to the history.
 
 ## In CI
 

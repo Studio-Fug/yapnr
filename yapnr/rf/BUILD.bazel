@@ -1,0 +1,18 @@
+"""yapnr.rf: RF microstrip inverse design (docs/design/rf-topology-optimization.md)."""
+
+load("@rules_python//python:defs.bzl", "py_library")
+load("@yapnr_pypi//:requirements.bzl", "requirement")
+
+package(default_visibility = ["//visibility:public"])
+
+py_library(
+    name = "rf",
+    srcs = glob(["**/*.py"]),
+    imports = ["../.."],
+    deps = [
+        "//yapnr:package",
+        requirement("numpy"),
+        requirement("pyyaml"),
+        requirement("torch"),
+    ],
+)

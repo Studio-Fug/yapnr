@@ -1,0 +1,14 @@
+load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+
+# Fast solver tests (design §12). The FDTD tests run seconds to a few minutes on 4 threads.
+yapnr_py_tests(
+    env = {
+        "OMP_NUM_THREADS": "4",
+        "MKL_NUM_THREADS": "4",
+    },
+    overrides = {
+        "test_adjoint_gradients": {"size": "medium"},
+        "test_dtft": {"size": "medium"},
+    },
+    deps = ["//yapnr/rf"],
+)

@@ -145,6 +145,8 @@ py_library(
     imports = ["."],
     deps = [
         ":pnr",
+        # Line groups (pnr.place.line_group) collapse into pnr.hier.macro macros.
+        ":pnr_hier",
         requirement("torch"),
         requirement("numpy"),
     ],
@@ -1060,7 +1062,10 @@ py_test(
         "regression",
     ],
     main = "regression/test_contract.py",
-    deps = [":pnr"],
+    deps = [
+        ":pnr",
+        ":pnr_hier",  # the showcase contract extracts the twin banks' blocks
+    ],
 )
 
 py_binary(
@@ -1113,13 +1118,35 @@ py_binary(
     deps = [":pnr_animate"],
 )
 
+# Renders the showcases (docs/design/constraint-and-hier-animations.md): the side-by-side
+# line-group and board-edge comparisons and the hierarchical chapters, from a traced showcase
+# run (--render-only RUN_DIR: no KiCad).
+py_binary(
+    name = "showcase_animations",
+    srcs = ["regression/animate_showcases.py"],
+    data = glob(["regression/*.py"]),
+    imports = [
+        ".",
+        "regression",
+    ],
+    main = "regression/animate_showcases.py",
+    tags = [
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr_animate"],
+)
+
 py_test(
     name = "trace_test",
     size = "small",
     srcs = ["tests/test_trace.py"],
     imports = ["."],
     main = "tests/test_trace.py",
-    deps = [":pnr"],
+    deps = [
+        ":pnr",
+        ":pnr_hier",  # MacroPlan.trace_rows, the pose expander of rigid bodies
+    ],
 )
 
 # Tracing never changes a result: byte-identical placements and routes, unset/set/unset.
@@ -1179,6 +1206,58 @@ py_test(
     deps = [
         ":pnr",
         ":pnr_animate",
+    ],
+)
+
+# Line groups: parser, group layout, rigid placement, legality, macro collapse defaults.
+py_test(
+    name = "line_group_test",
+    size = "medium",
+    srcs = ["tests/test_line_group.py"],
+    imports = ["."],
+    main = "tests/test_line_group.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_hier",
+        ":pnr_place",
+        ":pnr_route",
+    ],
+)
+
+# The hierarchical ladder driver (regression/hier_case.py) on a synthetic 10-part design.
+py_test(
+    name = "hier_case_test",
+    size = "medium",
+    srcs = [
+        "regression/hier_case.py",
+        "tests/test_hier_case.py",
+    ],
+    imports = [
+        ".",
+        "regression",
+    ],
+    main = "tests/test_hier_case.py",
+    deps = [
+        ":pnr",
+        ":pnr_animate",  # the bundle animates in chapters (pnr.animate.hier)
+        ":pnr_detail",
+        ":pnr_hier",
+        ":pnr_place",
+        ":pnr_route",
+    ],
+)
+
+# Opt-in hard edge alignment: parser, legalizer band, violations, unchanged soft path.
+py_test(
+    name = "edge_hard_test",
+    size = "small",
+    srcs = ["tests/test_edge_hard.py"],
+    imports = ["."],
+    main = "tests/test_edge_hard.py",
+    deps = [
+        ":pnr",
+        ":pnr_place",
     ],
 )
 

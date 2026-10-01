@@ -7,6 +7,13 @@ rung objectives and the winning rung's native phases) or a synthesis library (cr
 only: ``--storyboard``). ``--out`` is a file (``.webp``, ``.gif``, ``.mp4``) or a directory
 (``<case>.<ext>`` per ``--format``). The animator only reads its sources and refuses an
 output path inside one.
+
+``--compare LEFT RIGHT`` renders two traced runs side by side (:mod:`pnr.animate.compare`),
+each a trace, a ladder case directory or ``RUN_DIR:CASE`` (a case of a ladder run);
+``--labels`` names the halves; ``--replay-pool`` makes each half's pool shortlist replay every
+start's global placement in its tile. ``--pacing showcase`` gives placement, legalization and
+routing more time. A trace with a ``blocks`` event (a hierarchical case) gets the hierarchical
+storyboard (:mod:`pnr.animate.hier`).
 """
 
 from __future__ import annotations
@@ -87,12 +94,19 @@ def _label(trace, fallback):
 
 
 def trace_digest(trace):
-    """SHA-256 over a trace's content (not its location)."""
+    """SHA-256 over a trace's content (not its location); a hierarchical trace's block traces
+    (``blocks/**``) count too."""
     digest = hashlib.sha256()
     if trace.root is not None:
         files = [trace.root / "header.json", trace.root / "run.json"]
         files += sorted((trace.root / "streams").glob("*.jsonl"))
         files += sorted((trace.root / "blobs").glob("*.json"))
+        blocks = trace.root / "blocks"
+        if blocks.is_dir():
+            for sub in sorted(p for p in blocks.iterdir() if p.is_dir()):
+                files += [sub / "header.json", sub / "run.json"]
+                files += sorted((sub / "streams").glob("*.jsonl"))
+                files += sorted((sub / "blobs").glob("*.json"))
         for path in files:
             if path.is_file():
                 digest.update(path.relative_to(trace.root).as_posix().encode() + b"\0")
@@ -115,6 +129,7 @@ def render_animation(
     title=None,
     subtitle=None,
     allow_failed=False,
+    pacing=None,
 ):
     """Render one output file; returns its manifest entry (without file-system paths)."""
     board = storyboard.build(trace, title=title, subtitle=subtitle)
@@ -122,10 +137,17 @@ def render_animation(
     if result and not result.get("passed", False) and not allow_failed:
         raise SystemExit("the traced run failed its gate; pass --allow-failed to animate it")
     subject = board["subject"]
+    hierarchical = board.get("kind") == "hier"
 
     def make(w, frame_ms):
+        if hierarchical:
+            from pnr.animate import hier
+
+            return hier.make(trace, board, w, frame_ms, max_seconds, pacing)
         renderer = Renderer(trace.header, subject, width=w)
-        frames = Timeline(trace, board, frame_ms=frame_ms, max_seconds=max_seconds).frames
+        frames = Timeline(
+            trace, board, frame_ms=frame_ms, max_seconds=max_seconds, pacing=pacing
+        ).frames
         return renderer, frames
 
     if fmt == "mp4":
@@ -141,9 +163,14 @@ def render_animation(
             dict(s, width=min(s["width"], width))
             for s in (encode.WEBP_STEPS if fmt == "webp" else encode.GIF_STEPS)
         ]
+        extra = ()
+        if hierarchical:
+            extra = encode.CONSTRAINT_COLOURS
         data, settings, frames, renderer = encode.encode(
-            fmt, make, int(budget_mb * 1024 * 1024), steps
+            fmt, make, int(budget_mb * 1024 * 1024), steps, extra_colours=extra
         )
+        if pacing is not None:
+            settings = dict(settings, pacing=pacing)
         Path(path).write_bytes(data)
         count, seconds = encoded_frames(data)
     import PIL
@@ -201,14 +228,14 @@ def update_manifest(path, entries):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="python -m pnr.animate", description=__doc__.split("\n")[0])
-    ap.add_argument("sources", nargs="+", type=Path, metavar="SOURCE")
+    ap.add_argument("sources", nargs="*", type=Path, metavar="SOURCE")
     ap.add_argument("--out", type=Path, help="a .webp/.gif/.mp4 file or a directory")
     ap.add_argument("--format", default="webp", help="comma list of webp, gif, mp4")
     ap.add_argument("--case")
     ap.add_argument("--seed", type=int)
-    ap.add_argument("--width", type=int, default=800)
+    ap.add_argument("--width", type=int, help="default 800 (a comparison: 960)")
     ap.add_argument("--gif-width", type=int, default=640)
-    ap.add_argument("--max-seconds", type=float, default=22.0)
+    ap.add_argument("--max-seconds", type=float, help="default 22 (a comparison: 30)")
     ap.add_argument("--budget-mb", type=float, default=2.5)
     ap.add_argument("--gif-budget-mb", type=float, default=5.0)
     ap.add_argument("--title")
@@ -217,10 +244,27 @@ def main(argv=None):
     ap.add_argument("--manifest", type=Path, help="add or update entries in this manifest")
     ap.add_argument("--coarse", action="store_true", help="reconstruct untraced ladder cases")
     ap.add_argument("--allow-failed", action="store_true")
+    ap.add_argument(
+        "--compare",
+        nargs=2,
+        metavar=("LEFT", "RIGHT"),
+        help="two traced runs side by side (a trace, a case directory or RUN_DIR:CASE)",
+    )
+    ap.add_argument("--labels", nargs=2, metavar=("LEFT", "RIGHT"), help="comparison labels")
+    ap.add_argument("--pacing", choices=("showcase",), help="more time per placement and route")
+    ap.add_argument(
+        "--replay-pool",
+        action="store_true",
+        help="with --compare: replay every start's global placement in the shortlist",
+    )
     a = ap.parse_args(argv)
-    for text in (a.title, a.subtitle):
+    for text in (a.title, a.subtitle) + tuple(a.labels or ()):
         if text:
             safe_text(text)
+    if a.compare:
+        return _compare(ap, a)
+    if not a.sources:
+        ap.error("a SOURCE is required (or --compare LEFT RIGHT)")
     formats = [f.strip() for f in a.format.split(",") if f.strip()]
     if any(f not in FORMATS for f in formats):
         ap.error("unknown format; choose from " + ", ".join(FORMATS))
@@ -251,18 +295,19 @@ def main(argv=None):
     for label, trace in items:
         for fmt in [a.out.suffix.lstrip(".")] if single else formats:
             path = a.out if single else a.out / ("%s.%s" % (label, fmt))
-            width = a.gif_width if fmt == "gif" else a.width
+            width = a.gif_width if fmt == "gif" else (a.width or 800)
             budget = a.gif_budget_mb if fmt == "gif" else a.budget_mb
             entry = render_animation(
                 trace,
                 fmt,
                 path,
                 width=width,
-                max_seconds=a.max_seconds,
+                max_seconds=a.max_seconds or 22.0,
                 budget_mb=budget,
                 title=a.title,
                 subtitle=a.subtitle,
                 allow_failed=a.allow_failed,
+                pacing=a.pacing,
             )
             if entry:
                 entries.append(entry)
@@ -272,4 +317,50 @@ def main(argv=None):
                 )
     if a.manifest:
         update_manifest(a.manifest, entries)
+    return 0
+
+
+def load_one(source):
+    """One trace from a trace or case directory, or ``RUN_DIR:CASE`` (seed 0)."""
+    text = str(source)
+    if ":" in text and not Path(text).exists():
+        run, case = text.rsplit(":", 1)
+        items = load(Path(run), case=case, seed=0)
+    else:
+        items = load(Path(text))
+    if len(items) != 1:
+        raise SystemExit("%s names %d traces, not one" % (Path(text).name, len(items)))
+    return items[0][1]
+
+
+def _compare(ap, a):
+    from pnr.animate.compare import render_compare
+
+    if a.out is None or a.out.suffix.lstrip(".") not in ("webp", "gif"):
+        ap.error("--compare needs --out FILE.webp or FILE.gif")
+    for source in a.compare:
+        root = Path(str(source).rsplit(":", 1)[0]) if not Path(source).exists() else Path(source)
+        if _is_within(a.out, root):
+            ap.error("refusing to write into a source directory")
+    left, right = (load_one(s) for s in a.compare)
+    a.out.parent.mkdir(parents=True, exist_ok=True)
+    fmt = a.out.suffix.lstrip(".")
+    entry = render_compare(
+        left,
+        right,
+        fmt,
+        a.out,
+        width=a.width or 960,
+        max_seconds=a.max_seconds or 30.0,
+        budget_mb=a.gif_budget_mb if fmt == "gif" else a.budget_mb,
+        title=a.title,
+        labels=a.labels,
+        pacing=a.pacing or "showcase",
+        allow_failed=a.allow_failed,
+        replay_pool=a.replay_pool,
+    )
+    print(
+        "%s: %d frames, %.1f s, %d bytes"
+        % (entry["file"], entry["frames"], entry["seconds"], entry["bytes"])
+    )
     return 0

@@ -1,17 +1,24 @@
-"""The committed ladder animations stay small, described and referenced (docs/animations/).
+"""The committed ladder and showcase animations stay small, described and referenced
+(docs/animations/).
 
 The large-file hook skips docs/animations/; this check bounds it instead:
 
 - every file there is a .webp, a .gif or one of the two JSON files, and every animation is in
-  manifest.json with its size and SHA-256;
-- a WebP is at most 2.5 MB, a GIF at most 5 MB, the folder at most 20 MB; widths (read from the
-  file headers) are 480 to 960 px;
+  manifest.json (its ``animations`` or its ``showcases``) with its size and SHA-256;
+- a WebP is at most 2.5 MB, a GIF at most 5 MB, the folder at most 30 MB; widths (read from the
+  file headers) are 480 to 960 px. The hierarchical showcase's WebP may use 3.5 MB (below);
 - no EXIF, XMP or ICC chunk in a WebP and no comment or application block other than the loop
   count in a GIF, so no tool metadata reaches the repository;
 - every ladder case (hardware/pnr/regression/designs.py) has an animation and a result in
-  ladder-results.json;
-- README.md and docs/regression-ladder.md show only animations that exist, and README.md shows
-  the manifest's README animation.
+  ladder-results.json; every showcase file names its cases, and their results agree with the
+  ``showcases`` array of ladder-results.json;
+- README.md, docs/regression-ladder.md and docs/constraints-and-hierarchy.md show only
+  animations that exist, and README.md shows the manifest's README animation and its README
+  showcase.
+
+The folder budget was 20 MB for the ladder's nine files (about 12 MB). It is 30 MB since the
+showcases (docs/design/constraint-and-hier-animations.md) added four files of about 13 MB: two
+side-by-side comparisons and the hierarchical chapters.
 """
 
 from __future__ import annotations
@@ -31,8 +38,17 @@ ROOT = workspace_root()
 FOLDER = os.path.join(ROOT, "docs", "animations")
 JSON_FILES = {"manifest.json", "ladder-results.json"}
 BUDGETS = {".webp": 2.5 * 1024 * 1024, ".gif": 5 * 1024 * 1024}
-TOTAL = 20 * 1024 * 1024
-PAGES = ("README.md", os.path.join("docs", "regression-ladder.md"))
+# The hierarchical showcase is over 2.5 MB even at the encoder's last step (640 px, quality 60,
+# 80 ms frames): about 31 s in three chapters, with block copper moving through the whole
+# top-level placement. The design's showcase-only WebP budget applies to it alone.
+SHOWCASE_WEBP_BUDGET = 3.5 * 1024 * 1024
+SHOWCASE_BUDGET_FILES = {"showcase-hier-twin-bank.webp"}
+TOTAL = 30 * 1024 * 1024
+PAGES = (
+    "README.md",
+    os.path.join("docs", "regression-ladder.md"),
+    os.path.join("docs", "constraints-and-hierarchy.md"),
+)
 REFERENCE = re.compile(r"""(?:src|href)="([^"]*animations/[^"]+)\"""")
 
 
@@ -136,6 +152,7 @@ class AnimationsTest(unittest.TestCase):
         cls.manifest = _json("manifest.json")
         cls.results = _json("ladder-results.json")
         cls.entries: Dict[str, dict] = {e["file"]: e for e in cls.manifest["animations"]}
+        cls.showcases: Dict[str, dict] = {e["file"]: e for e in cls.manifest.get("showcases", [])}
 
     def test_only_animations_and_their_json(self):
         for name in self.files:
@@ -145,10 +162,11 @@ class AnimationsTest(unittest.TestCase):
 
     def test_every_animation_is_in_the_manifest(self):
         animations = [n for n in self.files if n not in JSON_FILES]
-        self.assertEqual(sorted(self.entries), animations)
+        self.assertFalse(set(self.entries) & set(self.showcases))
+        self.assertEqual(sorted(set(self.entries) | set(self.showcases)), animations)
         for name in animations:
             data = _read(os.path.join(FOLDER, name))
-            entry = self.entries[name]
+            entry = self.entries.get(name) or self.showcases[name]
             self.assertEqual(entry["bytes"], len(data), name)
             self.assertEqual(entry["sha256"], hashlib.sha256(data).hexdigest(), name)
 
@@ -158,12 +176,15 @@ class AnimationsTest(unittest.TestCase):
             size = os.path.getsize(os.path.join(FOLDER, name))
             total += size
             ext = os.path.splitext(name)[1]
-            if ext in BUDGETS:
+            if name in SHOWCASE_BUDGET_FILES:
+                self.assertLessEqual(size, SHOWCASE_WEBP_BUDGET, name)
+            elif ext in BUDGETS:
                 self.assertLessEqual(size, BUDGETS[ext], name)
         self.assertLessEqual(total, TOTAL)
 
     def test_widths_and_no_metadata(self):
-        for name in self.entries:
+        entries = dict(self.entries, **self.showcases)
+        for name in entries:
             data = _read(os.path.join(FOLDER, name))
             if name.endswith(".webp"):
                 width = webp_width(data)
@@ -174,7 +195,7 @@ class AnimationsTest(unittest.TestCase):
                 blocks = set(gif_blocks(data)) - {"image", "graphic", "app:NETSCAPE2.0"}
                 self.assertEqual(blocks, set(), name)
             self.assertTrue(480 <= width <= 960, (name, width))
-            self.assertEqual(width, self.entries[name]["width"], name)
+            self.assertEqual(width, entries[name]["width"], name)
 
     def test_every_ladder_case_is_animated_and_reported(self):
         cases = ladder_cases()
@@ -189,6 +210,21 @@ class AnimationsTest(unittest.TestCase):
             self.assertEqual(entry["result"]["passed"], result["passed"], entry["file"])
             self.assertEqual(entry["result"]["vias"], result["vias"], entry["file"])
 
+    def test_every_showcase_names_its_cases_and_results(self):
+        results = {c["case"]: c for c in self.results.get("showcases", [])}
+        self.assertTrue(not self.showcases or results)
+        for entry in self.showcases.values():
+            self.assertIn(entry["kind"], ("compare", "hier"), entry["file"])
+            self.assertEqual(len(entry["cases"]), 2 if entry["kind"] == "compare" else 1)
+            self.assertEqual(sorted(entry["trace_sha256"]), sorted(entry["cases"]), entry["file"])
+            for case in entry["cases"]:
+                result = results[case]
+                self.assertEqual(entry["results"][case]["passed"], result["passed"], case)
+                self.assertEqual(entry["results"][case]["vias"], result["vias"], case)
+        self.assertEqual(
+            [c["case"] for c in self.results["cases"]], sorted(ladder_cases())
+        )  # the ladder's own results stay the eight cases
+
     def test_pages_show_existing_animations(self):
         for page in PAGES:
             text = _read(os.path.join(ROOT, page)).decode("utf-8")
@@ -197,10 +233,12 @@ class AnimationsTest(unittest.TestCase):
             self.assertTrue(found, page)
             for ref in found:
                 self.assertTrue(os.path.isfile(os.path.normpath(os.path.join(base, ref))), ref)
-        readme = self.manifest["readme"]["file"]
-        self.assertIn(
-            'src="docs/animations/%s"' % readme, _read(os.path.join(ROOT, "README.md")).decode()
-        )
+        text = _read(os.path.join(ROOT, "README.md")).decode()
+        self.assertIn('src="docs/animations/%s"' % self.manifest["readme"]["file"], text)
+        showcase = self.manifest.get("readme_showcase")
+        if showcase:
+            self.assertIn(showcase["file"], self.showcases)
+            self.assertIn('src="docs/animations/%s"' % showcase["file"], text)
 
 
 if __name__ == "__main__":

@@ -25,6 +25,13 @@ HEAT_HIGH = "#f07769"
 TEXT = "#dce5e9"
 MUTED = "#8a9ea7"
 FAIL = "#ff566b"
+# New, used only for traces whose header lists placement constraints, for block macros and in
+# comparisons (docs/design/constraint-and-hier-animations.md, section 6.2).
+CONSTRAINT = "#f2c14e"  # a constrained part's target: the line, the edge, the rigid body
+CONSTRAINT_OK = "#62ffad"  # within its tolerance (the "new copper" mint)
+CONSTRAINT_BAD = "#ff566b"  # beyond it (the failure red)
+BLOCK_OUTLINE = "#d5dde1"  # a block macro's outline (dashed)
+REFERENCE = "#6f8792"  # another panel's constraint, drawn as a neutral target
 
 HEADER_PX = 34
 FOOTER_PX = 40
@@ -52,6 +59,12 @@ PHASE_TEXT = {
     "drc": "KiCad DRC",
     "native-phase": "Native loop",
     "result": "KiCad DRC verdict",
+    # Hierarchical chapters (pnr.animate.hier).
+    "chapter": "",
+    "blocks": "Blocks: placed and routed on their own boards",
+    "reuse": "Blocks: one layout per template",
+    "lift": "Blocks become macros",
+    "knit": "Knitting: routing the nets between blocks",
 }
 
 CRITERION_TEXT = {

@@ -8,6 +8,7 @@ run directory, including rejected boards, stage logs and source hashes.
 import argparse
 import hashlib
 import json
+import math
 import os
 import platform
 import shutil
@@ -19,7 +20,7 @@ from collections import Counter
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from designs import designs
+from designs import designs, showcases
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
@@ -64,6 +65,62 @@ def acceptance(pnr, audit, drc):
         if drc["violations"]:
             reasons.append("native_drc_violations")
     return reasons
+
+
+def constraint_reasons(spec, placed):
+    """Independent audit (stdlib, not the engine's metrics) of the showcase constraints
+    on ``placed`` (placed.json): each line group collinear at its pitch or gap, in member
+    order, with its declared rotation, and each hard edge part within its tolerance.
+    Returns ``(checked, findings)``."""
+    cons = spec["constraints"]
+    width, height = cons["board"]["outline"]["w"], cons["board"]["outline"]["h"]
+    comps = {c["ref"]: c for c in placed["components"]}
+    checked, findings = [], []
+
+    def extent(comp, axis_angle):
+        w, h = comp["courtyard"]
+        quarter = int(round((comp["rot"] - axis_angle) / 90.0)) % 2
+        return h if quarter else w
+
+    for group in cons.get("line_group") or []:
+        checked.append("line_group " + group["name"])
+        parts = [comps[r] for r in group["members"]]
+        dx = parts[1]["pos"][0] - parts[0]["pos"][0]
+        dy = parts[1]["pos"][1] - parts[0]["pos"][1]
+        turn = round(math.degrees(math.atan2(dy, dx)) / 90.0) * 90 % 360
+        ux, uy = round(math.cos(math.radians(turn))), round(math.sin(math.radians(turn)))
+        rot = (group.get("rot", 0) + turn) % 360
+        for a, b in zip(parts, parts[1:]):
+            if group.get("pitch_mm") is not None:
+                step = group["pitch_mm"]
+            else:
+                gap = group.get("gap_mm", cons["board"].get("default_clearance_mm", 0.2))
+                step = (extent(a, turn) + extent(b, turn)) / 2 + gap
+            want = (a["pos"][0] + ux * step, a["pos"][1] + uy * step)
+            if math.dist(want, b["pos"]) > 1e-3:
+                findings.append(
+                    "%s: %s not at the line step after %s" % (group["name"], b["ref"], a["ref"])
+                )
+        for c in parts:
+            if abs((c["rot"] - rot + 180) % 360 - 180) > 1e-3 or c["side"] != parts[0]["side"]:
+                findings.append(
+                    "%s: %s turned %s, want %s" % (group["name"], c["ref"], c["rot"], rot)
+                )
+    for ref, rule in sorted((cons.get("edge_align") or {}).items()):
+        if not rule.get("hard"):
+            continue
+        checked.append("edge_align " + ref)
+        comp = comps[ref]
+        w, h = comp["courtyard"]
+        if int(round(comp["rot"] / 90.0)) % 2:
+            w, h = h, w
+        x, y = comp["pos"]
+        distance = dict(
+            south=y - h / 2, north=height - y - h / 2, west=x - w / 2, east=width - x - w / 2
+        )[rule["edge"]]
+        if distance > rule.get("tolerance_mm", 1.0) + 1e-3:
+            findings.append("%s: %.3f mm from the %s edge" % (ref, distance, rule["edge"]))
+    return checked, findings
 
 
 def source_inputs(repo):
@@ -165,6 +222,16 @@ def parser():
         help="Record a pnr-trace-v1 trace per case (CASE/trace) for pnr.animate; observational only",
     )
     ap.add_argument(
+        "--trace-placement-every",
+        type=int,
+        help="With --trace: a global placement snapshot every N iterations (PNR_TRACE_PLACEMENT_EVERY)",
+    )
+    ap.add_argument(
+        "--showcases",
+        action="store_true",
+        help="Also offer the showcase cases (designs.showcases(), outside the ladder) to --case",
+    )
+    ap.add_argument(
         "--fab-profile",
         choices=FAB_PROFILES,
         default=DEFAULT_FAB_PROFILE,
@@ -194,8 +261,12 @@ def main():
     REPO = args.repo.resolve()
     args.python = args.python or str(REPO / "output/pnr-regression-runtime/bin/python")
     out = args.out.resolve()
+    if args.trace_placement_every is not None and (
+        not args.trace or args.trace_placement_every < 1
+    ):
+        raise SystemExit("--trace-placement-every needs --trace and a positive N")
     out.mkdir(parents=True, exist_ok=False)
-    allcases = designs()
+    allcases = designs() + (showcases() if args.showcases else [])
     cases = [c for c in allcases if not args.case or c["name"] in args.case]
     if not cases or (set(args.case) - {c["name"] for c in cases}):
         raise SystemExit("Unknown/empty case selection")
@@ -315,9 +386,11 @@ def main():
                     sum(bool(p["net"]) for c in graph["components"] for p in c["pads"])
                     == spec["expected_connected_pads"]
                 )
+                # A design's driver: flat (route_case.py) or hierarchical (hier_case.py).
+                driver = "hier_case.py" if spec.get("driver") == "hier" else "route_case.py"
                 run(
                     "place-route",
-                    [args.python, frozen_here / "route_case.py", root, seed, args.rounds],
+                    [args.python, frozen_here / driver, root, seed, args.rounds],
                     native.environment() if native else None,
                 )
                 board = root / "routed.kicad_pcb"
@@ -405,6 +478,16 @@ def main():
                 )
                 if source != sha(root / "source.kicad_pcb"):
                     result["reasons"].append("source_changed")
+                constraints = spec["constraints"]
+                if constraints.get("line_group") or any(
+                    rule.get("hard") for rule in (constraints.get("edge_align") or {}).values()
+                ):
+                    checked, findings = constraint_reasons(
+                        spec, json.loads((root / "placed.json").read_text())
+                    )
+                    result["constraint_audit"] = dict(checked=checked, findings=findings)
+                    if findings:
+                        result["reasons"].append("constraint_violated")
                 result["passed"] = not result["reasons"]
                 if native:
                     native.finish(board, drc, result)  # the saved board with the runner's final DRC

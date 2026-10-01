@@ -534,6 +534,115 @@ def _expand_layout_arrays(doc):
     return doc
 
 
+LINE_GROUP_EDGES = ("none",) + EDGES
+# Hard edge alignment: the largest courtyard-to-edge distance, default and floor (mm).
+EDGE_TOLERANCE_MM = 1.0
+MIN_EDGE_TOLERANCE_MM = 0.5
+
+
+def _finite_number(value) -> bool:
+    import math
+
+    return not isinstance(value, bool) and isinstance(value, (int, float)) and math.isfinite(value)
+
+
+def _parse_line_groups(raw, known_refs, board, prior) -> List[Constraint]:
+    """The ``line_group`` section: ordered members held in one rigid line.
+
+    A line group is HARD: its members keep the layout of :mod:`pnr.place.line_group`
+    under one common position and cardinal rotation. Members may carry no relation a
+    rigid body cannot honour (a fixed pose, a row, edge alignment, orientation, a hard
+    side, a ref-relative keepout, a hard group); a soft group pulls the whole line.
+    ``prior`` holds the constraints parsed before this section.
+    """
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ConstraintError("line_group must be a list")
+    known = set(known_refs)
+    conflicting = {}
+    for con in prior:
+        if con.kind in ("fixed", "row", "edge_align", "orientation", "side"):
+            refs = con.refs
+        elif con.kind == "keepout" and con.params.get("extent") and not con.params.get("polygon"):
+            refs = con.refs
+        elif con.kind == "group" and con.enforcement is Enforcement.HARD:
+            refs = tuple(con.refs) + (con.params.get("anchor"),)
+        else:
+            continue
+        for ref in refs:
+            if ref:
+                conflicting.setdefault(ref, "hard group" if con.kind == "group" else con.kind)
+    out: List[Constraint] = []
+    owner: Dict[str, str] = {}
+    clearance = float(board.default_clearance_mm)
+    for entry in raw:
+        if not isinstance(entry, dict):
+            raise ConstraintError("line_group entry must be a mapping")
+        name = entry.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ConstraintError("line_group requires a non-empty name")
+        where = "line_group %r" % name
+        if any(c.name == name for c in out):
+            raise ConstraintError(where + ": duplicate name")
+        members = entry.get("members")
+        if (
+            not isinstance(members, list)
+            or len(members) < 2
+            or any(not isinstance(m, str) or any(ch in m for ch in "*?[") for m in members)
+            or len(set(members)) != len(members)
+            or any(m not in known for m in members)
+        ):
+            raise ConstraintError(where + ": requires at least two known, unique, literal refs")
+        for ref in members:
+            if ref in owner:
+                raise ConstraintError(
+                    "%s: %s is already a member of line_group %r" % (where, ref, owner[ref])
+                )
+            if ref in conflicting:
+                raise ConstraintError(
+                    "%s: member %s also has a %s constraint, which a rigid line cannot honour"
+                    % (where, ref, conflicting[ref])
+                )
+        pitch, gap = entry.get("pitch_mm"), entry.get("gap_mm")
+        if pitch is not None and gap is not None:
+            raise ConstraintError(where + ": give pitch_mm or gap_mm, not both")
+        if pitch is None and gap is None:
+            gap = clearance
+        for label, value in (("pitch_mm", pitch), ("gap_mm", gap)):
+            if value is not None and (not _finite_number(value) or value <= 0):
+                raise ConstraintError("%s: %s must be finite and positive" % (where, label))
+        if gap is not None and gap < clearance - 1e-12:
+            raise ConstraintError(where + ": gap_mm must meet the placement clearance")
+        rot = entry.get("rot", 0)
+        if not _finite_number(rot) or abs(rot / 90 - round(rot / 90)) > 1e-8:
+            raise ConstraintError(where + ": rot must be a finite cardinal rotation")
+        edge = entry.get("edge", "none")
+        if edge not in LINE_GROUP_EDGES:
+            raise ConstraintError("%s: edge %r not one of %s" % (where, edge, LINE_GROUP_EDGES))
+        reason = entry.get("reason")
+        if reason is not None and not isinstance(reason, str):
+            raise ConstraintError(where + ": reason must be a string")
+        for ref in members:
+            owner[ref] = name
+        out.append(
+            Constraint(
+                "line_group",
+                Enforcement.HARD,
+                tuple(members),
+                dict(
+                    pitch_mm=None if pitch is None else float(pitch),
+                    gap_mm=None if gap is None else float(gap),
+                    rot=float(round(rot / 90) * 90 % 360),
+                    edge=edge,
+                    reason=reason,
+                ),
+                name=name,
+            )
+        )
+    return out
+
+
 def compile_constraints(
     doc: Dict, known_refs: Sequence[str], addresses=None, pin_nets=None
 ) -> CompiledConstraints:
@@ -568,6 +677,7 @@ def compile_constraints(
         "side_pref",
         "side",
         "group",
+        "line_group",
         "net_class",
         "diff_pair",
         "length_match",
@@ -632,7 +742,9 @@ def compile_constraints(
             )
         )
 
-    # edge_align: SOFT — pull the part to a board edge; snap orientation.
+    # edge_align: SOFT — pull the part to a board edge during global placement (the
+    # facing is set with ``orientation``). Opt-in ``hard: true`` also keeps the part's
+    # courtyard within ``tolerance_mm`` of that edge through legalization.
     for ref, spec in (doc.get("edge_align") or {}).items():
         spec = spec or {}
         refs = _expand_refs([ref], known_refs, warnings, f"edge_align.{ref}")
@@ -640,12 +752,24 @@ def compile_constraints(
         if edge is None:
             raise ConstraintError(f"edge_align.{ref}: 'edge' is required")
         _require_enum(spec.get("side"), SIDES, f"edge_align.{ref}.side")
+        hard = spec.get("hard", False)
+        if not isinstance(hard, bool):
+            raise ConstraintError(f"edge_align.{ref}.hard must be a boolean")
+        tolerance = spec.get("tolerance_mm", EDGE_TOLERANCE_MM)
+        if not _finite_number(tolerance) or tolerance < MIN_EDGE_TOLERANCE_MM:
+            raise ConstraintError(
+                f"edge_align.{ref}.tolerance_mm must be finite and at least "
+                f"{MIN_EDGE_TOLERANCE_MM} mm"
+            )
+        params = {"edge": edge, "side": spec.get("side")}
+        if hard:
+            params.update(hard=True, tolerance_mm=float(tolerance))
         constraints.append(
             Constraint(
                 kind="edge_align",
-                enforcement=Enforcement.SOFT,
+                enforcement=Enforcement.HARD if hard else Enforcement.SOFT,
                 refs=refs,
-                params={"edge": edge, "side": spec.get("side")},
+                params=params,
                 weight=float(spec.get("weight", DEFAULT_WEIGHTS["edge_align"])),
             )
         )
@@ -783,6 +907,9 @@ def compile_constraints(
                 weight=float(entry.get("weight", DEFAULT_WEIGHTS["group"])),
             )
         )
+
+    # line_group: HARD — ordered members held in one rigid line (pnr.place.line_group).
+    constraints.extend(_parse_line_groups(doc.get("line_group"), known_refs, board, constraints))
 
     # net_class: routing rule sets over net-name globs (resolved at route time).
     net_classes: List[NetClass] = []

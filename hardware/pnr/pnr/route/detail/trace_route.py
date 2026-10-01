@@ -78,6 +78,12 @@ class RouteTrace:
         for net in graph.nets:
             pins = recorder.pins.get(net.name) or [tuple(p) for p in net.pins]
             self.pins[net.name] = [tuple(p) for p in pins]
+        # Copper the route keeps (a fixed event, pnr.trace.Recorder.fixed): the routed
+        # graph may lack nets it completes, so every header net counts.
+        self.fixed = {n: gs for n, gs in (getattr(recorder, "route_fixed", None) or {}).items()}
+        if self.fixed:
+            for net, pins in recorder.pins.items():
+                self.pins.setdefault(net, [tuple(p) for p in pins])
         self.total = sum(max(0, len(p) - 1) for p in self.pins.values())
         self.access = {}
         self.escapes = {}
@@ -90,6 +96,28 @@ class RouteTrace:
             self.access.setdefault(esc.net, {}).setdefault(esc.access, []).append(index)
             self.escapes.setdefault(esc.net, []).append(esc)
         self.done = {False: {}, True: {}}
+        # The fixed copper's joins count from the start. Absent (every route but the
+        # hierarchical knit): no change.
+        self.fixed_done = {}
+        for net in sorted(self.fixed):
+            count = len(self.pins.get(net, []))
+            joined = count - len(self._merge(net, [[i] for i in range(count)]))
+            self.fixed_done[net] = joined
+            self.done[False][net] = self.done[True][net] = joined
+
+    def _merge(self, net, groups):
+        """``groups`` of ``net`` joined with the fixed copper's groups."""
+        parent = {}
+        for group in list(groups) + list(self.fixed.get(net, ())):
+            for i in group[1:]:
+                ra, rb = _find(parent, group[0]), _find(parent, i)
+                if ra != rb:
+                    parent[ra] = rb
+            _find(parent, group[0])
+        joined = {}
+        for i in parent:
+            joined.setdefault(_find(parent, i), []).append(i)
+        return sorted(sorted(g) for g in joined.values())
 
     def layer(self, name):
         return self.layer_names.index(name) if name in self.layer_names else 0
@@ -117,7 +145,7 @@ class RouteTrace:
         covered = set().union(*joined.values()) if joined else set()
         groups = [sorted(g) for g in joined.values()]
         groups += [[i] for i in range(count) if i not in covered]
-        return sorted(groups)
+        return self._merge(net, groups) if net in self.fixed else sorted(groups)
 
     def copper(self, net, cells, segments, vias):
         """Copper blob of one net: grid segments, new vias and the escapes its cells reach."""
@@ -178,6 +206,8 @@ class RouteTrace:
         else:
             copper = None
             groups = [[i] for i in range(len(self.pins.get(net, [])))]
+            if net in self.fixed:
+                groups = self._merge(net, groups)
         self.done[provisional][net] = len(self.pins.get(net, [])) - len(groups)
         self.recorder._emit(
             "net",
@@ -212,7 +242,7 @@ class RouteTrace:
             )
         for net, x, y in board.vias:
             per_net.setdefault(net, ([], []))[1].append((x, y))
-        nets, groups, done = {}, {}, {}
+        nets, groups, done = {}, {}, dict(self.fixed_done)
         for net, (tracks, points) in sorted(per_net.items()):
             nets[net] = self._blob(net, tracks, points)
         for net, rn in sorted(board.result.nets.items()):
@@ -228,6 +258,8 @@ class RouteTrace:
                     unions += [(cells[0], c) for c in cells[1:]]
             groups[net] = self.groups(net, edges, unions)
             done[net] = len(self.pins.get(net, [])) - len(groups[net])
+        for net in sorted(set(self.fixed) - set(groups)):
+            groups[net] = self._merge(net, [[i] for i in range(len(self.pins.get(net, [])))])
         self.done[False] = done
         self.recorder._emit(
             "route_end",

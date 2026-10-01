@@ -146,6 +146,29 @@ requests that change engine inputs, and all cases with seeds 0 and 1 nightly,
 inside the arm64 image, plus a traced pool run whose animations are uploaded as
 an artifact.
 
+## Showcases
+
+`designs.showcases()` lists cases outside the ladder that show placement
+constraints and hierarchy: `line-chaser-20` (the 07 chaser with LEDs D1 to D5 in
+one `line_group`), `edge-io-12` and its free twin `edge-io-12-free` (connector,
+button and LED held on the south edge with a hard `edge_align`) and
+`hier-twin-bank-32` (a 555 clock and two identical CD4017B LED banks as three
+blocks of two templates). `run.py --showcases` offers them to `--case`; without
+the flag only the eight ladder cases exist. A design with `driver: hier` runs
+`hier_case.py` instead of `route_case.py`: each block template is placed and
+routed on its own board (trials over outlines and seeds, the best by rank), the
+top level places the blocks as rigid macros and routes the nets between them
+with the block copper held fixed, and it writes the same outputs, so writeback,
+planes, refill, DRC and the gate run unchanged. A design with a `line_group` or
+a hard `edge_align` also gets an independent audit of `placed.json`
+(`constraint_audit` in `result.json`; a failure adds `constraint_violated`).
+`--trace-placement-every N` makes global placement snapshots denser for the
+animations. `//hardware/pnr:showcase_animations` (`animate_showcases.py`,
+`--render-only RUN_DIR`) renders them side by side (free and constrained) and in
+chapters (hierarchy) into `docs/animations/`; the page is
+[Constraints and hierarchy](../../../docs/constraints-and-hierarchy.md). The
+showcases never gate: the nightly lane runs them for information.
+
 Performance opt-ins can be tested explicitly with `--packed-maze` and
 `--batched-wirelength`. They are recorded in provenance; ambient variables are
 still cleared, so a baseline invocation keeps its original algorithms.

@@ -27,7 +27,7 @@ from pathlib import Path
 
 from pnr.graph import BoardGraph
 from pnr.hier.blocks import extract_blocks
-from pnr.hier.macro import collapse
+from pnr.hier.macro import collapse, macro_pair_weights
 from pnr.hier.synth import instance_board, local_key
 
 
@@ -125,22 +125,6 @@ def draw_layout(tier, rng, ratio=None):
     return len(tier) - 1, tier[-1]
 
 
-def macro_pair_weights(pair_weights, plan):
-    """Flat pad-pair weights {(ref_a, pad_a, ref_b, pad_b): w} on the macro graph.
-
-    A block member's pad is the macro pad ``'<ref>.<pad>'`` of its macro; pairs
-    inside one macro are rigid there and dropped; duplicates add up."""
-    out = {}
-    for (ra, pa, rb, pb), w in (pair_weights or {}).items():
-        ma, mb = plan.member_of.get(ra), plan.member_of.get(rb)
-        if ma is not None and ma == mb:
-            continue
-        a = (ma, "%s.%s" % (ra, pa)) if ma else (ra, pa)
-        b = (mb, "%s.%s" % (rb, pb)) if mb else (rb, pb)
-        out[(a[0], a[1], b[0], b[1])] = out.get((a[0], a[1], b[0], b[1]), 0.0) + float(w)
-    return out or None
-
-
 def hierarchical_place(graph, constraints, rules, library, seed, iters=600, pair_weights=None):
     """Return (flat placed graph, placement report, choice record).
 
@@ -197,16 +181,20 @@ def hierarchical_place(graph, constraints, rules, library, seed, iters=600, pair
         )
     else:
         mgraph, mcon, mrules, plan = collapse(source, constraints, rules, layouts)
-    placed_macro, report = place(
-        mgraph,
-        mcon,
-        seed=seed,
-        iters=iters,
-        orient=True,
-        spread=1.0,
-        channel_rules=mrules,
-        pair_weights=macro_pair_weights(pair_weights, plan),
-    )
+    from pnr import trace as _trace
+
+    # Tracing only: snapshots and the legalization order name the block members.
+    with _trace.pose_expansion(plan.trace_rows):
+        placed_macro, report = place(
+            mgraph,
+            mcon,
+            seed=seed,
+            iters=iters,
+            orient=True,
+            spread=1.0,
+            channel_rules=mrules,
+            pair_weights=macro_pair_weights(pair_weights, plan),
+        )
     flat = plan.expand(placed_macro, source)
     macros = {
         m: dict(block=v["block"], width=v["width"], height=v["height"])

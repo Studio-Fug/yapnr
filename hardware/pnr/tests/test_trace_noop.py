@@ -34,7 +34,7 @@ SPEC = dict(
 )
 
 
-def board():
+def board(line=False):
     def smd(ref, x, a, b):
         pads = [Pad("1", a, (-0.95, 0.0), (1.0, 1.45)), Pad("2", b, (0.95, 0.0), (1.0, 1.45))]
         return Component(
@@ -71,7 +71,11 @@ def board():
         [Net(n, i + 1, pins) for i, (n, pins) in enumerate(sorted(nets.items()))],
         BoardOutline(24.0, 18.0),
     )
-    constraints = compile_constraints(SPEC, graph.refs)
+    spec = dict(SPEC)
+    if line:
+        # A second board: the two LEDs held in a line group (pnr.place.line_group).
+        spec["line_group"] = [dict(name="leds", members=["D1", "D2"], pitch_mm=3.0, rot=90)]
+    constraints = compile_constraints(spec, graph.refs)
     rules = compile_routing_rules(constraints, [n.name for n in graph.nets])
     return graph, constraints, rules
 
@@ -85,8 +89,8 @@ def untimed(value):
     return value
 
 
-def run(pool):
-    graph, constraints, rules = board()
+def run(pool, line=False):
+    graph, constraints, rules = board(line)
     placed, report = route_and_place(
         graph,
         constraints,
@@ -122,15 +126,15 @@ def run(pool):
 
 
 class TraceNoOpTest(unittest.TestCase):
-    def check(self, pool):
+    def check(self, pool, line=False):
         clean = {k: v for k, v in os.environ.items() if not k.startswith("PNR_")}
         with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, clean, clear=True):
-            before = run(pool)
+            before = run(pool, line)
             os.environ["PNR_TRACE_DIR"] = str(Path(tmp) / "trace")
-            traced = run(pool)
+            traced = run(pool, line)
             trace.current().close()
             del os.environ["PNR_TRACE_DIR"]
-            after = run(pool)
+            after = run(pool, line)
             self.assertEqual(before, traced)
             self.assertEqual(before, after)
             root = Path(tmp) / "trace"
@@ -147,6 +151,16 @@ class TraceNoOpTest(unittest.TestCase):
     def test_baseline_loop(self):
         events = self.check(pool=False)
         self.assertTrue(any(e["kind"] == "scope_begin" and e["type"] == "attempt" for e in events))
+
+    def test_line_group(self):
+        events = self.check(pool=True, line=True)
+        placements = [e for e in events if e["kind"] in ("poses", "legal") and "groups" in e]
+        self.assertTrue(placements)
+        for event in placements:
+            self.assertEqual(event["group_members"], {"LG00": ["D1", "D2"]})
+            refs = [p[0] for p in event.get("poses") or event.get("order") or []]
+            self.assertIn("D1", refs)
+            self.assertNotIn("LG00", refs)
 
     def test_initial_pool(self):
         events = self.check(pool=True)

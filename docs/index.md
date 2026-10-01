@@ -31,6 +31,8 @@ command line currently offers `yapnr --version` and a `yapnr doctor` stub; the l
 - [Releases and versioning](releases.md): version numbers, image tags, what a release publishes.
 - [Regression ladder](regression-ladder.md): eight boards of rising complexity, up to a TLC555 +
   CD4017B LED chaser, with an animation of each board's place and route.
+- [Constraints and hierarchy](constraints-and-hierarchy.md): a line of LEDs, parts held on the
+  board edge and a board built from reused blocks, each animated from the engine's own record.
 - [Architecture](architecture.md): the planned layout of the package, the test tiers and the
   pipeline.
 - [Migration plan](migration-plan.md): how the engine moves out of Splanc, PR by PR.
@@ -68,9 +70,11 @@ releases
 
 architecture
 regression-ladder
+constraints-and-hierarchy
 migration-plan
 decisions
 design/animations
+design/constraint-and-hier-animations
 history/import-manifest
 about-the-name
 ```

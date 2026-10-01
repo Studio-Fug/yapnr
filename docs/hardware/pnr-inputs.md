@@ -118,17 +118,32 @@ pull their nets (so nearby parts cluster around them).
 For example, an edge USB-C is `USB1: { edge: south, overhang_mm: 1.5 }` — the
 connector body extends 1.5 mm past the board edge, its pads on-board.
 
-### `edge_align` — pull to an edge (soft)
+### `edge_align` — pull to an edge (soft, or hard on request)
 
-Attracts a part toward a board edge without nailing it there, and snaps its
-orientation to that edge. Use for user-facing controls and edge connectors that
-should be reachable but whose exact position the optimizer may choose.
+Attracts a part toward a board edge without nailing it there. Use for user-facing
+controls and edge connectors that should be reachable but whose exact position
+along the edge the optimizer may choose. `edge_align` does not turn the part: set
+its facing with `orientation` (for example, the long axis along the edge).
 
-| Key      | Meaning                                            |
-| -------- | -------------------------------------------------- |
-| `edge`   | Target edge (required).                            |
-| `side`   | Preferred side (`top`/`bottom`).                   |
-| `weight` | Penalty weight (default 5.0); higher pulls harder. |
+By default the pull acts during global placement only, so legalization may still
+move the part off the edge. With `hard: true` the part's courtyard also stays
+within `tolerance_mm` of the edge through legalization, and a placement where it
+does not is illegal. Parts on the same edge slide along it and may change order.
+
+| Key            | Meaning                                                                              |
+| -------------- | ------------------------------------------------------------------------------------ |
+| `edge`         | Target edge (required).                                                              |
+| `side`         | Preferred side (`top`/`bottom`).                                                     |
+| `weight`       | Penalty weight (default 5.0); higher pulls harder.                                   |
+| `hard`         | `true` keeps the part at the edge through legalization (default `false`).            |
+| `tolerance_mm` | With `hard`: largest courtyard-to-edge distance (default 1.0, at least 0.5).        |
+
+```yaml
+edge_align:
+  SW1: { edge: south, hard: true, tolerance_mm: 1.0 }
+orientation:
+  SW1: 0 # the long axis along the south edge
+```
 
 ### `keepout` — exclude a region (hard)
 
@@ -171,6 +186,40 @@ together — shorter loops, less noise.
 | `anchor`    | The ref they cluster around (usually the main IC). |
 | `radius_mm` | Target radius (default ~5 mm).                     |
 | `weight`    | Penalty weight (default 2.0).                      |
+
+### `line_group` — hold parts in one rigid line (hard)
+
+Keeps an ordered set of parts in one straight, evenly spaced line, all turned the
+same way: a row of indicator LEDs, a bank of buttons. The placer moves and turns
+the whole line as one rigid body (one position, one of four rotations); it may
+turn the line by 180°, which reverses the order on the board.
+
+| Key        | Meaning                                                                                  |
+| ---------- | ---------------------------------------------------------------------------------------- |
+| `name`     | Unique name (required).                                                                  |
+| `members`  | Literal refs in line order (at least two; no globs).                                     |
+| `pitch_mm` | Centre-to-centre spacing along the line.                                                 |
+| `gap_mm`   | Courtyard-to-courtyard gap instead (default: `board.default_clearance_mm`).              |
+| `rot`      | Every member's rotation in the line's frame (0/90/180/270, default 0).                   |
+| `edge`     | `none` (default) or an edge: a soft pull of the whole line toward it.                    |
+| `reason`   | Free text for reports.                                                                   |
+
+```yaml
+line_group:
+  - name: chaser_leds
+    members: [D1, D2, D3, D4, D5]
+    pitch_mm: 3.0
+    rot: 90
+    reason: Chaser LEDs in one row, so the sequence reads as a line
+```
+
+A member may not also be `fixed`, in a `row`, `edge_align`, `orientation` or
+`side`, the part of a ref-relative `keepout`, or in a hard `group`: a rigid line
+cannot honour those. A member locked in the source board is refused too, when
+placement starts. A soft `group` pulls the whole line. Members stay on the top
+side and carry no plane-access intents. The line occupies the sides its members
+occupy: a line of SMD parts may sit above a bottom-side part, and a drilled
+member reserves both sides of the whole line.
 
 ### `net_class` / `diff_pair` / `length_match` — routing rules
 

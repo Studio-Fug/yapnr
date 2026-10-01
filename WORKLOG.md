@@ -3,8 +3,9 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-09-30 (PR4, #10 and the ladder animations merged; atopile toolchain branch,
-review fixes).
+Last updated: 2026-09-30 (PR4, #10, the ladder animations, the atopile toolchain and the privacy-scan
+trailer rule merged; line groups, hard board edges, the hierarchical ladder driver and their
+animations on `claude/animations-groups-hier`).
 
 ## In progress
 
@@ -17,20 +18,19 @@ review fixes).
 - **Merged since:** the regression ladder in CI and the PnR animations (#15: `pnr.trace`,
   `pnr.provenance`, `pnr.animate`, `ladder.yaml`, `docs/regression-ladder.md`) and two viewer
   test race fixes (#16, #17).
-- **atopile toolchain and part cache** (branch `claude/atopile-toolchain`, rebased on `main`
-  after #17, not pushed; A1 and A2 of the end-to-end plan): `yapnr atopile setup` (hashed
-  per-platform locks, atopile 0.15.8 on Python 3.14.7), `yapnr atopile build` (offline,
-  isolated, bounded; a hook in every atopile interpreter), the loopback picker (catalog schema
-  v1), the part cache (store, HTTP server with tokens and takedowns, clients, importer,
-  container), the Bazel toolchain and `yapnr_atopile_build`. The adversarial review's findings
-  are fixed: a lock pins its part; client tokens go only to the named server (no redirects, https
-  or loopback, the write token never with reads); the server checks tokens before bodies, bounds
-  its connections, serves only files a part uses, collects orphans, checks file types, and a
-  takedown blocks the part's files; local-only parts; no git clone offline and no contact with a
-  running KiCad; ato.yaml's layout paths; the Bazel action copies only its declared inputs and
-  needs an explicit cache; hashed sdist builds on linux-aarch64. Real atopile: 4 end-to-end cases
-  (7 builds) pass on darwin-arm64; `bazel test //...` 137 of 137. Not done: the image's
-  `/opt/atopile` (A4) and a KiCad 9 against 10 A/B
+- **atopile toolchain and part cache** (merged as #18; A1 and A2 of the end-to-end plan):
+  `yapnr atopile setup` (hashed per-platform locks, atopile 0.15.8 on Python 3.14.7),
+  `yapnr atopile build` (offline, isolated, bounded; a hook in every atopile interpreter), the
+  loopback picker (catalog schema v1), the part cache (store, HTTP server with tokens and takedowns,
+  clients, importer, container), the Bazel toolchain and `yapnr_atopile_build`. The adversarial
+  review's findings are fixed: a lock pins its part; client tokens go only to the named server (no
+  redirects, https or loopback, the write token never with reads); the server checks tokens before
+  bodies, bounds its connections, serves only files a part uses, collects orphans, checks file
+  types, and a takedown blocks the part's files; local-only parts; no git clone offline and no
+  contact with a running KiCad; ato.yaml's layout paths; the Bazel action copies only its declared
+  inputs and needs an explicit cache; hashed sdist builds on linux-aarch64. Real atopile: 4
+  end-to-end cases (7 builds) pass on darwin-arm64; `bazel test //...` 137 of 137. Not done: the
+  image's `/opt/atopile` (A4) and a KiCad 9 against 10 A/B
   ([docs/frontends/atopile.md](docs/frontends/atopile.md#not-done-yet)).
 - **Splanc's parts in a local part cache** (local-machine note; Splanc is not modified): the
   committed parts of `splanc`, `splanc_dev`, `splanc_max` and `splanc_eol_tester` (276
@@ -48,6 +48,35 @@ review fixes).
   local layout, it equals rules_atopile's last Nix-built board in nets, footprints, pads,
   positions and outline. `splanc_eol_tester` fails on 0.15.8 with or without the cache: atopile
   rejects its `elec/footprints/` directory as deprecated.
+
+- **Constraint and hierarchy showcases** (branch `claude/animations-groups-hier`, on top of
+  `claude/ladder-animations`; design `docs/design/constraint-and-hier-animations.md`, §10 and §11
+  "As built"). Engine, all opt-in: a HARD `line_group` constraint placed as one rigid macro
+  inside `place()`, `edge_align` `hard`/`tolerance_mm`, own-net fixed copper in the detail
+  router, and `regression/hier_case.py` (blocks placed and routed on their own boards, placed as
+  macros, knitted with block copper held fixed). Traces gain `groups`, `group_members`,
+  `header.constraints`, a `fixed` event and per-template block traces. `run.py --showcases` and
+  `--trace-placement-every`; `designs.showcases()`: `line-chaser-20`, `edge-io-12-free`,
+  `edge-io-12`, `hier-twin-bank-32`. Showcase run (pool seed 0, 8 starts, 3 finalists,
+  snapshots every 5): all five cases pass the gate and the constraint audit, 0 opens, 0
+  findings; vias 19 (07), 20 (line), 9 (edge free), 8 (edge), 38 (hier). A/B of the eight
+  ladder cases: identical `placed.json`, `routes.json` and trace digests.
+  Renderer: constraint highlighting (`pnr.animate.highlight`), rigid-body tweens, side-by-side
+  comparisons (`python -m pnr.animate --compare A B`, `pnr.animate.compare`), the hierarchical
+  chapters (`pnr.animate.hier`, `provenance.from_hier`), `--pacing showcase`, and
+  `//hardware/pnr:showcase_animations`. Four files in `docs/animations/` (13.1 MB; folder
+  budget 30 MB, the hierarchical WebP 3.5 MB), the page
+  [docs/constraints-and-hierarchy.md](docs/constraints-and-hierarchy.md), a second README item
+  (the side-by-side chaser GIF), and a nightly, informational showcase step in `ladder.yaml`
+  (never run yet). Re-rendering the eight ladder cases reproduces every committed file's
+  SHA-256; each showcase renders byte-identically twice.
+  Review fixes (design §12): line-group macros reserve their members' sides (`line:<name>`) and
+  refuse source-locked members; knit retries trace in their own scopes; `PAD_AXIS` is checked
+  against the footprints; half-turns are drawn as flips, off-board poses widen the camera, the
+  edge comparison replays its pool's eight starts; GIF palette and per-file renders. Rerun
+  `.yapnr/ladder/showcase-2` (engine `c4db5fb`): the five cases' `placed.json`, `routes.json` and
+  trace digests are identical to the first run; all pass. Next: the owner's review of the
+  decisions in `docs/decisions.md` and the pull request.
 
 ## Next
 
@@ -110,6 +139,11 @@ review fixes).
     `claude/ladder-animations`) is the first run of its container path.
 15. Rebuild the KiCad base monthly (bump `docker/yapnr-kicad/TAG` to the next `-N`), or with the
     Dependabot `ubuntu` digest update (docs/releases.md, "Maintaining the images").
+16. Showcases (`claude/animations-groups-hier`): the first nightly showcase step on the arm64
+    runner (its runtime and its placements are unmeasured; `showcase-edge-io.webp` fits its
+    2.5 MB budget at quality 70 by 450 bytes here, the encoder steps down where it must). The
+    ladder's own animations still sweep single parts through half-turns (their timelines are
+    pinned); move them to flips with the next deliberate refresh of `docs/animations/`.
 
 ## Blockers
 
@@ -118,6 +152,12 @@ review fixes).
   lock, end-to-end tests) and the part cache image smoke test could not run; the images there
   belong to other projects and were not pruned. The no-isolation sdist build was checked with
   the pinned CPython on macOS instead.
+
+## Known issues
+
+- `detail_route_test` (large, not in the PR lane) fails `test_drc_clean_by_construction` on the
+  Mac at the branch base as well (a shared footprint cell on the `splanc_dev` fixture); not
+  caused by this branch.
 
 ## Do not retry
 

@@ -12,10 +12,11 @@ consecutive runs, in time order, before their consumer. :func:`critical_path` al
 where each visit began, which is where a storyboard shows the competitors of a selection
 before the winner's own replay.
 
-Adapters build DAGs from a ``pnr-trace-v1`` directory (:func:`from_trace`), from the saved
-results of an untraced ladder case (:func:`coarse_ladder_trace`, "reconstructed from saved
-results"), from a successive-halving run (:func:`from_halving`) and from a hierarchical
-synthesis library (:func:`from_synthesis`). Everything here only reads its sources.
+Adapters build DAGs from a ``pnr-trace-v1`` directory (:func:`from_trace`), from a
+hierarchical case's trace and its block traces (:func:`from_hier`), from the saved results of
+an untraced ladder case (:func:`coarse_ladder_trace`, "reconstructed from saved results"), from
+a successive-halving run (:func:`from_halving`) and from a hierarchical synthesis library
+(:func:`from_synthesis`). Everything here only reads its sources.
 Stdlib only.
 """
 
@@ -992,6 +993,156 @@ def from_synthesis(library_dir):
         )
         dag.select(sid, ids, ids[0])
         dag.derive(sid, "final")
+    return dag
+
+
+# --- hierarchical traces (regression/hier_case.py) --------------------------------------
+def hier_blocks(trace):
+    """The block instances of a hierarchical trace's ``blocks`` event (``[]`` for any other
+    trace): ``block``, ``template``, ``trace``, ``trial``, ``macro``, ``size_um``, ``members``
+    (block frame) and ``copper`` (a blob, block frame)."""
+    for event in trace.events():
+        if event["kind"] == "blocks":
+            return list(event.get("blocks") or [])
+    return []
+
+
+def hier_traces(trace):
+    """``{template: Trace}``: the per-template block traces a hierarchical trace names
+    (``blocks/<template>/``, relative to the trace), loaded once."""
+    cached = getattr(trace, "_hier_traces", None)
+    if cached is not None:
+        return cached
+    out = {}
+    for instance in hier_blocks(trace):
+        template, rel = instance["template"], instance.get("trace")
+        if template in out or not rel or trace.root is None:
+            continue
+        path = (trace.root / rel).resolve()
+        if trace.root.resolve() not in path.parents or not (path / "header.json").is_file():
+            raise ValueError("block trace %s is not inside the trace" % template)
+        out[template] = Trace(path)
+    trace._hier_traces = out
+    return out
+
+
+def from_hier(trace):
+    """The DAG of a hierarchical case (``pnr-provenance-v1``): per template, its trials (block
+    placement and routing on the block's own board) and the ``block-rank`` selection; the
+    top-level seeds, which derive from every template's chosen layout, their knits (routes) and
+    the ``top-seed`` selection; the native stages and the final board.
+
+    Block nodes are named ``block:<template>/<trial>``; top-level nodes keep their scope ids.
+    Block nodes are ordered before the top level (the driver synthesizes blocks first)."""
+    dag = Dag()
+    dag.add("source", "artifact", label="source board", stage="source", order=-1)
+    ranks = []
+    for template, sub in sorted(hier_traces(trace).items()):
+        for scope in sorted(sub.of_type("start"), key=lambda s: s.begin):
+            nid = "block:%s/%s" % (template, scope.id)
+            dag.add(
+                nid,
+                "experiment",
+                label=scope.id,
+                stage="block",
+                order=scope.begin,
+                scope=scope.id,
+                status=scope.status if scope.status != "open" else "ok",
+                metrics=scope.metrics,
+                meta=dict(scope.meta, template=template),
+            )
+            dag.derive("source", nid)
+        for event in sub.selects:
+            if event["id"] != "block-rank":
+                continue
+            sid = "block:%s/block-rank" % template
+
+            def name(trial, template=template):
+                return "block:%s/%s" % (template, trial)
+
+            dag.add(
+                sid,
+                "selection",
+                label="block-rank",
+                order=event["seq"],
+                criterion=event.get("criterion") or "block-rank",
+                scores={name(k): v for k, v in (event.get("scores") or {}).items()},
+                selected=[name(event.get("chosen"))],
+                template=template,
+            )
+            dag.select(sid, [name(c) for c in event.get("among", [])], name(event.get("chosen")))
+            ranks.append(sid)
+    base = 10**6
+    for scope in sorted(trace.scopes.values(), key=lambda s: s.begin):
+        if scope.lane != "engine" or scope.type not in ("start", "route"):
+            continue
+        status = scope.status if scope.status != "open" else "ok"
+        dag.add(
+            scope.id,
+            "experiment",
+            stage="place" if scope.type == "start" else "route",
+            order=base + scope.begin,
+            scope=scope.id,
+            status=status,
+            metrics=scope.metrics,
+            meta=scope.meta,
+        )
+        if scope.type == "start":
+            for sid in ranks:
+                dag.derive(sid, scope.id)
+            if not ranks:
+                dag.derive("source", scope.id)
+        elif scope.meta.get("start") in dag.nodes:
+            dag.derive(scope.meta["start"], scope.id)
+    head = None
+    for event in trace.selects:
+        if event["id"] != "top-seed":
+            continue
+        dag.add(
+            "top-seed",
+            "selection",
+            label="top-seed",
+            order=base + event["seq"],
+            criterion=event.get("criterion"),
+            scores=event.get("scores", {}),
+            selected=[event.get("chosen")],
+        )
+        dag.select("top-seed", event.get("among", []), event.get("chosen"))
+        head = "top-seed"
+    if head is None:
+        routes = [s.id for s in trace.of_type("route") if s.id in dag.nodes]
+        head = routes[-1] if routes else None
+    for event in trace.boards:
+        if event.get("lane") != "native":
+            continue
+        nid = "native:" + event["stage"]
+        if nid in dag.nodes:
+            continue
+        drc = event.get("drc") or {}
+        dag.add(
+            nid,
+            "experiment",
+            stage="native",
+            label=event["stage"],
+            order=10**9 + event["seq"],
+            metrics=dict(unconnected=drc.get("unconnected"), violations=drc.get("violations")),
+            event=event["seq"],
+        )
+        if head is not None:
+            dag.derive(head, nid)
+        head = nid
+    result = trace.results[-1] if trace.results else {}
+    dag.add(
+        "final",
+        "artifact",
+        label="final board",
+        stage="final",
+        order=10**10,
+        status="ok" if result.get("passed", True) else "failed",
+        metrics={k: result.get(k) for k in ("opens", "violations", "vias", "copper_length_mm")},
+    )
+    if head is not None:
+        dag.derive(head, "final")
     return dag
 
 

@@ -285,6 +285,7 @@ def route_board(
     escape_via_in_pad: bool = True,
     escape_dogbone: bool = True,
     fixed_copper: Optional[dict] = None,
+    fixed_copper_own_net: bool = False,
 ) -> BoardRoute:
     """Detailed-route the signal nets of a placed ``graph``.
 
@@ -295,6 +296,10 @@ def route_board(
     ``track_width_mm`` default to the fab profile: the grid pitch is the DRC-clean
     floor ``track + clearance`` (a tighter fab ⇒ finer pitch ⇒ better escape).
     Returns a :class:`BoardRoute` with grid + mm geometry.
+
+    ``fixed_copper`` is existing copper kept as it is (:mod:`.fixed`); with
+    ``fixed_copper_own_net`` its own net may reach and pass it (the hierarchical
+    knit joins pads that block copper already connects), other nets may not.
     """
     fab = _fab(rules)
     track_width_mm = fab["track_width_mm"] if track_width_mm is None else track_width_mm
@@ -386,6 +391,7 @@ def route_board(
             grid,
             fixed_copper,
             max([track_width_mm] + [net_width.get(n, track_width_mm) for n in signal_nets]),
+            **({"own_net": True} if fixed_copper_own_net else {}),
         )
     plan = plan_escapes(
         grid,

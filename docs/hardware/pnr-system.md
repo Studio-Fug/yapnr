@@ -115,7 +115,7 @@ The user-facing constraint language is the differentiator. A first cut:
 | Constraint                                       | Representation                                 | Enforcement in the optimizer                                                   |
 | ------------------------------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------ |
 | Fixed placement (connector at (x,y,θ) on edge)   | anchor pose, `locked=true`                     | held constant; contributes to net forces but not to the position gradient      |
-| Board-edge alignment                             | component edge ↔ board-outline edge           | attractor/penalty pulling the part to the edge; orientation snapped            |
+| Board-edge alignment                             | component edge ↔ board-outline edge           | attractor/penalty pulling the part to the edge; facing set by `orientation`    |
 | Orientation constraint / preference              | discrete rotation set (0/90/180/270 or fine)   | **Gumbel-Softmax** relaxation of the rotation class → differentiable (Cypress) |
 | Top/bottom side                                  | discrete side var, or fixed                    | **per-side density maps**; side either fixed or a learned discrete variable    |
 | Keep-out / antenna clearance                     | polygon region, no copper/parts                | hard penalty (barrier) in placement + a routing blockage                       |
@@ -145,7 +145,7 @@ board:
 fixed: # hard: locked pose (held out of the position gradient)
   usbc: { edge: south, align: center, rot: 0, side: top } # Type-C overhangs the south edge
 
-edge_align: # soft: pull to a board edge, snap orientation
+edge_align: # soft: pull to a board edge (hard: true keeps it there; facing via orientation)
   SW1: { edge: north, side: top } # user button, enclosure-accessible
   SW2: { edge: north, side: top }
 

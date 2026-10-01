@@ -17,6 +17,7 @@ from pnr.graph import BoardGraph, BoardOutline
 from . import metrics
 from .geometry import (
     apply_hard_sides,
+    hard_edge_bands,
     hard_group_edges,
     hard_group_limits,
     keepout_rects,
@@ -110,6 +111,22 @@ def place(
     torch build); another platform gives a different placement of the same
     quality on average (pnr.place.model).
     """
+    if any(c.kind == "line_group" for c in constraints.constraints):
+        # Line groups (pnr.place.line_group): each group is one rigid macro here.
+        return _place_line_groups(
+            graph,
+            constraints,
+            seed=seed,
+            iters=iters,
+            grid_mm=grid_mm,
+            orient=orient,
+            inflation=inflation,
+            spread=spread,
+            channel_rules=channel_rules,
+            initial_positions=initial_positions,
+            initial_rotations=initial_rotations,
+            pair_weights=pair_weights,
+        )
     # Edge rows are optimized across complete global starts. These temporary
     # search choices are distinct from authored absolute locks.
     # PNR_PAD_EDGE_CLEARANCE=1: pads/drills keep the fab edge rules (None = off).
@@ -218,6 +235,7 @@ def place(
         cont, channel_rules or compile_routing_rules(constraints, [n.name for n in graph.nets])
     )
     # 2. Legalization (snap to a non-overlapping, in-outline layout).
+    bands = hard_edge_bands(constraints)
     placed = legalize(
         cont,
         width,
@@ -247,8 +265,62 @@ def place(
         # (grow the outline via the rubber-band instead).
         spread=min(spread, _LEGALIZE_SPREAD_CAP),
         **({} if pad_edge is None else dict(pad_edge=pad_edge)),
+        # Hard edge_align (opt-in): only passed when a design declares one.
+        **({} if not bands else dict(edge_bands=bands)),
     )
     return _finish(placed, graph, constraints, width, height, baseline, pad_edge)
+
+
+def _place_line_groups(
+    graph,
+    constraints,
+    *,
+    seed,
+    iters,
+    grid_mm,
+    orient,
+    inflation,
+    spread,
+    channel_rules,
+    initial_positions,
+    initial_rotations,
+    pair_weights,
+):
+    """:func:`place` for a design with line groups: collapse each group into a rigid
+    macro (:func:`pnr.place.line_group.collapse`), place the macro graph as usual (rows,
+    sides, global placement, legalization), expand the members rigidly and report the
+    flat board against the original constraints."""
+    from pnr import trace as _trace
+    from pnr.hier.macro import macro_pair_weights
+
+    from . import line_group
+
+    if os.environ.get("PNR_POWER_FIRST") == "1":
+        raise ValueError("line groups do not support PNR_POWER_FIRST=1")
+    pad_edge = pad_edge_rule(constraints, channel_rules)
+    flat = BoardGraph.from_json(graph.to_json())
+    apply_hard_sides(flat, constraints)
+    width, height = outline_size(flat, constraints)
+    baseline = metrics.hpwl(flat)
+    mgraph, mcon, mrules, plan = line_group.collapse(graph, constraints, channel_rules)
+    positions, rotations = line_group.map_starts(plan, initial_positions, initial_rotations)
+    # Tracing only: snapshots and the legalization order name the members, not LG00.
+    with _trace.pose_expansion(plan.trace_rows):
+        placed, _ = place(
+            mgraph,
+            mcon,
+            seed=seed,
+            iters=iters,
+            grid_mm=grid_mm,
+            orient=orient,
+            inflation=line_group.map_inflation(plan, inflation),
+            spread=spread,
+            channel_rules=None if channel_rules is None else mrules,
+            initial_positions=positions,
+            initial_rotations=rotations,
+            pair_weights=macro_pair_weights(pair_weights, plan),
+        )
+    return _finish(plan.expand(placed, flat), graph, constraints, width, height, baseline, pad_edge)
 
 
 def _finish(placed, graph, constraints, width, height, baseline, pad_edge=None):

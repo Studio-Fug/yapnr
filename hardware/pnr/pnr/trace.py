@@ -33,15 +33,20 @@ Events carry ``seq`` (per stream), ``kind``, ``scope`` (a path-like id such as
 scope_begin ``type``, ``parent``, ``meta``
 scope_end   ``type``, ``status`` (ok, illegal, failed, dropped), ``metrics``
 poses       ``stage`` (global, legal, round, ...), ``iter``, ``iters``, ``poses`` (inline up
-            to 64 parts) or ``poses_blob``: ``[[ref, x, y, rot, side]]``
+            to 64 parts) or ``poses_blob``: ``[[ref, x, y, rot, side]]``; with rigid bodies
+            (below) also ``groups`` and ``group_members``
 legal       the legalizer's accepted order: ``order`` (poses in placement order),
-            ``backtracks``
+            ``backtracks``; with rigid bodies also ``groups`` and ``group_members``
 select      ``id``, ``among``, ``chosen`` (an id or a list of ids), ``criterion``, ``scores``
 route_begin ``pitch``, ``layers``, ``nets``, ``plane_nets``, ``deferred``, ``max_iters``
 net         ``net``, ``op`` (add, rip, commit, drop), ``pass``, ``provisional``,
             ``copper`` (blob), ``groups`` (pin indices joined by the route), ``progress``
 route_end   ``nets`` ({net: copper blob}), ``groups``, ``unrouted``, ``deferred``,
             ``progress``
+fixed       copper a route keeps as it is (the hierarchical knit's block copper):
+            ``copper`` (blob), ``groups`` ({net: pin-index groups it already joins}),
+            ``connections_done``, ``progress``; the route's progress and groups count
+            these joins from the start
 congestion  ``pitch``, ``nx``, ``ny``, ``cells`` (0 to 255), ``inflation``
 board       ``stage``, ``copper`` (blob with zones), ``poses``, ``drc`` (counts, ``open_pairs``,
             ``findings``: each violation's first item position), ``progress``
@@ -51,6 +56,17 @@ truncated   ``bytes``, ``level``, ``dropped_kinds``
 
 Blobs: ``copper`` is ``{"tracks": [[layer, x0, y0, x1, y1, width]], "vias": [[x, y,
 diameter, drill]], "zones": [[layer, net, [ring, ...]]]}``; ``poses`` is a list of poses.
+
+Rigid bodies (line groups of :mod:`pnr.place.line_group`, block macros of
+:mod:`pnr.hier.macro`): the placer and legalizer then see a macro (``LG00``, ``MB00``)
+in place of its members. While :func:`pose_expansion` is installed, ``poses`` and
+``legal`` name the members instead (member pose = macro pose plus the rotated member
+offset, as the macro expansion poses them; a macro in the legal order becomes its
+members in member order) and add ``groups`` (the macros' own rows) and
+``group_members`` (``{macro: [member refs]}``). ``header.constraints`` lists the
+``line_group``, ``edge_align``, ``group`` and ``row`` constraints of a design that has
+any (``kind``, ``refs``, ``hard``, ``name`` and the fields of the kind; lengths in
+micrometres); it is absent otherwise.
 
 Bounds: global placement records a snapshot every ``ceil(iters / 24)`` steps and the last one
 (``PNR_TRACE_PLACEMENT_EVERY`` overrides); router detail only inside a ``route`` scope opened
@@ -208,6 +224,8 @@ class Recorder:
         self.written = 0
         self.level = 0
         self.dropped = {}
+        self.expanders = []
+        self.route_fixed = None
         self._blobs = set()
         if max_mb is None:
             max_mb = float(os.environ.get(ENV_MAX_MB) or DEFAULT_MAX_MB)
@@ -392,6 +410,7 @@ class Recorder:
         self.stack.pop()
         if scope["type"] == "route":
             self.route = None
+            self.route_fixed = None
 
     @_guarded
     def note(self, status=None, **metrics):
@@ -412,11 +431,25 @@ class Recorder:
         return self.scope_id + "/" + name if self.stack else name
 
     # --- placement ----------------------------------------------------------------------
+    def _expand(self, rows):
+        """Rows through the installed pose expanders, innermost first: ``(rows, groups,
+        members)`` (:func:`pose_expansion`)."""
+        groups, members = [], {}
+        for expander in reversed(self.expanders):
+            rows, more, names = expander(rows)
+            groups += [list(g) for g in more]
+            members.update(names)
+        return rows, sorted(groups), dict(sorted(members.items()))
+
     @_guarded
     def poses(self, stage, poses, iter=None, iters=None, phase="placement", **fields):
         """A pose set: a :class:`BoardGraph` or ``[[ref, x, y, rot, side]]``."""
         if hasattr(poses, "components"):
             poses = graph_poses(poses)
+        if self.expanders:
+            poses, groups, members = self._expand(poses)
+            poses = sorted(poses)
+            fields.update(groups=groups, group_members=members)
         fields.update(stage=stage, iter=iter, iters=iters, phase=phase)
         if len(poses) <= INLINE_POSES:
             fields["poses"] = poses
@@ -427,15 +460,50 @@ class Recorder:
     @_guarded
     def legal(self, order, placed, backtracks=0):
         """The legalizer's accepted placement order (refs) and the legal ``placed`` graph."""
-        by_ref = {p[0]: p for p in graph_poses(placed)}
+        rows = graph_poses(placed)
+        extra = {}
+        if self.expanders:
+            rows, groups, members = self._expand(rows)
+            order = [m for r in order for m in members.get(r, [r])]
+            extra = dict(groups=groups, group_members=members)
+        by_ref = {p[0]: p for p in rows}
         ordered = [by_ref[r] for r in order if r in by_ref]
         seen = set(order)
         ordered = [p for r, p in sorted(by_ref.items()) if r not in seen] + ordered
         if len(ordered) > INLINE_POSES:
             return self._emit(
-                "legal", order_blob=self.blob(ordered), backtracks=backtracks, phase="legalization"
+                "legal",
+                order_blob=self.blob(ordered),
+                backtracks=backtracks,
+                phase="legalization",
+                **extra,
             )
-        return self._emit("legal", order=ordered, backtracks=backtracks, phase="legalization")
+        return self._emit(
+            "legal", order=ordered, backtracks=backtracks, phase="legalization", **extra
+        )
+
+    @_guarded
+    def fixed(self, copper, groups=None, **meta):
+        """Copper the open ``route`` scope keeps as it is, and the pin-index groups
+        (``{net: [[i, ...]]}``, indices into ``header.nets[].pins``) it already joins;
+        the router's progress and groups in this scope count those joins."""
+        if not (self.stack and self.stack[-1]["type"] == "route"):
+            raise ValueError("a fixed event belongs to an open route scope")
+        groups = {
+            n: sorted(sorted(int(i) for i in g) for g in gs) for n, gs in (groups or {}).items()
+        }
+        done = sum(max(0, len(self.pins.get(n, [])) - len(gs)) for n, gs in groups.items())
+        total = sum(max(0, len(p) - 1) for p in self.pins.values())
+        self.route_fixed = groups
+        return self._emit(
+            "fixed",
+            copper=self.blob(copper),
+            groups=groups,
+            connections_done=done,
+            progress=dict(done=done, total=total, source="router"),
+            phase="routed",
+            **meta,
+        )
 
     # --- selections, congestion, native boards, results --------------------------------
     @_guarded
@@ -582,6 +650,32 @@ def select(name, among, chosen, criterion, scores=None):
     recorder = current()
     if recorder is not None:
         recorder.select(name, among, chosen, criterion, scores)
+
+
+class _Expansion:
+    def __init__(self, recorder, expander):
+        self.recorder, self.expander = recorder, expander
+
+    def __enter__(self):
+        self.recorder.expanders.append(self.expander)
+        return self.expander
+
+    def __exit__(self, exc_type, exc, tb):
+        with contextlib.suppress(ValueError):
+            self.recorder.expanders.remove(self.expander)
+        return False
+
+
+def pose_expansion(expander):
+    """A context manager that makes ``poses`` and ``legal`` events name a rigid body's
+    members while it is open (see the module docstring); a shared no-op when tracing is
+    off. ``expander(rows)`` returns ``(rows, groups, members)``, e.g.
+    :meth:`pnr.hier.macro.MacroPlan.trace_rows`. Recording only: the engine's own
+    poses are never touched."""
+    recorder = current()
+    if recorder is None:
+        return _NULL
+    return _Expansion(recorder, expander)
 
 
 def route_hook():
@@ -733,6 +827,41 @@ def _pad_shape(pad):
     return "rect"
 
 
+HEADER_CONSTRAINTS = ("line_group", "edge_align", "group", "row")
+
+
+def header_constraints(constraints):
+    """``header.constraints``: the placement relations a renderer can highlight."""
+    out = []
+    for con in getattr(constraints, "constraints", None) or []:
+        kind = getattr(con, "kind", None)
+        if kind not in HEADER_CONSTRAINTS:
+            continue
+        params = con.params or {}
+        entry = dict(
+            kind=kind,
+            refs=list(con.refs),
+            hard=getattr(con.enforcement, "value", None) == "hard",
+        )
+        if con.name:
+            entry["name"] = str(con.name)
+        if kind in ("edge_align", "line_group", "row"):
+            entry["edge"] = params.get("edge") or "none"
+        lengths = dict(
+            tolerance_um=params.get("tolerance_mm") if kind == "edge_align" else None,
+            pitch_um=params.get("pitch_mm"),
+            gap_um=params.get("gap_mm"),
+            radius_um=params.get("radius_mm") if kind == "group" else None,
+        )
+        entry.update({k: um(v) for k, v in lengths.items() if v is not None})
+        if kind == "line_group":
+            entry["rot"] = angle(params.get("rot") or 0.0)
+        if kind == "group" and params.get("anchor"):
+            entry["anchor"] = str(params["anchor"])
+        out.append(entry)
+    return out
+
+
 def board_header(graph, constraints=None, rules=None):
     """The ``header.json`` document of a board graph under its constraints and rules."""
     board = getattr(constraints, "board", None)
@@ -798,7 +927,7 @@ def board_header(graph, constraints=None, rules=None):
                 plane=planes.get(n.name),
             )
         )
-    return dict(
+    header = dict(
         schema=SCHEMA,
         recorder=RECORDER_VERSION,
         outline=dict(w=um(width), h=um(height), polygon=polygon),
@@ -808,6 +937,10 @@ def board_header(graph, constraints=None, rules=None):
         nets=nets,
         connections_total=total,
     )
+    relations = header_constraints(constraints)
+    if relations:
+        header["constraints"] = relations
+    return header
 
 
 def write_run(root, document):

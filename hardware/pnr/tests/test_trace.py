@@ -170,6 +170,91 @@ class RecorderTest(unittest.TestCase):
         self.assertEqual([p[0] for p in events[2]["order"]], ["R2", "R1"])
         self.assertEqual(events[2]["backtracks"], 2)
 
+    def test_pose_expansion_names_members_and_keeps_the_rigid_bodies(self):
+        """Snapshots and the legal order of a macro graph name its members (pnr.hier.macro)."""
+        from pnr.hier.macro import MacroPlan
+
+        flat = _graph()
+        # A hand-built plan (no torch): R1 and R2 in a 5 x 1.2 mm group frame, as LG00.
+        plan = MacroPlan()
+        plan.macros["LG00"] = dict(
+            block="line_group:g",
+            width=5.0,
+            height=1.2,
+            members={"R1": (1.0, 0.6, 0.0, "top"), "R2": (4.0, 0.6, 0.0, "top")},
+        )
+        plan.member_of = {"R1": "LG00", "R2": "LG00"}
+        pads = [p for c in flat.components for p in c.pads]
+        macro = Component(
+            "LG00", "block:line_group:g", (0.0, 0.0), 0.0, "top", (5.0, 1.2), (5.0, 1.2), pads=pads
+        )
+        mgraph = BoardGraph("macro", [macro], [], BoardOutline(10.0, 8.0))
+        rec = self.recorder()
+        with mock.patch.dict(os.environ, {trace.ENV_DIR: str(self.root)}):
+            with mock.patch.object(trace, "_RECORDER", rec):
+                with trace.pose_expansion(plan.trace_rows):
+                    tracer = trace.PlacementTracer(rec, mgraph.components, 10)
+                    tracer.snapshot(0, _Tensor([[5.0, 4.0]]), _Tensor([[0.0, 1.0, 0.0, 0.0]]))
+                    placed = BoardGraph.from_json(mgraph.to_json())
+                    placed.component("LG00").pos = (5.0, 4.0)
+                    placed.component("LG00").rot = 90.0
+                    rec.legal(["LG00"], placed)
+                rec.poses("round", [["R1", 1, 2, 0.0, "top"]])
+        events = _events(self.root)
+        expanded = plan.expand(placed, flat)
+        rows = [
+            [c.ref, trace.um(c.pos[0]), trace.um(c.pos[1]), c.rot, c.side]
+            for c in expanded.components
+        ]
+        self.assertEqual(events[0]["poses"], rows)
+        self.assertEqual(events[0]["groups"], [["LG00", 5000, 4000, 90.0, "top"]])
+        self.assertEqual(events[0]["group_members"], {"LG00": ["R1", "R2"]})
+        self.assertEqual(events[1]["order"], rows)
+        self.assertEqual(events[1]["groups"], [["LG00", 5000, 4000, 90.0, "top"]])
+        self.assertNotIn("groups", events[2])
+        self.assertEqual(rec.expanders, [])
+
+    def test_header_constraints_only_when_declared(self):
+        from pnr.constraints import compile_constraints
+
+        graph = _graph()
+        plain = trace.board_header(graph, compile_constraints({}, graph.refs))
+        self.assertNotIn("constraints", plain)
+        doc = {
+            "edge_align": {"R1": {"edge": "south"}},
+            "group": [{"members": ["R2"], "anchor": "R1", "radius_mm": 3}],
+        }
+        header = trace.board_header(graph, compile_constraints(doc, graph.refs))
+        self.assertEqual(
+            header["constraints"],
+            [
+                dict(kind="edge_align", refs=["R1"], hard=False, edge="south"),
+                dict(kind="group", refs=["R2"], hard=False, anchor="R1", radius_um=3000),
+            ],
+        )
+        doc = {"edge_align": {"R2": {"edge": "north", "hard": True, "tolerance_mm": 1.5}}}
+        header = trace.board_header(graph, compile_constraints(doc, graph.refs))
+        self.assertEqual(
+            header["constraints"],
+            [dict(kind="edge_align", refs=["R2"], hard=True, edge="north", tolerance_um=1500)],
+        )
+        doc = {"line_group": [{"name": "pair", "members": ["R1", "R2"], "pitch_mm": 2.5}]}
+        header = trace.board_header(graph, compile_constraints(doc, graph.refs))
+        self.assertEqual(
+            header["constraints"],
+            [
+                dict(
+                    kind="line_group",
+                    refs=["R1", "R2"],
+                    hard=True,
+                    name="pair",
+                    edge="none",
+                    pitch_um=2500,
+                    rot=0.0,
+                )
+            ],
+        )
+
     def test_size_budget_drops_provisional_then_all_but_essentials(self):
         rec = self.recorder(max_mb=0.01)  # 10 KiB
         for i in range(400):

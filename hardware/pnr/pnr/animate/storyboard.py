@@ -14,14 +14,15 @@ Scenes, in path order:
 ``native``      a saved KiCad board after writeback, planes or refill, with its DRC
 ``end``         KiCad's verdict and the metrics
 
-A storyboard names scopes and event sequence numbers of its trace, never files.
+A storyboard names scopes and event sequence numbers of its trace, never files. A trace with a
+``blocks`` event (a hierarchical case) gets the chapters of :mod:`pnr.animate.hier` instead.
 """
 
 from __future__ import annotations
 
 import math
 
-from pnr.provenance import critical_path, from_trace
+from pnr.provenance import critical_path, from_trace, hier_blocks
 
 SCHEMA = "pnr-storyboard-v1"
 MAX_TILES = 8
@@ -62,6 +63,10 @@ def subject(trace, title=None, subtitle=None):
 
 def build(trace, title=None, subtitle=None):
     """The storyboard of a loaded :class:`pnr.provenance.Trace`."""
+    if trace.root is not None and hier_blocks(trace):
+        from pnr.animate import hier
+
+        return hier.build(trace, title=title, subtitle=subtitle)
     dag = trace.dag if getattr(trace, "dag", None) is not None else from_trace(trace)
     order, competitors, entry = critical_path(dag, "final")
     index = {n.id: i for i, n in enumerate(order)}

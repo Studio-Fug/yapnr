@@ -29,6 +29,7 @@ from pnr.graph import BoardGraph, BoardOutline
 from .geometry import (
     apply_hard_sides,
     courtyard_rect,
+    hard_edge_bands,
     hard_group_edges,
     hard_group_limits,
     keepout_rects,
@@ -149,9 +150,11 @@ def _opposite_body_basins(graph, constraints):
     keepouts = keepout_rects(fixed_graph, constraints, poses)
     groups = hard_group_limits(constraints, {c.ref: c.pos for c in graph.components})
     clearance = constraints.board.default_clearance_mm
+    # A line-group member moves only with its whole group (pnr.place.line_group).
+    lined = {r for con in constraints.constraints if con.kind == "line_group" for r in con.refs}
     basins = []
     for moving in sorted(graph.components, key=lambda c: (-len(c.pads), c.ref)):
-        if moving.ref in poses or moving.locked or len(moving.pads) < 4:
+        if moving.ref in poses or moving.locked or len(moving.pads) < 4 or moving.ref in lined:
             continue
         for host in sorted(
             fixed_components, key=lambda c: (-c.courtyard[0] * c.courtyard[1], c.ref)
@@ -533,6 +536,11 @@ def select_initial_placement(
                                 {}
                                 if pad_edge_rule(placement_constraints, rules) is None
                                 else dict(pad_edge=pad_edge_rule(placement_constraints, rules))
+                            ),
+                            **(
+                                {}
+                                if not hard_edge_bands(placement_constraints)
+                                else dict(edge_bands=hard_edge_bands(placement_constraints))
                             ),
                         )
                         prep = PlacementReport(

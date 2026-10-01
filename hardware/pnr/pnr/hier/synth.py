@@ -51,11 +51,7 @@ def _port_debt(placed, block_ports, width, height):
 
 def _trial(args):
     inputs, constraints_path, names, size, seed, iters, route_iters, reuse = args
-    from pnr.graph import BoardGraph
     from pnr.mc.halving import _load
-    from pnr.place.initial_pool import _route_metrics
-    from pnr.place.placer import place
-    from pnr.route.detail.router import route_board
 
     t = time.monotonic()
     w, h, u, a = size
@@ -63,14 +59,71 @@ def _trial(args):
     try:
         graph, constraints, rules = _load(Path(inputs), Path(constraints_path))
         blocks = {b.name: b for b in extract_blocks(graph, constraints)}
+    except Exception as error:
+        rec.update(status="failed", error=repr(error), traceback=traceback.format_exc()[-2500:])
+        rec["seconds"] = time.monotonic() - t
+        return rec
+    return run_trial(
+        graph, constraints, rules, blocks, names, size, seed, iters, route_iters, reuse, started=t
+    )
+
+
+def run_trial(
+    graph,
+    constraints,
+    rules,
+    blocks,
+    names,
+    size,
+    seed,
+    iters,
+    route_iters,
+    reuse=None,
+    *,
+    pitch=None,
+    trace_id=None,
+    started=None,
+):
+    """One synthesis trial in memory: place the first block of ``names`` alone on a
+    ``size`` = (w, h, utilisation, aspect) board and route every instance of the
+    template with that relative layout.
+
+    ``blocks`` maps block names to :class:`pnr.hier.blocks.Block`; ``reuse`` is a
+    placed sub-board JSON to route instead of placing; ``pitch`` is the detail grid
+    pitch (None: the fab profile's). ``trace_id`` (tracing only) records the placement
+    in a ``start`` scope of that name and each instance route in a ``route`` scope
+    ``<trace_id>-<block>``. Returns the trial record :func:`_trial` writes.
+    """
+    import contextlib
+
+    from pnr import trace as _trace
+    from pnr.graph import BoardGraph
+    from pnr.place.initial_pool import _route_metrics
+    from pnr.place.placer import place
+    from pnr.route.detail.router import route_board
+
+    t = time.monotonic() if started is None else started
+    w, h, u, a = size
+    rec = dict(blocks=names, width=w, height=h, utilisation=u, aspect=a, seed=seed, area=w * h)
+
+    def scope(name, scope_type, **meta):
+        return _trace.scope(name, scope_type, **meta) if trace_id else contextlib.nullcontext()
+
+    try:
         rep = blocks[names[0]]
         sg, sc, sr = sub_board(graph, constraints, rules, rep, w, h)
-        if reuse:
-            placed = BoardGraph.from_json(reuse)
-            legal = True
-        else:
-            placed, report = place(sg, sc, seed=seed, iters=iters, orient=True, channel_rules=sr)
-            legal = report.legal
+        outline = [_trace.um(w), _trace.um(h)]
+        with scope(trace_id, "start", kind="block-trial", outline=outline, seed=seed):
+            if reuse:
+                placed = BoardGraph.from_json(reuse)
+                legal = True
+            else:
+                placed, report = place(
+                    sg, sc, seed=seed, iters=iters, orient=True, channel_rules=sr
+                )
+                legal = report.legal
+            if trace_id and not legal:
+                _trace.note(status="illegal")
         rec["legal"] = legal
         if not legal:
             rec["status"] = "illegal"
@@ -86,7 +139,9 @@ def _trial(args):
         for name in names:
             blk = blocks[name]
             g2, c2, r2 = instance_board(graph, constraints, rules, blk, local, w, h)
-            route = route_board(g2, c2, r2, pitch=None, max_iters=route_iters)
+            label = "%s-%s" % (trace_id, name)
+            with scope(label, "route", start=trace_id, block=name, outline=outline):
+                route = route_board(g2, c2, r2, pitch=pitch, max_iters=route_iters)
             m = _route_metrics(route)
             m["port_debt_mm"] = _port_debt(g2, blk.external_nets, w, h)
             m["instance"] = name

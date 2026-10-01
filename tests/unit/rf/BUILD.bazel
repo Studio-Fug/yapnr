@@ -6,15 +6,32 @@ _ENV = {
     "OMP_NUM_THREADS": "4",
 }
 
-# Fast solver tests (design §12): seconds to about a minute each on 4 threads.
+# Fast tests (design §12): seconds to about a minute each on 4 threads. The optimizer tests
+# share a tiny two-port spec (//yapnr/rf:testing). test_kicad_cli runs in the KiCad lane only
+# (headless kicad-cli in YAPNR_KICAD_CLI).
 yapnr_py_tests(
     env = _ENV,
     overrides = {
         "test_adjoint_gradients": {"size": "medium"},
+        "test_animate": {
+            "deps": [
+                "//yapnr/rf:animate_lib",
+                "//yapnr/rf:testing",
+            ],
+        },
         "test_dtft": {"size": "medium"},
+        "test_kicad_cli": {"tags": ["kicad"]},
         "test_microstrip": {"size": "medium"},
+        "test_pipeline_gradient": {
+            "deps": ["//yapnr/rf:testing"],
+            "size": "medium",
+        },
         "test_ports": {"size": "medium"},
         "test_power_balance": {"size": "medium"},
+        "test_tiny_design": {
+            "deps": ["//yapnr/rf:testing"],
+            "size": "medium",
+        },
     },
     deps = ["//yapnr/rf"],
 )

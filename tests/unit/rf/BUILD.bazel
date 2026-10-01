@@ -13,6 +13,7 @@ yapnr_py_tests(
         "test_adjoint_gradients": {"size": "medium"},
         "test_dtft": {"size": "medium"},
         "test_microstrip": {"size": "medium"},
+        "test_ports": {"size": "medium"},
         "test_power_balance": {"size": "medium"},
     },
     deps = ["//yapnr/rf"],

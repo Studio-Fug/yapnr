@@ -57,6 +57,11 @@ class GaussianPulse:
     def t_end(self) -> float:
         return 2.0 * self.t0
 
+    @property
+    def f_top(self) -> float:
+        """Frequency above which the spectrum is below −100 dB of its peak (for decimation)."""
+        return self.f_center + math.sqrt(5.0) * self.f_half_width
+
     def __call__(self, t):
         t = np.asarray(t, dtype=np.float64)
         u = (t - self.t0) / self.tau
@@ -184,6 +189,12 @@ class NuttallFit:
         self._inv = np.linalg.inv(r)
         self._w = w
         self._basis = basis
+
+    @property
+    def f_top(self) -> float:
+        """Highest objective frequency plus the window's main-lobe half width (4 bins); above
+        it the spectrum is at the Nuttall sidelobe level (about −90 dB)."""
+        return float(self.omega.max()) / (2.0 * math.pi) + 4.0 / (self.n_window * self.dt)
 
     def coefficients(self, requested: np.ndarray) -> np.ndarray:
         """Real basis coefficients (P, 2M + moments) for requested DTFT values (P, M) at the

@@ -35,7 +35,9 @@ class StopRule:
 def relative_change(new: dict, old: dict, names) -> float:
     """max over probes of max|new − old| / max|new| (probes that are all zero are skipped)."""
     worst = 0.0
-    scale_all = max((float(np.max(np.abs(new[n]))) if new[n].size else 0.0) for n in names)
+    scale_all = max(
+        [float(np.max(np.abs(new[n]))) if new[n].size else 0.0 for n in names], default=0.0
+    )
     for n in names:
         if new[n].size == 0:
             continue

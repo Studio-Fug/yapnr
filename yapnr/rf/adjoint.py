@@ -28,7 +28,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from yapnr.rf.fdtd.dtft import conductance_factor, numerical_omega
+from yapnr.rf.fdtd.dtft import conductance_factor
+from yapnr.rf.fdtd.dtft import decimation as dtft_decimation
+from yapnr.rf.fdtd.dtft import numerical_omega
 from yapnr.rf.fdtd.engine import RunResult, Simulation
 from yapnr.rf.fdtd.monitors import Probe
 from yapnr.rf.fdtd.sources import NuttallFit, SpectralSource
@@ -118,12 +120,19 @@ def gradient(
     design_probes: list[Probe],
     stop: StopRule,
     *,
-    decimation: int = 1,
+    decimation: int | str = 1,
 ) -> Gradient:
     """Run the adjoint for Wirtinger gradients `grads` (name → (M, P)) of the forward probes
-    and recombine onto the design-plane edges (which `forward` must have recorded)."""
+    and recombine onto the design-plane edges (which `forward` must have recorded).
+
+    `decimation="auto"` accumulates the adjoint DTFT every d steps, d from the adjoint
+    spectrum's top frequency (main lobe; the Nuttall sidelobes alias at about −90 dB). Use 1
+    for exact gradients (tests)."""
     omega = forward.omega
     sources = adjoint_sources(sim, probes, grads, omega)
+    if decimation == "auto":
+        f_top = max((s.fit.f_top for s in sources), default=float(omega.max()) / (2 * np.pi))
+        decimation = dtft_decimation(f_top, sim.dt)
     adj = sim.run(sources, design_probes, omega, stop, decimation=decimation)
     big_omega = numerical_omega(omega, sim.dt)[:, None]
     c = conductance_factor(omega, sim.dt)[:, None]

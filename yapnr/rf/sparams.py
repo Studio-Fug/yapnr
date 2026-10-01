@@ -42,8 +42,13 @@ def port_waves(geom, cal, dft, omega):
     return waves(geom.voltage(dft), geom.current(dft), zc, k, geom.d_m)
 
 
-def incident_power(a):
-    return 0.5 * abs(a) ** 2
+def incident_power(a, cal=None, omega=None):
+    """P_inc = ½|a|², times the calibration's power factor when `cal` is given (to compare
+    with Poynting fluxes, e.g. for the radiated fraction)."""
+    p = 0.5 * abs(a) ** 2
+    if cal is None:
+        return p
+    return p * _as(cal.power_at(omega if omega is not None else cal.omega), a).real
 
 
 def to_engineering(s):

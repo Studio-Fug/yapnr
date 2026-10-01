@@ -307,13 +307,26 @@ def _jsonable(x):
 
 @dataclass
 class LineCalibration:
-    """Z_c(ω) and k(ω) of a feed line, at the frequencies `omega`."""
+    """Z_c(ω) and k(ω) of a feed line, at the frequencies `omega`.
+
+    `power` is the ratio of the Poynting flux through the line's cross-section to ½ Re(V Î*)
+    for the forward wave: V/I pseudo-waves carry ½(|a|² − |b|²) = ½ Re(V Î*), which differs
+    from the field power of the quasi-TEM mode by a few per cent as dispersion grows. Ratios of
+    waves (S-parameters) do not need it; powers compared with Poynting fluxes (the radiated
+    fraction) do: P_inc = power · |a|²/2.
+    """
 
     omega: np.ndarray
     zc: np.ndarray
     k: np.ndarray
     dt: float
     steps: int = 0
+    power: np.ndarray | None = None
+
+    def __post_init__(self) -> None:
+        self.omega = np.atleast_1d(np.asarray(self.omega, dtype=np.float64))
+        if self.power is None:
+            self.power = np.ones(self.omega.size)
 
     def eps_eff(self) -> np.ndarray:
         from yapnr.rf.constants import C0
@@ -333,6 +346,13 @@ class LineCalibration:
 
         return interp(self.zc), interp(self.k)
 
+    def power_at(self, omega) -> np.ndarray:
+        """The power factor interpolated at `omega`."""
+        omega = np.asarray(omega, dtype=np.float64)
+        if self.omega.size == 1:
+            return np.full(omega.shape, self.power[0])
+        return np.interp(omega, self.omega, self.power)
+
     def to_json(self) -> dict:
         return {
             "omega": self.omega.tolist(),
@@ -340,6 +360,7 @@ class LineCalibration:
             "k": [[z.real, z.imag] for z in self.k],
             "dt": self.dt,
             "steps": self.steps,
+            "power": [float(p) for p in self.power],
         }
 
     @classmethod
@@ -350,6 +371,7 @@ class LineCalibration:
             k=np.array([complex(*z) for z in d["k"]]),
             dt=float(d["dt"]),
             steps=int(d.get("steps", 0)),
+            power=np.array(d["power"]) if "power" in d else None,
         )
 
 
@@ -450,11 +472,23 @@ def calibrate_line(
     f = omega / (2 * np.pi)
     pulse = GaussianPulse.for_band(float(f.min()), float(f.max()))
     stop = StopRule(tol=tol, f_lo=float(f.min()))
-    res = sim.run(p1.mode_sources(pulse, sim.dt), p1.probes + p2.probes, omega, stop)
+    # Cross-section flux on the nodes either side of plane 1's current ring.
+    from yapnr.rf.fdtd.monitors import FluxBox
+
+    ic = p1.i_cell
+    yr = (grid.pml.y_lo + 1, grid.y.n - grid.pml.y_hi - 1)
+    zr = (0, grid.z.n - grid.pml.z_hi - 1)
+    sections = [
+        FluxBox(grid, f"section{n}", ((n - 1, n), yr, zr), faces=("x+",)) for n in (ic, ic + 1)
+    ]
+    probes = p1.probes + p2.probes + [p for b in sections for p in b.probes]
+    res = sim.run(p1.mode_sources(pulse, sim.dt), probes, omega, stop)
     v1, i1 = p1.voltage(res.dft), p1.current(res.dft)
     v2, i2 = p2.voltage(res.dft), p2.current(res.dft)
     zc, k = two_plane_line(v1, i1, v2, i2, gap * spec.pitch, k_guess)
-    cal = LineCalibration(omega=omega, zc=zc, k=k, dt=sim.dt, steps=res.steps)
+    flux = 0.5 * (sections[0].power(res.dft) + sections[1].power(res.dft))
+    power = flux / (0.5 * np.real(v1 * np.conj(i1)))
+    cal = LineCalibration(omega=omega, zc=zc, k=k, dt=sim.dt, steps=res.steps, power=power)
     if path:
         os.makedirs(cache_dir, exist_ok=True)
         with open(path, "w", encoding="utf-8") as fh:

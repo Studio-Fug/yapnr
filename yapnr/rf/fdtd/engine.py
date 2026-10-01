@@ -64,16 +64,27 @@ class _NumpyOps:
         flat[idx] -= vals.astype(self.dtype, copy=False)
 
     @staticmethod
-    def diff(a, axis):
-        if axis == 0:
-            return a[1:] - a[:-1]
-        if axis == 1:
-            return a[:, 1:] - a[:, :-1]
-        return a[:, :, 1:] - a[:, :, :-1]
+    def diff_into(a, axis, out):
+        hi = [slice(None)] * 3
+        lo = [slice(None)] * 3
+        hi[axis] = slice(1, None)
+        lo[axis] = slice(None, -1)
+        np.subtract(a[tuple(hi)], a[tuple(lo)], out=out)
+        return out
 
     @staticmethod
-    def mul(x, w):
-        return x * w
+    def mul_into(x, w, out):
+        np.multiply(x, w, out=out)
+        return out
+
+    @staticmethod
+    def slab_view(base, sl, axis, gap):
+        v = base[sl]
+        if not gap:
+            return v
+        return np.lib.stride_tricks.as_strided(
+            v, shape=(2,) + v.shape, strides=(gap * base.strides[axis],) + v.strides
+        )
 
     @staticmethod
     def addmul_(out, x, w, sign):
@@ -126,11 +137,23 @@ class _TorchOps:
     def sub_at(self, a, idx, vals):
         a.view(-1).index_add_(0, idx, self.torch.as_tensor(-np.asarray(vals), dtype=self.dtype))
 
-    def diff(self, a, axis):
-        return self.torch.diff(a, dim=axis)
+    def diff_into(self, a, axis, out):
+        n = a.shape[axis]
+        return self.torch.sub(a.narrow(axis, 1, n - 1), a.narrow(axis, 0, n - 1), out=out)
 
-    def mul(self, x, w):
-        return self.torch.mul(x, w)
+    def mul_into(self, x, w, out):
+        return self.torch.mul(x, w, out=out)
+
+    def slab_view(self, base, sl, axis, gap):
+        v = base[sl]
+        if not gap:
+            return v
+        return self.torch.as_strided(
+            v,
+            (2,) + tuple(v.shape),
+            (gap * base.stride(axis),) + tuple(v.stride()),
+            v.storage_offset(),
+        )
 
     @staticmethod
     def addmul_(out, x, w, sign):
@@ -159,10 +182,21 @@ def make_ops(backend: str, dtype):
 
 @dataclass
 class _Slab:
+    """CPML slab(s) of one curl term along its axis.
+
+    When the low and high slabs have equal length they are updated together through one
+    strided view with a leading dimension of 2 (`gap` = start of high − start of low), which
+    halves the number of small array operations per step.
+    """
+
     sl: tuple
     b: object
     cd: object
     psi: object
+    axis: int = 0
+    gap: int = 0
+    dview: object = None
+    oview: object = None
 
 
 @dataclass
@@ -173,6 +207,8 @@ class _Term:
     dsl: tuple
     ik: object
     slabs: list
+    shape: tuple = ()
+    buf: object = None
 
 
 @dataclass
@@ -261,19 +297,34 @@ class Simulation:
                 prof = profile(ax, n_lo, n_hi, pos, dt, self.cpml)
                 ik = scale / (prof.kappa * length)
                 slabs = []
-                for s0, s1 in prof.slabs():
+                runs = prof.slabs()
+                if len(runs) == 2 and runs[0][1] - runs[0][0] == runs[1][1] - runs[1][0]:
+                    groups = [(runs[0], runs[1][0] - runs[0][0])]
+                else:
+                    groups = [(r, 0) for r in runs]
+                for (s0, s1), gap in groups:
                     sl = tuple(slice(s0, s1) if a == u else slice(None) for a in range(3))
                     pshape = list(shape)
                     pshape[u] = s1 - s0
-                    slabs.append(
-                        _Slab(
-                            sl=sl,
-                            b=self._bshape(prof.b[s0:s1], u),
-                            cd=self._bshape(scale * prof.c[s0:s1] / length[s0:s1], u),
-                            psi=ops.zeros(tuple(pshape)),
+                    b = prof.b[s0:s1]
+                    cd = scale * prof.c[s0:s1] / length[s0:s1]
+                    if gap:
+                        b = np.stack([b, prof.b[s0 + gap : s1 + gap]])
+                        cd = np.stack(
+                            [cd, scale * prof.c[s0 + gap : s1 + gap] / length[s0 + gap : s1 + gap]]
                         )
-                    )
-                terms.append(_Term(sign, src, u, dsl, self._bshape(ik, u), slabs))
+                        bs = [2, 1, 1, 1]
+                        bs[u + 1] = s1 - s0
+                        b = ops.array(b.reshape(bs))
+                        cd = ops.array(cd.reshape(bs))
+                        pshape = [2] + pshape
+                    else:
+                        b = self._bshape(b, u)
+                        cd = self._bshape(cd, u)
+                    slabs.append(_Slab(sl, b, cd, ops.zeros(tuple(pshape)), u, gap))
+                terms.append(
+                    _Term(sign, src, u, dsl, self._bshape(ik, u), slabs, shape=tuple(shape))
+                )
             self.terms[comp] = terms
 
     def update_materials(self) -> None:
@@ -292,10 +343,17 @@ class Simulation:
         """Zero all fields and CPML auxiliary arrays."""
         self.f = {c: self.ops.zeros(self.grid.shape(c)) for c in E_COMPONENTS + H_COMPONENTS}
         self._fint = {c: self.f[c][self._interior[c]] for c in E_COMPONENTS}
-        for terms in self.terms.values():
+        self._curl = {}
+        for comp, terms in self.terms.items():
+            if comp[0] == "e":
+                self._curl[comp] = self.ops.zeros(terms[0].shape)
+            out = self._curl[comp] if comp[0] == "e" else self.f[comp]
             for t in terms:
+                t.buf = self.ops.zeros(t.shape)
                 for s in t.slabs:
                     s.psi = s.psi * 0
+                    s.dview = self.ops.slab_view(t.buf, s.sl, s.axis, s.gap)
+                    s.oview = self.ops.slab_view(out, s.sl, s.axis, s.gap)
         self.n = 0
 
     # -- stepping -------------------------------------------------------------------------------
@@ -305,25 +363,27 @@ class Simulation:
         for comp in H_COMPONENTS:
             out = f[comp]
             for t in self.terms[comp]:
-                d = ops.diff(f[t.src], t.axis)
+                d = ops.diff_into(f[t.src], t.axis, t.buf)
                 ops.addmul_(out, d, t.ik, -t.sign)
                 for s in t.slabs:
-                    ops.axpby_(s.psi, s.b, s.cd, d[s.sl])
-                    ops.add_(out[s.sl], s.psi, -t.sign)
+                    ops.axpby_(s.psi, s.b, s.cd, s.dview)
+                    ops.add_(s.oview, s.psi, -t.sign)
 
     def _step_e(self) -> None:
         ops, f = self.ops, self.f
         for comp in E_COMPONENTS:
-            curl = None
-            for t in self.terms[comp]:
-                d = ops.diff(f[t.src], t.axis)[t.dsl]
-                if curl is None:
-                    curl = ops.mul(d, t.ik)
+            curl = self._curl[comp]
+            for n, t in enumerate(self.terms[comp]):
+                # The derivative along t.axis of the source restricted to the interior rows of
+                # the other axes: diff(f)[dsl] without computing the unused rows.
+                d = ops.diff_into(f[t.src][t.dsl], t.axis, t.buf)
+                if n == 0:
+                    ops.mul_into(d, t.ik, curl)
                 else:
                     ops.addmul_(curl, d, t.ik, t.sign)
                 for s in t.slabs:
-                    ops.axpby_(s.psi, s.b, s.cd, d[s.sl])
-                    ops.add_(curl[s.sl], s.psi, t.sign)
+                    ops.axpby_(s.psi, s.b, s.cd, s.dview)
+                    ops.add_(s.oview, s.psi, t.sign)
             ops.axpby_(self._fint[comp], self._ca[comp], self._cb[comp], curl)
 
     def field(self, comp: str) -> np.ndarray:

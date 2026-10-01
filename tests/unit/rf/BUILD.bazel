@@ -1,14 +1,33 @@
+load("@rules_python//python:defs.bzl", "py_test")
 load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
 
-# Fast solver tests (design §12). The FDTD tests run seconds to a few minutes on 4 threads.
+_ENV = {
+    "MKL_NUM_THREADS": "4",
+    "OMP_NUM_THREADS": "4",
+}
+
+# Fast solver tests (design §12): seconds to about a minute each on 4 threads.
 yapnr_py_tests(
-    env = {
-        "OMP_NUM_THREADS": "4",
-        "MKL_NUM_THREADS": "4",
-    },
+    env = _ENV,
     overrides = {
         "test_adjoint_gradients": {"size": "medium"},
         "test_dtft": {"size": "medium"},
+        "test_microstrip": {"size": "medium"},
+        "test_power_balance": {"size": "medium"},
     },
+    deps = ["//yapnr/rf"],
+)
+
+# The microstrip check repeated at twice the resolution (several minutes).
+py_test(
+    name = "test_microstrip_slow",
+    size = "large",
+    srcs = ["test_microstrip.py"],
+    env = dict(
+        _ENV,
+        YAPNR_RF_SLOW = "1",
+    ),
+    main = "test_microstrip.py",
+    tags = ["slow"],
     deps = ["//yapnr/rf"],
 )

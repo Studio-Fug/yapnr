@@ -62,11 +62,16 @@ def _to_like(w: np.ndarray, x):
     return torch.as_tensor(w, dtype=torch.float64)
 
 
-def _clipped_dual(primary: np.ndarray, dual: np.ndarray, a0: int, a1: int) -> np.ndarray:
-    """Dual lengths of nodes a0..a1 clipped to [x_a0, x_a1] (half cells at both ends)."""
+def _rim_dual(dual: np.ndarray, a0: int, a1: int) -> np.ndarray:
+    """Dual lengths of nodes a0..a1, halved at both ends (the face's rim).
+
+    Half the full dual length, not the half cell inside the face: with region weights ½ on the
+    faces and ¼ on the box edges this is what the discrete Poynting theorem pairs with each rim
+    sample, also where the grid is graded.
+    """
     d = dual[a0 : a1 + 1].copy()
-    d[0] = 0.5 * primary[a0]
-    d[-1] = 0.5 * primary[a1 - 1]
+    d[0] *= 0.5
+    d[-1] *= 0.5
     return d
 
 
@@ -85,9 +90,10 @@ class FluxBox:
     """Poynting flux through faces of an axis-aligned box of grid nodes (design §5.6).
 
     On each face the tangential E samples pair with the tangential H averaged over the planes on
-    either side (normal averaging); E samples on the face's rim get half their dual area
-    (trapezoid rule), which makes the flux through a closed box the exact discrete power balance
-    of the scheme's frequency-domain equations. `windows` are physical boxes
+    either side (normal averaging); E samples on the face's rim get half their dual area. The
+    flux through a closed box is then the exact discrete power balance of the scheme's
+    frequency-domain equations, with the box's E edges weighted 1 inside, ½ on the faces and
+    ¼ on its edges (and the normal H on the faces ½). `windows` are physical boxes
     ((x0, x1), (y0, y1), (z0, z1)) whose samples are left out (for example where a feed crosses
     the box).
     """
@@ -119,11 +125,11 @@ class FluxBox:
             if e_axis == t1:
                 ranges[t1] = (a0, a1)
                 ranges[t2] = (b0, b1 + 1)
-                w = np.outer(ax1.primary[a0:a1], _clipped_dual(ax2.primary, ax2.dual, b0, b1))
+                w = np.outer(ax1.primary[a0:a1], _rim_dual(ax2.dual, b0, b1))
             else:
                 ranges[t1] = (a0, a1 + 1)
                 ranges[t2] = (b0, b1)
-                w = np.outer(_clipped_dual(ax1.primary, ax1.dual, a0, a1), ax2.primary[b0:b1])
+                w = np.outer(_rim_dual(ax1.dual, a0, a1), ax2.primary[b0:b1])
             # (t1, t2) ordering of w → array (x, y, z) ordering of the samples.
             order = sorted([t1, t2])
             if order != [t1, t2]:

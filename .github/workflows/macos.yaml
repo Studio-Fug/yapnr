@@ -27,13 +27,13 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Setup repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # setup-bazel's own caches are not used: their keys carry neither the CPU
       # architecture nor the lock files, and its Bazelisk cache is not where
       # .bazeliskrc sends Bazelisk. Both download caches are keyed below.
       - name: Setup Bazel
-        uses: bazel-contrib/setup-bazel@0.15.0
+        uses: bazel-contrib/setup-bazel@0.19.0
 
       # The environment overrides .bazeliskrc (./.bazelisk), so the Bazel
       # binary lands in the cached directory.
@@ -41,7 +41,7 @@ jobs:
         run: echo "BAZELISK_HOME=${HOME}/.cache/bazelisk" >> "${GITHUB_ENV}"
 
       - name: Cache Bazelisk and the Bazel repository cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/bazelisk
@@ -51,7 +51,7 @@ jobs:
 
       # Per-OS disk cache namespace: never share Linux-built outputs.
       - name: Cache Bazel disk cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/bazel-disk
           key: bazel-disk-macos-test-${{ hashFiles('MODULE.bazel.lock', 'requirements.lock') }}

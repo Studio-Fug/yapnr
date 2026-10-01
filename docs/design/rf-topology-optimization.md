@@ -1,0 +1,1024 @@
+# Design: RF microstrip inverse design by topology optimization
+
+Status: **proposal** for [issue #29](https://github.com/Studio-Fug/yapnr/issues/29), 2026-10-01.
+Nothing is implemented yet. Numbers marked "est." are planning estimates; the implementation
+replaces them with measurements and records them in `docs/rf-inverse-design.md`.
+
+## 1. Goals
+
+The owner asked for microstrip copper geometry that realizes specified transfer functions,
+generated in full by the method of Hammond et al. [1] (density-based topology optimization driven
+by a hybrid time/frequency-domain adjoint method, the method of Meep's adjoint package), adapted
+from photonics to RF microstrip, with test cases for power combiners, antennas and filter banks.
+The request says "finite element method"; the paper's solver is FDTD with frequency-domain adjoint
+gradients, and this design follows the paper.
+
+What we build:
+
+1. **`yapnr.rf`**, a pure-Python package (numpy reference backend, optional torch backend):
+   - a 3D Yee FDTD solver for microstrip: graded axes, CPML, a PEC ground plane, a dielectric
+     substrate, a zero-thickness copper sheet whose conductance is the design variable, line ports
+     and lumped resistors, S-parameters, Poynting flux and DTFT field monitors;
+   - the adjoint: filter-designed broadband adjoint sources and the gradient recombination onto
+     the design grid;
+   - the design parameterization: material grid, fixed regions, mirror symmetry, conic filter,
+     tanh projection with β continuation, minimum width and space constraints;
+   - an epigraph minimax optimizer (MMA);
+   - specs written as transfer-function targets (|S_ij| masks per band, phases, radiated
+     fraction);
+   - export: polygons, a KiCad footprint, Touchstone, a result JSON with provenance, an animation.
+2. **Tests:** fast unit tests in CI (`tests/unit/rf/`) and slow end-to-end design cases
+   (`tests/e2e/rf/`, manual): a power divider, a patch-class antenna and a diplexer, each
+   re-validated on a finer grid from the exported footprint.
+
+Requirements:
+
+- No new runtime dependency: numpy and torch are in the lock; PyYAML reads spec files; Pillow
+  (tooling only) renders animations.
+- Deterministic for the same inputs, backend, dtype and thread count.
+- Every run is time-bounded, uses at most 4 threads and runs niced on shared machines.
+- AGPL-3.0-or-later. No third-party code is copied: Meep (GPL-2.0-or-later) and Svanberg's MMA
+  codes (GPL) are references for method only.
+
+Non-goals for v1: more than one copper layer, vias and grounded stubs; finite ground planes and
+board-edge effects (the ground and substrate are infinite); far-field patterns (the near-to-far
+transform of [1] §4.2 is future work); frequency-dependent skin effect and roughness; active or
+nonlinear parts; connectivity constraints; MPI or GPU.
+
+## 2. Summary
+
+```mermaid
+flowchart LR
+    spec["Spec<br/>bands, S-parameter masks,<br/>radiated fraction"] --> obj["Objective groups<br/>φ per requirement,<br/>epigraph constraints"]
+    rho["ρ (design DOF)"] --> par["Symmetry, fixed ring,<br/>conic filter, tanh(β)"]
+    par --> G["Sheet conductance<br/>per pixel, averaged<br/>onto Yee edges"]
+    G --> fwd["Forward FDTD<br/>one per excitation"]
+    fwd -- "DTFT: ports, flux,<br/>design plane" --> obj
+    obj -- "∂F/∂Ê, ∂F/∂Ĥ<br/>Nuttall fit" --> adj["Adjoint FDTD<br/>one per group"]
+    adj --> grad["Recombination<br/>edges → pixels → ρ"]
+    fwd --> grad
+    grad --> mma["MMA<br/>epigraph minimax"]
+    mma --> rho
+    mma -- "β = ∞" --> exp["Polygons → .kicad_mod,<br/>.sNp, result.json"]
+    exp --> val["Re-simulation<br/>on a finer grid"]
+```
+
+| Topic                  | Choice                                                                                                                                   | Reason                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Solver                 | own 3D Yee FDTD; numpy reference, torch fast path                                                                                        | Meep has no lumped ports, its MPB eigenmode ports do not model metal microstrip, and it is conda-only; openEMS is an external GPL program without an adjoint. We need the exact discrete adjoint of the solver we step.                                                                                                                                                                                                                                           |
+| Conductivity update    | Crank–Nicolson (semi-implicit) on every lossy edge                                                                                       | unconditionally stable for any σ ≥ 0; its DTFT is exactly σ·cos(ωΔt/2), which makes the discrete adjoint exact (§4.6)                                                                                                                                                                                                                                                                                                                                             |
+| Ports                  | **line port**: the feed runs into the CPML, a soft source launches it, V/I wave separation, reference plane shifted to the design region | **Deviation from the lead's resistive lumped port.** A resistive termination has its own mismatch (est. −25 dB at 10 GHz for these lines) whose de-embedding needs N excitations per iteration. A CPML-terminated feed is matched (est. −40 dB) and de-embeds by a reference-plane shift with one excitation per objective group. It is the RF analogue of the paper's eigenmode ports. Resistive lumped ports stay, as an option and for lumped elements (§5.5). |
+| Copper                 | zero-thickness sheet on the tangential E edges of the plane z = h; sheet conductance per pixel, log-interpolated, averaged onto edges    | log G spreads the transparent-lossy-metallic transition over ρ̄ ∈ [0, 1]; averaging conductance (not density) onto edges is the parallel-conduction rule and leaves no lossy rim around binary metal (§7.4)                                                                                                                                                                                                                                                        |
+| Damping (paper Eq. 11) | implemented as ρ̄(1−ρ̄)·G_d, default off                                                                                                   | only conductance is interpolated (no ε), so there are no permittivity zero crossings; gray copper is already lossy                                                                                                                                                                                                                                                                                                                                                |
+| Gradient               | exact adjoint of the DTFT of the discrete scheme                                                                                         | finite-difference checks to 1e-5 instead of the paper's mixed scheme (its App. A)                                                                                                                                                                                                                                                                                                                                                                                 |
+| Adjoint sources        | Nuttall-basis fit (paper §5.2), solved exactly for a real-valued source                                                                  | short, band-limited adjoint runs; gradients at every frequency from one run                                                                                                                                                                                                                                                                                                                                                                                       |
+| Parameterization       | 2D material grid at the Yee pitch; fixed exterior ring; mirror symmetry on the DOF; conic filter; tanh projection, β 8 → 128             | as in the paper; symmetry on the DOF keeps the design binary                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Min width and space    | Zhou indicator constraints in the last β epoch, plus a raster check of the exported polygons                                             | as in the paper (§3.1, [16], [23])                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Optimizer              | own MMA [19, 21] in its native min-max form                                                                                              | the reference codes are GPL and NLopt is not in the lock; MMA is about 300 lines                                                                                                                                                                                                                                                                                                                                                                                  |
+| Specs                  | normalized violations per requirement; a smooth max per excitation group and frequency; epigraph                                         | one forward and one adjoint run per group per iteration                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Export                 | marching squares on the binary pixels → keyholed polygons → a net-tie `.kicad_mod`; Touchstone; JSON                                     | KiCad net ties let one copper shape connect differently named port nets                                                                                                                                                                                                                                                                                                                                                                                           |
+
+Cost per iteration: one forward run per excitation and one adjoint run per objective group. The
+three cases need two FDTD runs per iteration (the Wilkinson variant four), est. 12–45 s per
+iteration on 4 threads (§11.1).
+
+## 3. From the paper to microstrip
+
+| Paper [1]                                                                    | Here                                                                                                  |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Meep FDTD, uniform grid, subpixel smoothing                                  | own FDTD, graded axes, conductance averaging onto edges                                               |
+| eigenmode sources and mode-overlap coefficients (Eq. 14–16)                  | line port: soft current sheet; modal V and I; a, b = (V ± Z_c I)/(2√R_c)                              |
+| ε(ρ̄) linear (Eq. 5); conductivity interpolation (Eq. 9); damping (Eq. 11–12) | sheet conductance log-interpolated per pixel (§7.4); optional damping ρ̄(1−ρ̄)G_d                       |
+| material grid interpolated onto the Yee grid, restriction (§3)               | 2D material grid on the copper plane; edge averaging and its transpose                                |
+| conic filter, tanh projection (Eq. 3–4), β continuation                      | same                                                                                                  |
+| length-scale constraints in the last epoch (§3.1)                            | same, plus a raster check on export                                                                   |
+| epigraph minimax (Eq. 2) with NLopt's CCSA/MMA                               | MMA's own z variable as the epigraph variable                                                         |
+| DMs: mode coefficients, Poynting flux, near-to-far, DFT fields (§4)          | port waves (S-parameters), Poynting flux through a box, design-plane DFT fields; near-to-far deferred |
+| Nuttall filter-design adjoint sources (§5.2, Eq. 20–24)                      | same, with the half-step time phase and an exact real-valued fit                                      |
+| App. A: ω̂ correction, differentiate-then-discretize                          | exact discrete operator: Ω = (2/Δt)·sin(ωΔt/2), σ·cos(ωΔt/2); adjoint-source scale 1/(iΩV)            |
+| DTFT decimation, single-precision DFTs (§5.1)                                | decimation from the source bands; float32 fields in large runs, complex128 accumulators               |
+| MPI spatial and simulation parallelism (§5.1, §5.3)                          | none; torch intra-op threads (at most 4); frequency parallelism as in §5.2                            |
+| JAX automatic differentiation of objectives and filters                      | torch autograd (CPU, float64)                                                                         |
+
+## 4. Physical model and discretization
+
+### 4.1 Geometry and units
+
+SI units inside the package; spec files use mm and GHz. x and y lie in the board plane, z points up.
+A PEC ground plane covers z = 0 over the whole domain, including the CPML. The substrate fills
+0 < z < h with uniform εr and tanδ and extends through the lateral CPML. The copper is a
+zero-thickness sheet in the plane z = h, with air above. The domain is truncated in x, y and at
+the top by CPML backed by PEC.
+
+Stackups for the cases (RO4003C-like, design Dk):
+
+| Id  | εr   | tanδ   | h (mm) | Used by           |
+| --- | ---- | ------ | ------ | ----------------- |
+| S1  | 3.55 | 0.0027 | 0.813  | divider, diplexer |
+| S2  | 3.55 | 0.0027 | 1.524  | antenna           |
+
+### 4.2 Yee grid on graded axes
+
+Each axis is a strictly increasing node list, for example `x_0 < … < x_Nx`. Primary lengths are
+`Δx_{i+½} = x_{i+1} − x_i`; dual lengths are `Δx_i = (Δx_{i−½} + Δx_{i+½})/2` (a half length at
+the ends). Fields sit at the usual places:
+
+| Component | Location              | Component | Location                  |
+| --------- | --------------------- | --------- | ------------------------- |
+| Ex        | `(x_{i+½}, y_j, z_k)` | Hx        | `(x_i, y_{j+½}, z_{k+½})` |
+| Ey        | `(x_i, y_{j+½}, z_k)` | Hy        | `(x_{i+½}, y_j, z_{k+½})` |
+| Ez        | `(x_i, y_j, z_{k+½})` | Hz        | `(x_{i+½}, y_{j+½}, z_k)` |
+
+Meshing rules:
+
+- In-plane pitch Δ is uniform over the design region, the feeds and the port monitors. Outside
+  them the axes may grade outward with a ratio of at most 1.25 between neighbours, up to
+  Δ_max ≤ λ_min/15 in air.
+- z: `n_sub` uniform cells in the substrate; the copper plane is the node plane `k_c` with
+  `z_{k_c} = h`; the first air cell equals the substrate cell, then grows by at most 1.25 per
+  cell up to `Δz_max`.
+- CPML cells are uniform and equal to the last interior cell on that side.
+
+The curls use primary lengths for E → H and dual lengths for H → E, for example:
+
+```text
+(∂Hz/∂y)|Ex(i+½,j,k) = [Hz(i+½,j+½,k) − Hz(i+½,j−½,k)] / Δy_j          (dual length)
+(∂Ex/∂y)|Hz(i+½,j+½,k) = [Ex(i+½,j+1,k) − Ex(i+½,j,k)] / Δy_{j+½}      (primary length)
+```
+
+In matrix form, with D the face-edge incidence matrix of the primary grid, L_p and A_p the primary
+edge lengths and face areas, and L_d and A_d the dual ones (diagonal):
+
+```text
+C_E = A_p⁻¹ D L_p        (E → H)          C_H = A_d⁻¹ Dᵀ L_d        (H → E)
+V_e = A_d,e L_p,e        (dual volume of E edge e)
+V_h = A_p,h L_d,h        (dual volume of H edge h)
+```
+
+The scheme is second-order on smoothly graded axes and first-order where the grading changes
+abruptly; the 1.25 limit keeps the error well below the geometric errors of §11.
+
+### 4.3 Materials per edge
+
+- **Ez edges** lie inside one layer (the interface is a node plane): ε_sub below h, ε0 above.
+- **Ex, Ey edges** below h: the substrate permittivity; above: ε0; on the plane `k_c`
+  (tangential to the interface):
+  `ε = (ε_sub Δz_{k_c−½} + ε0 Δz_{k_c+½}) / (Δz_{k_c−½} + Δz_{k_c+½})`, and the
+  substrate conductivity is weighted the same way.
+- **Dielectric loss:** a constant σ_sub = 2π f_c ε0 εr tanδ matched at the band centre f_c
+  (5.3e-3 S/m for S1 at 10 GHz). Away from f_c the loss tangent scales as f_c/f; this is
+  negligible for these laminates.
+- **Ground:** Ex and Ey at k = 0 are held at zero.
+- **Copper sheet:** Ex and Ey edges on k_c get σ_e = G_e / Δz_d(k_c), where G_e is the sheet
+  conductance of the edge in siemens and Δz_d(k_c) the dual height. The sheet current is G_e·E.
+  Fixed copper (feeds, pads): G_e = G_max. No copper outside the design region: G_e = 0. Design
+  region: §7.4.
+- **G_max = 1/R_s(f_c)** with R_s = √(π f_c μ0 / σ_Cu) and σ_Cu = 5.8e7 S/m: R_s(10 GHz) = 26.1 mΩ,
+  G_max = 38.3 S, G_max·η0 = 1.44e4. This models the conductor loss of smooth copper at the band
+  centre; the 35 µm thickness and the 0.66 µm skin depth are not resolved. The ground is lossless.
+- **Lumped resistor** R across a gap of n edges in series and m in parallel (edge length L_e, dual
+  area A_e): σ_e = n L_e / (m R A_e).
+
+### 4.4 Update equations
+
+Leapfrog Yee steps with a Crank–Nicolson conductivity term on every edge (σ = 0 on most of them):
+
+```text
+H^{n+½} = H^{n−½} − (Δt/μ) (C_E E^n + K^n)
+ε (E^{n+1} − E^n)/Δt + σ (E^{n+1} + E^n)/2 = C_H H^{n+½} − J^{n+½}
+
+E^{n+1} = Ca E^n + Cb (C_H H^{n+½} − J^{n+½})
+Ca = (1 − a)/(1 + a),   Cb = (Δt/ε)/(1 + a),   a = σΔt/(2ε)
+```
+
+The explicit form (σE^n) is unstable for σΔt/ε > 2, which every copper edge exceeds (a ≈ 2e3 at
+G_max on S1); the semi-implicit form is stable for any σ ≥ 0. Its slow (−1)^n mode on copper edges
+(Ca ≈ −0.999) sits at the Nyquist frequency, outside every band, and the stop rule ignores it.
+The exponential update (Ca = e^{−σΔt/ε}) is the fallback if that mode ever matters; its discrete
+adjoint is equally exact, with a different ∂A/∂σ.
+
+**CPML** (Roden and Gedney [3]): in a PML slab normal to u, ∂_u → (1/κ_u) ∂_u + ψ_u with
+
+```text
+ψ_u^n = b_u ψ_u^{n−1} + c_u (∂_u F)^n
+b_u = exp(−(σ_u/κ_u + α_u) Δt/ε0),   c_u = σ_u (b_u − 1) / (κ_u (σ_u + κ_u α_u))
+σ_u(s) = σ_max (s/d)³,   κ_u(s) = 1 + (κ_max − 1)(s/d)³,   α_u(s) = α_max (1 − s/d)
+σ_max = 0.8·4/(η0 Δ_u),   κ_max = 5,   α_max = 2π ε0 (f_lo/2)
+```
+
+s is the depth into a PML of thickness d: 10 cells laterally, 8 on top. ψ arrays exist only in
+the slabs. The ground, the substrate and the feed strips continue through the PML.
+
+### 4.5 Sources
+
+- **Forward:** a soft electric current on the source edges of the excited port (§5.1),
+  `J(t) = sin(ω_c (t − t0)) · exp(−((t − t0)/τ)²)`, with τ = 3.03/Δω_h so that the spectrum is
+  −20 dB at ω_c ± Δω_h, and t0 = 5τ. The band covered is the union of the requirement bands plus
+  15 % on each side, and at least ±20 % of ω_c. DC content is below −150 dB for the cases, so no
+  static charge is left behind.
+- **Adjoint:** electric currents J and magnetic currents K on the monitor edges (§6.5).
+
+### 4.6 DTFT conventions and the exact discrete frequency-domain system
+
+E, K are sampled at integer steps and H, J at half steps, so their DTFTs carry the matching phase
+(time dependence e^{−iωt}, as in [1]):
+
+```text
+Ê(ω) = Δt Σ_n E^n e^{iωnΔt}             K̂ likewise
+Ĥ(ω) = Δt Σ_n H^{n+½} e^{iω(n+½)Δt}     Ĵ likewise
+```
+
+If the run starts from zero and has decayed, the DTFT of the update equations is exactly
+
+```text
+(−iΩ ε + c_ω σ) Ê = C_H Ĥ − Ĵ
+−iΩ μ Ĥ = −C_E Ê − K̂
+Ω = (2/Δt) sin(ωΔt/2),   c_ω = cos(ωΔt/2)
+```
+
+that is, Maxwell's equations at the numerical frequency Ω with conductivity σ·c_ω. This replaces
+the one-sided ω̂ of [1] App. A (Eq. 30) and is what makes the gradient exact (§6). The CPML
+recursion also has an exact DTFT: a stretch 1/s_u(ω) on each derivative that depends only on the
+position along u.
+
+**Decimation** ([1] §5.1): accumulators update every d steps with
+d = max(1, ⌊1/(2.5 f_top Δt)⌋), where f_top is the highest frequency at which any source spectrum
+exceeds −100 dB of its peak. Gradient and convention tests use d = 1; a unit test bounds the
+difference between d > 1 and d = 1.
+
+### 4.7 Stability and precision
+
+- **Time step on the graded grid:** Δt = 0.95 · min(Δt_pi, Δt_cfl), where
+  Δt_pi = 2/√(1.01 λ_est) and λ_est is the power-iteration estimate (converged to 1e-6, at most
+  500 iterations, deterministic start) of the largest eigenvalue of ε⁻¹ C_H μ⁻¹ C_E, and
+  Δt_cfl = 1/(c √(1/Δx_min² + 1/Δy_min² + 1/Δz_min²)). The power-iteration value approaches
+  λ_max from below, hence the 1.01 factor and the minimum with the closed-form bound. Lossy
+  edges (Crank–Nicolson) and the CPML (κ ≥ 1) do not lower the limit.
+- **Precision:** fields are float32 in the optimization runs and float64 in the unit tests. DTFT
+  accumulators and adjoint source weights are complex128 in both.
+
+### 4.8 Run length and stopping
+
+After the last source has ended (the forward pulse at 2t0, an adjoint source after N steps),
+every K = ⌈1/(f_lo Δt)⌉ steps the run compares every monitored
+DTFT value (port V and I, flux faces) with its value K steps earlier and stops after two
+consecutive checks with max |ΔX| / max |X| < tol. tol is 1e-3 in optimization runs, 1e-4 in
+validation runs and 1e-11 in float64 gradient tests. A hard cap (twice the case estimate) ends a
+run that does not converge, records it in the result, and fails the e2e test.
+
+## 5. Ports and S-parameters
+
+### 5.1 Line port
+
+A port is a feed strip of width w along the inward normal n̂ from the domain edge, through the
+CPML, to the boundary of the design region, which is the port's reference plane. Along −n̂ from the
+reference plane:
+
+| Item                  | Distance from the reference plane | S1 at Δ = 0.3 mm  |
+| --------------------- | --------------------------------- | ----------------- |
+| V/I measurement plane | d_m ≥ 3h                          | 9 cells (2.7 mm)  |
+| source plane          | d_s ≥ d_m + 3h                    | 17 cells (5.1 mm) |
+| CPML inner face       | ≥ d_s + 3 cells                   | 20 cells (6.0 mm) |
+
+The source is a uniform soft J_z on every Ez edge of the source plane under the strip (all nodes
+y_a ≤ y_j ≤ y_b of the strip, all substrate layers). The backward wave it launches is absorbed by
+the CPML; waves reflected by the design pass through the soft source and are absorbed too. Inside
+the design region, a fixed pad (the feed width, 2 pixels deep) keeps the connection.
+
+### 5.2 V and I with the Yee staggering
+
+For a feed along +x with strip nodes j_a … j_b on the copper plane k_c:
+
+```text
+V̂(x_i) = − Σ_{k<k_c} Êz(i, j_c, k+½) Δz_{k+½}                (j_c: centre node; mean of the
+                                                                two central nodes if none)
+Î(x_{i+½}) = Σ_{j=j_a..j_b} [Ĥy(i+½, j, k_c−½) − Ĥy(i+½, j, k_c+½)] Δy_j
+           + [Ĥz(i+½, j_b+½, k_c) − Ĥz(i+½, j_a−½, k_c)] Δz_{k_c}
+V̂_m = ½ [V̂(x_i) + V̂(x_{i+1})]                                 (co-located with Î)
+```
+
+The loop is the dual-cell ring around the strip at `x_{i+½}`; by the discrete Ampère law it equals
+the total current on the strip's Ex edges there. V is the strip potential over ground and I flows
+along +n̂, into the design; a unit test pins both signs. Ports may sit on any domain edge; the
+formulas permute the axes. The half-step time offset between V and I is absorbed by the DTFT
+phases of §4.6.
+
+### 5.3 Calibration: Z_c, k and the feed width
+
+Per (stackup, Δ, n_sub, w), one run of a straight feed through the domain with CPML at both ends,
+the source near one end and two V/I planes L_c ≈ λ_g/8 apart, gives
+
+```text
+Z_c(ω) = V̂_m / Î                      (a pure forward wave at plane 1)
+k(ω)  = ln(V̂_2 / V̂_1) / (i L_c)        (complex wavenumber, unwrapped from the quasi-static k)
+```
+
+k carries the forward propagation factor e^{ikx}. The feed width is the integer number of cells
+whose Z_c(f_c) is closest to 50 Ω (est. within ±3 %). Results are cached as JSON keyed by the
+sha256 of the inputs. The same runs are the Z0 and ε_eff unit tests (§12).
+
+### 5.4 Waves, S-parameters and de-embedding
+
+```text
+a = (V̂_m + Z_c Î)/(2√R_c),   b = (V̂_m − Z_c Î)/(2√R_c),   R_c = Re Z_c
+a_ref = a e^{+ik d_m},       b_ref = b e^{−ik d_m}
+S_ij = b_ref,i / a_ref,j     (only port j excited)
+P_inc = |a_ref|²/2
+```
+
+For real Z_c, ½(|a|² − |b|²) = ½ Re(V̂ conj(Î)) is the net power; Im Z_c is under 1 % here (est.). The
+shift removes the feed between the measurement plane and the design region, so the reported
+S-parameters are those of the footprint between its pads; the source and its near field are
+behind the measurement plane. Internally the time convention is e^{−iωt} (as in [1] and Meep);
+everything reported (Touchstone, JSON, phase targets in specs) uses the engineering e^{+jωt}
+convention, which is the complex conjugate. Each port's S-parameters are referenced to its own Z_c
+(pseudo-waves [7]). The optimization uses them as they are: |Z_c − 50|/(Z_c + 50) ≤ 0.015 keeps
+the reference error below −36 dB. Validation, which runs every excitation, renormalizes to 50 Ω
+through the impedance matrix, Z = √Z_c (I + S)(I − S)⁻¹ √Z_c and S' = (Z − 50)(Z + 50)⁻¹, and
+checks this against a line terminated in known loads.
+
+### 5.5 Lumped resistive ports and elements
+
+Kept for elements and as a fallback port: a resistive voltage source (Luebbers [5], Piket-May
+[6]) on a column of edges with internal resistance R, using the edge conductance of §4.3 plus a
+source term. Then a = V̂_s/(2√R), b = (2V̂ − V̂_s)/(2√R), with V̂ the port voltage and the reference
+plane at the port. A source-free resistor is the isolation resistor of the Wilkinson variant
+(§11.2). Lumped ports are not used by the case ports (§2).
+
+### 5.6 Radiated power
+
+A box surface B in air encloses the design region: the top face and the four side faces from
+z = h upward. On the face crossed by the feed, a window |y − y_p| ≤ w/2 + 2h, z ≤ 3h is left out,
+so the guided power of the feed is not counted; a unit test bounds what it still sees (§12). On
+each face the tangential E samples pair with the tangential H averaged over the two H planes on
+either side of the face (normal averaging), for example on a z face:
+
+```text
+P_B = ½ Re Σ_face [ Êx·conj(avg_z Ĥy) − Êy·conj(avg_z Ĥx) ] dA      (outward normal +z)
+η_rad = P_B / P_inc
+```
+
+Power carried by surface waves in the substrate does not reach B and counts as lost, which is
+conservative for a finite board. A near-to-far transform for pattern targets is future work.
+
+### 5.7 Dissipation and power balance
+
+```text
+P_diss = ½ Σ_e c_ω σ_e |Ê_e|² V_e
+```
+
+The discrete Poynting theorem then holds face by face. For a closed box (side faces down to the
+ground, including the substrate), P_out + P_diss(inside) equals the power entering through the
+feed; this, and the equality of port-wave power and the Poynting flux through the feed
+cross-section, are unit tests (§12).
+
+## 6. Adjoint method
+
+### 6.1 The discrete operator and its transpose
+
+Eliminating Ĥ from §4.6:
+
+```text
+A(ρ) Ê = b,     A = C_H μ⁻¹ C_E − Ω² ε − iΩ c_ω σ(ρ),     b = iΩ Ĵ − C_H μ⁻¹ K̂
+```
+
+With W = diag(V_e), W·A is complex symmetric: W C_H μ⁻¹ C_E = L_p Dᵀ (L_d μ⁻¹ A_p⁻¹) D L_p, and ε,
+σ are diagonal. The CPML's coordinate stretch makes P·A symmetric for a diagonal P that equals W
+outside the PML (Shin and Fan [11]). Sources, monitors and design edges are all outside the PML,
+so solving Aᵀλ = g needs only an ordinary FDTD run: λ = P A⁻¹ P⁻¹ g equals W·A⁻¹(W⁻¹g) on those
+edges. If the gradient test shows an error that grows with the PML strength, the fallback is a
+transposed CPML recursion in the adjoint stepper (§14).
+
+### 6.2 Gradient
+
+Let F be a real function of DMs (complex linear functionals of Ê and Ĥ at the objective
+frequencies ω_m). With Wirtinger derivatives g_E = ∂F/∂Ê and g_H = ∂F/∂Ĥ (holding the conjugates
+fixed, so dF = 2 Re(g_E dÊ + g_H dĤ)):
+
+```text
+adjoint sources:  Ĵ^adj_e(ω_m) =  g_E,e(ω_m) / (iΩ_m V_e)
+                  K̂^adj_h(ω_m) = −g_H,h(ω_m) / (iΩ_m V_h)
+gradient:         ∂F/∂σ_e = Σ_m 2 Re[ iΩ_m c_m V_e Ê^adj_e(ω_m) Ê_e(ω_m) ]
+in conductance:   ∂F/∂G_e = Σ_m 2 Re[ iΩ_m c_m ℓ_e b_e Ê^adj_e(ω_m) Ê_e(ω_m) ]
+```
+
+`Ê^adj` is the DTFT of the adjoint run's E field, `ℓ_e` the edge length, `b_e` its dual width
+(`V_e/Δz_d = ℓ_e b_e`, independent of resolution), and `c_m = cos(ω_m Δt/2)`. Derivation:
+
+```text
+dF/dp = −2 Re[λᵀ (∂A/∂p) Ê],   Aᵀλ = (g_E + g_H μ⁻¹ C_E/(iΩ))ᵀ,   ∂A/∂σ_e = −iΩ c_ω (diagonal)
+λ = W Ê^adj;   W⁻¹ C_Eᵀ = A_d⁻¹ Dᵀ A_p⁻¹ turns the H-dependence into the magnetic current K̂^adj
+one-edge check: (−iΩε + c_ω σ) E = −J, F = |E|²  →  ∂F/∂σ = 2 Re[iΩ c_ω |E|²/A], as derived directly
+```
+
+**Automatic differentiation:** the DMs → F layer is written in torch (complex128). For a real F,
+torch returns grad = 2·conj(∂F/∂q), so ∂F/∂q = conj(grad)/2. A unit test pins this with F = |q|².
+
+### 6.3 DMs and their adjoint sources
+
+| DM                      | Functional                            | Adjoint source                                                                                                                     |
+| ----------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| port voltage V̂_m        | weights −½Δz on two Ez columns (§5.2) | J on those Ez edges                                                                                                                |
+| port current Î          | ±Δy, ±Δz on the H ring                | K on the ring edges                                                                                                                |
+| port waves, S_ij, phase | functions of V̂, Î, Z_c, k (§5.4)      | J + K with ratio set by Z_c: a directional source launching into the design, the analogue of the paper's reversed eigenmode source |
+| flux P_B                | sesquilinear in tangential Ê, Ĥ on B  | J and K on B (equivalent surface currents)                                                                                         |
+| design-plane field      | Ê on design edges                     | J on those edges                                                                                                                   |
+
+Example, F = |S21|² at ω_m with port 1 excited: ∂F/∂S21 = conj(S21); ∂S21/∂b2 = 1/a1 and
+∂S21/∂a1 = −S21/a1; ∂b2/∂V̂_2 = e^{−ikd}/(2√R_c) and ∂b2/∂Î_2 = −Z_c e^{−ikd}/(2√R_c), and for
+a1 the same with e^{+ikd} and +Z_c. A phase target uses F = 1 − Re(S21 e^{−iθ0})/|S21|. The
+radiated fraction is η = P_B/P_inc, with P_inc from a_ref,1. Normalizing by the measured a from
+the same run makes every ratio independent of the source amplitude; the chain rule through a is
+kept, because a depends weakly on the design through residual CPML reflection.
+
+### 6.4 Frequency parallelism and objective groups
+
+DTFTs at different frequencies do not mix, so one adjoint run whose source carries the spectral
+values `g(ω_m)/(iΩ_m V)` for every m yields `Ê^adj(ω_m)` for each m, and with it the gradient of
+each per-frequency function `F(ω_m)` separately ([1] §5.2). Different functions at the same
+frequency superpose, so each needs its own adjoint run. An **objective group** is therefore a set
+of requirements sharing one excitation, aggregated per frequency into one function `f_{g,m}`
+(§9); each iteration costs one forward run per excitation and one adjoint run per group, and
+yields all `f_{g,m}` with their gradients.
+
+### 6.5 Time-domain adjoint sources (Nuttall fit)
+
+Per [1] Eq. 20–24, with the window length N = ⌈2π/(Δω_min Δt)⌉, Δω_min being the smallest spacing
+between objective frequencies:
+
+```text
+w[n] = Σ_{q=0..3} a_q (−1)^q cos(2π q n / N),  0 ≤ n ≤ N
+a = (0.355768, 0.487396, 0.144232, 0.012604)
+W_m[n] = w[n] · e^{−iω_m t_n}     t_n = (n+½)Δt for J (half steps), nΔt for K
+s[n] = 2 Re Σ_m β_m W_m[n]         (the real source sequence at one edge)
+```
+
+The DTFT of s at ω_k is `Σ_m (β_m Ŵ_km + conj(β_m) Ŵ'_km)`, where `Ŵ_km` is the DTFT of `W_m`
+at ω_k and `Ŵ'_km` that of `conj(W_m)` (the negative-frequency image). Both M×M matrices are
+computed numerically with the same phase convention as the monitor (half-step or integer).
+Setting the DTFT equal to the requested values at all ω_k is a real-linear 2M×2M system in
+(Re β, Im β), solved once per group and applied to every source edge. The fit is exact at the
+ω_m, so no approximation is made for the image term. If the condition number exceeds 1e6, N
+doubles. Out-of-band content follows the Nuttall sidelobes (−93 dB). The adjoint run lasts N steps
+plus decay (§4.8).
+
+### 6.6 Recombination onto the design
+
+```text
+∂F/∂σ_e (§6.2) → ∂F/∂G_e = ∂F/∂σ_e / Δz_d
+→ ∂F/∂ρ̄_p = G'(ρ̄_p) Σ_e w_ep ∂F/∂G_e        (restriction: transpose of the edge averaging)
+→ projection, filter, symmetry, fixed ring    (torch vector-Jacobian products)
+→ ∂f_{g,m}/∂ρ for every group g and frequency m
+G'(ρ̄) = ln(G_max/G_min) G_min (G_max/G_min)^ρ̄ + G_d (1 − 2ρ̄)
+```
+
+The forward and adjoint runs store Ê of every design edge at every ω_m (Ex and Ey on k_c,
+complex128; est. 2 MB for the diplexer).
+
+### 6.7 Verification hooks
+
+- The discrete frequency-domain residual of §4.6, evaluated with run DTFTs, is below 1e-10
+  (float64): this pins every phase and staggering convention.
+- Directional finite differences of the full pipeline (ρ → F) agree with the adjoint to 1e-5
+  relative, for each DM type, per frequency, with the damping term on and off.
+- These are unit tests (§12) on grids of about 1e4 cells.
+
+## 7. Design parameterization
+
+### 7.1 Material grid, fixed regions and symmetry
+
+The design grid is 2D on the copper plane with pitch `Δ_d = Δ`: pixel (p, q) is the Yee face
+`[x_p, x_{p+1}] × [y_q, y_{q+1}]` of the design region. An **exterior ring** of
+r = ⌈R/Δ_d⌉ + 1 pixels around the design region holds fixed values (1 on feeds, 0 elsewhere), so
+the filter sees the feeds entering the region instead of edge-replicated values (Meep pads by edge
+replication). **Fixed regions** inside the design region (port pads, keepouts, element pads) have
+MMA bounds lb = ub, are excluded from the DOF, and are re-imposed after projection. **Mirror
+symmetry** is imposed on the DOF before filtering: ρ_sym = ½(ρ + mirror(ρ)), or half the DOF, with
+the gradient symmetrized the same way. The paper averages mirrored material grids at the material
+level instead; doing it on the DOF keeps the design binary.
+
+### 7.2 Conic filter
+
+```text
+ρ̃ = w * ρ_ext,    w(r) ∝ max(0, 1 − r/R),    Σ w = 1
+```
+
+Applied to the extended grid with torch `conv2d` (float64); the transpose comes from autograd.
+
+### 7.3 Projection and β schedule
+
+```text
+ρ̄ = [tanh(βη) + tanh(β(ρ̃ − η))] / [tanh(βη) + tanh(β(1 − η))],   η = 0.5
+```
+
+β runs through epochs 8, 16, 32, 64, 128; the length-scale constraints are active in the last
+epoch, as in [1] §4.1 and [23]. After the schedule, β = ∞ (Heaviside) gives the binary design that
+is exported and re-simulated. Each epoch ends at its iteration cap (per case, §11) or once at
+least 8 iterations are done and `|t_k − t_{k−5}| < 1e-3 (1 + |t_k|)` with `max |Δρ| < 0.01`.
+MMA's state resets at each β change.
+
+### 7.4 Conductance interpolation and its pitfalls
+
+```text
+G_p(ρ̄) = G_min (G_max/G_min)^ρ̄  +  G_d ρ̄ (1 − ρ̄)        per pixel
+G_min = 1/(η0² G_max)                                      (log-symmetric about G = 1/η0)
+G_e   = Σ_p w_ep G_p                                        per edge (½, ½ for the two pixels
+                                                             that share the edge)
+```
+
+With S1 numbers, log10(G η0) runs from −4.16 at ρ̄ = 0 (a transparent 5 MΩ/sq sheet) through 0 at
+ρ̄ = 0.5 (377 Ω/sq, strongly lossy) to +4.16 at ρ̄ = 1 (copper). Choices and pitfalls:
+
+- **Linear σ interpolation** (the paper's Eq. 9 as written) saturates: the response depends on
+  log G, so every ρ̄ above about 1e-4 already looks like metal and the gradient vanishes over most
+  of [0, 1]. The microwave topology-optimization literature [12–15] discusses this strongly
+  nonlinear response; log interpolation spreads the transition over ρ̄ ∈ [0.3, 0.75].
+- **Order of interpolation and material function.** Meep interpolates ρ̄ onto the Yee grid and
+  then applies the material function; for linear ε the order is immaterial. For conductance it is
+  not: averaging ρ̄ onto an edge between a copper and a void pixel gives ρ̄_e = 0.5, a 377 Ω/sq rim
+  around every binary shape. A tangential edge whose dual face is half covered by copper conducts
+  like half the copper (conductances in parallel add), so we apply G(ρ̄) per pixel and average
+  conductance onto edges: boundary edges get G_max/2, which is metal. This matches the PEC
+  rasterization rule used in validation (an edge on a copper boundary is copper).
+- **Gray copper is lossy**, and loss can fake reflection specs (a resistive sheet is a good
+  match). Every spec that absorption could satisfy is paired with a power-delivery spec: the
+  divider's and diplexer's transmissions, the antenna's radiated fraction. β continuation and the
+  final Heaviside step remove gray material; the binarized design is always re-simulated.
+- **Damping** ([1] Eq. 11) exists to suppress spurious resonances at ε zero crossings of
+  dispersive interpolation. Only conductance is interpolated here and ε is fixed, so there are no
+  zero crossings. The term is kept as G_d ρ̄(1−ρ̄) (default G_d = 0) to make gray material lossier
+  if a design stalls gray; its gradient is tested.
+- **Stiffness:** copper edges have σΔt/ε ≈ 4e3; the semi-implicit update is stable (§4.4).
+- **Edge singularity of a zero-thickness strip:** under-resolved; it makes Z0 and ε_eff depend on
+  resolution (§12 tolerances) and is the main source of coarse-to-fine differences (§14).
+
+### 7.5 Minimum width and space
+
+Zhou et al. [16], as in [1] §3.1, [23] and Meep's filters, on the extended grid with physical
+gradients:
+
+```text
+I_s = ρ̄ exp(−c |∇ρ̃|²),   g_s = mean_p[ I_s · min(ρ̃ − η_e, 0)² ]
+I_v = (1 − ρ̄) exp(−c |∇ρ̃|²),   g_v = mean_p[ I_v · min(η_d − ρ̃, 0)² ]
+constraints:  g_s/ε − 1 ≤ 0,   g_v/ε − 1 ≤ 0
+```
+
+With η_e = 0.75 the conic radius for a minimum length b is R = b/(2 − 2√(1 − η_e)) = b
+(Qian and Sigmund [18]); η_d = 1 − η_e. Different minimum width and space use one R (the larger)
+and derive η_e and η_d from each. At a feature edge |∇ρ̃|² ≈ 1/(4R²), so c = 64 R² makes the
+exponent about −16 there. ε = 1e-6 by default. Unit tests calibrate c and ε: a line of width b
+passes, a line of width b/2 fails by at least 10ε, and the same for gaps. The exported polygons are
+checked again (§10.2).
+
+### 7.6 Binarization
+
+The result records M_nd = 4/n Σ ρ̄(1 − ρ̄) per iteration and requires M_nd ≤ 0.01 before the
+Heaviside step; otherwise it says so, and the e2e tests fail.
+
+## 8. Optimization
+
+### 8.1 Epigraph minimax
+
+```text
+min_{ρ, t}  t
+s.t.  f_{g,m}(ρ) ≤ t          every group g, objective frequency m
+      g_k(ρ) ≤ 0              length-scale constraints (last epoch)
+      0 ≤ ρ ≤ 1;  fixed DOF: lb = ub
+```
+
+t ≤ 0 means every requirement meets its target; the optimizer keeps pushing t down for margin.
+
+### 8.2 MMA
+
+Svanberg's MMA [19, 21] in its general form:
+
+```text
+min  f_0(x) + a_0 z + Σ_i (c_i y_i + ½ d_i y_i²)
+s.t. f_i(x) − a_i z − y_i ≤ 0,   x_min ≤ x ≤ x_max,   y ≥ 0,   z ≥ 0
+```
+
+The epigraph is native: `f_0 = 0`, `a_0 = 1`, `a_i = 1` for the `f_{g,m}` (shifted by C = 10 so
+that z ≥ 0; t = z − C), a_i = 0 for g_k, c_i = 1e3, d_i = 1. Parameters: asyinit 0.5, asyincr 1.2,
+asydecr 0.7, albefa 0.1, raa0 1e-5, move 0.2 (0.1 from β = 32). The subproblem is solved with the
+primal-dual interior-point method of [21] (ε from 1 down to 1e-7). It is written from the
+publications; GCMMA's inner iterations (extra FDTD runs) are a fallback (§14).
+
+### 8.3 One iteration
+
+1. ρ → ρ_sym → ρ̃ → ρ̄ → G_p → G_e (torch, float64, kept for the backward pass).
+2. One forward run per excitation (§4.5); DTFTs of ports, flux faces and design edges.
+3. DMs → φ → `f_{g,m}` (torch); g_E, g_H per group (§6.2).
+4. One adjoint run per group with Nuttall-fitted J and K (§6.5); DTFT of the design edges.
+5. Recombination (§6.6) → `∂f_{g,m}/∂ρ`; constraints and their gradients (torch).
+6. MMA update; checkpoint (ρ, MMA state, β, history) to the run directory.
+
+Every iteration records t, every `f_{g,m}`, the S-parameters at the objective frequencies, M_nd,
+run lengths and wall times. A run resumes from its checkpoint bit-identically. The initial design
+is uniform ρ = 0.5; selection is mechanical (no hand edits); multi-start with seeds is future work.
+
+## 9. Specs as transfer functions
+
+A spec names the stackup, grid profile, design region, ports, rules, bands and requirements.
+YAML (`yapnr-rf-spec/1`, lengths in mm, frequencies in GHz):
+
+```yaml
+schema: yapnr-rf-spec/1
+name: divider-x10
+stackup: { er: 3.55, tan_delta: 0.0027, h_mm: 0.813, copper: { model: sheet, f_ref_ghz: 10 } }
+grid: { pitch_mm: 0.3, substrate_cells: 4 }
+design_region: { x_mm: [0, 9.6], y_mm: [-6.0, 6.0] }
+symmetry: mirror_y
+rules: { min_width_mm: 0.6, min_space_mm: 0.6 }
+ports:
+  - { n: 1, side: W, at_mm: 0.0, width_mm: auto }
+  - { n: 2, side: E, at_mm: 4.2, width_mm: auto }
+  - { n: 3, side: E, at_mm: -4.2, width_mm: auto }
+bands:
+  pass: { ghz: [8.5, 11.5], points: 7 }
+requirements:
+  - { s: [1, 1], max_db: -20, band: pass }
+  - { s: [2, 1], min_db: -3.28, band: pass }
+  - { s: [3, 1], min_db: -3.28, band: pass }
+optimizer: { betas: [8, 16, 32, 64, 128], iterations_per_beta: 30, budget_min: 45 }
+```
+
+The Python API mirrors it (`rf.Spec`, `rf.S(2, 1).at_least_db(-3.28, band=...)`,
+`rf.RadiatedFraction(port=1).at_least(0.7, band=...)`, `rf.S(2, 1).phase_deg(90, tol=5)`,
+`rf.S(1, 1).mask_db([(f, limit), ...])` for piecewise-linear masks).
+
+Each requirement becomes a normalized violation φ(ω_m) at the objective frequencies inside its
+band (φ ≤ 0 means met), with x = 10 log10(|S|² + 1e-10):
+
+| Requirement               | φ                                       | Default scale s |
+| ------------------------- | --------------------------------------- | --------------- |
+| `max_db` L (or mask)      | (x − L)/s                               | 10 dB           |
+| `min_db` L                | (L − x)/s                               | 1 dB            |
+| power between p_lo, p_hi  | two one-sided terms in dB               | 1 dB            |
+| phase θ0 ± tol            | (1 − cos(arg S − θ0))/(1 − cos tol) − 1 | —               |
+| radiated fraction ≥ η_min | (η_min − η_rad)/s                       | 0.1             |
+
+Requirements group by excitation: `S_ij` and the radiated fraction of port j belong to excitation
+j. Per group and frequency, `f_{g,m} = τ log Σ_r exp(φ_r(ω_m)/τ)` with τ = 0.05: a smooth maximum,
+at most τ log K above the true one, needing one adjoint run per group, which is the paper's choice
+of combining sub-objectives into one FOM (its Eq. 17). `aggregate: none` gives one group per
+requirement (a strict epigraph at one adjoint run per requirement). The objective frequencies are
+the union of the band samples; Δω_min for the adjoint window is taken over that union.
+
+## 10. Output
+
+### 10.1 Polygons
+
+The Heaviside design is a binary pixel field. Marching squares on its bilinear interpolant at
+level 0.5 traces the copper outlines: they follow the pixel edges (the node lines the solver used)
+and chamfer pixel corners by half a pixel. Contours nest into outer boundaries and holes by
+containment. Each hole is joined to its outer boundary by a zero-width keyhole cut (as KiCad
+fractures zones for Gerber), because footprint polygons have no holes. Collinear points merge,
+and Douglas–Peucker simplification [26] with tolerance Δ_d/8 follows. Copper islands are kept,
+since they were part of the optimized physics; one narrower than L_min fails the check of §10.2.
+
+### 10.2 Minimum width and space check
+
+The polygons are rasterized at Δ_d/8. A Euclidean distance transform (the Felzenszwalb and
+Huttenlocher two-pass method [27], numpy) gives the morphological opening and closing with a
+disk of diameter L_min − 2·(Δ_d/8). Copper removed by the opening is a width violation; void
+filled by the closing is a space violation. Violations are listed in the result and fail the e2e
+tests. Clearance to copper outside the footprint is KiCad's job.
+
+### 10.3 KiCad footprint
+
+The `.kicad_mod` uses the format KiCad 10 writes for its own libraries:
+
+- one rectangular SMD pad per port, numbered by port, w × 2 pixels, on `F.Cu` only, at the
+  footprint edge; the footprint origin is the design-region centre;
+- copper islands touching two or more port pads: `fp_poly` on `F.Cu` (solid fill, zero width)
+  with `(net_tie_pad_groups "1, 2, 3")` naming those pads, so port nets may differ by name; an
+  island touching one pad: a custom pad of that number with `gr_poly` primitives; islands touching
+  none: `fp_poly` copper (netless);
+- `F.CrtYd` and `F.Fab` rectangles on the design region;
+  `(attr smd exclude_from_pos_files exclude_from_bom)`; a description naming the stackup the
+  design assumes (εr, h, tanδ, a solid ground on the next layer) and the spec sha256;
+- UUIDs derived deterministically (uuid5 of the spec hash and the item index).
+
+The package includes a minimal reader for round-trip tests. The KiCad test lane (headless
+`kicad-cli`, never the GUI bundle) checks that KiCad parses the footprint.
+
+### 10.4 Result, Touchstone and provenance
+
+The run directory holds `spec.json` (canonical, sha256), `checkpoint.npz`, `history.json`,
+`footprint.kicad_mod`, `coarse.sNp` and `fine.sNp` (full S-matrix renormalized to 50 Ω, RI format,
+GHz, 201 points over the source band, e^{+jωt} convention), and `result.json`
+(`yapnr-rf-result/1`):
+
+- the spec hash and the solver settings: grid, Δt, Courant factor, CPML, port calibration (Z_c,
+  k, chosen widths), decimation, tolerances, run lengths;
+- the optimizer: β schedule, iterations per epoch, final t, M_nd;
+- achieved values at the objective frequencies (coarse binary and fine), radiated fraction, power
+  balance, the min width and space check;
+- provenance: yapnr version, numpy, torch and Python versions, backend, dtype, threads, platform,
+  wall times.
+
+### 10.5 Animation (optional)
+
+`yapnr.rf.animate` renders the evolution of ρ̄ (one frame per iteration, from the checkpoints) with
+the feeds and ports, and beside it |S_ij| (dB) at the objective frequencies and t, following the
+`pnr.animate` conventions (Pillow, the viewer palette, animated WebP at 800 px within 2.5 MB, GIF
+at 640 px within 5 MB, deterministic). Pillow is imported lazily; the module is a tooling target.
+
+## 11. End-to-end cases
+
+### 11.1 Common settings and cost
+
+Ports run into the CPML on the edges named; feeds and pads are fixed; L_min = 0.6 mm width and
+space on S1 (2 pixels), 0.8 mm on S2. Each case writes its run directory to
+`$TEST_UNDECLARED_OUTPUTS_DIR`. Throughput basis (measured for this design on the development Mac):
+the core Yee update runs at 650 M cell-steps/s at 155k cells and 370 M at 930k cells with torch
+(4 threads, float32), and 150 M with numpy (one thread). With CPML, sources, monitors and DTFTs the
+plan assumes 150 M cell-steps/s for the torch backend (est.).
+
+| Case     | Stackup, Δ, n_sub | Grid (cells)     | Δt (ps) | Cells/λ_d at f_max | Forward / adjoint steps (est.) | s/iteration (est.) | Iteration cap | Budget |
+| -------- | ----------------- | ---------------- | ------- | ------------------ | ------------------------------ | ------------------ | ------------- | ------ |
+| divider  | S1, 0.3 mm, 4     | 92×84×22 = 170k  | 0.465   | 46 (11.5 GHz)      | 6k / 7.5k (window 4.3k)        | 15                 | 150           | 45 min |
+| antenna  | S2, 0.4 mm, 6     | 93×89×27 = 223k  | 0.599   | 39 (10.3 GHz)      | 10k / 15k (window 8.3k)        | 37                 | 80            | 55 min |
+| diplexer | S1, 0.3 mm, 4     | 110×94×22 = 227k | 0.465   | 42 (12.6 GHz)      | 8k / 11k (window 5.4k)         | 29                 | 100           | 55 min |
+
+Air above the copper: S1 to h + 5.5 mm (10 graded cells, ≤ 0.8 mm), S2 to h + 11 mm (13 cells,
+≤ 1.2 mm). The Courant factor is 0.95. Numerical dispersion at 39 cells per wavelength is about
+0.1 %, well below the geometric errors. Each e2e test has a hard wall-clock limit of 60 min (Bazel
+`timeout = "eternal"`); the optimizer stops gracefully at its budget, then binarizes, exports and
+validates, and the test judges the result. Run them one at a time, niced:
+`nice -n 10 bazel test --config=lowmem //tests/e2e/rf:test_divider`.
+
+### 11.2 (a) Power divider
+
+- Design region x ∈ [0, 9.6], y ∈ [−6.0, 6.0] mm (32×40 pixels), mirror symmetry about y = 0.
+- Port 1 on the W edge at y = 0; ports 2 and 3 on the E edge at y = ±4.2 mm; feeds 1.8 mm
+  (6 cells; Hammerstad–Jensen 50.3 Ω), confirmed by calibration.
+- Band 8.5–11.5 GHz (30 %), 7 points. Targets: |S11| ≤ −20 dB; |S21|, |S31| ≥ −3.28 dB
+  (|S|² ≥ 0.47). One group (excitation 1): 1 forward + 1 adjoint run per iteration.
+- A quarter-wave T-junction reaches −20 dB return loss over 37 % in ideal line theory [24], so the
+  targets are feasible in this region.
+
+Pass criteria (dense sweep, 61 points over the band):
+
+| Check        | Coarse binary (optimization grid)                                                                                         | Fine re-simulation of the footprint |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| return loss  | \|S11\| ≤ −17 dB                                                                                                          | \|S11\| ≤ −15 dB                    |
+| transmission | \|S21\|, \|S31\| ≥ −3.45 dB                                                                                               | \|S21\|, \|S31\| ≥ −3.6 dB          |
+| imbalance    | —                                                                                                                         | \|\|S21\| − \|S31\|\| ≤ 0.25 dB     |
+| passivity    | eig(I − SᴴS) ≥ −1e-3                                                                                                      | same                                |
+| export       | width and space check passes; the footprint re-simulated on this grid matches the optimizer's binary result within 0.5 dB | —                                   |
+
+**(a2) Wilkinson variant** (manual, tagged `rf-stretch`): fixed 0.6 × 0.6 mm pads 0.6 mm apart at
+x = 7.2 mm across y = 0 with a 100 Ω lumped resistor between them (§5.5); a second group
+(excitation 2) targets |S22| ≤ −20 dB and |S32| ≤ −20 dB over 9–11 GHz (5 points); fine
+acceptance ≤ −15 dB. Two forward and two adjoint runs per iteration. The footprint exposes the
+resistor pads as pads 4 and 5 and the result names the part (100 Ω, 0402).
+
+### 11.3 (b) Patch-class antenna
+
+- Stackup S2 (thicker for bandwidth: est. Q ≈ 13, against 26 on S1, which halves the ring-down).
+- Design region x ∈ [0, 18], y ∈ [−9, 9] mm (45×45 pixels at 0.4 mm), mirror symmetry about y = 0.
+  A textbook patch for 10 GHz on S2 is 7.2 × 9.9 mm [25], so the region has room for matching.
+- Port 1 on the W edge at y = 0; feed width from calibration (8 or 9 cells, 3.2 or 3.6 mm).
+- Flux box B: x ∈ [−2.4, 20.4], y ∈ [−11.4, 11.4] mm, z from h to h + 8.0 mm, feed window as in
+  §5.6.
+- Optimization band 9.7–10.3 GHz, 4 points (0.2 GHz). Targets: |S11| ≤ −12 dB; η_rad ≥ 0.70.
+  One group: 1 forward + 1 adjoint run per iteration.
+
+Pass criteria:
+
+| Check             | Coarse binary                      | Fine re-simulation                                                                               |
+| ----------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------ |
+| match             | \|S11\| ≤ −10 dB over 9.7–10.3 GHz | \|S11\| ≤ −10 dB over 9.75–10.25 GHz (41 points)                                                 |
+| radiated fraction | η_rad ≥ 0.65 at the 4 points       | η_rad ≥ 0.60 at 9.75, 10.0 and 10.25 GHz                                                         |
+| power balance     | —                                  | closed box (sides to the ground): outward flux + P_diss inside = (1 − \|S11\|²) P_inc within 2 % |
+| export            | as in (a)                          | as in (a)                                                                                        |
+
+The test also simulates, without asserting, a textbook quarter-wave-matched rectangular patch on
+the same grid and reports both, as context for the thresholds.
+
+### 11.4 (c) Diplexer (two-channel filter bank)
+
+- Stackup S1, Δ = 0.3 mm; design region x ∈ [0, 15], y ∈ [−7.5, 7.5] mm (50×50 pixels), no
+  symmetry.
+- Port 1 (common) on the W edge at y = 0; port 2 (channel A) on the E edge at y = +4.5 mm; port 3
+  (channel B) on the E edge at y = −4.5 mm.
+- Channels: A 7.6–8.4 GHz, B 11.6–12.4 GHz. Objective frequencies widen each channel by 0.2 GHz
+  against coarse-to-fine shifts: 7.4, 7.8, 8.2, 8.6 and 11.4, 11.8, 12.2, 12.6 GHz.
+- Targets in A: |S21| ≥ −1.0 dB, |S31| ≤ −22 dB, |S11| ≤ −12 dB. In B: |S31| ≥ −1.0 dB,
+  |S21| ≤ −22 dB, |S11| ≤ −12 dB. One group (excitation 1).
+- Without vias, the plausible topologies are open-stub notches and line transformers (a notch
+  per branch, a quarter-wave from the junction at the other channel); a single stub reaches 20 dB
+  over about ±3 % [24], so the targets need two resonators per branch and fit the region.
+
+Pass criteria (nominal channels, 0.05 GHz steps):
+
+| Check             | Coarse binary                      | Fine re-simulation |
+| ----------------- | ---------------------------------- | ------------------ |
+| in-channel loss   | \|S21\| (A), \|S31\| (B) ≥ −1.5 dB | ≥ −2.0 dB          |
+| rejection         | \|S31\| (A), \|S21\| (B) ≤ −18 dB  | ≤ −15 dB           |
+| common-port match | \|S11\| ≤ −10 dB in A and B        | ≤ −8 dB            |
+| export, passivity | as in (a)                          | as in (a)          |
+
+**(c2) Three-channel bank** (manual, `rf-stretch`): 4 ports, channels 7.0–7.6, 9.7–10.3 and
+12.4–13.0 GHz, design region 18×18 mm, same kind of targets; about twice the diplexer's cost.
+
+### 11.5 Independent re-validation
+
+- **Finer grid, from the export:** the validator reads `footprint.kicad_mod` (not the optimizer's
+  arrays) and rasterizes it on a grid with Δ/2 in-plane and 1.5 × n_sub (6 or 9 cells), graded by
+  the same rules, with the midpoint rule (an edge is copper if its midpoint is inside or on a
+  polygon). It recalibrates the ports at that grid, runs every excitation, renormalizes the full
+  S-matrix to 50 Ω, computes the radiated fraction and power balance, and applies the criteria
+  above (est. 1–3 min per excitation).
+- **Same grid, from the export:** must reproduce the optimizer's binary result within 0.5 dB and
+  2 % (checks the export).
+- **External solver (optional, manual, not in CI):** Meep [1] on a uniform grid at the fine
+  pitch, with a PEC ground, a one-cell PEC sheet for the copper, its PML, subpixel averaging, and
+  the same line-port post-processing (soft Ez sheet source, V and I from Meep's DFT fields). It
+  runs in a user-space environment outside the repository (micromamba with conda-forge `pymeep`;
+  osx-64 under Rosetta if there is no osx-arm64 build; no Docker, Homebrew or sudo). Agreement
+  targets: |S| within 1 dB in band, resonances within 2 %. openEMS built from source is the
+  alternative. Results are reported in the docs page, not committed as logs.
+
+## 12. Fast unit tests
+
+`tests/unit/rf/`, one Bazel target per file (`yapnr_py_tests`), float64 numpy unless noted, budgets
+for the CI arm runner:
+
+| File                        | Checks                                                                                                                                                                                                                                                    | Budget |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `test_mesh.py`              | graded axes, dual lengths, grading limits, index lookup, design-plane mapping                                                                                                                                                                             | 1 s    |
+| `test_stability.py`         | power-iteration λ_max equals the analytic value on a uniform grid (1 %); a graded grid stays bounded for 20k steps at 0.99 Δt and diverges at 1.05 Δt                                                                                                     | 10 s   |
+| `test_dtft.py`              | discrete frequency-domain residual (§4.6) ≤ 1e-10 with random σ; decimated DTFT within 1e-6 of d = 1                                                                                                                                                      | 10 s   |
+| `test_cpml.py`              | Ez dipole above ground: small domain against a large reference before its reflections return, error ≤ −50 dB (10 cells); measured value recorded                                                                                                          | 30 s   |
+| `test_microstrip.py`        | S1 at 6 cells/width, 4 substrate cells: Z_c vs Hammerstad–Jensen within 5 % at 2–4 GHz, ε_eff vs Kirschning–Jansen within 3 % at 2–12 GHz; matched line: \|S11\| ≤ −30 dB, \|S21\| ≥ −0.05 dB, ∠S21 = −Re(k)L ± 2° (engineering convention)               | 60 s   |
+| `test_sheet.py`             | G_max sheet against hard PEC edges: S21 within 0.02 dB and 0.5°; conductance averaging gives G_max/2 on boundary edges; G(ρ̄) monotone and log-symmetric                                                                                                   | 30 s   |
+| `test_power_balance.py`     | closed box: P_out + P_diss = P_in within 0.5 %; port-wave power equals feed Poynting flux within 2 %; feed leakage through B with its window ≤ 1 %; random gray 3-ports: eig(I − SᴴS) ≥ −1e-3                                                             | 90 s   |
+| `test_adjoint_gradients.py` | directional FD (2 random directions, 3 single pixels, central differences) vs adjoint ≤ 1e-5 relative for \|S21\|², \|S11\|² with de-embedding, ∠S21, η_rad, a design-plane field, an LSE group, damping on; per-frequency gradients from one adjoint run | 180 s  |
+| `test_adjoint_sources.py`   | realized real source: DTFT at ω_m equals the request within 1e-10 (half-step and integer kernels); out-of-band ≤ −90 dB; condition-number fallback                                                                                                        | 5 s    |
+| `test_material_grid.py`     | ⟨Px, y⟩ = ⟨x, Pᵀy⟩ within 1e-12; fixed ring and fixed regions; symmetry embedding and its gradient                                                                                                                                                        | 2 s    |
+| `test_filters.py`           | conic filter keeps constants, is self-adjoint, pads with the fixed ring; tanh projection maps η to η, derivative vs FD, β = ∞ is Heaviside                                                                                                                | 2 s    |
+| `test_lengthscale.py`       | width b passes, b/2 fails by ≥ 10ε, same for gaps; gradients vs FD                                                                                                                                                                                        | 5 s    |
+| `test_mma.py`               | Svanberg's three-variable toy problem converges to a KKT point (residual ≤ 1e-6); a min-max of quadratics matches its analytic optimum; determinism                                                                                                       | 5 s    |
+| `test_spec.py`              | YAML schema, φ forms, grouping by excitation, LSE bounds, epigraph shift, union of frequencies                                                                                                                                                            | 2 s    |
+| `test_torch_convention.py`  | complex autograd: ∂F/∂q = conj(grad)/2 for F = \|q\|² and Re(cq)                                                                                                                                                                                          | 1 s    |
+| `test_export.py`            | marching squares, nesting, keyholes, simplification tolerance; raster round trip (pixel XOR = 0, fine IoU ≥ 0.995); width and space violations flagged; `.kicad_mod` and Touchstone round trips; deterministic UUIDs                                      | 10 s   |
+| `test_backends.py`          | numpy vs torch float64 fields within 1e-12; torch float32 S-parameters within 1e-4                                                                                                                                                                        | 30 s   |
+| `test_tiny_design.py`       | a 2-port 6×4-pixel problem: 10 iterations lower t by a set margin; two runs are bit-identical; resume from a checkpoint is bit-identical                                                                                                                  | 60 s   |
+
+The tolerances for Z_c, ε_eff and CPML are starting values; the implementation records the measured
+errors and sets each tolerance to the measurement plus 50 %. A slow test (tag `slow`) repeats the
+microstrip check at 12 cells per width and expects the error to drop.
+
+## 13. Layout, targets, CLI and dependencies
+
+| Path                                | Contents                                                                                   |
+| ----------------------------------- | ------------------------------------------------------------------------------------------ |
+| `yapnr/rf/__init__.py`              | public API: `Spec`, requirements, `design()`, `validate()`, `calibrate()`                  |
+| `yapnr/rf/constants.py`             | c0, ε0, μ0, η0, σ_Cu                                                                       |
+| `yapnr/rf/stackup.py`               | stackups, the copper sheet model, Hammerstad–Jensen and Kirschning–Jansen formulas         |
+| `yapnr/rf/mesh.py`                  | graded axes, the Yee grid, lengths, areas, volumes, index lookup                           |
+| `yapnr/rf/materials.py`             | per-edge ε, σ, sheet conductance, lumped resistors                                         |
+| `yapnr/rf/fdtd/engine.py`           | the stepper with numpy and torch backends behind one small ops layer                       |
+| `yapnr/rf/fdtd/cpml.py`             | profiles, ψ updates                                                                        |
+| `yapnr/rf/fdtd/stability.py`        | Courant bounds, power iteration                                                            |
+| `yapnr/rf/fdtd/sources.py`          | Gaussian pulse, Nuttall basis, source placement                                            |
+| `yapnr/rf/fdtd/dtft.py`             | accumulators (integer and half-step phases), decimation                                    |
+| `yapnr/rf/fdtd/monitors.py`         | port V and I, flux surfaces, design-plane DFT, probes                                      |
+| `yapnr/rf/fdtd/stop.py`             | stop rules                                                                                 |
+| `yapnr/rf/ports.py`                 | line ports, lumped ports, calibration and its cache                                        |
+| `yapnr/rf/sparams.py`               | waves, de-embedding, renormalization, passivity                                            |
+| `yapnr/rf/adjoint.py`               | DM gradients → J, K spectra → fitted sources; recombination                                |
+| `yapnr/rf/design/`                  | `material_grid.py`, `filters.py`, `projection.py`, `lengthscale.py`, `metrics.py`          |
+| `yapnr/rf/optim/`                   | `mma.py`, `epigraph.py`, `schedule.py`                                                     |
+| `yapnr/rf/spec.py`, `objectives.py` | spec schema and loader; φ, groups, aggregation                                             |
+| `yapnr/rf/problem.py`, `driver.py`  | spec → grids, models and ports per resolution; the optimization loop, checkpoints, budgets |
+| `yapnr/rf/validate.py`              | footprint → fine re-simulation → criteria                                                  |
+| `yapnr/rf/export/`                  | `contour.py`, `drc.py`, `kicad.py` (writer and reader), `touchstone.py`, `report.py`       |
+| `yapnr/rf/cases.py`                 | the e2e specs as presets                                                                   |
+| `yapnr/rf/animate.py`               | the animation (Pillow, tooling target)                                                     |
+| `yapnr/rf/cli.py`                   | `yapnr rf design / validate / calibrate / animate`                                         |
+| `tests/unit/rf/`, `tests/e2e/rf/`   | §12, §11                                                                                   |
+
+- **Bazel:** `//yapnr/rf` (`py_library`, deps numpy, torch, pyyaml, `//yapnr:package`);
+  `//yapnr/rf:animate` (adds Pillow); the CLI gains a lazily imported `rf` command.
+  `//tests/unit/rf:all` (small and medium); `//tests/e2e/rf:all` with tags `manual`, `slow`,
+  `rf-e2e` (and `rf-stretch` for a2 and c2), `size = "enormous"`, `timeout = "eternal"`.
+- **CLI:**
+  `yapnr rf design SPEC.yaml --out DIR [--backend torch|numpy] [--threads 4] [--budget-min 45]`,
+  `yapnr rf validate DIR [--refine 2] [--external meep]`, `yapnr rf calibrate SPEC.yaml`,
+  `yapnr rf animate DIR`.
+- **Threads:** the package calls `torch.set_num_threads(n)` with n = min(4, `--threads`) and
+  honours `OMP_NUM_THREADS`; tests set 4.
+- **Dependencies:** none new. scipy and shapely are not needed: the distance transform, marching
+  squares and polygon code are small numpy routines, tested in §12.
+- **Docs:** `docs/rf-inverse-design.md` (user guide with measured numbers and figures), this
+  design, entries in `docs/decisions.md`, `WORKLOG.md`.
+- This is a new package, not new PnR engine behaviour, so no default-off flag is needed. Using the
+  footprints in PnR (stackup checks, keepouts on the next layers) is a follow-up issue.
+
+## 14. Risks and fallbacks
+
+| Risk                                                                            | Fallback                                                                                                                                                 |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| coarse-to-fine mismatch (2-pixel features, the zero-thickness edge singularity) | robust minimax over eroded, nominal and dilated designs ([1] §5.3; 3× cost); a 0.2 mm coarse grid (est. 2.5× cost); larger margins on the targets        |
+| gray absorbers satisfying reflection specs                                      | paired power-delivery specs (§7.4); damping G_d > 0; the binary re-simulation is the judge                                                               |
+| slow DTFT convergence (narrow-band antennas, high-Q filters)                    | the 1e-3 tolerance in optimization; fewer, wider-spaced objective points; the thicker S2 stackup; the run cap fails loudly rather than silently          |
+| CPML reflection of the microstrip mode or surface waves                         | 12–16 cells, κ_max and α_max retuned against `test_cpml.py` and the matched-line test                                                                    |
+| the CPML symmetrization does not hold exactly in the discrete scheme            | the FD test detects it; an adjoint stepper with the transposed ψ recursion                                                                               |
+| MMA oscillates at high β                                                        | smaller move limits; GCMMA inner iterations (extra forward runs)                                                                                         |
+| float32 accumulation or decimation errors in gradients                          | complex128 accumulators (already); d = 1; float64 runs at about 2× cost                                                                                  |
+| runtime above budget on a loaded machine                                        | lower iteration caps; fewer objective points; a PMC symmetry plane halving symmetric cases (both runs are even under the mirror); a coarser antenna grid |
+| line-port definitions (V path, wide low-impedance lines)                        | V averaged over the central third of the strip; P/I² impedance definition; resistive lumped ports                                                        |
+| infinite ground and substrate against a finite board                            | documented limitation; an optional external check with a finite board                                                                                    |
+| no Meep build for osx-arm64                                                     | osx-64 under Rosetta; openEMS from source; skip the external check and say so                                                                            |
+| KiCad rejects keyholed polygons or net-tie copper                               | split along cut lines into hole-free polygons; custom pads per island                                                                                    |
+
+## 15. Implementation order
+
+1. Grid, materials, the numpy stepper, CPML, sources, DTFT, stability and stop rules; tests mesh,
+   stability, dtft, cpml.
+2. Line ports, calibration, S-parameters, flux, dissipation; tests microstrip, sheet, power
+   balance.
+3. Adjoint sources, gradient, recombination; tests adjoint sources and gradients, torch
+   convention.
+4. Material grid, filters, projection, length scale, MMA, specs, objectives, driver; the
+   remaining unit tests and the tiny design.
+5. The torch backend and its performance (measure and record); export, the reader and the raster
+   check.
+6. The e2e cases, validation, the optional external check, the docs page, the animation, decisions
+   and worklog.
+
+## 16. Decisions to record in `docs/decisions.md`
+
+- Own FDTD solver rather than Meep or openEMS (reasons in §2), and no new runtime dependency.
+- Line ports into the CPML as the case ports; resistive lumped ports kept for elements and as a
+  fallback.
+- Crank–Nicolson conductivity; exact discrete adjoint with Ω and c_ω.
+- Copper as a zero-thickness sheet with log-interpolated conductance per pixel averaged onto edges;
+  damping off by default.
+- Own MMA written from Svanberg's publications.
+- The e2e cases are manual and slow; they never run in CI.
+
+## References
+
+1. A. M. Hammond, A. Oskooi, M. Chen, Z. Lin, S. G. Johnson, S. E. Ralph, "High-performance hybrid
+   time/frequency-domain topology optimization for large-scale photonics inverse design," Opt.
+   Express 30(3), 4467–4491 (2022).
+2. A. Taflove, S. C. Hagness, Computational Electrodynamics: The Finite-Difference Time-Domain
+   Method, 3rd ed., Artech House (2005).
+3. J. A. Roden, S. D. Gedney, "Convolution PML (CPML): an efficient FDTD implementation of the
+   CFS-PML for arbitrary media," Microw. Opt. Technol. Lett. 27(5), 334–339 (2000).
+4. D. M. Sheen, S. M. Ali, M. D. Abouzahra, J. A. Kong, "Application of the three-dimensional
+   finite-difference time-domain method to the analysis of planar microstrip circuits," IEEE Trans.
+   Microw. Theory Techn. 38(7), 849–857 (1990).
+5. R. J. Luebbers, H. S. Langdon, "A simple feed model that reduces time steps needed for FDTD
+   antenna and microstrip calculations," IEEE Trans. Antennas Propag. 44(7), 1000–1005 (1996).
+6. M. Piket-May, A. Taflove, J. Baron, "FD-TD modeling of digital signal propagation in 3-D circuits
+   with passive and active loads," IEEE Trans. Microw. Theory Techn. 42(8), 1514–1523 (1994).
+7. R. B. Marks, D. F. Williams, "A general waveguide circuit theory," J. Res. NIST 97(5), 533–562
+   (1992).
+8. K. Kurokawa, "Power waves and the scattering matrix," IEEE Trans. Microw. Theory Techn. 13(2),
+   194–202 (1965).
+9. E. Hammerstad, Ø. Jensen, "Accurate models for microstrip computer-aided design," IEEE MTT-S
+   Int. Microwave Symp. Digest, 407–409 (1980).
+10. M. Kirschning, R. H. Jansen, "Accurate model for effective dielectric constant of microstrip
+    with validity up to millimetre-wave frequencies," Electron. Lett. 18(6), 272–273 (1982).
+11. W. Shin, S. Fan, "Choice of the perfectly matched layer boundary condition for
+    frequency-domain Maxwell's equations solvers," J. Comput. Phys. 231(8), 3406–3431 (2012).
+12. E. Hassan, E. Wadbro, M. Berggren, "Topology optimization of metallic antennas," IEEE Trans.
+    Antennas Propag. 62(5), 2488–2500 (2014).
+13. E. Hassan, E. Wadbro, M. Berggren, "Patch and ground plane design of microstrip antennas by
+    material distribution topology optimization," Prog. Electromagn. Res. B 59, 89–102 (2014).
+14. A. Erentok, O. Sigmund, "Topology optimization of sub-wavelength antennas," IEEE Trans.
+    Antennas Propag. 59(1), 58–69 (2011).
+15. N. Aage, N. A. Mortensen, O. Sigmund, "Topology optimization of metallic devices for microwave
+    applications," Int. J. Numer. Methods Eng. 83(2), 228–248 (2010).
+16. M. Zhou, B. S. Lazarov, F. Wang, O. Sigmund, "Minimum length scale in topology optimization by
+    geometric constraints," Comput. Methods Appl. Mech. Eng. 293, 266–282 (2015).
+17. F. Wang, B. S. Lazarov, O. Sigmund, "On projection methods, convergence and robust formulations
+    in topology optimization," Struct. Multidiscip. Optim. 43(6), 767–784 (2011).
+18. X. Qian, O. Sigmund, "Topological design of electromechanical actuators with robustness toward
+    over- and under-etching," Comput. Methods Appl. Mech. Eng. 253, 237–251 (2013).
+19. K. Svanberg, "The method of moving asymptotes — a new method for structural optimization," Int.
+    J. Numer. Methods Eng. 24(2), 359–373 (1987).
+20. K. Svanberg, "A class of globally convergent optimization methods based on conservative convex
+    separable approximations," SIAM J. Optim. 12(2), 555–573 (2002).
+21. K. Svanberg, "MMA and GCMMA — two methods for nonlinear optimization," technical note, KTH
+    Royal Institute of Technology (2007).
+22. A. H. Nuttall, "Some windows with very good sidelobe behavior," IEEE Trans. Acoust. Speech
+    Signal Process. 29(1), 84–91 (1981).
+23. A. M. Hammond, A. Oskooi, S. G. Johnson, S. E. Ralph, "Photonic topology optimization with
+    semiconductor-foundry design-rule constraints," Opt. Express 29(15), 23916–23938 (2021).
+24. D. M. Pozar, Microwave Engineering, 4th ed., Wiley (2012).
+25. C. A. Balanis, Antenna Theory: Analysis and Design, 4th ed., Wiley (2016).
+26. D. H. Douglas, T. K. Peucker, "Algorithms for the reduction of the number of points required to
+    represent a digitized line or its caricature," Cartographica 10(2), 112–122 (1973).
+27. P. F. Felzenszwalb, D. P. Huttenlocher, "Distance transforms of sampled functions," Theory of
+    Computing 8, 415–428 (2012).
+
+The paper [1] was read in full, including §5.2 and App. A. The adaptation to microstrip rests on
+[2–11] and on Meep's public adjoint filters (for conventions only). [12–15] are cited for the
+nonlinear response of metallic designs to conductivity; their specific interpolations were not
+re-read for this design (the web-search quota ran out), and nothing here depends on them.

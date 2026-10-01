@@ -38,7 +38,7 @@ ARG KICAD_VERSION=10.0.6
 ARG KICAD_DEB=10.0.6~ubuntu24.04.1
 
 # --- src: the corresponding source of the KiCad packages ------------------------------------
-FROM --platform=$BUILDPLATFORM ubuntu:24.04@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3 AS src-fetch
+FROM --platform=$BUILDPLATFORM ubuntu:24.10@sha256:cdf755952ed117f6126ff4e65810bf93767d4c38f5c7185b50ec1f1078b464cc AS src-fetch
 ARG KICAD_DEB
 COPY docker/yapnr-kicad/kicad-ppa.asc /etc/apt/keyrings/kicad-ppa.asc
 COPY docker/yapnr-kicad/kicad.sources /etc/apt/sources.list.d/kicad.sources
@@ -59,7 +59,7 @@ FROM scratch AS src
 COPY --from=src-fetch /src/ /src/
 
 # --- base: the runnable image ---------------------------------------------------------------
-FROM ubuntu:24.04@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3 AS base
+FROM ubuntu:24.10@sha256:cdf755952ed117f6126ff4e65810bf93767d4c38f5c7185b50ec1f1078b464cc AS base
 ARG KICAD_SERIES
 ARG KICAD_VERSION
 ARG KICAD_DEB

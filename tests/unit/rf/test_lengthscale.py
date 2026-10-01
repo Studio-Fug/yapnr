@@ -64,6 +64,14 @@ class RelationsTest(unittest.TestCase):
         self.assertAlmostEqual(ls.radius, 0.9e-3)
         self.assertLess(ls.eta_e, 0.75)  # the narrower width under the larger radius
         self.assertAlmostEqual(ls.eta_d, 0.25)
+        # A filter wider than the rules need: both thresholds move towards 0.5.
+        ls = LengthScale.from_rules(0.6e-3, 0.6e-3, 0.3e-3, radius=1.2e-3)
+        self.assertAlmostEqual(ls.radius, 1.2e-3)
+        self.assertAlmostEqual(ls.eta_e, 0.5625)
+        self.assertAlmostEqual(ls.eta_d, 0.4375)
+        self.assertAlmostEqual(
+            LengthScale.from_rules(0.6e-3, 0.6e-3, 0.3e-3, radius=0.3e-3).radius, 0.6e-3
+        )
 
 
 class IndicatorTest(unittest.TestCase):

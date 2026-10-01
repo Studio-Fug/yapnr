@@ -58,10 +58,16 @@ class LengthScale:
 
     @classmethod
     def from_rules(
-        cls, min_width: float, min_space: float, pitch: float, eps: float = 1e-6
+        cls,
+        min_width: float,
+        min_space: float,
+        pitch: float,
+        eps: float = 1e-6,
+        radius: float | None = None,
     ) -> "LengthScale":
-        """R = the larger of the two radii at η = 0.75; η_e and η_d from each length."""
-        radius = max(conic_radius(min_width), conic_radius(min_space))
+        """R = the larger of the two radii at η = 0.75 (or the filter's `radius` when that is
+        larger); η_e and η_d from each length under R."""
+        radius = max(conic_radius(min_width), conic_radius(min_space), radius or 0.0)
         return cls(
             radius=radius,
             pitch=pitch,

@@ -201,6 +201,7 @@ class KiCadTest(unittest.TestCase):
         self.assertEqual(r.net_tie_groups, ["1, 2"])
         self.assertEqual([p["number"] for p in r.pads], ["1", "2", "3"])
         self.assertEqual([p["shape"] for p in r.pads], ["rect", "rect", "custom"])
+        self.assertEqual([p["size"] for p in r.pads], [pad.size for pad in fp.pads])
         # KiCad coordinates: origin at the region centre, y down.
         ring = fp.islands[0][0]
         np.testing.assert_allclose(

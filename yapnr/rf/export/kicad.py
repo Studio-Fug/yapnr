@@ -7,8 +7,8 @@ The `.kicad_mod` follows the format KiCad 10 writes for its own libraries (versi
 - each copper island touching two or more port pads: an `fp_poly` on F.Cu (filled, zero width),
   and the footprint lists those pads in `net_tie_pad_groups`, so the port nets may have
   different names (a net tie);
-- an island touching one pad: that port's pad becomes a custom pad (anchor = the port pad)
-  with the island as a `gr_poly` primitive;
+- an island touching one pad: that port's pad becomes a custom pad (anchor = the port pad, a
+  rectangle of the feed width × two pixels) with the island as a `gr_poly` primitive;
 - an island touching no pad: an `fp_poly` on F.Cu (netless);
 - F.CrtYd and F.Fab rectangles on the design region, `(attr smd exclude_from_pos_files
   exclude_from_bom)`, and a description naming the stackup the design assumes and the spec
@@ -175,7 +175,9 @@ def write_footprint(fp: Footprint, path: str | None = None) -> str:
         if pad.number in single:
             w.emit(1, f'(pad "{pad.number}" smd custom')
             w.emit(2, f"(at {w.xy(cx, cy)})")
-            w.emit(2, f"(size {_fmt(min(sx, sy))} {_fmt(min(sx, sy))})")
+            # A rectangular anchor the size of the port pad (KiCad 10 keeps it), so the feed
+            # width stays readable from the footprint.
+            w.emit(2, f"(size {_fmt(sx)} {_fmt(sy)})")
             w.emit(2, '(layers "F.Cu")')
             w.emit(2, "(options")
             w.emit(3, "(clearance outline)")

@@ -87,6 +87,15 @@ def domain_spec(
     )
 
 
+def _strip_on_nodes(spec: Spec, port, width: int, pitch_mm: float) -> bool:
+    """True when a strip of `width` cells centred at the port lies between grid nodes (the
+    grid's nodes are whole pitches from the design region's edges)."""
+    x0, _, y0, _ = spec.design_region
+    lo = y0 if port.side in ("W", "E") else x0
+    edge = (port.at_mm - lo) / pitch_mm - 0.5 * width
+    return abs(edge - round(edge)) < 1e-6
+
+
 def source_pulse(spec: Spec) -> GaussianPulse:
     """The forward pulse covering every band a requirement uses (design §4.5)."""
     used = {r.band for r in spec.requirements}
@@ -215,7 +224,9 @@ class Problem:
         if spec.rules.active:
             w = spec.rules.min_width_mm or spec.rules.min_space_mm
             s = spec.rules.min_space_mm or spec.rules.min_width_mm
-            self.lengthscale = LengthScale.from_rules(w * 1e-3, s * 1e-3, self.pitch)
+            self.lengthscale = LengthScale.from_rules(
+                w * 1e-3, s * 1e-3, self.pitch, radius=self.filter.radius
+            )
 
     # -- setup ----------------------------------------------------------------------------------
 
@@ -248,15 +259,26 @@ class Problem:
         if all(p.width_cells for p in spec.ports):
             return widths
         fc = 2.0 * np.pi * self.pulse.f_center
+        auto = [p for p in spec.ports if not p.width_cells]
 
         def z_at_fc(w):
             return float(self._calibration(w).at(np.array([fc]))[0][0].real)
 
-        z0 = z_at_fc(hj)
-        other = hj - 1 if z0 < 50.0 else hj + 1
-        cands = {hj: z0}
-        if other >= 1:
-            cands[other] = z_at_fc(other)
+        def fits(w):
+            """The strip of w cells lies between grid nodes at every auto port (an odd width
+            needs a centre on a cell centre, an even one a centre on a node)."""
+            return all(_strip_on_nodes(spec, p, w, pitch * 1e3) for p in auto)
+
+        fitting = sorted((w for w in range(1, 2 * hj + 3) if fits(w)), key=lambda w: abs(w - hj))
+        if not fitting:
+            raise ValueError("no feed width fits the port positions on the grid")
+        first = fitting[0]
+        z0 = z_at_fc(first)
+        wider = z0 >= 50.0  # a wider strip lowers Z_c
+        nxt = [w for w in fitting if (w > first if wider else w < first)]
+        cands = {first: z0}
+        if nxt:
+            cands[nxt[0]] = z_at_fc(nxt[0])
         best = min(cands, key=lambda w: (abs(cands[w] - 50.0), w))
         self.log(f"feed width {best} cells (Z_c at f_c: {cands})")
         for p in spec.ports:

@@ -10,7 +10,13 @@ Conventions of `pnr.animate`: Pillow only (imported lazily; `//yapnr/rf:animate`
 viewer's palette, animated WebP at 800 px within 2.5 MB and GIF at 640 px within 5 MB,
 the final frame held, frames rendered lazily, no metadata, deterministic for the same run and Pillow version.
 
+`figure` draws a still of a validated run (`validation.json`, `yapnr.rf.validate`): the
+exported footprint's copper on the left and, on the right, |S_ij| of excitation 1 over the
+re-validation sweep on the optimization grid (thin) and the finer grid (thick) with the fine
+criteria, and the radiated fraction when the case has one.
+
     python -m yapnr.rf.animate RUN_DIR --out run.webp
+    python -m yapnr.rf.animate RUN_DIR --figure run.png
 """
 
 from __future__ import annotations
@@ -382,16 +388,228 @@ def animate(run_dir: str, out: str, *, max_frames: int = 120) -> dict:
     raise ValueError(f"animation over its size budget: {len(data)} > {budget} bytes")
 
 
+# -- the still figure of a validated run ------------------------------------------------------
+
+
+def _copper_raster(run_dir: str, spec_d: dict, sub: int, margin: int) -> np.ndarray:
+    """The footprint's copper sampled `sub` times per pixel, with `margin` pixels of feed
+    around the region (feeds drawn as straight strips)."""
+    from yapnr.rf.export.kicad import read_footprint
+    from yapnr.rf.export.raster import rasterize
+    from yapnr.rf.spec import Spec
+    from yapnr.rf.validate import board_polygons
+
+    spec = Spec.from_dict(spec_d)
+    fp = read_footprint(os.path.join(run_dir, "footprint.kicad_mod"))
+    polys = board_polygons(fp, spec)
+    pitch = spec.grid.pitch_mm
+    x0, x1, y0, y1 = spec.design_region
+    step = pitch / sub
+    xs = np.arange(x0 - margin * pitch + 0.5 * step, x1 + margin * pitch, step)
+    ys = np.arange(y0 - margin * pitch + 0.5 * step, y1 + margin * pitch, step)
+    cu = rasterize(polys, xs, ys)
+    for pad, port in zip(sorted(fp.pads, key=lambda q: int(q["number"])), spec.ports):
+        sx, sy = pad["size"]
+        w = sy if port.side in ("W", "E") else sx
+        c = port.at_mm
+        if port.side == "W":
+            cu[np.ix_(xs < x0, np.abs(ys - c) < w / 2)] = True
+        elif port.side == "E":
+            cu[np.ix_(xs > x1, np.abs(ys - c) < w / 2)] = True
+        elif port.side == "S":
+            cu[np.ix_(np.abs(xs - c) < w / 2, ys < y0)] = True
+        else:
+            cu[np.ix_(np.abs(xs - c) < w / 2, ys > y1)] = True
+    return cu
+
+
+def figure(run_dir: str, out: str, *, width: int = 1000) -> dict:
+    """Write the still figure of a validated run (PNG); returns its size in bytes."""
+    from PIL import Image, ImageDraw
+
+    from yapnr.rf import cases
+
+    run_spec = os.path.join(run_dir, "spec.json")
+    with open(run_spec, encoding="utf-8") as fh:
+        spec_d = json.load(fh)
+    with open(os.path.join(run_dir, "validation.json"), encoding="utf-8") as fh:
+        val = json.load(fh)
+    k = width / 1000.0
+    w, h = width, int(round(540 * k))
+    img = Image.new("RGB", (w, h), _rgb(BACKGROUND))
+    draw = ImageDraw.Draw(img)
+    verdict = []
+    for level in ("coarse", "fine"):
+        if level in val:
+            verdict.append(f"{level} {'pass' if val[level]['ok'] else 'FAIL'}")
+    draw.text(
+        (12 * k, HEADER_PX * k / 2),
+        f"RF inverse design: {spec_d['name']}",
+        fill=_rgb(TEXT),
+        font=_font(int(16 * k)),
+        anchor="lm",
+    )
+    draw.text(
+        (w - 12 * k, HEADER_PX * k / 2),
+        "re-simulated from the footprint: " + ", ".join(verdict),
+        fill=_rgb(OK if val.get("ok") else FAIL),
+        font=_font(int(13 * k)),
+        anchor="rm",
+    )
+    # Left: the copper.
+    margin, sub = 4, 4
+    cu = _copper_raster(run_dir, spec_d, sub, margin)
+    box = (8 * k, HEADER_PX * k, 0.46 * w, h - 30 * k)
+    scale = min((box[2] - box[0]) / cu.shape[0], (box[3] - box[1]) / cu.shape[1])
+    sub_c = np.array(_rgb(SUBSTRATE), dtype=np.uint8)
+    cu_c = np.array(_rgb(COPPER), dtype=np.uint8)
+    rgb = np.where(cu[..., None], cu_c[None, None, :], sub_c[None, None, :])
+    arr = np.ascontiguousarray(np.transpose(rgb, (1, 0, 2))[::-1])
+    tile = Image.fromarray(arr, "RGB").resize(
+        (max(1, int(arr.shape[1] * scale)), max(1, int(arr.shape[0] * scale))), Image.NEAREST
+    )
+    ox = int(box[0] + 0.5 * (box[2] - box[0] - tile.width))
+    oy = int(box[1] + 0.5 * (box[3] - box[1] - tile.height))
+    img.paste(tile, (ox, oy))
+    px_mm = scale * sub / spec_d["grid"]["pitch_mm"]
+    m = margin * sub * scale
+    draw.rectangle(
+        (ox + m, oy + m, ox + tile.width - m - 1, oy + tile.height - m - 1), outline=_rgb(OUTLINE)
+    )
+    bar = 2.0 if px_mm * 5 > 0.4 * tile.width else 5.0
+    yb = oy + tile.height + 10 * k
+    draw.line([(ox, yb), (ox + bar * px_mm, yb)], fill=_rgb(TEXT), width=max(1, int(2 * k)))
+    draw.text(
+        (ox + bar * px_mm + 6 * k, yb),
+        f"{bar:g} mm",
+        fill=_rgb(MUTED),
+        font=_font(int(11 * k)),
+        anchor="lm",
+    )
+    # Right: |S_j1| and η.
+    has_eta = any(key.startswith("eta") for key in val["fine"]["table"]) if "fine" in val else False
+    right = (0.53 * w, HEADER_PX * k + 8 * k, w - 14 * k, h - 30 * k)
+    if has_eta:
+        split = right[1] + 0.62 * (right[3] - right[1])
+        s_box = (right[0], right[1], right[2], split - 18 * k)
+        e_box = (right[0], split + 6 * k, right[2], right[3])
+    else:
+        s_box, e_box = right, None
+    crit = cases.CRITERIA.get(val["case"], {}).get("fine", [])
+    self = _Plot(draw, k)
+    tables = [
+        (val[lv]["table"], width_) for lv, width_ in (("coarse", 1), ("fine", 2)) if lv in val
+    ]
+    ghz = tables[-1][0]["ghz"]
+    names = sorted(key for key in tables[-1][0] if key.startswith("S") and key.endswith("1"))
+    lo = min(-40.0, math.floor(min(min(tables[-1][0][n]) for n in names) / 10.0) * 10.0)
+    lo = max(lo, -60.0)
+    self.frame(
+        s_box, ghz[0], ghz[-1], lo, 0.0, "|S_i1| (dB)   thin: optimization grid, thick: fine"
+    )
+    for c in crit:
+        if c.kind in ("s_max", "s_min") and c.ghz is not None:
+            col = FAIL if c.kind == "s_max" else OK
+            self.hline(c.ghz[0], c.ghz[1], c.limit, col)
+    for n, name in enumerate(names):
+        colour = SERIES[n % len(SERIES)]
+        for table, lw in tables:
+            self.curve(table["ghz"], table[name], colour, lw)
+        self.label(n, name, colour, len(names))
+    if e_box is not None:
+        self.frame(e_box, ghz[0], ghz[-1], 0.0, 1.0, "radiated fraction")
+        for c in crit:
+            if c.kind == "eta_min":
+                self.hline(min(c.at_ghz), max(c.at_ghz), c.limit, OK)
+        for table, lw in tables:
+            self.curve(table["ghz"], table["eta1"], ACCENT, lw)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    with open(out, "wb") as fh:
+        fh.write(buf.getvalue())
+    return {"bytes": len(buf.getvalue()), "size": [w, h]}
+
+
+class _Plot:
+    """A minimal line plot on a Pillow canvas."""
+
+    def __init__(self, draw, k: float):
+        self.draw, self.k = draw, k
+
+    def frame(self, box, xlo, xhi, ylo, yhi, title):
+        self.box, self.xlo, self.xhi, self.ylo, self.yhi = box, xlo, xhi, ylo, yhi
+        x0, y0, x1, y1 = box
+        d, k = self.draw, self.k
+        d.rectangle(box, outline=_rgb(MUTED))
+        f = _font(int(10 * k))
+        span = yhi - ylo
+        ticks = np.linspace(ylo, yhi, 5) if span <= 1.0 else np.arange(ylo, yhi + 1e-9, 10.0)
+        for v in ticks:
+            y = self.py(v)
+            d.line([(x0, y), (x0 + 4 * k, y)], fill=_rgb(MUTED))
+            d.text((x0 - 4 * k, y), f"{v:g}", fill=_rgb(MUTED), font=f, anchor="rm")
+        d.text((x0 + 6 * k, y0 + 4 * k), title, fill=_rgb(MUTED), font=f, anchor="la")
+        d.text((x0, y1 + 3 * k), f"{xlo:g} GHz", fill=_rgb(MUTED), font=f, anchor="la")
+        d.text((x1, y1 + 3 * k), f"{xhi:g} GHz", fill=_rgb(MUTED), font=f, anchor="ra")
+
+    def px(self, x):
+        x0, _, x1, _ = self.box
+        return x0 + (x - self.xlo) / (self.xhi - self.xlo) * (x1 - x0)
+
+    def py(self, v):
+        _, y0, _, y1 = self.box
+        v = min(max(v, self.ylo), self.yhi)
+        return y1 - (v - self.ylo) / (self.yhi - self.ylo) * (y1 - y0)
+
+    def hline(self, xa, xb, v, colour):
+        self.draw.line(
+            [(self.px(xa), self.py(v)), (self.px(xb), self.py(v))],
+            fill=_rgb(colour),
+            width=max(1, int(self.k)),
+        )
+
+    def curve(self, xs, ys, colour, lw):
+        # Break the line at gaps in frequency (the diplexer's two channels).
+        xs = list(xs)
+        step = min(b - a for a, b in zip(xs, xs[1:])) if len(xs) > 1 else 1.0
+        seg = []
+        for i, (x, y) in enumerate(zip(xs, ys)):
+            if seg and x - xs[i - 1] > 3.5 * step:
+                self._poly(seg, colour, lw)
+                seg = []
+            seg.append((self.px(x), self.py(y)))
+        self._poly(seg, colour, lw)
+
+    def _poly(self, pts, colour, lw):
+        if len(pts) > 1:
+            self.draw.line(pts, fill=_rgb(colour), width=max(1, int(lw * self.k)))
+
+    def label(self, n, name, colour, count=1):
+        x0, y0, x1, y1 = self.box
+        self.draw.text(
+            (x1 - 6 * self.k, y1 - (8 + 13 * (count - n)) * self.k),
+            name,
+            fill=_rgb(colour),
+            font=_font(int(11 * self.k)),
+            anchor="ra",
+        )
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="python -m yapnr.rf.animate", description=__doc__.split("\n")[0]
     )
     ap.add_argument("run_dir")
-    ap.add_argument("--out", required=True, help="output .webp or .gif")
+    ap.add_argument("--out", help="output .webp or .gif")
+    ap.add_argument("--figure", help="output .png: the still figure of a validated run")
     ap.add_argument("--max-frames", type=int, default=120)
     args = ap.parse_args(argv)
-    info = animate(args.run_dir, args.out, max_frames=args.max_frames)
-    print(json.dumps(info))
+    if not args.out and not args.figure:
+        ap.error("give --out and/or --figure")
+    if args.out:
+        print(json.dumps(animate(args.run_dir, args.out, max_frames=args.max_frames)))
+    if args.figure:
+        print(json.dumps(figure(args.run_dir, args.figure)))
     return 0
 
 

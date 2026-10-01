@@ -482,8 +482,9 @@ divider's footprint:
   10 GHz is 0.49 mm at 0.3 mm pitch and 0.44 mm at 0.15 mm against 0.35 mm (Kirschning–Jansen–
   Koster): the copper acts about 0.45 cell larger per edge, falling roughly as √Δ. A design
   exported pixel for pixel therefore resonates higher on finer grids and in hardware than on the
-  optimization grid (the antenna about 1 % from 0.4 to 0.2 mm, about 3 % to the continuum by the
-  √Δ extrapolation), and diagonal staircases add a resolution effect of their own. The
+  optimization grid (the antenna 1.9 % from 0.4 to 0.2 mm and 2.4 % at 0.133 mm; the divider's
+  match null moved by up to 4 %), and diagonal staircases add a resolution effect of their own.
+  Robust optimization over the eroded design (`eta_variants`) is what kept the divider's margin. The
   validator re-simulates every case on the optimization grid, at half the pitch and at a third
   of it, judges the fine criteria on both finer grids and reports the trend of every check
   (`validation.json`, `convergence`): the finer grids are a check, not a converged answer, for

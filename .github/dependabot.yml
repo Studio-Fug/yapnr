@@ -28,7 +28,8 @@ updates:
     labels: [dependencies]
     # The KiCad PPA package is built per Ubuntu release (KICAD_DEB=...~ubuntu24.04.N), so moving
     # the base to a new release is a planned change (a new KICAD_DEB and TAG), not a monthly
-    # update: only 24.04 digests are proposed (owner decision 2026-09-30, after #3 proposed 26.04).
+    # update: only 24.04 digests are proposed (owner decision 2026-09-30, after #3 proposed 26.04
+    # and #23 the interim 24.10).
     ignore:
       - dependency-name: ubuntu
-        versions: ['>= 25']
+        versions: ['> 24.04']

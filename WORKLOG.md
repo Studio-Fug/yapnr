@@ -9,6 +9,16 @@ animations on `claude/animations-groups-hier`).
 
 ## In progress
 
+- **RF microstrip inverse design** (#29, branch `claude/rf-topopt`; design
+  [docs/design/rf-topology-optimization.md](docs/design/rf-topology-optimization.md), guide
+  [docs/rf-inverse-design.md](docs/rf-inverse-design.md), choices in
+  [docs/decisions.md](docs/decisions.md)). Done: the solver (`yapnr.rf`: Yee FDTD, CPML, line
+  ports, exact adjoint; gradients to 1.5e-8) and the optimizer (material grid, conic filter,
+  tanh projection, Zhou length scale, own MMA with the epigraph and an optional conservative
+  variant, specs, checkpoints with bit-identical resume, polygons → net-tie `.kicad_mod`,
+  Touchstone, result JSON, the animation); `//tests/unit/rf/...` passes. Next: the end-to-end
+  cases (divider, patch antenna, diplexer) with fine-grid re-validation, and a `yapnr rf` CLI.
+
 - **Merged today:** PR3a (#9, code key scheme 2 and the engine format), the viewer (#12, PR4:
   `yapnr/viewer`, `bazel run //:viewer -- --root <live>`, paid features off by default, elkjs and
   three.js fetched pinned; guide [docs/viewer.md](docs/viewer.md), choices in

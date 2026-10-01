@@ -961,6 +961,33 @@ microstrip check at 12 cells per width and expects the error to drop.
 - Own MMA written from Svanberg's publications.
 - The e2e cases are manual and slow; they never run in CI.
 
+## 17. As built: the optimizer layer
+
+Implemented as designed in §7–§10 (`yapnr/rf/design/`, `optim/`, `spec.py`, `objectives.py`,
+`problem.py`, `driver.py`, `export/`, `animate.py`), with these differences and measurements:
+
+- **Conservative MMA is an option, not only a fallback.** The tiny two-port test oscillated
+  under plain MMA (one step to t = 11.7 from 0.05) yet reached the matched straight line
+  (binary t = −0.28) in 18 forward runs; the CCSA/GCMMA inner iterations
+  (`MMA.conservative_step`, `optimizer.conservative`) kept t monotone but used 96 forward runs
+  and ended at −0.10. Plain MMA stays the default; the e2e cases may switch per case. A conservative
+  step's accepted point reuses its forward runs (`Problem` keeps the last design's).
+- **The whole pipeline is one gradient test:** x → symmetry → ring → filter → projection →
+  conductance with damping → FDTD → port waves, radiated fraction → log-sum-exp groups agrees
+  with finite differences to 1e-10.
+- **Length scale:** with b = 4 pixels, widths and gaps ≥ b give g/ε ≤ 1e-4; 0.75b gives 136;
+  0.5b vanishes from ρ̄ and is caught by the space constraint (37). At b = 2 pixels (the cases)
+  a 2-pixel line passes with g/ε = 1e-6.
+- **Export:** a simplified polygon that no longer reproduces the pixels falls back to the
+  unsimplified loops. The width and space check reports a removed part only if it is a whole
+  island, reaches beyond the corner trim ((√2 − 1)·D/2 + 2 samples) or joins two opened parts
+  (necks such as diagonal pixel contacts); nubs under about 0.6 pixel are not reported. KiCad
+  10 loads the footprints and keeps every polygon (`kicad-cli fp upgrade`, KiCad lane).
+- **Port strips** are now sized with the pitch at the strip, not the axis median (on graded
+  grids the median put the strip a cell off centre).
+- Not yet: lumped elements in specs (the Wilkinson variant), the `yapnr rf` CLI, the fine-grid
+  validator (`validate.py`) and the case presets (`cases.py`).
+
 ## References
 
 1. A. M. Hammond, A. Oskooi, M. Chen, Z. Lin, S. G. Johnson, S. E. Ralph, "High-performance hybrid

@@ -61,6 +61,7 @@ containers
 viewer
 frontends/atopile
 part-cache
+rf-inverse-design
 releases
 ```
 

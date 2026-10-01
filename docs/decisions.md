@@ -499,6 +499,33 @@ the pull request:
 - **Follow-ups:** companion rows (an LED and its resistor as one rigid unit), a hard edge for a
   whole line group, members on the bottom side, plane-access intents inside a line group.
 
+Choices made for RF microstrip inverse design (#29, branch `claude/rf-topopt`,
+[design](design/rf-topology-optimization.md) §2 and §16, [guide](rf-inverse-design.md)); the
+owner reviews them with the pull request:
+
+- **Own FDTD solver, no new runtime dependency.** Meep has no lumped ports, its eigenmode ports
+  do not model metal microstrip and it is conda-only; openEMS is an external GPL program without
+  an adjoint. `yapnr.rf` is numpy with an optional torch fast path, deterministic, at most 4
+  threads.
+- **Line ports into the absorbing boundary** are the case ports (V/I wave separation, the
+  reference plane moved to the design region); resistive lumped ports stay for elements and as a
+  fallback.
+- **Crank–Nicolson conductivity and the exact discrete adjoint** (numerical frequency Ω and
+  σ·cos(ωΔt/2)): gradients agree with finite differences to about 1e-8.
+- **Copper is a zero-thickness sheet** whose conductance is log-interpolated per pixel and
+  averaged onto the grid edges; the damping term of the paper is implemented but off.
+- **Own MMA, written from Svanberg's publications** (the reference codes are GPL, nothing is
+  copied), in its native min-max form. **Plain MMA is the default;** the conservative variant
+  (CCSA/GCMMA, NLopt's MMA as in the paper) is `optimizer.conservative: true`. On the tiny
+  two-port test it never let t rise but needed 96 forward runs against 18 and ended worse
+  (t −0.10 against −0.28).
+- **Mirror symmetry on the design variables** (pixels of one mirror orbit share a variable),
+  not by averaging mirrored grids, so symmetric designs stay binary.
+- **Footprints are KiCad 10 net ties:** one SMD pad per port, the copper as keyholed `fp_poly`
+  islands with `net_tie_pad_groups` (an island on one pad becomes that pad's custom shape), the
+  stackup the design assumes in the description; KiCad's own `kicad-cli` loads them (KiCad lane).
+- **The end-to-end design cases are manual and slow;** they never run in CI.
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.

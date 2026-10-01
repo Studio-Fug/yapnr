@@ -102,8 +102,9 @@ def resimulate(
     log=None,
 ) -> dict:
     """Re-simulate the run's footprint on a grid `refine` times finer in-plane (and `n_sub`
-    substrate cells); returns freqs (Hz), s (F, N, N; 50 Ω, engineering convention), s_ref
-    (the same referenced to each port's Z_c, internal convention), eta, mask, the problem,
+    substrate cells); returns freqs (Hz), s (F, N, N; 50 Ω, engineering convention, from the
+    wave matrices S = B A⁻¹), s_ref (b_i/a_j referenced to each port's Z_c, internal convention:
+    what the optimizer evaluates), eta, the largest idle-port incident wave, mask, the problem,
     steps and wall time."""
     from yapnr.rf.problem import Problem
 
@@ -120,6 +121,7 @@ def resimulate(
         backend=backend,
         dtype=dtype,
         cache_dir=cache_dir or os.path.join(run_dir, "cache"),
+        interpolation="resistive",  # binary copper: the physical sheet
         log=log,
     )
     mask = footprint_mask(fp, spec, spec.grid.pitch_mm / refine)
@@ -135,7 +137,8 @@ def resimulate(
     return {
         "freqs": sw["freqs"],
         "s": sparams.to_engineering(s50),
-        "s_ref": sw["s"],
+        "s_ref": sw["s_naive"],
+        "idle_incident": sw.get("idle_incident"),
         "zc": sw["zc"],
         "eta": sw["eta"],
         "mask": mask,
@@ -143,6 +146,88 @@ def resimulate(
         "steps": sw["steps"],
         "wall_s": time.perf_counter() - t0,
     }
+
+
+# Power balance of radiators (design §11.3): the port's net input power against what leaves a
+# box closed by the ground (side faces from the ground up, the top face, the feed windows left
+# out), the power the other ports take and the dissipation inside the box.
+BALANCE = 0.02
+
+
+def power_balance(prob, rho: np.ndarray, freqs, port: int = 1) -> dict:
+    """The power balance of the design `rho` with `port` excited, at `freqs` (Hz).
+
+    Returns per frequency (lists): `p_in` (the port's net input power, power factor × (|a|² −
+    |b|²)/2, at the reference plane), the fractions of it that leave the closed box
+    (`closed`), leave the radiation box the objectives use (`eta`, from the copper plane up),
+    are dissipated inside the closed box (`diss`) and are taken by the other ports (`ports`),
+    and `error` = closed + diss + ports − 1. A non-zero error is the inconsistency of the port
+    power (the calibration's power factor, |S|) with the fields: the radiated fraction the
+    criteria judge is only as good as this balance.
+    """
+    from yapnr.rf.fdtd.monitors import dissipated_power, region_probes
+    from yapnr.rf.fdtd.stop import StopRule
+
+    if prob.box is None:
+        raise ValueError("the power balance needs a spec with a radiation box")
+    rb = prob.spec.radiation
+    dom, g = prob.domain, prob.grid
+    closed = dom.radiation_box(
+        (rb.offset_mm * 1e-3) if rb.offset_mm is not None else 0.5 * dom.spec.margin,
+        (rb.height_mm * 1e-3) if rb.height_mm is not None else 0.6 * dom.spec.air,
+        name="closed",
+        window_margin=None if rb.window_margin_mm is None else rb.window_margin_mm * 1e-3,
+        window_height=None if rb.window_height_mm is None else rb.window_height_mm * 1e-3,
+        from_ground=True,
+    )
+    (i0, i1), (j0, j1), _ = closed.node_box
+    # Lossy edges only: the substrate and the copper plane (σ = 0 in the air above).
+    zbox = (0, g.k_c + 1)
+    region = region_probes(g, "diss", ((i0, i1), (j0, j1), zbox))
+    weights = []
+    for p in region:
+        ii, jj, _ = g.unravel(p.comp, p.index)
+        w = np.ones(p.index.size)
+        if p.comp != "ex":
+            w = np.where((ii == i0) | (ii == i1), 0.5 * w, w)
+        if p.comp != "ey":
+            w = np.where((jj == j0) | (jj == j1), 0.5 * w, w)
+        weights.append(w)
+    freqs = np.asarray(freqs, dtype=np.float64)
+    omega = 2.0 * np.pi * freqs
+    prob.set_design(rho)
+    probes = prob.port_probes + prob.box_probes + closed.probes + region
+    stop = StopRule(
+        tol=prob.tol,
+        f_lo=float(freqs.min()),
+        max_steps=prob.spec.solver.max_steps,
+        probes=tuple(prob.watched),
+    )
+    sources = prob.ports[port].mode_sources(prob.pulse, prob.dt)
+    res = prob.sim.run(sources, probes, omega, stop, decimation=prob._decimation())
+    q = prob.quantities(res.dft, port, omega)
+    a, b = q["waves"][port]
+    p_in = prob.cal[port].power_at(omega) * 0.5 * (np.abs(a) ** 2 - np.abs(b) ** 2)
+    others = np.zeros(freqs.size)
+    for n, (_, bn) in q["waves"].items():
+        if n != port:
+            others += sparams.incident_power(bn, prob.cal[n], omega)
+    p_closed = np.asarray(closed.power(res.dft), dtype=np.float64)
+    p_diss = dissipated_power(prob.sim.structure, region, res.dft, omega, prob.dt, weights)
+    eta = np.asarray(q["eta"][port], dtype=np.float64) * sparams.incident_power(
+        a, prob.cal[port], omega
+    )
+    frac = {
+        "closed": p_closed / p_in,
+        "eta": eta / p_in,
+        "diss": p_diss / p_in,
+        "ports": others / p_in,
+    }
+    err = frac["closed"] + frac["diss"] + frac["ports"] - 1.0
+    out = {"ghz": (freqs / 1e9).tolist(), "p_in": p_in.tolist(), "steps": int(res.steps)}
+    out.update({k: np.asarray(v, dtype=np.float64).tolist() for k, v in frac.items()})
+    out["error"] = err.tolist()
+    return out
 
 
 def reciprocity_error(s: np.ndarray) -> float:
@@ -197,13 +282,38 @@ def connectivity(fp, spec: Spec) -> dict:
 
 
 def binary_design(run_dir: str, problem) -> np.ndarray | None:
-    """The optimizer's binary design (β = ∞ of the checkpoint's x) on `problem`'s grid."""
+    """The optimizer's binary design (β = ∞ of the exported x in the checkpoint, `export_x`,
+    else its last x) on `problem`'s grid; None without a checkpoint."""
     path = os.path.join(run_dir, "checkpoint.npz")
     if not os.path.exists(path):
         return None
     with np.load(path, allow_pickle=False) as z:
-        x = np.array(z["x"])
+        x = np.array(z["export_x"] if "export_x" in z else z["x"])
     return problem.param.rho_bar(x, math.inf) > 0.5
+
+
+def substrate_cells_at(spec: Spec, refine: int) -> int:
+    """Substrate cells of the re-validation grid `refine` times finer in-plane: 1.5 times the
+    spec's at refine 2, twice at refine 3 (1 + (refine − 1)/2 times)."""
+    return int(math.ceil(spec.grid.substrate_cells * (1.0 + 0.5 * (refine - 1)) - 1e-9))
+
+
+def convergence(levels: dict, checks) -> dict:
+    """The worst value of each check (the fine criteria) on every re-validation grid, coarse to
+    finest: {"refine": [...], "checks": {name: [worst, ...]}, "last_change": {name: Δ}}. The
+    trend shows whether the fine grid's verdict is converged: the zero-thickness copper's edge
+    and the staircase of diagonal edges make the response depend on the pitch."""
+    names = [c.name for c in checks if c.kind != "balance"]
+    out = {"refine": sorted(levels), "checks": {}, "last_change": {}}
+    for name in names:
+        vals = []
+        for r in sorted(levels):
+            res = [c for c in levels[r]["checks"] if c["name"] == name]
+            vals.append(res[0]["worst"] if res else None)
+        out["checks"][name] = vals
+        if len(vals) >= 2 and None not in vals[-2:]:
+            out["last_change"][name] = vals[-1] - vals[-2]
+    return out
 
 
 def validate_case(
@@ -212,11 +322,14 @@ def validate_case(
     case: str | None = None,
     refine: int = 2,
     fine: bool = True,
+    finer: int | None = None,
     criteria: dict | None = None,
     log=print,
 ) -> dict:
-    """Re-validate a run directory on the optimization grid and (when `fine`) on the finer grid
-    and judge the case's criteria (`cases.CRITERIA`); returns the report."""
+    """Re-validate a run directory on the optimization grid, (when `fine`) on the finer grid
+    and (when `finer`, e.g. 3) on a third grid `finer` times finer in-plane, and judge the
+    case's criteria (`cases.CRITERIA`: the fine criteria on the fine and the finest grids);
+    returns the report, with the trend of the fine checks over the grids (`convergence`)."""
     from yapnr.rf import cases
 
     log = log or (lambda *_: None)
@@ -269,31 +382,103 @@ def validate_case(
     report["footprint"] = connectivity(
         read_footprint(os.path.join(run_dir, "footprint.kicad_mod")), spec
     )
-    report["coarse"] = cases.judge(crit["coarse"], co["freqs"], co["s"], co["eta"])
+    balance_at = [c for c in crit["coarse"] if c.kind == "balance"]
+    if balance_at:
+        bal = power_balance(
+            prob, co["mask"].astype(np.float64), np.asarray(balance_at[0].at_ghz) * 1e9
+        )
+        co["balance"] = {1: bal}
+    report["coarse"] = cases.judge(
+        crit["coarse"], co["freqs"], co["s"], co["eta"], balance=co.get("balance")
+    )
+    if "balance" in co:
+        report["coarse"]["balance"] = co["balance"][1]
     report["coarse"]["grid"] = prob.describe()
     report["coarse"]["table"] = _table(co["freqs"], co["s"], co["eta"])
     report["coarse"]["reciprocity_error"] = reciprocity_error(co["s"])
+    if co.get("idle_incident") is not None:
+        report["coarse"]["idle_incident_max"] = float(np.max(co["idle_incident"]))
     ok = report["coarse"]["ok"]
-    export_ok = (
-        same.get("pixel_xor", 0) == 0
-        and same.get("max_db_diff_transmission", 0.0) <= EXPORT_DB
-        and same.get("max_abs_diff", 0.0) <= EXPORT_ABS
-    )
-    if report.get("drc") is not None:
-        export_ok = export_ok and bool(report["drc"]["ok"])
-    export_ok = export_ok and report["footprint"]["ports_joined"]
+    # The export check: True or False when every part of it ran, None ("not checked") when the
+    # run directory lacks the checkpoint or the result it compares against (a published case
+    # directory without its checkpoint), so it never reads as passed by default.
+    parts = [
+        None if "pixel_xor" not in same else same["pixel_xor"] == 0,
+        (
+            None
+            if "max_db_diff_transmission" not in same
+            else same["max_db_diff_transmission"] <= EXPORT_DB
+            and same["max_abs_diff"] <= EXPORT_ABS
+        ),
+        None if report.get("drc") is None else bool(report["drc"]["ok"]),
+        bool(report["footprint"]["ports_joined"]),
+    ]
+    if any(p is False for p in parts):
+        export_ok = False
+    elif any(p is None for p in parts):
+        export_ok = None
+    else:
+        export_ok = True
     report["export_ok"] = export_ok
-    ok = ok and export_ok
+    ok = ok and export_ok is not False
+    levels = {}
     if fine:
-        n_sub = int(math.ceil(1.5 * spec.grid.substrate_cells))
+        # The coarse sweep judged by the fine criteria, for the trend over the grids.
+        levels[1] = cases.judge(
+            [c for c in crit["fine"] if c.kind != "balance"], co["freqs"], co["s"], co["eta"]
+        )
+        n_sub = substrate_cells_at(spec, refine)
         fi = resimulate(run_dir, refine=refine, n_sub=n_sub, freqs=freqs, log=log)
         report["wall_s"]["fine"] = fi["wall_s"]
         _touchstone(os.path.join(run_dir, f"fine.s{n}p"), fi, f"refine {refine}", spec)
-        report["fine"] = cases.judge(crit["fine"], fi["freqs"], fi["s"], fi["eta"])
+        balance_at = [c for c in crit["fine"] if c.kind == "balance"]
+        if balance_at:
+            bal = power_balance(
+                fi["problem"],
+                fi["mask"].astype(np.float64),
+                np.asarray(balance_at[0].at_ghz) * 1e9,
+            )
+            fi["balance"] = {1: bal}
+        report["fine"] = cases.judge(
+            crit["fine"], fi["freqs"], fi["s"], fi["eta"], balance=fi.get("balance")
+        )
+        if "balance" in fi:
+            report["fine"]["balance"] = fi["balance"][1]
         report["fine"]["grid"] = fi["problem"].describe()
         report["fine"]["table"] = _table(fi["freqs"], fi["s"], fi["eta"])
         report["fine"]["reciprocity_error"] = reciprocity_error(fi["s"])
+        if fi.get("idle_incident") is not None:
+            report["fine"]["idle_incident_max"] = float(np.max(fi["idle_incident"]))
         ok = ok and report["fine"]["ok"]
+        levels[refine] = report["fine"]
+        del fi
+    if fine and finer:
+        n_sub = substrate_cells_at(spec, finer)
+        fr = resimulate(run_dir, refine=finer, n_sub=n_sub, freqs=freqs, log=log)
+        report["wall_s"]["finer"] = fr["wall_s"]
+        _touchstone(os.path.join(run_dir, f"finer.s{n}p"), fr, f"refine {finer}", spec)
+        balance_at = [c for c in crit["fine"] if c.kind == "balance"]
+        if balance_at:
+            bal = power_balance(
+                fr["problem"],
+                fr["mask"].astype(np.float64),
+                np.asarray(balance_at[0].at_ghz) * 1e9,
+            )
+            fr["balance"] = {1: bal}
+        report["finer"] = cases.judge(
+            crit["fine"], fr["freqs"], fr["s"], fr["eta"], balance=fr.get("balance")
+        )
+        if "balance" in fr:
+            report["finer"]["balance"] = fr["balance"][1]
+        report["finer"]["grid"] = fr["problem"].describe()
+        report["finer"]["table"] = _table(fr["freqs"], fr["s"], fr["eta"])
+        report["finer"]["reciprocity_error"] = reciprocity_error(fr["s"])
+        if fr.get("idle_incident") is not None:
+            report["finer"]["idle_incident_max"] = float(np.max(fr["idle_incident"]))
+        ok = ok and report["finer"]["ok"]
+        levels[finer] = report["finer"]
+    if len(levels) >= 2:
+        report["convergence"] = convergence(levels, crit["fine"])
     report["smoke"] = smoke
     report["ok"] = bool(ok)
     return report

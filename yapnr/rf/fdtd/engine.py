@@ -5,7 +5,10 @@ One step (n → n + 1):
     H^{n+½} = H^{n−½} − (Δt/μ0) (curl E^n + K^n)            (CPML ψ terms in the slabs)
     E^{n+1} = Ca E^n + Cb (curl H^{n+½} − J^{n+½})          (interior, non-PEC edges)
 
-with Ca, Cb from `Structure.coefficients`. The outer boundary and the ground plane are PEC:
+with Ca, Cb from `Structure.coefficients`. An inductive copper sheet (`Structure.set_sheet`)
+adds its branch currents: the explicit part Σ w (1 + k) J^n/(2Δz) is subtracted from the curl
+before the update and the branch states advance after it (and after the sources), J^{n+1} =
+k J^n + (b/2)(E^{n+1} + E^n). The outer boundary and the ground plane are PEC:
 tangential E on them is never updated. H probes are accumulated at t = (n + ½)Δt after the H
 update, E probes at t = (n + 1)Δt after the E update.
 
@@ -107,6 +110,10 @@ class _NumpyOps:
         y += b * x
 
     @staticmethod
+    def copy_into(src, dst):
+        np.copyto(dst, src)
+
+    @staticmethod
     def to_numpy(a):
         return np.asarray(a)
 
@@ -166,6 +173,10 @@ class _TorchOps:
     @staticmethod
     def axpby_(y, a, b, x):
         y.mul_(a).addcmul_(b, x)
+
+    @staticmethod
+    def copy_into(src, dst):
+        dst.copy_(src)
 
     @staticmethod
     def to_numpy(a):
@@ -338,6 +349,29 @@ class Simulation:
             self._ca[comp] = self.ops.array(ca[sl])
             self._cb[comp] = self.ops.array(cb[sl])
             self._cb_full[comp] = cb  # float64, for source scaling
+        self._sheet = {}
+        st = self.structure
+        if st.inductive:
+            if abs(st.sheet_dt - self.dt) > 1e-9 * self.dt:
+                raise ValueError("the inductive sheet was set for another time step")
+            for comp in ("ex", "ey"):
+                br = st.sheet_branches(comp)
+                self._sheet[comp] = {
+                    name: tuple(self.ops.array(a) for a in arrs) for name, arrs in br.items()
+                }
+        self._reset_sheet()
+
+    def _reset_sheet(self) -> None:
+        kc = self.grid.k_c
+        self._sheet_state = {}
+        for comp, sh in self._sheet.items():
+            shape = tuple(sh["k"][0].shape)
+            self._sheet_state[comp] = {
+                "j": (self.ops.zeros(shape), self.ops.zeros(shape)),
+                "buf": self.ops.zeros(shape),
+                "esum": self.ops.zeros(shape),
+                "plane": kc - 1,
+            }
 
     def reset(self) -> None:
         """Zero all fields and CPML auxiliary arrays."""
@@ -354,6 +388,8 @@ class Simulation:
                     s.psi = s.psi * 0
                     s.dview = self.ops.slab_view(t.buf, s.sl, s.axis, s.gap)
                     s.oview = self.ops.slab_view(out, s.sl, s.axis, s.gap)
+        if hasattr(self, "_sheet"):
+            self._reset_sheet()
         self.n = 0
 
     # -- stepping -------------------------------------------------------------------------------
@@ -384,7 +420,28 @@ class Simulation:
                 for s in t.slabs:
                     ops.axpby_(s.psi, s.b, s.cd, s.dview)
                     ops.add_(s.oview, s.psi, t.sign)
+            sh = self._sheet.get(comp)
+            if sh is not None:
+                state = self._sheet_state[comp]
+                k = state["plane"]
+                jlo, jhi = state["j"]
+                buf = state["buf"]
+                ops.mul_into(jlo, sh["c1"][0], buf)
+                ops.addmul_(buf, jhi, sh["c1"][1], 1)
+                ops.add_(curl[:, :, k], buf, -1)
+                ops.copy_into(self._fint[comp][:, :, k], state["esum"])  # E^n
             ops.axpby_(self._fint[comp], self._ca[comp], self._cb[comp], curl)
+
+    def _step_sheet(self) -> None:
+        """Advance the inductive sheet's branch currents (after the E update and sources)."""
+        ops = self.ops
+        for comp, sh in self._sheet.items():
+            state = self._sheet_state[comp]
+            esum = state["esum"]
+            ops.add_(esum, self._fint[comp][:, :, state["plane"]], 1)  # E^n + E^{n+1}
+            jlo, jhi = state["j"]
+            ops.axpby_(jlo, sh["k"][0], sh["bh"][0], esum)
+            ops.axpby_(jhi, sh["k"][1], sh["bh"][1], esum)
 
     def field(self, comp: str) -> np.ndarray:
         """A float64 numpy copy of the current values of `comp`."""
@@ -451,6 +508,8 @@ class Simulation:
                 v = s.values(n)
                 if v is not None:
                     ops.sub_at(self.f[s.comp], idx, scale * v)
+            if self._sheet:
+                self._step_sheet()
             if (n + 1) % decimation == 0:
                 for p in e_probes:
                     acc[p.name].add(ops.take(self.f[p.comp], pidx[p.name]), n + 1, decimation)

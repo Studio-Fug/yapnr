@@ -36,7 +36,9 @@ yapnr_py_tests(
     deps = ["//yapnr/rf"],
 )
 
-# The microstrip check repeated at twice the resolution (several minutes).
+# The microstrip check repeated at twice the resolution: about 4 minutes on 4 threads, so it is
+# manual (not part of `bazel test //...` or CI); run it when the solver changes:
+#   bazel test //tests/unit/rf:test_microstrip_slow
 py_test(
     name = "test_microstrip_slow",
     size = "large",
@@ -46,6 +48,9 @@ py_test(
         YAPNR_RF_SLOW = "1",
     ),
     main = "test_microstrip.py",
-    tags = ["slow"],
+    tags = [
+        "manual",
+        "slow",
+    ],
     deps = ["//yapnr/rf"],
 )

@@ -1,7 +1,8 @@
 """The run directory's exports: polygons, footprint, Touchstone file and result JSON (§10).
 
-`export_design` takes the binarized design of an optimization, repairs its minimum width and
-space on the pixel grid (`repair`; the result records the pixels it changed) and writes
+`export_design` takes the exported design of an optimization (the best binarized design of the
+loop, `driver.Optimizer.finish`, with its minimum width and space repaired on the pixel grid by
+`repair`; the result records the pixels it changed and the iteration it came from) and writes
 
 - `footprint.kicad_mod`: the copper islands (`contour`), checked for minimum width and space
   (`drc`), with one pad per port (`kicad`);
@@ -22,7 +23,7 @@ import numpy as np
 from yapnr.rf import sparams
 from yapnr.rf.export.contour import islands, point_in_loop
 from yapnr.rf.export.drc import check_width_space
-from yapnr.rf.export.kicad import Footprint, PortPad, write_footprint
+from yapnr.rf.export.kicad import Footprint, PortPad, RuleArea, write_footprint
 from yapnr.rf.export.touchstone import write_touchstone
 
 RESULT = "result.json"
@@ -84,6 +85,69 @@ def exported_binary(problem, binary: np.ndarray) -> tuple[np.ndarray, dict]:
     return out, info
 
 
+# Half-width added to each port's corridor through the track keepout beyond its pad (mm): the
+# feed track of the pad's width fits with this much to spare on each side, other copper does not.
+CORRIDOR_SPARE_MM = 0.05
+
+
+def rule_areas(spec, pads: list, margin_mm: float) -> list[RuleArea]:
+    """The keepouts of the environment the simulation assumed (board coordinates, mm):
+
+    - the design region grown by the simulated margin: no copper pour, vias or other
+      footprints (the footprint's own copper and pads are inside it; KiCad does not test a
+      footprint's items against its own rule areas);
+    - the margin around the design region, as one strip per side: no tracks either, except in
+      a corridor for each port's feed (the pad's width plus `CORRIDOR_SPARE_MM` per side) from
+      the region's edge outward. The design region itself is left out of the track keepout so
+      that a feed track ending on its pad (round end cap) is not flagged; other tracks there
+      would violate the clearance to the footprint's copper anyway.
+    """
+    x0, x1, y0, y1 = spec.design_region
+    m = margin_mm
+    X0, X1, Y0, Y1 = x0 - m, x1 + m, y0 - m, y1 + m
+    corridors = {"W": [], "E": [], "S": [], "N": []}
+    sides = {p.n: p.side for p in spec.ports}
+    for pad in pads:
+        side = sides[pad.number]
+        cx, cy = pad.center
+        sx, sy = pad.size
+        half = 0.5 * (sy if side in ("W", "E") else sx) + CORRIDOR_SPARE_MM
+        c = cy if side in ("W", "E") else cx
+        corridors[side].append((c - half, c + half))
+    text = f"no other F.Cu within {_mm(m)} mm, a solid ground on the next copper layer"
+    out = [
+        RuleArea(
+            f"yapnr RF keepout: simulated with {text}",
+            np.array([(X0, Y0), (X1, Y0), (X1, Y1), (X0, Y1)], dtype=np.float64),
+            ("vias", "copperpour", "footprints"),
+        )
+    ]
+    # Strips: (side, along-edge span, the strip's rectangle as a function of a span (a, b)).
+    strips = {
+        "W": ((Y0, Y1), lambda a, b: [(X0, a), (x0, a), (x0, b), (X0, b)]),
+        "E": ((Y0, Y1), lambda a, b: [(x1, a), (X1, a), (X1, b), (x1, b)]),
+        "S": ((x0, x1), lambda a, b: [(a, Y0), (b, Y0), (b, y0), (a, y0)]),
+        "N": ((x0, x1), lambda a, b: [(a, y1), (b, y1), (b, Y1), (a, Y1)]),
+    }
+    for side, ((lo, hi), rect) in strips.items():
+        cuts = sorted(corridors[side])
+        edges = [lo] + [v for c in cuts for v in c] + [hi]
+        for a, b in zip(edges[::2], edges[1::2]):
+            if b - a > 1e-9:
+                out.append(
+                    RuleArea(
+                        f"yapnr RF track keepout ({side}): {text}",
+                        np.array(rect(a, b), dtype=np.float64),
+                        ("tracks", "vias", "copperpour", "footprints"),
+                    )
+                )
+    return out
+
+
+def _mm(v: float) -> str:
+    return f"{v:.2f}".rstrip("0").rstrip(".")
+
+
 def footprint_of(problem, binary: np.ndarray, *, name: str | None = None) -> tuple:
     """(Footprint, island polygons in mm) of a binary window design."""
     spec = problem.spec
@@ -126,6 +190,7 @@ def footprint_of(problem, binary: np.ndarray, *, name: str | None = None) -> tup
         islands=shapes,
         description=descr,
         seed=sha,
+        rule_areas=rule_areas(spec, pads, problem.domain.spec.margin * 1e3),
     )
     return fp, [p for p, _ in shapes]
 
@@ -151,7 +216,7 @@ def provenance(problem) -> dict:
 
 
 def achieved(problem, ev) -> dict:
-    """The binary design's values at the objective frequencies."""
+    """The exported binary design's values at the objective frequencies."""
     spec = problem.spec
     reqs = []
     for k, r in enumerate(spec.requirements):
@@ -184,7 +249,10 @@ def export_design(problem, opt, final: dict, out_dir: str, *, sweep: bool = True
     log = log or (lambda *_: None)
     t0 = time.perf_counter()
     spec = problem.spec
-    binary, repaired = exported_binary(problem, final["binary"])
+    if "exported" in final:
+        binary, repaired = final["exported"], final["repair"]
+    else:
+        binary, repaired = exported_binary(problem, final["binary"])
     if repaired["changed_pixels"]:
         log(f"width/space repair changed {repaired['changed_pixels']} pixels")
     fp, polys = footprint_of(problem, binary)
@@ -232,6 +300,11 @@ def export_design(problem, opt, final: dict, out_dir: str, *, sweep: bool = True
             "gray": final["gray"],
             "gray_ok": final["gray"] <= 0.01,
             "t_last": opt.history[-1]["t"] if opt.history else None,
+            # The exported design: the best binarized design of the loop (driver.finish).
+            "export_iteration": final.get("export_iteration"),
+            "t_binary_exported": float(np.max(final["evaluation"].values)),
+            "t_binary_last": final.get("t_binary_last"),
+            "best_iteration_tracked": final.get("best_iteration_tracked"),
         },
         "coarse_binary": achieved(problem, final["evaluation"]),
         "sweep": sweep_json,

@@ -170,12 +170,14 @@ class Domain:
         name: str = "rad",
         window_margin: float | None = None,
         window_height: float | None = None,
+        from_ground: bool = False,
     ) -> FluxBox:
         """The radiated-power box of design §5.6: the four side faces from the copper plane up
         and the top face, `offset` beyond the design region and `height` above the copper
         (both snapped to grid nodes). Where a feed crosses a side face, a window
         |t − t_feed| ≤ w/2 + window_margin (default 2h), z ≤ window_height (default 3h above
-        the ground) is left out."""
+        the ground) is left out. `from_ground` extends the side faces down to the ground plane
+        (a box closed by the ground, which also counts power guided away in the substrate)."""
         g = self.grid
         h = self.spec.stackup.h
         x0, x1, y0, y1 = self.spec.design
@@ -184,7 +186,7 @@ class Domain:
         box = (
             (g.x.nearest_node(x0 - offset), g.x.nearest_node(x1 + offset)),
             (g.y.nearest_node(y0 - offset), g.y.nearest_node(y1 + offset)),
-            (g.k_c, g.z.nearest_node(h + height)),
+            (0 if from_ground else g.k_c, g.z.nearest_node(h + height)),
         )
         windows = []
         for p in self.ports:
@@ -220,6 +222,7 @@ class Domain:
             n_pml_top=s.n_pml_top,
             ratio=s.ratio,
             lateral_max_cell=s.max_cell,
+            src_gap_cells=max(1, s.src_cells - s.meas_cells - 1),
         )
 
 

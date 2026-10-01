@@ -208,10 +208,20 @@ def dissipated_power(structure, probes, dft, omega, dt: float, weights=None) -> 
     grid = structure.grid
     c = conductance_factor(omega, dt)
     total = np.zeros(np.asarray(omega).size)
+    sheet = structure.sheet_coefficient(omega, dt) if structure.inductive else None
     for n, p in enumerate(probes):
         sig = structure.sigma(p.comp).reshape(-1)[p.index]
         vol = grid.volume(p.comp).reshape(-1)[p.index]
         w = 1.0 if weights is None else weights[n]
         e = np.asarray(dft[p.name])
+        if sheet is not None and p.comp in sheet:
+            # The inductive sheet's loss is Re of its frequency-dependent coefficient.
+            i, j, k = grid.unravel(p.comp, p.index)
+            on = k == grid.k_c
+            sig = np.where(on, sig - structure.sheet[p.comp][i, j] / structure.sheet_dz, sig)
+            coef = c[:, None] * sig[None, :]
+            coef[:, on] += sheet[p.comp][0][:, i[on], j[on]]
+            total += 0.5 * (np.abs(e) ** 2 * coef * (vol * w)).sum(-1)
+            continue
         total += 0.5 * c * (np.abs(e) ** 2 * (sig * vol * w)).sum(-1)
     return total

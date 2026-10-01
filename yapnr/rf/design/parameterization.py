@@ -37,8 +37,10 @@ class Parameterization:
     def n_dof(self) -> int:
         return self.grid.n_dof
 
-    def forward(self, x, beta: float) -> dict:
-        """All stages as torch tensors: rho, rho_tilde_m (with margin), rho_tilde, rho_bar."""
+    def forward(self, x, beta: float, eta: float | None = None) -> dict:
+        """All stages as torch tensors: rho, rho_tilde_m (with margin), rho_tilde, rho_bar.
+        `eta` overrides the projection threshold (the eroded and dilated designs of robust
+        optimization: η above ½ erodes, below dilates)."""
         import torch
 
         if not isinstance(x, torch.Tensor):
@@ -47,15 +49,17 @@ class Parameterization:
         rt_m = self.filter(self.grid.extend(rho))
         m = self.margin
         rt = rt_m[m:-m, m:-m]
-        rb = self.grid.reimpose(tanh_projection(rt, beta, self.eta))
+        e = self.eta if eta is None else float(eta)
+        rb = self.grid.reimpose(tanh_projection(rt, beta, e))
         return {"x": x, "rho": rho, "rho_tilde_m": rt_m, "rho_tilde": rt, "rho_bar": rb}
 
-    def rho_bar(self, x, beta: float) -> np.ndarray:
+    def rho_bar(self, x, beta: float, eta: float | None = None) -> np.ndarray:
         """ρ̄ (ni, nj) as numpy."""
         import torch
 
         with torch.no_grad():
-            return self.forward(np.asarray(x, dtype=np.float64), beta)["rho_bar"].numpy().copy()
+            st = self.forward(np.asarray(x, dtype=np.float64), beta, eta)
+            return st["rho_bar"].numpy().copy()
 
     def rho_tilde(self, x) -> np.ndarray:
         """ρ̃ (ni, nj) as numpy."""
@@ -64,7 +68,7 @@ class Parameterization:
         with torch.no_grad():
             return self.forward(np.asarray(x, dtype=np.float64), 1.0)["rho_tilde"].numpy().copy()
 
-    def vjp(self, x, beta: float, cotangents: np.ndarray) -> np.ndarray:
+    def vjp(self, x, beta: float, cotangents: np.ndarray, eta: float | None = None) -> np.ndarray:
         """Σ_p g_kp ∂ρ̄_p/∂x for each row k of `cotangents` (K, ni, nj) → (K, n_dof)."""
         import torch
 
@@ -73,7 +77,7 @@ class Parameterization:
         if squeeze:
             g = g[None]
         xt = torch.as_tensor(np.asarray(x, dtype=np.float64)).clone().requires_grad_(True)
-        rb = self.forward(xt, beta)["rho_bar"]
+        rb = self.forward(xt, beta, eta)["rho_bar"]
         out = np.zeros((g.shape[0], self.n_dof))
         for k in range(g.shape[0]):
             (gx,) = torch.autograd.grad(

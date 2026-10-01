@@ -12,7 +12,9 @@ The `.kicad_mod` follows the format KiCad 10 writes for its own libraries (versi
 - an island touching no pad: an `fp_poly` on F.Cu (netless);
 - F.CrtYd and F.Fab rectangles on the design region, `(attr smd exclude_from_pos_files
   exclude_from_bom)`, and a description naming the stackup the design assumes and the spec
-  sha256.
+  sha256;
+- rule areas (`Footprint.rule_areas`, KiCad keepout zones on F.Cu): the environment the design
+  was simulated in, which the board must keep (`report.rule_area`).
 
 The origin is the design-region centre; KiCad's y axis points down, so y_kicad = −(y − y_c).
 UUIDs are uuid5 of the spec hash and the item index, so the file is deterministic.
@@ -51,6 +53,21 @@ class Footprint:
     tags: str = "rf microstrip inverse-design"
     seed: str = ""
     extra: dict = field(default_factory=dict)
+    rule_areas: list = field(default_factory=list)  # [RuleArea]
+
+
+# Keepout kinds of a KiCad rule area, in the order KiCad writes them.
+KEEPOUT_KINDS = ("tracks", "vias", "pads", "copperpour", "footprints")
+
+
+@dataclass
+class RuleArea:
+    """A KiCad rule area (keepout zone) on F.Cu: name, polygon (mm, board coordinates, y up)
+    and the kinds it keeps out (the others are allowed)."""
+
+    name: str
+    polygon: np.ndarray
+    not_allowed: tuple[str, ...] = ("tracks", "vias", "copperpour", "footprints")
 
 
 def _fmt(v: float) -> str:
@@ -197,6 +214,34 @@ def write_footprint(fp: Footprint, path: str | None = None) -> str:
             w.emit(2, '(layers "F.Cu")')
         w.emit(2, f'(uuid "{w.uuid()}")')
         w.emit(1, ")")
+    for area in fp.rule_areas:
+        w.emit(1, "(zone")
+        w.emit(2, '(layer "F.Cu")')
+        w.emit(2, f'(uuid "{w.uuid()}")')
+        w.emit(2, f"(name {_q(area.name)})")
+        w.emit(2, "(hatch edge 0.5)")
+        w.emit(2, "(connect_pads")
+        w.emit(3, "(clearance 0)")
+        w.emit(2, ")")
+        w.emit(2, "(min_thickness 0.25)")
+        w.emit(2, "(keepout")
+        for kind in KEEPOUT_KINDS:
+            state = "not_allowed" if kind in area.not_allowed else "allowed"
+            w.emit(3, f"({kind} {state})")
+        w.emit(2, ")")
+        w.emit(2, "(placement")
+        w.emit(3, "(enabled no)")
+        w.emit(3, '(sheetname "")')
+        w.emit(2, ")")
+        w.emit(2, "(fill")
+        w.emit(3, "(thermal_gap 0.5)")
+        w.emit(3, "(thermal_bridge_width 0.5)")
+        w.emit(3, "(island_removal_mode 0)")
+        w.emit(2, ")")
+        w.emit(2, "(polygon")
+        w.pts(3, area.polygon)
+        w.emit(2, ")")
+        w.emit(1, ")")
     w.emit(1, "(embedded_fonts no)")
     w.emit(0, ")")
     text = "\n".join(w.lines) + "\n"
@@ -273,6 +318,7 @@ class ReadFootprint:
     net_tie_groups: list
     pads: list  # dicts: number, type, shape, at, size, primitives (polygons, absolute)
     polygons: list  # fp_poly on F.Cu: (k, 2) arrays
+    rule_areas: list = field(default_factory=list)  # dicts: name, layers, not_allowed, polygon
 
     def copper(self) -> list[np.ndarray]:
         """Every copper polygon (fp_poly and custom-pad primitives) plus rectangular pads."""
@@ -329,10 +375,26 @@ def read_footprint(path_or_text: str) -> ReadFootprint:
         layer = _child(fpoly, "layer")
         if layer and layer[1] == "F.Cu":
             polys.append(_points(fpoly))
+    areas = []
+    for z in _children(tree, "zone"):
+        keep = _child(z, "keepout")
+        if keep is None:
+            continue
+        layers = _child(z, "layers") or _child(z, "layer")
+        name = _child(z, "name")
+        areas.append(
+            {
+                "name": name[1] if name else "",
+                "layers": list(layers[1:]) if layers else [],
+                "not_allowed": sorted(k[0] for k in keep[1:] if k[1] == "not_allowed"),
+                "polygon": _points(_child(z, "polygon")),
+            }
+        )
     return ReadFootprint(
         name=tree[1],
         description=descr[1] if descr else "",
         net_tie_groups=[g for g in ties[1:]] if ties else [],
         pads=pads,
         polygons=polys,
+        rule_areas=areas,
     )

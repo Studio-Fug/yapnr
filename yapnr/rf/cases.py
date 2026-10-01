@@ -27,7 +27,7 @@ import argparse
 import json
 import os
 import time
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 
 import numpy as np
 
@@ -290,7 +290,9 @@ class Check:
 
     kind: "s_max" / "s_min" (|S_ij| in dB against `limit`), "imbalance" (||S_ij| − |S_kl||
       in dB ≤ `limit`, `ports` = (i, j, k, l)), "eta_min" (radiated fraction of port j ≥
-      `limit`), "passivity" (min eig(I − SᴴS) ≥ `limit`, every frequency).
+      `limit`), "passivity" (min eig(I − SᴴS) ≥ `limit`, every frequency), "balance" (the
+      power balance error of port j, `validate.power_balance`, |error| ≤ `limit`, at the
+      `at_ghz` frequencies).
     ghz: the inclusive band the check applies to (None: every frequency), or `at_ghz`: the
       exact frequencies.
     """
@@ -310,10 +312,24 @@ class Check:
             return np.ones(f.shape, bool)
         return (f >= self.ghz[0] - 1e-9) & (f <= self.ghz[1] + 1e-9)
 
-    def evaluate(self, freqs_hz, s, eta=None) -> dict:
-        """{name, kind, limit, worst, ok, points}; `s` is (F, N, N) at `freqs_hz`."""
+    def evaluate(self, freqs_hz, s, eta=None, balance=None) -> dict:
+        """{name, kind, limit, worst, ok, points}; `s` is (F, N, N) at `freqs_hz`; `balance`
+        maps a port to `validate.power_balance`'s report (for "balance")."""
         from yapnr.rf.sparams import db, passivity_margin
 
+        if self.kind == "balance":
+            if not balance or self.ports[0] not in balance:
+                raise ValueError(f"check {self.name}: no power balance")
+            err = np.abs(np.asarray(balance[self.ports[0]]["error"], dtype=np.float64))
+            worst = float(np.max(err))
+            return {
+                "name": self.name,
+                "kind": self.kind,
+                "limit": self.limit,
+                "worst": worst,
+                "ok": bool(worst <= self.limit),
+                "points": int(err.size),
+            }
         m = self.mask(freqs_hz)
         if not m.any():
             raise ValueError(f"check {self.name}: no sweep frequency in its band")
@@ -347,12 +363,11 @@ class Check:
         }
 
 
-# Passivity tolerance: min eig(I − SᴴS) ≥ −0.01, i.e. no excitation gains more than 1 % of
-# its power. The S-matrix of a near-lossless binary design carries the V/I wave extraction's
-# errors (|S_ij − S_ji| up to 0.015, about 0.1 dB of de-embedding error in |S21|; the exact
-# discrete system is reciprocal), which the even-mode excitation of the divider turns into
-# −0.005; the design's −1e-3 (met by lossy gray test networks) is below that resolution.
-PASSIVITY = -0.01
+# Passivity tolerance: min eig(I − SᴴS) ≥ −1e-3 (design §11). An earlier de-embedding with the
+# calibration's Im k (an artifact of the near-source fields, up to 4 Np/m against a true line
+# loss of about 0.8 Np/m) inflated every |S| by up to 0.15 dB and needed −0.01; with Re k only
+# (`sparams`) and the 6h feeds the divider's margin is +0.02 to +0.05.
+PASSIVITY = -1e-3
 
 
 def _divider_checks(r11, t, imb=None):
@@ -424,6 +439,10 @@ CRITERIA = {
     },
 }
 
+# The third re-validation grid of the full cases (a third of the pitch, twice the substrate
+# cells): the fine criteria must hold there too, and the report shows the trend over the grids.
+FINER = 3
+
 # Dense in-band frequencies (GHz) of the re-validation sweeps; the criteria are judged there.
 DENSE_GHZ = {
     "divider": np.linspace(8.5, 11.5, 61),
@@ -454,9 +473,9 @@ def sweep_frequencies(case: str, spec: Spec, broadband: np.ndarray | None = None
     return f[keep]
 
 
-def judge(checks, freqs_hz, s, eta=None) -> dict:
+def judge(checks, freqs_hz, s, eta=None, balance=None) -> dict:
     """Evaluate `checks`; {"checks": [...], "ok": all passed}."""
-    res = [c.evaluate(freqs_hz, s, eta) for c in checks]
+    res = [c.evaluate(freqs_hz, s, eta, balance) for c in checks]
     return {"checks": res, "ok": all(r["ok"] for r in res)}
 
 
@@ -470,11 +489,13 @@ def run(
     scale: str = "full",
     validate_fine: bool = True,
     refine: int = 2,
+    finer: int | None = None,
     max_iterations: int | None = None,
     log=print,
 ) -> dict:
     """Optimize, export and re-validate one case into `out_dir`; returns the validation
-    report (also written as `validation.json`). A run directory with a checkpoint resumes."""
+    report (also written as `validation.json`). A run directory with a checkpoint resumes.
+    `finer` adds a third re-validation grid (default 3 for the full cases, none for smoke)."""
     from yapnr.rf import validate
     from yapnr.rf.driver import Optimizer, design
 
@@ -495,7 +516,11 @@ def run(
     else:
         result = design(spec, out_dir, log=log)
     t_design = time.perf_counter() - t0
-    report = validate.validate_case(out_dir, case=case, refine=refine, fine=validate_fine, log=log)
+    if finer is None and scale == "full":
+        finer = FINER
+    report = validate.validate_case(
+        out_dir, case=case, refine=refine, fine=validate_fine, finer=finer, log=log
+    )
     report["wall_s"]["design"] = t_design
     report["optimizer"] = result["optimizer"]
     validate.write_report(out_dir, report)
@@ -506,17 +531,28 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="python -m yapnr.rf.cases", description=__doc__.split("\n")[0]
     )
-    ap.add_argument("action", choices=("run", "validate", "spec"))
+    ap.add_argument("action", choices=("run", "validate", "spec", "criteria"))
     ap.add_argument("case", choices=sorted(CASES))
     ap.add_argument("--out", help="run directory")
     ap.add_argument("--smoke", action="store_true", help="the tiny CI variant")
     ap.add_argument("--refine", type=int, default=2)
+    ap.add_argument("--finer", type=int, help=f"third grid (default {FINER}; 0: none)")
     ap.add_argument("--no-fine", action="store_true", help="skip the fine re-validation")
     ap.add_argument("--max-iterations", type=int)
     args = ap.parse_args(argv)
     scale = "smoke" if args.smoke else "full"
     if args.action == "spec":
         print(json.dumps(spec_for(args.case, scale).to_dict(), indent=1))
+        return 0
+    if args.action == "criteria":
+        out = {
+            level: [
+                {k: v for k, v in asdict(c).items() if v not in (None, ())}
+                for c in CRITERIA[args.case][level]
+            ]
+            for level in ("coarse", "fine")
+        }
+        print(json.dumps(out, indent=1))
         return 0
     if not args.out:
         ap.error("--out is required")
@@ -527,13 +563,15 @@ def main(argv=None) -> int:
             scale=scale,
             validate_fine=not args.no_fine,
             refine=args.refine,
+            finer=args.finer,
             max_iterations=args.max_iterations,
         )
     else:
         from yapnr.rf import validate
 
+        finer = args.finer if args.finer is not None else (None if args.smoke else FINER)
         rep = validate.validate_case(
-            args.out, case=args.case, refine=args.refine, fine=not args.no_fine
+            args.out, case=args.case, refine=args.refine, fine=not args.no_fine, finer=finer or None
         )
         validate.write_report(args.out, rep)
     print(json.dumps(validate_summary(rep), indent=1))
@@ -542,7 +580,7 @@ def main(argv=None) -> int:
 
 def validate_summary(rep: dict) -> dict:
     out = {"ok": rep["ok"]}
-    for level in ("coarse", "fine"):
+    for level in ("coarse", "fine", "finer"):
         if level in rep:
             out[level] = {c["name"]: [round(c["worst"], 3), c["ok"]] for c in rep[level]["checks"]}
     return out

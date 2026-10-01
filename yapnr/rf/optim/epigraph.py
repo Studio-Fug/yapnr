@@ -18,7 +18,9 @@ With `evaluate` (x → (f, g), the true values without gradients), the step is t
 variant (CCSA/GCMMA, `MMA.conservative_step`), as in NLopt's MMA that Hammond et al. use: inner
 iterations raise the curvature of non-conservative approximations until the new point's true
 values lie below them, so the epigraph value does not increase from one iteration to the next.
-Each inner iteration costs one forward simulation per excitation.
+Each inner iteration costs one forward simulation per excitation. A step whose `max_inner`
+inner iterations all fail is rejected (`accepted` False, x unchanged); the state carries the
+raised curvature, so calling again at the same point continues the inner iterations.
 """
 
 from __future__ import annotations
@@ -40,7 +42,7 @@ class EpigraphStep:
     newton_steps: int
     state: MMAState
     inner: int = 0  # conservative variant: subproblems solved (and points evaluated)
-    conservative: bool = True
+    accepted: bool = True  # conservative variant: False when x stayed at x_k (rejected)
     t_new: float | None = None  # conservative variant: max_k f_k(x_{k+1})
 
 
@@ -113,6 +115,6 @@ class Epigraph:
             newton_steps=sol.newton_steps,
             state=new_state,
             inner=inner,
-            conservative=ok,
+            accepted=ok,
             t_new=float(np.max(true[:k])) - shift,
         )

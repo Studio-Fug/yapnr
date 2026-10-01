@@ -363,6 +363,10 @@ class LineSpec:
     n_pml_top: int = 8
     ratio: float = 1.25
     cpml: CPMLParams = CPMLParams()
+    # Cells from the source plane to the V/I current cell of the ports that use the calibration
+    # (src_cells − meas_cells − 1, plus one half): the power factor is measured at that
+    # distance, where the incident wave of an excited port is measured (0: not set).
+    src_gap_cells: int = 0
 
     def key(self, omega) -> str:
         blob = json.dumps(
@@ -527,7 +531,10 @@ def calibrate_line(
     k_guess = omega * math.sqrt(e_eff) / C0
     lam_min = 2 * math.pi / float(k_guess.max())
     gap = plane_gap_cells or max(2, int(round(lam_min / 4.0 / spec.pitch)))
-    settle = int(math.ceil(3 * spec.stackup.h / spec.pitch)) + 1
+    # Z_c and k from two planes at least 3h from the source (the near-source fields bias them),
+    # the power factor at the ports' own distance from the source.
+    use = spec.src_gap_cells or int(math.ceil(3 * spec.stackup.h / spec.pitch)) + 1
+    settle = max(use, int(math.ceil(3 * spec.stackup.h / spec.pitch)) + 1)
     meas_cells = 2
     src_cells = settle + meas_cells + 1
     margin = settle + 3
@@ -543,6 +550,10 @@ def calibrate_line(
     p2 = LinePort(
         2, "W", centre, spec.width_cells, grid.x.nodes[i_ref1 + gap], meas_cells, src_cells
     ).on(grid)
+    i_src = p1.i_src
+    pp = LinePort(
+        3, "W", centre, spec.width_cells, grid.x.nodes[i_src + use + 3], meas_cells, use + 3
+    ).on(grid)
     g[:, p1.ta : p1.tb] = spec.stackup.g_max
     st.set_pixels(g)
     sim = Simulation(grid, st, dt=spec.dt, cpml=spec.cpml, backend=backend, dtype=dtype)
@@ -552,19 +563,25 @@ def calibrate_line(
     # Cross-section flux on the nodes either side of plane 1's current ring.
     from yapnr.rf.fdtd.monitors import FluxBox
 
-    ic = p1.i_cell
+    ic = pp.i_cell
     yr = (grid.pml.y_lo + 1, grid.y.n - grid.pml.y_hi - 1)
     zr = (0, grid.z.n - grid.pml.z_hi - 1)
     sections = [
         FluxBox(grid, f"section{n}", ((n - 1, n), yr, zr), faces=("x+",)) for n in (ic, ic + 1)
     ]
     probes = p1.probes + p2.probes + [p for b in sections for p in b.probes]
+    if pp.i_cell != p1.i_cell:
+        probes += pp.probes
     res = sim.run(p1.mode_sources(pulse, sim.dt), probes, omega, stop)
     v1, i1 = p1.voltage(res.dft), p1.current(res.dft)
     v2, i2 = p2.voltage(res.dft), p2.current(res.dft)
     zc, k = two_plane_line(v1, i1, v2, i2, gap * spec.pitch, k_guess)
     flux = 0.5 * (sections[0].power(res.dft) + sections[1].power(res.dft))
-    power = flux / (0.5 * np.real(v1 * np.conj(i1)))
+    if pp.i_cell != p1.i_cell:
+        vp, ip = pp.voltage(res.dft), pp.current(res.dft)
+    else:
+        vp, ip = v1, i1
+    power = flux / (0.5 * np.real(vp * np.conj(ip)))
     cal = LineCalibration(omega=omega, zc=zc, k=k, dt=sim.dt, steps=res.steps, power=power)
     if path:
         os.makedirs(cache_dir, exist_ok=True)

@@ -168,10 +168,19 @@ class OptimizerSpec:
     tau: float = 0.05
     aggregate: str = "excitation"
     damping: float = 0.0  # G_d in units of 1/η0
+    # Gray copper: "resistive" (G from G_min to G_max, 377 Ω/sq at ρ̄ = ½) or "reactive" (an
+    # inductive sheet R_s − iωL(ρ̄), lossless when gray; `materials`). Binary designs are the
+    # same copper and void either way.
+    interpolation: str = "resistive"
+    reactive_damping: float = 0.1  # loss tangent R/X of gray reactive pixels at f_ref
     conservative: bool = False  # CCSA/GCMMA inner iterations (extra forward runs)
     max_inner: int = 5
     filter_radius_mm: float | None = None  # default: from the rules (or 1.5 pitches)
     seed: str | None = None  # a closed-form start instead of the uniform `init` (`seeds`)
+    binary_every: int = 5  # evaluate the binarized design every n iterations (0: epochs only)
+    # Robust optimization (Hammond et al. §5.3): projection thresholds of extra designs (above
+    # `eta`: eroded, below: dilated) whose objectives join the epigraph with the nominal ones.
+    eta_variants: tuple[float, ...] = ()
 
 
 @dataclass(frozen=True)

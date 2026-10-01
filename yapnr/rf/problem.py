@@ -34,11 +34,19 @@ from yapnr.rf.design.lengthscale import LengthScale, conic_radius
 from yapnr.rf.design.material_grid import MaterialGrid
 from yapnr.rf.design.parameterization import Parameterization
 from yapnr.rf.domain import Domain, DomainSpec, PortSpec, hj_width_cells
+from yapnr.rf.fdtd.dtft import conductance_factor
 from yapnr.rf.fdtd.dtft import decimation as dtft_decimation
 from yapnr.rf.fdtd.engine import Simulation
 from yapnr.rf.fdtd.sources import GaussianPulse
 from yapnr.rf.fdtd.stop import StopRule
-from yapnr.rf.materials import sheet_conductance, sheet_conductance_derivative
+from yapnr.rf.materials import (
+    branch_admittance_derivative,
+    reactive_range,
+    reactive_sheet,
+    sheet_conductance,
+    sheet_conductance_derivative,
+    sheet_reactance_derivative,
+)
 from yapnr.rf.objectives import build_groups, group_values, violations
 from yapnr.rf.ports import LineCalibration, calibrate_line
 from yapnr.rf.spec import Spec
@@ -47,9 +55,14 @@ PAD_DEPTH = 2  # pixels of fixed feed copper inside the design window at each po
 
 
 def default_cells(h: float, pitch: float) -> tuple[int, int]:
-    """(meas_cells, src_cells) with the measurement plane ≥ 3h behind the reference plane and
-    the source about 3h further (design §5.1: 9 and 17 cells on S1 at 0.3 mm)."""
-    n = int(math.ceil(3.0 * h / pitch - 1e-9))
+    """(meas_cells, src_cells) with the measurement plane ≥ 6h behind the reference plane and
+    the source about 6h further (17 and 33 cells on S1 at 0.3 mm).
+
+    The design had 3h (9 and 17 cells): there the near fields of the discontinuity and of the
+    source reach the V/I samples, and on the divider |S21 − S12| was 0.009–0.013 and |S21|
+    0.04 dB lower than with 6h, where |S21 − S12| is 0.003–0.006 (docs/rf-inverse-design.md,
+    "Accuracy"). The longer feeds cost about a third more cells on a three-port."""
+    n = int(math.ceil(6.0 * h / pitch - 1e-9))
     return n, n + n - 1
 
 
@@ -159,6 +172,7 @@ class Problem:
         exact: bool = False,
         refine: int = 1,
         n_sub: int | None = None,
+        interpolation: str | None = None,
         log=None,
     ):
         self.spec = spec
@@ -207,6 +221,11 @@ class Problem:
         self.excitations = sorted({g.excitation for g in self.groups})
         self.g_min, self.g_max = self.stackup.g_min, self.stackup.g_max
         self.g_d = spec.optimizer.damping / ETA0
+        self.interpolation = interpolation or spec.optimizer.interpolation
+        if self.interpolation not in ("resistive", "reactive"):
+            raise ValueError(f"unknown interpolation {self.interpolation!r}")
+        self.x_range = reactive_range(self.g_max)
+        self.omega_ref = 2.0 * np.pi * self.stackup.f_ref
         self._fwd_cache: tuple[str, dict] = ("", {})
         self.sim = Simulation(
             self.grid,
@@ -344,12 +363,42 @@ class Problem:
     def conductance(self, rho_bar):
         return sheet_conductance(rho_bar, self.g_min, self.g_max, self.g_d)
 
+    def reactive(self, rho_bar):
+        """(R, L) per pixel of the reactive interpolation (Ω and H per square)."""
+        return reactive_sheet(
+            rho_bar, self.g_max, self.omega_ref, self.spec.optimizer.reactive_damping
+        )
+
     def set_design(self, rho_bar: np.ndarray) -> None:
         rho_bar = np.asarray(rho_bar, dtype=np.float64)
         if rho_bar.shape != self.design_shape:
             raise ValueError(f"design must be {self.design_shape}, got {rho_bar.shape}")
-        self.sim.structure.set_pixels(self.domain.pixels(self.conductance(rho_bar)))
+        dom = self.domain
+        if self.interpolation == "reactive":
+            r, ind = self.reactive(rho_bar)
+            g = dom.pixels(1.0 / r)
+            lp = dom.pixels(ind, g_feed=0.0)
+            self.sim.structure.set_sheet(g, lp, dt=self.dt)
+        else:
+            self.sim.structure.set_pixels(dom.pixels(self.conductance(rho_bar)))
         self.sim.update_materials()
+
+    def design_gradient(self, gr, rho_bar: np.ndarray) -> np.ndarray:
+        """∂F_m/∂ρ̄ (M, ni, nj) of the design window from an adjoint `Gradient`."""
+        dom = self.domain
+        if self.interpolation == "reactive":
+            kr, ki = (dom.window_pixels(k) for k in gr.pixel_kernel(self.grid))
+            r, lp = self.reactive(rho_bar)
+            dl = sheet_reactance_derivative(rho_bar, *self.x_range) / self.omega_ref
+            dl = np.where(lp > 0.0, dl, 0.0)
+            dr = self.spec.optimizer.reactive_damping * self.omega_ref * dl
+            yr, yi = branch_admittance_derivative(r, lp, dr, dl, gr.omega, self.dt)
+            shape = (gr.omega.size,) + lp.shape
+            # ∂(Δz a)/∂ρ̄ = c_ω ∂Y_d/∂ρ̄ (a = c_ω Y_d/Δz on the sheet's edges).
+            c = conductance_factor(gr.omega, self.dt)[:, None, None]
+            return 2.0 * c * (kr * yr.reshape(shape) - ki * yi.reshape(shape))
+        dg = sheet_conductance_derivative(rho_bar, self.g_min, self.g_max, self.g_d)
+        return dom.window_pixels(gr.pixels(self.grid)) * dg[None]
 
     def _decimation(self) -> int:
         return 1 if self.exact else dtft_decimation(self.pulse.f_top, self.dt)
@@ -395,7 +444,6 @@ class Problem:
         cache = self._fwd_cache[1] if self._fwd_cache[0] == key else {}
         self._fwd_cache = (key, cache)
         self.set_design(rho_bar)
-        dg = sheet_conductance_derivative(np.asarray(rho_bar), self.g_min, self.g_max, self.g_d)
         n_ports = len(self.ports)
         m = self.freqs.size
         s = np.full((m, n_ports, n_ports), np.nan + 0j)
@@ -446,7 +494,7 @@ class Problem:
                     )
                     steps["adjoint"][g.name] = gr.adjoint.steps
                     converged &= gr.adjoint.converged
-                    gp = self.domain.window_pixels(gr.pixels(self.grid)) * dg[None]
+                    gp = self.design_gradient(gr, rho_bar)
                 for mm in active:
                     values.append(float(f[mm]))
                     keys.append((g.name, float(self.freqs[mm])))
@@ -468,24 +516,41 @@ class Problem:
     def sweep(self, rho_bar: np.ndarray, freqs=None, ports=None) -> dict:
         """The full S-matrix (F, N, N) over `freqs` (default: the sweep grid) with every port
         (or those in `ports`) excited; also Z_c (F, N) and η (port → (F,)) when there is a box.
-        Internal e^{−iωt} convention; `sparams.to_engineering` converts."""
+        Internal e^{−iωt} convention; `sparams.to_engineering` converts.
+
+        With every port excited, S = B A⁻¹ from the wave matrices (A_nj, B_nj: the incident and
+        outgoing waves at port n with port j excited), which does not assume that the idle
+        ports see no incident wave (the residual reflection of their feeds); `s_naive` is
+        b_i/a_j and `idle_incident` the largest |a_k/a_j| (k ≠ j) per frequency."""
         freqs = self.sweep_freqs if freqs is None else np.asarray(freqs, dtype=np.float64)
         omega = 2.0 * np.pi * freqs
         self.set_design(rho_bar)
         n = len(self.ports)
         s = np.full((freqs.size, n, n), np.nan + 0j)
+        wa = np.full((freqs.size, n, n), np.nan + 0j)
+        wb = np.full((freqs.size, n, n), np.nan + 0j)
         eta = {}
         steps = {}
-        for j in ports or sorted(self.ports):
+        excited = list(ports or sorted(self.ports))
+        for j in excited:
             res = self.forward(j, omega=omega, design=False)
             steps[j] = res.steps
             qty = self.quantities(res.dft, j, omega)
             for (i, jj), v in qty["s"].items():
                 s[:, i - 1, jj - 1] = v
+            for k, (a, b) in qty["waves"].items():
+                wa[:, k - 1, j - 1] = a
+                wb[:, k - 1, j - 1] = b
             for jj, v in qty["eta"].items():
                 eta[jj] = np.asarray(v, dtype=np.float64)
         zc = np.stack([self.cal[k].at(omega)[0] for k in sorted(self.ports)], axis=-1)
-        return {"freqs": freqs, "s": s, "zc": zc, "eta": eta, "steps": steps}
+        out = {"freqs": freqs, "s": s, "zc": zc, "eta": eta, "steps": steps, "s_naive": s}
+        if sorted(excited) == sorted(self.ports) and n > 1:
+            diag = np.abs(np.diagonal(wa, axis1=1, axis2=2))
+            off = np.abs(wa - np.einsum("fii->fi", wa)[..., None] * np.eye(n))
+            out["idle_incident"] = np.max(off / diag[:, None, :], axis=(1, 2))
+            out["s"] = wb @ np.linalg.inv(wa)
+        return out
 
     # -- reports --------------------------------------------------------------------------------
 

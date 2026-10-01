@@ -27,6 +27,20 @@ def quads(x):
     return np.sum(d * d, axis=1), 2 * d
 
 
+def wavy(x):
+    """Two non-convex functions whose separable MMA approximations miss their ripples."""
+    f = np.array(
+        [np.cos(9.0 * x[0]) + 2.0 * (x[1] - 0.3) ** 2, np.sin(7.0 * x[1]) + (x[0] - 0.6) ** 2]
+    )
+    df = np.array(
+        [
+            [-9.0 * np.sin(9.0 * x[0]), 4.0 * (x[1] - 0.3)],
+            [2.0 * (x[0] - 0.6), 7.0 * np.cos(7.0 * x[1])],
+        ]
+    )
+    return f, df
+
+
 class MMAToyTest(unittest.TestCase):
     def _run(self, iterations=40):
         mma = MMA(3, 2, 0.0, 5.0, settings=MMASettings(move=1.0, epsimin=1e-9))
@@ -85,6 +99,33 @@ class EpigraphTest(unittest.TestCase):
         x, ts = self._minimax(True, 40)
         np.testing.assert_allclose(x, [0.5, 0.5], atol=1e-4)
         self.assertTrue(all(b <= a + 1e-12 for a, b in zip(ts, ts[1:])))
+
+    def test_conservative_rejects_after_max_inner(self):
+        # One subproblem per call: most calls end without a conservative approximation. Those
+        # steps must be rejected (x unchanged, t unchanged), and the raised curvature carried in
+        # the state must let a later call at the same point succeed.
+        epi = Epigraph(2, settings=MMASettings(move=0.5, epsimin=1e-9))
+        x, st = np.array([0.1, 0.9]), MMAState()
+        ts, rejected = [], 0
+        for _ in range(25):
+            f, df = wavy(x)
+            step = epi.step(
+                x, f, df, st, evaluate=lambda xh: (wavy(xh)[0], None), max_inner=1, move=0.5
+            )
+            self.assertLessEqual(step.t_new, step.t + 1e-9)  # the conservative test tolerance
+            if not step.accepted:
+                rejected += 1
+                np.testing.assert_array_equal(step.x, x)
+                self.assertIsNotNone(step.state.rho)
+            else:
+                self.assertIsNone(step.state.rho)
+            x, st = step.x, step.state
+            ts.append(step.t)
+        self.assertGreater(rejected, 5)
+        self.assertTrue(all(b <= a + 1e-9 for a, b in zip(ts, ts[1:])))
+        self.assertLess(ts[-1], -0.8)
+        back = MMAState.from_arrays(st.to_arrays())
+        np.testing.assert_array_equal(back.rho, st.rho)
 
     def test_lengthscale_style_constraint(self):
         # min max_k |x − c_k|² subject to x_0 ≥ 0.6 (as g = 0.6 − x_0 ≤ 0).

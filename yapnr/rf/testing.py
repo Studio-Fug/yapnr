@@ -131,6 +131,8 @@ class CaseChecks:
         self.assertTrue(report["export_ok"], (same, report.get("drc"), report["footprint"]))
         self.assertTrue(report["coarse"]["ok"], _summary(report))
         self.assertTrue(report["fine"]["ok"], _summary(report))
+        if "finer" in report:
+            self.assertTrue(report["finer"]["ok"], _summary(report))
 
     def _smoke_checks(self, report):
         with open(os.path.join(self.out, "history.json"), encoding="utf-8") as fh:

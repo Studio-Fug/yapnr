@@ -20,6 +20,12 @@ gradient of every F_m.
 
 Probes must lie outside the CPML. For the copper sheet σ_e = G_e/Δz_d(k_c), so
 ∂F/∂G_e = ∂F/∂σ_e / Δz_d; `materials.edges_to_pixels` restricts edge gradients to pixels.
+In general a sheet edge enters the discrete equations through a coefficient a_e(ω) (c_ω σ_e for
+a resistive sheet, Σ w c_ω Y_d/Δz for an inductive one, `materials`), and
+
+    ∂F_m/∂p = 2 Re[ K_e(ω_m) ∂(Δz a_e)/∂p ],   K_e = iΩ_m V_e Ê^adj_e Ê_e / Δz_d
+
+for any parameter p of the sheet; `Gradient.pixel_kernel` restricts K to pixels (complex).
 
 A typical iteration (one excitation, one objective group):
 
@@ -122,10 +128,21 @@ class Gradient:
     d_gx: np.ndarray  # (M, Nx, Ny+1) ∂F/∂G on copper-plane Ex edges (zero off the probes)
     d_gy: np.ndarray  # (M, Nx+1, Ny)
     adjoint: RunResult
+    k_gx: tuple = ()  # (Re, Im) of K on copper-plane Ex edges, (M, Nx, Ny+1) each
+    k_gy: tuple = ()  # (Re, Im) on Ey edges, (M, Nx+1, Ny) each
 
     def pixels(self, grid) -> np.ndarray:
-        """∂F_m/∂G_p for every pixel of the copper plane, (M, Nx, Ny)."""
+        """∂F_m/∂G_p for every pixel of the copper plane, (M, Nx, Ny) (resistive sheet)."""
         return edges_to_pixels(grid, self.d_gx, self.d_gy)
+
+    def pixel_kernel(self, grid) -> tuple[np.ndarray, np.ndarray]:
+        """(Re, Im) of K restricted to the pixels of the copper plane, (M, Nx, Ny) each: for an
+        inductive sheet ∂F_m/∂p = 2 Re[K_p c_ω ∂Y_d/∂p] (`materials.branch_admittance_derivative`).
+        """
+        return (
+            edges_to_pixels(grid, self.k_gx[0], self.k_gy[0]),
+            edges_to_pixels(grid, self.k_gx[1], self.k_gy[1]),
+        )
 
 
 def gradient(
@@ -159,11 +176,16 @@ def gradient(
     d_sigma = {}
     d_gx = np.zeros((omega.size, nx, ny + 1))
     d_gy = np.zeros((omega.size, nx + 1, ny))
+    k_gx = (np.zeros_like(d_gx), np.zeros_like(d_gx))
+    k_gy = (np.zeros_like(d_gy), np.zeros_like(d_gy))
     for p in design_probes:
         vol = grid.volume(p.comp).reshape(-1)[p.index][None, :]
-        # 2 Re[iΩ c V Ê^adj Ê] = −2 Ω c V Im(Ê^adj Ê), in real arithmetic (see numerics).
+        # K = iΩ V Ê^adj Ê / Δz in real arithmetic (see numerics):
+        # Re K = −Ω V Im(Ê^adj Ê)/Δz, Im K = Ω V Re(Ê^adj Ê)/Δz; ∂F/∂σ = 2 c Re(K) Δz.
         ea, ef = adj.dft[p.name], forward.dft[p.name]
-        ds = -2.0 * big_omega * c * vol * (ea.real * ef.imag + ea.imag * ef.real)
+        prod_im = ea.real * ef.imag + ea.imag * ef.real
+        prod_re = ea.real * ef.real - ea.imag * ef.imag
+        ds = -2.0 * big_omega * c * vol * prod_im
         d_sigma[p.name] = ds
         if p.comp in ("ex", "ey"):
             i, j, k = grid.unravel(p.comp, p.index)
@@ -171,4 +193,9 @@ def gradient(
                 continue
             target = d_gx if p.comp == "ex" else d_gy
             target[:, i, j] += ds / dz
-    return Gradient(omega=omega, d_sigma=d_sigma, d_gx=d_gx, d_gy=d_gy, adjoint=adj)
+            kr, ki = k_gx if p.comp == "ex" else k_gy
+            kr[:, i, j] += -big_omega * vol * prod_im / dz
+            ki[:, i, j] += big_omega * vol * prod_re / dz
+    return Gradient(
+        omega=omega, d_sigma=d_sigma, d_gx=d_gx, d_gy=d_gy, adjoint=adj, k_gx=k_gx, k_gy=k_gy
+    )

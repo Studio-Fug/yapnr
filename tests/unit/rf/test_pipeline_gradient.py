@@ -59,5 +59,26 @@ class PipelineGradientTest(unittest.TestCase):
         np.testing.assert_allclose(dg @ self.v, (gp - gm) / (2 * h), rtol=1e-5)
 
 
+class ReactivePipelineGradientTest(PipelineGradientTest):
+    """The same with the reactive interpolation: gray pixels are inductive sheets R_s − iωL(ρ̄)
+    with branch currents in the engine, and the gradient is 2 Re[K ∂Y_d/∂L] L'(ρ̄)."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = tiny_spec(radiated=True)
+        spec = spec.replace(optimizer=OptimizerSpec(interpolation="reactive"))
+        cls.p = p = Problem(spec, exact=True, calibrations=nominal_calibration())
+        rng = np.random.default_rng(4)
+        cls.x = rng.uniform(0.3, 0.7, p.param.n_dof)
+        cls.beta = 8.0
+        ev = p.evaluate(p.param.rho_bar(cls.x, cls.beta))
+        cls.ev = ev
+        cls.grad = p.param.vjp(cls.x, cls.beta, ev.grads)
+        cls.v = rng.standard_normal(cls.x.size)
+
+    def test_sheet_is_inductive(self):
+        self.assertTrue(self.p.sim.structure.inductive)
+
+
 if __name__ == "__main__":
     unittest.main()

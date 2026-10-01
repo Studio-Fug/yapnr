@@ -5,8 +5,15 @@ Internally the time dependence is e^{−iωt} (forward waves e^{ikx}); everythin
 conjugate (`to_engineering`).
 
     a = (V̂ + Z_c Î)/(2√R_c),   b = (V̂ − Z_c Î)/(2√R_c),   R_c = Re Z_c
-    a_ref = a e^{+ik d_m},     b_ref = b e^{−ik d_m}       (reference plane d_m ahead)
+    a_ref = a e^{+iβ d_m},     b_ref = b e^{−iβ d_m}       (reference plane d_m ahead)
     S_ij = b_ref,i / a_ref,j   (port j excited),  P_inc = |a_ref|²/2
+
+The de-embedding shifts phases only (β = Re k, `port_waves`): the line loss over the d_m ≈ 3h of
+feed between the measurement and the reference planes is about 0.002 dB per port on the cases'
+lines (α ≈ 0.7 Np/m), while the calibration's Im k is not accurate to that level (a two-plane
+extraction over a quarter wave resolves α only to about ±2 Np/m), and de-embedding with it
+inflated |S| by up to 0.15 dB and produced non-passive S-matrices. Neglecting the feed loss
+makes the reported |S| low by α(d_i + d_j), a conservative bias of under 0.01 dB.
 
 The wave functions accept numpy arrays or torch tensors (complex128) so objectives can be
 differentiated with autograd.
@@ -40,9 +47,10 @@ def waves(v, i, zc, k, d_m: float):
 
 
 def port_waves(geom, cal, dft, omega):
-    """(a_ref, b_ref) of a `PortGeometry` with its `LineCalibration` from probe DTFTs."""
+    """(a_ref, b_ref) of a `PortGeometry` with its `LineCalibration` from probe DTFTs; the
+    de-embedding uses Re k (see the module doc)."""
     zc, k = cal.at(omega)
-    return waves(geom.voltage(dft), geom.current(dft), zc, k, geom.d_m)
+    return waves(geom.voltage(dft), geom.current(dft), zc, np.real(k), geom.d_m)
 
 
 def incident_power(a, cal=None, omega=None):

@@ -1,9 +1,9 @@
 """KiCad parses the exported footprints (design §10.3); KiCad lane only (tag `kicad`).
 
 Needs a headless kicad-cli in YAPNR_KICAD_CLI (DEVELOPERS.md, never the GUI bundle). The
-footprint has a net-tie island with a keyholed hole, a custom pad and a netless island. KiCad
-must load it (`fp upgrade --force` rewrites it) and keep every pad and copper polygon, and it
-must plot it (`fp export svg`).
+footprint has a net-tie island with a keyholed hole, a custom pad, a netless island and two
+rule areas. KiCad must load it (`fp upgrade --force` rewrites it) and keep every pad, copper
+polygon and rule area, and it must plot it (`fp export svg`).
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import unittest
 import numpy as np
 
 from yapnr.rf.export.contour import islands
-from yapnr.rf.export.kicad import Footprint, PortPad, read_footprint, write_footprint
+from yapnr.rf.export.kicad import Footprint, PortPad, RuleArea, read_footprint, write_footprint
 
 CLI = os.environ.get("YAPNR_KICAD_CLI", "")
 
@@ -46,6 +46,16 @@ def _footprint():
         islands=shapes,
         description="kicad-cli parse test",
         seed="cli",
+        rule_areas=[
+            RuleArea(
+                "pour keepout", np.array([[-1.0, -1.0], [4.6, -1.0], [4.6, 3.4], [-1.0, 3.4]])
+            ),
+            RuleArea(
+                "track keepout",
+                np.array([[-1.0, -1.0], [0.0, -1.0], [0.0, 0.85], [-1.0, 0.85]]),
+                ("tracks", "vias", "copperpour", "footprints"),
+            ),
+        ],
     )
 
 
@@ -84,6 +94,16 @@ class KiCadCliTest(unittest.TestCase):
             for a, b in zip(mine.pads, theirs.pads):
                 for pa, pb in zip(a["primitives"], b["primitives"]):
                     np.testing.assert_allclose(pa, pb, atol=1e-6)
+            # The rule areas survive with their names, keepout kinds and outlines.
+            self.assertEqual(
+                sorted((a["name"], tuple(a["not_allowed"])) for a in theirs.rule_areas),
+                sorted((a["name"], tuple(a["not_allowed"])) for a in mine.rule_areas),
+            )
+            for a in mine.rule_areas:
+                b = [r for r in theirs.rule_areas if r["name"] == a["name"]][0]
+                np.testing.assert_allclose(
+                    sorted(map(tuple, a["polygon"])), sorted(map(tuple, b["polygon"])), atol=1e-6
+                )
             svg = os.path.join(d, "svg")
             os.makedirs(svg)
             subprocess.run(

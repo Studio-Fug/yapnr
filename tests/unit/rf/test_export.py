@@ -226,6 +226,76 @@ class KiCadTest(unittest.TestCase):
             self.assertEqual(read_footprint(path).name, "RF_test")
 
 
+class RuleAreaTest(unittest.TestCase):
+    """The keepouts of the simulated environment (`report.rule_areas`)."""
+
+    def _areas(self):
+        from yapnr.rf.export.report import CORRIDOR_SPARE_MM, rule_areas
+        from yapnr.rf.spec import Band, GridSpec, Port, S, Spec, StackupSpec
+
+        spec = Spec(
+            name="ra",
+            stackup=StackupSpec(3.55, 0.0027, 0.813, 10.0),
+            grid=GridSpec(pitch_mm=0.3, substrate_cells=4),
+            design_region=(0.0, 6.0, -3.0, 3.0),
+            ports=(Port(1, "W", 0.0, 6), Port(2, "E", 1.5, 6), Port(3, "N", 3.0, 6)),
+            bands={"b": Band(9.0, 11.0, 3)},
+            requirements=(S(2, 1).at_least_db(-3.5, band="b"),),
+        )
+        pads = [
+            PortPad(1, (0.3, 0.0), (0.6, 1.8)),
+            PortPad(2, (5.7, 1.5), (0.6, 1.8)),
+            PortPad(3, (3.0, 2.7), (1.8, 0.6)),
+        ]
+        return rule_areas(spec, pads, 2.0), CORRIDOR_SPARE_MM
+
+    def test_pour_keepout_covers_region_and_margin(self):
+        areas, _ = self._areas()
+        pour = areas[0]
+        self.assertEqual(set(pour.not_allowed), {"vias", "copperpour", "footprints"})
+        np.testing.assert_allclose(pour.polygon.min(axis=0), [-2.0, -5.0])
+        np.testing.assert_allclose(pour.polygon.max(axis=0), [8.0, 5.0])
+
+    def test_track_keepout_leaves_feed_corridors(self):
+        areas, spare = self._areas()
+        strips = areas[1:]
+        self.assertTrue(all("tracks" in a.not_allowed for a in strips))
+
+        def covered(x, y):
+            for a in strips:
+                lo, hi = a.polygon.min(axis=0), a.polygon.max(axis=0)
+                if lo[0] < x < hi[0] and lo[1] < y < hi[1]:
+                    return True
+            return False
+
+        # The margin is covered, the design region and the corridors are not.
+        self.assertTrue(covered(-1.0, 2.0) and covered(7.0, -2.0) and covered(1.0, -4.0))
+        self.assertFalse(covered(3.0, 0.0))
+        self.assertFalse(covered(-1.0, 0.0))  # port 1's corridor
+        self.assertFalse(covered(-1.0, 0.9 + 0.5 * spare))
+        self.assertTrue(covered(-1.0, 0.9 + 2 * spare))
+        self.assertFalse(covered(7.0, 1.5) or covered(3.0, 4.0))  # ports 2 and 3
+        self.assertTrue(covered(3.0 + 0.9 + 2 * spare, 4.0))
+
+    def test_round_trip(self):
+        areas, _ = self._areas()
+        fp = _footprint()
+        fp.rule_areas = areas
+        r = read_footprint(write_footprint(fp))
+        self.assertEqual(len(r.rule_areas), len(areas))
+        for mine, theirs in zip(areas, r.rule_areas):
+            self.assertEqual(theirs["name"], mine.name)
+            self.assertEqual(theirs["layers"], ["F.Cu"])
+            self.assertEqual(theirs["not_allowed"], sorted(mine.not_allowed))
+            ox, oy = fp.origin
+            want = np.column_stack([mine.polygon[:, 0] - ox, oy - mine.polygon[:, 1]])
+            np.testing.assert_allclose(theirs["polygon"], want, atol=1e-6)
+        # Rule areas are not copper.
+        self.assertEqual(
+            len(r.copper()), len(read_footprint(write_footprint(_footprint())).copper())
+        )
+
+
 class TouchstoneTest(unittest.TestCase):
     def test_round_trip(self):
         rng = np.random.default_rng(3)

@@ -154,6 +154,75 @@ class DiscreteFrequencyDomainTest(unittest.TestCase):
         self.assertLess(worst_e, 1e-10)
 
 
+class InductiveSheetTest(unittest.TestCase):
+    """The same identity with an inductive copper sheet (`Structure.set_sheet`): on the
+    copper-plane edges c_ω σ becomes the complex Σ w c_ω Y_d/Δz of the branch currents."""
+
+    @classmethod
+    def setUpClass(cls):
+        grid, st = small_grid()
+        s = Structure(grid, st)
+        rng = np.random.default_rng(5)
+        g = st.g_min * (st.g_max / st.g_min) ** rng.uniform(0, 0.85, grid.n[:2])
+        sim0 = Simulation(grid, s)
+        dt = sim0.dt
+        # Inductances with Ω L G from about 0.01 to 30 at 9 GHz: resistive to reactive branches.
+        lg = 10.0 ** rng.uniform(-2.0, 1.5, grid.n[:2]) / (2 * np.pi * 9e9)
+        s.set_sheet(g, lg / g, dt=dt)
+        sim = Simulation(grid, s, dt=dt)
+        cls.grid, cls.sim, cls.s = grid, sim, s
+        cls.omega = 2 * np.pi * np.array([7.5e9, 9e9, 10.5e9])
+        pulse = GaussianPulse(9e9, 2.5e9)
+        src = PulseSource("ez", grid.flat_index("ez", 6, 6, [0, 1]), [1.0, -0.5], pulse, sim.dt)
+        cls.src = src
+        cls.jhat = source_dtft(src, sim, cls.omega, magnetic=False)
+        cls.res = sim.run([src], full_probes(grid), cls.omega, StopRule(tol=1e-12, f_lo=7.5e9))
+
+    def test_converged(self):
+        self.assertTrue(self.res.converged)
+        self.assertTrue(self.s.inductive)
+
+    def test_e_residual_on_the_sheet(self):
+        g, sim, s = self.grid, self.sim, self.s
+        big = numerical_omega(self.omega, sim.dt)
+        cw = conductance_factor(self.omega, sim.dt)
+        sheet = s.sheet_coefficient(self.omega, sim.dt)
+        kc = g.k_c
+        lo = [g.pml.along(a)[0] + 1 for a in range(3)]
+        hi = [g.axis(a).n - g.pml.along(a)[1] - 1 for a in range(3)]
+        worst = 0.0
+        for m in range(self.omega.size):
+            f = {c: self.res.dft[c][m].reshape(g.shape(c)) for c in COMPONENTS}
+
+            def bc(v, a):
+                sh = [1, 1, 1]
+                sh[a] = v.size
+                return v.reshape(sh)
+
+            ch = {
+                "ex": (np.diff(f["hz"], axis=1) / bc(g.y.dual[1:-1], 1))[:, :, 1:-1]
+                - (np.diff(f["hy"], axis=2) / bc(g.z.dual[1:-1], 2))[:, 1:-1, :],
+                "ey": (np.diff(f["hx"], axis=2) / bc(g.z.dual[1:-1], 2))[1:-1, :, :]
+                - (np.diff(f["hz"], axis=0) / bc(g.x.dual[1:-1], 0))[:, :, 1:-1],
+            }
+            inner = {
+                "ex": (slice(None), slice(1, -1), slice(1, -1)),
+                "ey": (slice(1, -1), slice(None), slice(1, -1)),
+            }
+            for c in ("ex", "ey"):
+                eps = s.eps(c)[inner[c]]
+                sig = s.sigma(c).copy()
+                sig[:, :, kc] -= s.sheet[c] / s.sheet_dz  # the instantaneous sheet part
+                a = cw[m] * sig.astype(complex)
+                a[:, :, kc] += sheet[c][0][m] + 1j * sheet[c][1][m]
+                r = (-1j * big[m] * eps + a[inner[c]]) * f[c][inner[c]] - ch[c]
+                plane = r[:, :, kc - 1]
+                sl = tuple(slice(lo[ax] - 1, hi[ax] - 1) for ax in range(2))
+                scale = np.abs(ch[c][sl + (slice(None),)]).max()
+                worst = max(worst, np.abs(plane[sl]).max() / scale)
+        self.assertLess(worst, 1e-10)
+
+
 class DecimationTest(unittest.TestCase):
     def test_decimated_dtft_matches(self):
         grid, st = small_grid()

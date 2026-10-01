@@ -9,14 +9,16 @@ Measured on this grid (torch float64), the basis of the tolerances (measurement 
 - Z_c is 6.4 % (2 GHz) to 5.8 % (4 GHz) below Hammerstad–Jensen: the zero-thickness strip on
   6 cells is electrically about half a cell wider than its pixels (edge singularity);
 - ε_eff is within 0.5 % of Kirschning–Jansen from 2 to 12 GHz; Im Z_c is up to 2.2 % of Z0;
-- a straight line through a 9.6 mm design region: |S11| ≤ −41.8 dB, |S21| ≥ −0.13 dB (the line
-  loss plus the de-embedding error of the calibrated Im k near the source), ∠S21 within 1.8° of
-  −Re(k) L (engineering convention).
+- a straight line through a 9.6 mm design region: |S11| ≤ −45 dB, ∠S21 within 1.8° of
+  −Re(k) L (engineering convention), and |S21| from −0.07 dB (2 GHz) to −0.30 dB (12 GHz).
 
-The attenuation of this line rises from 0.55 Np/m at 2 GHz to about 2 Np/m at 10 GHz on both
-this grid and one twice as fine: with a constant sheet conductance G_max = 1/R_s(10 GHz) the
-current crowds towards the strip edges as frequency rises, so the zero-thickness sheet has
-several times the textbook conductor loss of a thick strip.
+The line loss itself is close to the textbook value: the Poynting flux along a long line
+decays by about 0.7–0.9 Np/m over 2–12 GHz (0.42 Np/m dielectric and R_s/(Z0 w) = 0.29 Np/m
+conductor loss), about 0.1 dB over the 15.3 mm between the measurement planes. The rest of the
+|S21| deficit at 8–12 GHz (up to about 0.2 dB) is the port, not the line: within about 50 cells
+of the source the V/I samples see non-modal fields the source launches, so the incident wave
+of the excited port reads 1.5–2 % high and every |S_ij| of its column about 0.15–0.2 dB low
+(docs/rf-inverse-design.md, "Accuracy"). The de-embedding uses Re k only (`sparams`).
 """
 
 from __future__ import annotations
@@ -97,7 +99,8 @@ class MicrostripTest(unittest.TestCase):
 
     def test_matched_line(self):
         self.assertLess(sparams.db(self.s11).max(), -35.0)
-        self.assertGreater(sparams.db(self.s21).min(), -0.2)
+        self.assertGreater(sparams.db(self.s21).min(), -0.45)  # measured −0.30 (12 GHz)
+        self.assertGreater(sparams.db(self.s21)[FREQS <= 4e9].min(), -0.15)  # measured −0.10
         self.assertLess(sparams.db(self.s21).max(), 0.01)
         phase = np.angle(sparams.to_engineering(self.s21), deg=True)
         expect = np.rad2deg(-self.cal.k.real * LENGTH)

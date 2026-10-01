@@ -1,9 +1,9 @@
-"""(c) Filter bank: a two-channel diplexer, A 7.6-8.4 GHz to port 2, B 11.6-12.4 GHz to port 3
-(design §11.4).
+"""(c) Filter bank: a two-channel diplexer, channel A to port 2 and channel B to port 3 (design
+§11.4, `yapnr.rf.cases.diplexer`).
 
-Fine re-validation (pitch 0.15 mm, 6 substrate cells): in-channel loss <= 2 dB, rejection of the
-other channel >= 15 dB, |S11| <= -8 dB in both channels, passive; on the optimization grid 1.5 dB,
-18 dB and -10 dB.
+The pass criteria (in-channel loss, rejection of the other channel, the common port's match and
+passivity, on the optimization grid and on the finer re-validation grid) are
+`yapnr.rf.cases.CRITERIA["diplexer"]`; `python -m yapnr.rf.cases criteria diplexer` prints them.
 
 Full run: `bazel test //tests/e2e/rf:test_diplexer` (manual); CI runs the smoke variant
 `:test_diplexer_smoke`. See yapnr/rf/testing.py (CaseChecks).

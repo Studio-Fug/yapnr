@@ -60,10 +60,13 @@ class MMAState:
     xold2: np.ndarray | None = None
     low: np.ndarray | None = None
     upp: np.ndarray | None = None
+    # Conservative variant: the curvature parameters reached by a rejected step, from which the
+    # next call at the same x_k continues (None after an accepted step).
+    rho: np.ndarray | None = None
 
     def to_arrays(self, prefix: str = "mma_") -> dict:
         out = {f"{prefix}k": np.array(self.k)}
-        for name in ("xold1", "xold2", "low", "upp"):
+        for name in ("xold1", "xold2", "low", "upp", "rho"):
             v = getattr(self, name)
             if v is not None:
                 out[prefix + name] = np.asarray(v)
@@ -81,6 +84,7 @@ class MMAState:
             xold2=get("xold2"),
             low=get("low"),
             upp=get("upp"),
+            rho=get("rho"),
         )
 
 
@@ -357,11 +361,16 @@ class MMA:
         values; every constraint whose approximation is not conservative, f_i(x̂) > f̃_i(x̂),
         gets ρ_i ← min(1.1 (ρ_i + δ_i), 10 ρ_i) with δ_i = (f_i(x̂) − f̃_i(x̂)) / d(x̂) and
         d(x) = Σ_j (u_j − l_j)(x_j − x_kj)² / ((u_j − x_j)(x_j − l_j)(x_max − x_min)_j),
-        and the subproblem is solved again. An accepted point never has a larger maximum
-        constraint (epigraph value) than x_k up to the elastic variables.
+        and the subproblem is solved again.
+
+        Only a conservative point is accepted, so the maximum constraint (the epigraph value)
+        never increases up to the elastic variables. When `max_inner` subproblems all fail, the
+        step is rejected: x_k is returned unchanged with its own values, and the returned state
+        keeps x_k's asymptotes and the raised ρ, so the next call at x_k (with the same values
+        and gradients) continues the inner iterations where this one stopped.
 
         Returns (x_{k+1}, the solution, the new state, the true values at x_{k+1}, the number
-        of inner iterations, whether the last point was conservative).
+        of inner iterations, whether the step was accepted).
         """
         x = np.asarray(x, np.float64)
         fval = np.asarray(fval, np.float64)
@@ -370,6 +379,8 @@ class MMA:
         rho = np.empty(self.m + 1)
         rho[0] = 1e-6
         rho[1:] = np.maximum(1e-6, 0.1 / self.n * np.abs(dfdx) @ span)
+        if state.rho is not None and np.asarray(state.rho).shape == rho.shape:
+            rho = np.maximum(rho, np.asarray(state.rho, np.float64))
         conservative = False
         inner = 0
         for inner in range(1, max_inner + 1):
@@ -382,8 +393,6 @@ class MMA:
             if not bad.any():
                 conservative = True
                 break
-            if inner == max_inner:
-                break
             dx2 = (sol.x - x) ** 2
             d = float(
                 np.sum((ap.upp - ap.low) * dx2 / ((ap.upp - sol.x) * (sol.x - ap.low) * span))
@@ -392,6 +401,16 @@ class MMA:
             delta = gap / d
             grown = np.minimum(1.1 * (rho[1:] + delta), 10.0 * rho[1:])
             rho[1:] = np.where(bad, grown, rho[1:])
+        if not conservative:
+            kept = MMAState(
+                k=state.k,
+                xold1=state.xold1,
+                xold2=state.xold2,
+                low=state.low,
+                upp=state.upp,
+                rho=rho.copy(),
+            )
+            return x.copy(), sol, kept, fval.copy(), inner, False
         new = MMAState(
             k=state.k + 1,
             xold1=x.copy(),
@@ -399,7 +418,7 @@ class MMA:
             low=ap.low,
             upp=ap.upp,
         )
-        return sol.x, sol, new, true, inner, conservative
+        return sol.x, sol, new, true, inner, True
 
     def kkt_residual(self, sol: Subsolution, df0, fval, dfdx) -> float:
         """Norm of the KKT residual of the original problem at sol.x, with the subproblem's

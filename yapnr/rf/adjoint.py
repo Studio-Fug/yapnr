@@ -20,6 +20,19 @@ gradient of every F_m.
 
 Probes must lie outside the CPML. For the copper sheet σ_e = G_e/Δz_d(k_c), so
 ∂F/∂G_e = ∂F/∂σ_e / Δz_d; `materials.edges_to_pixels` restricts edge gradients to pixels.
+
+A typical iteration (one excitation, one objective group):
+
+    sim.structure.set_pixels(dom.pixels(sheet_conductance(rho_bar, g_min, g_max)))
+    sim.update_materials()
+    fwd = sim.run(port.mode_sources(pulse, dt), probes, omega, stop,
+                  decimation=dtft.decimation(pulse.f_top, dt))
+    f, g = wirtinger(objective, fwd.dft, names)          # f: (M,), one value per ω_m
+    grad = gradient(sim, fwd, probes, g, dom.design_probes(), stop, decimation="auto")
+    df_drho_bar = dom.window_pixels(grad.pixels(dom.grid)) * sheet_conductance_derivative(...)
+
+`probes` must include the design probes, and `objective` maps the probe DTFTs (torch
+complex128) to the (M,) per-frequency values.
 """
 
 from __future__ import annotations

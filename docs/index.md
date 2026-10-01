@@ -75,6 +75,7 @@ migration-plan
 decisions
 design/animations
 design/constraint-and-hier-animations
+design/fea-integration
 history/import-manifest
 about-the-name
 ```

@@ -120,14 +120,15 @@ class CaseChecks:
             self.assertTrue(os.path.exists(os.path.join(self.out, name)), name)
         fp = read_footprint(os.path.join(self.out, "footprint.kicad_mod"))
         self.assertEqual(sorted(int(p["number"]) for p in fp.pads), list(range(1, n + 1)))
-        # The export reproduces the optimizer's binary design on its grid, pixel for pixel.
+        # The footprint reproduces the exported design on its grid, pixel for pixel.
         same = report["same_grid"]
         self.assertEqual(same["pixel_xor"], 0)
-        self.assertLessEqual(same["max_db_diff_vs_optimizer"], 0.5)
         if SMOKE:
             self._smoke_checks(report)
             return
-        self.assertTrue(report["export_ok"], report.get("drc"))
+        # The width and space check passes, every port is joined, and the exported design
+        # stays close to the optimizer's binary design (validate.EXPORT_DB, EXPORT_ABS).
+        self.assertTrue(report["export_ok"], (same, report.get("drc"), report["footprint"]))
         self.assertTrue(report["coarse"]["ok"], _summary(report))
         self.assertTrue(report["fine"]["ok"], _summary(report))
 

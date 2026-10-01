@@ -1,10 +1,11 @@
 """The run directory's exports: polygons, footprint, Touchstone file and result JSON (§10).
 
-`export_design` takes the binarized design of an optimization and writes
+`export_design` takes the binarized design of an optimization, repairs its minimum width and
+space on the pixel grid (`repair`; the result records the pixels it changed) and writes
 
 - `footprint.kicad_mod`: the copper islands (`contour`), checked for minimum width and space
   (`drc`), with one pad per port (`kicad`);
-- `coarse.sNp`: the full S-matrix of the binary design on the optimization grid (every port
+- `coarse.sNp`: the full S-matrix of the exported design on the optimization grid (every port
   excited), renormalized to 50 Ω, engineering convention, over the sweep grid;
 - the `yapnr-rf-result/1` dictionary (the driver writes it as `result.json`): spec hash, solver
   settings, optimizer summary, achieved values, the width and space check and provenance.
@@ -51,6 +52,36 @@ def port_pads(problem) -> list[tuple[int, slice, slice]]:
             )
         )
     return out
+
+
+def exported_binary(problem, binary: np.ndarray) -> tuple[np.ndarray, dict]:
+    """The binary design as exported: `repair.repair` at the spec's minimum width and space
+    (in pixels of the problem's grid), and what it changed."""
+    from yapnr.rf.export.repair import pixels_for, repair
+
+    spec = problem.spec
+    b = (np.asarray(binary) > 0.5).astype(np.float64)
+    info = {"changed_pixels": 0, "added": 0, "removed": 0, "rounds": 0}
+    if not spec.rules.active:
+        return b, info
+    pitch = spec.grid.pitch_mm / problem.refine
+    mg = problem.material
+    out, rounds = repair(
+        b,
+        mg.fixed,
+        mg.fixed_value,
+        mg.ring,
+        mg.ring_width,
+        pixels_for(spec.rules.min_width_mm, pitch),
+        pixels_for(spec.rules.min_space_mm, pitch),
+    )
+    info = {
+        "changed_pixels": int(np.sum(out != b)),
+        "added": int(np.sum((out > 0.5) & (b < 0.5))),
+        "removed": int(np.sum((out < 0.5) & (b > 0.5))),
+        "rounds": int(rounds),
+    }
+    return out, info
 
 
 def footprint_of(problem, binary: np.ndarray, *, name: str | None = None) -> tuple:
@@ -153,7 +184,9 @@ def export_design(problem, opt, final: dict, out_dir: str, *, sweep: bool = True
     log = log or (lambda *_: None)
     t0 = time.perf_counter()
     spec = problem.spec
-    binary = final["binary"]
+    binary, repaired = exported_binary(problem, final["binary"])
+    if repaired["changed_pixels"]:
+        log(f"width/space repair changed {repaired['changed_pixels']} pixels")
     fp, polys = footprint_of(problem, binary)
     write_footprint(fp, os.path.join(out_dir, FOOTPRINT))
     pitch = spec.grid.pitch_mm / problem.refine
@@ -206,6 +239,7 @@ def export_design(problem, opt, final: dict, out_dir: str, *, sweep: bool = True
             "file": FOOTPRINT,
             "islands": len(polys),
             "net_ties": sum(1 for _, t in fp.islands if len(t) >= 2),
+            "repair": repaired,
         },
         "drc": drc.to_json(),
         "provenance": provenance(problem),

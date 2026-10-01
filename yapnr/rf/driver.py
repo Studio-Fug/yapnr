@@ -158,7 +158,13 @@ class Optimizer:
         self.log = log or (lambda *_: None)
         self.history: list[dict] = []
         self.frames: list[np.ndarray] = []
-        self.state = LoopState(x=self.param.grid.initial(spec.optimizer.init))
+        if spec.optimizer.seed:
+            from yapnr.rf.seeds import initial_x
+
+            x0 = initial_x(problem)
+        else:
+            x0 = self.param.grid.initial(spec.optimizer.init)
+        self.state = LoopState(x=x0)
         self.spec_sha = spec.sha256()
 
     # -- checkpoints ----------------------------------------------------------------------------

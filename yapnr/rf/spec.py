@@ -171,6 +171,7 @@ class OptimizerSpec:
     conservative: bool = False  # CCSA/GCMMA inner iterations (extra forward runs)
     max_inner: int = 5
     filter_radius_mm: float | None = None  # default: from the rules (or 1.5 pitches)
+    seed: str | None = None  # a closed-form start instead of the uniform `init` (`seeds`)
 
 
 @dataclass(frozen=True)
@@ -468,7 +469,10 @@ class Spec:
             "fixed": [
                 {"x_mm": list(f.x_mm), "y_mm": list(f.y_mm), "value": f.value} for f in self.fixed
             ],
-            "optimizer": clean(self.optimizer),
+            # `seed` is left out when unset, so specs written before it keep their hashes.
+            "optimizer": {
+                k: v for k, v in clean(self.optimizer).items() if not (k == "seed" and v is None)
+            },
             "solver": clean(self.solver),
         }
         if self.radiation is not None:

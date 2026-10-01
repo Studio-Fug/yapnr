@@ -27,7 +27,7 @@ import argparse
 import json
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -65,11 +65,11 @@ _SMOKE_GRID = dict(
 # with copper, a 377 Ω/sq absorber over the whole window: from there the divider grew into one
 # radiating copper plate (t rose from 1.1 to 2.5 once binarized; docs/rf-inverse-design.md).
 INIT = 0.3
-# The conic filter spans four pixels (twice the minimum width of two pixels): the length-scale
-# constraints act on the skeletons of a smooth filtered field. With a two-pixel radius the
-# divider kept one-pixel holes and diagonal one-pixel nubs (four width/space violations) while
-# the constraints read as met; the thresholds follow the radius (`LengthScale.from_rules`).
-FILTER_PIXELS = 4
+# The antenna starts from the closed-form inset-fed patch instead (`seeds`, `optimizer.seed`):
+# from x = 0.3 or 0.5 it fell back to the bare open-ended feed (η ≈ 0.15, |S11| ≈ −0.8 dB) and
+# from a near-copper plate (0.7, also with β = 32 from the start) it stayed a plate (η ≈ 0.4):
+# gray copper absorbs before it radiates, so for a radiated-power target those starts are
+# local optima.
 _SMOKE_OPT = OptimizerSpec(betas=(8.0, 32.0), iterations_per_beta=2, min_iterations=2, init=INIT)
 _SMOKE_SOLVER = SolverSpec(backend="torch", dtype="float32", sweep_points=21)
 
@@ -113,9 +113,7 @@ def divider(scale: str = "full") -> Spec:
         ports=(Port(1, "W", 0.0), Port(2, "E", 4.2), Port(3, "E", -4.2)),
         bands=band,
         requirements=reqs,
-        optimizer=OptimizerSpec(
-            iterations_per_beta=30, budget_min=45, init=INIT, filter_radius_mm=FILTER_PIXELS * 0.3
-        ),
+        optimizer=OptimizerSpec(iterations_per_beta=30, budget_min=45, init=INIT),
     )
 
 
@@ -139,7 +137,7 @@ def antenna(scale: str = "full") -> Spec:
             bands={"main": Band(9.7, 10.3, 2)},
             requirements=reqs,
             radiation=RadiationBox(offset_mm=1.6, height_mm=4.0),
-            optimizer=_SMOKE_OPT,
+            optimizer=replace(_SMOKE_OPT, seed="patch"),
             solver=_SMOKE_SOLVER,
         )
     return Spec(
@@ -157,8 +155,7 @@ def antenna(scale: str = "full") -> Spec:
             betas=(8, 16, 32, 64),
             iterations_per_beta=25,
             budget_min=55,
-            init=INIT,
-            filter_radius_mm=FILTER_PIXELS * 0.4,
+            seed="patch",
         ),
     )
 
@@ -202,9 +199,7 @@ def diplexer(scale: str = "full") -> Spec:
         ports=(Port(1, "W", 0.0), Port(2, "E", 4.5), Port(3, "E", -4.5)),
         bands=bands,
         requirements=reqs,
-        optimizer=OptimizerSpec(
-            iterations_per_beta=25, budget_min=55, init=INIT, filter_radius_mm=FILTER_PIXELS * 0.3
-        ),
+        optimizer=OptimizerSpec(iterations_per_beta=25, budget_min=55, init=INIT),
     )
 
 
@@ -248,9 +243,7 @@ def filterbank3(scale: str = "full") -> Spec:
         ports=(Port(1, "W", 0.0), Port(2, "E", 6.0), Port(3, "E", 0.0), Port(4, "E", -6.0)),
         bands=bands,
         requirements=tuple(reqs),
-        optimizer=OptimizerSpec(
-            iterations_per_beta=25, budget_min=60, init=INIT, filter_radius_mm=FILTER_PIXELS * 0.3
-        ),
+        optimizer=OptimizerSpec(iterations_per_beta=25, budget_min=60, init=INIT),
     )
 
 

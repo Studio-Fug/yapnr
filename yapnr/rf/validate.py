@@ -10,9 +10,10 @@ re-simulates the copper it describes:
   in half count as copper and the rule is mirror symmetric;
 - **ports:** the feed widths are the widths of the port pads; the lines are calibrated again
   on the new grid and the S-matrix (every port excited) is renormalized to 50 Ω;
-- **grids:** "coarse" is the optimization grid (refine 1), which must reproduce the binary
-  design pixel for pixel; "fine" halves the in-plane pitch and has 1.5 times the substrate
-  cells (6 on S1, 9 on S2), graded by the same rules.
+- **grids:** "coarse" is the optimization grid (refine 1), which must reproduce the exported
+  design pixel for pixel (the optimizer's binary design after the width and space repair) and
+  the optimizer's binary S-parameters within 0.5 dB; "fine" halves the in-plane pitch and has
+  1.5 times the substrate cells (6 on S1, 9 on S2), graded by the same rules.
 
 `validate_case` applies the criteria of `cases.CRITERIA` to both and writes `validation.json`,
 `coarse_dense.sNp` and `fine.sNp` (engineering e^{+jωt} convention, 50 Ω).
@@ -35,6 +36,12 @@ from yapnr.rf.export.touchstone import write_touchstone
 from yapnr.rf.spec import Spec
 
 VALIDATION = "validation.json"
+# The exported footprint, re-simulated on the optimization grid, against the optimizer's binary
+# design at the objective frequencies: transmissions (|S| ≥ −10 dB) within 0.5 dB (design
+# §11.2) and every |S_ij| within 0.05 (the width and space repair moves a −20 dB reflection by
+# a few dB but its magnitude by a few hundredths).
+EXPORT_DB = 0.5
+EXPORT_ABS = 0.05
 _EPS = 1e-4  # sample offset around pixel centres, in pixels
 
 
@@ -230,19 +237,33 @@ def validate_case(
     same: dict = {"pixels": int(co["mask"].size)}
     binary = binary_design(run_dir, prob)
     if binary is not None:
-        same["pixel_xor"] = int(np.sum(binary != co["mask"]))
+        from yapnr.rf.export.report import exported_binary
+
+        exported, info = exported_binary(prob, binary)
+        # The footprint against the design the export wrote (pixel exact), and what the width
+        # and space repair changed against the optimizer's binary design.
+        same["pixel_xor"] = int(np.sum((exported > 0.5) != co["mask"]))
+        same["repaired_pixels"] = info["changed_pixels"]
     res_path = os.path.join(run_dir, "result.json")
     if os.path.exists(res_path):
         with open(res_path, encoding="utf-8") as fh:
             res = json.load(fh)
         opt_ghz = np.asarray(res["coarse_binary"]["frequencies_ghz"])
         idx = [int(np.argmin(np.abs(co["freqs"] / 1e9 - f))) for f in opt_ghz]
-        diffs = []
+        # The re-simulated footprint against the optimizer's binary design (both referenced to
+        # the feeds' Z_c): in dB where |S| ≥ −10 dB (transmissions), and as a difference of
+        # magnitudes everywhere (reflections near −20 dB move by many dB for a small change).
+        db_diff, abs_diff = [], []
         for key, vals in res["coarse_binary"]["s_db"].items():
             i, j = int(key[1]) - 1, int(key[2]) - 1
             again = sparams.db(co["s_ref"][idx, i, j])
-            diffs.append(np.max(np.abs(again - np.asarray(vals))))
-        same["max_db_diff_vs_optimizer"] = float(max(diffs)) if diffs else None
+            opt = np.asarray(vals, dtype=np.float64)
+            big = opt >= -10.0
+            if big.any():
+                db_diff.append(np.max(np.abs(again - opt)[big]))
+            abs_diff.append(np.max(np.abs(10 ** (again / 20) - 10 ** (opt / 20))))
+        same["max_db_diff_transmission"] = float(max(db_diff)) if db_diff else 0.0
+        same["max_abs_diff"] = float(max(abs_diff)) if abs_diff else 0.0
         report["drc"] = res.get("drc")
     report["same_grid"] = same
     report["footprint"] = connectivity(
@@ -253,8 +274,10 @@ def validate_case(
     report["coarse"]["table"] = _table(co["freqs"], co["s"], co["eta"])
     report["coarse"]["reciprocity_error"] = reciprocity_error(co["s"])
     ok = report["coarse"]["ok"]
-    export_ok = same.get("pixel_xor", 0) == 0 and (
-        same.get("max_db_diff_vs_optimizer") is None or same["max_db_diff_vs_optimizer"] <= 0.5
+    export_ok = (
+        same.get("pixel_xor", 0) == 0
+        and same.get("max_db_diff_transmission", 0.0) <= EXPORT_DB
+        and same.get("max_abs_diff", 0.0) <= EXPORT_ABS
     )
     if report.get("drc") is not None:
         export_ok = export_ok and bool(report["drc"]["ok"])

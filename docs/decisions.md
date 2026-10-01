@@ -424,8 +424,8 @@ Choices made for the regression ladder in CI and the animations (branch
   of Splanc runs stay local (the board is not public).
 
 Choices made for the constraint and hierarchy showcases (branch `claude/animations-groups-hier`,
-[design](design/constraint-and-hier-animations.md) §9 and §11); the owner reviews them with the
-pull request:
+[design](design/constraint-and-hier-animations.md) §9, §11 and §12); the owner reviews them with
+the pull request:
 
 - **`line_group`** is a new hard constraint (ordered literal members, `pitch_mm` or `gap_mm`,
   `rot`, an optional soft `edge`), placed as one rigid macro inside `place()` with the
@@ -443,6 +443,18 @@ pull request:
   group), 800 px, under the 555 flasher.
 - **A showcase that fails its gate is not committed as an animation** (the page then says why),
   rather than shown with a red end card. All five cases of the committed run pass.
+- **Half-turns are flips.** The placer records only its snapped four-way rotation, so a body or
+  part recorded at opposite angles switches at the middle of the interval instead of sweeping
+  through angles it never had; quarter turns keep the labelled shorter-arc tween. The ladder's
+  own animations keep their sweeps (their timelines are pinned unchanged); only the showcase
+  pacing and rigid bodies flip.
+- **Off-board poses widen the camera** over that global placement (showcase pacing only), and the
+  board zooms back in after legalization, rather than clamping parts to the panel edge.
+- **The edge comparison replays its pool.** The followed start never changes its edge order, so
+  its shortlist replays all eight starts' recorded global placements before the tiles hold;
+  the chaser comparison keeps static tiles (its README GIF is near its 5 MB budget).
+- **A line group reserves its members' sides** (`line:<name>`, not a `block:` macro) and refuses a
+  source-locked member rather than pinning the whole line to it.
 - **Follow-ups:** companion rows (an LED and its resistor as one rigid unit), a hard edge for a
   whole line group, members on the bottom side, plane-access intents inside a line group.
 

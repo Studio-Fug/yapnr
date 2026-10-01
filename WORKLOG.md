@@ -47,12 +47,18 @@ hard board edges, the hierarchical ladder driver and their animations on
   Renderer: constraint highlighting (`pnr.animate.highlight`), rigid-body tweens, side-by-side
   comparisons (`python -m pnr.animate --compare A B`, `pnr.animate.compare`), the hierarchical
   chapters (`pnr.animate.hier`, `provenance.from_hier`), `--pacing showcase`, and
-  `//hardware/pnr:showcase_animations`. Four files in `docs/animations/` (13.4 MB; folder
+  `//hardware/pnr:showcase_animations`. Four files in `docs/animations/` (13.1 MB; folder
   budget 30 MB, the hierarchical WebP 3.5 MB), the page
   [docs/constraints-and-hierarchy.md](docs/constraints-and-hierarchy.md), a second README item
   (the side-by-side chaser GIF), and a nightly, informational showcase step in `ladder.yaml`
   (never run yet). Re-rendering the eight ladder cases reproduces every committed file's
-  SHA-256; each showcase renders byte-identically twice. Next: the owner's review of the
+  SHA-256; each showcase renders byte-identically twice.
+  Review fixes (design §12): line-group macros reserve their members' sides (`line:<name>`) and
+  refuse source-locked members; knit retries trace in their own scopes; `PAD_AXIS` is checked
+  against the footprints; half-turns are drawn as flips, off-board poses widen the camera, the
+  edge comparison replays its pool's eight starts; GIF palette and per-file renders. Rerun
+  `.yapnr/ladder/showcase-2` (engine `c4db5fb`): the five cases' `placed.json`, `routes.json` and
+  trace digests are identical to the first run; all pass. Next: the owner's review of the
   decisions in `docs/decisions.md` and the pull request.
 
 ## Next
@@ -107,6 +113,11 @@ hard board edges, the hierarchical ladder driver and their animations on
     `claude/ladder-animations`) is the first run of its container path.
 13. Rebuild the KiCad base monthly (bump `docker/yapnr-kicad/TAG` to the next `-N`), or with the
     Dependabot `ubuntu` digest update (docs/releases.md, "Maintaining the images").
+14. Showcases (`claude/animations-groups-hier`): the first nightly showcase step on the arm64
+    runner (its runtime and its placements are unmeasured; `showcase-edge-io.webp` fits its
+    2.5 MB budget at quality 70 by 450 bytes here, the encoder steps down where it must). The
+    ladder's own animations still sweep single parts through half-turns (their timelines are
+    pinned); move them to flips with the next deliberate refresh of `docs/animations/`.
 
 ## Blockers
 

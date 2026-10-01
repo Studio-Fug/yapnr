@@ -451,7 +451,15 @@ Every frame is recorded engine state or a labelled transition between two record
   animation design);
 - **rigid tween (new):** a rigid body (line group or block macro, from `groups` rows) interpolates
   its centre linearly and its angle along the shorter arc, and its members are posed from that
-  (never member by member, which would shrink the line mid-turn);
+  (never member by member, which would shrink the line mid-turn). A half-turn is shown as a
+  flip, not a rotation: it has no shorter arc, and the placer records only its snapped four-way
+  choice, so a body (and, in the showcase pacing, a single part) recorded at opposite angles
+  switches at the middle of the interval;
+- **camera (new, showcase pacing):** a global placement whose recorded poses leave the board is
+  drawn with a camera over all its snapshots, and zooms back to the board after legalization;
+- **pool replay (new, edge comparison):** the shortlist's tiles first replay every start's
+  recorded global placement on one clock (each over its own snapshots), then show its
+  legalized placement in one step;
 - **lift (new, hierarchical):** block tiles move from the block grid to their first recorded
   macro poses (a camera and layout transition, 0.8 s, captioned "blocks become macros");
 - **phase holds (new, comparison):** the shorter panel holds its last frame of a phase.
@@ -773,3 +781,28 @@ The renderer, the four animations and the docs follow §6 and §7 with these dif
 - **Unchanged output.** Besides re-rendering the eight ladder cases from the A/B run (every file's
   SHA-256 reproduced), `animate_test` pins a digest of the ladder timelines' views, computed with
   the branch base's renderer.
+
+## 12. Review fixes
+
+An adversarial review of §10 and §11 found these, fixed on the same branch:
+
+- **Line-group macros and sides.** A line-group macro had a `block:` footprint, so it reserved
+  both copper sides of its whole outline: an SMD LED line could not sit above a bottom-side part
+  (legalization failed). The macro is now `line:<name>` and occupies its members' sides (top for
+  SMD members, both sides with a drilled one). A member locked in the source board (a `fixed`
+  pose added by `preserve_source_locks`) raised no error and made every placement illegal; it is
+  now refused by name when placement starts.
+- **Knit retries.** Every knit attempt opened a scope named `top-NN-route`, so a winning
+  representative-pad retry (recorded as `top-NN-route~2`) was selected by the first attempt's
+  name, and the knit chapter would have drawn copper that is not on the board. Retries route in
+  `top-NN-route-rN` and the record keeps the recorder's scope id; a test forces a retry.
+- **Pad axes.** The edge contract test derived the expected facing from `PAD_AXIS` itself; a
+  second test now checks the table against the `.kicad_mod` files (pad centres and courtyard).
+- **Motion.** The sweeps through angles the engine never recorded (every 180-degree turn of the
+  chaser's line and of the blocks), the free edge board's off-board parts drawn off-screen, and
+  the edge animation showing no change of order as motion: §6.1 (flip, camera, pool replay).
+- **Encoding.** The GIF palette keeps the constraint colour part-covered over the board (the
+  line's dashes were quantized to a dusty pink); each showcase file renders on its own (one over
+  budget no longer stops the others; WebPs first; a 720 px GIF step as the last resort). The
+  hierarchical case's manifest and results `config` list only `--trace-placement-every`: the
+  pool flags do not apply to its driver.

@@ -197,10 +197,13 @@ rung's final boards, then the verdict. Blocks assembled from a synthesis library
 a library itself has no board to draw, and `--storyboard FILE` writes its critical path (the
 chosen layout per template and its rivals) instead. The animator only reads its sources.
 
-Rendering is deterministic: the same trace gives the same bytes. Budgets: WebP at most 2.5 MB
-(800 px), the README GIF at most 5 MB (640 px), the folder at most 30 MB with the showcases
-(`tests/unit/repo/test_animations.py`). Refresh the committed animations deliberately, after a
-notable engine change, not on every pull request: each refresh adds about 12 MB to the history.
+Rendering is deterministic: the same trace gives the same bytes. Budgets: the ladder's WebPs at
+most 2.5 MB (800 px), its README GIF at most 5 MB (640 px), the folder at most 30 MB with the
+showcases, whose own widths and budgets are on
+[Constraints and hierarchy](constraints-and-hierarchy.md#regenerating)
+(`tests/unit/repo/test_animations.py` checks them all). Refresh the committed animations
+deliberately, after a notable engine change, not on every pull request: each refresh adds about
+12 MB to the history.
 
 ## In CI
 

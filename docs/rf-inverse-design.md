@@ -263,7 +263,7 @@ starts at 16: at x 0.7/0.3, two-pixel slots and β = 8 the slots blurred into a 
 the first step closed them, and at β = 32 every pixel saturated and nothing moved.
 
 On the antenna's grid, the closed-form patch alone (W 10.0 mm, L 7.2 mm, inset 2.4 mm with
-0.8 mm gaps, centred in the window) reaches |S11| = −21 dB at 10.15 GHz and a radiated fraction
+0.8 mm gaps, 4 mm from the port) reaches |S11| = −21 dB at 10.15 GHz and a radiated fraction
 of 0.80, with a −10 dB band of 9.90–10.35 GHz; on the fine grid the same pixels resonate 1 %
 higher (10.25 GHz). That sets the scale of what a single-layer patch on this substrate can do:
 refining it for the design's 9.7–10.3 GHz (6 %) froze at t = 1.40 (η 0.56 and |S11| −5.3 dB at

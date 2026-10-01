@@ -119,7 +119,8 @@ class CaseChecks:
         for name in (f"coarse.s{n}p", f"coarse_dense.s{n}p", f"fine.s{n}p"):
             self.assertTrue(os.path.exists(os.path.join(self.out, name)), name)
         fp = read_footprint(os.path.join(self.out, "footprint.kicad_mod"))
-        self.assertEqual(sorted(int(p["number"]) for p in fp.pads), list(range(1, n + 1)))
+        n_pads = n + 2 * len(spec.lumped)  # the ports, then two pads per lumped part
+        self.assertEqual(sorted(int(p["number"]) for p in fp.pads), list(range(1, n_pads + 1)))
         # The footprint reproduces the exported design on its grid, pixel for pixel.
         same = report["same_grid"]
         self.assertEqual(same["pixel_xor"], 0)

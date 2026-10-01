@@ -92,5 +92,45 @@ class TinyDesignTest(unittest.TestCase):
         self.assertGreater(saved["sweep"]["passivity_margin_min"], -0.03)
 
 
+class BestDesignTest(unittest.TestCase):
+    """The export is the best binarized design of the loop, not the last iterate, and robust
+    variants (eroded and dilated designs) join the epigraph."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp(prefix="rf-best-")
+        cls.cache = os.path.join(cls.tmp, "cache")
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def test_exports_the_best_binary_design(self):
+        spec = tiny_spec(binary_every=1)
+        opt = Optimizer(Problem(spec, cache_dir=self.cache))
+        opt.run(max_iterations=5)
+        tb = [h["t_binary"] for h in opt.history]
+        self.assertEqual(len(tb), 5)  # evaluated at every iteration
+        # Make the last iterate bad: the export must still be the best tracked design.
+        best_it = int(np.argmin(tb))
+        opt.state.x = np.zeros_like(opt.state.x)
+        fin = opt.finish()
+        self.assertGreater(fin["t_binary_last"], min(tb))
+        self.assertEqual(fin["export_iteration"], best_it)
+        self.assertAlmostEqual(float(np.max(fin["evaluation"].values)), min(tb), places=9)
+        np.testing.assert_array_equal(opt.state.export_x, fin["x"])
+
+    def test_robust_variants(self):
+        spec = tiny_spec(eta_variants=(0.6, 0.4))
+        opt = Optimizer(Problem(spec, cache_dir=self.cache))
+        opt.run(max_iterations=2)
+        rec = opt.history[0]
+        n = len(opt.problem.groups[0].frequencies_active.nonzero()[0])
+        self.assertEqual(len(rec["f"]), 3 * n * len(opt.problem.groups))
+        self.assertEqual(len(rec["t_variants"]), 3)
+        self.assertAlmostEqual(rec["t"], max(rec["t_variants"]), places=12)
+        self.assertEqual(len(rec["keys"]), len(rec["f"]))
+
+
 if __name__ == "__main__":
     unittest.main()

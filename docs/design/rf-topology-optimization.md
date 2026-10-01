@@ -1055,6 +1055,40 @@ divider's targets from a uniform start, but not resonant structures: the antenna
 below) its seed and the diplexer did not grow the quarter-wave stubs its rejection needs. Next
 steps: a finer antenna grid, robust (eroded/dilated) minimax, multi-start, lumped elements.
 
+## 19. Review fixes
+
+Two reviews of §18 (physics and designs) found errors in the port extraction, the optimizer and
+the validation, and over-statements in the reports. What changed (choices in
+`docs/decisions.md`, numbers in the [guide](../rf-inverse-design.md#accuracy)):
+
+- **Ports (§5.1–§5.4).** The magnitude is no longer de-embedded with the calibration's Im k (an
+  artifact of the near-source fields, +4 to −1 Np/m against 0.7–0.9 Np/m of true loss: it
+  inflated |S| by up to 0.15 dB and caused the passivity violations that §18 attributed to the
+  reciprocity error); the V/I plane sits 6h from the reference plane and the source (was 3h);
+  the calibration takes the power factor at the ports' distance from the source; validation
+  sweeps use S = B A⁻¹. Passivity is judged at −1e-3 again. The excited port's incident wave
+  still reads 1.5–2 % high at 8–12 GHz (transmissions 0.1–0.2 dB low), stated in the guide.
+- **Optimizer (§8).** A conservative step that does not reach a conservative approximation
+  within `max_inner` subproblems is rejected instead of accepted; the export is the best
+  binarized design of the run (evaluated every `binary_every` iterations, at β changes and at
+  the end) instead of the last iterate. New, off by default: robust variants (eroded and dilated
+  designs in the epigraph, Hammond et al. §5.3) and a reactive interpolation of gray copper
+  (an inductive sheet with damping, the analog of the paper's Eq. 7–12; tested, unused by the
+  cases).
+- **Validation (§11.5).** A third grid (a third of the pitch, twice the substrate cells) with the
+  fine criteria and the trend of every check; the power balance of radiators (§11.3, which §18
+  dropped without saying so); `export_ok` is undecided when the pixel check cannot run.
+- **Export (§10.3).** Rule areas for the simulated margin; two pads per lumped part.
+- **Specs (§9).** Lumped resistors (`lumped`), and the Wilkinson-type combiner case (§11.2, a2).
+- **Corrections to §18.** The fine re-simulations did not agree with the coarse ones "within
+  about 1 % in frequency": the divider's match null moved 4.7 % (9.55 → 10.0 GHz) and its
+  |S11| at 9 GHz by 2.7 dB, and at a third of the pitch the null moved another 4.5 %. The
+  divider passed its relaxed criteria (−17 and −15 dB), not its −20 dB target. The antenna's
+  export was the closed-form patch with two pixels changed (its inset slots were not made
+  shallower); the optimizer did not form it.
+
+Results after the fixes are in §20.
+
 ## References
 
 1. A. M. Hammond, A. Oskooi, M. Chen, Z. Lin, S. G. Johnson, S. E. Ralph, "High-performance hybrid

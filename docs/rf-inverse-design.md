@@ -47,9 +47,15 @@ optimizer: { betas: [8, 16, 32, 64, 128], iterations_per_beta: 30, budget_min: 4
   (engineering e^{+jωt} convention), and `{radiated: j, min: η}` for the fraction of the power
   incident at port j that leaves through a box above the board. Every requirement names a band
   and may set its `scale` (the normalization of its violation).
-- **Optional sections:** `fixed` (rectangles of fixed copper or keepout), `radiation` (the box's
-  offset and height), `solver` (backend, precision, tolerances) and `optimizer` (β schedule,
-  iteration caps, budget, move limits, `conservative`, `aggregate`).
+- **Optional sections:** `fixed` (rectangles of fixed copper or keepout), `lumped` (resistors
+  across a gap, such as a Wilkinson divider's isolation resistor: the body rectangle stays void
+  and carries the resistance between two copper pads), `radiation` (the box's offset and
+  height), `solver` (backend, precision, tolerances) and `optimizer`: the β schedule, iteration
+  caps, budget, move limits, `conservative` (CCSA steps that never raise t), `seed` (`star`,
+  `stubs`, `patch`, `patch_edge`, or a uniform `init`), `binary_every` (how often the
+  binarized design is evaluated, below), `eta_variants` (robust optimization over eroded and
+  dilated designs, Hammond et al. §5.3) and `interpolation` (`resistive` or `reactive` gray
+  copper, [below](#how-it-works)).
 
 The Python API mirrors the file:
 
@@ -77,6 +83,14 @@ every port excited, renormalized to 50 Ω) and `result.json` (`yapnr-rf-result/1
 settings, optimizer summary, achieved values, the width and space check and provenance). A run
 that stops resumes from its checkpoint and reproduces the uninterrupted run bit for bit. Runs use
 at most 4 threads; on a shared machine start them with `nice -n 10`.
+
+The exported design is the best binarized one of the run, not the last iterate: the loop
+evaluates the binarized design (β = ∞ after the width and space repair; one forward run per
+excitation) at the start, at every β change and every `binary_every` iterations (5), `finish`
+evaluates the last one, and the lowest epigraph value wins; `result.json` records the iteration
+it came from (`optimizer.export_iteration`). Plain MMA can raise t from one iteration to the next
+and the value at finite β is not the binary design's, so the last iterate is not always the
+best.
 
 The density evolution renders as an animation (Pillow, like the place-and-route animations):
 
@@ -285,18 +299,35 @@ t ≈ 0.7 at iteration 70, where the two-pixel run was at −0.002.
    around the window holds the feeds. A conic filter of radius R (from the minimum width and
    space) and a tanh projection with β growing 8 → 128 give the density ρ̄.
 2. **Physics:** each pixel's sheet conductance is G_min (G_max/G_min)^ρ̄, from transparent to
-   copper, averaged onto the solver's grid edges.
+   copper, averaged onto the solver's grid edges. With `interpolation: reactive` a gray pixel
+   is instead an inductive sheet R_s + ω_d L − iωL(ρ̄) (the RF analog of the paper's
+   interpolation of dispersive metals, Eq. 7–12: a branch current per pixel and edge, advanced
+   with the E field by the trapezoidal rule; the damping ω_d keeps the gray sheets' current
+   loops from ringing for 10⁴ periods), lossless where the resistive sheet is a 377 Ω/sq
+   absorber; copper and void are the same. It is tested (the discrete frequency-domain identity
+   and the pipeline gradient) but not used by the cases: on the antenna from a uniform start it
+   fell back to an unfed plate, and on the diplexer its gray lines broke the junction.
 3. **Objectives:** each requirement becomes a normalized violation φ ≤ 0 per frequency; the
    requirements of one excitation combine per frequency in a smooth maximum f, and the optimizer
    minimizes t subject to f ≤ t for every (excitation, frequency). One forward and one adjoint
    FDTD run per excitation give every f and its gradient.
 4. **Optimizer:** MMA in its native min-max form (written from Svanberg's publications); in the
-   last β epoch the minimum width and space enter as Zhou's indicator constraints.
+   last β epoch the minimum width and space enter as Zhou's indicator constraints. The
+   conservative variant accepts a step only when its approximation was conservative at the new
+   point, so t never rises; a step that does not get there within `max_inner` subproblems is
+   rejected (x stays) and the next iteration continues from the raised curvature. Robust
+   variants (`eta_variants`) add the objectives of eroded and dilated designs (projection
+   thresholds above and below ½) to the epigraph.
 5. **Export:** the design is binarized (β = ∞), traced into polygons by marching squares (pixel
    edges, half-pixel chamfers, holes joined by zero-width keyhole cuts), checked for minimum
    width and space on a raster at Δ/8, and written as a net-tie footprint: one SMD pad per port,
-   the copper as `fp_poly` on F.Cu with `net_tie_pad_groups`. The footprint's description names
-   the stackup it assumes (εr, tan δ, h, a solid ground on the next layer).
+   the copper as `fp_poly` on F.Cu with `net_tie_pad_groups`, two pads per lumped part, and rule
+   areas (keepouts) for the environment the design was simulated in: no copper pour, vias or
+   other footprints within the simulated margin around the window, and no tracks there except in
+   a corridor along each feed (checked with KiCad 10: a pour stops at the keepout, a track of
+   another net across it is flagged, the feed track and the footprint's own copper are not). The
+   footprint's description names the stackup it assumes (εr, tan δ, h, a solid ground on the
+   next layer).
 
 ## Measured
 
@@ -326,12 +357,52 @@ On the tiny problem the conservative MMA variant (`optimizer.conservative: true`
 CCSA as used by Hammond et al.) never lets t rise, but it needed 96 forward runs against 18 for
 plain MMA and ended at t = −0.10 against −0.28, so plain MMA is the default.
 
+## Accuracy
+
+What the reported numbers mean, measured on the S1 line (6 cells at 0.3 mm) and on the
+divider's footprint:
+
+- **Line loss.** The Poynting flux along a long matched line decays by 0.7–0.9 Np/m over
+  2–12 GHz, close to the textbook 0.42 Np/m (dielectric) plus R_s/(Z0 w) = 0.29 Np/m
+  (conductor): about 0.03 dB per centimetre of line. An earlier version of this guide said the
+  sheet's loss rose with frequency to several times a thick strip's; that came from the
+  calibration's Im k, which is not a loss measurement (next item).
+- **De-embedding uses Re k only.** The two-plane calibration resolves β to about 1 % but not α:
+  its Im k ranged from +4 to −1 Np/m with the planes' distance from the source. De-embedding
+  the magnitude with it inflated every |S| by up to 0.15 dB and produced non-passive S-matrices
+  (the earlier −0.01 passivity tolerance). The feed between the measurement and the reference
+  plane (6h, about 5 mm on S1) is now de-embedded in phase only; its true loss (about 0.01 dB)
+  makes the reported |S| that much low.
+- **The excited port's incident wave reads high.** Within about 50 cells of the source the V/I
+  samples see non-modal fields that the port's source launches, and the incident wave of the
+  excited port reads 1.5–2 % high at 8–12 GHz (0 at 2–4 GHz): every |S_ij| of that column is
+  about 0.1–0.2 dB low (a matched 15 mm line reads −0.26 dB at 10 GHz where the flux says
+  −0.11 dB). The bias is conservative for transmission targets. The radiated fraction is not
+  affected: the calibration measures the ratio of Poynting flux to V/I power at the ports' own
+  distance from the source and P_inc uses it.
+- **Reciprocity.** The discrete system is exactly reciprocal; the port-wave extraction is not.
+  With the V/I plane 6h from the discontinuity and from the source (the default) and S = B A⁻¹
+  from all excitations, |S21 − S12| on the divider is 0.003–0.007 (it was 0.009–0.013 at 3h)
+  and the passivity margin min eig(I − SᴴS) is +0.03 to +0.05; the criteria require −1e-3.
+  Taken together, transmissions are uncertain by about ±0.1 dB plus the low bias above.
+- **Copper edges and resolution.** A zero-thickness sheet's edge field is under-resolved: on
+  a 6-cell line the impedance is 6 % below Hammerstad–Jensen, and an open end's extension at
+  10 GHz is 0.49 mm at 0.3 mm pitch and 0.44 mm at 0.15 mm against 0.35 mm (Kirschning–Jansen–
+  Koster): the copper acts about 0.45 cell larger per edge, falling roughly as √Δ. A design
+  exported pixel for pixel therefore resonates higher on finer grids and in hardware than on the
+  optimization grid (the antenna about 1 % from 0.4 to 0.2 mm, about 3 % to the continuum by the
+  √Δ extrapolation), and diagonal staircases add a resolution effect of their own. The
+  validator re-simulates every case on the optimization grid, at half the pitch and at a third
+  of it, judges the fine criteria on both finer grids and reports the trend of every check
+  (`validation.json`, `convergence`): the finer grids are a check, not a converged answer, for
+  resonant designs.
+
 ## Limitations
 
 - One copper layer over a solid ground; no vias, no finite board or ground edges.
-- The copper is a zero-thickness sheet: its loss rises with frequency (edge crowding) to several
-  times a thick strip's, and the strip impedance on coarse grids is a few per cent low; the
-  coarse-to-fine re-validation is the judge.
+- The copper is a zero-thickness sheet: the strip impedance on coarse grids is a few per cent
+  low and edges act about half a cell larger than their pixels ([accuracy](#accuracy)); the
+  finer re-validation grids show the trend but are not converged for resonant designs.
 - Minimum width and space are enforced in the last β epoch, repaired on the pixel grid at
   export and checked on the polygons; tiny nubs under about 0.6 pixel are not reported by the
   check.
@@ -339,5 +410,8 @@ plain MMA and ended at t = −0.10 against −0.28, so plain MMA is the default.
   can be local optima and boundary moves through gray first add loss. Resonant designs (the
   antenna, the diplexer's stubs) stalled in the local search; at the cases' pitch one pixel
   moves a resonance by about 5 %, and the fine grid shifts it by about 1 %.
-- No lumped elements in specs yet (the Wilkinson divider), no external solver cross-check.
-- Clearance to copper outside the footprint is KiCad's job.
+- Lumped elements are resistors across a gap (`lumped`); no capacitors, inductors or vias. No
+  external solver cross-check.
+- The footprint's rule areas keep other copper out of the simulated margin (no pour, vias or
+  other footprints within the margin; no tracks there except along the feeds); a solid ground
+  on the next layer is assumed and named in the footprint, not enforced.

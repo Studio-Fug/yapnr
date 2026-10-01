@@ -5,7 +5,8 @@
 - the antenna preset's seed is a mirror-symmetric inset patch joined to the port's feed, with
   slots of 1.5 times the minimum space beside the inset feed, on both scales; a port on the
   east side mirrors it;
-- the star seed joins every port of the divider and the diplexer in one copper island.
+- the star seed joins every port of the divider and the diplexer in one copper island;
+- the stub seed adds the diplexer's two quarter-wave stubs, one island, the minimum space kept.
 """
 
 from __future__ import annotations
@@ -86,6 +87,31 @@ class PatchSeedTest(unittest.TestCase):
             self.assertTrue(m[0:2, shape[1] // 2 - 3 : shape[1] // 2 + 3].all(), case)
             self.assertTrue(m[-2:].any(axis=1).all(), case)
         np.testing.assert_array_equal(m, m[:, ::-1])  # the diplexer's ports are symmetric
+
+    def test_stub_seed(self):
+        from yapnr.rf.export.raster import label
+        from yapnr.rf.seeds import channel_plan, stub_mask
+
+        spec = spec_for("diplexer")
+        self.assertEqual(
+            {k: (f, tuple(o)) for k, (f, o) in channel_plan(spec).items()},
+            {2: (8e9, (12e9,)), 3: (12e9, (8e9,))},
+        )
+        prob = _problem(spec, (50, 50), 6, 0.3e-3)
+        prob.widths = {1: 6, 2: 6, 3: 6}
+        star = star_mask(prob) > 0.5
+        m = stub_mask(prob) > 0.5
+        self.assertTrue(m[star].all())
+        added = int(m.sum() - star.sum())
+        # Two quarter-wave stubs of the feed width: 12 GHz (11 px) and 8 GHz (17 px) long.
+        self.assertEqual(added, 6 * (11 + 17))
+        lab, n = label(m)
+        self.assertEqual(n, 1)
+        # The minimum space (two pixels) holds between the stubs and the rest of the copper:
+        # no void gap of one pixel between copper pixels, along x or y.
+        for arr in (m, m.T):
+            gap = arr[:-2] & ~arr[1:-1] & arr[2:]
+            self.assertFalse(gap.any())
 
     def test_needs_one_port(self):
         with self.assertRaises(ValueError):

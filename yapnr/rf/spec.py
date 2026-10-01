@@ -30,6 +30,9 @@ Requirement forms (YAML on the left, Python on the right):
     {s: [2, 1], phase_deg: 90, tol_deg: 5}       S(2, 1).phase_deg(90, tol=5, band="b")
     {radiated: 1, min: 0.7, band: b}             RadiatedFraction(1).at_least(0.7, band="b")
 
+Lumped resistors (`lumped`, e.g. the isolation resistor of a Wilkinson divider) are SMD parts
+across a void gap with copper pads at both ends: `Lumped(name, x_mm, y_mm, axis, ohms, pad_mm)`.
+
 Masks are piecewise linear in frequency (GHz, dB) and are evaluated at the band's samples.
 Phases use the engineering e^{+jωt} convention, like everything reported. Each requirement may
 set `scale` (its normalization, §9 of the design) and every requirement needs a band.
@@ -140,6 +143,29 @@ class FixedRegion:
     x_mm: tuple[float, float]
     y_mm: tuple[float, float]
     value: float = 0.0
+
+
+@dataclass(frozen=True)
+class Lumped:
+    """A lumped resistor across a gap in the copper (an SMD part, e.g. a Wilkinson divider's
+    isolation resistor). The body rectangle (mm) is kept void and carries `ohms` between its two
+    ends along `axis` ("x" or "y"); beyond each end a pad of `pad_mm` (the body's width) is
+    kept copper for the part's terminals. The optimizer connects the pads to the rest."""
+
+    name: str
+    x_mm: tuple[float, float]
+    y_mm: tuple[float, float]
+    axis: str
+    ohms: float
+    pad_mm: float
+
+    def pads(self) -> tuple[tuple, tuple]:
+        """The two pad rectangles ((x0, x1), (y0, y1)) in mm, low end first."""
+        (x0, x1), (y0, y1) = sorted(self.x_mm), sorted(self.y_mm)
+        p = self.pad_mm
+        if self.axis == "x":
+            return ((x0 - p, x0), (y0, y1)), ((x1, x1 + p), (y0, y1))
+        return ((x0, x1), (y0 - p, y0)), ((x0, x1), (y1, y1 + p))
 
 
 @dataclass(frozen=True)
@@ -393,12 +419,14 @@ class Spec:
     radiation: RadiationBox | None = None
     optimizer: OptimizerSpec = field(default_factory=OptimizerSpec)
     solver: SolverSpec = field(default_factory=SolverSpec)
+    lumped: tuple[Lumped, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "requirements", _flatten(self.requirements))
         object.__setattr__(self, "design_region", tuple(float(v) for v in self.design_region))
         object.__setattr__(self, "ports", tuple(self.ports))
         object.__setattr__(self, "fixed", tuple(self.fixed))
+        object.__setattr__(self, "lumped", tuple(self.lumped))
         self.validate()
 
     def validate(self) -> None:
@@ -428,6 +456,9 @@ class Spec:
             raise ValueError(f"unknown symmetry {self.symmetry!r}")
         if self.optimizer.aggregate not in ("excitation", "none"):
             raise ValueError("optimizer.aggregate must be 'excitation' or 'none'")
+        for el in self.lumped:
+            if el.axis not in ("x", "y") or not el.ohms > 0 or not el.pad_mm > 0:
+                raise ValueError(f"lumped {el.name}: axis x or y, ohms > 0 and pad_mm > 0")
         if any(r.quantity == "radiated" for r in self.requirements) and self.radiation is None:
             object.__setattr__(self, "radiation", RadiationBox())
 
@@ -486,6 +517,8 @@ class Spec:
         }
         if self.radiation is not None:
             out["radiation"] = clean(self.radiation)
+        if self.lumped:
+            out["lumped"] = [clean(el) for el in self.lumped]
         return out
 
     def canonical_json(self) -> str:
@@ -545,6 +578,7 @@ class Spec:
             radiation=None if rad is None else _build(RadiationBox, rad),
             optimizer=_build(OptimizerSpec, d.get("optimizer", {})),
             solver=_build(SolverSpec, d.get("solver", {})),
+            lumped=tuple(_build(Lumped, el) for el in d.get("lumped", ())),
         )
 
     @classmethod

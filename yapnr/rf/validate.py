@@ -269,7 +269,7 @@ def connectivity(fp, spec: Spec) -> dict:
     groups = [sorted(int(x) for x in str(g).split(",")) for g in fp.net_tie_groups]
     custom = [p for p in fp.pads if p["shape"] == "custom"]
     if len(ports) >= 2:
-        joined = ports in groups
+        joined = any(set(ports) <= set(g) for g in groups)
     else:
         joined = bool(custom)
     n_islands = len(fp.polygons) + sum(len(p["primitives"]) for p in custom)

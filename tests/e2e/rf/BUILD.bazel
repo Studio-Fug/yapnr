@@ -45,6 +45,18 @@ py_test(
 )
 
 py_test(
+    name = "test_wilkinson",
+    size = "enormous",
+    timeout = "eternal",
+    srcs = ["test_wilkinson.py"],
+    env = _ENV,
+    env_inherit = ["YAPNR_RF_RUN_DIR"],
+    main = "test_wilkinson.py",
+    tags = _FULL_TAGS,
+    deps = _DEPS,
+)
+
+py_test(
     name = "test_antenna",
     size = "enormous",
     timeout = "eternal",
@@ -90,6 +102,19 @@ py_test(
         YAPNR_RF_SMOKE = "1",
     ),
     main = "test_divider.py",
+    tags = ["rf-smoke"],
+    deps = _DEPS,
+)
+
+py_test(
+    name = "test_wilkinson_smoke",
+    size = "medium",
+    srcs = ["test_wilkinson.py"],
+    env = dict(
+        _ENV,
+        YAPNR_RF_SMOKE = "1",
+    ),
+    main = "test_wilkinson.py",
     tags = ["rf-smoke"],
     deps = _DEPS,
 )

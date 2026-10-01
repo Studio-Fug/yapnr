@@ -557,11 +557,51 @@ owner reviews them with the pull request:
 - **The antenna refines its seed with the conservative MMA variant and a 0.05 move** (schedule
   16, 64): plain MMA left the tuned seed on its first step. It still did not improve on the
   seed; the case is recorded as failing rather than tuned further by hand.
-- **Passivity is judged at −0.01** (no excitation gains more than 1 % of its power), not the
-  design's −1e-3: near-lossless binary designs carry the port-wave extraction's error
-  (|S_ij − S_ji| up to 0.015), which the divider's even mode turns into −0.005.
+- **Passivity is judged at −1e-3 again** (it was −0.01 for a while). The violations came from
+  de-embedding the feed's magnitude with the calibration's Im k (below), not from the
+  reciprocity error the earlier note blamed.
 - **Custom pads keep a rectangular anchor of the port pad's size** (KiCad 10 keeps it), so a
   one-port footprint still says how wide its feed is.
+
+Review fixes (the physics and design reviews of the cases; [guide](rf-inverse-design.md)
+"Accuracy"):
+
+- **De-embedding shifts the phase only (Re k).** The two-plane calibration's Im k is not a loss
+  measurement: +4 to −1 Np/m depending on where the planes sit relative to the source, against
+  0.7–0.9 Np/m from the Poynting flux. The feed between the V/I and reference planes is about
+  5 mm; neglecting its loss makes |S| about 0.01 dB low.
+- **V/I plane 6h from the reference plane and 6h from the source** (17 and 33 cells on S1 at
+  0.3 mm, was 9 and 17): the divider's |S21 − S12| drops from 0.009–0.013 to 0.003–0.006, for
+  about a third more cells on a three-port. The calibration takes Z_c and k at least 3h from
+  its source and the power factor (Poynting flux over V/I power) at the ports' own distance,
+  where the excited port's incident wave reads 1.5–2 % high; the radiated fraction uses it.
+  Transmissions stay about 0.1–0.2 dB low at 8–12 GHz (stated in the guide), which is
+  conservative for transmission targets.
+- **S = B A⁻¹** in the validation sweeps (every port excited), not b_i/a_j: the idle ports see
+  incident waves of about 1 %.
+- **The exported design is the best binarized design of the run** (evaluated every
+  `binary_every` iterations, at every β change and at the end), not the last iterate: the
+  antenna's last iterate was worse than its start and the diplexer's than its iteration 45.
+- **A conservative MMA step that is not conservative after `max_inner` subproblems is
+  rejected,** keeping x and the raised curvature (it used to be accepted, and the antenna's t
+  rose from 0.34 to 1.07 on the first step).
+- **Robust variants and a reactive interpolation are available, off by default:** eroded and
+  dilated designs in the epigraph (`eta_variants`, Hammond et al. §5.3), and gray copper as an
+  inductive sheet (`interpolation: reactive`, the analog of the paper's Drude–Lorentz
+  interpolation with damping). The reactive sheet did not help the cases (an unfed plate for the
+  antenna from a uniform start, broken lines for the diplexer).
+- **Lumped resistors in specs** (`lumped`), for the Wilkinson-type combiner: the body stays
+  void and carries the resistance on the copper-plane edges along its axis, its pads stay
+  copper, and the footprint gets two pads per part.
+- **The validator re-simulates on a third grid** (a third of the pitch, twice the substrate
+  cells) for the full cases, judges the fine criteria there too and reports every check's
+  trend over the three grids; resonant designs are not converged on the fine grid.
+- **Radiators get a power balance check** (`validate.power_balance`): the port's net input
+  power against the flux out of a box closed by the ground, the other ports' power and the
+  dissipation inside, within 2 %; it validates the radiated fraction the antenna is judged by.
+- **Footprints carry KiCad rule areas** for the simulated margin: no pour, vias or other
+  footprints, and no tracks outside a corridor along each feed.
+- **`export_ok` is `None` when the pixel check could not run** (no checkpoint).
 
 ## Pinned versions
 

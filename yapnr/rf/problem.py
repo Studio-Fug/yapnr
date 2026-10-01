@@ -49,7 +49,7 @@ from yapnr.rf.materials import (
 )
 from yapnr.rf.objectives import build_groups, group_values, violations
 from yapnr.rf.ports import LineCalibration, calibrate_line
-from yapnr.rf.spec import Spec
+from yapnr.rf.spec import FixedRegion, Spec
 
 PAD_DEPTH = 2  # pixels of fixed feed copper inside the design window at each port (§5.1)
 
@@ -235,6 +235,11 @@ class Problem:
             dtype=self.dtype,
             threads=self.threads,
         )
+        for el in spec.lumped:
+            comp, idx, n_series, m_parallel = self.lumped_edges(el)
+            self.sim.structure.add_resistor(comp, idx, el.ohms, n_series, m_parallel)
+        if spec.lumped:
+            self.sim.update_materials()
         self.pitch = spec.grid.pitch_mm * 1e-3 / refine
         self.filter = ConicFilter(filter_radius(spec), self.pitch)
         self.material = self._material_grid(self.filter.ring_width)
@@ -336,7 +341,13 @@ class Problem:
             value[sub] = 1.0
         xc = dom.grid.x.centers[i0:i1] * 1e3
         yc = dom.grid.y.centers[j0:j1] * 1e3
-        for fr in spec.fixed:
+        regions = list(spec.fixed)
+        for el in spec.lumped:
+            # The part's body stays void, its pads copper.
+            regions.append(FixedRegion(tuple(el.x_mm), tuple(el.y_mm), 0.0))
+            for px, py in el.pads():
+                regions.append(FixedRegion(px, py, 1.0))
+        for fr in regions:
             inside = (
                 (xc[:, None] >= min(fr.x_mm))
                 & (xc[:, None] <= max(fr.x_mm))
@@ -353,6 +364,31 @@ class Problem:
             ring_width=r,
             symmetry=spec.symmetry,
         )
+
+    def lumped_edges(self, el) -> tuple[str, np.ndarray, int, int]:
+        """(component, flat indices, edges in series, columns in parallel) of a lumped
+        resistor: the copper-plane edges along its axis inside its body (the pixels whose centre
+        lies in the body), including the node lines on the body's sides."""
+        g = self.grid
+        xc, yc = g.x.centers * 1e3, g.y.centers * 1e3
+        (x0, x1), (y0, y1) = sorted(el.x_mm), sorted(el.y_mm)
+        ii = np.nonzero((xc >= x0) & (xc <= x1))[0]
+        jj = np.nonzero((yc >= y0) & (yc <= y1))[0]
+        if ii.size == 0 or jj.size == 0:
+            raise ValueError(f"lumped {el.name}: the body covers no pixel")
+        kc = g.k_c
+        if el.axis == "y":
+            nodes = np.arange(ii[0], ii[-1] + 2)  # x node lines across the body
+            cells = jj
+            i, j = np.meshgrid(nodes, cells, indexing="ij")
+            idx = g.flat_index("ey", i.ravel(), j.ravel(), np.full(i.size, kc))
+        else:
+            nodes = np.arange(jj[0], jj[-1] + 2)
+            cells = ii
+            i, j = np.meshgrid(cells, nodes, indexing="ij")
+            idx = g.flat_index("ex", i.ravel(), j.ravel(), np.full(i.size, kc))
+        comp = "ey" if el.axis == "y" else "ex"
+        return comp, np.asarray(idx), int(cells.size), int(nodes.size)
 
     # -- design → solver ------------------------------------------------------------------------
 

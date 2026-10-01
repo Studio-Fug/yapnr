@@ -1,8 +1,10 @@
 """The end-to-end cases (design §11) as spec presets, with their pass criteria.
 
-Three cases, each at two scales:
+The cases, each at two scales:
 
 - `divider`: a 3-port equal-split power divider/combiner, 8.5–11.5 GHz (design §11.2);
+- `wilkinson`: the same with matched, isolated outputs and a 100 Ω isolation resistor, 9–11 GHz
+  (design §11.2, a2);
 - `antenna`: a 1-port microstrip-fed patch-class antenna over ground, 9.8–10.2 GHz, matched and
   radiating (design §11.3);
 - `diplexer`: a 3-port two-channel filter bank, channels 7.6–8.4 and 11.6–12.4 GHz (§11.4).
@@ -34,6 +36,7 @@ import numpy as np
 from yapnr.rf.spec import (
     Band,
     GridSpec,
+    Lumped,
     OptimizerSpec,
     Port,
     RadiatedFraction,
@@ -118,6 +121,50 @@ def divider(scale: str = "full") -> Spec:
         bands=band,
         requirements=reqs,
         optimizer=OptimizerSpec(iterations_per_beta=30, budget_min=45, init=INIT),
+    )
+
+
+def wilkinson(scale: str = "full") -> Spec:
+    """(a2) A Wilkinson-type combiner/divider: the equal split of `divider` plus matched and
+    isolated outputs (|S22| = |S33| and |S32| ≤ −20 dB), with a 100 Ω isolation resistor (an
+    0402-sized SMD part across a 0.6 mm gap on the symmetry line) as a fixed lumped element;
+    the copper around it is free (design §11.2, variant a2)."""
+    _check_scale(scale)
+    band = {"pass": Band(9.0, 11.0, 5)}
+    reqs = (
+        S(1, 1).at_most_db(-20, band="pass"),
+        S(2, 1).at_least_db(-3.4, band="pass"),
+        S(3, 1).at_least_db(-3.4, band="pass"),
+        S(2, 2).at_most_db(-20, band="pass"),
+        S(3, 2).at_most_db(-20, band="pass"),
+    )
+    if scale == "smoke":
+        return Spec(
+            name="wilkinson-smoke",
+            stackup=S1,
+            grid=GridSpec(pitch_mm=0.6, margin_mm=1.8, air_mm=3.0, f_max_ghz=14.0, **_SMOKE_GRID),
+            design_region=(0.0, 4.8, -3.3, 3.3),
+            symmetry="mirror_y",
+            rules=Rules(1.2, 1.2),
+            ports=(Port(1, "W", 0.0, 3), Port(2, "E", 1.8, 3), Port(3, "E", -1.8, 3)),
+            bands={"pass": Band(9.0, 11.0, 2)},
+            requirements=reqs,
+            lumped=(Lumped("R1", (3.0, 3.6), (-0.3, 0.3), "y", 100.0, 0.6),),
+            optimizer=_SMOKE_OPT,
+            solver=_SMOKE_SOLVER,
+        )
+    return Spec(
+        name="wilkinson-x10",
+        stackup=S1,
+        grid=GridSpec(pitch_mm=0.3, substrate_cells=4),
+        design_region=(0.0, 12.0, -6.0, 6.0),
+        symmetry="mirror_y",
+        rules=Rules(0.6, 0.6),
+        ports=(Port(1, "W", 0.0), Port(2, "E", 4.2), Port(3, "E", -4.2)),
+        bands=band,
+        requirements=reqs,
+        lumped=(Lumped("R1", (7.2, 7.8), (-0.3, 0.3), "y", 100.0, 0.6),),
+        optimizer=OptimizerSpec(iterations_per_beta=30, budget_min=90, init=INIT),
     )
 
 
@@ -206,7 +253,7 @@ def diplexer(scale: str = "full") -> Spec:
             ports=(Port(1, "W", 0.0, 3), Port(2, "E", 1.8, 3), Port(3, "E", -1.8, 3)),
             bands=bands,
             requirements=reqs,
-            optimizer=replace(_SMOKE_OPT, seed="star"),
+            optimizer=replace(_SMOKE_OPT, seed="stubs"),
             solver=_SMOKE_SOLVER,
         )
     return Spec(
@@ -218,8 +265,10 @@ def diplexer(scale: str = "full") -> Spec:
         ports=(Port(1, "W", 0.0), Port(2, "E", 4.5), Port(3, "E", -4.5)),
         bands=bands,
         requirements=reqs,
-        # A 60-iteration first epoch was tried: t stayed at 1.8 ± 0.1 from iteration 20 to 59.
-        optimizer=OptimizerSpec(iterations_per_beta=25, budget_min=55, seed="star"),
+        # From the plain junction (`seed: star`) the branches only learned to roll off (rejection
+        # 9–12 dB, t 1.8–2.4); the stub seed puts a quarter-wave open stub for the other channel
+        # on each branch (`seeds.stub_mask`), which the optimizer then reshapes.
+        optimizer=OptimizerSpec(iterations_per_beta=25, budget_min=55, seed="stubs"),
     )
 
 
@@ -263,12 +312,13 @@ def filterbank3(scale: str = "full") -> Spec:
         ports=(Port(1, "W", 0.0), Port(2, "E", 6.0), Port(3, "E", 0.0), Port(4, "E", -6.0)),
         bands=bands,
         requirements=tuple(reqs),
-        optimizer=OptimizerSpec(iterations_per_beta=25, budget_min=60, seed="star"),
+        optimizer=OptimizerSpec(iterations_per_beta=25, budget_min=90, seed="stubs"),
     )
 
 
 CASES = {
     "divider": divider,
+    "wilkinson": wilkinson,
     "antenna": antenna,
     "diplexer": diplexer,
     "filterbank3": filterbank3,
@@ -409,12 +459,29 @@ def _bank3_checks(loss, rej, match):
     return out + [Check("passivity", "passivity", limit=PASSIVITY)]
 
 
+def _wilkinson_checks(match, t, iso):
+    band = (9.0, 11.0)
+    return [
+        Check("|S11| max dB", "s_max", (1, 1), match, band),
+        Check("|S21| min dB", "s_min", (2, 1), t, band),
+        Check("|S31| min dB", "s_min", (3, 1), t, band),
+        Check("|S22| max dB", "s_max", (2, 2), match, band),
+        Check("|S33| max dB", "s_max", (3, 3), match, band),
+        Check("|S32| max dB (isolation)", "s_max", (3, 2), iso, band),
+        Check("passivity", "passivity", limit=PASSIVITY),
+    ]
+
+
 # Design §11.2–§11.4: "coarse" on the binary design re-simulated from the footprint on the
 # optimization grid, "fine" on the finer re-validation grid.
 CRITERIA = {
     "divider": {
         "coarse": _divider_checks(-17.0, -3.45),
         "fine": _divider_checks(-15.0, -3.6, 0.25),
+    },
+    "wilkinson": {
+        "coarse": _wilkinson_checks(-17.0, -3.6, -17.0),
+        "fine": _wilkinson_checks(-15.0, -3.8, -15.0),
     },
     "antenna": {
         "coarse": [
@@ -446,6 +513,7 @@ FINER = 3
 # Dense in-band frequencies (GHz) of the re-validation sweeps; the criteria are judged there.
 DENSE_GHZ = {
     "divider": np.linspace(8.5, 11.5, 61),
+    "wilkinson": np.linspace(9.0, 11.0, 41),
     "antenna": np.linspace(9.7, 10.3, 61),  # includes 9.8–10.2 at 0.01 GHz
     "diplexer": np.concatenate([np.linspace(7.4, 8.6, 25), np.linspace(11.4, 12.6, 25)]),
     "filterbank3": np.concatenate(

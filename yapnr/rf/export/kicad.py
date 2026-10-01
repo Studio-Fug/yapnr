@@ -3,7 +3,8 @@
 The `.kicad_mod` follows the format KiCad 10 writes for its own libraries (version 20260206):
 
 - one rectangular SMD pad per port on F.Cu, numbered by port, the feed width × two pixels, at
-  the footprint edge;
+  the footprint edge, then two pads per lumped part (its terminals, numbered on from the ports)
+  with its body as an F.Fab rectangle;
 - each copper island touching two or more port pads: an `fp_poly` on F.Cu (filled, zero width),
   and the footprint lists those pads in `net_tie_pad_groups`, so the port nets may have
   different names (a net tie);
@@ -54,6 +55,7 @@ class Footprint:
     seed: str = ""
     extra: dict = field(default_factory=dict)
     rule_areas: list = field(default_factory=list)  # [RuleArea]
+    fab_rects: list = field(default_factory=list)  # [(x0, x1, y0, y1)] on F.Fab (part bodies)
 
 
 # Keepout kinds of a KiCad rule area, in the order KiCad writes them.
@@ -128,8 +130,8 @@ class _Writer:
         self.emit(2, ")")
         self.emit(1, ")")
 
-    def rect(self, layer: str, width: float) -> None:
-        x0, x1, y0, y1 = self.fp.region
+    def rect(self, layer: str, width: float, region=None) -> None:
+        x0, x1, y0, y1 = region or self.fp.region
         self.emit(1, "(fp_rect")
         self.emit(2, f"(start {self.xy(x0, y1)})")
         self.emit(2, f"(end {self.xy(x1, y0)})")
@@ -186,6 +188,8 @@ def write_footprint(fp: Footprint, path: str | None = None) -> str:
         w.emit(1, ")")
     w.rect("F.CrtYd", 0.05)
     w.rect("F.Fab", 0.1)
+    for r in fp.fab_rects:
+        w.rect("F.Fab", 0.1, region=r)
     for pad in sorted(fp.pads, key=lambda p: p.number):
         cx, cy = pad.center
         sx, sy = pad.size

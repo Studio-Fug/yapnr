@@ -162,25 +162,36 @@ def footprint_of(problem, binary: np.ndarray, *, name: str | None = None) -> tup
         pads.append(
             PortPad(n, (cx, cy), ((sx.stop - sx.start) * pitch, (sy.stop - sy.start) * pitch))
         )
+    port_only = list(pads)
+    fab = []
+    centres = [(n, 0.5 * (sx.start + sx.stop), 0.5 * (sy.start + sy.stop)) for n, sx, sy in pad_px]
+    number = len(pad_px)
+    for el in spec.lumped:
+        (bx0, bx1), (by0, by1) = sorted(el.x_mm), sorted(el.y_mm)
+        fab.append((bx0, bx1, by0, by1))
+        for (px0, px1), (py0, py1) in el.pads():
+            number += 1
+            cx, cy = 0.5 * (px0 + px1), 0.5 * (py0 + py1)
+            pads.append(PortPad(number, (cx, cy), (px1 - px0, py1 - py0)))
+            centres.append((number, (cx - x0) / pitch, (cy - y0) / pitch))
     shapes = []
     for island in isl:
-        touched = sorted(
-            n
-            for n, sx, sy in pad_px
-            if point_in_loop(
-                (0.5 * (sx.start + sx.stop), 0.5 * (sy.start + sy.stop)), island.polygon
-            )
-        )
+        touched = sorted(n for n, u, v in centres if point_in_loop((u, v), island.polygon))
         poly_mm = np.column_stack(
             [x0 + island.polygon[:, 0] * pitch, y0 + island.polygon[:, 1] * pitch]
         )
         shapes.append((poly_mm, touched))
     st = spec.stackup
     sha = spec.sha256()
+    parts = "".join(
+        f"; {el.name}: {el.ohms:g} ohm between pads {len(pad_px) + 2 * k + 1} and "
+        f"{len(pad_px) + 2 * k + 2}"
+        for k, el in enumerate(spec.lumped)
+    )
     descr = (
         f"yapnr RF inverse design '{spec.name}': microstrip copper on er {st.er:g}, "
         f"tan_delta {st.tan_delta:g}, h {st.h_mm:g} mm with a solid ground on the next copper "
-        f"layer; spec sha256 {sha}"
+        f"layer{parts}; spec sha256 {sha}"
     )
     fp = Footprint(
         name=name or f"RF_{spec.name}",
@@ -190,7 +201,8 @@ def footprint_of(problem, binary: np.ndarray, *, name: str | None = None) -> tup
         islands=shapes,
         description=descr,
         seed=sha,
-        rule_areas=rule_areas(spec, pads, problem.domain.spec.margin * 1e3),
+        rule_areas=rule_areas(spec, port_only, problem.domain.spec.margin * 1e3),
+        fab_rects=fab,
     )
     return fp, [p for p, _ in shapes]
 

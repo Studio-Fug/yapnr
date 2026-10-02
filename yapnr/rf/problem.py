@@ -178,6 +178,7 @@ class Problem:
         self.spec = spec
         self.log = log or (lambda *_: None)
         sv = spec.solver
+        self.edge_correction = bool(sv.edge_correction)
         self.exact = exact
         self.backend = backend or ("numpy" if exact else sv.backend)
         self.dtype = np.dtype(dtype or (np.float64 if exact else sv.dtype))
@@ -201,7 +202,7 @@ class Problem:
         self.domain = Domain(domain_spec(spec, widths, refine=refine, n_sub=n_sub))
         dom = self.domain
         self.grid = dom.grid
-        self.dt = spec.grid.courant * self.grid.courant_dt()
+        self.dt = self._time_step(self.grid)
         self.ports = {pg.port.number: pg for pg in dom.ports}
         self.cal = {n: self._calibration(widths[n]) for n in self.ports}
         self.box = None
@@ -227,9 +228,14 @@ class Problem:
         self.x_range = reactive_range(self.g_max)
         self.omega_ref = 2.0 * np.pi * self.stackup.f_ref
         self._fwd_cache: tuple[str, dict] = ("", {})
+        self.edge_probes = []
+        if self.edge_correction:
+            from yapnr.rf.edges import design_probes as edge_design_probes
+
+            self.edge_probes = edge_design_probes(self.grid, dom.window)
         self.sim = Simulation(
             self.grid,
-            dom.structure(),
+            dom.structure(copper=np.zeros(dom.design_shape) if self.edge_correction else None),
             dt=self.dt,
             backend=self.backend,
             dtype=self.dtype,
@@ -254,12 +260,24 @@ class Problem:
 
     # -- setup ----------------------------------------------------------------------------------
 
+    def _time_step(self, grid) -> float:
+        """Δt = courant · Δt_CFL, or with the copper-edge correction its bound
+        (`edges.stable_dt`)."""
+        courant = self.spec.grid.courant
+        if self.edge_correction:
+            from yapnr.rf.edges import stable_dt
+
+            return stable_dt(grid, self.stackup.er, courant)
+        return courant * grid.courant_dt()
+
     def _calibration(self, width: int) -> LineCalibration:
         if self._given_cal is not None:
             return self._given_cal[width] if width in self._given_cal else self._given_cal["*"]
         if width not in self._cal_by_width:
             t0 = time.perf_counter()
-            line = self._line_domain().line_spec(width, self.dt)
+            line = self._line_domain().line_spec(
+                width, self.dt, self.edge_correction, self.spec.solver.port_source
+            )
             self._cal_by_width[width] = calibrate_line(
                 line,
                 self.cal_omega,
@@ -279,7 +297,7 @@ class Problem:
         hj = hj_width_cells(self.stackup, pitch)
         widths = {p.n: (p.width_cells * self.refine if p.width_cells else hj) for p in spec.ports}
         self._provisional = Domain(domain_spec(spec, widths, refine=self.refine, n_sub=n_sub))
-        self.dt = spec.grid.courant * self._provisional.grid.courant_dt()
+        self.dt = self._time_step(self._provisional.grid)
         if all(p.width_cells for p in spec.ports):
             return widths
         fc = 2.0 * np.pi * self.pulse.f_center
@@ -417,6 +435,8 @@ class Problem:
             self.sim.structure.set_sheet(g, lp, dt=self.dt)
         else:
             self.sim.structure.set_pixels(dom.pixels(self.conductance(rho_bar)))
+        if self.edge_correction:
+            self.sim.structure.set_edge_correction(dom.copper(rho_bar))
         self.sim.update_materials()
 
     def design_gradient(self, gr, rho_bar: np.ndarray) -> np.ndarray:
@@ -432,9 +452,17 @@ class Problem:
             shape = (gr.omega.size,) + lp.shape
             # ∂(Δz a)/∂ρ̄ = c_ω ∂Y_d/∂ρ̄ (a = c_ω Y_d/Δz on the sheet's edges).
             c = conductance_factor(gr.omega, self.dt)[:, None, None]
-            return 2.0 * c * (kr * yr.reshape(shape) - ki * yi.reshape(shape))
+            return 2.0 * c * (kr * yr.reshape(shape) - ki * yi.reshape(shape)) + (
+                self._edge_gradient(gr)
+            )
         dg = sheet_conductance_derivative(rho_bar, self.g_min, self.g_max, self.g_d)
-        return dom.window_pixels(gr.pixels(self.grid)) * dg[None]
+        return dom.window_pixels(gr.pixels(self.grid)) * dg[None] + self._edge_gradient(gr)
+
+    def _edge_gradient(self, gr):
+        """The copper-edge correction's part of ∂F_m/∂ρ̄ (the window's copper fraction is ρ̄)."""
+        if not self.edge_correction:
+            return 0.0
+        return self.domain.window_pixels(gr.edge_pixels(self.sim.structure))
 
     def _decimation(self) -> int:
         return 1 if self.exact else dtft_decimation(self.pulse.f_top, self.dt)
@@ -443,15 +471,28 @@ class Problem:
         """The forward run with port `port` excited; DTFTs of the ports, the box and (when
         `design`) the design plane."""
         omega = self.omega if omega is None else np.asarray(omega)
-        probes = self.port_probes + self.box_probes + (self.design_probes if design else [])
+        probes = self.port_probes + self.box_probes
+        if design:
+            probes = probes + self.design_probes + self.edge_probes
         stop = StopRule(
             tol=self.tol,
             f_lo=float(omega.min()) / (2.0 * np.pi),
             max_steps=self.spec.solver.max_steps,
             probes=tuple(self.watched),
         )
-        sources = self.ports[port].mode_sources(self.pulse, self.dt)
-        return self.sim.run(sources, probes, omega, stop, decimation=self._decimation())
+        return self.sim.run(
+            self.port_sources(port), probes, omega, stop, decimation=self._decimation()
+        )
+
+    def port_sources(self, port: int) -> list:
+        """The forward sources of port `port` (`spec.solver.port_source`)."""
+        return self.ports[port].sources(
+            self.pulse,
+            self.dt,
+            self.stackup,
+            kind=self.spec.solver.port_source,
+            edge_correction=self.edge_correction,
+        )
 
     def quantities(self, dft, port: int, omega=None) -> dict:
         """Waves of every port, S_ij for excitation j = `port`, and η_j (numpy or torch)."""
@@ -527,6 +568,7 @@ class Problem:
                         self.design_probes,
                         stop_adj,
                         decimation=dec,
+                        edge_probes=self.edge_probes,
                     )
                     steps["adjoint"][g.name] = gr.adjoint.steps
                     converged &= gr.adjoint.converged
@@ -611,6 +653,8 @@ class Problem:
             "pulse_ghz": [self.pulse.f_center / 1e9, self.pulse.f_half_width / 1e9],
             "objective_ghz": [float(f) / 1e9 for f in self.freqs],
             "decimation": self._decimation(),
+            "edge_correction": self.edge_correction,
+            "port_source": self.spec.solver.port_source,
             "tol": self.tol,
             "adjoint_tol": self.adjoint_tol,
             "backend": self.backend,

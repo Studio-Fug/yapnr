@@ -214,6 +214,47 @@ class Structure:
         # Inductive sheet: per-pixel conductance and inductance (None: resistive sheet).
         self.pixel_g: np.ndarray | None = None
         self.pixel_l: np.ndarray | None = None
+        # Copper-edge correction (`edges`): the pixel copper fraction and the factor maps.
+        self.copper: np.ndarray | None = None
+        self.edge_maps: dict | None = None
+        self._edge_k = None
+
+    # -- copper edges ---------------------------------------------------------------------------
+
+    @property
+    def edge_correction(self) -> bool:
+        return self.edge_maps is not None
+
+    def edge_constants(self):
+        from yapnr.rf.edges import EdgeConstants
+
+        if self._edge_k is None:
+            self._edge_k = EdgeConstants.build(self.grid, self.stackup.er)
+        return self._edge_k
+
+    def set_edge_correction(self, copper: np.ndarray | None) -> None:
+        """Correct the copper's edges (`edges`) for the pixel copper fraction `copper` (Nx, Ny)
+        in [0, 1] (None: no correction). Call `Simulation.update_materials` afterwards."""
+        from yapnr.rf.edges import factor_maps
+
+        if copper is None:
+            self.copper = self.edge_maps = None
+            return
+        copper = np.asarray(copper, dtype=np.float64)
+        if copper.shape != self.grid.n[:2]:
+            raise ValueError(f"copper fraction must be {self.grid.n[:2]}, got {copper.shape}")
+        self.copper = copper.copy()
+        self.edge_maps = factor_maps(self.copper, self.edge_constants())
+
+    def mu_factor(self, comp: str) -> np.ndarray | None:
+        """1/μr of the corrected planes of H component `comp` (n1, n2, planes), or None."""
+        if self.edge_maps is None:
+            return None
+        return self.edge_maps[comp]
+
+    def eps_base(self, comp: str) -> np.ndarray:
+        """Permittivity of each edge without the edge correction."""
+        return self._eps[comp]
 
     # -- copper sheet ---------------------------------------------------------------------------
 
@@ -334,7 +375,15 @@ class Structure:
     # -- per-edge material arrays ---------------------------------------------------------------
 
     def eps(self, comp: str) -> np.ndarray:
-        return self._eps[comp]
+        """Permittivity of each edge, with the edge correction's factors when it is on."""
+        if self.edge_maps is None:
+            return self._eps[comp]
+        from yapnr.rf.edges import planes
+
+        eps = self._eps[comp].copy()
+        for n, k in enumerate(planes(self.grid, comp)):
+            eps[:, :, k] *= self.edge_maps[comp][:, :, n]
+        return eps
 
     def sigma(self, comp: str) -> np.ndarray:
         """Total conductivity of each edge: substrate + sheet (on the copper plane) + elements."""
@@ -349,7 +398,7 @@ class Structure:
         E^{n+1} = Ca E^n + Cb (curl H − J),  a = σΔt/(2ε),  Ca = (1 − a)/(1 + a),
         Cb = (Δt/ε)/(1 + a). PEC edges get Ca = Cb = 0.
         """
-        eps = self._eps[comp]
+        eps = self.eps(comp)
         a = self.sigma(comp) * dt / (2.0 * eps)
         ca = (1.0 - a) / (1.0 + a)
         cb = (dt / eps) / (1.0 + a)

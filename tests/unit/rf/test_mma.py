@@ -127,6 +127,34 @@ class EpigraphTest(unittest.TestCase):
         back = MMAState.from_arrays(st.to_arrays())
         np.testing.assert_array_equal(back.rho, st.rho)
 
+    def test_adaptive_move_is_monotone(self):
+        # Plain MMA with a 0.5 move oscillates on the ripples (t: 0.28 → 0.49, −0.78 → −0.06);
+        # the adaptive move refuses every step that raises t and halves the move, and
+        # reaches the same optimum.
+        epi = Epigraph(2, settings=MMASettings(move=0.5, epsimin=1e-9))
+        x, st, move = np.array([0.1, 0.9]), MMAState(), 0.5
+        ts, refused = [], 0
+        for _ in range(25):
+            f, df = wavy(x)
+            tr = epi.trust_step(
+                x, f, df, st, move=move, evaluate=lambda xh: (wavy(xh)[0], None), slack=0.0
+            )
+            step = tr.step
+            self.assertEqual(len(tr.t_trials), tr.trials)
+            if step.accepted:
+                self.assertLessEqual(step.t_new, step.t + 1e-12)
+                move = min(0.5, 1.5 * tr.move) if step.t_new < step.t else tr.move
+            else:
+                refused += 1
+                np.testing.assert_array_equal(step.x, x)
+                move = max(1e-3, 0.5 * tr.move)
+            refused += tr.trials - 1
+            x, st = step.x, step.state
+            ts.append(step.t)
+        self.assertTrue(all(b <= a + 1e-12 for a, b in zip(ts, ts[1:])))
+        self.assertLess(ts[-1], -0.81)
+        self.assertGreater(refused, 3)
+
     def test_lengthscale_style_constraint(self):
         # min max_k |x − c_k|² subject to x_0 ≥ 0.6 (as g = 0.6 − x_0 ≤ 0).
         epi = Epigraph(2, settings=MMASettings(move=0.2, epsimin=1e-9))

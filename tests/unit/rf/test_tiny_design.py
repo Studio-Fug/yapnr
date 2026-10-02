@@ -120,6 +120,24 @@ class BestDesignTest(unittest.TestCase):
         self.assertAlmostEqual(float(np.max(fin["evaluation"].values)), min(tb), places=9)
         np.testing.assert_array_equal(opt.state.export_x, fin["x"])
 
+    def test_adaptive_move(self):
+        # A 0.3 move at β = 8: plain MMA jumps to t = 17 at the third iteration on this spec
+        # (round-2 measurement); the adaptive move refuses such steps, keeps t within the slack
+        # and resumes the move from the checkpoint.
+        spec = tiny_spec(betas=(8,), move=0.3, adaptive_move=True)
+        out = os.path.join(self.tmp, "adaptive")
+        opt = Optimizer(Problem(spec, cache_dir=self.cache), out_dir=out)
+        opt.run(max_iterations=5)
+        ts = [h["t"] for h in opt.history]
+        for a, b in zip(ts, ts[1:]):
+            self.assertLessEqual(b, a + 0.05 * max(1.0, abs(a)) + 1e-12)
+        self.assertLess(ts[-1], -0.1)
+        self.assertTrue(all(h["move"] <= 0.3 for h in opt.history))
+        self.assertTrue(all(len(h["t_trials"]) >= 1 for h in opt.history))
+        again = Optimizer(Problem(spec, cache_dir=self.cache), out_dir=out)
+        self.assertTrue(again.load_checkpoint())
+        self.assertEqual(again.state.move, opt.state.move)
+
     def test_robust_variants(self):
         spec = tiny_spec(eta_variants=(0.6, 0.4))
         opt = Optimizer(Problem(spec, cache_dir=self.cache))

@@ -13,6 +13,7 @@ import unittest
 import numpy as np
 
 from yapnr.rf.constants import MU0
+from yapnr.rf.edges import planes
 from yapnr.rf.fdtd.dtft import conductance_factor, decimation, numerical_omega
 from yapnr.rf.fdtd.engine import Simulation
 from yapnr.rf.fdtd.monitors import Probe, box_indices
@@ -124,7 +125,11 @@ class DiscreteFrequencyDomainTest(unittest.TestCase):
             }
             for c in ("hx", "hy", "hz"):
                 k = kfull if c == "hy" else 0.0
-                r = -1j * big[m] * MU0 * f[c] + ce[c] + k
+                mu = np.full(g.shape(c), MU0)
+                if self.s.edge_correction:
+                    ks = planes(g, c)
+                    mu[:, :, ks[0] : ks[-1] + 1] = MU0 / self.s.mu_factor(c)
+                r = -1j * big[m] * mu * f[c] + ce[c] + k
                 sl = tuple(slice(lo[a], hi[a]) for a in range(3))
                 scale = np.abs(ce[c][sl]).max()
                 worst_h = max(worst_h, np.abs(r[sl]).max() / scale)
@@ -152,6 +157,45 @@ class DiscreteFrequencyDomainTest(unittest.TestCase):
                 worst_e = max(worst_e, np.abs(r[sl]).max() / scale)
         self.assertLess(worst_h, 1e-10)
         self.assertLess(worst_e, 1e-10)
+
+
+class EdgeCorrectionTest(DiscreteFrequencyDomainTest):
+    """The same identity with the copper-edge correction (`edges`) for a gray copper fraction:
+    ε scaled on the corrected E edges (in `Structure.eps`) and μ = μ0/factor on the H edges
+    of the planes around the copper (applied by the engine after each H update)."""
+
+    @classmethod
+    def setUpClass(cls):
+        grid, st = small_grid()
+        s = Structure(grid, st)
+        rng = np.random.default_rng(7)
+        g = st.g_min * (st.g_max / st.g_min) ** rng.uniform(0, 0.85, grid.n[:2])
+        s.set_pixels(g)
+        s.set_edge_correction(rng.uniform(0.0, 1.0, grid.n[:2]))
+        s.add_resistor("ez", grid.flat_index("ez", 8, 7, [0, 1]), 50.0, 2, 1)
+        sim = Simulation(grid, s)
+        cls.grid, cls.sim, cls.s = grid, sim, s
+        cls.omega = 2 * np.pi * np.array([7.5e9, 9e9, 10.5e9])
+        pulse = GaussianPulse(9e9, 2.5e9)
+        jsrc = PulseSource("ez", grid.flat_index("ez", 6, 6, [0, 1]), [1.0, -0.5], pulse, sim.dt)
+        fit = NuttallFit.build(cls.omega, sim.dt, magnetic=True)
+        req = np.array([[1.0 + 2.0j, -0.5j, 0.3], [0.2, 1.0, -1.0 + 1.0j]]) * 1e-3
+        # The magnetic source sits on a corrected plane (k_c − 1, k_c of Hy).
+        kk = [grid.k_c - 1, grid.k_c]
+        ksrc = SpectralSource("hy", grid.flat_index("hy", 9, 8, kk), fit.coefficients(req), fit)
+        cls.sources = [jsrc, ksrc]
+        cls.jhat = source_dtft(jsrc, sim, cls.omega, magnetic=False)
+        cls.khat = source_dtft(ksrc, sim, cls.omega, magnetic=True)
+        cls.res = sim.run(
+            cls.sources, full_probes(grid), cls.omega, StopRule(tol=1e-12, f_lo=7.5e9)
+        )
+
+    def test_factors_vary(self):
+        self.assertTrue(self.s.edge_correction)
+        for c in ("hx", "hy", "hz"):
+            m = self.s.mu_factor(c)
+            self.assertLess(m.min(), 0.9)
+        self.assertLess(self.s.eps("ez").min() / self.s.eps_base("ez").min(), 0.95)
 
 
 class InductiveSheetTest(unittest.TestCase):

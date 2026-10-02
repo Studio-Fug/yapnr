@@ -134,6 +134,7 @@ class LoopState:
     binary_checked: int = -1  # the last iteration whose binarized design was evaluated
     export_x: np.ndarray | None = None  # set by `finish`
     export_iteration: int | None = None
+    move: float | None = None  # the adaptive move (`optimizer.adaptive_move`); None: schedule's
 
     def meta(self) -> dict:
         return {
@@ -147,6 +148,7 @@ class LoopState:
             "best_iteration": self.best_iteration,
             "binary_checked": self.binary_checked,
             "export_iteration": self.export_iteration,
+            "move": self.move,
         }
 
 
@@ -255,6 +257,7 @@ class Optimizer:
             binary_checked=int(meta.get("binary_checked", -1)),
             export_x=export_x,
             export_iteration=meta.get("export_iteration"),
+            move=meta.get("move"),
         )
         self.log(f"resumed at iteration {n} (epoch {self.state.epoch})")
         return True
@@ -347,17 +350,41 @@ class Optimizer:
             return vals, gh
 
         opt = prob.spec.optimizer
-        step = epi.step(
-            st.x,
-            values,
-            df,
-            st.mma,
-            g,
-            dg,
-            move=sch.move_for(st.epoch),
-            evaluate=true_values if opt.conservative else None,
-            max_inner=opt.max_inner,
-        )
+        trust = None
+        if opt.adaptive_move:
+            base = sch.move_for(st.epoch)
+            mv = base if st.move is None else min(st.move, base)
+            trust = epi.trust_step(
+                st.x,
+                values,
+                df,
+                st.mma,
+                g,
+                dg,
+                move=mv,
+                evaluate=true_values,
+                max_inner=opt.max_inner,
+                slack=opt.trust_slack,
+            )
+            step = trust.step
+            if not step.accepted:
+                st.move = max(1e-3, 0.5 * trust.move)
+            elif step.t_new < step.t:
+                st.move = min(base, 1.5 * trust.move)
+            else:
+                st.move = trust.move
+        else:
+            step = epi.step(
+                st.x,
+                values,
+                df,
+                st.mma,
+                g,
+                dg,
+                move=sch.move_for(st.epoch),
+                evaluate=true_values if opt.conservative else None,
+                max_inner=opt.max_inner,
+            )
         change = float(np.max(np.abs(step.x - st.x))) if st.x.size else 0.0
         wall = time.perf_counter() - t0
         rec.update(
@@ -383,6 +410,8 @@ class Optimizer:
                 "inner_forward_steps": inner_steps,
                 "accepted": step.accepted,
                 "t_next": step.t_new,
+                "move": trust.move if trust is not None else sch.move_for(st.epoch),
+                "t_trials": trust.t_trials if trust is not None else [],
                 "eval_s": 0.0 if reused else ev.wall_s,
                 "wall_s": wall,
             }
@@ -400,6 +429,7 @@ class Optimizer:
             st.epoch_iter = 0
             st.t_epoch = []
             st.mma = MMAState()
+            st.move = None
             if st.epoch >= sch.epochs:
                 st.stop_reason = "schedule"
         if self.budget_s is not None and st.wall_s >= self.budget_s and not self.done:

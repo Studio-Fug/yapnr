@@ -207,6 +207,12 @@ class OptimizerSpec:
     # Robust optimization (Hammond et al. §5.3): projection thresholds of extra designs (above
     # `eta`: eroded, below: dilated) whose objectives join the epigraph with the nominal ones.
     eta_variants: tuple[float, ...] = ()
+    # Adaptive move limits with a step test on the epigraph value (`Epigraph.trust_step`): a
+    # step whose true t exceeds t_k + trust_slack·max(1, |t_k|) is refused and retried with
+    # half the move (one forward run per refusal); accepted improving steps grow the move
+    # again up to the schedule's. Off by default.
+    adaptive_move: bool = False
+    trust_slack: float = 0.05
 
 
 @dataclass(frozen=True)
@@ -221,6 +227,19 @@ class SolverSpec:
     max_steps: int = 200_000
     threads: int = 4
     sweep_points: int = 101
+    # The subcell correction of the copper's edges (`yapnr.rf.edges`): static edge-field factors
+    # on ε and μ next to every copper edge, so that the coarse grid's lines and resonators
+    # agree with finer grids. Off by default.
+    edge_correction: bool = False
+    # The port source: "static" (J from the strip's static field in air) or "mode" (J from the
+    # line's discrete mode, `yapnr.rf.modes`, which removes the excited port's incident-wave
+    # bias of up to 2 %).
+    port_source: str = "static"
+
+
+# Solver options added after the first cases, with their defaults (`Spec.to_dict`).
+_SOLVER_NEW = {"edge_correction": False, "port_source": "static"}
+_OPTIMIZER_NEW = {"seed": None, "adaptive_move": False, "trust_slack": 0.05}
 
 
 # -- requirements -----------------------------------------------------------------------------
@@ -509,11 +528,20 @@ class Spec:
             "fixed": [
                 {"x_mm": list(f.x_mm), "y_mm": list(f.y_mm), "value": f.value} for f in self.fixed
             ],
-            # `seed` is left out when unset, so specs written before it keep their hashes.
+            # `seed` and later options are left out at their defaults, so specs written before
+            # them keep their hashes.
             "optimizer": {
-                k: v for k, v in clean(self.optimizer).items() if not (k == "seed" and v is None)
+                k: v
+                for k, v in clean(self.optimizer).items()
+                if not (k in _OPTIMIZER_NEW and v == _OPTIMIZER_NEW[k])
             },
-            "solver": clean(self.solver),
+            # Solver options added after the first cases are left out at their defaults, so
+            # specs written before them keep their hashes.
+            "solver": {
+                k: v
+                for k, v in clean(self.solver).items()
+                if not (k in _SOLVER_NEW and v == _SOLVER_NEW[k])
+            },
         }
         if self.radiation is not None:
             out["radiation"] = clean(self.radiation)

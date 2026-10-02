@@ -197,7 +197,7 @@ def power_balance(prob, rho: np.ndarray, freqs, port: int = 1) -> dict:
         max_steps=prob.spec.solver.max_steps,
         probes=tuple(prob.watched),
     )
-    sources = prob.ports[port].mode_sources(prob.pulse, prob.dt)
+    sources = prob.port_sources(port)
     res = prob.sim.run(sources, probes, omega, stop, decimation=prob._decimation())
     q = prob.quantities(res.dft, port, omega)
     a, b = q["waves"][port]

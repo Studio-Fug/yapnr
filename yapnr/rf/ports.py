@@ -200,6 +200,69 @@ class PortGeometry:
             out.append(PulseSource(comp, idx, amplitude * prof[jj, kk] / peak, waveform, dt))
         return out
 
+    def sources(
+        self,
+        waveform: GaussianPulse,
+        dt: float,
+        stackup: Stackup,
+        *,
+        kind: str = "static",
+        edge_correction: bool = False,
+        cpml: CPMLParams = CPMLParams(),
+    ):
+        """The port's sources: "static" (`mode_sources`) or "mode" (`modal_sources`)."""
+        if kind == "static":
+            return self.mode_sources(waveform, dt)
+        if kind == "mode":
+            return self.modal_sources(
+                waveform, dt, stackup, edge_correction=edge_correction, cpml=cpml
+            )
+        raise ValueError(f"unknown port source {kind!r}")
+
+    def modal_sources(
+        self,
+        waveform: GaussianPulse,
+        dt: float,
+        stackup: Stackup,
+        *,
+        edge_correction: bool = False,
+        cpml: CPMLParams = CPMLParams(),
+        amplitude: float = 1.0,
+    ):
+        """Soft J sources on the source cross-section shaped like the line's discrete mode
+        (`modes`): J = n̂ × H_0 of the mode solved on this grid's cross-section, fitted as
+        P0 + ω² P2 over the pulse's band and driven by s(t) and −s''(t)."""
+        from yapnr.rf.fdtd.sources import ProfileSource
+        from yapnr.rf.modes import cross_section, mode_profile
+
+        key = (float(dt), waveform.f_center, waveform.f_half_width, edge_correction, cpml)
+        cached = getattr(self, "_modal", None)
+        if cached is None or cached[0] != key:
+            cs = cross_section(
+                self.grid, stackup, self.axis, self.ta, self.tb, edge_correction=edge_correction
+            )
+            lo = max(waveform.f_center - waveform.f_half_width, 0.3 * waveform.f_center)
+            hi = waveform.f_center + waveform.f_half_width
+            self._modal = (key, mode_profile(cs, stackup, lo, hi, dt, cpml))
+        prof = self._modal[1]
+        a, t = self.axis, self.taxis
+        tcomp = "e" + "xyz"[t]
+        w2 = (2.0 * math.pi * waveform.f_center) ** 2
+        out = []
+        for comp, p0, p2 in (("ez", prof.jz0, prof.jz2), (tcomp, prof.jt0, prof.jt2)):
+            keep = (np.abs(p0) > 1e-6) | (np.abs(p2) * w2 > 1e-6)
+            jj, kk = np.nonzero(keep)
+            ijk = [None, None, kk]
+            ijk[a] = np.full(jj.shape, self.i_src)
+            ijk[t] = jj
+            idx = self.grid.flat_index(comp, *ijk)
+            out.append(
+                ProfileSource(
+                    comp, idx, amplitude * p0[jj, kk], amplitude * p2[jj, kk], waveform, dt
+                )
+            )
+        return out
+
     def feed_pixels(self) -> tuple[slice, slice]:
         """Pixel slices (x, y) of the feed strip from the domain edge to the reference plane."""
         along = slice(0, self.i_ref) if self.sign > 0 else slice(self.i_ref, None)
@@ -367,12 +430,18 @@ class LineSpec:
     # (src_cells − meas_cells − 1, plus one half): the power factor is measured at that
     # distance, where the incident wave of an excited port is measured (0: not set).
     src_gap_cells: int = 0
+    # The copper-edge correction (`edges`) on the strip's edges.
+    edge_correction: bool = False
+    # The port source, "static" or "mode" (`PortGeometry.sources`).
+    port_source: str = "static"
 
     def key(self, omega) -> str:
-        blob = json.dumps(
-            {"spec": _jsonable(asdict(self)), "omega": [float(w) for w in np.asarray(omega)]},
-            sort_keys=True,
-        )
+        d = {"spec": _jsonable(asdict(self)), "omega": [float(w) for w in np.asarray(omega)]}
+        if self.edge_correction:
+            from yapnr.rf.edges import MODEL
+
+            d["edge_model"] = MODEL
+        blob = json.dumps(d, sort_keys=True)
         return hashlib.sha256(blob.encode()).hexdigest()
 
 
@@ -556,6 +625,8 @@ def calibrate_line(
     ).on(grid)
     g[:, p1.ta : p1.tb] = spec.stackup.g_max
     st.set_pixels(g)
+    if spec.edge_correction:
+        st.set_edge_correction((g > 0).astype(np.float64))
     sim = Simulation(grid, st, dt=spec.dt, cpml=spec.cpml, backend=backend, dtype=dtype)
     f = omega / (2 * np.pi)
     pulse = GaussianPulse.for_band(float(f.min()), float(f.max()))
@@ -572,7 +643,19 @@ def calibrate_line(
     probes = p1.probes + p2.probes + [p for b in sections for p in b.probes]
     if pp.i_cell != p1.i_cell:
         probes += pp.probes
-    res = sim.run(p1.mode_sources(pulse, sim.dt), probes, omega, stop)
+    res = sim.run(
+        p1.sources(
+            pulse,
+            sim.dt,
+            spec.stackup,
+            kind=spec.port_source,
+            edge_correction=spec.edge_correction,
+            cpml=spec.cpml,
+        ),
+        probes,
+        omega,
+        stop,
+    )
     v1, i1 = p1.voltage(res.dft), p1.current(res.dft)
     v2, i2 = p2.voltage(res.dft), p2.current(res.dft)
     zc, k = two_plane_line(v1, i1, v2, i2, gap * spec.pitch, k_guess)

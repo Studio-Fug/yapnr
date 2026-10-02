@@ -11,6 +11,7 @@ relative); also the length-scale constraint gradients at β = 128.
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 
 import numpy as np
 
@@ -57,6 +58,41 @@ class PipelineGradientTest(unittest.TestCase):
         gp, _ = self.p.param.lengthscale(self.x + h * self.v, 128.0, ls)
         gm, _ = self.p.param.lengthscale(self.x - h * self.v, 128.0, ls)
         np.testing.assert_allclose(dg @ self.v, (gp - gm) / (2 * h), rtol=1e-5)
+
+
+class EdgeCorrectionPipelineGradientTest(PipelineGradientTest):
+    """The same with the copper-edge correction (`edges`: ε and μ next to the copper's edges
+    follow ρ̄) and the modal port source; the correction's part of the gradient comes from E
+    and H DTFTs around the copper plane (`edges.kernels`). Measured: 1e-10 relative."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = tiny_spec(radiated=True)
+        spec = spec.replace(
+            optimizer=OptimizerSpec(damping=0.5),
+            solver=replace(spec.solver, edge_correction=True, port_source="mode"),
+        )
+        cls.p = p = Problem(spec, exact=True, calibrations=nominal_calibration())
+        rng = np.random.default_rng(5)
+        cls.x = rng.uniform(0.3, 0.7, p.param.n_dof)
+        cls.beta = 8.0
+        ev = p.evaluate(p.param.rho_bar(cls.x, cls.beta))
+        cls.ev = ev
+        cls.grad = p.param.vjp(cls.x, cls.beta, ev.grads)
+        cls.v = rng.standard_normal(cls.x.size)
+
+    def test_edge_part_matters(self):
+        p = self.p
+        self.assertTrue(p.sim.structure.edge_correction)
+        orig = p._edge_gradient
+        p._edge_gradient = lambda gr: 0.0
+        try:
+            ev = p.evaluate(p.param.rho_bar(self.x, self.beta))
+        finally:
+            p._edge_gradient = orig
+        without = p.param.vjp(self.x, self.beta, ev.grads) @ self.v
+        full = self.grad @ self.v
+        self.assertGreater(np.abs(full - without).min(), 1e-3 * np.abs(full).max())
 
 
 class ReactivePipelineGradientTest(PipelineGradientTest):

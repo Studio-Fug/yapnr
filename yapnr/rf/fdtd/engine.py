@@ -5,7 +5,9 @@ One step (n → n + 1):
     H^{n+½} = H^{n−½} − (Δt/μ0) (curl E^n + K^n)            (CPML ψ terms in the slabs)
     E^{n+1} = Ca E^n + Cb (curl H^{n+½} − J^{n+½})          (interior, non-PEC edges)
 
-with Ca, Cb from `Structure.coefficients`. An inductive copper sheet (`Structure.set_sheet`)
+with Ca, Cb from `Structure.coefficients`. The copper-edge correction (`edges`) scales ε on a
+few E planes (in Ca, Cb) and 1/μ on a few H planes (the H update of those planes is scaled
+after the fact). An inductive copper sheet (`Structure.set_sheet`)
 adds its branch currents: the explicit part Σ w (1 + k) J^n/(2Δz) is subtracted from the curl
 before the update and the branch states advance after it (and after the sources), J^{n+1} =
 k J^n + (b/2)(E^{n+1} + E^n). The outer boundary and the ground plane are PEC:
@@ -18,6 +20,7 @@ The code path is shared; only a handful of array primitives differ (`_NumpyOps`,
 
 from __future__ import annotations
 
+import math
 import time
 from dataclasses import dataclass, field
 
@@ -114,6 +117,13 @@ class _NumpyOps:
         np.copyto(dst, src)
 
     @staticmethod
+    def blend_(x, old, m):
+        """x ← old + m·(x − old)."""
+        x -= old
+        x *= m
+        x += old
+
+    @staticmethod
     def to_numpy(a):
         return np.asarray(a)
 
@@ -177,6 +187,10 @@ class _TorchOps:
     @staticmethod
     def copy_into(src, dst):
         dst.copy_(src)
+
+    def blend_(self, x, old, m):
+        """x ← old + m·(x − old) (one fused op)."""
+        self.torch.lerp(old, x, m, out=x)
 
     @staticmethod
     def to_numpy(a):
@@ -349,6 +363,18 @@ class Simulation:
             self._ca[comp] = self.ops.array(ca[sl])
             self._cb[comp] = self.ops.array(cb[sl])
             self._cb_full[comp] = cb  # float64, for source scaling
+        # Copper-edge correction (`edges`): 1/μr on a few H planes around the copper plane.
+        # The H update of those planes (with its sources) is scaled after the fact,
+        # H ← H_old + (1/μr)(H − H_old), which is the update with μ = μ0 μr there.
+        self._mu = []
+        for comp in H_COMPONENTS:
+            m = self.structure.mu_factor(comp)
+            if m is None:
+                continue
+            from yapnr.rf.edges import planes
+
+            ks = planes(self.grid, comp)
+            self._mu.append((comp, ks[0], ks[-1] + 1, self.ops.array(m), self.ops.zeros(m.shape)))
         self._sheet = {}
         st = self.structure
         if st.inductive:
@@ -495,11 +521,15 @@ class Simulation:
         t0 = time.perf_counter()
         n = 0
         while n < stop.max_steps:
+            for comp, k0, k1, _, old in self._mu:
+                ops.copy_into(self.f[comp][:, :, k0:k1], old)
             self._step_h()
             for s, idx, scale in h_src:
                 v = s.values(n)
                 if v is not None:
                     ops.sub_at(self.f[s.comp], idx, scale * v)
+            for comp, k0, k1, m, old in self._mu:
+                ops.blend_(self.f[comp][:, :, k0:k1], old, m)
             if n % decimation == 0:
                 for p in h_probes:
                     acc[p.name].add(ops.take(self.f[p.comp], pidx[p.name]), n, decimation)
@@ -521,6 +551,10 @@ class Simulation:
                 cur = {k: acc[k].value for k in check_names}
                 if prev is not None:
                     change = relative_change(cur, prev, check_names)
+                    if not math.isfinite(change):
+                        raise FloatingPointError(
+                            f"the run diverged at step {n} (time step above the stable limit?)"
+                        )
                     history.append((n, change))
                     good = good + 1 if change < stop.tol else 0
                     if good >= stop.consecutive:

@@ -21,6 +21,15 @@ values lie below them, so the epigraph value does not increase from one iteratio
 Each inner iteration costs one forward simulation per excitation. A step whose `max_inner`
 inner iterations all fail is rejected (`accepted` False, x unchanged); the state carries the
 raised curvature, so calling again at the same point continues the inner iterations.
+
+`trust_step` is the other safeguard, adaptive move limits with a step test on the epigraph
+value itself (a trust region in the max-norm, as in move-limit strategies for MMA): the
+subproblem is solved with the current move; the new point is accepted when its true epigraph
+value is at most t_k + slack·max(1, |t_k|), else the move halves and the subproblem is solved
+again from x_k with the same asymptotes. The test is on the maximum, not on every constraint
+(which at high β the conservative variant rarely satisfies), so near-binary designs whose
+boundary pixel flips break a line are refused at the price of one forward run per refusal,
+while ordinary steps cost nothing extra (their forward runs are the next iteration's).
 """
 
 from __future__ import annotations
@@ -44,6 +53,16 @@ class EpigraphStep:
     inner: int = 0  # conservative variant: subproblems solved (and points evaluated)
     accepted: bool = True  # conservative variant: False when x stayed at x_k (rejected)
     t_new: float | None = None  # conservative variant: max_k f_k(x_{k+1})
+
+
+@dataclass
+class TrustResult:
+    """The result of an adaptive-move step (`Epigraph.trust_step`)."""
+
+    step: EpigraphStep
+    move: float  # the move of the accepted (or last refused) subproblem
+    trials: int  # subproblems solved and points evaluated
+    t_trials: list  # the true epigraph value of every trial point
 
 
 @dataclass
@@ -118,3 +137,51 @@ class Epigraph:
             accepted=ok,
             t_new=float(np.max(true[:k])) - shift,
         )
+
+    def trust_step(
+        self,
+        x: np.ndarray,
+        f: np.ndarray,
+        df: np.ndarray,
+        state: MMAState,
+        g: np.ndarray | None = None,
+        dg: np.ndarray | None = None,
+        *,
+        move: float,
+        evaluate,
+        max_inner: int = 4,
+        slack: float = 0.05,
+        move_min: float = 1e-3,
+        xmin=0.0,
+        xmax=1.0,
+    ) -> TrustResult:
+        """One adaptive-move step (see the module doc). `evaluate(x̂)` returns (f, g) at x̂
+        (no gradients). When every trial is refused, x stays (`accepted` False) and the state
+        is unchanged; the caller keeps the halved move for the next call."""
+        t = float(np.max(f))
+        limit = t + slack * max(1.0, abs(t))
+        trials = []
+        mv = float(move)
+        step = None
+        for _ in range(max_inner):
+            step = self.step(x, f, df, state, g, dg, move=mv, xmin=xmin, xmax=xmax)
+            fh, _ = evaluate(step.x)
+            th = float(np.max(np.asarray(fh, np.float64)))
+            trials.append(th)
+            if th <= limit:
+                step.t_new = th
+                return TrustResult(step, mv, len(trials), trials)
+            if mv <= move_min:
+                break
+            mv = max(move_min, 0.5 * mv)
+        refused = EpigraphStep(
+            x=np.asarray(x, np.float64).copy(),
+            t=t,
+            shift=step.shift,
+            newton_steps=step.newton_steps,
+            state=state,
+            inner=len(trials),
+            accepted=False,
+            t_new=t,
+        )
+        return TrustResult(refused, mv, len(trials), trials)

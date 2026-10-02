@@ -153,10 +153,25 @@ class Domain:
             g[i0:i1, j0:j1] = g_design
         return g
 
-    def structure(self, g_design: np.ndarray | None = None) -> Structure:
+    def structure(
+        self, g_design: np.ndarray | None = None, copper: np.ndarray | None = None
+    ) -> Structure:
+        """The structure with the design window's conductances `g_design`; with `copper` (the
+        window's copper fraction) the copper-edge correction is on (`edges`)."""
         s = Structure(self.grid, self.spec.stackup)
         s.set_pixels(self.pixels(g_design))
+        if copper is not None:
+            s.set_edge_correction(self.copper(copper))
         return s
+
+    def copper(self, c_design: np.ndarray | None = None) -> np.ndarray:
+        """The copper fraction of every pixel of the plane: 1 on the feeds, the design window
+        from `c_design`, 0 elsewhere."""
+        c = self.feed.astype(np.float64)
+        if c_design is not None:
+            i0, i1, j0, j1 = self.window
+            c[i0:i1, j0:j1] = c_design
+        return c
 
     def design_probes(self, prefix: str = "design"):
         i0, i1, j0, j1 = self.window
@@ -205,7 +220,13 @@ class Domain:
         i0, i1, j0, j1 = self.window
         return full[..., i0:i1, j0:j1]
 
-    def line_spec(self, width_cells: int, dt: float):
+    def line_spec(
+        self,
+        width_cells: int,
+        dt: float,
+        edge_correction: bool = False,
+        port_source: str = "static",
+    ):
         """The calibration spec of a feed of `width_cells` on this domain's cross-section."""
         from yapnr.rf.ports import LineSpec
 
@@ -223,6 +244,8 @@ class Domain:
             ratio=s.ratio,
             lateral_max_cell=s.max_cell,
             src_gap_cells=max(1, s.src_cells - s.meas_cells - 1),
+            edge_correction=edge_correction,
+            port_source=port_source,
         )
 
 

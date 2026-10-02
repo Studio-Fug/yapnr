@@ -40,8 +40,9 @@ def _bc(v, a):
     return v.reshape(s)
 
 
-def apply_curl_curl(grid: Grid, e: dict, eps: dict, masks: dict) -> dict:
-    """M e = ε⁻¹ C_H μ0⁻¹ C_E e on the free edges (no CPML)."""
+def apply_curl_curl(grid: Grid, e: dict, eps: dict, masks: dict, mu: dict | None = None) -> dict:
+    """M e = ε⁻¹ C_H μ⁻¹ C_E e on the free edges (no CPML); `mu` maps an H component to its
+    1/μr on the planes the copper-edge correction changes (`Structure.mu_factor`)."""
     x, y, z = grid.x, grid.y, grid.z
 
     def d(a, ax):
@@ -50,6 +51,13 @@ def apply_curl_curl(grid: Grid, e: dict, eps: dict, masks: dict) -> dict:
     hx = (d(e["ez"], 1) / _bc(y.primary, 1) - d(e["ey"], 2) / _bc(z.primary, 2)) / MU0
     hy = (d(e["ex"], 2) / _bc(z.primary, 2) - d(e["ez"], 0) / _bc(x.primary, 0)) / MU0
     hz = (d(e["ey"], 0) / _bc(x.primary, 0) - d(e["ex"], 1) / _bc(y.primary, 1)) / MU0
+    if mu:
+        from yapnr.rf.edges import planes
+
+        for comp, h in (("hx", hx), ("hy", hy), ("hz", hz)):
+            if mu.get(comp) is not None:
+                ks = planes(grid, comp)
+                h[:, :, ks[0] : ks[-1] + 1] *= mu[comp]
     out = {}
     cx = np.zeros(grid.shape("ex"))
     cx[:, 1:-1, :] += d(hz, 1) / _bc(y.dual[1:-1], 1)
@@ -74,6 +82,9 @@ def max_eigenvalue(grid: Grid, structure=None, *, tol: float = 1e-6, max_iter: i
         c: (structure.eps(c) if structure is not None else np.full(grid.shape(c), EPS0))
         for c in E_COMPONENTS
     }
+    mu = None
+    if structure is not None and structure.edge_correction:
+        mu = {c: structure.mu_factor(c) for c in ("hx", "hy", "hz")}
     w = {c: grid.volume(c) * eps[c] for c in E_COMPONENTS}
     # Deterministic start with a strong Nyquist component: (−1)^(i+j+k).
     e = {}
@@ -85,7 +96,7 @@ def max_eigenvalue(grid: Grid, structure=None, *, tol: float = 1e-6, max_iter: i
     lam_prev = 0.0
     lam = 0.0
     for it in range(1, max_iter + 1):
-        me = apply_curl_curl(grid, e, eps, masks)
+        me = apply_curl_curl(grid, e, eps, masks, mu)
         num = sum(float(np.sum(w[c] * e[c] * me[c])) for c in E_COMPONENTS)
         den = sum(float(np.sum(w[c] * e[c] * e[c])) for c in E_COMPONENTS)
         lam = num / den

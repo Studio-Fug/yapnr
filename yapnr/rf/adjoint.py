@@ -38,7 +38,9 @@ A typical iteration (one excitation, one objective group):
     df_drho_bar = dom.window_pixels(grad.pixels(dom.grid)) * sheet_conductance_derivative(...)
 
 `probes` must include the design probes, and `objective` maps the probe DTFTs (torch
-complex128) to the (M,) per-frequency values.
+complex128) to the (M,) per-frequency values. With the copper-edge correction (`edges`) the
+design also sets ε and μ next to the copper's edges; `edge_probes` (`edges.design_probes`, in
+the forward run too) give their part of the gradient, `Gradient.edge_pixels`.
 """
 
 from __future__ import annotations
@@ -130,6 +132,17 @@ class Gradient:
     adjoint: RunResult
     k_gx: tuple = ()  # (Re, Im) of K on copper-plane Ex edges, (M, Nx, Ny+1) each
     k_gy: tuple = ()  # (Re, Im) on Ey edges, (M, Nx+1, Ny) each
+    # ∂F/∂(edge-correction factor) per component (`edges.kernels`), when the correction is on.
+    edge: dict | None = None
+
+    def edge_pixels(self, structure) -> np.ndarray:
+        """∂F_m/∂c_p (M, Nx, Ny) through the copper-edge correction's factors (`edges`), c the
+        pixel copper fraction of the plane; zero without the correction."""
+        from yapnr.rf.edges import vjp
+
+        if not self.edge:
+            return 0.0
+        return vjp(structure.copper, structure.edge_constants(), self.edge)
 
     def pixels(self, grid) -> np.ndarray:
         """∂F_m/∂G_p for every pixel of the copper plane, (M, Nx, Ny) (resistive sheet)."""
@@ -154,6 +167,7 @@ def gradient(
     stop: StopRule,
     *,
     decimation: int | str = 1,
+    edge_probes: list[Probe] = (),
 ) -> Gradient:
     """Run the adjoint for Wirtinger gradients `grads` (name → (M, P)) of the forward probes
     and recombine onto the design-plane edges (which `forward` must have recorded).
@@ -166,7 +180,9 @@ def gradient(
     if decimation == "auto":
         f_top = max((s.fit.f_top for s in sources), default=float(omega.max()) / (2 * np.pi))
         decimation = dtft_decimation(f_top, sim.dt)
-    adj = sim.run(sources, design_probes, omega, stop, decimation=decimation)
+    adj = sim.run(
+        sources, list(design_probes) + list(edge_probes), omega, stop, decimation=decimation
+    )
     big_omega = numerical_omega(omega, sim.dt)[:, None]
     c = conductance_factor(omega, sim.dt)[:, None]
     grid = sim.grid
@@ -196,6 +212,18 @@ def gradient(
             kr, ki = k_gx if p.comp == "ex" else k_gy
             kr[:, i, j] += -big_omega * vol * prod_im / dz
             ki[:, i, j] += big_omega * vol * prod_re / dz
+    edge = None
+    if edge_probes:
+        from yapnr.rf.edges import kernels
+
+        edge = kernels(sim.structure, edge_probes, forward.dft, adj.dft, omega, sim.dt)
     return Gradient(
-        omega=omega, d_sigma=d_sigma, d_gx=d_gx, d_gy=d_gy, adjoint=adj, k_gx=k_gx, k_gy=k_gy
+        omega=omega,
+        d_sigma=d_sigma,
+        d_gx=d_gx,
+        d_gy=d_gy,
+        adjoint=adj,
+        k_gx=k_gx,
+        k_gy=k_gy,
+        edge=edge,
     )

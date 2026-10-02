@@ -78,6 +78,62 @@ class GaussianPulse:
         return cls(fc, hw)
 
 
+@dataclass(frozen=True)
+class PulseSecondDerivative:
+    """s''(t) of a `GaussianPulse` s (analytic), for sources whose spectrum carries a factor
+    ω² (ω² S(ω) is the transform of −s'' with the e^{−iωt} convention)."""
+
+    pulse: GaussianPulse
+
+    @property
+    def t_end(self) -> float:
+        return self.pulse.t_end
+
+    @property
+    def f_top(self) -> float:
+        return self.pulse.f_top
+
+    def __call__(self, t):
+        p = self.pulse
+        t = np.asarray(t, dtype=np.float64) - p.t0
+        w = 2.0 * math.pi * p.f_center
+        tau2 = p.tau * p.tau
+        g = np.exp(-t * t / tau2)
+        g1 = -2.0 * t / tau2 * g
+        g2 = (4.0 * t * t / (tau2 * tau2) - 2.0 / tau2) * g
+        sn, cs = np.sin(w * t), np.cos(w * t)
+        return -w * w * sn * g + 2.0 * w * cs * g1 + sn * g2
+
+
+@dataclass
+class ProfileSource:
+    """A source with two per-edge profiles: values(n) = amp0 · s(t_n) − amp2 · s''(t_n) for a
+    `GaussianPulse` s (a spectrum (amp0 + ω² amp2) S(ω); the modal port source)."""
+
+    comp: str
+    index: np.ndarray
+    amp0: np.ndarray
+    amp2: np.ndarray
+    waveform: GaussianPulse
+    dt: float
+
+    def __post_init__(self) -> None:
+        self.index = np.asarray(self.index, dtype=np.int64).ravel()
+        self.amp0 = np.asarray(self.amp0, dtype=np.float64).ravel()
+        self.amp2 = np.asarray(self.amp2, dtype=np.float64).ravel()
+        self._d2 = PulseSecondDerivative(self.waveform)
+
+    @property
+    def end_step(self) -> int:
+        return int(math.ceil(self.waveform.t_end / self.dt)) + 1
+
+    def values(self, n: int):
+        if n > self.end_step:
+            return None
+        t = source_time(n, self.dt, is_magnetic(self.comp))
+        return self.amp0 * float(self.waveform(t)) - self.amp2 * float(self._d2(t))
+
+
 @dataclass
 class PulseSource:
     """A source with one waveform scaled per edge: values(n) = amplitude · waveform(t_n)."""

@@ -3,12 +3,22 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-09-30 (PR4, #10, the ladder animations, the atopile toolchain and the privacy-scan
-trailer rule merged; line groups, hard board edges, the hierarchical ladder driver and their
-animations on `claude/animations-groups-hier`).
+Last updated: 2026-10-02 (fab outputs and staged ordering, F2, F1 and O1, on `claude/fab-order`).
+Before that, 2026-09-30: PR4, #10, the ladder animations, the atopile toolchain and the
+privacy-scan trailer rule merged; line groups, hard board edges, the hierarchical ladder driver and
+their animations on `claude/animations-groups-hier`.
 
 ## In progress
 
+- **Fab outputs and staged ordering** (branch `claude/fab-order`; design
+  [docs/design/fab-and-ordering.md](docs/design/fab-and-ordering.md), guide
+  [docs/fab-and-ordering.md](docs/fab-and-ordering.md)). Built: vendor profiles and stackups as
+  data (`oshpark-2l/4l/6l`, `jlc-4l`; drafts `jlc-6l`, `pcbway-std`, `pcbway-hf-2l`), engine
+  support for them (`PNR_FAB_PROFILE`, `run.py --fab-profile`; `legacy` and `jlc-pofv` unchanged,
+  golden-pinned), `yapnr fab profiles|show|check|build|preview` and `yapnr order stage|vendors`
+  (staging only, never uploads). Ladder cases 04 (`oshpark-2l`) and 08 (`oshpark-4l`, `jlc-4l`,
+  `pcbway-std`) route clean under them and stage as dry runs. Not built: O2 and O3 (decisions D1
+  and D3), JLC rotation corrections in the part cache.
 - **Merged today:** PR3a (#9, code key scheme 2 and the engine format), the viewer (#12, PR4:
   `yapnr/viewer`, `bazel run //:viewer -- --root <live>`, paid features off by default, elkjs and
   three.js fetched pinned; guide [docs/viewer.md](docs/viewer.md), choices in
@@ -130,16 +140,19 @@ animations on `claude/animations-groups-hier`).
 13. First release tag `v0.1.0` (owner) once the engine runs end to end inside the published image on
     both architectures (the PR6b example), after the `Image` run of that commit on `main` is green;
     make the `image` check required then.
-14. Owner: decide whether the ladder should default to `--fab-profile jlc-pofv` (the engine's
+14. Owner, fab and ordering (design §12): decisions D1 to D5. For the first OSH Park order, route
+    the board under an OSH Park profile, run `yapnr order stage BOARD --vendor oshpark`, drop the
+    zip on oshpark.com, check the preview and pay there; RF boards also pin `--stackup` (D4).
+15. Owner: decide whether the ladder should default to `--fab-profile jlc-pofv` (the engine's
     default JLCPCB profile) instead of `legacy` (the fixtures' own rules; `docs/decisions.md`).
     With `route_case.py` applying the profile, `jlc-pofv` passes every case too (2026-09-30:
     pool seed 0, 8 of 8; baseline seeds 0 and 1, 16 of 16; other boards than legacy's, e.g. case
     07 with 17 vias instead of 19). Flipping it changes the rules the ladder README states and
     needs a refresh of `docs/animations/`. The first `ladder.yaml` run (the pull request of
     `claude/ladder-animations`) is the first run of its container path.
-15. Rebuild the KiCad base monthly (bump `docker/yapnr-kicad/TAG` to the next `-N`), or with the
+16. Rebuild the KiCad base monthly (bump `docker/yapnr-kicad/TAG` to the next `-N`), or with the
     Dependabot `ubuntu` digest update (docs/releases.md, "Maintaining the images").
-16. Showcases (`claude/animations-groups-hier`): the first nightly showcase step on the arm64
+17. Showcases (`claude/animations-groups-hier`): the first nightly showcase step on the arm64
     runner (its runtime and its placements are unmeasured; `showcase-edge-io.webp` fits its
     2.5 MB budget at quality 70 by 450 bytes here, the encoder steps down where it must). The
     ladder's own animations still sweep single parts through half-turns (their timelines are

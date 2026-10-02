@@ -216,6 +216,7 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/viewer.html">The live viewer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/frontends/atopile.html">The atopile toolchain</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/part-cache.html">The part cache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/fab-and-ordering.html">Fab bundles and staged orders</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/releases.html">Releases and versioning</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
@@ -228,6 +229,7 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/fea-integration.html">Design: thermal and electromagnetic field solvers (FEA) in yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/references.html">Foundations and references</a></li>
@@ -286,12 +288,22 @@
 <h1>Worklog<a class="headerlink" href="#worklog" title="Link to this heading">¶</a></h1>
 <p>A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.</p>
-<p>Last updated: 2026-09-30 (PR4, #10, the ladder animations, the atopile toolchain and the privacy-scan
-trailer rule merged; line groups, hard board edges, the hierarchical ladder driver and their
-animations on <code class="docutils literal notranslate"><span class="pre">claude/animations-groups-hier</span></code>).</p>
+<p>Last updated: 2026-10-02 (fab outputs and staged ordering, F2, F1 and O1, on <code class="docutils literal notranslate"><span class="pre">claude/fab-order</span></code>).
+Before that, 2026-09-30: PR4, #10, the ladder animations, the atopile toolchain and the
+privacy-scan trailer rule merged; line groups, hard board edges, the hierarchical ladder driver and
+their animations on <code class="docutils literal notranslate"><span class="pre">claude/animations-groups-hier</span></code>.</p>
 <section id="in-progress">
 <h2>In progress<a class="headerlink" href="#in-progress" title="Link to this heading">¶</a></h2>
 <ul class="simple">
+<li><p><strong>Fab outputs and staged ordering</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/fab-order</span></code>; design
+<a class="reference internal" href="docs/design/fab-and-ordering.html"><span class="std std-doc">docs/design/fab-and-ordering.md</span></a>, guide
+<a class="reference internal" href="docs/fab-and-ordering.html"><span class="std std-doc">docs/fab-and-ordering.md</span></a>). Built: vendor profiles and stackups as
+data (<code class="docutils literal notranslate"><span class="pre">oshpark-2l/4l/6l</span></code>, <code class="docutils literal notranslate"><span class="pre">jlc-4l</span></code>; drafts <code class="docutils literal notranslate"><span class="pre">jlc-6l</span></code>, <code class="docutils literal notranslate"><span class="pre">pcbway-std</span></code>, <code class="docutils literal notranslate"><span class="pre">pcbway-hf-2l</span></code>), engine
+support for them (<code class="docutils literal notranslate"><span class="pre">PNR_FAB_PROFILE</span></code>, <code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--fab-profile</span></code>; <code class="docutils literal notranslate"><span class="pre">legacy</span></code> and <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> unchanged,
+golden-pinned), <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span> <span class="pre">profiles|show|check|build|preview</span></code> and <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage|vendors</span></code>
+(staging only, never uploads). Ladder cases 04 (<code class="docutils literal notranslate"><span class="pre">oshpark-2l</span></code>) and 08 (<code class="docutils literal notranslate"><span class="pre">oshpark-4l</span></code>, <code class="docutils literal notranslate"><span class="pre">jlc-4l</span></code>,
+<code class="docutils literal notranslate"><span class="pre">pcbway-std</span></code>) route clean under them and stage as dry runs. Not built: O2 and O3 (decisions D1
+and D3), JLC rotation corrections in the part cache.</p></li>
 <li><p><strong>Merged today:</strong> PR3a (#9, code key scheme 2 and the engine format), the viewer (#12, PR4:
 <code class="docutils literal notranslate"><span class="pre">yapnr/viewer</span></code>, <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">run</span> <span class="pre">//:viewer</span> <span class="pre">--</span> <span class="pre">--root</span> <span class="pre">&lt;live&gt;</span></code>, paid features off by default, elkjs and
 three.js fetched pinned; guide <a class="reference internal" href="docs/viewer.html"><span class="std std-doc">docs/viewer.md</span></a>, choices in
@@ -414,6 +426,9 @@ and none of the venv’s compiled packages, and add a smoke check for it.</p></l
 <li><p>First release tag <code class="docutils literal notranslate"><span class="pre">v0.1.0</span></code> (owner) once the engine runs end to end inside the published image on
 both architectures (the PR6b example), after the <code class="docutils literal notranslate"><span class="pre">Image</span></code> run of that commit on <code class="docutils literal notranslate"><span class="pre">main</span></code> is green;
 make the <code class="docutils literal notranslate"><span class="pre">image</span></code> check required then.</p></li>
+<li><p>Owner, fab and ordering (design §12): decisions D1 to D5. For the first OSH Park order, route
+the board under an OSH Park profile, run <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span> <span class="pre">BOARD</span> <span class="pre">--vendor</span> <span class="pre">oshpark</span></code>, drop the
+zip on oshpark.com, check the preview and pay there; RF boards also pin <code class="docutils literal notranslate"><span class="pre">--stackup</span></code> (D4).</p></li>
 <li><p>Owner: decide whether the ladder should default to <code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">jlc-pofv</span></code> (the engine’s
 default JLCPCB profile) instead of <code class="docutils literal notranslate"><span class="pre">legacy</span></code> (the fixtures’ own rules; <code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code>).
 With <code class="docutils literal notranslate"><span class="pre">route_case.py</span></code> applying the profile, <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> passes every case too (2026-09-30:

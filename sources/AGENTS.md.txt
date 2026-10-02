@@ -17,6 +17,11 @@ conflict, stop and ask the owner.
   claim completion. Electrical contracts are never relaxed without the designer.
 - **New engine behaviour lands behind a default-off flag,** with a measured A/B result in the commit
   body.
+- **Ordering is staging only, and agents only dry-run it.** Agents run `yapnr order stage` only
+  with `--dry-run`. They never upload a file to a vendor or any third-party service, never call a
+  vendor API, and never open a vendor page on a human's behalf. Paying, confirming an order,
+  accounts and terms belong to the human on the vendor's page
+  ([docs/fab-and-ordering.md](docs/fab-and-ordering.md)).
 
 ## Repository rules
 

@@ -239,6 +239,12 @@ def parser():
         help="Also offer the hard rungs (hard_rungs.hard_rungs(), outside the ladder) to --case",
     )
     ap.add_argument(
+        "--design-json",
+        action="append",
+        default=[],
+        help="Also offer the designs in this JSON list (e.g. lenmatch_scratch.py write) to --case",
+    )
+    ap.add_argument(
         "--lane",
         choices=("nightly", "manual"),
         help="Run the hard rungs whose ci.lane is LANE (with any --case given); implies --hard",
@@ -280,6 +286,8 @@ def main():
     out.mkdir(parents=True, exist_ok=False)
     hard = hard_rungs() if args.hard or args.lane else []
     allcases = designs() + (showcases() if args.showcases else []) + hard
+    for path in args.design_json:
+        allcases += json.loads(Path(path).read_text())
     if args.lane:
         lane = {c["name"] for c in hard if c["ci"]["lane"] == args.lane}
         cases = [c for c in allcases if c["name"] in lane or c["name"] in args.case]

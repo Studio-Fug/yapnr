@@ -42,6 +42,9 @@ from .geometry import (
 from .legalize import LegalizationError
 from .metrics import hard_violations, hpwl
 from .placer import PlacementReport, place
+from .sides import opposite
+from .sides import plan as side_plan
+from .sides import same_footprint, under_body_sides
 
 
 @dataclass(frozen=True)
@@ -210,10 +213,13 @@ def initial_starts(graph, constraints, config, seed=0, orient=True):
     Hard-fixed centres/rotations are left for the existing constraint resolver.
     """
     width, height = outline_size(graph, constraints)
-    fixed = set(resolve_fixed_poses(graph, constraints)) | {
-        c.ref for c in graph.components if c.locked
-    }
+    fixed_poses = resolve_fixed_poses(graph, constraints)
+    fixed = set(fixed_poses) | {c.ref for c in graph.components if c.locked}
     movable = sorted((c for c in graph.components if c.ref not in fixed), key=lambda c: c.ref)
+    # Side-free parts (pnr.place.sides): explicit starts also draw sides, from their
+    # own generator so positions and rotations are those of a single-sided start.
+    plan = side_plan(graph, constraints)
+    free = [r for r in plan.free if r not in fixed]
     result = [dict(id="start-00", kind="legacy-global", seed=seed, positions=None, rotations=None)]
     result.append(
         dict(
@@ -271,6 +277,16 @@ def initial_starts(graph, constraints, config, seed=0, orient=True):
                 rotations=rotations if orient else None,
             )
         )
+        if free:
+            side_rng = random.Random(this_seed ^ SIDE_SALT)
+            result[-1]["sides"] = {
+                ref: (
+                    opposite(plan.source[ref])
+                    if side_rng.random() < START_FLIP_PROBABILITY
+                    else plan.source[ref]
+                )
+                for ref in free
+            }
     # Reserve at most two of the bounded starts for otherwise easily-erased
     # under-body basins. This adds topology diversity, not more route budget.
     for start, basin in zip(result[2:4], _opposite_body_basins(graph, constraints)):
@@ -279,7 +295,46 @@ def initial_starts(graph, constraints, config, seed=0, orient=True):
         start["positions"][basin["ref"]] = basin["at"]
         if start["rotations"] is not None:
             start["rotations"][basin["ref"]] = basin["rot"]
+    if free:
+        _under_body_start(graph, plan, result, fixed_poses, width, height)
     return result
+
+
+# Side starts (pnr.place.sides): a free part starts on its other side with this
+# probability; the generator is salted apart from the position/rotation one.
+START_FLIP_PROBABILITY = 0.25
+SIDE_SALT = 0x5DE5
+UNDER_BODY_STEP_MM = 1.5
+
+
+def _under_body_start(graph, plan, result, fixed_poses, width, height):
+    """Turn the last explicit start into an under-body proposal: every free two-pin
+    part starts under the largest part it shares a net with, on the other side
+    (:func:`pnr.place.sides.under_body_sides`), spread along x; other free parts
+    start on their source side. A start, never a rule."""
+    under = under_body_sides(graph, plan)
+    start = next((s for s in reversed(result[2:]) if s["kind"] != "opposite-body-global"), None)
+    if not under or start is None:
+        return
+    start["kind"] = "under-body-sides"
+    start["sides"] = {ref: plan.source[ref] for ref in start["sides"]}
+    by_host = {}
+    for ref, (side, host) in sorted(under.items()):
+        start["sides"][ref] = side
+        by_host.setdefault(host, []).append(ref)
+    for host, refs in sorted(by_host.items()):
+        centre = (start["positions"] or {}).get(host) or fixed_poses.get(host)
+        if centre is None:
+            centre = graph.component(host).pos
+        for k, ref in enumerate(refs):
+            comp = graph.component(ref)
+            half_x = min(width / 2, comp.courtyard[0] / 2)
+            half_y = min(height / 2, comp.courtyard[1] / 2)
+            x = centre[0] + (k - (len(refs) - 1) / 2) * UNDER_BODY_STEP_MM
+            start["positions"][ref] = [
+                min(max(x, half_x), width - half_x),
+                min(max(centre[1], half_y), height - half_y),
+            ]
 
 
 def _pose(graph):
@@ -351,6 +406,22 @@ def diverse_shortlist(candidates, count, cost_key, mandatory=(), refs=None):
     return chosen
 
 
+def uses_other_side(candidate, plan):
+    """True when a pool candidate puts a part off its source side (pnr.place.sides)."""
+    return plan.active and any(
+        c.side != plan.source.get(c.ref, c.side) for c in candidate["graph"].components
+    )
+
+
+def keep_other_side(pool, required, key, plan):
+    """``required`` ids plus the cheapest (by ``key``) candidate of ``pool`` that uses
+    the other side, when the plan frees a part and none of ``required`` does."""
+    if not plan.active or any(uses_other_side(c, plan) for c in pool if c["id"] in required):
+        return required
+    users = sorted((c for c in pool if uses_other_side(c, plan)), key=lambda c: (c[key], c["id"]))
+    return required + [users[0]["id"]] if users else required
+
+
 def _hard_and_source_errors(candidate, source, constraints):
     errors = {k: v for k, v in hard_violations(candidate, constraints).items() if v}
     before = {c.ref: c for c in source.components}
@@ -359,15 +430,20 @@ def _hard_and_source_errors(candidate, source, constraints):
         changed.append("component_set")
     if [asdict(n) for n in candidate.nets] != [asdict(n) for n in source.nets]:
         changed.append("netlist")
+    plan = None
     for comp in candidate.components:
         original = before.get(comp.ref)
         if original is None:
             continue
-        if (
-            [asdict(p) for p in comp.pads] != [asdict(p) for p in original.pads]
-            or comp.side != original.side
-            or comp.footprint != original.footprint
-        ):
+        if comp.side != original.side:
+            # Only a part the side policy frees may change side, as the same
+            # footprint mirrored (pnr.place.sides).
+            plan = plan or side_plan(source, constraints)
+            if not plan.allows(comp.ref, comp.side) or not same_footprint(comp, original):
+                changed.append(comp.ref)
+        elif [asdict(p) for p in comp.pads] != [
+            asdict(p) for p in original.pads
+        ] or comp.footprint != original.footprint:
             changed.append(comp.ref)
     if changed:
         errors["source_geometry_changed"] = changed
@@ -433,6 +509,7 @@ def select_initial_placement(
     source = _prepared_source(graph, constraints, rules)
     fixed = set(resolve_fixed_poses(source, constraints))
     movable_refs = [c.ref for c in source.components if c.ref not in fixed]
+    plan = side_plan(source, constraints, rules)
     root = Path(output) if output else None
     if root:
         root.mkdir(parents=True, exist_ok=True)
@@ -493,6 +570,7 @@ def select_initial_placement(
                             channel_rules=rules,
                             initial_positions=start["positions"],
                             initial_rotations=start["rotations"],
+                            **({"initial_sides": start["sides"]} if start.get("sides") else {}),
                         )
                     except LegalizationError as error:
                         if not start.get("basin_anchors") or not legal:
@@ -561,6 +639,10 @@ def select_initial_placement(
                     hpwl_mm=hpwl(placed),
                     cheap_score=cheap_score(placed, rules),
                 )
+                if plan.active:
+                    record["other_side"] = sorted(
+                        c.ref for c in placed.components if c.side != plan.source.get(c.ref)
+                    )
                 if identity in seen:
                     record.update(status="duplicate", duplicate_of=seen[identity])
                     continue
@@ -612,8 +694,22 @@ def select_initial_placement(
     mandatory = [baseline["id"]]
     if incumbent and incumbent["id"] not in mandatory and config.route_finalists > 1:
         mandatory.append(incumbent["id"])
+
+    # With side-free parts, one candidate that uses the other side is kept through
+    # each shortlist (the cheapest by that stage's screen), so the routed comparison
+    # always includes one; the route objective still decides.
+    def other_side(candidate):
+        return uses_other_side(candidate, plan)
+
+    def with_other_side(pool, required, key):
+        return keep_other_side(pool, required, key, plan)
+
     proxy_candidates = diverse_shortlist(
-        legal, config.proxy_budget, "cheap_score", mandatory=mandatory, refs=movable_refs
+        legal,
+        config.proxy_budget,
+        "cheap_score",
+        mandatory=with_other_side(legal, mandatory, "cheap_score"),
+        refs=movable_refs,
     )
     for candidate in proxy_candidates:
         record = candidate["record"]
@@ -637,7 +733,7 @@ def select_initial_placement(
         proxy_candidates,
         config.route_finalists,
         "proxy_score",
-        mandatory=mandatory,
+        mandatory=with_other_side(proxy_candidates, mandatory, "proxy_score"),
         refs=movable_refs,
     )
     if _trace.current() is not None:  # PNR_TRACE_DIR only
@@ -657,6 +753,14 @@ def select_initial_placement(
         fixed_refs=sorted(fixed),
         movable_refs=sorted(movable_refs),
         shortlisted_finalists=[c["id"] for c in finalists],
+        **(
+            dict(
+                side_policy=plan.policy,
+                other_side_candidates=sorted(c["id"] for c in legal if other_side(c)),
+            )
+            if plan.active
+            else {}
+        ),
         shortlist_policy="baseline/incumbent, best estimated cost, unrepresented legal geometric basin, then RMS diversity",
         placement_optimizer_iterations_per_start=iters,
         minimum_finalist_pose_distance=min(

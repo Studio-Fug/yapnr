@@ -260,6 +260,7 @@ def _place_impl(
                 initial_positions=start.get("positions"),
                 initial_rotations=start.get("rotations"),
                 pair_weights=pair_weights,
+                **({"initial_sides": start["sides"]} if start.get("sides") else {}),
             )
         errors = _hard_and_source_errors(placed, source, constraints)
         from pnr.place.metrics import hard_violations

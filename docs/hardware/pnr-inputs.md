@@ -171,9 +171,21 @@ side_pref:
   top: [U*, J*] # ICs and connectors prefer the front
 ```
 
-> Note: in the current MVP `side_pref` compiles to a soft term but legalization
-> keeps parts on the top side (single-sided legalize); two-sided placement is a
-> tracked follow-on. `fixed.side` is honored end-to-end.
+A `side_pref` frees the parts it names to either side, under either
+`board.sides` policy: the preference is a cost (`weight` x 5 mm of wirelength for
+a part on the other side), not a lock. With `board.sides: double` every part
+nothing holds is free. A part stays on its source side when a hard `side` rule, a
+`fixed` pose, a source lock, a line group or row, a drilled pad, a keep-out or
+copper keep-out tied to it, a plane-access intent or a landing reserve holds it.
+
+For free parts, global placement relaxes the side with the position and
+rotation, the legalizer may take a slot on the other side, and a seeded detail
+pass tries flips and pairwise swaps. Every side choice is costed in wirelength
+millimetres: 3 mm for each non-plane net whose surface pins end up on both
+sides without a drilled pin (a layer change), the `side_pref` cost, and 0.5 mm
+for each part off its source side. Writeback flips a bottom part as KiCad's
+Flip does (mirrored footprint, every pad, graphic and text on `B.*`).
+`fixed.side` and `side` are honored end-to-end.
 
 ### `group` — cluster a subsystem (soft)
 

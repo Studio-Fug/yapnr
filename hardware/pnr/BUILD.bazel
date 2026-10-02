@@ -502,6 +502,23 @@ py_test(
     deps = [":pnr", ":pnr_place"],
 )
 
+# Double-sided placement end to end: global placement, legalizer, detail moves,
+# pool starts and shortlist, the source check, MC and relocation flips, routing.
+py_test(
+    name = "sides_placement_test",
+    size = "medium",
+    srcs = ["tests/test_sides_placement.py"],
+    legacy_create_init = False,
+    main = "tests/test_sides_placement.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("pyyaml"),
+    ],
+)
+
 py_test(
     name = "fanout_reserve_test",
     size = "small",

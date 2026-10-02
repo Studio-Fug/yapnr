@@ -81,7 +81,7 @@
       "value": true,
       "option": "Mark on PCB",
       "choices": "Remove Mark, Order Number, 2D barcode",
-      "src": "J-quote (the 'Mark on PCB' option; its default not confirmed)"
+      "src": "J-quote (the 'Mark on PCB' option: 'No mark will be added by default.')"
     },
     "alternates": []
   },

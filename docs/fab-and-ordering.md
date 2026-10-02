@@ -91,25 +91,25 @@ and the profile's custom rules ahead of any hand-written `.kicad_dru`. Then KiCa
 with a zone refill (`kicad-cli pcb drc --refill-zones --save-board --severity-all`). KiCad's DRC
 is the judge: no finding is relaxed. On top of it, the checks KiCad cannot express:
 
-| Code                | Checks                                                                                    |
-| ------------------- | ----------------------------------------------------------------------------------------- |
-| `FAB-DRC`           | KiCad DRC under the vendor's rules (errors, warnings, unconnected items)                  |
-| `FAB-LAYERS`        | the copper layer count against the profile and stackup                                    |
-| `FAB-OUTLINE`       | a closed outline; several outlines (a panel) with the vendor's panel rules                |
-| `FAB-SIZE`          | the vendor's minimum and maximum board size                                               |
-| `FAB-VIA-TYPE`      | blind, buried or micro vias on a through-via-only service                                 |
-| `FAB-DRILL`         | holes the vendor mills instead of drilling; slots and the minimum slot                    |
-| `FAB-CASTELLATED`   | castellated pads (OSH Park: "allowed, but not guaranteed"; JLC: the option and hole size) |
-| `FAB-STACKUP`       | the board's KiCad stackup against the ordered stackup                                     |
-| `FAB-RF`            | an RF footprint designed for another substrate than the ordered stackup                   |
-| `FAB-IMPEDANCE`     | impedance-relevant items on a service without impedance control                           |
-| `FAB-ALTERNATE`     | the substrate to pick at checkout when the vendor offers an alternate (OSH Park EM528)    |
-| `FAB-QTY`           | OSH Park: multiples of 3; JLCPCB and PCBWay: 5 or more                                    |
-| `FAB-MARKING`       | the order-number marking JLCPCB and PCBWay print unless told otherwise on the quote page  |
-| `FAB-ASSEMBLY`      | missing LCSC ids or MPNs, parts not in the parts lock, unchecked rotations, bottom parts  |
-| `FAB-PROFILE-DRAFT` | a draft profile                                                                           |
-| `FAB-SOURCES`       | vendor data read more than 180 days ago                                                   |
-| `FAB-PRIVACY`       | with `--public`: absolute paths, home directories or e-mail addresses in the bundle       |
+| Code                | Checks                                                                                                           |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `FAB-DRC`           | KiCad DRC under the vendor's rules (errors, warnings, unconnected items)                                         |
+| `FAB-LAYERS`        | the copper layer count against the profile and stackup                                                           |
+| `FAB-OUTLINE`       | a closed outline; several outlines (a panel) with the vendor's panel rules                                       |
+| `FAB-SIZE`          | the vendor's minimum and maximum board size                                                                      |
+| `FAB-VIA-TYPE`      | blind, buried or micro vias on a through-via-only service                                                        |
+| `FAB-DRILL`         | holes the vendor mills instead of drilling; slots and the minimum slot; NPTH in OSH Park's merged drill file     |
+| `FAB-CASTELLATED`   | castellated pads (OSH Park: "allowed, but not guaranteed"; JLC: the option and hole size)                        |
+| `FAB-STACKUP`       | the board's KiCad stackup against the ordered stackup                                                            |
+| `FAB-RF`            | an RF footprint designed for another substrate than the ordered stackup                                          |
+| `FAB-IMPEDANCE`     | impedance-relevant items on a service without impedance control                                                  |
+| `FAB-ALTERNATE`     | the substrate to pick at checkout when the vendor offers an alternate (OSH Park EM528)                           |
+| `FAB-QTY`           | OSH Park: multiples of 3; JLCPCB and PCBWay: 5 or more                                                           |
+| `FAB-MARKING`       | the order-number marking option (PCBWay prints its number unless told otherwise; JLCPCB adds no mark by default) |
+| `FAB-ASSEMBLY`      | missing LCSC ids or MPNs, parts not in the parts lock, unchecked rotations, bottom parts                         |
+| `FAB-PROFILE-DRAFT` | a draft profile                                                                                                  |
+| `FAB-SOURCES`       | vendor data read more than 180 days ago                                                                          |
+| `FAB-PRIVACY`       | with `--public`: absolute paths, home directories or e-mail addresses in the bundle                              |
 
 `fab check` exits 1 on any error; `--json` prints every finding.
 
@@ -134,11 +134,11 @@ copy, so the files are exactly what DRC judged, and writes `<out>/<name>-<profil
 | `manifest.json`                       | sha256 of every file and zip member, the inputs and tools (no absolute paths) |
 | `<name>-<vendor>-bundle.zip`          | everything above, for records or a release                                    |
 
-| Vendor   | Gerbers                                                                              | Drill                                                      | Extra               |
-| -------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------- | ------------------- |
-| OSH Park | `.GTL .GBL .G2L .G3L .GTS .GBS .GTO .GBO .GKO` (6 layers: `.G4L .G5L`, extrapolated) | `.XLN`: inches, decimal, absolute, PTH and NPTH merged     |                     |
-| JLCPCB   | KiCad's Protel names, paste layers included                                          | `-PTH.drl`, `-NPTH.drl`: mm, decimal, absolute, drill maps | BOM and CPL         |
-| PCBWay   | KiCad's own names (as PCBWay's KiCad plugin sends them)                              | `-PTH.drl`, `-NPTH.drl`: inches, decimal, absolute         | IPC-D-356, BOM, CPL |
+| Vendor   | Gerbers                                                                     | Drill                                                      | Extra               |
+| -------- | --------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------- |
+| OSH Park | `.GTL .GBL .G2L .G3L .GTS .GBS .GTO .GBO .GKO` (6 layers: also `.G4L .G5L`) | `.XLN`: inches, decimal, absolute, PTH and NPTH merged     |                     |
+| JLCPCB   | KiCad's Protel names, paste layers included                                 | `-PTH.drl`, `-NPTH.drl`: mm, decimal, absolute, drill maps | BOM and CPL         |
+| PCBWay   | KiCad's own names (as PCBWay's KiCad plugin sends them)                     | `-PTH.drl`, `-NPTH.drl`: inches, decimal, absolute         | IPC-D-356, BOM, CPL |
 
 Every gerber's X2 `FileFunction` is read back and must match its layer before it is renamed.
 The bundle is reproducible: kicad-cli runs with `TZ=UTC`, its time stamps are rewritten to
@@ -149,9 +149,10 @@ sorted entries and fixed times, so the same board, rules and tools give the same
 **Assembly** (`--assembly`): parts come from the footprints' fields (`LCSC`, `lcsc_id`,
 `Partnumber`, `Manufacturer`); DNP parts and RF footprints are left out; `--consign` lists parts
 the vendor does not place; with `--parts-lock`, every LCSC id must be locked. The JLCPCB CPL
-follows Fabrication Toolkit's conversion (bottom-side rotation `180 - r`). yapnr carries no
-vendor rotation-correction table, so the card lists every part to check in JLC's placement
-preview.
+follows Fabrication Toolkit's conversion: each part's centre (its pads' bounding box, JLCPCB's
+"Mid X/Mid Y") in the gerbers' coordinates, and bottom-side rotation `180 - r`. Footprints
+excluded from position files stay in the BOM but not in the CPL. yapnr carries no vendor
+rotation-correction table, so the card lists every part to check in JLC's placement preview.
 
 **Preview**: `yapnr fab preview <gerber zip> [--out DIR]` reads the zip's gerbers and drill files
 back and renders them to SVG without KiCad: each layer, and a top and a bottom composite (both

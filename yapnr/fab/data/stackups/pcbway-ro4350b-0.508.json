@@ -23,12 +23,13 @@
       "type": "core",
       "material": "RO4350B",
       "thickness_mm": 0.508,
-      "er": 3.48,
+      "er": 3.66,
       "er_freq_hz": 10000000000.0,
       "df": 0.0037,
-      "src": "P-hf",
-      "er_kind": "process",
-      "er_process": 3.48
+      "src": "R-4350",
+      "er_kind": "design",
+      "er_process": 3.48,
+      "er_process_src": "P-hf"
     },
     {
       "kind": "copper",
@@ -48,7 +49,13 @@
     "P-hf": {
       "url": "https://www.pcbway.com/pcb_prototype/What_is_High_Frequency__HF__PCB_.html",
       "accessed": "2026-10-02"
+    },
+    "R-4350": {
+      "url": "https://www.rogerscorp.com/advanced-electronics-solutions/ro4000-series-laminates/ro4350b-laminates",
+      "accessed": "2026-10-02"
     }
   },
-  "notes": ["er is the process Dk from P-hf; the design Dk is still to be taken from Rogers."]
+  "notes": [
+    "er is the Rogers design Dk (3.66; process Dk 3.48 +/- 0.05, as PCBWay lists it), as yapnr.rf uses."
+  ]
 }

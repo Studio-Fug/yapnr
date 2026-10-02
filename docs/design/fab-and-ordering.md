@@ -397,11 +397,11 @@ unchanged board skips KiCad entirely.
 
 ### 6.3 Per-vendor file sets
 
-| Vendor   | Layers exported                                          | Names                                                                                                                                                                     | Drill                                                                                    | Extra                                                   |
-| -------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| OSH Park | Cu (all), F/B Mask, F/B Silkscreen, Edge.Cuts            | `<b>.GTL .GBL .GTS .GBS .GTO .GBO .GKO`; inner layers `.G2L .G3L` (4L, documented [O-name]); 6L `.G2L`..`.G5L` (extrapolated: the X2 `FileFunction` also identifies them) | `<b>.XLN`: inches, decimal, absolute, alternate oval mode, PTH and NPTH merged           | none                                                    |
-| JLCPCB   | Cu (all), F/B Mask, F/B Silkscreen, F/B Paste, Edge.Cuts | KiCad's Protel extensions as kicad-cli writes them (`.gtl .g1 … .gm1`)                                                                                                    | `<b>-PTH.drl`, `<b>-NPTH.drl`: mm, decimal, absolute, alternate oval mode; map as `.gbr` | BOM and CPL kept separate from the gerber zip           |
-| PCBWay   | as JLCPCB                                                | KiCad names, as PCBWay's plugin sends                                                                                                                                     | as JLCPCB                                                                                | `<b>.d356` (IPC-D-356) in the zip; BOM and CPL separate |
+| Vendor   | Layers exported                                          | Names                                                                                                                                                  | Drill                                                                                    | Extra                                                   |
+| -------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| OSH Park | Cu (all), F/B Mask, F/B Silkscreen, Edge.Cuts            | `<b>.GTL .GBL .GTS .GBS .GTO .GBO .GKO`; inner layers `.G2L .G3L` (4L, documented [O-name]); 6L `.G2L`..`.G5L` (documented on the 6 layer page [O-6l]) | `<b>.XLN`: inches, decimal, absolute, alternate oval mode, PTH and NPTH merged           | none                                                    |
+| JLCPCB   | Cu (all), F/B Mask, F/B Silkscreen, F/B Paste, Edge.Cuts | KiCad's Protel extensions as kicad-cli writes them (`.gtl .g1 … .gm1`)                                                                                 | `<b>-PTH.drl`, `<b>-NPTH.drl`: mm, decimal, absolute, alternate oval mode; map as `.gbr` | BOM and CPL kept separate from the gerber zip           |
+| PCBWay   | as JLCPCB                                                | KiCad names, as PCBWay's plugin sends                                                                                                                  | as JLCPCB                                                                                | `<b>.d356` (IPC-D-356) in the zip; BOM and CPL separate |
 
 **OSH Park drill format.** The two OSH Park pages disagree (§4.1). The bundle uses inches, as the
 drill page asks, and decimal format with alternate oval mode, as the KiCad page asks. A KiCad-lane
@@ -453,7 +453,9 @@ zip (§6.7).
 - **JLCPCB CPL** (`<b>-jlcpcb-cpl.csv`):
   - columns `Designator, Mid X, Mid Y, Layer, Rotation`, mm, counter-clockwise positive,
     `Top`/`Bottom` [J-cpl];
-  - built from the kicad-cli pos CSV and transformed in yapnr.
+  - built from the kicad-cli pos CSV and transformed in yapnr. As built: read from the board file,
+    with each part's centre taken as its pads' bounding box (Fabrication Toolkit's default), not
+    the footprint anchor, which sits on pin 1 for many connectors.
 - **JLCPCB rotation corrections.**
   - They come from the part cache, **per locked part**, as new manifest metadata outside the part
     id (like `licence.distribution`): `placement.jlcpcb`, with `rotation_deg`, `dx_mm`, `dy_mm`,
@@ -544,24 +546,24 @@ release.
 
 Each finding has a code, a severity (error, warning or info) and the source of its limit.
 
-| Code                | What                                                                                                                                  | Severity                                       |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `FAB-DRC`           | KiCad DRC errors under the vendor rules (the judge)                                                                                   | error per DRC error; DRC warnings are warnings |
-| `FAB-LAYERS`        | Copper layer count differs from the stackup's                                                                                         | error                                          |
-| `FAB-OUTLINE`       | No outline, or more than one closed outline (a panel); OSH Park's panel rules [O-panel]                                               | error / warning                                |
-| `FAB-SIZE`          | Outside the vendor's minimum or maximum board size                                                                                    | error                                          |
-| `FAB-VIA-TYPE`      | Blind, buried or micro vias on a profile without them                                                                                 | error                                          |
-| `FAB-DRILL`         | A hole above the vendor's maximum drill (OSH Park mills it [O-drill]); slots present (vendor slot notes)                              | warning                                        |
-| `FAB-CASTELLATED`   | Castellated pads: OSH Park "allowed, but not guaranteed" [O-cast]; JLC needs the option and hole ≥ 0.5 mm                             | warning / error                                |
-| `FAB-STACKUP`       | The board's KiCad stackup differs from the chosen stackup (thickness, εr)                                                             | warning                                        |
-| `FAB-RF`            | An RF footprint's assumed substrate differs from the order's stackup (§6.6)                                                           | error                                          |
-| `FAB-IMPEDANCE`     | Impedance-relevant items on a vendor or service without impedance control                                                             | warning (the card states "not controlled")     |
-| `FAB-ALTERNATE`     | The vendor has an alternate substrate at checkout (OSH Park EM528) and the board has RF items                                         | info; the card tells the human what to pick    |
-| `FAB-QTY`           | Quantity not allowed (OSH Park: multiples of 3; JLC and PCBWay: 5 or more)                                                            | error                                          |
-| `FAB-MARKING`       | Assembly vendors print an order number on the silkscreen unless the human chooses otherwise (to be confirmed on the live quote pages) | info on the card                               |
-| `FAB-ASSEMBLY`      | Missing LCSC id or MPN, unchecked rotation, bottom-side parts, DNP parts                                                              | error / warning                                |
-| `FAB-PROFILE-DRAFT` | A draft profile                                                                                                                       | error without `--allow-draft`                  |
-| `FAB-PRIVACY`       | With `--public`: absolute paths or e-mail addresses in bundle text                                                                    | error                                          |
+| Code                | What                                                                                                                                                                   | Severity                                       |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `FAB-DRC`           | KiCad DRC errors under the vendor rules (the judge)                                                                                                                    | error per DRC error; DRC warnings are warnings |
+| `FAB-LAYERS`        | Copper layer count differs from the stackup's                                                                                                                          | error                                          |
+| `FAB-OUTLINE`       | No outline, or more than one closed outline (a panel); OSH Park's panel rules [O-panel]                                                                                | error / warning                                |
+| `FAB-SIZE`          | Outside the vendor's minimum or maximum board size                                                                                                                     | error                                          |
+| `FAB-VIA-TYPE`      | Blind, buried or micro vias on a profile without them                                                                                                                  | error                                          |
+| `FAB-DRILL`         | A hole above the vendor's maximum drill (OSH Park mills it [O-drill]); slots present (vendor slot notes); as built, non-plated holes in a merged drill file (OSH Park) | warning                                        |
+| `FAB-CASTELLATED`   | Castellated pads: OSH Park "allowed, but not guaranteed" [O-cast]; JLC needs the option and hole ≥ 0.5 mm                                                              | warning / error                                |
+| `FAB-STACKUP`       | The board's KiCad stackup differs from the chosen stackup (thickness, εr)                                                                                              | warning                                        |
+| `FAB-RF`            | An RF footprint's assumed substrate differs from the order's stackup (§6.6)                                                                                            | error                                          |
+| `FAB-IMPEDANCE`     | Impedance-relevant items on a vendor or service without impedance control                                                                                              | warning (the card states "not controlled")     |
+| `FAB-ALTERNATE`     | The vendor has an alternate substrate at checkout (OSH Park EM528) and the board has RF items                                                                          | info; the card tells the human what to pick    |
+| `FAB-QTY`           | Quantity not allowed (OSH Park: multiples of 3; JLC and PCBWay: 5 or more)                                                                                             | error                                          |
+| `FAB-MARKING`       | Assembly vendors print an order number on the silkscreen unless the human chooses otherwise (to be confirmed on the live quote pages)                                  | info on the card                               |
+| `FAB-ASSEMBLY`      | Missing LCSC id or MPN, unchecked rotation, bottom-side parts, DNP parts                                                                                               | error / warning                                |
+| `FAB-PROFILE-DRAFT` | A draft profile                                                                                                                                                        | error without `--allow-draft`                  |
+| `FAB-PRIVACY`       | With `--public`: absolute paths or e-mail addresses in bundle text                                                                                                     | error                                          |
 
 `fab check` exits non-zero on any error. `--json` prints the full finding list.
 
@@ -817,15 +819,16 @@ yapnr/order/
 - **D4. The substrate of the first OSH Park RF demo:** FR408HR (wait for stock) or EM528 (now).
   Also whether the first demo is a 4L FR408HR re-optimization (§9: compute cost) or a 2L FR-4
   board.
-- **D5. The derived values** in §5.2: those marked "derived" in the OSH Park table, and the 6-layer
-  inner layer names `.G4L`/`.G5L`.
+- **D5. The derived values** in §5.2: those marked "derived" in the OSH Park table. (The 6-layer
+  inner layer names `.G2L` to `.G5L` are documented on OSH Park's 6 layer page [O-6l].)
 
 **Unverified:**
 
 - **Df values:** OSH Park's 4-layer prepreg Df (prior 0.009 from its 6-layer 2113 core); the OSH
   Park 2L Dk above 10 MHz and its Df.
 - **Mask Dk:** for OSH Park and PCBWay.
-- **Live prices:** JLC's and PCBWay's prices and their order-number marking options (`FAB-MARKING`).
+- **Live prices:** JLC's and PCBWay's prices. (JLCPCB's quote page states "No mark will be added
+  by default." [J-quote]; PCBWay's "Remove product No." defaults to "No" [P-order].)
   PCBWay's Rogers thicknesses and 2-layer rules (draft profiles). JLC's default 6-layer stackup
   when none is specified.
 - **OSH Park file handling:** NPTH handling in a merged drill file, and whether the 6-layer inner
@@ -905,15 +908,15 @@ Pages accessed 2026-10-02 unless noted. Vendor pages change; the data files carr
 **Confirmed on the live pages** (2026-10-02, read only):
 
 - **JLCPCB's quote page** has "Add gerber file", "Mark on PCB" (Remove Mark, Order Number, 2D
-  barcode) and "SAVE TO CART" [J-quote].
+  barcode; "No mark will be added by default.") and "SAVE TO CART" [J-quote].
 - **PCBWay's quote page** has "Single pieces", "Calculate", "Other special request" (200
   characters), "Remove product No." (No, Yes for USD 1.50, Specify a location) and "Save to Cart"
   [P-order].
 - **OSH Park's upload area** reads "Drag and drop your KiCAD, EagleCAD, or zipped Gerber files",
   with a "Browse for files" button [O-home].
 
-`FAB-MARKING` and the cards name these options. Which marking JLCPCB selects by default is still
-unconfirmed.
+`FAB-MARKING` and the cards name these options. JLCPCB's page states that no mark is added by
+default (re-read 2026-10-02); the card still names the option, since the default can change.
 
 ## Appendix A. Stackup data
 
@@ -1044,9 +1047,9 @@ by about 1 to 3 Ω at this width, so the 2D solver and the coupons set the real 
 | `jlc06161h-3313`                            | Cu 0.035; 3313 0.0994; Cu 0.0152; core 0.55; Cu 0.0152; middle 2116 0.1088                              | pp 4.1 / 4.16; core 4.6                                                  | 0.20               | [J-imp] (coupon research) |
 | `pcbway-4l-7628`                            | Cu 0.5 oz base plated to 1 oz; 7628 RC46 % 0.196 (0.1855 after lamination); Cu 1 oz; core 1.03          | pp 4.74; core 4.6; frequency and Df not published                        | 0.34               | [P-lam]                   |
 | `pcbway-ro4003c-0.813` (`-0.508`, `-1.524`) | Cu 1 oz; RO4003C 0.813                                                                                  | process 3.38 ± 0.05, **design 3.55**; Df 0.0027 at 10 GHz                | 1.82               | [P-hf] [R-4003]           |
-| `pcbway-ro4350b-0.508`                      | Cu 1 oz; RO4350B 0.508                                                                                  | 3.48 (0.0037) at 10 GHz (process)                                        | 1.15               | [P-hf]                    |
+| `pcbway-ro4350b-0.508`                      | Cu 1 oz; RO4350B 0.508                                                                                  | process 3.48 ± 0.05, **design 3.66**; Df 0.0037 at 10 GHz                | 1.11               | [P-hf] [R-4350]           |
 
-For `pcbway-ro4350b-0.508`, the design Dk is still to be taken from the Rogers datasheet.
+For `pcbway-ro4350b-0.508`, the design Dk is Rogers' published 3.66 [R-4350], as for RO4003C.
 
 **Notes on the table:**
 
@@ -1094,6 +1097,7 @@ For `pcbway-ro4350b-0.508`, the design Dk is still to be taken from the Rogers d
 [P-asm]: https://www.pcbway.com/pcb-assembly.html
 [P-home]: https://www.pcbway.com/
 [R-4003]: https://www.rogerscorp.com/advanced-electronics-solutions/ro4000-series-laminates/ro4003c-laminates
+[R-4350]: https://www.rogerscorp.com/advanced-electronics-solutions/ro4000-series-laminates/ro4350b-laminates
 [FT]: https://github.com/bennymeg/Fabrication-Toolkit
 [KK]: https://github.com/yaqwsx/KiKit
 [JT]: https://github.com/Bouni/kicad-jlcpcb-tools

@@ -24,8 +24,7 @@
       "B.Silkscreen": "{board}.GBO",
       "Edge.Cuts": "{board}.GKO"
     },
-    "names_src": "O-name",
-    "names_extrapolated": ["In3.Cu", "In4.Cu"],
+    "names_src": "O-name (.G2L and .G3L for 4 layers) and O-6l (.G2L to .G5L for 6 layers)",
     "subtract_soldermask": true,
     "x2": true,
     "src": "O-kgerb"
@@ -86,6 +85,10 @@
     },
     "O-name": {
       "url": "https://docs.oshpark.com/troubleshooting/naming-pattern/",
+      "accessed": "2026-10-02"
+    },
+    "O-6l": {
+      "url": "https://docs.oshpark.com/services/six-layer/",
       "accessed": "2026-10-02"
     }
   }

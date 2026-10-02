@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import math
 import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -227,7 +228,11 @@ class Problem:
             raise ValueError(f"unknown interpolation {self.interpolation!r}")
         self.x_range = reactive_range(self.g_max)
         self.omega_ref = 2.0 * np.pi * self.stackup.f_ref
-        self._fwd_cache: tuple[str, dict] = ("", {})
+        # The forward runs of the last few designs evaluated (key → {port: run}), most recent
+        # last: the nominal design and every robust variant of the current x and of an
+        # adaptive move's trial point, whose forward runs the next iteration reuses.
+        self._fwd_cache: OrderedDict[str, dict] = OrderedDict()
+        self.fwd_cache_size = 2 * (1 + len(spec.optimizer.eta_variants))
         self.edge_probes = []
         if self.edge_correction:
             from yapnr.rf.edges import design_probes as edge_design_probes
@@ -581,17 +586,20 @@ class Problem:
         the objective frequencies times the factor and judges the results against the
         requirements of the nominal frequencies (the masks and limits are not moved).
 
-        The forward runs of the last design evaluated are kept (with the design-plane DTFTs),
-        so evaluating the same ρ̄ again with gradients (the point a conservative MMA step
-        accepted) runs only the adjoints."""
+        The forward runs of the last few designs evaluated are kept (with the design-plane
+        DTFTs; `fwd_cache_size`, two per robust variant), so evaluating the same ρ̄ again with
+        gradients (the point a conservative or adaptive MMA step accepted, with each of its
+        variants) runs only the adjoints."""
         import torch
 
         t0 = time.perf_counter()
         rho_bar = np.ascontiguousarray(rho_bar, dtype=np.float64)
         key = hashlib.sha256(rho_bar.tobytes()).hexdigest() + f":{float(frequency_scale)!r}"
-        cache = self._fwd_cache[1] if self._fwd_cache[0] == key else {}
+        cache = self._fwd_cache.pop(key, {})
         omega = self.omega * float(frequency_scale)
-        self._fwd_cache = (key, cache)
+        self._fwd_cache[key] = cache
+        while len(self._fwd_cache) > self.fwd_cache_size:
+            self._fwd_cache.popitem(last=False)
         self.set_design(rho_bar)
         n_ports = len(self.ports)
         m = self.freqs.size

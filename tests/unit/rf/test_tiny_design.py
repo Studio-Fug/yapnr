@@ -181,6 +181,24 @@ class BestDesignTest(unittest.TestCase):
         t_bin = opt.evaluate_binary(opt.state.x)[0]
         self.assertAlmostEqual(t_bin, prob.evaluate(exported, gradients=False).t, places=12)
 
+    def test_forward_runs_of_several_designs_are_reused(self):
+        # An adaptive step evaluates the trial point's nominal and variant designs; the next
+        # iteration evaluates the same designs with gradients and reuses their forward runs
+        # (the cache keeps two designs per variant), with the same values and gradients.
+        spec = tiny_spec(eta_variants=(0.6, 0.4))
+        prob = Problem(spec, cache_dir=self.cache)
+        self.assertEqual(prob.fwd_cache_size, 6)
+        x = prob.param.grid.initial(0.6)
+        rhos = [prob.param.rho_bar(x, 8.0, e) for e in (None, 0.6, 0.4)]
+        first = prob.evaluate(rhos[0])
+        for r in rhos:
+            prob.evaluate(r, gradients=False)
+        again = prob.evaluate(rhos[0])
+        self.assertTrue(all(v == 0 for v in again.steps["forward"].values()))
+        self.assertTrue(all(v > 0 for v in first.steps["forward"].values()))
+        np.testing.assert_array_equal(again.values, first.values)
+        np.testing.assert_allclose(again.grads, first.grads, rtol=1e-12, atol=1e-15)
+
     def test_robust_variants(self):
         spec = tiny_spec(eta_variants=(0.6, 0.4))
         opt = Optimizer(Problem(spec, cache_dir=self.cache))

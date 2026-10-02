@@ -105,6 +105,10 @@ class RouteGrid:
         self.via_to_smd_pad = None
         self.smd_via_blocked = None  # (ny, nx) bool, cell-centre verdicts
         self._smd_index = None
+        # net -> grid layer indices its tracks may use (None: every layer). Set
+        # for a declared stack only (route_board: a current-rated net stays off an
+        # inner layer whose copper would need a wider track); vias still cross.
+        self.layer_mask = None
 
     def plated_transition(self, net, i, j):
         """Exact source PTH centre when this column fits its existing copper land.
@@ -234,6 +238,10 @@ class RouteGrid:
             return False
         if self.blocked[layer, j, i]:
             return False
+        if self.layer_mask is not None:
+            allowed = self.layer_mask.get(net)
+            if allowed is not None and layer not in allowed:
+                return False
         owner = self.pad_net.get((layer, i, j))
         return owner is None or owner == net
 

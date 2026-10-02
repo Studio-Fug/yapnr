@@ -148,6 +148,44 @@ def layer_plan(graph: BoardGraph, rules: Optional[dict]):
     return stack.grid_layers, planes | set(stack.plane_nets), stack
 
 
+# Copper thickness of one ounce per square foot (mm), the IPC-2221 unit.
+_OZ_MM = 0.035
+
+
+def current_layer_mask(stack, layers, rules, net_width, default_width):
+    """net -> the grid layers a current-rated net's tracks may use.
+
+    A net class with ``current_a`` sizes its width for outer copper (IPC-2221,
+    ``copper_oz``). An inner layer is open to such a net only if the IPC-2221
+    internal width at that layer's declared copper thickness fits the net's routed
+    width; the outer layers carry its pads and stay open. Nets that fit everywhere,
+    and layers of unknown thickness, are not restricted.
+    """
+    from pnr.electrical import current_width
+
+    out = {}
+    for nc in (rules or {}).get("net_classes", []):
+        current = nc.get("current_a")
+        if not current or nc.get("plane_layer"):
+            continue
+        for net in nc.get("nets", []):
+            width = net_width.get(net, default_width)
+            allowed = []
+            for index, name in enumerate(layers):
+                copper = stack.layer(name).copper_mm
+                inner = 0 < index < len(layers) - 1
+                if inner and copper:
+                    need = current_width(
+                        current, copper / _OZ_MM, nc.get("delta_t_c") or 10.0, external=False
+                    )
+                    if need > width + 1e-9:
+                        continue
+                allowed.append(index)
+            if len(allowed) < len(layers):
+                out[net] = frozenset(allowed)
+    return out
+
+
 def _mark_plane_regions(
     grid: RouteGrid, graph: BoardGraph, rules: Optional[dict], margin: float, stack=None
 ) -> None:
@@ -352,6 +390,10 @@ def route_board(
         via_radius=via_radius_mm,
     )
     grid.net_widths = net_width
+    if stack is not None:
+        grid.layer_mask = (
+            current_layer_mask(stack, layers, rules, net_width, track_width_mm) or None
+        )
     # Fab-profile per-hole-kind rules ride in rules['fab'] beside the 5 keys
     # _fab() keeps; absent (legacy rules) they leave the original model intact.
     extra = dict((rules or {}).get("fab") or {})

@@ -57,6 +57,25 @@ class PackedMazeTest(unittest.TestCase):
                     drill_sites=((5.5, 5.5),),
                 )
 
+    def test_layer_masks_agree_and_keep_tracks_off_masked_layers(self):
+        for seed in range(30):
+            with self.subTest(seed=seed):
+                rng = random.Random(seed)
+                grid = RouteGrid(9, 8, 1, layers=("F.Cu", "In1.Cu", "In2.Cu", "B.Cu"))
+                cells = [Cell(la, i, j) for la in (0, 3) for i in range(9) for j in range(8)]
+                for c in rng.sample(cells, 40):
+                    grid.blocked[c.layer, c.j, c.i] = True
+                grid.layer_mask = {"N": frozenset({0, 3, 1 + seed % 2}), "OTHER": frozenset()}
+                path = self.parity(
+                    grid,
+                    {Cell(0, 0, 0)},
+                    {Cell(3, 8, 7)},
+                    occ={c: rng.randrange(3) for c in rng.sample(cells, 20)},
+                    diagonal=seed % 2 == 0,
+                )
+                if path is not None:
+                    self.assertFalse({c.layer for c in path} - {0, 3, 1 + seed % 2})
+
     def test_outside_coordinates_never_alias_an_edge(self):
         grid = RouteGrid(3, 3, 1)
         grid.routing_via_keepout = 1

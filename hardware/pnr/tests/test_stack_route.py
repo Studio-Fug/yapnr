@@ -229,6 +229,37 @@ class StackRouting(unittest.TestCase):
         self.assertTrue(any(math.dist(p, (6.8, 6.0)) < 1e-6 for p in sites))
 
 
+class CurrentLayers(unittest.TestCase):
+    def test_a_current_rated_net_stays_off_thin_inner_copper(self):
+        from pnr.route.detail.router import current_layer_mask
+        from pnr.stack import resolve
+
+        rows = [
+            dict(name="F.Cu", type="signal", copper_mm=0.035),
+            dict(name="In1.Cu", type="signal", copper_mm=0.0152),
+            dict(name="In2.Cu", type="power", copper_mm=0.0152),
+            dict(name="B.Cu", type="signal", copper_mm=0.035),
+        ]
+        rules = dict(
+            layers=4,
+            net_classes=[
+                dict(name="supply", nets=["VBUS"], width_mm=0.4, current_a=0.5, delta_t_c=10.0),
+                dict(name="logic", nets=["VCC"], width_mm=0.4, current_a=0.1, delta_t_c=10.0),
+                dict(name="plane_gnd", nets=["GND"], width_mm=0.4, plane_layer="In2.Cu"),
+            ],
+        )
+        stack = resolve(rules, record_from_rows(rows))
+        layers = stack.grid_layers
+        self.assertEqual(layers, ("F.Cu", "In1.Cu", "B.Cu"))
+        # IPC-2221 internal: 0.5 A at 10 C rise on 0.0152 mm needs about 0.69 mm.
+        mask = current_layer_mask(stack, layers, rules, {"VBUS": 0.4, "VCC": 0.4}, 0.25)
+        self.assertEqual(mask, {"VBUS": frozenset({0, 2})})
+        # Wide enough for the inner copper: no restriction.
+        self.assertEqual(
+            current_layer_mask(stack, layers, rules, {"VBUS": 0.7, "VCC": 0.4}, 0.25), {}
+        )
+
+
 class DropPlanning(unittest.TestCase):
     def test_no_via_in_a_pad_without_an_in_pad_policy(self):
         from pnr.route.detail.grid import RouteGrid

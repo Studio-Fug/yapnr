@@ -315,6 +315,19 @@ py_test(
     deps = [":pnr"],
 )
 
+# Pair / group length tuning after detailed routing (pnr.route.detail.tune).
+py_test(
+    name = "length_tune_test",
+    size = "small",
+    srcs = ["tests/test_length_tune.py"],
+    main = "tests/test_length_tune.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+    ],
+)
+
 # Phase 2 acceptance: placement MVP is legal + beats the ato-row HPWL baseline.
 py_test(
     name = "placement_test",

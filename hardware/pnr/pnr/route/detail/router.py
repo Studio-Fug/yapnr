@@ -86,6 +86,8 @@ class BoardRoute:
     pressure_events: Optional[list] = None
     deferred_nets: Set[str] = field(default_factory=set)
     escape_diagnostics: dict = field(default_factory=dict)
+    # Pair / group length tuning report (pnr.route.detail.tune); None without sets.
+    length_report: Optional[list] = None
 
     @property
     def fully_routed(self) -> bool:
@@ -486,6 +488,22 @@ def route_board(
     # Zero-length pad-to-grid stubs add no connection and become dangling items.
     board.tracks = [t for t in board.tracks if math.dist(t[2], t[3]) >= 1e-6]
     board.vias = list(dict.fromkeys(board.vias))
+    if rules and (rules.get("diff_pairs") or rules.get("length_match")):
+        # Length-match the declared pairs and groups on the finished route.
+        from .tune import tune_board
+
+        board.length_report = tune_board(
+            board,
+            graph,
+            grid,
+            rules,
+            net_width=net_width,
+            default_width=track_width_mm,
+            net_halo=net_halo,
+            via_keepout=via_keepout,
+            access=net_access,
+            via_radius=via_radius_mm,
+        )
     if route_trace is not None:
         route_trace.end(board)
     return board

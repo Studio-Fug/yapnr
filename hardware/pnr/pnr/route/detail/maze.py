@@ -367,13 +367,15 @@ def _route_one(
     blocked: Optional[Set[Cell]] = None,
     soft: Optional[Dict[Cell, float]] = None,
     _session=None,
+    _field=None,
 ) -> Optional["_Route"]:
     """Connect all ``access`` cells of ``net`` into one tree (Prim on the grid).
     Returns a useful, possibly incomplete :class:`_Route` (cells + edges — edges record which cells are
     diagonally vs orthogonally connected, for DRC-correct 45° emit + corner
     reservation). ``blocked`` cells are hard-impassable; ``soft`` adds a crossing
     penalty (rip-up pass). ``_session`` (:class:`.dense_maze.DenseSession`) builds
-    the net's dense search field once for all of its tree's searches."""
+    the net's dense search field once for all of its tree's searches; ``_field``
+    is such a field built by the caller (the exact-separation router)."""
     access = list(dict.fromkeys(access))  # de-dup, keep order
     original_access = list(access)
     access = [c for c in access if grid.passable(c.layer, c.i, c.j, net)]
@@ -385,7 +387,7 @@ def _route_one(
     remaining = set(access[1:])
     all_cells: List[Cell] = [access[0]]
     edges: List[Tuple[Cell, Cell]] = []
-    field = None
+    field = _field
     while remaining:
         if field is None and _session is not None:
             field = _session.field(net, occ, history, pres_fac, blocked, soft)
@@ -979,13 +981,40 @@ def route(grid, net_access, **kwargs):
 
     from pnr.runtime_controls import route_workers
 
+    from .exact_route import exact_mode
+
+    mode = exact_mode()
+    if mode != "off":
+        from .exact_route import route_exact, supported
+
+        if not supported(grid):
+            mode = "off"
+    if mode == "full":
+        return route_exact(grid, net_access, **kwargs)
     workers = route_workers("grid-start")
     if workers == 1 and not os.environ.get("PNR_CONTROL_FILE"):
-        return _route_impl(grid, net_access, **kwargs)
-    from .parallel import NetPool
+        result = _route_impl(grid, net_access, **kwargs)
+    else:
+        from .parallel import NetPool
 
-    pool = NetPool(grid, workers)
-    try:
-        return _route_impl(grid, net_access, **kwargs, _pool=pool)
-    finally:
-        pool.close()
+        pool = NetPool(grid, workers)
+        try:
+            result = _route_impl(grid, net_access, **kwargs, _pool=pool)
+        finally:
+            pool.close()
+    if mode == "recover" and result.unrouted:
+        # Open connections left: route again with the exact pairwise separation
+        # and keep it only when it leaves strictly fewer connections open.
+        import sys
+
+        from .exact_route import missing_connections
+
+        exact = route_exact(grid, net_access, **kwargs)
+        before, after = missing_connections(result), missing_connections(exact)
+        sys.stderr.write(
+            "exact-separation recovery: %d -> %d open connections (%s)\n"
+            % (before, after, "kept" if after < before else "discarded")
+        )
+        if after < before:
+            return exact
+    return result

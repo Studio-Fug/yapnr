@@ -315,6 +315,8 @@ class Field:
         "hole",
         "stencil",
         "static",
+        "corner",
+        "diag",
         "_lists",
     )
 
@@ -337,12 +339,15 @@ class Field:
     def lists(self):
         """Python lists of the field (the packed kernel's flat lookups)."""
         if self._lists is None:
+            ok = self.ok.tolist()
             self._lists = (
-                self.ok.tolist(),
+                ok,
                 self.price.tolist(),
                 self.via_price.tolist(),
                 self.col.tolist(),
                 self.plated.tolist(),
+                ok if self.corner is self.ok else self.corner.tolist(),
+                None if self.diag is None else self.diag.tolist(),
             )
         return self._lists
 
@@ -441,20 +446,91 @@ def build_field(
         price = combine(False)
         via_price = combine(True)
 
+    return _field(static, net, ok, price, via_price, column, plated, stencil)
+
+
+def _field(static, net, ok, price, via_price, column, plated, stencil, corner=None, diag=None):
+    """A field. A 45° step needs both corner cells ``corner`` (by default the
+    same as ``ok``) and, when ``diag`` is given, its 2x2 block (indexed by the
+    block's lower-left cell) ``diag``."""
+    grid = static.grid
     field = Field()
     field.grid = grid
     field.net = net
-    field.nx, field.ny, field.nlayers = nx, ny, nl
+    field.nx, field.ny, field.nlayers = grid.nx, grid.ny, grid.nlayers
     field.ok = np.ascontiguousarray(ok.reshape(-1))
-    field.price = np.ascontiguousarray(price, dtype=np.float64)
-    field.via_price = np.ascontiguousarray(via_price, dtype=np.float64)
+    field.price = np.ascontiguousarray(price, dtype=np.float64).reshape(-1)
+    field.via_price = np.ascontiguousarray(via_price, dtype=np.float64).reshape(-1)
     field.col = np.ascontiguousarray(column.reshape(-1))
     field.plated = np.ascontiguousarray(plated.reshape(-1))
     field.hole = static.hole()
     field.stencil = stencil
     field.static = static
+    field.corner = field.ok if corner is None else np.ascontiguousarray(corner.reshape(-1))
+    field.diag = None if diag is None else np.ascontiguousarray(diag.reshape(-1))
     field._lists = None
     return field
+
+
+def build_exact_field(
+    static: GridStatic,
+    net,
+    *,
+    track_count=None,
+    via_count=None,
+    history=None,
+    pres_fac=0.0,
+    track_block=None,
+    via_block=None,
+    diag_block=None,
+    track_soft=None,
+    via_soft=None,
+):
+    """A search field under the exact separation model (:mod:`.exact_route`).
+
+    The inputs are already exact for this net's core kinds, so nothing is
+    dilated here: ``track_count``/``track_block``/``track_soft`` (``[L, ny,
+    nx]``) say how many other nets' separation zones, whether any committed
+    zone, and at what crossing price, cover a cell for this net's track cores;
+    ``via_count`` (``[L, ny, nx]``) and ``via_block``/``via_soft`` (``[ny,
+    nx]``, every layer folded) do the same for a through-via core, and
+    ``diag_block`` (``[L, ny, nx]`` by a 2x2 block's lower-left cell) for the
+    centre of a 45° step. A 45° step's corner cells only need to be passable
+    (pads, obstacles): the separation is judged at its centre. ``history`` is
+    the negotiated history per cell. Prices keep the reference form
+    ``(1 + history) * (1 + present * count) + soft``; a via is priced over
+    every layer of its column. Pads, plated pads, drills and escape vias are
+    the grid's, as for :func:`build_field`. None when the grid is outside the
+    dense model.
+    """
+    stencil = static.stencil()
+    if stencil is None:
+        return None
+    passable, via_ok, plated = static.net(net)
+    if track_block is None:
+        ok = passable
+        column = np.all(via_ok, axis=0)
+    else:
+        ok = passable & ~track_block
+        column = np.all(via_ok & ~track_block, axis=0)
+    if via_block is not None:
+        column &= plated | ~via_block
+    grid = static.grid
+    shape = (grid.nlayers, grid.ny, grid.nx)
+    hist = np.zeros(shape) if history is None else history
+    count = 0.0 if track_count is None else track_count
+    price = (1.0 + hist) * (1.0 + pres_fac * count)
+    if track_soft is not None:
+        price = price + track_soft
+    via_hist = hist.max(axis=0)
+    via_occ = 0.0 if via_count is None else via_count.max(axis=0)
+    via_price = (1.0 + via_hist) * (1.0 + pres_fac * via_occ)
+    if via_soft is not None:
+        via_price = via_price + via_soft
+    diag = None if diag_block is None else ~diag_block
+    return _field(
+        static, net, ok, price, via_price, column, plated, stencil, corner=passable, diag=diag
+    )
 
 
 class DenseSession:

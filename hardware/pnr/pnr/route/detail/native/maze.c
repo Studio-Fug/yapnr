@@ -20,7 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define PNR_MAZE_ABI 1
+#define PNR_MAZE_ABI 2
 
 typedef struct {
   int32_t nx, ny, nl, diagonal;
@@ -31,6 +31,8 @@ typedef struct {
   const uint8_t *plated;   /* [ny * nx] own-net plated pad: no new drill */
   const uint8_t *hole;     /* [ny * nx] drill clears static drills and tree vias */
   const uint8_t *stencil;  /* [(2r+1)^2] drill-to-drill conflicts by offset */
+  const uint8_t *corner;   /* [nl * ny * nx] a 45-degree step's corner cells may be crossed */
+  const uint8_t *diag;     /* [nl * ny * nx] by a 2x2 block's lower-left cell, or NULL */
   int32_t stencil_radius;
   double via_cost, sqrt2, octile;
 } pnr_field;
@@ -220,7 +222,7 @@ int32_t pnr_maze_search(void *pointer, const pnr_field *f, const int32_t *starts
   }
   const double *price = f->price, *via_price = f->via_price;
   const uint8_t *ok = f->ok, *col = f->col, *plated = f->plated, *hole = f->hole;
-  const uint8_t *stencil = f->stencil;
+  const uint8_t *stencil = f->stencil, *corner = f->corner, *diag_ok = f->diag;
   const int32_t radius = f->stencil_radius, width = 2 * f->stencil_radius + 1;
   static const int32_t orthogonal[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
   static const int32_t diagonal[4][2] = {{1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
@@ -286,7 +288,9 @@ int32_t pnr_maze_search(void *pointer, const pnr_field *f, const int32_t *starts
         int32_t ni = i + diagonal[m][0], nj = j + diagonal[m][1];
         if (ni < 0 || ni >= nx || nj < 0 || nj >= ny) continue;
         int32_t next = layer_base + nj * nx + ni;
-        if (!ok[next] || !ok[layer_base + j * nx + ni] || !ok[layer_base + nj * nx + i]) continue;
+        if (!ok[next] || !corner[layer_base + j * nx + ni] || !corner[layer_base + nj * nx + i])
+          continue;
+        if (diag_ok && !diag_ok[layer_base + (nj < j ? nj : j) * nx + (ni < i ? ni : i)]) continue;
         double step = f->sqrt2 * price[next];
         double distance = base + step;
         RELAX(next, distance, drills);

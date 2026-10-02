@@ -104,7 +104,7 @@ def _native():
 def _search(field, starts, ends, target_xy, via_cost, diagonal, drill_sites):
     nx, ny, nlayers = field.nx, field.ny, field.nlayers
     plane = nx * ny
-    ok, price, via_price, column, plated = field.lists()
+    ok, price, via_price, column, plated, corner, diag = field.lists()
     hole = field.tree_hole(drill_sites).reshape(-1).tolist()
     radius, mask = field.stencil
     conflict = {
@@ -178,7 +178,13 @@ def _search(field, starts, ends, target_xy, via_cost, diagonal, drill_sites):
                 if not (0 <= ni < nx and 0 <= nj < ny):
                     continue
                 nxt = layer_base + nj * nx + ni
-                if not (ok[nxt] and ok[layer_base + j * nx + ni] and ok[layer_base + nj * nx + i]):
+                if not (
+                    ok[nxt]
+                    and corner[layer_base + j * nx + ni]
+                    and corner[layer_base + nj * nx + i]
+                ):
+                    continue
+                if diag is not None and not diag[layer_base + min(j, nj) * nx + min(i, ni)]:
                     continue
                 new_distance = base + _SQRT2 * price[nxt]
                 if new_distance < distances.get(nxt, infinity):

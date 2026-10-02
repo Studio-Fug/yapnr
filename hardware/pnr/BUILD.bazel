@@ -1336,6 +1336,22 @@ py_test(
     ],
 )
 
+# Exact-separation routing (PNR_EXACT_SEPARATION): the separation model, copper gaps of
+# routed boards, the recovery mode, and packed/native agreement.
+py_test(
+    name = "exact_route_test",
+    size = "medium",
+    srcs = ["tests/test_exact_route.py"],
+    data = [":libpnr_maze.so"],
+    main = "tests/test_exact_route.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        requirement("numpy"),
+    ],
+)
+
 py_test(
     name = "batched_cost_test",
     size = "small",

@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 
 _SQRT2 = 2.0**0.5
-_ABI = 1
+_ABI = 2
 _STATE = {"loaded": False, "kernel": None, "reason": "not requested"}
 
 
@@ -53,6 +53,8 @@ class _Field(ctypes.Structure):
         ("plated", ctypes.POINTER(ctypes.c_uint8)),
         ("hole", ctypes.POINTER(ctypes.c_uint8)),
         ("stencil", ctypes.POINTER(ctypes.c_uint8)),
+        ("corner", ctypes.POINTER(ctypes.c_uint8)),
+        ("diag", ctypes.POINTER(ctypes.c_uint8)),
         ("stencil_radius", ctypes.c_int32),
         ("via_cost", ctypes.c_double),
         ("sqrt2", ctypes.c_double),
@@ -106,6 +108,8 @@ class NativeKernel:
         ok = field.ok.view(np.uint8)
         col = field.col.view(np.uint8)
         plated = field.plated.view(np.uint8)
+        corner = field.corner.view(np.uint8)
+        diag = None if field.diag is None else field.diag.view(np.uint8)
         spec = _Field(
             field.nx,
             field.ny,
@@ -118,6 +122,8 @@ class NativeKernel:
             _pointer(plated, ctypes.c_uint8),
             _pointer(hole, ctypes.c_uint8),
             _pointer(stencil, ctypes.c_uint8),
+            _pointer(corner, ctypes.c_uint8),
+            ctypes.POINTER(ctypes.c_uint8)() if diag is None else _pointer(diag, ctypes.c_uint8),
             radius,
             float(via_cost),
             _SQRT2,

@@ -177,7 +177,13 @@ same routes). `--reference-maze` routes with the reference kernel instead, and
 sources with the host compiler and routes with it (the same routes again, about
 six times faster than packed on a dense board); each case's `pnr-report.json`
 records the kernel that actually ran (`maze_kernel`), which is packed when the
-library cannot load. The
+library cannot load. `--exact-separation recover|full|off` sets the detailed
+router's separation model (`PNR_EXACT_SEPARATION`, `pnr/route/detail/exact_route.py`):
+`full` routes with the exact pairwise copper separation instead of the halo
+model (which keeps nets about twice as far apart as the rules ask), `recover`
+routes again with it only when a detailed route leaves connections open and
+keeps that route when it leaves fewer open, so every route that completes is
+unchanged; the default is the engine's. The
 performance opt-in `--batched-wirelength` can be tested explicitly. All of these
 are recorded in provenance; ambient variables are still cleared, so a baseline
 invocation keeps its original algorithms.

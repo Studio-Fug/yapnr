@@ -219,6 +219,15 @@ def parser():
         ),
     )
     ap.add_argument(
+        "--exact-separation",
+        choices=("off", "recover", "full"),
+        help=(
+            "PNR_EXACT_SEPARATION: recover routes again with the exact pairwise separation when "
+            "a detailed route leaves connections open (and keeps it only with fewer open), full "
+            "routes with it only; default: the engine's"
+        ),
+    )
+    ap.add_argument(
         "--reference-maze",
         action="store_true",
         help="Route with the reference dict A* kernel (PNR_PACKED_MAZE=0) instead of the packed one",
@@ -323,6 +332,8 @@ def main():
         env["PNR_PACKED_MAZE"] = "1"
     if args.reference_maze:
         env["PNR_PACKED_MAZE"] = "0"
+    if args.exact_separation:
+        env["PNR_EXACT_SEPARATION"] = args.exact_separation
     native = None
     if args.maze_kernel == "native":
         if args.reference_maze:

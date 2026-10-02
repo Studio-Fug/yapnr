@@ -79,6 +79,7 @@ decisions
 design/animations
 design/constraint-and-hier-animations
 design/fea-integration
+design/cloud-experiments
 history/import-manifest
 about-the-name
 references

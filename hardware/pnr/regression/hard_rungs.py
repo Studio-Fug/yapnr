@@ -26,8 +26,9 @@ Every rung carries a tool-neutral description of those dimensions (``stackup``,
 ``via_policy``, ``sides``, ``checks``) besides the engine's own ``constraints``. The
 ``checks`` are verified on the saved board by ``check_constraints.py``, which reads
 any tool's KiCad board, so other place-and-route tools are judged by the same list.
-A check the engine cannot express carries ``"engine": "unsupported"``: it is still
-measured, never silently dropped.
+Each check names the engine constraint that expresses it (``engine``); a check the
+engine could not express would carry ``"engine": "unsupported"``: still measured,
+never silently dropped.
 
 Each rung has a ``ci`` tag: ``lane`` (``nightly``: informational, every night;
 ``manual``: on request only) and ``minutes``, the per-seed wall budget its lane must
@@ -525,7 +526,7 @@ def absolute(spec, *, holes, edges, rotations, keepout, region, describe):
     """Absolute placement constraints: mounting holes (stock NPTH footprints) at fixed
     poses, hard edge locks (``edges``: ref -> edge, 1 mm tolerance), locked rotations,
     a placement keep-out rectangle, and a board-region restriction (``region``: refs
-    and rectangle), which the engine cannot express: it is checked, not given."""
+    and rectangle; the engine's hard ``region``, each courtyard inside the rectangle)."""
     spec = deepcopy(spec)
     for ref in holes:
         spec["parts"].append(pinned(ref, "hole_m2", "M2", {"": ""}))
@@ -540,6 +541,8 @@ def absolute(spec, *, holes, edges, rotations, keepout, region, describe):
     cons["orientation"] = dict(rotations)
     x0, y0, x1, y1 = keepout
     cons["keepout"] = [dict(name="label", polygon=[[x0, y0], [x1, y0], [x1, y1], [x0, y1]])]
+    refs, rect = region
+    cons["region"] = [dict(name="region", refs=list(refs), rect=list(rect), hard=True)]
     checks = base_checks(spec)
     checks += [
         dict(id="edge-" + ref, kind="edge", ref=ref, edge=edge, max_mm=1.0, engine="edge_align")
@@ -552,8 +555,7 @@ def absolute(spec, *, holes, edges, rotations, keepout, region, describe):
     checks.append(
         dict(id="keepout-label", kind="keepout", rect=keepout, refs="*", engine="keepout")
     )
-    refs, rect = region
-    checks.append(dict(id="region", kind="region", refs=refs, rect=rect, engine="unsupported"))
+    checks.append(dict(id="region", kind="region", refs=refs, rect=rect, engine="region"))
     spec["checks"] = checks
     spec["description"] += " " + describe
     spec["name"] += "-abs"
@@ -566,8 +568,8 @@ def relative(spec, *, lines, groups, align, describe):
     """Relative placement constraints: ordered lines at a pitch (``line_group``: a
     rigid row, which also fixes the members' order and their offsets), hard proximity
     groups (members within a radius of an anchor), and an alignment (``align``: refs
-    sharing one coordinate within 0.25 mm), which the engine cannot express: it is
-    checked, not given."""
+    sharing one coordinate within 0.25 mm; the engine's hard ``align`` on the
+    footprint origins, as the check measures)."""
     spec = deepcopy(spec)
     cons = spec["constraints"]
     cons["line_group"] = [
@@ -577,6 +579,10 @@ def relative(spec, *, lines, groups, align, describe):
     cons["group"] = [
         dict(members=members, anchor=anchor, hard=True, radius_mm=radius)
         for _name, anchor, members, radius in groups
+    ]
+    refs, axis = align
+    cons["align"] = [
+        dict(name="align", refs=list(refs), axis=axis, anchor="origin", tol_mm=0.25, hard=True)
     ]
     checks = base_checks(spec)
     checks += [
@@ -602,10 +608,7 @@ def relative(spec, *, lines, groups, align, describe):
         )
         for name, anchor, members, radius in groups
     ]
-    refs, axis = align
-    checks.append(
-        dict(id="align", kind="align", refs=refs, axis=axis, tol_mm=0.25, engine="unsupported")
-    )
+    checks.append(dict(id="align", kind="align", refs=refs, axis=axis, tol_mm=0.25, engine="align"))
     spec["checks"] = checks
     spec["description"] += " " + describe
     spec["name"] += "-rel"

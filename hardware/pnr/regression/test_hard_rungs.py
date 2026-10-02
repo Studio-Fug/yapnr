@@ -178,6 +178,39 @@ class HardRungContract(unittest.TestCase):
                     self.assertEqual(pads[pad], count)
         self.assertTrue(set(HARD_LIB.values()) >= {f for f in seen if f in HARD_LIB.values()})
 
+    def test_constraint_checks_are_expressed_to_the_engine(self):
+        """No rung leaves a check unsupported; a region or align check is the engine's
+        own constraint over the same refs, rectangle, axis and tolerance (the check
+        measures footprint origins, so the align anchors are the origins), and every
+        rung's constraint file compiles against its parts."""
+        from pnr.constraints import compile_constraints
+
+        kinds = set()
+        for spec in self.rungs:
+            with self.subTest(spec=spec["name"]):
+                cons = spec["constraints"]
+                for c in spec["checks"]:
+                    self.assertNotEqual(c["engine"], "unsupported", c)
+                    if c["kind"] not in ("region", "align"):
+                        continue
+                    kinds.add(c["kind"])
+                    self.assertEqual(c["engine"], c["kind"])
+                    (rule,) = [r for r in cons[c["kind"]] if r["name"] == c["id"]]
+                    self.assertEqual(rule["refs"], c["refs"])
+                    self.assertIs(rule["hard"], True)
+                    if c["kind"] == "region":
+                        self.assertEqual(rule["rect"], c["rect"])
+                    else:
+                        self.assertEqual(rule["axis"], c["axis"])
+                        self.assertEqual(rule["tol_mm"], c["tol_mm"])
+                        self.assertEqual(rule["anchor"], "origin")
+                refs = [p["ref"] for p in spec["parts"]]
+                compiled = compile_constraints(cons, refs)
+                self.assertFalse(
+                    [w for w in compiled.warnings if "unknown" in w], compiled.warnings
+                )
+        self.assertEqual(kinds, {"region", "align"})
+
     def test_ladder_checks_derive_from_the_engine_constraints(self):
         line, free, edge = showcases()[:3]
         self.assertIn("line-chaser_leds", [c["id"] for c in derived_checks(line)])

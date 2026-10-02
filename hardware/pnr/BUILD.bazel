@@ -1306,6 +1306,21 @@ py_test(
     deps = [":pnr", ":pnr_detail", ":pnr_place"],
 )
 
+# Dense fields and the packed kernel against the reference A* (searches and whole
+# negotiated routes).
+py_test(
+    name = "dense_maze_test",
+    size = "medium",
+    srcs = ["tests/test_dense_maze.py"],
+    main = "tests/test_dense_maze.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        requirement("numpy"),
+    ],
+)
+
 py_test(
     name = "batched_cost_test",
     size = "small",

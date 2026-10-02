@@ -105,14 +105,73 @@ def remaining_connections(access, edges):
 
 
 def maze_kernel() -> str:
-    """The A\\* kernel this process routes with: ``"packed"`` (the default: integer
-    keys, same predicates, prices and tie order, so identical paths) or
-    ``"reference"`` (``PNR_PACKED_MAZE=0``: the dict/Cell search below, kept as the
-    specification the faster kernels are tested against)."""
+    """The A\\* kernel this process routes with.
+
+    * ``"packed"`` (the default): integer keys over a dense per-net field
+      (:mod:`.dense_maze`), the same predicates, prices and tie order, so the
+      same paths;
+    * ``"reference"`` (``PNR_PACKED_MAZE=0``): the dict/Cell search
+      :func:`_astar_reference`, kept as the specification the faster kernels
+      are tested against.
+    """
     return "reference" if os.environ.get("PNR_PACKED_MAZE") == "0" else "packed"
 
 
 def _astar(
+    grid: RouteGrid,
+    sources: Set[Cell],
+    targets: Set[Cell],
+    net: str,
+    occ: Dict[Cell, int],
+    history: Dict[Cell, float],
+    via_cost: float,
+    pres_fac: float,
+    blocked: Optional[Set[Cell]] = None,
+    soft: Optional[Dict[Cell, float]] = None,
+    diagonal: bool = True,
+    drill_sites: Tuple[Tuple[float, float], ...] = (),
+    _field=None,
+) -> Optional[List[Cell]]:
+    """A\\* from any ``sources`` cell to the nearest ``targets`` cell for ``net``
+    with the selected kernel (:func:`maze_kernel`); see :func:`_astar_reference`.
+    ``_field`` is the net's prebuilt dense field for this pricing state."""
+    if maze_kernel() == "reference":
+        from .dense_maze import plain_soft
+
+        return _astar_reference(
+            grid,
+            sources,
+            targets,
+            net,
+            occ,
+            history,
+            via_cost,
+            pres_fac,
+            blocked,
+            plain_soft(soft),
+            diagonal,
+            drill_sites,
+        )
+    from .packed_maze import astar
+
+    return astar(
+        grid,
+        sources,
+        targets,
+        net,
+        occ,
+        history,
+        via_cost,
+        pres_fac,
+        blocked,
+        soft,
+        diagonal,
+        drill_sites,
+        field=_field,
+    )
+
+
+def _astar_reference(
     grid: RouteGrid,
     sources: Set[Cell],
     targets: Set[Cell],
@@ -132,23 +191,6 @@ def _astar(
     DRC-safe 45° steps (both corners free) to shorten diagonal runs. ``blocked``
     cells are hard-impassable; ``soft`` cells (committed other-net copper the rip-up
     pass may cross at a price) are passable but expensive. Returns the path or None."""
-    if maze_kernel() != "reference":
-        from .packed_maze import astar
-
-        return astar(
-            grid,
-            sources,
-            targets,
-            net,
-            occ,
-            history,
-            via_cost,
-            pres_fac,
-            blocked,
-            soft,
-            diagonal,
-            drill_sites,
-        )
     if not targets:
         return None
     targets = {c for c in targets if grid.passable(c.layer, c.i, c.j, net)}
@@ -319,12 +361,14 @@ def _route_one(
     pres_fac: float,
     blocked: Optional[Set[Cell]] = None,
     soft: Optional[Dict[Cell, float]] = None,
+    _session=None,
 ) -> Optional["_Route"]:
     """Connect all ``access`` cells of ``net`` into one tree (Prim on the grid).
     Returns a useful, possibly incomplete :class:`_Route` (cells + edges — edges record which cells are
     diagonally vs orthogonally connected, for DRC-correct 45° emit + corner
     reservation). ``blocked`` cells are hard-impassable; ``soft`` adds a crossing
-    penalty (rip-up pass)."""
+    penalty (rip-up pass). ``_session`` (:class:`.dense_maze.DenseSession`) builds
+    the net's dense search field once for all of its tree's searches."""
     access = list(dict.fromkeys(access))  # de-dup, keep order
     original_access = list(access)
     access = [c for c in access if grid.passable(c.layer, c.i, c.j, net)]
@@ -336,7 +380,10 @@ def _route_one(
     remaining = set(access[1:])
     all_cells: List[Cell] = [access[0]]
     edges: List[Tuple[Cell, Cell]] = []
+    field = None
     while remaining:
+        if field is None and _session is not None:
+            field = _session.field(net, occ, history, pres_fac, blocked, soft)
         path = _astar(
             grid,
             set(tree),
@@ -349,6 +396,7 @@ def _route_one(
             blocked,
             soft,
             drill_sites=tuple(grid.center_of(i, j) for i, j in _new_via_sites(grid, edges, net)),
+            _field=field,
         )
         if path is None:
             return _Route(all_cells, edges) if edges else None
@@ -476,7 +524,21 @@ def _route_impl(
     halo) is shared (DRC-clean) or ``max_iters``. Deterministic."""
     nets = sorted(n for n, cells in net_access.items() if len([c for c in cells]) >= 2)
     nego_order = nets  # name order (difficulty-first ordering measured worse here)
-    history: Dict[Cell, float] = defaultdict(float)
+    # Dense kernels: occupancy, history and committed owners are mirrored in
+    # arrays as they change (identical dictionaries for every other reader).
+    session = None
+    if maze_kernel() != "reference":
+        from .dense_maze import DenseSession
+
+        session = DenseSession(grid)
+        if session.static is None:
+            session = None
+    if session is not None:
+        from .dense_maze import DenseCounts, DenseOwners, SoftOwners
+
+        history: Dict[Cell, float] = DenseCounts(float, grid)
+    else:
+        history = defaultdict(float)
     pres_fac = pres_fac0
     result_nets: Dict[str, RoutedNet] = {}
     iters = 0
@@ -490,7 +552,7 @@ def _route_impl(
 
     # Persistent congestion: owner[cell] = nets currently on it, occ[cell] = |owner|.
     owner: Dict[Cell, Set[str]] = defaultdict(set)
-    occ: Dict[Cell, int] = defaultdict(int)
+    occ: Dict[Cell, int] = DenseCounts(int, grid) if session is not None else defaultdict(int)
     routed: Dict[str, Optional[_Route]] = {n: None for n in nets}
     fps: Dict[str, Set[Cell]] = {n: set() for n in nets}
 
@@ -572,7 +634,9 @@ def _route_impl(
                 proposals = _pool.batch(batch, net_access, occ, history, via_cost, pres_fac)
             else:
                 proposals = [
-                    _route_one(grid, net_access[n], n, occ, history, via_cost, pres_fac)
+                    _route_one(
+                        grid, net_access[n], n, occ, history, via_cost, pres_fac, _session=session
+                    )
                     for n in batch
                 ]
             added = set()
@@ -590,7 +654,14 @@ def _route_impl(
                         "parallel_grid_retry", data=dict(net=net, phase="signals", pass_index=iters)
                     )
                     proposal = _route_one(
-                        grid, net_access[net], net, occ, history, via_cost, pres_fac
+                        grid,
+                        net_access[net],
+                        net,
+                        occ,
+                        history,
+                        via_cost,
+                        pres_fac,
+                        _session=session,
                     )
                 _place(net, proposal)
                 added.update(fps[net])
@@ -620,7 +691,7 @@ def _route_impl(
     #  contended for one cell during negotiation now reroutes instead of being lost;
     #  it stays unrouted only if it genuinely cannot path around the committed set.
     #  This is the difference between a greedy grid router and a real one.
-    occupied: Dict[Cell, str] = {}
+    occupied: Dict[Cell, str] = DenseOwners(grid) if session is not None else {}
     committed: Set[Cell] = set()
     routes: Dict[str, _Route] = {}  # committed _Route per net (geometry + snapshot)
 
@@ -678,7 +749,15 @@ def _route_impl(
             if _pool
             else [
                 _route_one(
-                    grid, net_access[n], n, zero_occ, zero_hist, via_cost, 0.0, blocked=committed
+                    grid,
+                    net_access[n],
+                    n,
+                    zero_occ,
+                    zero_hist,
+                    via_cost,
+                    0.0,
+                    blocked=committed,
+                    _session=session,
                 )
                 for n in batch
             ]
@@ -701,6 +780,7 @@ def _route_impl(
                     via_cost,
                     0.0,
                     blocked=committed,
+                    _session=session,
                 )
                 fp = (
                     _footprint(
@@ -747,9 +827,21 @@ def _route_impl(
         net = queue.popleft()
         queued.discard(net)
         pen = rip_penalty * (1 + rip_count[net])
-        soft = {c: pen for c, o in occupied.items() if o != net}
+        soft = (
+            SoftOwners(occupied, net, pen)
+            if session is not None
+            else {c: pen for c, o in occupied.items() if o != net}
+        )
         route = _route_one(
-            grid, net_access[net], net, zero_occ, zero_hist, via_cost, 0.0, soft=soft
+            grid,
+            net_access[net],
+            net,
+            zero_occ,
+            zero_hist,
+            via_cost,
+            0.0,
+            soft=soft,
+            _session=session,
         )
         if not route:
             continue
@@ -758,7 +850,15 @@ def _route_impl(
         if len(crossed) > max_rip:
             # Too disruptive at this penalty — try to route strictly AROUND instead.
             around = _route_one(
-                grid, net_access[net], net, zero_occ, zero_hist, via_cost, 0.0, blocked=committed
+                grid,
+                net_access[net],
+                net,
+                zero_occ,
+                zero_hist,
+                via_cost,
+                0.0,
+                blocked=committed,
+                _session=session,
             )
             if around and not (
                 _footprint(grid, around.cells, via_keepout, _h(net), edges=around.edges, net=net)
@@ -814,6 +914,7 @@ def _route_impl(
             )
         remaining = set(net_access[net]) - set(forest.cells)
         first_tree = set(forest.cells)
+        field = None
         while remaining:
             if first_tree:
                 tree = first_tree
@@ -823,6 +924,8 @@ def _route_impl(
                 remaining.remove(seed)
                 tree = {seed}
             while remaining:
+                if field is None and session is not None:
+                    field = session.field(net, zero_occ, zero_hist, 0.0, blocked=committed)
                 path = _astar(
                     grid,
                     tree,
@@ -836,6 +939,7 @@ def _route_impl(
                     drill_sites=tuple(
                         grid.center_of(i, j) for i, j in _new_via_sites(grid, forest.edges, net)
                     ),
+                    _field=field,
                 )
                 if not path:
                     break

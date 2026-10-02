@@ -1,0 +1,13 @@
+(version 1)
+(rule "MO_A22_PMO: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_A22_PMO')")
+	(severity ignore))
+(rule "MO_A09: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_A09')")
+	(severity ignore))
+(rule "MO_A13: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_A13')")
+	(severity ignore))

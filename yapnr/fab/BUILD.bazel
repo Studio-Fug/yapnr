@@ -1,0 +1,66 @@
+"""Fab outputs (docs/fab-and-ordering.md; design docs/design/fab-and-ordering.md).
+
+- :capability is the vendor data (profiles, stackups, vendors) and its loader: stdlib only and
+  Python 3.9 compatible, because pnr.fab_profile imports it inside KiCad's Python.
+- :fab is `yapnr fab` (checks, exports, bundles, previews). It drives the headless kicad-cli and
+  uses pnr.fab_profile for the rules KiCad enforces.
+"""
+
+load("@rules_python//python:defs.bzl", "py_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The files KiCad-side engine workers need on their path to select a data profile
+# (pnr.fab_profile resolves every non-built-in name through yapnr.fab.capability).
+filegroup(
+    name = "capability_files",
+    srcs = [
+        "__init__.py",
+        "capability.py",
+        "//yapnr:__init__.py",
+    ] + glob(["data/**/*.json"]),
+)
+
+py_library(
+    name = "capability",
+    srcs = [
+        "__init__.py",
+        "capability.py",
+    ],
+    data = glob(["data/**/*.json"]),
+    imports = ["../.."],
+    deps = ["//yapnr:package"],
+)
+
+py_library(
+    name = "fab",
+    srcs = [
+        "assembly.py",
+        "board.py",
+        "build.py",
+        "bundle.py",
+        "check.py",
+        "cli.py",
+        "export.py",
+        "kicad.py",
+        "preview.py",
+        "profiles.py",
+        "stackups.py",
+    ],
+    imports = ["../.."],
+    deps = [
+        ":capability",
+        "//hardware/pnr",
+        "//yapnr/frontends/atopile",
+        "//yapnr/order:card",
+    ],
+)
+
+# Synthetic boards and a fake kicad-cli for the tests (never real product data); not in the wheel.
+py_library(
+    name = "testing",
+    testonly = True,
+    srcs = ["testing.py"],
+    imports = ["../.."],
+    deps = [":fab"],
+)

@@ -23,6 +23,14 @@ The commands:
 
 ``yapnr part-cache ...``
     The part cache: local directory or server (docs/part-cache.md).
+
+``yapnr fab profiles|show|check|build|preview``
+    Vendor profiles and stackups, the fab check (KiCad DRC under a vendor's rules), the
+    per-vendor fab bundle and a preview of its gerbers (docs/fab-and-ordering.md).
+
+``yapnr order stage|vendors``
+    The order card and the vendor's upload page. Staging only: yapnr never uploads, orders or
+    pays (docs/fab-and-ordering.md).
 """
 
 from __future__ import annotations
@@ -172,18 +180,24 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.add_argument("--json", action="store_true", help="machine-readable output")
     doctor.set_defaults(func=_cmd_doctor)
 
+    from yapnr.fab.cli import register as register_fab
     from yapnr.frontends.atopile.cli import register_atopile, register_picker
+    from yapnr.order.cli import register as register_order
     from yapnr.partcache.cli import register as register_part_cache
 
     register_atopile(commands)
     register_picker(commands)
     register_part_cache(commands)
+    register_fab(commands)
+    register_order(commands)
     return parser
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    # The command line as given (for the fab manifest, which keeps relative paths only).
+    args._argv = list(argv) if argv is not None else sys.argv[1:]
     func = getattr(args, "func", None)
     if func is None:
         parser.print_help(sys.stderr)

@@ -1,0 +1,127 @@
+{
+  "schema": "yapnr-fab-stackup-v1",
+  "id": "oshpark-4l-mixed",
+  "vendor": "oshpark",
+  "title": "OSH Park 4 layer, FR408-HR prepreg on an EM528 core",
+  "vendor_name": "4 Layer, mixed material",
+  "checkout": "The mixed-material build OSH Park described on O-mixed; it is not chosen at checkout.",
+  "thickness_mm": {
+    "value": 1.6,
+    "src": "O-mixed"
+  },
+  "layers": [
+    {
+      "kind": "mask",
+      "side": "F",
+      "thickness_mm": 0.01524,
+      "er": null,
+      "src": "O-6l (0.6 mil solder resist; O-4l gives none)",
+      "er_prior": 3.8,
+      "er_prior_src": "J-imp (calculator default)"
+    },
+    {
+      "kind": "copper",
+      "name": "F.Cu",
+      "thickness_mm": 0.04318,
+      "weight_oz": 1.0,
+      "plated": true,
+      "src": "O-4l",
+      "finish": "ENIG"
+    },
+    {
+      "kind": "dielectric",
+      "type": "prepreg",
+      "material": "FR408HR 2113",
+      "thickness_mm": 0.1999,
+      "er": 3.61,
+      "er_freq_hz": 1000000000.0,
+      "df": null,
+      "src": "O-4l",
+      "df_prior": 0.009,
+      "df_prior_src": "O-6l (FR408HR 2113 core, 1 GHz)"
+    },
+    {
+      "kind": "copper",
+      "name": "In1.Cu",
+      "thickness_mm": 0.01727,
+      "weight_oz": 0.5,
+      "plated": false,
+      "src": "O-4l"
+    },
+    {
+      "kind": "dielectric",
+      "type": "core",
+      "material": "EM528",
+      "thickness_mm": 0.9906,
+      "er": 4.11,
+      "er_freq_hz": null,
+      "df": 0.005,
+      "src": "O-mixed"
+    },
+    {
+      "kind": "copper",
+      "name": "In2.Cu",
+      "thickness_mm": 0.01727,
+      "weight_oz": 0.5,
+      "plated": false,
+      "src": "O-4l"
+    },
+    {
+      "kind": "dielectric",
+      "type": "prepreg",
+      "material": "FR408HR 2113",
+      "thickness_mm": 0.1999,
+      "er": 3.61,
+      "er_freq_hz": 1000000000.0,
+      "df": null,
+      "src": "O-4l",
+      "df_prior": 0.009,
+      "df_prior_src": "O-6l (FR408HR 2113 core, 1 GHz)"
+    },
+    {
+      "kind": "copper",
+      "name": "B.Cu",
+      "thickness_mm": 0.04318,
+      "weight_oz": 1.0,
+      "plated": true,
+      "src": "O-4l",
+      "finish": "ENIG"
+    },
+    {
+      "kind": "mask",
+      "side": "B",
+      "thickness_mm": 0.01524,
+      "er": null,
+      "src": "O-6l (0.6 mil solder resist; O-4l gives none)",
+      "er_prior": 3.8,
+      "er_prior_src": "J-imp (calculator default)"
+    }
+  ],
+  "tolerances": {
+    "impedance_pct": null,
+    "thickness_pct": null,
+    "width_pct": null
+  },
+  "sources": {
+    "J-imp": {
+      "url": "https://jlcpcb.com/impedance",
+      "accessed": "2026-10-02"
+    },
+    "O-4l": {
+      "url": "https://docs.oshpark.com/services/four-layer/",
+      "accessed": "2026-10-02"
+    },
+    "O-6l": {
+      "url": "https://docs.oshpark.com/services/six-layer/",
+      "accessed": "2026-10-02"
+    },
+    "O-alt": {
+      "url": "https://docs.oshpark.com/troubleshooting/alternate-4-layer-stackup/",
+      "accessed": "2026-10-02"
+    },
+    "O-mixed": {
+      "url": "https://docs.oshpark.com/troubleshooting/mixed-material-4-layer-stackup/",
+      "accessed": "2026-10-02"
+    }
+  }
+}

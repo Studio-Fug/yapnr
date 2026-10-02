@@ -1,0 +1,426 @@
+{
+  "jlc-pofv": {
+    "apply_fab_legacy": {
+      "clearance_mm": 0.127,
+      "component_pth_min_drill_mm": 0.3,
+      "edge_clearance_mm": 0.3,
+      "filled_via_hole_to_hole_mm": 0.45,
+      "hole_clearance_mm": 0.2,
+      "hole_to_edge_mm": 0.5,
+      "hole_to_hole_mm": 0.25,
+      "min_npth_drill_mm": 0.5,
+      "min_through_drill_mm": 0.2,
+      "min_track_width_mm": 0.127,
+      "min_via_diameter_mm": 0.35,
+      "npth_hole_clearance_mm": 0.2,
+      "pth_hole_clearance_mm": 0.35,
+      "pth_hole_to_hole_mm": 0.5,
+      "smd_pad_clearance_mm": 0.15,
+      "track_width_mm": 0.2,
+      "via_annular_mm": 0.075,
+      "via_classes": {
+        "default": {
+          "diameter_mm": 0.45,
+          "drill_mm": 0.3
+        },
+        "escape": {
+          "diameter_mm": 0.45,
+          "drill_mm": 0.2
+        },
+        "in_pad": {
+          "alt_diameter_mm": 0.45,
+          "diameter_mm": 0.35,
+          "drill_mm": 0.2,
+          "filled": true,
+          "min_hole_edge_to_pad_edge_mm": 0.09,
+          "min_row_pitch_mm": 0.45,
+          "remove_unused_inner_pads": true,
+          "row_pitch_mm": 0.5,
+          "stagger_mm": 0.25
+        },
+        "power": {
+          "diameter_mm": 0.6,
+          "drill_mm": 0.3
+        }
+      },
+      "via_diameter_mm": 0.45,
+      "via_drill_mm": 0.3,
+      "via_to_smd_pad_mm": 0.127
+    },
+    "apply_fab_model": {
+      "board_thickness_mm": 1.6,
+      "component_pth_min_drill_mm": 0.3,
+      "edge_clearance_mm": 0.3,
+      "fab_profile": "jlc-pofv",
+      "filled_via_hole_to_hole_mm": 0.45,
+      "hole_clearance_mm": 0.2,
+      "hole_to_edge_mm": 0.5,
+      "hole_to_hole_mm": 0.25,
+      "inner_copper_oz": 0.4342857142857143,
+      "inner_copper_um": 15.2,
+      "min_via_plating_um": 18,
+      "outer_copper_oz": 1.0,
+      "outer_copper_um": 35.0,
+      "pth_hole_to_hole_mm": 0.5,
+      "qualification": "JLCPCB standard 4-layer 1.6 mm (JLC04161H-7628) + POFV screening: 35 um outer / 15.2 um inner finished copper, 18 um barrel plating (docs/fab-comparison.md 5A/5B). IPC-2221 screening only; IPC-2152 thermal and impedance qualification remain pending.",
+      "via_diameter_mm": 0.45,
+      "via_drill_mm": 0.3,
+      "via_to_smd_pad_mm": 0.127,
+      "x": 1
+    },
+    "apply_rules": {
+      "default_clearance_mm": 0.2,
+      "electrical_fab": {
+        "board_thickness_mm": 1.6,
+        "component_pth_min_drill_mm": 0.3,
+        "edge_clearance_mm": 0.3,
+        "fab_profile": "jlc-pofv",
+        "filled_via_hole_to_hole_mm": 0.45,
+        "hole_clearance_mm": 0.2,
+        "hole_to_edge_mm": 0.5,
+        "hole_to_hole_mm": 0.25,
+        "inner_copper_oz": 0.4342857142857143,
+        "inner_copper_um": 15.2,
+        "max_temp_rise_c": 10.0,
+        "min_via_plating_um": 18,
+        "outer_copper_oz": 1.0,
+        "outer_copper_um": 35.0,
+        "pth_hole_to_hole_mm": 0.5,
+        "qualification": "JLCPCB standard 4-layer 1.6 mm (JLC04161H-7628) + POFV screening: 35 um outer / 15.2 um inner finished copper, 18 um barrel plating (docs/fab-comparison.md 5A/5B). IPC-2221 screening only; IPC-2152 thermal and impedance qualification remain pending.",
+        "via_diameter_mm": 0.45,
+        "via_drill_mm": 0.3,
+        "via_to_smd_pad_mm": 0.127
+      },
+      "fab": {
+        "clearance_mm": 0.127,
+        "component_pth_min_drill_mm": 0.3,
+        "edge_clearance_mm": 0.3,
+        "filled_via_hole_to_hole_mm": 0.45,
+        "hole_clearance_mm": 0.2,
+        "hole_to_edge_mm": 0.5,
+        "hole_to_hole_mm": 0.25,
+        "min_npth_drill_mm": 0.5,
+        "min_through_drill_mm": 0.2,
+        "min_track_width_mm": 0.127,
+        "min_via_diameter_mm": 0.35,
+        "npth_hole_clearance_mm": 0.2,
+        "pth_hole_clearance_mm": 0.35,
+        "pth_hole_to_hole_mm": 0.5,
+        "smd_pad_clearance_mm": 0.15,
+        "track_width_mm": 0.25,
+        "via_annular_mm": 0.075,
+        "via_classes": {
+          "default": {
+            "diameter_mm": 0.45,
+            "drill_mm": 0.3
+          },
+          "escape": {
+            "diameter_mm": 0.45,
+            "drill_mm": 0.2
+          },
+          "in_pad": {
+            "alt_diameter_mm": 0.45,
+            "diameter_mm": 0.35,
+            "drill_mm": 0.2,
+            "filled": true,
+            "min_hole_edge_to_pad_edge_mm": 0.09,
+            "min_row_pitch_mm": 0.45,
+            "remove_unused_inner_pads": true,
+            "row_pitch_mm": 0.5,
+            "stagger_mm": 0.25
+          },
+          "power": {
+            "diameter_mm": 0.6,
+            "drill_mm": 0.3
+          }
+        },
+        "via_diameter_mm": 0.45,
+        "via_drill_mm": 0.3,
+        "via_to_smd_pad_mm": 0.127
+      },
+      "fab_profile": "jlc-pofv",
+      "net_classes": [
+        {
+          "clearance_mm": 0.25,
+          "name": "power",
+          "nets": ["vcc"],
+          "width_mm": 0.5
+        }
+      ],
+      "plane_access_fab": {
+        "board_thickness_mm": 1.6,
+        "component_pth_min_drill_mm": 0.3,
+        "edge_clearance_mm": 0.3,
+        "fab_profile": "jlc-pofv",
+        "filled_via_hole_to_hole_mm": 0.45,
+        "hole_clearance_mm": 0.2,
+        "hole_to_edge_mm": 0.5,
+        "hole_to_hole_mm": 0.25,
+        "inner_copper_oz": 0.4342857142857143,
+        "inner_copper_um": 15.2,
+        "min_via_plating_um": 18,
+        "outer_copper_oz": 1.0,
+        "outer_copper_um": 35.0,
+        "pth_hole_to_hole_mm": 0.5,
+        "qualification": "JLCPCB standard 4-layer 1.6 mm (JLC04161H-7628) + POFV screening: 35 um outer / 15.2 um inner finished copper, 18 um barrel plating (docs/fab-comparison.md 5A/5B). IPC-2221 screening only; IPC-2152 thermal and impedance qualification remain pending.",
+        "via_diameter_mm": 0.45,
+        "via_drill_mm": 0.3,
+        "via_to_smd_pad_mm": 0.127
+      }
+    },
+    "board_constraints": {
+      "min_clearance": 0.127,
+      "min_copper_edge_clearance": 0.3,
+      "min_hole_clearance": 0.2,
+      "min_hole_to_hole": 0.25,
+      "min_through_hole_diameter": 0.2,
+      "min_track_width": 0.127,
+      "min_via_annular_width": 0.075,
+      "min_via_diameter": 0.35
+    },
+    "board_constraints_rules": {
+      "min_clearance": 0.127,
+      "min_copper_edge_clearance": 0.3,
+      "min_hole_clearance": 0.2,
+      "min_hole_to_hole": 0.25,
+      "min_through_hole_diameter": 0.2,
+      "min_track_width": 0.127,
+      "min_via_annular_width": 0.075,
+      "min_via_diameter": 0.35
+    },
+    "dru_text": "(version 1)\n# Generated by pnr.fab_profile (profile jlc-pofv); docs/fab-comparison.md 5A/5B.\n# Rewritten on every project stamp and native DRC: edit pnr/fab_profile.py.\n# 5A SMD pad to pad, different nets (clearance applies to different nets only)\n(rule \"jlc-pofv_smd_pad_to_pad\"\n  (constraint clearance (min 0.15mm))\n  (condition \"A.Type == 'Pad' && B.Type == 'Pad' && A.Pad_Type == 'SMD' && B.Pad_Type == 'SMD' && A.NetClass != 'Default' && B.NetClass != 'Default' && A.NetClass != 'power' && B.NetClass != 'power'\"))\n# 5A Vias in SMD pads: via copper to SMD pad 0.127 (any net); 5B Via-in-pad via: only the filled 0.20-drill in-pad class may enter an SMD pad\n(rule \"jlc-pofv_via_to_smd_pad\"\n  (constraint physical_clearance (min 0.127mm))\n  (condition \"A.Type == 'Via' && A.Hole > 0.2mm && B.Type == 'Pad' && B.Pad_Type == 'SMD'\"))\n# 5A Via hole to copper (vias and via-class footprint holes under 5A Component PTH hole 0.30)\n(rule \"jlc-pofv_via_hole_clearance\"\n  (constraint hole_clearance (min 0.2mm))\n  (condition \"(A.Type == 'Via' || (A.Type == 'Pad' && A.Pad_Type == 'Through-hole' && A.Hole_Size_X < 0.3mm && A.Hole_Size_Y < 0.3mm))\"))\n# 5A NPTH hole to copper\n(rule \"jlc-pofv_npth_hole_clearance\"\n  (constraint hole_clearance (min 0.2mm))\n  (condition \"(A.Type == 'Pad' && A.Pad_Type == 'NPTH, mechanical')\"))\n# 5A PTH hole to copper (component PTH: 5A hole 0.30 or more)\n(rule \"jlc-pofv_pth_hole_clearance\"\n  (constraint hole_clearance (min 0.35mm))\n  (condition \"(A.Type == 'Pad' && A.Pad_Type == 'Through-hole' && (A.Hole_Size_X >= 0.3mm || A.Hole_Size_Y >= 0.3mm)) && !(B.Type == 'Via' || (B.Type == 'Pad' && B.Pad_Type == 'Through-hole' && B.Hole_Size_X < 0.3mm && B.Hole_Size_Y < 0.3mm))\"))\n# 5A Hole-to-hole, via to via\n(rule \"jlc-pofv_via_hole_to_hole\"\n  (constraint hole_to_hole (min 0.25mm))\n  (condition \"(A.Type == 'Via' || (A.Type == 'Pad' && A.Pad_Type == 'Through-hole' && A.Hole_Size_X < 0.3mm && A.Hole_Size_Y < 0.3mm)) && (B.Type == 'Via' || (B.Type == 'Pad' && B.Pad_Type == 'Through-hole' && B.Hole_Size_X < 0.3mm && B.Hole_Size_Y < 0.3mm))\"))\n# 5B Filled via hole to any regular PTH or NPTH\n(rule \"jlc-pofv_filled_via_to_pad_hole\"\n  (constraint hole_to_hole (min 0.45mm))\n  (condition \"(A.Type == 'Via' || (A.Type == 'Pad' && A.Pad_Type == 'Through-hole' && A.Hole_Size_X < 0.3mm && A.Hole_Size_Y < 0.3mm)) && ((B.Type == 'Pad' && B.Pad_Type == 'Through-hole' && (B.Hole_Size_X >= 0.3mm || B.Hole_Size_Y >= 0.3mm)) || (B.Type == 'Pad' && B.Pad_Type == 'NPTH, mechanical'))\"))\n# 5A Hole-to-hole, any pair involving a component PTH\n(rule \"jlc-pofv_component_pth_hole_to_hole\"\n  (constraint hole_to_hole (min 0.5mm))\n  (condition \"(A.Type == 'Pad' && A.Pad_Type == 'Through-hole' && (A.Hole_Size_X >= 0.3mm || A.Hole_Size_Y >= 0.3mm))\"))\n# 5A NPTH 0.50 or more\n(rule \"jlc-pofv_npth_min_drill\"\n  (constraint hole_size (min 0.5mm))\n  (condition \"(A.Type == 'Pad' && A.Pad_Type == 'NPTH, mechanical')\"))\n# 5A Hole to edge 0.5mm to the outline centreline (KiCad measures to the stroke edge: minus half the 0.15mm Edge.Cuts stroke)\n(rule \"jlc-pofv_hole_to_edge\"\n  (constraint physical_hole_clearance (min 0.425mm))\n  (condition \"A.Layer == 'Edge.Cuts' || B.Layer == 'Edge.Cuts'\"))\n",
+    "dru_text_plain": "(version 1)\n# Generated by pnr.fab_profile (profile jlc-pofv); docs/fab-comparison.md 5A/5B.\n# Rewritten on every project stamp and native DRC: edit pnr/fab_profile.py.\n# 5A SMD pad to pad, different nets (clearance applies to different nets only)\n(rule \"jlc-pofv_smd_pad_to_pad\"\n  (constraint clearance (min 0.15mm))\n  (condition \"A.Type == 'Pad' && B.Type == 'Pad' && A.Pad_Type == 'SMD' && B.Pad_Type == 'SMD'\"))\n# 5A Vias in SMD pads: via copper to SMD pad 0.127 (any net); 5B Via-in-pad via: only the filled 0.20-drill in-pad class may enter an SMD pad\n(rule \"jlc-pofv_via_to_smd_pad\"\n  (constraint physical_clearance (min 0.127mm))\n  (condition \"A.Type == 'Via' && A.Hole > 0.2mm && B.Type == 'Pad' && B.Pad_Type == 'SMD'\"))\n# 5A Via hole to copper (vias and via-class footprint holes under 5A Component PTH hole 0.30)\n(rule \"jlc-pofv_via_hole_clearance\"\n  (constraint hole_clearance (min 0.2mm))\n  (condition \"(A.Type == 'Via' || (A.Type == 'Pad' && A.Pad_Type == 'Through-hole' && A.Hole_Size_X < 0.3mm && A.Hole_Size_Y < 0.3mm))\"))\n# 5A NPTH hole to copper\n(rule \"jlc-pofv_npth_hole_clearance\"\n  (constraint hole_clearance (min 0.2mm))\n  (condition \"(A.Type == 'Pad' && A.Pad_Type == 'NPTH, mechanical')\"))\n# 5A PTH hole to copper (component PTH: 5A hole 0.30 or more)\n(rule \"jlc-pofv_pth_hole_clearance\"\n  (constraint hole_clearance (min 0.35mm))\n  (condition \"(A.Type == 'Pad' && A.Pad_Type == 'Through-hole' && (A.Hole_Size_X >= 0.3mm || A.Hole_Size_Y >= 0.3mm)) && !(B.Type == 'Via' || (B.Type == 'Pad' && B.Pad_Type == 'Through-hole' && B.Hole_Size_X < 0.3mm && B.Hole_Size_Y < 0.3mm))\"))\n# 5A Hole-to-hole, via to via\n(rule \"jlc-pofv_via_hole_to_hole\"\n  (constraint hole_to_hole (min 0.25mm))\n  (condition \"(A.Type == 'Via' || (A.Type == 'Pad' && A.Pad_Type == 'Through-hole' && A.Hole_Size_X < 0.3mm && A.Hole_Size_Y < 0.3mm)) && (B.Type == 'Via' || (B.Type == 'Pad' && B.Pad_Type == 'Through-hole' && B.Hole_Size_X < 0.3mm && B.Hole_Size_Y < 0.3mm))\"))\n# 5B Filled via hole to any regular PTH or NPTH\n(rule \"jlc-pofv_filled_via_to_pad_hole\"\n  (constraint hole_to_hole (min 0.45mm))\n  (condition \"(A.Type == 'Via' || (A.Type == 'Pad' && A.Pad_Type == 'Through-hole' && A.Hole_Size_X < 0.3mm && A.Hole_Size_Y < 0.3mm)) && ((B.Type == 'Pad' && B.Pad_Type == 'Through-hole' && (B.Hole_Size_X >= 0.3mm || B.Hole_Size_Y >= 0.3mm)) || (B.Type == 'Pad' && B.Pad_Type == 'NPTH, mechanical'))\"))\n# 5A Hole-to-hole, any pair involving a component PTH\n(rule \"jlc-pofv_component_pth_hole_to_hole\"\n  (constraint hole_to_hole (min 0.5mm))\n  (condition \"(A.Type == 'Pad' && A.Pad_Type == 'Through-hole' && (A.Hole_Size_X >= 0.3mm || A.Hole_Size_Y >= 0.3mm))\"))\n# 5A NPTH 0.50 or more\n(rule \"jlc-pofv_npth_min_drill\"\n  (constraint hole_size (min 0.5mm))\n  (condition \"(A.Type == 'Pad' && A.Pad_Type == 'NPTH, mechanical')\"))\n# 5A Hole to edge 0.5mm to the outline centreline (KiCad measures to the stroke edge: minus half the 0mm Edge.Cuts stroke)\n(rule \"jlc-pofv_hole_to_edge\"\n  (constraint physical_hole_clearance (min 0.5mm))\n  (condition \"A.Layer == 'Edge.Cuts' || B.Layer == 'Edge.Cuts'\"))\n",
+    "dru_text_rules": "(version 1)\n# Generated by pnr.fab_profile (profile jlc-pofv); docs/fab-comparison.md 5A/5B.\n# Rewritten on every project stamp and native DRC: edit pnr/fab_profile.py.\n# 5A SMD pad to pad, different nets (clearance applies to different nets only)\n(rule \"jlc-pofv_smd_pad_to_pad\"\n  (constraint clearance (min 0.15mm))\n  (condition \"A.Type == 'Pad' && B.Type == 'Pad' && A.Pad_Type == 'SMD' && B.Pad_Type == 'SMD' && A.NetClass != 'Default' && B.NetClass != 'Default'\"))\n# 5A Vias in SMD pads: via copper to SMD pad 0.127 (any net); 5B Via-in-pad via: only the filled 0.20-drill in-pad class may enter an SMD pad\n(rule \"jlc-pofv_via_to_smd_pad\"\n  (constraint physical_clearance (min 0.127mm))\n  (condition \"A.Type == 'Via' && A.Hole > 0.2mm && B.Type == 'Pad' && B.Pad_Type == 'SMD'\"))\n# 5A Via hole to copper (vias and via-class footprint holes under 5A Component PTH hole 0.30)\n(rule \"jlc-pofv_via_hole_clearance\"\n  (constraint hole_clearance (min 0.2mm))\n  (condition \"(A.Type == 'Via' || (A.Type == 'Pad' && A.Pad_Type == 'Through-hole' && A.Hole_Size_X < 0.3mm && A.Hole_Size_Y < 0.3mm))\"))\n# 5A NPTH hole to copper\n(rule \"jlc-pofv_npth_hole_clearance\"\n  (constraint hole_clearance (min 0.2mm))\n  (condition \"(A.Type == 'Pad' && A.Pad_Type == 'NPTH, mechanical')\"))\n# 5A PTH hole to copper (component PTH: 5A hole 0.30 or more)\n(rule \"jlc-pofv_pth_hole_clearance\"\n  (constraint hole_clearance (min 0.35mm))\n  (condition \"(A.Type == 'Pad' && A.Pad_Type == 'Through-hole' && (A.Hole_Size_X >= 0.3mm || A.Hole_Size_Y >= 0.3mm)) && !(B.Type == 'Via' || (B.Type == 'Pad' && B.Pad_Type == 'Through-hole' && B.Hole_Size_X < 0.3mm && B.Hole_Size_Y < 0.3mm))\"))\n# 5A Hole-to-hole, via to via\n(rule \"jlc-pofv_via_hole_to_hole\"\n  (constraint hole_to_hole (min 0.25mm))\n  (condition \"(A.Type == 'Via' || (A.Type == 'Pad' && A.Pad_Type == 'Through-hole' && A.Hole_Size_X < 0.3mm && A.Hole_Size_Y < 0.3mm)) && (B.Type == 'Via' || (B.Type == 'Pad' && B.Pad_Type == 'Through-hole' && B.Hole_Size_X < 0.3mm && B.Hole_Size_Y < 0.3mm))\"))\n# 5B Filled via hole to any regular PTH or NPTH\n(rule \"jlc-pofv_filled_via_to_pad_hole\"\n  (constraint hole_to_hole (min 0.45mm))\n  (condition \"(A.Type == 'Via' || (A.Type == 'Pad' && A.Pad_Type == 'Through-hole' && A.Hole_Size_X < 0.3mm && A.Hole_Size_Y < 0.3mm)) && ((B.Type == 'Pad' && B.Pad_Type == 'Through-hole' && (B.Hole_Size_X >= 0.3mm || B.Hole_Size_Y >= 0.3mm)) || (B.Type == 'Pad' && B.Pad_Type == 'NPTH, mechanical'))\"))\n# 5A Hole-to-hole, any pair involving a component PTH\n(rule \"jlc-pofv_component_pth_hole_to_hole\"\n  (constraint hole_to_hole (min 0.5mm))\n  (condition \"(A.Type == 'Pad' && A.Pad_Type == 'Through-hole' && (A.Hole_Size_X >= 0.3mm || A.Hole_Size_Y >= 0.3mm))\"))\n# 5A NPTH 0.50 or more\n(rule \"jlc-pofv_npth_min_drill\"\n  (constraint hole_size (min 0.5mm))\n  (condition \"(A.Type == 'Pad' && A.Pad_Type == 'NPTH, mechanical')\"))\n# 5A Hole to edge 0.5mm to the outline centreline (KiCad measures to the stroke edge: minus half the 0.05mm Edge.Cuts stroke)\n(rule \"jlc-pofv_hole_to_edge\"\n  (constraint physical_hole_clearance (min 0.475mm))\n  (condition \"A.Layer == 'Edge.Cuts' || B.Layer == 'Edge.Cuts'\"))\n",
+    "geometry_profile": {
+      "clearance": 0.127,
+      "clearance_gap": 0.128,
+      "component_pth_min_drill": 0.3,
+      "edge_clearance": 0.3,
+      "edge_gap": 0.301,
+      "filled_via_hole_to_hole": 0.45,
+      "hole_clearance": 0.2,
+      "hole_gap": 0.251,
+      "hole_to_edge": 0.5,
+      "hole_to_hole": 0.25,
+      "in_pad": {
+        "diameters": [0.35, 0.45],
+        "drill": 0.2,
+        "hole_margin": 0.09,
+        "min_pitch": 0.45,
+        "pitch": 0.5,
+        "remove_unused_inner_pads": true,
+        "stagger": 0.25
+      },
+      "max_via_hole_gap": 0.5,
+      "npth_hole_clearance": 0.2,
+      "pad_hole_clearances": [0.35, 0.2, 0.35],
+      "pth_hole_clearance": 0.35,
+      "pth_hole_to_hole": 0.5,
+      "same_net_via_pitch": 0.551,
+      "via_diameter": 0.45,
+      "via_drill": 0.3,
+      "via_edge_margin": 0.651,
+      "via_hole_gaps": [0.25, 0.5, 0.45, 0.5],
+      "via_radius": 0.225,
+      "via_to_smd_pad": 0.127
+    },
+    "geometry_rules": {
+      "clearance": 0.127,
+      "clearance_gap": 0.128,
+      "component_pth_min_drill": 0.3,
+      "edge_clearance": 0.3,
+      "edge_gap": 0.301,
+      "filled_via_hole_to_hole": 0.45,
+      "hole_clearance": 0.2,
+      "hole_gap": 0.251,
+      "hole_to_edge": 0.5,
+      "hole_to_hole": 0.25,
+      "in_pad": {
+        "diameters": [0.35, 0.45],
+        "drill": 0.2,
+        "hole_margin": 0.09,
+        "min_pitch": 0.45,
+        "pitch": 0.5,
+        "remove_unused_inner_pads": true,
+        "stagger": 0.25
+      },
+      "max_via_hole_gap": 0.5,
+      "npth_hole_clearance": 0.2,
+      "pad_hole_clearances": [0.35, 0.2, 0.35],
+      "pth_hole_clearance": 0.35,
+      "pth_hole_to_hole": 0.5,
+      "same_net_via_pitch": 0.551,
+      "via_diameter": 0.45,
+      "via_drill": 0.3,
+      "via_edge_margin": 0.651,
+      "via_hole_gaps": [0.25, 0.5, 0.45, 0.5],
+      "via_radius": 0.225,
+      "via_to_smd_pad": 0.127
+    },
+    "profile_fab": {
+      "clearance_mm": 0.127,
+      "component_pth_min_drill_mm": 0.3,
+      "edge_clearance_mm": 0.3,
+      "filled_via_hole_to_hole_mm": 0.45,
+      "hole_clearance_mm": 0.2,
+      "hole_to_edge_mm": 0.5,
+      "hole_to_hole_mm": 0.25,
+      "min_npth_drill_mm": 0.5,
+      "min_through_drill_mm": 0.2,
+      "min_track_width_mm": 0.127,
+      "min_via_diameter_mm": 0.35,
+      "npth_hole_clearance_mm": 0.2,
+      "pth_hole_clearance_mm": 0.35,
+      "pth_hole_to_hole_mm": 0.5,
+      "smd_pad_clearance_mm": 0.15,
+      "via_annular_mm": 0.075,
+      "via_classes": {
+        "default": {
+          "diameter_mm": 0.45,
+          "drill_mm": 0.3
+        },
+        "escape": {
+          "diameter_mm": 0.45,
+          "drill_mm": 0.2
+        },
+        "in_pad": {
+          "alt_diameter_mm": 0.45,
+          "diameter_mm": 0.35,
+          "drill_mm": 0.2,
+          "filled": true,
+          "min_hole_edge_to_pad_edge_mm": 0.09,
+          "min_row_pitch_mm": 0.45,
+          "remove_unused_inner_pads": true,
+          "row_pitch_mm": 0.5,
+          "stagger_mm": 0.25
+        },
+        "power": {
+          "diameter_mm": 0.6,
+          "drill_mm": 0.3
+        }
+      },
+      "via_diameter_mm": 0.45,
+      "via_drill_mm": 0.3,
+      "via_to_smd_pad_mm": 0.127
+    }
+  },
+  "legacy": {
+    "apply_fab_legacy": {
+      "clearance_mm": 0.15,
+      "edge_clearance_mm": 0.2,
+      "hole_clearance_mm": 0.2,
+      "min_through_drill_mm": 0.2,
+      "track_width_mm": 0.2,
+      "via_annular_mm": 0.0,
+      "via_diameter_mm": 0.6,
+      "via_drill_mm": 0.3
+    },
+    "apply_fab_model": {
+      "outer_copper_um": 70.0,
+      "x": 1
+    },
+    "apply_rules": {
+      "default_clearance_mm": 0.2,
+      "electrical_fab": {
+        "max_temp_rise_c": 10.0,
+        "outer_copper_um": 35.0
+      },
+      "fab": {
+        "clearance_mm": 0.2,
+        "edge_clearance_mm": 0.2,
+        "hole_clearance_mm": 0.2,
+        "min_through_drill_mm": 0.2,
+        "track_width_mm": 0.25,
+        "via_annular_mm": 0.0,
+        "via_diameter_mm": 0.6,
+        "via_drill_mm": 0.3
+      },
+      "net_classes": [
+        {
+          "clearance_mm": 0.25,
+          "name": "power",
+          "nets": ["vcc"],
+          "width_mm": 0.5
+        }
+      ],
+      "plane_access_fab": {
+        "min_via_plating_um": 20,
+        "via_drill_mm": 0.3
+      }
+    },
+    "board_constraints": {
+      "min_clearance": 0.15,
+      "min_copper_edge_clearance": 0.2,
+      "min_hole_clearance": 0.2,
+      "min_hole_to_hole": 0.2,
+      "min_through_hole_diameter": 0.2,
+      "min_track_width": 0.2,
+      "min_via_annular_width": 0.0,
+      "min_via_diameter": 0.6
+    },
+    "board_constraints_rules": {
+      "min_clearance": 0.2,
+      "min_copper_edge_clearance": 0.2,
+      "min_hole_clearance": 0.2,
+      "min_hole_to_hole": 0.2,
+      "min_through_hole_diameter": 0.2,
+      "min_track_width": 0.25,
+      "min_via_annular_width": 0.0,
+      "min_via_diameter": 0.6
+    },
+    "dru_text": null,
+    "dru_text_plain": null,
+    "dru_text_rules": null,
+    "geometry_profile": {
+      "clearance": 0.15,
+      "clearance_gap": 0.151,
+      "component_pth_min_drill": null,
+      "edge_clearance": 0.2,
+      "edge_gap": 0.201,
+      "filled_via_hole_to_hole": null,
+      "hole_clearance": 0.2,
+      "hole_gap": 0.201,
+      "hole_to_edge": null,
+      "hole_to_hole": 0.2,
+      "in_pad": null,
+      "max_via_hole_gap": 0.2,
+      "npth_hole_clearance": null,
+      "pad_hole_clearances": [null, 0.2, null],
+      "pth_hole_clearance": null,
+      "pth_hole_to_hole": null,
+      "same_net_via_pitch": 0.501,
+      "via_diameter": 0.6,
+      "via_drill": 0.3,
+      "via_edge_margin": 0.501,
+      "via_hole_gaps": [0.2, 0.2, 0.2, 0.2],
+      "via_radius": 0.3,
+      "via_to_smd_pad": null
+    },
+    "geometry_rules": {
+      "clearance": 0.2,
+      "clearance_gap": 0.201,
+      "component_pth_min_drill": null,
+      "edge_clearance": 0.2,
+      "edge_gap": 0.201,
+      "filled_via_hole_to_hole": null,
+      "hole_clearance": 0.2,
+      "hole_gap": 0.201,
+      "hole_to_edge": null,
+      "hole_to_hole": 0.2,
+      "in_pad": null,
+      "max_via_hole_gap": 0.2,
+      "npth_hole_clearance": null,
+      "pad_hole_clearances": [null, 0.2, null],
+      "pth_hole_clearance": null,
+      "pth_hole_to_hole": null,
+      "same_net_via_pitch": 0.501,
+      "via_diameter": 0.6,
+      "via_drill": 0.3,
+      "via_edge_margin": 0.501,
+      "via_hole_gaps": [0.2, 0.2, 0.2, 0.2],
+      "via_radius": 0.3,
+      "via_to_smd_pad": null
+    },
+    "profile_fab": {}
+  }
+}

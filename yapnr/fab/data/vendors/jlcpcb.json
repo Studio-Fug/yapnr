@@ -1,0 +1,93 @@
+{
+  "schema": "yapnr-fab-vendor-v1",
+  "vendor": "jlcpcb",
+  "title": "JLCPCB",
+  "country": "CN",
+  "profiles_by_layers": {
+    "4": "jlc-4l",
+    "6": "jlc-6l"
+  },
+  "profiles_in_pad": {
+    "4": "jlc-pofv"
+  },
+  "gerbers": {
+    "layers": [
+      "copper",
+      "F.Mask",
+      "B.Mask",
+      "F.Silkscreen",
+      "B.Silkscreen",
+      "F.Paste",
+      "B.Paste",
+      "Edge.Cuts"
+    ],
+    "protel_extensions": true,
+    "names": null,
+    "subtract_soldermask": true,
+    "x2": true,
+    "src": "J-kicad"
+  },
+  "drill": {
+    "units": "mm",
+    "zeros": "decimal",
+    "oval": "alternate",
+    "origin": "absolute",
+    "separate_th": true,
+    "map": "gerberx2",
+    "names": {
+      "pth": "{board}-PTH.drl",
+      "npth": "{board}-NPTH.drl"
+    },
+    "src": "J-kicad"
+  },
+  "extras": [],
+  "assembly": {
+    "bom": {
+      "file": "{board}-jlcpcb-bom.csv",
+      "columns": ["Comment", "Designator", "Footprint", "JLCPCB Part #"],
+      "src": "J-bomkicad"
+    },
+    "cpl": {
+      "file": "{board}-jlcpcb-cpl.csv",
+      "columns": ["Designator", "Mid X", "Mid Y", "Layer", "Rotation"],
+      "units": "mm",
+      "layers": {
+        "top": "Top",
+        "bottom": "Bottom"
+      },
+      "src": "J-cpl"
+    },
+    "part_key": "lcsc",
+    "rotation_check": true
+  },
+  "staging": {
+    "manual": {
+      "url": "https://cart.jlcpcb.com/quote",
+      "steps": [
+        "Click 'Add gerber file' and upload {zip}.",
+        "Set the options on this card (layers, thickness, finish, via covering, stackup).",
+        "Assembly: switch on 'PCB Assembly', then upload the BOM and CPL files on the next page.",
+        "Check the gerber and placement previews, then 'SAVE TO CART' and pay there."
+      ],
+      "src": "J-quote"
+    }
+  },
+  "sources": {
+    "J-bomkicad": {
+      "url": "https://jlcpcb.com/help/article/how-to-generate-the-bom-and-centroid-file-from-kicad",
+      "accessed": "2026-10-02"
+    },
+    "J-cpl": {
+      "url": "https://jlcpcb.com/help/article/pick-place-file-for-pcb-assembly",
+      "accessed": "2026-10-02"
+    },
+    "J-kicad": {
+      "url": "https://jlcpcb.com/help/article/how-to-generate-gerber-and-drill-files-in-kicad-8",
+      "accessed": "2026-10-02"
+    },
+    "J-quote": {
+      "url": "https://cart.jlcpcb.com/quote",
+      "accessed": "2026-10-02"
+    }
+  }
+}

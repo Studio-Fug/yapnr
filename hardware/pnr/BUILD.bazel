@@ -492,6 +492,16 @@ py_test(
     deps = [":pnr", ":pnr_place"],
 )
 
+# Double-sided placement: the board.sides policy, side options and the side cost.
+py_test(
+    name = "sides_test",
+    size = "small",
+    srcs = ["tests/test_sides.py"],
+    legacy_create_init = False,
+    main = "tests/test_sides.py",
+    deps = [":pnr", ":pnr_place"],
+)
+
 py_test(
     name = "fanout_reserve_test",
     size = "small",

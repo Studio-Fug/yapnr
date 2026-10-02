@@ -31,6 +31,9 @@ from pnr.graph import BoardGraph
 from pnr.mc.halving import _rank_key
 from pnr.place.initial_pool import _route_metrics
 from pnr.place.metrics import hpwl
+from pnr.place.sides import plan as side_plan
+from pnr.place.sides import report as sides_report
+from pnr.place.sides import with_policy
 from pnr.route.detail.router import route_board
 
 root = Path(sys.argv[1]).resolve()
@@ -38,7 +41,10 @@ seed = int(sys.argv[2])
 spec = json.loads((root / "design.json").read_text())
 mc = spec["mc"]
 graph = BoardGraph.from_json((root / "source-graph.json").read_text())
-constraints = compile_constraints(spec["constraints"], graph.refs)
+# The rung's side policy (``sides: double``) as the engine's ``board.sides``, for this
+# driver and for halving's workers (constraints.yaml), as route_case.py maps it.
+doc = with_policy(spec["constraints"], spec.get("sides"))
+constraints = compile_constraints(doc, graph.refs)
 rules = apply_rules(compile_routing_rules(constraints, [n.name for n in graph.nets]))
 (root / "rules.json").write_text(json.dumps(rules, indent=2))
 
@@ -46,7 +52,7 @@ inputs = root / "mc-inputs"
 inputs.mkdir(exist_ok=True)
 (inputs / "graph.json").write_text((root / "source-graph.json").read_text())
 (inputs / "rules.json").write_text(json.dumps(rules, indent=2))
-(inputs / "constraints.yaml").write_text(yaml.safe_dump(spec["constraints"], sort_keys=True))
+(inputs / "constraints.yaml").write_text(yaml.safe_dump(doc, sort_keys=True))
 out = root / "mc"
 started = time.monotonic()
 cmd = [
@@ -163,6 +169,7 @@ unresolved = sorted(set(route.result.unrouted) - set(route.deferred_nets))
             deferred=sorted(route.deferred_nets),
             unresolved=unresolved,
             mc=dict(selected=best["id"], finalists=[c["id"] for c in evaluated]),
+            sides=sides_report(best["graph"], side_plan(graph, constraints)),
             escape_diagnostics=getattr(route, "escape_diagnostics", {}),
             elapsed_seconds=time.monotonic() - started,
             summary=route.summary(),

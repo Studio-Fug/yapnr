@@ -94,6 +94,7 @@ The approximate board you're targeting.
 | `outline: {w, h}`      | Placement region (mm). Parts are kept inside it; it becomes the `Edge.Cuts` rectangle. Omit to use the board's own outline.       |
 | `layers`               | Copper layer count (2/4). Inner layers are treated as power/ground planes, so routing capacity scales with the **signal** layers. |
 | `default_clearance_mm` | Minimum courtyard-to-courtyard gap enforced in legalization, and the track pitch the lookahead router assumes.                    |
+| `sides`                | Side policy: `single` (default; every part stays on its source side) or `double` (placement chooses the side of every part nothing holds; see `side_pref`). |
 
 The outline is _approximate guidance_: the placer frames the parts within it. Make
 it a bit larger than the parts need — an over-tight outline forces congestion and

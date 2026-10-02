@@ -32,6 +32,11 @@ SCHEMA_VERSION = "v0"
 
 EDGES = ("north", "south", "east", "west")
 SIDES = ("top", "bottom")
+# The board's side policy (``board.sides``): ``single`` keeps every part on the side
+# it arrives on (the default, and the behaviour of every board without the key);
+# ``double`` lets placement choose either side for each part nothing else holds
+# (pnr.place.sides).
+SIDE_POLICIES = ("single", "double")
 
 # The board-outline default when the file omits one; the placer reframes to the
 # real Edge.Cuts once ingested.
@@ -110,6 +115,7 @@ class BoardSpec:
     layers: int = 2
     default_clearance_mm: float = DEFAULT_CLEARANCE_MM
     references_on_fab: bool = False
+    sides: str = "single"  # side policy, one of SIDE_POLICIES (pnr.place.sides)
 
 
 @dataclass
@@ -387,6 +393,7 @@ def _parse_board(raw: Dict) -> BoardSpec:
         layers=int(raw.get("layers", 2)),
         default_clearance_mm=float(raw.get("default_clearance_mm", DEFAULT_CLEARANCE_MM)),
         references_on_fab=bool(raw.get("references_on_fab", False)),
+        sides=_require_enum(raw.get("sides") or "single", SIDE_POLICIES, "board.sides"),
     )
 
 

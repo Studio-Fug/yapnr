@@ -98,6 +98,32 @@ class EdgeCorrectionPipelineGradientTest(PipelineGradientTest):
         self.assertGreater(np.abs(full - without).min(), 1e-3 * np.abs(full).max())
 
 
+class ReactiveEdgeCorrectionPipelineGradientTest(PipelineGradientTest):
+    """The reactive interpolation together with the copper-edge correction and the modal source
+    (the Wilkinson-type combiner's settings): both parts of the design gradient, the inductive
+    branches' and the edge factors', in one adjoint run."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = tiny_spec(radiated=True)
+        spec = spec.replace(
+            optimizer=OptimizerSpec(interpolation="reactive"),
+            solver=replace(spec.solver, edge_correction=True, port_source="mode"),
+        )
+        cls.p = p = Problem(spec, exact=True, calibrations=nominal_calibration())
+        rng = np.random.default_rng(8)
+        cls.x = rng.uniform(0.3, 0.7, p.param.n_dof)
+        cls.beta = 8.0
+        ev = p.evaluate(p.param.rho_bar(cls.x, cls.beta))
+        cls.ev = ev
+        cls.grad = p.param.vjp(cls.x, cls.beta, ev.grads)
+        cls.v = rng.standard_normal(cls.x.size)
+
+    def test_both_models_on(self):
+        self.assertTrue(self.p.sim.structure.inductive)
+        self.assertTrue(self.p.sim.structure.edge_correction)
+
+
 class RadiationObjectivePipelineGradientTest(PipelineGradientTest):
     """The same with the radiation objective (`optimizer.epoch_objectives`): one scalar,
     log(1 + R̄) − log η̄ over the band, whose gradient sums the per-frequency recombinations of

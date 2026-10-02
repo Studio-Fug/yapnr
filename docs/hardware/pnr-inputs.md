@@ -92,12 +92,31 @@ The approximate board you're targeting.
 | Key                    | Meaning                                                                                                                           |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | `outline: {w, h}`      | Placement region (mm). Parts are kept inside it; it becomes the `Edge.Cuts` rectangle. Omit to use the board's own outline.       |
-| `layers`               | Copper layer count (2/4). Inner layers are treated as power/ground planes, so routing capacity scales with the **signal** layers. |
+| `layers`               | Copper layer count (2 to 32). Without a declared stack (below), inner layers are treated as power/ground planes, so routing capacity scales with the **signal** layers. |
 | `default_clearance_mm` | Minimum courtyard-to-courtyard gap enforced in legalization, and the track pitch the lookahead router assumes.                    |
 
 The outline is _approximate guidance_: the placer frames the parts within it. Make
 it a bit larger than the parts need — an over-tight outline forces congestion and
 can leave the place↔route loop unable to reach zero overflow.
+
+**Declared copper stack.** A board whose KiCad file declares a physical stackup
+(Board Setup > Physical Stackup) and types at least one layer `power` or `mixed`
+(Board Setup > Board Editor Layers), or declares no `plane_layer` class, is routed
+on its own stack (`pnr.stack`), for any layer count:
+
+- a `power` inner layer is a **dedicated plane**: no tracks. Its nets are the
+  `plane_layer` classes naming it plus the nets of zones already drawn on it, so a
+  second ground plane is just a zone in the source board. Every surface pad of
+  such a net drops a through via to it, planned together with the signal escapes,
+  and write-back forms each dedicated plane as a full-outline zone;
+- a `mixed` layer, or a `signal` layer named by a `plane_layer` class, is a split
+  plane: the class nets' pads' bounding box, with signals in the gaps;
+- every other `signal` layer is routed, inner ones included. A class with
+  `current_a` stays off an inner layer whose declared copper thickness would need
+  a wider track (IPC-2221 internal) than the class width.
+
+A board without a declared stack, or whose planes come only from `plane_layer`
+classes on signal-typed layers, keeps the behaviour above.
 
 ### `fixed` — lock a pose (hard)
 

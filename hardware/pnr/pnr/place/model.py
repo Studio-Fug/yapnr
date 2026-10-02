@@ -21,6 +21,18 @@ toward one-hot (a deterministic Concrete/Gumbel-Softmax relaxation â€” Cypress Â
 Pin offsets and courtyard extents become the *expected* offset/extent under that
 distribution, so orientation is differentiable and co-optimized with position; at
 the end we snap to the arg-max angle. Fixed parts keep their constrained angle.
+
+**Side** (a ``side_plan`` with free parts, :mod:`pnr.place.sides`): each free part
+also carries a side logit, its probability ``q`` of the bottom side a sigmoid annealed
+with the rotation temperature, initialised toward its start side. Pin offsets are
+the expectation over both sides (the bottom mirrors them, as KiCad's Flip does) and
+rotations; two parts repel with weight ``min(1, o_i . o_j)``, ``o = [1 - q, q]`` for a
+surface part and ``[1, 1]`` for one that occupies both sides (the constant per-side
+mask when nothing is free). Three terms join the loss, in wirelength millimetres:
+the expected layer changes ``VIA_MM * sum P(net split)``, ``P = 1 - prod(1 - q) -
+prod(q)`` over each splittable net's parts, the ``side_pref`` bias and a small cost
+per part off its source side. Each free part snaps to the bottom when ``q > 0.5``.
+Without free parts none of this runs and the result is unchanged.
 """
 
 from __future__ import annotations
@@ -97,7 +109,10 @@ def global_place(
     initial_positions: Optional[Dict[str, Tuple[float, float]]] = None,
     initial_rotations: Optional[Dict[str, float]] = None,
     pair_weights: Optional[Dict[Tuple[str, str, str, str], float]] = None,
-) -> Tuple[Dict[str, Tuple[float, float]], Dict[str, float]]:
+    side_plan=None,
+    initial_sides: Optional[Dict[str, str]] = None,
+    return_sides: bool = False,
+):
     """Optimize continuous centres (+ orientation); return positions and angles.
 
     ``inflation`` optionally maps a ref to a spreading multiplier > 1 (RePlAce
@@ -110,8 +125,14 @@ def global_place(
     ``sum w * sqrt(dx^2 + dy^2 + PAIR_EPS2)`` over those pad pairs (expected
     rotated pin offsets) beside the wirelength term; None skips it entirely.
 
+    ``side_plan`` (:func:`pnr.place.sides.plan`) relaxes the side of each of its free
+    parts too, starting toward ``initial_sides`` ({ref: side}, default the part's
+    current side); without free parts it changes nothing.
+
     Returns ``({ref: (x, y)}, {ref: angle_deg})`` for every component (angle is
-    the arg-max of the relaxed rotation distribution, a legal 0/90/180/270)."""
+    the arg-max of the relaxed rotation distribution, a legal 0/90/180/270), and
+    with ``return_sides`` a third map ``{ref: side}`` (free parts snapped at
+    ``q > 0.5``, every other part its current side)."""
     torch.manual_seed(seed)
     comps = graph.components
     n = len(comps)
@@ -151,6 +172,17 @@ def global_place(
     )
 
     poses = resolve_fixed_poses(graph, constraints)
+    # Side relaxation only with free parts (and not over hull bodies, whose macros are
+    # held anyway); otherwise every tensor below is the single-sided one.
+    free_side = (
+        [idx[r] for r in side_plan.free if r in idx and r not in poses]
+        if side_plan is not None and bodies is None
+        else []
+    )
+    for ref, side in (initial_sides or {}).items():
+        if ref not in idx or side not in ("top", "bottom"):
+            raise ValueError("invalid initial side")
+    # A start may only propose a side the plan allows; any other start side is moot.
     is_fixed = torch.zeros(n, dtype=torch.bool)
     fixed_xy = torch.zeros(n, 2, dtype=torch.float32)
     fixed_angle_idx = torch.zeros(n, dtype=torch.long)
@@ -230,6 +262,10 @@ def global_place(
             pin_off4.append(variants)
     pin_comp_t = torch.tensor(pin_comp, dtype=torch.long)
     pin_off4_t = torch.tensor(pin_off4, dtype=torch.float32)  # (P, 4, 2)
+    sided = None
+    if free_side:
+        sided = _side_terms(graph, comps, idx, side_plan, free_side, initial_sides, pin_off4_t)
+        params.append(sided["logits"])
     net_pin_idx = [[pin_key[p] for p in net.pins if p in pin_key] for net in graph.nets]
     net_pin_idx = [pins for pins in net_pin_idx if len(pins) >= 2]
     pairs = pair_tensors(pair_weights, pin_key)
@@ -302,6 +338,13 @@ def global_place(
         # Expected pin offset under the rotation distribution.
         p_pin = p[pin_comp_t]  # (P, 4)
         exp_off = (p_pin.unsqueeze(-1) * pin_off4_t).sum(1)  # (P, 2)
+        if sided is not None:
+            # ... and under the side distribution: the far side mirrors the offsets.
+            bottom = _bottom_probability(sided, temp)  # (n,)
+            away = torch.where(sided["current_bottom"], 1.0 - bottom, bottom)
+            mirrored = (p_pin.unsqueeze(-1) * sided["pin_off4_mirror"]).sum(1)
+            away_pin = away[pin_comp_t].unsqueeze(-1)
+            exp_off = (1.0 - away_pin) * exp_off + away_pin * mirrored
         pin_x = pos[pin_comp_t, 0] + exp_off[:, 0]
         pin_y = pos[pin_comp_t, 1] + exp_off[:, 1]
 
@@ -330,7 +373,8 @@ def global_place(
             sh = hh.unsqueeze(1) + hh.unsqueeze(0) + clearance
             ox = torch.clamp(sw - dx, min=0.0)
             oy = torch.clamp(sh - dy, min=0.0)
-            overlap = torch.triu(ox * oy * side_overlap, diagonal=1).sum()
+            mask = side_overlap if sided is None else _side_overlap(sided, bottom)
+            overlap = torch.triu(ox * oy * mask, diagonal=1).sum()
         else:
             overlap = gp_overlap(bodies, pos, p, clearance)
 
@@ -345,6 +389,8 @@ def global_place(
         bound = (bound * movable_f).sum()
 
         loss = wl + w_spread * overlap + w_bound * bound
+        if sided is not None:
+            loss = loss + _side_cost(sided, bottom)
         if pairs is not None:
             pa, pb, pw = pairs
             loss = (
@@ -441,4 +487,96 @@ def global_place(
     rotations = {c.ref: float(ANGLES[int(angle_idx[i])]) for i, c in enumerate(comps)}
     if tracer is not None:
         tracer.finish(positions, rotations)
-    return positions, rotations
+    if not return_sides:
+        return positions, rotations
+    sides = {c.ref: c.side for c in comps}
+    if sided is not None:
+        logits = sided["logits"].detach()
+        for k, i in enumerate(sided["free"]):
+            sides[comps[i].ref] = "bottom" if float(logits[k]) > 0.0 else "top"
+    return positions, rotations, sides
+
+
+# Initial side logit: toward the start side, like a start rotation's logit.
+SIDE_LOGIT = 2.0
+
+
+def _side_terms(graph, comps, idx, side_plan, free, initial_sides, pin_off4_t):
+    """Constant tensors of the side relaxation (see the module docstring)."""
+    from .sides import FLIP_MM, SIDE_PREF_MM, VIA_MM
+
+    n = len(comps)
+    current_bottom = torch.tensor([c.side == "bottom" for c in comps], dtype=torch.bool)
+    both = torch.tensor([len(set(occupied_sides(c))) > 1 for c in comps], dtype=torch.bool)
+    init = []
+    for i in free:
+        start = (initial_sides or {}).get(comps[i].ref, comps[i].side)
+        init.append(SIDE_LOGIT if start == "bottom" else -SIDE_LOGIT)
+    mirror = pin_off4_t.clone()
+    for k, ang in enumerate(ANGLES):
+        th = torch.deg2rad(torch.tensor(ang))
+        # Rotating the y-mirrored offset (ox, -oy): (ox c + oy s, ox s - oy c).
+        ct, st = float(torch.cos(th)), float(torch.sin(th))
+        r0 = pin_off4_t[:, 0, :]  # rot-0 offsets (ox, oy)
+        mirror[:, k, 0] = r0[:, 0] * ct + r0[:, 1] * st
+        mirror[:, k, 1] = r0[:, 0] * st - r0[:, 1] * ct
+    nets = side_plan.nets(graph)
+    member = torch.zeros(len(nets), n)
+    for k, (_, refs) in enumerate(nets):
+        for ref in refs:
+            if ref in idx:
+                member[k, idx[ref]] = 1.0
+    pref = [
+        (idx[ref], side == "bottom", SIDE_PREF_MM * weight)
+        for ref, (side, weight) in sorted(side_plan.preferred.items())
+        if ref in idx and idx[ref] in free
+    ]
+    source_bottom = torch.tensor(
+        [side_plan.source.get(c.ref, c.side) == "bottom" for c in comps], dtype=torch.bool
+    )
+    free_t = torch.tensor(free, dtype=torch.long)
+    return dict(
+        free=free,
+        free_t=free_t,
+        logits=torch.nn.Parameter(torch.tensor(init, dtype=torch.float32)),
+        current_bottom=current_bottom,
+        both=both,
+        pin_off4_mirror=mirror,
+        member=member if nets else None,
+        pref=pref,
+        source_bottom=source_bottom,
+        via_mm=VIA_MM,
+        flip_mm=FLIP_MM,
+    )
+
+
+def _bottom_probability(sided, temp):
+    """(n,) probability of the bottom side: free parts relaxed, the rest 0 or 1."""
+    bottom = sided["current_bottom"].float()
+    return bottom.index_put(
+        (sided["free_t"],), torch.sigmoid(sided["logits"] / temp), accumulate=False
+    )
+
+
+def _side_overlap(sided, bottom):
+    """(n, n) expected same-side weight ``min(1, o_i . o_j)``."""
+    top_o = torch.where(sided["both"], 1.0, 1.0 - bottom)
+    bottom_o = torch.where(sided["both"], 1.0, bottom)
+    weight = top_o.unsqueeze(1) * top_o.unsqueeze(0) + bottom_o.unsqueeze(1) * bottom_o.unsqueeze(0)
+    return torch.clamp(weight, max=1.0)
+
+
+def _side_cost(sided, bottom):
+    """Expected layer changes, side preferences and source-side departures (mm)."""
+    cost = bottom.new_zeros(())
+    if sided["member"] is not None:
+        log_top = torch.log(torch.clamp(1.0 - bottom, min=1e-9))
+        log_bottom = torch.log(torch.clamp(bottom, min=1e-9))
+        member = sided["member"]
+        split = 1.0 - torch.exp(member @ log_top) - torch.exp(member @ log_bottom)
+        cost = cost + sided["via_mm"] * torch.clamp(split, min=0.0).sum()
+    for i, want_bottom, weight in sided["pref"]:
+        cost = cost + weight * ((1.0 - bottom[i]) if want_bottom else bottom[i])
+    off_source = torch.where(sided["source_bottom"], 1.0 - bottom, bottom)
+    cost = cost + sided["flip_mm"] * off_source[sided["free_t"]].sum()
+    return cost

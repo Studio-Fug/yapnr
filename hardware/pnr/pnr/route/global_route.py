@@ -200,6 +200,7 @@ def global_route(
     pres_fac0: float = 0.5,
     pres_mult: float = 2.0,
     hist_fac: float = 1.0,
+    signal_layers: Optional[int] = None,
 ) -> GlobalRouteResult:
     """Run a PathFinder global route over ``graph``'s current placement.
 
@@ -218,8 +219,10 @@ def global_route(
             raise ValueError("global_route needs width/height or a graph outline")
 
     # On 4+ layer boards the two inner layers are typically power/ground planes,
-    # so routing capacity comes from the signal layers only.
-    signal_layers = max(1, layers - 2) if layers > 2 else layers
+    # so routing capacity comes from the signal layers only. A board that declares
+    # its stack gives its routed-layer count (``signal_layers``, pnr.stack).
+    if signal_layers is None:
+        signal_layers = max(1, layers - 2) if layers > 2 else layers
     tracks = max(1, int(gcell_mm / track_pitch_mm))
     capacity = float(signal_layers * tracks)
 

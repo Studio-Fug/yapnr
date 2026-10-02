@@ -204,7 +204,14 @@ def parser():
         help="Explicit signal grid pitch for source and fixed-copper handoff; 0 keeps automatic pitch",
     )
     ap.add_argument(
-        "--packed-maze", action="store_true", help="Validate the packed CPU maze kernel explicitly"
+        "--packed-maze",
+        action="store_true",
+        help="The packed CPU maze kernel (the default; kept so recorded configurations still parse)",
+    )
+    ap.add_argument(
+        "--reference-maze",
+        action="store_true",
+        help="Route with the reference dict A* kernel (PNR_PACKED_MAZE=0) instead of the packed one",
     )
     ap.add_argument(
         "--batched-wirelength",
@@ -300,8 +307,12 @@ def main():
     for key in list(env):
         if key.startswith("PNR_") and key not in ("PNR_LOCAL_PRESSURE", "PNR_JOINT_ACCESS"):
             del env[key]
+    if args.packed_maze and args.reference_maze:
+        raise SystemExit("--packed-maze and --reference-maze are exclusive")
     if args.packed_maze:
         env["PNR_PACKED_MAZE"] = "1"
+    if args.reference_maze:
+        env["PNR_PACKED_MAZE"] = "0"
     if args.dense_maze_cost:
         env["PNR_DENSE_MAZE_COST"] = "1"
     if args.detail_pitch_mm is not None:

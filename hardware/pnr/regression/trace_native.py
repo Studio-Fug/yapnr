@@ -39,6 +39,7 @@ class NativeTrace:
             initial_finalists=args.initial_finalists if args.initial_pool else None,
             detail_pitch_mm=args.detail_pitch_mm,
             packed_maze=bool(args.packed_maze),
+            reference_maze=bool(getattr(args, "reference_maze", False)),
             batched_wirelength=bool(args.batched_wirelength),
             dense_maze_cost=bool(args.dense_maze_cost),
             fab_profile=getattr(args, "fab_profile", None),

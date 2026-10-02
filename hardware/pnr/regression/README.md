@@ -169,6 +169,10 @@ chapters (hierarchy) into `docs/animations/`; the page is
 [Constraints and hierarchy](../../../docs/constraints-and-hierarchy.md). The
 showcases never gate: the nightly lane runs them for information.
 
-Performance opt-ins can be tested explicitly with `--packed-maze` and
-`--batched-wirelength`. They are recorded in provenance; ambient variables are
-still cleared, so a baseline invocation keeps its original algorithms.
+The detailed router's A\* runs on the packed kernel by default (integer cell
+keys; the same predicates, prices and tie order as the reference search, so the
+same routes). `--reference-maze` routes with the reference kernel instead, and
+`--packed-maze` is accepted as a no-op for recorded configurations. The
+performance opt-in `--batched-wirelength` can be tested explicitly. All of these
+are recorded in provenance; ambient variables are still cleared, so a baseline
+invocation keeps its original algorithms.

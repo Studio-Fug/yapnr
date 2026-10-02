@@ -104,6 +104,14 @@ def remaining_connections(access, edges):
     return max(0, len({find(c) for c in access}) - 1)
 
 
+def maze_kernel() -> str:
+    """The A\\* kernel this process routes with: ``"packed"`` (the default: integer
+    keys, same predicates, prices and tie order, so identical paths) or
+    ``"reference"`` (``PNR_PACKED_MAZE=0``: the dict/Cell search below, kept as the
+    specification the faster kernels are tested against)."""
+    return "reference" if os.environ.get("PNR_PACKED_MAZE") == "0" else "packed"
+
+
 def _astar(
     grid: RouteGrid,
     sources: Set[Cell],
@@ -124,7 +132,7 @@ def _astar(
     DRC-safe 45° steps (both corners free) to shorten diagonal runs. ``blocked``
     cells are hard-impassable; ``soft`` cells (committed other-net copper the rip-up
     pass may cross at a price) are passable but expensive. Returns the path or None."""
-    if os.environ.get("PNR_PACKED_MAZE") == "1":
+    if maze_kernel() != "reference":
         from .packed_maze import astar
 
         return astar(

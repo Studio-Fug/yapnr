@@ -255,6 +255,22 @@ class TuneBoardTest(unittest.TestCase):
         self.assertAlmostEqual(spread, report["spread"], places=6)
         self.assertGreaterEqual(sum(1 for m in report["members"] if m["bumps"]), 4)
 
+    def test_a_tuning_failure_keeps_the_route(self):
+        from unittest import mock
+
+        g = pair_board(n_offset=2.5)
+        plain_rules = pair_rules()
+        plain_rules["diff_pairs"] = []
+        plain = route(g, plain_rules)
+        with mock.patch(
+            "pnr.route.detail.tune.Tuner.tune_member", side_effect=RuntimeError("boom")
+        ):
+            board = route(g, pair_rules(skew_mm=0.5))
+        self.assertEqual(sorted(board.tracks), sorted(plain.tracks))
+        (report,) = board.length_report
+        self.assertEqual(report["status"], "tuning_error")
+        self.assertIn("boom", report["error"])
+
     def test_ps_budget(self):
         g = pair_board(n_offset=2.5)
         board = route(g, pair_rules(skew_ps=2.0))

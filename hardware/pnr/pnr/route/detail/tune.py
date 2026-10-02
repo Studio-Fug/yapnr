@@ -912,8 +912,38 @@ def tune_board(
     board, graph, grid: RouteGrid, rules: Optional[dict], **kwargs
 ) -> Optional[List[dict]]:
     """Tune the matched nets of a routed ``board`` in place (module docstring).
-    Returns the per-set report, or None when the rules declare no pair or group."""
-    if not match_sets(rules):
+    Returns the per-set report, or None when the rules declare no pair or group.
+
+    Tuning only adds length to a finished route, so a failure inside it must not
+    cost the route: the board is restored as routed and the report names the error
+    (``status: "tuning_error"`` on every set)."""
+    sets = match_sets(rules)
+    if not sets:
         return None
-    tuner = Tuner(board, graph, grid, rules, **kwargs)
-    return [r.to_json() for r in tuner.run()]
+    members = {n for s in sets for n in s.nets}
+    nets = board.result.nets
+    saved_tracks = list(board.tracks)
+    saved = {
+        n: (list(nets[n].segments), list(nets[n].cells), list(nets[n].vias))
+        for n in members
+        if n in nets
+    }
+    try:
+        tuner = Tuner(board, graph, grid, rules, **kwargs)
+        return [r.to_json() for r in tuner.run()]
+    except Exception as error:  # noqa: BLE001 - the route stands without tuning
+        board.tracks = saved_tracks
+        for n, (segments, cells, vias) in saved.items():
+            nets[n].segments, nets[n].cells, nets[n].vias = segments, cells, vias
+        return [
+            dict(
+                name=s.name,
+                kind=s.kind,
+                unit=s.unit,
+                budget=s.budget,
+                status="tuning_error",
+                error="%s: %s" % (type(error).__name__, error),
+                members=[],
+            )
+            for s in sets
+        ]

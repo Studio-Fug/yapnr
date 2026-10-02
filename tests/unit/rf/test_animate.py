@@ -11,7 +11,7 @@ import unittest
 import numpy as np
 from PIL import Image
 
-from yapnr.rf.animate import animate, durations, figure, frame_indices
+from yapnr.rf.animate import animate, durations, figure, frame_indices, plotted_sparams
 from yapnr.rf.export.kicad import Footprint, PortPad, write_footprint
 from yapnr.rf.testing import tiny_spec
 
@@ -106,6 +106,15 @@ class AnimateTest(unittest.TestCase):
                 if ext == "gif":  # Pillow reports per-frame durations for GIF
                     im.seek(13)
                     self.assertEqual(im.info["duration"], 1500)
+
+    def test_plotted_sparams(self):
+        from yapnr.rf.cases import CRITERIA
+
+        table = {k: [] for k in ("ghz", "S11", "S21", "S31", "S12", "S22", "S32", "S33")}
+        # A combiner's figure also shows the output match and the isolation it is judged by.
+        names = plotted_sparams(CRITERIA["wilkinson"]["fine"], table)
+        self.assertEqual(names, ["S11", "S21", "S31", "S22", "S32", "S33"])
+        self.assertEqual(plotted_sparams(CRITERIA["divider"]["fine"], table), ["S11", "S21", "S31"])
 
     def test_bad_extension(self):
         with self.assertRaises(ValueError):

@@ -13,6 +13,15 @@ four). `repair` removes them mechanically:
 
 with the fixed pixels (port pads, fixed regions) set back after each pass, and outside the
 window the exterior ring's values (the feeds are copper, the rest void), until nothing changes.
+
+- **conflicts:** a fixed point of the round is not yet a fixed point of each pass. A copper
+  pixel can be too narrow and, removed, leave too narrow a gap: a one-pixel bridge between two
+  blocks offset diagonally by a pixel (the opening removes it, the space pass puts it back, and
+  the round ends where it began; round 1's Wilkinson footprint kept two such 0.3 mm necks).
+  Such a pixel is widened instead: the k × k square through it with the fewest void pixels
+  (none of them fixed void or outside the window) becomes copper, which keeps the connection
+  the design made, and the rounds continue.
+
 The result is exported and then re-simulated by the validator, which compares it with the
 optimizer's binary design.
 """
@@ -96,8 +105,51 @@ def repair(
         b = _bridge_corners(b)
         b = np.where(fixed, fv, b)
         if np.array_equal(b, prev):
-            break
+            if kw == 1:
+                break
+            # The space pass undid the opening (module doc, "conflicts"): widen the copper.
+            bad = b & ~_opening(b, outside, kw, r) & ~fixed
+            if not bad.any():
+                break
+            b = _widen(b, bad, outside, kw, r, fixed & ~fv)
+            if np.array_equal(b, prev):
+                break  # nothing can be widened (fixed void or the exterior in the way)
     return b.astype(np.float64), rounds
+
+
+def _widen(
+    mask: np.ndarray,
+    bad: np.ndarray,
+    outside: np.ndarray,
+    k: int,
+    r: int,
+    keep_void: np.ndarray,
+) -> np.ndarray:
+    """`mask` with, for every pixel of `bad`, the k × k square through it that needs the fewest
+    new copper pixels made copper; squares that would need copper outside the window (where
+    `outside` is void) or on `keep_void` pixels are not used (first such square on ties)."""
+    ni, nj = mask.shape
+    ext = outside.astype(bool).copy()
+    ext[r : r + ni, r : r + nj] = mask
+    frozen = np.ones_like(ext)  # pixels that may not become copper
+    frozen[r : r + ni, r : r + nj] = keep_void
+    out = ext.copy()
+    for i, j in np.argwhere(bad):
+        best = None
+        for a in range(k):
+            for c in range(k):
+                i0, j0 = r + i - a, r + j - c
+                sq = ext[i0 : i0 + k, j0 : j0 + k]
+                need = ~sq
+                if (need & frozen[i0 : i0 + k, j0 : j0 + k]).any():
+                    continue
+                cost = int(need.sum())
+                if best is None or cost < best[0]:
+                    best = (cost, i0, j0)
+        if best is not None:
+            _, i0, j0 = best
+            out[i0 : i0 + k, j0 : j0 + k] = True
+    return out[r : r + ni, r : r + nj]
 
 
 def pixels_for(length_mm: float, pitch_mm: float) -> int:

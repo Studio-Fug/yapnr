@@ -2,6 +2,9 @@
 
 - a one-pixel hole is filled and a one-pixel nub removed at a two-pixel minimum;
 - a copper corner contact is bridged;
+- a one-pixel bridge between two blocks offset diagonally (too narrow as copper, too narrow a
+  gap once removed: the opening and the space pass undo each other) is widened to the minimum
+  width (round 1's Wilkinson footprint kept two such necks);
 - two-pixel lines and gaps, fixed pixels and copper continuing into the exterior ring (a feed)
   are kept; the result is a fixed point, passes the polygon width and space check, and a
   design without violations comes back unchanged.
@@ -77,6 +80,22 @@ class RepairTest(unittest.TestCase):
         self.assertTrue(out[14:16, 12:14].all())
         self.assertTrue(_drc(out).ok, _drc(out).to_json())
         again, rounds = _run(out)
+        np.testing.assert_array_equal(again, out)
+        self.assertEqual(rounds, 1)
+
+    def test_conflicting_neck_is_widened(self):
+        m = np.zeros((N, N), bool)
+        m[2:7, 4:6] = True  # block A
+        m[8:12, 5:7] = True  # block B, one pixel higher
+        m[7, 5] = True  # the one-pixel bridge between them
+        self.assertFalse(_drc(m).ok)
+        fixed, value = _fix(pads=False)
+        zero = np.zeros((N + 2 * RING, N + 2 * RING))
+        out, _ = _run(m, fixed, value, ring=zero)
+        self.assertTrue(out[7, 5])  # the connection is kept ...
+        self.assertTrue(out[7, 4] or out[7, 6])  # ... and widened to two pixels
+        self.assertTrue(_drc(out).ok, _drc(out).to_json())
+        again, rounds = _run(out, fixed, value, ring=zero)
         np.testing.assert_array_equal(again, out)
         self.assertEqual(rounds, 1)
 

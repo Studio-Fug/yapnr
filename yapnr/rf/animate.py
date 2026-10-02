@@ -38,7 +38,7 @@ MUTED = "#8a9ea7"
 ACCENT = "#9ee6d1"
 FAIL = "#ff566b"
 OK = "#62ffad"
-SERIES = ("#e89a73", "#6eb6e5", "#dfbd62", "#aa9de9", "#62ffad", "#ff566b", "#9ee6d1")
+SERIES = ("#e89a73", "#6eb6e5", "#dfbd62", "#aa9de9", "#9ee6d1", "#f28cc0", "#62ffad")
 HEADER_PX = 34
 FOOTER_PX = 34
 WEBP_STEPS = ((80, 800), (70, 800), (60, 800), (60, 720), (60, 640))
@@ -476,6 +476,25 @@ def figure(run_dir: str, out: str, *, width: int = 1000) -> dict:
     draw.rectangle(
         (ox + m, oy + m, ox + tile.width - m - 1, oy + tile.height - m - 1), outline=_rgb(OUTLINE)
     )
+    # Lumped parts: the body outlined (it is void in the copper), labelled with its value.
+    x0_mm = spec_d["design_region"]["x_mm"][0] - margin * spec_d["grid"]["pitch_mm"]
+    y1_mm = spec_d["design_region"]["y_mm"][1] + margin * spec_d["grid"]["pitch_mm"]
+    for el in spec_d.get("lumped", []):
+        (xa, xb), (ya, yb) = sorted(el["x_mm"]), sorted(el["y_mm"])
+        rect = (
+            ox + (xa - x0_mm) * px_mm,
+            oy + (y1_mm - yb) * px_mm,
+            ox + (xb - x0_mm) * px_mm,
+            oy + (y1_mm - ya) * px_mm,
+        )
+        draw.rectangle(rect, outline=_rgb(TEXT), width=max(1, int(2 * k)))
+        draw.text(
+            (rect[2] + 4 * k, 0.5 * (rect[1] + rect[3])),
+            f"{el['ohms']:g} Ω",
+            fill=_rgb(TEXT),
+            font=_font(int(11 * k)),
+            anchor="lm",
+        )
     bar = 2.0 if px_mm * 5 > 0.4 * tile.width else 5.0
     yb = oy + tile.height + 10 * k
     draw.line([(ox, yb), (ox + bar * px_mm, yb)], fill=_rgb(TEXT), width=max(1, int(2 * k)))
@@ -503,7 +522,7 @@ def figure(run_dir: str, out: str, *, width: int = 1000) -> dict:
         if lv in val
     ]
     ghz = tables[-1][0]["ghz"]
-    names = sorted(key for key in tables[-1][0] if key.startswith("S") and key.endswith("1"))
+    names = plotted_sparams(crit, tables[-1][0])
     lo = min(-40.0, math.floor(min(min(tables[-1][0][n]) for n in names) / 10.0) * 10.0)
     lo = max(lo, -60.0)
     self.frame(
@@ -512,7 +531,8 @@ def figure(run_dir: str, out: str, *, width: int = 1000) -> dict:
         ghz[-1],
         lo,
         0.0,
-        "|S_i1| (dB)   thin to thick: optimization pitch, 1/2, 1/3",
+        ("|S_i1|" if all(n.endswith("1") for n in names) else "|S_ij|")
+        + " (dB)   thin to thick: optimization pitch, 1/2, 1/3",
     )
     for c in crit:
         if c.kind in ("s_max", "s_min") and c.ghz is not None:
@@ -535,6 +555,18 @@ def figure(run_dir: str, out: str, *, width: int = 1000) -> dict:
     with open(out, "wb") as fh:
         fh.write(buf.getvalue())
     return {"bytes": len(buf.getvalue()), "size": [w, h]}
+
+
+def plotted_sparams(checks, table: dict) -> list[str]:
+    """The S-parameters the figure plots: |S_i1| of every port, plus the other entries the
+    criteria judge (a combiner's output match and isolation), in the table's order."""
+    names = [key for key in table if key.startswith("S") and key.endswith("1")]
+    for c in checks:
+        if c.kind in ("s_max", "s_min"):
+            key = f"S{c.ports[0]}{c.ports[1]}"
+            if key in table and key not in names:
+                names.append(key)
+    return sorted(names, key=lambda n: (n[2:], n[1:2]))
 
 
 class _Plot:

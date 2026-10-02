@@ -16,7 +16,8 @@ Most rungs are *variants* of two base designs (``09-mcu-usb-31`` and the ladder'
     through vias only, or blind/buried vias (and microvias) permitted, written as
     KiCad custom rules (``.kicad_dru``) so the judge itself enforces it;
 ``sides``
-    single-sided (every part on the top side) or double-sided placement;
+    single-sided (every part on the top side), double-sided (the tool may use both
+    sides), or assigned (the designer locks named parts to the bottom side);
 ``constraints``
     absolute (fixed poses, edge locks, keep-outs, regions, side locks) and relative
     (proximity groups, lines with a pitch, ordering, alignment) placement constraints.
@@ -520,159 +521,164 @@ MCU_REGION = [0.0, 0.0, MCU_SIZE[0] / 2, MCU_SIZE[1] / 2]  # the regulator: sout
 MCU_NEAR = dict(decoupling=12.0, crystal=13.0)
 
 
-def mcu_absolute(spec):
-    """Absolute constraints on the MCU board: two mounting holes at fixed poses, the
-    I/O header held on the east edge and both buttons on the south edge (hard edge
-    locks with their pad rows along the edge), the MCU's rotation locked, a keep-out
-    field, and a board-region restriction for the regulator (which the engine cannot
-    express: it is checked, not given)."""
+def absolute(spec, *, holes, edges, rotations, keepout, region, describe):
+    """Absolute placement constraints: mounting holes (stock NPTH footprints) at fixed
+    poses, hard edge locks (``edges``: ref -> edge, 1 mm tolerance), locked rotations,
+    a placement keep-out rectangle, and a board-region restriction (``region``: refs
+    and rectangle), which the engine cannot express: it is checked, not given."""
     spec = deepcopy(spec)
-    for ref, at in MCU_HOLES.items():
+    for ref in holes:
         spec["parts"].append(pinned(ref, "hole_m2", "M2", {"": ""}))
     spec["expected_components"] = len(spec["parts"])
     spec["expected_connected_pads"] = connected_pads(spec["parts"])
     cons = spec["constraints"]
-    for ref, at in MCU_HOLES.items():
+    for ref, at in holes.items():
         cons["fixed"][ref] = dict(at=at, rot=0, side="top")
     cons["edge_align"] = {
-        "J2": dict(edge="east", hard=True, tolerance_mm=1.0),
-        "SW1": dict(edge="south", hard=True, tolerance_mm=1.0),
-        "SW2": dict(edge="south", hard=True, tolerance_mm=1.0),
+        ref: dict(edge=edge, hard=True, tolerance_mm=1.0) for ref, edge in edges.items()
     }
-    # Pin rows along their edge: the connector's pads run along x at rot 0, so rot 90
-    # turns them along the east edge with the side-entry mouth facing out; the
-    # buttons' pads run along x (designs.PAD_AXIS).
-    cons["orientation"] = {"J2": 90, "SW1": 0, "SW2": 0, "U1": 0}
-    x0, y0, x1, y1 = MCU_KEEPOUT
+    cons["orientation"] = dict(rotations)
+    x0, y0, x1, y1 = keepout
     cons["keepout"] = [dict(name="label", polygon=[[x0, y0], [x1, y0], [x1, y1], [x0, y1]])]
     checks = base_checks(spec)
     checks += [
-        dict(id="edge-J2", kind="edge", ref="J2", edge="east", max_mm=1.0, engine="edge_align"),
-        dict(id="edge-SW1", kind="edge", ref="SW1", edge="south", max_mm=1.0, engine="edge_align"),
-        dict(id="edge-SW2", kind="edge", ref="SW2", edge="south", max_mm=1.0, engine="edge_align"),
-        dict(id="rot-J2", kind="orientation", ref="J2", rot=90, engine="orientation"),
-        dict(id="rot-SW1", kind="orientation", ref="SW1", rot=0, engine="orientation"),
-        dict(id="rot-SW2", kind="orientation", ref="SW2", rot=0, engine="orientation"),
-        dict(id="rot-U1", kind="orientation", ref="U1", rot=0, engine="orientation"),
-        dict(id="keepout-label", kind="keepout", rect=MCU_KEEPOUT, refs="*", engine="keepout"),
-        dict(
-            id="region-regulator",
-            kind="region",
-            refs=["U2", "C10", "C11"],
-            rect=MCU_REGION,
-            engine="unsupported",
-        ),
+        dict(id="edge-" + ref, kind="edge", ref=ref, edge=edge, max_mm=1.0, engine="edge_align")
+        for ref, edge in edges.items()
     ]
+    checks += [
+        dict(id="rot-" + ref, kind="orientation", ref=ref, rot=rot, engine="orientation")
+        for ref, rot in rotations.items()
+    ]
+    checks.append(
+        dict(id="keepout-label", kind="keepout", rect=keepout, refs="*", engine="keepout")
+    )
+    refs, rect = region
+    checks.append(dict(id="region", kind="region", refs=refs, rect=rect, engine="unsupported"))
     spec["checks"] = checks
+    spec["description"] += " " + describe
     spec["name"] += "-abs"
     spec["dims"]["constraints"] = "absolute"
     spec["features"] = sorted(set(spec["features"]) | {"absolute-constraints"})
     return spec
 
 
-def mcu_relative(spec):
-    """Relative constraints on the MCU board: the four LEDs in one ordered line at a
-    3 mm pitch, the two USB series resistors as a rigid side-by-side pair (a relative
-    offset), the crystal and its load capacitors within 13 mm of the MCU and the four
-    decoupling capacitors within 12 mm (proximity), and the two buttons aligned on one
-    horizontal line (which the engine cannot express: it is checked, not given)."""
+def relative(spec, *, lines, groups, align, describe):
+    """Relative placement constraints: ordered lines at a pitch (``line_group``: a
+    rigid row, which also fixes the members' order and their offsets), hard proximity
+    groups (members within a radius of an anchor), and an alignment (``align``: refs
+    sharing one coordinate within 0.25 mm), which the engine cannot express: it is
+    checked, not given."""
     spec = deepcopy(spec)
     cons = spec["constraints"]
     cons["line_group"] = [
-        dict(
-            name="status_leds",
-            members=["D1", "D2", "D3", "D4"],
-            pitch_mm=3.0,
-            rot=90,
-            reason="Status LEDs in one ordered row",
-        ),
-        dict(
-            name="usb_series",
-            members=["R1", "R2"],
-            pitch_mm=2.5,
-            rot=90,
-            reason="USB series resistors side by side, so the pair stays coupled",
-        ),
+        dict(name=name, members=members, pitch_mm=pitch, rot=90, reason=reason)
+        for name, members, pitch, reason in lines
     ]
     cons["group"] = [
-        dict(members=["Y1", "C8", "C9"], anchor="U1", hard=True, radius_mm=MCU_NEAR["crystal"]),
-        dict(
-            members=["C2", "C3", "C4", "C5"],
-            anchor="U1",
-            hard=True,
-            radius_mm=MCU_NEAR["decoupling"],
-        ),
+        dict(members=members, anchor=anchor, hard=True, radius_mm=radius)
+        for _name, anchor, members, radius in groups
     ]
     checks = base_checks(spec)
     checks += [
         dict(
-            id="line-status-leds",
+            id="line-" + name,
             kind="line",
-            refs=["D1", "D2", "D3", "D4"],
-            pitch_mm=3.0,
+            refs=members,
+            pitch_mm=pitch,
             rot=90,
             tol_mm=0.01,
             engine="line_group",
-        ),
-        dict(
-            id="pair-usb-series",
-            kind="line",
-            refs=["R1", "R2"],
-            pitch_mm=2.5,
-            rot=90,
-            tol_mm=0.01,
-            engine="line_group",
-        ),
-        dict(
-            id="near-crystal",
-            kind="proximity",
-            anchor="U1",
-            refs=["Y1", "C8", "C9"],
-            max_mm=MCU_NEAR["crystal"],
-            engine="group",
-        ),
-        dict(
-            id="near-decoupling",
-            kind="proximity",
-            anchor="U1",
-            refs=["C2", "C3", "C4", "C5"],
-            max_mm=MCU_NEAR["decoupling"],
-            engine="group",
-        ),
-        dict(
-            id="align-buttons",
-            kind="align",
-            refs=["SW1", "SW2"],
-            axis="y",
-            tol_mm=0.25,
-            engine="unsupported",
-        ),
+        )
+        for name, members, pitch, _reason in lines
     ]
+    checks += [
+        dict(
+            id="near-" + name,
+            kind="proximity",
+            anchor=anchor,
+            refs=members,
+            max_mm=radius,
+            engine="group",
+        )
+        for name, anchor, members, radius in groups
+    ]
+    refs, axis = align
+    checks.append(
+        dict(id="align", kind="align", refs=refs, axis=axis, tol_mm=0.25, engine="unsupported")
+    )
     spec["checks"] = checks
+    spec["description"] += " " + describe
     spec["name"] += "-rel"
     spec["dims"]["constraints"] = "relative"
     spec["features"] = sorted(set(spec["features"]) | {"relative-constraints"})
     return spec
 
 
-def mcu_sidelock(spec):
-    """A designer's side assignment: the MCU's six decoupling/UCAP/AREF capacitors are
-    locked to the bottom side (hard ``side``), everything else stays on top."""
+def sidelock(spec, bottom, describe):
+    """A designer's side assignment: ``bottom`` locked to the bottom side (hard
+    ``side``), every other part on top."""
     spec = deepcopy(spec)
-    bottom = ["C2", "C3", "C4", "C5", "C6", "C7"]
-    spec["constraints"]["side"] = {"bottom": bottom}
-    spec["sides"] = "double"
+    spec["constraints"]["side"] = {"bottom": list(bottom)}
+    spec["sides"] = "assigned"
     top = [p["ref"] for p in spec["parts"] if p["ref"] not in bottom]
     checks = [c for c in base_checks(spec) if c["id"] != "single-sided"]
     checks += [
-        dict(id="side-bottom", kind="side", refs=bottom, side="bottom", engine="side"),
+        dict(id="side-bottom", kind="side", refs=list(bottom), side="bottom", engine="side"),
         dict(id="side-top", kind="side", refs=top, side="top", engine="side"),
     ]
     spec["checks"] = checks
+    spec["description"] += " " + describe
     spec["name"] += "-sidelock"
-    spec["dims"].update(constraints="side-lock", sides="double")
+    spec["dims"]["sides"] = "assigned"
     spec["features"] = sorted(set(spec["features"]) | {"side-lock", "bottom-side"})
     return spec
+
+
+def mcu_absolute(spec):
+    # Pin rows along their edge: the connector's pads run along x at rot 0, so rot 90
+    # turns them along the east edge with the side-entry mouth facing out; the buttons'
+    # pads run along x (designs.PAD_AXIS).
+    return absolute(
+        spec,
+        holes=MCU_HOLES,
+        edges={"J2": "east", "SW1": "south", "SW2": "south"},
+        rotations={"J2": 90, "SW1": 0, "SW2": 0, "U1": 0},
+        keepout=MCU_KEEPOUT,
+        region=(["U2", "C10", "C11"], MCU_REGION),
+        describe=(
+            "Absolute constraints: M2 holes at two corners, the I/O connector on the east "
+            "edge and both buttons on the south edge, the MCU's rotation locked, a label "
+            "keep-out on the north edge, the regulator in the south-west quarter."
+        ),
+    )
+
+
+def mcu_relative(spec):
+    return relative(
+        spec,
+        lines=[
+            ("status-leds", ["D1", "D2", "D3", "D4"], 3.0, "Status LEDs in one ordered row"),
+            ("usb-series", ["R1", "R2"], 2.5, "USB series resistors side by side"),
+        ],
+        groups=[
+            ("crystal", "U1", ["Y1", "C8", "C9"], MCU_NEAR["crystal"]),
+            ("decoupling", "U1", ["C2", "C3", "C4", "C5"], MCU_NEAR["decoupling"]),
+        ],
+        align=(["SW1", "SW2"], "y"),
+        describe=(
+            "Relative constraints: the LEDs in an ordered 3 mm line, the USB series "
+            "resistors as a rigid pair, the crystal group within 13 mm and the decoupling "
+            "within 12 mm of the MCU, the two buttons aligned."
+        ),
+    )
+
+
+def mcu_sidelock(spec):
+    return sidelock(
+        spec,
+        ["C2", "C3", "C4", "C5", "C6", "C7"],
+        "The MCU's decoupling, UCAP and AREF capacitors are locked to the bottom side.",
+    )
 
 
 def mcu_header(spec):
@@ -693,14 +699,14 @@ def mcu_header(spec):
 def mcu_mc(spec):
     """The same board placed by Monte-Carlo successive halving (``mc_case.py``):
     32 independent global starts ranked by the capacity proxy, the best 8 plus 2
-    seeded controls screened by a short detailed route, and the 3 best screens routed
-    to completion with the ladder's own detailed-route budget; the best routed
-    candidate (fewest missing connections, then vias, then copper) is kept."""
+    seeded controls screened by a short detailed route (2 iterations), and the 2 best
+    screens routed with the ladder's own detailed-route budget (8 iterations); the best
+    routed candidate (fewest missing connections, then vias, then copper) is kept."""
     spec = deepcopy(spec)
     spec["name"] += "-mc"
     spec["driver"] = "mc"
     spec["mc"] = dict(
-        n0=32, k1=8, control=2, k2=3, iters=350, route_iters=4, final_iters=8, procs=4
+        n0=32, k1=8, control=2, k2=2, iters=350, route_iters=2, final_iters=8, procs=4
     )
     spec["dims"]["search"] = "mc"
     spec["features"] = sorted(set(spec["features"]) | {"monte-carlo", "successive-halving"})
@@ -823,7 +829,9 @@ def power_switch():
     )
     cons = spec["constraints"]
     # The terminal block's wire entry faces west (rot 90 turns its pin row along y).
-    cons["fixed"] = {"J1": dict(at=[4.0, size[1] / 2], rot=90, side="top")}
+    # Its origin is pin 1 and its body overhangs the pins: this pose keeps the courtyard on
+    # the board (west edge 0.25 mm) with the two pins centred on the edge.
+    cons["fixed"] = {"J1": dict(at=[6.0, size[1] / 2 - 2.54], rot=90, side="top")}
     cons["net_class"] = {
         "trunk": dict(nets=["VIN", "VP"], current_a=3.0, copper_oz=1, delta_t_c=20),
         "return": dict(nets=["GND"], current_a=3.0, copper_oz=1, delta_t_c=20),
@@ -844,6 +852,17 @@ def power_switch():
 
 # ----------------------------------------------------------- chaser variants
 
+CHASER_SIZE = (42, 32)  # chaser(5)'s outline
+CHASER_HOLES = {"H1": [3.0, CHASER_SIZE[1] - 3.0], "H2": [CHASER_SIZE[0] - 3.0, 3.0]}
+CHASER_KEEPOUT = [
+    CHASER_SIZE[0] / 2 - 6,
+    CHASER_SIZE[1] - 5,
+    CHASER_SIZE[0] / 2 + 6,
+    CHASER_SIZE[1],
+]
+CHASER_REGION = [0.0, 0.0, CHASER_SIZE[0] / 2, CHASER_SIZE[1]]  # the clock: west half
+CHASER_NEAR = dict(timer=8.0, counter=8.0)
+
 
 def chaser_base():
     """The ladder's 07-chaser-20 as a hard-rung base: same netlist, rules and fixed
@@ -853,6 +872,67 @@ def chaser_base():
     return hard(spec, "chaser-20", ["2-layer"], "nightly", 20)
 
 
+def chaser_absolute(spec):
+    return absolute(
+        spec,
+        holes=CHASER_HOLES,
+        edges={"D%d" % i: "south" for i in range(1, 6)},
+        rotations={"D%d" % i: 0 for i in range(1, 6)} | {"U1": 0, "U2": 0},
+        keepout=CHASER_KEEPOUT,
+        region=(["U1", "R1", "R2", "C1", "C2", "C3"], CHASER_REGION),
+        describe=(
+            "Absolute constraints: M2 holes at two corners, the five LEDs on the south edge, "
+            "both ICs' rotations locked, a label keep-out on the north edge, the clock parts "
+            "in the west half."
+        ),
+    )
+
+
+def chaser_relative(spec):
+    return relative(
+        spec,
+        lines=[
+            ("leds", ["D1", "D2", "D3", "D4", "D5"], 3.0, "Chaser LEDs in one ordered row"),
+            ("timing", ["R1", "R2"], 2.5, "Timing resistors side by side"),
+        ],
+        groups=[
+            ("timer", "U1", ["C1", "C2", "C3"], CHASER_NEAR["timer"]),
+            ("counter", "U2", ["C4"], CHASER_NEAR["counter"]),
+        ],
+        align=(["U1", "U2"], "y"),
+        describe=(
+            "Relative constraints: the LEDs in an ordered 3 mm line, the timing resistors as "
+            "a rigid pair, the timer's capacitors within 8 mm of the timer and the counter's "
+            "decoupling within 8 mm of the counter, the two ICs aligned."
+        ),
+    )
+
+
+def chaser_sidelock(spec):
+    return sidelock(
+        spec, ["C3", "C4", "C5"], "The supply capacitors are locked to the bottom side."
+    )
+
+
+# --------------------------------------------------------- run configurations
+
+# yapnr's configuration per family (run.py arguments). The ladder's documented best: the
+# initial pool (8 starts, 3 routed finalists) and 4 place-route rounds. The MCU family
+# uses a budgeted form of it (1 routed finalist, 2 rounds, the packed maze kernel, which
+# routes identically): one detailed route of the 2-layer board took 30 minutes.
+YAPNR_BEST = ["--initial-pool", "--initial-starts", "8", "--initial-finalists", "3"]
+YAPNR_BUDGET = [
+    "--initial-pool",
+    "--initial-starts",
+    "8",
+    "--initial-finalists",
+    "1",
+    "--rounds",
+    "2",
+    "--packed-maze",
+]
+
+
 # ------------------------------------------------------------------- the list
 
 
@@ -860,23 +940,21 @@ def hard_rungs():
     """Every hard rung, base designs first, then their one-dimension variants."""
     mcu = mcu_usb()
     out = [mcu]
-    for name in ("4L-SGPS", "4L-SGGS", "4L-SSGS", "6L-SGSSPS", "6L-SGSGPS", "8L-SGSGPSGS"):
-        out.append(with_stackup(mcu, name))
-    six = with_stackup(mcu, "6L-SGSGPS")
-    out += [with_via_policy(six, "blind-buried"), with_via_policy(six, "hdi")]
-    out += [with_double_sided(mcu), with_double_sided(with_stackup(mcu, "4L-SGPS"))]
+    out += [with_stackup(mcu, name) for name in ("4L-SGPS", "4L-SSGS", "6L-SGSGPS")]
     out += [mcu_absolute(mcu), mcu_relative(mcu), mcu_sidelock(mcu), mcu_mc(mcu), mcu_header(mcu)]
-    out += [quad_bank(), power_switch()]
-    base = chaser_base()
-    for name in ("4L-SGPS", "6L-SGSGPS", "8L-SGSGPSGS"):
-        out.append(with_stackup(base, name))
-    out.append(with_via_policy(with_stackup(base, "6L-SGSGPS"), "blind-buried"))
-    out.append(with_double_sided(base))
-    # Budgets: wall minutes per seed measured on the development Mac, rounded up.
     for spec in out:
-        layers = spec["stackup"]["copper_layers"]
-        if spec.get("driver") == "mc":
-            spec["ci"] = dict(lane="manual", minutes=120)
-        elif layers >= 6 and spec["base"] == "mcu-usb-31":
-            spec["ci"] = dict(lane="manual", minutes=60)
-    return deepcopy(out)
+        spec["yapnr_args"] = YAPNR_BUDGET if spec.get("driver") != "mc" else ["--packed-maze"]
+        spec["ci"] = dict(lane="manual", minutes=150 if spec.get("driver") == "mc" else 90)
+    base = chaser_base()
+    chasers = [
+        with_stackup(base, name)
+        for name in ("4L-SGPS", "4L-SGGS", "4L-SSGS", "6L-SGSSPS", "6L-SGSGPS", "8L-SGSGPSGS")
+    ]
+    six = with_stackup(base, "6L-SGSGPS")
+    chasers += [with_via_policy(six, "blind-buried"), with_via_policy(six, "hdi")]
+    chasers += [with_double_sided(base), with_double_sided(with_stackup(base, "4L-SGPS"))]
+    chasers += [chaser_absolute(base), chaser_relative(base), chaser_sidelock(base)]
+    others = [quad_bank(), power_switch()]
+    for spec in chasers + others:
+        spec["yapnr_args"] = YAPNR_BEST
+    return deepcopy(out + chasers + others)

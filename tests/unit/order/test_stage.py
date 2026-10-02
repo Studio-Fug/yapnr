@@ -157,18 +157,21 @@ class BundleTest(Base):
 
 
 class ImportUrlTest(Base):
-    URL = "https://example.com/boards/demo.zip?raw=1&token=x y"
+    URL = "https://example.com/boards/demo.zip?raw=1&name=x y"
 
     def test_the_link_encodes_the_public_url(self):
         link = vendors.import_link("oshpark", self.URL)
         self.assertEqual(
             link,
-            "https://oshpark.com/import?url=https://example.com/boards/demo.zip%3Fraw%3D1%26token%3Dx%20y",
+            "https://oshpark.com/import?url=https://example.com/boards/demo.zip%3Fraw%3D1%26name%3Dx%20y",
         )
         for bad in (
             "http://example.com/a.zip",
             "file:///tmp/a.zip",
             "https://user:pw@example.com/a.zip",
+            "https://example.com/a.zip?token=secret",
+            "https://bucket.s3.amazonaws.com/a.zip?X-Amz-Signature=ab&X-Amz-Credential=cd",
+            "https://example.blob.core.windows.net/a.zip?sv=2020&sig=ab",
         ):
             with self.assertRaises(vendors.StagingError):
                 vendors.import_link("oshpark", bad)

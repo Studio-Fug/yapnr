@@ -11,7 +11,7 @@ Mechanisms (design §8.3):
 from __future__ import annotations
 
 from typing import Any, Dict, List
-from urllib.parse import quote, urlsplit
+from urllib.parse import parse_qsl, quote, urlsplit
 
 from yapnr.fab import capability
 
@@ -20,6 +20,28 @@ NOT_BUILT = {
     "staging?)",
     "api": "O3, not built: waits for vendor API access and the owner's decision D3",
 }
+
+
+# Query parameters of signed or private links (S3, GCS, Azure SAS, tokens): such a URL is not
+# public, and the link, the card and staged.jsonl would carry the credential.
+_CREDENTIAL_PARAMS = (
+    "token",
+    "access_token",
+    "auth",
+    "key",
+    "apikey",
+    "api_key",
+    "password",
+    "secret",
+    "sig",
+    "signature",
+    "x-amz-signature",
+    "x-amz-credential",
+    "x-amz-security-token",
+    "x-goog-signature",
+    "x-goog-credential",
+    "googleaccessid",
+)
 
 
 class StagingError(ValueError):
@@ -63,6 +85,16 @@ def import_link(vendor: str, public_url: str) -> str:
         raise StagingError(f"--url must be a public https URL, not {public_url!r}")
     if parts.username or parts.password:
         raise StagingError("--url must not carry credentials")
+    secret = [
+        k
+        for k, _ in parse_qsl(parts.query, keep_blank_values=True)
+        if k.lower() in _CREDENTIAL_PARAMS
+    ]
+    if secret:
+        raise StagingError(
+            f"--url must be a public URL without credentials (query parameter {secret[0]!r}); "
+            "publish the zip (for example as a release asset) and give that URL"
+        )
     return spec["template"].format(url=quote(public_url, safe=":/"))
 
 

@@ -137,6 +137,24 @@ class EvaluateTest(unittest.TestCase):
         findings = self.run_check(self.facts(layers=4), "jlc-4l", st=stats(drill_holes=narrow))
         self.assertIn(("FAB-DRILL", "warning"), [(f.code, f.severity) for f in findings])
 
+    def test_fab_drill_npth_in_a_merged_drill_file(self):
+        """OSH Park takes one merged .XLN; JLCPCB and PCBWay get a separate NPTH file."""
+        npth = [
+            {"count": 1, "shape": "Round", "x_size": "0.3000 mm", "y_size": "0.3000 mm"},
+            {
+                "count": 2,
+                "shape": "Round",
+                "x_size": "2.2000 mm",
+                "y_size": "2.2000 mm",
+                "plated": False,
+            },
+        ]
+        osh = self.run_check(self.facts(layers=4), st=stats(drill_holes=npth))
+        self.assertEqual([(f.code, f.severity) for f in osh], [("FAB-DRILL", "warning")])
+        self.assertIn("2 non-plated holes share the one merged drill file", osh[0].message)
+        jlc = self.run_check(self.facts(layers=4), "jlc-4l", st=stats(drill_holes=npth))
+        self.assertNotIn("FAB-DRILL", [f.code for f in jlc])
+
     def test_fab_castellated(self):
         facts = self.facts(layers=4, castellated=True)
         osh = self.run_check(facts)

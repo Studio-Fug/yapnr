@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+import math
 import tempfile
 import unittest
 from pathlib import Path
@@ -81,6 +82,38 @@ class CplTest(unittest.TestCase):
             assembly.jlc_cpl([part("R1", rot=90), part("R2", side="bottom", rot=90)]),
             [["R1", "10", "-5", "Top", "90"], ["R2", "10", "-5", "Bottom", "90"]],
         )
+
+    def test_centroid_is_the_pad_box_centre_at_any_angle(self):
+        """Mid X/Mid Y is the part's centre, not its anchor: a header anchored on pin 1 [FT]."""
+
+        def header(angle):
+            a = math.radians(angle)
+            pads = [
+                board.Pad(
+                    str(i + 1),
+                    "thru_hole",
+                    "rect",
+                    at=(10 + u * math.cos(a), 20 - u * math.sin(a), angle),
+                    size=(1.7, 1.7),
+                )
+                for i, u in enumerate((0.0, 2.54))
+            ]
+            return board.Footprint("J1", "", "x:H", "F.Cu", (10.0, 20.0, angle), {}, [], "", pads)
+
+        for angle in (0, 90, 45, 180):
+            a = math.radians(angle)
+            x, y = assembly.centroid(header(angle))
+            self.assertAlmostEqual(x, 10 + 1.27 * math.cos(a), 6, angle)
+            self.assertAlmostEqual(y, 20 - 1.27 * math.sin(a), 6, angle)
+        bare = board.Footprint("H1", "", "x:H", "F.Cu", (3.0, 4.0, 0.0), {}, [], "")
+        self.assertEqual(assembly.centroid(bare), (3.0, 4.0))
+
+    def test_parts_excluded_from_position_files_stay_in_the_bom(self):
+        parts = [part("R1"), part("R2")]
+        parts[1].in_pos = False
+        self.assertEqual([r[0] for r in assembly.jlc_cpl(parts)], ["R1"])
+        self.assertEqual([r[0] for r in assembly.pcbway_cpl(parts)], ["R1"])
+        self.assertEqual(assembly.jlc_bom(parts)[0][1], "R1,R2")
 
     def test_consigned_parts_are_not_placed(self):
         parts = [part("R1"), part("J1", consigned=True)]

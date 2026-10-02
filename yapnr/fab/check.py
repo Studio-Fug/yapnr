@@ -347,6 +347,19 @@ def evaluate(
                 min_slot.get("src"),
             )
         )
+    drill_spec = vendor.get("drill") or {}
+    npth = [h for h in holes if h.get("plated") is False]
+    if npth and drill_spec.get("separate_th") is False:
+        out.append(
+            Finding(
+                "FAB-DRILL",
+                "warning",
+                f"{sum(h.get('count', 1) for h in npth)} non-plated holes share the one merged "
+                f"drill file; {vendor['title']} does not document how it plates them: check them "
+                "in its drill preview",
+                drill_spec.get("src"),
+            )
+        )
 
     # Castellation.
     castellated = board.castellated()

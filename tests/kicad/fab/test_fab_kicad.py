@@ -121,6 +121,13 @@ class KicadFabTest(unittest.TestCase):
         self.assertEqual(self.drc_types(self.check(thin, "oshpark-4l")), [])
         thin2 = self.board("thin2", layers=2, track_width=0.14)
         self.assertEqual(self.drc_types(self.check(thin2, "oshpark-2l")), ["track_width"])
+        hair = self.board("hair", layers=2, track_width=0.10)
+        self.assertEqual(self.drc_types(self.check(hair, "oshpark-2l")), ["track_width"])
+        small_drill = self.board("drill020", layers=4, via=(0.5, 0.20))
+        self.assertEqual(
+            self.drc_types(self.check(small_drill, "oshpark-4l")), ["drill_out_of_range"]
+        )
+        self.assertEqual(self.drc_types(self.check(small_drill, "jlc-4l")), [])
         small_via = self.board("via045", layers=4, via=(0.45, 0.30))
         self.assertEqual(
             self.drc_types(self.check(small_via, "oshpark-4l")), ["annular_width", "via_diameter"]

@@ -5,17 +5,20 @@ BOM (``yapnr.rf`` footprints exclude themselves). The LCSC id comes from the foo
 (atopile writes ``LCSC`` and ``lcsc_id``), the MPN from ``Partnumber``/``MPN``; with a parts lock,
 every LCSC id must be one of the lock's.
 
-Placement (CPL) follows Fabrication Toolkit's published conversion [FT]: the footprint anchor in
-millimetres with Y up (KiCad's Y negated, absolute origin, as ``kicad-cli pcb export pos``
-writes it), rotation counter-clockwise; JLCPCB bottom-side rotation is ``180 - r`` as seen from the
-top. No vendor correction table is copied into yapnr: every part whose rotation nobody checked in
-JLC's preview is listed on the card.
+Placement (CPL) follows Fabrication Toolkit's published conversion [FT]: the part's centroid (the
+centre of its pads' bounding box in the footprint's own frame, as JLCPCB's "Mid X/Mid Y" asks;
+the anchor when it has no pads) in millimetres with Y up (KiCad's Y negated, absolute origin, the
+gerbers' coordinates), rotation counter-clockwise; JLCPCB bottom-side rotation is ``180 - r`` as
+seen from the top. Footprints excluded from position files stay in the BOM but not in the CPL. No
+vendor correction table is copied into yapnr: every part whose rotation nobody checked in JLC's
+preview is listed on the card.
 """
 
 from __future__ import annotations
 
 import csv
 import io
+import math
 import re
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
@@ -43,6 +46,7 @@ class Part:
     mpn: str
     manufacturer: str
     consigned: bool = False
+    in_pos: bool = True  # False: excluded from position files (BOM only)
 
 
 def natural_key(ref: str) -> Tuple:
@@ -52,6 +56,31 @@ def natural_key(ref: str) -> Tuple:
 
 def _footprint_name(fp: Footprint) -> str:
     return fp.lib_id.split(":", 1)[-1]
+
+
+def centroid(fp: Footprint) -> Tuple[float, float]:
+    """The centre of the pads' bounding box, in board millimetres (Y down) [FT].
+
+    The box is taken in the footprint's own frame, so a part at any angle gets the same centre;
+    each pad counts as its rotated size rectangle. No pads: the anchor.
+    """
+    if not fp.pads:
+        return fp.at[0], fp.at[1]
+    ox, oy, a = fp.at[0], fp.at[1], math.radians(fp.at[2])
+    us, vs = [], []
+    for pad in fp.pads:
+        b = math.radians(pad.at[2])
+        for cx in (-0.5, 0.5):
+            for cy in (-0.5, 0.5):
+                pu, pv = cx * pad.size[0], cy * pad.size[1]
+                # pad frame to board offsets (KiCad: counter-clockwise, Y down)
+                dx = pad.at[0] - ox + pu * math.cos(b) + pv * math.sin(b)
+                dy = pad.at[1] - oy - pu * math.sin(b) + pv * math.cos(b)
+                # board offsets to the footprint frame
+                us.append(dx * math.cos(a) - dy * math.sin(a))
+                vs.append(dx * math.sin(a) + dy * math.cos(a))
+    u, v = (min(us) + max(us)) / 2, (min(vs) + max(vs)) / 2
+    return ox + u * math.cos(a) + v * math.sin(a), oy - u * math.sin(a) + v * math.cos(a)
 
 
 def collect(board: Board, consign: Iterable[str] = ()) -> Tuple[List[Part], Dict[str, List[str]]]:
@@ -73,20 +102,22 @@ def collect(board: Board, consign: Iterable[str] = ()) -> Tuple[List[Part], Dict
         if fp.dnp:
             skipped["dnp"].append(ref)
             continue
+        x, y = centroid(fp)
         parts.append(
             Part(
                 reference=ref,
                 value=fp.value,
                 footprint=_footprint_name(fp),
                 side=fp.side,
-                x_mm=fp.at[0],
-                y_mm=-fp.at[1],
+                x_mm=round(x, 6),
+                y_mm=round(-y, 6),
                 rotation=fp.at[2],
                 mount=fp.mount,
                 lcsc=fp.field(*LCSC_FIELDS).upper(),
                 mpn=fp.field(*MPN_FIELDS),
                 manufacturer=fp.field(*MFR_FIELDS),
                 consigned=ref in consign,
+                in_pos=not fp.excluded_from_pos,
             )
         )
     for key in skipped:
@@ -133,7 +164,7 @@ def jlc_cpl(parts: Sequence[Part]) -> List[List[str]]:
             _num(jlc_rotation(p)),
         ]
         for p in parts
-        if not p.consigned
+        if not p.consigned and p.in_pos
     ]
 
 
@@ -173,7 +204,7 @@ def pcbway_cpl(parts: Sequence[Part]) -> List[List[str]]:
             _num(p.rotation % 360.0),
         ]
         for p in parts
-        if not p.consigned
+        if not p.consigned and p.in_pos
     ]
 
 

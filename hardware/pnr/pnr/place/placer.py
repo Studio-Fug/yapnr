@@ -17,16 +17,12 @@ from pnr.graph import BoardGraph, BoardOutline
 from . import metrics
 from .geometry import (
     apply_hard_sides,
-    hard_edge_bands,
-    hard_group_edges,
-    hard_group_limits,
     keepout_rects,
     outline_size,
     resolve_fixed_poses,
-    resolve_hard_rotations,
     set_component_side,
 )
-from .legalize import legalize, pad_edge_rule
+from .legalize import legalize, legalize_constraint_kwargs, pad_edge_rule
 from .model import global_place
 
 
@@ -167,6 +163,10 @@ def place(
 
     roles = None
     if os.environ.get("PNR_POWER_FIRST") == "1":
+        from .regions import declared
+
+        if declared(constraints):
+            raise ValueError("region and align constraints do not support PNR_POWER_FIRST=1")
         # Power-first placement: derive tiers/loops, staged lexicographic global
         # placement, then power-first legalization (pnr.place.power_first).
         from .power_first import roles_for, staged_place
@@ -235,17 +235,12 @@ def place(
         cont, channel_rules or compile_routing_rules(constraints, [n.name for n in graph.nets])
     )
     # 2. Legalization (snap to a non-overlapping, in-outline layout).
-    bands = hard_edge_bands(constraints)
     placed = legalize(
         cont,
         width,
         height,
-        fixed=poses,
         allow_rotation=orient,
         channel_model=channels,
-        group_limits=hard_group_limits(constraints, poses, partial=True),
-        group_edges=hard_group_edges(constraints),
-        rotations=resolve_hard_rotations(constraints),
         mobility={
             ref: dict(
                 source_fixed=not bool(c.params.get("row_trial")),
@@ -255,7 +250,6 @@ def place(
             if c.kind == "fixed"
             for ref in c.refs
         },
-        keepouts=keepouts,
         clearance=clearance,
         grid_mm=grid_mm,
         inflation=inflation,
@@ -264,9 +258,9 @@ def place(
         # full spread here would over-reserve and fail to fit on a tight outline
         # (grow the outline via the rubber-band instead).
         spread=min(spread, _LEGALIZE_SPREAD_CAP),
-        **({} if pad_edge is None else dict(pad_edge=pad_edge)),
-        # Hard edge_align (opt-in): only passed when a design declares one.
-        **({} if not bands else dict(edge_bands=bands)),
+        # Fixed poses, keep-outs, hard groups and rotations, plus the optional
+        # relations (pad-edge rule, hard edge_align, region, align) only when declared.
+        **legalize_constraint_kwargs(graph, constraints, poses, pad_edge),
     )
     return _finish(placed, graph, constraints, width, height, baseline, pad_edge)
 

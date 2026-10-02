@@ -281,6 +281,11 @@ def propose(
         v["ref"] for v in rules.get("plane_access_intents", []) if v["kind"] == "power_array"
     } | {v["ref"] for v in rules.get("copper_keepouts", [])}
     legal = translation_checker(g, constraints)
+    from .regions import declared
+
+    related = declared(constraints)
+    if related:
+        from .regions import align_snap, soft_penalty
     terminals = {}
     for c in g.components:
         for p, (_, xy) in zip(c.pads, pin_positions(c)):
@@ -316,13 +321,23 @@ def propose(
 
         # Compute light cost with component at original pose.
         points = []
+        # A hard-aligned part moves along its line only (pnr.place.regions).
+        snap = align_snap(g, constraints, comp) if related else {}
+        seen = set()
         for x in np.arange(candidate_pitch / 2, width, candidate_pitch):
             for y in np.arange(candidate_pitch / 2, height, candidate_pitch):
-                comp.pos = (float(x), float(y))
+                point = [float(x), float(y)]
+                for k, value in snap.items():
+                    point[k] = value
+                point = tuple(point)
+                if point in seen:
+                    continue
+                seen.add(point)
+                comp.pos = point
                 ok = legal(comp)
                 comp.pos = original
                 if ok:
-                    points.append((light((x, y)), (float(x), float(y))))
+                    points.append((light(point), point))
         points.sort()
         selected = [p for _, p in points[:shortlist]]
         # Do not let a short-airwire basin hide empty distant regions.
@@ -353,6 +368,8 @@ def propose(
                     )
                 )
                 total = score + 0.1 * air
+                if related:
+                    total += soft_penalty(g, constraints, comp, pos)
                 evaluated[tuple(pos)] = dict(
                     position=list(pos),
                     cost=total,
@@ -375,6 +392,8 @@ def propose(
                     missing += 1
                     best = 10000.0
                 score += best
+            if related:
+                score += soft_penalty(g, constraints, comp, pos)
             return score + 0.1 * light(pos), missing
 
         baseline, _ = heavy(original)

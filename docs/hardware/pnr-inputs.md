@@ -70,6 +70,12 @@ edge_align: # soft: pull a part to a board edge
   SW1: { edge: south, side: top }
   CN1: { edge: east, side: top }
 
+region: # hard: keep parts inside an area
+  - { name: supply, refs: [U3, L1, C10], rect: [40, 0, 60, 20] }
+
+align: # hard: parts share one coordinate
+  - { name: buttons, refs: [SW1, SW2], axis: y }
+
 keepout: # hard: no parts/copper in a region
   - { name: esp32_antenna, ref: U5, extent: { edge: north, depth_mm: 6 } }
 
@@ -221,6 +227,81 @@ side and carry no plane-access intents. The line occupies the sides its members
 occupy: a line of SMD parts may sit above a bottom-side part, and a drilled
 member reserves both sides of the whole line.
 
+### `region` — confine parts to an area (hard, or soft on request)
+
+Keeps the courtyards of the listed parts inside an allowed area in board
+coordinates: a clock section in one half of the board, a regulator in a corner,
+an analog front end away from the switching supply. The area is one rectangle, one
+polygon, or the union of several (`areas`). Several regions on one part all apply.
+
+| Key       | Meaning                                                                                |
+| --------- | -------------------------------------------------------------------------------------- |
+| `name`    | Unique name (required).                                                                |
+| `refs`    | Refs, globs or `@addresses` (at least one known part).                                 |
+| `rect`    | `[x0, y0, x1, y1]` with `x0 < x1`, `y0 < y1`.                                          |
+| `polygon` | `[[x, y], ...]`: at least three points, nonzero area (concave is fine).                |
+| `areas`   | A list of `{rect: ...}` / `{polygon: ...}` pieces; the area is their union.            |
+| `hard`    | `true` (default): a placement outside is illegal. `false`: a penalty on the protrusion. |
+| `weight`  | Soft penalty weight (default 10).                                                      |
+| `reason`  | Free text for reports.                                                                 |
+
+```yaml
+region:
+  - name: clock
+    refs: [U1, "R[12]", C1, C2, C3]
+    rect: [0, 0, 21, 32] # the west half of a 42 x 32 mm board
+```
+
+A rectangle, or a single polygon, is tested exactly. A union of several pieces is
+tested on a 0.25 mm raster (a cell counts when it lies wholly inside one piece), so
+it is conservative by up to one cell; the legalizer uses that raster for every
+polygon. A region on a part in a `line_group` or a hierarchical block acts on the
+member's courtyard inside the rigid line or block, at every rotation.
+
+### `align` — share one coordinate (hard, or soft on request)
+
+Makes the listed parts share an `x` (a vertical line) or a `y` (a horizontal
+line): two ICs on one centre line, a row of buttons at one height, connectors flush
+along one edge. Each part is measured at its `anchor`, evaluated at the part's
+rotation and side, so a rotation moves a pad or edge anchor but never `origin`.
+
+| Key      | Meaning                                                                                      |
+| -------- | -------------------------------------------------------------------------------------------- |
+| `name`   | Unique name (required).                                                                      |
+| `refs`   | Refs, globs or `@addresses` (at least two known parts).                                      |
+| `axis`   | `y`: the anchors share one y (a horizontal line); `x`: one x.                                |
+| `anchor` | One for every ref, or a `{ref: anchor}` map (unlisted refs: `origin`); see below.            |
+| `tol_mm` | With `hard`: the largest spread of the anchors (default 0.25, at least 0.15).                |
+| `hard`   | `true` (default): a larger spread is illegal. `false`: a penalty on each anchor's deviation. |
+| `weight` | Soft penalty weight (default 5).                                                             |
+| `reason` | Free text for reports.                                                                       |
+
+Anchors: `origin` (the footprint origin, as KiCad stores the position; the
+default), `centre` (the centre of the pad bounding box), `pad1` or `pad:<name>`,
+and a courtyard edge: `south`/`north` with `axis: y`, `west`/`east` with `axis: x`.
+
+```yaml
+align:
+  - name: ics
+    refs: [U1, U2]
+    axis: y # one horizontal line through both origins
+    tol_mm: 0.25
+  - name: connector_faces
+    refs: [J2, J3]
+    axis: x
+    anchor: east # their east courtyard edges flush
+```
+
+An align works with `row`, `line_group` and `edge_align`: a member of a rigid line
+carries its anchor in the line's frame (two refs of one line are refused, as the
+line already fixes their offsets), and a hard edge band and an align band both
+bound the part. The compiler refuses an edge anchor that does not measure the axis
+and a tolerance under 0.15 mm (legalization slots are 0.25 mm apart). With three
+or more members and pad or edge anchors the band can hold no slot; the legalizer
+then backtracks, and fails with the part named if no arrangement fits. Aligned
+parts stay top-level parts in hierarchical placement. `PNR_POWER_FIRST=1` refuses
+a design with a `region` or an `align`.
+
 ### `net_class` / `diff_pair` / `length_match` — routing rules
 
 These describe how nets are _routed_ rather than how parts are _placed_ — they
@@ -279,10 +360,11 @@ similarly turns DRC violations into a build failure.
    nets, courtyards).
 2. **Placement** (differentiable, design §4) minimizes smooth wirelength +
    spreading + your constraint penalties; `fixed`/`keepout`/outline are hard
-   barriers, `edge_align`/`side_pref`/`group` are penalty gradients. Orientation
-   is co-optimized (§9.3).
+   barriers, `edge_align`/`side_pref`/`group`/`region`/`align` are penalty
+   gradients. Orientation is co-optimized (§9.3).
 3. **Legalization** snaps to a strictly non-overlapping, in-outline layout that
-   still honors the fixed poses and keep-outs.
+   still honors the fixed poses and keep-outs, and the hard edge bands, groups,
+   regions and alignments.
 4. **Place↔route loop** (design §6) global-routes the placement, and where copper
    demand exceeds capacity it inflates those parts' spacing and re-places — until
    the board is routable, then FreeRouting does the detailed route.

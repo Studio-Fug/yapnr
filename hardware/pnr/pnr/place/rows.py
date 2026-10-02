@@ -247,6 +247,11 @@ def sample_constraints(graph, constraints, seed, attempts=96, pad_edge=None):
             continue
         if violations(work, cc):
             continue
+        from .regions import violations as related_violations
+
+        # A region or align among the parts placed so far (fixed poses, rows).
+        if related_violations([work.component(ref) for ref in placed], cc):
+            continue
         for row in cc.constraints:
             if row.kind == "row":
                 row.params["trial_resolved"] = True

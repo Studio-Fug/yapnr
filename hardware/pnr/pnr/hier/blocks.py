@@ -59,11 +59,12 @@ def _suffix(address: str, prefix: str) -> str:
 def extract_blocks(graph: BoardGraph, constraints: CompiledConstraints) -> List[Block]:
     by_ref = {c.ref: c for c in graph.components}
     # Parts carrying board-level pose relations (edge rows, fixed poses, line
-    # groups) are interface parts: they stay top-level so those relations remain exact.
+    # groups, alignments) are interface parts: they stay top-level so those relations
+    # remain exact. (A region on a block member becomes a body of the block macro.)
     interface = {
         r
         for con in constraints.constraints
-        if con.kind in ("row", "fixed", "edge_align", "line_group")
+        if con.kind in ("row", "fixed", "edge_align", "line_group", "align")
         for r in con.refs
     }
     modules: Dict[str, List[str]] = {}
@@ -196,8 +197,9 @@ def sub_board(
         refs = tuple(r for r in c.refs if r in inside)
         if not refs:
             continue
-        if c.kind in ("fixed", "row", "edge_align", "keepout", "line_group"):
-            # Absolute/edge poses are board-level decisions, made when the block is placed.
+        if c.kind in ("fixed", "row", "edge_align", "keepout", "line_group", "region", "align"):
+            # Absolute/edge poses, regions and alignments are board-level decisions,
+            # made when the block is placed (a region on the block macro's bodies).
             continue
         anchor = c.params.get("anchor")
         if anchor and anchor not in inside:
@@ -313,6 +315,9 @@ def block_constraints_doc(doc: dict, addresses, width: float, height: float) -> 
     out.setdefault("board", {})["outline"] = {"w": float(width), "h": float(height)}
     out.pop("row", None)
     out.pop("line_group", None)
+    # Board-coordinate regions and alignments apply to the placed block macro.
+    out.pop("region", None)
+    out.pop("align", None)
     out["fixed"] = {}
     out.pop("layout_array", None)
     if "side" in out:

@@ -148,6 +148,10 @@ def hard_violations(
     rows_bad = row_violations(graph, constraints)
     rows_bad = rows_bad + line_violations(graph, constraints)
     rows_bad = rows_bad + edge_band_violations(graph, constraints, width, height)
+    # Hard region / align (pnr.place.regions): empty unless the design declares one.
+    from .regions import violations as region_violations
+
+    rows_bad = rows_bad + region_violations(graph, constraints)
     return {
         "overlaps": overlap_pairs(graph, clearance),
         "outside_outline": outside_outline(graph, width, height, exclude=constraints.locked_refs),
@@ -195,6 +199,9 @@ def translation_checker(graph, constraints, clearance=0.0):
     sides_required = resolve_hard_sides(constraints)
     rotations_required = resolve_hard_rotations(constraints)
     bands = hard_edge_bands(constraints)
+    from .regions import declared, ref_ok
+
+    related = declared(constraints)
 
     def legal(comp):
         from .line_group import violations as line_violations
@@ -217,6 +224,10 @@ def translation_checker(graph, constraints, clearance=0.0):
         ):
             return False
         if comp.ref in poses and any(abs(a - b) > 1e-3 for a, b in zip(comp.pos, poses[comp.ref])):
+            return False
+        if related and not ref_ok(
+            [comp if c.ref == comp.ref else c for c in graph.components], constraints, comp.ref
+        ):
             return False
         if comp.ref not in constraints.locked_refs and not rect.inside(width, height):
             return False

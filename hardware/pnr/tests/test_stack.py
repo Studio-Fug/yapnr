@@ -82,6 +82,12 @@ class LegacyEquality(unittest.TestCase):
         self.assertIsNone(resolve(rules, record("SSSS")))
         self.assertEqual(grid_layers(rules, record("SSSS")), legacy_layers(rules))
 
+    def test_a_stack_of_another_layer_count_stays_legacy(self):
+        # An atopile layout saved two-layer for a four-layer build (no plane class).
+        self.assertIsNone(resolve(plane_rules(4, {}), record("SS")))
+        self.assertEqual(grid_layers(plane_rules(4, {}), record("SS")), ("F.Cu", "B.Cu"))
+        self.assertIsNotNone(resolve(plane_rules(4, {}), record("SSSS")))
+
     def test_graph_round_trip_omits_an_absent_stack(self):
         g = BoardGraph(name="x")
         self.assertNotIn("stack", g.to_json())

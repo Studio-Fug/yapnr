@@ -12,9 +12,10 @@ drawn on each layer, as ``BoardGraph.stack``:
 :func:`resolve` combines the record with the routing rules into a :class:`Stack`,
 or returns None, which keeps the legacy layer heuristic (the two outer layers, or
 F/In1/In2/B on a board with four or more layers and a ``plane_layer`` class). The
-stack applies only when the board declares a stackup **and** it either types some
-layer ``power``/``mixed`` or no net class declares a ``plane_layer``: a board whose
-planes come only from the rules keeps its old behaviour exactly.
+stack applies only when the board declares a stackup with the rules' copper layer
+count **and** it either types some layer ``power``/``mixed`` or no net class
+declares a ``plane_layer``: a board whose planes come only from the rules, or whose
+source file was saved with another layer count, keeps its old behaviour exactly.
 
 Layer roles in a :class:`Stack`:
 
@@ -138,6 +139,10 @@ def resolve(rules: Optional[dict], record: Optional[dict]) -> Optional[Stack]:
     rows = record["layers"]
     if not 2 <= len(rows) <= MAX_COPPER_LAYERS:
         raise ValueError("stack record must list 2..%d copper layers" % MAX_COPPER_LAYERS)
+    if rules and rules.get("layers") is not None and int(rules["layers"]) != len(rows):
+        # The source file's stack does not describe the board the rules build (an
+        # atopile layout saved two-layer for a four-layer build): legacy.
+        return None
     kinds = [str(r.get("type", "signal")) for r in rows]
     unknown = sorted(set(kinds) - set(KICAD_LAYER_TYPES.values()))
     if unknown:

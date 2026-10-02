@@ -114,7 +114,8 @@ def place(
 
     Sides (:mod:`pnr.place.sides`): when the board's side policy frees a part, global
     placement relaxes its side too (starting toward ``initial_sides``, {ref: side}),
-    and the legalizer may take the slot on its other side; a held part never
+    the legalizer may take the slot on its other side, and a detail pass
+    (:mod:`pnr.place.detail_moves`) tries flips and pairwise swaps; a held part never
     changes side (checked). With nothing free the flow is the single-sided one, as it
     is under power-first placement (``PNR_POWER_FIRST=1``), which keeps every side.
     """
@@ -292,8 +293,17 @@ def place(
         **(_side_legalization(side_plan) if sided else {}),
     )
     if sided:
+        from .detail_moves import improve
         from .sides import check_held
 
+        placed = improve(
+            placed,
+            constraints,
+            side_plan,
+            seed=seed,
+            spread=min(spread, _LEGALIZE_SPREAD_CAP),
+            **({} if pad_edge is None else dict(pad_edge=pad_edge)),
+        )
         check_held(placed, side_plan)
     return _finish(placed, graph, constraints, width, height, baseline, pad_edge)
 

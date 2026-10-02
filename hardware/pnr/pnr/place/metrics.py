@@ -234,3 +234,138 @@ def translation_checker(graph, constraints, clearance=0.0):
         )
 
     return legal
+
+
+BUCKET_MM = 4.0  # pose_checker's spatial index cell
+
+
+def pose_checker(graph, constraints, *, clearance=0.0, spread=1.0, pad_edge=None):
+    """Check a few re-posed parts (position, rotation and side) against an otherwise
+    unchanged, initially legal board.
+
+    ``legal(moved, ignore=())`` takes the moved components of ``graph`` (already set
+    to their trial poses, pads mirrored for a side change) and tests each against
+    every other part's cached geometry (except the refs in ``ignore``) and against
+    each other: the outline (and the pad-edge
+    rule), keep-outs, hard rotations, sides, fixed poses, edge bands and group radii,
+    and same-side overlap with ``clearance``, the moved part's rectangles grown by
+    ``spread`` (the legalizer's slot slack, so a move does not close routing
+    channels). Rows and line groups are not re-checked: their members must not move.
+    After accepting a move call ``legal.update(refs)`` to refresh the cache.
+    """
+    bad = hard_violations(graph, constraints)
+    if any(bad.values()):
+        raise ValueError("pose checker requires a legal baseline")
+    width, height = outline_size(graph, constraints)
+    poses = resolve_fixed_poses(graph, constraints)
+    keepouts = keepout_rects(graph, constraints, poses)
+    edges = hard_group_edges(constraints)
+    sides_required = resolve_hard_sides(constraints)
+    rotations_required = resolve_hard_rotations(constraints)
+    bands = hard_edge_bands(constraints)
+    locked = set(constraints.locked_refs)
+    geometry = {}
+    buckets = {}  # (i, j) cell of BUCKET_MM -> refs whose rectangles touch it
+    cells_of = {}
+
+    def cells(regions, grow=0.0):
+        if not regions:
+            return []
+        x0 = min(r.left for _, r in regions) - grow
+        x1 = max(r.right for _, r in regions) + grow
+        y0 = min(r.bottom for _, r in regions) - grow
+        y1 = max(r.top for _, r in regions) + grow
+        return [
+            (i, j)
+            for i in range(math.floor(x0 / BUCKET_MM), math.floor(x1 / BUCKET_MM) + 1)
+            for j in range(math.floor(y0 / BUCKET_MM), math.floor(y1 / BUCKET_MM) + 1)
+        ]
+
+    def index(ref, regions):
+        for cell in cells_of.get(ref, ()):
+            buckets[cell].discard(ref)
+        geometry[ref] = regions
+        cells_of[ref] = cells(regions)
+        for cell in cells_of[ref]:
+            buckets.setdefault(cell, set()).add(ref)
+
+    for c in graph.components:
+        index(c.ref, placement_rects(c))
+
+    def grown(comp):
+        from .geometry import ReserveRect
+
+        out = []
+        for side, rect in placement_rects(comp):
+            if spread > 1.0 and not isinstance(rect, ReserveRect):
+                rect = Rect(rect.cx, rect.cy, rect.w * spread, rect.h * spread)
+            out.append((side, rect))
+        return out
+
+    def alone(comp):
+        if comp.ref in poses and any(abs(a - b) > 1e-3 for a, b in zip(comp.pos, poses[comp.ref])):
+            return False
+        if (
+            comp.ref in rotations_required
+            and abs((comp.rot - rotations_required[comp.ref] + 180) % 360 - 180) > 1e-6
+        ):
+            return False
+        if comp.ref in sides_required and comp.side != sides_required[comp.ref]:
+            return False
+        rect = courtyard_rect(comp)
+        if comp.ref not in locked and not rect.inside(width, height):
+            return False
+        if pad_edge is not None and comp.ref not in locked and comp.ref not in poses:
+            from .legalize import pad_edge_box
+
+            x_lo, x_hi, y_lo, y_hi = pad_edge_box(comp, pad_edge, width, height)
+            x, y = comp.pos
+            if not (x_lo - 1e-6 <= x <= x_hi + 1e-6 and y_lo - 1e-6 <= y <= y_hi + 1e-6):
+                return False
+        if (
+            comp.ref in bands
+            and edge_distance(comp, bands[comp.ref][0], width, height) > bands[comp.ref][1] + 1e-6
+        ):
+            return False
+        if any(rect.overlaps(k, gap=clearance) for k in keepouts):
+            return False
+        for anchor, member, radius in edges:
+            if comp.ref in (anchor, member):
+                other = graph.component(member if comp.ref == anchor else anchor)
+                if math.dist(comp.pos, other.pos) > radius + 1e-9:
+                    return False
+        return True
+
+    def legal(moved, ignore=()):
+        names = {c.ref for c in moved} | set(ignore)
+        mine = {c.ref: grown(c) for c in moved}
+        for comp in moved:
+            if not alone(comp):
+                return False
+            near = set()
+            for cell in cells(mine[comp.ref], clearance):
+                near |= buckets.get(cell, set())
+            for ref in sorted(near - names):
+                regions = geometry[ref]
+                if any(
+                    side == other_side and area.overlaps(other, gap=clearance)
+                    for side, area in mine[comp.ref]
+                    for other_side, other in regions
+                ):
+                    return False
+        for i, a in enumerate(moved):
+            for b in moved[i + 1 :]:
+                if any(
+                    side == other_side and area.overlaps(other, gap=clearance)
+                    for side, area in mine[a.ref]
+                    for other_side, other in placement_rects(b)
+                ):
+                    return False
+        return True
+
+    def update(refs):
+        for ref in refs:
+            index(ref, placement_rects(graph.component(ref)))
+
+    legal.update = update
+    return legal

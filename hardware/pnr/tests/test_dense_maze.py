@@ -365,8 +365,13 @@ class RouteParityTest(unittest.TestCase):
             )
 
     def routes(self, environ):
+        # The halo model on every kernel (the exact-separation recovery needs a dense
+        # kernel, so the reference kernel never runs it; test_exact_route covers it).
         out = []
-        with patch.dict(os.environ, dict(environ, PNR_SINGLE_TRACK_WORKERS="1")):
+        with patch.dict(
+            os.environ,
+            dict(environ, PNR_SINGLE_TRACK_WORKERS="1", PNR_EXACT_SEPARATION="off"),
+        ):
             for grid, access, kwargs in self.boards():
                 out.append(route(grid, access, **kwargs))
         return out

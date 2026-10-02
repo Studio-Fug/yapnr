@@ -224,7 +224,7 @@ def parser():
         help=(
             "PNR_EXACT_SEPARATION: recover routes again with the exact pairwise separation when "
             "a detailed route leaves connections open (and keeps it only with fewer open), full "
-            "routes with it only; default: the engine's"
+            "routes with it only; default: the engine's (recover)"
         ),
     )
     ap.add_argument(

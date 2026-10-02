@@ -50,14 +50,14 @@ MODES = ("off", "recover", "full")
 
 
 def exact_mode() -> str:
-    """``PNR_EXACT_SEPARATION``: ``off`` (default), ``recover`` (route again with
-    the exact rule when the negotiated route leaves connections open, and keep the
-    route with fewer open connections) or ``full`` (route with the exact rule
-    only)."""
+    """``PNR_EXACT_SEPARATION``: ``recover`` (the default: route again with the
+    exact rule when the negotiated route leaves connections open, and keep the
+    route with fewer open connections, so complete routes are unchanged), ``off``
+    or ``full`` (route with the exact rule only)."""
     import os
 
-    mode = os.environ.get("PNR_EXACT_SEPARATION", "off")
-    return mode if mode in MODES else "off"
+    mode = os.environ.get("PNR_EXACT_SEPARATION", "recover")
+    return mode if mode in MODES else "recover"
 
 
 class Separation:

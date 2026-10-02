@@ -183,7 +183,9 @@ router's separation model (`PNR_EXACT_SEPARATION`, `pnr/route/detail/exact_route
 model (which keeps nets about twice as far apart as the rules ask), `recover`
 routes again with it only when a detailed route leaves connections open and
 keeps that route when it leaves fewer open, so every route that completes is
-unchanged; the default is the engine's. The
+unchanged (the engine's default; it needs the packed or native kernel, so
+`--reference-maze` keeps the halo model). Each case's `pnr-report.json` records
+the mode (`exact_separation`), and `place-route.log` each recovery. The
 performance opt-in `--batched-wirelength` can be tested explicitly. All of these
 are recorded in provenance; ambient variables are still cleared, so a baseline
 invocation keeps its original algorithms.

@@ -1,7 +1,16 @@
 load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
 
-# Hermetic: the vendor data, the engine's rules and the stackup views (no KiCad, no network).
+# Hermetic: the vendor data, synthetic boards and a fake kicad-cli (yapnr.fab.testing). Sockets
+# are patched to fail where a test runs a build. The KiCad lane is //tests/kicad/fab.
 yapnr_py_tests(
     data = glob(["testdata/*"]),
-    deps = ["//yapnr/fab"],
+    overrides = {
+        # Builds bundles end to end (fake kicad-cli) several times.
+        "test_build": {"size": "medium"},
+    },
+    deps = [
+        "//yapnr",
+        "//yapnr/fab",
+        "//yapnr/fab:testing",
+    ],
 )

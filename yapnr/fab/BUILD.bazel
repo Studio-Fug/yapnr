@@ -2,7 +2,8 @@
 
 - :capability is the vendor data (profiles, stackups, vendors) and its loader: stdlib only and
   Python 3.9 compatible, because pnr.fab_profile imports it inside KiCad's Python.
-- :fab joins the data with the engine's rules (pnr.fab_profile) and gives the stackup views.
+- :fab is `yapnr fab` (checks, exports, bundles, previews). It drives the headless kicad-cli and
+  uses pnr.fab_profile for the rules KiCad enforces.
 """
 
 load("@rules_python//python:defs.bzl", "py_library")
@@ -34,6 +35,15 @@ py_library(
 py_library(
     name = "fab",
     srcs = [
+        "assembly.py",
+        "board.py",
+        "build.py",
+        "bundle.py",
+        "check.py",
+        "cli.py",
+        "export.py",
+        "kicad.py",
+        "preview.py",
         "profiles.py",
         "stackups.py",
     ],
@@ -41,5 +51,16 @@ py_library(
     deps = [
         ":capability",
         "//hardware/pnr",
+        "//yapnr/frontends/atopile",
+        "//yapnr/order:card",
     ],
+)
+
+# Synthetic boards and a fake kicad-cli for the tests (never real product data); not in the wheel.
+py_library(
+    name = "testing",
+    testonly = True,
+    srcs = ["testing.py"],
+    imports = ["../.."],
+    deps = [":fab"],
 )

@@ -169,6 +169,17 @@ chapters (hierarchy) into `docs/animations/`; the page is
 [Constraints and hierarchy](../../../docs/constraints-and-hierarchy.md). The
 showcases never gate: the nightly lane runs them for information.
 
+## Length-matching scratch designs
+
+No ladder case or hard rung declares a length-match group, so
+`lenmatch_scratch.py write OUT.json` writes scratch designs for the router's
+length tuning: an 8-net bus from a fixed SMD connector to an SOIC (a group, 0.5 mm)
+and a differential pair whose pins swap between its connectors (1.0 mm skew), on two
+layers and on 4L-SGPS with the budgets in ps. `run.py --design-json OUT.json` offers
+any such list to `--case`. `lenmatch_scratch.py judge CASE_DIR --kicad-cli PATH`
+then runs KiCad's DRC on a copy of the routed board with a `skew` rule per pair and
+per group and reports KiCad's lengths beside the engine's `length_tuning` report.
+
 Performance opt-ins can be tested explicitly with `--packed-maze` and
 `--batched-wirelength`. They are recorded in provenance; ambient variables are
 still cleared, so a baseline invocation keeps its original algorithms.

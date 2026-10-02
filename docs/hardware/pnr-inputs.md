@@ -258,10 +258,30 @@ length_match:
 
 - **`diff_pair`** — two nets (`p`/`n`) routed together with `width_mm`/`gap_mm`;
   the quality pass reports their routed-length **skew** and flags it if it
-  exceeds `skew_mm` (default 0.5).
+  exceeds `skew_mm` (default 0.5). `skew_ps` gives the budget as a delay
+  instead (each layer's propagation delay from the board's stackup).
 - **`length_match`** — a group of nets whose routed lengths must agree within
-  `tolerance_mm`; the quality pass reports the group **spread** and flags it if
-  it exceeds the tolerance.
+  `tolerance_mm` (or `tolerance_ps`); the quality pass reports the group
+  **spread** and flags it if it exceeds the tolerance.
+- **`tuning`** (optional) — the meander rules for both: `gap_mm` (edge to edge,
+  at least the clearance and the track width), `amplitude_max_mm`,
+  `min_segment_mm`, `style` (`auto`, `trombone`, `serpentine`, `accordion`) and
+  `mitre` (45-degree corners, default on).
+
+The own detailed router **tunes** every declared pair and group after routing
+(`pnr/route/detail/tune.py`): each member shorter than the longest gets meanders on
+straight runs of its own path and layer, legal by the router's own clearance rules,
+until the spread is within the budget. Lengths are measured as KiCad's DRC measures
+them (`pnr/length_model.py`: merged track lines straightened inside pads and vias,
+plus each via's span through the stackup), so a KiCad `skew` or `length` rule sees
+the same numbers. The per-set result (lengths, margin, meanders) is in the route
+report as `length_tuning`; a set that could not be matched is `length_unmatched`.
+
+```yaml
+diff_pair:
+  - { name: usb, p: USB_DP, n: USB_DM, width_mm: 0.2, gap_mm: 0.15, skew_ps: 2.0 }
+tuning: { gap_mm: 0.3, amplitude_max_mm: 1.0, style: serpentine }
+```
 
 The quality report ships in the fab bundle as `quality.txt`. Its diff-pair /
 length-match checks are **advisory** by default (reported, not enforced); set

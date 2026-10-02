@@ -6,6 +6,8 @@
   patch joined to the port's feed, with slots of 1.5 times the minimum space beside the inset
   feed, on both scales; a port on the east side mirrors it;
 - the star seed joins every port of the divider and the diplexer in one copper island;
+- the feeds seed is the Wilkinson-type combiner's three port lines up to the window's centre
+  line, not joined, the input line ending at the resistor's pads;
 - the stub seed adds the diplexer's two quarter-wave stubs, one island, the minimum space kept.
 """
 
@@ -18,7 +20,7 @@ from types import SimpleNamespace
 import numpy as np
 
 from yapnr.rf.cases import antenna_patch_reference, spec_for
-from yapnr.rf.seeds import PATCH_FAMILY, patch_dimensions, patch_mask, star_mask
+from yapnr.rf.seeds import PATCH_FAMILY, feeds_mask, patch_dimensions, patch_mask, star_mask
 
 
 def _problem(spec, shape, width, pitch_m):
@@ -87,6 +89,24 @@ class PatchSeedTest(unittest.TestCase):
             self.assertTrue(m[0:2, shape[1] // 2 - 3 : shape[1] // 2 + 3].all(), case)
             self.assertTrue(m[-2:].any(axis=1).all(), case)
         np.testing.assert_array_equal(m, m[:, ::-1])  # the diplexer's ports are symmetric
+
+    def test_feeds(self):
+        from yapnr.rf.export.raster import label
+
+        spec = spec_for("wilkinson")
+        prob = _problem(spec, (40, 40), 6, 0.3e-3)
+        prob.widths = {1: 6, 2: 6, 3: 6}
+        m = feeds_mask(prob) > 0.5
+        np.testing.assert_array_equal(m, m[:, ::-1])
+        self.assertEqual(label(m)[1], 3)  # three unjoined lines
+        # Port 1 (y = 0) from x = 0 to the centre line x = 6 mm (pixel 20), over the resistor's
+        # pads at x 5.4–6.0 mm (pixels 18, 19), y ±(0.3–0.9) mm (pixels 17, 18 and 21, 22).
+        self.assertTrue(m[0:20, 17:23].all())
+        self.assertFalse(m[20:, 17:23].any())
+        # Ports 2 and 3 (y = ±4.2 mm, pixels 31–36 and 3–8) from x = 12 mm to the centre line.
+        self.assertTrue(m[20:, 31:37].all() and m[20:, 3:9].all())
+        self.assertFalse(m[:20, 31:37].any())
+        self.assertEqual(int(m.sum()), 3 * 20 * 6)
 
     def test_stub_seed(self):
         from yapnr.rf.export.raster import label

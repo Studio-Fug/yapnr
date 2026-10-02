@@ -27,6 +27,13 @@ which the optimizer has to create the match and centre the resonance.
 `seed: star` joins every port with feed-width lines to the window's centre (a plain junction),
 a lossless start for multi-port specs whose uniform start stays absorbing.
 
+`seed: feeds` is every port's feed continued straight to the window's centre line, the lines
+not joined: the start of the Wilkinson-type combiner, whose isolation resistor sits on the
+centre line where the star's junction would short its pads on both sides (the optimizer must
+then cut the junction on the input and the output side at once before the resistor does
+anything, and the gradient does not lead there). From the feeds the input line ends on the
+resistor's pads and the outputs must reach them.
+
 `seed: stubs` (filter banks) is the star plus, on the arm of every output port, one open stub
 per other channel, a quarter guide wavelength long at that channel's centre (Hammerstad's
 open-end extension subtracted): the transmission zero that keeps that channel out of the port.
@@ -57,7 +64,13 @@ from yapnr.rf.stackup import hammerstad_jensen
 # two pixels wide and β = 8 they blurred to ρ̄ ≈ 0.42 (a lossy 32 Ω/sq) and the first step
 # closed them; at 0.9/0.1 and β = 32 every pixel saturated and nothing moved. The patch uses
 # 0.9/0.1, three-pixel slots and a schedule from β = 16.
-VALUES = {"patch": (0.9, 0.1), "patch_edge": (0.9, 0.1), "star": (0.7, 0.3), "stubs": (0.7, 0.3)}
+VALUES = {
+    "patch": (0.9, 0.1),
+    "patch_edge": (0.9, 0.1),
+    "star": (0.7, 0.3),
+    "feeds": (0.7, 0.3),
+    "stubs": (0.7, 0.3),
+}
 
 
 def patch_dimensions(er: float, h: float, f0: float, z_feed: float = 50.0) -> dict:
@@ -116,6 +129,27 @@ def patch_mask(problem, dl: int = 0, dw: int = 0, di: int = 0) -> np.ndarray:
     if port.side in ("E", "N"):
         m = m[::-1]
     return m if port.side in ("W", "E") else m.T
+
+
+def feeds_mask(problem) -> np.ndarray:
+    """Every port's feed continued straight to the window's centre line across its axis, the
+    lines not joined: the ports' own lines and nothing else (for a combiner with a lumped part
+    on the centre line, which the star's junction would short)."""
+    spec = problem.spec
+    pitch = problem.pitch
+    ni, nj = problem.design_shape
+    x0, _, y0, _ = (v * 1e-3 for v in spec.design_region)
+    m = np.zeros((ni, nj))
+    for port in spec.ports:
+        w = problem.widths[port.n]
+        along, at0 = (ni, y0) if port.side in ("W", "E") else (nj, x0)
+        t_lo = int(round((port.at_mm * 1e-3 - at0) / pitch - 0.5 * w))
+        a = slice(0, along // 2) if port.side in ("W", "S") else slice((along + 1) // 2, along)
+        if port.side in ("W", "E"):
+            m[a, t_lo : t_lo + w] = 1.0
+        else:
+            m[t_lo : t_lo + w, a] = 1.0
+    return m
 
 
 def star_mask(problem) -> np.ndarray:
@@ -378,6 +412,8 @@ def initial_x(problem, cache_dir: str | None = None, log=None) -> np.ndarray:
         mask = patch_mask(problem, 0, 0, -(10**6))
     elif seed == "star":
         mask = star_mask(problem)
+    elif seed == "feeds":
+        mask = feeds_mask(problem)
     elif seed == "stubs":
         mask = stub_mask(problem)
     else:

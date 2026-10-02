@@ -28,6 +28,9 @@ command line currently offers `yapnr --version` and a `yapnr doctor` stub; the l
   services and the cost and security of the (off by default) Ask agent.
 - [The atopile toolchain](frontends/atopile.md): build atopile projects offline, without Nix.
 - [The part cache](part-cache.md): where part data lives instead of the repository.
+- [Fab bundles and staged orders](fab-and-ordering.md): check a routed board under OSH Park's,
+  JLCPCB's or PCBWay's rules, build the files to upload and an order card, and open the vendor's
+  page. yapnr never uploads, orders or pays.
 - [Releases and versioning](releases.md): version numbers, image tags, what a release publishes.
 - [Regression ladder](regression-ladder.md): eight boards of rising complexity, up to a TLC555 +
   CD4017B LED chaser, with an animation of each board's place and route.
@@ -64,6 +67,7 @@ containers
 viewer
 frontends/atopile
 part-cache
+fab-and-ordering
 releases
 ```
 

@@ -1,8 +1,10 @@
 # Design: fab outputs and staged ordering (`yapnr fab`, `yapnr order stage`)
 
-Status: **proposal**, 2026-10-02. Nothing in this design is implemented yet. It covers the fab
-outputs and ordering items of the end-to-end plan (F1, F2, O1 to O3, named in `WORKLOG.md`). The
-owner's request was:
+Status: **F2, F1 and O1 built** (2026-10-02; user guide [Fab bundles and staged
+orders](../fab-and-ordering.md), differences in §14). O2 and O3 wait for the owner's decisions D1
+and D3. The sections below are the design as proposed; §1 describes the state before it. It
+covers the fab outputs and ordering items of the end-to-end plan (F1, F2, O1 to O3, named in
+`WORKLOG.md`). The owner's request was:
 
 > where are we at with one-click order on JLC and PCBWay? Please also include a US vendor like
 > OSHPark--I want to start sending out some boards ASAP.
@@ -840,7 +842,7 @@ Pages accessed 2026-10-02 unless noted. Vendor pages change; the data files carr
 - **OSH Park:**
   - services: [O-svc], [O-2l], [O-4l], [O-6l];
   - stackup changes: [O-alt], [O-mixed];
-  - ordering and files: [O-api], [O-kicad], [O-kgerb], [O-name], [O-drill];
+  - ordering and files: [O-home], [O-api], [O-kicad], [O-kgerb], [O-name], [O-drill];
   - design notes and shipping: [O-panel], [O-cast], [O-ship].
 - **JLCPCB:**
   - ordering and files: [J-quote], [J-kicad], [J-bom], [J-bomkicad], [J-cpl];
@@ -857,6 +859,61 @@ Pages accessed 2026-10-02 unless noted. Vendor pages change; the data files carr
   [FT] (Apache-2.0), KiKit [KK] (MIT), kicad-jlcpcb-tools [JT] (MIT), Aisler Push [AISLER] (MIT).
 - **Other US shops,** for later: AdvancedPCB [ADV] (quote portal needs a login; $99 each on RF
   material), Bay Area Circuits [BAC], Sierra Circuits [SC] (Rogers, controlled impedance).
+
+## 14. As built (2026-10-02)
+
+**Built:** F2a, F1a, O1a, F1b and O1b of §2.1, in `yapnr/fab` and `yapnr/order` as laid out in
+§11. The ladder routes under the new profiles (`run.py --fab-profile`), and `yapnr order stage
+--dry-run` stages every vendor from those boards:
+
+| Ladder case          | Profile      | Route                         | KiCad DRC under the profile | Bundle                       |
+| -------------------- | ------------ | ----------------------------- | --------------------------- | ---------------------------- |
+| `04-inverter-leds-8` | `oshpark-2l` | 363 tracks, 7 vias, 0 opens   | 0 errors, 0 warnings        | 8 files, `.GTL`..`.XLN`      |
+| `08-chaser-20-plane` | `oshpark-4l` | 1077 tracks, 28 vias, 0 opens | 0 errors, 0 warnings        | 10 files, `.G2L`, `.G3L`     |
+| `08-chaser-20-plane` | `jlc-4l`     | 1087 tracks, 28 vias, 0 opens | 0 errors, 0 warnings        | 13 files, KiCad Protel names |
+| `08-chaser-20-plane` | `pcbway-std` | 1102 tracks, 28 vias, 0 opens | 0 errors, 0 warnings        | 13 files, IPC-D-356 included |
+
+**Not built:**
+
+- **O2 and O3**, so neither `yapnr/order/http.py` nor `secrets.py` exists. `yapnr/order/net.py`
+  holds the one network call of O1, `--verify-url`. It follows redirects to https only (release
+  assets redirect to their storage host); the no-redirect rule of §8.4 stays for O2 and O3.
+- **`yapnr.rf.cases --stackup/--fab-profile`:** `yapnr.rf` is not in this repository yet. Its
+  adapter is ready: `stackups.load(id).microstrip(layer).rf_stackup_spec(...)` and
+  `stackups.rf_rules(profile)`.
+- **Part-cache placement corrections** (`placement.jlcpcb`, `yapnr part-cache set-placement`).
+  Until they exist, the JLCPCB card asks for a rotation check of every placed part.
+- **The project `[fab]` table (PR3d), `--run`, and the `yapnr_fab` Bazel rule:** later, as planned.
+  The measured stackup overlay is reserved; `stackups.load(..., measured=...)` refuses it.
+
+**Differences from the design:**
+
+- **The default profile** is first the profile the board was routed under, when its generated
+  `.kicad_dru` names one of the chosen vendor's profiles for its layer count. Otherwise it
+  follows §6.1, with JLCPCB's in-pad case found by a via on an SMD pad.
+- **PCBWay drill files are in inches,** as PCBWay's own plugin writes them [P-plug], not in mm as
+  §6.3 proposed. They stay decimal, with PTH and NPTH separate.
+- **`yapnr fab preview`** (not in §6): a stdlib reader of the gerber and Excellon files in the zip.
+  It renders each layer and a top and bottom composite to SVG, so the files to be uploaded can be
+  looked at without KiCad.
+- **`FAB-SOURCES`** (not in §7.2) warns when a source of the data is older than 180 days (§11,
+  data refresh).
+- **`order stage`** writes its card as `order-card.staged.{md,json}` beside the build's card, so
+  the manifest's hashes stay valid. A dry run writes that card but no `staged.jsonl`.
+- **The bundle archive** also keeps KiCad's job file (`kicad/<board>-job.gbrjob`).
+
+**Confirmed on the live pages** (2026-10-02, read only):
+
+- **JLCPCB's quote page** has "Add gerber file", "Mark on PCB" (Remove Mark, Order Number, 2D
+  barcode) and "SAVE TO CART" [J-quote].
+- **PCBWay's quote page** has "Single pieces", "Calculate", "Other special request" (200
+  characters), "Remove product No." (No, Yes for USD 1.50, Specify a location) and "Save to Cart"
+  [P-order].
+- **OSH Park's upload area** reads "Drag and drop your KiCAD, EagleCAD, or zipped Gerber files",
+  with a "Browse for files" button [O-home].
+
+`FAB-MARKING` and the cards name these options. Which marking JLCPCB selects by default is still
+unconfirmed.
 
 ## Appendix A. Stackup data
 
@@ -1015,6 +1072,7 @@ For `pcbway-ro4350b-0.508`, the design Dk is still to be taken from the Rogers d
 [O-panel]: https://docs.oshpark.com/troubleshooting/panelized-designs/
 [O-cast]: https://docs.oshpark.com/tips+tricks/castellation/
 [O-ship]: https://docs.oshpark.com/submitting-orders/shipping-information/
+[O-home]: https://oshpark.com/
 [J-quote]: https://cart.jlcpcb.com/quote
 [J-kicad]: https://jlcpcb.com/help/article/how-to-generate-gerber-and-drill-files-in-kicad-8
 [J-bom]: https://jlcpcb.com/help/article/bill-of-materials-for-pcb-assembly

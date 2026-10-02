@@ -1306,12 +1306,27 @@ py_test(
     deps = [":pnr", ":pnr_detail", ":pnr_place"],
 )
 
-# Dense fields and the packed kernel against the reference A* (searches and whole
-# negotiated routes).
+# Optional native maze kernel (pnr.route.detail.native_maze, PNR_MAZE_KERNEL=native): the
+# packed A* loop in C, loaded with ctypes. Nothing depends on it; without it the packed
+# Python kernel runs. No floating-point contraction, so every double matches Python.
+cc_binary(
+    name = "libpnr_maze.so",
+    srcs = ["pnr/route/detail/native/maze.c"],
+    copts = [
+        "-O2",
+        "-ffp-contract=off",
+        "-fno-fast-math",
+    ],
+    linkshared = True,
+)
+
+# Dense fields and the packed/native kernels against the reference A* (searches and
+# whole negotiated routes).
 py_test(
     name = "dense_maze_test",
     size = "medium",
     srcs = ["tests/test_dense_maze.py"],
+    data = [":libpnr_maze.so"],
     main = "tests/test_dense_maze.py",
     deps = [
         ":pnr",

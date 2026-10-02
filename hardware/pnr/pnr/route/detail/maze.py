@@ -110,11 +110,16 @@ def maze_kernel() -> str:
     * ``"packed"`` (the default): integer keys over a dense per-net field
       (:mod:`.dense_maze`), the same predicates, prices and tie order, so the
       same paths;
-    * ``"reference"`` (``PNR_PACKED_MAZE=0``): the dict/Cell search
-      :func:`_astar_reference`, kept as the specification the faster kernels
-      are tested against.
+    * ``"native"`` (``PNR_MAZE_KERNEL=native``): the packed search loop in C
+      (:mod:`.native_maze`), when its library loads; otherwise packed;
+    * ``"reference"`` (``PNR_PACKED_MAZE=0`` or ``PNR_MAZE_KERNEL=reference``):
+      the dict/Cell search :func:`_astar_reference`, kept as the specification
+      the faster kernels are tested against.
     """
-    return "reference" if os.environ.get("PNR_PACKED_MAZE") == "0" else "packed"
+    if os.environ.get("PNR_PACKED_MAZE") == "0":
+        return "reference"
+    kernel = os.environ.get("PNR_MAZE_KERNEL", "packed")
+    return kernel if kernel in ("reference", "native") else "packed"
 
 
 def _astar(

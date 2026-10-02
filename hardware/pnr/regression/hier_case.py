@@ -51,6 +51,7 @@ from pnr.hier.blocks import aspect_sizes, extract_blocks, sub_board
 from pnr.hier.macro import _rot
 from pnr.hier.synth import _template_id, instance_board, rank_key, run_trial
 from pnr.place.geometry import pad_rects
+from pnr.route.detail.native_maze import status as maze_status
 from pnr.writeback import _segment_distance_sq
 
 # Budgets; a design's "hier" mapping overrides them (and the report records them).
@@ -659,6 +660,7 @@ def run(root, seed):
         deferred=sorted(best["route"].deferred_nets),
         initial_pool={},
         escape_diagnostics={},
+        maze_kernel=maze_status(),
         elapsed_seconds=time.monotonic() - started,
         summary="hierarchical: %d blocks (%d templates), seed %s of %d, %d missing connections"
         % (len(frames), len(synth), best["id"], len(seeds), best["missing"]),

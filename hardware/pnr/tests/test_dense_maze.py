@@ -1,13 +1,16 @@
-"""Dense search fields and the packed kernel against the reference A*."""
+"""Dense search fields and the packed/native kernels against the reference A*."""
 
 import os
 import random
+import shutil
+import tempfile
 import unittest
 from collections import defaultdict
 from unittest.mock import patch
 
 import numpy as np
 
+from pnr.route.detail import native_maze
 from pnr.route.detail.dense_maze import (
     DenseCounts,
     DenseOwners,
@@ -139,6 +142,24 @@ def cell_cost(grid, net, occ, history, soft, pres_fac, c, via):
     return (1.0 + max(history.get(p, 0.0) for p in cells)) * present + max(
         soft.get(p, 0.0) for p in cells
     )
+
+
+def native_kernel(test):
+    """Load the native kernel, compiling it with the host compiler when the
+    library is not provided (Bazel provides it); skip without one."""
+    native_maze.reset()
+    with patch.dict(os.environ, {"PNR_MAZE_KERNEL": "native"}):
+        kernel = native_maze.load()
+    if kernel is None and shutil.which(os.environ.get("CC", "cc")):
+        out = tempfile.mkdtemp()
+        test.addCleanup(shutil.rmtree, out, True)
+        library = native_maze.build_library(out)
+        native_maze.reset()
+        with patch.dict(os.environ, {"PNR_MAZE_LIB": str(library)}):
+            kernel = native_maze.load()
+    if kernel is None:
+        test.skipTest("native maze library unavailable: " + native_maze._STATE["reason"])
+    return kernel
 
 
 class DenseFieldTest(unittest.TestCase):
@@ -274,7 +295,43 @@ class KernelParityTest(unittest.TestCase):
                         self.assertEqual(packed(grid, args), expected)
 
     def test_packed_matches_reference(self):
-        self.check({"PNR_PACKED_MAZE": "1"})
+        self.check({"PNR_MAZE_KERNEL": "packed"})
+
+    def test_native_matches_reference(self):
+        kernel = native_kernel(self)
+        with patch.object(native_maze, "load", return_value=kernel):
+            self.check({"PNR_MAZE_KERNEL": "native"})
+
+    def test_native_runs_when_selected(self):
+        kernel = native_kernel(self)
+        grid = RouteGrid(6, 6, 1)
+        calls = []
+        original = kernel.search
+
+        def spy(*args, **kwargs):
+            calls.append(1)
+            return original(*args, **kwargs)
+
+        with patch.object(native_maze, "load", return_value=kernel), patch.object(
+            kernel, "search", side_effect=spy
+        ), patch.dict(os.environ, {"PNR_MAZE_KERNEL": "native"}):
+            path = astar(grid, {Cell(0, 0, 0)}, {Cell(1, 5, 5)}, "N", {}, {}, 3.0, 0.5)
+        self.assertTrue(calls)
+        self.assertEqual(path[0], Cell(0, 0, 0))
+        self.assertEqual(path[-1], Cell(1, 5, 5))
+
+    def test_missing_library_falls_back_to_packed(self):
+        native_maze.reset()
+        self.addCleanup(native_maze.reset)
+        with patch.dict(
+            os.environ, {"PNR_MAZE_KERNEL": "native", "PNR_MAZE_LIB": "/nonexistent/lib.so"}
+        ), patch.object(native_maze, "_candidates", return_value=iter(())):
+            self.assertIsNone(native_maze.active())
+            self.assertEqual(native_maze.status()["kernel"], "packed")
+            grid = RouteGrid(5, 5, 1)
+            self.assertIsNotNone(
+                astar(grid, {Cell(0, 0, 0)}, {Cell(0, 4, 4)}, "N", {}, {}, 3.0, 0.5)
+            )
 
 
 class RouteParityTest(unittest.TestCase):
@@ -314,10 +371,13 @@ class RouteParityTest(unittest.TestCase):
                 out.append(route(grid, access, **kwargs))
         return out
 
-    def test_packed_routes_equal_reference(self):
+    def test_packed_and_native_routes_equal_reference(self):
         expected = self.routes({"PNR_PACKED_MAZE": "0"})
         self.assertTrue(any(r.unrouted for r in expected))  # the rip-up passes run
-        self.assertEqual(self.routes({"PNR_PACKED_MAZE": "1"}), expected)
+        self.assertEqual(self.routes({"PNR_MAZE_KERNEL": "packed"}), expected)
+        kernel = native_kernel(self)
+        with patch.object(native_maze, "load", return_value=kernel):
+            self.assertEqual(self.routes({"PNR_MAZE_KERNEL": "native"}), expected)
 
 
 if __name__ == "__main__":

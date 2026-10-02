@@ -131,6 +131,7 @@ def source_inputs(repo):
         raise FileNotFoundError("Native regression requires " + str(scanner))
     return (
         sorted((repo / "hardware/pnr/pnr").rglob("*.py"))
+        + sorted((repo / "hardware/pnr/pnr").rglob("*.c"))
         + sorted((repo / "hardware/pnr/regression").glob("*.py"))
         + [scanner]
     )
@@ -207,6 +208,15 @@ def parser():
         "--packed-maze",
         action="store_true",
         help="The packed CPU maze kernel (the default; kept so recorded configurations still parse)",
+    )
+    ap.add_argument(
+        "--maze-kernel",
+        choices=("packed", "native"),
+        default="packed",
+        help=(
+            "native: build the C search loop from the frozen sources with the host compiler and "
+            "route with it (identical routes; the packed kernel runs if it cannot load)"
+        ),
     )
     ap.add_argument(
         "--reference-maze",
@@ -313,6 +323,27 @@ def main():
         env["PNR_PACKED_MAZE"] = "1"
     if args.reference_maze:
         env["PNR_PACKED_MAZE"] = "0"
+    native = None
+    if args.maze_kernel == "native":
+        if args.reference_maze:
+            raise SystemExit("--maze-kernel native and --reference-maze are exclusive")
+        # The frozen C source, compiled once for the run (pnr.route.detail.native_maze).
+        library = subprocess.run(
+            [
+                args.python,
+                "-c",
+                "import sys; from pnr.route.detail.native_maze import build_library; "
+                "print(build_library(sys.argv[1]))",
+                str(out / "native"),
+            ],
+            env=dict(env, PYTHONPATH=str(freeze / "hardware/pnr")),
+            capture_output=True,
+            text=True,
+            timeout=600,
+            check=True,
+        ).stdout.strip()
+        env.update(PNR_MAZE_KERNEL="native", PNR_MAZE_LIB=library)
+        native = dict(library=Path(library).name, sha256=sha(Path(library)))
     if args.dense_maze_cost:
         env["PNR_DENSE_MAZE_COST"] = "1"
     if args.detail_pitch_mm is not None:
@@ -349,7 +380,10 @@ def main():
         seeds=args.seed or [0],
         trace=bool(args.trace),
         arguments={k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
-        pnr_environment={k: v for k, v in env.items() if k.startswith("PNR_")},
+        pnr_environment={
+            k: v for k, v in env.items() if k.startswith("PNR_") and k != "PNR_MAZE_LIB"
+        },
+        native_maze=native,
     )
     (out / "provenance.json").write_text(json.dumps(provenance, indent=2))
     for key, cmd in [

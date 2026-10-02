@@ -40,6 +40,7 @@ class NativeTrace:
             detail_pitch_mm=args.detail_pitch_mm,
             packed_maze=bool(args.packed_maze),
             reference_maze=bool(getattr(args, "reference_maze", False)),
+            maze_kernel=getattr(args, "maze_kernel", "packed"),
             batched_wirelength=bool(args.batched_wirelength),
             dense_maze_cost=bool(args.dense_maze_cost),
             fab_profile=getattr(args, "fab_profile", None),

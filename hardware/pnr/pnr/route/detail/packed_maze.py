@@ -4,7 +4,8 @@ The same search as the reference :func:`pnr.route.detail.maze._astar_reference`:
 the same moves in the same order, the same prices and arithmetic, the same heap
 key ``(f, tie)`` and the same closed-set and relaxation rules, so it returns the
 same path. Cells are flat ``[layer, j, i]`` keys; every predicate and price is a
-list lookup in the field, built once per routed net.
+list lookup in the field, built once per routed net. The native kernel
+(:mod:`.native_maze`) runs this loop in C on the same field.
 """
 
 from __future__ import annotations
@@ -88,7 +89,16 @@ def search(field, sources, targets, via_cost, diagonal=True, drill_sites=()):
     if found is None:
         return None
     starts, ends, target_xy = found
+    kernel = _native()
+    if kernel is not None:
+        return kernel.search(field, starts, ends, via_cost, diagonal, drill_sites)
     return _search(field, starts, ends, target_xy, via_cost, diagonal, drill_sites)
+
+
+def _native():
+    from .native_maze import active
+
+    return active()
 
 
 def _search(field, starts, ends, target_xy, via_cost, diagonal, drill_sites):

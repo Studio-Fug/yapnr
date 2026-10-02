@@ -172,7 +172,12 @@ showcases never gate: the nightly lane runs them for information.
 The detailed router's A\* runs on the packed kernel by default (integer cell
 keys; the same predicates, prices and tie order as the reference search, so the
 same routes). `--reference-maze` routes with the reference kernel instead, and
-`--packed-maze` is accepted as a no-op for recorded configurations. The
+`--packed-maze` is accepted as a no-op for recorded configurations.
+`--maze-kernel native` compiles the kernel's search loop in C from the frozen
+sources with the host compiler and routes with it (the same routes again, about
+six times faster than packed on a dense board); each case's `pnr-report.json`
+records the kernel that actually ran (`maze_kernel`), which is packed when the
+library cannot load. The
 performance opt-in `--batched-wirelength` can be tested explicitly. All of these
 are recorded in provenance; ambient variables are still cleared, so a baseline
 invocation keeps its original algorithms.

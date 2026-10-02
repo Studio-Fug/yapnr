@@ -9,6 +9,7 @@ from pathlib import Path
 from pnr.constraints import compile_constraints, compile_routing_rules
 from pnr.fab_profile import apply_rules
 from pnr.graph import BoardGraph
+from pnr.route.detail.native_maze import status as maze_status
 from pnr.route.feedback import route_and_place
 
 root = Path(sys.argv[1])
@@ -53,6 +54,7 @@ if r is None:
             deferred=report.deferred_nets,
             initial_pool=getattr(report, "initial_pool", {}),
             escape_diagnostics=getattr(r, "escape_diagnostics", {}),
+            maze_kernel=maze_status(),
             elapsed_seconds=time.monotonic() - t,
             summary=report.summary(),
         ),

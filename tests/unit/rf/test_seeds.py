@@ -2,9 +2,9 @@
 
 - the patch dimensions reproduce Balanis' worked example (Antenna Theory, 4th ed., Example
   14.1: εr 2.2, h 1.588 mm, 10 GHz → W 11.86 mm, L 9.06 mm) within 1 %;
-- the antenna preset's seed is a mirror-symmetric inset patch joined to the port's feed, with
-  slots of 1.5 times the minimum space beside the inset feed, on both scales; a port on the
-  east side mirrors it;
+- the patch reference's seed (`cases.antenna_patch_reference`) is a mirror-symmetric inset
+  patch joined to the port's feed, with slots of 1.5 times the minimum space beside the inset
+  feed, on both scales; a port on the east side mirrors it;
 - the star seed joins every port of the divider and the diplexer in one copper island;
 - the stub seed adds the diplexer's two quarter-wave stubs, one island, the minimum space kept.
 """
@@ -17,7 +17,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from yapnr.rf.cases import spec_for
+from yapnr.rf.cases import antenna_patch_reference, spec_for
 from yapnr.rf.seeds import PATCH_FAMILY, patch_dimensions, patch_mask, star_mask
 
 
@@ -34,7 +34,7 @@ class PatchSeedTest(unittest.TestCase):
         self.assertLess(d["inset"], 0.5 * d["l"])
 
     def test_antenna_seed(self):
-        spec = spec_for("antenna")
+        spec = antenna_patch_reference()
         m = patch_mask(_problem(spec, (45, 45), 9, 0.4e-3))
         np.testing.assert_array_equal(m, m[:, ::-1])
         # The 9-pixel feed runs from the port (x = 0) into the patch.
@@ -48,13 +48,13 @@ class PatchSeedTest(unittest.TestCase):
         self.assertFalse(m[13:19, 27:30].any())
         self.assertTrue(m[13:19, 14].all() and m[13:19, 30].all())
         self.assertTrue(m[19, 15:18].all())
-        smoke = spec_for("antenna", "smoke")
+        smoke = antenna_patch_reference("smoke")
         ms = patch_mask(_problem(smoke, (10, 10), 4, 0.8e-3))
         np.testing.assert_array_equal(ms, ms[:, ::-1])
         self.assertTrue(ms[0, 3:7].all())
 
     def test_whole_pixel_neighbours(self):
-        spec = spec_for("antenna")
+        spec = antenna_patch_reference()
         prob = _problem(spec, (45, 45), 9, 0.4e-3)
         base = patch_mask(prob)
         longer = patch_mask(prob, dl=1)
@@ -67,7 +67,7 @@ class PatchSeedTest(unittest.TestCase):
         self.assertEqual(len(PATCH_FAMILY), 27)
 
     def test_east_port_mirrors(self):
-        spec = spec_for("antenna")
+        spec = antenna_patch_reference()
         east = spec.replace(ports=(replace(spec.ports[0], side="E"),))
         mw = patch_mask(_problem(spec, (45, 45), 9, 0.4e-3))
         me = patch_mask(_problem(east, (45, 45), 9, 0.4e-3))

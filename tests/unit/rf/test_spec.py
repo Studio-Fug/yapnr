@@ -122,6 +122,25 @@ class SpecTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             Requirement("phase", (2, 1), "target", 90.0, "a")  # no tolerance
 
+    def test_epoch_objectives(self):
+        rad = (RadiatedFraction(1).at_least(0.7, band="a"),)
+        opt = OptimizerSpec(betas=(2, 8), epoch_objectives=("radiation", "spec"))
+        spec = _small(requirements=rad, optimizer=opt)
+        again = Spec.from_dict(spec.to_dict())
+        self.assertEqual(again.optimizer.epoch_objectives, ("radiation", "spec"))
+        self.assertEqual(again.sha256(), spec.sha256())
+        # Left out of the hash at its default, so earlier specs keep theirs.
+        self.assertNotIn("epoch_objectives", _small().to_dict()["optimizer"])
+        with self.assertRaises(ValueError):  # one per β epoch
+            _small(
+                requirements=rad,
+                optimizer=OptimizerSpec(betas=(2, 8), epoch_objectives=("radiation",)),
+            )
+        with self.assertRaises(ValueError):  # unknown objective
+            _small(requirements=rad, optimizer=OptimizerSpec(betas=(8,), epoch_objectives=("x",)))
+        with self.assertRaises(ValueError):  # radiation needs a radiated-fraction requirement
+            _small(optimizer=OptimizerSpec(betas=(8,), epoch_objectives=("radiation",)))
+
     def test_frequencies_union(self):
         spec = _small()
         f = spec.objective_frequencies() / 1e9

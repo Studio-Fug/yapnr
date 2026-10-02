@@ -11,14 +11,19 @@ One iteration at β = β_epoch (design §8.3):
 5. the record (t, every f, S-parameters, η, φ, M_nd, run lengths, wall times) and a checkpoint.
 
 An epoch ends at its cap or when converged (`optim.schedule`); MMA's state resets at each β.
-The run stops after the last epoch or when the wall-clock budget is used up.
+The run stops after the last epoch or when the wall-clock budget is used up. Each epoch
+optimizes the spec's epigraph unless `optimizer.epoch_objectives` names another objective for
+it ("radiation": the band-averaged log(1 + R̄) − log η̄ of a radiating port, which grows a
+radiator from a gray start; `Problem.objective_units`) and may solve at its objective
+frequencies scaled by `optimizer.epoch_frequency_scale` (frequency continuation).
 
 **The exported design is the best binarized one, not the last iterate.** The epigraph value t at
 finite β is not the value of the binary design (gray pixels interpolate), and plain MMA may
 raise t, so the loop also evaluates the binarized design (β = ∞, after the width and space
 repair, one forward run per excitation and no adjoint) at the first iteration, at the start of
 every epoch and every `optimizer.binary_every` iterations, and `finish` once more at the end.
-The design with the lowest binary t is exported; `result.json` records its iteration.
+The design with the lowest binary t is exported; `result.json` records its iteration. Binary
+designs are judged by the spec's epigraph in every epoch, whatever the epoch's objective.
 
 A conservative step (`optimizer.conservative`) that does not reach a conservative approximation
 within `max_inner` subproblems is rejected: x stays, the record says `accepted: false`, and
@@ -295,13 +300,26 @@ class Optimizer:
             t = max(t, evv.t)
         return t, ev, exported, info
 
-    def _evaluate(self, x: np.ndarray, beta: float, gradients: bool):
+    def objective(self, epoch: int) -> tuple[str, float]:
+        """The objective of `epoch` and its frequency scale (`optimizer.epoch_objectives`,
+        default "spec"; `optimizer.epoch_frequency_scale`, default 1)."""
+        o = self.problem.spec.optimizer
+        eo, fs = o.epoch_objectives, o.epoch_frequency_scale
+        e = min(epoch, len(o.betas) - 1)
+        return (str(eo[e]) if eo else "spec", float(fs[e]) if fs else 1.0)
+
+    def _evaluate(self, x: np.ndarray, beta: float, gradients: bool, objective=("spec", 1.0)):
         """The nominal evaluation, every variant's values (concatenated after the nominal ones)
         and, with `gradients`, ∂f/∂x of all of them."""
         prob, param = self.problem, self.param
         evs, dfs = [], []
         for e in self.variants:
-            ev = prob.evaluate(param.rho_bar(x, beta, e), gradients=gradients)
+            ev = prob.evaluate(
+                param.rho_bar(x, beta, e),
+                gradients=gradients,
+                objective=objective[0],
+                frequency_scale=objective[1],
+            )
             evs.append(ev)
             if gradients:
                 dfs.append(param.vjp(x, beta, ev.grads, e))
@@ -322,16 +340,21 @@ class Optimizer:
         st, sch, prob, param = self.state, self.schedule, self.problem, self.param
         t0 = time.perf_counter()
         beta = sch.betas[st.epoch]
+        objective = self.objective(st.epoch)
         rho_bar = param.rho_bar(st.x, beta)
-        key = (st.x.tobytes(), beta)
+        key = (st.x.tobytes(), beta, objective)
         if self._last_eval is not None and self._last_eval[0] == key:
             ev, values, df, t_var = self._last_eval[1]  # x unchanged (a rejected step)
             reused = True
         else:
-            ev, values, df, t_var = self._evaluate(st.x, beta, True)
+            ev, values, df, t_var = self._evaluate(st.x, beta, True, objective)
             reused = False
         self._last_eval = (key, (ev, values, df, t_var))
         rec: dict = {"iteration": st.iteration, "epoch": st.epoch, "beta": beta}
+        if objective[0] != "spec":
+            rec["objective"] = objective[0]
+        if objective[1] != 1.0:
+            rec["frequency_scale"] = objective[1]
         if len(t_var) > 1:
             rec["t_variants"] = t_var
         if self._binary_due():
@@ -344,7 +367,7 @@ class Optimizer:
         inner_steps = []
 
         def true_values(xh):
-            evh, vals, _, _ = self._evaluate(xh, beta, False)
+            evh, vals, _, _ = self._evaluate(xh, beta, False, objective)
             inner_steps.append(evh.steps["forward"])
             gh = param.lengthscale(xh, beta, ls)[0] if ls is not None else None
             return vals, gh

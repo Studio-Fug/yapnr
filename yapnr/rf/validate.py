@@ -103,8 +103,9 @@ def resimulate(
 ) -> dict:
     """Re-simulate the run's footprint on a grid `refine` times finer in-plane (and `n_sub`
     substrate cells); returns freqs (Hz), s (F, N, N; 50 Ω, engineering convention, from the
-    wave matrices S = B A⁻¹), s_ref (b_i/a_j referenced to each port's Z_c, internal convention:
-    what the optimizer evaluates), eta, the largest idle-port incident wave, mask, the problem,
+    wave matrices S = B A⁻¹), s_ref (b_i/a_j referenced to each port's Z_c, or renormalized to
+    `optimizer.reference_ohm` when the spec sets it; internal convention: what the optimizer
+    evaluates), eta, the largest idle-port incident wave, mask, the problem,
     steps and wall time."""
     from yapnr.rf.problem import Problem
 
@@ -134,10 +135,15 @@ def resimulate(
         f"re-simulated {spec.name} at refine {refine} ({prob.grid.cells} cells): "
         f"{time.perf_counter() - t1:.1f} s"
     )
+    s_ref = sw["s_naive"]
+    if spec.optimizer.reference_ohm is not None:
+        # The optimizer judged the one-port's reflection at this reference (`Problem.
+        # objective_quantities`); compare like with like.
+        s_ref = sparams.renormalize(s_ref, sw["zc"], spec.optimizer.reference_ohm)
     return {
         "freqs": sw["freqs"],
         "s": sparams.to_engineering(s50),
-        "s_ref": sw["s_naive"],
+        "s_ref": s_ref,
         "idle_incident": sw.get("idle_incident"),
         "zc": sw["zc"],
         "eta": sw["eta"],

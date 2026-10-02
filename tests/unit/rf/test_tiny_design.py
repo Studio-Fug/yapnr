@@ -15,6 +15,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from dataclasses import replace
 
 import numpy as np
 
@@ -22,6 +23,7 @@ from yapnr.rf.driver import CHECKPOINT, Optimizer, design
 from yapnr.rf.export.kicad import read_footprint
 from yapnr.rf.export.touchstone import read_touchstone
 from yapnr.rf.problem import Problem
+from yapnr.rf.spec import RadiatedFraction
 from yapnr.rf.testing import tiny_spec
 
 
@@ -137,6 +139,47 @@ class BestDesignTest(unittest.TestCase):
         again = Optimizer(Problem(spec, cache_dir=self.cache), out_dir=out)
         self.assertTrue(again.load_checkpoint())
         self.assertEqual(again.state.move, opt.state.move)
+
+    def test_epoch_objectives(self):
+        # The radiation objective in the first epoch (one value per lower bound on a radiated
+        # fraction), the spec's epigraph in the second; binary designs are always judged by
+        # the spec.
+        spec = tiny_spec(radiated=True, betas=(8, 16), iterations_per_beta=2)
+        reqs = spec.requirements[:-1] + (RadiatedFraction(1).at_least(0.3, band="b"),)
+        spec = spec.replace(
+            requirements=reqs,
+            optimizer=replace(spec.optimizer, epoch_objectives=("radiation", "spec")),
+        )
+        opt = Optimizer(Problem(spec, cache_dir=self.cache))
+        opt.run(max_iterations=4)
+        h = opt.history
+        self.assertEqual([r.get("objective", "spec") for r in h], ["radiation"] * 2 + ["spec"] * 2)
+        self.assertEqual(len(h[0]["f"]), 1)
+        self.assertEqual(h[0]["keys"][0][0], "radiation1")
+        n = len(opt.problem.groups[0].frequencies_active.nonzero()[0])
+        self.assertEqual(len(h[2]["f"]), n)
+        t_bin = opt.evaluate_binary(opt.state.x)[0]
+        exported = opt.evaluate_binary(opt.state.x)[2]
+        self.assertAlmostEqual(t_bin, opt.problem.evaluate(exported, gradients=False).t, places=12)
+
+    def test_frequency_scale(self):
+        # Frequency continuation: an epoch solves at its scaled frequencies (the same S as a
+        # sweep there) and records the factor; binary designs are judged at the nominal ones.
+        spec = tiny_spec(betas=(8, 16), iterations_per_beta=1)
+        spec = spec.replace(optimizer=replace(spec.optimizer, epoch_frequency_scale=(0.9, 1.0)))
+        prob = Problem(spec, cache_dir=self.cache)
+        rho = prob.param.rho_bar(prob.param.grid.initial(0.6), 8.0)
+        ev = prob.evaluate(rho, gradients=False, frequency_scale=0.9)
+        sw = prob.sweep(rho, freqs=0.9 * prob.freqs, ports=[1])
+        np.testing.assert_allclose(ev.s[:, 1, 0], sw["s_naive"][:, 1, 0], rtol=1e-9, atol=1e-12)
+        nominal = prob.evaluate(rho, gradients=False)
+        self.assertGreater(np.max(np.abs(nominal.s[:, 1, 0] - ev.s[:, 1, 0])), 1e-3)
+        opt = Optimizer(prob)
+        opt.run(max_iterations=2)
+        self.assertEqual([h.get("frequency_scale", 1.0) for h in opt.history], [0.9, 1.0])
+        exported = opt.evaluate_binary(opt.state.x)[2]
+        t_bin = opt.evaluate_binary(opt.state.x)[0]
+        self.assertAlmostEqual(t_bin, prob.evaluate(exported, gradients=False).t, places=12)
 
     def test_robust_variants(self):
         spec = tiny_spec(eta_variants=(0.6, 0.4))

@@ -16,11 +16,13 @@ from dataclasses import replace
 import numpy as np
 
 from yapnr.rf.problem import Problem
-from yapnr.rf.spec import OptimizerSpec
+from yapnr.rf.spec import OptimizerSpec, RadiatedFraction, S
 from yapnr.rf.testing import nominal_calibration, tiny_spec
 
 
 class PipelineGradientTest(unittest.TestCase):
+    OBJECTIVE = "spec"
+
     @classmethod
     def setUpClass(cls):
         spec = tiny_spec(radiated=True)
@@ -29,13 +31,14 @@ class PipelineGradientTest(unittest.TestCase):
         rng = np.random.default_rng(3)
         cls.x = rng.uniform(0.3, 0.7, p.param.n_dof)
         cls.beta = 8.0
-        ev = p.evaluate(p.param.rho_bar(cls.x, cls.beta))
+        ev = p.evaluate(p.param.rho_bar(cls.x, cls.beta), objective=cls.OBJECTIVE)
         cls.ev = ev
         cls.grad = p.param.vjp(cls.x, cls.beta, ev.grads)
         cls.v = rng.standard_normal(cls.x.size)
 
     def _f(self, x):
-        return self.p.evaluate(self.p.param.rho_bar(x, self.beta), gradients=False).values
+        rho = self.p.param.rho_bar(x, self.beta)
+        return self.p.evaluate(rho, gradients=False, objective=self.OBJECTIVE).values
 
     def test_runs_converged(self):
         self.assertTrue(self.ev.converged)
@@ -93,6 +96,78 @@ class EdgeCorrectionPipelineGradientTest(PipelineGradientTest):
         without = p.param.vjp(self.x, self.beta, ev.grads) @ self.v
         full = self.grad @ self.v
         self.assertGreater(np.abs(full - without).min(), 1e-3 * np.abs(full).max())
+
+
+class RadiationObjectivePipelineGradientTest(PipelineGradientTest):
+    """The same with the radiation objective (`optimizer.epoch_objectives`): one scalar,
+    log(1 + R̄) − log η̄ over the band, whose gradient sums the per-frequency recombinations of
+    one adjoint run."""
+
+    OBJECTIVE = "radiation"
+
+    @classmethod
+    def setUpClass(cls):
+        spec = tiny_spec(radiated=True)
+        reqs = spec.requirements[:-1] + (RadiatedFraction(1).at_least(0.5, band="b"),)
+        spec = spec.replace(requirements=reqs, optimizer=OptimizerSpec(damping=0.5))
+        cls.p = p = Problem(spec, exact=True, calibrations=nominal_calibration())
+        rng = np.random.default_rng(6)
+        cls.x = rng.uniform(0.3, 0.7, p.param.n_dof)
+        cls.beta = 8.0
+        ev = p.evaluate(p.param.rho_bar(cls.x, cls.beta), objective=cls.OBJECTIVE)
+        cls.ev = ev
+        cls.grad = p.param.vjp(cls.x, cls.beta, ev.grads)
+        cls.v = rng.standard_normal(cls.x.size)
+
+    def test_runs_converged(self):
+        self.assertTrue(self.ev.converged)
+        self.assertEqual(len(self.ev.keys), 1)
+        self.assertEqual(self.ev.keys[0][0], "radiation1")
+
+    def test_value(self):
+        s11 = np.abs(self.ev.s[:, 0, 0]) ** 2
+        eta = self.ev.eta[1]
+        band = self.p.spec.band_mask(self.p.spec.requirements[-1].band, self.p.freqs)
+        expect = np.log(1.0 + s11[band].mean()) - np.log(eta[band].mean())
+        self.assertAlmostEqual(float(self.ev.values[0]), float(expect), places=12)
+
+
+class ReferenceOhmPipelineGradientTest(PipelineGradientTest):
+    """A one-port spec judged at a 50 Ω reference (`optimizer.reference_ohm`): the reflection
+    renormalized from the feed's Z_c (72 Ω in the nominal calibration) inside the objective."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = tiny_spec(radiated=True)
+        spec = spec.replace(
+            ports=spec.ports[:1],
+            requirements=(
+                S(1, 1).at_most_db(-15, band="b"),
+                RadiatedFraction(1).at_least(0.5, band="b"),
+            ),
+            optimizer=OptimizerSpec(damping=0.5, reference_ohm=50.0),
+        )
+        cls.p = p = Problem(spec, exact=True, calibrations=nominal_calibration())
+        rng = np.random.default_rng(7)
+        cls.x = rng.uniform(0.3, 0.7, p.param.n_dof)
+        cls.beta = 8.0
+        ev = p.evaluate(p.param.rho_bar(cls.x, cls.beta))
+        cls.ev = ev
+        cls.grad = p.param.vjp(cls.x, cls.beta, ev.grads)
+        cls.v = rng.standard_normal(cls.x.size)
+
+    def test_runs_converged(self):
+        self.assertTrue(self.ev.converged)
+        self.assertEqual(len(self.ev.keys), 3)
+
+    def test_matches_the_validators_renormalization(self):
+        from yapnr.rf import sparams
+
+        p = self.p
+        sw = p.sweep(p.param.rho_bar(self.x, self.beta), freqs=p.freqs)
+        s50 = sparams.renormalize(sw["s"], sw["zc"], 50.0)
+        np.testing.assert_allclose(self.ev.s[:, 0, 0], s50[:, 0, 0], rtol=1e-9, atol=1e-12)
+        self.assertGreater(np.max(np.abs(sw["s"][:, 0, 0] - s50[:, 0, 0])), 0.05)
 
 
 class ReactivePipelineGradientTest(PipelineGradientTest):

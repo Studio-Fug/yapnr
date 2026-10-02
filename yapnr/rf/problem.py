@@ -507,8 +507,79 @@ class Problem:
             out["eta"][port] = self.box.power(dft) / p_inc
         return out
 
-    def evaluate(self, rho_bar: np.ndarray, *, gradients: bool = True) -> Evaluation:
-        """Every f_{g,m} and (when `gradients`) ∂f_{g,m}/∂ρ̄ for the design ρ̄.
+    def objective_quantities(self, dft, port: int, omega=None) -> dict:
+        """`quantities` as the objectives judge them: with `optimizer.reference_ohm` (one-port
+        specs) the reflection renormalized from the feed's Z_c to that reference, Γ' = (Z − R)/
+        (Z + R) with Z = Z_c (1 + Γ)/(1 − Γ), as `sparams.renormalize` does for the validator."""
+        q = self.quantities(dft, port, omega)
+        ref = self.spec.optimizer.reference_ohm
+        if ref is None:
+            return q
+        omega = self.omega if omega is None else np.asarray(omega)
+        g = q["s"][(port, port)]
+        zc = np.asarray(self.cal[port].at(omega)[0]).real
+        if not isinstance(g, np.ndarray):
+            import torch
+
+            zc = torch.as_tensor(zc, dtype=torch.float64)
+        z = zc * (1.0 + g) / (1.0 - g)
+        q["s"] = dict(q["s"])
+        q["s"][(port, port)] = (z - float(ref)) / (z + float(ref))
+        return q
+
+    def objective_units(self, objective: str = "spec") -> list:
+        """The objective's parts as (name, excitation, fn, rows): `fn(quantities)` → a real
+        (M,) torch tensor; `rows` the frequency indices whose entries are values of the
+        epigraph (one each), or None for a scalar (the sum of the entries, one value).
+
+        "spec": one part per objective group, f_{g,m} at its active frequencies (design §9).
+        "radiation": one scalar per lower bound on a radiated fraction, log(1 + R̄) − log η̄
+        over its band (`spec.OptimizerSpec.epoch_objectives`)."""
+        import torch
+
+        if objective == "spec":
+            tau = self.spec.optimizer.tau
+            return [
+                (
+                    g.name,
+                    g.excitation,
+                    lambda q, g=g: group_values(g, q, self.freqs, tau),
+                    np.nonzero(g.frequencies_active)[0],
+                )
+                for g in self.groups
+            ]
+        if objective != "radiation":
+            raise ValueError(f"unknown objective {objective!r}")
+        out = []
+        for r in self.spec.requirements:
+            if r.quantity != "radiated" or r.bound != "min":
+                continue
+            j = r.ports[0]
+            band = torch.as_tensor(self.spec.band_mask(r.band, self.freqs))
+
+            def fn(q, j=j, band=band):
+                refl = torch.mean(torch.abs(q["s"][(j, j)][band]) ** 2)
+                rad = torch.mean(q["eta"][j][band])
+                f = torch.log(1.0 + refl) - torch.log(rad)
+                return torch.cat([f.reshape(1), torch.zeros(self.freqs.size - 1, dtype=f.dtype)])
+
+            out.append((f"radiation{j}", j, fn, None))
+        return out
+
+    def evaluate(
+        self,
+        rho_bar: np.ndarray,
+        *,
+        gradients: bool = True,
+        objective: str = "spec",
+        frequency_scale: float = 1.0,
+    ) -> Evaluation:
+        """Every f_{g,m} and (when `gradients`) ∂f_{g,m}/∂ρ̄ for the design ρ̄ (with
+        `objective="radiation"`, the radiation objective's values instead, `objective_units`).
+
+        `frequency_scale` (frequency continuation, `optimizer.epoch_frequency_scale`) solves at
+        the objective frequencies times the factor and judges the results against the
+        requirements of the nominal frequencies (the masks and limits are not moved).
 
         The forward runs of the last design evaluated are kept (with the design-plane DTFTs),
         so evaluating the same ρ̄ again with gradients (the point a conservative MMA step
@@ -517,8 +588,9 @@ class Problem:
 
         t0 = time.perf_counter()
         rho_bar = np.ascontiguousarray(rho_bar, dtype=np.float64)
-        key = hashlib.sha256(rho_bar.tobytes()).hexdigest()
+        key = hashlib.sha256(rho_bar.tobytes()).hexdigest() + f":{float(frequency_scale)!r}"
         cache = self._fwd_cache[1] if self._fwd_cache[0] == key else {}
+        omega = self.omega * float(frequency_scale)
         self._fwd_cache = (key, cache)
         self.set_design(rho_bar)
         n_ports = len(self.ports)
@@ -529,34 +601,33 @@ class Problem:
         values, grads, keys = [], [], []
         steps: dict = {"forward": {}, "adjoint": {}}
         converged = True
-        tau = self.spec.optimizer.tau
+        units = self.objective_units(objective)
         stop_adj = StopRule(
             tol=self.adjoint_tol,
-            f_lo=float(self.freqs.min()),
+            f_lo=float(self.freqs.min() * frequency_scale),
             max_steps=self.spec.solver.max_steps,
         )
-        for j in self.excitations:
+        for j in sorted({u[1] for u in units}):
             if j in cache:
                 fwd = cache[j]
                 steps["forward"][j] = 0
             else:
-                fwd = cache[j] = self.forward(j, design=True)
+                fwd = cache[j] = self.forward(j, omega=omega, design=True)
                 steps["forward"][j] = fwd.steps
             converged &= fwd.converged
             q = {k: torch.as_tensor(v) for k, v in fwd.dft.items() if k in self.watched}
-            qty = self.quantities(q, j)
+            qty = self.objective_quantities(q, j, omega)
             for (i, jj), v in qty["s"].items():
                 s[:, i - 1, jj - 1] = v.detach().numpy()
             for jj, v in qty["eta"].items():
                 eta[jj] = v.detach().numpy().astype(np.float64)
             phis.update(violations(self.spec, qty, self.freqs, excitation=j))
-            for g in [g for g in self.groups if g.excitation == j]:
+            for name, _, part, rows in [u for u in units if u[1] == j]:
 
-                def fn(dft, g=g, j=j):
-                    return group_values(g, self.quantities(dft, j), self.freqs, tau)
+                def fn(dft, part=part, j=j):
+                    return part(self.objective_quantities(dft, j, omega))
 
                 f, wg = wirtinger(fn, fwd.dft, self.watched)
-                active = np.nonzero(g.frequencies_active)[0]
                 gp = None
                 if gradients:
                     dec = 1 if self.exact else "auto"
@@ -570,12 +641,20 @@ class Problem:
                         decimation=dec,
                         edge_probes=self.edge_probes,
                     )
-                    steps["adjoint"][g.name] = gr.adjoint.steps
+                    steps["adjoint"][name] = gr.adjoint.steps
                     converged &= gr.adjoint.converged
                     gp = self.design_gradient(gr, rho_bar)
-                for mm in active:
+                if rows is None:
+                    # A scalar: its Wirtinger rows are its derivatives at every frequency, so
+                    # the gradient is the sum of the per-frequency recombinations.
+                    values.append(float(np.sum(f)))
+                    keys.append((name, float(np.mean(self.freqs))))
+                    if gp is not None:
+                        grads.append(gp.sum(axis=0))
+                    continue
+                for mm in rows:
                     values.append(float(f[mm]))
-                    keys.append((g.name, float(self.freqs[mm])))
+                    keys.append((name, float(self.freqs[mm])))
                     if gp is not None:
                         grads.append(gp[mm])
         phis = dict(sorted(phis.items(), key=lambda kv: int(kv[0].split(":")[0])))

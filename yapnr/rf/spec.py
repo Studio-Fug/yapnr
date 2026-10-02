@@ -213,6 +213,25 @@ class OptimizerSpec:
     # again up to the schedule's. Off by default.
     adaptive_move: bool = False
     trust_slack: float = 0.05
+    # The objective of each β epoch (`Problem.evaluate`): "spec", the epigraph of the
+    # requirements (design §9), or "radiation", per lower bound on a radiated fraction the band
+    # average log(1 + R̄) − log η̄ of its port (R̄, η̄ the band means of |S_jj|² and η_j; Lu,
+    # Wadbro, Lundström, Starck, Berggren and Hassan, arXiv 2608.05712, Eq. 3). The radiation
+    # objective rewards radiated power and saturates on reflection, so absorbing gray copper
+    # does not pay: from a gray start it grows a radiator, which the spec's epochs then shape
+    # to the band. Empty: "spec" in every epoch. Binarized designs (the export's choice) are
+    # always judged by the spec.
+    epoch_objectives: tuple[str, ...] = ()
+    # Frequency continuation: each β epoch solves at the objective frequencies times its factor
+    # (judged against the requirements as written), e.g. (0.925, 1, 1, 1, 1): the radiator grows
+    # against a band below the target first and is trimmed to the band after. Empty: 1 in every
+    # epoch. Binarized designs are always judged at the nominal frequencies.
+    epoch_frequency_scale: tuple[float, ...] = ()
+    # One-port specs: judge the reflection renormalized to this real reference (Ω) instead of
+    # the feed's Z_c, i.e. what the validator reports (50 Ω). The feeds are whole cells wide, so
+    # Z_c is a few per cent off 50 Ω (47.5 Ω for the antenna's 11-cell feed), which moves a
+    # −10 dB reflection by up to 0.6 dB. None: the feed's Z_c (design §5.4).
+    reference_ohm: float | None = None
 
 
 @dataclass(frozen=True)
@@ -239,7 +258,15 @@ class SolverSpec:
 
 # Solver options added after the first cases, with their defaults (`Spec.to_dict`).
 _SOLVER_NEW = {"edge_correction": False, "port_source": "static"}
-_OPTIMIZER_NEW = {"seed": None, "adaptive_move": False, "trust_slack": 0.05}
+_OPTIMIZER_NEW = {
+    "seed": None,
+    "adaptive_move": False,
+    "trust_slack": 0.05,
+    "epoch_objectives": [],
+    "epoch_frequency_scale": [],
+    "reference_ohm": None,
+}
+OBJECTIVES = ("spec", "radiation")
 
 
 # -- requirements -----------------------------------------------------------------------------
@@ -478,6 +505,24 @@ class Spec:
         for el in self.lumped:
             if el.axis not in ("x", "y") or not el.ohms > 0 or not el.pad_mm > 0:
                 raise ValueError(f"lumped {el.name}: axis x or y, ohms > 0 and pad_mm > 0")
+        eo = self.optimizer.epoch_objectives
+        if eo:
+            if len(eo) != len(self.optimizer.betas) or any(o not in OBJECTIVES for o in eo):
+                raise ValueError(
+                    f"optimizer.epoch_objectives: one of {OBJECTIVES} per β epoch, or none"
+                )
+            if "radiation" in eo and not any(
+                r.quantity == "radiated" and r.bound == "min" for r in self.requirements
+            ):
+                raise ValueError(
+                    "the radiation objective needs a lower bound on a radiated fraction"
+                )
+        ref = self.optimizer.reference_ohm
+        if ref is not None and (len(self.ports) != 1 or not ref > 0):
+            raise ValueError("optimizer.reference_ohm: a positive reference, one-port specs only")
+        fs = self.optimizer.epoch_frequency_scale
+        if fs and (len(fs) != len(self.optimizer.betas) or not all(0.5 < f < 2.0 for f in fs)):
+            raise ValueError("optimizer.epoch_frequency_scale: one factor in (0.5, 2) per β epoch")
         if any(r.quantity == "radiated" for r in self.requirements) and self.radiation is None:
             object.__setattr__(self, "radiation", RadiationBox())
 

@@ -1,9 +1,13 @@
 load("@rules_python//python:defs.bzl", "py_test")
 load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
 
+# torch steps the fields on 4 threads; numpy's OpenBLAS (the adjoint sources' basis products)
+# stays on one: with its own 4 threads spinning beside torch's, an adjoint run used about 7
+# cores and took 1.6 times as long.
 _ENV = {
     "MKL_NUM_THREADS": "4",
     "OMP_NUM_THREADS": "4",
+    "OPENBLAS_NUM_THREADS": "1",
 }
 
 # Fast tests (design §12): seconds to about a minute each on 4 threads. The optimizer tests

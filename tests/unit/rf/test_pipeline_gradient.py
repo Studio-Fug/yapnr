@@ -16,7 +16,7 @@ from dataclasses import replace
 import numpy as np
 
 from yapnr.rf.problem import Problem
-from yapnr.rf.spec import OptimizerSpec, RadiatedFraction, S
+from yapnr.rf.spec import Absorbed, Lumped, OptimizerSpec, RadiatedFraction, S
 from yapnr.rf.testing import nominal_calibration, tiny_spec
 
 
@@ -194,6 +194,58 @@ class ReferenceOhmPipelineGradientTest(PipelineGradientTest):
         s50 = sparams.renormalize(sw["s"], sw["zc"], 50.0)
         np.testing.assert_allclose(self.ev.s[:, 0, 0], s50[:, 0, 0], rtol=1e-9, atol=1e-12)
         self.assertGreater(np.max(np.abs(sw["s"][:, 0, 0] - s50[:, 0, 0])), 0.05)
+
+
+class AbsorbedPipelineGradientTest(PipelineGradientTest):
+    """A lumped resistor's share of the incident power (`Absorbed`, the Wilkinson-type
+    combiner's resistor requirement): ½ c_ω Σ σ_e V_e |Ê_e|² over the part's edges, an adjoint
+    source on them, with the copper-edge correction and the modal source as in the cases."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = tiny_spec()
+        spec = spec.replace(
+            lumped=(Lumped("R1", (0.8, 1.6), (-0.4, 0.4), "y", 50.0, 0.4),),
+            requirements=spec.requirements + (Absorbed("R1", 1).at_least(0.3, band="b"),),
+            optimizer=OptimizerSpec(damping=0.5),
+            solver=replace(spec.solver, edge_correction=True, port_source="mode"),
+        )
+        cls.p = p = Problem(spec, exact=True, calibrations=nominal_calibration())
+        rng = np.random.default_rng(9)
+        cls.x = rng.uniform(0.3, 0.7, p.param.n_dof)
+        cls.beta = 8.0
+        ev = p.evaluate(p.param.rho_bar(cls.x, cls.beta))
+        cls.ev = ev
+        cls.grad = p.param.vjp(cls.x, cls.beta, ev.grads)
+        cls.v = rng.standard_normal(cls.x.size)
+
+    def test_absorbed_value(self):
+        from yapnr.rf.fdtd.monitors import dissipated_power
+
+        p = self.p
+        rho = p.param.rho_bar(self.x, self.beta)
+        p.set_design(rho)
+        fwd = p.forward(1, design=False)
+        q = p.quantities(fwd.dft, 1)
+        a = q["absorbed"][("R1", 1)]
+        self.assertTrue(np.all(a > 1e-4) and np.all(a < 1.0), a)
+        # The same as the monitor's dissipation on the part's edges less the sheet's share.
+        probe, _ = p.lumped_probes["R1"]
+        st = p.sim.structure
+        sheet = (
+            st.sigma(probe.comp).reshape(-1)[probe.index]
+            - st._extra[probe.comp].reshape(-1)[probe.index]
+        )
+        total = dissipated_power(st, [probe], fwd.dft, p.omega, p.dt)
+        c = np.cos(p.omega * p.dt / 2.0)
+        vol = p.grid.volume(probe.comp).reshape(-1)[probe.index]
+        own = total - 0.5 * c * (np.abs(fwd.dft[probe.name]) ** 2 * sheet * vol).sum(-1)
+        from yapnr.rf import sparams
+
+        p_inc = sparams.incident_power(q["waves"][1][0], p.cal[1], p.omega)
+        np.testing.assert_allclose(a, own / p_inc, rtol=1e-9)
+        phi = self.ev.phi[f"{len(p.spec.requirements)}: R1/P1 ≥ 0.3 @ b"]
+        np.testing.assert_allclose(phi, (0.3 - a) / 0.1, rtol=1e-9, atol=1e-12)
 
 
 class ReactivePipelineGradientTest(PipelineGradientTest):

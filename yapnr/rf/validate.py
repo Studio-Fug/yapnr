@@ -147,6 +147,7 @@ def resimulate(
         "idle_incident": sw.get("idle_incident"),
         "zc": sw["zc"],
         "eta": sw["eta"],
+        "absorbed": sw.get("absorbed", {}),
         "mask": mask,
         "problem": prob,
         "steps": sw["steps"],
@@ -236,8 +237,9 @@ def reciprocity_error(s: np.ndarray) -> float:
     return float(np.max(np.abs(s - np.swapaxes(s, -1, -2))))
 
 
-def _table(freqs, s, eta) -> dict:
-    """|S_ij| in dB (and η) per frequency, for the report."""
+def _table(freqs, s, eta, absorbed=None) -> dict:
+    """|S_ij| in dB (and η, and the probed resistors' shares of the incident power) per
+    frequency, for the report."""
     out = {"ghz": [float(f) / 1e9 for f in freqs]}
     n = s.shape[-1]
     for j in range(n):
@@ -245,6 +247,8 @@ def _table(freqs, s, eta) -> dict:
             out[f"S{i + 1}{j + 1}"] = [round(float(v), 4) for v in sparams.db(s[:, i, j])]
     for k, v in (eta or {}).items():
         out[f"eta{k}"] = [round(float(x), 5) for x in np.asarray(v)]
+    for k, v in (absorbed or {}).items():
+        out[k] = [round(float(x), 5) for x in np.asarray(v)]
     return out
 
 
@@ -394,7 +398,7 @@ def validate_case(
     if "balance" in co:
         report["coarse"]["balance"] = co["balance"][1]
     report["coarse"]["grid"] = prob.describe()
-    report["coarse"]["table"] = _table(co["freqs"], co["s"], co["eta"])
+    report["coarse"]["table"] = _table(co["freqs"], co["s"], co["eta"], co.get("absorbed"))
     report["coarse"]["reciprocity_error"] = reciprocity_error(co["s"])
     if co.get("idle_incident") is not None:
         report["coarse"]["idle_incident_max"] = float(np.max(co["idle_incident"]))
@@ -445,7 +449,7 @@ def validate_case(
         if "balance" in fi:
             report["fine"]["balance"] = fi["balance"][1]
         report["fine"]["grid"] = fi["problem"].describe()
-        report["fine"]["table"] = _table(fi["freqs"], fi["s"], fi["eta"])
+        report["fine"]["table"] = _table(fi["freqs"], fi["s"], fi["eta"], fi.get("absorbed"))
         report["fine"]["reciprocity_error"] = reciprocity_error(fi["s"])
         if fi.get("idle_incident") is not None:
             report["fine"]["idle_incident_max"] = float(np.max(fi["idle_incident"]))
@@ -471,7 +475,7 @@ def validate_case(
         if "balance" in fr:
             report["finer"]["balance"] = fr["balance"][1]
         report["finer"]["grid"] = fr["problem"].describe()
-        report["finer"]["table"] = _table(fr["freqs"], fr["s"], fr["eta"])
+        report["finer"]["table"] = _table(fr["freqs"], fr["s"], fr["eta"], fr.get("absorbed"))
         report["finer"]["reciprocity_error"] = reciprocity_error(fr["s"])
         if fr.get("idle_incident") is not None:
             report["finer"]["idle_incident_max"] = float(np.max(fr["idle_incident"]))

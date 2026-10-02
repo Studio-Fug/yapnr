@@ -7,9 +7,10 @@ band (φ ≤ 0 means met), with x = 10 log10(|S|² + 1e-10):
     min_db L (or a lower mask)       φ = (L − x)/s          s = 1 dB
     phase θ0 ± tol                   φ = (1 − cos(∠S − θ0))/(1 − cos tol) − 1
     radiated fraction ≥ η_min        φ = (η_min − η)/s      s = 0.1   (≤ η_max likewise)
+    absorbed fraction ≥ a_min        φ = (a_min − a)/s      s = 0.1   (≤ a_max likewise)
 
-Requirements group by excitation (S_ij and the radiated fraction of port j belong to excitation
-j). Per group and frequency the violations combine into one smooth maximum,
+Requirements group by excitation (S_ij and the radiated and absorbed fractions of port j belong
+to excitation j). Per group and frequency the violations combine into one smooth maximum,
 f_{g,m} = τ log Σ_r exp(φ_r(ω_m)/τ), at most τ log K above the true maximum; one adjoint run
 per group gives every f_{g,m} with its gradient. `aggregate="none"` makes one group per
 requirement. The epigraph constrains f_{g,m} ≤ t for every (g, m) with an active requirement.
@@ -62,8 +63,8 @@ def build_groups(spec: Spec, freqs: np.ndarray) -> list[Group]:
 def phi(req: Requirement, quantities: dict, freqs: np.ndarray):
     """φ_r at every objective frequency (torch (M,)); meaningful where the band is active.
 
-    `quantities` holds "s": {(i, j): S_ij (M,)} (internal e^{−iωt} convention) and
-    "eta": {j: η_j (M,)}.
+    `quantities` holds "s": {(i, j): S_ij (M,)} (internal e^{−iωt} convention), "eta":
+    {j: η_j (M,)} and "absorbed": {(element, j): the element's share of P_inc,j (M,)}.
     """
     import torch
 
@@ -72,6 +73,9 @@ def phi(req: Requirement, quantities: dict, freqs: np.ndarray):
     if req.quantity == "radiated":
         eta = quantities["eta"][req.ports[0]]
         return (limit - eta) / s if req.bound == "min" else (eta - limit) / s
+    if req.quantity == "absorbed":
+        a = quantities["absorbed"][(req.element, req.ports[0])]
+        return (limit - a) / s if req.bound == "min" else (a - limit) / s
     sij = quantities["s"][req.ports]
     if req.quantity == "phase":
         # Engineering phase: ∠conj(S); cos(∠conj(S) − θ0) = Re(S e^{iθ0}) / |S|.

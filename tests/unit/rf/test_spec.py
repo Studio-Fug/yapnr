@@ -13,8 +13,10 @@ import yaml
 
 from yapnr.rf.objectives import build_groups, group_values, phi, violations
 from yapnr.rf.spec import (
+    Absorbed,
     Band,
     GridSpec,
+    Lumped,
     OptimizerSpec,
     Port,
     RadiatedFraction,
@@ -91,14 +93,16 @@ class SpecTest(unittest.TestCase):
             {"s": [2, 1], "min_mask_db": [[8, -2], [9, -1]], "band": "a", "scale": 0.5},
             {"s": [2, 1], "phase_deg": 90, "tol_deg": 5, "band": "a"},
             {"radiated": 1, "min": 0.7, "band": "a"},
+            {"absorbed": 2, "element": "R1", "min": 0.4, "band": "a"},
         ]
         reqs = [r for x in d for r in Requirement.from_dict(x)]
-        self.assertEqual(len(reqs), 6)
+        self.assertEqual(len(reqs), 7)
         self.assertEqual((reqs[0].bound, reqs[1].bound), ("min", "max"))
         np.testing.assert_allclose(reqs[2].limit_at([8e9, 8.5e9, 9e9]), [-10, -15, -20])
         self.assertEqual(reqs[3].scale_value, 0.5)
         self.assertEqual(reqs[4].quantity, "phase")
         self.assertEqual(reqs[5].excitation, 1)
+        self.assertEqual((reqs[6].excitation, reqs[6].element, reqs[6].scale_value), (2, "R1", 0.1))
         for r in reqs:
             self.assertEqual(Requirement.from_dict(r.to_dict()), [r])
         py = [
@@ -107,6 +111,7 @@ class SpecTest(unittest.TestCase):
             S(2, 1).mask_db([(8, -2), (9, -1)], kind="min", band="a", scale=0.5),
             S(2, 1).phase_deg(90, tol=5, band="a"),
             RadiatedFraction(1).at_least(0.7, band="a"),
+            Absorbed("R1", 2).at_least(0.4, band="a"),
         ]
         self.assertEqual(py, reqs)
 
@@ -121,6 +126,13 @@ class SpecTest(unittest.TestCase):
             _small(requirements=(S(4, 1).at_least_db(-1, band="a"),))
         with self.assertRaises(ValueError):
             Requirement("phase", (2, 1), "target", 90.0, "a")  # no tolerance
+        r1 = Lumped("R1", (1.0, 1.6), (-0.3, 0.3), "y", 100.0, 0.6)
+        absorbed = (S(2, 1).at_least_db(-1, band="a"), Absorbed("R1", 2).at_least(0.4, band="a"))
+        self.assertEqual(_small(requirements=absorbed, lumped=(r1,)).excitations, (1, 2))
+        with self.assertRaises(ValueError):  # no such element
+            _small(requirements=absorbed)
+        with self.assertRaises(ValueError):  # absorbed needs an element
+            Requirement("absorbed", (2,), "min", 0.4, "a")
 
     def test_epoch_objectives(self):
         rad = (RadiatedFraction(1).at_least(0.7, band="a"),)
@@ -175,6 +187,9 @@ class ObjectiveTest(unittest.TestCase):
         self.assertGreater(float(v[0]), 0.0)
         v = phi(RadiatedFraction(1).at_least(0.7, band="a"), q, f).numpy()
         np.testing.assert_allclose(v, [2.0, 2.0])
+        q["absorbed"] = {("R1", 1): torch.tensor([0.25, 0.45], dtype=torch.float64)}
+        v = phi(Absorbed("R1", 1).at_least(0.4, band="a"), q, f).numpy()
+        np.testing.assert_allclose(v, [1.5, -0.5])
         v = phi(S(1, 1).mask_db([(8, -10), (9, -30)], band="a"), q, f).numpy()
         np.testing.assert_allclose(v, [(-20 + 10) / 10, (-40 + 30) / 10], atol=1e-6)
 

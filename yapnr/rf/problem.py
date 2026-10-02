@@ -6,7 +6,8 @@
 - the port calibrations Z_c(ω), k(ω) (cached on disk), and the port widths: a port without a
   width gets the whole number of cells whose calibrated Re Z_c at the band centre is closest to
   50 Ω, starting from Hammerstad–Jensen's width;
-- the radiated-power box when a requirement needs it;
+- the radiated-power box when a requirement needs it, and probes on the lumped resistors an
+  `absorbed` requirement names;
 - the objective groups (`objectives`) and the design chain x → ρ̄ (`design.parameterization`):
   the material grid with fixed port pads (the feed width, two pixels deep), fixed regions,
   mirror symmetry and the exterior ring (1 on the feeds), the conic filter and the length scale
@@ -38,6 +39,7 @@ from yapnr.rf.domain import Domain, DomainSpec, PortSpec, hj_width_cells
 from yapnr.rf.fdtd.dtft import conductance_factor
 from yapnr.rf.fdtd.dtft import decimation as dtft_decimation
 from yapnr.rf.fdtd.engine import Simulation
+from yapnr.rf.fdtd.monitors import Probe
 from yapnr.rf.fdtd.sources import GaussianPulse
 from yapnr.rf.fdtd.stop import StopRule
 from yapnr.rf.materials import (
@@ -48,6 +50,7 @@ from yapnr.rf.materials import (
     sheet_conductance_derivative,
     sheet_reactance_derivative,
 )
+from yapnr.rf.numerics import re_conj_product
 from yapnr.rf.objectives import build_groups, group_values, violations
 from yapnr.rf.ports import LineCalibration, calibrate_line
 from yapnr.rf.spec import FixedRegion, Spec
@@ -246,9 +249,25 @@ class Problem:
             dtype=self.dtype,
             threads=self.threads,
         )
+        # Probes on the resistors an `absorbed` requirement names: P = ½ c_ω Σ_e σ_e V_e |Ê_e|²
+        # over the part's edges (`dissipated_power` with the part's own σ only), name →
+        # (probe, ½ σ_e V_e).
+        self.lumped_probes: dict = {}
+        absorbed = {r.element for r in spec.requirements if r.quantity == "absorbed"}
         for el in spec.lumped:
             comp, idx, n_series, m_parallel = self.lumped_edges(el)
             self.sim.structure.add_resistor(comp, idx, el.ohms, n_series, m_parallel)
+            if el.name in absorbed:
+                vol = self.grid.volume(comp).ravel()[idx]
+                length = np.broadcast_to(self.grid.edge_length(comp), self.grid.shape(comp))
+                length = length.ravel()[idx]
+                sigma = n_series * length / (m_parallel * el.ohms * (vol / length))
+                probe = Probe(f"lumped_{el.name}", comp, idx)
+                self.lumped_probes[el.name] = (probe, 0.5 * sigma * vol)
+        if self.lumped_probes:
+            extra = [pr for pr, _ in self.lumped_probes.values()]
+            self.port_probes = self.port_probes + extra
+            self.watched = self.watched + [pr.name for pr in extra]
         if spec.lumped:
             self.sim.update_materials()
         self.pitch = spec.grid.pitch_mm * 1e-3 / refine
@@ -507,9 +526,32 @@ class Problem:
         out = {"waves": waves, "s": {}, "eta": {}}
         for n, (_, b) in waves.items():
             out["s"][(n, port)] = b / a_j
-        if self.box is not None:
+        if self.box is not None or self.lumped_probes:
             p_inc = sparams.incident_power(a_j, self.cal[port], omega)
+        if self.box is not None:
             out["eta"][port] = self.box.power(dft) / p_inc
+        out["absorbed"] = {
+            (name, port): p / p_inc for name, p in self.lumped_power(dft, omega).items()
+        }
+        return out
+
+    def lumped_power(self, dft, omega=None) -> dict:
+        """Power (W, (M,)) dissipated in each probed lumped resistor (`lumped_probes`)."""
+        omega = self.omega if omega is None else np.asarray(omega)
+        out = {}
+        if not self.lumped_probes:
+            return out
+        c = conductance_factor(omega, self.dt)
+        for name, (probe, w) in self.lumped_probes.items():
+            e = dft[probe.name]
+            p2 = re_conj_product(e, e)
+            if isinstance(p2, np.ndarray):
+                out[name] = c * (p2 * w).sum(-1)
+            else:
+                import torch
+
+                ct = torch.as_tensor(c, dtype=torch.float64)
+                out[name] = ct * (p2 * torch.as_tensor(w, dtype=torch.float64)).sum(-1)
         return out
 
     def objective_quantities(self, dft, port: int, omega=None) -> dict:
@@ -680,7 +722,8 @@ class Problem:
 
     def sweep(self, rho_bar: np.ndarray, freqs=None, ports=None) -> dict:
         """The full S-matrix (F, N, N) over `freqs` (default: the sweep grid) with every port
-        (or those in `ports`) excited; also Z_c (F, N) and η (port → (F,)) when there is a box.
+        (or those in `ports`) excited; also Z_c (F, N), η (port → (F,)) when there is a box and
+        the probed resistors' shares of the incident power ("R1/P2" → (F,), `absorbed`).
         Internal e^{−iωt} convention; `sparams.to_engineering` converts.
 
         With every port excited, S = B A⁻¹ from the wave matrices (A_nj, B_nj: the incident and
@@ -695,6 +738,7 @@ class Problem:
         wa = np.full((freqs.size, n, n), np.nan + 0j)
         wb = np.full((freqs.size, n, n), np.nan + 0j)
         eta = {}
+        absorbed = {}
         steps = {}
         excited = list(ports or sorted(self.ports))
         for j in excited:
@@ -708,8 +752,11 @@ class Problem:
                 wb[:, k - 1, j - 1] = b
             for jj, v in qty["eta"].items():
                 eta[jj] = np.asarray(v, dtype=np.float64)
+            for (name, jj), v in qty["absorbed"].items():
+                absorbed[f"{name}/P{jj}"] = np.asarray(v, dtype=np.float64)
         zc = np.stack([self.cal[k].at(omega)[0] for k in sorted(self.ports)], axis=-1)
         out = {"freqs": freqs, "s": s, "zc": zc, "eta": eta, "steps": steps, "s_naive": s}
+        out["absorbed"] = absorbed
         if sorted(excited) == sorted(self.ports) and n > 1:
             diag = np.abs(np.diagonal(wa, axis1=1, axis2=2))
             off = np.abs(wa - np.einsum("fii->fi", wa)[..., None] * np.eye(n))

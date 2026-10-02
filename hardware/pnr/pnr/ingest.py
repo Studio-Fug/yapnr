@@ -288,6 +288,61 @@ def _component(fp, frame: _Frame) -> Component:
     )
 
 
+def _copper_thickness_mm(path: Optional[str]) -> dict:
+    """copper layer name -> thickness (mm) from the board file's ``(stackup ...)``
+    block. KiCad's Python does not wrap the stackup descriptor; the file states it."""
+    import re
+
+    if not path:
+        return {}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError:
+        return {}
+    start = text.find("(stackup")
+    if start < 0:
+        return {}
+    depth = 0
+    for end in range(start, len(text)):
+        depth += {"(": 1, ")": -1}.get(text[end], 0)
+        if depth == 0:
+            break
+    block = text[start : end + 1]
+    pattern = r'\(layer\s+"([^"]+)"\s*\(type\s+"copper"\)\s*\(thickness\s+([0-9.eE+-]+)\)'
+    return {name: float(value) for name, value in re.findall(pattern, block)}
+
+
+def stack_record(board, path: Optional[str] = None) -> Optional[dict]:
+    """The board's declared copper stack (:mod:`pnr.stack`), or None when the board
+    declares no physical stackup. Copper layers in order with their KiCad layer type,
+    copper thickness and the nets of the (non-rule-area) zones on them, by KiCad's
+    standard layer names (the names the routing rules use)."""
+    import pcbnew
+
+    from pnr.stack import KICAD_LAYER_TYPES, record_from_rows
+
+    if not getattr(board.GetDesignSettings(), "m_HasStackup", False):
+        return None
+    thickness = _copper_thickness_mm(path if path is not None else board.GetFileName())
+    rows = []
+    for lid in board.GetEnabledLayers().CuStack():
+        name = pcbnew.BOARD.GetStandardLayerName(lid)
+        rows.append(
+            dict(
+                name=name,
+                type=KICAD_LAYER_TYPES.get(int(board.GetLayerType(lid)), "signal"),
+                copper_mm=thickness.get(name, thickness.get(board.GetLayerName(lid))),
+                zones=[
+                    z.GetNetname()
+                    for z in board.Zones()
+                    if not z.GetIsRuleArea() and z.GetNetCode() > 0 and z.IsOnLayer(lid)
+                ],
+            )
+        )
+    return record_from_rows(rows)
+
+
 def build_graph(board, name: Optional[str] = None) -> BoardGraph:
     """Build a :class:`BoardGraph` from an open ``pcbnew.BOARD``."""
 
@@ -316,6 +371,7 @@ def build_graph(board, name: Optional[str] = None) -> BoardGraph:
         components=components,
         nets=nets,
         outline=outline,
+        stack=stack_record(board),
     )
 
 

@@ -176,7 +176,7 @@ def sub_board(
     constraints that reference parts outside the block are dropped.
     """
     inside = set(block.refs)
-    sub = BoardGraph(name=graph.name + ":" + block.name)
+    sub = BoardGraph(name=graph.name + ":" + block.name, stack=copy.deepcopy(graph.stack))
     for c in graph.components:
         if c.ref in inside:
             cc = copy.deepcopy(c)

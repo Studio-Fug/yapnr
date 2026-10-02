@@ -112,7 +112,7 @@ def collapse(graph, constraints, rules):
     layouts = []
     for con in lines:
         width, height, poses = layout(graph, con, clearance)
-        sub = BoardGraph(name=graph.name + ":line:" + con.name)
+        sub = BoardGraph(name=graph.name + ":line:" + con.name, stack=copy.deepcopy(graph.stack))
         for ref in con.refs:
             comp = copy.deepcopy(graph.component(ref))
             if comp.side != "top":

@@ -106,6 +106,7 @@ filegroup(
         "pnr/quality.py",
         "pnr/specctra.py",
         "pnr/writeback.py",
+        "pnr/stack.py",
         # PNR_SI=1 (the prepare worker imports pnr.si even with the flag off): SI v1
         # package + its committed models (profiles, cable, connector, receiver, parts).
         "pnr/si/__init__.py",
@@ -420,6 +421,29 @@ py_test(
     imports = ["."],
     legacy_create_init = False,
     main = "tests/test_escape.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+    ],
+)
+
+# The board's own copper stack (pnr.stack): roles, legacy equality with the router's
+# heuristic on the gate and showcases, and agreement with every hard rung's judge rules.
+py_test(
+    name = "stack_test",
+    size = "small",
+    srcs = [
+        "regression/designs.py",
+        "regression/hard_rungs.py",
+        "regression/stackup.py",
+        "tests/test_stack.py",
+    ],
+    imports = [
+        ".",
+        "regression",
+    ],
+    legacy_create_init = False,
+    main = "tests/test_stack.py",
     deps = [
         ":pnr",
         ":pnr_detail",

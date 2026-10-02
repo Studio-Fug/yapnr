@@ -1281,6 +1281,149 @@ Not done: grid continuation (optimizing coarse and finishing on a finer grid). W
 correction the coarse grid agrees with the finer one to the numbers above, and the export,
 rules and validation all assume one optimization pitch.
 
+## 22. Round 2: the antenna by the method
+
+The owner asked that the antenna's copper, like every other case's, come out of the
+optimization. Round 1's antenna was the closed-form inset patch, which the optimizer did not
+change (§20). Round 2 starts it from something that is not an antenna, with only the port pad
+fixed, and tries formulations one at a time on the case's grid (S2, 0.4 mm, 45 × 45 pixels,
+mirror symmetric) with the round-2 solver (§21: edge correction, modal source, adaptive moves).
+The target band during the attempts was the case's, 9.85–10.15 GHz (4 points), |S11| ≤ −10 dB
+and η ≥ 0.7.
+
+### 22.1 The formulation of the case
+
+- **Start: the feed line alone** (`seed: star` for a one-port spec): the port's 11-cell line
+  continued to the window's centre (x = 0.7 on it, 0.3 elsewhere: ρ̄ 0.96 and 0.04 at β = 8).
+- **Objective: the spec's robust epigraph.** The dilated and eroded designs (projection
+  thresholds 0.45 and 0.55) join the minimax with the nominal one ([1] §5.3; the divider uses
+  the eroded one), β 8, 16, 32, 64 × 15 iterations, adaptive moves. |S11| ≤ −10 dB and
+  η ≥ 0.7 at 9.65, 9.825, 10.0, 10.175 and 10.35 GHz (the criteria band plus 0.2 GHz on each
+  side, as the diplexer's), with the reflection judged at 50 Ω (`optimizer.reference_ohm`,
+  below).
+- **Why the eroded design.** Without it (A6–A9 below) the feed line grew into a patch with two
+  parasitic islands that matched only 8 % above the band (|S11| −27.8 dB at 10.8 GHz, η 0.88,
+  a −10 dB band of 4.3 %) and then stalled at β 8 with its far, radiating edge turned into a
+  gray comb (ρ̄ 0.3–0.6: a lossy sheet of a few hundred Ω/sq). The adjoint gradient there points
+  to void (less dissipation), and the void beyond it has almost no sensitivity, since under the
+  log interpolation dG/dρ̄ = ln(G_max/G_min)·G is 1.3·10⁻³/η0 at ρ̄ = 0 against 19/η0 at ρ̄ = ½:
+  lengthening the patch would have to cross the lossy state. In the eroded design such a gray
+  boundary is void, so it is worth nothing to the minimax; the edges stay crisp and the
+  structure kept growing: the same start matched the band by iteration 8 (|S11| −11 to −15 dB,
+  on the criteria band) and reached t = 0.10 at β 16 (|S11| −11.3 to −23.4 dB, η 0.69–0.76).
+- **Why the dilated design.** With the eroded design alone the second case run (22.4) met its
+  objectives before the width and space repair and not after it: the design relied on
+  one-pixel slots and on corner contacts with its parasitic patches, which the repair closed
+  and bridged. In the dilated design they close and bridge already, so the optimum cannot
+  rely on them.
+
+### 22.2 Attempts
+
+All on the case's grid, one at a time (4 threads), times wall clock. "t" is the epigraph value
+(≤ 0 meets every target); "binarized" is the β = ∞ design after the width and space repair.
+
+| #   | Run dir¹    | Start                                  | Formulation                                                                                              | Iterations, wall | Outcome                                                                                                                                                                                           |
+| --- | ----------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1  | a01         | uniform x 0.3 (transparent)            | resistive, minimax, β 8                                                                                  | 15, 16 min       | copper along the window's edges (a bar across the feed end, a separate frame at the far edge); gray η 0.48–0.57, \|S11\| −3.7 to −4.9 dB; binarized η 0.34–0.40. Unlike round 1 not the bare feed |
+| A2  | a02         | uniform x 0.3                          | reactive (inductive) sheet, damping 0.1                                                                  | 20, 21 min       | the bare feed (η 0.11, t 6.12 → 5.94): far from ρ̄ = ½ the inductive sheet is transparent and its gradient small                                                                                   |
+| A3  | a03 (\_abs) | uniform x 0.6 (ρ̄ 0.63, 30 Ω/sq), β 2 → | log R̄ − log η̄ (band means)                                                                               | 6, 6 min         | an absorber: \|S11\| −35 to −56 dB at η 0.02 (log R̄ is unbounded below)                                                                                                                           |
+| A4  | a03         | as A3                                  | the objective of [31]: log(1 + R̄) − log η̄                                                                | 20, 21 min       | a near-copper plate over most of the window, connected to the feed; η̄ 0.02 → 0.48 (gray); binarized η 0.56–0.60, \|S11\| −7.3 to −8.1 dB                                                          |
+| A5  | a04         | uniform x 0.3                          | frequency continuation from 8–12 GHz (soft band maximum)                                                 | 15, 5 min        | the bare feed in 2 iterations (x pinned at 0, where the β = 8 projection is flat)                                                                                                                 |
+| A6  | a05         | **feed line only** (`seed: star`)      | resistive, minimax, β 8, 16 × 15                                                                         | 20, 20 min       | **a patch-like body with two parasitic islands**; binarized: \|S11\| −27.8 dB at 10.8 GHz, −10 dB over 10.55–11.0 GHz, η 0.88 there; in the band η 0.46–0.60                                      |
+| A7  | a06         | as A3                                  | A4's objective for β 2, 4, 8, then the spec (`epoch_objectives`)                                         | 52, 50 min       | A4's plate; levelled off at η̄ 0.62, \|S11\| −9 dB (gray); the spec epochs moved it by 0.02 per step, binarized t stuck at 1.19                                                                    |
+| A8  | a07         | feed line only                         | as A6 with 45 iterations at β 8                                                                          | 31, 32 min       | stalled at t 1.93 with moves back at 0.2: the gray comb at the radiating edge (22.1); binarized t 2.40                                                                                            |
+| A9  | a05 (cont.) | A6's state                             | A6's schedule to its end                                                                                 | 36 in all        | stalled (moves of 0.01, binarized t 2.41); the resonance stayed above the band                                                                                                                    |
+| A10 | a09         | feed line only                         | reactive sheet, damping 0.05                                                                             | 30, 22 min       | gray at β 8: t 2.53, η 0.45–0.47, \|S11\| −8 to −20 dB, but binarized t 4.5 (η 0.25); collapsed at β 16 (t 5.4)                                                                                   |
+| A11 | a10         | feed line only                         | dissipation credited as radiation: η' = η + ½(1 − \|S11\|² − η), to be annealed                          | 15, 9 min        | a broadband absorber (\|S11\| −4.4 dB flat), then t crept up 3.54 → 4.25 in small accepted steps                                                                                                  |
+| A12 | a11         | feed line only                         | frequency continuation from a broad band: 8.8–11.2 GHz minimax (20), then the band                       | 32, 17 min       | a weak broad radiator (η 0.20–0.27 over 8.8–11.2 GHz); on the band t 3.06 at β 8 (A6: 2.4)                                                                                                        |
+| A13 | a12         | feed line only                         | frequency continuation from below: the band × 0.925 at β 8 (15), then the band (`epoch_frequency_scale`) | 45, 28 min       | a larger patch, centred: a broad peak at 10.1 GHz, but \|S11\| −4.4 dB (Z_in 12 Ω at its series resonance, no inset or transformer); binarized t 1.59                                             |
+| A14 | a13         | feed line only                         | A13 with the match weighted 3 dB per unit (was 10)                                                       | 27, 16 min       | the same mismatched response (\|S11\| −3.8 to −4.7 dB, t 2.75)                                                                                                                                    |
+| A15 | a14         | feed line only                         | **A6 plus the eroded design (threshold 0.55) in the epigraph**                                           | 18, 21 min       | **matched the band by iteration 8** (t 6.07 → 0.27 at iteration 17); continued as case runs 1–3 (22.4)                                                                                            |
+
+¹ Under the round-2 scratch directory `rftopo/round2/ant/` (the case runs under
+`rftopo/round2/final/`); the log of every attempt is there, and
+`rftopo/round2/antenna-attempts.md` has the full notes.
+
+Two of the formulations are kept as options, off by default and left out of the spec hash:
+`optimizer.epoch_objectives` (per β epoch, `spec` or `radiation`, the objective of [31]:
+log(1 + R̄) − log η̄ over the band, one adjoint run, its gradient the sum of the per-frequency
+recombinations; tested against finite differences) and `optimizer.epoch_frequency_scale` (per
+β epoch, a factor on the objective frequencies; the requirements are judged as written and
+binarized designs at the nominal frequencies). The case uses neither.
+
+### 22.3 The band, the reference and the criteria
+
+**Reference impedance.** The feeds are whole cells wide, so their Z_c is a few per cent off
+50 Ω (47.5 Ω for the antenna's 11 cells) and the optimizer's pseudo-wave reflection (against
+Z_c, §5.4) differs from the validator's 50 Ω one by up to 0.6 dB near −10 dB. For one-port specs
+`optimizer.reference_ohm` renormalizes the reflection inside the objective, Γ' = (Z − R)/(Z + R)
+with Z = Z_c (1 + Γ)/(1 − Γ) (`Problem.objective_quantities`; differentiable, checked against
+finite differences and against `sparams.renormalize`); the validator's export comparison uses the
+same reference. Multi-port specs would need every excitation for the renormalization and keep
+Z_c.
+
+**Band.** On this grid and solver the closed-form inset patch (`cases.antenna_patch_reference`'s
+seed, whole-pixel family) matches −10 dB over 10.05–10.40 GHz (3.4 %) with η 0.88; round 1's
+4.5 % was the uncorrected copper's. The case is judged over 9.85–10.15 GHz (3 %) at
+|S11| ≤ −10 dB with η ≥ 0.6, the same criteria on all three grids: about the bandwidth of one
+patch on S2, centred to ±0.2 %, so a single-layer radiator can reach it and a mis-tuned one
+misses it. The optimization asks for η ≥ 0.7 over 9.65–10.35 GHz, which leaves room for the
+grids' shift of the band edge (22.4). The power balance tolerance is 4 % (22.4).
+
+### 22.4 Results
+
+Three case runs (one at a time, 4 threads, `OPENBLAS_NUM_THREADS=1`):
+
+| Run | Objective band, reference, variants             | Iterations, wall | Exported (iteration, binarized t) | \|S11\| max, 9.85–10.15 GHz (coarse / fine / finer) | η min          | Power balance | Verdict        |
+| --- | ----------------------------------------------- | ---------------- | --------------------------------- | --------------------------------------------------- | -------------- | ------------- | -------------- |
+| 1   | 9.85–10.15 (4 points), Z_c, eroded              | 59, 90 min       | 50, −0.030                        | −9.7 / −8.4 / −7.9 dB                               | 0.80/0.75/0.73 | 3.9/5.1/5.7 % | fail (\|S11\|) |
+| 2   | 9.65–10.35 (5 points), 50 Ω, eroded             | 60, 68 min       | 50, +0.273 (−0.040 unrepaired)    | −10.3 / −9.5 / −8.6 dB                              | 0.81/0.79/0.76 | 2.4/3.0/3.8 % | fail (\|S11\|) |
+| 3   | 9.65–10.35 (5 points), 50 Ω, eroded and dilated | 60, 109 min      | 50, −0.139                        | **−13.2 / −13.6 / −12.8 dB**                        | 0.86/0.86/0.84 | 2.1/2.8/3.4 % | **pass** (4 %) |
+
+The case is run 3. Run 1 met its objectives on the optimization grid against the feed's
+Z_c (47.5 Ω) with 0.3 dB to spare at 9.85 GHz, which read −9.7 dB at 50 Ω; its −10 dB band
+(9.87–10.62 GHz, 7.3 %) was wide but centred 2.5 % high, and the finer grids raised its lower
+edge by 0.9 and 1.3 %. Run 2 widened the objective band and judged the reflection at 50 Ω;
+its binarized design met the objectives before the width and space repair (t −0.040) and not
+after it (t +0.273, |S11| −7.3 dB at 9.65 GHz): the repair closed two one-pixel slots in the
+driven patch and bridged its corner contacts with the parasitic patches (34 pixels). Run 3
+adds the dilated design, in which such sub-rule slots close and corner contacts bridge, so the
+design cannot rely on them; its repair changed 26 pixels without breaking it.
+
+Run 3's footprint (one island fed by the port, 124 mm² of copper, and two small floating
+islands): the feed splits around a 1.2 mm slot over its first 3 mm, flares into a driven patch
+about 7.5 mm long and 9 mm wide at its shoulders, and the shoulders carry two wing patches
+(about 7 × 6.4 mm) along the window's top and bottom edges, separated from the patch by
+0.8–1.2 mm slits; patch and wings have rows of 0.8 mm holes. On the optimization grid it
+matches −10 dB from 9.57 to 11.47 GHz (18 %, resonances near 9.9 and 10.9 GHz); in the
+criteria band η is 0.84–0.87 on all grids. The finer grids raise the lower −10 dB edge by
+about 1 % (|S11| at 9.65 GHz −11.4, −10.5, −9.7 dB): ten times the closed-form patch's shift
+with the edge correction (§21.4), presumably the 0.8 mm slits and holes, whose edges couple
+across two cells and are corrected as isolated edges.
+
+**Power balance.** The balance error is negative and largest at the lower band edge (run 3:
+−2.1 %, −1.0 %, −0.7 % at 9.85, 10.0, 10.15 GHz on the optimization grid; −3.4 % at 9.85 GHz
+on the finer one). The closed box leaves a window (the strip ± 2h, up to 3h) where the feed
+crosses it, to keep the feed's guided power out; radiation and substrate waves leaving through
+it are missed. With the window's margin at 1.5 and 0.8 mm (heights 3.0 and 2.3 mm) the error
+at 9.85 GHz is −4.9 and −10.5 % (the guided fringe outside the window is counted), at 4.5 and
+6 mm −3.6 and −5.4 % (more radiation missed); the closed-form patch reads −1.9 % at its
+resonance and −3.5 % at 10.35 GHz with the default window. The criterion is therefore 4 %
+(decisions); the sign means the radiated fraction reads low, if anything.
+
+**Cost.** About 110 s per iteration (three designs, each a forward and an adjoint run, plus
+refused adaptive steps and a binarized evaluation every five iterations); 109 minutes for the
+run. Re-validation: 13.5 minutes the first time (the finer grid's line calibration takes 4
+minutes), 5.6 minutes with the calibrations cached.
+
+### 22.5 Threads
+
+numpy's OpenBLAS evaluates the adjoint sources' basis products every time step (`NuttallFit.
+series`); with `OPENBLAS_NUM_THREADS` unset or 4 its worker threads kept spinning beside
+torch's four, and an adjoint run on the antenna's grid used about 7 cores and took 46.6 s
+instead of 28.3 s with one OpenBLAS thread. The Bazel targets set `OPENBLAS_NUM_THREADS=1`
+and the guide says so; the round-1 and accuracy runs were affected the same way.
+
 ## References
 
 1. A. M. Hammond, A. Oskooi, M. Chen, Z. Lin, S. G. Johnson, S. E. Ralph, "High-performance hybrid
@@ -1343,6 +1486,11 @@ rules and validation all assume one optimization pitch.
     20(4), 442–446 (1972).
 30. D. L. Morrison, J. A. Lewis, "Charge singularity at the corner of a flat plate," SIAM J. Appl.
     Math. 31(2), 233–250 (1976).
+31. P. Lu, E. Wadbro, V. Lundström, J. Starck, M. Berggren, E. Hassan, "Multilayer dual-polarized
+    microstrip antenna design by topology optimization with enhanced bandwidth," arXiv:2608.05712
+    (2026): density-based TO of microstrip antennas by FDTD, σ = 10^(9ρ̃ − 4), a uniform start
+    of 0.7, GCMMA, and the objective log(D₁₁ D₂₁ / D₁ₚ) whose received-energy term "enforces
+    the design material to be less lossy" (read for round 2).
 
 [28–30] are cited from memory for round 2 (the web-search quota was used up); the corner
 exponent was recomputed here (§21.1). The paper [1] was read in full, including §5.2 and

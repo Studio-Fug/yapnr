@@ -14,6 +14,7 @@ from pnr.route.detail.tune import (
     SQRT2,
     Bump,
     _corner,
+    _mitre,
     _seg_dist,
     bump_path,
     match_sets,
@@ -120,11 +121,38 @@ class TemplateTest(unittest.TestCase):
         mitred = path[:k] + path[k + 1 :]
         self.assertAlmostEqual(path_cells_mm(path, 1.0) - path_cells_mm(mitred, 1.0), 2 - SQRT2)
 
+    def test_diagonal_run_bump_and_mitres(self):
+        diagonal = [Cell(0, i, i) for i in range(10)]
+        for amp in (1, 2):
+            path = bump_path(diagonal, [Bump(0, 3, 1, amp, 2)])
+            self.assertAlmostEqual(
+                path_cells_mm(path, 1.0) - path_cells_mm(diagonal, 1.0), 2 * amp * SQRT2
+            )
+            self.assertEqual(len(set(path)), len(path))
+        path = bump_path(diagonal, [Bump(0, 3, 1, 2, 2)])
+        cuts = [(k, _mitre(path, k)) for k in range(len(path))]
+        cuts = [(k, c) for k, c in cuts if c is not None]
+        self.assertEqual(len(cuts), 4)  # the bump's four 90-degree corners
+        k, (replacement, cell, saved) = cuts[1]
+        self.assertAlmostEqual(saved, 2 * SQRT2 - 2)
+        trial = path[:k] + replacement + path[k + 1 :]
+        self.assertAlmostEqual(path_cells_mm(path, 1.0) - path_cells_mm(trial, 1.0), saved)
+        for a, b in zip(trial, trial[1:]):
+            self.assertLessEqual(max(abs(a.i - b.i), abs(a.j - b.j)), 1)
+        # An orthogonal corner loses its vertex.
+        line = bump_path(self.line, [Bump(0, 3, 1, 2, 2)])
+        k = next(k for k in range(len(line)) if _mitre(line, k) is not None)
+        self.assertEqual(_mitre(line, k)[0], [])
+        self.assertAlmostEqual(_mitre(line, k)[2], 2 - SQRT2)
+
     def test_straight_runs_stop_at_breaking_cells(self):
         rn = RoutedNet("N")
         rn.segments = [(0, (i, 0), (i + 1, 0)) for i in range(6)] + [(0, (6, 0), (6, 1))]
         runs = straight_runs(rn, {Cell(0, 3, 0)})
         self.assertEqual([[c.i for c in r] for r in runs], [[0, 1, 2, 3], [3, 4, 5, 6]])
+        rn.segments = [(0, (i, i), (i + 1, i + 1)) for i in range(4)]
+        self.assertEqual([[c.i for c in r] for r in straight_runs(rn, set())], [[0, 1, 2, 3, 4]])
+        self.assertEqual(straight_runs(rn, set(), diagonal=False), [])
 
 
 class TuneBoardTest(unittest.TestCase):

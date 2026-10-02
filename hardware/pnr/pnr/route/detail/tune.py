@@ -265,15 +265,17 @@ def net_footprint(grid: RouteGrid, net: str, rn, via_keepout: int, halo: int) ->
     return _footprint(grid, list(rn.cells), via_keepout, halo, edges=edges, net=net)
 
 
-def straight_runs(rn, breaking: Set[Cell]) -> List[List[Cell]]:
-    """Maximal axis-aligned chains of the net's unit track edges on one layer whose
-    inner vertices have degree two and are not in ``breaking``."""
+def straight_runs(rn, breaking: Set[Cell], diagonal: bool = True) -> List[List[Cell]]:
+    """Maximal straight chains of the net's unit track edges on one layer (axis
+    aligned, and with ``diagonal`` the 45-degree ones too) whose inner vertices have
+    degree two and are not in ``breaking``."""
     adj: Dict[Cell, Set[Cell]] = {}
     for a, b in _edges(rn):
         adj.setdefault(a, set()).add(b)
         adj.setdefault(b, set()).add(a)
     runs: List[List[Cell]] = []
-    for di, dj in ((1, 0), (0, 1)):
+    directions = ((1, 0), (0, 1)) + (((1, 1), (1, -1)) if diagonal else ())
+    for di, dj in directions:
 
         def nxt(c):
             n = Cell(c.layer, c.i + di, c.j + dj)
@@ -353,6 +355,28 @@ def _corner(path: List[Cell], index: int) -> Optional[Cell]:
     if d1[0] * d2[0] + d1[1] * d2[1] != 0:
         return None
     return Cell(v.layer, u.i + x.i - v.i, u.j + x.j - v.j)
+
+
+def _mitre(path: List[Cell], index: int) -> Optional[Tuple[List[Cell], Cell, float]]:
+    """A 45-degree cut of the 90-degree corner at ``path[index]``: ``(replacement,
+    new cell, cells saved)``. Orthogonal unit steps lose the corner vertex (one
+    diagonal step, ``2 - sqrt(2)`` cells shorter; the new cell is the square's
+    opposite corner the diagonal passes); diagonal unit steps turn into two
+    orthogonal ones through their midpoint (``2 sqrt(2) - 2`` cells shorter)."""
+    o = _corner(path, index)
+    if o is not None:
+        return [], o, 2 - SQRT2
+    if index <= 0 or index >= len(path) - 1:
+        return None
+    u, v, x = path[index - 1], path[index], path[index + 1]
+    d1 = (v.i - u.i, v.j - u.j)
+    d2 = (x.i - v.i, x.j - v.j)
+    if abs(d1[0]) != 1 or abs(d1[1]) != 1 or abs(d2[0]) != 1 or abs(d2[1]) != 1:
+        return None
+    if d1[0] * d2[0] + d1[1] * d2[1] != 0:
+        return None
+    m = Cell(v.layer, (u.i + x.i) // 2, (u.j + x.j) // 2)
+    return [m], m, 2 * SQRT2 - 2
 
 
 def path_cells_mm(path: Sequence[Cell], pitch: float) -> float:
@@ -541,20 +565,25 @@ class Tuner:
                     own_cols.add((la, c.i, c.j))
             own_cols.add((c.layer, c.i, c.j))
         runs = straight_runs(rn, self._breaking(net, rn))
+        diag = [run[0].i != run[1].i and run[0].j != run[1].j for run in runs]
 
-        def unit_value(layer: int) -> float:
-            mm = 2 * pitch
+        def in_units(mm: float, layer: int) -> float:
             if unit == "ps":
                 return mm * self.delay.track(grid.layers[layer], width)
             return mm
 
-        def mitre_value(layer: int) -> float:
-            mm = (2 - SQRT2) * pitch
-            if unit == "ps":
-                return mm * self.delay.track(grid.layers[layer], width)
-            return mm
+        def unit_value(r: int) -> float:
+            """What one cell of amplitude adds on run ``r`` (two legs of one step)."""
+            return in_units(2 * pitch * (SQRT2 if diag[r] else 1.0), runs[r][0].layer)
 
         run_cells = [set(r) for r in runs]
+
+        def corners_ok(a: Cell, b: Cell) -> bool:
+            """A diagonal step's two side cells (part of the router's footprint) stay
+            out of the other nets' footprints."""
+            if a.i == b.i or a.j == b.j:
+                return True
+            return Cell(a.layer, a.i, b.j) not in foreign and Cell(a.layer, b.i, a.j) not in foreign
 
         def legal(c: Cell, run_index: int) -> bool:
             if not grid.in_bounds(c.i, c.j) or not grid.passable(c.layer, c.i, c.j, net):
@@ -581,12 +610,14 @@ class Tuner:
                 for u in range(1, len(run) - 1):
                     base = run[u]
                     h = 0
+                    prev = base
                     while h < shape.amp_cap:
                         c = Cell(
                             base.layer, base.i + side * (h + 1) * ni, base.j + side * (h + 1) * nj
                         )
-                        if not legal(c, r):
+                        if not legal(c, r) or not corners_ok(prev, c):
                             break
+                        prev = c
                         h += 1
                     heights[(r, side, u)] = h
 
@@ -625,11 +656,13 @@ class Tuner:
                     for b in chosen
                 ):
                     continue
-                uv = unit_value(runs[r][0].layer)
+                uv = unit_value(r)
                 amp = min(amax, max(shape.amp_min, math.ceil(remaining / uv - 1e-9)))
                 bump = Bump(r, k, side, amp, w)
                 path = bump_path(runs[r], [bump])
                 new_cells = set(path) - set(runs[r])
+                if not all(corners_ok(a, b) for a, b in zip(path, path[1:])):
+                    continue
                 # Bumps keep the meander gap from each other's new copper.
                 if any(
                     Cell(c.layer, c.i + di, c.j + dj) in claimed
@@ -675,22 +708,23 @@ class Tuner:
         if shape.mitre and overshoot > 0:
             for r in sorted(paths):
                 path = paths[r]
-                mv = mitre_value(runs[r][0].layer)
                 bumped = set(path) - set(runs[r])
                 index_ = 1
-                while index_ < len(path) - 1 and overshoot > mv / 2:
+                while index_ < len(path) - 1 and overshoot > 0:
                     v = path[index_]
-                    o = _corner(path, index_)
+                    cut = _mitre(path, index_)
                     near = v in bumped or path[index_ - 1] in bumped or path[index_ + 1] in bumped
-                    if (
-                        o is not None
-                        and near
-                        and self._mitre_ok(o, r, legal, path, index_, net, index)
-                    ):
-                        path = path[:index_] + path[index_ + 1 :]
-                        overshoot -= mv
-                        mitres += 1
-                        continue
+                    if cut is not None and near:
+                        replacement, new_cell, saved = cut
+                        mv = in_units(saved * pitch, runs[r][0].layer)
+                        trial = path[:index_] + replacement + path[index_ + 1 :]
+                        if overshoot > mv / 2 and self._mitre_ok(
+                            new_cell, r, legal, path, trial, net, index
+                        ):
+                            path = trial
+                            overshoot -= mv
+                            mitres += 1
+                            continue
                     index_ += 1
                 paths[r] = path
         added = 0.0
@@ -699,22 +733,26 @@ class Tuner:
             self._apply(net, runs[r], path, owner)
         return added, len(chosen), mitres
 
-    def _mitre_ok(self, o: Cell, r: int, legal, path, index_, net, index) -> bool:
-        if not legal(o, r) and Cell(o.layer, o.i, o.j) not in set(path):
-            # The corner cell may be the bump's own interior (legal) or a cell the
-            # path already owns.
+    def _mitre_ok(self, o: Cell, r: int, legal, path, trial, net, index) -> bool:
+        """A mitre is legal when the cell its new copper crosses is free for the net
+        (or already the path's own) and the new segments clear the other nets."""
+        if o not in set(path) and not legal(o, r):
             return False
-        u, x = path[index_ - 1], path[index_ + 1]
-        a = self.grid.center_of(u.i, u.j)
-        b = self.grid.center_of(x.i, x.j)
-        return index.clear(
-            net,
-            self.grid.layers[u.layer],
-            a,
-            b,
-            self.width(net) / 2,
-            lambda n: self.clearance_of(net, n),
-        )
+        old = set(zip(path, path[1:]))
+        layer = self.grid.layers[o.layer]
+        for u, x in zip(trial, trial[1:]):
+            if (u, x) in old:
+                continue
+            if not index.clear(
+                net,
+                layer,
+                self.grid.center_of(u.i, u.j),
+                self.grid.center_of(x.i, x.j),
+                self.width(net) / 2,
+                lambda n: self.clearance_of(net, n),
+            ):
+                return False
+        return True
 
     def _path_clear(self, net: str, run: List[Cell], path: List[Cell], index: CopperIndex) -> bool:
         old = set(zip(run, run[1:]))

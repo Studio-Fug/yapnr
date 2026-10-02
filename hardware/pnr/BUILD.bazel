@@ -1204,6 +1204,22 @@ py_test(
     deps = [":pnr"],
 )
 
+# Bottom-side parts through writeback (pad centres, B.* layers, copper keep-outs);
+# run it under KiCad's Python with PNR_KICAD_FOOTPRINTS set, by hand.
+py_test(
+    name = "bottom_side_kicad_test",
+    size = "small",
+    srcs = ["tests/test_bottom_side_kicad.py"],
+    imports = ["."],
+    main = "tests/test_bottom_side_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
+)
+
 # Parity of the .kicad_pcb reader with pcbnew; run it under KiCad's Python by hand.
 py_test(
     name = "trace_board_kicad_test",

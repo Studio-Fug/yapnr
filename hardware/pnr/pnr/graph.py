@@ -119,6 +119,21 @@ class Component:
         self.bbox = _fpair(self.bbox)
 
 
+def footprint_point(comp: "Component", x: float, y: float) -> Tuple[float, float]:
+    """A point in a footprint's own frame (unrotated, as the library draws it on the
+    top side, mm) at ``comp``'s pose: mirrored in y on the bottom side, as the pads are
+    (KiCad ``Flip``; :func:`pnr.place.geometry.set_component_side`), then turned by
+    ``comp.rot`` about the component origin. For rule areas tied to a footprint
+    (``copper_keepout.rect_mm``)."""
+    import math
+
+    if comp.side == SIDE_BOTTOM:
+        y = -y
+    a = math.radians(comp.rot)
+    co, si = math.cos(a), math.sin(a)
+    return (comp.pos[0] + co * x - si * y, comp.pos[1] + si * x + co * y)
+
+
 @dataclass
 class Net:
     """A net: a set of ``(component_ref, pad_name)`` connection points."""

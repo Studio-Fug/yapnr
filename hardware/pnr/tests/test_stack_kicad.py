@@ -151,5 +151,131 @@ class IngestRecord(unittest.TestCase):
         self.assertNotIn('"stack"', g.to_json())
 
 
+FAB = dict(
+    track_width_mm=0.25,
+    clearance_mm=0.2,
+    via_diameter_mm=0.6,
+    via_drill_mm=0.3,
+    hole_clearance_mm=0.25,
+    edge_clearance_mm=0.3,
+)
+
+
+def stack_of(code, planes, zones=()):
+    from pnr.stack import copper_names, record_from_rows, resolve
+
+    kinds = {"S": "signal", "P": "power"}
+    rows = []
+    for name, role in zip(copper_names(len(code)), code):
+        rows.append(dict(name=name, type=kinds[role], zones=[n for la, n in zones if la == name]))
+    rules = dict(
+        layers=len(code),
+        fab=FAB,
+        net_classes=[
+            dict(name="p_" + n.lower(), nets=[n], plane_layer=la, width_mm=0.4)
+            for n, la in planes.items()
+        ],
+    )
+    return resolve(rules, record_from_rows(rows)), rules
+
+
+@unittest.skipUnless(NATIVE, "requires KiCad Python")
+class FormPlanes(unittest.TestCase):
+    def zones(self, b):
+        return sorted(
+            (b.GetLayerName(z.GetLayer()), z.GetNetname(), z.GetAssignedPriority())
+            for z in b.Zones()
+            if not z.GetIsRuleArea()
+        )
+
+    def test_every_dedicated_plane_gets_a_full_outline_zone_and_source_zones_stay(self):
+        from pnr.writeback import form_planes
+
+        b, _ = board("SPPPPS", zones=[("In2.Cu", "GND")])
+        smd(b, "C1", (40.0, 40.0), [("1", "VCC", (-0.8, 0)), ("2", "GND", (0.8, 0))])
+        stack, rules = stack_of(
+            "SPPPPS",
+            {"GND": "In1.Cu", "VCC": "In4.Cu"},
+            zones=[("In2.Cu", "GND"), ("In3.Cu", "GND")],
+        )
+        source = [z for z in b.Zones()][0]
+        formed = form_planes(b, stack, rules, 30.0, 20.0)
+        self.assertEqual(
+            sorted(formed["zones"]), [("In1.Cu", "GND"), ("In3.Cu", "GND"), ("In4.Cu", "VCC")]
+        )
+        self.assertEqual(
+            self.zones(b),
+            [
+                ("In1.Cu", "GND", 0),
+                ("In2.Cu", "GND", 0),
+                ("In3.Cu", "GND", 0),
+                ("In4.Cu", "VCC", 0),
+            ],
+        )
+        self.assertIn(source, list(b.Zones()))
+        for z in b.Zones():
+            box = z.GetBoundingBox()
+            self.assertEqual((box.GetWidth(), box.GetHeight()), (30_000_000, 20_000_000))
+        # Idempotent: a second pass declares nothing new.
+        self.assertEqual(form_planes(b, stack, rules, 30.0, 20.0)["zones"], [])
+
+    def test_shared_plane_layer_gives_the_outline_to_the_net_with_most_pads(self):
+        from pnr.writeback import form_planes
+
+        b, _ = board("SPPS")
+        smd(b, "C1", (36.0, 36.0), [("1", "VCC", (-0.8, 0)), ("2", "GND", (0.8, 0))])
+        smd(b, "C2", (44.0, 36.0), [("1", "SIG", (-0.8, 0)), ("2", "GND", (0.8, 0))])
+        stack, rules = stack_of(
+            "SPPS", {"GND": "In1.Cu", "VCC": "In1.Cu"}, zones=[("In2.Cu", "GND")]
+        )
+        form_planes(b, stack, rules, 30.0, 20.0)
+        rows = {
+            (la, n): z
+            for z in b.Zones()
+            for la, n in [(b.GetLayerName(z.GetLayer()), z.GetNetname())]
+        }
+        gnd, vcc = rows[("In1.Cu", "GND")], rows[("In1.Cu", "VCC")]
+        self.assertEqual(gnd.GetAssignedPriority(), 0)
+        self.assertGreater(vcc.GetAssignedPriority(), gnd.GetAssignedPriority())
+        self.assertEqual(gnd.GetBoundingBox().GetWidth(), 30_000_000)
+        self.assertLess(vcc.GetBoundingBox().GetWidth(), 30_000_000)
+
+    def test_fallback_drops_only_pads_without_a_through_contact(self):
+        import pcbnew as k
+
+        from pnr.writeback import _has_through_access, form_planes
+
+        b, nets = board("SPPS")
+        smd(b, "C1", (38.0, 40.0), [("1", "VCC", (-0.8, 0)), ("2", "GND", (0.8, 0))])
+        smd(b, "C2", (46.0, 40.0), [("1", "VCC", (-0.8, 0)), ("2", "GND", (0.8, 0))])
+        # C1.2 already drops to a via; the other plane pads have nothing.
+        via = k.PCB_VIA(b)
+        via.SetPosition(k.VECTOR2I(38_800_000, 42_000_000))
+        via.SetViaType(k.VIATYPE_THROUGH)
+        via.SetLayerPair(k.F_Cu, k.B_Cu)
+        via.SetWidth(600_000)
+        via.SetDrill(300_000)
+        via.SetNetCode(nets["GND"].GetNetCode())
+        b.Add(via)
+        t = k.PCB_TRACK(b)
+        t.SetStart(k.VECTOR2I(38_800_000, 40_000_000))
+        t.SetEnd(k.VECTOR2I(38_800_000, 42_000_000))
+        t.SetWidth(400_000)
+        t.SetLayer(k.F_Cu)
+        t.SetNetCode(nets["GND"].GetNetCode())
+        b.Add(t)
+        stack, rules = stack_of("SPPS", {"GND": "In1.Cu", "VCC": "In2.Cu"})
+        formed = form_planes(b, stack, rules, 30.0, 20.0)
+        self.assertEqual(formed["fallback_vias"], 3)
+        vias = [x for x in b.GetTracks() if x.GetClass() == "PCB_VIA"]
+        self.assertEqual(len(vias), 4)
+        b.BuildConnectivity()
+        for fp in b.GetFootprints():
+            for pad in fp.Pads():
+                self.assertTrue(_has_through_access(b, pad), fp.GetReference() + pad.GetNumber())
+        # Nothing left to drop: a second pass adds no via.
+        self.assertEqual(form_planes(b, stack, rules, 30.0, 20.0)["fallback_vias"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

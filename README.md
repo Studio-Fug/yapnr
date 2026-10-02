@@ -62,6 +62,8 @@ next to the design.
 The engine is being migrated here from the [Splanc](https://github.com/fughilli/splanc) repository,
 where it was developed to lay out the Splanc Mini board. The migration plan and progress are in
 [`docs/`](docs/index.md) and [`WORKLOG.md`](WORKLOG.md).
+The papers and open-source projects it builds on are listed in
+[Foundations and references](docs/references.md).
 
 ## Status
 

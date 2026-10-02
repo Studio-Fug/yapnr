@@ -40,6 +40,9 @@ command line currently offers `yapnr --version` and a `yapnr doctor` stub; the l
 - [History import manifest](history/import-manifest.md): what PR1 and PR2 imported from Splanc,
   and how it was rewritten and checked.
 - [About the name](about-the-name.md): "yet another place and route", and the circuit tree.
+- [Foundations and references](references.md): the papers and open-source projects behind the
+  place-and-route loop (DREAMPlace, freerouting, tscircuit, PathFinder and more), and what yapnr
+  takes from each.
 
 For contributors and agents:
 
@@ -78,6 +81,7 @@ design/constraint-and-hier-animations
 design/fea-integration
 history/import-manifest
 about-the-name
+references
 ```
 
 ```{toctree}

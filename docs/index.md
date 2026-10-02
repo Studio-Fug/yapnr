@@ -79,6 +79,7 @@ decisions
 design/animations
 design/constraint-and-hier-animations
 design/fea-integration
+design/fab-and-ordering
 history/import-manifest
 about-the-name
 references

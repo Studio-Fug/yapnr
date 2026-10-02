@@ -1,0 +1,23 @@
+load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+
+# Fast tests of yapnr.rf.coupons (numpy and PyYAML only). test_kicad runs in the KiCad lane only
+# (headless kicad-cli in YAPNR_KICAD_CLI); test_xsec needs the FEA environment (scikit-fem,
+# gmsh), so it is manual here and skips without them. The full synthetic-recovery study (design
+# §10) is manual too: `python -m yapnr.rf.coupons study` (docs/rf-fab-coupons.md).
+yapnr_py_tests(
+    env = {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+    },
+    overrides = {
+        "test_cli": {"size": "medium"},
+        "test_fit": {"size": "medium"},
+        # KiCad writes its settings under the home directory, which the macOS sandbox forbids
+        "test_kicad": {"tags": [
+            "kicad",
+            "no-sandbox",
+        ]},
+        "test_xsec": {"tags": ["manual"]},
+    },
+    deps = ["//yapnr/rf/coupons"],
+)

@@ -462,6 +462,22 @@ py_test(
     ],
 )
 
+# Stack-aware detailed routing: signal layers from the declared stack, plane drops
+# planned with the signal exits, and a two-layer stack identical to the legacy path.
+py_test(
+    name = "stack_route_test",
+    size = "medium",
+    srcs = ["tests/test_stack_route.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_stack_route.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+    ],
+)
+
 # R5 acceptance: the detailed router on a real placed board (place -> route,
 # DRC-clean by construction). Places the fixture, so it needs torch.
 py_test(

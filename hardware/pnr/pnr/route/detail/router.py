@@ -126,22 +126,39 @@ def _signal_layers(rules: Optional[dict]) -> Tuple[str, ...]:
     """The copper layers the detailed router routes signals on. A 4-layer board
     with split planes on the inners routes on **all four** — F/B plus the inner-
     layer *gaps* between the split planes — which is the routing resource a dense
-    2-signal-layer board lacks. Otherwise the two outer layers."""
+    2-signal-layer board lacks. Otherwise the two outer layers. (The legacy
+    heuristic: a board that declares its stack uses :func:`layer_plan`.)"""
     if rules and int(rules.get("layers", 2)) >= 4 and _plane_nets(rules):
         return _FOUR_LAYER
     return DEFAULT_SIGNAL_LAYERS
 
 
+def layer_plan(graph: BoardGraph, rules: Optional[dict]):
+    """``(grid layers, plane nets, stack)`` for routing ``graph``.
+
+    A board that declares its copper stack (:mod:`pnr.stack`) routes every signal
+    and split-plane layer in stack order and keeps every net with a dedicated plane
+    out of the maze; otherwise (``stack`` None) the legacy heuristic, unchanged."""
+    from pnr.stack import resolve
+
+    stack = resolve(rules, getattr(graph, "stack", None))
+    planes = _plane_nets(rules)
+    if stack is None:
+        return _signal_layers(rules), planes, None
+    return stack.grid_layers, planes | set(stack.plane_nets), stack
+
+
 def _mark_plane_regions(
-    grid: RouteGrid, graph: BoardGraph, rules: Optional[dict], margin: float
+    grid: RouteGrid, graph: BoardGraph, rules: Optional[dict], margin: float, stack=None
 ) -> None:
     """Block the poured split-plane regions on the inner layers so signals + their
     through-vias avoid the plane copper (they route the gaps). Each plane net's
     region is the bbox of its pads + ``margin`` (matching the writeback pour) +
     clearance — the same split-plane geometry :func:`pnr.writeback.apply_planes`
-    lays down, so the grid model and the emitted copper agree."""
+    lays down, so the grid model and the emitted copper agree. With a declared
+    ``stack`` only its split planes apply (dedicated planes are not grid layers)."""
     layer_idx = {name: i for i, name in enumerate(grid.layers)}
-    net_layer = _net_plane_layer(rules)
+    net_layer = _net_plane_layer(rules) if stack is None else stack.split_nets
     if not net_layer:
         return
     rects: dict = {}
@@ -323,7 +340,7 @@ def route_board(
     via_keepout = max(1, math.ceil((2 * via_radius_mm + clearance_mm) / pitch) - 1)
 
     width, height = outline_size(graph, constraints)
-    layers = _signal_layers(rules)
+    layers, planes, stack = layer_plan(graph, rules)
     grid = RouteGrid.from_graph(
         graph,
         width,
@@ -368,10 +385,9 @@ def route_board(
         )
     # Split planes on the inner layers become obstacles the signals route around
     # (matching the 2 mm writeback pour margin).
-    _mark_plane_regions(grid, graph, rules, margin=2.0)
+    _mark_plane_regions(grid, graph, rules, margin=2.0, stack=stack)
     _mark_copper_keepouts(grid, graph, rules)
     _mark_source_arrays(grid, graph, rules)
-    planes = _plane_nets(rules)
 
     # Plan a pin escape per pad (E2 via-in-pad / E3 dog-bone) — the access cell the
     # maze routes each net from, plus the escape geometry that bonds pad→access.
@@ -393,6 +409,20 @@ def route_board(
             max([track_width_mm] + [net_width.get(n, track_width_mm) for n in signal_nets]),
             **({"own_net": True} if fixed_copper_own_net else {}),
         )
+    # Stack-aware: every surface pad of a net with a dedicated plane drops a through
+    # via to it, planned jointly with the signal exits (no drop is left to after
+    # routing). The stub carries the pad's required entry width.
+    drop_widths = {}
+    if stack is not None:
+        from pnr.pad_entry import terminal_required_width
+
+        for comp in graph.components:
+            for pad in comp.pads:
+                if pad.net in stack.plane_nets and not pad.through_hole:
+                    width = terminal_required_width(comp.ref, pad.name, pad.net, rules or {})
+                    drop_widths[pad.net] = max(drop_widths.get(pad.net, 0.0), width)
+        for n, w in drop_widths.items():
+            net_width.setdefault(n, w)
     plan = plan_escapes(
         grid,
         graph,
@@ -405,11 +435,13 @@ def route_board(
         joint_max_options=int(os.environ.get("PNR_JOINT_ACCESS_OPTIONS", "16")),
         joint_max_states=int(os.environ.get("PNR_JOINT_ACCESS_STATES", "20000")),
         joint_max_cluster_size=int(os.environ.get("PNR_JOINT_ACCESS_CLUSTER", "24")),
+        drop_widths=drop_widths or None,
+        drop_in_pad=grid.in_pad is not None,
     )
     net_access = {
         n: cells
         for n, cells in plan.net_access.items()
-        if len(cells) >= 2 and n not in plan.blocked_nets
+        if len(cells) >= 2 and n not in plan.blocked_nets and n not in drop_widths
     }
     # PNR_TRACE_DIR only: records this route inside a traced route scope (pnr.trace).
     from .trace_route import start as trace_start
@@ -447,6 +479,9 @@ def route_board(
         failure_sites=trapped_access_sites(grid, plan.net_access, result.unrouted),
         escape_diagnostics=plan.diagnostics,
     )
+    for net, sites in plan.drop_failures.items():
+        # A plane pad without a drop is localized at the pad for the placement loop.
+        board.failure_sites[net] = sorted(set(board.failure_sites.get(net, [])) | set(sites))
     if os.environ.get("PNR_LOCAL_PRESSURE") == "1":
         from .pressure import localized_pressure
 
@@ -479,6 +514,10 @@ def route_board(
     # Emit each routed pad's escape geometry (on-layer stub, via-in-pad, or dog-bone
     # stub + via) so the net is electrically whole from the real pad centre.
     for esc in plan.escapes:
+        if esc.net in drop_widths:
+            # A plane drop needs no maze route: its through via reaches the planes.
+            _emit_escape(board, esc, grid, drop_widths[esc.net])
+            continue
         rn = result.nets.get(esc.net)
         if rn is None or esc.access not in set(rn.cells):
             continue

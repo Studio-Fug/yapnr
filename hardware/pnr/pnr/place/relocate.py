@@ -84,8 +84,7 @@ def _fields(graph, comp, rules, tracks, vias, pitch, *, terms=False):
         _mark_plane_regions,
         _mark_source_arrays,
         _net_widths,
-        _plane_nets,
-        _signal_layers,
+        layer_plan,
     )
 
     # Remove only this component's pads from the static substrate. Keep its body
@@ -93,8 +92,8 @@ def _fields(graph, comp, rules, tracks, vias, pitch, *, terms=False):
     static = BoardGraph.from_json(graph.to_json())
     static.component(comp.ref).pads = []
     fab = _fab(rules)
-    layers = _signal_layers(rules)
-    names = {p.net for p in comp.pads if p.net} - _plane_nets(rules)
+    layers, planes, stack = layer_plan(graph, rules)
+    names = {p.net for p in comp.pads if p.net} - planes
     widths = _net_widths(rules, fab["track_width_mm"])
     fields = {}
     for net in sorted(names):
@@ -108,7 +107,7 @@ def _fields(graph, comp, rules, tracks, vias, pitch, *, terms=False):
             track_width=widths.get(net, fab["track_width_mm"]),
             via_radius=fab["via_diameter_mm"] / 2,
         )
-        _mark_plane_regions(g, static, rules, 2.0)
+        _mark_plane_regions(g, static, rules, 2.0, stack=stack)
         _mark_copper_keepouts(g, graph, rules)
         # Source arrays on the moving footprint need candidate-specific rebuild;
         # those footprints are excluded by the proposal generator.

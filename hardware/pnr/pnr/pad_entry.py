@@ -30,37 +30,50 @@ def xy(p):
     return (p.x / 1e6, p.y / 1e6)
 
 
-def required_width(pad, rules):
+def terminal_required_width(ref, number, net, rules):
+    """The hard minimum width of a new entry at pad ``number`` of ``ref`` on ``net``
+    (mm): the fab track width, the net's class widths and electrical outer width, a
+    terminal current budget and a terminal width contract. Pure (no pcbnew): the
+    detailed router sizes plane drops with it, the native checks a pad with it."""
     # widths are resolved upstream by constraints.py from source current inputs.
     width = rules.get("fab", {}).get("track_width_mm", 0.2)
     for cls in rules.get("net_classes", []):
-        if pad.GetNetname() in cls.get("nets", []) and cls.get("width_mm") is not None:
+        if net in cls.get("nets", []) and cls.get("width_mm") is not None:
             width = max(width, cls["width_mm"])
-    width = max(
-        width, rules.get("electrical_nets", {}).get(pad.GetNetname(), {}).get("outer_width_mm", 0)
-    )
+    width = max(width, rules.get("electrical_nets", {}).get(net, {}).get("outer_width_mm", 0))
     if rules.get("electrical_fab"):
         from pnr.electrical import terminal_policy
 
-        p = terminal_policy(
-            pad.GetParentFootprint().GetReference(), [pad.GetNumber()], pad.GetNetname(), rules
-        )
+        p = terminal_policy(ref, [number], net, rules)
         if p:
             width = p["outer_width_mm"]
-    contract = width_contract(pad, rules)
+    contract = terminal_contract(ref, number, net, rules)
     if contract:  # PNR_TERMINAL_MIN_WIDTH=1: source minimum is a hard floor
         width = max(width, contract["min_width_mm"])
     return width
+
+
+def terminal_contract(ref, number, net, rules):
+    """The @pnr-terminal-width contract of pad ``number`` of ``ref`` or None."""
+    if not rules.get("terminal_width_intents"):
+        return None
+    from pnr.electrical import terminal_width
+
+    return terminal_width(ref, [number], net, rules)
+
+
+def required_width(pad, rules):
+    return terminal_required_width(
+        pad.GetParentFootprint().GetReference(), pad.GetNumber(), pad.GetNetname(), rules
+    )
 
 
 def width_contract(pad, rules):
     """The pad's @pnr-terminal-width contract (PNR_TERMINAL_MIN_WIDTH=1) or None."""
     if not rules.get("terminal_width_intents"):
         return None
-    from pnr.electrical import terminal_width
-
-    return terminal_width(
-        pad.GetParentFootprint().GetReference(), [pad.GetNumber()], pad.GetNetname(), rules
+    return terminal_contract(
+        pad.GetParentFootprint().GetReference(), pad.GetNumber(), pad.GetNetname(), rules
     )
 
 

@@ -213,6 +213,10 @@ class OptimizerSpec:
     # again up to the schedule's. Off by default.
     adaptive_move: bool = False
     trust_slack: float = 0.05
+    # With `adaptive_move`, the β from which the adaptive steps apply (epochs below it take plain
+    # MMA steps at the schedule's move): free exploration while the design is gray, steps that
+    # keep the epigraph value once it is nearly binary. 0: every epoch.
+    adaptive_from_beta: float = 0.0
     # The objective of each β epoch (`Problem.evaluate`): "spec", the epigraph of the
     # requirements (design §9), or "radiation", per lower bound on a radiated fraction the band
     # average log(1 + R̄) − log η̄ of its port (R̄, η̄ the band means of |S_jj|² and η_j; Lu,
@@ -262,6 +266,7 @@ _OPTIMIZER_NEW = {
     "seed": None,
     "adaptive_move": False,
     "trust_slack": 0.05,
+    "adaptive_from_beta": 0.0,
     "epoch_objectives": [],
     "epoch_frequency_scale": [],
     "reference_ohm": None,

@@ -374,7 +374,7 @@ class Optimizer:
 
         opt = prob.spec.optimizer
         trust = None
-        if opt.adaptive_move:
+        if opt.adaptive_move and beta >= opt.adaptive_from_beta:
             base = sch.move_for(st.epoch)
             mv = base if st.move is None else min(st.move, base)
             trust = epi.trust_step(

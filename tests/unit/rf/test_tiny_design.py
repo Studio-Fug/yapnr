@@ -140,6 +140,18 @@ class BestDesignTest(unittest.TestCase):
         self.assertTrue(again.load_checkpoint())
         self.assertEqual(again.state.move, opt.state.move)
 
+    def test_adaptive_from_beta(self):
+        # Plain MMA steps below `adaptive_from_beta`, adaptive ones from it on.
+        spec = tiny_spec(
+            betas=(8, 16), iterations_per_beta=2, adaptive_move=True, adaptive_from_beta=16.0
+        )
+        opt = Optimizer(Problem(spec, cache_dir=self.cache))
+        opt.run(max_iterations=4)
+        h = opt.history
+        self.assertEqual([h_["beta"] for h_ in h], [8.0, 8.0, 16.0, 16.0])
+        self.assertEqual([bool(h_["t_trials"]) for h_ in h], [False, False, True, True])
+        self.assertNotIn("adaptive_from_beta", tiny_spec().to_dict()["optimizer"])
+
     def test_epoch_objectives(self):
         # The radiation objective in the first epoch (one value per lower bound on a radiated
         # fraction), the spec's epigraph in the second; binary designs are always judged by

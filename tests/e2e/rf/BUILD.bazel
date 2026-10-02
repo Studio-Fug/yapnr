@@ -1,0 +1,146 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+# End-to-end RF inverse design cases (docs/design/rf-topology-optimization.md §11,
+# docs/rf-inverse-design.md): optimize, export the footprint, re-simulate it on the
+# optimization grid and on a finer grid, and assert the case's criteria.
+#
+# The full cases are slow (minutes to an hour each on 4 threads) and tagged `manual`; run them
+# one at a time, niced, and optionally keep the run directory (a finished run there is only
+# re-validated):
+#
+#   nice -n 10 bazel test --config=lowmem --local_test_jobs=1 //tests/e2e/rf:test_divider \
+#     --test_env=YAPNR_RF_RUN_DIR=/path/to/runs
+#
+# The smoke variants run the same topologies on tiny grids for four iterations (CI, about half
+# a minute each).
+
+_ENV = {
+    "MKL_NUM_THREADS": "4",
+    "OMP_NUM_THREADS": "4",
+}
+
+_DEPS = [
+    "//yapnr/rf",
+    "//yapnr/rf:testing",
+]
+
+_FULL_TAGS = [
+    "local",
+    "manual",
+    "no-remote",
+    "rf-e2e",
+    "slow",
+]
+
+py_test(
+    name = "test_divider",
+    size = "enormous",
+    timeout = "eternal",
+    srcs = ["test_divider.py"],
+    env = _ENV,
+    env_inherit = ["YAPNR_RF_RUN_DIR"],
+    main = "test_divider.py",
+    tags = _FULL_TAGS,
+    deps = _DEPS,
+)
+
+py_test(
+    name = "test_wilkinson",
+    size = "enormous",
+    timeout = "eternal",
+    srcs = ["test_wilkinson.py"],
+    env = _ENV,
+    env_inherit = ["YAPNR_RF_RUN_DIR"],
+    main = "test_wilkinson.py",
+    tags = _FULL_TAGS,
+    deps = _DEPS,
+)
+
+py_test(
+    name = "test_antenna",
+    size = "enormous",
+    timeout = "eternal",
+    srcs = ["test_antenna.py"],
+    env = _ENV,
+    env_inherit = ["YAPNR_RF_RUN_DIR"],
+    main = "test_antenna.py",
+    tags = _FULL_TAGS,
+    deps = _DEPS,
+)
+
+py_test(
+    name = "test_diplexer",
+    size = "enormous",
+    timeout = "eternal",
+    srcs = ["test_diplexer.py"],
+    env = _ENV,
+    env_inherit = ["YAPNR_RF_RUN_DIR"],
+    main = "test_diplexer.py",
+    tags = _FULL_TAGS,
+    deps = _DEPS,
+)
+
+# Stretch (design §11.4, c2): a three-channel bank, about twice the diplexer's cost.
+py_test(
+    name = "test_filterbank3",
+    size = "enormous",
+    timeout = "eternal",
+    srcs = ["test_filterbank3.py"],
+    env = _ENV,
+    env_inherit = ["YAPNR_RF_RUN_DIR"],
+    main = "test_filterbank3.py",
+    tags = _FULL_TAGS + ["rf-stretch"],
+    deps = _DEPS,
+)
+
+py_test(
+    name = "test_divider_smoke",
+    size = "medium",
+    srcs = ["test_divider.py"],
+    env = dict(
+        _ENV,
+        YAPNR_RF_SMOKE = "1",
+    ),
+    main = "test_divider.py",
+    tags = ["rf-smoke"],
+    deps = _DEPS,
+)
+
+py_test(
+    name = "test_wilkinson_smoke",
+    size = "medium",
+    srcs = ["test_wilkinson.py"],
+    env = dict(
+        _ENV,
+        YAPNR_RF_SMOKE = "1",
+    ),
+    main = "test_wilkinson.py",
+    tags = ["rf-smoke"],
+    deps = _DEPS,
+)
+
+py_test(
+    name = "test_antenna_smoke",
+    size = "medium",
+    srcs = ["test_antenna.py"],
+    env = dict(
+        _ENV,
+        YAPNR_RF_SMOKE = "1",
+    ),
+    main = "test_antenna.py",
+    tags = ["rf-smoke"],
+    deps = _DEPS,
+)
+
+py_test(
+    name = "test_diplexer_smoke",
+    size = "medium",
+    srcs = ["test_diplexer.py"],
+    env = dict(
+        _ENV,
+        YAPNR_RF_SMOKE = "1",
+    ),
+    main = "test_diplexer.py",
+    tags = ["rf-smoke"],
+    deps = _DEPS,
+)

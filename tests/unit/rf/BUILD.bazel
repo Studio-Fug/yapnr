@@ -1,0 +1,60 @@
+load("@rules_python//python:defs.bzl", "py_test")
+load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+
+_ENV = {
+    "MKL_NUM_THREADS": "4",
+    "OMP_NUM_THREADS": "4",
+}
+
+# Fast tests (design §12): seconds to about a minute each on 4 threads. The optimizer tests
+# share a tiny two-port spec (//yapnr/rf:testing). test_kicad_cli runs in the KiCad lane only
+# (headless kicad-cli in YAPNR_KICAD_CLI).
+yapnr_py_tests(
+    env = _ENV,
+    overrides = {
+        "test_adjoint_gradients": {"size": "medium"},
+        "test_balance": {
+            "deps": ["//yapnr/rf:testing"],
+            "size": "medium",
+        },
+        "test_animate": {
+            "deps": [
+                "//yapnr/rf:animate_lib",
+                "//yapnr/rf:testing",
+            ],
+        },
+        "test_dtft": {"size": "medium"},
+        "test_kicad_cli": {"tags": ["kicad"]},
+        "test_microstrip": {"size": "medium"},
+        "test_pipeline_gradient": {
+            "deps": ["//yapnr/rf:testing"],
+            "size": "medium",
+        },
+        "test_ports": {"size": "medium"},
+        "test_power_balance": {"size": "medium"},
+        "test_tiny_design": {
+            "deps": ["//yapnr/rf:testing"],
+            "size": "medium",
+        },
+    },
+    deps = ["//yapnr/rf"],
+)
+
+# The microstrip check repeated at twice the resolution: about 4 minutes on 4 threads, so it is
+# manual (not part of `bazel test //...` or CI); run it when the solver changes:
+#   bazel test //tests/unit/rf:test_microstrip_slow
+py_test(
+    name = "test_microstrip_slow",
+    size = "large",
+    srcs = ["test_microstrip.py"],
+    env = dict(
+        _ENV,
+        YAPNR_RF_SLOW = "1",
+    ),
+    main = "test_microstrip.py",
+    tags = [
+        "manual",
+        "slow",
+    ],
+    deps = ["//yapnr/rf"],
+)

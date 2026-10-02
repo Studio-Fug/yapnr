@@ -64,6 +64,7 @@ containers
 viewer
 frontends/atopile
 part-cache
+rf-inverse-design
 releases
 ```
 
@@ -79,6 +80,7 @@ decisions
 design/animations
 design/constraint-and-hier-animations
 design/fea-integration
+design/rf-topology-optimization
 history/import-manifest
 about-the-name
 references

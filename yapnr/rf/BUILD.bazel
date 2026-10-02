@@ -1,0 +1,52 @@
+"""yapnr.rf: RF microstrip inverse design (docs/design/rf-topology-optimization.md)."""
+
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+load("@yapnr_pypi//:requirements.bzl", "requirement")
+
+package(default_visibility = ["//visibility:public"])
+
+py_library(
+    name = "rf",
+    srcs = glob(
+        ["**/*.py"],
+        exclude = [
+            "animate.py",
+            "testing.py",
+        ],
+    ),
+    imports = ["../.."],
+    deps = [
+        "//yapnr:package",
+        requirement("numpy"),
+        requirement("pyyaml"),
+        requirement("torch"),
+    ],
+)
+
+# Test helpers (a tiny spec), for tests only.
+py_library(
+    name = "testing",
+    testonly = True,
+    srcs = ["testing.py"],
+    imports = ["../.."],
+    deps = [":rf"],
+)
+
+# The optimization animation (design §10.5): Pillow only, like pnr.animate.
+py_library(
+    name = "animate_lib",
+    srcs = ["animate.py"],
+    imports = ["../.."],
+    deps = [
+        ":rf",
+        requirement("pillow"),
+    ],
+)
+
+# bazel run //yapnr/rf:animate -- RUN_DIR --out PATH.webp (python -m yapnr.rf.animate).
+py_binary(
+    name = "animate",
+    srcs = ["animate.py"],
+    main = "animate.py",
+    deps = [":animate_lib"],
+)

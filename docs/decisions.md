@@ -499,6 +499,127 @@ the pull request:
 - **Follow-ups:** companion rows (an LED and its resistor as one rigid unit), a hard edge for a
   whole line group, members on the bottom side, plane-access intents inside a line group.
 
+Choices made for RF microstrip inverse design (#29, branch `claude/rf-topopt`,
+[design](design/rf-topology-optimization.md) §2 and §16, [guide](rf-inverse-design.md)); the
+owner reviews them with the pull request:
+
+- **Own FDTD solver, no new runtime dependency.** Meep has no lumped ports, its eigenmode ports
+  do not model metal microstrip and it is conda-only; openEMS is an external GPL program without
+  an adjoint. `yapnr.rf` is numpy with an optional torch fast path, deterministic, at most 4
+  threads.
+- **Line ports into the absorbing boundary** are the case ports (V/I wave separation, the
+  reference plane moved to the design region); resistive lumped ports stay for elements and as a
+  fallback.
+- **Crank–Nicolson conductivity and the exact discrete adjoint** (numerical frequency Ω and
+  σ·cos(ωΔt/2)): gradients agree with finite differences to about 1e-8.
+- **Copper is a zero-thickness sheet** whose conductance is log-interpolated per pixel and
+  averaged onto the grid edges; the damping term of the paper is implemented but off.
+- **Own MMA, written from Svanberg's publications** (the reference codes are GPL, nothing is
+  copied), in its native min-max form. **Plain MMA is the default;** the conservative variant
+  (CCSA/GCMMA, NLopt's MMA as in the paper) is `optimizer.conservative: true`. On the tiny
+  two-port test it never let t rise but needed 96 forward runs against 18 and ended worse
+  (t −0.10 against −0.28).
+- **Mirror symmetry on the design variables** (pixels of one mirror orbit share a variable),
+  not by averaging mirrored grids, so symmetric designs stay binary.
+- **Footprints are KiCad 10 net ties:** one SMD pad per port, the copper as keyholed `fp_poly`
+  islands with `net_tie_pad_groups` (an island on one pad becomes that pad's custom shape), the
+  stackup the design assumes in the description; KiCad's own `kicad-cli` loads them (KiCad lane).
+- **The end-to-end design cases are manual and slow;** they never run in CI. Each has a smoke
+  variant that does (the same topology on a tiny grid for four iterations; it checks the
+  pipeline, not the RF targets).
+- **The cases do not start from the paper's uniform 0.5.** With copper, ρ̄ = 0.5 is a 377 Ω/sq
+  absorber over the whole window: from it the divider grew into one radiating plate. The
+  divider starts from a uniform x = 0.3 (an almost transparent sheet on the steep part of the
+  projection); the filter banks from a junction of their ports with quarter-wave stubs
+  (`optimizer.seed: stubs`, below), since from 0.3 the diplexer's window absorbed for 15
+  iterations and then formed a radiating mass; the antenna from
+  the closed-form inset-fed patch (`seed: patch`), since every uniform start (0.3, 0.5, 0.7,
+  0.7 at β = 32) stayed at the bare feed or a plate. Gray copper absorbs before it radiates.
+  The seeds are computed from the spec alone; every pixel stays a design variable.
+- **A width and space repair on the pixel grid before export.** With the rules' two-pixel
+  filter radius the Zhou constraints read as met while the binary divider kept one-pixel holes
+  and diagonal one-pixel nubs (four violations). The export opens the copper and the void with
+  a square of the minimum width (space) and bridges corner contacts (the divider: 10 of 1280
+  pixels); the result records the change and the validator compares the repaired footprint with
+  the optimizer's binary design. A four-pixel filter instead (thresholds from the filter radius,
+  now supported) gave smoother shapes but stalled (t ≈ 0.7 at iteration 70, against −0.002 at
+  iteration 60 with two pixels).
+- **Re-validation reads the exported footprint**, not the optimizer's arrays: it rasterizes the
+  KiCad polygons ("inside or on" at pixel centres), recalibrates the feeds from the pad
+  widths, excites every port and renormalizes to 50 Ω, once on the optimization grid (which
+  must reproduce the binary design pixel for pixel) and once at half the pitch with 1.5 times
+  the substrate cells. The criteria live with the presets (`yapnr.rf.cases`).
+- **The antenna's band is 9.8–10.2 GHz (4 %), not the design's 9.7–10.3 GHz (6 %).** On the
+  case's grid the closed-form inset patch has a −10 dB band of 4.5 % and a radiated fraction of
+  0.80 at its peak; refining it for 6 % froze at t = 1.40 (η 0.56 and |S11| −5.3 dB at
+  9.7 GHz), since a second resonance would have to appear from nothing. The target levels
+  (−12 dB, η ≥ 0.7) and the criteria's form are unchanged; the criteria bands narrow with it
+  (coarse 9.8–10.2, fine 9.85–10.15 GHz).
+- **The antenna refines its seed with the conservative MMA variant and a 0.05 move** (schedule
+  16, 64): plain MMA left the tuned seed on its first step. It still did not improve on the
+  seed; the case is recorded as failing rather than tuned further by hand.
+- **Passivity is judged at −1e-3 again** (it was −0.01 for a while). The violations came from
+  de-embedding the feed's magnitude with the calibration's Im k (below), not from the
+  reciprocity error the earlier note blamed.
+- **Custom pads keep a rectangular anchor of the port pad's size** (KiCad 10 keeps it), so a
+  one-port footprint still says how wide its feed is.
+
+Review fixes (the physics and design reviews of the cases; [guide](rf-inverse-design.md)
+"Accuracy"):
+
+- **De-embedding shifts the phase only (Re k).** The two-plane calibration's Im k is not a loss
+  measurement: +4 to −1 Np/m depending on where the planes sit relative to the source, against
+  0.7–0.9 Np/m from the Poynting flux. The feed between the V/I and reference planes is about
+  5 mm; neglecting its loss makes |S| about 0.01 dB low.
+- **V/I plane 6h from the reference plane and 6h from the source** (17 and 33 cells on S1 at
+  0.3 mm, was 9 and 17): the divider's |S21 − S12| drops from 0.009–0.013 to 0.003–0.006, for
+  about a third more cells on a three-port. The calibration takes Z_c and k at least 3h from
+  its source and the power factor (Poynting flux over V/I power) at the ports' own distance,
+  where the excited port's incident wave reads 1.5–2 % high; the radiated fraction uses it.
+  Transmissions stay about 0.1–0.2 dB low at 8–12 GHz (stated in the guide), which is
+  conservative for transmission targets.
+- **S = B A⁻¹** in the validation sweeps (every port excited), not b_i/a_j: the idle ports see
+  incident waves of about 1 %.
+- **The exported design is the best binarized design of the run** (evaluated every
+  `binary_every` iterations, at every β change and at the end), not the last iterate: the
+  antenna's last iterate was worse than its start and the diplexer's than its iteration 45.
+- **A conservative MMA step that is not conservative after `max_inner` subproblems is
+  rejected,** keeping x and the raised curvature (it used to be accepted, and the antenna's t
+  rose from 0.34 to 1.07 on the first step).
+- **Robust variants and a reactive interpolation are available, off by default:** eroded and
+  dilated designs in the epigraph (`eta_variants`, Hammond et al. §5.3), and gray copper as an
+  inductive sheet (`interpolation: reactive`, the analog of the paper's Drude–Lorentz
+  interpolation with damping). The reactive sheet did not help the cases (an unfed plate for the
+  antenna from a uniform start, broken lines for the diplexer).
+- **Lumped resistors in specs** (`lumped`), for the Wilkinson-type combiner: the body stays
+  void and carries the resistance on the copper-plane edges along its axis, its pads stay
+  copper, and the footprint gets two pads per part.
+- **The validator re-simulates on a third grid** (a third of the pitch, twice the substrate
+  cells) for the full cases, judges the fine criteria there too and reports every check's
+  trend over the three grids; resonant designs are not converged on the fine grid.
+- **Radiators get a power balance check** (`validate.power_balance`): the port's net input
+  power against the flux out of a box closed by the ground, the other ports' power and the
+  dissipation inside, within 2 %; it validates the radiated fraction the antenna is judged by.
+- **Footprints carry KiCad rule areas** for the simulated margin: no pour, vias or other
+  footprints, and no tracks outside a corridor along each feed.
+- **`export_ok` is `None` when the pixel check could not run** (no checkpoint).
+- **The divider's transmission target is −3.4 dB (was −3.28) and it is optimized robustly**
+  (the eroded design, projection threshold 0.55, in the epigraph). With the extraction
+  corrected, −3.28 dB was out of reach (the ideal split is −3.01 dB and transmissions read
+  0.1–0.2 dB low) and the run oscillated; without the eroded design |S11| lost 1.8 dB per
+  refinement. With both it passes on all three grids. The criteria are unchanged.
+- **The filter banks start from the stub seed** (`seed: stubs`), as the design review
+  suggested: from the plain junction the diplexer only learned to roll off (rejection 5–12 dB).
+- **Moves of 0.05 from β = 32** for the divider, the Wilkinson case and the banks: at 0.1 a
+  near-binary design flipped boundary pixels back and forth (t alternating between 0.7 and 8,
+  a broken arm each time). The best-design export keeps such excursions out of the footprints.
+- **The antenna case is unchanged and fails; changing it is the owner's call.** On S2 the patch
+  class has about 4 % of −10 dB bandwidth, the band itself, and the finer grids shift it up by
+  2 %; uniform starts (resistive or reactive) and an untuned rectangle did not lead the
+  optimizer to a radiator, so the export is the tuned closed-form patch, which the optimizer did
+  not change. Options: a broader-band topology, a thicker or lower-εr substrate, a band or
+  criteria that allow the shift, or a copper-edge correction in the solver.
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.

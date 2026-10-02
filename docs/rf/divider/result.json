@@ -1,0 +1,157 @@
+{
+  "schema": "yapnr-rf-result/1",
+  "spec": "divider-x10",
+  "spec_sha256": "f5144dc4019d05e3076269f1d2ef09f83b3ffd205fa06323749b2f93080a4e38",
+  "solver": {
+    "grid_cells": [124, 74, 22],
+    "cells": 201872,
+    "pitch_mm": 0.3,
+    "substrate_cells": 4,
+    "dt_ps": 0.4650586643949092,
+    "courant": 0.95,
+    "cpml_cells": [10, 10, 10, 10, 8],
+    "design_pixels": [32, 40],
+    "port_width_cells": {
+      "1": 6,
+      "2": 6,
+      "3": 6
+    },
+    "port_zc_at_fc_ohm": {
+      "1": [49.49950277263912, 0.6449309303940397],
+      "2": [49.49950277263912, 0.6449309303940397],
+      "3": [49.49950277263912, 0.6449309303940397]
+    },
+    "pulse_ghz": [10.0, 2.0],
+    "objective_ghz": [8.5, 9.0, 9.5, 10.0, 10.5, 11.0, 11.5],
+    "decimation": 59,
+    "tol": 0.001,
+    "adjoint_tol": 0.001,
+    "backend": "torch",
+    "dtype": "float32",
+    "threads": 4,
+    "filter_radius_mm": 0.6,
+    "material_grid": {
+      "shape": [32, 40],
+      "ring_width": 3,
+      "symmetry": ["y"],
+      "n_dof": 622,
+      "fixed_pixels": 36
+    },
+    "groups": [
+      {
+        "name": "x1",
+        "excitation": 1,
+        "requirements": 3
+      }
+    ]
+  },
+  "optimizer": {
+    "schedule": {
+      "betas": [8.0, 16.0, 32.0, 64.0, 128.0],
+      "iterations": 30,
+      "min_iterations": 8,
+      "lookback": 5,
+      "t_tol": 0.001,
+      "drho_tol": 0.01,
+      "move": 0.2,
+      "move_late": 0.05,
+      "late_beta": 32.0
+    },
+    "iterations": 137,
+    "stop_reason": "schedule",
+    "final_beta": 128.0,
+    "gray": 0.0059606335665756995,
+    "gray_ok": true,
+    "t_last": 13.698986614278054,
+    "export_iteration": 80,
+    "t_binary_exported": 0.10091190098002392,
+    "t_binary_last": 13.700430682472097,
+    "best_iteration_tracked": 80
+  },
+  "coarse_binary": {
+    "frequencies_ghz": [8.5, 9.0, 9.5, 10.0, 10.5, 11.0, 11.5],
+    "t": 0.10091190098002392,
+    "f": [
+      -0.11109270416616823, -0.12497002793557298, -0.12486263357273093, -0.11568204484161687,
+      -0.09919709710852871, -0.06571735293612917, 0.10091190098002392
+    ],
+    "s_db": {
+      "S11": [
+        -22.90134190665027, -26.396316024314327, -27.714916122517582, -26.107438654031768,
+        -23.90300041896241, -21.614906949852248, -19.028755459958298
+      ],
+      "S21": [
+        -3.252837511142657, -3.2403709381748778, -3.2404798503271204, -3.2496581848646273,
+        -3.2659974081528915, -3.2916598903075407, -3.3353570206031065
+      ],
+      "S31": [
+        -3.252837582034635, -3.2403709035197226, -3.2404799245050753, -3.249657997835849,
+        -3.2659970918163728, -3.2916590950387974, -3.3353553532587075
+      ]
+    },
+    "eta": {},
+    "requirements": [
+      {
+        "requirement": "|S11| \u2264 -20 dB @ pass",
+        "worst_phi": 0.09712445747681073,
+        "met": false
+      },
+      {
+        "requirement": "|S21| \u2265 -3.4 dB @ pass",
+        "worst_phi": -0.06464298033298865,
+        "met": true
+      },
+      {
+        "requirement": "|S31| \u2265 -3.4 dB @ pass",
+        "worst_phi": -0.06464464767738676,
+        "met": true
+      }
+    ],
+    "all_met": false
+  },
+  "sweep": {
+    "file": "coarse.s3p",
+    "points": 101,
+    "ghz": [8.0, 12.0],
+    "passivity_margin_min": 0.030073155810115795,
+    "steps": {
+      "1": 6002,
+      "2": 6002,
+      "3": 6002
+    }
+  },
+  "footprint": {
+    "file": "footprint.kicad_mod",
+    "islands": 1,
+    "net_ties": 1,
+    "repair": {
+      "changed_pixels": 4,
+      "added": 0,
+      "removed": 4,
+      "rounds": 2
+    }
+  },
+  "drc": {
+    "min_width_mm": 0.6,
+    "min_space_mm": 0.6,
+    "resolution_mm": 0.0375,
+    "ok": true,
+    "violations": []
+  },
+  "provenance": {
+    "yapnr": "0.0.0.dev0",
+    "python": "3.11.15",
+    "numpy": "1.26.4",
+    "torch": "2.3.1",
+    "system": "Darwin",
+    "machine": "arm64",
+    "backend": "torch",
+    "dtype": "float32",
+    "threads": 4
+  },
+  "wall_s": {
+    "optimization": 2544.769529252895,
+    "export": 13.42822233401239,
+    "total": 2597.7182848749217
+  }
+}

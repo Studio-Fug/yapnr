@@ -1,0 +1,172 @@
+{
+  "schema": "yapnr-rf-spec/1",
+  "name": "filterbank3-x7x10x13",
+  "stackup": {
+    "er": 3.55,
+    "tan_delta": 0.0027,
+    "h_mm": 0.813,
+    "f_ref_ghz": 10.0
+  },
+  "grid": {
+    "pitch_mm": 0.3,
+    "substrate_cells": 4,
+    "air_mm": null,
+    "dz_max_mm": null,
+    "margin_mm": null,
+    "meas_cells": null,
+    "src_cells": null,
+    "pml_gap": 3,
+    "core_cells": 2,
+    "pml_cells": 10,
+    "pml_top_cells": 8,
+    "ratio": 1.25,
+    "courant": 0.95,
+    "f_max_ghz": null
+  },
+  "design_region": {
+    "x_mm": [0.0, 18.0],
+    "y_mm": [-9.0, 9.0]
+  },
+  "symmetry": "none",
+  "rules": {
+    "min_width_mm": 0.6,
+    "min_space_mm": 0.6
+  },
+  "ports": [
+    {
+      "n": 1,
+      "side": "W",
+      "at_mm": 0.0,
+      "width_cells": null
+    },
+    {
+      "n": 2,
+      "side": "E",
+      "at_mm": 6.0,
+      "width_cells": null
+    },
+    {
+      "n": 3,
+      "side": "E",
+      "at_mm": 0.0,
+      "width_cells": null
+    },
+    {
+      "n": 4,
+      "side": "E",
+      "at_mm": -6.0,
+      "width_cells": null
+    }
+  ],
+  "bands": {
+    "A": {
+      "lo_ghz": 6.8,
+      "hi_ghz": 7.8,
+      "points": 3
+    },
+    "B": {
+      "lo_ghz": 9.5,
+      "hi_ghz": 10.5,
+      "points": 3
+    },
+    "C": {
+      "lo_ghz": 12.2,
+      "hi_ghz": 13.2,
+      "points": 3
+    }
+  },
+  "requirements": [
+    {
+      "s": [2, 1],
+      "min_db": -1.5,
+      "band": "A"
+    },
+    {
+      "s": [3, 1],
+      "max_db": -20.0,
+      "band": "A"
+    },
+    {
+      "s": [4, 1],
+      "max_db": -20.0,
+      "band": "A"
+    },
+    {
+      "s": [1, 1],
+      "max_db": -10.0,
+      "band": "A"
+    },
+    {
+      "s": [3, 1],
+      "min_db": -1.5,
+      "band": "B"
+    },
+    {
+      "s": [2, 1],
+      "max_db": -20.0,
+      "band": "B"
+    },
+    {
+      "s": [4, 1],
+      "max_db": -20.0,
+      "band": "B"
+    },
+    {
+      "s": [1, 1],
+      "max_db": -10.0,
+      "band": "B"
+    },
+    {
+      "s": [4, 1],
+      "min_db": -1.5,
+      "band": "C"
+    },
+    {
+      "s": [2, 1],
+      "max_db": -20.0,
+      "band": "C"
+    },
+    {
+      "s": [3, 1],
+      "max_db": -20.0,
+      "band": "C"
+    },
+    {
+      "s": [1, 1],
+      "max_db": -10.0,
+      "band": "C"
+    }
+  ],
+  "fixed": [],
+  "optimizer": {
+    "betas": [8.0, 16.0, 32.0, 64.0, 128.0],
+    "iterations_per_beta": 25,
+    "min_iterations": 8,
+    "budget_min": 90,
+    "move": 0.2,
+    "move_late": 0.05,
+    "init": 0.5,
+    "eta": 0.5,
+    "tau": 0.05,
+    "aggregate": "excitation",
+    "damping": 0.0,
+    "interpolation": "resistive",
+    "reactive_damping": 0.1,
+    "conservative": false,
+    "max_inner": 5,
+    "filter_radius_mm": null,
+    "seed": "stubs",
+    "binary_every": 5,
+    "eta_variants": []
+  },
+  "solver": {
+    "backend": "torch",
+    "dtype": "float32",
+    "tol": 0.001,
+    "adjoint_tol": 0.001,
+    "decimation": "auto",
+    "max_steps": 200000,
+    "threads": 4,
+    "sweep_points": 101
+  }
+}

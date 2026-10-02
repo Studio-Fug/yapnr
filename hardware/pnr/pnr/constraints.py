@@ -197,6 +197,9 @@ class DiffPair:
     width_mm: Optional[float] = None
     gap_mm: Optional[float] = None
     skew_mm: float = 0.5  # max acceptable + / - routed-length difference
+    # A skew budget in time (ps); when given it replaces ``skew_mm`` for tuning and
+    # is judged on delay (per-layer propagation delay from the board's stackup).
+    skew_ps: Optional[float] = None
     # PNR_BUS_CLASSES=1 only: ``_defaulted`` (a plain attribute, not a dataclass
     # field, so asdict() is unchanged) names the fields the constraint file left to
     # their defaults; a bus class (pnr.si.bus_classes) may derive those.
@@ -209,6 +212,7 @@ class LengthMatch:
     name: str
     nets: Tuple[str, ...] = ()
     tolerance_mm: float = 1.0
+    tolerance_ps: Optional[float] = None  # a time budget; replaces tolerance_mm
 
 
 @dataclass
@@ -226,6 +230,8 @@ class CompiledConstraints:
     net_classes: List[NetClass] = field(default_factory=list)
     diff_pairs: List[DiffPair] = field(default_factory=list)
     length_matches: List[LengthMatch] = field(default_factory=list)
+    # Meander rules for pair / group length tuning (``tuning:``); None = defaults.
+    tuning: Optional[Dict] = None
     copper_keepouts: List[Dict] = field(default_factory=list)
     mounting_holes: List[Dict] = field(default_factory=list)
 
@@ -296,6 +302,44 @@ def _opt_float(value):
     return None if value is None else float(value)
 
 
+def _positive(value, where: str) -> Optional[float]:
+    """An optional positive finite number (None when absent)."""
+    if value is None:
+        return None
+    if not _finite_number(value) or float(value) <= 0:
+        raise ConstraintError(f"{where} must be a positive number")
+    return float(value)
+
+
+TUNING_STYLES = ("auto", "trombone", "serpentine", "accordion")
+
+
+def _parse_tuning(raw) -> Optional[Dict]:
+    """The ``tuning:`` block (meanders for pair / group length matching): ``gap_mm``
+    (edge to edge, at least the clearance and the track width), ``amplitude_max_mm``,
+    ``min_segment_mm``, ``style`` (auto, trombone, serpentine, accordion) and
+    ``mitre`` (45-degree corners for the fine step). None when absent."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ConstraintError("tuning must be a mapping")
+    out: Dict = {}
+    for key in ("gap_mm", "amplitude_max_mm", "min_segment_mm"):
+        if raw.get(key) is not None:
+            out[key] = _positive(raw[key], f"tuning.{key}")
+    if raw.get("style") is not None:
+        _require_enum(raw["style"], TUNING_STYLES, "tuning.style")
+        out["style"] = str(raw["style"])
+    if raw.get("mitre") is not None:
+        if not isinstance(raw["mitre"], bool):
+            raise ConstraintError("tuning.mitre must be true or false")
+        out["mitre"] = raw["mitre"]
+    unknown = sorted(set(raw) - {"gap_mm", "amplitude_max_mm", "min_segment_mm", "style", "mitre"})
+    if unknown:
+        raise ConstraintError("tuning: unknown key(s) %s" % ", ".join(unknown))
+    return out
+
+
 def _expand_nets(patterns: Iterable[str], net_names: Sequence[str]) -> Tuple[str, ...]:
     """Expand net-name literals/globs against the real netlist (order-stable)."""
     resolved: List[str] = []
@@ -363,6 +407,7 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
                 "width_mm": dp.width_mm,
                 "gap_mm": dp.gap_mm,
                 "skew_mm": dp.skew_mm,
+                **({"skew_ps": dp.skew_ps} if dp.skew_ps is not None else {}),
                 **({"defaulted": list(dp._defaulted)} if getattr(dp, "_defaulted", ()) else {}),
             }
             for dp in compiled.diff_pairs
@@ -373,9 +418,11 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
                 "name": lm.name,
                 "nets": list(_expand_nets(lm.nets, net_names)),
                 "tolerance_mm": lm.tolerance_mm,
+                **({"tolerance_ps": lm.tolerance_ps} if lm.tolerance_ps is not None else {}),
             }
             for lm in compiled.length_matches
         ],
+        **({"tuning": dict(compiled.tuning)} if compiled.tuning is not None else {}),
     }
 
 
@@ -681,6 +728,7 @@ def compile_constraints(
         "net_class",
         "diff_pair",
         "length_match",
+        "tuning",
         "copper_keepout",
     }
     for key in doc:
@@ -943,6 +991,7 @@ def compile_constraints(
             width_mm=_opt_float(entry.get("width_mm")),
             gap_mm=_opt_float(entry.get("gap_mm")),
             skew_mm=float(entry.get("skew_mm", 0.5)),
+            skew_ps=_positive(entry.get("skew_ps"), f"diff_pair {entry.get('name')!r}.skew_ps"),
         )
         if os.environ.get("PNR_BUS_CLASSES") == "1":
             dp._defaulted = tuple(k for k in ("skew_mm",) if k not in entry)
@@ -960,8 +1009,12 @@ def compile_constraints(
                 name=str(entry.get("name") or "group"),
                 nets=tuple(str(n) for n in nets),
                 tolerance_mm=float(entry.get("tolerance_mm", 1.0)),
+                tolerance_ps=_positive(
+                    entry.get("tolerance_ps"), f"length_match {entry.get('name')!r}.tolerance_ps"
+                ),
             )
         )
+    tuning = _parse_tuning(doc.get("tuning"))
 
     # Mechanical fastener envelopes reserve both faces and every copper layer.
     import math
@@ -1043,6 +1096,7 @@ def compile_constraints(
         net_classes=net_classes,
         diff_pairs=diff_pairs,
         length_matches=length_matches,
+        tuning=tuning,
         copper_keepouts=copper_keepouts,
         mounting_holes=mounting_holes,
     )

@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import Mock
 
 from pnr.constraints import (
+    ConstraintError,
     DiffPair,
     LengthMatch,
     NetClass,
@@ -71,6 +72,52 @@ class RoutingRuleCompileTest(unittest.TestCase):
 
         with self.assertRaises(ConstraintError):
             compile_constraints({"diff_pair": [{"name": "x", "p": "a"}]}, [])
+
+
+class TimeBudgetAndTuningRuleTest(unittest.TestCase):
+    def test_constraints_carry_ps_budgets_and_tuning(self):
+        doc = {
+            "diff_pair": [{"name": "usb", "p": "DP", "n": "DN", "skew_ps": 2.5}],
+            "length_match": [{"name": "bus", "nets": ["A", "B"], "tolerance_ps": 5}],
+            "tuning": {"gap_mm": 0.3, "style": "serpentine", "mitre": False},
+        }
+        rules = compile_routing_rules(compile_constraints(doc, []), ["DP", "DN", "A", "B"])
+        self.assertEqual(rules["diff_pairs"][0]["skew_ps"], 2.5)
+        self.assertEqual(rules["length_match"][0]["tolerance_ps"], 5.0)
+        self.assertEqual(rules["tuning"], {"gap_mm": 0.3, "style": "serpentine", "mitre": False})
+        for bad in ({"style": "zigzag"}, {"gap_mm": -1}, {"mitre": "yes"}, {"pitch": 1}):
+            with self.assertRaises(ConstraintError):
+                compile_constraints({"tuning": bad}, [])
+        with self.assertRaises(ConstraintError):
+            compile_constraints({"diff_pair": [{"p": "a", "n": "b", "skew_ps": 0}]}, [])
+
+    def test_rules_unchanged_without_the_new_keys(self):
+        doc = {"diff_pair": [{"name": "usb", "p": "DP", "n": "DN", "skew_mm": 1.0}]}
+        rules = compile_routing_rules(compile_constraints(doc, []), ["DP", "DN"])
+        self.assertNotIn("tuning", rules)
+        self.assertEqual(
+            rules["diff_pairs"][0],
+            dict(name="usb", p="DP", n="DN", width_mm=None, gap_mm=None, skew_mm=1.0),
+        )
+
+    def test_ps_budgets_judge_delay_and_report_margins(self):
+        rules = {
+            "diff_pairs": [{"name": "usb", "p": "dp", "n": "dm", "skew_mm": 9.0, "skew_ps": 2.0}],
+            "length_match": [
+                {"name": "bus", "nets": ["x", "y"], "tolerance_mm": 9.0, "tolerance_ps": 5.0}
+            ],
+        }
+        lengths = {"dp": 10.0, "dm": 10.1, "x": 10.0, "y": 11.0}
+        ok = analyze(lengths, {}, rules, delays={"dp": 60.0, "dm": 61.5, "x": 60.0, "y": 63.0})
+        self.assertTrue(ok.ok)
+        self.assertAlmostEqual(ok.diff_pairs[0].margin, 0.5)
+        self.assertAlmostEqual(ok.length_matches[0].margin, 2.0)
+        self.assertIn("ps", ok.summary())
+        late = analyze(lengths, {}, rules, delays={"dp": 60.0, "dm": 62.5, "x": 60.0, "y": 63.0})
+        self.assertFalse(late.diff_pairs[0].ok)
+        self.assertFalse(analyze(lengths, {}, rules).diff_pairs[0].ok)  # no delays: unproven
+        mm = analyze(lengths, {}, {"diff_pairs": [dict(rules["diff_pairs"][0], skew_ps=None)]})
+        self.assertAlmostEqual(mm.diff_pairs[0].margin, 8.9)
 
 
 class QualityAnalyzeTest(unittest.TestCase):

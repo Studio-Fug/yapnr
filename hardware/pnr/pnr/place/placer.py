@@ -96,6 +96,7 @@ def place(
     initial_positions: Optional[Dict[str, Tuple[float, float]]] = None,
     initial_rotations: Optional[Dict[str, float]] = None,
     pair_weights: Optional[Dict[Tuple[str, str, str, str], float]] = None,
+    initial_sides: Optional[Dict[str, str]] = None,
 ) -> Tuple[BoardGraph, PlacementReport]:
     """Place ``graph`` under ``constraints``; return the placed graph + report.
 
@@ -110,6 +111,12 @@ def place(
     Deterministic under a fixed ``seed`` on one platform (OS, architecture and
     torch build); another platform gives a different placement of the same
     quality on average (pnr.place.model).
+
+    Sides (:mod:`pnr.place.sides`): when the board's side policy frees a part, global
+    placement relaxes its side too (starting toward ``initial_sides``, {ref: side}),
+    and the legalizer may take the slot on its other side; a held part never
+    changes side (checked). With nothing free the flow is the single-sided one, as it
+    is under power-first placement (``PNR_POWER_FIRST=1``), which keeps every side.
     """
     if any(c.kind == "line_group" for c in constraints.constraints):
         # Line groups (pnr.place.line_group): each group is one rigid macro here.
@@ -126,6 +133,7 @@ def place(
             initial_positions=initial_positions,
             initial_rotations=initial_rotations,
             pair_weights=pair_weights,
+            initial_sides=initial_sides,
         )
     # Edge rows are optimized across complete global starts. These temporary
     # search choices are distinct from authored absolute locks.
@@ -164,6 +172,9 @@ def place(
     poses = resolve_fixed_poses(graph, constraints)
     keepouts = keepout_rects(graph, constraints, poses)
     clearance = float(constraints.board.default_clearance_mm)
+    from .sides import plan as side_plan_of
+
+    side_plan = side_plan_of(graph, constraints, channel_rules)
 
     roles = None
     if os.environ.get("PNR_POWER_FIRST") == "1":
@@ -206,8 +217,9 @@ def place(
         )
         return _finish(placed, graph, constraints, width, height, baseline, pad_edge)
 
-    # 1. Global placement (continuous position + orientation).
-    positions, rotations = global_place(
+    # 1. Global placement (continuous position + orientation, and side when free).
+    sided = side_plan.active
+    placement = global_place(
         graph,
         constraints,
         width,
@@ -220,11 +232,21 @@ def place(
         initial_positions=initial_positions,
         initial_rotations=initial_rotations,
         pair_weights=pair_weights,
+        **(
+            dict(side_plan=side_plan, initial_sides=initial_sides, return_sides=True)
+            if sided
+            else {}
+        ),
     )
+    positions, rotations = placement[:2]
     cont = BoardGraph.from_json(graph.to_json())
     for comp in cont.components:
         comp.pos = positions[comp.ref]
         comp.rot = rotations[comp.ref]
+    if sided:
+        from .sides import assign
+
+        assign(cont, placement[2], side_plan)
 
     # Directional copper escape demand is part of production legalization.
     from pnr.constraints import compile_routing_rules
@@ -267,8 +289,23 @@ def place(
         **({} if pad_edge is None else dict(pad_edge=pad_edge)),
         # Hard edge_align (opt-in): only passed when a design declares one.
         **({} if not bands else dict(edge_bands=bands)),
+        **(_side_legalization(side_plan) if sided else {}),
     )
+    if sided:
+        from .sides import check_held
+
+        check_held(placed, side_plan)
     return _finish(placed, graph, constraints, width, height, baseline, pad_edge)
+
+
+def _side_legalization(side_plan):
+    """Legalizer arguments for a board with side-free parts (pnr.place.sides)."""
+    from .sides import side_cost
+
+    return dict(
+        side_options={r: o for r, o in side_plan.options.items() if len(o) > 1},
+        side_cost=lambda board: side_cost(board, side_plan),
+    )
 
 
 def _place_line_groups(
@@ -285,6 +322,7 @@ def _place_line_groups(
     initial_positions,
     initial_rotations,
     pair_weights,
+    initial_sides=None,
 ):
     """:func:`place` for a design with line groups: collapse each group into a rigid
     macro (:func:`pnr.place.line_group.collapse`), place the macro graph as usual (rows,
@@ -319,6 +357,11 @@ def _place_line_groups(
             initial_positions=positions,
             initial_rotations=rotations,
             pair_weights=macro_pair_weights(pair_weights, plan),
+            initial_sides=(
+                None
+                if initial_sides is None
+                else {r: v for r, v in initial_sides.items() if r not in plan.member_of}
+            ),
         )
     return _finish(plan.expand(placed, flat), graph, constraints, width, height, baseline, pad_edge)
 

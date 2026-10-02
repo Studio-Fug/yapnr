@@ -31,7 +31,16 @@ import numpy as np
 
 from pnr.graph import BoardGraph, Component
 
-from .geometry import Rect, ReserveRect, courtyard_rect, occupied_sides, pad_rects, placement_rects
+from .geometry import (
+    Rect,
+    ReserveRect,
+    courtyard_rect,
+    occupied_sides,
+    pad_rects,
+    placement_rects,
+    set_component_side,
+)
+from .sides import opposite as opposite_side
 
 # PNR_PAIR_LANDING_RESERVE=1 (pnr.place.pair_landing): besides the per-side body
 # occupancy, legalize keeps two more rasters per side: ``mounted`` (bodies of parts
@@ -259,6 +268,10 @@ def legalize(
     roles=None,
     pad_edge: Optional[Tuple[float, float]] = None,
     edge_bands: Optional[Dict[str, Tuple[str, float]]] = None,
+    side_options: Optional[Dict[str, Tuple[str, ...]]] = None,
+    side_cost=None,
+    side_weight: float = 3.0,
+    side_retry_mm: float = 1.0,
 ) -> BoardGraph:
     """Return a copy of ``graph`` with movable parts snapped to a legal layout.
 
@@ -292,6 +305,14 @@ def legalize(
     keeps each listed part's courtyard within the tolerance of its edge: its slot
     centre is bounded like ``pad_edge`` does, per tried rotation, and its spreading
     factor is capped so the reserved slot still fits the band.
+
+    ``side_options`` ({ref: allowed sides}, :func:`pnr.place.sides.plan`; None = off)
+    lets a part with two options take the slot nearest its target on either side:
+    when its current side has no slot, or only one more than ``side_retry_mm`` from
+    its target, the other side is tried too and the cheaper slot wins, its cost the
+    slot cost (squared displacement plus channel demand) plus ``side_weight`` (mm)
+    times ``side_cost(graph)`` (mm, :func:`pnr.place.sides.side_cost` of the board
+    with that choice). A part with one option keeps its side.
 
     With hull macros (``PNR_MACRO_HULL=1``) the occupancy gains an ``inner`` plane:
     hull macros mark their inner-layer mask there, drilled parts and solid block
@@ -443,6 +464,22 @@ def legalize(
         else:
             for side in sides:
                 occupancy[side][r : r + bh, c : c + bw] = True
+
+    def displaced(comp, r, c, bw, bh):
+        return math.dist(comp.pos, ((c + bw / 2.0) * g, (r + bh / 2.0) * g))
+
+    def slot_cost(comp, outcome, neighbors):
+        """Cost of a :func:`search` outcome (its side and turn set on ``comp``)."""
+        if outcome[2] is not None:
+            return math.inf
+        _, _, _, r, c, bw, bh = outcome[:7]
+        x, y = (c + bw / 2.0) * g, (r + bh / 2.0) * g
+        cost = (x - comp.pos[0]) ** 2 + (y - comp.pos[1]) ** 2
+        if channel_model is not None:
+            cost += channel_weight * float(channel_model.penalty(comp, neighbors, x, y))
+        if side_cost is not None:
+            cost += side_weight * float(side_cost(placed))
+        return cost
 
     aid = None
     if roles is not None:
@@ -686,112 +723,144 @@ def legalize(
             movable=list(movable),
             active=set(active_block),
             poses={c.ref: (c.pos, c.rot) for c in placed.components},
+            sides={c.ref: c.side for c in placed.components} if side_options else None,
             records=list(cost_records),
             banned={k: set(v) for k, v in banned.items()},
         )
         movable.remove(comp)
-        infl = max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
-        banded = comp.ref in bands
-        sides = part_sides(comp)
-        occ = np.logical_or.reduce([occupancy[side] for side in sides])
-        if landing:
-            occ = occ | np.logical_or.reduce([reserved[m] for m in mounts_of(comp)])
-        attached = ()
         original_rotation = comp.rot
-        error = None
         from .cost_capture import folder as cost_folder
         from .cost_capture import legalizer_decision
 
         capturing = cost_folder() is not None
-        captured_fields = {}
-        turns = [original_rotation] + (
-            [(original_rotation + 90) % 360] if allow_rotation and comp.ref not in rotations else []
-        )
-        if is_hull(comp) and allow_rotation and comp.ref not in rotations:
-            turns = hull_turns(comp, original_rotation)
-        for rotation in turns:
-            comp.rot = rotation
-            cr = courtyard_rect(comp)
-            if banded:
-                infl = spreading(comp)  # capped per tried rotation (hard edge band)
-            bw = int(math.ceil((cr.w * infl + clearance) / g))
-            bh = int(math.ceil((cr.h * infl + clearance) / g))
-            attached = _landing_blocks(comp, bw, bh, g, clearance, mounted) if landing else ()
-            try:
-                candidate_cost = (
-                    None
-                    if channel_model is None
-                    else (
-                        lambda xs, ys: channel_weight
-                        * channel_model.penalty(comp, neighbors, xs, ys)
+
+        def search():
+            """The nearest legal slot for ``comp`` on its current side, trying its turns:
+            ``(error, r, c, bw, bh, sides, attached, captured_fields)``."""
+            r = c = None
+            bw = bh = 0
+            infl = max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
+            banded = comp.ref in bands
+            sides = part_sides(comp)
+            occ = np.logical_or.reduce([occupancy[side] for side in sides])
+            if landing:
+                occ = occ | np.logical_or.reduce([reserved[m] for m in mounts_of(comp)])
+            attached = ()
+            error = None
+            captured_fields = {}
+            turns = [original_rotation] + (
+                [(original_rotation + 90) % 360]
+                if allow_rotation and comp.ref not in rotations
+                else []
+            )
+            if is_hull(comp) and allow_rotation and comp.ref not in rotations:
+                turns = hull_turns(comp, original_rotation)
+            for rotation in turns:
+                comp.rot = rotation
+                cr = courtyard_rect(comp)
+                if banded:
+                    infl = spreading(comp)  # capped per tried rotation (hard edge band)
+                bw = int(math.ceil((cr.w * infl + clearance) / g))
+                bh = int(math.ceil((cr.h * infl + clearance) / g))
+                attached = _landing_blocks(comp, bw, bh, g, clearance, mounted) if landing else ()
+                try:
+                    candidate_cost = (
+                        None
+                        if channel_model is None
+                        else (
+                            lambda xs, ys: channel_weight
+                            * channel_model.penalty(comp, neighbors, xs, ys)
+                        )
                     )
-                )
-                if capturing:
+                    if capturing:
 
-                    def candidate_cost(xs, ys):
-                        channel = (
-                            0.0
-                            if channel_model is None
-                            else channel_model.penalty(comp, neighbors, xs, ys)
-                        )
-                        if np.asarray(xs).ndim:
-                            xx, yy, ch = np.broadcast_arrays(xs, ys, channel)
-                            captured_fields[rotation] = np.column_stack(
-                                (
-                                    xx,
-                                    yy,
-                                    (xx - comp.pos[0]) ** 2 + (yy - comp.pos[1]) ** 2,
-                                    ch,
-                                    np.zeros(xx.shape),
+                        def candidate_cost(xs, ys):
+                            channel = (
+                                0.0
+                                if channel_model is None
+                                else channel_model.penalty(comp, neighbors, xs, ys)
+                            )
+                            if np.asarray(xs).ndim:
+                                xx, yy, ch = np.broadcast_arrays(xs, ys, channel)
+                                captured_fields[rotation] = np.column_stack(
+                                    (
+                                        xx,
+                                        yy,
+                                        (xx - comp.pos[0]) ** 2 + (yy - comp.pos[1]) ** 2,
+                                        ch,
+                                        np.zeros(xx.shape),
+                                    )
                                 )
-                            )
-                        return channel_weight * channel
+                            return channel_weight * channel
 
-                slot_free = hull_free(comp, bw, bh) if is_hull(comp) else None
-                r, c = _place_part(
-                    occ,
-                    g,
-                    bw,
-                    bh,
-                    comp.pos,
-                    limits_for(comp.ref),
-                    candidate_cost=candidate_cost,
-                    forbidden=[
-                        (rr, cc) for rot, rr, cc in banned.get(comp.ref, ()) if rot == rotation
-                    ],
-                    attached=attached,
-                    free=slot_free,
-                    box=edge_box(comp),
-                )
-                if aid is not None:
-                    tried = [
-                        (rr, cc) for rot, rr, cc in banned.get(comp.ref, ()) if rot == rotation
-                    ]
-                    for attempt in range(LOOK_AHEAD_TRIES):
-                        if not starves(comp, r, c, bw, bh, sides):
-                            break
-                        tried.append((r, c))
-                        if attempt == LOOK_AHEAD_TRIES - 1:
-                            raise LegalizationError(
-                                "look-ahead: every tried slot strands a hard-limited part"
+                    slot_free = hull_free(comp, bw, bh) if is_hull(comp) else None
+                    r, c = _place_part(
+                        occ,
+                        g,
+                        bw,
+                        bh,
+                        comp.pos,
+                        limits_for(comp.ref),
+                        candidate_cost=candidate_cost,
+                        forbidden=[
+                            (rr, cc) for rot, rr, cc in banned.get(comp.ref, ()) if rot == rotation
+                        ],
+                        attached=attached,
+                        free=slot_free,
+                        box=edge_box(comp),
+                    )
+                    if aid is not None:
+                        tried = [
+                            (rr, cc) for rot, rr, cc in banned.get(comp.ref, ()) if rot == rotation
+                        ]
+                        for attempt in range(LOOK_AHEAD_TRIES):
+                            if not starves(comp, r, c, bw, bh, sides):
+                                break
+                            tried.append((r, c))
+                            if attempt == LOOK_AHEAD_TRIES - 1:
+                                raise LegalizationError(
+                                    "look-ahead: every tried slot strands a hard-limited part"
+                                )
+                            r, c = _place_part(
+                                occ,
+                                g,
+                                bw,
+                                bh,
+                                comp.pos,
+                                limits_for(comp.ref),
+                                candidate_cost=candidate_cost,
+                                forbidden=tried,
+                                attached=attached,
+                                free=slot_free,
+                                box=edge_box(comp),
                             )
-                        r, c = _place_part(
-                            occ,
-                            g,
-                            bw,
-                            bh,
-                            comp.pos,
-                            limits_for(comp.ref),
-                            candidate_cost=candidate_cost,
-                            forbidden=tried,
-                            attached=attached,
-                            free=slot_free,
-                            box=edge_box(comp),
-                        )
-                error = None
-                break
-            except LegalizationError as exc:
-                error = exc
+                    error = None
+                    break
+                except LegalizationError as exc:
+                    error = exc
+            return error, r, c, bw, bh, sides, attached, captured_fields
+
+        error, r, c, bw, bh, sides, attached, captured_fields = search()
+        if (
+            side_options
+            and len(side_options.get(comp.ref, ())) > 1
+            and (error is not None or displaced(comp, r, c, bw, bh) > side_retry_mm)
+        ):
+            # A part free to take either side (pnr.place.sides) also tries the other
+            # side, and keeps whichever slot is cheaper including the side cost.
+            here = (comp.side, comp.rot, error, r, c, bw, bh, sides, attached, captured_fields)
+            set_component_side(comp, opposite_side(comp.side))
+            comp.rot = original_rotation
+            there = (comp.side, None) + search()
+            there = (there[0], comp.rot) + there[2:]
+            far = slot_cost(comp, there, neighbors)
+            set_component_side(comp, here[0])
+            comp.rot = here[1]
+            near = slot_cost(comp, here, neighbors)
+            if far < near - 1e-9:
+                set_component_side(comp, there[0])
+                comp.rot = there[1]
+                _, _, error, r, c, bw, bh, sides, attached, captured_fields = there
         if (
             error is not None
             and stack
@@ -809,6 +878,8 @@ def legalize(
             for ref, (pos, rot) in previous["poses"].items():
                 by_ref[ref].pos = pos
                 by_ref[ref].rot = rot
+            for ref, side in (previous["sides"] or {}).items():
+                set_component_side(by_ref[ref], side)
             cost_records = previous["records"]
             banned = previous["banned"]
             banned.setdefault(chosen_ref, set()).add(chosen_pose)

@@ -1,0 +1,2654 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html"><link rel="next" title="Design: fab outputs and staged ordering (yapnr fab, yapnr order stage)" href="fab-and-ordering.html"><link rel="prev" title="Design: line groups, board edges and hierarchical PnR, animated" href="constraint-and-hier-animations.html">
+        <link rel="prefetch" href="../../static/yapnr-logo-256.png" as="image">
+        <link rel="prefetch" href="../../static/yapnr-logo-light.png" as="image">
+
+    <link rel="shortcut icon" href="../../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
+        <title>Design: thermal and electromagnetic field solvers (FEA) in yapnr - yapnr documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../../static/custom.css?v=ad564152" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-brand-primary: #024823;
+  --color-brand-content: #024823;
+  --color-brand-visited: #024823;
+  --color-yapnr-accent: #ba9015;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">yapnr documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="../../static/yapnr-logo-256.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../../static/yapnr-logo-light.png" alt="Dark Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../viewer.html">The live viewer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../frontends/atopile.html">The atopile toolchain</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../part-cache.html">The part cache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../fab-and-ordering.html">Fab bundles and staged orders</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../releases.html">Releases and versioning</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../regression-ladder.html">Regression ladder</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../decisions.html">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Design: thermal and electromagnetic field solvers (FEA) in yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../history/import-manifest.html">History import manifest</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../about-the-name.html">About the name</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../references.html">Foundations and references</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../DEVELOPERS.html">Developing yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../CONTRIBUTING.html">Contributing to yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../AGENTS.html">Rules for agents</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../WORKLOG.html">Worklog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../THIRD_PARTY.html">Third-party material</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../README.html">yapnr</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/blob/main/docs/design/fea-integration.md?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/edit/main/docs/design/fea-integration.md" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="design-thermal-and-electromagnetic-field-solvers-fea-in-yapnr">
+<h1>Design: thermal and electromagnetic field solvers (FEA) in yapnr<a class="headerlink" href="#design-thermal-and-electromagnetic-field-solvers-fea-in-yapnr" title="Link to this heading">¶</a></h1>
+<p>Status: <strong>proposal</strong> for <a class="reference external" href="https://github.com/Studio-Fug/yapnr/issues/27">issue #27</a>. The tool
+survey and a feasibility spike were done on 2026-09-30, followed by an adversarial review on
+2026-10-01 that corrected several claims and added one sensitivity run (FR-4 in-plane conductivity,
+§5.2); nothing is implemented yet. Section 10 lists the follow-up issues. Numbers marked “est.” are
+estimates, not measurements.</p>
+<section id="goals">
+<h2>1. Goals<a class="headerlink" href="#goals" title="Link to this heading">¶</a></h2>
+<p>yapnr routes boards against electrical contracts, but every physical model behind those contracts
+is a closed-form screen: IPC-2221 widths for current, a resistive screen for short necks, an
+assumed current split for parallel branches and via arrays, closed-form mutual C and M for the
+noise budget (#26), and closed-form line impedance for pairs and SI v1. This design adds field
+solvers that back those screens with a round trip:</p>
+<ol class="arabic simple">
+<li><p><strong>Export</strong> the routed copper (tracks, arcs, pads, vias, zone fills) with its identity (uuid,
+net, layer) and the dielectric stackup (thicknesses, εr, copper weights, thermal properties).</p></li>
+<li><p><strong>Run</strong> a simulation chosen per question, as a cached, time-bounded job.</p></li>
+<li><p><strong>Import</strong> the results as data keyed by copper item, and use them to drive validation (contract
+checks, reports, viewer overlays) and PnR (calibrated screening models and costs, repair
+evidence).</p></li>
+</ol>
+<section id="the-four-questions">
+<h3>1.1 The four questions<a class="headerlink" href="#the-four-questions" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Question</p></th>
+<th class="head"><p>What it backs in yapnr</p></th>
+<th class="head"><p>Outputs</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>DC current density, IR drop and Joule heating: temperature rise of tracks, necks, vias, planes</p></td>
+<td><p>current contracts (<code class="docutils literal notranslate"><span class="pre">current_width</span></code>), <code class="docutils literal notranslate"><span class="pre">neck_budget</span></code>, via arrays, the current-sharing report</p></td>
+<td><p>per item: current, J_max, power, ΔT mean and max; per net: R and drop; per via: current</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>Quasi-static RLC: mutual C and L between nets and to planes</p></td>
+<td><p>noise-budget screening model (#26), pair impedance rules, SI v1 segment values</p></td>
+<td><p>C and L per mm per layer relation; kC, kL; Z0, Zodd, Zeven, εeff; C/L of 3D windows</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>Full-wave crosstalk, S-parameters and impedance of critical nets</p></td>
+<td><p>SI v1 (replacing lumped segments), future fast interfaces</p></td>
+<td><p>Touchstone files; rational macromodels as SPICE subcircuits</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>Board-level thermal with component dissipation (optional)</p></td>
+<td><p>placement (spacing of heat sources), ΔT of copper next to hot parts</p></td>
+<td><p>temperature map; ΔT per component and per copper item</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Priority is the order of the table. The typical target board is 4-layer 1.6 mm FR-4 (JLCPCB
+JLC04161H-7628: 35 µm outer, 15 µm inner copper), about 60×50 mm, a few hundred nets, switching
+converters at 0.4–2 MHz with ns edges, USB 2.0 full speed, I2C, I2S and WS2812 data.</p>
+</section>
+<section id="requirements">
+<h3>1.2 Requirements<a class="headerlink" href="#requirements" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Free and open source first.</strong> Research codes are in scope if they have published validation and
+can be brought up to these requirements.</p></li>
+<li><p><strong>Licence boundary.</strong> yapnr is AGPL-3.0-or-later. Code imported into a yapnr process must have an
+AGPL-compatible licence (permissive, LGPL, MPL-2.0, GPL-3.0, GPL-2.0-or-later, AGPL-3.0). Any OSI
+licence is fine for a solver run as a separate program (GPL-2.0-only included). See §3.2.</p></li>
+<li><p><strong>Platforms.</strong> macOS arm64 for development; linux aarch64 and x86_64 in the Ubuntu 24.04 CI
+containers. Installs are per-user or per-image; nothing system-wide is needed on a developer Mac.</p></li>
+<li><p><strong>Budgets.</strong> Solves run under <code class="docutils literal notranslate"><span class="pre">nice</span></code>, with at most 4 threads and a timeout per study (§7.7).</p></li>
+<li><p><strong>Reproducible.</strong> Inputs are canonical and hashed, environments are locked, results are cached by
+content (§7.9, §7.10).</p></li>
+<li><p><strong>Qualified.</strong> Every number states the model that produced it (<code class="docutils literal notranslate"><span class="pre">screening</span></code>, <code class="docutils literal notranslate"><span class="pre">fea-calibrated</span></code>,
+<code class="docutils literal notranslate"><span class="pre">fea-2.5d</span></code>, <code class="docutils literal notranslate"><span class="pre">fea-3d</span></code>) and its provenance. An FEA result never silently replaces a contract.</p></li>
+<li><p><strong>Validated.</strong> Every model that feeds a decision has validation cases in CI against exact
+solutions, published formulas or a second code (§5, §7.11).</p></li>
+</ul>
+</section>
+<section id="non-goals">
+<h3>1.3 Non-goals<a class="headerlink" href="#non-goals" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>EMC compliance (radiated emissions) prediction.</p></li>
+<li><p>Full-wave simulation of a whole board.</p></li>
+<li><p>Transient thermal (steady state first; transient only if pulsed loads need it).</p></li>
+<li><p>Replacing KiCad DRC, which stays the judge of geometry.</p></li>
+<li><p>A GUI. Results are files, reports and viewer overlays.</p></li>
+</ul>
+</section>
+</section>
+<section id="summary">
+<h2>2. Summary<a class="headerlink" href="#summary" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Q</p></th>
+<th class="head"><p>Primary (runs in yapnr)</p></th>
+<th class="head"><p>Reference and cross-check</p></th>
+<th class="head"><p>Fallbacks</p></th>
+<th class="head"><p>When it runs</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>in-house <strong>layered electro-thermal solver</strong> (scikit-fem, scipy, pyamg)</p></td>
+<td><p><strong>Elmer</strong> StatCurrent + Heat in 3D, as an external program; Elmer WhitneyAV harmonic for the AC part of switched currents</p></td>
+<td><p>FEniCSx (in-process 3D), GetDP; padne for the DC part</p></td>
+<td><p>per-stackup calibration; stage boundaries; finalists</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>in-house <strong>2D cross-section solver</strong> (scikit-fem) producing per-stackup tables</p></td>
+<td><p>Elmer StatElec (2D and 3D windows); Elmer WhitneyAV harmonic and FastHenry2 for 3D L and R(f)</p></td>
+<td><p>FasterCap (2D and 3D), Palace BoundaryMode (2D), femwell, TNT-MMTL; Palace electro- and magnetostatic</p></td>
+<td><p>calibration per stackup; 3D windows nightly</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>deferred: quasi-static RLGC tables cover the typical board (§6.3); then <strong>Palace</strong> driven</p></td>
+<td><p>openEMS (FDTD); Elmer VectorHelmholtz (already built, ports)</p></td>
+<td><p>OpenParEM3D (x86 only), EMerge</p></td>
+<td><p>manual, per coupon</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>the layered solver with component heat sources</p></td>
+<td><p>Elmer Heat with component blocks</p></td>
+<td><p>none</p></td>
+<td><p>per placement finalist</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>What the spike showed (§5):</p>
+<ul class="simple">
+<li><p>The export works without kicad-cli’s 3D exports: pcbnew polygons keep uuid, net and layer, and
+one conformal layered mesh (an in-plane triangulation extruded slab by slab) feeds both the
+in-house solver and Elmer.</p></li>
+<li><p><strong>Q1:</strong> the in-house layered solver and Elmer 3D agree within 1.2 % on ΔT, and both are within
+0.6 % of exact solutions. This is solver verification on a shared mesh and problem definition,
+not validation of the board model. IPC-2221, today’s current screen, reads 1.9–3.6 times the FEA
+ΔT when inner planes are present. Without planes the ratio depends on material data: 0.48–1.14
+with isotropic FR-4 (k = 0.3 W/mK), but 1.1–1.9 on the three cases re-run with an in-plane
+conductivity of 0.8 W/mK. So IPC-2221 is not a consistent screen, but the spike does not show
+that it is unconservative. The FEA supports the short-neck contract: a 0.5 mm long neck raises
+the peak ΔT by 1.5–4.6 K, where IPC-2221 applied to the neck width predicts 124 K.</p></li>
+<li><p><strong>Q1:</strong> the absolute ΔT on boards without planes depends on two poorly known inputs. h = 5–20
+W/m²K moves it by −22 % to +28 %. FR-4 in-plane conductivity of 0.8 instead of 0.3 W/mK lowers it
+by about 40 %. With planes the two effects are −12 % to +21 % and −5 %.</p></li>
+<li><p><strong>Q2:</strong> the 2D solver matches Hammerstad–Jensen within 0.11 % and Kirschning–Jansen within that
+formula’s own accuracy. The Johnson–Graham rule under-estimates inductive coupling kL by 7–10 %,
+and same-layer capacitive coupling kC is 1.6–3 times smaller than kL.</p></li>
+<li><p><strong>Runtime</strong> on an Apple-silicon Mac, single-threaded solves: 2D cases 0.4–2.3 s, layered Q1
+coupons 11–36 s, Elmer 3D windows 8–185 s. These were single-trace coupons. Real nets, the
+whole-board solve and the sub-second repair solve are not measured (§7.7).</p></li>
+<li><p><strong>Not yet covered by the design or the spike, found in review:</strong> where the per-pad load currents
+and return paths come from (§7.3), the AC part of switched currents, which splits between
+parallel paths by inductance rather than resistance (§6.1), and FR-4 anisotropy and solder mask,
+which the spike left out but which change headline numbers (§5.2, §6.2).</p></li>
+</ul>
+</section>
+<section id="tool-survey">
+<h2>3. Tool survey<a class="headerlink" href="#tool-survey" title="Link to this heading">¶</a></h2>
+<section id="method-and-limits">
+<h3>3.1 Method and limits<a class="headerlink" href="#method-and-limits" title="Link to this heading">¶</a></h3>
+<p>Desk survey of primary sources (project repositories, manuals, release notes, package indexes,
+papers with validation), plus the local <code class="docutils literal notranslate"><span class="pre">kicad-cli</span></code> 10.0.6. Versions are those current on
+2026-09-30. The web-search quota ran out partway through, so later facts come from fetching
+project pages directly, and coverage of academic papers on PCB heating codes is incomplete
+(open question 7, §12). Ranks weigh fit to the questions, validation, licence and packaging.
+The review on 2026-10-01 re-checked licences against the projects’ licence files, versions
+against GitHub releases, and wheel and package availability against the PyPI, conda-forge and
+Ubuntu 24.04 indexes. It corrected the entries for Elmer’s licence, openEMS’s version, pyamg’s
+wheels and Elmer’s CI platforms, and it added Elmer’s electromagnetic modules, Palace’s 2D mode
+solver, FasterCap 2D, FreeFEM and FEMM.</p>
+</section>
+<section id="licence-boundary">
+<h3>3.2 Licence boundary<a class="headerlink" href="#licence-boundary" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Integration</p></th>
+<th class="head"><p>Allowed licences</p></th>
+<th class="head"><p>Examples</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>imported by yapnr code (controller or FEA worker)</p></td>
+<td><p>AGPL-compatible: permissive, LGPL, MPL-2.0, GPL-3.0, GPL-2.0-or-later</p></td>
+<td><p>scikit-fem, scipy, pyamg, shapely, meshio, gmsh, scikit-rf</p></td>
+</tr>
+<tr class="row-odd"><td><p>external program (subprocess, files in and out)</p></td>
+<td><p>any OSI licence</p></td>
+<td><p>Elmer (GPL-2.0-or-later), openEMS (GPL-3.0), Palace (Apache-2.0)</p></td>
+</tr>
+<tr class="row-even"><td><p>code copied in (seeding the in-house solvers)</p></td>
+<td><p>AGPL-compatible, with attribution in <code class="docutils literal notranslate"><span class="pre">THIRD_PARTY.md</span></code></p></td>
+<td><p>padne (GPL-3.0-or-later), Ki-PIDA (AGPL-3.0), KiCad_Thermal_Sim (MIT)</p></td>
+</tr>
+<tr class="row-odd"><td><p>shipped as a binary in a published image</p></td>
+<td><p>any OSI licence, plus the source obligations of the GPL</p></td>
+<td><p>Elmer and gmsh in <code class="docutils literal notranslate"><span class="pre">yapnr-fea</span></code> with a <code class="docutils literal notranslate"><span class="pre">-src</span></code> companion (§7.11)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Excluded: Kratos (its core licence is BSD with the advertising clause) for in-process use;
+anything GPL-2.0-only in-process; FEMM (Aladdin Free Public License, which is not OSI-approved,
+and Windows-only) everywhere. Copying “-only” code (GPL-3.0-only, AGPL-3.0-only) into yapnr is
+allowed, but those files then cannot follow yapnr’s “or later” grant. Record the exact SPDX
+identifier per copied file.</p>
+</section>
+<section id="thermal-and-dc-current-q1-q4-ranked">
+<h3>3.3 Thermal and DC current (Q1, Q4), ranked<a class="headerlink" href="#thermal-and-dc-current-q1-q4-ranked" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Tool (version)</p></th>
+<th class="head"><p>Method and physics</p></th>
+<th class="head"><p>Licence, use</p></th>
+<th class="head"><p>Validation evidence</p></th>
+<th class="head"><p>Platforms (mac arm64 / lin arm64 / lin x64)</p></th>
+<th class="head"><p>Verdict</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>in-house layered solver</p></td>
+<td><p>2.5D sheet conduction per layer; layered 3D heat through the stack; ρ(T); convection</p></td>
+<td><p>AGPL, in-process (FEA worker)</p></td>
+<td><p>ours: spike vs exact solutions, IPC-2152 and Elmer (§5.2)</p></td>
+<td><p>pure Python on scipy, scikit-fem, pyamg: all three</p></td>
+<td><p><strong>primary for Q1 and Q4</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>Elmer FEM 26.2.1</p></td>
+<td><p>3D FEM: StatCurrent with Joule heating, Heat, ρ(T); resistance and capacitance matrices; also MagnetoDynamics (WhitneyAV, harmonic, with circuits) and VectorHelmholtz with ports</p></td>
+<td><p>GPL-2.0-or-later (ElmerSolver library LGPL-2.1-or-later), external</p></td>
+<td><p>30 years of use; about 970 regression test cases (838/840 non-slow pass in our build); upstream CI builds on macos-14 (arm64), ubuntu-24.04 and ubuntu-24.04-arm</p></td>
+<td><p>source build (done in the spike) / source build (upstream CI) / source build (upstream CI)</p></td>
+<td><p><strong>reference for Q1, Q2</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>padne 0.3</p></td>
+<td><p>2.5D FEM Laplace on KiCad copper with vias, DC only; schematic directives for sources, current loads, resistors and regulators</p></td>
+<td><p>GPL-3.0-or-later, can be combined</p></td>
+<td><p>NLnet-funded; CI tests against exact sheet and annulus solutions; about 40 KiCad fixture boards (vias, via-in-pad, castellations, floating copper)</p></td>
+<td><p>all-in-one linux-x64 binary (bundles KiCad); pipx or source build (CGAL, boost, KiCad Python) elsewhere</p></td>
+<td><p>cross-check for Q1 DC; its load-directive model and fixtures are worth reusing (§7.3)</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>scikit-fem 12</p></td>
+<td><p>FEM library: any weak form, P1/P2, 2D/3D</p></td>
+<td><p>BSD-3, in-process</p></td>
+<td><p>examples checked against exact solutions (incl. Joule heating of a wire)</p></td>
+<td><p>pure Python: all three</p></td>
+<td><p><strong>the in-house solvers’ FEM core</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>FEniCSx (DOLFINx 0.11)</p></td>
+<td><p>FEM framework, PETSc solvers</p></td>
+<td><p>LGPL-3.0, in-process</p></td>
+<td><p>verified by manufactured solutions</p></td>
+<td><p>conda-forge on all three (heavy PETSc/MPI stack)</p></td>
+<td><p>fallback if in-process 3D is needed</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p>NGSolve 6.2.2607</p></td>
+<td><p>FEM framework; OCC kernel reads STEP</p></td>
+<td><p>LGPL-2.1, in-process</p></td>
+<td><p>mature</p></td>
+<td><p>PyPI / none (no aarch64 wheel, not on conda-forge) / PyPI</p></td>
+<td><p>not chosen: no linux aarch64 build</p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p>KiCad_Thermal_Sim</p></td>
+<td><p>2D finite volume per layer with vertical coupling; Joule; transient</p></td>
+<td><p>MIT, can vendor</p></td>
+<td><p>tests, no validation</p></td>
+<td><p>pure Python</p></td>
+<td><p>code to mine</p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td><p>GetDP 3.5 + Gmsh</p></td>
+<td><p>FEM with user-written formulations</p></td>
+<td><p>GPL-2.0-or-later, external</p></td>
+<td><p>mature (ONELAB model library)</p></td>
+<td><p>binary / Ubuntu <code class="docutils literal notranslate"><span class="pre">getdp</span></code> 3.2 / binary</p></td>
+<td><p>fallback reference</p></td>
+</tr>
+<tr class="row-even"><td><p>9</p></td>
+<td><p>Ki-PIDA</p></td>
+<td><p>2.5D resistor grid for IR drop with ρ(T)</p></td>
+<td><p>AGPL-3.0</p></td>
+<td><p>alpha, no validation; GUI plugin</p></td>
+<td><p>KiCad plugin</p></td>
+<td><p>ideas only</p></td>
+</tr>
+<tr class="row-odd"><td><p>10</p></td>
+<td><p>SfePy 2026.3</p></td>
+<td><p>FEM; thermo-electric example</p></td>
+<td><p>BSD-3</p></td>
+<td><p>mature</p></td>
+<td><p>conda-forge osx-arm64 and linux-64, no linux-aarch64; PyPI source only</p></td>
+<td><p>not chosen</p></td>
+</tr>
+<tr class="row-even"><td><p>11</p></td>
+<td><p>MFEM 4.8 / PyMFEM 4.10</p></td>
+<td><p>FEM library; <code class="docutils literal notranslate"><span class="pre">joule</span></code> miniapp</p></td>
+<td><p>BSD-3</p></td>
+<td><p>mature</p></td>
+<td><p>MFEM on conda-forge on all three; PyMFEM wheels for macOS arm64 and linux x86_64 only</p></td>
+<td><p>not chosen (C++ effort)</p></td>
+</tr>
+<tr class="row-odd"><td><p>12</p></td>
+<td><p>Sparselizard</p></td>
+<td><p>nonlinear electro-thermal hp-FEM</p></td>
+<td><p>GPL-2.0-or-later</p></td>
+<td><p>one maintainer; last release 2022 (repository still active)</p></td>
+<td><p>source build</p></td>
+<td><p>not chosen</p></td>
+</tr>
+<tr class="row-even"><td><p>12b</p></td>
+<td><p>FreeFEM 4.13</p></td>
+<td><p>FEM language; any weak form, 2D and 3D</p></td>
+<td><p>LGPL-3.0, external</p></td>
+<td><p>mature, widely used</p></td>
+<td><p>conda-forge linux-64 and osx-64 only; upstream installers for x86_64</p></td>
+<td><p>not chosen: no arm64 packages</p></td>
+</tr>
+<tr class="row-odd"><td><p>13</p></td>
+<td><p>CalculiX</p></td>
+<td><p>structural and thermal FEM; Joule only through induction</p></td>
+<td><p>GPL-2.0-or-later, external</p></td>
+<td><p>mature</p></td>
+<td><p>conda-forge on all three</p></td>
+<td><p>Q4 only, not needed</p></td>
+</tr>
+<tr class="row-even"><td><p>14</p></td>
+<td><p>MOOSE</p></td>
+<td><p>multiphysics; <code class="docutils literal notranslate"><span class="pre">JouleHeatingSource</span></code></p></td>
+<td><p>LGPL-2.1</p></td>
+<td><p>formal QA</p></td>
+<td><p>INL conda osx-arm64 and linux-64 only; multi-GB</p></td>
+<td><p>too heavy</p></td>
+</tr>
+<tr class="row-odd"><td><p>15</p></td>
+<td><p>SPIKE 0.3.1</p></td>
+<td><p>PEEC DC, plate thermal, openEMS hooks</p></td>
+<td><p>Apache-2.0</p></td>
+<td><p>preview; Windows-first</p></td>
+<td><p>experimental</p></td>
+<td><p>watch (not re-verified in review)</p></td>
+</tr>
+<tr class="row-even"><td><p>16</p></td>
+<td><p>OpenFOAM <code class="docutils literal notranslate"><span class="pre">chtMultiRegionFoam</span></code></p></td>
+<td><p>CFD conjugate heat transfer, no electrics</p></td>
+<td><p>GPL-3.0, external</p></td>
+<td><p>mature</p></td>
+<td><p>source / source / conda-forge linux-64</p></td>
+<td><p>only if forced airflow ever matters (Q4)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Research codes worth mining for formulations, not for direct use: <strong>3D-ICE</strong> (EPFL, GPL-3.0; a
+validated compact finite-volume model of layered stacks), <strong>HotSpot 7</strong> (UVA, permissive; a
+validated grid thermal model) and <strong>OpenROAD PDNSim</strong> (BSD-3; resistor-network IR drop). All three
+are chip-scale but layered in the same way as a PCB.</p>
+<p>No free PCB-specific heating code with published validation against IPC-2152 or measurements was
+found. The general solvers are verified as solvers; validating the PCB model (geometry, materials,
+boundary conditions) is ours to do (§5, §7.11). The cheapest validation backed by measurement is to
+model the IPC-2152 test-board configuration (board size, thickness, plane presence and mounting as
+described in IPC-2152 and by Brooks and Adam) and compare with the charts. That tests the
+environment and material model as well as the solver. The spike’s comparison of a 60×50 mm board
+with the charts does not.</p>
+<p>Component heat sources (Q4) should use the JEDEC compact-model conventions (JESD51 θJA/θJB/ΨJT
+data, or the JESD15-3 two-resistor model when θJC and θJB are both known) rather than an ad-hoc
+junction-to-board resistance.</p>
+</section>
+<section id="electromagnetic-q2-q3-ranked">
+<h3>3.4 Electromagnetic (Q2, Q3), ranked<a class="headerlink" href="#electromagnetic-q2-q3-ranked" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Tool (version)</p></th>
+<th class="head"><p>Method</p></th>
+<th class="head"><p>Answers</p></th>
+<th class="head"><p>Licence, use</p></th>
+<th class="head"><p>Validation evidence</p></th>
+<th class="head"><p>Platforms</p></th>
+<th class="head"><p>Scale</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>Elmer FEM 26.2.1</p></td>
+<td><p>FEM: StatElec, StatCurrent, MagnetoDynamics (WhitneyAV harmonic, circuit coupling), VectorHelmholtz</p></td>
+<td><p>Q2: Maxwell C matrix; L and R(f) with finite σ through A-V; Q1; Q3 with port boundaries (impedance-matrix tests upstream)</p></td>
+<td><p>GPL-2.0-or-later, external</p></td>
+<td><p>as above; our 2D results match scikit-fem within 1e-9 (P2) (§5.3); EM port and waveguide regression tests upstream</p></td>
+<td><p>source build on all three (upstream CI covers all three)</p></td>
+<td><p>3D window: seconds to minutes</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>AWS Palace 0.18.1</p></td>
+<td><p>high-order FEM (MFEM), adaptive refinement; problem types Driven, Transient, Eigenmode, Electrostatic, Magnetostatic, 2D BoundaryMode</p></td>
+<td><p>Q2: terminal C and M matrices, 2D Z0/γ with losses; Q3: S-parameters with adaptive sweep, circuit synthesis</p></td>
+<td><p>Apache-2.0, external</p></td>
+<td><p>C and eigenmodes agree with COMSOL/Ansys, and resonators within 0.3 % of measurement, both for <strong>superconducting qubit chips</strong> (arXiv 2511.01220, 2511.09041), not lossy PCB interconnect</p></td>
+<td><p>no binaries, no conda-forge package; Spack, <code class="docutils literal notranslate"><span class="pre">spack</span> <span class="pre">containerize</span></code> or CMake superbuild; needs MPI</p></td>
+<td><p>window: minutes to hours (est.); driven needs f &gt; 0; the <code class="docutils literal notranslate"><span class="pre">Conductivity</span></code> boundary assumes thickness ≫ skin depth (not true for 15–35 µm copper below about 100 MHz)</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>openEMS v0.0.36 (2023; v0.37.0 at rc3 in 2026-09) + gerber2ems</p></td>
+<td><p>EC-FDTD</p></td>
+<td><p>Q3: S-parameters, Z(f), fields</p></td>
+<td><p>GPL-3.0 (CSXCAD LGPL-3.0; gerber2ems Apache-2.0)</p></td>
+<td><p>community use; gerber2ems ships a PCB example with VNA data (<code class="docutils literal notranslate"><span class="pre">stub_short</span></code>); no PCB benchmark suite</p></td>
+<td><p>Windows binaries only; not in Ubuntu 24.04 or conda-forge; source builds elsewhere</p></td>
+<td><p>coupons; MHz content needs long runs</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>TNT-MMTL</p></td>
+<td><p>2D BEM</p></td>
+<td><p>Q2: RLGC matrices for N conductors with planes; Z0, Zodd, Zeven</p></td>
+<td><p>GPL-2.0 (or-later grant not verified), external</p></td>
+<td><p>decades of use; last SourceForge update 2013; no recent public benchmark</p></td>
+<td><p>C++/Fortran with a Tcl/Tk front end; arm64 builds unverified</p></td>
+<td><p>ms to s per cross-section</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>FastHenry2 / FasterCap</p></td>
+<td><p>multipole-accelerated PEEC / BEM (FasterCap: 2D and 3D)</p></td>
+<td><p>Q2: R + jωL matrix with planes and skin effect; C matrix</p></td>
+<td><p>MIT-style / LGPL-2.1, external</p></td>
+<td><p>reference results in Kamon 1994 and Nabors 1991</p></td>
+<td><p>plain C/C++ builds; last code changes 2015 (FastHenry2) and 2018 (FasterCap)</p></td>
+<td><p>seconds to minutes per window; FastHenry ground planes are rectangular meshes with point, rectangle or circle holes, so pours need conversion</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p>scikit-fem / NGSolve / DOLFINx</p></td>
+<td><p>FEM frameworks</p></td>
+<td><p>Q1, Q2 (we write the forms)</p></td>
+<td><p>BSD-3 / LGPL-2.1 / LGPL-3.0, in-process</p></td>
+<td><p>ours to validate</p></td>
+<td><p>see §3.3</p></td>
+<td><p>2D: seconds</p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p>femwell 0.1.12</p></td>
+<td><p>2D FEM mode solver on scikit-fem</p></td>
+<td><p>Q2: Z0, εeff, C and L of coupled lines</p></td>
+<td><p>GPL-3.0</p></td>
+<td><p>CPW tutorial checked against published data; last release 2025-01</p></td>
+<td><p>pure Python</p></td>
+<td><p>seconds</p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td><p>PyPEEC 5.8</p></td>
+<td><p>FFT-accelerated voxel PEEC</p></td>
+<td><p>Q1: DC/AC J and R; Q2: L, no C</p></td>
+<td><p>MPL-2.0</p></td>
+<td><p>JOSS-reviewed; few PCB benchmarks</p></td>
+<td><p>PyPI and conda-forge</p></td>
+<td><p>net windows (uniform voxels)</p></td>
+</tr>
+<tr class="row-even"><td><p>9</p></td>
+<td><p>GetDP 3.5 + Gmsh</p></td>
+<td><p>FEM with user formulations</p></td>
+<td><p>Q1–Q4</p></td>
+<td><p>GPL-2.0-or-later, external</p></td>
+<td><p>ONELAB model library</p></td>
+<td><p>see §3.3</p></td>
+<td><p>like Elmer</p></td>
+</tr>
+<tr class="row-odd"><td><p>10</p></td>
+<td><p>EMerge 2.8.9</p></td>
+<td><p>Python time-harmonic FEM</p></td>
+<td><p>Q3: Touchstone; PCB layouter</p></td>
+<td><p>GPL-2.0-or-later</p></td>
+<td><p>none published; one maintainer</p></td>
+<td><p>pure-Python wheel, but needs gmsh (no PyPI linux aarch64 wheel)</p></td>
+<td><p>coupons</p></td>
+</tr>
+<tr class="row-even"><td><p>11</p></td>
+<td><p>OpenParEM2D/3D 2.1</p></td>
+<td><p>high-order full-wave FEM</p></td>
+<td><p>Q3: S-parameters; 2D γ and Z0</p></td>
+<td><p>GPL-3.0-or-later, external</p></td>
+<td><p>accuracy manual: ~1e-9 against analytic waveguides; coupled microstrip matches literature; &gt; 1 % error near 1 MHz</p></td>
+<td><p>x86 Linux binaries only</p></td>
+<td><p>coupons</p></td>
+</tr>
+<tr class="row-odd"><td><p>12–14</p></td>
+<td><p>atlc; Sparselizard; MEEP 1.34</p></td>
+<td><p>2D finite differences; hp-FEM; photonic FDTD</p></td>
+<td><p>atlc: Q2 for ≤ 2 conductors; MEEP: Q3 but a poor fit</p></td>
+<td><p>GPL-2.0 / GPL-2.0-or-later</p></td>
+<td><p>little PCB evidence</p></td>
+<td><p>atlc dormant but packaged in Ubuntu 24.04 (amd64, arm64); MEEP on conda-forge</p></td>
+<td><p>MEEP: uniform grid, infeasible at 15 µm over 60 mm</p></td>
+</tr>
+<tr class="row-even"><td><p>—</p></td>
+<td><p>FEMM 4.2</p></td>
+<td><p>2D FEM: magnetics, electrostatics, heat, current flow</p></td>
+<td><p>2D Q1/Q2 hand checks</p></td>
+<td><p>Aladdin Free Public License (not OSI)</p></td>
+<td><p>widely used in industry and teaching</p></td>
+<td><p>Windows only</p></td>
+<td><p>excluded (licence, platform)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="glue">
+<h3>3.5 Glue<a class="headerlink" href="#glue" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Tool</p></th>
+<th class="head"><p>Role</p></th>
+<th class="head"><p>Licence</p></th>
+<th class="head"><p>Packaging notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>gmsh 4.15</p></td>
+<td><p>meshing; physical groups; msh 2.2 and 4.1 output</p></td>
+<td><p>GPL-2.0-or-later</p></td>
+<td><p>PyPI wheels for macOS arm64 and linux x86_64, <strong>none for linux aarch64</strong>: use conda-forge there (Ubuntu 24.04 ships 4.12.1, too old to match the pin)</p></td>
+</tr>
+<tr class="row-odd"><td><p>meshio</p></td>
+<td><p>reading and writing msh, VTU, XDMF</p></td>
+<td><p>MIT</p></td>
+<td><p>pure Python</p></td>
+</tr>
+<tr class="row-even"><td><p>pyamg 5.3</p></td>
+<td><p>algebraic multigrid for the in-house solvers</p></td>
+<td><p>MIT</p></td>
+<td><p>PyPI wheels for macOS arm64 and linux x86_64, <strong>none for linux aarch64</strong> (source only); conda-forge on all three</p></td>
+</tr>
+<tr class="row-odd"><td><p>scipy, shapely</p></td>
+<td><p>sparse algebra; polygon operations</p></td>
+<td><p>BSD-3</p></td>
+<td><p>wheels or conda-forge on all three</p></td>
+</tr>
+<tr class="row-even"><td><p>scikit-rf 2.1</p></td>
+<td><p>Touchstone I/O, mixed-mode, TDR, vector fitting to SPICE subcircuits</p></td>
+<td><p>BSD-3</p></td>
+<td><p>pip and conda-forge</p></td>
+</tr>
+<tr class="row-odd"><td><p>micromamba</p></td>
+<td><p>user-space conda-forge environments</p></td>
+<td><p>BSD-3</p></td>
+<td><p>single static binary</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="front-ends-looked-at">
+<h3>3.6 Front ends looked at<a class="headerlink" href="#front-ends-looked-at" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>kicad-cli 10.0.6 <code class="docutils literal notranslate"><span class="pre">pcb</span> <span class="pre">export</span> <span class="pre">step|brep|xao</span></code></strong> with <code class="docutils literal notranslate"><span class="pre">--include-tracks</span></code>, <code class="docutils literal notranslate"><span class="pre">--include-pads</span></code>,
+<code class="docutils literal notranslate"><span class="pre">--include-zones</span></code>, <code class="docutils literal notranslate"><span class="pre">--include-inner-copper</span></code>, <code class="docutils literal notranslate"><span class="pre">--net-filter</span></code> and <code class="docutils literal notranslate"><span class="pre">--fuse-shapes</span></code>: produces 3D
+copper, but without identity (§4). Useful for visual checks and for component bodies in Q4.</p></li>
+<li><p><strong>gerber2ems</strong> (Antmicro, Apache-2.0) and <strong>kicad-si-simulation-wrapper</strong> (Apache-2.0): Gerbers
+rasterised through gerbv, then an openEMS model. Net identity and resolution are lost; their
+openEMS grid and port rules are worth reusing for Q3, and gerber2ems’s <code class="docutils literal notranslate"><span class="pre">stub_short</span></code> example
+with its VNA measurement is a ready Q3 validation case.</p></li>
+<li><p><strong>pcbmodelgen</strong> (GPL-3.0; KiCad board to openEMS model; last release 2017) is an older
+KiCad-native route to openEMS. Its mesh-line rules are worth a look; the code is not.</p></li>
+<li><p><strong>padne</strong> reads KiCad projects directly, with nets, vias and schematic load directives
+(§3.3). It is the closest existing front end to the Q1 round trip.</p></li>
+<li><p><strong>IPC-2581</strong> export is the hand-off for cross-checks in commercial tools, outside CI.</p></li>
+</ul>
+</section>
+</section>
+<section id="export-probes">
+<h2>4. Export probes<a class="headerlink" href="#export-probes" title="Link to this heading">¶</a></h2>
+<p>Run with KiCad 10.0.6 on a 4-layer board of the typical size (about 4,000 tracks, 300 vias and 30
+zones):</p>
+<ol class="arabic simple">
+<li><p><strong>pcbnew polygons are fast and keep identity.</strong> <code class="docutils literal notranslate"><span class="pre">TransformShapeToPolygon</span></code> with <code class="docutils literal notranslate"><span class="pre">ERROR_INSIDE</span></code>
+at 1 µm arc error converted every track, arc, via layer, pad layer and zone fill (about 5,800
+items, 188k vertices) in 0.27 s, each with uuid, net and layer. Merged copper per layer took
+14 ms.</p></li>
+<li><p><strong>kicad-cli 3D exports have no identity.</strong> A full-board <code class="docutils literal notranslate"><span class="pre">pcb</span> <span class="pre">export</span> <span class="pre">xao</span></code> took 2.1 s and wrote
+12.8 MB with 1,944 solids. Only pad faces are named (<code class="docutils literal notranslate"><span class="pre">Pad_F_&lt;ref&gt;_&lt;pad&gt;_&lt;net&gt;</span></code>); track and zone
+solids carry no net, layer or uuid. Tagging by net would need one export per net.</p></li>
+<li><p><strong>The KiCad stackup can be stale.</strong> Boards can keep KiCad’s default 2-layer stackup while four
+copper layers are enabled; the XAO export then had no copper between z = 0 and 1.51 mm. The
+<code class="docutils literal notranslate"><span class="pre">BOARD_STACKUP</span></code> object is also not exposed to KiCad’s Python. The stackup therefore comes from
+yapnr’s own <code class="docutils literal notranslate"><span class="pre">rules['stackup']</span></code> (the #26 fab JSON, read through <code class="docutils literal notranslate"><span class="pre">pnr.si.physics.stackup()</span></code>), and
+the KiCad stackup is only a cross-check.</p></li>
+<li><p><strong>Rasterised Gerbers lose nets</strong> (gerber2ems), so they are not a primary path.</p></li>
+</ol>
+<p>Conclusion: the exporter is a KiCad-side worker that dumps pcbnew polygons, and yapnr builds the
+3D model itself from those polygons and its own stackup.</p>
+</section>
+<section id="feasibility-spike">
+<h2>5. Feasibility spike<a class="headerlink" href="#feasibility-spike" title="Link to this heading">¶</a></h2>
+<section id="setup">
+<h3>5.1 Setup<a class="headerlink" href="#setup" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Tools:</strong> Elmer FEM 26.2.1 (external), scikit-fem 12.0.2 (in-process), gmsh 4.15.2, with pyamg
+5.3, scipy, shapely and meshio on Python 3.12. Not tried: Palace, TNT-MMTL, FastHenry2, openEMS
+(the spike was limited to three tools).</p></li>
+<li><p><strong>Install:</strong> user space only. micromamba and a conda-forge environment (20 s), then pip for gmsh
+and pyamg; Elmer built from the release tarball with conda-forge compilers and OpenBLAS (155 s at
+4 jobs, serial build without MPI or GUI). About 460 MB downloaded; 1.6 GB environment including
+compilers. Elmer’s own suite: 838 of 840 non-slow tests pass (the two failures are radiation
+view-factor tests, not used here).</p></li>
+<li><p><strong>Export path:</strong> coupon generators write the same neutral <code class="docutils literal notranslate"><span class="pre">fea-problem</span></code> JSON that a board export
+would (copper polygons per layer with net and id, ports, outline, stackup in the
+<code class="docutils literal notranslate"><span class="pre">pnr.si.physics</span></code> form). A layered mesher overlays all layers into one triangulation that follows
+every copper edge, extrudes it slab by slab into prisms, and names every body and boundary (net,
+layer, port, convection face). The mesh is conformal; no 3D boolean operations on 15–35 µm copper
+are needed. 0.3–2 M prisms take 1–8 s; Elmer’s mesh conversion (ElmerGrid) 0.4–2.5 s.</p></li>
+<li><p><strong>In-house solvers:</strong> (a) a layered electro-thermal solver: sheet conduction
+<code class="docutils literal notranslate"><span class="pre">div((t/ρ(T))</span> <span class="pre">grad</span> <span class="pre">V)</span> <span class="pre">=</span> <span class="pre">0</span></code> on each layer’s copper (P2 triangles), heat on the same triangulation
+times a few linear elements per slab, convection on the top and bottom faces only (board edges
+adiabatic), Joule power from the sheet solve, Picard iteration on ρ(T). Ports in the spike are
+fixed potentials on the trace-end edges, with the total current set by scaling; the floating
+equipotential ports of §7.3 are not yet implemented. (b) A 2D cross-section solver: Maxwell C by
+the energy method
+(P2), L from the capacitance with all εr = 1 (exact for quasi-TEM lines with ideal conductors).</p></li>
+</ul>
+</section>
+<section id="q1-current-and-heating">
+<h3>5.2 Q1: current and heating<a class="headerlink" href="#q1-current-and-heating" title="Link to this heading">¶</a></h3>
+<p>Coupon: one 20 mm trace on F.Cu of a 60×50 mm board, JLC04161H-7628 (1.59 mm); FR-4 k = 0.30
+W/mK isotropic; copper 385 W/mK, ρ20 = 1.724e-8 Ω·m, α = 0.393 %/K coupled to temperature;
+h = 10 W/m²K on both faces (convection plus linearised radiation, still air; Elmer also applied
+it on the board edges, the in-house solver kept the edges adiabatic, which the review found;
+the effect is within the 1.2 % agreement here but must be made consistent); ambient 20 °C; the
+trace ends are ideal electrical contacts with no heat sinking. “Planes” means solid floating copper
+on In1 and In2.</p>
+<p>Validation against exact answers:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Case</p></th>
+<th class="head"><p>In-house layered</p></th>
+<th class="head"><p>Elmer 3D</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>uniform heat flux, copper conduction off, vs flux-channel series (Muzychka et al. 2003), w = 0.5 / 1.5 mm</p></td>
+<td><p>−0.55 % / −0.25 %</p></td>
+<td><p>−0.35 % / −0.20 %</p></td>
+</tr>
+<tr class="row-odd"><td><p>neck resistance vs series squares plus Schwarz–Christoffel step correction (6.9971 mΩ)</p></td>
+<td><p>−0.008 % (−0.044 → −0.008 % as the mesh refines)</p></td>
+<td><p>−0.027 %</p></td>
+</tr>
+<tr class="row-even"><td><p>straight trace resistance</p></td>
+<td><p>exact</p></td>
+<td><p>exact</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Mean temperature rise (K), the four cases checked in both codes:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>w (mm) / I (A)</p></th>
+<th class="head"><p>No planes: in-house / Elmer</p></th>
+<th class="head"><p>IPC-2221 external</p></th>
+<th class="head"><p>IPC-2152 fit</p></th>
+<th class="head"><p>Planes: in-house / Elmer</p></th>
+<th class="head"><p>IPC-2152 fit with plane</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>0.2 / 1</p></td>
+<td><p>17.1 / 17.2</p></td>
+<td><p>19.5</p></td>
+<td><p>14.2</p></td>
+<td><p>6.05 / 6.12</p></td>
+<td><p>5.1</p></td>
+</tr>
+<tr class="row-odd"><td><p>0.5 / 2</p></td>
+<td><p>24.1 / 24.1</p></td>
+<td><p>20.9</p></td>
+<td><p>20.5</p></td>
+<td><p>6.82 / 6.82</p></td>
+<td><p>7.7</p></td>
+</tr>
+<tr class="row-even"><td><p>1.0 / 3</p></td>
+<td><p>23.6 / 23.6</p></td>
+<td><p>16.7</p></td>
+<td><p>20.8</p></td>
+<td><p>5.79 / 5.76</p></td>
+<td><p>8.0</p></td>
+</tr>
+<tr class="row-odd"><td><p>1.5 / 5</p></td>
+<td><p>42.5 / 42.4</p></td>
+<td><p>27.4</p></td>
+<td><p>36.0</p></td>
+<td><p>9.37 / 9.29</p></td>
+<td><p>13.9</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The IPC-2152 fit is a digitised fit of the IPC-2152 charts (as used by an open online calculator),
+corrected for board thickness, FR-4 conductivity and a plane 0.21 mm away; it is itself good to
+about ±10–20 %. The full grid has 26 cases (widths 0.2–1.5 mm, 1–5 A), 8 of them run in both codes;
+in-house and Elmer agree within 1.2 % on ΔT and 0.05 % on hot resistance.</p>
+<p>Findings:</p>
+<ul>
+<li><p><strong>IPC-2221 is not a consistent screen on this class of board.</strong> Over the 26-case grid it reads
+1.9–3.6 times the FEA ΔT with inner planes (very conservative). Without planes it reads 0.48–1.14
+times the FEA with isotropic FR-4: for 1–1.5 mm traces at ΔT ≥ 10 K it under-predicts by 29–38 %.
+The 60×50 mm board is much smaller than the IPC-2152 test boards, and the coupon has no heat
+sinking at the pads, so the no-plane numbers are pessimistic.</p></li>
+<li><p><strong>The no-plane comparison depends on the laminate model (review sensitivity run).</strong> The spike
+used k = 0.30 W/mK in all directions, which is a through-plane value. Glass-reinforced FR-4
+conducts better in-plane (commonly quoted at 2–3 times the through-plane value); the
+JLC04161H-7628 value is not published and must be sourced or measured. Re-running three no-plane
+cases and one plane case with 0.8 W/mK in-plane and 0.3 through-plane lowers the no-plane ΔT by
+about 40 %, and IPC-2221 then reads 1.1–1.9 times the FEA (spike solver, dielectric in-plane
+conductivity changed, all else equal):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>w (mm) / I (A)</p></th>
+<th class="head"><p>ΔT, k = 0.3 isotropic</p></th>
+<th class="head"><p>ΔT, k_xy = 0.8, k_z = 0.3</p></th>
+<th class="head"><p>IPC-2221 / FEA, isotropic → anisotropic</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>0.2 / 1</p></td>
+<td><p>17.1</p></td>
+<td><p>10.2</p></td>
+<td><p>1.14 → 1.91</p></td>
+</tr>
+<tr class="row-odd"><td><p>1.0 / 3</p></td>
+<td><p>23.6</p></td>
+<td><p>14.2</p></td>
+<td><p>0.71 → 1.18</p></td>
+</tr>
+<tr class="row-even"><td><p>1.5 / 5</p></td>
+<td><p>42.5</p></td>
+<td><p>25.0</p></td>
+<td><p>0.64 → 1.10</p></td>
+</tr>
+<tr class="row-odd"><td><p>1.5 / 5, planes</p></td>
+<td><p>9.37</p></td>
+<td><p>8.91</p></td>
+<td><p>2.92 → 3.08</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>So the spike does not show that IPC-2221 is unconservative. It shows that ΔT without planes is
+uncertain by tens of percent until the laminate’s in-plane conductivity and the environment are
+known. With planes the result is robust (−5 %).</p>
+</li>
+<li><p><strong>The IPC-2152 fit</strong> lands within 0.74–0.97 times the isotropic FEA without planes and 0.84–1.67
+times with planes: closer, but still a chart, not the board.</p></li>
+<li><p><strong>Environment and laminate together dominate the absolute uncertainty.</strong> For 0.5 mm at 2 A,
+h = 5 / 10 / 15 / 20 W/m²K gives 30.8 / 24.1 / 20.9 / 18.9 K without planes (−22 % to +28 %
+around h = 10) and 8.3 / 6.8 / 6.3 / 6.0 K with planes (−12 % to +21 %). A single h for both
+faces is itself a simplification. A downward-facing heated surface convects less than an upward
+one, and the radiation part depends on the surface emissivity (solder mask high, bare copper low)
+and rises with temperature.</p></li>
+<li><p><strong>Short necks are benign, as the contract assumes.</strong> A 0.6 mm wide, 0.5 mm long neck in a 1.5 mm
+trace at 5 A carries 238 A/mm² on average, yet raises the peak ΔT only from 43.5 to 48.1 K
+without planes and from 9.7 to 11.1 K with planes; resistance rises 6.5 %. IPC-2221 applied to a
+0.6 mm trace predicts 124 K. This holds for necks short compared with the copper’s thermal
+spreading length (millimetres here). Longer necks approach the IPC behaviour, so the neck
+calibration must sweep the length. Local current density at the neck’s re-entrant corners is
+singular in theory and mesh-dependent in practice, so J is reported as a cross-section or
+small-area average, never as a pointwise maximum (§7.3).</p></li>
+</ul>
+<p>Runtime: in-house 11–36 s for about 137–165 k unknowns (pyamg, one thread; scipy’s direct solver
+took 175–400 s above about 150 k unknowns); Elmer 30–64 s for 0.40–0.47 M elements and 113–185 s
+for the 1.1 M-element neck, 6–10 temperature-coupled iterations, serial.</p>
+</section>
+<section id="q2-capacitance-and-inductance">
+<h3>5.3 Q2: capacitance and inductance<a class="headerlink" href="#q2-capacitance-and-inductance" title="Link to this heading">¶</a></h3>
+<p>Coupon: 0.2 mm traces over a plane 0.2104 mm away, εr 4.4, no solder mask.</p>
+<p>Validation (zero-thickness copper):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Case</p></th>
+<th class="head"><p>Result</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>single line vs Hammerstad–Jensen</p></td>
+<td><p>C +0.11 %, L −0.06 %; Elmer P2 equals scikit-fem within 1e-9; Elmer P1 +0.31 % / −0.26 %</p></td>
+</tr>
+<tr class="row-odd"><td><p>coupled pair vs Kirschning–Jansen (claimed ~1 %), gaps 0.13 / 0.3 / 0.5 mm</p></td>
+<td><p>self C +0.01 / +0.16 / +0.12 %; mutual C −1.4 / −3.6 / −0.6 %; self L ≤ 0.08 %; mutual L −0.2 / −1.1 / −1.4 %</p></td>
+</tr>
+<tr class="row-even"><td><p>broadside pair in a uniform dielectric (exact by symmetry and Hammerstad–Jensen)</p></td>
+<td><p>+0.056 % (a published closed form for broadside strips is −10.6 % off)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Mutual C is a small difference of large terms, so the formula reference is itself uncertain by a
+few percent there.</p>
+<p>With real copper (35 / 15.2 µm), a single 0.2 mm F.Cu line gives 67.9 Ω and εeff 3.00, matching
+yapnr’s <code class="docutils literal notranslate"><span class="pre">pnr.si.physics</span></code> anchor (67.9 Ω, 2.99). Per mm, 0.2 mm lines:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Layer relation</p></th>
+<th class="head"><p>C11 (pF)</p></th>
+<th class="head"><p>Cm (pF)</p></th>
+<th class="head"><p>L11 (nH)</p></th>
+<th class="head"><p>Lm (nH)</p></th>
+<th class="head"><p>kC</p></th>
+<th class="head"><p>kL</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>same layer, gap 0.13</p></td>
+<td><p>0.0896</p></td>
+<td><p>0.0172</p></td>
+<td><p>0.384</p></td>
+<td><p>0.119</p></td>
+<td><p>0.19</p></td>
+<td><p>0.31</p></td>
+</tr>
+<tr class="row-odd"><td><p>same layer, gap 0.3</p></td>
+<td><p>0.0857</p></td>
+<td><p>0.0063</p></td>
+<td><p>0.391</p></td>
+<td><p>0.064</p></td>
+<td><p>0.074</p></td>
+<td><p>0.16</p></td>
+</tr>
+<tr class="row-even"><td><p>same layer, gap 0.5</p></td>
+<td><p>0.0852</p></td>
+<td><p>0.0026</p></td>
+<td><p>0.392</p></td>
+<td><p>0.036</p></td>
+<td><p>0.030</p></td>
+<td><p>0.092</p></td>
+</tr>
+<tr class="row-odd"><td><p>F.Cu over In1 (plane on In2), offset 0 / 0.2 / 0.5 mm</p></td>
+<td><p>0.077 / 0.067 / 0.052</p></td>
+<td><p>0.058 / 0.046 / 0.025</p></td>
+<td><p>0.73</p></td>
+<td><p>0.44 / 0.40 / 0.29</p></td>
+<td><p>0.65 / 0.59 / 0.40</p></td>
+<td><p>0.61 / 0.56 / 0.41</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>For the #26 screening model:</p>
+<ul class="simple">
+<li><p>The Johnson–Graham rule <code class="docutils literal notranslate"><span class="pre">1/(1+(D/H)²)</span></code> is a fair stand-in for kL but low by 7–10 %.</p></li>
+<li><p>On one layer, kC is 1.6–3 times smaller than kL, so a shared coefficient over-states capacitive
+coupling.</p></li>
+<li><p>A broadside pair with no plane between couples 4–9 times the mutual capacitance of a 0.3 mm edge
+gap: the relation classes in #26 are the right first split.</p></li>
+</ul>
+<p>3D check through the layered export (Elmer, pair at 0.3 mm gap, per-mm values from the difference
+of two trace lengths): at 0.55 / 0.91 / 2.05 M prisms (8 / 19 / 75 s) self C is +2.5 / +1.4 / +1.0 %
+and mutual C +5.6 / +3.1 / +2.3 % from 2D. The gap shrinks with refinement but not clearly to
+zero. The first point used different trace lengths (5/10 mm against 3/6 mm), and a Richardson
+estimate from the last two allows a residual of about 1 % (self) and 2 % (mutual). Its cause (end
+fields that do not cancel between the two lengths, air-box size, slab discretisation) is open, and
+the 3D windows should not be called converged to 2D until it is found. 2D cases take 0.4–2.3 s
+(scikit-fem) and 0.9–2 s (Elmer) at 17–35 k triangles.</p>
+<p>Solder mask was left out. On outer layers it sits exactly where same-layer mutual capacitance
+lives (between the traces), so kC, Zodd and the 67.9 Ω anchor all move by a few percent. The
+tables need it from the first release, not in Phase 4.</p>
+</section>
+<section id="import-side">
+<h3>5.4 Import side<a class="headerlink" href="#import-side" title="Link to this heading">¶</a></h3>
+<p>The spike wrote the two result shapes this design adopts: per copper id (hot and cold R, power,
+mean and max ΔT, J, the Elmer cross-check and a qualification), and per layer relation (C and L
+per mm, kC, kL, the inputs’ hash).</p>
+</section>
+<section id="not-covered-and-quirks">
+<h3>5.5 Not covered, and quirks<a class="headerlink" href="#not-covered-and-quirks" title="Link to this heading">¶</a></h3>
+<p>Not covered: export of a real routed board end to end, vias and via arrays, solder mask,
+anisotropic FR-4 (beyond the review’s three-case sensitivity run), finite plane conductivity at
+ripple frequencies (§6.2), AC current sharing (§6.1), multi-terminal floating ports and return
+nets (§7.3), Q3 and Q4, and the Linux CI build (no container runtime was available; upstream Elmer
+CI builds on ubuntu-24.04 and ubuntu-24.04-arm, which lowers but does not remove that risk).</p>
+<p>Quirks to encode in the backends:</p>
+<ul class="simple">
+<li><p>ElmerGrid cuts its output directory name at the first dot.</p></li>
+<li><p>Elmer’s heat solve diverges with CG; BiCGStab with ILU0 works.</p></li>
+<li><p>Elmer’s capacitance matrix file holds capacitance to ground on the diagonal and positive mutuals;
+convert to the Maxwell form.</p></li>
+<li><p>Second-order elements need the <code class="docutils literal notranslate"><span class="pre">StatElecSolveVec</span></code> variant.</p></li>
+<li><p>Elmer’s version banner reports the revision of an enclosing git repository; record the tarball
+digest instead.</p></li>
+<li><p>The PyPI gmsh wheel crashed at the end of 3D meshing with 4 threads; single-threaded meshing is
+fast enough (&lt; 5 s) and deterministic anyway.</p></li>
+</ul>
+</section>
+</section>
+<section id="recommended-toolchain-per-question">
+<h2>6. Recommended toolchain per question<a class="headerlink" href="#recommended-toolchain-per-question" title="Link to this heading">¶</a></h2>
+<section id="q1-current-density-ir-drop-and-heating">
+<h3>6.1 Q1: current density, IR drop and heating<a class="headerlink" href="#q1-current-density-ir-drop-and-heating" title="Link to this heading">¶</a></h3>
+<p><strong>Primary: the in-house layered solver</strong>, in the FEA worker (§7.2).</p>
+<ul class="simple">
+<li><p>Copper is 15–35 µm thick against features of 0.1 mm and more, and conducts heat 1000 times
+better than FR-4. In-plane sheet conduction is accurate for the current to order t/w, except where
+current turns vertical (vias, pads, contacts), which the lumped via and port models must carry. A
+few elements per slab resolve the heat; the spike shows ≤ 1.2 % against Elmer 3D.</p></li>
+<li><p>It is AGPL-compatible end to end (scikit-fem, scipy, pyamg, shapely, gmsh), runs on every
+platform from wheels or conda-forge, and is fast enough for stage boundaries.</p></li>
+<li><p>It maps results back per uuid without a 3D model.</p></li>
+<li><p>Vias become lumped elements: electrical barrel conductance between layers
+(<code class="docutils literal notranslate"><span class="pre">R</span> <span class="pre">=</span> <span class="pre">ρ·h</span> <span class="pre">/</span> <span class="pre">(π·d·t_plating)</span></code>), thermal barrel and fill conductance; calibrated against Elmer 3D
+via coupons (step 17 in §10).</p></li>
+<li><p>Board scale: the probe board has 188k copper vertices, so a triangulation conforming to all copper
+would reach millions of unknowns. Only the study nets’ copper is resolved exactly; all other
+copper becomes an effective in-plane conductivity per cell (copper fill fraction times k·t) on
+a coarse grid. The error of this homogenisation is measured against the exact mesh on fixtures.</p></li>
+<li><p>Switching ripple: skin depth is 104 µm at 0.4 MHz and 47 µm at 2 MHz, at least the copper
+thickness, so a single trace’s AC resistance stays close to its DC value. For DC-dominated
+currents (inductor-side paths with triangular ripple), the DC solve at I_rms is adequate.</p></li>
+<li><p><strong>AC current distribution is not resistive.</strong> The plane’s sheet resistance (about 1.1 mΩ/sq at
+15 µm) equals ωμ0h at roughly 0.1–0.7 MHz for the plane spacings of this stackup. At 1 MHz, a
+1 mm outer trace over its plane has ωL of about 1.2 mΩ/mm against 0.5 mΩ/mm of resistance, and
+a through via about 6 mΩ against about 1.6 mΩ (est.). At the switching frequency, the AC part
+of a pulsed current
+(input capacitors, switch node, hot loop) therefore returns in the planes under its own path,
+and divides between parallel branches and among the vias of an array by inductance, not
+resistance. The outer vias of an array carry more current. The DC solve gets the DC component
+right and the AC component wrong. Load cases therefore split each current into DC and RMS-AC
+parts. The DC part uses the sheet solve. The AC part at the fundamental (and a few harmonics
+with R_ac(f)) uses either a 2.5D magneto-quasi-static solve (sheet A-V, the same mesh) or Elmer
+WhitneyAV harmonic / FastHenry2 windows, and the losses are summed into the thermal solve. Until
+that exists, the sharing report labels its AC split as unqualified.</p></li>
+<li><p>Return paths are part of the problem. The load current flows back through GND (or the
+converter’s return), and necks in ground pours heat and drop voltage as well. A <code class="docutils literal notranslate"><span class="pre">dc-thermal</span></code>
+study solves the supply net and its return net(s) for each load case (§7.5).</p></li>
+</ul>
+<p><strong>Reference: Elmer</strong> StatCurrent (Joule heating) coupled to HeatSolver on the same layered mesh,
+extruded with copper as volume. Used in nightly cross-checks, for via and neck coupons, and on
+demand for a contract that fails narrowly.</p>
+<p><strong>Fallbacks:</strong> FEniCSx in-process if a 3D solve inside yapnr ever becomes necessary; GetDP as a
+second external code; padne as an independent check of the DC part. padne is GPL-3.0-or-later and
+already does KiCad-native 2.5D DC with vias. The decision to write our own DC sheet solver rather
+than adopt padne’s rests on needing the thermal coupling, uuid-level mapping, the yapnr stackup
+and the FEA environment without KiCad inside it. That decision should be revisited after step 6:
+if padne’s solver can be called as a library, adopting it removes a validation burden.</p>
+</section>
+<section id="q2-quasi-static-c-and-l">
+<h3>6.2 Q2: quasi-static C and L<a class="headerlink" href="#q2-quasi-static-c-and-l" title="Link to this heading">¶</a></h3>
+<p><strong>Tier A, tables: the in-house 2D cross-section solver.</strong> One sweep per stackup over layer
+relation (same layer, broadside without a plane between, plane-shielded), width, gap or offset and
+plane distance gives C and L per mm, kC, kL, Z0, Zodd, Zeven and εeff. These tables calibrate the
+closed forms of issue #26 and the pair impedance model (§9.2). 2D is right for the long parallel
+runs that dominate coupling, and it is cheap (seconds per case).</p>
+<p><strong>Finite plane conductivity.</strong> The spike’s L assumes ideal conductors, which holds for the ns edge
+content (skin depth 6.6 µm at 100 MHz, well under the copper). At the 0.4–2 MHz ripple
+fundamental, 15 µm inner planes are thinner than the skin depth (47–104 µm): return current spreads
+and magnetic shielding is weaker. The #26 model has a reduced shielding factor for this; the tables
+need a 2D magneto-quasi-static (eddy current) solve with finite σ at the ripple frequencies
+(scikit-fem, complex A-formulation), cross-checked by FastHenry2 and Elmer MagnetoDynamics2D
+harmonic. Palace cannot fill this role: its magnetostatic solver has no finite conductivity, and
+its <code class="docutils literal notranslate"><span class="pre">Conductivity</span></code> boundary is valid only for copper much thicker than the skin depth.</p>
+<p><strong>Solder mask</strong> is in the tables from the first release (§5.3), since it shifts same-layer kC and
+Zodd on the outer layers.</p>
+<p><strong>Tier B, 3D windows:</strong> necks, via transitions, plane splits, pair breakouts and converter hot
+loops (the power-loop inductance that sets switch-node ringing), where 2D does not hold. Elmer
+StatElec (C) on the layered mesh. For the R + jωL matrix with planes, Elmer WhitneyAV harmonic
+on the same mesh, which already exists in the built Elmer and takes arbitrary pour outlines.
+FastHenry2 is the independent check. Track centrelines map one to one onto its segments, but its
+ground planes are rectangular meshes with point, rectangle or circle holes, so pours need a
+conversion step, and the code has not changed since 2015. Palace electrostatic and magnetostatic
+are the fallback once Palace is built for Q3.</p>
+<p><strong>Independent 2D cross-check:</strong> FasterCap in 2D mode (BEM, LGPL-2.1) for C, and through C with
+εr = 1 for L, on a handful of table entries, run nightly. Palace’s 2D BoundaryMode solver is a
+second option once Palace is built. TNT-MMTL was proposed here, but it has had no release since
+2013 and its arm64 build is unverified, so it is optional.</p>
+</section>
+<section id="q3-full-wave">
+<h3>6.3 Q3: full-wave<a class="headerlink" href="#q3-full-wave" title="Link to this heading">¶</a></h3>
+<p><strong>Deferred, because quasi-static models cover the typical board.</strong> A 1 ns edge has a 3 dB
+bandwidth of about 350 MHz (0.35/t_r) and a knee frequency of about 500 MHz (0.5/t_r, Johnson and
+Graham). In FR-4 (εeff ≈ 3), a tenth of the wavelength at 500 MHz is about 35 mm, and the usual
+lumped limit of t_r/6 of delay is about 30 mm. Traces longer than that are therefore electrically
+long at the edge rate, and they need distributed models, though not full-wave ones. The first
+cavity resonance of a 60 mm plane pair is near 1.2 GHz, above the knee. For the current
+interfaces, SI v1 gets per-segment RLGC from the Q2 tables (ngspice transmission-line elements in
+place of lumped segments), which captures the distributed behaviour without a full-wave solver.</p>
+<p><strong>When full-wave is needed</strong> (faster interfaces, plane resonances, validating the quasi-static
+assumption): <strong>Palace</strong> in driven mode, for lumped and wave ports with an adaptive frequency
+sweep. It is Apache-2.0, FEM (no time-step limit, unlike FDTD at MHz), and reads gmsh meshes, so it
+reuses the layered mesher. Its published validation (agreement with commercial solvers, and with
+measurement within 0.3 % on resonator frequencies) is on superconducting qubit chips, not on lossy
+FR-4 interconnect, so PCB validation is ours to do. Packaging is the risk: no binaries and no
+conda-forge package, an MPI build through Spack or a CMake superbuild. <strong>Elmer VectorHelmholtz</strong>
+(time-harmonic Maxwell with port boundaries, already in the built Elmer, with impedance-matrix
+regression tests upstream) is a no-new-packaging alternative to try first on the Q3 coupons.
+<strong>openEMS</strong> is the independent cross-check, with gerber2ems’s grid and port rules ported onto
+yapnr’s own geometry, and gerber2ems’s <code class="docutils literal notranslate"><span class="pre">stub_short</span></code> VNA data as a measured case. Post-processing in
+scikit-rf: Touchstone, mixed mode, and vector fitting with passivity checking and enforcement
+before export to an ngspice subcircuit for SI v1. Palace’s own circuit synthesis from its adaptive
+sweep is an alternative. Macromodels need a DC point, which neither Palace driven nor FDTD
+provides; take it from the Q1 and Q2 solves.</p>
+<p>Neither Palace driven mode (f &gt; 0 only; Palace also has a time-domain <code class="docutils literal notranslate"><span class="pre">Transient</span></code> mode, but its
+mesh-bound time step makes µs-scale runs impractical) nor FDTD (very long runs) suits content below
+about 10 MHz; that stays with Q1 and Q2.</p>
+</section>
+<section id="q4-board-thermal-with-components">
+<h3>6.4 Q4: board thermal with components<a class="headerlink" href="#q4-board-thermal-with-components" title="Link to this heading">¶</a></h3>
+<p>The layered solver with component heat sources: dissipation spread over the pad or body area,
+optionally through a compact component model (JEDEC JESD15-3 two-resistor θJC/θJB, or a θJB/ΨJT
+resistance from JESD51 data). The thermal solve takes every heat source at once: the Joule losses
+of all contract nets (each solved electrically on its own) plus component dissipation. A hot net
+next to a hot part is then not underestimated. This merges Q1’s thermal step with Q4. Elmer Heat
+with component blocks (kicad-cli STEP bodies are an option there) is the reference. Thermal
+problems are linear when ρ(T) is frozen and radiation is linearised, so for placement a matrix of
+thermal influence between heat sources (one solve per source) gives superposition at a cost of
+seconds per source.</p>
+</section>
+</section>
+<section id="architecture">
+<h2>7. Architecture<a class="headerlink" href="#architecture" title="Link to this heading">¶</a></h2>
+<section id="processes-and-data-flow">
+<h3>7.1 Processes and data flow<a class="headerlink" href="#processes-and-data-flow" title="Link to this heading">¶</a></h3>
+<p>Four kinds of process, each with its own dependencies, like the existing KiCad worker pattern:</p>
+<ul class="simple">
+<li><p><strong>Controller</strong> (yapnr runtime: numpy, torch, pyyaml): chooses studies, owns the cache, reads
+results and tables, applies them to contracts and costs. It gains no new dependency.</p></li>
+<li><p><strong>KiCad worker</strong> (KiCad’s Python, stdlib only): extracts copper.</p></li>
+<li><p><strong>FEA worker</strong> (a locked FEA environment: scipy, scikit-fem, pyamg, shapely, meshio, gmsh): crops,
+meshes, runs the in-house solvers, writes inputs for external solvers, maps results back. Its
+numpy and scipy pins are independent of the controller’s. Starting a worker (importing scipy,
+scikit-fem and gmsh) takes on the order of a second, so the sub-second repair solve of §9.1 needs
+a long-lived worker that serves requests over a pipe, with the same files as the record of each
+call.</p></li>
+<li><p><strong>External solvers</strong> (Elmer, later FastHenry2, FasterCap, Palace, openEMS): files in, files out.</p></li>
+</ul>
+<pre  class="mermaid">
+        flowchart LR
+    board[&quot;Routed board&quot;] --&gt; extract[&quot;Extract&lt;br/&gt;KiCad worker&quot;]
+    extract -- &quot;fea-problem.json&quot; --&gt; study[&quot;Study selection&lt;br/&gt;controller&quot;]
+    rules[&quot;rules['stackup']&lt;br/&gt;materials, environment&quot;] --&gt; study
+    contracts[&quot;Contracts&lt;br/&gt;currents, budgets, pairs&quot;] --&gt; study
+    study -- &quot;fea-study.json&quot; --&gt; cache{&quot;Cache&quot;}
+    cache -- &quot;miss&quot; --&gt; worker[&quot;FEA worker&lt;br/&gt;crop, mesh, solve, sample&quot;]
+    worker &lt;-- &quot;msh, sif, inp / csv, vtu&quot; --&gt; ext[&quot;External solvers&quot;]
+    worker -- &quot;fea-result.json&quot; --&gt; cache
+    cache -- &quot;hit&quot; --&gt; imp[&quot;Import&lt;br/&gt;controller&quot;]
+    imp --&gt; checks[&quot;Contract checks,&lt;br/&gt;reports, viewer&quot;]
+    imp --&gt; repair[&quot;electrical_repair&lt;br/&gt;evidence&quot;]
+    sweep[&quot;Calibration sweep&lt;br/&gt;per stackup&quot;] -- &quot;fea-coeffs.json&quot; --&gt; tables[&quot;Tables and surrogates&quot;]
+    tables --&gt; costs[&quot;Widths, noise screen,&lt;br/&gt;router and placer costs&quot;]
+    </pre></section>
+<section id="module-layout">
+<h3>7.2 Module layout<a class="headerlink" href="#module-layout" title="Link to this heading">¶</a></h3>
+<p>Paths follow the planned package layout in <a class="reference internal" href="../architecture.html"><span class="std std-doc">architecture</span></a>; during the engine
+migration the same modules live as <code class="docutils literal notranslate"><span class="pre">pnr.fea</span></code>.</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Path</p></th>
+<th class="head"><p>Process</p></th>
+<th class="head"><p>Contents</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/fea/schema.py</span></code></p></td>
+<td><p>controller</p></td>
+<td><p>problem, study, result and coeffs schemas; validation; canonical JSON; cache keys</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/fea/materials.py</span></code></p></td>
+<td><p>controller</p></td>
+<td><p>stackup, materials and environment view over <code class="docutils literal notranslate"><span class="pre">rules['stackup']</span></code>; KiCad stackup cross-check</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/fea/studies.py</span></code></p></td>
+<td><p>controller</p></td>
+<td><p>which studies to run: contract nets and load cases, top-k #26 pairs, windows</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/fea/run.py</span></code></p></td>
+<td><p>controller</p></td>
+<td><p>launches the FEA worker: <code class="docutils literal notranslate"><span class="pre">nice</span></code>, thread caps, timeouts, budgets; parses its log</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/fea/cache.py</span></code></p></td>
+<td><p>controller</p></td>
+<td><p>content-addressed result store and provenance</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/fea/results.py</span></code></p></td>
+<td><p>controller</p></td>
+<td><p>reads results; maps them onto contract, sharing, neck, via and noise records</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/fea/tables.py</span></code></p></td>
+<td><p>controller</p></td>
+<td><p>loads coeff tables; monotone interpolation; range checks; screening fallback</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/fea/qualify.py</span></code></p></td>
+<td><p>controller</p></td>
+<td><p>qualification ladder, model uncertainty and guard bands</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/fea/data/</span></code></p></td>
+<td><p>data</p></td>
+<td><p>shipped tables for standard stackups (JLC04161H-7628 first)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/kicad/fea_extract.py</span></code></p></td>
+<td><p>KiCad</p></td>
+<td><p>polygons per item, track centrelines, vias, zone fills, pad faces</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/fea/worker/__main__.py</span></code></p></td>
+<td><p>FEA worker</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.fea.worker</span> <span class="pre">&lt;study.json&gt;</span> <span class="pre">&lt;out-dir&gt;</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/fea/worker/crop.py</span></code></p></td>
+<td><p>FEA worker</p></td>
+<td><p>windows; homogenisation of non-study copper</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/fea/worker/mesh_layered.py</span></code></p></td>
+<td><p>FEA worker</p></td>
+<td><p>conformal in-plane triangulation, slab extrusion, physical groups</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/fea/worker/mesh_xsec.py</span></code></p></td>
+<td><p>FEA worker</p></td>
+<td><p>2D cross-section meshes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/fea/worker/layered.py</span></code></p></td>
+<td><p>FEA worker</p></td>
+<td><p>the layered electro-thermal solver (Q1, Q4)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/fea/worker/xsec.py</span></code></p></td>
+<td><p>FEA worker</p></td>
+<td><p>2D quasi-static C and L; eddy-current R(f) and L(f) (Q2)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/fea/worker/sample.py</span></code></p></td>
+<td><p>FEA worker</p></td>
+<td><p>fields to per-uuid aggregates</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/fea/worker/backends/</span></code></p></td>
+<td><p>FEA worker</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">elmer.py</span></code>, later <code class="docutils literal notranslate"><span class="pre">fasthenry.py</span></code>, <code class="docutils literal notranslate"><span class="pre">palace.py</span></code>, <code class="docutils literal notranslate"><span class="pre">openems.py</span></code>: writer, runner, reader per solver</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/fea/worker/refs.py</span></code></p></td>
+<td><p>FEA worker</p></td>
+<td><p>exact and published references for the validation suite</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr/cli.py</span></code> (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fea</span> <span class="pre">...</span></code>)</p></td>
+<td><p>controller</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">doctor</span></code>, <code class="docutils literal notranslate"><span class="pre">extract</span></code>, <code class="docutils literal notranslate"><span class="pre">calibrate</span></code>, <code class="docutils literal notranslate"><span class="pre">check</span></code>, <code class="docutils literal notranslate"><span class="pre">report</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tools/fea/</span></code></p></td>
+<td><p>tooling</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">install.sh</span></code> (user-space environment and Elmer build), explicit locks per platform</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">docker/yapnr-fea/</span></code></p></td>
+<td><p>tooling</p></td>
+<td><p>the FEA image (§7.11)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tests/fea/</span></code></p></td>
+<td><p>tests</p></td>
+<td><p>tier 0 (no FEA environment) and <code class="docutils literal notranslate"><span class="pre">validation/</span></code> (tier 1, in the FEA image)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>If the FEA environment is missing, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">doctor</span></code> says so, FEA features are off, and every
+qualification stays <code class="docutils literal notranslate"><span class="pre">screening</span></code>.</p>
+</section>
+<section id="data-formats">
+<h3>7.3 Data formats<a class="headerlink" href="#data-formats" title="Link to this heading">¶</a></h3>
+<p>All files are JSON with a versioned <code class="docutils literal notranslate"><span class="pre">schema</span></code> field, lengths in integer nanometres (as in KiCad),
+and keys sorted when hashed.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">yapnr-fea-problem/1</span></code></strong>, written by the extractor once per board snapshot:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;yapnr-fea-problem/1&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;board&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;source_sha256&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;fill_sha256&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;outline&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[[</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">],</span><span class="w"> </span><span class="p">[</span><span class="mi">60000000</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">],</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">]},</span>
+<span class="w">  </span><span class="nt">&quot;stackup&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;JLC04161H-7628&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;sha256&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;layers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;... see 7.4 ...&quot;</span><span class="p">]},</span>
+<span class="w">  </span><span class="nt">&quot;environment&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;ambient_c&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">25</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;h_top_w_m2k&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;h_bottom_w_m2k&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;h_edge_w_m2k&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">10</span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;copper&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;uuid&gt;&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;track&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;net&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;VBUS&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;layer&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;F.Cu&quot;</span><span class="p">,</span>
+<span class="w">     </span><span class="nt">&quot;polygons&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[[[</span><span class="err">x</span><span class="p">,</span><span class="w"> </span><span class="err">y</span><span class="p">],</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">]],</span><span class="w"> </span><span class="nt">&quot;centerline&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[[</span><span class="err">x</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="err">y</span><span class="mi">0</span><span class="p">],</span><span class="w"> </span><span class="p">[</span><span class="err">x</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="err">y</span><span class="mi">1</span><span class="p">]],</span><span class="w"> </span><span class="nt">&quot;width&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">500000</span><span class="p">}</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;vias&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;uuid&gt;&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;net&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;GND&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;at&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="err">x</span><span class="p">,</span><span class="w"> </span><span class="err">y</span><span class="p">],</span><span class="w"> </span><span class="nt">&quot;drill&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">300000</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;plating&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">18000</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;span&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;F.Cu&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;B.Cu&quot;</span><span class="p">],</span><span class="w"> </span><span class="nt">&quot;filled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;pads&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;F.Cu&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">600000</span><span class="p">}}],</span>
+<span class="w">  </span><span class="nt">&quot;pads&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;uuid&gt;&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;ref&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;U1&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;pad&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;3&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;net&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;VBUS&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;layers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;F.Cu&quot;</span><span class="p">]}]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Polygons use <code class="docutils literal notranslate"><span class="pre">ERROR_INSIDE</span></code> (conservative for R and ΔT) at 1 µm arc error for windows and 5 µm for
+whole boards; slivers under 10 µm are dropped. Items are sorted by (layer, net, uuid).</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">yapnr-fea-study/1</span></code></strong>, one per study, built by the controller and cropped by the worker: the
+subset of copper, vias and pads, the ports and load cases, materials, mesh parameters, solver and
+tolerances. Kinds: <code class="docutils literal notranslate"><span class="pre">dc-thermal</span></code> (Q1), <code class="docutils literal notranslate"><span class="pre">xsec</span></code> (Q2 tables), <code class="docutils literal notranslate"><span class="pre">window-rlc</span></code> (Q2 3D), <code class="docutils literal notranslate"><span class="pre">sparam</span></code> (Q3),
+<code class="docutils literal notranslate"><span class="pre">board-thermal</span></code> (Q4). Its canonical hash is the cache key (§7.9). Ports: a source pad is an
+equipotential at 0 V; each sink pad is an equipotential with a prescribed current (one unknown
+potential per pad), so multi-terminal nets need no assumed split of the copper. They do need the
+per-pad load currents, which the spike never had to supply (it drove single traces).</p>
+<p><strong>Load cases, the missing input.</strong> Today’s current contract carries a current envelope per net,
+not per pad. The study therefore needs a <code class="docutils literal notranslate"><span class="pre">loads</span></code> block per load case, keyed by pad: source pads,
+sink pads with their DC and RMS-AC currents and the AC fundamental, and the matching return pads
+on the return net. Where the project gives no per-pad split, the default is a stated worst case,
+for example the whole current to each sink in turn, recorded as an assumption in the report.
+padne’s schematic directives (<code class="docutils literal notranslate"><span class="pre">VOLTAGE</span></code>, <code class="docutils literal notranslate"><span class="pre">CURRENT</span></code>, <code class="docutils literal notranslate"><span class="pre">RESISTANCE</span></code>, <code class="docutils literal notranslate"><span class="pre">REGULATOR</span></code>, multi-pad lists)
+are a working precedent for this annotation.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">yapnr-fea-result/1</span></code></strong>, one per study:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;yapnr-fea-result/1&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;study&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;dc-thermal&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;key&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;sha256:...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;load_case&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;nominal&quot;</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;solver&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;yapnr-layered&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;version&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;env_lock_sha256&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;qualification&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;fea-2.5d&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;items&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;&lt;uuid&gt;&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;net&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;VBUS&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;layer&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;F.Cu&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;i_a&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">2.0</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;j_xsec_max_a_mm2&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">114</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;p_w&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.081</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;dt_mean_c&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">6.8</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;dt_max_c&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">7.0</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;r_ohm&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.0202</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;vias&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;&lt;uuid&gt;&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;i_a&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.41</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;dt_max_c&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">5.2</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;nets&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;VBUS&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;drop_v&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.041</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;r_ohm&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.0205</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;mesh&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;triangles&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">41210</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;prisms&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">452000</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;sha256&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;convergence&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;iterations&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">8</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;residual&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1e-9</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;dt_change_c&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.004</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;timing_s&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;mesh&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1.2</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;solve&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">14.0</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Values are rounded to four significant figures, well below the validated error, so reruns produce
+the same bytes on one platform. Current density is reported as the largest cross-section average
+along the item (<code class="docutils literal notranslate"><span class="pre">j_xsec_max</span></code>) and, for necks, as an average over a fixed small area at the
+narrowest section, because the pointwise maximum at re-entrant corners does not converge with
+mesh refinement.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">yapnr-fea-coeffs/1</span></code></strong>, one per stackup hash: entries keyed by relation (kind, layers, plane),
+width, gap or offset, and frequency for eddy-current entries, holding C and L per mm, kC, kL, Z0,
+Zodd, Zeven, εeff, R(f), plus the validation residuals and the sweep’s provenance.</p>
+<p><strong>Mesh and field files</strong> stay inside the worker’s output directory: gmsh msh 4.1 internally, msh 2.2
+for ElmerGrid (and OpenParEM if ever used), VTU fields (optional, for debugging and the viewer),
+CSV matrices, Touchstone for Q3.</p>
+</section>
+<section id="stackup-materials-and-environment">
+<h3>7.4 Stackup, materials and environment<a class="headerlink" href="#stackup-materials-and-environment" title="Link to this heading">¶</a></h3>
+<p>The single source is <code class="docutils literal notranslate"><span class="pre">rules['stackup']</span></code>, the #26 stackup block, extended with:</p>
+<ul class="simple">
+<li><p>copper: ρ20 and its temperature coefficient α, thermal conductivity, thickness per layer after
+plating;</p></li>
+<li><p>dielectrics: εr, tanδ, thermal conductivity in-plane and through-plane;</p></li>
+<li><p>solder mask: thickness, εr, thermal conductivity;</p></li>
+<li><p>vias: plating thickness and fill material;</p></li>
+<li><p>environment: ambient temperature, h per face and edge, with a conservative default and a note of
+where the value came from. Better still, a natural-convection correlation for horizontal plates
+(top and bottom faces differ) plus a separate, nonlinear radiation term with emissivity per
+surface (mask, bare copper), iterated with the existing ρ(T) loop.</p></li>
+</ul>
+<p>Defaults ship for JLC04161H-7628 with each value’s source recorded. The fab publishes εr and
+thicknesses but no thermal conductivity, and in-plane conductivity moves ΔT without planes by
+about 40 % (§5.2). Until a sourced or measured value exists, the default must be the conservative
+(lower) in-plane value, and the material uncertainty must be part of u in the guard band
+(§7.10). The KiCad stackup is compared with it: a mismatch warns, and fails in strict mode.</p>
+</section>
+<section id="study-selection-and-cropping">
+<h3>7.5 Study selection and cropping<a class="headerlink" href="#study-selection-and-cropping" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Study</p></th>
+<th class="head"><p>Domain</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dc-thermal</span></code></p></td>
+<td><p>Electrical: the copper of the contract net and its return net(s), solved per net (DC part; AC part per §6.1 when present). Thermal: the whole board, with other copper homogenised (§6.1) and the losses of all contract nets (and components, Q4) applied together. Load cases: nominal, plus one per parallel branch or via-array member open, for the sharing report.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">xsec</span></code></p></td>
+<td><p>Synthetic cross-sections from the stackup, swept for tables; or a cut along a routed pair or bus.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">window-rlc</span></code></p></td>
+<td><p>The top-k aggressor and victim pairs from the #26 screen, in a window of their overlap plus max(3·s, 5·h); planes clipped to it; other nets in it become terminals. The margin is verified by doubling it on fixtures.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">sparam</span></code></p></td>
+<td><p>Critical nets with their reference planes; ports on named pad faces.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">board-thermal</span></code></p></td>
+<td><p>The whole board with component heat sources.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Cropping is per study, so an edit elsewhere on the board leaves a window’s cache entry valid.</p>
+</section>
+<section id="meshing">
+<h3>7.6 Meshing<a class="headerlink" href="#meshing" title="Link to this heading">¶</a></h3>
+<p>The spike’s mesher is the model: one in-plane triangulation that follows every edge of the study’s
+copper (and the outline), extruded through the stackup with 1–2 element layers per copper slab and
+2–4 per dielectric (graded towards copper), plus air slabs for field problems. Every prism keeps
+its identity (slab, in-plane face) and therefore its material and net; physical groups are named
+<code class="docutils literal notranslate"><span class="pre">cu/&lt;layer&gt;/&lt;net&gt;</span></code>, <code class="docutils literal notranslate"><span class="pre">diel/&lt;name&gt;</span></code>, <code class="docutils literal notranslate"><span class="pre">port/&lt;ref&gt;.&lt;pad&gt;</span></code>, <code class="docutils literal notranslate"><span class="pre">via/&lt;uuid&gt;</span></code> and <code class="docutils literal notranslate"><span class="pre">conv/&lt;face&gt;</span></code>. A size field
+gives about min(w, s)/3 at copper edges and about 1 mm in the far field. Vias are lumped in the
+layered solver and meshed as 12-sided barrels in 3D windows. Meshing is single-threaded with fixed
+options and seed.</p>
+</section>
+<section id="solving-runtime-controls-and-budgets">
+<h3>7.7 Solving, runtime controls and budgets<a class="headerlink" href="#solving-runtime-controls-and-budgets" title="Link to this heading">¶</a></h3>
+<p>The worker and every external solver run under <code class="docutils literal notranslate"><span class="pre">nice</span> <span class="pre">-n</span> <span class="pre">10</span></code>, with <code class="docutils literal notranslate"><span class="pre">OMP_NUM_THREADS</span></code>,
+<code class="docutils literal notranslate"><span class="pre">OPENBLAS_NUM_THREADS</span></code> and MPI ranks capped (default 1, at most 4), and a timeout of twice the
+budget below. Logs are kept; convergence is parsed and recorded; a non-converged solve is a failed
+study, never a result.</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Study</p></th>
+<th class="head"><p>Spike measurement</p></th>
+<th class="head"><p>Budget</p></th>
+<th class="head"><p>Where it runs</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">xsec</span></code>, one case</p></td>
+<td><p>0.4–2.3 s (17–35 k triangles)</p></td>
+<td><p>≤ 5 s</p></td>
+<td><p>calibration</p></td>
+</tr>
+<tr class="row-odd"><td><p>Q2 calibration sweep, one stackup (a few hundred <code class="docutils literal notranslate"><span class="pre">xsec</span></code> cases)</p></td>
+<td><p>not measured (0.4–2.3 s per case)</p></td>
+<td><p>≤ 15 min (est.)</p></td>
+<td><p>once per stackup</p></td>
+</tr>
+<tr class="row-even"><td><p>Q1 calibration sweep, one stackup (geometry only, §9.2)</p></td>
+<td><p>not measured (11–36 s per case)</p></td>
+<td><p>1–4 h (est., one thread)</p></td>
+<td><p>once per stackup, offline</p></td>
+</tr>
+<tr class="row-odd"><td><p>DC-only sheet solve, one net, long-lived worker</p></td>
+<td><p>not measured</p></td>
+<td><p>≤ 1 s (est.)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">electrical_repair</span></code> decisions</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dc-thermal</span></code>, layered, one net window</p></td>
+<td><p>11–36 s (137–165 k unknowns, single trace)</p></td>
+<td><p>≤ 60 s</p></td>
+<td><p>stage boundary</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dc-thermal</span></code>, layered, whole board (homogenised)</p></td>
+<td><p>not measured</p></td>
+<td><p>≤ 3 min (est.)</p></td>
+<td><p>stage boundary, finalists, sign-off</p></td>
+</tr>
+<tr class="row-even"><td><p>Elmer 3D, Q1 window</p></td>
+<td><p>30–185 s (0.47–1.1 M prisms)</p></td>
+<td><p>≤ 5 min</p></td>
+<td><p>nightly, on demand</p></td>
+</tr>
+<tr class="row-odd"><td><p>Elmer 3D, C window</p></td>
+<td><p>8–75 s (0.55–2.05 M prisms)</p></td>
+<td><p>≤ 5 min</p></td>
+<td><p>nightly, on demand</p></td>
+</tr>
+<tr class="row-even"><td><p>Palace, full-wave coupon</p></td>
+<td><p>not measured</p></td>
+<td><p>≤ 1 h</p></td>
+<td><p>manual</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="import-and-mapping-back">
+<h3>7.8 Import and mapping back<a class="headerlink" href="#import-and-mapping-back" title="Link to this heading">¶</a></h3>
+<p>Each in-plane triangle records which items cover it, so results aggregate per uuid without
+geometric guessing: ΔT max and mean, J max and power over the item’s triangles; the current of a
+track as the flux through its mid cross-section; via currents from the lumped via elements; net
+resistance and drop between ports. Where a track lies on a same-net pour, the flux through the
+track’s cross-section includes pour current and the track’s ΔT is the pour’s. Such items are
+reported as a merged copper region with all their uuids, and checks apply to the region.
+External solver fields (VTU) are sampled at the same triangles.
+Matrices (Elmer capacitance, FastHenry <code class="docutils literal notranslate"><span class="pre">Zc.mat</span></code>, Palace <code class="docutils literal notranslate"><span class="pre">terminal-*.csv</span></code>) are converted to the
+Maxwell form and mapped to net names by terminal. Touchstone goes through scikit-rf.</p>
+</section>
+<section id="caching">
+<h3>7.9 Caching<a class="headerlink" href="#caching" title="Link to this heading">¶</a></h3>
+<p>The cache key is the sha256 of the canonical study JSON (geometry, ports, load cases, materials,
+environment, mesh parameters, tolerances), the solver name, version and build digest, the FEA
+environment’s lock hash, and the schema version. Entries live in the project store under <code class="docutils literal notranslate"><span class="pre">fea/</span></code>
+(study, result, provenance, log; meshes and fields only on request) with a size cap and LRU
+eviction. Coeff tables are keyed by the stackup hash; shipped tables are data files in the
+repository, regenerated by <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fea</span> <span class="pre">calibrate</span></code> and checked by tests.</p>
+</section>
+<section id="determinism">
+<h3>7.10 Determinism<a class="headerlink" href="#determinism" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>Extraction sorts items and uses integer nanometres; zone fills are refilled and hashed.</p></li>
+<li><p>Meshing is single-threaded with fixed options and seed; the mesh hash is recorded.</p></li>
+<li><p>Solvers run with fixed thread counts and tolerances; the AMG setup is deterministic.</p></li>
+<li><p>Results are rounded (§7.3). On one platform, a rerun gives the same bytes; across platforms
+(macOS arm64, linux arm64, linux x86_64) tests compare with relative tolerances (1e-3 for
+results, looser for meshes), never bitwise. This matches yapnr’s existing position that runs are
+compared on one platform.</p></li>
+<li><p>Decisions use guard bands: a contract fails when <code class="docutils literal notranslate"><span class="pre">ΔT_fea·(1</span> <span class="pre">+</span> <span class="pre">u)</span> <span class="pre">&gt;</span> <span class="pre">limit</span></code>, where u combines the
+model’s validated numerical uncertainty with the input uncertainty: environment (h), laminate
+conductivity and plating thickness, which dominate (§5.2). Values within a further 2 % band of
+the limit are reported as marginal
+rather than flipping repair actions on rounding noise.</p></li>
+<li><p>Tables used by PnR are quantised (three significant figures) so cost values do not drift with
+the platform’s floating point.</p></li>
+</ul>
+</section>
+<section id="packaging-ci-and-containers">
+<h3>7.11 Packaging, CI and containers<a class="headerlink" href="#packaging-ci-and-containers" title="Link to this heading">¶</a></h3>
+<p><strong>Developer Mac:</strong> <code class="docutils literal notranslate"><span class="pre">tools/fea/install.sh</span></code> creates a user-space micromamba environment from an
+explicit conda-forge lock, installs pinned wheels with hashes, and builds Elmer from the pinned
+release tarball (sha256-checked; about 3 minutes at 4 jobs). Nothing system-wide.</p>
+<p><strong>Image:</strong> <code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr-fea</span></code>, built natively for linux/amd64 and linux/arm64 on top of
+<code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr</span></code>, like the existing images. It adds <code class="docutils literal notranslate"><span class="pre">/opt/yapnr-fea</span></code> (conda-forge
+explicit lock per architecture; conda-forge gmsh and pyamg, because PyPI has no linux aarch64
+wheel for either) and Elmer built from the same pinned tarball in a builder stage (serial, no GUI,
+no MPI; upstream Elmer CI already builds on ubuntu-24.04 and ubuntu-24.04-arm). Conda-forge gmsh
+pulls in OpenCASCADE and VTK (about 290 MB more than the PyPI wheel). Compilers stay
+in the builder, so the added size should stay under 1 GB (est.). A <code class="docutils literal notranslate"><span class="pre">-src</span></code> companion carries the
+sources of the GPL binaries (Elmer, gmsh), as the KiCad base image does, with an SBOM and
+attestation. Palace, if adopted, goes into a separate optional <code class="docutils literal notranslate"><span class="pre">yapnr-fea-em</span></code> image because of its
+build weight.</p>
+<p><strong>CI tiers:</strong></p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Tier</p></th>
+<th class="head"><p>Trigger</p></th>
+<th class="head"><p>Environment</p></th>
+<th class="head"><p>Content</p></th>
+<th class="head"><p>Budget</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>0</p></td>
+<td><p>every PR</p></td>
+<td><p>Bazel, hermetic</p></td>
+<td><p>schemas, cache keys, table interpolation, result mapping, guard bands on synthetic results; extractor golden tests in <code class="docutils literal notranslate"><span class="pre">yapnr-kicad</span></code></p></td>
+<td><p>seconds</p></td>
+</tr>
+<tr class="row-odd"><td><p>1</p></td>
+<td><p>PRs touching <code class="docutils literal notranslate"><span class="pre">yapnr/fea/**</span></code>, <code class="docutils literal notranslate"><span class="pre">tools/fea/**</span></code> or the image</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr-fea</span></code></p></td>
+<td><p>validation suite: exact and published references (§5), layered vs stored Elmer results, determinism</p></td>
+<td><p>≤ 10 min (est.)</p></td>
+</tr>
+<tr class="row-even"><td><p>2</p></td>
+<td><p>nightly</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr-fea</span></code></p></td>
+<td><p>live Elmer cross-checks, mesh and crop-margin convergence, <code class="docutils literal notranslate"><span class="pre">dc-thermal</span></code> on regression-ladder boards, Elmer’s quick test subset, FasterCap 2D spot checks, IPC-2152 test-board reproduction</p></td>
+<td><p>≤ 1 h</p></td>
+</tr>
+<tr class="row-odd"><td><p>3</p></td>
+<td><p>manual</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr-fea-em</span></code></p></td>
+<td><p>full-wave coupons</p></td>
+<td><p>hours</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The FEA worker is not imported by the controller, so the hermetic Bazel requirements do not grow;
+tier 1 and 2 tests run inside the image.</p>
+</section>
+</section>
+<section id="driving-validation">
+<h2>8. Driving validation<a class="headerlink" href="#driving-validation" title="Link to this heading">¶</a></h2>
+<section id="qualification-ladder">
+<h3>8.1 Qualification ladder<a class="headerlink" href="#qualification-ladder" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Qualification</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">screening</span></code></p></td>
+<td><p>closed form with default coefficients (today)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">fea-calibrated</span></code></p></td>
+<td><p>closed form or table with coefficients fitted to FEA for this stackup</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">fea-2.5d</span></code></p></td>
+<td><p>the layered solver on this board’s routed copper</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">fea-3d</span></code></p></td>
+<td><p>a 3D solve (Elmer) of this window, cross-checking <code class="docutils literal notranslate"><span class="pre">fea-2.5d</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>A check uses the highest qualification whose cache key matches the current board; a stale result
+falls back to the next level, with a note in the report. All FEA-backed checks start report-only
+behind <code class="docutils literal notranslate"><span class="pre">PNR_FEA=1</span></code>, the same pattern as <code class="docutils literal notranslate"><span class="pre">PNR_NOISE=1</span></code> in #26.</p>
+</section>
+<section id="current-contracts">
+<h3>8.2 Current contracts<a class="headerlink" href="#current-contracts" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">current_width</span></code> (IPC-2221) stays as the fast pre-route proposal and lower bound: widths remain
+lower bounds, as the contract says.</p></li>
+<li><p>The contract check becomes <code class="docutils literal notranslate"><span class="pre">ΔT_max(item)·(1</span> <span class="pre">+</span> <span class="pre">u)</span> <span class="pre">≤</span> <span class="pre">delta_t_c</span></code> for every track, arc, neck and via
+of the net, in every load case. The model label “IPC-2221 screening; explicit current envelope;
+thermal qualification separate” becomes the qualification of the result.</p></li>
+<li><p>An FEA failure overrides an IPC-2221 pass only when it survives the guard band with the
+material and environment uncertainty included in u. The spike’s apparent IPC-2221
+under-prediction without planes disappears with a plausible in-plane FR-4 conductivity (§5.2), so
+an override built on the isotropic default would produce spurious failures. An FEA pass never
+narrows a width by default; relaxing over-conservative IPC widths on boards with planes is an
+opt-in policy (open question 2).</p></li>
+<li><p>IR drop is reported per net; an optional drop limit on the current annotation is a proposed
+contract change (open question 3).</p></li>
+</ul>
+</section>
+<section id="necks-sharing-and-via-arrays">
+<h3>8.3 Necks, sharing and via arrays<a class="headerlink" href="#necks-sharing-and-via-arrays" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">neck_budget</span></code>:</strong> resistance, loss and drop come from the solved field (spreading at the width
+steps included) and the basis “thermal qualification separate” is replaced by the neck’s ΔT_max
+and its qualification.</p></li>
+<li><p><strong>Current-sharing report:</strong> the actual split under nominal load replaces the assumed one; the
+worst case (one branch or via open) is solved, not assumed. Branches carrying more than their
+assumed share are flagged with the item uuids. The split is reported separately for the DC
+component (resistive) and the AC component at the switching frequency (inductive, §6.1). The AC
+split stays <code class="docutils literal notranslate"><span class="pre">screening</span></code> until the AC solve exists.</p></li>
+<li><p><strong>Via arrays:</strong> current and ΔT per via, DC and AC; arrays whose most-loaded via exceeds its share
+by a configured factor are flagged.</p></li>
+</ul>
+</section>
+<section id="noise-budget-and-pair-impedance">
+<h3>8.4 Noise budget and pair impedance<a class="headerlink" href="#noise-budget-and-pair-impedance" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>The #26 screen reads C_m and M per mm from the coeff tables for each aggressor-victim segment
+pair (edge terms from the quasi-static tables, ripple terms from the eddy-current tables when
+present). Its results move from <code class="docutils literal notranslate"><span class="pre">screening</span></code> to <code class="docutils literal notranslate"><span class="pre">fea-calibrated</span></code>; table entries outside their
+range fall back to the closed form with a warning.</p></li>
+<li><p>The top-k pairs get <code class="docutils literal notranslate"><span class="pre">window-rlc</span></code> studies (nightly or on demand) to check the 2D assumption at
+ends, bends and vias.</p></li>
+<li><p>Pair rules read Zodd, Zeven and Zdiff for the routed width, gap and layer from the tables instead
+of the closed forms in <code class="docutils literal notranslate"><span class="pre">pnr.si.physics</span></code>.</p></li>
+<li><p>SI v1 takes per-segment RLGC from the tables; later, S-parameter macromodels for critical nets.</p></li>
+</ul>
+</section>
+<section id="reports-and-viewer">
+<h3>8.5 Reports and viewer<a class="headerlink" href="#reports-and-viewer" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">fea-result.json</span></code> per study, and an FEA section in the electrical audit report: failures and
+marginal items with uuid, net, layer, value, limit, qualification and the cache key.</p></li>
+<li><p>Viewer overlays keyed by uuid: ΔT colour along tracks and vias, J at necks and via arrays, branch
+currents, noise contributors per victim; a temperature raster for board thermal. VTU fields are
+offered as downloads, not rendered.</p></li>
+</ul>
+</section>
+</section>
+<section id="driving-pnr">
+<h2>9. Driving PnR<a class="headerlink" href="#driving-pnr" title="Link to this heading">¶</a></h2>
+<section id="what-is-affordable-where">
+<h3>9.1 What is affordable where<a class="headerlink" href="#what-is-affordable-where" title="Link to this heading">¶</a></h3>
+<p>Full FEA never runs in the router’s or placer’s inner loop. Each place in the engine gets the
+cheapest form that is accurate enough:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Where</p></th>
+<th class="head"><p>Budget per call</p></th>
+<th class="head"><p>FEA form</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>router cost per edge expansion</p></td>
+<td><p>microseconds</p></td>
+<td><p>table lookups: width for current at ΔT, keepaway per layer relation, Z for width and gap</p></td>
+</tr>
+<tr class="row-odd"><td><p>placer gradient step</p></td>
+<td><p>milliseconds</p></td>
+<td><p>differentiable surrogates with FEA-fitted coefficients (coupling vs distance; thermal spreading kernels)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">electrical_repair</span></code> decision on one net</p></td>
+<td><p>≤ 1 s</p></td>
+<td><p>DC-only sheet solve of that net in a long-lived worker (branch and via splits, IR drop); unmeasured</p></td>
+</tr>
+<tr class="row-odd"><td><p>stage boundary, Monte Carlo finalist</p></td>
+<td><p>minutes</p></td>
+<td><p>layered <code class="docutils literal notranslate"><span class="pre">dc-thermal</span></code> on the contract nets; noise check with tables</p></td>
+</tr>
+<tr class="row-even"><td><p>nightly, sign-off</p></td>
+<td><p>tens of minutes</p></td>
+<td><p>Elmer 3D windows, convergence checks; full-wave if adopted</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="calibration-of-the-screening-models">
+<h3>9.2 Calibration of the screening models<a class="headerlink" href="#calibration-of-the-screening-models" title="Link to this heading">¶</a></h3>
+<p>Per stackup hash, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fea</span> <span class="pre">calibrate</span></code> sweeps:</p>
+<ul class="simple">
+<li><p>Q1: width, layer and plane context (planes present or not, plane distance), and neck length and
+width, giving thermal resistance (K/W) and resistance tables. Current is not a sweep axis. With
+ρ frozen the thermal problem is linear in power, so ΔT(I) follows from one solve per geometry
+plus the scalar ρ(T) fixed point, which cuts the sweep by the number of current values. Board
+context matters as much as geometry: without planes, ΔT depends on board size, nearby copper and
+the laminate’s in-plane conductivity. The tables therefore either carry axes for board area and
+local copper fill, or stay advisory, with the per-board <code class="docutils literal notranslate"><span class="pre">dc-thermal</span></code> check as the authority.
+These feed an FEA-calibrated <code class="docutils literal notranslate"><span class="pre">current_width</span></code> (still monotone in current and ΔT), neck costs and
+via-array sizing.</p></li>
+<li><p>Q2: relation, width, gap or offset and plane distance (and frequency for ripple), giving
+coupling and impedance tables. These feed the #26 keepaways and overlap allowances, the router’s
+coupling cost, the placer’s aggressor term, and pair width and gap selection for a target Z.</p></li>
+</ul>
+<p>Surrogates are monotone interpolants of the tables, or small closed forms with fitted coefficients
+(for example a fitted correction to Johnson–Graham), clamped to the table range. Monotonicity keeps
+the costs well-behaved for the router. Tables for standard stackups ship with yapnr; a new
+stackup triggers a sweep (est. ≤ 15 minutes for Q2; Q1 tables take hours and run offline, with
+screening values in the meantime) and is cached.</p>
+</section>
+<section id="verification-at-stage-boundaries">
+<h3>9.3 Verification at stage boundaries<a class="headerlink" href="#verification-at-stage-boundaries" title="Link to this heading">¶</a></h3>
+<p>After the native electrical stage, and for each Monte Carlo finalist, <code class="docutils literal notranslate"><span class="pre">dc-thermal</span></code> runs on the
+contract nets. Failures become evidence for <code class="docutils literal notranslate"><span class="pre">electrical_repair</span></code> (widen at a uuid, add a via to an
+array, add a parallel path), followed by a bounded number of re-checks. An objective field
+<code class="docutils literal notranslate"><span class="pre">thermal_failures</span></code> (contract items over their limit) starts report-only, then takes a configurable
+position in the objective vector (proposal: next to <code class="docutils literal notranslate"><span class="pre">subwidth</span></code>), mirroring <code class="docutils literal notranslate"><span class="pre">noise_failures</span></code> in #26.
+Candidate selection stays mechanical.</p>
+</section>
+<section id="rollout">
+<h3>9.4 Rollout<a class="headerlink" href="#rollout" title="Link to this heading">¶</a></h3>
+<p>FEA-driven costs are flagged and A/B-tested on the regression ladder before becoming defaults, as
+for the #26 costs. A flag off reproduces today’s behaviour exactly.</p>
+</section>
+</section>
+<section id="roadmap">
+<h2>10. Roadmap<a class="headerlink" href="#roadmap" title="Link to this heading">¶</a></h2>
+<p>Each step is sized for one issue and one pull request. Steps 1–7 can start now; Phase 2 depends on
+Phase 1; Phases 4 and 5 are independent of Phase 3.</p>
+<section id="phase-0-done">
+<h3>Phase 0 (done)<a class="headerlink" href="#phase-0-done" title="Link to this heading">¶</a></h3>
+<p>Survey, export probes, spike (this document).</p>
+</section>
+<section id="phase-1-foundations">
+<h3>Phase 1: foundations<a class="headerlink" href="#phase-1-foundations" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Step 1.</strong> <code class="docutils literal notranslate"><span class="pre">yapnr/fea</span></code> skeleton: schemas (problem, study, result, coeffs), canonical JSON and
+keys, cache, tier 0 tests. Done when keys are stable across platforms and schema validation
+rejects bad inputs.</p></li>
+<li><p><strong>Step 2.</strong> Stackup materials and environment: extend the #26 stackup block (§7.4); JLC04161H-7628
+defaults with sources, including anisotropic FR-4 (in-plane and through-plane) and solder mask;
+KiCad stackup cross-check. Also the load-case annotation: per-pad DC and RMS-AC currents, the AC
+fundamental and return pads (§7.3), with a stated worst-case default when the project gives no
+split. Depends on #26’s stackup block.</p></li>
+<li><p><strong>Step 3.</strong> KiCad extractor worker: polygons per item, centrelines, vias, fills, pad faces; golden
+tests on the regression-ladder fixtures; extraction ≤ 2 s on a typical board.</p></li>
+<li><p><strong>Step 4.</strong> FEA environment: <code class="docutils literal notranslate"><span class="pre">tools/fea/install.sh</span></code>, explicit locks for the three platforms, Elmer
+build, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">doctor</span></code> check.</p></li>
+<li><p><strong>Step 5.</strong> Layered mesher from the spike, with item coverage per triangle; determinism and
+conformity tests.</p></li>
+<li><p><strong>Step 6.</strong> Layered electro-thermal solver from the spike, with ports as floating equipotentials
+(new, not in the spike), return nets, anisotropic dielectrics, edge convection consistent with
+Elmer, and pyamg; validation suite (flux-channel series, neck step correction, a multi-terminal
+case against an exact or Elmer answer, stored Elmer results, the IPC-2152 test-board
+reproduction). Done at ≤ 1 % against the exact cases and ≤ 3 % against Elmer. Revisit adopting
+padne’s DC solver here (§6.1).</p></li>
+<li><p><strong>Step 7.</strong> Elmer backend: writer, runner, readers, Maxwell-form conversion, quirks of §5.5;
+nightly cross-check.</p></li>
+</ul>
+</section>
+<section id="phase-2-validation">
+<h3>Phase 2: validation<a class="headerlink" href="#phase-2-validation" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Step 8.</strong> <code class="docutils literal notranslate"><span class="pre">dc-thermal</span></code> studies on routed boards: contract nets, load cases, homogenisation of
+other copper with its error measured; report-only behind <code class="docutils literal notranslate"><span class="pre">PNR_FEA=1</span></code>.</p></li>
+<li><p><strong>Step 9.</strong> Contract integration: current contracts, <code class="docutils literal notranslate"><span class="pre">neck_budget</span></code>, the sharing report and via
+arrays read FEA results with qualifications and guard bands.</p></li>
+<li><p><strong>Step 10.</strong> 2D cross-section solver and <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fea</span> <span class="pre">calibrate</span></code> for Q2, with solder mask; shipped
+JLC04161H-7628 tables; #26 reads them (<code class="docutils literal notranslate"><span class="pre">fea-calibrated</span></code>); pair impedance from the tables;
+FasterCap 2D spot checks.</p></li>
+<li><p><strong>Step 11.</strong> Viewer overlays and the FEA report section.</p></li>
+<li><p><strong>Step 12.</strong> <code class="docutils literal notranslate"><span class="pre">yapnr-fea</span></code> image (amd64, arm64) with its <code class="docutils literal notranslate"><span class="pre">-src</span></code> companion; CI tiers 1 and 2.</p></li>
+</ul>
+</section>
+<section id="phase-3-pnr">
+<h3>Phase 3: PnR<a class="headerlink" href="#phase-3-pnr" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Step 13.</strong> FEA-calibrated <code class="docutils literal notranslate"><span class="pre">current_width</span></code> and neck and via sizing tables in the router (flagged,
+A/B on the ladder).</p></li>
+<li><p><strong>Step 14.</strong> Stage-boundary verification feeding <code class="docutils literal notranslate"><span class="pre">electrical_repair</span></code>; <code class="docutils literal notranslate"><span class="pre">thermal_failures</span></code> objective
+field.</p></li>
+<li><p><strong>Step 15.</strong> Noise keepaways, overlap allowances and placer terms from the Q2 tables (with #26’s
+costs).</p></li>
+<li><p><strong>Step 16.</strong> DC-only sheet solve inside <code class="docutils literal notranslate"><span class="pre">electrical_repair</span></code> for via-array and branch decisions, if
+step 8 measures it under 1 s.</p></li>
+</ul>
+</section>
+<section id="phase-4-3d-windows-and-missing-physics">
+<h3>Phase 4: 3D windows and missing physics<a class="headerlink" href="#phase-4-3d-windows-and-missing-physics" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Step 17.</strong> Via barrels and via arrays: lumped via model calibrated against Elmer 3D coupons.</p></li>
+<li><p><strong>Step 18.</strong> AC current distribution for switched currents: a 2.5D magneto-quasi-static sheet
+solve, or Elmer WhitneyAV harmonic windows, for the AC part of load cases; AC sharing in the
+report (§6.1). This is the largest Q1 physics gap for converter boards, and it can move ahead of
+Phase 3.</p></li>
+<li><p><strong>Step 19.</strong> Eddy-current 2D tables for ripple (finite plane conductivity); Elmer WhitneyAV
+harmonic and FastHenry2 backends for 3D windows and hot-loop inductance.</p></li>
+<li><p><strong>Step 20.</strong> Component heat sources (JEDEC compact models) and the thermal influence matrix for
+placement (Q4).</p></li>
+</ul>
+</section>
+<section id="phase-5-full-wave-q3">
+<h3>Phase 5: full-wave (Q3)<a class="headerlink" href="#phase-5-full-wave-q3" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Step 21.</strong> Q3 coupons first with Elmer VectorHelmholtz (no new packaging), then the Palace build
+recipe in <code class="docutils literal notranslate"><span class="pre">yapnr-fea-em</span></code> and backend. Validate on a microstrip and a coupled pair against the 2D
+tables and analytic results, and on gerber2ems’s <code class="docutils literal notranslate"><span class="pre">stub_short</span></code> VNA data; openEMS cross-check.</p></li>
+<li><p><strong>Step 22.</strong> scikit-rf vector fitting with passivity enforcement to ngspice subcircuits in SI v1
+for designated critical nets, with the DC point from Q1 and Q2.</p></li>
+</ul>
+</section>
+</section>
+<section id="risks">
+<h2>11. Risks<a class="headerlink" href="#risks" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Risk</p></th>
+<th class="head"><p>Impact</p></th>
+<th class="head"><p>Mitigation</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Convection coefficient and enclosure are unknown</p></td>
+<td><p>absolute ΔT off by −22 % to +28 % or more</p></td>
+<td><p>explicit environment parameters with a conservative default; report the sensitivity; guard bands; open question 1</p></td>
+</tr>
+<tr class="row-odd"><td><p>FR-4 in-plane conductivity unknown (spike used an isotropic through-plane value)</p></td>
+<td><p>ΔT without planes off by about 40 %; spurious FEA failures</p></td>
+<td><p>anisotropic material model in step 2; conservative default; sourced or measured value (open question 8); u includes it</p></td>
+</tr>
+<tr class="row-even"><td><p>AC part of switched currents solved as DC</p></td>
+<td><p>wrong branch, via-array and plane current split at the switching frequency</p></td>
+<td><p>DC/AC split load cases; AC solve (step 18); AC split labelled <code class="docutils literal notranslate"><span class="pre">screening</span></code> until then</p></td>
+</tr>
+<tr class="row-odd"><td><p>Load currents per pad and return paths not specified by today’s contracts</p></td>
+<td><p>the FEA answers a different question from the board’s</p></td>
+<td><p>load-case annotation (step 2), stated worst-case default, return nets in every <code class="docutils literal notranslate"><span class="pre">dc-thermal</span></code> study</p></td>
+</tr>
+<tr class="row-even"><td><p>Model-form error at vias, pads and component leads (heat sinking into parts ignored)</p></td>
+<td><p>ΔT biased, mostly conservative</p></td>
+<td><p>lumped via elements calibrated in 3D; optional pad sinks per footprint class; Elmer 3D windows nightly</p></td>
+</tr>
+<tr class="row-odd"><td><p>No measured validation: IPC-2152 is itself ±10–20 %, no FOSS PCB code has published measurements; code-to-code agreement on a shared mesher does not test the board model</p></td>
+<td><p>systematic error goes unnoticed</p></td>
+<td><p>layered references (exact, published formulas, a second code); the IPC-2152 test-board reproduction; gerber2ems VNA case for Q3; optional physical coupon (open question 5)</p></td>
+</tr>
+<tr class="row-even"><td><p>Board-scale meshes get large (188k copper vertices on a typical board)</p></td>
+<td><p>runtime over budget</p></td>
+<td><p>resolve only study nets; homogenise the rest with measured error; crop windows; pyamg</p></td>
+</tr>
+<tr class="row-odd"><td><p>Real planes are perforated and split; the spike used solid planes</p></td>
+<td><p>spreading and shielding over-estimated</p></td>
+<td><p>use the routed fills; homogenisation from the real fill fraction</p></td>
+</tr>
+<tr class="row-even"><td><p>Thin inner planes at ripple frequencies</p></td>
+<td><p>inductive coupling under-estimated by ideal-conductor tables</p></td>
+<td><p>eddy-current tables (step 19); keep #26’s reduced shielding factor until then</p></td>
+</tr>
+<tr class="row-odd"><td><p>Packaging: Elmer has no binaries; Palace is a heavy MPI superbuild; no PyPI gmsh or pyamg wheels for linux aarch64; the PyPI gmsh wheel crashed with 4 threads</p></td>
+<td><p>broken or slow CI images</p></td>
+<td><p>pinned source builds in builder stages; conda-forge gmsh and pyamg on Linux; single-threaded meshing; Palace in an optional image</p></td>
+</tr>
+<tr class="row-even"><td><p>Linux build of Elmer untested by us (no container runtime during the spike)</p></td>
+<td><p>step 4 or 12 slips</p></td>
+<td><p>upstream CI builds on ubuntu-24.04 x64 and arm64; still do step 4 on both Linux architectures first</p></td>
+</tr>
+<tr class="row-odd"><td><p>Research and one-maintainer codes go dormant (FastHenry2 code unchanged since 2015, FasterCap since 2018, TNT-MMTL since 2013, Sparselizard, femwell, EMerge)</p></td>
+<td><p>lost cross-checks</p></td>
+<td><p>in-house primary solvers; Elmer modules preferred as references; external codes only as cross-checks that can be dropped</p></td>
+</tr>
+<tr class="row-even"><td><p>Licence mistakes when copying solver code or shipping binaries</p></td>
+<td><p>AGPL violation</p></td>
+<td><p>§3.2 rules; <code class="docutils literal notranslate"><span class="pre">THIRD_PARTY.md</span></code>; GPL tools only as subprocesses; <code class="docutils literal notranslate"><span class="pre">-src</span></code> image</p></td>
+</tr>
+<tr class="row-odd"><td><p>Cross-platform float differences flip decisions</p></td>
+<td><p>non-reproducible boards</p></td>
+<td><p>rounding, quantised tables, guard bands (§7.10)</p></td>
+</tr>
+<tr class="row-even"><td><p>Stale KiCad stackup used by mistake</p></td>
+<td><p>wrong geometry</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">rules['stackup']</span></code> only; cross-check warns or fails</p></td>
+</tr>
+<tr class="row-odd"><td><p>CPU contention on shared machines</p></td>
+<td><p>slow or starved runs</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">nice</span></code>, thread caps, timeouts, cache</p></td>
+</tr>
+<tr class="row-even"><td><p>Survey gaps (search quota ran out)</p></td>
+<td><p>a better tool missed</p></td>
+<td><p>open question 7; revisit before Phase 5</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="open-questions-for-the-owner">
+<h2>12. Open questions for the owner<a class="headerlink" href="#open-questions-for-the-owner" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p><strong>Environment defaults.</strong> What ambient temperature and convection coefficient should a contract
+assume when the project gives none (enclosed, still air)?</p></li>
+<li><p><strong>Relaxing widths.</strong> May FEA results narrow IPC-2221 widths on boards with planes (opt-in), or
+do widths stay IPC lower bounds and FEA only add failures?</p></li>
+<li><p><strong>IR-drop contracts.</strong> Add an optional drop limit to the current annotation?</p></li>
+<li><p><strong>Published image.</strong> Ship Elmer (GPL-2.0-or-later) and gmsh binaries in <code class="docutils literal notranslate"><span class="pre">yapnr-fea</span></code> with a
+<code class="docutils literal notranslate"><span class="pre">-src</span></code> companion?</p></li>
+<li><p><strong>Measurement.</strong> Is a physical validation coupon (thermocouples or an IR camera) in scope?</p></li>
+<li><p><strong>Q3 priority.</strong> Keep full-wave deferred until a faster interface needs it?</p></li>
+<li><p><strong>Literature pass.</strong> Fund a second survey pass on academic PCB heating and extraction codes
+before Phase 5?</p></li>
+<li><p><strong>Laminate thermal data.</strong> Which in-plane FR-4 conductivity should the default assume until a
+sourced or measured value exists? The choice moves ΔT without planes by about 40 % and decides
+whether FEA failures can override IPC-2221 passes.</p></li>
+<li><p><strong>Load annotation.</strong> Should per-pad load currents, the AC content and return pads be a contract
+annotation (in the style of padne’s directives), and what worst-case split applies when they
+are missing?</p></li>
+<li><p><strong>padne.</strong> Build our own DC sheet solver (the plan), or adopt padne’s solver for the DC part
+and keep only the thermal coupling in-house?</p></li>
+</ol>
+</section>
+<section id="references">
+<h2>References<a class="headerlink" href="#references" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>IPC-2221B, <em>Generic Standard on Printed Board Design</em>; IPC-2152, <em>Standard for Determining
+Current-Carrying Capacity in Printed Board Design</em>.</p></li>
+<li><p>D. Brooks and J. Adam, <em>PCB Design Guide to Via and Trace Currents and Temperatures</em>, Artech
+House, 2021.</p></li>
+<li><p>Y. Muzychka, J. Culham and M. Yovanovich, “Thermal spreading resistance of eccentric heat sources
+on rectangular flux channels”, <em>J. Electron. Packag.</em> 125 (2003).</p></li>
+<li><p>N. Marcuvitz, <em>Waveguide Handbook</em> (static limit of the E-plane step), used for the neck
+correction.</p></li>
+<li><p>E. Hammerstad and Ø. Jensen, “Accurate models for microstrip computer-aided design”, IEEE MTT-S 1980.</p></li>
+<li><p>M. Kirschning and R. Jansen, “Accurate wide-range design equations for the frequency-dependent
+characteristic of parallel coupled microstrip lines”, IEEE Trans. MTT 32 (1984).</p></li>
+<li><p>H. Johnson and M. Graham, <em>High-Speed Digital Design</em>, Prentice Hall, 1993.</p></li>
+<li><p>M. Kamon, M. Tsuk and J. White, “FASTHENRY”, IEEE Trans. MTT 42 (1994); K. Nabors and J. White,
+“FastCap”, IEEE Trans. CAD 10 (1991).</p></li>
+<li><p>Palace validation (superconducting circuits): D. Sommers et al., “Open-source highly parallel
+electromagnetic simulations for superconducting circuits”, arXiv 2511.01220; J. Ye, J. Wang and
+Y. Liu, “Electromagnetic feature extraction in superconducting quantum circuits: an open-source
+finite-element workflow using Palace”, arXiv 2511.09041.</p></li>
+<li><p>JEDEC JESD51 series (thermal test methods and board environments) and JESD15-3 (two-resistor
+compact thermal model).</p></li>
+<li><p>Project sources: ElmerCSC/elmerfem, awslabs/palace, thliebig/openEMS-Project, antmicro/gerber2ems,
+scikit-fem, gmsh, ediloren/FastHenry2 and FasterCap, TNT-MMTL (SourceForge <code class="docutils literal notranslate"><span class="pre">mmtl</span></code>), atx/padne,
+kbralten/KiPIDA, PoeAlex/KiCad_Thermal_Sim, esl-epfl/3d-ice, uvahotspot/HotSpot, OpenParEM,
+scikit-rf, jcyrax/pcbmodelgen, halbux/sparselizard, FennisRobert/EMerge, femm.info.</p></li>
+</ul>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="fab-and-ordering.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="constraint-and-hier-animations.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Design: line groups, board edges and hierarchical PnR, animated</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 Kevin Balke. Licensed under AGPL-3.0-or-later
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Design: thermal and electromagnetic field solvers (FEA) in yapnr</a><ul>
+<li><a class="reference internal" href="#goals">1. Goals</a><ul>
+<li><a class="reference internal" href="#the-four-questions">1.1 The four questions</a></li>
+<li><a class="reference internal" href="#requirements">1.2 Requirements</a></li>
+<li><a class="reference internal" href="#non-goals">1.3 Non-goals</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#summary">2. Summary</a></li>
+<li><a class="reference internal" href="#tool-survey">3. Tool survey</a><ul>
+<li><a class="reference internal" href="#method-and-limits">3.1 Method and limits</a></li>
+<li><a class="reference internal" href="#licence-boundary">3.2 Licence boundary</a></li>
+<li><a class="reference internal" href="#thermal-and-dc-current-q1-q4-ranked">3.3 Thermal and DC current (Q1, Q4), ranked</a></li>
+<li><a class="reference internal" href="#electromagnetic-q2-q3-ranked">3.4 Electromagnetic (Q2, Q3), ranked</a></li>
+<li><a class="reference internal" href="#glue">3.5 Glue</a></li>
+<li><a class="reference internal" href="#front-ends-looked-at">3.6 Front ends looked at</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#export-probes">4. Export probes</a></li>
+<li><a class="reference internal" href="#feasibility-spike">5. Feasibility spike</a><ul>
+<li><a class="reference internal" href="#setup">5.1 Setup</a></li>
+<li><a class="reference internal" href="#q1-current-and-heating">5.2 Q1: current and heating</a></li>
+<li><a class="reference internal" href="#q2-capacitance-and-inductance">5.3 Q2: capacitance and inductance</a></li>
+<li><a class="reference internal" href="#import-side">5.4 Import side</a></li>
+<li><a class="reference internal" href="#not-covered-and-quirks">5.5 Not covered, and quirks</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#recommended-toolchain-per-question">6. Recommended toolchain per question</a><ul>
+<li><a class="reference internal" href="#q1-current-density-ir-drop-and-heating">6.1 Q1: current density, IR drop and heating</a></li>
+<li><a class="reference internal" href="#q2-quasi-static-c-and-l">6.2 Q2: quasi-static C and L</a></li>
+<li><a class="reference internal" href="#q3-full-wave">6.3 Q3: full-wave</a></li>
+<li><a class="reference internal" href="#q4-board-thermal-with-components">6.4 Q4: board thermal with components</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#architecture">7. Architecture</a><ul>
+<li><a class="reference internal" href="#processes-and-data-flow">7.1 Processes and data flow</a></li>
+<li><a class="reference internal" href="#module-layout">7.2 Module layout</a></li>
+<li><a class="reference internal" href="#data-formats">7.3 Data formats</a></li>
+<li><a class="reference internal" href="#stackup-materials-and-environment">7.4 Stackup, materials and environment</a></li>
+<li><a class="reference internal" href="#study-selection-and-cropping">7.5 Study selection and cropping</a></li>
+<li><a class="reference internal" href="#meshing">7.6 Meshing</a></li>
+<li><a class="reference internal" href="#solving-runtime-controls-and-budgets">7.7 Solving, runtime controls and budgets</a></li>
+<li><a class="reference internal" href="#import-and-mapping-back">7.8 Import and mapping back</a></li>
+<li><a class="reference internal" href="#caching">7.9 Caching</a></li>
+<li><a class="reference internal" href="#determinism">7.10 Determinism</a></li>
+<li><a class="reference internal" href="#packaging-ci-and-containers">7.11 Packaging, CI and containers</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#driving-validation">8. Driving validation</a><ul>
+<li><a class="reference internal" href="#qualification-ladder">8.1 Qualification ladder</a></li>
+<li><a class="reference internal" href="#current-contracts">8.2 Current contracts</a></li>
+<li><a class="reference internal" href="#necks-sharing-and-via-arrays">8.3 Necks, sharing and via arrays</a></li>
+<li><a class="reference internal" href="#noise-budget-and-pair-impedance">8.4 Noise budget and pair impedance</a></li>
+<li><a class="reference internal" href="#reports-and-viewer">8.5 Reports and viewer</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#driving-pnr">9. Driving PnR</a><ul>
+<li><a class="reference internal" href="#what-is-affordable-where">9.1 What is affordable where</a></li>
+<li><a class="reference internal" href="#calibration-of-the-screening-models">9.2 Calibration of the screening models</a></li>
+<li><a class="reference internal" href="#verification-at-stage-boundaries">9.3 Verification at stage boundaries</a></li>
+<li><a class="reference internal" href="#rollout">9.4 Rollout</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#roadmap">10. Roadmap</a><ul>
+<li><a class="reference internal" href="#phase-0-done">Phase 0 (done)</a></li>
+<li><a class="reference internal" href="#phase-1-foundations">Phase 1: foundations</a></li>
+<li><a class="reference internal" href="#phase-2-validation">Phase 2: validation</a></li>
+<li><a class="reference internal" href="#phase-3-pnr">Phase 3: PnR</a></li>
+<li><a class="reference internal" href="#phase-4-3d-windows-and-missing-physics">Phase 4: 3D windows and missing physics</a></li>
+<li><a class="reference internal" href="#phase-5-full-wave-q3">Phase 5: full-wave (Q3)</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#risks">11. Risks</a></li>
+<li><a class="reference internal" href="#open-questions-for-the-owner">12. Open questions for the owner</a></li>
+<li><a class="reference internal" href="#references">References</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../../static/documentation_options.js?v=8a448e45"></script>
+    <script src="../../static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../static/copybutton.js?v=fd10adb8"></script>
+    <script src="../../static/design-tabs.js?v=f930bc37"></script>
+    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+
+
+
+const initStyles = () => {
+    const defaultStyle = document.createElement('style');
+    defaultStyle.textContent = "pre.mermaid {\n    /* Same as .mermaid-container > pre */\n    display: block;\n    width: 100%;\n}\n\npre.mermaid > svg {\n    /* Same as .mermaid-container > pre > svg */\n    height: auto;\n    width: 100%;\n    max-width: 100% !important;\n}";
+    document.head.appendChild(defaultStyle);
+
+    const fullscreenStyle = document.createElement('style');
+    fullscreenStyle.textContent = ".mermaid-container {\n    position: relative;\n    display: flex;\n    flex-direction: row;\n    width: 100%;\n}\n\n.mermaid-container > pre {\n    display: block;\n    width: 100%;\n}\n\n.mermaid-container > pre > svg {\n    height: auto;\n    width: 100%;\n    max-width: 100% !important;\n}\n\n.mermaid-fullscreen-btn {\n    position: absolute;\n    width: 28px;\n    height: 28px;\n    background: rgba(255, 255, 255, 0.95);\n    border: 1px solid rgba(0, 0, 0, 0.3);\n    border-radius: 4px;\n    cursor: pointer;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    transition: all 0.2s;\n    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);\n    font-size: 14px;\n    line-height: 1;\n    padding: 0;\n    color: #333;\n}\n\n.mermaid-fullscreen-btn:hover {\n    opacity: 100% !important;\n    background: rgba(255, 255, 255, 1);\n    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);\n    transform: scale(1.1);\n}\n\n.mermaid-fullscreen-btn.dark-theme {\n    background: rgba(50, 50, 50, 0.95);\n    border: 1px solid rgba(255, 255, 255, 0.3);\n    color: #e0e0e0;\n}\n\n.mermaid-fullscreen-btn.dark-theme:hover {\n    background: rgba(60, 60, 60, 1);\n    box-shadow: 0 3px 10px rgba(255, 255, 255, 0.2);\n}\n\n.mermaid-fullscreen-modal {\n    display: none;\n    position: fixed !important;\n    top: 0 !important;\n    left: 0 !important;\n    width: 95vw;\n    height: 100vh;\n    background: rgba(255, 255, 255, 0.98);\n    z-index: 9999;\n    padding: 20px;\n    overflow: auto;\n}\n\n.mermaid-fullscreen-modal.dark-theme {\n    background: rgba(0, 0, 0, 0.98);\n}\n\n.mermaid-fullscreen-modal.active {\n    display: flex;\n    align-items: center;\n    justify-content: center;\n}\n\n.mermaid-container-fullscreen {\n    position: relative;\n    width: 95vw;\n    height: 90vh;\n    max-width: 95vw;\n    max-height: 90vh;\n    background: white;\n    border-radius: 8px;\n    padding: 20px;\n    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);\n    overflow: auto;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n}\n\n.mermaid-container-fullscreen.dark-theme {\n    background: #1a1a1a;\n    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);\n}\n\n.mermaid-container-fullscreen pre.mermaid {\n    width: 100%;\n    height: 100%;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n}\n\n.mermaid-container-fullscreen .mermaid svg {\n    height: 100% !important;\n    width: 100% !important;\n    cursor: grab;\n}\n\n.mermaid-fullscreen-close {\n    position: fixed !important;\n    top: 20px !important;\n    right: 20px !important;\n    width: 40px;\n    height: 40px;\n    background: rgba(255, 255, 255, 0.95);\n    border: 1px solid rgba(0, 0, 0, 0.2);\n    border-radius: 50%;\n    cursor: pointer;\n    z-index: 10000;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);\n    transition: all 0.2s;\n    font-size: 24px;\n    line-height: 1;\n    color: #333;\n}\n\n.mermaid-fullscreen-close:hover {\n    background: white;\n    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);\n    transform: scale(1.1);\n}\n\n.mermaid-fullscreen-close.dark-theme {\n    background: rgba(50, 50, 50, 0.95);\n    border: 1px solid rgba(255, 255, 255, 0.2);\n    color: #e0e0e0;\n}\n\n.mermaid-fullscreen-close.dark-theme:hover {\n    background: rgba(60, 60, 60, 1);\n    box-shadow: 0 6px 16px rgba(255, 255, 255, 0.2);\n}\n\n.mermaid-fullscreen-modal .mermaid-fullscreen-btn {\n    display: none !important;\n}";
+    document.head.appendChild(fullscreenStyle);
+}
+
+// Detect if page has dark background
+const isDarkTheme = () => {
+    // We use a set of heuristics:
+    // 1. Check for common dark mode classes or attributes
+    // 2. Check computed background color brightness
+    if (document.documentElement.classList.contains('dark') ||
+        document.documentElement.getAttribute('data-theme') === 'dark' ||
+        document.body.classList.contains('dark') ||
+        document.body.getAttribute('data-theme') === 'dark') {
+        // console.log("Dark theme detected via class/attribute");
+        return true;
+    }
+    if (document.documentElement.classList.contains('light') ||
+        document.documentElement.getAttribute('data-theme') === 'light' ||
+        document.body.classList.contains('light') ||
+        document.body.getAttribute('data-theme') === 'light') {
+        // console.log("Light theme detected via class/attribute");
+        return false;
+    }
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        // console.log("Dark theme detected via prefers-color-scheme");
+        return true;
+    }
+    const bgColor = window.getComputedStyle(document.body).backgroundColor;
+    const match = bgColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)/);
+    if (match) {
+        const r = parseInt(match[1]);
+        const g = parseInt(match[2]);
+        const b = parseInt(match[3]);
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        // console.log("Background color brightness:", brightness);
+        return brightness < 128;
+    }
+    // console.log("No dark or light theme detected, defaulting to light theme");
+    return false;
+};
+
+let darkTheme = isDarkTheme();
+let modal = null;
+let modalContent = null;
+let previousScrollOffset = [window.scrollX, window.scrollY];
+let _lazyObserver = null;
+let _renderQueue = Promise.resolve();
+let closeModal = () => {};
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modal?.classList.contains('active')) {
+        closeModal();
+    }
+});
+
+// Apply d3 zoom to each SVG. Idempotent: an SVG already wrapped is skipped,
+// so this is safe to call both for the initial batch and for diagrams that
+// render lazily once they become visible.
+const addZoomToSvgs = (svgs) => {
+    svgs.each(function() {
+        if (this.getAttribute('data-zoom-applied') === 'true') return;
+        var svg = d3.select(this);
+        svg.html("<g class='wrapper'>" + svg.html() + "</g>");
+        var inner = svg.select("g");
+        var zoom = d3.zoom().on("zoom", function(event) {
+            inner.attr("transform", event.transform);
+        });
+        svg.call(zoom);
+        this.setAttribute('data-zoom-applied', 'true');
+    });
+};
+
+const runMermaid = async (rerun) => {
+    console.log("Running mermaid diagrams, rerun =", rerun);
+    // clear all existing mermaid charts
+    let all_mermaids = document.querySelectorAll(".mermaid");
+
+    if (rerun) {
+        // Disconnect any previous lazy rendering observer
+        if (_lazyObserver) {
+            _lazyObserver.disconnect();
+            _lazyObserver = null;
+        }
+
+        all_mermaids.forEach((el) => {
+            el.removeAttribute('data-mermaid-deferred');
+            el.removeAttribute('data-mermaid-render-failed');
+            if(!el.hasAttribute("data-original-code")) {
+                // store original code
+                // console.log(`Storing original code for first run: `, el.innerHTML);
+                el.setAttribute('data-original-code', el.innerHTML);
+            }
+            if(el.getAttribute("data-processed") === "true") {
+                // remove and restore original
+                el.removeAttribute("data-processed");
+                // console.log(`Restoring original code for re-run: `, el.getAttribute('data-original-code'));
+                el.innerHTML = el.getAttribute('data-original-code');
+            } else {
+                // store original code
+                // console.log(`Storing original code for re-run: `, el.innerHTML);
+                el.setAttribute('data-original-code', el.innerHTML);
+            }
+        });
+
+        // Separate visible and hidden elements. Mermaid's layout engine measures
+        // text dimensions via the DOM, which fails for elements hidden by a parent
+        // (e.g., Reveal.js non-active slides, sphinx-design unopened tabs),
+        // producing broken SVGs. Render visible elements now, defer hidden ones.
+        const visible = [];
+        const hidden = [];
+        all_mermaids.forEach((el) => {
+            // offsetParent is null for display:none ancestors.
+            // getClientRects().length > 0 catches position:fixed elements
+            // (which also have null offsetParent but are still visible).
+            if (el.offsetParent !== null || el.getClientRects().length > 0) {
+                visible.push(el);
+            } else {
+                hidden.push(el);
+                el.setAttribute('data-mermaid-deferred', 'true');
+            }
+        });
+
+        if (visible.length > 0) {
+            try {
+                await mermaid.run({ nodes: visible });
+            } catch (e) {
+                console.error("Mermaid rendering failed:", e);
+            }
+        }
+
+        // Lazily render hidden elements when they become visible.
+        // Uses a promise chain (_renderQueue) to serialize rendering,
+        // since IntersectionObserver may report multiple entries at once
+        // and mermaid.run() is not safe to call concurrently.
+        if (hidden.length > 0) {
+            if (typeof IntersectionObserver === 'undefined') {
+                console.warn("IntersectionObserver not available; hidden mermaid diagrams will not render.");
+            } else {
+                _renderQueue = Promise.resolve();
+                _lazyObserver = new IntersectionObserver((entries) => {
+                    for (const entry of entries) {
+                        if (entry.isIntersecting && entry.target.getAttribute("data-processed") !== "true") {
+                            _lazyObserver.unobserve(entry.target);
+                            const el = entry.target;
+                            _renderQueue = _renderQueue.then(async () => {
+                                try {
+                                    await mermaid.run({ nodes: [el] });
+                                    el.removeAttribute('data-mermaid-deferred');
+                                    // Apply zoom to the now-rendered diagram, matching
+                                    // the decoration visible diagrams receive.
+                                    if (false) {
+                                        addZoomToSvgs(d3.selectAll("").select(function() {
+                                            return this.querySelector("svg");
+                                        }));
+                                    }
+                                } catch (e) {
+                                    console.error("Mermaid deferred rendering failed:", e);
+                                    el.removeAttribute('data-mermaid-deferred');
+                                    el.setAttribute('data-mermaid-render-failed', 'true');
+                                }
+                            });
+                        }
+                    }
+                });
+                hidden.forEach((el) => _lazyObserver.observe(el));
+            }
+        }
+    }
+
+    all_mermaids = document.querySelectorAll(".mermaid");
+    // Exclude deferred (hidden) and render-failed elements from completion checks
+    const mermaids_active = document.querySelectorAll(".mermaid:not([data-mermaid-deferred]):not([data-mermaid-render-failed])");
+    const mermaids_processed = document.querySelectorAll(".mermaid:not([data-mermaid-deferred]):not([data-mermaid-render-failed])[data-processed='true']");
+
+    if (false) {
+        const mermaids_to_add_zoom = 0 === -1 ? mermaids_active.length : 0;
+        if(mermaids_to_add_zoom > 0) {
+            var svgs = d3.selectAll("").select(function() {
+                return this.querySelector("svg");
+            });
+            // Wait until every active (visible) diagram has rendered. Deferred
+            // diagrams are excluded, so a fixed d3_node_count that counts a
+            // hidden diagram no longer loops forever waiting for its SVG.
+            if(mermaids_active.length !== mermaids_processed.length) {
+                setTimeout(() => runMermaid(false), 200);
+                return;
+            }
+            addZoomToSvgs(svgs);
+        }
+    } else if(mermaids_active.length !== mermaids_processed.length) {
+        // Wait for mermaid to process all diagrams
+        setTimeout(() => runMermaid(false), 200);
+        return;
+    }
+
+    // Stop here if not adding fullscreen capability
+    if (!true) return;
+
+    if (modal !== null ) {
+        // Destroy existing modal
+        modal.remove();
+        modal = null;
+        modalContent = null;
+    }
+
+    modal = document.createElement('div');
+    modal.className = 'mermaid-fullscreen-modal' + (darkTheme ? ' dark-theme' : '');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Fullscreen diagram viewer');
+    modal.innerHTML = `
+        <button class="mermaid-fullscreen-close${darkTheme ? ' dark-theme' : ''}" aria-label="Close fullscreen">✕</button>
+        <div class="mermaid-container-fullscreen${darkTheme ? ' dark-theme' : ''}"></div>
+    `;
+    document.body.appendChild(modal);
+
+    modalContent = modal.querySelector('.mermaid-container-fullscreen');
+    const closeBtn = modal.querySelector('.mermaid-fullscreen-close');
+
+    closeModal = () => {
+        modal.classList.remove('active');
+        modalContent.innerHTML = '';
+        document.body.style.overflow = ''
+        window.scrollTo({left: previousScrollOffset[0], top: previousScrollOffset[1], behavior: 'instant'});
+    };
+
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+    document.querySelectorAll('.mermaid').forEach((mermaidDiv) => {
+        if (mermaidDiv.parentNode.classList.contains('mermaid-container') ||
+            mermaidDiv.closest('.mermaid-fullscreen-modal')) {
+            // Already processed, adjust button class if needed
+            const existingBtn = mermaidDiv.parentNode.querySelector('.mermaid-fullscreen-btn');
+            if (existingBtn) {
+                existingBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+            }
+            return;
+        }
+
+        const container = document.createElement('div');
+        container.className = 'mermaid-container';
+        mermaidDiv.parentNode.insertBefore(container, mermaidDiv);
+        container.appendChild(mermaidDiv);
+
+        const fullscreenBtn = document.createElement('button');
+        fullscreenBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+        fullscreenBtn.setAttribute('aria-label', 'View diagram in fullscreen');
+        fullscreenBtn.textContent = "\u26f6";
+        fullscreenBtn.style.opacity = "50%";
+
+        // Calculate dynamic position based on diagram's margin and padding
+        const diagramStyle = window.getComputedStyle(mermaidDiv);
+        const marginTop = parseFloat(diagramStyle.marginTop) || 0;
+        const marginRight = parseFloat(diagramStyle.marginRight) || 0;
+        const paddingTop = parseFloat(diagramStyle.paddingTop) || 0;
+        const paddingRight = parseFloat(diagramStyle.paddingRight) || 0;
+        fullscreenBtn.style.top = `${marginTop + paddingTop + 4}px`;
+        fullscreenBtn.style.right = `${marginRight + paddingRight + 4}px`;
+
+        fullscreenBtn.addEventListener('click', () => {
+            previousScrollOffset = [window.scrollX, window.scrollY];
+            const clone = mermaidDiv.cloneNode(true);
+            modalContent.innerHTML = '';
+            modalContent.appendChild(clone);
+
+            const svg = clone.querySelector('svg');
+            if (svg) {
+                svg.removeAttribute('width');
+                svg.removeAttribute('height');
+                svg.style.width = '100%';
+                svg.style.height = 'auto';
+                svg.style.maxWidth = '100%';
+                svg.style.display = 'block';
+
+                if (false) {
+                    setTimeout(() => {
+                        const g = svg.querySelector('g');
+                        if (g) {
+                            var svgD3 = d3.select(svg);
+                            svgD3.html("<g class='wrapper'>" + svgD3.html() + "</g>");
+                            var inner = svgD3.select("g");
+                            var zoom = d3.zoom().on("zoom", function(event) {
+                                inner.attr("transform", event.transform);
+                            });
+                            svgD3.call(zoom);
+                        }
+                    }, 100);
+                }
+            }
+
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        });
+        container.appendChild(fullscreenBtn);
+    });
+};
+
+
+
+const load = async () => {
+    initStyles();
+
+
+    await runMermaid(true);
+
+    const reRunIfThemeChanges = async () => {
+        const newDarkTheme = isDarkTheme();
+        if (newDarkTheme !== darkTheme) {
+            darkTheme = newDarkTheme;
+            console.log("Theme change detected, re-running mermaid with", darkTheme ? "dark" : "default", "theme");
+            await mermaid.initialize(
+                {...{"startOnLoad": false},
+                ...{ darkMode: darkTheme, theme: darkTheme ? "dark" : "default" },
+                }
+            );
+            await runMermaid(true);
+        }
+    };
+
+    // Update theme classes when theme changes
+    const themeObserver = new MutationObserver(reRunIfThemeChanges);
+    themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+    themeObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+};
+
+
+
+
+
+console.log("Initializing mermaid with", darkTheme ? "dark" : "default", "theme");
+mermaid.initialize(
+    {...{"startOnLoad": false},
+    ...{ darkMode: darkTheme, theme: darkTheme ? "dark" : "default" },
+    }
+);
+
+window.addEventListener("load", load);
+window.runMermaid = runMermaid;</script>
+    </body>
+</html>

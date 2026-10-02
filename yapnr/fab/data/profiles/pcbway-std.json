@@ -1,0 +1,228 @@
+{
+  "schema": "yapnr-fab-profile-v1",
+  "name": "pcbway-std",
+  "status": "draft",
+  "vendor": "pcbway",
+  "service": "Standard PCB, 4 layers",
+  "title": "PCBWay standard 4 layer 1.6 mm FR-4 (draft: copper to edge and hole to copper not transcribed)",
+  "copper_layers": 4,
+  "stackups": {
+    "default": "pcbway-4l-7628",
+    "allowed": ["pcbway-4l-7628"]
+  },
+  "engine": {
+    "fab": {
+      "min_track_width_mm": 0.127,
+      "clearance_mm": 0.1524,
+      "smd_pad_clearance_mm": 0.1524,
+      "edge_clearance_mm": 0.3,
+      "hole_to_edge_mm": 0.5,
+      "hole_clearance_mm": 0.2,
+      "pth_hole_clearance_mm": 0.35,
+      "npth_hole_clearance_mm": 0.2,
+      "hole_to_hole_mm": 0.3,
+      "pth_hole_to_hole_mm": 0.45,
+      "component_pth_min_drill_mm": 0.3,
+      "via_diameter_mm": 0.6,
+      "via_drill_mm": 0.3,
+      "min_via_diameter_mm": 0.5,
+      "min_through_drill_mm": 0.2,
+      "via_annular_mm": 0.15,
+      "min_npth_drill_mm": 0.45,
+      "via_to_smd_pad_mm": 0.127,
+      "via_classes": {
+        "default": {
+          "diameter_mm": 0.6,
+          "drill_mm": 0.3
+        },
+        "escape": {
+          "diameter_mm": 0.5,
+          "drill_mm": 0.2
+        },
+        "power": {
+          "diameter_mm": 0.7,
+          "drill_mm": 0.4
+        }
+      }
+    },
+    "copper": {
+      "outer_copper_um": 35.0,
+      "inner_copper_um": 35.0,
+      "outer_copper_oz": 1.0,
+      "inner_copper_oz": 1.0,
+      "min_via_plating_um": 20,
+      "via_diameter_mm": 0.6,
+      "via_drill_mm": 0.3,
+      "hole_clearance_mm": 0.2,
+      "hole_to_hole_mm": 0.3,
+      "pth_hole_to_hole_mm": 0.45,
+      "component_pth_min_drill_mm": 0.3,
+      "edge_clearance_mm": 0.3,
+      "hole_to_edge_mm": 0.5,
+      "via_to_smd_pad_mm": 0.127,
+      "board_thickness_mm": 1.6
+    },
+    "qualification": "PCBWay standard 4-layer 1.6 mm (draft): 35 um outer and inner copper, 20 um plating.",
+    "provenance": {
+      "fab": {
+        "min_track_width_mm": "P-cap (fab comparison section 2: outer 1 oz normal trace 5 mil)",
+        "clearance_mm": "P-cap (fab comparison section 2: outer 1 oz normal space 6 mil)",
+        "smd_pad_clearance_mm": "derived: equal to the clearance (pad to pad 0.12 normal)",
+        "edge_clearance_mm": "P-cap (fab comparison section 2: copper to routed edge, 0.25 minimum, designed at 0.30)",
+        "hole_to_edge_mm": "P-cap (fab comparison section 2: hole to routed edge 0.50)",
+        "hole_clearance_mm": "P-cap (fab comparison section 2: via to copper, outer, 0.20 normal)",
+        "pth_hole_clearance_mm": "P-cap (fab comparison section 2: PTH hole to trace 0.35)",
+        "npth_hole_clearance_mm": "P-cap (fab comparison section 2: NPTH to trace 0.20)",
+        "hole_to_hole_mm": "P-cap (fab comparison section 2: different-net vias 0.28 to 0.30, designed at 0.30)",
+        "pth_hole_to_hole_mm": "P-cap (fab comparison section 2: different-net PTH 0.45)",
+        "component_pth_min_drill_mm": "derived: a classification threshold, as in jlc-pofv",
+        "via_diameter_mm": "derived: fab comparison 5B 'If the board goes to PCBWay': normal vias 0.3/0.6",
+        "via_drill_mm": "derived: fab comparison 5B 'If the board goes to PCBWay': normal vias 0.3/0.6",
+        "min_via_diameter_mm": "derived: minimum drill + 2 x the 0.15 standard ring",
+        "min_through_drill_mm": "P-cap (fab comparison section 2: drill 0.20 free)",
+        "via_annular_mm": "P-cap (fab comparison section 2: via ring, standard table 0.15)",
+        "min_npth_drill_mm": "P-cap (fab comparison section 2: NPTH 0.45 minimum)",
+        "via_to_smd_pad_mm": "derived: the jlc-4l value (PCBWay via-in-pad is a paid option)",
+        "via_classes": "derived: default 0.3/0.6, escape 0.2/0.5 at the minimum ring"
+      },
+      "copper": {
+        "outer_copper_um": "P-cap (1 oz outer)",
+        "inner_copper_um": "P-cap (standard inner copper 1 oz)",
+        "outer_copper_oz": "derived: 1 oz",
+        "inner_copper_oz": "derived: 1 oz",
+        "min_via_plating_um": "P-cap (standard barrel plating 20 um)",
+        "via_diameter_mm": "as fab.via_diameter_mm",
+        "via_drill_mm": "as fab.via_drill_mm",
+        "hole_clearance_mm": "as fab.hole_clearance_mm",
+        "hole_to_hole_mm": "as fab.hole_to_hole_mm",
+        "pth_hole_to_hole_mm": "as fab.pth_hole_to_hole_mm",
+        "component_pth_min_drill_mm": "as fab.component_pth_min_drill_mm",
+        "edge_clearance_mm": "as fab.edge_clearance_mm",
+        "hole_to_edge_mm": "as fab.hole_to_edge_mm",
+        "via_to_smd_pad_mm": "as fab.via_to_smd_pad_mm",
+        "board_thickness_mm": "derived: 1.6 mm ordered"
+      }
+    }
+  },
+  "vendor_limits": {
+    "board_min_mm": {
+      "value": [5.0, 5.0],
+      "src": "derived: not transcribed; the quote page checks it"
+    },
+    "board_max_mm": {
+      "value": [500.0, 1100.0],
+      "src": "derived: not transcribed; the quote page checks it"
+    },
+    "copper_layers": {
+      "value": [4],
+      "src": "P-cap"
+    },
+    "qty": {
+      "multiple": 1,
+      "min": 5,
+      "src": "P-order"
+    },
+    "max_drilled_hole_mm": {
+      "value": 6.3,
+      "src": "derived: not transcribed"
+    },
+    "min_slot_mm": {
+      "value": 0.5,
+      "src": "derived: not transcribed"
+    },
+    "via_types": {
+      "value": ["through"],
+      "src": "P-cap (standard line; HDI is a paid option)"
+    },
+    "castellation": {
+      "value": "option",
+      "min_hole_mm": 0.4,
+      "src": "P-cap"
+    },
+    "impedance_control": {
+      "value": true,
+      "tolerance_pct": 10,
+      "src": "P-adv"
+    },
+    "thickness_mm": {
+      "range": [0.2, 3.2],
+      "src": "P-cap"
+    },
+    "finish": {
+      "value": [
+        "HASL with lead",
+        "HASL lead free",
+        "Immersion gold (ENIG)",
+        "OSP",
+        "Hard gold",
+        "Immersion silver",
+        "Immersion tin",
+        "ENEPIG"
+      ],
+      "fixed": false,
+      "src": "P-cap"
+    },
+    "mask_color": {
+      "value": null,
+      "fixed": false,
+      "note": "nine colours on the quote page",
+      "src": "P-cap"
+    },
+    "via_fill": {
+      "value": "tented",
+      "src": "P-cap"
+    },
+    "assembly": {
+      "value": true,
+      "src": "P-asm"
+    },
+    "order_number_marking": {
+      "value": true,
+      "option": "Remove product No.",
+      "choices": "No, Yes (USD 1.50), Specify a location",
+      "src": "P-order (the 'Remove product No.' option, 'No' by default)"
+    },
+    "alternates": []
+  },
+  "order_defaults": {
+    "service": "standard",
+    "services": {
+      "standard": {
+        "title": "Standard PCB",
+        "lead_time": "4-5 day build (see the quote)"
+      }
+    },
+    "thickness_mm": 1.6,
+    "finish": "HASL lead free",
+    "mask_color": "green",
+    "silk_color": "white",
+    "via_covering": "Tented",
+    "copper": "1 oz outer, 1 oz inner",
+    "qty": 5,
+    "remark": ""
+  },
+  "pricing": null,
+  "sources": {
+    "P-adv": {
+      "url": "https://www.pcbway.com/advanced-pcb-capabilities.html",
+      "accessed": "2026-09-26"
+    },
+    "P-asm": {
+      "url": "https://www.pcbway.com/pcb-assembly.html",
+      "accessed": "2026-10-02"
+    },
+    "P-cap": {
+      "url": "https://www.pcbway.com/capabilities.html",
+      "accessed": "2026-09-26"
+    },
+    "P-lam": {
+      "url": "https://www.pcbway.com/multi-layer-laminated-structure.html",
+      "accessed": "2026-09-26"
+    },
+    "P-order": {
+      "url": "https://www.pcbway.com/orderonline.aspx",
+      "accessed": "2026-10-02"
+    }
+  },
+  "notes": ["Draft: copper-to-edge and hole-to-copper rules are not transcribed from P-cap yet."]
+}

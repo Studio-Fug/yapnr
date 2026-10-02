@@ -17,6 +17,14 @@ Profiles
         The rules as they were before profiles existed. Every function here is
         the identity for it and no ``.kicad_dru`` is written, so
         ``PNR_FAB_PROFILE=legacy`` reproduces the old rules exactly (A/B baseline).
+    data profiles (``oshpark-2l``, ``oshpark-4l``, ``jlc-4l``, ...)
+        Every other name resolves lazily through ``yapnr.fab.capability``
+        (``yapnr/fab/data/profiles/<name>.json``: the same ``fab``/``copper``/
+        ``qualification`` blocks, each value with its source). The two built-in
+        profiles above stay literals here and byte-identical
+        (docs/design/fab-and-ordering.md section 5.4). KiCad-side workers need
+        ``yapnr/__init__.py``, ``yapnr/fab/{__init__,capability}.py`` and
+        ``yapnr/fab/data/`` on their path to select a data profile.
 
 Applied rules carry ``rules['fab_profile'] = <name>`` (never for legacy).
 Consuming rules compiled for another profile raises instead of mixing numbers.
@@ -170,19 +178,80 @@ _JLC_POFV_QUALIFICATION = (
     "IPC-2221 screening only; IPC-2152 thermal and impedance qualification remain pending."
 )
 
-PROFILES = {
-    LEGACY: None,
-    "jlc-pofv": dict(
-        fab=_JLC_POFV_FAB, copper=_JLC_POFV_COPPER, qualification=_JLC_POFV_QUALIFICATION
-    ),
-}
+
+def _data_profile(name) -> Optional[Dict]:
+    """The spec of a data profile (``yapnr.fab.capability``), or None.
+
+    None as well when ``yapnr`` is not importable (a worker without the data on its path):
+    the name is then unknown, exactly as before data profiles existed.
+    """
+    try:
+        from yapnr.fab import capability
+    except ImportError:
+        return None
+    try:
+        spec = capability.engine_profile(name)
+    except KeyError:
+        return None
+    return dict(
+        fab=spec["fab"],
+        copper=spec["copper"],
+        qualification=spec["qualification"],
+        data=dict(name=name, status=spec["status"], provenance=spec["provenance"]),
+    )
+
+
+def _data_profile_names():
+    try:
+        from yapnr.fab import capability
+    except ImportError:
+        return []
+    return capability.engine_profile_names()
+
+
+class _Profiles(dict):
+    """The built-in profiles; any other name resolves (once) to a data profile, else KeyError."""
+
+    def __missing__(self, name):
+        spec = _data_profile(name)
+        if spec is None:
+            raise KeyError(name)
+        self[name] = spec
+        return spec
+
+    def __contains__(self, name):
+        try:
+            self[name]
+        except (KeyError, TypeError):
+            return False
+        return True
+
+    def get(self, name, default=None):
+        try:
+            return self[name]
+        except (KeyError, TypeError):
+            return default
+
+    def names(self):
+        """Every selectable name: the built-in ones and the data profiles."""
+        return sorted(set(dict.keys(self)) | set(_data_profile_names()))
+
+
+PROFILES = _Profiles(
+    {
+        LEGACY: None,
+        "jlc-pofv": dict(
+            fab=_JLC_POFV_FAB, copper=_JLC_POFV_COPPER, qualification=_JLC_POFV_QUALIFICATION
+        ),
+    }
+)
 
 
 def active_name(env=None) -> str:
     """The selected profile name (``PNR_FAB_PROFILE``, default jlc-pofv)."""
     name = ((os.environ if env is None else env).get(ENV) or DEFAULT).strip()
     if name not in PROFILES:
-        raise ValueError(f"unknown {ENV}={name!r}; expected one of {sorted(PROFILES)}")
+        raise ValueError(f"unknown {ENV}={name!r}; expected one of {PROFILES.names()}")
     return name
 
 
@@ -740,13 +809,18 @@ def dru_text(
             f["hole_to_hole_mm"],
             "5A Hole-to-hole, via to via",
         ),
-        (
-            "filled_via_to_pad_hole",
-            f"{via_a} && ({pth_b} || {npth_b})",
-            "hole_to_hole",
-            f["filled_via_hole_to_hole_mm"],
-            "5B Filled via hole to any regular PTH or NPTH",
-        ),
+    ]
+    if f.get("filled_via_hole_to_hole_mm") is not None:
+        rules.append(
+            (
+                "filled_via_to_pad_hole",
+                f"{via_a} && ({pth_b} || {npth_b})",
+                "hole_to_hole",
+                f["filled_via_hole_to_hole_mm"],
+                "5B Filled via hole to any regular PTH or NPTH",
+            )
+        )
+    rules += [
         (
             "component_pth_hole_to_hole",
             pth_a,
@@ -764,11 +838,25 @@ def dru_text(
             f"(KiCad measures to the stroke edge: minus half the {_mm(edge_stroke_mm)} Edge.Cuts stroke)",
         ),
     ]
-    lines = [
-        "(version 1)",
-        f"{DRU_HEADER} (profile {name}); docs/fab-comparison.md 5A/5B.",
-        "# Rewritten on every project stamp and native DRC: edit pnr/fab_profile.py.",
-    ]
+    data = (PROFILES[name] or {}).get("data")
+    if data is None:
+        lines = [
+            "(version 1)",
+            f"{DRU_HEADER} (profile {name}); docs/fab-comparison.md 5A/5B.",
+            "# Rewritten on every project stamp and native DRC: edit pnr/fab_profile.py.",
+        ]
+    else:
+        # A data profile cites its own sources (yapnr/fab/data/profiles/<name>.json).
+        lines = [
+            "(version 1)",
+            f"{DRU_HEADER} (profile {name}); yapnr/fab/data/profiles/{name}.json.",
+            "# Rewritten on every project stamp and native DRC: edit that data file.",
+        ]
+        prov = data["provenance"]["fab"]
+        rules = [
+            (rule, condition, kind, value, _data_rule_source(rule, value, prov, edge_stroke_mm))
+            for rule, condition, kind, value, _ in rules
+        ]
     for rule, condition, kind, value, source in rules:
         lines += [
             f"# {source}",
@@ -777,6 +865,44 @@ def dru_text(
             f'  (condition "{condition}"))',
         ]
     return "\n".join(lines) + "\n"
+
+
+# The fab key and description behind each custom rule, for the comments of a data profile.
+_DATA_RULES = {
+    "smd_pad_to_pad": (
+        "smd_pad_clearance_mm",
+        "SMD pad to pad, different nets (clearance applies to different nets only)",
+    ),
+    "via_to_smd_pad": ("via_to_smd_pad_mm", "Via copper to SMD pad (any net)"),
+    "via_hole_clearance": (
+        "hole_clearance_mm",
+        "Via hole to copper (vias and via-class footprint holes under the component PTH drill)",
+    ),
+    "npth_hole_clearance": ("npth_hole_clearance_mm", "NPTH hole to copper"),
+    "pth_hole_clearance": ("pth_hole_clearance_mm", "Component PTH hole to copper"),
+    "via_hole_to_hole": ("hole_to_hole_mm", "Hole-to-hole, via to via"),
+    "filled_via_to_pad_hole": (
+        "filled_via_hole_to_hole_mm",
+        "Filled via hole to any regular PTH or NPTH",
+    ),
+    "component_pth_hole_to_hole": (
+        "pth_hole_to_hole_mm",
+        "Hole-to-hole, any pair involving a component PTH",
+    ),
+    "npth_min_drill": ("min_npth_drill_mm", "Minimum NPTH drill"),
+    "hole_to_edge": ("hole_to_edge_mm", "Hole to edge"),
+}
+
+
+def _data_rule_source(rule, value, provenance, edge_stroke_mm) -> str:
+    """The comment of one custom rule of a data profile: what it is and where it comes from."""
+    key, text = _DATA_RULES[rule]
+    if rule == "hole_to_edge":
+        text = (
+            f"Hole to edge to the outline centreline (KiCad measures to the stroke edge: "
+            f"{_mm(value)} is the limit minus half the {_mm(edge_stroke_mm)} Edge.Cuts stroke)"
+        )
+    return f"{text}: {provenance.get(key, 'see the profile')}"
 
 
 def project_netclass_clearances(project) -> Dict[str, float]:

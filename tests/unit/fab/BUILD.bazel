@@ -1,0 +1,7 @@
+load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+
+# Hermetic: the vendor data, the engine's rules and the stackup views (no KiCad, no network).
+yapnr_py_tests(
+    data = glob(["testdata/*"]),
+    deps = ["//yapnr/fab"],
+)

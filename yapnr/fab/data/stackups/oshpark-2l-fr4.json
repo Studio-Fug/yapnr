@@ -1,0 +1,56 @@
+{
+  "schema": "yapnr-fab-stackup-v1",
+  "id": "oshpark-2l-fr4",
+  "vendor": "oshpark",
+  "title": "OSH Park 2 layer, FR-4 175Tg, 1.6 mm",
+  "vendor_name": "2 Layer",
+  "checkout": "Standard 2 layer service (1.6 mm, 1 oz, ENIG, purple). Nothing to choose at checkout.",
+  "thickness_mm": {
+    "value": 1.6,
+    "src": "O-2l"
+  },
+  "layers": [
+    {
+      "kind": "copper",
+      "name": "F.Cu",
+      "thickness_mm": 0.035,
+      "weight_oz": 1.0,
+      "plated": true,
+      "src": "O-2l",
+      "finish": "ENIG"
+    },
+    {
+      "kind": "dielectric",
+      "type": "core",
+      "material": "FR-4 175Tg",
+      "thickness_mm": 1.53,
+      "er": 4.5,
+      "er_freq_hz": 10000000.0,
+      "df": null,
+      "src": "derived: 1.6 mm nominal minus 2 x 35 um copper (O-2l gives the board thickness only)",
+      "df_prior": 0.017,
+      "df_prior_src": "derived: literature FR-4 near 1 GHz (0.015 to 0.02)"
+    },
+    {
+      "kind": "copper",
+      "name": "B.Cu",
+      "thickness_mm": 0.035,
+      "weight_oz": 1.0,
+      "plated": true,
+      "src": "O-2l",
+      "finish": "ENIG"
+    }
+  ],
+  "tolerances": {
+    "impedance_pct": null,
+    "thickness_pct": null,
+    "width_pct": null
+  },
+  "sources": {
+    "O-2l": {
+      "url": "https://docs.oshpark.com/services/two-layer/",
+      "accessed": "2026-10-02"
+    }
+  },
+  "notes": ["Dk is published at 10 MHz only (4.5); RF designs must pin it with coupons."]
+}

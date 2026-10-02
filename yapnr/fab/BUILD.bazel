@@ -1,0 +1,45 @@
+"""Fab outputs (docs/fab-and-ordering.md; design docs/design/fab-and-ordering.md).
+
+- :capability is the vendor data (profiles, stackups, vendors) and its loader: stdlib only and
+  Python 3.9 compatible, because pnr.fab_profile imports it inside KiCad's Python.
+- :fab joins the data with the engine's rules (pnr.fab_profile) and gives the stackup views.
+"""
+
+load("@rules_python//python:defs.bzl", "py_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The files KiCad-side engine workers need on their path to select a data profile
+# (pnr.fab_profile resolves every non-built-in name through yapnr.fab.capability).
+filegroup(
+    name = "capability_files",
+    srcs = [
+        "__init__.py",
+        "capability.py",
+        "//yapnr:__init__.py",
+    ] + glob(["data/**/*.json"]),
+)
+
+py_library(
+    name = "capability",
+    srcs = [
+        "__init__.py",
+        "capability.py",
+    ],
+    data = glob(["data/**/*.json"]),
+    imports = ["../.."],
+    deps = ["//yapnr:package"],
+)
+
+py_library(
+    name = "fab",
+    srcs = [
+        "profiles.py",
+        "stackups.py",
+    ],
+    imports = ["../.."],
+    deps = [
+        ":capability",
+        "//hardware/pnr",
+    ],
+)

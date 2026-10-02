@@ -3,6 +3,9 @@ load("@yapnr_pypi//:requirements.bzl", "requirement")
 
 package(default_visibility = ["//visibility:public"])
 
+# The package marker, for the files KiCad-side workers stage (//yapnr/fab:capability_files).
+exports_files(["__init__.py"])
+
 py_library(
     name = "yapnr",
     srcs = [

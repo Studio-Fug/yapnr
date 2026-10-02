@@ -1,0 +1,130 @@
+{
+  "schema": "yapnr-fab-profile-v1",
+  "name": "jlc-pofv",
+  "status": "active",
+  "vendor": "jlcpcb",
+  "service": "Standard PCB, FR-4, 4 layers, Epoxy Filled & Capped vias",
+  "title": "JLCPCB 4 layer 1.6 mm with epoxy filled and capped vias (the engine default)",
+  "copper_layers": 4,
+  "stackups": {
+    "default": "jlc04161h-7628",
+    "allowed": ["jlc04161h-7628", "jlc04161h-2116", "jlc04161h-3313", "jlc04161h-1080"]
+  },
+  "engine": {
+    "builtin": true,
+    "note": "The engine values are pnr/fab_profile.py literals (byte-identical)."
+  },
+  "vendor_limits": {
+    "board_min_mm": {
+      "value": [5.0, 5.0],
+      "src": "derived: not transcribed; the quote page checks it"
+    },
+    "board_max_mm": {
+      "value": [500.0, 500.0],
+      "src": "derived: not transcribed; the quote page checks it"
+    },
+    "copper_layers": {
+      "value": [4],
+      "src": "J-cap"
+    },
+    "qty": {
+      "multiple": 1,
+      "min": 5,
+      "src": "J-quote"
+    },
+    "max_drilled_hole_mm": {
+      "value": 6.3,
+      "src": "derived: not transcribed; larger holes are routed"
+    },
+    "min_slot_mm": {
+      "value": 0.5,
+      "src": "derived: not transcribed"
+    },
+    "via_types": {
+      "value": ["through"],
+      "src": "J-cap (standard FR-4: through vias only)"
+    },
+    "castellation": {
+      "value": "option",
+      "min_hole_mm": 0.5,
+      "min_board_mm": [10.0, 10.0],
+      "src": "J-cap"
+    },
+    "impedance_control": {
+      "value": true,
+      "tolerance_pct": 10,
+      "src": "J-cap"
+    },
+    "thickness_mm": {
+      "range": [0.4, 4.5],
+      "src": "J-cap"
+    },
+    "finish": {
+      "value": ["HASL", "LeadFree HASL", "ENIG", "OSP"],
+      "fixed": false,
+      "src": "J-cap"
+    },
+    "mask_color": {
+      "value": ["green", "purple", "red", "yellow", "blue", "white", "black"],
+      "fixed": false,
+      "src": "J-cap"
+    },
+    "via_fill": {
+      "value": "pofv",
+      "src": "J-cover"
+    },
+    "assembly": {
+      "value": true,
+      "src": "J-pcba"
+    },
+    "order_number_marking": {
+      "value": true,
+      "option": "Mark on PCB",
+      "choices": "Remove Mark, Order Number, 2D barcode",
+      "src": "J-quote (the 'Mark on PCB' option; its default not confirmed)"
+    },
+    "alternates": []
+  },
+  "order_defaults": {
+    "service": "standard",
+    "services": {
+      "standard": {
+        "title": "FR-4 4 layers",
+        "lead_time": "see the quote"
+      }
+    },
+    "thickness_mm": 1.6,
+    "finish": "LeadFree HASL",
+    "mask_color": "green",
+    "silk_color": "white",
+    "via_covering": "Epoxy Filled & Capped",
+    "copper": "1 oz outer, 0.5 oz inner",
+    "qty": 5,
+    "remark": "fill and cap all vias",
+    "specify_stackup": "JLC04161H-7628",
+    "via_option": "0.2mm/(0.3/0.35mm)"
+  },
+  "pricing": null,
+  "sources": {
+    "J-cap": {
+      "url": "https://jlcpcb.com/capabilities/pcb-capabilities",
+      "accessed": "2026-09-26"
+    },
+    "J-cover": {
+      "url": "https://jlcpcb.com/help/article/pcb-via-covering",
+      "accessed": "2026-10-02"
+    },
+    "J-imp": {
+      "url": "https://jlcpcb.com/impedance",
+      "accessed": "2026-10-02"
+    },
+    "J-pcba": {
+      "url": "https://jlcpcb.com/help/article/pcb-assembly-price",
+      "accessed": "2026-10-02"
+    },
+    "J-quote": {
+      "url": "https://cart.jlcpcb.com/quote",
+      "accessed": "2026-10-02"
+    }
+  }
+}

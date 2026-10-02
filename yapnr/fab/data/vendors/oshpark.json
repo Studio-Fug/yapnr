@@ -1,0 +1,92 @@
+{
+  "schema": "yapnr-fab-vendor-v1",
+  "vendor": "oshpark",
+  "title": "OSH Park",
+  "country": "US",
+  "profiles_by_layers": {
+    "2": "oshpark-2l",
+    "4": "oshpark-4l",
+    "6": "oshpark-6l"
+  },
+  "gerbers": {
+    "layers": ["copper", "F.Mask", "B.Mask", "F.Silkscreen", "B.Silkscreen", "Edge.Cuts"],
+    "protel_extensions": true,
+    "names": {
+      "F.Cu": "{board}.GTL",
+      "B.Cu": "{board}.GBL",
+      "In1.Cu": "{board}.G2L",
+      "In2.Cu": "{board}.G3L",
+      "In3.Cu": "{board}.G4L",
+      "In4.Cu": "{board}.G5L",
+      "F.Mask": "{board}.GTS",
+      "B.Mask": "{board}.GBS",
+      "F.Silkscreen": "{board}.GTO",
+      "B.Silkscreen": "{board}.GBO",
+      "Edge.Cuts": "{board}.GKO"
+    },
+    "names_src": "O-name",
+    "names_extrapolated": ["In3.Cu", "In4.Cu"],
+    "subtract_soldermask": true,
+    "x2": true,
+    "src": "O-kgerb"
+  },
+  "drill": {
+    "units": "in",
+    "zeros": "decimal",
+    "oval": "alternate",
+    "origin": "absolute",
+    "separate_th": false,
+    "map": null,
+    "names": {
+      "merged": "{board}.XLN"
+    },
+    "src": "O-drill (inches, 2:4) and O-kgerb (alternate drill mode, absolute, decimal preferred)"
+  },
+  "extras": [],
+  "assembly": null,
+  "staging": {
+    "manual": {
+      "url": "https://oshpark.com/",
+      "steps": [
+        "Drop {zip} on the page (or 'Browse for files').",
+        "Check every layer in the preview and approve it.",
+        "Choose the service and options shown on this card, add to cart and pay there."
+      ],
+      "src": "O-home (the upload area) and O-kicad"
+    },
+    "import_url": {
+      "template": "https://oshpark.com/import?url={url}",
+      "steps": [
+        "Open the link: OSH Park fetches the public zip itself (yapnr uploads nothing).",
+        "Check every layer in the preview, choose the options on this card, pay there."
+      ],
+      "src": "O-api"
+    }
+  },
+  "sources": {
+    "O-api": {
+      "url": "https://docs.oshpark.com/tips+tricks/api/",
+      "accessed": "2026-10-02"
+    },
+    "O-drill": {
+      "url": "https://docs.oshpark.com/submitting-orders/drill-specs/",
+      "accessed": "2026-10-02"
+    },
+    "O-home": {
+      "url": "https://oshpark.com/",
+      "accessed": "2026-10-02"
+    },
+    "O-kgerb": {
+      "url": "https://docs.oshpark.com/design-tools/kicad/generating-kicad-gerbers/",
+      "accessed": "2026-10-02"
+    },
+    "O-kicad": {
+      "url": "https://docs.oshpark.com/design-tools/kicad/",
+      "accessed": "2026-10-02"
+    },
+    "O-name": {
+      "url": "https://docs.oshpark.com/troubleshooting/naming-pattern/",
+      "accessed": "2026-10-02"
+    }
+  }
+}

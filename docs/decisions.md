@@ -620,6 +620,38 @@ Review fixes (the physics and design reviews of the cases; [guide](rf-inverse-de
   not change. Options: a broader-band topology, a thicker or lower-εr substrate, a band or
   criteria that allow the shift, or a copper-edge correction in the solver.
 
+Round 2, accuracy (design §21, guide "Accuracy"); each change is an option, off by default,
+with the A/B measurements in the design:
+
+- **Copper-edge correction (`solver.edge_correction`)**, the static-field method of Shorthouse
+  and Railton rather than grid continuation: Hodge factors on ε and μ of the cells next to
+  every copper edge (knife-edge field), the next ring of cells, and corner nodes (the field of a
+  flat sector, from a spherical eigenproblem), each a multilinear function of the pixels so the
+  adjoint stays exact. Lines, a stub and the patch then agree between the optimization grid and
+  a third of its pitch to 0.13–0.22 % (were 1.5–4 %). Grid continuation was not built: with the
+  correction it is not needed for these numbers, and export, rules and validation all assume
+  one optimization pitch.
+- **The corner factors are part of the correction.** First and second ring alone left the stub
+  and the patch at 0.5–0.6 %; the corner factors (convex 0.62 κ_n, concave 1.48 κ_n on the cases'
+  grids), derived like the edge factors and not fitted, bring them to 0.13 %.
+- **The time step with the correction is bounded over a library of dense copper patterns** (times
+  1.05 on the eigenvalue), not by taking every factor at its extreme (which no pattern can
+  reach and would cost 11–17 % more steps). It is 0.88–0.89 of the plain step at the
+  optimization pitch, 0.82–0.83 at a third; a run that diverges stops with an error.
+- **Modal port source (`solver.port_source: mode`)**: the line's mode solved for the solver's own
+  discretization of the feed's cross-section (block-LU inverse iteration, no new dependency),
+  fitted as P0 + ω² P2 over the pulse's band. The static source's surface wave made the
+  excited port's incident wave read high (a matched line's |S21| 0.09 dB below its loss, |S11|
+  −40 dB); with the modal source within 0.001 dB and −63 dB. Other strips crossing the source
+  plane are left out of the solve, as before.
+- **Adaptive move limits (`optimizer.adaptive_move`)** instead of making the conservative
+  (GCMMA) variant the default: the step test is on the epigraph value only (slack 0.05 ·
+  max(1, |t|)), refusals halve the move, accepted points cost nothing extra. On the tiny spec
+  plain MMA jumped to t = 17 at a 0.3 move; the adaptive move rose by at most 0.04 and reached
+  the same optimum with two refusals.
+- **The new options are left out of the spec hash at their defaults**, so specs and run
+  directories written before them keep their hashes and resume.
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.

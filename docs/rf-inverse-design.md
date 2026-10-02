@@ -52,8 +52,10 @@ optimizer: { betas: [8, 16, 32, 64, 128], iterations_per_beta: 30, budget_min: 4
 - **Optional sections:** `fixed` (rectangles of fixed copper or keepout), `lumped` (resistors
   across a gap, such as a Wilkinson divider's isolation resistor: the body rectangle stays void
   and carries the resistance between two copper pads), `radiation` (the box's offset and
-  height), `solver` (backend, precision, tolerances) and `optimizer`: the β schedule, iteration
-  caps, budget, move limits, `conservative` (CCSA steps that never raise t), `seed` (`star`,
+  height), `solver` (backend, precision, tolerances, `edge_correction` and `port_source:
+mode`, [accuracy](#accuracy)) and `optimizer`: the β schedule, iteration caps, budget, move
+  limits, `conservative` (CCSA steps that never raise t), `adaptive_move` (steps that raise t
+  by more than `trust_slack` are refused and retried with half the move), `seed` (`star`,
   `stubs`, `patch`, `patch_edge`, or a uniform `init`), `binary_every` (how often the
   binarized design is evaluated, below), `eta_variants` (robust optimization over eroded and
   dilated designs, Hammond et al. §5.3) and `interpolation` (`resistive` or `reactive` gray
@@ -402,7 +404,11 @@ t ≈ 0.7 at iteration 70, where the two-pixel run was at −0.002.
    last β epoch the minimum width and space enter as Zhou's indicator constraints. The
    conservative variant accepts a step only when its approximation was conservative at the new
    point, so t never rises; a step that does not get there within `max_inner` subproblems is
-   rejected (x stays) and the next iteration continues from the raised curvature. Robust
+   rejected (x stays) and the next iteration continues from the raised curvature. The
+   adaptive move (`adaptive_move`) tests only the new point's epigraph value: a step that
+   raises t by more than `trust_slack` · max(1, |t|) is refused and the move halves (one forward
+   run per refusal; an accepted point's forward runs are the next iteration's), and improving
+   steps grow the move back to the schedule's. Robust
    variants (`eta_variants`) add the objectives of eroded and dilated designs (projection
    thresholds above and below ½) to the epigraph.
 5. **Export:** the design is binarized (β = ∞), traced into polygons by marching squares (pixel
@@ -464,38 +470,48 @@ divider's footprint:
   (the earlier −0.01 passivity tolerance). The feed between the measurement and the reference
   plane (6h, about 5 mm on S1) is now de-embedded in phase only; its true loss (about 0.01 dB)
   makes the reported |S| that much low.
-- **The excited port's incident wave reads high.** Within about 50 cells of the source the V/I
-  samples see non-modal fields that the port's source launches, and the incident wave of the
-  excited port reads 1.5–2 % high at 8–12 GHz (0 at 2–4 GHz): every |S_ij| of that column is
-  about 0.1–0.2 dB low (a matched 15 mm line reads −0.26 dB at 10 GHz where the flux says
-  −0.11 dB). The bias is conservative for transmission targets. The radiated fraction is not
-  affected: the calibration measures the ratio of Poynting flux to V/I power at the ports' own
-  distance from the source and P_inc uses it.
+- **The excited port's incident wave (`solver.port_source`).** The default source, J = n̂ × H
+  of the strip's static field in air, also launches the substrate's TM0 surface wave, which
+  reaches the V/I samples: the excited port's incident wave reads up to 1.5–2 % off at 8–12 GHz
+  (0 at 2–4 GHz) and every |S_ij| of that column about 0.1–0.2 dB low (a matched line through a
+  9.6 mm window reads |S21| = −0.21 dB where the line's own loss is −0.12 dB, and |S11| =
+  −40 dB). `port_source: mode` shapes the source like the line's mode, solved for the solver's
+  own discretization of the feed's cross-section and fitted over the pulse's band
+  (`yapnr.rf.modes`): the same line then reads |S21| within 0.001 dB of its loss and |S11|
+  −63 to −68 dB, and the incident wave along a long line stays within 0.3 % of its far value.
+  The radiated fraction uses the calibration's power factor at the ports' own distance from the
+  source with either source.
 - **Reciprocity.** The discrete system is exactly reciprocal; the port-wave extraction is not.
   With the V/I plane 6h from the discontinuity and from the source (the default) and S = B A⁻¹
   from all excitations, |S21 − S12| on the old divider footprint at 8.5, 10 and 11.5 GHz is
   0.003–0.007 (it was 0.009–0.013 at 3h); the largest over a whole re-validation sweep is about
   0.01. The passivity margin min eig(I − SᴴS) of the divider is +0.03 (the criteria require
   −1e-3). Taken together, transmissions are uncertain by about ±0.1 dB plus the low bias above.
-- **Copper edges and resolution.** A zero-thickness sheet's edge field is under-resolved: on
-  a 6-cell line the impedance is 6 % below Hammerstad–Jensen, and an open end's extension at
-  10 GHz is 0.49 mm at 0.3 mm pitch and 0.44 mm at 0.15 mm against 0.35 mm (Kirschning–Jansen–
-  Koster): the copper acts about 0.45 cell larger per edge, falling roughly as √Δ. A design
-  exported pixel for pixel therefore resonates higher on finer grids and in hardware than on the
-  optimization grid (the antenna 1.9 % from 0.4 to 0.2 mm and 2.4 % at 0.133 mm; the divider's
-  match null moved by up to 4 %), and diagonal staircases add a resolution effect of their own.
-  Robust optimization over the eroded design (`eta_variants`) is what kept the divider's margin. The
-  validator re-simulates every case on the optimization grid, at half the pitch and at a third
-  of it, judges the fine criteria on both finer grids and reports the trend of every check
-  (`validation.json`, `convergence`): the finer grids are a check, not a converged answer, for
-  resonant designs.
+- **Copper edges and resolution (`solver.edge_correction`).** A zero-thickness sheet's edge
+  field is singular (r^(−½)) and under-resolved: without a correction a 6-cell line's impedance
+  is 6 % below Hammerstad–Jensen, the copper acts about 0.45 cell larger per edge, and a design
+  exported pixel for pixel resonates higher on finer grids and in hardware than on the
+  optimization grid (an open stub 1.5 % and the closed-form patch 1.6 % from the optimization
+  grid to a third of its pitch; round 1's antenna 2.4 %, the divider's match null up to 4 %).
+  `edge_correction: true` builds the static edge field into the update coefficients of the cells
+  next to every copper edge and corner (the method of Shorthouse and Railton: factors on ε and
+  μ from the knife-edge field, the next ring of cells, and the field of a flat corner; design
+  §21.1), differentiably in the pixels, so the gradient stays exact. Measured between the
+  optimization grid and a third of its pitch: the line's ε_eff +0.06 to +0.21 % and impedance
+  within ±0.13 % (was +0.6 to +0.8 % and −3.8 to −4.0 %), the stub's notch +0.13 % (was +1.5 %)
+  and the patch's match +0.13 % (was +1.6 %). It costs about a quarter more time per iteration
+  (a smaller time step and the extra field probes). Diagonal staircases keep a resolution
+  effect of their own, and the validator still re-simulates every case on the optimization
+  grid, at half the pitch and at a third of it and reports the trend of every check
+  (`validation.json`, `convergence`).
 
 ## Limitations
 
 - One copper layer over a solid ground; no vias, no finite board or ground edges.
-- The copper is a zero-thickness sheet: the strip impedance on coarse grids is a few per cent
-  low and edges act about half a cell larger than their pixels ([accuracy](#accuracy)); the
-  finer re-validation grids show the trend but are not converged for resonant designs.
+- The copper is a zero-thickness sheet: without `solver.edge_correction` the strip impedance
+  on coarse grids is a few per cent low and edges act about half a cell larger than their
+  pixels; with it lines and resonators agree with a grid three times finer to about 0.2 %
+  ([accuracy](#accuracy)). Copper thickness is not modelled.
 - Minimum width and space are enforced in the last β epoch, repaired on the pixel grid at
   export and checked on the polygons; tiny nubs under about 0.6 pixel are not reported by the
   check.

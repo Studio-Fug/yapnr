@@ -1126,6 +1126,161 @@ optimization grid, "fine" and "finer" at a half and a third of its pitch.
   them. The conservative variant does not oscillate but costs a forward run per subproblem and
   barely moved the antenna.
 
+## 21. Round 2: accuracy
+
+The round-1 results (§20) were limited by the solver as much as by the optimizer: resonators
+tuned on the optimization grid resonated 1.5–2.4 % higher on a grid three times finer, the line
+impedance was 4 % low, and the excited port's incident wave read high. Three changes, each
+behind a default-off option (`solver.edge_correction`, `solver.port_source: mode`,
+`optimizer.adaptive_move`), with unit tests and the measurements below (the guide's
+[accuracy](../rf-inverse-design.md#accuracy) section has the user-facing summary).
+
+### 21.1 Subcell correction of the copper's edges (`yapnr/rf/edges.py`)
+
+The copper is a zero-thickness sheet on the node plane z = h. Near a sheet edge the transverse
+fields are singular, E, H ∝ r^(−½) (Meixner's edge condition [29]; for a sheet lying on the
+substrate–air interface the exponent stays ½, since the sheet and the interface are coplanar
+and the edge field is even in z), and the Yee scheme's constitutive relations, which assume
+fields uniform over each edge and dual face, misjudge the charge and current there. Following
+the static-field method of Shorthouse and Railton [28] (and the contour-path subcell models of
+[2], ch. 10), write the scheme in integral unknowns: e = ∫E·dl on primary edges, b = ∫B·dA on
+primary faces, h = ∫H·dl on dual edges, d = ∫D·dA on dual faces. Faraday's and Ampère's laws
+are exact in these unknowns; only the discrete constitutive relations
+
+```text
+d = ε (A_d / L_p) e,        b = μ (A_p / L_d) h
+```
+
+assume uniform fields. For the static singular field the true ratio d/e (b/h) of the unknowns
+next to an edge is computed in closed form, and the correction multiplies ε (1/μ) of those
+edges by κ = d_true/d_uniform:
+
+| Unknown (edge along x on node line y_a)                       | Static field used               | κ (S1, 0.3 mm, 4 substrate cells) |
+| ------------------------------------------------------------- | ------------------------------- | --------------------------------- |
+| E_y across the edge into the void (and H_z of that pixel)     | φ = Re √w, w = s + iz′          | κ_t = 0.673                       |
+| E_y across a one-cell slot (copper at both ends)              | slot line, E ∝ (g²/4 − y²)^(−½) | κ_slot = 0.596                    |
+| E_z above and below the edge (and H_y on the edge's segments) | φ = Re √w                       | κ_n = 0.600                       |
+| E_z one cell into the void / into the copper (and H_y there)  | φ = Re √w, next ring            | 1.21 / 1.03                       |
+| E_z at a convex / concave corner node                         | flat-sector field R^ν F(θ, ϕ)   | 0.62 κ_n / 1.48 κ_n               |
+
+with closed forms (g the cell across the edge, Δz the cell height):
+
+```text
+κ_t    = [ε_lo I(Δz_lo/2) + ε_hi I(Δz_hi/2)] / [(ε_lo Δz_lo + ε_hi Δz_hi)/2 · 2/√g],  I(a) = 2 Im √(g/2 + ia)
+κ_slot = [ε_lo asinh(Δz_lo/g) + ε_hi asinh(Δz_hi/g)] / [(ε_lo Δz_lo + ε_hi Δz_hi)/2 · π/g]
+κ_n    = [(Im √(g/2 + iΔz/2) − Im √(−g/2 + iΔz/2))/g] / [√(Δz/2)/Δz]
+```
+
+The magnetic field of the strip current has the same singular shape (H_t ∝ x̂ × ∇ψ, ψ = Re √w),
+so the dual H unknowns get the same κ on 1/μ (air-filled). Corner nodes use the field of a flat
+sector: φ = R^ν F, F the lowest Dirichlet eigenfunction of the Laplace–Beltrami operator on
+the unit sphere slit along the sector's arc (finite volumes, block LU, inverse iteration; ν =
+0.297 for a 90° sector as in the literature, 0.81 for 270°, and the 180° case reproduces the
+straight edge's ν = ½ and κ_n to 1 %); the corner factor is the ratio κ_sector/κ_180° times
+κ_n. Without the corner factors the stub of §21.4 kept a 0.6 % shift; with them 0.13 %.
+
+**Pixels.** Every factor is a multilinear interpolation over the copper configurations of the
+pixels around its unknown (two pixels around at most), exact for binary pixels and smooth for
+gray ones: E_z on a node interpolates over its four pixels (mixed: κ_n, one or three copper:
+the corner values) plus the next ring; the in-plane E over its own two pixels and the pixel
+pairs beyond its ends; H_z over its pixel and four neighbours; H_x, H_y over their two pixels
+(exclusive or) plus the next ring. The structure is still a diagonal change of ε and μ, so
+W·A stays symmetric and the adjoint is an ordinary run. The design gradient gains
+
+```text
+∂F/∂ε_e  = 2 Re[Ω² V_e Ê^adj_e Ê_e]              (∂A/∂ε = −Ω²)
+∂F/∂μ⁻¹_h = 2 Re[Ω² μ_h² V_h Ĥ^adj_h Ĥ_h]          ((C_H^T W) = V_h C_E, C_E Ê = iΩμĤ off the sources)
+```
+
+from DTFT probes on the corrected planes around the window (`edges.design_probes`), chained
+through the factor maps by torch autograd (`edges.vjp`). The engine applies 1/μr by scaling the
+H update of the corrected planes (with their sources) after the fact; K sources on those planes
+stay consistent with −iΩμĤ = −C_E Ê − K̂.
+
+**Time step.** Lower ε next to edges and corners raises the largest eigenvalue of
+ε⁻¹C_Hμ⁻¹C_E. The step is courant · min(Δt_CFL, 2/√(1.01 · 1.05 λ)), λ the largest over a
+library of dense copper patterns (stripes, checkerboards, isolated pixels and holes, random
+binary and gray) on a 20 × 20 proxy of the grid's densest region (`edges.stable_dt`; cached).
+On the cases' grids that is 0.88–0.89 of the plain step at the optimization pitch and 0.82–0.83
+at a third of it (gray designs and isolated pixels raise λ by up to about 40 %; one square
+patch only by 10 %). A bound taking every factor at its extreme at once (no pattern can) would
+be tighter; this one is not a proof, so a run whose DTFTs turn non-finite stops with an error.
+
+### 21.2 Modal port source (`yapnr/rf/modes.py`)
+
+The excited port's source was J = n̂ × H_qs with H_qs the static field of the strip in air
+(`ports.quasi_tem_air`). At 8–12 GHz that profile differs from the line's mode by its
+dispersion, and the source also launched the substrate's TM0 surface wave, which reaches the
+V/I samples 6h away: along a long matched line the incident wave measured with the static source
+wanders by ±1.5 % with distance (|b/a| up to 0.025), and on a matched line through a 9.6 mm
+window |S21| read −0.208 dB where the mode's own loss is −0.118 dB.
+
+`line_mode` solves the discrete mode of the scheme itself on the source plane's cross-section:
+fields ∝ e^{iKa}, ∂a → iK̃ (K̃ = (2/Δa) sin(KΔa/2)), the numerical Ω and c_ω, the CPML as the
+exact stretch of its recursion, the sheet's conductance and the edge factors; eliminating H gives
+A0 X = K̃² B X for X = (iK̃E_a, E_t, E_z), block tridiagonal across the line, solved by block LU
+and inverse iteration from the Kirschning–Jansen estimate (the line mode is the slowest guided
+mode). The source profile per unit modal current is fitted as P0 + ω² P2 from solves at the edges
+of the pulse's band (0.8 % fit error at the centre for a 2–12 GHz pulse) and driven as
+J(t) = P0 s(t) − P2 s''(t). A line along y solves the same equations in a left-handed frame
+(H → −H); the source has the same form. Other strips crossing the source plane are left out, as
+the static source did.
+
+### 21.3 Adaptive move limits (`Epigraph.trust_step`)
+
+Plain MMA oscillated from β = 16–32 (§20). `optimizer.adaptive_move` solves the subproblem with
+the current move, evaluates the new point's epigraph value (forward runs only; they are reused
+as the next iteration's forward runs when the point is accepted) and accepts it when
+t ≤ t_k + slack · max(1, |t_k|) (default slack 0.05); otherwise the move halves and the
+subproblem is solved again from x_k with the same asymptotes, up to `max_inner` times (a
+refused step keeps x). An accepted improving step grows the move by 1.5 up to the schedule's.
+Unlike the conservative variant (GCMMA), which needs every constraint's approximation to be
+conservative at the new point and rarely achieves that on near-binary designs, the test is on
+the maximum only, and an accepted step costs no extra simulation.
+
+### 21.4 Measurements
+
+Coarse = the optimization grid, finer = a third of its pitch with twice the substrate cells (the
+validator's third grid). Torch, 4 threads.
+
+| Quantity                                                          | Plain                             | Corrected                           |
+| ----------------------------------------------------------------- | --------------------------------- | ----------------------------------- |
+| S1 1.8 mm line, discrete mode, ε_eff coarse vs finer, 2–12 GHz    | +0.55 to +0.76 %                  | +0.06 to +0.21 %                    |
+| same, power–current impedance                                     | −3.8 to −4.0 %                    | −0.13 to +0.13 %                    |
+| same, FDTD calibration (V/I, modal source), Z_c / ε_eff, 4–12 GHz | −3.8 to −3.9 % / +0.55 to +0.77 % | −0.02 to +0.08 % / +0.04 to +0.22 % |
+| S1 1.2 mm line, ε_eff / impedance                                 | +0.72 to +0.96 % / −5.0 %         | +0.06 to +0.21 % / ±0.13 %          |
+| open stub notch (S1, 1.2 × 4.2 mm on the 1.8 mm line)             | 9.754 → 9.898 GHz, +1.48 %        | 9.947 → 9.961 GHz, +0.13 %          |
+| closed-form inset patch, \|S11\| minimum (S2, 0.4 mm)             | 10.097 → 10.262 GHz, +1.63 %      | 10.328 → 10.341 GHz, +0.13 %        |
+| matched line, \|S21\| − the mode's loss (8.5–11.5 GHz)            | −0.07 to −0.09 dB (static source) | ≤ 0.001 dB (modal source)           |
+| matched line, \|S11\|                                             | −40 dB (static source)            | −63 to −68 dB (modal source)        |
+
+The stub and the patch are the same physical copper on every grid (the coarse pixels
+subdivided), both with the static source (a notch or a match frequency does not depend on the
+incident wave's level), "corrected" with the edge correction; the stub notch
+and the patch's match move by 0.10 and 0.09 % from the coarse grid to half its pitch and by
+0.13 % to a third. Without the corner factors (first and second ring only) both still moved by
+0.5–0.6 %, and with the first ring only by the same.
+
+Gradient checks (central differences with Richardson extrapolation along a random direction,
+the whole pipeline with the correction and the modal source, `test_pipeline_gradient`):
+9e-12 to 3e-11 relative; dropping the correction's part of the gradient changes the directional
+derivative by more than 1e-3, so the check is sensitive to it. The discrete
+frequency-domain identity of §4.6 holds to 1e-10 with gray edge factors and a magnetic source on
+a corrected plane.
+
+Cost: on the divider (one forward and one adjoint run per iteration) an iteration takes 10.1 s
+instead of 8.0 s (+26 %): 13 % more steps from the time-step bound, 11 % per step for the
+correction (scaling the H planes, the extra DTFT probes) and 7 % for the modal source; the
+setup adds about 6 s (the time-step bound and the mode solves, both cached per grid). At a third
+of the pitch the step is 0.82 of the plain one. `optimizer.adaptive_move` costs one forward run
+per refused step: on the tiny two-port spec at a 0.3 move, plain MMA jumped from t = 0.14 to 17.1
+and later to 1.3, the adaptive move never rose by more than 0.04 and reached the same t = −0.248
+with 2 refusals in 36 iterations (+11 % wall time).
+
+Not done: grid continuation (optimizing coarse and finishing on a finer grid). With the
+correction the coarse grid agrees with the finer one to the numbers above, and the export,
+rules and validation all assume one optimization pitch.
+
 ## References
 
 1. A. M. Hammond, A. Oskooi, M. Chen, Z. Lin, S. G. Johnson, S. E. Ralph, "High-performance hybrid
@@ -1182,8 +1337,16 @@ optimization grid, "fine" and "finer" at a half and a third of its pitch.
     represent a digitized line or its caricature," Cartographica 10(2), 112–122 (1973).
 27. P. F. Felzenszwalb, D. P. Huttenlocher, "Distance transforms of sampled functions," Theory of
     Computing 8, 415–428 (2012).
+28. D. B. Shorthouse, C. J. Railton, "The incorporation of static field solutions into the finite
+    difference time domain algorithm," IEEE Trans. Microw. Theory Techn. 40(5), 986–994 (1992).
+29. J. Meixner, "The behavior of electromagnetic fields at edges," IEEE Trans. Antennas Propag.
+    20(4), 442–446 (1972).
+30. D. L. Morrison, J. A. Lewis, "Charge singularity at the corner of a flat plate," SIAM J. Appl.
+    Math. 31(2), 233–250 (1976).
 
-The paper [1] was read in full, including §5.2 and App. A. The adaptation to microstrip rests on
-[2–11] and on Meep's public adjoint filters (for conventions only). [12–15] are cited for the
-nonlinear response of metallic designs to conductivity; their specific interpolations were not
-re-read for this design (the web-search quota ran out), and nothing here depends on them.
+[28–30] are cited from memory for round 2 (the web-search quota was used up); the corner
+exponent was recomputed here (§21.1). The paper [1] was read in full, including §5.2 and
+App. A. The adaptation to microstrip rests on [2–11] and on Meep's public adjoint filters (for
+conventions only). [12–15] are cited for the nonlinear response of metallic designs to
+conductivity; their specific interpolations were not re-read for this design (the web-search
+quota ran out), and nothing here depends on them.

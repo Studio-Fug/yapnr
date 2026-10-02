@@ -279,8 +279,8 @@ def initial_starts(graph, constraints, config, seed=0, orient=True):
                 rotations=rotations if orient else None,
             )
         )
-    # Regions and aligns: move the sampled points into their hard regions and onto
-    # the align lines (a projection; no extra random draws).
+    # Regions and aligns: move the start points into the outline, their hard regions
+    # and onto the align lines (a projection; no extra random draws).
     from .regions import declared
 
     if declared(constraints):
@@ -297,10 +297,43 @@ def initial_starts(graph, constraints, config, seed=0, orient=True):
     return result
 
 
+# Margin, as a fraction of the outline, that _fit_outline leaves on each side.
+FIT_MARGIN = 0.05
+
+
+def _fit_outline(graph, constraints, positions):
+    """Bring a start whose points leave the outline inside it, keeping their order.
+
+    A source board may hold its parts outside the outline (a generated staging row, a
+    netlist import); projecting only the region parts would then leave the start half
+    on and half off the board, which the global placer does not recover from. On each
+    axis whose points leave the outline, the points' span maps affinely onto the
+    outline less :data:`FIT_MARGIN`; every point is then clamped so the part's
+    courtyard fits. A start already inside the outline is unchanged."""
+    width, height = outline_size(graph, constraints)
+    points = list(positions.values())
+    if not points or all(0.0 <= x <= width and 0.0 <= y <= height for x, y in points):
+        return
+    by_ref = {c.ref: c for c in graph.components}
+    fitted = {ref: list(xy) for ref, xy in positions.items()}
+    for k, size in ((0, width), (1, height)):
+        values = [p[k] for p in points]
+        lo, hi = min(values), max(values)
+        scale = hi - lo > 1e-9 and (lo < 0.0 or hi > size)
+        margin = FIT_MARGIN * size
+        for ref, xy in positions.items():
+            value = xy[k]
+            if scale:
+                value = margin + (value - lo) / (hi - lo) * (size - 2.0 * margin)
+            half = min(size / 2.0, by_ref[ref].courtyard[k] / 2.0) if ref in by_ref else 0.0
+            fitted[ref][k] = min(max(value, half), size - half)
+    positions.update(fitted)
+
+
 def _project_start(graph, constraints, start):
-    """Project ``start``'s positions into the hard regions of their refs, then each
-    align's members onto the line through the median of their anchors (a fixed
-    member's anchor when there is one)."""
+    """Project ``start``'s positions into the outline (:func:`_fit_outline`), into the
+    hard regions of their refs, then each align's members onto the line through the
+    median of their anchors (a fixed member's anchor when there is one)."""
     from .regions import (
         align_rules,
         anchor_offset,
@@ -318,6 +351,7 @@ def _project_start(graph, constraints, start):
     def rot_of(ref):
         return hard_rot.get(ref, rotations.get(ref, by_ref[ref].rot))
 
+    _fit_outline(graph, constraints, positions)
     regions = region_rules(constraints)
     for ref, xy in positions.items():
         rules = [c for c in regions if ref in c.refs]

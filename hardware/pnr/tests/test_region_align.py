@@ -615,6 +615,42 @@ class CostInspectTest(unittest.TestCase):
         self.assertEqual(Objective(graph, plain).term_keys, list(TERMS[:BASE_TERMS]))
 
 
+class PoolStartTest(unittest.TestCase):
+    def test_off_board_source_start_is_fitted_then_projected(self):
+        from pnr.place.initial_pool import InitialPoolConfig, initial_starts
+
+        graph = chaser()
+        for i, comp in enumerate(graph.components):  # a staging row east of the board
+            comp.pos = (5.0 + 12.0 * i, 22.0)
+        config = InitialPoolConfig(starts=8, route_finalists=3, proxy_budget=8)
+        cc = compile_constraints(absolute(), graph.refs)
+        starts = initial_starts(graph, cc, config, seed=0)
+        source = starts[1]["positions"]
+        for ref, (x, y) in source.items():
+            w, h = graph.component(ref).courtyard
+            self.assertTrue(w / 2 - 1e-9 <= x <= SIZE[0] - w / 2 + 1e-9, (ref, x))
+            self.assertTrue(h / 2 - 1e-9 <= y <= SIZE[1] - h / 2 + 1e-9, (ref, y))
+        outside = sorted(
+            (r for r in source if r not in CLOCK), key=lambda r: graph.component(r).pos
+        )
+        xs = [source[r][0] for r in outside]
+        self.assertEqual(xs, sorted(xs))  # the row keeps its order
+        for ref in CLOCK:
+            w = graph.component(ref).courtyard[0]
+            self.assertLessEqual(source[ref][0] + w / 2, WEST[2] + 1e-9)
+        # The sampled starts already lie inside the outline: the fit leaves them alone.
+        bare = copy.deepcopy(cc)
+        bare.constraints = [c for c in cc.constraints if c.kind != "region"]
+        sampled = initial_starts(graph, bare, config, seed=0)
+        for got, plain in zip(starts[2:], sampled[2:]):
+            for ref in plain["positions"]:
+                if ref not in CLOCK:
+                    self.assertEqual(got["positions"][ref], plain["positions"][ref])
+        # Without a region or an align the source start is the source board, unchanged.
+        for ref, xy in sampled[1]["positions"].items():
+            self.assertEqual(tuple(xy), graph.component(ref).pos)
+
+
 class UnchangedTest(unittest.TestCase):
     def test_designs_without_either_constraint_are_unchanged(self):
         graph = chaser()

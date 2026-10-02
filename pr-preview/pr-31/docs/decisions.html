@@ -1,0 +1,1092 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Design: the regression ladder in CI, PnR traces and critical-path animations" href="design/animations.html"><link rel="prev" title="yapnr migration plan" href="migration-plan.html">
+        <link rel="prefetch" href="../static/yapnr-logo-256.png" as="image">
+        <link rel="prefetch" href="../static/yapnr-logo-light.png" as="image">
+
+    <link rel="shortcut icon" href="../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
+        <title>Decisions - yapnr documentation</title>
+      <link rel="stylesheet" type="text/css" href="../static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../static/custom.css?v=ad564152" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-brand-primary: #024823;
+  --color-brand-content: #024823;
+  --color-brand-visited: #024823;
+  --color-yapnr-accent: #ba9015;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">yapnr documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="../static/yapnr-logo-256.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../static/yapnr-logo-light.png" alt="Dark Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="viewer.html">The live viewer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="frontends/atopile.html">The atopile toolchain</a></li>
+<li class="toctree-l1"><a class="reference internal" href="part-cache.html">The part cache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html">Releases and versioning</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="regression-ladder.html">Regression ladder</a></li>
+<li class="toctree-l1"><a class="reference internal" href="constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/fea-integration.html">Design: thermal and electromagnetic field solvers (FEA) in yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
+<li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
+<li class="toctree-l1"><a class="reference internal" href="references.html">Foundations and references</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../DEVELOPERS.html">Developing yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Contributing to yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../AGENTS.html">Rules for agents</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../WORKLOG.html">Worklog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../THIRD_PARTY.html">Third-party material</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../README.html">yapnr</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/blob/main/docs/decisions.md?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/edit/main/docs/decisions.md" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="decisions">
+<h1>Decisions<a class="headerlink" href="#decisions" title="Link to this heading">¶</a></h1>
+<p>The owner’s decisions for yapnr, and the pinned tool versions with their rationale. Update this file
+in the same change as the file that holds a pin (<code class="docutils literal notranslate"><span class="pre">MODULE.bazel</span></code>, <code class="docutils literal notranslate"><span class="pre">requirements.in</span></code>,
+<code class="docutils literal notranslate"><span class="pre">.pre-commit-config.yaml</span></code>, the workflows). Architecture decision records (ADRs) join this page in
+PR7 under <code class="docutils literal notranslate"><span class="pre">docs/adr/</span></code>.</p>
+<section id="decision-log">
+<h2>Decision log<a class="headerlink" href="#decision-log" title="Link to this heading">¶</a></h2>
+<p>Owner decisions of 2026-09-29, taken while planning the migration (see
+<a class="reference internal" href="migration-plan.html"><span class="std std-doc">the migration plan</span></a>, §0.2):</p>
+<ul class="simple">
+<li><p><strong>License: <code class="docutils literal notranslate"><span class="pre">AGPL-3.0-or-later</span></code>.</strong> <code class="docutils literal notranslate"><span class="pre">LICENSE</span></code> holds the verbatim AGPL-3.0 text; the SPDX identifier
+appears in <code class="docutils literal notranslate"><span class="pre">README.md</span></code>, the docs footer and <code class="docutils literal notranslate"><span class="pre">CONTRIBUTING.md</span></code>. No per-file SPDX headers for now.
+Matches Splanc’s declaration; one identifier keeps a later relicense cheap.</p></li>
+<li><p><strong>No license metadata in Bazel for now.</strong> If it is added later, it goes into <code class="docutils literal notranslate"><span class="pre">REPO.bazel</span></code> as
+<code class="docutils literal notranslate"><span class="pre">repo(default_package_metadata</span> <span class="pre">=</span> <span class="pre">...)</span></code>, which covers every package, never into a root
+<code class="docutils literal notranslate"><span class="pre">package()</span></code>, which would cover only the root package. This avoids a <code class="docutils literal notranslate"><span class="pre">rules_license</span></code> dependency
+before anything consumes it.</p></li>
+<li><p><strong>Contributions: owner only, for now.</strong> Outside contributions are not accepted yet;
+<code class="docutils literal notranslate"><span class="pre">CONTRIBUTING.md</span></code> says so. Revisit together with the inbound license terms (CLA or DCO).</p></li>
+<li><p><strong>Commit identity: the owner’s public commit address</strong> (decided 2026-09-29; it replaces the
+earlier “GitHub noreply addresses only” rule), for new commits and for imported history: the
+owner’s commits under the owner’s name, agent commits as <code class="docutils literal notranslate"><span class="pre">Claude</span> <span class="pre">Agent</span></code>, and every identity in
+the imported Splanc history mapped to it (migration plan §7.2). The address is listed in
+<code class="docutils literal notranslate"><span class="pre">tools/privacy/allowed_identities.txt</span></code>, the only file that may name it. Reason: GitHub accepts
+only an address verified on the account as the author of a merge made on the website, so a
+noreply address cannot author the merges into <code class="docutils literal notranslate"><span class="pre">main</span></code>; the owner chose to publish this address
+on commits. The CI <code class="docutils literal notranslate"><span class="pre">lint</span></code> job checks the author and committer address of every new commit with
+<code class="docutils literal notranslate"><span class="pre">tools/privacy_scan.py</span> <span class="pre">--identities</span></code>, which accepts the allowlisted addresses,
+<code class="docutils literal notranslate"><span class="pre">users.noreply.github.com</span></code> addresses (the earlier PR0 commits keep theirs) and
+<code class="docutils literal notranslate"><span class="pre">noreply&#64;github.com</span></code> (GitHub’s committer for web merges). It also scans the messages and
+patches of the new commits, where the allowlisted addresses pass; in file contents they remain
+findings like any other personal address. Adding an address to the allowlist is an owner
+decision recorded here.</p></li>
+<li><p><strong>Issue tracking: GitHub issues</strong> (<code class="docutils literal notranslate"><span class="pre">#N</span></code>); Splanc’s <code class="docutils literal notranslate"><span class="pre">FUG-NNN</span></code> keys are not used here.</p></li>
+<li><p><strong>Docs on GitHub Pages, with per-PR previews.</strong> Wired like Splanc and gated on the repository
+variable <code class="docutils literal notranslate"><span class="pre">YAPNR_PAGES_ENABLED</span> <span class="pre">==</span> <span class="pre">'true'</span></code>, which the owner sets after the first green build of
+<code class="docutils literal notranslate"><span class="pre">main</span></code>; a manual run of CI on <code class="docutils literal notranslate"><span class="pre">main</span></code> then creates the <code class="docutils literal notranslate"><span class="pre">gh-pages</span></code> branch, and Pages is pointed at
+it (the order is in <code class="docutils literal notranslate"><span class="pre">ci.yaml</span></code> and <code class="docutils literal notranslate"><span class="pre">WORKLOG.md</span></code>). Previews are published only after <code class="docutils literal notranslate"><span class="pre">lint</span></code>,
+<code class="docutils literal notranslate"><span class="pre">test</span></code> and <code class="docutils literal notranslate"><span class="pre">docs</span></code> pass. The repository is public, so publishing is approved.</p></li>
+<li><p><strong>Viewer agent features off by default.</strong> The viewer’s Ask agent and AI summaries ship in a later
+PR (PR4c) as optional features, disabled unless explicitly enabled.</p></li>
+<li><p><strong>elkjs is fetched at build time, pinned by sha256, never vendored.</strong> It is served as a
+separate, unmodified file (PR4b). <code class="docutils literal notranslate"><span class="pre">THIRD_PARTY.md</span></code> lists it and three.js.</p></li>
+<li><p><strong>No Nix in yapnr.</strong> KiCad comes from the discovered toolchain (and the official container image
+in CI). Nix extension tags are root-module-only, which Splanc had to patch around.</p></li>
+<li><p><strong>Required CI test job on <code class="docutils literal notranslate"><span class="pre">ubuntu-24.04-arm</span></code>;</strong> the macOS job is informational. The lock is
+CPU-only for darwin-arm64 and linux-aarch64 (below).</p></li>
+</ul>
+<p>Owner decisions for releases and container images (PR-R; <a class="reference internal" href="releases.html"><span class="std std-doc">releases</span></a>,
+<a class="reference internal" href="containers.html"><span class="std std-doc">containers</span></a>):</p>
+<ul class="simple">
+<li><p><strong>Versions: SemVer tags <code class="docutils literal notranslate"><span class="pre">vX.Y.Z</span></code>,</strong> release candidates <code class="docutils literal notranslate"><span class="pre">vX.Y.Z-rc.N</span></code>. While 0.x, a breaking or
+results-changing release bumps MINOR; the <code class="docutils literal notranslate"><span class="pre">results-change</span></code> label marks such pull requests.</p></li>
+<li><p><strong>The tag is the only version source.</strong> No <code class="docutils literal notranslate"><span class="pre">version</span></code> in <code class="docutils literal notranslate"><span class="pre">MODULE.bazel</span></code>; the wheel is stamped at
+build time and <code class="docutils literal notranslate"><span class="pre">__version__</span></code> reads the installed metadata.</p></li>
+<li><p><strong>Only the owner creates <code class="docutils literal notranslate"><span class="pre">v*</span></code> tags</strong> (a tag ruleset); agents never create tags or releases. The
+release workflow runs on the tag push and has a dry-run dispatch.</p></li>
+<li><p><strong>Release notes are GitHub’s generated notes,</strong> grouped by pull request label
+(<code class="docutils literal notranslate"><span class="pre">.github/release.yml</span></code>). No Conventional Commits, no release-please.</p></li>
+<li><p><strong>Public images on GHCR:</strong> <code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr-kicad</span></code> (Ubuntu 24.04 with KiCad from the
+KiCad team’s PPA) and <code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr</span></code>, native linux/amd64 and linux/arm64 builds with
+SBOM, provenance and attestations. Owner approved making the packages public (a one-time,
+irreversible switch after the first push).</p></li>
+<li><p><strong>Redistributing KiCad in the images is approved,</strong> with the source offer as permanent
+<code class="docutils literal notranslate"><span class="pre">yapnr-kicad:&lt;tag&gt;-src</span></code> images (never pruned), the Ubuntu snapshot recorded with the image, and
+the notices (<code class="docutils literal notranslate"><span class="pre">LICENSE</span></code>, <code class="docutils literal notranslate"><span class="pre">THIRD_PARTY.md</span></code>, <code class="docutils literal notranslate"><span class="pre">SOURCES</span></code>) under <code class="docutils literal notranslate"><span class="pre">/usr/share/doc/yapnr</span></code>. (The snapshot
+is recorded inside the image rather than as a label; see “Container images” below.)</p></li>
+</ul>
+<p>Owner decisions for the history import (PR1; <a class="reference internal" href="migration-plan.html"><span class="std std-doc">the migration plan</span></a>, §7):</p>
+<ul class="simple">
+<li><p><strong>Privacy scan: what counts as an e-mail address</strong> (decided 2026-09-29). The imported engine
+history holds 21 matches of the address pattern that are code: top-level test decorators on added
+or removed patch lines (<code class="docutils literal notranslate"><span class="pre">+&#64;unittest.skipIf(</span></code>, where the diff marker is the local part), a matrix
+product (<code class="docutils literal notranslate"><span class="pre">W&#64;field.reshape(</span></code>) and endpoints in the engine’s constraint syntax
+(<code class="docutils literal notranslate"><span class="pre">net&#64;board.usbc:A6</span></code>). The owner chose to refine the rule rather than change imported code or add
+allow markers: an <code class="docutils literal notranslate"><span class="pre">&#64;</span></code> match counts as an e-mail address only if its local part contains a letter
+or digit, it is not immediately followed by <code class="docutils literal notranslate"><span class="pre">(</span></code> (a call), and its top-level domain is in the IANA
+root zone, compared in lower case. The list is a static copy in <code class="docutils literal notranslate"><span class="pre">tools/privacy/iana_tlds.txt</span></code>,
+whose header gives the source URL, the retrieval date and the upstream checksum, followed by the
+upstream file with its version line; refresh it by replacing it with a new download. Nothing else
+changed: personal addresses at public top-level domains stay findings in files, <code class="docutils literal notranslate"><span class="pre">--all</span></code> and
+<code class="docutils literal notranslate"><span class="pre">--stdin</span></code>, the allowlisted commit address stays a finding in files, and <code class="docutils literal notranslate"><span class="pre">--identities</span></code> does not
+use the refinement. By construction, addresses at names outside the root zone (such as <code class="docutils literal notranslate"><span class="pre">.local</span></code>,
+<code class="docutils literal notranslate"><span class="pre">.lan</span></code> or <code class="docutils literal notranslate"><span class="pre">.internal</span></code>) are no longer e-mail findings. So that <code class="docutils literal notranslate"><span class="pre">.local</span></code> machine names stay covered
+as before, the <code class="docutils literal notranslate"><span class="pre">local-host</span></code> rule also reports a <code class="docutils literal notranslate"><span class="pre">.local</span></code> name right after <code class="docutils literal notranslate"><span class="pre">&#64;</span></code>
+(<code class="docutils literal notranslate"><span class="pre">user&#64;&lt;host&gt;.local</span></code>, as in ssh or git’s guessed identity), besides hyphenated and URL <code class="docutils literal notranslate"><span class="pre">.local</span></code>
+names. Commit identities at any such name still fail <code class="docutils literal notranslate"><span class="pre">--identities</span></code>.</p></li>
+<li><p><strong>Privacy scan: GitHub’s service addresses on trailers</strong> (decided 2026-09-30). Dependabot signs
+its commits off with GitHub’s support address (<code class="docutils literal notranslate"><span class="pre">support</span></code> at <code class="docutils literal notranslate"><span class="pre">github.com</span></code>), so both of its pull
+requests failed the history scan. The owner chose to accept GitHub’s own service addresses
+(<code class="docutils literal notranslate"><span class="pre">GITHUB_SERVICE_ADDRESSES</span></code>, today only that address) only on a <code class="docutils literal notranslate"><span class="pre">Signed-off-by:</span></code> or <code class="docutils literal notranslate"><span class="pre">Co-authored-by:</span></code>
+trailer line of the <code class="docutils literal notranslate"><span class="pre">--stdin</span></code> history scan. A patch line (it starts with its diff marker), any
+other line, and every file scan still report it; personal addresses on trailers stay findings.</p></li>
+</ul>
+<p>Choices made in PR1 itself, following the plan; the owner reviews them with the pull request:</p>
+<ul class="simple">
+<li><p><strong>Full-history import of the engine paths</strong> (plan §0.3, item 7). The committed Splanc history of
+the PnR paths is imported with <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">filter-repo</span></code> (42 commits) rather than as one snapshot commit,
+so blame and <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">log</span> <span class="pre">--follow</span></code> keep the reasons behind the engine’s heuristics; the history is
+small (486 blobs, none over 600 KB). Merging PR1 with a merge commit answers the plan’s open
+question Q2b. What was imported, how it was rewritten and how it was checked is in the
+<a class="reference internal" href="history/import-manifest.html"><span class="std std-doc">history import manifest</span></a>.</p></li>
+<li><p><strong>The test-wiring check keeps its <code class="docutils literal notranslate"><span class="pre">tests/</span></code> scope until PR3.</strong> This replaces the plan’s first form
+(extend the check to <code class="docutils literal notranslate"><span class="pre">hardware/</span></code> with a shrink-only baseline in PR1): PR2 replaces
+<code class="docutils literal notranslate"><span class="pre">hardware/pnr</span></code> from the engine snapshots, and PR3 moves its tests under <code class="docutils literal notranslate"><span class="pre">tests/</span></code>, where the glob
+macro wires them and the check covers them, so a baseline for a tree that is replaced twice would
+only be churn. <code class="docutils literal notranslate"><span class="pre">tools/check_test_wiring.py</span> <span class="pre">--scope</span> <span class="pre">hardware/</span></code> lists the 29 unwired test files of
+the import, and the manifest counts them.</p></li>
+<li><p><strong>The imported Bazel targets run in <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//...</span></code>.</strong> <code class="docutils literal notranslate"><span class="pre">hardware/pnr/BUILD.bazel</span></code> loads
+<code class="docutils literal notranslate"><span class="pre">&#64;yapnr_pypi</span></code>, and a minimal <code class="docutils literal notranslate"><span class="pre">hardware/tools/BUILD.bazel</span></code> exports the one tool a test needs.
+Splanc’s <code class="docutils literal notranslate"><span class="pre">pnr.bzl</span></code> (atopile and KiCad Python rules, which yapnr does not have) stays in the tree
+unloaded until PR8 replaces it. Tests that fail on the Splanc source commit, or run past their
+timeout, are tagged <code class="docutils literal notranslate"><span class="pre">manual</span></code> with a comment and listed in the plan’s appendix B, so CI stays
+green; the manifest records the pass set.</p></li>
+</ul>
+<p>Choices made in PR2 (the newer engine state; <a class="reference internal" href="migration-plan.html"><span class="std std-doc">migration plan</span></a> §7.3), following
+the plan; the owner reviews them with the pull request:</p>
+<ul class="simple">
+<li><p><strong>Snapshot-exact commits, with merges.</strong> Each engine snapshot becomes one commit whose engine
+tree equals the snapshot (apart from the scrubbed files), and the side lines (Electrical221, the
+USB pair engine, N-0001) join through merge commits, as they were developed. The alternative, a
+linear series with the merges applied as plain commits, would lose the side lines’ focused
+diffs. Only the head builds in yapnr, as in PR1. PR2 is merged with a merge commit.</p></li>
+<li><p><strong>Machine paths are scrubbed when a snapshot is staged, not in a later commit.</strong> Four engine
+files held absolute paths of the experiment area; a later scrub commit (the plan’s first form)
+would have published them in the history. Every commit that carries these files has the
+scrubbed version; the <a class="reference internal" href="history/import-manifest.html#content-scrub"><span class="std std-ref">import manifest</span></a> lists them.</p></li>
+<li><p><strong>No engine edits in PR2.</strong> Tests that fail with the newer engine are tagged <code class="docutils literal notranslate"><span class="pre">manual</span></code> with a
+comment, and the defects found while importing (workers without a timeout, Splanc defaults,
+Splanc data in the test fixtures) are listed for PR3 in the manifest and in the plan’s
+appendix B.</p></li>
+<li><p><strong>Electrical221 is imported as it ran in Splanc.</strong> Its <code class="docutils literal notranslate"><span class="pre">via_coalesce</span></code>/<code class="docutils literal notranslate"><span class="pre">track_graph</span></code> cleanup is
+on by default without a flag or an A/B result, unlike the rule for new engine behaviour; the H7
+run uses <code class="docutils literal notranslate"><span class="pre">src15</span></code> without it. It stays as imported (faithful to Splanc’s working tree) until the
+owner decides between gating it and an A/B run. (Superseded: gated, default off, in the engine
+hygiene change below.)</p></li>
+<li><p><strong>src8b’s default changes stay</strong> (the <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> fab profile, bounded workers, the
+parallel-commit fix, plane-access reuse): they predate the default-off rule and are documented,
+with their measurements, in the src8b commit.</p></li>
+<li><p><strong>The Splanc working tree’s viewer changes (<code class="docutils literal notranslate"><span class="pre">pnr_live</span></code>) go to PR4,</strong> not PR2: the cost service
+imports <code class="docutils literal notranslate"><span class="pre">pnr.capacitor_intent</span></code>, which was never committed, and the README reintroduces machine
+names that PR1 scrubbed.</p></li>
+</ul>
+<p>Choices made in the engine hygiene change after PR2 (branch <code class="docutils literal notranslate"><span class="pre">claude/engine-hygiene</span></code>; the PR3
+leftovers of the <a class="reference internal" href="history/import-manifest.html#known-leftovers-for-pr3"><span class="std std-ref">import manifest</span></a>); the owner
+reviews them with the pull request:</p>
+<ul class="simple">
+<li><p><strong>Electrical221’s cleanup is gated, default off,</strong> which makes the default engine behave as
+<code class="docutils literal notranslate"><span class="pre">src15</span></code>, the engine of the H7 experiment, again. <code class="docutils literal notranslate"><span class="pre">PNR_PARTIAL_CYCLE_CLEANUP=1</span></code> enables the
+partial-track cycle edits (and the stricter cycle-trial match); <code class="docutils literal notranslate"><span class="pre">PNR_BARREL_CONTACT_BRIDGES=1</span></code>
+enables the bridges for barrel-contact tails. Two flags rather than one, so an A/B can separate
+them. Turning them on needs an A/B on the hierarchical engine (the rule for new behaviour);
+Electrical221’s own evidence is in its import commit. The full electrical pool was already
+opt-in (<code class="docutils literal notranslate"><span class="pre">PNR_FULL_ELECTRICAL_POOL=1</span></code>). The coalesce report keeps Electrical221’s two summary
+keys, which are reporting only.</p></li>
+<li><p><strong>Discarded KiCad items are deleted with <code class="docutils literal notranslate"><span class="pre">board.Delete</span></code>, never <code class="docutils literal notranslate"><span class="pre">board.Remove</span></code>.</strong> <code class="docutils literal notranslate"><span class="pre">Remove</span></code> makes
+the Python wrapper the item’s owner, so the item can be freed after its board (the teardown
+SIGSEGV of <code class="docutils literal notranslate"><span class="pre">fanout_reserve.release</span></code>, fixed in src12i). <code class="docutils literal notranslate"><span class="pre">Remove</span></code> stays only for an item that is
+re-added, kept alive on purpose (the warm DRC keepalive arena) or detached with
+<code class="docutils literal notranslate"><span class="pre">thisown=False</span></code>. Code must not use a wrapper of a deleted item, so it reads uuids and sizes
+first. <code class="docutils literal notranslate"><span class="pre">//hardware/pnr:board_delete_test</span></code> fails on any <code class="docutils literal notranslate"><span class="pre">Remove</span></code> call beyond the three it lists
+(per call, so a new one in a kept file fails too). The signal retries of <code class="docutils literal notranslate"><span class="pre">via_coalesce</span></code> and
+<code class="docutils literal notranslate"><span class="pre">native_loop</span></code> and the <code class="docutils literal notranslate"><span class="pre">os._exit(0)</span></code> of the hier workers stay as a second line of defence.
+Replayed on the H7 experiment’s real boards against the pre-audit code, the five sites those
+steps reach (<code class="docutils literal notranslate"><span class="pre">hier.subpcb</span></code>, <code class="docutils literal notranslate"><span class="pre">electrical_repair</span></code>’s blocker segments, <code class="docutils literal notranslate"><span class="pre">via_coalesce.apply</span></code>,
+<code class="docutils literal notranslate"><span class="pre">track_graph.apply_cycle</span></code>, <code class="docutils literal notranslate"><span class="pre">shove.ladder</span></code>’s rip-up; 176 items) give the same boards and
+reports, exit cleanly, and no longer print SWIG’s “memory leak … no destructor found”
+messages. The Delete run’s placement, plane-access and coalesce geometry equals H7’s own
+(src15) boards. A full rung-1 evaluation, which reaches the other sites, is left for a quiet
+machine: its nested workers exceed the two-process KiCad budget kept while H7 runs.</p></li>
+<li><p><strong>Every engine subprocess has a deadline, through <code class="docutils literal notranslate"><span class="pre">pnr.proc</span></code>,</strong> with three env-overridable
+limits sized as wedge guards from the H2 to H7 records: <code class="docutils literal notranslate"><span class="pre">PNR_WORKER_TIMEOUT</span></code> (1800 s, unchanged;
+a worker with its own <code class="docutils literal notranslate"><span class="pre">--seconds</span></code> budget gets at least twice that plus 600 s),
+<code class="docutils literal notranslate"><span class="pre">PNR_PHASE_TIMEOUT</span></code> (4 h, a phase of bounded workers; the longest observed phase took 90 s) and
+<code class="docutils literal notranslate"><span class="pre">PNR_EVALUATION_TIMEOUT</span></code> (max(48 h, 48 x the native budget), one <code class="docutils literal notranslate"><span class="pre">pnr.full_iteration</span></code>; the
+longest observed evaluation took 18.3 h for a 5400 s budget). <code class="docutils literal notranslate"><span class="pre">0</span></code>, a negative value or <code class="docutils literal notranslate"><span class="pre">inf</span></code>
+means no limit (an explicit opt-out; <code class="docutils literal notranslate"><span class="pre">0</span></code> does not mean “kill at once”). A timed-out child
+counts as a failed worker (exit -9), as a crash did before, and the signal retries of
+<code class="docutils literal notranslate"><span class="pre">native_loop</span></code> and <code class="docutils literal notranslate"><span class="pre">via_coalesce</span></code> do not rerun it (a wedge, not a crash). Only the parent
+enforces a deadline, so a timeout kills the child’s whole process tree: the child, every
+descendant (stopped with SIGSTOP first, so nothing forks away) and every process group a
+descendant leads. The workers of a killed <code class="docutils literal notranslate"><span class="pre">pnr.full_iteration</span></code> run in their own groups and
+would otherwise outlive it without a deadline. An interrupted wait (Ctrl-C) kills the tree
+too, as <code class="docutils literal notranslate"><span class="pre">subprocess.run</span></code> kills its child. The converted calls, the subpcb cut included, keep
+the child in the caller’s process group (<code class="docutils literal notranslate"><span class="pre">session=False</span></code>), as their plain <code class="docutils literal notranslate"><span class="pre">subprocess.run</span></code>
+did, so stopping a run’s process group still stops them; the existing <code class="docutils literal notranslate"><span class="pre">pnr.proc</span></code> callers keep
+their own groups. A nested deadline only binds when it is shorter than its parent’s: the
+4 h <code class="docutils literal notranslate"><span class="pre">PNR_PHASE_TIMEOUT</span></code> of <code class="docutils literal notranslate"><span class="pre">keyhole_region</span></code>’s cleanup pass applies when the tool runs on its
+own, while under the native loop and the repair adapters the 1800 s (or <code class="docutils literal notranslate"><span class="pre">worker_timeout</span></code>)
+deadline of the whole <code class="docutils literal notranslate"><span class="pre">keyhole_region</span></code> worker comes first. <code class="docutils literal notranslate"><span class="pre">//hardware/pnr:proc_test</span></code> fails on
+any new subprocess call without a deadline (aliased imports included); the opt-in warm DRC
+host daemon is the one exception (its session ends it).</p></li>
+<li><p><strong>CI’s history scan includes merge diffs</strong> (<code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">log</span> <span class="pre">-p</span> <span class="pre">--diff-merges=separate</span></code>): a merge
+commit’s diff against each parent is scanned, so a conflict resolution cannot bypass the scan
+(PR2’s two merges were checked this way only locally). The explicit option, not <code class="docutils literal notranslate"><span class="pre">-m</span></code>, because
+<code class="docutils literal notranslate"><span class="pre">-m</span></code> follows <code class="docutils literal notranslate"><span class="pre">log.diffMerges</span></code>, and <code class="docutils literal notranslate"><span class="pre">first-parent</span></code> there drops the second parent’s diff.</p></li>
+<li><p><strong>The docs enable MyST’s <code class="docutils literal notranslate"><span class="pre">strikethrough</span></code> extension</strong> so status lists (the manifest’s PR3
+leftovers, the plan’s appendix B) can strike done items instead of deleting them.</p></li>
+<li><p><strong>Placement is reproducible per platform, not across platforms</strong> (Studio-Fug/yapnr#6). The same
+inputs and seed give one board on macOS arm64 and another on linux-aarch64 (the CI runner and
+the images). Measured with torch 2.3.1 and numpy 1.26.4 on both: the seeded start, the thread
+count (1) and the legalizer agree bit for bit (each platform’s global placement legalizes to
+the other’s board exactly), and <code class="docutils literal notranslate"><span class="pre">torch.use_deterministic_algorithms(True)</span></code> changes nothing. The
+two torch wheels round float32 <code class="docutils literal notranslate"><span class="pre">exp</span></code> (0.6 % of inputs), <code class="docutils literal notranslate"><span class="pre">log</span></code> (0.1 %) and <code class="docutils literal notranslate"><span class="pre">addcmul</span></code> (0.07 %,
+Adam’s second moment) differently by one ulp. The first gradient difference appears at the
+second optimizer step; the non-convex placement grows it to millimetres by step 200, and
+legalization turns that into another legal placement. Evaluating <code class="docutils literal notranslate"><span class="pre">exp</span></code> and <code class="docutils literal notranslate"><span class="pre">log</span></code> in float64
+removes the gradient difference but not Adam’s. The engine is not changed: bitwise
+cross-platform results would need torch’s transcendental and fused kernels replaced, would
+change every result, and would break again with the next torch build or on x86_64. Both
+platforms draw from the same distribution (30 seeds each; mean final HPWL with orientation
+1846 mm on macOS and 1838 mm on Linux, without 1862 mm and 1873 mm), so a run is reproducible
+on one image digest or one Mac environment, and comparisons between runs stay on one platform.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">orientation_test</span></code> checks what the placer guarantees.</strong> Its former check, oriented HPWL at
+most the position-only HPWL for seed 0, held on macOS by 3.6 mm (0.2 %) and failed on
+linux-aarch64 by 35 mm. Over those 30 seeds orientation beat position-only on 18 (macOS) and 20
+(Linux), a mean gain of 16 ± 18 mm and 36 ± 19 mm (± one standard error) against a per-seed
+spread of about 100 mm: the single-seed check fails on 22 of the 60 (platform, seed) pairs, and
+a median over three or five seeds on 27 to 32 % of the seed sets. The test now requires the
+mean HPWL of seeds 0 to 2 with orientation to be at most 5 % above the position-only mean
+(fails on 2.3 % of the seed triples of the measured pairs; the ratio is 0.997 on macOS and
+0.987 on Linux). That is a coarse guard, not proof that orientation costs no wirelength: a
+regression of up to 5 % passes, and the 90°/270° mix-up below fails it by 0.6 %. A tighter
+margin fails more seed triples on a new platform or torch build (2.5 %: 10.5 %; 3 %: 8.1 %;
+4 %: 4.4 %), so the margin stays and the synthetic board is the guard of the search. A
+synthetic board with known best angles, started from explicit positions so the seed does not
+matter, checks that the search finds them (22.5 mm against 42 mm); this well-conditioned
+problem gives the same result on both platforms. A 90°/270° mix-up in the
+rotation convention fails three of the checks. A golden result per platform was rejected: it
+pins numbers that every torch bump changes and cannot state the orientation claim (Linux’s
+seed 0 is worse than position-only). Nine placements take 44 s on the development Mac and 51 s
+on two linux-aarch64 cores; the shared CI runner, which took 77 s for the former three, needs
+an estimated 185 to 240 s, so the target is <code class="docutils literal notranslate"><span class="pre">large</span></code> (900 s) and no longer <code class="docutils literal notranslate"><span class="pre">manual</span></code>.</p></li>
+</ul>
+<p>Choices made in PR3a (the mechanical format of the imported engine; <a class="reference internal" href="migration-plan.html"><span class="std std-doc">migration plan</span></a>
+PR3a); the owner reviews them with the pull request:</p>
+<ul class="simple">
+<li><p><strong>Code keys hash each module’s canonical syntax tree, not its bytes</strong> (code key scheme 2), so
+the format commits do not invalidate the libraries and trials that routing feedback imports.
+<code class="docutils literal notranslate"><span class="pre">pnr.feedback.signals</span></code> hashes every module of the evaluation closure by module name; comments
+and layout are not in the tree, and on top of that it applies what black’s own AST check
+allows (docstrings compared stripped line by line, the <code class="docutils literal notranslate"><span class="pre">u</span></code> prefix, <code class="docutils literal notranslate"><span class="pre">del</span> <span class="pre">(a,</span> <span class="pre">b)</span></code> as
+<code class="docutils literal notranslate"><span class="pre">del</span> <span class="pre">a,</span> <span class="pre">b</span></code>) and what isort does: each block of consecutive imports counts as a sorted set of
+imported names, unless the order can matter (a star import, or a name bound twice). An import
+never moves across other code in that form, and a docstring’s text still counts. Fields are
+named and empty ones left out, so Python 3.9, 3.11 and 3.12 give the same key for the engine.
+Measured on the engine: black and isort change 338 files, 226 of them in their plain
+<code class="docutils literal notranslate"><span class="pre">ast.dump</span></code> (import order, docstring indentation), none in the canonical form, and both routers’
+keys stay the same. New records stamp <code class="docutils literal notranslate"><span class="pre">code_key_scheme</span></code> next to <code class="docutils literal notranslate"><span class="pre">code</span></code>. A record without it
+is legacy (scheme 1, raw file bytes by path, the exact former key): it is compared under that
+scheme, or re-keyed from its evaluation tree when that tree still hashes to its stamp, so
+trials of frozen snapshot trees survive the format while those of a tree reformatted since
+do not. PR3b’s rename needs a scheme that applies the module map to module names and imports.
+The router key string (<code class="docutils literal notranslate"><span class="pre">router_key</span></code> in statuses, tables and libraries) ends with the scheme,
+and the feedback report names a key’s scheme when it is not the current one, so a legacy key
+and a new one cannot be mistaken for each other there.</p></li>
+<li><p><strong>The new key has two blind spots, by design.</strong> Reordering the imports inside a block does not
+change it, even where the order matters at import time, so a fix to an import-order bug changes
+the key only if it changes something else too. Whitespace at the start or end of a docstring’s
+lines does not change it either (black re-indents docstrings), although <code class="docutils literal notranslate"><span class="pre">__doc__</span></code> keeps it.
+Both are what the format needs to leave alone. In this format, black changed docstring
+whitespace in six files; one of them, <code class="docutils literal notranslate"><span class="pre">hier/subpcb.py</span></code>, passes its module docstring to argparse,
+whose default formatter reflows it, so its <code class="docutils literal notranslate"><span class="pre">--help</span></code> is unchanged.</p></li>
+<li><p><strong>Other hashes of engine source stay raw bytes</strong>, and the format changes them:
+<code class="docutils literal notranslate"><span class="pre">place/cost_capture.py</span></code> (<code class="docutils literal notranslate"><span class="pre">runtime_sources</span></code> and <code class="docutils literal notranslate"><span class="pre">probe_sources</span></code> in cost captures), <code class="docutils literal notranslate"><span class="pre">profile.py</span></code>
+(<code class="docutils literal notranslate"><span class="pre">source_hashes</span></code>), <code class="docutils literal notranslate"><span class="pre">drc_warm/host.py</span></code> (<code class="docutils literal notranslate"><span class="pre">sha256</span></code> in <code class="docutils literal notranslate"><span class="pre">ready.json</span></code>) and <code class="docutils literal notranslate"><span class="pre">regression/run.py</span></code>
+(<code class="docutils literal notranslate"><span class="pre">source_hashes</span></code> in <code class="docutils literal notranslate"><span class="pre">provenance.json</span></code>). They are diagnostic: nothing compares them across trees
+(the regression runner checks its manifest only against its own source freeze, within one run).</p></li>
+<li><p><strong>The format is three mechanical commits, and the pull request is merged with a merge commit</strong>
+so their hashes reach <code class="docutils literal notranslate"><span class="pre">main</span></code> and a follow-up lists them in <code class="docutils literal notranslate"><span class="pre">.git-blame-ignore-revs</span></code> (the plan
+had a squash merge and a follow-up with the squashed hash). black 25.1.0 and isort 6.0.1, the
+pinned hooks run through prek, cover every Python file under <code class="docutils literal notranslate"><span class="pre">hardware/</span></code> (<code class="docutils literal notranslate"><span class="pre">pnr</span></code>, <code class="docutils literal notranslate"><span class="pre">tools</span></code>,
+<code class="docutils literal notranslate"><span class="pre">experiments</span></code>): black changes 369 files, isort 294. The third commit pins isort’s settings in
+<code class="docutils literal notranslate"><span class="pre">.isort.cfg</span></code> (black profile, 100 columns, <code class="docutils literal notranslate"><span class="pre">known_first_party</span> <span class="pre">=</span> <span class="pre">pnr,yapnr,tools</span></code>): without them
+isort guessed first-party packages from its working directory, so <code class="docutils literal notranslate"><span class="pre">pnr</span></code> was third party when
+run from the root (as prek runs it) and first party from <code class="docutils literal notranslate"><span class="pre">hardware/pnr</span></code>, where 117 files then
+failed <code class="docutils literal notranslate"><span class="pre">isort</span> <span class="pre">--check</span></code>. Re-sorting with the pinned settings changes 130 files under <code class="docutils literal notranslate"><span class="pre">hardware/</span></code>
+(<code class="docutils literal notranslate"><span class="pre">pnr</span></code> imports get their own block), each only inside one run of imports; the code keys and the
+results of the 43 re-sorted test files are unchanged. black’s own equivalence check passes for
+all 369 (plain <code class="docutils literal notranslate"><span class="pre">ast.dump</span></code> differs in 6, docstring whitespace only). isort’s differences are all
+reorderings, splits or merges of imports inside one run of consecutive imports (each run
+compared as a multiset), so no import moved across code, and no file needed
+<code class="docutils literal notranslate"><span class="pre">#</span> <span class="pre">isort:</span> <span class="pre">skip_file</span></code>. isort changes the syntax tree of 250 files (the other 44 only in
+layout); no torch/numpy pair changes order, the engine’s import-time effects
+(<code class="docutils literal notranslate"><span class="pre">torch.set_num_threads(1)</span></code> in <code class="docutils literal notranslate"><span class="pre">pnr.place.model</span></code>, three <code class="docutils literal notranslate"><span class="pre">fab_profile.bind_active</span></code> callbacks
+that each set their own module’s globals) do not depend on order, and each of 344 modules of
+<code class="docutils literal notranslate"><span class="pre">hardware/pnr</span></code> imports in a fresh interpreter with the same outcome before and after (import
+cycles would show there).</p></li>
+<li><p><strong>No hand lint fixes; a per-file flake8 baseline instead.</strong> After black and isort, flake8 finds
+479 issues in 157 files, 112 of them unused imports. Every fix changes a syntax tree, and 155
+of the findings (27 unused imports, the F821) are in the 127 modules an evaluation runs, where
+any change alters the code key and so invalidates routing-feedback libraries and trials, which
+is what the new key scheme avoids. Outside them an unused import is still a module attribute
+that tests patch or other modules import (<code class="docutils literal notranslate"><span class="pre">subprocess</span></code> in <code class="docutils literal notranslate"><span class="pre">native_electrical</span></code>), so proving one
+unused takes a per-name search. <code class="docutils literal notranslate"><span class="pre">.flake8</span></code> therefore lists each file’s remaining codes in
+<code class="docutils literal notranslate"><span class="pre">per-file-ignores</span></code>; new files and codes are checked in full, the list only shrinks, and PR3b’s
+codemod (which changes every import anyway) is where it shrinks.</p></li>
+<li><p><strong>Non-Python files under <code class="docutils literal notranslate"><span class="pre">hardware/</span></code> keep per-hook excludes</strong> where a hook would rewrite or
+reject them, measured with the global exclude lifted: prettier rewrites 42 files (SI model and
+test-data JSON, the engine’s Markdown), markdownlint fails on 3 Markdown files, buildifier
+rewrites <code class="docutils literal notranslate"><span class="pre">BUILD.bazel</span></code> and <code class="docutils literal notranslate"><span class="pre">pnr.bzl</span></code> (regenerated in PR3b), end-of-file-fixer adds a final
+newline to 28 byte-exact test-data files and trailing-whitespace changes the built viewer’s
+CSS. <code class="docutils literal notranslate"><span class="pre">name-tests-test</span></code> rejects two test helpers (<code class="docutils literal notranslate"><span class="pre">cost_fixture.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">power_topology_golden.py</span></code>), which PR3b moves. Every other hook passes on <code class="docutils literal notranslate"><span class="pre">hardware/</span></code> and now
+covers it.</p></li>
+<li><p><strong>Five tests that read engine source as text now ignore its layout.</strong> <code class="docutils literal notranslate"><span class="pre">test_via_in_pad</span></code> and
+three <code class="docutils literal notranslate"><span class="pre">test_src15_merge</span></code> checks matched Splanc’s single quotes and one-line calls, so the
+format changed their results; they now compare with quotes and whitespace normalized (a
+wrapped call’s first two lines count as context). <code class="docutils literal notranslate"><span class="pre">board_delete_test</span></code> required
+<code class="docutils literal notranslate"><span class="pre">thisown=False</span></code> on the line of the kept <code class="docutils literal notranslate"><span class="pre">b.Remove(t)</span></code> calls (<code class="docutils literal notranslate"><span class="pre">a;</span> <span class="pre">b</span></code> joins that black splits);
+it now requires the next statement to set that item’s <code class="docutils literal notranslate"><span class="pre">thisown</span></code> to <code class="docutils literal notranslate"><span class="pre">False</span></code>, on the syntax
+tree. On the tree before and after the format they give the same result per test. Two of the
+<code class="docutils literal notranslate"><span class="pre">test_src15_merge</span></code> checks still fail, as before the format, on Splanc-only files and eight
+tool defaults (PR3c).</p></li>
+<li><p><strong>What Bazel runs of the new key.</strong> <code class="docutils literal notranslate"><span class="pre">code_key_test</span></code> covers the key, legacy records and both
+feedback drivers’ seed imports on fake records (halving’s <code class="docutils literal notranslate"><span class="pre">_import_seed_runs</span></code>, synth_native’s
+<code class="docutils literal notranslate"><span class="pre">_import_code</span></code>), and <code class="docutils literal notranslate"><span class="pre">test_feedback_signals</span></code> is wired as <code class="docutils literal notranslate"><span class="pre">feedback_signals_test</span></code>. The two
+generation tests (<code class="docutils literal notranslate"><span class="pre">test_halving_generations</span></code>, <code class="docutils literal notranslate"><span class="pre">test_synth_native_generations</span></code>) stay unwired:
+without Splanc’s Mini inputs every one of their tests skips, so they wait for PR3c’s fixtures.
+They pass by hand with the Mini inputs, with new and with legacy stamps.</p></li>
+</ul>
+<p>Choices made in PR4 (the viewer; branch <code class="docutils literal notranslate"><span class="pre">claude/pr4-viewer</span></code>), following the plan where it
+applies; the owner reviews them with the pull request:</p>
+<ul class="simple">
+<li><p><strong>One branch instead of four sub-PRs (4a to 4d).</strong> The deployed viewer is one program whose
+parts import each other (the server wires the cost, schematic, source, notes, agent and 3D
+services together), so it is ported as one commit series: a pure move, the imports (privacy
+scrubbed while staging), a mechanical format, then packaging, lint, the build and the tests.</p></li>
+<li><p><strong>Imported from the deployed viewer only,</strong> after checking it is a superset of Splanc’s
+<code class="docutils literal notranslate"><span class="pre">pnr_live</span></code> working tree (plan risk “four diverging viewer copies”). The Splanc working tree’s
+uncommitted <code class="docutils literal notranslate"><span class="pre">pnr_live</span></code> changes are imported first, as their own commit.</p></li>
+<li><p><strong>three.js is fetched, not vendored</strong> (this replaces “vendored under <code class="docutils literal notranslate"><span class="pre">third_party/three/</span></code>” in
+the plan and in <code class="docutils literal notranslate"><span class="pre">THIRD_PARTY.md</span></code>): <code class="docutils literal notranslate"><span class="pre">three.core.js</span></code> (1.46 MB) and <code class="docutils literal notranslate"><span class="pre">three.module.js</span></code> (0.66 MB)
+exceed the 600 KB file limit, and the version the viewer uses is 0.186.1 (r186), not r180. It
+is pinned by sha256 like elkjs.</p></li>
+<li><p><strong>elkjs’s license is served from the pinned tarball</strong> (<code class="docutils literal notranslate"><span class="pre">third_party/elkjs/LICENSE.md</span></code> in the
+served directory) instead of a copy under <code class="docutils literal notranslate"><span class="pre">third_party/elkjs/</span></code> in the repository: the text then
+always matches the fetched version.</p></li>
+<li><p><strong>The third-party files come in through <code class="docutils literal notranslate"><span class="pre">use_repo_rule(http_archive)</span></code> in <code class="docutils literal notranslate"><span class="pre">MODULE.bazel</span></code>,</strong> not a
+new <code class="docutils literal notranslate"><span class="pre">bazel_dep</span></code> (no rules_js); a genrule copies them unmodified into <code class="docutils literal notranslate"><span class="pre">//yapnr/viewer:dist</span></code>.
+Repositories are fetched lazily, so a build that does not need the viewer never downloads them.</p></li>
+<li><p><strong>No node toolchain.</strong> The two node tests (<code class="docutils literal notranslate"><span class="pre">test_ui.cjs</span></code>, <code class="docutils literal notranslate"><span class="pre">test_controls_ui.cjs</span></code>) read Splanc’s
+paths and a captured state; they are dropped, not ported. Browser checks become <code class="docutils literal notranslate"><span class="pre">tests/e2e</span></code>
+(Chrome DevTools) in a later change; until then the viewer’s behaviour is covered by the Python
+unit tests and manual screenshots.</p></li>
+<li><p><strong>The Ask agent needs <code class="docutils literal notranslate"><span class="pre">--agent</span> <span class="pre">on</span></code> also on loopback</strong> (it was on by default there), its web tools
+need <code class="docutils literal notranslate"><span class="pre">--agent-web</span> <span class="pre">on</span></code>, and AI net labels need <code class="docutils literal notranslate"><span class="pre">--net-summaries</span> <span class="pre">on</span></code> (they followed the agent).
+The default agent model stays opus with a $2 per-turn and $20 per-process cap; the owner may
+prefer sonnet as the default.</p></li>
+<li><p><strong>Configuration is flags plus a TOML file (<code class="docutils literal notranslate"><span class="pre">yapnr-viewer-v1</span></code>), not the project manifest yet.</strong>
+The manifest’s <code class="docutils literal notranslate"><span class="pre">[viewer]</span></code> table and <code class="docutils literal notranslate"><span class="pre">--project</span></code> arrive with the project abstraction (PR3d);
+until then no setting defaults to a machine path, and machine tool paths come from flags,
+<code class="docutils literal notranslate"><span class="pre">YAPNR_*</span></code> variables or <code class="docutils literal notranslate"><span class="pre">~/.config/yapnr/config.toml</span></code>.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">pnr.capacitor_intent</span></code> is not recreated.</strong> It exists in no snapshot; the cost replay reports a
+placement context that needs it as unavailable. The owner files the issue.</p></li>
+<li><p><strong>The viewer stays out of the wheel and the images</strong> until the engine it imports is in them
+(PR3b); <code class="docutils literal notranslate"><span class="pre">//yapnr:cli</span></code> has no viewer dependency.</p></li>
+<li><p><strong>One spend cap per server process for every paid call</strong> (<code class="docutils literal notranslate"><span class="pre">--agent-total-usd</span></code>, default $20):
+Ask turns and AI net labels draw from the same meter (<code class="docutils literal notranslate"><span class="pre">yapnr/viewer/agent/spend.py</span></code>). A call
+holds its whole budget (<code class="docutils literal notranslate"><span class="pre">--agent-budget-usd</span></code>, default $2; <code class="docutils literal notranslate"><span class="pre">--net-summary-budget-usd</span></code>, default $1)
+while it runs and starts only if the cap covers it, so concurrent calls cannot pass the cap; a
+call without a cost report from the CLI (timeout, cancel, killed) is charged its whole budget.
+The meter is in memory: a restart resets it.</p></li>
+<li><p><strong>The Apache-2.0 license text is kept in the repository</strong> (<code class="docutils literal notranslate"><span class="pre">third_party/licenses/</span></code>), byte for
+byte as published: elkjs’s bundle includes an Apache-2.0 web-worker shim, and its tarball has
+only the EPL-2.0 text. It is served next to <code class="docutils literal notranslate"><span class="pre">elk.bundled.js</span></code>; the code itself stays fetched.</p></li>
+<li><p><strong>The Source link names the viewer’s own revision,</strong> not the engine commit of the run being
+viewed (plan §1.4, “Network use”): it links the repository tree of the commit the server runs
+and marks a checkout with uncommitted changes as modified. Runs do not record the engine commit
+yet; showing it per run waits for the run manifests (PR3d).</p></li>
+<li><p><strong>No <code class="docutils literal notranslate"><span class="pre">//yapnr/viewer:dev</span></code> target.</strong> There is no auto-reload server: a development viewer is
+<code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">run</span> <span class="pre">//:viewer</span> <span class="pre">--</span> <span class="pre">--root</span> <span class="pre">&lt;live</span> <span class="pre">dir&gt;</span> <span class="pre">--port</span> <span class="pre">&lt;spare</span> <span class="pre">port&gt;</span></code>, rebuilt after edits to
+<code class="docutils literal notranslate"><span class="pre">static/</span></code>.</p></li>
+<li><p><strong>The viewer’s KiCad lookup is stricter than plan §2.3</strong> until <code class="docutils literal notranslate"><span class="pre">yapnr.kicad.toolchain</span></code> replaces
+it (PR6a): it follows AGENTS.md and refuses everything inside <code class="docutils literal notranslate"><span class="pre">KiCad.app</span></code> or
+<code class="docutils literal notranslate"><span class="pre">/Applications/KiCad</span></code>, KiCad’s Python included (the plan allows the stock Python); on macOS it
+discovers only the headless copy, never <code class="docutils literal notranslate"><span class="pre">PATH</span></code>; and it does not check for KiCad 10.x (the
+toolchain module will).</p></li>
+</ul>
+<p>Choices made for the regression ladder in CI and the animations (branch
+<code class="docutils literal notranslate"><span class="pre">claude/ladder-animations</span></code>); the owner reviews them with the pull request:</p>
+<ul class="simple">
+<li><p><strong>Tracing is opt-in and observational.</strong> <code class="docutils literal notranslate"><span class="pre">PNR_TRACE_DIR</span></code> enables <code class="docutils literal notranslate"><span class="pre">pnr.trace</span></code> (format
+<code class="docutils literal notranslate"><span class="pre">pnr-trace-v1</span></code>); unset, each hook is one environment lookup. Hooks use no random number
+generator, add no torch operation and change no engine state; the first recorder error disables
+recording for the process. <code class="docutils literal notranslate"><span class="pre">trace_noop_test</span></code> requires byte-identical placements, routes and
+reports with tracing unset, set and unset again (baseline loop and initial pool), and a traced
+and an untraced ladder run give identical <code class="docutils literal notranslate"><span class="pre">placed.json</span></code>, <code class="docutils literal notranslate"><span class="pre">routes.json</span></code> and reports.</p></li>
+<li><p><strong>The legalizer’s accepted order, not its backtracking.</strong> A trace records the order in which the
+legalizer placed each part on the path it kept (<code class="docutils literal notranslate"><span class="pre">legal</span></code>), not the branches it rejected, as the
+cost capture keeps only the accepted search path.</p></li>
+<li><p><strong>Animations follow the critical path</strong> (<code class="docutils literal notranslate"><span class="pre">pnr.provenance</span></code>): the ancestry of the final board,
+where a selection contributes only its chosen candidate; the rejected candidates appear as
+montages. Rendering is pure Python and Pillow (no numpy, torch or KiCad); the <code class="docutils literal notranslate"><span class="pre">.kicad_pcb</span></code> reader
+(<code class="docutils literal notranslate"><span class="pre">pnr.trace_board</span></code>) needs no KiCad process.</p></li>
+<li><p><strong>The ladder lane runs in the published image, resolved to a digest,</strong> on <code class="docutils literal notranslate"><span class="pre">ubuntu-24.04-arm</span></code>,
+and runs the checkout’s engine sources. A runtime guard installs the checkout’s runtime lock into
+an overlay venv when a pull request changes the pins, rather than building the image in the job.
+The lane is informational until the owner makes its <code class="docutils literal notranslate"><span class="pre">ladder</span></code> check required.</p></li>
+<li><p><strong>The ladder routes and is judged under its fixtures’ own rules.</strong> The fixtures carry their own
+fab block (0.2 mm clearance, 0.6/0.3 mm vias, documented in the ladder README), and RESULTS-118
+passed under it before fabrication profiles existed. <code class="docutils literal notranslate"><span class="pre">run.py</span></code> now sets <code class="docutils literal notranslate"><span class="pre">PNR_FAB_PROFILE</span></code> for
+every stage from <code class="docutils literal notranslate"><span class="pre">--fab-profile</span></code>, default <code class="docutils literal notranslate"><span class="pre">legacy</span></code>, which enforces exactly that block; the boards
+are RESULTS-118’s (all 16 baseline runs, seeds 0 and 1, identical vias and copper) and all eight
+cases pass. The alternative, the engine’s default <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> profile, overrides the fixtures’
+numbers with JLC’s (0.127 mm clearance, 0.45/0.30 mm vias) and would make the README’s stated
+rules false; it stays available as <code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">jlc-pofv</span></code>, and <code class="docutils literal notranslate"><span class="pre">route_case.py</span></code> applies the
+selected profile to the router’s rules (the identity for legacy), so that configuration routes
+under the rules KiCad judges it by. Before, the unset variable made writeback stamp <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code>
+while the router used the fixtures’ rules, and cases 04 to 08 failed on vias touching their own
+SMD pads. With the profile applied at the router, <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> passes every case as well (pool
+seed 0 and baseline seeds 0 and 1); making it the ladder’s default is the owner’s call
+(WORKLOG, “Next”).</p></li>
+<li><p><strong>The committed animations.</strong> All eight ladder cases are animated in <code class="docutils literal notranslate"><span class="pre">docs/animations/</span></code> (not
+<code class="docutils literal notranslate"><span class="pre">static</span></code>, whose references the Pages step rewrites), from a traced pool run (seed 0) on the
+development Mac; all eight pass the gate. A failed case is only rendered with <code class="docutils literal notranslate"><span class="pre">--allow-failed</span></code>,
+and its end card then names the broken rules in red. The README shows <code class="docutils literal notranslate"><span class="pre">05-timer-led-10</span></code>, the
+TLC555 blinker (the request’s “555 flasher”), as a GIF (GitHub autoplays it); the page uses WebP.
+<code class="docutils literal notranslate"><span class="pre">tests/unit/repo/test_animations.py</span></code> bounds the folder (WebP 2.5 MB, GIF 5 MB, 20 MB in all,
+hashes in the manifest, no metadata) in place of the large-file hook, and prettier leaves the
+generated JSON as written. A refresh adds about 12 MB to the history, so it is deliberate.</p></li>
+<li><p><strong>A montage follows the winner’s replay.</strong> The timeline is one straight line: a selection’s
+candidates appear once the winner’s own replay reached the state their tiles show, and the bar
+counts committed connections only, so nothing on screen runs ahead of the process.</p></li>
+<li><p><strong>Coarse animations of halving runs.</strong> A successive-halving run records no trace;
+<code class="docutils literal notranslate"><span class="pre">pnr.provenance.halving_trace</span></code> rebuilds one from its saved placements, rung objectives and the
+winning rung’s native phases, and the overlay’s phases say what was saved, not more. Animations
+of Splanc runs stay local (the board is not public).</p></li>
+</ul>
+<p>Owner decisions for the atopile toolchain and part data (2026-09-30;
+<a class="reference internal" href="frontends/atopile.html"><span class="std std-doc">the atopile toolchain</span></a>, <a class="reference internal" href="part-cache.html"><span class="std std-doc">the part cache</span></a>):</p>
+<ul class="simple">
+<li><p><strong>The atopile tooling is imported under <code class="docutils literal notranslate"><span class="pre">AGPL-3.0-or-later</span></code>:</strong> the offline picker server and
+the board-outline script (from rules_atopile, the owner’s repository, which declared no license
+when they were copied) and Splanc’s scripts (AGPL-3.0). The imports name their source in the
+commit message and the module docstring.</p></li>
+<li><p><strong>No EasyEDA-derived part files and no vendor-API data in yapnr.</strong> Parts and catalogs live in a
+<strong>part cache</strong> outside every repository: a local directory, or a server the owner may run in
+public (user-generated content, with provenance and licence metadata per part and takedowns).
+<code class="docutils literal notranslate"><span class="pre">tools/check_part_data.py</span></code> fails on generated part files in the repository; tests use synthetic
+parts only. Splanc’s committed parts and picker catalog were moved into a local cache on the
+development machine, so Splanc builds from a parts lock without them.</p></li>
+<li><p><strong>atopile via a hashed lock; “No Nix” stays.</strong> atopile 0.15.8 is pinned. <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">atopile</span> <span class="pre">setup</span></code>
+installs it with uv from one fully hashed lock per platform (Python 3.14.7 from
+python-build-standalone), resolved as of the date that reproduces the environment Splanc’s
+Nix build used. linux-aarch64 has no atopile wheel on PyPI; its wheel is built from the
+sha256-pinned sdist with pinned build dependencies (the scikit-build-core fork by commit). A
+0.15.9 bump comes through an A/B. The <code class="docutils literal notranslate"><span class="pre">yapnr</span></code> image bundles the environment later (A4).</p></li>
+<li><p><strong>Builds are offline and isolated.</strong> A build copies the project, materializes its locked parts
+from the cache, answers part queries from a loopback picker, runs atopile with an allowlisted
+environment and a deadline, and records a UUID-normalized input id. A hook loaded into every
+atopile interpreter (forkserver workers included) replaces the Nix source patches: the picker
+token only for a parsed loopback URL of the runner’s port, empty queries answered locally, picks
+attached from the project’s parts, no EasyEDA, no git clone of a dependency, no GUI KiCad and no
+contact with a running one.</p></li>
+<li><p><strong>The part cache serves part files only.</strong> A file must match its type, is served only while a
+stored part uses it, and is removed when no part took it up within a grace period; a takedown
+also blocks the part’s own files under any name. Tokens are checked before a body is read, sent
+by the clients only to the server named (no redirects) over https or loopback, and the write
+token never with reads. Parts can be marked local-only; a public server refuses a cache that
+holds one.</p></li>
+<li><p><strong>Ordering stays staging-only</strong> (for the later ordering PRs): cart, quote or payment page; the
+human pays on the vendor’s page.</p></li>
+</ul>
+<p>Choices made for the constraint and hierarchy showcases (branch <code class="docutils literal notranslate"><span class="pre">claude/animations-groups-hier</span></code>,
+<a class="reference internal" href="design/constraint-and-hier-animations.html"><span class="std std-doc">design</span></a> §9, §11 and §12); the owner reviews them with
+the pull request:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">line_group</span></code></strong> is a new hard constraint (ordered literal members, <code class="docutils literal notranslate"><span class="pre">pitch_mm</span></code> or <code class="docutils literal notranslate"><span class="pre">gap_mm</span></code>,
+<code class="docutils literal notranslate"><span class="pre">rot</span></code>, an optional soft <code class="docutils literal notranslate"><span class="pre">edge</span></code>), placed as one rigid macro inside <code class="docutils literal notranslate"><span class="pre">place()</span></code> with the
+hierarchical macro code; <code class="docutils literal notranslate"><span class="pre">row</span></code> is unchanged.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">edge_align</span></code> gains <code class="docutils literal notranslate"><span class="pre">hard</span></code> and <code class="docutils literal notranslate"><span class="pre">tolerance_mm</span></code></strong> (default false and 1.0 mm): a hard edge part
+stays within the tolerance through legalization and the legality checks. The facing is set with
+<code class="docutils literal notranslate"><span class="pre">orientation</span></code>, not by <code class="docutils literal notranslate"><span class="pre">edge_align</span></code>.</p></li>
+<li><p><strong>Showcases stay outside the gate.</strong> <code class="docutils literal notranslate"><span class="pre">designs.showcases()</span></code> is a list beside <code class="docutils literal notranslate"><span class="pre">designs()</span></code>, run
+with <code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--showcases</span></code>; the pull-request lane never runs them and the nightly lane runs them
+for information.</p></li>
+<li><p><strong>The animations folder budget is 30 MB</strong> (was 20 MB): the four showcase files add about
+13 MB. The hierarchical WebP may use 3.5 MB (it is 2.69 MB even at the encoder’s last step);
+every other WebP keeps 2.5 MB and every GIF 5 MB.</p></li>
+<li><p><strong>A second media item in the README:</strong> the side-by-side chaser GIF (free LEDs against a line
+group), 800 px, under the 555 flasher.</p></li>
+<li><p><strong>A showcase that fails its gate is not committed as an animation</strong> (the page then says why),
+rather than shown with a red end card. All five cases of the committed run pass.</p></li>
+<li><p><strong>Half-turns are flips.</strong> The placer records only its snapped four-way rotation, so a body or
+part recorded at opposite angles switches at the middle of the interval instead of sweeping
+through angles it never had; quarter turns keep the labelled shorter-arc tween. The ladder’s
+own animations keep their sweeps (their timelines are pinned unchanged); only the showcase
+pacing and rigid bodies flip.</p></li>
+<li><p><strong>Off-board poses widen the camera</strong> over that global placement (showcase pacing only), and the
+board zooms back in after legalization, rather than clamping parts to the panel edge.</p></li>
+<li><p><strong>The edge comparison replays its pool.</strong> The followed start never changes its edge order, so
+its shortlist replays all eight starts’ recorded global placements before the tiles hold;
+the chaser comparison keeps static tiles (its README GIF is near its 5 MB budget).</p></li>
+<li><p><strong>A line group reserves its members’ sides</strong> (<code class="docutils literal notranslate"><span class="pre">line:&lt;name&gt;</span></code>, not a <code class="docutils literal notranslate"><span class="pre">block:</span></code> macro) and refuses a
+source-locked member rather than pinning the whole line to it.</p></li>
+<li><p><strong>Follow-ups:</strong> companion rows (an LED and its resistor as one rigid unit), a hard edge for a
+whole line group, members on the bottom side, plane-access intents inside a line group.</p></li>
+</ul>
+</section>
+<section id="pinned-versions">
+<h2>Pinned versions<a class="headerlink" href="#pinned-versions" title="Link to this heading">¶</a></h2>
+<p>Update a pin together with the file that holds it, and note why here.</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Component</p></th>
+<th class="head"><p>Pin</p></th>
+<th class="head"><p>Held in</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Bazel</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">7.7.1</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">.bazelversion</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">rules_python</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">2.0.3</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">MODULE.bazel</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Python</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">3.11</span></code> (hermetic)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">MODULE.bazel</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>pip hub</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr_pypi</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">MODULE.bazel</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>torch</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&gt;=2.2,&lt;2.4</span></code> (lock: 2.3.1)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">requirements.in</span></code>, lock</p></td>
+</tr>
+<tr class="row-odd"><td><p>numpy</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&gt;=1.26,&lt;2</span></code> (lock: 1.26.4)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">requirements.in</span></code>, lock</p></td>
+</tr>
+<tr class="row-even"><td><p>pyyaml</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&gt;=6</span></code> (lock: 6.0.3)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">requirements.in</span></code>, lock</p></td>
+</tr>
+<tr class="row-odd"><td><p>Pillow</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&gt;=12,&lt;13</span></code> (lock: 12.3.0)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">requirements.in</span></code>, lock</p></td>
+</tr>
+<tr class="row-even"><td><p>Sphinx stack</p></td>
+<td><p>see below</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">requirements.in</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>mermaid (JS)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">11.4.1</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">docs/_sphinx/conf.py</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>prek</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.4.12</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">setup-precommit.sh</span></code>, <code class="docutils literal notranslate"><span class="pre">ci.yaml</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>presubmit hooks</p></td>
+<td><p>see below</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">.pre-commit-config.yaml</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">setup-bazel</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.15.0</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">.github/workflows/</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Ubuntu (images)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">24.04</span></code>, by digest</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">docker/yapnr-kicad/Dockerfile</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>KiCad (images)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">10.0.6~ubuntu24.04.1</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">docker/yapnr-kicad/Dockerfile</span></code>, <code class="docutils literal notranslate"><span class="pre">TAG</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Python (image)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">3.11.15</span></code> (uv-managed)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">docker/yapnr/Dockerfile</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>uv (image build)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.12.21</span></code>, by digest</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">docker/yapnr/Dockerfile</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>PBS (image)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">20260807</span></code>, by sha256</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">docker/yapnr/Dockerfile</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Runtime locks</p></td>
+<td><p>from <code class="docutils literal notranslate"><span class="pre">requirements.lock</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">docker/yapnr/runtime-*.lock</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>atopile</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.15.8</span></code>, hashed locks</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr/frontends/atopile/locks/</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Python (atopile)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">3.14.7</span></code>, PBS <code class="docutils literal notranslate"><span class="pre">20260929</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr/frontends/atopile/locks/pins.json</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>uv (atopile)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.12.21</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr/frontends/atopile/locks/pins.json</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>elkjs (viewer)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.9.3</span></code>, by sha256</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">MODULE.bazel</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>three (viewer)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.186.1</span></code>, by sha256</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">MODULE.bazel</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Image, release</p></td>
+<td><p>every action by commit SHA</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">.github/actions/</span></code>, <code class="docutils literal notranslate"><span class="pre">image.yaml</span></code>, …</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Rationale:</p>
+<ul class="simple">
+<li><p><strong>Bazel 7.7.1 and <code class="docutils literal notranslate"><span class="pre">rules_python</span></code> 2.0.3:</strong> the same as Splanc, so yapnr can be Splanc’s
+<code class="docutils literal notranslate"><span class="pre">bazel_dep</span></code> without version skew; bumped together.</p></li>
+<li><p><strong>Python 3.11:</strong> Splanc’s hermetic toolchain. Code that runs inside KiCad must additionally stay
+stdlib-only and parse under Python 3.9 (KiCad’s bundled Python on macOS).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">yapnr_pypi</span></code>:</strong> pip hub names must be unique across modules; Splanc’s hub is <code class="docutils literal notranslate"><span class="pre">pypi</span></code>.</p></li>
+<li><p><strong>torch below 2.4:</strong> the same ceiling as Splanc’s <code class="docutils literal notranslate"><span class="pre">requirements.in</span></code>, and the version the engine
+was tuned on: the experiment environment runs torch 2.3.1 with numpy 1.26 (numpy 1 ABI), and the
+lock resolves torch 2.3.1. Lifting the ceiling is a separate change with a measured regression
+comparison. The ceiling is not what keeps the aarch64 lock CPU-only: torch 2.4 to 2.9 also
+restrict their <code class="docutils literal notranslate"><span class="pre">nvidia-*</span></code> and <code class="docutils literal notranslate"><span class="pre">triton</span></code> dependencies to x86_64.</p></li>
+<li><p><strong>numpy 1.x:</strong> torch 2.3 wheels are built against the numpy 1 ABI, and the engine was tuned on
+numpy 1.26. (Splanc’s lock pairs torch 2.3.1 with numpy 2, which this avoids.) The interop smoke
+test in <code class="docutils literal notranslate"><span class="pre">tests/unit/interop</span></code> guards it.</p></li>
+<li><p><strong>Pillow below 13:</strong> the renderer of the place-and-route animations (<code class="docutils literal notranslate"><span class="pre">pnr.animate</span></code>), a
+contributor and docs tool: it is in <code class="docutils literal notranslate"><span class="pre">requirements.in</span></code> only, not in <code class="docutils literal notranslate"><span class="pre">requirements-runtime.in</span></code>, so
+the wheel’s dependencies and the image’s runtime locks do not change. The bytes of an animation
+depend on the libwebp, zlib and FreeType that the Pillow wheels bundle, so the major version is
+capped and the animations’ manifest records the exact version.</p></li>
+<li><p><strong>Sphinx stack:</strong> sphinx 9.0.4, myst-parser 5.1.0, furo 2025.12.19, sphinx-copybutton 0.5.2,
+sphinx-design 0.7.0 and sphinxcontrib-mermaid 2.1.0, exactly Splanc’s locked versions, so both
+sites build the same way. matplotlib is left out until a page needs generated figures.</p></li>
+<li><p><strong>Presubmit hooks:</strong> Splanc’s set and pins (black 25.1.0, isort 6.0.1, flake8 7.0.0,
+shellcheck-py v0.9.0.6, buildifier 8.2.0, prettier v3.1.0, markdownlint-cli v0.38.0,
+pre-commit-hooks v4.5.0), minus <code class="docutils literal notranslate"><span class="pre">nixpkgs-fmt</span></code>, plus the local privacy scan.</p></li>
+<li><p><strong>mermaid, prek, <code class="docutils literal notranslate"><span class="pre">setup-bazel</span></code>:</strong> the same as Splanc.</p></li>
+<li><p><strong>atopile 0.15.8, Python 3.14.7, uv 0.12.21:</strong> atopile is the version Splanc’s boards were
+built with; it requires Python 3.14. The locks resolve as of 2026-09-20 (<code class="docutils literal notranslate"><span class="pre">exclude_newer</span></code>), the
+date that reproduces Splanc’s Nix environment package for package. uv is the version the image
+build already pins; python-build-standalone 20260929 is the release that uv installs 3.14.7
+from, checked by <code class="docutils literal notranslate"><span class="pre">setup</span></code>. Regenerate with <code class="docutils literal notranslate"><span class="pre">tools/atopile/update_locks.sh</span></code>.</p></li>
+<li><p><strong>elkjs 0.9.3 and three.js 0.186.1:</strong> the versions the Splanc viewer shipped and was tested
+with. The npm tarballs are pinned by sha256 (elkjs
+<code class="docutils literal notranslate"><span class="pre">b95b224bd1ab71fd40f6d9a6365c28d989745dff6b0d514407bc1eb68f2f561e</span></code>, three
+<code class="docutils literal notranslate"><span class="pre">8cd068708ea44f2c73c944b1cead2ba2f0d5c15c8fc194e5700f4e4f4a033fe7</span></code>), and the served files by
+<code class="docutils literal notranslate"><span class="pre">tests/unit/viewer/test_dist.py</span></code>. An upgrade changes both and gets a browser check of the
+schematic and 3D views.</p></li>
+<li><p><strong>GitHub Actions majors</strong> (<code class="docutils literal notranslate"><span class="pre">actions/checkout&#64;v4</span></code>, <code class="docutils literal notranslate"><span class="pre">setup-python&#64;v5</span></code>, <code class="docutils literal notranslate"><span class="pre">cache&#64;v4</span></code>,
+<code class="docutils literal notranslate"><span class="pre">upload-artifact&#64;v4</span></code>, <code class="docutils literal notranslate"><span class="pre">download-artifact&#64;v4</span></code>, <code class="docutils literal notranslate"><span class="pre">setup-bazel&#64;0.15.0</span></code>): Splanc’s. They declare Node
+20, which GitHub now runs on Node 24 with a deprecation warning. Move to the Node 24 majors
+together with Splanc, and record it here.</p></li>
+<li><p><strong>CI caches:</strong> <code class="docutils literal notranslate"><span class="pre">setup-bazel</span></code>’s own caches are off. One <code class="docutils literal notranslate"><span class="pre">actions/cache</span></code> entry holds Bazelisk’s
+downloads and the Bazel repository cache, keyed on OS, CPU architecture, <code class="docutils literal notranslate"><span class="pre">.bazelversion</span></code>,
+<code class="docutils literal notranslate"><span class="pre">MODULE.bazel</span></code>, <code class="docutils literal notranslate"><span class="pre">MODULE.bazel.lock</span></code> and <code class="docutils literal notranslate"><span class="pre">requirements.lock</span></code>; the disk cache is per job. CI sets
+<code class="docutils literal notranslate"><span class="pre">BAZELISK_HOME</span></code>, which takes precedence over <code class="docutils literal notranslate"><span class="pre">.bazeliskrc</span></code>.</p></li>
+</ul>
+<section id="container-images">
+<h3>Container images<a class="headerlink" href="#container-images" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Base: Ubuntu 24.04 plus <code class="docutils literal notranslate"><span class="pre">ppa:kicad/kicad-10.0-releases</span></code>, on both architectures.</strong> One
+Dockerfile gives the same distribution, KiCad build and worker Python (3.12) everywhere. The
+official <code class="docutils literal notranslate"><span class="pre">kicad/kicad</span></code> image is amd64-only (its <code class="docutils literal notranslate"><span class="pre">9.0</span></code> and <code class="docutils literal notranslate"><span class="pre">10.0</span></code> tags alike, checked on
+2026-09-29) and ships 341 MB of demos and a passwordless <code class="docutils literal notranslate"><span class="pre">sudo</span></code>; building KiCad from source costs
+about an hour per architecture and release. The PPA key is checked in
+(<code class="docutils literal notranslate"><span class="pre">docker/yapnr-kicad/kicad-ppa.asc</span></code>, fingerprint
+<code class="docutils literal notranslate"><span class="pre">FDA8</span> <span class="pre">54F6</span> <span class="pre">1C4D</span> <span class="pre">0D95</span> <span class="pre">72BB</span> <span class="pre">95E5</span> <span class="pre">245D</span> <span class="pre">5502</span> <span class="pre">FAD7</span> <span class="pre">A805</span></code>, confirmed against Launchpad).</p></li>
+<li><p><strong>The base is published once per <code class="docutils literal notranslate"><span class="pre">docker/yapnr-kicad/TAG</span></code> and never overwritten,</strong> because the
+PPA deletes superseded builds within days (Launchpad’s PPA snapshot service,
+<code class="docutils literal notranslate"><span class="pre">snapshot.ppa.launchpadcontent.net</span></code>, only reaches back to 2026-09-01; <code class="docutils literal notranslate"><span class="pre">SOURCES</span></code> points at it as
+a second copy). CI refuses a change to <code class="docutils literal notranslate"><span class="pre">docker/yapnr-kicad/</span></code> that keeps a published tag, in every
+run, releases included: the base carries a hash of the directory
+(<code class="docutils literal notranslate"><span class="pre">tools/image/base_context.sh</span></code>) as the label <code class="docutils literal notranslate"><span class="pre">io.github.studio-fug.yapnr.kicad.context</span></code>, and the
+plan job compares it with the checkout. The yapnr image is built FROM the base by digest.</p></li>
+<li><p><strong>The publish order is source image, base tags, attestation,</strong> and every step can be re-run:
+the GPL source offer (<code class="docutils literal notranslate"><span class="pre">&lt;tag&gt;-src</span></code>) is in the registry before the base tag it belongs to, a
+re-run accepts a base tag that already points at the same images, and a later run publishes a
+missing <code class="docutils literal notranslate"><span class="pre">-src</span></code> image.</p></li>
+<li><p><strong>The Ubuntu archive snapshot is taken inside the build,</strong> right after <code class="docutils literal notranslate"><span class="pre">apt-get</span> <span class="pre">update</span></code>, with
+every package upgraded to that state, and recorded in <code class="docutils literal notranslate"><span class="pre">/etc/yapnr/ubuntu-snapshot</span></code> and
+<code class="docutils literal notranslate"><span class="pre">SOURCES</span></code> instead of a label (a label has to be known before the build starts, so it could not
+describe the installed packages exactly). The ports archive (linux/arm64) is not in the snapshot
+service; its packages are built from the same source packages, which Launchpad keeps per
+version, so <code class="docutils literal notranslate"><span class="pre">SOURCES</span></code> names both.</p></li>
+<li><p><strong>Controller Python: the patch release of Bazel’s hermetic 3.11</strong> (<code class="docutils literal notranslate"><span class="pre">3.11.15</span></code>), installed by uv
+from python-build-standalone, with the runtime locks pinned to <code class="docutils literal notranslate"><span class="pre">requirements.lock</span></code> (versions and
+hashes; <code class="docutils literal notranslate"><span class="pre">tests/unit/repo/test_images.py</span></code>). On amd64, torch is <code class="docutils literal notranslate"><span class="pre">2.3.1+cpu</span></code> from the PyTorch CPU
+index; PyPI’s x86_64 wheel pulls in the CUDA stack. uv resolves both locks from any host.</p></li>
+<li><p><strong>Measured on linux/arm64 (2026-09-29):</strong> the base is 1.6 GB unpacked and 390 MB compressed (the
+KiCad install adds 1.5 GB to Ubuntu’s 0.11 GB); the yapnr layers add about 0.67 GB (CPython
+0.12 GB, the runtime 0.55 GB with byte-compiled sources), 2.3 GB unpacked and 570 MB compressed
+in all. (<code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">image</span> <span class="pre">ls</span></code> with the containerd image store shows 1.98 GB and 2.83 GB: unpacked
+plus compressed.) The KiCad install takes about a minute on a native arm64 host.</p></li>
+<li><p><strong>Every action in the image and release workflows is pinned by commit SHA</strong> (with its version
+in a comment), including <code class="docutils literal notranslate"><span class="pre">actions/checkout</span></code>, the artifact actions and <code class="docutils literal notranslate"><span class="pre">setup-bazel</span></code>: those jobs
+build what is published, or can write packages and attestations. Dependabot keeps the pins
+current (<code class="docutils literal notranslate"><span class="pre">.github/dependabot.yml</span></code>). <code class="docutils literal notranslate"><span class="pre">ci.yaml</span></code> and <code class="docutils literal notranslate"><span class="pre">macos.yaml</span></code> stay on major tags.</p></li>
+<li><p><strong>Notices for bundled native code.</strong> CPython from python-build-standalone ships only its own
+license in the install-only archive uv uses, so the build copies the license texts of the
+libraries it bundles from the same release’s full archive (pinned by sha256). The numpy and
+torch wheels bundle OpenBLAS, GCC runtime libraries, the Arm Compute Library (arm64) and
+statically linked Intel oneMKL (amd64), not all of them with license texts or exact sources in
+the wheels’ notices; <code class="docutils literal notranslate"><span class="pre">docker/yapnr/native-libraries-&lt;arch&gt;.txt</span></code> names each with its source (the
+GCC runtime libraries by GNU build ID), and <code class="docutils literal notranslate"><span class="pre">third_party/image-licenses/</span></code> holds the missing
+texts.</p></li>
+</ul>
+</section>
+<section id="the-requirements-lock">
+<h3>The requirements lock<a class="headerlink" href="#the-requirements-lock" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">requirements.lock</span></code> is generated on the development Mac (darwin-arm64) with the hermetic Python
+3.11 toolchain: <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">run</span> <span class="pre">//:requirements.update</span></code>. The resolution is also valid on linux-aarch64,
+which is why the required <code class="docutils literal notranslate"><span class="pre">test</span></code> job runs on <code class="docutils literal notranslate"><span class="pre">ubuntu-24.04-arm</span></code>. It is <strong>not</strong> valid on
+linux-x86_64: the x86_64 torch 2.3.1 wheel needs CUDA libraries that the lock does not list. PR6a
+adds a separate x86_64 lock with the CPU torch index (<code class="docutils literal notranslate"><span class="pre">requirements_by_platform</span></code>).</p>
+<p><code class="docutils literal notranslate"><span class="pre">//:requirements.test</span></code> re-resolves and diffs the lock. It needs network access, so it is tagged
+<code class="docutils literal notranslate"><span class="pre">manual</span></code> and runs in exactly one CI job (<code class="docutils literal notranslate"><span class="pre">test</span></code>).</p>
+</section>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="design/animations.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Design: the regression ladder in CI, PnR traces and critical-path animations</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="migration-plan.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">yapnr migration plan</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 Kevin Balke. Licensed under AGPL-3.0-or-later
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Decisions</a><ul>
+<li><a class="reference internal" href="#decision-log">Decision log</a></li>
+<li><a class="reference internal" href="#pinned-versions">Pinned versions</a><ul>
+<li><a class="reference internal" href="#container-images">Container images</a></li>
+<li><a class="reference internal" href="#the-requirements-lock">The requirements lock</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../static/documentation_options.js?v=8a448e45"></script>
+    <script src="../static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../static/copybutton.js?v=fd10adb8"></script>
+    <script src="../static/design-tabs.js?v=f930bc37"></script>
+    </body>
+</html>

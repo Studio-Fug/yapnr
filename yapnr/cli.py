@@ -28,6 +28,9 @@ The commands:
     Vendor profiles and stackups, the fab check (KiCad DRC under a vendor's rules), the
     per-vendor fab bundle and a preview of its gerbers (docs/fab-and-ordering.md).
 
+``yapnr order stage|vendors``
+    The order card and the vendor's upload page. Staging only: yapnr never uploads, orders or
+    pays (docs/fab-and-ordering.md).
 """
 
 from __future__ import annotations
@@ -179,12 +182,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     from yapnr.fab.cli import register as register_fab
     from yapnr.frontends.atopile.cli import register_atopile, register_picker
+    from yapnr.order.cli import register as register_order
     from yapnr.partcache.cli import register as register_part_cache
 
     register_atopile(commands)
     register_picker(commands)
     register_part_cache(commands)
     register_fab(commands)
+    register_order(commands)
     return parser
 
 

@@ -12,5 +12,6 @@ yapnr_py_tests(
         "//yapnr",
         "//yapnr/fab",
         "//yapnr/fab:testing",
+        "//yapnr/order",
     ],
 )

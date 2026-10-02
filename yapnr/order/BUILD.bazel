@@ -1,6 +1,7 @@
-"""The order card of every fab bundle (docs/fab-and-ordering.md).
+"""Staged ordering: `yapnr order stage|vendors` (docs/fab-and-ordering.md).
 
-Staging only: the human pays on the vendor's page (docs/decisions.md).
+Staging only: the human pays on the vendor's page (docs/decisions.md). :order opens no network
+connection except net.py's read-only --verify-url.
 """
 
 load("@rules_python//python:defs.bzl", "py_library")
@@ -20,5 +21,19 @@ py_library(
     deps = [
         "//yapnr:package",
         "//yapnr/fab:capability",
+    ],
+)
+
+py_library(
+    name = "order",
+    srcs = [
+        "cli.py",
+        "net.py",
+        "stage.py",
+    ],
+    imports = ["../.."],
+    deps = [
+        ":card",
+        "//yapnr/fab",
     ],
 )

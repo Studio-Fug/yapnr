@@ -857,6 +857,8 @@ class Tuner:
             for _ in range(PASSES):
                 values = {n: self.value(self.measure(n), s.unit) for n in s.nets}
                 target = max(values.values())
+                if target - min(values.values()) <= report.target_residual:
+                    break  # the set is within its target
                 progressed = False
                 for net in s.nets:
                     need = target - values[net]
@@ -864,7 +866,10 @@ class Tuner:
                         continue
                     if owner_set.get(net, s.name) != s.name:
                         continue  # matched in an earlier set: left as it is
-                    added, bumps, mitres = self.tune_member(net, need, s.unit, shape, owner, index)
+                    # Aim a little short of the longest: an overshoot the mitres cannot
+                    # trim would make this member the new target of every other one.
+                    aim = need - report.target_residual / 4
+                    added, bumps, mitres = self.tune_member(net, aim, s.unit, shape, owner, index)
                     if not bumps:
                         continue
                     before = tuned.get(net, (0.0, 0, 0))

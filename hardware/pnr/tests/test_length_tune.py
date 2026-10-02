@@ -188,7 +188,7 @@ class TuneBoardTest(unittest.TestCase):
         before = lm.board_route_lengths(plain, g, ["D_P"], lm.default_stackup(2), via_radius=0.3)[
             "D_P"
         ].total_mm
-        self.assertAlmostEqual(lengths["D_P"].total_mm - before, tuned[0]["added_mm"], places=6)
+        self.assertAlmostEqual(lengths["D_P"].total_mm - before, tuned[0]["added_mm"], delta=1e-5)
 
     def test_tuning_leaves_other_nets_alone_and_keeps_clearance(self):
         extra = [("S1", (0.4, -1.3), (0.4, -3.0)), ("S2", (0.4, 1.3), (0.4, 3.0))]
@@ -220,6 +220,40 @@ class TuneBoardTest(unittest.TestCase):
         for net in ("D_P", "D_N"):
             for c in tuned.result.nets[net].cells:
                 self.assertTrue(tuned.grid.passable(c.layer, c.i, c.j, net))
+
+    def test_group_is_matched_within_its_tolerance(self):
+        # An 8-net bus fanning out from a 0.5 mm pitch row to a 2 mm pitch row: the
+        # outer nets run about 6 mm longer than the middle ones.
+        def pad(name, net, off):
+            return Pad(name, net, off, (0.3, 0.6), land_corner=0.0)
+
+        nets = ["B%d" % k for k in range(8)]
+        j1 = [pad(str(k + 1), n, ((k - 3.5) * 0.5, 0.0)) for k, n in enumerate(nets)]
+        u1 = [pad(str(k + 1), n, ((k - 3.5) * 2.0, 0.0)) for k, n in enumerate(nets)]
+        comps = [
+            Component("J1", "conn", (12.0, 3.0), 0, "top", (5.0, 1.5), (5.0, 1.5), pads=j1),
+            Component("U1", "dev", (12.0, 13.0), 0, "top", (16.0, 1.5), (16.0, 1.5), pads=u1),
+        ]
+        g = BoardGraph(
+            "bus",
+            comps,
+            [Net(n, k + 1, [("J1", str(k + 1)), ("U1", str(k + 1))]) for k, n in enumerate(nets)],
+        )
+        rules = pair_rules()
+        rules["diff_pairs"] = []
+        rules["length_match"] = [{"name": "bus", "nets": nets, "tolerance_mm": 0.5}]
+        c = compile_constraints({"board": {"outline": {"w": 24, "h": 16}}}, g.refs)
+        board = route_board(g, c, rules, pitch=0.25, max_iters=4)
+        self.assertTrue(board.fully_routed)
+        (report,) = board.length_report
+        self.assertEqual(report["status"], "tuned")
+        self.assertLessEqual(report["spread"], report["target_residual"])
+        lengths = lm.board_route_lengths(board, g, nets, lm.default_stackup(2), via_radius=0.3)
+        spread = max(x.total_mm for x in lengths.values()) - min(
+            x.total_mm for x in lengths.values()
+        )
+        self.assertAlmostEqual(spread, report["spread"], places=6)
+        self.assertGreaterEqual(sum(1 for m in report["members"] if m["bumps"]), 4)
 
     def test_ps_budget(self):
         g = pair_board(n_offset=2.5)

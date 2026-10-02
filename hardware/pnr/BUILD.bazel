@@ -1053,6 +1053,7 @@ py_test(
     srcs = [
         "regression/animate_ladder.py",
         "regression/designs.py",
+        "regression/hard_rungs.py",
         "regression/run.py",
         "regression/test_contract.py",
         "regression/trace_native.py",
@@ -1068,9 +1069,29 @@ py_test(
     ],
 )
 
+# The hard rungs (regression/hard_rungs.py): circuits, one-dimension variants and the custom
+# rules the judge enforces; the footprint check runs where the KiCad library is installed.
+py_test(
+    name = "hard_rungs_test",
+    size = "small",
+    srcs = [
+        "regression/designs.py",
+        "regression/hard_rungs.py",
+        "regression/run.py",
+        "regression/test_hard_rungs.py",
+    ],
+    imports = ["regression"],
+    main = "regression/test_hard_rungs.py",
+    deps = [":pnr"],
+)
+
 py_binary(
     name = "native_regression",
-    srcs = ["regression/run.py", "regression/designs.py"],
+    srcs = [
+        "regression/designs.py",
+        "regression/hard_rungs.py",
+        "regression/run.py",
+    ],
     main = "regression/run.py",
     imports = ["regression"],
     data = glob(["regression/*.py"]),

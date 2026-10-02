@@ -11,6 +11,7 @@ import json
 import math
 import os
 import platform
+import resource
 import shutil
 import subprocess
 import sys
@@ -21,6 +22,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from designs import designs, showcases
+from hard_rungs import dru_text, hard_rungs
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
@@ -232,6 +234,16 @@ def parser():
         help="Also offer the showcase cases (designs.showcases(), outside the ladder) to --case",
     )
     ap.add_argument(
+        "--hard",
+        action="store_true",
+        help="Also offer the hard rungs (hard_rungs.hard_rungs(), outside the ladder) to --case",
+    )
+    ap.add_argument(
+        "--lane",
+        choices=("nightly", "manual"),
+        help="Run the hard rungs whose ci.lane is LANE (with any --case given); implies --hard",
+    )
+    ap.add_argument(
         "--fab-profile",
         choices=FAB_PROFILES,
         default=DEFAULT_FAB_PROFILE,
@@ -266,8 +278,13 @@ def main():
     ):
         raise SystemExit("--trace-placement-every needs --trace and a positive N")
     out.mkdir(parents=True, exist_ok=False)
-    allcases = designs() + (showcases() if args.showcases else [])
-    cases = [c for c in allcases if not args.case or c["name"] in args.case]
+    hard = hard_rungs() if args.hard or args.lane else []
+    allcases = designs() + (showcases() if args.showcases else []) + hard
+    if args.lane:
+        lane = {c["name"] for c in hard if c["ci"]["lane"] == args.lane}
+        cases = [c for c in allcases if c["name"] in lane or c["name"] in args.case]
+    else:
+        cases = [c for c in allcases if not args.case or c["name"] in args.case]
     if not cases or (set(args.case) - {c["name"] for c in cases}):
         raise SystemExit("Unknown/empty case selection")
     source_files = source_inputs(REPO)
@@ -340,18 +357,28 @@ def main():
         import trace_native as tracing
     results = []
 
-    def stage(root, name, cmd, extra=None):
+    def stage(root, name, cmd, extra=None, cpu=None):
+        """Run one stage; its wall seconds are returned and, with ``cpu``, its CPU
+        seconds (user + system of the stage's whole waited-for process tree) recorded."""
         t = time.monotonic()
-        with (root / (name + ".log")).open("w") as log:
-            subprocess.run(
-                list(map(str, cmd)),
-                cwd=REPO,
-                env=dict(env, **(extra or {})),
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                check=True,
-                timeout=args.timeout,
-            )
+        before = resource.getrusage(resource.RUSAGE_CHILDREN)
+        try:
+            with (root / (name + ".log")).open("w") as log:
+                subprocess.run(
+                    list(map(str, cmd)),
+                    cwd=REPO,
+                    env=dict(env, **(extra or {})),
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    check=True,
+                    timeout=args.timeout,
+                )
+        finally:
+            after = resource.getrusage(resource.RUSAGE_CHILDREN)
+            if cpu is not None:
+                cpu[name] = round(
+                    after.ru_utime - before.ru_utime + after.ru_stime - before.ru_stime, 3
+                )
         return time.monotonic() - t
 
     for spec in cases:
@@ -364,8 +391,10 @@ def main():
             print("START " + root.name, flush=True)
             try:
 
+                result["cpu_stages"] = {}
+
                 def run(name, cmd, extra=None):
-                    result["stages"][name] = stage(root, name, cmd, extra)
+                    result["stages"][name] = stage(root, name, cmd, extra, result["cpu_stages"])
 
                 native = tracing.NativeTrace(root, spec, seed, args, out.name) if tracing else None
                 run(
@@ -386,8 +415,19 @@ def main():
                     sum(bool(p["net"]) for c in graph["components"] for p in c["pads"])
                     == spec["expected_connected_pads"]
                 )
-                # A design's driver: flat (route_case.py) or hierarchical (hier_case.py).
-                driver = "hier_case.py" if spec.get("driver") == "hier" else "route_case.py"
+                # A hard rung's custom rules (via policy, plane layers, pair skew) sit
+                # beside the boards before any stage loads them: the zone filler and
+                # the judge read <board>.kicad_dru (never generated under legacy, so
+                # the fab profile leaves a hand-written file alone).
+                dru = dru_text(spec) if spec.get("tier") == "hard" else None
+                if dru:
+                    for stem in ("source", "routed"):
+                        (root / (stem + ".kicad_dru")).write_text(dru)
+                # A design's driver: flat (route_case.py), hierarchical (hier_case.py) or
+                # Monte-Carlo successive halving (mc_case.py).
+                driver = {"hier": "hier_case.py", "mc": "mc_case.py"}.get(
+                    spec.get("driver"), "route_case.py"
+                )
                 run(
                     "place-route",
                     [args.python, frozen_here / driver, root, seed, args.rounds],
@@ -461,6 +501,21 @@ def main():
                         root / "via-scan",
                     ],
                 )
+                # The independent constraint check (check_constraints.py) on the saved
+                # board: every case, gating only the hard rungs.
+                run(
+                    "checks",
+                    [
+                        args.kicad_python,
+                        frozen_here / "check_constraints.py",
+                        board,
+                        "--spec",
+                        root / "design.json",
+                        "--out",
+                        root / "checks.json",
+                        "--exit-zero",
+                    ],
+                )
                 pnr = json.loads((root / "pnr-report.json").read_text())
                 audit = json.loads((root / "native-audit.json").read_text())
                 drc = json.loads((root / "drc.json").read_text())
@@ -478,6 +533,12 @@ def main():
                 )
                 if source != sha(root / "source.kicad_pcb"):
                     result["reasons"].append("source_changed")
+                checks = json.loads((root / "checks.json").read_text())
+                result["checks"] = checks["summary"]
+                if spec.get("tier") == "hard":
+                    result["dims"] = spec["dims"]
+                    if checks["summary"]["satisfied"] != checks["summary"]["total"]:
+                        result["reasons"].append("constraint_violated")
                 constraints = spec["constraints"]
                 if constraints.get("line_group") or any(
                     rule.get("hard") for rule in (constraints.get("edge_align") or {}).values()
@@ -496,6 +557,7 @@ def main():
                     error=str(ex), traceback=traceback.format_exc(), reasons=["stage_failure"]
                 )
             result["elapsed_seconds"] = time.monotonic() - t
+            result["cpu_seconds"] = round(sum((result.get("cpu_stages") or {}).values()), 3)
             (root / "result.json").write_text(json.dumps(result, indent=2))
             results.append(result)
             (out / "summary.json").write_text(

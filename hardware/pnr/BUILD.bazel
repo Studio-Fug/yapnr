@@ -400,6 +400,18 @@ py_test(
     deps = [":pnr"],
 )
 
+# The board's copper stack through KiCad: ingest record, copper on any named layer,
+# plane layers formed at writeback (KiCad Python; skipped elsewhere).
+py_test(
+    name = "stack_kicad_test",
+    size = "small",
+    srcs = ["tests/test_stack_kicad.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_stack_kicad.py",
+    deps = [":pnr"],
+)
+
 py_test(
     name = "detail_maze_test",
     size = "small",

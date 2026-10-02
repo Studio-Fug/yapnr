@@ -202,14 +202,17 @@ def apply_net_classes(board, rules: dict) -> int:
     return applied
 
 
-_LAYER_NAMES = {
-    "F.Cu": "F_Cu",
-    "B.Cu": "B_Cu",
-    "In1.Cu": "In1_Cu",
-    "In2.Cu": "In2_Cu",
-    "In3.Cu": "In3_Cu",
-    "In4.Cu": "In4_Cu",
-}
+def copper_layer(board, name: str) -> int:
+    """The board's copper layer id named ``name`` (KiCad's standard or the board's
+    own name), for any copper layer count. An unknown name, or a layer the board
+    does not enable, raises: copper is never silently moved to another layer."""
+    lid = board.GetLayerID(name)
+    if lid < 0 or lid not in list(board.GetEnabledLayers().CuStack()):
+        raise ValueError(
+            "copper layer %r is not one of this board's %d copper layers"
+            % (name, board.GetCopperLayerCount())
+        )
+    return lid
 
 
 def apply_planes(board, rules: dict, pad_margin_mm: float = 2.0) -> int:
@@ -228,7 +231,6 @@ def apply_planes(board, rules: dict, pad_margin_mm: float = 2.0) -> int:
     """
     import pcbnew
 
-    layer_id = {name: getattr(pcbnew, attr) for name, attr in _LAYER_NAMES.items()}
     edges = board.GetBoardEdgesBoundingBox()
     bx0, by0, bx1, by1 = edges.GetLeft(), edges.GetTop(), edges.GetRight(), edges.GetBottom()
     margin = _nm(pad_margin_mm)
@@ -244,8 +246,9 @@ def apply_planes(board, rules: dict, pad_margin_mm: float = 2.0) -> int:
     width_log = []  # @pnr-terminal-width fanout choices (PNR_TERMINAL_MIN_WIDTH=1 only)
     for nc in rules.get("net_classes", []):
         layer = nc.get("plane_layer")
-        if not layer or layer not in layer_id:
+        if not layer:
             continue
+        plane_id = copper_layer(board, layer)
         for net_name in nc.get("nets", []):
             net = board.FindNet(net_name)
             pts = pad_pos.get(net_name, [])
@@ -259,7 +262,7 @@ def apply_planes(board, rules: dict, pad_margin_mm: float = 2.0) -> int:
                 for z in board.Zones()
                 if not z.GetIsRuleArea()
                 and z.GetNetCode() == net.GetNetCode()
-                and z.IsOnLayer(layer_id[layer])
+                and z.IsOnLayer(plane_id)
             ]
             if existing:
                 reused += len(existing)
@@ -271,7 +274,7 @@ def apply_planes(board, rules: dict, pad_margin_mm: float = 2.0) -> int:
             y0 = max(by0, min(ys) - margin)
             y1 = min(by1, max(ys) + margin)
             z = pcbnew.ZONE(board)
-            z.SetLayer(layer_id[layer])
+            z.SetLayer(plane_id)
             z.SetNetCode(net.GetNetCode())
             # Carve the pour back from foreign copper by the design clearance so a
             # signal routed *on* this plane layer (4-layer routing) stays DRC-clean —
@@ -309,12 +312,12 @@ def _type_plane_layers(board, rules: dict) -> None:
     it (the ground/power plane is poured there after routing)."""
     import pcbnew
 
-    layer_id = {name: getattr(pcbnew, attr) for name, attr in _LAYER_NAMES.items()}
     for nc in rules.get("net_classes", []):
         layer = nc.get("plane_layer")
-        if layer and layer in layer_id and hasattr(board, "SetLayerType"):
+        if layer and hasattr(board, "SetLayerType"):
+            lid = copper_layer(board, layer)
             try:
-                board.SetLayerType(layer_id[layer], pcbnew.LT_POWER)
+                board.SetLayerType(lid, pcbnew.LT_POWER)
             except Exception:  # pragma: no cover - version shim
                 pass
 
@@ -1072,12 +1075,7 @@ def emit_routes(
     via_d = _nm(fab["via_diameter_mm"])
     via_drill = _nm(fab["via_drill_mm"])
     frame = _WriteFrame(height, offset)
-    layer_id = {
-        "F.Cu": pcbnew.F_Cu,
-        "In1.Cu": pcbnew.In1_Cu,
-        "In2.Cu": pcbnew.In2_Cu,
-        "B.Cu": pcbnew.B_Cu,
-    }
+    layer_id = {}
 
     def code(net_name):
         return net_code.get(net_name, 0)
@@ -1088,7 +1086,9 @@ def emit_routes(
         t.SetStart(frame.point(x0, y0))
         t.SetEnd(frame.point(x1, y1))
         t.SetWidth(_nm(w))
-        t.SetLayer(layer_id.get(layer, pcbnew.F_Cu))
+        if layer not in layer_id:
+            layer_id[layer] = copper_layer(board, layer)
+        t.SetLayer(layer_id[layer])
         t.SetNetCode(code(net))
         board.Add(t)
         n_tracks += 1

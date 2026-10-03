@@ -318,6 +318,32 @@ def main():
         result.update(
             si_side_fields(board, json.loads(rules.read_text()), work, sources, inventory)
         )
+    if os.environ.get("PNR_GLOSS") == "1":
+        # PNR_GLOSS=1 side fields only (assumptions/SI precedent); the objective vector is unchanged.
+        gloss_metrics = None
+        try:
+            run(
+                [
+                    "pnr.gloss",
+                    board,
+                    "--worker",
+                    "metrics",
+                    "--rules",
+                    rules,
+                    "--report",
+                    work / "gloss-metrics.json",
+                    *annotations,
+                ],
+                "gloss-metrics",
+            )
+            from pnr.gloss import compact_metrics
+
+            gloss_metrics = compact_metrics(
+                json.loads((work / "gloss-metrics.json").read_text())["metrics"]
+            )
+        except (subprocess.CalledProcessError, OSError, ValueError, KeyError) as e:
+            gloss_metrics = dict(error=repr(e))
+        result.update(gloss_summary=native_progress.get("gloss"), gloss_metrics=gloss_metrics)
     (p / "evaluation.json").write_text(json.dumps(result, indent=2) + "\n")
     emit("candidate_complete", board=board, data=result)
     print(json.dumps(dict(objective=result["objective"], qualified=result["qualified"])))

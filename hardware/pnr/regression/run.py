@@ -44,6 +44,26 @@ def sha(p):
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
 
+def copper_sha(board):
+    """SHA-256 of a board's copper without uuids: its track, arc and via blocks, uuid lines
+    dropped, sorted. Writeback gives tracks random uuids, so two runs of one case differ in
+    ``sha`` but not here when their copper is the same (pairing A/B arms, determinism)."""
+    blocks, block, depth = [], None, 0
+    for line in Path(board).read_text().splitlines():
+        text = line.strip()
+        if block is None:
+            if text.startswith(("(segment", "(arc", "(via")) and line.startswith("\t("):
+                block, depth = [text], text.count("(") - text.count(")")
+            continue
+        depth += text.count("(") - text.count(")")
+        if not text.startswith("(uuid"):
+            block.append(text)
+        if depth <= 0:
+            blocks.append(" ".join(block))
+            block = None
+    return hashlib.sha256("\n".join(sorted(blocks)).encode()).hexdigest()
+
+
 def acceptance(pnr, audit, drc):
     reasons = []
     if not pnr.get("legal"):
@@ -284,7 +304,12 @@ def gloss_stage(root, board, args, run, flags):
         )
         return json.loads(out.read_text())
 
-    block = dict(pre_gloss_board_sha256=pre_sha, flags=dict(flags), kept=False)
+    block = dict(
+        pre_gloss_board_sha256=pre_sha,
+        pre_gloss_copper_sha256=copper_sha(board),
+        flags=dict(flags),
+        kept=False,
+    )
     try:
         before = cold_drc("drc-before")
         candidate = folder / "candidate.kicad_pcb"
@@ -336,6 +361,7 @@ def gloss_stage(root, board, args, run, flags):
     if not block["kept"]:
         shutil.copyfile(pre, board)
     block["board_sha256"] = sha(board)
+    block["copper_sha256"] = copper_sha(board)
     return block
 
 
@@ -753,6 +779,7 @@ def main():
                     pnr=pnr,
                     source_board_sha256=source,
                     board_sha256=sha(board),
+                    copper_sha256=copper_sha(board),
                     project_sha256=sha(board.with_suffix(".kicad_pro")),
                 )
                 if source != sha(root / "source.kicad_pcb"):

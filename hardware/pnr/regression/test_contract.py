@@ -19,6 +19,7 @@ from run import (
     LISTING,
     acceptance,
     constraint_reasons,
+    copper_sha,
     engine_revision,
     gloss_flags,
     gloss_gate,
@@ -516,6 +517,15 @@ def drc_report(opens=0, **violations):
     )
 
 
+# A two-segment board; %s names the second segment's layer (input or glossed copper).
+GLOSS_BOARD = (
+    "(kicad_pcb\n\t(segment\n\t\t(start 1 1)\n\t\t(end 2 1)\n\t\t(width 0.25)\n"
+    '\t\t(layer "F.Cu")\n\t\t(net "N")\n\t\t(uuid "a")\n\t)\n\t(segment\n'
+    '\t\t(start 2 1)\n\t\t(end 3 2)\n\t\t(width 0.25)\n\t\t(layer "%s")\n'
+    '\t\t(net "N")\n\t\t(uuid "b")\n\t)\n)\n'
+)
+
+
 class GlossStageContract(unittest.TestCase):
     """run.py --gloss (PNR_GLOSS, opt-in): one gated stage after refill, stubbed here."""
 
@@ -557,7 +567,7 @@ class GlossStageContract(unittest.TestCase):
         root = tmp / "case"
         root.mkdir()
         board = root / "routed.kicad_pcb"
-        board.write_text("input board\n")
+        board.write_text(GLOSS_BOARD % "input")
         args = SimpleNamespace(
             python="py", kicad_cli="kicad-cli", kicad_python="kp", gloss=True, timeout=600
         )
@@ -575,7 +585,7 @@ class GlossStageContract(unittest.TestCase):
                 self.assertEqual(extra["PNR_GLOSS"], "1")
                 self.assertEqual(extra["PNR_GLOSS_STEPS"], "dekink")
                 self.assertNotIn("--guard-open-nets", cmd)  # 07g semantics
-                Path(cmd[cmd.index("--out") + 1]).write_text("glossed board\n")
+                Path(cmd[cmd.index("--out") + 1]).write_text(GLOSS_BOARD % "glossed")
                 Path(cmd[cmd.index("--report") + 1]).write_text(
                     json.dumps(
                         dict(
@@ -589,41 +599,52 @@ class GlossStageContract(unittest.TestCase):
                 )
 
         block = gloss_stage(root, board, args, run, dict(PNR_GLOSS_STEPS="dekink"))
-        self.assertEqual((root / "routed.pre-gloss.kicad_pcb").read_text(), "input board\n")
+        self.assertEqual((root / "routed.pre-gloss.kicad_pcb").read_text(), GLOSS_BOARD % "input")
         self.assertNotIn(str(tmp), json.dumps(block))  # result.json holds no paths
         return block, board.read_text(), names
 
     def test_a_clean_pass_replaces_the_board(self):
         block, text, names = self.stage(after_drc=drc_report(0, clearance=1))
-        self.assertEqual(text, "glossed board\n")
+        self.assertEqual(text, GLOSS_BOARD % "glossed")
         self.assertTrue(block["kept"] and block["outer_gate"]["passed"])
         self.assertEqual(names, ["gloss-drc-before", "gloss", "gloss-drc-after"])
         self.assertEqual(block["summary"]["edits_by_step"], dict(dekink=3))
         self.assertEqual(block["summary"]["cross_group"]["groups"], "groups.json")
         self.assertNotIn("transactions", block["summary"])
         self.assertEqual(
-            block["pre_gloss_board_sha256"], hashlib.sha256(b"input board\n").hexdigest()
+            block["pre_gloss_board_sha256"],
+            hashlib.sha256((GLOSS_BOARD % "input").encode()).hexdigest(),
         )
-        self.assertEqual(block["board_sha256"], hashlib.sha256(b"glossed board\n").hexdigest())
+        self.assertNotEqual(block["pre_gloss_copper_sha256"], block["copper_sha256"])
 
     def test_a_worse_drc_restores_the_pre_gloss_board(self):
         for after in (drc_report(1, clearance=1), drc_report(0, clearance=2)):
             block, text, _ = self.stage(after_drc=after)
-            self.assertEqual(text, "input board\n")
+            self.assertEqual(text, GLOSS_BOARD % "input")
             self.assertFalse(block["kept"] or block["outer_gate"]["passed"])
             self.assertEqual(block["board_sha256"], block["pre_gloss_board_sha256"])
+            self.assertEqual(block["copper_sha256"], block["pre_gloss_copper_sha256"])
 
     def test_no_accepted_transaction_keeps_the_board_without_a_second_drc(self):
         block, text, names = self.stage(accepted=0)
-        self.assertEqual((text, block["kept"]), ("input board\n", False))
+        self.assertEqual((text, block["kept"]), (GLOSS_BOARD % "input", False))
         self.assertEqual(names, ["gloss-drc-before", "gloss"])
 
     def test_a_stage_error_restores_the_board_and_is_reported(self):
         for name in ("gloss", "gloss-drc-after"):
             block, text, _ = self.stage(after_drc=drc_report(0), fail=name)
             self.assertEqual(
-                (text, block["kept"], block["status"]), ("input board\n", False, "error")
+                (text, block["kept"], block["status"]), (GLOSS_BOARD % "input", False, "error")
             )
+
+    def test_copper_hash_ignores_uuids_and_order(self):
+        tmp = Path(tempfile.mkdtemp())
+        a, b, c = tmp / "a.kicad_pcb", tmp / "b.kicad_pcb", tmp / "c.kicad_pcb"
+        a.write_text(GLOSS_BOARD % "F.Cu")
+        b.write_text((GLOSS_BOARD % "F.Cu").replace('"a"', '"z"').replace('"b"', '"y"'))
+        c.write_text(GLOSS_BOARD % "B.Cu")
+        self.assertEqual(copper_sha(a), copper_sha(b))
+        self.assertNotEqual(copper_sha(a), copper_sha(c))
 
     def test_summary_and_measure_figures(self):
         self.assertEqual(

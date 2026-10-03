@@ -467,6 +467,24 @@ def board_stack(board, rules: Optional[dict], path: Optional[str] = None):
 _STACK_WARNED: set = set()
 
 
+def declared_si_stackup(board, rules: Optional[dict], path: Optional[str] = None):
+    """The SI model's stack from ``board``'s declared stackup block
+    (:func:`pnr.stack.si_stackup`), or None when the declared stack does not apply
+    (the SI model then keeps its default four-layer stack)."""
+    from pnr.stack import si_stackup, stackup_rows
+
+    stack = board_stack(board, rules, path)
+    path = path if path is not None else board.GetFileName()
+    if stack is None or not path:
+        return None
+    try:
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError:
+        return None
+    return si_stackup(stackup_rows(text), stack)
+
+
 def build_graph(board, name: Optional[str] = None) -> BoardGraph:
     """Build a :class:`BoardGraph` from an open ``pcbnew.BOARD``."""
 

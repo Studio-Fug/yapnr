@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "regression"))
 
 from designs import designs, showcases  # noqa: E402
 from hard_rungs import dru_text, hard_rungs  # noqa: E402
-from stackup import zone_layers  # noqa: E402
+from stackup import stackup_text, zone_layers  # noqa: E402
 
 from pnr.constraints import compile_constraints, compile_routing_rules  # noqa: E402
 from pnr.graph import BoardGraph  # noqa: E402
@@ -33,7 +33,9 @@ from pnr.stack import (  # noqa: E402
     reference_layer,
     reference_nets,
     resolve,
+    si_stackup,
     split_plane_patterns,
+    stackup_rows,
 )
 
 
@@ -412,6 +414,32 @@ class NativeLayers(unittest.TestCase):
         stack = resolve(plane_rules(4, {}), record("SSSS"))
         self.assertIsNone(stack.reference_plane("F.Cu"))
         self.assertEqual(reference_layer(stack), "In1.Cu")
+
+
+class SignalIntegrityStack(unittest.TestCase):
+    def test_the_si_model_takes_the_declared_stackup(self):
+        from hard_rungs import stackup as rung_stackup
+
+        from pnr.si import physics
+
+        spec = rung_stackup("8L-SGSGPSGS")
+        text = "(kicad_pcb\n\t(setup\n" + stackup_text(spec) + "\n\t)\n)"
+        code = "".join("S" if x["role"] == "signal" else "G" for x in spec["layers"])
+        rec = record(code, {"In3.Cu": ["GND"], "In6.Cu": ["GND"]})
+        stack = resolve(plane_rules(8, {"GND": "In1.Cu", "VCC": "In4.Cu"}), rec)
+        st = si_stackup(stackup_rows(text), stack)
+        self.assertEqual(st["planes"], ["In1.Cu", "In3.Cu", "In4.Cu", "In6.Cu"])
+        model = physics.stackup(dict(stackup=st))
+        self.assertEqual(physics.copper_layers(model), list(copper_names(8)))
+        dielectric = sum(d["thickness_mm"] for d in spec["dielectrics"])
+        self.assertAlmostEqual(physics.thickness(model), 2 * 0.035 + 6 * 0.0152 + dielectric)
+        # F.Cu's trace references In1 at 0.09 mm, not the default 4L stack's In1.
+        self.assertAlmostEqual(physics.via_span_mm(model, "F.Cu", "In1.Cu"), 0.035 + 0.09)
+        # A block that leaves a dielectric's thickness out, or other copper: none.
+        rows = stackup_rows(text)
+        rows[4] = dict(rows[4], thickness_mm=None)
+        self.assertIsNone(si_stackup(rows, stack))
+        self.assertIsNone(si_stackup(stackup_rows(text)[:6], stack))
 
 
 class PlacementPlaneTerms(unittest.TestCase):

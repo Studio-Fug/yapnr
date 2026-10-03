@@ -336,6 +336,76 @@ def split_plane_patterns(constraints, graph) -> List[str]:
     return [glob.escape(n) for n in sorted(stack.split_nets)]
 
 
+def stackup_rows(text: str) -> List[dict]:
+    """The physical rows of a board file's ``(stackup ...)`` block, top to bottom:
+    ``{"name", "type", "thickness_mm", "epsilon_r"}`` (thickness and epsilon_r None
+    when the row does not state them). Copper rows have type ``copper``."""
+    import re
+
+    start = text.find("(stackup")
+    if start < 0:
+        return []
+    depth = 0
+    rows = []
+    row_start = None
+    for index in range(start, len(text)):
+        ch = text[index]
+        if ch == "(":
+            depth += 1
+            if depth == 2 and text.startswith("(layer", index):
+                row_start = index
+        elif ch == ")":
+            if depth == 2 and row_start is not None:
+                row = text[row_start : index + 1]
+                name = re.match(r'\(layer\s+"([^"]+)"', row)
+                kind = re.search(r'\(type\s+"([^"]+)"\)', row)
+                thick = re.search(r"\(thickness\s+([0-9.eE+-]+)", row)
+                er = re.search(r"\(epsilon_r\s+([0-9.eE+-]+)\)", row)
+                if name and kind:
+                    rows.append(
+                        dict(
+                            name=name.group(1),
+                            type=kind.group(1),
+                            thickness_mm=float(thick.group(1)) if thick else None,
+                            epsilon_r=float(er.group(1)) if er else None,
+                        )
+                    )
+                row_start = None
+            depth -= 1
+            if depth == 0:
+                break
+    return rows
+
+
+def si_stackup(rows: Sequence[dict], stack: Stack) -> Optional[dict]:
+    """The SI model's stack (:func:`pnr.si.physics.stackup`, ``rules['stackup']``)
+    from a declared stackup block's ``rows`` (:func:`stackup_rows`): its copper and
+    dielectric layers, top to bottom, and the stack's dedicated planes as reference
+    planes. None when the block does not state every copper and dielectric
+    thickness, or its copper is not the stack's."""
+    layers = []
+    for row in rows:
+        if row["type"] == "copper":
+            kind = "copper"
+        elif row["type"] in ("core", "prepreg") or row["name"].startswith("dielectric"):
+            kind = "dielectric"
+        else:
+            continue  # mask, paste, silk: outside the copper
+        if row["thickness_mm"] is None:
+            return None
+        layer = dict(name=row["name"], kind=kind, t_mm=row["thickness_mm"])
+        if kind == "dielectric":
+            layer["er"] = row["epsilon_r"] if row["epsilon_r"] is not None else 4.5
+            layer["material"] = row["type"]
+        layers.append(layer)
+    if [x["name"] for x in layers if x["kind"] == "copper"] != list(stack.names):
+        return None
+    planes = [x.name for x in stack.layers if x.role == PLANE and x.nets]
+    return dict(
+        name="declared stackup", source="the board file's stackup", layers=layers, planes=planes
+    )
+
+
 # ------------------------------------------------- the native loop's copper layers
 # The native KiCad loop (pnr.native_electrical, pnr.native_loop) predates declared
 # stacks: it routes power paths on F/B plus In2 and takes In1 as a pair's reference

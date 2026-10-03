@@ -159,6 +159,13 @@ def native_worker(a):
             except AnnotationError as error:
                 sys.exit("pnr.si: @pnr-si annotation error: %s" % error)
             compiled = dict(compiled, si_intents=intents)
+            if not compiled.get("stackup"):
+                # A declared copper stack is the SI model's stack (else JLC04161H).
+                from pnr.ingest import declared_si_stackup
+
+                declared = declared_si_stackup(b, compiled)
+                if declared is not None:
+                    compiled["stackup"] = declared
             from pnr.si.physics import stackup
 
             save(

@@ -139,8 +139,14 @@ class RouteGrid:
                 return centre
         return None
 
-    def hole_site_clear(self, point, sites=()):
-        """Same-net copper may merge; two distinct drills still need spacing."""
+    def hole_site_clear(self, point, sites=(), net=None):
+        """Same-net copper may merge; two distinct drills still need spacing.
+
+        ``sites`` are the net's own drills (one exactly there is the same barrel).
+        With ``net`` (a grid with a via model, whose vias of two nets may share no
+        grid layer) an escape via of another net is never shared either; without
+        it any exactly co-located escape via passes here, as before (a through
+        via's layer occupancy rejects a foreign one)."""
         import math
 
         if self.pth_hole_gap is None:
@@ -154,6 +160,15 @@ class RouteGrid:
             for k, (p, radius) in enumerate(self.source_drills)
         ):
             return False
+        if net is not None:
+            return all(
+                (math.dist(point, p) < 1e-7 and owner == net)
+                or math.dist(point, p) >= self.via_spacing - 1e-7
+                for owner, p in self.escape_vias
+            ) and all(
+                math.dist(point, p) < 1e-7 or math.dist(point, p) >= self.via_spacing - 1e-7
+                for p in sites
+            )
         return all(
             math.dist(point, p) < 1e-7 or math.dist(point, p) >= self.via_spacing - 1e-7
             for p in [xy for _, xy in self.escape_vias] + list(sites)

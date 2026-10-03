@@ -79,7 +79,9 @@ def _via_clean(
     another net. A Ø0.45 via dropped in a 0.5 mm-pitch pad field would short its
     neighbours; this rejects that (the pad must then dog-bone out, or stay unrouted —
     honest ground truth)."""
-    if not grid.hole_site_clear(grid.center_of(i, j)):
+    # A grid with a via model never shares a site with another net's escape via.
+    owner = net if getattr(grid, "via_model", None) is not None else None
+    if not grid.hole_site_clear(grid.center_of(i, j), net=owner):
         return False
     for la in range(grid.nlayers) if layers is None else layers:
         # ``point``: an exact off-grid via site (a pad centre) for the fab

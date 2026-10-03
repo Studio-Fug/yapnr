@@ -375,7 +375,7 @@ def _span_column(grid, cur, net, block, raw_block, sites, span, memo):
             if not memo[key]:
                 return False, None
     if "hole" not in memo:
-        memo["hole"] = grid.hole_site_clear(grid.center_of(i, j), sites)
+        memo["hole"] = grid.hole_site_clear(grid.center_of(i, j), sites, net=net)
     return (True, None) if memo["hole"] else (False, None)
 
 

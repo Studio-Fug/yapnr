@@ -94,7 +94,10 @@ def _via_clear(grid, net, p, via_keepout, span=None):
     radius = grid.via_radius if span is None else span.radius
     # The via sits exactly at p (a pad centre for via-in-pad): the fab profile's
     # via-to-SMD-pad rule is judged there, not at the cell centre.
-    if not _via_clean(grid, i, j, net, keepout, p, layers) or not grid.hole_site_clear(p):
+    owner = net if getattr(grid, "via_model", None) is not None else None  # no shared site
+    if not _via_clean(grid, i, j, net, keepout, p, layers) or not grid.hole_site_clear(
+        p, net=owner
+    ):
         return False
     # Checking a point with the via diameter reuses the exact foreign copper test
     # in every layer; via-blocked applies even when tracks may use an inner gap.
@@ -380,7 +383,8 @@ def _drop_via_clear(grid, net, p, span=None):
     wrote (a plated hole, fixed copper) still rejects the site, as does the fab
     profile's via-to-SMD-pad rule."""
     i, j = grid.cell_of(*p)
-    if not grid.in_bounds(i, j) or not grid.hole_site_clear(p):
+    owner = net if getattr(grid, "via_model", None) is not None else None  # no shared site
+    if not grid.in_bounds(i, j) or not grid.hole_site_clear(p, net=owner):
         return False
     if grid.smd_via_blocked is not None and not grid.smd_via_ok(p, net):
         return False
@@ -540,6 +544,9 @@ def options_conflict(grid, a, b):
     if a.access_key in b.occupied or b.access_key in a.occupied:
         return True
     if a.spans or b.spans:
+        # Two nets' vias never share a site, even where their spans share no layer.
+        if any(math.dist(p, q) < 1e-7 for p in a.vias for q in b.vias):
+            return True
         return _span_copper_conflict(grid, a, b)
     for la, p, q, wa in a.segments:
         for lb, r, s, wb in b.segments:

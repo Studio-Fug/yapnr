@@ -526,6 +526,21 @@ py_test(
     ],
 )
 
+# Vias of two nets never share a site under a via model (blind, buried, micro),
+# whatever their spans.
+py_test(
+    name = "via_holes_test",
+    size = "small",
+    srcs = ["tests/test_via_holes.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_via_holes.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+    ],
+)
+
 # The same through KiCad (KiCad Python only, by hand: python3 -m unittest
 # tests.test_via_spans_kicad): via types and layer pairs written back, the fixed
 # copper round trip, the native checker's span, plane layer connection counts.

@@ -428,6 +428,7 @@ class FitResult:
     nuisance: Dict[str, Tuple[float, float]] = field(default_factory=dict)
     bootstrap: Optional[dict] = None
     sigma_boot: Dict[str, float] = field(default_factory=dict)
+    table_edge: List[str] = field(default_factory=list)  # parameters at a 2D-table bound
 
     @property
     def sigma_total(self) -> Dict[str, float]:
@@ -577,9 +578,20 @@ def run_fit(
     for n, s_ in zip(names, sd):
         if sig[n] > 0.7 * s_:
             warn.append(f"{n}: prior-dominated (σ {sig[n]:.3g} of prior {s_:.3g})")
+    edge = []
     for n, zi, a, b_ in zip(names, z, zlo, zhi):
         if zi <= a + 1e-9 or zi >= b_ - 1e-9:
-            warn.append(f"{n}: at its bound ({val[n]:.4g})")
+            q = stackups.PARAMS[n]
+            t_lo, t_hi = q.table if q.table is not None else (q.lo, q.hi)
+            if (t_lo > q.lo and val[n] <= t_lo + 1e-9) or (t_hi < q.hi and val[n] >= t_hi - 1e-9):
+                edge.append(n)
+                warn.append(
+                    f"{n}: at the edge of the 2D tables ({val[n]:.4g}); the as-built value is"
+                    " probably outside them and the fit is biased (Z0 most): rebuild the tables"
+                    " around it (`families build`) before using this fit"
+                )
+            else:
+                warn.append(f"{n}: at its bound ({val[n]:.4g})")
     corr = cov / np.outer(np.sqrt(np.diag(cov)), np.sqrt(np.diag(cov)))
     for i in range(len(names)):
         for j in range(i + 1, len(names)):
@@ -591,6 +603,7 @@ def run_fit(
         if out:
             warn.append(f"{fam_id}: outside the 2D table range in {', '.join(out)} (extrapolated)")
     res = FitResult(names, val, sig, {}, cov, {n: pr[n] for n in names}, chi2, it_total, warn)
+    res.table_edge = edge
     res.value.update({k: float(v) for k, v in fixed.items()})
     res.nuisance = nuis
     return res
@@ -830,7 +843,8 @@ def bootstrap(
     weights. The spread of the refits is the estimator's sampling uncertainty, including what
     the block model of the fit leaves out (the calibration's errors are shared by every
     corrected stick). The session's verification line scales the connector spread when it is
-    worse than the model's (est. median 0.021 for the default model, 1-6 GHz)."""
+    worse than 0.021 (the default model gives a median of 0.023 on board A and 0.027 on board
+    B, 1-6 GHz, so typical sessions are scaled up slightly: conservative)."""
     import shutil
     import tempfile
 
@@ -909,6 +923,11 @@ def extract(
     d = prepare(stackup_id, ses, f_max=f_max)
     p = Predictor(d, tables)
     res = run_fit(p, prior, loss=loss)
+    for n in res.table_edge:
+        d.problems.append(
+            f"{n} at the edge of the 2D tables ({res.value[n]:.4g}): the fab is outside the"
+            " modelled range; rebuild the tables around it and refit"
+        )
     res.derived = derived(p, res)
     res.held_out = held_out(p, res)
     if boot:

@@ -110,6 +110,8 @@ def cmd_extract(a) -> int:
         print(f"  {n:12s} {res.value[n]:.5g} ± {res.sigma_total[n]:.2g} {q.unit}")
     for w in res.warnings:
         print(f"  warning: {w}")
+    for pr in d.problems:
+        print(f"  problem: {pr}")
     for name, path in paths.items():
         print(f"{name}: {path}")
     failed = [k for k, h in res.held_out.items() if not h["passed"]]

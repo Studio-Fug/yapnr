@@ -102,6 +102,26 @@ class RecoveryTest(unittest.TestCase):
         )
 
 
+class OutsideTablesTest(unittest.TestCase):
+    """A fab far from the nominal stackup (here a 0.150 mm L1 dielectric, below the 2D tables'
+    0.158 mm): the fit stops at the table edge, and the session is flagged as a problem rather
+    than reported with a biased Z0 and a normal-looking σ."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_flagged(self):
+        st = stackups.get(A)
+        truth = dict(synthetic.draw_truth(st, np.random.default_rng(51)), **{"pp1.h": 0.150})
+        synthetic.simulate(A, truth, self.dir, synthetic.grid(6e9, 20e6), np.random.default_rng(51))
+        res, d, p = fit.extract(A, self.dir, with_systematics=False)
+        self.assertIn("pp1.h", res.table_edge)
+        self.assertTrue(any(x.startswith("pp1.h at the edge of the 2D tables") for x in d.problems))
+
+
 class ExportTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()

@@ -11,7 +11,7 @@ yapnr_py_tests(
     },
     overrides = {
         "test_cli": {"size": "medium"},
-        "test_fit": {"size": "medium"},
+        "test_fit": {"size": "large"},
         # KiCad writes its settings under the home directory, which the macOS sandbox forbids
         "test_kicad": {"tags": [
             "kicad",

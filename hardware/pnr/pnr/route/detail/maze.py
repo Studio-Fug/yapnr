@@ -600,16 +600,17 @@ def _route_impl(
             ),
         )
 
-    def _place(net, route):
+    def _place(net, route, fp=None):
         live_net(net, route, "signal_net_added")
         if trace_hook:
             trace_hook.net(net, route, "add", True, iters)
         routed[net] = route
-        fp = (
-            _footprint(grid, route.cells, via_keepout, _h(net), edges=route.edges, net=net)
-            if route
-            else set()
-        )
+        if fp is None:
+            fp = (
+                _footprint(grid, route.cells, via_keepout, _h(net), edges=route.edges, net=net)
+                if route
+                else set()
+            )
         fps[net] = fp
         for c in fp:
             owner[c].add(net)
@@ -670,7 +671,9 @@ def _route_impl(
                         pres_fac,
                         _session=session,
                     )
-                _place(net, proposal)
+                    footprint = None
+                # The footprint is a pure function of the route: computed once.
+                _place(net, proposal, footprint)
                 added.update(fps[net])
 
     negotiate(nego_order)
@@ -702,11 +705,24 @@ def _route_impl(
     committed: Set[Cell] = set()
     routes: Dict[str, _Route] = {}  # committed _Route per net (geometry + snapshot)
 
-    def _commit(net: str, route: _Route) -> None:
+    # Footprint of each net's committed route (the route object and its cells), so
+    # rip-ups and the snapshot restore reuse it instead of recomputing it.
+    committed_fp: Dict[str, Tuple[_Route, Set[Cell]]] = {}
+
+    def _fp(net: str, route: _Route) -> Set[Cell]:
+        known = committed_fp.get(net)
+        if known is not None and known[0] is route:
+            return known[1]
+        return _footprint(grid, route.cells, via_keepout, _h(net), edges=route.edges, net=net)
+
+    def _commit(net: str, route: _Route, fp: Optional[Set[Cell]] = None) -> None:
         live_net(net, route, "signal_net_added")
         if trace_hook:
             trace_hook.net(net, route, "commit", False, iters)
-        for c in _footprint(grid, route.cells, via_keepout, _h(net), edges=route.edges, net=net):
+        if fp is None:
+            fp = _footprint(grid, route.cells, via_keepout, _h(net), edges=route.edges, net=net)
+        committed_fp[net] = (route, fp)
+        for c in fp:
             occupied[c] = net
             committed.add(c)
         routes[net] = route
@@ -732,7 +748,7 @@ def _route_impl(
             else set()
         )
         if route and not any(c in occupied for c in fp):
-            _commit(net, route)
+            _commit(net, route, fp)
         else:
             leftover.append(net)
 
@@ -797,7 +813,7 @@ def _route_impl(
                     else set()
                 )
             if proposal and not fp & committed:
-                _commit(net, proposal)
+                _commit(net, proposal, fp)
             else:
                 unrouted.append(net)
                 _drop(net)
@@ -867,16 +883,18 @@ def _route_impl(
                 blocked=committed,
                 _session=session,
             )
-            if around and not (
+            around_fp = (
                 _footprint(grid, around.cells, via_keepout, _h(net), edges=around.edges, net=net)
-                & set(occupied)
-            ):
-                _commit(net, around)
+                if around
+                else None
+            )
+            if around and not (around_fp & set(occupied)):
+                _commit(net, around, around_fp)
             continue
         for c in crossed:  # rip the crossed nets, re-queue them
             rc = routes.get(c)
             if rc:
-                for cell in _footprint(grid, rc.cells, via_keepout, _h(c), edges=rc.edges, net=c):
+                for cell in _fp(c, rc):
                     if occupied.get(cell) == c:
                         del occupied[cell]
                         committed.discard(cell)
@@ -886,7 +904,7 @@ def _route_impl(
             if c not in queued:
                 queue.append(c)
                 queued.add(c)
-        _commit(net, route)
+        _commit(net, route, fp)
         cnt = _routed_count()
         if cnt > best_count:
             best_count = cnt
@@ -909,16 +927,12 @@ def _route_impl(
     # separate from negotiation scoring: unreachable terminals remain open.
     committed = set()
     for name, saved in best_snap.items():
-        committed.update(
-            _footprint(grid, saved.cells, via_keepout, _h(name), edges=saved.edges, net=name)
-        )
+        committed.update(_fp(name, saved))
     for net in sorted(unrouted):
         saved = best_snap.get(net)
         forest = _Route(list(saved.cells), list(saved.edges)) if saved else _Route()
         if saved:
-            committed.difference_update(
-                _footprint(grid, saved.cells, via_keepout, _h(net), edges=saved.edges, net=net)
-            )
+            committed.difference_update(_fp(net, saved))
         remaining = set(net_access[net]) - set(forest.cells)
         first_tree = set(forest.cells)
         field = None

@@ -62,6 +62,7 @@ viewer
 frontends/atopile
 part-cache
 rf-inverse-design
+rf-solver-backends
 releases
 ```
 

@@ -31,6 +31,9 @@
  * Work within a phase is handed out dynamically (rows, source chunks, probe chunks).
  */
 
+/* posix_memalign under -std=c11 with glibc */
+#define _POSIX_C_SOURCE 200809L
+
 #include <pthread.h>
 #include <sched.h>
 #include <stdatomic.h>

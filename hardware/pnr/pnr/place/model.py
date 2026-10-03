@@ -8,6 +8,7 @@ Relaxes a continuous placement by gradient descent on a smooth loss:
       + w_edge   * edge_align         # soft pull to a board edge
       + w_keep   * keepout_penalty    # keep movable parts out of keep-outs
       + w_group  * grouping           # cluster grouped parts near their anchor
+      + w_match  * length_mismatch    # equal estimated lengths in pairs / groups
 
 Positions of ``fixed`` parts are held constant (they still anchor the wirelength);
 everything else is an optimized parameter. This is the DREAMPlace reframing —
@@ -69,6 +70,48 @@ def pair_tensors(pair_weights, pin_key):
     )
 
 
+def matched_pin_sets(graph: BoardGraph, constraints, pin_key) -> List[List[torch.Tensor]]:
+    """Pin index tensors per member net of each declared diff pair and length-match
+    group whose members all have two or more placed pins ([] when none)."""
+    pins_of = {
+        net.name: [pin_key[p] for p in net.pins if p in pin_key]
+        for net in getattr(graph, "nets", [])
+    }
+    sets = [(dp.p, dp.n) for dp in getattr(constraints, "diff_pairs", None) or []]
+    sets += [tuple(lm.nets) for lm in getattr(constraints, "length_matches", None) or []]
+    out = []
+    for members in sets:
+        members = list(dict.fromkeys(members))
+        if len(members) >= 2 and all(len(pins_of.get(n, ())) >= 2 for n in members):
+            out.append([torch.tensor(pins_of[n], dtype=torch.long) for n in members])
+    return out
+
+
+def length_mismatch(match_sets, pin_x, pin_y, gamma: float) -> torch.Tensor:
+    """``sum |L_i - mean(L)|`` (smoothed) over each set's members, ``L`` the estimated
+    routed length: the pin distance of a two-pin net, else the smooth HPWL."""
+    total = pin_x.new_zeros(())
+    for members in match_sets:
+        lengths = []
+        for pins in members:
+            px, py = pin_x[pins], pin_y[pins]
+            if len(pins) == 2:
+                lengths.append(torch.sqrt((px[0] - px[1]) ** 2 + (py[0] - py[1]) ** 2 + PAIR_EPS2))
+            else:
+                lengths.append(
+                    gamma
+                    * (
+                        torch.logsumexp(px / gamma, 0)
+                        + torch.logsumexp(-px / gamma, 0)
+                        + torch.logsumexp(py / gamma, 0)
+                        + torch.logsumexp(-py / gamma, 0)
+                    )
+                )
+        stacked = torch.stack(lengths)
+        total = total + torch.sqrt((stacked - stacked.mean()) ** 2 + PAIR_EPS2).sum()
+    return total
+
+
 def _base_half_sizes(graph: BoardGraph) -> torch.Tensor:
     """Unrotated courtyard half-(w, h) per component (parts ingest at rot 0)."""
     hs = [(c.courtyard[0] / 2.0, c.courtyard[1] / 2.0) for c in graph.components]
@@ -94,6 +137,7 @@ def global_place(
     w_group: float = 0.5,
     w_plane: float = 0.05,
     w_plane_sep: float = 0.35,
+    w_match: float = 1.0,
     initial_positions: Optional[Dict[str, Tuple[float, float]]] = None,
     initial_rotations: Optional[Dict[str, float]] = None,
     pair_weights: Optional[Dict[Tuple[str, str, str, str], float]] = None,
@@ -109,6 +153,13 @@ def global_place(
     ``pair_weights`` ({(ref_a, pad_a, ref_b, pad_b): w}) adds
     ``sum w * sqrt(dx^2 + dy^2 + PAIR_EPS2)`` over those pad pairs (expected
     rotated pin offsets) beside the wirelength term; None skips it entirely.
+
+    Each declared differential pair and length-match group (``constraints.diff_pairs``,
+    ``constraints.length_matches``) adds ``w_match * sum |L_i - mean(L)|`` over its
+    members' estimated lengths (a two-pin net: the pin distance; more pins: the
+    smooth HPWL). A pair whose legs run through series parts (connector -> R1/R2 ->
+    MCU) is otherwise free to place R1 and R2 at different distances along the way,
+    which no meander can make up; a design without pairs or groups is unchanged.
 
     Returns ``({ref: (x, y)}, {ref: angle_deg})`` for every component (angle is
     the arg-max of the relaxed rotation distribution, a legal 0/90/180/270)."""
@@ -233,6 +284,7 @@ def global_place(
     net_pin_idx = [[pin_key[p] for p in net.pins if p in pin_key] for net in graph.nets]
     net_pin_idx = [pins for pins in net_pin_idx if len(pins) >= 2]
     pairs = pair_tensors(pair_weights, pin_key)
+    match_sets = matched_pin_sets(graph, constraints, pin_key)
     batched_wl = None
     if os.environ.get("PNR_BATCHED_WIRELENGTH") == "1":
         from .batched_cost import BucketedWirelength
@@ -356,6 +408,8 @@ def global_place(
                     )
                 ).sum()
             )
+        if match_sets and w_match > 0.0:
+            loss = loss + w_match * length_mismatch(match_sets, pin_x, pin_y, gamma)
 
         # Power-plane compactness + inter-domain separation. Each plane net gets a
         # smooth pad bbox; minimise its AREA (compact planes) and penalise overlap

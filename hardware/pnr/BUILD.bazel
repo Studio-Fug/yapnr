@@ -328,6 +328,21 @@ py_test(
     ],
 )
 
+# Placement keeps the legs of diff pairs and length-match groups even (the global
+# term and the post-legalization refinement, pnr.place.matched).
+py_test(
+    name = "matched_placement_test",
+    size = "small",
+    srcs = ["tests/test_matched_placement.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_matched_placement.py",
+    deps = [
+        ":pnr",
+        ":pnr_place",
+    ],
+)
+
 # Phase 2 acceptance: placement MVP is legal + beats the ato-row HPWL baseline.
 py_test(
     name = "placement_test",

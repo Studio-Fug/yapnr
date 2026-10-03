@@ -307,6 +307,33 @@ class RunTest(unittest.TestCase):
         self.assertEqual(seen, list(range(1, ref.steps + 1)))
         self.assert_same(got, ref)
 
+    def test_forked_child_gets_its_own_pool(self):
+        """A forked process inherits the pool's handle but not its threads: it makes its own."""
+        kernel_or_skip(self)
+        if not hasattr(os, "fork"):
+            self.skipTest("no fork")
+        sim, ref = self.run_sim("native", threads=3)
+        r, w = os.pipe()
+        pid = os.fork()
+        if pid == 0:  # child: run again on the inherited simulation, report equality
+            ok = 0
+            try:
+                p1, p2 = self.dom.ports
+                got = sim.run(
+                    p1.sources(self.pulse, self.dt, self.dom.spec.stackup, kind="mode"),
+                    p1.probes + p2.probes + self.dom.design_probes(),
+                    self.omega,
+                    StopRule(tol=1e-6, f_lo=8e9),
+                )
+                ok = int(all(np.array_equal(got.dft[k], ref.dft[k]) for k in ref.dft))
+            finally:
+                os.write(w, bytes([ok]))
+                os._exit(0)
+        os.close(w)
+        result = os.read(r, 1)
+        os.waitpid(pid, 0)
+        self.assertEqual(result, bytes([1]))
+
     def test_float32_sparameters(self):
         """float32 (opt-in) against float64: |ΔS| < 1e-4, as for torch (test_backends)."""
         kernel_or_skip(self)

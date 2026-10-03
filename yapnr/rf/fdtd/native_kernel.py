@@ -389,10 +389,8 @@ class NativeStepper:
         self.bufs = {c: _aligned_zeros(self.size, self.dtype) for c in COMPONENTS}
         self.views = {c: self._view(self.bufs[c], grid.shape(c)) for c in COMPONENTS}
         self.threads = thread_count(threads)
-        self.pool = kernel.lib.yf_pool_new(self.threads)
-        if not self.pool:
-            raise MemoryError("native FDTD thread pool")
-        self.threads = int(kernel.lib.yf_pool_threads(self.pool))
+        self.pool = None
+        self._new_pool()
         self.s = YfSim()
         s = self.s
         s.nx, s.ny, s.nz = nx, ny, nz
@@ -408,9 +406,23 @@ class NativeStepper:
         self.mu_old, self.sheet_state = [], []
         self.tblock = self._tblock()
 
+    def _new_pool(self) -> None:
+        self.pool = self.kernel.lib.yf_pool_new(self.threads)
+        if not self.pool:
+            raise MemoryError("native FDTD thread pool")
+        self.pool_pid = os.getpid()
+        self.threads = int(self.kernel.lib.yf_pool_threads(self.pool))
+
+    def pool_handle(self) -> int:
+        """The thread pool; a new one in a forked child (which inherits the handle but not the
+        threads; the parent's pool is left alone)."""
+        if self.pool_pid != os.getpid():
+            self._new_pool()
+        return self.pool
+
     def __del__(self):
         pool = getattr(self, "pool", None)
-        if pool:
+        if pool and getattr(self, "pool_pid", None) == os.getpid():
             try:
                 self.kernel.lib.yf_pool_free(pool)
             except Exception:  # interpreter shutdown
@@ -742,7 +754,7 @@ class _NativeRun:
         r.hcos, r.hsin, r.ecos, r.esin = _ptr(hc), _ptr(hs), _ptr(ec), _ptr(es)
         st = self.st
         err = st.kernel.lib.yf_run_block(
-            c_void_p(st.pool), ctypes.addressof(st.s), ctypes.addressof(r)
+            c_void_p(st.pool_handle()), ctypes.addressof(st.s), ctypes.addressof(r)
         )
         del keep
         if err:

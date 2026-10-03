@@ -1221,8 +1221,8 @@ py_test(
     deps = [":pnr"],
 )
 
-# Bottom-side parts through writeback (pad centres, B.* layers, copper keep-outs);
-# run it under KiCad's Python with PNR_KICAD_FOOTPRINTS set, by hand.
+# Bottom-side parts through writeback (pad centres, B.* layers, copper keep-outs),
+# with inline footprints: the KiCad lane runs it (it skips without pcbnew).
 py_test(
     name = "bottom_side_kicad_test",
     size = "small",
@@ -1231,7 +1231,6 @@ py_test(
     main = "tests/test_bottom_side_kicad.py",
     tags = [
         "kicad",
-        "manual",
         "requires-kicad",
     ],
     deps = [":pnr"],

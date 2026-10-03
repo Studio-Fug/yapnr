@@ -7,32 +7,72 @@ text of the part must sit on a ``B.*`` layer, and a copper keep-out tied to the 
 (``copper_keepout.rect_mm``, footprint frame) must cover the same pad it names on the
 top side.
 
-Needs KiCad's Python (``pcbnew``) and its stock footprint library
-(``PNR_KICAD_FOOTPRINTS``, the ``footprints`` folder); skipped otherwise.
+Needs KiCad's Python (``pcbnew``); skipped otherwise. The footprints are written
+inline (pads, courtyard, silkscreen, fabrication graphics and texts on ``F.*``, as a
+library draws them), so no footprint library is needed.
 """
 
 import importlib.util
 import json
-import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-LIBRARY = os.environ.get("PNR_KICAD_FOOTPRINTS", "")
-FOOTPRINTS = (
-    ("Package_TO_SOT_SMD", "SOT-23-5"),
-    ("Package_SO", "SOIC-8_3.9x4.9mm_P1.27mm"),
-)
+# Two stock-like packages with pads asymmetric about the x axis (a wrong mirror moves
+# a pad onto another's centre): name -> (courtyard half size, [(pad, x, y, w, h)]).
+FOOTPRINTS = {
+    "SOT-23-5": (
+        (2.05, 1.7),
+        [
+            ("1", -1.1375, -0.95, 1.325, 0.6),
+            ("2", -1.1375, 0.0, 1.325, 0.6),
+            ("3", -1.1375, 0.95, 1.325, 0.6),
+            ("4", 1.1375, 0.95, 1.325, 0.6),
+            ("5", 1.1375, -0.95, 1.325, 0.6),
+        ],
+    ),
+    "SOIC-8_3.9x4.9mm_P1.27mm": (
+        (3.7, 2.7),
+        [("%d" % (i + 1), -2.475, -1.905 + 1.27 * i, 1.95, 0.6) for i in range(4)]
+        + [("%d" % (i + 5), 2.475, 1.905 - 1.27 * i, 1.95, 0.6) for i in range(4)],
+    ),
+}
 ROTATIONS = (0, 90, 180, 270)
 HEIGHT = 60.0
 
 
-@unittest.skipUnless(
-    importlib.util.find_spec("pcbnew") is not None and bool(LIBRARY) and Path(LIBRARY).is_dir(),
-    "requires KiCad's pcbnew and PNR_KICAD_FOOTPRINTS",
-)
+def kicad_mod(name, courtyard, pads):
+    """A footprint file as a library draws it: everything on the front layers."""
+    cx, cy = courtyard
+    font = "(effects (font (size 1 1) (thickness 0.15)))"
+    stroke = "(stroke (width %s) (type solid))"
+    lines = [
+        '(footprint "%s"' % name,
+        "  (version 20240108)",
+        '  (generator "pnr_test")',
+        '  (layer "F.Cu")',
+        '  (property "Reference" "REF**" (at 0 %s 0) (layer "F.SilkS") %s)' % (-cy - 0.7, font),
+        '  (property "Value" "%s" (at 0 %s 0) (layer "F.Fab") %s)' % (name, cy + 0.7, font),
+        "  (attr smd)",
+        '  (fp_line (start %s %s) (end %s %s) %s (layer "F.SilkS"))'
+        % (-cx + 0.6, -cy + 0.15, cx - 0.6, -cy + 0.15, stroke % 0.12),
+        '  (fp_rect (start %s %s) (end %s %s) %s (fill none) (layer "F.CrtYd"))'
+        % (-cx, -cy, cx, cy, stroke % 0.05),
+        '  (fp_line (start %s %s) (end %s %s) %s (layer "F.Fab"))'
+        % (-cx + 0.8, -cy + 0.3, cx - 0.8, cy - 0.3, stroke % 0.1),
+        '  (fp_text user "${REFERENCE}" (at 0 0 0) (layer "F.Fab") %s)' % font,
+    ]
+    for number, x, y, w, h in pads:
+        lines.append(
+            '  (pad "%s" smd roundrect (at %s %s) (size %s %s) '
+            '(layers "F.Cu" "F.Paste" "F.Mask") (roundrect_rratio 0.25))' % (number, x, y, w, h)
+        )
+    return "\n".join(lines + [")", ""])
+
+
+@unittest.skipUnless(importlib.util.find_spec("pcbnew") is not None, "requires KiCad's pcbnew")
 class BottomSideWritebackTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -42,11 +82,15 @@ class BottomSideWritebackTest(unittest.TestCase):
 
         cls.tmp = tempfile.TemporaryDirectory()
         root = Path(cls.tmp.name)
+        library = root / "inline.pretty"
+        library.mkdir()
+        for name, (courtyard, pads) in FOOTPRINTS.items():
+            (library / (name + ".kicad_mod")).write_text(kicad_mod(name, courtyard, pads))
         board = pcbnew.BOARD()
         index = 0
-        for lib, name in FOOTPRINTS:
+        for name in FOOTPRINTS:
             for rot in ROTATIONS:
-                fp = pcbnew.FootprintLoad(str(Path(LIBRARY) / (lib + ".pretty")), name)
+                fp = pcbnew.FootprintLoad(str(library), name)
                 fp.SetReference("U%d" % index)
                 fp.Reference().SetLayer(pcbnew.F_Fab)
                 board.Add(fp)

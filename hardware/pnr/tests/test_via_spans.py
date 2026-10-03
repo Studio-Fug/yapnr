@@ -114,6 +114,28 @@ class GridSpans(unittest.TestCase):
             else:
                 self.assertEqual(a.via_spans, {})
 
+    def test_reused_escape_via_joins_its_span_only(self):
+        """A pad may reuse its net's existing escape via only to reach a layer of
+        that via's span: a blind F-In2 via leads to In2, never to B.Cu; a through
+        via (no span entry) leads to both."""
+        from pnr.route.detail.joint_escape import enumerate_access
+
+        reached = {}
+        for kind in ("blind", "through"):
+            g = grid(16, BB, pitch=0.25)
+            via = g.center_of(8, 8)
+            g.escape_vias.append(("N", via))
+            if kind == "blind":
+                g.escape_via_spans[("N", via)] = g.via_model.span(0, 1)
+            pad = g.center_of(6, 8)
+            options = enumerate_access(
+                g, "N", pad, 0, allow_via_in_pad=False, allow_dogbone=False, reach=4
+            )
+            reached[kind] = {o.escape.access.layer for o in options if o.access_key and not o.vias}
+        self.assertIn(1, reached["blind"])
+        self.assertNotIn(2, reached["blind"])
+        self.assertTrue({1, 2} <= reached["through"])
+
     def test_all_through_model_matches_legacy(self):
         """A via model whose only kind is through routes exactly like no model."""
         through_only = dict(allowed=[THROUGH], layers=list(SIX), gaps_mm=GAPS6, sizes={})

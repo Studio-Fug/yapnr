@@ -98,14 +98,30 @@ def _via_clear(grid, net, p, via_keepout):
 
 def _occupied(grid, segments, vias, via_keepout):
     cells = set()
+    pitch = grid.pitch
     for layer, a, b, width in segments:
         radius = (width + grid.track_width) / 2 + grid.clearance
+        limit = radius**2 - 1e-10
         i0, j0 = grid.cell_of(min(a[0], b[0]) - radius, min(a[1], b[1]) - radius)
         i1, j1 = grid.cell_of(max(a[0], b[0]) + radius, max(a[1], b[1]) + radius)
+        # _segment_distance_sq(a, b, p, p) with the same arithmetic, inlined: a
+        # point never straddles the segment, so it is the least of the squared
+        # distances to a, to b and to the segment.
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        den = dx * dx + dy * dy
         for j in range(j0, j1 + 1):
+            py = (j + 0.5) * pitch
             for i in range(i0, i1 + 1):
-                p = grid.center_of(i, j)
-                if _segment_distance_sq(a, b, p, p) < radius**2 - 1e-10:
+                px = (i + 0.5) * pitch
+                t = max(0.0, min(1.0, ((px - a[0]) * dx + (py - a[1]) * dy) / den)) if den else 0.0
+                if (
+                    min(
+                        (a[0] - px) ** 2 + (a[1] - py) ** 2,
+                        (b[0] - px) ** 2 + (b[1] - py) ** 2,
+                        (px - a[0] - t * dx) ** 2 + (py - a[1] - t * dy) ** 2,
+                    )
+                    < limit
+                ):
                     cells.add((layer, i, j))
     for p in vias:
         i, j = grid.cell_of(*p)

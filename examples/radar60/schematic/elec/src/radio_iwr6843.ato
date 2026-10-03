@@ -1,0 +1,387 @@
+#pragma experiment("TRAITS")
+#pragma experiment("FOR_LOOP")
+# radar60 radio: IWR6843AQGABLR (FCBGA-161 ABL0161B) with its supplies, decoupling, crystal, straps.
+# Ball map: tools/data/abl0161_ballmap.json (TI SWRS219F Figures 6-2..6-5, 6.2, Table 6-1).
+# 3-TX mode: VIN_13RF1 (G5/H5/J5), VIN_13RF2 (C2/D2) and VOUT_PA (A2/B2) on 1.0 V (1-V LDO bypass,
+# PA LDO disabled; SWRS219F Table 7-1 note 1, 6.2.2). Decoupling per TI IWR6843ISK Rev D
+# (SWRR164, sheet 5 "SUPPLY_DECOUPLING_CAPS"); VDDIN gets one 220 nF per ball [D].
+# VBGAP 47 nF: errata ANA#19 (SWRZ087D). Crystal: Kyocera CX3225SA40000D0PTWCC, CL 8 pF, with the
+# 4.7 pF load capacitors TI uses with the same crystal on the ISK Rev D (C32/C33); SWRS219F eq. 1
+# then implies about 5.6 pF of pin and board parasitics; check the 40 MHz offset at bring-up.
+# SOP straps (SWRS219F 6.3): production SOP[2:0] = 001 (SOP0 pull-up, SOP1/SOP2 pull-down);
+# pogo pads take SOP2 or SOP1 high for flashing (101) or debug (011).
+# Not routed off-board: SYNC_IN (P4, pulled down) and OSC_CLKOUT (A14): 47 CFR 15.255(h).
+# VPP (L13) unconnected (non-secure part). GPADC1..6, DMM/trace balls unused.
+
+import has_net_name_suggestion
+
+import has_designator
+
+from "parts/Radar60_IWR6843AQGABLR/Radar60_IWR6843AQGABLR.ato" import Radar60_IWR6843AQGABLR
+from "parts/Radar60_CX3225SA40000D0PTWCC/Radar60_CX3225SA40000D0PTWCC.ato" import Radar60_CX3225SA40000D0PTWCC
+from "parts/Radar60_TPS22917DBVR_DNP/Radar60_TPS22917DBVR_DNP.ato" import Radar60_TPS22917DBVR_DNP
+from "parts/Radar60_2N7002/Radar60_2N7002.ato" import Radar60_2N7002
+from "parts/Radar60_LED_Green_0603/Radar60_LED_Green_0603.ato" import Radar60_LED_Green_0603
+from "parts/Radar60_C_220n_0402/Radar60_C_220n_0402.ato" import Radar60_C_220n_0402
+from "parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato" import Radar60_C_100n_0402
+from "parts/Radar60_C_1u_0402/Radar60_C_1u_0402.ato" import Radar60_C_1u_0402
+from "parts/Radar60_C_2u2_0402/Radar60_C_2u2_0402.ato" import Radar60_C_2u2_0402
+from "parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato" import Radar60_C_10u_0603
+from "parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato" import Radar60_C_22u_0805
+from "parts/Radar60_C_10n_0402/Radar60_C_10n_0402.ato" import Radar60_C_10n_0402
+from "parts/Radar60_C_47n_0603/Radar60_C_47n_0603.ato" import Radar60_C_47n_0603
+from "parts/Radar60_C_4p7_0402/Radar60_C_4p7_0402.ato" import Radar60_C_4p7_0402
+from "parts/Radar60_R_0_0402/Radar60_R_0_0402.ato" import Radar60_R_0_0402
+from "parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato" import Radar60_R_10k_0402
+from "parts/Radar60_R_10k_0402_DNP/Radar60_R_10k_0402_DNP.ato" import Radar60_R_10k_0402_DNP
+from "parts/Radar60_R_100k_0402/Radar60_R_100k_0402.ato" import Radar60_R_100k_0402
+from "parts/Radar60_R_1k_0402/Radar60_R_1k_0402.ato" import Radar60_R_1k_0402
+
+
+module Radio:
+    """IWR6843AQGABLR with decoupling, 40 MHz crystal, SOP straps, pull-ups and the status LED."""
+
+    signal gnd
+    signal v3v3
+    signal v1v2
+    signal v1v8
+    signal v1v0_rf1
+    signal v1v0_rf2
+    signal v3v3_io
+    signal v1v0_pa
+    signal nreset
+    signal warm_reset
+    signal nerror_out
+    signal nerror_in
+    signal sop0
+    signal sop1
+    signal sop2
+    signal uart_tx
+    signal uart_rx
+    signal can_tx_h14
+    signal can_rx_f14
+    signal spia_miso
+    signal spia_mosi
+    signal spia_clk
+    signal spia_cs_n
+    signal host_intr
+    signal i2c_scl
+    signal i2c_sda
+    signal qspi_clk
+    signal qspi_cs_n
+    signal qspi_d0
+    signal qspi_d1
+    signal qspi_d2
+    signal qspi_d3
+    signal lvds_tx0_p
+    signal lvds_tx0_n
+    signal lvds_tx1_p
+    signal lvds_tx1_n
+    signal lvds_clk_p
+    signal lvds_clk_n
+    signal lvds_frclk_p
+    signal lvds_frclk_n
+    signal tck
+    signal tms
+    signal tdi
+    signal frame_start
+    signal tx1
+    signal tx2
+    signal tx3
+    signal rx1
+    signal rx2
+    signal rx3
+    signal rx4
+
+    u1 = new Radar60_IWR6843AQGABLR
+
+    # --- supplies ---
+    u1.VSS ~ gnd
+    u1.VSSA ~ gnd
+    u1.VDDIN ~ v1v2
+    u1.VIN_SRAM ~ v1v2
+    u1.VNWA ~ v1v2
+    u1.VIOIN ~ v3v3_io
+    u1.VIOIN_18 ~ v1v8
+    u1.VIOIN_18DIFF ~ v1v8
+    u1.VIN_18CLK ~ v1v8
+    u1.VIN_18VCO ~ v1v8
+    u1.VIN_18BB ~ v1v8
+    u1.VIN_13RF1 ~ v1v0_rf1
+    u1.VIN_13RF2 ~ v1v0_rf2
+    u1.VOUT_PA ~ v1v0_pa
+
+    # VOUT_PA fed from the RF2 branch through 0 Ohm (TI ISK Rev D R1)
+    r_pa = new Radar60_R_0_0402
+    r_pa.p1 ~ v1v0_rf2
+    r_pa.p2 ~ v1v0_pa
+
+    # VIOIN: 0 Ohm bypass fitted; TPS22917 load-switch option DNP (review O13, ISK Rev D U9)
+    r_vio_bypass = new Radar60_R_0_0402
+    r_vio_bypass.p1 ~ v3v3
+    r_vio_bypass.p2 ~ v3v3_io
+    u6 = new Radar60_TPS22917DBVR_DNP
+    u6.VIN ~ v3v3
+    u6.VOUT ~ v3v3_io
+    u6.GND ~ gnd
+    signal vio_ls_on
+    u6.ON ~ vio_ls_on
+    r_vio_ls_on = new Radar60_R_10k_0402_DNP
+    r_vio_ls_on.p1 ~ v3v3
+    r_vio_ls_on.p2 ~ vio_ls_on
+
+    # --- decoupling (ISK Rev D sheet 5) ---
+    # BB supply (VIN_18BB F5/K5): 2 x 220 nF + 10 uF
+    c_bb = new Radar60_C_220n_0402[2]
+    for c in c_bb:
+        c.p1 ~ u1.VIN_18BB
+        c.p2 ~ gnd
+    c_bb_bulk = new Radar60_C_10u_0603
+    c_bb_bulk.p1 ~ u1.VIN_18BB
+    c_bb_bulk.p2 ~ gnd
+    # DIFF (D15), 1P8V IO (R9), VCO LDO (B12): 220 nF each
+    c_diff = new Radar60_C_220n_0402
+    c_diff.p1 ~ u1.VIOIN_18DIFF
+    c_diff.p2 ~ gnd
+    c_io18 = new Radar60_C_220n_0402
+    c_io18.p1 ~ u1.VIOIN_18
+    c_io18.p2 ~ gnd
+    c_vco = new Radar60_C_220n_0402
+    c_vco.p1 ~ u1.VIN_18VCO
+    c_vco.p2 ~ gnd
+    # CLK (B11): 220 nF + 10 uF
+    c_clk = new Radar60_C_220n_0402
+    c_clk.p1 ~ u1.VIN_18CLK
+    c_clk.p2 ~ gnd
+    c_clk_bulk = new Radar60_C_10u_0603
+    c_clk_bulk.p1 ~ u1.VIN_18CLK
+    c_clk_bulk.p2 ~ gnd
+    # VBGAP (B10): 47 nF (errata ANA#19)
+    c_vbgap = new Radar60_C_47n_0603
+    c_vbgap.p1 ~ u1.VBGAP
+    c_vbgap.p2 ~ gnd
+    # internal LDO outputs: 1 uF each (APLL A10, SYNTH B13)
+    c_apll = new Radar60_C_1u_0402
+    c_apll.p1 ~ u1.VOUT_14APLL
+    c_apll.p2 ~ gnd
+    c_synth = new Radar60_C_1u_0402
+    c_synth.p1 ~ u1.VOUT_14SYNTH
+    c_synth.p2 ~ gnd
+    # VOUT_PA (A2/B2), RF1 (G5/H5/J5), RF2 (C2/D2): 220 nF + 10 uF + 22 uF each
+    c_pa = new Radar60_C_220n_0402
+    c_pa.p1 ~ u1.VOUT_PA
+    c_pa.p2 ~ gnd
+    c_pa_10u = new Radar60_C_10u_0603
+    c_pa_10u.p1 ~ u1.VOUT_PA
+    c_pa_10u.p2 ~ gnd
+    c_pa_22u = new Radar60_C_22u_0805
+    c_pa_22u.p1 ~ u1.VOUT_PA
+    c_pa_22u.p2 ~ gnd
+    c_rf1 = new Radar60_C_220n_0402
+    c_rf1.p1 ~ u1.VIN_13RF1
+    c_rf1.p2 ~ gnd
+    c_rf1_10u = new Radar60_C_10u_0603
+    c_rf1_10u.p1 ~ u1.VIN_13RF1
+    c_rf1_10u.p2 ~ gnd
+    c_rf1_22u = new Radar60_C_22u_0805
+    c_rf1_22u.p1 ~ u1.VIN_13RF1
+    c_rf1_22u.p2 ~ gnd
+    c_rf2 = new Radar60_C_220n_0402
+    c_rf2.p1 ~ u1.VIN_13RF2
+    c_rf2.p2 ~ gnd
+    c_rf2_10u = new Radar60_C_10u_0603
+    c_rf2_10u.p1 ~ u1.VIN_13RF2
+    c_rf2_10u.p2 ~ gnd
+    c_rf2_22u = new Radar60_C_22u_0805
+    c_rf2_22u.p1 ~ u1.VIN_13RF2
+    c_rf2_22u.p2 ~ gnd
+    # 3.3 V IO (R10/F15): 10 uF + 3 x 220 nF + 2.2 uF
+    c_vio_10u = new Radar60_C_10u_0603
+    c_vio_10u.p1 ~ u1.VIOIN
+    c_vio_10u.p2 ~ gnd
+    c_vio = new Radar60_C_220n_0402[3]
+    for c in c_vio:
+        c.p1 ~ u1.VIOIN
+        c.p2 ~ gnd
+    c_vio_2u2 = new Radar60_C_2u2_0402
+    c_vio_2u2.p1 ~ u1.VIOIN
+    c_vio_2u2.p2 ~ gnd
+    # VNWA (P14), SRAM (G15): 100 nF each
+    c_vnwa = new Radar60_C_100n_0402
+    c_vnwa.p1 ~ u1.VNWA
+    c_vnwa.p2 ~ gnd
+    c_sram = new Radar60_C_100n_0402
+    c_sram.p1 ~ u1.VIN_SRAM
+    c_sram.p2 ~ gnd
+    # digital 1.2 V (VDDIN H15/N11/P15/R6): 4 x 220 nF + 2.2 uF + 10 nF
+    c_dig = new Radar60_C_220n_0402[4]
+    for c in c_dig:
+        c.p1 ~ u1.VDDIN
+        c.p2 ~ gnd
+    c_dig_2u2 = new Radar60_C_2u2_0402
+    c_dig_2u2.p1 ~ u1.VDDIN
+    c_dig_2u2.p2 ~ gnd
+    c_dig_10n = new Radar60_C_10n_0402
+    c_dig_10n.p1 ~ u1.VDDIN
+    c_dig_10n.p2 ~ gnd
+
+    # --- 40 MHz crystal ---
+    signal xtal_p
+    signal xtal_n
+    u1.CLKP ~ xtal_p
+    u1.CLKM ~ xtal_n
+    y1 = new Radar60_CX3225SA40000D0PTWCC
+    y1.X1 ~ u1.CLKP
+    y1.X2 ~ u1.CLKM
+    y1.GND ~ gnd
+    c_xp = new Radar60_C_4p7_0402
+    c_xp.p1 ~ u1.CLKP
+    c_xp.p2 ~ gnd
+    c_xm = new Radar60_C_4p7_0402
+    c_xm.p1 ~ u1.CLKM
+    c_xm.p2 ~ gnd
+
+    # --- reset, error and straps ---
+    u1.NRESET ~ nreset
+    u1.WARM_RESET ~ warm_reset
+    r_warm_pu = new Radar60_R_10k_0402
+    r_warm_pu.p1 ~ v3v3_io
+    r_warm_pu.p2 ~ warm_reset
+    u1.NERROR_OUT ~ nerror_out
+    r_nerr_out_pu = new Radar60_R_10k_0402
+    r_nerr_out_pu.p1 ~ v3v3_io
+    r_nerr_out_pu.p2 ~ nerror_out
+    u1.NERROR_IN ~ nerror_in
+    r_nerr_in_pu = new Radar60_R_10k_0402
+    r_nerr_in_pu.p1 ~ v3v3_io
+    r_nerr_in_pu.p2 ~ nerror_in
+
+    u1.TDO ~ sop0
+    u1.SYNC_OUT ~ sop1
+    u1.PMIC_CLKOUT ~ sop2
+    r_sop0_pu = new Radar60_R_10k_0402
+    r_sop0_pu.p1 ~ v3v3_io
+    r_sop0_pu.p2 ~ sop0
+    r_sop1_pd = new Radar60_R_10k_0402
+    r_sop1_pd.p1 ~ sop1
+    r_sop1_pd.p2 ~ gnd
+    r_sop2_pd = new Radar60_R_10k_0402
+    r_sop2_pd.p1 ~ sop2
+    r_sop2_pd.p2 ~ gnd
+
+    signal sync_in
+    u1.SYNC_IN ~ sync_in
+    r_sync_in_pd = new Radar60_R_100k_0402
+    r_sync_in_pd.p1 ~ sync_in
+    r_sync_in_pd.p2 ~ gnd
+
+    # --- digital interfaces ---
+    u1.RS232_TX ~ uart_tx
+    u1.RS232_RX ~ uart_rx
+    r_uart_rx_pu = new Radar60_R_100k_0402
+    r_uart_rx_pu.p1 ~ v3v3_io
+    r_uart_rx_pu.p2 ~ uart_rx
+    u1.SPIB_CS_N ~ can_tx_h14
+    u1.SPIB_CLK ~ can_rx_f14
+    u1.SPIA_MISO ~ spia_miso
+    u1.SPIA_MOSI ~ spia_mosi
+    u1.SPIA_CLK ~ spia_clk
+    u1.SPIA_CS_N ~ spia_cs_n
+    r_spia_cs_pu = new Radar60_R_100k_0402
+    r_spia_cs_pu.p1 ~ v3v3_io
+    r_spia_cs_pu.p2 ~ spia_cs_n
+    u1.SPI_HOST_INTR ~ host_intr
+    u1.SPIB_MISO ~ i2c_scl
+    u1.SPIB_MOSI ~ i2c_sda
+    u1.QSPI_CLK ~ qspi_clk
+    u1.QSPI_CS_N ~ qspi_cs_n
+    u1.QSPI_0 ~ qspi_d0
+    u1.QSPI_1 ~ qspi_d1
+    u1.QSPI_2 ~ qspi_d2
+    u1.QSPI_3 ~ qspi_d3
+    u1.LVDS_TXP_0 ~ lvds_tx0_p
+    u1.LVDS_TXM_0 ~ lvds_tx0_n
+    u1.LVDS_TXP_1 ~ lvds_tx1_p
+    u1.LVDS_TXM_1 ~ lvds_tx1_n
+    u1.LVDS_CLKP ~ lvds_clk_p
+    u1.LVDS_CLKM ~ lvds_clk_n
+    u1.LVDS_FRCLKP ~ lvds_frclk_p
+    u1.LVDS_FRCLKM ~ lvds_frclk_n
+    u1.TCK ~ tck
+    u1.TMS ~ tms
+    u1.TDI ~ tdi
+    u1.MCU_CLKOUT ~ frame_start
+
+    # --- RF ports (copper owned by the RF macro RFM1) ---
+    u1.TX1 ~ tx1
+    u1.TX2 ~ tx2
+    u1.TX3 ~ tx3
+    u1.RX1 ~ rx1
+    u1.RX2 ~ rx2
+    u1.RX3 ~ rx3
+    u1.RX4 ~ rx4
+
+    # --- status LED: lit while NERROR_OUT is high (powered, no ESM error) ---
+    q_led = new Radar60_2N7002
+    d_led = new Radar60_LED_Green_0603
+    r_led = new Radar60_R_1k_0402
+    q_led.G ~ nerror_out
+    q_led.S ~ gnd
+    signal led_k
+    signal led_a
+    q_led.D ~ led_k
+    d_led.K ~ led_k
+    d_led.A ~ led_a
+    r_led.p1 ~ led_a
+    r_led.p2 ~ v3v3_io
+
+    # net names (net classes and PnR rules refer to these)
+    trait v1v0_pa has_net_name_suggestion<name="1V0_PA", level="SUGGESTED">
+    trait xtal_p has_net_name_suggestion<name="XTAL_P", level="SUGGESTED">
+    trait xtal_n has_net_name_suggestion<name="XTAL_N", level="SUGGESTED">
+    trait tx1 has_net_name_suggestion<name="RF_TX1", level="SUGGESTED">
+    trait tx2 has_net_name_suggestion<name="RF_TX2", level="SUGGESTED">
+    trait tx3 has_net_name_suggestion<name="RF_TX3", level="SUGGESTED">
+    trait rx1 has_net_name_suggestion<name="RF_RX1", level="SUGGESTED">
+    trait rx2 has_net_name_suggestion<name="RF_RX2", level="SUGGESTED">
+    trait rx3 has_net_name_suggestion<name="RF_RX3", level="SUGGESTED">
+    trait rx4 has_net_name_suggestion<name="RF_RX4", level="SUGGESTED">
+    trait lvds_tx0_p has_net_name_suggestion<name="LVDS_TX0_P", level="SUGGESTED">
+    trait lvds_tx0_n has_net_name_suggestion<name="LVDS_TX0_N", level="SUGGESTED">
+    trait lvds_tx1_p has_net_name_suggestion<name="LVDS_TX1_P", level="SUGGESTED">
+    trait lvds_tx1_n has_net_name_suggestion<name="LVDS_TX1_N", level="SUGGESTED">
+    trait lvds_clk_p has_net_name_suggestion<name="LVDS_CLK_P", level="SUGGESTED">
+    trait lvds_clk_n has_net_name_suggestion<name="LVDS_CLK_N", level="SUGGESTED">
+    trait lvds_frclk_p has_net_name_suggestion<name="LVDS_FRCLK_P", level="SUGGESTED">
+    trait lvds_frclk_n has_net_name_suggestion<name="LVDS_FRCLK_N", level="SUGGESTED">
+    trait qspi_clk has_net_name_suggestion<name="QSPI_CLK", level="SUGGESTED">
+    trait qspi_cs_n has_net_name_suggestion<name="QSPI_CS_N", level="SUGGESTED">
+    trait qspi_d0 has_net_name_suggestion<name="QSPI_D0", level="SUGGESTED">
+    trait qspi_d1 has_net_name_suggestion<name="QSPI_D1", level="SUGGESTED">
+    trait qspi_d2 has_net_name_suggestion<name="QSPI_D2", level="SUGGESTED">
+    trait qspi_d3 has_net_name_suggestion<name="QSPI_D3", level="SUGGESTED">
+    trait sop0 has_net_name_suggestion<name="SOP0_TDO", level="SUGGESTED">
+    trait sop1 has_net_name_suggestion<name="SOP1", level="SUGGESTED">
+    trait sop2 has_net_name_suggestion<name="SOP2_PMIC_CLKOUT", level="SUGGESTED">
+    trait nerror_out has_net_name_suggestion<name="NERROR_OUT", level="SUGGESTED">
+    trait nerror_in has_net_name_suggestion<name="NERROR_IN", level="SUGGESTED">
+    trait warm_reset has_net_name_suggestion<name="WARM_RESET", level="SUGGESTED">
+    trait frame_start has_net_name_suggestion<name="FRAME_START", level="SUGGESTED">
+    trait spia_clk has_net_name_suggestion<name="SPIA_CLK", level="SUGGESTED">
+    trait spia_cs_n has_net_name_suggestion<name="SPIA_CS_N", level="SUGGESTED">
+    trait spia_miso has_net_name_suggestion<name="SPIA_MISO", level="SUGGESTED">
+    trait spia_mosi has_net_name_suggestion<name="SPIA_MOSI", level="SUGGESTED">
+    trait host_intr has_net_name_suggestion<name="SPI_HOST_INTR", level="SUGGESTED">
+    trait can_tx_h14 has_net_name_suggestion<name="CAN_TX", level="SUGGESTED">
+    trait can_rx_f14 has_net_name_suggestion<name="CAN_RX", level="SUGGESTED">
+    trait tck has_net_name_suggestion<name="JTAG_TCK", level="SUGGESTED">
+    trait tms has_net_name_suggestion<name="JTAG_TMS", level="SUGGESTED">
+    trait tdi has_net_name_suggestion<name="JTAG_TDI", level="SUGGESTED">
+    trait sync_in has_net_name_suggestion<name="SYNC_IN", level="SUGGESTED">
+
+    # fixed designators (board-design.md 2.1)
+    trait u1 has_designator<designator="U1">
+    trait y1 has_designator<designator="Y1">
+    trait u6 has_designator<designator="U6">
+    trait q_led has_designator<designator="Q1">
+    trait d_led has_designator<designator="D4">

@@ -1,0 +1,118 @@
+#pragma experiment("TRAITS")
+#pragma experiment("FOR_LOOP")
+# radar60 power input: J1 5 V -> SMF5.0A TVS -> TPS259474A eFuse -> 5V_SYS (board-design.md 3.1, 3.3).
+# Values are derived [D] from TI SLVSFC9C (TPS25947xx), section 7.3, read 2026-10-03:
+#   UVLO  (EN/UVLO, eq. 1): 1.20 V x (24k + 10k) / 10k = 4.08 V rising (1.183-1.223 V -> 4.02-4.16 V)
+#   OVLO  (eq. 2):          1.20 V x (39k + 11k) / 11k = 5.45 V rising (5.38-5.56 V); LP87524 VIN
+#                           is 5.5 V recommended / 6 V absolute (SNVSAW2B 6.1, 6.3), review 3.3
+#   PGTH  (from OUT):       1.20 V x 3.4 = 4.08 V: PG high once 5V_SYS is up
+#   (divider values chosen from LCSC-verified 1 % parts; 1.65k for ILM has no verified LCSC number)
+#   ILM   (eq. 5):          3334 / 1650 = 2.02 A circuit breaker (data sheet: 1.80-2.20 A at 1.65k)
+#   ITIMER (eq. 6):         1.51 V x 1 nF / 1.8 uA = 0.84 ms over-current blanking (fast trip 2 x ILIM)
+#   dVdt  (eq. 4):          2000 / 470 pF = 4.3 V/ms; about 60 uF on 5V_SYS -> about 0.26 A inrush
+
+import has_net_name_suggestion
+
+import has_designator
+
+from "parts/Radar60_SMF5V0A/Radar60_SMF5V0A.ato" import Radar60_SMF5V0A
+from "parts/Radar60_TPS259474ARPWR/Radar60_TPS259474ARPWR.ato" import Radar60_TPS259474ARPWR
+from "parts/Radar60_C_10u_0805/Radar60_C_10u_0805.ato" import Radar60_C_10u_0805
+from "parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato" import Radar60_C_22u_0805
+from "parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato" import Radar60_C_100n_0402
+from "parts/Radar60_C_1n_0402/Radar60_C_1n_0402.ato" import Radar60_C_1n_0402
+from "parts/Radar60_C_470p_0402/Radar60_C_470p_0402.ato" import Radar60_C_470p_0402
+from "parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato" import Radar60_R_10k_0402
+from "parts/Radar60_R_24k_0402/Radar60_R_24k_0402.ato" import Radar60_R_24k_0402
+from "parts/Radar60_R_39k_0402/Radar60_R_39k_0402.ato" import Radar60_R_39k_0402
+from "parts/Radar60_R_11k_0402/Radar60_R_11k_0402.ato" import Radar60_R_11k_0402
+from "parts/Radar60_R_1k65_0402/Radar60_R_1k65_0402.ato" import Radar60_R_1k65_0402
+
+
+module PowerIn:
+    """5 V input protection: TVS, bulk capacitance and the TPS259474A eFuse with PG."""
+
+    signal vin
+    signal v5_sys
+    signal gnd
+    signal pg
+
+    tvs = new Radar60_SMF5V0A
+    tvs.K ~ vin
+    tvs.A ~ gnd
+
+    c_in_bulk = new Radar60_C_10u_0805
+    c_in_bulk.p1 ~ vin
+    c_in_bulk.p2 ~ gnd
+    c_in_hf = new Radar60_C_100n_0402
+    c_in_hf.p1 ~ vin
+    c_in_hf.p2 ~ gnd
+
+    efuse = new Radar60_TPS259474ARPWR
+    efuse.IN ~ vin
+    efuse.OUT ~ v5_sys
+    efuse.GND ~ gnd
+
+    # EN/UVLO divider from the input
+    signal en_uvlo
+    r_uv_top = new Radar60_R_24k_0402
+    r_uv_bot = new Radar60_R_10k_0402
+    vin ~ r_uv_top.p1
+    r_uv_top.p2 ~ en_uvlo
+    en_uvlo ~ r_uv_bot.p1
+    r_uv_bot.p2 ~ gnd
+    efuse.EN_UVLO ~ en_uvlo
+
+    # OVLO divider from the input
+    signal ovlo
+    r_ov_top = new Radar60_R_39k_0402
+    r_ov_bot = new Radar60_R_11k_0402
+    vin ~ r_ov_top.p1
+    r_ov_top.p2 ~ ovlo
+    ovlo ~ r_ov_bot.p1
+    r_ov_bot.p2 ~ gnd
+    efuse.OVLO ~ ovlo
+
+    # PG threshold from the output
+    signal pgth
+    r_pg_top = new Radar60_R_24k_0402
+    r_pg_bot = new Radar60_R_10k_0402
+    v5_sys ~ r_pg_top.p1
+    r_pg_top.p2 ~ pgth
+    pgth ~ r_pg_bot.p1
+    r_pg_bot.p2 ~ gnd
+    efuse.PGTH ~ pgth
+
+    # PG (open drain) pulled to 5V_SYS; it drives the PMIC NRST (LP87524 NRST: 1.65 V to VANA)
+    r_pg_pu = new Radar60_R_10k_0402
+    r_pg_pu.p1 ~ v5_sys
+    r_pg_pu.p2 ~ pg
+    efuse.PG ~ pg
+
+    r_ilm = new Radar60_R_1k65_0402
+    r_ilm.p1 ~ efuse.ILM
+    r_ilm.p2 ~ gnd
+    c_itimer = new Radar60_C_1n_0402
+    c_itimer.p1 ~ efuse.ITIMER
+    c_itimer.p2 ~ gnd
+    c_dvdt = new Radar60_C_470p_0402
+    c_dvdt.p1 ~ efuse.DVDT
+    c_dvdt.p2 ~ gnd
+
+    # 5V_SYS bulk: LP87524 wants >= 22 uF common on its input rail besides 10 uF per phase (SNVSAW2B 8.2.1.2)
+    c_sys_bulk = new Radar60_C_22u_0805
+    c_sys_bulk.p1 ~ v5_sys
+    c_sys_bulk.p2 ~ gnd
+    c_sys_hf = new Radar60_C_100n_0402
+    c_sys_hf.p1 ~ v5_sys
+    c_sys_hf.p2 ~ gnd
+
+    # net names (net classes and PnR rules refer to these)
+    trait pg has_net_name_suggestion<name="EFUSE_PG", level="SUGGESTED">
+    trait en_uvlo has_net_name_suggestion<name="EFUSE_EN_UVLO", level="SUGGESTED">
+    trait ovlo has_net_name_suggestion<name="EFUSE_OVLO", level="SUGGESTED">
+    trait pgth has_net_name_suggestion<name="EFUSE_PGTH", level="SUGGESTED">
+
+    # fixed designators (board-design.md 2.1)
+    trait efuse has_designator<designator="U5">
+    trait tvs has_designator<designator="D3">

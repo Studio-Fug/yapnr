@@ -1,0 +1,7 @@
+requires-atopile: '>=0.15.0,<0.16.0'
+
+builds:
+  rev-a:
+    entry: elec/src/radar60.ato:Radar60
+  rev-a-prod:
+    entry: elec/src/radar60_prod.ato:Radar60Prod

@@ -1,0 +1,23 @@
+#pragma experiment("TRAITS")
+# radar60 product UART on J1 (also the ROM flashing port with SOP = 101): RS232_TX N5, RS232_RX N4
+# (SWRS219F Table 6-1), protected by a TPD2E2U06 at the connector.
+
+import has_designator
+
+from "parts/Radar60_TPD2E2U06DCKR/Radar60_TPD2E2U06DCKR.ato" import Radar60_TPD2E2U06DCKR
+
+
+module Uart:
+    """UART ESD protection at J1."""
+
+    signal tx
+    signal rx
+    signal gnd
+
+    esd = new Radar60_TPD2E2U06DCKR
+    esd.IO1 ~ tx
+    esd.IO2 ~ rx
+    esd.GND ~ gnd
+
+    # fixed designators (board-design.md 2.1)
+    trait esd has_designator<designator="D2">

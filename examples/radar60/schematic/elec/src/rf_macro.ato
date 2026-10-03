@@ -1,0 +1,29 @@
+# radar60 RF macro RFM1: the yapnr-generated antenna and feed copper (examples/radar60/rf). In this
+# schematic it is a placeholder footprint with one port pad per RF chain and a ground pad, so the
+# U1 RF balls are not single-pad nets; the PnR flow replaces it with the pinned macro export
+# (@pnr-rf-macro in radar60.ato). Board-only: no BOM line.
+
+from "parts/Radar60_RFM1_Placeholder/Radar60_RFM1_Placeholder.ato" import Radar60_RFM1_Placeholder
+
+
+module RfMacro:
+    """Placeholder for RFM1 (7 RF ports + ground)."""
+
+    signal gnd
+    signal tx1
+    signal tx2
+    signal tx3
+    signal rx1
+    signal rx2
+    signal rx3
+    signal rx4
+
+    rfm1 = new Radar60_RFM1_Placeholder
+    rfm1.TX1 ~ tx1
+    rfm1.TX2 ~ tx2
+    rfm1.TX3 ~ tx3
+    rfm1.RX1 ~ rx1
+    rfm1.RX2 ~ rx2
+    rfm1.RX3 ~ rx3
+    rfm1.RX4 ~ rx4
+    rfm1.GND ~ gnd

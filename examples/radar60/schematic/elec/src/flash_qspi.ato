@@ -1,0 +1,55 @@
+#pragma experiment("TRAITS")
+# radar60 boot flash: Macronix MX25V1635FZNQ (TI-tested for xWR QSPI boot, TI SPRACH9) on the
+# IWR6843 QSPI port: R12 CLK, P11 CS_N, R13/N12/R14/P12 D0..D3 (SWRS219F Table 6-1).
+# 22 Ohm series resistor at the clock source (board-design.md 3.4, @pnr-si); CS_N pulled up.
+
+import has_net_name_suggestion
+
+import has_designator
+
+from "parts/Radar60_MX25V1635FZNQ/Radar60_MX25V1635FZNQ.ato" import Radar60_MX25V1635FZNQ
+from "parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato" import Radar60_C_100n_0402
+from "parts/Radar60_R_22_0402/Radar60_R_22_0402.ato" import Radar60_R_22_0402
+from "parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato" import Radar60_R_10k_0402
+
+
+module Flash:
+    """16 Mbit quad-SPI boot flash with a series-terminated clock."""
+
+    signal v3v3
+    signal gnd
+    signal clk_src
+    signal cs_n
+    signal d0
+    signal d1
+    signal d2
+    signal d3
+
+    u3 = new Radar60_MX25V1635FZNQ
+    u3.VCC ~ v3v3
+    u3.GND ~ gnd
+    u3.EP ~ gnd
+    u3.CS_N ~ cs_n
+    u3.SIO0 ~ d0
+    u3.SIO1 ~ d1
+    u3.SIO2 ~ d2
+    u3.SIO3 ~ d3
+
+    signal sclk
+    r_clk = new Radar60_R_22_0402
+    r_clk.p1 ~ clk_src
+    r_clk.p2 ~ sclk
+    u3.SCLK ~ sclk
+
+    r_cs_pu = new Radar60_R_10k_0402
+    r_cs_pu.p1 ~ v3v3
+    r_cs_pu.p2 ~ cs_n
+    c_vcc = new Radar60_C_100n_0402
+    c_vcc.p1 ~ v3v3
+    c_vcc.p2 ~ gnd
+
+    # net names (net classes and PnR rules refer to these)
+    trait sclk has_net_name_suggestion<name="QSPI_CLK_FLASH", level="SUGGESTED">
+
+    # fixed designators (board-design.md 2.1)
+    trait u3 has_designator<designator="U3">

@@ -1,0 +1,269 @@
+#pragma experiment("TRAITS")
+# radar60 Rev A, top level: 60 GHz phased-array FMCW radar on the TI IWR6843AQGABLR.
+# Plan: board-design.md sections 2-3 (Rev A, 2026-10-03). The RF copper (antennas, feeds, launches)
+# is the yapnr RF macro RFM1 (examples/radar60/rf); this source holds the electronics netlist and
+# the PnR intent. TI design files are not used; every part comes from tools/gen_parts.py.
+#
+# J1 (JST GH 8-pin; O18: two contacts each for 5 V and GND, GH contacts are rated 1 A):
+#   1, 2 = 5 V in; 3, 4 = GND; 5 = CANH; 6 = CANL; 7 = UART TX (radar out); 8 = UART RX (radar in)
+
+import has_net_name_suggestion
+
+import has_designator
+
+from "power_in.ato" import PowerIn
+from "pmic_lp87524j.ato" import Pmic
+from "radio_iwr6843.ato" import Radio
+from "flash_qspi.ato" import Flash
+from "can_fd.ato" import CanFd
+from "uart.ato" import Uart
+from "debug.ato" import Debug
+from "rf_macro.ato" import RfMacro
+from "mech.ato" import Mech
+from "parts/Radar60_JST_SM08B_GHS_TB/Radar60_JST_SM08B_GHS_TB.ato" import Radar60_JST_SM08B_GHS_TB
+from "parts/Radar60_TestPad_D1/Radar60_TestPad_D1.ato" import Radar60_TestPad_D1
+
+
+module Radar60:
+    """radar60 Rev A: IWR6843 radar with LP87524J LDO-bypass power tree, CAN-FD and UART on J1."""
+
+    # --- nets with fixed names (net classes and rules refer to these) ---
+    signal gnd
+    signal vin_5v
+    signal v5_sys
+    signal v3v3
+    signal v3v3_io
+    signal v1v2
+    signal v1v8
+    signal v1v0_rf1
+    signal v1v0_rf2
+    signal nreset
+    signal pgood
+    signal i2c_scl
+    signal i2c_sda
+    signal uart_tx
+    signal uart_rx
+    signal canh
+    signal canl
+    trait gnd has_net_name_suggestion<name="GND", level="EXPECTED">
+    trait vin_5v has_net_name_suggestion<name="VIN_5V", level="SUGGESTED">
+    trait v5_sys has_net_name_suggestion<name="5V_SYS", level="SUGGESTED">
+    trait v3v3 has_net_name_suggestion<name="3V3", level="SUGGESTED">
+    trait v3v3_io has_net_name_suggestion<name="3V3_RADIO_IO", level="SUGGESTED">
+    trait v1v2 has_net_name_suggestion<name="1V2", level="SUGGESTED">
+    trait v1v8 has_net_name_suggestion<name="1V8", level="SUGGESTED">
+    trait v1v0_rf1 has_net_name_suggestion<name="1V0_RF1", level="SUGGESTED">
+    trait v1v0_rf2 has_net_name_suggestion<name="1V0_RF2", level="SUGGESTED">
+    trait nreset has_net_name_suggestion<name="NRESET", level="SUGGESTED">
+    trait pgood has_net_name_suggestion<name="PMIC_PGOOD", level="SUGGESTED">
+    trait i2c_scl has_net_name_suggestion<name="I2C_SCL", level="SUGGESTED">
+    trait i2c_sda has_net_name_suggestion<name="I2C_SDA", level="SUGGESTED">
+    trait uart_tx has_net_name_suggestion<name="UART_TX", level="SUGGESTED">
+    trait uart_rx has_net_name_suggestion<name="UART_RX", level="SUGGESTED">
+    trait canh has_net_name_suggestion<name="CANH", level="SUGGESTED">
+    trait canl has_net_name_suggestion<name="CANL", level="SUGGESTED">
+
+    j1 = new Radar60_JST_SM08B_GHS_TB
+    j1.P1 ~ vin_5v
+    j1.P2 ~ vin_5v
+    j1.P3 ~ gnd
+    j1.P4 ~ gnd
+    j1.P5 ~ canh
+    j1.P6 ~ canl
+    j1.P7 ~ uart_tx
+    j1.P8 ~ uart_rx
+    j1.MOUNT ~ gnd
+
+    power_in = new PowerIn
+    power_in.vin ~ vin_5v
+    power_in.v5_sys ~ v5_sys
+    power_in.gnd ~ gnd
+
+    pmic = new Pmic
+    pmic.vin ~ v5_sys
+    pmic.gnd ~ gnd
+    pmic.nrst_in ~ power_in.pg
+    pmic.v3v3 ~ v3v3
+    pmic.v1v2 ~ v1v2
+    pmic.v1v8 ~ v1v8
+    pmic.v1v0_rf1 ~ v1v0_rf1
+    pmic.v1v0_rf2 ~ v1v0_rf2
+    pmic.scl ~ i2c_scl
+    pmic.sda ~ i2c_sda
+    pmic.pgood ~ pgood
+    pmic.nreset ~ nreset
+    pmic.vio ~ v3v3_io
+
+    radio = new Radio
+    radio.gnd ~ gnd
+    radio.v3v3 ~ v3v3
+    radio.v3v3_io ~ v3v3_io
+    radio.v1v2 ~ v1v2
+    radio.v1v8 ~ v1v8
+    radio.v1v0_rf1 ~ v1v0_rf1
+    radio.v1v0_rf2 ~ v1v0_rf2
+    radio.nreset ~ nreset
+    radio.i2c_scl ~ i2c_scl
+    radio.i2c_sda ~ i2c_sda
+    radio.uart_tx ~ uart_tx
+    radio.uart_rx ~ uart_rx
+    radio.sop2 ~ pmic.clk_ext
+    # flash, CAN VIO and every pull-up on a radio pin use the radio IO rail (IWR6843 IOs are not fail-safe)
+
+    flash = new Flash
+    flash.v3v3 ~ v3v3_io
+    flash.gnd ~ gnd
+    flash.clk_src ~ radio.qspi_clk
+    flash.cs_n ~ radio.qspi_cs_n
+    flash.d0 ~ radio.qspi_d0
+    flash.d1 ~ radio.qspi_d1
+    flash.d2 ~ radio.qspi_d2
+    flash.d3 ~ radio.qspi_d3
+
+    can = new CanFd
+    can.v5 ~ v5_sys
+    can.v3v3 ~ v3v3_io
+    can.gnd ~ gnd
+    can.tx_h14 ~ radio.can_tx_h14
+    can.rx_f14 ~ radio.can_rx_f14
+    can.tx_e14 ~ radio.spia_miso
+    can.rx_d13 ~ radio.spia_mosi
+    can.canh ~ canh
+    can.canl ~ canl
+
+    uart = new Uart
+    uart.tx ~ uart_tx
+    uart.rx ~ uart_rx
+    uart.gnd ~ gnd
+
+    debug = new Debug
+    debug.gnd ~ gnd
+    debug.v3v3_io ~ v3v3_io
+    debug.spia_clk ~ radio.spia_clk
+    debug.spia_cs_n ~ radio.spia_cs_n
+    debug.spia_mosi ~ radio.spia_mosi
+    debug.spia_miso ~ radio.spia_miso
+    debug.host_intr ~ radio.host_intr
+    debug.pgood ~ pgood
+    debug.i2c_sda ~ i2c_sda
+    debug.i2c_scl ~ i2c_scl
+    debug.uart_tx ~ uart_tx
+    debug.uart_rx ~ uart_rx
+    debug.nreset ~ nreset
+    debug.lvds_tx0_p ~ radio.lvds_tx0_p
+    debug.lvds_tx0_n ~ radio.lvds_tx0_n
+    debug.lvds_tx1_p ~ radio.lvds_tx1_p
+    debug.lvds_tx1_n ~ radio.lvds_tx1_n
+    debug.lvds_clk_p ~ radio.lvds_clk_p
+    debug.lvds_clk_n ~ radio.lvds_clk_n
+    debug.lvds_frclk_p ~ radio.lvds_frclk_p
+    debug.lvds_frclk_n ~ radio.lvds_frclk_n
+    debug.tck ~ radio.tck
+    debug.tms ~ radio.tms
+    debug.tdi ~ radio.tdi
+    debug.tdo ~ radio.sop0
+
+    rf_macro = new RfMacro
+    rf_macro.gnd ~ gnd
+    rf_macro.tx1 ~ radio.tx1
+    rf_macro.tx2 ~ radio.tx2
+    rf_macro.tx3 ~ radio.tx3
+    rf_macro.rx1 ~ radio.rx1
+    rf_macro.rx2 ~ radio.rx2
+    rf_macro.rx3 ~ radio.rx3
+    rf_macro.rx4 ~ radio.rx4
+
+    mech = new Mech
+
+    # --- test pads (rails, reset, straps, UART, timeline) ---
+    tp_5v = new Radar60_TestPad_D1
+    tp_5v.TP ~ v5_sys
+    tp_3v3 = new Radar60_TestPad_D1
+    tp_3v3.TP ~ v3v3_io
+    tp_1v8 = new Radar60_TestPad_D1
+    tp_1v8.TP ~ v1v8
+    tp_1v2 = new Radar60_TestPad_D1
+    tp_1v2.TP ~ v1v2
+    tp_1v0 = new Radar60_TestPad_D1
+    tp_1v0.TP ~ radio.v1v0_pa
+    tp_gnd_a = new Radar60_TestPad_D1
+    tp_gnd_a.TP ~ gnd
+    tp_gnd_b = new Radar60_TestPad_D1
+    tp_gnd_b.TP ~ gnd
+    tp_nreset = new Radar60_TestPad_D1
+    tp_nreset.TP ~ nreset
+    tp_pgood = new Radar60_TestPad_D1
+    tp_pgood.TP ~ pgood
+    tp_efuse_pg = new Radar60_TestPad_D1
+    tp_efuse_pg.TP ~ power_in.pg
+    tp_pmic_nint = new Radar60_TestPad_D1
+    tp_pmic_nint.TP ~ pmic.nint
+    tp_sop0 = new Radar60_TestPad_D1
+    tp_sop0.TP ~ radio.sop0
+    tp_sop1 = new Radar60_TestPad_D1
+    tp_sop1.TP ~ radio.sop1
+    tp_sop2 = new Radar60_TestPad_D1
+    tp_sop2.TP ~ radio.sop2
+    tp_uart_tx = new Radar60_TestPad_D1
+    tp_uart_tx.TP ~ uart_tx
+    tp_uart_rx = new Radar60_TestPad_D1
+    tp_uart_rx.TP ~ uart_rx
+    tp_frame = new Radar60_TestPad_D1
+    tp_frame.TP ~ radio.frame_start
+    tp_nerror = new Radar60_TestPad_D1
+    tp_nerror.TP ~ radio.nerror_out
+    tp_warm_reset = new Radar60_TestPad_D1
+    tp_warm_reset.TP ~ radio.warm_reset
+
+    # --- PnR intent (board-design.md 3.4). Every value is [D] from board-design.md 3.3 and is
+    # flagged for review. Targets are atopile instance addresses below this module, with pads.
+    # Trunk currents. The RF1 / RF2 / PA split of the 2.5 A 1.0 V peak is not published, so each
+    # branch carries the whole rail current (conservative). Buck switch-node peaks add half the
+    # ripple: dI = Vout (1 - Vout/5 V) / (0.47 uH x 4 MHz).
+    # @pnr-current {"target":"j1","pads":["1","2"],"scope":"net","rms_current_a":0.6,"peak_current_a":1.5}
+    # @pnr-current {"target":"power_in.efuse","pads":["6"],"scope":"net","rms_current_a":0.6,"peak_current_a":1.5}
+    # @pnr-current {"target":"pmic.u2","pads":["10"],"scope":"net","rms_current_a":0.1,"peak_current_a":0.5}
+    # @pnr-current {"target":"pmic.u2","pads":["12"],"scope":"net","rms_current_a":0.6,"peak_current_a":1.25}
+    # @pnr-current {"target":"pmic.u2","pads":["25"],"scope":"net","rms_current_a":1.0,"peak_current_a":2.8}
+    # @pnr-current {"target":"pmic.u2","pads":["23"],"scope":"net","rms_current_a":0.5,"peak_current_a":1.2}
+    # @pnr-current {"target":"pmic.l_b0","pads":["2"],"scope":"net","rms_current_a":0.1,"peak_current_a":0.2}
+    # @pnr-current {"target":"pmic.l_b1","pads":["2"],"scope":"net","rms_current_a":0.6,"peak_current_a":1.0}
+    # @pnr-current {"target":"pmic.fb_1v2","pads":["2"],"scope":"net","rms_current_a":0.6,"peak_current_a":1.0}
+    # @pnr-current {"target":"pmic.l_b3","pads":["2"],"scope":"net","rms_current_a":0.5,"peak_current_a":0.85}
+    # @pnr-current {"target":"pmic.fb_1v8","pads":["2"],"scope":"net","rms_current_a":0.5,"peak_current_a":0.85}
+    # @pnr-current {"target":"pmic.l_b2","pads":["2"],"scope":"net","rms_current_a":1.0,"peak_current_a":2.5}
+    # @pnr-current {"target":"pmic.r_sh","pads":["2"],"scope":"net","rms_current_a":1.0,"peak_current_a":2.5}
+    # @pnr-current {"target":"pmic.fb_rf1","pads":["2"],"scope":"net","rms_current_a":1.0,"peak_current_a":2.5}
+    # @pnr-current {"target":"pmic.fb_rf2_a","pads":["2"],"scope":"net","rms_current_a":1.0,"peak_current_a":2.5}
+    # @pnr-current {"target":"radio.r_pa","pads":["2"],"scope":"net","rms_current_a":1.0,"peak_current_a":2.5}
+    # The 2 mOhm shunt is read at the two Kelvin pads (5 mV at 2.5 A; O10).
+    # @pnr-kelvin {"shunt":"pmic.r_sh","positive_pad":"1","negative_pad":"2","sense_component":"pmic.tp_isns","sense_positive_pad":"1","sense_negative_pad":"2","avoid_shared_power_neck":true}
+    # QSPI at 80 MHz: 22 Ohm series at the clock source, 25 mm maximum, GND reference (proposed fields).
+    # @pnr-si {"name":"qspi","profile":"qspi_80mhz","driver":"radio.u1:R12","series":"flash.r_clk","receiver":"flash.u3:6","return":"flash.u3:4","members":["radio.u1:P11","radio.u1:R13","radio.u1:N12","radio.u1:R14","radio.u1:P12"],"max_length_mm":25}
+    # LVDS to J2: 100 Ohm differential, 0.1 mm intra-pair skew (diff_pair rule), outer layer next to J2 (R9).
+    # @pnr-pair {"name":"lvds_tx0","terminal_chain":[{"p":"radio.u1:J14","n":"radio.u1:J15"},{"p":"debug.j2:56","n":"debug.j2:58"}],"max_uncoupled_mm":1.0,"reference_layer":"In1.Cu"}
+    # @pnr-pair {"name":"lvds_tx1","terminal_chain":[{"p":"radio.u1:K14","n":"radio.u1:K15"},{"p":"debug.j2:50","n":"debug.j2:52"}],"max_uncoupled_mm":1.0,"reference_layer":"In1.Cu"}
+    # @pnr-pair {"name":"lvds_clk","terminal_chain":[{"p":"radio.u1:L14","n":"radio.u1:L15"},{"p":"debug.j2:44","n":"debug.j2:46"}],"max_uncoupled_mm":1.0,"reference_layer":"In1.Cu"}
+    # @pnr-pair {"name":"lvds_frclk","terminal_chain":[{"p":"radio.u1:M14","n":"radio.u1:M15"},{"p":"debug.j2:26","n":"debug.j2:28"}],"max_uncoupled_mm":1.0,"reference_layer":"In1.Cu"}
+    # @pnr-si {"name":"lvds","profile":"lvds_600mbps","pairs":["lvds_tx0","lvds_tx1","lvds_clk","lvds_frclk"],"group_skew_mm":2.0}
+    # Noise (N-0003 forms, proposed): 4 MHz bucks with spread spectrum; the 40 MHz crystal.
+    # @pnr-noise-source {"target":"pmic.u2","pads":["10","12","23","25"],"kind":"switching","f_mhz":4.0,"spread":true}
+    # @pnr-noise-source {"target":"radio.y1","pads":["1","3"],"kind":"clock","f_mhz":40}
+    # Ripple budgets for a -105 dBc spur, uVrms by frequency in MHz (SWRS219F Table 7-2): 1.0 V RF rail (bypass) and 1.8 V VCO/IF rail.
+    # @pnr-noise-budget {"target":"radio.u1","pads":["G5","H5","J5","C2","D2","A2","B2"],"kind":"supply_ripple_uvrms","limits":{"0.1375":7,"0.275":5,"0.55":3,"1.1":2,"2.2":11,"4.4":13,"6.6":22}}
+    # @pnr-noise-budget {"target":"radio.u1","pads":["B11","B12","F5","K5"],"kind":"supply_ripple_uvrms","limits":{"0.1375":83,"0.275":21,"0.55":11,"1.1":6,"2.2":13,"4.4":19,"6.6":29}}
+    # @pnr-noise-budget {"target":"radio.y1","kind":"clock","min_distance_mm":{"pmic.u2":8,"pmic.l_b0":8,"pmic.l_b1":8,"pmic.l_b2":8,"pmic.l_b3":8}}
+    # RF macro and chains (proposed forms, as in the 5.8 GHz plan). Paths are relative to examples/radar60/.
+    # @pnr-rf-macro {"target":"rf_macro.rfm1","spec":"rf/specs/rfm1.yaml","result":"rf/results/rfm1-conv/result.json","sha256":"<pinned>","lock":"fixed","anchor":"radio.u1","layers":["F.Cu","In1.Cu","In2.Cu"],"owns_vias":true}
+    # @pnr-rf-keepout {"target":"rf_macro.rfm1","layers":["F.Cu","In1.Cu","In2.Cu"],"kind":"rf_region","vias":"macro_only","parts":"pocket_only"}
+    # @pnr-rf-chain {"name":"rx1","order":["radio.u1:M2","rf_macro.rfm1:rx1"],"budget":{"il_db_max":1.5,"rl_db_min":10,"band_ghz":[60.3,63.8]}}
+    # @pnr-rf-chain {"name":"rx2","order":["radio.u1:K2","rf_macro.rfm1:rx2"],"budget":{"il_db_max":1.5,"rl_db_min":10,"band_ghz":[60.3,63.8]}}
+    # @pnr-rf-chain {"name":"rx3","order":["radio.u1:H2","rf_macro.rfm1:rx3"],"budget":{"il_db_max":1.5,"rl_db_min":10,"band_ghz":[60.3,63.8]}}
+    # @pnr-rf-chain {"name":"rx4","order":["radio.u1:F2","rf_macro.rfm1:rx4"],"budget":{"il_db_max":1.5,"rl_db_min":10,"band_ghz":[60.3,63.8]}}
+    # TX chains carry the accepted RF-03 waiver (D6: up to 2.7 dB ball to column input).
+    # @pnr-rf-chain {"name":"tx1","order":["radio.u1:B4","rf_macro.rfm1:tx1"],"budget":{"il_db_max":2.7,"rl_db_min":10,"band_ghz":[60.3,63.8]}}
+    # @pnr-rf-chain {"name":"tx2","order":["radio.u1:B6","rf_macro.rfm1:tx2"],"budget":{"il_db_max":2.7,"rl_db_min":10,"band_ghz":[60.3,63.8]}}
+    # @pnr-rf-chain {"name":"tx3","order":["radio.u1:B8","rf_macro.rfm1:tx3"],"budget":{"il_db_max":2.7,"rl_db_min":10,"band_ghz":[60.3,63.8]}}
+
+    # fixed designators (board-design.md 2.1)
+    trait j1 has_designator<designator="J1">

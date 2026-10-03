@@ -1,0 +1,279 @@
+#pragma experiment("TRAITS")
+#pragma experiment("FOR_LOOP")
+# radar60 power tree: LP87524J-Q1 in the 1.0 V LDO-bypass configuration (board-design.md 3.3).
+# OTP defaults of the J part (TI SNVSAW2B 7.1, checked): Buck0 3.3 V/1.5 A (IO), Buck1 1.2 V/1.5 A
+# (digital), Buck2 1.0 V/4 A (RF, with ferrite filter), Buck3 1.8 V/2.5 A (RF, with ferrite filter).
+# Per phase (SNVSAW2B 8.2.1): 0.47 uH, 10 uF input, 22 uF local output; snubber 3.9 Ohm + 390 pF on
+# every switch node because VIN > 4 V (8.2.1.4); VANA 100 nF (8.2.1.5).
+# LC filters after the bucks follow TI's IWR6843ISK Rev D (SWRR164, sheet 5 "PMIC LC Filters"):
+# MPZ2012S101A with 22 uF before and 22 uF + 10 uF after. The 1.0 V rail is split into RF1 and
+# RF2/PA branches with two beads in parallel on RF2/PA and a 2 mOhm Kelvin shunt ahead of the split
+# (review fix R5; development fit, 0 Ohm 0612 on product builds). FB_B2 senses at the buck output;
+# a DNP 0 Ohm moves the sense point downstream (review 3.3).
+
+import has_net_name_suggestion
+
+import has_designator
+
+from "parts/Radar60_LP87524JRNFRQ1/Radar60_LP87524JRNFRQ1.ato" import Radar60_LP87524JRNFRQ1
+from "parts/Radar60_L_0u47_MCKK2012/Radar60_L_0u47_MCKK2012.ato" import Radar60_L_0u47_MCKK2012
+from "parts/Radar60_FB_MPZ2012S101A/Radar60_FB_MPZ2012S101A.ato" import Radar60_FB_MPZ2012S101A
+from "parts/Radar60_C_10u_0805/Radar60_C_10u_0805.ato" import Radar60_C_10u_0805
+from "parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato" import Radar60_C_22u_0805
+from "parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato" import Radar60_C_10u_0603
+from "parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato" import Radar60_C_100n_0402
+from "parts/Radar60_C_1u_0402/Radar60_C_1u_0402.ato" import Radar60_C_1u_0402
+from "parts/Radar60_C_390p_0402/Radar60_C_390p_0402.ato" import Radar60_C_390p_0402
+from "parts/Radar60_R_3R9_0402/Radar60_R_3R9_0402.ato" import Radar60_R_3R9_0402
+from "parts/Radar60_R_0_0402/Radar60_R_0_0402.ato" import Radar60_R_0_0402
+from "parts/Radar60_R_0_0402_DNP/Radar60_R_0_0402_DNP.ato" import Radar60_R_0_0402_DNP
+from "parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato" import Radar60_R_10k_0402
+from "parts/Radar60_R_10k_0402_DNP/Radar60_R_10k_0402_DNP.ato" import Radar60_R_10k_0402_DNP
+from "parts/Radar60_R_4k99_0402/Radar60_R_4k99_0402.ato" import Radar60_R_4k99_0402
+from "parts/Radar60_R_2m_0612/Radar60_R_2m_0612.ato" import Radar60_R_2m_0612
+from "parts/Radar60_KelvinSense_2Pad/Radar60_KelvinSense_2Pad.ato" import Radar60_KelvinSense_2Pad
+
+
+module Pmic:
+    """LP87524J four-buck PMIC, LC filters, 1.0 V shunt, I2C pull-ups, PGOOD -> NRESET RC."""
+
+    signal vin
+    signal gnd
+    signal nrst_in
+    signal v3v3
+    signal v1v2
+    signal v1v8
+    signal v1v0_rf1
+    signal v1v0_rf2
+    signal scl
+    signal sda
+    signal pgood
+    signal nreset
+    signal nint
+    signal clk_ext
+    signal vio
+
+    u2 = new Radar60_LP87524JRNFRQ1
+    u2.VANA ~ vin
+    u2.VIN_B0 ~ vin
+    u2.VIN_B1 ~ vin
+    u2.VIN_B2 ~ vin
+    u2.VIN_B3 ~ vin
+    u2.AGND ~ gnd
+    u2.PGND_B01 ~ gnd
+    u2.PGND_B23 ~ gnd
+    u2.NRST ~ nrst_in
+
+    c_vana = new Radar60_C_100n_0402
+    c_vana.p1 ~ vin
+    c_vana.p2 ~ gnd
+    c_in = new Radar60_C_10u_0805[4]
+    for c in c_in:
+        c.p1 ~ vin
+        c.p2 ~ gnd
+
+    # buck outputs (sensed here)
+    signal v1v2_buck
+    signal v1v8_buck
+    signal v1v0_buck
+    l_b0 = new Radar60_L_0u47_MCKK2012
+    l_b1 = new Radar60_L_0u47_MCKK2012
+    l_b2 = new Radar60_L_0u47_MCKK2012
+    l_b3 = new Radar60_L_0u47_MCKK2012
+    signal sw_b0
+    signal sw_b1
+    signal sw_b2
+    signal sw_b3
+    signal fb_b2
+    u2.SW_B0 ~ sw_b0
+    u2.SW_B1 ~ sw_b1
+    u2.SW_B2 ~ sw_b2
+    u2.SW_B3 ~ sw_b3
+    u2.FB_B2 ~ fb_b2
+    l_b0.p1 ~ u2.SW_B0
+    l_b0.p2 ~ v3v3
+    l_b1.p1 ~ u2.SW_B1
+    l_b1.p2 ~ v1v2_buck
+    l_b2.p1 ~ u2.SW_B2
+    l_b2.p2 ~ v1v0_buck
+    l_b3.p1 ~ u2.SW_B3
+    l_b3.p2 ~ v1v8_buck
+    u2.FB_B0 ~ v3v3
+    u2.FB_B1 ~ v1v2_buck
+    u2.FB_B3 ~ v1v8_buck
+    # FB_B2: local sense fitted, downstream sense (after the RF2/PA beads) DNP
+    r_fb2_local = new Radar60_R_0_0402
+    r_fb2_local.p1 ~ u2.FB_B2
+    r_fb2_local.p2 ~ v1v0_buck
+    r_fb2_remote = new Radar60_R_0_0402_DNP
+    r_fb2_remote.p1 ~ u2.FB_B2
+    r_fb2_remote.p2 ~ v1v0_rf2
+
+    c_out_b0 = new Radar60_C_22u_0805
+    c_out_b0.p1 ~ v3v3
+    c_out_b0.p2 ~ gnd
+    c_out_b1 = new Radar60_C_22u_0805
+    c_out_b1.p1 ~ v1v2_buck
+    c_out_b1.p2 ~ gnd
+    c_out_b2 = new Radar60_C_22u_0805
+    c_out_b2.p1 ~ v1v0_buck
+    c_out_b2.p2 ~ gnd
+    c_out_b3 = new Radar60_C_22u_0805
+    c_out_b3.p1 ~ v1v8_buck
+    c_out_b3.p2 ~ gnd
+
+    # switch-node snubbers (VIN > 4 V)
+    signal snb0
+    signal snb1
+    signal snb2
+    signal snb3
+    r_snb0 = new Radar60_R_3R9_0402
+    c_snb0 = new Radar60_C_390p_0402
+    u2.SW_B0 ~ r_snb0.p1
+    r_snb0.p2 ~ snb0
+    snb0 ~ c_snb0.p1
+    c_snb0.p2 ~ gnd
+    r_snb1 = new Radar60_R_3R9_0402
+    c_snb1 = new Radar60_C_390p_0402
+    u2.SW_B1 ~ r_snb1.p1
+    r_snb1.p2 ~ snb1
+    snb1 ~ c_snb1.p1
+    c_snb1.p2 ~ gnd
+    r_snb2 = new Radar60_R_3R9_0402
+    c_snb2 = new Radar60_C_390p_0402
+    u2.SW_B2 ~ r_snb2.p1
+    r_snb2.p2 ~ snb2
+    snb2 ~ c_snb2.p1
+    c_snb2.p2 ~ gnd
+    r_snb3 = new Radar60_R_3R9_0402
+    c_snb3 = new Radar60_C_390p_0402
+    u2.SW_B3 ~ r_snb3.p1
+    r_snb3.p2 ~ snb3
+    snb3 ~ c_snb3.p1
+    c_snb3.p2 ~ gnd
+
+    # 1.2 V and 1.8 V LC filters
+    fb_1v2 = new Radar60_FB_MPZ2012S101A
+    fb_1v2.p1 ~ v1v2_buck
+    fb_1v2.p2 ~ v1v2
+    c_1v2_a = new Radar60_C_22u_0805
+    c_1v2_a.p1 ~ v1v2
+    c_1v2_a.p2 ~ gnd
+    c_1v2_b = new Radar60_C_10u_0603
+    c_1v2_b.p1 ~ v1v2
+    c_1v2_b.p2 ~ gnd
+    fb_1v8 = new Radar60_FB_MPZ2012S101A
+    fb_1v8.p1 ~ v1v8_buck
+    fb_1v8.p2 ~ v1v8
+    c_1v8_a = new Radar60_C_22u_0805
+    c_1v8_a.p1 ~ v1v8
+    c_1v8_a.p2 ~ gnd
+    c_1v8_b = new Radar60_C_10u_0603
+    c_1v8_b.p1 ~ v1v8
+    c_1v8_b.p2 ~ gnd
+
+    # 1.0 V RF/PA rail: shunt, then RF1 and RF2/PA branches
+    signal v1v0_sh
+    r_sh = new Radar60_R_2m_0612
+    r_sh.p1 ~ v1v0_buck
+    r_sh.p2 ~ v1v0_sh
+    tp_isns = new Radar60_KelvinSense_2Pad
+    tp_isns.SP ~ v1v0_buck
+    tp_isns.SN ~ v1v0_sh
+    fb_rf1 = new Radar60_FB_MPZ2012S101A
+    fb_rf1.p1 ~ v1v0_sh
+    fb_rf1.p2 ~ v1v0_rf1
+    fb_rf2_a = new Radar60_FB_MPZ2012S101A
+    fb_rf2_a.p1 ~ v1v0_sh
+    fb_rf2_a.p2 ~ v1v0_rf2
+    fb_rf2_b = new Radar60_FB_MPZ2012S101A
+    fb_rf2_b.p1 ~ v1v0_sh
+    fb_rf2_b.p2 ~ v1v0_rf2
+    c_rf1_a = new Radar60_C_22u_0805
+    c_rf1_a.p1 ~ v1v0_rf1
+    c_rf1_a.p2 ~ gnd
+    c_rf1_b = new Radar60_C_10u_0603
+    c_rf1_b.p1 ~ v1v0_rf1
+    c_rf1_b.p2 ~ gnd
+    c_rf2_a = new Radar60_C_22u_0805
+    c_rf2_a.p1 ~ v1v0_rf2
+    c_rf2_a.p2 ~ gnd
+    c_rf2_b = new Radar60_C_10u_0603
+    c_rf2_b.p1 ~ v1v0_rf2
+    c_rf2_b.p2 ~ gnd
+
+    # CLKIN: grounded (spread spectrum needs the internal oscillator, SNVSAW2B 7.3.1.4);
+    # DNP option to the radio's PMIC_CLKOUT (P9) for the sync experiment
+    r_clkin_gnd = new Radar60_R_0_0402
+    r_clkin_gnd.p1 ~ u2.CLKIN
+    r_clkin_gnd.p2 ~ gnd
+    r_clkin_sync = new Radar60_R_0_0402_DNP
+    r_clkin_sync.p1 ~ u2.CLKIN
+    r_clkin_sync.p2 ~ clk_ext
+
+    # EN1..EN3 high (fitted) or low (DNP) until the J part's OTP enable mapping is read (O5)
+    r_en1_pu = new Radar60_R_10k_0402
+    r_en1_pu.p1 ~ vin
+    r_en1_pu.p2 ~ u2.EN1
+    r_en1_pd = new Radar60_R_10k_0402_DNP
+    r_en1_pd.p1 ~ u2.EN1
+    r_en1_pd.p2 ~ gnd
+    r_en2_pu = new Radar60_R_10k_0402
+    r_en2_pu.p1 ~ vin
+    r_en2_pu.p2 ~ u2.EN2
+    r_en2_pd = new Radar60_R_10k_0402_DNP
+    r_en2_pd.p1 ~ u2.EN2
+    r_en2_pd.p2 ~ gnd
+    r_en3_pu = new Radar60_R_10k_0402
+    r_en3_pu.p1 ~ vin
+    r_en3_pu.p2 ~ u2.EN3
+    r_en3_pd = new Radar60_R_10k_0402_DNP
+    r_en3_pd.p1 ~ u2.EN3
+    r_en3_pd.p2 ~ gnd
+
+    # I2C (radio is the controller; LP87524 address 0x60, SNVSAW2B 7.5). Every pull-up that touches a
+    # radio pin goes to the radio's IO rail (vio = 3V3_RADIO_IO): the IWR6843 IOs are not fail-safe
+    # (SWRS219F 6.2 note), which matters if the DNP load switch delays that rail.
+    u2.SCL ~ scl
+    u2.SDA ~ sda
+    r_scl_pu = new Radar60_R_4k99_0402
+    r_scl_pu.p1 ~ vio
+    r_scl_pu.p2 ~ scl
+    r_sda_pu = new Radar60_R_4k99_0402
+    r_sda_pu.p1 ~ vio
+    r_sda_pu.p2 ~ sda
+
+    # nINT and PGOOD are open drain (PGOOD_OD = 1 by default, SNVSAW2B Table 46)
+    u2.nINT ~ nint
+    r_nint_pu = new Radar60_R_10k_0402
+    r_nint_pu.p1 ~ vio
+    r_nint_pu.p2 ~ nint
+    u2.PGOOD ~ pgood
+    r_pgood_pu = new Radar60_R_10k_0402
+    r_pgood_pu.p1 ~ vio
+    r_pgood_pu.p2 ~ pgood
+
+    # PGOOD -> RC (10 kOhm x 1 uF = 10 ms [E]) -> radio NRESET: all rails stable before reset
+    # is released (SWRS219F 7.12.1)
+    r_rst = new Radar60_R_10k_0402
+    r_rst.p1 ~ pgood
+    r_rst.p2 ~ nreset
+    c_rst = new Radar60_C_1u_0402
+    c_rst.p1 ~ nreset
+    c_rst.p2 ~ gnd
+
+    # net names (net classes and PnR rules refer to these)
+    trait sw_b0 has_net_name_suggestion<name="PMIC_SW_B0", level="SUGGESTED">
+    trait sw_b1 has_net_name_suggestion<name="PMIC_SW_B1", level="SUGGESTED">
+    trait sw_b2 has_net_name_suggestion<name="PMIC_SW_B2", level="SUGGESTED">
+    trait sw_b3 has_net_name_suggestion<name="PMIC_SW_B3", level="SUGGESTED">
+    trait fb_b2 has_net_name_suggestion<name="PMIC_FB_B2", level="SUGGESTED">
+    trait v1v2_buck has_net_name_suggestion<name="1V2_BUCK", level="SUGGESTED">
+    trait v1v8_buck has_net_name_suggestion<name="1V8_BUCK", level="SUGGESTED">
+    trait v1v0_buck has_net_name_suggestion<name="1V0_BUCK", level="SUGGESTED">
+    trait v1v0_sh has_net_name_suggestion<name="1V0_SH", level="SUGGESTED">
+    trait nint has_net_name_suggestion<name="PMIC_NINT", level="SUGGESTED">
+
+    # fixed designators (board-design.md 2.1)
+    trait u2 has_designator<designator="U2">
+    trait r_sh has_designator<designator="R_SH1">

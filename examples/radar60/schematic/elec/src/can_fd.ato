@@ -1,0 +1,96 @@
+#pragma experiment("TRAITS")
+# radar60 CAN-FD: TCAN1044AV-Q1 (VCC 5 V, VIO 3.3 V) with ESD2CAN24-Q1 on the bus.
+# Controller pins: CAN_FD_TX on H14 (mode 9) and CAN_FD_RX on F14 (mode 8) (SWRS219F Table 6-1,
+# board-design.md 3.2); DNP 0 Ohm options to E14 (mode 2 TX) / D13 (mode 2 RX) keep the SPIA
+# pins free for mmWave Studio (O3). STB tied low through 0 Ohm: normal mode (STB has an internal
+# pull-up, SLLSFJ3D Table 5-1). Split 120 Ohm termination footprint, DNP.
+
+import has_net_name_suggestion
+
+import has_designator
+
+from "parts/Radar60_TCAN1044AVDRBRQ1/Radar60_TCAN1044AVDRBRQ1.ato" import Radar60_TCAN1044AVDRBRQ1
+from "parts/Radar60_ESD2CAN24DBZRQ1/Radar60_ESD2CAN24DBZRQ1.ato" import Radar60_ESD2CAN24DBZRQ1
+from "parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato" import Radar60_C_100n_0402
+from "parts/Radar60_C_1u_0402/Radar60_C_1u_0402.ato" import Radar60_C_1u_0402
+from "parts/Radar60_C_4n7_0402_DNP/Radar60_C_4n7_0402_DNP.ato" import Radar60_C_4n7_0402_DNP
+from "parts/Radar60_R_0_0402/Radar60_R_0_0402.ato" import Radar60_R_0_0402
+from "parts/Radar60_R_0_0402_DNP/Radar60_R_0_0402_DNP.ato" import Radar60_R_0_0402_DNP
+from "parts/Radar60_R_62_0402_DNP/Radar60_R_62_0402_DNP.ato" import Radar60_R_62_0402_DNP
+
+
+module CanFd:
+    """CAN-FD transceiver, bus ESD, pin-mux options and a DNP split termination."""
+
+    signal v5
+    signal v3v3
+    signal gnd
+    signal tx_h14
+    signal rx_f14
+    signal tx_e14
+    signal rx_d13
+    signal canh
+    signal canl
+
+    u4 = new Radar60_TCAN1044AVDRBRQ1
+    u4.VCC ~ v5
+    u4.VIO ~ v3v3
+    u4.GND ~ gnd
+    u4.EP ~ gnd
+    u4.CANH ~ canh
+    u4.CANL ~ canl
+    r_stb = new Radar60_R_0_0402
+    r_stb.p1 ~ u4.STB
+    r_stb.p2 ~ gnd
+
+    c_vcc = new Radar60_C_100n_0402
+    c_vcc.p1 ~ v5
+    c_vcc.p2 ~ gnd
+    c_vcc_bulk = new Radar60_C_1u_0402
+    c_vcc_bulk.p1 ~ v5
+    c_vcc_bulk.p2 ~ gnd
+    c_vio = new Radar60_C_100n_0402
+    c_vio.p1 ~ v3v3
+    c_vio.p2 ~ gnd
+
+    signal txd
+    signal rxd
+    u4.TXD ~ txd
+    u4.RXD ~ rxd
+    r_tx_h14 = new Radar60_R_0_0402
+    r_tx_h14.p1 ~ tx_h14
+    r_tx_h14.p2 ~ txd
+    r_tx_e14 = new Radar60_R_0_0402_DNP
+    r_tx_e14.p1 ~ tx_e14
+    r_tx_e14.p2 ~ txd
+    r_rx_f14 = new Radar60_R_0_0402
+    r_rx_f14.p1 ~ rxd
+    r_rx_f14.p2 ~ rx_f14
+    r_rx_d13 = new Radar60_R_0_0402_DNP
+    r_rx_d13.p1 ~ rxd
+    r_rx_d13.p2 ~ rx_d13
+
+    esd = new Radar60_ESD2CAN24DBZRQ1
+    esd.IO1 ~ canh
+    esd.IO2 ~ canl
+    esd.GND ~ gnd
+
+    signal term_mid
+    r_term_h = new Radar60_R_62_0402_DNP
+    r_term_h.p1 ~ canh
+    r_term_h.p2 ~ term_mid
+    r_term_l = new Radar60_R_62_0402_DNP
+    r_term_l.p1 ~ term_mid
+    r_term_l.p2 ~ canl
+    c_term = new Radar60_C_4n7_0402_DNP
+    c_term.p1 ~ term_mid
+    c_term.p2 ~ gnd
+
+    # net names (net classes and PnR rules refer to these)
+    trait txd has_net_name_suggestion<name="CAN_TXD", level="SUGGESTED">
+    trait rxd has_net_name_suggestion<name="CAN_RXD", level="SUGGESTED">
+    trait term_mid has_net_name_suggestion<name="CAN_TERM_MID", level="SUGGESTED">
+
+    # fixed designators (board-design.md 2.1)
+    trait u4 has_designator<designator="U4">
+    trait esd has_designator<designator="D1">

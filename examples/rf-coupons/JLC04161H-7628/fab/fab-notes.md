@@ -19,6 +19,8 @@ Order the coupons exactly as the product will be ordered (design §5.6).
 Controlled-impedance traces (do not change these widths; record any engineering query that does, since the width is an input of the fit):
 
 - P: L1 grounded coplanar, 0.291 mm with 0.20 mm gaps, under mask, 50 ohm.
+- M: L1 microstrip, 0.348 mm, under mask, 50 ohm.
+- every other trace and gap on the board (the 0.7x and 1.4x width variants, the coupled pair, the ring and stubs) is a test structure as well: no width or gap may be changed.
 
 Intentional features:
 
@@ -26,7 +28,9 @@ Intentional features:
 - planes cut out under the SMA pads and tapers (launch, design §6.2);
 - per-stick nets (GND_<stick>, RF_<stick>): sticks are electrically separate after break-out.
 
-Unverified (check before ordering): the edge SMA geometry (Samtec SMA-J-P-H-ST-EM1 pads from the KiCad library, in place of the design's Cinch 142-0701-851); JLC's routed-edge copper clearance (0.25 mm assumed); whether break-out sticks cost extra; the launch is 2D-matched, not 3D-tuned.
+Unverified (check before ordering): the edge SMA geometry (Samtec SMA-J-P-H-ST-EM1 pads from the KiCad library, in place of the design's Cinch 142-0701-851); whether break-out sticks cost extra; the launch is 2D-matched, not 3D-tuned.
+
+Checked against JLC's capabilities page (read 2026-10-02): copper at least 0.2 mm from a routed edge (the zones stop 0.30 mm from every edge; the DRC checks 0.25 mm); mouse-bite tabs at least 5 mm wide with 0.5-0.8 mm bites (5 mm, 0.5 mm at 0.8 mm pitch); silkscreen text 1.0 mm high, 0.15 mm lines.
 
 KiCad DRC (zones refilled):
 

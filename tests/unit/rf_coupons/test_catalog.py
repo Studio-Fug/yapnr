@@ -150,6 +150,27 @@ class LabelTest(unittest.TestCase):
         self.assertEqual(len(ticks), 4)
         self.assertTrue(math.isclose(s.rp[1] - s.rp[0], s.dl))
 
+    def test_labels_carry_the_stick_id_and_fit(self):
+        # design §5.5: the stick id, family and ΔL on every stick (session file names use the
+        # id), inside the stick, and below the reference-plane ticks (0.5-1.3 mm from the edge)
+        for sid in (A, B):
+            st = stackups.get(sid)
+            for s in catalog.board(sid).sticks:
+                if not s.generated:
+                    continue
+                text = s.label or s.id
+                self.assertTrue(text.startswith(s.id + " "), (s.id, text))
+                if s.ports != 2:
+                    continue
+                wr = layout.Writer(st, catalog.board(sid))
+                wr.labels(layout.Placed(s, 0.0, 0.0))
+                g = next(g for g in wr.items.graphics if "gr_text" in g)
+                x, y = map(float, re.search(r"\(at ([-\d.]+) ([-\d.]+)", g).groups())
+                self.assertGreaterEqual(x, 0.5 - 1e-9, s.id)
+                self.assertLessEqual(x + layout.label_width(text), s.length - 0.5 + 1e-9, s.id)
+                # 1 mm text with 0.15 mm strokes clears the 0.15 mm tick ending 1.3 mm in
+                self.assertGreaterEqual(s.height / 2 - abs(y) - 0.5 - 0.075, 1.3 + 0.075 + 0.1)
+
 
 if __name__ == "__main__":
     unittest.main()

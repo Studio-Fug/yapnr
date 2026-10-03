@@ -47,7 +47,7 @@ def write(
             f,
             s50,
             [
-                f"yapnr rf coupon {b.letter} {s.id}: {s.label} ({s.kind}, family {s.family})",
+                f"yapnr rf coupon {b.letter}: {s.label} ({s.kind}, family {s.family})",
                 f"stackup {stackup_id}, nominal parameters; reference planes {s.rp[0]:g} mm from"
                 " each end; 50 ohm (renormalized from the line's Zc)",
                 "model: 2D quasi-static RLGC (Djordjevic-Sarkar, Huray roughness, Wheeler loss);"

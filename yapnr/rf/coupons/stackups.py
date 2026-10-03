@@ -168,9 +168,9 @@ STACKUPS: Dict[str, Stackup] = {
             _cu("L3", 0.0152, "L3"),
             Layer("pp3", "prepreg", 0.2028, "7628", 4.4, "pp3"),
             _cu("L4", 0.0152, "L4"),
-            Layer("core45", "core", 0.40, "FR-4 core", 4.6, "core45", verified=False),
-            _cu("L5", 0.0152, "L5", verified=False),
-            Layer("pp5", "prepreg", 0.2104, "7628", 4.4, "pp5", verified=False),
+            Layer("core45", "core", 0.40, "FR-4 core", 4.6, "core45"),
+            _cu("L5", 0.0152, "L5"),
+            Layer("pp5", "prepreg", 0.2104, "7628", 4.4, "pp5"),
             _cu("L6", 0.035, "L6"),
         ),
         params=(
@@ -187,7 +187,6 @@ STACKUPS: Dict[str, Stackup] = {
         + _L1_PARAMS,
         finish="ENIG",
         source="jlcpcb.com/impedance (JLC06161H-7628), read 2026-10-02",
-        notes=("L4-L6 assumed symmetric to L1-L3 (unverified: 'per JLC's table')",),
     ),
     "JLC06161H-2116C": Stackup(
         id="JLC06161H-2116C",
@@ -200,15 +199,15 @@ STACKUPS: Dict[str, Stackup] = {
             _cu("L3", 0.0152, "L3"),
             Layer("pp3", "prepreg", 0.366, "3 x 2116", 4.16, "pp3"),
             _cu("L4", 0.0152, "L4"),
-            Layer("core45", "core", 0.30, "FR-4 core", 4.6, "core45", verified=False),
-            _cu("L5", 0.0152, "L5", verified=False),
-            Layer("pp5", "prepreg", 0.2464, "2116", 4.16, "pp5", verified=False),
+            Layer("core45", "core", 0.30, "FR-4 core", 4.6, "core45"),
+            _cu("L5", 0.0152, "L5"),
+            Layer("pp5", "prepreg", 0.2464, "2116", 4.16, "pp5"),
             _cu("L6", 0.035, "L6"),
         ),
         params=(),  # no 2D tables shipped: run the table tool first (design §4.2 alternative)
         finish="ENIG",
         source="jlcpcb.com/impedance (JLC06161H-2116C), read 2026-10-02",
-        notes=("alternative board B'; L4-L6 unverified",),
+        notes=("alternative board B'",),
     ),
 }
 

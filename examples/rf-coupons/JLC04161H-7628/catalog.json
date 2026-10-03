@@ -52,7 +52,7 @@
       "fitted": true,
       "ports": 2,
       "determines": "calibration; \u03b3(f) of P",
-      "label": "P THRU",
+      "label": "A01 P THRU",
       "geometry": {},
       "generated": true,
       "rp_mm": [
@@ -79,7 +79,7 @@
       "fitted": true,
       "ports": 2,
       "determines": "calibration; \u03b3(f) of P",
-      "label": "P L2.5",
+      "label": "A02 P L2.5",
       "geometry": {},
       "generated": true,
       "rp_mm": [
@@ -106,7 +106,7 @@
       "fitted": true,
       "ports": 2,
       "determines": "calibration; \u03b3(f) of P",
-      "label": "P L6.5",
+      "label": "A03 P L6.5",
       "geometry": {},
       "generated": true,
       "rp_mm": [
@@ -133,7 +133,7 @@
       "fitted": true,
       "ports": 2,
       "determines": "calibration; \u03b3(f) of P",
-      "label": "P L16",
+      "label": "A04 P L16",
       "geometry": {},
       "generated": true,
       "rp_mm": [
@@ -160,7 +160,7 @@
       "fitted": true,
       "ports": 2,
       "determines": "calibration; \u03b3(f) of P",
-      "label": "P L40",
+      "label": "A05 P L40",
       "geometry": {},
       "generated": true,
       "rp_mm": [
@@ -187,7 +187,7 @@
       "fitted": true,
       "ports": 2,
       "determines": "calibration; \u03b3(f) of P",
-      "label": "P L100",
+      "label": "A06 P L100",
       "geometry": {},
       "generated": true,
       "rp_mm": [
@@ -208,7 +208,7 @@
       "fitted": false,
       "ports": 2,
       "determines": "calibration (reflect)",
-      "label": "P REFL",
+      "label": "A07 P REFL",
       "geometry": {},
       "generated": true,
       "rp_mm": [
@@ -235,7 +235,7 @@
       "fitted": false,
       "ports": 2,
       "determines": "residual calibration error",
-      "label": "P VER28",
+      "label": "A08 P VER28",
       "geometry": {},
       "generated": true,
       "rp_mm": [

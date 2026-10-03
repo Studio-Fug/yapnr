@@ -6,8 +6,8 @@ Text generation of a KiCad 10 board (`.kicad_pcb`, nets by name) and its project
 
 Panel: rows of sticks of equal height, end to end with 2 mm milled slots between them, a 2 mm
 slot above and below every row, 3 mm rails between rows and 5 mm rails around. Every stick hangs
-on mouse-bite tabs (five 0.5 mm holes at 0.8 mm pitch) on its long sides only, so its connector
-ends are milled edges. Copper never crosses a slot or a tab.
+on 5 mm mouse-bite tabs (six 0.5 mm holes at 0.8 mm pitch) on its long sides only, so its
+connector ends are milled edges. Copper never crosses a slot or a tab.
 
 Per stick (local x along the stick from its left end, y across from its centre line): per-stick
 nets RF_<id> and GND_<id>, the edge SMA footprints with the launch taper as a copper-only pad, a
@@ -31,8 +31,10 @@ from yapnr.rf.coupons import catalog, families, stackups
 RAIL = 5.0
 INNER_RAIL = 3.0
 SLOT = 2.0
-TAB_W = 4.0
-BITE_D, BITE_PITCH, BITES = 0.5, 0.8, 5
+# JLC's capabilities page (read 2026-10-02): mouse-bite tabs at least 5 mm wide, bites 0.5-0.8 mm
+# at 0.2-0.3 mm spacing, NPTH at least 0.5 mm
+TAB_W = 5.0
+BITE_D, BITE_PITCH, BITES = 0.5, 0.8, 6
 EDGE_CLEAR = 0.30  # zone inset from every stick edge
 VIA_D, VIA_DRILL = 0.5, 0.3
 FENCE_OFF, FENCE_PITCH = 0.5, 0.8  # from the gap edge, along the line (design §6.2)
@@ -310,13 +312,22 @@ class Writer:
                 self.via(pl.p(x, yy), net, key + (i, j))
 
     def labels(self, pl: Placed, rp=True, x=None, bottom=False):
+        """The stick's label (id, family, ΔL: design §5.5) after its first reference plane, and
+        the reference-plane ticks (0.5-1.3 mm from the long edge; the label sits below them,
+        1.6-2.6 mm from the edge, so the short lines' second tick does not touch it). A label
+        too long for the stick past the reference plane (the 20 mm thrus) ends 0.5 mm from the
+        far edge instead."""
         s = pl.stick
         hh = s.height / 2
+        text = s.label or s.id
+        ticks = rp and s.ports == 2
         if x is None:
-            x = s.rp[0] + 1.0 if (rp and s.ports == 2) else 2.0
-        y = hh - 1.4 if bottom else -hh + 1.4
-        self.text(s.label or s.id, pl.p(x, y), ("lab", s.id), size=1.0)
-        if rp and s.ports == 2:
+            x = s.rp[0] + 1.0 if ticks else 2.0
+            x = max(min(x, s.length - 0.5 - label_width(text)), 0.5)
+        dy = 2.1 if ticks else 1.4
+        y = hh - dy if bottom else -hh + dy
+        self.text(text, pl.p(x, y), ("lab", s.id), size=1.0)
+        if ticks:
             for x in s.rp:
                 for sgn in (-1, 1):
                     self.gr_line(
@@ -325,6 +336,11 @@ class Writer:
                         "F.SilkS",
                         ("rp", s.id, x, sgn),
                     )
+
+
+def label_width(text: str, size: float = 1.0) -> float:
+    """Upper estimate of a KiCad stroke-font text's length (mm): 0.92 em per character."""
+    return 0.92 * size * len(text)
 
 
 def _profile_launch(b: catalog.Board, x_end: float, w_line: float, gap: float):

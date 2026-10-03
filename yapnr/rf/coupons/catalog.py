@@ -138,7 +138,7 @@ def _trl_sticks(prefix: str, n0: int, fam: str, set_id: str, dls, with_verify: b
                 elements=[("line", fam, dl)] if dl else [],
                 fitted=True,
                 determines="calibration; γ(f) of " + fam,
-                label=f"{label} {'THRU' if dl == 0 else 'L%g' % dl}",
+                label=f"{prefix}{n:02d} {label} {'THRU' if dl == 0 else 'L%g' % dl}",
             )
         )
         n += 1
@@ -150,7 +150,7 @@ def _trl_sticks(prefix: str, n0: int, fam: str, set_id: str, dls, with_verify: b
             set_id,
             3 * LAUNCH_MM,
             determines="calibration (reflect)",
-            label=f"{label} REFL",
+            label=f"{prefix}{n:02d} {label} REFL",
         )
     )
     n += 1
@@ -165,7 +165,7 @@ def _trl_sticks(prefix: str, n0: int, fam: str, set_id: str, dls, with_verify: b
                 dl=VERIFY_DL,
                 elements=[("line", fam, VERIFY_DL)],
                 determines="residual calibration error",
-                label=f"{label} VER{VERIFY_DL:g}",
+                label=f"{prefix}{n:02d} {label} VER{VERIFY_DL:g}",
             )
         )
     return out

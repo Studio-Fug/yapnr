@@ -71,7 +71,7 @@
       "fitted": true,
       "ports": 2,
       "determines": "calibration; \u03b3(f) of S",
-      "label": "S THRU",
+      "label": "B01 S THRU",
       "geometry": {},
       "generated": true,
       "rp_mm": [
@@ -98,7 +98,7 @@
       "fitted": true,
       "ports": 2,
       "determines": "calibration; \u03b3(f) of S",
-      "label": "S L2.5",
+      "label": "B02 S L2.5",
       "geometry": {},
       "generated": true,
       "rp_mm": [
@@ -125,7 +125,7 @@
       "fitted": true,
       "ports": 2,
       "determines": "calibration; \u03b3(f) of S",
-      "label": "S L6.5",
+      "label": "B03 S L6.5",
       "geometry": {},
       "generated": true,
       "rp_mm": [
@@ -152,7 +152,7 @@
       "fitted": true,
       "ports": 2,
       "determines": "calibration; \u03b3(f) of S",
-      "label": "S L16",
+      "label": "B04 S L16",
       "geometry": {},
       "generated": true,
       "rp_mm": [
@@ -179,7 +179,7 @@
       "fitted": true,
       "ports": 2,
       "determines": "calibration; \u03b3(f) of S",
-      "label": "S L40",
+      "label": "B05 S L40",
       "geometry": {},
       "generated": true,
       "rp_mm": [
@@ -206,7 +206,7 @@
       "fitted": true,
       "ports": 2,
       "determines": "calibration; \u03b3(f) of S",
-      "label": "S L100",
+      "label": "B06 S L100",
       "geometry": {},
       "generated": true,
       "rp_mm": [
@@ -227,7 +227,7 @@
       "fitted": false,
       "ports": 2,
       "determines": "calibration (reflect)",
-      "label": "S REFL",
+      "label": "B07 S REFL",
       "geometry": {},
       "generated": true,
       "rp_mm": [
@@ -254,7 +254,7 @@
       "fitted": false,
       "ports": 2,
       "determines": "residual calibration error",
-      "label": "S VER28",
+      "label": "B08 S VER28",
       "geometry": {},
       "generated": true,
       "rp_mm": [
@@ -375,7 +375,7 @@
       "fitted": true,
       "ports": 2,
       "determines": "calibration; \u03b3(f) of P",
-      "label": "P THRU",
+      "label": "B12 P THRU",
       "geometry": {},
       "generated": true,
       "rp_mm": [
@@ -402,7 +402,7 @@
       "fitted": true,
       "ports": 2,
       "determines": "calibration; \u03b3(f) of P",
-      "label": "P L6.5",
+      "label": "B13 P L6.5",
       "geometry": {},
       "generated": true,
       "rp_mm": [
@@ -429,7 +429,7 @@
       "fitted": true,
       "ports": 2,
       "determines": "calibration; \u03b3(f) of P",
-      "label": "P L16",
+      "label": "B14 P L16",
       "geometry": {},
       "generated": true,
       "rp_mm": [
@@ -456,7 +456,7 @@
       "fitted": true,
       "ports": 2,
       "determines": "calibration; \u03b3(f) of P",
-      "label": "P L40",
+      "label": "B15 P L40",
       "geometry": {},
       "generated": true,
       "rp_mm": [
@@ -477,7 +477,7 @@
       "fitted": false,
       "ports": 2,
       "determines": "calibration (reflect)",
-      "label": "P REFL",
+      "label": "B16 P REFL",
       "geometry": {},
       "generated": true,
       "rp_mm": [

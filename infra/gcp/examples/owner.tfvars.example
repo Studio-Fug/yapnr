@@ -1,0 +1,26 @@
+# The owner's variables for infra/gcp (docs/cloud-experiments.md, runbook step 3). Copy to
+# ~/.config/yapnr/gcp.tfvars and replace every example value; never commit the real file.
+
+project_id      = "example-project"
+project_number  = "123456789012"
+home_region     = "us-west4"
+regions         = ["us-west4", "northamerica-northeast1"]
+inputs_bucket   = "example-yapnr-inputs"
+runs_bucket     = "example-yapnr-runs"
+mac_identity    = "user:someone@example.com"
+billing_account = "000000-000000-000000"
+budget_usd      = 50
+quota_cut_at    = 1.2
+
+# Quota preferences the budget guard may set to 0 (region => quota id from runbook step 4).
+quota_preferences = {
+  "us-west4"                = "PREEMPTIBLE-CPUS-per-project-region"
+  "northamerica-northeast1" = "PREEMPTIBLE-CPUS-per-project-region"
+}
+
+# Spot templates for Hyperdisk-only families, in every region.
+template_shapes = ["c4d-highcpu-16", "c4d-standard-16", "c4d-highcpu-8"]
+
+# While the GHCR packages are private: a Secret Manager secret version with a read:packages token.
+# ghcr_token_secret = "projects/example-project/secrets/ghcr-read-packages/versions/1"
+# ghcr_username     = "example-user"

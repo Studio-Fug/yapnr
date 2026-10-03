@@ -1,0 +1,68 @@
+# infra/gcp: experiment infrastructure on Google Cloud
+
+The OpenTofu root module behind `yapnr exp --backend gcp-batch`
+([guide](../../docs/cloud-experiments.md), [design](../../docs/design/cloud-experiments.md)).
+OpenTofu (MPL-2.0) is the tool it is tested with; the HCL stays Terraform-compatible. Every
+owner-specific value comes from a tfvars file outside the repository
+([example](examples/owner.tfvars.example)); the state lives in a versioned bucket the owner creates
+first.
+
+## What it creates
+
+| Module      | Resources                                                                                                                                                                                                                                                                                                                                         |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `services`  | The project's APIs (Batch, Compute Engine, Cloud Storage, Artifact Registry, IAM, Cloud Quotas, Billing Budgets, Pub/Sub, Cloud Run functions and their build chain, Cloud Scheduler, Secret Manager, Logging). Destroy leaves them enabled.                                                                                                      |
+| `network`   | VPC `yapnr` with one subnet per region (`yapnr-<region>`, Private Google Access), no ingress rules and no NAT: VMs have no external IP and reach Google APIs privately.                                                                                                                                                                           |
+| `storage`   | The inputs bucket (soft delete kept, nothing expires) and the runs bucket (no soft delete; `result.tar.gz` deleted after 90 days, `checkpoints/` after 14, incomplete uploads after 1), both private with uniform access, never force-destroyed; bucket grants.                                                                                   |
+| `identity`  | `yapnr-submit` (impersonated by the owner's Mac identity), `yapnr-runner` (the jobs' account), `yapnr-guard` (kill switch and reaper) and `yapnr-fn-build` (builds the functions), with the grants of design section 9. No keys.                                                                                                                  |
+| `registry`  | An Artifact Registry remote repository `ghcr` per region, upstream `https://ghcr.io`: a pull-through cache of the yapnr images. With `ghcr_token_secret`, it authenticates upstream while the packages are private.                                                                                                                               |
+| `templates` | Global Spot instance templates `yapnr-<shape>-spot-<region>` for Hyperdisk-only families: Batch's Container-Optimized OS image, a 30 GiB `hyperdisk-balanced` boot disk at the free baseline (3,000 IOPS, 140 MiB/s), no external IP, the runner account, `DELETE` on preemption, optional `threads_per_core`.                                    |
+| `budget`    | A monthly budget on the project (alerts at 50, 90 and 100% of actual spend, 100% of forecast) publishing to the Pub/Sub topic `yapnr-budget`.                                                                                                                                                                                                     |
+| `guard`     | Two Cloud Run functions from [`functions/guard`](functions/guard/main.py): `yapnr-budget` (at 100% of the budget: write `control/frozen` and cancel every yapnr job; at `quota_cut_at`: set the preemptible CPU quota preferences to 0) and `yapnr-reaper` (every 15 minutes: cancel jobs past their deadline label, delete VMs an hour past it). |
+
+`tofu plan` lists 67 resources for two regions and three template shapes.
+
+**Idle cost** (nothing running): the buckets' stored bytes, about one cached image per region in
+Artifact Registry (about $0.10 per GiB-month after the first 0.5 GiB), and nothing else that
+bills by the hour: functions, Pub/Sub, Scheduler (three free jobs per billing account) and
+Logging stay within their free tiers at this volume. No VM, NAT or IP exists between campaigns.
+
+## Quotas are not managed here
+
+The budget guard lowers the preemptible CPU quota when spending runs away; a later `tofu apply`
+must not silently raise it again. Quotas are requested with the runbook's commands
+([guide, step 4](../../docs/cloud-experiments.md#4-quotas)), and the quota preference ids must
+be `yapnr-preemptible-cpus-<region>`: that is the name the guard updates. List them in
+`quota_preferences` (region to quota id) so the guard knows them.
+
+## Apply and destroy
+
+```sh
+cd infra/gcp
+tofu init -backend-config="bucket=$STATE"
+tofu plan -var-file="$HOME/.config/yapnr/gcp.tfvars" -out=yapnr.plan
+tofu apply yapnr.plan
+tofu output -json owner_config   # the [gcp] section of ~/.config/yapnr/cloud.toml
+```
+
+The account that applies needs Owner on the project and budget rights on the billing account
+(Billing Account Administrator or Billing Account Costs Manager); it uses Application Default
+Credentials (`gcloud auth application-default login`). Teardown: cancel all jobs, empty the buckets
+on purpose (they refuse to be destroyed while they hold objects), then `tofu destroy`.
+
+## Checks (no credentials, no cloud calls)
+
+```sh
+python3 infra/gcp/tofu_check.py      # or: bazel test //infra/gcp:tofu_check --test_env=TOFU=...
+```
+
+It runs `tofu fmt -check`, `tofu validate`, `tofu test` (the [tests](tests/plan.tftest.hcl) plan
+the whole module against mocked providers) and `tofu plan` against the documentation project of the
+example tfvars with a placeholder token, `-refresh=false` and all HTTP(S) traffic sent to a closed
+local port, so a provider that tried to call an API would fail the check. `tofu init` downloads the
+pinned providers from the OpenTofu registry ([lock file](.terraform.lock.hcl)). The guard functions
+have their own unit tests (`bazel test //infra/gcp/functions/guard:all`).
+
+Not verified without a project: whether the provider accepts every value at apply time (quota ids,
+Hyperdisk settings on a template, the Batch image family), which the runbook's first apply and smoke
+job settle.

@@ -1,0 +1,3 @@
+# The guard uses the Python standard library only; the Functions Framework is the runtime's
+# entry point (the decorator is optional in main.py, so the unit tests need nothing).
+functions-framework==3.*

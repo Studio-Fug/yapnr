@@ -123,6 +123,25 @@ class OpenemsPlanTest(unittest.TestCase):
         doc["packing"] = "vcpu"
         self.assertNotIn("template", openems_plan.placement(doc))
 
+    def test_engine_and_openems_options_reach_the_job_runner(self):
+        doc = openems_plan.load_jobs(self.jobs)
+        doc["engine"] = "sse"
+        doc["openems_options"] = ["exact-endcriteria"]
+        doc["jobs"][1]["engine"] = "multithreaded"
+        doc = dict(openems_plan.DEFAULTS, **doc)
+        first, second = (openems_plan.stage_line(job, doc) for job in doc["jobs"])
+        self.assertEqual(
+            first["command"][2:11],
+            ["--id", "tx12-A-e1", "--threads", "4", "--engine", "sse"]
+            + ["--openems-option", "exact-endcriteria", "--"],
+        )
+        self.assertEqual(second["command"][7], "multithreaded")
+        self.assertEqual(first["labels"], {"model": "tx12-A-e1", "threads": "4", "engine": "sse"})
+        errors = openems_plan.check_jobs(
+            dict(doc, engine="avx", jobs=[dict(doc["jobs"][0], openems_options=["a b"])])
+        )
+        self.assertEqual(len(errors), 2, errors)
+
     def test_bad_jobs_are_listed(self):
         errors = openems_plan.check_jobs(
             {"name": "X", "image": "", "inputs": {"job": "x"}, "jobs": [{"id": "a"}, {"id": "a"}]}
@@ -162,6 +181,46 @@ class OpenemsPlanTest(unittest.TestCase):
         self.assertEqual(self.run_job(failed, "3").returncode, 0)  # a result, not a retry
         record = json.loads((failed / "out" / "m1.job.json").read_text())
         self.assertEqual((record["ok"], record["exit"]), (False, 3))
+
+    def test_the_job_runner_hands_the_engine_to_every_openems_run(self):
+        work = self.tmp / "engine"
+        (work / "job").mkdir(parents=True)
+        (work / "job" / "openems_job.py").write_bytes(
+            (Path(openems_plan.__file__).parent / "openems_job.py").read_bytes()
+        )
+        # A stand-in openEMS package and a script that imports it as the model scripts do.
+        (work / "openEMS").mkdir()
+        (work / "openEMS" / "__init__.py").write_text(
+            "class openEMS:\n"
+            "    def Run(self, sim_path, **kw):\n"
+            "        print('Run', sim_path, sorted(kw.items()))\n"
+        )
+        (work / "code").mkdir()
+        (work / "code" / "helper.py").write_text("NAME = 'helper'\n")
+        (work / "code" / "model.py").write_text(
+            "import sys\n"
+            "import helper\n"
+            "from openEMS import openEMS\n"
+            "openEMS().Run(sys.argv[1], numThreads=2)\n"
+            "print(helper.NAME, sys.argv[1:], openEMS.__name__)\n"
+        )
+        argv = [sys.executable, "job/openems_job.py", "--id", "m1", "--threads", "2"]
+        argv += ["--engine", "sse", "--openems-option", "exact-endcriteria", "--"]
+        argv += ["code/model.py", "{out}"]
+        env = {"PATH": "/usr/bin:/bin", "PYTHONPATH": str(work)}
+        done = subprocess.run(argv, cwd=work, capture_output=True, text=True, env=env, timeout=60)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        log = (work / "out" / "m1.log").read_text()
+        self.assertIn(
+            "Run out/m1 [('engine', 'sse'), ('exact_endcriteria', True), ('numThreads', 2)]", log
+        )
+        self.assertIn("helper ['out/m1'] openEMS", log)
+        record = json.loads((work / "out" / "m1.job.json").read_text())
+        self.assertTrue(record["ok"], log)
+        self.assertEqual(record["openems_options"], {"engine": "sse", "exact_endcriteria": True})
+        bad = argv[:6] + ["--engine", "avx", "--"] + argv[-2:]
+        done = subprocess.run(bad, cwd=work, capture_output=True, text=True, env=env, timeout=60)
+        self.assertEqual(done.returncode, 2)
 
     def test_collect_lays_results_out_like_local_runs(self):
         plan_dir = self.tmp / "plans" / "20261003-mceval-abcdef"

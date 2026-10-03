@@ -28,11 +28,15 @@ the openEMS image (docker/openems), packed ``models_per_vm`` to a VM at ``thread
     [env]                                      # the tasks' environment
     RFMACRO_ROOT = "w"
 
+    engine = "multithreaded"                   # optional: basic, sse, sse-compressed, ...
+    openems_options = ["exact-endcriteria"]    # optional: openEMS options for every Run
+
     [[jobs]]
     id = "tx12-A-e1"                           # out/<id>/ (the model's output), out/<id>.log
     script = "code/feed_sim.py"
     args = ["models/tx12-A.json", "--out", "{out}", "--excite", "TX1.P0", "--threads", "{threads}"]
-    # threads, memory_gb, disk_gb, max_wall_s, summary and labels per job, optionally
+    # threads, engine, openems_options, memory_gb, disk_gb, max_wall_s, summary and labels per
+    # job, optionally
 
 ``DIR`` receives copies of the input directories, the job bundle (``openems_job.py``), the stage
 plan, ``campaign.toml`` (image pinned by digest, ``[runtime]`` for the openEMS interpreter) and
@@ -82,6 +86,9 @@ ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$")
 DEST_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$")
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,40}$")
 DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+# openems_job.py --engine (openEMS's own names) and --openems-option K[=V].
+ENGINES = ("basic", "sse", "sse-compressed", "multithreaded", "fastest")
+OPTION_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*(=[^\s]+)?$")
 TOP_KEYS = {
     "name",
     "image",
@@ -94,6 +101,8 @@ TOP_KEYS = {
     "max_wall_s",
     "visibility",
     "summary",
+    "engine",
+    "openems_options",
     "inputs",
     "env",
     "jobs",
@@ -103,6 +112,8 @@ JOB_KEYS = {
     "script",
     "args",
     "threads",
+    "engine",
+    "openems_options",
     "memory_gb",
     "disk_gb",
     "max_wall_s",
@@ -251,8 +262,21 @@ def _positive(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0
 
 
+def _check_openems(where: str, item: Mapping[str, Any]) -> List[str]:
+    errors = []
+    if "engine" in item and item["engine"] not in ENGINES:
+        errors.append("%sengine is one of %s" % (where, ", ".join(ENGINES)))
+    options = item.get("openems_options", [])
+    if not isinstance(options, list) or not all(
+        isinstance(o, str) and OPTION_RE.match(o) for o in options
+    ):
+        errors.append("%sopenems_options is a list of openEMS options, K or K=V" % where)
+    return errors
+
+
 def check_jobs(doc: Mapping[str, Any]) -> List[str]:
     errors = ["unknown key %r" % k for k in sorted(set(doc) - TOP_KEYS)]
+    errors += _check_openems("", doc)
     if not isinstance(doc.get("name"), str) or not NAME_RE.match(doc["name"]):
         errors.append("name is a campaign name ([a-z0-9-], at most 41 characters)")
     if not isinstance(doc.get("image"), str) or not doc["image"]:
@@ -298,6 +322,7 @@ def check_jobs(doc: Mapping[str, Any]) -> List[str]:
         for key in ("threads", "memory_gb", "disk_gb", "max_wall_s"):
             if key in job and not _positive(job[key]):
                 errors.append("%s: %s is a positive number" % (where, key))
+        errors += _check_openems(where + ": ", job)
     return errors
 
 
@@ -331,10 +356,21 @@ def stage_line(job: Mapping[str, Any], doc: Mapping[str, Any]) -> Dict[str, Any]
     inputs += [{"dest": dest, "path": "inputs/" + dest} for dest in sorted(doc.get("inputs", {}))]
     env = dict(doc.get("env", {}))
     env.update(OMP_NUM_THREADS=str(threads), OPENBLAS_NUM_THREADS="1")
+    flags = ["--id", jid, "--threads", str(threads)]
+    engine = job.get("engine", doc.get("engine"))
+    if engine:
+        flags += ["--engine", engine]
+    for option in job.get("openems_options", doc.get("openems_options", [])):
+        flags += ["--openems-option", option]
+    labels = {str(k): str(v) for k, v in job.get("labels", {}).items()}
+    labels.update(model=jid, threads=str(threads))
+    if engine:
+        labels["engine"] = engine
     return {
         "id": jid,
-        "command": ["${PYTHON}", "job/" + RUNNER, "--id", jid, "--threads", str(threads), "--"]
-        + [job["script"]]
+        "command": ["${PYTHON}", "job/" + RUNNER]
+        + flags
+        + ["--", job["script"]]
         + list(job.get("args", [])),
         "inputs": inputs,
         "env": env,
@@ -347,7 +383,7 @@ def stage_line(job: Mapping[str, Any], doc: Mapping[str, Any]) -> Dict[str, Any]
         "record": record,
         "summary": summary,
         "verdict": {"file": record, "json_path": "ok"},
-        "labels": dict({str(k): str(v) for k, v in job.get("labels", {}).items()}, model=jid),
+        "labels": labels,
     }
 
 
@@ -447,6 +483,9 @@ def collect(plan_dir: Path, fetched: Path, dest: Path) -> Dict[str, Any]:
         speeds = [r.get("mcells_per_s") for r in record.get("openems_runs", [])]
         summary["models"][model] = {
             "ok": record.get("ok"),
+            "threads": record.get("threads"),
+            "openems_options": record.get("openems_options"),
+            "max_rss_mb": record.get("max_rss_mb"),
             "wall_s": record.get("wall_s"),
             "mcells_per_s": speeds,
             "cpu": (record.get("cpu") or {}).get("model"),

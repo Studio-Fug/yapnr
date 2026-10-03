@@ -574,7 +574,12 @@ python3 tools/exp/openems_plan.py collect <cid> --dest <tree>       # <tree>/run
 Each task runs `SCRIPT ARGS` through the job bundle's `openems_job.py` with `OMP_NUM_THREADS` at
 the model's `threads` and records `out/<id>.job.json` (its verdict is `ok`, the exit code of the
 script): wall and CPU time, peak memory, the CPU and whether it has AVX-512, the image's build
-flags and openEMS's own iterations, cells, seconds and MCells/s. `models_per_vm` models of
+flags and openEMS's own iterations, cells, seconds and MCells/s. `engine` (`basic`, `sse`,
+`sse-compressed` or `multithreaded`, openEMS's default) and `openems_options` (openEMS
+command-line options such as `exact-endcriteria`, which makes the stop step independent of the
+machine's speed), for the campaign or per model, reach every `openEMS.Run` of an unchanged model
+script: the runner starts it under a bootstrap that adds them to `Run`'s keyword arguments, and
+the record and the task's labels carry them. `models_per_vm` models of
 `threads` cores share a VM: `vm_vcpus` is `2 x models_per_vm x threads` on C4D (two vCPUs a core),
 or half that with `packing = "vcpu"`, which runs the threads on SMT siblings; a shape without an
 instance template runs from an instance policy. openEMS runs do not checkpoint, so a preempted

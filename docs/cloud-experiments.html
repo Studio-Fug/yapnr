@@ -513,8 +513,9 @@ gcloud<span class="w"> </span>compute<span class="w"> </span>networks<span class
 <p>Spot VMs consume the preemptible CPU quota once it is granted in a region (<a class="reference external" href="https://docs.cloud.google.com/compute/resource-usage">quotas</a>). The
 quota ceiling is the only hard cap on spending, so request only what the caps allow, in the enabled
 regions only. Look the quota id up first (it is not verified here), then create a preference with
-the id the budget guard knows, <code class="docutils literal notranslate"><span class="pre">yapnr-preemptible-cpus-&lt;region&gt;</span></code>. Check first that the region
-offers the planned shapes (the price table only shows that the region bills them):</p>
+the id <code class="docutils literal notranslate"><span class="pre">yapnr-preemptible-cpus-&lt;region&gt;</span></code>, or request the quota in the console (IAM &amp; Admin, Quotas &amp;
+System Limits); the budget guard finds an existing preference by quota id and region. Check first
+that the region offers the planned shapes (the price table only shows that the region bills them):</p>
 <div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>gcloud<span class="w"> </span>compute<span class="w"> </span>machine-types<span class="w"> </span>list<span class="w"> </span>--project<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$PROJECT</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--filter<span class="o">=</span><span class="s2">&quot;zone~^</span><span class="nv">$REGION</span><span class="s2">- AND name=( c4d-highcpu-16 c4d-highcpu-8 c3d-highcpu-8 )&quot;</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--format<span class="o">=</span><span class="s2">&quot;table(name,zone)&quot;</span>

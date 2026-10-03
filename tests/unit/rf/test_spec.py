@@ -16,6 +16,7 @@ from yapnr.rf.spec import (
     Absorbed,
     Band,
     GridSpec,
+    Loss,
     Lumped,
     OptimizerSpec,
     Port,
@@ -94,9 +95,10 @@ class SpecTest(unittest.TestCase):
             {"s": [2, 1], "phase_deg": 90, "tol_deg": 5, "band": "a"},
             {"radiated": 1, "min": 0.7, "band": "a"},
             {"absorbed": 2, "element": "R1", "min": 0.4, "band": "a"},
+            {"loss": 2, "max": 0.08, "band": "a"},
         ]
         reqs = [r for x in d for r in Requirement.from_dict(x)]
-        self.assertEqual(len(reqs), 7)
+        self.assertEqual(len(reqs), 8)
         self.assertEqual((reqs[0].bound, reqs[1].bound), ("min", "max"))
         np.testing.assert_allclose(reqs[2].limit_at([8e9, 8.5e9, 9e9]), [-10, -15, -20])
         self.assertEqual(reqs[3].scale_value, 0.5)
@@ -112,8 +114,10 @@ class SpecTest(unittest.TestCase):
             S(2, 1).phase_deg(90, tol=5, band="a"),
             RadiatedFraction(1).at_least(0.7, band="a"),
             Absorbed("R1", 2).at_least(0.4, band="a"),
+            Loss(2).at_most(0.08, band="a"),
         ]
         self.assertEqual(py, reqs)
+        self.assertEqual((reqs[7].excitation, reqs[7].scale_value), (2, 0.1))
 
     def test_validation(self):
         with self.assertRaises(ValueError):
@@ -190,6 +194,9 @@ class ObjectiveTest(unittest.TestCase):
         q["absorbed"] = {("R1", 1): torch.tensor([0.25, 0.45], dtype=torch.float64)}
         v = phi(Absorbed("R1", 1).at_least(0.4, band="a"), q, f).numpy()
         np.testing.assert_allclose(v, [1.5, -0.5])
+        q["loss"] = {1: torch.tensor([0.02, 0.18], dtype=torch.float64)}
+        v = phi(Loss(1).at_most(0.08, band="a"), q, f).numpy()
+        np.testing.assert_allclose(v, [-0.6, 1.0])
         v = phi(S(1, 1).mask_db([(8, -10), (9, -30)], band="a"), q, f).numpy()
         np.testing.assert_allclose(v, [(-20 + 10) / 10, (-40 + 30) / 10], atol=1e-6)
 

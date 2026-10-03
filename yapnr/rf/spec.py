@@ -30,11 +30,15 @@ Requirement forms (YAML on the left, Python on the right):
     {s: [2, 1], phase_deg: 90, tol_deg: 5}       S(2, 1).phase_deg(90, tol=5, band="b")
     {radiated: 1, min: 0.7, band: b}             RadiatedFraction(1).at_least(0.7, band="b")
     {absorbed: 2, element: R1, min: 0.4, ...}    Absorbed("R1", 2).at_least(0.4, band="b")
+    {loss: 2, max: 0.08, band: b}                Loss(2).at_most(0.08, band="b")
 
 Lumped resistors (`lumped`, e.g. the isolation resistor of a Wilkinson divider) are SMD parts
 across a void gap with copper pads at both ends: `Lumped(name, x_mm, y_mm, axis, ohms, pad_mm)`.
 An `absorbed` requirement bounds the fraction of the power incident at a port that one of them
-dissipates (a Wilkinson's resistor takes half of what enters an output port).
+dissipates (a Wilkinson's resistor takes half of what enters an output port); a `loss`
+requirement bounds the rest of what is lost, the fraction of the incident power that leaves
+neither through a port nor into a lumped resistor (radiation and dissipation in the copper,
+gray copper included, and the substrate).
 
 Masks are piecewise linear in frequency (GHz, dB) and are evaluated at the band's samples.
 Phases use the engineering e^{+jωt} convention, like everything reported. Each requirement may
@@ -291,8 +295,9 @@ class Requirement:
 
     quantity: "s" (|S_ij| in dB), "phase" (∠S_ij in degrees), "radiated" (radiated fraction
       of the power incident at port j) or "absorbed" (the fraction of the power incident at
-      port j that the lumped resistor `element` dissipates).
-    ports: (i, j) for S_ij; (j,) for the radiated and absorbed fractions.
+      port j that the lumped resistor `element` dissipates) or "loss" (the fraction of the
+      power incident at port j that leaves neither through a port nor into a lumped resistor).
+    ports: (i, j) for S_ij; (j,) for the radiated, absorbed and lost fractions.
     bound: "max" or "min" ("target" for phases).
     limit: a number, or a piecewise-linear mask ((f_GHz, value), ...).
     """
@@ -307,13 +312,13 @@ class Requirement:
     element: str | None = None
 
     def __post_init__(self) -> None:
-        if self.quantity not in ("s", "phase", "radiated", "absorbed"):
+        if self.quantity not in ("s", "phase", "radiated", "absorbed", "loss"):
             raise ValueError(f"unknown quantity {self.quantity!r}")
         if self.bound not in ("max", "min", "target"):
             raise ValueError(f"unknown bound {self.bound!r}")
         if (self.quantity == "phase") != (self.bound == "target"):
             raise ValueError("phase requirements (and only they) have a target")
-        n = 1 if self.quantity in ("radiated", "absorbed") else 2
+        n = 1 if self.quantity in ("radiated", "absorbed", "loss") else 2
         if len(self.ports) != n:
             raise ValueError(f"{self.quantity} requirement needs {n} port numbers")
         if self.quantity == "phase" and not (self.tol_deg and 0 < self.tol_deg < 180):
@@ -328,7 +333,7 @@ class Requirement:
 
     @property
     def default_scale(self) -> float:
-        if self.quantity in ("radiated", "absorbed"):
+        if self.quantity in ("radiated", "absorbed", "loss"):
             return 0.1
         if self.quantity == "phase":
             return 1.0
@@ -354,6 +359,9 @@ class Requirement:
         if self.quantity == "absorbed":
             op = "≥" if self.bound == "min" else "≤"
             return f"{self.element}/P{self.ports[0]} {op} {self._limit_text()} @ {self.band}"
+        if self.quantity == "loss":
+            op = "≥" if self.bound == "min" else "≤"
+            return f"loss{self.ports[0]} {op} {self._limit_text()} @ {self.band}"
         sij = f"S{self.ports[0]}{self.ports[1]}"
         if self.quantity == "phase":
             return f"∠{sij} = {self.limit:g}° ± {self.tol_deg:g}° @ {self.band}"
@@ -373,6 +381,9 @@ class Requirement:
         elif self.quantity == "absorbed":
             out["absorbed"] = self.ports[0]
             out["element"] = self.element
+            out[self.bound] = self.limit
+        elif self.quantity == "loss":
+            out["loss"] = self.ports[0]
             out[self.bound] = self.limit
         elif self.quantity == "phase":
             out["s"] = list(self.ports)
@@ -402,6 +413,10 @@ class Requirement:
             port = int(d.pop("radiated"))
             (bound,) = [k for k in ("min", "max") if k in d]
             return [cls("radiated", (port,), bound, float(d[bound]), band, scale)]
+        if "loss" in d:
+            port = int(d.pop("loss"))
+            (bound,) = [k for k in ("min", "max") if k in d]
+            return [cls("loss", (port,), bound, float(d[bound]), band, scale)]
         if "absorbed" in d:
             port = int(d.pop("absorbed"))
             (bound,) = [k for k in ("min", "max") if k in d]
@@ -485,6 +500,21 @@ class Absorbed:
         return Requirement(
             "absorbed", (self.port,), "max", float(value), band, scale, None, self.element
         )
+
+
+class Loss:
+    """Builder of lost-fraction requirements: the fraction of the power incident at port `port`
+    that leaves neither through a port nor into a lumped resistor (radiation, and dissipation in
+    the copper, gray copper included, and the substrate): `Loss(2).at_most(0.08, band=...)`."""
+
+    def __init__(self, port: int):
+        self.port = int(port)
+
+    def at_most(self, value: float, *, band: str, scale: float | None = None) -> Requirement:
+        return Requirement("loss", (self.port,), "max", float(value), band, scale)
+
+    def at_least(self, value: float, *, band: str, scale: float | None = None) -> Requirement:
+        return Requirement("loss", (self.port,), "min", float(value), band, scale)
 
 
 def _flatten(reqs) -> tuple[Requirement, ...]:

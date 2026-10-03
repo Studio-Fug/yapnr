@@ -16,7 +16,7 @@ from dataclasses import replace
 import numpy as np
 
 from yapnr.rf.problem import Problem
-from yapnr.rf.spec import Absorbed, Lumped, OptimizerSpec, RadiatedFraction, S
+from yapnr.rf.spec import Absorbed, Loss, Lumped, OptimizerSpec, RadiatedFraction, S
 from yapnr.rf.testing import nominal_calibration, tiny_spec
 
 
@@ -246,6 +246,55 @@ class AbsorbedPipelineGradientTest(PipelineGradientTest):
         np.testing.assert_allclose(a, own / p_inc, rtol=1e-9)
         phi = self.ev.phi[f"{len(p.spec.requirements)}: R1/P1 ≥ 0.3 @ b"]
         np.testing.assert_allclose(phi, (0.3 - a) / 0.1, rtol=1e-9, atol=1e-12)
+
+
+class LossPipelineGradientTest(PipelineGradientTest):
+    """The lost fraction (`Loss`, the combiner's bound on gray copper's dissipation): the net
+    power into the device less the net power out of the other ports and into the lumped
+    resistor, over the incident power, from the waves and the resistor's probes."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = tiny_spec()
+        spec = spec.replace(
+            lumped=(Lumped("R1", (0.8, 1.6), (-0.4, 0.4), "y", 50.0, 0.4),),
+            requirements=spec.requirements + (Loss(1).at_most(0.02, band="b"),),
+            optimizer=OptimizerSpec(damping=0.5),
+            solver=replace(spec.solver, edge_correction=True, port_source="mode"),
+        )
+        cls.p = p = Problem(spec, exact=True, calibrations=nominal_calibration())
+        rng = np.random.default_rng(10)
+        cls.x = rng.uniform(0.3, 0.7, p.param.n_dof)
+        cls.beta = 8.0
+        ev = p.evaluate(p.param.rho_bar(cls.x, cls.beta))
+        cls.ev = ev
+        cls.grad = p.param.vjp(cls.x, cls.beta, ev.grads)
+        cls.v = rng.standard_normal(cls.x.size)
+
+    def test_loss_value(self):
+        from yapnr.rf import sparams
+
+        p = self.p
+        self.assertIn("R1", p.lumped_probes)  # every resistor is probed for the loss
+        p.set_design(p.param.rho_bar(self.x, self.beta))
+        fwd = p.forward(1, design=False)
+        q = p.quantities(fwd.dft, 1)
+        w = q["waves"]
+        pw = {
+            n: (
+                sparams.incident_power(a, p.cal[n], p.omega),
+                sparams.incident_power(b, p.cal[n], p.omega),
+            )
+            for n, (a, b) in w.items()
+        }
+        p_in = pw[1][0] - pw[1][1]
+        p_out = pw[2][1] - pw[2][0]
+        share = q["absorbed"][("R1", 1)]
+        expect = (p_in - p_out) / pw[1][0] - share
+        np.testing.assert_allclose(q["loss"][1], expect, rtol=1e-12, atol=1e-14)
+        self.assertTrue(np.all(q["loss"][1] > 0.0) and np.all(q["loss"][1] < 1.0), q["loss"][1])
+        # Lossy gray copper: the lost fraction is far above the binary line's.
+        self.assertGreater(float(np.min(q["loss"][1])), 0.05)
 
 
 class ReactivePipelineGradientTest(PipelineGradientTest):

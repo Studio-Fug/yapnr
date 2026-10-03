@@ -7,7 +7,8 @@
   width gets the whole number of cells whose calibrated Re Z_c at the band centre is closest to
   50 Ω, starting from Hammerstad–Jensen's width;
 - the radiated-power box when a requirement needs it, and probes on the lumped resistors an
-  `absorbed` requirement names;
+  `absorbed` requirement names (on every lumped resistor when a `loss` requirement needs their
+  power);
 - the objective groups (`objectives`) and the design chain x → ρ̄ (`design.parameterization`):
   the material grid with fixed port pads (the feed width, two pixels deep), fixed regions,
   mirror symmetry and the exterior ring (1 on the feeds), the conic filter and the length scale
@@ -254,6 +255,9 @@ class Problem:
         # (probe, ½ σ_e V_e).
         self.lumped_probes: dict = {}
         absorbed = {r.element for r in spec.requirements if r.quantity == "absorbed"}
+        self.loss_ports = {r.ports[0] for r in spec.requirements if r.quantity == "loss"}
+        if self.loss_ports:
+            absorbed = {el.name for el in spec.lumped}
         for el in spec.lumped:
             comp, idx, n_series, m_parallel = self.lumped_edges(el)
             self.sim.structure.add_resistor(comp, idx, el.ohms, n_series, m_parallel)
@@ -526,13 +530,26 @@ class Problem:
         out = {"waves": waves, "s": {}, "eta": {}}
         for n, (_, b) in waves.items():
             out["s"][(n, port)] = b / a_j
-        if self.box is not None or self.lumped_probes:
+        if self.box is not None or self.lumped_probes or port in self.loss_ports:
             p_inc = sparams.incident_power(a_j, self.cal[port], omega)
         if self.box is not None:
             out["eta"][port] = self.box.power(dft) / p_inc
         out["absorbed"] = {
             (name, port): p / p_inc for name, p in self.lumped_power(dft, omega).items()
         }
+        out["loss"] = {}
+        if port in self.loss_ports:
+            # The net power into the device, less the net power out of the other ports and into
+            # every lumped resistor: −Σ_n (|b_n|² − |a_n|²) times each port's power factor (the
+            # idle ports' residual incident waves included), less the resistors' shares.
+            lost = 0.0
+            for n, (a, b) in waves.items():
+                cal = self.cal[n]
+                net = sparams.incident_power(b, cal, omega) - sparams.incident_power(a, cal, omega)
+                lost = lost - net / p_inc
+            for v in out["absorbed"].values():
+                lost = lost - v
+            out["loss"][port] = lost
         return out
 
     def lumped_power(self, dft, omega=None) -> dict:
@@ -723,7 +740,8 @@ class Problem:
     def sweep(self, rho_bar: np.ndarray, freqs=None, ports=None) -> dict:
         """The full S-matrix (F, N, N) over `freqs` (default: the sweep grid) with every port
         (or those in `ports`) excited; also Z_c (F, N), η (port → (F,)) when there is a box and
-        the probed resistors' shares of the incident power ("R1/P2" → (F,), `absorbed`).
+        the probed resistors' shares of the incident power ("R1/P2" → (F,), `absorbed`) and the
+        lost fractions ("loss2", for the ports a `loss` requirement names).
         Internal e^{−iωt} convention; `sparams.to_engineering` converts.
 
         With every port excited, S = B A⁻¹ from the wave matrices (A_nj, B_nj: the incident and
@@ -754,6 +772,8 @@ class Problem:
                 eta[jj] = np.asarray(v, dtype=np.float64)
             for (name, jj), v in qty["absorbed"].items():
                 absorbed[f"{name}/P{jj}"] = np.asarray(v, dtype=np.float64)
+            for jj, v in qty["loss"].items():
+                absorbed[f"loss{jj}"] = np.asarray(v, dtype=np.float64)
         zc = np.stack([self.cal[k].at(omega)[0] for k in sorted(self.ports)], axis=-1)
         out = {"freqs": freqs, "s": s, "zc": zc, "eta": eta, "steps": steps, "s_naive": s}
         out["absorbed"] = absorbed

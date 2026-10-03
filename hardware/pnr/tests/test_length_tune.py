@@ -167,6 +167,71 @@ class TemplateTest(unittest.TestCase):
         self.assertEqual(straight_runs(rn, set(), diagonal=False), [])
 
 
+class TuneMemberTest(unittest.TestCase):
+    def test_a_run_beside_another_footprint_still_takes_meanders(self):
+        # A 45-degree run passing a via of another net at the exact spacing: the
+        # via's keep-out ring (radius 3 at this fab and pitch) covers side cells of
+        # the run's own steps. Only a meander's new steps are judged, so the run
+        # still takes bumps away from the via.
+        from pnr.route.detail.grid import RouteGrid
+        from pnr.route.detail.maze import RouteResult
+        from pnr.route.detail.router import BoardRoute
+        from pnr.route.detail.tune import Tuner
+
+        grid = RouteGrid(10, 10, 0.25, layers=("F.Cu", "B.Cu"), clearance=0.2, track_width=0.25)
+        a = RoutedNet("A")
+        a.cells = [Cell(0, 5 + k, 30 - k) for k in range(21)]
+        a.segments = [(0, (p.i, p.j), (q.i, q.j)) for p, q in zip(a.cells, a.cells[1:])]
+        a.routed = True
+        b = RoutedNet("B")
+        b.cells = [Cell(0, 18, 21), Cell(1, 18, 21)]
+        b.vias = [(18, 21)]
+        b.routed = True
+        board = BoardRoute(
+            result=RouteResult(nets={"A": a, "B": b}, unrouted=[], iterations=0), grid=grid
+        )
+        board.tracks = [
+            ("A", "F.Cu", grid.center_of(*p), grid.center_of(*q), 0.25) for _l, p, q in a.segments
+        ]
+        board.vias = [("B",) + tuple(grid.center_of(18, 21))]
+        g = BoardGraph("t", [], [Net("A", 1, []), Net("B", 2, [])])
+        rules = pair_rules()
+        rules["diff_pairs"] = []
+        rules["length_match"] = [{"name": "ab", "nets": ["A", "B"], "tolerance_mm": 0.5}]
+        tuner = Tuner(
+            board,
+            g,
+            grid,
+            rules,
+            net_width={},
+            default_width=0.25,
+            net_halo={},
+            via_keepout=3,
+            access={"A": [a.cells[0], a.cells[-1]]},
+            via_radius=0.3,
+        )
+        owner = tuner._owner_map()
+        # Side cells of the run's own steps lie in B's footprint (its via ring).
+        corners = {
+            Cell(0, q.i, p.j)
+            for _l, p, q in [(0, Cell(0, *s[1]), Cell(0, *s[2])) for s in a.segments]
+        }
+        self.assertTrue(any("B" in owner.get(c, ()) for c in corners))
+        shape = shape_rules(rules, grid.pitch, 0.25, 0.2)
+        added, bumps, _mitres = tuner.tune_member(
+            "A", 2.0, "mm", shape, owner, tuner.copper_index()
+        )
+        self.assertGreaterEqual(bumps, 1)
+        self.assertGreater(added, 1.0)
+        # Every new cell keeps out of B's footprint; the via keeps its clearance.
+        b_fp = {c for c, n in owner.items() if "B" in n}
+        old = {Cell(0, 5 + k, 30 - k) for k in range(21)}
+        self.assertFalse((set(a.cells) - old) & b_fp)
+        via = grid.center_of(18, 21)
+        for t in board.tracks:
+            self.assertGreaterEqual(_seg_dist(t[2], t[3], via, via) + 1e-6, 0.125 + 0.3 + 0.2)
+
+
 class TuneBoardTest(unittest.TestCase):
     def test_no_sets_no_change(self):
         g = pair_board()

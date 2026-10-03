@@ -52,8 +52,10 @@ class Escape:
     # The via's span (pnr.via_policy.Span) under the grid's via model; None: through.
     via_span: Optional[object] = None
     # The declared fanout (pnr.route.detail.fanout) this escape belongs to: it is
-    # emitted at its own ``width``. None for every planned escape.
+    # emitted at its own ``width``, or ``widths`` per segment. None for every
+    # planned escape.
     fanout: Optional[str] = None
+    widths: Optional[List[float]] = None
 
 
 @dataclass

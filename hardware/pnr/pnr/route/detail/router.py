@@ -1135,8 +1135,8 @@ def _emit_escape(board: BoardRoute, esc, grid: RouteGrid, w: float, span_at=None
         span = esc.via_span if esc.kind == "joint" and esc.via_span else grid.via_model.full
         span_at.setdefault((esc.net, *esc.via_xy), []).append(span)
     if esc.kind == "joint":
-        for layer, a, b in esc.segments:
-            board.tracks.append((esc.net, layer, a, b, w))
+        for k, (layer, a, b) in enumerate(esc.segments):
+            board.tracks.append((esc.net, layer, a, b, esc.widths[k] if esc.widths else w))
         if esc.via_xy is not None:
             board.vias.append((esc.net, *esc.via_xy))
     elif esc.kind == "offgrid":

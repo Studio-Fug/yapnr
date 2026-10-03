@@ -218,17 +218,21 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
             )
             continue
         tail = []
+        tail_width = row["width_mm"]
         if row["kind"] == "drop" or (row["kind"] == "via_in_pad" and "exit" not in row):
             access = Cell(side, *grid.cell_of(*pad_xy))
         else:
             layer = layer_index[row["layer"]]
+            # The tail runs at the router's width for the net (the class width): the
+            # fanout's own width (a neck) ends at its exit.
+            tail_width = grid.net_widths.get(net, grid.track_width)
             found = _access(
                 grid,
                 net,
                 layer,
                 tuple(row["exit"]),
                 tuple(row["outward"]),
-                row["width_mm"],
+                tail_width,
                 taken,
                 owners,
             )
@@ -252,9 +256,10 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
                 grid.escape_segments.append((layer, net, tuple(row["exit"]), centre))
             out.access.setdefault(net, []).append(access)
             out.protected[(access.layer, access.i, access.j)] = net
+        widths = [row["width_mm"]] * len(segments) + [tail_width] * len(tail)
         cells = _occupied(
             grid,
-            [(la, a, b, row["width_mm"]) for la, a, b in segments + tail],
+            [(la, a, b, w) for (la, a, b), w in zip(segments + tail, widths)],
             [via] if via is not None else [],
             via_keepout,
         )
@@ -273,6 +278,7 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
             via_xy=via,
             segments=[(grid.layers[la], a, b) for la, a, b in segments + tail],
             width=row["width_mm"],
+            widths=widths,
             fanout=spec["name"],
         )
         out.escapes.append(esc)

@@ -803,6 +803,50 @@ class FixedCopperTest(unittest.TestCase):
         self.assertFalse(tuner.reroute_shorter("A", "mm"))
 
 
+class ViaModelTest(unittest.TestCase):
+    def test_no_member_is_routed_again_under_a_via_model(self):
+        # A's route crosses W (F.Cu) by a detour on B.Cu. Through vias only, the
+        # tuner routes it again, shorter, across W on In2.Cu. With blind and buried
+        # vias allowed that route would change layers through F.Cu-In2.Cu vias the
+        # board's via spans (recorded before tuning) do not hold, so A stays.
+        from pnr.stack import copper_names
+        from pnr.via_policy import BLIND, BURIED, THROUGH, GridVias, resolve
+
+        layers = ("F.Cu", "In2.Cu", "B.Cu")
+
+        def col(i, j0, j1, layer):
+            step = 1 if j1 >= j0 else -1
+            return [Cell(layer, i, j) for j in range(j0, j1 + step, step)]
+
+        for model in (False, True):
+            with self.subTest(via_model=model):
+                a = row(10, 2, 12) + col(12, 10, 30, 2) + row(30, 12, 20, 2)
+                a += col(20, 30, 10, 2) + row(10, 20, 30)
+                routes = {"A": a, "W": col(16, 0, 39, 0), "C": row(36, 2, 30, 2)}
+                board, g = hand_board(routes, layers=layers, vias=[("A", 12, 10), ("A", 20, 10)])
+                if model:
+                    policy = resolve(
+                        dict(allowed=[THROUGH, BLIND, BURIED]),
+                        copper_names(6),
+                        gaps=[0.09, 0.55, 0.2, 0.55, 0.09],
+                        bonds=["prepreg", "core", "prepreg", "core", "prepreg"],
+                    )
+                    board.grid.via_model = GridVias(policy, layers, 0.25, 0.2, (0.6, 0.3), 1)
+                rules = pair_rules()
+                rules.update(layers=6, stackup=lm.default_stackup(6), diff_pairs=[])
+                rules["length_match"] = [{"name": "ac", "nets": ["A", "C"], "tolerance_mm": 0.5}]
+                tuner = hand_tuner(board, g, rules)
+                tuner.prepare()
+                before = (list(board.tracks), list(board.vias))
+                self.assertEqual(tuner.may_reroute("A"), not model)
+                self.assertEqual(tuner.reroute_shorter("A", "mm"), not model)
+                if model:
+                    self.assertEqual((board.tracks, board.vias), before)
+                    self.assertEqual(tuner.spread_set(match_sets(rules)[0]), [])
+                else:
+                    self.assertIn(1, {c.layer for c in board.result.nets["A"].cells})
+
+
 class StackupTest(unittest.TestCase):
     def test_a_via_counts_its_span_on_four_layers(self):
         layers = ("F.Cu", "In1.Cu", "In2.Cu", "B.Cu")

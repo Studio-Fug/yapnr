@@ -197,8 +197,13 @@ on this board means through vias only, exactly as before. Under a policy:
 - `routes.json` lists each non-through via in `via_spans` (`[net, x, y, top,
   bottom, kind]`); write-back emits the KiCad via type and layer pair, and fixed
   copper keeps blind, buried and micro vias (each reserves only its span). The
-  packed maze kernel (`PNR_PACKED_MAZE=1`), the native KiCad repair loop and the
-  hierarchical driver add through vias only; the first and last say so on stderr.
+  packed and native maze kernels do not model spans: on such a board every search
+  runs on the reference kernel (the same routes, slower; stderr says so once), so
+  the exact-separation recovery, which needs the packed kernel's fields, does not
+  run there. The length tuner adds meanders there but routes no member again
+  (its new vias would lose their spans). The native KiCad repair loop and the
+  hierarchical driver add through vias only; the hierarchical driver says so on
+  stderr.
 
 ### `fixed` — lock a pose (hard)
 
@@ -418,8 +423,9 @@ the route report and in `routes.json` as `length_tuning`; a set left outside its
 budget is `length_unmatched` and named on stderr. When the short members have no
 room left for meanders, the longest member is routed again around the other nets
 (vias priced high, so it may change layer) and kept if it is shorter (`rerouted` in
-the report). A group member boxed in by its own neighbours (a bus routed at its
-pins' pitch round a corner, where the inner members are the short ones) gets room
+the report; never on a board with blind, buried or micro vias, see above). A
+group member boxed in by its own neighbours (a bus routed at its pins' pitch round
+a corner, where the inner members are the short ones) gets room
 instead: from the route as it was before tuning, each member is routed again with
 the others in place, steps close to another member priced a little higher, so the
 bus fans out where the board has room; the set is tuned again and whichever attempt

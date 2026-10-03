@@ -1261,9 +1261,16 @@ class Tuner:
 
     def may_reroute(self, net: str) -> bool:
         """A member the re-routing steps may move: routed on the grid, in no other
-        set, with no fixed copper and no layer change through a plated pad."""
+        set, with no fixed copper and no layer change through a plated pad, on a
+        grid without a via model. Under a via model (blind, buried or micro vias,
+        pnr.via_policy) the router records each via's span beside the route
+        (``BoardRoute.via_spans``) before tuning; a route swapped in here would
+        leave its new vias without spans (written as through vias) and could
+        inherit an old via's span at a reused site, so such a board gets meanders
+        only, which change no via."""
         return (
-            net in self.tunable
+            getattr(self.grid, "via_model", None) is None
+            and net in self.tunable
             and self.set_count.get(net, 0) == 1
             and not self.fixed_tracks.get(net)
             and not self.fixed_vias.get(net)

@@ -509,14 +509,16 @@ class GridModelGuardTest(unittest.TestCase):
 
         grid = RouteGrid(8, 8, 1)
         access = {"A": [Cell(0, 0, 3), Cell(0, 7, 3)], "B": [Cell(0, 3, 0), Cell(1, 3, 7)]}
-        grid.layer_mask = None  # neutral: modelled as absent
+        # Grid state the fields do not model (as a stack's layer mask was before
+        # the fields learnt it): any attribute outside MODELLED_ATTRIBUTES.
+        grid.unmodelled_feature = None  # neutral: modelled as absent
         self.assertTrue(dense_maze.supports(grid))
-        grid.layer_mask = {"A": frozenset({1})}
+        grid.unmodelled_feature = {"A": frozenset({1})}
         log = io.StringIO()
         with redirect_stderr(log):
             self.assertFalse(dense_maze.supports(grid))
             self.assertIsNone(dense_maze.DenseSession(grid).static)
-        self.assertIn("layer_mask", log.getvalue())
+        self.assertIn("unmodelled_feature", log.getvalue())
         with patch.dict(os.environ, {"PNR_SINGLE_TRACK_WORKERS": "1"}):
             with patch.dict(os.environ, {"PNR_PACKED_MAZE": "0"}):
                 expected = route(grid, access, max_iters=2)

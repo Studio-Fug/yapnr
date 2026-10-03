@@ -1463,6 +1463,131 @@ py_test(
     deps = [":pnr", ":pnr_detail", ":pnr_place"],
 )
 
+# Optional native maze kernel (pnr.route.detail.native_maze, PNR_MAZE_KERNEL=native): the
+# packed A* loop in C, loaded with ctypes. Nothing depends on it; without it the packed
+# Python kernel runs. No floating-point contraction, so every double matches Python.
+# Manual: `bazel build //...` and `bazel test //...` need no C toolchain; the native
+# parity tests below name it, and run only when asked for.
+cc_binary(
+    name = "libpnr_maze.so",
+    srcs = ["pnr/route/detail/native/maze.c"],
+    copts = [
+        "-O2",
+        "-ffp-contract=off",
+        "-fno-fast-math",
+    ],
+    linkshared = True,
+    tags = ["manual"],
+)
+
+# Dense fields and the packed kernel against the reference A* (searches, whole negotiated
+# routes, the real fixture grid, two route workers), and the guard that keeps them in step.
+# The native cases compile the kernel with a host compiler when one is on PATH, and skip
+# otherwise; dense_maze_native_test runs them on the Bazel-built library.
+py_test(
+    name = "dense_maze_test",
+    size = "medium",
+    srcs = ["tests/test_dense_maze.py"],
+    data = glob(["testdata/splanc_dev/*"]),
+    main = "tests/test_dense_maze.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        requirement("numpy"),
+    ],
+)
+
+# Exact-separation routing (PNR_EXACT_SEPARATION): the separation model and its zones,
+# class clearances, copper gaps of routed boards, the recovery mode and its scope.
+py_test(
+    name = "exact_route_test",
+    size = "medium",
+    srcs = ["tests/test_exact_route.py"],
+    main = "tests/test_exact_route.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        requirement("numpy"),
+    ],
+)
+
+# The native kernel's parity cases on the Bazel-built library (needs a C toolchain):
+# bazel test //hardware/pnr:dense_maze_native_test //hardware/pnr:exact_route_native_test
+py_test(
+    name = "dense_maze_native_test",
+    size = "medium",
+    srcs = ["tests/test_dense_maze.py"],
+    args = [
+        "KernelParityTest.test_native_matches_reference",
+        "KernelParityTest.test_native_runs_when_selected",
+        "KernelParityTest.test_missing_library_falls_back_to_packed",
+        "RouteParityTest.test_packed_and_native_routes_equal_reference",
+    ],
+    data = [":libpnr_maze.so"],
+    main = "tests/test_dense_maze.py",
+    tags = [
+        "manual",
+        "native",
+    ],
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        requirement("numpy"),
+    ],
+)
+
+py_test(
+    name = "exact_route_native_test",
+    size = "medium",
+    srcs = ["tests/test_exact_route.py"],
+    args = [
+        "ExactRouteTest.test_native_and_packed_exact_routes_match",
+        "DiagonalMaskParityTest.test_random_fields",
+    ],
+    data = [":libpnr_maze.so"],
+    main = "tests/test_exact_route.py",
+    tags = [
+        "manual",
+        "native",
+    ],
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        requirement("numpy"),
+    ],
+)
+
+# Exact-separation routes judged by kicad-cli's DRC (no clearance, hole or short
+# finding, a net class's clearance included). The KiCad tier: run it with
+# --test_env=PNR_KICAD_PYTHON=... --test_env=PNR_KICAD_CLI=... (headless KiCad); it
+# skips without them.
+py_test(
+    name = "exact_route_kicad_test",
+    size = "small",
+    srcs = [
+        "tests/test_exact_route.py",
+        "tests/test_exact_route_kicad.py",
+    ],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_exact_route_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        requirement("numpy"),
+    ],
+)
+
 py_test(
     name = "batched_cost_test",
     size = "small",

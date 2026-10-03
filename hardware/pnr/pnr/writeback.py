@@ -408,21 +408,28 @@ def _type_plane_layers(board, rules: dict) -> None:
                 pass
 
 
+def _cross(p, q, r):
+    return (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+
+
+def _point_dist_sq(p, u, v):
+    """Squared distance from point ``p`` to the closed segment ``uv``."""
+    dx, dy = v[0] - u[0], v[1] - u[1]
+    den = dx * dx + dy * dy
+    t = max(0.0, min(1.0, ((p[0] - u[0]) * dx + (p[1] - u[1]) * dy) / den)) if den else 0.0
+    return (p[0] - u[0] - t * dx) ** 2 + (p[1] - u[1] - t * dy) ** 2
+
+
 def _segment_distance_sq(a, b, c, d):
     """Squared minimum separation of two closed 2D line segments."""
-
-    def cross(p, q, r):
-        return (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
-
-    def point_dist(p, u, v):
-        dx, dy = v[0] - u[0], v[1] - u[1]
-        den = dx * dx + dy * dy
-        t = max(0.0, min(1.0, ((p[0] - u[0]) * dx + (p[1] - u[1]) * dy) / den)) if den else 0.0
-        return (p[0] - u[0] - t * dx) ** 2 + (p[1] - u[1] - t * dy) ** 2
-
-    if cross(a, b, c) * cross(a, b, d) < 0 and cross(c, d, a) * cross(c, d, b) < 0:
+    if _cross(a, b, c) * _cross(a, b, d) < 0 and _cross(c, d, a) * _cross(c, d, b) < 0:
         return 0.0
-    return min(point_dist(a, c, d), point_dist(b, c, d), point_dist(c, a, b), point_dist(d, a, b))
+    return min(
+        _point_dist_sq(a, c, d),
+        _point_dist_sq(b, c, d),
+        _point_dist_sq(c, a, b),
+        _point_dist_sq(d, a, b),
+    )
 
 
 def _collect_obstacles(board):

@@ -26,6 +26,25 @@ class PackedMazeTest(unittest.TestCase):
         self.assertEqual(astar(*args, **kwargs), expected)
         return expected
 
+    def test_packed_is_the_default_and_zero_opts_out(self):
+        from pnr.route.detail import packed_maze
+        from pnr.route.detail.maze import maze_kernel
+
+        environ = {k: v for k, v in os.environ.items() if k != "PNR_PACKED_MAZE"}
+        grid = RouteGrid(4, 4, 1)
+        args = (grid, {Cell(0, 0, 0)}, {Cell(0, 3, 3)}, "N", {}, {}, 3.0, 0.6)
+        with patch.dict(os.environ, environ, clear=True):
+            self.assertEqual(maze_kernel(), "packed")
+            with patch.object(packed_maze, "astar", wraps=packed_maze.astar) as packed:
+                _astar(*args)
+            self.assertEqual(packed.call_count, 1)
+        for value, kernel in (("1", "packed"), ("0", "reference")):
+            with patch.dict(os.environ, {"PNR_PACKED_MAZE": value}):
+                self.assertEqual(maze_kernel(), kernel)
+                with patch.object(packed_maze, "astar", wraps=packed_maze.astar) as packed:
+                    _astar(*args)
+                self.assertEqual(packed.call_count, int(kernel == "packed"))
+
     def test_seeded_obstacles_prices_halos_and_drills(self):
         for seed in range(60):
             with self.subTest(seed=seed):

@@ -169,6 +169,31 @@ chapters (hierarchy) into `docs/animations/`; the page is
 [Constraints and hierarchy](../../../docs/constraints-and-hierarchy.md). The
 showcases never gate: the nightly lane runs them for information.
 
-Performance opt-ins can be tested explicitly with `--packed-maze` and
-`--batched-wirelength`. They are recorded in provenance; ambient variables are
-still cleared, so a baseline invocation keeps its original algorithms.
+The detailed router's A\* runs on the packed kernel by default (integer cell
+keys; the same predicates, prices and tie order as the reference search, so the
+same routes). `--reference-maze` routes with the reference kernel instead, and
+`--packed-maze` is accepted as a no-op for recorded configurations.
+`--maze-kernel native` compiles the kernel's search loop in C from the frozen
+sources with the host compiler and routes with it (the same routes again; the
+search itself runs about six times faster than packed on a dense board, while
+on the small ladder boards the whole run is about as fast as packed, since
+little of it is search); each case's `pnr-report.json` records the kernel that
+actually ran (`maze_kernel`), which is packed when the library cannot load or
+no compiler is found (the runner then says so and records it in provenance).
+`--exact-separation recover|full|off` sets the detailed router's separation
+model (`PNR_EXACT_SEPARATION`, `pnr/route/detail/exact_route.py`): `full` routes
+with the exact pairwise copper separation instead of the halo model (which
+keeps nets about twice as far apart as the rules ask), `recover` routes again
+with it only when a detailed route leaves connections open and keeps that route
+when it leaves fewer open, so every route that completes is unchanged (the
+engine's default). The recovery is skipped on a board whose later stages add
+copper the route does not hold (plane drops placed after routing, deferred
+native nets), since it cannot tell whether it took their room. It needs the
+packed or native kernel, so `--reference-maze` also turns it off: a reference
+run differs from a default one in the kernel *and* in the recovery. Each
+case's `pnr-report.json` records the mode (`exact_separation`), and
+`place-route.log` each recovery or skip. An unknown kernel or mode is an
+error. The
+performance opt-in `--batched-wirelength` can be tested explicitly. All of these
+are recorded in provenance; ambient variables are still cleared, so a baseline
+invocation keeps its original algorithms.

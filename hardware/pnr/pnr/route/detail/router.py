@@ -63,6 +63,63 @@ def _net_widths(rules: Optional[dict], default_mm: float) -> dict:
     return out
 
 
+def _net_clearances(rules: Optional[dict]) -> dict:
+    """net name -> the largest clearance (mm) of the net classes that list it.
+    Writeback stamps each class's clearance into the project
+    (:func:`pnr.writeback.patch_project_rules`), KiCad judges two nets at the
+    larger of their clearances, and a net outside every class keeps the fab
+    clearance (the grid's)."""
+    out: dict = {}
+    for nc in (rules or {}).get("net_classes", []):
+        value = nc.get("clearance_mm")
+        if not value:
+            continue
+        for n in nc.get("nets", []):
+            out[n] = max(out.get(n, 0.0), float(value))
+    return out
+
+
+def _late_copper(
+    graph: BoardGraph, planes: Set[str], deferred: Set[str], escapes=()
+) -> Optional[str]:
+    """What later stages add to the board without the signal grid holding it, or
+    None: the via drops of plane nets' surface pads (writeback dog-bones them after
+    routing, :func:`pnr.writeback._dogbone_fanout_net`) and the deferred power and
+    pair nets (routed natively after the grid). A pad whose drop the escape plan
+    already holds (an escape of its net at its centre, ``escapes``) is not late.
+    :func:`.maze.route` skips its exact-separation recovery when there is any."""
+    planned = {
+        (esc.net, round(esc.pad_xy[0], 6), round(esc.pad_xy[1], 6))
+        for esc in escapes
+        if esc.net in planes and esc.kind != "blocked"
+    }
+    pads = sorted(
+        "%s.%s" % (comp.ref, name)
+        for comp in graph.components
+        for (name, net, r), pad in zip(pad_rects(comp), comp.pads)
+        if net in planes
+        and not pad.through_hole
+        and (net, round(r.cx, 6), round(r.cy, 6)) not in planned
+    )
+    parts = []
+    if pads:
+        parts.append(
+            "%d plane-net surface pad%s (%s%s)"
+            % (
+                len(pads),
+                "" if len(pads) == 1 else "s",
+                ", ".join(pads[:6]),
+                ", ..." if len(pads) > 6 else "",
+            )
+        )
+    if deferred:
+        parts.append(
+            "%d deferred net%s (%s)"
+            % (len(deferred), "" if len(deferred) == 1 else "s", ", ".join(sorted(deferred)[:6]))
+        )
+    return "; ".join(parts) or None
+
+
 def _track_halo(width: float, signal_width: float, clearance: float, pitch: float) -> int:
     """Cells to reserve so even a fine grid preserves copper separation."""
     return max(0, math.ceil((width / 2 + clearance + signal_width / 2) / pitch) - 1)
@@ -315,7 +372,8 @@ def _diag_unrouted(grid, net_access, unrouted, via_keepout):
 
     alone_ok = 0
     for net in unrouted:
-        r = route(grid, {net: net_access[net]}, max_iters=6, via_keepout=via_keepout)
+        # The halo model alone, as documented: what negotiation could not separate.
+        r = route(grid, {net: net_access[net]}, max_iters=6, via_keepout=via_keepout, exact="off")
         if not r.unrouted:
             alone_ok += 1
     sys.stderr.write(
@@ -734,6 +792,8 @@ def route_board(
         grid.layer_mask = (
             current_layer_mask(stack, layers, rules, net_width, track_width_mm) or None
         )
+    grid.net_clearances = _net_clearances(rules)
+    grid.reserve_wide_pad_clearance()
     # Fab-profile per-hole-kind rules ride in rules['fab'] beside the 5 keys
     # _fab() keeps; absent (legacy rules) they leave the original model intact.
     extra = dict((rules or {}).get("fab") or {})
@@ -863,6 +923,7 @@ def route_board(
         net_halo=net_halo,
         rrr_rounds=ripup_rounds,
         via_cost=3.0 / grid.pitch,
+        late_copper=_late_copper(graph, planes, deferred, plan.escapes),
     )
 
     if deferred or plan.blocked_nets:

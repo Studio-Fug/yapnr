@@ -31,6 +31,8 @@ from pnr.graph import BoardGraph
 from pnr.mc.halving import _rank_key
 from pnr.place.initial_pool import _route_metrics
 from pnr.place.metrics import hpwl
+from pnr.route.detail.exact_route import exact_mode
+from pnr.route.detail.native_maze import status as maze_status
 from pnr.route.detail.router import route_board
 from pnr.via_policy import board_policy
 
@@ -170,6 +172,8 @@ unresolved = sorted(set(route.result.unrouted) - set(route.deferred_nets))
             unresolved=unresolved,
             mc=dict(selected=best["id"], finalists=[c["id"] for c in evaluated]),
             escape_diagnostics=getattr(route, "escape_diagnostics", {}),
+            maze_kernel=maze_status(),
+            exact_separation=exact_mode(),
             elapsed_seconds=time.monotonic() - started,
             summary=route.summary(),
         ),

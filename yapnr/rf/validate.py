@@ -6,14 +6,20 @@ re-simulates the copper it describes:
 - **raster:** the footprint's copper (islands, custom-pad primitives and the rectangular port
   pads) is sampled at the centres of the pixels of a grid of pitch Δ/refine with the
   "inside or on" rule: a pixel is copper when at least two of four points at ±10⁻⁴ pixel
-  around its centre (along x and y) are inside a polygon, so pixels that a 45° chamfer cuts
-  in half count as copper and the rule is mirror symmetric;
+  around its centre (along x and y) are inside a polygon (mirror symmetric). The polygons
+  follow the pixel boundaries (`export.contour`), so no sample lies on an edge at refine 1–3
+  and the raster is the exported design's pixels subdivided: every finer grid simulates the
+  copper the optimizer simulated, which `copper_xor` checks on each grid (round 2's chamfered
+  polygons added copper at concave corners and removed it at convex ones on the finer grids,
+  and the finer grids resonated 1.2–1.7 % higher than the design; design §24);
 - **ports:** the feed widths are the widths of the port pads; the lines are calibrated again
   on the new grid and the S-matrix (every port excited) is renormalized to 50 Ω;
 - **grids:** "coarse" is the optimization grid (refine 1), which must reproduce the exported
   design pixel for pixel (the optimizer's binary design after the width and space repair) and
   the optimizer's binary S-parameters within 0.5 dB; "fine" halves the in-plane pitch and has
-  1.5 times the substrate cells (6 on S1, 9 on S2), graded by the same rules.
+  1.5 times the substrate cells (6 on S1, 9 on S2), graded by the same rules;
+- **seed:** for a seeded run, how much of the closed-form start survives in the exported design
+  (`seed_overlap`).
 
 `validate_case` applies the criteria of `cases.CRITERIA` to both and writes `validation.json`,
 `coarse_dense.sNp` and `fine.sNp` (engineering e^{+jωt} convention, 50 Ω).
@@ -237,6 +243,78 @@ def reciprocity_error(s: np.ndarray) -> float:
     return float(np.max(np.abs(s - np.swapaxes(s, -1, -2))))
 
 
+def match_band(freqs, s11, centre_hz: float, level_db: float = -10.0) -> dict | None:
+    """The contiguous band around `centre_hz` where |S11| ≤ `level_db` (edges interpolated
+    linearly in dB between sweep points): {"ghz": [lo, hi], "open": [lo at the sweep's start,
+    hi at its end], "fraction": (hi − lo)/centre}; None when the centre is not matched."""
+    f = np.asarray(freqs, dtype=np.float64)
+    order = np.argsort(f)
+    f = f[order]
+    d = np.asarray(sparams.db(np.asarray(s11)[order]), dtype=np.float64)
+    k = int(np.argmin(np.abs(f - centre_hz)))
+    if d[k] > level_db:
+        return None
+    lo = hi = k
+    while lo > 0 and d[lo - 1] <= level_db:
+        lo -= 1
+    while hi < f.size - 1 and d[hi + 1] <= level_db:
+        hi += 1
+
+    def edge(a, b):  # a inside, b outside
+        t = (level_db - d[a]) / (d[b] - d[a])
+        return f[a] + t * (f[b] - f[a])
+
+    f_lo = f[0] if lo == 0 else edge(lo, lo - 1)
+    f_hi = f[-1] if hi == f.size - 1 else edge(hi, hi + 1)
+    return {
+        "ghz": [float(f_lo / 1e9), float(f_hi / 1e9)],
+        "open": [lo == 0, hi == f.size - 1],
+        "fraction": float((f_hi - f_lo) / centre_hz),
+    }
+
+
+def copper_xor(coarse: np.ndarray, fine: np.ndarray, refine: int) -> dict:
+    """The footprint's raster at `refine` against the optimization grid's raster subdivided:
+    sub-pixels added and removed (both 0 when the finer grid simulates the design's copper)."""
+    sub = np.kron(np.asarray(coarse, bool), np.ones((refine, refine), bool))
+    fine = np.asarray(fine, bool)
+    return {"added": int(np.sum(fine & ~sub)), "removed": int(np.sum(sub & ~fine))}
+
+
+def seed_overlap(problem, mask: np.ndarray) -> dict | None:
+    """How much of a seeded run's closed-form start is in the exported design `mask` (window
+    pixels of `problem`'s grid, the fixed pixels left out): the seed's copper still copper
+    (`seed_kept`), the design's copper that was seed copper (`from_seed`) and their
+    intersection over union (`iou`); for the stub seed also the stubs alone (the seed less the
+    star junction). None for an unseeded run or the tuned patch (27 forward runs)."""
+    from yapnr.rf import seeds
+
+    seed = problem.spec.optimizer.seed
+    makers = {"star": seeds.star_mask, "feeds": seeds.feeds_mask, "stubs": seeds.stub_mask}
+    if seed not in makers:
+        return None
+    free = ~np.asarray(problem.material.fixed, bool)
+    final = np.asarray(mask, bool) & free
+
+    def stats(start):
+        start = np.asarray(start, bool) & free
+        both = int(np.sum(start & final))
+        union = int(np.sum(start | final))
+        return {
+            "seed_pixels": int(start.sum()),
+            "design_pixels": int(final.sum()),
+            "seed_kept": both / max(1, int(start.sum())),
+            "from_seed": both / max(1, int(final.sum())),
+            "iou": both / max(1, union),
+        }
+
+    start = makers[seed](problem) > 0.5
+    out = {"seed": seed, **stats(start)}
+    if seed == "stubs":
+        out["stubs_only"] = stats(start & ~(seeds.star_mask(problem) > 0.5))
+    return out
+
+
 def _table(freqs, s, eta, absorbed=None) -> dict:
     """|S_ij| in dB (and η, and the probed resistors' shares of the incident power) per
     frequency, for the report."""
@@ -386,6 +464,9 @@ def validate_case(
     report["footprint"] = connectivity(
         read_footprint(os.path.join(run_dir, "footprint.kicad_mod")), spec
     )
+    overlap = seed_overlap(prob, co["mask"])
+    if overlap is not None:
+        report["seed_overlap"] = overlap
     balance_at = [c for c in crit["coarse"] if c.kind == "balance"]
     if balance_at:
         bal = power_balance(
@@ -399,6 +480,8 @@ def validate_case(
         report["coarse"]["balance"] = co["balance"][1]
     report["coarse"]["grid"] = prob.describe()
     report["coarse"]["table"] = _table(co["freqs"], co["s"], co["eta"], co.get("absorbed"))
+    if n == 1:
+        report["coarse"]["match_band"] = match_band(co["freqs"], co["s"][:, 0, 0], _centre(crit))
     report["coarse"]["reciprocity_error"] = reciprocity_error(co["s"])
     if co.get("idle_incident") is not None:
         report["coarse"]["idle_incident_max"] = float(np.max(co["idle_incident"]))
@@ -448,12 +531,15 @@ def validate_case(
         )
         if "balance" in fi:
             report["fine"]["balance"] = fi["balance"][1]
+        report["fine"]["copper_xor"] = copper_xor(co["mask"], fi["mask"], refine)
         report["fine"]["grid"] = fi["problem"].describe()
         report["fine"]["table"] = _table(fi["freqs"], fi["s"], fi["eta"], fi.get("absorbed"))
+        if n == 1:
+            report["fine"]["match_band"] = match_band(fi["freqs"], fi["s"][:, 0, 0], _centre(crit))
         report["fine"]["reciprocity_error"] = reciprocity_error(fi["s"])
         if fi.get("idle_incident") is not None:
             report["fine"]["idle_incident_max"] = float(np.max(fi["idle_incident"]))
-        ok = ok and report["fine"]["ok"]
+        ok = ok and report["fine"]["ok"] and not any(report["fine"]["copper_xor"].values())
         levels[refine] = report["fine"]
         del fi
     if fine and finer:
@@ -474,18 +560,30 @@ def validate_case(
         )
         if "balance" in fr:
             report["finer"]["balance"] = fr["balance"][1]
+        report["finer"]["copper_xor"] = copper_xor(co["mask"], fr["mask"], finer)
         report["finer"]["grid"] = fr["problem"].describe()
         report["finer"]["table"] = _table(fr["freqs"], fr["s"], fr["eta"], fr.get("absorbed"))
+        if n == 1:
+            report["finer"]["match_band"] = match_band(fr["freqs"], fr["s"][:, 0, 0], _centre(crit))
         report["finer"]["reciprocity_error"] = reciprocity_error(fr["s"])
         if fr.get("idle_incident") is not None:
             report["finer"]["idle_incident_max"] = float(np.max(fr["idle_incident"]))
-        ok = ok and report["finer"]["ok"]
+        ok = ok and report["finer"]["ok"] and not any(report["finer"]["copper_xor"].values())
         levels[finer] = report["finer"]
     if len(levels) >= 2:
         report["convergence"] = convergence(levels, crit["fine"])
     report["smoke"] = smoke
     report["ok"] = bool(ok)
     return report
+
+
+def _centre(crit: dict) -> float:
+    """The centre (Hz) of the first s_max check's band of the coarse criteria (a one-port's
+    match)."""
+    for c in crit["coarse"]:
+        if c.kind == "s_max" and c.ghz is not None:
+            return 0.5e9 * (c.ghz[0] + c.ghz[1])
+    raise ValueError("no s_max check with a band")
 
 
 def write_report(run_dir: str, report: dict) -> str:

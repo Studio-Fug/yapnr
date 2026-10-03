@@ -28,13 +28,17 @@ def _pixels(polys, shape):
 
 
 class ContourTest(unittest.TestCase):
-    def test_square_is_a_chamfered_square(self):
+    def test_square_is_its_pixels(self):
         m = np.zeros((4, 4), bool)
         m[1:3, 1:3] = True
         (loop,) = trace_loops(m)
         loop = merge_collinear(loop)
-        self.assertEqual(loop.shape[0], 8)  # four sides, four half-pixel chamfers
-        self.assertAlmostEqual(signed_area(loop), 4.0 - 4 * 0.125)
+        self.assertEqual(loop.shape[0], 4)  # the pixel boundary: no chamfers
+        self.assertAlmostEqual(signed_area(loop), 4.0)
+        ell = np.zeros((5, 5), bool)
+        ell[1:4, 1] = ell[1, 1:4] = True  # an L: its concave corner stays a pixel corner
+        (loop,) = trace_loops(ell)
+        self.assertAlmostEqual(signed_area(merge_collinear(loop)), 5.0)
 
     def test_ring_nests_into_outer_and_hole(self):
         m = np.zeros((7, 7), bool)
@@ -55,12 +59,19 @@ class ContourTest(unittest.TestCase):
         self.assertEqual(len(islands(m)), 2)
 
     def test_random_round_trip(self):
+        # The polygons are the pixels on the grid and, sampled at the centres of a grid two and
+        # three times finer, the pixels subdivided (saddles included).
         rng = np.random.default_rng(0)
         for _ in range(200):
             ni, nj = rng.integers(2, 22, 2)
             m = rng.random((ni, nj)) < rng.uniform(0.2, 0.8)
             polys = [i.polygon for i in islands(m)]
             np.testing.assert_array_equal(_pixels(polys, m.shape), m)
+            for k in (2, 3):
+                fine = rasterize(
+                    polys, (np.arange(ni * k) + 0.5) / k, (np.arange(nj * k) + 0.5) / k
+                )
+                np.testing.assert_array_equal(fine, np.kron(m, np.ones((k, k), bool)))
 
     def test_fine_area_matches_polygon_area(self):
         rng = np.random.default_rng(1)

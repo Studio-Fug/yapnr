@@ -153,7 +153,7 @@ def footprint_of(problem, binary: np.ndarray, *, name: str | None = None) -> tup
     spec = problem.spec
     pitch = spec.grid.pitch_mm / problem.refine
     x0, x1, y0, y1 = spec.design_region
-    isl = islands(np.asarray(binary) > 0.5, simplify_tol=0.125)
+    isl = islands(np.asarray(binary) > 0.5)
     pads = []
     pad_px = port_pads(problem)
     for n, sx, sy in pad_px:

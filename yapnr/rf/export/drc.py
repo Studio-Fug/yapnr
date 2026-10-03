@@ -31,6 +31,7 @@ class Violation:
     reason: str  # "island", "strip" or "neck"
     at_mm: tuple[float, float]  # a point of the residue
     extent_mm: float  # largest distance of the residue from the opened set
+    box_mm: tuple[float, float, float, float] | None = None  # the residue's x0, x1, y0, y1
 
 
 @dataclass
@@ -87,11 +88,13 @@ def _residue_violations(mask, opened, radius, kind, xs, ys) -> list[Violation]:
         reach = float(dist[sel].max())
         i, j = np.argwhere(sel)[np.argmax(dist[sel])]
         at = (float(xs[i]), float(ys[j]))
+        si, sj = np.nonzero(sel)
+        box = (float(xs[si.min()]), float(xs[si.max()]), float(ys[sj.min()]), float(ys[sj.max()]))
         if not (opened & in_island).any():
-            out.append(Violation(kind, "island", at, reach * step))
+            out.append(Violation(kind, "island", at, reach * step, box))
             continue
         if reach > corner:
-            out.append(Violation(kind, "strip", at, reach * step))
+            out.append(Violation(kind, "strip", at, reach * step, box))
             continue
         ring = np.zeros_like(sel)
         ring[1:, :] |= sel[:-1, :]
@@ -100,7 +103,7 @@ def _residue_violations(mask, opened, radius, kind, xs, ys) -> list[Violation]:
         ring[:, :-1] |= sel[:, 1:]
         touching = np.unique(open_lab[ring & opened])
         if touching.size >= 2:
-            out.append(Violation(kind, "neck", at, reach * step))
+            out.append(Violation(kind, "neck", at, reach * step, box))
     return out
 
 

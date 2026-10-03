@@ -2,9 +2,9 @@
 
 - the footprint raster ("inside or on" at pixel centres) reproduces the binary design pixel for
   pixel on the optimization grid, for random designs written through the KiCad footprint;
-- on a grid twice as fine, a straight-edged shape maps to its 2 × 2 blocks, a concave corner
-  gains exactly the one fine pixel its chamfer half covers, and a mirror-symmetric design stays
-  mirror symmetric;
+- on grids two and three times as fine, every design maps to its pixels subdivided (concave
+  and convex corners included: the polygons follow the pixel boundaries), and a
+  mirror-symmetric design stays mirror symmetric;
 - the port pad widths come back in cells;
 - the criteria evaluate |S| limits, imbalance, the radiated fraction and passivity, and every
   preset spec builds at both scales.
@@ -22,7 +22,7 @@ from yapnr.rf import cases
 from yapnr.rf.export.contour import islands, point_in_loop
 from yapnr.rf.export.kicad import Footprint, PortPad, read_footprint, write_footprint
 from yapnr.rf.spec import Band, GridSpec, Port, S, Spec, StackupSpec
-from yapnr.rf.validate import footprint_mask, pad_widths
+from yapnr.rf.validate import copper_xor, footprint_mask, match_band, pad_widths
 
 PITCH = 0.5
 
@@ -92,12 +92,13 @@ class RasterTest(unittest.TestCase):
         ell[4:9, 6:8] = True
         ell[4:6, 3:6] = True
         m = _with_pads(ell)
-        fine = footprint_mask(_footprint(m, spec), spec, PITCH / 2)
-        base = np.kron(m, np.ones((2, 2), bool))
-        self.assertTrue(np.all(fine >= base))
-        extra = np.argwhere(fine & ~base)
-        # the L's concave corner at pixel (6, 5): its fine pixel nearest the corner node (6, 6)
-        self.assertEqual(extra.tolist(), [[12, 11]])
+        rng = np.random.default_rng(4)
+        for mask in [m] + [_with_pads(rng.random((12, 9)) < 0.5) for _ in range(5)]:
+            fp = _footprint(mask, spec)
+            for k in (2, 3):
+                fine = footprint_mask(fp, spec, PITCH / k)
+                np.testing.assert_array_equal(fine, np.kron(mask, np.ones((k, k), bool)))
+                self.assertEqual(copper_xor(mask, fine, k), {"added": 0, "removed": 0})
 
     def test_mirror_symmetry_is_kept(self):
         rng = np.random.default_rng(5)
@@ -164,6 +165,19 @@ class CriteriaTest(unittest.TestCase):
         self.assertFalse(cases.Check("e", "passivity", limit=-1e-3).evaluate(f, s)["ok"])
         with self.assertRaises(ValueError):
             cases.Check("x", "s_max", (1, 1), 0.0, (20.0, 21.0)).evaluate(f, s)
+
+    def test_match_band(self):
+        f = np.linspace(9.0, 11.0, 21) * 1e9
+        d = -10.0 - 10.0 * (
+            1.0 - ((f / 1e9 - 10.0) / 0.5) ** 2
+        )  # −20 dB at 10, −10 at 9.5 and 10.5
+        r = match_band(f, 10 ** (d / 20), 10e9)
+        np.testing.assert_allclose(r["ghz"], [9.5, 10.5], atol=1e-9)
+        self.assertEqual(r["open"], [False, False])
+        self.assertAlmostEqual(r["fraction"], 0.1)
+        self.assertIsNone(match_band(f, np.ones(f.size), 10e9))
+        r = match_band(f, np.full(f.size, 0.1), 10e9)  # −20 dB everywhere: open on both sides
+        self.assertEqual(r["open"], [True, True])
 
     def test_presets_build(self):
         for name in cases.CASES:

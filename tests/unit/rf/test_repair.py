@@ -5,6 +5,9 @@
 - a one-pixel bridge between two blocks offset diagonally (too narrow as copper, too narrow a
   gap once removed: the opening and the space pass undo each other) is widened to the minimum
   width (round 1's Wilkinson footprint kept two such necks);
+- a one-pixel neck between two lines offset diagonally (each covered by k × k squares) is
+  widened, symmetrically for a mirror-symmetric design (the pixel-exact footprint has it, the
+  chamfered one hid it from the polygon check);
 - two-pixel lines and gaps, fixed pixels and copper continuing into the exterior ring (a feed)
   are kept; the result is a fixed point, passes the polygon width and space check, and a
   design without violations comes back unchanged.
@@ -117,6 +120,29 @@ class RepairTest(unittest.TestCase):
         fixed, value = _fix(pads=False)
         out, _ = _run(m, fixed, value, ring=np.zeros((N + 2 * RING, N + 2 * RING)))
         np.testing.assert_array_equal(out, m)
+
+    def test_diagonal_neck(self):
+        # Two two-pixel lines, each covered by 2 × 2 squares, offset diagonally and touching
+        # along one pixel edge: the k × k opening keeps them, the polygon check of the
+        # pixel-exact footprint flags the one-pixel neck (the chamfered polygons of the earlier
+        # export widened it to 1.4 pixels); the repair widens it at the void pixel with the
+        # smaller x, and a mirror-symmetric design stays symmetric.
+        zero = np.zeros((N + 2 * RING, N + 2 * RING))
+        fixed, value = _fix(pads=False)
+        m = np.zeros((N, N), bool)
+        m[2:8, 4:6] = True
+        m[8:14, 5:7] = True  # touches the first line along the edge of (7, 5) and (8, 5)
+        self.assertFalse(_drc(m).ok)
+        out, _ = _run(m, fixed, value, ring=zero)
+        self.assertTrue(_drc(out).ok, _drc(out).to_json())
+        np.testing.assert_array_equal(out & m, m)  # only widened
+        self.assertTrue(out[7, 6])  # at the void pixel with the smaller x
+        again, rounds = _run(out, fixed, value, ring=zero)
+        np.testing.assert_array_equal(again, out)
+        sym = m | m[:, ::-1]
+        out, _ = _run(sym, fixed, value, ring=zero)
+        np.testing.assert_array_equal(out, out[:, ::-1])
+        self.assertTrue(_drc(out).ok, _drc(out).to_json())
 
     def test_pixels_for(self):
         self.assertEqual(pixels_for(0.6, 0.3), 2)

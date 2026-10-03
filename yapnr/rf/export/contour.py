@@ -1,18 +1,30 @@
 """Binary pixels → copper polygons (design §10.1).
 
-Marching squares on the pixel-centre samples of the binary field at level ½: on its bilinear
-interpolant the contour crosses each segment between a copper and a void centre at its
-midpoint, which is on the pixel boundary (the node line the solver used), and cuts pixel
-corners by half a pixel. Saddles (two diagonal copper pixels) are resolved as connected copper,
-as in the solver, where the four edges at the shared node all conduct (`materials`).
+The polygons follow the pixel boundaries exactly: the copper is the union of its closed pixels,
+the copper the solver simulates (its sheet conductance sits on the edges of the copper pixels,
+boundary edges included, `materials`), on the optimization grid and, subdivided, on every finer
+grid. Each boundary edge between a copper and a void pixel is directed with the copper on its
+left, so outer boundaries run counter-clockwise and holes clockwise; each hole belongs to the
+smallest outer loop around it.
 
-Loops are directed with the copper on the left, so outer boundaries run counter-clockwise and
-holes clockwise; each hole belongs to the smallest outer loop around it. Collinear points merge,
-Douglas–Peucker simplification (tolerance Δ/8 by default) follows, and each hole is joined to
+Saddles (two diagonal copper pixels, [[1, 0], [0, 1]]) are resolved as connected copper, as in
+the solver, where the four edges at the shared node all conduct. A polygon cannot touch itself
+at a point, so the connection is a bridge of the two void pixels' corners cut by
+`SADDLE_CUT` (a quarter pixel) along the diagonal: no sample point of a grid up to three
+times finer (sub-pixel centres at 1/6 of a pixel and more from the node) falls in the cut, so
+the raster of the polygons at those grids is the subdivided pixels. The width and space repair
+(`repair`) leaves no saddles in an exported design.
+
+Collinear points merge; an optional Douglas–Peucker simplification (off by default, since
+every vertex of a pixel boundary carries a pixel) falls back to the unsimplified loops when the
+simplified polygons no longer reproduce the pixels (pixel-centre test). Each hole is joined to
 its outer boundary by a zero-width keyhole cut along +x from its rightmost vertex, because
-footprint polygons have no holes (KiCad fractures zones for Gerber the same way). A polygon
-from simplification that no longer reproduces the pixels (pixel-centre test) falls back to the
-unsimplified loops.
+footprint polygons have no holes (KiCad fractures zones for Gerber the same way).
+
+An earlier version traced the level-½ contour of the pixel centres (marching squares), which
+cuts every convex pixel corner and fills every concave one by half a pixel: the same pixels on
+the optimization grid, but other copper at a half and a third of the pitch, where the
+re-validation resonated 1.2–1.7 % higher than the optimizer's copper (design §24).
 
 Coordinates are in pixel units with pixel (i, j) the square [i, i+1] × [j, j+1]; i runs along
 x, j along y (y up).
@@ -24,60 +36,66 @@ from dataclasses import dataclass
 
 import numpy as np
 
-# Segments per case (corner bits bl=1, br=2, tr=4, tl=8), copper on the left. Edge midpoints
-# of the marching cell between samples (a, b) .. (a+1, b+1), in half-pixel units:
-# B = (2a, 2b−1), R = (2a+1, 2b), T = (2a, 2b+1), L = (2a−1, 2b).
-_CASES = {
-    1: [("B", "L")],
-    2: [("R", "B")],
-    3: [("R", "L")],
-    4: [("T", "R")],
-    5: [("B", "R"), ("T", "L")],
-    6: [("T", "B")],
-    7: [("T", "L")],
-    8: [("L", "T")],
-    9: [("B", "T")],
-    10: [("L", "B"), ("R", "T")],
-    11: [("R", "T")],
-    12: [("L", "R")],
-    13: [("B", "R")],
-    14: [("L", "B")],
-}
+# The corners of the void pixels at a saddle are cut by this much (pixels) along the diagonal.
+SADDLE_CUT = 0.25
+
+# Unit steps of the four edge directions.
+_DIRS = {(1, 0), (0, 1), (-1, 0), (0, -1)}
 
 
-def _point(edge: str, a: int, b: int) -> tuple[int, int]:
-    return {
-        "B": (2 * a, 2 * b - 1),
-        "R": (2 * a + 1, 2 * b),
-        "T": (2 * a, 2 * b + 1),
-        "L": (2 * a - 1, 2 * b),
-    }[edge]
+def _boundary_edges(m: np.ndarray) -> dict:
+    """Directed boundary edges of the copper (copper on the left): start node → [direction]."""
+    p = np.zeros((m.shape[0] + 2, m.shape[1] + 2), dtype=bool)
+    p[1:-1, 1:-1] = m
+    out: dict[tuple[int, int], list[tuple[int, int]]] = {}
+
+    def add(nodes, d):
+        for a, b in nodes:
+            out.setdefault((int(a), int(b)), []).append(d)
+
+    c = p[1:-1, 1:-1]
+    ii, jj = np.nonzero(c & ~p[1:-1, :-2])  # void below: the bottom edge, +x
+    add(zip(ii, jj), (1, 0))
+    ii, jj = np.nonzero(c & ~p[2:, 1:-1])  # void to the right: the right edge, +y
+    add(zip(ii + 1, jj), (0, 1))
+    ii, jj = np.nonzero(c & ~p[1:-1, 2:])  # void above: the top edge, −x
+    add(zip(ii + 1, jj + 1), (-1, 0))
+    ii, jj = np.nonzero(c & ~p[:-2, 1:-1])  # void to the left: the left edge, −y
+    add(zip(ii, jj + 1), (0, -1))
+    return out
 
 
 def trace_loops(mask: np.ndarray) -> list[np.ndarray]:
-    """Closed loops (k, 2) in pixel units around the copper of a binary mask (ni, nj)."""
+    """Closed loops (k, 2) in pixel units along the pixel boundaries of the copper of a binary
+    mask (ni, nj), copper on the left; saddles connect the copper (module doc)."""
     m = np.asarray(mask, dtype=bool)
-    p = np.zeros((m.shape[0] + 2, m.shape[1] + 2), dtype=np.int64)
-    p[1:-1, 1:-1] = m
-    # Cell (a, b) has corners at padded samples (a, b), (a+1, b), (a+1, b+1), (a, b+1); padded
-    # sample (a, b) is pixel (a−1, b−1) with centre (a − ½, b − ½).
-    code = p[:-1, :-1] + 2 * p[1:, :-1] + 4 * p[1:, 1:] + 8 * p[:-1, 1:]
-    nxt: dict[tuple[int, int], tuple[int, int]] = {}
-    for a, b in zip(*np.nonzero((code > 0) & (code < 15))):
-        for e0, e1 in _CASES[int(code[a, b])]:
-            nxt[_point(e0, int(a), int(b))] = _point(e1, int(a), int(b))
+    edges = _boundary_edges(m)
+    used: set = set()
     loops = []
-    seen: set = set()
-    for start in sorted(nxt):
-        if start in seen:
-            continue
-        pts = []
-        q = start
-        while q not in seen:
-            seen.add(q)
-            pts.append(q)
-            q = nxt[q]
-        loops.append(np.array(pts, dtype=np.float64) / 2.0)
+    for start in sorted(edges):
+        for d0 in sorted(edges[start]):
+            if (start, d0) in used:
+                continue
+            pts: list[tuple[float, float]] = []
+            node, d = start, d0
+            while (node, d) not in used:
+                used.add((node, d))
+                nxt = (node[0] + d[0], node[1] + d[1])
+                outs = edges[nxt]
+                if len(outs) == 1:
+                    dn = outs[0]
+                    pts.append((float(nxt[0]), float(nxt[1])))
+                else:
+                    # A saddle: turn right (the copper on the left stays connected) and cut the
+                    # void pixel's corner between the two edges.
+                    dn = (d[1], -d[0])
+                    if dn not in outs:
+                        raise ValueError(f"inconsistent boundary at node {nxt}")
+                    c = SADDLE_CUT
+                    pts.append((nxt[0] - c * d[0], nxt[1] - c * d[1]))
+                    pts.append((nxt[0] + c * dn[0], nxt[1] + c * dn[1]))
+                node, d = nxt, dn
+            loops.append(np.array(pts, dtype=np.float64))
     return loops
 
 
@@ -239,8 +257,10 @@ def keyhole(outer: np.ndarray, holes: list[np.ndarray]) -> np.ndarray:
     return np.array(poly, dtype=np.float64)
 
 
-def islands(mask: np.ndarray, *, simplify_tol: float = 0.125) -> list[Island]:
-    """Copper islands of a binary mask as keyholed polygons (pixel units), largest first."""
+def islands(mask: np.ndarray, *, simplify_tol: float = 0.0) -> list[Island]:
+    """Copper islands of a binary mask as keyholed polygons (pixel units), largest first;
+    `simplify_tol` > 0 simplifies the loops (Douglas–Peucker, kept only if the polygons still
+    reproduce the pixels)."""
     raw = trace_loops(mask)
     loops = [merge_collinear(lp) for lp in raw]
     simple = [simplify_loop(lp, simplify_tol) for lp in loops]

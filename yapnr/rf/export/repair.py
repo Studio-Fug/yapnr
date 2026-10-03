@@ -22,6 +22,21 @@ window the exterior ring's values (the feeds are copper, the rest void), until n
   (none of them fixed void or outside the window) becomes copper, which keeps the connection
   the design made, and the rounds continue.
 
+- **diagonal necks and gaps** (a two-pixel rule): the copper is exported pixel for pixel
+  (`contour`), and a union of k × k squares can still narrow to √2 pixels where two of its void
+  pixels face each other diagonally across one copper pixel ([[0, 1, ·], [1, 1, 1], [·, 1, 0]])
+  or to one pixel where they face each other across a pixel edge (void pixels offset by
+  (2, 1)); a gap of void narrows the same way between copper pixels. A neck is widened (the
+  k × k square through the facing void pixel with the smaller x, or through the other one when
+  that one is fixed void or outside the window, that needs the fewest new copper pixels, as
+  for conflicts); a gap is closed (the k × k square through each of its void pixels that needs
+  the fewest new copper pixels), as the space opening closes one-pixel gaps and as the dilated
+  design of the robust optimization sees them. Ties go to the square nearest the window's
+  centre line in y, so a mirror-symmetric design stays symmetric. Round 2's divider, antenna
+  and three-channel bank had two to four √2 necks (0.42 mm at 0.3 mm pitch) and the antenna
+  two one-pixel gaps between its feed pad and the islands beside it; the chamfered polygons of
+  the earlier export hid them from the polygon check (design §24).
+
 The result is exported and then re-simulated by the validator, which compares it with the
 optimizer's binary design.
 """
@@ -109,12 +124,126 @@ def repair(
                 break
             # The space pass undid the opening (module doc, "conflicts"): widen the copper.
             bad = b & ~_opening(b, outside, kw, r) & ~fixed
-            if not bad.any():
-                break
-            b = _widen(b, bad, outside, kw, r, fixed & ~fv)
+            if bad.any():
+                b = _widen(b, bad, outside, kw, r, fixed & ~fv)
+                if not np.array_equal(b, prev):
+                    continue
+            # Diagonal necks and gaps that the polygon check flags (module doc).
+            if kw == 2 or ks == 2:
+                b = _repair_necks(b, outside, r, fixed, fv, kw, ks)
+            b = np.where(fixed, fv, b)
             if np.array_equal(b, prev):
-                break  # nothing can be widened (fixed void or the exterior in the way)
+                break  # nothing left, or nothing can change (fixed or the exterior in the way)
     return b.astype(np.float64), rounds
+
+
+def _necks(mask: np.ndarray, outside: np.ndarray, r: int, frozen: np.ndarray) -> list:
+    """Candidate √2 and one-pixel necks of the copper and gaps of the void (two-pixel rules):
+    [(kind, centre (x, y) in window pixel units, window pixels to widen or to close)]. A neck's
+    pixel is the facing void pixel with the smaller x, or the other one when that one is
+    `frozen` (fixed void or outside the window); a gap's pixels are its void pixels in the
+    window. `outside` as in `_opening` (r ≥ 2); the patterns are searched over the window and
+    the exterior around it."""
+    ni, nj = mask.shape
+    ext = outside.astype(bool).copy()
+    ext[r : r + ni, r : r + nj] = mask
+    n0, n1 = ext.shape
+    can = np.zeros_like(ext)  # pixels that may become copper
+    can[r : r + ni, r : r + nj] = ~mask & ~frozen[r : r + ni, r : r + nj]
+    out = []
+
+    def at(v, di, dj):
+        # Anchors (i, j): i in [0, n0 − 2), j in [2, n1 − 2), so every offset used (0..2 along
+        # x, −2..2 along y) stays in the array.
+        return v[di : di + n0 - 2, 2 + dj : 2 + dj + n1 - 4]
+
+    for cop in (True, False):
+        v = ext if cop else ~ext  # the narrow material: copper (a neck) or void (a gap)
+        kind = "width" if cop else "space"
+        for sy in (1, -1):
+            # √2: A = (0, 0), B = (2, 2sy) of the other material across M = (1, sy), with this
+            # material on both sides of the diagonal through M.
+            cond = (
+                ~at(v, 0, 0)
+                & ~at(v, 2, 2 * sy)
+                & at(v, 1, sy)
+                & (at(v, 0, sy) | at(v, 1, 2 * sy))
+                & (at(v, 1, 0) | at(v, 2, sy))
+            )
+            centre = (1.5, sy + 0.5)
+            shapes = [((0, 0), (2, 2 * sy), [(1, sy)])]
+            # One pixel: A = (0, 0), B = (2, sy) across (1, 0) and (1, sy) (centre on their
+            # shared edge); A = (0, 0), B = (1, 2sy) across (0, sy) and (1, sy).
+            cond2 = ~at(v, 0, 0) & ~at(v, 2, sy) & at(v, 1, 0) & at(v, 1, sy)
+            cond3 = ~at(v, 0, 0) & ~at(v, 1, 2 * sy) & at(v, 0, sy) & at(v, 1, sy)
+            shapes += [
+                ((0, 0), (2, sy), [(1, 0), (1, sy)]),
+                ((0, 0), (1, 2 * sy), [(0, sy), (1, sy)]),
+            ]
+            centres = [centre, (1.5, 0.5 + 0.5 * sy), (1.0, sy + 0.5)]
+            for c, ctr, (a_, b_, mid) in zip((cond, cond2, cond3), centres, shapes):
+                if cop:
+
+                    def pick(i, j, a_=a_, b_=b_):
+                        pa, pb = (i + a_[0], j + a_[1]), (i + b_[0], j + b_[1])
+                        return [pa] if can[pa] else ([pb] if can[pb] else [])
+
+                else:
+
+                    def pick(i, j, mid=mid):
+                        return [(i + m0, j + m1) for m0, m1 in mid]
+
+                for x, y, pix in _cands(c, ctr, pick, r, ni, nj):
+                    out.append((kind, (x, y), pix))
+    return out
+
+
+def _cands(cond, centre, pick, r, ni, nj):
+    """(x, y, window pixels) of every anchor where `cond` holds (see `_necks`)."""
+    res = []
+    for i, j in np.argwhere(cond):
+        ai, aj = int(i), int(j) + 2  # extended indices of the anchor pixel
+        pix = [(p - r, q - r) for p, q in pick(ai, aj) if r <= p < r + ni and r <= q < r + nj]
+        if pix:
+            res.append((ai - r + centre[0], aj - r + centre[1], pix))
+    return res
+
+
+def _repair_necks(b, outside, r, fixed, fv, kw, ks) -> np.ndarray:
+    """Widen the necks and close the gaps of `_necks` that the polygon width and space check
+    of the pixel-exact copper flags (a candidate counts when its centre lies in a flagged
+    residue's box grown by half a pixel): the check's opening tolerates a √2 neck between
+    blocks thick enough that the disks from both sides overlap in it."""
+    from yapnr.rf.export.contour import islands
+    from yapnr.rf.export.drc import check_width_space
+
+    ni, nj = b.shape
+    frozen = np.ones_like(outside)  # fixed void and the exterior stay void
+    frozen[r : r + ni, r : r + nj] = fixed & ~fv
+    cand = _necks(b, outside, r, frozen)
+    if not cand:
+        return b
+    polys = [isl.polygon for isl in islands(b)]
+    viol = check_width_space(polys, (0.0, ni, 0.0, nj), 1.0, kw, ks).violations
+    boxes = {"width": [], "space": []}
+    for v in viol:
+        if v.box_mm is not None:
+            x0, x1, y0, y1 = v.box_mm
+            boxes[v.kind].append((x0 - 0.5, x1 + 0.5, y0 - 0.5, y1 + 0.5))
+    neck = np.zeros_like(b)
+    gap = np.zeros_like(b)
+    for kind, (x, y), pix in cand:
+        if not any(x0 <= x <= x1 and y0 <= y <= y1 for x0, x1, y0, y1 in boxes[kind]):
+            continue
+        tgt = neck if kind == "width" else gap
+        for p, q in pix:
+            tgt[p, q] = True
+    out = b.copy()
+    if kw == 2 and neck.any():
+        out = _widen(out, neck & ~fixed, outside, kw, r, fixed & ~fv)
+    if ks == 2 and gap.any():
+        out = _widen(out, gap & ~fixed, outside, kw, r, fixed & ~fv)
+    return out
 
 
 def _widen(
@@ -127,7 +256,9 @@ def _widen(
 ) -> np.ndarray:
     """`mask` with, for every pixel of `bad`, the k × k square through it that needs the fewest
     new copper pixels made copper; squares that would need copper outside the window (where
-    `outside` is void) or on `keep_void` pixels are not used (first such square on ties)."""
+    `outside` is void) or on `keep_void` pixels are not used. On ties the square nearest the
+    window's centre line in y wins, then the one with the smallest x: the choice commutes with
+    a mirror about that line, so a mirror-symmetric design stays symmetric."""
     ni, nj = mask.shape
     ext = outside.astype(bool).copy()
     ext[r : r + ni, r : r + nj] = mask
@@ -144,8 +275,11 @@ def _widen(
                 if (need & frozen[i0 : i0 + k, j0 : j0 + k]).any():
                     continue
                 cost = int(need.sum())
-                if best is None or cost < best[0]:
-                    best = (cost, i0, j0)
+                # Distance of the square's centre from the centre line, in half pixels.
+                off = abs(2 * (j0 - r) + k - nj)
+                key = (cost, off, i0)
+                if best is None or key < best[0]:
+                    best = (key, i0, j0)
         if best is not None:
             _, i0, j0 = best
             out[i0 : i0 + k, j0 : j0 + k] = True

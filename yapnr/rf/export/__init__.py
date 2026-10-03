@@ -1,7 +1,7 @@
 """Export of a binary design (design §10).
 
-- `contour`: marching squares on the binary pixels → loops → nesting → simplified,
-  keyholed polygons (one per copper island);
+- `contour`: the pixel boundaries of the binary copper → loops → nesting → keyholed polygons
+  (one per copper island), the copper the solver simulated on every grid;
 - `raster`: polygons → samples (even-odd), connected components, the exact Euclidean
   distance transform;
 - `drc`: the minimum width and space check of the polygons (morphological opening and

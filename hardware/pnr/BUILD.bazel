@@ -70,6 +70,7 @@ filegroup(
         "pnr/fanout/__init__.py",
         "pnr/fanout/__main__.py",
         "pnr/fanout/assign.py",
+        "pnr/fanout/bottom.py",
         "pnr/fanout/geom.py",
         "pnr/fanout/lattice.py",
         "pnr/fanout/planner.py",

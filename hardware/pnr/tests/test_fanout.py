@@ -94,7 +94,7 @@ def board(positions, nets, *, pos=(20.0, 20.0), rot=0.0, targets=True):
     return BoardGraph("t", comps, nets_out, BoardOutline(40, 40))
 
 
-def spec(**kw):
+def spec(refs=("U1",), **kw):
     s = dict(
         name="u1",
         ref="U1",
@@ -104,7 +104,7 @@ def spec(**kw):
         ),
     )
     s.update(kw)
-    return parse(s, ["U1"])
+    return parse(s, list(refs))
 
 
 def rules():
@@ -306,6 +306,65 @@ class PlanTest(unittest.TestCase):
             self.assertIn("no legal path", p["terminals"][name]["reason"])
         self.assertEqual(p["diagnostics"]["signals_escaped"], 0)
         self.assertEqual(p["diagnostics"]["drops_placed"], p["diagnostics"]["drops"])
+
+
+class BottomSitesTest(unittest.TestCase):
+    def test_sites_clear_the_vias_and_reach_their_nets(self):
+        # A peripheral array (rings 0-3), its inner ring alternating supply and ground.
+        positions = array(15, lambda r, c: min(r, c, 14 - r, 14 - c) > 3)
+        nets = {}
+        for name in positions:
+            r, c = ROWS.index(name[0]), int(name[1:]) - 1
+            k = min(r, c, 14 - r, 14 - c)
+            nets[name] = ("GND" if (r + c) % 2 else "VCC") if k == 3 else ""
+        graph = board(positions, nets, targets=False)
+        for ref in ("C1", "C2"):
+            pads = [
+                Pad("1", "VCC", (-0.48, 0.0), (0.56, 0.62), land_corner=0.14),
+                Pad("2", "GND", (0.48, 0.0), (0.56, 0.62), land_corner=0.14),
+            ]
+            graph.components.append(
+                Component(ref, "c", (0, 0), 0.0, "top", (1.86, 0.94), (1.86, 0.94), pads=pads)
+            )
+        sp = spec(
+            ("U1", "C1", "C2"),
+            via_classes={
+                "ground": {
+                    "diameter_mm": 0.35,
+                    "drill_mm": 0.15,
+                    "nets": ["GND", "VCC"],
+                    "sites": ["interstitial"],
+                }
+            },
+            bottom_sites={"parts": ["C1", "C2"], "max_stub_mm": 0.6},
+        )
+        r = rules()
+        p = plan(
+            graph,
+            r,
+            sp,
+            grid_layers=["F.Cu", "In2.Cu", "B.Cu"],
+            plane_nets={"GND", "VCC"},
+            signal_nets=set(),
+        )
+        found = p["bottom"]
+        self.assertEqual(sorted(found["sites"]), ["C1", "C2"], found["unplaced"])
+        vias = [((v[1], v[2]), v[3]) for v in p["copper"]["vias"]]
+        boxes = []
+        for ref, site in found["sites"].items():
+            pose = Pose(site["at"], site["rot"])
+            self.assertEqual(site["side"], "bottom")
+            for pad in graph.component(ref).pads:
+                c = pose.to_board((pad.offset[0], -pad.offset[1]))
+                swap = int(round(site["rot"])) % 180 == 90
+                w, h = (pad.size[1], pad.size[0]) if swap else pad.size
+                land = Land(c, w / 2, h / 2, 0.14)
+                for at, d in vias:
+                    self.assertGreaterEqual(land.distance(at, at) - d / 2, 0.1 - 1e-6)
+                self.assertLessEqual(site["stubs"][pad.name], 0.6 + 1e-9)
+            boxes.append(site["at"])
+        self.assertGreater(math.dist(*boxes), 0.9)
+        self.assertTrue(found["keepouts"])
 
 
 class SpecTest(unittest.TestCase):

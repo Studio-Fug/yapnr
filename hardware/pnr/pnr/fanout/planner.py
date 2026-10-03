@@ -104,9 +104,19 @@ def _inputs(graph, rules, spec, layers, plane_nets, signal_nets, fixed_copper):
         for ref in keepout_refs
         if ref in graph.refs
     }
+    sites = (spec.get("bottom_sites") or {}).get("parts") or []
     return dict(
         schema=SCHEMA,
         spec=spec,
+        site_parts=[
+            [ref, graph.component(ref).side, list(graph.component(ref).courtyard)]
+            + [
+                [p.name, p.net, list(p.offset), list(p.size), p.land_corner]
+                for p in graph.component(ref).pads
+            ]
+            for ref in sites
+            if ref in graph.refs
+        ],
         part=dict(
             ref=comp.ref,
             pos=list(comp.pos),
@@ -377,7 +387,12 @@ def plan(
         variant=spec.get("variant", 0),
     )
     assigner.run()
-    return _emit(spec, comp, pose, lat, model, tasks, skipped, warnings, assigner, digest, layers)
+    result = _emit(spec, comp, pose, lat, model, tasks, skipped, warnings, assigner, digest, layers)
+    if spec.get("bottom_sites"):
+        from .bottom import sites
+
+        result["bottom"] = sites(graph, spec, result, lat, pose, rules)
+    return result
 
 
 def _emit(spec, comp, pose, lat, model, tasks, skipped, warnings, assigner, digest, layers):

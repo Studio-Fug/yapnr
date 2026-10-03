@@ -141,6 +141,38 @@ layer no class or zone gives a net, a shared plane layer, zones on a signal
 layer), is a warning in the run's log and in the PnR report
 (`escape_diagnostics.stack_warnings`).
 
+**Via kinds (blind, buried, micro).** Every via is a through via unless the routing
+rules carry a `via_policy` (`pnr.via_policy`). The ladder drivers resolve it from
+the design's declared kinds (`via_policy.allowed`: `through`, `blind`, `buried`,
+`micro`, with an optional `microvia: {diameter_mm, drill_mm}`) less every kind the
+board's `.kicad_dru` disallows (`blind_via`, `buried_via`, `micro_via` or `via`; a
+ban limited by a layer or condition counts everywhere), on the board's stackup
+block (copper layers and dielectric thickness). Nothing declared, or every other
+kind banned, means through vias only, exactly as before. Under a policy:
+
+- a via spans two copper layers and occupies only the layers between them: the
+  router tests, reserves and prices it there (blind F.Cu to In2.Cu leaves B.Cu
+  free), at a keep-out from its own diameter. Its price is the via cost times
+  `0.5 + 0.5 * depth / board thickness` (through: 1.0). A layer change takes the
+  cheapest allowed span covering both layers; hole spacing is kept between all
+  vias whatever their spans, and same-net vias at one site whose spans share a
+  layer are one barrel;
+- a microvia joins two adjacent layers, one of them outer, whose dielectric is no
+  deeper than its drill (aspect ratio 1:1); KiCad accepts any pair, the engine
+  keeps to these. Its size is the declared one, else the project's net class
+  microvia, widened to the board's minimum annular width (which KiCad applies to
+  microvias too); blind and buried vias take the routed via size;
+- a plane pad drops to its net's plane nearest the pad (a microvia when one
+  qualifies). A net with several plane layers (two ground planes) gets two
+  connections on each: drops are deepened where clear, else buried stitches are
+  placed beside them. The counts are in the PnR report
+  (`escape_diagnostics.plane_layer_connections`) and the write-back log; KiCad
+  keeps a plane layer without any connection filled, floating, and its DRC does
+  not flag it;
+- `routes.json` lists each non-through via in `via_spans` (`[net, x, y, top,
+  bottom, kind]`); write-back emits the KiCad via type and layer pair, and fixed
+  copper keeps blind, buried and micro vias (each reserves only its span).
+
 ### `fixed` — lock a pose (hard)
 
 Pins a part so downstream steps can't move it — the right tool for anything with a

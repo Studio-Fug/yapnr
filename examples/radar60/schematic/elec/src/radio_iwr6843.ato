@@ -85,6 +85,7 @@ module Radio:
     signal tms
     signal tdi
     signal frame_start
+    signal pmic_nint
     signal tx1
     signal tx2
     signal tx3
@@ -311,6 +312,14 @@ module Radio:
     u1.TMS ~ tms
     u1.TDI ~ tdi
     u1.MCU_CLKOUT ~ frame_start
+    # PMIC nINT (open drain, 10 kOhm pull-up in the PMIC block) to GPIO_2 (K13) through 0 Ohm, as
+    # TI's IWR6843ISK Rev D (RADAR_INTn, SWRR164): the radio sees PMIC faults (current limit,
+    # power-good, thermal) without polling (review 2026-10-03)
+    signal gpio_2
+    u1.GPIO_2 ~ gpio_2
+    r_pmic_int = new Radar60_R_0_0402
+    r_pmic_int.p1 ~ pmic_nint
+    r_pmic_int.p2 ~ gpio_2
 
     # --- RF ports (copper owned by the RF macro RFM1) ---
     u1.TX1 ~ tx1
@@ -378,6 +387,8 @@ module Radio:
     trait tms has_net_name_suggestion<name="JTAG_TMS", level="SUGGESTED">
     trait tdi has_net_name_suggestion<name="JTAG_TDI", level="SUGGESTED">
     trait sync_in has_net_name_suggestion<name="SYNC_IN", level="SUGGESTED">
+    trait gpio_2 has_net_name_suggestion<name="RADIO_GPIO_2", level="SUGGESTED">
+    trait vio_ls_on has_net_name_suggestion<name="VIO_LS_ON", level="SUGGESTED">
 
     # fixed designators (board-design.md 2.1)
     trait u1 has_designator<designator="U1">

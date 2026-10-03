@@ -70,8 +70,6 @@ module Radar60:
     j1.P4 ~ gnd
     j1.P5 ~ canh
     j1.P6 ~ canl
-    j1.P7 ~ uart_tx
-    j1.P8 ~ uart_rx
     j1.MOUNT ~ gnd
 
     power_in = new PowerIn
@@ -93,6 +91,8 @@ module Radar60:
     pmic.pgood ~ pgood
     pmic.nreset ~ nreset
     pmic.vio ~ v3v3_io
+    pmic.gpio2_out ~ radio.vio_ls_on
+    pmic.nint ~ radio.pmic_nint
 
     radio = new Radio
     radio.gnd ~ gnd
@@ -131,10 +131,14 @@ module Radar60:
     can.canh ~ canh
     can.canl ~ canl
 
+    # UART: 1 kOhm in series between J1 (and its ESD diode) and the radio; J2 and the test pads stay
+    # on the radio side
     uart = new Uart
     uart.tx ~ uart_tx
     uart.rx ~ uart_rx
     uart.gnd ~ gnd
+    j1.P7 ~ uart.tx_conn
+    j1.P8 ~ uart.rx_conn
 
     debug = new Debug
     debug.gnd ~ gnd
@@ -174,6 +178,7 @@ module Radar60:
     rf_macro.rx4 ~ radio.rx4
 
     mech = new Mech
+    mech.gnd ~ gnd
 
     # --- test pads (rails, reset, straps, UART, timeline) ---
     tp_5v = new Radar60_TestPad_D1
@@ -246,8 +251,10 @@ module Radar60:
     # @pnr-pair {"name":"lvds_clk","terminal_chain":[{"p":"radio.u1:L14","n":"radio.u1:L15"},{"p":"debug.j2:44","n":"debug.j2:46"}],"max_uncoupled_mm":1.0,"reference_layer":"In1.Cu"}
     # @pnr-pair {"name":"lvds_frclk","terminal_chain":[{"p":"radio.u1:M14","n":"radio.u1:M15"},{"p":"debug.j2:26","n":"debug.j2:28"}],"max_uncoupled_mm":1.0,"reference_layer":"In1.Cu"}
     # @pnr-si {"name":"lvds","profile":"lvds_600mbps","pairs":["lvds_tx0","lvds_tx1","lvds_clk","lvds_frclk"],"group_skew_mm":2.0}
-    # Noise (N-0003 forms, proposed): 4 MHz bucks with spread spectrum; the 40 MHz crystal.
-    # @pnr-noise-source {"target":"pmic.u2","pads":["10","12","23","25"],"kind":"switching","f_mhz":4.0,"spread":true}
+    # Noise (N-0003 forms, proposed): 4 MHz bucks; the 40 MHz crystal. Spread spectrum is off by the
+    # OTP default (EN_SPREAD_SPEC = 0, SNVSAW2B Table 49) until firmware sets it, so the source is
+    # declared without spreading (review 2026-10-03).
+    # @pnr-noise-source {"target":"pmic.u2","pads":["10","12","23","25"],"kind":"switching","f_mhz":4.0,"spread":false}
     # @pnr-noise-source {"target":"radio.y1","pads":["1","3"],"kind":"clock","f_mhz":40}
     # Ripple budgets for a -105 dBc spur, uVrms by frequency in MHz (SWRS219F Table 7-2): 1.0 V RF rail (bypass) and 1.8 V VCO/IF rail.
     # @pnr-noise-budget {"target":"radio.u1","pads":["G5","H5","J5","C2","D2","A2","B2"],"kind":"supply_ripple_uvrms","limits":{"0.1375":7,"0.275":5,"0.55":3,"1.1":2,"2.2":11,"4.4":13,"6.6":22}}

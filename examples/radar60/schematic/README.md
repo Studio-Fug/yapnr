@@ -6,23 +6,23 @@ atopile flow ([docs/frontends/atopile.md](../../../docs/frontends/atopile.md)). 
 feed copper is the yapnr RF macro RFM1 (`../rf`); here it is a placeholder footprint with one pad
 per RF port.
 
-| File                              | Contents                                                                     |
-| --------------------------------- | ---------------------------------------------------------------------------- |
-| `elec/src/radar60.ato`            | top level, J1, test pads, net names, the `@pnr-*` PnR intent                 |
-| `elec/src/power_in.ato`           | TVS, TPS259474A eFuse (OVLO 5.45 V, UVLO 4.08 V, ILIM 2.0 A, PG)             |
-| `elec/src/pmic_lp87524j.ato`      | LP87524J-Q1, snubbers, LC filters, 1.0 V split and shunt, PGOOD to NRESET RC |
-| `elec/src/radio_iwr6843.ato`      | IWR6843 supplies and decoupling, 40 MHz crystal, SOP straps, pull-ups, LED   |
-| `elec/src/flash_qspi.ato`         | MX25V1635F boot flash                                                        |
-| `elec/src/can_fd.ato`             | TCAN1044AV-Q1, ESD2CAN24-Q1, pin-mux options, DNP split termination          |
-| `elec/src/uart.ato`               | UART ESD                                                                     |
-| `elec/src/debug.ato`              | DCA1000 header J2 (development fit), JTAG J3 (DNP)                           |
-| `elec/src/rf_macro.ato`           | RFM1 placeholder                                                             |
-| `elec/src/mech.ato`               | mounting holes, fiducials                                                    |
-| `elec/src/radar60_prod.ato`       | product fit: J2 not fitted, 0 Ohm in the shunt footprint                     |
-| `tools/gen_parts.py`              | writes every part into `elec/src/parts/` (not committed)                     |
-| `tools/footprints.py`             | land patterns from the package drawings (ABL0161B, RNF0026C, RPW0010A)       |
-| `tools/data/abl0161_ballmap.json` | the IWR6843 ABL0161 ball map, from TI SWRS219F                               |
-| `tools/check_schematic.py`        | ERC-equivalent checks of the built board                                     |
+| File                              | Contents                                                                   |
+| --------------------------------- | -------------------------------------------------------------------------- |
+| `elec/src/radar60.ato`            | top level, J1, test pads, net names, the `@pnr-*` PnR intent               |
+| `elec/src/power_in.ato`           | TVS, TPS259474A eFuse (OVLO 5.45 V, UVLO 4.08 V, ILIM 2.0 A, PG divider)   |
+| `elec/src/pmic_lp87524j.ato`      | LP87524J-Q1, snubbers, LC filters, 1.0 V split and shunt, PGOOD to NRESET  |
+| `elec/src/radio_iwr6843.ato`      | IWR6843 supplies and decoupling, 40 MHz crystal, SOP straps, pull-ups, LED |
+| `elec/src/flash_qspi.ato`         | MX25V1635F boot flash, WP#/HOLD# pull-ups                                  |
+| `elec/src/can_fd.ato`             | TCAN1044AV-Q1, ESD2CAN24-Q1, pin-mux options, DNP split termination        |
+| `elec/src/uart.ato`               | UART ESD and 1 kOhm back-power limiting resistors                          |
+| `elec/src/debug.ato`              | DCA1000 header J2 (development fit), JTAG J3 (DNP)                         |
+| `elec/src/rf_macro.ato`           | RFM1 placeholder                                                           |
+| `elec/src/mech.ato`               | mounting holes, fiducials                                                  |
+| `elec/src/radar60_prod.ato`       | product fit: J2 not fitted, 0 Ohm in the shunt footprint                   |
+| `tools/gen_parts.py`              | writes every part into `elec/src/parts/` (not committed)                   |
+| `tools/footprints.py`             | land patterns from the package drawings (ABL0161B, RNF0026C, RPW0010A)     |
+| `tools/data/abl0161_ballmap.json` | the IWR6843 ABL0161 ball map, from TI SWRS219F                             |
+| `tools/check_schematic.py`        | ERC-equivalent checks of the built board                                   |
 
 ## Build
 
@@ -64,7 +64,14 @@ any order.
 - two push-pull outputs on one net, an input with nothing fitted to drive or pull it, an IC
   pin alone on its net;
 - an `@pnr-*` annotation whose target or pads do not exist, or a `@pnr-current` pad set that
-  spans several nets.
+  spans several nets;
+- the two PMIC CLKIN options both fitted (that shorts SOP2 to GND).
+
+It also prints two quantified warnings for review: the 1.0 V rail's fitted capacitance (about
+183 uF, TI's IWR6843ISK Rev D network) against the LP87524's 100 uF for a 1-phase output, and
+the 1.0 V DC window at the balls. The latter is a firmware requirement: write BUCK2_VSET = 0x52
+(1.025 V) over I2C before the RF starts (0.946 V worst case, 1.0455 V at no load, against
+0.95-1.05 V).
 
 ## Sources
 

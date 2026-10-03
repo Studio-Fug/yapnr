@@ -15,6 +15,9 @@ netlist in the built ``.kicad_pcb`` instead:
    drives or pulls it; no fitted IC pin that must be connected left alone on a net.
 4. **Annotations**: every ``@pnr-*`` target in the sources resolves to a footprint (by atopile
    address) and its pads exist; a ``@pnr-current`` pad set lies on one net.
+5. **Fit options and quantified warnings**: the two PMIC CLKIN options are never both fitted
+   (that shorts SOP2 to GND); the 1.0 V rail's total capacitance against the LP87524 limit and its
+   DC window at the balls are printed as quantified warnings (design assumptions for review).
 
 Usage::
 
@@ -160,6 +163,7 @@ NET_BY_BALLNAME = {
     "PMIC_CLKOUT": "SOP2_PMIC_CLKOUT",
     "MCU_CLKOUT": "FRAME_START",
     "SYNC_IN": "SYNC_IN",
+    "GPIO_2": "RADIO_GPIO_2",
 }
 # deliberately unused balls (no other pad on their net)
 UNUSED_BALLNAMES = {
@@ -173,7 +177,6 @@ UNUSED_BALLNAMES = {
     "GPADC6",
     "GPIO_0",
     "GPIO_1",
-    "GPIO_2",
     "DMM_SYNC",
     "GPIO_47",
     "GPIO_31",
@@ -320,6 +323,7 @@ RADIO_TYPES = {
     "PMIC_CLKOUT": ("io",),
     "MCU_CLKOUT": ("out",),
     "SYNC_IN": ("in",),
+    "GPIO_2": ("io",),  # PMIC nINT through 0 Ohm (an input in firmware)
 }
 # rail sources: (atopile address, pad) -> nominal volts
 SOURCES = {
@@ -663,6 +667,69 @@ def check_annotations(fps: List[Fp], sources: Path, rep: Report) -> None:
     rep.info["annotations"] = rows
 
 
+_CAP = re.compile(r"^Radar60_C_(\d+)([pnu])(\d*)_")
+_SCALE = {"p": 1e-12, "n": 1e-9, "u": 1e-6}
+
+
+def cap_value(part: str) -> Optional[float]:
+    """Capacitance of a generated capacitor part, from its name (Radar60_C_2u2_0402 -> 2.2 uF)."""
+    m = _CAP.match(part)
+    if not m:
+        return None
+    whole, unit, frac = m.groups()
+    return float(f"{whole}.{frac or 0}") * _SCALE[unit]
+
+
+# LP87524J Buck2 (SNVSAW2B 6.5): total output capacitance of a 1-phase output, maximum
+BUCK2_COUT_MAX_F = 100e-6
+# 1.0 V window at the balls (SWRS219F 7.4, LDO bypass) and the DC budget terms (review_calc 5)
+RF_WINDOW_V = (0.95, 1.05)
+BUCK_DC, BUCK_STEP, IR_DROP_V = 0.02, 0.03, 0.028
+BUCK2_VSET_FIRMWARE_V = 1.025  # BUCK2_VSET = 0x52, written by firmware before the RF starts
+
+
+def check_fit_options(fps: List[Fp], nets, rep: Report) -> None:
+    """Footprint options that must not be fitted together, and the quantified power warnings."""
+    by_addr = {f.addr: f for f in fps}
+    gnd, sync = by_addr.get("pmic.r_clkin_gnd"), by_addr.get("pmic.r_clkin_sync")
+    if gnd is not None and sync is not None and gnd.fitted and sync.fitted:
+        rep.err(
+            "pmic.r_clkin_gnd and pmic.r_clkin_sync are both fitted: SOP2 (PMIC_CLKOUT) shorted to GND"
+        )
+    volts = rails(fps, nets)
+    one_volt = {n for n, v in volts.items() if abs(v - 1.0) < 1e-9}
+    total = 0.0
+    for f in fps:
+        c = cap_value(f.part)
+        if c is None or not f.fitted:
+            continue
+        if any(net in one_volt for _, net in f.pads):
+            total += c
+    rep.info["buck2_output_capacitance_uf"] = round(total * 1e6, 2)
+    if total > BUCK2_COUT_MAX_F:
+        rep.warn(
+            f"1.0 V rail (Buck2) carries {total * 1e6:.0f} uF of fitted capacitance (nominal) against"
+            f" {BUCK2_COUT_MAX_F * 1e6:.0f} uF total for a 1-phase output (SNVSAW2B 6.5); kept on the"
+            " IWR6843ISK Rev D precedent; B4: start-up time, BUCK2_ILIM_INT during soft start, a 2.5 A"
+            " load step"
+        )
+    lo = 1.0 * (1 - BUCK_DC - BUCK_STEP) - IR_DROP_V
+    v = BUCK2_VSET_FIRMWARE_V
+    lo_fw, hi_fw = v * (1 - BUCK_DC - BUCK_STEP) - IR_DROP_V, v * (1 + BUCK_DC)
+    rep.info["rf_rail_window_v"] = {
+        "otp_1v0_worst_min": round(lo, 4),
+        "firmware_vset": v,
+        "firmware_worst_min": round(lo_fw, 4),
+        "firmware_no_load_max": round(hi_fw, 4),
+    }
+    rep.warn(
+        f"1.0 V at the balls: OTP 1.000 V gives {lo:.3f} V worst case (-2 % DC, -3 % step,"
+        f" {IR_DROP_V * 1e3:.0f} mV IR) against {RF_WINDOW_V[0]} V; firmware must write BUCK2_VSET ="
+        f" {v:.3f} V (0x52) before the RF starts: {lo_fw:.3f} V worst case, {hi_fw:.4f} V at no load"
+        f" (max {RF_WINDOW_V[1]} V); the step term was characterized with 44 uF; B4 measures VOUT_PA"
+    )
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("board")
@@ -677,6 +744,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     check_power_and_conflicts(fps, nets, sources, rep)
     check_singletons(fps, nets, rep)
     check_annotations(fps, sources, rep)
+    check_fit_options(fps, nets, rep)
     rep.info["footprints"] = len(fps)
     rep.info["fitted"] = sum(1 for f in fps if f.fitted)
     rep.info["dnp"] = sorted(f.ref + " " + f.addr for f in fps if "dnp" in f.attrs)

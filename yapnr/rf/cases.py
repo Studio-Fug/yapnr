@@ -177,6 +177,14 @@ def isolation_keepout(resistor: Lumped, window: tuple[float, float, float, float
     return FixedRegion((max(resistor.x_mm), window[1]), tuple(resistor.y_mm), 0.0)
 
 
+def arm_keepout(resistor: Lumped, x_from_mm: float) -> FixedRegion:
+    """The strip on the symmetry line from `x_from_mm` to a combiner's isolation resistor, as
+    wide as the part's body, kept void: the arms from the input junction to the resistor stay
+    apart along it, so the junction lies west of `x_from_mm` and every arm path to the resistor
+    is at least as long as the strip (a Wilkinson's quarter-wave arms)."""
+    return FixedRegion((x_from_mm, min(resistor.x_mm)), tuple(resistor.y_mm), 0.0)
+
+
 def wilkinson(scale: str = "full") -> Spec:
     """(a2) A Wilkinson-type combiner/divider: the equal split of `divider` plus matched and
     isolated outputs (|S22| = |S33| and |S32| ≤ −20 dB), with a 100 Ω isolation resistor (an
@@ -212,7 +220,7 @@ def wilkinson(scale: str = "full") -> Spec:
             bands={"pass": Band(9.0, 11.0, 2)},
             requirements=reqs,
             lumped=(smoke_r,),
-            fixed=(isolation_keepout(smoke_r, (0.0, 4.8, -3.3, 3.3)),),
+            fixed=(isolation_keepout(smoke_r, (0.0, 4.8, -3.3, 3.3)), arm_keepout(smoke_r, 2.4)),
             optimizer=replace(_R2_SMOKE_OPT, seed="feeds"),
             solver=_R2_SMOKE_SOLVER,
         )
@@ -238,18 +246,24 @@ def wilkinson(scale: str = "full") -> Spec:
         lumped=(r1,),
         # The outputs' arms join only through the resistor east of it (design §23: with the
         # resistor's share alone, gray copper bridged the arms across the symmetry line east of
-        # it, in parallel with it, and became copper shorts at β = 16).
-        fixed=(isolation_keepout(r1, window),),
+        # it, in parallel with it, and became copper shorts at β = 16), and west of it they stay
+        # apart from x = 1.2 mm (the port pad plus one minimum width) to the resistor: with the
+        # east keepout alone (W10) the optimizer joined the arms 1.2 mm west of the resistor,
+        # an odd-mode path of about 3 mm instead of a quarter wave (about 5 mm), so the output
+        # match and the isolation centred above the band (−14 and −15 dB at 9 GHz, −31 and
+        # −18 dB at 11 GHz).
+        fixed=(isolation_keepout(r1, window), arm_keepout(r1, 1.2)),
         # Robust from β = 16: the dilated and eroded designs join the epigraph (at β = 8 they are
         # about as gray as the nominal design). With gray copper a resistive sheet, the nominal
         # design alone isolated the outputs with a gray bridge between the arms (a distributed
         # resistor) that the binarized design turned into a short (gray t 1.15, binarized
         # t 15–20, round 2's screens); the robust variants alone did not stop it at β = 8 (gray
-        # t 0.39, binarized 1.3–1.5); the requirement on the resistor's share and the keepout
-        # do (design §23). Plain MMA at β = 8, adaptive moves from β = 16, as the filter banks.
+        # t 0.39, binarized 1.3–1.5); the requirement on the resistor's share and the keepouts
+        # do (design §23). Plain MMA at β = 8 (35 iterations: W10's t still fell at its 25th),
+        # adaptive moves from β = 16, as the diplexer.
         optimizer=OptimizerSpec(
             betas=(8, 16, 32, 64),
-            iterations_per_beta=(25, 15, 15, 10),
+            iterations_per_beta=(35, 15, 15, 10),
             budget_min=240,
             seed="feeds",
             move_late=0.05,
@@ -498,7 +512,11 @@ def filterbank3(scale: str = "full") -> Spec:
         # (whose designs relied on one-pixel stubs the repair removed, and whose adaptive moves
         # from the start stalled). Moves of 0.05 from β = 32 on: with 0.1 the near-binary
         # designs of the other cases flipped boundary pixels back and forth (t alternating
-        # between 0.7 and 8).
+        # between 0.7 and 8). Round 2 (design §23): this formulation's best binarized design
+        # came at β = 8 (t 1.39) and fails the adjacent-channel rejection; after it the adaptive
+        # steps tuned the design with near-threshold pixels (gray robust t 0.83, binarized
+        # 1.6–4.8). A 24 × 24 mm window with the variants from β = 8 did worse (robust binarized
+        # t 5.3–5.6 at iterations 15 and 20) and was stopped.
         optimizer=OptimizerSpec(
             betas=(8, 16, 32, 64),
             iterations_per_beta=(25, 15, 10, 10),

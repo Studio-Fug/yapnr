@@ -188,14 +188,33 @@ def _astar(
     vm = getattr(grid, "via_model", None)
 
     @lru_cache(maxsize=None)
+    def layer_window(la: int, i: int, j: int, radius: int):
+        """Max occupancy, history and soft price in one layer's window."""
+        cells = [
+            Cell(la, i + di, j + dj)
+            for di in range(-radius, radius + 1)
+            for dj in range(-radius, radius + 1)
+            if grid.in_bounds(i + di, j + dj)
+        ]
+        return (
+            max([0] + [occ.get(p, 0) for p in cells]),
+            max(history.get(p, 0.0) for p in cells),
+            max(softc.get(p, 0.0) for p in cells),
+        )
+
+    @lru_cache(maxsize=None)
+    def span_cost(i: int, j: int, span) -> float:
+        """:func:`cell_cost` of a via of ``span`` (its layers, its keep-out): the
+        maxima over its layers' windows, each window shared by every span."""
+        radius = max(track_halo, span.keepout)
+        windows = [layer_window(la, i, j, radius) for la in span.layers()]
+        present = 1.0 + pres_fac * max(w[0] for w in windows)
+        return (1.0 + max(w[1] for w in windows)) * present + max(w[2] for w in windows)
+
+    @lru_cache(maxsize=None)
     def cell_cost(c: Cell, via=False) -> float:
-        # ``via``: True for a through via, a Span (its layers, its keep-out) else.
-        if via is True:
-            radius, layers = max(track_halo, via_halo), range(grid.nlayers)
-        elif via:
-            radius, layers = max(track_halo, via.keepout), via.layers()
-        else:
-            radius, layers = track_halo, (c.layer,)
+        radius = max(track_halo, via_halo) if via else track_halo
+        layers = range(grid.nlayers) if via else (c.layer,)
         cells = [
             Cell(la, c.i + di, c.j + dj)
             for la in layers
@@ -286,7 +305,7 @@ def _astar(
         # the grid layers of its span: those alone are tested, priced and reserved,
         # and its price is ``via_cost`` times the span's multiplier.
         column = None
-        columns = {}
+        memo = {}
         for la in range(grid.nlayers):
             if la == cur.layer:
                 continue
@@ -304,24 +323,15 @@ def _astar(
                 span = None
             else:
                 span = vm.span(cur.layer, la)
-                if span not in columns:
-                    columns[span] = _via_column(
-                        grid,
-                        cur,
-                        net,
-                        block,
-                        raw_block,
-                        span.keepout,
-                        drill_sites + path_drills[cur],
-                        span.layers(),
-                    )
-                allowed, plated = columns[span]
+                allowed, plated = _span_column(
+                    grid, cur, net, block, raw_block, drill_sites + path_drills[cur], span, memo
+                )
             if not allowed:
                 continue
             if plated is None and span is None:
                 ng = base + cell_cost(Cell(0, nc.i, nc.j), via=True) + via_cost
             elif plated is None:
-                ng = base + cell_cost(Cell(span.lo, nc.i, nc.j), via=span) + via_cost * span.cost
+                ng = base + span_cost(nc.i, nc.j, span) + via_cost * span.cost
             else:
                 ng = base + cell_cost(nc)
             if ng < g.get(nc, float("inf")):
@@ -335,22 +345,55 @@ def _astar(
     return None
 
 
-def _via_column(grid, cur, net, block, raw_block, via_halo, sites, layers=None):
-    """``(allowed, plated)`` for a via at ``cur``'s column: every layer's cell (of
-    ``layers``, a span's grid layers; all of them for a through via) clear of
-    ``block`` and via-passable, then (a drilled via, ``plated`` None) its halo
-    window clear of ``raw_block`` and its hole spaced from ``sites``. Hole spacing
-    is judged for every via whatever its span (a conservative reading)."""
+def _span_column(grid, cur, net, block, raw_block, sites, span, memo):
+    """:func:`_via_column` for a via of ``span`` (pnr.via_policy.Span) at ``cur``'s
+    column, judged on the span's grid layers only at its own keep-out. Each
+    layer's verdict, the plated transition and the hole test are kept in ``memo``
+    (one expanded cell) and shared by every span there; the verdict is the one
+    :func:`_via_column` gives on those layers."""
     i, j = cur.i, cur.j
-    layers = range(grid.nlayers) if layers is None else layers
-    if any(Cell(z, i, j) in block or not grid.via_passable(z, i, j, net) for z in layers):
+    for z in span.layers():
+        key = ("cell", z)
+        if key not in memo:
+            memo[key] = Cell(z, i, j) not in block and grid.via_passable(z, i, j, net)
+        if not memo[key]:
+            return False, None
+    if "plated" not in memo:
+        memo["plated"] = getattr(grid, "plated_transition", lambda *a: None)(net, i, j)
+    if memo["plated"] is not None:
+        return True, memo["plated"]
+    k = span.keepout
+    if raw_block:
+        for z in span.layers():
+            key = ("halo", z, k)
+            if key not in memo:
+                memo[key] = not any(
+                    Cell(z, i + di, j + dj) in raw_block
+                    for di in range(-k, k + 1)
+                    for dj in range(-k, k + 1)
+                )
+            if not memo[key]:
+                return False, None
+    if "hole" not in memo:
+        memo["hole"] = grid.hole_site_clear(grid.center_of(i, j), sites)
+    return (True, None) if memo["hole"] else (False, None)
+
+
+def _via_column(grid, cur, net, block, raw_block, via_halo, sites):
+    """``(allowed, plated)`` for a through via at ``cur``'s column: every layer's
+    cell clear of ``block`` and via-passable, then (a drilled via, ``plated`` None)
+    its halo window clear of ``raw_block`` and its hole spaced from ``sites``."""
+    i, j = cur.i, cur.j
+    if any(
+        Cell(z, i, j) in block or not grid.via_passable(z, i, j, net) for z in range(grid.nlayers)
+    ):
         return False, None
     plated = getattr(grid, "plated_transition", lambda *a: None)(net, i, j)
     if plated is not None:
         return True, plated
     if any(
         Cell(z, i + di, j + dj) in raw_block
-        for z in layers
+        for z in range(grid.nlayers)
         for di in range(-via_halo, via_halo + 1)
         for dj in range(-via_halo, via_halo + 1)
     ):

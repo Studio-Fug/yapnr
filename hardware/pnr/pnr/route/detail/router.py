@@ -385,9 +385,9 @@ def connect_plane_layers(grid, graph, stack, plan, result, plane_access, via_kee
     (spread over the board), then stitch vias from a connected plane layer of the
     net are added beside the drops. Every new layer is checked like a drop
     (exact pads, escape copper, hole spacing) plus the routed nets' reservations.
-    A plane layer left without a connection is filled as an island of its own net
-    and removed by KiCad's zone filler, so the counts are reported (a quantified
-    assumption, not a guarantee of the plane's current capacity).
+    A plane layer left without a connection floats (KiCad 10 keeps its fill and
+    its DRC does not flag it), so the counts are reported: two per layer is an
+    assumption about current sharing, not a check of the plane's capacity.
 
     Returns ``(stitches, report)``: stitches ``[(net, (x, y), span)]`` and per net
     ``{layer: connections}``."""

@@ -239,7 +239,7 @@ polygon, or the union of several (`areas`). Several regions on one part all appl
 | `name`    | Unique name (required).                                                                |
 | `refs`    | Refs, globs or `@addresses` (at least one known part).                                 |
 | `rect`    | `[x0, y0, x1, y1]` with `x0 < x1`, `y0 < y1`.                                          |
-| `polygon` | `[[x, y], ...]`: at least three points, nonzero area (concave is fine).                |
+| `polygon` | `[[x, y], ...]`: at least three points, nonzero area, simple (concave is fine).        |
 | `areas`   | A list of `{rect: ...}` / `{polygon: ...}` pieces; the area is their union.            |
 | `hard`    | `true` (default): a placement outside is illegal. `false`: a penalty on the protrusion. |
 | `weight`  | Soft penalty weight (default 10).                                                      |
@@ -252,11 +252,21 @@ region:
     rect: [0, 0, 21, 32] # the west half of a 42 x 32 mm board
 ```
 
-A rectangle, or a single polygon, is tested exactly. A union of several pieces is
-tested on a 0.25 mm raster (a cell counts when it lies wholly inside one piece), so
-it is conservative by up to one cell; the legalizer uses that raster for every
-polygon. A region on a part in a `line_group` or a hierarchical block acts on the
-member's courtyard inside the rigid line or block, at every rotation.
+The part's body is its courtyard widened to its pads and silkscreen, where it
+really lies about the footprint origin: a pin header measured from pin 1 or a
+connector with an offset shell is not padded out to a box centred on its origin. A
+rectangle, a single polygon, and a union whose pieces have only horizontal and
+vertical edges are tested exactly. Other unions are tested on a raster whose grid
+lines are the pieces' own coordinates plus a 0.25 mm grid; only the cells a sloped
+edge cuts are refused, so the test is conservative by at most one cell along a
+sloped edge. The legalizer uses that raster for every polygon and union. A region
+on a part in a `line_group` or a hierarchical block acts on the member's body
+inside the rigid line or block, at every rotation.
+
+A region no placement can meet is refused before placement, with the region and
+the part named: a fixed part outside it, or a part that fits nowhere inside it at
+any allowed rotation within the outline, its keep-outs and its hard edge band.
+Self-crossing polygons are refused when the file is read.
 
 ### `align` — share one coordinate (hard, or soft on request)
 
@@ -271,14 +281,16 @@ rotation and side, so a rotation moves a pad or edge anchor but never `origin`.
 | `refs`   | Refs, globs or `@addresses` (at least two known parts).                                      |
 | `axis`   | `y`: the anchors share one y (a horizontal line); `x`: one x.                                |
 | `anchor` | One for every ref, or a `{ref: anchor}` map (unlisted refs: `origin`); see below.            |
-| `tol_mm` | With `hard`: the largest spread of the anchors (default 0.25, at least 0.15).                |
+| `tol_mm` | With `hard`: the largest spread of the anchors (default 0.25; 0 asks for one exact line).   |
 | `hard`   | `true` (default): a larger spread is illegal. `false`: a penalty on each anchor's deviation. |
 | `weight` | Soft penalty weight (default 5).                                                             |
 | `reason` | Free text for reports.                                                                       |
 
 Anchors: `origin` (the footprint origin, as KiCad stores the position; the
 default), `centre` (the centre of the pad bounding box), `pad1` or `pad:<name>`,
-and a courtyard edge: `south`/`north` with `axis: y`, `west`/`east` with `axis: x`.
+and a body edge: `south`/`north` with `axis: y`, `west`/`east` with `axis: x`. The
+body is the one a region measures (above), so an edge anchor finds the real edge of
+an off-centre part.
 
 ```yaml
 align:
@@ -295,12 +307,21 @@ align:
 An align works with `row`, `line_group` and `edge_align`: a member of a rigid line
 carries its anchor in the line's frame (two refs of one line are refused, as the
 line already fixes their offsets), and a hard edge band and an align band both
-bound the part. The compiler refuses an edge anchor that does not measure the axis
-and a tolerance under 0.15 mm (legalization slots are 0.25 mm apart). With three
-or more members and pad or edge anchors the band can hold no slot; the legalizer
-then backtracks, and fails with the part named if no arrangement fits. Aligned
-parts stay top-level parts in hierarchical placement. `PNR_POWER_FIRST=1` refuses
-a design with a `region` or an `align`.
+bound the part. The compiler refuses an edge anchor that does not measure the axis.
+
+The legalizer keeps each member within the band the members already placed leave
+(at least 0.15 mm wide, since its slots are 0.25 mm apart), narrowed to where the
+members not yet placed can still reach. A `tol_mm` under that band (0, say) is met
+afterwards: the members move onto one exact line wherever every move stays legal.
+An align already within its `tol_mm` keeps the legalized poses, which stay on the
+placement grid that the router's grid follows. A band that holds no slot is
+backtracked, and the legalizer fails with the part named if no arrangement fits.
+
+An align no placement can meet is refused before placement, naming the align:
+fixed members farther apart than `tol_mm`, members whose regions or edge bands keep
+their anchors apart, or a `pad:<name>` the part does not have. Aligned parts stay
+top-level parts in hierarchical placement. `PNR_POWER_FIRST=1` refuses a design
+with a `region` or an `align`.
 
 ### `net_class` / `diff_pair` / `length_match` — routing rules
 

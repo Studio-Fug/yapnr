@@ -143,6 +143,7 @@ class BottomSideWritebackTest(unittest.TestCase):
             ],
             capture_output=True,
             text=True,
+            timeout=600,  # a writeback of four parts takes seconds; never hang the suite
         )
         if result.returncode:
             raise RuntimeError(result.stderr[-3000:])

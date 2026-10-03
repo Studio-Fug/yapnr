@@ -11,10 +11,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-CLI = os.environ.get("KICAD_CLI") or os.environ.get(
-    "PNR_KICAD_CLI", "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"
-)  # PNR_KICAD_CLI (src15)
-NATIVE = importlib.util.find_spec("pcbnew") is not None and Path(CLI).exists()
+# A headless kicad-cli only (AGENTS.md: never the stock macOS application bundle,
+# whose every call registers a Dock icon); skipped without one.
+CLI = os.environ.get("KICAD_CLI") or os.environ.get("PNR_KICAD_CLI", "")
+NATIVE = importlib.util.find_spec("pcbnew") is not None and bool(CLI) and Path(CLI).exists()
 
 
 def build(path, chains, vias, layers=2, pad_b_layer="F", pad_b_angle=0.0):
@@ -80,7 +80,7 @@ def build(path, chains, vias, layers=2, pad_b_layer="F", pad_b_angle=0.0):
     Path(path).with_suffix(".kicad_pro").write_text("{}\n")
 
 
-@unittest.skipUnless(NATIVE, "needs KiCad's pcbnew and kicad-cli")
+@unittest.skipUnless(NATIVE, "needs KiCad's pcbnew and KICAD_CLI or PNR_KICAD_CLI")
 class OracleAgreementTest(unittest.TestCase):
     A, B = (10.0, 10.0), (30.0, 14.0)
 

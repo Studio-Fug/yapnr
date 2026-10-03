@@ -6,23 +6,23 @@ atopile flow ([docs/frontends/atopile.md](../../../docs/frontends/atopile.md)). 
 feed copper is the yapnr RF macro RFM1 (`../rf`); here it is a placeholder footprint with one pad
 per RF port.
 
-| File                              | Contents                                                                   |
-| --------------------------------- | -------------------------------------------------------------------------- |
-| `elec/src/radar60.ato`            | top level, J1, test pads, net names, the `@pnr-*` PnR intent               |
-| `elec/src/power_in.ato`           | TVS, TPS259474A eFuse (OVLO 5.45 V, UVLO 4.08 V, ILIM 2.0 A, PG divider)   |
-| `elec/src/pmic_lp87524j.ato`      | LP87524J-Q1, snubbers, LC filters, 1.0 V split and shunt, PGOOD to NRESET  |
-| `elec/src/radio_iwr6843.ato`      | IWR6843 supplies and decoupling, 40 MHz crystal, SOP straps, pull-ups, LED |
-| `elec/src/flash_qspi.ato`         | MX25V1635F boot flash, WP#/HOLD# pull-ups                                  |
-| `elec/src/can_fd.ato`             | TCAN1044AV-Q1, ESD2CAN24-Q1, pin-mux options, DNP split termination        |
-| `elec/src/uart.ato`               | UART ESD and 1 kOhm back-power limiting resistors                          |
-| `elec/src/debug.ato`              | DCA1000 header J2 (development fit), JTAG J3 (DNP)                         |
-| `elec/src/rf_macro.ato`           | RFM1 placeholder                                                           |
-| `elec/src/mech.ato`               | mounting holes, fiducials                                                  |
-| `elec/src/radar60_prod.ato`       | product fit: J2 not fitted, 0 Ohm in the shunt footprint                   |
-| `tools/gen_parts.py`              | writes every part into `elec/src/parts/` (not committed)                   |
-| `tools/footprints.py`             | land patterns from the package drawings (ABL0161B, RNF0026C, RPW0010A)     |
-| `tools/data/abl0161_ballmap.json` | the IWR6843 ABL0161 ball map, from TI SWRS219F                             |
-| `tools/check_schematic.py`        | ERC-equivalent checks of the built board                                   |
+| File                              | Contents                                                                           |
+| --------------------------------- | ---------------------------------------------------------------------------------- |
+| `elec/src/radar60.ato`            | top level, J1, test pads, net names, the `@pnr-*` PnR intent                       |
+| `elec/src/power_in.ato`           | TVS, TPS259474A eFuse (OVLO 5.45 V, UVLO 4.08 V, ILIM 2.0 A, PG divider)           |
+| `elec/src/pmic_lp87524j.ato`      | LP87524J-Q1, snubbers, LC filters, 1.0 V split and shunt, PGOOD to NRESET          |
+| `elec/src/radio_iwr6843.ato`      | IWR6843 supplies and decoupling, 40 MHz crystal, SOP straps, pull-ups, LED         |
+| `elec/src/flash_qspi.ato`         | MX25V1635F boot flash, WP#/HOLD# pull-ups                                          |
+| `elec/src/can_fd.ato`             | TCAN1044AV-Q1, ESD2CAN24-Q1, pin-mux options, DNP split termination                |
+| `elec/src/uart.ato`               | UART ESD and 1 kOhm back-power limiting resistors                                  |
+| `elec/src/debug.ato`              | DCA1000 header J2 (development fit), JTAG J3 (DNP)                                 |
+| `elec/src/rf_macro.ato`           | RFM1 placeholder                                                                   |
+| `elec/src/mech.ato`               | mounting holes, fiducials                                                          |
+| `elec/src/radar60_prod.ato`       | product fit: J2 not fitted, 0 Ohm in the shunt footprint                           |
+| `tools/gen_parts.py`              | writes every part into `elec/src/parts/` (not committed)                           |
+| `tools/footprints.py`             | land patterns from the package drawings (ABL0161B, RNF0026C, RPW0010A, Samtec QTH) |
+| `tools/data/abl0161_ballmap.json` | the IWR6843 ABL0161 ball map, from TI SWRS219F                                     |
+| `tools/check_schematic.py`        | ERC-equivalent checks of the built board                                           |
 
 ## Build
 
@@ -48,9 +48,22 @@ them by manufacturer part number, its JLCPCB CSV drops them with a warning, and 
 refuses them, so the project has no parts lock yet. Rev A is assembled from manufacturer part
 numbers.
 
-The Samtec QTH-030-01-L-D-A land pattern (J2) is **provisional**: the Samtec footprint drawing
-was not available. It carries the footprint property `Unverified` and must be regenerated before
-any order.
+## Land patterns
+
+The stock KiCad footprints are KiCad 10.0.6's. The generated ones (`tools/footprints.py`) carry
+a `Source` property naming the drawing:
+
+| Part                       | Land pattern                               | Source                                                                                                                                                                                                                                                |
+| -------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| J2 Samtec QTH-030-01-L-D-A | `qth030_01_a`                              | Samtec "Recommended PCB layout for QTH-XXX-XX-X-D-XXX" rev. M (2024-01-26), Fig. 1 and Tables 1-3, and the part drawing QTH-XXX-XX-X-D-XXX rev. BL ([prints](https://suddendocs.samtec.com/prints/qth-xxx-xx-x-d-xxx-footprint.pdf), read 2026-10-03) |
+| U3 Macronix MX25V1635FZNQ  | stock `WSON-8-1EP_6x5mm_P1.27mm_EP3.4x4mm` | Macronix MX25V1635F data sheet PM2257 rev. 1.4, section 18-3, drawing 6110-3401 rev. 8: exposed pad 3.40 x 4.00 mm nominal (read 2026-10-03)                                                                                                          |
+| U1, PMIC, eFuse            | `abl0161b`, `rnf0026c`, `rpw0010a`         | TI drawings 4223365/A, 4223207/B, 4225183/A                                                                                                                                                                                                           |
+
+J2: 60 lands of 0.305 x 1.45 mm at 0.5 mm in rows 6.172 mm apart, four ground-plane lands
+MP1-MP4 on the centreline (on GND), and two 1.02 mm NPTH holes for the alignment pins, 18.48 mm
+apart and 2.03 mm towards the pin-1 row. Samtec's stencil drawing opens the lands 1:1 for a
+0.152 mm stencil. The flash's exposed pad was 3.4 x 4.3 mm (KiCad's Winbond variant), 0.2 mm
+longer than the Macronix maximum. No vendor PDF is committed.
 
 ## Checks
 
@@ -78,3 +91,5 @@ the 1.0 V DC window at the balls. The latter is a firmware requirement: write BU
 TI SWRS219F (IWR6843), SWRZ087D (errata), SNVSAW2B (LP87524-Q1), SLVSFC9C (TPS25947),
 SLLSFJ3D (TCAN1044A-Q1), SLVSFW5D (ESD2CAN24-Q1), SPRUIJ4A (DCA1000EVM), and the
 IWR6843ISK Rev D schematic (SWRR164) for decoupling values; each file names the sections it uses.
+Land patterns: Samtec's QTH-XXX-XX-X-D-XXX footprint (rev. M) and part (rev. BL) drawings and
+Macronix PM2257 rev. 1.4 (MX25V1635F), read 2026-10-03.

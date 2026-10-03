@@ -150,6 +150,11 @@ def iwr6843_pins() -> Dict[str, str]:
 # --- the parts -------------------------------------------------------------------------------
 
 TI_DS = "TI SWRS219F https://www.ti.com/lit/ds/symlink/iwr6843.pdf"
+QTH_SOURCE = (
+    "TI SPRUIJ4A Table 5 (pin numbering); land pattern: Samtec recommended PCB layout "
+    "QTH-XXX-XX-X-D-XXX rev. M (https://suddendocs.samtec.com/prints/"
+    "qth-xxx-xx-x-d-xxx-footprint.pdf; read 2026-10-03), tools/footprints.py:qth030_01_a"
+)
 
 
 def parts() -> List[Part]:
@@ -257,13 +262,19 @@ def parts() -> List[Part]:
                 "8": "VCC",
                 "9": "EP",
             },
-            "stock:Package_SON:WSON-8-1EP_6x5mm_P1.27mm_EP3.4x4.3mm",
+            # Macronix 8-WSON (6x5 mm) drawing 6110-3401 rev. 8 (JEDEC MO-220): exposed pad
+            # D1 x E1 = 3.40 x 4.00 mm nominal (3.30-3.50 x 3.90-4.10), leads b 0.40, L 0.60 at
+            # 1.27 mm. KiCad's EP3.4x4mm variant matches; the EP3.4x4.3mm (Winbond) one is 0.2 mm
+            # longer than E1 max. Macronix: EP floating or GND, no vias or traces under it.
+            "stock:Package_SON:WSON-8-1EP_6x5mm_P1.27mm_EP3.4x4mm",
             "C2908148",
             kind="ic",
             package="WSON-8",
             source=(
-                "JEDEC 8-pin serial-flash pinout as on TI ISK Rev D (SWRR164) U3; "
-                "Macronix drawing not read (EP size to verify)"
+                "JEDEC 8-pin serial-flash pinout as on TI ISK Rev D (SWRR164) U3; package: Macronix "
+                "MX25V1635F data sheet PM2257 rev. 1.4 section 18-3, drawing 6110-3401 rev. 8 "
+                "(https://www.macronix.com/en-us/products/NOR-Flash/Serial-NOR-Flash/Pages/"
+                "spec.aspx?p=MX25V1635F; read 2026-10-03)"
             ),
         )
     )
@@ -468,13 +479,13 @@ def parts() -> List[Part]:
             "Samtec",
             "QTH-030-01-L-D-A",
             "J",
-            "Samtec QTH 60-pin 0.5 mm header for the DCA1000EVM (development fit; PROVISIONAL land pattern)",
+            "Samtec QTH 60-pin 0.5 mm header for the DCA1000EVM (development fit)",
             {**{str(i): f"P{i}" for i in range(1, 61)}, **{f"MP{i}": "MOUNT" for i in range(1, 5)}},
-            "gen:qth030_provisional",
+            "gen:qth030_01_a",
             "C2843756",
             kind="connector",
             package="QTH-030",
-            source="TI SPRUIJ4A Table 5 (pin numbering)",
+            source=QTH_SOURCE,
         )
     )
     P.append(
@@ -483,14 +494,14 @@ def parts() -> List[Part]:
             "Samtec",
             "QTH-030-01-L-D-A",
             "J",
-            "Samtec QTH 60-pin 0.5 mm header for the DCA1000EVM, not fitted (product builds; PROVISIONAL land pattern)",
+            "Samtec QTH 60-pin 0.5 mm header for the DCA1000EVM, not fitted (product builds)",
             {**{str(i): f"P{i}" for i in range(1, 61)}, **{f"MP{i}": "MOUNT" for i in range(1, 5)}},
-            "gen:qth030_provisional",
+            "gen:qth030_01_a",
             "C2843756",
             dnp=True,
             kind="connector",
             package="QTH-030",
-            source="TI SPRUIJ4A Table 5 (pin numbering)",
+            source=QTH_SOURCE,
         )
     )
     P.append(

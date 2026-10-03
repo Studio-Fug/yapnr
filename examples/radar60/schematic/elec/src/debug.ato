@@ -9,7 +9,8 @@
 # LVDS lanes 2/3 and VALID (two lanes are enough for the 4.1 profile, board-design.md 3.2).
 # UART direction follows the ISK Rev D naming (CONN_RS232TX on pin 57): radar TX -> 57, 55 -> radar RX
 # (to be confirmed on the bench, open item). MCU_RSTn reaches NRESET only through a DNP 0 Ohm.
-# Development builds fit J2; product builds leave it unfitted. Its land pattern is PROVISIONAL.
+# Development builds fit J2; product builds leave it unfitted. Land pattern: Samtec's recommended
+# PCB layout (tools/footprints.py:qth030_01_a); MP1-MP4 are the ground-plane lands.
 # J3: Arm Cortex 10-pin 1.27 mm debug header (DNP): 1 VTref, 2 TMS, 3 GND, 4 TCK, 5 GND, 6 TDO,
 # 7 key, 8 TDI, 9 GNDdetect, 10 nRESET; pinout against the LP-XDS110 to be verified (O7).
 

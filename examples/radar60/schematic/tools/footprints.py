@@ -355,45 +355,76 @@ def rpw0010a() -> Footprint:
     return fp
 
 
-def qth030_provisional() -> Footprint:
-    """Samtec QTH-030-01-L-D-A, PROVISIONAL land pattern (Samtec's footprint drawing not read).
+# --- Samtec QTH-030-01-X-D-A ---------------------------------------------------------------
 
-    Only the facts known without the drawing are used: 60 terminals in two rows of 30 at
-    0.50 mm pitch (odd pins one row, even pins the other, TI SPRUIJ4A Table 5 numbering),
-    ground-plane/locking pads MP1-MP4 (TI's ISK carries four, SWRR164 J6) and two alignment
-    holes ("-A"). Every dimension below is a placeholder chosen to be plausibly sized; the
-    footprint must be regenerated from Samtec's QTH-030-01-L-D-A footprint drawing before any
-    order (it carries the property "Unverified").
+# Samtec, "Recommended PCB layout for QTH-XXX-XX-X-D-XXX" (qth-xxx-xx-x-d-xxx-footprint.pdf,
+# revision M, 2024-01-26, ECN-474970), Fig. 1 and Tables 1-3, and the part drawing
+# QTH-XXX-XX-X-D-XXX (qth-xxx-xx-x-d-xxx-mkt.pdf, revision BL), both at
+# https://suddendocs.samtec.com/prints/ (read 2026-10-03). One bank of 30 positions per row.
+QTH_PITCH = 0.500  # .0197
+QTH_ROW_Y = 3.086  # .1215, connector centreline to each signal row's land centre
+QTH_LAND = (0.305, 1.45)  # .0120 x .057
+QTH_GND_LANDS = ((8.445, 2.54), (3.175, 4.70))  # (x, length): .665/2 [.100]; .250/2 [.185]
+QTH_GND_LAND_H = 0.64  # .025
+QTH_ALIGN_X = 9.24  # Table 1 "B" for -030, -A option: .728 [18.48] between the holes
+QTH_ALIGN_Y = 2.03  # .080, towards the pin-1 row
+QTH_ALIGN_DRILL = 1.02  # Table 3 "F" for -A: NPTH .040 [1.02] (alignment pins 0.89 mm)
+QTH_BODY = (20.00, 5.97)  # part drawing Table 2 "A" for -030; footprint Table 2 "E" for -01
+
+
+def qth030_01_a() -> Footprint:
+    """Samtec QTH-030-01-X-D-A (60 positions, lead style -01, alignment pins -A), from Samtec's
+    recommended PCB layout for QTH-XXX-XX-X-D-XXX (revision M, Fig. 1, Tables 1-3).
+
+    Two rows of 30 lands of 0.305 x 1.45 mm at 0.50 mm pitch, 6.172 mm apart (pin 1 and the odd
+    pins on one row, TI SPRUIJ4A Table 5 numbering); four ground-plane lands on the centreline
+    (2.54 and 4.70 mm long, 0.64 mm wide: MP1-MP4, the ground bus of the QSH mate); two
+    1.02 mm NPTH holes for the -A alignment pins, 18.48 mm apart and 2.03 mm off the centreline
+    towards the pin-1 row. Samtec's stencil drawing (sheet 2) opens every land 1:1 for a
+    0.152 mm stencil, so the paste layer equals the copper. Body 20.00 x 5.97 mm (envelope "A",
+    "E"); the body's polarising chamfer is at the pin-2 end.
     """
     fp = Footprint(
-        "Samtec_QTH-030-01-L-D-A_2x30_P0.5mm_PROVISIONAL",
-        "Samtec QTH-030-01-L-D-A 60-pin 0.5 mm high-speed header, PROVISIONAL geometry: regenerate "
-        "from the Samtec footprint drawing before ordering",
-        "Samtec QTH 0.5mm DCA1000 PROVISIONAL",
+        "Samtec_QTH-030-01-L-D-A_2x30_P0.5mm_Vertical",
+        "Samtec QTH-030-01-L-D-A 60-pin 0.5 mm high-speed terminal strip, lead style -01, "
+        "alignment pins; Samtec recommended PCB layout QTH-XXX-XX-X-D-XXX revision M "
+        "(https://suddendocs.samtec.com/prints/qth-xxx-xx-x-d-xxx-footprint.pdf)",
+        "Samtec QTH 0.5mm 60 DCA1000",
     )
-    fp.prop("Unverified", "land pattern dimensions are placeholders; Samtec drawing required")
-    pitch, row_y, pad = 0.5, 2.9, (0.3, 1.5)
+    fp.prop(
+        "Source",
+        "Samtec qth-xxx-xx-x-d-xxx-footprint.pdf revision M (2024-01-26) Fig. 1, Tables 1-3; "
+        "read 2026-10-03",
+    )
+    w, h = QTH_LAND
     for i in range(30):
-        x = (i - 14.5) * pitch
-        fp.pad(str(2 * i + 1), "rect", (x, -row_y), pad)
-        fp.pad(str(2 * i + 2), "rect", (x, row_y), pad)
-    for k, x in enumerate((-4.0, 4.0)):
-        fp.pad(f"MP{k * 2 + 1}", "rect", (x, -0.9), (2.5, 0.8))
-        fp.pad(f"MP{k * 2 + 2}", "rect", (x, 0.9), (2.5, 0.8))
-    for x in (-9.0, 9.0):
+        x = (i - 14.5) * QTH_PITCH
+        fp.pad(str(2 * i + 1), "rect", (x, -QTH_ROW_Y), (w, h))
+        fp.pad(str(2 * i + 2), "rect", (x, QTH_ROW_Y), (w, h))
+    gnd = [(-QTH_GND_LANDS[0][0], QTH_GND_LANDS[0][1]), (-QTH_GND_LANDS[1][0], QTH_GND_LANDS[1][1])]
+    gnd += [(QTH_GND_LANDS[1][0], QTH_GND_LANDS[1][1]), (QTH_GND_LANDS[0][0], QTH_GND_LANDS[0][1])]
+    for k, (x, length) in enumerate(gnd):
+        fp.pad(f"MP{k + 1}", "rect", (x, 0), (length, QTH_GND_LAND_H))
+    for x in (-QTH_ALIGN_X, QTH_ALIGN_X):
         fp.pad(
             "",
             "circle",
-            (x, 0),
-            (1.0, 1.0),
+            (x, -QTH_ALIGN_Y),
+            (QTH_ALIGN_DRILL, QTH_ALIGN_DRILL),
             layers='"*.Cu" "*.Mask"',
             kind="np_thru_hole",
-            drill=1.0,
+            drill=QTH_ALIGN_DRILL,
         )
-    fp.rect((-10.0, -2.0, 10.0, 2.0), "F.Fab", 0.1)
-    fp.text("PROVISIONAL", (0, 0), "F.Fab", size=0.8)
-    fp.line((-7.6, -3.9), (-7.2, -3.9), "F.SilkS", 0.12)
-    _courtyard(fp, (-10.5, -4.0, 10.5, 4.0))
+    bw, bh = QTH_BODY[0] / 2, QTH_BODY[1] / 2
+    _fab_body(fp, bw, bh, 1.0)
+    # silk: the two short ends (the long edges run under the signal lands) and a pin-1 bar
+    # beyond pin 1's land
+    for sx in (-1, 1):
+        fp.line((sx * (bw + 0.11), -bh), (sx * (bw + 0.11), bh), "F.SilkS", 0.12)
+    y1 = -QTH_ROW_Y - h / 2 - 0.25
+    fp.line((-7.25 - 0.4, y1), (-7.25 + 0.15, y1), "F.SilkS", 0.12)
+    land_y = QTH_ROW_Y + h / 2
+    _courtyard(fp, (-bw - 0.25, -land_y - 0.25, bw + 0.25, land_y + 0.25))
     return fp
 
 

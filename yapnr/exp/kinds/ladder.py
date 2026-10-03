@@ -105,7 +105,9 @@ class LadderCell(base.Kind):
     name = "ladder-cell"
     short = "ladder"
     source_paths = ("hardware/pnr", "hardware/tools")
-    default_resources = dict(cpus=1, memory_gb=3, disk_gb=4, max_wall_s=7200)
+    # A cell's work directory holds a few MB (the source bundle and the case's outputs); 2 GB
+    # keeps 8 cells per VM within the boot disk's free space (cost.BOOT_DISK_RESERVE_GB).
+    default_resources = dict(cpus=1, memory_gb=3, disk_gb=2, max_wall_s=7200)
     default_determinism = "wall_clock_budgeted"
     config_keys = frozenset(OPTIONS) | {"prune", "reference_seconds"}
     matrix_axes = ("case", "seed", "config")

@@ -65,9 +65,9 @@ variable "quota_preferences" {
 }
 
 variable "template_shapes" {
-  description = "Machine types that get Spot instance templates in every region (Hyperdisk families)."
+  description = "Machine types that get Spot instance templates in every region (Hyperdisk families); c4d-highcpu-8 is the calibration's shape."
   type        = list(string)
-  default     = ["c4d-highcpu-16", "c4d-standard-16"]
+  default     = ["c4d-highcpu-16", "c4d-standard-16", "c4d-highcpu-8"]
 }
 
 variable "boot_disk_gb" {

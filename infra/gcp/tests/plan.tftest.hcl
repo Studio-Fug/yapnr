@@ -72,8 +72,8 @@ run "templates_per_shape_and_region" {
   command = plan
 
   assert {
-    condition     = length(output.templates) == 4
-    error_message = "two default shapes in two regions make four templates"
+    condition     = length(output.templates) == 6
+    error_message = "three default shapes in two regions make six templates"
   }
 
   assert {

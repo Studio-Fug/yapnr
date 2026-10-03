@@ -62,6 +62,28 @@ class CostTest(unittest.TestCase):
         shape, _, _, _, per_vm = cost.choose_shape(self.table, "c4d", 1, 6, 16)
         self.assertEqual((shape, per_vm), ("c4d-standard-16", 8))
 
+    def test_tasks_per_vm_keep_their_disk_within_the_boot_disk(self):
+        # Batch packs by CPU and memory only: 8 tasks of 4 GB on a 30 GB boot disk (18 GB free
+        # after the reserve) would not fit, so 4 go on each VM.
+        free = 30 - cost.BOOT_DISK_RESERVE_GB
+        _, _, _, _, per_vm = cost.choose_shape(self.table, "c4d", 1, 3, 16, "core", 4, free)
+        self.assertEqual(per_vm, 4)
+        _, _, _, _, per_vm = cost.choose_shape(self.table, "c4d", 1, 3, 16, "core", 2, free)
+        self.assertEqual(per_vm, 8)
+        with self.assertRaises(cost.CostError):
+            cost.choose_shape(self.table, "c4d", 1, 3, 16, "core", 20, free)
+        p = cost.place(
+            self.table,
+            self.none,
+            cpus=1,
+            memory_gb=2,
+            families=["c4d"],
+            regions=["r1"],
+            disk_gb=6,
+            disk_free_gb=free,
+        )
+        self.assertEqual(p.tasks_per_vm, 3)
+
     def test_batch_unsupported_families_are_never_placed(self):
         with self.assertRaises(cost.CostError):
             cost.place(self.table, self.none, cpus=1, memory_gb=1, families=["n4d"], regions=["r1"])

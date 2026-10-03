@@ -571,7 +571,7 @@ outputs:
   prune: ['**/route-*/*.kicad_pcb']
 done: { file: out/run/summary.json, json: { complete: true } }
 verdict: { file: out/run/summary.json, json_path: passed } # a FAIL is a result, never a retry
-resources: { cpus: 1, memory_gb: 3, disk_gb: 4, max_wall_s: 7200 }
+resources: { cpus: 1, memory_gb: 3, disk_gb: 2, max_wall_s: 7200 }
 restart: scratch # scratch | resume (checkpoint restored first)
 checkpoint: null # rf-run: { path: out/checkpoint.npz, sync_every_s: 300, on_signal: true }
 determinism: wall_clock_budgeted # seeded | wall_clock_budgeted (one machine type per campaign)
@@ -580,6 +580,9 @@ labels: { arm: baseline, seed: '1' } # analysis labels; only allowlisted keys be
 
 - `cpus` counts **physical cores**; the renderer turns it into `cpuMilli` per family (2000 per core
   on SMT families).
+- `disk_gb` is what the work directory may use. Batch packs tasks by CPU and memory only, so the
+  planner also caps tasks per VM at the boot disk (`boot_disk_gb`, 30) less a 12 GB reserve for
+  the OS and the image, divided by `disk_gb`.
 - `${PYTHON}`, `${KICAD_CLI}`, `${KICAD_PYTHON}` and `${FOOTPRINTS}` come from the backend's
   toolchain profile: the image profile (`/opt/venv/bin/python`, `/usr/bin/kicad-cli`,
   `/usr/bin/python3`, `/usr/share/kicad/footprints`) or the local profile (the headless KiCad
@@ -686,6 +689,9 @@ The example file uses documentation values; real values are never committed.
 | `yapnr exp prices [--rerank]`                                                           | refreshes the price cache and shows the ranked (family, region) list                                                                                                                                                                 | Billing Catalog only                              |
 | `yapnr exp unfreeze`                                                                    | clears `control/frozen` after the owner confirms                                                                                                                                                                                     | yes                                               |
 | `python -m yapnr.exp.task`                                                              | the in-task wrapper (§11.6); not run by hand                                                                                                                                                                                         | –                                                 |
+
+Not built yet (phase 2, §19): `submit --fallback`, `status --watch` and `logs --follow`; region
+fallback after a stockout is manual (cancel, then plan again with `--region`).
 
 Cloud calls go through one `Cloud` interface. The default implementation runs `gcloud` (installed
 in user space) with `--format=json` and a timeout on every call, using the impersonation set in

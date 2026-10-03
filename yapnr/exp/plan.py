@@ -205,6 +205,8 @@ def gcp_placements(
                 model=model,
                 template_families=gcp.template_families,
                 prefer=prefer,
+                disk_gb=cls.disk_gb,
+                disk_free_gb=gcp.boot_disk_gb - cost.BOOT_DISK_RESERVE_GB,
             )
         except cost.CostError as err:
             raise PlanError("class %s: %s" % (cls.name, err)) from err

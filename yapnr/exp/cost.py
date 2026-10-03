@@ -30,6 +30,10 @@ SHARED_PRICES = {"us-east1": "us-central1", "us-west1": "us-central1"}
 MAX_TASKS_PER_VM = 20  # Batch's limit (docs.cloud.google.com/batch/docs/create-run-job)
 MEMORY_RESERVE_GB = 1.0  # left to the OS, Docker and the Batch agent on every VM
 MEMORY_USABLE = 0.9
+# Boot disk space that task work directories cannot use: Container-Optimized OS, the unpacked
+# image (a few GB) and Docker's logs. A planning reserve, not a measurement; Batch itself does not
+# pack tasks by disk, so tasks per VM are capped here to keep their disk_gb within the rest.
+BOOT_DISK_RESERVE_GB = 12.0
 # What a Batch attempt may run beyond the task's max_wall_s: the runnable's timeout adds 300 s
 # for the upload, maxRunDuration 300 s more (backends/gcp_batch.py). The ceiling prices this.
 BATCH_ATTEMPT_GRACE_S = 600
@@ -183,8 +187,14 @@ def choose_shape(
     memory_gb: float,
     vm_vcpus: int = 16,
     packing: str = "core",
+    disk_gb: float = 0.0,
+    disk_free_gb: Optional[float] = None,
 ) -> Tuple[str, int, float, int, int]:
-    """(shape, vm vCPUs, vm memory GB, cpuMilli, tasks per VM) for tasks of ``cpus`` cores."""
+    """(shape, vm vCPUs, vm memory GB, cpuMilli, tasks per VM) for tasks of ``cpus`` cores.
+
+    With ``disk_free_gb`` (the boot disk less ``BOOT_DISK_RESERVE_GB``), the tasks on one VM also
+    keep their ``disk_gb`` within it.
+    """
     fam = table.family(family)
     threads = int(fam["threads_per_core"])
     task_vcpus = cpus * (threads if packing == "core" else 1)
@@ -196,6 +206,13 @@ def choose_shape(
     if vcpus < task_vcpus:
         raise CostError("%s has no shape with %d vCPUs" % (family, task_vcpus))
     per_vm = max(1, min(MAX_TASKS_PER_VM, vcpus // task_vcpus))
+    if disk_gb > 0 and disk_free_gb is not None:
+        if disk_gb > disk_free_gb:
+            raise CostError(
+                "a task of %.1f GB of disk does not fit the %.1f GB a boot disk leaves for tasks "
+                "(raise boot_disk_gb)" % (disk_gb, disk_free_gb)
+            )
+        per_vm = min(per_vm, int(disk_free_gb // disk_gb))
     while per_vm >= 1:
         for kind in TYPES:
             ratio = fam["memory_gb_per_vcpu"].get(kind)
@@ -231,6 +248,8 @@ def place(
     template_families: Sequence[str] = ("c4d", "c4", "c4a", "n4"),
     arch: Optional[str] = None,
     prefer: str = "cost",
+    disk_gb: float = 0.0,
+    disk_free_gb: Optional[float] = None,
 ) -> Placement:
     """Where a resource class runs: one (family, region, shape) among the allowed ones.
 
@@ -256,7 +275,7 @@ def place(
             if arch and fam["arch"] != arch:
                 raise CostError("%s is %s, the image is pinned to %s" % (family, fam["arch"], arch))
             shape, vcpus, vm_mem, cpu_milli, per_vm = choose_shape(
-                table, family, cpus, memory_gb, vm_vcpus, packing
+                table, family, cpus, memory_gb, vm_vcpus, packing, disk_gb, disk_free_gb
             )
             vcpu_price, gb_price, source = table.rate(family, region, model)
         except CostError as err:

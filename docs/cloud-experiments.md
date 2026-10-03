@@ -93,6 +93,12 @@ image, wall and CPU time, peak RSS, verdict) and `log.tail` under its own attemp
 `_DONE` last. A pass or a fail is a result; so is an engine crash (`verdict: error`), because a retry
 would repeat it. Only infrastructure failures are retried.
 
+A task that reaches `max_wall_s` is a result too (`verdict: timeout`), so set the limit from the
+Mac's wall time with room to spare: at the table's speed factors a cell takes about 1.3x as long
+on C4D and 1.6-1.8x on C3D or T2D. About 3x the Mac's time covers both; a hard rung of 1.5 hours
+on the Mac wants about 16,000 s, above `ladder-sweep.toml`'s 7,200 s and the example
+`max_task_wall_s` of 14,400 (raise both for a hard-rung campaign).
+
 ## Commands
 
 | Command                                                                             | Changes something in a cloud                           |
@@ -289,14 +295,19 @@ accessed 2026-10-02: the [Spot pricing page][spot-pricing] for `us-central1` and
 [Billing Catalog snapshot][snapshot] of 2026-09-24 for other regions) until `prices --refresh`
 replaces them; regions missing from the table are priced at `us-central1`, which is above the
 median, and the plan says so. Speeds are PassMark single-thread ratios to the development Mac's M4
-until the calibration measures them. Examples from that table (C4D Spot in `us-west4`, 8 tasks on a
-`c4d-highcpu-16`):
+until the calibration measures them. Examples from that table, as `plan` prints them with the
+example owner config (C4D Spot in `us-west4`, one task per physical core):
 
-| Campaign                        | Tasks | Expected | Ceiling |
-| ------------------------------- | ----: | -------: | ------: |
-| `smoke.toml` on `c4d-highcpu-4` |     2 |  < $0.01 |   $0.03 |
-| `ladder-small.toml`             |     4 |    $0.01 |   $0.16 |
-| `ladder-sweep.toml` (8 x 16)    |   128 |    $0.07 |   $7.26 |
+| Campaign                                          | Tasks | Expected | Ceiling |
+| ------------------------------------------------- | ----: | -------: | ------: |
+| `smoke.toml` on `c4d-highcpu-4` (`--no-template`) |     2 |  < $0.01 |   $0.06 |
+| `ladder-small.toml` (one `c4d-highcpu-16`)        |     4 |    $0.01 |   $0.41 |
+| `calibration-ladder.toml` (per shape, 8 vCPUs)    |    12 |    $0.01 |   $1.09 |
+| `ladder-sweep.toml` (8 x 16)                      |   128 |    $0.07 |   $7.41 |
+
+The ceilings are far above the expected costs on purpose: they price every attempt at its full
+`max_wall_s` plus Batch's 10-minute grace, with every retry, on whole VMs even when a small job
+fills only part of one.
 
 The layers, each of which holds when the one above fails:
 
@@ -308,8 +319,9 @@ The layers, each of which holds when the one above fails:
    `max_campaign_hours` (the jobs' deadline). `submit` refuses tasks that a queued or running job
    of the campaign still holds (no task runs twice), and on-demand placements (`spot = false`,
    outside the quota ceiling) unless `allow_on_demand = true`.
-3. **The estimate**: every plan prints the expected cost and a ceiling (every task at its maximum
-   wall time with every retry, or the quota for `max_campaign_hours`, whichever is lower).
+3. **The estimate**: every plan prints the expected cost and a ceiling (every attempt at its
+   maximum wall time plus the grace, with every retry, on whole VMs; or the quota's VMs for
+   `max_campaign_hours` plus the reaper's interval, whichever is lower).
    `submit` asks above `confirm_usd` and refuses a ceiling above `refuse_usd` unless `--max-usd`
    raises it, never above `hard_refuse_usd`.
 4. **The reaper**: every 15 minutes it cancels jobs past their `deadline` label and deletes yapnr VMs
@@ -403,7 +415,8 @@ quota vCPU, T2D and C4A (a full core per vCPU) about 0.55 at the table's factors
 wall-clock-budgeted search favour the fastest core (C4D); seed sweeps of short cells may favour
 throughput. Neither T2D nor C4A is offered in the two proposed regions: add a region that has them
 (the price table lists `northamerica-northeast2` for T2D and `europe-west4` for C4A) to
-`regions` and the tfvars before calibrating them, and compare C4A (arm64) boards only with other
+`regions` and the tfvars before calibrating them (C4A, a Hyperdisk-only family, also needs
+`c4a-highcpu-8` in `template_shapes`), and compare C4A (arm64) boards only with other
 arm64 runs, such as the Mac's and the CI ladder's. `ingest` keys factors by machine type, not by
 packing: ingest a one-task-per-vCPU run (`[placement] packing = "vcpu"` in a copy of the campaign)
 into a calibration file of its own.
@@ -432,7 +445,7 @@ it writes under `out/`:
    "--seed", "0", "--procs", "4", "--native-parallel", "2", "--native-workers", "2"],
  "inputs": [{"dest": "snap", "path": "snapshots/arm-a"}, {"dest": "boards", "path": "board"}],
  "env": {"PYTHONPATH": "snap/hardware/pnr", "PNR_LIVE_CANDIDATE": "hier"},
- "resources": {"cpus": 4, "memory_gb": 12, "max_wall_s": 14400},
+ "resources": {"cpus": 4, "memory_gb": 12, "disk_gb": 4, "max_wall_s": 14400},
  "record": "out/run/status.json", "labels": {"arm": "a", "seed": "0"}}
 ```
 
@@ -453,12 +466,15 @@ stage_plan = "stage.jsonl"   # relative to the campaign file; input paths relati
 Paths in commands and `env` are relative to the work directory: no host paths, and no KiCad
 paths, which the wrapper sets for the image (`PNR_KICAD_CLI`, `PNR_KICAD_PYTHON`,
 `PNR_KICAD_FOOTPRINTS`). Give each task the cores its processes use (`--procs` and the native
-workers above; `cpus = 2` for an evaluation that runs two KiCad processes). A task without
-checkpoints starts again after a Spot preemption, so keep Spot tasks to a few hours; longer ones
-belong on standard VMs (`[placement] spot = false`, which `limits.allow_on_demand` must allow) or
-on the Mac. `fetch` writes `assembled/dataset.jsonl`, one line per task with its record and the
-machine it ran on. A private A/B campaign of this shape (a toy engine snapshot as the bundle) was
-planned, run and fetched end to end on the local backend.
+workers above; `cpus = 2` for an evaluation that runs two KiCad processes) and the disk its work
+directory needs (`disk_gb`, default 10 for `mc-eval`): Batch packs by CPU and memory only, so
+`plan` caps the tasks per VM to fit the boot disk (`boot_disk_gb` less 12 GB for the OS and the
+image). A task without checkpoints starts again after a Spot preemption, so keep Spot tasks to a
+few hours; longer ones belong on standard VMs (`[placement] spot = false`, which
+`limits.allow_on_demand` must allow) or on the Mac. `fetch` writes `assembled/dataset.jsonl`, one
+line per task with its record and the machine it ran on. A private A/B campaign of this shape
+(a toy engine snapshot as the bundle) was planned, run and fetched end to end on the local
+backend.
 
 ## Testing
 
@@ -476,14 +492,20 @@ The test process cannot reach a cloud: real `gcloud` calls are disabled while
 
 What only a real project or site can settle, in the order the first runs will meet it:
 
-- whether a Batch instance policy accepts a `hyperdisk-balanced` boot disk for C4D (the smoke job
-  tries both; templates are the default);
-- the gcsfuse mount options for the container (the default runs the container as root and mounts
-  with `--implicit-dirs`);
-- the exact preemptible quota ids, and whether restoring a cut quota needs a new approval;
+- at the first `tofu apply`: the instance templates' Hyperdisk settings and the Batch image
+  family, and whether a custom role may hold `iam.serviceAccounts.disable` and be granted on the
+  single `yapnr-submit` account (the kill switch's first step);
+- the exact preemptible quota ids (step 4), and whether restoring a cut quota needs a new
+  approval (the drill of step 9);
 - the Billing Catalog SKU descriptions `prices --refresh` parses (`Spot Preemptible <FAMILY> ...
 Instance Core|Ram running in ...`);
-- the instance templates' Hyperdisk settings and the Batch image family at apply time;
+- in the smoke job (step 10): whether a Batch instance policy accepts a `hyperdisk-balanced` boot
+  disk for C4D (it tries both; templates are the default); the gcsfuse mount options (the
+  container runs as root and mounts with `--implicit-dirs`) together with the runs bucket's IAM
+  condition that keeps tasks out of `control/`;
+- on a Slurm site: whether `USR1` reaches the wrappers through Apptainer's PID namespace and
+  whether users may `scontrol requeue` their own array elements (the scripts are tested with
+  stub `apptainer` and `scontrol` only);
 - region fallback after a stockout is manual: cancel and plan again with `--region`.
 
 ## References

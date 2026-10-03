@@ -131,13 +131,14 @@ def family_line(
     mode: str = "",
     roughness: str = "huray",
     dispersion: bool = True,
+    stackup_id: str = "",
 ) -> Line:
     """γ(f) and Zc(f) of a family (or one mode of a pair) at parameter values v.
 
     C(f) = C(F_REF) [1 + Σ_r q_r (ε_r(f)/Dk_r − 1)] is the first-order filling-factor expansion
     around the 2D solve (exact at F_REF); L = μ0 ε0 / C0. Geometric dispersion of the L1 lines
     scales L and C by √D(f) each (εeff by D, Zc unchanged), D from Kirschning-Jansen."""
-    fam = families.FAMILIES[fam_id]
+    fam = families.get(fam_id, stackup_id or None)
     f = np.asarray(f, float)
     w = 2 * math.pi * f
     out = tables[fam_id](v)
@@ -152,7 +153,8 @@ def family_line(
     L = MU0 * EPS0 / c0
     if dispersion and fam.kind == "outer":
         w_e = fam.w - 2 * v["L1.etch"]
-        d = np.sqrt(kj_ratio(w_e, v["pp1.h"], v["pp.dk"], f))
+        h_kj, er_kj = fam.dispersion_substrate(v)
+        d = np.sqrt(kj_ratio(w_e, h_kj, er_kj, f))
     else:
         d = np.ones_like(f)
     # conductor: skin-effect surface impedance with roughness, blended with DC
@@ -349,13 +351,19 @@ class Model:
         key = (fam, mode)
         if key not in self._lines:
             self._lines[key] = family_line(
-                fam, self.v, self.f, self.tables, mode, roughness=self.roughness
+                fam,
+                self.v,
+                self.f,
+                self.tables,
+                mode,
+                roughness=self.roughness,
+                stackup_id=self.st.id,
             )
         return self._lines[key]
 
     def abcd(self, el: Sequence) -> np.ndarray:
         """ABCD of one element: ("line", fam, mm), ("shunt_c", farads), ("series_l", henries),
-        ("junction", name) (a shunt C nuisance parameter in pF, 0 if absent), ("stub", fam,
+        ("shunt_rl", ohms, henries), ("junction", name) (a shunt C nuisance parameter in pF, 0 if absent), ("stub", fam,
         mm, "open"|"short"), ("coupled", fam, mm), ("ring", fam, radius_mm, gap_mm) (gap
         coupled), ("ring2", fam, radius_mm, arc_fraction) (directly fed)."""
         kind = el[0]
@@ -366,6 +374,9 @@ class Model:
             return abcd_shunt(1j * self.w * el[1])
         if kind == "series_l":
             return abcd_series(1j * self.w * el[1])
+        if kind == "shunt_rl":
+            # ("shunt_rl", ohms, henries): a shunt resistor with its series inductance
+            return abcd_shunt(1.0 / (el[1] + 1j * self.w * el[2]))
         if kind == "conn":
             # ("conn", fam, stick, port): a connection nuisance of the fit (fit.Predictor)
             dl = self.v.get(f"conn.{el[2]}.{el[3]}.dl", 0.0)
@@ -414,7 +425,7 @@ class Model:
         return m
 
     def gap_abcd(self, fam: str, gap_mm: float) -> np.ndarray:
-        f = families.FAMILIES[fam]
+        f = families.get(fam, self.st.id)
         h = self.v["pp1.h"] if f.kind == "outer" else 0.5 * (self.v["pp3.h"] + self.v["core.h"])
         er = self.v["pp.dk"]
         cs, cp = gap_capacitances(f.w, h, gap_mm, er)

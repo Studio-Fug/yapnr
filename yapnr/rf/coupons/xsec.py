@@ -279,6 +279,62 @@ def strip_spec(
     return dict(width=width, slabs=slabs, blocks=blocks, conductors=conds), [n for n, *_ in strips]
 
 
+def layered_spec(
+    w: float,
+    t: float,
+    etch: float,
+    gap: Optional[float],
+    slabs: Sequence[Tuple[str, float]],
+    mask: float = 0.0,
+    ring: Optional[float] = None,
+    t_ring: float = 0.0,
+    recede: float = 0.0,
+    width: float = 12.0,
+    air: float = 5.0,
+    keepback: float = 0.381,
+) -> Tuple[dict, List[str]]:
+    """An L1 trace over a stack of dielectric slabs [(region, thickness)] from the plane at z = 0
+    up (the OSH Park Order 0 sections: region M is one prepreg over In1.Cu, region W prepreg, core
+    and prepreg over B.Cu). `gap`: coplanar L1 ground from the trace edge out to `keepback` from
+    the box side (the stick's milled edge); None: no L1 ground. `mask`: a conformal mask of that
+    thickness over the substrate, the copper and its sides (0: none). `ring`: inner-layer copper
+    at every slab interface for |y| >= ring (the W stick's stitched perimeter ring), `t_ring`
+    thick. `etch` per copper edge; `recede` moves every metal wall by δ (Wheeler)."""
+    d = recede
+    we = w - 2 * etch
+    z = [0.0]
+    for _, h in slabs:
+        z.append(z[-1] + h)
+    z0 = z[-1]  # copper foot
+    zc0, zc1 = z0 + d, z0 + t - d
+    full = [("S", -we / 2, we / 2)]
+    if gap is not None:
+        g0 = we / 2 + gap + 2 * etch
+        g1 = width / 2 - keepback - etch
+        if g0 < g1:
+            full += [("G1", -g1, -g0), ("G2", g0, g1)]
+    conds = [(n, a + d, b_ - d, zc0, zc1) for n, a, b_ in full]
+    out_slabs = []
+    for k, (name, _) in enumerate(slabs):
+        out_slabs.append((name, z[k] - (d if k == 0 else 0.0), z[k + 1]))
+    if ring is not None and ring < width / 2:
+        for k, zz in enumerate(z[1:-1]):
+            h = t_ring / 2 - d
+            conds += [
+                (f"R{k}a", -width / 2, -ring - d, zz - h, zz + h),
+                (f"R{k}b", ring + d, width / 2, zz - h, zz + h),
+            ]
+    blocks = []
+    if mask > 0:
+        out_slabs.append(("mask", z0, z0 + mask))
+        blocks = [("mask", a - mask, b_ + mask, z0, z0 + t + mask) for _, a, b_ in full]
+        out_slabs.append(("air", z0 + mask, z0 + t + mask + air))
+        blocks += [("air", a, b_, z0, z0 + t) for _, a, b_ in full] if d > 0 else []
+    else:
+        out_slabs.append(("air", z0, z0 + t + air))
+    return dict(width=width, slabs=out_slabs, blocks=blocks, conductors=conds), ["S"]
+
+
 def wheeler_g(c0: np.ndarray, c0_receded: np.ndarray, recede_mm: float) -> np.ndarray:
     """Wheeler's ∂L/∂n / μ0 (1/m) per mode from the vacuum C of the nominal and receded
     geometries (L = μ0 ε0 / C0 per mode)."""

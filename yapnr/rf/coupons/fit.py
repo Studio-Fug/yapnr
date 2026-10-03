@@ -474,13 +474,14 @@ def run_fit(
     st = p.st
     fixed = dict(fixed or {})
     main = [n for n in st.params if n not in fixed]
-    pr = {n: (stackups.PARAMS[n].nominal, stackups.PARAMS[n].sigma) for n in st.params}
+    ps = stackups.params_of(st)
+    pr = {n: (ps[n].nominal, ps[n].sigma) for n in st.params}
     pr.update(prior or {})
     nui = p.nuisances() if nuisance else {}
     names = main + list(nui)
     mu = np.array([pr[n][0] for n in main] + [x[0] for x in nui.values()])
     sd = np.array([pr[n][1] for n in main] + [x[1] for x in nui.values()])
-    lo, hi = bounds(main)
+    lo, hi = bounds(main, st)
     lo = np.concatenate([lo, [x[2] for x in nui.values()]])
     hi = np.concatenate([hi, [x[3] for x in nui.values()]])
     zlo, zhi = (lo - mu) / sd, (hi - mu) / sd
@@ -581,7 +582,7 @@ def run_fit(
     edge = []
     for n, zi, a, b_ in zip(names, z, zlo, zhi):
         if zi <= a + 1e-9 or zi >= b_ - 1e-9:
-            q = stackups.PARAMS[n]
+            q = stackups.param(n, st)
             t_lo, t_hi = q.table if q.table is not None else (q.lo, q.hi)
             if (t_lo > q.lo and val[n] <= t_lo + 1e-9) or (t_hi < q.hi and val[n] >= t_hi - 1e-9):
                 edge.append(n)
@@ -642,12 +643,12 @@ def _lm(fun, z0, zlo, zhi, max_iter: int, loss: str):
     return z, it
 
 
-def bounds(names: Sequence[str]) -> Tuple[np.ndarray, np.ndarray]:
+def bounds(names: Sequence[str], st=None) -> Tuple[np.ndarray, np.ndarray]:
     """Hard bounds of the fit: the parameter's physical range, narrowed to its 2D-table range
     where it has one (the surrogate is not trusted outside it)."""
     lo, hi = [], []
     for n in names:
-        q = stackups.PARAMS[n]
+        q = stackups.param(n, st)
         a, b = (q.lo, q.hi) if q.table is None else (max(q.lo, q.table[0]), min(q.hi, q.table[1]))
         lo.append(a)
         hi.append(b)

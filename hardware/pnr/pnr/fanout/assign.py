@@ -31,6 +31,11 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from .sites import DIRS, Model
 
 STEPS = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (-1, 1), (1, -1))
+# PathFinder schedule: the present-sharing factor grows each round up to a cap, and
+# every contested object gains history cost (mm) each round it stays contested.
+PF_GROWTH = 1.5
+PF_MAX = 1e9
+HISTORY_STEP = 0.2
 
 
 @dataclass
@@ -310,8 +315,8 @@ class Assigner:
             for t in bad:
                 for o in t.path:
                     if self.present(o, t.net):
-                        self.history[o] += 0.2
-            self.pf *= 1.5
+                        self.history[o] += HISTORY_STEP
+            self.pf = min(PF_MAX, self.pf * PF_GROWTH)
             for t in self.order():
                 if t in bad:
                     self.ripup(t)
@@ -320,6 +325,66 @@ class Assigner:
         self.report["rounds"] = rounds
         self._legalize()
         return self.tasks
+
+    def _owners(self, objs, net):
+        """The tasks of other nets whose committed objects conflict with ``objs``."""
+        hit = set()
+        for obj in objs:
+            other, same = self._cache_conflicts(obj)
+            hit.update(other)
+            hit.update(o for o in same)
+        out = []
+        for t in self.tasks:
+            if t.path is None or t.net == net:
+                continue
+            if any(o in hit for o in t.path):
+                out.append(t)
+        return out
+
+    def _displace(self, max_passes=3):
+        """Local repair: a failed task takes its best path through other tasks'
+        resources when every task it displaces (of its priority or lower) finds a
+        strictly legal path again; otherwise nothing changes."""
+        for _ in range(max_passes):
+            improved = False
+            for t in sorted(
+                (t for t in self.tasks if t.path is None and t.failed and "static" not in t.failed),
+                key=lambda t: (t.priority, -t.ring, t.pad),
+            ):
+                saved_pf = self.pf
+                self.pf = 1.0
+                found = self.search(t)
+                self.pf = saved_pf
+                if found is None:
+                    continue
+                displaced = self._owners(found[1], t.net)
+                if any(d.priority < t.priority for d in displaced) or len(displaced) > 4:
+                    continue
+                before = {d.pad: (d.path, d.route) for d in displaced}
+                for d in displaced:
+                    self.ripup(d)
+                self.commit(t, found)
+                ok = True
+                for d in sorted(displaced, key=lambda d: (d.priority, -d.ring, d.pad)):
+                    again = self.search(d, strict=True)
+                    if again is None:
+                        ok = False
+                        break
+                    self.commit(d, again)
+                if ok and not self.conflicted():
+                    t.failed = None
+                    self.report["repaired"].append(t.pad)
+                    improved = True
+                    continue
+                # Roll back: the displaced tasks get their old paths again.
+                for d in displaced:
+                    self.ripup(d)
+                self.ripup(t)
+                for d in displaced:
+                    d.path, d.route = before[d.pad]
+                    self._apply(d.net, d.path, +1)
+            if not improved:
+                break
 
     def _legalize(self):
         """Drop conflicting tasks by priority, then retry each strictly."""
@@ -347,3 +412,4 @@ class Assigner:
                 self.commit(t, found)
                 t.failed = None
                 self.report["repaired"].append(t.pad)
+        self._displace()

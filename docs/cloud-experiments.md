@@ -129,10 +129,10 @@ set.
 ### 2. Project and billing (owner account)
 
 ```sh
-! gcloud auth login                       # in Claude Code: the ! prefix, you sign in yourself
+gcloud config configurations create yapnr-owner   # first: a new configuration has no account
+! gcloud auth login "$OWNER"              # in Claude Code: the ! prefix, you sign in yourself
 gcloud projects create "$PROJECT" --name="yapnr experiments"
 gcloud billing projects link "$PROJECT" --billing-account="$BILLING"
-gcloud config configurations create yapnr-owner
 gcloud config set project "$PROJECT"
 gcloud services enable serviceusage.googleapis.com cloudresourcemanager.googleapis.com \
   iam.googleapis.com cloudbilling.googleapis.com billingbudgets.googleapis.com \
@@ -164,9 +164,13 @@ templates, the budget and the guard functions.
 Spot VMs consume the preemptible CPU quota once it is granted in a region ([quotas][quotas]). The
 quota ceiling is the only hard cap on spending, so request only what the caps allow, in the enabled
 regions only. Look the quota id up first (it is not verified here), then create a preference with
-the id the budget guard knows, `yapnr-preemptible-cpus-<region>`:
+the id the budget guard knows, `yapnr-preemptible-cpus-<region>`. Check first that the region
+offers the planned shapes (the price table only shows that the region bills them):
 
 ```sh
+gcloud compute machine-types list --project="$PROJECT" \
+  --filter="zone~^$REGION- AND name=( c4d-highcpu-16 c4d-highcpu-8 c3d-highcpu-8 )" \
+  --format="table(name,zone)"
 gcloud quotas info list --service=compute.googleapis.com --project="$PROJECT" \
   --filter="quotaId~PREEMPTIBLE" --format="value(quotaId)"
 gcloud quotas preferences create --service=compute.googleapis.com --project="$PROJECT" \
@@ -179,9 +183,17 @@ Repeat per region, and list each region and quota id in `quota_preferences` of t
 `tofu apply` again). Leave the on-demand CPU quota at its default. A new billing account may get
 less than it asks for at first.
 
+The quota, not the price, sets how fast campaigns finish: at one task per physical core, 64
+preemptible vCPUs of C4D run 32 single-threaded tasks at once, the work of about 25 M4
+performance cores at the table's speed factor (the development Mac has 4 performance and 6
+efficiency cores), for about $0.60 an hour in `us-west4`. Ask for more (256 vCPUs is about $2.40
+an hour) once the kill-switch drill (step 9) and the first campaigns have shown the guards work;
+raise `max_parallel_vcpus` with it.
+
 ### 5. Price key (optional)
 
 ```sh
+gcloud services enable apikeys.googleapis.com
 gcloud services api-keys create --display-name=yapnr-prices \
   --api-target=service=cloudbilling.googleapis.com
 security add-generic-password -s yapnr-billing-catalog -a "$USER" -w   # paste the key

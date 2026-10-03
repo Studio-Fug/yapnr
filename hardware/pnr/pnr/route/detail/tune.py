@@ -54,6 +54,11 @@ DEFAULT_AMPLITUDE_MM = 1.0
 DEFAULT_AMPLITUDE_CAP_MM = 4.0
 # Measure-and-tune passes per set (each pass lengthens every member still short).
 PASSES = 3
+# Via price (mm of track per via) when the longest member of an unmatched set is
+# routed again: the router's own is 3 mm; KiCad counts a via as its stack span.
+REROUTE_VIA_MM = 12.0
+# Price of a cell in another net's footprint (not its copper) on the second try.
+REROUTE_FOOTPRINT_COST = 20.0
 
 
 # ------------------------------------------------------------------ rules
@@ -437,6 +442,8 @@ class SetReport:
     spread: Optional[float] = None
     nominal_spread: Optional[float] = None
     status: str = "unrouted"  # ok | tuned | length_unmatched | unrouted
+    # Members routed again (shorter) because the others had no room to catch up.
+    rerouted: List[str] = field(default_factory=list)
 
     def to_json(self) -> dict:
         return dict(
@@ -453,6 +460,7 @@ class SetReport:
                 else {}
             ),
             status=self.status,
+            **({"rerouted": list(self.rerouted)} if self.rerouted else {}),
             members=[
                 dict(
                     net=m.net,
@@ -882,6 +890,132 @@ class Tuner:
         for c in net_footprint(grid, net, rn, self.via_keepout, halo):
             owner.setdefault(c, set()).add(net)
 
+    # -- rerouting the longest member ------------------------------------------
+
+    def reroute_shorter(self, net: str, unit: str, owner, index: CopperIndex) -> bool:
+        """Route ``net`` again from its access cells around every other net's
+        footprint (as the router's recovery pass does), with vias priced at
+        :data:`REROUTE_VIA_MM`, and keep the new route only when it connects every
+        access cell, its footprint and its millimetre geometry clear the other nets,
+        and it measures shorter. Routes through plated pad transitions are left as
+        they are. Returns True when the net was replaced."""
+        from collections import defaultdict
+
+        from .maze import _footprint, _route_one, _to_geometry, remaining_connections
+
+        grid = self.grid
+        rn = self.board.result.nets[net]
+        access = sorted(self.access.get(net, ()), key=lambda c: (c.layer, c.i, c.j))
+        if len(access) < 2:
+            return False
+        plated = getattr(grid, "plated_transition", lambda *a: None)
+        if any(plated(net, i, j) is not None for i, j in rn.vias):
+            return False
+        halo = self.net_halo.get(net, 0)
+        foreign = {c for c, nets in owner.items() if nets - {net}}
+        # The net's own cells stay usable even where they sit in another net's
+        # footprint (a route the router completed at the rules' exact spacing).
+        old_fp = net_footprint(grid, net, rn, self.via_keepout, halo)
+        own = set(rn.cells)
+
+        def search(blocked, soft=None):
+            route = _route_one(
+                grid,
+                access,
+                net,
+                defaultdict(int),
+                defaultdict(float),
+                REROUTE_VIA_MM / grid.pitch,
+                0.0,
+                blocked=blocked,
+                soft=soft,
+            )
+            if route is None or remaining_connections(access, route.edges):
+                return None
+            return route
+
+        # First around the other nets' footprints (the router's own model); failing
+        # that, around their copper only, with their footprints priced, and the
+        # millimetre check below as the judge.
+        route = search(foreign - own)
+        if route is not None:
+            fp = _footprint(grid, route.cells, self.via_keepout, halo, edges=route.edges, net=net)
+            if (fp & foreign) - (old_fp & foreign):
+                route = None
+        if route is None:
+            copper = set()
+            for name, other in self.board.result.nets.items():
+                if name == net or not other.cells:
+                    continue
+                copper.update(other.cells)
+                for i, j in other.vias:
+                    copper.update(Cell(la, i, j) for la in range(grid.nlayers))
+            route = search(copper - own, {c: REROUTE_FOOTPRINT_COST for c in foreign - own})
+        if route is None:
+            return False
+        new = _to_geometry(route)
+        if any(plated(net, i, j) is not None for i, j in new.vias):
+            return False
+        width = self.width(net)
+        old_segments = {(layer, frozenset((a, b))) for layer, a, b in rn.segments}
+        tracks = [
+            (net, grid.layers[layer], grid.center_of(*a), grid.center_of(*b), width)
+            for layer, a, b in new.segments
+        ]
+        vias = [(net,) + tuple(grid.center_of(i, j)) for i, j in new.vias]
+
+        def clear_of(n):
+            return self.clearance_of(net, n)
+
+        # Exact millimetre clearance of every piece of copper the old route did not have.
+        for (layer, a, b), (_n, name, pa, pb, w) in zip(new.segments, tracks):
+            if (layer, frozenset((a, b))) in old_segments:
+                continue
+            if not index.clear(net, name, pa, pb, w / 2, clear_of):
+                return False
+        for (i, j), (_n, x, y) in zip(new.vias, vias):
+            if (i, j) in set(rn.vias):
+                continue
+            if not all(
+                index.clear(net, layer, (x, y), (x, y), self.via_radius, clear_of)
+                for layer in grid.layers
+            ):
+                return False
+        # Swap the grid route and its millimetre copper, measure, keep or restore.
+        old = (list(rn.cells), list(rn.segments), list(rn.vias))
+        old_tracks, old_vias = list(self.board.tracks), list(self.board.vias)
+        before = self.value(self.measure(net), unit)
+        grid_keys = {
+            frozenset(
+                (lm._key(grid.center_of(*a)), lm._key(grid.center_of(*b)), grid.layers[layer])
+            )
+            for layer, a, b in rn.segments
+        }
+        via_keys = {lm._key(grid.center_of(i, j)) for i, j in rn.vias}
+        self.board.tracks = [
+            t
+            for t in self.board.tracks
+            if not (
+                t[0] == net
+                and frozenset((lm._key(tuple(t[2])), lm._key(tuple(t[3])), t[1])) in grid_keys
+            )
+        ] + tracks
+        self.board.vias = [
+            v for v in self.board.vias if not (v[0] == net and lm._key((v[1], v[2])) in via_keys)
+        ] + vias
+        rn.cells, rn.segments, rn.vias = list(new.cells), list(new.segments), list(new.vias)
+        if self.value(self.measure(net), unit) < before - 1e-6:
+            for c in old_fp:
+                nets = owner.get(c)
+                if nets:
+                    nets.discard(net)
+            for c in net_footprint(grid, net, rn, self.via_keepout, halo):
+                owner.setdefault(c, set()).add(net)
+            return True
+        rn.cells, rn.segments, rn.vias = old
+        self.board.tracks, self.board.vias = old_tracks, old_vias
+        return False
+
     # -- driver -------------------------------------------------------------
 
     def run(self) -> List[SetReport]:
@@ -905,44 +1039,68 @@ class Tuner:
                 report.status = "unrouted"
                 continue
             status = "ok"
-            # Measure, lengthen every member short of the longest, measure again: a
-            # bump's exact effect is what KiCad measures, so a few passes settle it.
-            for _ in range(PASSES):
+
+            def tune_passes():
+                """Measure, lengthen every member short of the longest, measure again:
+                a bump's exact effect is what KiCad measures, so a few passes settle it."""
+                nonlocal index, status
+                for _ in range(PASSES):
+                    values = {n: self.value(self.measure(n), s.unit) for n in s.nets}
+                    target = max(values.values())
+                    if target - min(values.values()) <= report.target_residual:
+                        break  # the set is within its target
+                    progressed = False
+                    for net in s.nets:
+                        need = target - values[net]
+                        if need <= report.target_residual / 4:
+                            continue
+                        if owner_set.get(net, s.name) != s.name:
+                            continue  # matched in an earlier set: left as it is
+                        # Aim a little short of the longest: an overshoot the mitres
+                        # cannot trim would make this member every other one's target.
+                        aim = need - report.target_residual / 4
+                        shape = shape_rules(
+                            self.rules, self.grid.pitch, self.width(net), self.clearance
+                        )
+                        added, bumps, mitres = self.tune_member(
+                            net, aim, s.unit, shape, owner, index
+                        )
+                        if not bumps:
+                            continue
+                        before = tuned.get(net, (0.0, 0, 0))
+                        tuned[net] = (before[0] + added, before[1] + bumps, before[2] + mitres)
+                        owner_set[net] = s.name
+                        index = self.copper_index()
+                        progressed = True
+                        status = "tuned"
+                    if not progressed:
+                        break
+
+            def unmatched() -> bool:
+                # Matched: the nominal spread (KiCad's file order) within the target
+                # and every merge order KiCad might take within the budget.
+                report.nominal_spread, report.spread = self.spread(s.nets, s.unit)
+                return (
+                    report.nominal_spread > report.target_residual + 1e-9
+                    or report.spread > report.budget + 1e-9
+                )
+
+            tune_passes()
+            if unmatched():
+                # No room to lengthen the short members enough: route the longest one
+                # again around everything else at a high via price (a via is 1.6 mm on
+                # two layers), keep it if it is shorter, and tune once more.
                 values = {n: self.value(self.measure(n), s.unit) for n in s.nets}
-                target = max(values.values())
-                if target - min(values.values()) <= report.target_residual:
-                    break  # the set is within its target
-                progressed = False
-                for net in s.nets:
-                    need = target - values[net]
-                    if need <= report.target_residual / 4:
-                        continue
-                    if owner_set.get(net, s.name) != s.name:
-                        continue  # matched in an earlier set: left as it is
-                    # Aim a little short of the longest: an overshoot the mitres cannot
-                    # trim would make this member the new target of every other one.
-                    aim = need - report.target_residual / 4
-                    shape = shape_rules(
-                        self.rules, self.grid.pitch, self.width(net), self.clearance
-                    )
-                    added, bumps, mitres = self.tune_member(net, aim, s.unit, shape, owner, index)
-                    if not bumps:
-                        continue
-                    before = tuned.get(net, (0.0, 0, 0))
-                    tuned[net] = (before[0] + added, before[1] + bumps, before[2] + mitres)
-                    owner_set[net] = s.name
+                longest = max(s.nets, key=lambda n: (values[n], n))
+                if owner_set.get(longest, s.name) == s.name and self.reroute_shorter(
+                    longest, s.unit, owner, index
+                ):
+                    report.rerouted.append(longest)
+                    tuned.pop(longest, None)  # its meanders went with the old route
                     index = self.copper_index()
-                    progressed = True
                     status = "tuned"
-                if not progressed:
-                    break
-            # Matched: the nominal spread (KiCad's file order) within the target and
-            # every merge order KiCad might take within the budget.
-            report.nominal_spread, report.spread = self.spread(s.nets, s.unit)
-            if (
-                report.nominal_spread > report.target_residual + 1e-9
-                or report.spread > report.budget + 1e-9
-            ):
+                    tune_passes()
+            if unmatched():
                 status = "length_unmatched"
             report.status = status
         for s, report in zip(self.sets, reports):
@@ -983,7 +1141,7 @@ def tune_board(
         return None
     members = {n for s in sets for n in s.nets}
     nets = board.result.nets
-    saved_tracks = list(board.tracks)
+    saved_tracks, saved_vias = list(board.tracks), list(board.vias)
     saved = {
         n: (list(nets[n].segments), list(nets[n].cells), list(nets[n].vias))
         for n in members
@@ -993,7 +1151,7 @@ def tune_board(
         tuner = Tuner(board, graph, grid, rules, **kwargs)
         return [r.to_json() for r in tuner.run()]
     except Exception as error:  # noqa: BLE001 - the route stands without tuning
-        board.tracks = saved_tracks
+        board.tracks, board.vias = saved_tracks, saved_vias
         for n, (segments, cells, vias) in saved.items():
             nets[n].segments, nets[n].cells, nets[n].vias = segments, cells, vias
         return [

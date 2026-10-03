@@ -285,6 +285,74 @@ class TuneBoardTest(unittest.TestCase):
         self.assertEqual(report["status"], "tuning_error")
         self.assertIn("boom", report["error"])
 
+    def test_unmatched_set_reroutes_its_longest_member(self):
+        from collections import defaultdict
+        from unittest import mock
+
+        from pnr.route.detail import tune
+        from pnr.route.detail.maze import _route_one, _to_geometry
+
+        g = pair_board(n_offset=0.5)
+        rules = pair_rules(skew_mm=0.5)
+        # One short trombone at most: meanders alone cannot make up a detour.
+        rules["tuning"] = {"style": "trombone", "amplitude_max_mm": 0.25}
+        got = {}
+
+        def capture(board, graph, grid, rules, **kwargs):
+            got.update(board=board, kwargs=kwargs)
+
+        with mock.patch.object(tune, "tune_board", side_effect=capture):
+            route(g, rules)
+        board, kwargs = got["board"], got["kwargs"]
+        grid = board.grid
+        # Send D_N over a wall across the board (as a congested negotiation might).
+        rn = board.result.nets["D_N"]
+        wall = {Cell(la, 36, j) for la in range(grid.nlayers) for j in range(0, 41)}
+        p_cells = set(board.result.nets["D_P"].cells)
+        access = sorted(kwargs["access"]["D_N"], key=lambda c: (c.layer, c.i, c.j))
+        detour = _to_geometry(
+            _route_one(
+                grid, access, "D_N", defaultdict(int), defaultdict(float), 12, 0.0, wall | p_cells
+            )
+        )
+        old = {frozenset((grid.center_of(*a), grid.center_of(*b))) for _l, a, b in rn.segments}
+        board.tracks = [
+            t
+            for t in board.tracks
+            if not (t[0] == "D_N" and frozenset((tuple(t[2]), tuple(t[3]))) in old)
+        ]
+        board.tracks += [
+            ("D_N", grid.layers[la], grid.center_of(*a), grid.center_of(*b), 0.25)
+            for la, a, b in detour.segments
+        ]
+        board.vias = [v for v in board.vias if v[0] != "D_N"]
+        board.vias += [("D_N",) + tuple(grid.center_of(i, j)) for i, j in detour.vias]
+        rn.cells, rn.segments, rn.vias = detour.cells, detour.segments, detour.vias
+
+        def lengths():
+            return lm.board_route_lengths(
+                board, g, ["D_P", "D_N"], lm.default_stackup(2), via_radius=0.3
+            )
+
+        before = lengths()
+        self.assertGreater(before["D_N"].total_mm - before["D_P"].total_mm, 3.0)
+        (report,) = tune.tune_board(board, g, grid, rules, **kwargs)
+        self.assertEqual(report["rerouted"], ["D_N"])
+        self.assertIn(report["status"], ("ok", "tuned"))
+        after = lengths()
+        self.assertLess(after["D_N"].total_mm, before["D_N"].total_mm - 1.0)
+        self.assertLessEqual(
+            abs(after["D_N"].total_mm - after["D_P"].total_mm), report["target_residual"] + 1e-9
+        )
+        # The new route is the net's own grid route and copper; it clears D_P.
+        self.assertTrue(all(grid.passable(c.layer, c.i, c.j, "D_N") for c in rn.cells))
+        for t in (t for t in board.tracks if t[0] == "D_N"):
+            for o in board.tracks:
+                if o[0] == "D_P" and o[1] == t[1]:
+                    self.assertGreaterEqual(
+                        _seg_dist(t[2], t[3], o[2], o[3]) + 1e-6, 0.25 + FAB["clearance_mm"]
+                    )
+
     def test_ps_budget(self):
         g = pair_board(n_offset=2.5)
         board = route(g, pair_rules(skew_ps=2.0))

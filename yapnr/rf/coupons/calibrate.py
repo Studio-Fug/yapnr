@@ -9,8 +9,9 @@ every line M_i M0⁻¹ = X L_i X⁻¹ with L_i = diag(e^{−γ l_i}, e^{+γ l_i}
   least squares over the pairs;
 - the eigenvectors give the error box X up to one scalar, X ∝ [[a, b], [κa, 1]] (κ from the
   e^{−γl} eigenvector, b from the e^{+γl} one), averaged over the pairs with the weights
-  |λ1 − λ2|², the conditioning of each pair [Marks91, DeGroot02]; the reported conditioning is
-  the best pair's |sin(β Δl)|, the figure of merit of design §5.1;
+  |λ1 − λ2|², the conditioning of each pair [Marks91, DeGroot02]; nearly degenerate pairs
+  (`PAIR_MIN_WEIGHT`) and pairs whose roots came out swapped are left out; the reported
+  conditioning is the best pair's |sin(β Δl)|, the figure of merit of design §5.1;
 - the reflect, measured at both ports, gives a² (sign from the reflect's expected sign);
 - a device is corrected by T = X⁻¹ M M0⁻¹ X, referenced to the line's own Zc at the reference
   planes (pseudo-waves).
@@ -35,6 +36,10 @@ import numpy as np
 from yapnr.rf.coupons import models
 
 C_LIGHT = 299792458.0
+# Pairs of standards whose eigenvalue separation |λ1 − λ2|² is below this fraction of the best
+# pair's are left out (|sin β Δl| below about 0.3 of the best pair's); the line set keeps a pair
+# above |sin| 0.95 at every frequency (design §5.1).
+PAIR_MIN_WEIGHT = 0.1
 
 
 @dataclass
@@ -102,8 +107,9 @@ def multiline_trl(
         num, den = 0.0 + 0.0j, 0.0
         kap_num, b_num, wsum = 0.0 + 0.0j, 0.0 + 0.0j, 0.0
         g_est = g_ref
-        for dl, a_, i in A:
-            lam, vec = np.linalg.eig(a_[k])
+        eig = [np.linalg.eig(a_[k]) for _, a_, _ in A]
+        wmax = max(float(np.abs(lam[0] - lam[1]) ** 2) for lam, _ in eig)
+        for (dl, a_, i), (lam, vec) in zip(A, eig):
             j1 = int(np.argmin(np.abs(lam - np.exp(-g_ref * dl))))
             j2 = 1 - j1
             phi = -np.log(lam[j1])
@@ -112,6 +118,11 @@ def multiline_trl(
             wt = float(np.abs(lam[j1] - lam[j2]) ** 2)
             if i == 0:
                 per_line[round(dl * 1e3, 6)][k] = phi / dl
+            if wt < PAIR_MIN_WEIGHT * wmax:
+                # a nearly degenerate pair (β Δl near a multiple of π): its two roots cannot
+                # be told apart, and swapped roots put 1/κ and 1/b into the error box, a spike
+                # at one frequency even at a small weight
+                continue
             num += wt * dl * phi
             den += wt * dl * dl
             if den > 0:
@@ -120,16 +131,23 @@ def multiline_trl(
                     g_ref = g_est  # first frequency: unwrap the longer pairs with it
             v1, v2 = vec[:, j1], vec[:, j2]
             if abs(v1[0]) > 0 and abs(v2[1]) > 0:
-                kap_num += wt * (v1[1] / v1[0])
-                b_num += wt * (v2[0] / v2[1])
-                wsum += wt
+                kp, bp = v1[1] / v1[0], v2[0] / v2[1]
+                # forward eigenvector [1, κ], backward [b, 1]: |κ b| ≪ 1 unless swapped
+                if abs(kp * bp) < 1.0:
+                    kap_num += wt * kp
+                    b_num += wt * bp
+                    wsum += wt
         gamma[k] = g_est
         e = ((g_est * C_LIGHT / (1j * w)) ** 2).real
         if g_est.imag > 0 and 0.5 * eps_guess < e < 2.0 * eps_guess:
             eps_ref = e
         cond[k] = max(abs(math.sin(g_est.imag * dl)) for dl, _, _ in A)
-        kap = kap_num / wsum
-        b = b_num / wsum
+        if wsum > 0:
+            kap, b = kap_num / wsum, b_num / wsum
+        elif k > 0:  # no usable pair (never seen): keep the previous frequency's error box
+            kap, b = x[k - 1, 1, 0], x[k - 1, 0, 1]
+        else:
+            kap, b = 0.0, 0.0
         x[k] = np.array([[1.0, b], [kap, 1.0]])  # with a = 1 for now
     # reflect: a^2 = N1 / N2
     g1, g2 = reflect[:, 0, 0], reflect[:, 1, 1]
@@ -203,7 +221,10 @@ def tdr_z0(
 # --- quality checks (IEEE 370-style, simplified) -----------------------------------------------
 
 
-PASSIVITY_TOL = 0.02  # SOLT-corrected data of a lossy line may exceed 1 by the residual errors
+# SOLT-corrected data of a near-lossless stick (the thru, the reflect) exceed 1 by the residual
+# errors of tier 1: directivity −40 dB (0.010) + source match −35 dB (0.018) + cable flex 0.02 dB
+# (0.002) is 0.030, and synthetic sessions with that error model reach 1.030 (est., 2026-10-02).
+PASSIVITY_TOL = 0.035
 
 
 def quality(s: np.ndarray) -> dict:

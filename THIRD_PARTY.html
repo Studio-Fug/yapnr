@@ -218,6 +218,7 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/part-cache.html">The part cache</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/fab-and-ordering.html">Fab bundles and staged orders</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/releases.html">Releases and versioning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/cloud-experiments.html">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
 <ul>
@@ -229,6 +230,7 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/fea-integration.html">Design: thermal and electromagnetic field solvers (FEA) in yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/about-the-name.html">About the name</a></li>
@@ -321,6 +323,22 @@ unmodified to <code class="docutils literal notranslate"><span class="pre">vendo
 build files are larger than the repository’s 600 KB file limit.</p></li>
 </ul>
 <p><code class="docutils literal notranslate"><span class="pre">tests/unit/viewer/test_dist.py</span></code> checks the sha256 of every served third-party file.</p>
+</section>
+<section id="google-api-discovery-documents">
+<h3>Google API discovery documents<a class="headerlink" href="#google-api-discovery-documents" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>What:</strong> the Batch v1 discovery document (revision 20260723), Google’s machine-readable
+description of the Batch REST API, as mirrored by
+<a class="reference external" href="https://github.com/googleapis/google-api-go-client">google-api-go-client</a> at
+<code class="docutils literal notranslate"><span class="pre">batch/v1/batch-api.json</span></code> (commit <code class="docutils literal notranslate"><span class="pre">8140ddf12e1a5c4a54748a94b6655818fcc480ed</span></code>, 2026-08-02).</p></li>
+<li><p><strong>License:</strong> BSD-3-Clause (the repository’s <code class="docutils literal notranslate"><span class="pre">LICENSE</span></code>, kept next to it).</p></li>
+<li><p><strong>How:</strong> vendored unmodified as <code class="docutils literal notranslate"><span class="pre">third_party/googleapis/batch-v1.json</span></code> (sha256
+<code class="docutils literal notranslate"><span class="pre">8ea2a112c32f1995d8b53660b4c729b62d5dc81ab79b096172a06093d2b89d15</span></code>), with
+<code class="docutils literal notranslate"><span class="pre">third_party/googleapis/LICENSE</span></code> (sha256
+<code class="docutils literal notranslate"><span class="pre">110244b02140866ee37d17fa7449436a377ec3b85a481fbb208f4c87964382de</span></code>). <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code> validates
+the Batch jobs it renders against it, offline; it is data of <code class="docutils literal notranslate"><span class="pre">//yapnr/exp</span></code>, not part of the
+wheel.</p></li>
+</ul>
 </section>
 </section>
 <section id="in-the-container-images">
@@ -483,6 +501,7 @@ of the wheel or the container images.</p></li>
 <li><a class="reference internal" href="#shipped-or-served-with-yapnr">Shipped or served with yapnr</a><ul>
 <li><a class="reference internal" href="#elkjs">elkjs</a></li>
 <li><a class="reference internal" href="#three-js">three.js</a></li>
+<li><a class="reference internal" href="#google-api-discovery-documents">Google API discovery documents</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#in-the-container-images">In the container images</a></li>

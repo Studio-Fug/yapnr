@@ -439,6 +439,15 @@ class RecoveryScopeTest(unittest.TestCase):
         self.assertIsNone(_late_copper(graph, set(), set()))
         self.assertIn("1 plane-net surface pad (U1.1)", _late_copper(graph, {"GND"}, set()))
         self.assertIn("1 deferred net (SIG)", _late_copper(graph, set(), {"SIG"}))
+        # A drop the escape plan holds (planned with the signals) is not late.
+        from pnr.place.geometry import pad_rects
+        from pnr.route.detail.escape import Escape
+
+        centre = next((r.cx, r.cy) for name, _, r in pad_rects(comp) if name == "1")
+        planned = Escape(net="GND", kind="dogbone", access=Cell(0, 0, 0), pad_xy=centre)
+        self.assertIsNone(_late_copper(graph, {"GND"}, set(), [planned]))
+        blocked = Escape(net="GND", kind="blocked", access=Cell(0, 0, 0), pad_xy=centre)
+        self.assertIsNotNone(_late_copper(graph, {"GND"}, set(), [blocked]))
 
     def test_trace_events_end_on_the_recovered_route(self):
         from pnr.route.detail.maze import _to_geometry

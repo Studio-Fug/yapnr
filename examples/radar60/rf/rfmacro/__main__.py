@@ -133,7 +133,10 @@ def main(argv=None) -> int:
         name = f"rfm1-{tag}"
         out = os.path.join(a.out, name)
         paths = kicad.write(
-            mc, out, name, f"radar60 RFM1 conventional macro, variant {a.variant:+d}"
+            mc,
+            out,
+            name,
+            f"radar60 RFM1 conventional macro, variant {a.variant:+d} (PLACEHOLDER until C1/C2)",
         )
         rec = report.record(mc)
         rec["schema"] = SCHEMA

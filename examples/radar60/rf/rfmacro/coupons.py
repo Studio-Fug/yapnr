@@ -86,7 +86,7 @@ def _gsg(st: Strip, net: str, tip: Pt, heading: float, key: str) -> Pt:
         ]
     )
     for v in (-0.55, 0.55):
-        st.vias.append((at(0.10, v), 0.15, 0.30))
+        st.vias.append((at(0.10, v), *RULES["via_fence"]))
     return at(GSG_LEN + TAPER, 0.0)
 
 
@@ -99,7 +99,7 @@ def _line(
     st.chan.append(outline(p, half=0.30))
     if fence:
         for v in p.fence(0.50, 0.45, skip_from=0.10, skip_to=0.10):
-            st.vias.append((v, 0.15, 0.30))
+            st.vias.append((v, *RULES["via_fence"]))
     return p
 
 
@@ -131,7 +131,7 @@ def cp60(st: Strip, x0: float, y0: float, d: Dict) -> float:
     y += 1.4
     a = _gsg(st, "GND", (x0, y), 0.0, "cp60/short")
     p = _line(st, "GND", a, 0.0, 1.0, "cp60/short", fence=False)
-    st.vias.append((p.pos, 0.15, 0.30, "GND", True))
+    st.vias.append((p.pos, *RULES["via_fence"], "GND", True))
     st.catalog.append(dict(id="CP60-SHORT", kind="1-port short (via at 1.0 mm)", y=y))
     return y + 1.4
 
@@ -242,7 +242,7 @@ def tx_replica(st: Strip, origin: Pt) -> None:
     st.paths.append((net, q))
     st.chan.append(outline(q, half=0.30))
     for v in q.fence(0.50, 0.45, skip_from=0.1, skip_to=0.1):
-        st.vias.append((v, 0.15, 0.30))
+        st.vias.append((v, *RULES["via_fence"]))
     st.catalog.append(
         dict(id="CP-T-TX1", kind="TX1 feed replica P0->P1", length_mm=round(q.length, 4))
     )
@@ -278,7 +278,7 @@ def launch_replicas(st: Strip, x0: float, y0: float, p: Dict) -> None:
                 st.vias.append(((c[0] + inward * pitch / 2, c[1] + sg * pitch / 2), 0.15, 0.35))
         p_ = _line(st, net, land, 0.0, L, f"cpl{k}", fence=False)
         for v in p_.fence(0.50, 0.45, skip_from=0.9, skip_to=0.9 if two else 0.1):
-            st.vias.append((v, 0.15, 0.30))
+            st.vias.append((v, *RULES["via_fence"]))
         if not two:
             _gsg(st, net, (end[0] + GSG_LEN + TAPER, y), math.pi, f"cpl{k}/b")
         st.catalog.append(
@@ -421,7 +421,7 @@ def librevna(st: Strip, x0: float) -> None:
         st.paths.append((net, p))
         st.chan.append(outline(p, half=0.30))
         for v in p.fence(0.50, 0.9, skip_from=0.5, skip_to=0.5):
-            st.vias.append((v, 0.15, 0.30))
+            st.vias.append((v, *RULES["via_fence"]))
         st.catalog.append(
             dict(
                 id=f"CP6-{kind.upper()}",
@@ -494,7 +494,7 @@ def librevna(st: Strip, x0: float) -> None:
 
 
 def _filter(st: Strip):
-    """Keep pinned vias; drop GND vias in a line's gap or closer than 0.40 mm to a kept via."""
+    """Keep pinned vias; drop GND vias in a line's gap or closer than RULES["fence_pitch_min"] to a kept via."""
     from .geom import path_dist
 
     kept = []
@@ -505,7 +505,7 @@ def _filter(st: Strip):
         if len(v) > 4 and v[4]:
             continue
         xy, pad = v[0], v[2]
-        if any(math.dist(xy, k[0]) < 0.40 - 1e-6 for k in kept):
+        if any(math.dist(xy, k[0]) < RULES["fence_pitch_min"] - 1e-6 for k in kept):
             continue
         if any(path_dist(xy, p_, 0.05) < p_.width / 2 + 0.2 + pad / 2 - 1e-6 for _, p_ in st.paths):
             continue

@@ -15,7 +15,10 @@ Structures:
   arm lambda_g/2 longer for the 180° of the facing feeds); the input runs up the column gap;
 - isolation (RFS-5): the L1 GND strip and a fence between the RX and TX banks;
 - windows and margins (RFS-6): L2 windows `window_margin` beyond every patch; the L1 pour is kept
-  `pour_clear_ant` from the radiators.
+  `pour_clear_ant` from the radiators;
+- L3 (In2.Cu) GND: only the RF region outside the package, the under-package ground of rows 1-3
+  and A-C and each land's L2 cut-out plus `l3_cut_margin` (elsewhere In2 is the board's escape
+  layer); L2-L3 stitching vias round each bank and along that boundary (review 2026-10-03).
 """
 
 from __future__ import annotations
@@ -94,6 +97,7 @@ class Macro:
     pour: List[List[Pt]] = field(default_factory=list)  # L1 GND pour outlines (regions)
     pour_keepouts: List[List[Pt]] = field(default_factory=list)
     mask_open: List[List[Pt]] = field(default_factory=list)
+    l3_gnd: List[List[Pt]] = field(default_factory=list)  # In2.Cu GND outlines (macro-owned)
     ports: Dict[str, Dict[str, object]] = field(default_factory=dict)
     checks: List[Dict[str, object]] = field(default_factory=list)
     region: Dict[str, List[float]] = field(default_factory=dict)
@@ -381,8 +385,10 @@ def build(overrides: Dict | None = None) -> Macro:
     x_lo = min(pxs) - 5.0
     x_hi = max(pxs) + 5.0
     y_hi = max(pys) + 5.0
+    # the region starts where the east pour does (U1 y -1.3, board y 26.7): nothing of the
+    # macro lies further south, and the strip below is the board's (review 2026-10-03)
     mc.region = dict(
-        x=[round(x_lo, 3), round(x_hi, 3)], y=[round(-half_body + 1.3, 3), round(y_hi, 3)]
+        x=[round(x_lo, 3), round(x_hi, 3)], y=[round(-half_body + 3.9, 3), round(y_hi, 3)]
     )
     # L1 GND pour: north strip above the package and the east strip right of it (the macro's
     # own L1 copper; the pour stops at the package outline except around the RF lands)
@@ -397,6 +403,15 @@ def build(overrides: Dict | None = None) -> Macro:
     mc.pour.append(
         rect(tx_ball["TX1"][0] - 0.65 - 0.16, min(txs) - 0.65, half_body, max(txs) + 0.65)
     )
+    # L3 (In2.Cu) GND, the reference of the L2 windows and land cut-outs: the RF region outside
+    # the package (the two pour strips), the under-package ground of rows 1-3 and A-C, and each
+    # land's cut-out plus a margin. Under the rest of the package In2 carries the BGA escapes
+    # (review 2026-10-03: clipping In2 to the region alone would leave the lands without L3).
+    mc.l3_gnd = [list(q) for q in mc.pour]
+    margin = float(p["l3_cut_margin"])
+    for n in mc.feeds:
+        b = rx_ball.get(n) or tx_ball.get(n)
+        mc.l3_gnd.append(circle(b, float(p["l2_cut_r"]) + margin))
     mc.mask_open.append(rect(x_lo, half_body + 0.05, x_hi, y_hi))
     mc.mask_open.append(rect(half_body + 0.05, -half_body + 3.9, x_hi, half_body + 0.05))
 
@@ -415,6 +430,39 @@ def build(overrides: Dict | None = None) -> Macro:
             mc.vias.append(((x_iso, y), via_f[0], via_f[1], "isolation"))
         y += pitch
     mc.ports["iso_fence_x"] = dict(at=[x_iso, 0.0])
+
+    # ---- L2-L3 stitching (review 2026-10-03) ---------------------------------------------
+    # GND through vias in the L1 pour: a ring `stitch_inset` outside each bank's field box (so
+    # >= pour_clear_ant + inset from the patches) and a row `stitch_inset` inside the In2 GND
+    # boundary (west and east edges, the north board edge, the east strip's south edge and the
+    # north strip's south edge west of the package), at `stitch_pitch`
+    sp, si = float(p["stitch_pitch"]), float(p["stitch_inset"])
+
+    def row(a, b):
+        n_ = max(1, int(math.floor(math.dist(a, b) / sp)))
+        return [
+            (a[0] + (b[0] - a[0]) * k / n_, a[1] + (b[1] - a[1]) * k / n_) for k in range(n_ + 1)
+        ]
+
+    for box in (bank_box(rx_cols), bank_box(tx_cols)):
+        bx0, by0, bx1, by1 = box[0] - si, box[1] - si, box[2] + si, box[3] + si
+        for a, b in (
+            ((bx0, by0), (bx1, by0)),
+            ((bx1, by0), (bx1, by1)),
+            ((bx1, by1), (bx0, by1)),
+            ((bx0, by1), (bx0, by0)),
+        ):
+            mc.vias += [(v, via_f[0], via_f[1], "stitch") for v in row(a, b)]
+    y_s = -half_body + 3.9
+    edges = [
+        ((x_lo + si, half_body + si), (x_lo + si, y_hi - si)),  # west
+        ((x_lo + si, y_hi - si), (x_hi - si, y_hi - si)),  # north (board edge)
+        ((x_hi - si, y_hi - si), (x_hi - si, y_s + si)),  # east
+        ((x_hi - si, y_s + si), (half_body + si, y_s + si)),  # east strip, south edge
+        ((x_lo + si, half_body + si), (-half_body - si, half_body + si)),  # west of the package
+    ]
+    for a, b in edges:
+        mc.vias += [(v, via_f[0], via_f[1], "stitch") for v in row(a, b)]
 
     _filter_vias(mc)
 
@@ -457,7 +505,7 @@ def _filter_vias(mc: Macro) -> None:
     ]
     lim_min = RULES["fence_pitch_min"]
     kept: List[Tuple[Pt, float, float, str]] = []
-    order = {"launch": 0, "fence": 1, "isolation": 2}
+    order = {"launch": 0, "fence": 1, "isolation": 2, "stitch": 3}
     zones = (
         list(mc.pour_keepouts)
         + [w for c in mc.columns.values() for w in c.windows]

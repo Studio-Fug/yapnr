@@ -18,9 +18,14 @@ Units: all coordinates and lengths are **millimetres**; ``rot`` is degrees CCW.
 The frame matches the constraint file: origin at the board-outline bottom-left.
 (``pcbnew`` reports nanometres with y pointing down; :mod:`pnr.ingest` converts.)
 
+``BoardGraph.stack`` (the board's declared copper stack, :mod:`pnr.stack`) is
+omitted when None, so a board without a stackup serializes byte-identically.
+
 src13: ``Component.reserves`` (placement reservations derived from routing rules,
 PNR_PAIR_LANDING_RESERVE) round-trips through JSON and is omitted when empty, so
-graphs without reservations serialize byte-identically to before.
+graphs without reservations serialize byte-identically to before. ``Component.body``
+(the part's real, possibly off-centre body box) is likewise omitted when it is the
+centred ``courtyard`` box.
 """
 
 from __future__ import annotations
@@ -90,6 +95,11 @@ class Component:
     (width, height) of the courtyard used for overlap/density; ``bbox`` is the
     full graphical bounding box. Both are in mm in the unrotated frame and
     symmetric around the footprint origin, including offset component bodies.
+    ``body`` is the box those symmetric sizes are built from, as it lies about
+    the origin: ``(x0, y0, x1, y1)`` in the unrotated frame of the current side
+    (y up), so ``courtyard == (2 * max(-x0, x1), 2 * max(-y0, y1))`` at ingest.
+    None when it is centred (then it is the ``courtyard`` box); the region and
+    align constraints (:mod:`pnr.place.regions`) measure off-centre parts by it.
     """
 
     ref: str
@@ -112,11 +122,30 @@ class Component:
     # pnr.place.hull; only set with PNR_MACRO_HULL=1). None for every ordinary
     # part, and then omitted from the JSON so default graphs stay byte-identical.
     hull: Optional[dict] = None
+    # The off-centre body box (see above); None, and omitted from the JSON, when centred.
+    body: Optional[Tuple[float, float, float, float]] = None
 
     def __post_init__(self):
         self.pos = _fpair(self.pos)
         self.courtyard = _fpair(self.courtyard)
         self.bbox = _fpair(self.bbox)
+        if self.body is not None:
+            self.body = tuple(float(v) for v in self.body)
+
+
+def footprint_point(comp: "Component", x: float, y: float) -> Tuple[float, float]:
+    """A point in a footprint's own frame (unrotated, as the library draws it on the
+    top side, mm) at ``comp``'s pose: mirrored in y on the bottom side, as the pads are
+    (KiCad ``Flip``; :func:`pnr.place.geometry.set_component_side`), then turned by
+    ``comp.rot`` about the component origin. For rule areas tied to a footprint
+    (``copper_keepout.rect_mm``)."""
+    import math
+
+    if comp.side == SIDE_BOTTOM:
+        y = -y
+    a = math.radians(comp.rot)
+    co, si = math.cos(a), math.sin(a)
+    return (comp.pos[0] + co * x - si * y, comp.pos[1] + si * x + co * y)
 
 
 @dataclass
@@ -157,6 +186,10 @@ class BoardGraph:
     nets: List[Net] = field(default_factory=list)
     outline: Optional[BoardOutline] = None
     schema: str = SCHEMA_VERSION
+    # The board's declared copper stack (pnr.ingest.stack_record): copper layers
+    # in order with KiCad type, copper thickness and zone nets. None when the
+    # board declares no physical stackup; then omitted from the JSON.
+    stack: Optional[dict] = None
 
     # -- convenience views -------------------------------------------------
 
@@ -189,6 +222,10 @@ class BoardGraph:
                 c.pop("reserves", None)
             if c.get("hull") is None:
                 c.pop("hull", None)
+            if c.get("body") is None:
+                c.pop("body", None)
+        if d.get("stack") is None:
+            d.pop("stack", None)
         return d
 
     def to_json(self, *, indent: Optional[int] = 2) -> str:
@@ -212,6 +249,7 @@ class BoardGraph:
                 smd_body=bool(c.get("smd_body", False)),
                 reserves=[dict(r) for r in c.get("reserves", [])],
                 hull=c.get("hull"),
+                body=c.get("body"),
                 pads=[
                     Pad(
                         name=p["name"],
@@ -251,6 +289,7 @@ class BoardGraph:
             nets=nets,
             outline=outline,
             schema=d.get("schema", SCHEMA_VERSION),
+            stack=d.get("stack"),
         )
 
     @classmethod

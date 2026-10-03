@@ -109,8 +109,13 @@ filegroup(
         "pnr/gloss_geometry.py",
         "pnr/track_graph.py",
         "pnr/quality.py",
+        # pnr.quality measures routed length as KiCad's DRC does (pnr.length_model).
+        "pnr/length_model.py",
+        "pnr/length_oracle.py",
         "pnr/specctra.py",
         "pnr/writeback.py",
+        "pnr/stack.py",
+        "pnr/via_policy.py",
         # PNR_SI=1 (the prepare worker imports pnr.si even with the flag off): SI v1
         # package + its committed models (profiles, cable, connector, receiver, parts).
         "pnr/si/__init__.py",
@@ -307,6 +312,66 @@ py_test(
     ],
 )
 
+# Routed length as KiCad's DRC measures it (pnr.length_model), against KiCad 10.0.6
+# measurements of the same geometry. No KiCad needed.
+py_test(
+    name = "length_model_test",
+    size = "small",
+    srcs = ["tests/test_length_model.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_length_model.py",
+    # The bottom-side pad cases place their part with pnr.place.geometry.
+    deps = [
+        ":pnr",
+        ":pnr_place",
+    ],
+)
+
+# The same model against KiCad's own DRC lengths on probe boards; run it under KiCad's
+# Python by hand (KICAD_CLI names kicad-cli).
+py_test(
+    name = "length_oracle_kicad_test",
+    size = "small",
+    srcs = ["tests/test_length_oracle_kicad.py"],
+    imports = ["."],
+    main = "tests/test_length_oracle_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
+)
+
+# Pair / group length tuning after detailed routing (pnr.route.detail.tune).
+py_test(
+    name = "length_tune_test",
+    size = "small",
+    srcs = ["tests/test_length_tune.py"],
+    main = "tests/test_length_tune.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+    ],
+)
+
+# Placement keeps the legs of diff pairs and length-match groups even (the global
+# term and the post-legalization refinement, pnr.place.matched).
+py_test(
+    name = "matched_placement_test",
+    size = "small",
+    srcs = ["tests/test_matched_placement.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_matched_placement.py",
+    deps = [
+        ":pnr",
+        ":pnr_place",
+    ],
+)
+
 # Phase 2 acceptance: placement MVP is legal + beats the ato-row HPWL baseline.
 py_test(
     name = "placement_test",
@@ -406,6 +471,25 @@ py_test(
     deps = [":pnr"],
 )
 
+# The board's copper stack through KiCad: ingest record, copper on any named layer,
+# plane layers formed at writeback, the plane-region model against KiCad's own zone
+# fill. It needs KiCad's Python (pcbnew): run it there by hand, as the other KiCad
+# tests (python3 -m unittest tests.test_stack_kicad).
+py_test(
+    name = "stack_kicad_test",
+    size = "small",
+    srcs = ["tests/test_stack_kicad.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_stack_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
+)
+
 py_test(
     name = "detail_maze_test",
     size = "small",
@@ -431,6 +515,124 @@ py_test(
         ":pnr",
         ":pnr_detail",
     ],
+)
+
+# The board's own copper stack (pnr.stack): roles, legacy equality with the router's
+# heuristic on the gate and showcases, and agreement with every hard rung's judge rules.
+py_test(
+    name = "stack_test",
+    size = "small",
+    srcs = [
+        "regression/designs.py",
+        "regression/hard_rungs.py",
+        "regression/stackup.py",
+        "tests/test_stack.py",
+    ],
+    imports = [
+        ".",
+        "regression",
+    ],
+    legacy_create_init = False,
+    main = "tests/test_stack.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+    ],
+)
+
+# Stack-aware detailed routing: signal layers from the declared stack, plane drops
+# planned with the signal exits, and a two-layer stack identical to the legacy path.
+py_test(
+    name = "stack_route_test",
+    size = "medium",
+    srcs = ["tests/test_stack_route.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_stack_route.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+    ],
+)
+
+# The board's via policy (pnr.via_policy): DRU bans for each rung, declared kinds,
+# microvia adjacency and size, spans buildable on the stack's cores and prepregs
+# (4/6/8 layers), the board's build (a laminar family priced per drill pair), span
+# cost, the return-tie rule.
+py_test(
+    name = "via_policy_test",
+    size = "small",
+    srcs = [
+        "regression/designs.py",
+        "regression/hard_rungs.py",
+        "regression/stackup.py",
+        "tests/test_via_policy.py",
+    ],
+    imports = [
+        ".",
+        "regression",
+    ],
+    legacy_create_init = False,
+    main = "tests/test_via_policy.py",
+    deps = [":pnr"],
+)
+
+# Blind, buried and micro vias in the detailed router: span-only checks and
+# reservations, an all-through model identical to the legacy one, fixed vias of a
+# span, every via a span of the board's build, return ties between two ground
+# planes (deepened drops, through or buried ties), drops from bottom-side parts.
+py_test(
+    name = "via_spans_test",
+    size = "medium",
+    srcs = [
+        "tests/test_stack_route.py",
+        "tests/test_via_spans.py",
+    ],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_via_spans.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+    ],
+)
+
+# Vias of two nets never share a site under a via model (blind, buried, micro),
+# whatever their spans.
+py_test(
+    name = "via_holes_test",
+    size = "small",
+    srcs = ["tests/test_via_holes.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_via_holes.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+    ],
+)
+
+# The same through KiCad (KiCad Python only, by hand: python3 -m unittest
+# tests.test_via_spans_kicad): via types and layer pairs written back, the fixed
+# copper round trip, the native checker's span, plane layer connection counts.
+py_test(
+    name = "via_spans_kicad_test",
+    size = "small",
+    srcs = [
+        "tests/test_stack_kicad.py",
+        "tests/test_via_spans_kicad.py",
+    ],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_via_spans_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
 )
 
 # R5 acceptance: the detailed router on a real placed board (place -> route,
@@ -497,6 +699,33 @@ py_test(
     srcs = ["tests/test_two_sided_placement.py"],
     main = "tests/test_two_sided_placement.py",
     deps = [":pnr", ":pnr_place"],
+)
+
+# Double-sided placement: the board.sides policy, side options and the side cost.
+py_test(
+    name = "sides_test",
+    size = "small",
+    srcs = ["tests/test_sides.py"],
+    legacy_create_init = False,
+    main = "tests/test_sides.py",
+    deps = [":pnr", ":pnr_place"],
+)
+
+# Double-sided placement end to end: global placement, legalizer, detail moves,
+# pool starts and shortlist, the source check, MC and relocation flips, routing.
+py_test(
+    name = "sides_placement_test",
+    size = "medium",
+    srcs = ["tests/test_sides_placement.py"],
+    legacy_create_init = False,
+    main = "tests/test_sides_placement.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("pyyaml"),
+    ],
 )
 
 py_test(
@@ -1133,6 +1362,7 @@ py_test(
     srcs = [
         "regression/animate_ladder.py",
         "regression/designs.py",
+        "regression/hard_rungs.py",
         "regression/run.py",
         "regression/test_contract.py",
         "regression/trace_native.py",
@@ -1149,9 +1379,47 @@ py_test(
     ],
 )
 
+# The hard rungs (regression/hard_rungs.py): circuits, one-dimension variants and the custom
+# rules the judge enforces; the footprint check runs where the KiCad library is installed.
+py_test(
+    name = "hard_rungs_test",
+    size = "small",
+    srcs = [
+        "regression/designs.py",
+        "regression/hard_rungs.py",
+        "regression/run.py",
+        "regression/test_hard_rungs.py",
+    ],
+    imports = ["regression"],
+    main = "regression/test_hard_rungs.py",
+    deps = [":pnr"],
+)
+
+# The constraint checker's plane and microvia-span checks on small boards (KiCad's Python:
+# run it there by hand, python3 -m unittest test_check_constraints in regression/).
+py_test(
+    name = "check_constraints_test",
+    size = "small",
+    srcs = [
+        "regression/check_constraints.py",
+        "regression/test_check_constraints.py",
+    ],
+    imports = ["regression"],
+    main = "regression/test_check_constraints.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+)
+
 py_binary(
     name = "native_regression",
-    srcs = ["regression/run.py", "regression/designs.py"],
+    srcs = [
+        "regression/designs.py",
+        "regression/hard_rungs.py",
+        "regression/run.py",
+    ],
     main = "regression/run.py",
     imports = ["regression"],
     data = glob(["regression/*.py"]),
@@ -1254,6 +1522,21 @@ py_test(
     deps = [":pnr"],
 )
 
+# Bottom-side parts through writeback (pad centres, B.* layers, copper keep-outs),
+# with inline footprints: the KiCad lane runs it (it skips without pcbnew).
+py_test(
+    name = "bottom_side_kicad_test",
+    size = "small",
+    srcs = ["tests/test_bottom_side_kicad.py"],
+    imports = ["."],
+    main = "tests/test_bottom_side_kicad.py",
+    tags = [
+        "kicad",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
+)
+
 # Parity of the .kicad_pcb reader with pcbnew; run it under KiCad's Python by hand.
 py_test(
     name = "trace_board_kicad_test",
@@ -1342,6 +1625,45 @@ py_test(
     ],
 )
 
+# Regions and alignments (pnr.place.regions): parser, anchors at every rotation and side,
+# area containment, the legalizer and global terms on the 07-chaser-20 netlist, rigid
+# macros (line groups, blocks), the checks, and an unchanged path without them.
+py_test(
+    name = "region_align_test",
+    size = "medium",
+    srcs = ["tests/test_region_align.py"],
+    # pnr.feedback is not in :pnr yet (PR3b); the feedback-children test imports it from source.
+    data = glob(["pnr/**/*.py"]),
+    imports = ["."],
+    main = "tests/test_region_align.py",
+    deps = [
+        ":pnr",
+        ":pnr_hier",
+        ":pnr_place",
+    ],
+)
+
+# Regions and aligns under board.sides: double (pnr.place.regions with pnr.place.sides).
+py_test(
+    name = "sides_regions_test",
+    size = "medium",
+    srcs = [
+        "tests/test_region_align.py",
+        "tests/test_sides_regions.py",
+    ],
+    imports = [
+        ".",
+        "tests",
+    ],
+    main = "tests/test_sides_regions.py",
+    deps = [
+        ":pnr",
+        ":pnr_hier",
+        ":pnr_place",
+        requirement("torch"),
+    ],
+)
+
 py_test(
     name = "initial_pool_test",
     srcs = ["tests/test_initial_pool.py"],
@@ -1364,6 +1686,131 @@ py_test(
     srcs = ["tests/test_packed_maze.py"],
     main = "tests/test_packed_maze.py",
     deps = [":pnr", ":pnr_detail", ":pnr_place"],
+)
+
+# Optional native maze kernel (pnr.route.detail.native_maze, PNR_MAZE_KERNEL=native): the
+# packed A* loop in C, loaded with ctypes. Nothing depends on it; without it the packed
+# Python kernel runs. No floating-point contraction, so every double matches Python.
+# Manual: `bazel build //...` and `bazel test //...` need no C toolchain; the native
+# parity tests below name it, and run only when asked for.
+cc_binary(
+    name = "libpnr_maze.so",
+    srcs = ["pnr/route/detail/native/maze.c"],
+    copts = [
+        "-O2",
+        "-ffp-contract=off",
+        "-fno-fast-math",
+    ],
+    linkshared = True,
+    tags = ["manual"],
+)
+
+# Dense fields and the packed kernel against the reference A* (searches, whole negotiated
+# routes, the real fixture grid, two route workers), and the guard that keeps them in step.
+# The native cases compile the kernel with a host compiler when one is on PATH, and skip
+# otherwise; dense_maze_native_test runs them on the Bazel-built library.
+py_test(
+    name = "dense_maze_test",
+    size = "medium",
+    srcs = ["tests/test_dense_maze.py"],
+    data = glob(["testdata/splanc_dev/*"]),
+    main = "tests/test_dense_maze.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        requirement("numpy"),
+    ],
+)
+
+# Exact-separation routing (PNR_EXACT_SEPARATION): the separation model and its zones,
+# class clearances, copper gaps of routed boards, the recovery mode and its scope.
+py_test(
+    name = "exact_route_test",
+    size = "medium",
+    srcs = ["tests/test_exact_route.py"],
+    main = "tests/test_exact_route.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        requirement("numpy"),
+    ],
+)
+
+# The native kernel's parity cases on the Bazel-built library (needs a C toolchain):
+# bazel test //hardware/pnr:dense_maze_native_test //hardware/pnr:exact_route_native_test
+py_test(
+    name = "dense_maze_native_test",
+    size = "medium",
+    srcs = ["tests/test_dense_maze.py"],
+    args = [
+        "KernelParityTest.test_native_matches_reference",
+        "KernelParityTest.test_native_runs_when_selected",
+        "KernelParityTest.test_missing_library_falls_back_to_packed",
+        "RouteParityTest.test_packed_and_native_routes_equal_reference",
+    ],
+    data = [":libpnr_maze.so"],
+    main = "tests/test_dense_maze.py",
+    tags = [
+        "manual",
+        "native",
+    ],
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        requirement("numpy"),
+    ],
+)
+
+py_test(
+    name = "exact_route_native_test",
+    size = "medium",
+    srcs = ["tests/test_exact_route.py"],
+    args = [
+        "ExactRouteTest.test_native_and_packed_exact_routes_match",
+        "DiagonalMaskParityTest.test_random_fields",
+    ],
+    data = [":libpnr_maze.so"],
+    main = "tests/test_exact_route.py",
+    tags = [
+        "manual",
+        "native",
+    ],
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        requirement("numpy"),
+    ],
+)
+
+# Exact-separation routes judged by kicad-cli's DRC (no clearance, hole or short
+# finding, a net class's clearance included). The KiCad tier: run it with
+# --test_env=PNR_KICAD_PYTHON=... --test_env=PNR_KICAD_CLI=... (headless KiCad); it
+# skips without them.
+py_test(
+    name = "exact_route_kicad_test",
+    size = "small",
+    srcs = [
+        "tests/test_exact_route.py",
+        "tests/test_exact_route_kicad.py",
+    ],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_exact_route_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        requirement("numpy"),
+    ],
 )
 
 py_test(

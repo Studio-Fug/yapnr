@@ -32,6 +32,11 @@ SCHEMA_VERSION = "v0"
 
 EDGES = ("north", "south", "east", "west")
 SIDES = ("top", "bottom")
+# The board's side policy (``board.sides``): ``single`` keeps every part on the side
+# it arrives on (the default, and the behaviour of every board without the key);
+# ``double`` lets placement choose either side for each part nothing else holds
+# (pnr.place.sides).
+SIDE_POLICIES = ("single", "double")
 
 # The board-outline default when the file omits one; the placer reframes to the
 # real Edge.Cuts once ingested.
@@ -110,6 +115,7 @@ class BoardSpec:
     layers: int = 2
     default_clearance_mm: float = DEFAULT_CLEARANCE_MM
     references_on_fab: bool = False
+    sides: str = "single"  # side policy, one of SIDE_POLICIES (pnr.place.sides)
 
 
 @dataclass
@@ -197,6 +203,9 @@ class DiffPair:
     width_mm: Optional[float] = None
     gap_mm: Optional[float] = None
     skew_mm: float = 0.5  # max acceptable + / - routed-length difference
+    # A skew budget in time (ps), judged on delay (per-layer propagation delay from
+    # the board's stackup). A pair gives ``skew_mm`` or ``skew_ps``, not both.
+    skew_ps: Optional[float] = None
     # PNR_BUS_CLASSES=1 only: ``_defaulted`` (a plain attribute, not a dataclass
     # field, so asdict() is unchanged) names the fields the constraint file left to
     # their defaults; a bus class (pnr.si.bus_classes) may derive those.
@@ -209,6 +218,7 @@ class LengthMatch:
     name: str
     nets: Tuple[str, ...] = ()
     tolerance_mm: float = 1.0
+    tolerance_ps: Optional[float] = None  # a time budget; never with tolerance_mm
 
 
 @dataclass
@@ -226,6 +236,8 @@ class CompiledConstraints:
     net_classes: List[NetClass] = field(default_factory=list)
     diff_pairs: List[DiffPair] = field(default_factory=list)
     length_matches: List[LengthMatch] = field(default_factory=list)
+    # Meander rules for pair / group length tuning (``tuning:``); None = defaults.
+    tuning: Optional[Dict] = None
     copper_keepouts: List[Dict] = field(default_factory=list)
     mounting_holes: List[Dict] = field(default_factory=list)
 
@@ -296,6 +308,52 @@ def _opt_float(value):
     return None if value is None else float(value)
 
 
+def _positive(value, where: str) -> Optional[float]:
+    """An optional positive finite number (None when absent)."""
+    if value is None:
+        return None
+    if not _finite_number(value) or float(value) <= 0:
+        raise ConstraintError(f"{where} must be a positive number")
+    return float(value)
+
+
+TUNING_STYLES = ("auto", "trombone", "serpentine", "accordion")
+
+
+TUNING_NUMBERS = ("gap_mm", "amplitude_max_mm", "min_segment_mm", "max_added_mm")
+TUNING_SWITCHES = ("mitre", "meanders", "placement")
+
+
+def _parse_tuning(raw) -> Optional[Dict]:
+    """The ``tuning:`` block (meanders for pair / group length matching): ``gap_mm``
+    (edge to edge, at least the clearance and the track width), ``amplitude_max_mm``,
+    ``min_segment_mm``, ``max_added_mm`` (meander length one net may gain), ``style``
+    (auto, trombone, serpentine, accordion), ``mitre`` (45-degree corners for the fine
+    step), and the switches ``meanders`` (the router tunes the sets after routing) and
+    ``placement`` (placement keeps the members' estimated lengths even), both on by
+    default. None when absent."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ConstraintError("tuning must be a mapping")
+    out: Dict = {}
+    for key in TUNING_NUMBERS:
+        if raw.get(key) is not None:
+            out[key] = _positive(raw[key], f"tuning.{key}")
+    if raw.get("style") is not None:
+        _require_enum(raw["style"], TUNING_STYLES, "tuning.style")
+        out["style"] = str(raw["style"])
+    for key in TUNING_SWITCHES:
+        if raw.get(key) is not None:
+            if not isinstance(raw[key], bool):
+                raise ConstraintError(f"tuning.{key} must be true or false")
+            out[key] = raw[key]
+    unknown = sorted(set(raw) - set(TUNING_NUMBERS) - set(TUNING_SWITCHES) - {"style"})
+    if unknown:
+        raise ConstraintError("tuning: unknown key(s) %s" % ", ".join(unknown))
+    return out
+
+
 def _expand_nets(patterns: Iterable[str], net_names: Sequence[str]) -> Tuple[str, ...]:
     """Expand net-name literals/globs against the real netlist (order-stable)."""
     resolved: List[str] = []
@@ -363,6 +421,7 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
                 "width_mm": dp.width_mm,
                 "gap_mm": dp.gap_mm,
                 "skew_mm": dp.skew_mm,
+                **({"skew_ps": dp.skew_ps} if dp.skew_ps is not None else {}),
                 **({"defaulted": list(dp._defaulted)} if getattr(dp, "_defaulted", ()) else {}),
             }
             for dp in compiled.diff_pairs
@@ -373,21 +432,27 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
                 "name": lm.name,
                 "nets": list(_expand_nets(lm.nets, net_names)),
                 "tolerance_mm": lm.tolerance_mm,
+                **({"tolerance_ps": lm.tolerance_ps} if lm.tolerance_ps is not None else {}),
             }
             for lm in compiled.length_matches
         ],
+        **({"tuning": dict(compiled.tuning)} if compiled.tuning is not None else {}),
     }
 
 
 def _parse_board(raw: Dict) -> BoardSpec:
     outline = raw.get("outline") or {}
-    return BoardSpec(
+    board = BoardSpec(
         width=outline.get("w"),
         height=outline.get("h"),
         layers=int(raw.get("layers", 2)),
         default_clearance_mm=float(raw.get("default_clearance_mm", DEFAULT_CLEARANCE_MM)),
         references_on_fab=bool(raw.get("references_on_fab", False)),
+        sides=_require_enum(raw.get("sides") or "single", SIDE_POLICIES, "board.sides"),
     )
+    if board.sides == "double" and board.layers < 2:
+        raise ConstraintError("board.sides: double needs at least 2 copper layers")
+    return board
 
 
 _OPTIONAL_FAB = (
@@ -643,6 +708,256 @@ def _parse_line_groups(raw, known_refs, board, prior) -> List[Constraint]:
     return out
 
 
+REGION_WEIGHT = 10.0  # soft region: penalty weight default
+ALIGN_WEIGHT = 5.0  # soft align: penalty weight default
+ALIGN_TOLERANCE_MM = 0.25
+AXIS_EDGES = {"x": ("west", "east"), "y": ("south", "north")}
+POINT_ANCHORS = ("origin", "centre", "pad1")
+
+
+def _hard_flag(entry, where):
+    hard = entry.get("hard", True)
+    if not isinstance(hard, bool):
+        raise ConstraintError(where + ": hard must be a boolean")
+    return hard
+
+
+def _weight(entry, default, where):
+    weight = entry.get("weight", default)
+    if not _finite_number(weight) or weight <= 0:
+        raise ConstraintError(where + ": weight must be finite and positive")
+    return float(weight)
+
+
+def _entry_refs(entry, known_refs, warnings, where, minimum):
+    refs = entry.get("refs")
+    if not isinstance(refs, list) or not refs or any(not isinstance(r, str) or not r for r in refs):
+        raise ConstraintError(where + ": refs must be a nonempty list of refs or globs")
+    resolved = _expand_refs(refs, known_refs, warnings, where)
+    known = [r for r in resolved if r in known_refs]
+    if len(known) < minimum:
+        raise ConstraintError(
+            "%s: needs at least %d known component%s" % (where, minimum, "s" * (minimum > 1))
+        )
+    return resolved
+
+
+def _area(spec, where):
+    """One area piece, ``{"rect": [x0, y0, x1, y1]}`` or ``{"polygon": [[x, y], ...]}``."""
+    if not isinstance(spec, dict) or len([k for k in ("rect", "polygon") if k in spec]) != 1:
+        raise ConstraintError(where + ": an area is exactly one of rect or polygon")
+    if "rect" in spec:
+        rect = spec["rect"]
+        if (
+            not isinstance(rect, (list, tuple))
+            or len(rect) != 4
+            or not all(_finite_number(v) for v in rect)
+            or not (rect[0] < rect[2] and rect[1] < rect[3])
+        ):
+            raise ConstraintError(where + ": rect needs [x0, y0, x1, y1] with x0 < x1 and y0 < y1")
+        return {"rect": [float(v) for v in rect]}
+    poly = spec["polygon"]
+    if (
+        not isinstance(poly, (list, tuple))
+        or len(poly) < 3
+        or any(
+            not isinstance(p, (list, tuple)) or len(p) != 2 or not all(_finite_number(v) for v in p)
+            for p in poly
+        )
+    ):
+        raise ConstraintError(where + ": polygon needs at least three finite [x, y] points")
+    pts = [[float(x), float(y)] for x, y in poly]
+    twice = sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(pts, pts[1:] + pts[:1]))  # shoelace
+    if abs(twice) < 1e-9:
+        raise ConstraintError(where + ": polygon has no area")
+    crossing = _self_intersection(pts)
+    if crossing is not None:
+        raise ConstraintError(
+            "%s: polygon is not simple (edges %d and %d meet)" % (where, crossing[0], crossing[1])
+        )
+    return {"polygon": pts}
+
+
+def _self_intersection(pts):
+    """The first pair of polygon edges (by index) that touch or cross other than at
+    the vertex adjacent edges share, else None. A repeated point is a zero-length
+    edge, which also counts."""
+    n = len(pts)
+    edges = [(pts[i], pts[(i + 1) % n]) for i in range(n)]
+
+    def orient(a, b, c):
+        v = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+        return 0 if abs(v) <= 1e-12 else (1 if v > 0 else -1)
+
+    def on(a, b, c):  # c on segment a-b, given collinear
+        return min(a[0], b[0]) <= c[0] <= max(a[0], b[0]) and min(a[1], b[1]) <= c[1] <= max(
+            a[1], b[1]
+        )
+
+    def meet(p, q):
+        (a, b), (c, d) = p, q
+        o1, o2, o3, o4 = orient(a, b, c), orient(a, b, d), orient(c, d, a), orient(c, d, b)
+        if o1 != o2 and o3 != o4 and 0 not in (o1, o2, o3, o4):
+            return True
+        return (
+            (o1 == 0 and on(a, b, c))
+            or (o2 == 0 and on(a, b, d))
+            or (o3 == 0 and on(c, d, a))
+            or (o4 == 0 and on(c, d, b))
+        )
+
+    for i, (a, b) in enumerate(edges):
+        if a == b:
+            return (i, i)
+    for i in range(n):
+        for j in range(i + 1, n):
+            if j == i + 1 or (i == 0 and j == n - 1):
+                # Adjacent edges share one vertex; they may not fold back onto each other.
+                shared = edges[i][1] if j == i + 1 else edges[i][0]
+                p = edges[i][0] if j == i + 1 else edges[i][1]
+                q = edges[j][1] if j == i + 1 else edges[j][0]
+                if orient(p, shared, q) == 0 and (
+                    (p[0] - shared[0]) * (q[0] - shared[0])
+                    + (p[1] - shared[1]) * (q[1] - shared[1])
+                    > 0
+                ):
+                    return (i, j)
+                continue
+            if meet(edges[i], edges[j]):
+                return (i, j)
+    return None
+
+
+def _parse_regions(raw, known_refs, warnings) -> List[Constraint]:
+    """The ``region`` section: the courtyards of ``refs`` lie inside an area (the
+    union of ``rect``/``polygon`` pieces, board coordinates). Hard by default; a soft
+    region is a penalty on the protrusion. See :mod:`pnr.place.regions`."""
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ConstraintError("region must be a list")
+    out: List[Constraint] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            raise ConstraintError("region entry must be a mapping")
+        name = entry.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ConstraintError("region requires a non-empty name")
+        where = "region %r" % name
+        if any(c.name == name for c in out):
+            raise ConstraintError(where + ": duplicate name")
+        refs = _entry_refs(entry, known_refs, warnings, where, 1)
+        given = [k for k in ("rect", "polygon", "areas") if k in entry]
+        if len(given) != 1:
+            raise ConstraintError(where + ": give exactly one of rect, polygon or areas")
+        if given[0] == "areas":
+            pieces = entry["areas"]
+            if not isinstance(pieces, list) or not pieces:
+                raise ConstraintError(where + ": areas must be a nonempty list")
+            areas = [_area(p, where) for p in pieces]
+        else:
+            areas = [_area({given[0]: entry[given[0]]}, where)]
+        hard = _hard_flag(entry, where)
+        reason = entry.get("reason")
+        if reason is not None and not isinstance(reason, str):
+            raise ConstraintError(where + ": reason must be a string")
+        out.append(
+            Constraint(
+                "region",
+                Enforcement.HARD if hard else Enforcement.SOFT,
+                refs,
+                dict(areas=areas, reason=reason),
+                weight=_weight(entry, REGION_WEIGHT, where),
+                name=name,
+            )
+        )
+    return out
+
+
+def _anchor(value, axis, where):
+    """Validate one align anchor name for ``axis``; ``center`` reads as ``centre``."""
+    if value == "center":
+        value = "centre"
+    if value in POINT_ANCHORS:
+        return value
+    if isinstance(value, str) and value.startswith("pad:") and len(value) > 4:
+        return value
+    if value in EDGES:
+        if value not in AXIS_EDGES[axis]:
+            raise ConstraintError(
+                "%s: edge anchor %r does not measure axis %s (use %s)"
+                % (where, value, axis, " or ".join(AXIS_EDGES[axis]))
+            )
+        return value
+    raise ConstraintError(
+        "%s: anchor %r not one of origin, centre, pad1, pad:<name>, %s"
+        % (where, value, ", ".join(AXIS_EDGES[axis]))
+    )
+
+
+def _parse_aligns(raw, known_refs, warnings, prior) -> List[Constraint]:
+    """The ``align`` section: the anchors of ``refs`` share one ``axis`` coordinate
+    (``y``: one horizontal line). Hard by default (the largest anchor spread is at
+    most ``tol_mm``, 0 for exact); a soft align is a penalty on the spread. ``prior``
+    holds the constraints parsed before (the line groups)."""
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ConstraintError("align must be a list")
+    line_of = {r: c.name for c in prior if c.kind == "line_group" for r in c.refs}
+    out: List[Constraint] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            raise ConstraintError("align entry must be a mapping")
+        name = entry.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ConstraintError("align requires a non-empty name")
+        where = "align %r" % name
+        if any(c.name == name for c in out):
+            raise ConstraintError(where + ": duplicate name")
+        refs = _entry_refs(entry, known_refs, warnings, where, 2)
+        axis = entry.get("axis")
+        if axis not in AXIS_EDGES:
+            raise ConstraintError(where + ": axis must be x or y")
+        spec = entry.get("anchor", "origin")
+        if isinstance(spec, dict):
+            unknown = sorted(set(spec) - set(refs))
+            if unknown:
+                raise ConstraintError(where + ": anchor names refs outside refs: %s" % unknown)
+            anchors = {r: _anchor(spec.get(r, "origin"), axis, where) for r in refs}
+        else:
+            default = _anchor(spec, axis, where)
+            anchors = {r: default for r in refs}
+        tol = entry.get("tol_mm", ALIGN_TOLERANCE_MM)
+        if not _finite_number(tol) or tol < 0:
+            raise ConstraintError(where + ": tol_mm must be finite and not negative")
+        lines = {}
+        for ref in refs:
+            if ref in line_of:
+                lines.setdefault(line_of[ref], []).append(ref)
+        for line, members in lines.items():
+            if len(members) > 1:
+                raise ConstraintError(
+                    "%s: %s are members of one line_group %r, which already fixes their "
+                    "relative position" % (where, " and ".join(members), line)
+                )
+        hard = _hard_flag(entry, where)
+        reason = entry.get("reason")
+        if reason is not None and not isinstance(reason, str):
+            raise ConstraintError(where + ": reason must be a string")
+        out.append(
+            Constraint(
+                "align",
+                Enforcement.HARD if hard else Enforcement.SOFT,
+                refs,
+                dict(axis=axis, anchors=anchors, tol_mm=float(tol), reason=reason),
+                weight=_weight(entry, ALIGN_WEIGHT, where),
+                name=name,
+            )
+        )
+    return out
+
+
 def compile_constraints(
     doc: Dict, known_refs: Sequence[str], addresses=None, pin_nets=None
 ) -> CompiledConstraints:
@@ -678,9 +993,12 @@ def compile_constraints(
         "side",
         "group",
         "line_group",
+        "region",
+        "align",
         "net_class",
         "diff_pair",
         "length_match",
+        "tuning",
         "copper_keepout",
     }
     for key in doc:
@@ -816,7 +1134,10 @@ def compile_constraints(
             Constraint(kind="side", enforcement=Enforcement.HARD, refs=refs, params={"side": side})
         )
 
-    # side_pref: SOFT — bias a set of parts to a side.
+    # side_pref: SOFT — bias a set of parts to a side. Only a double-sided board
+    # (board.sides: double) lets placement choose sides; elsewhere it has no effect.
+    if doc.get("side_pref") and board.sides != "double":
+        warnings.append("side_pref has no effect unless board.sides is double (ignored)")
     for side, patterns in (doc.get("side_pref") or {}).items():
         _require_enum(side, SIDES, "side_pref key")
         refs = _expand_refs(patterns or [], known_refs, warnings, f"side_pref.{side}")
@@ -911,6 +1232,11 @@ def compile_constraints(
     # line_group: HARD — ordered members held in one rigid line (pnr.place.line_group).
     constraints.extend(_parse_line_groups(doc.get("line_group"), known_refs, board, constraints))
 
+    # region / align: HARD by default — allowed placement areas and shared
+    # coordinates (pnr.place.regions); a soft one is a weighted penalty.
+    constraints.extend(_parse_regions(doc.get("region"), known_refs, warnings))
+    constraints.extend(_parse_aligns(doc.get("align"), known_refs, warnings, constraints))
+
     # net_class: routing rule sets over net-name globs (resolved at route time).
     net_classes: List[NetClass] = []
     for name, spec in (doc.get("net_class") or {}).items():
@@ -936,6 +1262,10 @@ def compile_constraints(
         entry = entry or {}
         if not entry.get("p") or not entry.get("n"):
             raise ConstraintError(f"diff_pair {entry.get('name')!r}: needs 'p' and 'n' nets")
+        if entry.get("skew_mm") is not None and entry.get("skew_ps") is not None:
+            raise ConstraintError(
+                f"diff_pair {entry.get('name')!r}: give skew_mm or skew_ps, not both"
+            )
         dp = DiffPair(
             name=str(entry.get("name") or f"{entry['p']}/{entry['n']}"),
             p=str(entry["p"]),
@@ -943,6 +1273,7 @@ def compile_constraints(
             width_mm=_opt_float(entry.get("width_mm")),
             gap_mm=_opt_float(entry.get("gap_mm")),
             skew_mm=float(entry.get("skew_mm", 0.5)),
+            skew_ps=_positive(entry.get("skew_ps"), f"diff_pair {entry.get('name')!r}.skew_ps"),
         )
         if os.environ.get("PNR_BUS_CLASSES") == "1":
             dp._defaulted = tuple(k for k in ("skew_mm",) if k not in entry)
@@ -955,13 +1286,21 @@ def compile_constraints(
         nets = entry.get("nets") or []
         if len(nets) < 2:
             raise ConstraintError(f"length_match {entry.get('name')!r}: needs >= 2 nets")
+        if entry.get("tolerance_mm") is not None and entry.get("tolerance_ps") is not None:
+            raise ConstraintError(
+                f"length_match {entry.get('name')!r}: give tolerance_mm or tolerance_ps, not both"
+            )
         length_matches.append(
             LengthMatch(
                 name=str(entry.get("name") or "group"),
                 nets=tuple(str(n) for n in nets),
                 tolerance_mm=float(entry.get("tolerance_mm", 1.0)),
+                tolerance_ps=_positive(
+                    entry.get("tolerance_ps"), f"length_match {entry.get('name')!r}.tolerance_ps"
+                ),
             )
         )
+    tuning = _parse_tuning(doc.get("tuning"))
 
     # Mechanical fastener envelopes reserve both faces and every copper layer.
     import math
@@ -1043,6 +1382,7 @@ def compile_constraints(
         net_classes=net_classes,
         diff_pairs=diff_pairs,
         length_matches=length_matches,
+        tuning=tuning,
         copper_keepouts=copper_keepouts,
         mounting_holes=mounting_holes,
     )

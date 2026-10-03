@@ -513,16 +513,15 @@ def _place_route_loop(
             )
             report.connection_history.append(missing)
             if folder:
-                (folder / "routes.json").write_text(
-                    json.dumps(
-                        dict(
-                            tracks=broute.tracks,
-                            vias=broute.vias,
-                            unrouted=broute.result.unrouted,
-                            deferred=report.deferred_nets,
-                        )
-                    )
+                payload = dict(
+                    tracks=broute.tracks,
+                    vias=broute.vias,
+                    unrouted=broute.result.unrouted,
+                    deferred=report.deferred_nets,
                 )
+                if getattr(broute, "via_spans", None):  # blind, buried, micro (pnr.via_policy)
+                    payload["via_spans"] = broute.via_spans
+                (folder / "routes.json").write_text(json.dumps(payload))
                 (folder / "result.json").write_text(
                     json.dumps(
                         dict(
@@ -577,6 +576,9 @@ def _place_route_loop(
             cell = detail_congestion(broute, placed, width, height, gcell_mm)
             overflow = float(missing)
         else:
+            from pnr.stack import resolve as resolve_stack
+
+            stack = resolve_stack(detail_rules, getattr(placed, "stack", None))
             gr = global_route(
                 placed,
                 width,
@@ -585,6 +587,7 @@ def _place_route_loop(
                 layers=layers,
                 track_pitch_mm=track_pitch_mm,
                 max_passes=route_passes,
+                signal_layers=None if stack is None else len(stack.grid_layers),
             )
             report.overflow_history.append(gr.overflow)
             report.route = gr

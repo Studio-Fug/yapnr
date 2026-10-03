@@ -10,12 +10,16 @@ from pathlib import Path
 import pcbnew as k
 
 from pnr.ingest import load
-from pnr.writeback import frame_region, patch_project_rules
+from pnr.writeback import _PAGE_OFFSET_MM, frame_region, patch_project_rules
 
 
 def make(spec, root, library):
     b = k.BOARD()
     b.SetCopperLayerCount(spec["constraints"]["board"]["layers"])
+    if spec.get("stackup"):  # a hard rung's copper stack (stackup.py): layer types first
+        import stackup
+
+        stackup.layer_types(b, spec["stackup"])
     nets = sorted({n for p in spec["parts"] for n in p["pins"].values() if n})
     nm = {}
     for n in nets:
@@ -62,9 +66,18 @@ def make(spec, root, library):
             raise ValueError("Missing pad " + p["ref"])
         footprints.append(fp)
     source = root / "source.kicad_pcb"
-    k.SaveBoard(str(source), b)
     size = spec["constraints"]["board"]["outline"]
-    source.write_text(frame_region(source.read_text(), size["w"], size["h"]))
+    if spec.get("stackup"):
+        # Plane zones the engine cannot declare itself (a second plane layer of one
+        # net), on the outline frame_region stamps below.
+        x0 = y0 = k.FromMM(_PAGE_OFFSET_MM)
+        rect = (x0, y0, x0 + k.FromMM(size["w"]), y0 + k.FromMM(size["h"]))
+        stackup.add_plane_zones(b, spec, rect, "extra")
+    k.SaveBoard(str(source), b)
+    text = frame_region(source.read_text(), size["w"], size["h"])
+    if spec.get("stackup"):
+        text = stackup.insert_stackup(text, spec["stackup"])
+    source.write_text(text)
     table = (
         "(fp_lib_table (version 7)\n"
         + "".join(

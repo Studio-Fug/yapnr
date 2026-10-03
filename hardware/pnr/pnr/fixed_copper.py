@@ -23,25 +23,35 @@ def extract(board):
     frame, _ = _board_frame(board)
     tracks = []
     vias = []
+    kinds = {
+        int(k.VIATYPE_THROUGH): "through",
+        int(k.VIATYPE_BLIND): "blind",
+        int(k.VIATYPE_BURIED): "buried",
+        int(k.VIATYPE_MICROVIA): "micro",
+    }
     for t in board.GetTracks():
         if t.GetClass() == "PCB_VIA":
-            if t.GetViaType() != k.VIATYPE_THROUGH:
-                raise ValueError("unsupported fixed blind/buried via")
+            kind = kinds.get(int(t.GetViaType()))
+            if kind is None:
+                raise ValueError("unsupported fixed via type %r" % t.GetViaType())
             p = t.GetPosition()
-            vias.append(
-                dict(
-                    net=t.GetNetname(),
-                    xy=frame.point(p.x, p.y),
-                    diameter_mm=max(
-                        t.GetWidth(la)
-                        for la in board.GetEnabledLayers().CuStack()
-                        if t.IsOnLayer(la)
-                    )
-                    / 1e6,
-                    drill_mm=t.GetDrillValue() / 1e6,
-                    type="through",
+            via = dict(
+                net=t.GetNetname(),
+                xy=frame.point(p.x, p.y),
+                diameter_mm=max(
+                    t.GetWidth(la) for la in board.GetEnabledLayers().CuStack() if t.IsOnLayer(la)
                 )
+                / 1e6,
+                drill_mm=t.GetDrillValue() / 1e6,
+                type=kind,
             )
+            if kind != "through":
+                # A blind, buried or micro via occupies its span only: its layers.
+                via["layers"] = [
+                    pcbnew_name(k, t.TopLayer()),
+                    pcbnew_name(k, t.BottomLayer()),
+                ]
+            vias.append(via)
         elif t.GetClass() == "PCB_TRACK":
             a, z = t.GetStart(), t.GetEnd()
             tracks.append(
@@ -56,6 +66,11 @@ def extract(board):
         else:
             raise ValueError("unsupported fixed copper " + t.GetClass())
     return dict(frame="engine-mm-y-up", tracks=tracks, vias=vias)
+
+
+def pcbnew_name(k, layer):
+    """KiCad's standard name of copper layer id ``layer`` (the names rules use)."""
+    return k.BOARD.GetStandardLayerName(layer)
 
 
 def export(source, folder):
@@ -122,7 +137,21 @@ def append(source, fixed, routes, rules, out):
 
     g = geometry(rules)
     smd = [p for f in board.GetFootprints() for p in f.Pads()] if g.in_pad else []
+    # Blind, buried and micro vias (routes["via_spans"], pnr.via_policy).
+    from pnr.writeback import span_via
+
+    spans = {}
+    for net, x, y, top, bottom, kind in routes.get("via_spans", []):
+        spans.setdefault((net, x, y), []).append((top, bottom, kind))
+    sizes = (rules.get("via_policy") or {}).get("sizes") or {}
     for net, x, y in routes.get("vias", []):
+        if spans.get((net, x, y)):
+            for top, bottom, kind in spans[(net, x, y)]:
+                diameter, drill = sizes.get(kind) or (fab["via_diameter_mm"], fab["via_drill_mm"])
+                t = span_via(board, point((x, y)), codes[net], top, bottom, kind, diameter, drill)
+                board.Add(t)
+                keep.append(t)
+            continue
         t = k.PCB_VIA(board)
         t.SetNetCode(codes[net])
         t.SetPosition(point((x, y)))

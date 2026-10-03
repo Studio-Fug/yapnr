@@ -76,7 +76,7 @@ def _near(grid, blocked, xy, layer, radius=1.5):
     return sorted(cells)
 
 
-def _fields(graph, comp, rules, tracks, vias, pitch, *, terms=False):
+def _fields(graph, comp, rules, tracks, vias, pitch, *, terms=False, without=()):
     from pnr.route.detail.grid import RouteGrid
     from pnr.route.detail.router import (
         _fab,
@@ -84,17 +84,18 @@ def _fields(graph, comp, rules, tracks, vias, pitch, *, terms=False):
         _mark_plane_regions,
         _mark_source_arrays,
         _net_widths,
-        _plane_nets,
-        _signal_layers,
+        layer_plan,
     )
 
     # Remove only this component's pads from the static substrate. Keep its body
     # and parent-relative rule areas in graph for conservative keepout handling.
     static = BoardGraph.from_json(graph.to_json())
     static.component(comp.ref).pads = []
+    for ref in without:  # a swap partner leaves its pose too
+        static.component(ref).pads = []
     fab = _fab(rules)
-    layers = _signal_layers(rules)
-    names = {p.net for p in comp.pads if p.net} - _plane_nets(rules)
+    layers, planes, stack = layer_plan(graph, rules)
+    names = {p.net for p in comp.pads if p.net} - planes
     widths = _net_widths(rules, fab["track_width_mm"])
     fields = {}
     for net in sorted(names):
@@ -108,7 +109,7 @@ def _fields(graph, comp, rules, tracks, vias, pitch, *, terms=False):
             track_width=widths.get(net, fab["track_width_mm"]),
             via_radius=fab["via_diameter_mm"] / 2,
         )
-        _mark_plane_regions(g, static, rules, 2.0)
+        _mark_plane_regions(g, static, rules, 2.0, stack=stack)
         _mark_copper_keepouts(g, graph, rules)
         # Source arrays on the moving footprint need candidate-specific rebuild;
         # those footprints are excluded by the proposal generator.
@@ -237,6 +238,124 @@ def probe_cost(comp, fields, pos):
     return float(score), int(raw[4]), terms, omitted
 
 
+def _score(comp, fields, target, terminals):
+    """Layered field cost of ``comp``'s pads with its centre at ``target`` plus 0.1 of
+    the endpoint Manhattan screen (the translation proposals' heavy cost)."""
+    dx, dy = target[0] - comp.pos[0], target[1] - comp.pos[1]
+    score, air = 0.0, 0.0
+    for pad, (_, xy) in zip(comp.pads, pin_positions(comp)):
+        pt = (xy[0] + dx, xy[1] + dy)
+        peers = [q for ref, q in terminals.get(pad.net, []) if ref != comp.ref]
+        if peers:
+            air += min(abs(pt[0] - q[0]) + abs(pt[1] - q[1]) for q in peers)
+        if pad.net not in fields:
+            continue
+        grid, blocked, dist = fields[pad.net][:3]
+        side = 0 if comp.side == "top" else len(grid.layers) - 1
+        values = [dist[la, j, i] + d for d, la, j, i in _near(grid, blocked, pt, side)]
+        best = min(values, default=np.inf)
+        score += best if math.isfinite(best) else 10000.0
+    return score + 0.1 * air
+
+
+def _shifted(terminals, shifts):
+    """``terminals`` ({net: [(ref, xy)]}) with the pins of each ref in ``shifts``
+    ({ref: (dx, dy)}) moved by its shift."""
+    return {
+        net: [
+            (ref, (xy[0] + shifts[ref][0], xy[1] + shifts[ref][1]) if ref in shifts else xy)
+            for ref, xy in pins
+        ]
+        for net, pins in terminals.items()
+    }
+
+
+def _swaps(
+    g,
+    posed,
+    scored,
+    terminals,
+    rules,
+    tracks,
+    vias,
+    pitch,
+    tried,
+    temperature,
+    limit=2,
+    held=(),
+    soft=None,
+):
+    """Swap proposals among the parts :func:`propose` scored (except ``held`` ones:
+    row and line members, macros): pairs with courtyard areas within a factor of two,
+    legal when exchanged (``posed``), ranked by the endpoint screen; the best
+    ``limit`` are scored with fields rebuilt without both. Before and after are
+    costed alike: each part by :func:`_score` in the fields without its partner, its
+    peers' pins where they are (after: the partner's at its new centre). ``soft``
+    (refs -> penalty, :func:`pnr.place.regions.soft_penalty`) adds the soft region and
+    align penalty of both parts, before and after alike."""
+    if posed is None or len(scored) < 2:
+        return []
+    from .geometry import courtyard_rect
+
+    refs = sorted(r for r in scored if r not in held)
+
+    def swapped(ca, cb):
+        pa, pb = ca.pos, cb.pos
+        return _shifted(
+            terminals,
+            {ca.ref: (pb[0] - pa[0], pb[1] - pa[1]), cb.ref: (pa[0] - pb[0], pa[1] - pb[1])},
+        )
+
+    pairs = []
+    for i, a in enumerate(refs):
+        for b in refs[i + 1 :]:
+            ca, cb = g.component(a), g.component(b)
+            ra, rb = courtyard_rect(ca), courtyard_rect(cb)
+            if not 0.5 <= (rb.w * rb.h) / max(ra.w * ra.h, 1e-9) <= 2.0:
+                continue
+            if (a, b, "swap") in tried:
+                continue
+            pa, pb = ca.pos, cb.pos
+            after = swapped(ca, cb)
+            gain = sum(
+                _score(c, {}, here, terminals) - _score(c, {}, there, after)
+                for c, here, there in ((ca, pa, pb), (cb, pb, pa))
+            )
+            ca.pos, cb.pos = pb, pa
+            ok = posed([ca, cb])
+            ca.pos, cb.pos = pa, pb
+            if ok:
+                pairs.append((-gain, a, b))
+    out = []
+    for _, a, b in sorted(pairs)[:limit]:
+        ca, cb = g.component(a), g.component(b)
+        pa, pb = ca.pos, cb.pos
+        after_terminals = swapped(ca, cb)
+        before = after = 0.0
+        for comp, here, target, partner in ((ca, pa, pb, b), (cb, pb, pa, a)):
+            fields = _fields(g, comp, rules, tracks, vias, pitch, without=(partner,))
+            before += _score(comp, fields, here, terminals)
+            after += _score(comp, fields, target, after_terminals)
+        if soft is not None:
+            before += soft(ca, cb)
+            ca.pos, cb.pos = pb, pa
+            after += soft(ca, cb)
+            ca.pos, cb.pos = pa, pb
+        if after < before - 1e-6 or temperature > 0:
+            out.append(
+                (
+                    before - after,
+                    a,
+                    pb,
+                    before,
+                    after,
+                    (a, b, "swap"),
+                    [(a, pb, None), (b, pa, None)],
+                )
+            )
+    return out
+
+
 def propose(
     graph,
     constraints,
@@ -260,6 +379,12 @@ def propose(
     heavy scoring uses per-net layered distance fields from stationary terminals.
     Declines unsupported nonrectangular outlines and moving source-array/keepout
     owners until their candidate-dependent obstacles can be rebuilt correctly.
+
+    With side-free parts (:mod:`pnr.place.sides`) two more proposals join the
+    translations: a *flip* (the part at its centre on its other side, scored by the
+    same fields: its pads mirror and move to the far layer) and a *swap* of two
+    evaluated parts with similar courtyards (each at the other's centre, fields
+    rebuilt without both), each checked by :func:`pnr.place.metrics.pose_checker`.
     """
     import random
 
@@ -281,6 +406,22 @@ def propose(
         v["ref"] for v in rules.get("plane_access_intents", []) if v["kind"] == "power_array"
     } | {v["ref"] for v in rules.get("copper_keepouts", [])}
     legal = translation_checker(g, constraints)
+    from .geometry import set_component_side
+    from .metrics import pose_checker
+    from .regions import declared
+    from .sides import macro, opposite
+    from .sides import plan as side_plan
+
+    related = declared(constraints)
+    if related:
+        from .regions import align_snap, soft_penalty
+    plan = side_plan(g, constraints, rules)
+    posed = pose_checker(g, constraints) if plan.active else None
+    # Swaps move two parts by pose_checker, which does not re-check rows and lines.
+    unswappable = {
+        r for con in constraints.constraints if con.kind in ("line_group", "row") for r in con.refs
+    } | {c.ref for c in g.components if macro(c)}
+    scored = {}  # ref -> (original centre, baseline heavy cost), for swaps
     terminals = {}
     for c in g.components:
         for p, (_, xy) in zip(c.pads, pin_positions(c)):
@@ -316,13 +457,23 @@ def propose(
 
         # Compute light cost with component at original pose.
         points = []
+        # A hard-aligned part moves along its line only (pnr.place.regions).
+        snap = align_snap(g, constraints, comp) if related else {}
+        seen = set()
         for x in np.arange(candidate_pitch / 2, width, candidate_pitch):
             for y in np.arange(candidate_pitch / 2, height, candidate_pitch):
-                comp.pos = (float(x), float(y))
+                point = [float(x), float(y)]
+                for k, value in snap.items():
+                    point[k] = value
+                point = tuple(point)
+                if point in seen:
+                    continue
+                seen.add(point)
+                comp.pos = point
                 ok = legal(comp)
                 comp.pos = original
                 if ok:
-                    points.append((light((x, y)), (float(x), float(y))))
+                    points.append((light(point), point))
         points.sort()
         selected = [p for _, p in points[:shortlist]]
         # Do not let a short-airwire basin hide empty distant regions.
@@ -353,6 +504,8 @@ def propose(
                     )
                 )
                 total = score + 0.1 * air
+                if related:
+                    total += soft_penalty(g, constraints, comp, pos)
                 evaluated[tuple(pos)] = dict(
                     position=list(pos),
                     cost=total,
@@ -375,6 +528,8 @@ def propose(
                     missing += 1
                     best = 10000.0
                 score += best
+            if related:
+                score += soft_penalty(g, constraints, comp, pos)
             return score + 0.1 * light(pos), missing
 
         baseline, _ = heavy(original)
@@ -386,7 +541,40 @@ def propose(
             cost, missing = heavy(pos)
             ranked.append(dict(position=list(pos), cost=cost, unreachable=missing))
             if cost < baseline - 1e-6 or temperature > 0:
-                choices.append((baseline - cost, comp.ref, pos, baseline, cost, identity))
+                choices.append(
+                    (
+                        baseline - cost,
+                        comp.ref,
+                        pos,
+                        baseline,
+                        cost,
+                        identity,
+                        [(comp.ref, pos, None)],
+                    )
+                )
+        if posed is not None:
+            scored[comp.ref] = (original, baseline)
+            other = opposite(comp.side)
+            identity = (comp.ref, *original, other)
+            if plan.allows(comp.ref, other) and identity not in tried:
+                here = comp.side
+                set_component_side(comp, other)
+                if posed([comp]):
+                    cost, missing = heavy(original)
+                    ranked.append(dict(position=list(original), side=other, cost=cost))
+                    if cost < baseline - 1e-6 or temperature > 0:
+                        choices.append(
+                            (
+                                baseline - cost,
+                                comp.ref,
+                                original,
+                                baseline,
+                                cost,
+                                identity,
+                                [(comp.ref, original, other)],
+                            )
+                        )
+                set_component_side(comp, here)
         audit.append(
             dict(
                 ref=comp.ref,
@@ -413,23 +601,53 @@ def propose(
                     screen="Layered routing proxy plus .1 endpoint Manhattan distance; fixed face/orientation",
                 ),
             )
-    if not choices:
-        return None
-    # Compare relative improvements across components with different pin counts.
-    # Zero temperature retains the original deterministic greedy behavior.
-    chosen = (
-        choose_cost([(v[4] - v[3]) / max(1.0, v[3]) for v in choices], temperature, rng)
-        if temperature > 0
-        else max(range(len(choices)), key=lambda i: (choices[i][0], choices[i][1], choices[i][2]))
+    choices += _swaps(
+        g,
+        posed,
+        scored,
+        terminals,
+        rules,
+        tracks,
+        vias,
+        pitch,
+        tried,
+        temperature,
+        held=unswappable,
+        soft=(
+            (lambda *parts: sum(soft_penalty(g, constraints, p, p.pos) for p in parts))
+            if related
+            else None
+        ),
     )
-    gain, ref, pos, before, after, identity = choices[chosen]
-    tried.add(identity)
-    comp = g.component(ref)
-    old = comp.pos
-    comp.pos = pos
-    bad = hard_violations(g, constraints)
-    if any(bad.values()):
-        raise AssertionError(bad)
+    while True:
+        if not choices:
+            return None
+        # Compare relative improvements across components with different pin counts.
+        # Zero temperature retains the original deterministic greedy behavior.
+        chosen = (
+            choose_cost([(v[4] - v[3]) / max(1.0, v[3]) for v in choices], temperature, rng)
+            if temperature > 0
+            else max(
+                range(len(choices)), key=lambda i: (choices[i][0], choices[i][1], choices[i][2])
+            )
+        )
+        gain, ref, pos, before, after, identity, moves = choices[chosen]
+        tried.add(identity)
+        olds = {r: (g.component(r).pos, g.component(r).side) for r, _, _ in moves}
+        for r, xy, side in moves:
+            g.component(r).pos = xy
+            if side is not None:
+                set_component_side(g.component(r), side)
+        bad = hard_violations(g, constraints)
+        if not any(bad.values()):
+            break
+        if len(moves) == 1 and moves[0][2] is None:
+            raise AssertionError(bad)  # a translation: translation_checker disagrees
+        # A flip or swap that breaks a rule pose_checker does not know: undo, drop it.
+        for r, (xy, side) in olds.items():
+            g.component(r).pos = xy
+            set_component_side(g.component(r), side)
+        choices.pop(chosen)
     report = PlacementReport(width, height, hpwl(graph), hpwl(g), **bad)
     return (
         g,
@@ -440,8 +658,13 @@ def propose(
             sampled_candidates=len(choices),
             moves=[
                 dict(
-                    ref=ref, original=list(old), position=list(pos), distance_mm=math.dist(old, pos)
+                    ref=r,
+                    original=list(olds[r][0]),
+                    position=list(xy),
+                    distance_mm=math.dist(olds[r][0], xy),
+                    **({} if side is None else dict(side=side, original_side=olds[r][1])),
                 )
+                for r, xy, side in moves
             ],
             cost_before=before,
             cost_after=after,

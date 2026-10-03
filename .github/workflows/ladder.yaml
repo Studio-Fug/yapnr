@@ -9,8 +9,14 @@ name: Ladder
 #                     the showcases (designs.showcases() and 07-chaser-20, traced), rendered too
 #                     (informational: a showcase never decides the job); then the opt-in gloss
 #                     stage (run.py --gloss, PNR_GLOSS) on 04-inverter-leds-8 and 07-chaser-20,
-#                     seed 0: no other run exercises it while the flag is off by default
-#   manual            cases, seeds, animations, showcases and the gloss stage as given
+#                     seed 0: no other run exercises it while the flag is off by default; then
+#                     the hard rungs of the nightly lane (hard_rungs.py, ci.lane == nightly), seed 0
+#                     (informational: a hard rung never decides the job)
+#   manual            cases, seeds, animations, showcases, the gloss stage and a hard-rung lane
+#                     as given
+#
+# Every run first judges the exact-separation router's routes with KiCad's DRC
+# (tests/test_exact_route_kicad.py, the KiCad tier of its unit tests).
 #
 # The ladder runs the checkout's engine sources (run.py freezes them), not the image's wheel. A
 # pull request can change the runtime pins, so a runtime guard compares the image's /opt/venv
@@ -44,6 +50,11 @@ on:
         description: Also run the showcase cases traced and render their animations
         type: boolean
         default: false
+      hard_lane:
+        description: Also run the hard rungs of this CI lane (hard_rungs.py), seed 0, informational
+        type: choice
+        options: [none, nightly, manual]
+        default: none
       gloss:
         description: Also run the opt-in gloss stage (run.py --gloss) on two cases
         type: boolean
@@ -77,6 +88,8 @@ jobs:
       baseline_minutes: ${{ steps.plan.outputs.baseline_minutes }}
       traced_minutes: ${{ steps.plan.outputs.traced_minutes }}
       showcase_minutes: ${{ steps.plan.outputs.showcase_minutes }}
+      hard_lane: ${{ steps.plan.outputs.hard_lane }}
+      hard_minutes: ${{ steps.plan.outputs.hard_minutes }}
       gloss_minutes: ${{ steps.plan.outputs.gloss_minutes }}
     steps:
       - name: Setup repository
@@ -95,6 +108,7 @@ jobs:
           INPUT_SEEDS: ${{ inputs.seeds }}
           INPUT_ANIMATE: ${{ inputs.animate }}
           INPUT_SHOWCASES: ${{ inputs.showcases }}
+          INPUT_HARD_LANE: ${{ inputs.hard_lane }}
           INPUT_GLOSS: ${{ inputs.gloss }}
         run: |
           run=true
@@ -102,6 +116,7 @@ jobs:
           seeds="0"
           animate=false
           showcases=false
+          hard_lane=none
           gloss=false
           if [ "${EVENT}" = pull_request ]; then
             cases="${PR_CASES}"
@@ -119,12 +134,14 @@ jobs:
             seeds="0 1"
             animate=true
             showcases=true
+            hard_lane=nightly
             gloss=true
           else
             cases="${INPUT_CASES}"
             seeds="${INPUT_SEEDS:-0}"
             animate="${INPUT_ANIMATE:-false}"
             showcases="${INPUT_SHOWCASES:-false}"
+            hard_lane="${INPUT_HARD_LANE:-none}"
             gloss="${INPUT_GLOSS:-false}"
           fi
           # Step budgets (minutes) that fit the job's: the runtime guard may take up to 20,
@@ -148,6 +165,21 @@ jobs:
           if [ "${showcases}" = true ]; then
             showcase_minutes=45
             timeout=$((timeout + showcase_minutes))
+          fi
+          # The hard rungs' budget is the sum of their own per-seed budgets (ci.minutes in
+          # hard_rungs.py, measured on the development Mac), added only when a lane runs.
+          hard_minutes=0
+          if [ "${hard_lane}" != none ]; then
+            hard_minutes="$(HARD_LANE="${hard_lane}" python3 -c 'import os, sys
+          sys.path.insert(0, "hardware/pnr/regression")
+          from hard_rungs import hard_rungs
+          print(sum(r["ci"]["minutes"] for r in hard_rungs() if r["ci"]["lane"] == os.environ["HARD_LANE"]))')"
+            if [ "${hard_minutes}" -gt 90 ]; then
+              # GitHub-hosted jobs stop at 360 minutes; the per-seed budgets in hard_rungs.py were
+              # measured before the router speed work (the lane takes about 9 CPU minutes on x86).
+              hard_minutes=90
+            fi
+            timeout=$((timeout + hard_minutes))
           fi
           # The gloss stage on two cases (about 4 minutes on the development Mac, gloss included).
           gloss_minutes=0
@@ -173,6 +205,8 @@ jobs:
             echo "baseline_minutes=${baseline_minutes}"
             echo "traced_minutes=${traced_minutes}"
             echo "showcase_minutes=${showcase_minutes}"
+            echo "hard_lane=${hard_lane}"
+            echo "hard_minutes=${hard_minutes}"
             echo "gloss_minutes=${gloss_minutes}"
           } | tee -a "${GITHUB_OUTPUT}"
 
@@ -235,6 +269,18 @@ jobs:
                   --require-hashes --no-deps -r docker/yapnr/runtime-arm64.lock'
             echo "LADDER_PY=/work/out/venv/bin/python" >> "${GITHUB_ENV}"
           fi
+
+      # The KiCad tier of the router's unit tests (exact_route_kicad_test in Bazel): routes
+      # under the exact pairwise separation, a net class's clearance included, judged by
+      # kicad-cli's DRC in the image that has KiCad.
+      - name: Exact-separation routes under KiCad's DRC
+        timeout-minutes: 15
+        run: |
+          docker run --rm --init -u "$(id -u):$(id -g)" -v "${PWD}:/work" -w /work/hardware/pnr \
+            -e PYTHONPATH=/work/hardware/pnr -e PNR_KICAD_PYTHON=/usr/bin/python3 \
+            -e PNR_KICAD_CLI=/usr/bin/kicad-cli \
+            --entrypoint /usr/local/bin/yapnr-kicad-env "${LADDER_IMAGE}" \
+            "${LADDER_PY}" -m unittest -v tests.test_exact_route_kicad
 
       - name: Run the ladder (baseline)
         id: baseline
@@ -308,6 +354,29 @@ jobs:
             echo "::notice::the showcases did not all pass (informational: they never decide the job)"
           fi
 
+      # Informational: the hard rungs of one CI lane (hardware/pnr/regression/hard_rungs.py), seed 0,
+      # with the initial pool. A failure or a timeout is a notice, never the job.
+      - name: Run the hard rungs (informational)
+        if: always() && needs.plan.outputs.hard_lane != 'none'
+        env:
+          LANE: ${{ needs.plan.outputs.hard_lane }}
+          MINUTES: ${{ needs.plan.outputs.hard_minutes }}
+        run: |
+          status=0
+          timeout --kill-after=60 "${MINUTES}m" \
+            docker run --rm --init -u "$(id -u):$(id -g)" -v "${PWD}:/work" -w /work \
+              --shm-size 1g --entrypoint /usr/local/bin/yapnr-kicad-env "${LADDER_IMAGE}" \
+              "${LADDER_PY}" hardware/pnr/regression/run.py --repo /work --out /work/out/hard \
+                --python "${LADDER_PY}" --kicad-python /usr/bin/python3 \
+                --kicad-cli /usr/bin/kicad-cli --library /usr/share/kicad/footprints \
+                --timeout 3600 --seed 0 --initial-pool --initial-starts 8 --initial-finalists 3 \
+                --lane "${LANE}" || status=$?
+          python3 tools/ci/ladder_summary.py out/hard --title "Hard rungs, ${LANE} lane (informational)" \
+            >> "${GITHUB_STEP_SUMMARY}" || true
+          if [ "${status}" != 0 ]; then
+            echo "::notice::the hard rungs did not all pass (informational: they never decide the job)"
+          fi
+
       # PNR_GLOSS is opt-in (default off), so no other run takes the pass: the gloss stage
       # (run.py --gloss, gated by the case's cold DRC) on two cases. A case that fails (a stage
       # error) fails the job; a stage that kept no edit on either case is a warning.
@@ -339,7 +408,7 @@ jobs:
           python3 - <<'EOF'
           import json, shutil
           from pathlib import Path
-          for run in (Path("out/ladder"), Path("out/traced"), Path("out/showcases"), Path("out/gloss")):
+          for run in (Path("out/ladder"), Path("out/traced"), Path("out/showcases"), Path("out/hard"), Path("out/gloss")):
               path = run / "summary.json"
               if not path.is_file():
                   continue
@@ -405,6 +474,22 @@ jobs:
             out/showcases/*-version.txt
             out/showcases/*/result.json
             out/showcases/*/trace/
+
+      - name: Upload the hard-rung run
+        if: always() && needs.plan.outputs.hard_lane != 'none'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ladder-hard
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            out/hard/summary.json
+            out/hard/provenance.json
+            out/hard/*-version.txt
+            out/hard/*/result.json
+            out/hard/*/drc.json
+            out/hard/*/checks.json
+            out/hard/*/*.log
 
       - name: The baseline ladder (and the gloss stage when it ran) decides the job
         env:

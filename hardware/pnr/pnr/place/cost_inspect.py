@@ -51,6 +51,9 @@ DEFAULTS = dict(
 # 'wirelength' holds J3's nets, 'power_tap' J3's taps, 'lex_guard' the weighted
 # guards on J1/J2, and 'power_trunk'/'power_loop' show raw J1 parts at weight 0.
 BASE_TERMS = 9
+# The global placer's region and align terms (pnr.place.regions.GlobalTerms) are
+# appended after the others only when a design declares a region or an align.
+RELATED_TERMS = (("region", "Region protrusion", "mm²"), ("alignment", "Alignment spread", "mm²"))
 
 
 class Objective:
@@ -161,6 +164,55 @@ class Objective:
                     self.cap.append((src, dst, sorted(set(self.pin_owner[src + dst])), con.weight))
         if roles is not None:
             self._power_first(roles, pf_state)
+        self.related = []
+        from .regions import declared
+
+        if declared(constraints):
+            self._related()
+        self.term_keys = list(TERMS[: self.nterms]) + (
+            [k for k, _, _ in RELATED_TERMS] if self.related else []
+        )
+        self.nall = len(self.term_keys)
+
+    def _related(self):
+        """Region/align terms at the observed rigid poses (GlobalTerms at one-hot
+        rotations): ('region', comp, corner offsets, area, weight) and ('align',
+        members, anchor offsets, axis index, weight)."""
+        from pnr.constraints import Enforcement
+
+        from .regions import (
+            GP_ALIGN_WEIGHT,
+            GP_REGION_WEIGHT,
+            align_rules,
+            anchor_offset,
+            anchor_spec,
+            area_of,
+            placed_boxes,
+            region_rules,
+        )
+
+        comps = self.graph.components
+        for con in region_rules(self.constraints):
+            weight = GP_REGION_WEIGHT if con.enforcement is Enforcement.HARD else con.weight
+            for ref in con.refs:
+                i = self.index.get(ref)
+                if i is None or not self.movable[i]:
+                    continue
+                c = comps[i]
+                offsets = []
+                for b in placed_boxes(c, con, pos=(0.0, 0.0)):
+                    offsets += [(b[0], b[1]), (b[2], b[1]), (b[0], b[3]), (b[2], b[3])]
+                self.related.append(("region", i, np.array(offsets), area_of(con), weight))
+        for con in align_rules(self.constraints):
+            members = [self.index[r] for r in con.refs if r in self.index]
+            if len(members) < 2:
+                continue
+            axis = con.params["axis"]
+            offsets = np.array(
+                [anchor_offset(comps[i], anchor_spec(con, comps[i].ref), axis) for i in members]
+            )
+            weight = GP_ALIGN_WEIGHT if con.enforcement is Enforcement.HARD else con.weight
+            self.related.append(("align", members, offsets, 0 if axis == "x" else 1, weight))
 
     def _power_first(self, roles, pf_state):
         """Final-stage staged loss factors; without pf_state the stage-3 end values are used and the guard is 0."""
@@ -214,7 +266,7 @@ class Objective:
         if pos.shape[1:] != (self.n, 2):
             raise ValueError("position shape")
         b = len(pos)
-        raw = np.zeros((b, self.n, self.nterms))
+        raw = np.zeros((b, self.n, self.nall))
         weighted = np.zeros_like(raw)
         pf = self.pf
 
@@ -320,6 +372,14 @@ class Objective:
                 axis=(1, 2)
             )
             add(8, dist, owners, weight)
+        for kind, who, offsets, data, weight in self.related:
+            if kind == "region":
+                pts = pos[:, who, None, :] + offsets[None]
+                add(self.nterms, data.dist2(pts[..., 0], pts[..., 1]).sum(1), [who], weight)
+            else:
+                anchors = pos[:, who, data] + offsets[None]
+                spread = ((anchors - anchors.mean(1, keepdims=True)) ** 2).sum(1)
+                add(self.nterms + 1, spread, who, weight)
         return raw, weighted
 
     def report(self):
@@ -337,23 +397,39 @@ class Objective:
                 [self.cfg["w_keep"]],
                 sorted(set(v[3] for v in self.cap if i in v[2])),
             ]
+            if self.related:
+                extra = [
+                    sorted(
+                        set(
+                            v[4]
+                            for v in self.related
+                            if v[0] == kind and (v[1] == i if kind == "region" else i in v[1])
+                        )
+                    )
+                    for kind in ("region", "align")
+                ]
             if self.pf is not None:
                 weights[1:3] = [[self.pf["w_ov"]], [self.pf["bound"]]]
                 weights[6] = sorted(
                     set(v[3] * self.pf["group"] for v in self.pf_groups if i in v[:2])
                 )
                 weights += [[0.0], [0.0], [1.0], [1.0]]
+            labels, units = list(LABELS[: self.nterms]), list(UNITS[: self.nterms])
+            if self.related:
+                weights += extra
+                labels += [label for _, label, _ in RELATED_TERMS]
+                units += [unit for _, _, unit in RELATED_TERMS]
             terms = [
                 dict(
                     key=k,
-                    label=LABELS[t],
+                    label=labels[t],
                     raw_share=float(raw[0, i, t]),
                     weighted=float(w[0, i, t]),
-                    unit=UNITS[t],
+                    unit=units[t],
                     weights=weights[t],
                     effective_weight=float(w[0, i, t] / raw[0, i, t]) if raw[0, i, t] else None,
                 )
-                for t, k in enumerate(TERMS[: self.nterms])
+                for t, k in enumerate(self.term_keys)
             ]
             locks = [
                 c.params
@@ -436,11 +512,20 @@ class Objective:
         regions = {c.ref: placement_rects(c) for c in self.graph.components}
         limits = hard_group_limits(self.constraints, {c.ref: c.pos for c in self.graph.components})
         sides = resolve_hard_sides(self.constraints)
+        from .regions import ref_ok
 
         def legal(c):
             rect = courtyard_rect(c)
             return (
                 rect.inside(self.width, self.height)
+                and (
+                    not self.related
+                    or ref_ok(
+                        [c if x.ref == c.ref else x for x in self.graph.components],
+                        self.constraints,
+                        c.ref,
+                    )
+                )
                 and (c.ref not in sides or c.side == sides[c.ref])
                 and not any(rect.overlaps(k) for k in self.keepouts)
                 and not any(
@@ -474,7 +559,7 @@ class Objective:
             values=values,
             component_scores=shares,
             term_delta=term_delta,
-            term_keys=list(TERMS[: self.nterms]),
+            term_keys=list(self.term_keys),
             legal=valid,
             current_position=list(old),
             current_component_score=local_base,

@@ -31,7 +31,17 @@ import numpy as np
 
 from pnr.graph import BoardGraph, Component
 
-from .geometry import Rect, ReserveRect, courtyard_rect, occupied_sides, pad_rects, placement_rects
+from .geometry import (
+    Rect,
+    ReserveRect,
+    courtyard_rect,
+    occupied_sides,
+    pad_rects,
+    placement_rects,
+    set_component_side,
+)
+from .sides import STACK_PLANE
+from .sides import opposite as opposite_side
 
 # PNR_PAIR_LANDING_RESERVE=1 (pnr.place.pair_landing): besides the per-side body
 # occupancy, legalize keeps two more rasters per side: ``mounted`` (bodies of parts
@@ -140,6 +150,39 @@ def _band_box(box, rect, band, width, height):
     return (x_lo, x_hi, y_lo, y_hi)
 
 
+def legalize_constraint_kwargs(graph, constraints, poses, pad_edge=None) -> dict:
+    """The constraint keyword arguments of :func:`legalize` for ``constraints``.
+
+    ``poses`` are the resolved fixed poses and ``graph`` the graph keep-outs are
+    resolved on. Optional relations add their keys only when the design declares
+    them (``pad_edge`` when given, ``edge_bands`` for a hard ``edge_align``,
+    ``regions``/``aligns`` for a ``region`` or ``align``), so every other design
+    calls the legalizer exactly as before."""
+    from .geometry import (
+        hard_edge_bands,
+        hard_group_edges,
+        hard_group_limits,
+        keepout_rects,
+        resolve_hard_rotations,
+    )
+    from .regions import legalize_kwargs
+
+    out = dict(
+        fixed=poses,
+        keepouts=keepout_rects(graph, constraints, poses),
+        group_limits=hard_group_limits(constraints, poses, partial=True),
+        group_edges=hard_group_edges(constraints),
+        rotations=resolve_hard_rotations(constraints),
+    )
+    if pad_edge is not None:
+        out["pad_edge"] = pad_edge
+    bands = hard_edge_bands(constraints)
+    if bands:
+        out["edge_bands"] = bands
+    out.update(legalize_kwargs(constraints, graph.components))
+    return out
+
+
 class LegalizationError(RuntimeError):
     """Raised when a part cannot be placed (outline too small / too full)."""
 
@@ -167,6 +210,8 @@ def _place_part(
     attached=(),
     free=None,
     box=None,
+    mask=None,
+    box_label="keeping pads clear of the board edge",
 ) -> Tuple[int, int]:
     """Find the free ``bh x bw`` block nearest ``target`` (returns top-left r, c).
 
@@ -176,7 +221,10 @@ def _place_part(
     ``free`` (hull macros, :func:`pnr.place.hull.free_map`) replaces the
     whole-block test on ``occ`` with a precomputed map of valid top-lefts.
     ``box`` (``PNR_PAD_EDGE_CLEARANCE=1``, :func:`pad_edge_box`) bounds the
-    block centre so the part's pads and drills keep the fab edge rules."""
+    block centre so the part's pads and drills keep the fab edge rules; it also carries
+    a hard edge band, a rectangle region and an align band.
+    ``mask`` (a polygon or union region, :meth:`pnr.place.regions.LegalizeRules.mask`)
+    is a map of the top-lefts whose courtyard lies inside the region."""
     ny, nx = occ.shape
     if free is not None:
         if free is False:
@@ -202,6 +250,10 @@ def _place_part(
             free &= (integ2[r1, c1] - integ2[r0, c1] - integ2[r1, c0] + integ2[r0, c0]) == 0
     if not free.any():
         raise LegalizationError("no free slot for part")
+    if mask is not None:
+        free &= mask
+        if not free.any():
+            raise LegalizationError("no free slot inside the part's region")
 
     # Centre of the block for each candidate top-left (r, c).
     rows = np.arange(free.shape[0])[:, None]
@@ -216,7 +268,7 @@ def _place_part(
             & (cy <= box[3] + 1e-9)
         )
         if not free.any():
-            raise LegalizationError("no free slot keeping pads clear of the board edge")
+            raise LegalizationError("no free slot " + box_label)
     for ax, ay, radius in limits:
         free &= (cx - ax) ** 2 + (cy - ay) ** 2 <= radius**2 + 1e-9
     for rr, cc in forbidden:
@@ -259,6 +311,13 @@ def legalize(
     roles=None,
     pad_edge: Optional[Tuple[float, float]] = None,
     edge_bands: Optional[Dict[str, Tuple[str, float]]] = None,
+    side_options: Optional[Dict[str, Tuple[str, ...]]] = None,
+    side_cost=None,
+    side_weight: float = 3.0,
+    side_retry_mm: float = 1.0,
+    stack: Optional[frozenset] = None,
+    regions=None,
+    aligns=None,
 ) -> BoardGraph:
     """Return a copy of ``graph`` with movable parts snapped to a legal layout.
 
@@ -292,6 +351,26 @@ def legalize(
     keeps each listed part's courtyard within the tolerance of its edge: its slot
     centre is bounded like ``pad_edge`` does, per tried rotation, and its spreading
     factor is capped so the reserved slot still fits the band.
+
+    ``side_options`` ({ref: allowed sides}, :func:`pnr.place.sides.plan`; None = off)
+    lets a part with two options take the slot nearest its target on either side:
+    when its current side has no slot, or only one more than ``side_retry_mm`` from
+    its target, the other side is tried too and the cheaper slot wins, its cost the
+    slot cost (squared displacement plus channel demand) plus ``side_weight`` (mm)
+    times ``side_cost(graph)`` (mm, :func:`pnr.place.sides.side_cost` of the board
+    with that choice). A part with one option keeps its side.
+
+    ``stack`` (refs, :func:`pnr.place.sides.stack_refs`; None = off) adds a ``stack``
+    occupancy plane that each of those parts tests and marks whatever its side, so two
+    of them never overlap back to back on opposite sides.
+
+    ``regions`` / ``aligns`` (the ``region`` / ``align`` constraints,
+    :func:`legalize_constraint_kwargs`; None = off): a hard region bounds the slot
+    centre per tried rotation (a rectangle as a box, a polygon or union as a raster
+    mask), a hard align bounds it to the band the members already placed leave
+    (``tol_mm``), and each aligned member's target moves onto the line. Soft ones add
+    their penalty to the candidate cost. Aligned members are ordered as one block,
+    and a slot that strands a later member is backtracked like a hard group's.
 
     With hull macros (``PNR_MACRO_HULL=1``) the occupancy gains an ``inner`` plane:
     hull macros mark their inner-layer mask there, drilled parts and solid block
@@ -344,6 +423,10 @@ def legalize(
     def is_hull(comp):
         return hulls and bool(comp.hull)
 
+    stacked = frozenset(stack or ())
+    if stacked:
+        occupancy[STACK_PLANE] = np.zeros((ny, nx), dtype=bool)
+
     def part_sides(comp):
         """Occupancy planes a slot tests and marks (drilled parts: both sides)."""
         sides = (
@@ -355,18 +438,29 @@ def legalize(
             and (hullmod.drilled(comp) or str(comp.footprint).startswith("block:"))
         ):
             sides = tuple(sides) + ("inner",)
+        if comp.ref in stacked:
+            sides = tuple(sides) + (STACK_PLANE,)
         return sides
 
     boxes = {}
     bands = edge_bands or {}
+    # Regions and aligns (pnr.place.regions): None unless the design declares one;
+    # built once the hard rotations and fixed poses are applied (below).
+    rules = None
+    if regions or aligns:
+        from .regions import _intersect as intersect_boxes
 
-    def edge_box(comp):
-        """pad_edge_box at comp.rot, narrowed to the part's hard edge band (None when
-        neither the pad-edge rule nor a band applies)."""
+    def constrained(comp):
+        return rules is not None and rules.applies(comp.ref)
+
+    def static_edge_box(comp):
+        """pad_edge_box at comp.rot, narrowed to the part's hard edge band and its hard
+        rectangle regions (None when none applies)."""
         band = bands.get(comp.ref)
-        if pad_edge is None and band is None:
+        if pad_edge is None and band is None and not constrained(comp):
             return None
-        key = (comp.ref, round(comp.rot % 360, 6))
+        # Per side too: a flipped part's pads and off-centre body are mirrored.
+        key = (comp.ref, round(comp.rot % 360, 6), comp.side)
         hit = boxes.get(key)
         if hit is None:
             if pad_edge is None:
@@ -375,18 +469,101 @@ def legalize(
                 hit = pad_edge_box(comp, pad_edge, width, height)
             if band is not None:
                 hit = _band_box(hit, courtyard_rect(comp), band, width, height)
+            if constrained(comp):
+                region = rules.static_box(comp)
+                if region is not None:
+                    hit = intersect_boxes(hit, region)
             boxes[key] = hit
         return hit
 
-    def spreading(comp):
+    def edge_box(comp):
+        """static_edge_box, narrowed to the part's hard align band (None when none
+        applies)."""
+        hit = static_edge_box(comp)
+        if constrained(comp):
+            dynamic = rules.align_box(comp, {c.ref: c for c in neighbors}, by_ref)
+            if dynamic is not None:
+                hit = intersect_boxes(hit, dynamic)
+        return hit
+
+    def centre_limits(comp, rot):
+        """The slot centres ``comp`` could take at ``rot`` on an empty board: its block
+        on the grid, inside static_edge_box; None when there is none. The align bands
+        of the other members of its aligns are built from these
+        (pnr.place.regions.LegalizeRules.reach). A part with a hard edge band has the
+        block its band cap gives it, and its bounds move inward onto its slot lattice
+        (exact: a partner placed first then leaves it a slot); any other part could
+        have its block shrunk to its courtyard by the align cap (spreading), so its
+        bounds are those of that smallest block (never too narrow)."""
+        saved = comp.rot
+        comp.rot = rot
+        try:
+            cr = courtyard_rect(comp)
+            banded = comp.ref in bands
+            infl = spreading(comp, aligned=False) if banded else 1.0
+            bw = int(math.ceil((cr.w * infl + clearance) / g))
+            bh = int(math.ceil((cr.h * infl + clearance) / g))
+            if bw > nx or bh > ny:
+                return None
+            box = ((bw / 2.0) * g, (nx - bw / 2.0) * g, (bh / 2.0) * g, (ny - bh / 2.0) * g)
+            static = static_edge_box(comp)
+            if static is not None:
+                box = intersect_boxes(box, static)
+            if not banded:
+                ok = box[0] <= box[1] + 1e-9 and box[2] <= box[3] + 1e-9
+                return box if ok else None
+            lo_c = math.ceil(box[0] / g - bw / 2.0 - 1e-9)
+            hi_c = math.floor(box[1] / g - bw / 2.0 + 1e-9)
+            lo_r = math.ceil(box[2] / g - bh / 2.0 - 1e-9)
+            hi_r = math.floor(box[3] / g - bh / 2.0 + 1e-9)
+            if lo_c > hi_c or lo_r > hi_r:
+                return None
+            return (
+                (lo_c + bw / 2.0) * g,
+                (hi_c + bw / 2.0) * g,
+                (lo_r + bh / 2.0) * g,
+                (hi_r + bh / 2.0) * g,
+            )
+        finally:
+            comp.rot = saved
+
+    def region_mask(comp, bw, bh):
+        """The hard polygon/union region mask of comp at comp.rot (None when none)."""
+        if not constrained(comp) or bw > nx or bh > ny:
+            return None
+        return rules.mask(comp, bw, bh, g, (ny - bh + 1, nx - bw + 1))
+
+    def box_label_of(comp):
+        if not constrained(comp):
+            return {}
+        return dict(box_label="inside its edge band, region and align band")
+
+    def target_of(comp):
+        """The slot target: comp.pos, with an aligned axis moved onto its line."""
+        if not constrained(comp):
+            return comp.pos
+        return rules.target(comp, {c.ref: c for c in neighbors}, comp.pos)
+
+    def spreading(comp, aligned=True):
         """The part's slot inflation: the spread floor or its feedback inflation, capped
-        for a hard edge part so the slot fits its band."""
+        for a hard edge part so the slot fits its band, and (``aligned``) for a
+        hard-aligned part so the slot fits beside the board edge its align band runs
+        along."""
         infl = max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
         band = bands.get(comp.ref)
         if band is not None:
             cr = courtyard_rect(comp)
             normal = cr.h if band[0] in ("south", "north") else cr.w
             infl = min(infl, max(1.0, 1.0 + (2 * band[1] - clearance - g) / normal))
+        if aligned and constrained(comp):
+            bound = rules.align_box(comp, {c.ref: c for c in neighbors}, by_ref)
+            if bound is not None:
+                cr = courtyard_rect(comp)
+                for k, normal, size in ((0, cr.w, width), (1, cr.h, height)):
+                    # The widest block centred in [lo, hi] that stays on the board.
+                    lo, hi = bound[2 * k], bound[2 * k + 1]
+                    room = 2 * min(hi, size - lo, size / 2)
+                    infl = min(infl, max(1.0, (room - clearance - g) / normal))
         return infl
 
     free_cache = {}
@@ -444,6 +621,27 @@ def legalize(
             for side in sides:
                 occupancy[side][r : r + bh, c : c + bw] = True
 
+    def displaced(comp, r, c, bw, bh):
+        return math.dist(target_of(comp), ((c + bw / 2.0) * g, (r + bh / 2.0) * g))
+
+    def slot_cost(comp, outcome, neighbors):
+        """Cost of a :func:`search` outcome (its side and turn set on ``comp``), measured
+        from the slot target (an aligned axis on its line, :func:`target_of`)."""
+        if outcome[2] is not None:
+            return math.inf
+        _, _, _, r, c, bw, bh = outcome[:7]
+        x, y = (c + bw / 2.0) * g, (r + bh / 2.0) * g
+        tx, ty = target_of(comp)
+        cost = (x - tx) ** 2 + (y - ty) ** 2
+        if channel_model is not None:
+            cost += channel_weight * float(channel_model.penalty(comp, neighbors, x, y))
+        if rules is not None and rules.has_soft(comp.ref):
+            extra = rules.soft_cost(comp, {q.ref: q for q in neighbors}, x, y)
+            cost += 0.0 if extra is None else float(extra)
+        if side_cost is not None:
+            cost += side_weight * float(side_cost(placed))
+        return cost
+
     aid = None
     if roles is not None:
         from .power_first import LOOK_AHEAD_TRIES, LegalizeAid
@@ -497,6 +695,24 @@ def legalize(
                 _mark(
                     mounted[side], g, Rect(rect.cx, rect.cy, rect.w + clearance, rect.h + clearance)
                 )
+        if comp.ref in stacked:
+            cr = courtyard_rect(comp)
+            _mark(occupancy[STACK_PLANE], g, Rect(cr.cx, cr.cy, cr.w + clearance, cr.h + clearance))
+
+    if regions or aligns:
+        from .regions import LegalizeRules
+
+        # Align lines start at the median of the global anchors (fixed parts at their pose).
+        rules = LegalizeRules(
+            regions,
+            aligns,
+            placed.components,
+            grid_mm=g,
+            limits=centre_limits,
+            # The rotations the slot search tries per part (below).
+            turns=lambda m: [m.rot]
+            + ([(m.rot + 90) % 360] if allow_rotation and m.ref not in rotations else []),
+        )
 
     # Minimum-remaining-slots ordering accounts for actual fixed obstacles and
     # intersections of group discs. Radius alone can let a flexible neighbor
@@ -505,7 +721,11 @@ def legalize(
 
     def available_pose(comp):
         cr = courtyard_rect(comp)
-        infl = spreading(comp) if bands else max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
+        infl = (
+            spreading(comp)
+            if bands or rules is not None
+            else max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
+        )
         bw = int(math.ceil((cr.w * infl + clearance) / g))
         bh = int(math.ceil((cr.h * infl + clearance) / g))
         occ = np.logical_or.reduce([occupancy[side] for side in part_sides(comp)])
@@ -529,6 +749,9 @@ def legalize(
                 & (cy >= box[2] - 1e-9)
                 & (cy <= box[3] + 1e-9)
             )
+        mask = region_mask(comp, bw, bh)
+        if mask is not None:
+            free &= mask
         return int(free.sum())
 
     def available(comp):
@@ -572,7 +795,9 @@ def legalize(
                 sides_m = part_sides(m)
                 occ_m = np.logical_or.reduce([occupancy[side] for side in sides_m])
                 infl_m = (
-                    spreading(m) if bands else max(1.0, spread, float(inflation.get(m.ref, 1.0)))
+                    spreading(m)
+                    if bands or rules is not None
+                    else max(1.0, spread, float(inflation.get(m.ref, 1.0)))
                 )
                 target = aid.target(m.ref, neighbors)
                 turns = (
@@ -621,6 +846,12 @@ def legalize(
     for anchor, member, _ in group_edges:
         adjacency.setdefault(anchor, set()).add(member)
         adjacency.setdefault(member, set()).add(anchor)
+    if rules is not None:
+        # Aligned members share one band: place them as one block.
+        for a, b in rules.edges():
+            if a in by_ref and b in by_ref:
+                adjacency.setdefault(a, set()).add(b)
+                adjacency.setdefault(b, set()).add(a)
     blocks = {}
     for ref in sorted(adjacency):
         if ref in blocks:
@@ -636,7 +867,7 @@ def legalize(
         for v in members:
             blocks[v] = members
     active_block = set()
-    stack = []
+    trail = []  # backtracking: (state, ref, chosen slot)
     banned = {}
     backtracks = 0
     while movable:
@@ -686,119 +917,169 @@ def legalize(
             movable=list(movable),
             active=set(active_block),
             poses={c.ref: (c.pos, c.rot) for c in placed.components},
+            sides={c.ref: c.side for c in placed.components} if side_options else None,
             records=list(cost_records),
             banned={k: set(v) for k, v in banned.items()},
         )
         movable.remove(comp)
-        infl = max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
-        banded = comp.ref in bands
-        sides = part_sides(comp)
-        occ = np.logical_or.reduce([occupancy[side] for side in sides])
-        if landing:
-            occ = occ | np.logical_or.reduce([reserved[m] for m in mounts_of(comp)])
-        attached = ()
         original_rotation = comp.rot
-        error = None
         from .cost_capture import folder as cost_folder
         from .cost_capture import legalizer_decision
 
         capturing = cost_folder() is not None
-        captured_fields = {}
-        turns = [original_rotation] + (
-            [(original_rotation + 90) % 360] if allow_rotation and comp.ref not in rotations else []
-        )
-        if is_hull(comp) and allow_rotation and comp.ref not in rotations:
-            turns = hull_turns(comp, original_rotation)
-        for rotation in turns:
-            comp.rot = rotation
-            cr = courtyard_rect(comp)
-            if banded:
-                infl = spreading(comp)  # capped per tried rotation (hard edge band)
-            bw = int(math.ceil((cr.w * infl + clearance) / g))
-            bh = int(math.ceil((cr.h * infl + clearance) / g))
-            attached = _landing_blocks(comp, bw, bh, g, clearance, mounted) if landing else ()
-            try:
-                candidate_cost = (
-                    None
-                    if channel_model is None
-                    else (
-                        lambda xs, ys: channel_weight
-                        * channel_model.penalty(comp, neighbors, xs, ys)
+
+        def search():
+            """The nearest legal slot for ``comp`` on its current side, trying its turns:
+            ``(error, r, c, bw, bh, sides, attached, captured_fields)``."""
+            r = c = None
+            bw = bh = 0
+            infl = max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
+            # A hard edge band, or a hard align: the inflation is capped per tried rotation.
+            banded = comp.ref in bands or (rules is not None and comp.ref in rules.align_of)
+            sides = part_sides(comp)
+            occ = np.logical_or.reduce([occupancy[side] for side in sides])
+            if landing:
+                occ = occ | np.logical_or.reduce([reserved[m] for m in mounts_of(comp)])
+            attached = ()
+            error = None
+            captured_fields = {}
+            turns = [original_rotation] + (
+                [(original_rotation + 90) % 360]
+                if allow_rotation and comp.ref not in rotations
+                else []
+            )
+            if is_hull(comp) and allow_rotation and comp.ref not in rotations:
+                turns = hull_turns(comp, original_rotation)
+            for rotation in turns:
+                comp.rot = rotation
+                cr = courtyard_rect(comp)
+                if banded:
+                    infl = spreading(comp)  # capped per tried rotation (edge band, align band)
+                bw = int(math.ceil((cr.w * infl + clearance) / g))
+                bh = int(math.ceil((cr.h * infl + clearance) / g))
+                attached = _landing_blocks(comp, bw, bh, g, clearance, mounted) if landing else ()
+                target = target_of(comp)
+                try:
+                    candidate_cost = (
+                        None
+                        if channel_model is None
+                        else (
+                            lambda xs, ys: channel_weight
+                            * channel_model.penalty(comp, neighbors, xs, ys)
+                        )
                     )
-                )
-                if capturing:
+                    if capturing:
 
-                    def candidate_cost(xs, ys):
-                        channel = (
-                            0.0
-                            if channel_model is None
-                            else channel_model.penalty(comp, neighbors, xs, ys)
-                        )
-                        if np.asarray(xs).ndim:
-                            xx, yy, ch = np.broadcast_arrays(xs, ys, channel)
-                            captured_fields[rotation] = np.column_stack(
-                                (
-                                    xx,
-                                    yy,
-                                    (xx - comp.pos[0]) ** 2 + (yy - comp.pos[1]) ** 2,
-                                    ch,
-                                    np.zeros(xx.shape),
+                        def candidate_cost(xs, ys):
+                            channel = (
+                                0.0
+                                if channel_model is None
+                                else channel_model.penalty(comp, neighbors, xs, ys)
+                            )
+                            if np.asarray(xs).ndim:
+                                xx, yy, ch = np.broadcast_arrays(xs, ys, channel)
+                                captured_fields[rotation] = np.column_stack(
+                                    (
+                                        xx,
+                                        yy,
+                                        (xx - comp.pos[0]) ** 2 + (yy - comp.pos[1]) ** 2,
+                                        ch,
+                                        np.zeros(xx.shape),
+                                    )
                                 )
-                            )
-                        return channel_weight * channel
+                            return channel_weight * channel
 
-                slot_free = hull_free(comp, bw, bh) if is_hull(comp) else None
-                r, c = _place_part(
-                    occ,
-                    g,
-                    bw,
-                    bh,
-                    comp.pos,
-                    limits_for(comp.ref),
-                    candidate_cost=candidate_cost,
-                    forbidden=[
-                        (rr, cc) for rot, rr, cc in banned.get(comp.ref, ()) if rot == rotation
-                    ],
-                    attached=attached,
-                    free=slot_free,
-                    box=edge_box(comp),
-                )
-                if aid is not None:
-                    tried = [
-                        (rr, cc) for rot, rr, cc in banned.get(comp.ref, ()) if rot == rotation
-                    ]
-                    for attempt in range(LOOK_AHEAD_TRIES):
-                        if not starves(comp, r, c, bw, bh, sides):
-                            break
-                        tried.append((r, c))
-                        if attempt == LOOK_AHEAD_TRIES - 1:
-                            raise LegalizationError(
-                                "look-ahead: every tried slot strands a hard-limited part"
+                    if rules is not None and rules.has_soft(comp.ref):
+                        # Soft region / align: their penalty joins the candidate cost.
+                        def candidate_cost(xs, ys, _base=candidate_cost):
+                            extra = rules.soft_cost(comp, {c.ref: c for c in neighbors}, xs, ys)
+                            value = 0.0 if _base is None else _base(xs, ys)
+                            return value + (0.0 if extra is None else extra)
+
+                    slot_free = hull_free(comp, bw, bh) if is_hull(comp) else None
+                    slot_mask = region_mask(comp, bw, bh)
+                    r, c = _place_part(
+                        occ,
+                        g,
+                        bw,
+                        bh,
+                        target,
+                        limits_for(comp.ref),
+                        candidate_cost=candidate_cost,
+                        forbidden=[
+                            (rr, cc)
+                            for rot, rr, cc, side in banned.get(comp.ref, ())
+                            if rot == rotation and side == comp.side
+                        ],
+                        attached=attached,
+                        free=slot_free,
+                        box=edge_box(comp),
+                        mask=slot_mask,
+                        **box_label_of(comp),
+                    )
+                    if aid is not None:
+                        tried = [
+                            (rr, cc)
+                            for rot, rr, cc, side in banned.get(comp.ref, ())
+                            if rot == rotation and side == comp.side
+                        ]
+                        for attempt in range(LOOK_AHEAD_TRIES):
+                            if not starves(comp, r, c, bw, bh, sides):
+                                break
+                            tried.append((r, c))
+                            if attempt == LOOK_AHEAD_TRIES - 1:
+                                raise LegalizationError(
+                                    "look-ahead: every tried slot strands a hard-limited part"
+                                )
+                            r, c = _place_part(
+                                occ,
+                                g,
+                                bw,
+                                bh,
+                                target,
+                                limits_for(comp.ref),
+                                candidate_cost=candidate_cost,
+                                forbidden=tried,
+                                attached=attached,
+                                free=slot_free,
+                                box=edge_box(comp),
+                                mask=slot_mask,
+                                **box_label_of(comp),
                             )
-                        r, c = _place_part(
-                            occ,
-                            g,
-                            bw,
-                            bh,
-                            comp.pos,
-                            limits_for(comp.ref),
-                            candidate_cost=candidate_cost,
-                            forbidden=tried,
-                            attached=attached,
-                            free=slot_free,
-                            box=edge_box(comp),
-                        )
-                error = None
-                break
-            except LegalizationError as exc:
-                error = exc
+                    error = None
+                    break
+                except LegalizationError as exc:
+                    error = exc
+            return error, r, c, bw, bh, sides, attached, captured_fields
+
+        error, r, c, bw, bh, sides, attached, captured_fields = search()
+        if (
+            side_options
+            and len(side_options.get(comp.ref, ())) > 1
+            and (error is not None or displaced(comp, r, c, bw, bh) > side_retry_mm)
+        ):
+            # A part free to take either side (pnr.place.sides) also tries the other
+            # side, and keeps whichever slot is cheaper including the side cost.
+            here = (comp.side, comp.rot, error, r, c, bw, bh, sides, attached, captured_fields)
+            set_component_side(comp, opposite_side(comp.side))
+            comp.rot = original_rotation
+            there = (comp.side, None) + search()
+            there = (there[0], comp.rot) + there[2:]
+            far = slot_cost(comp, there, neighbors)
+            set_component_side(comp, here[0])
+            comp.rot = here[1]
+            near = slot_cost(comp, here, neighbors)
+            if far < near - 1e-9:
+                set_component_side(comp, there[0])
+                comp.rot = there[1]
+                _, _, error, r, c, bw, bh, sides, attached, captured_fields = there
         if (
             error is not None
-            and stack
-            and (group_edges or group_limits)
+            and trail
+            and (group_edges or group_limits or (rules is not None and rules.hard))
             and backtracks < backtrack_budget
         ):
-            previous, chosen_ref, chosen_pose = stack.pop()
+            previous, chosen_ref, chosen_pose = trail.pop()
             occupancy = previous["occupancy"]
             neighbors = previous["neighbors"]
             if landing:
@@ -809,6 +1090,8 @@ def legalize(
             for ref, (pos, rot) in previous["poses"].items():
                 by_ref[ref].pos = pos
                 by_ref[ref].rot = rot
+            for ref, side in (previous["sides"] or {}).items():
+                set_component_side(by_ref[ref], side)
             cost_records = previous["records"]
             banned = previous["banned"]
             banned.setdefault(chosen_ref, set()).add(chosen_pose)
@@ -862,9 +1145,11 @@ def legalize(
                         0.0,
                     ),
                     poses={q.ref: (q.pos, q.rot) for q in placed.components},
+                    sides={q.ref: q.side for q in placed.components},
                 )
             )
-        stack.append((state, comp.ref, (comp.rot, r, c)))
+        # A slot is banned on the side it was taken (the other side's cell is free).
+        trail.append((state, comp.ref, (comp.rot, r, c, comp.side)))
         banned.pop(comp.ref, None)
         if is_hull(comp):
             mark_slot(comp, r, c, bw, bh, sides)
@@ -890,7 +1175,7 @@ def legalize(
     from pnr import trace as _trace
 
     if _trace.current() is not None:  # PNR_TRACE_DIR only
-        _trace.legal([ref for _state, ref, _pose in stack], placed, backtracks)
+        _trace.legal([ref for _state, ref, _pose in trail], placed, backtracks)
     if cost_records:
         import hashlib
         import json
@@ -905,6 +1190,8 @@ def legalize(
             for ref, (pos, rot) in v["poses"].items():
                 replay_refs[ref].pos = pos
                 replay_refs[ref].rot = rot
+            for ref, side in v["sides"].items():
+                set_component_side(replay_refs[ref], side)
             records.append(
                 legalizer_decision(
                     replay,

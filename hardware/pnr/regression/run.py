@@ -23,6 +23,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from designs import designs, showcases
+from hard_rungs import dru_text, hard_rungs
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
@@ -192,6 +193,7 @@ def source_inputs(repo):
         raise FileNotFoundError("Native regression requires " + str(scanner))
     return (
         sorted((repo / "hardware/pnr/pnr").rglob("*.py"))
+        + sorted((repo / "hardware/pnr/pnr").rglob("*.c"))
         + sorted((repo / "hardware/pnr/regression").glob("*.py"))
         + [scanner]
         + [p for p in fab_data_inputs(repo) if p.is_file()]
@@ -541,7 +543,32 @@ def parser():
         help="Explicit signal grid pitch for source and fixed-copper handoff; 0 keeps automatic pitch",
     )
     ap.add_argument(
-        "--packed-maze", action="store_true", help="Validate the packed CPU maze kernel explicitly"
+        "--packed-maze",
+        action="store_true",
+        help="The packed CPU maze kernel (the default; kept so recorded configurations still parse)",
+    )
+    ap.add_argument(
+        "--maze-kernel",
+        choices=("packed", "native"),
+        default="packed",
+        help=(
+            "native: build the C search loop from the frozen sources with the host compiler and "
+            "route with it (identical routes; the packed kernel runs if it cannot load)"
+        ),
+    )
+    ap.add_argument(
+        "--exact-separation",
+        choices=("off", "recover", "full"),
+        help=(
+            "PNR_EXACT_SEPARATION: recover routes again with the exact pairwise separation when "
+            "a detailed route leaves connections open (and keeps it only with fewer open), full "
+            "routes with it only; default: the engine's (recover)"
+        ),
+    )
+    ap.add_argument(
+        "--reference-maze",
+        action="store_true",
+        help="Route with the reference dict A* kernel (PNR_PACKED_MAZE=0) instead of the packed one",
     )
     ap.add_argument(
         "--batched-wirelength",
@@ -569,6 +596,22 @@ def parser():
         "--showcases",
         action="store_true",
         help="Also offer the showcase cases (designs.showcases(), outside the ladder) to --case",
+    )
+    ap.add_argument(
+        "--hard",
+        action="store_true",
+        help="Also offer the hard rungs (hard_rungs.hard_rungs(), outside the ladder) to --case",
+    )
+    ap.add_argument(
+        "--design-json",
+        action="append",
+        default=[],
+        help="Also offer the designs in this JSON list (e.g. lenmatch_scratch.py write) to --case",
+    )
+    ap.add_argument(
+        "--lane",
+        choices=("nightly", "manual"),
+        help="Run the hard rungs whose ci.lane is LANE (with any --case given); implies --hard",
     )
     ap.add_argument(
         "--gloss",
@@ -636,8 +679,15 @@ def main():
     if glossing and not (args.gloss or args.gloss_measure):
         raise SystemExit("--gloss-flag needs --gloss or --gloss-measure")
     out.mkdir(parents=True, exist_ok=False)
-    allcases = designs() + (showcases() if args.showcases else [])
-    cases = [c for c in allcases if not args.case or c["name"] in args.case]
+    hard = hard_rungs() if args.hard or args.lane else []
+    allcases = designs() + (showcases() if args.showcases else []) + hard
+    for path in args.design_json:
+        allcases += json.loads(Path(path).read_text())
+    if args.lane:
+        lane = {c["name"] for c in hard if c["ci"]["lane"] == args.lane}
+        cases = [c for c in allcases if c["name"] in lane or c["name"] in args.case]
+    else:
+        cases = [c for c in allcases if not args.case or c["name"] in args.case]
     if not cases or (set(args.case) - {c["name"] for c in cases}):
         raise SystemExit("Unknown/empty case selection")
     source_files = source_inputs(REPO)
@@ -662,8 +712,44 @@ def main():
     for key in list(env):
         if key.startswith("PNR_") and key not in ("PNR_LOCAL_PRESSURE", "PNR_JOINT_ACCESS"):
             del env[key]
+    if args.packed_maze and args.reference_maze:
+        raise SystemExit("--packed-maze and --reference-maze are exclusive")
     if args.packed_maze:
         env["PNR_PACKED_MAZE"] = "1"
+    if args.reference_maze:
+        env["PNR_PACKED_MAZE"] = "0"
+    if args.exact_separation:
+        env["PNR_EXACT_SEPARATION"] = args.exact_separation
+    native = None
+    if args.maze_kernel == "native":
+        if args.reference_maze:
+            raise SystemExit("--maze-kernel native and --reference-maze are exclusive")
+        # The frozen C source, compiled once for the run (pnr.route.detail.native_maze).
+        # Without a working compiler the run keeps the packed kernel (identical routes)
+        # and says so here and in provenance.
+        try:
+            library = subprocess.run(
+                [
+                    args.python,
+                    "-c",
+                    "import sys; from pnr.route.detail.native_maze import build_library; "
+                    "print(build_library(sys.argv[1]))",
+                    str(out / "native"),
+                ],
+                env=dict(env, PYTHONPATH=str(freeze / "hardware/pnr")),
+                capture_output=True,
+                text=True,
+                timeout=600,
+                check=True,
+            ).stdout.strip()
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as error:
+            detail = (getattr(error, "stderr", None) or str(error)).strip().splitlines()
+            reason = detail[-1] if detail else type(error).__name__
+            print("native maze kernel not built (%s); the packed kernel routes" % reason)
+            native = dict(library=None, error=reason)
+        else:
+            env.update(PNR_MAZE_KERNEL="native", PNR_MAZE_LIB=library)
+            native = dict(library=Path(library).name, sha256=sha(Path(library)))
     if args.dense_maze_cost:
         env["PNR_DENSE_MAZE_COST"] = "1"
     if args.detail_pitch_mm is not None:
@@ -706,7 +792,10 @@ def main():
             groups=gloss_groups,
         ),
         arguments={k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
-        pnr_environment={k: v for k, v in env.items() if k.startswith("PNR_")},
+        pnr_environment={
+            k: v for k, v in env.items() if k.startswith("PNR_") and k != "PNR_MAZE_LIB"
+        },
+        native_maze=native,
     )
     (out / "provenance.json").write_text(json.dumps(provenance, indent=2))
     for key, cmd in [
@@ -783,8 +872,19 @@ def main():
                     sum(bool(p["net"]) for c in graph["components"] for p in c["pads"])
                     == spec["expected_connected_pads"]
                 )
-                # A design's driver: flat (route_case.py) or hierarchical (hier_case.py).
-                driver = "hier_case.py" if spec.get("driver") == "hier" else "route_case.py"
+                # A hard rung's custom rules (via policy, plane layers, pair skew) sit
+                # beside the boards before any stage loads them: the zone filler and
+                # the judge read <board>.kicad_dru (never generated under legacy, so
+                # the fab profile leaves a hand-written file alone).
+                dru = dru_text(spec) if spec.get("tier") == "hard" else None
+                if dru:
+                    for stem in ("source", "routed"):
+                        (root / (stem + ".kicad_dru")).write_text(dru)
+                # A design's driver: flat (route_case.py), hierarchical (hier_case.py) or
+                # Monte-Carlo successive halving (mc_case.py).
+                driver = {"hier": "hier_case.py", "mc": "mc_case.py"}.get(
+                    spec.get("driver"), "route_case.py"
+                )
                 run(
                     "place-route",
                     [args.python, frozen_here / driver, root, seed, args.rounds],
@@ -864,6 +964,21 @@ def main():
                         root / "via-scan",
                     ],
                 )
+                # The independent constraint check (check_constraints.py) on the saved
+                # board: every case, gating only the hard rungs.
+                run(
+                    "checks",
+                    [
+                        args.kicad_python,
+                        frozen_here / "check_constraints.py",
+                        board,
+                        "--spec",
+                        root / "design.json",
+                        "--out",
+                        root / "checks.json",
+                        "--exit-zero",
+                    ],
+                )
                 pnr = json.loads((root / "pnr-report.json").read_text())
                 audit = json.loads((root / "native-audit.json").read_text())
                 drc = json.loads((root / "drc.json").read_text())
@@ -882,6 +997,12 @@ def main():
                 )
                 if source != sha(root / "source.kicad_pcb"):
                     result["reasons"].append("source_changed")
+                checks = json.loads((root / "checks.json").read_text())
+                result["checks"] = checks["summary"]
+                if spec.get("tier") == "hard":
+                    result["dims"] = spec["dims"]
+                    if checks["summary"]["satisfied"] != checks["summary"]["total"]:
+                        result["reasons"].append("constraint_violated")
                 if result.get("gloss_error"):
                     result["reasons"].append("gloss_error")
                 if args.gloss_measure:

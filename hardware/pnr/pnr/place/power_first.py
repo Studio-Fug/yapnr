@@ -522,7 +522,9 @@ class StagedPlacer:
         from .model import pair_tensors
 
         self.pairs = pair_tensors(pair_weights, pin_key)
-        pats = [p for nc in constraints.net_classes if nc.plane_layer for p in nc.nets]
+        from pnr.stack import split_plane_patterns
+
+        pats = split_plane_patterns(constraints, graph)
         self.plane_pins = []
         for net in graph.nets:
             if any(fnmatch.fnmatch(net.name, p) for p in pats):

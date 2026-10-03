@@ -266,6 +266,26 @@ def main(argv: Optional[List[str]] = None) -> int:
             "vias": [[net, x, y] for (net, x, y) in board.vias],
             "unrouted": board.result.unrouted,
         }
+        if board.length_report is not None:
+            # Pair / group length tuning (pnr.route.detail.tune), only when declared.
+            routes["length_tuning"] = board.length_report
+            for entry in board.length_report:
+                if entry.get("status") not in ("ok", "tuned"):
+                    print(
+                        "pnr.route: %s %r is %s%s"
+                        % (
+                            entry.get("kind"),
+                            entry.get("name"),
+                            entry.get("status"),
+                            (
+                                ""
+                                if entry.get("spread") is None
+                                else " (spread %.3f %s, budget %g)"
+                                % (entry["spread"], entry.get("unit"), entry.get("budget"))
+                            ),
+                        ),
+                        file=sys.stderr,
+                    )
         with open(args.dump_routes, "w", encoding="utf-8") as fh:
             json.dump(routes, fh, indent=2, sort_keys=True)
 

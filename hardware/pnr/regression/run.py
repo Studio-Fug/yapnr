@@ -44,10 +44,28 @@ def sha(p):
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
 
+def _oriented(block):
+    """A track or arc block with its ends in sorted order (a segment drawn either way is the
+    same copper; which end a merged segment keeps can follow its random uuid)."""
+    ends = [i for i, text in enumerate(block) if text.startswith(("(start ", "(end "))]
+    if len(ends) != 2:
+        return block
+    i, j = ends
+
+    def point(text):
+        return tuple(float(v) for v in text.split("(", 1)[1].rstrip(")").split()[1:])
+
+    if point(block[j]) < point(block[i]):
+        block = list(block)
+        block[i], block[j] = "(start" + block[j][4:], "(end" + block[i][6:]
+    return block
+
+
 def copper_sha(board):
     """SHA-256 of a board's copper without uuids: its track, arc and via blocks, uuid lines
-    dropped, sorted. Writeback gives tracks random uuids, so two runs of one case differ in
-    ``sha`` but not here when their copper is the same (pairing A/B arms, determinism)."""
+    dropped, ends in sorted order, sorted. Writeback gives tracks random uuids, so two runs of
+    one case differ in ``sha`` but not here when their copper is the same (pairing A/B arms,
+    determinism)."""
     blocks, block, depth = [], None, 0
     for line in Path(board).read_text().splitlines():
         text = line.strip()
@@ -59,7 +77,7 @@ def copper_sha(board):
         if not text.startswith("(uuid"):
             block.append(text)
         if depth <= 0:
-            blocks.append(" ".join(block))
+            blocks.append(" ".join(_oriented(block)))
             block = None
     return hashlib.sha256("\n".join(sorted(blocks)).encode()).hexdigest()
 

@@ -645,6 +645,15 @@ class GlossStageContract(unittest.TestCase):
         c.write_text(GLOSS_BOARD % "B.Cu")
         self.assertEqual(copper_sha(a), copper_sha(b))
         self.assertNotEqual(copper_sha(a), copper_sha(c))
+        # a segment drawn the other way is the same copper
+        d = tmp / "d.kicad_pcb"
+        d.write_text(
+            (GLOSS_BOARD % "F.Cu")
+            .replace("(start 2 1)", "(start 3 2)", 1)
+            .replace("(end 3 2)", "(end 2 1)", 1)
+        )
+        self.assertEqual(copper_sha(a), copper_sha(d))
+        self.assertNotEqual((GLOSS_BOARD % "F.Cu"), d.read_text())
 
     def test_summary_and_measure_figures(self):
         self.assertEqual(

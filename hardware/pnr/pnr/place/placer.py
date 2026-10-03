@@ -312,6 +312,9 @@ def place(
             side_plan,
             seed=seed,
             spread=min(spread, _LEGALIZE_SPREAD_CAP),
+            inflation=inflation,
+            allow_rotation=orient,
+            channel_model=channels,
             **({} if pad_edge is None else dict(pad_edge=pad_edge)),
         )
         check_held(placed, side_plan)

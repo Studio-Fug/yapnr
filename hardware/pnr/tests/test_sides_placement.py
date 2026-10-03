@@ -152,6 +152,14 @@ class DoublePolicyTest(unittest.TestCase):
         without, _ = place(g, rules(g, "single", **DECOUPLED_FIXED), seed=2, iters=120)
         self.assertEqual(with_pref.to_json(), without.to_json())
 
+    def test_position_only_placement_turns_nothing(self):
+        g = decoupled()
+        c = rules(g, "double", **DECOUPLED_FIXED)
+        placed, report = place(g, c, seed=0, iters=150, orient=False)
+        self.assertTrue(report.legal, report.summary())
+        for comp in placed.components:
+            self.assertEqual(comp.rot, g.component(comp.ref).rot, comp.ref)
+
 
 class LegalizerTest(unittest.TestCase):
     def test_falls_back_to_the_other_side(self):
@@ -290,6 +298,105 @@ class DetailMovesTest(unittest.TestCase):
         self.assertEqual(
             improve(g, c, S.plan(g, c), seed=5).to_json(),
             improve(g, c, S.plan(g, c), seed=5).to_json(),
+        )
+
+    def test_no_part_turns_without_rotation(self):
+        from pnr.place.detail_moves import improve
+
+        g, c = self.crossed()
+        for comp in g.components:
+            comp.rot = 90.0 if comp.ref in ("P1", "P2") else 0.0
+        out = improve(g, c, S.plan(g, c), seed=0, allow_rotation=False)
+        self.assertLess(hpwl(out), hpwl(g) - 10)  # the swap still happens
+        self.assertEqual({out.component(r).rot for r in ("P1", "P2")}, {90.0})
+        turned = improve(g, c, S.plan(g, c), seed=0)
+        self.assertNotEqual({turned.component(r).rot for r in ("P1", "P2")}, {90.0})
+
+    def test_inflation_grows_the_moved_part(self):
+        g, c = self.crossed()
+        p1 = g.component("P1")
+        plain = pose_checker(g, c, clearance=0.2)
+        grown = pose_checker(g, c, clearance=0.2, inflation={"P1": 3.0})
+        p1.pos = (10.0, 5.5)  # 0.8 mm from P2 (at 7.5); grown 3x, 1.2 mm into it
+        self.assertTrue(plain([p1]))
+        self.assertFalse(grown([p1]))
+
+    def test_soft_edge_and_group_terms_are_costed(self):
+        from pnr.place.detail_moves import _Cost
+
+        g, c = self.crossed()
+        soft = rules(
+            g,
+            "double",
+            outline=(20, 10),
+            edge_align=dict(P1=dict(edge="south", weight=2.0)),
+            group=[dict(members=["P1", "P2"], anchor="P2", radius_mm=1.0, weight=3.0)],
+        )
+        plain = _Cost(g, S.plan(g, c), c)
+        cost = _Cost(g, S.plan(g, soft), soft)
+        p1 = g.component("P1")
+        # P1's courtyard 1.9 mm above the south edge; 5 mm from P2 (radius 1).
+        extra = 2.0 * 1.9**2 + 3.0 * (5.0 - 1.0) ** 2
+        self.assertAlmostEqual(cost.local([p1]) - plain.local([p1]), extra, places=6)
+
+    def test_a_move_that_adds_channel_shortage_is_not_made(self):
+        from pnr.place.detail_moves import LAST_STATS, improve
+
+        g, c = self.crossed()
+        home = {comp.ref: comp.pos for comp in g.components}
+
+        class AwayIsCrowded:
+            """A channel model under which a part away from its slot is short of room."""
+
+            def penalty(self, comp, others, xs, ys):
+                return 0.0 if comp.pos == home[comp.ref] else 100.0
+
+        free = improve(g, c, S.plan(g, c), seed=0)
+        self.assertLess(hpwl(free), hpwl(g) - 10)
+        vetoed = improve(g, c, S.plan(g, c), seed=0, channel_model=AwayIsCrowded())
+        self.assertEqual({p.ref: p.pos for p in vetoed.components}, home)
+        self.assertGreater(LAST_STATS["channel_vetoes"], 0)
+
+    def test_channel_reach_bounds_every_demand(self):
+        import itertools
+
+        from pnr.constraints import compile_routing_rules
+        from pnr.place.channels import ChannelModel
+
+        nets = ["D+", "D-", "VCC", "GND", "A", "B", "C", "E"]
+        u1 = smd("U1", nets, (6, 4), (6, 7), pitch=1.27, rows=2)
+        u2 = smd("U2", nets[::-1], (6, 4), (13, 7), pitch=1.27, rows=2)
+        r1 = smd("R1", ["A", "B"], pos=(9.5, 3))
+        g = board(u1, u2, r1, outline=(20, 14))
+        c = rules(
+            g,
+            outline=(20, 14),
+            layers=4,
+            diff_pair=[dict(name="usb", p="D+", n="D-", width_mm=0.3, gap_mm=0.2)],
+            net_class=dict(
+                pwr=dict(nets=["VCC", "GND"], plane_layer="In1.Cu", clearance_mm=0.3),
+                wide=dict(nets=["A"], width_mm=0.5, clearance_mm=0.25),
+            ),
+        )
+        model = ChannelModel(g, compile_routing_rules(c, nets))
+        reach = {x.ref: model.reach({p.net for p in x.pads if p.net}) for x in g.components}
+        for a, b in itertools.permutations(g.components, 2):
+            for _, gap, _, required, _ in model.interactions(a, b):
+                self.assertLessEqual(float(required), reach[a.ref] + reach[b.ref] + 1e-9)
+
+    def test_a_result_the_full_check_rejects_is_reverted(self):
+        from pnr.place import detail_moves
+        from pnr.place.detail_moves import LAST_STATS, improve
+
+        g, c = self.crossed()
+        with mock.patch.object(
+            detail_moves, "hard_violations", return_value=dict(region_outside=["P1"])
+        ):
+            out = improve(g, c, S.plan(g, c), seed=0)
+        self.assertTrue(LAST_STATS["reverted"])
+        self.assertEqual(
+            [(p.pos, float(p.rot), p.side) for p in out.components],
+            [(p.pos, float(p.rot), p.side) for p in g.components],
         )
 
     def test_flip_rejected_into_drilled_bodies_and_keepouts(self):

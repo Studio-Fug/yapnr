@@ -93,6 +93,26 @@ class ChannelModel:
     def demand(self, nets):
         return float(self.active_demand({n: True for n in nets}))
 
+    def reach(self, nets):
+        """An upper bound (mm) on one part's share of any channel's demand: the
+        demand between two parts (any of their nets, :meth:`active_demand`) is at
+        most ``reach(a's nets) + reach(b's nets)``, so two parts farther apart than
+        that never have a shortage. Each net counts its widest bundle share (a pair
+        leg: width plus half the gap) plus the largest clearance, and each part half
+        of one more clearance and of a plane net's via corridor."""
+        clearance = max(
+            [self.clearance] + [c for _, c, _ in self.classes.values() if c is not None]
+        )
+        legs = {}
+        for pair in self.pairs:
+            for net in (pair["p"], pair["n"]):
+                legs[net] = float(pair["width_mm"]) + float(pair["gap_mm"]) / 2
+        total = 0.0
+        for net in nets:
+            width = self.classes.get(net, (self.width, self.clearance, False))[0]
+            total += max(float(width), legs.get(net, 0.0)) + clearance
+        return total + (self.via + 3 * clearance) / 2
+
     def active_demand(self, active):
         remaining = dict(active)
         bundles = []

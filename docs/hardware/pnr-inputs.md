@@ -276,6 +276,13 @@ them (`pnr/length_model.py`: merged track lines straightened inside pads and via
 plus each via's span through the stackup), so a KiCad `skew` or `length` rule sees
 the same numbers. The per-set result (lengths, margin, meanders) is in the route
 report as `length_tuning`; a set that could not be matched is `length_unmatched`.
+When the short members have no room left for meanders, the longest member is routed
+again around the other nets (vias priced high) and kept if it is shorter (`rerouted`
+in the report). Placement prepares for this: global placement pulls each set's
+members toward equal estimated lengths, and after legalization the small parts on
+matched nets (series resistors and the like) move to the legal slot that keeps the
+legs even (`pnr/place/matched.py`), so two series resistors of a pair do not end up
+at different distances from the connector.
 
 ```yaml
 diff_pair:

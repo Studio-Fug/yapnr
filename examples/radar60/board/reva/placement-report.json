@@ -1,0 +1,387 @@
+{
+  "checks": {
+    "bottom_side_parts": ["C50", "C56"],
+    "declared_bottom_roles": ["pa_decoupling"],
+    "r2_bottom_parts_under_rf_region": [],
+    "r2_parts_in_rf_region": [],
+    "r4_digital_pads_in_guard": [],
+    "r5_radome_violations": [],
+    "r5_unknown_heights": ["RFM1"],
+    "sw_to_rf_region_mm": 7.91,
+    "sw_to_xtal_mm": 12.93
+  },
+  "constraints": {
+    "fixed": {
+      "J1": {
+        "courtyard_y0": 0.0,
+        "x": 30.0
+      },
+      "MH1": 0.0,
+      "MH2": 0.0,
+      "MH3": 0.0,
+      "MH4": 0.0,
+      "U1": {
+        "at": [26.0, 28.0],
+        "rot": -90.0
+      }
+    },
+    "groups": {
+      "crystal": {
+        "beyond": {},
+        "max_distance_mm": 8.63,
+        "members": 1,
+        "radius_mm": 9.5
+      },
+      "pending_can": {
+        "beyond": {
+          "C1": 32.83,
+          "C2": 39.6,
+          "C3": 39.41,
+          "C4": 19.1,
+          "R1": 18.09,
+          "R2": 13.04,
+          "R3": 12.41,
+          "R4": 14.58,
+          "R5": 26.45,
+          "R6": 31.6,
+          "R7": 14.23
+        },
+        "max_distance_mm": 39.6,
+        "members": 11,
+        "radius_mm": 7.0
+      },
+      "pending_connector_esd": {
+        "beyond": {
+          "D1": 33.32,
+          "D2": 31.47,
+          "D3": 14.61
+        },
+        "max_distance_mm": 33.32,
+        "members": 3,
+        "radius_mm": 10.0
+      },
+      "pending_efuse": {
+        "beyond": {
+          "C28": 18.19,
+          "C29": 9.69,
+          "C30": 40.56,
+          "C31": 34.19,
+          "C32": 32.56,
+          "C33": 35.34,
+          "R30": 33.84,
+          "R31": 12.36,
+          "R32": 33.15,
+          "R33": 39.04,
+          "R34": 9.91,
+          "R35": 19.27,
+          "R36": 31.51,
+          "R37": 31.86
+        },
+        "max_distance_mm": 40.56,
+        "members": 14,
+        "radius_mm": 8.0
+      },
+      "pending_flash": {
+        "beyond": {
+          "C5": 17.48,
+          "R10": 26.09,
+          "R9": 29.83
+        },
+        "max_distance_mm": 29.83,
+        "members": 3,
+        "radius_mm": 7.5
+      },
+      "pending_lvds_header": {
+        "beyond": {
+          "R8": 38.17
+        },
+        "max_distance_mm": 38.17,
+        "members": 1,
+        "radius_mm": 14.0
+      },
+      "pmic": {
+        "beyond": {},
+        "max_distance_mm": 5.94,
+        "members": 4,
+        "radius_mm": 6.0
+      },
+      "radio_decoupling_bulk": {
+        "beyond": {},
+        "max_distance_mm": 13.88,
+        "members": 9,
+        "radius_mm": 14.0
+      },
+      "radio_decoupling_hf": {
+        "beyond": {},
+        "max_distance_mm": 10.45,
+        "members": 24,
+        "radius_mm": 10.5
+      }
+    },
+    "regions": {
+      "crystal": {
+        "members": 3,
+        "outside": [],
+        "wrong_side": []
+      },
+      "jtag": {
+        "members": 1,
+        "outside": [],
+        "wrong_side": []
+      },
+      "lvds_header": {
+        "members": 1,
+        "outside": [],
+        "wrong_side": []
+      },
+      "pa_corner": {
+        "members": 2,
+        "outside": [],
+        "wrong_side": []
+      },
+      "pmic_block": {
+        "members": 53,
+        "outside": [],
+        "wrong_side": []
+      },
+      "pmic_switching": {
+        "members": 5,
+        "outside": [],
+        "wrong_side": []
+      }
+    }
+  },
+  "drc": {
+    "by_type": {
+      "annular_width": 144,
+      "hole_to_hole": 2,
+      "lib_footprint_issues": 171,
+      "silk_over_copper": 6,
+      "via_diameter": 144
+    },
+    "examples": {
+      "annular_width": [
+        {
+          "description": "Annular width (board setup constraints min annular width 0.0762 mm; actual 0.0750 mm)",
+          "items": ["Via [GND] on F.Cu - B.Cu"],
+          "severity": "error"
+        },
+        {
+          "description": "Annular width (board setup constraints min annular width 0.0762 mm; actual 0.0750 mm)",
+          "items": ["Via [GND] on F.Cu - B.Cu"],
+          "severity": "error"
+        },
+        {
+          "description": "Annular width (board setup constraints min annular width 0.0762 mm; actual 0.0750 mm)",
+          "items": ["Via [GND] on F.Cu - B.Cu"],
+          "severity": "error"
+        },
+        {
+          "description": "Annular width (board setup constraints min annular width 0.0762 mm; actual 0.0750 mm)",
+          "items": ["Via [GND] on F.Cu - B.Cu"],
+          "severity": "error"
+        },
+        {
+          "description": "Annular width (board setup constraints min annular width 0.0762 mm; actual 0.0750 mm)",
+          "items": ["Via [GND] on F.Cu - B.Cu"],
+          "severity": "error"
+        },
+        {
+          "description": "Annular width (board setup constraints min annular width 0.0762 mm; actual 0.0750 mm)",
+          "items": ["Via [GND] on F.Cu - B.Cu"],
+          "severity": "error"
+        }
+      ],
+      "hole_to_hole": [
+        {
+          "description": "Drilled hole too close to other hole (rule 'pcbway-adv-6l-rf_via_hole_to_hole' min 0.2800 mm; actual 0.2742 mm)",
+          "items": ["Via [GND] on F.Cu - B.Cu", "Via [GND] on F.Cu - B.Cu"],
+          "severity": "warning"
+        },
+        {
+          "description": "Drilled hole too close to other hole (rule 'pcbway-adv-6l-rf_via_hole_to_hole' min 0.2800 mm; actual 0.2617 mm)",
+          "items": ["Via [GND] on F.Cu - B.Cu", "Via [GND] on F.Cu - B.Cu"],
+          "severity": "warning"
+        }
+      ],
+      "lib_footprint_issues": [
+        {
+          "description": "The current configuration does not include the footprint library 'Radar60_C_390p_0402'",
+          "items": ["Footprint C23"],
+          "severity": "warning"
+        },
+        {
+          "description": "The current configuration does not include the footprint library 'Radar60_TestPad_D1'",
+          "items": ["Footprint TP14"],
+          "severity": "warning"
+        },
+        {
+          "description": "The current configuration does not include the footprint library 'Radar60_TestPad_D1'",
+          "items": ["Footprint TP16"],
+          "severity": "warning"
+        },
+        {
+          "description": "The current configuration does not include the footprint library 'Radar60_R_10k_0402'",
+          "items": ["Footprint R33"],
+          "severity": "warning"
+        },
+        {
+          "description": "The current configuration does not include the footprint library 'Radar60_C_220n_0402'",
+          "items": ["Footprint C41"],
+          "severity": "warning"
+        },
+        {
+          "description": "The current configuration does not include the footprint library 'Radar60_C_390p_0402'",
+          "items": ["Footprint C25"],
+          "severity": "warning"
+        }
+      ],
+      "silk_over_copper": [
+        {
+          "description": "Silkscreen clipped by solder mask",
+          "items": ["Segment of U1 on F.Silkscreen", "Polygon of RFM1 on F.Mask"],
+          "severity": "warning"
+        },
+        {
+          "description": "Silkscreen clipped by solder mask",
+          "items": ["Segment of U1 on F.Silkscreen", "Polygon of RFM1 on F.Mask"],
+          "severity": "warning"
+        },
+        {
+          "description": "Silkscreen clipped by solder mask",
+          "items": ["Segment of U1 on F.Silkscreen", "Polygon of RFM1 on F.Mask"],
+          "severity": "warning"
+        },
+        {
+          "description": "Silkscreen clipped by solder mask",
+          "items": ["Polygon of U1 on F.Silkscreen", "Polygon of RFM1 on F.Mask"],
+          "severity": "warning"
+        },
+        {
+          "description": "Silkscreen clipped by solder mask",
+          "items": ["Segment of U1 on F.Silkscreen", "Polygon of RFM1 on F.Mask"],
+          "severity": "warning"
+        },
+        {
+          "description": "Silkscreen clipped by solder mask",
+          "items": ["Segment of U1 on F.Silkscreen", "Polygon of RFM1 on F.Mask"],
+          "severity": "warning"
+        }
+      ],
+      "via_diameter": [
+        {
+          "description": "Via diameter (rule 'radar60_rf_fence_vias' min diameter 0.3200 mm; actual 0.3000 mm)",
+          "items": ["Via [GND] on F.Cu - B.Cu"],
+          "severity": "error"
+        },
+        {
+          "description": "Via diameter (rule 'radar60_rf_fence_vias' min diameter 0.3200 mm; actual 0.3000 mm)",
+          "items": ["Via [GND] on F.Cu - B.Cu"],
+          "severity": "error"
+        },
+        {
+          "description": "Via diameter (rule 'radar60_rf_fence_vias' min diameter 0.3200 mm; actual 0.3000 mm)",
+          "items": ["Via [GND] on F.Cu - B.Cu"],
+          "severity": "error"
+        },
+        {
+          "description": "Via diameter (rule 'radar60_rf_fence_vias' min diameter 0.3200 mm; actual 0.3000 mm)",
+          "items": ["Via [GND] on F.Cu - B.Cu"],
+          "severity": "error"
+        },
+        {
+          "description": "Via diameter (rule 'radar60_bga_gnd_vias' min diameter 0.3500 mm; actual 0.3000 mm)",
+          "items": ["Via [GND] on F.Cu - B.Cu"],
+          "severity": "error"
+        },
+        {
+          "description": "Via diameter (rule 'radar60_bga_gnd_vias' min diameter 0.3500 mm; actual 0.3000 mm)",
+          "items": ["Via [GND] on F.Cu - B.Cu"],
+          "severity": "error"
+        }
+      ]
+    },
+    "schematic_parity": 0,
+    "unconnected_items": 413,
+    "violations": 467
+  },
+  "finish": {
+    "copper_keepouts": {
+      "dropped": true,
+      "engine_rule_areas": 4,
+      "max_corner_error_mm": 0.0,
+      "rf_region_pieces": 4
+    },
+    "locked_tracks_and_vias": 302,
+    "macro": {
+      "arc": 61,
+      "columns": 7,
+      "geometry_sha256": "cbe1477b7a5683b2e019da988572e5007a90bb28470cccaa9ef7961d95446d4b",
+      "segment": 83,
+      "via": 158,
+      "zone": 64
+    },
+    "outline_items": 8,
+    "r1_macro_copper": {
+      "board_sha256": "8301dcd5ad7b026dca9d43768c9105f3c6be38a8fa7084a56e6d1e8afe0fb2aa",
+      "equal": true,
+      "items": [302, 302],
+      "macro_sha256": "8301dcd5ad7b026dca9d43768c9105f3c6be38a8fa7084a56e6d1e8afe0fb2aa"
+    },
+    "u1": {
+      "at_kicad": [56.0, 48.0],
+      "orientation_deg": -90.0
+    },
+    "writeback_plane_drops_removed": {
+      "tracks": 165,
+      "vias": 165
+    }
+  },
+  "macro": {
+    "geometry_sha256": "cbe1477b7a5683b2e019da988572e5007a90bb28470cccaa9ef7961d95446d4b",
+    "macro_frame_u1_at": [26.0, 28.0],
+    "record_sha256": "cbe1477b7a5683b2e019da988572e5007a90bb28470cccaa9ef7961d95446d4b",
+    "rf_ball_vs_macro_port_um": {
+      "RX1": 0.0,
+      "RX2": 0.0,
+      "RX3": 0.0,
+      "RX4": 0.0,
+      "TX1": 0.0,
+      "TX2": 0.0,
+      "TX3": 0.0
+    },
+    "rfm1_at": [26.0, 28.0],
+    "u1_at": [26.0, 28.0],
+    "worst_um": 0.0
+  },
+  "summary": {
+    "audit_failures": [],
+    "audit_pass_candidates": 9,
+    "board_sha256": "5cadac9eb7bace9ba0d559ae5361d3621d1553a68759179f5ca22c170b3ba6ed",
+    "bottom_side": ["C50", "C56"],
+    "drc_by_type": {
+      "annular_width": 144,
+      "hole_to_hole": 2,
+      "lib_footprint_issues": 171,
+      "silk_over_copper": 6,
+      "via_diameter": 144
+    },
+    "drc_placement_types": {},
+    "drc_violations": 467,
+    "groups_ok": true,
+    "legal": 10,
+    "parts": 173,
+    "pending_block_spread_mm": {
+      "can": 39.6,
+      "connector_esd": 33.32,
+      "efuse": 40.56,
+      "flash": 29.83,
+      "lvds_header": 38.17
+    },
+    "regions_ok": true,
+    "rf_ball_vs_macro_worst_um": 0.0,
+    "starts": 32,
+    "unconnected_items": 413,
+    "winner": "p008"
+  }
+}

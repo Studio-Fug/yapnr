@@ -26,8 +26,32 @@ board:
 # it differently; every generated file follows. Globs match within the address.
 parts:
   radio: radio.u1 # U1 (fixed designator), IWR6843AQGABLR, FCBGA-161 (same lands as fcbga161.py)
-  radio_decoupling: radio.c_* # every capacitor of the radio block
-  pa_decoupling: [radio.c_pa, radio.c_rf2] # the 0402 VOUT_PA / VIN_13RF2 caps: the RFM1 pocket
+  # The radio block's capacitors in three sets (each cap in exactly one; integrate.py checks):
+  # high-frequency decoupling next to the package, bulk farther out, the crystal's load caps.
+  # Instance paths with an index are written as fnmatch patterns ('c_bb[[]*' matches c_bb[0]).
+  radio_decoupling_hf:
+    [
+      radio.c_apll,
+      'radio.c_bb[[]*',
+      radio.c_clk,
+      radio.c_diff,
+      'radio.c_dig[[]*',
+      radio.c_dig_2u2,
+      radio.c_dig_10n,
+      radio.c_io18,
+      radio.c_rf1,
+      radio.c_sram,
+      radio.c_synth,
+      radio.c_vbgap,
+      radio.c_vco,
+      'radio.c_vio[[]*',
+      radio.c_vio_2u2,
+      radio.c_vnwa,
+      radio.c_pa,
+      radio.c_rf2,
+    ]
+  radio_decoupling_bulk: ['radio.c_*_10u', 'radio.c_*_22u', 'radio.c_*_bulk'] # 0603/0805 bulk
+  pa_decoupling: [radio.c_pa, radio.c_rf2] # the 0402 VOUT_PA / VIN_13RF2 caps (see regions.pa_corner)
   crystal: radio.y1 # Y1, 40 MHz 3225
   crystal_caps: [radio.c_xp, radio.c_xm] # Y1 load capacitors
   pmic: pmic.u2 # U2, LP87524J
@@ -37,8 +61,18 @@ parts:
   lvds_header: debug.j2 # J2, Samtec QTH-030 (development builds)
   jtag: debug.j3 # J3, 10-pin 1.27 mm (DNP)
   flash: flash.u3 # U3, QSPI flash
-  holes: mech.mh* # 4 x M2.5
+  holes: ['mech.mh[0]', 'mech.mh[1]', 'mech.mh[2]', 'mech.mh[3]'] # 4 x M2.5, in mounting_holes.at order
   rf_macro: rf_macro.rfm1 # RFM1 (yapnr.rf macro footprint; designator prefix RFM)
+  # Connector-side protection and the small blocks' support parts (integration 2026-10-03: left
+  # free, the placer spread them up to 40 mm from their IC, because their nets are the board's
+  # supply and ground nets, which pull nothing).
+  connector_esd: [uart.esd, can.esd, power_in.tvs] # ESD/TVS at J1
+  efuse: power_in.efuse # U5
+  efuse_parts: ['power_in.c_*', 'power_in.r_*']
+  can_xcvr: can.u4 # U4
+  can_parts: ['can.c_*', 'can.r_*']
+  flash_parts: ['flash.c_*', 'flash.r_*']
+  dca_reset: debug.r_dca_rst # J2's reset option (0 ohm, DNP)
 
 # Net classes by net-name glob (the schematic's suggested names). The class names are the ones
 # radar60.kicad_dru tests.
@@ -68,7 +102,7 @@ u1:
   at: [26.0, 28.0] # [D] plan 5.1
   rot: 270 # RX edge (ball column 2) north, TX edge (row B) east
   body_mm: 10.4
-  courtyard_mm: 11.5
+  courtyard_mm: 12.5 # the schematic's ABL0161B footprint: courtyard 1.0 mm beyond the body, plus its stroke
 
 connector: # J1 GH-6 on the south edge, centred at x = 30, cable entry facing south (plan 5.1)
   x: 30.0
@@ -88,30 +122,33 @@ radome_lands: # standoff lands for the north-only test radome (plan 5.4, review)
 
 rf:
   macro_ref: RFM1 # reference of the RF macro footprint (generated in U1's frame, plan 6)
-  # The RF track's macro (examples/radar60/rf, rfm1-n, geometry sha256 ab2378d3..., a parametric
-  # first draw of 2026-10-03) moved the columns north and the pocket against plan 5.2; these
-  # values follow the macro, and `gen_board.py --macro` checks them against its record.
+  # The RF track's macro (examples/radar60/rf, rfm1-n, geometry sha256 cbe1477b..., the first
+  # full-wave calibrated draw of 2026-10-03) moved the columns north and the pocket against plan
+  # 5.2; these values follow the macro, and `gen_board.py --macro` checks them against its record.
   macro_record: ../rf/generated/rfm1-n/rfm1-n.json
   patches: # patch copper extents, for the radome rule (macro: plan 5.2 had rx 21.0-29.7 x 35.2-39.6)
-    rx: [19.941, 36.905, 28.417, 40.995]
-    tx: [34.446, 34.745, 40.58, 38.835]
+    rx: [19.941, 36.924, 28.417, 40.975]
+    tx: [34.446, 34.76, 40.58, 38.811]
   # RF region (plan 5.2): (a) the RX fan, (b) the TX feeds and bank, plus a 5 mm ground margin
-  # west of the RX bank; the VOUT_PA pocket is cut out of it down to the package edge.
+  # beyond the outer patches (west of RX, east of TX: the macro's own pour, x 14.941-45.58); the
+  # TX side starts at the macro's pour edge (y 26.7, U1 y -1.3); the VOUT_PA pocket is cut out
+  # of it down to the package edge. `gen_board.py --macro` checks that every macro item outside
+  # the package body lies in the region or the pocket.
   region: # [x0, y0, x1, y1] rectangles whose union is the region minus the pocket
-    - [16.0, 33.2, 29.563, 46.0] # RX fan and the west ground margin
+    - [14.941, 33.2, 29.563, 46.0] # RX fan and the west ground margin
     - [29.563, 35.0, 31.25, 46.0] # above the pocket
-    - [31.25, 26.8, 44.5, 46.0] # TX launches, feeds and bank
-    - [31.2, 26.8, 31.25, 33.2] # the sliver between the package edge and the pocket's east side
+    - [31.25, 26.7, 45.58, 46.0] # TX launches, feeds, bank and the east ground margin
+    - [31.2, 26.7, 31.25, 33.2] # the sliver between the package edge and the pocket's east side
   pocket: [29.563, 33.2, 31.25, 35.0] # macro's VOUT_PA pocket (y from 33.45), down to the package edge
   # R4 (plan 7.5): no digital net within 5 mm of RF copper on F.Cu-In2.Cu. A rectangular 5 mm
   # band around the region, without the package body (the radio's own balls and escapes) and
   # without the region itself; the RF audit (E6) measures the exact distance.
   guard_mm: 5.0
   guard: # [x0, y0, x1, y1]
-    - [11.0, 28.2, 16.0, 46.0] # west of the ground margin
-    - [16.0, 28.2, 20.8, 33.2] # south of the RX fan, west of the package
-    - [31.2, 21.8, 49.5, 26.8] # south of the TX region, east of the package
-    - [44.5, 26.8, 49.5, 46.0] # east of the TX bank
+    - [9.941, 28.2, 14.941, 46.0] # west of the ground margin
+    - [14.941, 28.2, 20.8, 33.2] # south of the RX fan, west of the package
+    - [31.2, 21.7, 50.58, 26.7] # south of the TX region, east of the package
+    - [45.58, 26.7, 50.58, 46.0] # east of the TX bank
   fence_via: { drill: 0.15, diameter: 0.32, min_pitch: 0.45 } # RFS-5; 11 mil hole to hole
 
 noise: # plan 3.4 noise budget and 7.5 R4
@@ -126,50 +163,120 @@ regions:
       rect: [10.0, 4.0, 42.0, 18.0],
       reason: 'J2 south of the LVDS balls (columns 14/15 face south)',
     }
-  # Plan 5.1 gives y 18-40; the radome rule keeps a 5 mm header 8.7 mm from the RX patches, so
-  # the region stops at y 30 [D] (gen_board.py --radome).
+  # Plan 5.1 gives y 18-40; the radome rule keeps a 5 mm header 8.7 mm from the RX patches, and
+  # the R4 guard band starts at y 28.2 west of the RX margin, so the region stops at y 28.2; the
+  # west radome land (3.5, 27) takes its north-west corner, so it reaches down to y 8 [D]
+  # (gen_board.py --radome).
   jtag:
     {
       parts: [jtag],
-      rect: [1.0, 18.0, 14.0, 30.0],
+      rect: [1.0, 8.0, 14.0, 28.2],
       reason: 'J3 west of U1 on the JTAG/UART side, below the radome line',
     }
+  # Plan 5.1 gives x 36-58, y 2-24 (448 mm2 net of MH2): the block's 50 parts take about 365 mm2
+  # with the 0.2 mm courtyard clearance (81 %), and the legalizer runs out of slots in most
+  # starts; x from 34 gives 492 mm2 (74 %) [D].
   pmic_block:
-    { parts: [pmic_parts], rect: [36.0, 2.0, 58.0, 24.0], reason: 'PMIC block, power-first' }
+    { parts: [pmic_parts], rect: [34.0, 2.0, 58.0, 24.0], reason: 'PMIC block, power-first' }
   # The switch nodes keep >= 8 mm from the crystal zone (x <= 31.2) and >= 5 mm from the RF
-  # region (y <= 21.8): x >= 41 gives 9.8 mm, y <= 21.8 gives 5.0 mm, by construction [D].
+  # region (y <= 21.7): x >= 41 gives 9.8 mm, y <= 21.7 gives 5.0 mm, by construction [D].
   pmic_switching:
     {
       parts: [pmic, pmic_inductors],
-      rect: [41.0, 2.0, 58.0, 21.8],
+      rect: [41.0, 2.0, 58.0, 21.7],
       reason: 'switch nodes >= 8 mm from Y1 and >= 5 mm from RF',
     }
   # Y1 within about 3 mm of CLKP/CLKM (B15/C15 at (29.9, 23.45)/(29.25, 23.45) after rotation),
-  # south of the package, west of the RF guard.
+  # south of the package, west of the RF guard. U1's courtyard (1.0 mm beyond the body) ends at
+  # y 21.76, so Y1 (3.59 x 4.29 mm courtyard) and its two 0402 load caps need about 6.7 x 4.0 mm
+  # below it with the 0.2 mm clearance: the plan's 5.2 x 5.1 mm box holds Y1 alone [D].
   crystal:
     {
       parts: [crystal, crystal_caps],
-      rect: [26.0, 17.5, 31.2, 22.6],
+      rect: [24.0, 16.0, 31.2, 22.6],
       reason: 'Y1 next to B15/C15, outside the RF guard',
     }
-  pa_pocket: { parts: [pa_decoupling], rect: rf.pocket, reason: 'RFM1 pocket for the VOUT_PA caps' }
+  # The macro's VOUT_PA pocket (1.69 x 1.55 mm; U1's courtyard, 1.0 mm beyond the body, covers
+  # it up to y 34.2) holds no 0402 courtyard (1.91 x 1.01 mm), let alone two. Plan 5.2's
+  # double-sided branch: the two caps go on the bottom side under the VOUT_PA / VIN_13RF2 corner
+  # (balls A2, B2, C2, D2 at x 28.6-30.55, y 31.9), outside the RF region [D] (integration,
+  # 2026-10-03; a top-side pocket needs about 2.1 x 2.0 mm clear of U1's courtyard).
+  # The macro's launch vias (through, 0.35 mm, rfm1-n) stand at y 31.575 (RX, x <= 27.625) and
+  # x 29.575 (TX, y <= 30.925) under the corner; the area keeps 0.275 mm from their centres
+  # (0.1 mm via to SMD pad beyond the via copper), an L of two rectangles [D].
+  pa_corner:
+    {
+      parts: [pa_decoupling],
+      areas: [[27.9, 31.85, 31.2, 33.2], [29.85, 29.4, 31.2, 33.2]],
+      side: bottom,
+      reason: 'VOUT_PA / VIN_13RF2 caps under the corner, bottom side (plan 5.2 branch)',
+    }
 
 groups: # hard proximity, centre to centre (pnr.place.geometry.hard_group_edges)
-  radio_decoupling:
+  # U1's courtyard reaches 6.25 mm from its centre: an 0402 centre comes no closer than 6.95 mm
+  # (courtyard, 0.2 mm clearance, half the cap), and a 9 mm radius leaves four 2 mm strips with
+  # no corners, about 17 caps of room against 18 caps plus the radio's free parts. 10.5 mm opens
+  # the corners (6.95 mm on both axes is 9.83 mm out): caps within about 5 mm of the package
+  # edge on top. The alternative is the bottom side under the package (plan 4.2) [D].
+  radio_decoupling_hf:
     {
       anchor: radio,
-      members: [radio_decoupling],
-      radius_mm: 9.0,
-      reason: 'within about 3 mm of the package edge (5.2 mm half body + 3 mm + part)',
+      members: [radio_decoupling_hf],
+      radius_mm: 10.5,
+      reason: 'within about 5 mm of the package edge, top side',
     }
+  # The bulk caps (10-22 uF) serve below about 10 MHz; with all 35 radio caps inside 9 mm the
+  # ring around U1 (outside its courtyard, the RF region and the crystal block, about 104 mm2)
+  # is smaller than the caps' courtyards with clearance (about 124 mm2) [D].
+  radio_decoupling_bulk:
+    {
+      anchor: radio,
+      members: [radio_decoupling_bulk],
+      radius_mm: 14.0,
+      reason: 'bulk within about 9 mm of the package edge',
+    }
+  # Y1 below U1's courtyard (y <= 21.56 with clearance) is at least 8.24 mm (rotation 0) south
+  # of U1's centre, and 8.5 mm away inside the crystal region: the plan's 7 mm cannot be met [D].
   crystal:
     {
       anchor: radio,
       members: [crystal],
-      radius_mm: 7.0,
-      reason: 'B15/C15 are 5.7 mm from the U1 centre',
+      radius_mm: 9.5,
+      reason: 'Y1 within about 3 mm of B15/C15 (4.55 mm south of U1 centre)',
     }
-  pmic: { anchor: pmic, members: [pmic_inductors], radius_mm: 4.0, reason: 'tight buck hot loops' }
+  # U2's courtyard reaches 3.07 / 3.32 mm from its centre; with the 0.2 mm courtyard clearance
+  # and an 0805 inductor's 0.9 mm half width no inductor centre can come closer than 4.17 mm,
+  # so the plan's 4 mm is infeasible; 6 mm (one inductor length of slack, so the block's 22
+  # capacitors can also reach their pins) keeps the loops tight [D].
+  pmic: { anchor: pmic, members: [pmic_inductors], radius_mm: 6.0, reason: 'tight buck hot loops' }
+
+# Block groups held back (integration 2026-10-03). With the plan's constraints the placer left
+# the small blocks' passives up to 40 mm from their IC (their nets are the board's supply and
+# ground, which pull nothing). As hard groups they make yapnr's legalizer fail: it places every
+# grouped part before any other, so in 32 starts each, 0 were legal with these groups (J2 lost
+# its one window above J1 in 29), and 0 again with J2 grouped too (J2 15, Y1's caps 13, eFuse
+# parts 4). They wait for the engine's hierarchical blocks; integrate.py reports their spread.
+blocks_pending:
+  # Block radii [D]: the anchor's courtyard half diagonal + the radius of a disc holding the
+  # members' courtyards with 30 % for clearance + 1 mm. ESD and TVS sit beside J1 (half width
+  # 7.3 mm): 10 mm.
+  connector_esd:
+    { anchor: connector, members: [connector_esd], radius_mm: 10.0, reason: 'protection at J1' }
+  efuse:
+    { anchor: efuse, members: [efuse_parts], radius_mm: 8.0, reason: 'eFuse thresholds and caps' }
+  can: { anchor: can_xcvr, members: [can_parts], radius_mm: 7.0, reason: 'CAN transceiver block' }
+  # R9 is QSPI_CLK's 22 ohm series resistor; at the flash it is a far-end placement (U1 to U3
+  # about 17 mm here, QSPI <= 25 mm).
+  flash:
+    { anchor: flash, members: [flash_parts], radius_mm: 7.5, reason: 'flash decoupling, pull-up' }
+  # J2 grouped with its reset option, so the legalizer ranks it by its few free slots.
+  lvds_header:
+    {
+      anchor: lvds_header,
+      members: [dca_reset],
+      radius_mm: 14.0,
+      reason: 'J2 and its reset option',
+    }
 
 # Radome visibility (plan 5.2, R5): no part above a 30 degree line from the nearest patch edge,
 # i.e. a part of height h stays >= h / tan(30 deg) = 1.73 h from the patch copper.

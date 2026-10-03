@@ -6,9 +6,10 @@
 # PNR_FAB_PROFILE=pcbway-adv-6l-rf (stackup pcbway-6l-ro4835-ro4450f); radar60.kicad_dru beside
 # the board carries the profile's custom rules and the board's own.
 #
-# Sections: fixed (U1 in the RF macro's frame, J1 on the south edge), mounting_hole (holes and
-# radome lands), keepout / copper_keepout (the RF region minus the VOUT_PA pocket), region (J2,
-# J3, PMIC, switch nodes, Y1, the pocket; hard), group (decoupling, Y1, buck loops; hard),
+# Sections: fixed (U1 in the RF macro's frame, J1 on the south edge, the four mounting-hole
+# parts, the floorplan board's two radome standoff lands), keepout / copper_keepout (the RF
+# region minus the VOUT_PA pocket), region (J2, J3, PMIC, switch nodes, Y1, the pocket; hard),
+# group (decoupling, Y1, buck loops; hard),
 # net_class / diff_pair / length_match (routing). rf_macro, noise_keepout and height_limit are
 # proposed (radar60 plan 3.4, 7.3, 7.5): the current engine warns and ignores them, and the
 # custom rules and the RF audit enforce them meanwhile.
@@ -33,53 +34,54 @@ fixed:
     align: center
     rot: 0
     side: top
-mounting_hole:
-  - name: H1
+  '@mech.mh[[]0]':
     at: [3.5, 3.5]
-    drill_mm: 2.7
-    clearance_diameter_mm: 6.5
-  - name: H2
+    rot: 0
+    side: top
+  '@mech.mh[[]1]':
     at: [56.5, 3.5]
-    drill_mm: 2.7
-    clearance_diameter_mm: 6.5
-  - name: H3
+    rot: 0
+    side: top
+  '@mech.mh[[]2]':
     at: [3.5, 42.5]
-    drill_mm: 2.7
-    clearance_diameter_mm: 6.5
-  - name: H4
+    rot: 0
+    side: top
+  '@mech.mh[[]3]':
     at: [56.5, 42.5]
-    drill_mm: 2.7
-    clearance_diameter_mm: 6.5
-  - name: radome_w
+    rot: 0
+    side: top
+  RL1:
     at: [3.5, 27]
-    drill_mm: 3
-    clearance_diameter_mm: 5
-  - name: radome_e
+    rot: 0
+    side: top
+  RL2:
     at: [56.5, 27]
-    drill_mm: 3
-    clearance_diameter_mm: 5
+    rot: 0
+    side: top
 keepout:
   - name: rf_region_1
-    polygon: ['(16.0, 33.2)', '(29.563, 33.2)', '(29.563, 46.0)', '(16.0, 46.0)']
+    polygon: [[14.941, 34.25], [29.563, 34.25], [29.563, 46], [14.941, 46]]
   - name: rf_region_2
-    polygon: ['(29.563, 35.0)', '(31.25, 35.0)', '(31.25, 46.0)', '(29.563, 46.0)']
+    polygon: [[14.941, 33.2], [19.75, 33.2], [19.75, 34.25], [14.941, 34.25]]
   - name: rf_region_3
-    polygon: ['(31.25, 26.8)', '(44.5, 26.8)', '(44.5, 46.0)', '(31.25, 46.0)']
+    polygon: [[29.563, 35], [31.25, 35], [31.25, 46], [29.563, 46]]
   - name: rf_region_4
-    polygon: ['(31.2, 26.8)', '(31.25, 26.8)', '(31.25, 33.2)', '(31.2, 33.2)']
+    polygon: [[31.25, 34.25], [45.58, 34.25], [45.58, 46], [31.25, 46]]
+  - name: rf_region_5
+    polygon: [[32.25, 26.7], [45.58, 26.7], [45.58, 34.25], [32.25, 34.25]]
 copper_keepout:
   - name: rf_region_1
     ref: '@radio.u1'
-    rect_mm: [-18, -10, -5.2, 3.563]
+    rect_mm: [-18, -11.059, -5.2, 3.563]
   - name: rf_region_2
     ref: '@radio.u1'
     rect_mm: [-18, 3.563, -7, 5.25]
   - name: rf_region_3
     ref: '@radio.u1'
-    rect_mm: [-18, 5.25, 1.2, 18.5]
+    rect_mm: [-18, 5.25, 1.3, 19.58]
   - name: rf_region_4
     ref: '@radio.u1'
-    rect_mm: [-5.2, 5.2, 1.2, 5.25]
+    rect_mm: [-5.2, 5.2, 1.3, 5.25]
 region:
   - name: lvds_header
     refs: ['@debug.j2']
@@ -88,41 +90,69 @@ region:
     reason: 'J2 south of the LVDS balls (columns 14/15 face south)'
   - name: jtag
     refs: ['@debug.j3']
-    rect: [1, 18, 14, 30]
+    rect: [1, 8, 14, 28.2]
     hard: true
     reason: 'J3 west of U1 on the JTAG/UART side, below the radome line'
   - name: pmic_block
     refs: ['@pmic.*']
-    rect: [36, 2, 58, 24]
+    rect: [34, 2, 58, 24]
     hard: true
     reason: 'PMIC block, power-first'
   - name: pmic_switching
     refs: ['@pmic.u2', '@pmic.l_b*']
-    rect: [41, 2, 58, 21.8]
+    rect: [41, 2, 58, 21.7]
     hard: true
     reason: 'switch nodes >= 8 mm from Y1 and >= 5 mm from RF'
   - name: crystal
     refs: ['@radio.y1', '@radio.c_xp', '@radio.c_xm']
-    rect: [26, 17.5, 31.2, 22.6]
+    rect: [24, 16, 31.2, 22.6]
     hard: true
     reason: 'Y1 next to B15/C15, outside the RF guard'
-  - name: pa_pocket
+  - name: pa_corner
     refs: ['@radio.c_pa', '@radio.c_rf2']
-    rect: [29.563, 33.2, 31.25, 35]
+    areas:
+      - rect: [27.9, 31.85, 31.2, 33.2]
+      - rect: [29.85, 29.4, 31.2, 33.2]
     hard: true
-    reason: 'RFM1 pocket for the VOUT_PA caps'
+    reason: 'VOUT_PA / VIN_13RF2 caps under the corner, bottom side (plan 5.2 branch)'
+side:
+  bottom: ['@radio.c_pa', '@radio.c_rf2']
 group:
-  - members: ['@radio.c_*']
+  - members:
+      [
+        '@radio.c_apll',
+        '@radio.c_bb[[]*',
+        '@radio.c_clk',
+        '@radio.c_diff',
+        '@radio.c_dig[[]*',
+        '@radio.c_dig_2u2',
+        '@radio.c_dig_10n',
+        '@radio.c_io18',
+        '@radio.c_rf1',
+        '@radio.c_sram',
+        '@radio.c_synth',
+        '@radio.c_vbgap',
+        '@radio.c_vco',
+        '@radio.c_vio[[]*',
+        '@radio.c_vio_2u2',
+        '@radio.c_vnwa',
+        '@radio.c_pa',
+        '@radio.c_rf2',
+      ]
     anchor: '@radio.u1'
-    radius_mm: 9
+    radius_mm: 10.5
+    hard: true
+  - members: ['@radio.c_*_10u', '@radio.c_*_22u', '@radio.c_*_bulk']
+    anchor: '@radio.u1'
+    radius_mm: 14
     hard: true
   - members: ['@radio.y1']
     anchor: '@radio.u1'
-    radius_mm: 7
+    radius_mm: 9.5
     hard: true
   - members: ['@pmic.l_b*']
     anchor: '@pmic.u2'
-    radius_mm: 4
+    radius_mm: 6
     hard: true
 net_class:
   RF:
@@ -204,10 +234,10 @@ rf_macro:
   owns_vias: true
   region:
     [
-      [16, 33.2, 29.563, 46],
+      [14.941, 33.2, 29.563, 46],
       [29.563, 35, 31.25, 46],
-      [31.25, 26.8, 44.5, 46],
-      [31.2, 26.8, 31.25, 33.2],
+      [31.25, 26.7, 45.58, 46],
+      [31.2, 26.7, 31.25, 33.2],
     ]
   pocket: [29.563, 33.2, 31.25, 35]
 noise_keepout:
@@ -227,4 +257,4 @@ noise_keepout:
 height_limit:
   rule: radome_visibility
   angle_deg: 30
-  from_copper: [[19.941, 36.905, 28.417, 40.995], [34.446, 34.745, 40.58, 38.835]]
+  from_copper: [[19.941, 36.924, 28.417, 40.975], [34.446, 34.76, 40.58, 38.811]]

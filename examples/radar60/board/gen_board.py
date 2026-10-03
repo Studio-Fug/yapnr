@@ -60,13 +60,41 @@ class Floorplan:
         return self.doc["parts"][role]
 
     def rect(self, spec):
-        """A region's rectangle; ``rf.pocket`` names the RF pocket."""
+        """A region's rectangle (the bounding box of its ``areas``); ``rf.pocket`` names the RF
+        pocket."""
+        if "areas" in spec:
+            a = spec["areas"]
+            return [
+                min(r[0] for r in a),
+                min(r[1] for r in a),
+                max(r[2] for r in a),
+                max(r[3] for r in a),
+            ]
         r = spec["rect"]
         return self.doc["rf"]["pocket"] if r == "rf.pocket" else r
+
+    def areas(self, spec):
+        """A region's rectangles."""
+        return spec["areas"] if "areas" in spec else [self.rect(spec)]
 
 
 def load(path=HERE / "floorplan.yaml"):
     return Floorplan(yaml.safe_load(Path(path).read_text()))
+
+
+def rect_subtract(r, hole):
+    """Rectangle ``r`` minus rectangle ``hole``: up to four rectangles."""
+    x0, y0, x1, y1 = r
+    hx0, hy0, hx1, hy1 = max(hole[0], x0), max(hole[1], y0), min(hole[2], x1), min(hole[3], y1)
+    if hx0 >= hx1 or hy0 >= hy1:
+        return [list(r)]
+    out = [
+        [x0, y0, x1, hy0],  # below
+        [x0, hy1, x1, y1],  # above
+        [x0, hy0, hx0, hy1],  # left
+        [hx1, hy0, x1, hy1],  # right
+    ]
+    return [[round(v, 4) for v in q] for q in out if q[2] - q[0] > 1e-6 and q[3] - q[1] > 1e-6]
 
 
 def rect_pts(r):
@@ -82,6 +110,11 @@ def circle_pts(cx, cy, radius, n=24):
 
 
 # --------------------------------------------------------------------------- constraints.yaml
+
+
+def _glob_literal(path):
+    """An instance path as an fnmatch pattern that matches only itself (``mh[0]`` -> ``mh[[]0]``)."""
+    return "".join("[%s]" % c if c in "[*?" else c for c in path)
 
 
 def constraints(fp: Floorplan):
@@ -124,17 +157,24 @@ def constraints(fp: Floorplan):
     ]
     lvds_nets = [x for pair in d["nets"]["LVDS"]["pairs"].values() for x in pair]
     net_class["LVDS"] = {"nets": lvds_nets, "width_mm": lv["width"], "clearance_mm": 0.1}
-    region = []
+    region, side = [], {}
     for name, spec in d["regions"].items():
+        area = (
+            {"areas": [{"rect": r} for r in spec["areas"]]}
+            if "areas" in spec
+            else {"rect": fp.rect(spec)}
+        )
         region.append(
             {
                 "name": name,
                 "refs": [r for p in spec["parts"] for r in refs(p)],
-                "rect": fp.rect(spec),
+                **area,
                 "hard": True,
                 "reason": spec["reason"],
             }
         )
+        if spec.get("side"):  # a region on the other side holds its parts there (hard)
+            side.setdefault(spec["side"], []).extend(r for p in spec["parts"] for r in refs(p))
     group = [
         {
             "members": [r for m in spec["members"] for r in refs(m)],
@@ -144,25 +184,22 @@ def constraints(fp: Floorplan):
         }
         for spec in d["groups"].values()
     ]
+    # The four M2.5 holes are the schematic's own mounting-hole parts (mech.mh[i], plated, GND),
+    # fixed at their positions; the radome standoff lands are board-only footprints of the
+    # floorplan board (RL1, RL2), fixed too. A `mounting_hole` entry would make yapnr drill an
+    # extra unplated hole (pnr.writeback.apply_mounting_holes), so none is emitted.
     holes = d["mounting_holes"]
     lands = d["radome_lands"]
-    mounting_hole = [
-        {
-            "name": "H%d" % (i + 1),
-            "at": at,
-            "drill_mm": holes["drill"],
-            "clearance_diameter_mm": holes["keepout_diameter"],
-        }
-        for i, at in enumerate(holes["at"])
-    ] + [
-        {
-            "name": "radome_%s" % ("w" if at[0] < fp.w / 2 else "e"),
-            "at": at,
-            "drill_mm": lands["diameter"],
-            "clearance_diameter_mm": lands["keepout_diameter"],
-        }
-        for at in lands["at"]
-    ]
+    hole_parts = fp.doc["parts"]["holes"]
+    if len(hole_parts) != len(holes["at"]):
+        raise SystemExit("floorplan: parts.holes and mounting_holes.at differ in length")
+    fixed_holes = {
+        "@" + _glob_literal(path): {"at": at, "rot": 0, "side": "top"}
+        for path, at in zip(hole_parts, holes["at"])
+    }
+    fixed_lands = {
+        "RL%d" % (i + 1): {"at": at, "rot": 0, "side": "top"} for i, at in enumerate(lands["at"])
+    }
     # Copper keepouts relative to U1 (rect_mm in U1's own y-up frame): the router blocks every
     # layer there and writeback draws a KiCad rule area. Inverse of pnr.graph.footprint_point.
     cx, cy = u1["at"]
@@ -188,9 +225,14 @@ def constraints(fp: Floorplan):
                 ],
             }
         )
+    # Placement keepout: the RF region less U1's courtyard (the macro is drawn around U1, whose
+    # courtyard reaches into it; yapnr would count the fixed U1 as a keepout violation).
+    half = u1["courtyard_mm"] / 2
+    u1_box = [cx - half, cy - half, cx + half, cy + half]
+    pieces = [q for r in d["rf"]["region"] for q in rect_subtract(r, u1_box)]
     keepout = [
-        {"name": "rf_region_%d" % (i + 1), "polygon": rect_pts(r)}
-        for i, r in enumerate(d["rf"]["region"])
+        {"name": "rf_region_%d" % (i + 1), "polygon": [list(p) for p in rect_pts(r)]}
+        for i, r in enumerate(pieces)
     ]
     doc = {
         "schema": "v0",
@@ -210,11 +252,13 @@ def constraints(fp: Floorplan):
                 "rot": d["connector"]["rot"],
                 "side": "top",
             },
+            **fixed_holes,
+            **fixed_lands,
         },
-        "mounting_hole": mounting_hole,
         "keepout": keepout,
         "copper_keepout": copper_keepout,
         "region": region,
+        **({"side": side} if side else {}),
         "group": group,
         "net_class": net_class,
         "diff_pair": diff_pair,
@@ -270,9 +314,10 @@ HEADER = """\
 # PNR_FAB_PROFILE=pcbway-adv-6l-rf (stackup pcbway-6l-ro4835-ro4450f); radar60.kicad_dru beside
 # the board carries the profile's custom rules and the board's own.
 #
-# Sections: fixed (U1 in the RF macro's frame, J1 on the south edge), mounting_hole (holes and
-# radome lands), keepout / copper_keepout (the RF region minus the VOUT_PA pocket), region (J2,
-# J3, PMIC, switch nodes, Y1, the pocket; hard), group (decoupling, Y1, buck loops; hard),
+# Sections: fixed (U1 in the RF macro's frame, J1 on the south edge, the four mounting-hole
+# parts, the floorplan board's two radome standoff lands), keepout / copper_keepout (the RF
+# region minus the VOUT_PA pocket), region (J2, J3, PMIC, switch nodes, Y1, the pocket; hard),
+# group (decoupling, Y1, buck loops; hard),
 # net_class / diff_pair / length_match (routing). rf_macro, noise_keepout and height_limit are
 # proposed (radar60 plan 3.4, 7.3, 7.5): the current engine warns and ignores them, and the
 # custom rules and the RF audit enforce them meanwhile.
@@ -321,6 +366,8 @@ def _flat_list(v):
 
 
 def _inline(v):
+    if isinstance(v, tuple):
+        raise TypeError("write points as [x, y] lists, not tuples: %r" % (v,))
     if isinstance(v, list):
         return "[" + ", ".join(_inline(x) for x in v) + "]"
     if isinstance(v, dict):
@@ -362,6 +409,19 @@ def netclasses(fp):
             diff_pair_gap=lv["gap"],
         ),
     }
+
+
+def netclass_patterns(fp):
+    """Net-name patterns -> class (floorplan ``nets``), so the custom rules' hasNetclass() sees
+    the board's real nets wherever this project file is used."""
+    out = []
+    for name, spec in fp.doc["nets"].items():
+        if name == "LVDS":
+            pats = [n for pair in spec["pairs"].values() for n in pair]
+        else:
+            pats = spec["globs"]
+        out.extend({"netclass": name, "pattern": p} for p in pats)
+    return out
 
 
 def project(fp):
@@ -434,7 +494,7 @@ def project(fp):
             "meta": {"version": 4},
             "net_colors": None,
             "netclass_assignments": None,
-            "netclass_patterns": [],
+            "netclass_patterns": netclass_patterns(fp),
         },
         "pcbnew": {"page_layout_descr_file": ""},
         "sheets": [],
@@ -825,8 +885,9 @@ def board(fp):
         )
     # Placement regions and the patch extents, for review (User.1 / User.2).
     for name, spec in d["regions"].items():
+        for i, r in enumerate(fp.areas(spec)):
+            items.append(_gr_rect(fp, r, "User.1", "reg-%s-%d" % (name, i) if i else "reg-" + name))
         r = fp.rect(spec)
-        items.append(_gr_rect(fp, r, "User.1", "reg-" + name))
         items.append(_gr_text(fp, name, (r[0] + 0.3, r[3] - 0.9), "User.1", "reg-" + name, 0.6))
     for name, r in d["rf"]["patches"].items():
         items.append(_gr_rect(fp, r, "User.2", "patch-" + name))
@@ -1003,6 +1064,26 @@ def macro_check(fp):
     out.append(
         "macro vias outside the RF region and the package: %d of %d %s"
         % (len(outside), len(vias), outside[:6])
+    )
+    # Top-layer copper: track and arc points and F.Cu zone vertices (the In1/In2 GND zones are
+    # the macro's reference planes and may extend past the region; the board's In1 is GND too).
+    points = [
+        (float(a) - ux + cx, -(float(b) - uy) + cy)
+        for line in board.splitlines()
+        if line.lstrip().startswith(("(segment", "(arc"))
+        or (line.lstrip().startswith("(zone") and '"F.Cu"' in line and "(net " in line)
+        for a, b in re.findall(r"\((?:start|mid|end|xy) ([-\d.]+) ([-\d.]+)\)", line)
+    ]
+    eps = 1e-3
+    outside = [
+        (round(x, 2), round(y, 2))
+        for x, y in points
+        if not any(r[0] - eps <= x <= r[2] + eps and r[1] - eps <= y <= r[3] + eps for r in regions)
+    ]
+    ok &= not outside
+    out.append(
+        "macro F.Cu copper points outside the RF region and the package: %d of %d %s"
+        % (len(outside), len(points), outside[:6])
     )
     return out, ok
 

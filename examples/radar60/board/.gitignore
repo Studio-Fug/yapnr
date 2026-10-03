@@ -1,0 +1,5 @@
+# KiCad local view state (written by kicad-cli runs)
+*.kicad_prl
+# The placed board is over the repository's 600 kB file limit: integrate.py finish --placement
+# reva/placement.json rebuilds it bit for bit (sha256 in reva/placement-report.json).
+reva/radar60-reva.kicad_pcb

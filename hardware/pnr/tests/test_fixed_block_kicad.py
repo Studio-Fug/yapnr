@@ -340,6 +340,44 @@ class WritebackKeepsBlock(unittest.TestCase):
                 self.assertNotIn("unreached", formed)
 
 
+@unittest.skipUnless(NATIVE, "requires KiCad Python")
+class FallbackDropsAvoidKeepouts(unittest.TestCase):
+    def test_no_fallback_via_lands_in_a_class_keepout(self):
+        """With the fallback on, a plane drop never lands in an engine copper keepout,
+        even one whose rule area forbids nothing by its flags (its custom rules do)."""
+        from test_stack_kicad import board, smd, stack_of
+
+        from pnr.graph import BoardGraph
+        from pnr.writeback import _keepout_v1_area, _WriteFrame, form_planes
+
+        b, _ = board("SPPS")
+        smd(b, "C1", (38.0, 40.0), [("1", "VCC", (-0.8, 0)), ("2", "GND", (0.8, 0))])
+        smd(b, "C2", (52.0, 40.0), [("1", "VCC", (-0.8, 0)), ("2", "GND", (0.8, 0))])
+        spec = dict(
+            name="guard",
+            polygon=[[4, 6], [12, 6], [12, 14], [4, 14]],  # around C1 (engine frame)
+            layers=["F.Cu", "B.Cu"],
+            items=["tracks", "vias"],
+            allow_classes=[],
+            allow_nets=["SIG"],
+            allowed_nets=["SIG"],
+            exempt_groups=[],
+        )
+        b.Add(_keepout_v1_area(b, BoardGraph("t"), spec, _WriteFrame(20.0, 30.0)))
+        stack, rules = stack_of("SPPS", {"GND": "In1.Cu", "VCC": "In2.Cu"})
+        rules["copper_keepouts"] = [dict(spec, allowed_nets=["VCC"])]  # VCC may drop there
+        formed = form_planes(b, stack, rules, 30.0, 20.0)
+        vias = [t for t in b.GetTracks() if t.GetClass() == "PCB_VIA"]
+        self.assertEqual(formed["fallback_vias"], len(vias))
+        inside = []
+        for v in vias:
+            x, y = v.GetPosition().x / 1e6 - 30.0, 50.0 - v.GetPosition().y / 1e6
+            if 4 <= x <= 12 and 6 <= y <= 14:
+                inside.append(v.GetNetname())
+        self.assertEqual(inside, ["VCC"])  # C1's GND drop is barred, its VCC drop allowed
+        self.assertEqual(len(vias), 3)  # and C2's two pads drop outside
+
+
 def drc(cli, board):
     out = Path(board).with_suffix(".drc.json")
     subprocess.run(

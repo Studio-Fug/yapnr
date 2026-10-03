@@ -566,6 +566,69 @@ class KeepoutRulesFileTest(unittest.TestCase):
             self.assertFalse(dru.exists())
 
 
+class CapacityProxyTest(unittest.TestCase):
+    """The placement routability proxy sees v1 keepouts on their own layers and the
+    fixed copper the rules carry."""
+
+    def fixture(self):
+        from pnr.graph import BoardOutline
+
+        comps = [
+            Component(
+                ref,
+                "",
+                (x, 2),
+                0,
+                "top",
+                (0.2, 0.2),
+                (0.2, 0.2),
+                pads=[Pad("1", "n0", (0, 0), (0.2, 0.2))],
+                smd_body=True,
+            )
+            for ref, x in (("A0", 1), ("B0", 9))
+        ]
+        return BoardGraph("fixture", comps, [], BoardOutline(10, 4))
+
+    def unreachable(self, rules):
+        from pnr.place.capacity_proxy import score
+
+        return score(self.fixture(), dict({"layers": 2}, **rules), passes=1)["unreachable_branches"]
+
+    def keepout(self, **kw):
+        spec = dict(
+            name="wall",
+            polygon=[[4, -1], [6, -1], [6, 5], [4, 5]],
+            layers=["F.Cu", "B.Cu"],
+            items=["tracks", "vias"],
+            allowed_nets=[],
+        )
+        spec.update(kw)
+        return {"copper_keepouts": [spec]}
+
+    def test_keepouts_by_layer_and_class(self):
+        self.assertEqual(self.unreachable({}), 0)
+        self.assertEqual(self.unreachable(self.keepout()), 1)
+        self.assertEqual(self.unreachable(self.keepout(layers=["F.Cu"])), 0)
+        self.assertEqual(self.unreachable(self.keepout(items=["vias"])), 0)
+        # A keepout with allow lists is not modelled (optimistic).
+        self.assertEqual(self.unreachable(self.keepout(allow_nets=["V*"], allowed_nets=["VCC"])), 0)
+
+    def test_fixed_copper_in_the_rules_is_an_obstacle(self):
+        # A 2.5 mm wide wall across the board on both layers (the proxy models capacity
+        # per 2 mm cell, so a wall must fill whole cells to cut the board).
+        wall = [["X", la, [5.0, -0.5], [5.0, 4.5], 2.5] for la in ("F.Cu", "B.Cu")]
+        copper = dict(
+            frame="engine-mm-y-up",
+            tracks=[],
+            vias=[],
+            blocks=[dict(meander_block(), tracks=wall, arcs=[], vias=[])],
+        )
+        self.assertEqual(self.unreachable({"fixed_copper": copper}), 1)
+        # Only on F.Cu: the board stays routable on B.Cu.
+        copper["blocks"][0]["tracks"] = wall[:1]
+        self.assertEqual(self.unreachable({"fixed_copper": copper}), 0)
+
+
 class RouteBoardPortTest(unittest.TestCase):
     def test_route_board_joins_a_one_pad_net_to_its_block_port(self):
         from pnr.route.detail.router import route_board

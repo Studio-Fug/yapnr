@@ -449,7 +449,9 @@ def _collect_obstacles(board):
     """Conservative copper capsules (start, end, radius, net code).
 
     Pad bounding-box diagonals enclose rotated/custom copper. Straight tracks
-    are full capsules, not endpoint discs. Arcs use their enclosing box.
+    are full capsules, not endpoint discs. Arcs use their enclosing box. Rule
+    areas that bar tracks or vias, and the engine's copper keepouts (``PNR
+    keepout:``, whose allow lists live in custom rules), are their enclosing box.
     An unreadable track collection raises instead of silently ignoring copper.
     """
     import math
@@ -472,7 +474,12 @@ def _collect_obstacles(board):
     for fp in board.GetFootprints():
         zones.extend(fp.Zones())
     for zone in zones:
-        if zone.GetIsRuleArea() and (zone.GetDoNotAllowTracks() or zone.GetDoNotAllowVias()):
+        # A copper keepout with allow lists or exempt groups forbids nothing by its
+        # flags (its custom rules do, pnr.writeback.keepout_dru): an obstacle too.
+        barred = zone.GetIsRuleArea() and zone.GetZoneName().startswith("PNR keepout:")
+        if zone.GetIsRuleArea() and (
+            zone.GetDoNotAllowTracks() or zone.GetDoNotAllowVias() or barred
+        ):
             box = zone.GetBoundingBox()
             center = box.GetCenter()
             point = (center.x, center.y)
@@ -736,6 +743,22 @@ def _dogbone_fanout_net(
         )
         oracle = Oracle(board, checked_rules)
     added, skipped = 0, []
+    # Copper keepouts whose rule areas carry no flags (their allow lists are custom
+    # rules, keepout_dru): no drop of a net they bar lands in them or crosses them.
+    # None: as before.
+    allowed = {
+        "PNR keepout:" + k["name"]: set(k.get("allowed_nets") or ())
+        for k in (rules or {}).get("copper_keepouts", [])
+        if "items" in k
+    }
+    barred = [
+        (z.Outline(), allowed.get(z.GetZoneName(), set()))
+        for z in board.Zones()
+        if z.GetIsRuleArea()
+        and z.GetZoneName().startswith("PNR keepout:")
+        and not z.GetDoNotAllowTracks()
+        and not z.GetDoNotAllowVias()
+    ]
     board.BuildConnectivity()
     for fp in board.GetFootprints():
         center = fp.GetPosition()
@@ -821,6 +844,17 @@ def _dogbone_fanout_net(
                     if not (
                         bounds.GetLeft() + edge <= x <= bounds.GetRight() - edge
                         and bounds.GetTop() + edge <= y <= bounds.GetBottom() - edge
+                    ):
+                        continue
+                    if barred and any(
+                        pad.GetNetname() not in nets
+                        and (
+                            area.Collide(pcbnew.VECTOR2I(x, y), round(via_r))
+                            or area.Collide(
+                                pcbnew.SEG(pos, pcbnew.VECTOR2I(x, y)), round(trace_w / 2.0)
+                            )
+                        )
+                        for area, nets in barred
                     ):
                         continue
                     if oracle:

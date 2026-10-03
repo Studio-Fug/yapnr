@@ -59,11 +59,61 @@ def _n(x: float) -> str:
 @dataclass
 class Placed:
     stick: catalog.Stick
-    x0: float  # panel coordinates of the stick's left end
-    yc: float  # panel y of the stick centre line
+    x0: float  # panel coordinates of the stick's left end (rot 90: x of its centre line)
+    yc: float  # panel y of the stick centre line (rot 90: y of its first end)
+    rot: int = 0  # 90: the stick's x axis runs along panel +y (board O's A04R)
 
     def p(self, x: float, y: float) -> Tuple[float, float]:
+        if self.rot == 90:
+            return (self.x0 - y, self.yc + x)
         return (self.x0 + x, self.yc + y)
+
+    @property
+    def angle(self) -> float:
+        """KiCad rotation (degrees, counter-clockwise on screen) of the stick's frame."""
+        return -90.0 if self.rot == 90 else 0.0
+
+
+class Frame:
+    """Launch coordinates (x from the milled edge into the stick, y across the launch axis) of
+    the launch on stick side "W", "E", "N" or "S", its axis at `at` (W, E: y from the stick's
+    centre line; N, S: x from the stick's left end), mapped to the panel."""
+
+    def __init__(self, pl: Placed, side: str, at: float = 0.0):
+        self.pl, self.side, self.at = pl, side, at
+
+    def s(self, x: float, y: float) -> Tuple[float, float]:
+        """Launch to stick coordinates."""
+        st, a = self.pl.stick, self.at
+        if self.side == "W":
+            return (x, a + y)
+        if self.side == "E":
+            return (st.length - x, a - y)
+        if self.side == "N":
+            return (a - y, -st.height / 2 + x)
+        if self.side == "S":
+            return (a + y, st.height / 2 - x)
+        raise ValueError(self.side)
+
+    def p(self, x: float, y: float) -> Tuple[float, float]:
+        return self.pl.p(*self.s(x, y))
+
+    @property
+    def angle(self) -> float:
+        base = {"W": 0.0, "E": 180.0, "N": -90.0, "S": 90.0}[self.side]
+        a = base + self.pl.angle
+        return a - 360.0 if a > 180.0 else a + 360.0 if a <= -180.0 else a
+
+
+def line_start_extra(ld) -> float:
+    """The full-width stub of the line in the launch's taper pad: half a line width plus
+    0.05 mm, so a round-ended track starting there stays inside it."""
+    return ld.line_w / 2 + 0.05
+
+
+def line_start(ld) -> float:
+    """Where the line's track starts, launch coordinates (inside the taper pad's stub)."""
+    return ld.x_te + ld.line_w / 2
 
 
 @dataclass
@@ -101,6 +151,7 @@ class Writer:
         self.mask_rules: List[str] = []
         # a 2D-designed edge launch (the OSH Park boards), else the Samtec geometry
         self.ld = launch.design(b.launch.design) if b.launch.design else None
+        self.lds = {r: launch.design(x.design) for r, x in b.launches.items()}
         self.edge_clear = self.ld.board.keepback if self.ld else EDGE_CLEAR
         self.via_size = (launch.VIA_D, launch.VIA_DRILL) if self.ld else (VIA_D, VIA_DRILL)
 
@@ -248,34 +299,43 @@ class Writer:
             ref=f"J{s.id}{side}",
         )
 
-    def edge_launch(self, pl: Placed, side: str, net_sig: str, net_gnd: str, y=0.0, x_max=None):
-        """The 2D-designed launch (`launch.LaunchDesign`) at the left ("L") or right ("R") end:
-        the Cinch 142-0701-851 footprint (pin pad, taper as a copper-only pad, leg pads on F.Cu
-        and B.Cu), the In1.Cu cut-out (region M) and the launch's ground vias. The stick draws
-        the L1 channel (`ld.channel`), the line from `ld.x_te` and the mask opening from
-        `ld.x_pe + launch.DAM_W`."""
-        ld = self.ld
+    def edge_launch(
+        self,
+        pl: Placed,
+        side: str,
+        net_sig: str,
+        net_gnd: str,
+        y=0.0,
+        x_max=None,
+        ld=None,
+        half_w=None,
+        ref=None,
+    ):
+        """The 2D-designed launch (`launch.LaunchDesign`, `ld` or the board's) on one edge of a
+        stick: "L"/"W" (left end), "R"/"E" (right end), "N" or "S" (the long edges of board O's
+        3-port sticks), its axis at `y` across (W, E) or `y` along (N, S) the stick. It draws
+        the Cinch 142-0701-851 footprint (pin pad; the taper, with a full-width stub of the line
+        so the line's round end stays inside it, as a copper-only pad; leg pads on F.Cu and
+        B.Cu), the In1.Cu cut-out (region M) and the launch's ground vias (`ld.vias` on a stick
+        `2 half_w` wide, to `x_max` from the edge). The stick draws the L1 channel
+        (`ld.channel`), the line from `line_start(ld)` and the mask opening from
+        `ld.x_pe + launch.DAM_W`. Returns the frame (launch to panel coordinates)."""
+        ld = ld or self.ld
         conn = ld.conn
         s = pl.stick
-        if side == "L":
-            at, rot = pl.p(0.0, y), 0.0
-
-            def loc(x, yy):
-                return pl.p(x, y + yy)
-
-        else:
-            at, rot = pl.p(s.length, y), 180.0
-
-            def loc(x, yy):
-                return pl.p(s.length - x, y - yy)
-
+        fr = Frame(pl, {"L": "W", "R": "E"}.get(side, side), y)
         x0, x_pe = ld.x0, ld.x_pe
         taper = [(x, yy) for x, yy in ld.signal_outline() if x >= x_pe - 1e-9]
+        # the taper's last station is the line width: run it on by half a line width
+        hw, xe = ld.line_w / 2, ld.x_te + line_start_extra(ld)
+        i = len(taper) // 2
+        taper = taper[:i] + [(xe, -hw), (xe, hw)] + taper[i:]
+        rot = fr.angle
         body = [
             f'\t\t(pad "1" smd rect (at {_n((x0 + x_pe) / 2)} 0 {_n(rot)}) (size {_n(x_pe - x0)} {_n(ld.pad_w)})'
-            f' (layers "F.Cu" "F.Mask") (net "{net_sig}") (uuid "{_u("lp1", s.id, side)}"))',
+            f' (layers "F.Cu" "F.Mask") (net "{net_sig}") (uuid "{_u("lp1", s.id, side, y)}"))',
             f'\t\t(pad "1" smd custom (at {_n(x_pe)} 0 {_n(rot)}) (size 0.1 0.1) (layers "F.Cu")'
-            f' (net "{net_sig}") (uuid "{_u("lp1t", s.id, side)}")'
+            f' (net "{net_sig}") (uuid "{_u("lp1t", s.id, side, y)}")'
             " (options (clearance outline) (anchor rect))"
             f" (primitives (gr_poly (pts {_poly_pts([(x - x_pe, yy) for x, yy in taper])})"
             " (width 0) (fill yes))))",
@@ -285,7 +345,7 @@ class Writer:
                 body.append(
                     f'\t\t(pad "2" smd rect (at {_n((a + b_) / 2)} {_n((c + d) / 2)} {_n(rot)})'
                     f" (size {_n(b_ - a)} {_n(d - c)}) (layers {lay})"
-                    f' (net "{net_gnd}") (uuid "{_u("lp2", s.id, side, k, lay)}"))'
+                    f' (net "{net_gnd}") (uuid "{_u("lp2", s.id, side, y, k, lay)}"))'
                 )
         # fab drawing: the flange off the board, the legs and the tab on it
         hb = conn.body_w / 2
@@ -297,34 +357,34 @@ class Writer:
             body.append(
                 f"\t\t(fp_rect (start {_n(p[0])} {_n(p[1])}) (end {_n(q[0])} {_n(q[1])})"
                 f' (stroke (width 0.05) (type solid)) (fill no) (layer "F.Fab")'
-                f' (uuid "{_u("lfab", s.id, side, k)}"))'
+                f' (uuid "{_u("lfab", s.id, side, y, k)}"))'
             )
         # courtyard on the board (the connector is fitted after break-out)
         cy = conn.lay_d / 2 + 0.05
         body.append(
             f"\t\t(fp_rect (start 0 {_n(-cy)}) (end {_n(conn.lay_e + 0.25)} {_n(cy)})"
             " (stroke (width 0.05) (type solid))"
-            f' (fill no) (layer "F.CrtYd") (uuid "{_u("lcrt", s.id, side)}"))'
+            f' (fill no) (layer "F.CrtYd") (uuid "{_u("lcrt", s.id, side, y)}"))'
         )
-        ref = self.footprint(
+        self.footprint(
             "SMA_EdgeLaunch_Cinch_142-0701-851",
-            at,
+            fr.p(0.0, 0.0),
             rot,
             body,
-            ("lconn", s.id, side),
-            ref=f"J{s.id}{side}",
+            ("lconn", s.id, side, y),
+            ref=ref or f"J{s.id}{side}",
         )
         cut = ld.cut_profile()
         if cut:
             lays = [self.layers[k - 1] for k in ld.cut_layers]
-            pts = [loc(x, -c) for x, c in cut] + [loc(x, c) for x, c in reversed(cut)]
+            pts = [fr.p(x, -c) for x, c in cut] + [fr.p(x, c) for x, c in reversed(cut)]
             ded = [p for i, p in enumerate(pts) if i == 0 or math.dist(p, pts[i - 1]) > 1e-6]
-            self.keepout(lays, ded, (s.id, "lcut", side))
-        if x_max is None and s.ports == 2:
+            self.keepout(lays, ded, (s.id, "lcut", side, y))
+        if x_max is None and s.ports == 2 and fr.side in ("W", "E"):
             x_max = s.length / 2 - 0.45  # the two launches' fences meet mid-stick
-        for k, v in enumerate(ld.vias(s.height / 2, x_max)):
-            self.via(loc(v.x, v.y), net_gnd, (s.id, "lvia", side, k))
-        return ref
+        for k, v in enumerate(ld.vias(half_w or s.height / 2, x_max)):
+            self.via(fr.p(v.x, v.y), net_gnd, (s.id, "lvia", side, y, k))
+        return fr
 
     def anchor(self, pl: Placed, p, w, net, key, layer="F.Cu"):
         """Ends an open track so it is not a dangling end: a copper-only pad on F.Cu, a small
@@ -443,8 +503,8 @@ def _mirror(prof, length):
 # --- the sticks ---------------------------------------------------------------------------------
 
 
-def _hw(fam_id: str) -> float:
-    return families.channel_halfwidth(fam_id)
+def _hw(fam_id: str, stackup_id=None) -> float:
+    return families.channel_halfwidth(fam_id, stackup_id)
 
 
 def build_stick(wr: Writer, pl: Placed):
@@ -465,8 +525,8 @@ def build_stick(wr: Writer, pl: Placed):
     if fam_trl == "S":
         return stripline_stick(wr, pl, sig, gnd)
     L = s.length
-    wP = families.FAMILIES["P"].w
-    gP = families.FAMILIES["P"].gap
+    wP = families.of(wr.st.id)["P"].w
+    gP = families.of(wr.st.id)["P"].gap
     rp1, rp2 = s.rp
     wr.stick_zones(pl, gnd)
     # inner-layer cut-outs under the pad and taper (both ends)
@@ -502,9 +562,9 @@ def build_stick(wr: Writer, pl: Placed):
                 wr.via(pl.p(x, yy), gnd, (s.id, "short", k, yy))
     elif kind == "variant":
         fam = s.family
-        f = families.FAMILIES[fam]
+        f = families.of(wr.st.id)[fam]
         prof = _profile_launch(b, rp1, wP, gP)
-        hw = _hw(fam)
+        hw = families.channel_halfwidth(fam, wr.st.id)
         prof = prof + [(rp1, hw), (rp2, hw)] + _mirror(prof, L)
         wr.channel(pl, prof, (s.id, "ch"))
         if f.gap is not None:
@@ -559,9 +619,8 @@ def launch_stick(wr: Writer, pl: Placed):
     prof = ld.channel(x_to=L / 2)
     prof = prof + _mirror(prof, L)[1:]
     wr.channel(pl, prof, (s.id, "ch"))
-    wr.seg(
-        pl.p(ld.x_te - 0.05, 0), pl.p(L - ld.x_te + 0.05, 0), ld.line_w, "F.Cu", sig, (s.id, "line")
-    )
+    xs = line_start(ld)
+    wr.seg(pl.p(xs, 0), pl.p(L - xs, 0), ld.line_w, "F.Cu", sig, (s.id, "line"))
     # mask open over the line and its channel, from dam to dam
     xm = ld.x_pe + launch.DAM_W
     inside = [(x, hw) for x, hw in prof if xm < x < L - xm]
@@ -643,11 +702,11 @@ def ring_stick(wr: Writer, pl: Placed, sig, gnd, prof_launch):
     s = pl.stick
     L = s.length
     rp1, rp2 = s.rp
-    fam = families.FAMILIES["M"]
-    wP = families.FAMILIES["P"].w
+    fam = families.of(wr.st.id)["M"]
+    wP = families.of(wr.st.id)["P"].w
     x_tap = prof_launch[2][0]
     (cx, yc), r, f1, f2 = ring_points(s)
-    hw = _hw("M")
+    hw = families.channel_halfwidth("M", wr.st.id)
     prof1 = prof_launch + [(rp1, hw), (f1[0], hw)]
     wr.channel(pl, prof1, (s.id, "ch1"))
     wr.channel(pl, _mirror(prof1, L), (s.id, "ch2"))
@@ -677,8 +736,8 @@ def _retarget_right_connector(wr: Writer, sid: str, old: str, new: str):
 def stub_stick(wr: Writer, pl: Placed, sig, gnd, prof_launch):
     s = pl.stick
     L = s.length
-    wP = families.FAMILIES["P"].w
-    gP = families.FAMILIES["P"].gap
+    wP = families.of(wr.st.id)["P"].w
+    gP = families.of(wr.st.id)["P"].gap
     x_tap = prof_launch[2][0]
     end = s.geometry["end"]
     ls = s.geometry["stub_mm"]
@@ -729,13 +788,13 @@ def coupled_stick(wr: Writer, pl: Placed, gnd, prof_launch):
     L = s.length
     rp1, rp2 = s.rp
     g = s.geometry
-    fam = families.FAMILIES["M"]
-    wP = families.FAMILIES["P"].w
+    fam = families.of(wr.st.id)["M"]
+    wP = families.of(wr.st.id)["P"].w
     x_tap = prof_launch[2][0]
     a, lc, pg = g["feed"], g["length"], g["pair_gap"]
     dy = -(fam.w + pg)  # line 2 sits above line 1
     n1, n2 = wr.net(f"RF_{s.id}"), wr.net(f"RF_{s.id}_2")
-    hw = _hw("M")
+    hw = families.channel_halfwidth("M", wr.st.id)
     # one channel around both M lines between the reference planes
     top = [pl.p(x, -hw0) for x, hw0 in prof_launch] + [pl.p(rp1, dy - hw), pl.p(rp2, dy - hw)]
     right = [pl.p(L - x, dy - hw0) for x, hw0 in reversed(prof_launch)]
@@ -762,8 +821,8 @@ def stripline_stick(wr: Writer, pl: Placed, sig, gnd):
     b = wr.b
     L = s.length
     rp1, rp2 = s.rp
-    wP = families.FAMILIES["P"].w
-    gP = families.FAMILIES["P"].gap
+    wP = families.of(wr.st.id)["P"].w
+    gP = families.of(wr.st.id)["P"].gap
     lau = b.launch
     xv = lau.via_x
     hp = lau.pad_w / 2 + lau.pad_gap
@@ -796,9 +855,9 @@ def stripline_stick(wr: Writer, pl: Placed, sig, gnd):
         wr.via(pl.p(xx, 0), net, (s.id, "sv", side), remove_unused=True)
     wr.seg(pl.p(x_tap - 0.05, 0), pl.p(xv, 0), wP, l1, sig, (s.id, "pL"))
     wr.seg(pl.p(L - xv, 0), pl.p(L - x_tap + 0.05, 0), wP, l1, sig_r, (s.id, "pR"))
-    fam = families.FAMILIES[s.family] if s.kind == "variant" else families.FAMILIES["S"]
-    wS = families.FAMILIES["S"].w
-    hwS = _hw("S")
+    fam = families.of(wr.st.id)[s.family] if s.kind == "variant" else families.of(wr.st.id)["S"]
+    wS = families.of(wr.st.id)["S"].w
+    hwS = families.channel_halfwidth("S", wr.st.id)
     if s.kind == "reflect":
         for side, xa, xb in (("L", xv, rp1), ("R", rp2, L - xv)):
             wr.seg(pl.p(xa, 0), pl.p(xb, 0), wS, l3, sig, (s.id, "s", side))
@@ -935,8 +994,8 @@ def xsec_stick(wr: Writer, pl: Placed, gnd):
     y = -s.height / 2 + 2.0
     body = []
     for f_id in fams:
-        f = families.FAMILIES[f_id]
-        hw = _hw(f_id)
+        f = families.of(wr.st.id)[f_id]
+        hw = families.channel_halfwidth(f_id, wr.st.id)
         y += hw
         lay = "F.Cu" if f.kind == "outer" else wr.layers[2]
         body.append(
@@ -1171,13 +1230,18 @@ def _layers_block(n_cu: int) -> str:
 
 
 def _stackup_block(st: stackups.Stackup) -> str:
+    ps = stackups.params_of(st)
+    mask_t = 0.01524 if st.board == "O" else stackups.MASK_CU_MM  # OSH Park: 0.6 mil
+    mask = (
+        f'(color "{st.mask_color}") (thickness {_n(mask_t)})'
+        f' (material "LPI") (epsilon_r {_n(ps["mask.dk"].nominal)})'
+        f' (loss_tangent {_n(ps["mask.df"].nominal)}))'
+    )
     out = [
         "\t\t(stackup",
         '\t\t\t(layer "F.SilkS" (type "Top Silk Screen"))',
         '\t\t\t(layer "F.Paste" (type "Top Solder Paste"))',
-        f'\t\t\t(layer "F.Mask" (type "Top Solder Mask") (color "Green") (thickness {_n(stackups.MASK_CU_MM)})'
-        f" (material \"LPI\") (epsilon_r {_n(stackups.PARAMS['mask.dk'].nominal)})"
-        f" (loss_tangent {_n(stackups.PARAMS['mask.df'].nominal)}))",
+        f'\t\t\t(layer "F.Mask" (type "Top Solder Mask") {mask}',
     ]
     d = 0
     for x in st.layers:
@@ -1187,15 +1251,13 @@ def _stackup_block(st: stackups.Stackup) -> str:
             )
         else:
             d += 1
-            df = stackups.PARAMS["pp.df" if x.kind == "prepreg" else "core.df"].nominal
+            df = ps["pp.df" if x.kind == "prepreg" else "core.df"].nominal
             out.append(
                 f'\t\t\t(layer "dielectric {d}" (type "{x.kind}") (thickness {_n(x.t_mm)})'
                 f' (material "{x.material}") (epsilon_r {_n(x.er)}) (loss_tangent {_n(df)}))'
             )
     out += [
-        f'\t\t\t(layer "B.Mask" (type "Bottom Solder Mask") (color "Green") (thickness {_n(stackups.MASK_CU_MM)})'
-        f" (material \"LPI\") (epsilon_r {_n(stackups.PARAMS['mask.dk'].nominal)})"
-        f" (loss_tangent {_n(stackups.PARAMS['mask.df'].nominal)}))",
+        f'\t\t\t(layer "B.Mask" (type "Bottom Solder Mask") {mask}',
         '\t\t\t(layer "B.Paste" (type "Bottom Solder Paste"))',
         '\t\t\t(layer "B.SilkS" (type "Bottom Silk Screen"))',
         f'\t\t\t(copper_finish "{st.finish}")',
@@ -1206,12 +1268,17 @@ def _stackup_block(st: stackups.Stackup) -> str:
 
 
 def board_text(
-    stackup_id: str, b: Optional[catalog.Board] = None, revision: str = "1"
+    stackup_id: str,
+    b: Optional[catalog.Board] = None,
+    revision: str = "1",
+    info: Optional[dict] = None,
 ) -> Tuple[str, Panel]:
     st = stackups.get(stackup_id)
     b = b or catalog.board(stackup_id)
     wr = Writer(st, b)
     sticks = [s for s in b.sticks if s.generated]
+    if b.panel == "osh":
+        return _board_text_osh(st, b, wr, sticks, revision, info or {})
     panel = pack(sticks)
     for pl in panel.placed:
         build_stick(wr, pl)
@@ -1244,6 +1311,12 @@ def board_text(
     wr.text("LOT ____  SN ____", (x0 + 110, y0 + 3.2), ("lot",), size=1.2)
     if wr.ld is None:
         wr.text("JLCJLCJLCJLC", (x1 - 40, y1 - 1.8), ("orderno",), size=1.0)
+    text = _file_text(st, b, wr, revision)
+    panel.mask_rules = list(wr.mask_rules)
+    return text, panel
+
+
+def _file_text(st, b, wr, revision) -> str:
     nets = "\n".join(f'\t(net {i} "{n}")' for i, n in enumerate([""] + wr.items.nets))
     head = "\n".join(
         [
@@ -1253,7 +1326,8 @@ def board_text(
             '\t(generator_version "10.0")',
             f"\t(general (thickness {_n(st.thickness_mm)}) (legacy_teardrops no))",
             '\t(paper "A3")',
-            f'\t(title_block (title "yapnr RF coupon {b.letter} ({st.id})") (rev "{revision}")'
+            f'\t(title_block (title "yapnr RF coupon {b.name if b.upload else b.letter} ({st.id})")'
+            f' (rev "{revision}")'
             ' (comment 1 "generated by python -m yapnr.rf.coupons generate; do not edit"))',
             _layers_block(len(st.copper)),
             "\t(setup",
@@ -1272,14 +1346,34 @@ def board_text(
         + wr.items.vias
         + wr.items.zones
     )
+    return head + "\n" + "\n".join(body) + "\n)\n"
+
+
+def _board_text_osh(st, b, wr, sticks, revision, info):
+    """Board O: the frameless OSH Park panel (layout_o); its text and the tag on the A15
+    stick, nothing on a frame."""
+    from yapnr.rf.coupons import layout_o
+
+    panel = layout_o.pack(sticks)
+    layout_o.build(wr, panel, info)
+    text = _file_text(st, b, wr, revision)
     panel.mask_rules = list(wr.mask_rules)
-    return head + "\n" + "\n".join(body) + "\n)\n", panel
+    return text, panel
 
 
-def dru_text(mask_rules: Sequence[str]) -> str:
+def dru_text(mask_rules: Sequence[str], bites: bool = False) -> str:
     """Custom rules: each intentional mask opening may bridge its line and ground (the
-    mask-off sticks measure bare copper); nothing else is relaxed."""
+    mask-off sticks measure bare copper); with `bites`, the mouse-bite holes (footprint MB1)
+    sit on the break-off edge (OSH Park's suggested tab pattern), so the hole-to-edge rule does
+    not apply to them. Nothing else is relaxed."""
     out = ["(version 1)"]
+    if bites:
+        out.append(
+            '(rule "MB1: mouse-bite holes on the break-off edge (OSH Park tab pattern)"\n'
+            "\t(constraint physical_hole_clearance)\n"
+            "\t(condition \"A.memberOfFootprint('MB1') && B.Layer == 'Edge.Cuts'\")\n"
+            "\t(severity ignore))"
+        )
     for n in mask_rules:
         out.append(
             f'(rule "{n}: intentional mask opening over a test line"\n'

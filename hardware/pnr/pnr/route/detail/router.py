@@ -489,21 +489,24 @@ def route_board(
     board.tracks = [t for t in board.tracks if math.dist(t[2], t[3]) >= 1e-6]
     board.vias = list(dict.fromkeys(board.vias))
     if rules and (rules.get("diff_pairs") or rules.get("length_match")):
-        # Length-match the declared pairs and groups on the finished route.
-        from .tune import tune_board
+        # Length-match the declared pairs and groups on the finished route (fixed
+        # copper counts in its net's length, unchanged).
+        from .tune import meanders_enabled, tune_board
 
-        board.length_report = tune_board(
-            board,
-            graph,
-            grid,
-            rules,
-            net_width=net_width,
-            default_width=track_width_mm,
-            net_halo=net_halo,
-            via_keepout=via_keepout,
-            access=net_access,
-            via_radius=via_radius_mm,
-        )
+        if meanders_enabled(rules):
+            board.length_report = tune_board(
+                board,
+                graph,
+                grid,
+                rules,
+                net_width=net_width,
+                default_width=track_width_mm,
+                net_halo=net_halo,
+                via_keepout=via_keepout,
+                access=net_access,
+                via_radius=via_radius_mm,
+                fixed_copper=fixed_copper,
+            )
     if route_trace is not None:
         route_trace.end(board)
     return board

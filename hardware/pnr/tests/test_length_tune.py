@@ -1,8 +1,10 @@
 """Length tuning after detailed routing (pnr.route.detail.tune) and its rules."""
 
 import math
+import os
 import random
 import unittest
+from unittest import mock
 
 from pnr import length_model as lm
 from pnr.constraints import compile_constraints
@@ -25,6 +27,9 @@ from pnr.route.detail.tune import (
     straight_runs,
     tune_board,
 )
+
+# An error inside tuning fails the test instead of leaving the route untuned.
+os.environ["PNR_TUNE_STRICT"] = "1"
 
 FAB = {
     "track_width_mm": 0.25,
@@ -74,10 +79,21 @@ def route(graph, rules):
 
 class RulesTest(unittest.TestCase):
     def test_shape_defaults_from_the_fab(self):
+        # Legs three widths apart (edge to edge) by preference, the clearance at least.
         shape = shape_rules({}, 0.25, 0.25, 0.2)
-        self.assertEqual((shape.gap, shape.amp_min, shape.amp_max, shape.amp_cap), (2, 1, 4, 16))
-        shape = shape_rules({"tuning": {"amplitude_max_mm": 0.5, "gap_mm": 0.6}}, 0.25, 0.25, 0.2)
-        self.assertEqual((shape.gap, shape.amp_max, shape.amp_cap), (4, 2, 2))
+        self.assertEqual(
+            (shape.gap, shape.gap_min, shape.amp_min, shape.amp_max, shape.amp_cap),
+            (4, 2, 1, 4, 16),
+        )
+        self.assertIsNone(shape.max_added_mm)
+        shape = shape_rules(
+            {"tuning": {"amplitude_max_mm": 0.5, "gap_mm": 0.6, "max_added_mm": 3}},
+            0.25,
+            0.25,
+            0.2,
+        )
+        self.assertEqual((shape.gap, shape.gap_min, shape.amp_max, shape.amp_cap), (4, 4, 2, 2))
+        self.assertEqual(shape.max_added_mm, 3.0)
 
     def test_sets_and_units(self):
         rules = pair_rules(skew_ps=3.0)
@@ -210,7 +226,8 @@ class TuneMemberTest(unittest.TestCase):
             access={"A": [a.cells[0], a.cells[-1]]},
             via_radius=0.3,
         )
-        owner = tuner._owner_map()
+        tuner.prepare()
+        owner = tuner.owner
         # Side cells of the run's own steps lie in B's footprint (its via ring).
         corners = {
             Cell(0, q.i, p.j)
@@ -218,9 +235,7 @@ class TuneMemberTest(unittest.TestCase):
         }
         self.assertTrue(any("B" in owner.get(c, ()) for c in corners))
         shape = shape_rules(rules, grid.pitch, 0.25, 0.2)
-        added, bumps, _mitres = tuner.tune_member(
-            "A", 2.0, "mm", shape, owner, tuner.copper_index()
-        )
+        added, bumps, _mitres, _gap = tuner.tune_member("A", 2.0, "mm", shape)
         self.assertGreaterEqual(bumps, 1)
         self.assertGreater(added, 1.0)
         # Every new cell keeps out of B's footprint; the via keeps its clearance.
@@ -279,9 +294,10 @@ class SpreadSetTest(unittest.TestCase):
             via_radius=0.3,
         )
         longest = tuner.measure("C").total_mm
-        owner = tuner._owner_map()
+        tuner.prepare()
+        owner = tuner.owner
         (s,) = match_sets(rules)
-        moved = tuner.spread_set(s, owner, tuner.copper_index())
+        moved = tuner.spread_set(s)
         self.assertIn("A", moved)
         self.assertNotIn("B", moved)
         # B now has at least 5 cells to each neighbour along its middle.
@@ -405,15 +421,13 @@ class TuneBoardTest(unittest.TestCase):
         self.assertGreaterEqual(sum(1 for m in report["members"] if m["bumps"]), 4)
 
     def test_a_tuning_failure_keeps_the_route(self):
-        from unittest import mock
-
         g = pair_board(n_offset=2.5)
         plain_rules = pair_rules()
         plain_rules["diff_pairs"] = []
         plain = route(g, plain_rules)
         with mock.patch(
             "pnr.route.detail.tune.Tuner.tune_member", side_effect=RuntimeError("boom")
-        ):
+        ), mock.patch.dict(os.environ, {"PNR_TUNE_STRICT": "0"}):
             board = route(g, pair_rules(skew_mm=0.5))
         self.assertEqual(sorted(board.tracks), sorted(plain.tracks))
         (report,) = board.length_report
@@ -422,7 +436,6 @@ class TuneBoardTest(unittest.TestCase):
 
     def test_unmatched_set_reroutes_its_longest_member(self):
         from collections import defaultdict
-        from unittest import mock
 
         from pnr.route.detail import tune
         from pnr.route.detail.maze import _route_one, _to_geometry
@@ -492,8 +505,6 @@ class TuneBoardTest(unittest.TestCase):
         # Six nets from a 1 mm pitch column to a 1.27 mm pitch row above and to the
         # right: the bus turns a corner, the inner nets are the short ones and run
         # between their neighbours at the pins' pitch.
-        from unittest import mock
-
         from pnr.route.detail import tune
 
         def pad(name, net, off, size):
@@ -552,6 +563,266 @@ class TuneBoardTest(unittest.TestCase):
         delays = [m["delay_ps"] for m in report["members"]]
         self.assertTrue(all(d and d > 0 for d in delays))
         self.assertTrue(math.isclose(max(delays) - min(delays), report["spread"], abs_tol=1e-3))
+
+
+def hand_board(routes, layers=("F.Cu", "B.Cu"), size=10.0, halo=1, vias=()):
+    """A routed board from hand-made grid routes ``{net: [cells]}`` (consecutive
+    cells joined), with ``vias`` ``[(net, i, j)]`` (the net's cells must hold both
+    layers of the column). Returns (board, graph)."""
+    from pnr.route.detail.grid import RouteGrid
+    from pnr.route.detail.maze import RouteResult
+    from pnr.route.detail.router import BoardRoute
+
+    grid = RouteGrid(size, size, 0.25, layers=layers, clearance=0.2, track_width=0.25)
+    grid.routing_track_halos = {n: halo for n in routes}
+    grid.routing_via_keepout = 1
+    nets = {}
+    for n, cells in routes.items():
+        rn = RoutedNet(n)
+        rn.cells = list(dict.fromkeys(cells))
+        rn.segments = [
+            (p.layer, (p.i, p.j), (q.i, q.j))
+            for p, q in zip(cells, cells[1:])
+            if p.layer == q.layer
+        ]
+        rn.vias = [(i, j) for net, i, j in vias if net == n]
+        rn.routed = True
+        nets[n] = rn
+    board = BoardRoute(result=RouteResult(nets=nets, unrouted=[], iterations=0), grid=grid)
+    board.tracks = [
+        (n, layers[la], grid.center_of(*p), grid.center_of(*q), 0.25)
+        for n, rn in nets.items()
+        for la, p, q in rn.segments
+    ]
+    board.vias = [(net, *grid.center_of(i, j)) for net, i, j in vias]
+    g = BoardGraph("t", [], [Net(n, k + 1, []) for k, n in enumerate(routes)])
+    return board, g
+
+
+def hand_tuner(board, g, rules, **kw):
+    from pnr.route.detail.tune import Tuner
+
+    nets = board.result.nets
+    return Tuner(
+        board,
+        g,
+        board.grid,
+        rules,
+        net_width={},
+        default_width=0.25,
+        net_halo={n: 1 for n in nets},
+        via_keepout=1,
+        access={n: [rn.cells[0], rn.cells[-1]] for n, rn in nets.items()},
+        via_radius=0.3,
+        **kw,
+    )
+
+
+def row(j, i0, i1, layer=0):
+    return [Cell(layer, i, j) for i in range(i0, i1 + 1)]
+
+
+class OverlappingSetsTest(unittest.TestCase):
+    def report(self, x_end):
+        g = pair_board(n_offset=1.5, extra=[("X", (0, -1.4), (0, -x_end))])
+        rules = pair_rules()
+        rules["length_match"] = [{"name": "grp", "nets": ["D_P", "D_N", "X"], "tolerance_mm": 0.5}]
+        board = route(g, rules)
+        return {r["name"]: r for r in board.length_report}
+
+    def test_a_group_lengthens_both_legs_of_a_pair(self):
+        # X as long as D_N, then X the longest: the group brings both legs up to it
+        # and the pair stays within its own budget.
+        for x_end in (4.4, 5.2):
+            with self.subTest(x_end=x_end):
+                got = self.report(x_end)
+                for name in ("d", "grp"):
+                    self.assertEqual(got[name]["status"], "tuned")
+                    self.assertLessEqual(got[name]["spread"], got[name]["budget"])
+                legs = {m["net"]: m["length_mm"] for m in got["grp"]["members"]}
+                pair = {m["net"]: m["length_mm"] for m in got["d"]["members"]}
+                self.assertEqual(legs["D_P"], pair["D_P"])  # one board, one measure
+                self.assertAlmostEqual(got["d"]["spread"], abs(pair["D_P"] - pair["D_N"]), places=6)
+
+    def test_a_set_that_would_break_an_earlier_one_is_undone(self):
+        # Pair ab: A and B are 7 mm, matched. Group {A, X}: X is 9 mm, so the group
+        # lengthens A; B, boxed in by C and D, cannot follow, so the pair would end
+        # 2 mm apart: the group's tuning is undone and the group reported unmatched.
+        routes = {
+            "A": row(30, 2, 30),
+            "B": row(12, 2, 30),
+            "C": row(9, 2, 30),
+            "D": row(15, 2, 30),
+            "X": row(22, 2, 38),
+        }
+        board, g = hand_board(routes)
+        rules = pair_rules()
+        rules["diff_pairs"] = [dict(name="ab", p="A", n="B", skew_mm=0.5)]
+        rules["length_match"] = [{"name": "grp", "nets": ["A", "X"], "tolerance_mm": 0.5}]
+        before = sorted(board.tracks)
+        reports = {r.name: r for r in hand_tuner(board, g, rules).run()}
+        self.assertEqual(reports["ab"].status, "ok")
+        self.assertEqual(reports["grp"].status, "length_unmatched")
+        self.assertTrue(reports["grp"].reverted)
+        self.assertEqual(reports["grp"].conflicts, ["ab"])
+        self.assertEqual(sorted(board.tracks), before)
+
+    def test_statuses_follow_the_final_board(self):
+        # Whatever the order, every set's status says what its spread says.
+        for x_end in (4.4, 5.2):
+            for r in self.report(x_end).values():
+                over = r["spread"] > r["budget"] + 1e-9
+                self.assertEqual(r["status"] == "length_unmatched", over)
+
+
+class PairTest(unittest.TestCase):
+    def test_a_pairs_legs_are_never_routed_apart(self):
+        from pnr.route.detail import tune
+
+        g = pair_board(n_offset=2.5)
+        rules = pair_rules(skew_mm=0.5)
+        rules["tuning"] = {"style": "trombone", "amplitude_max_mm": 0.25}
+        with mock.patch.object(tune.Tuner, "spread_set") as spread:
+            board = route(g, rules)
+        spread.assert_not_called()
+        (report,) = board.length_report
+        self.assertNotIn("spaced", report)
+        # Nor by default for a group that holds a pair's legs.
+        routes = {"A": row(10, 2, 30), "B": row(20, 2, 30), "C": row(30, 2, 34)}
+        hb, hg = hand_board(routes)
+        rules = pair_rules()
+        rules["diff_pairs"] = [dict(name="ab", p="A", n="B", skew_mm=0.5)]
+        rules["length_match"] = [{"name": "grp", "nets": ["B", "C"], "tolerance_mm": 0.5}]
+        tuner = hand_tuner(hb, hg, rules)
+        tuner.prepare()
+        self.assertFalse(tuner.may_reroute("B"))  # two sets
+        self.assertTrue(tuner.may_reroute("A"))  # its pair only: rerouting, not spreading
+        self.assertEqual(tuner.spread_set(match_sets(rules)[1]), [])
+
+    def test_coupled_length(self):
+        from pnr.route.detail.tune import coupled_length
+
+        p = [("F.Cu", (0.0, 0.0), (10.0, 0.0))]
+        n = [("F.Cu", (0.0, 0.45), (5.0, 0.45)), ("B.Cu", (5.0, 0.45), (10.0, 0.45))]
+        coupled, total = coupled_length(p, n, 0.5)
+        self.assertAlmostEqual(total, 10.0)
+        # Beside the F.Cu half, up to where its end is 0.5 mm away (x = 5.218).
+        self.assertAlmostEqual(coupled, 5.218, delta=0.06)
+        self.assertEqual(coupled_length(p, n, 0.4)[0], 0.0)
+
+    def test_the_report_gives_layers_gap_and_coupling(self):
+        g = pair_board(n_offset=2.5)
+        (report,) = route(g, pair_rules(skew_mm=0.5)).length_report
+        self.assertIn("coupled_share", report)
+        self.assertGreaterEqual(report["coupled_share"], 0.0)
+        tuned = [m for m in report["members"] if m["bumps"]]
+        self.assertTrue(tuned)
+        for m in report["members"]:
+            self.assertTrue(set(m["layers"]) <= {"F.Cu", "B.Cu"} and m["layers"])
+        # Room beside the leg: the meander legs stand three widths apart.
+        self.assertAlmostEqual(tuned[0]["gap_mm"], 0.75)
+
+
+class UnmatchedTest(unittest.TestCase):
+    def test_an_unmatched_set_goes_back_to_the_route_as_routed(self):
+        g = pair_board(n_offset=4.0)
+        rules = pair_rules(skew_mm=0.5)
+        # One 0.5 mm bump of the 1.37 mm the pair needs: not half of the excess.
+        rules["tuning"] = {"max_added_mm": 0.5}
+        board = route(g, rules)
+        (report,) = board.length_report
+        self.assertEqual(report["status"], "length_unmatched")
+        self.assertTrue(report["reverted"])
+        self.assertTrue(all(m["bumps"] == 0 for m in report["members"]))
+        plain_rules = pair_rules(skew_mm=0.5)
+        plain_rules["tuning"] = {"meanders": False}
+        plain = route(g, plain_rules)
+        self.assertIsNone(plain.length_report)
+        self.assertEqual(sorted(board.tracks), sorted(plain.tracks))
+
+    def test_meanders_stop_at_the_added_length_cap(self):
+        g = pair_board(n_offset=4.0)
+        free = pair_rules(skew_mm=0.5)
+        (report,) = route(g, free).length_report
+        self.assertGreater(max(m["added_mm"] for m in report["members"]), 1.2)
+        rules = pair_rules(skew_mm=0.5)
+        rules["tuning"] = {"max_added_mm": 1.0}
+        (report,) = route(g, rules).length_report
+        self.assertAlmostEqual(max(m["added_mm"] for m in report["members"]), 1.0)
+        self.assertEqual(report["status"], "tuned")  # 0.37 mm apart, inside 0.5
+
+
+class FixedCopperTest(unittest.TestCase):
+    def test_fixed_copper_counts_in_the_length_and_the_clearance(self):
+        routes = {"A": row(10, 2, 30), "B": row(20, 2, 30)}
+        board, g = hand_board(routes)
+        rules = pair_rules()
+        rules["diff_pairs"] = []
+        rules["length_match"] = [{"name": "ab", "nets": ["A", "B"], "tolerance_mm": 0.5}]
+        a_end = board.grid.center_of(30, 10)
+        fixed = {
+            "frame": "engine-mm-y-up",
+            "tracks": [["A", "F.Cu", list(a_end), [a_end[0] + 2.0, a_end[1]], 0.25]],
+            "vias": [dict(net="Z", xy=[5.0, 7.0], diameter_mm=0.6, drill_mm=0.3, type="through")],
+        }
+        tuner = hand_tuner(board, g, rules, fixed_copper=fixed)
+        self.assertAlmostEqual(tuner.measure("A").total_mm, 7.0 + 2.0, places=6)
+        tuner.prepare()
+        self.assertFalse(
+            tuner.index.clear("B", "F.Cu", (5.0, 6.6), (5.5, 6.6), 0.125, lambda n: 0.2)
+        )
+        self.assertFalse(tuner.may_reroute("A"))  # its fixed copper stays joined
+        reports = tuner.run()
+        # B is lengthened to A's whole length, fixed part included.
+        self.assertEqual(reports[0].status, "tuned")
+        self.assertLessEqual(reports[0].spread, reports[0].budget)
+        self.assertTrue(next(m for m in reports[0].members if m.net == "A").fixed)
+
+    def test_a_set_leaving_a_block_is_partial(self):
+        g = pair_board(n_offset=2.5)
+        rules = pair_rules(skew_mm=0.5)
+        rules["block_ports"] = ["D_P"]
+        plain_rules = dict(rules, tuning={"meanders": False})
+        board = route(g, rules)
+        (report,) = board.length_report
+        self.assertEqual(report["status"], "partial")
+        self.assertEqual(sorted(board.tracks), sorted(route(g, plain_rules).tracks))
+
+    def test_a_layer_change_through_a_plated_pad_is_not_routed_again(self):
+        cells = row(10, 2, 15) + row(10, 15, 30, layer=1)
+        board, g = hand_board({"A": cells, "B": row(20, 2, 30)})
+        rules = pair_rules()
+        rules["diff_pairs"] = []
+        rules["length_match"] = [{"name": "ab", "nets": ["A", "B"], "tolerance_mm": 0.5}]
+        tuner = hand_tuner(board, g, rules)
+        tuner.prepare()
+        self.assertTrue(tuner.may_reroute("A"))
+        centre = board.grid.center_of(15, 10)
+        board.grid.plated_ports = [("A", centre, 1.0)]
+        self.assertFalse(tuner.may_reroute("A"))
+        self.assertFalse(tuner.reroute_shorter("A", "mm"))
+
+
+class StackupTest(unittest.TestCase):
+    def test_a_via_counts_its_span_on_four_layers(self):
+        layers = ("F.Cu", "In1.Cu", "In2.Cu", "B.Cu")
+        a = row(10, 2, 20) + row(10, 20, 30, layer=3)
+        board, g = hand_board({"A": a, "B": row(22, 2, 30)}, layers=layers, vias=[("A", 20, 10)])
+        st = lm.default_stackup(4)
+        rules = pair_rules()
+        rules.update(layers=4, stackup=st, diff_pairs=[])
+        rules["length_match"] = [{"name": "ab", "nets": ["A", "B"], "tolerance_mm": 0.2}]
+        tuner = hand_tuner(board, g, rules)
+        span = lm.layer_distance(st, "F.Cu", "B.Cu")
+        self.assertAlmostEqual(tuner.measure("A").via_mm, span)
+        (report,) = tuner.run()
+        self.assertEqual(report.status, "tuned")
+        self.assertLessEqual(report.nominal_spread, report.target_residual)
+        b = next(m for m in report.members if m.net == "B")
+        self.assertGreater(b.added_mm, span - report.target_residual)
+        # A stackup whose copper layers are not the board's is refused.
+        with self.assertRaises(ValueError):
+            hand_tuner(board, g, dict(rules, stackup=lm.default_stackup(2)))
 
 
 if __name__ == "__main__":

@@ -151,6 +151,12 @@ def supports(grid) -> bool:
     return False
 
 
+def fallbacks() -> list:
+    """Why searches on a :class:`RouteGrid` ran on the reference kernel in this
+    process (:func:`supports`), sorted; empty when every search had its fields."""
+    return sorted(_WARNED)
+
+
 _STENCILS: Dict[tuple, object] = {}
 
 

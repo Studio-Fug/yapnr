@@ -224,10 +224,17 @@ def active():
 
 
 def status():
-    """Which kernel searches run on, for provenance."""
+    """Which kernel searches run on, for provenance: the selected kernel and, under
+    ``reference_fallback``, why searches on some grid ran on the reference kernel
+    instead (grid state the dense fields do not model, such as a via model)."""
+    from .dense_maze import fallbacks
     from .maze import maze_kernel
 
     kernel = maze_kernel()
     if kernel == "native":
-        return dict(kernel="native" if load() is not None else "packed", reason=_STATE["reason"])
-    return dict(kernel=kernel, reason="")
+        out = dict(kernel="native" if load() is not None else "packed", reason=_STATE["reason"])
+    else:
+        out = dict(kernel=kernel, reason="")
+    if kernel != "reference" and fallbacks():
+        out["reference_fallback"] = fallbacks()
+    return out

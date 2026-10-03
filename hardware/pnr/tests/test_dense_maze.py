@@ -526,6 +526,29 @@ class GridModelGuardTest(unittest.TestCase):
         with patch.object(dense_maze, "_STALE", ["RouteGrid.passable"]):
             self.assertIn("RouteGrid.passable", dense_maze.unmodelled(RouteGrid(4, 4, 1)))
 
+    def test_status_names_a_reference_fallback(self):
+        # A run whose grid the fields do not model (a via model) records that its
+        # searches ran on the reference kernel, not only the kernel it selected.
+        import io
+        from contextlib import redirect_stderr
+
+        from pnr.route.detail import dense_maze
+
+        with patch.object(dense_maze, "_WARNED", set()), patch.dict(os.environ):
+            os.environ.pop("PNR_PACKED_MAZE", None)
+            os.environ.pop("PNR_MAZE_KERNEL", None)
+            self.assertEqual(native_maze.status(), dict(kernel="packed", reason=""))
+            grid = RouteGrid(4, 4, 1)
+            grid.via_model = {"spans": [(0, 1)]}
+            with redirect_stderr(io.StringIO()):
+                self.assertFalse(dense_maze.supports(grid))
+            status = native_maze.status()
+            self.assertEqual(status["kernel"], "packed")
+            self.assertEqual(len(status["reference_fallback"]), 1)
+            self.assertIn("via_model", status["reference_fallback"][0])
+            os.environ["PNR_PACKED_MAZE"] = "0"
+            self.assertNotIn("reference_fallback", native_maze.status())
+
     def test_one_static_table_per_tree_without_a_session(self):
         from pnr.route.detail import dense_maze
         from pnr.route.detail.maze import _route_one

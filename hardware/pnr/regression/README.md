@@ -179,7 +179,10 @@ search itself runs about six times faster than packed on a dense board, while
 on the small ladder boards the whole run is about as fast as packed, since
 little of it is search); each case's `pnr-report.json` records the kernel that
 actually ran (`maze_kernel`), which is packed when the library cannot load or
-no compiler is found (the runner then says so and records it in provenance).
+no compiler is found (the runner then says so and records it in provenance), and
+under `maze_kernel.reference_fallback` why searches ran on the reference kernel
+instead (a grid the dense fields do not model, such as a board with blind, buried
+or micro vias).
 `--exact-separation recover|full|off` sets the detailed router's separation
 model (`PNR_EXACT_SEPARATION`, `pnr/route/detail/exact_route.py`): `full` routes
 with the exact pairwise copper separation instead of the halo model (which

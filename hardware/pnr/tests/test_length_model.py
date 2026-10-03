@@ -276,6 +276,44 @@ class LengthTest(unittest.TestCase):
         plain = lm.net_length("N", tracks[:3], [v], pads, self.st, via_radius=0.3)
         self.assertEqual(plain.low_mm, plain.high_mm)
 
+    def test_a_line_with_both_ends_in_one_via_gives_both_directions(self):
+        # A via in an SMD pad, 0.25 mm from the pad's centre (inside the via's
+        # copper), joined to the centre by a hook: both ends of the F.Cu line lie in
+        # the via. KiCad cuts the line at its first point when that lies in the via,
+        # else at its last, so the item order (the line's direction) decides which
+        # end is straightened. On the routed 09-mcu-usb-31-4L-SGPS seed 0 board KiCad
+        # 10.0.6 measured this net (USB_DN) at the high end, 0.213 mm over the
+        # route's own order.
+        pad, via = (31.75, 37.4125), (31.875, 37.625)
+        a, b = (31.6625, 37.4125), (31.625, 37.375)
+        tracks = [
+            ("F.Cu", pad, a, 0.25),
+            ("F.Cu", a, b, 0.25),
+            ("F.Cu", via, b, 0.25),
+            ("B.Cu", (31.875, 38.125), (31.875, 37.875), 0.25),
+            ("B.Cu", (31.875, 37.875), via, 0.25),
+        ]
+        pads = [
+            lm.PadCopper("N", pad, frozenset(["F.Cu"]), lm.rounded_rect(pad, (1.025, 1.4), 0.25))
+        ]
+        got = lm.net_length("N", tracks, [via], pads, self.st, via_radius=0.3)
+        first = lm.net_length("N", tracks, [via], pads, self.st, via_radius=0.3, orders=1)
+        other = lm.net_length(
+            "N",
+            [tracks[2]] + tracks[:2] + tracks[3:],
+            [via],
+            pads,
+            self.st,
+            via_radius=0.3,
+            orders=1,
+        )
+        self.assertGreater(abs(first.total_mm - other.total_mm), 0.2)
+        self.assertAlmostEqual(got.low_mm, min(first.total_mm, other.total_mm), places=9)
+        self.assertAlmostEqual(got.high_mm, max(first.total_mm, other.total_mm), places=9)
+        # Without the via the line's direction does not matter.
+        plain = lm.net_length("N", tracks[:3], [], pads, self.st)
+        self.assertEqual(plain.low_mm, plain.high_mm)
+
     def test_board_frame_is_the_writebacks(self):
         from pnr.writeback import to_pcb_nm
 

@@ -693,8 +693,9 @@ def net_length(
 
     The total takes the tracks layer by layer (F.Cu first, then by KiCad layer id),
     each layer in the given order, the order KiCad's file holds them in. A net that
-    branches is measured again in ``orders - 1`` other orders (reversed, then seeded
-    shuffles) for the range KiCad's own order may give (``low_mm`` .. ``high_mm``)."""
+    branches, or has a line with both ends in one via (:func:`_ends_in_one_via`), is
+    measured again in ``orders - 1`` other orders (reversed, then seeded shuffles) for
+    the range KiCad's own order may give (``low_mm`` .. ``high_mm``)."""
     _nm = frame or _key
     mine = [p for p in pads if p.net == net]
     pad_items = [_Pad(_nm(p.centre), [_nm(q) for q in p.outline], p.layers, p.side) for p in mine]
@@ -724,7 +725,7 @@ def net_length(
     track_mm, track_ps, result.lines = _track_length(raw, via_items, pad_items, delay)
     result.track_mm = track_mm
     totals = [(result.via_mm + track_mm, via_ps + track_ps)]
-    if orders > 1 and _branches(raw):
+    if orders > 1 and (_branches(raw) or _ends_in_one_via(raw, via_items)):
         # KiCad saves a net's tracks layer by layer (F.Cu first, then in layer id
         # order) and in random UUID order within a layer, and measures them in its
         # items' memory order, which mostly follows the file: half the samples keep
@@ -772,6 +773,25 @@ def _branches(raw) -> bool:
         for p in (a, b):
             ends[p] = ends.get(p, 0) + 1
     return any(n >= 3 for n in ends.values())
+
+
+def _ends_in_one_via(raw, via_items) -> bool:
+    """A line with both ends in one via's copper (a via in a pad, next to the pad's
+    centre): KiCad cuts it at its first point when that lies in the via, else at its
+    last, so which end is cut follows the line's direction, set by the item order."""
+    lines = [_Line(layer, w, [a, b]) for layer, a, b, w in raw]
+    _merge_lines(lines)
+    for line in lines:
+        if line.status != 1 or len(line.pts) < 2:
+            continue
+        for centre, radius in via_items:
+            if (
+                radius > 0
+                and _in_circle(centre, radius, line.pts[0])
+                and _in_circle(centre, radius, line.pts[-1])
+            ):
+                return True
+    return False
 
 
 def _track_length(raw, via_items, pad_items, delay):

@@ -9,6 +9,12 @@ downstream: this module chooses a starting placement, never a finished PCB.
 
 PNR_PAIR_LANDING_RESERVE=1 (src13, default off): the prepared source graph (flat
 MC placement and hierarchical_place) carries the diff-pair via landing reserves.
+
+PNR_COMPACT=1 (default off, :mod:`pnr.place.compact`): the stratified and Latin starts
+are drawn in the cluster box (``GP``, the same draws), the pool places at spread 1.0, the
+basin fallback legalizes with the compact legalizer settings (``LEGALIZE``) and
+(``RANK``) the routed finalists rank by :func:`route_rank` with the compactness bucket
+after the completion keys.
 """
 
 from __future__ import annotations
@@ -26,6 +32,7 @@ from pnr import trace as _trace
 from pnr.constraints import Constraint, Enforcement
 from pnr.graph import BoardGraph, BoardOutline
 
+from . import compact
 from .geometry import (
     apply_hard_sides,
     courtyard_rect,
@@ -233,6 +240,8 @@ def initial_starts(graph, constraints, config, seed=0, orient=True, rules=None):
     # own generator so positions and rotations are those of a single-sided start.
     plan = side_plan(graph, constraints, rules)
     free = [r for r in plan.free if r not in fixed]
+    # PNR_COMPACT GP: the draws land in the cluster box instead of the whole board.
+    box = compact.cluster_box(graph, constraints, width, height) if compact.enabled("GP") else None
     result = [dict(id="start-00", kind="legacy-global", seed=seed, positions=None, rotations=None)]
     result.append(
         dict(
@@ -275,10 +284,19 @@ def initial_starts(graph, constraints, config, seed=0, orient=True, rules=None):
         for comp, (u, v) in zip(movable, normalized):
             half_x = min(width / 2, comp.courtyard[0] / 2)
             half_y = min(height / 2, comp.courtyard[1] / 2)
-            positions[comp.ref] = [
-                half_x + u * (width - 2 * half_x),
-                half_y + v * (height - 2 * half_y),
-            ]
+            if box is None:
+                positions[comp.ref] = [
+                    half_x + u * (width - 2 * half_x),
+                    half_y + v * (height - 2 * half_y),
+                ]
+            else:
+                x0, y0, x1, y1 = compact.occupied_box(comp)
+                half_x = min(width / 2, (x1 - x0) / 2)
+                half_y = min(height / 2, (y1 - y0) / 2)
+                positions[comp.ref] = [
+                    compact.box_coordinate(u, half_x, box[0], box[2], width),
+                    compact.box_coordinate(v, half_y, box[1], box[3], height),
+                ]
             if orient:
                 rotations[comp.ref] = 90 * rng.randrange(4)
         result.append(
@@ -630,9 +648,16 @@ def _route_metrics(board):
 def route_rank(metrics) -> tuple:
     """Sort key of routed candidates: missing connections, unresolved nets, then
     declared pairs / groups outside their budgets (``length_unmatched``, only when
-    the design declares any), then vias and copper length (the ``objective``)."""
+    the design declares any), then vias and copper length (the ``objective``).
+
+    PNR_COMPACT ``RANK``: a record carrying the compactness ``bucket``
+    (:func:`pnr.place.compact.rank_bucket`) ranks it right before the vias, after every
+    completion key; a record without one is keyed as before."""
     objective = list(metrics.get("objective") or [math.inf])
-    return tuple(objective[:2]) + (metrics.get("length_unmatched", 0),) + tuple(objective[2:])
+    head = tuple(objective[:2]) + (metrics.get("length_unmatched", 0),)
+    if "bucket" in metrics:
+        head = head + (metrics["bucket"],)
+    return head + tuple(objective[2:])
 
 
 def select_initial_placement(
@@ -662,6 +687,7 @@ def select_initial_placement(
     from .cost_capture import initial_start_context
 
     config = config or InitialPoolConfig()
+    spread = compact.spread(spread)  # PNR_COMPACT GP: 1.0 (unchanged otherwise)
     constraints = preserve_source_locks(graph, constraints)
     source = _prepared_source(graph, constraints, rules)
     fixed = set(resolve_fixed_poses(source, constraints))
@@ -741,6 +767,8 @@ def select_initial_placement(
                         from .legalize import legalize, legalize_constraint_kwargs, pad_edge_rule
 
                         seed_graph = copy.deepcopy(legal[0]["graph"])
+                        # PNR_COMPACT LEGALIZE: the compact legalizer settings (None: off).
+                        tight = compact.legalize_settings(source, placement_constraints, rules)
                         poses = resolve_fixed_poses(seed_graph, placement_constraints)
                         for anchor in start["basin_anchors"]:
                             comp = seed_graph.component(anchor["ref"])
@@ -755,8 +783,12 @@ def select_initial_placement(
                             seed_graph,
                             source.outline.width,
                             source.outline.height,
-                            clearance=placement_constraints.board.default_clearance_mm,
-                            grid_mm=0.25,
+                            clearance=(
+                                placement_constraints.board.default_clearance_mm
+                                if tight is None
+                                else tight.gap
+                            ),
+                            grid_mm=0.25 if tight is None else tight.grid_mm,
                             allow_rotation=orient,
                             channel_model=ChannelModel(seed_graph, rules),
                             spread=min(spread, 1.3),
@@ -771,6 +803,9 @@ def select_initial_placement(
                                 if not stack_refs(seed_graph, placement_constraints)
                                 else dict(stack=stack_refs(seed_graph, placement_constraints))
                             ),
+                            **(
+                                {} if not (tight and tight.margins) else dict(margins=tight.margins)
+                            ),
                         )
                         from .regions import declared, snap_aligns
 
@@ -778,7 +813,7 @@ def select_initial_placement(
                             snap_aligns(
                                 placed,
                                 placement_constraints,
-                                placement_constraints.board.default_clearance_mm,
+                                compact.placement_clearance(placement_constraints),
                                 pad_edge_rule(placement_constraints, rules),
                                 (source.outline.width, source.outline.height),
                             )
@@ -999,6 +1034,12 @@ def select_initial_placement(
             else:
                 os.environ["PNR_LIVE_CANDIDATE"] = previous_lane
         metrics = _route_metrics(route)
+        if compact.enabled("RANK"):
+            # PNR_COMPACT RANK: the compactness bucket joins route_rank after completion.
+            measured = compact.metrics(
+                candidate["graph"], source.outline.width, source.outline.height
+            )
+            metrics = dict(metrics, bucket=measured["bucket"], compactness=measured)
         record.update(
             status="routed_finalist",
             routing=metrics,

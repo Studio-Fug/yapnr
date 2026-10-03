@@ -327,7 +327,9 @@ def translation_checker(graph, constraints, clearance=0.0):
 BUCKET_MM = 4.0  # pose_checker's spatial index cell
 
 
-def pose_checker(graph, constraints, *, clearance=0.0, spread=1.0, pad_edge=None, inflation=None):
+def pose_checker(
+    graph, constraints, *, clearance=0.0, spread=1.0, pad_edge=None, inflation=None, margins=None
+):
     """Check a few re-posed parts (position, rotation and side) against an otherwise
     unchanged, initially legal board.
 
@@ -339,6 +341,8 @@ def pose_checker(graph, constraints, *, clearance=0.0, spread=1.0, pad_edge=None
     ``inflation`` ({ref: factor}, the routing feedback's), whichever is larger, as the
     legalizer grows its slot (so a move does not close routing channels). Rows and
     line groups are not re-checked: their members must not move.
+    ``margins`` ({ref: mm}, PNR_COMPACT ``LEGALIZE``) grows each part's rectangles by its
+    copper margin on every side, as the legalizer grows its slot.
     After accepting a move call ``legal.update(refs)`` to refresh the cache.
     """
     bad = hard_violations(graph, constraints)
@@ -371,9 +375,23 @@ def pose_checker(graph, constraints, *, clearance=0.0, spread=1.0, pad_edge=None
         for cell in cells_of[ref]:
             buckets.setdefault(cell, set()).add(ref)
 
+    margins = margins or {}
+
+    def widen(ref, regions):
+        """PNR_COMPACT LEGALIZE: the part's rectangles grown by its copper margin."""
+        from .geometry import ReserveRect
+
+        m = margins.get(ref)
+        if not m:
+            return regions
+        return [
+            (side, r if isinstance(r, ReserveRect) else Rect(r.cx, r.cy, r.w + 2 * m, r.h + 2 * m))
+            for side, r in regions
+        ]
+
     stack = stack_refs(graph, constraints)
     for c in graph.components:
-        index(c.ref, _with_stack(c, placement_rects(c), stack))
+        index(c.ref, widen(c.ref, _with_stack(c, placement_rects(c), stack)))
 
     def grown(comp):
         from .geometry import ReserveRect
@@ -384,7 +402,7 @@ def pose_checker(graph, constraints, *, clearance=0.0, spread=1.0, pad_edge=None
             if factor > 1.0 and not isinstance(rect, ReserveRect):
                 rect = Rect(rect.cx, rect.cy, rect.w * factor, rect.h * factor)
             out.append((side, rect))
-        return out
+        return widen(comp.ref, out)
 
     def legal(moved, ignore=()):
         names = {c.ref for c in moved} | set(ignore)
@@ -408,7 +426,7 @@ def pose_checker(graph, constraints, *, clearance=0.0, spread=1.0, pad_edge=None
                 if any(
                     side == other_side and area.overlaps(other, gap=clearance)
                     for side, area in mine[a.ref]
-                    for other_side, other in _with_stack(b, placement_rects(b), stack)
+                    for other_side, other in widen(b.ref, _with_stack(b, placement_rects(b), stack))
                 ):
                     return False
         return True
@@ -416,7 +434,7 @@ def pose_checker(graph, constraints, *, clearance=0.0, spread=1.0, pad_edge=None
     def update(refs):
         for ref in refs:
             comp = graph.component(ref)
-            index(ref, _with_stack(comp, placement_rects(comp), stack))
+            index(ref, widen(ref, _with_stack(comp, placement_rects(comp), stack)))
 
     legal.update = update
     return legal

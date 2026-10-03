@@ -181,6 +181,14 @@ def reserve_array_space(graph, intents, fab, edge_clearance_mm):
                 center = (max(p.offset[axis] for p in pads) + min(p.offset[axis] for p in pads)) / 2
                 extent = max(extent, abs(center) + span / 2 + diameter / 2) + edge_clearance_mm
             envelope[axis] = max(envelope[axis], 2 * extent)
+        from pnr.compact_flags import enabled as compact_enabled
+
+        if comp.body is not None and compact_enabled("COURTYARD"):
+            # PNR_COMPACT offset courtyard: the body box grows to the same symmetric
+            # reservation, so the array space stays reserved at every pose.
+            x0, y0, x1, y1 = comp.body
+            ex, ey = envelope[0] / 2, envelope[1] / 2
+            comp.body = (min(x0, -ex), min(y0, -ey), max(x1, ex), max(y1, ey))
         comp.courtyard = tuple(envelope)
 
 

@@ -99,6 +99,8 @@ def top_board(
     def extra(graph_, moved):
         return sorted(source_errors(graph_, source, con, rules))
 
+    from pnr.place.compact import placement_clearance
+
     return MoveBoard(
         graph=parent,
         constraints=con,
@@ -107,7 +109,8 @@ def top_board(
         units=units or None,
         tier1=tier1,
         origin=origin,
-        clearance=float(con.board.default_clearance_mm),
+        # The board clearance; the courtyard gap with PNR_COMPACT LEGALIZE.
+        clearance=placement_clearance(con),
         plane=plane_nets(parent, con),
         extra_check=extra,
         guard=guard,

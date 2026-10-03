@@ -39,6 +39,8 @@ filegroup(
         "pnr/__init__.py",
         "pnr/graph.py",
         "pnr/ingest.py",
+        # PNR_COMPACT / PNR_SHRINK switches (stdlib; pnr.plane_intent reads them).
+        "pnr/compact_flags.py",
         "pnr/source_footprints.py",
         "pnr/library_table.py",
         "pnr/planes.py",

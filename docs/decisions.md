@@ -558,6 +558,16 @@ Compact placement (`PNR_COMPACT`, shrink-to-fit `PNR_SHRINK`,
   routing), but 5 of the 16 manual `09-mcu-usb-31` rung cells that pass without it fail with it
   (USB pair skew or a leg unrouted), and 3 with `COURTYARD` alone. Dense placement needs room
   reserved for pair tuning before another A/B.
+- **The docs animations show compact placement and gloss** (the owner's request: "regenerate
+  the animations in the docs and readme to show the new glossed results"). Compact placement won
+  the ladder A/B (every ladder and showcase cell passes; placed bounding box -38 %, copper -16 %,
+  vias +10 %); what keeps it off by default is the manual `09-mcu-usb-31` lane, which the
+  animations do not show. So the ladder and showcase animations are rendered from one traced run
+  with `--compact --gloss` (seed 0, darwin-arm64, engine `cfb7cb3`), each animation's `config`
+  in the manifest says so, the pages and the README caption name both opt-in switches, and the
+  CI traced runs take the same options so their trace hashes stay comparable. The renderer
+  (version 3) plays the gloss stage's saved board as a before/after: the copper the stage
+  replaced in red, its new copper in green, marked by geometry, not by track rows.
 
 ## Pinned versions
 

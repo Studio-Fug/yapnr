@@ -172,6 +172,10 @@ the design's.
   manifest. `animate_ladder.py`'s baseline fallback reruns a failed case with the same
   arguments unless `--fallback-runner-arg ARG` names its own (`--fallback-runner-arg=--gloss`:
   a compact ladder's failed case falls back to the default mode).
+- The committed animations (`docs/animations/`, 2026-10-03) are rendered from traced runs with
+  `--compact --gloss` (ladder: 8 of 8 pass; showcases: 5 of 5), with the gloss stage as a
+  before/after (renderer 3, [Regression ladder](../regression-ladder.md#reading-an-animation));
+  CI's traced runs take the same options.
 
 ## 9. Determinism
 

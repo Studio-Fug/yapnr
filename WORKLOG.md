@@ -20,8 +20,10 @@ hierarchical ladder driver and their animations on `claude/animations-groups-hie
   Flag-off identity holds on x86 (placed and routed bytes of 30 cells against `main`). The A/B
   (GCP, seeds 0 and 1) passes the ladder, the showcases, the header rung, `08-chaser-20-plane`
   on ten seeds and the nightly hard rungs, but 5 of 16 manual `09-mcu-usb-31` cells regress (USB
-  pair skew), so it stays opt-in. Next: reserve room for pair tuning under compact, then
-  another A/B; the docs and README animations with gloss.
+  pair skew), so it stays opt-in. The docs and README animations (ladder and showcases) are
+  regenerated with `--compact --gloss` (renderer 3: the gloss stage as a before/after; CI's
+  traced runs take the same options). Next: reserve room for pair tuning under compact, then
+  another A/B.
 
 - **Hard-rung gap fixes** (branch `claude/gap-fixes` on `claude/ladder-hard-rungs`, local, not
   pushed). The hard rungs (`regression/hard_rungs.py`: stackups, via kinds, sides, absolute and

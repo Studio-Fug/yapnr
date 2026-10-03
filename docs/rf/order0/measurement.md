@@ -16,13 +16,17 @@ switch terms estimated from the asymmetric coupon A14) whose agreement is checke
    repeatability.
 4. Optionally, the same with 3 dB attenuators at the VNA ports; keep whichever gives the better
    residual on the verification line later.
+5. Measure the thickness of any OSH Park 4-layer board at hand before buying the connectors. The
+   published layers add to 1.511 mm against the nominal 1.6 mm, and Cinch's slot is 0.068 in
+   (1.73 mm): a board at the top of a ±10 % tolerance (1.76 mm) would not fit.
 
 ## Equipment
 
 - The LibreVNA powered from its 5 V jack or a powered hub; two phase-stable SMA cables, taped
   down. Move the board, not the cables.
 - Tier 1: a LibreCAL if available, else SMA open/short/load standards and an F-F thru adapter.
-- Tier 2: the on-board multiline TRL kits, A01-A07 (region M) and B01-B05 (region W).
+- Tier 2: the on-board multiline TRL kits, A01-A07 (region M) and B01-B05 (region W); O0-D
+  carries its own thru and two lines (A01, A20, A04) for its lot's εeff, loss and relative Z0.
 - Two SMA-male 50 Ω loads for the third port of the 3-port demos, each measured as a 1-port after
   tier 1 and referred to the demo's reference plane through that port's error box.
 - An SMA torque wrench at one fixed setting (8 in-lb is inside Cinch's 7-10 in-lb), a 4-wire
@@ -32,8 +36,13 @@ switch terms estimated from the asymmetric coupon A14) whose agreement is checke
 
 One operator, one alloy, a 3D-printed jig that holds each connector flush against the milled edge
 and presses the board up against the top legs (the 1.73 mm slot is 0.19 mm wider than the board),
-flux removed with isopropyl alcohol (residue changes εeff on mask-open lines). File any tab nubs
-off the launch edges first. Photograph every joint.
+flux removed with isopropyl alcohol (residue changes εeff on mask-open lines). The tabs sit only
+on edges without a connector; file their nubs flush anyway. Photograph every joint.
+
+The solder mask covers the 0.155-0.21 mm gaps between each pin pad and its coplanar ground (the
+launch was designed with mask there). OSH Park's minimum mask web is 4 mil (0.10 mm), so the
+slivers are buildable; a registration shift (3 mil) opens one gap as it closes the other, which
+changes the pad's impedance only to second order.
 
 ## On arrival
 
@@ -41,8 +50,9 @@ off the launch edges first. Photograph every joint.
 - Measure the board thickness at three points with calipers (this checks the core, not the
   0.2 mm prepreg).
 - Break out the sticks of copies 1 and 2; keep copy 3 as a spare and for the microsection.
-- Solder the connectors (O0-M: 33 per copy; O0-W: 16; O0-D: 10), then condition for 24 h at lab
-  ambient.
+- Solder the connectors (O0-M: 33 per copy; O0-W: 16; O0-D: 12), then condition for 24 h at lab
+  ambient. The back silkscreen of every stick names its upload (`O0-D A01`): A01 and R1 exist on
+  two uploads, which are two lots.
 
 ## Set-up and calibration
 
@@ -57,7 +67,8 @@ off the launch edges first. Photograph every joint.
 ## Sequence per copy
 
 1. The thru, then the lines in increasing length, the reflect and the verification line.
-2. The width set, A10, the ring, the stub, the C-pads (tier 1, 30-300 MHz matters).
+2. The width set, A10, the ring, the stub, the C-pads (tier 1; their analysis is in the
+   [pre-registration](preregistration.md#the-c-pads-a16-how-h-is-read)).
 3. A14 in both orientations (swap the cables).
 4. R1 (and on O0-D, D1): each pair of ports (1-2, 1-3, 2-3) with a load on the third.
 5. The thru again (drift check).

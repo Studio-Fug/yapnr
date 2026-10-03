@@ -12,7 +12,13 @@ FR408HR geometry in both:
 - two-port sticks: reference plane to reference plane (what the multiline-TRL-corrected
   measurement shows), 30 MHz-6 GHz in 30 MHz steps, renormalized to 50 Ω from the TRL line's Zc;
 - the C-pads of A16: S11 at each pad's reference plane, 6 MHz-6 GHz in 6 MHz steps (the
-  measurement grid; 30-300 MHz is the band that matters).
+  measurement grid; 0.1-1 GHz is the band that is fitted; the step from the line to the pad is
+  left out, about 0.5 % of the pads' capacitance difference);
+- `scalars.json`: the numbers the held-out criteria test, from the model's own |S21| minimum on a
+  10 kHz grid, not the 30 MHz files: the ring A11's notches n = 1 and 3 (FR408HR 1.924 and
+  5.793 GHz) and the stub A12's notch (5.500 GHz). The ring's arcs and the stub carry Hammerstad's
+  T-junction reference planes;
+- `lines.csv`: every line family's εeff, α (dB/cm) and Zc on the 6 MHz measurement grid.
 
 The model is the coupon forward model: the 2D quasi-static RLGC of each line family (Djordjevic-
 Sarkar dielectrics, Huray roughness, Wheeler's conductor loss, the shipped 2D tables) cascaded
@@ -26,8 +32,8 @@ python -m yapnr.rf.coupons expected --stackup OSHPARK-4L-FR408HR --upload M \
 
 ## Demos and references
 
-| Item               | Prediction                                                                   | Status                                                         |
-| ------------------ | ---------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| [D1](D1/README.md) | the optimizer's validation runs (thickness-equivalent and nominal substrate) | not yet: D1 has not been optimized for Order 0                 |
-| [D2](D2/README.md) | the same, region W                                                           | not yet                                                        |
-| R1, R1t            | the optimizer's FDTD, forward only, loss-corrected                           | not yet: the forward-simulation command is still to be written |
+| Item               | Prediction                                                                       | Status                                                         |
+| ------------------ | -------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| [D1](D1/README.md) | the optimizer's validation runs (thickness-equivalent and nominal substrate)     | not yet: D1 has not been optimized for Order 0                 |
+| [D2](D2/README.md) | the same, region W                                                               | not yet                                                        |
+| R1, R1t            | the optimizer's FDTD, forward only, loss-corrected, at refine 2 (0.05 / 0.25 mm) | not yet: the forward-simulation command is still to be written |

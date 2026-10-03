@@ -20,15 +20,20 @@ The QR code on the boards' tag stick points here.
 
 All three are OSH Park standard 4-layer, FR408HR (the EM528 alternate is covered by the same
 models), 1.6 mm, ENIG, purple mask, 3 copies each, one frameless outline per upload: the sticks
-are separated by 2.54 mm milled slots and held by OSH Park's suggested mouse-bite tabs on edges
-away from every connector. Every port is a Cinch 142-0701-851 edge-launch SMA. Costs are OSH Park's
-standard 4-layer price, $10 per square inch of the bounding rectangle, for 3 copies.
+are separated by 2.54 mm milled slots and held by OSH Park's suggested mouse-bite tabs, at least
+two per stick, only on edges that carry no connector (a 2-port stick's long sides, a 3-port
+demo's fourth edge), so every launch edge is a clean milled edge. Every port is a Cinch
+142-0701-851 edge-launch SMA. Costs are OSH Park's standard 4-layer price, $10 per square inch of
+the bounding rectangle, for 3 copies.
 
-| Upload   | Contents                                                                     | Size                         | Cost | SMAs per copy |
-| -------- | ---------------------------------------------------------------------------- | ---------------------------- | ---- | ------------- |
-| **O0-M** | the thin-microstrip (region M) coupons, R1, A16, A04R, the tag               | 141.1 × 117.2 mm, 25.6 sq in | $256 | 33            |
-| **O0-W** | the thick-microstrip (region W) calibration set, R1t, the D2 window          | 105.1 × 71.6 mm, 11.7 sq in  | $117 | 16            |
-| **O0-D** | the D1 window, an R1 copy, a thru and a 30 mm line (uploaded when D1 passes) | 60.5 × 67.1 mm, 6.3 sq in    | $63  | 10            |
+| Upload   | Contents                                                                             | Size                         | Cost | SMAs per copy |
+| -------- | ------------------------------------------------------------------------------------ | ---------------------------- | ---- | ------------- |
+| **O0-M** | the thin-microstrip (region M) coupons, R1, A16, A04R, the tag                       | 120.1 × 144.3 mm, 26.9 sq in | $269 | 33            |
+| **O0-W** | the thick-microstrip (region W) calibration set, R1t, the D2 window                  | 57.5 × 131.2 mm, 11.7 sq in  | $117 | 16            |
+| **O0-D** | the D1 window, an R1 copy, a thru, a 9 mm and a 30 mm line (uploaded when D1 passes) | 90.6 × 51.5 mm, 7.2 sq in    | $72  | 12            |
+
+The windows of D1 and D2 are placeholders: `yapnr fab check` refuses those boards
+(`FAB-PLACEHOLDER`) until the optimizer's copper is in.
 
 The KiCad projects, catalogues and DRC results are in
 [examples/rf-coupons/order0/](../../../examples/rf-coupons/order0/README.md).
@@ -38,7 +43,7 @@ the sticks held by tabs with three mouse-bite holes each side](images/O0-M.png)
 
 ![O0-W: the W calibration set, R1t and the empty D2 window](images/O0-W.png)
 
-![O0-D: the empty D1 window, R1, the thru and the 30 mm line](images/O0-D.png)
+![O0-D: the empty D1 window, R1, and the thru and lines, turned 90°](images/O0-D.png)
 
 ### Cross-sections
 
@@ -60,13 +65,13 @@ with 0.2 mm mask dams at the connector pads; one coupon (A10) keeps the mask on.
 | A07      | verification line, ΔL 21 mm                                                                    | 41 × 12      | residual calibration error                                |
 | A08, A09 | width set: 0.28 and 0.56 mm over 30 mm                                                         | 50 × 12      | Z0(w), α(w): etch, height, εr, the copper-thickness bias  |
 | A10      | the 0.40 mm line under mask over 30 mm                                                         | 50 × 12      | mask Dk × thickness: OSH Park's default against mask-open |
-| A11      | ring, fed directly, the feeds a quarter turn apart (notches at n = 1 and 3: 1.93 and 5.80 GHz) | 56 × 36      | held out: εeff                                            |
-| A12      | open λ/4 stub at 5.8 GHz on a 15 mm line                                                       | 35 × 18      | held out: the open-end model                              |
+| A11      | ring, fed directly, the feeds a quarter turn apart (notches at n = 1 and 3: 1.92 and 5.79 GHz) | 56 × 36      | held out: εeff                                            |
+| A12      | open λ/4 stub, notch at 5.5 GHz, on a 15 mm line                                               | 35 × 19      | held out: the open-end and T-junction models              |
 | A14      | 30 mm line with a shunt 0402 100 Ω 5 mm from RP1                                               | 50 × 12      | switch terms (both orientations)                          |
 | A15      | 4-wire meanders on L1 (0.20 × 200 mm, 0.50 × 250 mm), microsection lines, QR and tag           | 68 × 24      | w·t and etch; microsection; this page                     |
-| A16      | 6 mm and 12 mm square pads, each at the reference plane of a launch                            | 50 × 16      | h (and so the absolute Z0) from C at 30-300 MHz           |
+| A16      | 6 mm and 12 mm square pads, each at the reference plane of a launch                            | 50 × 16      | h (and so the absolute Z0) from C at 0.1-1 GHz            |
 | A04R     | A04 turned 90°                                                                                 | 12 × 50      | glass-weave direction                                     |
-| R1       | textbook divider: T-junction + λ/4 35.36 Ω transformer [Pozar §7.2, §5.5]                      | 29 × 38      | the reference for D1                                      |
+| R1       | textbook divider: T-junction + λ/4 35.36 Ω transformer [Pozar §7.2, §5.5]                      | 30 × 38      | the reference for D1                                      |
 
 ### O0-W sticks
 
@@ -74,29 +79,34 @@ with 0.2 mm mask dams at the connector pads; one coupon (A10) keeps the mask on.
 | ------- | ------------------------------------------------------------------------------ | ---------- | --------------------------------------------------- |
 | B01-B04 | W thru and lines, ΔL 5, 14, 34 mm                                              | 20-54 × 16 | γ(f) of W: the core's Dk, which region M cannot see |
 | B05     | reflect, open at both reference planes                                         | 30 × 16    | mTRL reflect                                        |
-| R1t     | the textbook divider on W                                                      | 30 × 50    | the reference for D2                                |
+| R1t     | the textbook divider on W                                                      | 33 × 50    | the reference for D2                                |
 | D2      | window for the optimizer's thick divider (20 × 24 mm), its feeds and keep-away | 40 × 52    | **placeholder** until D2 passes validation          |
 
 ### O0-D sticks
 
-| Stick    | Structure                                                                 | Size (mm)   | What it determines                                 |
-| -------- | ------------------------------------------------------------------------- | ----------- | -------------------------------------------------- |
-| D1       | window for the optimizer's thin divider (12 × 15 mm), feeds and keep-away | 29 × 41     | **placeholder** until D1 passes: the headline demo |
-| R1       | a copy of O0-M's R1                                                       | 29 × 38     | D1 and a reference on one lot                      |
-| A01, A04 | thru and 30 mm line                                                       | 20, 50 × 12 | this lot's εeff, loss and relative Z0              |
+| Stick         | Structure                                                                 | Size (mm)       | What it determines                                                   |
+| ------------- | ------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------- |
+| D1            | window for the optimizer's thin divider (12 × 15 mm), feeds and keep-away | 29 × 41         | **placeholder** until D1 passes: the headline demo                   |
+| R1            | a copy of O0-M's R1                                                       | 30 × 38         | D1 and a reference on one lot                                        |
+| A01, A20, A04 | thru and lines ΔL 9 and 30 mm                                             | 20, 29, 50 × 12 | this lot's εeff, loss and relative Z0 (the 9 mm line covers 5-6 GHz) |
 
 ### The demos and their references
 
-| Demo      | Specification                                                                                               | Window                                | Reference                                    |
-| --------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------- | -------------------------------------------- |
-| D1 (O0-D) | 4.25-5.75 GHz: \|S11\| ≤ −20 dB, \|S21\|, \|S31\| ≥ −3.4 dB (to be confirmed after the solver's loss check) | region M, 12 × 15 mm, ports W / N / S | R1: arm 0.70 × 8.9 mm to the junction centre |
-| D2 (O0-W) | the same                                                                                                    | region W, 20 × 24 mm, ports W / N / S | R1t: arm 5.0 × 8.5 mm                        |
+| Demo      | Specification                                                                                               | Window                                | Reference                                             |
+| --------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------- | ----------------------------------------------------- |
+| D1 (O0-D) | 4.25-5.75 GHz: \|S11\| ≤ −20 dB, \|S21\|, \|S31\| ≥ −3.4 dB (to be confirmed after the solver's loss check) | region M, 12 × 15 mm, ports W / N / S | R1: arm 0.70 × 9.0 mm (9.2 mm to the junction centre) |
+| D2 (O0-W) | the same                                                                                                    | region W, 20 × 24 mm, ports W / N / S | R1t: arm 5.0 × 9.25 mm (10.75 mm to the centre)       |
 
 Each demo port has exactly the coupons' launch (10 mm from the milled edge to its reference plane)
 and a straight feed (3 mm on M, 4 mm on W) to the window, so the comparison plane is the
 optimizer's own port plane. No other L1 copper lies within 1.0 mm (M) or 4.2 mm (W) of a window.
-R1 and R1t are drawn on the optimizer's grid, so their simulations see exactly the copper that is
-built.
+
+R1 and R1t are drawn as a designer would: the arm is the 2D-solved width nearest the ideal
+transformer impedance, a quarter wave long at 5.0 GHz counted from the T-junction's reference
+plane, which lies 0.37 mm (M) and 2.18 mm (W) beyond the output line's centre line (Hammerstad's
+T-junction model). Counted to the centre line instead, R1 would sit 4 % and R1t 25 % high in
+frequency. Every edge lies on the grid the optimizer's FDTD predicts them on: 0.05 mm (M) and
+0.25 mm (W), its second refinement (R1's 0.70 mm arm cannot be centred on the 0.10 mm grid).
 
 ## Pages
 

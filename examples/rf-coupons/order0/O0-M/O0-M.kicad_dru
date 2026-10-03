@@ -1,8 +1,7 @@
 (version 1)
-(rule "MB1: mouse-bite holes on the break-off edge (OSH Park tab pattern)"
-	(constraint physical_hole_clearance)
-	(condition "A.memberOfFootprint('MB1') && B.Layer == 'Edge.Cuts'")
-	(severity ignore))
+(rule "MB1: mouse-bite holes inside the tabs (OSH Park tab pattern)"
+	(constraint physical_hole_clearance (min 0.005mm))
+	(condition "A.memberOfFootprint('MB1') && B.Layer == 'Edge.Cuts'"))
 (rule "MO_A01: intentional mask opening over a test line"
 	(constraint bridged_mask)
 	(condition "A.memberOfFootprint('MO_A01')")
@@ -62,6 +61,14 @@
 (rule "MO_A11D: intentional mask opening over a test line"
 	(constraint bridged_mask)
 	(condition "A.memberOfFootprint('MO_A11D')")
+	(severity ignore))
+(rule "MO_A11LJ: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_A11LJ')")
+	(severity ignore))
+(rule "MO_A11RJ: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_A11RJ')")
 	(severity ignore))
 (rule "MO_A12: intentional mask opening over a test line"
 	(constraint bridged_mask)

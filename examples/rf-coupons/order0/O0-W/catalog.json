@@ -200,7 +200,7 @@
       "kind": "demo",
       "family": "W",
       "trl": "W",
-      "length": 30.0,
+      "length": 33.0,
       "height": 50.0,
       "dl": 0.0,
       "elements": [],
@@ -213,7 +213,7 @@
         "region": "W",
         "window": {
           "region": "W",
-          "w": 10.0,
+          "w": 12.25,
           "h": 22.0,
           "ports": [
             [
@@ -222,34 +222,37 @@
             ],
             [
               "N",
-              8.5
+              10.75
             ],
             [
               "S",
-              8.5
+              10.75
             ]
           ],
           "copper": [
             [
               0.0,
-              7.0,
+              9.25,
               -2.5,
               2.5
             ],
             [
-              7.0,
-              10.0,
+              9.25,
+              12.25,
               -11.0,
               11.0
             ]
           ],
           "arm": {
             "w": 5.0,
-            "l_to_centre": 8.5,
-            "z0_design": 35.36,
-            "f0_ghz": 5.0
+            "z0_2d": 34.47,
+            "quarter_wave_mm": 8.58,
+            "l_to_centre": 10.75,
+            "junction_d_branch_mm": 2.1764,
+            "f0_ghz_est": 5.004
           },
-          "source": "Pozar \u00a77.2 (T-junction) and \u00a75.5 (\u03bb/4 transformer); 2D solve, grid-snapped",
+          "fdtd_pitch_mm": 0.25,
+          "source": "Pozar \u00a77.2 (T-junction) and \u00a75.5 (\u03bb/4 transformer); 2D solves; Hammerstad's T-junction reference plane; snapped to the refine-2 grid",
           "x0": 14.0,
           "feed": 4.0
         },
@@ -262,15 +265,16 @@
           {
             "n": 2,
             "side": "N",
-            "at": 22.5
+            "at": 24.75
           },
           {
             "n": 3,
             "side": "S",
-            "at": 22.5
+            "at": 24.75
           }
         ],
-        "stick_w": 16.0
+        "stick_w": 16.0,
+        "rot": 90
       },
       "generated": true,
       "rp_mm": []
@@ -329,7 +333,9 @@
             "at": 24.0
           }
         ],
-        "stick_w": 16.0
+        "stick_w": 16.0,
+        "placeholder": true,
+        "rot": 270
       },
       "generated": true,
       "rp_mm": []
@@ -342,47 +348,47 @@
     "D2 window is a placeholder: the optimizer's footprint is added when D2 passes"
   ],
   "panel_mm": [
-    105.08,
-    71.62
+    57.54,
+    131.16
   ],
-  "panel_sq_in": 11.67,
+  "panel_sq_in": 11.7,
   "revision": "A",
   "placement": {
     "B01": {
-      "x": 75.08,
-      "y": 55.62,
+      "x": 36.54,
+      "y": 72.62,
       "rot": 0
     },
     "B02": {
-      "x": 75.08,
-      "y": 37.08,
+      "x": 32.54,
+      "y": 35.54,
       "rot": 0
     },
     "B03": {
-      "x": 56.54,
-      "y": 0.0,
+      "x": 0.0,
+      "y": 72.62,
       "rot": 0
     },
     "B04": {
-      "x": 0.0,
-      "y": 0.0,
+      "x": 2.54,
+      "y": 54.08,
       "rot": 0
     },
     "B05": {
-      "x": 75.08,
-      "y": 18.54,
+      "x": 0.0,
+      "y": 35.54,
       "rot": 0
     },
     "R1t": {
       "x": 0.0,
-      "y": 18.54,
-      "rot": 0
+      "y": 0.0,
+      "rot": 90
     },
     "D2": {
-      "x": 32.54,
-      "y": 18.54,
-      "rot": 0
+      "x": 4.54,
+      "y": 91.16,
+      "rot": 270
     }
   },
-  "tabs": 8
+  "tabs": 15
 }

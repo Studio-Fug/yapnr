@@ -47,10 +47,12 @@
       "family": "M",
       "dl": [
         0.0,
+        9.0,
         30.0
       ],
       "sticks": [
         "A01",
+        "A20",
         "A04"
       ],
       "reflect": "",
@@ -74,12 +76,43 @@
       "determines": "mTRL thru and launch-only 2x-thru (IEEE 370)",
       "label": "O0-D A01 M THRU",
       "geometry": {
-        "region": "M"
+        "region": "M",
+        "rot": 90
       },
       "generated": true,
       "rp_mm": [
         10.0,
         10.0
+      ]
+    },
+    {
+      "id": "A20",
+      "kind": "line",
+      "family": "M",
+      "trl": "M",
+      "length": 29.0,
+      "height": 12.0,
+      "dl": 9.0,
+      "elements": [
+        [
+          "line",
+          "M",
+          9.0
+        ]
+      ],
+      "tier": "core",
+      "fitted": true,
+      "ports": 2,
+      "determines": "calibration; \u03b3(f) of M",
+      "label": "O0-D A20 M dL9",
+      "geometry": {
+        "region": "M",
+        "rot": 90
+      },
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        19.0
       ]
     },
     {
@@ -103,7 +136,8 @@
       "determines": "calibration; \u03b3(f) of M",
       "label": "O0-D A04 M dL30",
       "geometry": {
-        "region": "M"
+        "region": "M",
+        "rot": 90
       },
       "generated": true,
       "rp_mm": [
@@ -116,7 +150,7 @@
       "kind": "demo",
       "family": "M",
       "trl": "M",
-      "length": 29.0,
+      "length": 30.0,
       "height": 38.0,
       "dl": 0.0,
       "elements": [],
@@ -129,7 +163,7 @@
         "region": "M",
         "window": {
           "region": "M",
-          "w": 9.1,
+          "w": 9.4,
           "h": 12.0,
           "ports": [
             [
@@ -138,34 +172,37 @@
             ],
             [
               "N",
-              8.9
+              9.2
             ],
             [
               "S",
-              8.9
+              9.2
             ]
           ],
           "copper": [
             [
               0.0,
-              8.7,
+              9.0,
               -0.35,
               0.35
             ],
             [
-              8.7,
-              9.1,
+              9.0,
+              9.4,
               -6.0,
               6.0
             ]
           ],
           "arm": {
             "w": 0.7,
-            "l_to_centre": 8.9,
-            "z0_design": 35.36,
-            "f0_ghz": 5.0
+            "z0_2d": 35.72,
+            "quarter_wave_mm": 8.8532,
+            "l_to_centre": 9.2,
+            "junction_d_branch_mm": 0.37,
+            "f0_ghz_est": 5.013
           },
-          "source": "Pozar \u00a77.2 (T-junction) and \u00a75.5 (\u03bb/4 transformer); 2D solve, grid-snapped",
+          "fdtd_pitch_mm": 0.05,
+          "source": "Pozar \u00a77.2 (T-junction) and \u00a75.5 (\u03bb/4 transformer); 2D solves; Hammerstad's T-junction reference plane; snapped to the refine-2 grid",
           "x0": 13.0,
           "feed": 3.0
         },
@@ -178,15 +215,16 @@
           {
             "n": 2,
             "side": "N",
-            "at": 21.9
+            "at": 22.2
           },
           {
             "n": 3,
             "side": "S",
-            "at": 21.9
+            "at": 22.2
           }
         ],
-        "stick_w": 12.0
+        "stick_w": 12.0,
+        "rot": 0
       },
       "generated": true,
       "rp_mm": []
@@ -245,7 +283,9 @@
             "at": 19.0
           }
         ],
-        "stick_w": 12.0
+        "stick_w": 12.0,
+        "placeholder": true,
+        "rot": 180
       },
       "generated": true,
       "rp_mm": []
@@ -258,32 +298,37 @@
     "D1 window is a placeholder: the optimizer's footprint is added when D1 passes"
   ],
   "panel_mm": [
-    60.54,
-    67.08
+    90.62,
+    51.54
   ],
-  "panel_sq_in": 6.29,
+  "panel_sq_in": 7.24,
   "revision": "A",
   "placement": {
     "A01": {
-      "x": 31.54,
-      "y": 55.08,
-      "rot": 0
+      "x": 32.54,
+      "y": 0.0,
+      "rot": 90
+    },
+    "A20": {
+      "x": 32.54,
+      "y": 22.54,
+      "rot": 90
     },
     "A04": {
+      "x": 47.08,
+      "y": 0.0,
+      "rot": 90
+    },
+    "R1": {
       "x": 0.0,
       "y": 0.0,
       "rot": 0
     },
-    "R1": {
-      "x": 31.54,
-      "y": 14.54,
-      "rot": 0
-    },
     "D1": {
-      "x": 0.0,
-      "y": 14.54,
-      "rot": 0
+      "x": 61.62,
+      "y": 0.0,
+      "rot": 180
     }
   },
-  "tabs": 5
+  "tabs": 9
 }

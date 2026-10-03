@@ -1,5 +1,6 @@
 """Test helpers.
 
+- `GradientChecks`: the shared body of the pipeline gradient tests (tests/unit/rf).
 - `tiny_spec`: a tiny two-port spec for the optimizer tests (about 1e4 cells, 6 × 6 pixels):
   S-parameter requirements on a 2.4 mm square region between two 2-cell (0.8 mm) feeds on a
   0.8 mm substrate, 8–12 GHz; the best binary design is the straight line continuing the
@@ -82,6 +83,57 @@ def nominal_calibration() -> dict:
     om = 2 * np.pi * np.array([8e9, 10e9, 12e9])
     zc = np.array([72 + 1j, 72.5 + 0.8j, 73 + 0.6j])
     return {"*": LineCalibration(om, zc, om * np.sqrt(2.3) / 3e8 + 0.5j, 0.0)}
+
+
+# -- pipeline gradients -------------------------------------------------------------------------
+
+
+class GradientChecks:
+    """Mixin of the pipeline gradient tests (tests/unit/rf/test_pipeline_gradient*.py): the
+    whole pipeline's gradient against Richardson-extrapolated central differences along a
+    random direction, and the length-scale constraints' at β = 128. A subclass calls
+    `setup_gradient(spec, seed)` in its setUpClass and mixes with TestCase."""
+
+    OBJECTIVE = "spec"
+
+    @classmethod
+    def setup_gradient(cls, spec, seed: int) -> None:
+        from yapnr.rf.problem import Problem
+
+        cls.p = p = Problem(spec, exact=True, calibrations=nominal_calibration())
+        rng = np.random.default_rng(seed)
+        cls.x = rng.uniform(0.3, 0.7, p.param.n_dof)
+        cls.beta = 8.0
+        ev = p.evaluate(p.param.rho_bar(cls.x, cls.beta), objective=cls.OBJECTIVE)
+        cls.ev = ev
+        cls.grad = p.param.vjp(cls.x, cls.beta, ev.grads)
+        cls.v = rng.standard_normal(cls.x.size)
+
+    def _f(self, x):
+        rho = self.p.param.rho_bar(x, self.beta)
+        return self.p.evaluate(rho, gradients=False, objective=self.OBJECTIVE).values
+
+    def test_runs_converged(self):
+        self.assertTrue(self.ev.converged)
+        self.assertEqual(len(self.ev.keys), 3)
+
+    def test_directional_derivative(self):
+        h = 1e-4
+        x, v = self.x, self.v
+        d1 = (self._f(x + h * v) - self._f(x - h * v)) / (2 * h)
+        d2 = (self._f(x + 0.5 * h * v) - self._f(x - 0.5 * h * v)) / h
+        fd = (4 * d2 - d1) / 3
+        adj = self.grad @ v
+        np.testing.assert_allclose(adj, fd, rtol=1e-6)
+
+    def test_lengthscale_gradient(self):
+        ls = self.p.lengthscale
+        self.assertIsNotNone(ls)
+        h = 1e-5
+        g, dg = self.p.param.lengthscale(self.x, 128.0, ls)
+        gp, _ = self.p.param.lengthscale(self.x + h * self.v, 128.0, ls)
+        gm, _ = self.p.param.lengthscale(self.x - h * self.v, 128.0, ls)
+        np.testing.assert_allclose(dg @ self.v, (gp - gm) / (2 * h), rtol=1e-5)
 
 
 # -- end-to-end cases ---------------------------------------------------------------------------

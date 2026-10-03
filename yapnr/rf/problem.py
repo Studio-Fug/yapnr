@@ -187,7 +187,9 @@ class Problem:
         self.exact = exact
         self.backend = backend or ("numpy" if exact else sv.backend)
         self.dtype = np.dtype(dtype or (np.float64 if exact else sv.dtype))
-        self.threads = int(threads or sv.threads)
+        from yapnr.rf.fdtd.engine import thread_count
+
+        self.threads = thread_count(int(threads or sv.threads))
         self.tol = 1e-12 if exact else sv.tol
         self.adjoint_tol = 1e-10 if exact else sv.adjoint_tol
         self.cache_dir = cache_dir

@@ -11,16 +11,27 @@ load("@rules_python//python:defs.bzl", "py_test")
 #   nice -n 10 bazel test --config=lowmem --local_test_jobs=1 //tests/e2e/rf:test_divider \
 #     --test_env=YAPNR_RF_RUN_DIR=/path/to/runs
 #
-# The smoke variants run the same topologies on tiny grids for four iterations (CI, about half
-# a minute each).
+# The smoke variants run the same topologies on tiny grids for four iterations (CI, about a
+# minute each on one thread).
 
-# torch steps the fields on 4 threads; numpy's OpenBLAS (the adjoint sources' basis products)
-# stays on one: with its own 4 threads spinning beside torch's, an adjoint run used about 7
-# cores and took 1.6 times as long.
+# The full cases: torch steps the fields on 4 threads; numpy's OpenBLAS (the adjoint sources'
+# basis products) stays on one: with its own 4 threads spinning beside torch's, an adjoint run
+# used about 7 cores and took 1.6 times as long.
 _ENV = {
     "MKL_NUM_THREADS": "4",
     "OMP_NUM_THREADS": "4",
     "OPENBLAS_NUM_THREADS": "1",
+}
+
+# The smoke variants (CI): one thread each, so that the tests Bazel runs side by side do not
+# oversubscribe the runner (`YAPNR_RF_THREADS` caps torch's threads; design §24), and the long
+# timeout (900 s; about a minute each on one thread of the development Mac).
+_SMOKE_ENV = {
+    "MKL_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "YAPNR_RF_SMOKE": "1",
+    "YAPNR_RF_THREADS": "1",
 }
 
 _DEPS = [
@@ -100,11 +111,9 @@ py_test(
 py_test(
     name = "test_divider_smoke",
     size = "medium",
+    timeout = "long",
     srcs = ["test_divider.py"],
-    env = dict(
-        _ENV,
-        YAPNR_RF_SMOKE = "1",
-    ),
+    env = _SMOKE_ENV,
     main = "test_divider.py",
     tags = ["rf-smoke"],
     deps = _DEPS,
@@ -113,11 +122,9 @@ py_test(
 py_test(
     name = "test_wilkinson_smoke",
     size = "medium",
+    timeout = "long",
     srcs = ["test_wilkinson.py"],
-    env = dict(
-        _ENV,
-        YAPNR_RF_SMOKE = "1",
-    ),
+    env = _SMOKE_ENV,
     main = "test_wilkinson.py",
     tags = ["rf-smoke"],
     deps = _DEPS,
@@ -126,11 +133,9 @@ py_test(
 py_test(
     name = "test_antenna_smoke",
     size = "medium",
+    timeout = "long",
     srcs = ["test_antenna.py"],
-    env = dict(
-        _ENV,
-        YAPNR_RF_SMOKE = "1",
-    ),
+    env = _SMOKE_ENV,
     main = "test_antenna.py",
     tags = ["rf-smoke"],
     deps = _DEPS,
@@ -139,11 +144,9 @@ py_test(
 py_test(
     name = "test_diplexer_smoke",
     size = "medium",
+    timeout = "long",
     srcs = ["test_diplexer.py"],
-    env = dict(
-        _ENV,
-        YAPNR_RF_SMOKE = "1",
-    ),
+    env = _SMOKE_ENV,
     main = "test_diplexer.py",
     tags = ["rf-smoke"],
     deps = _DEPS,

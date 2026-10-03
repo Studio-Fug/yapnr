@@ -21,6 +21,7 @@ The code path is shared; only a handful of array primitives differ (`_NumpyOps`,
 from __future__ import annotations
 
 import math
+import os
 import time
 from dataclasses import dataclass, field
 
@@ -250,6 +251,15 @@ class RunResult:
     history: list = field(default_factory=list)
 
 
+def thread_count(threads: int) -> int:
+    """torch's intra-op threads: `threads` (the spec's, at most 4), capped by the environment
+    variable `YAPNR_RF_THREADS` when it is set (the Bazel tests set 1, so that the tests the
+    runner schedules side by side do not oversubscribe its cores)."""
+    n = max(1, min(4, int(threads)))
+    cap = os.environ.get("YAPNR_RF_THREADS")
+    return max(1, min(n, int(cap))) if cap else n
+
+
 class Simulation:
     """A microstrip FDTD model ready to run: grid, materials, CPML and the time step."""
 
@@ -275,7 +285,7 @@ class Simulation:
         if backend == "torch":
             import torch
 
-            torch.set_num_threads(max(1, min(4, int(threads))))
+            torch.set_num_threads(thread_count(threads))
         self._interior = {
             c: tuple(slice(None) if staggered(c, a) else slice(1, -1) for a in range(3))
             for c in E_COMPONENTS

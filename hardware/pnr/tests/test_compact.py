@@ -759,6 +759,21 @@ class DriverTest(unittest.TestCase):
         none = SimpleNamespace(runner_arg=["--compact"], fallback_runner_arg=[""])
         self.assertEqual(animate_ladder.fallback_arguments(none), [])
 
+    def test_animation_results_gloss(self):
+        import animate_ladder
+
+        self.assertIsNone(animate_ladder.gloss_result({}))
+        summary = dict(
+            accepted_transactions=7,
+            proposed_transactions=7,
+            metrics_before=dict(bends_total=39, length_mm=67.006),
+            metrics_after=dict(bends_total=12, length_mm=63.033),
+        )
+        self.assertEqual(
+            animate_ladder.gloss_result(dict(gloss=dict(kept=True, summary=summary))),
+            dict(kept=True, accepted=7, proposed=7, bends=[39, 12], length_mm=[67.006, 63.033]),
+        )
+
 
 class TraceTest(unittest.TestCase):
     def test_header_body_and_renderer_rect(self):

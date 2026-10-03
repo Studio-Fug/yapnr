@@ -240,6 +240,8 @@ class CompiledConstraints:
     tuning: Optional[Dict] = None
     copper_keepouts: List[Dict] = field(default_factory=list)
     mounting_holes: List[Dict] = field(default_factory=list)
+    # Declared BGA fanouts (``fanout:``, pnr.fanout.spec); the router plans them.
+    fanouts: List[Dict] = field(default_factory=list)
 
     @property
     def hard(self) -> List[Constraint]:
@@ -437,7 +439,20 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
             for lm in compiled.length_matches
         ],
         **({"tuning": dict(compiled.tuning)} if compiled.tuning is not None else {}),
+        # Declared fanouts (pnr.fanout), with their via classes' net globs expanded;
+        # absent without one, so such a board's rules keep their bytes.
+        **(
+            {"fanouts": [_fanout_nets(f, net_names) for f in compiled.fanouts]}
+            if compiled.fanouts
+            else {}
+        ),
     }
+
+
+def _fanout_nets(spec: Dict, net_names: Sequence[str]) -> Dict:
+    from pnr.fanout.spec import expand_nets
+
+    return expand_nets(spec, net_names)
 
 
 def _parse_board(raw: Dict) -> BoardSpec:
@@ -1000,6 +1015,7 @@ def compile_constraints(
         "length_match",
         "tuning",
         "copper_keepout",
+        "fanout",
     }
     for key in doc:
         if key not in known_keys:
@@ -1373,6 +1389,23 @@ def compile_constraints(
             {"name": str(entry.get("name") or ref), "ref": ref, "rect_mm": list(rect)}
         )
 
+    # fanout: declared BGA fanouts (pnr.fanout), validated here; the router plans them.
+    fanouts = []
+    if doc.get("fanout") is not None:
+        from pnr.fanout.spec import FanoutError, parse_all
+
+        try:
+            fanouts = parse_all(doc.get("fanout"), known_refs)
+        except FanoutError as error:
+            raise ConstraintError(str(error)) from None
+        fixed_refs = {r for c in constraints if c.kind == "fixed" for r in c.refs}
+        for f in fanouts:
+            if f["ref"] not in fixed_refs:
+                warnings.append(
+                    "fanout %s: %s is not fixed; its fanout is planned at each placed pose"
+                    % (f["name"], f["ref"])
+                )
+
     return CompiledConstraints(
         board=board,
         constraints=constraints,
@@ -1385,6 +1418,7 @@ def compile_constraints(
         tuning=tuning,
         copper_keepouts=copper_keepouts,
         mounting_holes=mounting_holes,
+        fanouts=fanouts,
     )
 
 

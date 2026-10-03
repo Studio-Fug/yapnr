@@ -66,6 +66,16 @@ filegroup(
         "pnr/placement_copper.py",
         "pnr/staged_signal.py",
         "pnr/fanout_reserve.py",
+        # Declared BGA fanouts: python -m pnr.fanout verify runs under KiCad's Python.
+        "pnr/fanout/__init__.py",
+        "pnr/fanout/__main__.py",
+        "pnr/fanout/assign.py",
+        "pnr/fanout/geom.py",
+        "pnr/fanout/lattice.py",
+        "pnr/fanout/planner.py",
+        "pnr/fanout/sites.py",
+        "pnr/fanout/spec.py",
+        "pnr/fanout/verify.py",
         "pnr/electrical_repair.py",
         "pnr/plane_leaf.py",
         "pnr/plane_leaf_repair.py",
@@ -135,7 +145,13 @@ filegroup(
 # KiCad pcbnew flow and the schema tests use.
 py_library(
     name = "pnr",
-    srcs = glob(["pnr/*.py", "pnr/drc_warm/*.py", "pnr/shove/*.py", "pnr/si/*.py"]),  # no torch/native imports at package load
+    srcs = glob([
+        "pnr/*.py",
+        "pnr/drc_warm/*.py",
+        "pnr/fanout/*.py",
+        "pnr/shove/*.py",
+        "pnr/si/*.py",
+    ]),  # no torch/native imports at package load
     # SI v1 model library (pnr.si.models reads hardware/pnr/si_models next to the package).
     data = glob(["si_models/*.json"]),
     imports = ["."],
@@ -726,6 +742,14 @@ py_test(
         ":pnr_route",
         requirement("pyyaml"),
     ],
+)
+
+py_test(
+    name = "fanout_test",
+    size = "small",
+    srcs = ["tests/test_fanout.py"],
+    main = "tests/test_fanout.py",
+    deps = [":pnr"],
 )
 
 py_test(

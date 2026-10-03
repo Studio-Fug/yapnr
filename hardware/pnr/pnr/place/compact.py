@@ -25,6 +25,10 @@ Parts of ``PNR_COMPACT=1`` (``PNR_COMPACT_<PART>=0`` drops one):
     courtyard, or the body, united with the pads and silk, as it lies about the origin),
     turned with the part (:func:`pnr.place.geometry.courtyard_rect`,
     :func:`pnr.place.geometry.body_shift`); ``pos`` stays the footprint origin.
+``DROPS``
+    A ``plane_layer`` net without a declared stack gets its plane drops from the detailed
+    router, planned with the signal escapes (:func:`pnr.route.detail.router.route_board`),
+    instead of writeback's dog-bones after routing.
 
 ``PNR_SHRINK=1`` (:func:`shrink_search`, flat driver only) treats the outline as an
 envelope and keeps the smallest probed outline whose place-route loop converges.

@@ -10,24 +10,30 @@ legalizer settings, shrink search); the call sites guard on the switches. Tests:
 > parts looks too conservative during global placement and legalization.
 
 Measured before the change (seed 0): the ladder's courtyards cover only 11 to 22 % of their
-outlines. Four causes, one switch part each:
+outlines. Four causes, one switch part each, and a fifth part (`DROPS`) for a defect the denser
+placement exposed:
 
 | Part        | Cause                                                                                                                                                                        | Change                                                                                                                                                   |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GP`        | The ladder places at `spread=1.3`, which "makes parts fill the whole board"; the random starts are spread over the whole interior.                                           | Spread 1.0; the starts are drawn in a cluster box around the fixed parts. Space grows only where the router measured congestion.                         |
 | `LEGALIZE`  | Slots are `ceil((size + 0.4) / 0.25 mm)`: the routing clearance (0.4 mm on the ladder) between courtyards that KiCad already draws about 0.25 mm outside the pads.           | The courtyard gap (0.01 mm, or `board.courtyard_clearance_mm`), a copper margin only where a box hugs its pads, a 0.125 mm slot grid, pads off the edge. |
 | `COURTYARD` | Courtyards are modelled symmetric about the footprint origin: a 1x8 pin header whose origin is pin 1 reserves twice its length, and `09-mcu-usb-31-header` cannot be placed. | Each part occupies its ingested body box (`Component.body`), off its origin and turned with the part.                                                    |
-| `RANK`      | Selections among equally complete candidates ignore compactness.                                                                                                             | A compactness tie-break after every completion key.                                                                                                      |
+| `RANK`      | Selections among equally complete candidates ignore compactness.                                                                                                             | A compactness tie-break after every completion key and the vias.                                                                                         |
+| `DROPS`     | A `plane_layer` net without a declared stack gets its plane vias from writeback's dog-bones after routing, where routed copper can enclose a pad (`08-chaser-20-plane`).     | The router plans those drops with the signal escapes before routing, as it does for a declared stack.                                                    |
 
 ## 1. Switches
 
-- `PNR_COMPACT=1` turns on `GP`, `RANK`, `LEGALIZE` and `COURTYARD`; `PNR_COMPACT_<PART>=0`
-  drops one part (ablations).
+- `PNR_COMPACT=1` turns on `GP`, `RANK`, `LEGALIZE`, `COURTYARD` and `DROPS`;
+  `PNR_COMPACT_<PART>=0` drops one part (ablations).
+- `run.py`'s `--compact-off` choices and the `ladder-cell` kind's `compact_off` list the same
+  parts as `pnr/compact_flags.py` (tests keep them equal).
 - `PNR_SHRINK=1` is separate and never on by default: it changes the board outline.
 - Unset, every caller takes its unchanged path and the engine's JSON gains no key. The flag-off
   identity is tested on 04-inverter-leds-8 and 07-chaser-20 against the parent commit (the
   legalizer, the initial pool's starts and fixed poses on every platform; the whole placer on the
-  platform the golden was recorded on).
+  platform the golden was recorded on). On every platform a guard test runs the placer, the
+  legalizer and the initial pool with the compact-only functions patched to fail and checks
+  that no part has an offset body.
 - The ladder: `run.py --compact [--compact-off PART ...] [--shrink]` sets the variables after
   the runner strips the ambient `PNR_*` ones, so `provenance.json` records them. The
   `ladder-cell` experiment kind takes `compact`, `compact_off`, `shrink`, `gloss`,
@@ -71,7 +77,8 @@ outlines. Four causes, one switch part each:
   centred on the fixed parts (else the board) and clamped inside it. `global_place(start_box=)`
   and the initial pool's stratified and Latin starts map their existing random draws into it (no
   new draws).
-- Hierarchical block trials also try the utilisations 0.5 and 0.6.
+- The hierarchical regression driver's block trials also try the utilisations 0.5 and 0.6 (its
+  own budget, `hier_case.budget_of`; a caller of `pnr.hier` sets its own).
 
 ## 4. Legalizer (`LEGALIZE`)
 
@@ -79,7 +86,10 @@ outlines. Four causes, one switch part each:
 `compact.placement_clearance(constraints)` replaces `board.default_clearance_mm` wherever
 placement reads it as a courtyard clearance: the placer (legalize, `snap_aligns`,
 `refine_matched`, the side moves), the global objective and its inspector, the initial pool's
-basin fallback and the hierarchical feedback boards.
+basin fallback and the hierarchical feedback boards. The copper margins go wherever that
+clearance is checked after legalization: `snap_aligns`, the side moves (`pose_checker`) and
+the feedback `MoveBoard` (both parts' margins added to the gap). Rows and line groups keep the
+board's `default_clearance_mm`, not the gap, so they need none.
 
 - **Gap:** `board.courtyard_clearance_mm` when authored, else 0.01 mm (KiCad courtyards carry
   about 0.25 mm around the pads; touching courtyards are legal; 10 µm guards nanometre rounding).
@@ -101,12 +111,32 @@ whatever the switches (so every arm is measured alike): `bbox_mm2`, `utilization
 the same measure in each case's `result.json` (`compactness`, every arm).
 
 - `initial_pool.route_rank` (the pool's routed finalists, the halving screen, `mc_case`, the
-  hierarchical top seed): `missing, unresolved, length_unmatched, bucket, vias, length`, then
-  the id. A record without a bucket (the switch off) keeps the previous key.
+  hierarchical top seed): `missing, unresolved, length_unmatched, vias, bucket, length`, then
+  the id: on a fixed outline a smaller bounding box is free but a via is not. Under
+  `PNR_SHRINK` (the outline follows the bounding box) the bucket ranks before the vias. A record
+  without a bucket (the switch off) keeps the previous key.
 - Halving native and deep stages: `bbox_mm2` after every completion key, before the id.
 - The place-route loop's best round: `(overflow, unfinished, bbox_mm2)`.
 
-## 6. Shrink-to-fit (`PNR_SHRINK`, flat driver)
+## 6. Plane drops before routing (`DROPS`)
+
+A net class with a `plane_layer` and no declared stack (the legacy plane path, e.g.
+`08-chaser-20-plane`) routed its signals first and left every surface pad's via to the plane to
+writeback's dog-bone search (`writeback.apply_planes`, eight directions and five distances). Where
+routed copper enclosed a pad, the search failed (`planes: no clear fanout for ...`) and the pad
+stayed off the plane: 1 seed in 6 with the switch off, 3 in 6 under compact. A placement-level
+count (a dog-bone site clear of every other net's pad and of the edge, writeback's search
+without the routed copper) found a free site for every plane pad in all 52 runs, so a placement
+margin would not have helped; the routed copper closed them.
+
+With `DROPS`, `route_board` treats those nets as a declared stack's plane nets are treated: each
+surface pad gets a drop (stub plus through via, the pad's required width) planned jointly with the
+signal exits and reserved before the maze runs. The via may cross its own net's plane region on
+the plane layer (`RouteGrid.own_plane_cells`; blocked for tracks there, not for vias), which is
+cleared after the planning so the maze kernels see the grid they model. The planes stage then
+dog-bones only the pads still without a through contact (`skip_connected`).
+
+## 7. Shrink-to-fit (`PNR_SHRINK`, flat driver)
 
 `route_and_place` treats the outline as an envelope:
 
@@ -116,16 +146,21 @@ the same measure in each case's `result.json` (`compactness`, every arm).
 3. Then bisection between the largest failed scale (at first the lower bound
    `max(√(ΣA / 0.7 WH), the part and fixed-part bounds)`) and the smallest converged one: at most
    four probes, sizes rounded to 0.5 mm.
-4. Each probe is a same-seed `_place_route_loop` on `compact.scaled_constraints`: a fixed `at`
-   within 25 % of an edge keeps its distance to that edge, any other scales with the outline.
+4. Each probe is a same-seed `_place_route_loop` on `compact.scaled_constraints`. The outline
+   keeps its origin and gives up its north and east: a fixed `at` keeps its absolute position,
+   except one within 25 % of the north or east edge, which keeps its distance to that edge
+   (`moved_fixed` in the record lists those). The lower bound keeps every fixed part's box
+   inside the scaled outline.
 5. The smallest probe that converges legally sets the constraints' outline and fixed poses and
    `placed.outline`, which write-back stamps; `pnr-report.json` records the search (`shrink`).
 
 Skipped, and recorded so, with `auto_outline`, keep-outs or regions; the hierarchical and Monte
-Carlo drivers never call it, and `run.py` exempts the hard rungs (their outline is part of the
-rung). The runner's constraint audit reads `placed.json`'s outline.
+Carlo drivers never call it and record `shrink: {"skipped": "hier driver"}` (or `"mc driver"`),
+and `run.py` exempts the hard rungs (their outline is part of the rung). Under `--shrink` the
+runner's constraint audit judges hard edges against `placed.json`'s outline, otherwise against
+the design's.
 
-## 7. Trace and animation
+## 8. Trace and animation
 
 - The trace header carries each part's `body` (µm) under `COURTYARD`; the renderer draws and
   measures it (courtyards, edge tethers, rigid line boxes).
@@ -134,22 +169,45 @@ rung). The runner's constraint audit reads `placed.json`'s outline.
 - `animate_ladder.py` and `animate_showcases.py` take `--runner-arg ARG` (repeatable); the
   options that changed a run's boards (`--compact`, `--compact-off`, `--shrink`, `--gloss`,
   `--gloss-flag`, read back from its provenance) are part of each animation's `config` in the
-  manifest.
+  manifest. `animate_ladder.py`'s baseline fallback reruns a failed case with the same
+  arguments unless `--fallback-runner-arg ARG` names its own (`--fallback-runner-arg=--gloss`:
+  a compact ladder's failed case falls back to the default mode).
 
-## 8. Determinism
+## 9. Determinism
 
 No new random streams (the cluster box maps the existing draws), integer buckets, rounded floats,
 a fixed probe order and exact quarter-turn offsets: runs stay bitwise reproducible per platform,
 as before.
 
-## 9. Measurements and the default-on rule
+## 10. Measurements and the default-on rule
 
 Default-on (with `PNR_COMPACT=0` restoring the previous behaviour) only if, for each gloss
 setting, every case that passes with the switch off also passes with it on, opens and DRC
-findings are no worse, and `09-mcu-usb-31-header` passes; a regressing case is rerun on seeds 2
-to 5. Shrink stays opt-in. The A/B (the eight cases and four showcases, seeds 0 and 1, plus the
-header rung, arms off, off with gloss, compact and compact with gloss, compared on one platform)
-is reported in [the ladder documentation](../regression-ladder.md#compact-placement-opt-in).
+findings are no worse, and `09-mcu-usb-31-header` passes. Shrink stays opt-in.
 
-Flagged for review: the bucket ranks before vias (a denser board may cost a few vias); the
-0.01 mm courtyard gap; shrink moves a fixed `at` in the middle band (e.g. a connector's y).
+**Outcome (2026-10-03): both stay off by default.** Measured on GCP C4D (x86-64), every arm on
+one image, seeds 0 and 1 unless noted:
+
+| Cells                              | off            | compact                     | `COURTYARD` alone |
+| ---------------------------------- | -------------- | --------------------------- | ----------------- |
+| 8 ladder cases + 4 showcases (24)  | 24 pass        | 24 pass (also with gloss)   | 24 pass           |
+| `09-mcu-usb-31-header` (2)         | 0 (pool fails) | 2 pass                      | 2 pass            |
+| `08-chaser-20-plane`, seeds 0 to 9 | 7 pass         | 10 pass (7 without `DROPS`) | 7 pass            |
+| nightly hard rungs, seed 0 (14)    | 14 pass        | 14 pass                     | 14 pass           |
+| manual `09-mcu-usb-31` rungs (16)  | 16 pass        | 11 pass                     | 13 pass           |
+| `10-quad-bank-56` (2)              | 1 pass         | 2 pass                      | 2 pass            |
+
+On the 24 cells compact cuts the summed placed bounding box from 13068 to 8122 mm² (median
+utilisation 0.36 to 0.55) and copper from 4777 to 4022 mm, for 28 more vias (282 to 310) and
+21 % more CPU; with `RANK` after the vias, dropping `RANK` changes nothing there. The manual
+`09-mcu-usb-31` rungs fail the rule: their USB pairs end out of skew (`skew_out_of_range`) or
+with one leg or `VBUS` unrouted on 5 cells under compact and 3 under `COURTYARD` alone, all of
+which pass with the switch off. Dense placement leaves no room for the pair tuning; reserving
+it (inflating the parts on declared pairs and length groups) is the next step before another
+A/B. Shrink passes 23 of 24: on `line-chaser-20` seed 1 a 0.4 mm GND track runs 0.175 mm from
+the shrunk edge, through pad cells the router's edge inset leaves open.
+
+The full tables are in the workflow's A/B notes; the ladder documentation
+([compact placement](../regression-ladder.md#compact-placement-opt-in)) summarises them.
+
+Still open: the 0.01 mm courtyard gap (no DRC finding in any arm).

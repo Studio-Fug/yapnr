@@ -294,9 +294,10 @@ hurts completion; turning it on by default waits for a paired A/B of the native 
 `run.py --compact` places with `PNR_COMPACT=1` (off by default; [design](design/compact-placement.md)):
 spread 1.0 and starts clustered around the fixed parts, the courtyard gap instead of the routing
 clearance in the legalizer (with a copper margin only where a part's box hugs its pads), offset
-courtyards (a pin-1-origin header occupies its real extent) and a compactness tie-break after
-every completion key. `--compact-off PART` drops one part (`GP`, `RANK`, `LEGALIZE`,
-`COURTYARD`) for an ablation. `--shrink` (`PNR_SHRINK=1`) also searches a smaller outline inside
+courtyards (a pin-1-origin header occupies its real extent), a compactness tie-break after
+every completion key and the vias, and the plane drops of a `plane_layer` net without a declared
+stack planned before routing. `--compact-off PART` drops one part (`GP`, `RANK`, `LEGALIZE`,
+`COURTYARD`, `DROPS`) for an ablation. `--shrink` (`PNR_SHRINK=1`) also searches a smaller outline inside
 the design's and writes the board at the smallest that routes; hard rungs are exempt. Both are
 recorded in `provenance.json` (`pnr_environment`).
 
@@ -312,7 +313,16 @@ run.py ... --seed 0 --seed 1 --showcases --gloss-measure --compact --shrink   # 
 
 The animation scripts pass such options with `--runner-arg` (for example
 `animate_ladder.py ... --runner-arg=--compact --runner-arg=--gloss`) and record them in each
-animation's `config`.
+animation's `config`; `--fallback-runner-arg` gives `animate_ladder.py`'s baseline fallback its
+own (`--fallback-runner-arg=--gloss` reruns a failed compact case without `--compact`).
+
+Results (2026-10-03, GCP C4D x86-64, seeds 0 and 1): with `--compact` the eight cases and four
+showcases all pass (with and without gloss), as do `09-mcu-usb-31-header` (whose pool fails
+without it), `08-chaser-20-plane` on seeds 0 to 9 (7 of 10 without it) and the 14 nightly hard
+rungs; the summed placed bounding box of the 24 ladder cells drops from 13068 to 8122 mm² and
+their copper from 4777 to 4022 mm, for 28 more vias. It stays off by default because 5 of the 16
+manual `09-mcu-usb-31` rung cells, which pass without it, end with a USB pair out of skew or a
+leg unrouted (3 with `COURTYARD` alone): see the [design](design/compact-placement.md).
 
 ## In CI
 

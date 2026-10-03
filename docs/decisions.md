@@ -541,17 +541,23 @@ The gloss, dekink and corridor-coalescing pass (`PNR_GLOSS`,
 Compact placement (`PNR_COMPACT`, shrink-to-fit `PNR_SHRINK`,
 [design](design/compact-placement.md)); owner decisions of 2026-10-03:
 
-- **Behind `PNR_COMPACT`, off by default,** in four parts that can be dropped one at a time
+- **Behind `PNR_COMPACT`, off by default,** in five parts that can be dropped one at a time
   (`PNR_COMPACT_<PART>=0`): spread 1.0 with clustered starts, the compact legalizer (courtyard
-  gap, copper margins, finer slots, pads off the edge), offset courtyards and a compactness
-  tie-break in the Monte Carlo selection. With the switch unset the engine's outputs are those of
-  the parent commit (tested); the ladder's `result.json` gains a `compactness` measure in every
-  arm.
-- **Completion first:** the compactness tie-break ranks after every completion key; copper
-  clearance stays with the router and KiCad's DRC.
+  gap, copper margins, finer slots, pads off the edge), offset courtyards, a compactness
+  tie-break in the Monte Carlo selection and plane drops planned before routing (`DROPS`).
+  With the switch unset the engine's outputs are those of the parent commit (tested); the
+  ladder's `result.json` gains a `compactness` measure in every arm.
+- **Completion first:** the compactness tie-break ranks after every completion key and the
+  vias (before the vias only under `PNR_SHRINK`); copper clearance stays with the router and
+  KiCad's DRC.
 - **Default-on rule:** only if, per gloss setting, every case that passes with the switch off
   passes with it on, opens and DRC findings are no worse and the pin-1-origin header rung
   passes. `PNR_SHRINK` stays opt-in, since it changes the board outline.
+- **Outcome: off by default.** The ladder, the showcases, the header rung and the nightly hard
+  rungs pass under it (`08-chaser-20-plane` only once `DROPS` plans its plane drops before
+  routing), but 5 of the 16 manual `09-mcu-usb-31` rung cells that pass without it fail with it
+  (USB pair skew or a leg unrouted), and 3 with `COURTYARD` alone. Dense placement needs room
+  reserved for pair tuning before another A/B.
 
 ## Pinned versions
 

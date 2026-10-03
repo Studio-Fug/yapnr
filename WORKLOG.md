@@ -14,16 +14,14 @@ hierarchical ladder driver and their animations on `claude/animations-groups-hie
 
 - **Compact placement (`PNR_COMPACT`, shrink-to-fit `PNR_SHRINK`, both off by default)**
   (branch `claude/compact` on `main`; design
-  [docs/design/compact-placement.md](docs/design/compact-placement.md)): offset courtyards from
-  `Component.body`, the compact legalizer (courtyard gap, copper margins, 0.125 mm slots, pads
-  off the edge), spread 1.0 with clustered starts, a compactness tie-break after every
-  completion key, and the flat driver's outline search; the runner's `--compact`,
-  `--compact-off PART` and `--shrink`, `result.json` `compactness` in every arm, `--runner-arg`
-  for the animation scripts. Flag-off identity: unit goldens on 04 and 07 and placed/routes bytes
-  on cases 01-04 (seed 0, pool) match `main`. Smoke with `--compact` (seed 0): 04, 07 and
-  `09-mcu-usb-31-header` (no legal placement before) pass with 0 opens and 0 findings; 07's body
-  bounding box 866 to 470 mm². Next: the ladder A/B (default-on rule in the design), then the
-  animations with gloss and the winning mode.
+  [docs/design/compact-placement.md](docs/design/compact-placement.md)): offset courtyards, the
+  compact legalizer, spread 1.0 with clustered starts, a compactness tie-break after the vias,
+  legacy plane drops planned before routing (`DROPS`) and the flat driver's outline search.
+  Flag-off identity holds on x86 (placed and routed bytes of 30 cells against `main`). The A/B
+  (GCP, seeds 0 and 1) passes the ladder, the showcases, the header rung, `08-chaser-20-plane`
+  on ten seeds and the nightly hard rungs, but 5 of 16 manual `09-mcu-usb-31` cells regress (USB
+  pair skew), so it stays opt-in. Next: reserve room for pair tuning under compact, then
+  another A/B; the docs and README animations with gloss.
 
 - **Hard-rung gap fixes** (branch `claude/gap-fixes` on `claude/ladder-hard-rungs`, local, not
   pushed). The hard rungs (`regression/hard_rungs.py`: stackups, via kinds, sides, absolute and

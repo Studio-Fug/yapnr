@@ -15,9 +15,10 @@ py_library(
         "frontends/__init__.py",
     ],
     imports = [".."],
-    # The `atopile`, `picker`, `part-cache`, `fab` and `order` commands (imported when the parser
-    # is built).
+    # The `atopile`, `picker`, `part-cache`, `exp`, `fab` and `order` commands (imported when the
+    # parser is built).
     deps = [
+        "//yapnr/exp",
         "//yapnr/fab",
         "//yapnr/frontends/atopile",
         "//yapnr/order",

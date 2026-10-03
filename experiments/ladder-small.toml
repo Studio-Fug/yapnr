@@ -1,0 +1,20 @@
+# The two smallest regression ladder cases, two seeds each, as one task per cell
+# (hardware/pnr/regression/README.md). The local backend's end-to-end check and the cloud smoke
+# job's second step use it.
+schema = "yapnr-campaign-v1"
+kind = "ladder-cell"
+name = "ladder-small"
+source = "HEAD"
+image = "edge"
+
+[matrix]
+case = ["01-connector-led-2", "02-resistor-led-3"]
+seed = [0, 1]
+
+[config]
+timeout = 600
+
+[resources]
+cpus = 1
+memory_gb = 3
+max_wall_s = 1800

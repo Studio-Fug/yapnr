@@ -32,6 +32,8 @@ command line currently offers `yapnr --version` and a `yapnr doctor` stub; the l
   JLCPCB's or PCBWay's rules, build the files to upload and an order card, and open the vendor's
   page. yapnr never uploads, orders or pays.
 - [Releases and versioning](releases.md): version numbers, image tags, what a release publishes.
+- [Cloud and HPC experiments](cloud-experiments.md): `yapnr exp` campaigns on a local pool, Google
+  Cloud Batch (Spot VMs) or a Slurm allocation, with cost guards; the owner's bootstrap runbook.
 - [Regression ladder](regression-ladder.md): eight boards of rising complexity, up to a TLC555 +
   CD4017B LED chaser, with an animation of each board's place and route.
 - [Constraints and hierarchy](constraints-and-hierarchy.md): a line of LEDs, parts held on the
@@ -69,6 +71,7 @@ frontends/atopile
 part-cache
 fab-and-ordering
 releases
+cloud-experiments
 ```
 
 ```{toctree}
@@ -83,6 +86,7 @@ decisions
 design/animations
 design/constraint-and-hier-animations
 design/fea-integration
+design/cloud-experiments
 design/fab-and-ordering
 history/import-manifest
 about-the-name

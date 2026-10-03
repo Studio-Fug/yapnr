@@ -1,0 +1,36 @@
+# A seed sweep of the whole ladder with the initial placement pool (8 starts, 3 finalists):
+# 8 cases x 16 seeds = 128 cells, the phase 2 exit criterion of docs/design/cloud-experiments.md.
+schema = "yapnr-campaign-v1"
+kind = "ladder-cell"
+name = "ladder-sweep"
+source = "HEAD"
+image = "edge"
+determinism = "wall_clock_budgeted"
+
+[matrix]
+case = [
+  "01-connector-led-2",
+  "02-resistor-led-3",
+  "03-branched-leds-5",
+  "04-inverter-leds-8",
+  "05-timer-led-10",
+  "06-chaser-14",
+  "07-chaser-20",
+  "08-chaser-20-plane",
+]
+seed = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+
+[config]
+initial_pool = true
+initial_starts = 8
+initial_finalists = 3
+timeout = 1800
+
+[resources]
+cpus = 1
+memory_gb = 3
+max_wall_s = 7200
+
+[placement]
+families = ["c4d", "c3d"]
+spot = true

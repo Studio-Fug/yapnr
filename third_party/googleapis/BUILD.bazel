@@ -1,0 +1,13 @@
+"""Google API descriptions, vendored unmodified (THIRD_PARTY.md, "Google API discovery documents").
+
+batch-v1.json: the Batch v1 discovery document (revision 20260723), from
+googleapis/google-api-go-client batch/v1/batch-api.json; BSD-3-Clause (LICENSE here). yapnr.exp
+validates rendered Batch jobs against it offline.
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "LICENSE",
+    "batch-v1.json",
+])

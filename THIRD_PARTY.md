@@ -34,6 +34,20 @@ brought in. Update it in the same change that adds, removes or upgrades such mat
 
 `tests/unit/viewer/test_dist.py` checks the sha256 of every served third-party file.
 
+### Google API discovery documents
+
+- **What:** the Batch v1 discovery document (revision 20260723), Google's machine-readable
+  description of the Batch REST API, as mirrored by
+  [google-api-go-client](https://github.com/googleapis/google-api-go-client) at
+  `batch/v1/batch-api.json` (commit `8140ddf12e1a5c4a54748a94b6655818fcc480ed`, 2026-08-02).
+- **License:** BSD-3-Clause (the repository's `LICENSE`, kept next to it).
+- **How:** vendored unmodified as `third_party/googleapis/batch-v1.json` (sha256
+  `8ea2a112c32f1995d8b53660b4c729b62d5dc81ab79b096172a06093d2b89d15`), with
+  `third_party/googleapis/LICENSE` (sha256
+  `110244b02140866ee37d17fa7449436a377ec3b85a481fbb208f4c87964382de`). `yapnr exp` validates
+  the Batch jobs it renders against it, offline; it is data of `//yapnr/exp`, not part of the
+  wheel.
+
 ## In the container images
 
 The images `ghcr.io/studio-fug/yapnr-kicad` and `ghcr.io/studio-fug/yapnr`

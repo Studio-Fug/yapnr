@@ -1,0 +1,367 @@
+{
+  "schema": "yapnr-price-table-v1",
+  "currency": "USD",
+  "accessed": "2026-10-02",
+  "note": "Spot list prices per vCPU-hour and per GB-hour of memory (least-squares fits over the standard, highcpu and highmem shapes; T2D and H3 per vCPU with memory included). us-central1 is the live Spot pricing page on 2026-10-02 (it shares Spot prices with us-east1 and us-west1); the other regions are the five cheapest Batch regions per family in the public Cloud Billing Catalog snapshot of 2026-09-24. Prices change daily: `yapnr exp prices` refreshes them from the Billing Catalog. Regions missing here are priced at us-central1 (above the median for most families), and the estimate says so. memory_gb_per_vcpu holds for shapes of 8 vCPUs or more. speed_vs_reference is the PassMark single-thread rating divided by the Apple M4 rating (an estimate until the calibration measures it).",
+  "reference": "Apple M4 performance core (the development Mac)",
+  "sources": [
+    {
+      "what": "Spot VM prices (live tables)",
+      "url": "https://cloud.google.com/spot-vms/pricing",
+      "accessed": "2026-10-02"
+    },
+    {
+      "what": "Cloud Billing Catalog snapshot (pricing.yml, 2026-09-24)",
+      "url": "https://github.com/Cyclenerd/google-cloud-pricing-cost-calculator",
+      "accessed": "2026-10-02"
+    },
+    {
+      "what": "Disk prices",
+      "url": "https://cloud.google.com/compute/disks-image-pricing",
+      "accessed": "2026-10-02"
+    },
+    {
+      "what": "Machine families (shapes, memory, CPU platforms, boot disk types)",
+      "url": "https://docs.cloud.google.com/compute/docs/general-purpose-machines",
+      "accessed": "2026-10-02"
+    },
+    {
+      "what": "Compute-optimized machine families",
+      "url": "https://docs.cloud.google.com/compute/docs/compute-optimized-machines",
+      "accessed": "2026-10-02"
+    },
+    {
+      "what": "Batch supported machine series",
+      "url": "https://docs.cloud.google.com/batch/docs/get-started",
+      "accessed": "2026-10-02"
+    },
+    {
+      "what": "PassMark single-thread ratings",
+      "url": "https://www.cpubenchmark.net/",
+      "accessed": "2026-10-02"
+    }
+  ],
+  "disks": {
+    "hyperdisk-balanced": {
+      "gib_month": 0.08,
+      "note": "capacity only, with IOPS and throughput pinned to the free baseline (3000 IOPS, 140 MiB/s)"
+    },
+    "pd-balanced": {
+      "gib_month": 0.1
+    }
+  },
+  "overheads": {
+    "boot_disk_gib": 30,
+    "external_ip_hour": 0.0025,
+    "preemption_rework": 0.08,
+    "vm_start_s": 120
+  },
+  "egress_gib": 0.12,
+  "families": {
+    "c4d": {
+      "cpu": "AMD EPYC 9B45 (Turin)",
+      "arch": "x86_64",
+      "threads_per_core": 2,
+      "batch": true,
+      "boot_disk": "hyperdisk-balanced",
+      "memory_gb_per_vcpu": {
+        "highcpu": 1.875,
+        "standard": 3.875,
+        "highmem": 7.875
+      },
+      "vcpus": [2, 4, 8, 16, 32, 48, 64, 96, 192, 384],
+      "speed_vs_reference": 0.79,
+      "memory_included": false,
+      "spot": {
+        "us-central1": [0.0132, 0.0015172],
+        "us-west4": [0.00761, 0.000873],
+        "asia-south1": [0.00877, 0.001007],
+        "us-east5": [0.01362, 0.001561]
+      },
+      "on_demand": {
+        "us-central1": [0.032704, 0.0037533]
+      }
+    },
+    "c4": {
+      "cpu": "Intel Xeon 6975P-C / 8581C (Granite Rapids, Emerald Rapids)",
+      "arch": "x86_64",
+      "threads_per_core": 2,
+      "batch": true,
+      "boot_disk": "hyperdisk-balanced",
+      "memory_gb_per_vcpu": {
+        "highcpu": 2.0,
+        "standard": 3.75,
+        "highmem": 7.75
+      },
+      "vcpus": [2, 4, 8, 16, 24, 32, 48, 96, 144, 192, 288],
+      "speed_vs_reference": 0.73,
+      "memory_included": false,
+      "spot": {
+        "us-central1": [0.02074, 0.002357],
+        "northamerica-northeast1": [0.00508, 0.000578],
+        "me-central2": [0.00538, 0.00061],
+        "me-west1": [0.00576, 0.000655],
+        "europe-west9": [0.00593, 0.000674],
+        "europe-west12": [0.00839, 0.000954]
+      },
+      "on_demand": {
+        "us-central1": [0.03465, 0.003938]
+      }
+    },
+    "c3d": {
+      "cpu": "AMD EPYC 9B14 (Genoa)",
+      "arch": "x86_64",
+      "threads_per_core": 2,
+      "batch": true,
+      "boot_disk": "pd-balanced",
+      "memory_gb_per_vcpu": {
+        "highcpu": 2.0,
+        "standard": 4.0,
+        "highmem": 8.0
+      },
+      "vcpus": [4, 8, 16, 30, 60, 90, 180, 360],
+      "speed_vs_reference": 0.64,
+      "memory_included": false,
+      "spot": {
+        "us-central1": [0.007965, 0.001058],
+        "northamerica-northeast1": [0.00293, 0.000392],
+        "northamerica-northeast2": [0.00293, 0.000392],
+        "europe-west9": [0.00309, 0.000413],
+        "asia-south2": [0.00314, 0.000419],
+        "europe-southwest1": [0.00315, 0.00042]
+      },
+      "on_demand": {
+        "us-central1": [0.029563, 0.003959]
+      }
+    },
+    "t2d": {
+      "cpu": "AMD EPYC 7B13 (Milan)",
+      "arch": "x86_64",
+      "threads_per_core": 1,
+      "batch": true,
+      "boot_disk": "pd-balanced",
+      "memory_gb_per_vcpu": {
+        "standard": 4.0
+      },
+      "vcpus": [1, 2, 4, 8, 16, 32, 48, 60],
+      "speed_vs_reference": 0.57,
+      "memory_included": true,
+      "spot": {
+        "us-central1": [0.025348, 0.0],
+        "asia-northeast3": [0.00488, 0],
+        "europe-southwest1": [0.0073, 0],
+        "europe-west8": [0.00822, 0],
+        "me-central2": [0.00854, 0],
+        "northamerica-northeast2": [0.00943, 0]
+      },
+      "on_demand": {
+        "us-central1": [0.042246, 0.0]
+      }
+    },
+    "c4a": {
+      "cpu": "Google Axion (Neoverse V2)",
+      "arch": "arm64",
+      "threads_per_core": 1,
+      "batch": true,
+      "boot_disk": "hyperdisk-balanced",
+      "memory_gb_per_vcpu": {
+        "highcpu": 2.0,
+        "standard": 4.0,
+        "highmem": 8.0
+      },
+      "vcpus": [1, 2, 4, 8, 16, 32, 48, 64, 72],
+      "speed_vs_reference": 0.52,
+      "memory_included": false,
+      "spot": {
+        "us-central1": [0.01387, 0.001578],
+        "europe-west4": [0.00414, 0.00047],
+        "europe-north1": [0.00798, 0.000908],
+        "us-east5": [0.00808, 0.00092],
+        "australia-southeast1": [0.00811, 0.000921],
+        "australia-southeast2": [0.00843, 0.000958]
+      },
+      "on_demand": {
+        "us-central1": [0.03086, 0.00351]
+      }
+    },
+    "n2d": {
+      "cpu": "AMD EPYC Milan or Rome (set a minimum CPU platform)",
+      "arch": "x86_64",
+      "threads_per_core": 2,
+      "batch": true,
+      "boot_disk": "pd-balanced",
+      "memory_gb_per_vcpu": {
+        "highcpu": 1.0,
+        "standard": 4.0,
+        "highmem": 8.0
+      },
+      "vcpus": [2, 4, 8, 16, 32, 48, 64, 80, 96, 128, 224],
+      "speed_vs_reference": 0.57,
+      "memory_included": false,
+      "spot": {
+        "us-central1": [0.01475, 0.001975],
+        "europe-west10": [0.00716, 0.000958],
+        "asia-southeast1": [0.00802, 0.001076],
+        "europe-west8": [0.00823, 0.001107],
+        "asia-northeast2": [0.00874, 0.001173],
+        "europe-west12": [0.00879, 0.001175]
+      },
+      "on_demand": {
+        "us-central1": [0.027502, 0.003686]
+      }
+    },
+    "n4": {
+      "cpu": "Intel Xeon (Emerald Rapids)",
+      "arch": "x86_64",
+      "threads_per_core": 2,
+      "batch": true,
+      "boot_disk": "hyperdisk-balanced",
+      "memory_gb_per_vcpu": {
+        "highcpu": 2.0,
+        "standard": 4.0,
+        "highmem": 8.0
+      },
+      "vcpus": [2, 4, 8, 16, 32, 48, 64, 80],
+      "speed_vs_reference": 0.54,
+      "memory_included": false,
+      "spot": {
+        "us-central1": [0.01677, 0.001904],
+        "asia-east2": [0.00438, 0.000496],
+        "europe-west1": [0.005, 0.000567],
+        "northamerica-northeast1": [0.00682, 0.000773],
+        "europe-west8": [0.00712, 0.000809]
+      },
+      "on_demand": {
+        "us-central1": [0.03119, 0.00354]
+      }
+    },
+    "n4a": {
+      "cpu": "Google Axion (Neoverse N3)",
+      "arch": "arm64",
+      "threads_per_core": 1,
+      "batch": true,
+      "boot_disk": "hyperdisk-balanced",
+      "memory_gb_per_vcpu": {
+        "highcpu": 2.0,
+        "standard": 4.0,
+        "highmem": 8.0
+      },
+      "vcpus": [1, 2, 4, 8, 16, 32, 48, 64],
+      "speed_vs_reference": 0.45,
+      "memory_included": false,
+      "spot": {
+        "us-central1": [0.01002, 0.001141],
+        "us-east1": [0.00956, 0.001087],
+        "us-west1": [0.00956, 0.001087],
+        "us-east4": [0.01222, 0.00139]
+      },
+      "on_demand": {
+        "us-central1": [0.02646, 0.00301]
+      }
+    },
+    "e2": {
+      "cpu": "unspecified (platform varies)",
+      "arch": "x86_64",
+      "threads_per_core": 2,
+      "batch": true,
+      "boot_disk": "pd-balanced",
+      "memory_gb_per_vcpu": {
+        "highcpu": 1.0,
+        "standard": 4.0,
+        "highmem": 8.0
+      },
+      "vcpus": [2, 4, 8, 16, 32],
+      "speed_vs_reference": 0.45,
+      "memory_included": false,
+      "spot": {
+        "us-central1": [0.01309, 0.001754],
+        "us-west4": [0.00324, 0.000435],
+        "northamerica-northeast2": [0.00477, 0.000638],
+        "europe-west10": [0.00516, 0.000689],
+        "asia-southeast2": [0.00638, 0.000859]
+      },
+      "on_demand": {
+        "us-central1": [0.021812, 0.0029235]
+      }
+    },
+    "h3": {
+      "cpu": "Intel Xeon 8481C (Sapphire Rapids), 88-core host",
+      "arch": "x86_64",
+      "threads_per_core": 1,
+      "batch": true,
+      "boot_disk": "pd-balanced",
+      "memory_gb_per_vcpu": {
+        "standard": 4.0
+      },
+      "vcpus": [88],
+      "speed_vs_reference": 0.55,
+      "memory_included": true,
+      "spot": {
+        "us-central1": [0.033256, 0.0],
+        "us-east4": [0.00516, 0],
+        "asia-south1": [0.00539, 0],
+        "us-east5": [0.00583, 0],
+        "us-west4": [0.00583, 0],
+        "europe-west2": [0.00592, 0]
+      },
+      "on_demand": {
+        "us-central1": [0.05595, 0.0]
+      }
+    },
+    "n4d": {
+      "cpu": "AMD EPYC (Turin)",
+      "arch": "x86_64",
+      "threads_per_core": 2,
+      "batch": false,
+      "boot_disk": "hyperdisk-balanced",
+      "memory_gb_per_vcpu": {
+        "highcpu": 2.0,
+        "standard": 4.0,
+        "highmem": 8.0
+      },
+      "vcpus": [],
+      "speed_vs_reference": 0.79,
+      "memory_included": false,
+      "spot": {
+        "us-central1": [0.01708, 0.001944],
+        "me-west1": [0.00694, 0.000788],
+        "europe-west9": [0.00732, 0.000831],
+        "asia-northeast2": [0.0081, 0.00092],
+        "asia-northeast3": [0.0081, 0.00092],
+        "us-west4": [0.00885, 0.001007]
+      },
+      "on_demand": {
+        "us-central1": [0.02911, 0.00331]
+      }
+    },
+    "t2a": {
+      "cpu": "Ampere Altra",
+      "arch": "arm64",
+      "threads_per_core": 1,
+      "batch": false,
+      "boot_disk": "pd-balanced",
+      "memory_gb_per_vcpu": {
+        "standard": 4.0
+      },
+      "vcpus": [],
+      "speed_vs_reference": 0.43,
+      "memory_included": true,
+      "spot": {
+        "us-central1": [0.0231, 0.0],
+        "asia-southeast1": [0.01788, 0],
+        "us-east1": [0.0231, 0],
+        "us-west1": [0.0231, 0],
+        "europe-west4": [0.02415, 0]
+      },
+      "on_demand": {
+        "us-central1": [0.0385, 0.0]
+      }
+    }
+  },
+  "batch_unavailable_regions": [
+    "africa-south1",
+    "asia-southeast3",
+    "europe-north2",
+    "northamerica-south1"
+  ]
+}

@@ -24,6 +24,10 @@ The commands:
 ``yapnr part-cache ...``
     The part cache: local directory or server (docs/part-cache.md).
 
+``yapnr exp plan|submit|status|logs|fetch|cancel|doctor|prices|unfreeze|calibration``
+    Experiment campaigns on a local pool, Google Cloud Batch or Slurm
+    (docs/cloud-experiments.md).
+
 ``yapnr fab profiles|show|check|build|preview``
     Vendor profiles and stackups, the fab check (KiCad DRC under a vendor's rules), the
     per-vendor fab bundle and a preview of its gerbers (docs/fab-and-ordering.md).
@@ -180,6 +184,7 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.add_argument("--json", action="store_true", help="machine-readable output")
     doctor.set_defaults(func=_cmd_doctor)
 
+    from yapnr.exp.cli import register as register_exp
     from yapnr.fab.cli import register as register_fab
     from yapnr.frontends.atopile.cli import register_atopile, register_picker
     from yapnr.order.cli import register as register_order
@@ -188,6 +193,7 @@ def build_parser() -> argparse.ArgumentParser:
     register_atopile(commands)
     register_picker(commands)
     register_part_cache(commands)
+    register_exp(commands)
     register_fab(commands)
     register_order(commands)
     return parser

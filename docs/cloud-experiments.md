@@ -179,8 +179,9 @@ gcloud compute networks delete default --quiet
 Spot VMs consume the preemptible CPU quota once it is granted in a region ([quotas][quotas]). The
 quota ceiling is the only hard cap on spending, so request only what the caps allow, in the enabled
 regions only. Look the quota id up first (it is not verified here), then create a preference with
-the id the budget guard knows, `yapnr-preemptible-cpus-<region>`. Check first that the region
-offers the planned shapes (the price table only shows that the region bills them):
+the id `yapnr-preemptible-cpus-<region>`, or request the quota in the console (IAM & Admin, Quotas &
+System Limits); the budget guard finds an existing preference by quota id and region. Check first
+that the region offers the planned shapes (the price table only shows that the region bills them):
 
 ```sh
 gcloud compute machine-types list --project="$PROJECT" \

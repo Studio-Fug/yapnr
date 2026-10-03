@@ -35,9 +35,10 @@ def job(name, state="RUNNING", **labels):
 
 
 class FakeHttp:
-    def __init__(self, jobs=(), instances=None):
+    def __init__(self, jobs=(), instances=None, preferences=()):
         self.jobs = list(jobs)
         self.instances = instances or {}
+        self.preferences = list(preferences)
         self.calls = []
 
     def __call__(self, method, url, body=None, content_type="application/json"):
@@ -48,6 +49,8 @@ class FakeHttp:
             return 200, {}
         if method == "GET" and "aggregated/instances" in url:
             return 200, {"items": self.instances}
+        if method == "GET" and "/quotaPreferences?" in url:
+            return 200, {"quotaPreferences": self.preferences}
         if method == "POST" and url.endswith(":cancel"):
             name = url[len(main.BATCH) + 1 : -len(":cancel")]
             for j in self.jobs:
@@ -122,6 +125,29 @@ class BudgetGuardTest(unittest.TestCase):
         self.assertIn("ignoreSafetyChecks=QUOTA_DECREASE_BELOW_USAGE", url)
         self.assertEqual(body["quotaConfig"], {"preferredValue": "0"})
         self.assertEqual(body["dimensions"], {"region": "us-west4"})
+
+    def test_quota_cut_updates_a_preference_made_in_the_console(self):
+        console = {
+            "name": "projects/5/locations/global/quotaPreferences/8aeb531a-708e-47f3-9ca2",
+            "service": "compute.googleapis.com",
+            "quotaId": "PREEMPTIBLE-CPUS-per-project-region",
+            "dimensions": {"region": "us-west4"},
+        }
+        other_region = dict(
+            console,
+            name="projects/5/locations/global/quotaPreferences/x",
+            dimensions={"region": "northamerica-northeast1"},
+        )
+        other_quota = dict(
+            console,
+            name="projects/5/locations/global/quotaPreferences/y",
+            quotaId="CPUS-per-project-region",
+        )
+        http = FakeHttp([job("a")], preferences=[other_region, other_quota, console])
+        main.handle_budget(budget(61.0), http, CFG, NOW)
+        ((method, url, body),) = http.of("PATCH")
+        self.assertIn("quotaPreferences/8aeb531a-708e-47f3-9ca2?", url)
+        self.assertEqual(body["quotaConfig"], {"preferredValue": "0"})
 
     def test_stale_and_malformed_messages_are_ignored(self):
         http = FakeHttp([job("a")])

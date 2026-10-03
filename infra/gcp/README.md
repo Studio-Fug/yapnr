@@ -33,9 +33,10 @@ IP exists between campaigns.
 
 The budget guard lowers the preemptible CPU quota when spending runs away; a later `tofu apply`
 must not silently raise it again. Quotas are requested with the runbook's commands
-([guide, step 4](../../docs/cloud-experiments.md#4-quotas)), and the quota preference ids must
-be `yapnr-preemptible-cpus-<region>`: that is the name the guard updates. List them in
-`quota_preferences` (region to quota id) so the guard knows them.
+([guide, step 4](../../docs/cloud-experiments.md#4-quotas)) or in the console. List them in
+`quota_preferences` (region to quota id) so the guard knows them. The guard updates the existing
+preference for that quota and region, whatever its id (a console request gets a generated one),
+and creates `yapnr-preemptible-cpus-<region>` only when none exists.
 
 ## Apply and destroy
 

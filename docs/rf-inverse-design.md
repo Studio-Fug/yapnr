@@ -8,12 +8,14 @@ and projected density on the copper plane, and an epigraph minimax solved by MMA
 a KiCad footprint, a Touchstone file and a JSON report. The method and its choices are in the
 [design](design/rf-topology-optimization.md) (issue #29).
 
-Status: the solver, the optimizer and five end-to-end cases are implemented. The power divider
-meets its criteria on the optimization grid and on two finer grids, and so does the antenna,
-whose copper the optimizer grew from the feed line alone (round 2; its power balance criterion
-was relaxed from 2 to 4 %, [below](#b-antenna)); the diplexer comes close; the Wilkinson-type
-combiner and the three-channel bank do not. The results and the reasons are
-[below](#end-to-end-cases); what the numbers are worth is in [accuracy](#accuracy).
+Status: the solver, the optimizer and five end-to-end cases are implemented. Re-simulated from
+their exported footprints on the optimization grid and on two finer grids, four meet their
+criteria: the power divider, the Wilkinson-type combiner (round 2: matched and isolated
+outputs, with void strips on its symmetry line), the diplexer and the antenna, whose copper the
+optimizer grew from the feed line alone (round 2; its power balance criterion was relaxed from
+2 to 4 %, [below](#b-antenna)). The three-channel bank does not: its adjacent channels leak
+−10 dB against −15 dB. The results and the reasons are [below](#end-to-end-cases); what the
+numbers are worth is in [accuracy](#accuracy).
 
 ## A spec
 
@@ -77,7 +79,8 @@ from yapnr.rf.spec import Absorbed, Loss, S, RadiatedFraction, Spec
 spec = Spec.load("divider.yaml")
 extra = S(2, 1).phase_deg(-90, tol=10, band="pass")
 antenna_target = RadiatedFraction(1).at_least(0.7, band="main")
-wilkinson_resistor = (Absorbed("R1", 2).at_least(0.4, band="pass"), Loss(2).at_most(0.08, band="pass"))
+wilkinson_resistor = Absorbed("R1", 2).at_least(0.4, band="pass")  # the resistor's share
+lost = Loss(2).at_most(0.08, band="pass")  # radiated and dissipated outside resistors
 ```
 
 ## Running a design
@@ -157,28 +160,30 @@ tiny grids for four iterations and check the pipeline, not the RF targets.
 
 All cases use a substrate of εr 3.55 and tan δ 0.0027 (a Rogers 4003C-like laminate; S1 0.813 mm,
 S2 1.524 mm) over a solid ground, copper as a sheet with the surface resistance of smooth copper
-at 10 GHz, 50 Ω feeds (6 cells on S1, Z_c 49.5 Ω; 11 cells on S2), the V/I planes 6h from the
+at 10 GHz, 50 Ω feeds (6 cells on S1, Z_c 52.7 Ω with the round-2 solver, 49.5 Ω without it;
+11 cells on S2, 47.5 Ω), the V/I planes 6h from the
 reference plane and the source, torch float32 on 4 threads. Times are wall times on the
 development Mac (Apple silicon), niced, next to other work.
 
 | Case                                                | Ports, substrate   | Optimization grid (cells, Δt)  | Fine, finer cells | Window (pixels)  | Start               | Iterations, wall time | Coarse | Fine | Finer |
 | --------------------------------------------------- | ------------------ | ------------------------------ | ----------------- | ---------------- | ------------------- | --------------------- | ------ | ---- | ----- |
-| [divider](#a-power-divider)                         | 3, S1 (h 0.813 mm) | 124 × 74 × 22 = 202k, 0.465 ps | 689k, 1.62M       | 32 × 40 @ 0.3 mm | uniform 0.3, robust | 137, 42 min           | pass   | pass | pass  |
-| [Wilkinson](#a2-wilkinson-type-combiner)            | 3 + 100 Ω, S1      | 132 × 74 × 22 = 215k, 0.465 ps | 738k, 1.74M       | 40 × 40 @ 0.3 mm | uniform 0.3         | 150, 48 min           | fail   | fail | fail  |
+| [divider](#a-power-divider)                         | 3, S1 (h 0.813 mm) | 124 × 74 × 22 = 202k, 0.410 ps | 689k, 1.62M       | 32 × 40 @ 0.3 mm | uniform 0.3, robust | 70, 131 min           | pass   | pass | pass  |
+| [Wilkinson](#a2-wilkinson-type-combiner)            | 3 + 100 Ω, S1      | 132 × 74 × 22 = 215k, 0.410 ps | 738k, 1.74M       | 40 × 40 @ 0.3 mm | feeds, keepouts     | 75, 108 min           | pass   | pass | pass  |
 | [antenna](#b-antenna)                               | 1, S2 (h 1.524 mm) | 121 × 81 × 27 = 265k, 0.535 ps | 957k, 2.13M       | 45 × 45 @ 0.4 mm | feed line, robust   | 60, 109 min           | pass   | pass | pass  |
-| [diplexer](#c-diplexer)                             | 3, S1              | 142 × 84 × 22 = 262k, 0.465 ps | 967k, 2.22M       | 50 × 50 @ 0.3 mm | stubs, robust       | 36, 97 min            | pass   | pass | pass  |
-| [three-channel bank](#c2-three-channel-filter-bank) | 4, S1              | 152 × 94 × 22 = 314k, 0.465 ps | 1.19M, 2.75M      | 60 × 60 @ 0.3 mm | stubs               | 96, 31 min            | fail   | fail | fail  |
+| [diplexer](#c-diplexer)                             | 3, S1              | 142 × 84 × 22 = 262k, 0.410 ps | 967k, 2.22M       | 50 × 50 @ 0.3 mm | stubs, robust       | 36, 97 min            | pass   | pass | pass  |
+| [three-channel bank](#c2-three-channel-filter-bank) | 4, S1              | 152 × 94 × 22 = 314k, 0.410 ps | 1.19M, 2.75M      | 60 × 60 @ 0.3 mm | stubs               | 60, 159 min           | fail   | fail | fail  |
 
-The re-validation takes 2–3 minutes on the fine grid and 5–15 on the finer one per case (the
-antenna also runs the power balance). The finer grids have 0.265 and 0.184 ps steps on S1,
-0.344 and 0.24 ps on S2 (the round-2 antenna, with the copper-edge correction: 0.535, 0.291 and
-0.199 ps on its three grids; its re-validation took 2.4 and 11 minutes on the fine and finer
-grids).
+Each re-validation re-simulates every excitation on the three grids (the antenna also runs
+the power balance). With the copper-edge correction the three grids have
+0.410, 0.222 and 0.151 ps steps on S1 (0.465, 0.265 and 0.184 ps without it) and 0.535, 0.291
+and 0.199 ps on S2; round 2's re-validations took 2.4–7.3 minutes on the fine grid and 10–34 on
+the finer one (the bank's four excitations and the shared Mac's load set the upper ends; round
+1: 2–3 and 5–15 minutes).
 
-One iteration is one forward and one adjoint FDTD run per excitation (the divider's robust
-variant doubles it, the antenna's eroded and dilated variants triple it, and adaptive moves
-add a forward run per refused step), plus a forward run of the binarized design every five
-iterations.
+One iteration is one forward and one adjoint FDTD run per excitation (the eroded and dilated
+variants triple it, from β = 16 in the divider, the combiner and the bank and throughout in the
+diplexer and the antenna, and adaptive moves add a forward run per refused step), plus forward
+runs of the binarized design and its variants every five iterations.
 
 The artifacts of each case are in [`docs/rf/`](rf/): the footprints form one KiCad library,
 [`yapnr-rf-examples.pretty`](rf/yapnr-rf-examples.pretty/); each case directory holds
@@ -194,32 +199,41 @@ animation of the optimization and the figure.
 
 Three ports on S1 (h 0.813 mm), a 9.6 × 12 mm window (32 × 40 pixels at 0.3 mm, mirror
 symmetric about y = 0), port 1 on the west edge and ports 2 and 3 on the east edge 8.4 mm apart.
-Targets over 8.5–11.5 GHz (7 points): |S11| ≤ −20 dB and |S21|, |S31| ≥ −3.4 dB, robust: the
-epigraph also holds the eroded design (projection threshold 0.55), because the finer grids see
-the copper smaller. The exported design is iteration 80's (β = 32, robust t = 0.10); plain MMA
-later lost it (the last binarized design was at t = 13.7: a broken arm).
+Targets over 8.5–11.5 GHz (7 points): |S11| ≤ −20 dB and |S21|, |S31| ≥ −3.4 dB. Round 2
+(design §23): the round-2 solver ([accuracy](#accuracy)), the dilated and eroded designs in
+the epigraph from β = 16 (projection thresholds 0.45 and 0.55, because the finer grids see the
+copper differently), plain MMA steps for the 30 iterations at β = 8 and adaptive moves from
+β = 16, schedule 30, 15, 15, 10 iterations at β = 8, 16, 32, 64 from a uniform x = 0.3. The
+exported design is iteration 40's (β = 16, robust binarized t −0.028; the last design's
++0.066); 70 iterations in 131 minutes on the shared Mac (22 s to 18 minutes per iteration as
+the machine's load rose from 8 to 29).
 
 | Check (dense sweep, 61 points) | Target  | Criterion (coarse; fine and finer) | Coarse 0.3 mm | Fine 0.15 mm | Finer 0.1 mm |
 | ------------------------------ | ------- | ---------------------------------- | ------------- | ------------ | ------------ |
-| \|S11\| max, 8.5–11.5 GHz      | −20 dB  | ≤ −17 dB; ≤ −15 dB                 | −19.6 dB      | −20.3 dB     | −17.7 dB     |
-| \|S21\| = \|S31\| min          | −3.4 dB | ≥ −3.45 dB; ≥ −3.6 dB              | −3.33 dB      | −3.31 dB     | −3.34 dB     |
+| \|S11\| max, 8.5–11.5 GHz      | −20 dB  | ≤ −17 dB; ≤ −15 dB                 | −20.3 dB      | −19.2 dB     | −19.5 dB     |
+| \|S21\| = \|S31\| min          | −3.4 dB | ≥ −3.45 dB; ≥ −3.6 dB              | −3.33 dB      | −3.30 dB     | −3.31 dB     |
 | \|\|S21\| − \|S31\|\| max      | —       | —; ≤ 0.25 dB                       | 0             | 0            | 0            |
-| passivity, min eig(I − SᴴS)    | —       | ≥ −1e-3                            | 0.033         | 0.032        | 0.033        |
+| passivity, min eig(I − SᴴS)    | —       | ≥ −1e-3                            | 0.024         | 0.023        | 0.024        |
 
-It meets every criterion on all three grids, but not its −20 dB target everywhere: |S11| reaches
-−19.6 dB on the optimization grid and −17.7 dB at a third of the pitch. The design is a junction
-with a slot on its axis, short stubs beside the input line and wide arms to the outputs, one
-copper island joining all three pads (a net tie), manufacturable at 0.6 mm width and space
-after the repair (4 pixels). The match's null moves from 9.55 (coarse) to 9.95 and 9.7 GHz. The
-outputs are not matched or isolated (|S22| ≈ −6 dB, |S32| ≈ −6 dB), as for any lossless
-reciprocal three-port: that is the Wilkinson case below. The imbalance is zero by construction
-(mirror symmetry).
+It meets every criterion on all three grids, and its −20 dB target on the optimization grid;
+the three grids agree within 1.1 dB on the match and 0.04 dB on the split (round 1's design:
+−19.6, −20.3 and −17.7 dB, and −16.2 dB on the coarse grid once re-simulated with the round-2
+solver, which fails the −17 dB criterion: it had been tuned to the uncorrected copper). The
+match's null sits at 10.2, 10.75 and 10.4 GHz on the three grids (−30 to −33 dB). The design:
+the input line opens into a wide junction with a V-shaped notch on the axis, each arm carries
+a small hole and a teardrop slot and widens into a pad that turns east to its port, and a
+0.6 mm square floats on the axis near the outputs. All three ports are one copper island (a net
+tie), the footprint passes the 0.6 mm width and space check (the repair added 6 pixels), and
+the footprint reproduces the exported design pixel for pixel. The outputs are not matched or
+isolated (|S22| −5.9 to −6.7 dB, |S32| −6.2 to −7.6 dB), as for any lossless reciprocal
+three-port: that is the Wilkinson case below. The imbalance is zero by construction (mirror
+symmetry).
 
-Without the robust variant (and with the design's −3.28 dB target, which the corrected port
-extraction makes unreachable: the ideal split is −3.01 dB and transmissions read 0.1–0.2 dB
-low) the run oscillated (t up to 13), its best design reached |S11| −17.5 dB and |S21| −3.45 dB
-on the coarse grid, and |S11| fell by 1.8 dB per refinement (−17.5, −15.7, −13.9 dB): the
-robust formulation is what keeps the margin on the finer grids.
+Round 2's attempts (design §23): round 1's formulation with the round-2 solver and adaptive
+moves throughout crept (moves of 0.01–0.03 from β = 16) and its best design failed the match on
+every grid (−15.4, −13.4, −13.7 dB); with plain MMA throughout β = 16 oscillated (t up to 11).
+In round 1, without the robust variant the run oscillated (t up to 13) and |S11| fell by 1.8 dB
+per refinement (−17.5, −15.7, −13.9 dB).
 
 <img src="rf/divider/divider.webp" alt="The divider's optimization" width="800">
 
@@ -227,28 +241,56 @@ robust formulation is what keeps the margin on the finer grids.
 
 <img src="rf/wilkinson/wilkinson.png" alt="The combiner's copper and its |S_i1| on three grids" width="800">
 
-**This case does not meet its targets.** The divider's three ports on a 12 × 12 mm window
-(40 × 40 pixels, mirror symmetric) with a 100 Ω isolation resistor across a 0.6 mm gap on the
-symmetry line, 4.8–5.4 mm from port 1 (an 0402-sized body, `lumped`; its pads are copper, the
-optimizer connects them). Targets over 9–11 GHz (5 points, excitations 1 and 2): |S11|,
-|S22| = |S33| and |S32| ≤ −20 dB, |S21| = |S31| ≥ −3.4 dB. Criteria: −17, −3.6, −17, −17 dB
-coarse; −15, −3.8, −15, −15 dB fine and finer.
+The divider's three ports on a 12 × 12 mm window (40 × 40 pixels, mirror symmetric) with a
+100 Ω isolation resistor across a 0.6 mm gap on the symmetry line, 5.4–6.0 mm from port 1 (an
+0402-sized body, `lumped`; its pads are copper, the optimizer connects them). Targets over
+9–11 GHz (5 points, excitations 1 and 2): |S11|, |S22| = |S33| and |S32| ≤ −20 dB,
+|S21| = |S31| ≥ −3.4 dB, and the resistor takes at least 0.4 of the power entering port 2 (an
+ideal Wilkinson's takes 0.5). Criteria: −17, −3.6, −17, −17 dB coarse; −15, −3.8, −15, −15 dB
+fine and finer.
 
-| Check (dense sweep, 41 points) | Coarse 0.3 mm   | Fine 0.15 mm    | Finer 0.1 mm    |
-| ------------------------------ | --------------- | --------------- | --------------- |
-| \|S11\| max                    | −18.3 dB        | −17.0 dB        | −15.2 dB        |
-| \|S21\| = \|S31\| min          | −3.30 dB        | −3.33 dB        | −3.38 dB        |
-| \|S22\| = \|S33\| max          | −11.1 dB (fail) | −11.3 dB (fail) | −11.4 dB (fail) |
-| \|S32\| max (isolation)        | −12.8 dB (fail) | −12.3 dB (fail) | −12.0 dB (fail) |
-| passivity                      | 0.033           | 0.032           | 0.033           |
+Round 2 (design §23): the round-2 solver; the start `seed: feeds` (each port's line continued
+to the window's centre line, not joined; port 1's ends on the resistor's pads); two void
+strips on the symmetry line, as wide as the resistor's body, one from the resistor to the
+window's east edge and one from 1.2 mm (the port pad plus one minimum width) to the resistor,
+so that the arms meet only at the input junction and through the resistor, as in a
+Wilkinson's layout (`cases.isolation_keepout`, `cases.arm_keepout`); the requirement on the
+resistor's share; plain MMA for the 35 iterations at β = 8, then the dilated and eroded designs
+in the epigraph and adaptive moves from β = 16. The exported design is iteration 60's (β = 32,
+robust binarized t 0.076; nominal 0.069); 75 iterations in 108 minutes (21–270 s each, two
+excitations per design).
 
-The input match and the split pass; the outputs reach −11 dB of match and −12 to −16 dB of
-isolation over the band (−16 dB at the centre), a combiner that works but misses the −15 dB
-criteria. The exported design is iteration 70's (t 0.90) of 150 (19 s each, 48 min; two
-excitations per iteration); plain MMA oscillated from β = 16 on. Its footprint also fails the
-width and space check: two 0.14 mm necks on the arms (a diagonal pinch the pixel repair did not
-widen), so `export_ok` is false. A first run with the resistor at 7.2–7.8 mm (three eighths of a
-wave from port 1) ended with |S22| −8 dB and |S32| −16 dB.
+| Check (dense sweep, 41 points) | Target  | Criterion (coarse; fine and finer) | Coarse 0.3 mm | Fine 0.15 mm | Finer 0.1 mm |
+| ------------------------------ | ------- | ---------------------------------- | ------------- | ------------ | ------------ |
+| \|S11\| max                    | −20 dB  | ≤ −17 dB; ≤ −15 dB                 | −27.1 dB      | −29.5 dB     | −25.0 dB     |
+| \|S21\| = \|S31\| min          | −3.4 dB | ≥ −3.6 dB; ≥ −3.8 dB               | −3.23 dB      | −3.23 dB     | −3.23 dB     |
+| \|S22\| = \|S33\| max          | −20 dB  | ≤ −17 dB; ≤ −15 dB                 | −18.6 dB      | −17.8 dB     | −17.9 dB     |
+| \|S32\| max (isolation)        | −20 dB  | ≤ −17 dB; ≤ −15 dB                 | −20.6 dB      | −19.7 dB     | −19.9 dB     |
+| passivity                      | —       | ≥ −1e-3                            | 0.03          | 0.03         | 0.03         |
+
+It meets every criterion on all three grids (round 1: output match −11 dB and isolation −12 to
+−13 dB, failing). The output match misses its −20 dB target at the band's lower edge (−18.6,
+−17.8 and −17.9 dB at 9 GHz; −24.6 to −26.2 dB at its null near 10.3 GHz), and the isolation
+reaches it on the optimization grid only (−19.7 and −19.9 dB on the finer grids at 9 GHz). On
+the optimization grid the resistor takes 0.44 or more of port 2's power at the objective
+frequencies. The design: the input line forks 1.2 mm from the port into two arms that bow
+apart around a notch on the axis, carry two holes each and meet the resistor's pads on the
+axis; from the pads the outputs widen into pads with holes that turn east to ports 2 and 3;
+two small islands float beside the axis east of the resistor. The footprint passes the 0.6 mm
+width and space check (the repair changed 32 pixels; round 1's footprint failed it with two
+0.14 mm diagonal necks, which the repair now widens), joins the three ports and the resistor's
+pads in one island and reproduces the exported design pixel for pixel.
+
+Round 2's attempts (design §23, every one in its table): from a uniform start the resistor's
+pads stayed unconnected, or gray copper beside the resistor or bridging the arms did the
+resistor's work and the binarized design lost it (gray t 0.39–1.15, binarized 1.3–20); the
+star's junction shorts the resistor on both sides; the reactive sheet disconnected the outputs;
+a bound on the lost fraction kept the gray design from connecting the resistor. The
+requirement on the resistor's share made the binarized design track the gray one, the east
+strip stopped gray bridges in parallel with the resistor (W10: output match −16.2 / −15.0 /
+−16.4 dB, isolation −14.1 / −13.6 / −13.6 dB, failing: the arms joined only 1.2 mm west of the
+resistor, an odd-mode path of about 3 mm instead of a quarter wave), and the west strip gave
+the arms their length: t 0.04 at the end of β = 8 against W10's 0.56.
 
 <img src="rf/wilkinson/wilkinson.webp" alt="The combiner's optimization" width="800">
 
@@ -377,13 +419,39 @@ match by 0.27 dB (design §23).
 
 **This case does not meet its targets.** Four ports on S1, an 18 × 18 mm window (60 × 60
 pixels), channels A 7.0–7.6, B 9.7–10.3 and C 12.4–13.0 GHz from port 1 to ports 2, 3 and 4 (the
-objectives at 6.8–7.8, 9.5–10.5 and 12.2–13.2 GHz, 3 points each): in-channel ≥ −1.5 dB, the
+objectives at 6.9–7.7, 9.6–10.4 and 12.3–13.1 GHz, 4 points each): in-channel ≥ −1.5 dB, the
 other ports ≤ −20 dB, |S11| ≤ −10 dB; criteria in-channel ≥ −2.5 dB, rejection ≤ −15 dB, |S11|
-≤ −8 dB (coarse; −3, −12, −6 dB fine). From the stub seed (six stubs) the best binarized design
-came at iteration 5 (t 2.72) and the run stayed near t 3.2 for 96 iterations (19 s each,
-31 min): in-channel −2.9 to −3.6 dB, rejection −6.5 to −19 dB, |S11| −3.5 to −9.4 dB; the finer
-grids agree within 1 dB. Six interacting stubs and a four-way junction in 18 × 18 mm under a
-0.6 mm width and space rule are beyond what the local search found.
+≤ −8 dB (coarse; −3, −12, −6 dB fine and finer). Round 2 (design §23): the round-2 solver, the
+stub seed (six stubs), plain MMA for 25 iterations at β = 8, then the dilated and eroded
+designs and adaptive moves from β = 16; 60 iterations in 159 minutes. The exported design is
+iteration 20's (β = 8, robust binarized t 1.39, the nominal design's 1.02; round 1: 2.72).
+
+| Check (21 points per channel) | Target  | Criterion (coarse; fine and finer) | Coarse 0.3 mm                  | Fine 0.15 mm            | Finer 0.1 mm            |
+| ----------------------------- | ------- | ---------------------------------- | ------------------------------ | ----------------------- | ----------------------- |
+| in-channel \|S21\|, A min     | −1.5 dB | ≥ −2.5 dB; ≥ −3 dB                 | −2.04 dB                       | −2.04 dB                | −2.09 dB                |
+| in-channel \|S31\|, B min     | −1.5 dB | ≥ −2.5 dB; ≥ −3 dB                 | −1.50 dB                       | −1.49 dB                | −1.50 dB                |
+| in-channel \|S41\|, C min     | −1.5 dB | ≥ −2.5 dB; ≥ −3 dB                 | −1.88 dB                       | −1.79 dB                | −1.74 dB                |
+| A at port 3 (\|S31\| max)     | −20 dB  | ≤ −15 dB; ≤ −12 dB                 | −9.7 dB (fail)                 | −10.0 dB (fail)         | −9.8 dB (fail)          |
+| A at port 4                   | −20 dB  | ≤ −15 dB; ≤ −12 dB                 | −34.5 dB                       | −33.6 dB                | −34.1 dB                |
+| B at port 2                   | −20 dB  | ≤ −15 dB; ≤ −12 dB                 | −13.1 dB (fail)                | −12.7 dB                | −11.9 dB (fail)         |
+| B at port 4                   | −20 dB  | ≤ −15 dB; ≤ −12 dB                 | −10.5 dB (fail)                | −10.1 dB (fail)         | −10.4 dB (fail)         |
+| C at port 2                   | −20 dB  | ≤ −15 dB; ≤ −12 dB                 | −12.2 dB (fail)                | −12.6 dB                | −13.0 dB                |
+| C at port 3                   | −20 dB  | ≤ −15 dB; ≤ −12 dB                 | −14.7 dB (fail)                | −12.6 dB                | −12.2 dB                |
+| \|S11\| max, A / B / C        | −10 dB  | ≤ −8 dB; ≤ −6 dB                   | −6.4 (fail) / −10.7 / −12.3 dB | −6.3 / −11.1 / −13.2 dB | −6.2 / −11.3 / −13.4 dB |
+| passivity                     | —       | ≥ −1e-3                            | 0.03                           | 0.03                    | 0.03                    |
+
+The in-channel transmissions pass on every grid, but the adjacent channels leak: channel A
+reaches port 3 at −10 dB and channel B port 4 at −10.5 dB, and channel A's match is −6.4 dB.
+The grids agree within 1.1 dB but on channel C at port 3 (2.5 dB). The footprint passes the
+width and space check (repair: 27 pixels) and joins the four ports in one island (four floating
+islands). After β = 8 the adaptive steps lowered the gray robust t to 0.83 but tuned the
+design with near-threshold pixels, and its binarized design got worse (t 1.6–4.8), so the
+export is β = 8's. A run on a 24 × 24 mm window (the outputs 8.1 mm apart) with the dilated and
+eroded designs from β = 8 did worse (robust binarized t 5.3–5.6 at iterations 15 and 20, the
+Mac under load 9–12 with 340–540 s per iteration) and was stopped. Each arm needs an open stub
+per other channel, 3.5–6.1 mm long and tuned to about 1 % against channels 5–8 % wide; one
+pixel (0.3 mm) of stub length moves its notch by 5–9 %, which near-threshold gray pixels can
+tune and the binary design cannot.
 
 <img src="rf/filterbank3/filterbank3.webp" alt="The bank's optimization" width="800">
 
@@ -394,12 +462,12 @@ window, and adding or removing conductance anywhere first changes how much it ab
 therefore start differently (`optimizer.init`, `optimizer.seed`), each choice computed from the
 spec alone:
 
-| Case                         | Start                                                                                                                                          | Uniform starts tried                                                                                                                                                                                                                             |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| divider                      | uniform x = 0.3 (ρ̄ ≈ 0.04 at β = 8: an almost transparent 3.3 kΩ/sq sheet)                                                                     | 0.5 grew into one radiating copper plate with holes: at β = 32 \|S21\| fell to −5.5 dB at 11.5 GHz and t rose from 1.1 to 2.5                                                                                                                    |
-| Wilkinson                    | `seed: feeds`, each port's line continued to the window's centre line, the lines not joined; requirements on the resistor's share and the loss | round 2 (design §23): from 0.3 the resistor's pads stayed unconnected, or gray copper beside the resistor did its work and the binarized design lost it; the star's junction shorts the resistor on both sides                                   |
-| diplexer, three-channel bank | `seed: stubs`, the junction of the ports plus a quarter-wave open stub per other channel on every output arm                                   | 0.3: the transmissions stayed below −30 dB for 15 iterations (the window absorbed); at iteration 30 a radiating copper mass, t = 8.5. From the plain junction (`seed: star`) the branches only learned to roll off: rejection 5–12 dB, t 1.8–2.4 |
-| antenna                      | `seed: star`, the feed line alone (the port's line continued to the window's centre); robust epigraph                                          | round 2 ([above](#b-antenna), design §22): 0.3 grew copper along the window's edges (η ≤ 0.57 gray); 0.6 with the radiation objective a plate (η 0.6); the reactive sheet the bare feed                                                          |
+| Case                         | Start                                                                                                                                                                                         | Uniform starts tried                                                                                                                                                                                                                             |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| divider                      | uniform x = 0.3 (ρ̄ ≈ 0.04 at β = 8: an almost transparent 3.3 kΩ/sq sheet)                                                                                                                    | 0.5 grew into one radiating copper plate with holes: at β = 32 \|S21\| fell to −5.5 dB at 11.5 GHz and t rose from 1.1 to 2.5                                                                                                                    |
+| Wilkinson                    | `seed: feeds`, each port's line continued to the window's centre line, the lines not joined; a requirement on the resistor's share and void keepouts on the symmetry line beside the resistor | round 2 (design §23): from 0.3 the resistor's pads stayed unconnected, or gray copper beside the resistor did its work and the binarized design lost it; the star's junction shorts the resistor on both sides                                   |
+| diplexer, three-channel bank | `seed: stubs`, the junction of the ports plus a quarter-wave open stub per other channel on every output arm                                                                                  | 0.3: the transmissions stayed below −30 dB for 15 iterations (the window absorbed); at iteration 30 a radiating copper mass, t = 8.5. From the plain junction (`seed: star`) the branches only learned to roll off: rejection 5–12 dB, t 1.8–2.4 |
+| antenna                      | `seed: star`, the feed line alone (the port's line continued to the window's centre); robust epigraph                                                                                         | round 2 ([above](#b-antenna), design §22): 0.3 grew copper along the window's edges (η ≤ 0.57 gray); 0.6 with the radiation objective a plate (η 0.6); the reactive sheet the bare feed                                                          |
 
 For a radiated-power target the uniform starts are local optima: gray copper absorbs before it
 radiates. The seeds are textbook starting points (a junction with stubs, Balanis' patch); every
@@ -572,9 +640,11 @@ divider's footprint:
   can be local optima and boundary moves through gray first add loss. The antenna grew only
   from the feed line and with eroded and dilated designs in the epigraph; without them its
   radiating edge stalled as a gray comb. Where the spec wants loss (a Wilkinson's isolation),
-  gray copper offers it where the binary design has none: the combiner needs requirements on
-  its resistor's share and on the loss elsewhere (`Absorbed`, `Loss`). At the cases' pitch one
-  pixel moves a resonance by about 5 %.
+  gray copper offers it where the binary design has none: the combiner needs a requirement on
+  its resistor's share (`Absorbed`) and void strips beside the resistor (a bound on the lost
+  fraction, `Loss`, kept the gray design from connecting the resistor at all). At the cases'
+  pitch one pixel moves a resonance by about 5 %, and resonant designs past β = 8 tune with
+  near-threshold pixels that the binary design loses (the three-channel bank, design §23.3).
 - The width and space repair at export can change a design that relies on features under the
   rules (one-pixel slots, corner contacts): the antenna's second run met its objectives before
   the repair and missed by 3 dB after it; the dilated variant in the epigraph prevents that.

@@ -84,17 +84,34 @@
       "s": [3, 2],
       "max_db": -20.0,
       "band": "pass"
+    },
+    {
+      "absorbed": 2,
+      "element": "R1",
+      "min": 0.4,
+      "band": "pass"
     }
   ],
-  "fixed": [],
+  "fixed": [
+    {
+      "x_mm": [6.0, 12.0],
+      "y_mm": [-0.3, 0.3],
+      "value": 0.0
+    },
+    {
+      "x_mm": [1.2, 5.4],
+      "y_mm": [-0.3, 0.3],
+      "value": 0.0
+    }
+  ],
   "optimizer": {
-    "betas": [8.0, 16.0, 32.0, 64.0, 128.0],
-    "iterations_per_beta": 30,
+    "betas": [8, 16, 32, 64],
+    "iterations_per_beta": [35, 15, 15, 10],
     "min_iterations": 8,
-    "budget_min": 90,
+    "budget_min": 240,
     "move": 0.2,
     "move_late": 0.05,
-    "init": 0.3,
+    "init": 0.5,
     "eta": 0.5,
     "tau": 0.05,
     "aggregate": "excitation",
@@ -104,8 +121,12 @@
     "conservative": false,
     "max_inner": 5,
     "filter_radius_mm": null,
+    "seed": "feeds",
     "binary_every": 5,
-    "eta_variants": []
+    "eta_variants": [0.45, 0.55],
+    "robust_from_beta": 16.0,
+    "adaptive_move": true,
+    "adaptive_from_beta": 16.0
   },
   "solver": {
     "backend": "torch",
@@ -115,12 +136,14 @@
     "decimation": "auto",
     "max_steps": 200000,
     "threads": 4,
-    "sweep_points": 101
+    "sweep_points": 101,
+    "edge_correction": true,
+    "port_source": "mode"
   },
   "lumped": [
     {
       "name": "R1",
-      "x_mm": [4.8, 5.4],
+      "x_mm": [5.4, 6.0],
       "y_mm": [-0.3, 0.3],
       "axis": "y",
       "ohms": 100.0,

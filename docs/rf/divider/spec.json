@@ -78,10 +78,10 @@
   ],
   "fixed": [],
   "optimizer": {
-    "betas": [8.0, 16.0, 32.0, 64.0, 128.0],
-    "iterations_per_beta": 30,
+    "betas": [8, 16, 32, 64],
+    "iterations_per_beta": [30, 15, 15, 10],
     "min_iterations": 8,
-    "budget_min": 75,
+    "budget_min": 180,
     "move": 0.2,
     "move_late": 0.05,
     "init": 0.3,
@@ -95,7 +95,10 @@
     "max_inner": 5,
     "filter_radius_mm": null,
     "binary_every": 5,
-    "eta_variants": [0.55]
+    "eta_variants": [0.45, 0.55],
+    "robust_from_beta": 16.0,
+    "adaptive_move": true,
+    "adaptive_from_beta": 16.0
   },
   "solver": {
     "backend": "torch",
@@ -105,6 +108,8 @@
     "decimation": "auto",
     "max_steps": 200000,
     "threads": 4,
-    "sweep_points": 101
+    "sweep_points": 101,
+    "edge_correction": true,
+    "port_source": "mode"
   }
 }

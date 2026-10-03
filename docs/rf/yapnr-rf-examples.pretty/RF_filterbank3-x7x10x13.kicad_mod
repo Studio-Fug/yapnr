@@ -3,12 +3,12 @@
 	(generator "yapnr")
 	(generator_version "rf")
 	(layer "F.Cu")
-	(descr "yapnr RF inverse design 'filterbank3-x7x10x13': microstrip copper on er 3.55, tan_delta 0.0027, h 0.813 mm with a solid ground on the next copper layer; spec sha256 df5ab564e1c322b271f76ad80d9181197c19f513a32404bdb5ba9fe06625d552")
+	(descr "yapnr RF inverse design 'filterbank3-x7x10x13': microstrip copper on er 3.55, tan_delta 0.0027, h 0.813 mm with a solid ground on the next copper layer; spec sha256 13de688406c8ea8aa5a2983c7d9dfbef6bc7c31cd2b218bfb1531cd97a05cd76")
 	(tags "rf microstrip inverse-design")
 	(property "Reference" "REF**"
 		(at 0 -10.2 0)
 		(layer "F.SilkS")
-		(uuid "8163ebc3-8fc2-5478-9ee9-c1a80767794c")
+		(uuid "1ee53f70-9801-5f2a-88df-f3e63157a6c7")
 		(effects
 			(font
 				(size 1 1)
@@ -19,7 +19,7 @@
 	(property "Value" "RF_filterbank3-x7x10x13"
 		(at 0 10.2 0)
 		(layer "F.Fab")
-		(uuid "db9b49e8-9feb-5200-a279-3cb77fe8be2d")
+		(uuid "066d3d4b-6434-59bb-afcb-603c4d3d2e53")
 		(effects
 			(font
 				(size 1 1)
@@ -32,7 +32,7 @@
 		(unlocked yes)
 		(layer "F.Fab")
 		(hide yes)
-		(uuid "4b3902e0-1bd0-5fa4-bace-ad7b4cd671bb")
+		(uuid "2ccb0e87-8184-532b-835a-68147c303640")
 		(effects
 			(font
 				(size 1 1)
@@ -40,12 +40,12 @@
 			)
 		)
 	)
-	(property "Description" "yapnr RF inverse design 'filterbank3-x7x10x13': microstrip copper on er 3.55, tan_delta 0.0027, h 0.813 mm with a solid ground on the next copper layer; spec sha256 df5ab564e1c322b271f76ad80d9181197c19f513a32404bdb5ba9fe06625d552"
+	(property "Description" "yapnr RF inverse design 'filterbank3-x7x10x13': microstrip copper on er 3.55, tan_delta 0.0027, h 0.813 mm with a solid ground on the next copper layer; spec sha256 13de688406c8ea8aa5a2983c7d9dfbef6bc7c31cd2b218bfb1531cd97a05cd76"
 		(at 0 0 0)
 		(unlocked yes)
 		(layer "F.Fab")
 		(hide yes)
-		(uuid "5f1a7cef-339e-54b1-8259-04eccad7e12b")
+		(uuid "acb71571-70d9-5987-b656-d59f77a6d6de")
 		(effects
 			(font
 				(size 1 1)
@@ -58,31 +58,52 @@
 	(duplicate_pad_numbers_are_jumpers no)
 	(fp_poly
 		(pts
-			(xy -9 0.75) (xy -8.85 0.9) (xy -7.95 0.9) (xy -7.65 1.2) (xy -1.35 1.2) (xy -1.2 1.35)
-			(xy -1.2 2.55) (xy -1.35 2.7) (xy -3.15 2.7) (xy -3.45 2.4) (xy -5.25 2.4) (xy -5.4 2.55)
-			(xy -5.4 4.95) (xy -5.55 5.1) (xy -6.45 5.1) (xy -6.6 5.25) (xy -6.6 6.75) (xy -6.15 7.2)
-			(xy -4.35 7.2) (xy -4.05 7.5) (xy -3.45 7.5) (xy -2.85 6.9) (xy 1.35 6.9) (xy 1.65 7.2)
-			(xy 1.95 7.2) (xy 2.25 6.9) (xy 3.75 6.9) (xy 4.05 7.2) (xy 6.45 7.2) (xy 6.75 6.9)
-			(xy 8.85 6.9) (xy 9 6.75) (xy 9 5.25) (xy 8.85 5.1) (xy 7.35 5.1) (xy 7.05 4.8)
-			(xy 4.95 4.8) (xy 4.65 4.5) (xy 3.75 4.5) (xy 3.45 4.8) (xy 2.85 4.8) (xy 2.55 5.1)
-			(xy 1.05 5.1) (xy 0.9 4.95) (xy 0.9 4.65) (xy -1.5 4.65) (xy -1.5 4.95) (xy -1.65 5.1)
-			(xy -3.15 5.1) (xy -3.3 4.95) (xy -3.3 4.65) (xy -3.15 4.5) (xy -1.65 4.5) (xy -1.5 4.65)
-			(xy 0.9 4.65) (xy 0.9 1.35) (xy 0.6 1.05) (xy 0.6 0.15) (xy 1.05 -0.3) (xy 1.65 -0.3)
-			(xy 1.95 0) (xy 2.25 0) (xy 2.4 0.15) (xy 2.4 0.75) (xy 2.55 0.9) (xy 4.05 0.9)
-			(xy 4.35 0.6) (xy 5.25 0.6) (xy 6 1.35) (xy 6 1.65) (xy 6.45 2.1) (xy 6.75 2.1)
-			(xy 6.9 1.95) (xy 6.9 1.35) (xy 6.6 1.05) (xy 6.6 0.75) (xy 6.75 0.6) (xy 8.25 0.6)
-			(xy 8.55 0.9) (xy 8.85 0.9) (xy 9 0.75) (xy 9 -1.05) (xy 8.7 -1.35) (xy 8.7 -1.65)
-			(xy 9 -1.95) (xy 9 -3.75) (xy 8.85 -3.9) (xy 7.65 -3.9) (xy 7.2 -3.45) (xy 7.2 -1.35)
-			(xy 6.75 -0.9) (xy 5.55 -0.9) (xy 5.25 -1.2) (xy 2.25 -1.2) (xy 1.95 -0.9) (xy 1.05 -0.9)
-			(xy 0.9 -1.05) (xy 0.9 -3.45) (xy 1.2 -3.75) (xy 1.2 -4.65) (xy 1.35 -4.8) (xy 1.65 -4.8)
-			(xy 1.95 -5.1) (xy 2.85 -5.1) (xy 3.6 -4.35) (xy 3.6 -2.55) (xy 3.75 -2.4) (xy 4.05 -2.4)
-			(xy 4.35 -2.1) (xy 4.65 -2.1) (xy 4.8 -2.25) (xy 4.8 -2.55) (xy 5.1 -2.85) (xy 5.1 -3.75)
-			(xy 5.4 -4.05) (xy 5.4 -4.95) (xy 5.55 -5.1) (xy 8.85 -5.1) (xy 9 -5.25) (xy 9 -6.75)
-			(xy 8.85 -6.9) (xy 3.15 -6.9) (xy 2.85 -7.2) (xy 0.75 -7.2) (xy 0.45 -6.9) (xy -0.45 -6.9)
-			(xy -0.9 -6.45) (xy -0.9 -5.85) (xy -1.35 -5.4) (xy -3.45 -5.4) (xy -3.75 -5.1) (xy -4.95 -5.1)
-			(xy -5.1 -4.95) (xy -5.1 -4.35) (xy -4.8 -4.05) (xy -4.8 -3.75) (xy -4.65 -3.6) (xy -2.55 -3.6)
-			(xy -2.25 -3.3) (xy -1.95 -3.3) (xy -1.65 -3) (xy -1.35 -3) (xy -1.2 -2.85) (xy -1.2 -1.35)
-			(xy -1.35 -1.2) (xy -7.95 -1.2) (xy -8.25 -0.9) (xy -8.85 -0.9) (xy -9 -0.75)
+			(xy -9 0.75) (xy -8.85 0.9) (xy -8.55 0.9) (xy -8.25 1.2) (xy -4.65 1.2) (xy -4.35 1.5)
+			(xy -3.75 1.5) (xy -3.45 1.8) (xy -2.85 1.8) (xy -2.25 1.2) (xy -1.05 1.2) (xy -0.9 1.35)
+			(xy -0.9 2.55) (xy -1.05 2.7) (xy -1.35 2.7) (xy -1.65 2.4) (xy -3.75 2.4) (xy -4.05 2.1)
+			(xy -5.25 2.1) (xy -5.4 2.25) (xy -5.4 2.85) (xy -5.7 3.15) (xy -5.7 4.05) (xy -5.4 4.35)
+			(xy -5.4 4.95) (xy -5.55 5.1) (xy -6.75 5.1) (xy -6.9 5.25) (xy -6.9 5.55) (xy -6.6 5.85)
+			(xy -6.6 6.15) (xy -6.9 6.45) (xy -6.9 7.05) (xy -6.75 7.2) (xy -6.45 7.2) (xy -6.15 6.9)
+			(xy -5.85 6.9) (xy -5.55 7.2) (xy -4.95 7.2) (xy -4.35 7.8) (xy -4.05 7.8) (xy -3.15 6.9)
+			(xy -1.35 6.9) (xy -1.05 6.6) (xy -0.15 6.6) (xy 0 6.45) (xy 0 6.15) (xy 0.45 5.7)
+			(xy 0.75 5.7) (xy 0.9 5.85) (xy 0.9 6.75) (xy 1.05 6.9) (xy 2.85 6.9) (xy 3.3 7.35)
+			(xy 3.3 7.65) (xy 3.45 7.8) (xy 3.75 7.8) (xy 4.05 7.5) (xy 5.25 7.5) (xy 5.55 7.8)
+			(xy 5.85 7.8) (xy 6.15 8.1) (xy 6.75 8.1) (xy 6.9 7.95) (xy 6.9 7.35) (xy 7.05 7.2)
+			(xy 7.65 7.2) (xy 7.95 6.9) (xy 8.85 6.9) (xy 9 6.75) (xy 9 5.85) (xy 3 5.85)
+			(xy 3 6.15) (xy 2.85 6.3) (xy 1.65 6.3) (xy 1.5 6.15) (xy 1.5 5.85) (xy 1.65 5.7)
+			(xy 2.85 5.7) (xy 3 5.85) (xy 9 5.85) (xy 9 5.25) (xy 8.85 5.1) (xy 7.35 5.1)
+			(xy 6.75 4.5) (xy 4.35 4.5) (xy 3.9 4.05) (xy 3.9 3.15) (xy 4.05 3) (xy 5.25 3)
+			(xy 5.4 3.15) (xy 5.4 3.45) (xy 5.55 3.6) (xy 6.75 3.6) (xy 6.9 3.45) (xy 6.9 2.85)
+			(xy 6.75 2.7) (xy 6.45 2.7) (xy 5.55 1.8) (xy 5.25 1.8) (xy 4.65 2.4) (xy 3.15 2.4)
+			(xy 2.85 2.7) (xy 2.55 2.7) (xy 2.4 2.85) (xy 2.4 3.15) (xy 2.7 3.45) (xy 2.7 3.75)
+			(xy 3.15 4.2) (xy 3.45 4.2) (xy 3.6 4.35) (xy 3.6 4.65) (xy 3.45 4.8) (xy 1.95 4.8)
+			(xy 1.65 5.1) (xy 1.05 5.1) (xy 0.9 4.95) (xy 0.9 4.65) (xy 1.2 4.35) (xy 1.2 3.75)
+			(xy 0.9 3.45) (xy 0.9 1.65) (xy 1.05 1.5) (xy 1.35 1.5) (xy 1.5 1.35) (xy 1.5 0.75)
+			(xy 1.2 0.45) (xy 1.2 0.15) (xy -5.4 0.15) (xy -5.4 0.45) (xy -5.55 0.6) (xy -5.85 0.6)
+			(xy -6 0.45) (xy -6 0.15) (xy -5.85 0) (xy -5.55 0) (xy -5.4 0.15) (xy 1.2 0.15)
+			(xy 1.35 0) (xy 1.65 0) (xy 1.95 0.3) (xy 3.75 0.3) (xy 4.35 0.9) (xy 5.85 0.9)
+			(xy 6 0.75) (xy 6 0.45) (xy 6.45 0) (xy 8.25 0) (xy 8.4 0.15) (xy 8.4 0.45)
+			(xy 7.95 0.9) (xy 7.65 0.9) (xy 7.5 1.05) (xy 7.5 1.65) (xy 8.4 2.55) (xy 8.4 3.15)
+			(xy 8.55 3.3) (xy 8.85 3.3) (xy 9 3.15) (xy 9 2.55) (xy 8.7 2.25) (xy 8.7 1.05)
+			(xy 9 0.75) (xy 9 -0.15) (xy -6.6 -0.15) (xy -6.6 0.15) (xy -6.75 0.3) (xy -7.65 0.3)
+			(xy -7.8 0.15) (xy -7.8 -0.15) (xy -7.65 -0.3) (xy -6.75 -0.3) (xy -6.6 -0.15) (xy 9 -0.15)
+			(xy 9 -2.55) (xy 8.85 -2.7) (xy 8.55 -2.7) (xy 8.1 -2.25) (xy 8.1 -1.95) (xy 8.4 -1.65)
+			(xy 8.4 -1.05) (xy 8.25 -0.9) (xy 7.35 -0.9) (xy 6.45 -1.8) (xy 6.15 -1.8) (xy 5.85 -1.5)
+			(xy 4.65 -1.5) (xy 4.5 -1.35) (xy 4.5 -1.05) (xy 4.35 -0.9) (xy 2.25 -0.9) (xy 1.95 -0.6)
+			(xy 1.35 -0.6) (xy 0.9 -1.05) (xy 0.9 -4.35) (xy 1.05 -4.5) (xy 1.65 -4.5) (xy 1.95 -4.2)
+			(xy 2.55 -4.2) (xy 2.7 -4.35) (xy 2.7 -4.95) (xy 2.85 -5.1) (xy 3.15 -5.1) (xy 3.3 -4.95)
+			(xy 3.3 -4.05) (xy 3.9 -3.45) (xy 3.9 -2.85) (xy 4.35 -2.4) (xy 4.65 -2.4) (xy 4.8 -2.55)
+			(xy 4.8 -3.15) (xy 5.4 -3.75) (xy 5.4 -4.35) (xy 5.85 -4.8) (xy 6.15 -4.8) (xy 6.75 -5.4)
+			(xy 7.95 -5.4) (xy 8.25 -5.1) (xy 8.85 -5.1) (xy 9 -5.25) (xy 9 -6.75) (xy 8.55 -7.2)
+			(xy 8.25 -7.2) (xy 7.95 -6.9) (xy 7.65 -6.9) (xy 7.35 -7.2) (xy 6.75 -7.2) (xy 6.45 -6.9)
+			(xy 5.85 -6.9) (xy 5.25 -6.3) (xy 4.35 -6.3) (xy 3.6 -7.05) (xy 3.6 -7.65) (xy 3.45 -7.8)
+			(xy 2.85 -7.8) (xy 2.55 -7.5) (xy 1.95 -7.5) (xy 1.65 -7.2) (xy 1.05 -7.2) (xy 0.75 -7.5)
+			(xy -0.75 -7.5) (xy -0.9 -7.35) (xy -0.9 -5.25) (xy -1.05 -5.1) (xy -1.35 -5.1) (xy -1.65 -5.4)
+			(xy -3.45 -5.4) (xy -4.35 -4.5) (xy -4.65 -4.5) (xy -5.1 -4.05) (xy -5.1 -3.75) (xy -4.95 -3.6)
+			(xy -4.35 -3.6) (xy -4.05 -3.3) (xy -3.15 -3.3) (xy -2.85 -3) (xy -2.55 -3) (xy -2.25 -3.3)
+			(xy -1.35 -3.3) (xy -1.2 -3.15) (xy -1.2 -1.95) (xy -1.35 -1.8) (xy -3.45 -1.8) (xy -3.6 -1.65)
+			(xy -3.6 -1.05) (xy -3.75 -0.9) (xy -7.65 -0.9) (xy -7.95 -1.2) (xy -8.25 -1.2) (xy -8.55 -0.9)
+			(xy -8.85 -0.9) (xy -9 -0.75)
 		)
 		(stroke
 			(width 0)
@@ -90,12 +111,12 @@
 		)
 		(fill yes)
 		(layer "F.Cu")
-		(uuid "74d38db9-4237-5667-8e49-5f804f8e9e23")
+		(uuid "9d8575e9-e0ba-5660-bbd1-2b06eb989789")
 	)
 	(fp_poly
 		(pts
-			(xy 1.5 2.85) (xy 1.65 3) (xy 5.85 3) (xy 6 2.85) (xy 6 2.55) (xy 5.85 2.4)
-			(xy 3.75 2.4) (xy 3.45 2.1) (xy 1.95 2.1) (xy 1.5 2.55)
+			(xy 1.5 8.55) (xy 1.65 8.7) (xy 2.25 8.7) (xy 2.7 8.25) (xy 2.7 7.95) (xy 2.55 7.8)
+			(xy 2.25 7.8) (xy 1.95 8.1) (xy 1.65 8.1) (xy 1.5 8.25)
 		)
 		(stroke
 			(width 0)
@@ -103,7 +124,46 @@
 		)
 		(fill yes)
 		(layer "F.Cu")
-		(uuid "5336fb80-c5c9-5d55-84f0-a2796c8bd577")
+		(uuid "87b95f1d-cf97-5327-8dc4-90d0bbd3b2ab")
+	)
+	(fp_poly
+		(pts
+			(xy -0.3 7.95) (xy 0.15 8.4) (xy 0.45 8.4) (xy 0.6 8.25) (xy 0.6 7.65) (xy 0.45 7.5)
+			(xy -0.15 7.5) (xy -0.3 7.65)
+		)
+		(stroke
+			(width 0)
+			(type solid)
+		)
+		(fill yes)
+		(layer "F.Cu")
+		(uuid "b4dbc1da-4435-5d1e-b365-73e4e1e7abce")
+	)
+	(fp_poly
+		(pts
+			(xy 8.1 -7.95) (xy 8.25 -7.8) (xy 8.55 -7.8) (xy 9 -8.25) (xy 9 -8.55) (xy 8.85 -8.7)
+			(xy 8.25 -8.7) (xy 8.1 -8.55)
+		)
+		(stroke
+			(width 0)
+			(type solid)
+		)
+		(fill yes)
+		(layer "F.Cu")
+		(uuid "69abf7cb-d800-580a-8484-91b9f3e3dd59")
+	)
+	(fp_poly
+		(pts
+			(xy 8.1 7.95) (xy 8.25 8.1) (xy 8.55 8.1) (xy 8.7 7.95) (xy 8.7 7.65) (xy 8.55 7.5)
+			(xy 8.25 7.5) (xy 8.1 7.65)
+		)
+		(stroke
+			(width 0)
+			(type solid)
+		)
+		(fill yes)
+		(layer "F.Cu")
+		(uuid "ff200706-0181-5ec3-9ff9-3c1b9bb67c4e")
 	)
 	(fp_rect
 		(start -9 -9)
@@ -114,7 +174,7 @@
 		)
 		(fill no)
 		(layer "F.CrtYd")
-		(uuid "597d512d-c9dd-55b2-83b1-91151e45557a")
+		(uuid "13d8b963-4456-5f80-880e-e5d6160604be")
 	)
 	(fp_rect
 		(start -9 -9)
@@ -125,35 +185,35 @@
 		)
 		(fill no)
 		(layer "F.Fab")
-		(uuid "fd947d2c-4e8f-5d74-81ac-c281e17fc1bb")
+		(uuid "f7ef3f29-1776-5e3a-87ed-bde6917596df")
 	)
 	(pad "1" smd rect
 		(at -8.7 0)
 		(size 0.6 1.8)
 		(layers "F.Cu")
-		(uuid "49ab5683-b19f-5b1b-8ffb-f749931d0cef")
+		(uuid "4e50e7f6-85f1-5564-b0f6-8c1d672bb1a2")
 	)
 	(pad "2" smd rect
 		(at 8.7 -6)
 		(size 0.6 1.8)
 		(layers "F.Cu")
-		(uuid "1d22342d-cdc6-5088-a52a-d44935ae690d")
+		(uuid "0207a019-bfce-5b63-86d9-c87f9181a4d7")
 	)
 	(pad "3" smd rect
 		(at 8.7 0)
 		(size 0.6 1.8)
 		(layers "F.Cu")
-		(uuid "37c3a2d1-db38-5e72-b1be-6968f8647460")
+		(uuid "126f351d-e969-542e-9d82-f016dce923a3")
 	)
 	(pad "4" smd rect
 		(at 8.7 6)
 		(size 0.6 1.8)
 		(layers "F.Cu")
-		(uuid "275adbe6-f192-5302-b2aa-e0a4a64349d1")
+		(uuid "8a5e0685-888e-57cf-ac16-54bc0d63677f")
 	)
 	(zone
 		(layer "F.Cu")
-		(uuid "a7c76386-9771-5a33-9062-603b6e299888")
+		(uuid "377b09be-4d86-5bf0-bf7a-781a1a7c1b65")
 		(name "yapnr RF keepout: simulated with no other F.Cu within 3.25 mm, a solid ground on the next copper layer")
 		(hatch edge 0.5)
 		(connect_pads
@@ -184,7 +244,7 @@
 	)
 	(zone
 		(layer "F.Cu")
-		(uuid "00c827b1-1bd3-59f6-a857-c3d3913732b1")
+		(uuid "df6c45de-eef7-5102-b7c1-29343044d53a")
 		(name "yapnr RF track keepout (W): no other F.Cu within 3.25 mm, a solid ground on the next copper layer")
 		(hatch edge 0.5)
 		(connect_pads
@@ -215,7 +275,7 @@
 	)
 	(zone
 		(layer "F.Cu")
-		(uuid "2f9e2da2-8865-5997-8134-1e7d2aace113")
+		(uuid "35216582-d226-5e58-b35e-1cb86caaa356")
 		(name "yapnr RF track keepout (W): no other F.Cu within 3.25 mm, a solid ground on the next copper layer")
 		(hatch edge 0.5)
 		(connect_pads
@@ -246,7 +306,7 @@
 	)
 	(zone
 		(layer "F.Cu")
-		(uuid "7ee69749-0be2-5cf6-b1c6-1766c14431d3")
+		(uuid "1a5bae51-4e48-5d84-8acb-5c74068f90cc")
 		(name "yapnr RF track keepout (E): no other F.Cu within 3.25 mm, a solid ground on the next copper layer")
 		(hatch edge 0.5)
 		(connect_pads
@@ -277,7 +337,7 @@
 	)
 	(zone
 		(layer "F.Cu")
-		(uuid "cf0b17f4-b120-5fa0-8f8a-78c36bbcacd8")
+		(uuid "94b5c947-8631-59c9-9fe2-d42c8106d130")
 		(name "yapnr RF track keepout (E): no other F.Cu within 3.25 mm, a solid ground on the next copper layer")
 		(hatch edge 0.5)
 		(connect_pads
@@ -308,7 +368,7 @@
 	)
 	(zone
 		(layer "F.Cu")
-		(uuid "c4f13be5-c228-5f23-a9c9-dfa01b286c37")
+		(uuid "ed2a7ff6-e702-58e0-834a-397ef8ce8fa1")
 		(name "yapnr RF track keepout (E): no other F.Cu within 3.25 mm, a solid ground on the next copper layer")
 		(hatch edge 0.5)
 		(connect_pads
@@ -339,7 +399,7 @@
 	)
 	(zone
 		(layer "F.Cu")
-		(uuid "12ba018f-5af2-5a71-a5d2-7fb2d6b740e8")
+		(uuid "3ae5009d-abb5-5598-8e4c-cae94bd8638f")
 		(name "yapnr RF track keepout (E): no other F.Cu within 3.25 mm, a solid ground on the next copper layer")
 		(hatch edge 0.5)
 		(connect_pads
@@ -370,7 +430,7 @@
 	)
 	(zone
 		(layer "F.Cu")
-		(uuid "0113c02d-164e-5d12-9d77-66650b564667")
+		(uuid "ea5995ce-e99c-5c6c-ab5a-0645fda461b5")
 		(name "yapnr RF track keepout (S): no other F.Cu within 3.25 mm, a solid ground on the next copper layer")
 		(hatch edge 0.5)
 		(connect_pads
@@ -401,7 +461,7 @@
 	)
 	(zone
 		(layer "F.Cu")
-		(uuid "5753cb38-e4b5-5d54-9fb5-9c6279e72de1")
+		(uuid "c8a35346-b3a4-5c37-b719-39cea67d34e6")
 		(name "yapnr RF track keepout (N): no other F.Cu within 3.25 mm, a solid ground on the next copper layer")
 		(hatch edge 0.5)
 		(connect_pads

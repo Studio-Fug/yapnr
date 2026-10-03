@@ -777,6 +777,20 @@ table):
   through gray copper first adds loss). The keepout is what a Wilkinson's layout has anyway
   (the arms meet only at the input junction and through the resistor), computed from the
   part's position, and leaves the rest of the window free; `Loss` stays available to specs.
+- **...and west of it, from 1.2 mm to the resistor** (`cases.arm_keepout`, a second `fixed` void
+  strip as wide as the part's body, from the port pad plus one minimum width to the resistor's
+  west end), and the combiner's β = 8 epoch has 35 iterations (was 25). With the east keepout
+  alone (W10, validated: output match −16.2 / −15.0 / −16.4 dB, isolation −14.1 / −13.6 /
+  −13.6 dB, failing the −17 and −15 dB criteria) the optimizer cut the input line along the
+  axis only from 1.2 mm west of the resistor: the odd-mode path from the resistor back to the
+  junction, which a Wilkinson makes a quarter wave (about 5 mm here), was about 3 mm, and the
+  output match and the isolation centred above the band (−14 and −15 dB at 9 GHz, −31 and
+  −18 dB at 11 GHz). An ideal single-section Wilkinson meets −25 dB at ±10 %, so the targets
+  ask for the topology rather than for more iterations. With both strips the arms meet only at
+  the input junction (west of 1.2 mm) and through the resistor, as in a Wilkinson's layout;
+  their widths, their paths (they bow apart) and the output lines stay free. From the same
+  seed W11 reached t 0.04 at the end of β = 8 (W10: 0.56) and a robust binarized t of 0.08
+  at β = 16 (W10: 0.74 at best).
 - **The combiner's resistor moves to 5.4–6.0 mm from port 1** (was 4.8–5.4 mm; a change of the
   spec's `lumped` part, its criteria unchanged). A Wilkinson's resistor ends its quarter-wave
   arms; the optimizer's arms run side by side as coupled lines, and the resistor terminates
@@ -795,10 +809,24 @@ table):
   −16.2 dB against −17; −17.8 and −16.0 dB on the finer grids, which pass): it was tuned to the
   uncorrected copper. Round 1's formulation with the round-2 solver failed with adaptive moves
   throughout (best robust binarized t 0.455; −15.4, −13.4, −13.7 dB) and plain MMA throughout
-  oscillated from β = 16 (best t 0.92 by iteration 48).
+  oscillated from β = 16 (best t 0.92 by iteration 48). With plain MMA at β = 8 and adaptive
+  moves from β = 16 (V3) it passes on all three grids: |S11| −20.3, −19.2 and −19.5 dB,
+  |S21| = |S31| −3.33, −3.30 and −3.31 dB (guide, "(a) Power divider").
 - **The filter banks' objective bands widen each channel by 0.1 GHz** (was 0.2 GHz) against
   coarse-to-fine shifts, which the edge correction reduced to about 0.2 %; five points per
   diplexer channel and four per bank channel. The criteria are unchanged.
+- **The three-channel bank keeps its spec and fails** (round 2's B1 is published as it is).
+  Its best binarized design came at β = 8 (t 1.39; round 1: 2.72): every in-channel
+  transmission passes on all three grids (−1.5 to −2.1 dB), but the adjacent channels leak
+  (channel A at port 3 −9.7 to −10.0 dB, channel B at port 4 −10.1 to −10.5 dB against −15 and
+  −12 dB) and channel A's match is −6.4 dB on the coarse grid (−8 dB). A larger window
+  (24 × 24 mm, the outputs 8.1 mm apart, with the variants from β = 8, B2) did worse at β = 8
+  (robust binarized t 5.3–5.6) and was stopped at its 22nd iteration under the shared Mac's
+  load, so the window stays 18 × 18 mm; no criterion or target was changed. The stubs' notches
+  need about 1 % of precision and a pixel of stub length is 5–9 %; past β = 8 the optimizer
+  reaches that precision only with near-threshold (gray, lossy) pixels, which the binary
+  design loses (design §23.3). Sub-pixel tuning of binary copper is the open problem, not the
+  spec.
 
 ## Pinned versions
 

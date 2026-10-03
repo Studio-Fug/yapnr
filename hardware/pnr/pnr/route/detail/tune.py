@@ -634,6 +634,7 @@ class Tuner:
             return in_units(2 * pitch * (SQRT2 if diag[r] else 1.0), runs[r][0].layer)
 
         run_cells = [set(r) for r in runs]
+        run_edges = [set(zip(r, r[1:])) for r in runs]
 
         def corners_ok(a: Cell, b: Cell) -> bool:
             """A diagonal step's two side cells (part of the router's footprint) stay
@@ -714,26 +715,35 @@ class Tuner:
                 ):
                     continue
                 uv = unit_value(r)
-                amp = min(amax, max(shape.amp_min, math.ceil(remaining / uv - 1e-9)))
-                bump = Bump(r, k, side, amp, w)
-                path = bump_path(runs[r], [bump])
-                new_cells = set(path) - set(runs[r])
-                if not all(corners_ok(a, b) for a, b in zip(path, path[1:])):
-                    continue
-                # Bumps keep the meander gap from each other's new copper.
-                if any(
-                    Cell(c.layer, c.i + di, c.j + dj) in claimed
-                    for c in new_cells
-                    for di in (-1, 0, 1)
-                    for dj in (-1, 0, 1)
-                ):
-                    continue
-                # Exact millimetre check of the new segments.
-                if not self._path_clear(net, runs[r], path, index):
-                    continue
-                chosen.append(bump)
-                claimed |= new_cells
-                remaining -= amp * uv
+                want = min(amax, max(shape.amp_min, math.ceil(remaining / uv - 1e-9)))
+                # The tallest legal bump up to ``want``: a lower one may clear a corner
+                # (a diagonal step's side cell) or a neighbour the taller one meets.
+                for amp in range(want, shape.amp_min - 1, -1):
+                    bump = Bump(r, k, side, amp, w)
+                    path = bump_path(runs[r], [bump])
+                    new_cells = set(path) - set(runs[r])
+                    # New steps only: the run's own steps are routed copper already.
+                    if not all(
+                        corners_ok(a, b)
+                        for a, b in zip(path, path[1:])
+                        if (a, b) not in run_edges[r]
+                    ):
+                        continue
+                    # Bumps keep the meander gap from each other's new copper.
+                    if any(
+                        Cell(c.layer, c.i + di, c.j + dj) in claimed
+                        for c in new_cells
+                        for di in (-1, 0, 1)
+                        for dj in (-1, 0, 1)
+                    ):
+                        continue
+                    # Exact millimetre check of the new segments.
+                    if not self._path_clear(net, runs[r], path, index):
+                        continue
+                    chosen.append(bump)
+                    claimed |= new_cells
+                    remaining -= amp * uv
+                    break
             return chosen, remaining
 
         amp_max = shape.amp_max
@@ -748,9 +758,13 @@ class Tuner:
                 if b.side != want:
                     flipped = Bump(b.run, b.k, want, b.amp, b.w)
                     ok = min(heights[(b.run, want, u)] for u in range(b.k, b.k + b.w + 1)) >= b.amp
-                    if ok and self._path_clear(
-                        net, runs[b.run], bump_path(runs[b.run], [flipped]), index
-                    ):
+                    path = bump_path(runs[b.run], [flipped])
+                    ok = ok and all(
+                        corners_ok(x, y)
+                        for x, y in zip(path, path[1:])
+                        if (x, y) not in run_edges[b.run]
+                    )
+                    if ok and self._path_clear(net, runs[b.run], path, index):
                         chosen[chosen.index(b)] = flipped
         if not chosen:
             return 0.0, 0, 0

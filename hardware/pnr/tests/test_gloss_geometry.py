@@ -1020,6 +1020,39 @@ class RefinementTest(unittest.TestCase):
         x = g.adjacency([a, b], index, window=(0, -MM, 5 * MM, 2 * MM))
         self.assertAlmostEqual(x["X"] / MM / MM, 10 * (0.8 - 0.128), places=3)
 
+    def test_adjacency_does_not_depend_on_drawing_direction(self):
+        # The neighbour turns away right above the samples at 5.65 and 5.75 mm: their rays meet
+        # the common end cap of its parallel leg and of its perpendicular leg at the same
+        # distance. Whichever way the subject and the neighbour's legs are drawn, X, T and the
+        # hug score are the same, and those samples count the neighbour: X equals that of the
+        # parallel leg alone.
+        subject = ((0, 0), (7_500_000, 0))
+        bend = (5_750_000, 1_750_000)
+        legs = [(bend, (7_500_000, 1_750_000)), (bend, (5_750_000, 4_000_000))]
+
+        def measure(flip, flips, legs=legs):
+            a, b = subject[::-1] if flip else subject
+            items = [g.RayItem(a, b, W / 2, "A", K_DEF, C, "a")]
+            for k, ((p, q), f) in enumerate(zip(legs, flips)):
+                p, q = (q, p) if f else (p, q)
+                items.append(g.RayItem(p, q, W / 2, "B", K_DEF, C, "b%d" % k))
+            index = g.RayIndex(items)
+            x = g.adjacency(items[:1], index)
+            hug = g.hug_segment(a, b, W / 2, "A", K_DEF, C, index)
+            return round(x["X"]), round(x["T"]), round(hug)
+
+        seen = {
+            measure(flip, (f1, f2))
+            for flip in (False, True)
+            for f1 in (False, True)
+            for f2 in (False, True)
+        }
+        self.assertEqual(len(seen), 1, seen)
+        X, T, _ = seen.pop()
+        self.assertEqual(T, 0)
+        self.assertGreater(X, 0)
+        self.assertEqual(X, measure(False, (False,), legs[:1])[0])
+
     def test_dekink_snaps_to_same_class_neighbour(self):
         # staircase in the {E, NE} cone; the outside legs at both anchors run north-east, so every
         # fewest-bend path is NE - E - NE (2 bends) and only the E leg's height is free

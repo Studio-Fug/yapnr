@@ -65,6 +65,7 @@ ADJ_REACH = CORRIDOR_MAX_GAP  # rays up to 2.0 mm from the copper edge
 ADJ_PARALLEL = 30.0  # a hit counts as a same-class neighbour within +-30 deg of parallel
 ADJ_TIGHT = CORRIDOR_TIGHT  # gap <= c_req + 0.1 mm counts as packed (tight length T)
 ADJ_MIN_GAIN = CORRIDOR_MIN_GAIN  # a material adjacency change (mm^2 x NM^2)
+RAY_TIE = 1e-6  # nm: two ray hits this close are at the same distance (a shared vertex)
 HUG_SLACK = CORRIDOR_SLACK  # router-cost slack adjacency may buy (keyhole.align_parallel)
 DP_MAX_LATTICE = 32  # dekink lattice values per axis incl. neighbour-snap lines
 CHAIN_CALL_BUDGET = 6000  # deterministic per-chain planning budget (clear+contact calls)
@@ -2036,9 +2037,33 @@ def _ray_hit(o, d, it):
     return best
 
 
-def _side_hits(a, b, half, net, index, side, extra=(), exclude=(), step=ADJ_STEP, reach=ADJ_REACH):
+def _canonical(a, b):
+    """A segment's ends in sorted order. The ray metric samples and sides a segment from its
+    canonical first end, so it never depends on which way the segment is drawn (normalize keeps
+    whichever end a merge meets first, and that can follow a random uuid)."""
+    return (a, b) if a <= b else (b, a)
+
+
+def _side_hits(
+    a,
+    b,
+    half,
+    net,
+    index,
+    side,
+    extra=(),
+    exclude=(),
+    step=ADJ_STEP,
+    reach=ADJ_REACH,
+    prefer=None,
+):
     """Per sample of segment a-b (every ~step, centred): (s, w, gap, item) of the first copper
-    of another net hit by the normal ray on one side within reach (gap None: no hit)."""
+    of another net hit by the normal ray on one side within reach (gap None: no hit).
+
+    Several items hit at the same distance (a ray through a neighbour's vertex meets both of
+    its segments' end caps): the one ``prefer(item)`` accepts wins, else the first in the
+    candidate order. Callers pass their same-class test, so the sample counts the neighbour
+    whichever segment of it the order meets first."""
     L = math.dist(a, b)
     if L <= 0:
         return []
@@ -2077,13 +2102,17 @@ def _side_hits(a, b, half, net, index, side, extra=(), exclude=(), step=ADJ_STEP
         o = (a[0] + ux * s + nx * (half + 1), a[1] + uy * s + ny * (half + 1))
         best, hit = None, None
         for nlo, tlo, thi, _, it in cands:
-            if best is not None and nlo - half - 1 > best:
+            if best is not None and nlo - half - 1 > best + RAY_TIE:
                 break
             if s < tlo or s > thi:
                 continue
             t = _ray_hit(o, d, it)
-            if t is not None and t <= reach and (best is None or t < best):
+            if t is None or t > reach:
+                continue
+            if best is None or t < best - RAY_TIE:
                 best, hit = t, it
+            elif t <= best + RAY_TIE and prefer is not None and prefer(it) and not prefer(hit):
+                best, hit = min(best, t), it
         out.append((s, w, best, hit))
     return out
 
@@ -2111,24 +2140,31 @@ def adjacency(
     T: sampled length whose such neighbour is packed (gap <= c_req + 0.1 mm) (nm);
     pairs: tight length per net pair (coupled length at minimum pitch, both sides counted).
     window: count only samples whose centreline point lies in the box. No leg-length or
-    overlap cut-offs (replaces E for acceptance); a direction-agnostic dead-space proxy.
+    overlap cut-offs (replaces E for acceptance); a direction-agnostic dead-space proxy: each
+    subject is sampled from its canonical first end, and a ray meeting a same-class parallel
+    track and other copper at the same distance (a neighbour's vertex) counts the neighbour.
     """
     X = T = 0.0
     pairs = defaultdict(float)
     for sub in sorted(subjects, key=_ray_item_key):
         if sub.key is None or sub.a == sub.b:
             continue
-        L = math.dist(sub.a, sub.b)
-        ux, uy = (sub.b[0] - sub.a[0]) / L, (sub.b[1] - sub.a[1]) / L
+        a, b = _canonical(sub.a, sub.b)
+        L = math.dist(a, b)
+        ux, uy = (b[0] - a[0]) / L, (b[1] - a[1]) / L
+
+        def same_class(it, a=a, b=b, key=sub.key):
+            return _class_hit(key, a, b, it)
+
         for side in (1, -1):
             for s, w, gap, hit in _side_hits(
-                sub.a, sub.b, sub.r, sub.net, index, side, extra, exclude, step, reach
+                a, b, sub.r, sub.net, index, side, extra, exclude, step, reach, same_class
             ):
                 if window is not None:
-                    px, py = sub.a[0] + ux * s, sub.a[1] + uy * s
+                    px, py = a[0] + ux * s, a[1] + uy * s
                     if not (window[0] <= px <= window[2] and window[1] <= py <= window[3]):
                         continue
-                if not _class_hit(sub.key, sub.a, sub.b, hit):
+                if not same_class(hit):
                     continue
                 creq = max(sub.clearance, hit.clearance) + MARGIN
                 if gap <= creq + ADJ_TIGHT:
@@ -2159,14 +2195,19 @@ def hug_segment(
     accept(item) -> bool narrows the neighbours that count (functional groups: same group only)."""
     if a == b:
         return 0.0
+    a, b = _canonical(a, b)
     creq = clearance + MARGIN
-    left = _side_hits(a, b, half, net, index, 1, extra, exclude, step, reach)
-    right = _side_hits(a, b, half, net, index, -1, extra, exclude, step, reach)
+
+    def counts(it):
+        return _class_hit(key, a, b, it) and (accept is None or accept(it))
+
+    left = _side_hits(a, b, half, net, index, 1, extra, exclude, step, reach, counts)
+    right = _side_hits(a, b, half, net, index, -1, extra, exclude, step, reach, counts)
     score = 0.0
     for (s, w, g1, h1), (_, _, g2, h2) in zip(left, right):
         best = reach
         for g_, h_ in ((g1, h1), (g2, h2)):
-            if _class_hit(key, a, b, h_) and (accept is None or accept(h_)):
+            if counts(h_):
                 best = min(best, g_)
         score += (max(best, creq) - creq) * w
     return score

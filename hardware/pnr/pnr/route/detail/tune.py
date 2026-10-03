@@ -937,7 +937,7 @@ class Tuner:
             return None
         return route
 
-    def _swap_in(self, net: str, new, index: CopperIndex, check: bool = True):
+    def _swap_in(self, net: str, new, index: CopperIndex):
         """Replace ``net``'s grid route (cells, segments, vias and their millimetre
         copper; the pad escapes stay) by ``new`` when every piece of copper the old
         route did not have clears the other nets in millimetres. Returns the undo
@@ -959,13 +959,13 @@ class Tuner:
             return self.clearance_of(net, n)
 
         for (layer, a, b), (_n, name, pa, pb, w) in zip(new.segments, tracks):
-            if not check or (layer, frozenset((a, b))) in old_segments:
+            if (layer, frozenset((a, b))) in old_segments:
                 continue
             if not index.clear(net, name, pa, pb, w / 2, clear_of):
                 return None
         old_vias = set(rn.vias)
         for (i, j), (_n, x, y) in zip(new.vias, vias):
-            if not check or (i, j) in old_vias:
+            if (i, j) in old_vias:
                 continue
             if not all(
                 index.clear(net, layer, (x, y), (x, y), self.via_radius, clear_of)

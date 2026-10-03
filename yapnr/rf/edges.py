@@ -492,7 +492,15 @@ DT_MARGIN = 1.05
 
 def _patterns(n: int) -> list:
     """Dense copper patterns for the time-step bound: one- to three-pixel stripes both ways,
-    checkerboards, isolated dots and holes, random binary (two densities) and random gray."""
+    checkerboards, isolated dots and holes, random binary (two densities) and random gray, and
+    the diagonal families (stripes two and three pixels wide, one-pixel lines touching at
+    corners every three and four pixels, a knight's-move lattice, random diagonal stripes).
+
+    The diagonal families raise λ most: on the cases' grids one-pixel diagonal lines every three
+    pixels reach 1.66 (0.3 mm, 4 substrate cells) to 1.74 (0.1 mm, 8 cells) times the plain
+    grid's λ, two-pixel diagonal stripes 1.62–1.69, against 1.58–1.64 for the earlier library
+    (random binary); a random search of single and diagonal flips from the worst of them found
+    nothing larger (design §24)."""
     i, j = np.meshgrid(np.arange(n), np.arange(n), indexing="ij")
     rng = np.random.default_rng(0)
     out = []
@@ -504,6 +512,12 @@ def _patterns(n: int) -> list:
     out += [dots, 1.0 - dots]
     out += [(rng.uniform(size=(n, n)) > q).astype(float) for q in (0.5, 0.3)]
     out.append(rng.uniform(size=(n, n)))
+    for w in (2, 3):
+        out.append((((i + j) // w) % 2).astype(float))
+    for k in (3, 4):
+        out.append(((i + j) % k == 0).astype(float))
+    out.append(((i + 2 * j) % 5 == 0).astype(float))
+    out.append((rng.uniform(size=2 * n) < 0.5)[i + j].astype(float))
     return out
 
 
@@ -514,11 +528,10 @@ def stable_dt(grid: Grid, er: float, courant: float = 0.95) -> float:
     taken as `DT_MARGIN` times the largest over dense copper patterns (`_patterns`).
 
     The correction lowers ε next to edges and raises 1/μ one cell away, so λ depends on the
-    pattern. On the cases' grids the densest patterns (random binary) raise it by 18–20 %;
-    the plain grid's margin over Δt_CFL absorbs that at the optimization pitch, and at a
-    third of the pitch the step is about 2 % smaller. A bound that takes every factor at its
-    extreme at once (no pattern can) would cost 11–17 % of the steps; this one is not a
-    proof, so `Simulation.run` stops a diverging run with an error."""
+    pattern: on the cases' grids the worst patterns of the library (one-pixel diagonal lines
+    touching at corners) raise it to 1.66–1.74 times the plain grid's. A bound that takes
+    every factor at its extreme at once (no pattern can) would cost more steps; this one is
+    not a proof, so `Simulation.run` stops a diverging run with an error."""
     from yapnr.rf.fdtd.stability import max_eigenvalue
     from yapnr.rf.materials import Structure
     from yapnr.rf.mesh import Axis, PMLCells, uniform_nodes

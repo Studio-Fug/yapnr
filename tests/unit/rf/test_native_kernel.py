@@ -7,7 +7,8 @@ several thread counts. Covered: random fields stepped through every kernel (CPML
 graded axes, the copper-edge μ planes, the inductive sheet, a lumped resistor and PEC edges),
 runs with sources, probes and decimation, the optimization pipeline's forward and adjoint runs
 (exact and production settings), the divider and the antenna (smoke grids), float32 against
-float64 (S within 1e-4), the source tables and backend selection and fallback.
+float64 (S within 1e-4), the source tables and backend selection and fallback; both schedules
+of the C side, the sweeps and the wavefront passes (YAPNR_RF_TBLOCK).
 
 The native cases need the library: the Bazel-built one (the manual `test_native_kernel_native`
 target), else this test compiles it with the host compiler (``cc``/``$CC``); without either they
@@ -199,6 +200,18 @@ class RandomFieldTest(unittest.TestCase):
                 with self.subTest(structure=name, dtype=np.dtype(dtype).name, threads=threads):
                     self.compare(dom, st, dt, dtype, threads)
 
+    def test_wavefront_schedule(self):
+        """Several steps per pass over the planes (YAPNR_RF_TBLOCK): the same values."""
+        kernel_or_skip(self)
+        dom = domain()
+        dt = 0.95 * dom.grid.courant_dt()
+        for name, st in structures(dom, dt):
+            for tblock in ("1", "3", "8"):
+                with self.subTest(structure=name, tblock=tblock), patch.dict(
+                    os.environ, {native_kernel.ENV_TBLOCK: tblock}
+                ):
+                    self.compare(dom, st, dt, np.float64, 3)
+
     def test_uneven_cpml(self):
         """CPML slabs of unequal length (separate ψ runs) and none along one side."""
         kernel_or_skip(self)
@@ -271,6 +284,20 @@ class RunTest(unittest.TestCase):
                         self.assertEqual(sim.backend, "native")
                         self.assert_same(got, ref)
 
+    def test_wavefront_runs_equal_numpy(self):
+        """Sources, mu blend, sheet and probes row by row inside the passes."""
+        kernel_or_skip(self)
+        for dec in (1, 3):
+            _, ref = self.run_sim("numpy", decimation=dec)
+            for tblock in ("2", "5", "auto"):
+                with self.subTest(decimation=dec, tblock=tblock), patch.dict(
+                    os.environ, {native_kernel.ENV_TBLOCK: tblock, native_kernel.ENV_CACHE: "1"}
+                ):
+                    sim, got = self.run_sim("native", threads=3, decimation=dec)
+                    if tblock != "auto":
+                        self.assertEqual(sim._native.tblock, int(tblock))
+                    self.assert_same(got, ref)
+
     def test_callback_steps_one_at_a_time(self):
         """With a callback the native backend runs one-step blocks: the same run."""
         kernel_or_skip(self)
@@ -331,8 +358,10 @@ class PipelineTest(unittest.TestCase):
         kernel_or_skip(self)
         for dtype in (np.float64,) if exact else (np.float64, np.float32):
             _, ref = self.evaluate(spec, "numpy", dtype, 1, exact)
-            for threads in (1, 3):
-                with self.subTest(dtype=np.dtype(dtype).name, threads=threads):
+            for threads, tblock in ((1, "0"), (3, "0"), (3, "4")):
+                with self.subTest(
+                    dtype=np.dtype(dtype).name, threads=threads, tblock=tblock
+                ), patch.dict(os.environ, {native_kernel.ENV_TBLOCK: tblock}):
                     p, got = self.evaluate(spec, "native", dtype, threads, exact)
                     self.assertEqual(got.steps, ref.steps)
                     np.testing.assert_array_equal(got.values, ref.values)

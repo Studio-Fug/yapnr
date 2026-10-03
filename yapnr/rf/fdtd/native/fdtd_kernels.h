@@ -193,9 +193,13 @@ ALWAYS int SFX(mu_entry)(const yf_sim *s, int c, int k) {
   return -1;
 }
 
-/* One row of H component c (3..5). mumode 1: blend the mu planes in place (no H source this
- * step); 2: keep H before the update in mu_old (the blend runs after the sources). */
-static void SFX(h_row)(const yf_sim *s, int c, int k, int i, R *scratch, int mumode) {
+ALWAYS int SFX(in_region)(const yf_comp *C, int k, int i) {
+  return k >= C->k0 && k < C->k1 && i >= C->i0 && i < C->i1;
+}
+
+/* Update one row of H component c (3..5); with `old`, keep the row before the update there
+ * (copy_into(H, old) of a mu plane). */
+static void SFX(h_row)(const yf_sim *s, int c, int k, int i, R *old) {
   const yf_comp *C = &s->c[c];
   const size_t o = ((size_t)k * s->ni + i) * (size_t)s->jp;
   R *h = (R *)s->f[c] + o;
@@ -204,16 +208,9 @@ static void SFX(h_row)(const yf_sim *s, int c, int k, int i, R *scratch, int mum
   const R *p0 = a0 + SFX(delta)(s, T0->axis), *p1 = a1 + SFX(delta)(s, T1->axis);
   const SFX(trow) r0 = SFX(term_row)(s, T0, k, i), r1 = SFX(term_row)(s, T1, k, i);
   const int vy = T0->axis == 1 ? 0 : T1->axis == 1 ? 1 : 2;
-  const int jlo = C->seg[0].j0, jhi = C->seg[C->nseg - 1].j1;
-  int e = -1;
-  R *old = NULL;
-  if (mumode && s->nmu) {
-    e = SFX(mu_entry)(s, c, k);
-    if (e >= 0) {
-      const size_t mo = ((size_t)(k - s->mu_k0[e]) * s->ni + i) * (size_t)s->jp;
-      old = mumode == 1 ? scratch : (R *)s->mu_old[e] + mo;
-      memcpy(old + jlo, h + jlo, sizeof(R) * (size_t)(jhi - jlo)); /* copy_into(H, old) */
-    }
+  if (old) {
+    const int jlo = C->seg[0].j0, jhi = C->seg[C->nseg - 1].j1;
+    memcpy(old + jlo, h + jlo, sizeof(R) * (size_t)(jhi - jlo));
   }
   for (int g = 0; g < C->nseg; g++) {
     const yf_seg *S = &C->seg[g];
@@ -238,15 +235,21 @@ static void SFX(h_row)(const yf_sim *s, int c, int k, int i, R *scratch, int mum
     }
     SFX(hseg_any)(vy, j0, j1, h, p0, a0, r0.ik, s0, b0, c0, q0, p1, a1, r1.ik, s1, b1, c1, q1);
   }
-  if (e >= 0 && mumode == 1) {
-    /* blend_(H, old, m): H -= old; H *= m; H += old */
-    const R *m = (const R *)s->mu_m[e] + ((size_t)(k - s->mu_k0[e]) * s->ni + i) * (size_t)s->jp;
-    for (int j = jlo; j < jhi; j++) h[j] = (h[j] - old[j]) * m[j] + old[j];
-  }
 }
 
-/* One row of E component c (0..2). sheetmode 1: advance the sheet's branch currents in the
- * sweep (no E source this step); 2: keep E^n in esum (they advance after the sources). */
+/* blend_(H, old, m) on a row of mu entry e: H -= old; H *= m; H += old. */
+static void SFX(mu_row)(const yf_sim *s, int e, int k, int i, const R *old) {
+  const int c = s->mu_comp[e];
+  const yf_comp *C = &s->c[c];
+  R *h = (R *)s->f[c] + ((size_t)k * s->ni + i) * (size_t)s->jp;
+  const R *m = (const R *)s->mu_m[e] + ((size_t)(k - s->mu_k0[e]) * s->ni + i) * (size_t)s->jp;
+  const int jlo = C->seg[0].j0, jhi = C->seg[C->nseg - 1].j1;
+  for (int j = jlo; j < jhi; j++) h[j] = (h[j] - old[j]) * m[j] + old[j];
+}
+
+/* Update one row of E component c (0..2). On the copper plane with the inductive sheet:
+ * sheetmode 1 advances the sheet's branch currents in the row (no E source acts), 2 keeps E^n
+ * in esum (they advance after the sources, `sheet_row`). `scratch`: one row. */
 static void SFX(e_row)(const yf_sim *s, int c, int k, int i, R *scratch, int sheetmode) {
   const yf_comp *C = &s->c[c];
   const size_t o = ((size_t)k * s->ni + i) * (size_t)s->jp;
@@ -323,57 +326,8 @@ static void SFX(e_row)(const yf_sim *s, int c, int k, int i, R *scratch, int she
   }
 }
 
-static void SFX(h_item)(const yf_sim *s, int64_t item, R *scratch, int mumode) {
-  const int64_t nrows = (int64_t)s->np * s->ni;
-  const int64_t r0 = item * SFX_ROWS, r1 = r0 + SFX_ROWS < nrows ? r0 + SFX_ROWS : nrows;
-  for (int64_t r = r0; r < r1; r++) {
-    const int k = (int)(r / s->ni), i = (int)(r % s->ni);
-    for (int c = 3; c < 6; c++) {
-      const yf_comp *C = &s->c[c];
-      if (k >= C->k0 && k < C->k1 && i >= C->i0 && i < C->i1)
-        SFX(h_row)(s, c, k, i, scratch, mumode);
-    }
-  }
-}
-
-static void SFX(e_item)(const yf_sim *s, int64_t item, R *scratch, int sheetmode) {
-  const int64_t nrows = (int64_t)s->np * s->ni;
-  const int64_t r0 = item * SFX_ROWS, r1 = r0 + SFX_ROWS < nrows ? r0 + SFX_ROWS : nrows;
-  for (int64_t r = r0; r < r1; r++) {
-    const int k = (int)(r / s->ni), i = (int)(r % s->ni);
-    for (int c = 0; c < 3; c++) {
-      const yf_comp *C = &s->c[c];
-      if (k >= C->k0 && k < C->k1 && i >= C->i0 && i < C->i1)
-        SFX(e_row)(s, c, k, i, scratch, sheetmode);
-    }
-  }
-}
-
-/* The mu blend after the sources: item = one row of one entry's planes. */
-static void SFX(mu_item)(const yf_sim *s, int64_t item) {
-  for (int e = 0; e < s->nmu; e++) {
-    const int64_t rows = (int64_t)(s->mu_k1[e] - s->mu_k0[e]) * s->ni;
-    if (item >= rows) {
-      item -= rows;
-      continue;
-    }
-    const int c = s->mu_comp[e];
-    const yf_comp *C = &s->c[c];
-    const int k = s->mu_k0[e] + (int)(item / s->ni), i = (int)(item % s->ni);
-    if (i < C->i0 || i >= C->i1) return;
-    const size_t mo = (size_t)item * s->jp;
-    R *h = (R *)s->f[c] + ((size_t)k * s->ni + i) * (size_t)s->jp;
-    const R *old = (const R *)s->mu_old[e] + mo, *m = (const R *)s->mu_m[e] + mo;
-    const int jlo = C->seg[0].j0, jhi = C->seg[C->nseg - 1].j1;
-    for (int j = jlo; j < jhi; j++) h[j] = (h[j] - old[j]) * m[j] + old[j];
-    return;
-  }
-}
-
-/* The sheet's branch currents after the E sources: item = one row of ex (< ni) or ey. */
-static void SFX(sheet_item)(const yf_sim *s, int64_t item) {
-  const int c = item < s->ni ? 0 : 1;
-  const int i = (int)(c == 0 ? item : item - s->ni);
+/* The sheet's branch currents on row i of ex (c = 0) or ey (1) after the E sources. */
+static void SFX(sheet_row)(const yf_sim *s, int c, int i) {
   const yf_comp *C = &s->c[c];
   if (i < C->i0 || i >= C->i1) return;
   const size_t so = (size_t)i * s->jp;
@@ -391,11 +345,11 @@ static void SFX(sheet_item)(const yf_sim *s, int64_t item) {
   }
 }
 
-/* This step's values of a chunk of a source: sum_k amp[k][p] w[b][k] in k order (the
- * engine's `_source_rows`), or the table row. */
-static void SFX(src_eval)(const yf_src *q, const yf_item *it, int64_t b) {
+/* This step's values of a chunk of a source into val[slot]: sum_k amp[k][p] w[b][k] in k
+ * order (`sources.combine`), or the table row. */
+static void SFX(src_eval)(const yf_src *q, const yf_item *it, int64_t b, int slot) {
   const int P = q->count, p0 = it->p0, p1 = it->p1;
-  double *v = q->val;
+  double *v = q->val + (size_t)slot * P;
   if (q->k == 0) {
     const double *w = q->w + (size_t)b * P;
     for (int p = p0; p < p1; p++) v[p] = w[p];
@@ -441,19 +395,69 @@ static void SFX(probe_item)(const yf_sim *s, const yf_run *r, const yf_item *it,
   }
 }
 
-#define SFX_PHASE(N, BODY)                                                                      \
+#define SFX_PHASE(N, ...)                                                                       \
   do {                                                                                         \
     const int64_t n_items_ = (N);                                                              \
     for (;;) {                                                                                 \
       const int64_t it = claim(P, base);                                                       \
       if (it >= n_items_) break;                                                               \
-      BODY;                                                                                    \
+      __VA_ARGS__;                                                                             \
     }                                                                                          \
     base += n_items_ + P->n;                                                                   \
     barrier(P, &sense);                                                                        \
   } while (0)
 
-static void SFX(job)(yf_pool *P, int tid, const yf_sim *s, const yf_run *r) {
+/* ---- sweeps: one step at a time, H then E over the whole box ------------------------------ */
+
+static void SFX(h_item)(const yf_sim *s, int64_t item, R *scratch, int mumode) {
+  const int64_t nrows = (int64_t)s->np * s->ni;
+  const int64_t r0 = item * SFX_ROWS, r1 = r0 + SFX_ROWS < nrows ? r0 + SFX_ROWS : nrows;
+  for (int64_t r = r0; r < r1; r++) {
+    const int k = (int)(r / s->ni), i = (int)(r % s->ni);
+    for (int c = 3; c < 6; c++) {
+      if (!SFX(in_region)(&s->c[c], k, i)) continue;
+      const int e = s->nmu ? SFX(mu_entry)(s, c, k) : -1;
+      if (e < 0) {
+        SFX(h_row)(s, c, k, i, NULL);
+      } else if (mumode == 1) {
+        /* no H source this step: blend in place */
+        SFX(h_row)(s, c, k, i, scratch);
+        SFX(mu_row)(s, e, k, i, scratch);
+      } else {
+        R *old = (R *)s->mu_old[e] + ((size_t)(k - s->mu_k0[e]) * s->ni + i) * (size_t)s->jp;
+        SFX(h_row)(s, c, k, i, old);
+      }
+    }
+  }
+}
+
+static void SFX(e_item)(const yf_sim *s, int64_t item, R *scratch, int sheetmode) {
+  const int64_t nrows = (int64_t)s->np * s->ni;
+  const int64_t r0 = item * SFX_ROWS, r1 = r0 + SFX_ROWS < nrows ? r0 + SFX_ROWS : nrows;
+  for (int64_t r = r0; r < r1; r++) {
+    const int k = (int)(r / s->ni), i = (int)(r % s->ni);
+    for (int c = 0; c < 3; c++)
+      if (SFX(in_region)(&s->c[c], k, i)) SFX(e_row)(s, c, k, i, scratch, sheetmode);
+  }
+}
+
+/* The mu blend after the sources: item = one row of one entry's planes. */
+static void SFX(mu_item)(const yf_sim *s, int64_t item) {
+  for (int e = 0; e < s->nmu; e++) {
+    const int64_t rows = (int64_t)(s->mu_k1[e] - s->mu_k0[e]) * s->ni;
+    if (item >= rows) {
+      item -= rows;
+      continue;
+    }
+    const int c = s->mu_comp[e];
+    const int k = s->mu_k0[e] + (int)(item / s->ni), i = (int)(item % s->ni);
+    if (!SFX(in_region)(&s->c[c], k, i)) return;
+    SFX(mu_row)(s, e, k, i, (const R *)s->mu_old[e] + (size_t)item * s->jp);
+    return;
+  }
+}
+
+static void SFX(job_sweep)(yf_pool *P, int tid, const yf_sim *s, const yf_run *r) {
   int64_t base = 0;
   int sense = 0;
   R *scratch = NULL;
@@ -480,7 +484,7 @@ static void SFX(job)(yf_pool *P, int tid, const yf_sim *s, const yf_run *r) {
     if (hsrc) {
       SFX_PHASE(r->nhsitem, {
         const yf_item *x = &r->hsitem[it];
-        if (r->src[x->index].act[b]) SFX(src_eval)(&r->src[x->index], x, b);
+        if (r->src[x->index].act[b]) SFX(src_eval)(&r->src[x->index], x, b, 0);
       });
       if (tid == 0) SFX(src_apply)(s, r, b, 1);
       barrier(P, &sense);
@@ -496,11 +500,14 @@ static void SFX(job)(yf_pool *P, int tid, const yf_sim *s, const yf_run *r) {
     if (esrc) {
       SFX_PHASE(r->nesitem, {
         const yf_item *x = &r->esitem[it];
-        if (r->src[x->index].act[b]) SFX(src_eval)(&r->src[x->index], x, b);
+        if (r->src[x->index].act[b]) SFX(src_eval)(&r->src[x->index], x, b, 0);
       });
       if (tid == 0) SFX(src_apply)(s, r, b, 0);
       barrier(P, &sense);
-      if (s->sheet) SFX_PHASE(2 * (int64_t)s->ni, SFX(sheet_item)(s, it));
+      if (s->sheet) SFX_PHASE(2 * (int64_t)s->ni, {
+          const int c = it < s->ni ? 0 : 1;
+          SFX(sheet_row)(s, c, (int)(c == 0 ? it : it - s->ni));
+        });
     }
     if ((n + 1) % r->dec == 0) {
       const double *cw = r->ecos + (size_t)es * r->m, *sw = r->esin + (size_t)es * r->m;
@@ -510,6 +517,147 @@ static void SFX(job)(yf_pool *P, int tid, const yf_sim *s, const yf_run *r) {
   }
   free(scratch);
   free(pv);
+}
+
+/* ---- wavefront: `tblock` steps per pass over the planes ------------------------------------
+ *
+ * Phase p of a pass updates, for every step s of the pass, H on plane p - 3s and E on plane
+ * p - 1 - 3s, rows handed out dynamically. H(k) reads E(k), E(k + 1) and E(k) reads H(k),
+ * H(k - 1), so every value is read at the time level the sweeps would read it: a plane of E is
+ * updated after the H of both planes that read its old value, and before the next step's H
+ * of those planes (three phases later); the planes touched in one phase are distinct. Each
+ * row then gets its sources, mu blend, sheet branches and probe samples right after its
+ * update, which is when the sweeps' later passes would reach that row's values. A pass keeps
+ * about 3 tblock + 1 planes in cache instead of streaming the box twice per step. */
+
+/* Apply the source entries of one row: F[off] -= (real)(scale * v), in list order. */
+ALWAYS void SFX(row_sources)(const yf_sim *s, const yf_run *r, const int64_t *ptr,
+                             const yf_item *ent, size_t row, int64_t b, int slot) {
+  for (int64_t t = ptr[row]; t < ptr[row + 1]; t++) {
+    const yf_src *S = &r->src[ent[t].index];
+    if (!S->act[b]) continue;
+    const int p = ent[t].p0;
+    R *f = (R *)s->f[S->comp] + S->off[p];
+    *f = *f - (R)(S->scale[p] * S->val[(size_t)slot * S->count + p]);
+  }
+}
+
+/* Accumulate the probe entries of one row: re += cw v, im += sw v. */
+ALWAYS void SFX(row_probes)(const yf_sim *s, const yf_run *r, const int64_t *ptr,
+                            const yf_item *ent, size_t row, const double *cw, const double *sw) {
+  for (int64_t t = ptr[row]; t < ptr[row + 1]; t++) {
+    const yf_probe *Q = &r->probe[ent[t].index];
+    const int p = ent[t].p0, P = Q->count;
+    const double v = (double)((const R *)s->f[Q->comp])[Q->off[p]];
+    for (int m = 0; m < r->m; m++) {
+      double *re = Q->re + (size_t)m * P + p, *im = Q->im + (size_t)m * P + p;
+      *re = *re + cw[m] * v;
+      *im = *im + sw[m] * v;
+    }
+  }
+}
+
+/* Row (k, i) of H at step n (b = n - n0, slot = its step in the pass), with sources, mu blend
+ * and probes. `scratch`: three rows. */
+static void SFX(h_full)(const yf_sim *s, const yf_run *r, int k, int i, int64_t n, int slot,
+                        R *scratch) {
+  const int64_t b = n - r->n0;
+  int mu[3] = {-1, -1, -1};
+  for (int c = 3; c < 6; c++) {
+    if (!SFX(in_region)(&s->c[c], k, i)) continue;
+    mu[c - 3] = s->nmu ? SFX(mu_entry)(s, c, k) : -1;
+    SFX(h_row)(s, c, k, i, mu[c - 3] >= 0 ? scratch + (size_t)(c - 3) * s->jp : NULL);
+  }
+  const size_t row = (size_t)k * s->ni + i;
+  if (r->hs_ptr) SFX(row_sources)(s, r, r->hs_ptr, r->hs_ent, row, b, slot);
+  for (int c = 0; c < 3; c++)
+    if (mu[c] >= 0) SFX(mu_row)(s, mu[c], k, i, scratch + (size_t)c * s->jp);
+  if (r->hp_ptr && n % r->dec == 0) {
+    const int64_t hs = (n + r->dec - 1) / r->dec - (r->n0 + r->dec - 1) / r->dec;
+    SFX(row_probes)(s, r, r->hp_ptr, r->hp_ent, row, r->hcos + (size_t)hs * r->m,
+                    r->hsin + (size_t)hs * r->m);
+  }
+}
+
+static void SFX(e_full)(const yf_sim *s, const yf_run *r, int k, int i, int64_t n, int slot,
+                        R *scratch) {
+  const int64_t b = n - r->n0;
+  for (int c = 0; c < 3; c++)
+    if (SFX(in_region)(&s->c[c], k, i)) SFX(e_row)(s, c, k, i, scratch, 2);
+  const size_t row = (size_t)k * s->ni + i;
+  if (r->es_ptr) SFX(row_sources)(s, r, r->es_ptr, r->es_ent, row, b, slot);
+  if (s->sheet && k == s->kc) {
+    SFX(sheet_row)(s, 0, i);
+    SFX(sheet_row)(s, 1, i);
+  }
+  if (r->ep_ptr && (n + 1) % r->dec == 0) {
+    const int64_t es = (n + r->dec) / r->dec - (r->n0 + r->dec) / r->dec;
+    SFX(row_probes)(s, r, r->ep_ptr, r->ep_ent, row, r->ecos + (size_t)es * r->m,
+                    r->esin + (size_t)es * r->m);
+  }
+}
+
+static void SFX(job_wave)(yf_pool *P, int tid, const yf_sim *s, const yf_run *r) {
+  (void)tid;
+  int64_t base = 0;
+  int sense = 0;
+  R *scratch = NULL;
+  if (posix_memalign((void **)&scratch, 64, sizeof(R) * (3 * (size_t)s->jp + 16)) != 0) abort();
+  const int T = r->tblock;
+  const int np = s->np, ni = s->ni;
+  const int nchunk = (ni + SFX_ROWS - 1) / SFX_ROWS;
+  for (int64_t n0 = r->n0; n0 < r->n1; n0 += T) {
+    const int S = (int)(r->n1 - n0 < T ? r->n1 - n0 : T);
+    /* this pass's source values */
+    int any = 0;
+    for (int q = 0; q < r->nsrc && !any; q++)
+      for (int t = 0; t < S; t++)
+        if (r->src[q].act[n0 + t - r->n0]) any = 1;
+    if (any)
+      SFX_PHASE((int64_t)r->nsitem * S, {
+        const yf_item *x = &r->sitem[it % r->nsitem];
+        const int t = (int)(it / r->nsitem);
+        const int64_t b = n0 + t - r->n0;
+        if (r->src[x->index].act[b]) SFX(src_eval)(&r->src[x->index], x, b, t);
+      });
+    const int nphase = np + 3 * (S - 1) + 1;
+    for (int p = 0; p < nphase; p++) {
+      /* tasks of this phase: (step t, H or E, plane) */
+      int tk[64], tt[64], te[64], ntask = 0;
+      for (int t = 0; t < S; t++) {
+        const int kh = p - 3 * t, ke = p - 1 - 3 * t;
+        if (kh >= 0 && kh < np) {
+          tk[ntask] = kh;
+          tt[ntask] = t;
+          te[ntask++] = 0;
+        }
+        if (ke >= 0 && ke < np) {
+          tk[ntask] = ke;
+          tt[ntask] = t;
+          te[ntask++] = 1;
+        }
+      }
+      SFX_PHASE((int64_t)ntask * nchunk, {
+        const int task = (int)(it / nchunk), ch = (int)(it % nchunk);
+        const int k = tk[task], t = tt[task];
+        const int i1 = (ch + 1) * SFX_ROWS < ni ? (ch + 1) * SFX_ROWS : ni;
+        for (int i = ch * SFX_ROWS; i < i1; i++) {
+          if (te[task])
+            SFX(e_full)(s, r, k, i, n0 + t, t, scratch);
+          else
+            SFX(h_full)(s, r, k, i, n0 + t, t, scratch);
+        }
+      });
+    }
+  }
+  free(scratch);
+}
+
+static void SFX(job)(yf_pool *P, int tid, const yf_sim *s, const yf_run *r) {
+  if (r->tblock >= 1)
+    SFX(job_wave)(P, tid, s, r);
+  else
+    SFX(job_sweep)(P, tid, s, r);
 }
 
 #undef SFX_ROWS

@@ -15,7 +15,12 @@
  * component is at ((k * ni) + i) * jp + j with ni = nx + 1. Python views these buffers as the
  * engine's (x, y, z) arrays without copying.
  *
- * One step (n -> n + 1), each phase separated by a barrier:
+ * Two schedules, the same values. Wavefront (run->tblock >= 1, fdtd_kernels.h `job_wave`):
+ * passes of tblock steps over the planes, H of plane k and E of plane k - 1 of a step in one
+ * phase, the next step three planes behind, each row with its sources, mu blend, sheet and
+ * probes right after its update; the planes of a pass stay in cache. Sweeps (tblock 0, for
+ * boxes whose planes do not fit in cache):
+ * one step (n -> n + 1), each phase separated by a barrier:
  *   H sweep (curl E, CPML psi; the mu planes blend in the sweep when no H source is active)
  *   [H sources; mu blend]            when an H source is active this step
  *   [H probes]                       when n is a sample step
@@ -34,7 +39,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define YF_ABI 1
+#define YF_ABI 2
 
 #define ALWAYS static inline __attribute__((always_inline))
 
@@ -101,7 +106,7 @@ typedef struct {
   const double *amp;   /* [k][count] */
   const double *w;     /* this block: [B][k], or [B][count] */
   const uint8_t *act;  /* [B]: the source is on at step n0 + b */
-  double *val;         /* [count] scratch: this step's values */
+  double *val;         /* [tblock or 1][count] scratch: the values of the pass's steps */
 } yf_src;
 
 typedef struct {
@@ -118,14 +123,21 @@ typedef struct {
   int64_t n0, n1; /* steps of the block */
   int32_t dec, m; /* decimation, frequencies */
   int32_t nsrc, nprobe;
-  int32_t nhitem, neitem; /* probe chunks */
+  int32_t nhitem, neitem;   /* probe chunks */
   int32_t nhsitem, nesitem; /* source chunks */
+  int32_t tblock;           /* steps per wavefront pass; 0: sweeps */
+  int32_t nsitem;           /* chunks of all sources */
   const yf_src *src;
   const yf_probe *probe;
   const yf_item *hitem, *eitem;   /* probe chunks of the H and E probes */
   const yf_item *hsitem, *esitem; /* source chunks of the H and E sources */
+  const yf_item *sitem;           /* source chunks of all sources */
   const double *hcos, *hsin;      /* [H samples of the block][m]: dec dt cos(w t) */
   const double *ecos, *esin;      /* [E samples][m] */
+  /* Wavefront: per row (k ni + i) of the box, the source and probe edges on it (CSR: ptr
+   * [rows + 1], entries {index, p}), H and E apart, sources in list order. */
+  const int64_t *hs_ptr, *es_ptr, *hp_ptr, *ep_ptr;
+  const yf_item *hs_ent, *es_ent, *hp_ent, *ep_ent;
 } yf_run;
 
 /* ---- thread pool: one job (a block of steps) at a time, run by every thread ------------ */

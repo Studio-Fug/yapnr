@@ -28,11 +28,17 @@ import numpy as np
 
 from yapnr.rf.mesh import COMPONENTS, E_COMPONENTS
 
-_ABI = 1
+_ABI = 2
 ENV_LIB = "YAPNR_RF_FDTD_LIB"
 ENV_BACKEND = "YAPNR_RF_BACKEND"
 ENV_DTYPE = "YAPNR_RF_DTYPE"
 ENV_THREADS = "YAPNR_RF_THREADS"
+ENV_TBLOCK = "YAPNR_RF_TBLOCK"
+ENV_CACHE = "YAPNR_RF_CACHE_MB"
+# Steps per wavefront pass: the planes a pass keeps (about 3 per step) should fit in this much
+# cache (the last level a thread team shares), MiB.
+DEFAULT_CACHE_MB = 8.0
+MAX_TBLOCK = 8
 BACKENDS = ("numpy", "torch", "native")
 
 HERE = Path(__file__).resolve().parent
@@ -155,16 +161,27 @@ class YfRun(ctypes.Structure):
         ("neitem", c_int32),
         ("nhsitem", c_int32),
         ("nesitem", c_int32),
+        ("tblock", c_int32),
+        ("nsitem", c_int32),
         ("src", c_void_p),
         ("probe", c_void_p),
         ("hitem", c_void_p),
         ("eitem", c_void_p),
         ("hsitem", c_void_p),
         ("esitem", c_void_p),
+        ("sitem", c_void_p),
         ("hcos", c_void_p),
         ("hsin", c_void_p),
         ("ecos", c_void_p),
         ("esin", c_void_p),
+        ("hs_ptr", c_void_p),
+        ("es_ptr", c_void_p),
+        ("hp_ptr", c_void_p),
+        ("ep_ptr", c_void_p),
+        ("hs_ent", c_void_p),
+        ("es_ent", c_void_p),
+        ("hp_ent", c_void_p),
+        ("ep_ent", c_void_p),
     ]
 
 
@@ -388,6 +405,8 @@ class NativeStepper:
         self._psi = []
         self._build_comps()
         self._mat_keep = []
+        self.mu_old, self.sheet_state = [], []
+        self.tblock = self._tblock()
 
     def __del__(self):
         pool = getattr(self, "pool", None)
@@ -397,6 +416,18 @@ class NativeStepper:
             except Exception:  # interpreter shutdown
                 pass
             self.pool = None
+
+    def _tblock(self) -> int:
+        """Steps per wavefront pass, ``$YAPNR_RF_TBLOCK``: unset or 0, the sweeps (one pass over
+        the box per half step); N, N steps per pass; "auto", as many as keep about three planes
+        per step within ``$YAPNR_RF_CACHE_MB`` (0 when not even one fits)."""
+        env = os.environ.get(ENV_TBLOCK, "").strip().lower()
+        if env != "auto":
+            return max(0, min(MAX_TBLOCK, int(env or 0)))
+        cache = float(os.environ.get(ENV_CACHE, "").strip() or DEFAULT_CACHE_MB) * 2**20
+        plane = 6 * self.ni * self.jp * self.dtype.itemsize
+        plane += sum(p.nbytes for p in self._psi) / self.np_
+        return max(0, min(MAX_TBLOCK, int(cache // (3 * plane))))
 
     # -- layout ----------------------------------------------------------------------------------
 
@@ -606,11 +637,33 @@ def _items(counts, magnetic_flags, want_magnetic: bool) -> np.ndarray:
     return np.array(rows, dtype=np.int32).reshape(-1, 4)
 
 
+def _row_lists(stepper, members, rows: int):
+    """CSR of edges by row of the box: ptr [rows + 1] (int64) and entries {index, p} (int32),
+    in the members' order (list order, then edge order) within each row."""
+    if not members:
+        return np.zeros(rows + 1, dtype=np.int64), np.zeros((1, 4), dtype=np.int32)
+    row, ent = [], []
+    for n, comp, idx in members:
+        off = stepper.offsets(comp, idx)
+        row.append(off // stepper.jp)
+        e = np.zeros((idx.size, 4), dtype=np.int32)
+        e[:, 0] = n
+        e[:, 1] = np.arange(idx.size)
+        ent.append(e)
+    row = np.concatenate(row)
+    ent = np.concatenate(ent)
+    order = np.argsort(row, kind="stable")
+    ptr = np.zeros(rows + 1, dtype=np.int64)
+    ptr[1:] = np.cumsum(np.bincount(row, minlength=rows))
+    return ptr, np.ascontiguousarray(ent[order])
+
+
 class _NativeRun:
     """The per-run C structures: sources and probes with their offsets and buffers."""
 
     def __init__(self, stepper: NativeStepper, srcs, probes, omega_count: int, decimation: int):
         self.st = stepper
+        tblock = stepper.tblock
         index = {c: n for n, c in enumerate(COMPONENTS)}
         self.srcs = srcs
         self.src = (YfSrc * max(1, len(srcs)))()
@@ -621,7 +674,7 @@ class _NativeRun:
             q.count = sp.index.size
             off = stepper.offsets(sp.comp, sp.index)
             scale = np.ascontiguousarray(sp.scale, dtype=np.float64)
-            val = np.zeros(max(1, sp.index.size))
+            val = np.zeros(max(1, tblock) * max(1, sp.index.size))
             q.off, q.scale, q.val = _ptr(off), _ptr(scale), _ptr(val)
             if sp.amp is not None:
                 amp = np.ascontiguousarray(sp.amp, dtype=np.float64)
@@ -648,7 +701,25 @@ class _NativeRun:
         self.eitem = _items([p.index.size for p, _ in probes], pmag, False)
         self.hsitem = _items([sp.index.size for sp in srcs], smag, True)
         self.esitem = _items([sp.index.size for sp in srcs], smag, False)
+        self.sitem = np.concatenate([self.hsitem, self.esitem])
         r = self.run = YfRun()
+        r.tblock = tblock
+        r.nsitem = len(self.sitem)
+        r.sitem = _ptr(self.sitem)
+        if tblock:
+            # Per-row lists of the source and probe edges (CSR over the box's rows).
+            rows = stepper.np_ * stepper.ni
+            groups = {
+                "hs": [(n, sp.comp, sp.index) for n, sp in enumerate(srcs) if smag[n]],
+                "es": [(n, sp.comp, sp.index) for n, sp in enumerate(srcs) if not smag[n]],
+                "hp": [(n, p.comp, p.index) for n, (p, _) in enumerate(probes) if pmag[n]],
+                "ep": [(n, p.comp, p.index) for n, (p, _) in enumerate(probes) if not pmag[n]],
+            }
+            for key, members in groups.items():
+                ptr, ent = _row_lists(stepper, members, rows)
+                self.keep += [ptr, ent]
+                setattr(r, key + "_ptr", _ptr(ptr) if members else 0)
+                setattr(r, key + "_ent", _ptr(ent) if members else 0)
         r.dec, r.m = int(decimation), int(omega_count)
         r.nsrc, r.nprobe = len(srcs), len(probes)
         r.nhitem, r.neitem = len(self.hitem), len(self.eitem)

@@ -138,33 +138,55 @@ class WrapperTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self.marker("t/long")["attempt"], "s1r1")
 
-    def test_resume_restores_the_checkpoint(self):
-        script = (
-            "import json, os, sys; os.makedirs('out/run', exist_ok=True)\n"
-            "p = 'out/run/state.json'\n"
-            "n = json.load(open(p))['n'] if os.path.exists(p) else 0\n"
-            "json.dump({'n': n + 1}, open(p, 'w'))\n"
-            "if n == 0: sys.exit(75)\n"
-            "json.dump({'resumed_from': n}, open('out/done.json', 'w'))\n"
-        )
+    RESUMING = (
+        "import json, os, sys; os.makedirs('out/run', exist_ok=True)\n"
+        "p = 'out/run/state.json'\n"
+        "n = json.load(open(p))['n'] if os.path.exists(p) else 0\n"
+        "json.dump({'n': n + 1}, open(p, 'w'))\n"
+        "if n == 0: sys.exit(75)\n"
+        "json.dump({'resumed_from': n}, open('out/done.json', 'w'))\n"
+    )
+
+    def resumable(self, task_id):
         checkpoint = {"path": "out/run", "sync_every_s": 30, "on_signal": True}
-        self.campaign(testing.python_task("t/rf", script, restart="resume", checkpoint=checkpoint))
-        # The first attempt checkpoints and fails transiently, so it records nothing...
+        return testing.python_task(task_id, self.RESUMING, restart="resume", checkpoint=checkpoint)
+
+    def resumed_from(self, task_id):
+        marker = self.marker(task_id)
+        key = task_id.replace("/", "~")
+        attempt = self.store / "campaigns" / testing.CID / "tasks" / key / marker["attempt"]
+        return json.loads((attempt / "summary" / "done.json").read_text())["resumed_from"]
+
+    def test_resume_restores_the_checkpoint(self):
+        self.campaign(self.resumable("t/rf"))
+        # The first attempt checkpoints and exits 75 (its time is up), so it records nothing...
         first = self.run_index(0)
         self.assertEqual(first.returncode, wrapper.EXIT_TEMPFAIL, first.stdout + first.stderr)
-        # ... but its state was not synced: a tempfail exits before the final sync. Simulate the
-        # periodic sync of a long run instead, then resume.
+        self.assertIsNone(self.marker("t/rf"))
+        # ... but its last checkpoint is synced before the wrapper exits 75.
         ckpt = self.store / "checkpoints" / testing.CID / "t~rf"
+        manifest = json.loads((ckpt / "_checkpoint.json").read_text())
+        self.assertEqual(manifest["files"], {"state.json": "g1/state.json"})
+        self.assertEqual(json.loads((ckpt / "g1" / "state.json").read_text()), {"n": 1})
+        second = self.run_index(0, env={"BATCH_TASK_RETRY_ATTEMPT": "1"})
+        self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+        self.assertEqual(self.resumed_from("t/rf"), 1)
+        # The final sync wrote a new generation and removed the superseded one.
+        manifest = json.loads((ckpt / "_checkpoint.json").read_text())
+        self.assertEqual(manifest["files"], {"state.json": "g2/state.json"})
+        self.assertEqual(json.loads((ckpt / "g2" / "state.json").read_text()), {"n": 2})
+        self.assertFalse((ckpt / "g1").exists())
+
+    def test_resume_reads_the_first_layout(self):
+        self.campaign(self.resumable("t/old"))
+        # A checkpoint of the first layout: the files flat beside a manifest that lists them.
+        ckpt = self.store / "checkpoints" / testing.CID / "t~old"
         ckpt.mkdir(parents=True)
         (ckpt / "state.json").write_text(json.dumps({"n": 1}))
         (ckpt / "_checkpoint.json").write_text(json.dumps({"kind": "dir", "files": ["state.json"]}))
-        second = self.run_index(0, env={"BATCH_TASK_RETRY_ATTEMPT": "1"})
-        self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
-        marker = self.marker("t/rf")
-        attempt = self.store / "campaigns" / testing.CID / "tasks" / "t~rf" / marker["attempt"]
-        self.assertEqual(
-            json.loads((attempt / "summary" / "done.json").read_text()), {"resumed_from": 1}
-        )
+        result = self.run_index(0, env={"BATCH_TASK_RETRY_ATTEMPT": "1"})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.resumed_from("t/old"), 1)
         # The final sync wrote a new generation and removed the superseded first-layout file.
         manifest = json.loads((ckpt / "_checkpoint.json").read_text())
         self.assertEqual(manifest["files"], {"state.json": "g1/state.json"})

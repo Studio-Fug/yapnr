@@ -29,25 +29,39 @@ file that replaces the case's spec (the case's criteria still judge it), the sta
     id = "d1-star"
     case = "divider"
     spec = "specs/d1.yaml"         # relative to the jobs file
+    criteria = "specs/d1-criteria.yaml"  # the spec's own band: criteria and dense frequencies
     seed = "star"
     max_iterations = 60
     args = ["--no-fine"]           # more options of `yapnr.rf.cases run`
+
+    [[jobs]]
+    id = "d1-star-fine"
+    case = "divider"
+    validate = "fetched/d1-star"   # re-validate a finished (fetched) run directory
+    criteria = "specs/d1-criteria.yaml"
+    args = ["--finer", "0"]        # more options of `yapnr.rf.cases validate`
 
     [[jobs]]
     id = "diag"
     diagnostic = true              # tools/exp/rf_diag.py: what the image offers yapnr.rf
 
 ``DIR`` receives the source bundle (``git archive`` of the committed ``REV`` of ``CHECKOUT``,
-never its working tree), the job bundle (the runner, the diagnostic and the spec files), the
-stage plan, ``campaign.toml`` and ``manifest.json``; then ``yapnr exp plan DIR/campaign.toml``.
+never its working tree), the job bundle (the runner, the diagnostic, the spec and criteria
+files), copies of the run directories to re-validate, the stage plan, ``campaign.toml`` and
+``manifest.json``; then ``yapnr exp plan DIR/campaign.toml``.
 
 Every RF task runs niced in the image with ``PYTHONPATH=src``, ``OMP_NUM_THREADS`` and
-``MKL_NUM_THREADS`` at its threads and ``OPENBLAS_NUM_THREADS=1`` (docs/rf-inverse-design.md),
-records ``out/<id>/validation.json`` (verdict: its ``ok``) and is resumable: the run
+``MKL_NUM_THREADS`` at its threads and ``OPENBLAS_NUM_THREADS=1`` (docs/rf-inverse-design.md)
+and records ``out/<id>/validation.json`` (verdict: its ``ok``). A run is resumable: the run
 directory's top-level files (``checkpoint.npz``, ``history.json``...) are synced to the store and
-restored after a Spot preemption, and the driver resumes from them. ``--plain-lines`` leaves out
-the line keys that need a recent ``mc-eval`` (``checkpoint``, ``prune``, ``verdict``): such tasks
-start again after a preemption.
+restored after a Spot preemption, and the driver resumes from them. A run longer than one task
+attempt goes on over several: ``attempt_s`` (default ``max_wall_s`` less the larger of 120 s and
+a 24th of it; 0: off) makes the runner exit 75 with its checkpoint synced before the wrapper's
+limit, which the backend retries (``limits.max_retries`` times per submission; ``submit`` again
+resumes after that), and ``end_s`` (default a third of ``attempt_s``, at most 3600 s) is the time
+the end (binarize, export, re-validate) needs, which it starts only with that much left.
+``--plain-lines`` leaves out the line keys that need a recent ``mc-eval`` (``checkpoint``,
+``prune``, ``verdict``) and the attempts: such tasks start again after a preemption.
 """
 
 from __future__ import annotations
@@ -62,7 +76,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 try:
     import tomllib
@@ -90,19 +104,30 @@ JOB_KEYS = {
     "id",
     "case",
     "spec",
+    "criteria",
     "seed",
     "threads",
     "max_iterations",
     "smoke",
     "args",
     "labels",
+    "attempt_s",
+    "end_s",
+    "validate",
     "diagnostic",
 } | set(RESOURCE_KEYS)
+# What only an optimization takes; a `validate` job re-validates the run directory's spec.
+RUN_ONLY_KEYS = ("spec", "seed", "max_iterations", "attempt_s", "end_s")
 DEFAULTS = {"threads": 4, "memory_gb": 8, "disk_gb": 10, "max_wall_s": 14400, "args": []}
 DIAGNOSTIC_RESOURCES = {"cpus": 1, "memory_gb": 2, "disk_gb": 4, "max_wall_s": 600}
 # The engine sets torch's threads to min(cap, solver.threads) (yapnr/rf/fdtd/engine.py).
 THREAD_CAP_RE = re.compile(r"set_num_threads\(\s*max\(\s*1\s*,\s*min\(\s*(\d+)\s*,")
 GIT_TIMEOUT_S = 120
+# A run's attempt ends this long (or a 24th of max_wall_s) before the wrapper's limit; the end
+# (binarize, export, re-validate) starts only with END_S (or a third of the attempt) left.
+ATTEMPT_MARGIN_S = 120
+END_S = 3600
+RUN_FILES_LEFT_OUT = ("validation.json",)
 # Stage-line keys an mc-eval before resumable lines refuses.
 EXTENDED_KEYS = ("checkpoint", "prune", "verdict")
 
@@ -135,6 +160,17 @@ def source_bundle(repo: Path, commit: str, paths: List[str], dest: Path) -> Dict
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(data)
     return {"path": dest.name, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+
+
+def copy_run_dir(src: Path, dest: Path) -> str:
+    """A finished run directory's top-level files (not its report) for a re-validation input."""
+    if not (src / "spec.json").is_file():
+        raise JobError("%s is not a run directory (no spec.json)" % src)
+    dest.mkdir(parents=True)
+    for path in sorted(src.iterdir()):
+        if path.is_file() and not path.name.startswith(".") and path.name not in RUN_FILES_LEFT_OUT:
+            shutil.copyfile(path, dest / path.name)
+    return "runs/" + dest.name
 
 
 def thread_cap(repo: Path, commit: str) -> Optional[int]:
@@ -174,8 +210,21 @@ def check_jobs(doc: Mapping[str, Any]) -> List[str]:
             continue
         if not isinstance(job.get("case"), str):
             errors.append("%s: case names a preset case (it judges the run)" % where)
-        if "spec" in job and not str(job["spec"]).endswith(SPEC_SUFFIXES):
-            errors.append("%s: spec is a .yaml, .yml or .json file" % where)
+        for key in ("spec", "criteria"):
+            if key in job and not str(job[key]).endswith(SPEC_SUFFIXES):
+                errors.append("%s: %s is a .yaml, .yml or .json file" % (where, key))
+        if "validate" in job:
+            if not isinstance(job["validate"], str):
+                errors.append("%s: validate is a run directory" % where)
+            errors += [
+                "%s: %s does not go with validate" % (where, key)
+                for key in RUN_ONLY_KEYS
+                if key in job
+            ]
+        for key in ("attempt_s", "end_s"):
+            value = job.get(key, doc.get("defaults", {}).get(key, 0))
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                errors.append("%s: %s is a whole number of seconds" % (where, key))
         args = job.get("args", [])
         if not isinstance(args, list) or not all(isinstance(a, str) for a in args):
             errors.append("%s: args is a list of strings" % where)
@@ -213,6 +262,9 @@ def stage_line(
         return line if extended else plain(line)
     merged = dict(DEFAULTS, **defaults)
     merged.update(job)
+    validating = bool(job.get("validate"))
+    if validating:  # the run directory's spec: nothing of the optimization from the defaults
+        merged = {k: v for k, v in merged.items() if k not in RUN_ONLY_KEYS or k in job}
     threads = int(merged["threads"])
     flags: List[str] = []
     if merged.get("smoke"):
@@ -221,19 +273,28 @@ def stage_line(
         flags += ["--max-iterations", str(int(merged["max_iterations"]))]
     flags += list(merged.get("args", []))
     runner_opts: List[str] = []
+    if validating:
+        runner_opts += ["--validate-from", "run"]
+        inputs.append({"dest": "run", "path": job["validate"]})
     if job.get("spec"):
         runner_opts += ["--spec", job["spec"]]
+    if job.get("criteria"):
+        runner_opts += ["--criteria", job["criteria"]]
     if merged.get("seed") is not None:
         runner_opts += ["--seed", str(merged["seed"])]
-    if "threads" in job or "threads" in defaults:
+    if not validating and ("threads" in job or "threads" in defaults):
         runner_opts += ["--threads", str(threads)]
+    resources = {k: merged[k] for k in RESOURCE_KEYS if k in merged}
+    resources.setdefault("cpus", threads)
+    if extended and not validating:
+        attempt_s, end_s = attempt_times(merged, int(resources["max_wall_s"]))
+        if attempt_s:
+            runner_opts += ["--attempt-s", str(attempt_s), "--end-s", str(end_s)]
     if runner_opts:
         command = ["${PYTHON}", "job/" + RUNNER, job["case"], "--out", out] + runner_opts
         inputs.append({"dest": "job", "path": "job"})
     else:
         command = ["${PYTHON}", "-m", "yapnr.rf.cases", "run", job["case"], "--out", out]
-    resources = {k: merged[k] for k in RESOURCE_KEYS if k in merged}
-    resources.setdefault("cpus", threads)
     record = out + "/validation.json"
     line = {
         "id": jid,
@@ -250,10 +311,28 @@ def stage_line(
         "summary": [jid + "/result.json", jid + "/spec.json"],
         "prune": [jid + "/cache"],
         "verdict": {"file": record, "json_path": "ok"},
-        "labels": dict(labels, case=job["case"]),
+        "labels": dict(labels, case=job["case"], job="validate" if validating else "run"),
     }
-    line["checkpoint"] = {"path": out, "sync_every_s": int(sync_every_s)}
+    if not validating:  # a re-validation is not resumable: it starts again after a preemption
+        line["checkpoint"] = {"path": out, "sync_every_s": int(sync_every_s)}
     return line if extended else plain(line)
+
+
+def attempt_times(merged: Mapping[str, Any], max_wall_s: int) -> Tuple[int, int]:
+    """(attempt_s, end_s) of a run: 0 when one attempt is all it gets."""
+    attempt_s = merged.get("attempt_s")
+    if attempt_s is None:
+        attempt_s = max_wall_s - max(ATTEMPT_MARGIN_S, max_wall_s // 24)
+    attempt_s = int(attempt_s)
+    if attempt_s <= 0:
+        return 0, 0
+    if attempt_s >= max_wall_s:
+        raise JobError("attempt_s %d is not below max_wall_s %d" % (attempt_s, max_wall_s))
+    end_s = merged.get("end_s")
+    end_s = int(min(END_S, attempt_s // 3) if end_s is None else end_s)
+    if end_s >= attempt_s:
+        raise JobError("end_s %d is not below attempt_s %d" % (end_s, attempt_s))
+    return attempt_s, end_s
 
 
 def plain(line: Dict[str, Any]) -> Dict[str, Any]:
@@ -313,13 +392,21 @@ def generate(
     defaults = dict(doc.get("defaults", {}))
     cap = thread_cap(repo, full)
     warnings, lines, resolved = [], [], []
+    runs_dir = out / "runs"
+    shutil.rmtree(runs_dir, ignore_errors=True)
     for job in doc["jobs"]:
         job = dict(job)
-        if job.get("spec"):
-            spec_src = (jobs_path.parent / job["spec"]).resolve()
-            spec_name = "specs/%s%s" % (job["id"], spec_src.suffix)
-            shutil.copyfile(spec_src, job_dir / spec_name)
-            job["spec"] = "job/" + spec_name
+        for key, folder in (("spec", "specs"), ("criteria", "criteria")):
+            if job.get(key):
+                src_file = (jobs_path.parent / job[key]).resolve()
+                name = "%s/%s%s" % (folder, job["id"], src_file.suffix)
+                (job_dir / folder).mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(src_file, job_dir / name)
+                job[key] = "job/" + name
+        if job.get("validate"):
+            job["validate"] = copy_run_dir(
+                (jobs_path.parent / job["validate"]).resolve(), runs_dir / job["id"]
+            )
         line = stage_line(
             job,
             defaults,
@@ -333,6 +420,11 @@ def generate(
             warnings.append(
                 "%s: %d threads, but this commit's engine runs torch on at most %d"
                 % (job["id"], threads, cap)
+            )
+        if job.get("spec") and not job.get("criteria"):
+            warnings.append(
+                "%s: a spec of its own, judged by the %s case's criteria and frequencies; give"
+                " criteria unless it is in that case's band" % (job["id"], job["case"])
             )
         if line["resources"]["cpus"] < threads:
             warnings.append(

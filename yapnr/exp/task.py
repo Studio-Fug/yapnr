@@ -27,7 +27,8 @@ system on Slurm, a local directory); ``BUNDLES`` holds the inputs store's ``<sha
    ``record.json`` and ``log.tail`` under ``tasks/<task>/<attempt>/``; ``_DONE`` is written last.
 7. Exit 0 whenever a result was recorded (pass, fail, timeout or an engine crash: retrying would
    repeat it); exit 75 for staging or upload failures, when stopped by a signal, and when the
-   command itself exits 75 without a result (all retried, nothing recorded); exit 2 for a
+   command itself exits 75 without a result (all retried, nothing recorded; a resumable task's
+   checkpoint is synced first, so a command can exit 75 to continue in a new attempt); exit 2 for a
    malformed campaign.
 """
 
@@ -765,6 +766,13 @@ def run_task(args, campaign, position, toolchain, stop):
         finished = _done(task, work)
         if code == EXIT_TEMPFAIL and not finished and not timed_out:
             # The command's own EX_TEMPFAIL without a result: transient, retried, not recorded.
+            # A resumable command also exits 75 to go on in a fresh attempt (its time is nearly
+            # up), so its last checkpoint goes to the store first.
+            if checkpoints.spec:
+                try:
+                    checkpoints.sync()
+                except OSError:
+                    pass  # the last whole generation in the store stays the checkpoint
             status(task_id, "tempfail", exit_code=code)
             return EXIT_TEMPFAIL
         if timed_out:

@@ -2,6 +2,16 @@ load("@rules_python//python:defs.bzl", "py_binary", "py_library")
 
 package(default_visibility = ["//visibility:public"])
 
+# The package marker alone, for libraries below tools/ (//tools/ci:ci_lib). Without it their
+# runfiles get an auto-created, empty tools/__init__.py, and Bazel 7's sandbox reuse has written
+# such an empty file through a reused symlink, truncating tools/__init__.py in the source tree
+# (as //yapnr:package explains for yapnr/).
+py_library(
+    name = "package",
+    srcs = ["__init__.py"],
+    imports = [".."],
+)
+
 # Repository checks. Stdlib-only and Python 3.9 compatible: the pre-commit hook
 # runs tools/privacy_scan.py directly with the system python3.
 py_library(

@@ -1,0 +1,244 @@
+{
+  "schema": "yapnr-fab-profile-v1",
+  "name": "oshpark-6l",
+  "status": "active",
+  "vendor": "oshpark",
+  "service": "6 Layer",
+  "title": "OSH Park 6 Layer (1.6 mm FR408-HR, 1 oz / 0.5 oz, ENIG, purple)",
+  "copper_layers": 6,
+  "stackups": {
+    "default": "oshpark-6l-fr408hr",
+    "allowed": ["oshpark-6l-fr408hr"]
+  },
+  "engine": {
+    "fab": {
+      "min_track_width_mm": 0.127,
+      "clearance_mm": 0.127,
+      "smd_pad_clearance_mm": 0.127,
+      "edge_clearance_mm": 0.381,
+      "hole_to_edge_mm": 0.5,
+      "hole_clearance_mm": 0.254,
+      "pth_hole_clearance_mm": 0.254,
+      "npth_hole_clearance_mm": 0.254,
+      "hole_to_hole_mm": 0.254,
+      "pth_hole_to_hole_mm": 0.5,
+      "component_pth_min_drill_mm": 0.3,
+      "via_diameter_mm": 0.55,
+      "via_drill_mm": 0.3,
+      "min_via_diameter_mm": 0.4064,
+      "min_through_drill_mm": 0.2032,
+      "via_annular_mm": 0.1016,
+      "min_npth_drill_mm": 0.2032,
+      "via_to_smd_pad_mm": 0.127,
+      "via_classes": {
+        "default": {
+          "diameter_mm": 0.55,
+          "drill_mm": 0.3
+        },
+        "escape": {
+          "diameter_mm": 0.4064,
+          "drill_mm": 0.2032
+        },
+        "power": {
+          "diameter_mm": 0.7,
+          "drill_mm": 0.4
+        }
+      }
+    },
+    "copper": {
+      "outer_copper_um": 35.0,
+      "outer_copper_oz": 1.0,
+      "min_via_plating_um": 25.4,
+      "via_diameter_mm": 0.55,
+      "via_drill_mm": 0.3,
+      "hole_clearance_mm": 0.254,
+      "hole_to_hole_mm": 0.254,
+      "pth_hole_to_hole_mm": 0.5,
+      "component_pth_min_drill_mm": 0.3,
+      "edge_clearance_mm": 0.381,
+      "hole_to_edge_mm": 0.5,
+      "via_to_smd_pad_mm": 0.127,
+      "board_thickness_mm": 1.6,
+      "inner_copper_um": 17.3,
+      "inner_copper_oz": 0.494286
+    },
+    "qualification": "OSH Park 6 layer 1.6 mm screening: 35 um outer / 17.3 um inner copper, 25.4 um via plating, no via fill. IPC-2221 screening only; no impedance control.",
+    "provenance": {
+      "fab": {
+        "min_track_width_mm": "O-6l",
+        "clearance_mm": "O-6l",
+        "smd_pad_clearance_mm": "derived: equal to the clearance (OSH Park publishes no separate pad rule)",
+        "edge_clearance_mm": "O-6l (15 mil board edge keepout)",
+        "hole_to_edge_mm": "derived: not published (the JLC/PCBWay value)",
+        "hole_clearance_mm": "derived: the O-4l 10 mil drill-to-internal-copper rule",
+        "pth_hole_clearance_mm": "derived: as hole_clearance_mm",
+        "npth_hole_clearance_mm": "derived: as hole_clearance_mm",
+        "hole_to_hole_mm": "derived: not published; equal to hole_clearance_mm",
+        "pth_hole_to_hole_mm": "derived: not published; JLC's stricter component PTH value",
+        "component_pth_min_drill_mm": "derived: a classification threshold, as in jlc-pofv",
+        "via_diameter_mm": "derived: the default via class",
+        "via_drill_mm": "derived: the default via class",
+        "min_via_diameter_mm": "derived: minimum drill + 2 x minimum annular ring",
+        "min_through_drill_mm": "O-drill",
+        "via_annular_mm": "O-drill",
+        "min_npth_drill_mm": "derived: O-drill publishes one minimum for all holes",
+        "via_to_smd_pad_mm": "derived: no filled vias at OSH Park (O-2l), so no via goes in a pad",
+        "via_classes": "derived: escape sits exactly at the minimum ring; there is no in_pad class"
+      },
+      "copper": {
+        "outer_copper_um": "derived: nominal 1 oz (35 um), stricter than the published 1.7 mil plated",
+        "outer_copper_oz": "derived: nominal 1 oz",
+        "min_via_plating_um": "O-drill (1 mil via plating)",
+        "via_diameter_mm": "as fab.via_diameter_mm",
+        "via_drill_mm": "as fab.via_drill_mm",
+        "hole_clearance_mm": "as fab.hole_clearance_mm",
+        "hole_to_hole_mm": "as fab.hole_to_hole_mm",
+        "pth_hole_to_hole_mm": "as fab.pth_hole_to_hole_mm",
+        "component_pth_min_drill_mm": "as fab.component_pth_min_drill_mm",
+        "edge_clearance_mm": "as fab.edge_clearance_mm",
+        "hole_to_edge_mm": "as fab.hole_to_edge_mm",
+        "via_to_smd_pad_mm": "as fab.via_to_smd_pad_mm",
+        "board_thickness_mm": "O-6l",
+        "inner_copper_um": "O-6l (0.68 mil inner copper)",
+        "inner_copper_oz": "derived: inner_copper_um / 35 um"
+      }
+    }
+  },
+  "vendor_limits": {
+    "board_min_mm": {
+      "value": [6.35, 6.35],
+      "src": "derived: as O-4l (O-6l states no size)"
+    },
+    "board_max_mm": {
+      "value": [406.4, 558.8],
+      "src": "derived: as O-4l (O-6l states no size)"
+    },
+    "copper_layers": {
+      "value": [6],
+      "src": "O-6l"
+    },
+    "qty": {
+      "multiple": 3,
+      "min": 3,
+      "src": "O-svc"
+    },
+    "max_drilled_hole_mm": {
+      "value": 6.604,
+      "src": "O-drill",
+      "note": "larger holes are milled"
+    },
+    "min_slot_mm": {
+      "value": 0.508,
+      "src": "derived: the O-2l/O-4l value"
+    },
+    "via_types": {
+      "value": ["through"],
+      "src": "O-2l (no buried, blind or filled vias)"
+    },
+    "castellation": {
+      "value": "not_guaranteed",
+      "src": "O-cast",
+      "note": "allowed, but not guaranteed"
+    },
+    "panel": {
+      "outline_gap_mm": 2.54,
+      "frame_min_mm": 5.08,
+      "src": "O-panel"
+    },
+    "impedance_control": {
+      "value": false,
+      "src": "O-6l"
+    },
+    "thickness_mm": {
+      "value": [1.6],
+      "src": "O-6l"
+    },
+    "finish": {
+      "value": ["ENIG"],
+      "fixed": true,
+      "src": "O-6l"
+    },
+    "mask_color": {
+      "value": ["purple"],
+      "fixed": true,
+      "src": "O-6l"
+    },
+    "via_fill": {
+      "value": "none",
+      "src": "O-2l",
+      "note": "via tenting permitted, a filled or flat via is not guaranteed"
+    },
+    "assembly": {
+      "value": false,
+      "src": "O-svc"
+    },
+    "order_number_marking": {
+      "value": false,
+      "src": "O-svc"
+    },
+    "alternates": []
+  },
+  "order_defaults": {
+    "service": "standard",
+    "services": {
+      "standard": {
+        "title": "6 Layer",
+        "lead_time": "ships in 12-21 calendar days"
+      }
+    },
+    "thickness_mm": 1.6,
+    "finish": "ENIG",
+    "mask_color": "purple",
+    "silk_color": "white",
+    "via_covering": "tented",
+    "copper": "1 oz outer, 0.5 oz inner",
+    "qty": 3
+  },
+  "pricing": {
+    "kind": "per_sq_in",
+    "currency": "USD",
+    "boards_per_set": 3,
+    "per_sq_in": {
+      "standard": 15.0
+    },
+    "src": "O-svc"
+  },
+  "sources": {
+    "O-2l": {
+      "url": "https://docs.oshpark.com/services/two-layer/",
+      "accessed": "2026-10-02"
+    },
+    "O-4l": {
+      "url": "https://docs.oshpark.com/services/four-layer/",
+      "accessed": "2026-10-02"
+    },
+    "O-6l": {
+      "url": "https://docs.oshpark.com/services/six-layer/",
+      "accessed": "2026-10-02"
+    },
+    "O-api": {
+      "url": "https://docs.oshpark.com/tips+tricks/api/",
+      "accessed": "2026-10-02"
+    },
+    "O-cast": {
+      "url": "https://docs.oshpark.com/tips+tricks/castellation/",
+      "accessed": "2026-10-02"
+    },
+    "O-drill": {
+      "url": "https://docs.oshpark.com/submitting-orders/drill-specs/",
+      "accessed": "2026-10-02"
+    },
+    "O-name": {
+      "url": "https://docs.oshpark.com/troubleshooting/naming-pattern/",
+      "accessed": "2026-10-02"
+    },
+    "O-panel": {
+      "url": "https://docs.oshpark.com/troubleshooting/panelized-designs/",
+      "accessed": "2026-10-02"
+    },
+    "O-svc": {
+      "url": "https://docs.oshpark.com/services/",
+      "accessed": "2026-10-02"
+    }
+  }
+}

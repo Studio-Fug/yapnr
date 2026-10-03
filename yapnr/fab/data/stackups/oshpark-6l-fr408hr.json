@@ -1,0 +1,149 @@
+{
+  "schema": "yapnr-fab-stackup-v1",
+  "id": "oshpark-6l-fr408hr",
+  "vendor": "oshpark",
+  "title": "OSH Park 6 layer, FR408-HR",
+  "vendor_name": "6 Layer",
+  "checkout": "Standard 6 layer service. Nothing to choose at checkout.",
+  "thickness_mm": {
+    "value": 1.6,
+    "src": "O-6l"
+  },
+  "layers": [
+    {
+      "kind": "mask",
+      "side": "F",
+      "thickness_mm": 0.01524,
+      "er": null,
+      "src": "O-6l",
+      "er_prior": 3.8,
+      "er_prior_src": "J-imp (calculator default)"
+    },
+    {
+      "kind": "copper",
+      "name": "F.Cu",
+      "thickness_mm": 0.04318,
+      "weight_oz": 1.0,
+      "plated": true,
+      "src": "O-6l",
+      "finish": "ENIG"
+    },
+    {
+      "kind": "dielectric",
+      "type": "prepreg",
+      "material": "FR408HR 106 75%",
+      "thickness_mm": 0.11074,
+      "er": 3.23,
+      "er_freq_hz": 1000000000.0,
+      "df": 0.011,
+      "src": "O-6l"
+    },
+    {
+      "kind": "copper",
+      "name": "In1.Cu",
+      "thickness_mm": 0.01727,
+      "weight_oz": 0.5,
+      "plated": false,
+      "src": "O-6l"
+    },
+    {
+      "kind": "dielectric",
+      "type": "core",
+      "material": "FR408HR 2113",
+      "thickness_mm": 0.1016,
+      "er": 3.66,
+      "er_freq_hz": 1000000000.0,
+      "df": 0.009,
+      "src": "O-6l"
+    },
+    {
+      "kind": "copper",
+      "name": "In2.Cu",
+      "thickness_mm": 0.01727,
+      "weight_oz": 0.5,
+      "plated": false,
+      "src": "O-6l"
+    },
+    {
+      "kind": "dielectric",
+      "type": "core",
+      "material": "FR408HR",
+      "thickness_mm": 0.92558,
+      "er": null,
+      "er_freq_hz": null,
+      "df": null,
+      "src": "O-6l",
+      "er_prior": 3.66,
+      "er_prior_src": "derived: the O-6l 2113 value"
+    },
+    {
+      "kind": "copper",
+      "name": "In3.Cu",
+      "thickness_mm": 0.01727,
+      "weight_oz": 0.5,
+      "plated": false,
+      "src": "O-6l"
+    },
+    {
+      "kind": "dielectric",
+      "type": "core",
+      "material": "FR408HR 2113",
+      "thickness_mm": 0.1016,
+      "er": 3.66,
+      "er_freq_hz": 1000000000.0,
+      "df": 0.009,
+      "src": "O-6l"
+    },
+    {
+      "kind": "copper",
+      "name": "In4.Cu",
+      "thickness_mm": 0.01727,
+      "weight_oz": 0.5,
+      "plated": false,
+      "src": "O-6l"
+    },
+    {
+      "kind": "dielectric",
+      "type": "prepreg",
+      "material": "FR408HR 106 75%",
+      "thickness_mm": 0.11074,
+      "er": 3.23,
+      "er_freq_hz": 1000000000.0,
+      "df": 0.011,
+      "src": "O-6l"
+    },
+    {
+      "kind": "copper",
+      "name": "B.Cu",
+      "thickness_mm": 0.04318,
+      "weight_oz": 1.0,
+      "plated": true,
+      "src": "O-6l",
+      "finish": "ENIG"
+    },
+    {
+      "kind": "mask",
+      "side": "B",
+      "thickness_mm": 0.01524,
+      "er": null,
+      "src": "O-6l",
+      "er_prior": 3.8,
+      "er_prior_src": "J-imp (calculator default)"
+    }
+  ],
+  "tolerances": {
+    "impedance_pct": null,
+    "thickness_pct": null,
+    "width_pct": null
+  },
+  "sources": {
+    "J-imp": {
+      "url": "https://jlcpcb.com/impedance",
+      "accessed": "2026-10-02"
+    },
+    "O-6l": {
+      "url": "https://docs.oshpark.com/services/six-layer/",
+      "accessed": "2026-10-02"
+    }
+  }
+}

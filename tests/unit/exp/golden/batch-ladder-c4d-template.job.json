@@ -1,0 +1,117 @@
+{
+  "allocationPolicy": {
+    "instances": [
+      {
+        "instanceTemplate": "yapnr-c4d-highcpu-16-spot-us-west4"
+      }
+    ],
+    "labels": {
+      "campaign": "20261002-ladder-f23de8",
+      "class": "c1m3",
+      "deadline": "1790000000",
+      "kind": "ladder-cell",
+      "submission": "1",
+      "visibility": "public",
+      "yapnr": "1"
+    },
+    "location": {
+      "allowedLocations": [
+        "regions/us-west4"
+      ]
+    },
+    "serviceAccount": {
+      "email": "yapnr-runner@{project}.iam.gserviceaccount.com"
+    }
+  },
+  "labels": {
+    "campaign": "20261002-ladder-f23de8",
+    "deadline": "1790000000",
+    "submission": "1",
+    "yapnr": "1"
+  },
+  "logsPolicy": {
+    "destination": "CLOUD_LOGGING"
+  },
+  "taskGroups": [
+    {
+      "parallelism": "4",
+      "taskCount": "4",
+      "taskCountPerNode": "8",
+      "taskSpec": {
+        "computeResource": {
+          "cpuMilli": "2000",
+          "memoryMib": "3072"
+        },
+        "environment": {
+          "variables": {
+            "YAPNR_BACKEND": "gcp-batch"
+          }
+        },
+        "lifecyclePolicies": [
+          {
+            "action": "RETRY_TASK",
+            "actionCondition": {
+              "exitCodes": [
+                50001,
+                50002,
+                50003,
+                50006,
+                75
+              ]
+            }
+          }
+        ],
+        "maxRetryCount": 3,
+        "maxRunDuration": "2400s",
+        "runnables": [
+          {
+            "container": {
+              "commands": [
+                "/opt/venv/bin/python",
+                "/mnt/disks/runs/campaigns/20261002-ladder-f23de8/task.py",
+                "--store",
+                "/mnt/disks/runs",
+                "--inputs",
+                "/mnt/disks/inputs",
+                "--campaign",
+                "20261002-ladder-f23de8",
+                "--submission",
+                "1",
+                "--toolchain",
+                "image",
+                "--work-root",
+                "/tmp/yapnr-work"
+              ],
+              "entrypoint": "/usr/local/bin/yapnr-kicad-env",
+              "imageUri": "us-west4-docker.pkg.dev/example-project/ghcr/studio-fug/yapnr@sha256:abababababababababababababababababababababababababababababababab",
+              "options": "--init --shm-size 1g --user 0:0"
+            },
+            "displayName": "yapnr-task",
+            "timeout": "2100s"
+          }
+        ],
+        "volumes": [
+          {
+            "gcs": {
+              "remotePath": "example-yapnr-runs"
+            },
+            "mountOptions": [
+              "--implicit-dirs"
+            ],
+            "mountPath": "/mnt/disks/runs"
+          },
+          {
+            "gcs": {
+              "remotePath": "example-yapnr-inputs/bundles"
+            },
+            "mountOptions": [
+              "--implicit-dirs",
+              "-o ro"
+            ],
+            "mountPath": "/mnt/disks/inputs"
+          }
+        ]
+      }
+    }
+  ]
+}

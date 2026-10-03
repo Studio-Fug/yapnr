@@ -3,3 +3,5 @@
 hardware/
 docs/hardware/
 third_party/
+# Generated fab notes (python -m yapnr.rf.coupons generate).
+examples/rf-coupons/JLC*/

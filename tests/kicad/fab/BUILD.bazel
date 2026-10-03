@@ -1,0 +1,23 @@
+load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+
+# The KiCad lane (tag `kicad`, excluded from the default `bazel test //...`): the fab pipeline
+# with the real headless kicad-cli on synthetic boards. Skips without a kicad-cli:
+#
+#   bazel test --test_tag_filters=kicad //tests/kicad/fab:all --test_env=YAPNR_KICAD_CLI=<path>
+yapnr_py_tests(
+    size = "large",
+    env_inherit = [
+        "HOME",
+        "YAPNR_KICAD_CLI",
+    ],
+    tags = [
+        "external",
+        "kicad",
+        "local",
+        "no-remote",
+    ],
+    deps = [
+        "//yapnr/fab",
+        "//yapnr/fab:testing",
+    ],
+)

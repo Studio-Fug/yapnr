@@ -12,8 +12,8 @@ instance dir (``<synth out>/<tid>/native/<tag>``) or a halving stage dir
 * ``evaluated-placed.json`` (else ``placed.json``): ref -> address, so
   connections are keyed by a caller key (block-local path for templates, ref at
   top level) and pool across layouts and instances;
-* ``electrical/native-loop/progress.json`` and ``rules.json``: the native budget
-  and fab profile, for the router key;
+* ``electrical/native-loop/progress.json`` and ``rules.json``: the native budget,
+  the gloss settings key (PNR_GLOSS=1) and the fab profile, for the router key;
 * ``electrical/coalesce.json``: the source tree that ran the evaluation, whose
   evaluation modules give the code part of the router key (:func:`observed_code`).
 
@@ -136,6 +136,7 @@ def read_round(round_dir, key=None):
         router="shove" if "shove" in feedback else "plain",
         budget_seconds=(progress.get("budgets") or {}).get("seconds"),
         fab_profile=rules.get("fab_profile", "legacy") if rules else None,
+        gloss=progress.get("gloss_key"),
         conns=[conns[c] for c in sorted(conns)],
         same_part=dict(count=len(same), ids=sorted(same)),
         endpoints={k_: endpoints[k_] for k_ in sorted(endpoints)},
@@ -165,6 +166,7 @@ def merge(fbs):
         for key_, _ in (c["a"], c["b"]):
             endpoints[key_] = endpoints.get(key_, 0) + 1
     routers = sorted({f.get("router") for f in fbs})
+    glosses = {f.get("gloss") for f in fbs}
     opens = [f.get("opens") for f in fbs]
     return dict(
         dirs=[f.get("dir") for f in fbs],
@@ -172,6 +174,7 @@ def merge(fbs):
         router=routers[0] if len(routers) == 1 else "mixed",
         budget_seconds=fbs[0].get("budget_seconds"),
         fab_profile=fbs[0].get("fab_profile"),
+        gloss=glosses.pop() if len(glosses) == 1 else "mixed",
         conns=[conns[c] for c in sorted(conns)],
         same_part=dict(
             count=sum(f["same_part"]["count"] for f in fbs),
@@ -202,7 +205,10 @@ def file_sha(path, n=8):
 # ``-m pnr.x`` subprocess targets and package ``__main__`` included), stopping at
 # driver-only modules that launch evaluations but never run inside one. The shove
 # package is part of the key only for the shove router (every import of it
-# outside the package is gated on PNR_SHOVE=1).
+# outside the package is gated on PNR_SHOVE=1). The gloss pass (pnr.gloss,
+# pnr.gloss_geometry) is part of it only with PNR_GLOSS=1 (every import of it is
+# gated on the flag), and then so is the one shove module it runs under any
+# router, pnr.shove.gates (its unjustified sub-width check).
 #
 # Key schemes (a record's ``code_key_scheme``; a record without one is legacy):
 #
@@ -221,6 +227,8 @@ def file_sha(path, n=8):
 PNR_ROOT = Path(__file__).resolve().parents[2]  # .../hardware/pnr of this tree
 EVAL_ENTRIES = ("pnr.full_iteration", "pnr.hier.native_block", "pnr.hier.synth", "pnr.hier.blocks")
 DRIVER_MODULES = ("pnr.feedback", "pnr.mc", "pnr.hier.synth_native", "pnr.hier.top")
+GLOSS_MODULES = ("pnr.gloss", "pnr.gloss_geometry")  # evaluation code with PNR_GLOSS=1 only
+GLOSS_SHOVE_MODULES = ("pnr.shove", "pnr.shove.gates")  # what pnr.gloss runs of pnr.shove
 _MODULE_RE = None
 
 LEGACY_CODE_KEY_SCHEME = 1
@@ -239,8 +247,16 @@ def _router():
     return "shove" if os.environ.get("PNR_SHOVE") == "1" else "plain"
 
 
-def _excluded(module, router):
+def _gloss():
+    return os.environ.get("PNR_GLOSS") == "1"
+
+
+def _excluded(module, router, gloss=False):
+    if gloss and module in GLOSS_SHOVE_MODULES:
+        return False
     prefixes = DRIVER_MODULES + (("pnr.shove",) if router == "plain" else ())
+    if module in GLOSS_MODULES and not gloss:
+        return True
     return any(module == p or module.startswith(p + ".") for p in prefixes)
 
 
@@ -254,8 +270,9 @@ def _parse(path):
         return None
 
 
-def eval_code_modules(pnr_root, router):
-    """{module: source file} of the modules an evaluation under ``router`` can run."""
+def eval_code_modules(pnr_root, router, gloss=None):
+    """{module: source file} of the modules an evaluation under ``router`` can run (``gloss``:
+    with PNR_GLOSS=1; None: this process's flag)."""
     import ast
     import re
 
@@ -269,10 +286,11 @@ def eval_code_modules(pnr_root, router):
             return p / "__init__.py"
         return p.with_suffix(".py") if p.with_suffix(".py").exists() else None
 
+    gloss = _gloss() if gloss is None else bool(gloss)
     todo, seen = list(EVAL_ENTRIES), {}
     while todo:
         m = todo.pop()
-        if m in seen or _excluded(m, router):
+        if m in seen or _excluded(m, router, gloss):
             continue
         f = path_of(m)
         if f is None:
@@ -430,10 +448,10 @@ def code_files(modules, pnr_root, scheme=CODE_KEY_SCHEME):
     return {k: out[k] for k in sorted(out)}
 
 
-def eval_code_files(pnr_root, router, scheme=CODE_KEY_SCHEME):
+def eval_code_files(pnr_root, router, scheme=CODE_KEY_SCHEME, gloss=None):
     """{module (scheme 2) or relative path (scheme 1): digest} of the modules an
-    evaluation under ``router`` can run."""
-    return code_files(eval_code_modules(pnr_root, router), pnr_root, scheme)
+    evaluation under ``router`` (and ``gloss``) can run."""
+    return code_files(eval_code_modules(pnr_root, router, gloss), pnr_root, scheme)
 
 
 def code_sha(files, scheme=CODE_KEY_SCHEME):
@@ -443,30 +461,34 @@ def code_sha(files, scheme=CODE_KEY_SCHEME):
     return hashlib.sha1(json.dumps([scheme, sorted(files.items())]).encode()).hexdigest()[:10]
 
 
-def code_key(pnr_root=None, router=None, scheme=CODE_KEY_SCHEME):
-    """Code key of the evaluation code of a tree (default: this tree, this process's router)."""
-    return code_sha(eval_code_files(pnr_root or PNR_ROOT, router or _router(), scheme), scheme)
+def code_key(pnr_root=None, router=None, scheme=CODE_KEY_SCHEME, gloss=None):
+    """Code key of the evaluation code of a tree (default: this tree, this process's router
+    and PNR_GLOSS)."""
+    return code_sha(
+        eval_code_files(pnr_root or PNR_ROOT, router or _router(), scheme, gloss), scheme
+    )
 
 
-def code_stamp(pnr_root=None, router=None):
+def code_stamp(pnr_root=None, router=None, gloss=None):
     """The fields a record stamps for the code that evaluates it: ``code`` and its
     ``code_key_scheme``. Stamp both, always together."""
-    return dict(code=code_key(pnr_root, router), code_key_scheme=CODE_KEY_SCHEME)
+    return dict(code=code_key(pnr_root, router, gloss=gloss), code_key_scheme=CODE_KEY_SCHEME)
 
 
 class TreeCode:
     """The evaluation code of one tree under one router, keyed in any scheme on
     first use (:func:`check_code` compares an import in the import's scheme)."""
 
-    def __init__(self, pnr_root=None, router=None):
+    def __init__(self, pnr_root=None, router=None, gloss=None):
         self.root = Path(pnr_root or PNR_ROOT)
         self.router = router or _router()
+        self.gloss = _gloss() if gloss is None else bool(gloss)
         self._modules = None
         self._files = {}
 
     def modules(self):
         if self._modules is None:
-            self._modules = eval_code_modules(self.root, self.router)
+            self._modules = eval_code_modules(self.root, self.router, self.gloss)
         return self._modules
 
     def files(self, scheme=CODE_KEY_SCHEME):
@@ -481,9 +503,10 @@ class TreeCode:
 def _tree_code(root, router, cache):
     if cache is None:
         return TreeCode(root, router)
-    if (str(root), router) not in cache:
-        cache[str(root), router] = TreeCode(root, router)
-    return cache[str(root), router]
+    key = (str(root), router) + (("gloss",) if _gloss() else ())
+    if key not in cache:
+        cache[key] = TreeCode(root, router)
+    return cache[key]
 
 
 def evaluation_tree(round_dir):
@@ -661,6 +684,20 @@ def check_code(observed, current_code, current_files=None, policy="error"):
     return [], [why + ": re-evaluated under this code (rebase)"], True
 
 
+def gloss_key():
+    """The router key's ``gloss`` field: None with PNR_GLOSS unset, else a digest of the gloss
+    pass settings (:func:`pnr.gloss.settings_key`: every sub-flag's effective value and the
+    groups file's content), so the two arms of a gloss A/B never share a key."""
+    if not _gloss():
+        return None
+    from pnr.gloss import settings, settings_key
+
+    try:
+        return settings_key(settings())
+    except ValueError:
+        return "invalid"
+
+
 def current_key(stage, budget_seconds, inputs=None):
     """Router key of evaluations this process will run (environment + CLI + evaluation code)."""
     router = _router()
@@ -672,6 +709,7 @@ def current_key(stage, budget_seconds, inputs=None):
         fanout_reserve=os.environ.get("PNR_FANOUT_RESERVE") == "1",
         fab_profile=os.environ.get("PNR_FAB_PROFILE") or "jlc-pofv",
         inputs=file_sha(Path(inputs) / "source.kicad_pcb") if inputs else None,
+        gloss=gloss_key(),
         code=code_key(PNR_ROOT, router),
         code_key_scheme=CODE_KEY_SCHEME,
     )
@@ -682,20 +720,14 @@ def key_string(key):
 
     The code key's scheme is the last field, so a key string names the scheme of
     its code key; strings written before schemes existed have one field less (and
-    a legacy code key)."""
+    a legacy code key). With PNR_GLOSS=1 a ``gloss=<settings key>`` field precedes
+    the code key; without it the string is what it was before the flag existed."""
+    fields = ["router", "stage", "budget_seconds", "power_first", "fanout_reserve"]
+    fields += ["fab_profile", "inputs", "gloss", "code", "code_key_scheme"]
     return "|".join(
-        str(key.get(f))
-        for f in (
-            "router",
-            "stage",
-            "budget_seconds",
-            "power_first",
-            "fanout_reserve",
-            "fab_profile",
-            "inputs",
-            "code",
-            "code_key_scheme",
-        )
+        ("gloss=%s" % key[f]) if f == "gloss" else str(key.get(f))
+        for f in fields
+        if f != "gloss" or key.get(f) is not None
     )
 
 
@@ -709,6 +741,7 @@ def observed_key(fb, *, stage=None, power_first=None):
         ),
         power_first=power_first,
         fab_profile=fb.get("fab_profile"),
+        gloss=fb.get("gloss"),
     )
 
 
@@ -717,8 +750,12 @@ def check_import(observed, current, budget_policy="error"):
 
     Router, power-first and fab profile must match (failure statistics and flags
     depend on the router). A different native budget is an error unless
-    ``budget_policy`` is 'warn'. Fields the import cannot show are warnings."""
+    ``budget_policy`` is 'warn'. Fields the import cannot show are warnings. The gloss
+    settings key (None: PNR_GLOSS unset, also for records older than the flag) must match:
+    a gloss A/B arm never imports the other arm's evaluations."""
     errors, warnings = [], []
+    if observed.get("gloss") != current.get("gloss"):
+        errors.append("gloss %r != this run %r" % (observed.get("gloss"), current.get("gloss")))
     for field in ("router", "power_first", "fab_profile", "stage"):
         o, c = observed.get(field), current.get(field)
         if o is None or c is None:

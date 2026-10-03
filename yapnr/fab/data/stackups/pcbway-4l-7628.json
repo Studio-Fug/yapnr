@@ -1,0 +1,117 @@
+{
+  "schema": "yapnr-fab-stackup-v1",
+  "id": "pcbway-4l-7628",
+  "vendor": "pcbway",
+  "title": "PCBWay 4 layer 1.6 mm standard (7628)",
+  "vendor_name": "4 layers, 1.6 mm, standard laminated structure",
+  "checkout": "Standard FR-4, 4 layers, 1.6 mm, 1 oz outer and 1 oz inner; no stackup to specify.",
+  "thickness_mm": {
+    "value": 1.6,
+    "src": "P-lam"
+  },
+  "layers": [
+    {
+      "kind": "mask",
+      "side": "F",
+      "thickness_mm": null,
+      "er": null,
+      "src": "P-lam",
+      "er_prior": 3.8,
+      "er_prior_src": "J-imp (calculator default)"
+    },
+    {
+      "kind": "copper",
+      "name": "F.Cu",
+      "thickness_mm": 0.035,
+      "weight_oz": 1.0,
+      "plated": true,
+      "src": "P-lam"
+    },
+    {
+      "kind": "dielectric",
+      "type": "prepreg",
+      "material": "7628 RC46%",
+      "thickness_mm": 0.1855,
+      "er": 4.74,
+      "er_freq_hz": null,
+      "df": null,
+      "src": "P-lam",
+      "df_prior": 0.017,
+      "df_prior_src": "derived: literature FR-4 near 1 GHz (0.015 to 0.02)",
+      "pressed_from_mm": 0.196
+    },
+    {
+      "kind": "copper",
+      "name": "In1.Cu",
+      "thickness_mm": 0.035,
+      "weight_oz": 1.0,
+      "plated": false,
+      "src": "P-lam"
+    },
+    {
+      "kind": "dielectric",
+      "type": "core",
+      "material": "FR-4 core",
+      "thickness_mm": 1.03,
+      "er": 4.6,
+      "er_freq_hz": null,
+      "df": null,
+      "src": "P-lam",
+      "df_prior": 0.017,
+      "df_prior_src": "derived: literature FR-4 near 1 GHz (0.015 to 0.02)"
+    },
+    {
+      "kind": "copper",
+      "name": "In2.Cu",
+      "thickness_mm": 0.035,
+      "weight_oz": 1.0,
+      "plated": false,
+      "src": "P-lam"
+    },
+    {
+      "kind": "dielectric",
+      "type": "prepreg",
+      "material": "7628 RC46%",
+      "thickness_mm": 0.1855,
+      "er": 4.74,
+      "er_freq_hz": null,
+      "df": null,
+      "src": "P-lam",
+      "df_prior": 0.017,
+      "df_prior_src": "derived: literature FR-4 near 1 GHz (0.015 to 0.02)",
+      "pressed_from_mm": 0.196
+    },
+    {
+      "kind": "copper",
+      "name": "B.Cu",
+      "thickness_mm": 0.035,
+      "weight_oz": 1.0,
+      "plated": true,
+      "src": "P-lam"
+    },
+    {
+      "kind": "mask",
+      "side": "B",
+      "thickness_mm": null,
+      "er": null,
+      "src": "P-lam",
+      "er_prior": 3.8,
+      "er_prior_src": "J-imp (calculator default)"
+    }
+  ],
+  "tolerances": {
+    "impedance_pct": 10,
+    "thickness_pct": null,
+    "width_pct": null
+  },
+  "sources": {
+    "J-imp": {
+      "url": "https://jlcpcb.com/impedance",
+      "accessed": "2026-10-02"
+    },
+    "P-lam": {
+      "url": "https://www.pcbway.com/multi-layer-laminated-structure.html",
+      "accessed": "2026-09-26"
+    }
+  }
+}

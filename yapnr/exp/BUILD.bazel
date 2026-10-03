@@ -1,0 +1,60 @@
+"""`yapnr exp`: experiment campaigns on a local pool, Google Cloud Batch or Slurm.
+
+Standard library only (no Google client libraries): the cloud boundary is the gcloud CLI. The
+Batch v1 discovery document (third_party/googleapis) is data, so plans made from a checkout or
+`bazel run //:yapnr -- exp ...` validate their job JSON offline; the wheel does not ship it.
+"""
+
+load("@rules_python//python:defs.bzl", "py_library")
+
+package(default_visibility = ["//visibility:public"])
+
+py_library(
+    name = "exp",
+    srcs = [
+        "__init__.py",
+        "backends/__init__.py",
+        "backends/base.py",
+        "backends/gcp_batch.py",
+        "backends/local.py",
+        "backends/local_pool.py",
+        "backends/slurm.py",
+        "batch_schema.py",
+        "bundle.py",
+        "calibration.py",
+        "cli.py",
+        "cloud.py",
+        "config.py",
+        "cost.py",
+        "errors.py",
+        "fetch.py",
+        "image.py",
+        "kinds/__init__.py",
+        "kinds/base.py",
+        "kinds/bench.py",
+        "kinds/ladder.py",
+        "kinds/mc.py",
+        "kinds/rf.py",
+        "kinds/smoke.py",
+        "plan.py",
+        "prices.py",
+        "spec.py",
+        "store.py",
+        "task.py",
+    ],
+    data = [
+        "data/gcp-spot-prices.json",
+        "//third_party/googleapis:batch-v1.json",
+    ],
+    imports = ["../.."],
+    deps = ["//yapnr:package"],
+)
+
+# Offline helpers for the tests (tests/unit/exp): configs, fixture repositories, goldens.
+py_library(
+    name = "testing",
+    testonly = True,
+    srcs = ["testing.py"],
+    imports = ["../.."],
+    deps = [":exp"],
+)

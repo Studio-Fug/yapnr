@@ -1,0 +1,7 @@
+load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+
+# The budget guard and reaper (main.py, deployed by infra/gcp/modules/guard) against a fake HTTP
+# layer: standard library only, no credentials.
+yapnr_py_tests(
+    data = ["main.py"],
+)

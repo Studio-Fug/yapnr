@@ -1,0 +1,13 @@
+load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+
+# Hermetic: dry runs, prompts and the log with a fake kicad-cli; sockets patched to fail, and the
+# --verify-url opener is a fake. Nothing here can open a browser or reach a vendor.
+yapnr_py_tests(
+    size = "medium",
+    deps = [
+        "//yapnr",
+        "//yapnr/fab",
+        "//yapnr/fab:testing",
+        "//yapnr/order",
+    ],
+)

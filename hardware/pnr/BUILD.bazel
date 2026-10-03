@@ -34,6 +34,8 @@ py_test(
 filegroup(
     name = "pnr_kicad_srcs",
     srcs = [
+        # pnr.fab_profile resolves vendor data profiles through yapnr.fab.capability.
+        "//yapnr/fab:capability_files",
         "pnr/__init__.py",
         "pnr/graph.py",
         "pnr/ingest.py",
@@ -102,6 +104,9 @@ filegroup(
         "pnr/reference_guard.py",
         "pnr/pad_identity.py",
         "pnr/via_coalesce.py",
+        # PNR_GLOSS=1 gloss/dekink/corridor pass (imported only with the flag set).
+        "pnr/gloss.py",
+        "pnr/gloss_geometry.py",
         "pnr/track_graph.py",
         "pnr/quality.py",
         # pnr.quality measures routed length as KiCad's DRC does (pnr.length_model).
@@ -135,6 +140,8 @@ py_library(
     data = glob(["si_models/*.json"]),
     imports = ["."],
     deps = [
+        # pnr.fab_profile: vendor data profiles (oshpark-4l, jlc-4l, ...) beside the built-in ones.
+        "//yapnr/fab:capability",
         requirement("pyyaml"),  # constraints.py parses the sidecar YAML
     ],
 )
@@ -737,6 +744,19 @@ py_test(
     deps = [":pnr_detail"],
 )
 
+# PNR_GLOSS geometry core (pnr.gloss_geometry): pure Python, no KiCad; the router's keyhole
+# search and bend cost come from :pnr_detail.
+py_test(
+    name = "gloss_geometry_test",
+    size = "medium",
+    srcs = ["tests/test_gloss_geometry.py"],
+    main = "tests/test_gloss_geometry.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+    ],
+)
+
 py_test(
     name = "regional_test",
     size = "small",
@@ -823,6 +843,66 @@ py_test(
     data = glob(["pnr/**/*.py", "regression/*.py"]) + ["//hardware/tools:keyhole_region.py"],
     main = "tests/test_board_delete.py",
     deps = [":pnr"],
+)
+
+# PNR_GLOSS wiring in pnr.native_loop with stubbed workers and DRC: no import, label,
+# event or progress key with the flag unset; both passes, skips and the outer gate with it.
+py_test(
+    name = "gloss_loop_test",
+    size = "small",
+    srcs = ["tests/test_gloss_loop.py"],
+    data = glob(["pnr/**/*.py"]),  # the code-key closure scan reads pnr.feedback's sources
+    main = "tests/test_gloss_loop.py",
+    deps = [
+        ":pnr",
+        ":pnr_place",
+    ],
+)
+
+# PNR_GLOSS KiCad adapter and controller (pnr.gloss). The native tests build in-memory
+# boards (gloss_fixture) and run every worker in process; the end-to-end tests drive the
+# KiCad-python workers and kicad-cli one at a time (PNR_KICAD_PYTHON, PNR_KICAD_CLI), and
+# run the regression ladder's --gloss stage on the public case 04-inverter-leds-8. Both
+# need the headless KiCad: the KiCad lane.
+py_test(
+    name = "gloss_native_test",
+    size = "medium",
+    srcs = [
+        "tests/gloss_fixture.py",
+        "tests/test_gloss_native.py",
+    ],
+    imports = ["tests"],
+    main = "tests/test_gloss_native.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+    ],
+)
+
+py_test(
+    name = "gloss_e2e_test",
+    size = "large",
+    srcs = [
+        "tests/gloss_fixture.py",
+        "tests/test_gloss_e2e.py",
+    ],
+    data = glob(["regression/*.py"]),  # the ladder case runs regression/run.py
+    imports = ["tests"],
+    main = "tests/test_gloss_e2e.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+    ],
 )
 
 # Code keys of the routing feedback (pnr.feedback.signals): formatting-only
@@ -1287,6 +1367,7 @@ py_test(
         "regression/test_contract.py",
         "regression/trace_native.py",
     ],
+    data = ["//docs:examples/gloss-groups-chaser.json"],
     imports = [
         ".",
         "regression",

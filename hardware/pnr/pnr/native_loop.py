@@ -93,6 +93,8 @@ PHASE_LABELS = (
     "07-native-refinement",
     "08b-power-bank-consolidation",
 )
+# PNR_GLOSS=1 only: the gloss/dekink/corridor passes (pnr.gloss); valid stop labels then.
+GLOSS_LABELS = ("06g-gloss", "07g-gloss")
 
 
 class StopAfterPhase(Exception):
@@ -1046,8 +1048,23 @@ def controller(argv=None, nested=False):
         ap.error("positive budgets required")
     # Recursive early subphases share os.environ; only the outer loop stops.
     stop_label = None if nested else os.environ.get("PNR_STOP_AFTER_PHASE") or None
-    if stop_label and stop_label not in PHASE_LABELS:
-        ap.error("PNR_STOP_AFTER_PHASE must be one of: " + ", ".join(PHASE_LABELS))
+    stop_labels = PHASE_LABELS + (GLOSS_LABELS if os.environ.get("PNR_GLOSS") == "1" else ())
+    if stop_label and stop_label not in stop_labels:
+        ap.error("PNR_STOP_AFTER_PHASE must be one of: " + ", ".join(stop_labels))
+    if os.environ.get("PNR_GLOSS") == "1" and not nested:
+        # PNR_GLOSS=1: reject malformed PNR_GLOSS_* sub-flags, and a groups file or rules that
+        # give no functional groups, before any phase runs
+        from pnr.gloss import check_groups
+        from pnr.gloss import settings as gloss_settings
+        from pnr.gloss import settings_key
+
+        try:
+            conf = gloss_settings()
+            check_groups(conf, json.loads(a.rules.read_text()))
+        except ValueError as error:
+            ap.error(str(error))
+        # the router key's gloss field (pnr.feedback.signals reads it from progress.json)
+        a.gloss_key = settings_key(conf)
     a.out_dir = a.out_dir.resolve()
     a.out_dir.mkdir(parents=True, exist_ok=False)
     worker_root = a.out_dir / "worker-source"
@@ -1063,6 +1080,15 @@ def controller(argv=None, nested=False):
     ).is_dir():
         # PNR_SI=1: the prepare worker resolves @pnr-si parts against the committed models;
         # PNR_BUS_CLASSES=1: it reads si_models/bus_classes.json (pnr.si.bus_classes).
+        shutil.copytree(
+            Path(__file__).resolve().parents[1] / "si_models",
+            worker_root / "hardware/pnr/si_models",
+        )
+    elif (
+        os.environ.get("PNR_GLOSS") == "1"
+        and (Path(__file__).resolve().parents[1] / "si_models").is_dir()
+    ):
+        # PNR_GLOSS=1: the gloss pass resolves @pnr-si nets (E3) when the rules carry none.
         shutil.copytree(
             Path(__file__).resolve().parents[1] / "si_models",
             worker_root / "hardware/pnr/si_models",
@@ -1344,6 +1370,116 @@ def controller(argv=None, nested=False):
         )
         return result
 
+    def gloss_pass(board, label):
+        # PNR_GLOSS=1: normalize/dekink/gloss/corridor of ordinary signal copper, each
+        # transaction gated by native checks inside pnr.gloss; this outer gate (the loop's own
+        # inspect/check/DRC) can still keep the pre-pass board. Off: never reached.
+        if os.environ.get("PNR_GLOSS") != "1" or nested or a.only_mode or not a.electrical_fab:
+            return board
+        from pnr.gloss import settings as gloss_settings
+
+        try:
+            conf = gloss_settings()
+        except ValueError as error:
+            # validated at controller start; a failure here skips the pass (pre-pass board kept)
+            event = dict(
+                stage="gloss_pass",
+                phase=label,
+                accepted=False,
+                status="bad_settings",
+                error=str(error),
+            )
+            events.append(event)
+            a.gloss_summaries = dict(
+                getattr(a, "gloss_summaries", {}),
+                **{label: dict(accepted=False, status="bad_settings")},
+            )
+            return board
+        if label not in conf.passes:
+            return board
+        import resource
+
+        # the pass's cost (its own workers plus this outer gate's), for an equal-compute A/B
+        clock, cpu = time.monotonic(), resource.getrusage(resource.RUSAGE_CHILDREN)
+        folder = a.out_dir / label
+        folder.mkdir()
+        output = folder / "candidate.kicad_pcb"
+        previous = drc(board)
+        worker("inspect", board, folder / "reference")
+        cmd = [
+            sys.executable,
+            "-m",
+            "pnr.gloss",
+            str(board),
+            "--rules",
+            str(a.rules.resolve()),
+            "--out",
+            str(output),
+            "--work-dir",
+            str(folder / "trials"),
+            "--report",
+            str(folder / "result.json"),
+            "--kicad-cli",
+            a.kicad_cli,
+            "--kicad-python",
+            a.kicad_python,
+            "--label",
+            label,
+            "--metrics",
+        ]
+        # Before refinement (06g) targets are still open: G2 guards all copper of open nets.
+        if label == "06g-gloss":
+            cmd += ["--guard-open-nets"]
+        for source in a.annotation_source:
+            cmd += ["--annotation-source", str(source.resolve())]
+        event = dict(stage="gloss_pass", phase=label, accepted=False, folder=str(folder))
+        try:
+            invoke(cmd, folder / "run.log")
+            result = read(folder / "result.json")
+            summary = {
+                k: v
+                for k, v in result.items()
+                if k not in ("transactions", "inverse_specs", "created_uuids", "steps_report")
+            }
+            event.update(summary=summary)
+            if summary["accepted_transactions"]:
+                checks = worker(
+                    "check",
+                    output,
+                    folder / "checks",
+                    ["--spec", str(folder / "reference/inspect.json")],
+                )
+                event.update(accepted=bool(gate(previous, drc(output), checks, strict=False)))
+                if not event["accepted"]:
+                    event["status"] = "outer_gate"
+        except subprocess.CalledProcessError as error:
+            event.update(status="worker_error", returncode=error.returncode)
+        used = resource.getrusage(resource.RUSAGE_CHILDREN)
+        event["cost"] = dict(
+            wall_seconds=round(time.monotonic() - clock, 2),
+            cpu_seconds=round(used.ru_utime - cpu.ru_utime + used.ru_stime - cpu.ru_stime, 2),
+        )
+        events.append(event)
+        a.gloss_summaries = dict(
+            getattr(a, "gloss_summaries", {}),
+            **{
+                label: dict(
+                    event.get("summary") or {},
+                    accepted=event["accepted"],
+                    status=event.get("status", "ok"),
+                    cost=event["cost"],
+                )
+            },
+        )
+        result = output if event["accepted"] else board
+        phase(label, result, event)
+        emit(
+            "route_result",
+            board=result,
+            data=dict(**event, opens=len(drc(result)["unconnected_items"])),
+        )
+        return result
+
     def fanout(board, action, label):
         # PNR_FANOUT_RESERVE=1: named all-net rule areas keep planned fine-pitch
         # signal escapes free through phases 03-05; release deletes exactly them
@@ -1503,6 +1639,8 @@ def controller(argv=None, nested=False):
         )
         phase("06-signals", current)
     current = bank_consolidation(current, "06b-power-bank-consolidation")
+    if os.environ.get("PNR_GLOSS") == "1":
+        current = gloss_pass(current, "06g-gloss")
     started = phase_clock.begin_refinement()
     before = drc(current)
     initial = before
@@ -1537,6 +1675,12 @@ def controller(argv=None, nested=False):
                 ),
             ),
         )
+        if os.environ.get("PNR_GLOSS") == "1" and getattr(a, "gloss_key", None):
+            progress = read(a.out_dir / "progress.json")
+            progress["gloss_key"] = a.gloss_key
+            if getattr(a, "gloss_summaries", None):
+                progress["gloss"] = a.gloss_summaries
+            save(a.out_dir / "progress.json", progress)
 
     portal_trials = set()
 
@@ -2510,6 +2654,8 @@ def controller(argv=None, nested=False):
         events.append(dict(stage="coalesce_and_graph", accepted=accepted, folder=str(cleanup)))
         if accepted:
             current, before = out, after
+    if os.environ.get("PNR_GLOSS") == "1":
+        current = gloss_pass(current, "07g-gloss")
     current = bank_consolidation(current, "08b-power-bank-consolidation")
     result = a.out_dir / "best" / "candidate.kicad_pcb"
     copy_board(current, result)

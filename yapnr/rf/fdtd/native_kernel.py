@@ -7,7 +7,7 @@ numpy reference's operations in the same order and no floating-point contraction
 is bit-identical to the numpy backend, for any thread count and instruction set. float32 is the
 same code with float fields (equal to numpy float32).
 
-Selection (docs/rf/solver-backends.md): ``Simulation(backend="native")``; for problems the
+Selection (docs/rf-solver-backends.md): ``Simulation(backend="native")``; for problems the
 environment overrides the spec, ``YAPNR_RF_BACKEND=native`` (``YAPNR_RF_DTYPE``, default
 float64 for an overridden backend; ``YAPNR_RF_THREADS``, the native thread count). The library
 is looked up at ``YAPNR_RF_FDTD_LIB``, then beside this module (``native/``), then in the Bazel

@@ -164,6 +164,33 @@ The `auto` schedule follows these numbers: sweeps while the box (fields and ψ) 
 last-level cache, passes sized to that cache otherwise. Handing out 8 rows per work item
 instead of 2 made the Mac about 20 % faster on 4 threads (fewer claims on the shared counter).
 
+### Larger grids
+
+With 8 rows per work item and the `auto` schedule, on another Spot `c4d-highcpu-16`: one
+evaluation (forward and adjoint runs, gradients), seconds. The 60 GHz grids are synthetic,
+built only for timing: a series-fed column of two patches with its feed on a 0.127 mm laminate
+(εr 3.0), 58–63 GHz, with the starting design the two patches themselves.
+
+| Grid                 | Cells  | Steps  | numpy float64 | torch float32, 4 threads | native float64, 1 / 4 / 8 / 16 threads | native float32, 16 |
+| -------------------- | ------ | ------ | ------------- | ------------------------ | -------------------------------------- | ------------------ |
+| divider              | 0.20 M | 12,484 | 87.4          | 12.4                     | 10.8 / 3.91 / 2.47 / 2.22              | 1.99               |
+| antenna              | 0.26 M | 16,353 | 147           | 23.3                     | 19.5 / 6.75 / 4.03 / 3.66              | 3.08               |
+| 60 GHz column, 50 µm | 0.50 M | 23,738 | 421 \*        | 51 \*                    | – / – / 12.0 / 11.0                    | 6.84               |
+| 60 GHz column, 25 µm | 1.79 M | 41,929 | 2,960 \*      | 420 \*                   | – / – / – / 124                        | 53.9               |
+
+\* The forward run's milliseconds per step (12–60 steps) times the evaluation's steps.
+
+- **Memory-bound from about 1 M cells.** At 1.79 M cells native float64 takes 2.39 ms per step
+  on both 8 and 16 threads (1.3 ns per cell-step). The 2-step passes are 1.9 times faster
+  than plain sweeps (4.46 ms), and float32 halves the time again (1.11 ms).
+- **Memory:** an evaluation peaks at about 1.07 GB at 1.79 M cells (on the Mac and on the
+  C4D). Most of it is outside the field arrays.
+- **Exactness on these grids:** native float64 equals numpy bit for bit on all four grids,
+  through 60–200 steps with sources and probes, both in sweeps and in passes. On the divider
+  and the antenna the whole evaluation (values and gradients) is equal at every thread count.
+- **Mac against the C4D:** float64 results differ by about 1e-12 relative at most. The numpy
+  reference differs between the two machines by the same amount.
+
 ## Design notes
 
 - **C with ctypes,** as the router's native maze kernel (`hardware/pnr`): no build dependency

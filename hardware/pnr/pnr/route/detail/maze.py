@@ -826,15 +826,23 @@ def _route_impl(
     # per-net penalty makes a net that keeps losing eventually route AROUND instead of
     # ripping — so the churn converges — and we snapshot the best (most connected terminal branches)
     # DRC-clean state seen and return that (rip-ups never corrupt the result).
-    def _routed_count() -> int:
-        return sum(
-            max(
-                0,
-                len(set(net_access[n])) - 1 - remaining_connections(net_access[n], routes[n].edges),
-            )
-            for n in nets
-            if n in routes
+    # Connected terminal branches per committed route, kept per net (the route
+    # object it belongs to is checked): only the nets a rip-up touched change.
+    branch_count: Dict[str, Tuple[_Route, int]] = {}
+
+    def _branches(n: str) -> int:
+        route = routes[n]
+        known = branch_count.get(n)
+        if known is not None and known[0] is route:
+            return known[1]
+        value = max(
+            0, len(set(net_access[n])) - 1 - remaining_connections(net_access[n], route.edges)
         )
+        branch_count[n] = (route, value)
+        return value
+
+    def _routed_count() -> int:
+        return sum(_branches(n) for n in nets if n in routes)
 
     def _snapshot() -> Dict[str, _Route]:
         return {n: routes[n] for n in nets if result_nets[n].routed}

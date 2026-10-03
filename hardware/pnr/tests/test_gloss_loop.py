@@ -404,6 +404,76 @@ class GlossLoopTest(unittest.TestCase):
         self.assertEqual(cmd[cmd.index("--classes") + 1], str(groups.resolve()))
         self.assertEqual(cmd[cmd.index("--cross-group-mm") + 1], "4.5")
 
+    def test_derived_groups(self):
+        from pnr import gloss
+
+        rules = dict(
+            net_classes=[
+                dict(name="power", nets=["VCC", "GND"]),
+                dict(name="usb", nets=["DP", "DN"]),
+                dict(name="empty", nets=[]),
+            ],
+            diff_pairs=[dict(name="usb", p="DP", n="DN")],
+            length_match=[dict(name="bus", nets=["D0", "D1", "D2"], tolerance_mm=0.5)],
+        )
+        intents = [dict(name="led", nets=["DIN", "DOUT"])]
+        tags = gloss.derive_class_tags(rules, gloss.CLASS_SOURCES, intents)
+        self.assertEqual(
+            tags,
+            {
+                "VCC": "netclass:power",
+                "GND": "netclass:power",
+                "DP": "netclass:usb",  # the pair is also its own net class: one group
+                "DN": "netclass:usb",
+                "D0": "length_match:bus",
+                "D1": "length_match:bus",
+                "D2": "length_match:bus",
+                "DIN": "si:led",
+                "DOUT": "si:led",
+            },
+        )
+        self.assertEqual(
+            gloss.derive_class_tags(rules, ("pairs",)), {"DP": "pair:usb", "DN": "pair:usb"}
+        )
+        self.assertEqual(gloss.derive_class_tags(rules, ("si",)), {})  # no intents given
+        # a net derived into two groups with different members is an error
+        clash = dict(rules, length_match=[dict(name="bus", nets=["DP", "D0"])])
+        with self.assertRaises(ValueError):
+            gloss.derive_class_tags(clash, ("pairs", "length_match"))
+        # a groups file entry wins for its net; neither source: no groups (no cap)
+        groups = Path(tempfile.mkdtemp()) / "groups.json"
+        groups.write_text(json.dumps({"classes": {"sense": ["DP"]}}))
+        tags = gloss.class_tags(str(groups), ("pairs",), rules)
+        self.assertEqual(tags, {"DP": "sense", "DN": "pair:usb"})
+        self.assertIsNone(gloss.class_tags(None, (), rules))
+        self.assertEqual(gloss.class_tags(None, ("pairs",), {}), {})  # every net a singleton
+        # settings: the source list (fixed order), the cap with derived groups only
+        conf = gloss.settings(dict(PNR_GLOSS_CLASSES_FROM="si,netclasses"))
+        self.assertEqual(conf.classes_from, ("netclasses", "si"))
+        self.assertEqual(gloss.settings({}).classes_from, ())
+        conf = gloss.settings(dict(PNR_GLOSS_CLASSES_FROM="pairs", PNR_GLOSS_CROSS_GROUP_MM="5"))
+        self.assertEqual(conf.cross_group_mm, 5.0)
+        with self.assertRaises(ValueError):
+            gloss.settings(dict(PNR_GLOSS_CLASSES_FROM="netclass"))
+        # the controller hands the sources to every worker
+        a = mock.Mock(
+            annotation_source=[],
+            guard_open_nets=False,
+            work_dir=groups.parent / "w",
+            rules=groups,
+            seconds=600,
+            kicad_python="kp",
+        )
+        p = gloss.GlossPass(a, gloss.settings(dict(PNR_GLOSS_CLASSES_FROM="netclasses,pairs")))
+        with mock.patch("pnr.proc.run_status", return_value=(0, False)) as run, mock.patch.object(
+            gloss, "read", return_value={}
+        ):
+            p.run_worker("inventory", "b.kicad_pcb", groups.parent / "r.json")
+        cmd = run.call_args[0][0]
+        self.assertEqual(cmd[cmd.index("--classes-from") + 1], "netclasses,pairs")
+        self.assertEqual(cmd[cmd.index("--cross-group-mm") + 1], "10.0")
+        self.assertNotIn("--classes", cmd)
+
     def test_malformed_subflag_rejected_before_any_phase(self):
         for flags in (
             dict(PNR_GLOSS_STEPS="dekinks"),

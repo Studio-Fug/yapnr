@@ -36,6 +36,7 @@ def args(**kw):
         no_hug=False,
         classes=None,
         cross_group_mm=None,
+        classes_from=None,
     )
     base.update(kw)
     return argparse.Namespace(**base)
@@ -483,6 +484,26 @@ class GlossNativeTest(unittest.TestCase):
         g = self.model(path, rules, drc=drc, guard_open_nets=True)
         (g2,) = [x for x in g.guards("sig", la, 200000, box) if x.name == "G2"]
         self.assertEqual(len(g2.shapes), 1 + len(m.groups["on", la]))  # + every 'on' track
+
+    def test_derived_groups_from_rule_net_classes(self):
+        # PNR_GLOSS_CLASSES_FROM=netclasses: c1 and c2 in one rules net class are one group
+        # (packing unlimited); a groups file entry wins for its net (c1 moves to its own group)
+        path, rules = self.board()
+        data = json.loads(rules.read_text())
+        data["net_classes"] = [dict(name="bus", nets=["c1", "c2"])]
+        rules.write_text(json.dumps(data))
+        corridor = dict(worker="inventory", board=path, rules=rules, step="corridor")
+        none = self.run_worker(**corridor)["specs"]
+        self.assertEqual(self.run_worker(classes_from="netclasses", **corridor)["specs"], none)
+        m = self.model(path, rules, classes_from=("netclasses",))
+        self.assertEqual(m.info("c1", m.k.F_Cu)["tag"], "netclass:bus")
+        self.assertIsNone(m.allowed_nm("c1", "c2"))
+        self.assertEqual(m.allowed_nm("c1", "sig"), 10 * MM)
+        own = self.root / "own.json"
+        own.write_text(json.dumps({"classes": {"alone": ["c1"]}}))
+        apart = self.run_worker(classes_from="netclasses", classes=str(own), **corridor)
+        self.assertEqual(apart["specs"], [])
+        self.assertGreater(apart["stats"]["cap_refused"], 0)
 
     def test_functional_groups_cap_cross_group_packing(self):
         # gloss_fixture: corridor packs c1's 11.5 mm leg onto c2, leaving ~11.9 mm of parallel run at

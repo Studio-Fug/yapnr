@@ -33,6 +33,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 STEPS = ("normalize", "dekink", "gloss", "corridor")
+# PNR_GLOSS_CLASSES_FROM: rule sources functional groups may be derived from (fixed order)
+CLASS_SOURCES = ("netclasses", "pairs", "si", "length_match")
 LABELS = ("06g-gloss", "07g-gloss")
 NM = 1_000_000
 DS_TOLERANCE_MM2 = 1e-3  # polygon approximation noise allowed in a window dead-space comparison
@@ -61,9 +63,8 @@ class Settings:
     hug: bool = True  # same-class adjacency tie-breaks in dekink/gloss (PNR_GLOSS_HUG=0: off)
     sweeps: int = 2  # 2: a final gloss + corridor sweep after the step list (PNR_GLOSS_SWEEPS)
     classes: str = None  # PNR_GLOSS_CLASSES: functional groups JSON {tag: [nets] | {nets: [...]}}
-    cross_group_mm: float = (
-        10.0  # PNR_GLOSS_CROSS_GROUP_MM: cap on cross-group parallel runs (with classes)
-    )
+    cross_group_mm: float = 10.0  # PNR_GLOSS_CROSS_GROUP_MM: cross-group parallel-run cap (mm)
+    classes_from: tuple = ()  # PNR_GLOSS_CLASSES_FROM: groups derived from rules (CLASS_SOURCES)
 
 
 def settings(env=None):
@@ -114,10 +115,14 @@ def settings(env=None):
             load_class_tags(classes)
         except (ValueError, TypeError, AttributeError) as error:
             raise ValueError("PNR_GLOSS_CLASSES: unreadable groups file %r (%s)" % (classes, error))
+    classes_from = (
+        items("PNR_GLOSS_CLASSES_FROM", CLASS_SOURCES) if env.get("PNR_GLOSS_CLASSES_FROM") else ()
+    )
     raw = env.get("PNR_GLOSS_CROSS_GROUP_MM")
-    if raw is not None and classes is None:
+    if raw is not None and classes is None and not classes_from:
         raise ValueError(
-            "PNR_GLOSS_CROSS_GROUP_MM needs PNR_GLOSS_CLASSES (the functional groups file)"
+            "PNR_GLOSS_CROSS_GROUP_MM needs PNR_GLOSS_CLASSES (the functional groups file) or "
+            "PNR_GLOSS_CLASSES_FROM"
         )
     try:
         cross_group_mm = float(raw) if raw is not None else 10.0
@@ -140,6 +145,7 @@ def settings(env=None):
         sweeps,
         str(Path(classes).resolve()) if classes else None,
         cross_group_mm,
+        classes_from,
     )
 
 
@@ -194,12 +200,13 @@ def project_netclass(board_path):
     return name
 
 
-def si_nets(board, rules, sources):
-    """E3: nets of every @pnr-si intent; (nets, status). Fails closed (nets None)."""
+def si_intents(board, rules, sources):
+    """The @pnr-si intents: the rules' si_intents, else resolved from the annotation sources
+    (parse and resolve, no simulation); (intents, status). Fails closed (intents None)."""
     intents = rules.get("si_intents")
     if intents is None:
         if not any("@pnr-si" in Path(s).read_text(errors="replace") for s in sources):
-            return set(), "none"
+            return [], "none"
         try:
             from pnr.ingest import build_graph
             from pnr.si.report import resolve_intents
@@ -207,8 +214,16 @@ def si_nets(board, rules, sources):
             intents = resolve_intents([str(s) for s in sources], build_graph(board).components)
         except Exception as error:  # fail closed: the pass stops
             return None, "si_unresolved: %r" % (error,)
-        return {n for i in intents for n in i.get("nets", [])}, "resolved"
-    return {n for i in intents for n in i.get("nets", [])}, "rules"
+        return intents, "resolved"
+    return intents, "rules"
+
+
+def si_nets(board, rules, sources):
+    """E3: nets of every @pnr-si intent; (nets, status). Fails closed (nets None)."""
+    intents, status = si_intents(board, rules, sources)
+    if intents is None:
+        return None, status
+    return {n for i in intents for n in i.get("nets", [])}, status
 
 
 class Grid:
@@ -318,6 +333,64 @@ def load_class_tags(path):
     return out
 
 
+def derive_class_tags(rules, kinds, intents=()):
+    """PNR_GLOSS_CLASSES_FROM: functional groups from the rules -> {net: group tag}.
+
+    kinds (CLASS_SOURCES order): ``netclasses`` (each rules net class, tag ``netclass:NAME``),
+    ``pairs`` (each differential pair, ``pair:NAME``), ``si`` (the nets of each @pnr-si intent,
+    ``si:NAME``), ``length_match`` (each length-match group, ``length_match:NAME``). Derived
+    groups with the same member set are one group (the first source's tag, e.g. a pair that is
+    also its own net class); a net derived into two groups with different members is an error."""
+    groups = []  # (tag, frozenset of nets), in source order
+    for kind in [k for k in CLASS_SOURCES if k in kinds]:
+        if kind == "netclasses":
+            rows = [
+                ("netclass:" + c["name"], c.get("nets") or [])
+                for c in rules.get("net_classes") or []
+            ]
+        elif kind == "pairs":
+            rows = [("pair:" + d["name"], [d["p"], d["n"]]) for d in rules.get("diff_pairs") or []]
+        elif kind == "si":
+            rows = [
+                ("si:" + str(i.get("name", k)), i.get("nets") or [])
+                for k, i in enumerate(intents or [])
+            ]
+        else:
+            rows = [
+                ("length_match:" + m["name"], m.get("nets") or [])
+                for m in rules.get("length_match") or []
+            ]
+        for tag, nets in rows:
+            if isinstance(nets, str) or not all(isinstance(n, str) for n in nets):
+                raise ValueError("PNR_GLOSS_CLASSES_FROM: group %r must list net names" % tag)
+            if nets:
+                groups.append((tag, frozenset(nets)))
+    out, members = {}, {}
+    for tag, nets in groups:
+        same = next((t for t, m in members.items() if m == nets), None)
+        if same is not None:
+            continue  # the same group derived again (e.g. a pair declared as its own net class)
+        members[tag] = nets
+        for net in sorted(nets):
+            if net in out:
+                raise ValueError(
+                    "PNR_GLOSS_CLASSES_FROM: net %r derived into groups %r and %r"
+                    % (net, out[net], tag)
+                )
+            out[net] = tag
+    return out
+
+
+def class_tags(classes=None, classes_from=(), rules=None, intents=()):
+    """Functional groups {net: tag} of a pass: derived ones (PNR_GLOSS_CLASSES_FROM) overlaid by
+    the groups file (PNR_GLOSS_CLASSES; a file entry wins for its net); None when neither."""
+    if not classes and not classes_from:
+        return None
+    tags = derive_class_tags(rules or {}, classes_from, intents) if classes_from else {}
+    tags.update(load_class_tags(classes) or {})
+    return tags
+
+
 # ---------------------------------------------------------------- KiCad adapter (design 1.1-1.4)
 class Model:
     """Board facts the planner and the trial checks need, in nm (KiCad side).
@@ -342,6 +415,7 @@ class Model:
         classes=None,
         cross_group_mm=None,
         noise_allowance=None,
+        classes_from=(),
     ):
         import pcbnew as k
 
@@ -388,7 +462,12 @@ class Model:
             self.si, self.si_status = si_nets(board, rules, sources)
             self.policies, self.gloss_si, self.contracts = {}, gloss_si, {}
             self.guard_open_nets, self.hug_enabled = bool(guard_open_nets), bool(hug)
-            self.class_tags = load_class_tags(classes)
+            self.class_tags = class_tags(
+                classes,
+                classes_from,
+                rules,
+                (si_intents(board, rules, sources)[0] or []) if "si" in classes_from else (),
+            )
             # functional groups (PNR_GLOSS_CLASSES): cap on cross-group parallel runs at minimum
             # pitch; noise_allowance is the noise-budget hook (gloss_geometry.allowed_parallel_mm budget)
             self.cross_group_mm = (
@@ -2063,6 +2142,9 @@ def worker(args):
         hug=not getattr(args, "no_hug", False),
         classes=getattr(args, "classes", None),
         cross_group_mm=getattr(args, "cross_group_mm", None),
+        classes_from=tuple(
+            x for x in (getattr(args, "classes_from", None) or "").split(",") if x.strip()
+        ),
     )
     keep = []
     if args.worker == "inventory":
@@ -2218,7 +2300,7 @@ def worker(args):
         b.BuildConnectivity()
         result = board_facts(b, rules, Path(args.board).read_text())
         keep.append(b)
-        if opts["classes"]:
+        if opts["classes"] or opts["classes_from"]:
             model = Model(
                 b, rules, path=args.board, sources=sources, drc=drc, gloss_si=gloss_si, **opts
             )
@@ -2450,12 +2532,11 @@ class GlossPass:
         if not getattr(self.conf, "hug", True):
             cmd += ["--no-hug"]
         if getattr(self.conf, "classes", None):
-            cmd += [
-                "--classes",
-                str(self.conf.classes),
-                "--cross-group-mm",
-                repr(float(getattr(self.conf, "cross_group_mm", 10.0))),
-            ]
+            cmd += ["--classes", str(self.conf.classes)]
+        if getattr(self.conf, "classes_from", ()):
+            cmd += ["--classes-from", ",".join(self.conf.classes_from)]
+        if getattr(self.conf, "classes", None) or getattr(self.conf, "classes_from", ()):
+            cmd += ["--cross-group-mm", repr(float(getattr(self.conf, "cross_group_mm", 10.0)))]
         cmd += [str(x) for x in extra]
         run_kicad(cmd, Path(report).with_suffix(".log"))
         return read(report)
@@ -3080,9 +3161,10 @@ class GlossPass:
                 rows=self.planning,
             ),
         )
-        if getattr(self.conf, "classes", None):
+        if getattr(self.conf, "classes", None) or getattr(self.conf, "classes_from", ()):
             summary["cross_group"] = dict(
-                groups=str(self.conf.classes),
+                groups=str(self.conf.classes) if self.conf.classes else None,
+                derived_from=list(getattr(self.conf, "classes_from", ())),
                 cap_mm=self.conf.cross_group_mm,
                 trial_drops=dict(sorted(cap_drops.items())),
             )
@@ -3140,8 +3222,12 @@ def measure(a):
         ]
         if getattr(a, "classes", None):  # report the functional-group runs too
             cmd += ["--classes", str(Path(a.classes).resolve())]
-            if getattr(a, "cross_group_mm", None) is not None:
-                cmd += ["--cross-group-mm", repr(float(a.cross_group_mm))]
+        if getattr(a, "classes_from", None):
+            cmd += ["--classes-from", a.classes_from]
+        if (getattr(a, "classes", None) or getattr(a, "classes_from", None)) and getattr(
+            a, "cross_group_mm", None
+        ) is not None:
+            cmd += ["--cross-group-mm", repr(float(a.cross_group_mm))]
         for s in a.annotation_source:
             cmd += ["--annotation-source", str(Path(s).resolve())]
         run_kicad(cmd, report.with_suffix(".log"))
@@ -3213,6 +3299,11 @@ def main(argv=None):
         "--classes",
         default=None,
         help="worker / --measure: PNR_GLOSS_CLASSES functional groups file",
+    )
+    ap.add_argument(
+        "--classes-from",
+        default=None,
+        help="worker / --measure: PNR_GLOSS_CLASSES_FROM (netclasses,pairs,si,length_match)",
     )
     ap.add_argument(
         "--cross-group-mm",

@@ -816,6 +816,53 @@ few hours; longer ones belong on standard VMs (<code class="docutils literal not
 line per task with its record and the machine it ran on. A private A/B campaign of this shape
 (a toy engine snapshot as the bundle) was planned, run and fetched end to end on the local
 backend.</p>
+<p>Three optional keys serve long evaluations. <code class="docutils literal notranslate"><span class="pre">&quot;checkpoint&quot;:</span> <span class="pre">{&quot;path&quot;:</span> <span class="pre">&quot;out/run&quot;}</span></code> makes the task
+resumable: the wrapper copies the top-level files of that directory to the store every
+<code class="docutils literal notranslate"><span class="pre">sync_every_s</span></code> (default 300, at least 30) and when it is stopped (<code class="docutils literal notranslate"><span class="pre">on_signal</span></code>, default true), and
+restores them before a retry, so a command that resumes from its run directory continues after a
+Spot preemption instead of starting again. A command that exits 75 without its record has its
+checkpoint synced too and is retried, so a long run can stop before <code class="docutils literal notranslate"><span class="pre">max_wall_s</span></code> and go on in the
+next attempt (at most <code class="docutils literal notranslate"><span class="pre">max_retries</span></code> retries per submission, preemptions included; <code class="docutils literal notranslate"><span class="pre">submit</span></code> again
+resumes after that). <code class="docutils literal notranslate"><span class="pre">&quot;prune&quot;</span></code> lists globs under <code class="docutils literal notranslate"><span class="pre">out/</span></code> that the result
+archive leaves out (caches), and <code class="docutils literal notranslate"><span class="pre">&quot;verdict&quot;:</span> <span class="pre">{&quot;file&quot;:</span> <span class="pre">&quot;out/run/report.json&quot;,</span> <span class="pre">&quot;json_path&quot;:</span> <span class="pre">&quot;ok&quot;}</span></code>
+reads a pass or a fail from the record.</p>
+<section id="rf-runs">
+<h4>RF runs<a class="headerlink" href="#rf-runs" title="Link to this heading">¶</a></h4>
+<p><code class="docutils literal notranslate"><span class="pre">tools/exp/rf_stage_plan.py</span></code> writes such a campaign for <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code> runs from a list of jobs: a
+preset case each, optionally a spec file that replaces the case’s spec, a criteria file that
+replaces the case’s pass criteria and dense frequencies (for a spec in another band), the
+starting design (<code class="docutils literal notranslate"><span class="pre">seed</span></code>), an iteration cap, the threads and the resources (the format is in its
+docstring).</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/exp/rf_stage_plan.py<span class="w"> </span>jobs.toml<span class="w"> </span>--repo<span class="w"> </span>&lt;checkout<span class="w"> </span>with<span class="w"> </span>yapnr.rf&gt;<span class="w"> </span>--out<span class="w"> </span>&lt;dir&gt;
+yapnr<span class="w"> </span>exp<span class="w"> </span>plan<span class="w"> </span>&lt;dir&gt;/campaign.toml<span class="w"> </span>--backend<span class="w"> </span>gcp-batch<span class="w"> </span>--shape<span class="w"> </span>c4d-highcpu-8
+</pre></div>
+</div>
+<p>The source bundle is a <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">archive</span></code> of the committed revision (<code class="docutils literal notranslate"><span class="pre">--commit</span></code>, default <code class="docutils literal notranslate"><span class="pre">HEAD</span></code>),
+never the working tree, so a branch another session is still editing runs as it was last
+committed. Each task runs the job bundle’s <code class="docutils literal notranslate"><span class="pre">rf_job.py</span></code>, which runs <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.rf.cases</span> <span class="pre">run</span> <span class="pre">CASE</span> <span class="pre">--out</span> <span class="pre">out/&lt;id&gt;</span></code> with the spec, the criteria, <code class="docutils literal notranslate"><span class="pre">optimizer.seed</span></code> or <code class="docutils literal notranslate"><span class="pre">solver.threads</span></code> replaced
+(or that command itself for a job with nothing to replace and <code class="docutils literal notranslate"><span class="pre">attempt_s</span> <span class="pre">=</span> <span class="pre">0</span></code>) on as many cores as
+it has threads, with <code class="docutils literal notranslate"><span class="pre">OMP_NUM_THREADS</span></code> and <code class="docutils literal notranslate"><span class="pre">MKL_NUM_THREADS</span></code> at that number and
+<code class="docutils literal notranslate"><span class="pre">OPENBLAS_NUM_THREADS=1</span></code>. Cores are physical, two vCPUs each on SMT shapes: one 4-thread run fills
+a <code class="docutils literal notranslate"><span class="pre">c4d-highcpu-8</span></code>. The engine runs torch on at most 4 threads, and the generator warns above that.
+The record is <code class="docutils literal notranslate"><span class="pre">out/&lt;id&gt;/validation.json</span></code> (the verdict is its <code class="docutils literal notranslate"><span class="pre">ok</span></code>), the run directory is the
+checkpoint, and the cases runner resumes from it; <code class="docutils literal notranslate"><span class="pre">--max-iterations</span></code> counts the iterations of one
+attempt, so an attempt resumed mid-loop may run that many again. A run longer than <code class="docutils literal notranslate"><span class="pre">max_wall_s</span></code>
+goes on over attempts: <code class="docutils literal notranslate"><span class="pre">rf_job.py</span></code> stops the loop before an iteration that would end after
+<code class="docutils literal notranslate"><span class="pre">attempt_s</span></code> (default <code class="docutils literal notranslate"><span class="pre">max_wall_s</span></code> less a 24th), starts the end (binarize, export, re-validate)
+only with <code class="docutils literal notranslate"><span class="pre">end_s</span></code> left (default a third of the attempt, at most an hour), and otherwise exits 75.
+Every attempt makes progress. On Batch a submission holds <code class="docutils literal notranslate"><span class="pre">max_retries</span> <span class="pre">+</span> <span class="pre">1</span></code> attempts, and the
+reaper cancels it <code class="docutils literal notranslate"><span class="pre">max_campaign_hours</span></code> after <code class="docutils literal notranslate"><span class="pre">submit</span></code> (with the example limits, about three
+attempts of 3.8 hours; preemptions take attempts too); the checkpoint stays in the store, and
+<code class="docutils literal notranslate"><span class="pre">submit</span></code> again goes on from it. A job with <code class="docutils literal notranslate"><span class="pre">validate</span> <span class="pre">=</span> <span class="pre">&quot;&lt;run</span> <span class="pre">directory&gt;&quot;</span></code> re-validates a finished
+run instead (a fetched one: its top-level files go into the plan as an input), as a task of its
+own that starts again after a preemption: for a fine-grid validation longer than what is left of
+the run’s last attempt (pass <code class="docutils literal notranslate"><span class="pre">--no-fine</span></code> or <code class="docutils literal notranslate"><span class="pre">--finer</span> <span class="pre">0</span></code> to the run in <code class="docutils literal notranslate"><span class="pre">args</span></code>). A job with
+<code class="docutils literal notranslate"><span class="pre">diagnostic</span> <span class="pre">=</span> <span class="pre">true</span></code> runs the job bundle’s <code class="docutils literal notranslate"><span class="pre">rf_diag.py</span></code> instead, which records the interpreter,
+the CPUs, the versions of numpy, torch, Pillow and PyYAML, whether the sources compile on the
+image’s Python, and <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.rf.cases</span> <span class="pre">--help</span></code>; run one before the first campaign of a new
+branch or image. <code class="docutils literal notranslate"><span class="pre">--plain-lines</span></code> leaves the three optional keys and the attempts out, for a
+<code class="docutils literal notranslate"><span class="pre">yapnr</span></code> whose <code class="docutils literal notranslate"><span class="pre">mc-eval</span></code> refuses them.</p>
+</section>
 </section>
 </section>
 <section id="testing">
@@ -958,7 +1005,10 @@ stub <code class="docutils literal notranslate"><span class="pre">apptainer</spa
 <li><a class="reference internal" href="#slurm-and-apptainer-hpc-allocations">Slurm and Apptainer (HPC allocations)</a></li>
 <li><a class="reference internal" href="#id1">Calibration</a></li>
 <li><a class="reference internal" href="#private-campaigns">Private campaigns</a><ul>
-<li><a class="reference internal" href="#any-command-as-a-task-stage-plans">Any command as a task: stage plans</a></li>
+<li><a class="reference internal" href="#any-command-as-a-task-stage-plans">Any command as a task: stage plans</a><ul>
+<li><a class="reference internal" href="#rf-runs">RF runs</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li><a class="reference internal" href="#testing">Testing</a></li>

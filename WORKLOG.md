@@ -10,6 +10,19 @@ their animations on `claude/animations-groups-hier`.
 
 ## In progress
 
+- **Gloss, dekink and corridor coalescing (`PNR_GLOSS`, off by default)** (branch
+  `claude/gloss-port`; design [docs/design/gloss.md](docs/design/gloss.md)): ported from Splanc's
+  src18 with its tests (geometry 64, native 16, loop 15, end-to-end 7 with the ladder stage on
+  `04-inverter-leds-8`, ladder contract 10), `board.Delete` instead of `Remove`, workers through
+  `pnr.proc.run_status`; the `06g-gloss` and `07g-gloss` loop passes, the ladder's opt-in
+  `--gloss` stage with `--gloss-flag` and `--gloss-measure`, functional groups derived from the
+  rules (`PNR_GLOSS_CLASSES_FROM`) and the public example groups file for `07-chaser-20`. Identity
+  with the source engine is exact on three private replay points; flag-off identity with `main`
+  (stubbed loop) holds. Ladder A/B (24 runs per arm, no regression): see
+  [docs/regression-ladder.md](docs/regression-ladder.md#gloss-opt-in). Next: the larger paired
+  native-loop A/B on the cloud lane decides default-on (owner); 06g routability is unmeasured on
+  public boards.
+
 - **Fab outputs and staged ordering** (branch `claude/fab-order`; design
   [docs/design/fab-and-ordering.md](docs/design/fab-and-ordering.md), guide
   [docs/fab-and-ordering.md](docs/fab-and-ordering.md)). Built: vendor profiles and stackups as

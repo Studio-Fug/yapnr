@@ -499,6 +499,34 @@ the pull request:
 - **Follow-ups:** companion rows (an LED and its resistor as one rigid unit), a hard edge for a
   whole line group, members on the bottom side, plane-access intents inside a line group.
 
+The gloss, dekink and corridor-coalescing pass (`PNR_GLOSS`,
+[design](design/gloss.md)); owner decisions of 2026-09-30 (in Splanc) and 2026-10-02:
+
+- **Behind `PNR_GLOSS`, off by default,** in the native loop (passes `06g-gloss` and
+  `07g-gloss`) and as the ladder's opt-in `--gloss` stage. With the flag unset nothing is
+  imported and no output changes.
+- **The router's cost, never traded:** rule R (shorter, or the same length with fewer bends) for
+  dekink and gloss; corridor moves and adjacency tie-breaks may spend at most the
+  `align_parallel` slack, **0.2 mm** of length per member. Dead space never buys router cost
+  beyond it, and router cost never buys legality.
+- **The legalizer overrides the pass:** per-transaction native checks with a cold KiCad DRC, a
+  phase-end gate with bisection and revert, the loop's own gate, and later legalizers that rip up
+  glossed copper like any other.
+- **Functional groups with a cross-group cap:** packing at minimum pitch is unlimited within a
+  functional group and capped at **10 mm** of parallel run between groups (a net in no group is
+  its own group; `PNR_GLOSS_CROSS_GROUP_MM`). Groups come from a documented file
+  (`PNR_GLOSS_CLASSES`) or are derived from net classes, pairs, SI intents and length-match groups
+  (`PNR_GLOSS_CLASSES_FROM`); a file entry wins for its net. A noise-budget model may later
+  replace the fixed cap with per-pair allowances through one hook (`allowed_parallel_mm`).
+- **Only `Default`-class signal nets are edited** (E4), as the regional router; admitting named
+  signal classes is a later decision.
+- **Default-on rule:** the pass is turned on by default only if a paired native-loop A/B, larger
+  than Splanc's inconclusive three-placement run and planned for the cloud lane, shows that it
+  does not cost completion. The ladder A/B (gloss after a complete route) cannot decide it; any
+  regression there (gate, DRC, opens, objective) is a bug.
+- **Private board data stays out:** the port's tests and examples use generated geometry and the
+  public ladder boards; Splanc's groups file and replay boards are not ported.
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.

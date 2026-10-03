@@ -414,10 +414,6 @@ def graph_pads(
 ALL_LAYERS = frozenset(("*",))
 
 
-def _pad_on(pad: PadCopper, layer: str) -> bool:
-    return "*" in pad.layers or layer in pad.layers
-
-
 # ------------------------------------------------------------------ the model
 #
 # A transcription of KiCad 10.0.6's LENGTH_DELAY_CALCULATION::CalculateLengthDetails

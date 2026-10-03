@@ -360,11 +360,6 @@ def _no_track_layers(path: Optional[str]) -> List[str]:
     return sorted(layers)
 
 
-def _copper_thickness_mm(path: Optional[str]) -> dict:
-    """copper layer name -> thickness (mm) from the board file's stackup block."""
-    return dict(_stackup_copper(path) or [])
-
-
 def stack_record(board, path: Optional[str] = None) -> Optional[dict]:
     """The board's declared copper stack (:mod:`pnr.stack`), or None when the board
     declares no physical stackup. Copper layers in order with their KiCad layer type,

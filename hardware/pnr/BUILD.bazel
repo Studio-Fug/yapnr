@@ -1139,6 +1139,28 @@ py_test(
     deps = [":pnr", ":pnr_detail", ":pnr_route", ":pnr_place"],
 )
 
+# The same through KiCad (KiCad Python only, by hand: python3 -m unittest
+# tests.test_fixed_block_kicad; PNR_KICAD_CLI for the custom-rules case): schema-2
+# export, digest frame, validate, writeback keeping the block, plane_fallback_drops,
+# keepout rule areas and custom rules judged by KiCad's DRC.
+py_test(
+    name = "fixed_block_kicad_test",
+    size = "small",
+    srcs = [
+        "tests/test_fixed_block_kicad.py",
+        "tests/test_stack_kicad.py",
+    ],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_fixed_block_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
+)
+
 py_test(
     name = "feedback_tie_test",
     size = "small",

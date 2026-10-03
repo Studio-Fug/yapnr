@@ -1,5 +1,8 @@
-"""Fixed copper blocks, arcs and per-layer / per-class copper keepouts (pure Python):
-the constraint inputs and the shared geometry (pnr.fixed_block)."""
+"""Fixed copper blocks, arcs and per-layer / per-class copper keepouts (pure Python).
+
+The KiCad side (export, digest, validate, writeback, custom rules) is
+tests/test_fixed_block_kicad.py.
+"""
 
 import math
 import random
@@ -14,11 +17,15 @@ from pnr.fixed_block import (
     arc_segments,
     block_refs,
     components_touching,
+    flatten,
     hold_out,
     pick_ports,
     port_candidates,
 )
 from pnr.graph import BoardGraph, Component, Net, Pad
+from pnr.route.detail.fixed import reserve_fixed_copper
+from pnr.route.detail.grid import RouteGrid
+from pnr.route.detail.router import block_ports
 
 
 def _seg_dist(p, a, b):
@@ -81,6 +88,47 @@ class ArcGeometryTest(unittest.TestCase):
                 self.assertLessEqual(d, ARC_EPS_MM + 1e-9)
 
 
+class ArcReservationTest(unittest.TestCase):
+    def test_arc_reservation_is_conservative_and_tight(self):
+        """Every cell a foreign track centre could not use is blocked (within
+        ``w/2 + clearance + track/2`` of the arc), and nothing beyond that plus eps
+        and a cell diagonal is."""
+        rng = random.Random(3)
+        pitch, clearance, track = 0.1, 0.1, 0.1
+        for _ in range(12):
+            (s, m, e), _r, _ = _random_arc(rng)
+            w = rng.uniform(0.1, 0.4)
+            g = RouteGrid(10, 10, pitch, clearance=clearance, track_width=track)
+            arc = ["RF", "F.Cu", list(s), list(m), list(e), w]
+            reserve_fixed_copper(g, dict(frame="engine-mm-y-up", tracks=[], arcs=[arc]))
+            samples = _arc_samples(s, m, e, 600)
+            near = w / 2 + clearance + track / 2
+            far = near + ARC_EPS_MM + pitch / math.sqrt(2) + 1e-9
+            blocked = g.blocked[0]
+            for j in range(g.ny):
+                for i in range(g.nx):
+                    c = g.center_of(i, j)
+                    d = min(math.dist(c, q) for q in samples[::3])
+                    if d <= near - 0.01:  # sampled arc: a hair of margin
+                        self.assertTrue(blocked[j, i], (c, d))
+                    if d > far + 0.01:
+                        self.assertFalse(blocked[j, i], (c, d))
+            self.assertFalse(g.blocked[1].any())
+
+    def test_schema_one_copper_reserves_as_before(self):
+        copper = dict(
+            frame="engine-mm-y-up",
+            tracks=[["A", "F.Cu", [1.0, 1.0], [8.0, 3.3], 0.3]],
+            vias=[dict(net="A", xy=[4, 6], diameter_mm=0.6, drill_mm=0.3, type="through")],
+        )
+        g = RouteGrid(10, 10, 0.25)
+        reserve_fixed_copper(g, copper)
+        self.assertEqual(int(g.blocked.sum()), 193)
+        self.assertEqual(int(g.via_blocked.sum()), 254)
+        self.assertEqual(g.fixed_owned, {})
+        self.assertIs(flatten(copper), copper)
+
+
 def meander_block(net="CLK", gnd_via=True):
     """A small block: a straight lead, a 180-degree arc and a return lead on F.Cu,
     two free ends; a GND via beside it."""
@@ -104,6 +152,80 @@ def meander_block(net="CLK", gnd_via=True):
 
 
 class BlockTest(unittest.TestCase):
+    def test_flatten_merges_blocks_and_chords(self):
+        copper = dict(frame="engine-mm-y-up", tracks=[], vias=[], blocks=[meander_block()])
+        flat = flatten(copper)
+        self.assertEqual(len(flat["vias"]), 1)
+        self.assertGreater(len(flat["tracks"]), 3)
+        self.assertTrue(all(len(t) == 5 for t in flat["tracks"]))
+        chords = [t for t in flat["tracks"] if abs(t[4] - (0.2 + 2 * ARC_EPS_MM)) < 1e-12]
+        length = sum(math.dist(t[2], t[3]) for t in chords)
+        # Chords are short of the arc by well under 0.1 % at a 1 um sagitta.
+        self.assertLess(math.pi * 0.5 - length, 1.5e-3)
+        self.assertGreater(math.pi * 0.5 - length, 0)
+
+    def test_block_copper_is_owned_by_its_nets(self):
+        g = RouteGrid(10, 10, 0.1, clearance=0.1, track_width=0.1)
+        copper = dict(frame="engine-mm-y-up", tracks=[], vias=[], blocks=[meander_block()])
+        reserve_fixed_copper(g, copper)  # own_net False: blocks are owned anyway
+        i, j = g.cell_of(5.5, 5.5)
+        self.assertTrue(g.passable(0, i, j, "CLK"))
+        self.assertFalse(g.passable(0, i, j, "X"))
+        self.assertEqual(g.fixed_owned[(0, i, j)], "CLK")
+        self.assertTrue(g.passable(1, i, j, "X"))  # F.Cu only
+        vi, vj = g.cell_of(6.5, 5.5)
+        for la in range(2):
+            self.assertFalse(g.via_passable(la, vi, vj, "GND"))  # hole spacing: no via
+            self.assertTrue(g.passable(la, vi, vj, "GND"))
+            self.assertFalse(g.passable(la, vi, vj, "CLK"))
+        self.assertFalse(g.blocked.any())
+
+    def test_polygons_pads_zones_and_rule_areas(self):
+        square = [[4, 4], [5, 4], [5, 5], [4, 5]]
+        block = dict(
+            name="b",
+            group="B",
+            tracks=[],
+            arcs=[],
+            vias=[],
+            refs=["P1"],
+            polygons=[
+                dict(net="RF", layer="F.Cu", outline=square, holes=[], kind="pad"),
+                dict(
+                    net="GND",
+                    layer="In2.Cu",
+                    outline=[[1, 1], [2, 1], [2, 2], [1, 2]],
+                    holes=[],
+                    kind="zone",
+                ),
+                dict(
+                    net="",
+                    layers=["B.Cu"],
+                    outline=[[7, 7], [8, 7], [8, 8], [7, 8]],
+                    holes=[],
+                    kind="rule_area",
+                    tracks=True,
+                    vias=False,
+                ),
+            ],
+        )
+        g = RouteGrid(10, 10, 0.1, clearance=0.1, track_width=0.1)
+        reserve_fixed_copper(g, dict(frame="engine-mm-y-up", tracks=[], vias=[], blocks=[block]))
+        i, j = g.cell_of(4.5, 4.5)
+        self.assertTrue(g.passable(0, i, j, "RF"))
+        self.assertFalse(g.passable(0, i, j, "X"))
+        self.assertTrue(g.passable(1, i, j, "X"))
+        # The In2 zone (not a routed layer here) keeps foreign vias out on every layer.
+        zi, zj = g.cell_of(1.5, 1.5)
+        self.assertTrue(g.passable(0, zi, zj, "X"))
+        self.assertFalse(g.via_passable(0, zi, zj, "X"))
+        self.assertFalse(g.via_passable(1, zi, zj, "X"))
+        self.assertTrue(g.via_passable(0, zi, zj, "GND"))
+        ri, rj = g.cell_of(7.5, 7.5)
+        self.assertFalse(g.passable(1, ri, rj, "GND"))
+        self.assertTrue(g.passable(0, ri, rj, "GND"))
+        self.assertTrue(g.via_passable(0, ri, rj, "GND"))
+
     def test_hold_out_and_block_refs(self):
         comps = [
             Component("U1", "u", (5, 5), 0, "top", (1, 1), (1, 1), pads=[Pad("1", "RF", (0, 0))]),
@@ -215,6 +337,60 @@ class ConstraintTest(unittest.TestCase):
             with self.subTest(extra=extra):
                 with self.assertRaises(ConstraintError):
                     _compile(extra)
+
+
+class RouteBoardPortTest(unittest.TestCase):
+    def test_route_board_joins_a_one_pad_net_to_its_block_port(self):
+        from pnr.route.detail.router import route_board
+
+        comp = Component(
+            "R1",
+            "r",
+            (1.5, 5.5),
+            0,
+            "top",
+            (1.6, 0.8),
+            (1.6, 0.8),
+            pads=[Pad("1", "CLK", (-0.5, 0), (0.5, 0.5)), Pad("2", "", (0.5, 0), (0.5, 0.5))],
+        )
+        graph = BoardGraph("t", [comp], [Net("CLK", 1, [("R1", "1")])])
+        cc = compile_constraints({"board": {"outline": {"w": 10, "h": 10}, "layers": 2}}, ["R1"])
+        rules = compile_routing_rules(cc, ["CLK"])
+        copper = dict(
+            frame="engine-mm-y-up", tracks=[], vias=[], blocks=[meander_block(gnd_via=False)]
+        )
+        result = route_board(graph, cc, rules, fixed_copper=copper)
+        self.assertEqual(result.result.unrouted, [])
+        self.assertIn("CLK", result.escape_diagnostics["block_ports"])
+        ends = {tuple(map(lambda v: round(v, 6), t[2])) for t in result.tracks} | {
+            tuple(map(lambda v: round(v, 6), t[3])) for t in result.tracks
+        }
+        self.assertIn((3.0, 5.0), ends)  # the free end nearest the pad
+        # Without the block the one-pad net is not routed at all.
+        bare = route_board(graph, cc, rules)
+        self.assertEqual(bare.tracks, [])
+        # The same copper carried in the rules routes the same.
+        again = route_board(graph, cc, dict(rules, fixed_copper=copper))
+        self.assertEqual(again.tracks, result.tracks)
+
+    def test_block_ports_skip_pieces_a_pad_reaches(self):
+        g = RouteGrid(10, 10, 0.1, clearance=0.1, track_width=0.1)
+        comp = Component(
+            "U1",
+            "u",
+            (3.0, 5.0),
+            0,
+            "top",
+            (0.4, 0.4),
+            (0.4, 0.4),
+            pads=[Pad("1", "CLK", (0, 0), (0.3, 0.3))],
+        )
+        graph = BoardGraph("t", [comp], [Net("CLK", 1, [("U1", "1")])])
+        copper = dict(
+            frame="engine-mm-y-up", tracks=[], vias=[], blocks=[meander_block(gnd_via=False)]
+        )
+        reserve_fixed_copper(g, copper)
+        self.assertEqual(block_ports(g, graph, copper), {})
 
 
 if __name__ == "__main__":

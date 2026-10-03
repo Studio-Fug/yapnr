@@ -948,15 +948,30 @@ def _in_pad_plane_via(board, pad, rules, oracle, obstacles) -> bool:
     return True
 
 
-def _clear_tracks(board) -> int:
+def _clear_tracks(board, keep_groups=None) -> int:
     """Remove all existing tracks + vias (mm-scale preview routing from the base
     autoroute pass). Moving footprints invalidates them; the detailed router
-    re-routes from a clean placed board. Returns the count removed."""
+    re-routes from a clean placed board. Returns the count removed. Items of the
+    KiCad groups named in ``keep_groups`` (fixed blocks, pnr.fixed_block) stay."""
     n = 0
     for t in list(board.GetTracks()):  # PCB_TRACK and PCB_VIA
+        if keep_groups and group_name(t) in keep_groups:
+            continue
         board.Delete(t)  # discarded (Delete, not Remove: see pnr.fanout_reserve.release)
         n += 1
     return n
+
+
+def group_name(item) -> Optional[str]:
+    """Name of the outermost KiCad group holding ``item`` (None outside any)."""
+    group = item.GetParentGroup()
+    name = None
+    while group is not None:
+        name = group.GetName()
+        # KiCad 10 returns the EDA_GROUP mixin; its item knows the enclosing group.
+        owner = group.AsEdaItem() if hasattr(group, "AsEdaItem") else group
+        group = owner.GetParentGroup()
+    return name
 
 
 def normalize_item_uuids(board):
@@ -995,7 +1010,13 @@ def normalize_item_uuids(board):
 
 
 def apply_placement(
-    board, graph: BoardGraph, *, width: float, height: float, layers: int = 2
+    board,
+    graph: BoardGraph,
+    *,
+    width: float,
+    height: float,
+    layers: int = 2,
+    keep_groups=None,
 ) -> int:
     """Move each footprint in ``board`` to its pose in ``graph``; clear old tracks;
     set the copper layer count.
@@ -1027,7 +1048,7 @@ def apply_placement(
         fp.SetOrientationDegrees(float(comp.rot))
         placed += 1
 
-    _clear_tracks(board)  # drop stale preview routing; the detail router re-routes
+    _clear_tracks(board, keep_groups)  # drop stale preview routing; the detail router re-routes
     # Keep pad nets/ratsnest consistent after the moves.
     board.BuildConnectivity()
     _ = pcbnew.F_Cu  # touch pcbnew so linters don't flag the import
@@ -1491,7 +1512,10 @@ def writeback(
     if rules and rules.get("references_on_fab"):
         for fp in board.GetFootprints():
             fp.Reference().SetLayer(pcbnew.B_Fab if fp.IsFlipped() else pcbnew.F_Fab)
-    n = apply_placement(board, graph, width=width, height=height, layers=layers)
+    keep = {b["group"] for b in (rules or {}).get("fixed_blocks") or []}
+    n = apply_placement(
+        board, graph, width=width, height=height, layers=layers, keep_groups=keep or None
+    )
     # Type the plane layers as POWER so signals stay on the outer layers
     # (F.Cu/B.Cu) and the inner layers carry the ground/power planes (pnr.planes).
     if rules:

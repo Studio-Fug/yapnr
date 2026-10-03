@@ -28,8 +28,12 @@ def run(board, rules, constraints, out, kicad_python, kicad_cli, iterations=12):
         with (out / name).open("w") as f:
             run_checked(args, session=False, env=env, stdout=f, stderr=subprocess.STDOUT)
 
+    # With fixed blocks declared (rules fixed_blocks) the export holds their
+    # footprints out of placed.json and records their copper as blocks.
     invoke(
-        [kicad_python, "-m", "pnr.fixed_copper", str(board), "--export-dir", str(out)], "export.log"
+        [kicad_python, "-m", "pnr.fixed_copper", str(board), "--export-dir", str(out)]
+        + (["--rules", str(rules)] if json.loads(rules.read_text()).get("fixed_blocks") else []),
+        "export.log",
     )
     g = BoardGraph.from_json((out / "placed.json").read_text())
     policy = json.loads(rules.read_text())

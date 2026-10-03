@@ -38,6 +38,9 @@ def _segment_clear(grid, net, layer, a, b, width):
     # and retained copper. Exact foreign-pad checks below may relax pad *halos*,
     # but they may never relax this mask.
     steps = max(1, math.ceil(math.dist(a, b) / (grid.pitch / 4)))
+    # Fixed-block copper (a centreline reservation, like the maze's): judged at the
+    # centre samples. Absent, nothing.
+    owned = getattr(grid, "fixed_owned", None)
     for step in range(steps + 1):
         x = a[0] + (b[0] - a[0]) * step / steps
         y = a[1] + (b[1] - a[1]) * step / steps
@@ -47,6 +50,12 @@ def _segment_clear(grid, net, layer, a, b, width):
             i, j = grid.cell_of(x + dx, y + dy)
             if grid.blocked[layer, j, i]:
                 return False
+            if dx or dy:
+                continue
+            if owned:
+                holder = owned.get((layer, i, j))
+                if holder is not None and holder != net:
+                    return False
     for la, owner, r in grid.pad_rectangles:
         if la != layer or owner == net:
             continue

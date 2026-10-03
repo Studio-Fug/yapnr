@@ -256,6 +256,12 @@ def _offgrid_escape(grid, net, center, pad_xy, side, part_center):
                     or grid.blocked[side, j, i]
                 ):
                     return False
+                # Fixed-block copper (owned by its nets): centre samples.
+                if (
+                    not (dx or dy)
+                    and getattr(grid, "fixed_owned", {}).get((side, i, j), net) != net
+                ):
+                    return False
         for layer, owner, r in grid.pad_rectangles:
             if layer != side or owner == net:
                 continue

@@ -181,6 +181,11 @@ class RouteGrid:
         # (net, site); a via missing from it is through.
         self.via_model = None
         self.escape_via_spans = {}
+        # Cells owned by fixed-block copper (pnr.route.detail.fixed, blocks only):
+        # (layer, i, j) -> net (or a conflict). A mirror of their ``pad_net`` claims
+        # for the exact escape tests (joint_escape), which read pad rectangles, not
+        # the owner tables. Empty: no fixed block.
+        self.fixed_owned = {}
 
     def plated_transition(self, net, i, j):
         """Exact source PTH centre when this column fits its existing copper land.
@@ -368,6 +373,57 @@ class RouteGrid:
             return False
         vh = self.via_halo.get((layer, i, j))
         return vh is None or vh == net
+
+    def polygon_cells(self, outline, holes=(), grow: float = 0.0):
+        """``[ny, nx]`` bool: cells whose centre lies inside the polygon (``outline``
+        less ``holes``, mm) or within ``grow`` of its boundary."""
+        ring = np.asarray(outline, dtype=float)
+        out = np.zeros((self.ny, self.nx), dtype=bool)
+        if len(ring) < 3:
+            return out
+        p = self.pitch
+        i0 = max(0, int(math.floor((ring[:, 0].min() - grow) / p)) - 1)
+        i1 = min(self.nx - 1, int(math.floor((ring[:, 0].max() + grow) / p)) + 1)
+        j0 = max(0, int(math.floor((ring[:, 1].min() - grow) / p)) - 1)
+        j1 = min(self.ny - 1, int(math.floor((ring[:, 1].max() + grow) / p)) + 1)
+        if i1 < i0 or j1 < j0:
+            return out
+        xs = (np.arange(i0, i1 + 1) + 0.5) * p
+        ys = (np.arange(j0, j1 + 1) + 0.5) * p
+        X, Y = np.meshgrid(xs, ys)
+
+        def inside(r):
+            hit = np.zeros(X.shape, dtype=bool)
+            for k in range(len(r)):
+                x0, y0 = r[k]
+                x1, y1 = r[(k + 1) % len(r)]
+                if y0 == y1:
+                    continue
+                crosses = (y0 > Y) != (y1 > Y)
+                xc = x0 + (Y - y0) / (y1 - y0) * (x1 - x0)
+                hit ^= crosses & (X < xc)
+            return hit
+
+        def near(r):
+            best = np.full(X.shape, np.inf)
+            for k in range(len(r)):
+                ax, ay = r[k]
+                bx, by = r[(k + 1) % len(r)]
+                dx, dy = bx - ax, by - ay
+                den = dx * dx + dy * dy
+                t = 0.0 if den == 0 else np.clip(((X - ax) * dx + (Y - ay) * dy) / den, 0.0, 1.0)
+                best = np.minimum(best, np.hypot(X - ax - t * dx, Y - ay - t * dy))
+            return best <= grow + 1e-12
+
+        mask = inside(ring)
+        rings = [np.asarray(h, dtype=float) for h in holes or () if len(h) >= 3]
+        for h in rings:
+            mask &= ~inside(h)
+        if grow > 0:
+            for r in [ring] + rings:
+                mask |= near(r)
+        out[j0 : j1 + 1, i0 : i1 + 1] = mask
+        return out
 
     def smd_via_ok(self, point: Tuple[float, float], net: Optional[str] = None) -> bool:
         """Fab profile via-to-SMD-pad rule for a via centred at ``point`` (mm).
@@ -630,6 +686,32 @@ class RouteGrid:
                 self._mark_rect(
                     la, r, grow, lambda L, i, j: self.via_blocked.__setitem__((L, j, i), True)
                 )
+
+    def block_polygon(
+        self,
+        outline,
+        holes=(),
+        layers: Optional[List[int]] = None,
+        grow: float = 0.0,
+        block_vias: bool = True,
+        via_grow: Optional[float] = None,
+        block_tracks: bool = True,
+    ) -> None:
+        """Block a polygon (``outline`` less ``holes``, mm) grown by ``grow`` on the
+        given layers (all by default), like :meth:`block_region` does a rectangle:
+        cells whose centre is inside or within ``grow`` of it. Vias are blocked within
+        ``via_grow`` (default ``grow``) on the same layers."""
+        lays = list(range(self.nlayers)) if layers is None else list(layers)
+        if not lays:
+            return
+        if block_tracks:
+            cells = self.polygon_cells(outline, holes, grow)
+            for la in lays:
+                self.blocked[la] |= cells
+        if block_vias:
+            cells = self.polygon_cells(outline, holes, grow if via_grow is None else via_grow)
+            for la in lays:
+                self.via_blocked[la] |= cells
 
     def block_edge_inset(self, inset: float) -> None:
         """Block every routing cell whose centre is within ``inset`` of the board

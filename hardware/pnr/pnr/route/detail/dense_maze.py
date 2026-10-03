@@ -65,7 +65,7 @@ MODELLED_SOURCES = {
 MODELLED_ATTRIBUTES = frozenset(
     (
         "_pth_keepouts _smd_index _wide_seen _wide_specs _wide_tables access blocked "
-        "clearance component_pth_min_drill drilled_pads escape_segments escape_vias "
+        "clearance component_pth_min_drill drilled_pads escape_segments escape_vias fixed_owned "
         "height hole_clearance in_pad layer_mask layers net_clearances net_widths nlayers "
         "npth_hole_gap nx ny pad_net pad_rectangles pad_track_halo pad_via_halo pitch plated_ports "
         "protected_escape_access pth_hole_gap routing_track_halos routing_via_keepout "

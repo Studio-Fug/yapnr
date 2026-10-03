@@ -18,6 +18,9 @@ Units: all coordinates and lengths are **millimetres**; ``rot`` is degrees CCW.
 The frame matches the constraint file: origin at the board-outline bottom-left.
 (``pcbnew`` reports nanometres with y pointing down; :mod:`pnr.ingest` converts.)
 
+``BoardGraph.stack`` (the board's declared copper stack, :mod:`pnr.stack`) is
+omitted when None, so a board without a stackup serializes byte-identically.
+
 src13: ``Component.reserves`` (placement reservations derived from routing rules,
 PNR_PAIR_LANDING_RESERVE) round-trips through JSON and is omitted when empty, so
 graphs without reservations serialize byte-identically to before.
@@ -157,6 +160,10 @@ class BoardGraph:
     nets: List[Net] = field(default_factory=list)
     outline: Optional[BoardOutline] = None
     schema: str = SCHEMA_VERSION
+    # The board's declared copper stack (pnr.ingest.stack_record): copper layers
+    # in order with KiCad type, copper thickness and zone nets. None when the
+    # board declares no physical stackup; then omitted from the JSON.
+    stack: Optional[dict] = None
 
     # -- convenience views -------------------------------------------------
 
@@ -189,6 +196,8 @@ class BoardGraph:
                 c.pop("reserves", None)
             if c.get("hull") is None:
                 c.pop("hull", None)
+        if d.get("stack") is None:
+            d.pop("stack", None)
         return d
 
     def to_json(self, *, indent: Optional[int] = 2) -> str:
@@ -251,6 +260,7 @@ class BoardGraph:
             nets=nets,
             outline=outline,
             schema=d.get("schema", SCHEMA_VERSION),
+            stack=d.get("stack"),
         )
 
     @classmethod

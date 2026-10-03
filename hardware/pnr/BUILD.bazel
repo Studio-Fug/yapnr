@@ -106,6 +106,7 @@ filegroup(
         "pnr/quality.py",
         "pnr/specctra.py",
         "pnr/writeback.py",
+        "pnr/stack.py",
         # PNR_SI=1 (the prepare worker imports pnr.si even with the flag off): SI v1
         # package + its committed models (profiles, cable, connector, receiver, parts).
         "pnr/si/__init__.py",
@@ -399,6 +400,25 @@ py_test(
     deps = [":pnr"],
 )
 
+# The board's copper stack through KiCad: ingest record, copper on any named layer,
+# plane layers formed at writeback, the plane-region model against KiCad's own zone
+# fill. It needs KiCad's Python (pcbnew): run it there by hand, as the other KiCad
+# tests (python3 -m unittest tests.test_stack_kicad).
+py_test(
+    name = "stack_kicad_test",
+    size = "small",
+    srcs = ["tests/test_stack_kicad.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_stack_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
+)
+
 py_test(
     name = "detail_maze_test",
     size = "small",
@@ -423,6 +443,45 @@ py_test(
     deps = [
         ":pnr",
         ":pnr_detail",
+    ],
+)
+
+# The board's own copper stack (pnr.stack): roles, legacy equality with the router's
+# heuristic on the gate and showcases, and agreement with every hard rung's judge rules.
+py_test(
+    name = "stack_test",
+    size = "small",
+    srcs = [
+        "regression/designs.py",
+        "regression/hard_rungs.py",
+        "regression/stackup.py",
+        "tests/test_stack.py",
+    ],
+    imports = [
+        ".",
+        "regression",
+    ],
+    legacy_create_init = False,
+    main = "tests/test_stack.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+    ],
+)
+
+# Stack-aware detailed routing: signal layers from the declared stack, plane drops
+# planned with the signal exits, and a two-layer stack identical to the legacy path.
+py_test(
+    name = "stack_route_test",
+    size = "medium",
+    srcs = ["tests/test_stack_route.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_stack_route.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
     ],
 )
 
@@ -1083,6 +1142,24 @@ py_test(
     imports = ["regression"],
     main = "regression/test_hard_rungs.py",
     deps = [":pnr"],
+)
+
+# The constraint checker's plane check on small boards (KiCad's Python: run it there by
+# hand, python3 -m unittest test_check_constraints in regression/).
+py_test(
+    name = "check_constraints_test",
+    size = "small",
+    srcs = [
+        "regression/check_constraints.py",
+        "regression/test_check_constraints.py",
+    ],
+    imports = ["regression"],
+    main = "regression/test_check_constraints.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
 )
 
 py_binary(

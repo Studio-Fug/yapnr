@@ -92,12 +92,54 @@ The approximate board you're targeting.
 | Key                    | Meaning                                                                                                                           |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | `outline: {w, h}`      | Placement region (mm). Parts are kept inside it; it becomes the `Edge.Cuts` rectangle. Omit to use the board's own outline.       |
-| `layers`               | Copper layer count (2/4). Inner layers are treated as power/ground planes, so routing capacity scales with the **signal** layers. |
+| `layers`               | Copper layer count (2 to 32). Without a declared stack (below), inner layers are treated as power/ground planes, so routing capacity scales with the **signal** layers. |
 | `default_clearance_mm` | Minimum courtyard-to-courtyard gap enforced in legalization, and the track pitch the lookahead router assumes.                    |
 
 The outline is _approximate guidance_: the placer frames the parts within it. Make
 it a bit larger than the parts need — an over-tight outline forces congestion and
 can leave the place↔route loop unable to reach zero overflow.
+
+**Declared copper stack.** A board whose KiCad file declares a physical stackup
+(Board Setup > Physical Stackup) is routed on its own stack (`pnr.stack`), for any
+layer count, when it types at least one layer `power` or `mixed` (Board Setup >
+Board Editor Layers) or keeps tracks off an inner layer by a custom rule
+(`.kicad_dru`: `(layer ...)`, `(constraint disallow track)`), or when it declares no
+`plane_layer` class and draws no zone on a signal-typed inner layer:
+
+- a `power` inner layer (or one a custom rule keeps free of tracks) is a
+  **dedicated plane**: no tracks. Its nets are the `plane_layer` classes naming it
+  plus the nets of zones already drawn on it, so a second ground plane is just a
+  zone in the source board. Every surface pad of
+  such a net drops a through via to it, planned together with the signal escapes
+  and sized for that pad's own entry width. The via must land where the net's
+  copper fills on one of its planes; a pad without such a site is reported
+  unrouted at the pad. Write-back keeps the zones already drawn and forms the
+  rest: the whole outline for a layer's only net; on a layer shared by several
+  nets, the outline for the net with the most pads and, at a higher fill
+  priority, its pads' bounding box plus 2 mm for each other net. The outline
+  net's drops then stay out of those boxes, so on a shared layer whose nets'
+  pads interleave, give each net a layer of its own or draw the zones;
+- a `mixed` layer, or a `signal` layer named by a `plane_layer` class, is a split
+  plane: the class nets' pads' bounding box, with signals in the gaps;
+- every other `signal` layer is routed, inner ones included; zones on it refill
+  around its tracks. A class with `current_a` stays off an inner layer whose
+  declared copper thickness would need a wider track (IPC-2221 internal) than the
+  class width;
+- the native KiCad loop's power paths use the routed layers (never a dedicated
+  plane), and a pair without its own `reference_layer` takes the dedicated plane
+  nearest F.Cu as its reference.
+
+A board without a declared stack keeps the behaviour above, and so does a declared
+stack whose planes come only from `plane_layer` classes on signal-typed layers, or
+whose only plane hints are zones on signal-typed inner layers (KiCad's default
+type). A declared stack that cannot be used as declared also keeps it: one copper
+layer, an unknown layer type, a `jumper` outer layer, another copper layer count
+than `layers`, or a stackup block whose copper rows are not the board's layers
+(KiCad keeps the old block when the layer count changes). Write-back keeps a
+declared stack's layer types. Each such decision, and each ambiguity (a `power`
+layer no class or zone gives a net, a shared plane layer, zones on a signal
+layer), is a warning in the run's log and in the PnR report
+(`escape_diagnostics.stack_warnings`).
 
 ### `fixed` — lock a pose (hard)
 

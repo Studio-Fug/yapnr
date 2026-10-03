@@ -577,6 +577,9 @@ def _place_route_loop(
             cell = detail_congestion(broute, placed, width, height, gcell_mm)
             overflow = float(missing)
         else:
+            from pnr.stack import resolve as resolve_stack
+
+            stack = resolve_stack(detail_rules, getattr(placed, "stack", None))
             gr = global_route(
                 placed,
                 width,
@@ -585,6 +588,7 @@ def _place_route_loop(
                 layers=layers,
                 track_pitch_mm=track_pitch_mm,
                 max_passes=route_passes,
+                signal_layers=None if stack is None else len(stack.grid_layers),
             )
             report.overflow_history.append(gr.overflow)
             report.route = gr

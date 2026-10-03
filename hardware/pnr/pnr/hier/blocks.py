@@ -21,6 +21,7 @@ from typing import Dict, List, Optional, Tuple
 
 from pnr.constraints import CompiledConstraints, Constraint
 from pnr.graph import BoardGraph, BoardOutline, Net
+from pnr.stack import local_record
 
 
 @dataclass
@@ -176,7 +177,9 @@ def sub_board(
     constraints that reference parts outside the block are dropped.
     """
     inside = set(block.refs)
-    sub = BoardGraph(name=graph.name + ":" + block.name)
+    sub = BoardGraph(
+        name=graph.name + ":" + block.name, stack=local_record(copy.deepcopy(graph.stack))
+    )
     for c in graph.components:
         if c.ref in inside:
             cc = copy.deepcopy(c)

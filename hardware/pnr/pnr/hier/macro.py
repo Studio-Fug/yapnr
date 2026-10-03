@@ -193,7 +193,11 @@ def collapse(
     """
     plan = MacroPlan()
     by_ref = {c.ref: c for c in flat.components}
-    macro_graph = BoardGraph(name=flat.name + ":macro", outline=copy.deepcopy(flat.outline))
+    macro_graph = BoardGraph(
+        name=flat.name + ":macro",
+        outline=copy.deepcopy(flat.outline),
+        stack=copy.deepcopy(flat.stack),
+    )
     pad_alias: Dict[Tuple[str, str], Tuple[str, str]] = {}
     # Orientation is a per-ref absolute axis: every ref of a lock counts, not just refs[0].
     orient_locks = {

@@ -314,6 +314,141 @@ def enumerate_access(
     return sorted(selected[:max_options], key=lambda c: (c.cost, c.access_key, c.segments))
 
 
+def _outside_own_lands(grid, net, p, rect=None):
+    """A drop via at ``p`` keeps its copper clear of every surface land of its own
+    net (``via_to_smd_pad`` under a fab profile, else the clearance): an unfilled
+    via in or touching a land wicks solder. Foreign lands are ``_via_clear``'s."""
+    keep = grid.via_radius + (
+        grid.via_to_smd_pad if grid.via_to_smd_pad is not None else grid.clearance
+    )
+    lands = [r for _, owner, r, _ in grid.smd_pads if owner == net]
+    if rect is not None:
+        lands.append(rect)
+    for r in lands:
+        dx = max(r.left - p[0], 0.0, p[0] - r.right)
+        dy = max(r.bottom - p[1], 0.0, p[1] - r.top)
+        if math.hypot(dx, dy) < keep - 1e-9:
+            return False
+    return True
+
+
+def _drop_via_clear(grid, net, p):
+    """A plane-drop via site judged on exact geometry: the drill's hole spacing,
+    every grid layer's via mask, and the via disk against foreign pad rectangles,
+    escape copper and the blocked mask (``_segment_clear``).
+
+    Unlike ``_via_clear`` it does not reject a site for a foreign track-halo cell
+    inside the square keep-out: that square is the maze's reservation (still
+    claimed for the chosen drop), not a copper-to-copper rule, and it shuts a
+    fine-pitch row's middle pins out of every outward site. Nor does it reject one
+    for a foreign pad's cell-rounded halo (``RouteGrid.pad_track_halo`` /
+    ``pad_via_halo``), which overstates the pad's clearance by up to a cell: the
+    pad rectangle itself is judged exactly. A halo cell any other reservation
+    wrote (a plated hole, fixed copper) still rejects the site, as does the fab
+    profile's via-to-SMD-pad rule."""
+    i, j = grid.cell_of(*p)
+    if not grid.in_bounds(i, j) or not grid.hole_site_clear(p):
+        return False
+    if grid.smd_via_blocked is not None and not grid.smd_via_ok(p, net):
+        return False
+    halos = (
+        (grid.pad_net, getattr(grid, "pad_track_halo", {})),
+        (grid.via_halo, getattr(grid, "pad_via_halo", {})),
+    )
+    for la in range(grid.nlayers):
+        if grid.via_blocked[la, j, i]:
+            return False
+        key = (la, i, j)
+        for table, pads_only in halos:
+            owner = table.get(key)
+            if owner is not None and owner != net and owner != pads_only.get(key):
+                return False
+        if not _segment_clear(grid, net, la, p, p, 2 * grid.via_radius):
+            return False
+    return True
+
+
+def enumerate_drops(
+    grid,
+    net,
+    pad_xy,
+    side,
+    *,
+    rect=None,
+    width,
+    via_keepout=1,
+    allow_in_pad=False,
+    reach=4,
+    max_options=8,
+    site_ok=None,
+):
+    """Plane-drop exits for a surface pad of a net with a dedicated plane.
+
+    Each option is a stub on the pad's layer from the pad centre to a through via
+    whose site clears every grid layer (``_via_clear``) and the pad's own lands;
+    the via reaches every plane of the net, so no maze tail follows. A filled via
+    in the pad is an option only under the fab profile's in-pad policy
+    (``allow_in_pad``), as for the native plane fanout. ``width`` is the pad's
+    required entry width (pnr.pad_entry). ``site_ok(point)``, when given, admits
+    only sites where the via reaches its net's own plane fill (a plane layer
+    shared by several nets, a partial plane zone: pnr.stack.PlaneAccess).
+    """
+    options = []
+    ci, cj = grid.cell_of(*pad_xy)
+    if (
+        allow_in_pad
+        and (site_ok is None or site_ok(pad_xy))
+        and _via_clear(grid, net, pad_xy, via_keepout)
+    ):
+        options.append(
+            _make_option(
+                grid, net, pad_xy, side, Cell(side, ci, cj), (), (pad_xy,), "drop", via_keepout
+            )
+        )
+    offsets = sorted(
+        ((di, dj) for di in range(-reach, reach + 1) for dj in range(-reach, reach + 1)),
+        key=lambda p: (p[0] ** 2 + p[1] ** 2, p),
+    )
+    found = []
+    for di, dj in offsets:
+        i, j = ci + di, cj + dj
+        if not grid.in_bounds(i, j):
+            continue
+        q = grid.center_of(i, j)
+        if site_ok is not None and not site_ok(q):
+            continue
+        if not _outside_own_lands(grid, net, q, rect) or not _drop_via_clear(grid, net, q):
+            continue
+        for path in sorted(elbows(pad_xy, q), key=lambda p: (length(p), len(p), p)):
+            if all(_segment_clear(grid, net, side, a, b, width) for a, b in zip(path, path[1:])):
+                trunk = tuple((side, a, b, width) for a, b in zip(path, path[1:]))
+                found.append(
+                    _make_option(
+                        grid, net, pad_xy, side, Cell(side, i, j), trunk, (q,), "drop", via_keepout
+                    )
+                )
+                break
+        if len(found) >= 4 * max_options:
+            break
+    # Directionally diverse: equal-cost sites on one side must not crowd out the
+    # only exit on the other side of a dense pad row.
+    found.sort(key=lambda c: (c.cost, c.access_key, c.segments))
+    chosen, directions = [], set()
+    for c in found:
+        p = c.vias[0]
+        direction = round(math.atan2(p[1] - pad_xy[1], p[0] - pad_xy[0]) / (math.pi / 4))
+        if direction not in directions:
+            directions.add(direction)
+            chosen.append(c)
+    for c in found:
+        if len(chosen) >= max_options:
+            break
+        if c not in chosen:
+            chosen.append(c)
+    options += chosen[: max(0, max_options - len(options))]
+    return sorted(options, key=lambda c: (c.cost, c.access_key, c.segments))
+
+
 def _overlap(a, b):
     return not (a[2] < b[0] or b[2] < a[0] or a[3] < b[1] or b[3] < a[1])
 
@@ -371,14 +506,56 @@ def plan_joint_escapes(
     max_options=16,
     max_states=20000,
     max_cluster_size=24,
+    drop_widths=None,
+    drop_in_pad=False,
+    drop_pad_width=None,
+    plane_access=None,
 ):
+    """Choose every terminal's exit jointly. ``drop_widths`` (net -> entry width)
+    names the nets with a dedicated plane: each of their surface pads becomes a
+    plane-drop terminal (:func:`enumerate_drops`) planned together with the signal
+    exits, kept out of ``net_access``; one without a drop is reported in
+    ``plan.blocked_nets`` and ``plan.drop_failures`` (net -> pad centres). Each
+    drop's stub is ``drop_pad_width[(ref, pad)]`` wide (else its net's width), and
+    ``plane_access`` (:class:`pnr.stack.PlaneAccess`) keeps its via inside the
+    net's own plane fill."""
     from .escape import Escape, EscapePlan
 
+    drop_widths = drop_widths or {}
+    drop_pad_width = drop_pad_width or {}
     options = {}
     terminals = {}
+    drops = set()
+    drop_width = {}
+    site_tests = {}
+    for net in drop_widths:
+        if plane_access is not None and plane_access.constrained(net):
+            site_tests[net] = lambda q, net=net: plane_access.site_ok(net, q)
     for comp in sorted(graph.components, key=lambda c: c.ref):
         side = grid.side_layer(comp.side)
         for index, ((name, net, rect), pad) in enumerate(zip(pad_rects(comp), comp.pads)):
+            if net in drop_widths and net not in net_names:
+                if pad.through_hole:
+                    continue  # the plated barrel already reaches every plane
+                key = "%s.%s#%d" % (comp.ref, name, index)
+                point = (rect.cx, rect.cy)
+                terminals[key] = (net, point, side)
+                drops.add(key)
+                drop_width[key] = drop_pad_width.get((comp.ref, pad.name), drop_widths[net])
+                options[key] = enumerate_drops(
+                    grid,
+                    net,
+                    point,
+                    side,
+                    rect=rect,
+                    width=drop_width[key],
+                    via_keepout=via_keepout,
+                    allow_in_pad=drop_in_pad,
+                    reach=dogbone_reach,
+                    max_options=max(1, max_options // 2),
+                    site_ok=site_tests.get(net),
+                )
+                continue
             if net not in net_names:
                 continue
             key = "%s.%s#%d" % (comp.ref, name, index)
@@ -418,12 +595,18 @@ def plan_joint_escapes(
     plan.diagnostics["candidate_counts"] = {k: len(cs) for k, cs in options.items()}
     plan.diagnostics["model"] = "joint-grid-pad-rectangles-v1"
     plan.blocked_nets = {terminals[key][0] for key in selection.unresolved}
+    plan.drop_failures = {}
+    for key in sorted(selection.unresolved):
+        if key in drops:
+            plan.drop_failures.setdefault(terminals[key][0], []).append(terminals[key][1])
     grid.protected_escape_access = {}
     for key in sorted(terminals):
         net, point, side = terminals[key]
         if key in selection.selected:
             choice = options[key][selection.selected[key]]
             esc = choice.escape
+            if key in drops:
+                esc.width = drop_width[key]
             # The complete legal assignment is known before any reservation is
             # committed. Foreign pad halos may still overlap the coarse corridor;
             # retain that conflict rather than erasing an unrelated obstacle.
@@ -443,6 +626,7 @@ def plan_joint_escapes(
                 pad_xy=point,
                 side_layer=grid.layers[side],
             )
-        plan.net_access.setdefault(net, []).append(esc.access)
+        if key not in drops:
+            plan.net_access.setdefault(net, []).append(esc.access)
         plan.escapes.append(esc)
     return plan

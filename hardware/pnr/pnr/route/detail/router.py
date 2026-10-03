@@ -86,6 +86,9 @@ class BoardRoute:
     pressure_events: Optional[list] = None
     deferred_nets: Set[str] = field(default_factory=set)
     escape_diagnostics: dict = field(default_factory=dict)
+    # The declared copper stack's warnings (pnr.stack.assess); also in
+    # escape_diagnostics["stack_warnings"], which the run's PnR report keeps.
+    stack_warnings: List[str] = field(default_factory=list)
 
     @property
     def fully_routed(self) -> bool:
@@ -126,22 +129,92 @@ def _signal_layers(rules: Optional[dict]) -> Tuple[str, ...]:
     """The copper layers the detailed router routes signals on. A 4-layer board
     with split planes on the inners routes on **all four** — F/B plus the inner-
     layer *gaps* between the split planes — which is the routing resource a dense
-    2-signal-layer board lacks. Otherwise the two outer layers."""
+    2-signal-layer board lacks. Otherwise the two outer layers. (The legacy
+    heuristic: a board that declares its stack uses :func:`layer_plan`.)"""
     if rules and int(rules.get("layers", 2)) >= 4 and _plane_nets(rules):
         return _FOUR_LAYER
     return DEFAULT_SIGNAL_LAYERS
 
 
+def layer_plan(graph: BoardGraph, rules: Optional[dict]):
+    """``(grid layers, plane nets, stack)`` for routing ``graph``.
+
+    A board that declares its copper stack (:mod:`pnr.stack`) routes every signal
+    and split-plane layer in stack order and keeps every net with a dedicated plane
+    out of the maze; otherwise (``stack`` None) the legacy heuristic, unchanged."""
+    from pnr.stack import assess
+
+    stack, warnings = assess(rules, getattr(graph, "stack", None))
+    _warn_once(warnings)
+    planes = _plane_nets(rules)
+    if stack is None:
+        return _signal_layers(rules), planes, None
+    return stack.grid_layers, planes | set(stack.plane_nets), stack
+
+
+_WARNED: Set[str] = set()
+
+
+def _warn_once(warnings) -> None:
+    """Each stack warning (pnr.stack.assess) once per process, on stderr, where the
+    run's place-and-route log keeps it; the route result also carries them."""
+    import sys
+
+    for text in warnings:
+        if text not in _WARNED:
+            _WARNED.add(text)
+            sys.stderr.write("pnr.stack: warning: %s\n" % text)
+
+
+# Copper thickness of one ounce per square foot (mm), the IPC-2221 unit.
+_OZ_MM = 0.035
+
+
+def current_layer_mask(stack, layers, rules, net_width, default_width):
+    """net -> the grid layers a current-rated net's tracks may use.
+
+    A net class with ``current_a`` sizes its width for outer copper (IPC-2221,
+    ``copper_oz``). An inner layer is open to such a net only if the IPC-2221
+    internal width at that layer's declared copper thickness fits the net's routed
+    width; the outer layers carry its pads and stay open. Nets that fit everywhere,
+    and layers of unknown thickness, are not restricted.
+    """
+    from pnr.electrical import current_width
+
+    out = {}
+    for nc in (rules or {}).get("net_classes", []):
+        current = nc.get("current_a")
+        if not current or nc.get("plane_layer"):
+            continue
+        for net in nc.get("nets", []):
+            width = net_width.get(net, default_width)
+            allowed = []
+            for index, name in enumerate(layers):
+                copper = stack.layer(name).copper_mm
+                inner = 0 < index < len(layers) - 1
+                if inner and copper:
+                    need = current_width(
+                        current, copper / _OZ_MM, nc.get("delta_t_c") or 10.0, external=False
+                    )
+                    if need > width + 1e-9:
+                        continue
+                allowed.append(index)
+            if len(allowed) < len(layers):
+                out[net] = frozenset(allowed)
+    return out
+
+
 def _mark_plane_regions(
-    grid: RouteGrid, graph: BoardGraph, rules: Optional[dict], margin: float
+    grid: RouteGrid, graph: BoardGraph, rules: Optional[dict], margin: float, stack=None
 ) -> None:
     """Block the poured split-plane regions on the inner layers so signals + their
     through-vias avoid the plane copper (they route the gaps). Each plane net's
     region is the bbox of its pads + ``margin`` (matching the writeback pour) +
     clearance — the same split-plane geometry :func:`pnr.writeback.apply_planes`
-    lays down, so the grid model and the emitted copper agree."""
+    lays down, so the grid model and the emitted copper agree. With a declared
+    ``stack`` only its split planes apply (dedicated planes are not grid layers)."""
     layer_idx = {name: i for i, name in enumerate(grid.layers)}
-    net_layer = _net_plane_layer(rules)
+    net_layer = _net_plane_layer(rules) if stack is None else stack.split_nets
     if not net_layer:
         return
     rects: dict = {}
@@ -323,7 +396,7 @@ def route_board(
     via_keepout = max(1, math.ceil((2 * via_radius_mm + clearance_mm) / pitch) - 1)
 
     width, height = outline_size(graph, constraints)
-    layers = _signal_layers(rules)
+    layers, planes, stack = layer_plan(graph, rules)
     grid = RouteGrid.from_graph(
         graph,
         width,
@@ -335,6 +408,10 @@ def route_board(
         via_radius=via_radius_mm,
     )
     grid.net_widths = net_width
+    if stack is not None:
+        grid.layer_mask = (
+            current_layer_mask(stack, layers, rules, net_width, track_width_mm) or None
+        )
     # Fab-profile per-hole-kind rules ride in rules['fab'] beside the 5 keys
     # _fab() keeps; absent (legacy rules) they leave the original model intact.
     extra = dict((rules or {}).get("fab") or {})
@@ -368,10 +445,9 @@ def route_board(
         )
     # Split planes on the inner layers become obstacles the signals route around
     # (matching the 2 mm writeback pour margin).
-    _mark_plane_regions(grid, graph, rules, margin=2.0)
+    _mark_plane_regions(grid, graph, rules, margin=2.0, stack=stack)
     _mark_copper_keepouts(grid, graph, rules)
     _mark_source_arrays(grid, graph, rules)
-    planes = _plane_nets(rules)
 
     # Plan a pin escape per pad (E2 via-in-pad / E3 dog-bone) — the access cell the
     # maze routes each net from, plus the escape geometry that bonds pad→access.
@@ -393,6 +469,32 @@ def route_board(
             max([track_width_mm] + [net_width.get(n, track_width_mm) for n in signal_nets]),
             **({"own_net": True} if fixed_copper_own_net else {}),
         )
+    # Stack-aware: every surface pad of a net with a dedicated plane drops a through
+    # via to it, planned jointly with the signal exits (no drop is left to after
+    # routing). Each stub carries its own pad's required entry width, and its via
+    # must land where the net's own plane fills (a layer shared by several nets
+    # splits into regions, pnr.stack.plane_regions).
+    drop_widths = {}
+    pad_drop_width = {}
+    plane_access = None
+    if stack is not None:
+        from pnr.pad_entry import terminal_required_width
+        from pnr.stack import PlaneAccess, pad_points, plane_regions
+
+        for comp in graph.components:
+            for pad in comp.pads:
+                if pad.net in stack.plane_nets and not pad.through_hole:
+                    w = terminal_required_width(comp.ref, pad.name, pad.net, rules or {})
+                    pad_drop_width[(comp.ref, pad.name)] = w
+                    drop_widths[pad.net] = max(drop_widths.get(pad.net, 0.0), w)
+        for n, w in drop_widths.items():
+            net_width.setdefault(n, w)
+        plane_access = PlaneAccess(
+            stack,
+            plane_regions(stack, graph.stack, pad_points(graph), width, height),
+            inset=via_radius_mm,
+            outset=via_radius_mm + clearance_mm + fab["track_width_mm"],
+        )
     plan = plan_escapes(
         grid,
         graph,
@@ -405,11 +507,20 @@ def route_board(
         joint_max_options=int(os.environ.get("PNR_JOINT_ACCESS_OPTIONS", "16")),
         joint_max_states=int(os.environ.get("PNR_JOINT_ACCESS_STATES", "20000")),
         joint_max_cluster_size=int(os.environ.get("PNR_JOINT_ACCESS_CLUSTER", "24")),
+        drop_widths=drop_widths or None,
+        drop_in_pad=grid.in_pad is not None,
+        drop_pad_width=pad_drop_width,
+        plane_access=plane_access,
     )
+    from pnr.stack import assess
+
+    stack_warnings = list(assess(rules, getattr(graph, "stack", None))[1])
+    if stack_warnings:
+        plan.diagnostics["stack_warnings"] = stack_warnings
     net_access = {
         n: cells
         for n, cells in plan.net_access.items()
-        if len(cells) >= 2 and n not in plan.blocked_nets
+        if len(cells) >= 2 and n not in plan.blocked_nets and n not in drop_widths
     }
     # PNR_TRACE_DIR only: records this route inside a traced route scope (pnr.trace).
     from .trace_route import start as trace_start
@@ -446,7 +557,11 @@ def route_board(
         plane_nets=planes,
         failure_sites=trapped_access_sites(grid, plan.net_access, result.unrouted),
         escape_diagnostics=plan.diagnostics,
+        stack_warnings=stack_warnings,
     )
+    for net, sites in plan.drop_failures.items():
+        # A plane pad without a drop is localized at the pad for the placement loop.
+        board.failure_sites[net] = sorted(set(board.failure_sites.get(net, [])) | set(sites))
     if os.environ.get("PNR_LOCAL_PRESSURE") == "1":
         from .pressure import localized_pressure
 
@@ -479,6 +594,10 @@ def route_board(
     # Emit each routed pad's escape geometry (on-layer stub, via-in-pad, or dog-bone
     # stub + via) so the net is electrically whole from the real pad centre.
     for esc in plan.escapes:
+        if esc.net in drop_widths:
+            # A plane drop needs no maze route: its through via reaches the planes.
+            _emit_escape(board, esc, grid, esc.width or drop_widths[esc.net])
+            continue
         rn = result.nets.get(esc.net)
         if rn is None or esc.access not in set(rn.cells):
             continue

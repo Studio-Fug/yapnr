@@ -48,6 +48,7 @@ class Escape:
     stub_path: Optional[List[Tuple[float, float]]] = None
     via_xy: Optional[Tuple[float, float]] = None  # via site (mm): pad ctr or stub end
     segments: Optional[list] = None  # joint access: (layer name, exact start, end)
+    width: Optional[float] = None  # a plane drop's stub width (its pad's entry width)
 
 
 @dataclass
@@ -56,6 +57,8 @@ class EscapePlan:
     escapes: List[Escape] = field(default_factory=list)
     blocked_nets: Set[str] = field(default_factory=set)
     diagnostics: dict = field(default_factory=dict)
+    # Plane drops (stack-aware): net -> centres of surface pads left without one.
+    drop_failures: Dict[str, List[Tuple[float, float]]] = field(default_factory=dict)
 
 
 def _line_clear(
@@ -86,6 +89,15 @@ def _via_clean(grid: RouteGrid, i: int, j: int, net: str, via_keepout: int, poin
     return True
 
 
+def via_layer_order(nlayers: int, side: int) -> List[int]:
+    """Layers to try for an escape via from the pad layer ``side``: the opposite
+    outer layer first (B.Cu for a top pad, F.Cu for a bottom pad), then the inner
+    layers from F.Cu's side."""
+    opposite = 0 if side == nlayers - 1 else nlayers - 1
+    order = [opposite] + list(range(1, nlayers - 1))
+    return [la for la in dict.fromkeys(order) if 0 <= la < nlayers and la != side]
+
+
 def _has_free_neighbor(grid: RouteGrid, c: Cell, net: str) -> bool:
     """True if cell ``c`` has an in-plane neighbour the net may enter — i.e. the net
     can actually leave ``c`` on that layer (an isolated cell is a dead end)."""
@@ -108,6 +120,10 @@ def plan_escapes(
     joint_max_options: int = 16,
     joint_max_states: int = 20000,
     joint_max_cluster_size: int = 24,
+    drop_widths: Optional[Dict[str, float]] = None,
+    drop_in_pad: bool = False,
+    drop_pad_width: Optional[Dict[Tuple[str, str], float]] = None,
+    plane_access=None,
 ) -> EscapePlan:
     """Plan a legal escape for every pad of the routable ``net_names``.
 
@@ -117,6 +133,13 @@ def plan_escapes(
     Escape vias reserve their keep-out (``via_keepout``) in the grid so subsequent
     escapes and the maze stay clear. Returns the per-pad access cells + the escape
     geometry to emit.
+
+    ``drop_widths`` (net -> stub width) names the nets with a dedicated plane whose
+    surface pads get a plane drop, planned jointly (``joint`` only; the sequential
+    planner leaves them to the native plane fanout); ``drop_pad_width`` sizes each
+    pad's stub ((ref, pad) -> width) and ``plane_access``
+    (:class:`pnr.stack.PlaneAccess`) admits only via sites inside the net's own
+    plane fill.
     """
     if joint:
         from .joint_escape import plan_joint_escapes
@@ -132,6 +155,10 @@ def plan_escapes(
             max_options=joint_max_options,
             max_states=joint_max_states,
             max_cluster_size=joint_max_cluster_size,
+            drop_widths=drop_widths,
+            drop_in_pad=drop_in_pad,
+            drop_pad_width=drop_pad_width,
+            plane_access=plane_access,
         )
     plan = EscapePlan()
     plan.diagnostics = {"model": "legacy-sequential", "complete": None}
@@ -348,8 +375,7 @@ def _plan_one(
     # 1) Via-in-pad (E2): a via straight down the pad centre to another layer with
     # room. Prefer the opposite outer layer, then the inner-layer gaps.
     if allow_via_in_pad:
-        order = [la for la in (grid.nlayers - 1, 1, 2) if 0 <= la < grid.nlayers and la != side]
-        for la in order:
+        for la in via_layer_order(grid.nlayers, side):
             tgt = Cell(la, ci, cj)
             if (
                 grid.via_passable(la, ci, cj, net, pad_xy)
@@ -393,9 +419,7 @@ def _plan_one(
                         stub_to=grid.center_of(ni, nj),
                     )
                 # dog-bone + via to another layer at the offset cell
-                for la in (grid.nlayers - 1, 1, 2):
-                    if not (0 <= la < grid.nlayers) or la == side:
-                        continue
+                for la in via_layer_order(grid.nlayers, side):
                     tgt = Cell(la, ni, nj)
                     if (
                         grid.via_passable(la, ni, nj, net)

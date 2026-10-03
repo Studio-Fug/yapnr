@@ -139,11 +139,11 @@ def repair(
 
 def _necks(mask: np.ndarray, outside: np.ndarray, r: int, frozen: np.ndarray) -> list:
     """Candidate √2 and one-pixel necks of the copper and gaps of the void (two-pixel rules):
-    [(kind, centre (x, y) in window pixel units, window pixels to widen or to close)]. A neck's
-    pixel is the facing void pixel with the smaller x, or the other one when that one is
-    `frozen` (fixed void or outside the window); a gap's pixels are its void pixels in the
-    window. `outside` as in `_opening` (r ≥ 2); the patterns are searched over the window and
-    the exterior around it."""
+    [(kind, centre (x, y) in window pixel units, window pixels)]. A neck's pixels are its two
+    facing void pixels that may become copper (not `frozen`, fixed void or outside the window),
+    the one with the smaller x first: alternatives, one of which `_repair_necks` widens. A gap's
+    pixels are its void pixels in the window, all of which it closes. `outside` as in `_opening`
+    (r ≥ 2); the patterns are searched over the window and the exterior around it."""
     ni, nj = mask.shape
     ext = outside.astype(bool).copy()
     ext[r : r + ni, r : r + nj] = mask
@@ -185,8 +185,9 @@ def _necks(mask: np.ndarray, outside: np.ndarray, r: int, frozen: np.ndarray) ->
                 if cop:
 
                     def pick(i, j, a_=a_, b_=b_):
+                        # Both facing void pixels that may become copper, A (smaller x) first.
                         pa, pb = (i + a_[0], j + a_[1]), (i + b_[0], j + b_[1])
-                        return [pa] if can[pa] else ([pb] if can[pb] else [])
+                        return [q for q in (pa, pb) if can[q]]
 
                 else:
 
@@ -216,6 +217,7 @@ def _repair_necks(b, outside, r, fixed, fv, kw, ks) -> np.ndarray:
     blocks thick enough that the disks from both sides overlap in it."""
     from yapnr.rf.export.contour import islands
     from yapnr.rf.export.drc import check_width_space
+    from yapnr.rf.export.raster import label
 
     ni, nj = b.shape
     frozen = np.ones_like(outside)  # fixed void and the exterior stay void
@@ -230,20 +232,72 @@ def _repair_necks(b, outside, r, fixed, fv, kw, ks) -> np.ndarray:
         if v.box_mm is not None:
             x0, x1, y0, y1 = v.box_mm
             boxes[v.kind].append((x0 - 0.5, x1 + 0.5, y0 - 0.5, y1 + 0.5))
-    neck = np.zeros_like(b)
+    ext = outside.astype(bool).copy()
+    ext[r : r + ni, r : r + nj] = b
+    lab, _ = label(ext)
+    keep_void = np.ones_like(ext)
+    keep_void[r : r + ni, r : r + nj] = fixed & ~fv
+    neck = np.zeros_like(ext)
     gap = np.zeros_like(b)
     for kind, (x, y), pix in cand:
         if not any(x0 <= x <= x1 and y0 <= y <= y1 for x0, x1, y0, y1 in boxes[kind]):
             continue
-        tgt = neck if kind == "width" else gap
-        for p, q in pix:
-            tgt[p, q] = True
-    out = b.copy()
-    if kw == 2 and neck.any():
-        out = _widen(out, neck & ~fixed, outside, kw, r, fixed & ~fv)
+        if kind == "space":
+            for p, q in pix:
+                gap[p, q] = True
+            continue
+        if kw != 2:
+            continue
+        # The copper component the neck belongs to: the copper pixels next to its centre.
+        ci, cj = int(np.floor(x)) + r, int(np.floor(y)) + r
+        own = {int(lab[a, c]) for a in (ci - 1, ci) for c in (cj - 1, cj) if lab[a, c] > 0}
+        for p, q in pix:  # A first, then B
+            sq = _square(ext, p + r, q + r, kw, keep_void, nj, r)
+            if sq is None:
+                continue
+            i0, j0 = sq
+            new = ~ext[i0 : i0 + kw, j0 : j0 + kw]
+            if _near_other(lab, own, i0, j0, kw, new, ks):
+                continue  # widening here would narrow a gap to other copper
+            neck[i0 : i0 + kw, j0 : j0 + kw] = True
+            break
+    out = b | neck[r : r + ni, r : r + nj]
     if ks == 2 and gap.any():
         out = _widen(out, gap & ~fixed, outside, kw, r, fixed & ~fv)
     return out
+
+
+def _square(ext, i, j, k, keep_void, nj, r):
+    """(i0, j0) of the k × k square through extended pixel (i, j) that needs the fewest new
+    copper pixels, none on `keep_void`; ties as in `_widen`; None if every square is blocked."""
+    best = None
+    n0, n1 = ext.shape
+    for a in range(k):
+        for c in range(k):
+            i0, j0 = i - a, j - c
+            if i0 < 0 or j0 < 0 or i0 + k > n0 or j0 + k > n1:
+                continue
+            need = ~ext[i0 : i0 + k, j0 : j0 + k]
+            if (need & keep_void[i0 : i0 + k, j0 : j0 + k]).any():
+                continue
+            key = (int(need.sum()), abs(2 * (j0 - r) + k - nj), i0)
+            if best is None or key < best[0]:
+                best = (key, i0, j0)
+    return None if best is None else best[1:]
+
+
+def _near_other(lab, own, i0, j0, k, new, ks) -> bool:
+    """Whether a new pixel of the square at (i0, j0) lies within `ks` pixels (Chebyshev) of
+    copper of a component other than `own`: the widening would open a gap narrower than the
+    minimum space, which the space pass closes, merging the components."""
+    n0, n1 = lab.shape
+    for a, c in np.argwhere(new):
+        p, q = i0 + a, j0 + c
+        win = lab[max(0, p - ks) : min(n0, p + ks + 1), max(0, q - ks) : min(n1, q + ks + 1)]
+        others = set(np.unique(win[win > 0]).tolist()) - own
+        if others:
+            return True
+    return False
 
 
 def _widen(

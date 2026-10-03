@@ -70,9 +70,17 @@ class StackupTest(unittest.TestCase):
         rules = {"diff_pairs": [], "length_match": []}
         self.assertFalse(lm.attach_stackup(rules, SGPS))
         self.assertNotIn("stackup", rules)
-        rules = {"diff_pairs": [{"name": "d", "p": "A", "n": "B"}]}
+        rules = {"diff_pairs": [{"name": "d", "p": "A", "n": "B"}], "layers": 4}
         self.assertTrue(lm.attach_stackup(rules, SGPS))
         self.assertEqual(len(lm.stackup_copper(rules["stackup"])), 4)
+
+    def test_a_stackup_of_another_layer_count_is_not_attached(self):
+        rules = {"diff_pairs": [{"name": "d", "p": "A", "n": "B"}], "layers": 2}
+        self.assertFalse(lm.attach_stackup(rules, SGPS))
+        self.assertNotIn("stackup", rules)
+        with self.assertRaises(ValueError):
+            lm.check_stackup(lm.read_stackup(SGPS), 2)
+        lm.check_stackup(lm.read_stackup(SGPS), 4)
 
     def test_six_layer_inner_span(self):
         st = lm.default_stackup(6)
@@ -126,10 +134,44 @@ class PadLandTest(unittest.TestCase):
         rules = {"diff_pairs": [], "length_match": []}
         self.assertFalse(lm.attach_board(rules, BOARD_PADS))
         self.assertEqual(rules, {"diff_pairs": [], "length_match": []})
-        rules = {"diff_pairs": [{"name": "d", "p": "DP", "n": "DN"}], "length_match": []}
+        rules = {
+            "diff_pairs": [{"name": "d", "p": "DP", "n": "DN"}],
+            "length_match": [],
+            "layers": 4,
+        }
         self.assertTrue(lm.attach_board(rules, BOARD_PADS + SGPS))
         self.assertIn(["J3", "2", 0.85], rules["pad_lands"])
         self.assertIn("stackup", rules)
+
+    def test_graph_pads_of_a_bottom_part_turned_a_quarter(self):
+        # A part flipped to the bottom and turned 90 degrees: its pad lands on B.Cu at
+        # the pin position, the 1.6 x 0.6 land standing 0.6 x 1.6.
+        from pnr.graph import BoardGraph, Component, Net, Pad
+        from pnr.place.geometry import pin_positions, set_component_side
+
+        comp = Component(
+            "U1",
+            "t",
+            (10.0, 5.0),
+            90,
+            "top",
+            (3, 3),
+            (3, 3),
+            pads=[Pad("1", "N", (1.0, 0.5), (1.6, 0.6), land_corner=0.0)],
+        )
+        set_component_side(comp, "bottom")
+        g = BoardGraph("b", [comp], [Net("N", 1, [("U1", "1")])])
+        (pad,) = lm.graph_pads(g, ["N"])
+        ((_name, centre),) = pin_positions(comp)
+        self.assertEqual(pad.side, "B.Cu")
+        self.assertEqual(pad.layers, frozenset(("B.Cu",)))
+        self.assertEqual(pad.centre, centre)
+        xs = [p[0] for p in pad.outline]
+        ys = [p[1] for p in pad.outline]
+        self.assertAlmostEqual(max(xs) - min(xs), 0.6)
+        self.assertAlmostEqual(max(ys) - min(ys), 1.6)
+        self.assertAlmostEqual(centre[0], 10.0 + 0.5)  # offset (1.0, -0.5) turned 90
+        self.assertAlmostEqual(centre[1], 5.0 + 1.0)
 
     def test_a_track_entering_a_round_pad_off_its_axis(self):
         # A routed ladder board (lm-bus-corner, seed 1): DP runs straight from the

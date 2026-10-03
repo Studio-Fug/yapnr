@@ -315,6 +315,22 @@ py_test(
     deps = [":pnr"],
 )
 
+# The same model against KiCad's own DRC lengths on probe boards; run it under KiCad's
+# Python by hand (KICAD_CLI names kicad-cli).
+py_test(
+    name = "length_oracle_kicad_test",
+    size = "small",
+    srcs = ["tests/test_length_oracle_kicad.py"],
+    imports = ["."],
+    main = "tests/test_length_oracle_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
+)
+
 # Pair / group length tuning after detailed routing (pnr.route.detail.tune).
 py_test(
     name = "length_tune_test",

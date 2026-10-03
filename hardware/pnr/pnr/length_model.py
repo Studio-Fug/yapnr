@@ -49,6 +49,7 @@ from __future__ import annotations
 import math
 import random
 import re
+import sys
 from dataclasses import dataclass, field
 from typing import Dict, FrozenSet, Iterable, List, Optional, Sequence, Tuple
 
@@ -153,15 +154,32 @@ def read_stackup(text: str) -> Optional[dict]:
     return out
 
 
+def check_stackup(st: dict, copper_layers: int) -> None:
+    """Raise ValueError unless ``st`` has ``copper_layers`` copper layers (a via
+    to a layer the stack does not have would measure nothing)."""
+    names = stackup_copper(st)
+    if len(names) != copper_layers:
+        raise ValueError(
+            "stackup %r has %d copper layers, the board %d"
+            % (st.get("name"), len(names), copper_layers)
+        )
+
+
 def attach_stackup(rules: dict, board_text: str) -> bool:
     """Give a design that declares pairs or groups its board's stackup
     (``rules["stackup"]``, read by the length tuner). Rules without pairs or groups,
-    or of a board without a stackup block, are left as they are. Returns whether the
-    rules changed."""
+    of a board without a stackup block, or whose stackup's copper layers are not the
+    rules' ``layers`` (the tuner then takes KiCad's default stack for ``layers``) are
+    left as they are. Returns whether the rules changed."""
     if rules.get("stackup") or not (rules.get("diff_pairs") or rules.get("length_match")):
         return False
     st = read_stackup(board_text)
     if st is None:
+        return False
+    try:
+        check_stackup(st, int(rules.get("layers", 2) or 2))
+    except ValueError as error:
+        sys.stderr.write("pnr.length_model: board stackup not used: %s\n" % error)
         return False
     rules["stackup"] = st
     return True
@@ -660,10 +678,14 @@ class _Pad:
         return "*" in self.layers or layer in self.layers
 
 
-def board_frame(height_mm: float, offset_mm: float = 30.0):
+def board_frame(height_mm: float, offset_mm: Optional[float] = None):
     """Engine millimetres (y up, origin at the outline's lower left) to the routed
     board's nanometres (y down, page offset), exactly as :func:`pnr.writeback.to_pcb_nm`
     writes them. KiCad's inside tests are half-open, so they depend on the frame."""
+    if offset_mm is None:
+        from pnr.writeback import _PAGE_OFFSET_MM
+
+        offset_mm = _PAGE_OFFSET_MM
 
     def frame(p: Point) -> IPoint:
         return (

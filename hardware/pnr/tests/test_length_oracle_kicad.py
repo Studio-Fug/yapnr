@@ -17,9 +17,10 @@ CLI = os.environ.get("KICAD_CLI") or os.environ.get(
 NATIVE = importlib.util.find_spec("pcbnew") is not None and Path(CLI).exists()
 
 
-def build(path, chains, vias, layers=2, pad_b_layer="F"):
-    """A board with SMD pads A (1.0 x 1.4 mm) and B (1.4 x 1.0 mm, on ``pad_b_layer``)
-    of net N, the ``chains`` [(layer, [points])] and ``vias`` [(x, y)] of N."""
+def build(path, chains, vias, layers=2, pad_b_layer="F", pad_b_angle=0.0):
+    """A board with SMD pads A (1.0 x 1.4 mm) and B (1.4 x 1.0 mm, on ``pad_b_layer``,
+    turned by ``pad_b_angle`` degrees) of net N, the ``chains`` [(layer, [points])]
+    and ``vias`` [(x, y)] of N."""
     import pcbnew as k
 
     b = k.BOARD()
@@ -52,6 +53,8 @@ def build(path, chains, vias, layers=2, pad_b_layer="F"):
         cu.AddLayer(layer[side])
         pad.SetLayerSet(cu)
         pad.SetPosition(V(*at))
+        if ref == "B" and pad_b_angle:
+            pad.SetOrientationDegrees(pad_b_angle)
         pad.SetNet(net)
         fp.Add(pad)
         b.Add(fp)
@@ -140,6 +143,18 @@ class OracleAgreementTest(unittest.TestCase):
         for name, (chains, vias) in cases.items():
             with self.subTest(name):
                 self.agree(chains, vias)
+
+    def test_bottom_and_turned_pads(self):
+        a, b = self.A, self.B
+        mid = (20.0, 12.0)
+        # B on the bottom: the line reaches it on B.Cu through a via, wandering
+        # inside the pad; then B turned 30 degrees, entered off its axis.
+        wander = [mid, (b[0] - 3, b[1]), (b[0] - 0.2, b[1] + 0.3), (b[0] + 0.3, b[1] + 0.2), b]
+        self.agree([("F", [a, mid]), ("B", wander)], [mid], pad_b_layer="B")
+        off_axis = [a, (b[0] - 2, b[1] + 1.0), (b[0] - 0.3, b[1] + 0.25), b]
+        for angle in (30.0, 90.0):
+            with self.subTest(angle=angle):
+                self.agree([("F", off_axis)], [], pad_b_angle=angle)
 
     def test_inner_layer_via(self):
         a, b = self.A, self.B

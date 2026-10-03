@@ -9,9 +9,10 @@ writeback would (the fanout's via classes, locked), then:
   copper gaps carry a 1 um margin, so an item planned at exactly the clearance is
   reported there: ``oracle_exact`` counts them);
 * KiCad's DRC (``kicad-cli pcb drc``, the board's own rules beside it) runs on the
-  copy; unconnected items are ignored (the router has not run), every other
-  finding is counted by type, and those touching the fanned-out part's window (its
-  courtyard grown by 2 mm) are listed.
+  copy; unconnected items and dangling vias and tracks are reported apart (the
+  router has not run and no plane is filled), every other finding is counted by
+  type, and those touching the fanned-out part's window (its bounding box grown by
+  2 mm) are listed.
 
 The original board is never written.
 """
@@ -73,6 +74,15 @@ def apply(board, plans, rules):
     return added
 
 
+def refill(board):
+    """Refill the board's zones around the added copper (as the planes stage does)."""
+    import pcbnew as k
+
+    zones = [z for z in board.Zones() if not z.GetIsRuleArea()]
+    if zones:
+        k.ZONE_FILLER(board).Fill(zones)
+
+
 def oracle_check(source_board, plans, rules):
     """Judge each planned item with the native Oracle on ``source_board`` (before
     any is added), reserving it once judged: ``{checked, rejected: [...]}``."""
@@ -107,6 +117,11 @@ def oracle_check(source_board, plans, rules):
     return dict(checked=checked, rejected=rejected)
 
 
+# Connectivity findings of an unrouted copy (no route, no plane fill yet): reported
+# apart, never counted against the fanout.
+DANGLING = ("via_dangling", "track_dangling")
+
+
 def drc(board_path: Path, kicad_cli: str, window, timeout=900) -> Dict:
     """KiCad DRC of ``board_path``: counts by type (unconnected items ignored) and
     the findings with an item inside ``window`` (pcbnew mm box)."""
@@ -130,8 +145,12 @@ def drc(board_path: Path, kicad_cli: str, window, timeout=900) -> Dict:
     report = json.loads(out.read_text())
     x0, y0, x1, y1 = window
     types = Counter()
+    dangling = Counter()
     inside = []
     for v in report.get("violations", []):
+        if v["type"] in DANGLING:
+            dangling[v["type"]] += 1
+            continue
         types[v["type"]] += 1
         for item in v.get("items", []):
             pos = item.get("pos") or {}
@@ -144,6 +163,7 @@ def drc(board_path: Path, kicad_cli: str, window, timeout=900) -> Dict:
         in_window_types=dict(sorted(Counter(v["type"] for v in inside).items())),
         in_window_items=inside[:50],
         unconnected_ignored=len(report.get("unconnected_items", [])),
+        dangling_ignored=dict(sorted(dangling.items())),
     )
 
 
@@ -183,6 +203,7 @@ def verify(board_path, rules: Dict, out_dir, *, kicad_cli: Optional[str] = None,
             shutil.copyfile(board_path.with_suffix(suffix), scratch.with_suffix(suffix))
     board = k.LoadBoard(str(board_path))
     added = apply(board, plans, rules)
+    refill(board)
     k.SaveBoard(str(scratch), board)
     report["items_added"] = len(added)
     if kicad_cli:

@@ -209,7 +209,6 @@ class FitTest(unittest.TestCase):
             ["F.Cu", "In2.Cu"],
             obs,
             clearance=0.1,
-            pad_clearance=0.1,
             via_to_pad=0.1,
             hole_to_hole=0.28,
             edge_clearance=0.3,
@@ -228,17 +227,28 @@ class FitTest(unittest.TestCase):
 
     def test_vacant_via_conflicts_with_its_interstitial_neighbours(self):
         m = self.model()
-        other, _same = m.stencils[(("v", 1), ("v", 0))]
+        other, _same = m.stencils[(("v", 1, 0), ("v", 0, 0))]
         for offset in ((1, 1), (-1, 1), (1, -1), (-1, -1)):
             self.assertIn(offset, other)
-        self.assertNotIn((2, 2), m.stencils[(("v", 0), ("v", 0))][0])
+        self.assertNotIn((2, 2), m.stencils[(("v", 0, 0), ("v", 0, 0))][0])
+
+    def test_a_wider_class_clearance_closes_the_channel_beside_it(self):
+        m = self.model()
+        m.net_clearance = {"N_E2": 0.15}  # the ball east of the channel (0.115 mm away)
+        m.clearances = [0.1, 0.15]
+        m._edge_cache.clear()
+        # A 0.10 track of a 0.10 net between E1 and E2 must keep 0.15 from E2 land.
+        self.assertIn("N_E2", m.edge_blockers(0, (1, 0), 1, 0.1, 0.1))
+        self.assertNotIn("N_E1", m.edge_blockers(0, (1, 0), 1, 0.1, 0.1))
+        # The same channel between two 0.10 nets is free.
+        self.assertEqual(m.edge_blockers(0, (5, 0), 1, 0.1, 0.1), frozenset())
 
     def test_channel_holds_one_track(self):
         m = self.model()
         # A track along the channel between two balls (x = half a pitch) clears both.
         self.assertEqual(m.edge_blockers(0, (1, 0), 1, 0.1), frozenset())
         # Two tracks a half pitch apart are legal; one cell apart they are not.
-        edges = m.stencils[(("e", 1, 0), ("e", 1, 0))][0]
+        edges = m.stencils[(("e", 1, 0, 0), ("e", 1, 0, 0))][0]
         self.assertNotIn((1, 0), edges)
         self.assertIn((0, 0), edges)
         # A track from a ball (lattice node 0, 0: E1, the bottom-left ball) is
@@ -295,6 +305,37 @@ class PlanTest(unittest.TestCase):
             if row.get("outward"):
                 self.assertLess(row["outward"][0], 0.5, name)  # never east
         self.assertEqual(violations(p, graph), [])
+
+    def test_fixed_pour_joins_its_balls_and_keeps_others_out(self):
+        positions = array(5)
+        nets = {n: "GND" if n in ("A1", "A2", "B1") else "S_" + n for n in positions}
+        graph = board(positions, nets)
+        # A GND pour over the north-west corner (A1, A2, B1) in the board frame.
+        pour = [[18.3, 20.9], [19.7, 20.9], [19.7, 21.6], [18.3, 21.6]]
+        fixed = dict(
+            frame="engine-mm-y-up",
+            tracks=[],
+            vias=[],
+            polygons=[dict(net="GND", layer="F.Cu", kind="zone", outline=pour)],
+        )
+        p = plan(
+            graph,
+            rules(),
+            spec(),
+            grid_layers=["F.Cu", "In2.Cu", "B.Cu"],
+            plane_nets={"GND"},
+            signal_nets={n.name for n in graph.nets if n.name != "GND"},
+            fixed_copper=fixed,
+        )
+        joined = sorted(n for n, r in p["terminals"].items() if r["kind"] == "fixed")
+        self.assertEqual(joined, ["A1", "A2"])  # B1 lies outside the pour
+        from pnr.fanout.geom import segment_polygon
+
+        for net, layer, a, b, w in p["copper"]["tracks"]:
+            if layer == "F.Cu" and net != "GND":
+                self.assertGreaterEqual(
+                    segment_polygon(tuple(a), tuple(b), pour), w / 2 + 0.1 - 1e-6
+                )
 
     def test_failed_pad_has_a_reason(self):
         positions = array(5)

@@ -1111,6 +1111,7 @@ def ufbga_base():
         smd_pad_clearance_mm=0.1,
         hole_to_hole_mm=0.25,
         via_to_smd_pad_mm=0.1,
+        min_via_diameter_mm=0.35,
     )
     cons["net_class"] = {
         "supply": dict(nets=["VCC"], width_mm=0.1),

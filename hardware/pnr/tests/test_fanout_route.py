@@ -20,6 +20,7 @@ FAB = {
     "smd_pad_clearance_mm": 0.1,
     "hole_to_hole_mm": 0.28,
     "via_to_smd_pad_mm": 0.1,
+    "min_via_diameter_mm": 0.31,
 }
 STACK = {
     "layers": [

@@ -10,10 +10,11 @@ kinds of the via class) and which pairs of objects of two nets cannot coexist
 spacing). Conflicts depend only on the two objects' kinds and their offset on the
 lattice, so they are computed once per board as **stencils**.
 
-Every number comes from the routing rules: the fab block (clearance, SMD pad
-clearance, via-to-SMD-pad, hole to hole, copper to edge, hole to edge), the net
-classes (width, clearance) and the fanout's via classes. The clearance between two
-fanout objects is the largest clearance any fanned-out net has (conservative).
+Every number comes from the routing rules: the fab block (clearance, via-to-SMD-pad,
+hole to hole, copper to edge, hole to edge), the net classes (width, clearance) and
+the fanout's via classes. Two nets keep the larger of their clearances (a net
+outside every class has the fab clearance), as KiCad's DRC judges them; an object's
+clearance is part of its type, so the stencils hold it exactly.
 """
 
 from __future__ import annotations
@@ -42,6 +43,9 @@ class Obstacles:
         # nets exempt from it)
         self.areas: List[Tuple[str, list, Optional[frozenset], bool, frozenset]] = []
         self.outline: Optional[list] = None  # board outline polygon (local frame)
+        # Fixed copper pours (fixed_copper "polygons", a block's solid zones): (net,
+        # polygon, layer indices or None for every layer); other nets keep clear.
+        self.zones: List[Tuple[str, list, Optional[frozenset]]] = []
 
 
 class Model:
@@ -54,7 +58,6 @@ class Model:
         obstacles: Obstacles,
         *,
         clearance: float,
-        pad_clearance: float,
         via_to_pad: Optional[float],
         hole_to_hole: float,
         edge_clearance: float,
@@ -63,12 +66,17 @@ class Model:
         widths: Sequence[float],
         margin: int = 2,
         in_pad=None,
+        net_clearance: Optional[Dict[str, float]] = None,
+        clearances: Sequence[float] = (),
     ):
         self.lat = lattice
         self.layers = list(layers)
         self.obs = obstacles
-        self.clearance = clearance
-        self.pad_clearance = max(pad_clearance, clearance)
+        self.clearance = clearance  # the fab clearance: a net in no class keeps it
+        self.net_clearance = dict(net_clearance or {})
+        self.clearances = sorted(
+            {round(clearance, 6)} | {round(max(clearance, c), 6) for c in clearances}
+        )
         self.via_to_pad = via_to_pad
         self.hole_to_hole = hole_to_hole
         self.edge_clearance = edge_clearance
@@ -99,6 +107,10 @@ class Model:
                 continue
             return False
         return True
+
+    def cl(self, net: str) -> float:
+        """``net``'s clearance: its class's where larger than the fab's."""
+        return max(self.clearance, self.net_clearance.get(net, 0.0))
 
     # ------------------------------------------------------------ nodes
 
@@ -175,38 +187,44 @@ class Model:
             segment_segment(a, b, poly[k], poly[(k + 1) % n]) >= keep - MARGIN for k in range(n)
         )
 
-    def edge_blockers(self, layer: int, node, d: int, width: float) -> Optional[frozenset]:
-        """Nets whose copper a track edge of ``width`` from ``node`` in direction
-        ``DIRS[d]`` on ``layer`` would violate (empty: free for every net), or None
-        when nothing may use it (an area, the outline, a no-net land)."""
-        key = (layer, node, d, width)
+    def edge_blockers(
+        self, layer: int, node, d: int, width: float, clearance: Optional[float] = None
+    ) -> Optional[frozenset]:
+        """Nets whose copper a track edge of ``width`` (of a net with ``clearance``,
+        default the fab's) from ``node`` in direction ``DIRS[d]`` on ``layer`` would
+        violate (empty: free for every net), or None when nothing may use it (an
+        area, the outline, a no-net land)."""
+        cl = self.clearance if clearance is None else clearance
+        key = (layer, node, d, width, cl)
         if key in self._edge_cache:
             return self._edge_cache[key]
         other = (node[0] + DIRS[d][0], node[1] + DIRS[d][1])
-        result = self._edge_blockers(layer, self.point(node), self.point(other), width)
+        result = self._edge_blockers(layer, self.point(node), self.point(other), width, cl)
         self._edge_cache[key] = result
         return result
 
-    def segment_blockers(self, layer, a, b, width) -> Optional[frozenset]:
+    def segment_blockers(self, layer, a, b, width, clearance=None) -> Optional[frozenset]:
         """As :meth:`edge_blockers` for any segment (a stub from a ball's exact centre)."""
-        return self._edge_blockers(layer, a, b, width)
+        cl = self.clearance if clearance is None else clearance
+        return self._edge_blockers(layer, a, b, width, cl)
 
-    def _edge_blockers(self, layer, a, b, width):
+    def _edge_blockers(self, layer, a, b, width, cl):
         nets = set()
         half = width / 2
         if layer == 0:
             for land in self._near_lands(a, b):
-                if land.distance(a, b) < half + self.pad_clearance - MARGIN:
+                if land.distance(a, b) < half + max(cl, self.cl(land.net)) - MARGIN:
                     if not land.net:
                         return None
                     nets.add(land.net)
         for net, la, p, q, w in self.obs.tracks:
-            if la == layer and segment_segment(a, b, p, q) < half + w / 2 + self.clearance - MARGIN:
+            gap = half + w / 2 + max(cl, self.cl(net)) - MARGIN
+            if la == layer and segment_segment(a, b, p, q) < gap:
                 if not net:
                     return None
                 nets.add(net)
         for net, c, dia, _drill in self.obs.vias:
-            if segment_segment(a, b, c, c) < half + dia / 2 + self.clearance - MARGIN:
+            if segment_segment(a, b, c, c) < half + dia / 2 + max(cl, self.cl(net)) - MARGIN:
                 if not net:
                     return None
                 nets.add(net)
@@ -215,6 +233,12 @@ class Model:
                 if not allow:
                     return None
                 nets.add(AREA + name)
+        for net, poly, layers in self.obs.zones:
+            if layers is None or layer in layers:
+                if segment_polygon(a, b, poly) < half + max(cl, self.cl(net)) - MARGIN:
+                    if not net:
+                        return None
+                    nets.add(net)
         if not self._outline_clear(a, b, half + self.edge_clearance):
             return None
         return frozenset(nets)
@@ -245,8 +269,8 @@ class Model:
         d, h = cls["diameter_mm"], cls["drill_mm"]
         r = d / 2
         nets = set()
-        keep_own = self.via_to_pad if self.via_to_pad is not None else self.clearance
-        keep_foreign = max(self.pad_clearance, self.via_to_pad or 0.0)
+        cl = self.cl(net)
+        keep_own = self.via_to_pad if self.via_to_pad is not None else cl
         for land in self._near_lands(p, p):
             dist = land.distance(p, p)
             if land.net and land.net == net:
@@ -256,12 +280,12 @@ class Model:
                 elif dist < r + keep_own - MARGIN:
                     return None
                 continue
-            if dist < r + keep_foreign - MARGIN:
+            if dist < r + max(cl, self.cl(land.net), self.via_to_pad or 0.0) - MARGIN:
                 if not land.net:
                     return None
                 nets.add(land.net)
         for other, _la, a, b, w in self.obs.tracks:
-            if segment_segment(p, p, a, b) < r + w / 2 + self.clearance - MARGIN:
+            if segment_segment(p, p, a, b) < r + w / 2 + max(cl, self.cl(other)) - MARGIN:
                 if not other:
                     return None
                 nets.add(other)
@@ -269,7 +293,7 @@ class Model:
             gap = math.dist(p, c)
             if gap < (h + drill) / 2 + self.hole_to_hole - MARGIN and gap > 1e-6:
                 return None  # drills too close, whatever the nets
-            if gap < r + dia / 2 + self.clearance - MARGIN:
+            if gap < r + dia / 2 + max(cl, self.cl(other)) - MARGIN:
                 if not other:
                     return None
                 nets.add(other)
@@ -278,6 +302,11 @@ class Model:
                 if not allow:
                     return None
                 nets.add(AREA + name)
+        for other, poly, _layers in self.obs.zones:  # a through via meets every layer
+            if other != net and segment_polygon(p, p, poly) < r + max(cl, self.cl(other)) - MARGIN:
+                if not other:
+                    return None
+                nets.add(other)
         keep = r + self.edge_clearance
         if self.hole_to_edge is not None:
             keep = max(keep, h / 2 + self.hole_to_edge)
@@ -293,29 +322,53 @@ class Model:
         offset = (p[0] - land.centre[0], p[1] - land.centre[1])
         return in_pad_fit(self.in_pad, (2 * land.hw, 2 * land.hh), offset, d, h, land.corner)
 
+    def joined(self, land, layer: int = 0) -> bool:
+        """``land`` already touches fixed copper of its own net on ``layer`` (a
+        block's pour or track): the block's copper is its connection."""
+        if not land.net:
+            return False
+        c = land.centre
+        for net, poly, layers in self.obs.zones:
+            if net == land.net and (layers is None or layer in layers):
+                if segment_polygon(c, c, poly) <= land.radius:
+                    if point_in_polygon(c, poly) or any(
+                        land.distance(poly[k], poly[(k + 1) % len(poly)]) <= 0.0
+                        for k in range(len(poly))
+                    ):
+                        return True
+        for net, la, a, b, w in self.obs.tracks:
+            if net == land.net and la == layer and land.distance(a, b) <= w / 2:
+                return True
+        return False
+
     # ------------------------------------------------------------ conflicts
 
-    def edge_type(self, d: int, width: float) -> Tuple:
-        return ("e", d, self.widths.index(round(width, 6)))
+    def clearance_class(self, net: str) -> int:
+        return self.clearances.index(round(self.cl(net), 6))
 
-    def via_type(self, k: int) -> Tuple:
-        return ("v", k)
+    def edge_type(self, d: int, width: float, net: str = "") -> Tuple:
+        return ("e", d, self.widths.index(round(width, 6)), self.clearance_class(net))
+
+    def via_type(self, k: int, net: str = "") -> Tuple:
+        return ("v", k, self.clearance_class(net))
 
     def _types(self):
-        return [("e", d, w) for d in range(4) for w in range(len(self.widths))] + [
-            ("v", k) for k in range(len(self.via_classes))
+        cc = range(len(self.clearances))
+        return [("e", d, w, c) for d in range(4) for w in range(len(self.widths)) for c in cc] + [
+            ("v", k, c) for k in range(len(self.via_classes)) for c in cc
         ]
 
     def _shape(self, t, origin=(0, 0)):
-        """(segment start, end, radius, drill or None) of an object of type ``t`` at
-        half-lattice ``origin`` (its position relative to the stencil's origin)."""
+        """(segment start, end, radius, drill or None, clearance) of an object of type
+        ``t`` at half-lattice ``origin`` (relative to the stencil's origin)."""
         hx, hy = self.lat.px / 2, self.lat.py / 2
         p = (origin[0] * hx, origin[1] * hy)
         if t[0] == "e":
             dx, dy = DIRS[t[1]]
-            return p, (p[0] + dx * hx, p[1] + dy * hy), self.widths[t[2]] / 2, None
+            end = (p[0] + dx * hx, p[1] + dy * hy)
+            return p, end, self.widths[t[2]] / 2, None, self.clearances[t[3]]
         cls = self.via_classes[t[1]]
-        return p, p, cls["diameter_mm"] / 2, cls["drill_mm"]
+        return p, p, cls["diameter_mm"] / 2, cls["drill_mm"], self.clearances[t[2]]
 
     def _stencils(self):
         """``{(type a, type b): (other-net offsets, same-net offsets)}``: the offsets
@@ -325,7 +378,7 @@ class Model:
             math.ceil(
                 (
                     max([w for w in self.widths] + [c["diameter_mm"] for c in self.via_classes])
-                    + self.clearance
+                    + max(self.clearances)
                     + self.hole_to_hole
                 )
                 / (min(self.lat.px, self.lat.py) / 2)
@@ -334,14 +387,14 @@ class Model:
         out = {}
         types = self._types()
         for ta in types:
-            a0, a1, ra, ha = self._shape(ta)
+            a0, a1, ra, ha, ca = self._shape(ta)
             for tb in types:
                 other, same = [], []
                 for da in range(-reach, reach + 1):
                     for db in range(-reach, reach + 1):
-                        b0, b1, rb, hb = self._shape(tb, (da, db))
+                        b0, b1, rb, hb, cb = self._shape(tb, (da, db))
                         gap = segment_segment(a0, a1, b0, b1)
-                        if gap < ra + rb + self.clearance - MARGIN:
+                        if gap < ra + rb + max(ca, cb) - MARGIN:
                             other.append((da, db))
                         if ha is not None and hb is not None and (da, db) != (0, 0):
                             if gap < (ha + hb) / 2 + self.hole_to_hole - MARGIN:

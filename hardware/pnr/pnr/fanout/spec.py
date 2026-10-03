@@ -284,7 +284,8 @@ def check(spec: Dict, rules: Dict, layers: Sequence[str]) -> List[str]:
         ]
     min_drill = float(fab.get("min_through_drill_mm", 0.0) or 0.0)
     annular = float(fab.get("via_annular_mm", 0.0) or 0.0)
-    min_dia = fab.get("min_via_diameter_mm")
+    # The judge's board setup minimum (pnr.fab_profile.board_constraints).
+    min_dia = fab.get("min_via_diameter_mm", fab.get("via_diameter_mm"))
     for c in spec["via_classes"]:
         w = "%s.via_classes.%s" % (where, c["name"])
         if c["drill_mm"] < min_drill - 1e-9:
@@ -299,8 +300,8 @@ def check(spec: Dict, rules: Dict, layers: Sequence[str]) -> List[str]:
             )
         if min_dia is not None and c["diameter_mm"] < float(min_dia) - 1e-9:
             raise FanoutError(
-                "%s: diameter %.3f is under the fab's min_via_diameter %.3f"
-                % (w, c["diameter_mm"], float(min_dia))
+                "%s: diameter %.3f is under the fab's minimum via %.3f (min_via_diameter_mm, "
+                "else via_diameter_mm)" % (w, c["diameter_mm"], float(min_dia))
             )
         if "in_pad" in c["sites"] and g.in_pad is None:
             raise FanoutError(w + ": in_pad sites need the fab profile's filled via-in-pad class")

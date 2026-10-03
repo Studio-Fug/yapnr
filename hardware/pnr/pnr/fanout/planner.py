@@ -183,6 +183,18 @@ def _obstacles(graph, rules, spec, comp, pose, layers, fixed_copper):
             obs.tracks.append(
                 (net, lidx[layer], pose.to_local(tuple(a)), pose.to_local(tuple(b)), float(width))
             )
+    for poly in (fixed_copper or {}).get("polygons", []):
+        # A fixed block's pads and solid zones (fixed.json schema 2): other nets'
+        # copper keeps clear; on the surface a ball of its net is joined by it.
+        if poly.get("layer") not in lidx:
+            continue
+        obs.zones.append(
+            (
+                poly.get("net", ""),
+                [pose.to_local(tuple(p)) for p in poly["outline"]],
+                frozenset({lidx[poly["layer"]]}),
+            )
+        )
     for via in (fixed_copper or {}).get("vias", []):
         obs.vias.append(
             (
@@ -298,15 +310,14 @@ def plan(
         raise FanoutError("fanout %s: %s" % (spec["name"], error)) from None
     g = geometry(rules)
     fab = rules.get("fab") or {}
-    clearance = max(
-        [float(fab.get("clearance_mm", 0.13))]
-        + [
-            float(c["clearance_mm"])
-            for c in rules.get("net_classes", [])
-            if c.get("clearance_mm") and set(c.get("nets", [])) & (plane_nets | signal_nets)
-        ]
-    )
-    pad_clearance = float(fab.get("smd_pad_clearance_mm") or clearance)
+    clearance = float(fab.get("clearance_mm", 0.13))
+    # Each net keeps its class's clearance where larger (route_board's
+    # _net_clearances): two nets keep the larger of theirs, as KiCad's DRC judges.
+    net_clearance = {}
+    for c in rules.get("net_classes", []):
+        if c.get("clearance_mm"):
+            for n in c.get("nets", []):
+                net_clearance[n] = max(net_clearance.get(n, 0.0), float(c["clearance_mm"]))
     # The pads this fanout covers and their tasks.
     fanned = {}
     skipped = {}
@@ -338,7 +349,13 @@ def plan(
         layers,
         obs,
         clearance=clearance,
-        pad_clearance=pad_clearance,
+        net_clearance=net_clearance,
+        clearances=sorted(
+            {
+                max(clearance, net_clearance.get(land.net, 0.0))
+                for _k, (_kind, _c, _r, land) in fanned.items()
+            }
+        ),
         via_to_pad=g.via_to_smd_pad,
         hole_to_hole=g.hole_to_hole,
         edge_clearance=g.edge_clearance,
@@ -350,6 +367,7 @@ def plan(
     exits = _exits(model, pose, layers, spec)
     escape_idx = list(range(1, len(layers)))
     tasks = []
+    joined = {}
     for name, (kind, col, row, land) in sorted(fanned.items()):
         ring = lat.ring(col, row)
         cls = class_for(spec, land.net)
@@ -379,6 +397,11 @@ def plan(
         )
         if k < 0 and (kind == "drop" or 0 not in exit_layers):
             task.failed = "no via class for net %s" % land.net
+        if kind == "drop" and model.joined(
+            Land(land.centre, land.size[0] / 2, land.size[1] / 2, land.corner or 0.0, land.net)
+        ):
+            joined[name] = land.net  # its fixed copper is its connection: no drop
+            continue
         tasks.append(task)
     assigner = Assigner(
         model,
@@ -387,6 +410,8 @@ def plan(
         variant=spec.get("variant", 0),
     )
     assigner.run()
+    for name, net in joined.items():
+        skipped[name] = ("fixed", net)
     result = _emit(spec, comp, pose, lat, model, tasks, skipped, warnings, assigner, digest, layers)
     if spec.get("bottom_sites"):
         from .bottom import sites
@@ -465,6 +490,15 @@ def _emit(spec, comp, pose, lat, model, tasks, skipped, warnings, assigner, dige
             row.update(exit=xy(ext[2]), outward=[round(direction[0], 6), round(direction[1], 6)])
         terminals[t.pad] = row
     for name, reason in sorted(skipped.items()):
+        if isinstance(reason, tuple):  # a plane ball its fixed copper already joins
+            land = next(b for b in lat.balls.values() if b.name == name)
+            terminals[name] = dict(
+                kind="fixed",
+                net=reason[1],
+                pad_xy=xy(land.centre),
+                reason="joined by fixed copper of its net (no drop)",
+            )
+            continue
         terminals[name] = dict(kind="skipped", reason=reason)
     counts = Counter()
     for name, row in terminals.items():

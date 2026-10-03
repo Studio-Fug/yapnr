@@ -93,12 +93,12 @@ class Assigner:
         via positions it excludes for its own net (drill spacing)."""
         m = self.m
         if obj[0] == "e":
-            _, layer, node, d, wc = obj
-            ta = ("e", d, wc)
+            _, layer, node, d, wc, cc = obj
+            ta = ("e", d, wc, cc)
         else:
-            _, node, k = obj
+            _, node, k, cc = obj
             layer = None
-            ta = ("v", k)
+            ta = ("v", k, cc)
         other, same = [], []
         for (sa, tb), (offsets, same_offsets) in m.stencils.items():
             if sa != ta:
@@ -106,13 +106,13 @@ class Assigner:
             for da, db in offsets:
                 at = (node[0] + da, node[1] + db)
                 if tb[0] == "v":
-                    other.append(("v", at, tb[1]))
+                    other.append(("v", at, tb[1], tb[2]))
                 elif layer is not None:
-                    other.append(("e", layer, at, tb[1], tb[2]))
+                    other.append(("e", layer, at, tb[1], tb[2], tb[3]))
                 else:
-                    other.extend(("e", la, at, tb[1], tb[2]) for la in range(len(m.layers)))
+                    other.extend(("e", la, at, tb[1], tb[2], tb[3]) for la in range(len(m.layers)))
             for da, db in same_offsets:
-                same.append(("v", (node[0] + da, node[1] + db), tb[1]))
+                same.append(("v", (node[0] + da, node[1] + db), tb[1], tb[2]))
         return other, same
 
     def _apply(self, net, objs, sign):
@@ -184,6 +184,8 @@ class Assigner:
         m = self.m
         net, w = task.net, task.width
         wc = m.widths.index(round(w, 6))
+        cc = m.clearance_class(net)
+        cl = m.cl(net)
         start = (0, task.node)
         best = {start: 0.0}
         prev = {}
@@ -201,7 +203,7 @@ class Assigner:
             moves = []
             # The goal: a via (drops), or an exit node's outward step (signals).
             if layer == 0 and (task.kind == "drop" or task.via_layers):
-                via = ("v", node, task.via_class)
+                via = ("v", node, task.via_class, cc)
                 if m.legal(m.via_blockers(node, task.via_class, net), net):
                     in_pad = node == task.node
                     base = self.via_cost + (self.in_pad_cost if in_pad else 0.0)
@@ -216,8 +218,8 @@ class Assigner:
                 out = self.exits.get(layer, {}).get(node)
                 if out is not None:
                     o, d = self.edge(layer, node, out)
-                    if m.legal(m.edge_blockers(layer, o, d, w), net):
-                        obj = ("e", layer, o, d, wc)
+                    if m.legal(m.edge_blockers(layer, o, d, w, cl), net):
+                        obj = ("e", layer, o, d, wc, cc)
                         c = self.cost(obj, self.length[d], net, strict)
                         if c is not None:
                             moves.append(("GOAL", c, (obj,)))
@@ -238,9 +240,9 @@ class Assigner:
                 if m.site_kind(nxt) == "ball" and nxt != task.node and layer == 0:
                     continue  # another ball's land (judged anyway; skip early)
                 o, d = self.edge(layer, node, step)
-                if not m.legal(m.edge_blockers(layer, o, d, w), net):
+                if not m.legal(m.edge_blockers(layer, o, d, w, cl), net):
                     continue
-                obj = ("e", layer, o, d, wc)
+                obj = ("e", layer, o, d, wc, cc)
                 c = self.cost(obj, self.length[d], net, strict)
                 if c is None:
                     continue

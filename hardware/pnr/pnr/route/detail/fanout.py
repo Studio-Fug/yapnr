@@ -154,6 +154,21 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
                 continue
             out.skip_pads.add((comp.ref, name))
             pad_xy = centres[name]
+            if row["kind"] == "fixed":
+                # A plane ball the fixed copper of its net already joins: planned,
+                # with nothing to emit (so it is not late copper either).
+                out.escapes.append(
+                    Escape(
+                        net=row["net"],
+                        kind="joint",
+                        access=Cell(side, *grid.cell_of(*pad_xy)),
+                        pad_xy=pad_xy,
+                        side_layer=grid.layers[side],
+                        segments=[],
+                        fanout=spec["name"],
+                    )
+                )
+                continue
             if row["kind"] == "failed":
                 rows.append((spec, comp, name, row, pad_xy, side, None, None))
                 continue

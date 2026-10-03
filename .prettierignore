@@ -3,3 +3,5 @@ MODULE.bazel.lock
 requirements.lock
 # Written by //hardware/pnr:ladder_animations; kept as generated, so a refresh has no churn.
 docs/animations/
+# Written by the tests (YAPNR_UPDATE_GOLDEN=1, tests/unit/exp) and compared byte for byte.
+tests/unit/exp/golden/

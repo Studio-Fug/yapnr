@@ -23,6 +23,10 @@ The commands:
 
 ``yapnr part-cache ...``
     The part cache: local directory or server (docs/part-cache.md).
+
+``yapnr exp plan|submit|status|logs|fetch|cancel|doctor|prices|unfreeze|calibration``
+    Experiment campaigns on a local pool, Google Cloud Batch or Slurm
+    (docs/cloud-experiments.md).
 """
 
 from __future__ import annotations
@@ -172,12 +176,14 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.add_argument("--json", action="store_true", help="machine-readable output")
     doctor.set_defaults(func=_cmd_doctor)
 
+    from yapnr.exp.cli import register as register_exp
     from yapnr.frontends.atopile.cli import register_atopile, register_picker
     from yapnr.partcache.cli import register as register_part_cache
 
     register_atopile(commands)
     register_picker(commands)
     register_part_cache(commands)
+    register_exp(commands)
     return parser
 
 

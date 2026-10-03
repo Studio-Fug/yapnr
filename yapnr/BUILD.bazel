@@ -12,8 +12,9 @@ py_library(
         "frontends/__init__.py",
     ],
     imports = [".."],
-    # The `atopile`, `picker` and `part-cache` commands (imported when the parser is built).
+    # The `atopile`, `picker`, `part-cache` and `exp` commands (imported when the parser is built).
     deps = [
+        "//yapnr/exp",
         "//yapnr/frontends/atopile",
         "//yapnr/partcache",
     ],

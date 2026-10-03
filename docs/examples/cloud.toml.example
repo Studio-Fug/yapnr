@@ -1,0 +1,75 @@
+# The owner configuration of `yapnr exp` (docs/cloud-experiments.md). Copy it to
+# ~/.config/yapnr/cloud.toml (or point YAPNR_CLOUD_CONFIG at another file) and replace every
+# example value. Real values never go into the repository. Every key is optional unless marked
+# "required"; the defaults are the values shown.
+
+# --- Google Cloud Batch (`--backend gcp-batch`). Fill it from `tofu output` (infra/gcp).
+[gcp]
+project = "example-project"                        # required: the project id
+home_region = "us-west4"                           # required: where the buckets live
+regions = ["us-west4", "northamerica-northeast1"]  # required: regions with quota and templates
+inputs_bucket = "example-yapnr-inputs"             # required: source and private input bundles
+runs_bucket = "example-yapnr-runs"                 # required: campaigns, results, control/
+submit_service_account = "yapnr-submit"            # account ids; the project gives the address
+runner_service_account = "yapnr-runner"
+# The Artifact Registry remote repository (upstream https://ghcr.io) in each region.
+registry = "{region}-docker.pkg.dev/{project}/ghcr"
+subnetwork = "projects/{project}/regions/{region}/subnetworks/yapnr-{region}"
+# Instance templates for Hyperdisk-only families (template_families), one per shape and region.
+template = "yapnr-{shape}-{model}-{region}"
+template_families = ["c4d", "c4", "c4a", "n4"]
+gcloud = "gcloud"                                  # the gcloud CLI (a user-space install works)
+# gcloud_configuration = "yapnr"                   # a named gcloud configuration, if not active
+# The Billing Catalog API key for `yapnr exp prices --refresh`, read from the macOS Keychain.
+price_api_key_command = ["security", "find-generic-password", "-s", "yapnr-billing-catalog", "-w"]
+# Ranked (family, region) pairs, from the calibration; empty: every family in every region.
+ranking = [["c4d", "us-west4"], ["c3d", "northamerica-northeast1"]]
+queue_timeout_s = 1800
+# The container runs as root so it can write the gcsfuse mounts (Batch mounts them as root).
+container_user = "0:0"
+gcsfuse_options = ["--implicit-dirs"]
+boot_disk_gb = 30
+
+# --- Per-submit caps. `plan` reports them and `submit` enforces them (docs/design, section 10).
+[limits]
+max_tasks = 2000
+max_parallel_vcpus = 64       # keep at or below the preemptible CPU quota
+max_task_wall_s = 14400
+max_campaign_hours = 12       # also the reaper's deadline for each job
+max_retries = 3               # infrastructure exit codes only; at most 3
+confirm_usd = 5               # submit asks above this expected cost
+refuse_usd = 25               # submit refuses above this ceiling ...
+hard_refuse_usd = 100         # ... unless --max-usd raises it, never above this
+
+# --- The local backend (`--backend local`): a niced process pool on this machine.
+[local]
+store = "~/yapnr-runs"                        # plans, the local store and fetched results
+private_results_root = "~/yapnr-private-runs" # the same for private campaigns
+workers = 4
+nice = 10
+# The host toolchain; unset values fall back to YAPNR_KICAD_CLI / YAPNR_KICAD_PYTHON /
+# YAPNR_KICAD_FOOTPRINTS (or the PNR_* aliases). On macOS use the headless KiCad copy
+# (DEVELOPERS.md).
+# python = "~/yapnr-runtime/bin/python"
+# kicad_cli = "~/Applications/KiCad-headless.app/Contents/MacOS/kicad-cli"
+# kicad_python = "~/Applications/KiCad-headless.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3"
+# footprints = "~/Applications/KiCad-headless.app/Contents/SharedSupport/footprints"
+isolate_home = true
+
+# --- Prices and the calibration (`yapnr exp prices`, `yapnr exp calibration ingest`).
+[prices]
+# table = "~/.cache/yapnr/exp/gcp-spot-prices.json"   # default: the committed snapshot
+# calibration = "~/.config/yapnr/calibration.json"   # default: PassMark estimates
+
+# --- A Slurm site (`--backend slurm --site example-site`). Paths are expanded on the site.
+[slurm.example-site]
+account = "example-account"
+partition = "cpu"
+store = "$SCRATCH/yapnr-store"
+sif = "$HOME/yapnr/yapnr-{digest12}.sif"
+max_array = 1000
+max_concurrent = 64
+chunk = 8
+max_time_h = 48
+module = "apptainer"
+private_ok = false            # set true only after reading the site's data policy

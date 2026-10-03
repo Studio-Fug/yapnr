@@ -1,10 +1,12 @@
 # Design: cloud and HPC experiment backends (GCP Batch, Slurm)
 
-Status: **proposal**, written 2026-10-02 for the owner's request of the same day: stand up GCP so
-experiments run on cheap, scalable compute, "pull in Slurm (or something that's an even better
-fit)", and get everything ready to deploy experiments on C4D Spot instances. Nothing here is
-implemented yet. No Google Cloud credentials exist, and no Google Cloud API was called: every
-fact comes from public documentation and pricing pages, accessed 2026-10-02 (§22). Prices are USD
+Status: **proposal, implemented offline**, written 2026-10-02 for the owner's request of the same
+day: stand up GCP so experiments run on cheap, scalable compute, "pull in Slurm (or something
+that's an even better fit)", and get everything ready to deploy experiments on C4D Spot instances.
+The implementation (`yapnr/exp`, `infra/gcp`) and the owner's runbook are described in
+[Cloud and HPC experiments](../cloud-experiments.md); nothing has run on Google Cloud yet. No
+Google Cloud credentials exist, and no Google Cloud API was called: every fact comes from public
+documentation and pricing pages, accessed 2026-10-02 (§22). Prices are USD
 list prices and drift daily. Numbers marked "est." are estimates, not measurements. Owner-specific
 values (project, buckets, accounts, regions in use) never appear in this repository; they live in
 `~/.config/yapnr/cloud.toml` (§11.4).

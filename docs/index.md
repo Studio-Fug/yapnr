@@ -29,6 +29,8 @@ command line currently offers `yapnr --version` and a `yapnr doctor` stub; the l
 - [The atopile toolchain](frontends/atopile.md): build atopile projects offline, without Nix.
 - [The part cache](part-cache.md): where part data lives instead of the repository.
 - [Releases and versioning](releases.md): version numbers, image tags, what a release publishes.
+- [Cloud and HPC experiments](cloud-experiments.md): `yapnr exp` campaigns on a local pool, Google
+  Cloud Batch (Spot VMs) or a Slurm allocation, with cost guards; the owner's bootstrap runbook.
 - [Regression ladder](regression-ladder.md): eight boards of rising complexity, up to a TLC555 +
   CD4017B LED chaser, with an animation of each board's place and route.
 - [Constraints and hierarchy](constraints-and-hierarchy.md): a line of LEDs, parts held on the
@@ -65,6 +67,7 @@ viewer
 frontends/atopile
 part-cache
 releases
+cloud-experiments
 ```
 
 ```{toctree}

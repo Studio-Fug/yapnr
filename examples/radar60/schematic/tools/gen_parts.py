@@ -9,9 +9,11 @@ a footprint and a symbol. Footprints come from two places only:
   and, for parts not fitted in a build, the ``dnp`` attribute added;
 - ``footprints.py``: land patterns generated from the manufacturers' package drawings.
 
-No EasyEDA data, vendor CAD file or TI design file is used. Pin maps cite the data sheet they
-come from. LCSC numbers are given only where the public LCSC product page was read and its
-manufacturer part number matched (2026-10-03); the others are empty on purpose.
+No EasyEDA data, vendor CAD file or TI design file is used. Pin maps and generated land patterns
+cite the document they come from. An LCSC number is given only where the public LCSC product page
+(``https://www.lcsc.com/product-detail/<C id>.html``) was read and its manufacturer part number and
+maker matched (``LCSC_READ``); every fitted part has one, so the project has a parts lock
+(``../yapnr-parts.lock.json``, README "Parts lock").
 
 Usage::
 
@@ -37,12 +39,8 @@ HERE = Path(__file__).resolve().parent
 PROJECT = HERE.parent
 BALLMAP = HERE / "data" / "abl0161_ballmap.json"
 KICAD_APP = Path.home() / "Applications" / "KiCad-headless.app"
-LCSC_TBD = "LCSC-TBD"
-
-
-def lcsc_tbd(part: "Part") -> str:
-    """A per-part placeholder: atopile's JSON BOM merges lines by supplier number."""
-    return f"{LCSC_TBD}-" + re.sub(r"[^A-Za-z0-9.-]", "-", part.mpn)
+LCSC_READ = "2026-10-03"  # the date every LCSC product page below was read
+LCSC_ID = re.compile(r"C[1-9][0-9]{0,11}")  # what the part cache accepts (yapnr.partcache.model)
 
 
 @dataclass
@@ -77,6 +75,7 @@ def cap(
     v: float,
     descr: str,
     dnp: bool = False,
+    source: str = "",
 ) -> Part:
     return Part(
         name,
@@ -91,6 +90,7 @@ def cap(
         kind="capacitor",
         package=pkg,
         params={"capacitance_f": value_f, "voltage_max_v": v},
+        source=source,
     )
 
 
@@ -103,6 +103,8 @@ def res(
     descr: str,
     pkg: str = "0402",
     dnp: bool = False,
+    fp: str = "",
+    source: str = "",
 ) -> Part:
     return Part(
         name,
@@ -111,12 +113,13 @@ def res(
         "R",
         descr,
         two(),
-        f"stock:Resistor_SMD:R_{pkg}_{_metric(pkg)}Metric",
+        fp or f"stock:Resistor_SMD:R_{pkg}_{_metric(pkg)}Metric",
         lcsc,
         dnp=dnp,
         kind="resistor",
         package=pkg,
         params={"resistance_ohm": value},
+        source=source,
     )
 
 
@@ -154,6 +157,11 @@ QTH_SOURCE = (
     "TI SPRUIJ4A Table 5 (pin numbering); land pattern: Samtec recommended PCB layout "
     "QTH-XXX-XX-X-D-XXX rev. M (https://suddendocs.samtec.com/prints/"
     "qth-xxx-xx-x-d-xxx-footprint.pdf; read 2026-10-03), tools/footprints.py:qth030_01_a"
+)
+SNUBBER = "TI SNVSAW2B Table 56 (recommended snubber components)"
+WFCP_SOURCE = (
+    "Vishay document 30417 rev. 20-Nov-2023 (https://www.vishay.com/docs/30417/wfcp.pdf; "
+    "read 2026-10-03): 2 W for 1-5 mOhm, +/-100 ppm/K, pad layout 1.30 x 3.80 mm, 0.60 mm apart"
 )
 
 
@@ -312,7 +320,7 @@ def parts() -> List[Part]:
             "TPS22917 load switch (DNP option: delays the radio's 3.3 V as on TI ISK Rev D, O13)",
             {"1": "VIN", "2": "GND", "3": "ON", "4": "CT", "5": "QOD", "6": "VOUT"},
             "stock:Package_TO_SOT_SMD:SOT-23-6",
-            "",
+            "C2681320",
             dnp=True,
             kind="ic",
             package="SOT-23-6",
@@ -344,10 +352,13 @@ def parts() -> List[Part]:
             "2-channel ESD diode for the UART, SC-70-3",
             {"1": "IO1", "2": "IO2", "3": "GND"},
             "stock:Package_TO_SOT_SMD:SOT-323_SC-70",
-            "",
+            "C1855726",
             kind="diode",
             package="SC-70",
-            source="TI TPD2E2U06 data sheet, Pin Functions (DCK)",
+            source=(
+                "TI TPD2E2U06 data sheet, Pin Functions (DCK) "
+                "(https://www.ti.com/lit/ds/symlink/tpd2e2u06.pdf)"
+            ),
         )
     )
     P.append(
@@ -359,9 +370,16 @@ def parts() -> List[Part]:
             "5.0 V standoff unidirectional TVS, SOD-123F (SMF)",
             two("K", "A"),
             "stock:Diode_SMD:D_SMF",
-            "",
+            "C151296",
             kind="diode",
             package="SOD-123F",
+            # Littelfuse SMF series data sheet (rev. 06/07/17): SOD-123FL, mounting pad layout
+            # 1.3 x 1.4 mm lands 1.6 mm apart, the same lands as KiCad's D_SMF (DO-219AB)
+            source=(
+                "Littelfuse SMF series data sheet rev. 06/07/17, dimensions and mounting pad "
+                "layout (https://www.littelfuse.com/products/tvs-diodes/surface-mount/smf; "
+                "read 2026-10-03)"
+            ),
         )
     )
     P.append(
@@ -437,7 +455,7 @@ def parts() -> List[Part]:
             "0.47 uH 7.0 A (Isat, typ.) 16 mOhm (max) shielded buck inductor, IHLP-1616BZ-11, 4.06x4.45x2.0 mm",
             two(),
             "stock:Inductor_SMD:L_Vishay_IHLP-1616",
-            "",
+            "C844982",
             kind="inductor",
             package="IHLP-1616BZ",
             params={"inductance_h": 0.47e-6},
@@ -468,7 +486,7 @@ def parts() -> List[Part]:
             "JST GH 8-pin 1.25 mm right-angle SMD header (power, CAN-FD, UART)",
             {**{str(i): f"P{i}" for i in range(1, 9)}, "MP": "MOUNT"},
             "stock:Connector_JST:JST_GH_SM08B-GHS-TB_1x08-1MP_P1.25mm_Horizontal",
-            "",
+            "C265111",
             kind="connector",
             package="GH-8",
         )
@@ -513,7 +531,7 @@ def parts() -> List[Part]:
             "Arm Cortex 10-pin 1.27 mm debug header (JTAG, DNP)",
             {str(i): f"P{i}" for i in range(1, 11)},
             "stock:Connector_PinHeader_1.27mm:PinHeader_2x05_P1.27mm_Vertical_SMD",
-            "",
+            "C5155080",
             dnp=True,
             kind="connector",
             package="2x05 1.27",
@@ -669,12 +687,12 @@ def parts() -> List[Part]:
             "22 uF 25 V X5R 0805",
         ),
         # VBGAP in 0402: the part TI's errata names (SWRZ087D ANA#19: GRM155R71E473KA88), so the
-        # cap fits beside B10 at the package edge (review 2026-10-03); LCSC number not verified
+        # cap fits beside B10 at the package edge (review 2026-10-03)
         cap(
             "Radar60_C_47n_0402",
             "GRM155R71E473KA88D",
             MU,
-            "",
+            "C77017",
             "0402",
             47e-9,
             25,
@@ -724,11 +742,12 @@ def parts() -> List[Part]:
             "Radar60_C_390p_0402",
             "GCM1555C1H391JA16D",
             MU,
-            "",
+            "C723890",
             "0402",
             390e-12,
             50,
             "390 pF 50 V C0G 0402 (snubber, SNVSAW2B Table 56)",
+            source=SNUBBER,
         ),
         # ANA#17A damping option (SWRZ087D: damp the supply ringing): 22 uF behind 0.22 Ohm, DNP
         cap(
@@ -785,51 +804,70 @@ def parts() -> List[Part]:
         ),
         res("Radar60_R_100k_0402", _uniroyal(100e3), U, "C25741", 100e3, "100 kOhm 1 % 0402"),
         res(
-            "Radar60_R_1k65_0402", _uniroyal(1650), U, "", 1.65e3, "1.65 kOhm 1 % 0402 (eFuse ILM)"
+            "Radar60_R_1k65_0402",
+            _uniroyal(1650),
+            U,
+            "C25869",
+            1.65e3,
+            "1.65 kOhm 1 % 0402 (eFuse ILM)",
         ),
+        # snubber dissipation C V^2 f = 390 pF x (5.45 V)^2 x 4 MHz = 46 mW per phase at the OVLO
+        # limit, against the 62 mW that TI's table gives this part (flagged in the README)
         res(
             "Radar60_R_3R9_0402",
             "CRCW04023R90JNED",
             "Vishay Dale",
-            "",
+            "C3988797",
             3.9,
             "3.9 Ohm 5 % 0402 (snubber, SNVSAW2B Table 56)",
+            source=SNUBBER,
         ),
         res(
             "Radar60_R_62_0402_DNP",
             _uniroyal(62),
             U,
-            "",
+            "C4962",
             62,
             "62 Ohm 1 % 0402 (DNP, CAN split termination)",
             dnp=True,
         ),
         res(
             "Radar60_R_0R22_0402_DNP",
-            "TBD-0R22-1%-0402",
-            "TBD",
-            "",
+            "0402WGF220LTCE",
+            U,
+            "C270628",
             0.22,
             "0.22 Ohm 1 % 0402 (DNP, series damping resistor of the ANA#17A option) [E]",
             dnp=True,
         ),
+        # The 1.0 V shunt R_SH1 (ahead of the RF1/RF2 split, outside the Buck2 feedback loop): a
+        # Vishay WFCP0612 metal-foil shunt, 2 mOhm on development builds (5 mV at 2.5 A, inside
+        # the 28 mV IR budget of the 1.0 V window) and 1 mOhm on product builds. A 0 Ohm 0612
+        # thick-film jumper is specified only as <= 10 mOhm (Vishay RCL0612: 25 mV at 2.5 A), which
+        # would break that budget, so the product fit is the 1 mOhm part of the same family on
+        # the same lands.
         res(
             "Radar60_R_2m_0612",
-            "TBD-2mOhm-1%-0612",
-            "TBD",
-            "",
+            "WFCP06122L000FE66",
+            "Vishay Dale",
+            "C3917256",
             0.002,
-            "2 mOhm 1 % 0612 wide-terminal current shunt (development fit; product fit is a 0 Ohm 0612)",
+            "2 mOhm 1 % 2 W 0612 wide-terminal metal-foil current shunt (development fit)",
             pkg="0612",
+            fp="gen:wfcp0612",
+            source=WFCP_SOURCE,
         ),
         res(
-            "Radar60_R_0_0612",
-            "TBD-0R-jumper-0612",
-            "TBD",
-            "",
-            0,
-            "0 Ohm 0612 jumper in the 1.0 V shunt footprint (product fit)",
+            "Radar60_R_1m_0612",
+            "WFCP06121L000FE66",
+            "Vishay Dale",
+            "C4231187",
+            0.001,
+            "1 mOhm 1 % 2 W 0612 wide-terminal metal-foil resistor in the 1.0 V shunt footprint "
+            "(product fit, in place of a 0 Ohm jumper)",
             pkg="0612",
+            fp="gen:wfcp0612",
+            source=WFCP_SOURCE,
         ),
     ]
     return P
@@ -1001,11 +1039,9 @@ def ato(part: Part, fp_file: str, sym_file: str) -> str:
         # not fitted / not a part: no BOM line, but the footprint stays on the board
         lines.append("    trait has_part_removed")
     else:
-        # LCSC-TBD-<mpn>: the LCSC number was not verified; the JSON BOM keeps the line by MPN,
-        # atopile's JLC CSV drops it with a warning (Rev A is assembled by MPN)
         lines.append(
             '    trait has_part_picked::by_supplier<supplier_id="lcsc", '
-            f'supplier_partno="{part.lcsc or lcsc_tbd(part)}", '
+            f'supplier_partno="{part.lcsc}", '
             f'manufacturer="{part.mfr}", partno="{part.mpn}">'
         )
     lines.append(f'    trait has_designator_prefix<prefix="{part.prefix}">')
@@ -1022,6 +1058,28 @@ def ato(part: Part, fp_file: str, sym_file: str) -> str:
             lines.append(f"    signal {sig} ~ pin {pin}")
             declared.add(sig)
     return "\n".join(line for line in lines if line is not None) + "\n"
+
+
+def check_parts(ps: Sequence[Part]) -> List[str]:
+    """Problems that would stop the parts lock: a fitted part without a verified LCSC id or
+    manufacturer part number, a repeated name, or one LCSC id for two part numbers."""
+    problems = []
+    names = [p.name for p in ps]
+    if len(names) != len(set(names)):
+        problems.append("duplicate part names")
+    by_lcsc: Dict[str, str] = {}
+    for p in ps:
+        if p.lcsc and not LCSC_ID.fullmatch(p.lcsc):
+            problems.append(f"{p.name}: {p.lcsc!r} is not an LCSC id")
+        if p.board_only:
+            continue
+        if not p.mpn or "TBD" in p.mpn or not p.mfr or "TBD" in p.mfr:
+            problems.append(f"{p.name}: no manufacturer part number")
+        if not p.dnp and not p.lcsc:
+            problems.append(f"{p.name}: fitted without an LCSC id")
+        if p.lcsc and by_lcsc.setdefault(p.lcsc, p.mpn) != p.mpn:
+            problems.append(f"{p.lcsc}: {by_lcsc[p.lcsc]} and {p.mpn}")
+    return problems
 
 
 def write_part(out: Path, part: Part, lib_dir: Path) -> None:
@@ -1041,12 +1099,16 @@ def write_part(out: Path, part: Part, lib_dir: Path) -> None:
     (d / f"{part.name}.ato").write_text(ato(part, fp_file, sym_file), encoding="utf-8")
     note = [f"# {part.name}", "", part.descr, ""]
     note.append(f"- manufacturer part number: {part.mpn or '(board-only item)'}")
-    note.append(f"- LCSC: {part.lcsc or '(not verified; left empty)'}")
+    note.append(
+        f"- LCSC: {part.lcsc} (product page read {LCSC_READ})"
+        if part.lcsc
+        else "- LCSC: (none: board-only item)"
+    )
     note.append(
         f"- footprint: {'KiCad stock ' + ref if kind == 'stock' else 'generated, tools/footprints.py:' + ref}"
     )
     if part.source:
-        note.append(f"- pin map source: {part.source}")
+        note.append(f"- source: {part.source}")
     if part.dnp:
         note.append("- fitted: no (DNP)")
     (d / "NOTES.md").write_text("\n".join(note) + "\n", encoding="utf-8")
@@ -1074,7 +1136,7 @@ def catalog(ps: Sequence[Part]) -> Dict:
         "schema": "yapnr-picker-catalog-v1",
         "provenance": {
             "source": "LCSC public product pages (title: manufacturer part number), one page per id",
-            "retrieved": "2026-10-03",
+            "retrieved": LCSC_READ,
             "licence_note": "part facts only (identifiers, values, packages)",
         },
         "parts": sorted(entries, key=lambda e: e["lcsc"]),
@@ -1093,8 +1155,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     ps = parts()
+    problems = check_parts(ps)
+    if problems:
+        raise SystemExit("gen_parts: " + "; ".join(problems))
     names = [p.name for p in ps]
-    assert len(names) == len(set(names)), "duplicate part names"
     for stale in sorted(out.glob("Radar60_*")):
         if stale.is_dir() and stale.name not in names:
             shutil.rmtree(stale)

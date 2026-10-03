@@ -1,17 +1,18 @@
 # radar60 Rev A product fit: the same netlist as radar60.ato with the development-only parts
-# changed (board-design.md 2.1, 2.2): J2 (DCA1000 header) not fitted, and a 0 Ohm 0612 jumper
-# in the 1.0 V shunt footprint instead of the 2 mOhm development shunt.
+# changed (board-design.md 2.1, 2.2): J2 (DCA1000 header) not fitted, and a 1 mOhm 0612 part in
+# the 1.0 V shunt footprint instead of the 2 mOhm development shunt (a 0 Ohm 0612 thick-film
+# jumper is only specified as <= 10 mOhm, more than the shunt; tools/gen_parts.py).
 
 from "radar60.ato" import Radar60
 from "pmic_lp87524j.ato" import Pmic
 from "debug.ato" import Debug
 from "parts/Radar60_QTH_030_01_L_D_A_DNP/Radar60_QTH_030_01_L_D_A_DNP.ato" import Radar60_QTH_030_01_L_D_A_DNP
-from "parts/Radar60_R_0_0612/Radar60_R_0_0612.ato" import Radar60_R_0_0612
+from "parts/Radar60_R_1m_0612/Radar60_R_1m_0612.ato" import Radar60_R_1m_0612
 
 
 module PmicProd from Pmic:
-    """Pmic with the 0 Ohm 0612 jumper in the shunt footprint."""
-    r_sh -> Radar60_R_0_0612
+    """Pmic with the 1 mOhm 0612 part in the shunt footprint."""
+    r_sh -> Radar60_R_1m_0612
 
 
 module DebugProd from Debug:

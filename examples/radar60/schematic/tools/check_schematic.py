@@ -336,7 +336,7 @@ SOURCES = {
 }
 # fitted series elements that carry a rail on (inductors, beads, 0 Ohm and shunt resistors)
 SERIES_PART = re.compile(
-    r"^(Radar60_FB_|Radar60_L_|Radar60_R_0_0402$|Radar60_R_0_0612$|Radar60_R_2m_0612$)"
+    r"^(Radar60_FB_|Radar60_L_|Radar60_R_0_0402$|Radar60_R_1m_0612$|Radar60_R_2m_0612$)"
 )
 
 

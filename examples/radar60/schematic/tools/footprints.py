@@ -428,6 +428,38 @@ def qth030_01_a() -> Footprint:
     return fp
 
 
+# --- Vishay WFCP0612 ------------------------------------------------------------------------
+
+
+def wfcp0612() -> Footprint:
+    """Vishay Dale WFCP0612 (1 to 5 mOhm) wide-terminal metal-foil current-sense resistor, from
+    Vishay document 30417 (WFCP, revision 20-Nov-2023), "Recommended solder pad layout".
+
+    Two lands b x c = 1.30 x 3.80 mm with a = 0.60 mm between them (centres 1.90 mm apart);
+    body 1.60 x 3.20 mm (L x W, Fig. 2), terminals on the long sides. The 1.0 V shunt R_SH1 uses
+    it on development builds (2 mOhm) and on product builds (1 mOhm), so both fits share it.
+    """
+    fp = Footprint(
+        "Vishay_WFCP0612_1632Metric",
+        "Vishay WFCP0612 wide-terminal current-sense resistor (1-5 mOhm), 1.6x3.2 mm; "
+        "Vishay document 30417 recommended solder pad layout "
+        "(https://www.vishay.com/docs/30417/wfcp.pdf)",
+        "resistor shunt wide terminal 0612 1632 WFCP",
+    )
+    fp.prop("Source", "Vishay document 30417 rev. 20-Nov-2023, pad layout a/b/c; read 2026-10-03")
+    a, b, c = 0.60, 1.30, 3.80
+    x = a / 2 + b / 2
+    fp.pad("1", "rect", (-x, 0), (b, c))
+    fp.pad("2", "rect", (x, 0), (b, c))
+    fp.rect((-0.8, -1.6, 0.8, 1.6), "F.Fab", 0.1)
+    fp.text("${REFERENCE}", (0, 0), "F.Fab", size=0.4)
+    # silk: short bars beyond the body's long ends, between the lands
+    for sy in (-1, 1):
+        fp.line((-0.18, sy * (c / 2 + 0.2)), (0.18, sy * (c / 2 + 0.2)), "F.SilkS", 0.12)
+    _courtyard(fp, (-x - b / 2 - 0.25, -c / 2 - 0.25, x + b / 2 + 0.25, c / 2 + 0.25))
+    return fp
+
+
 def rfm1_placeholder() -> Footprint:
     """Placeholder for the yapnr RF macro RFM1 (7 RF ports + ground), replaced by the rf track's export.
 

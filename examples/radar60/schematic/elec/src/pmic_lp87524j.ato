@@ -23,7 +23,7 @@
 # LC filters after the bucks follow TI's IWR6843ISK Rev D (SWRR164, sheet 5 "PMIC LC Filters"):
 # MPZ2012S101A with 22 uF before and 22 uF + 10 uF after. The 1.0 V rail is split into RF1 and
 # RF2/PA branches with two beads in parallel on RF2/PA and a 2 mOhm Kelvin shunt ahead of the split
-# (review fix R5; development fit, 0 Ohm 0612 on product builds). FB_B2 senses at the buck output;
+# (review fix R5; development fit, 1 mOhm 0612 on product builds). FB_B2 senses at the buck output;
 # a DNP 0 Ohm moves the sense point downstream (review 3.3).
 
 import has_net_name_suggestion

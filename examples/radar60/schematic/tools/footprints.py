@@ -150,15 +150,23 @@ def _fab_body(fp: Footprint, half_w: float, half_h: float, chamfer: float) -> No
 
 
 def _silk_corners(
-    fp: Footprint, half_w: float, half_h: float, arm: float, pin1: bool = True
+    fp: Footprint,
+    half_w: float,
+    half_h: float,
+    arm: float,
+    pin1: bool = True,
+    skip_edges: Tuple[str, ...] = (),
 ) -> None:
-    """Silk corner marks just outside the body (no full outline: the RF feeds leave the package edges)."""
+    """Silk corner marks just outside the body (no full outline: the RF feeds leave the package
+    edges). ``skip_edges`` ('left', 'top', 'right', 'bottom', footprint frame) get no arms."""
     o = 0.11
     xw, yh = half_w + o, half_h + o
     for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
         cx, cy = sx * xw, sy * yh
-        fp.line((cx, cy), (cx - sx * arm, cy), "F.SilkS", 0.12)
-        fp.line((cx, cy), (cx, cy - sy * arm), "F.SilkS", 0.12)
+        if ("top" if sy < 0 else "bottom") not in skip_edges:
+            fp.line((cx, cy), (cx - sx * arm, cy), "F.SilkS", 0.12)
+        if ("left" if sx < 0 else "right") not in skip_edges:
+            fp.line((cx, cy), (cx, cy - sy * arm), "F.SilkS", 0.12)
     if pin1:
         fp.poly(
             [(-xw - 0.1, -yh - 0.1), (-xw - 0.6, -yh - 0.1), (-xw - 0.1, -yh - 0.6)],
@@ -196,7 +204,11 @@ def abl0161b(balls: Dict[str, str]) -> Footprint:
         fp.pad(ball, "circle", (x, y), (0.32, 0.32), extra="\n\t\t(solder_mask_margin 0.05)")
     half = 5.2
     _fab_body(fp, half, half, 1.0)
-    _silk_corners(fp, half, half, 1.0)
+    # No silk on the two RF edges (columns 1-2 on the left, rows A-B on top): the RF macro's mask
+    # opening starts 0.05 mm outside them (no mask over RF copper, TI SPRACG5), where silk would
+    # be clipped (6 DRC findings at integration). Pin 1 (A1, the RF corner) is marked on F.Fab
+    # and by the two remaining corner marks' asymmetry; the courtyard is unchanged.
+    _silk_corners(fp, half, half, 1.0, pin1=False, skip_edges=("left", "top"))
     _courtyard(fp, (-half - 1.0, -half - 1.0, half + 1.0, half + 1.0))
     return fp
 

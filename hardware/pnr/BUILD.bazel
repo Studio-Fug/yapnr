@@ -1632,6 +1632,8 @@ py_test(
     name = "region_align_test",
     size = "medium",
     srcs = ["tests/test_region_align.py"],
+    # pnr.feedback is not in :pnr yet (PR3b); the feedback-children test imports it from source.
+    data = glob(["pnr/**/*.py"]),
     imports = ["."],
     main = "tests/test_region_align.py",
     deps = [

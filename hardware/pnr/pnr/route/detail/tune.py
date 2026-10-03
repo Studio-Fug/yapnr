@@ -59,6 +59,11 @@ PASSES = 3
 REROUTE_VIA_MM = 12.0
 # Price of a cell in another net's footprint (not its copper) on the second try.
 REROUTE_FOOTPRINT_COST = 20.0
+# Members of a set boxed in by each other are routed apart (Tuner.spread_set): a
+# step within SPACING_CELLS of another member's footprint costs SPACING_COST more.
+SPACING_CELLS = 2
+SPACING_COST = 0.5
+SPREAD_PASSES = 2
 
 
 # ------------------------------------------------------------------ rules
@@ -444,6 +449,8 @@ class SetReport:
     status: str = "unrouted"  # ok | tuned | length_unmatched | unrouted
     # Members routed again (shorter) because the others had no room to catch up.
     rerouted: List[str] = field(default_factory=list)
+    # Members routed apart to make room for meanders (Tuner.spread_set).
+    spaced: List[str] = field(default_factory=list)
 
     def to_json(self) -> dict:
         return dict(
@@ -461,6 +468,7 @@ class SetReport:
             ),
             status=self.status,
             **({"rerouted": list(self.rerouted)} if self.rerouted else {}),
+            **({"spaced": list(self.spaced)} if self.spaced else {}),
             members=[
                 dict(
                     net=m.net,
@@ -904,72 +912,40 @@ class Tuner:
         for c in net_footprint(grid, net, rn, self.via_keepout, halo):
             owner.setdefault(c, set()).add(net)
 
-    # -- rerouting the longest member ------------------------------------------
+    # -- routing a member again ------------------------------------------------
 
-    def reroute_shorter(self, net: str, unit: str, owner, index: CopperIndex) -> bool:
-        """Route ``net`` again from its access cells around every other net's
-        footprint (as the router's recovery pass does), with vias priced at
-        :data:`REROUTE_VIA_MM`, and keep the new route only when it connects every
-        access cell, its footprint and its millimetre geometry clear the other nets,
-        and it measures shorter. Routes through plated pad transitions are left as
-        they are. Returns True when the net was replaced."""
+    def _search(self, net: str, access: List[Cell], blocked, soft=None):
+        """The router's own A* over ``access`` (one tree), vias priced at
+        :data:`REROUTE_VIA_MM`; None unless every access cell is connected."""
         from collections import defaultdict
 
-        from .maze import _footprint, _route_one, _to_geometry, remaining_connections
+        from .maze import _route_one, remaining_connections
 
+        route = _route_one(
+            self.grid,
+            access,
+            net,
+            defaultdict(int),
+            defaultdict(float),
+            REROUTE_VIA_MM / self.grid.pitch,
+            0.0,
+            blocked=blocked,
+            soft=soft,
+        )
+        if route is None or remaining_connections(access, route.edges):
+            return None
+        return route
+
+    def _swap_in(self, net: str, new, index: CopperIndex, check: bool = True):
+        """Replace ``net``'s grid route (cells, segments, vias and their millimetre
+        copper; the pad escapes stay) by ``new`` when every piece of copper the old
+        route did not have clears the other nets in millimetres. Returns the undo
+        record, or None (nothing changed) when the new copper is not clear."""
         grid = self.grid
         rn = self.board.result.nets[net]
-        access = sorted(self.access.get(net, ()), key=lambda c: (c.layer, c.i, c.j))
-        if len(access) < 2:
-            return False
         plated = getattr(grid, "plated_transition", lambda *a: None)
-        if any(plated(net, i, j) is not None for i, j in rn.vias):
-            return False
-        halo = self.net_halo.get(net, 0)
-        foreign = {c for c, nets in owner.items() if nets - {net}}
-        # The net's own cells stay usable even where they sit in another net's
-        # footprint (a route the router completed at the rules' exact spacing).
-        old_fp = net_footprint(grid, net, rn, self.via_keepout, halo)
-        own = set(rn.cells)
-
-        def search(blocked, soft=None):
-            route = _route_one(
-                grid,
-                access,
-                net,
-                defaultdict(int),
-                defaultdict(float),
-                REROUTE_VIA_MM / grid.pitch,
-                0.0,
-                blocked=blocked,
-                soft=soft,
-            )
-            if route is None or remaining_connections(access, route.edges):
-                return None
-            return route
-
-        # First around the other nets' footprints (the router's own model); failing
-        # that, around their copper only, with their footprints priced, and the
-        # millimetre check below as the judge.
-        route = search(foreign - own)
-        if route is not None:
-            fp = _footprint(grid, route.cells, self.via_keepout, halo, edges=route.edges, net=net)
-            if (fp & foreign) - (old_fp & foreign):
-                route = None
-        if route is None:
-            copper = set()
-            for name, other in self.board.result.nets.items():
-                if name == net or not other.cells:
-                    continue
-                copper.update(other.cells)
-                for i, j in other.vias:
-                    copper.update(Cell(la, i, j) for la in range(grid.nlayers))
-            route = search(copper - own, {c: REROUTE_FOOTPRINT_COST for c in foreign - own})
-        if route is None:
-            return False
-        new = _to_geometry(route)
         if any(plated(net, i, j) is not None for i, j in new.vias):
-            return False
+            return None
         width = self.width(net)
         old_segments = {(layer, frozenset((a, b))) for layer, a, b in rn.segments}
         tracks = [
@@ -981,24 +957,24 @@ class Tuner:
         def clear_of(n):
             return self.clearance_of(net, n)
 
-        # Exact millimetre clearance of every piece of copper the old route did not have.
         for (layer, a, b), (_n, name, pa, pb, w) in zip(new.segments, tracks):
-            if (layer, frozenset((a, b))) in old_segments:
+            if not check or (layer, frozenset((a, b))) in old_segments:
                 continue
             if not index.clear(net, name, pa, pb, w / 2, clear_of):
-                return False
+                return None
+        old_vias = set(rn.vias)
         for (i, j), (_n, x, y) in zip(new.vias, vias):
-            if (i, j) in set(rn.vias):
+            if not check or (i, j) in old_vias:
                 continue
             if not all(
                 index.clear(net, layer, (x, y), (x, y), self.via_radius, clear_of)
                 for layer in grid.layers
             ):
-                return False
-        # Swap the grid route and its millimetre copper, measure, keep or restore.
-        old = (list(rn.cells), list(rn.segments), list(rn.vias))
-        old_tracks, old_vias = list(self.board.tracks), list(self.board.vias)
-        before = self.value(self.measure(net), unit)
+                return None
+        undo = (
+            (list(rn.cells), list(rn.segments), list(rn.vias)),
+            (list(self.board.tracks), list(self.board.vias)),
+        )
         grid_keys = {
             frozenset(
                 (lm._key(grid.center_of(*a)), lm._key(grid.center_of(*b)), grid.layers[layer])
@@ -1018,17 +994,161 @@ class Tuner:
             v for v in self.board.vias if not (v[0] == net and lm._key((v[1], v[2])) in via_keys)
         ] + vias
         rn.cells, rn.segments, rn.vias = list(new.cells), list(new.segments), list(new.vias)
+        return undo
+
+    def _undo(self, net: str, undo) -> None:
+        rn = self.board.result.nets[net]
+        (rn.cells, rn.segments, rn.vias), (self.board.tracks, self.board.vias) = undo
+
+    def _claim(self, net: str, old_fp: Set[Cell], owner) -> None:
+        """Move ``net``'s entries in the owner map from ``old_fp`` to its new route."""
+        for c in old_fp:
+            nets = owner.get(c)
+            if nets:
+                nets.discard(net)
+        rn = self.board.result.nets[net]
+        halo = self.net_halo.get(net, 0)
+        for c in net_footprint(self.grid, net, rn, self.via_keepout, halo):
+            owner.setdefault(c, set()).add(net)
+
+    def reroute_shorter(self, net: str, unit: str, owner, index: CopperIndex) -> bool:
+        """Route ``net`` again from its access cells around every other net's
+        footprint (as the router's recovery pass does), with vias priced at
+        :data:`REROUTE_VIA_MM`, and keep the new route only when it connects every
+        access cell, its footprint and its millimetre geometry clear the other nets,
+        and it measures shorter. Routes through plated pad transitions are left as
+        they are. Returns True when the net was replaced."""
+        from .maze import _footprint, _to_geometry
+
+        grid = self.grid
+        rn = self.board.result.nets[net]
+        access = sorted(self.access.get(net, ()), key=lambda c: (c.layer, c.i, c.j))
+        if len(access) < 2:
+            return False
+        plated = getattr(grid, "plated_transition", lambda *a: None)
+        if any(plated(net, i, j) is not None for i, j in rn.vias):
+            return False
+        halo = self.net_halo.get(net, 0)
+        foreign = {c for c, nets in owner.items() if nets - {net}}
+        # The net's own cells stay usable even where they sit in another net's
+        # footprint (a route the router completed at the rules' exact spacing).
+        old_fp = net_footprint(grid, net, rn, self.via_keepout, halo)
+        own = set(rn.cells)
+        # First around the other nets' footprints (the router's own model); failing
+        # that, around their copper only, with their footprints priced, and the
+        # millimetre check below as the judge.
+        route = self._search(net, access, foreign - own)
+        if route is not None:
+            fp = _footprint(grid, route.cells, self.via_keepout, halo, edges=route.edges, net=net)
+            if (fp & foreign) - (old_fp & foreign):
+                route = None
+        if route is None:
+            copper = set()
+            for name, other in self.board.result.nets.items():
+                if name == net or not other.cells:
+                    continue
+                copper.update(other.cells)
+                for i, j in other.vias:
+                    copper.update(Cell(la, i, j) for la in range(grid.nlayers))
+            route = self._search(
+                net, access, copper - own, {c: REROUTE_FOOTPRINT_COST for c in foreign - own}
+            )
+        if route is None:
+            return False
+        before = self.value(self.measure(net), unit)
+        undo = self._swap_in(net, _to_geometry(route), index)
+        if undo is None:
+            return False
         if self.value(self.measure(net), unit) < before - 1e-6:
-            for c in old_fp:
-                nets = owner.get(c)
-                if nets:
-                    nets.discard(net)
-            for c in net_footprint(grid, net, rn, self.via_keepout, halo):
-                owner.setdefault(c, set()).add(net)
+            self._claim(net, old_fp, owner)
             return True
-        rn.cells, rn.segments, rn.vias = old
-        self.board.tracks, self.board.vias = old_tracks, old_vias
+        self._undo(net, undo)
         return False
+
+    # -- room for meanders: routing a set's members apart --------------------
+
+    def _snapshot(self, nets: Sequence[str]) -> tuple:
+        """The board's copper and ``nets``' grid routes, for :meth:`_restore`."""
+        rns = self.board.result.nets
+        return (
+            list(self.board.tracks),
+            list(self.board.vias),
+            {n: (list(rns[n].cells), list(rns[n].segments), list(rns[n].vias)) for n in nets},
+        )
+
+    def _restore(self, snap, owner) -> None:
+        """Back to a :meth:`_snapshot`; the owner map is rebuilt from the routes."""
+        tracks, vias, routes = snap
+        self.board.tracks, self.board.vias = list(tracks), list(vias)
+        rns = self.board.result.nets
+        for n, (cells, segments, net_vias) in routes.items():
+            rns[n].cells, rns[n].segments, rns[n].vias = list(cells), list(segments), list(net_vias)
+        owner.clear()
+        owner.update(self._owner_map())
+
+    def spread_set(self, s: MatchSet, owner, index, owner_set=None) -> List[str]:
+        """Give a set's members room for meanders: route each again, the others in
+        place, around every other net's footprint as the router does, but with each
+        step within :data:`SPACING_CELLS` of another member's footprint priced
+        :data:`SPACING_COST` more, so a bus packed at the pins' pitch fans out where
+        the board has room (forward, then backward through the members). A member
+        keeps its new route when it connects, clears the other nets (footprint and
+        millimetres) and does not measure longer than the set's longest member.
+        Returns the members moved."""
+        from .maze import _footprint, _to_geometry
+
+        grid = self.grid
+        rns = self.board.result.nets
+        plated = getattr(grid, "plated_transition", lambda *a: None)
+        moved: List[str] = []
+        members = set(s.nets)
+        # Members matched in an earlier set keep their routes.
+        order = [n for n in s.nets if (owner_set or {}).get(n, s.name) == s.name]
+        for k in range(SPREAD_PASSES):
+            for net in order if k % 2 == 0 else order[::-1]:
+                rn = rns[net]
+                access = sorted(self.access.get(net, ()), key=lambda c: (c.layer, c.i, c.j))
+                if len(access) < 2 or not rn.cells:
+                    continue
+                if any(plated(net, i, j) is not None for i, j in rn.vias):
+                    continue
+                ceiling = max(self.value(self.measure(n), s.unit) for n in s.nets)
+                halo = self.net_halo.get(net, 0)
+                foreign = {c for c, nets in owner.items() if nets - {net}}
+                mates = {c for c, nets in owner.items() if (nets & members) - {net}}
+                soft: Dict[Cell, float] = {}
+                for c in mates:
+                    for di in range(-SPACING_CELLS, SPACING_CELLS + 1):
+                        for dj in range(-SPACING_CELLS, SPACING_CELLS + 1):
+                            x = Cell(c.layer, c.i + di, c.j + dj)
+                            if x not in foreign:
+                                soft[x] = SPACING_COST
+                old_fp = net_footprint(grid, net, rn, self.via_keepout, halo)
+                own = set(rn.cells)
+                route = self._search(net, access, foreign - own, soft)
+                if route is None:
+                    continue
+                fp = _footprint(
+                    grid, route.cells, self.via_keepout, halo, edges=route.edges, net=net
+                )
+                if (fp & foreign) - (old_fp & foreign):
+                    continue
+                new = _to_geometry(route)
+                if {(la, frozenset((a, b))) for la, a, b in new.segments} == {
+                    (la, frozenset((a, b))) for la, a, b in rn.segments
+                }:
+                    continue
+                undo = self._swap_in(net, new, index)
+                if undo is None:
+                    continue
+                if self.value(self.measure(net), s.unit) > ceiling + 1e-6:
+                    self._undo(net, undo)
+                    continue
+                self._claim(net, old_fp, owner)
+                index = self.copper_index()
+                if net not in moved:
+                    moved.append(net)
+        return moved
 
     # -- driver -------------------------------------------------------------
 
@@ -1099,6 +1219,7 @@ class Tuner:
                     or report.spread > report.budget + 1e-9
                 )
 
+            start = (None, self._snapshot(s.nets), dict(tuned), dict(owner_set), status, [])
             tune_passes()
             if unmatched():
                 # No room to lengthen the short members enough: route the longest one
@@ -1114,6 +1235,42 @@ class Tuner:
                     index = self.copper_index()
                     status = "tuned"
                     tune_passes()
+            if unmatched() and len(s.nets) > 1:
+                # A member still short has no room for meanders where it runs: its
+                # neighbours box it in (a bus routed at its pins' pitch). From the
+                # route as it was before tuning, route the members apart where the
+                # board has room, tune again, and keep whichever attempt ends closer.
+                first = (
+                    report.nominal_spread,
+                    self._snapshot(s.nets),
+                    dict(tuned),
+                    dict(owner_set),
+                    status,
+                    list(report.rerouted),
+                )
+
+                def back_to(snap):
+                    nonlocal index, status
+                    self._restore(snap[1], owner)
+                    tuned.clear()
+                    tuned.update(snap[2])
+                    owner_set.clear()
+                    owner_set.update(snap[3])
+                    status = snap[4]
+                    report.rerouted = list(snap[5])
+                    index = self.copper_index()
+
+                back_to(start)
+                moved = self.spread_set(s, owner, index, owner_set)
+                if moved:
+                    index = self.copper_index()
+                    status = "tuned"
+                    tune_passes()
+                    unmatched()
+                if moved and report.nominal_spread < first[0] - 1e-9:
+                    report.spaced = moved
+                else:
+                    back_to(first)
             if unmatched():
                 status = "length_unmatched"
             report.status = status

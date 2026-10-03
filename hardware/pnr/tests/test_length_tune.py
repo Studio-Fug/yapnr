@@ -232,6 +232,76 @@ class TuneMemberTest(unittest.TestCase):
             self.assertGreaterEqual(_seg_dist(t[2], t[3], via, via) + 1e-6, 0.125 + 0.3 + 0.2)
 
 
+class SpreadSetTest(unittest.TestCase):
+    def test_members_move_apart_where_the_board_has_room(self):
+        # Three nets of a group run side by side at the closest spacing the router
+        # allows (3 cells with a 1-cell halo); C, the longest, turns up at its end.
+        # The middle one has no room for meanders until its neighbours move out.
+        from pnr.route.detail.grid import RouteGrid
+        from pnr.route.detail.maze import RouteResult
+        from pnr.route.detail.router import BoardRoute
+        from pnr.route.detail.tune import Tuner, net_footprint
+
+        grid = RouteGrid(10, 7.5, 0.25, layers=("F.Cu", "B.Cu"), clearance=0.2, track_width=0.25)
+        names = ["A", "B", "C"]
+        nets = {}
+        for n, j in (("A", 12), ("B", 15), ("C", 18)):
+            rn = RoutedNet(n)
+            rn.cells = [Cell(0, i, j) for i in range(2, 38)]
+            if n == "C":
+                rn.cells += [Cell(0, 37, j + k) for k in range(1, 7)]
+            rn.segments = [(0, (p.i, p.j), (q.i, q.j)) for p, q in zip(rn.cells, rn.cells[1:])]
+            rn.routed = True
+            nets[n] = rn
+        halo = {n: 1 for n in names}
+        grid.routing_track_halos = halo
+        grid.routing_via_keepout = 1
+        board = BoardRoute(result=RouteResult(nets=nets, unrouted=[], iterations=0), grid=grid)
+        board.tracks = [
+            (n, "F.Cu", grid.center_of(*p), grid.center_of(*q), 0.25)
+            for n, rn in nets.items()
+            for _l, p, q in rn.segments
+        ]
+        g = BoardGraph("t", [], [Net(n, k + 1, []) for k, n in enumerate(names)])
+        rules = pair_rules()
+        rules["diff_pairs"] = []
+        rules["length_match"] = [{"name": "bus", "nets": names, "tolerance_mm": 0.5}]
+        tuner = Tuner(
+            board,
+            g,
+            grid,
+            rules,
+            net_width={},
+            default_width=0.25,
+            net_halo=halo,
+            via_keepout=1,
+            access={n: [nets[n].cells[0], nets[n].cells[-1]] for n in names},
+            via_radius=0.3,
+        )
+        longest = tuner.measure("C").total_mm
+        owner = tuner._owner_map()
+        (s,) = match_sets(rules)
+        moved = tuner.spread_set(s, owner, tuner.copper_index())
+        self.assertIn("A", moved)
+        self.assertNotIn("B", moved)
+        # B now has at least 5 cells to each neighbour along its middle.
+        for i in range(12, 28):
+            rows = {n: [c.j for c in nets[n].cells if c.i == i] for n in names}
+            self.assertGreaterEqual(15 - max(rows["A"]), 5)
+            self.assertGreaterEqual(min(rows["C"]) - 15, 5)
+        # Still connected end to end, no member longer than the longest was, the
+        # footprints apart and the owner map the routes' own.
+        for n in names:
+            self.assertEqual(nets[n].cells[0].i, 2)
+            self.assertLessEqual(tuner.measure(n).total_mm, longest + 1e-6)
+        fps = {n: net_footprint(grid, n, nets[n], 1, 1) for n in names}
+        self.assertFalse(fps["A"] & fps["B"] or fps["B"] & fps["C"] or fps["A"] & fps["C"])
+        self.assertEqual({c: v for c, v in owner.items() if v}, tuner._owner_map())
+        for a in (t for t in board.tracks if t[0] == "A"):
+            for b in (t for t in board.tracks if t[0] == "B"):
+                self.assertGreaterEqual(_seg_dist(a[2], a[3], b[2], b[3]) + 1e-6, 0.45)
+
+
 class TuneBoardTest(unittest.TestCase):
     def test_no_sets_no_change(self):
         g = pair_board()
@@ -416,6 +486,61 @@ class TuneBoardTest(unittest.TestCase):
                 if o[0] == "D_P" and o[1] == t[1]:
                     self.assertGreaterEqual(
                         _seg_dist(t[2], t[3], o[2], o[3]) + 1e-6, 0.25 + FAB["clearance_mm"]
+                    )
+
+    def test_a_boxed_in_bus_member_gets_room(self):
+        # Six nets from a 1 mm pitch column to a 1.27 mm pitch row above and to the
+        # right: the bus turns a corner, the inner nets are the short ones and run
+        # between their neighbours at the pins' pitch.
+        from unittest import mock
+
+        from pnr.route.detail import tune
+
+        def pad(name, net, off, size):
+            return Pad(name, net, off, size, land_corner=0.0)
+
+        nets = ["B%d" % k for k in range(6)]
+        j1 = [pad(str(k + 1), n, (0.0, (2.5 - k) * 1.0), (0.8, 0.4)) for k, n in enumerate(nets)]
+        u1 = [pad(str(k + 1), n, ((k - 2.5) * 1.27, 0.0), (0.4, 0.8)) for k, n in enumerate(nets)]
+        comps = [
+            Component("J1", "conn", (1.5, 6.5), 0, "top", (1.6, 7.0), (1.6, 7.0), pads=j1),
+            Component("U1", "dev", (12.0, 10.0), 0, "top", (8.62, 1.6), (8.62, 1.6), pads=u1),
+        ]
+        g = BoardGraph(
+            "corner",
+            comps,
+            [Net(n, k + 1, [("J1", str(k + 1)), ("U1", str(k + 1))]) for k, n in enumerate(nets)],
+        )
+        rules = pair_rules()
+        rules["diff_pairs"] = []
+        rules["length_match"] = [{"name": "bus", "nets": nets, "tolerance_mm": 0.5}]
+        c = compile_constraints({"board": {"outline": {"w": 16, "h": 13}}}, g.refs)
+        with mock.patch.object(tune, "SPREAD_PASSES", 0):
+            plain = route_board(g, c, rules, pitch=0.25, max_iters=4)
+        board = route_board(g, c, rules, pitch=0.25, max_iters=4)
+        self.assertTrue(board.fully_routed)
+        (report,) = board.length_report
+        self.assertEqual(report["status"], "tuned")
+        self.assertLessEqual(
+            report.get("nominal_spread", report["spread"]), report["target_residual"]
+        )
+        if plain.length_report[0]["status"] == "length_unmatched":
+            self.assertTrue(report.get("spaced"))
+        lengths = lm.board_route_lengths(board, g, nets, lm.default_stackup(2), via_radius=0.3)
+        self.assertAlmostEqual(
+            max(x.total_mm for x in lengths.values()) - min(x.total_mm for x in lengths.values()),
+            report.get("nominal_spread", report["spread"]),
+            places=6,
+        )
+        for net in nets:
+            for cell in board.result.nets[net].cells:
+                self.assertTrue(board.grid.passable(cell.layer, cell.i, cell.j, net))
+        mine = [t for t in board.tracks if t[0] in nets]
+        for a in mine:
+            for b in mine:
+                if a[0] < b[0] and a[1] == b[1]:
+                    self.assertGreaterEqual(
+                        _seg_dist(a[2], a[3], b[2], b[3]) + 1e-6, 0.25 + FAB["clearance_mm"]
                     )
 
     def test_ps_budget(self):

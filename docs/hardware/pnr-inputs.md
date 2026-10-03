@@ -278,7 +278,12 @@ the same numbers. The per-set result (lengths, margin, meanders) is in the route
 report as `length_tuning`; a set that could not be matched is `length_unmatched`.
 When the short members have no room left for meanders, the longest member is routed
 again around the other nets (vias priced high) and kept if it is shorter (`rerouted`
-in the report). Placement prepares for this: global placement pulls each set's
+in the report). A member boxed in by its own neighbours (a bus routed at its pins'
+pitch round a corner, where the inner members are the short ones) gets room
+instead: from the route as it was before tuning, each member is routed again with
+the others in place, steps close to another member priced a little higher, so the
+bus fans out where the board has room; the set is tuned again and whichever attempt
+ends closer is kept (`spaced` in the report). Placement prepares for this: global placement pulls each set's
 members toward equal estimated lengths, and after legalization the small parts on
 matched nets (series resistors and the like) move to the legal slot that keeps the
 legs even (`pnr/place/matched.py`), so two series resistors of a pair do not end up

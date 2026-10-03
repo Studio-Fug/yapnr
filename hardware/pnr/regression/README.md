@@ -131,7 +131,9 @@ the critical path from the unplaced board to KiCad's verdict, with the rejected
 candidates of each selection as montages (`pnr.provenance`);
 `//hardware/pnr:ladder_animations` runs the traced ladder with the initial pool
 and renders every case (`--render-only RUN_DIR` skips the ladder) into
-`docs/animations/`, with `manifest.json` and `ladder-results.json`. Case
+`docs/animations/`, with `manifest.json` and `ladder-results.json`; the
+committed ones were recorded with `--compact --gloss` (`--runner-arg`), and a
+board saved after the gloss stage plays as a before/after. Case
 directories in `result.json`, `summary.json` and `junit.xml` are relative to the
 run directory. `provenance.json` records the fab profile, the checkout's commit
 (and whether engine files were modified), the platform and `sources_sha256`, one
@@ -143,8 +145,8 @@ objectives and the winning rung's native phases).
 
 CI (`.github/workflows/ladder.yaml`, informational) runs cases 01 to 06 on pull
 requests that change engine inputs, and all cases with seeds 0 and 1 nightly,
-inside the arm64 image, plus a traced pool run whose animations are uploaded as
-an artifact.
+inside the arm64 image, plus a traced pool run (with the committed animations'
+`--compact --gloss`) whose animations are uploaded as an artifact.
 
 ## Showcases
 

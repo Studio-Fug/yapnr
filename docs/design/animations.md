@@ -18,10 +18,20 @@ this design:
 - **Progress bar.** The number and the bar count committed connections; negotiation fills a
   lighter bar behind them (§5.2 drew the provisional count in the bar itself, which reached 100 %
   and then dropped when commits began). The title card's backdrop is the unplaced board.
+- **The gloss stage (renderer 3, 2026-10-03).** A board saved after `run.py --gloss`'s stage
+  (a `native` board event with `stage: gloss`) plays as a before/after: the board before it
+  with the copper the stage replaced drawn as ripped (dashed red), a cross-fade, and the board
+  after it with its new copper flashed (green); the footer gives the copper length before and
+  after. The changed copper is the geometric difference of the two boards
+  (`pnr.animate.gloss`: track pieces no collinear track of the same layer and width covers,
+  sampled every 0.1 mm), so the pass's merging of collinear pieces is not marked. A stage that
+  changed no copper holds for 0.4 s ("Gloss · no copper changed"). Traces without the stage
+  render as before (the timeline golden holds).
 - **Draw order.** Vias are drawn after pads, as KiCad draws them (§5.2 had them before, which hid
   a via on a pad); native frames ring each KiCad DRC finding.
 - **Results.** `docs/animations/ladder-results.json` (every case's gate result, with KiCad's
-  findings by rule) sits next to the manifest. The manifest records the ladder run's own
+  findings by rule; since 2026-10-03 also the placed parts' `compactness` and the gloss stage's
+  bends and length) sits next to the manifest. The manifest records the ladder run's own
   provenance (commit and dirty flag, `sources_sha256`, profile, platform, image, KiCad) apart from
   the render's, and frame counts as encoded.
 - **README case.** The README shows `05-timer-led-10`, the TLC555 blinker: the request's "555

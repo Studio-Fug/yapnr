@@ -21,6 +21,7 @@ are warnings, not errors, so the file can grow without breaking older boards.
 from __future__ import annotations
 
 import fnmatch
+import math
 import os
 from dataclasses import dataclass, field
 from enum import Enum
@@ -116,6 +117,10 @@ class BoardSpec:
     default_clearance_mm: float = DEFAULT_CLEARANCE_MM
     references_on_fab: bool = False
     sides: str = "single"  # side policy, one of SIDE_POLICIES (pnr.place.sides)
+    # Courtyard-to-courtyard gap (mm) of the compact legalizer (PNR_COMPACT LEGALIZE,
+    # pnr.place.compact.courtyard_gap); None (not authored) takes its default. A plain
+    # class attribute, not a dataclass field, so asdict() is unchanged.
+    courtyard_clearance_mm = None
 
 
 @dataclass
@@ -450,9 +455,23 @@ def _parse_board(raw: Dict) -> BoardSpec:
         references_on_fab=bool(raw.get("references_on_fab", False)),
         sides=_require_enum(raw.get("sides") or "single", SIDE_POLICIES, "board.sides"),
     )
+    gap = _courtyard_clearance(raw.get("courtyard_clearance_mm"))
+    if gap is not None:
+        board.courtyard_clearance_mm = gap
     if board.sides == "double" and board.layers < 2:
         raise ConstraintError("board.sides: double needs at least 2 copper layers")
     return board
+
+
+def _courtyard_clearance(value) -> Optional[float]:
+    """``board.courtyard_clearance_mm``: None when absent, else a finite number >= 0."""
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise ConstraintError("board.courtyard_clearance_mm must be a finite number")
+    if value < 0:
+        raise ConstraintError("board.courtyard_clearance_mm must not be negative")
+    return float(value)
 
 
 _OPTIONAL_FAB = (

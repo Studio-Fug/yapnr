@@ -8,6 +8,12 @@ PNR_PAIR_LANDING_RESERVE=1 (src13, default off): :func:`placement_rects` also
 returns the component's diff-pair via landing reserves (:class:`ReserveRect`, see
 :mod:`pnr.place.pair_landing`) and tags body rects with their mount side
 (:class:`MountedRect`); unset, it returns exactly the plain rects as before.
+
+PNR_COMPACT=1 (``COURTYARD``, default off; :mod:`pnr.compact_flags`): a part with an
+off-centre body box (``Component.body``) occupies that box, turned with the part, instead
+of the origin-symmetric ``courtyard`` envelope: :func:`courtyard_rect` returns it,
+:func:`body_shift` is its centre's offset from ``pos``, and edge poses and ref-relative
+keep-outs are taken against it. Block and line macros keep their centred courtyard.
 """
 
 from __future__ import annotations
@@ -17,6 +23,7 @@ import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
+from pnr import compact_flags
 from pnr.constraints import CompiledConstraints, Enforcement
 from pnr.graph import BoardGraph, Component
 
@@ -229,12 +236,47 @@ def occupied_sides(comp: Component):
     )
 
 
+def compact_body(comp: Component) -> Optional[Tuple[float, float, float, float]]:
+    """The part's off-centre body box ``(x0, y0, x1, y1)`` (unrotated frame of its
+    current side) when PNR_COMPACT ``COURTYARD`` places it, else None: the flag is off,
+    the body is centred (``body`` None) or the part is a block or line macro."""
+    body = comp.body
+    if body is None or not compact_flags.enabled("COURTYARD"):
+        return None
+    if str(comp.footprint).startswith(("block:", "line:")):
+        return None
+    return body
+
+
+def _turned(box, rot):
+    """``box`` (x0, y0, x1, y1) turned ``rot`` degrees CCW about the origin (exact at the
+    quarter turns: :func:`pnr.place.regions.rotate_box`)."""
+    return _regions.rotate_box(box, rot)
+
+
+def body_shift(comp: Component, rot: Optional[float] = None) -> Optional[Tuple[float, float]]:
+    """PNR_COMPACT offset courtyard: the board-frame offset of the occupied box's centre
+    from ``comp.pos`` at ``rot`` (default ``comp.rot``) and the part's current side; None
+    for a part centred on its origin (always, with the flag off)."""
+    body = compact_body(comp)
+    if body is None:
+        return None
+    x0, y0, x1, y1 = _turned(body, comp.rot if rot is None else rot)
+    return ((x0 + x1) / 2.0, (y0 + y1) / 2.0)
+
+
 def courtyard_rect(comp: Component) -> Rect:
     """The component's courtyard as a placed :class:`Rect`.
 
     Courtyard dimensions are recorded orientation-agnostic; for a 90/270° part we
     swap w/h so the placed extent is correct (no orientation *search* here — this
-    just honors the ingested angle)."""
+    just honors the ingested angle). With PNR_COMPACT ``COURTYARD`` an off-centre
+    body box (:func:`compact_body`) is the rectangle, turned with the part and centred
+    at ``pos`` plus :func:`body_shift`."""
+    body = compact_body(comp)
+    if body is not None:
+        x0, y0, x1, y1 = _turned(body, comp.rot)
+        return Rect(comp.pos[0] + (x0 + x1) / 2.0, comp.pos[1] + (y0 + y1) / 2.0, x1 - x0, y1 - y0)
     w, h = comp.courtyard
     if int(round(comp.rot)) % 180 == 90:
         w, h = h, w
@@ -333,6 +375,21 @@ def resolve_fixed_poses(
             at = c.params.get("at")
             if at:
                 poses[ref] = (float(at[0]), float(at[1]))
+            elif compact_body(comp) is not None:
+                # PNR_COMPACT offset courtyard: the edge rule places the body box at the
+                # held rotation; the pose is the origin behind it.
+                rot = float(c.params.get("rot") or 0.0)
+                x0, y0, x1, y1 = _turned(compact_body(comp), rot)
+                cx, cy = _edge_pose(
+                    c.params.get("edge"),
+                    c.params.get("align"),
+                    x1 - x0,
+                    y1 - y0,
+                    width,
+                    height,
+                    overhang=float(c.params.get("overhang_mm") or 0.0),
+                )
+                poses[ref] = (cx - (x0 + x1) / 2.0, cy - (y0 + y1) / 2.0)
             else:
                 poses[ref] = _edge_pose(
                     c.params.get("edge"),
@@ -390,6 +447,17 @@ def keepout_rects(
                 "east": ((w + depth) / 2, 0, depth, h),
                 "west": (-(w + depth) / 2, 0, depth, h),
             }.get(extent.get("edge"))
+            body = compact_body(comp)
+            if local is not None and body is not None:
+                # PNR_COMPACT offset courtyard: against the body box's own edge.
+                x0, y0, x1, y1 = body
+                mx, my = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+                local = {
+                    "north": (mx, y1 + depth / 2, x1 - x0, depth),
+                    "south": (mx, y0 - depth / 2, x1 - x0, depth),
+                    "east": (x1 + depth / 2, my, depth, y1 - y0),
+                    "west": (x0 - depth / 2, my, depth, y1 - y0),
+                }[extent.get("edge")]
             if local is None:
                 continue
             angle = resolve_hard_rotations(constraints).get(ref, comp.rot)
@@ -455,3 +523,4 @@ def placement_rects(comp):
 
 
 from . import pair_landing as _landing  # noqa: E402  (stdlib-only; imports this module)
+from . import regions as _regions  # noqa: E402  (stdlib-only)

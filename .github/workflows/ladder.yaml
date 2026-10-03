@@ -7,7 +7,9 @@ name: Ladder
 #   nightly (main)    all 8 cases, seeds 0 and 1, baseline; then all 8, seed 0, with the initial
 #                     placement pool and traces, rendered to animations (artifacts only); then
 #                     the showcases (designs.showcases() and 07-chaser-20, traced), rendered too
-#                     (informational: a showcase never decides the job); then the opt-in gloss
+#                     (informational: a showcase never decides the job); both traced runs take
+#                     the committed animations' options (--compact --gloss, docs/animations/
+#                     manifest.json), so their trace hashes are comparable; then the opt-in gloss
 #                     stage (run.py --gloss, PNR_GLOSS) on 04-inverter-leds-8 and 07-chaser-20,
 #                     seed 0: no other run exercises it while the flag is off by default; then
 #                     the hard rungs of the nightly lane (hard_rungs.py, ci.lane == nightly), seed 0
@@ -307,6 +309,8 @@ jobs:
         if: always()
         run: python3 tools/ci/ladder_summary.py out/ladder --title "Regression ladder (baseline)" >> "${GITHUB_STEP_SUMMARY}"
 
+      # The committed animations' options (the opt-in compact placement and gloss stage; each
+      # animation's config in docs/animations/manifest.json), so the traces compare with them.
       - name: Run the ladder with traces (initial pool, seed 0)
         if: always() && needs.plan.outputs.animate == 'true'
         env:
@@ -322,7 +326,7 @@ jobs:
                 --python "${LADDER_PY}" --kicad-python /usr/bin/python3 \
                 --kicad-cli /usr/bin/kicad-cli --library /usr/share/kicad/footprints \
                 --timeout 600 --seed 0 --trace --initial-pool --initial-starts 8 \
-                --initial-finalists 3 "${args[@]}" || true
+                --initial-finalists 3 --compact --gloss "${args[@]}" || true
           mkdir -p out/traced
           echo "${LADDER_IMAGE}" > out/traced/image.txt
           python3 tools/ci/ladder_summary.py out/traced --title "Regression ladder (traced, initial pool)" \
@@ -343,7 +347,7 @@ jobs:
                 --python "${LADDER_PY}" --kicad-python /usr/bin/python3 \
                 --kicad-cli /usr/bin/kicad-cli --library /usr/share/kicad/footprints \
                 --timeout 1200 --seed 0 --trace --trace-placement-every 5 --initial-pool \
-                --initial-starts 8 --initial-finalists 3 --showcases \
+                --initial-starts 8 --initial-finalists 3 --showcases --compact --gloss \
                 --case 07-chaser-20 --case line-chaser-20 --case edge-io-12-free \
                 --case edge-io-12 --case hier-twin-bank-32 || status=$?
           mkdir -p out/showcases

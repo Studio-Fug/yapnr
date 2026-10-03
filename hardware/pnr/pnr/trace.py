@@ -884,6 +884,11 @@ def board_header(graph, constraints=None, rules=None):
     for con in getattr(constraints, "constraints", None) or []:
         if getattr(con, "kind", None) == "fixed":
             fixed.update(con.refs)
+    from pnr.compact_flags import enabled as compact_enabled
+
+    # PNR_COMPACT offset courtyards: the placer holds each off-centre body box, so the
+    # header carries it (``body``, um, the header pose's side) for the renderer.
+    bodies = compact_enabled("COURTYARD")
     components = []
     for c in sorted(graph.components, key=lambda c: c.ref):
         pads = []
@@ -903,18 +908,20 @@ def board_header(graph, constraints=None, rules=None):
                     angle=0.0,
                 )
             )
-        components.append(
-            dict(
-                ref=c.ref,
-                footprint=c.footprint,
-                courtyard=[um(c.courtyard[0]), um(c.courtyard[1])],
-                fixed=bool(c.ref in fixed or c.locked),
-                pos=[um(c.pos[0]), um(c.pos[1])],
-                rot=angle(c.rot),
-                side=c.side,
-                pads=pads,
-            )
+        entry = dict(
+            ref=c.ref,
+            footprint=c.footprint,
+            courtyard=[um(c.courtyard[0]), um(c.courtyard[1])],
+            fixed=bool(c.ref in fixed or c.locked),
+            pos=[um(c.pos[0]), um(c.pos[1])],
+            rot=angle(c.rot),
+            side=c.side,
+            pads=pads,
         )
+        body = getattr(c, "body", None)
+        if bodies and body is not None and not str(c.footprint).startswith(("block:", "line:")):
+            entry["body"] = [um(v) for v in body]
+        components.append(entry)
     nets, total = [], 0
     for n in sorted(graph.nets, key=lambda n: n.name):
         pins = [[r, p] for r, p in n.pins]

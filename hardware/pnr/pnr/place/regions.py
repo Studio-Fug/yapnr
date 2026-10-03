@@ -731,6 +731,16 @@ def check_feasible(graph, constraints, width, height, orient=True, trials_fixed=
         if int(round(rot)) % 180 == 90:
             w, h = h, w
         box = [w / 2, width - w / 2, h / 2, height - h / 2]
+        # PNR_COMPACT offset courtyard: the placer holds the body box, not the envelope.
+        from .geometry import compact_body
+
+        body = compact_body(comp)
+        lo = hi = None
+        if body is not None:
+            lo_x, lo_y, hi_x, hi_y = rotate_box(body, rot)
+            w, h = hi_x - lo_x, hi_y - lo_y
+            lo, hi = (lo_x, lo_y), (hi_x, hi_y)
+            box = [-lo_x, width - hi_x, -lo_y, height - hi_y]
         if box[0] > box[1] + CHECK_EPS_MM or box[2] > box[3] + CHECK_EPS_MM:
             return None, "the board outline"
         for con in hard_regions:
@@ -750,26 +760,35 @@ def check_feasible(graph, constraints, width, height, orient=True, trials_fixed=
                 return None, "region %r within the board outline" % con.name
         if ref in bands:
             edge, tol = bands[ref]
-            k, lo, hi = {
-                "south": (2, -math.inf, tol + h / 2),
-                "north": (2, height - tol - h / 2, math.inf),
-                "west": (0, -math.inf, tol + w / 2),
-                "east": (0, width - tol - w / 2, math.inf),
-            }[edge]
-            box[k], box[k + 1] = max(box[k], lo), min(box[k + 1], hi)
+            if body is None:
+                k, b_lo, b_hi = {
+                    "south": (2, -math.inf, tol + h / 2),
+                    "north": (2, height - tol - h / 2, math.inf),
+                    "west": (0, -math.inf, tol + w / 2),
+                    "east": (0, width - tol - w / 2, math.inf),
+                }[edge]
+            else:
+                k, b_lo, b_hi = {
+                    "south": (2, -math.inf, tol - lo[1]),
+                    "north": (2, height - tol - hi[1], math.inf),
+                    "west": (0, -math.inf, tol - lo[0]),
+                    "east": (0, width - tol - hi[0], math.inf),
+                }[edge]
+            box[k], box[k + 1] = max(box[k], b_lo), min(box[k + 1], b_hi)
             if box[k] > box[k + 1] + CHECK_EPS_MM:
                 return None, "its hard edge_align (%s, %g mm)" % (edge, tol)
         if keepouts and any(ref in c.refs for c in hard_regions):
             # The centres are lost when the keep-outs, grown by half the courtyard
             # (less a hair: touching is legal), cover all of them.
+            sx, sy = (0.0, 0.0) if body is None else ((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2)
             grown = [
                 (
                     "rect",
                     (
-                        k[0] - w / 2 + 1e-4,
-                        k[1] - h / 2 + 1e-4,
-                        k[2] + w / 2 - 1e-4,
-                        k[3] + h / 2 - 1e-4,
+                        k[0] - w / 2 + 1e-4 - sx,
+                        k[1] - h / 2 + 1e-4 - sy,
+                        k[2] + w / 2 - 1e-4 - sx,
+                        k[3] + h / 2 - 1e-4 - sy,
                     ),
                 )
                 for _, k in keepouts
@@ -869,7 +888,7 @@ def check_feasible(graph, constraints, width, height, orient=True, trials_fixed=
 # ------------------------------------------------------------------ exact snap
 
 
-def snap_aligns(placed, constraints, clearance=0.0, pad_edge=None, size=None):
+def snap_aligns(placed, constraints, clearance=0.0, pad_edge=None, size=None, margins=None):
     """After legalization, put the anchors of each hard align whose spread exceeds its
     ``tol_mm`` (one under the legalizer's band floor, e.g. 0) on one line, best effort.
     An align already within ``tol_mm`` is left alone: a snap would move parts off the
@@ -882,8 +901,10 @@ def snap_aligns(placed, constraints, clearance=0.0, pad_edge=None, size=None):
     outline, keep-outs, regions, edge bands, groups, the other aligns), brings no
     other part within ``clearance`` that was not within it before and, with
     ``pad_edge`` (PNR_PAD_EDGE_CLEARANCE=1, ``size`` = (width, height)), keeps the
-    pads' edge rule. Returns the refs moved; an align that cannot be snapped keeps
-    its legal spread (within ``max(tol_mm, the legalizer's band floor)``)."""
+    pads' edge rule. ``margins`` ({ref: mm}, PNR_COMPACT ``LEGALIZE`` copper margins)
+    add both parts' margins to ``clearance``, as the legalizer's slots do. Returns the
+    refs moved; an align that cannot be snapped keeps its legal spread (within
+    ``max(tol_mm, the legalizer's band floor)``)."""
     import copy
 
     from pnr.constraints import Constraint
@@ -918,6 +939,11 @@ def snap_aligns(placed, constraints, clearance=0.0, pad_edge=None, size=None):
         for c in constraints.constraints
     ]
 
+    margins = margins or {}
+
+    def gap(a, b):
+        return clearance + margins.get(a, 0.0) + margins.get(b, 0.0)
+
     def near(comp):
         mine = placement_rects(comp)
         return {
@@ -926,8 +952,10 @@ def snap_aligns(placed, constraints, clearance=0.0, pad_edge=None, size=None):
             if other.ref != comp.ref
             for other_side, other_rect in placement_rects(other)
             for side, rect in mine
-            if side == other_side and rect.overlaps(other_rect, gap=clearance)
+            if side == other_side and rect.overlaps(other_rect, gap=gap(comp.ref, other.ref))
         }
+
+    guarded = clearance > 0 or bool(margins)
 
     moved = []
     for con in rules:
@@ -957,11 +985,11 @@ def snap_aligns(placed, constraints, clearance=0.0, pad_edge=None, size=None):
                 except ValueError:  # the legalized board is not legal: leave it
                     return moved
                 comp = comps[ref]
-                before = near(comp) if clearance > 0 else set()
+                before = near(comp) if guarded else set()
                 point = list(comp.pos)
                 point[k] += delta
                 comp.pos = tuple(point)
-                ok = legal(comp) and (clearance <= 0 or near(comp) <= before)
+                ok = legal(comp) and (not guarded or near(comp) <= before)
                 if ok and pad_edge is not None:
                     ok = not pad_edge_violations(
                         placed, size[0], size[1], pad_edge, exclude=set(comps) - {ref}
@@ -1101,9 +1129,10 @@ class LegalizeRules:
         self._reach[key] = out
         return out
 
-    def mask(self, comp, bw, bh, g, shape):
+    def mask(self, comp, bw, bh, g, shape, shift=None):
         """Valid slot top-lefts (array of ``shape``) for the hard polygon/union regions
-        of ``comp`` at its rotation, or None."""
+        of ``comp`` at its rotation, or None. ``shift`` (PNR_COMPACT offset courtyard) is
+        the slot centre's offset from the part's origin."""
         import numpy as np
 
         out = None
@@ -1112,8 +1141,12 @@ class LegalizeRules:
                 continue
             rows = np.arange(shape[0])[:, None]
             cols = np.arange(shape[1])[None, :]
-            cx = np.broadcast_to((cols + bw / 2.0) * g, shape)
-            cy = np.broadcast_to((rows + bh / 2.0) * g, shape)
+            if shift is None:
+                cx = np.broadcast_to((cols + bw / 2.0) * g, shape)
+                cy = np.broadcast_to((rows + bh / 2.0) * g, shape)
+            else:
+                cx = np.broadcast_to((cols + bw / 2.0) * g - shift[0], shape)
+                cy = np.broadcast_to((rows + bh / 2.0) * g - shift[1], shape)
             ok = np.ones(shape, dtype=bool)
             for b in bodies(comp, con):
                 r = rotate_box(b, comp.rot)

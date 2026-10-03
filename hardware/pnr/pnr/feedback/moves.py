@@ -20,7 +20,8 @@ feedback beats perturbation.
 
 A unit is a single part, or (hierarchical top level) a whole library block
 moved rigidly by translation. Legality: the mover's courtyards (with plane-array
-reservations) clear every other part by the board clearance, stay inside the
+reservations) clear every other part by the board clearance (PNR_COMPACT
+``LEGALIZE``: the courtyard gap plus both parts' copper margins), stay inside the
 outline, out of keep-outs and within hard group radii; then the full
 :func:`pnr.place.metrics.hard_violations` of the child may add nothing; then the
 driver's ``extra_check`` and (PNR_POWER_FIRST=1) the power guard (no new power
@@ -131,6 +132,9 @@ class MoveBoard:
     tier1: FrozenSet[str] = frozenset()
     origin: Optional[Dict[str, Tuple[float, float]]] = None
     clearance: float = 0.0
+    # PNR_COMPACT LEGALIZE copper margins ({ref: mm}, pnr.place.compact.margins): a part
+    # clears others by the clearance plus both parts' margins, as the legalizer's slots.
+    margins: Dict[str, float] = field(default_factory=dict)
     plane: FrozenSet[str] = frozenset()
     extra_check: Optional[Callable] = None  # f(graph, moved {ref: pose}) -> [problems]
     guard: Optional[Callable] = None  # f(graph) -> reason or None
@@ -214,7 +218,8 @@ class MoveBoard:
             rect = courtyard_rect(comp)
             if ref not in self.locked and not rect.inside(self.width, self.height):
                 return "outline"
-            if any(rect.overlaps(k, gap=self.clearance) for k in self.keepouts):
+            margin = self.margins.get(ref, 0.0)
+            if any(rect.overlaps(k, gap=self.clearance + margin) for k in self.keepouts):
                 return "keepout"
             for anchor, member, radius in self.edges:
                 if ref in (anchor, member):
@@ -225,8 +230,9 @@ class MoveBoard:
                 for other, regions in self.rects.items():
                     if other in inside:
                         continue
+                    gap = self.clearance + margin + self.margins.get(other, 0.0)
                     for other_side, rect2 in regions:
-                        if other_side == side and area.overlaps(rect2, gap=self.clearance):
+                        if other_side == side and area.overlaps(rect2, gap=gap):
                             return "overlap"
         return None
 

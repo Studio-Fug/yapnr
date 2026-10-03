@@ -1457,8 +1457,8 @@ an idle machine; times below are wall clock.
   are judged with every variant throughout, so the export's choice is the same.
 - **The isolation resistor's share** (`spec.Absorbed`, requirement quantity "absorbed"): the
   fraction of the power incident at port j that a lumped resistor dissipates,
-  P*R/P_inc,j with P_R = ½ Σ_e c*ω σ*e V_e |Ê_e|² over the part's edges (σ_e its own
-  conductivity, c*ω = cos(ωΔt/2) as in §5.7's dissipation), from probes on those edges, whose
+  `P_R / P_inc,j` with `P_R = ½ Σ_e c_ω σ_e V_e |Ê_e|²` over the part's edges (`σ_e` its own
+  conductivity, `c_ω = cos(ωΔt/2)` as in §5.7's dissipation), from probes on those edges, whose
   adjoint sources are J sources there. φ = (a_min − a)/0.1 like the radiated fraction. The
   combiner asks R1 to take ≥ 0.4 of what enters port 2 (an ideal Wilkinson's resistor takes
   0.5): with gray copper a resistive sheet, every earlier formulation isolated the outputs with
@@ -1467,13 +1467,22 @@ an idle machine; times below are wall clock.
   relative on the share alone; its value equals the §5.7 dissipation on the part's edges less
   the sheet's.
 - **The lost fraction** (`spec.Loss`, quantity "loss"): what leaves neither through a port nor
-  into a lumped resistor, L_j = −Σ_n (P(b_n) − P(a_n))/P_inc,j − Σ_R P_R/P_inc,j with
-  P(w) = ½|w|² times port n's power factor (the idle ports' residual incident waves included):
-  radiation and the dissipation in the copper, gray copper included, and the substrate. It
-  needs no field over the design plane (the sheet's dissipation would need adjoint sources on
-  every copper-plane edge). The combiner bounds L_2 ≤ 0.08 (a binary design loses a few per
-  cent): with the share alone (W8) the optimizer still bridged the arms with gray copper.
-  Gradient against finite differences: 1.4–2.2e-10 relative on L alone.
+  into a lumped resistor, `L_j = −Σ_n (P(b_n) − P(a_n)) / P_inc,j − Σ_R P_R / P_inc,j` with
+  `P(w) = ½|w|²` times port n's power factor (the idle ports' residual incident waves
+  included): radiation and the dissipation in the copper, gray copper included, and the
+  substrate. It needs no field over the design plane (the sheet's dissipation would need
+  adjoint sources on every copper-plane edge). Gradient against finite differences:
+  1.4–2.2e-10 relative on L alone. The combiner tried `L_2 ≤ 0.08` (a binary design loses a
+  few per cent) against W8's gray bridges; it kept the gray design from connecting the
+  resistor at all (W9: connecting it through gray copper first adds loss), and the case does
+  not use it.
+- **The combiner's keepout** (`cases.isolation_keepout`, a `fixed` void region): the strip on
+  the symmetry line from the resistor's east end to the window's east edge, as wide as the
+  part's body (0.6 mm, the minimum space). The output arms then join only through the resistor
+  and through the input junction west of it, as in a Wilkinson's layout; W8's gray bridges
+  across the symmetry line east of the resistor (in parallel with it, copper shorts once
+  binary) cannot form. It is computed from the part's position and the window, and the rest of
+  the window stays free.
 - **Plain MMA, then adaptive moves** (`optimizer.adaptive_from_beta`, new: adaptive steps from
   that β on, plain MMA steps before it). Adaptive moves from the start made every case creep
   (moves of 0.004–0.03; 23.2), plain MMA throughout oscillated from β = 16 without improving

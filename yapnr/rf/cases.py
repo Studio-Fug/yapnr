@@ -40,8 +40,8 @@ import numpy as np
 from yapnr.rf.spec import (
     Absorbed,
     Band,
+    FixedRegion,
     GridSpec,
-    Loss,
     Lumped,
     OptimizerSpec,
     Port,
@@ -170,6 +170,13 @@ def divider(scale: str = "full") -> Spec:
     )
 
 
+def isolation_keepout(resistor: Lumped, window: tuple[float, float, float, float]) -> FixedRegion:
+    """The strip from a combiner's isolation resistor (on the symmetry line, across it) to the
+    outputs' edge of the window, as wide as the part's body, kept void: the output arms then
+    join only through the resistor and through the input junction on the other side of it."""
+    return FixedRegion((max(resistor.x_mm), window[1]), tuple(resistor.y_mm), 0.0)
+
+
 def wilkinson(scale: str = "full") -> Spec:
     """(a2) A Wilkinson-type combiner/divider: the equal split of `divider` plus matched and
     isolated outputs (|S22| = |S33| and |S32| ≤ −20 dB), with a 100 Ω isolation resistor (an
@@ -185,15 +192,15 @@ def wilkinson(scale: str = "full") -> Spec:
         S(3, 2).at_most_db(-20, band="pass"),
         # The isolation resistor takes most of what an output port does not pass on (an ideal
         # Wilkinson's resistor dissipates half the power entering port 2; the rest goes to port
-        # 1), and little else is lost (radiation, the copper's and the substrate's dissipation:
-        # a few per cent in a binary design). Without these the optimizer isolated the outputs
-        # with gray copper beside the resistor or bridging the arms (a lossy sheet), which the
-        # binary design does not have; with the share alone it still bridged the arms with
-        # gray copper east of the resistor (design §23).
+        # 1). Without this the optimizer isolated the outputs with gray copper beside the
+        # resistor or bridging the arms (a lossy sheet), which the binary design does not have
+        # (design §23). With |S12| ≥ −3.4 dB it also bounds the rest of port 2's power
+        # (reflected, passed to port 3 or lost) to 14 %; a tighter bound on the lost fraction
+        # alone (`Loss(2).at_most(0.08)`, W9) kept the gray design from connecting the resistor.
         Absorbed("R1", 2).at_least(0.4, band="pass"),
-        Loss(2).at_most(0.08, band="pass"),
     )
     if scale == "smoke":
+        smoke_r = Lumped("R1", (3.0, 3.6), (-0.3, 0.3), "y", 100.0, 0.6)
         return Spec(
             name="wilkinson-smoke",
             stackup=S1,
@@ -204,15 +211,18 @@ def wilkinson(scale: str = "full") -> Spec:
             ports=(Port(1, "W", 0.0, 3), Port(2, "E", 1.8, 3), Port(3, "E", -1.8, 3)),
             bands={"pass": Band(9.0, 11.0, 2)},
             requirements=reqs,
-            lumped=(Lumped("R1", (3.0, 3.6), (-0.3, 0.3), "y", 100.0, 0.6),),
+            lumped=(smoke_r,),
+            fixed=(isolation_keepout(smoke_r, (0.0, 4.8, -3.3, 3.3)),),
             optimizer=replace(_R2_SMOKE_OPT, seed="feeds"),
             solver=_R2_SMOKE_SOLVER,
         )
+    r1 = Lumped("R1", (5.4, 6.0), (-0.3, 0.3), "y", 100.0, 0.6)
+    window = (0.0, 12.0, -6.0, 6.0)
     return Spec(
         name="wilkinson-x10",
         stackup=S1,
         grid=GridSpec(pitch_mm=0.3, substrate_cells=4),
-        design_region=(0.0, 12.0, -6.0, 6.0),
+        design_region=window,
         symmetry="mirror_y",
         rules=Rules(0.6, 0.6),
         ports=(Port(1, "W", 0.0), Port(2, "E", 4.2), Port(3, "E", -4.2)),
@@ -225,13 +235,17 @@ def wilkinson(scale: str = "full") -> Spec:
         # 4.8–5.4 mm, where the coupled arms were about 65° long in the odd mode and the
         # outputs stayed at −11 dB of match and −13 dB of isolation (an ideal circuit with those
         # lengths gives −12 dB); at 7.2–7.8 mm (three eighths of a wave) |S22| was −8 dB.
-        lumped=(Lumped("R1", (5.4, 6.0), (-0.3, 0.3), "y", 100.0, 0.6),),
+        lumped=(r1,),
+        # The outputs' arms join only through the resistor east of it (design §23: with the
+        # resistor's share alone, gray copper bridged the arms across the symmetry line east of
+        # it, in parallel with it, and became copper shorts at β = 16).
+        fixed=(isolation_keepout(r1, window),),
         # Robust from β = 16: the dilated and eroded designs join the epigraph (at β = 8 they are
         # about as gray as the nominal design). With gray copper a resistive sheet, the nominal
         # design alone isolated the outputs with a gray bridge between the arms (a distributed
         # resistor) that the binarized design turned into a short (gray t 1.15, binarized
         # t 15–20, round 2's screens); the robust variants alone did not stop it at β = 8 (gray
-        # t 0.39, binarized 1.3–1.5); the requirements on the resistor's share and on the loss
+        # t 0.39, binarized 1.3–1.5); the requirement on the resistor's share and the keepout
         # do (design §23). Plain MMA at β = 8, adaptive moves from β = 16, as the filter banks.
         optimizer=OptimizerSpec(
             betas=(8, 16, 32, 64),

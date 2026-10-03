@@ -766,11 +766,17 @@ table):
   the isolation (gray t 0.39–1.15, binarized 1.3–20). The requirement makes the gray loss pay
   against the resistor's share: in its 20-iteration screen the binarized design tracked the
   gray one (t 0.86 against 0.72; W2's nominal screen: 1.12 against 15–20). It did not stop gray
-  copper bridging the arms east of the resistor, which became copper shorts at β = 16 (W8), so
-  the combiner also bounds **the lost fraction** (`Loss(2).at_most(0.08)`, new: the power
-  leaving neither through a port nor into a resistor, from the port waves and the resistor's
-  share; radiation and the copper's and substrate's dissipation, gray copper's included, a few
-  per cent for a binary design). Both are objectives, not criteria; the validator reports them.
+  copper bridging the arms east of the resistor, which became copper shorts at β = 16 (W8).
+  The share is an objective, not a criterion; the validator reports it.
+- **The combiner keeps the symmetry line east of its resistor void** (`cases.isolation_keepout`:
+  a `fixed` void strip from the resistor's east end to the window's east edge, as wide as the
+  part's body, 0.6 mm), against W8's gray bridges there. A bound on **the lost fraction**
+  instead (`Loss(2).at_most(0.08)`, new: the power leaving neither through a port nor into a
+  resistor, from the port waves and the resistor's share) kept the gray design from connecting
+  the resistor at all (W9: share 0.01–0.02 and t 3.9 for the first 12 iterations; connecting it
+  through gray copper first adds loss). The keepout is what a Wilkinson's layout has anyway
+  (the arms meet only at the input junction and through the resistor), computed from the
+  part's position, and leaves the rest of the window free; `Loss` stays available to specs.
 - **The combiner's resistor moves to 5.4–6.0 mm from port 1** (was 4.8–5.4 mm; a change of the
   spec's `lumped` part, its criteria unchanged). A Wilkinson's resistor ends its quarter-wave
   arms; the optimizer's arms run side by side as coupled lines, and the resistor terminates

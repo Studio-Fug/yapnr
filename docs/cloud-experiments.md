@@ -397,6 +397,49 @@ spec out of the uploaded `campaign.json`, puts only opaque values in labels, pla
 repository. The generator of private bundles lives in the private repository and emits the generic
 kinds.
 
+### Any command as a task: stage plans
+
+Until the halving driver writes its own stage plans, `mc-eval` runs any list of commands, which is
+how private board experiments (an A/B of engine snapshots, a full iteration per placement) move to
+the cloud without code changes. Each line of a JSON Lines file is one task: the command, the
+directories it needs (each packed into a bundle and unpacked at `dest` in the task's work
+directory, which is also the working directory), its environment, resources, and the JSON record
+it writes under `out/`:
+
+```text
+{"id": "arm-a/s0", "command": ["${PYTHON}", "-m", "pnr.mc.halving", "--out", "out/run",
+   "--inputs", "boards/inputs", "--constraints", "boards/constraints.json", "--repo", ".",
+   "--seed", "0", "--procs", "4", "--native-parallel", "2", "--native-workers", "2"],
+ "inputs": [{"dest": "snap", "path": "snapshots/arm-a"}, {"dest": "boards", "path": "board"}],
+ "env": {"PYTHONPATH": "snap/hardware/pnr", "PNR_LIVE_CANDIDATE": "hier"},
+ "resources": {"cpus": 4, "memory_gb": 12, "max_wall_s": 14400},
+ "record": "out/run/status.json", "labels": {"arm": "a", "seed": "0"}}
+```
+
+(one line per task in the file; wrapped here). The campaign file names it:
+
+```toml
+schema = "yapnr-campaign-v1"
+kind = "mc-eval"
+name = "snapshot-ab"
+source = "none"          # the engine comes from the snapshot bundles
+image = "edge"
+visibility = "private"
+
+[config]
+stage_plan = "stage.jsonl"   # relative to the campaign file; input paths relative to it
+```
+
+Paths in commands and `env` are relative to the work directory: no host paths, and no KiCad
+paths, which the wrapper sets for the image (`PNR_KICAD_CLI`, `PNR_KICAD_PYTHON`,
+`PNR_KICAD_FOOTPRINTS`). Give each task the cores its processes use (`--procs` and the native
+workers above; `cpus = 2` for an evaluation that runs two KiCad processes). A task without
+checkpoints starts again after a Spot preemption, so keep Spot tasks to a few hours; longer ones
+belong on standard VMs (`[placement] spot = false`, which `limits.allow_on_demand` must allow) or
+on the Mac. `fetch` writes `assembled/dataset.jsonl`, one line per task with its record and the
+machine it ran on. A private A/B campaign of this shape (a toy engine snapshot as the bundle) was
+planned, run and fetched end to end on the local backend.
+
 ## Testing
 
 Everything above is tested offline and for free: `bazel test //tests/unit/exp/...

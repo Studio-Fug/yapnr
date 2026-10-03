@@ -1,0 +1,29 @@
+load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+
+# Manual end to end: `yapnr order stage --dry-run` for every vendor on routed ladder boards (the
+# regression ladder run under a vendor profile, `run.py --fab-profile oshpark-4l`). Skips unless
+# YAPNR_FAB_LADDER_RUNS names the run directories:
+#
+#   bazel test //tests/e2e/fab:all --test_env=YAPNR_FAB_LADDER_RUNS=<run>:<run> \
+#       --test_env=YAPNR_KICAD_CLI=<path>
+yapnr_py_tests(
+    size = "large",
+    env_inherit = [
+        "HOME",
+        "YAPNR_FAB_LADDER_RUNS",
+        "YAPNR_FAB_E2E_OUT",
+        "YAPNR_KICAD_CLI",
+    ],
+    tags = [
+        "external",
+        "kicad",
+        "local",
+        "manual",
+        "no-remote",
+    ],
+    deps = [
+        "//yapnr",
+        "//yapnr/fab",
+        "//yapnr/order",
+    ],
+)

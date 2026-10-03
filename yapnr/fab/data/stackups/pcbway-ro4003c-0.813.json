@@ -1,0 +1,58 @@
+{
+  "schema": "yapnr-fab-stackup-v1",
+  "id": "pcbway-ro4003c-0.813",
+  "vendor": "pcbway",
+  "title": "PCBWay 2 layer RO4003C 0.813 mm",
+  "vendor_name": "High Frequency PCB, RO4003C, 0.813 mm",
+  "checkout": "Quote as High Frequency, material RO4003C, 0.813 mm; confirm the thickness on the quote.",
+  "thickness_mm": {
+    "value": 0.883,
+    "src": "derived: substrate plus 2 x 35 um copper"
+  },
+  "layers": [
+    {
+      "kind": "copper",
+      "name": "F.Cu",
+      "thickness_mm": 0.035,
+      "weight_oz": 1.0,
+      "plated": true,
+      "src": "P-hf"
+    },
+    {
+      "kind": "dielectric",
+      "type": "core",
+      "material": "RO4003C",
+      "thickness_mm": 0.813,
+      "er": 3.55,
+      "er_freq_hz": 10000000000.0,
+      "df": 0.0027,
+      "src": "R-4003",
+      "er_kind": "design",
+      "er_process": 3.38
+    },
+    {
+      "kind": "copper",
+      "name": "B.Cu",
+      "thickness_mm": 0.035,
+      "weight_oz": 1.0,
+      "plated": true,
+      "src": "P-hf"
+    }
+  ],
+  "tolerances": {
+    "impedance_pct": null,
+    "thickness_pct": null,
+    "width_pct": null
+  },
+  "sources": {
+    "P-hf": {
+      "url": "https://www.pcbway.com/pcb_prototype/What_is_High_Frequency__HF__PCB_.html",
+      "accessed": "2026-10-02"
+    },
+    "R-4003": {
+      "url": "https://www.rogerscorp.com/advanced-electronics-solutions/ro4000-series-laminates/ro4003c-laminates",
+      "accessed": "2026-10-02"
+    }
+  },
+  "notes": ["er is the Rogers design Dk (3.55; process Dk 3.38 +/- 0.05), as yapnr.rf uses."]
+}

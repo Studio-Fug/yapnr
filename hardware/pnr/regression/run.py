@@ -123,6 +123,17 @@ def constraint_reasons(spec, placed):
     return checked, findings
 
 
+# The vendor profile data pnr.fab_profile resolves data profiles from (yapnr.fab.capability), frozen
+# with the engine so a run under oshpark-4l or jlc-4l uses the data of its own checkout.
+FAB_DATA_SOURCES = ("yapnr/__init__.py", "yapnr/fab/__init__.py", "yapnr/fab/capability.py")
+
+
+def fab_data_inputs(repo):
+    return [repo / p for p in FAB_DATA_SOURCES] + sorted(
+        (repo / "yapnr/fab/data/profiles").glob("*.json")
+    )
+
+
 def source_inputs(repo):
     scanner = repo / "hardware/tools/scan_via_proximity.py"
     if not scanner.is_file():
@@ -131,14 +142,23 @@ def source_inputs(repo):
         sorted((repo / "hardware/pnr/pnr").rglob("*.py"))
         + sorted((repo / "hardware/pnr/regression").glob("*.py"))
         + [scanner]
+        + [p for p in fab_data_inputs(repo) if p.is_file()]
     )
 
 
 # The fabrication profile the ladder routes and is judged under (pnr.fab_profile). The fixtures
 # carry their own fab block (0.2 mm clearance, 0.6/0.3 mm vias; README), which is exactly what the
 # legacy profile enforces; the engine's default (jlc-pofv) overrides it with JLC capability values.
+# The vendor profiles of yapnr/fab/data (oshpark-2l, oshpark-4l, jlc-4l, ...) route and judge a
+# case under that vendor's rules (docs/fab-and-ordering.md).
 FAB_PROFILES = ("legacy", "jlc-pofv")
 DEFAULT_FAB_PROFILE = "legacy"
+
+
+def fab_profiles(repo=REPO):
+    """Every profile ``--fab-profile`` accepts: the built-in ones and the data profiles."""
+    data = sorted(p.stem for p in (repo / "yapnr/fab/data/profiles").glob("*.json"))
+    return tuple(sorted(set(FAB_PROFILES) | set(data)))
 
 
 def engine_revision(repo):
@@ -240,11 +260,12 @@ def parser():
     )
     ap.add_argument(
         "--fab-profile",
-        choices=FAB_PROFILES,
+        choices=fab_profiles(),
         default=DEFAULT_FAB_PROFILE,
         help=(
             "PNR_FAB_PROFILE for every stage (default legacy: the fixtures' own fab block); "
-            "jlc-pofv routes and judges under the engine's default profile"
+            "jlc-pofv routes and judges under the engine's default profile, a vendor profile "
+            "(oshpark-4l, jlc-4l, ...) under that vendor's rules"
         ),
     )
     ap.add_argument(
@@ -285,7 +306,12 @@ def main():
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_path, target)
     frozen_here = freeze / "hardware/pnr/regression"
-    env = dict(os.environ, PYTHONPATH=str(freeze / "hardware/pnr"), PNR_LOCAL_PRESSURE="1")
+    # The frozen root carries yapnr.fab.capability and its profile data (fab_data_inputs).
+    env = dict(
+        os.environ,
+        PYTHONPATH=os.pathsep.join([str(freeze / "hardware/pnr"), str(freeze)]),
+        PNR_LOCAL_PRESSURE="1",
+    )
     # Ambient experiment switches must not silently change the suite configuration.
     for key in list(env):
         if key.startswith("PNR_") and key not in ("PNR_LOCAL_PRESSURE", "PNR_JOINT_ACCESS"):

@@ -40,8 +40,9 @@ held in the panel by mouse-bite tabs on its long sides. The 50 Ω lines are P 0.
   100 mm more, a reflect (via shorts at the reference planes) and a 28 mm verification line;
 - **variants** over 40 mm: the line at 0.7 and 1.4 times its width, with the mask opened, and
   (board A) microstrip with and without mask;
-- **held-out structures** the fit never sees: a directly fed ring (notches at 2.9, 5.8 and
-  11.6 GHz), an open quarter-wave and a shorted half-wave stub (notches at 5.8 GHz), a λ/4
+- **held-out structures** the fit never sees: a directly fed ring (resonance notches at 2.9, 5.8
+  and 11.6 GHz; the two feed paths also cancel at 2.2, 6.5 and 10.9 GHz, which the check
+  ignores), an open quarter-wave and a shorted half-wave stub (notches at 5.8 GHz), a λ/4
   coupled-line section;
 - **DC meanders** on every copper layer (two widths, four-wire pads) and a 50-via chain;
 - a **microsection** stick with every line family side by side and a cut line.
@@ -50,8 +51,12 @@ held in the panel by mouse-bite tabs on its long sides. The 50 Ω lines are P 0.
 section, the DC and microsection sticks in their frame](images/rf-coupon-board-a.png)
 
 The full list is in each board's `catalog.json` and in design §5. Board B shares board A's L1
-cross-section; its L1 sticks tie the 7628 prepreg's εr, which the stripline alone cannot separate
-from the core's.
+cross-section. On its own, board B measures the stripline's mix of the core's and the 7628's εr
+(S's εeff to 0.008) but not the split between them: its L1 sticks are all under mask, and with the
+mask unknown they do not pin the 7628's εr (the fit reports the two εr correlated −0.97 to −1.00).
+Fit board B with board A's fit as the prior (`--prior <board A>/fit.json`, §4), which assumes the
+same prepreg and mask on both boards, so order them together. In a synthetic test this cut the
+core's εr σ from 0.14 to 0.05 and the 7628's from 0.09 to 0.03, with the truth within 0.4σ.
 
 ### Regenerating
 
@@ -93,8 +98,10 @@ record any engineering query that changes a width: the drawn widths are inputs o
   library (1.27 × 3.2 mm centre pad), in place of the design's Cinch 142-0701-851, whose
   board-thickness variant and pin size could not be checked. Whichever SMA is bought, its
   drawing must match the pads, or the launch geometry (`catalog.LAUNCHES`) must be changed;
-- JLC's copper-to-routed-edge clearance (0.25 mm is assumed) and whether a panel of break-out
-  sticks costs extra;
+- whether a panel of break-out sticks costs extra (JLC may count the sticks as different
+  designs). JLC's capabilities page (read 2026-10-02) asks for copper at least 0.2 mm from a
+  routed edge (the zones stop 0.30 mm from every edge), mouse-bite tabs at least 5 mm wide (they
+  are 5 mm, six 0.5 mm bites) and silkscreen text at least 1.0 mm high (it is 1.0 mm);
 - the launches are matched by 2D solves only (pad gap 0.342 mm on A, 0.616 mm on B, with the
   planes cut out under the pad), not tuned in 3D; the calibration removes them, but their match
   limits the usable bandwidth of the hobby-VNA setup;
@@ -239,31 +246,31 @@ microsection, and runs the extraction unchanged.
 
 Results (2026-10-02, 20 draws per board and band, 8 bootstrap sessions per extraction, truth
 from the shipped tables; rms error of the fitted value over the draws, and the median reported
-σ):
+σ; re-run after the multiline-TRL fix of the same day, which changed them by rounding only):
 
 | Quantity: rms error / median σ     | A, 6 GHz        | A, 12 GHz       | B, 6 GHz        | B, 12 GHz       |
 | ---------------------------------- | --------------- | --------------- | --------------- | --------------- |
 | εr of the 7628 prepreg             | 0.032 / 0.049   | 0.030 / 0.038   | 0.069 / 0.084   | 0.063 / 0.084   |
-| tan δ of the 7628 prepreg          | 0.0025 / 0.0023 | 0.0016 / 0.0017 | 0.0044 / 0.0027 | 0.0035 / 0.0024 |
-| εr of the core                     | –               | –               | 0.097 / 0.125   | 0.091 / 0.125   |
-| L1-L2 height (µm)                  | 3.7 / 4.1       | 4.4 / 4.0       | 5.4 / 5.7       | 5.4 / 5.7       |
+| tan δ of the 7628 prepreg          | 0.0025 / 0.0023 | 0.0016 / 0.0017 | 0.0044 / 0.0027 | 0.0036 / 0.0024 |
+| εr of the core                     | –               | –               | 0.096 / 0.125   | 0.091 / 0.125   |
+| L1-L2 height (µm)                  | 3.8 / 4.1       | 4.5 / 3.9       | 5.4 / 5.7       | 5.4 / 5.7       |
 | L2-L3 core height (µm)             | –               | –               | 5.0 / 4.9       | 5.1 / 4.9       |
-| L1 etch per edge (µm)              | 0.45 / 0.84     | 0.56 / 0.91     | 0.49 / 1.20     | 0.49 / 1.20     |
-| L1 copper thickness (µm)           | 0.12 / 0.28     | 0.14 / 0.28     | 0.12 / 0.30     | 0.13 / 0.30     |
-| L3 etch per edge (µm)              | –               | –               | 0.55 / 1.11     | 0.63 / 1.15     |
-| mask thickness scale               | 0.147 / 0.102   | 0.145 / 0.104   | 0.115 / 0.157   | 0.115 / 0.153   |
-| mask Dk                            | 0.306 / 0.246   | 0.303 / 0.246   | 0.261 / 0.290   | 0.260 / 0.290   |
-| P: Z0 at 5.8 GHz (Ω)               | 0.38 / 0.41     | 0.39 / 0.41     | 0.46 / 0.54     | 0.46 / 0.54     |
-| P: εeff at 5.8 GHz                 | 0.0062 / 0.0090 | 0.0061 / 0.0093 | 0.0226 / 0.0246 | 0.0214 / 0.0243 |
+| L1 etch per edge (µm)              | 0.45 / 0.84     | 0.56 / 0.91     | 0.48 / 1.20     | 0.49 / 1.20     |
+| L1 copper thickness (µm)           | 0.12 / 0.28     | 0.15 / 0.28     | 0.12 / 0.30     | 0.13 / 0.30     |
+| L3 etch per edge (µm)              | –               | –               | 0.50 / 1.11     | 0.64 / 1.15     |
+| mask thickness scale               | 0.148 / 0.102   | 0.145 / 0.104   | 0.115 / 0.157   | 0.115 / 0.152   |
+| mask Dk                            | 0.305 / 0.246   | 0.302 / 0.246   | 0.261 / 0.290   | 0.260 / 0.290   |
+| P: Z0 at 5.8 GHz (Ω)               | 0.39 / 0.40     | 0.39 / 0.40     | 0.46 / 0.54     | 0.46 / 0.54     |
+| P: εeff at 5.8 GHz                 | 0.0062 / 0.0090 | 0.0061 / 0.0091 | 0.0226 / 0.0245 | 0.0215 / 0.0243 |
 | S: Z0 at 5.8 GHz (Ω)               | –               | –               | 0.52 / 0.46     | 0.51 / 0.45     |
-| S: εeff at 5.8 GHz                 | –               | –               | 0.0075 / 0.0087 | 0.0081 / 0.0087 |
-| truth within 2σ (all parameters)   | 95 %            | 95 %            | 96 %            | 96 %            |
+| S: εeff at 5.8 GHz                 | –               | –               | 0.0075 / 0.0087 | 0.0081 / 0.0086 |
+| truth within 2σ (all parameters)   | 94 %            | 95 %            | 96 %            | 96 %            |
 | held-out checks passed             | 92 %            | 92 %            | 100 %           | 90 %            |
-| time per draw (fit + 8 bootstraps) | 45 s            | 45 s            | 29 s            | 26 s            |
+| time per draw (fit + 8 bootstraps) | 44 s            | 39 s            | 29 s            | 22 s            |
 
 Against the pass criteria of design §10:
 
-- **Coverage** (truth within the reported 2σ, all parameters and draws): 95-96 %, above the
+- **Coverage** (truth within the reported 2σ, all parameters and draws): 94-96 %, above the
   required 90 %.
 - **Bias** (|mean error| below 0.5 σ per parameter): met on board A; on board B the loss split is
   slightly biased (tan δ of the prepreg and the L1 roughness, mean error 0.5-0.75 σ at 6 GHz,
@@ -276,13 +283,31 @@ Against the pass criteria of design §10:
   split is the least determined quantity.
 
 What the product sees: on board A the 50 Ω coplanar line's Z0 at 5.8 GHz comes out within
-0.38 Ω (rms) and its εeff within 0.006, about 5 MHz on a 5.8 GHz resonator; the stripline of
+0.39 Ω (rms) and its εeff within 0.006, about 5 MHz on a 5.8 GHz resonator; the stripline of
 board B within 0.5 Ω and 0.008. A 12 GHz VNA mainly improves the loss tangent (0.0016 against
 0.0025 on board A). These are the fab model's uncertainties before lot-to-lot drift, under the
 synthetic error model. With the truth from direct 2D solves instead of the tables (`study --truth
 direct`, FEA environment; board A, 6 GHz, 10 draws, 4 bootstrap sessions), so that the
 surrogate's own error is in the data, the results hold: 95 % coverage, every |mean error| below
 0.45 σ, P within 0.23 Ω and 0.005 in εeff (rms), held-out checks 92 %.
+
+Adversarial checks (2026-10-02, 6 GHz, truth from direct 2D solves unless noted):
+
+- **Another seed** (9100, 6 draws per board, 4 bootstrap sessions, shipped tables): 92 % (A) and
+  100 % (B) of the truth within 2σ, and P's and S's Z0 and εeff within 2σ in every draw. On
+  board A two draws had parameters near 3σ (the 7628's tan δ, εr and height, the mask's Df):
+  their reported σ was 2-3 times below the study's median. Four bootstrap sessions estimate a σ
+  to about ±40 %; keep the default 12 or more for a real fit.
+- **A wrong nominal stackup**, every parameter 1-1.8 prior σ off at once (board A: εr 4.05,
+  0.185 mm, etch 30 µm, 46 µm copper, mask 1.9 × thicker; board B: core εr 4.25, 7628 εr 4.75,
+  heights ±10 %): A's P line, 55.0 Ω instead of 50, came out within 0.19 Ω (0.6σ) and 0.003 in
+  εeff; B's stripline, 52.9 Ω, within 0.47 Ω (1.0σ) and 0.004. Every parameter was within 1.5σ
+  except A's mask thickness scale (−2.1σ; the mask's Dk was +1.5σ, their product right).
+- **A lab twice as bad as the error model** (connector spread ×2, SOLT residuals −32/−28 dB,
+  twice the flex and drift): the verification line (0.041) scaled the bootstrap, every parameter
+  stayed within 1.4σ and every derived Z0 and εeff within 1.8σ, and the session showed its
+  quality: the coupler check failed and 6 sticks were reported not passive.
+- **A fab outside the tables**: see §8.
 
 The fast part runs in CI (`bazel test //tests/unit/rf_coupons/...`): noise-free recovery, exact
 multiline TRL, realistic sessions within the reported σ, the mask product, the file formats, the
@@ -309,7 +334,20 @@ catalogue and panel, and the CLI. `test_kicad` (tag `kicad`) generates both boar
   [Hatab 2023] is replaced by the parametric bootstrap.
 - The DC meanders enter the fit for the layers that carry fitted lines (L1 on A; L1 and L3 on B);
   the other layers' thickness and etch come from the two meander widths alone (`dc_layers` in
-  `fit.json`).
+  `fit.json`). The copper resistivity is fixed at the annealed value (1.72 × 10⁻⁸ Ω·m);
+  electrodeposited and plated copper is a few percent more resistive (IPC-4562 sets the foil's
+  limits), which makes the DC copper thickness that much too thin (1-2 µm on L1, about 0.1-0.2 Ω
+  in Z0). The microsection reading (±3 µm) bounds it; the synthetic study does not include it.
+- The absolute Z0 is model-mediated: multiline TRL references the data to the line's own Zc, the
+  TDR plateau alone gives Z0 to about 1 Ω, and the 0.4-0.5 Ω of §7 comes from the 2D model tying
+  Z0 to the fitted geometry and εr (rectangular copper, conformal mask). A trapezoidal trace or a
+  differently shaped mask in the gaps biases Z0 in a way the synthetic study cannot show; compare
+  the microsection's top and bottom widths with the fitted etch.
+- A fab far outside the priors (a parameter at the edge of the 2D tables, ±2.5 prior σ) is
+  reported as a problem (`checks.problems` in `fit.json`, and on the console): the fit stops at
+  the edge and its Z0 is biased. Rebuild the tables around the measured values
+  (`families build`) and refit. A synthetic board with a 0.150 mm L1 dielectric (table edge
+  0.158 mm) came out 1.2 Ω (3σ) high in Z0 with only that flag to show it.
 - JLC06161H-2116C (the alternative board B') is defined as a stackup but has no tables or board
   yet; `families build` and `generate` make them.
 - The commands are `python -m yapnr.rf.coupons ...`, not yet `yapnr rf coupons ...`: the `yapnr`

@@ -156,7 +156,10 @@ The inner planes are only removed on the DC stick, where L2 and L3 carry meander
 | L3    | copper 0.0152               | **stripline**                        |
 | –     | 7628 prepreg 0.2028, εr 4.4 | below the stripline                  |
 | L4    | copper 0.0152               | ground (lower stripline plane)       |
-| L5–L6 | per JLC's table             | ground; meanders on the DC stick     |
+| –     | core 0.40, εr 4.6           |                                      |
+| L5    | copper 0.0152               | ground; meanders on the DC stick     |
+| –     | 7628 prepreg 0.2104, εr 4.4 |                                      |
+| L6    | copper 0.035                | ground; meanders on the DC stick     |
 
 JLCPCB lists 16 six-layer stackups. In several the L3 layer sits close to one plane only (a thin
 core with a 0.55–0.7 mm dielectric on the other side), which is not a balanced stripline. Two give
@@ -165,7 +168,8 @@ a true stripline on L3:
 - **JLC06161H-7628 (default):** 0.40 mm core above, 0.2028 mm 7628 below (2:1). Its L1–L2
   dielectric is the same 7628 0.2104 mm as board A, so board B's L1 sticks are geometrically
   identical to board A's and measure the same prepreg type on a second lamination. They also tie
-  the 7628 εr, which the stripline alone cannot separate from the core's (§8.8).
+  the 7628 εr, which the stripline alone cannot separate from the core's (§8.8; in practice
+  together with board A's fit, see there).
 - **JLC06161H-2116C (alternative):** 0.30 mm core above, 3 × 2116 (0.366 mm, εr 4.16) below, the
   most symmetric stripline. Its L1 dielectric is 2116 (0.2464 mm), so nothing is shared with
   board A. Choose it if the product will use it; the generator then builds a board B' from it.
@@ -324,10 +328,11 @@ or B's posterior as the prior updates the model for that lot.
 
 ### 5.5 Panel, outline and labels
 
-- **Panel.** Sticks are packed in rows into a frame with 5 mm rails, 2 mm milled slots and mouse
-  bites (five 0.5 mm holes at 0.8 mm pitch) on the long sides. Estimated outlines: board A core
-  about 175 × 160 mm, with the extended set about 175 × 215 mm; board B core about 175 × 130 mm
-  (est.; the generator packs automatically and reports the size).
+- **Panel.** Sticks are packed in rows into a frame with 5 mm rails, 2 mm milled slots and
+  mouse-bite tabs on the long sides: 5 mm wide (JLC's minimum for a tab with mouse bites), six
+  0.5 mm holes at 0.8 mm pitch. Estimated outlines: board A core about 175 × 160 mm, with the
+  extended set about 175 × 215 mm; board B core about 175 × 130 mm (est.; the generator packs
+  automatically and reports the size).
 - **Orientation.** All sticks run along one panel axis except A24, A25 and B23, so every line
   sees the same glass-weave direction.
 - **Copper at the edge.** The launch copper stops 0.25 mm from the milled edge (est.; checked
@@ -628,7 +633,10 @@ What this shows:
   The L1 tie does, assuming the L1–L2 and L3–L4 7628 plies have the same εr (same glass style,
   possibly different resin content: an assumption the report states). The individual heights
   stay loose without the microsection, but the product quantities (Z0, εeff) are measured
-  directly and do not need them.
+  directly and do not need them. _Implementation (2026-10-02):_ the full fit of board B alone
+  does not reproduce the tie (correlation −0.97 to −1.00), because board B's L1 sticks are all
+  masked and the mask is free there; with board A's fit as the prior (CLI `--prior`) it does
+  (user guide §1). A mask-off P stick on board B would make board B self-sufficient.
 - **What the product sees.** With all core structures, the predicted σ of the primary family is
   0.3 Ω in Z0 and 0.0027 in εeff on board A (0.4 Ω and 0.003 for S on board B): about ±2.5 MHz
   (1σ) on a 5.8 GHz resonator from the fab model, before lot-to-lot drift.

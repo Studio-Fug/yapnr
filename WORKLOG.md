@@ -86,6 +86,14 @@ animations on `claude/animations-groups-hier`).
   and a parametric bootstrap. Synthetic recovery passes in CI. Next: the owner's decisions of
   design §14 (connector, VNA, scope), checking the SMA footprint and JLC's edge clearance, and
   the order (owner only).
+- **RF coupons, adversarial review** (#32): the boards' TRL sticks carried no stick id (fixed, all
+  labels now `A05 P L40`); mouse-bite tabs widened to JLC's 5 mm minimum; multiline TRL dropped
+  nearly degenerate line pairs, whose swapped roots spiked the error boxes and failed a quarter of
+  nominal verification lines; a fit stuck at the 2D-table edge is now a reported problem; board B
+  alone does not split the core's and the 7628's εr (use board A's fit as `--prior`). Impedances
+  re-checked with an independent finite-volume solver (within 0.1 Ω) and IPC-2141A (stripline
+  50.5 Ω); recovery re-run with another seed, a wrong nominal stackup and a worse lab. Open: the
+  SMA part, the panel fee, a mask-off stick on board B.
 
 ## Next
 

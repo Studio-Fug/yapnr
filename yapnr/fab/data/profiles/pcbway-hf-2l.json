@@ -1,0 +1,239 @@
+{
+  "schema": "yapnr-fab-profile-v1",
+  "name": "pcbway-hf-2l",
+  "status": "draft",
+  "vendor": "pcbway",
+  "service": "High Frequency PCB, 2 layers",
+  "title": "PCBWay Rogers 2 layer (draft: HF rules not transcribed; standard-line values)",
+  "copper_layers": 2,
+  "stackups": {
+    "default": null,
+    "allowed": [
+      "pcbway-ro4003c-0.813",
+      "pcbway-ro4003c-0.508",
+      "pcbway-ro4003c-1.524",
+      "pcbway-ro4350b-0.508"
+    ]
+  },
+  "engine": {
+    "fab": {
+      "min_track_width_mm": 0.127,
+      "clearance_mm": 0.1524,
+      "smd_pad_clearance_mm": 0.1524,
+      "edge_clearance_mm": 0.3,
+      "hole_to_edge_mm": 0.5,
+      "hole_clearance_mm": 0.2,
+      "pth_hole_clearance_mm": 0.35,
+      "npth_hole_clearance_mm": 0.2,
+      "hole_to_hole_mm": 0.3,
+      "pth_hole_to_hole_mm": 0.45,
+      "component_pth_min_drill_mm": 0.3,
+      "via_diameter_mm": 0.6,
+      "via_drill_mm": 0.3,
+      "min_via_diameter_mm": 0.5,
+      "min_through_drill_mm": 0.2,
+      "via_annular_mm": 0.15,
+      "min_npth_drill_mm": 0.45,
+      "via_to_smd_pad_mm": 0.127,
+      "via_classes": {
+        "default": {
+          "diameter_mm": 0.6,
+          "drill_mm": 0.3
+        },
+        "escape": {
+          "diameter_mm": 0.5,
+          "drill_mm": 0.2
+        },
+        "power": {
+          "diameter_mm": 0.7,
+          "drill_mm": 0.4
+        }
+      }
+    },
+    "copper": {
+      "outer_copper_um": 35.0,
+      "inner_copper_um": 35.0,
+      "outer_copper_oz": 1.0,
+      "inner_copper_oz": 1.0,
+      "min_via_plating_um": 20,
+      "via_diameter_mm": 0.6,
+      "via_drill_mm": 0.3,
+      "hole_clearance_mm": 0.2,
+      "hole_to_hole_mm": 0.3,
+      "pth_hole_to_hole_mm": 0.45,
+      "component_pth_min_drill_mm": 0.3,
+      "edge_clearance_mm": 0.3,
+      "hole_to_edge_mm": 0.5,
+      "via_to_smd_pad_mm": 0.127,
+      "board_thickness_mm": 0.883
+    },
+    "qualification": "PCBWay Rogers 2 layer (draft): PCBWay standard-line values; HF rules not transcribed.",
+    "provenance": {
+      "fab": {
+        "min_track_width_mm": "derived: the pcbway-std value (HF rules not transcribed)",
+        "clearance_mm": "derived: the pcbway-std value (HF rules not transcribed)",
+        "smd_pad_clearance_mm": "derived: the pcbway-std value (HF rules not transcribed)",
+        "edge_clearance_mm": "derived: the pcbway-std value (HF rules not transcribed)",
+        "hole_to_edge_mm": "derived: the pcbway-std value (HF rules not transcribed)",
+        "hole_clearance_mm": "derived: the pcbway-std value (HF rules not transcribed)",
+        "pth_hole_clearance_mm": "derived: the pcbway-std value (HF rules not transcribed)",
+        "npth_hole_clearance_mm": "derived: the pcbway-std value (HF rules not transcribed)",
+        "hole_to_hole_mm": "derived: the pcbway-std value (HF rules not transcribed)",
+        "pth_hole_to_hole_mm": "derived: the pcbway-std value (HF rules not transcribed)",
+        "component_pth_min_drill_mm": "derived: the pcbway-std value (HF rules not transcribed)",
+        "via_diameter_mm": "derived: the pcbway-std value (HF rules not transcribed)",
+        "via_drill_mm": "derived: the pcbway-std value (HF rules not transcribed)",
+        "min_via_diameter_mm": "derived: the pcbway-std value (HF rules not transcribed)",
+        "min_through_drill_mm": "derived: the pcbway-std value (HF rules not transcribed)",
+        "via_annular_mm": "derived: the pcbway-std value (HF rules not transcribed)",
+        "min_npth_drill_mm": "derived: the pcbway-std value (HF rules not transcribed)",
+        "via_to_smd_pad_mm": "derived: the pcbway-std value (HF rules not transcribed)",
+        "via_classes": "derived: the pcbway-std value (HF rules not transcribed)"
+      },
+      "copper": {
+        "outer_copper_um": "derived: the pcbway-std value",
+        "inner_copper_um": "derived: the pcbway-std value",
+        "outer_copper_oz": "derived: the pcbway-std value",
+        "inner_copper_oz": "derived: the pcbway-std value",
+        "min_via_plating_um": "derived: the pcbway-std value",
+        "via_diameter_mm": "derived: the pcbway-std value",
+        "via_drill_mm": "derived: the pcbway-std value",
+        "hole_clearance_mm": "derived: the pcbway-std value",
+        "hole_to_hole_mm": "derived: the pcbway-std value",
+        "pth_hole_to_hole_mm": "derived: the pcbway-std value",
+        "component_pth_min_drill_mm": "derived: the pcbway-std value",
+        "edge_clearance_mm": "derived: the pcbway-std value",
+        "hole_to_edge_mm": "derived: the pcbway-std value",
+        "via_to_smd_pad_mm": "derived: the pcbway-std value",
+        "board_thickness_mm": "derived: RO4003C 0.813 mm plus 2 x 35 um copper"
+      }
+    }
+  },
+  "vendor_limits": {
+    "board_min_mm": {
+      "value": [5.0, 5.0],
+      "src": "derived: not transcribed; the quote page checks it"
+    },
+    "board_max_mm": {
+      "value": [500.0, 1100.0],
+      "src": "derived: not transcribed; the quote page checks it"
+    },
+    "copper_layers": {
+      "value": [2],
+      "src": "P-hf"
+    },
+    "qty": {
+      "multiple": 1,
+      "min": 5,
+      "src": "P-order"
+    },
+    "max_drilled_hole_mm": {
+      "value": 6.3,
+      "src": "derived: not transcribed"
+    },
+    "min_slot_mm": {
+      "value": 0.5,
+      "src": "derived: not transcribed"
+    },
+    "via_types": {
+      "value": ["through"],
+      "src": "P-cap (standard line; HDI is a paid option)"
+    },
+    "castellation": {
+      "value": "option",
+      "min_hole_mm": 0.4,
+      "src": "P-cap"
+    },
+    "impedance_control": {
+      "value": true,
+      "tolerance_pct": 10,
+      "src": "P-adv"
+    },
+    "thickness_mm": {
+      "range": [0.2, 3.2],
+      "src": "P-cap"
+    },
+    "finish": {
+      "value": [
+        "HASL with lead",
+        "HASL lead free",
+        "Immersion gold (ENIG)",
+        "OSP",
+        "Hard gold",
+        "Immersion silver",
+        "Immersion tin",
+        "ENEPIG"
+      ],
+      "fixed": false,
+      "src": "P-cap"
+    },
+    "mask_color": {
+      "value": null,
+      "fixed": false,
+      "note": "nine colours on the quote page",
+      "src": "P-cap"
+    },
+    "via_fill": {
+      "value": "tented",
+      "src": "P-cap"
+    },
+    "assembly": {
+      "value": true,
+      "src": "P-asm"
+    },
+    "order_number_marking": {
+      "value": true,
+      "option": "Remove product No.",
+      "choices": "No, Yes (USD 1.50), Specify a location",
+      "src": "P-order (the 'Remove product No.' option, 'No' by default)"
+    },
+    "alternates": []
+  },
+  "order_defaults": {
+    "service": "high-frequency",
+    "services": {
+      "high-frequency": {
+        "title": "High Frequency PCB (Rogers)",
+        "lead_time": "7-10 day build (P-hf)"
+      }
+    },
+    "thickness_mm": null,
+    "finish": "Immersion gold (ENIG)",
+    "mask_color": "green",
+    "silk_color": "white",
+    "via_covering": "Tented",
+    "copper": "1 oz",
+    "qty": 5,
+    "remark": "Rogers material as named on the card; no copper thieving on the RF structures."
+  },
+  "pricing": null,
+  "sources": {
+    "P-adv": {
+      "url": "https://www.pcbway.com/advanced-pcb-capabilities.html",
+      "accessed": "2026-09-26"
+    },
+    "P-asm": {
+      "url": "https://www.pcbway.com/pcb-assembly.html",
+      "accessed": "2026-10-02"
+    },
+    "P-cap": {
+      "url": "https://www.pcbway.com/capabilities.html",
+      "accessed": "2026-09-26"
+    },
+    "P-hf": {
+      "url": "https://www.pcbway.com/pcb_prototype/What_is_High_Frequency__HF__PCB_.html",
+      "accessed": "2026-10-02"
+    },
+    "P-order": {
+      "url": "https://www.pcbway.com/orderonline.aspx",
+      "accessed": "2026-10-02"
+    },
+    "R-4003": {
+      "url": "https://www.rogerscorp.com/advanced-electronics-solutions/ro4000-series-laminates/ro4003c-laminates",
+      "accessed": "2026-10-02"
+    }
+  },
+  "notes": [
+    "Draft: the Rogers thicknesses PCBWay offers and its HF design rules must be confirmed on the quote."
+  ]
+}

@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from collections import Counter
 from pathlib import Path
 
@@ -333,6 +334,12 @@ class RunnerContract(unittest.TestCase):
         self.assertNotEqual(a, sources_digest({"a.py": "1", "b.py": "3"}))
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(engine_revision(Path(tmp) / "not-a-checkout"), (None, None))
+
+    def test_revision_of_a_source_bundle_comes_from_the_task_wrapper(self):
+        # yapnr exp runs the ladder from a git archive (no .git); the wrapper names the commit.
+        env = {"YAPNR_ENGINE_REVISION": "abc123", "YAPNR_ENGINE_DIRTY": "1"}
+        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.dict("os.environ", env):
+            self.assertEqual(engine_revision(Path(tmp)), ("abc123", True))
 
     def test_case_directories_are_run_relative(self):
         spec = designs()[0]

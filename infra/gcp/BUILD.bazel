@@ -1,0 +1,34 @@
+"""infra/gcp: the OpenTofu root module of the experiment infrastructure (README.md).
+
+//infra/gcp:tofu_check runs tofu fmt -check, validate, test (mock providers) and a plan against
+a documentation project with the network blackholed. It needs the tofu binary and downloads the
+pinned providers from the OpenTofu registry, so it is manual:
+
+    bazel test //infra/gcp:tofu_check --test_env=TOFU=/path/to/tofu \
+        --test_env=TF_PLUGIN_CACHE_DIR=/path/to/cache
+"""
+
+load("@rules_python//python:defs.bzl", "py_test")
+
+py_test(
+    name = "tofu_check",
+    size = "large",
+    srcs = ["tofu_check.py"],
+    data = [".terraform.lock.hcl"] + glob(
+        [
+            "*.tf",
+            "modules/**/*.tf",
+            "functions/guard/*",
+            "examples/*",
+            "tests/*.hcl",
+        ],
+        exclude = ["functions/guard/BUILD.bazel"],
+    ),
+    main = "tofu_check.py",
+    tags = [
+        "external",
+        "local",
+        "manual",
+        "requires-network",
+    ],
+)

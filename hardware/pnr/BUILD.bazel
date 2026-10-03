@@ -34,6 +34,8 @@ py_test(
 filegroup(
     name = "pnr_kicad_srcs",
     srcs = [
+        # pnr.fab_profile resolves vendor data profiles through yapnr.fab.capability.
+        "//yapnr/fab:capability_files",
         "pnr/__init__.py",
         "pnr/graph.py",
         "pnr/ingest.py",
@@ -130,6 +132,8 @@ py_library(
     data = glob(["si_models/*.json"]),
     imports = ["."],
     deps = [
+        # pnr.fab_profile: vendor data profiles (oshpark-4l, jlc-4l, ...) beside the built-in ones.
+        "//yapnr/fab:capability",
         requirement("pyyaml"),  # constraints.py parses the sidecar YAML
     ],
 )

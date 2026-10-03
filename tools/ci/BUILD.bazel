@@ -11,6 +11,7 @@ py_library(
         "ladder_summary.py",
     ],
     imports = ["../.."],
+    deps = ["//tools:package"],
 )
 
 # `bazel run //tools/ci:ladder_summary -- RUN_DIR`

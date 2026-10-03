@@ -1,0 +1,35 @@
+# The calibration workload (docs/cloud-experiments.md, "Calibration"): six ladder cases x 2 seeds
+# with the initial pool, the same set on the development Mac (local backend) and on each
+# candidate machine type (`--shape <type> --region <region>`, one plan per shape).
+# `yapnr exp calibration ingest` pairs the records into measured speed factors.
+schema = "yapnr-campaign-v1"
+kind = "ladder-cell"
+name = "calibration-ladder"
+source = "HEAD"
+image = "edge"
+determinism = "wall_clock_budgeted"
+
+[matrix]
+case = [
+  "03-branched-leds-5",
+  "04-inverter-leds-8",
+  "05-timer-led-10",
+  "06-chaser-14",
+  "07-chaser-20",
+  "08-chaser-20-plane",
+]
+seed = [0, 1]
+
+[config]
+initial_pool = true
+initial_starts = 8
+initial_finalists = 3
+timeout = 1800
+
+[resources]
+cpus = 1
+memory_gb = 3
+max_wall_s = 3600
+
+[placement]
+vm_vcpus = 8

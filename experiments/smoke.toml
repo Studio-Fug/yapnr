@@ -1,0 +1,18 @@
+# Smoke campaign: two tiny tasks that prove a backend end to end (docs/cloud-experiments.md).
+# Each writes out/smoke.json with the interpreter and platform it ran on and, with kicad = true,
+# the version of kicad-cli; no source bundle. The first submission on Google Cloud uses it.
+schema = "yapnr-campaign-v1"
+kind = "smoke"
+name = "smoke"
+source = "none"
+image = "edge"
+
+[config]
+count = 2
+sleep_s = 5
+kicad = true
+
+[resources]
+cpus = 1
+memory_gb = 1
+max_wall_s = 600

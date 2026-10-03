@@ -1,0 +1,8 @@
+# OpenTofu working files: provider plugins, local state, saved plans and the function zip.
+.terraform/
+.build/
+*.tfstate
+*.tfstate.*
+*.plan
+*.tfvars
+!examples/*.tfvars.example

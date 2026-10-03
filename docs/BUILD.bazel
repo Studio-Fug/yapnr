@@ -32,3 +32,6 @@ py_binary(
     srcs = ["serve.py"],
     main = "serve.py",
 )
+
+# The annotated owner configuration of `yapnr exp` (tests/unit/exp checks that it parses).
+exports_files(["examples/cloud.toml.example"])

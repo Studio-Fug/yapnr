@@ -65,7 +65,9 @@ resource "google_compute_instance_template" "spot" {
     preemptible                 = true
     automatic_restart           = false
     on_host_maintenance         = "TERMINATE"
-    instance_termination_action = "DELETE"
+    # Batch runs templates through managed instance groups, which refuse Spot VMs whose termination
+    # action is DELETE (CODE_GCE_UNSUPPORTED_OPERATION); Batch deletes its VMs when the job ends.
+    instance_termination_action = "STOP"
   }
 
   service_account {

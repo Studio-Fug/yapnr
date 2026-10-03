@@ -181,10 +181,43 @@ def disable_submit(http, cfg):
     return status
 
 
+def preference_name(http, cfg, region, quota):
+    """The id of the existing preference for this quota and region, else ``yapnr-preemptible-cpus-<region>``.
+
+    A preference requested in the console gets a generated id, and a second preference for the
+    same quota and region would compete with it, so the guard updates the one that exists.
+    """
+    token = ""
+    while True:
+        query = {"pageSize": "100"}
+        if token:
+            query["pageToken"] = token
+        url = "%s/projects/%s/locations/global/quotaPreferences?%s" % (
+            QUOTAS,
+            cfg["project"],
+            urllib.parse.urlencode(query),
+        )
+        status, page = http("GET", url)
+        if status != 200:
+            print(json.dumps({"guard": "preferences-list-failed", "status": status}))
+            break
+        for pref in page.get("quotaPreferences", []):
+            if (
+                pref.get("service", "compute.googleapis.com") == "compute.googleapis.com"
+                and pref.get("quotaId") == quota
+                and (pref.get("dimensions") or {}).get("region") == region
+            ):
+                return pref["name"].rsplit("/", 1)[-1]
+        token = page.get("nextPageToken")
+        if not token:
+            break
+    return "yapnr-preemptible-cpus-%s" % region
+
+
 def cut_quota(http, cfg):
     statuses = {}
     for region, quota in sorted(cfg["preferences"].items()):
-        name = "yapnr-preemptible-cpus-%s" % region
+        name = preference_name(http, cfg, region, quota)
         query = urllib.parse.urlencode(
             [
                 ("allowMissing", "true"),

@@ -234,6 +234,7 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/design/rf-fab-coupons.html">Design: fab-model test coupons</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/references.html">Foundations and references</a></li>
@@ -292,13 +293,30 @@
 <h1>Worklog<a class="headerlink" href="#worklog" title="Link to this heading">¶</a></h1>
 <p>A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.</p>
-<p>Last updated: 2026-10-02 (fab outputs and staged ordering, F2, F1 and O1, on <code class="docutils literal notranslate"><span class="pre">claude/fab-order</span></code>).
+<p>Last updated: 2026-10-03 (the gloss port’s review fixes, on <code class="docutils literal notranslate"><span class="pre">claude/gloss-port</span></code>).
+Before that, 2026-10-02: fab outputs and staged ordering, F2, F1 and O1, on <code class="docutils literal notranslate"><span class="pre">claude/fab-order</span></code>.
 Before that, 2026-09-30: PR4, #10, the ladder animations, the atopile toolchain and the
 privacy-scan trailer rule merged; line groups, hard board edges, the hierarchical ladder driver and
 their animations on <code class="docutils literal notranslate"><span class="pre">claude/animations-groups-hier</span></code>.</p>
 <section id="in-progress">
 <h2>In progress<a class="headerlink" href="#in-progress" title="Link to this heading">¶</a></h2>
 <ul class="simple">
+<li><p><strong>Gloss, dekink and corridor coalescing (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>, off by default)</strong> (branch
+<code class="docutils literal notranslate"><span class="pre">claude/gloss-port</span></code>; design <a class="reference internal" href="docs/design/gloss.html"><span class="std std-doc">docs/design/gloss.md</span></a>): ported from Splanc’s
+src18 with its tests, <code class="docutils literal notranslate"><span class="pre">board.Delete</span></code> instead of <code class="docutils literal notranslate"><span class="pre">Remove</span></code>, workers through <code class="docutils literal notranslate"><span class="pre">pnr.proc.run_status</span></code>;
+the <code class="docutils literal notranslate"><span class="pre">06g-gloss</span></code> and <code class="docutils literal notranslate"><span class="pre">07g-gloss</span></code> loop passes, the ladder’s opt-in <code class="docutils literal notranslate"><span class="pre">--gloss</span></code> stage with
+<code class="docutils literal notranslate"><span class="pre">--gloss-flag</span></code> and <code class="docutils literal notranslate"><span class="pre">--gloss-measure</span></code>, functional groups derived from the rules
+(<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS_CLASSES_FROM</span></code>, the most specific group wins) and the public example groups file for
+<code class="docutils literal notranslate"><span class="pre">07-chaser-20</span></code>. Review fixes: the ray metric no longer depends on which way a segment is drawn
+(patch handed back to the source), gloss settings in the router key and imports, the code key
+covers the pass only with the flag, the ladder’s outer gate by violation keys, frozen and hashed
+groups file, per-stage CPU as on the hard-rungs branch, a nightly CI lane. Identity with the
+source (plus the same ray patch) is exact on three private replay points; flag-off identity with
+<code class="docutils literal notranslate"><span class="pre">main</span></code> (stubbed loop) holds; a real native loop with the flag ran both passes on a public board.
+Ladder A/B (24 runs per arm, no regression, bends -32 %, length -4 %, CPU 2.2 times): see
+<a class="reference internal" href="docs/regression-ladder.html#gloss-opt-in"><span class="std std-ref">docs/regression-ladder.md</span></a>. Next: the larger paired
+native-loop A/B on the cloud lane decides default-on (owner); rebase <code class="docutils literal notranslate"><span class="pre">run.py</span></code> onto
+<code class="docutils literal notranslate"><span class="pre">claude/ladder-hard-rungs</span></code> when it lands.</p></li>
 <li><p><strong>Fab outputs and staged ordering</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/fab-order</span></code>; design
 <a class="reference internal" href="docs/design/fab-and-ordering.html"><span class="std std-doc">docs/design/fab-and-ordering.md</span></a>, guide
 <a class="reference internal" href="docs/fab-and-ordering.html"><span class="std std-doc">docs/fab-and-ordering.md</span></a>). Built: vendor profiles and stackups as

@@ -234,6 +234,7 @@
 <li class="toctree-l1"><a class="reference internal" href="design/rf-fab-coupons.html">Design: fab-model test coupons</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="references.html">Foundations and references</a></li>
@@ -597,14 +598,377 @@ showcases, whose own widths and budgets are on
 deliberately, after a notable engine change, not on every pull request: each refresh adds about
 12 MB to the history.</p>
 </section>
+<section id="gloss-opt-in">
+<h2>Gloss (opt-in)<a class="headerlink" href="#gloss-opt-in" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--gloss</span></code> adds one stage after the refill: the gloss, dekink and corridor-coalescing pass
+(<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>, off by default; <a class="reference internal" href="design/gloss.html"><span class="std std-doc">design</span></a>), with the semantics of the native loop’s
+<code class="docutils literal notranslate"><span class="pre">07g-gloss</span></code> pass, gated inside the pass by native checks and a cold KiCad DRC, and again by the
+runner’s own DRC (a worse DRC restores <code class="docutils literal notranslate"><span class="pre">routed.pre-gloss.kicad_pcb</span></code>). <code class="docutils literal notranslate"><span class="pre">--gloss-flag</span> <span class="pre">PNR_GLOSS_NAME=VALUE</span></code> passes sub-flags, and <code class="docutils literal notranslate"><span class="pre">--gloss-measure</span></code> measures every final board, for both
+arms of an A/B.</p>
+<p>A/B of 2026-10-03: the eight cases and the four showcases, seeds 0 and 1, one engine (<code class="docutils literal notranslate"><span class="pre">2fc4cc9</span></code>)
+for both arms, legacy profile, on the development Mac (niced, beside other work):</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>run.py<span class="w"> </span>...<span class="w"> </span>--seed<span class="w"> </span><span class="m">0</span><span class="w"> </span>--seed<span class="w"> </span><span class="m">1</span><span class="w"> </span>--showcases<span class="w"> </span>--gloss-measure<span class="w">            </span><span class="c1"># off</span>
+run.py<span class="w"> </span>...<span class="w"> </span>--seed<span class="w"> </span><span class="m">0</span><span class="w"> </span>--seed<span class="w"> </span><span class="m">1</span><span class="w"> </span>--showcases<span class="w"> </span>--gloss<span class="w"> </span>--gloss-measure<span class="w">    </span><span class="c1"># on</span>
+</pre></div>
+</div>
+<p>Every on-arm case pairs with its off-arm twin (the same placement, routes and pre-gloss copper,
+<code class="docutils literal notranslate"><span class="pre">copper_sha256</span></code>). “Length” and “Bends” are the eligible signal copper (<code class="docutils literal notranslate"><span class="pre">Default</span></code> netclass, signal
+width) and every degree-2 vertex on it; X is the summed excess gap to same-class neighbours within
+2 mm (smaller is tighter) and DS the free area no signal track can use. Transactions are accepted
+of proposed. “Gloss” is the stage’s wall and CPU time with its two cold DRCs; “Case CPU” is the
+whole case’s CPU time without <code class="docutils literal notranslate"><span class="pre">--gloss-measure</span></code>, which both arms run.</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Case</p></th>
+<th class="head text-right"><p>Seed</p></th>
+<th class="head"><p>Gate off / on</p></th>
+<th class="head"><p>Opens, findings</p></th>
+<th class="head text-right"><p>Length (mm)</p></th>
+<th class="head text-right"><p>Bends</p></th>
+<th class="head text-right"><p>X (mm²)</p></th>
+<th class="head text-right"><p>DS (mm²)</p></th>
+<th class="head text-right"><p>Transactions</p></th>
+<th class="head text-right"><p>Gloss wall / CPU (s)</p></th>
+<th class="head text-right"><p>Case CPU off / on (s)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>01-connector-led-2</p></td>
+<td class="text-right"><p>0</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>4.6</p></td>
+<td class="text-right"><p>3</p></td>
+<td class="text-right"><p>0.0</p></td>
+<td class="text-right"><p>0.03</p></td>
+<td class="text-right"><p>1 of 1</p></td>
+<td class="text-right"><p>12 / 29</p></td>
+<td class="text-right"><p>9 / 38</p></td>
+</tr>
+<tr class="row-odd"><td><p>01-connector-led-2</p></td>
+<td class="text-right"><p>1</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>4.6</p></td>
+<td class="text-right"><p>3</p></td>
+<td class="text-right"><p>0.0</p></td>
+<td class="text-right"><p>0.03</p></td>
+<td class="text-right"><p>1 of 1</p></td>
+<td class="text-right"><p>12 / 29</p></td>
+<td class="text-right"><p>9 / 38</p></td>
+</tr>
+<tr class="row-even"><td><p>02-resistor-led-3</p></td>
+<td class="text-right"><p>0</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>3.7</p></td>
+<td class="text-right"><p>5</p></td>
+<td class="text-right"><p>0.0</p></td>
+<td class="text-right"><p>0.21</p></td>
+<td class="text-right"><p>1 of 1</p></td>
+<td class="text-right"><p>12 / 29</p></td>
+<td class="text-right"><p>9 / 38</p></td>
+</tr>
+<tr class="row-odd"><td><p>02-resistor-led-3</p></td>
+<td class="text-right"><p>1</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>6.7 → 5.9</p></td>
+<td class="text-right"><p>9 → 5</p></td>
+<td class="text-right"><p>0.0</p></td>
+<td class="text-right"><p>0.32 → 0.09</p></td>
+<td class="text-right"><p>3 of 3</p></td>
+<td class="text-right"><p>18 / 40</p></td>
+<td class="text-right"><p>9 / 50</p></td>
+</tr>
+<tr class="row-even"><td><p>03-branched-leds-5</p></td>
+<td class="text-right"><p>0</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>10.2 → 10.1</p></td>
+<td class="text-right"><p>12 → 9</p></td>
+<td class="text-right"><p>0.0</p></td>
+<td class="text-right"><p>0.17</p></td>
+<td class="text-right"><p>2 of 2</p></td>
+<td class="text-right"><p>15 / 34</p></td>
+<td class="text-right"><p>9 / 44</p></td>
+</tr>
+<tr class="row-odd"><td><p>03-branched-leds-5</p></td>
+<td class="text-right"><p>1</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>8.2</p></td>
+<td class="text-right"><p>10</p></td>
+<td class="text-right"><p>0.0</p></td>
+<td class="text-right"><p>0.10</p></td>
+<td class="text-right"><p>1 of 1</p></td>
+<td class="text-right"><p>11 / 29</p></td>
+<td class="text-right"><p>10 / 39</p></td>
+</tr>
+<tr class="row-even"><td><p>04-inverter-leds-8</p></td>
+<td class="text-right"><p>0</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>35.6 → 35.0</p></td>
+<td class="text-right"><p>33 → 26</p></td>
+<td class="text-right"><p>4.0 → 6.3</p></td>
+<td class="text-right"><p>0.52 → 0.46</p></td>
+<td class="text-right"><p>3 of 3</p></td>
+<td class="text-right"><p>16 / 41</p></td>
+<td class="text-right"><p>12 / 53</p></td>
+</tr>
+<tr class="row-odd"><td><p>04-inverter-leds-8</p></td>
+<td class="text-right"><p>1</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>38.3 → 37.3</p></td>
+<td class="text-right"><p>40 → 27</p></td>
+<td class="text-right"><p>0.0</p></td>
+<td class="text-right"><p>0.66 → 0.57</p></td>
+<td class="text-right"><p>5 of 5</p></td>
+<td class="text-right"><p>20 / 52</p></td>
+<td class="text-right"><p>13 / 65</p></td>
+</tr>
+<tr class="row-even"><td><p>05-timer-led-10</p></td>
+<td class="text-right"><p>0</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>47.4 → 45.7</p></td>
+<td class="text-right"><p>59 → 41</p></td>
+<td class="text-right"><p>0.8 → 0.6</p></td>
+<td class="text-right"><p>2.01 → 1.90</p></td>
+<td class="text-right"><p>4 of 5</p></td>
+<td class="text-right"><p>21 / 48</p></td>
+<td class="text-right"><p>15 / 63</p></td>
+</tr>
+<tr class="row-odd"><td><p>05-timer-led-10</p></td>
+<td class="text-right"><p>1</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>69.6 → 65.8</p></td>
+<td class="text-right"><p>67 → 44</p></td>
+<td class="text-right"><p>6.8 → 4.4</p></td>
+<td class="text-right"><p>2.12 → 1.20</p></td>
+<td class="text-right"><p>8 of 8</p></td>
+<td class="text-right"><p>30 / 71</p></td>
+<td class="text-right"><p>49 / 122</p></td>
+</tr>
+<tr class="row-even"><td><p>06-chaser-14</p></td>
+<td class="text-right"><p>0</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>150.7 → 144.7</p></td>
+<td class="text-right"><p>113 → 85</p></td>
+<td class="text-right"><p>34.6 → 21.2</p></td>
+<td class="text-right"><p>2.29 → 2.62</p></td>
+<td class="text-right"><p>7 of 7</p></td>
+<td class="text-right"><p>31 / 71</p></td>
+<td class="text-right"><p>31 / 102</p></td>
+</tr>
+<tr class="row-odd"><td><p>06-chaser-14</p></td>
+<td class="text-right"><p>1</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>113.5 → 111.6</p></td>
+<td class="text-right"><p>91 → 65</p></td>
+<td class="text-right"><p>13.3 → 14.3</p></td>
+<td class="text-right"><p>2.98 → 2.49</p></td>
+<td class="text-right"><p>6 of 6</p></td>
+<td class="text-right"><p>24 / 60</p></td>
+<td class="text-right"><p>37 / 96</p></td>
+</tr>
+<tr class="row-even"><td><p>07-chaser-20</p></td>
+<td class="text-right"><p>0</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>231.8 → 220.0</p></td>
+<td class="text-right"><p>191 → 130</p></td>
+<td class="text-right"><p>20.8 → 9.7</p></td>
+<td class="text-right"><p>3.93 → 3.88</p></td>
+<td class="text-right"><p>10 of 10</p></td>
+<td class="text-right"><p>41 / 92</p></td>
+<td class="text-right"><p>49 / 142</p></td>
+</tr>
+<tr class="row-odd"><td><p>07-chaser-20</p></td>
+<td class="text-right"><p>1</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>217.8 → 206.6</p></td>
+<td class="text-right"><p>180 → 120</p></td>
+<td class="text-right"><p>52.1 → 38.7</p></td>
+<td class="text-right"><p>4.59 → 2.98</p></td>
+<td class="text-right"><p>13 of 14</p></td>
+<td class="text-right"><p>55 / 114</p></td>
+<td class="text-right"><p>115 / 231</p></td>
+</tr>
+<tr class="row-even"><td><p>08-chaser-20-plane</p></td>
+<td class="text-right"><p>0</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>231.7 → 226.9</p></td>
+<td class="text-right"><p>171 → 127</p></td>
+<td class="text-right"><p>37.4 → 25.1</p></td>
+<td class="text-right"><p>4.74 → 3.82</p></td>
+<td class="text-right"><p>13 of 13</p></td>
+<td class="text-right"><p>46 / 107</p></td>
+<td class="text-right"><p>82 / 188</p></td>
+</tr>
+<tr class="row-odd"><td><p>08-chaser-20-plane</p></td>
+<td class="text-right"><p>1</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>248.3 → 237.0</p></td>
+<td class="text-right"><p>192 → 110</p></td>
+<td class="text-right"><p>45.6 → 22.1</p></td>
+<td class="text-right"><p>4.98 → 2.78</p></td>
+<td class="text-right"><p>15 of 15</p></td>
+<td class="text-right"><p>53 / 121</p></td>
+<td class="text-right"><p>198 / 315</p></td>
+</tr>
+<tr class="row-even"><td><p>edge-io-12</p></td>
+<td class="text-right"><p>0</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>93.0 → 89.6</p></td>
+<td class="text-right"><p>90 → 53</p></td>
+<td class="text-right"><p>9.5 → 3.8</p></td>
+<td class="text-right"><p>1.51 → 1.25</p></td>
+<td class="text-right"><p>6 of 6</p></td>
+<td class="text-right"><p>25 / 61</p></td>
+<td class="text-right"><p>21 / 81</p></td>
+</tr>
+<tr class="row-odd"><td><p>edge-io-12</p></td>
+<td class="text-right"><p>1</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>94.7 → 91.0</p></td>
+<td class="text-right"><p>94 → 61</p></td>
+<td class="text-right"><p>19.0 → 14.1</p></td>
+<td class="text-right"><p>1.55 → 1.31</p></td>
+<td class="text-right"><p>10 of 10</p></td>
+<td class="text-right"><p>38 / 85</p></td>
+<td class="text-right"><p>38 / 122</p></td>
+</tr>
+<tr class="row-even"><td><p>edge-io-12-free</p></td>
+<td class="text-right"><p>0</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>100.1 → 95.6</p></td>
+<td class="text-right"><p>82 → 52</p></td>
+<td class="text-right"><p>18.7 → 21.5</p></td>
+<td class="text-right"><p>1.77 → 1.67</p></td>
+<td class="text-right"><p>8 of 8</p></td>
+<td class="text-right"><p>29 / 72</p></td>
+<td class="text-right"><p>32 / 105</p></td>
+</tr>
+<tr class="row-odd"><td><p>edge-io-12-free</p></td>
+<td class="text-right"><p>1</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>94.4 → 90.9</p></td>
+<td class="text-right"><p>82 → 43</p></td>
+<td class="text-right"><p>13.8 → 11.8</p></td>
+<td class="text-right"><p>1.58</p></td>
+<td class="text-right"><p>9 of 9</p></td>
+<td class="text-right"><p>30 / 76</p></td>
+<td class="text-right"><p>22 / 98</p></td>
+</tr>
+<tr class="row-even"><td><p>hier-twin-bank-32</p></td>
+<td class="text-right"><p>0</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>323.9 → 307.8</p></td>
+<td class="text-right"><p>279 → 210</p></td>
+<td class="text-right"><p>66.1 → 54.5</p></td>
+<td class="text-right"><p>8.56 → 5.21</p></td>
+<td class="text-right"><p>7 of 7</p></td>
+<td class="text-right"><p>45 / 84</p></td>
+<td class="text-right"><p>213 / 296</p></td>
+</tr>
+<tr class="row-odd"><td><p>hier-twin-bank-32</p></td>
+<td class="text-right"><p>1</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>307.4 → 294.3</p></td>
+<td class="text-right"><p>271 → 202</p></td>
+<td class="text-right"><p>63.2 → 58.4</p></td>
+<td class="text-right"><p>8.71 → 6.14</p></td>
+<td class="text-right"><p>7 of 7</p></td>
+<td class="text-right"><p>42 / 83</p></td>
+<td class="text-right"><p>224 / 305</p></td>
+</tr>
+<tr class="row-even"><td><p>line-chaser-20</p></td>
+<td class="text-right"><p>0</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>235.8 → 227.4</p></td>
+<td class="text-right"><p>188 → 125</p></td>
+<td class="text-right"><p>34.2 → 32.6</p></td>
+<td class="text-right"><p>3.57 → 3.26</p></td>
+<td class="text-right"><p>10 of 10</p></td>
+<td class="text-right"><p>39 / 90</p></td>
+<td class="text-right"><p>58 / 147</p></td>
+</tr>
+<tr class="row-odd"><td><p>line-chaser-20</p></td>
+<td class="text-right"><p>1</p></td>
+<td><p>pass / pass</p></td>
+<td><p>0, 0 → 0, 0</p></td>
+<td class="text-right"><p>184.3 → 177.6</p></td>
+<td class="text-right"><p>162 → 96</p></td>
+<td class="text-right"><p>20.8 → 10.4</p></td>
+<td class="text-right"><p>3.22 → 3.17</p></td>
+<td class="text-right"><p>6 of 6</p></td>
+<td class="text-right"><p>30 / 67</p></td>
+<td class="text-right"><p>35 / 102</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<ul class="simple">
+<li><p><strong>No regression:</strong> all 24 runs pass the gate in both arms; KiCad’s opens and findings (0 and 0
+everywhere), the objective vector and the audit are unchanged. The runner’s outer gate never
+fired, no pass reverted at its end gate and none stopped on a budget.</p></li>
+<li><p><strong>Bends -32 %</strong> in total (2427 to 1652; 0 to -48 % per run), <strong>length -4.0 %</strong> (2856.3 to
+2741.9 mm; never up), X -24 % in total and DS -22 %. X rose on three runs and DS on one: the
+router’s cost ranks first, and a shortcut that saves at least 0.2 mm is kept even when it moves
+a track off its neighbour.</p></li>
+<li><p><strong>The legalizer at work:</strong> 156 of 158 transactions accepted; the trial worker dropped the other
+two edits on the applied board (a new same-net contact, <code class="docutils literal notranslate"><span class="pre">L2</span></code>, and a corridor member whose
+segments an earlier transaction had replaced). Edits: normalize 281, dekink 162, gloss 185,
+corridor 18.</p></li>
+<li><p><strong>Cost:</strong> the stage takes 11 to 55 s of wall time and 29 to 121 s of CPU per case, a roughly
+fixed overhead (KiCad worker start-up and the cold DRCs dominate on these small boards). In all,
+the on arm used 2880 s of CPU against 1301 s (2.2 times) and 1918 s of wall time against 1226 s
+(+56 %). Per case the CPU factor falls with the case’s size: 2.5 to 5.4 on cases 01 to 05, 3.2
+to 4.4 on the edge-io showcases, 1.6 to 3.3 on the chaser cases and 1.4 on hier-twin-bank-32.</p></li>
+<li><p><strong>Against the first A/B</strong> (engine <code class="docutils literal notranslate"><span class="pre">879f22c</span></code>, before the ray metric stopped depending on the
+drawing direction): the off arm’s copper is the same on all 24 runs; 21 of the 24 on-arm runs
+keep the same copper, and three take a different equal-cost edit (length within 0.1 mm, the same
+bends). X counts a few more samples now (a ray through a neighbour’s vertex counts the
+neighbour), so its values are not comparable with the first A/B’s.</p></li>
+<li><p><strong>Functional groups</strong> (first A/B): 07-chaser-20 with the example groups file
+(<code class="docutils literal notranslate"><span class="pre">docs/examples/gloss-groups-chaser.json</span></code>) and the groups derived from the rules gives the same
+copper as without groups (longest cross-group run at minimum pitch 0 and 1.5 mm, under the
+10 mm cap).</p></li>
+<li><p><strong>Determinism:</strong> the off arm repeats the first A/B’s copper on all 24 runs, and a rerun of
+04-inverter-leds-8 and 07-chaser-20 (seed 0) with the gloss stage gave the same copper; only the
+direction in which a few merged segments are drawn differed (1 and 4 segments), which
+<code class="docutils literal notranslate"><span class="pre">copper_sha256</span></code> and the metrics ignore.</p></li>
+</ul>
+<p>The ladder runs the pass after a complete route, so it cannot show whether the pass helps or
+hurts completion; turning it on by default waits for a paired A/B of the native loop.</p>
+</section>
 <section id="in-ci">
 <h2>In CI<a class="headerlink" href="#in-ci" title="Link to this heading">¶</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">.github/workflows/ladder.yaml</span></code> runs the ladder inside the published arm64 image: cases 01 to 06
 with seed 0 on pull requests that change engine inputs, and nightly all eight cases with seeds 0 and
 1, plus a traced pool run whose animations are uploaded as an artifact and whose trace hashes are
 compared with <a href="animations/manifest.json"><code>animations/manifest.json</code></a> (a drift
-is a notice). The lane is informational, not a required check yet; its aggregate check is named
-<code class="docutils literal notranslate"><span class="pre">ladder</span></code>.</p>
+is a notice). The nightly run also takes the opt-in <a class="reference internal" href="#gloss-opt-in">gloss stage</a> through
+<code class="docutils literal notranslate"><span class="pre">04-inverter-leds-8</span></code> and <code class="docutils literal notranslate"><span class="pre">07-chaser-20</span></code> (seed 0): a stage error fails the job, and a stage that
+kept no edit on either case is a warning. The lane is informational, not a required check yet;
+its aggregate check is named <code class="docutils literal notranslate"><span class="pre">ladder</span></code>.</p>
 </section>
 </section>
 
@@ -681,6 +1045,7 @@ is a notice). The lane is informational, not a required check yet; its aggregate
 </ul>
 </li>
 <li><a class="reference internal" href="#regenerating">Regenerating</a></li>
+<li><a class="reference internal" href="#gloss-opt-in">Gloss (opt-in)</a></li>
 <li><a class="reference internal" href="#in-ci">In CI</a></li>
 </ul>
 </li>

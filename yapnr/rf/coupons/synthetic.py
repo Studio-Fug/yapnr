@@ -45,6 +45,8 @@ class Imperfections:
     via_l_nh: float = 0.25  # L1 -> L3 via (board B), est.
     via_c_pf: float = 0.12
     repeats: int = 3  # thru and the 40 mm line are re-mated (design §7.4)
+    dc_temp_k: float = 0.5  # error of the recorded board temperature (one per session)
+    dc_noise: float = 5e-4  # relative noise of a 4-wire reading
 
 
 def ideal() -> Imperfections:
@@ -259,15 +261,19 @@ def simulate(
     # DC meanders
     rows = []
     dc_truth = {}
+    t_board = 23.0 + imp.dc_temp_k * float(rng.standard_normal())  # recorded as 23.0
     for s in b.sticks:
         if s.kind != "dc":
             continue
         for mnd in s.geometry["meanders"]:
             k = mnd["layer"]
             t, e = _layer_te(st, v, k, dc_layers_truth, rng, dc_truth)
-            r_true = models.meander_resistance(mnd["w"], t, e, mnd["length"], mnd["corners"], 23.0)
+            r_true = models.meander_resistance(
+                mnd["w"], t, e, mnd["length"], mnd["corners"], t_board
+            )
             i = 0.1
-            volt = r_true * i * (1 + 5e-4 * rng.standard_normal()) + 1e-6 * rng.standard_normal()
+            volt = r_true * i * (1 + imp.dc_noise * rng.standard_normal())
+            volt += 1e-6 * rng.standard_normal()
             rows.append(
                 dict(
                     serial=serial,

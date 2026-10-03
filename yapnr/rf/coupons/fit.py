@@ -708,23 +708,39 @@ def _fitted_families(b: catalog.Board):
     return out
 
 
-def _peaks(f, mag, centers, rel=0.06, minimum=False):
+def _centre(f, db, fc, rel=0.4):
+    """Centre of a passband near fc: the power-weighted mean frequency of the contiguous
+    region within 3 dB of the peak."""
+    sel = np.where(np.abs(f - fc) <= rel * fc)[0]
+    y = db[sel]
+    j = int(np.argmax(y))
+    a = b = j
+    while a > 0 and y[a - 1] >= y[j] - 3.0:
+        a -= 1
+    while b < len(y) - 1 and y[b + 1] >= y[j] - 3.0:
+        b += 1
+    w = 10 ** (y[a : b + 1] / 10)
+    return float(np.sum(w * f[sel][a : b + 1]) / np.sum(w))
+
+
+def _notches(f, t, centers, rel=0.02):
+    """Transmission zeros near `centers` from complex S21 `t`: a complex quadratic through the
+    five points around the smallest |S21|, minimized on a fine grid. Near a zero S21 passes
+    the origin almost linearly, so this resolves a notch far below the frequency step (a
+    parabola in dB does not)."""
     out = []
     for fc in centers:
         sel = np.where(np.abs(f - fc) <= rel * fc)[0]
-        if len(sel) < 3:
+        if len(sel) < 5:
             out.append(float("nan"))
             continue
-        y = -mag[sel] if minimum else mag[sel]
-        j = int(np.argmax(y))
-        if 0 < j < len(sel) - 1:
-            y0, y1, y2 = y[j - 1], y[j], y[j + 1]
-            den = y0 - 2 * y1 + y2
-            dj = 0.5 * (y0 - y2) / den if den != 0 else 0.0
-            df = f[sel[1]] - f[sel[0]]
-            out.append(float(f[sel[j]] + dj * df))
-        else:
-            out.append(float(f[sel[j]]))
+        j = int(np.argmin(np.abs(t[sel])))
+        j = min(max(j, 2), len(sel) - 3)
+        k = sel[j - 2 : j + 3]
+        x = f[k] - f[k[2]]
+        c = np.polyfit(x, t[k].real, 2) + 1j * np.polyfit(x, t[k].imag, 2)
+        xx = np.linspace(x[0], x[-1], 801)
+        out.append(float(f[k[2]] + xx[int(np.argmin(np.abs(np.polyval(c, xx))))]))
     return out
 
 
@@ -742,21 +758,26 @@ def held_out(p: Predictor, res: FitResult) -> Dict[str, dict]:
         s_mod = p.stick_s(p.model(v, fine), sid)
         db_m = 20 * np.log10(np.abs(s_meas[:, 1, 0]) + 1e-12)
         db_p = 20 * np.log10(np.abs(s_mod[:, 1, 0]) + 1e-12)
-        if st.kind == "ring":
-            # the directly fed ring's notches at its resonances n = 1, 2, 4
-            fr = [f0 for f0 in (2.9e9, 5.8e9, 11.6e9) if f0 < fmax * 0.96]
-            fm = _peaks(d.f_grid, db_m, fr, rel=0.02, minimum=True)
-            fp = _peaks(fine, db_p, fr, rel=0.02, minimum=True)
-            tol = 0.005
-        elif st.kind == "stub":
-            fr = [5.8e9] + ([11.6e9] if st.geometry["end"] == "short" and fmax > 12e9 else [])
-            fm = _peaks(d.f_grid, db_m, fr, minimum=True)
-            fp = _peaks(fine, db_p, fr, minimum=True)
+        if st.kind in ("ring", "stub"):
+            # the ring's notches at its resonances n = 1, 2, 4 (its other zeros are 6-25 %
+            # away); the stubs' notches. The predicted notch (the fitted model) centres the
+            # search in the measurement.
+            if st.kind == "ring":
+                fr, win = [x for x in (2.9e9, 5.8e9, 11.6e9) if x < fmax * 0.95], 0.05
+            else:
+                fr = [5.8e9] + ([11.6e9] if st.geometry["end"] == "short" and fmax > 12e9 else [])
+                win = 0.08
+            fp = _notches(fine, s_mod[:, 1, 0], fr, rel=win)
+            step = float(d.f_grid[1] - d.f_grid[0])
+            fm = [
+                _notches(d.f_grid, s_meas[:, 1, 0], [x], rel=max(0.015, 3.5 * step / x))[0]
+                for x in fp
+            ]
             tol = 0.005
         else:
+            # the coupled section's passband centre: the power centroid above -3 dB of its peak
             fr = [5.8e9]
-            fm = _peaks(d.f_grid, db_m, fr, rel=0.25)
-            fp = _peaks(fine, db_p, fr, rel=0.25)
+            fm, fp = [_centre(d.f_grid, db_m, 5.8e9)], [_centre(fine, db_p, 5.8e9)]
             tol = 0.01
         rel = [(a - b) / b for a, b in zip(fm, fp)]
         ok = all(abs(x) <= tol for x in rel if x == x)

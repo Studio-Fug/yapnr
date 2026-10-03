@@ -13,6 +13,22 @@ Every option is off unless the constraint file declares it, and then the legaliz
     ``exact`` the slot centre is bounded by :func:`outline_box`, derived from the same
     courtyard rectangle that check tests, and the legalizer asserts that check before it
     returns.
+
+``order: scarcity``
+    The legalizer places the parts of hard-group blocks (and aligns) first, choosing the
+    next block by its free slots per area, and only then the other parts, so a part
+    held only by a narrow hard region (a connector's one window) finds its slots taken
+    by unrelated blocks. With ``scarcity`` every part held by a hard region or a hard
+    edge band, and in no block, is a block of its own and competes by the same rank.
+
+``lookahead: regions``
+    The power-first look-ahead (``starves``: refuse a slot when a greedy trial pack of
+    the unplaced hard-limited parts fails) without power-first: the parts that join the
+    trial are those held by a hard group, region or edge band whose reach meets the slot
+    and that keep at most :data:`SCARCE_SLOTS` free slots, each packed at its own slot
+    target inside its edge box and region mask. Up to ``LOOK_AHEAD_TRIES`` slots are
+    tried; when every one strands a part the nearest slot is kept, as without the
+    look-ahead, and backtracking deals with the stranded part.
 """
 
 from __future__ import annotations
@@ -22,6 +38,10 @@ from typing import Optional, Tuple
 from .geometry import courtyard_rect
 
 Box = Tuple[float, float, float, float]
+
+# ``lookahead: regions``: a held part is scarce, and joins the trial pack, when a slot
+# leaves it at most this many free slots (bounds the look-ahead's cost).
+SCARCE_SLOTS = 64
 
 
 def options(constraints) -> dict:
@@ -37,7 +57,50 @@ def legalize_kwargs(constraints) -> dict:
     out = {}
     if opts.get("outline") == "exact":
         out["outline"] = "exact"
+    if opts.get("order") == "scarcity":
+        out["order"] = "scarcity"
+    if opts.get("lookahead") == "regions":
+        out["lookahead"] = "regions"
     return out
+
+
+def region_held(components, rules, bands) -> set:
+    """Refs of ``components`` held by a hard region (``rules``, a
+    :class:`pnr.place.regions.LegalizeRules` or None) or a hard edge band (``bands``)."""
+    from pnr.constraints import Enforcement
+
+    out = set()
+    for comp in components:
+        if comp.ref in (bands or {}):
+            out.add(comp.ref)
+        elif rules is not None and any(
+            con.enforcement is Enforcement.HARD for con, _ in rules.region_of.get(comp.ref, ())
+        ):
+            out.add(comp.ref)
+    return out
+
+
+def reaches(comp, slot, limits, box, rules, width: float, height: float) -> bool:
+    """Whether ``comp`` could still be placed over ``slot`` (x0, x1, y0, y1, mm): its
+    centre bounds (``box``, a centre box or None; each hard group disc in ``limits``; the
+    bounding box of its hard polygon regions) grown by a generous half slot (either turn,
+    the largest spreading) meet it. A cheap filter: False only when no slot of ``comp``
+    can overlap ``slot``, so taking it cannot change ``comp``'s free slots."""
+    x0, x1, y0, y1 = 0.0, width, 0.0, height
+    if box is not None:
+        x0, x1, y0, y1 = max(x0, box[0]), min(x1, box[1]), max(y0, box[2]), min(y1, box[3])
+    for ax, ay, radius in limits:
+        x0, x1 = max(x0, ax - radius), min(x1, ax + radius)
+        y0, y1 = max(y0, ay - radius), min(y1, ay + radius)
+    if rules is not None and comp.ref in rules.region_of:
+        bounds = rules.static_box(comp, bounds=True)
+        if bounds is not None:
+            x0, x1 = max(x0, bounds[0]), min(x1, bounds[1])
+            y0, y1 = max(y0, bounds[2]), min(y1, bounds[3])
+    grow = 0.65 * max(comp.courtyard) + 0.5
+    return not (
+        x1 + grow < slot[0] or slot[1] < x0 - grow or y1 + grow < slot[2] or slot[3] < y0 - grow
+    )
 
 
 def outline_box(comp, width: float, height: float) -> Box:

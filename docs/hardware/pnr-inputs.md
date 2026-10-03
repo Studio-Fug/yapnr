@@ -461,13 +461,17 @@ The legalizer snaps the global placement onto a grid of slots (0.25 mm) and pack
 the parts one by one. These options change how; each is off unless the file sets it,
 and a design without the section is legalized exactly as before.
 
-| Key       | Values                      | Meaning                                                                                   |
-| --------- | --------------------------- | ----------------------------------------------------------------------------------------- |
-| `outline` | `raster` (default), `exact` | `exact`: every part's courtyard stays inside the outline by the test the hard check uses. |
+| Key         | Values                         | Meaning                                                                                        |
+| ----------- | ------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `outline`   | `raster` (default), `exact`    | `exact`: every part's courtyard stays inside the outline by the test the hard check uses.      |
+| `order`     | `blocks` (default), `scarcity` | `scarcity`: a part held by a hard region or edge band competes with the hard-group blocks.     |
+| `lookahead` | `none` (default), `regions`    | `regions`: a slot that strands a held part with few slots left is refused (when another fits). |
 
 ```yaml
 legalize:
   outline: exact
+  order: scarcity
+  lookahead: regions
 ```
 
 `outline: exact` matters when the outline is not a whole number of slots (a 46.3 mm
@@ -479,6 +483,24 @@ bounded by the box in which the part's courtyard, at the tried rotation and side
 inside the outline, and the legalizer checks the result with the hard check itself.
 The length-matching pass after legalization keeps off those cells too. The outline is
 the `board.outline` rectangle; rounded corners are not modelled.
+
+`order: scarcity` changes the order parts are packed in. The legalizer packs the
+parts of hard groups (and aligns) block by block, picking next the block with the
+fewest free slots per square millimetre of its parts, and only then every other part,
+fewest free slots first. A part held only by a narrow hard `region` (a connector's one
+window) therefore comes after every block and can find its window full. With
+`scarcity` each part held by a hard region or a hard `edge_align` band, and in no
+group, is a block of its own and takes its turn by the same measure, so a window part
+goes before a roomy block.
+
+`lookahead: regions` checks each slot before taking it: a greedy trial pack of the
+parts still to place that are held by a hard group, region or edge band, can still
+reach the slot and would keep at most 64 free slots once it is taken. When one of them
+no longer fits, the next nearest slot is tried (up to 40); when every tried slot
+strands a part, the nearest one is kept and backtracking deals with the part. It is
+the look-ahead of power-first placement (`PNR_POWER_FIRST=1`, which refuses regions)
+for the default flow, and costs the trial packs: it is meant for boards with narrow
+regions.
 
 ### `net_class` / `diff_pair` / `length_match` — routing rules
 

@@ -143,6 +143,98 @@ class OutlineTest(unittest.TestCase):
             self.assertEqual(moved, set())
 
 
+def window_board(seed, one_slot=False):
+    """A fixed U1 with eight caps in a roomy hard group (radius 5.5 mm), and J2 held only
+    by a hard region: a window under U1 (or, ``one_slot``, a window with one slot). The
+    caps' global targets lie in J2's window, so blocks-first legalization fills it."""
+    rng = random.Random(seed)
+    parts = [Component("U1", "U", (5, 6), 0, "top", (3, 3), (3, 3))]
+    for i in range(8):
+        pos = (rng.uniform(1, 7), rng.uniform(0.3, 2.2))
+        parts.append(Component("C%d" % i, "C", pos, 0, "top", (1.5, 0.9), (1.5, 0.9)))
+    parts.append(Component("J2", "J", (4, 1.2), 0, "top", (6, 2), (6, 2)))
+    g = BoardGraph("window", parts, [], BoardOutline(20, 10))
+    window = [0.85, 0.0, 7.0, 2.3] if one_slot else [0, 0, 8, 2.6]
+    spec = dict(
+        schema="v0",
+        board=dict(outline=dict(w=20, h=10), default_clearance_mm=0.2),
+        fixed={"U1": dict(at=[5, 6], rot=0, side="top")},
+        orientation={"J2": 0},
+        group=[dict(members=["C%d" % i for i in range(8)], anchor="U1", radius_mm=5.5, hard=True)],
+        region=[dict(name="j2", refs=["J2"], rect=window)],
+    )
+    return g, spec
+
+
+def legal_count(options, seeds=range(10), one_slot=False):
+    from pnr.place.geometry import resolve_fixed_poses
+    from pnr.place.legalize import LegalizationError
+    from pnr.place.metrics import hard_violations
+
+    count = 0
+    for seed in seeds:
+        g, spec = window_board(seed, one_slot)
+        if options:
+            spec["legalize"] = options
+        c = compile_constraints(spec, [p.ref for p in g.components])
+        kw = legalize_constraint_kwargs(g, c, resolve_fixed_poses(g, c))
+        try:
+            placed = legalize(g, 20, 10, clearance=0.2, grid_mm=0.25, backtrack_budget=50, **kw)
+        except LegalizationError:
+            continue
+        count += not any(hard_violations(placed, c).values())
+    return count
+
+
+class OrderTest(unittest.TestCase):
+    def test_window_part_before_roomy_group(self):
+        # Blocks first: the caps fill J2's window and backtracking cannot recover it.
+        self.assertEqual(legal_count(None), 0)
+        self.assertEqual(legal_count(dict(order="scarcity")), 10)
+
+    def test_scarcity_blocks(self):
+        from pnr.place.legalize import _scarcity_blocks
+
+        g, spec = window_board(0)
+        spec["edge_align"] = {"C7": dict(edge="south", hard=True, tolerance_mm=1.0)}
+        spec["group"][0]["members"] = ["C%d" % i for i in range(6)]
+        c = compile_constraints(spec, [p.ref for p in g.components])
+        kw = legalize_constraint_kwargs(g, c, {})
+        from pnr.place.regions import LegalizeRules
+
+        rules = LegalizeRules(kw["regions"], kw.get("aligns"), g.components)
+        group = {"U1", "C0", "C1"}
+        blocks = {r: group for r in group}
+        out = _scarcity_blocks(blocks, g.components, rules, kw["edge_bands"])
+        self.assertEqual(out["J2"], {"J2"})
+        self.assertEqual(out["C7"], {"C7"})
+        self.assertIs(out["C0"], group)
+        self.assertNotIn("C6", out)  # held by nothing
+        self.assertEqual(set(blocks), group)  # the input is not changed
+
+
+class LookaheadTest(unittest.TestCase):
+    def test_one_slot_region(self):
+        # J2's window holds one slot; group caps aimed at it would take it.
+        self.assertLess(legal_count(None, one_slot=True), 10)
+        self.assertEqual(legal_count(dict(lookahead="regions"), one_slot=True), 10)
+
+    def test_window_without_scarcity(self):
+        self.assertEqual(legal_count(dict(lookahead="regions")), 10)
+        self.assertEqual(legal_count(dict(order="scarcity", lookahead="regions")), 10)
+
+    def test_reaches(self):
+        c = part("J2", (4, 1), (6, 2))
+        # Inside its centre box: reaches a slot there, not one far away.
+        self.assertTrue(legal_options.reaches(c, (3, 4, 0, 1), [], (3, 5, 1, 1.3), None, 20, 10))
+        self.assertFalse(legal_options.reaches(c, (15, 16, 8, 9), [], (3, 5, 1, 1.3), None, 20, 10))
+        # A hard group disc bounds it too.
+        self.assertFalse(
+            legal_options.reaches(c, (15, 16, 0, 1), [(4, 1, 2.0)], None, None, 20, 10)
+        )
+        self.assertTrue(legal_options.reaches(c, (15, 16, 0, 1), [], None, None, 20, 10))
+
+
 class PlacerTest(unittest.TestCase):
     def test_placer_passes_the_option(self):
         pads = [Pad("1", "A", (-0.5, 0), (0.5, 0.5)), Pad("2", "B", (0.5, 0), (0.5, 0.5))]

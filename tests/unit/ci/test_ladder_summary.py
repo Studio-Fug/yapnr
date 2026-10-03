@@ -62,6 +62,31 @@ class LadderSummaryTest(unittest.TestCase):
         self.assertIn("stage_failure (writeback)", text)
         self.assertNotIn("/somewhere", text)
 
+    def test_gloss_table(self):
+        self.assertNotIn("Gloss stage", ladder_summary.render(SUMMARY))
+        glossed = dict(SUMMARY["results"][0])
+        glossed["gloss"] = {
+            "kept": True,
+            "flags": {},
+            "summary": {
+                "accepted_transactions": 3,
+                "proposed_transactions": 4,
+                "stop": None,
+                "metrics_before": {"bends_all": 33, "length_mm": 35.61},
+                "metrics_after": {"bends_all": 26, "length_mm": 35.04},
+            },
+            "outer_gate": {"passed": True, "reasons": []},
+        }
+        failed = dict(SUMMARY["results"][1], gloss={"kept": False, "status": "error"})
+        text = ladder_summary.render(dict(SUMMARY, results=[glossed, failed]))
+        self.assertIn("**Gloss stage** (PNR_GLOSS): 1 of 2 cases kept an edit.", text)
+        self.assertIn(
+            "| 01-connector-led-2 | 0 | yes | 3 of 4 | - | pass | 33 -> 26 | 35.6 -> 35.0 |", text
+        )
+        self.assertIn(
+            "| 05-timer-led-10 | 1 | no | - of - | - | **error** | - -> - | - -> - |", text
+        )
+
     def test_main_and_check(self):
         with tempfile.TemporaryDirectory() as tmp:
             run = Path(tmp)

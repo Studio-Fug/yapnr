@@ -5,8 +5,11 @@
 
 Reads ``RUN_DIR/summary.json`` (written by ``hardware/pnr/regression/run.py``) and prints a
 table: case, seed, result, KiCad opens and violations, vias, copper, seconds and the failure
-reasons. Only case names, numbers and the runner's reason keys are printed (no error text,
-which may hold paths). ``--check`` exits 1 unless every case passed. Stdlib only.
+reasons. A run with the opt-in gloss stage (``run.py --gloss``, PNR_GLOSS) gets a second table:
+whether the stage kept its output, its transactions, why it stopped, its outer gate and the
+bends and length before and after. Only case names, numbers and the runner's reason keys are
+printed (no error text, which may hold paths). ``--check`` exits 1 unless every case passed.
+Stdlib only.
 """
 
 from __future__ import annotations
@@ -79,7 +82,51 @@ def render(summary, title="Regression ladder"):
                 ", ".join(_reasons(r)) or "",
             )
         )
+    glossed = [r for r in results if isinstance(r.get("gloss"), dict)]
+    if glossed:
+        lines += _gloss_table(glossed)
     return "\n".join(lines) + "\n"
+
+
+def _gloss_table(results):
+    """The gloss stage of each case (run.py --gloss): kept, transactions, stop, gate, figures."""
+    lines = [
+        "",
+        "**Gloss stage** (PNR_GLOSS): %d of %d cases kept an edit."
+        % (sum(1 for r in results if r["gloss"].get("kept")), len(results)),
+        "",
+        "| Case | Seed | Kept | Transactions | Stop | Outer gate | Bends | Length mm |",
+        "| --- | ---: | --- | ---: | --- | --- | --- | --- |",
+    ]
+    for r in results:
+        block = r["gloss"]
+        summary = block.get("summary") or {}
+        before = summary.get("metrics_before") or {}
+        after = summary.get("metrics_after") or {}
+        gate = block.get("outer_gate") or {}
+        if block.get("status") == "error":
+            gate_text = "**error**"
+        elif gate:
+            gate_text = "pass" if gate.get("passed") else "restored"
+        else:
+            gate_text = "-"
+        lines.append(
+            "| %s | %s | %s | %s of %s | %s | %s | %s -> %s | %s -> %s |"
+            % (
+                r.get("case", "?"),
+                r.get("seed", "?"),
+                "yes" if block.get("kept") else "no",
+                _number(summary.get("accepted_transactions")),
+                _number(summary.get("proposed_transactions")),
+                summary.get("stop") or "-",
+                gate_text,
+                _number(before.get("bends_all")),
+                _number(after.get("bends_all")),
+                _number(before.get("length_mm")),
+                _number(after.get("length_mm")),
+            )
+        )
+    return lines
 
 
 def main(argv=None):

@@ -1057,7 +1057,7 @@ def staged_place(
                 spread=legalize_spread,
                 roles=roles,
                 **({} if pad_edge is None else dict(pad_edge=pad_edge)),
-                **legal_options.legalize_kwargs(constraints),
+                **legal_options.legalize_kwargs(constraints, graph),
             )
         except LegalizationError as exc:
             out["error"] = exc

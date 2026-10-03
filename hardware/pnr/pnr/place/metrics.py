@@ -41,6 +41,7 @@ from .geometry import (
     resolve_hard_rotations,
     resolve_hard_sides,
 )
+from .legal_options import pad_group_offenders
 from .sides import STACK_PLANE, stack_refs
 
 
@@ -218,6 +219,8 @@ def hard_violations(
                 if math.dist(graph.component(anchor).pos, graph.component(member).pos)
                 > radius + 1e-9
             }
+            # Hard groups measured from a pad of the anchor (pnr.place.legal_options).
+            | set(pad_group_offenders(graph, constraints))
         ),
     }
     # Hard region / align (pnr.place.regions): their own keys, present only when the
@@ -249,7 +252,10 @@ def part_rules(graph, constraints, *, clearance=0.0, pad_edge=None):
     rotations_required = resolve_hard_rotations(constraints)
     bands = hard_edge_bands(constraints)
     locked = set(constraints.locked_refs)
+    from .legal_options import hard_pad_group_edges, pad_group_limits
     from .regions import declared, ref_ok
+
+    pad_edges = hard_pad_group_edges(constraints)  # anchor_pad hard groups
 
     related = declared(constraints)
 
@@ -287,6 +293,13 @@ def part_rules(graph, constraints, *, clearance=0.0, pad_edge=None):
         for other, radius in edges.get(comp.ref, ()):
             if math.dist(comp.pos, graph.component(other).pos) > radius + 1e-9:
                 return False
+        if pad_edges and any(
+            math.dist(comp.pos, (x, y)) > radius + 1e-9
+            for x, y, radius in pad_group_limits(
+                comp.ref, pad_edges, {c.ref: c for c in graph.components if c.ref != comp.ref}, comp
+            )
+        ):
+            return False
         return True
 
     return ok

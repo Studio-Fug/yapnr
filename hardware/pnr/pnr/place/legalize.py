@@ -183,7 +183,7 @@ def legalize_constraint_kwargs(graph, constraints, poses, pad_edge=None) -> dict
         out["edge_bands"] = bands
     out.update(legalize_kwargs(constraints, graph.components))
     # The opt-in ``legalize:`` options (pnr.place.legal_options): {} when undeclared.
-    out.update(legal_options.legalize_kwargs(constraints))
+    out.update(legal_options.legalize_kwargs(constraints, graph))
     return out
 
 
@@ -329,6 +329,14 @@ def _legal_held(components, rules, bands, fixed):
     return region_held([c for c in components if c.ref not in fixed], rules, bands)
 
 
+def _pad_limits(ref, edges, neighbors, by_ref):
+    """The pad-anchored hard group discs on ``ref`` against the placed ``neighbors``
+    (:func:`pnr.place.legal_options.pad_group_limits`)."""
+    from .legal_options import pad_group_limits
+
+    return pad_group_limits(ref, edges, {c.ref: c for c in neighbors}, by_ref[ref])
+
+
 def _assert_inside_outline(placed, width, height, fixed):
     """``legalize: {outline: exact}``: the legalized parts pass the hard outline check."""
     from .legal_options import outline_offenders
@@ -372,6 +380,7 @@ def legalize(
     outline: Optional[str] = None,
     order: Optional[str] = None,
     lookahead: Optional[str] = None,
+    pad_group_edges=None,
 ) -> BoardGraph:
     """Return a copy of ``graph`` with movable parts snapped to a legal layout.
 
@@ -443,6 +452,11 @@ def legalize(
     slot that strands an unplaced part held by a hard group, region or edge band with
     few slots left (:func:`starves` without power-first; the nearest slot is kept when
     every tried one strands).
+
+    ``pad_group_edges`` ([(anchor, pad, member, radius)], hard groups with
+    ``anchor_pad``, :func:`pnr.place.legal_options.hard_pad_group_edges`; None = none)
+    bounds each member's centre to the radius about the placed anchor's pad (the anchor
+    is placed first) and orders the group as one block, like ``group_edges``.
     """
     inflation = inflation or {}
     group_limits = group_limits or {}
@@ -724,6 +738,8 @@ def legalize(
     parents = {}
     for anchor, member, radius in group_edges:
         parents.setdefault(member, set()).add(anchor)
+    for anchor, _pad, member, _radius in pad_group_edges or ():
+        parents.setdefault(member, set()).add(anchor)  # pad-anchored hard groups
 
     def limits_for(ref):
         points = {c.ref: c.pos for c in neighbors}
@@ -733,6 +749,8 @@ def legalize(
                 limits.append((*points[anchor], radius))
             if anchor == ref and member in points:
                 limits.append((*points[member], radius))
+        if pad_group_edges:
+            limits += _pad_limits(ref, pad_group_edges, neighbors, by_ref)
         return limits
 
     for ref, angle in rotations.items():
@@ -1022,6 +1040,9 @@ def legalize(
     for anchor, member, _ in group_edges:
         adjacency.setdefault(anchor, set()).add(member)
         adjacency.setdefault(member, set()).add(anchor)
+    for anchor, _pad, member, _radius in pad_group_edges or ():
+        adjacency.setdefault(anchor, set()).add(member)
+        adjacency.setdefault(member, set()).add(anchor)
     if rules is not None:
         # Aligned members share one band: place them as one block.
         for a, b in rules.edges():
@@ -1279,7 +1300,9 @@ def legalize(
         if (
             error is not None
             and trail
-            and (group_edges or group_limits or (rules is not None and rules.hard))
+            and (
+                group_edges or group_limits or pad_group_edges or (rules is not None and rules.hard)
+            )
             and backtracks < backtrack_budget
         ):
             previous, chosen_ref, chosen_pose = trail.pop()

@@ -64,6 +64,14 @@ class Board:
         p = self.fps[ref].GetPosition()
         return (mm(p.x) - self.x0, self.y1 - mm(p.y))
 
+    def pad_pos(self, ref, pad):
+        """The centre of ``ref``'s first pad numbered ``pad``, in the checker's frame."""
+        hit = self.fps[ref].FindPadByNumber(str(pad))
+        if hit is None:
+            raise ValueError("%s has no pad %r" % (ref, pad))
+        p = hit.GetPosition()
+        return (mm(p.x) - self.x0, self.y1 - mm(p.y))
+
     def rot(self, ref):
         return self.fps[ref].GetOrientationDegrees() % 360
 
@@ -187,10 +195,16 @@ def check_region(b, c):
 
 
 def check_proximity(b, c):
-    anchor = b.pos(c["anchor"])
+    """Each ref's position within ``max_mm`` of the anchor's position, or, with
+    ``anchor_pad``, of the centre of that pad of the anchor (a pad-anchored hard group)."""
+    pad = c.get("anchor_pad")
+    anchor = b.pos(c["anchor"]) if pad is None else b.pad_pos(c["anchor"], pad)
     dists = {r: round(math.dist(anchor, b.pos(r)), 3) for r in c["refs"]}
     worst = max(dists.values())
-    return worst <= c["max_mm"] + TOL, dict(distance_mm=dists), dict(max_mm=c["max_mm"])
+    expected = dict(max_mm=c["max_mm"])
+    if pad is not None:
+        expected["anchor_pad"] = str(pad)
+    return worst <= c["max_mm"] + TOL, dict(distance_mm=dists), expected
 
 
 def check_line(b, c):

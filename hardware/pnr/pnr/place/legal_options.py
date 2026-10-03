@@ -29,6 +29,14 @@ Every option is off unless the constraint file declares it, and then the legaliz
     target inside its edge box and region mask. Up to ``LOOK_AHEAD_TRIES`` slots are
     tried; when every one strands a part the nearest slot is kept, as without the
     look-ahead, and backtracking deals with the stranded part.
+
+Pad-anchored hard groups (``group: [{..., hard: true, anchor_pad: "2"}]``)
+    A hard group measures each member's centre from its anchor's centre. With
+    ``anchor_pad`` it measures from the centre of that pad of the anchor (a snubber at
+    an inductor's switch-node pad, a decoupling cap at a ball), at the anchor's pose,
+    rotation and side. Such groups leave :func:`pnr.place.geometry.hard_group_edges`;
+    the legalizer bounds each member by a disc about the placed anchor's pad (the anchor
+    goes first) and the hard check (``group_outside``) measures the same point.
 """
 
 from __future__ import annotations
@@ -49,12 +57,18 @@ def options(constraints) -> dict:
     return dict(getattr(constraints, "legalize", None) or {})
 
 
-def legalize_kwargs(constraints) -> dict:
+def legalize_kwargs(constraints, graph=None) -> dict:
     """Keyword arguments of :func:`pnr.place.legalize.legalize` for the declared
-    options; empty without a ``legalize:`` section (or with only default values), so
-    every other design calls the legalizer exactly as before."""
+    options and pad-anchored hard groups; empty without a ``legalize:`` section (or with
+    only default values) and without an ``anchor_pad``, so every other design calls the
+    legalizer exactly as before. With ``graph`` each anchor pad is checked to exist."""
     opts = options(constraints)
     out = {}
+    edges = hard_pad_group_edges(constraints)
+    if edges:
+        if graph is not None:
+            check_anchor_pads(graph, edges)
+        out["pad_group_edges"] = edges
     if opts.get("outline") == "exact":
         out["outline"] = "exact"
     if opts.get("order") == "scarcity":
@@ -101,6 +115,80 @@ def reaches(comp, slot, limits, box, rules, width: float, height: float) -> bool
     return not (
         x1 + grow < slot[0] or slot[1] < x0 - grow or y1 + grow < slot[2] or slot[3] < y0 - grow
     )
+
+
+def hard_pad_group_edges(constraints):
+    """``[(anchor, pad, member, radius_mm)]`` of the hard groups measured from a pad of
+    their anchor (``anchor_pad``): each member's centre lies within ``radius_mm`` of that
+    pad's centre. They are not in :func:`pnr.place.geometry.hard_group_edges`."""
+    from pnr.constraints import Enforcement
+
+    return [
+        (con.params["anchor"], con.params["anchor_pad"], ref, float(con.params["radius_mm"]))
+        for con in constraints.constraints
+        if con.kind == "group"
+        and con.enforcement is Enforcement.HARD
+        and con.params.get("anchor_pad") is not None
+        for ref in con.refs
+        if ref != con.params["anchor"]
+    ]
+
+
+def pad_offset(comp, pad: str, rot: Optional[float] = None) -> Tuple[float, float]:
+    """The board-frame offset from ``comp.pos`` of the centre of ``comp``'s first pad
+    named ``pad``, at ``rot`` (default ``comp.rot``) on its current side (pad offsets
+    are mirrored with the part, :func:`pnr.place.geometry.set_component_side`)."""
+    from .regions import rotate_point
+
+    for p in comp.pads:
+        if p.name == pad:
+            return rotate_point(p.offset[0], p.offset[1], comp.rot if rot is None else rot)
+    raise ValueError("group anchor_pad: %s has no pad %r" % (comp.ref, pad))
+
+
+def pad_point(comp, pad: str) -> Tuple[float, float]:
+    """The board position of ``comp``'s pad ``pad`` (:func:`pad_offset`)."""
+    dx, dy = pad_offset(comp, pad)
+    return (comp.pos[0] + dx, comp.pos[1] + dy)
+
+
+def check_anchor_pads(graph, edges) -> None:
+    """Refuse, by name, an ``anchor_pad`` its anchor does not have."""
+    by_ref = {c.ref: c for c in graph.components}
+    for anchor, pad, _member, _radius in edges:
+        if anchor in by_ref:
+            pad_offset(by_ref[anchor], pad)
+
+
+def pad_group_limits(ref, edges, placed, comp) -> list:
+    """The hard discs ``(x, y, radius)`` on ``comp``'s centre (``ref``, at its current
+    rotation and side) from the pad-anchored groups ``edges`` whose other end is in
+    ``placed`` ({ref: component}): a member's centre within the radius of its anchor's
+    placed pad; an anchor's centre within the radius of the placed member less its own
+    pad offset, which is exact at the rotation tried."""
+    out = []
+    for anchor, pad, member, radius in edges:
+        if member == ref and anchor in placed:
+            out.append((*pad_point(placed[anchor], pad), radius))
+        elif anchor == ref and member in placed:
+            dx, dy = pad_offset(comp, pad)
+            mx, my = placed[member].pos
+            out.append((mx - dx, my - dy, radius))
+    return out
+
+
+def pad_group_offenders(graph, constraints, edges=None) -> list:
+    """Members of pad-anchored hard groups whose centre is farther than the radius from
+    their anchor's pad (the hard check of ``anchor_pad``)."""
+    import math
+
+    edges = hard_pad_group_edges(constraints) if edges is None else edges
+    out = set()
+    for anchor, pad, member, radius in edges:
+        point = pad_point(graph.component(anchor), pad)
+        if math.dist(point, graph.component(member).pos) > radius + 1e-9:
+            out.add(member)
+    return sorted(out)
 
 
 def outline_box(comp, width: float, height: float) -> Box:

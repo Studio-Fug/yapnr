@@ -235,6 +235,123 @@ class LookaheadTest(unittest.TestCase):
         self.assertTrue(legal_options.reaches(c, (15, 16, 0, 1), [], None, None, 20, 10))
 
 
+def pad_board(anchor_pos=(10.0, 5.0), member_pos=(18.0, 1.0)):
+    """L2 (5 x 3 courtyard, pads 1 and 2 at x -2 / +2, the switch node pad 2 offset in y
+    too) and the snubber C1 (1 x 0.5), on a 20 x 10 board."""
+    pads = [Pad("1", "VIN", (-2.0, 0.0), (1.0, 2.0)), Pad("2", "SW", (2.0, 0.5), (1.0, 2.0))]
+    return board(
+        [
+            part("L2", anchor_pos, (5.0, 3.0), pads=pads),
+            part("C1", member_pos, (1.0, 0.5), pads=[Pad("1", "SW", (-0.4, 0), (0.4, 0.4))]),
+        ],
+        20,
+        10,
+    )
+
+
+def pad_spec(fixed=None, **group):
+    spec = dict(
+        schema="v0",
+        board=dict(outline=dict(w=20, h=10), default_clearance_mm=0.2),
+        group=[dict(dict(members=["C1"], anchor="L2", radius_mm=1.6, hard=True), **group)],
+    )
+    if fixed:
+        spec["fixed"] = fixed
+    return spec
+
+
+class AnchorPadTest(unittest.TestCase):
+    def compiled(self, g, spec):
+        return compile_constraints(spec, [c.ref for c in g.components])
+
+    def test_parse(self):
+        from pnr.place.geometry import hard_group_edges
+
+        g = pad_board()
+        c = self.compiled(g, pad_spec(anchor_pad=2))
+        self.assertEqual(c.constraints[0].params["anchor_pad"], "2")
+        self.assertEqual(hard_group_edges(c), [])
+        self.assertEqual(legal_options.hard_pad_group_edges(c), [("L2", "2", "C1", 1.6)])
+        # Without it the params keep their keys (byte-identical compiled constraints).
+        c = self.compiled(g, pad_spec())
+        self.assertEqual(sorted(c.constraints[0].params), ["anchor", "radius_mm"])
+        self.assertEqual(hard_group_edges(c), [("L2", "C1", 1.6)])
+        for bad in (dict(anchor_pad="2", hard=False), dict(anchor_pad=""), dict(anchor_pad=True)):
+            with self.assertRaises(ConstraintError, msg=str(bad)):
+                self.compiled(g, pad_spec(**bad))
+        with self.assertRaises(ValueError):
+            legalize_constraint_kwargs(g, self.compiled(g, pad_spec(anchor_pad="9")), {})
+
+    def test_pad_point_turns_and_mirrors(self):
+        from pnr.place.geometry import set_component_side
+
+        g = pad_board()
+        anchor = g.component("L2")
+        self.assertEqual(legal_options.pad_point(anchor, "2"), (12.0, 5.5))
+        anchor.rot = 90.0
+        self.assertEqual(legal_options.pad_point(anchor, "2"), (9.5, 7.0))
+        set_component_side(anchor, "bottom")  # pads mirror in y, as KiCad's Flip
+        self.assertEqual(legal_options.pad_point(anchor, "2"), (10.5, 7.0))
+
+    def legal(self, spec, g=None):
+        from pnr.place.geometry import resolve_fixed_poses
+        from pnr.place.metrics import hard_violations
+
+        g = g or pad_board()
+        c = self.compiled(g, spec)
+        poses = resolve_fixed_poses(g, c)
+        kw = legalize_constraint_kwargs(g, c, poses)
+        placed = legalize(g, 20, 10, clearance=0.2, grid_mm=0.25, allow_rotation=True, **kw)
+        return placed, c, hard_violations(placed, c)
+
+    def test_member_at_the_pad_of_a_fixed_anchor(self):
+        fixed = {"L2": dict(at=[10, 5], rot=90, side="top")}
+        placed, c, bad = self.legal(pad_spec(fixed, anchor_pad="2"))
+        self.assertFalse(any(bad.values()), bad)
+        pad = legal_options.pad_point(placed.component("L2"), "2")
+        self.assertLessEqual(math.dist(pad, placed.component("C1").pos), 1.6 + 1e-9)
+        # Centre-anchored at the same radius, no slot clears L2's courtyard.
+        from pnr.place.legalize import LegalizationError
+
+        with self.assertRaises(LegalizationError):
+            self.legal(pad_spec(fixed))
+
+    def test_movable_anchor_and_movable_member(self):
+        placed, c, bad = self.legal(pad_spec(anchor_pad="2"))
+        self.assertFalse(any(bad.values()), bad)
+        pad = legal_options.pad_point(placed.component("L2"), "2")
+        self.assertLessEqual(math.dist(pad, placed.component("C1").pos), 1.6 + 1e-9)
+
+    def test_fixed_member_bounds_the_anchor(self):
+        # The reciprocal disc: the anchor's pad, at the rotation tried, near the member.
+        fixed = {"C1": dict(at=[15, 6], rot=0, side="top")}
+        placed, c, bad = self.legal(pad_spec(fixed, anchor_pad="2"))
+        self.assertFalse(any(bad.values()), bad)
+        pad = legal_options.pad_point(placed.component("L2"), "2")
+        self.assertLessEqual(math.dist(pad, (15, 6)), 1.6 + 1e-9)
+
+    def test_hard_check_and_checkers(self):
+        from pnr.place.metrics import hard_violations, translation_checker
+
+        fixed = {"L2": dict(at=[10, 5], rot=0, side="top")}
+        g = pad_board(member_pos=(13.5, 5.5))  # 1.5 mm from pad 2, 3.54 mm from the centre
+        c = self.compiled(g, pad_spec(fixed, anchor_pad="2"))
+        self.assertEqual(hard_violations(g, c)["group_outside"], [])
+        self.assertEqual(legal_options.pad_group_offenders(g, c), [])
+        check = translation_checker(g, c)
+        member = g.component("C1")
+        member.pos = (13.4, 5.0)  # 1.49 mm from the pad
+        self.assertTrue(check(member))
+        member.pos = (16.0, 5.5)  # 4 mm from the pad
+        self.assertFalse(check(member))
+        self.assertEqual(hard_violations(g, c)["group_outside"], ["C1"])
+        # The same board centre-anchored: 3.54 mm from L2's centre is outside 1.6 mm.
+        member.pos = (13.5, 5.5)
+        self.assertEqual(
+            hard_violations(g, self.compiled(g, pad_spec(fixed)))["group_outside"], ["C1"]
+        )
+
+
 class PlacerTest(unittest.TestCase):
     def test_placer_passes_the_option(self):
         pads = [Pad("1", "A", (-0.5, 0), (0.5, 0.5)), Pad("2", "B", (0.5, 0), (0.5, 0.5))]

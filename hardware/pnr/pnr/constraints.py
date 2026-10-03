@@ -387,6 +387,15 @@ def _parse_legalize(raw) -> Optional[Dict]:
     return out
 
 
+def _anchor_pad(value, hard: bool) -> str:
+    """A hard group's ``anchor_pad``: the anchor's pad name (number or string)."""
+    if not hard:
+        raise ConstraintError("group.anchor_pad requires hard: true")
+    if isinstance(value, bool) or not isinstance(value, (str, int)) or str(value) == "":
+        raise ConstraintError("group.anchor_pad must be a pad name")
+    return str(value)
+
+
 def _expand_nets(patterns: Iterable[str], net_names: Sequence[str]) -> Tuple[str, ...]:
     """Expand net-name literals/globs against the real netlist (order-stable)."""
     resolved: List[str] = []
@@ -1253,12 +1262,16 @@ def compile_constraints(
                 raise ConstraintError("hard group requires a known anchor")
         if anchor is not None and anchor not in known_refs:
             warnings.append(f"group.anchor: unknown component ref {anchor!r}")
+        params = {"anchor": anchor, "radius_mm": entry.get("radius_mm")}
+        if entry.get("anchor_pad") is not None:
+            # A hard group measured from one pad of its anchor (pnr.place.legal_options).
+            params["anchor_pad"] = _anchor_pad(entry["anchor_pad"], hard)
         constraints.append(
             Constraint(
                 kind="group",
                 enforcement=Enforcement.HARD if hard else Enforcement.SOFT,
                 refs=refs,
-                params={"anchor": anchor, "radius_mm": entry.get("radius_mm")},
+                params=params,
                 weight=float(entry.get("weight", DEFAULT_WEIGHTS["group"])),
             )
         )

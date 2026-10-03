@@ -314,12 +314,30 @@ Pulls members within `radius_mm` of an `anchor`, so a functional block (a
 switching regulator and its inductor + caps, a crystal and its load caps) lands
 together — shorter loops, less noise.
 
-| Key         | Meaning                                            |
-| ----------- | -------------------------------------------------- |
-| `members`   | Refs/globs to cluster.                             |
-| `anchor`    | The ref they cluster around (usually the main IC). |
-| `radius_mm` | Target radius (default ~5 mm).                     |
-| `weight`    | Penalty weight (default 2.0).                      |
+| Key          | Meaning                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------ |
+| `members`    | Refs/globs to cluster.                                                                     |
+| `anchor`     | The ref they cluster around (usually the main IC).                                         |
+| `radius_mm`  | Target radius (default ~5 mm).                                                             |
+| `weight`     | Penalty weight (default 2.0).                                                              |
+| `hard`       | `true`: each member's centre must lie within `radius_mm` (a placement outside is illegal). |
+| `anchor_pad` | With `hard`: measure from the centre of this pad of the anchor, not from its origin.       |
+
+A hard group measures each member's centre from the anchor's origin. For a part that
+must sit at one pad of a bigger one (a snubber at an inductor's switch-node pad, a
+decoupling capacitor at its ball), the origin can be several millimetres from the pad
+that matters, so `anchor_pad` measures from that pad instead, at the anchor's pose,
+rotation and side (a bottom-side anchor's pads are mirrored with it). The legalizer
+places the anchor before its members and bounds each member by a disc about the pad;
+the hard check (`group_outside`) and the benchmark checker's `proximity` check
+(`anchor_pad`) measure the same point. A pad name the anchor does not have is
+refused by name. The soft pull of global placement still aims at the anchor's
+origin; the legalizer applies the pad.
+
+```yaml
+group:
+  - { members: [C31], anchor: L2, anchor_pad: "2", radius_mm: 2.5, hard: true }
+```
 
 ### `line_group` — hold parts in one rigid line (hard)
 

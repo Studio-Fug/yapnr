@@ -22,11 +22,15 @@ from pnr.graph import BoardGraph, Component
 
 
 def hard_group_edges(constraints):
-    """Relative distance bounds, independent of absolute XY anchoring."""
+    """Relative distance bounds, independent of absolute XY anchoring (centre to centre;
+    a group measured from a pad of its anchor is
+    :func:`pnr.place.legal_options.hard_pad_group_edges`)."""
     return [
         (con.params["anchor"], ref, con.params["radius_mm"])
         for con in constraints.constraints
-        if con.kind == "group" and con.enforcement == Enforcement.HARD
+        if con.kind == "group"
+        and con.enforcement == Enforcement.HARD
+        and con.params.get("anchor_pad") is None
         for ref in con.refs
         if ref != con.params["anchor"]
     ]

@@ -424,7 +424,7 @@ def choose(backend, dtype, spec_backend: str, spec_dtype, *, exact: bool = False
     ``YAPNR_RF_DTYPE``, then the spec. An exact problem runs numpy float64, or native float64
     (bit-identical) when the environment asks for native. Native chosen by the environment
     alone, without a usable library, runs the spec's own backend and precision (not numpy
-    float64, which is 6 times slower than the specs' torch float32), saying so once; or raises
+    float64, 4-7 times slower than the specs' torch float32), saying so once; or raises
     with ``YAPNR_RF_REQUIRE_NATIVE``."""
     env_backend = os.environ.get(ENV_BACKEND, "").strip().lower() or None
     env_dtype = _env_dtype()

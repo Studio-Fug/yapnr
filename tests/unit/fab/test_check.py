@@ -102,6 +102,26 @@ class EvaluateTest(unittest.TestCase):
         findings = self.run_check(self.facts(layers=2), profile="oshpark-4l")
         self.assertEqual(self.codes(findings, "error"), ["FAB-LAYERS"])
 
+    def test_fab_placeholder(self):
+        """A footprint with a yapnr_placeholder field (an empty optimizer window) is an error."""
+        facts = self.facts(layers=4)
+        self.assertEqual(self.codes(self.run_check(facts), "error"), [])
+        facts.footprints.append(
+            board.Footprint(
+                reference="PHD1",
+                value="Placeholder_D1",
+                lib_id="Placeholder_D1",
+                layer="F.Cu",
+                at=(0.0, 0.0, 0.0),
+                properties={"yapnr_placeholder": "D1: the optimizer's copper goes here"},
+                attrs=["board_only"],
+                description="",
+            )
+        )
+        findings = self.run_check(facts)
+        self.assertEqual(self.codes(findings, "error"), ["FAB-PLACEHOLDER"])
+        self.assertIn("PHD1", findings[0].message)
+
     def test_fab_outline_panel_and_missing(self):
         findings = self.run_check(self.facts(layers=4, second_outline=True))
         self.assertEqual(self.codes(findings), ["FAB-OUTLINE"])

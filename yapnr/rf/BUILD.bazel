@@ -2,6 +2,7 @@
 
 load("@rules_python//python:defs.bzl", "py_binary", "py_library")
 load("@yapnr_pypi//:requirements.bzl", "requirement")
+load("//tools/bazel:native_cc.bzl", "native_shared_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -55,4 +56,26 @@ py_binary(
     srcs = ["animate.py"],
     main = "animate.py",
     deps = [":animate_lib"],
+)
+
+# Optional native FDTD stepper (yapnr.rf.fdtd.native_kernel, backend "native"): blocks of Yee
+# steps in C on a thread pool, loaded with ctypes. No floating-point contraction, so float64
+# runs are bit-identical to the numpy reference. Nothing depends on it; without it backend
+# "native" runs numpy. Manual: `bazel build //...` and `bazel test //...` need no C toolchain
+# (the unit test compiles the source with a host compiler when there is one); the
+# //tests/unit/rf:*_native targets run on this library.
+native_shared_library(
+    name = "libyapnr_fdtd.so",
+    srcs = [
+        "fdtd/native/fdtd.c",
+        "fdtd/native/fdtd_kernels.h",
+    ],
+    copts = [
+        "-O3",
+        "-std=c11",
+        "-ffp-contract=off",
+        "-fno-fast-math",
+    ],
+    linkopts = ["-pthread"],
+    tags = ["manual"],
 )

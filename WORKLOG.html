@@ -218,6 +218,7 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/part-cache.html">The part cache</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/fab-and-ordering.html">Fab bundles and staged orders</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/releases.html">Releases and versioning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/rf-fab-coupons.html">RF fab-model test coupons</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/cloud-experiments.html">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Project</span></p>
@@ -230,6 +231,7 @@
 <li class="toctree-l1"><a class="reference internal" href="docs/design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/fea-integration.html">Design: thermal and electromagnetic field solvers (FEA) in yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docs/design/rf-fab-coupons.html">Design: fab-model test coupons</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="docs/history/import-manifest.html">History import manifest</a></li>
@@ -373,6 +375,22 @@ edge comparison replays its pool’s eight starts; GIF palette and per-file rend
 <code class="docutils literal notranslate"><span class="pre">.yapnr/ladder/showcase-2</span></code> (engine <code class="docutils literal notranslate"><span class="pre">c4db5fb</span></code>): the five cases’ <code class="docutils literal notranslate"><span class="pre">placed.json</span></code>, <code class="docutils literal notranslate"><span class="pre">routes.json</span></code> and
 trace digests are identical to the first run; all pass. Next: the owner’s review of the
 decisions in <code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code> and the pull request.</p></li>
+<li><p><strong>RF fab-model coupons</strong> (#32, branch <code class="docutils literal notranslate"><span class="pre">claude/rf-coupons</span></code>; design
+<code class="docutils literal notranslate"><span class="pre">docs/design/rf-fab-coupons.md</span></code>, guide <code class="docutils literal notranslate"><span class="pre">docs/rf-fab-coupons.md</span></code>): <code class="docutils literal notranslate"><span class="pre">yapnr/rf/coupons</span></code> generates
+boards A (JLC04161H-7628) and B (JLC06161H-7628), DRC-clean, with expected S-parameters and fab
+zips under <code class="docutils literal notranslate"><span class="pre">examples/rf-coupons/</span></code>, and extracts the fab parameters from a VNA session
+(<code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.rf.coupons</span> <span class="pre">extract</span></code>): multiline TRL, a joint fit with connection nuisances
+and a parametric bootstrap. Synthetic recovery passes in CI. Next: the owner’s decisions of
+design §14 (connector, VNA, scope), checking the SMA footprint and JLC’s edge clearance, and
+the order (owner only).</p></li>
+<li><p><strong>RF coupons, adversarial review</strong> (#32): the boards’ TRL sticks carried no stick id (fixed, all
+labels now <code class="docutils literal notranslate"><span class="pre">A05</span> <span class="pre">P</span> <span class="pre">L40</span></code>); mouse-bite tabs widened to JLC’s 5 mm minimum; multiline TRL dropped
+nearly degenerate line pairs, whose swapped roots spiked the error boxes and failed a quarter of
+nominal verification lines; a fit stuck at the 2D-table edge is now a reported problem; board B
+alone does not split the core’s and the 7628’s εr (use board A’s fit as <code class="docutils literal notranslate"><span class="pre">--prior</span></code>). Impedances
+re-checked with an independent finite-volume solver (within 0.1 Ω) and IPC-2141A (stripline
+50.5 Ω); recovery re-run with another seed, a wrong nominal stackup and a worse lab. Open: the
+SMA part, the panel fee, a mask-off stick on board B.</p></li>
 </ul>
 </section>
 <section id="next">

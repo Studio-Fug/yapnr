@@ -32,6 +32,9 @@ command line currently offers `yapnr --version` and a `yapnr doctor` stub; the l
   JLCPCB's or PCBWay's rules, build the files to upload and an order card, and open the vendor's
   page. yapnr never uploads, orders or pays.
 - [Releases and versioning](releases.md): version numbers, image tags, what a release publishes.
+- [RF fab-model test coupons](rf-fab-coupons.md): coupon boards that measure the fab's stackup
+  (εr, loss, heights, copper, etch, mask), and the extraction that turns VNA data into a fitted
+  stackup with uncertainties.
 - [Cloud and HPC experiments](cloud-experiments.md): `yapnr exp` campaigns on a local pool, Google
   Cloud Batch (Spot VMs) or a Slurm allocation, with cost guards; the owner's bootstrap runbook.
 - [Regression ladder](regression-ladder.md): eight boards of rising complexity, up to a TLC555 +
@@ -71,6 +74,7 @@ frontends/atopile
 part-cache
 fab-and-ordering
 releases
+rf-fab-coupons
 cloud-experiments
 ```
 
@@ -86,6 +90,7 @@ decisions
 design/animations
 design/constraint-and-hier-animations
 design/fea-integration
+design/rf-fab-coupons
 design/cloud-experiments
 design/fab-and-ordering
 history/import-manifest

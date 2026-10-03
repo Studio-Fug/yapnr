@@ -234,5 +234,31 @@ class RfTest(unittest.TestCase):
         self.assertEqual(task["command"][:4], ["${PYTHON}", "-m", "yapnr.rf.cases", "run"])
 
 
+class LadderOptionsTest(unittest.TestCase):
+    def test_compact_shrink_gloss_and_hard_reach_the_runner(self):
+        from yapnr.exp.kinds import ladder
+
+        args = ladder.runner_arguments(
+            dict(compact=True, compact_off=["RANK"], shrink=True, gloss=True, hard=True)
+        )
+        for flag in ("--compact", "--shrink", "--gloss", "--hard"):
+            self.assertIn(flag, args)
+        self.assertEqual(args[args.index("--compact-off") + 1], "RANK")
+        self.assertNotIn("--compact", ladder.runner_arguments({}))
+        kind = kinds.get("ladder-cell")
+        campaign = {
+            "schema": spec.CAMPAIGN_SCHEMA,
+            "kind": "ladder-cell",
+            "matrix": {"case": ["01-connector-led-2"], "seed": [0], "config": ["off", "on"]},
+            "configs": {"off": {}, "on": {"compact": True, "compact_off": ["GP"]}},
+        }
+        self.assertEqual(kind.check(campaign), [])
+        campaign["configs"]["bad"] = {"compact_off": ["SPREAD"]}
+        campaign["matrix"]["config"].append("bad")
+        errors = kind.check(campaign)
+        self.assertTrue(any("compact_off names" in e for e in errors), errors)
+        self.assertTrue(any("compact_off needs compact" in e for e in errors), errors)
+
+
 if __name__ == "__main__":
     unittest.main()

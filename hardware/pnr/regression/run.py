@@ -120,13 +120,60 @@ def acceptance(pnr, audit, drc):
     return reasons
 
 
-def constraint_reasons(spec, placed):
+def _quarter(x, y, rot):
+    """``(x, y)`` turned ``rot`` degrees CCW (a quarter turn, exactly)."""
+    return ((x, y), (-y, x), (-x, -y), (y, -x))[int(round(rot / 90.0)) % 4]
+
+
+def body_extent(comp, use_body=True):
+    """``(x0, y0, x1, y1)`` of a placed.json component's box at its pose: its off-centre
+    ``body`` (``use_body``, when it has one), else the ``courtyard`` centred on ``pos``."""
+    x, y = comp["pos"]
+    body = comp.get("body") if use_body else None
+    if not body:
+        w, h = comp["courtyard"]
+        body = (-w / 2.0, -h / 2.0, w / 2.0, h / 2.0)
+    corners = [
+        _quarter(px, py, comp["rot"]) for px in (body[0], body[2]) for py in (body[1], body[3])
+    ]
+    xs, ys = [c[0] for c in corners], [c[1] for c in corners]
+    return (x + min(xs), y + min(ys), x + max(xs), y + max(ys))
+
+
+def compactness(placed):
+    """Stdlib measure of a placed.json (every arm alike, the engine's
+    pnr.place.compact.metrics): the bounding box of the parts' body boxes, their summed
+    area, utilization (area / bbox), occupancy (area / outline) and the outline area."""
+    boxes = [body_extent(c) for c in placed["components"]]
+    outline = placed.get("outline") or {}
+    board = float(outline.get("width") or 0.0) * float(outline.get("height") or 0.0)
+    if not boxes:
+        return None
+    bw = max(b[2] for b in boxes) - min(b[0] for b in boxes)
+    bh = max(b[3] for b in boxes) - min(b[1] for b in boxes)
+    area = sum((b[2] - b[0]) * (b[3] - b[1]) for b in boxes)
+    return dict(
+        bbox_mm2=round(bw * bh, 3),
+        bbox_mm=[round(bw, 3), round(bh, 3)],
+        area_mm2=round(area, 3),
+        utilization=round(area / (bw * bh), 3) if bw * bh > 0 else 0.0,
+        occupancy=round(area / board, 3) if board > 0 else None,
+        outline_mm2=round(board, 3),
+    )
+
+
+def constraint_reasons(spec, placed, use_body=False):
     """Independent audit (stdlib, not the engine's metrics) of the showcase constraints
     on ``placed`` (placed.json): each line group collinear at its pitch or gap, in member
-    order, with its declared rotation, and each hard edge part within its tolerance.
+    order, with its declared rotation, and each hard edge part within its tolerance of
+    placed.json's outline (the shrunk one under ``--shrink``), measured on its body box
+    with ``use_body`` (``--compact``: the placer holds off-centre bodies).
     Returns ``(checked, findings)``."""
     cons = spec["constraints"]
     width, height = cons["board"]["outline"]["w"], cons["board"]["outline"]["h"]
+    outline = placed.get("outline") or {}
+    if outline.get("width") and outline.get("height"):
+        width, height = outline["width"], outline["height"]
     comps = {c["ref"]: c for c in placed["components"]}
     checked, findings = [], []
 
@@ -164,13 +211,8 @@ def constraint_reasons(spec, placed):
             continue
         checked.append("edge_align " + ref)
         comp = comps[ref]
-        w, h = comp["courtyard"]
-        if int(round(comp["rot"] / 90.0)) % 2:
-            w, h = h, w
-        x, y = comp["pos"]
-        distance = dict(
-            south=y - h / 2, north=height - y - h / 2, west=x - w / 2, east=width - x - w / 2
-        )[rule["edge"]]
+        x0, y0, x1, y1 = body_extent(comp, use_body)
+        distance = dict(south=y0, north=height - y1, west=x0, east=width - x1)[rule["edge"]]
         if distance > rule.get("tolerance_mm", 1.0) + 1e-3:
             findings.append("%s: %.3f mm from the %s edge" % (ref, distance, rule["edge"]))
     return checked, findings
@@ -179,6 +221,25 @@ def constraint_reasons(spec, placed):
 # The vendor profile data pnr.fab_profile resolves data profiles from (yapnr.fab.capability), frozen
 # with the engine so a run under oshpark-4l or jlc-4l uses the data of its own checkout.
 FAB_DATA_SOURCES = ("yapnr/__init__.py", "yapnr/fab/__init__.py", "yapnr/fab/capability.py")
+
+# The parts of PNR_COMPACT (pnr.compact_flags.PARTS) --compact-off may drop.
+COMPACT_PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD")
+
+
+def compact_environment(compact, compact_off=(), shrink=False):
+    """The PNR_COMPACT / PNR_SHRINK variables of ``--compact``, ``--compact-off`` and
+    ``--shrink`` (set after the ambient PNR_* variables are stripped, so provenance
+    records them); empty when none is given."""
+    if compact_off and not compact:
+        raise ValueError("--compact-off needs --compact")
+    env = {}
+    if compact:
+        env["PNR_COMPACT"] = "1"
+        for part in sorted(set(compact_off)):
+            env["PNR_COMPACT_" + part] = "0"
+    if shrink:
+        env["PNR_SHRINK"] = "1"
+    return env
 
 
 def fab_data_inputs(repo):
@@ -638,6 +699,30 @@ def parser():
         ),
     )
     ap.add_argument(
+        "--compact",
+        action="store_true",
+        help=(
+            "PNR_COMPACT=1: compact placement (spread 1.0, clustered starts, the courtyard gap "
+            "and copper margins in the legalizer, offset courtyards, a compactness tie-break)"
+        ),
+    )
+    ap.add_argument(
+        "--compact-off",
+        action="append",
+        default=[],
+        choices=COMPACT_PARTS,
+        metavar="PART",
+        help="With --compact: drop one part, PNR_COMPACT_<PART>=0 (repeatable; ablations)",
+    )
+    ap.add_argument(
+        "--shrink",
+        action="store_true",
+        help=(
+            "PNR_SHRINK=1: the flat driver searches a smaller outline inside the design's "
+            "(the board shrinks); hard rungs are exempt"
+        ),
+    )
+    ap.add_argument(
         "--fab-profile",
         choices=fab_profiles(),
         default=DEFAULT_FAB_PROFILE,
@@ -760,6 +845,10 @@ def main():
         env["PNR_DETAIL_PITCH_MM"] = str(args.detail_pitch_mm)
     if args.batched_wirelength:
         env["PNR_BATCHED_WIRELENGTH"] = "1"
+    try:
+        env.update(compact_environment(args.compact, args.compact_off, args.shrink))
+    except ValueError as error:
+        raise SystemExit(str(error))
     env["PNR_FAB_PROFILE"] = (
         args.fab_profile
     )  # routed and judged under one profile (route_case.py, writeback)
@@ -885,10 +974,15 @@ def main():
                 driver = {"hier": "hier_case.py", "mc": "mc_case.py"}.get(
                     spec.get("driver"), "route_case.py"
                 )
+                extra = dict(native.environment()) if native else {}
+                if args.shrink and spec.get("tier") == "hard":
+                    # A hard rung's outline is part of its contract: never shrunk.
+                    extra["PNR_SHRINK"] = "0"
+                    result["shrink_exempt"] = True
                 run(
                     "place-route",
                     [args.python, frozen_here / driver, root, seed, args.rounds],
-                    native.environment() if native else None,
+                    extra or None,
                 )
                 board = root / "routed.kicad_pcb"
                 run(
@@ -1007,12 +1101,16 @@ def main():
                     result["reasons"].append("gloss_error")
                 if args.gloss_measure:
                     result["gloss_measure"] = gloss_measure(root, board, args, run, glossing)
+                placed_doc = json.loads((root / "placed.json").read_text())
+                result["compactness"] = compactness(placed_doc)
                 constraints = spec["constraints"]
                 if constraints.get("line_group") or any(
                     rule.get("hard") for rule in (constraints.get("edge_align") or {}).values()
                 ):
                     checked, findings = constraint_reasons(
-                        spec, json.loads((root / "placed.json").read_text())
+                        spec,
+                        placed_doc,
+                        use_body=args.compact and "COURTYARD" not in args.compact_off,
                     )
                     result["constraint_audit"] = dict(checked=checked, findings=findings)
                     if findings:

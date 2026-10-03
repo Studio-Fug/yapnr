@@ -86,6 +86,31 @@ def _rotate(x, y, degrees):
     return x * c - y * s, x * s + y * c
 
 
+def courtyard_rect(comp, pose):
+    """``(cx, cy, w, h)`` (um) of a header component's courtyard under ``pose``: the
+    ``courtyard`` centred on the pose, or (PNR_COMPACT) its off-centre ``body`` box,
+    mirrored when the pose's side differs from the header's and turned with the part."""
+    x, y, rot, side = pose
+    body = comp.get("body")
+    if not body:
+        w, h = comp["courtyard"]
+        if int(round(rot / 90.0)) % 2 == 1:
+            w, h = h, w
+        return x, y, w, h
+    x0, y0, x1, y1 = body
+    if side != comp["side"]:
+        y0, y1 = -y1, -y0
+    q = int(round(rot / 90.0)) % 4
+    pts = [((px, py), (-py, px), (-px, -py), (py, -px))[q] for px in (x0, x1) for py in (y0, y1)]
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    return (
+        x + (min(xs) + max(xs)) / 2.0,
+        y + (min(ys) + max(ys)) / 2.0,
+        max(xs) - min(xs),
+        max(ys) - min(ys),
+    )
+
+
 class Renderer:
     """Draws :class:`pnr.animate.timeline.View` frames of one trace header."""
 
@@ -388,11 +413,7 @@ class Renderer:
             )
 
     def _courtyard_box(self, tf, ref, pose):
-        comp = self.components[ref]
-        x, y, rot, _side = pose
-        w, h = comp["courtyard"]
-        if int(round(rot / 90.0)) % 2 == 1:
-            w, h = h, w
+        x, y, w, h = courtyard_rect(self.components[ref], pose)
         a, b = tf(x - w / 2.0, y + h / 2.0), tf(x + w / 2.0, y - h / 2.0)
         return a + b
 

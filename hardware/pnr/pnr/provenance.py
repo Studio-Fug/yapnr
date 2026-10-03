@@ -197,6 +197,22 @@ class Trace:
         self.results = []
         for lane in sorted(self.lanes, key=lambda n: (n != "engine", n)):
             self._index(lane, self.lanes[lane])
+        shrunk = self.shrink_choice()
+        if shrunk is not None and self.header:
+            # PNR_SHRINK: the board is the chosen run's outline, not the envelope.
+            outline = (self.scopes[shrunk].meta or {}).get("outline")
+            if outline and self.header.get("outline"):
+                self.header = dict(
+                    self.header, outline=dict(self.header["outline"], w=outline[0], h=outline[1])
+                )
+
+    def shrink_choice(self):
+        """The scope id of the run a PNR_SHRINK search chose (its ``shrink`` selection),
+        or None without one."""
+        for event in reversed(self.selects):
+            if event.get("id") == "shrink" and isinstance(event.get("chosen"), str):
+                return event["chosen"] if event["chosen"] in self.scopes else None
+        return None
 
     def _index(self, lane, events):
         for event in events:
@@ -331,6 +347,10 @@ def from_trace(trace):
                 dag.derive(source, scope.id)
     # Rounds: attempts (first legal wins) or the pool's choice, then the round's route.
     rounds = sorted(trace.of_type("round"), key=lambda s: s.begin)
+    shrunk = trace.shrink_choice() if hasattr(trace, "shrink_choice") else None
+    if shrunk is not None:
+        # PNR_SHRINK: only the chosen outline's run (its scope shrink-NN) leads to the board.
+        rounds = [s for s in rounds if s.id.startswith(shrunk + "/")]
     previous = None
     for scope in rounds:
         route = next(
@@ -380,6 +400,8 @@ def from_trace(trace):
     # The best round, the native stages and the final board.
     head = previous
     best = [e for e in trace.selects if e["id"].rsplit("/", 1)[-1] == "best-round"]
+    if shrunk is not None:
+        best = [e for e in best if e["id"].startswith(shrunk + "/")]
     if best and best[-1]["id"] in dag.nodes and dag.nodes[best[-1]["id"]].chosen:
         head = best[-1]["id"]
     for event in trace.boards:

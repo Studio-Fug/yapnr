@@ -28,11 +28,11 @@ returned. Options are costed before they are checked, cheapest first, and one th
 cannot come within :data:`PRUNE` temperatures of staying is never checked (it would
 practically never be drawn). Legality is :func:`pnr.place.metrics.pose_checker` with
 the legalizer's clearance, spread and per-part ``inflation``, so a move keeps the
-same slack as a legalized slot. With the legalizer's ``channel_model``
-(:class:`pnr.place.channels.ChannelModel`) a drawn move is also charged the
-escape-channel shortage it adds between the parts it moves and their neighbours, at
-the legalizer's weight (:data:`CHANNEL_WEIGHT` mm per mm² of squared shortage): a
-move that adds shortage is made only when its own gain pays for it. Without
+same slack as a legalized slot. The legalizer's escape-channel model
+(:class:`pnr.place.channels.ChannelModel`) is not charged here: it scores only
+same-side pad rows, so charging it favours parking parts back to back on the other
+side, where vias cannot land (on the double-sided chaser rung the mandatory
+source-start finalist then failed to route on both seeds, after ~380 s each). Without
 ``allow_rotation`` (the placer's ``orient=False``) no part turns. The result is
 checked with :func:`pnr.place.metrics.hard_violations`; should a move have broken a
 rule the incremental checker does not know, the legal input is returned instead.
@@ -50,11 +50,9 @@ from pnr.graph import BoardGraph
 
 from .anneal import choose_cost
 from .geometry import (
-    Rect,
     courtyard_rect,
     edge_distance,
     outline_size,
-    pad_rects,
     pin_positions,
     resolve_fixed_poses,
     resolve_hard_rotations,
@@ -74,12 +72,6 @@ START_TEMPERATURE_MM = 1.0
 # (at zero temperature only improving candidates are checked).
 PRUNE = 5.0
 SALT = 0x51DE5
-# The legalizer's channel weight (pnr.place.legalize.legalize): the cost (mm) of one
-# mm² of squared escape-channel shortage.
-CHANNEL_WEIGHT = 25.0
-# Without a model's demand bound, neighbours farther than this (courtyard to
-# courtyard, mm) share no escape channel with a moved part.
-CHANNEL_REACH_MM = 10.0
 
 
 # Offsets (grid steps) within FLIP_RADIUS_MM, nearest first.
@@ -226,14 +218,6 @@ def _pose(comp):
     return (comp.pos, comp.rot, comp.side)
 
 
-def _extent(comp):
-    """The rectangle around ``comp``'s courtyard and pads."""
-    rects = [courtyard_rect(comp)] + [r for _, _, r in pad_rects(comp)]
-    x0, x1 = min(r.left for r in rects), max(r.right for r in rects)
-    y0, y1 = min(r.bottom for r in rects), max(r.top for r in rects)
-    return Rect((x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0)
-
-
 def _set(comp, pose):
     comp.pos, comp.rot = pose[0], pose[1]
     set_component_side(comp, pose[2])
@@ -250,7 +234,6 @@ def improve(
     budget=None,
     inflation=None,
     allow_rotation=True,
-    channel_model=None,
 ):
     """Return a copy of legal ``graph`` after the seeded flip/swap pass (see module)."""
     placed = BoardGraph.from_json(graph.to_json())
@@ -286,7 +269,7 @@ def improve(
     hot = max(1, int(0.7 * budget))
     best_total = total = cost.local(placed.components)
     best = {ref: _pose(placed.component(ref)) for ref in movable}
-    stats = dict(proposals=0, flips=0, swaps=0, budget=budget, channel_vetoes=0)
+    stats = dict(proposals=0, flips=0, swaps=0, budget=budget)
 
     def turns(comp):
         if comp.ref in rotations:
@@ -294,36 +277,6 @@ def improve(
         if not allow_rotation:
             return [comp.rot]
         return [(comp.rot + 90 * k) % 360 for k in range(4)]
-
-    # A channel between two parts is short only when the gap between their pad rows
-    # is below its demand, at most reach(a) + reach(b) (ChannelModel.reach): parts
-    # farther apart (their courtyard and pad extents) are never scored.
-    bound = getattr(channel_model, "reach", None)
-    reach = {
-        c.ref: (
-            float(bound({p.net for p in c.pads if p.net}))
-            if bound is not None
-            else CHANNEL_REACH_MM / 2
-        )
-        for c in placed.components
-    }
-    extents = {c.ref: _extent(c) for c in placed.components}
-
-    def channel_load(parts):
-        """Escape-channel shortage (``channel_model.penalty``) of ``parts`` against
-        their neighbours and among themselves."""
-        refs = {p.ref for p in parts}
-        total = 0.0
-        for i, part in enumerate(parts):
-            area = _extent(part)
-            others = [
-                o
-                for o in placed.components
-                if o.ref not in refs
-                and area.overlaps(extents[o.ref], gap=reach[part.ref] + reach[o.ref])
-            ] + list(parts[i + 1 :])
-            total += float(channel_model.penalty(part, others, None, None))
-        return total
 
     def sides_of(comp):
         return list(side_plan.options.get(comp.ref, (comp.side,)))
@@ -442,23 +395,9 @@ def improve(
         kind, moves, delta = candidates[chosen]
         if kind == "stay":
             continue
-        if channel_model is not None:
-            parts = [part for part, _ in moves]
-            starts = [_pose(part) for part in parts]
-            before = channel_load(parts)
-            for part, pose in moves:
-                _set(part, pose)
-            added = CHANNEL_WEIGHT * (channel_load(parts) - before)
-            if added > 1e-9 and delta + added > 0:
-                for part, pose in zip(parts, starts):
-                    _set(part, pose)
-                stats["channel_vetoes"] += 1
-                continue
-            delta += added
         for part, pose in moves:
             _set(part, pose)
             cost.refresh(part)
-            extents[part.ref] = _extent(part)
         cost.invalidate()
         legal.update([part.ref for part, _ in moves])
         total += delta

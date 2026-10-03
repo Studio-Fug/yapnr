@@ -339,51 +339,6 @@ class DetailMovesTest(unittest.TestCase):
         extra = 2.0 * 1.9**2 + 3.0 * (5.0 - 1.0) ** 2
         self.assertAlmostEqual(cost.local([p1]) - plain.local([p1]), extra, places=6)
 
-    def test_a_move_that_adds_channel_shortage_is_not_made(self):
-        from pnr.place.detail_moves import LAST_STATS, improve
-
-        g, c = self.crossed()
-        home = {comp.ref: comp.pos for comp in g.components}
-
-        class AwayIsCrowded:
-            """A channel model under which a part away from its slot is short of room."""
-
-            def penalty(self, comp, others, xs, ys):
-                return 0.0 if comp.pos == home[comp.ref] else 100.0
-
-        free = improve(g, c, S.plan(g, c), seed=0)
-        self.assertLess(hpwl(free), hpwl(g) - 10)
-        vetoed = improve(g, c, S.plan(g, c), seed=0, channel_model=AwayIsCrowded())
-        self.assertEqual({p.ref: p.pos for p in vetoed.components}, home)
-        self.assertGreater(LAST_STATS["channel_vetoes"], 0)
-
-    def test_channel_reach_bounds_every_demand(self):
-        import itertools
-
-        from pnr.constraints import compile_routing_rules
-        from pnr.place.channels import ChannelModel
-
-        nets = ["D+", "D-", "VCC", "GND", "A", "B", "C", "E"]
-        u1 = smd("U1", nets, (6, 4), (6, 7), pitch=1.27, rows=2)
-        u2 = smd("U2", nets[::-1], (6, 4), (13, 7), pitch=1.27, rows=2)
-        r1 = smd("R1", ["A", "B"], pos=(9.5, 3))
-        g = board(u1, u2, r1, outline=(20, 14))
-        c = rules(
-            g,
-            outline=(20, 14),
-            layers=4,
-            diff_pair=[dict(name="usb", p="D+", n="D-", width_mm=0.3, gap_mm=0.2)],
-            net_class=dict(
-                pwr=dict(nets=["VCC", "GND"], plane_layer="In1.Cu", clearance_mm=0.3),
-                wide=dict(nets=["A"], width_mm=0.5, clearance_mm=0.25),
-            ),
-        )
-        model = ChannelModel(g, compile_routing_rules(c, nets))
-        reach = {x.ref: model.reach({p.net for p in x.pads if p.net}) for x in g.components}
-        for a, b in itertools.permutations(g.components, 2):
-            for _, gap, _, required, _ in model.interactions(a, b):
-                self.assertLessEqual(float(required), reach[a.ref] + reach[b.ref] + 1e-9)
-
     def test_a_result_the_full_check_rejects_is_reverted(self):
         from pnr.place import detail_moves
         from pnr.place.detail_moves import LAST_STATS, improve

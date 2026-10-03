@@ -280,8 +280,11 @@ def base_checks(spec, fixed_ids=True):
 
 def derived_checks(spec):
     """Checks for a ladder or showcase design without a ``checks`` list, derived from
-    its engine constraints (fixed poses, hard edge locks, orientations, line groups)
-    plus the board-wide inside-the-outline and single-sided checks."""
+    its engine constraints (fixed poses, hard edge locks, orientations, line groups,
+    hard rectangle regions, hard origin-anchored aligns) plus the board-wide
+    inside-the-outline and single-sided checks. A region or align the checker cannot
+    measure (a polygon or union, another anchor, a glob or @address) gets no derived
+    check."""
     cons = spec["constraints"]
     checks = [
         dict(id="inside-board", kind="inside_board", refs="*", engine="native"),
@@ -328,6 +331,37 @@ def derived_checks(spec):
                     rot=group.get("rot", 0),
                     tol_mm=0.01,
                     engine="line_group",
+                )
+            )
+
+    def plain(refs):  # the checker takes literal refs, not globs or @addresses
+        return all(not set(r) & set("*?[@") for r in refs)
+
+    for rule in cons.get("region") or []:
+        if rule.get("hard", True) and rule.get("rect") is not None and plain(rule["refs"]):
+            checks.append(
+                dict(
+                    id="region-" + rule["name"],
+                    kind="region",
+                    refs=list(rule["refs"]),
+                    rect=list(rule["rect"]),
+                    engine="region",
+                )
+            )
+    for rule in cons.get("align") or []:
+        if (
+            rule.get("hard", True)
+            and rule.get("anchor", "origin") == "origin"
+            and plain(rule["refs"])
+        ):
+            checks.append(
+                dict(
+                    id="align-" + rule["name"],
+                    kind="align",
+                    refs=list(rule["refs"]),
+                    axis=rule["axis"],
+                    tol_mm=rule.get("tol_mm", 0.25),
+                    engine="align",
                 )
             )
     return checks

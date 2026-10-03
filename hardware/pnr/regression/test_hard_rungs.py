@@ -179,10 +179,11 @@ class HardRungContract(unittest.TestCase):
         self.assertTrue(set(HARD_LIB.values()) >= {f for f in seen if f in HARD_LIB.values()})
 
     def test_constraint_checks_are_expressed_to_the_engine(self):
-        """No rung leaves a check unsupported; a region or align check is the engine's
-        own constraint over the same refs, rectangle, axis and tolerance (the check
-        measures footprint origins, so the align anchors are the origins), and every
-        rung's constraint file compiles against its parts."""
+        """A region or align check is the engine's own constraint over the same refs,
+        rectangle, axis and tolerance (the check measures footprint origins, so the
+        align anchors are the origins), and every rung's constraint file compiles
+        against its parts. A check the engine cannot express stays allowed: it keeps
+        ``"engine": "unsupported"`` and is still measured (hard_rungs docstring)."""
         from pnr.constraints import compile_constraints
 
         kinds = set()
@@ -190,7 +191,6 @@ class HardRungContract(unittest.TestCase):
             with self.subTest(spec=spec["name"]):
                 cons = spec["constraints"]
                 for c in spec["checks"]:
-                    self.assertNotEqual(c["engine"], "unsupported", c)
                     if c["kind"] not in ("region", "align"):
                         continue
                     kinds.add(c["kind"])
@@ -217,6 +217,37 @@ class HardRungContract(unittest.TestCase):
         ids = [c["id"] for c in derived_checks(edge)]
         self.assertTrue({"edge-J1", "edge-SW1", "edge-D1", "rot-J1"} <= set(ids))
         self.assertNotIn("fixed-J1", [c["id"] for c in derived_checks(free)])
+
+    def test_derived_checks_cover_hard_regions_and_aligns(self):
+        """A design without a checks list: each hard rectangle region and each hard
+        origin-anchored align becomes the checker's own region / align check; what the
+        checker cannot measure (a polygon, another anchor, a glob) or a soft rule is left
+        out."""
+        spec = {
+            "constraints": {
+                "region": [
+                    dict(name="clock", refs=["U1", "C1"], rect=[0, 0, 21, 32]),
+                    dict(name="soft", refs=["U2"], rect=[0, 0, 21, 32], hard=False),
+                    dict(name="poly", refs=["U2"], polygon=[[0, 0], [9, 0], [0, 9]]),
+                    dict(name="glob", refs=["C*"], rect=[0, 0, 21, 32]),
+                ],
+                "align": [
+                    dict(name="ics", refs=["U1", "U2"], axis="y", tol_mm=0.1),
+                    dict(name="flush", refs=["J1", "J2"], axis="x", anchor="east"),
+                    dict(name="pins", refs=["J1", "J2"], axis="x", anchor={"J2": "pad1"}),
+                    dict(name="loose", refs=["D1", "D2"], axis="x", hard=False),
+                ],
+            }
+        }
+        checks = {c["id"]: c for c in derived_checks(spec)}
+        region = dict(kind="region", refs=["U1", "C1"], rect=[0, 0, 21, 32], engine="region")
+        self.assertEqual(checks["region-clock"], dict(id="region-clock", **region))
+        align = dict(kind="align", refs=["U1", "U2"], axis="y", tol_mm=0.1, engine="align")
+        self.assertEqual(checks["align-ics"], dict(id="align-ics", **align))
+        for name in ("soft", "poly", "glob"):
+            self.assertNotIn("region-" + name, checks)
+        for name in ("flush", "pins", "loose"):
+            self.assertNotIn("align-" + name, checks)
 
     def test_runner_offers_the_hard_rungs(self):
         args = parser().parse_args(["--out", "x", "--hard"])

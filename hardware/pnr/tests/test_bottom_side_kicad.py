@@ -30,7 +30,7 @@ HEIGHT = 60.0
 
 
 @unittest.skipUnless(
-    importlib.util.find_spec("pcbnew") is not None and Path(LIBRARY).is_dir(),
+    importlib.util.find_spec("pcbnew") is not None and bool(LIBRARY) and Path(LIBRARY).is_dir(),
     "requires KiCad's pcbnew and PNR_KICAD_FOOTPRINTS",
 )
 class BottomSideWritebackTest(unittest.TestCase):

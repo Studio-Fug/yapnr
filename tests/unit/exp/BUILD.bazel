@@ -21,6 +21,7 @@ yapnr_py_tests(
     },
     deps = [
         "//tools/ci:ci_lib",
+        "//tools/exp:exp_lib",
         "//yapnr",
         "//yapnr/exp",
         "//yapnr/exp:testing",

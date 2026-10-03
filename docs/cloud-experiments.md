@@ -477,6 +477,41 @@ line per task with its record and the machine it ran on. A private A/B campaign 
 (a toy engine snapshot as the bundle) was planned, run and fetched end to end on the local
 backend.
 
+Three optional keys serve long evaluations. `"checkpoint": {"path": "out/run"}` makes the task
+resumable: the wrapper copies the top-level files of that directory to the store every
+`sync_every_s` (default 300, at least 30) and when it is stopped (`on_signal`, default true), and
+restores them before a retry, so a command that resumes from its run directory continues after a
+Spot preemption instead of starting again. `"prune"` lists globs under `out/` that the result
+archive leaves out (caches), and `"verdict": {"file": "out/run/report.json", "json_path": "ok"}`
+reads a pass or a fail from the record.
+
+#### RF runs
+
+`tools/exp/rf_stage_plan.py` writes such a campaign for `yapnr.rf` runs from a list of jobs: a
+preset case each, optionally a spec file that replaces the case's spec (the case's criteria still
+judge it), the starting design (`seed`), an iteration cap, the threads and the resources (the
+format is in its docstring).
+
+```sh
+python3 tools/exp/rf_stage_plan.py jobs.toml --repo <checkout with yapnr.rf> --out <dir>
+yapnr exp plan <dir>/campaign.toml --backend gcp-batch --shape c4d-highcpu-8
+```
+
+The source bundle is a `git archive` of the committed revision (`--commit`, default `HEAD`),
+never the working tree, so a branch another session is still editing runs as it was last
+committed. Each task runs `python -m yapnr.rf.cases run CASE --out out/<id>` (or the job bundle's
+`rf_job.py`, the same runner with the spec, `optimizer.seed` or `solver.threads` replaced) on as
+many cores as it has threads, with `OMP_NUM_THREADS` and `MKL_NUM_THREADS` at that number and
+`OPENBLAS_NUM_THREADS=1`. Cores are physical, two vCPUs each on SMT shapes: one 4-thread run fills
+a `c4d-highcpu-8`. The engine runs torch on at most 4 threads, and the generator warns above that.
+The record is `out/<id>/validation.json` (the verdict is its `ok`), the run directory is the
+checkpoint, and the cases runner resumes from it; `--max-iterations` counts the iterations of one
+attempt, so an attempt resumed mid-loop may run that many again. A job with `diagnostic = true`
+runs the job bundle's `rf_diag.py` instead, which records the interpreter, the CPUs, the versions
+of numpy, torch, Pillow and PyYAML, whether the sources compile on the image's Python, and
+`python -m yapnr.rf.cases --help`; run one before the first campaign of a new branch or image.
+`--plain-lines` leaves the three optional keys out, for a `yapnr` whose `mc-eval` refuses them.
+
 ## Testing
 
 Everything above is tested offline and for free: `bazel test //tests/unit/exp/...

@@ -14,6 +14,13 @@ A stage plan line::
      "record": "out/eval/record.json",      # the evaluation's record, relative to the work dir
      "resources": {"cpus": 2, "memory_gb": 8, "max_wall_s": 7200},       # optional
      "labels": {"rung": "1"}, "env": {"PNR_X": "1"}}                     # optional
+
+Optional keys for long evaluations: ``"checkpoint": {"path": "out/run", "sync_every_s": 300}``
+makes the task resumable (``restart: resume``; the wrapper keeps the top-level files of that
+directory in the store and restores them on a retry, so a Spot preemption resumes instead of
+starting again; ``on_signal`` defaults to true), ``"prune"`` lists globs under ``out/`` left out of
+the result archive (caches), and ``"verdict": {"file": ..., "json_path": "ok"}`` reads a pass or
+fail from the record.
 """
 
 from __future__ import annotations
@@ -25,7 +32,37 @@ from typing import Any, Dict, List, Mapping
 from yapnr.exp import bundle, spec
 from yapnr.exp.kinds import base
 
-LINE_KEYS = {"id", "command", "inputs", "record", "resources", "labels", "env", "summary"}
+LINE_KEYS = {
+    "id",
+    "command",
+    "inputs",
+    "record",
+    "resources",
+    "labels",
+    "env",
+    "summary",
+    "checkpoint",
+    "prune",
+    "verdict",
+}
+CHECKPOINT_KEYS = {"path", "sync_every_s", "on_signal"}
+DEFAULT_SYNC_EVERY_S = 300
+
+
+def _strings(value: Any) -> bool:
+    return isinstance(value, list) and all(isinstance(x, str) for x in value)
+
+
+def _checkpoint(line: Mapping[str, Any]) -> Any:
+    """The task's checkpoint, with the defaults filled in; None for a task without one."""
+    item = line.get("checkpoint")
+    if item is None:
+        return None
+    return {
+        "path": item["path"],
+        "sync_every_s": item.get("sync_every_s", DEFAULT_SYNC_EVERY_S),
+        "on_signal": item.get("on_signal", True),
+    }
 
 
 def read_stage_plan(path: Path) -> List[Dict[str, Any]]:
@@ -52,6 +89,16 @@ def read_stage_plan(path: Path) -> List[Dict[str, Any]]:
                 errors.append("command is a list of strings")
             if not isinstance(line.get("record"), str) or not line["record"].startswith("out/"):
                 errors.append("record is a path under out/")
+            checkpoint = line.get("checkpoint")
+            if checkpoint is not None and (
+                not isinstance(checkpoint, dict)
+                or not isinstance(checkpoint.get("path"), str)
+                or set(checkpoint) - CHECKPOINT_KEYS
+            ):
+                errors.append("checkpoint is {path, sync_every_s?, on_signal?}")
+            for key in ("summary", "prune"):
+                if key in line and not _strings(line[key]):
+                    errors.append("%s is a list of globs under out/" % key)
         if errors:
             raise ValueError("%s:%d: %s" % (path.name, number, "; ".join(errors)))
         lines.append(line)
@@ -90,6 +137,7 @@ class McEval(base.Kind):
                 inputs.append({"dest": item["dest"], "bundle": digest, "kind": input_kind})
             record = line["record"]
             summary = [record[len("out/") :]] + list(line.get("summary", []))
+            checkpoint = _checkpoint(line)
             tasks.append(
                 base.make_task(
                     ctx,
@@ -98,9 +146,12 @@ class McEval(base.Kind):
                     command=line["command"],
                     env=line.get("env", {}),
                     inputs=inputs,
-                    outputs={"root": "out", "summary": summary, "prune": []},
+                    outputs={"root": "out", "summary": summary, "prune": line.get("prune", [])},
                     done={"file": record, "json": {}},
+                    verdict=line.get("verdict"),
                     resources=line.get("resources"),
+                    restart="resume" if checkpoint else "scratch",
+                    checkpoint=checkpoint,
                     labels=dict(line.get("labels", {}), candidate=line["id"]),
                 )
             )

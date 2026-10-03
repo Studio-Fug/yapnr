@@ -158,6 +158,46 @@ class MonteCarloTest(unittest.TestCase):
             self.assertEqual(dataset[0]["record"], {"score": 1.5})
             self.assertEqual(report["missing"], [tasks[1]["id"]])
 
+    def test_stage_plan_line_can_be_resumable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            lines = [
+                {
+                    "id": "rf/divider",
+                    "command": ["${PYTHON}", "-m", "yapnr.rf.cases", "run", "divider"],
+                    "record": "out/divider/validation.json",
+                    "checkpoint": {"path": "out/divider"},
+                    "prune": ["divider/cache"],
+                    "verdict": {"file": "out/divider/validation.json", "json_path": "ok"},
+                },
+                {
+                    "id": "rf/antenna",
+                    "command": ["${PYTHON}", "-m", "yapnr.rf.cases", "run", "antenna"],
+                    "record": "out/antenna/validation.json",
+                    "checkpoint": {"path": "out/antenna", "sync_every_s": 120, "on_signal": False},
+                },
+                {"id": "plain", "command": ["true"], "record": "out/r.json"},
+            ]
+            (tmp / "stage.jsonl").write_text("".join(json.dumps(line) + "\n" for line in lines))
+            campaign = {
+                "schema": spec.CAMPAIGN_SCHEMA,
+                "kind": "mc-eval",
+                "config": {"stage_plan": "stage.jsonl"},
+            }
+            first, second, plain = kinds.get("mc-eval").expand(campaign, context(tmp))
+        self.assertEqual(first["restart"], "resume")
+        self.assertEqual(
+            first["checkpoint"], {"path": "out/divider", "sync_every_s": 300, "on_signal": True}
+        )
+        self.assertEqual(first["outputs"]["prune"], ["divider/cache"])
+        self.assertEqual(first["verdict"]["json_path"], "ok")
+        self.assertEqual(
+            second["checkpoint"], {"path": "out/antenna", "sync_every_s": 120, "on_signal": False}
+        )
+        self.assertEqual(plain["restart"], "scratch")
+        self.assertIsNone(plain["checkpoint"])
+        self.assertIsNone(plain["verdict"])
+
     def test_malformed_stage_plan_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "stage.jsonl"
@@ -166,6 +206,11 @@ class MonteCarloTest(unittest.TestCase):
             )
             with self.assertRaises(ValueError):
                 mc.read_stage_plan(path)
+            for bad in ({"checkpoint": "out/run"}, {"checkpoint": {"path": "out/r", "every": 1}}):
+                line = dict({"id": "x", "command": ["true"], "record": "out/r.json"}, **bad)
+                path.write_text(json.dumps(line) + "\n")
+                with self.assertRaises(ValueError):
+                    mc.read_stage_plan(path)
 
 
 class RfTest(unittest.TestCase):

@@ -1,0 +1,25 @@
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Stage-plan generators for `yapnr exp` campaigns (docs/cloud-experiments.md). rf_job.py and
+# rf_diag.py run inside the tasks, from the job bundle rf_stage_plan.py writes.
+py_library(
+    name = "exp_lib",
+    srcs = [
+        "__init__.py",
+        "rf_diag.py",
+        "rf_job.py",
+        "rf_stage_plan.py",
+    ],
+    imports = ["../.."],
+    deps = ["//tools:package"],
+)
+
+# `bazel run //tools/exp:rf_stage_plan -- JOBS.toml --repo CHECKOUT --out DIR`
+py_binary(
+    name = "rf_stage_plan",
+    srcs = ["rf_stage_plan.py"],
+    main = "rf_stage_plan.py",
+    deps = [":exp_lib"],
+)

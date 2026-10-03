@@ -21,6 +21,7 @@ from run import (
     constraint_reasons,
     copper_sha,
     engine_revision,
+    freeze_gloss_groups,
     gloss_flags,
     gloss_gate,
     gloss_stage,
@@ -510,10 +511,15 @@ class NativeTraceContract(unittest.TestCase):
             native.finish(root / "missing.kicad_pcb", {}, {})
 
 
-def drc_report(opens=0, **violations):
+def drc_report(opens=0, items=(), **violations):
+    """A kicad-cli DRC report; ``items``: the uuids of every violation's items."""
     return dict(
         unconnected_items=[dict(items=[])] * opens,
-        violations=[dict(type=t) for t, n in violations.items() for _ in range(n)],
+        violations=[
+            dict(type=t, items=[dict(uuid=u) for u in items])
+            for t, n in violations.items()
+            for _ in range(n)
+        ],
     )
 
 
@@ -560,6 +566,26 @@ class GlossStageContract(unittest.TestCase):
             gloss_gate(drc_report(0, clearance=2), drc_report(0, clearance=1, track_dangling=1)),
             ["track_dangling 0 -> 1"],
         )
+        # as strict as the pass's own gate (pnr.via_coalesce.violation_keys): a violation that
+        # moved to other items is new, even when its type's count holds
+        self.assertEqual(
+            gloss_gate(
+                drc_report(0, ["a", "b"], clearance=1), drc_report(0, ["a", "c"], clearance=1)
+            ),
+            ["new clearance 1"],
+        )
+        self.assertEqual(
+            gloss_gate(
+                drc_report(0, ["b", "a"], clearance=1), drc_report(0, ["a", "b"], clearance=1)
+            ),
+            [],
+        )
+        from run import violation_keys
+
+        from pnr.via_coalesce import violation_keys as engine_keys
+
+        for report in (drc_report(0, ["x", "a"], clearance=2, track_dangling=1), drc_report(3)):
+            self.assertEqual(violation_keys(report), engine_keys(report))
 
     def stage(self, after_drc=None, accepted=1, fail=None):
         """Run gloss_stage with a stub ``run``: returns (block, board bytes, stage names)."""
@@ -599,6 +625,7 @@ class GlossStageContract(unittest.TestCase):
                     )
                 )
 
+        (tmp / "groups.json").write_text('{"classes": {"g": ["N"]}}')
         flags = dict(PNR_GLOSS_STEPS="dekink", PNR_GLOSS_CLASSES=str(tmp / "groups.json"))
         block = gloss_stage(root, board, args, run, flags)
         self.assertEqual((root / "routed.pre-gloss.kicad_pcb").read_text(), GLOSS_BOARD % "input")
@@ -614,6 +641,13 @@ class GlossStageContract(unittest.TestCase):
         self.assertEqual(block["summary"]["cross_group"]["groups"], "groups.json")
         self.assertEqual(
             block["flags"], dict(PNR_GLOSS_STEPS="dekink", PNR_GLOSS_CLASSES="groups.json")
+        )
+        self.assertEqual(
+            block["groups"],
+            dict(
+                name="groups.json",
+                sha256=hashlib.sha256(b'{"classes": {"g": ["N"]}}').hexdigest(),
+            ),
         )
         self.assertNotIn("transactions", block["summary"])
         self.assertEqual(
@@ -659,11 +693,29 @@ class GlossStageContract(unittest.TestCase):
         )
         self.assertEqual(copper_sha(a), copper_sha(d))
         self.assertNotEqual((GLOSS_BOARD % "F.Cu"), d.read_text())
+        # a layout it cannot read (here: spaces, not tabs) raises; a board without copper hashes
+        e = tmp / "e.kicad_pcb"
+        e.write_text((GLOSS_BOARD % "F.Cu").replace("\t", "  "))
+        with self.assertRaises(ValueError):
+            copper_sha(e)
+        f = tmp / "f.kicad_pcb"
+        f.write_text("(kicad_pcb\n\t(pcbplotparams\n\t\t(viasonmask no)\n\t)\n)\n")
+        self.assertEqual(copper_sha(f), hashlib.sha256(b"").hexdigest())
 
     def test_summary_and_measure_figures(self):
         self.assertEqual(
             gloss_summary(dict(status="ok", inverse_specs=[1], steps_report={}, wall_seconds=3)),
             dict(status="ok", wall_seconds=3),
+        )
+        # a pass cut short by its wall-clock budget is visible in result.json
+        planning = dict(inventories=4, deadline_hits=1, rows=[dict(seconds=120.0)])
+        self.assertEqual(
+            gloss_summary(dict(stop="time_budget", budget=dict(seconds=240.0), planning=planning)),
+            dict(
+                stop="time_budget",
+                budget=dict(seconds=240.0),
+                planning=dict(inventories=4, deadline_hits=1),
+            ),
         )
         row = dict(
             objective=[0, 0, 0, 0, 0, 0],
@@ -685,6 +737,29 @@ class GlossStageContract(unittest.TestCase):
             (summary["length_mm"], summary["bends_all"], summary["X_mm2"]), (12.346, 7, 1.235)
         )
         self.assertEqual((summary["cross_group_max_mm"], summary["cross_group_over_cap"]), (4.0, 0))
+
+    def test_a_groups_file_is_frozen_and_recorded_by_name_and_content(self):
+        tmp = Path(tempfile.mkdtemp())
+        groups = tmp / "live" / "groups.json"
+        groups.parent.mkdir()
+        groups.write_text('{"classes": {"g": ["N"]}}')
+        flags, record = freeze_gloss_groups(
+            dict(PNR_GLOSS_CLASSES=str(groups), PNR_GLOSS_STEPS="dekink"), tmp / "freeze"
+        )
+        frozen = tmp / "freeze" / "gloss-groups" / "groups.json"
+        self.assertEqual(flags, dict(PNR_GLOSS_CLASSES=str(frozen), PNR_GLOSS_STEPS="dekink"))
+        self.assertEqual(frozen.read_text(), groups.read_text())
+        self.assertEqual(
+            record, dict(name="groups.json", sha256=hashlib.sha256(frozen.read_bytes()).hexdigest())
+        )
+        groups.write_text("{}")  # a later edit of the live file does not reach the run
+        self.assertNotEqual(frozen.read_text(), groups.read_text())
+        self.assertEqual(
+            freeze_gloss_groups(dict(PNR_GLOSS_STEPS="x"), tmp / "f2"),
+            (dict(PNR_GLOSS_STEPS="x"), None),
+        )
+        with self.assertRaises(ValueError):
+            freeze_gloss_groups(dict(PNR_GLOSS_CLASSES=str(tmp / "missing.json")), tmp / "f3")
 
     def test_the_public_example_groups_cover_only_nets_of_their_design(self):
         from pnr.gloss import load_class_tags

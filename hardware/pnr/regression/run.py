@@ -11,6 +11,7 @@ import json
 import math
 import os
 import platform
+import re
 import resource
 import shutil
 import subprocess
@@ -61,24 +62,36 @@ def _oriented(block):
     return block
 
 
+COPPER_ITEM = re.compile(r"^\s*\((segment|via)[\s)]", re.M)  # tracks and vias, any layout
+
+
 def copper_sha(board):
     """SHA-256 of a board's copper without uuids: its track, arc and via blocks, uuid lines
     dropped, ends in sorted order, sorted. Writeback gives tracks random uuids, so two runs of
     one case differ in ``sha`` but not here when their copper is the same (pairing A/B arms,
-    determinism)."""
+    determinism). Raises ValueError when the board holds a track or via block this reader
+    does not parse (another file layout): a hash of nothing would pair any two boards."""
+    text = Path(board).read_text()
     blocks, block, depth = [], None, 0
-    for line in Path(board).read_text().splitlines():
-        text = line.strip()
+    for line in text.splitlines():
+        item = line.strip()
         if block is None:
-            if text.startswith(("(segment", "(arc", "(via")) and line.startswith("\t("):
-                block, depth = [text], text.count("(") - text.count(")")
+            if item.startswith(("(segment", "(arc", "(via")) and line.startswith("\t("):
+                block, depth = [item], item.count("(") - item.count(")")
             continue
-        depth += text.count("(") - text.count(")")
-        if not text.startswith("(uuid"):
-            block.append(text)
+        depth += item.count("(") - item.count(")")
+        if not item.startswith("(uuid"):
+            block.append(item)
         if depth <= 0:
             blocks.append(" ".join(_oriented(block)))
             block = None
+    parsed = sum(b.startswith(("(segment", "(via")) for b in blocks)
+    found = len(COPPER_ITEM.findall(text))
+    if parsed != found:
+        raise ValueError(
+            "copper_sha: %s has %d track and via blocks, %d parsed"
+            % (Path(board).name, found, parsed)
+        )
     return hashlib.sha256("\n".join(sorted(blocks)).encode()).hexdigest()
 
 
@@ -251,6 +264,8 @@ GLOSS_SUMMARY_KEYS = (
     "edits_by_step",
     "rejections_by_check",
     "end_gate",
+    "stop",  # why the pass stopped early (time_budget, max_transactions) or null
+    "budget",
     "seconds",
     "wall_seconds",
     "objective_before",
@@ -281,15 +296,56 @@ def drc_counts(report):
     return len(report["unconnected_items"]), dict(Counter(v["type"] for v in report["violations"]))
 
 
+DANGLING = ("track_dangling", "via_dangling")
+
+
+def violation_keys(report):
+    """As pnr.via_coalesce.violation_keys (the pass's own gate): each violation as its type and
+    the sorted uuids of its items, the dangling kinds aside (they are counted)."""
+    return Counter(
+        (v["type"], tuple(sorted(i["uuid"] for i in v.get("items", []))))
+        for v in report["violations"]
+        if v["type"] not in DANGLING
+    )
+
+
 def gloss_gate(before, after):
-    """The outer gate of the gloss stage: [] when the cold DRC did not get worse (opens and the
-    count of every violation type not up), else the reasons."""
+    """The outer gate of the gloss stage, as strict as the pass's own transaction gate: [] when
+    the cold DRC did not get worse, else the reasons. Worse: more opens, any violation that is
+    new by its type and items (a violation that moved to other items is new, even when the
+    count of its type holds), or more dangling tracks or vias."""
     (o0, v0), (o1, v1) = drc_counts(before), drc_counts(after)
     reasons = ["opens %d -> %d" % (o0, o1)] if o1 > o0 else []
-    for kind in sorted(v1):
-        if v1[kind] > v0.get(kind, 0):
+    new = violation_keys(after) - violation_keys(before)
+    for kind in sorted({kind for kind, _ in new}):
+        reasons.append("new %s %d" % (kind, sum(n for (k, _), n in new.items() if k == kind)))
+    for kind in DANGLING:
+        if v1.get(kind, 0) > v0.get(kind, 0):
             reasons.append("%s %d -> %d" % (kind, v0.get(kind, 0), v1[kind]))
     return reasons
+
+
+def freeze_gloss_groups(flags, freeze):
+    """A PNR_GLOSS_CLASSES groups file is copied into the run's source freeze and the run reads
+    the copy, as it reads every engine source: (flags naming the copy, the file's record
+    {name, sha256} for provenance.json; None without a groups file)."""
+    path = flags.get("PNR_GLOSS_CLASSES")
+    if not path:
+        return flags, None
+    if not Path(path).is_file():
+        raise ValueError("--gloss-flag PNR_GLOSS_CLASSES: no such file %r" % Path(path).name)
+    target = freeze / "gloss-groups" / Path(path).name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(path, target)
+    return dict(flags, PNR_GLOSS_CLASSES=str(target)), gloss_groups_record(flags)
+
+
+def gloss_groups_record(flags):
+    """The groups file of the sub-flags by its name and content, never its path (or None)."""
+    path = flags.get("PNR_GLOSS_CLASSES")
+    if not path or not Path(path).is_file():
+        return None
+    return dict(name=Path(path).name, sha256=sha(path))
 
 
 def gloss_flags_record(flags):
@@ -301,8 +357,11 @@ def gloss_flags_record(flags):
 
 
 def gloss_summary(report):
-    """The pass summary kept in result.json: no transactions, specs or paths."""
+    """The pass summary kept in result.json: no transactions, specs or paths. ``planning``
+    keeps its totals (inventories, wall-clock safety-net hits), not its rows."""
     block = {k: report[k] for k in GLOSS_SUMMARY_KEYS if k in report}
+    if isinstance(report.get("planning"), dict):
+        block["planning"] = {k: v for k, v in report["planning"].items() if k != "rows"}
     if (block.get("cross_group") or {}).get("groups"):
         block["cross_group"] = dict(
             block["cross_group"], groups=Path(block["cross_group"]["groups"]).name
@@ -334,6 +393,7 @@ def gloss_stage(root, board, args, run, flags):
         pre_gloss_board_sha256=pre_sha,
         pre_gloss_copper_sha256=copper_sha(board),
         flags=gloss_flags_record(flags),
+        groups=gloss_groups_record(flags),
         kept=False,
     )
     try:
@@ -451,12 +511,6 @@ def gloss_measure(root, board, args, run, flags):
     return measure_summary(next(iter(rows.values())))
 
 
-def children_cpu():
-    """CPU seconds (user + system) of every finished child process so far."""
-    usage = resource.getrusage(resource.RUSAGE_CHILDREN)
-    return usage.ru_utime + usage.ru_stime
-
-
 def new_result(spec, seed, root):
     """A case's result record; ``directory`` is relative to the run directory."""
     return dict(
@@ -465,7 +519,6 @@ def new_result(spec, seed, root):
         components=spec["expected_components"],
         passed=False,
         stages={},
-        stage_cpu={},  # CPU seconds of each stage's processes (children's user + system)
         directory=root.name,
     )
 
@@ -595,6 +648,10 @@ def main():
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_path, target)
     frozen_here = freeze / "hardware/pnr/regression"
+    try:
+        glossing, gloss_groups = freeze_gloss_groups(glossing, freeze)
+    except ValueError as error:
+        raise SystemExit(str(error))
     # The frozen root carries yapnr.fab.capability and its profile data (fab_data_inputs).
     env = dict(
         os.environ,
@@ -642,7 +699,12 @@ def main():
         platform="%s-%s" % (sys.platform, platform.machine().lower()),
         seeds=args.seed or [0],
         trace=bool(args.trace),
-        gloss=dict(enabled=bool(args.gloss), measure=bool(args.gloss_measure), flags=glossing),
+        gloss=dict(
+            enabled=bool(args.gloss),
+            measure=bool(args.gloss_measure),
+            flags=gloss_flags_record(glossing),
+            groups=gloss_groups,
+        ),
         arguments={k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
         pnr_environment={k: v for k, v in env.items() if k.startswith("PNR_")},
     )
@@ -663,18 +725,28 @@ def main():
         import trace_native as tracing
     results = []
 
-    def stage(root, name, cmd, extra=None):
+    def stage(root, name, cmd, extra=None, cpu=None):
+        """Run one stage; its wall seconds are returned and, with ``cpu``, its CPU
+        seconds (user + system of the stage's whole waited-for process tree) recorded."""
         t = time.monotonic()
-        with (root / (name + ".log")).open("w") as log:
-            subprocess.run(
-                list(map(str, cmd)),
-                cwd=REPO,
-                env=dict(env, **(extra or {})),
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                check=True,
-                timeout=args.timeout,
-            )
+        before = resource.getrusage(resource.RUSAGE_CHILDREN)
+        try:
+            with (root / (name + ".log")).open("w") as log:
+                subprocess.run(
+                    list(map(str, cmd)),
+                    cwd=REPO,
+                    env=dict(env, **(extra or {})),
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    check=True,
+                    timeout=args.timeout,
+                )
+        finally:
+            after = resource.getrusage(resource.RUSAGE_CHILDREN)
+            if cpu is not None:
+                cpu[name] = round(
+                    after.ru_utime - before.ru_utime + after.ru_stime - before.ru_stime, 3
+                )
         return time.monotonic() - t
 
     for spec in cases:
@@ -687,10 +759,10 @@ def main():
             print("START " + root.name, flush=True)
             try:
 
+                result["cpu_stages"] = {}
+
                 def run(name, cmd, extra=None):
-                    cpu = children_cpu()
-                    result["stages"][name] = stage(root, name, cmd, extra)
-                    result["stage_cpu"][name] = round(children_cpu() - cpu, 3)
+                    result["stages"][name] = stage(root, name, cmd, extra, result["cpu_stages"])
 
                 native = tracing.NativeTrace(root, spec, seed, args, out.name) if tracing else None
                 run(
@@ -832,6 +904,7 @@ def main():
                     error=str(ex), traceback=traceback.format_exc(), reasons=["stage_failure"]
                 )
             result["elapsed_seconds"] = time.monotonic() - t
+            result["cpu_seconds"] = round(sum((result.get("cpu_stages") or {}).values()), 3)
             (root / "result.json").write_text(json.dumps(result, indent=2))
             results.append(result)
             (out / "summary.json").write_text(

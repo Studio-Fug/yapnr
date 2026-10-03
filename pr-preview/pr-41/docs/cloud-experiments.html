@@ -1,0 +1,1037 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Architecture" href="architecture.html"><link rel="prev" title="RF fab-model test coupons" href="rf-fab-coupons.html">
+        <link rel="prefetch" href="../static/yapnr-logo-256.png" as="image">
+        <link rel="prefetch" href="../static/yapnr-logo-light.png" as="image">
+
+    <link rel="shortcut icon" href="../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
+        <title>Cloud and HPC experiments (yapnr exp) - yapnr documentation</title>
+      <link rel="stylesheet" type="text/css" href="../static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../static/custom.css?v=ad564152" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-brand-primary: #024823;
+  --color-brand-content: #024823;
+  --color-brand-visited: #024823;
+  --color-yapnr-accent: #ba9015;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">yapnr documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="../static/yapnr-logo-256.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../static/yapnr-logo-light.png" alt="Dark Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="viewer.html">The live viewer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="frontends/atopile.html">The atopile toolchain</a></li>
+<li class="toctree-l1"><a class="reference internal" href="part-cache.html">The part cache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fab-and-ordering.html">Fab bundles and staged orders</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html">Releases and versioning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-fab-coupons.html">RF fab-model test coupons</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="regression-ladder.html">Regression ladder</a></li>
+<li class="toctree-l1"><a class="reference internal" href="constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="decisions.html">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/fea-integration.html">Design: thermal and electromagnetic field solvers (FEA) in yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/rf-fab-coupons.html">Design: fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
+<li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
+<li class="toctree-l1"><a class="reference internal" href="references.html">Foundations and references</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../DEVELOPERS.html">Developing yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Contributing to yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../AGENTS.html">Rules for agents</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../WORKLOG.html">Worklog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../THIRD_PARTY.html">Third-party material</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../README.html">yapnr</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/blob/main/docs/cloud-experiments.md?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/edit/main/docs/cloud-experiments.md" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="cloud-and-hpc-experiments-yapnr-exp">
+<h1>Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)<a class="headerlink" href="#cloud-and-hpc-experiments-yapnr-exp" title="Link to this heading">¶</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code> runs experiment campaigns (regression ladder sweeps, tool-comparison cells, Monte Carlo
+evaluations, RF optimisation runs) on three backends from one task description:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">local</span></code></strong>: a niced process pool on your machine, with the host’s KiCad;</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">gcp-batch</span></code></strong>: Google Cloud Batch on Spot VMs (C4D by default), nothing running between
+campaigns;</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">slurm</span></code></strong>: a job array on an HPC allocation, running the published image under Apptainer.</p></li>
+</ul>
+<p>The reasoning behind every choice is in the <a class="reference internal" href="design/cloud-experiments.html"><span class="std std-doc">design</span></a>. This page is the
+owner’s guide: what to provision, the exact bootstrap commands, and everyday use.</p>
+<blockquote>
+<div><p><strong>Status (2026-10-02).</strong> The local backend runs end to end (a real ladder cell, planned, run,
+fetched and assembled; <code class="docutils literal notranslate"><span class="pre">tools/ci/ladder_summary.py</span> <span class="pre">--check</span></code> passes on the result). The
+<code class="docutils literal notranslate"><span class="pre">gcp-batch</span></code> and <code class="docutils literal notranslate"><span class="pre">slurm</span></code> backends render, validate and dry-run everything offline, and their
+output is pinned by golden files, but <strong>nothing has run on Google Cloud or on a Slurm site
+yet</strong>: there are no credentials. The first real run is the smoke job of
+<a class="reference internal" href="#smoke-job">step 10</a>, at a cost of cents. What that run settles is listed under
+<a class="reference internal" href="#not-verified-yet">Not verified yet</a>.</p>
+</div></blockquote>
+<section id="what-the-owner-provides">
+<h2>What the owner provides<a class="headerlink" href="#what-the-owner-provides" title="Link to this heading">¶</a></h2>
+<p>An API key cannot run Batch or Compute Engine: they authorize an IAM principal, and an API key is
+not one (<a class="reference external" href="https://docs.cloud.google.com/docs/authentication/api-keys">API keys</a>). Provide these instead:</p>
+<ol class="arabic simple">
+<li><p><strong>A Google account with Owner on a new project</strong>, used for the bootstrap and <code class="docutils literal notranslate"><span class="pre">tofu</span> <span class="pre">apply</span></code> only.</p></li>
+<li><p><strong>A billing account linked to the project</strong>, and permission to create budgets on it (Billing
+Account Administrator or Billing Account Costs Manager). Free-trial billing accounts cannot get
+quota increases.</p></li>
+<li><p><strong>Your decisions on the caps</strong> (proposed: a $50 monthly budget, 64 preemptible vCPUs per region,
+confirmation above $5 and refusal above $25 per submit; see <a class="reference internal" href="#costs-and-guards">Costs</a>) and the
+regions (proposed: <code class="docutils literal notranslate"><span class="pre">us-west4</span></code>, then <code class="docutils literal notranslate"><span class="pre">northamerica-northeast1</span></code>).</p></li>
+<li><p><strong>A day-to-day identity for this Mac</strong>: ideally a separate, low-privilege Google account whose
+only grant is to impersonate <code class="docutils literal notranslate"><span class="pre">yapnr-submit</span></code>. Your own account works too.</p></li>
+<li><p><strong>Public GHCR packages</strong> (<code class="docutils literal notranslate"><span class="pre">studio-fug/yapnr</span></code> and <code class="docutils literal notranslate"><span class="pre">studio-fug/yapnr-kicad</span></code>), or a GitHub token
+with <code class="docutils literal notranslate"><span class="pre">read:packages</span></code> for the registry cache. On 2026-10-02 anonymous pulls of both still
+returned <code class="docutils literal notranslate"><span class="pre">401</span></code> (a public control image returned <code class="docutils literal notranslate"><span class="pre">200</span></code>), so they are still private.</p></li>
+<li><p><strong>Optionally, an API key restricted to the Cloud Billing API</strong>, for <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">prices</span> <span class="pre">--refresh</span></code> (<a class="reference external" href="https://docs.cloud.google.com/billing/docs/how-to/get-pricing-information-api">pricing API</a>); it lives in the macOS Keychain.</p></li>
+</ol>
+<p>Agents never log in for you. In Claude Code, run login commands yourself with the <code class="docutils literal notranslate"><span class="pre">!</span></code> prefix (for
+example <code class="docutils literal notranslate"><span class="pre">!</span> <span class="pre">gcloud</span> <span class="pre">auth</span> <span class="pre">login</span></code>), which runs them in your shell with your browser; the agent only
+sees the output. Nothing in this setup uses service-account key files.</p>
+</section>
+<section id="quick-start-the-local-backend">
+<h2>Quick start: the local backend<a class="headerlink" href="#quick-start-the-local-backend" title="Link to this heading">¶</a></h2>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>mkdir<span class="w"> </span>-p<span class="w"> </span>~/.config/yapnr
+cp<span class="w"> </span>docs/examples/cloud.toml.example<span class="w"> </span>~/.config/yapnr/cloud.toml<span class="w">   </span><span class="c1"># then edit [local]</span>
+yapnr<span class="w"> </span>exp<span class="w"> </span>plan<span class="w"> </span>experiments/ladder-small.toml<span class="w"> </span>--backend<span class="w"> </span><span class="nb">local</span>
+yapnr<span class="w"> </span>exp<span class="w"> </span>submit<span class="w"> </span>&lt;plan&gt;<span class="w"> </span>--wait<span class="w">          </span><span class="c1"># or without --wait: a detached, niced pool</span>
+yapnr<span class="w"> </span>exp<span class="w"> </span>status<span class="w"> </span>&lt;plan&gt;
+yapnr<span class="w"> </span>exp<span class="w"> </span>fetch<span class="w"> </span>&lt;plan&gt;<span class="w">                  </span><span class="c1"># -&gt; &lt;store&gt;/fetched/&lt;campaign&gt;/assembled/default</span>
+python3<span class="w"> </span>tools/ci/ladder_summary.py<span class="w"> </span>&lt;store&gt;/fetched/&lt;campaign&gt;/assembled/default<span class="w"> </span>--check
+</pre></div>
+</div>
+<p>Use <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">run</span> <span class="pre">//:yapnr</span> <span class="pre">--</span> <span class="pre">exp</span> <span class="pre">...</span></code> from a checkout. The local toolchain is the headless KiCad copy
+(<a class="reference internal" href="../DEVELOPERS.html#macos-use-a-headless-copy-no-dock-icons"><span class="std std-ref">DEVELOPERS.md</span></a>) and a Python with the
+engine’s dependencies, set in <code class="docutils literal notranslate"><span class="pre">[local]</span></code> of the owner config or through <code class="docutils literal notranslate"><span class="pre">YAPNR_KICAD_CLI</span></code>,
+<code class="docutils literal notranslate"><span class="pre">YAPNR_KICAD_PYTHON</span></code> and <code class="docutils literal notranslate"><span class="pre">YAPNR_KICAD_FOOTPRINTS</span></code>. <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">doctor</span> <span class="pre">--backend</span> <span class="pre">local</span></code> checks them.</p>
+</section>
+<section id="campaigns-plans-and-tasks">
+<h2>Campaigns, plans and tasks<a class="headerlink" href="#campaigns-plans-and-tasks" title="Link to this heading">¶</a></h2>
+<p>A <strong>campaign file</strong> (TOML, <code class="docutils literal notranslate"><span class="pre">schema</span> <span class="pre">=</span> <span class="pre">&quot;yapnr-campaign-v1&quot;</span></code>) names a kind, a matrix and options;
+public examples are in <a class="reference external" href="https://github.com/Studio-Fug/yapnr/tree/main/experiments"><code class="docutils literal notranslate"><span class="pre">experiments/</span></code></a>:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Kind</p></th>
+<th class="head"><p>One task</p></th>
+<th class="head"><p>Example</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ladder-cell</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--case</span> <span class="pre">C</span> <span class="pre">--seed</span> <span class="pre">S</span></code> with the options in <code class="docutils literal notranslate"><span class="pre">[config]</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ladder-small.toml</span></code>, <code class="docutils literal notranslate"><span class="pre">ladder-sweep.toml</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">bench-cell</span></code></p></td>
+<td><p>one tool on one rung and seed, judged in the same task</p></td>
+<td><p>(tool images first)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">mc-place</span></code></p></td>
+<td><p>stage 0 of a successive-halving run</p></td>
+<td><p>from the halving driver’s stage plan</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">mc-eval</span></code></p></td>
+<td><p>one candidate evaluation</p></td>
+<td><p>from the halving driver’s stage plan</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">rf-run</span></code></p></td>
+<td><p>one RF topology-optimisation case, resumable</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">matrix.case</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">smoke</span></code></p></td>
+<td><p>writes the interpreter, platform and <code class="docutils literal notranslate"><span class="pre">kicad-cli</span> <span class="pre">version</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">smoke.toml</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">plan</span></code> turns it into a <strong>plan directory</strong>: <code class="docutils literal notranslate"><span class="pre">campaign.json</span></code> (the campaign id, pinned image
+digest, source commit and bundle, the tasks’ hashes, resource classes, placements and the
+estimate), <code class="docutils literal notranslate"><span class="pre">tasks.jsonl</span></code> (one <code class="docutils literal notranslate"><span class="pre">yapnr-task-v1</span></code> per line), <code class="docutils literal notranslate"><span class="pre">task.py</span></code> (the wrapper every backend
+runs), <code class="docutils literal notranslate"><span class="pre">bundles/</span></code> (a <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">archive</span></code> of the source commit and any data inputs, named by sha256) and
+<code class="docutils literal notranslate"><span class="pre">backend/&lt;name&gt;/</span></code> (the Batch job JSON, <code class="docutils literal notranslate"><span class="pre">sbatch</span></code> scripts or pool items, for review). A dirty
+checkout is refused unless <code class="docutils literal notranslate"><span class="pre">--allow-dirty</span></code>, which every record then reports. A campaign id looks
+like <code class="docutils literal notranslate"><span class="pre">20261002-ladder-3f9a1c</span></code>; the same file, commit, image and backend give the same id.</p>
+<p><code class="docutils literal notranslate"><span class="pre">submit</span></code> sends the pending tasks (those without a <code class="docutils literal notranslate"><span class="pre">_DONE</span></code> marker in the store), one <strong>submission</strong>
+per resource class: one Batch job, one Slurm array or one local pool. Running <code class="docutils literal notranslate"><span class="pre">submit</span></code> again after
+preemptions, failures or a freeze sends only what is still pending.</p>
+<p>Inside every task, the wrapper stages the bundles (checking their sha256), runs the command niced,
+with a wall-time limit and a scrubbed environment (no credentials, no ambient <code class="docutils literal notranslate"><span class="pre">PNR_*</span></code> switches, a
+private <code class="docutils literal notranslate"><span class="pre">HOME</span></code>), then writes <code class="docutils literal notranslate"><span class="pre">result.tar.gz</span></code>, the summary files, <code class="docutils literal notranslate"><span class="pre">record.json</span></code> (machine, CPU model,
+image, wall and CPU time, peak RSS, verdict) and <code class="docutils literal notranslate"><span class="pre">log.tail</span></code> under its own attempt directory, and
+<code class="docutils literal notranslate"><span class="pre">_DONE</span></code> last. A pass or a fail is a result; so is an engine crash (<code class="docutils literal notranslate"><span class="pre">verdict:</span> <span class="pre">error</span></code>), because a retry
+would repeat it. Only infrastructure failures are retried.</p>
+<p>A task that reaches <code class="docutils literal notranslate"><span class="pre">max_wall_s</span></code> is a result too (<code class="docutils literal notranslate"><span class="pre">verdict:</span> <span class="pre">timeout</span></code>), so set the limit from the
+Mac’s wall time with room to spare: at the table’s speed factors a cell takes about 1.3x as long
+on C4D and 1.6-1.8x on C3D or T2D. About 3x the Mac’s time covers both; a hard rung of 1.5 hours
+on the Mac wants about 16,000 s, above <code class="docutils literal notranslate"><span class="pre">ladder-sweep.toml</span></code>’s 7,200 s and the example
+<code class="docutils literal notranslate"><span class="pre">max_task_wall_s</span></code> of 14,400 (raise both for a hard-rung campaign).</p>
+</section>
+<section id="commands">
+<h2>Commands<a class="headerlink" href="#commands" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Command</p></th>
+<th class="head"><p>Changes something in a cloud</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">plan</span> <span class="pre">CAMPAIGN</span> <span class="pre">--backend</span> <span class="pre">B</span> <span class="pre">[--offline</span> <span class="pre">--image-digest</span> <span class="pre">D]</span></code></p></td>
+<td><p>no (a registry lookup of the image tag unless offline)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">submit</span> <span class="pre">PLAN</span> <span class="pre">[--dry-run]</span> <span class="pre">[--yes]</span> <span class="pre">[--max-usd</span> <span class="pre">X]</span> <span class="pre">[--only</span> <span class="pre">TASK...]</span> <span class="pre">[--wait]</span></code></p></td>
+<td><p>yes, unless <code class="docutils literal notranslate"><span class="pre">--dry-run</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">status</span> <span class="pre">PLAN</span> <span class="pre">[--json]</span></code></p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">logs</span> <span class="pre">PLAN</span> <span class="pre">[TASK]</span></code></p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">fetch</span> <span class="pre">PLAN</span> <span class="pre">[--full]</span> <span class="pre">[--into</span> <span class="pre">DIR]</span> <span class="pre">[--from</span> <span class="pre">DIR]</span></code></p></td>
+<td><p>no (egress is billed)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">cancel</span> <span class="pre">PLAN</span> <span class="pre">[--submission</span> <span class="pre">N]</span> <span class="pre">[--dry-run]</span></code></p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">doctor</span> <span class="pre">--backend</span> <span class="pre">B</span></code></p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">prices</span> <span class="pre">[--refresh]</span> <span class="pre">[--family</span> <span class="pre">F]</span></code></p></td>
+<td><p>no (Billing Catalog read)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">unfreeze</span> <span class="pre">--backend</span> <span class="pre">gcp-batch</span></code></p></td>
+<td><p>yes (deletes the freeze marker)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">calibration</span> <span class="pre">ingest</span> <span class="pre">--reference</span> <span class="pre">DIR</span> <span class="pre">--cloud</span> <span class="pre">DIR...</span> <span class="pre">--out</span> <span class="pre">FILE</span></code></p></td>
+<td><p>no</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">PLAN</span></code> is the plan directory <code class="docutils literal notranslate"><span class="pre">plan</span></code> printed, or the campaign id. <code class="docutils literal notranslate"><span class="pre">submit</span> <span class="pre">--dry-run</span></code> on <code class="docutils literal notranslate"><span class="pre">gcp-batch</span></code>
+prints every <code class="docutils literal notranslate"><span class="pre">gcloud</span></code> call it would make (all with <code class="docutils literal notranslate"><span class="pre">--impersonate-service-account=yapnr-submit&#64;...</span></code>)
+without making any.</p>
+</section>
+<section id="google-cloud-bootstrap">
+<h2>Google Cloud bootstrap<a class="headerlink" href="#google-cloud-bootstrap" title="Link to this heading">¶</a></h2>
+<p>Run once, after billing exists. <code class="docutils literal notranslate"><span class="pre">$PROJECT</span></code>, <code class="docutils literal notranslate"><span class="pre">$BILLING</span></code>, <code class="docutils literal notranslate"><span class="pre">$REGION</span></code>, <code class="docutils literal notranslate"><span class="pre">$OWNER</span></code>, <code class="docutils literal notranslate"><span class="pre">$MAC_ID</span></code> and <code class="docutils literal notranslate"><span class="pre">$STATE</span></code>
+are your values; keep them in your notes and the owner config, never in this repository. Install
+the <a class="reference external" href="https://docs.cloud.google.com/sdk/docs/install">gcloud CLI</a> and <a class="reference external" href="https://opentofu.org/docs/intro/install/">OpenTofu</a> in user space first.</p>
+<section id="images">
+<h3>1. Images<a class="headerlink" href="#images" title="Link to this heading">¶</a></h3>
+<p>Make both GHCR packages public (package settings, “Change visibility”; this cannot be undone) or
+create a GitHub token with <code class="docutils literal notranslate"><span class="pre">read:packages</span></code> and store it in Secret Manager after step 3
+(<code class="docutils literal notranslate"><span class="pre">ghcr_token_secret</span></code> in the tfvars). Check: <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">plan</span> <span class="pre">experiments/smoke.toml</span> <span class="pre">--backend</span> <span class="pre">gcp-batch</span></code> resolves <code class="docutils literal notranslate"><span class="pre">edge</span></code> to a digest only when the package is public or <code class="docutils literal notranslate"><span class="pre">YAPNR_REGISTRY_TOKEN</span></code> is
+set.</p>
+</section>
+<section id="project-and-billing-owner-account">
+<h3>2. Project and billing (owner account)<a class="headerlink" href="#project-and-billing-owner-account" title="Link to this heading">¶</a></h3>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>gcloud<span class="w"> </span>config<span class="w"> </span>configurations<span class="w"> </span>create<span class="w"> </span>yapnr-owner<span class="w">   </span><span class="c1"># first: a new configuration has no account</span>
+!<span class="w"> </span>gcloud<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$OWNER</span><span class="s2">&quot;</span><span class="w">              </span><span class="c1"># in Claude Code: the ! prefix, you sign in yourself</span>
+gcloud<span class="w"> </span>projects<span class="w"> </span>create<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PROJECT</span><span class="s2">&quot;</span><span class="w"> </span>--name<span class="o">=</span><span class="s2">&quot;yapnr experiments&quot;</span>
+gcloud<span class="w"> </span>billing<span class="w"> </span>projects<span class="w"> </span>link<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PROJECT</span><span class="s2">&quot;</span><span class="w"> </span>--billing-account<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$BILLING</span><span class="s2">&quot;</span>
+gcloud<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>project<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PROJECT</span><span class="s2">&quot;</span>
+gcloud<span class="w"> </span>services<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>serviceusage.googleapis.com<span class="w"> </span>cloudresourcemanager.googleapis.com<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>iam.googleapis.com<span class="w"> </span>cloudbilling.googleapis.com<span class="w"> </span>billingbudgets.googleapis.com<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>storage.googleapis.com
+gcloud<span class="w"> </span>projects<span class="w"> </span>describe<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PROJECT</span><span class="s2">&quot;</span><span class="w"> </span>--format<span class="o">=</span><span class="s1">&#39;value(projectNumber)&#39;</span><span class="w">   </span><span class="c1"># project_number below</span>
+</pre></div>
+</div>
+</section>
+<section id="state-bucket-and-infrastructure">
+<h3>3. State bucket and infrastructure<a class="headerlink" href="#state-bucket-and-infrastructure" title="Link to this heading">¶</a></h3>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>gcloud<span class="w"> </span>storage<span class="w"> </span>buckets<span class="w"> </span>create<span class="w"> </span><span class="s2">&quot;gs://</span><span class="nv">$STATE</span><span class="s2">&quot;</span><span class="w"> </span>--location<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$REGION</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--uniform-bucket-level-access<span class="w"> </span>--public-access-prevention
+gcloud<span class="w"> </span>storage<span class="w"> </span>buckets<span class="w"> </span>update<span class="w"> </span><span class="s2">&quot;gs://</span><span class="nv">$STATE</span><span class="s2">&quot;</span><span class="w"> </span>--versioning
+!<span class="w"> </span>gcloud<span class="w"> </span>auth<span class="w"> </span>application-default<span class="w"> </span>login
+gcloud<span class="w"> </span>auth<span class="w"> </span>application-default<span class="w"> </span>set-quota-project<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PROJECT</span><span class="s2">&quot;</span>
+cp<span class="w"> </span>infra/gcp/examples/owner.tfvars.example<span class="w"> </span>~/.config/yapnr/gcp.tfvars<span class="w">   </span><span class="c1"># then edit it</span>
+<span class="nb">cd</span><span class="w"> </span>infra/gcp
+tofu<span class="w"> </span>init<span class="w"> </span>-backend-config<span class="o">=</span><span class="s2">&quot;bucket=</span><span class="nv">$STATE</span><span class="s2">&quot;</span>
+tofu<span class="w"> </span>plan<span class="w"> </span>-var-file<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$HOME</span><span class="s2">/.config/yapnr/gcp.tfvars&quot;</span><span class="w"> </span>-out<span class="o">=</span>bootstrap.plan
+tofu<span class="w"> </span>apply<span class="w"> </span>bootstrap.plan
+</pre></div>
+</div>
+<p>The plan creates 70 resources for two regions (<a class="reference external" href="https://github.com/Studio-Fug/yapnr/tree/main/infra/gcp">infra/gcp</a>):
+APIs, the VPC, both buckets, the service accounts and grants, the registry caches, the Spot
+templates, the budget and the guard functions.</p>
+<p>The project’s <code class="docutils literal notranslate"><span class="pre">default</span></code> network allows SSH from anywhere and gives VMs external IPs; yapnr jobs
+never use it, so delete it, and with it any way a hand-written job could land there:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>gcloud<span class="w"> </span>compute<span class="w"> </span>firewall-rules<span class="w"> </span>list<span class="w"> </span>--filter<span class="o">=</span><span class="s2">&quot;network=default&quot;</span><span class="w"> </span>--format<span class="o">=</span><span class="s2">&quot;value(name)&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="p">|</span><span class="w"> </span>xargs<span class="w"> </span>-r<span class="w"> </span>gcloud<span class="w"> </span>compute<span class="w"> </span>firewall-rules<span class="w"> </span>delete<span class="w"> </span>--quiet
+gcloud<span class="w"> </span>compute<span class="w"> </span>networks<span class="w"> </span>delete<span class="w"> </span>default<span class="w"> </span>--quiet
+</pre></div>
+</div>
+</section>
+<section id="quotas">
+<h3>4. Quotas<a class="headerlink" href="#quotas" title="Link to this heading">¶</a></h3>
+<p>Spot VMs consume the preemptible CPU quota once it is granted in a region (<a class="reference external" href="https://docs.cloud.google.com/compute/resource-usage">quotas</a>). The
+quota ceiling is the only hard cap on spending, so request only what the caps allow, in the enabled
+regions only. Look the quota id up first (it is not verified here), then create a preference with
+the id <code class="docutils literal notranslate"><span class="pre">yapnr-preemptible-cpus-&lt;region&gt;</span></code>, or request the quota in the console (IAM &amp; Admin, Quotas &amp;
+System Limits); the budget guard finds an existing preference by quota id and region. Check first
+that the region offers the planned shapes (the price table only shows that the region bills them):</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>gcloud<span class="w"> </span>compute<span class="w"> </span>machine-types<span class="w"> </span>list<span class="w"> </span>--project<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$PROJECT</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--filter<span class="o">=</span><span class="s2">&quot;zone~^</span><span class="nv">$REGION</span><span class="s2">- AND name=( c4d-highcpu-16 c4d-highcpu-8 c3d-highcpu-8 )&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--format<span class="o">=</span><span class="s2">&quot;table(name,zone)&quot;</span>
+gcloud<span class="w"> </span>quotas<span class="w"> </span>info<span class="w"> </span>list<span class="w"> </span>--service<span class="o">=</span>compute.googleapis.com<span class="w"> </span>--project<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$PROJECT</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--filter<span class="o">=</span><span class="s2">&quot;quotaId~PREEMPTIBLE&quot;</span><span class="w"> </span>--format<span class="o">=</span><span class="s2">&quot;value(quotaId)&quot;</span>
+gcloud<span class="w"> </span>quotas<span class="w"> </span>preferences<span class="w"> </span>create<span class="w"> </span>--service<span class="o">=</span>compute.googleapis.com<span class="w"> </span>--project<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$PROJECT</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--quota-id<span class="o">=</span>&lt;id<span class="w"> </span>from<span class="w"> </span>the<span class="w"> </span>listing&gt;<span class="w"> </span>--preference-id<span class="o">=</span><span class="s2">&quot;yapnr-preemptible-cpus-</span><span class="nv">$REGION</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--dimensions<span class="o">=</span><span class="nv">region</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$REGION</span><span class="s2">&quot;</span><span class="w"> </span>--preferred-value<span class="o">=</span><span class="m">64</span><span class="w"> </span>--email<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$OWNER</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--justification<span class="o">=</span><span class="s2">&quot;Batch Spot jobs for open-source PCB routing research&quot;</span>
+</pre></div>
+</div>
+<p>Repeat per region, and list each region and quota id in <code class="docutils literal notranslate"><span class="pre">quota_preferences</span></code> of the tfvars (then
+<code class="docutils literal notranslate"><span class="pre">tofu</span> <span class="pre">apply</span></code> again). Leave the on-demand CPU quota at its default. A new billing account may get
+less than it asks for at first.</p>
+<p>The quota, not the price, sets how fast campaigns finish: at one task per physical core, 64
+preemptible vCPUs of C4D run 32 single-threaded tasks at once, the work of about 25 M4
+performance cores at the table’s speed factor (the development Mac has 4 performance and 6
+efficiency cores), for about $0.60 an hour in <code class="docutils literal notranslate"><span class="pre">us-west4</span></code>. Ask for more (256 vCPUs is about $2.40
+an hour) once the kill-switch drill (step 9) and the first campaigns have shown the guards work;
+raise <code class="docutils literal notranslate"><span class="pre">max_parallel_vcpus</span></code> with it.</p>
+</section>
+<section id="price-key-optional">
+<h3>5. Price key (optional)<a class="headerlink" href="#price-key-optional" title="Link to this heading">¶</a></h3>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>gcloud<span class="w"> </span>services<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>apikeys.googleapis.com
+gcloud<span class="w"> </span>services<span class="w"> </span>api-keys<span class="w"> </span>create<span class="w"> </span>--display-name<span class="o">=</span>yapnr-prices<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--api-target<span class="o">=</span><span class="nv">service</span><span class="o">=</span>cloudbilling.googleapis.com
+security<span class="w"> </span>add-generic-password<span class="w"> </span>-s<span class="w"> </span>yapnr-billing-catalog<span class="w"> </span>-a<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$USER</span><span class="s2">&quot;</span><span class="w"> </span>-w<span class="w">   </span><span class="c1"># paste the key</span>
+yapnr<span class="w"> </span>exp<span class="w"> </span>prices<span class="w"> </span>--refresh
+</pre></div>
+</div>
+</section>
+<section id="day-to-day-identity">
+<h3>6. Day-to-day identity<a class="headerlink" href="#day-to-day-identity" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">tofu</span> <span class="pre">apply</span></code> granted <code class="docutils literal notranslate"><span class="pre">$MAC_ID</span></code> the right to impersonate <code class="docutils literal notranslate"><span class="pre">yapnr-submit</span></code> and nothing else:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>gcloud<span class="w"> </span>config<span class="w"> </span>configurations<span class="w"> </span>create<span class="w"> </span>yapnr
+!<span class="w"> </span>gcloud<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$MAC_ID</span><span class="s2">&quot;</span>
+gcloud<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>project<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PROJECT</span><span class="s2">&quot;</span>
+gcloud<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>auth/impersonate_service_account<span class="w"> </span><span class="s2">&quot;yapnr-submit@</span><span class="si">${</span><span class="nv">PROJECT</span><span class="si">}</span><span class="s2">.iam.gserviceaccount.com&quot;</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code> passes <code class="docutils literal notranslate"><span class="pre">--impersonate-service-account</span></code> and <code class="docutils literal notranslate"><span class="pre">--project</span></code> on every call anyway; set
+<code class="docutils literal notranslate"><span class="pre">gcloud_configuration</span> <span class="pre">=</span> <span class="pre">&quot;yapnr&quot;</span></code> in the owner config to pin the configuration too.</p>
+</section>
+<section id="owner-config">
+<h3>7. Owner config<a class="headerlink" href="#owner-config" title="Link to this heading">¶</a></h3>
+<p>Copy <a class="reference internal" href="#examples/cloud.toml.example"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">docs/examples/cloud.toml.example</span></code></span></a> to
+<code class="docutils literal notranslate"><span class="pre">~/.config/yapnr/cloud.toml</span></code> and fill <code class="docutils literal notranslate"><span class="pre">[gcp]</span></code> from <code class="docutils literal notranslate"><span class="pre">tofu</span> <span class="pre">output</span> <span class="pre">-json</span> <span class="pre">owner_config</span></code>.</p>
+</section>
+<section id="checks">
+<h3>8. Checks<a class="headerlink" href="#checks" title="Link to this heading">¶</a></h3>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>yapnr<span class="w"> </span>exp<span class="w"> </span>doctor<span class="w"> </span>--backend<span class="w"> </span>gcp-batch<span class="w">      </span><span class="c1"># buckets, Batch access, quotas, templates, freeze</span>
+</pre></div>
+</div>
+</section>
+<section id="kill-switch-drill">
+<h3>9. Kill-switch drill<a class="headerlink" href="#kill-switch-drill" title="Link to this heading">¶</a></h3>
+<p>With the owner configuration (it may publish to the topic), publish a synthetic over-budget message
+and check that <code class="docutils literal notranslate"><span class="pre">yapnr-submit</span></code> is disabled (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">doctor</span></code> and <code class="docutils literal notranslate"><span class="pre">submit</span></code> fail to impersonate it)
+and <code class="docutils literal notranslate"><span class="pre">control/frozen</span></code> appears. Only the owner can undo the freeze: re-enable the account, then clear
+the marker:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>publish<span class="w"> </span>yapnr-budget<span class="w"> </span>--configuration<span class="o">=</span>yapnr-owner<span class="w"> </span>--message<span class="o">=</span><span class="s1">&#39;{</span>
+<span class="s1">  &quot;budgetDisplayName&quot;: &quot;drill&quot;, &quot;costAmount&quot;: 51, &quot;budgetAmount&quot;: 50,</span>
+<span class="s1">  &quot;costIntervalStart&quot;: &quot;&lt;first day of this month&gt;T00:00:00Z&quot;, &quot;currencyCode&quot;: &quot;USD&quot;}&#39;</span>
+gcloud<span class="w"> </span>iam<span class="w"> </span>service-accounts<span class="w"> </span>describe<span class="w"> </span><span class="s2">&quot;yapnr-submit@</span><span class="si">${</span><span class="nv">PROJECT</span><span class="si">}</span><span class="s2">.iam.gserviceaccount.com&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--configuration<span class="o">=</span>yapnr-owner<span class="w"> </span>--format<span class="o">=</span><span class="s2">&quot;value(disabled)&quot;</span><span class="w">          </span><span class="c1"># True</span>
+gcloud<span class="w"> </span>iam<span class="w"> </span>service-accounts<span class="w"> </span><span class="nb">enable</span><span class="w"> </span><span class="s2">&quot;yapnr-submit@</span><span class="si">${</span><span class="nv">PROJECT</span><span class="si">}</span><span class="s2">.iam.gserviceaccount.com&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--configuration<span class="o">=</span>yapnr-owner
+yapnr<span class="w"> </span>exp<span class="w"> </span>unfreeze<span class="w"> </span>--backend<span class="w"> </span>gcp-batch
+</pre></div>
+</div>
+<p>After a real freeze, do the same once you know why the budget ran out.</p>
+<p>To drill the quota cut too, use a cost of 61 (above 120%), then restore the quota with the step 4
+command and learn whether that needs a new approval.</p>
+</section>
+<section id="smoke-job">
+<h3>10. Smoke job<a class="headerlink" href="#smoke-job" title="Link to this heading">¶</a></h3>
+<p>Two tiny tasks on C4D, once without a template (does Batch take a Hyperdisk boot disk from an
+instance policy?) and once from the template; each costs well under a cent:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>yapnr<span class="w"> </span>exp<span class="w"> </span>plan<span class="w"> </span>experiments/smoke.toml<span class="w"> </span>--backend<span class="w"> </span>gcp-batch<span class="w"> </span>--shape<span class="w"> </span>c4d-highcpu-4<span class="w"> </span>--no-template
+yapnr<span class="w"> </span>exp<span class="w"> </span>submit<span class="w"> </span>&lt;plan&gt;<span class="w"> </span>--dry-run<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>yapnr<span class="w"> </span>exp<span class="w"> </span>submit<span class="w"> </span>&lt;plan&gt;
+yapnr<span class="w"> </span>exp<span class="w"> </span>status<span class="w"> </span>&lt;plan&gt;<span class="p">;</span><span class="w"> </span>yapnr<span class="w"> </span>exp<span class="w"> </span>fetch<span class="w"> </span>&lt;plan&gt;
+yapnr<span class="w"> </span>exp<span class="w"> </span>plan<span class="w"> </span>experiments/smoke.toml<span class="w"> </span>--backend<span class="w"> </span>gcp-batch<span class="w"> </span>--shape<span class="w"> </span>c4d-highcpu-16
+yapnr<span class="w"> </span>exp<span class="w"> </span>plan<span class="w"> </span>experiments/ladder-small.toml<span class="w"> </span>--backend<span class="w"> </span>gcp-batch<span class="w">   </span><span class="c1"># then the first ladder cells</span>
+</pre></div>
+</div>
+</section>
+<section id="sign-the-owner-out">
+<h3>11. Sign the owner out<a class="headerlink" href="#sign-the-owner-out" title="Link to this heading">¶</a></h3>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>gcloud<span class="w"> </span>auth<span class="w"> </span>revoke<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$OWNER</span><span class="s2">&quot;</span>
+gcloud<span class="w"> </span>auth<span class="w"> </span>application-default<span class="w"> </span>revoke
+</pre></div>
+</div>
+</section>
+<section id="calibration">
+<h3>12. Calibration<a class="headerlink" href="#calibration" title="Link to this heading">¶</a></h3>
+<p>See <a class="reference internal" href="#id1">Calibration</a>. Then record the ranking in <code class="docutils literal notranslate"><span class="pre">[gcp]</span> <span class="pre">ranking</span></code>.</p>
+</section>
+</section>
+<section id="costs-and-guards">
+<h2>Costs and guards<a class="headerlink" href="#costs-and-guards" title="Link to this heading">¶</a></h2>
+<p>Prices are list prices from the committed table
+(<a class="reference external" href="https://github.com/Studio-Fug/yapnr/blob/main/yapnr/exp/data/gcp-spot-prices.json"><code class="docutils literal notranslate"><span class="pre">yapnr/exp/data/gcp-spot-prices.json</span></code></a>,
+accessed 2026-10-02: the <a class="reference external" href="https://cloud.google.com/spot-vms/pricing">Spot pricing page</a> for <code class="docutils literal notranslate"><span class="pre">us-central1</span></code> and a public
+<a class="reference external" href="https://github.com/Cyclenerd/google-cloud-pricing-cost-calculator">Billing Catalog snapshot</a> of 2026-09-24 for other regions) until <code class="docutils literal notranslate"><span class="pre">prices</span> <span class="pre">--refresh</span></code>
+replaces them; regions missing from the table are priced at <code class="docutils literal notranslate"><span class="pre">us-central1</span></code>, which is above the
+median, and the plan says so. Speeds are PassMark single-thread ratios to the development Mac’s M4
+until the calibration measures them. Examples from that table, as <code class="docutils literal notranslate"><span class="pre">plan</span></code> prints them with the
+example owner config (C4D Spot in <code class="docutils literal notranslate"><span class="pre">us-west4</span></code>, one task per physical core):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Campaign</p></th>
+<th class="head text-right"><p>Tasks</p></th>
+<th class="head text-right"><p>Expected</p></th>
+<th class="head text-right"><p>Ceiling</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">smoke.toml</span></code> on <code class="docutils literal notranslate"><span class="pre">c4d-highcpu-4</span></code> (<code class="docutils literal notranslate"><span class="pre">--no-template</span></code>)</p></td>
+<td class="text-right"><p>2</p></td>
+<td class="text-right"><p>&lt; $0.01</p></td>
+<td class="text-right"><p>$0.06</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ladder-small.toml</span></code> (one <code class="docutils literal notranslate"><span class="pre">c4d-highcpu-16</span></code>)</p></td>
+<td class="text-right"><p>4</p></td>
+<td class="text-right"><p>$0.01</p></td>
+<td class="text-right"><p>$0.41</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">calibration-ladder.toml</span></code> (per shape, 8 vCPUs)</p></td>
+<td class="text-right"><p>12</p></td>
+<td class="text-right"><p>$0.01</p></td>
+<td class="text-right"><p>$1.09</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ladder-sweep.toml</span></code> (8 x 16)</p></td>
+<td class="text-right"><p>128</p></td>
+<td class="text-right"><p>$0.07</p></td>
+<td class="text-right"><p>$7.41</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The ceilings are far above the expected costs on purpose: they price every attempt at its full
+<code class="docutils literal notranslate"><span class="pre">max_wall_s</span></code> plus Batch’s 10-minute grace, with every retry, on whole VMs even when a small job
+fills only part of one.</p>
+<p>The layers, each of which holds when the one above fails:</p>
+<ol class="arabic simple">
+<li><p><strong>Quota</strong> (step 4): the hard ceiling. Spot burn is at most quota x price: 64 vCPUs of
+<code class="docutils literal notranslate"><span class="pre">c4d-highcpu</span></code> cost about $0.016 per vCPU-hour with memory in <code class="docutils literal notranslate"><span class="pre">us-central1</span></code>, so about $1.04 an
+hour, less in <code class="docutils literal notranslate"><span class="pre">us-west4</span></code>.</p></li>
+<li><p><strong>Per-submit caps</strong> (<code class="docutils literal notranslate"><span class="pre">[limits]</span></code>): <code class="docutils literal notranslate"><span class="pre">max_tasks</span></code>, <code class="docutils literal notranslate"><span class="pre">max_task_wall_s</span></code>, <code class="docutils literal notranslate"><span class="pre">max_parallel_vcpus</span></code> (the
+jobs’ parallelism), <code class="docutils literal notranslate"><span class="pre">max_retries</span></code> (at most 3, infrastructure exit codes only) and
+<code class="docutils literal notranslate"><span class="pre">max_campaign_hours</span></code> (the jobs’ deadline). <code class="docutils literal notranslate"><span class="pre">submit</span></code> refuses tasks that a queued or running job
+of the campaign still holds (no task runs twice), and on-demand placements (<code class="docutils literal notranslate"><span class="pre">spot</span> <span class="pre">=</span> <span class="pre">false</span></code>,
+outside the quota ceiling) unless <code class="docutils literal notranslate"><span class="pre">allow_on_demand</span> <span class="pre">=</span> <span class="pre">true</span></code>.</p></li>
+<li><p><strong>The estimate</strong>: every plan prints the expected cost and a ceiling (every attempt at its
+maximum wall time plus the grace, with every retry, on whole VMs; or the quota’s VMs for
+<code class="docutils literal notranslate"><span class="pre">max_campaign_hours</span></code> plus the reaper’s interval, whichever is lower).
+<code class="docutils literal notranslate"><span class="pre">submit</span></code> asks above <code class="docutils literal notranslate"><span class="pre">confirm_usd</span></code> and refuses a ceiling above <code class="docutils literal notranslate"><span class="pre">refuse_usd</span></code> unless <code class="docutils literal notranslate"><span class="pre">--max-usd</span></code>
+raises it, never above <code class="docutils literal notranslate"><span class="pre">hard_refuse_usd</span></code>.</p></li>
+<li><p><strong>The reaper</strong>: every 15 minutes it cancels jobs past their <code class="docutils literal notranslate"><span class="pre">deadline</span></code> label and deletes yapnr VMs
+an hour past it.</p></li>
+<li><p><strong>The budget and kill switch</strong>: at 100% of the monthly budget the guard disables
+<code class="docutils literal notranslate"><span class="pre">yapnr-submit</span></code> (no client can submit until the owner re-enables it), writes <code class="docutils literal notranslate"><span class="pre">control/frozen</span></code>
+(submit and every task check it) and cancels every yapnr job; at 120% it sets the preemptible
+CPU quota preferences to 0. The budget counts spend gross of credits, so free-trial or
+research credits do not hide a runaway; raise <code class="docutils literal notranslate"><span class="pre">budget_usd</span></code> to spend credits faster. Budget
+data lags by hours (<a class="reference external" href="https://docs.cloud.google.com/billing/docs/how-to/budgets">budgets</a>), which is why it is the last layer. Google’s “disable
+billing” recipe is not used: it can delete resources.</p></li>
+<li><p><strong>Lifecycle rules</strong> delete result archives after 90 days and checkpoints after 14.</p></li>
+</ol>
+<p><code class="docutils literal notranslate"><span class="pre">fetch</span></code> downloads summaries by default; <code class="docutils literal notranslate"><span class="pre">--full</span></code> adds every <code class="docutils literal notranslate"><span class="pre">result.tar.gz</span></code>, and internet egress
+is billed (about $0.12 per GiB, <a class="reference external" href="https://cloud.google.com/vpc/network-pricing">network pricing</a>).</p>
+</section>
+<section id="slurm-and-apptainer-hpc-allocations">
+<h2>Slurm and Apptainer (HPC allocations)<a class="headerlink" href="#slurm-and-apptainer-hpc-allocations" title="Link to this heading">¶</a></h2>
+<p>Add the site to the owner config (<code class="docutils literal notranslate"><span class="pre">[slurm.&lt;site&gt;]</span></code>: account, partition, store, SIF path, array and
+concurrency limits, <code class="docutils literal notranslate"><span class="pre">chunk</span></code>, <code class="docutils literal notranslate"><span class="pre">slots</span></code>, <code class="docutils literal notranslate"><span class="pre">speed</span></code>), then:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>yapnr<span class="w"> </span>exp<span class="w"> </span>plan<span class="w"> </span>experiments/ladder-sweep.toml<span class="w"> </span>--backend<span class="w"> </span>slurm<span class="w"> </span>--site<span class="w"> </span>&lt;site&gt;
+rsync<span class="w"> </span>-a<span class="w"> </span>&lt;plan&gt;/<span class="w"> </span>&lt;login<span class="w"> </span>node&gt;:&lt;somewhere&gt;/<span class="w">        </span><span class="c1"># by hand; agents never SSH to a site</span>
+<span class="c1"># on the login node:</span>
+bash<span class="w"> </span>&lt;somewhere&gt;/backend/slurm/submit.sh
+bash<span class="w"> </span>&lt;somewhere&gt;/backend/slurm/status.sh
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">submit.sh</span></code> needs only bash, coreutils, Slurm and Apptainer: it stages the bundles and campaign
+files into the site’s store, builds the SIF once from the pinned digest
+(<code class="docutils literal notranslate"><span class="pre">apptainer</span> <span class="pre">pull</span> <span class="pre">...</span> <span class="pre">docker://ghcr.io/studio-fug/yapnr&#64;sha256:...</span></code>), and submits one
+<code class="docutils literal notranslate"><span class="pre">sbatch</span> <span class="pre">--array</span></code> per resource class. Each array element runs <code class="docutils literal notranslate"><span class="pre">chunk</span></code> tasks in sequence (the plan
+raises <code class="docutils literal notranslate"><span class="pre">chunk</span></code> until the array fits <code class="docutils literal notranslate"><span class="pre">max_array</span></code>), with <code class="docutils literal notranslate"><span class="pre">--requeue</span> <span class="pre">--signal=B:USR1&#64;300</span></code>: the batch
+shell forwards the signal, the wrapper flushes checkpoints and exits, and the element is requeued;
+finished tasks are skipped. Copy the store’s <code class="docutils literal notranslate"><span class="pre">campaigns/&lt;id&gt;</span></code> back and run
+<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">fetch</span> <span class="pre">&lt;plan&gt;</span> <span class="pre">--from</span> <span class="pre">&lt;copy&gt;</span></code>. A private campaign is refused on a site unless the owner
+config marks it <code class="docutils literal notranslate"><span class="pre">private_ok</span> <span class="pre">=</span> <span class="pre">true</span></code>.</p>
+<p>Before writing an allocation request, read the site’s charging policy:</p>
+<ul class="simple">
+<li><p><strong>Per core</strong> (shared nodes): keep <code class="docutils literal notranslate"><span class="pre">slots</span> <span class="pre">=</span> <span class="pre">1</span></code>; each array element is one task’s cores.</p></li>
+<li><p><strong>Per node</strong> (the scheduler gives whole nodes, as many large centres do): set <code class="docutils literal notranslate"><span class="pre">slots</span></code> to the
+tasks one node holds (its cores over the task’s cores, within its memory) and add
+<code class="docutils literal notranslate"><span class="pre">extra_sbatch</span> <span class="pre">=</span> <span class="pre">[&quot;--exclusive&quot;]</span></code>. Each element then runs that many wrappers side by side and
+is charged one node; with <code class="docutils literal notranslate"><span class="pre">slots</span> <span class="pre">=</span> <span class="pre">1</span></code> every one-core task would be charged a whole node.</p></li>
+<li><p><strong>The request itself</strong>: <code class="docutils literal notranslate"><span class="pre">plan</span> <span class="pre">--backend</span> <span class="pre">slurm</span></code> prints core-hours at the site’s <code class="docutils literal notranslate"><span class="pre">speed</span></code>
+(default 0.5 of the Mac’s M4 performance core, typical of HPC server cores by single-thread
+rating), before requeues and the idle tail of each element. A calibration run on the site
+replaces the guess before the full request: plan <code class="docutils literal notranslate"><span class="pre">experiments/calibration-ladder.toml</span></code> with
+<code class="docutils literal notranslate"><span class="pre">--backend</span> <span class="pre">slurm</span></code>, fetch it with <code class="docutils literal notranslate"><span class="pre">--from</span></code>, and <code class="docutils literal notranslate"><span class="pre">calibration</span> <span class="pre">ingest</span></code> it like a cloud shape; its
+factor is keyed <code class="docutils literal notranslate"><span class="pre">slurm/&lt;CPU</span> <span class="pre">model&gt;</span></code>, the value for <code class="docutils literal notranslate"><span class="pre">speed</span></code>. Sites that bill node-hours want the
+core-hours divided by the cores per node.</p></li>
+<li><p><strong>Images</strong>: <code class="docutils literal notranslate"><span class="pre">submit.sh</span></code> pulls the SIF on the login node, keeping Apptainer’s layer cache and
+build directory under the store (<code class="docutils literal notranslate"><span class="pre">APPTAINER_CACHEDIR</span></code>, <code class="docutils literal notranslate"><span class="pre">APPTAINER_TMPDIR</span></code>; set them to
+override), because home quotas and login-node <code class="docutils literal notranslate"><span class="pre">/tmp</span></code> are small. While the GHCR packages are
+private, export <code class="docutils literal notranslate"><span class="pre">APPTAINER_DOCKER_USERNAME</span></code> and <code class="docutils literal notranslate"><span class="pre">APPTAINER_DOCKER_PASSWORD</span></code> (a <code class="docutils literal notranslate"><span class="pre">read:packages</span></code>
+token) before running it. Compute nodes need no internet access.</p></li>
+</ul>
+</section>
+<section id="id1">
+<h2>Calibration<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h2>
+<p>The calibration measures what the estimator now assumes. Run <code class="docutils literal notranslate"><span class="pre">experiments/calibration-ladder.toml</span></code>
+on the Mac (the reference) and on each candidate shape, then ingest the records:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>yapnr<span class="w"> </span>exp<span class="w"> </span>plan<span class="w"> </span>experiments/calibration-ladder.toml<span class="w"> </span>--backend<span class="w"> </span><span class="nb">local</span>
+yapnr<span class="w"> </span>exp<span class="w"> </span>plan<span class="w"> </span>experiments/calibration-ladder.toml<span class="w"> </span>--backend<span class="w"> </span>gcp-batch<span class="w"> </span>--shape<span class="w"> </span>c4d-highcpu-8<span class="w"> </span>--region<span class="w"> </span>us-west4
+yapnr<span class="w"> </span>exp<span class="w"> </span>plan<span class="w"> </span>experiments/calibration-ladder.toml<span class="w"> </span>--backend<span class="w"> </span>gcp-batch<span class="w"> </span>--shape<span class="w"> </span>c3d-highcpu-8<span class="w"> </span>--region<span class="w"> </span>northamerica-northeast1
+<span class="c1"># ... submit each, fetch each, then:</span>
+yapnr<span class="w"> </span>exp<span class="w"> </span>calibration<span class="w"> </span>ingest<span class="w"> </span>--reference<span class="w"> </span>&lt;fetched&gt;/&lt;<span class="nb">local</span><span class="w"> </span>id&gt;<span class="w"> </span>--cloud<span class="w"> </span>&lt;fetched&gt;/&lt;id&gt;<span class="w"> </span>...<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--out<span class="w"> </span>~/.config/yapnr/calibration.json
+</pre></div>
+</div>
+<p>The speed factors are ratios to the reference’s wall times, so a loaded reference makes every cloud
+shape look faster than it is. Run the reference on an otherwise idle Mac (stop the other
+experiments first) and plan it with a copy of the owner config (<code class="docutils literal notranslate"><span class="pre">YAPNR_CLOUD_CONFIG=&lt;copy&gt;</span></code>) whose
+<code class="docutils literal notranslate"><span class="pre">[local]</span></code> has <code class="docutils literal notranslate"><span class="pre">nice</span> <span class="pre">=</span> <span class="pre">0</span></code> and <code class="docutils literal notranslate"><span class="pre">workers</span></code> at most the performance cores
+(<code class="docutils literal notranslate"><span class="pre">sysctl</span> <span class="pre">-n</span> <span class="pre">hw.perflevel0.physicalcpu</span></code>: 4 on the development Mac, which also has 6 efficiency
+cores). <code class="docutils literal notranslate"><span class="pre">ingest</span></code> prints the reference’s median load average and warns when it reached half the
+Mac’s cores.</p>
+<p><code class="docutils literal notranslate"><span class="pre">ingest</span></code> pairs tasks by kind and labels and writes, per machine type and family, the median of
+reference wall time over cloud wall time, with the number of pairs and the spread; set
+<code class="docutils literal notranslate"><span class="pre">[prices]</span> <span class="pre">calibration</span></code> to use it. Each shape costs a few cents at the table’s prices; the design’s
+full calibration (nine families, two regions, both SMT packings) is capped at $10.</p>
+<p>Read two rankings from the factors. Cost per result (price / speed) says where a campaign is
+cheapest; results per hour within the quota (speed / vCPUs per task) says how fast it finishes,
+and the quota is the scarce part: C4D at one task per core yields about 0.4 of an M4 core per
+quota vCPU, T2D and C4A (a full core per vCPU) about 0.55 at the table’s factors. Hard rungs and
+wall-clock-budgeted search favour the fastest core (C4D); seed sweeps of short cells may favour
+throughput. Neither T2D nor C4A is offered in the two proposed regions: add a region that has them
+(the price table lists <code class="docutils literal notranslate"><span class="pre">northamerica-northeast2</span></code> for T2D and <code class="docutils literal notranslate"><span class="pre">europe-west4</span></code> for C4A) to
+<code class="docutils literal notranslate"><span class="pre">regions</span></code> and the tfvars before calibrating them (C4A, a Hyperdisk-only family, also needs
+<code class="docutils literal notranslate"><span class="pre">c4a-highcpu-8</span></code> in <code class="docutils literal notranslate"><span class="pre">template_shapes</span></code>), and compare C4A (arm64) boards only with other
+arm64 runs, such as the Mac’s and the CI ladder’s. <code class="docutils literal notranslate"><span class="pre">ingest</span></code> keys factors by machine type, not by
+packing: ingest a one-task-per-vCPU run (<code class="docutils literal notranslate"><span class="pre">[placement]</span> <span class="pre">packing</span> <span class="pre">=</span> <span class="pre">&quot;vcpu&quot;</span></code> in a copy of the campaign)
+into a calibration file of its own.</p>
+</section>
+<section id="private-campaigns">
+<h2>Private campaigns<a class="headerlink" href="#private-campaigns" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">visibility</span> <span class="pre">=</span> <span class="pre">&quot;private&quot;</span></code> in a campaign file gives opaque campaign and task ids (<code class="docutils literal notranslate"><span class="pre">&lt;date&gt;-p-&lt;hash&gt;</span></code>,
+<code class="docutils literal notranslate"><span class="pre">p/&lt;16</span> <span class="pre">hex&gt;</span></code>), keeps the readable mapping in the local plan directory only, leaves the readable
+spec out of the uploaded <code class="docutils literal notranslate"><span class="pre">campaign.json</span></code>, puts only opaque values in labels, plans into
+<code class="docutils literal notranslate"><span class="pre">[local]</span> <span class="pre">private_results_root</span></code>, and refuses to fetch anywhere else or into a checkout of the public
+repository. The generator of private bundles lives in the private repository and emits the generic
+kinds.</p>
+<section id="any-command-as-a-task-stage-plans">
+<h3>Any command as a task: stage plans<a class="headerlink" href="#any-command-as-a-task-stage-plans" title="Link to this heading">¶</a></h3>
+<p>Until the halving driver writes its own stage plans, <code class="docutils literal notranslate"><span class="pre">mc-eval</span></code> runs any list of commands, which is
+how private board experiments (an A/B of engine snapshots, a full iteration per placement) move to
+the cloud without code changes. Each line of a JSON Lines file is one task: the command, the
+directories it needs (each packed into a bundle and unpacked at <code class="docutils literal notranslate"><span class="pre">dest</span></code> in the task’s work
+directory, which is also the working directory), its environment, resources, and the JSON record
+it writes under <code class="docutils literal notranslate"><span class="pre">out/</span></code>:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>{&quot;id&quot;: &quot;arm-a/s0&quot;, &quot;command&quot;: [&quot;${PYTHON}&quot;, &quot;-m&quot;, &quot;pnr.mc.halving&quot;, &quot;--out&quot;, &quot;out/run&quot;,
+   &quot;--inputs&quot;, &quot;boards/inputs&quot;, &quot;--constraints&quot;, &quot;boards/constraints.json&quot;, &quot;--repo&quot;, &quot;.&quot;,
+   &quot;--seed&quot;, &quot;0&quot;, &quot;--procs&quot;, &quot;4&quot;, &quot;--native-parallel&quot;, &quot;2&quot;, &quot;--native-workers&quot;, &quot;2&quot;],
+ &quot;inputs&quot;: [{&quot;dest&quot;: &quot;snap&quot;, &quot;path&quot;: &quot;snapshots/arm-a&quot;}, {&quot;dest&quot;: &quot;boards&quot;, &quot;path&quot;: &quot;board&quot;}],
+ &quot;env&quot;: {&quot;PYTHONPATH&quot;: &quot;snap/hardware/pnr&quot;, &quot;PNR_LIVE_CANDIDATE&quot;: &quot;hier&quot;},
+ &quot;resources&quot;: {&quot;cpus&quot;: 4, &quot;memory_gb&quot;: 12, &quot;disk_gb&quot;: 4, &quot;max_wall_s&quot;: 14400},
+ &quot;record&quot;: &quot;out/run/status.json&quot;, &quot;labels&quot;: {&quot;arm&quot;: &quot;a&quot;, &quot;seed&quot;: &quot;0&quot;}}
+</pre></div>
+</div>
+<p>(one line per task in the file; wrapped here). The campaign file names it:</p>
+<div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="n">schema</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;yapnr-campaign-v1&quot;</span>
+<span class="n">kind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mc-eval&quot;</span>
+<span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;snapshot-ab&quot;</span>
+<span class="n">source</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;none&quot;</span><span class="w">          </span><span class="c1"># the engine comes from the snapshot bundles</span>
+<span class="n">image</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;edge&quot;</span>
+<span class="n">visibility</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;private&quot;</span>
+
+<span class="k">[config]</span>
+<span class="n">stage_plan</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;stage.jsonl&quot;</span><span class="w">   </span><span class="c1"># relative to the campaign file; input paths relative to it</span>
+</pre></div>
+</div>
+<p>Paths in commands and <code class="docutils literal notranslate"><span class="pre">env</span></code> are relative to the work directory: no host paths, and no KiCad
+paths, which the wrapper sets for the image (<code class="docutils literal notranslate"><span class="pre">PNR_KICAD_CLI</span></code>, <code class="docutils literal notranslate"><span class="pre">PNR_KICAD_PYTHON</span></code>,
+<code class="docutils literal notranslate"><span class="pre">PNR_KICAD_FOOTPRINTS</span></code>). Give each task the cores its processes use (<code class="docutils literal notranslate"><span class="pre">--procs</span></code> and the native
+workers above; <code class="docutils literal notranslate"><span class="pre">cpus</span> <span class="pre">=</span> <span class="pre">2</span></code> for an evaluation that runs two KiCad processes) and the disk its work
+directory needs (<code class="docutils literal notranslate"><span class="pre">disk_gb</span></code>, default 10 for <code class="docutils literal notranslate"><span class="pre">mc-eval</span></code>): Batch packs by CPU and memory only, so
+<code class="docutils literal notranslate"><span class="pre">plan</span></code> caps the tasks per VM to fit the boot disk (<code class="docutils literal notranslate"><span class="pre">boot_disk_gb</span></code> less 12 GB for the OS and the
+image). A task without checkpoints starts again after a Spot preemption, so keep Spot tasks to a
+few hours; longer ones belong on standard VMs (<code class="docutils literal notranslate"><span class="pre">[placement]</span> <span class="pre">spot</span> <span class="pre">=</span> <span class="pre">false</span></code>, which
+<code class="docutils literal notranslate"><span class="pre">limits.allow_on_demand</span></code> must allow) or on the Mac. <code class="docutils literal notranslate"><span class="pre">fetch</span></code> writes <code class="docutils literal notranslate"><span class="pre">assembled/dataset.jsonl</span></code>, one
+line per task with its record and the machine it ran on. A private A/B campaign of this shape
+(a toy engine snapshot as the bundle) was planned, run and fetched end to end on the local
+backend.</p>
+<p>Three optional keys serve long evaluations. <code class="docutils literal notranslate"><span class="pre">&quot;checkpoint&quot;:</span> <span class="pre">{&quot;path&quot;:</span> <span class="pre">&quot;out/run&quot;}</span></code> makes the task
+resumable: the wrapper copies the top-level files of that directory to the store every
+<code class="docutils literal notranslate"><span class="pre">sync_every_s</span></code> (default 300, at least 30) and when it is stopped (<code class="docutils literal notranslate"><span class="pre">on_signal</span></code>, default true), and
+restores them before a retry, so a command that resumes from its run directory continues after a
+Spot preemption instead of starting again. A command that exits 75 without its record has its
+checkpoint synced too and is retried, so a long run can stop before <code class="docutils literal notranslate"><span class="pre">max_wall_s</span></code> and go on in the
+next attempt (at most <code class="docutils literal notranslate"><span class="pre">max_retries</span></code> retries per submission, preemptions included; <code class="docutils literal notranslate"><span class="pre">submit</span></code> again
+resumes after that). <code class="docutils literal notranslate"><span class="pre">&quot;prune&quot;</span></code> lists globs under <code class="docutils literal notranslate"><span class="pre">out/</span></code> that the result
+archive leaves out (caches), and <code class="docutils literal notranslate"><span class="pre">&quot;verdict&quot;:</span> <span class="pre">{&quot;file&quot;:</span> <span class="pre">&quot;out/run/report.json&quot;,</span> <span class="pre">&quot;json_path&quot;:</span> <span class="pre">&quot;ok&quot;}</span></code>
+reads a pass or a fail from the record.</p>
+<section id="rf-runs">
+<h4>RF runs<a class="headerlink" href="#rf-runs" title="Link to this heading">¶</a></h4>
+<p><code class="docutils literal notranslate"><span class="pre">tools/exp/rf_stage_plan.py</span></code> writes such a campaign for <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code> runs from a list of jobs: a
+preset case each, optionally a spec file that replaces the case’s spec, a criteria file that
+replaces the case’s pass criteria and dense frequencies (for a spec in another band), the
+starting design (<code class="docutils literal notranslate"><span class="pre">seed</span></code>), an iteration cap, the threads and the resources (the format is in its
+docstring).</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/exp/rf_stage_plan.py<span class="w"> </span>jobs.toml<span class="w"> </span>--repo<span class="w"> </span>&lt;checkout<span class="w"> </span>with<span class="w"> </span>yapnr.rf&gt;<span class="w"> </span>--out<span class="w"> </span>&lt;dir&gt;
+yapnr<span class="w"> </span>exp<span class="w"> </span>plan<span class="w"> </span>&lt;dir&gt;/campaign.toml<span class="w"> </span>--backend<span class="w"> </span>gcp-batch<span class="w"> </span>--shape<span class="w"> </span>c4d-highcpu-8
+</pre></div>
+</div>
+<p>The source bundle is a <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">archive</span></code> of the committed revision (<code class="docutils literal notranslate"><span class="pre">--commit</span></code>, default <code class="docutils literal notranslate"><span class="pre">HEAD</span></code>),
+never the working tree, so a branch another session is still editing runs as it was last
+committed. Each task runs the job bundle’s <code class="docutils literal notranslate"><span class="pre">rf_job.py</span></code>, which runs <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.rf.cases</span> <span class="pre">run</span> <span class="pre">CASE</span> <span class="pre">--out</span> <span class="pre">out/&lt;id&gt;</span></code> with the spec, the criteria, <code class="docutils literal notranslate"><span class="pre">optimizer.seed</span></code> or <code class="docutils literal notranslate"><span class="pre">solver.threads</span></code> replaced
+(or that command itself for a job with nothing to replace and <code class="docutils literal notranslate"><span class="pre">attempt_s</span> <span class="pre">=</span> <span class="pre">0</span></code>) on as many cores as
+it has threads, with <code class="docutils literal notranslate"><span class="pre">OMP_NUM_THREADS</span></code> and <code class="docutils literal notranslate"><span class="pre">MKL_NUM_THREADS</span></code> at that number and
+<code class="docutils literal notranslate"><span class="pre">OPENBLAS_NUM_THREADS=1</span></code>. Cores are physical, two vCPUs each on SMT shapes: one 4-thread run fills
+a <code class="docutils literal notranslate"><span class="pre">c4d-highcpu-8</span></code>. The engine runs torch on at most 4 threads, and the generator warns above that.
+The record is <code class="docutils literal notranslate"><span class="pre">out/&lt;id&gt;/validation.json</span></code> (the verdict is its <code class="docutils literal notranslate"><span class="pre">ok</span></code>), the run directory is the
+checkpoint, and the cases runner resumes from it; <code class="docutils literal notranslate"><span class="pre">--max-iterations</span></code> counts the iterations of one
+attempt, so an attempt resumed mid-loop may run that many again. A run longer than <code class="docutils literal notranslate"><span class="pre">max_wall_s</span></code>
+goes on over attempts: <code class="docutils literal notranslate"><span class="pre">rf_job.py</span></code> stops the loop before an iteration that would end after
+<code class="docutils literal notranslate"><span class="pre">attempt_s</span></code> (default <code class="docutils literal notranslate"><span class="pre">max_wall_s</span></code> less a 24th), starts the end (binarize, export, re-validate)
+only with <code class="docutils literal notranslate"><span class="pre">end_s</span></code> left (default a third of the attempt, at most an hour), and otherwise exits 75.
+Every attempt makes progress. On Batch a submission holds <code class="docutils literal notranslate"><span class="pre">max_retries</span> <span class="pre">+</span> <span class="pre">1</span></code> attempts, and the
+reaper cancels it <code class="docutils literal notranslate"><span class="pre">max_campaign_hours</span></code> after <code class="docutils literal notranslate"><span class="pre">submit</span></code> (with the example limits, about three
+attempts of 3.8 hours; preemptions take attempts too); the checkpoint stays in the store, and
+<code class="docutils literal notranslate"><span class="pre">submit</span></code> again goes on from it. A job with <code class="docutils literal notranslate"><span class="pre">validate</span> <span class="pre">=</span> <span class="pre">&quot;&lt;run</span> <span class="pre">directory&gt;&quot;</span></code> re-validates a finished
+run instead (a fetched one: its top-level files go into the plan as an input), as a task of its
+own that starts again after a preemption: for a fine-grid validation longer than what is left of
+the run’s last attempt (pass <code class="docutils literal notranslate"><span class="pre">--no-fine</span></code> or <code class="docutils literal notranslate"><span class="pre">--finer</span> <span class="pre">0</span></code> to the run in <code class="docutils literal notranslate"><span class="pre">args</span></code>). A job with
+<code class="docutils literal notranslate"><span class="pre">diagnostic</span> <span class="pre">=</span> <span class="pre">true</span></code> runs the job bundle’s <code class="docutils literal notranslate"><span class="pre">rf_diag.py</span></code> instead, which records the interpreter,
+the CPUs, the versions of numpy, torch, Pillow and PyYAML, whether the sources compile on the
+image’s Python, and <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.rf.cases</span> <span class="pre">--help</span></code>; run one before the first campaign of a new
+branch or image. <code class="docutils literal notranslate"><span class="pre">--plain-lines</span></code> leaves the three optional keys and the attempts out, for a
+<code class="docutils literal notranslate"><span class="pre">yapnr</span></code> whose <code class="docutils literal notranslate"><span class="pre">mc-eval</span></code> refuses them.</p>
+</section>
+</section>
+</section>
+<section id="testing">
+<h2>Testing<a class="headerlink" href="#testing" title="Link to this heading">¶</a></h2>
+<p>Everything above is tested offline and for free: <code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//tests/unit/exp/...</span> <span class="pre">//infra/gcp/functions/guard/...</span></code> (the wrapper’s exit codes, preemption and retry, checkpoints;
+planning; golden Batch JSON validated against the vendored
+<a class="reference external" href="https://github.com/Studio-Fug/yapnr/tree/main/third_party/googleapis">Batch v1 discovery document</a>;
+the exact <code class="docutils literal notranslate"><span class="pre">gcloud</span></code> calls of a dry-run submit; golden <code class="docutils literal notranslate"><span class="pre">sbatch</span></code> scripts with <code class="docutils literal notranslate"><span class="pre">bash</span> <span class="pre">-n</span></code> and
+shellcheck; fetch and ladder assembly; prices and calibration; the budget guard), and the manual
+<code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">test</span> <span class="pre">//infra/gcp:tofu_check</span></code> (see <a class="reference external" href="https://github.com/Studio-Fug/yapnr/tree/main/infra/gcp">infra/gcp</a>).
+The test process cannot reach a cloud: real <code class="docutils literal notranslate"><span class="pre">gcloud</span></code> calls are disabled while
+<code class="docutils literal notranslate"><span class="pre">YAPNR_EXP_NO_CLOUD</span></code> is set.</p>
+</section>
+<section id="not-verified-yet">
+<h2>Not verified yet<a class="headerlink" href="#not-verified-yet" title="Link to this heading">¶</a></h2>
+<p>What only a real project or site can settle, in the order the first runs will meet it:</p>
+<ul class="simple">
+<li><p>at the first <code class="docutils literal notranslate"><span class="pre">tofu</span> <span class="pre">apply</span></code>: the instance templates’ Hyperdisk settings and the Batch image
+family, and whether a custom role may hold <code class="docutils literal notranslate"><span class="pre">iam.serviceAccounts.disable</span></code> and be granted on the
+single <code class="docutils literal notranslate"><span class="pre">yapnr-submit</span></code> account (the kill switch’s first step);</p></li>
+<li><p>the exact preemptible quota ids (step 4), and whether restoring a cut quota needs a new
+approval (the drill of step 9);</p></li>
+<li><p>the Billing Catalog SKU descriptions <code class="docutils literal notranslate"><span class="pre">prices</span> <span class="pre">--refresh</span></code> parses (<code class="docutils literal notranslate"><span class="pre">Spot</span> <span class="pre">Preemptible</span> <span class="pre">&lt;FAMILY&gt;</span> <span class="pre">...</span> <span class="pre">Instance</span> <span class="pre">Core|Ram</span> <span class="pre">running</span> <span class="pre">in</span> <span class="pre">...</span></code>);</p></li>
+<li><p>in the smoke job (step 10): whether a Batch instance policy accepts a <code class="docutils literal notranslate"><span class="pre">hyperdisk-balanced</span></code> boot
+disk for C4D (it tries both; templates are the default); the gcsfuse mount options (the
+container runs as root and mounts with <code class="docutils literal notranslate"><span class="pre">--implicit-dirs</span></code>) together with the runs bucket’s IAM
+condition that keeps tasks out of <code class="docutils literal notranslate"><span class="pre">control/</span></code>;</p></li>
+<li><p>on a Slurm site: whether <code class="docutils literal notranslate"><span class="pre">USR1</span></code> reaches the wrappers through Apptainer’s PID namespace and
+whether users may <code class="docutils literal notranslate"><span class="pre">scontrol</span> <span class="pre">requeue</span></code> their own array elements (the scripts are tested with
+stub <code class="docutils literal notranslate"><span class="pre">apptainer</span></code> and <code class="docutils literal notranslate"><span class="pre">scontrol</span></code> only);</p></li>
+<li><p>region fallback after a stockout is manual: cancel and plan again with <code class="docutils literal notranslate"><span class="pre">--region</span></code>.</p></li>
+</ul>
+</section>
+<section id="references">
+<h2>References<a class="headerlink" href="#references" title="Link to this heading">¶</a></h2>
+<p>Accessed 2026-10-02.</p>
+<ul class="simple">
+<li><p><a class="reference external" href="https://docs.cloud.google.com/batch/docs/quotas">Batch quotas and limits</a>,
+<a class="reference external" href="https://docs.cloud.google.com/batch/docs/automate-task-retries">task retries</a>,
+<a class="reference external" href="https://docs.cloud.google.com/batch/docs/troubleshooting">reserved exit codes</a>,
+<a class="reference external" href="https://docs.cloud.google.com/batch/docs/create-run-job-vm-template">instance templates</a>,
+<a class="reference external" href="https://docs.cloud.google.com/batch/docs/vm-os-environment-overview">VM OS images</a>,
+<a class="reference external" href="https://docs.cloud.google.com/batch/docs/create-run-job-storage">storage volumes</a>,
+<a class="reference external" href="https://cloud.google.com/batch/pricing">Batch pricing</a></p></li>
+<li><p><a class="reference external" href="https://cloud.google.com/spot-vms/pricing">Spot VM pricing</a>, <a class="reference external" href="https://docs.cloud.google.com/compute/docs/instances/spot">Spot VMs</a>,
+<a class="reference external" href="https://cloud.google.com/compute/disks-image-pricing">disk pricing</a>,
+<a class="reference external" href="https://github.com/Cyclenerd/google-cloud-pricing-cost-calculator">Billing Catalog snapshot</a></p></li>
+<li><p><a class="reference external" href="https://docs.cloud.google.com/compute/resource-usage">Compute Engine quotas</a>,
+<a class="reference external" href="https://docs.cloud.google.com/sdk/gcloud/reference/quotas/preferences/create"><code class="docutils literal notranslate"><span class="pre">gcloud</span> <span class="pre">quotas</span> <span class="pre">preferences</span> <span class="pre">create</span></code></a>,
+<a class="reference external" href="https://docs.cloud.google.com/docs/quotas/reference/rest/v1/projects.locations.quotaPreferences/patch">quota preference API</a></p></li>
+<li><p><a class="reference external" href="https://docs.cloud.google.com/billing/docs/how-to/budgets">Budgets</a>,
+<a class="reference external" href="https://docs.cloud.google.com/billing/docs/how-to/budgets-programmatic-notifications">budget notifications</a>,
+<a class="reference external" href="https://docs.cloud.google.com/billing/docs/how-to/get-pricing-information-api">Cloud Billing Catalog API</a>, <a class="reference external" href="https://docs.cloud.google.com/docs/authentication/api-keys">API keys</a>,
+<a class="reference external" href="https://docs.cloud.google.com/docs/authentication/use-service-account-impersonation">service-account impersonation</a></p></li>
+<li><p><a class="reference external" href="https://docs.cloud.google.com/artifact-registry/docs/repositories/remote-overview">Artifact Registry remote repositories</a>,
+<a class="reference external" href="https://cloud.google.com/vpc/network-pricing">network pricing</a>, <a class="reference external" href="https://cloud.google.com/scheduler/pricing">Cloud Scheduler pricing</a></p></li>
+<li><p><a class="reference external" href="https://apptainer.org/docs/user/latest/docker_and_oci.html">Apptainer with OCI images</a>,
+<a class="reference external" href="https://slurm.schedmd.com/job_array.html">Slurm job arrays</a>,
+<a class="reference external" href="https://opentofu.org/docs/cli/commands/test/">OpenTofu <code class="docutils literal notranslate"><span class="pre">tofu</span> <span class="pre">test</span></code></a></p></li>
+</ul>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="architecture.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Architecture</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="rf-fab-coupons.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">RF fab-model test coupons</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 Kevin Balke. Licensed under AGPL-3.0-or-later
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a><ul>
+<li><a class="reference internal" href="#what-the-owner-provides">What the owner provides</a></li>
+<li><a class="reference internal" href="#quick-start-the-local-backend">Quick start: the local backend</a></li>
+<li><a class="reference internal" href="#campaigns-plans-and-tasks">Campaigns, plans and tasks</a></li>
+<li><a class="reference internal" href="#commands">Commands</a></li>
+<li><a class="reference internal" href="#google-cloud-bootstrap">Google Cloud bootstrap</a><ul>
+<li><a class="reference internal" href="#images">1. Images</a></li>
+<li><a class="reference internal" href="#project-and-billing-owner-account">2. Project and billing (owner account)</a></li>
+<li><a class="reference internal" href="#state-bucket-and-infrastructure">3. State bucket and infrastructure</a></li>
+<li><a class="reference internal" href="#quotas">4. Quotas</a></li>
+<li><a class="reference internal" href="#price-key-optional">5. Price key (optional)</a></li>
+<li><a class="reference internal" href="#day-to-day-identity">6. Day-to-day identity</a></li>
+<li><a class="reference internal" href="#owner-config">7. Owner config</a></li>
+<li><a class="reference internal" href="#checks">8. Checks</a></li>
+<li><a class="reference internal" href="#kill-switch-drill">9. Kill-switch drill</a></li>
+<li><a class="reference internal" href="#smoke-job">10. Smoke job</a></li>
+<li><a class="reference internal" href="#sign-the-owner-out">11. Sign the owner out</a></li>
+<li><a class="reference internal" href="#calibration">12. Calibration</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#costs-and-guards">Costs and guards</a></li>
+<li><a class="reference internal" href="#slurm-and-apptainer-hpc-allocations">Slurm and Apptainer (HPC allocations)</a></li>
+<li><a class="reference internal" href="#id1">Calibration</a></li>
+<li><a class="reference internal" href="#private-campaigns">Private campaigns</a><ul>
+<li><a class="reference internal" href="#any-command-as-a-task-stage-plans">Any command as a task: stage plans</a><ul>
+<li><a class="reference internal" href="#rf-runs">RF runs</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#testing">Testing</a></li>
+<li><a class="reference internal" href="#not-verified-yet">Not verified yet</a></li>
+<li><a class="reference internal" href="#references">References</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../static/documentation_options.js?v=8a448e45"></script>
+    <script src="../static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../static/copybutton.js?v=fd10adb8"></script>
+    <script src="../static/design-tabs.js?v=f930bc37"></script>
+    </body>
+</html>

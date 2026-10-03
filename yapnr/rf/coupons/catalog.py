@@ -665,7 +665,7 @@ O_TRL_M = (0.0, 4.5, 13.0, 30.0, 70.0)  # design §4.2: thru + ΔL 4.5, 13.0, 30
 O_TRL_W = (0.0, 5.0, 14.0, 34.0)  # design §4.3: thru + ΔL 5, 14, 34 mm
 O_VERIFY_M = 21.0
 O_VARIANT_MM = 30.0
-O_RING_ARC = 0.25  # feeds a quarter turn apart: notches at every ring resonance n = 1, 2, 3
+O_RING_ARC = 0.25  # feeds a quarter turn apart: notches at the odd resonances n = 1, 3
 O_RING_R = 15.1  # mean radius (design §4.2 A11), re-tuned to n = 3 at 5.8 GHz in `tune`
 O_STUB_LINE = 15.0  # A12: the open stub's 15 mm line between the reference planes
 O_SWITCH_X = 5.0  # A14: the shunt resistor 5 mm from RP1
@@ -836,8 +836,10 @@ def _o_demo(sid, kind, region, label, determines, window, ports_n=3, tier="core"
 
 
 def _o_ring(sid, label) -> Stick:
-    """A11: a directly fed M ring, the feeds a quarter turn apart (notches at n = 1, 2, 3; the
-    port axis off the stick centre so the ring fits a 36 mm stick)."""
+    """A11: a directly fed M ring, the feeds a quarter turn apart: notches at the odd resonances
+    n = 1 (1.9 GHz, in the LibreVNA's clean band) and n = 3 (5.8 GHz, the product band); at n = 2
+    both arcs are half-wave multiples and the ring passes. The port axis sits off the stick
+    centre so the ring fits a 36 mm stick."""
     r = O_RING_R
     rebuilt = _o_ring_geometry(sid, r, label)
     return rebuilt
@@ -867,7 +869,7 @@ def _o_ring_geometry(sid, r, label) -> Stick:
             ("ring2", "M", r, O_RING_ARC),
             ("line", "M", round(feed, 4)),
         ],
-        determines="held out: εeff at the ring's notches n = 1, 2, 3 (1.9, 3.9, 5.8 GHz)",
+        determines="held out: εeff at the ring's notches n = 1 and 3 (1.9 and 5.8 GHz)",
         label=label,
         geometry=dict(region="M", radius=r, arc=O_RING_ARC, feed=round(feed, 4), axis_y=axis_y),
     )

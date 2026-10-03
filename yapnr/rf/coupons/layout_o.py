@@ -558,7 +558,7 @@ def demo_stick(wr: Writer, pl: Placed):
     for p in g["ports"]:
         nets[p["n"]] = wr.net(f"RF_{s.id}_{p['n']}") if placeholder else wr.net(f"RF_{s.id}")
     wr.stick_zones(pl, gnd)
-    x_win = LAUNCH_MM_FEED(ld, lf)
+    x_win = _window_x(lf)
     hw_stick = g["stick_w"] / 2
     if reg == "W":
         r = launch.W_RING
@@ -647,7 +647,7 @@ def demo_stick(wr: Writer, pl: Placed):
     _copy_box(wr, pl, xw + ww / 2 - 4.0, -COPY_BOX / 2, ("box", s.id), s.id)
 
 
-def LAUNCH_MM_FEED(ld, lf: float) -> float:
+def _window_x(lf: float) -> float:
     """Launch coordinate of the window edge: the reference plane plus the feed."""
     return catalog.LAUNCH_MM + lf
 

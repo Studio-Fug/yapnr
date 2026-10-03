@@ -4,7 +4,8 @@
   "title": "PCBWay",
   "country": "CN",
   "profiles_by_layers": {
-    "4": "pcbway-std"
+    "4": "pcbway-std",
+    "6": "pcbway-adv-6l-rf"
   },
   "gerbers": {
     "layers": [

@@ -23,16 +23,17 @@ class DataTest(unittest.TestCase):
                 "oshpark-2l",
                 "oshpark-4l",
                 "oshpark-6l",
+                "pcbway-adv-6l-rf",
                 "pcbway-hf-2l",
                 "pcbway-std",
             ],
         )
         self.assertEqual(capability.names("vendors"), ["jlcpcb", "oshpark", "pcbway"])
-        self.assertEqual(len(capability.names("stackups")), 17)
+        self.assertEqual(len(capability.names("stackups")), 18)
         drafts = [
             n for n in capability.names("profiles") if capability.profile(n)["status"] == "draft"
         ]
-        self.assertEqual(drafts, ["jlc-6l", "pcbway-hf-2l", "pcbway-std"])
+        self.assertEqual(drafts, ["jlc-6l", "pcbway-adv-6l-rf", "pcbway-hf-2l", "pcbway-std"])
 
     def test_every_source_has_an_https_url_and_an_access_date(self):
         sources = capability.all_sources()

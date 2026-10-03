@@ -58,16 +58,17 @@ Without `--profile`, `fab` and `order stage` take the profile the board was rout
 its generated `.kicad_dru` names) when it is the chosen vendor's; otherwise the vendor's profile
 for the board's copper layer count, and at JLCPCB `jlc-pofv` when a via sits on an SMD pad.
 
-| Profile        | Status | Vendor, service                               | Default stackup      | Other stackups                                                     |
-| -------------- | ------ | --------------------------------------------- | -------------------- | ------------------------------------------------------------------ |
-| `oshpark-2l`   | active | OSH Park 2 Layer (and Super Swift)            | `oshpark-2l-fr4`     |                                                                    |
-| `oshpark-4l`   | active | OSH Park 4 Layer (and Super Swift)            | `oshpark-4l-fr408hr` | `oshpark-4l-em528` (the alternate at checkout), `oshpark-4l-mixed` |
-| `oshpark-6l`   | active | OSH Park 6 Layer                              | `oshpark-6l-fr408hr` |                                                                    |
-| `jlc-4l`       | active | JLCPCB 4 layers, tented vias, no via in pad   | `jlc04161h-7628`     | `jlc04161h-2116`, `-3313`, `-1080`                                 |
-| `jlc-pofv`     | active | JLCPCB 4 layers, epoxy filled and capped vias | `jlc04161h-7628`     | as `jlc-4l`                                                        |
-| `jlc-6l`       | draft  | JLCPCB 6 layers                               | `jlc06161h-3313`     | `jlc06161h-2116c`, `jlc06161h-7628`                                |
-| `pcbway-std`   | draft  | PCBWay standard 4 layers                      | `pcbway-4l-7628`     |                                                                    |
-| `pcbway-hf-2l` | draft  | PCBWay Rogers 2 layers (RO4003C, RO4350B)     | none: choose one     | `pcbway-ro4003c-0.813`, `-0.508`, `-1.524`, `pcbway-ro4350b-0.508` |
+| Profile            | Status | Vendor, service                                        | Default stackup            | Other stackups                                                     |
+| ------------------ | ------ | ------------------------------------------------------ | -------------------------- | ------------------------------------------------------------------ |
+| `oshpark-2l`       | active | OSH Park 2 Layer (and Super Swift)                     | `oshpark-2l-fr4`           |                                                                    |
+| `oshpark-4l`       | active | OSH Park 4 Layer (and Super Swift)                     | `oshpark-4l-fr408hr`       | `oshpark-4l-em528` (the alternate at checkout), `oshpark-4l-mixed` |
+| `oshpark-6l`       | active | OSH Park 6 Layer                                       | `oshpark-6l-fr408hr`       |                                                                    |
+| `jlc-4l`           | active | JLCPCB 4 layers, tented vias, no via in pad            | `jlc04161h-7628`           | `jlc04161h-2116`, `-3313`, `-1080`                                 |
+| `jlc-pofv`         | active | JLCPCB 4 layers, epoxy filled and capped vias          | `jlc04161h-7628`           | as `jlc-4l`                                                        |
+| `jlc-6l`           | draft  | JLCPCB 6 layers                                        | `jlc06161h-3313`           | `jlc06161h-2116c`, `jlc06161h-7628`                                |
+| `pcbway-std`       | draft  | PCBWay standard 4 layers                               | `pcbway-4l-7628`           |                                                                    |
+| `pcbway-hf-2l`     | draft  | PCBWay Rogers 2 layers (RO4003C, RO4350B)              | none: choose one           | `pcbway-ro4003c-0.813`, `-0.508`, `-1.524`, `pcbway-ro4350b-0.508` |
+| `pcbway-adv-6l-rf` | draft  | PCBWay Advanced 6 layers, RO4835/RO4450F + FR-4 hybrid | `pcbway-6l-ro4835-ro4450f` |                                                                    |
 
 A **draft** profile still has published values that are not transcribed; `fab check`, `fab
 build` and `order stage` refuse it unless `--allow-draft` is given, and the card says so.
@@ -239,6 +240,7 @@ than 1 %; such boards also need `--stackup` named explicitly. The vendors differ
 | `oshpark-2l-fr4`              | about 1.53 mm FR-4, Dk 4.5 (10 MHz) |              2.88 mm |
 | `jlc04161h-7628`              | 0.2104 mm 7628, Dk 4.4              |              0.40 mm |
 | `pcbway-ro4003c-0.813`        | 0.813 mm RO4003C, design Dk 3.55    |              1.82 mm |
+| `pcbway-6l-ro4835-ro4450f`    | 0.1016 mm RO4835, design Dk 3.66    |              0.22 mm |
 
 (Hammerstad-Jensen, zero-thickness strip, no mask; the 2D solver and test coupons set the real
 numbers.) A line designed for OSH Park's FR408HR, built on the EM528 alternate, comes out at

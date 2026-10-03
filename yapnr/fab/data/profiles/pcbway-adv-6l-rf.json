@@ -1,0 +1,245 @@
+{
+  "schema": "yapnr-fab-profile-v1",
+  "name": "pcbway-adv-6l-rf",
+  "status": "draft",
+  "vendor": "pcbway",
+  "service": "Advanced PCB, Rogers 4 series + FR-4 hybrid, 6 layers",
+  "title": "PCBWay Advanced 6 layer RO4835/RO4450F + FR-4 hybrid, 1.17 mm, immersion silver (draft until the quote)",
+  "copper_layers": 6,
+  "stackups": {
+    "default": "pcbway-6l-ro4835-ro4450f",
+    "allowed": ["pcbway-6l-ro4835-ro4450f"]
+  },
+  "engine": {
+    "fab": {
+      "min_track_width_mm": 0.1,
+      "clearance_mm": 0.1,
+      "smd_pad_clearance_mm": 0.1,
+      "edge_clearance_mm": 0.3,
+      "hole_to_edge_mm": 0.5,
+      "hole_clearance_mm": 0.1524,
+      "pth_hole_clearance_mm": 0.2,
+      "npth_hole_clearance_mm": 0.2,
+      "hole_to_hole_mm": 0.28,
+      "pth_hole_to_hole_mm": 0.41,
+      "component_pth_min_drill_mm": 0.3,
+      "via_diameter_mm": 0.4,
+      "via_drill_mm": 0.2,
+      "min_via_diameter_mm": 0.31,
+      "min_through_drill_mm": 0.15,
+      "via_annular_mm": 0.0762,
+      "min_npth_drill_mm": 0.5,
+      "via_to_smd_pad_mm": 0.1,
+      "via_classes": {
+        "default": {
+          "diameter_mm": 0.4,
+          "drill_mm": 0.2
+        },
+        "escape": {
+          "diameter_mm": 0.4,
+          "drill_mm": 0.2
+        },
+        "bga_gnd": {
+          "diameter_mm": 0.35,
+          "drill_mm": 0.15
+        },
+        "fence": {
+          "diameter_mm": 0.32,
+          "drill_mm": 0.15
+        },
+        "power": {
+          "diameter_mm": 0.55,
+          "drill_mm": 0.3
+        }
+      }
+    },
+    "copper": {
+      "outer_copper_um": 30.0,
+      "inner_copper_um": 17.5,
+      "outer_copper_oz": 0.857,
+      "inner_copper_oz": 0.5,
+      "min_via_plating_um": 18,
+      "via_diameter_mm": 0.4,
+      "via_drill_mm": 0.2,
+      "hole_clearance_mm": 0.1524,
+      "hole_to_hole_mm": 0.28,
+      "pth_hole_to_hole_mm": 0.41,
+      "component_pth_min_drill_mm": 0.3,
+      "edge_clearance_mm": 0.3,
+      "hole_to_edge_mm": 0.5,
+      "via_to_smd_pad_mm": 0.1,
+      "board_thickness_mm": 1.17
+    },
+    "qualification": "PCBWay Advanced 6 layer Rogers/FR-4 hybrid 1.17 mm (draft until the quote): 30 um outer copper (0.5 oz plated), 17.5 um thinnest inner (In3 is 1 oz), 18 um via plating. 0.10/0.10 mm on 0.5 oz outer copper and drills under 0.20 mm are PCBWay medium-difficulty items; IPC-2221 screening only.",
+    "provenance": {
+      "fab": {
+        "min_track_width_mm": "P-cap (min manufacturable trace 4 mil; outer 18 um base copper: 4/5 mil normal, 4/4 mil medium)",
+        "clearance_mm": "P-cap (min manufacturable spacing 4 mil; inner 18 um 4/4 mil normal; outer 4/4 mil medium, 3.5 mil only in a BGA area)",
+        "smd_pad_clearance_mm": "P-cap (4 mil spacing, as clearance_mm)",
+        "edge_clearance_mm": "P-cap (line to board edge, CNC milling: 0.25 normal, designed at 0.30)",
+        "hole_to_edge_mm": "derived: the yapnr PCBWay value (hole to routed edge 0.50)",
+        "hole_clearance_mm": "P-adv (min spacing between hole and inner or outer conductor 6 mil; P-cap's 6-layer inner isolation is 8 mil normal, 6 mil high difficulty)",
+        "pth_hole_clearance_mm": "derived: component PTH hole to copper kept above the 6 mil P-adv minimum",
+        "npth_hole_clearance_mm": "derived: NPTH hole to copper kept above the 6 mil P-adv minimum",
+        "hole_to_hole_mm": "P-cap (hole to hole spacing, via of 0.45 mm or less: 11 mil normal)",
+        "pth_hole_to_hole_mm": "P-cap (hole to hole spacing, component hole: 16 mil normal)",
+        "component_pth_min_drill_mm": "derived: the yapnr convention (smaller plated holes are via-class)",
+        "via_diameter_mm": "P-cap (0.20 mm drill normal up to 1.6 mm thick; via ring 4 mil on 18 um base copper is the medium tier)",
+        "via_drill_mm": "P-cap (0.20 mm drill normal up to 1.6 mm thick)",
+        "min_via_diameter_mm": "P-adv (0.15 mm drill plus the 3 mil minimum via ring, rounded up)",
+        "min_through_drill_mm": "P-adv (min hole size 0.15 mm CNC; P-cap: under 0.20 mm is medium difficulty, 1.17/0.15 = 7.8 within the normal thickness-to-diameter ratio of 8)",
+        "via_annular_mm": "P-adv (min annular ring for via 3 mil)",
+        "min_npth_drill_mm": "derived: the yapnr PCBWay convention; P-cap non-plated slots are 0.8 mm or more",
+        "via_to_smd_pad_mm": "derived: as clearance_mm (4 mil)",
+        "via_classes": "P-adv and P-cap (default and escape 0.40/0.20, 4 mil ring; bga_gnd 0.35/0.15 for same-net GND vias at BGA interstitial sites, 4 mil ring; fence 0.32/0.15 for the RF via fences, 3.4 mil ring at 0.45 mm or more pitch to keep 11 mil hole to hole; power 0.55/0.30)"
+      },
+      "copper": {
+        "outer_copper_um": "derived: 0.5 oz base foil (17.5 um) plus at least 12.5 um plating; TI-RF asks for thin top copper, the plan caps it at 35 um finished",
+        "inner_copper_um": "derived: the thinnest inner layer, 0.5 oz (In1, In2, In4); In3 is 1 oz",
+        "outer_copper_oz": "derived: 30 um over 35 um per oz",
+        "inner_copper_oz": "derived: 0.5 oz inner layers",
+        "min_via_plating_um": "P-cap (through-hole copper 18-25 um normal)",
+        "via_diameter_mm": "as fab.via_diameter_mm",
+        "via_drill_mm": "as fab.via_drill_mm",
+        "hole_clearance_mm": "as fab.hole_clearance_mm",
+        "hole_to_hole_mm": "as fab.hole_to_hole_mm",
+        "pth_hole_to_hole_mm": "as fab.pth_hole_to_hole_mm",
+        "component_pth_min_drill_mm": "as fab.component_pth_min_drill_mm",
+        "edge_clearance_mm": "as fab.edge_clearance_mm",
+        "hole_to_edge_mm": "as fab.hole_to_edge_mm",
+        "via_to_smd_pad_mm": "as fab.via_to_smd_pad_mm",
+        "board_thickness_mm": "derived: the pcbway-6l-ro4835-ro4450f layer sum"
+      }
+    }
+  },
+  "vendor_limits": {
+    "board_min_mm": {
+      "value": [5.0, 5.0],
+      "src": "derived: not transcribed; the quote checks it"
+    },
+    "board_max_mm": {
+      "value": [508.0, 762.0],
+      "src": "P-adv (maximum board size 20 x 30 in)"
+    },
+    "copper_layers": {
+      "value": [6],
+      "src": "P-adv (high frequency mix-pressing 2-20 layers)"
+    },
+    "qty": {
+      "multiple": 1,
+      "min": 5,
+      "src": "P-order"
+    },
+    "max_drilled_hole_mm": {
+      "value": 6.0,
+      "src": "P-cap (drills over 6.0 mm are milled)"
+    },
+    "min_slot_mm": {
+      "value": 0.5,
+      "src": "P-cap (plated slot 0.5 mm or more)"
+    },
+    "via_types": {
+      "value": ["through"],
+      "src": "P-adv (HDI is offered; this profile is through vias only, owner decision 2026-10-03)"
+    },
+    "castellation": {
+      "value": "option",
+      "min_hole_mm": 0.5,
+      "src": "P-cap"
+    },
+    "impedance_control": {
+      "value": true,
+      "tolerance_pct": 10,
+      "note": "50 ohm and below: +/-5 ohm; radar60 orders no impedance service (RF widths come from the macro and the coupons)",
+      "src": "P-adv"
+    },
+    "thickness_mm": {
+      "range": [0.21, 6.0],
+      "src": "P-adv"
+    },
+    "finish": {
+      "value": [
+        "ENIG",
+        "HASL",
+        "HASL lead free",
+        "OSP",
+        "Immersion tin",
+        "Immersion silver",
+        "Hard gold"
+      ],
+      "fixed": false,
+      "src": "P-adv"
+    },
+    "mask_color": {
+      "value": ["green", "blue", "red", "white", "black"],
+      "fixed": false,
+      "src": "P-adv"
+    },
+    "via_fill": {
+      "value": "tented",
+      "note": "resin plugging is offered for 0.15-0.7 mm holes",
+      "src": "P-adv"
+    },
+    "imaging": {
+      "value": ["film", "LDI"],
+      "src": "P-adv"
+    },
+    "assembly": {
+      "value": true,
+      "src": "P-asm"
+    },
+    "order_number_marking": {
+      "value": true,
+      "option": "Remove product No.",
+      "choices": "No, Yes (USD 1.50), Specify a location",
+      "src": "P-order (the 'Remove product No.' option, 'No' by default)"
+    },
+    "alternates": []
+  },
+  "order_defaults": {
+    "service": "advanced-hybrid",
+    "services": {
+      "advanced-hybrid": {
+        "title": "Advanced PCB, Rogers 4 series + FR-4 hybrid (manual quote)",
+        "lead_time": "manual quote; Rogers material stock sets the lead time"
+      }
+    },
+    "thickness_mm": 1.2,
+    "finish": "Immersion silver",
+    "mask_color": "green",
+    "silk_color": "white",
+    "via_covering": "Tented",
+    "copper": "0.5 oz base outer (plated), 0.5 oz inner, 1 oz on In3",
+    "qty": 5,
+    "remark": "6 layer hybrid per the stackup table: RO4835 LoPro 4 mil core L1-L2, RO4450F 4 mil bondply L2-L3, high-Tg FR-4 below, 1.17 mm nominal. Through vias only (0.15 mm minimum drill). Immersion silver. LDI on L1. No solder mask over the RF copper (mask openings as drawn). Please confirm the materials and pressed thicknesses, send a CAD-to-CAM report of the L1 RF critical dimensions, and state the absolute L1 etch tolerance (target +/-13 um). No copper thieving or balancing copper on L1-L3 inside the RF areas.",
+    "specify_stackup": "pcbway-6l-ro4835-ro4450f (paste the layer table into the quote request)"
+  },
+  "pricing": null,
+  "sources": {
+    "P-adv": {
+      "url": "https://www.pcbway.com/advanced-pcb-capabilities.html",
+      "accessed": "2026-10-03"
+    },
+    "P-asm": {
+      "url": "https://www.pcbway.com/pcb-assembly.html",
+      "accessed": "2026-10-02"
+    },
+    "P-cap": {
+      "url": "https://www.pcbway.com/capabilities.html",
+      "accessed": "2026-10-03"
+    },
+    "P-order": {
+      "url": "https://www.pcbway.com/orderonline.aspx",
+      "accessed": "2026-10-02"
+    },
+    "TI-RF": {
+      "url": "https://www.ti.com/lit/pdf/spracg5",
+      "accessed": "2026-10-03"
+    }
+  },
+  "notes": [
+    "Draft until the PCBWay quote and CAM reply confirm it: the Rogers materials in an FR-4 hybrid, 0.10/0.10 mm on L1, 0.15 mm drills, the 6 mil hole-to-inner-copper rule and the 3 mil via ring are PCBWay medium or high-difficulty items.",
+    "Rogers jobs have no instant price on the order form: the quote is manual.",
+    "Board-specific rules (RF keepouts, via fences, BGA escape classes) live in the board's own .kicad_dru (examples/radar60/board), which carries these profile rules as well."
+  ]
+}

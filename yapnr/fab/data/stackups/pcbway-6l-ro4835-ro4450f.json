@@ -1,0 +1,199 @@
+{
+  "schema": "yapnr-fab-stackup-v1",
+  "id": "pcbway-6l-ro4835-ro4450f",
+  "vendor": "pcbway",
+  "title": "PCBWay 6 layer hybrid 1.17 mm: RO4835 4 mil L1-L2, RO4450F 4 mil L2-L3, FR-4 below",
+  "vendor_name": "Advanced PCB, Rogers 4 series + FR-4 mixed, 6 layers (manual quote)",
+  "checkout": "Advanced PCB with a Rogers + FR-4 hybrid build; no instant price. Paste the stackup from this file into the quote request and ask the CAM reply to confirm every material and pressed thickness.",
+  "thickness_mm": {
+    "value": 1.17,
+    "src": "derived: sum of the layers below (radar60 plan section 4.1); the CAM reply states the pressed thickness"
+  },
+  "layers": [
+    {
+      "kind": "mask",
+      "side": "F",
+      "thickness_mm": null,
+      "er": null,
+      "src": "TI-RF (no solder mask over the RF copper; mask elsewhere)",
+      "er_prior": 3.8,
+      "er_prior_src": "derived: a typical LPI solder mask"
+    },
+    {
+      "kind": "copper",
+      "name": "F.Cu",
+      "thickness_mm": 0.035,
+      "weight_oz": 0.5,
+      "plated": true,
+      "src": "TI-RF (thin top copper, plated; 0.5 oz base foil plated to about 35 um finished)",
+      "finish": "Immersion silver",
+      "foil": "RO4835 LoPro reverse-treated foil (Rogers lists ED foil as standard: confirm on the quote)"
+    },
+    {
+      "kind": "dielectric",
+      "type": "core",
+      "material": "RO4835 LoPro",
+      "thickness_mm": 0.1016,
+      "thickness_tol_mm": 0.0178,
+      "er": 3.66,
+      "er_freq_hz": 10000000000.0,
+      "df": 0.0037,
+      "src": "R-4835 (design Dk 3.66, 8-40 GHz; Df 0.0037 at 10 GHz; 4 mil core +/- 0.7 mil)",
+      "er_kind": "design",
+      "er_process": 3.33,
+      "er_process_src": "R-4835 (process Dk of the 4 mil core, 3.33 +/- 0.05)",
+      "er_62ghz_prior": 3.56,
+      "er_62ghz_prior_src": "derived: the radar60 board-calc model value at 62 GHz, between the 4 mil process Dk and the design Dk; G2 measures it",
+      "df_62ghz_prior": 0.0037,
+      "df_62ghz_prior_src": "derived: the 10 GHz value carried to 62 GHz (no vendor publishes 60 GHz data); G2 measures it",
+      "role": "RF layer: launches, feeds and patches on F.Cu over In1.Cu"
+    },
+    {
+      "kind": "copper",
+      "name": "In1.Cu",
+      "thickness_mm": 0.0175,
+      "weight_oz": 0.5,
+      "plated": false,
+      "src": "derived: 0.5 oz (radar60 plan section 4.1)",
+      "role": "GND, the RF reference; windows cleared under the radiators only (owner decision D4)"
+    },
+    {
+      "kind": "dielectric",
+      "type": "prepreg",
+      "material": "RO4450F bondply",
+      "thickness_mm": 0.1016,
+      "er": 3.52,
+      "er_freq_hz": 10000000000.0,
+      "df": 0.004,
+      "src": "R-4450 (RO4450F: Dk 3.52, Df 0.004)",
+      "er_62ghz_prior": 3.52,
+      "er_62ghz_prior_src": "derived: the 10 GHz value carried to 62 GHz; G2 measures it",
+      "df_62ghz_prior": 0.004,
+      "df_62ghz_prior_src": "derived: the 10 GHz value carried to 62 GHz; G2 measures it",
+      "vendor_note": "P-adv lists 'RO4450 0.1mm' as high-frequency prepreg; P-cap lists 4450F for pure Rogers multilayers and Shengyi or RO4403-series prepreg for Rogers + FR-4 mixed builds: confirm the material in a hybrid on the quote",
+      "window_composite_mm": 0.215,
+      "window_composite_src": "derived: under an L2 window the bondply also fills the removed 17.5 um of L2 copper, so the patch dielectric is about 0.21-0.22 mm (radar60 review_calc section 1)"
+    },
+    {
+      "kind": "copper",
+      "name": "In2.Cu",
+      "thickness_mm": 0.0175,
+      "weight_oz": 0.5,
+      "plated": false,
+      "src": "derived: 0.5 oz (radar60 plan section 4.1)",
+      "role": "Solid GND under the RF region (the patch reference under the windows); escape signals elsewhere"
+    },
+    {
+      "kind": "dielectric",
+      "type": "core",
+      "material": "FR-4 core (IT180A or S1000-2M class)",
+      "thickness_mm": 0.51,
+      "er": null,
+      "er_freq_hz": null,
+      "df": null,
+      "src": "P-adv (High Tg FR4: S1000-2, S1000-2M, IT180A)",
+      "er_prior": 4.4,
+      "er_prior_src": "derived: typical high-Tg FR-4 near 1 GHz; no RF on this layer",
+      "df_prior": 0.016,
+      "df_prior_src": "derived: typical high-Tg FR-4 near 1 GHz"
+    },
+    {
+      "kind": "copper",
+      "name": "In3.Cu",
+      "thickness_mm": 0.035,
+      "weight_oz": 1.0,
+      "plated": false,
+      "src": "derived: 1 oz for the 2.5 A peak 1.0 V RF/PA rail (radar60 plan section 4.1)",
+      "role": "Power pours: 1V0_RF, 1V2, 1V8, 3V3, 5V_SYS"
+    },
+    {
+      "kind": "dielectric",
+      "type": "prepreg",
+      "material": "FR-4 prepreg",
+      "thickness_mm": 0.1,
+      "er": null,
+      "er_freq_hz": null,
+      "df": null,
+      "src": "derived: about 0.10 mm (radar60 plan section 4.1); the CAM reply states the glass style",
+      "er_prior": 4.2,
+      "er_prior_src": "derived: typical FR-4 prepreg near 1 GHz",
+      "df_prior": 0.017,
+      "df_prior_src": "derived: literature FR-4 near 1 GHz (0.015 to 0.02)"
+    },
+    {
+      "kind": "copper",
+      "name": "In4.Cu",
+      "thickness_mm": 0.0175,
+      "weight_oz": 0.5,
+      "plated": false,
+      "src": "derived: 0.5 oz (radar60 plan section 4.1)",
+      "role": "GND, solid"
+    },
+    {
+      "kind": "dielectric",
+      "type": "core",
+      "material": "FR-4 core (IT180A or S1000-2M class)",
+      "thickness_mm": 0.2,
+      "er": null,
+      "er_freq_hz": null,
+      "df": null,
+      "src": "P-adv (High Tg FR4: S1000-2, S1000-2M, IT180A)",
+      "er_prior": 4.4,
+      "er_prior_src": "derived: typical high-Tg FR-4 near 1 GHz",
+      "df_prior": 0.016,
+      "df_prior_src": "derived: typical high-Tg FR-4 near 1 GHz"
+    },
+    {
+      "kind": "copper",
+      "name": "B.Cu",
+      "thickness_mm": 0.035,
+      "weight_oz": 0.5,
+      "plated": true,
+      "src": "derived: 0.5 oz base plated (radar60 plan section 4.1)",
+      "finish": "Immersion silver"
+    },
+    {
+      "kind": "mask",
+      "side": "B",
+      "thickness_mm": null,
+      "er": null,
+      "src": "P-cap",
+      "er_prior": 3.8,
+      "er_prior_src": "derived: a typical LPI solder mask"
+    }
+  ],
+  "tolerances": {
+    "impedance_pct": 10,
+    "thickness_pct": 7,
+    "width_pct": 10,
+    "width_note": "P-cap: +/-10 % is the medium-difficulty tier (+/-20 % normal); it is relative to the line width, so the fab notes also ask for an absolute L1 etch tolerance (+/-13 um target, +/-25 um limit) on the RF copper",
+    "src": "P-adv (impedance +/-10 %, board thickness 1.0-2.5 mm +/-7 %) and P-cap (width tolerance tiers)"
+  },
+  "sources": {
+    "P-adv": {
+      "url": "https://www.pcbway.com/advanced-pcb-capabilities.html",
+      "accessed": "2026-10-03"
+    },
+    "P-cap": {
+      "url": "https://www.pcbway.com/capabilities.html",
+      "accessed": "2026-10-03"
+    },
+    "R-4450": {
+      "url": "https://www.rogerscorp.com/-/media/project/rogerscorp/documents/advanced-electronics-solutions/english/data-sheets/ro4400-series-bondply-data-sheet---ro4450f-and-ro4460g2-bondply.pdf",
+      "accessed": "2026-10-03"
+    },
+    "R-4835": {
+      "url": "https://www.rogerscorp.com/-/media/project/rogerscorp/documents/advanced-electronics-solutions/english/data-sheets/ro4835-laminate-data-sheet.pdf",
+      "accessed": "2026-10-03"
+    },
+    "TI-RF": {
+      "url": "https://www.ti.com/lit/pdf/spracg5",
+      "accessed": "2026-10-03"
+    }
+  },
+  "notes": [
+    "Draft until the PCBWay quote and CAM reply confirm the materials (RO4835 LoPro foil, RO4450F in an FR-4 hybrid), the pressed thicknesses and the balancing of this asymmetric build.",
+    "No solder mask on F.Cu over the RF region (macro-owned mask openings); mask elsewhere on F as usual.",
+    "Fallback if RO4450F is not offered in the hybrid: FR-4 prepreg on L2-L3 with the TX feeds kept on 4 mil RO4835 (radar60 plan section 4.1)."
+  ]
+}

@@ -59,6 +59,11 @@ class Floorplan:
     def part(self, role):
         return self.doc["parts"][role]
 
+    def rect(self, spec):
+        """A region's rectangle; ``rf.pocket`` names the RF pocket."""
+        r = spec["rect"]
+        return self.doc["rf"]["pocket"] if r == "rf.pocket" else r
+
 
 def load(path=HERE / "floorplan.yaml"):
     return Floorplan(yaml.safe_load(Path(path).read_text()))
@@ -125,7 +130,7 @@ def constraints(fp: Floorplan):
             {
                 "name": name,
                 "refs": ["@" + fp.part(p) for p in spec["parts"]],
-                "rect": spec["rect"],
+                "rect": fp.rect(spec),
                 "hard": True,
                 "reason": spec["reason"],
             }
@@ -486,6 +491,15 @@ def board_rules(fp):
             ["(constraint disallow footprint)"],
         ),
         (
+            "No solder mask over the RF copper (TI SPRACG5): the macro's F.Mask opening bridges "
+            "its copper by design, inside the RF region or the macro footprint only",
+            "rf_mask_opening",
+            "A.intersectsArea('RF_REGION') || B.intersectsArea('RF_REGION') || "
+            "A.memberOfFootprint('%s') || B.memberOfFootprint('%s') || "
+            "A.memberOfFootprint('*:%s*') || B.memberOfFootprint('*:%s*')" % ((macro,) * 4),
+            ["(constraint bridged_mask)", "(severity ignore)"],
+        ),
+        (
             "The 60 GHz nets never change layer (the RF balls have no vias; plan 7.2)",
             "rf_no_vias",
             "A.Type == 'Via' && A.hasNetclass('RF')",
@@ -811,17 +825,9 @@ def board(fp):
         )
     # Placement regions and the patch extents, for review (User.1 / User.2).
     for name, spec in d["regions"].items():
-        items.append(_gr_rect(fp, spec["rect"], "User.1", "reg-" + name))
-        items.append(
-            _gr_text(
-                fp,
-                name,
-                (spec["rect"][0] + 0.3, spec["rect"][3] - 0.9),
-                "User.1",
-                "reg-" + name,
-                0.6,
-            )
-        )
+        r = fp.rect(spec)
+        items.append(_gr_rect(fp, r, "User.1", "reg-" + name))
+        items.append(_gr_text(fp, name, (r[0] + 0.3, r[3] - 0.9), "User.1", "reg-" + name, 0.6))
     for name, r in d["rf"]["patches"].items():
         items.append(_gr_rect(fp, r, "User.2", "patch-" + name))
         items.append(
@@ -928,7 +934,7 @@ def radome_report(fp):
             h = d["radome"]["heights"].get(part)
             if h is None:
                 continue
-            gap = min(_rect_gap(spec["rect"], p) for p in patches)
+            gap = min(_rect_gap(fp.rect(spec), p) for p in patches)
             rows.append(
                 dict(
                     part=part,
@@ -941,6 +947,64 @@ def radome_report(fp):
                 )
             )
     return rows
+
+
+def macro_check(fp):
+    """Compare the floorplan with the RF macro's record (rf.macro_record, if present): pocket,
+    patch extents, and every macro via inside the RF region or the package body. Returns
+    ``(lines, ok)``."""
+    path = (HERE / fp.doc["rf"]["macro_record"]).resolve()
+    if not path.is_file():
+        return ["macro record %s not found: skipped" % fp.doc["rf"]["macro_record"]], True
+    rec = json.loads(path.read_text())
+    cx, cy = fp.doc["u1"]["at"]
+    out, ok = [], True
+    pk = rec["ports"]["vout_pa_pocket"]["rect"]
+    pocket = [pk[0] + cx, pk[1] + cy, pk[2] + cx, pk[3] + cy]
+    mine = fp.doc["rf"]["pocket"]
+    inside = (
+        mine[0] <= pocket[0] + 1e-3 and mine[2] >= pocket[2] - 1e-3 and mine[3] >= pocket[3] - 1e-3
+    )
+    ok &= inside
+    out.append(
+        "pocket: macro %s, floorplan %s: %s" % (pocket, mine, "covered" if inside else "DIFFERS")
+    )
+    w, length = rec["dims"]["patch"]["w"], rec["dims"]["patch"]["l"]
+    half_col = rec["params"]["spacing"] / 2 + length / 2
+    for bank in ("rx", "tx"):
+        cols = [c["phase_centre"] for n, c in rec["columns"].items() if n.lower().startswith(bank)]
+        box = [
+            round(min(c[0] for c in cols) - w / 2 + cx, 3),
+            round(min(c[1] for c in cols) - half_col + cy, 3),
+            round(max(c[0] for c in cols) + w / 2 + cx, 3),
+            round(max(c[1] for c in cols) + half_col + cy, 3),
+        ]
+        same = all(abs(a - b) < 0.01 for a, b in zip(box, fp.doc["rf"]["patches"][bank]))
+        ok &= same
+        out.append("%s patches: macro %s: %s" % (bank, box, "same" if same else "DIFFERS"))
+    regions = fp.doc["rf"]["region"] + [fp.doc["rf"]["pocket"]]
+    half = fp.doc["u1"]["body_mm"] / 2
+    regions.append([cx - half, cy - half, cx + half, cy + half])
+    board = (path.parent / rec["files"]["pcb"]).read_text()
+    import re
+
+    m = re.search(r'\(footprint "[^"]*ABL0161[^"]*".*?\(at ([-\d.]+) ([-\d.]+)', board, re.S)
+    ux, uy = (float(m.group(1)), float(m.group(2))) if m else (0.0, 0.0)
+    vias = [
+        (float(a) - ux + cx, -(float(b) - uy) + cy)
+        for a, b in re.findall(r"\(via \(at ([-\d.]+) ([-\d.]+)\)", board)
+    ]
+    outside = [
+        (round(x, 2), round(y, 2))
+        for x, y in vias
+        if not any(r[0] <= x <= r[2] and r[1] <= y <= r[3] for r in regions)
+    ]
+    ok &= not outside
+    out.append(
+        "macro vias outside the RF region and the package: %d of %d %s"
+        % (len(outside), len(vias), outside[:6])
+    )
+    return out, ok
 
 
 def compile_check(fp, engine=None):
@@ -982,6 +1046,7 @@ def main(argv=None):
     ap.add_argument("--check", action="store_true", help="fail if a generated file is stale")
     ap.add_argument("--out", type=Path, default=HERE)
     ap.add_argument("--radome", action="store_true", help="print the radome visibility check")
+    ap.add_argument("--macro", action="store_true", help="compare with the RF macro's record")
     ap.add_argument(
         "--compile",
         nargs="?",
@@ -1006,6 +1071,12 @@ def main(argv=None):
                 "radome: %(part)-15s region %(region)-15s h %(height_mm)4.2f mm, needs %(need_mm)5.2f,"
                 " has %(gap_mm)5.2f (max h %(max_height_mm)4.2f) %(ok)s" % row
             )
+    if args.macro:
+        lines, ok = macro_check(fp)
+        for line in lines:
+            print("macro: " + line)
+        if not ok:
+            stale.append("floorplan.yaml (differs from the RF macro)")
     if args.compile is not None:
         warnings, kinds, _ = compile_check(fp, args.compile or None)
         print("compiled constraint kinds: " + ", ".join(kinds))

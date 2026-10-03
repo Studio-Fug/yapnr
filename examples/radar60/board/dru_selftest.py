@@ -66,7 +66,7 @@ CASES = [
     ),
     ("rf_net_via", "via", dict(at=(52, 14), drill=0.2, size=0.4, net="RF_TX1"), "rf_no_vias"),
     ("part_in_rf_region", "part", dict(at=(18, 40), ref="C90"), "rf_region_parts"),
-    ("part_in_pocket", "part", dict(at=(30.9, 33.8), ref="C91"), None),
+    ("part_in_pocket", "part", dict(at=(30.4, 34.1), ref="C91"), None),
     ("macro_in_rf_region", "part", dict(at=(24, 42), ref="RFM1"), None),
     (
         "digital_track_in_guard",

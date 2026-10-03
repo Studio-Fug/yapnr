@@ -117,17 +117,21 @@ radome_lands: # standoff lands for the north-only test radome (plan 5.4, review)
 
 rf:
   macro_ref: RFM1 # reference of the RF macro footprint (generated in U1's frame, plan 6)
-  patches: # patch copper extents, for the radome rule (plan 5.2) [D]
-    rx: [21.0, 35.2, 29.7, 39.6]
-    tx: [33.2, 31.8, 39.5, 36.2]
+  # The RF track's macro (examples/radar60/rf, rfm1-n, geometry sha256 ab2378d3..., a parametric
+  # first draw of 2026-10-03) moved the columns north and the pocket against plan 5.2; these
+  # values follow the macro, and `gen_board.py --macro` checks them against its record.
+  macro_record: ../rf/generated/rfm1-n/rfm1-n.json
+  patches: # patch copper extents, for the radome rule (macro: plan 5.2 had rx 21.0-29.7 x 35.2-39.6)
+    rx: [19.941, 36.905, 28.417, 40.995]
+    tx: [34.446, 34.745, 40.58, 38.835]
   # RF region (plan 5.2): (a) the RX fan, (b) the TX feeds and bank, plus a 5 mm ground margin
   # west of the RX bank; the VOUT_PA pocket is cut out of it down to the package edge.
   region: # [x0, y0, x1, y1] rectangles whose union is the region minus the pocket
-    - [16.0, 33.2, 29.7, 46.0] # RX fan and the west ground margin
-    - [29.7, 34.4, 32.1, 46.0] # above the pocket
-    - [32.1, 26.8, 44.5, 46.0] # TX feeds and bank
-    - [31.2, 26.8, 32.1, 33.2] # TX launches, east of the package, south of the pocket
-  pocket: [29.7, 33.2, 32.1, 34.4] # 0402 VOUT_PA / VIN_13RF2 caps, <= 0.6 mm tall (plan 5.2)
+    - [16.0, 33.2, 29.563, 46.0] # RX fan and the west ground margin
+    - [29.563, 35.0, 31.25, 46.0] # above the pocket
+    - [31.25, 26.8, 44.5, 46.0] # TX launches, feeds and bank
+    - [31.2, 26.8, 31.25, 33.2] # the sliver between the package edge and the pocket's east side
+  pocket: [29.563, 33.2, 31.25, 35.0] # macro's VOUT_PA pocket (y from 33.45), down to the package edge
   # R4 (plan 7.5): no digital net within 5 mm of RF copper on F.Cu-In2.Cu. A rectangular 5 mm
   # band around the region, without the package body (the radio's own balls and escapes) and
   # without the region itself; the RF audit (E6) measures the exact distance.
@@ -177,12 +181,7 @@ regions:
       rect: [26.0, 17.5, 31.2, 22.6],
       reason: 'Y1 next to B15/C15, outside the RF guard',
     }
-  pa_pocket:
-    {
-      parts: [pa_decoupling],
-      rect: [29.7, 33.2, 32.1, 34.4],
-      reason: 'RFM1 pocket for the VOUT_PA caps',
-    }
+  pa_pocket: { parts: [pa_decoupling], rect: rf.pocket, reason: 'RFM1 pocket for the VOUT_PA caps' }
 
 groups: # hard proximity, centre to centre (pnr.place.geometry.hard_group_edges)
   radio_decoupling:

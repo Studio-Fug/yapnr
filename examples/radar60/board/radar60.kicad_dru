@@ -63,6 +63,11 @@
 (rule "radar60_rf_region_parts"
   (constraint disallow footprint)
   (condition "A.Type == 'Footprint' && A.Layer == 'F.Cu' && A.intersectsArea('RF_REGION') && A.Reference != 'RFM1' && A.Reference != 'U1' && !A.enclosedByArea('RF_POCKET')"))
+# No solder mask over the RF copper (TI SPRACG5): the macro's F.Mask opening bridges its copper by design, inside the RF region or the macro footprint only
+(rule "radar60_rf_mask_opening"
+  (constraint bridged_mask)
+  (severity ignore)
+  (condition "A.intersectsArea('RF_REGION') || B.intersectsArea('RF_REGION') || A.memberOfFootprint('RFM1') || B.memberOfFootprint('RFM1') || A.memberOfFootprint('*:RFM1*') || B.memberOfFootprint('*:RFM1*')"))
 # The 60 GHz nets never change layer (the RF balls have no vias; plan 7.2)
 (rule "radar60_rf_no_vias"
   (constraint disallow via)

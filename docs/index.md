@@ -93,6 +93,7 @@ design/fea-integration
 design/rf-fab-coupons
 design/cloud-experiments
 design/fab-and-ordering
+design/gloss
 history/import-manifest
 about-the-name
 references

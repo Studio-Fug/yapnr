@@ -11,6 +11,8 @@ import json
 import math
 import os
 import platform
+import re
+import resource
 import shutil
 import subprocess
 import sys
@@ -41,6 +43,56 @@ def kicad_footprints():
 
 def sha(p):
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+
+
+def _oriented(block):
+    """A track or arc block with its ends in sorted order (a segment drawn either way is the
+    same copper; which end a merged segment keeps can follow its random uuid)."""
+    ends = [i for i, text in enumerate(block) if text.startswith(("(start ", "(end "))]
+    if len(ends) != 2:
+        return block
+    i, j = ends
+
+    def point(text):
+        return tuple(float(v) for v in text.split("(", 1)[1].rstrip(")").split()[1:])
+
+    if point(block[j]) < point(block[i]):
+        block = list(block)
+        block[i], block[j] = "(start" + block[j][4:], "(end" + block[i][6:]
+    return block
+
+
+COPPER_ITEM = re.compile(r"^\s*\((segment|via)[\s)]", re.M)  # tracks and vias, any layout
+
+
+def copper_sha(board):
+    """SHA-256 of a board's copper without uuids: its track, arc and via blocks, uuid lines
+    dropped, ends in sorted order, sorted. Writeback gives tracks random uuids, so two runs of
+    one case differ in ``sha`` but not here when their copper is the same (pairing A/B arms,
+    determinism). Raises ValueError when the board holds a track or via block this reader
+    does not parse (another file layout): a hash of nothing would pair any two boards."""
+    text = Path(board).read_text()
+    blocks, block, depth = [], None, 0
+    for line in text.splitlines():
+        item = line.strip()
+        if block is None:
+            if item.startswith(("(segment", "(arc", "(via")) and line.startswith("\t("):
+                block, depth = [item], item.count("(") - item.count(")")
+            continue
+        depth += item.count("(") - item.count(")")
+        if not item.startswith("(uuid"):
+            block.append(item)
+        if depth <= 0:
+            blocks.append(" ".join(_oriented(block)))
+            block = None
+    parsed = sum(b.startswith(("(segment", "(via")) for b in blocks)
+    found = len(COPPER_ITEM.findall(text))
+    if parsed != found:
+        raise ValueError(
+            "copper_sha: %s has %d track and via blocks, %d parsed"
+            % (Path(board).name, found, parsed)
+        )
+    return hashlib.sha256("\n".join(sorted(blocks)).encode()).hexdigest()
 
 
 def acceptance(pnr, audit, drc):
@@ -199,6 +251,266 @@ LISTING = (
 )
 
 
+# --- PNR_GLOSS ladder stage (opt-in, docs/design/gloss.md "Ladder stage") ---------------------
+# The ladder has no native loop, so --gloss runs one gloss pass with 07g semantics (no open-net
+# guard) on the refilled board, before the audit: transactional and gated inside pnr.gloss, then
+# gated again here by the cold kicad-cli DRC that judges the case.
+GLOSS_SUMMARY_KEYS = (
+    "status",
+    "accepted_transactions",
+    "proposed_transactions",
+    "rejected_transactions",
+    "split_transactions",
+    "edits_by_step",
+    "rejections_by_check",
+    "end_gate",
+    "stop",  # why the pass stopped early (time_budget, max_transactions) or null
+    "budget",
+    "seconds",
+    "wall_seconds",
+    "objective_before",
+    "objective_after",
+    "metrics_before",
+    "metrics_after",
+    "delta_by_step",
+    "cross_group",
+)
+
+
+def gloss_flags(items, repo):
+    """``--gloss-flag KEY=VALUE`` items -> {KEY: VALUE}, PNR_GLOSS_* sub-flags only (the runner
+    strips ambient PNR_* variables). A relative PNR_GLOSS_CLASSES file is taken from the repo."""
+    out = {}
+    for item in items:
+        key, sep, value = item.partition("=")
+        if not sep or not key.startswith("PNR_GLOSS_"):
+            raise ValueError("--gloss-flag takes PNR_GLOSS_<NAME>=VALUE, got %r" % item)
+        if key == "PNR_GLOSS_CLASSES" and value and not Path(value).is_absolute():
+            value = str((Path(repo) / value).resolve())
+        out[key] = value
+    return out
+
+
+def drc_counts(report):
+    """(opens, {violation type: count}) of a kicad-cli DRC report."""
+    return len(report["unconnected_items"]), dict(Counter(v["type"] for v in report["violations"]))
+
+
+DANGLING = ("track_dangling", "via_dangling")
+
+
+def violation_keys(report):
+    """As pnr.via_coalesce.violation_keys (the pass's own gate): each violation as its type and
+    the sorted uuids of its items, the dangling kinds aside (they are counted)."""
+    return Counter(
+        (v["type"], tuple(sorted(i["uuid"] for i in v.get("items", []))))
+        for v in report["violations"]
+        if v["type"] not in DANGLING
+    )
+
+
+def gloss_gate(before, after):
+    """The outer gate of the gloss stage, as strict as the pass's own transaction gate: [] when
+    the cold DRC did not get worse, else the reasons. Worse: more opens, any violation that is
+    new by its type and items (a violation that moved to other items is new, even when the
+    count of its type holds), or more dangling tracks or vias."""
+    (o0, v0), (o1, v1) = drc_counts(before), drc_counts(after)
+    reasons = ["opens %d -> %d" % (o0, o1)] if o1 > o0 else []
+    new = violation_keys(after) - violation_keys(before)
+    for kind in sorted({kind for kind, _ in new}):
+        reasons.append("new %s %d" % (kind, sum(n for (k, _), n in new.items() if k == kind)))
+    for kind in DANGLING:
+        if v1.get(kind, 0) > v0.get(kind, 0):
+            reasons.append("%s %d -> %d" % (kind, v0.get(kind, 0), v1[kind]))
+    return reasons
+
+
+def freeze_gloss_groups(flags, freeze):
+    """A PNR_GLOSS_CLASSES groups file is copied into the run's source freeze and the run reads
+    the copy, as it reads every engine source: (flags naming the copy, the file's record
+    {name, sha256} for provenance.json; None without a groups file)."""
+    path = flags.get("PNR_GLOSS_CLASSES")
+    if not path:
+        return flags, None
+    if not Path(path).is_file():
+        raise ValueError("--gloss-flag PNR_GLOSS_CLASSES: no such file %r" % Path(path).name)
+    target = freeze / "gloss-groups" / Path(path).name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(path, target)
+    return dict(flags, PNR_GLOSS_CLASSES=str(target)), gloss_groups_record(flags)
+
+
+def gloss_groups_record(flags):
+    """The groups file of the sub-flags by its name and content, never its path (or None)."""
+    path = flags.get("PNR_GLOSS_CLASSES")
+    if not path or not Path(path).is_file():
+        return None
+    return dict(name=Path(path).name, sha256=sha(path))
+
+
+def gloss_flags_record(flags):
+    """The sub-flags as result.json records them: a groups file by its name, never its path."""
+    return {
+        key: Path(value).name if key == "PNR_GLOSS_CLASSES" and value else value
+        for key, value in flags.items()
+    }
+
+
+def gloss_summary(report):
+    """The pass summary kept in result.json: no transactions, specs or paths. ``planning``
+    keeps its totals (inventories, wall-clock safety-net hits), not its rows."""
+    block = {k: report[k] for k in GLOSS_SUMMARY_KEYS if k in report}
+    if isinstance(report.get("planning"), dict):
+        block["planning"] = {k: v for k, v in report["planning"].items() if k != "rows"}
+    if (block.get("cross_group") or {}).get("groups"):
+        block["cross_group"] = dict(
+            block["cross_group"], groups=Path(block["cross_group"]["groups"]).name
+        )
+    return block
+
+
+def gloss_stage(root, board, args, run, flags):
+    """--gloss: the PNR_GLOSS pass on ``board`` (in place); returns the case's gloss block.
+
+    ``routed.pre-gloss.kicad_pcb`` keeps the input. The pass output replaces the board only when
+    it kept edits and the cold kicad-cli DRC of the replaced board is not worse (gloss_gate);
+    otherwise, and on any stage error, the input is restored."""
+    folder = root / "gloss"
+    folder.mkdir()
+    pre = root / "routed.pre-gloss.kicad_pcb"
+    shutil.copyfile(board, pre)
+    pre_sha = sha(board)
+
+    def cold_drc(name):
+        out = folder / (name + ".drc.json")
+        run(
+            "gloss-" + name,
+            [args.kicad_cli, "pcb", "drc", board, "--format", "json", "--output", out],
+        )
+        return json.loads(out.read_text())
+
+    block = dict(
+        pre_gloss_board_sha256=pre_sha,
+        pre_gloss_copper_sha256=copper_sha(board),
+        flags=gloss_flags_record(flags),
+        groups=gloss_groups_record(flags),
+        kept=False,
+    )
+    try:
+        before = cold_drc("drc-before")
+        candidate = folder / "candidate.kicad_pcb"
+        run(
+            "gloss",
+            [
+                args.python,
+                "-m",
+                "pnr.gloss",
+                board,
+                "--rules",
+                root / "rules.json",
+                "--out",
+                candidate,
+                "--work-dir",
+                folder / "work",
+                "--report",
+                folder / "result.json",
+                "--kicad-cli",
+                args.kicad_cli,
+                "--kicad-python",
+                args.kicad_python,
+                "--label",
+                "07g-gloss",
+                "--metrics",
+            ],
+            dict(flags, PNR_GLOSS="1"),
+        )
+        report = json.loads((folder / "result.json").read_text())
+        block.update(summary=gloss_summary(report))
+        reasons, after = [], before
+        if report.get("accepted_transactions") and sha(candidate) != pre_sha:
+            shutil.copyfile(candidate, board)
+            after = cold_drc("drc-after")
+            reasons = gloss_gate(before, after)
+            block["kept"] = not reasons
+        block["outer_gate"] = dict(
+            passed=not reasons,
+            reasons=reasons,
+            before=dict(zip(("opens", "violations"), drc_counts(before))),
+            after=dict(zip(("opens", "violations"), drc_counts(after))),
+        )
+    except (subprocess.SubprocessError, OSError, ValueError, KeyError) as ex:
+        # no paths in result.json: the error's kind and exit code; the stage logs have the rest
+        code = getattr(ex, "returncode", None)
+        block.update(
+            status="error", error=type(ex).__name__ + ("" if code is None else " %s" % code)
+        )
+    if not block["kept"]:
+        shutil.copyfile(pre, board)
+    block["board_sha256"] = sha(board)
+    block["copper_sha256"] = copper_sha(board)
+    return block
+
+
+def measure_summary(row):
+    """--gloss-measure: the A/B figures of one pnr.gloss --measure row."""
+    m = row["metrics"]
+    eligible = m["classes"].get("eligible") or {}
+    cross = m.get("cross_group") or {}
+    return dict(
+        objective=row["objective"],
+        drc=row["drc"],
+        audit=row["audit"],
+        pad_entry=row["pad_entry"],
+        length_mm=round(eligible.get("length_mm", 0.0), 3),
+        segments=eligible.get("segments", 0),
+        bends_all=eligible.get("bends_all", 0),
+        X_mm2=round(m.get("X_mm2", 0.0), 3),
+        T_mm=round(m.get("T_mm", 0.0), 3),
+        DS_mm2=round(m.get("DS_mm2", 0.0), 3),
+        A3_mm2=round(m.get("A3_mm2", 0.0), 3),
+        cross_group_max_mm=cross.get("max_mm"),
+        cross_group_max_pair=cross.get("max_pair"),
+        cross_group_over_cap=len(cross.get("over_cap") or []),
+        seconds=row.get("seconds"),
+    )
+
+
+def gloss_measure(root, board, args, run, flags):
+    """--gloss-measure: pnr.gloss --measure on a copy of the final board (both A/B arms)."""
+    folder = root / "gloss-measure"
+    folder.mkdir()
+    copy = folder / board.name
+    for ext in (".kicad_pcb", ".kicad_pro", ".kicad_dru"):
+        if board.with_suffix(ext).exists():
+            shutil.copyfile(board.with_suffix(ext), copy.with_suffix(ext))
+    if (root / "fp-lib-table").exists():
+        shutil.copyfile(root / "fp-lib-table", folder / "fp-lib-table")
+    cmd = [
+        args.python,
+        "-m",
+        "pnr.gloss",
+        "--measure",
+        copy,
+        "--rules",
+        root / "rules.json",
+        "--out",
+        folder / "measure.json",
+        "--kicad-cli",
+        args.kicad_cli,
+        "--kicad-python",
+        args.kicad_python,
+    ]
+    if flags.get("PNR_GLOSS_CLASSES"):
+        cmd += ["--classes", flags["PNR_GLOSS_CLASSES"]]
+    if flags.get("PNR_GLOSS_CLASSES_FROM"):
+        cmd += ["--classes-from", flags["PNR_GLOSS_CLASSES_FROM"]]
+    if flags.get("PNR_GLOSS_CROSS_GROUP_MM"):
+        cmd += ["--cross-group-mm", flags["PNR_GLOSS_CROSS_GROUP_MM"]]
+    run("gloss-measure", cmd)
+    rows = json.loads((folder / "measure.json").read_text())
+    return measure_summary(next(iter(rows.values())))
+
+
 def new_result(spec, seed, root):
     """A case's result record; ``directory`` is relative to the run directory."""
     return dict(
@@ -259,6 +571,30 @@ def parser():
         help="Also offer the showcase cases (designs.showcases(), outside the ladder) to --case",
     )
     ap.add_argument(
+        "--gloss",
+        action="store_true",
+        help=(
+            "Run the opt-in PNR_GLOSS pass (dekink, pull-tight, corridor packing; 07g semantics) "
+            "after refill, before the audit; a cold-DRC gate restores the pre-gloss board if "
+            "opens or findings rise"
+        ),
+    )
+    ap.add_argument(
+        "--gloss-flag",
+        action="append",
+        default=[],
+        metavar="PNR_GLOSS_NAME=VALUE",
+        help="A PNR_GLOSS_* sub-flag for the gloss stage and --gloss-measure (repeatable)",
+    )
+    ap.add_argument(
+        "--gloss-measure",
+        action="store_true",
+        help=(
+            "pnr.gloss --measure on a copy of each final board (objective, length, bends, "
+            "adjacency, dead space): the figures of a gloss A/B, for both arms"
+        ),
+    )
+    ap.add_argument(
         "--fab-profile",
         choices=fab_profiles(),
         default=DEFAULT_FAB_PROFILE,
@@ -293,6 +629,12 @@ def main():
         not args.trace or args.trace_placement_every < 1
     ):
         raise SystemExit("--trace-placement-every needs --trace and a positive N")
+    try:
+        glossing = gloss_flags(args.gloss_flag, REPO)
+    except ValueError as error:
+        raise SystemExit(str(error))
+    if glossing and not (args.gloss or args.gloss_measure):
+        raise SystemExit("--gloss-flag needs --gloss or --gloss-measure")
     out.mkdir(parents=True, exist_ok=False)
     allcases = designs() + (showcases() if args.showcases else [])
     cases = [c for c in allcases if not args.case or c["name"] in args.case]
@@ -306,6 +648,10 @@ def main():
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_path, target)
     frozen_here = freeze / "hardware/pnr/regression"
+    try:
+        glossing, gloss_groups = freeze_gloss_groups(glossing, freeze)
+    except ValueError as error:
+        raise SystemExit(str(error))
     # The frozen root carries yapnr.fab.capability and its profile data (fab_data_inputs).
     env = dict(
         os.environ,
@@ -353,6 +699,12 @@ def main():
         platform="%s-%s" % (sys.platform, platform.machine().lower()),
         seeds=args.seed or [0],
         trace=bool(args.trace),
+        gloss=dict(
+            enabled=bool(args.gloss),
+            measure=bool(args.gloss_measure),
+            flags=gloss_flags_record(glossing),
+            groups=gloss_groups,
+        ),
         arguments={k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
         pnr_environment={k: v for k, v in env.items() if k.startswith("PNR_")},
     )
@@ -373,18 +725,28 @@ def main():
         import trace_native as tracing
     results = []
 
-    def stage(root, name, cmd, extra=None):
+    def stage(root, name, cmd, extra=None, cpu=None):
+        """Run one stage; its wall seconds are returned and, with ``cpu``, its CPU
+        seconds (user + system of the stage's whole waited-for process tree) recorded."""
         t = time.monotonic()
-        with (root / (name + ".log")).open("w") as log:
-            subprocess.run(
-                list(map(str, cmd)),
-                cwd=REPO,
-                env=dict(env, **(extra or {})),
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                check=True,
-                timeout=args.timeout,
-            )
+        before = resource.getrusage(resource.RUSAGE_CHILDREN)
+        try:
+            with (root / (name + ".log")).open("w") as log:
+                subprocess.run(
+                    list(map(str, cmd)),
+                    cwd=REPO,
+                    env=dict(env, **(extra or {})),
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    check=True,
+                    timeout=args.timeout,
+                )
+        finally:
+            after = resource.getrusage(resource.RUSAGE_CHILDREN)
+            if cpu is not None:
+                cpu[name] = round(
+                    after.ru_utime - before.ru_utime + after.ru_stime - before.ru_stime, 3
+                )
         return time.monotonic() - t
 
     for spec in cases:
@@ -397,8 +759,10 @@ def main():
             print("START " + root.name, flush=True)
             try:
 
+                result["cpu_stages"] = {}
+
                 def run(name, cmd, extra=None):
-                    result["stages"][name] = stage(root, name, cmd, extra)
+                    result["stages"][name] = stage(root, name, cmd, extra, result["cpu_stages"])
 
                 native = tracing.NativeTrace(root, spec, seed, args, out.name) if tracing else None
                 run(
@@ -465,6 +829,12 @@ def main():
                         "--refill-only",
                     ],
                 )
+                if args.gloss:
+                    result["gloss"] = gloss_stage(root, board, args, run, glossing)
+                    if result["gloss"].get("status") == "error":
+                        result["gloss_error"] = result["gloss"]["error"]
+                    if native:
+                        native.snapshot("gloss", board, args.kicad_cli, args.timeout)
                 run(
                     "audit",
                     [args.kicad_python, frozen_here / "native.py", "audit", root, "--pcb", board],
@@ -507,10 +877,15 @@ def main():
                     pnr=pnr,
                     source_board_sha256=source,
                     board_sha256=sha(board),
+                    copper_sha256=copper_sha(board),
                     project_sha256=sha(board.with_suffix(".kicad_pro")),
                 )
                 if source != sha(root / "source.kicad_pcb"):
                     result["reasons"].append("source_changed")
+                if result.get("gloss_error"):
+                    result["reasons"].append("gloss_error")
+                if args.gloss_measure:
+                    result["gloss_measure"] = gloss_measure(root, board, args, run, glossing)
                 constraints = spec["constraints"]
                 if constraints.get("line_group") or any(
                     rule.get("hard") for rule in (constraints.get("edge_align") or {}).values()
@@ -529,6 +904,7 @@ def main():
                     error=str(ex), traceback=traceback.format_exc(), reasons=["stage_failure"]
                 )
             result["elapsed_seconds"] = time.monotonic() - t
+            result["cpu_seconds"] = round(sum((result.get("cpu_stages") or {}).values()), 3)
             (root / "result.json").write_text(json.dumps(result, indent=2))
             results.append(result)
             (out / "summary.json").write_text(

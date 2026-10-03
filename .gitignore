@@ -28,3 +28,6 @@ yapnr.local.toml
 
 # `yapnr atopile build` outputs (default ./yapnr-out/<project>/<build>)
 yapnr-out/
+
+# Locally built native FDTD stepper (python -m yapnr.rf.fdtd.native_kernel build)
+yapnr/rf/fdtd/native/libyapnr_fdtd.*

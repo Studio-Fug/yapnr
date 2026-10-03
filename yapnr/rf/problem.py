@@ -41,6 +41,8 @@ from yapnr.rf.fdtd.dtft import conductance_factor
 from yapnr.rf.fdtd.dtft import decimation as dtft_decimation
 from yapnr.rf.fdtd.engine import Simulation
 from yapnr.rf.fdtd.monitors import Probe
+from yapnr.rf.fdtd.native_kernel import choose as choose_backend
+from yapnr.rf.fdtd.native_kernel import provenance as native_status
 from yapnr.rf.fdtd.sources import GaussianPulse
 from yapnr.rf.fdtd.stop import StopRule
 from yapnr.rf.materials import (
@@ -185,8 +187,9 @@ class Problem:
         sv = spec.solver
         self.edge_correction = bool(sv.edge_correction)
         self.exact = exact
-        self.backend = backend or ("numpy" if exact else sv.backend)
-        self.dtype = np.dtype(dtype or (np.float64 if exact else sv.dtype))
+        # Explicit arguments, then $YAPNR_RF_BACKEND / $YAPNR_RF_DTYPE, then the spec
+        # (`fdtd.native_kernel.choose`; exact problems: numpy float64, or native float64).
+        self.backend, self.dtype = choose_backend(backend, dtype, sv.backend, sv.dtype, exact=exact)
         self.threads = int(threads or sv.threads)
         self.tol = 1e-12 if exact else sv.tol
         self.adjoint_tol = 1e-10 if exact else sv.adjoint_tol
@@ -250,6 +253,7 @@ class Problem:
             dtype=self.dtype,
             threads=self.threads,
         )
+        self.backend = self.sim.backend  # "numpy" when the native library is missing
         # Probes on the resistors an `absorbed` requirement names: P = ½ c_ω Σ_e σ_e V_e |Ê_e|²
         # over the part's edges (`dissipated_power` with the part's own σ only), name →
         # (probe, ½ σ_e V_e).
@@ -309,7 +313,7 @@ class Problem:
             self._cal_by_width[width] = calibrate_line(
                 line,
                 self.cal_omega,
-                backend="torch" if self.backend == "torch" else "numpy",
+                backend=self.backend if self.backend in ("torch", "native") else "numpy",
                 dtype=np.float64,
                 cache_dir=self.cache_dir,
             )
@@ -814,6 +818,7 @@ class Problem:
             "backend": self.backend,
             "dtype": str(self.dtype),
             "threads": self.threads,
+            "native": native_status(self.sim),
             "filter_radius_mm": self.filter.radius * 1e3,
             "material_grid": self.material.to_json(),
             "groups": [

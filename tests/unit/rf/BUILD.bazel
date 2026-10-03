@@ -31,6 +31,10 @@ yapnr_py_tests(
         "test_kicad_cli": {"tags": ["kicad"]},
         "test_microstrip": {"size": "medium"},
         "test_modes": {"size": "medium"},
+        "test_native_kernel": {
+            "deps": ["//yapnr/rf:testing"],
+            "size": "medium",
+        },
         "test_pipeline_gradient": {
             "deps": ["//yapnr/rf:testing"],
             "size": "medium",

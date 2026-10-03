@@ -16,7 +16,8 @@ update, E probes at t = (n + 1)Δt after the E update.
 
 Backends: "numpy" (reference) and "torch" (CPU, intra-op threads), float64 or float32 fields;
 their code path is shared and only a handful of array primitives differ (`_NumpyOps`,
-`_TorchOps`).
+`_TorchOps`). "native" (`native_kernel`, optional) runs blocks of steps in C with the numpy
+reference's operations in the same order: float64 runs are bit-identical to numpy's.
 
 A run advances in blocks of steps that end where the stop rule checks; the sources' values and
 the DTFT phase factors of a block are tabulated once (`_BlockTables`) and every backend uses
@@ -260,8 +261,10 @@ class RunResult:
 class Simulation:
     """A microstrip FDTD model ready to run: grid, materials, CPML and the time step.
 
-    `backend` "numpy" (the reference) or "torch"; None: ``$YAPNR_RF_BACKEND`` or numpy.
-    `threads`: torch's intra-op threads (at most 4).
+    `backend` "numpy" (the reference), "torch" or "native" (`native_kernel`; falls back to
+    numpy, saying so once, when its library is missing); None: ``$YAPNR_RF_BACKEND`` or numpy.
+    `threads`: torch's intra-op threads (at most 4) or the native pool (``$YAPNR_RF_THREADS``
+    overrides it).
     """
 
     def __init__(
@@ -283,7 +286,15 @@ class Simulation:
         if backend is None:
             backend = os.environ.get("YAPNR_RF_BACKEND", "").strip().lower() or "numpy"
         self.requested_backend = backend
-        self.ops = make_ops(backend, dtype)
+        kernel = None
+        if backend == "native":
+            from yapnr.rf.fdtd import native_kernel
+
+            kernel = native_kernel.require_or_warn()
+            if kernel is None:
+                backend = "numpy"
+        # The native backend builds its coefficients with the numpy primitives (same values).
+        self.ops = make_ops("numpy" if backend == "native" else backend, dtype)
         self.backend = backend
         self.dtype = np.dtype(dtype)
         if backend == "torch":
@@ -294,9 +305,19 @@ class Simulation:
             c: tuple(slice(None) if staggered(c, a) else slice(1, -1) for a in range(3))
             for c in E_COMPONENTS
         }
-        self._build_terms()
+        self._native = None
+        self._build_terms(allocate=kernel is None)
+        if kernel is not None:
+            from yapnr.rf.fdtd.native_kernel import NativeStepper
+
+            self._native = NativeStepper(self, kernel, threads)
         self.update_materials()
         self.reset()
+
+    @property
+    def threads(self) -> int | None:
+        """Threads of the native stepper (None for the other backends)."""
+        return self._native.threads if self._native is not None else None
 
     # -- setup ----------------------------------------------------------------------------------
 
@@ -305,7 +326,9 @@ class Simulation:
         shape[axis] = v.size
         return self.ops.array(v.reshape(shape))
 
-    def _build_terms(self) -> None:
+    def _build_terms(self, allocate: bool = True) -> None:
+        """Curl terms and their CPML slabs; `allocate` the ψ arrays (the native stepper keeps
+        its own)."""
         grid, dt, ops = self.grid, self.dt, self.ops
         self.terms: dict[str, list[_Term]] = {}
         for comp, spec in list(_E_TERMS.items()) + list(_H_TERMS.items()):
@@ -360,7 +383,8 @@ class Simulation:
                     else:
                         b = self._bshape(b, u)
                         cd = self._bshape(cd, u)
-                    slabs.append(_Slab(sl, b, cd, ops.zeros(tuple(pshape)), u, gap))
+                    psi = ops.zeros(tuple(pshape)) if allocate else None
+                    slabs.append(_Slab(sl, b, cd, psi, u, gap))
                 terms.append(
                     _Term(sign, src, u, dsl, self._bshape(ik, u), slabs, shape=tuple(shape))
                 )
@@ -399,6 +423,12 @@ class Simulation:
                 self._sheet[comp] = {
                     name: tuple(self.ops.array(a) for a in arrs) for name, arrs in br.items()
                 }
+        if self._native is not None:
+            self._native.set_materials(
+                self._ca, self._cb, [(c, k0, k1, m) for c, k0, k1, m, _ in self._mu], self._sheet
+            )
+            # The stepper holds per-plane copies (scalars for uniform planes).
+            self._ca, self._cb = {}, {}
         self._reset_sheet()
 
     def _reset_sheet(self) -> None:
@@ -415,6 +445,12 @@ class Simulation:
 
     def reset(self) -> None:
         """Zero all fields and CPML auxiliary arrays."""
+        if self._native is not None:
+            self._native.reset()
+            # Views of the native buffers in the (x, y, z) shapes of the other backends.
+            self.f = dict(self._native.views)
+            self.n = 0
+            return
         self.f = {c: self.ops.zeros(self.grid.shape(c)) for c in E_COMPONENTS + H_COMPONENTS}
         self._fint = {c: self.f[c][self._interior[c]] for c in E_COMPONENTS}
         self._curl = {}
@@ -490,7 +526,10 @@ class Simulation:
         if steps <= 0:
             return
         omega = np.zeros(1)
-        stepper = _PythonRun(self, [], [], {}, 1)
+        if self._native is not None:
+            stepper = self._native.start([], [], omega.size, 1)
+        else:
+            stepper = _PythonRun(self, [], [], {}, 1)
         n = self.n
         while n < self.n + steps:
             n1 = min(n + _MAX_BLOCK, self.n + steps)
@@ -549,7 +588,12 @@ class Simulation:
         good = 0
         converged = False
         history = []
-        stepper = _PythonRun(self, plan, probes, acc, decimation)
+        if self._native is not None:
+            stepper = self._native.start(
+                plan, [(p, acc[p.name]) for p in probes], omega.size, decimation
+            )
+        else:
+            stepper = _PythonRun(self, plan, probes, acc, decimation)
         t0 = time.perf_counter()
         n = 0
         while n < stop.max_steps:

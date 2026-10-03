@@ -151,6 +151,8 @@ class BoardRoute:
     # The declared copper stack's warnings (pnr.stack.assess); also in
     # escape_diagnostics["stack_warnings"], which the run's PnR report keeps.
     stack_warnings: List[str] = field(default_factory=list)
+    # Pair / group length tuning report (pnr.route.detail.tune); None without sets.
+    length_report: Optional[list] = None
 
     @property
     def fully_routed(self) -> bool:
@@ -1026,6 +1028,25 @@ def route_board(
             for span in vm.merged(span_at.get(key) or [vm.full]):
                 if not span.through:
                     board.via_spans.append((*key, span.top, span.bottom, span.kind))
+    if rules and (rules.get("diff_pairs") or rules.get("length_match")):
+        # Length-match the declared pairs and groups on the finished route (fixed
+        # copper counts in its net's length, unchanged).
+        from .tune import meanders_enabled, tune_board
+
+        if meanders_enabled(rules):
+            board.length_report = tune_board(
+                board,
+                graph,
+                grid,
+                rules,
+                net_width=net_width,
+                default_width=track_width_mm,
+                net_halo=net_halo,
+                via_keepout=via_keepout,
+                access=net_access,
+                via_radius=via_radius_mm,
+                fixed_copper=fixed_copper,
+            )
     if route_trace is not None:
         route_trace.end(board)
     return board

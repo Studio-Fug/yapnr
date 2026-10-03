@@ -9,6 +9,7 @@ from pathlib import Path
 from pnr.constraints import compile_constraints, compile_routing_rules
 from pnr.fab_profile import apply_rules
 from pnr.graph import BoardGraph
+from pnr.length_model import attach_board
 from pnr.route.detail.exact_route import exact_mode
 from pnr.route.detail.native_maze import status as maze_status
 from pnr.route.feedback import route_and_place
@@ -28,6 +29,9 @@ rules = apply_rules(compile_routing_rules(c, [n.name for n in g.nets]))
 via_policy = board_policy(spec.get("via_policy"), root / "source.kicad_pcb", rules, graph=g)
 if via_policy:
     rules["via_policy"] = via_policy
+# Pairs and groups are tuned against the board's own stackup (via lengths) and the
+# exact lands of their pads.
+attach_board(rules, (root / "source.kicad_pcb").read_text())
 (root / "rules.json").write_text(json.dumps(rules, indent=2))
 os.environ["PNR_ROUND_DIAGNOSTICS"] = str(root / "rounds")
 t = time.monotonic()
@@ -67,6 +71,8 @@ if getattr(r, "via_spans", None):
             exact_separation=exact_mode(),
             elapsed_seconds=time.monotonic() - t,
             summary=report.summary(),
+            # Pair / group length tuning (pnr.route.detail.tune), only when declared.
+            **({"length_tuning": r.length_report} if r.length_report is not None else {}),
         ),
         indent=2,
     )

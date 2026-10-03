@@ -104,6 +104,9 @@ filegroup(
         "pnr/via_coalesce.py",
         "pnr/track_graph.py",
         "pnr/quality.py",
+        # pnr.quality measures routed length as KiCad's DRC does (pnr.length_model).
+        "pnr/length_model.py",
+        "pnr/length_oracle.py",
         "pnr/specctra.py",
         "pnr/writeback.py",
         "pnr/stack.py",
@@ -299,6 +302,62 @@ py_test(
     deps = [
         ":pnr",
         requirement("pyyaml"),
+    ],
+)
+
+# Routed length as KiCad's DRC measures it (pnr.length_model), against KiCad 10.0.6
+# measurements of the same geometry. No KiCad needed.
+py_test(
+    name = "length_model_test",
+    size = "small",
+    srcs = ["tests/test_length_model.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_length_model.py",
+    deps = [":pnr"],
+)
+
+# The same model against KiCad's own DRC lengths on probe boards; run it under KiCad's
+# Python by hand (KICAD_CLI names kicad-cli).
+py_test(
+    name = "length_oracle_kicad_test",
+    size = "small",
+    srcs = ["tests/test_length_oracle_kicad.py"],
+    imports = ["."],
+    main = "tests/test_length_oracle_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
+)
+
+# Pair / group length tuning after detailed routing (pnr.route.detail.tune).
+py_test(
+    name = "length_tune_test",
+    size = "small",
+    srcs = ["tests/test_length_tune.py"],
+    main = "tests/test_length_tune.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+    ],
+)
+
+# Placement keeps the legs of diff pairs and length-match groups even (the global
+# term and the post-legalization refinement, pnr.place.matched).
+py_test(
+    name = "matched_placement_test",
+    size = "small",
+    srcs = ["tests/test_matched_placement.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_matched_placement.py",
+    deps = [
+        ":pnr",
+        ":pnr_place",
     ],
 )
 

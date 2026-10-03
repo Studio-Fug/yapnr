@@ -197,3 +197,19 @@ error. The
 performance opt-in `--batched-wirelength` can be tested explicitly. All of these
 are recorded in provenance; ambient variables are still cleared, so a baseline
 invocation keeps its original algorithms.
+
+## Length-matching scratch designs
+
+No ladder case or hard rung declares a length-match group, so
+`lenmatch_scratch.py write OUT.json` writes scratch designs for the router's
+length tuning: an 8-net bus from a fixed SMD connector to an SOIC (a group, 0.5 mm)
+and a differential pair whose pins swap between its connectors (1.0 mm skew), on two
+layers and on 4L-SGPS with the bus's budget in ps (`lm-bus-pair`, whose bus reaches the
+SOIC in reverse pin order, and `lm-bus-pair-4L-ps`), and the bus turning a corner to
+an SOIC fixed above and to the right of the connector (`lm-bus-corner`). `run.py --design-json OUT.json` offers
+any such list to `--case`. `lenmatch_scratch.py judge CASE_DIR --kicad-cli PATH`
+then runs KiCad's DRC on a copy of the routed board with a `skew` rule per pair and
+per group with a budget in mm and reports KiCad's lengths beside the engine's
+`length_tuning` report. A budget in ps has no KiCad judge: KiCad 10.0.6's
+`kicad-cli pcb drc` reads every delay as 0 ps (KiCad issue 23868), so those sets are
+reported from the engine's audit only.

@@ -28,8 +28,9 @@ import yaml
 from pnr.constraints import compile_constraints, compile_routing_rules
 from pnr.fab_profile import apply_rules
 from pnr.graph import BoardGraph
+from pnr.length_model import attach_board
 from pnr.mc.halving import _rank_key
-from pnr.place.initial_pool import _route_metrics
+from pnr.place.initial_pool import _route_metrics, route_rank
 from pnr.place.metrics import hpwl
 from pnr.route.detail.exact_route import exact_mode
 from pnr.route.detail.native_maze import status as maze_status
@@ -47,6 +48,9 @@ rules = apply_rules(compile_routing_rules(constraints, [n.name for n in graph.ne
 via_policy = board_policy(spec.get("via_policy"), root / "source.kicad_pcb", rules, graph=graph)
 if via_policy:
     rules["via_policy"] = via_policy
+# Pairs and groups are tuned against the board's own stackup (via lengths) and the
+# exact lands of their pads.
+attach_board(rules, (root / "source.kicad_pcb").read_text())
 (root / "rules.json").write_text(json.dumps(rules, indent=2))
 
 inputs = root / "mc-inputs"
@@ -125,7 +129,7 @@ for rec in finalists:
         )
     )
     print("final", rec["id"], metrics["objective"], "%.1fs" % (time.monotonic() - t), flush=True)
-best = min(evaluated, key=lambda c: (c["metrics"]["objective"], c["id"]))
+best = min(evaluated, key=lambda c: (route_rank(c["metrics"]), c["id"]))
 route = best["route"]
 (root / "placed.json").write_text(best["graph"].to_json())
 routes = dict(tracks=route.tracks, vias=route.vias, unrouted=route.result.unrouted)
@@ -176,6 +180,12 @@ unresolved = sorted(set(route.result.unrouted) - set(route.deferred_nets))
             exact_separation=exact_mode(),
             elapsed_seconds=time.monotonic() - started,
             summary=route.summary(),
+            # Pair / group length tuning (pnr.route.detail.tune), only when declared.
+            **(
+                {"length_tuning": route.length_report}
+                if getattr(route, "length_report", None) is not None
+                else {}
+            ),
         ),
         indent=2,
     )

@@ -154,7 +154,9 @@ def _pnr_board_impl(ctx):
         # 2. place + route feedback loop (torch) -> placed graph + routing rules
         # (net classes / diff pairs / length match). Runs with its OWN runfiles
         # env (no injected PYTHONPATH).
-        'PNR_ROUND_DIAGNOSTICS="$_WORK" PNR_PLACEMENT_DIAGNOSTICS="$_WORK/placement-failure.json" "%s" "$_WORK/graph.json" "%s" --dump-json "$_WORK/placed.json" --dump-rules "$_WORK/rules.json" --dump-routes "$_WORK/routes.json" --detail-loop --max-rounds %d %s %s' % (
+        # --board: declared pairs / groups are length-tuned against the board's own
+        # stackup and its pads' exact lands.
+        'PNR_ROUND_DIAGNOSTICS="$_WORK" PNR_PLACEMENT_DIAGNOSTICS="$_WORK/placement-failure.json" "%s" "$_WORK/graph.json" "%s" --board "$_WORK/source.kicad_pcb" --dump-json "$_WORK/placed.json" --dump-rules "$_WORK/rules.json" --dump-routes "$_WORK/routes.json" --detail-loop --max-rounds %d %s %s' % (
             placer.path,
             ctx.file.constraints.path,
             ctx.attr.placement_rounds,

@@ -268,6 +268,26 @@ def place(
         # Hard edge_align (opt-in): only passed when a design declares one.
         **({} if not bands else dict(edge_bands=bands)),
     )
+    if (constraints.diff_pairs or constraints.length_matches) and (
+        (getattr(constraints, "tuning", None) or {}).get("placement", True)
+    ):
+        # Even the legs of each pair / group the packer pulled apart (pnr.place.matched).
+        from .matched import refine_matched
+
+        placed = refine_matched(
+            placed,
+            constraints,
+            width,
+            height,
+            fixed=poses,
+            keepouts=keepouts,
+            group_limits=hard_group_limits(constraints, poses, partial=True),
+            clearance=clearance,
+            grid_mm=grid_mm,
+            spread=min(spread, _LEGALIZE_SPREAD_CAP),
+            inflation=inflation,
+            pad_edge=pad_edge,
+        )
     return _finish(placed, graph, constraints, width, height, baseline, pad_edge)
 
 

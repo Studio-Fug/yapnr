@@ -356,12 +356,74 @@ length_match:
     v3v3: { nets: [3V3], plane_layer: In2.Cu } # 3V3 plane on inner layer 2
   ```
 
-- **`diff_pair`** — two nets (`p`/`n`) routed together with `width_mm`/`gap_mm`;
-  the quality pass reports their routed-length **skew** and flags it if it
-  exceeds `skew_mm` (default 0.5).
+- **`diff_pair`** — two nets (`p`/`n`) with `width_mm`/`gap_mm`; the quality pass
+  reports their routed-length **skew** and flags it if it exceeds `skew_mm`
+  (default 0.5). `skew_ps` gives the budget as a delay instead (each layer's
+  propagation delay from the board's stackup); a pair gives one or the other. The
+  native electrical flow routes a pair coupled; the own grid router routes its two
+  legs as two nets and matches their lengths (the route report says how much of the
+  P leg runs beside the N leg).
 - **`length_match`** — a group of nets whose routed lengths must agree within
-  `tolerance_mm`; the quality pass reports the group **spread** and flags it if
-  it exceeds the tolerance.
+  `tolerance_mm` or `tolerance_ps` (not both); the quality pass reports the group
+  **spread** and flags it if it exceeds the tolerance.
+- **`tuning`** (optional) — the meander rules for both: `gap_mm` (edge to edge,
+  at least the clearance and the track width; without it three track widths where
+  that is enough, else the minimum), `amplitude_max_mm`, `min_segment_mm`,
+  `max_added_mm` (the meander length one net may gain), `style` (`auto`,
+  `trombone`, `serpentine`, `accordion`), `mitre` (45-degree corners, default on),
+  and two switches, both on by default: `meanders` (the router tunes the sets after
+  routing) and `placement` (placement keeps the members' estimated lengths even).
+
+The own detailed router **tunes** every declared pair and group after routing
+(`pnr/route/detail/tune.py`): each member shorter than the longest gets meanders on
+straight runs of its own path and layer, legal by the router's own clearance rules,
+until the spread is within the budget. Lengths are measured as KiCad's DRC measures
+them (`pnr/length_model.py`: merged track lines straightened inside pads and vias,
+plus each via's span through the stackup), so a KiCad `skew` or `length` rule in mm
+sees the same numbers. A budget in ps is judged by the engine's own audit
+(`pnr.quality`): KiCad 10.0.6's `kicad-cli pcb drc` reads every delay as 0 ps
+(KiCad issue 23868), so it cannot judge a time-domain rule. The stackup and the
+exact lands of the matched nets' pads (a through-hole pad's circle or square, which
+the graph does not record) come from the board itself: `python -m pnr.route ...
+--board BOARD.kicad_pcb` (the `atopile_pnr` rule passes its source board); without
+it the tuner takes KiCad's default stack for the board's layer count and a rounded
+square for through-hole lands, and a board stackup whose copper layers are not the
+board's layer count is not used.
+
+The per-set result (status, lengths, layers, margin, meanders and their gap) is in
+the route report and in `routes.json` as `length_tuning`; a set left outside its
+budget is `length_unmatched` and named on stderr. When the short members have no
+room left for meanders, the longest member is routed again around the other nets
+(vias priced high, so it may change layer) and kept if it is shorter (`rerouted` in
+the report). A group member boxed in by its own neighbours (a bus routed at its
+pins' pitch round a corner, where the inner members are the short ones) gets room
+instead: from the route as it was before tuning, each member is routed again with
+the others in place, steps close to another member priced a little higher, so the
+bus fans out where the board has room; the set is tuned again and whichever attempt
+ends closer is kept (`spaced` in the report). A pair's legs are never routed apart.
+A set that still misses its budget keeps its meanders only when they closed at
+least half of the gap; otherwise it goes back to the route as routed (`reverted`).
+
+Pairs are tuned before groups. A group may lengthen a pair's legs (both, toward its
+longest member); a pair it puts out of its budget is tuned again, and if that fails
+the group's tuning is undone (`conflicts`). A net in two sets is never routed again.
+Copper the route keeps as it is (a hierarchical block's, or pairs routed before the
+grid) counts in its net's length; a set whose nets leave a hierarchical block is
+tuned on the whole board, not in the block (`partial`).
+
+Placement prepares for this: global placement pulls each set's members toward equal
+estimated lengths, and after legalization the small parts on matched nets (series
+resistors and the like) move to the legal slot that keeps the legs even
+(`pnr/place/matched.py`), so two series resistors of a pair do not end up at
+different distances from the connector. The candidate routes of the initial
+placement pool, the Monte-Carlo screen and the hierarchical knit rank a route with
+fewer sets outside their budgets ahead of fewer vias and less copper.
+
+```yaml
+diff_pair:
+  - { name: usb, p: USB_DP, n: USB_DM, width_mm: 0.2, gap_mm: 0.15, skew_ps: 2.0 }
+tuning: { gap_mm: 0.3, amplitude_max_mm: 1.0, style: serpentine }
+```
 
 The quality report ships in the fab bundle as `quality.txt`. Its diff-pair /
 length-match checks are **advisory** by default (reported, not enforced); set

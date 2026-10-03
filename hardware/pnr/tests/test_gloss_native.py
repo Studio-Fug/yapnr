@@ -655,9 +655,12 @@ class GlossNativeTest(unittest.TestCase):
         self.assertGreater(m["classes"]["eligible"]["bends_total"], 10)
         self.assertGreater(m["DS_mm2"], 1.0)  # the c1/c2 sliver
         # ray metric, both sides sampled: c1's 11.5 mm bottom leg faces c2 at 0.35 mm, and sig's 1 mm
-        # leg at y = 12 faces sig2 at 1.8 mm (rays reaching its round end caps add up to ~0.2 mm^2)
+        # leg at y = 12 faces sig2 at 1.8 mm. Rays reaching the round end caps add ~0.36 mm^2: a ray
+        # through a neighbour's vertex, where its parallel leg meets a turning one, counts the
+        # neighbour (c2 under c1's corner and sig2 under sig's, 0.19 mm^2 of it), whichever way
+        # either track is drawn.
         expected = 2 * 11.5 * (0.35 - 0.128) + 2 * 1.0 * (1.8 - 0.128)
-        self.assertAlmostEqual(m["layers"]["F.Cu"]["X_mm2"], expected, delta=0.25)
+        self.assertAlmostEqual(m["layers"]["F.Cu"]["X_mm2"], expected, delta=0.4)
         self.assertEqual(m["layers"]["F.Cu"]["T_mm"], 0)
         e = m["classes"]["eligible"]
         self.assertGreaterEqual(e["bends_all"], e["bends_total"])

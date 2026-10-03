@@ -259,6 +259,23 @@ class LadderOptionsTest(unittest.TestCase):
         self.assertTrue(any("compact_off names" in e for e in errors), errors)
         self.assertTrue(any("compact_off needs compact" in e for e in errors), errors)
 
+    def test_compact_parts_match_the_engine(self):
+        """The kind's PNR_COMPACT parts are the engine's (hardware/pnr/pnr/compact_flags.py,
+        read without importing the engine)."""
+        import ast
+
+        from yapnr.exp.kinds import ladder
+
+        source = Path(__file__).resolve().parents[3] / "hardware/pnr/pnr/compact_flags.py"
+        tree = ast.parse(source.read_text())
+        (parts,) = [
+            ast.literal_eval(node.value)
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            and any(isinstance(t, ast.Name) and t.id == "PARTS" for t in node.targets)
+        ]
+        self.assertEqual(ladder.COMPACT_PARTS, parts)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -84,10 +84,18 @@ class FlagsTest(unittest.TestCase):
             self.assertFalse(compact_flags.enabled("GP"))
             self.assertTrue(compact_flags.enabled("COURTYARD"))
             self.assertEqual(
-                compact_flags.active(), dict(RANK=True, LEGALIZE=True, COURTYARD=True, SHRINK=True)
+                compact_flags.active(),
+                dict(RANK=True, LEGALIZE=True, COURTYARD=True, DROPS=True, SHRINK=True),
             )
             with self.assertRaises(ValueError):
                 compact_flags.enabled("SPREAD")
+
+    def test_part_lists_agree(self):
+        """run.py --compact-off offers exactly the engine's parts (the ladder kind's list
+        is checked by tests/unit/exp/test_kinds.py)."""
+        import run
+
+        self.assertEqual(run.COMPACT_PARTS, PARTS)
 
 
 class IdentityTest(unittest.TestCase):
@@ -110,6 +118,53 @@ class IdentityTest(unittest.TestCase):
             for case in cases:
                 with self.subTest(case=case):
                     self.assertEqual(fixture.place_digest(case), self.golden[case]["place"][key])
+
+
+class FlagOffPathTest(unittest.TestCase):
+    """Platform independent (CI runs no placement golden): with the flags unset the placer,
+    the legalizer and the initial pool never call a compact-only function, and no part
+    has an offset body, so they take their previous paths."""
+
+    def test_flag_off_never_enters_the_compact_paths(self):
+        from pnr.place import compact, geometry, model
+
+        def refuse(name):
+            def call(*args, **kwargs):
+                raise AssertionError("compact-only %s called with the flags unset" % name)
+
+            return call
+
+        guarded = (
+            "cluster_box",
+            "box_coordinate",
+            "occupied_box",
+            "legalize_settings",
+            "margins",
+            "metrics",
+            "rank_bucket",
+            "scaled_constraints",
+            "shrink_search",
+        )
+        real_body = geometry.compact_body
+
+        def no_body(comp):
+            out = real_body(comp)
+            if out is not None:
+                raise AssertionError("an offset body with the flags unset: " + comp.ref)
+            return out
+
+        with flags(), contextlib.ExitStack() as stack:
+            for name in guarded:
+                stack.enter_context(mock.patch.object(compact, name, refuse(name)))
+            stack.enter_context(mock.patch.object(geometry, "compact_body", no_body))
+            self.assertEqual(compact.spread(1.3), 1.3)
+            self.assertEqual(compact.placement_clearance(compiled()), 0.2)
+            for case in fixture.CASES:
+                with self.subTest(case=case):
+                    graph = fixture.load(case)[0]
+                    self.assertIsNone(model.body_offsets(graph))
+                    fixture.legal_digest(case)
+                    fixture.place_digest(case)
 
 
 class OffsetCourtyardTest(unittest.TestCase):
@@ -347,8 +402,17 @@ class RankTest(unittest.TestCase):
             route_rank(dict(complete, length_unmatched=0)),
             route_rank(dict(complete, length_unmatched=1, bucket=0)),
         )
-        # Equal completion: the bucket ranks before vias and length.
-        self.assertLess(route_rank(dense), route_rank(complete))
+        # Equal completion: vias first (a fixed outline does not pay for the bbox), then
+        # the bucket, then length.
+        with flags(**ON):
+            self.assertLess(route_rank(complete), route_rank(dense))
+            self.assertEqual(route_rank(complete), (0, 0, 0, 9, 19, 300.0))
+            same_vias = dict(objective=[0, 0, 9, 200.0], bucket=20)
+            self.assertLess(route_rank(complete), route_rank(same_vias))
+        # PNR_SHRINK (the outline follows the bbox): the bucket before the vias.
+        with flags(PNR_COMPACT="1", PNR_SHRINK="1"):
+            self.assertLess(route_rank(dense), route_rank(complete))
+            self.assertEqual(route_rank(complete), (0, 0, 0, 19, 9, 300.0))
         # Without a bucket (the flag off) the key is the previous one.
         self.assertEqual(route_rank(dict(objective=[0, 0, 9, 300.0])), (0, 0, 0, 9, 300.0))
 
@@ -433,17 +497,31 @@ class ShrinkTest(unittest.TestCase):
         from pnr.constraints import compile_constraints
         from pnr.place import compact
 
-        g = board([part("J1", (4.0, 2.0)), part("U1", (2.0, 2.0))], 40.0, 20.0)
+        g = board(
+            [part("J1", (4.0, 2.0)), part("U1", (2.0, 2.0)), part("J2", (2.0, 4.0))], 40.0, 20.0
+        )
         cc = compile_constraints(
-            {"board": {"outline": {"w": 40, "h": 20}}, "fixed": {"J1": {"at": [2, 10]}}}, g.refs
+            {
+                "board": {"outline": {"w": 40, "h": 20}},
+                "fixed": {"J1": {"at": [2, 10]}, "J2": {"at": [39, 12]}},
+            },
+            g.refs,
         )
         scaled = compact.scaled_constraints(cc, 40.0, 20.0, 30.0, 15.0)
-        (fixed,) = [c for c in scaled.constraints if c.kind == "fixed"]
-        self.assertEqual(fixed.params["at"], [2.0, 7.5])  # near the west edge; mid y scales
+        at = {c.refs[0]: c.params["at"] for c in scaled.constraints if c.kind == "fixed"}
+        # A fixed at keeps its absolute position (mid-board y included); one on the far
+        # (east) edge's band keeps its distance to that edge.
+        self.assertEqual(at["J1"], [2.0, 10.0])
+        self.assertEqual(at["J2"], [29.0, 12.0])
+        self.assertEqual(
+            compact.moved_fixed(cc, scaled), [dict(refs=["J2"], at=[39.0, 12.0], to=[29.0, 12.0])]
+        )
         self.assertEqual((scaled.board.width, scaled.board.height), (30.0, 15.0))
         self.assertEqual(cc.board.width, 40)  # a copy
         lower = compact.shrink_lower_bound(g, cc, 40.0, 20.0)
-        self.assertGreaterEqual(lower, math.sqrt(12.0 / (0.7 * 800.0)))
+        self.assertGreaterEqual(lower, math.sqrt(16.0 / (0.7 * 800.0)))
+        # J2 (at y 12, 4 mm tall, not in the north band) must end below the scaled outline.
+        self.assertGreaterEqual(lower, 14.0 / 20.0 - 1e-9)
         self.assertLess(lower, 1.0)
         self.assertEqual(compact.shrink_skip_reason(cc), None)
         self.assertEqual(compact.shrink_skip_reason(cc, auto_outline=True), "auto_outline")
@@ -528,11 +606,158 @@ class RunnerTest(unittest.TestCase):
         )
         _, findings = run.constraint_reasons(spec, placed, use_body=True)
         self.assertEqual(findings, [])  # the body's bottom is 0.035 mm from the edge
+        # A north edge part is judged on the design's outline unless the run shrank it.
+        north = dict(spec, constraints=dict(spec["constraints"], edge_align={}))
+        north["constraints"]["edge_align"] = {"J1": dict(edge="north", hard=True, tolerance_mm=0.5)}
+        top = dict(placed, components=[dict(placed["components"][0], pos=[10.0, 13.0])])
+        self.assertEqual(len(run.constraint_reasons(north, top, use_body=True)[1]), 1)
+        self.assertEqual(run.constraint_reasons(north, top, use_body=True, shrunk=True)[1], [])
         _, findings = run.constraint_reasons(spec, placed)
         self.assertEqual(len(findings), 0 if 4.4 - 8.73 / 2 <= 0.5 else 1)
         measured = run.compactness(placed)
         self.assertEqual(measured["outline_mm2"], 450.0)
         self.assertEqual(measured["bbox_mm"], [3.63, 6.18])
+
+
+class MarginPathTest(unittest.TestCase):
+    """A part whose box hugs its pads (a copper margin) keeps it after the legalizer too:
+    the align snap and the feedback moves add both parts' margins to the gap."""
+
+    def hugging(self, ref, pos):
+        return part(ref, (2.0, 1.0), pos=pos, pads=[Pad("1", "h" + ref, (-0.75, 0.0), (0.5, 1.0))])
+
+    def test_align_snap_keeps_the_margin(self):
+        from pnr.constraints import compile_constraints
+        from pnr.place import compact
+        from pnr.place.regions import snap_aligns
+
+        def boards():
+            g = board(
+                [part("A", (2.0, 1.0), pos=(4.0, 5.0)), part("B", (2.0, 1.0), pos=(10.0, 6.0))]
+                + [self.hugging("H", (10.0, 3.9))]
+            )
+            cc = compile_constraints(
+                {
+                    "board": {"outline": {"w": 20, "h": 10}},
+                    "fixed": {"A": {"at": [4, 5]}},
+                    "align": [
+                        dict(name="al", refs=["A", "B"], axis="y", anchor="origin", tol_mm=0.0)
+                        | dict(hard=True)
+                    ],
+                },
+                ["A", "B", "H"],
+            )
+            return g, cc
+
+        with flags(**ON):
+            g, cc = boards()
+            margins = compact.margins(g, 0.2)
+            self.assertEqual(margins, {"H": 0.1})
+            # B down to y 5 leaves 0.1 mm to H: more than the gap, less than gap + margin.
+            self.assertEqual(snap_aligns(g, cc, compact.GAP_MM, None, (20.0, 10.0)), ["B"])
+            g, cc = boards()
+            self.assertEqual(
+                snap_aligns(g, cc, compact.GAP_MM, None, (20.0, 10.0), margins=margins), []
+            )
+            self.assertEqual(g.component("B").pos, (10.0, 6.0))
+
+    def test_feedback_move_keeps_the_margin(self):
+        from pnr.feedback.moves import MoveBoard
+        from pnr.place import compact
+
+        with flags(**ON):
+            g = board([part("B", (2.0, 1.0), pos=(10.0, 6.0)), self.hugging("H", (10.0, 3.9))])
+            cc = compiled()
+            plain = MoveBoard(g, cc, {}, frozenset(), clearance=compact.GAP_MM)
+            kept = MoveBoard(
+                g, cc, {}, frozenset(), clearance=compact.GAP_MM, margins=compact.margins(g, 0.2)
+            )
+            g.component("B").pos = (10.0, 5.0)  # 0.1 mm from H
+            self.assertIsNone(plain._local(["B"]))
+            self.assertEqual(kept._local(["B"]), "overlap")
+
+
+class DropsTest(unittest.TestCase):
+    """PNR_COMPACT DROPS: a legacy plane_layer net's surface pads get their through-via
+    drops from the detailed router (writeback dog-bones them otherwise)."""
+
+    def route(self):
+        from pnr.constraints import compile_constraints, compile_routing_rules
+        from pnr.graph import Net
+        from pnr.route.detail.router import route_board
+
+        def resistor(ref, pos):
+            return Component(
+                ref,
+                "R_0805",
+                pos,
+                0.0,
+                "top",
+                (3.2, 1.6),
+                (3.2, 1.6),
+                pads=[
+                    Pad("1", "SIG", (-0.95, 0.0), (1.0, 1.4)),
+                    Pad("2", "GND", (0.95, 0.0), (1.0, 1.4)),
+                ],
+            )
+
+        comps = [resistor("R1", (6.0, 5.0)), resistor("R2", (14.0, 5.0))]
+        nets = [Net("SIG", [("R1", "1"), ("R2", "1")]), Net("GND", [("R1", "2"), ("R2", "2")])]
+        g = BoardGraph("toy", comps, nets, BoardOutline(20.0, 10.0))
+        cc = compile_constraints(
+            {
+                "board": {"outline": {"w": 20, "h": 10}, "layers": 4},
+                "net_class": {
+                    "return": {"nets": ["GND"], "width_mm": 0.4, "plane_layer": "In1.Cu"}
+                },
+            },
+            g.refs,
+        )
+        rules = compile_routing_rules(cc, ["SIG", "GND"])
+        return route_board(g, cc, rules, pitch=0.25, max_iters=4)
+
+    def test_legacy_plane_pads_get_router_drops(self):
+        with flags():
+            off = self.route()
+        with flags(**ON):
+            on = self.route()
+        with flags(PNR_COMPACT="1", PNR_COMPACT_DROPS="0"):
+            ablated = self.route()
+        self.assertEqual([v for v in off.vias if v[0] == "GND"], [])
+        self.assertEqual(off.vias, ablated.vias)
+        self.assertEqual(off.result.unrouted, [])
+        drops = [v for v in on.vias if v[0] == "GND"]
+        self.assertEqual(len(drops), 2)  # one per GND pad, through In1.Cu's own region
+        self.assertEqual(on.result.unrouted, [])
+        stubs = [t for t in on.tracks if t[0] == "GND"]
+        self.assertTrue(stubs and all(t[1] == "F.Cu" and t[4] >= 0.4 - 1e-9 for t in stubs))
+
+
+class DriverTest(unittest.TestCase):
+    def test_hier_utilisations_follow_gp(self):
+        import hier_case
+
+        spec = {}
+        base = hier_case.budget_of(spec)["utilisations"]
+        with flags(**ON):
+            self.assertEqual(
+                hier_case.budget_of(spec)["utilisations"],
+                list(base) + [u for u in (0.5, 0.6) if u not in base],
+            )
+        with flags(PNR_COMPACT="1", PNR_COMPACT_GP="0"):
+            self.assertEqual(hier_case.budget_of(spec)["utilisations"], base)
+
+    def test_animation_fallback_arguments(self):
+        from types import SimpleNamespace
+
+        import animate_ladder
+
+        same = SimpleNamespace(runner_arg=["--compact", "--gloss"], fallback_runner_arg=None)
+        self.assertEqual(animate_ladder.fallback_arguments(same), ["--compact", "--gloss"])
+        own = SimpleNamespace(runner_arg=["--compact", "--gloss"], fallback_runner_arg=["--gloss"])
+        self.assertEqual(animate_ladder.fallback_arguments(own), ["--gloss"])
+        none = SimpleNamespace(runner_arg=["--compact"], fallback_runner_arg=[""])
+        self.assertEqual(animate_ladder.fallback_arguments(none), [])
 
 
 class TraceTest(unittest.TestCase):

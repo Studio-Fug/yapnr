@@ -374,22 +374,36 @@ def pick_ports(
     net: str,
     pad_points: Sequence[Point],
     joined: Optional[Iterable[int]] = None,
+    via_layer: str = "F.Cu",
 ) -> List[Tuple[Point, str]]:
     """One port per connected component of ``net``'s block copper that no pad of the
-    circuit already reaches (``joined``: those components' numbers): the free end
-    nearest the centroid of the net's pads (``pad_points``), ties by position. A
-    component without a free end gets none."""
+    circuit already reaches (``joined``: those components' numbers), nearest the
+    centroid of the net's pads (``pad_points``), ties by position: a free end of its
+    tracks and arcs; for a component without one (a ground rail joining fence vias),
+    one of its vias, entered on ``via_layer`` (its copper is on every layer); else an
+    end of its tracks. A component of pads or zones alone gets none."""
     joined = set(joined or ())
     if pad_points:
         cx = sum(p[0] for p in pad_points) / len(pad_points)
         cy = sum(p[1] for p in pad_points) / len(pad_points)
     else:
         cx = cy = 0.0
-    best: Dict[int, tuple] = {}
-    for point, layer, comp in port_candidates(block, net):
+    items, component, ends = _connectivity(block, net)
+    candidates: Dict[int, List[tuple]] = {}
+    for k, point, layer, free in ends:
+        candidates.setdefault(component[k], []).append((0 if free else 2, point, layer))
+    for k, item in enumerate(items):
+        if item[0] == "via":
+            candidates.setdefault(component[k], []).append((1, item[3][0], via_layer))
+    out = []
+    for comp in sorted(candidates):
         if comp in joined:
             continue
-        key = (math.hypot(point[0] - cx, point[1] - cy), point[0], point[1], layer)
-        if comp not in best or key < best[comp][0]:
-            best[comp] = (key, point, layer)
-    return [(best[c][1], best[c][2]) for c in sorted(best)]
+        rank = min(r for r, _, _ in candidates[comp])
+        best = min(
+            (math.hypot(p[0] - cx, p[1] - cy), float(p[0]), float(p[1]), layer)
+            for r, p, layer in candidates[comp]
+            if r == rank
+        )
+        out.append(((best[1], best[2]), best[3]))
+    return out

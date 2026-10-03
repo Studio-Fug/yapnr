@@ -350,7 +350,9 @@ fixed_block:
   solid zone, its own nets may join it. A solid zone on a layer the router does not
   route keeps foreign vias out. A net with pads in the circuit joins the block at a
   **port**: for each connected piece of the net's block copper that no pad already
-  reaches, the free end of its tracks and arcs nearest the net's pads. Rule areas in
+  reaches, the free end of its tracks and arcs nearest the net's pads (a piece without
+  a free end, such as a ground rail between fence vias, joins at its nearest via). The
+  plane nets join through their planes instead. Rule areas in
   the group bar what their flags say. The regression runner carries the copper in
   `rules.json` (`fixed_copper`), so every route of the placement loop sees it.
 - **Writeback** keeps the group's tracks, arcs and vias (they are not preview

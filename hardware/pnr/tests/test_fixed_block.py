@@ -663,6 +663,42 @@ class RouteBoardPortTest(unittest.TestCase):
         again = route_board(graph, cc, dict(rules, fixed_copper=copper))
         self.assertEqual(again.tracks, result.tracks)
 
+    def test_a_rail_without_free_ends_joins_at_a_via(self):
+        """Block ground copper with no free end (a rail between two vias) is still a
+        connection target: the router joins the net's pads to one of its vias."""
+        from pnr.route.detail.router import route_board
+
+        rail = dict(
+            name="g",
+            group="G",
+            tracks=[["GND", "F.Cu", [6.0, 5.0], [8.0, 5.0], 0.3]],
+            arcs=[],
+            vias=[
+                dict(net="GND", xy=[6.0, 5.0], diameter_mm=0.6, drill_mm=0.3, type="through"),
+                dict(net="GND", xy=[8.0, 5.0], diameter_mm=0.6, drill_mm=0.3, type="through"),
+            ],
+            polygons=[],
+            refs=[],
+        )
+        self.assertEqual(pick_ports(rail, "GND", [(1.0, 5.0)]), [((6.0, 5.0), "F.Cu")])
+        comp = Component(
+            "R1",
+            "r",
+            (1.5, 5.0),
+            0,
+            "top",
+            (1.6, 0.8),
+            (1.6, 0.8),
+            pads=[Pad("1", "GND", (-0.5, 0), (0.5, 0.5)), Pad("2", "", (0.5, 0), (0.5, 0.5))],
+        )
+        graph = BoardGraph("t", [comp], [Net("GND", 1, [("R1", "1")])])
+        cc = compile_constraints({"board": {"outline": {"w": 10, "h": 10}, "layers": 2}}, ["R1"])
+        rules = compile_routing_rules(cc, ["GND"])
+        copper = dict(frame="engine-mm-y-up", tracks=[], vias=[], blocks=[rail])
+        result = route_board(graph, cc, rules, fixed_copper=copper)
+        self.assertEqual(result.result.unrouted, [])
+        self.assertEqual(result.escape_diagnostics["block_ports"], {"GND": [["F.Cu", 6.0, 5.0]]})
+
     def test_block_ports_skip_pieces_a_pad_reaches(self):
         g = RouteGrid(10, 10, 0.1, clearance=0.1, track_width=0.1)
         comp = Component(

@@ -391,6 +391,7 @@ def block_ports(grid: RouteGrid, graph: BoardGraph, copper: Optional[dict], skip
     out = {}
     for block in copper["blocks"]:
         nets = {t[0] for t in block.get("tracks", [])} | {a[0] for a in block.get("arcs") or []}
+        nets |= {v.get("net") for v in block.get("vias", [])}
         for net in sorted(n for n in nets if n and n in pads and n not in skip):
             joined = components_touching(block, net, pads[net])
             centres = [((x0 + x1) / 2, (y0 + y1) / 2) for _, x0, y0, x1, y1 in pads[net]]

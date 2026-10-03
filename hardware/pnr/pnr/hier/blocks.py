@@ -321,6 +321,8 @@ def block_constraints_doc(doc: dict, addresses, width: float, height: float) -> 
     # Board-coordinate regions and alignments apply to the placed block macro.
     out.pop("region", None)
     out.pop("align", None)
+    # Fixed copper blocks are board-level copper (their anchors are fixed poses).
+    out.pop("fixed_block", None)
     out["fixed"] = {}
     out.pop("layout_array", None)
     if "side" in out:

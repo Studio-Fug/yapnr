@@ -1,6 +1,6 @@
 # radar60 board track: floorplan, rules, constraints and the BGA escape probe
 
-The board-level inputs for the radar60 Rev A board (a 60 GHz IWR6843 FMCW radar, 60 × 46 mm,
+The board-level inputs for the radar60 Rev A board (a 60 GHz IWR6843 FMCW radar, 60 × 46.3 mm,
 6-layer RO4835/RO4450F + FR-4 hybrid at PCBWay): the outline and fixed items, the RF region,
 the KiCad custom rules, the yapnr constraint file, and a probe of whether yapnr can escape the
 radio's FCBGA-161 on this stackup. Nothing here is routed yet; the board is placed and routed
@@ -37,25 +37,27 @@ PCBWay quote and CAM reply confirm the hybrid materials).
 
 ## Floorplan (origin at the lower-left corner, +y north towards the antennas)
 
-| Item                                        | Pose or extent                                                                                                                              |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Outline                                     | 60.0 × 46.0 mm, 1 mm corner radii                                                                                                           |
-| U1 (IWR6843, FCBGA-161)                     | fixed at (26.0, 28.0), 270°: RX balls (column 2) face north, TX balls (row B) face east                                                     |
-| Mounting holes                              | the schematic's 4 M2.5 hole parts (mech.mh[0..3]) fixed at (3.5, 3.5), (56.5, 3.5), (3.5, 42.5), (56.5, 42.5); Ø6.5 mm copper keepout       |
-| Radome standoff lands                       | Ø3.0 mm, Ø5.0 mm keepout, at (3.5, 27.0) and (56.5, 27.0): the test radome covers y ≥ 27                                                    |
-| J1 (JST GH-8, right angle)                  | fixed on the south edge, centred at x = 30, cable entry south                                                                               |
-| RF region (F.Cu-In2.Cu)                     | RX fan and west ground margin x 14.94-29.56, y 33.2-46; TX launches, feeds, bank and east margin x 31.25-45.58, y 26.7-46; above the pocket |
-| VOUT_PA pocket                              | x 29.56-31.25, y 33.2-35.0: the RF macro's pocket (from y 33.45), cut out of the RF region down to the package edge                         |
-| R4 guard (no digital copper on F.Cu-In2.Cu) | a 5 mm band around the RF region without the package body: x 9.94-20.8 for y ≥ 28.2, x 31.2-50.58 for y 21.7-26.7, x 45.58-50.58 above      |
-| J2 (QTH-030, development)                   | region x 10-42, y 4-18 (south of the LVDS balls)                                                                                            |
-| J3 (JTAG, DNP)                              | region x 1-14, y 8-28.2 (the plan's y 40 breaks the radome rule for a 5 mm header; y 28.2 is the R4 guard's edge)                           |
-| PMIC block / switch nodes                   | x 34-58, y 2-24 / x 41-58, y 2-21.7 (≥ 9.8 mm from the crystal zone, ≥ 5 mm from the RF region)                                             |
-| Y1 (40 MHz) and load caps                   | x 24-31.2, y 16-22.6, next to CLKP/CLKM (B15/C15 at (29.9, 23.45) and (29.25, 23.45)), below U1's courtyard                                 |
-| VOUT_PA / VIN_13RF2 caps                    | bottom side under the corner, an L clear of the macro's launch vias (the pocket holds no 0402 courtyard)                                    |
+| Item                                        | Pose or extent                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Outline                                     | 60.0 × 46.3 mm, 1 mm corner radii (46.3: the macro's ground ends 5.0 mm beyond the RX patches, 0.325 mm from the edge)                                                                                                                                                                                                                                  |
+| U1 (IWR6843, FCBGA-161)                     | fixed at (26.0, 28.0), 270°: RX balls (column 2) face north, TX balls (row B) face east                                                                                                                                                                                                                                                                 |
+| Mounting holes                              | the schematic's 4 plated M2.5 hole parts on GND (mech.mh[0..3]) fixed at (3.5, 3.5), (56.5, 3.5), (3.5, 42.8), (56.5, 42.8); Ø6.5 mm copper keepout                                                                                                                                                                                                     |
+| Radome standoff lands                       | Ø3.0 mm, Ø5.0 mm keepout, at (3.5, 27.0) and (56.5, 27.0): the test radome covers y ≥ 27                                                                                                                                                                                                                                                                |
+| J1 (JST GH-8, right angle)                  | fixed on the south edge, centred at x = 30, cable entry south                                                                                                                                                                                                                                                                                           |
+| J2 (QTH-030, development)                   | fixed at (20.75, 11.5), 0° (the stage-2 Monte Carlo winner's pose; as a region part the legalizer stranded it behind the block groups)                                                                                                                                                                                                                  |
+| J3 (JTAG, DNP)                              | fixed at (4.3, 19.5), 90°, at the west edge below the radome land, leaving the strip west of U1 to the flash                                                                                                                                                                                                                                            |
+| RF region (F.Cu-In2.Cu)                     | RX fan and west ground margin x 14.94-29.56, y 33.2-46.3; TX launches, feeds, bank and east margin x 31.25-45.58, y 26.7-46.3; above the pocket                                                                                                                                                                                                         |
+| VOUT_PA pocket                              | x 29.56-31.25, y 33.2-35.0: the RF macro's pocket (from y 33.45), cut out of the RF region down to the package edge                                                                                                                                                                                                                                     |
+| R4 guard (no digital copper on F.Cu-In2.Cu) | a 5 mm band around the RF region without the package body: x 9.94-20.8 for y ≥ 28.2, x 31.2-50.58 for y 21.7-26.7, x 45.58-50.58 above. RF, PWR, GND and ANALOG nets are exempt                                                                                                                                                                         |
+| PMIC block / switch nodes                   | x 38-58, y 2-26.65 / x 41-58, y 2-21.7 (≥ 8.6 mm from the crystal zone, ≥ 5 mm from the RF region); the bead LC filters and the DNP damping options are outside the block                                                                                                                                                                               |
+| Y1 (40 MHz) / load caps                     | x 23.5-30.2, y 15.75-21.55 / x 27.6-32.4, y 19.6-21.55 (pads about 2.4 mm from B15/C15)                                                                                                                                                                                                                                                                 |
+| Ball-anchored radio parts                   | APLL, SYNTH and VBGAP caps east of A10/B10/B13 (x 32.3-37, y 22-26.65, top); VOUT_PA / VIN_13RF2 220 nF and the PA 0 Ω under the corner (bottom, an L clear of the macro's launch vias); their bulk on the bottom east of the package (x 31.4-37.5, y 19.5-26.6); RF1 220 nF and VIN_18BB caps west of the package; the QSPI clock resistor next to R12 |
+| Blocks                                      | flash x 8.3-19.3, y 15.75-24.6 (QSPI about 10 mm); eFuse and TVS west of J1 below J2; CAN transceiver north-east of J1 behind its ESD diodes (x 31.6-38.5, y 6.65-11); hard groups round U2 (inductors, input caps, snubbers, VANA), U5, U4 and U3                                                                                                      |
 
 `gen_board.py --radome` checks the 30° radome visibility rule (a part of height h stays 1.73 h
-from the patch copper) against the regions: J2 has 16.8 mm for 7.45 mm, J3 10.6 mm for 8.66 mm,
-the PMIC inductors 13.1 mm for 1.73 mm; J1 is more than 25 mm away.
+from the patch copper) against the regions and the fixed headers: J2 has 19.5 mm for 7.45 mm,
+J3 17.7 mm for 8.66 mm, the PMIC inductors (IHLP-1616, 2.0 mm) 13.1 mm for 3.46 mm; J1 is more
+than 25 mm away.
 
 ## Custom rules (`radar60.kicad_dru`)
 
@@ -63,7 +65,7 @@ Part 1 is the `pcbway-adv-6l-rf` profile's rules, copied from `pnr.fab_profile.d
 writes those alone beside a board that has no rules file, and leaves a file without its
 generated header untouched, so this file carries both parts. Part 2, the board's rules (rule
 areas `RF_REGION`, `RF_POCKET` and `RF_GUARD` are drawn in `radar60.kicad_pcb`; net classes
-`RF`, `XTAL`, `LVDS`/`dp_lvds_*`, `QSPI`, `PWR`, `SW`, `GND` come from `constraints.yaml`):
+`RF`, `XTAL`, `LVDS`/`dp_lvds_*`, `QSPI`, `PWR`, `SW`, `GND`, `ANALOG` come from `constraints.yaml`):
 
 | Rule                                     | What it enforces                                                                                                |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
@@ -71,7 +73,7 @@ areas `RF_REGION`, `RF_POCKET` and `RF_GUARD` are drawn in `radar60.kicad_pcb`; 
 | `rf_region_vias`, `rf_fence_vias`        | no vias there but GND fence vias of 0.15/0.32 mm (pitch ≥ 0.45 mm from the 11 mil hole to hole)                 |
 | `rf_region_parts`                        | no top-side parts there but RFM1, U1 and parts enclosed by the pocket                                           |
 | `rf_no_vias`                             | the 60 GHz nets never change layer                                                                              |
-| `rf_guard_digital`                       | R4: no digital tracks (F.Cu-In2.Cu) or vias in the guard band                                                   |
+| `rf_guard_digital`                       | R4: no tracks (F.Cu-In2.Cu) or vias in the guard band but RF, PWR, GND and ANALOG nets                          |
 | `bga_signal_vias`, `bga_gnd_vias`        | under U1: signal and power vias 0.20/0.40 (dog-bones); 0.15/0.35 only for GND (interstitial)                    |
 | `general_vias`                           | elsewhere 0.20/0.40 or larger                                                                                   |
 | `xtal_no_vias`, `sw_to_xtal`, `sw_to_rf` | crystal nets on F.Cu only; switch nodes ≥ 8 mm from the crystal, ≥ 5 mm from RF copper                          |
@@ -79,7 +81,7 @@ areas `RF_REGION`, `RF_POCKET` and `RF_GUARD` are drawn in `radar60.kicad_pcb`; 
 | `qspi_length`                            | ≤ 25 mm at 80 MHz                                                                                               |
 | `plane_in1`, `plane_in4`                 | no tracks on the GND planes                                                                                     |
 
-`dru_selftest.py` (KiCad 10.0.6, headless) passes all 20 planted cases; the floorplan board
+`dru_selftest.py` (KiCad 10.0.6, headless) passes all 21 planted cases; the floorplan board
 itself is clean (0 violations, 0 unconnected) under these rules.
 
 ## Constraints (`constraints.yaml`)
@@ -119,12 +121,12 @@ and RF balls agree.
 
 ## RF macro
 
-The column and pocket positions follow the RF track's first macro draw (`../rf`, rfm1-n), which
-moved them against plan 5.2. `gen_board.py --macro` compares the floorplan with the macro's
-record: the pocket is covered, the patch extents are equal and all 158 macro vias lie inside the
-RF region, the pocket or the package body. Judged with `radar60.kicad_dru`, the macro board has
-two findings for the RF track: 0.15/0.30 mm fence vias (a 2.95 mil ring; PCBWay's minimum is
-3 mil, so 0.32 mm pads) and two via pairs 0.26-0.27 mm hole to hole (11 mil, 0.28 mm, needed).
+The column and pocket positions follow the RF track's macro (`../rf`, rfm1-n, a placeholder until
+the C1/C2 runs), which moved them against plan 5.2. `gen_board.py --macro` compares the floorplan
+with the records of all three D12 variants (rfm1-m/-n/-p): each pocket is covered, all 364 vias
+and 365 F.Cu points of each lie inside the RF region, the pocket or the package body, and the
+rfm1-n patch extents are the floorplan's (m and p differ by 0.01 mm). The macro's fence vias are
+0.15/0.32 mm at least 0.43 mm apart (the profile's 3 mil ring and 11 mil hole to hole).
 
 ## BGA escape probe
 
@@ -160,9 +162,10 @@ signal balls (worst case): 25, 31, 26 and 41 of 59 in the same four runs. What i
 ## Rev A integration: placed, not routed (`reva/`)
 
 `integrate.py` combines the schematic's board (`yapnr atopile build ../schematic -b rev-a`), the
-RF macro (`../rf/generated/rfm1-n`) and this floorplan into one board, places it with yapnr and
-stops before routing. Nothing is placed by hand: the poses come from yapnr's Monte Carlo
-placement search and a mechanical selection.
+RF macro (`../rf/generated/rfm1-n`, or `--macro-variant m|p` for the D12 brackets) and this
+floorplan into one board, places it with yapnr and stops before routing. Nothing is placed by
+hand: the fixed poses, regions and rotations are derived values in `floorplan.yaml`, and every
+other pose comes from yapnr's Monte Carlo placement search and a mechanical selection.
 
 ```sh
 # A numeric Python (torch, numpy, PyYAML); ENGINE: a yapnr checkout with the region, side and
@@ -180,8 +183,9 @@ python3 integrate.py render  --work W --kicad-cli "$PNR_KICAD_CLI" --renders OUT
   about its origin, and the macro is neither a box nor movable, so its area enters the
   placement as the RF region keepout (less U1's courtyard, which the macro is drawn around).
 - **Prepare.** The constraints as compiled for placement add one derived region: every movable
-  part with a pad on a digital net stays out of the RF region and its 5 mm guard band (R4; the
-  engine's `noise_keepout` is only proposed). `prepare` also checks that the HF, bulk and crystal
+  part with a pad on a guard-restricted net (a routed net outside the RF, PWR, GND and ANALOG
+  classes, as the custom rule tests it) stays out of the RF region and its 5 mm guard band (R4;
+  the engine's `noise_keepout` is only proposed). `prepare` also checks that the HF, bulk and crystal
   sets cover each radio capacitor exactly once.
 - **Place.** `pnr.mc.halving --stop-after place`: seeded stratified and Latin-hypercube global
   starts, each legalized and scored by the engine's routability proxy (`capacity-proxy-v1`).
@@ -199,22 +203,34 @@ python3 integrate.py render  --work W --kicad-cli "$PNR_KICAD_CLI" --renders OUT
   zones filled. The copper digest of the macro's tracks, arcs and vias in U1's frame equals the
   RF track's board (R1), and every RF ball lands on its macro port to 0 µm.
 
-The run of 2026-10-03 (32 starts, seed 0, 4 processes, 14 min): 10 legal, 9 pass the audit,
-winner `p008` (no unreachable branch in the proxy; the next best has one). On the written
-board KiCad's DRC finds no courtyard, keepout or rule-area violation; what it reports belongs to
-the RF macro (144 fence vias 0.30 mm against the board's 0.32 mm minimum, two via pairs 0.26-0.27
-mm hole to hole), U1's silkscreen corner marks clipped by the RF mask opening (6), the footprint
-libraries not being configured (171), and the 413 connections nothing has routed yet.
-`reva/placement-report.json` holds the audit, the constraint checks, the macro checks and the
-DRC summary.
+After the review fixes (2026-10-03; 32 starts, seed 0, 4 processes, 5.5 min): 12 legal, all 12
+pass the audit, winner `p002` (proxy: no unreachable branch, 2.8 overflow units; the next best
+scores 970 against 425). On the written board KiCad's DRC reports only the footprint libraries
+not being configured (183) and the 432 connections nothing has routed yet: no courtyard,
+keepout, rule-area, clearance, via or silk violation. `reva/placement-report.json` holds the
+audit, the constraint checks, the pin distances, the macro checks and the DRC summary.
 
-The placed board itself (1.2 MB) is over the repository's 600 kB file limit and is not committed:
-`reva/placement.json` holds the winner's poses (by atopile address), its scores and the
-engine it came from, and `integrate.py finish --placement reva/placement.json` (after `source`
-and `prepare`) rebuilds `reva/radar60-reva.kicad_pcb` bit for bit; its sha256 is in the report.
+What the review changed in the placement inputs:
 
-`floorplan.yaml`'s `blocks_pending` keeps the small blocks' groups (ESD and TVS at J1, the eFuse,
-CAN and flash support parts) that this placement lacks: without them the placer left those
-passives up to 40 mm from their IC, and with them yapnr's legalizer, which places every grouped
-part before any other, found no legal placement in 32 starts. They wait for the engine's
-hierarchical blocks.
+- **Ball-anchored parts.** U1 is fixed, so each part the review named has a one-slot region next
+  to its ball and a fixed rotation that turns its signal pad toward it (`orientations`): the
+  APLL, VBGAP and SYNTH caps 2.25 / 3.44 / 3.07 mm from A10 / B10 / B13 (were 12.3 and 11.1 mm),
+  the crystal load caps 2.1 / 2.3 mm from B15 / C15 (6.8 / 8.6), the VOUT_PA and VIN_13RF2
+  220 nF and the PA 0 Ω 0.5-1.1 mm from their corner balls on the bottom side, the QSPI clock
+  resistor 2.1 mm from R12. U1's courtyard is 0.5 mm beyond the body (IPC-7351B least) so the
+  B-row caps fit. `audit.py` fails a candidate beyond 3.0 mm (3.5 for the B-row LDO caps).
+- **Blocks.** Hard groups for the eFuse network, the CAN and flash support parts, the PMIC input
+  caps (5 mm), snubbers (7.5 mm, each capacitor within 2.5 mm of its resistor) and VANA; regions
+  for the block anchors (flash west of U1, eFuse west of J1, CAN transceiver north-east of J1
+  behind its ESD diodes) and for the protection at J1. `audit.py` checks that on every J1 line
+  the ESD/TVS pad comes before any IC pad.
+- **J2 and J3 are fixed.** As region parts the legalizer placed them after every grouped block
+  and they lost their windows; J2 keeps the first Monte Carlo winner's pose, J3 moved to the west
+  edge to leave room for the flash.
+- **R4 by class.** The derived R4 region and the audit use the custom rule's own test: a routed
+  net outside the RF, PWR, GND and ANALOG classes.
+
+What stays open for routing (the stage-2 integration report has the numbers): the PA and RF2
+bulk caps sit 7-12 mm from their balls on the bottom side (nearer needs the BGA shadow, with
+E4); three of four snubbers are 5-5.5 mm from their switch-node copper; the RF1 220 nF is
+8.8 mm from its interior balls.

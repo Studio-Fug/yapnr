@@ -75,17 +75,17 @@
 # R4 no digital copper within 5 mm of the RF region on F.Cu-In2.Cu (rectangular band; the package body is exempt)
 (rule "radar60_rf_guard_digital"
   (constraint disallow track via)
-  (condition "(A.Type == 'Via' || (A.Type == 'Track' && (A.Layer == 'F.Cu' || A.Layer == 'In1.Cu' || A.Layer == 'In2.Cu'))) && A.intersectsArea('RF_GUARD') && A.NetName != '' && !A.hasNetclass('RF') && !A.hasNetclass('PWR') && !A.hasNetclass('GND')"))
-# BGA escape: signal and power vias under U1 are the 0.20/0.40 escape class (dog-bones)
+  (condition "(A.Type == 'Via' || (A.Type == 'Track' && (A.Layer == 'F.Cu' || A.Layer == 'In1.Cu' || A.Layer == 'In2.Cu'))) && A.intersectsArea('RF_GUARD') && A.NetName != '' && !A.hasNetclass('RF') && !A.hasNetclass('PWR') && !A.hasNetclass('GND') && !A.hasNetclass('ANALOG')"))
+# BGA escape: signal and power vias under U1 are the 0.20/0.40 escape class (dog-bones); the RF region's vias are the macro's own class
 (rule "radar60_bga_signal_vias"
   (constraint hole_size (min 0.2mm))
   (constraint via_diameter (min 0.4mm))
-  (condition "A.Type == 'Via' && A.intersectsCourtyard('U1') && !A.hasNetclass('GND')"))
-# BGA escape: 0.15/0.35 vias under U1 are GND only (interstitial sites, same net)
+  (condition "A.Type == 'Via' && A.intersectsCourtyard('U1') && !A.hasNetclass('GND') && !A.intersectsArea('RF_REGION')"))
+# BGA escape: 0.15/0.35 vias under U1 are GND only (interstitial sites, same net); the macro's 0.15/0.32 fence vias at the package edge are the RF region's class
 (rule "radar60_bga_gnd_vias"
   (constraint hole_size (min 0.15mm))
   (constraint via_diameter (min 0.35mm))
-  (condition "A.Type == 'Via' && A.intersectsCourtyard('U1') && A.hasNetclass('GND')"))
+  (condition "A.Type == 'Via' && A.intersectsCourtyard('U1') && A.hasNetclass('GND') && !A.intersectsArea('RF_REGION')"))
 # Vias away from U1 and the RF region: 0.20/0.40 or larger
 (rule "radar60_general_vias"
   (constraint hole_size (min 0.2mm))

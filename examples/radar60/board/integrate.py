@@ -49,7 +49,15 @@ import yaml
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 PROFILE = "pcbway-adv-6l-rf"
-MACRO = HERE.parent / "rf" / "generated" / "rfm1-n" / "rfm1-n.kicad_pcb"
+MACRO_VARIANTS = {"m": -1, "n": 0, "p": +1}  # D12 bracketing (patch length x0.982 / x1 / x1.018)
+
+
+def macro_board(variant):
+    """The RF track's macro board of one D12 variant (rfm1-n by default)."""
+    name = "rfm1-" + variant
+    return HERE.parent / "rf" / "generated" / name / (name + ".kicad_pcb")
+
+
 BOARD_NAME = "radar60-reva"
 
 
@@ -178,16 +186,22 @@ def step_prepare(a):
     doc.pop("rf_macro", None)  # its part is held out of the graph (see ``source``)
     floorplan = yaml.safe_load((HERE / "floorplan.yaml").read_text())
     # R4 as a placement region (the engine's noise_keepout is only proposed): every movable
-    # part with a pad on a digital net stays out of the RF region and its 5 mm guard band.
+    # part with a guard-restricted pad (a routed net outside the RF, PWR, GND and ANALOG
+    # classes: the custom rule's own test) stays out of the RF region and its 5 mm guard band.
     graph_doc = json.loads((inputs / "graph.json").read_text())
     fixed = {k for k in doc.get("fixed", {})}
+    counts = {}
+    for c in graph_doc["components"]:
+        for p in c["pads"]:
+            if p.get("net"):
+                counts[p["net"]] = counts.get(p["net"], 0) + 1
     digital = sorted(
         c["address"]
         for c in graph_doc["components"]
         if c.get("address")
         and "@" + _glob_literal(c["address"]) not in fixed
         and c["ref"] not in fixed
-        and any(audit.is_digital(p.get("net")) for p in c["pads"])
+        and any(audit.guard_restricted(p.get("net"), floorplan, counts) for p in c["pads"])
     )
     doc.setdefault("region", []).append(
         {
@@ -205,6 +219,17 @@ def step_prepare(a):
     graph, compiled, rules = _compile(a.engine, inputs / "graph.json", doc)
     (inputs / "rules.json").write_text(json.dumps(rules, indent=1, sort_keys=True))
     sets = decoupling_sets(floorplan, [c.address for c in graph.components if c.address])
+    # Every PMIC part is in the block region but the damping options (a list, not pmic.*)
+    pmic_all = {c.address for c in graph.components if (c.address or "").startswith("pmic.")}
+
+    def matched(role):
+        pats = floorplan["parts"][role]
+        pats = pats if isinstance(pats, list) else [pats]
+        return {a for a in pmic_all if any(fnmatch.fnmatchcase(a, q) for q in pats)}
+
+    sets["pmic_unassigned"] = sorted(
+        pmic_all - matched("pmic_parts") - matched("pmic_filters") - matched("supply_damping")
+    )
     report = {
         "components": len(graph.components),
         "nets": len(graph.nets),
@@ -218,6 +243,8 @@ def step_prepare(a):
     print(json.dumps(report, indent=1))
     if sets["uncovered"] or sets["in_several"]:
         raise SystemExit("decoupling sets do not partition the radio capacitors")
+    if sets["pmic_unassigned"]:
+        raise SystemExit("PMIC parts in no block role: %s" % sets["pmic_unassigned"])
 
 
 # ---------------------------------------------------------------- place / select
@@ -339,6 +366,7 @@ def write_placement(a, work, recs, winner, sel):
         "schema": "radar60-placement/1",
         "note": "yapnr Monte Carlo placement (pnr.mc.halving stage 0), selected by integrate.py",
         "atopile_input_id": json.loads(ato.read_text()).get("input_id") if ato.is_file() else None,
+        "macro_variant": a.macro_variant,
         "engine": _engine_id(a.engine),
         "search": {
             "seed": a.seed,
@@ -414,6 +442,7 @@ def step_finish(a):
         placed_json = placed_from_record(a, work, a.placement)
         rec = json.loads(Path(a.placement).read_text())
         sel = dict(rec["search"], winner=rec["winner"]["id"])
+        a.macro_variant = rec.get("macro_variant", a.macro_variant)
     else:
         sel = json.loads((work / "selection.json").read_text())
         placed_json = work / "mc" / "cand" / sel["winner"] / "placed.json"
@@ -448,7 +477,7 @@ def step_finish(a):
             "finish",
             placed,
             HERE / "radar60.kicad_pcb",
-            MACRO,
+            macro_board(a.macro_variant),
             board,
             work / "finish.json",
         ],
@@ -475,7 +504,7 @@ def step_finish(a):
     poses = work / "final-poses.json"
     _run([a.kicad_python, HERE / "kicad_ops.py", "poses", board, poses])
     floorplan = yaml.safe_load((HERE / "floorplan.yaml").read_text())
-    macro_record = json.loads(MACRO.with_suffix(".json").read_text())
+    macro_record = json.loads(macro_board(a.macro_variant).with_suffix(".json").read_text())
     report = audit.board_audit(
         json.loads(poses.read_text()),
         json.loads(drc.read_text()),
@@ -530,6 +559,12 @@ def main(argv=None):
     ap.add_argument("--label-python", help="a Python with Pillow, to label the renders")
     ap.add_argument(
         "--placement", help="finish: rebuild from this placement record (reva/placement.json)"
+    )
+    ap.add_argument(
+        "--macro-variant",
+        choices=sorted(MACRO_VARIANTS),
+        default="n",
+        help="the RF macro's D12 variant to merge (rfm1-m/-n/-p; one placement fits all three)",
     )
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--n0", type=int, default=24, help="placement starts")

@@ -11,7 +11,10 @@
 
 board:
   width: 60.0 # [D] fits the 100 x 70 mm envelope (SYS-05) with enclosure walls
-  height: 46.0
+  # 46.3 (review 2026-10-03): the RF macro's ground ends 5.0 mm beyond the RX patches (y 45.975)
+  # and copper keeps 0.3 mm from the edge, so the plan's >= 5 mm ground margin (5.1, RFS-6) needs
+  # the edge at >= 46.275; at 46.0 the margin was 4.73 mm [D]
+  height: 46.3
   corner_radius: 1.0
   copper_layers: 6
   profile: pcbway-adv-6l-rf # yapnr/fab/data/profiles
@@ -51,28 +54,93 @@ parts:
       radio.c_rf2,
     ]
   radio_decoupling_bulk: ['radio.c_*_10u', 'radio.c_*_22u', 'radio.c_*_bulk'] # 0603/0805 bulk
-  pa_decoupling: [radio.c_pa, radio.c_rf2] # the 0402 VOUT_PA / VIN_13RF2 caps (see regions.pa_corner)
+  # the 0402 VOUT_PA / VIN_13RF2 caps and the 0 ohm PA feed (ISK Rev D R1), at the corner balls
+  # A2/B2 and C2/D2 (see regions.pa_corner)
+  pa_decoupling: [radio.c_pa, radio.c_rf2, radio.r_pa]
+  # Pin-anchored sets (review 2026-10-03): U1 is fixed, so a region next to the balls a part
+  # serves bounds its pad-to-ball distance; audit.py measures it (pin_distance).
+  # East edge, south of the TX region: the internal-LDO outputs A10 (APLL) and B13 (SYNTH) and
+  # VBGAP B10, one ball-anchored slot each (see regions); the CLK and VCO 220 nF at B11/B12 stay
+  # in the HF group
+  radio_east: [radio.c_apll, radio.c_synth, radio.c_vbgap]
+  radio_apll: radio.c_apll
+  radio_vbgap: radio.c_vbgap
+  radio_synth: radio.c_synth
+  xtal_cap_p: radio.c_xp
+  xtal_cap_n: radio.c_xm
+  pa_cap: radio.c_pa
+  pa_r: radio.r_pa
+  rf2_cap: radio.c_rf2
+  # VOUT_PA (A2/B2) and VIN_13RF2 (C2/D2) bulk: the nearest free area is the bottom side east of
+  # the package, below the TX region (top side there is radio_east)
+  pa_bulk: [radio.c_pa_10u, radio.c_pa_22u, radio.c_rf2_10u, radio.c_rf2_22u]
+  # VIN_13RF1 (G5/H5/J5) and VIN_18BB (F5/K5) are interior balls of the north half: the nearest
+  # top-side area is west of the package (north and east are the RF region). Their bulk caps stay
+  # in the bulk group (a region for all six left no legal slot in 4 of 4 starts)
+  radio_west: ['radio.c_rf1', 'radio.c_bb[[]*']
+  qspi_series: flash.r_clk # QSPI_CLK 22 ohm at the source, ball R12 (west edge)
   crystal: radio.y1 # Y1, 40 MHz 3225
   crystal_caps: [radio.c_xp, radio.c_xm] # Y1 load capacitors
   pmic: pmic.u2 # U2, LP87524J
   pmic_inductors: pmic.l_b* # L1-L4 (switch nodes)
-  pmic_parts: pmic.* # the whole PMIC block (filters, caps, shunt)
-  connector: j1 # J1, JST GH right angle on the south edge
+  # The PMIC block: U2, inductors, input/output caps, snubbers, shunt, pulls. Its LC filters
+  # (beads and their caps) and the damping options are not: with them the block region failed
+  # in 4 of 8 starts once Buck2/3 took the larger IHLP-1616 (review 2026-10-03) [D]
+  pmic_parts:
+    [
+      'pmic.u2',
+      'pmic.l_*',
+      'pmic.c_in*',
+      'pmic.c_out*',
+      'pmic.c_vana',
+      'pmic.r_snb*',
+      'pmic.c_snb*',
+      'pmic.r_sh',
+      'pmic.tp_isns',
+      'pmic.r_fb2*',
+      'pmic.r_clkin*',
+      'pmic.r_en*',
+      'pmic.r_gpio2_ls',
+      'pmic.r_s*',
+      'pmic.r_nint*',
+      'pmic.r_pgood*',
+      'pmic.r_rst',
+      'pmic.c_rst',
+    ]
+  pmic_filters: ['pmic.fb_*', 'pmic.c_1v*', 'pmic.c_rf*'] # bead LC filters to the radio rails
+  connector: j1 # J1, JST GH-8 right angle on the south edge (pins 1-2 5 V, 3-4 GND, 5-6 CAN, 7-8 UART)
   lvds_header: debug.j2 # J2, Samtec QTH-030 (development builds)
   jtag: debug.j3 # J3, 10-pin 1.27 mm (DNP)
   flash: flash.u3 # U3, QSPI flash
   holes: ['mech.mh[0]', 'mech.mh[1]', 'mech.mh[2]', 'mech.mh[3]'] # 4 x M2.5, in mounting_holes.at order
   rf_macro: rf_macro.rfm1 # RFM1 (yapnr.rf macro footprint; designator prefix RFM)
-  # Connector-side protection and the small blocks' support parts (integration 2026-10-03: left
-  # free, the placer spread them up to 40 mm from their IC, because their nets are the board's
-  # supply and ground nets, which pull nothing).
-  connector_esd: [uart.esd, can.esd, power_in.tvs] # ESD/TVS at J1
+  # Connector-side protection and the small blocks' support parts. Integration 2026-10-03 left
+  # them free and the placer spread them up to 40 mm from their IC (their nets are the board's
+  # supply and ground, which pull nothing); the review puts each block in a hard group.
+  connector_esd: [uart.esd, can.esd] # D2, D1: ESD next to J1's UART and CAN pins (5-8)
+  connector_tvs: power_in.tvs # D3: TVS next to J1's 5 V pins (1-2)
   efuse: power_in.efuse # U5
-  efuse_parts: ['power_in.c_*', 'power_in.r_*']
+  # threshold and timer network: high-impedance comparator inputs (UVLO, OVLO, PGTH, ILM, ITIMER)
+  efuse_parts: ['power_in.r_*', 'power_in.c_itimer', 'power_in.c_dvdt']
+  efuse_caps: ['power_in.c_in_*', 'power_in.c_sys_*'] # input and 5V_SYS capacitors
   can_xcvr: can.u4 # U4
   can_parts: ['can.c_*', 'can.r_*']
-  flash_parts: ['flash.c_*', 'flash.r_*']
+  flash_parts: ['flash.c_*', 'flash.r_cs_pu', 'flash.r_d2_pu', 'flash.r_d3_pu']
   dca_reset: debug.r_dca_rst # J2's reset option (0 ohm, DNP)
+  pmic_in_caps: 'pmic.c_in[[]*' # 4 x 10 uF at VIN_B0..B3 (SNVSAW2B 8.2.1.2: as close as possible)
+  pmic_snubbers: ['pmic.r_snb*', 'pmic.c_snb*'] # 3.9 ohm + 390 pF on each switch node (8.2.1.4)
+  pmic_snub_r: 'pmic.r_snb*' # the snubber resistors (on the switch nodes)
+  snb_r0: pmic.r_snb0
+  snb_r1: pmic.r_snb1
+  snb_r2: pmic.r_snb2
+  snb_r3: pmic.r_snb3
+  snb_c0: pmic.c_snb0
+  snb_c1: pmic.c_snb1
+  snb_c2: pmic.c_snb2
+  snb_c3: pmic.c_snb3
+  pmic_vana: pmic.c_vana # 100 nF at VANA (8.2.1.5)
+  # ANA#17A damping options (DNP) on the radio rails: not part of the PMIC block region
+  supply_damping: ['pmic.r_damp_*', 'pmic.c_damp_*']
 
 # Net classes by net-name glob (the schematic's suggested names). The class names are the ones
 # radar60.kicad_dru tests.
@@ -89,6 +157,27 @@ nets:
   PWR: { globs: [1V0_*, 1V2*, 1V8*, 3V3*, 5V_SYS, VIN_5V] }
   SW: { globs: [PMIC_SW_B*] } # the four buck switch nodes
   GND: { globs: [GND] }
+  # Analog DC nodes (review 2026-10-03): the radio's internal-LDO and band-gap capacitors, the
+  # eFuse threshold and timer network, the load-switch enable, the damping nodes and the buck
+  # feedback. Not digital: R4 (no digital copper next to the RF region) exempts them, as it does
+  # RF, PWR and GND, in the custom rules and in audit.py alike.
+  ANALOG:
+    {
+      globs:
+        [
+          VOUT_14*,
+          VBGAP,
+          EFUSE_EN_UVLO,
+          EFUSE_OVLO,
+          EFUSE_PGTH,
+          EFUSE_ILM,
+          EFUSE_ITIMER,
+          EFUSE_DVDT,
+          VIO_LS_ON,
+          DAMP_*,
+          PMIC_FB_B2,
+        ],
+    }
 
 lvds: # 100 ohm edge-coupled microstrip on F.Cu over In1.Cu (RO4835 4 mil): 99-103 ohm for Dk 3.33-3.66 [D]
   width: 0.17
@@ -102,18 +191,21 @@ u1:
   at: [26.0, 28.0] # [D] plan 5.1
   rot: 270 # RX edge (ball column 2) north, TX edge (row B) east
   body_mm: 10.4
-  courtyard_mm: 12.5 # the schematic's ABL0161B footprint: courtyard 1.0 mm beyond the body, plus its stroke
+  # the schematic's ABL0161B footprint: courtyard 0.5 mm beyond the body (IPC-7351B least,
+  # review 2026-10-03; it was 1.0), plus its stroke
+  courtyard_mm: 11.5
 
-connector: # J1 GH-6 on the south edge, centred at x = 30, cable entry facing south (plan 5.1)
+connector: # J1 GH-8 (SM08B-GHS-TB, schematic O18) on the south edge, centred at x = 30, entry south (plan 5.1)
   x: 30.0
   rot: 0 # the stock footprint's mating face points +y in KiCad (south here): verify on the part
   height_mm: 4.25
 
-mounting_holes: # 4 x M2.5, plated, GND (plan 5.1)
+mounting_holes: # 4 x M2.5, plated, GND (plan 5.1; the schematic's MountingHole_2.7mm_M2.5_Pad)
   drill: 2.7
-  pad: 5.0
+  pad: 5.4
   keepout_diameter: 6.5
-  at: [[3.5, 3.5], [56.5, 3.5], [3.5, 42.5], [56.5, 42.5]]
+  # 3.5 mm from each corner of the 60 x 46.3 mm outline
+  at: [[3.5, 3.5], [56.5, 3.5], [3.5, 42.8], [56.5, 42.8]]
 
 radome_lands: # standoff lands for the north-only test radome (plan 5.4, review) [D]
   diameter: 3.0
@@ -135,9 +227,9 @@ rf:
   # of it down to the package edge. `gen_board.py --macro` checks that every macro item outside
   # the package body lies in the region or the pocket.
   region: # [x0, y0, x1, y1] rectangles whose union is the region minus the pocket
-    - [14.941, 33.2, 29.563, 46.0] # RX fan and the west ground margin
-    - [29.563, 35.0, 31.25, 46.0] # above the pocket
-    - [31.25, 26.7, 45.58, 46.0] # TX launches, feeds, bank and the east ground margin
+    - [14.941, 33.2, 29.563, 46.3] # RX fan and the west ground margin
+    - [29.563, 35.0, 31.25, 46.3] # above the pocket
+    - [31.25, 26.7, 45.58, 46.3] # TX launches, feeds, bank and the east ground margin
     - [31.2, 26.7, 31.25, 33.2] # the sliver between the package edge and the pocket's east side
   pocket: [29.563, 33.2, 31.25, 35.0] # macro's VOUT_PA pocket (y from 33.45), down to the package edge
   # R4 (plan 7.5): no digital net within 5 mm of RF copper on F.Cu-In2.Cu. A rectangular 5 mm
@@ -145,10 +237,10 @@ rf:
   # without the region itself; the RF audit (E6) measures the exact distance.
   guard_mm: 5.0
   guard: # [x0, y0, x1, y1]
-    - [9.941, 28.2, 14.941, 46.0] # west of the ground margin
+    - [9.941, 28.2, 14.941, 46.3] # west of the ground margin
     - [14.941, 28.2, 20.8, 33.2] # south of the RX fan, west of the package
     - [31.2, 21.7, 50.58, 26.7] # south of the TX region, east of the package
-    - [45.58, 26.7, 50.58, 46.0] # east of the TX bank
+    - [45.58, 26.7, 50.58, 46.3] # east of the TX bank
   fence_via: { drill: 0.15, diameter: 0.32, min_pitch: 0.45 } # RFS-5; 11 mil hole to hole
 
 noise: # plan 3.4 noise budget and 7.5 R4
@@ -156,74 +248,182 @@ noise: # plan 3.4 noise budget and 7.5 R4
   sw_to_rf_mm: 5.0
 
 # Placement regions (plan 5.1, 7.3); yapnr `region` constraints, hard.
+# J2 (development connector) is fixed (review 2026-10-03): as a region part it was placed after
+# every grouped block and lost its one window above J1 (29 of 32 starts with the block groups,
+# 15 of 32 with J2 grouped too). Its pose is the stage-2 mechanical winner's (p008, seed 837832,
+# reva/placement.json of commit 735327c), unchanged [D].
+lvds_header_fixed: { at: [20.75, 11.5], rot: 0, side: top, courtyard_mm: [21.09, 8.09] }
+# J3 (JTAG, DNP) is fixed too: as a region part it lost its window in 2 of 8 starts. At the
+# west edge (courtyard x 0.6-8.0), below the radome land RL1's keepout (y <= 24.3) and clear of
+# MH1, it leaves x 8.3-19.5 west of U1 to the flash, whose 7.46 x 5.59 mm courtyard fits neither
+# between J2 and U1 (5.8 mm) nor between the former J3 pose and U1 (5.7 mm) [D].
+jtag_fixed: { at: [4.3, 19.5], rot: 90, side: top, courtyard_mm: [7.45, 8.67] }
+
+# Placement regions (plan 5.1, 7.3); yapnr `region` constraints, hard.
 regions:
-  lvds_header:
-    {
-      parts: [lvds_header],
-      rect: [10.0, 4.0, 42.0, 18.0],
-      reason: 'J2 south of the LVDS balls (columns 14/15 face south)',
-    }
   # Plan 5.1 gives y 18-40; the radome rule keeps a 5 mm header 8.7 mm from the RX patches, and
   # the R4 guard band starts at y 28.2 west of the RX margin, so the region stops at y 28.2; the
   # west radome land (3.5, 27) takes its north-west corner, so it reaches down to y 8 [D]
   # (gen_board.py --radome).
-  jtag:
-    {
-      parts: [jtag],
-      rect: [1.0, 8.0, 14.0, 28.2],
-      reason: 'J3 west of U1 on the JTAG/UART side, below the radome line',
-    }
-  # Plan 5.1 gives x 36-58, y 2-24 (448 mm2 net of MH2): the block's 50 parts take about 365 mm2
-  # with the 0.2 mm courtyard clearance (81 %), and the legalizer runs out of slots in most
-  # starts; x from 34 gives 492 mm2 (74 %) [D].
+  # Plan 5.1 gives x 36-58, y 2-24. The block (without its LC filters) now runs from x 38, to
+  # leave x 31.6-38 north-east of J1 to the protection and the CAN block, and up to y 26.65
+  # (the east guard band takes PWR parts) [D]: 493 mm2, as before.
   pmic_block:
-    { parts: [pmic_parts], rect: [34.0, 2.0, 58.0, 24.0], reason: 'PMIC block, power-first' }
-  # The switch nodes keep >= 8 mm from the crystal zone (x <= 31.2) and >= 5 mm from the RF
-  # region (y <= 21.7): x >= 41 gives 9.8 mm, y <= 21.7 gives 5.0 mm, by construction [D].
+    { parts: [pmic_parts], rect: [38.0, 2.0, 58.0, 26.65], reason: 'PMIC block, power-first' }
+  # Block anchors (review 2026-10-03: with the block groups the search put the flash 33 mm from
+  # its balls (QSPI <= 25 mm routed), the CAN transceiver 20 mm and the eFuse 31 mm from J1):
+  # the flash west of U1 (QSPI balls R12-P12 on the west edge, x 21.45-22.75, y 24.1-25.4),
+  # between J3 and the radio's west caps, above J2; the eFuse (and its TVS) west of J1 below J2,
+  # next to J1's 5 V pins 1-2; the CAN transceiver north-east of J1, beyond its ESD diode [D].
+  flash_block: { parts: [flash], rect: [8.3, 15.75, 19.3, 24.6], reason: 'QSPI within about 10 mm' }
+  efuse_block: { parts: [efuse], rect: [6.8, 0.4, 22.5, 7.25], reason: 'eFuse next to J1 pins 1-2' }
+  can_block:
+    { parts: [can_xcvr], rect: [31.6, 6.65, 38.0, 16.0], reason: 'CAN after its ESD, near J1' }
+  # The switch nodes keep >= 8 mm from the crystal zone (x <= 32.4) and >= 5 mm from the RF
+  # region (y <= 21.7): x >= 41 gives 8.6 mm, y <= 21.7 gives 5.0 mm, by construction [D].
   pmic_switching:
     {
       parts: [pmic, pmic_inductors],
       rect: [41.0, 2.0, 58.0, 21.7],
       reason: 'switch nodes >= 8 mm from Y1 and >= 5 mm from RF',
     }
-  # Y1 within about 3 mm of CLKP/CLKM (B15/C15 at (29.9, 23.45)/(29.25, 23.45) after rotation),
-  # south of the package, west of the RF guard. U1's courtyard (1.0 mm beyond the body) ends at
-  # y 21.76, so Y1 (3.59 x 4.29 mm courtyard) and its two 0402 load caps need about 6.7 x 4.0 mm
-  # below it with the 0.2 mm clearance: the plan's 5.2 x 5.1 mm box holds Y1 alone [D].
+  # Y1 south of CLKP/CLKM (B15/C15 at (29.9, 23.45)/(29.25, 23.45)), between U1's courtyard
+  # (y >= 21.75, 0.2 mm clearance) and J2's (y <= 15.55), west of the RF guard [D].
   crystal:
     {
-      parts: [crystal, crystal_caps],
-      rect: [24.0, 16.0, 31.2, 22.6],
-      reason: 'Y1 next to B15/C15, outside the RF guard',
+      parts: [crystal],
+      rect: [23.5, 15.75, 30.2, 21.55],
+      reason: 'Y1 below B15/C15, outside the RF guard',
     }
+  # Ball-anchored slots (review 2026-10-03). The legalizer works on a 0.25 mm grid with 0.2 mm
+  # courtyard clearance, so an 0402 (courtyard 1.91 x 1.01 mm) takes a 2.25 x 1.25 mm slot. U1's
+  # courtyard (0.5 mm beyond the body) blocks up to x 32.0 east of it and down to y 22.0 below
+  # it; the TX region blocks y >= 26.5 east of it. Each rect bounds one part's courtyard to one
+  # slot, and an orientation (`orientations`) turns its signal pad (pad 1) toward the ball [D]:
+  # APLL cap, pad (32.645, 25.875), 2.25 mm from A10 (30.55, 26.7)
+  radio_apll:
+    { parts: [radio_apll], rect: [32.1, 25.3, 34.15, 26.45], reason: 'VOUT_14APLL cap at A10' }
+  # VBGAP cap, pad (32.645, 24.625), 3.44 mm from B10 (29.9, 26.7)
+  radio_vbgap:
+    { parts: [radio_vbgap], rect: [32.1, 24.05, 34.15, 25.2], reason: 'VBGAP cap at B10' }
+  # SYNTH cap, pad (32.645, 23.375), 3.07 mm from B13 (29.9, 24.75)
+  radio_synth:
+    { parts: [radio_synth], rect: [32.1, 22.8, 34.15, 23.95], reason: 'VOUT_14SYNTH cap at B13' }
+  # Crystal load caps below CLKP (B15 at 29.9) and CLKM (C15 at 29.25), y 23.45, west of the R4
+  # guard band (x < 31.2 above y 21.7): pads (29.645, 21.375) and (28.355, 21.375), 2.09 and
+  # 2.26 mm from their balls (SWRS219F 7.12.2: as close as possible)
+  xtal_cap_p:
+    { parts: [xtal_cap_p], rect: [29.1, 20.8, 31.15, 21.95], reason: 'CLKP load cap below B15' }
+  xtal_cap_n:
+    { parts: [xtal_cap_n], rect: [26.85, 20.8, 28.9, 21.95], reason: 'CLKM load cap below C15' }
+  # VOUT_PA (A2/B2), VIN_13RF2 (C2/D2) and the PA 0 ohm feed on the bottom side under the corner
+  # (balls at x 28.6-30.55, y 31.9; the pocket holds no 0402 courtyard, not even with a 0.5 mm
+  # U1 courtyard: 1.69 mm wide against 1.91). The macro's launch vias stand at y 31.575 (RX,
+  # x <= 27.625) and x 29.575 (TX, y <= 30.925); the parts keep 0.275 mm from their centres:
+  # the 220 nF VOUT_PA cap upright east of the TX launch vias (pad 1 north, 0.6 mm from A2), the
+  # 0 ohm between C2/D2 and A2/B2 above the RX launch row, the 220 nF VIN_13RF2 cap west of it
+  # (pad 1 east, under D2) [D]. Their vias are E4 inputs: reserve them before the fanout.
+  pa_cap:
+    {
+      parts: [pa_cap],
+      rect: [30.05, 29.4, 31.2, 31.85],
+      side: bottom,
+      reason: 'VOUT_PA 220 nF at A2/B2',
+    }
+  pa_r:
+    {
+      parts: [pa_r],
+      rect: [28.6, 31.85, 30.95, 33.2],
+      side: bottom,
+      reason: 'PA 0 ohm between D2 and B2',
+    }
+  rf2_cap:
+    {
+      parts: [rf2_cap],
+      rect: [26.1, 31.85, 28.6, 33.2],
+      side: bottom,
+      reason: 'VIN_13RF2 220 nF at C2/D2',
+    }
+  # The load capacitors straight below B15/C15 (SWRS219F 7.12.2: as close as possible): a cap
+  # centre at y <= 21.08 puts its pad about 2.4 mm from the balls (review 2026-10-03) [D].
   # The macro's VOUT_PA pocket (1.69 x 1.55 mm; U1's courtyard, 1.0 mm beyond the body, covers
-  # it up to y 34.2) holds no 0402 courtyard (1.91 x 1.01 mm), let alone two. Plan 5.2's
-  # double-sided branch: the two caps go on the bottom side under the VOUT_PA / VIN_13RF2 corner
-  # (balls A2, B2, C2, D2 at x 28.6-30.55, y 31.9), outside the RF region [D] (integration,
-  # 2026-10-03; a top-side pocket needs about 2.1 x 2.0 mm clear of U1's courtyard).
+  # it up to y 34.2) holds no 0402 courtyard (1.91 x 1.01 mm), and a 0.5 mm courtyard would not
+  # either (1.86 mm wide against 1.69 mm). Plan 5.2's double-sided branch: the caps and the 0 ohm
+  # PA feed go on the bottom side under the VOUT_PA / VIN_13RF2 corner (balls A2, B2, C2, D2 at
+  # x 28.6-30.55, y 31.9), outside the RF region [D] (integration and review, 2026-10-03).
   # The macro's launch vias (through, 0.35 mm, rfm1-n) stand at y 31.575 (RX, x <= 27.625) and
   # x 29.575 (TX, y <= 30.925) under the corner; the area keeps 0.275 mm from their centres
-  # (0.1 mm via to SMD pad beyond the via copper), an L of two rectangles [D].
-  pa_corner:
+  # (0.1 mm via to SMD pad beyond the via copper), an L of two rectangles [D]. The vias these
+  # three parts need are E4 inputs: reserve them before the fanout.
+  # East edge below the TX region: A10 (30.55, 26.7), B10-B13 (29.9, 26.7-24.75); x >= 32.3
+  # clears U1's courtyard, y <= 26.65 the TX region. Pads land 2-3 mm from their balls [D].
+  # Bottom side under and below radio_east, the nearest area to A2/B2 and C2/D2 outside the BGA
+  # shadow and the RF region: 6-11 mm from the balls. Within 8 mm there are about 8 mm2 per side
+  # outside the package, against about 27 mm2 for the four caps [D]; nearer needs the BGA-shadow
+  # bottom side (E4 co-design) or fewer caps (review finding 7's option).
+  pa_bulk:
     {
-      parts: [pa_decoupling],
-      areas: [[27.9, 31.85, 31.2, 33.2], [29.85, 29.4, 31.2, 33.2]],
+      parts: [pa_bulk],
+      rect: [31.4, 19.5, 37.5, 26.6],
       side: bottom,
-      reason: 'VOUT_PA / VIN_13RF2 caps under the corner, bottom side (plan 5.2 branch)',
+      reason: 'VOUT_PA and VIN_13RF2 bulk, bottom side east of the package',
     }
+  # West of the package (x <= 19.55: U1's courtyard and clearance), PWR/GND parts in the guard band
+  radio_west:
+    {
+      parts: [radio_west],
+      rect: [15.0, 26.0, 19.55, 33.0],
+      reason: 'VIN_13RF1 and VIN_18BB caps west of G5-J5 / F5, K5',
+    }
+  # The QSPI clock's series resistor at the source, R12 (21.45, 25.4), below the R4 guard (y < 28.2)
+  # The QSPI clock's series resistor at the source, R12 (21.45, 25.4), below the R4 guard: U1's
+  # courtyard blocks x >= 20.0 west of it, so the slot centre is (18.875, 25.375) and pad 1
+  # (QSPI_CLK, east) is 2.1 mm from the ball [D]
+  qspi_series:
+    {
+      parts: [qspi_series],
+      rect: [17.85, 24.8, 19.95, 25.95],
+      reason: 'QSPI_CLK 22 ohm next to R12',
+    }
+  # Protection at J1 (review 2026-10-03: the ESD diodes sat 27-32 mm away, behind the CAN
+  # transceiver). J1's pins 5-8 (CAN, UART) are at x 30.6-34.4, y 5.1; north of them is J2's
+  # courtyard up to x 31.3, so the ESD diodes go north-east of the pins. Pins 1-2 (5 V) are at
+  # x 25.6-26.9; the TVS goes west of J1 (J2 above).
+  connector_esd:
+    {
+      parts: [connector_esd],
+      rect: [31.6, 6.65, 38.5, 11.0],
+      reason: 'CAN and UART ESD next to J1 pins 5-8, before the transceiver',
+    }
+  connector_tvs:
+    { parts: [connector_tvs], rect: [12.0, 0.4, 22.5, 7.25], reason: '5 V TVS next to J1 pins 1-2' }
+
+# Fixed rotations (yapnr `orientation`, hard) for the ball-anchored parts above: pad 1 (the
+# signal side of every cap and resistor here) toward the ball. Rotation CCW in the board frame;
+# an 0402 at 0 has pad 1 west [D].
+orientations:
+  radio_apll: 0
+  radio_vbgap: 0
+  radio_synth: 0
+  xtal_cap_p: 0
+  xtal_cap_n: 180
+  pa_cap: 270
+  pa_r: 0
+  rf2_cap: 180
+  qspi_series: 180
 
 groups: # hard proximity, centre to centre (pnr.place.geometry.hard_group_edges)
   # U1's courtyard reaches 6.25 mm from its centre: an 0402 centre comes no closer than 6.95 mm
   # (courtyard, 0.2 mm clearance, half the cap), and a 9 mm radius leaves four 2 mm strips with
   # no corners, about 17 caps of room against 18 caps plus the radio's free parts. 10.5 mm opens
   # the corners (6.95 mm on both axes is 9.83 mm out): caps within about 5 mm of the package
-  # edge on top. The alternative is the bottom side under the package (plan 4.2) [D].
+  # edge on top. The ball-anchored sets above narrow this for the parts the review named.
   radio_decoupling_hf:
     {
       anchor: radio,
       members: [radio_decoupling_hf],
-      radius_mm: 10.5,
-      reason: 'within about 5 mm of the package edge, top side',
+      radius_mm: 11.0,
+      reason: 'within about 5 mm of the package edge',
     }
   # The bulk caps (10-22 uF) serve below about 10 MHz; with all 35 radio caps inside 9 mm the
   # ring around U1 (outside its courtyard, the RF region and the crystal block, about 104 mm2)
@@ -244,46 +444,53 @@ groups: # hard proximity, centre to centre (pnr.place.geometry.hard_group_edges)
       radius_mm: 9.5,
       reason: 'Y1 within about 3 mm of B15/C15 (4.55 mm south of U1 centre)',
     }
-  # U2's courtyard reaches 3.07 / 3.32 mm from its centre; with the 0.2 mm courtyard clearance
-  # and an 0805 inductor's 0.9 mm half width no inductor centre can come closer than 4.17 mm,
-  # so the plan's 4 mm is infeasible; 6 mm (one inductor length of slack, so the block's 22
-  # capacitors can also reach their pins) keeps the loops tight [D].
-  pmic: { anchor: pmic, members: [pmic_inductors], radius_mm: 6.0, reason: 'tight buck hot loops' }
-
-# Block groups held back (integration 2026-10-03). With the plan's constraints the placer left
-# the small blocks' passives up to 40 mm from their IC (their nets are the board's supply and
-# ground, which pull nothing). As hard groups they make yapnr's legalizer fail: it places every
-# grouped part before any other, so in 32 starts each, 0 were legal with these groups (J2 lost
-# its one window above J1 in 29), and 0 again with J2 grouped too (J2 15, Y1's caps 13, eFuse
-# parts 4). They wait for the engine's hierarchical blocks; integrate.py reports their spread.
-blocks_pending:
-  # Block radii [D]: the anchor's courtyard half diagonal + the radius of a disc holding the
-  # members' courtyards with 30 % for clearance + 1 mm. ESD and TVS sit beside J1 (half width
-  # 7.3 mm): 10 mm.
-  connector_esd:
-    { anchor: connector, members: [connector_esd], radius_mm: 10.0, reason: 'protection at J1' }
-  efuse:
-    { anchor: efuse, members: [efuse_parts], radius_mm: 8.0, reason: 'eFuse thresholds and caps' }
-  can: { anchor: can_xcvr, members: [can_parts], radius_mm: 7.0, reason: 'CAN transceiver block' }
-  # R9 is QSPI_CLK's 22 ohm series resistor; at the flash it is a far-end placement (U1 to U3
-  # about 17 mm here, QSPI <= 25 mm).
+  # U2's courtyard is 6.14 x 6.64 mm. Buck2 and Buck3 now use the IHLP-1616BZ (courtyard
+  # 6.23 x 4.65 mm): its centre comes no closer than 5.9 mm. Inductors, the four input caps, the
+  # eight snubber parts and VANA take about 125 mm2 with clearance; inside 7.5 mm of U2's centre
+  # there are 136 mm2 (no legal start), inside 8.5 mm 186 mm2 [D].
+  pmic: { anchor: pmic, members: [pmic_inductors], radius_mm: 8.5, reason: 'buck loops' }
+  # Review 2026-10-03: input caps, snubbers and VANA next to U2 (they sat 3.8-13 mm away). An
+  # 0805 centre comes no closer than 4.3 mm (courtyard 3.07 + 0.2 + 0.98), an 0402 3.7 mm [D].
+  pmic_in_caps:
+    { anchor: pmic, members: [pmic_in_caps], radius_mm: 5.0, reason: 'CIN at VIN_Bx/PGND_Bx' }
+  pmic_snubbers:
+    { anchor: pmic, members: [pmic_snub_r], radius_mm: 7.5, reason: 'snubbers at the switch nodes' }
+  # each snubber's capacitor next to its resistor (one placement put a pair 9.9 mm apart when
+  # both were only tied to U2) [D]
+  snb0: { anchor: snb_r0, members: [snb_c0], radius_mm: 2.5, reason: 'snubber R-C pair' }
+  snb1: { anchor: snb_r1, members: [snb_c1], radius_mm: 2.5, reason: 'snubber R-C pair' }
+  snb2: { anchor: snb_r2, members: [snb_c2], radius_mm: 2.5, reason: 'snubber R-C pair' }
+  snb3: { anchor: snb_r3, members: [snb_c3], radius_mm: 2.5, reason: 'snubber R-C pair' }
+  pmic_vana: { anchor: pmic, members: [pmic_vana], radius_mm: 5.0, reason: 'VANA filter cap' }
+  # Blocks (review 2026-10-03; held back at integration because the legalizer stranded J2,
+  # which is fixed now). Radii [D]: the anchor's courtyard half width + 0.2 mm + the members'.
+  # U5's courtyard is 4.14 mm square; 11 threshold/timer parts within 5.5 mm failed 4 of 8 starts
+  efuse: { anchor: efuse, members: [efuse_parts], radius_mm: 8.0, reason: 'eFuse thresholds' }
+  efuse_caps: { anchor: efuse, members: [efuse_caps], radius_mm: 10.0, reason: 'eFuse in/out caps' }
+  can: { anchor: can_xcvr, members: [can_parts], radius_mm: 7.5, reason: 'CAN transceiver block' }
   flash:
-    { anchor: flash, members: [flash_parts], radius_mm: 7.5, reason: 'flash decoupling, pull-up' }
-  # J2 grouped with its reset option, so the legalizer ranks it by its few free slots.
-  lvds_header:
-    {
-      anchor: lvds_header,
-      members: [dca_reset],
-      radius_mm: 14.0,
-      reason: 'J2 and its reset option',
-    }
+    { anchor: flash, members: [flash_parts], radius_mm: 5.5, reason: 'flash decoupling, pulls' }
+  # Region-only parts are placed after every grouped block, which can take their few slots
+  # (the QSPI resistor's strip lost in 4 of 8 starts): these groups only put them in the radio's
+  # block, where the legalizer orders parts by their free slots; the regions bound them.
+  qspi_series:
+    { anchor: radio, members: [qspi_series], radius_mm: 9.5, reason: 'order: radio block' }
+  crystal_caps:
+    { anchor: radio, members: [crystal_caps], radius_mm: 9.5, reason: 'order: radio block' }
+  # The protection parts join J1's block, so the legalizer places them before unrelated blocks
+  # take the strip next to J1 (their regions bound them; these radii only order them).
+  connector_esd:
+    { anchor: connector, members: [connector_esd], radius_mm: 12.0, reason: 'ESD at J1' }
+  connector_tvs:
+    { anchor: connector, members: [connector_tvs], radius_mm: 13.0, reason: 'TVS at J1' }
 
 # Radome visibility (plan 5.2, R5): no part above a 30 degree line from the nearest patch edge,
 # i.e. a part of height h stays >= h / tan(30 deg) = 1.73 h from the patch copper.
 radome:
   angle_deg: 30.0
   test_radome_south_y: 27.0 # the test radome covers y >= 27 (plan 5.4)
-  heights: { connector: 4.25, lvds_header: 4.3, jtag: 5.0, pmic_inductors: 1.0 } # [E] part heights, mm
+  # [E] part heights, mm (IHLP-1616BZ: 2.0 mm max, Vishay 34196)
+  heights: { connector: 4.25, lvds_header: 4.3, jtag: 5.0, pmic_inductors: 2.0 }
 
 # Probe and documentation only: where U1's signal escapes may leave the package (plan 7.2).
 escape:

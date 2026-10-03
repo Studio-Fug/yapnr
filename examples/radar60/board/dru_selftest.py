@@ -34,8 +34,9 @@ PATTERNS = {
     "SW": "SW_*",
     "LVDS": "LVDS_*",
     "QSPI": "QSPI_*",
+    "ANALOG": "ANA_*",
 }
-NETS = ["SIG1", "RF_TX1", "PWR_1V8", "XTAL_P", "SW_B0", "LVDS_TXP0"]
+NETS = ["SIG1", "RF_TX1", "PWR_1V8", "XTAL_P", "SW_B0", "LVDS_TXP0", "ANA_VBGAP"]
 
 # (case, kind, spec, expected board rule or None). Coordinates: board frame (y-up, mm).
 CASES = [
@@ -84,6 +85,12 @@ CASES = [
         "power_track_in_guard",
         "track",
         dict(a=(46, 30), b=(46, 32), layer="F.Cu", net="PWR_1V8"),
+        None,
+    ),
+    (
+        "analog_track_in_guard",
+        "track",
+        dict(a=(33, 24), b=(35, 24), layer="F.Cu", net="ANA_VBGAP"),
         None,
     ),
     (

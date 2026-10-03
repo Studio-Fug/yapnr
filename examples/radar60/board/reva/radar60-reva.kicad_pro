@@ -320,6 +320,25 @@
         "line_style": 0,
         "microvia_diameter": 0.3,
         "microvia_drill": 0.1,
+        "name": "ANALOG",
+        "pcb_color": "rgba(0, 0, 0, 0.000)",
+        "priority": 7,
+        "schematic_color": "rgba(0, 0, 0, 0.000)",
+        "track_width": 0.15,
+        "tuning_profile": "",
+        "via_diameter": 0.6,
+        "via_drill": 0.3,
+        "wire_width": 6
+      },
+      {
+        "bus_width": 12,
+        "clearance": 0.1,
+        "diff_pair_gap": 0.25,
+        "diff_pair_via_gap": 0.25,
+        "diff_pair_width": 0.2,
+        "line_style": 0,
+        "microvia_diameter": 0.3,
+        "microvia_drill": 0.1,
         "name": "GND",
         "pcb_color": "rgba(0, 0, 0, 0.000)",
         "priority": 6,
@@ -341,7 +360,7 @@
         "microvia_drill": 0.1,
         "name": "LVDS",
         "pcb_color": "rgba(0, 0, 0, 0.000)",
-        "priority": 7,
+        "priority": 8,
         "schematic_color": "rgba(0, 0, 0, 0.000)",
         "track_width": 0.17,
         "tuning_profile": "",
@@ -564,6 +583,14 @@
         "pattern": "PMIC_SW_B*"
       },
       {
+        "netclass": "ANALOG",
+        "pattern": "VOUT_14*"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "DAMP_*"
+      },
+      {
         "netclass": "RF",
         "pattern": "RF_RX4"
       },
@@ -601,6 +628,14 @@
       },
       {
         "netclass": "QSPI",
+        "pattern": "QSPI_D3"
+      },
+      {
+        "netclass": "QSPI",
+        "pattern": "QSPI_D2"
+      },
+      {
+        "netclass": "QSPI",
         "pattern": "QSPI_CS_N"
       },
       {
@@ -609,7 +644,7 @@
       },
       {
         "netclass": "QSPI",
-        "pattern": "QSPI_D2"
+        "pattern": "QSPI_CLK"
       },
       {
         "netclass": "QSPI",
@@ -620,12 +655,12 @@
         "pattern": "QSPI_CLK_FLASH"
       },
       {
-        "netclass": "QSPI",
-        "pattern": "QSPI_D3"
+        "netclass": "PWR",
+        "pattern": "1V0_RF1"
       },
       {
-        "netclass": "QSPI",
-        "pattern": "QSPI_CLK"
+        "netclass": "PWR",
+        "pattern": "1V0_RF2"
       },
       {
         "netclass": "PWR",
@@ -633,15 +668,7 @@
       },
       {
         "netclass": "PWR",
-        "pattern": "1V0_RF1"
-      },
-      {
-        "netclass": "PWR",
         "pattern": "1V0_PA"
-      },
-      {
-        "netclass": "PWR",
-        "pattern": "1V0_RF2"
       },
       {
         "netclass": "PWR",
@@ -657,11 +684,11 @@
       },
       {
         "netclass": "PWR",
-        "pattern": "1V8"
+        "pattern": "1V8_BUCK"
       },
       {
         "netclass": "PWR",
-        "pattern": "1V8_BUCK"
+        "pattern": "1V8"
       },
       {
         "netclass": "PWR",
@@ -681,14 +708,6 @@
       },
       {
         "netclass": "SW",
-        "pattern": "PMIC_SW_B1"
-      },
-      {
-        "netclass": "SW",
-        "pattern": "PMIC_SW_B2"
-      },
-      {
-        "netclass": "SW",
         "pattern": "PMIC_SW_B0"
       },
       {
@@ -696,8 +715,72 @@
         "pattern": "PMIC_SW_B3"
       },
       {
+        "netclass": "SW",
+        "pattern": "PMIC_SW_B2"
+      },
+      {
+        "netclass": "SW",
+        "pattern": "PMIC_SW_B1"
+      },
+      {
         "netclass": "GND",
         "pattern": "GND"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "VOUT_14SYNTH"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "VOUT_14APLL"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "VBGAP"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "EFUSE_EN_UVLO"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "EFUSE_OVLO"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "EFUSE_PGTH"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "EFUSE_ILM"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "EFUSE_ITIMER"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "EFUSE_DVDT"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "VIO_LS_ON"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "DAMP_1V8"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "DAMP_1V0_RF2"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "DAMP_1V0_RF1"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "PMIC_FB_B2"
       },
       {
         "netclass": "dp_lvds_tx0",

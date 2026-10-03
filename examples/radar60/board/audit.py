@@ -4,8 +4,15 @@ the final KiCad board. Board frame: mm, origin at the lower-left corner, +y nort
 
 R4 and R5 have no engine constraint yet (yapnr's proposed ``noise_keepout`` and
 ``height_limit``): ``digital_region`` turns R4 into a placement region for the parts with a
-digital pad, and the audit checks both on every candidate; selection only takes candidates that
-pass.
+guard-restricted pad, and the audit checks both on every candidate; selection only takes
+candidates that pass. A net is guard-restricted when it is routed (two or more pads) and its net
+class (floorplan ``nets``) is none of RF, PWR, GND and ANALOG: the same classes the board's
+custom rule ``radar60_rf_guard_digital`` exempts (review 2026-10-03; before, a name list here
+called some Default-class nets analog that the rule forbids).
+
+``pin_distances`` measures, for the parts the review named, the distance from each of their
+non-ground pads to the nearest U1 ball (or J1 pin) on the same net, and the order of the
+protection parts along J1's lines.
 """
 
 from __future__ import annotations
@@ -16,9 +23,10 @@ import math
 OFFSET = 30.0  # KiCad page offset of the board origin (pnr.writeback._PAGE_OFFSET_MM)
 TAN30 = math.tan(math.radians(30.0))
 
-# Digital nets for R4 (no digital copper within 5 mm of RF copper on F.Cu-In2.Cu). Supply,
-# ground, RF, crystal, the radio's internal LDO and band-gap capacitor nets, the switch nodes
-# and the unnamed passive-to-passive nets are not digital [D].
+# R4 exempts these net classes (gen_board.R4_EXEMPT, radar60_rf_guard_digital).
+R4_EXEMPT = ("RF", "PWR", "GND", "ANALOG")
+
+# Named digital nets, for reports only (R4 itself is class-based, see guard_restricted).
 DIGITAL = [
     "UART_*",
     "SPIA_*",
@@ -55,6 +63,7 @@ HEIGHTS = [
     ("LED_0603", 0.80),
     ("C_0805", 1.45),
     ("L_0805", 1.00),
+    ("L_Vishay_IHLP-1616", 2.00),
     ("R_0612", 0.65),
     ("SOT-23-6", 1.45),
     ("SOT-23", 1.12),
@@ -78,6 +87,33 @@ HEIGHTS = [
 
 def is_digital(net):
     return bool(net) and any(fnmatch.fnmatchcase(net, p) for p in DIGITAL)
+
+
+def net_class(net, floorplan):
+    """The net's class from floorplan ``nets`` (globs, LVDS pairs), or 'Default'."""
+    for name, spec in floorplan["nets"].items():
+        pats = (
+            [n for pair in spec["pairs"].values() for n in pair]
+            if "pairs" in spec
+            else spec["globs"]
+        )
+        if any(fnmatch.fnmatchcase(net or "", q) for q in pats):
+            return name
+    return "Default"
+
+
+def pad_counts(parts):
+    out = {}
+    for p in parts:
+        for net, _ in p["pads"]:
+            if net:
+                out[net] = out.get(net, 0) + 1
+    return out
+
+
+def guard_restricted(net, floorplan, counts):
+    """R4: a routed net (two or more pads) outside the RF, PWR, GND and ANALOG classes."""
+    return bool(net) and counts.get(net, 0) >= 2 and net_class(net, floorplan) not in R4_EXEMPT
 
 
 def height(footprint):
@@ -221,13 +257,15 @@ def checks(parts, floorplan, footprint_of=None):
     res["r2_bottom_parts_under_rf_region"] = sorted(
         p["ref"] for p in parts if p["side"] == "bottom" and any(overlap(p["box"], r) for r in rf)
     )
-    # R4: digital pads (top-side copper) in the guard band or the RF region.
+    # R4: guard-restricted pads (class-based, as the custom rule) in the guard band or the RF
+    # region.
+    counts = pad_counts(parts)
     bad = []
     for p in parts:
         if p["ref"] in exempt:
             continue
         for net, xy in p["pads"]:
-            if is_digital(net) and any(inside(xy, r) for r in guard + rf):
+            if guard_restricted(net, floorplan, counts) and any(inside(xy, r) for r in guard + rf):
                 bad.append("%s:%s" % (p["ref"], net))
     res["r4_digital_pads_in_guard"] = sorted(set(bad))
     # R5: radome visibility, every part with a known height.
@@ -274,7 +312,105 @@ def checks(parts, floorplan, footprint_of=None):
     }
     res["bottom_side_parts"] = sorted(p["ref"] for p in parts if p["side"] == "bottom")
     res["declared_bottom_roles"] = sorted(declared)
+    res["pin_distance"] = pin_distances(parts, floorplan)
     return res
+
+
+# Pad-to-ball limits (review 2026-10-03) [D]: the radio's internal-LDO outputs, VBGAP, the
+# crystal load caps, the VOUT_PA corner parts and the QSPI clock resistor are failures beyond
+# these; the rest is reported (decoupling: limit; bulk: the PA/RF2 bulk sits on the bottom side
+# east of the package, the nearest area outside the BGA shadow, see floorplan pa_bulk).
+PIN_LIMITS = [
+    # (role, limit mm, hard)
+    ("pa_decoupling", 3.0, True),
+    ("crystal_caps", 3.0, True),
+    ("qspi_series", 3.0, True),
+    ("radio_east", 3.5, True),
+    ("radio_west", 8.0, False),
+    ("pa_bulk", 8.0, False),
+    ("radio_decoupling_hf", 7.0, False),
+    ("radio_decoupling_bulk", 12.0, False),
+]
+# B10/B13 are one ball in from the edge: with U1's 0.5 mm courtyard and the 0.25 mm grid the
+# nearest slot puts the VBGAP and SYNTH pads 3.1-3.4 mm from their balls (floorplan regions)
+LDO_PARTS = ("radio.c_apll", "radio.c_synth", "radio.c_vbgap")  # 3.5 mm, hard
+
+
+def _role_parts(parts, floorplan, role):
+    pats = floorplan["parts"][role]
+    pats = pats if isinstance(pats, list) else [pats]
+    return [
+        p for p in parts if p["address"] and any(fnmatch.fnmatchcase(p["address"], q) for q in pats)
+    ]
+
+
+def pin_distances(parts, floorplan):
+    """Pad-to-ball distances of the pin-anchored parts and the protection order at J1."""
+    by_ref = {p["ref"]: p for p in parts}
+    u1 = by_ref.get("U1")
+    out = {"parts": {}, "failures": [], "protection": {}}
+    if u1 is None:
+        return out
+    balls = {}
+    for net, xy in u1["pads"]:
+        balls.setdefault(net, []).append(xy)
+    seen = set()
+    for role, limit, hard in PIN_LIMITS:
+        for p in _role_parts(parts, floorplan, role):
+            if p["ref"] in seen:
+                continue
+            seen.add(p["ref"])
+            # each non-ground pad to the nearest ball of its own net; a part's distance is its
+            # worst pad (a series part such as the PA 0 ohm has a ball net on both pads)
+            ds = [
+                min(math.dist(xy, b) for b in balls[net])
+                for net, xy in p["pads"]
+                if net and net != "GND" and net in balls
+            ]
+            if not ds:
+                continue
+            d = round(max(ds), 2)
+            lim = 3.5 if p["address"] in LDO_PARTS else limit
+            out["parts"][p["address"]] = {"ref": p["ref"], "mm": d, "limit_mm": lim, "role": role}
+            if d > lim + 1e-6 and (hard or p["address"] in LDO_PARTS):
+                out["failures"].append("%s (%s) %.2f mm > %.1f" % (p["ref"], p["address"], d, lim))
+    # Protection at J1: on every line from J1, the ESD/TVS pad nearest J1's pin must be nearer than
+    # any IC's pad on that line (review High 1: the CAN ESD sat behind the transceiver).
+    j1 = next((p for p in parts if p["address"] == floorplan["parts"]["connector"]), None)
+    prot = set(
+        p["ref"]
+        for r in ("connector_esd", "connector_tvs")
+        if r in floorplan["parts"]
+        for p in _role_parts(parts, floorplan, r)
+    )
+    if j1:
+        for net, pin in j1["pads"]:
+            if not net or net == "GND":
+                continue
+            others = [
+                (math.dist(pin, xy), q["ref"])
+                for q in parts
+                if q is not j1
+                for n, xy in q["pads"]
+                if n == net
+            ]
+            if not others:
+                continue
+            others.sort()
+            esd = [o for o in others if o[1] in prot]
+            ics = [o for o in others if o[1].startswith("U")]
+            row = {"nearest": others[0][1], "nearest_mm": round(others[0][0], 2)}
+            if esd:
+                row.update(esd=esd[0][1], esd_mm=round(esd[0][0], 2))
+            if ics:
+                row.update(ic=ics[0][1], ic_mm=round(ics[0][0], 2))
+            out["protection"][net] = row
+            if esd and ics and ics[0][0] < esd[0][0]:
+                out["failures"].append(
+                    "J1 %s: %s (%.1f mm) before the protection %s (%.1f mm)"
+                    % (net, ics[0][1], ics[0][0], esd[0][1], esd[0][0])
+                )
+    return out
 
 
 def failures(res, floorplan):
@@ -289,6 +425,7 @@ def failures(res, floorplan):
         out.append("switch node %.2f mm from the crystal" % res["sw_to_xtal_mm"])
     if res["sw_to_rf_region_mm"] < floorplan["noise"]["sw_to_rf_mm"]:
         out.append("switch node %.2f mm from the RF region" % res["sw_to_rf_region_mm"])
+    out += ["pin distance: " + f for f in res["pin_distance"]["failures"]]
     return out
 
 
@@ -357,6 +494,10 @@ def _constraint_checks(parts, floorplan):
         out["fixed"][p["ref"]] = round(math.dist(p["at"], at), 4)
     j1 = role("connector")[0]
     out["fixed"]["J1"] = {"x": round(j1["at"][0], 3), "courtyard_y0": round(j1["box"][1], 3)}
+    for key, r in (("lvds_header_fixed", "lvds_header"), ("jtag_fixed", "jtag")):
+        if d.get(key):
+            part = role(r)[0]
+            out["fixed"][part["ref"]] = round(math.dist(part["at"], d[key]["at"]), 4)
     return out
 
 
@@ -448,7 +589,11 @@ def board_audit(poses, drc, floorplan, macro_record, finish, selection):
             for k, v in cons["groups"].items()
             if k.startswith("pending_")
         },
+        "pin_distance_failures": res["pin_distance"]["failures"],
+        "protection_at_j1": res["pin_distance"]["protection"],
         "rf_ball_vs_macro_worst_um": macro["worst_um"],
+        "macro_variant": finish["macro"].get("variant"),
+        "macro_status": macro_record.get("status"),
         "drc_violations": drc_s["violations"],
         "drc_by_type": drc_s["by_type"],
         "drc_placement_types": {t: n for t, n in drc_s["by_type"].items() if t in placement_types},

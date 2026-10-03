@@ -36,6 +36,8 @@ REPO = HERE.parents[2]
 OFFSET = 30.0  # KiCad page offset of the board origin (pnr.writeback._PAGE_OFFSET_MM)
 COPPER = ["F.Cu", "In1.Cu", "In2.Cu", "In3.Cu", "In4.Cu", "B.Cu"]
 RF_LAYERS = ["F.Cu", "In1.Cu", "In2.Cu"]
+# R4 (no digital copper next to the RF region): the net classes it exempts (audit.py uses the same)
+R4_EXEMPT = ("RF", "PWR", "GND", "ANALOG")
 
 
 def _u(*parts):
@@ -254,7 +256,36 @@ def constraints(fp: Floorplan):
             },
             **fixed_holes,
             **fixed_lands,
+            **(
+                {
+                    "@"
+                    + fp.part("lvds_header"): {
+                        "at": d["lvds_header_fixed"]["at"],
+                        "rot": d["lvds_header_fixed"]["rot"],
+                        "side": d["lvds_header_fixed"]["side"],
+                    }
+                }
+                if d.get("lvds_header_fixed")
+                else {}
+            ),
+            **(
+                {
+                    "@"
+                    + fp.part("jtag"): {
+                        "at": d["jtag_fixed"]["at"],
+                        "rot": d["jtag_fixed"]["rot"],
+                        "side": d["jtag_fixed"]["side"],
+                    }
+                }
+                if d.get("jtag_fixed")
+                else {}
+            ),
         },
+        **(
+            {"orientation": {r: rot for role, rot in d["orientations"].items() for r in refs(role)}}
+            if d.get("orientations")
+            else {}
+        ),
         "keepout": keepout,
         "copper_keepout": copper_keepout,
         "region": region,
@@ -293,7 +324,7 @@ def constraints(fp: Floorplan):
                 "layers": RF_LAYERS,
                 "from_region": "rf_macro",
                 "min_distance_mm": d["rf"]["guard_mm"],
-                "except_classes": ["RF", "PWR", "GND"],
+                "except_classes": list(R4_EXEMPT),
             },
         ],
         "height_limit": {
@@ -400,6 +431,7 @@ def netclasses(fp):
         "PWR": dict(clearance=0.15, track_width=0.25),
         "SW": dict(clearance=0.2, track_width=0.6),
         "RF": dict(clearance=0.1, track_width=0.2),
+        "ANALOG": dict(clearance=0.1, track_width=0.15),
         "XTAL": dict(clearance=0.15, track_width=0.15),
         "QSPI": dict(clearance=0.1, track_width=0.12),
         "LVDS": dict(
@@ -570,23 +602,27 @@ def board_rules(fp):
             "the package body is exempt)" % _n(d["rf"]["guard_mm"]),
             "rf_guard_digital",
             "(A.Type == 'Via' || (A.Type == 'Track' && (%s))) && A.intersectsArea('RF_GUARD') && "
-            "A.NetName != '' && !A.hasNetclass('RF') && !A.hasNetclass('PWR') && "
-            "!A.hasNetclass('GND')" % rf_layers,
+            "A.NetName != '' && %s"
+            % (rf_layers, " && ".join("!A.hasNetclass('%s')" % c for c in R4_EXEMPT)),
             ["(constraint disallow track via)"],
         ),
         (
-            "BGA escape: signal and power vias under U1 are the 0.20/0.40 escape class (dog-bones)",
+            "BGA escape: signal and power vias under U1 are the 0.20/0.40 escape class (dog-bones);"
+            " the RF region's vias are the macro's own class",
             "bga_signal_vias",
-            "A.Type == 'Via' && A.intersectsCourtyard('%s') && !A.hasNetclass('GND')" % u1,
+            "A.Type == 'Via' && A.intersectsCourtyard('%s') && !A.hasNetclass('GND') && "
+            "!A.intersectsArea('RF_REGION')" % u1,
             [
                 "(constraint hole_size (min 0.2mm))",
                 "(constraint via_diameter (min 0.4mm))",
             ],
         ),
         (
-            "BGA escape: 0.15/0.35 vias under U1 are GND only (interstitial sites, same net)",
+            "BGA escape: 0.15/0.35 vias under U1 are GND only (interstitial sites, same net); the"
+            " macro's 0.15/0.32 fence vias at the package edge are the RF region's class",
             "bga_gnd_vias",
-            "A.Type == 'Via' && A.intersectsCourtyard('%s') && A.hasNetclass('GND')" % u1,
+            "A.Type == 'Via' && A.intersectsCourtyard('%s') && A.hasNetclass('GND') && "
+            "!A.intersectsArea('RF_REGION')" % u1,
             [
                 "(constraint hole_size (min 0.15mm))",
                 "(constraint via_diameter (min 0.35mm))",
@@ -990,12 +1026,18 @@ def radome_report(fp):
     t = math.tan(math.radians(d["radome"]["angle_deg"]))
     patches = list(d["rf"]["patches"].values())
     rows = []
-    for name, spec in d["regions"].items():
-        for part in spec["parts"]:
+    places = [(name, spec["parts"], fp.rect(spec)) for name, spec in d["regions"].items()]
+    for key, role in (("lvds_header_fixed", "lvds_header"), ("jtag_fixed", "jtag")):
+        fx = d.get(key)
+        if fx:  # fixed: its courtyard at the pose
+            (x, y), (w, h_) = fx["at"], fx["courtyard_mm"]
+            places.append(("fixed", [role], [x - w / 2, y - h_ / 2, x + w / 2, y + h_ / 2]))
+    for name, parts, box in places:
+        for part in parts:
             h = d["radome"]["heights"].get(part)
             if h is None:
                 continue
-            gap = min(_rect_gap(fp.rect(spec), p) for p in patches)
+            gap = min(_rect_gap(box, p) for p in patches)
             rows.append(
                 dict(
                     part=part,
@@ -1011,12 +1053,30 @@ def radome_report(fp):
 
 
 def macro_check(fp):
-    """Compare the floorplan with the RF macro's record (rf.macro_record, if present): pocket,
-    patch extents, and every macro via inside the RF region or the package body. Returns
+    """Compare the floorplan with the RF macro's records: the integrated variant
+    (rf.macro_record) and its D12 bracketing siblings (rfm1-m/-n/-p beside it, review
+    2026-10-03). Every variant: pocket covered, every via and every F.Cu copper point inside the
+    RF region, the pocket or the package body. The integrated variant's patch extents must equal
+    the floorplan's; the siblings' differ by the bracketing step and are reported. Returns
     ``(lines, ok)``."""
     path = (HERE / fp.doc["rf"]["macro_record"]).resolve()
     if not path.is_file():
         return ["macro record %s not found: skipped" % fp.doc["rf"]["macro_record"]], True
+    out, ok = [], True
+    stem = path.parent.name  # rfm1-n
+    for tag in ("m", "n", "p"):
+        sib = path.parent.parent / (stem[:-1] + tag) / (stem[:-1] + tag + ".json")
+        if not sib.is_file():
+            out.append("variant %s: record %s missing" % (tag, sib.name))
+            ok = False
+            continue
+        lines, good = _macro_check_one(fp, sib, exact=(sib == path))
+        out += ["%s: %s" % (sib.parent.name, line) for line in lines]
+        ok &= good
+    return out, ok
+
+
+def _macro_check_one(fp, path, exact):
     rec = json.loads(path.read_text())
     cx, cy = fp.doc["u1"]["at"]
     out, ok = [], True
@@ -1040,9 +1100,18 @@ def macro_check(fp):
             round(max(c[0] for c in cols) + w / 2 + cx, 3),
             round(max(c[1] for c in cols) + half_col + cy, 3),
         ]
-        same = all(abs(a - b) < 0.01 for a, b in zip(box, fp.doc["rf"]["patches"][bank]))
-        ok &= same
-        out.append("%s patches: macro %s: %s" % (bank, box, "same" if same else "DIFFERS"))
+        delta = max(abs(a - b) for a, b in zip(box, fp.doc["rf"]["patches"][bank]))
+        same = delta < 0.01
+        if exact:
+            ok &= same
+        out.append(
+            "%s patches: macro %s: %s"
+            % (
+                bank,
+                box,
+                "same" if same else "differs by %.3f mm%s" % (delta, "" if exact else " (D12)"),
+            )
+        )
     regions = fp.doc["rf"]["region"] + [fp.doc["rf"]["pocket"]]
     half = fp.doc["u1"]["body_mm"] / 2
     regions.append([cx - half, cy - half, cx + half, cy + half])

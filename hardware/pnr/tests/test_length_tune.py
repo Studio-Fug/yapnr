@@ -15,6 +15,7 @@ from pnr.route.detail.tune import (
     Bump,
     _corner,
     _mitre,
+    _piece_cells,
     _seg_dist,
     bump_path,
     match_sets,
@@ -144,6 +145,17 @@ class TemplateTest(unittest.TestCase):
         k = next(k for k in range(len(line)) if _mitre(line, k) is not None)
         self.assertEqual(_mitre(line, k)[0], [])
         self.assertAlmostEqual(_mitre(line, k)[2], 2 - SQRT2)
+
+    def test_straight_pieces_around_a_vertex(self):
+        path = bump_path(self.line, [Bump(0, 3, 1, 2, 2)])  # legs of 2, top of 2
+        k = path.index(Cell(0, 3, 7))  # the first leg's top corner
+        self.assertEqual(sorted(_piece_cells(path, k)), [2.0, 2.0])
+        trial = path[:k] + path[k + 1 :]  # mitred: 1-cell leg, diagonal, 1-cell top
+        self.assertEqual(
+            sorted(_piece_cells(trial, k - 1) + _piece_cells(trial, k)), [1.0, 1.0, SQRT2, SQRT2]
+        )
+        shape = shape_rules({"tuning": {"min_segment_mm": 0.5}}, 0.25, 0.25, 0.2)
+        self.assertEqual((shape.amp_min, shape.min_seg_mm), (2, 0.5))
 
     def test_straight_runs_stop_at_breaking_cells(self):
         rn = RoutedNet("N")

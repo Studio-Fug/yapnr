@@ -111,6 +111,8 @@ class Shape:
     # The largest amplitude a member may escalate to when ``amp_max`` leaves its need
     # unmet: ``amp_max`` itself when the rules set ``amplitude_max_mm``.
     amp_cap: int = 0
+    # The shortest straight piece a meander may have (mm); mitres keep to it.
+    min_seg_mm: float = 0.0
 
 
 def shape_rules(rules: Optional[dict], pitch: float, width: float, clearance: float) -> Shape:
@@ -134,7 +136,7 @@ def shape_rules(rules: Optional[dict], pitch: float, width: float, clearance: fl
         if explicit
         else max(amp_max, int(math.floor(DEFAULT_AMPLITUDE_CAP_MM / pitch + 1e-9)))
     )
-    return Shape(gap, amp_min, amp_max, style, bool(spec.get("mitre", True)), cap)
+    return Shape(gap, amp_min, amp_max, style, bool(spec.get("mitre", True)), cap, min_seg)
 
 
 def residual_target(budget: float, margin: float) -> float:
@@ -377,6 +379,27 @@ def _mitre(path: List[Cell], index: int) -> Optional[Tuple[List[Cell], Cell, flo
         return None
     m = Cell(v.layer, (u.i + x.i) // 2, (u.j + x.j) // 2)
     return [m], m, 2 * SQRT2 - 2
+
+
+def _piece_cells(path: Sequence[Cell], index: int) -> List[float]:
+    """Lengths (cells) of the maximal straight pieces of ``path`` that meet at or
+    pass through ``path[index]``."""
+
+    def step(a, b):
+        return (b.i - a.i, b.j - a.j)
+
+    out = []
+    for lo, hi in ((index - 1, index), (index, index + 1)):
+        if lo < 0 or hi >= len(path):
+            continue
+        d = step(path[lo], path[hi])
+        a, b = lo, hi
+        while a > 0 and step(path[a - 1], path[a]) == d:
+            a -= 1
+        while b < len(path) - 1 and step(path[b], path[b + 1]) == d:
+            b += 1
+        out.append((b - a) * (SQRT2 if d[0] and d[1] else 1.0))
+    return out
 
 
 def path_cells_mm(path: Sequence[Cell], pitch: float) -> float:
@@ -718,6 +741,11 @@ class Tuner:
                         replacement, new_cell, saved = cut
                         mv = in_units(saved * pitch, runs[r][0].layer)
                         trial = path[:index_] + replacement + path[index_ + 1 :]
+                        # The pieces either side of the cut keep the minimum segment.
+                        short = min(_piece_cells(trial, index_ - 1) + _piece_cells(trial, index_))
+                        if short * pitch < shape.min_seg_mm - 1e-9:
+                            index_ += 1
+                            continue
                         if overshoot > mv / 2 and self._mitre_ok(
                             new_cell, r, legal, path, trial, net, index
                         ):
@@ -835,7 +863,6 @@ class Tuner:
         routed = {n for n in self.members if n in nets and nets[n].routed}
         index = self.copper_index()
         owner = self._owner_map() if routed else {}
-        shape = shape_rules(self.rules, self.grid.pitch, self.default_width, self.clearance)
         reports: List[SetReport] = []
         tuned: Dict[str, Tuple[float, int, int]] = {}
         owner_set: Dict[str, str] = {}
@@ -869,6 +896,9 @@ class Tuner:
                     # Aim a little short of the longest: an overshoot the mitres cannot
                     # trim would make this member the new target of every other one.
                     aim = need - report.target_residual / 4
+                    shape = shape_rules(
+                        self.rules, self.grid.pitch, self.width(net), self.clearance
+                    )
                     added, bumps, mitres = self.tune_member(net, aim, s.unit, shape, owner, index)
                     if not bumps:
                         continue

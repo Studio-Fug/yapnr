@@ -1,23 +1,43 @@
 #pragma experiment("TRAITS")
 # radar60 product UART on J1 (also the ROM flashing port with SOP = 101): RS232_TX N5, RS232_RX N4
-# (SWRS219F Table 6-1), protected by a TPD2E2U06 at the connector.
+# (SWRS219F Table 6-1), protected by a TPD2E2U06 at the connector. The radio's digital IOs are not
+# fail-safe (SWRS219F 6.2 note): a host powered before the radar would back-feed VIOIN through the
+# IO's ESD diode, so each line has 1 kOhm in series between the connector (and its ESD diode) and
+# the radio: (3.3 V - 0.6 V) / 1 kOhm = 2.7 mA at most into an unpowered radio (review 2026-10-03).
+# 1 kOhm with about 10 pF of pin and line is 10 ns, far below a 921.6 kbaud bit (1.1 us).
+
+import has_net_name_suggestion
 
 import has_designator
 
 from "parts/Radar60_TPD2E2U06DCKR/Radar60_TPD2E2U06DCKR.ato" import Radar60_TPD2E2U06DCKR
+from "parts/Radar60_R_1k_0402/Radar60_R_1k_0402.ato" import Radar60_R_1k_0402
 
 
 module Uart:
-    """UART ESD protection at J1."""
+    """UART ESD protection at J1 and back-power limiting resistors."""
 
     signal tx
     signal rx
+    signal tx_conn
+    signal rx_conn
     signal gnd
 
     esd = new Radar60_TPD2E2U06DCKR
-    esd.IO1 ~ tx
-    esd.IO2 ~ rx
+    esd.IO1 ~ tx_conn
+    esd.IO2 ~ rx_conn
     esd.GND ~ gnd
+
+    r_tx = new Radar60_R_1k_0402
+    r_tx.p1 ~ tx
+    r_tx.p2 ~ tx_conn
+    r_rx = new Radar60_R_1k_0402
+    r_rx.p1 ~ rx
+    r_rx.p2 ~ rx_conn
+
+    # net names (the connector side; the radio side keeps UART_TX / UART_RX)
+    trait tx_conn has_net_name_suggestion<name="UART_TX_J1", level="SUGGESTED">
+    trait rx_conn has_net_name_suggestion<name="UART_RX_J1", level="SUGGESTED">
 
     # fixed designators (board-design.md 2.1)
     trait esd has_designator<designator="D2">

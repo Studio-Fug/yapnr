@@ -337,7 +337,12 @@ def finish(placed_pcb, floorplan_pcb, macro_pcb, out_pcb, report_json):
     macro_text = open(macro_pcb, encoding="utf-8").read()
     record = json.load(open(macro_pcb[: -len(".kicad_pcb")] + ".json", encoding="utf-8"))
     text, counts = merge_macro(text, macro_text, record, u1_xy)
-    report["macro"] = dict(counts, geometry_sha256=record["geometry_sha256"])
+    report["macro"] = dict(
+        counts,
+        geometry_sha256=record["geometry_sha256"],
+        variant=_variant(record),
+        status=record.get("status"),
+    )
     open(out_pcb, "w", encoding="utf-8").write(text)
 
     board = pcbnew.LoadBoard(out_pcb)

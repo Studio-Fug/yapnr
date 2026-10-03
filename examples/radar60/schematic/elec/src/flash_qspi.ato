@@ -2,6 +2,10 @@
 # radar60 boot flash: Macronix MX25V1635FZNQ (TI-tested for xWR QSPI boot, TI SPRACH9) on the
 # IWR6843 QSPI port: R12 CLK, P11 CS_N, R13/N12/R14/P12 D0..D3 (SWRS219F Table 6-1).
 # 22 Ohm series resistor at the clock source (board-design.md 3.4, @pnr-si); CS_N pulled up.
+# WP#/SIO2 and HOLD#/SIO3 (radio R14/P12) leave reset with the radio's internal pull-downs
+# (SWRS219F Table 6-1) and the flash ships with QE = 0 (TI SPRACH9: the ROM bootloader sets QE while
+# flashing), so before that a low HOLD# can block the first programming: 10 kOhm pull-ups on both,
+# as TI's IWR6843ISK Rev D fits (SWRR164, flash sheet), plus 1 uF beside the 100 nF (review).
 
 import has_net_name_suggestion
 
@@ -9,6 +13,7 @@ import has_designator
 
 from "parts/Radar60_MX25V1635FZNQ/Radar60_MX25V1635FZNQ.ato" import Radar60_MX25V1635FZNQ
 from "parts/Radar60_C_100n_0402/Radar60_C_100n_0402.ato" import Radar60_C_100n_0402
+from "parts/Radar60_C_1u_0402/Radar60_C_1u_0402.ato" import Radar60_C_1u_0402
 from "parts/Radar60_R_22_0402/Radar60_R_22_0402.ato" import Radar60_R_22_0402
 from "parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato" import Radar60_R_10k_0402
 
@@ -44,9 +49,18 @@ module Flash:
     r_cs_pu = new Radar60_R_10k_0402
     r_cs_pu.p1 ~ v3v3
     r_cs_pu.p2 ~ cs_n
+    r_d2_pu = new Radar60_R_10k_0402
+    r_d2_pu.p1 ~ v3v3
+    r_d2_pu.p2 ~ d2
+    r_d3_pu = new Radar60_R_10k_0402
+    r_d3_pu.p1 ~ v3v3
+    r_d3_pu.p2 ~ d3
     c_vcc = new Radar60_C_100n_0402
     c_vcc.p1 ~ v3v3
     c_vcc.p2 ~ gnd
+    c_vcc_bulk = new Radar60_C_1u_0402
+    c_vcc_bulk.p1 ~ v3v3
+    c_vcc_bulk.p2 ~ gnd
 
     # net names (net classes and PnR rules refer to these)
     trait sclk has_net_name_suggestion<name="QSPI_CLK_FLASH", level="SUGGESTED">

@@ -46,9 +46,12 @@ CORNERS = {  # RF-06 fab corners [BD §6.2]
 RULES = {  # pcbway-adv-6l-rf draft [BD §4.2]
     "track_min": 0.10,
     "space_min": 0.10,
-    "via_fence": (0.15, 0.30),  # drill, pad
+    # drill, pad: 0.32 mm keeps the advanced 3 mil (0.076 mm) via ring of pcbway-adv-6l-rf; the
+    # plan's 0.30 pad is a 2.95 mil ring (board track, stage 2; integration DRC 2026-10-03)
+    "via_fence": (0.15, 0.32),
     "via_bga": (0.15, 0.35),  # interstitial GND vias
-    "fence_pitch_min": 0.40,
+    # via centre spacing: 11 mil (0.2794 mm) hole to hole [PW] + one 0.15 drill = 0.43 mm
+    "fence_pitch_min": 0.43,
     "edge_clear": 0.30,
 }
 
@@ -79,6 +82,7 @@ DEFAULTS: Dict[str, object] = {
     # launch (RFS-1): land, L1 anti-pad and L2 cut-out radii, interstitial GND vias [TI-RF Fig. 2]
     "antipad_r": 0.30,
     "l2_cut_r": 0.38,
+    "l3_cut_margin": 0.30,  # In2.Cu GND beyond each L2 cut-out (review 2026-10-03) [D]
     "launch_len": 1.30,  # land centre to P0 (TI: 50 ohm about 1.3 mm from the ball) [TI-RF §2.1.2]
     # column (RFS-4): patch on the L2 window, corporate divider on 4 mil over L2
     "patch_w": 1.45,  # W/L >= 1.2 and 0.2 mm from the gap line to the window [BD §14.4 R2]
@@ -112,6 +116,11 @@ DEFAULTS: Dict[str, object] = {
     "tx_meander": {"TX1": "h", "TX2": "v", "TX3": "v"},
     "pour_clear_ant": 1.0,  # L1 GND pour kept this far from patch copper [D]
     "pour_clear_feed": 0.45,  # and this far from the column's microstrip divider [D]
+    # L2-L3 stitching (review 2026-10-03): GND through vias at <= lambda_d/4 in RO4450F
+    # (62 GHz: lambda0 4.83 mm / sqrt(3.52) = 2.58 mm -> 0.64 mm) round each bank and along the
+    # macro's In2.Cu GND boundary, so the L2-L3 parallel plate has no open edge [D]
+    "stitch_pitch": 0.60,
+    "stitch_inset": 0.40,  # via centre inside the In2 GND boundary / outside a bank's field box
 }
 
 

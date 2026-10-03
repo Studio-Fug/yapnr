@@ -402,13 +402,35 @@ def parts() -> List[Part]:
             "Taiyo Yuden",
             "MCKK2012TR47M",
             "L",
-            "0.47 uH buck inductor 0805 (LP87524 0.47 uH +/-30 %, DCR <= 25 mOhm class)",
+            "0.47 uH 4.5 A (Isat) 32 mOhm buck inductor 0805 (Buck0/Buck1: forward current limit <= 3.0 A)",
             two(),
             "stock:Inductor_SMD:L_0805_2012Metric",
             "C655211",
             kind="inductor",
             package="0805",
             params={"inductance_h": 0.47e-6},
+        )
+    )
+    # Buck2 (1.0 V, 2.5 A peak) and Buck3 (1.8 V): the forward current limit reaches 6.0 A and
+    # 5.4 A (SNVSAW2B 6.5, LP87524B/J) and the inductor must saturate above it with DCR <= 25 mOhm
+    # (6.5 DCR_L, 8.2.1.1); MCKK2012TR47M (4.5 A, 32 mOhm) does not. Vishay IHLP-1616BZ-11
+    # 0.47 uH: Isat 7.0 A, heat 7.0 A, DCR 14.5 / 16 mOhm (Vishay document 34196, rev. 22-May-2024),
+    # the KiCad stock land pattern of that data sheet. TI's Table 53 lists the same family's
+    # IHLP1616AB-1A (6 A typ.).
+    P.append(
+        Part(
+            "Radar60_L_0u47_IHLP1616BZ",
+            "Vishay Dale",
+            "IHLP1616BZERR47M11",
+            "L",
+            "0.47 uH 7.0 A (Isat, typ.) 16 mOhm (max) shielded buck inductor, IHLP-1616BZ-11, 4.06x4.45x2.0 mm",
+            two(),
+            "stock:Inductor_SMD:L_Vishay_IHLP-1616",
+            "",
+            kind="inductor",
+            package="IHLP-1616BZ",
+            params={"inductance_h": 0.47e-6},
+            source="Vishay IHLP-1616BZ-11 data sheet, document 34196 (https://www.vishay.com/docs/34196/lp16bz11.pdf)",
         )
     )
     P.append(
@@ -520,9 +542,9 @@ def parts() -> List[Part]:
             "",
             "",
             "MH",
-            "M2.5 mounting hole (NPTH)",
-            {},
-            "stock:MountingHole:MountingHole_2.7mm_M2.5",
+            "M2.5 mounting hole, plated, 5.4 mm pad (GND, board-design.md 5.1)",
+            {"1": "MH"},
+            "stock:MountingHole:MountingHole_2.7mm_M2.5_Pad",
             "",
             board_only=True,
         )
@@ -635,15 +657,17 @@ def parts() -> List[Part]:
             25,
             "22 uF 25 V X5R 0805",
         ),
+        # VBGAP in 0402: the part TI's errata names (SWRZ087D ANA#19: GRM155R71E473KA88), so the
+        # cap fits beside B10 at the package edge (review 2026-10-03); LCSC number not verified
         cap(
-            "Radar60_C_47n_0603",
-            "CL10B473KB8NNNC",
-            S,
-            "C1622",
-            "0603",
+            "Radar60_C_47n_0402",
+            "GRM155R71E473KA88D",
+            MU,
+            "",
+            "0402",
             47e-9,
-            50,
-            "47 nF 50 V X7R 0603 (VBGAP, errata ANA#19)",
+            25,
+            "47 nF 25 V X7R 0402 (VBGAP, errata ANA#19 example part)",
         ),
         cap(
             "Radar60_C_10n_0402",
@@ -694,6 +718,18 @@ def parts() -> List[Part]:
             390e-12,
             50,
             "390 pF 50 V C0G 0402 (snubber, SNVSAW2B Table 56)",
+        ),
+        # ANA#17A damping option (SWRZ087D: damp the supply ringing): 22 uF behind 0.22 Ohm, DNP
+        cap(
+            "Radar60_C_22u_0805_DNP",
+            "CL21A226MAQNNNE",
+            S,
+            "C45783",
+            "0805",
+            22e-6,
+            25,
+            "22 uF 25 V X5R 0805 (DNP, supply damping option)",
+            dnp=True,
         ),
         cap(
             "Radar60_C_4n7_0402_DNP",
@@ -755,6 +791,15 @@ def parts() -> List[Part]:
             "",
             62,
             "62 Ohm 1 % 0402 (DNP, CAN split termination)",
+            dnp=True,
+        ),
+        res(
+            "Radar60_R_0R22_0402_DNP",
+            "TBD-0R22-1%-0402",
+            "TBD",
+            "",
+            0.22,
+            "0.22 Ohm 1 % 0402 (DNP, series damping resistor of the ANA#17A option) [E]",
             dnp=True,
         ),
         res(

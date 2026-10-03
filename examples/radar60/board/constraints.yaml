@@ -18,7 +18,7 @@ schema: v0
 board:
   outline:
     w: 60
-    h: 46
+    h: 46.3
   layers: 6
   default_clearance_mm: 0.2
   references_on_fab: true
@@ -43,11 +43,11 @@ fixed:
     rot: 0
     side: top
   '@mech.mh[[]2]':
-    at: [3.5, 42.5]
+    at: [3.5, 42.8]
     rot: 0
     side: top
   '@mech.mh[[]3]':
-    at: [56.5, 42.5]
+    at: [56.5, 42.8]
     rot: 0
     side: top
   RL1:
@@ -58,65 +58,175 @@ fixed:
     at: [56.5, 27]
     rot: 0
     side: top
+  '@debug.j2':
+    at: [20.75, 11.5]
+    rot: 0
+    side: top
+  '@debug.j3':
+    at: [4.3, 19.5]
+    rot: 90
+    side: top
+orientation:
+  '@radio.c_apll': 0
+  '@radio.c_vbgap': 0
+  '@radio.c_synth': 0
+  '@radio.c_xp': 0
+  '@radio.c_xm': 180
+  '@radio.c_pa': 270
+  '@radio.r_pa': 0
+  '@radio.c_rf2': 180
+  '@flash.r_clk': 180
 keepout:
   - name: rf_region_1
-    polygon: [[14.941, 34.25], [29.563, 34.25], [29.563, 46], [14.941, 46]]
+    polygon: [[14.941, 33.75], [29.563, 33.75], [29.563, 46.3], [14.941, 46.3]]
   - name: rf_region_2
-    polygon: [[14.941, 33.2], [19.75, 33.2], [19.75, 34.25], [14.941, 34.25]]
+    polygon: [[14.941, 33.2], [20.25, 33.2], [20.25, 33.75], [14.941, 33.75]]
   - name: rf_region_3
-    polygon: [[29.563, 35], [31.25, 35], [31.25, 46], [29.563, 46]]
+    polygon: [[29.563, 35], [31.25, 35], [31.25, 46.3], [29.563, 46.3]]
   - name: rf_region_4
-    polygon: [[31.25, 34.25], [45.58, 34.25], [45.58, 46], [31.25, 46]]
+    polygon: [[31.25, 33.75], [45.58, 33.75], [45.58, 46.3], [31.25, 46.3]]
   - name: rf_region_5
-    polygon: [[32.25, 26.7], [45.58, 26.7], [45.58, 34.25], [32.25, 34.25]]
+    polygon: [[31.75, 26.7], [45.58, 26.7], [45.58, 33.75], [31.75, 33.75]]
 copper_keepout:
   - name: rf_region_1
     ref: '@radio.u1'
-    rect_mm: [-18, -11.059, -5.2, 3.563]
+    rect_mm: [-18.3, -11.059, -5.2, 3.563]
   - name: rf_region_2
     ref: '@radio.u1'
-    rect_mm: [-18, 3.563, -7, 5.25]
+    rect_mm: [-18.3, 3.563, -7, 5.25]
   - name: rf_region_3
     ref: '@radio.u1'
-    rect_mm: [-18, 5.25, 1.3, 19.58]
+    rect_mm: [-18.3, 5.25, 1.3, 19.58]
   - name: rf_region_4
     ref: '@radio.u1'
     rect_mm: [-5.2, 5.2, 1.3, 5.25]
 region:
-  - name: lvds_header
-    refs: ['@debug.j2']
-    rect: [10, 4, 42, 18]
-    hard: true
-    reason: 'J2 south of the LVDS balls (columns 14/15 face south)'
-  - name: jtag
-    refs: ['@debug.j3']
-    rect: [1, 8, 14, 28.2]
-    hard: true
-    reason: 'J3 west of U1 on the JTAG/UART side, below the radome line'
   - name: pmic_block
-    refs: ['@pmic.*']
-    rect: [34, 2, 58, 24]
+    refs:
+      [
+        '@pmic.u2',
+        '@pmic.l_*',
+        '@pmic.c_in*',
+        '@pmic.c_out*',
+        '@pmic.c_vana',
+        '@pmic.r_snb*',
+        '@pmic.c_snb*',
+        '@pmic.r_sh',
+        '@pmic.tp_isns',
+        '@pmic.r_fb2*',
+        '@pmic.r_clkin*',
+        '@pmic.r_en*',
+        '@pmic.r_gpio2_ls',
+        '@pmic.r_s*',
+        '@pmic.r_nint*',
+        '@pmic.r_pgood*',
+        '@pmic.r_rst',
+        '@pmic.c_rst',
+      ]
+    rect: [38, 2, 58, 26.65]
     hard: true
     reason: 'PMIC block, power-first'
+  - name: flash_block
+    refs: ['@flash.u3']
+    rect: [8.3, 15.75, 19.3, 24.6]
+    hard: true
+    reason: 'QSPI within about 10 mm'
+  - name: efuse_block
+    refs: ['@power_in.efuse']
+    rect: [6.8, 0.4, 22.5, 7.25]
+    hard: true
+    reason: 'eFuse next to J1 pins 1-2'
+  - name: can_block
+    refs: ['@can.u4']
+    rect: [31.6, 6.65, 38, 16]
+    hard: true
+    reason: 'CAN after its ESD, near J1'
   - name: pmic_switching
     refs: ['@pmic.u2', '@pmic.l_b*']
     rect: [41, 2, 58, 21.7]
     hard: true
     reason: 'switch nodes >= 8 mm from Y1 and >= 5 mm from RF'
   - name: crystal
-    refs: ['@radio.y1', '@radio.c_xp', '@radio.c_xm']
-    rect: [24, 16, 31.2, 22.6]
+    refs: ['@radio.y1']
+    rect: [23.5, 15.75, 30.2, 21.55]
     hard: true
-    reason: 'Y1 next to B15/C15, outside the RF guard'
-  - name: pa_corner
-    refs: ['@radio.c_pa', '@radio.c_rf2']
-    areas:
-      - rect: [27.9, 31.85, 31.2, 33.2]
-      - rect: [29.85, 29.4, 31.2, 33.2]
+    reason: 'Y1 below B15/C15, outside the RF guard'
+  - name: radio_apll
+    refs: ['@radio.c_apll']
+    rect: [32.1, 25.3, 34.15, 26.45]
     hard: true
-    reason: 'VOUT_PA / VIN_13RF2 caps under the corner, bottom side (plan 5.2 branch)'
+    reason: 'VOUT_14APLL cap at A10'
+  - name: radio_vbgap
+    refs: ['@radio.c_vbgap']
+    rect: [32.1, 24.05, 34.15, 25.2]
+    hard: true
+    reason: 'VBGAP cap at B10'
+  - name: radio_synth
+    refs: ['@radio.c_synth']
+    rect: [32.1, 22.8, 34.15, 23.95]
+    hard: true
+    reason: 'VOUT_14SYNTH cap at B13'
+  - name: xtal_cap_p
+    refs: ['@radio.c_xp']
+    rect: [29.1, 20.8, 31.15, 21.95]
+    hard: true
+    reason: 'CLKP load cap below B15'
+  - name: xtal_cap_n
+    refs: ['@radio.c_xm']
+    rect: [26.85, 20.8, 28.9, 21.95]
+    hard: true
+    reason: 'CLKM load cap below C15'
+  - name: pa_cap
+    refs: ['@radio.c_pa']
+    rect: [30.05, 29.4, 31.2, 31.85]
+    hard: true
+    reason: 'VOUT_PA 220 nF at A2/B2'
+  - name: pa_r
+    refs: ['@radio.r_pa']
+    rect: [28.6, 31.85, 30.95, 33.2]
+    hard: true
+    reason: 'PA 0 ohm between D2 and B2'
+  - name: rf2_cap
+    refs: ['@radio.c_rf2']
+    rect: [26.1, 31.85, 28.6, 33.2]
+    hard: true
+    reason: 'VIN_13RF2 220 nF at C2/D2'
+  - name: pa_bulk
+    refs: ['@radio.c_pa_10u', '@radio.c_pa_22u', '@radio.c_rf2_10u', '@radio.c_rf2_22u']
+    rect: [31.4, 19.5, 37.5, 26.6]
+    hard: true
+    reason: 'VOUT_PA and VIN_13RF2 bulk, bottom side east of the package'
+  - name: radio_west
+    refs: ['@radio.c_rf1', '@radio.c_bb[[]*']
+    rect: [15, 26, 19.55, 33]
+    hard: true
+    reason: 'VIN_13RF1 and VIN_18BB caps west of G5-J5 / F5, K5'
+  - name: qspi_series
+    refs: ['@flash.r_clk']
+    rect: [17.85, 24.8, 19.95, 25.95]
+    hard: true
+    reason: 'QSPI_CLK 22 ohm next to R12'
+  - name: connector_esd
+    refs: ['@uart.esd', '@can.esd']
+    rect: [31.6, 6.65, 38.5, 11]
+    hard: true
+    reason: 'CAN and UART ESD next to J1 pins 5-8, before the transceiver'
+  - name: connector_tvs
+    refs: ['@power_in.tvs']
+    rect: [12, 0.4, 22.5, 7.25]
+    hard: true
+    reason: '5 V TVS next to J1 pins 1-2'
 side:
-  bottom: ['@radio.c_pa', '@radio.c_rf2']
+  bottom:
+    [
+      '@radio.c_pa',
+      '@radio.r_pa',
+      '@radio.c_rf2',
+      '@radio.c_pa_10u',
+      '@radio.c_pa_22u',
+      '@radio.c_rf2_10u',
+      '@radio.c_rf2_22u',
+    ]
 group:
   - members:
       [
@@ -140,7 +250,7 @@ group:
         '@radio.c_rf2',
       ]
     anchor: '@radio.u1'
-    radius_mm: 10.5
+    radius_mm: 11
     hard: true
   - members: ['@radio.c_*_10u', '@radio.c_*_22u', '@radio.c_*_bulk']
     anchor: '@radio.u1'
@@ -152,7 +262,67 @@ group:
     hard: true
   - members: ['@pmic.l_b*']
     anchor: '@pmic.u2'
-    radius_mm: 6
+    radius_mm: 8.5
+    hard: true
+  - members: ['@pmic.c_in[[]*']
+    anchor: '@pmic.u2'
+    radius_mm: 5
+    hard: true
+  - members: ['@pmic.r_snb*']
+    anchor: '@pmic.u2'
+    radius_mm: 7.5
+    hard: true
+  - members: ['@pmic.c_snb0']
+    anchor: '@pmic.r_snb0'
+    radius_mm: 2.5
+    hard: true
+  - members: ['@pmic.c_snb1']
+    anchor: '@pmic.r_snb1'
+    radius_mm: 2.5
+    hard: true
+  - members: ['@pmic.c_snb2']
+    anchor: '@pmic.r_snb2'
+    radius_mm: 2.5
+    hard: true
+  - members: ['@pmic.c_snb3']
+    anchor: '@pmic.r_snb3'
+    radius_mm: 2.5
+    hard: true
+  - members: ['@pmic.c_vana']
+    anchor: '@pmic.u2'
+    radius_mm: 5
+    hard: true
+  - members: ['@power_in.r_*', '@power_in.c_itimer', '@power_in.c_dvdt']
+    anchor: '@power_in.efuse'
+    radius_mm: 8
+    hard: true
+  - members: ['@power_in.c_in_*', '@power_in.c_sys_*']
+    anchor: '@power_in.efuse'
+    radius_mm: 10
+    hard: true
+  - members: ['@can.c_*', '@can.r_*']
+    anchor: '@can.u4'
+    radius_mm: 7.5
+    hard: true
+  - members: ['@flash.c_*', '@flash.r_cs_pu', '@flash.r_d2_pu', '@flash.r_d3_pu']
+    anchor: '@flash.u3'
+    radius_mm: 5.5
+    hard: true
+  - members: ['@flash.r_clk']
+    anchor: '@radio.u1'
+    radius_mm: 9.5
+    hard: true
+  - members: ['@radio.c_xp', '@radio.c_xm']
+    anchor: '@radio.u1'
+    radius_mm: 9.5
+    hard: true
+  - members: ['@uart.esd', '@can.esd']
+    anchor: '@j1'
+    radius_mm: 12
+    hard: true
+  - members: ['@power_in.tvs']
+    anchor: '@j1'
+    radius_mm: 13
     hard: true
 net_class:
   RF:
@@ -173,6 +343,21 @@ net_class:
   GND:
     nets: [GND]
     plane_layer: In1.Cu
+  ANALOG:
+    nets:
+      [
+        'VOUT_14*',
+        VBGAP,
+        EFUSE_EN_UVLO,
+        EFUSE_OVLO,
+        EFUSE_PGTH,
+        EFUSE_ILM,
+        EFUSE_ITIMER,
+        EFUSE_DVDT,
+        VIO_LS_ON,
+        'DAMP_*',
+        PMIC_FB_B2,
+      ]
   LVDS:
     nets:
       [
@@ -234,9 +419,9 @@ rf_macro:
   owns_vias: true
   region:
     [
-      [14.941, 33.2, 29.563, 46],
-      [29.563, 35, 31.25, 46],
-      [31.25, 26.7, 45.58, 46],
+      [14.941, 33.2, 29.563, 46.3],
+      [29.563, 35, 31.25, 46.3],
+      [31.25, 26.7, 45.58, 46.3],
       [31.2, 26.7, 31.25, 33.2],
     ]
   pocket: [29.563, 33.2, 31.25, 35]
@@ -253,7 +438,7 @@ noise_keepout:
     layers: [F.Cu, In1.Cu, In2.Cu]
     from_region: rf_macro
     min_distance_mm: 5
-    except_classes: [RF, PWR, GND]
+    except_classes: [RF, PWR, GND, ANALOG]
 height_limit:
   rule: radome_visibility
   angle_deg: 30

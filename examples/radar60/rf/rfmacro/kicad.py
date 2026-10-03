@@ -184,7 +184,10 @@ def board_text(mc: Macro, title: str) -> str:
     y0, y1 = mc.region["y"]
     plane = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
     items.append(_zone("GND", "In1.Cu", plane, "l2"))
-    items.append(_zone("GND", "In2.Cu", plane, "l3"))
+    # In2.Cu GND only where the macro needs its L3 reference (Macro.l3_gnd); elsewhere In2 is
+    # the board's escape layer
+    for i, poly in enumerate(mc.l3_gnd):
+        items.append(_zone("GND", "In2.Cu", poly, f"l3_{i}" if i else "l3", prio=i))
     for i, poly in enumerate(channel_outlines(mc)):
         items.append(_keepout(["F.Cu"], poly, f"chan{i}"))
     for i, poly in enumerate(mc.antipads):
@@ -212,7 +215,10 @@ def board_text(mc: Macro, title: str) -> str:
     )
     # --- outline
     m = 0.6
-    e0, e1 = _k((x0 - m, y1 + m)), _k((x1 + m, y0 - m))
+    # the preview outline also holds U1's ring 0-2 balls of the RF edges (some lie south of the
+    # region, which starts at the east pour)
+    yb = min([y0] + [xy[1] - PKG["land"] for _, xy, _ in balls])
+    e0, e1 = _k((x0 - m, y1 + m)), _k((x1 + m, yb - m))
     items.append(
         f"\t(gr_rect (start {_n(e0[0])} {_n(e0[1])}) (end {_n(e1[0])} {_n(e1[1])}) (stroke (width 0.05) "
         f'(type solid)) (fill no) (layer "Edge.Cuts") (uuid "{_u("edge")}"))'
@@ -272,7 +278,7 @@ def project_json(name: str) -> Dict:
         "min_copper_edge_clearance": RULES["edge_clear"],
         "min_groove_width": 0.0,
         "min_hole_clearance": 0.15,
-        "min_hole_to_hole": 0.25,
+        "min_hole_to_hole": round(RULES["fence_pitch_min"] - RULES["via_fence"][0], 4),
         "min_microvia_diameter": 0.2,
         "min_microvia_drill": 0.1,
         "min_resolved_spokes": 2,

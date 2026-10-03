@@ -150,15 +150,27 @@ def _fab_body(fp: Footprint, half_w: float, half_h: float, chamfer: float) -> No
 
 
 def _silk_corners(
-    fp: Footprint, half_w: float, half_h: float, arm: float, pin1: bool = True
+    fp: Footprint,
+    half_w: float,
+    half_h: float,
+    arm: float,
+    pin1: bool = True,
+    skip_edges: Tuple[str, ...] = (),
 ) -> None:
-    """Silk corner marks just outside the body (no full outline: the RF feeds leave the package edges)."""
+    """Silk corner marks just outside the body (no full outline: the RF feeds leave the package
+    edges). ``skip_edges`` ('left', 'top', 'right', 'bottom', footprint frame) get no arms."""
     o = 0.11
     xw, yh = half_w + o, half_h + o
     for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
         cx, cy = sx * xw, sy * yh
-        fp.line((cx, cy), (cx - sx * arm, cy), "F.SilkS", 0.12)
-        fp.line((cx, cy), (cx, cy - sy * arm), "F.SilkS", 0.12)
+        horizontal, vertical = ("top" if sy < 0 else "bottom"), ("left" if sx < 0 else "right")
+        # an arm at a corner of a skipped edge starts 0.3 mm short of that edge
+        gx = 0.3 if vertical in skip_edges else 0.0
+        gy = 0.3 if horizontal in skip_edges else 0.0
+        if horizontal not in skip_edges:
+            fp.line((cx - sx * gx, cy), (cx - sx * arm, cy), "F.SilkS", 0.12)
+        if vertical not in skip_edges:
+            fp.line((cx, cy - sy * gy), (cx, cy - sy * arm), "F.SilkS", 0.12)
     if pin1:
         fp.poly(
             [(-xw - 0.1, -yh - 0.1), (-xw - 0.6, -yh - 0.1), (-xw - 0.1, -yh - 0.6)],
@@ -196,8 +208,16 @@ def abl0161b(balls: Dict[str, str]) -> Footprint:
         fp.pad(ball, "circle", (x, y), (0.32, 0.32), extra="\n\t\t(solder_mask_margin 0.05)")
     half = 5.2
     _fab_body(fp, half, half, 1.0)
-    _silk_corners(fp, half, half, 1.0)
-    _courtyard(fp, (-half - 1.0, -half - 1.0, half + 1.0, half + 1.0))
+    # No silk on the two RF edges (columns 1-2 on the left, rows A-B on top): the RF macro's mask
+    # opening starts 0.05 mm outside them (no mask over RF copper, TI SPRACG5), where silk would
+    # be clipped (6 DRC findings at integration). Pin 1 (A1, the RF corner) is marked on F.Fab
+    # and by the two remaining corner marks' asymmetry; the courtyard is unchanged.
+    _silk_corners(fp, half, half, 1.0, pin1=False, skip_edges=("left", "top"))
+    # Courtyard 0.5 mm beyond the body: IPC-7351B least-density BGA excess. The radio's
+    # ball-anchored decoupling (internal-LDO outputs, VBGAP, crystal load caps) sits right at the
+    # package edge; with the nominal 1.0 mm the B-row caps' pads cannot come within 3.5 mm of
+    # their balls (radar60 review 2026-10-03).
+    _courtyard(fp, (-half - 0.5, -half - 0.5, half + 0.5, half + 0.5))
     return fp
 
 

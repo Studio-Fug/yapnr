@@ -1,12 +1,17 @@
-# radar60 mechanical items: 4 x M2.5 mounting holes (board-design.md 2.3, 5.1) and three fiducials
-# for assembly. Positions belong to the board track.
+#pragma experiment("FOR_LOOP")
+# radar60 mechanical items: 4 x M2.5 mounting holes, plated and on GND (board-design.md 2.3, 5.1),
+# and three fiducials for assembly. Positions belong to the board track.
 
 from "parts/Radar60_MountingHole_M2p5/Radar60_MountingHole_M2p5.ato" import Radar60_MountingHole_M2p5
 from "parts/Radar60_Fiducial_1mm/Radar60_Fiducial_1mm.ato" import Radar60_Fiducial_1mm
 
 
 module Mech:
-    """Mounting holes and fiducials."""
+    """Mounting holes (plated, GND) and fiducials."""
+
+    signal gnd
 
     mh = new Radar60_MountingHole_M2p5[4]
+    for h in mh:
+        h.MH ~ gnd
     fid = new Radar60_Fiducial_1mm[3]

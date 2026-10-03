@@ -6,6 +6,10 @@
 #   OVLO  (eq. 2):          1.20 V x (39k + 11k) / 11k = 5.45 V rising (5.38-5.56 V); LP87524 VIN
 #                           is 5.5 V recommended / 6 V absolute (SNVSAW2B 6.1, 6.3), review 3.3
 #   PGTH  (from OUT):       1.20 V x 3.4 = 4.08 V: PG high once 5V_SYS is up
+#   PG    (open drain):     10k / 39k divider from 5V_SYS: 5.45 V x 39 / 49 = 4.34 V at the OVLO
+#                           limit, inside PG's 5 V recommended maximum (SLVSFC9C 6.3; 6.5 V absolute),
+#                           and 4.08 x 39 / 49 = 3.25 V at the PG threshold, above the LP87524 NRST
+#                           input high level (review 2026-10-03)
 #   (divider values chosen from LCSC-verified 1 % parts; 1.65k for ILM has no verified LCSC number)
 #   ILM   (eq. 5):          3334 / 1650 = 2.02 A circuit breaker (data sheet: 1.80-2.20 A at 1.65k)
 #   ITIMER (eq. 6):         1.51 V x 1 nF / 1.8 uA = 0.84 ms over-current blanking (fast trip 2 x ILIM)
@@ -83,20 +87,29 @@ module PowerIn:
     r_pg_bot.p2 ~ gnd
     efuse.PGTH ~ pgth
 
-    # PG (open drain) pulled to 5V_SYS; it drives the PMIC NRST (LP87524 NRST: 1.65 V to VANA)
+    # PG (open drain) pulled up by a divider from 5V_SYS (PG <= 5 V); it drives the PMIC NRST
     r_pg_pu = new Radar60_R_10k_0402
     r_pg_pu.p1 ~ v5_sys
     r_pg_pu.p2 ~ pg
+    r_pg_div = new Radar60_R_39k_0402
+    r_pg_div.p1 ~ pg
+    r_pg_div.p2 ~ gnd
     efuse.PG ~ pg
 
+    signal ilm
+    signal itimer
+    signal dvdt
+    efuse.ILM ~ ilm
+    efuse.ITIMER ~ itimer
+    efuse.DVDT ~ dvdt
     r_ilm = new Radar60_R_1k65_0402
-    r_ilm.p1 ~ efuse.ILM
+    r_ilm.p1 ~ ilm
     r_ilm.p2 ~ gnd
     c_itimer = new Radar60_C_1n_0402
-    c_itimer.p1 ~ efuse.ITIMER
+    c_itimer.p1 ~ itimer
     c_itimer.p2 ~ gnd
     c_dvdt = new Radar60_C_470p_0402
-    c_dvdt.p1 ~ efuse.DVDT
+    c_dvdt.p1 ~ dvdt
     c_dvdt.p2 ~ gnd
 
     # 5V_SYS bulk: LP87524 wants >= 22 uF common on its input rail besides 10 uF per phase (SNVSAW2B 8.2.1.2)
@@ -112,6 +125,9 @@ module PowerIn:
     trait en_uvlo has_net_name_suggestion<name="EFUSE_EN_UVLO", level="SUGGESTED">
     trait ovlo has_net_name_suggestion<name="EFUSE_OVLO", level="SUGGESTED">
     trait pgth has_net_name_suggestion<name="EFUSE_PGTH", level="SUGGESTED">
+    trait ilm has_net_name_suggestion<name="EFUSE_ILM", level="SUGGESTED">
+    trait itimer has_net_name_suggestion<name="EFUSE_ITIMER", level="SUGGESTED">
+    trait dvdt has_net_name_suggestion<name="EFUSE_DVDT", level="SUGGESTED">
 
     # fixed designators (board-design.md 2.1)
     trait efuse has_designator<designator="U5">

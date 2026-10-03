@@ -47,7 +47,20 @@ def _board_frame(mc: Macro) -> Dict[str, object]:
         phase_centres={
             n: [c.origin[0] + U1_AT[0], c.origin[1] + U1_AT[1]] for n, c in mc.columns.items()
         },
+        # In2.Cu GND the macro owns (its L3 reference): a keepout for the BGA fanout (E4) and
+        # the escape probe, which lose In2 there (review 2026-10-03)
+        in2_gnd_polygons=[[[q[0] + U1_AT[0], q[1] + U1_AT[1]] for q in poly] for poly in mc.l3_gnd],
     )
+
+
+# Not a sign-off: the column frozen here fails ANT-02's return loss at P1 (col-c, openEMS
+# 2026-10-03: RL 5.9 / 9.1 / 11.4 dB at 60.3 / 62.05 / 63.8 GHz, best match at 64.0 GHz), the L
+# x0.967 calibration came from one patch, and the bank (C2) is not solved.
+STATUS = (
+    "placeholder: geometry for integration only; the column fails ANT-02 RL at P1 (col-c 5.9/9.1/"
+    "11.4 dB at 60.3/62.05/63.8 GHz); the joint C1 sweep (w35, t_y, inset, L) and the C2 bank "
+    "solve (TX-RX isolation, coupling, phase centres, L2-L3 stitching) come before it is frozen"
+)
 
 
 def record(mc: Macro) -> Dict[str, object]:
@@ -90,10 +103,12 @@ def record(mc: Macro) -> Dict[str, object]:
             columns=cols,
             ports=mc.ports,
             region_u1_mm=mc.region,
+            status=STATUS,
             vias=dict(
                 fence=sum(1 for v in mc.vias if v[3] == "fence"),
                 launch=sum(1 for v in mc.vias if v[3] == "launch"),
                 isolation=sum(1 for v in mc.vias if v[3] == "isolation"),
+                stitch=sum(1 for v in mc.vias if v[3] == "stitch"),
             ),
             checks=mc.checks,
             geometry_sha256=hashlib.sha256(geo).hexdigest(),

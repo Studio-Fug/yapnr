@@ -5,6 +5,21 @@
 # (digital), Buck2 1.0 V/4 A (RF, with ferrite filter), Buck3 1.8 V/2.5 A (RF, with ferrite filter).
 # Per phase (SNVSAW2B 8.2.1): 0.47 uH, 10 uF input, 22 uF local output; snubber 3.9 Ohm + 390 pF on
 # every switch node because VIN > 4 V (8.2.1.4); VANA 100 nF (8.2.1.5).
+# Inductors (review 2026-10-03): the inductor must saturate above the forward current limit
+# (8.2.1.1). Buck2 (ILIM up to 6.0 A) and Buck3 (up to 5.4 A) use the IHLP-1616BZ-11 0.47 uH
+# (Isat 7.0 A, DCR 16 mOhm max); Buck0/Buck1 (ILIM up to 3.0 A) keep the MCKK2012TR47M (Isat 4.5 A;
+# its 32 mOhm DCR is above the 25 mOhm of 6.5 DCR_L: about 2.5 mW more loss at Buck1's 0.6 A rms,
+# accepted [D]).
+# Capacitance on Buck2 (review): about 183 uF nominal on the 1.0 V rail (22 uF at the buck, 2 x
+# (22 + 10) uF after the beads, 3 x (22 + 10 + 0.22) uF at the balls) against 100 uF "total output
+# capacitance, 1-phase output" (6.5). This is TI's own IWR6843ISK Rev D network (SWRR164 sheets 5
+# and 10), kept on that precedent; B4 verifies start-up, the BUCK2 ILIM flag and a 2.5 A load step
+# (open item, tools/check_schematic.py prints it as a quantified warning).
+# 1.0 V window (review R5/M6): with the 2 mOhm shunt and two beads the IR drop is 28 mV, so 1.0 V at
+# the buck gives 0.922 V worst case at the balls (0.95-1.05 V). Firmware requirement: write
+# BUCK2_VSET = 0x52 (1.025 V, SNVSAW2B Table 19) over I2C before the RF starts: 0.946 V worst case
+# (-2 % DC, -3 % step, 28 mV IR) and 1.0455 V at no load (+2 %); the step term was characterized with
+# 44 uF and this rail carries about 180 uF. B4 measures the minimum VOUT_PA in a 3-TX burst.
 # LC filters after the bucks follow TI's IWR6843ISK Rev D (SWRR164, sheet 5 "PMIC LC Filters"):
 # MPZ2012S101A with 22 uF before and 22 uF + 10 uF after. The 1.0 V rail is split into RF1 and
 # RF2/PA branches with two beads in parallel on RF2/PA and a 2 mOhm Kelvin shunt ahead of the split
@@ -17,6 +32,9 @@ import has_designator
 
 from "parts/Radar60_LP87524JRNFRQ1/Radar60_LP87524JRNFRQ1.ato" import Radar60_LP87524JRNFRQ1
 from "parts/Radar60_L_0u47_MCKK2012/Radar60_L_0u47_MCKK2012.ato" import Radar60_L_0u47_MCKK2012
+from "parts/Radar60_L_0u47_IHLP1616BZ/Radar60_L_0u47_IHLP1616BZ.ato" import Radar60_L_0u47_IHLP1616BZ
+from "parts/Radar60_C_22u_0805_DNP/Radar60_C_22u_0805_DNP.ato" import Radar60_C_22u_0805_DNP
+from "parts/Radar60_R_0R22_0402_DNP/Radar60_R_0R22_0402_DNP.ato" import Radar60_R_0R22_0402_DNP
 from "parts/Radar60_FB_MPZ2012S101A/Radar60_FB_MPZ2012S101A.ato" import Radar60_FB_MPZ2012S101A
 from "parts/Radar60_C_10u_0805/Radar60_C_10u_0805.ato" import Radar60_C_10u_0805
 from "parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato" import Radar60_C_22u_0805
@@ -78,8 +96,8 @@ module Pmic:
     signal v1v0_buck
     l_b0 = new Radar60_L_0u47_MCKK2012
     l_b1 = new Radar60_L_0u47_MCKK2012
-    l_b2 = new Radar60_L_0u47_MCKK2012
-    l_b3 = new Radar60_L_0u47_MCKK2012
+    l_b2 = new Radar60_L_0u47_IHLP1616BZ
+    l_b3 = new Radar60_L_0u47_IHLP1616BZ
     signal sw_b0
     signal sw_b1
     signal sw_b2
@@ -202,8 +220,35 @@ module Pmic:
     c_rf2_b.p1 ~ v1v0_rf2
     c_rf2_b.p2 ~ gnd
 
+    # ANA#17A (SWRZ087D: supply ringing after the RX/TX duty cycling, a ~130 kHz spur; workaround 2
+    # "damp out the ringing on the rails"): a DNP lossy shunt (0.22 Ohm + 22 uF, about sqrt(L/C) of
+    # the bead and the low-ESR ceramics [E]) on each bead-filtered radio rail, tuned at B4.
+    signal damp_rf1
+    r_damp_rf1 = new Radar60_R_0R22_0402_DNP
+    c_damp_rf1 = new Radar60_C_22u_0805_DNP
+    r_damp_rf1.p1 ~ v1v0_rf1
+    r_damp_rf1.p2 ~ damp_rf1
+    c_damp_rf1.p1 ~ damp_rf1
+    c_damp_rf1.p2 ~ gnd
+    signal damp_rf2
+    r_damp_rf2 = new Radar60_R_0R22_0402_DNP
+    c_damp_rf2 = new Radar60_C_22u_0805_DNP
+    r_damp_rf2.p1 ~ v1v0_rf2
+    r_damp_rf2.p2 ~ damp_rf2
+    c_damp_rf2.p1 ~ damp_rf2
+    c_damp_rf2.p2 ~ gnd
+    signal damp_1v8
+    r_damp_1v8 = new Radar60_R_0R22_0402_DNP
+    c_damp_1v8 = new Radar60_C_22u_0805_DNP
+    r_damp_1v8.p1 ~ v1v8
+    r_damp_1v8.p2 ~ damp_1v8
+    c_damp_1v8.p1 ~ damp_1v8
+    c_damp_1v8.p2 ~ gnd
+
     # CLKIN: grounded (spread spectrum needs the internal oscillator, SNVSAW2B 7.3.1.4);
-    # DNP option to the radio's PMIC_CLKOUT (P9) for the sync experiment
+    # DNP option to the radio's PMIC_CLKOUT (P9) for the sync experiment.
+    # MUTUALLY EXCLUSIVE (review): fitting r_clkin_sync while r_clkin_gnd stays shorts SOP2 to GND;
+    # remove r_clkin_gnd first. tools/check_schematic.py fails a build that fits both.
     r_clkin_gnd = new Radar60_R_0_0402
     r_clkin_gnd.p1 ~ u2.CLKIN
     r_clkin_gnd.p2 ~ gnd
@@ -211,25 +256,34 @@ module Pmic:
     r_clkin_sync.p1 ~ u2.CLKIN
     r_clkin_sync.p2 ~ clk_ext
 
-    # EN1..EN3 high (fitted) or low (DNP) until the J part's OTP enable mapping is read (O5)
+    # Enable mapping of the J part's OTP (SNVSAW2B Tables 11-23, 27-29, 45, 46, 49, 50; S6/O5 closed):
+    # every buck has BUCKx_EN_PIN_SELECT = 0 and EN_PIN_CTRL = 1, so EN1 alone enables all four;
+    # start-up delays after EN1 rises: Buck3 0 ms, Buck2 2 ms, Buck0 and Buck1 5 ms. EN2 and EN3
+    # are GPIO2/GPIO3 (GPIOx_SEL = 1), open-drain outputs (GPIOx_OD = 1, DIR = 1) that follow EN1
+    # 5 ms (GPIO2) and 3 ms (GPIO3) after it rises. PGOOD watches all four bucks for under- and
+    # over-voltage (PGx_SEL = 1, PGOOD_WINDOW = 1), open drain, 11 ms debounce on the valid edge.
+    # So: EN1 pulled up (DNP pull-down to hold the PMIC off); EN2/EN3 are outputs with pull-ups.
     r_en1_pu = new Radar60_R_10k_0402
     r_en1_pu.p1 ~ vin
     r_en1_pu.p2 ~ u2.EN1
     r_en1_pd = new Radar60_R_10k_0402_DNP
     r_en1_pd.p1 ~ u2.EN1
     r_en1_pd.p2 ~ gnd
+    signal en2_gpio2
+    u2.EN2 ~ en2_gpio2
     r_en2_pu = new Radar60_R_10k_0402
     r_en2_pu.p1 ~ vin
-    r_en2_pu.p2 ~ u2.EN2
-    r_en2_pd = new Radar60_R_10k_0402_DNP
-    r_en2_pd.p1 ~ u2.EN2
-    r_en2_pd.p2 ~ gnd
+    r_en2_pu.p2 ~ en2_gpio2
     r_en3_pu = new Radar60_R_10k_0402
     r_en3_pu.p1 ~ vin
     r_en3_pu.p2 ~ u2.EN3
-    r_en3_pd = new Radar60_R_10k_0402_DNP
-    r_en3_pd.p1 ~ u2.EN3
-    r_en3_pd.p2 ~ gnd
+    # GPIO2 (high 5 ms after EN1) can switch the DNP VIOIN load switch U6 instead of its own RC
+    # (ISK Rev D delays the radio's 3.3 V the same way): DNP 0 Ohm to U6 ON (radio.vio_ls_on, wired
+    # at the top level). ON then sees 5V_SYS through r_en2_pu (TPS22917 ON: up to 5.5 V).
+    signal gpio2_out
+    r_gpio2_ls = new Radar60_R_0_0402_DNP
+    r_gpio2_ls.p1 ~ en2_gpio2
+    r_gpio2_ls.p2 ~ gpio2_out
 
     # I2C (radio is the controller; LP87524 address 0x60, SNVSAW2B 7.5). Every pull-up that touches a
     # radio pin goes to the radio's IO rail (vio = 3V3_RADIO_IO): the IWR6843 IOs are not fail-safe
@@ -253,12 +307,15 @@ module Pmic:
     r_pgood_pu.p1 ~ vio
     r_pgood_pu.p2 ~ pgood
 
-    # PGOOD -> RC (10 kOhm x 1 uF = 10 ms [E]) -> radio NRESET: all rails stable before reset
-    # is released (SWRS219F 7.12.1)
-    r_rst = new Radar60_R_10k_0402
+    # PGOOD -> radio NRESET (SWRS219F 7.12.1: all rails stable before reset is released). PGOOD
+    # already waits 11 ms after the last rail is valid (PGOOD_SET_DELAY = 1, SNVSAW2B Table 46) and
+    # falls within about 7 us of a rail leaving its window, so the link is a 0 Ohm and a 100 nF
+    # filter: 10 kOhm pull-up x 100 nF = 1 ms rise, no delay on a fault (review: the former
+    # 10 kOhm + 1 uF RC held the radio running about 16 ms after a rail failed).
+    r_rst = new Radar60_R_0_0402
     r_rst.p1 ~ pgood
     r_rst.p2 ~ nreset
-    c_rst = new Radar60_C_1u_0402
+    c_rst = new Radar60_C_100n_0402
     c_rst.p1 ~ nreset
     c_rst.p2 ~ gnd
 
@@ -273,6 +330,10 @@ module Pmic:
     trait v1v0_buck has_net_name_suggestion<name="1V0_BUCK", level="SUGGESTED">
     trait v1v0_sh has_net_name_suggestion<name="1V0_SH", level="SUGGESTED">
     trait nint has_net_name_suggestion<name="PMIC_NINT", level="SUGGESTED">
+    trait en2_gpio2 has_net_name_suggestion<name="PMIC_EN2_GPIO2", level="SUGGESTED">
+    trait damp_rf1 has_net_name_suggestion<name="DAMP_1V0_RF1", level="SUGGESTED">
+    trait damp_rf2 has_net_name_suggestion<name="DAMP_1V0_RF2", level="SUGGESTED">
+    trait damp_1v8 has_net_name_suggestion<name="DAMP_1V8", level="SUGGESTED">
 
     # fixed designators (board-design.md 2.1)
     trait u2 has_designator<designator="U2">

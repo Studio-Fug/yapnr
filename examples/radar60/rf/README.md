@@ -7,9 +7,14 @@ only, FR-4 below, immersion silver, through vias only). Everything here is gener
 hand, and no TI design file is used or committed. The ball positions come from the ball names
 and the 0.65 mm pitch in TI's data sheet [TI-DS].
 
-Status: **parametric first draw, not signed off.** The dimensions are starting values for the
-openEMS sweeps; the evidence label of every number is "analytical estimate" or "solver
-prediction" (PNR-05), never "measured".
+Status: **placeholder, not signed off.** The dimensions are starting values for the openEMS
+sweeps; the evidence label of every number is "analytical estimate" or "solver prediction"
+(PNR-05), never "measured". The column frozen into `rfm1-n` fails ANT-02's return loss at its
+input (openEMS `col-c`: RL 5.9 / 9.1 / 11.4 dB at 60.3 / 62.05 / 63.8 GHz, best match at 64.0
+GHz), its length calibration (L x0.967) came from a single patch, and the bank (C2: TX-RX
+isolation, adjacent-column coupling, phase centres, the L2-L3 parallel plate) is not solved.
+Every JSON record carries this as `status`. The joint C1 sweep and the C2 solve come before the
+macro is frozen for an order.
 
 ## Contents
 
@@ -63,10 +68,12 @@ lands inside the VM.
   line leaving through the depopulated outer site to P0 at 1.3 mm [TI-RF §2.1.2], L1 GND joining
   the VSSA lands. TI's own transition uses microvias, so this one is new and is the first C1 sweep.
 - **Feeds (RFS-2/3):** 50 ohm GCPW (w 0.200, g 0.200) on 4 mil over solid L2 everywhere (D4: no
-  windows under the feeds), via fences 0.15/0.30 at 0.45 mm both sides. RX: S-bends (R 1.0) plus a
-  symmetric bump on the inner lines; P0->P1 4.199 mm for all four. TX: L-routes (R 0.6) with
-  serpentines (R >= 0.4) for TX1 (north fingers on its eastward leg) and TX2 (west fingers on its
-  northward leg); P0->P1 13.712 mm for all three. Spread 0 um (geometric).
+  windows under the feeds), via fences 0.15/0.32 at 0.45 mm both sides (0.32 mm keeps the
+  profile's 3 mil via ring; no two vias closer than 0.43 mm, the 11 mil hole to hole). RX:
+  S-bends (R 1.0) plus a symmetric bump on the inner lines; P0->P1 4.199 mm for all four. TX:
+  L-routes (R 0.6) with serpentines (R >= 0.4) for TX1 (north fingers on its eastward leg) and
+  TX2 (west fingers on its northward leg); P0->P1 13.712 mm for all three. Spread 0 um
+  (geometric).
 - **Columns (RFS-4, x7):** two inset-fed patches (W 1.45, L 1.151 = closed-form 1.190 x 0.967
   full-wave correction, inset 0.30 mm from the first openEMS calibration, notch 0.10)
   at 2.90 mm (0.60 lambda0), each on an L2 window 0.15 mm larger, fed at their facing edges by a
@@ -76,6 +83,15 @@ lands inside the VM.
   (mirrored columns), both on the board plan's lattice.
 - **Isolation (RFS-5):** a fence row between the banks; the nearest RX and TX phase centres
   are 7.8 mm (1.6 lambda0) apart.
+- **L3 (In2.Cu) GND:** only where the macro needs its reference: the RF region outside the
+  package (the two L1 pour strips), the under-package ground of rows 1-3 and A-C, and each land's
+  L2 cut-out plus 0.3 mm. Under the rest of the package In2 is the board's escape layer. The
+  outlines are in each record (`board_frame.in2_gnd_polygons`) for the BGA fanout and the escape
+  probe.
+- **L2-L3 stitching:** GND through vias (0.15/0.32) every 0.6 mm (lambda_d/4 in RO4450F at
+  62 GHz is 0.64 mm) in a ring 0.4 mm outside each bank's field box (1.4 mm from the patches)
+  and 0.4 mm inside the In2 GND boundary (west, north and east edges, the south edges of the two
+  strips), so the L2-L3 parallel plate has no open edge. Not simulated yet (C2).
 
 Floorplan changes against board-design.md §5.3 that the macro forces: RX phase centres at
 y = 10.95 (plan 9.5) and x = -5.334 ... +1.692 (plan -4.163 ... +2.863, inputs now there), TX

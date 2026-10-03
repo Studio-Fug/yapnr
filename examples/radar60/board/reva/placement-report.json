@@ -1,14 +1,279 @@
 {
   "checks": {
-    "bottom_side_parts": ["C50", "C56"],
-    "declared_bottom_roles": ["pa_decoupling"],
+    "bottom_side_parts": ["C52", "C53", "C54", "C58", "C59", "C60", "R46"],
+    "declared_bottom_roles": ["pa_bulk", "pa_cap", "pa_r", "rf2_cap"],
+    "pin_distance": {
+      "failures": [],
+      "parts": {
+        "flash.r_clk": {
+          "limit_mm": 3.0,
+          "mm": 2.07,
+          "ref": "R9",
+          "role": "qspi_series"
+        },
+        "radio.c_apll": {
+          "limit_mm": 3.5,
+          "mm": 2.25,
+          "ref": "C38",
+          "role": "radio_east"
+        },
+        "radio.c_bb[0]": {
+          "limit_mm": 8.0,
+          "mm": 3.9,
+          "ref": "C39",
+          "role": "radio_west"
+        },
+        "radio.c_bb[1]": {
+          "limit_mm": 8.0,
+          "mm": 2.65,
+          "ref": "C40",
+          "role": "radio_west"
+        },
+        "radio.c_bb_bulk": {
+          "limit_mm": 12.0,
+          "mm": 9.31,
+          "ref": "C41",
+          "role": "radio_decoupling_bulk"
+        },
+        "radio.c_clk": {
+          "limit_mm": 7.0,
+          "mm": 5.29,
+          "ref": "C43",
+          "role": "radio_decoupling_hf"
+        },
+        "radio.c_clk_bulk": {
+          "limit_mm": 12.0,
+          "mm": 7.49,
+          "ref": "C42",
+          "role": "radio_decoupling_bulk"
+        },
+        "radio.c_diff": {
+          "limit_mm": 7.0,
+          "mm": 4.03,
+          "ref": "C44",
+          "role": "radio_decoupling_hf"
+        },
+        "radio.c_dig[0]": {
+          "limit_mm": 7.0,
+          "mm": 10.08,
+          "ref": "C45",
+          "role": "radio_decoupling_hf"
+        },
+        "radio.c_dig[1]": {
+          "limit_mm": 7.0,
+          "mm": 8.35,
+          "ref": "C46",
+          "role": "radio_decoupling_hf"
+        },
+        "radio.c_dig[2]": {
+          "limit_mm": 7.0,
+          "mm": 6.14,
+          "ref": "C47",
+          "role": "radio_decoupling_hf"
+        },
+        "radio.c_dig[3]": {
+          "limit_mm": 7.0,
+          "mm": 9.04,
+          "ref": "C48",
+          "role": "radio_decoupling_hf"
+        },
+        "radio.c_dig_10n": {
+          "limit_mm": 7.0,
+          "mm": 4.28,
+          "ref": "C50",
+          "role": "radio_decoupling_hf"
+        },
+        "radio.c_dig_2u2": {
+          "limit_mm": 7.0,
+          "mm": 4.25,
+          "ref": "C49",
+          "role": "radio_decoupling_hf"
+        },
+        "radio.c_io18": {
+          "limit_mm": 7.0,
+          "mm": 6.89,
+          "ref": "C51",
+          "role": "radio_decoupling_hf"
+        },
+        "radio.c_pa": {
+          "limit_mm": 3.0,
+          "mm": 1.05,
+          "ref": "C54",
+          "role": "pa_decoupling"
+        },
+        "radio.c_pa_10u": {
+          "limit_mm": 8.0,
+          "mm": 11.83,
+          "ref": "C52",
+          "role": "pa_bulk"
+        },
+        "radio.c_pa_22u": {
+          "limit_mm": 8.0,
+          "mm": 7.03,
+          "ref": "C53",
+          "role": "pa_bulk"
+        },
+        "radio.c_rf1": {
+          "limit_mm": 8.0,
+          "mm": 8.76,
+          "ref": "C57",
+          "role": "radio_west"
+        },
+        "radio.c_rf1_10u": {
+          "limit_mm": 12.0,
+          "mm": 12.47,
+          "ref": "C55",
+          "role": "radio_decoupling_bulk"
+        },
+        "radio.c_rf1_22u": {
+          "limit_mm": 12.0,
+          "mm": 12.66,
+          "ref": "C56",
+          "role": "radio_decoupling_bulk"
+        },
+        "radio.c_rf2": {
+          "limit_mm": 3.0,
+          "mm": 0.88,
+          "ref": "C60",
+          "role": "pa_decoupling"
+        },
+        "radio.c_rf2_10u": {
+          "limit_mm": 8.0,
+          "mm": 11.67,
+          "ref": "C58",
+          "role": "pa_bulk"
+        },
+        "radio.c_rf2_22u": {
+          "limit_mm": 8.0,
+          "mm": 11.48,
+          "ref": "C59",
+          "role": "pa_bulk"
+        },
+        "radio.c_sram": {
+          "limit_mm": 7.0,
+          "mm": 6.33,
+          "ref": "C61",
+          "role": "radio_decoupling_hf"
+        },
+        "radio.c_synth": {
+          "limit_mm": 3.5,
+          "mm": 3.07,
+          "ref": "C62",
+          "role": "radio_east"
+        },
+        "radio.c_vbgap": {
+          "limit_mm": 3.5,
+          "mm": 3.44,
+          "ref": "C63",
+          "role": "radio_east"
+        },
+        "radio.c_vco": {
+          "limit_mm": 7.0,
+          "mm": 6.04,
+          "ref": "C64",
+          "role": "radio_decoupling_hf"
+        },
+        "radio.c_vio[0]": {
+          "limit_mm": 7.0,
+          "mm": 5.58,
+          "ref": "C65",
+          "role": "radio_decoupling_hf"
+        },
+        "radio.c_vio[1]": {
+          "limit_mm": 7.0,
+          "mm": 6.18,
+          "ref": "C66",
+          "role": "radio_decoupling_hf"
+        },
+        "radio.c_vio[2]": {
+          "limit_mm": 7.0,
+          "mm": 5.56,
+          "ref": "C67",
+          "role": "radio_decoupling_hf"
+        },
+        "radio.c_vio_10u": {
+          "limit_mm": 12.0,
+          "mm": 11.05,
+          "ref": "C69",
+          "role": "radio_decoupling_bulk"
+        },
+        "radio.c_vio_2u2": {
+          "limit_mm": 7.0,
+          "mm": 5.13,
+          "ref": "C68",
+          "role": "radio_decoupling_hf"
+        },
+        "radio.c_vnwa": {
+          "limit_mm": 7.0,
+          "mm": 6.91,
+          "ref": "C70",
+          "role": "radio_decoupling_hf"
+        },
+        "radio.c_xm": {
+          "limit_mm": 3.0,
+          "mm": 2.26,
+          "ref": "C71",
+          "role": "crystal_caps"
+        },
+        "radio.c_xp": {
+          "limit_mm": 3.0,
+          "mm": 2.09,
+          "ref": "C72",
+          "role": "crystal_caps"
+        },
+        "radio.r_pa": {
+          "limit_mm": 3.0,
+          "mm": 0.5,
+          "ref": "R46",
+          "role": "pa_decoupling"
+        }
+      },
+      "protection": {
+        "CANH": {
+          "esd": "D1",
+          "esd_mm": 3.66,
+          "ic": "U4",
+          "ic_mm": 8.61,
+          "nearest": "D1",
+          "nearest_mm": 3.66
+        },
+        "CANL": {
+          "esd": "D1",
+          "esd_mm": 4.1,
+          "ic": "U4",
+          "ic_mm": 9.11,
+          "nearest": "D1",
+          "nearest_mm": 4.1
+        },
+        "UART_RX_J1": {
+          "esd": "D2",
+          "esd_mm": 4.67,
+          "nearest": "D2",
+          "nearest_mm": 4.67
+        },
+        "UART_TX_J1": {
+          "esd": "D2",
+          "esd_mm": 6.24,
+          "nearest": "D2",
+          "nearest_mm": 6.24
+        },
+        "VIN_5V": {
+          "esd": "D3",
+          "esd_mm": 8.31,
+          "ic": "U5",
+          "ic_mm": 14.63,
+          "nearest": "C34",
+          "nearest_mm": 5.99
+        }
+      }
+    },
     "r2_bottom_parts_under_rf_region": [],
     "r2_parts_in_rf_region": [],
     "r4_digital_pads_in_guard": [],
     "r5_radome_violations": [],
     "r5_unknown_heights": ["RFM1"],
-    "sw_to_rf_region_mm": 7.91,
-    "sw_to_xtal_mm": 12.93
+    "sw_to_rf_region_mm": 6.68,
+    "sw_to_xtal_mm": 11.26
   },
   "constraints": {
     "fixed": {
@@ -16,6 +281,8 @@
         "courtyard_y0": 0.0,
         "x": 30.0
       },
+      "J2": 0.0,
+      "J3": 0.0,
       "MH1": 0.0,
       "MH2": 0.0,
       "MH3": 0.0,
@@ -26,121 +293,169 @@
       }
     },
     "groups": {
+      "can": {
+        "beyond": {},
+        "max_distance_mm": 6.37,
+        "members": 11,
+        "radius_mm": 7.5
+      },
+      "connector_esd": {
+        "beyond": {},
+        "max_distance_mm": 8.78,
+        "members": 2,
+        "radius_mm": 12.0
+      },
+      "connector_tvs": {
+        "beyond": {},
+        "max_distance_mm": 12.95,
+        "members": 1,
+        "radius_mm": 13.0
+      },
       "crystal": {
         "beyond": {},
-        "max_distance_mm": 8.63,
+        "max_distance_mm": 9.46,
         "members": 1,
         "radius_mm": 9.5
       },
-      "pending_can": {
-        "beyond": {
-          "C1": 32.83,
-          "C2": 39.6,
-          "C3": 39.41,
-          "C4": 19.1,
-          "R1": 18.09,
-          "R2": 13.04,
-          "R3": 12.41,
-          "R4": 14.58,
-          "R5": 26.45,
-          "R6": 31.6,
-          "R7": 14.23
-        },
-        "max_distance_mm": 39.6,
+      "crystal_caps": {
+        "beyond": {},
+        "max_distance_mm": 7.8,
+        "members": 2,
+        "radius_mm": 9.5
+      },
+      "efuse": {
+        "beyond": {},
+        "max_distance_mm": 7.88,
         "members": 11,
-        "radius_mm": 7.0
-      },
-      "pending_connector_esd": {
-        "beyond": {
-          "D1": 33.32,
-          "D2": 31.47,
-          "D3": 14.61
-        },
-        "max_distance_mm": 33.32,
-        "members": 3,
-        "radius_mm": 10.0
-      },
-      "pending_efuse": {
-        "beyond": {
-          "C28": 18.19,
-          "C29": 9.69,
-          "C30": 40.56,
-          "C31": 34.19,
-          "C32": 32.56,
-          "C33": 35.34,
-          "R30": 33.84,
-          "R31": 12.36,
-          "R32": 33.15,
-          "R33": 39.04,
-          "R34": 9.91,
-          "R35": 19.27,
-          "R36": 31.51,
-          "R37": 31.86
-        },
-        "max_distance_mm": 40.56,
-        "members": 14,
         "radius_mm": 8.0
       },
-      "pending_flash": {
-        "beyond": {
-          "C5": 17.48,
-          "R10": 26.09,
-          "R9": 29.83
-        },
-        "max_distance_mm": 29.83,
-        "members": 3,
-        "radius_mm": 7.5
+      "efuse_caps": {
+        "beyond": {},
+        "max_distance_mm": 9.79,
+        "members": 4,
+        "radius_mm": 10.0
       },
-      "pending_lvds_header": {
-        "beyond": {
-          "R8": 38.17
-        },
-        "max_distance_mm": 38.17,
-        "members": 1,
-        "radius_mm": 14.0
+      "flash": {
+        "beyond": {},
+        "max_distance_mm": 5.4,
+        "members": 5,
+        "radius_mm": 5.5
       },
       "pmic": {
         "beyond": {},
-        "max_distance_mm": 5.94,
+        "max_distance_mm": 8.49,
         "members": 4,
-        "radius_mm": 6.0
+        "radius_mm": 8.5
+      },
+      "pmic_in_caps": {
+        "beyond": {},
+        "max_distance_mm": 4.99,
+        "members": 4,
+        "radius_mm": 5.0
+      },
+      "pmic_snubbers": {
+        "beyond": {},
+        "max_distance_mm": 7.44,
+        "members": 4,
+        "radius_mm": 7.5
+      },
+      "pmic_vana": {
+        "beyond": {},
+        "max_distance_mm": 4.3,
+        "members": 1,
+        "radius_mm": 5.0
+      },
+      "qspi_series": {
+        "beyond": {},
+        "max_distance_mm": 7.59,
+        "members": 1,
+        "radius_mm": 9.5
       },
       "radio_decoupling_bulk": {
         "beyond": {},
-        "max_distance_mm": 13.88,
+        "max_distance_mm": 13.83,
         "members": 9,
         "radius_mm": 14.0
       },
       "radio_decoupling_hf": {
         "beyond": {},
-        "max_distance_mm": 10.45,
+        "max_distance_mm": 11.0,
         "members": 24,
-        "radius_mm": 10.5
+        "radius_mm": 11.0
+      },
+      "snb0": {
+        "beyond": {},
+        "max_distance_mm": 2.15,
+        "members": 1,
+        "radius_mm": 2.5
+      },
+      "snb1": {
+        "beyond": {},
+        "max_distance_mm": 1.35,
+        "members": 1,
+        "radius_mm": 2.5
+      },
+      "snb2": {
+        "beyond": {},
+        "max_distance_mm": 2.37,
+        "members": 1,
+        "radius_mm": 2.5
+      },
+      "snb3": {
+        "beyond": {},
+        "max_distance_mm": 1.82,
+        "members": 1,
+        "radius_mm": 2.5
       }
     },
     "regions": {
-      "crystal": {
-        "members": 3,
-        "outside": [],
-        "wrong_side": []
-      },
-      "jtag": {
+      "can_block": {
         "members": 1,
         "outside": [],
         "wrong_side": []
       },
-      "lvds_header": {
-        "members": 1,
-        "outside": [],
-        "wrong_side": []
-      },
-      "pa_corner": {
+      "connector_esd": {
         "members": 2,
         "outside": [],
         "wrong_side": []
       },
+      "connector_tvs": {
+        "members": 1,
+        "outside": [],
+        "wrong_side": []
+      },
+      "crystal": {
+        "members": 1,
+        "outside": [],
+        "wrong_side": []
+      },
+      "efuse_block": {
+        "members": 1,
+        "outside": [],
+        "wrong_side": []
+      },
+      "flash_block": {
+        "members": 1,
+        "outside": [],
+        "wrong_side": []
+      },
+      "pa_bulk": {
+        "members": 4,
+        "outside": [],
+        "wrong_side": []
+      },
+      "pa_cap": {
+        "members": 1,
+        "outside": [],
+        "wrong_side": []
+      },
+      "pa_r": {
+        "members": 1,
+        "outside": [],
+        "wrong_side": []
+      },
       "pmic_block": {
-        "members": 53,
+        "members": 39,
         "outside": [],
         "wrong_side": []
       },
@@ -148,162 +463,90 @@
         "members": 5,
         "outside": [],
         "wrong_side": []
+      },
+      "qspi_series": {
+        "members": 1,
+        "outside": [],
+        "wrong_side": []
+      },
+      "radio_apll": {
+        "members": 1,
+        "outside": [],
+        "wrong_side": []
+      },
+      "radio_synth": {
+        "members": 1,
+        "outside": [],
+        "wrong_side": []
+      },
+      "radio_vbgap": {
+        "members": 1,
+        "outside": [],
+        "wrong_side": []
+      },
+      "radio_west": {
+        "members": 3,
+        "outside": [],
+        "wrong_side": []
+      },
+      "rf2_cap": {
+        "members": 1,
+        "outside": [],
+        "wrong_side": []
+      },
+      "xtal_cap_n": {
+        "members": 1,
+        "outside": [],
+        "wrong_side": []
+      },
+      "xtal_cap_p": {
+        "members": 1,
+        "outside": [],
+        "wrong_side": []
       }
     }
   },
   "drc": {
     "by_type": {
-      "annular_width": 144,
-      "hole_to_hole": 2,
-      "lib_footprint_issues": 171,
-      "silk_over_copper": 6,
-      "via_diameter": 144
+      "lib_footprint_issues": 183
     },
     "examples": {
-      "annular_width": [
-        {
-          "description": "Annular width (board setup constraints min annular width 0.0762 mm; actual 0.0750 mm)",
-          "items": ["Via [GND] on F.Cu - B.Cu"],
-          "severity": "error"
-        },
-        {
-          "description": "Annular width (board setup constraints min annular width 0.0762 mm; actual 0.0750 mm)",
-          "items": ["Via [GND] on F.Cu - B.Cu"],
-          "severity": "error"
-        },
-        {
-          "description": "Annular width (board setup constraints min annular width 0.0762 mm; actual 0.0750 mm)",
-          "items": ["Via [GND] on F.Cu - B.Cu"],
-          "severity": "error"
-        },
-        {
-          "description": "Annular width (board setup constraints min annular width 0.0762 mm; actual 0.0750 mm)",
-          "items": ["Via [GND] on F.Cu - B.Cu"],
-          "severity": "error"
-        },
-        {
-          "description": "Annular width (board setup constraints min annular width 0.0762 mm; actual 0.0750 mm)",
-          "items": ["Via [GND] on F.Cu - B.Cu"],
-          "severity": "error"
-        },
-        {
-          "description": "Annular width (board setup constraints min annular width 0.0762 mm; actual 0.0750 mm)",
-          "items": ["Via [GND] on F.Cu - B.Cu"],
-          "severity": "error"
-        }
-      ],
-      "hole_to_hole": [
-        {
-          "description": "Drilled hole too close to other hole (rule 'pcbway-adv-6l-rf_via_hole_to_hole' min 0.2800 mm; actual 0.2742 mm)",
-          "items": ["Via [GND] on F.Cu - B.Cu", "Via [GND] on F.Cu - B.Cu"],
-          "severity": "warning"
-        },
-        {
-          "description": "Drilled hole too close to other hole (rule 'pcbway-adv-6l-rf_via_hole_to_hole' min 0.2800 mm; actual 0.2617 mm)",
-          "items": ["Via [GND] on F.Cu - B.Cu", "Via [GND] on F.Cu - B.Cu"],
-          "severity": "warning"
-        }
-      ],
       "lib_footprint_issues": [
         {
-          "description": "The current configuration does not include the footprint library 'Radar60_C_390p_0402'",
-          "items": ["Footprint C23"],
+          "description": "The current configuration does not include the footprint library 'Radar60_C_1u_0402'",
+          "items": ["Footprint C2"],
           "severity": "warning"
         },
         {
-          "description": "The current configuration does not include the footprint library 'Radar60_TestPad_D1'",
-          "items": ["Footprint TP14"],
+          "description": "The current configuration does not include the footprint library 'Radar60_R_100k_0402'",
+          "items": ["Footprint R52"],
           "severity": "warning"
         },
         {
-          "description": "The current configuration does not include the footprint library 'Radar60_TestPad_D1'",
-          "items": ["Footprint TP16"],
+          "description": "The current configuration does not include the footprint library 'Radar60_C_100n_0402'",
+          "items": ["Footprint C3"],
           "severity": "warning"
         },
         {
-          "description": "The current configuration does not include the footprint library 'Radar60_R_10k_0402'",
-          "items": ["Footprint R33"],
+          "description": "The current configuration does not include the footprint library 'Radar60_C_10u_0603'",
+          "items": ["Footprint C55"],
           "severity": "warning"
         },
         {
-          "description": "The current configuration does not include the footprint library 'Radar60_C_220n_0402'",
-          "items": ["Footprint C41"],
+          "description": "The current configuration does not include the footprint library 'Radar60_R_4k99_0402'",
+          "items": ["Footprint R29"],
           "severity": "warning"
         },
         {
-          "description": "The current configuration does not include the footprint library 'Radar60_C_390p_0402'",
-          "items": ["Footprint C25"],
+          "description": "The current configuration does not include the footprint library 'Radar60_C_22u_0805_DNP'",
+          "items": ["Footprint C11"],
           "severity": "warning"
-        }
-      ],
-      "silk_over_copper": [
-        {
-          "description": "Silkscreen clipped by solder mask",
-          "items": ["Segment of U1 on F.Silkscreen", "Polygon of RFM1 on F.Mask"],
-          "severity": "warning"
-        },
-        {
-          "description": "Silkscreen clipped by solder mask",
-          "items": ["Segment of U1 on F.Silkscreen", "Polygon of RFM1 on F.Mask"],
-          "severity": "warning"
-        },
-        {
-          "description": "Silkscreen clipped by solder mask",
-          "items": ["Segment of U1 on F.Silkscreen", "Polygon of RFM1 on F.Mask"],
-          "severity": "warning"
-        },
-        {
-          "description": "Silkscreen clipped by solder mask",
-          "items": ["Polygon of U1 on F.Silkscreen", "Polygon of RFM1 on F.Mask"],
-          "severity": "warning"
-        },
-        {
-          "description": "Silkscreen clipped by solder mask",
-          "items": ["Segment of U1 on F.Silkscreen", "Polygon of RFM1 on F.Mask"],
-          "severity": "warning"
-        },
-        {
-          "description": "Silkscreen clipped by solder mask",
-          "items": ["Segment of U1 on F.Silkscreen", "Polygon of RFM1 on F.Mask"],
-          "severity": "warning"
-        }
-      ],
-      "via_diameter": [
-        {
-          "description": "Via diameter (rule 'radar60_rf_fence_vias' min diameter 0.3200 mm; actual 0.3000 mm)",
-          "items": ["Via [GND] on F.Cu - B.Cu"],
-          "severity": "error"
-        },
-        {
-          "description": "Via diameter (rule 'radar60_rf_fence_vias' min diameter 0.3200 mm; actual 0.3000 mm)",
-          "items": ["Via [GND] on F.Cu - B.Cu"],
-          "severity": "error"
-        },
-        {
-          "description": "Via diameter (rule 'radar60_rf_fence_vias' min diameter 0.3200 mm; actual 0.3000 mm)",
-          "items": ["Via [GND] on F.Cu - B.Cu"],
-          "severity": "error"
-        },
-        {
-          "description": "Via diameter (rule 'radar60_rf_fence_vias' min diameter 0.3200 mm; actual 0.3000 mm)",
-          "items": ["Via [GND] on F.Cu - B.Cu"],
-          "severity": "error"
-        },
-        {
-          "description": "Via diameter (rule 'radar60_bga_gnd_vias' min diameter 0.3500 mm; actual 0.3000 mm)",
-          "items": ["Via [GND] on F.Cu - B.Cu"],
-          "severity": "error"
-        },
-        {
-          "description": "Via diameter (rule 'radar60_bga_gnd_vias' min diameter 0.3500 mm; actual 0.3000 mm)",
-          "items": ["Via [GND] on F.Cu - B.Cu"],
-          "severity": "error"
         }
       ]
     },
     "schematic_parity": 0,
-    "unconnected_items": 413,
-    "violations": 467
+    "unconnected_items": 432,
+    "violations": 183
   },
   "finish": {
     "copper_keepouts": {
@@ -312,35 +555,37 @@
       "max_corner_error_mm": 0.0,
       "rf_region_pieces": 4
     },
-    "locked_tracks_and_vias": 302,
+    "locked_tracks_and_vias": 508,
     "macro": {
       "arc": 61,
       "columns": 7,
-      "geometry_sha256": "cbe1477b7a5683b2e019da988572e5007a90bb28470cccaa9ef7961d95446d4b",
+      "geometry_sha256": "5ea92fa2f1016b7386784b476003efb02fc59e26d4ad8db7ad9c826a65d375b0",
       "segment": 83,
-      "via": 158,
-      "zone": 64
+      "status": "placeholder: geometry for integration only; the column fails ANT-02 RL at P1 (col-c 5.9/9.1/11.4 dB at 60.3/62.05/63.8 GHz); the joint C1 sweep (w35, t_y, inset, L) and the C2 bank solve (TX-RX isolation, coupling, phase centres, L2-L3 stitching) come before it is frozen",
+      "variant": "n",
+      "via": 364,
+      "zone": 74
     },
     "outline_items": 8,
     "r1_macro_copper": {
-      "board_sha256": "8301dcd5ad7b026dca9d43768c9105f3c6be38a8fa7084a56e6d1e8afe0fb2aa",
+      "board_sha256": "9d73245c8d851c7f4058ab6da70f3b49067598ebf5997837bbd1eba0c37a0009",
       "equal": true,
-      "items": [302, 302],
-      "macro_sha256": "8301dcd5ad7b026dca9d43768c9105f3c6be38a8fa7084a56e6d1e8afe0fb2aa"
+      "items": [508, 508],
+      "macro_sha256": "9d73245c8d851c7f4058ab6da70f3b49067598ebf5997837bbd1eba0c37a0009"
     },
     "u1": {
-      "at_kicad": [56.0, 48.0],
+      "at_kicad": [56.0, 48.3],
       "orientation_deg": -90.0
     },
     "writeback_plane_drops_removed": {
-      "tracks": 165,
-      "vias": 165
+      "tracks": 167,
+      "vias": 167
     }
   },
   "macro": {
-    "geometry_sha256": "cbe1477b7a5683b2e019da988572e5007a90bb28470cccaa9ef7961d95446d4b",
+    "geometry_sha256": "5ea92fa2f1016b7386784b476003efb02fc59e26d4ad8db7ad9c826a65d375b0",
     "macro_frame_u1_at": [26.0, 28.0],
-    "record_sha256": "cbe1477b7a5683b2e019da988572e5007a90bb28470cccaa9ef7961d95446d4b",
+    "record_sha256": "5ea92fa2f1016b7386784b476003efb02fc59e26d4ad8db7ad9c826a65d375b0",
     "rf_ball_vs_macro_port_um": {
       "RX1": 0.0,
       "RX2": 0.0,
@@ -356,32 +601,63 @@
   },
   "summary": {
     "audit_failures": [],
-    "audit_pass_candidates": 9,
-    "board_sha256": "5cadac9eb7bace9ba0d559ae5361d3621d1553a68759179f5ca22c170b3ba6ed",
-    "bottom_side": ["C50", "C56"],
+    "audit_pass_candidates": 12,
+    "board_sha256": "1d342ef4557043bd6c87b0f1cb227f24e34359972a43c7dac776af222c8fba43",
+    "bottom_side": ["C52", "C53", "C54", "C58", "C59", "C60", "R46"],
     "drc_by_type": {
-      "annular_width": 144,
-      "hole_to_hole": 2,
-      "lib_footprint_issues": 171,
-      "silk_over_copper": 6,
-      "via_diameter": 144
+      "lib_footprint_issues": 183
     },
     "drc_placement_types": {},
-    "drc_violations": 467,
+    "drc_violations": 183,
     "groups_ok": true,
-    "legal": 10,
-    "parts": 173,
-    "pending_block_spread_mm": {
-      "can": 39.6,
-      "connector_esd": 33.32,
-      "efuse": 40.56,
-      "flash": 29.83,
-      "lvds_header": 38.17
+    "legal": 12,
+    "macro_status": "placeholder: geometry for integration only; the column fails ANT-02 RL at P1 (col-c 5.9/9.1/11.4 dB at 60.3/62.05/63.8 GHz); the joint C1 sweep (w35, t_y, inset, L) and the C2 bank solve (TX-RX isolation, coupling, phase centres, L2-L3 stitching) come before it is frozen",
+    "macro_variant": "n",
+    "parts": 185,
+    "pending_block_spread_mm": {},
+    "pin_distance_failures": [],
+    "protection_at_j1": {
+      "CANH": {
+        "esd": "D1",
+        "esd_mm": 3.66,
+        "ic": "U4",
+        "ic_mm": 8.61,
+        "nearest": "D1",
+        "nearest_mm": 3.66
+      },
+      "CANL": {
+        "esd": "D1",
+        "esd_mm": 4.1,
+        "ic": "U4",
+        "ic_mm": 9.11,
+        "nearest": "D1",
+        "nearest_mm": 4.1
+      },
+      "UART_RX_J1": {
+        "esd": "D2",
+        "esd_mm": 4.67,
+        "nearest": "D2",
+        "nearest_mm": 4.67
+      },
+      "UART_TX_J1": {
+        "esd": "D2",
+        "esd_mm": 6.24,
+        "nearest": "D2",
+        "nearest_mm": 6.24
+      },
+      "VIN_5V": {
+        "esd": "D3",
+        "esd_mm": 8.31,
+        "ic": "U5",
+        "ic_mm": 14.63,
+        "nearest": "C34",
+        "nearest_mm": 5.99
+      }
     },
     "regions_ok": true,
     "rf_ball_vs_macro_worst_um": 0.0,
     "starts": 32,
-    "unconnected_items": 413,
-    "winner": "p008"
+    "unconnected_items": 432,
+    "winner": "p002"
   }
 }

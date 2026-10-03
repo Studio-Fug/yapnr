@@ -64,6 +64,7 @@ class Launch:
     cut_layers: Tuple[int, ...]  # copper layers removed under pad and taper
     via_x: Optional[float] = None  # L1 -> L3 transition (board B), mm from the edge
     source: str = ""
+    design: str = ""  # a 2D-designed launch, "<board id>:<region>" (launch.design); "" Samtec
 
 
 @dataclass
@@ -120,6 +121,59 @@ LAUNCHES = {
         1.27, 0.5, 3.2, 0.616, 1.0, (2, 3), via_x=7.0, source="2D, L2+L3 cut, L4 reference"
     ),
 }
+
+
+def designed_launch(key: str) -> Launch:
+    """The `Launch` record of a 2D-designed edge launch (`launch.design`)."""
+    from yapnr.rf.coupons import launch
+
+    ld = launch.design(key)
+    return Launch(
+        ld.pad_w,
+        ld.x0,
+        round(ld.x_pe - ld.x0, 4),
+        ld.gap_tab,
+        round(ld.x_te - ld.x_pe, 4),
+        ld.cut_layers,
+        source=f"2D (launch.py), {ld.conn.part}, region {ld.region}",
+        design=key,
+    )
+
+
+def launch_check_board(region: str, board_id: str = "oshpark-4l-fr408hr") -> Board:
+    """A small board that carries one region's launch on a thru and a line stick (Order 0
+    design: A01/A03 on M, B01/B03 on W), for KiCad's DRC and for a look at the geometry. It
+    is not an Order 0 board: the Order 0 catalogue (board O) builds on the same launch."""
+    from yapnr.rf.coupons import launch
+
+    key = f"{board_id}:{region}"
+    ld = launch.design(key)
+    w = launch.STICK_W[region]
+    dl = 13.0 if region == "M" else 14.0
+    sticks = [
+        Stick(f"{region}01", "thru", region, "", 2 * LAUNCH_MM, w, label=f"LC {region} THRU"),
+        Stick(
+            f"{region}02",
+            "line",
+            region,
+            "",
+            2 * LAUNCH_MM + dl,
+            w,
+            dl=dl,
+            label=f"LC {region} L{dl:g}",
+        ),
+    ]
+    return Board(
+        "OSHPARK-4L-FR408HR",
+        "O",
+        designed_launch(key),
+        sticks,
+        {},
+        notes=[
+            f"launch check, region {region}: {ld.conn.part} on a {ld.line_w} mm line",
+            "the launch is 2D-designed (launch.py), not 3D-tuned",
+        ],
+    )
 
 
 def _trl_sticks(prefix: str, n0: int, fam: str, set_id: str, dls, with_verify: bool, label: str):

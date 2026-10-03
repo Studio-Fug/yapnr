@@ -257,6 +257,56 @@ def generate(
     return out
 
 
+def run_drc(cli: str, out_dir: str, name: str) -> dict:
+    """KiCad's DRC with the zones refilled, on a copy of the project in `out_dir`."""
+    with tempfile.TemporaryDirectory() as tmp:
+        for ext in ("kicad_pcb", "kicad_pro", "kicad_dru"):
+            shutil.copy(os.path.join(out_dir, f"{name}.{ext}"), tmp)
+        rep = os.path.join(tmp, "drc.json")
+        r = _run(
+            [
+                cli,
+                "pcb",
+                "drc",
+                "--refill-zones",
+                "--format",
+                "json",
+                "--severity-all",
+                "-o",
+                rep,
+                f"{name}.kicad_pcb",
+            ],
+            tmp,
+        )
+        if not os.path.exists(rep):
+            raise RuntimeError(f"kicad-cli drc failed: {r.stderr[-2000:]}")
+        with open(rep, encoding="utf-8") as f:
+            return drc_summary(json.load(f))
+
+
+def generate_launch_check(region: str, out_dir: str, drc: bool = True) -> Dict[str, object]:
+    """The launch check board of one Order 0 region (`catalog.launch_check_board`: a thru and
+    a line stick with the Cinch 142-0701-851 launch), with the OSH Park 4-layer rules, and its
+    KiCad DRC when a headless kicad-cli is configured."""
+    b = catalog.launch_check_board(region)
+    name = f"launch-{region}"
+    os.makedirs(out_dir, exist_ok=True)
+    text, panel = layout.board_text(b.stackup, b)
+    pcb = os.path.join(out_dir, f"{name}.kicad_pcb")
+    with open(pcb, "w", encoding="utf-8") as f:
+        f.write(text)
+    with open(os.path.join(out_dir, f"{name}.kicad_pro"), "w", encoding="utf-8") as f:
+        json.dump(layout.project_json(name, layout.RULES_OSHPARK_4L), f, indent=2)
+        f.write("\n")
+    with open(os.path.join(out_dir, f"{name}.kicad_dru"), "w", encoding="utf-8") as f:
+        f.write(layout.dru_text(panel.mask_rules))
+    out: Dict[str, object] = dict(board=pcb, panel=(panel.width, panel.height), drc=None)
+    cli = kicad_cli()
+    if drc and cli:
+        out["drc"] = run_drc(cli, out_dir, name)
+    return out
+
+
 def _strip_dates(name: str, data: bytes) -> bytes:
     """Drop the creation-date comments KiCad writes into Gerber, drill and job files, so the
     package is reproducible."""

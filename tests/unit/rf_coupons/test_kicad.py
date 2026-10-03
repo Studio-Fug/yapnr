@@ -34,6 +34,14 @@ class GenerateTest(unittest.TestCase):
             self.assertIn(f"board-{letter}/fab-notes.md", names)
             self.assertTrue(any(n.endswith("-PTH.drl") for n in names))
 
+    def test_launch_check_boards_are_drc_clean(self):
+        """The Cinch 142-0701-851 launch of both Order 0 regions under OSH Park's 4-layer rules
+        (0.381 mm copper keep-back, 0.127 mm space, 0.254 mm drill to copper)."""
+        for reg in ("M", "W"):
+            out = fab.generate_launch_check(reg, os.path.join(self.dir, f"launch-{reg}"))
+            self.assertEqual(out["drc"]["violations"], {}, out["drc"]["details"][:5])
+            self.assertEqual(out["drc"]["unconnected"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

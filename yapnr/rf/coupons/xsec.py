@@ -34,7 +34,9 @@ MASK_SUB, MASK_CU = 0.030, 0.015  # mm, conformal mask over substrate and over c
 # "fit" builds the shipped tables; "fine" checks them (and is the truth of the slow synthetic
 # study). At P's nominal point the two differ by 0.005 Ω in Z0 and 4e-5 in εeff, and "fine"
 # differs from a (0.0012, 0.4, 0.10) mesh by 0.003 Ω.
-MESH = {"fit": (0.003, 0.6, 0.25), "fine": (0.002, 0.6, 0.15)}
+# "launch" sizes the edge-launch stations (launch.py): on the M pin pad with the connector tab it
+# is within 0.03 ohm of "fit" at a quarter of the elements.
+MESH = {"fit": (0.003, 0.6, 0.25), "fine": (0.002, 0.6, 0.15), "launch": (0.008, 0.6, 0.30)}
 
 
 def _need():

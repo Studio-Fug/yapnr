@@ -73,6 +73,37 @@ items), exports Gerbers and Excellon drill files and packs them with the fab not
 `fab/board-<A|B>-fab.zip`. Use the headless KiCad (DEVELOPERS.md), never the GUI bundle. The
 generator is parametric in the stackup; a new stackup needs its 2D tables first (§6).
 
+### The OSH Park edge launch (Order 0)
+
+The OSH Park 4-layer boards of Order 0 use the Cinch 142-0701-851 end-launch SMA (a 0.51 x 0.25 mm
+flat tab contact) on every port, with a launch designed in 2D for each region
+(`yapnr/rf/coupons/launch.py`, shipped as `data/launch-oshpark-4l-fr408hr.json`):
+
+- **Region M** (L1 microstrip over In1.Cu, 0.20 mm): a 0.80 mm grounded-coplanar pin pad from
+  the 0.381 mm copper keep-back to 0.4 mm past the tab, its coplanar gap solved with the tab and a
+  solder fillet on it (and solved again for the bare toe), In1.Cu cut out under the pad so it
+  references In2.Cu; then a 1.2 mm taper to the line in which the cut-out closes at constant 2D
+  impedance, and a 2 mm flare of the L1 ground to the line's 1.0 mm keep-away.
+- **Region W** (L1 over B.Cu, inner layers removed): the same pad, then a coplanar taper to the
+  3 mm line whose gap follows the 50 Ω solution until the ground has to clear the line.
+- **Ground:** the manufacturer's leg pads on F.Cu and B.Cu, vias inside and behind each pad, a row
+  0.7 mm from the edge, and fences (0.3 mm drill, 1.0 mm pitch) 0.50 mm outside the channel to
+  4 mm past the launch. The solder mask covers the pad's gap (a web against bridges) and opens over
+  the line and its keep-away from a 0.2 mm dam at the pad end.
+
+```sh
+python -m yapnr.rf.coupons.launch show                     # the numbers and the rule check
+python -m yapnr.rf.coupons.launch design --region M        # re-solve (FEA environment)
+YAPNR_KICAD_CLI=<headless kicad-cli> python -m yapnr.rf.coupons.launch board --region M --out <dir>
+```
+
+`board` writes a small check board (a thru and a line stick carrying the launch, OSH Park's
+4-layer design rules) and runs KiCad's DRC on it. The launch is not 3D-tuned: the multiline
+calibration removes it as long as it repeats. A 3D (openEMS) sweep should still check the 0.38 mm
+of bare laminate under the tab at the milled edge, the connector's set-back and the tab's height
+in the 1.73 mm slot, the solder fillet, the closing profile of the In1.Cu cut-out and the return
+path through the legs.
+
 ## 2. Ordering
 
 The owner orders; agents never do. Order each board **exactly as the product will be ordered**:
@@ -323,8 +354,9 @@ catalogue and panel, and the CLI. `test_kicad` (tag `kicad`) generates both boar
   (Garg-Bahl gap model), below a hobby VNA's noise. Its T-junctions are not modelled.
 - Discontinuities (open ends, via shorts, gaps) are closed forms (Kirschning-Jansen-Koster,
   Goldfarb-Pucel), estimates for coplanar lines; no 3D or FDTD check yet (design §12).
-- The launch and the L1-L3 via transition are not 3D-tuned; the switch-connector and u.FL
-  sticks are not generated.
+- The launches (the Samtec geometry of boards A and B, the Cinch launch of the OSH Park boards)
+  and the L1-L3 via transition are not 3D-tuned; the switch-connector and u.FL sticks are not
+  generated. Board O's own catalogue (Order 0) is not generated yet: only the launch check board.
 - The uncertainty model assumes the synthetic error model describes the lab; the verification
   line and the thru repeats scale it, but a session with unusual errors can still be
   overconfident. The held-out checks are the guard.

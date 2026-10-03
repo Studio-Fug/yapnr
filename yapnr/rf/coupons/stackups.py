@@ -209,6 +209,23 @@ STACKUPS: Dict[str, Stackup] = {
         source="jlcpcb.com/impedance (JLC06161H-2116C), read 2026-10-02",
         notes=("alternative board B'",),
     ),
+    "OSHPARK-4L-FR408HR": Stackup(
+        id="OSHPARK-4L-FR408HR",
+        board="O",
+        layers=(
+            _cu("L1", 0.04318, "L1"),
+            Layer("pp1", "prepreg", 0.1999, "FR408HR 2 x 2113", 3.61, "pp1"),
+            _cu("L2", 0.01727, "L2"),
+            Layer("core", "core", 0.9906, "FR408HR", 3.87, "core"),
+            _cu("L3", 0.01727, "L3"),
+            Layer("pp3", "prepreg", 0.1999, "FR408HR 2 x 2113", 3.61, "pp3"),
+            _cu("L4", 0.04318, "L4"),
+        ),
+        params=(),  # the Order 0 priors and 2D tables come with board O's catalogue
+        finish="ENIG",
+        source="docs.oshpark.com/services/four-layer and its construction drawing, read 2026-10-02",
+        notes=("Order 0 (OSH Park): only the launch check board uses it so far",),
+    ),
 }
 
 

@@ -26,7 +26,7 @@ from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from yapnr.rf.coupons import catalog, families, stackups
+from yapnr.rf.coupons import catalog, families, launch, stackups
 
 RAIL = 5.0
 INNER_RAIL = 3.0
@@ -99,6 +99,10 @@ class Writer:
         self.items = Items()
         self.ref = 0
         self.mask_rules: List[str] = []
+        # a 2D-designed edge launch (the OSH Park boards), else the Samtec geometry
+        self.ld = launch.design(b.launch.design) if b.launch.design else None
+        self.edge_clear = self.ld.board.keepback if self.ld else EDGE_CLEAR
+        self.via_size = (launch.VIA_D, launch.VIA_DRILL) if self.ld else (VIA_D, VIA_DRILL)
 
     # primitives -----------------------------------------------------------------------------
 
@@ -113,7 +117,7 @@ class Writer:
     def via(self, p, net, key, remove_unused=False):
         extra = " (remove_unused_layers yes) (keep_end_layers yes)" if remove_unused else ""
         self.items.vias.append(
-            f"\t(via (at {_n(p[0])} {_n(p[1])}) (size {_n(VIA_D)}) (drill {_n(VIA_DRILL)})"
+            f"\t(via (at {_n(p[0])} {_n(p[1])}) (size {_n(self.via_size[0])}) (drill {_n(self.via_size[1])})"
             f' (layers "F.Cu" "B.Cu"){extra} (net "{net}"))'
         )
 
@@ -198,6 +202,8 @@ class Writer:
 
     def connector(self, pl: Placed, side: str, net_sig: str, net_gnd: str, w_line: float, y=0.0):
         """Edge SMA at the left ("L") or right ("R") end, with the launch taper to w_line."""
+        if self.ld is not None:
+            return self.edge_launch(pl, side, net_sig, net_gnd, y)
         L = self.b.launch
         s = pl.stick
         if side == "L":
@@ -242,6 +248,84 @@ class Writer:
             ref=f"J{s.id}{side}",
         )
 
+    def edge_launch(self, pl: Placed, side: str, net_sig: str, net_gnd: str, y=0.0, x_max=None):
+        """The 2D-designed launch (`launch.LaunchDesign`) at the left ("L") or right ("R") end:
+        the Cinch 142-0701-851 footprint (pin pad, taper as a copper-only pad, leg pads on F.Cu
+        and B.Cu), the In1.Cu cut-out (region M) and the launch's ground vias. The stick draws
+        the L1 channel (`ld.channel`), the line from `ld.x_te` and the mask opening from
+        `ld.x_pe + launch.DAM_W`."""
+        ld = self.ld
+        conn = ld.conn
+        s = pl.stick
+        if side == "L":
+            at, rot = pl.p(0.0, y), 0.0
+
+            def loc(x, yy):
+                return pl.p(x, y + yy)
+
+        else:
+            at, rot = pl.p(s.length, y), 180.0
+
+            def loc(x, yy):
+                return pl.p(s.length - x, y - yy)
+
+        x0, x_pe = ld.x0, ld.x_pe
+        taper = [(x, yy) for x, yy in ld.signal_outline() if x >= x_pe - 1e-9]
+        body = [
+            f'\t\t(pad "1" smd rect (at {_n((x0 + x_pe) / 2)} 0 {_n(rot)}) (size {_n(x_pe - x0)} {_n(ld.pad_w)})'
+            f' (layers "F.Cu" "F.Mask") (net "{net_sig}") (uuid "{_u("lp1", s.id, side)}"))',
+            f'\t\t(pad "1" smd custom (at {_n(x_pe)} 0 {_n(rot)}) (size 0.1 0.1) (layers "F.Cu")'
+            f' (net "{net_sig}") (uuid "{_u("lp1t", s.id, side)}")'
+            " (options (clearance outline) (anchor rect))"
+            f" (primitives (gr_poly (pts {_poly_pts([(x - x_pe, yy) for x, yy in taper])})"
+            " (width 0) (fill yes))))",
+        ]
+        for k, (a, b_, c, d) in enumerate(ld.ground_pads()):
+            for lay in ('"F.Cu" "F.Mask"', '"B.Cu" "B.Mask"'):
+                body.append(
+                    f'\t\t(pad "2" smd rect (at {_n((a + b_) / 2)} {_n((c + d) / 2)} {_n(rot)})'
+                    f" (size {_n(b_ - a)} {_n(d - c)}) (layers {lay})"
+                    f' (net "{net_gnd}") (uuid "{_u("lp2", s.id, side, k, lay)}"))'
+                )
+        # fab drawing: the flange off the board, the legs and the tab on it
+        hb = conn.body_w / 2
+        l0, l1 = conn.leg_y
+        fab = [((-conn.flange_t, -hb), (0.0, hb))]
+        fab += [((0.0, sg * l0), (conn.leg_len, sg * l1)) for sg in (-1, 1)]
+        fab += [((0.0, -conn.tab_w / 2), (conn.tab_len, conn.tab_w / 2))]
+        for k, (p, q) in enumerate(fab):
+            body.append(
+                f"\t\t(fp_rect (start {_n(p[0])} {_n(p[1])}) (end {_n(q[0])} {_n(q[1])})"
+                f' (stroke (width 0.05) (type solid)) (fill no) (layer "F.Fab")'
+                f' (uuid "{_u("lfab", s.id, side, k)}"))'
+            )
+        # courtyard on the board (the connector is fitted after break-out)
+        cy = conn.lay_d / 2 + 0.05
+        body.append(
+            f"\t\t(fp_rect (start 0 {_n(-cy)}) (end {_n(conn.lay_e + 0.25)} {_n(cy)})"
+            " (stroke (width 0.05) (type solid))"
+            f' (fill no) (layer "F.CrtYd") (uuid "{_u("lcrt", s.id, side)}"))'
+        )
+        ref = self.footprint(
+            "SMA_EdgeLaunch_Cinch_142-0701-851",
+            at,
+            rot,
+            body,
+            ("lconn", s.id, side),
+            ref=f"J{s.id}{side}",
+        )
+        cut = ld.cut_profile()
+        if cut:
+            lays = [self.layers[k - 1] for k in ld.cut_layers]
+            pts = [loc(x, -c) for x, c in cut] + [loc(x, c) for x, c in reversed(cut)]
+            ded = [p for i, p in enumerate(pts) if i == 0 or math.dist(p, pts[i - 1]) > 1e-6]
+            self.keepout(lays, ded, (s.id, "lcut", side))
+        if x_max is None and s.ports == 2:
+            x_max = s.length / 2 - 0.45  # the two launches' fences meet mid-stick
+        for k, v in enumerate(ld.vias(s.height / 2, x_max)):
+            self.via(loc(v.x, v.y), net_gnd, (s.id, "lvia", side, k))
+        return ref
+
     def anchor(self, pl: Placed, p, w, net, key, layer="F.Cu"):
         """Ends an open track so it is not a dangling end: a copper-only pad on F.Cu, a small
         zone of the track's net on an inner layer (an inner-only SMD pad is a questionable
@@ -258,9 +342,10 @@ class Writer:
         ]
         return self.footprint("Anchor", pl.p(*p), 0, body, ("anchor",) + key)
 
-    def stick_zones(self, pl: Placed, net, layers=None, x_inset=EDGE_CLEAR):
+    def stick_zones(self, pl: Placed, net, layers=None, x_inset=None):
         s = pl.stick
-        hh = s.height / 2 - EDGE_CLEAR
+        x_inset = self.edge_clear if x_inset is None else x_inset
+        hh = s.height / 2 - self.edge_clear
         pts = [
             pl.p(x_inset, -hh),
             pl.p(s.length - x_inset, -hh),
@@ -368,6 +453,8 @@ def build_stick(wr: Writer, pl: Placed):
     sig = wr.net(f"RF_{s.id}")
     gnd = wr.net(f"GND_{s.id}")
     kind = s.kind
+    if wr.ld is not None:
+        return launch_stick(wr, pl)
     if kind in ("dc",):
         return dc_stick(wr, pl)
     if kind == "xsec":
@@ -446,6 +533,75 @@ def build_stick(wr: Writer, pl: Placed):
         keep_boxes = coupled_stick(wr, pl, gnd, _profile_launch(b, rp1, wP, gP))
     wr.stitch(pl, gnd, (s.id, "st"), keep_boxes)
     wr.labels(pl)
+
+
+def launch_stick(wr: Writer, pl: Placed):
+    """A thru or line stick of a board with a 2D-designed launch (`Writer.ld`, the OSH Park
+    Order 0 boards): both launches, the line of the launch's family between them, the L1
+    channel at the region's keep-away, the mask opened over the line and its channel between
+    the dams, a sparse fence (every 3 mm) along the line past the launch fences, and, on W
+    sticks, In1/In2 removed except a perimeter ring. The other Order 0 structures belong to
+    board O's catalogue."""
+    s = pl.stick
+    ld = wr.ld
+    if s.kind not in ("thru", "line", "verify"):
+        raise NotImplementedError(f"stick kind {s.kind!r} on a designed-launch board")
+    sig = wr.net(f"RF_{s.id}")
+    gnd = wr.net(f"GND_{s.id}")
+    L, half = s.length, s.height / 2
+    wr.stick_zones(pl, gnd)
+    if ld.region == "W":
+        inner = wr.layers[1:-1]
+        r = min(launch.W_RING, half - 1.0)
+        wr.keepout(inner, [pl.p(0, -r), pl.p(L, -r), pl.p(L, r), pl.p(0, r)], (s.id, "wring"))
+    wr.connector(pl, "L", sig, gnd, ld.line_w)
+    wr.connector(pl, "R", sig, gnd, ld.line_w)
+    prof = ld.channel(x_to=L / 2)
+    prof = prof + _mirror(prof, L)[1:]
+    wr.channel(pl, prof, (s.id, "ch"))
+    wr.seg(
+        pl.p(ld.x_te - 0.05, 0), pl.p(L - ld.x_te + 0.05, 0), ld.line_w, "F.Cu", sig, (s.id, "line")
+    )
+    # mask open over the line and its channel, from dam to dam
+    xm = ld.x_pe + launch.DAM_W
+    inside = [(x, hw) for x, hw in prof if xm < x < L - xm]
+    mprof = [(xm, ld.channel_at(xm))] + inside + [(L - xm, ld.channel_at(xm))]
+    top = [pl.p(x, -hw) for x, hw in mprof]
+    bot = [pl.p(x, hw) for x, hw in reversed(mprof)]
+    wr.mask_opening(top + bot, f"MO_{s.id}")
+    # the line's own fence: every 3 mm past the launch fences
+    xf = ld.x_end + launch.FENCE_LINE + 1.5
+    if L - 2 * xf > 0:
+        wr.fence(pl, prof, gnd, (s.id, "lf"), pitch=3.0, off=launch.FENCE_OFF, x_lim=(xf, L - xf))
+    xl = ld.conn.lay_e + 1.2
+    hw_max = max(hw for _, hw in prof)
+    keep = [(0, xl, -half, half), (L - xl, L, -half, half), (0, L, -hw_max - 0.8, hw_max + 0.8)]
+    wr.stitch(pl, gnd, (s.id, "st"), keep)
+    launch_labels(wr, pl, xl)
+
+
+def launch_labels(wr: Writer, pl: Placed, x_free: float):
+    """Label and reference-plane ticks of a designed-launch stick: the text sits 0.9-1.9 mm
+    from the long edge (outside the W mask opening and the M leg pads' x range), between
+    `x_free` and the next reference plane, shortened to the stick id when the full label does
+    not fit; the ticks are 0.5-1.3 mm from both long edges at each reference plane."""
+    s = pl.stick
+    hh = s.height / 2
+    rp1, rp2 = s.rp
+    text = s.label or s.id
+    x0 = x_free if x_free < rp1 - 0.6 else rp1 + 0.6
+    room = (rp1 if x0 < rp1 else rp2) - 0.3 - x0
+    if label_width(text) > room:
+        text = s.id
+    wr.text(text, pl.p(x0, -hh + 1.4), ("lab", s.id), size=1.0)
+    for x in s.rp:
+        for sgn in (-1, 1):
+            wr.gr_line(
+                pl.p(x, sgn * (hh - 0.5)),
+                pl.p(x, sgn * (hh - 1.3)),
+                "F.SilkS",
+                ("rp", s.id, x, sgn),
+            )
 
 
 def ring_points(s: catalog.Stick):
@@ -1086,7 +1242,8 @@ def board_text(
     wr.text(f"yapnr RF coupon {b.letter} rev {revision}", (x0 + 6, y0 + 3.2), ("title",), size=1.5)
     wr.text(f"{st.id}", (x0 + 70, y0 + 3.2), ("stackup",), size=1.5)
     wr.text("LOT ____  SN ____", (x0 + 110, y0 + 3.2), ("lot",), size=1.2)
-    wr.text("JLCJLCJLCJLC", (x1 - 40, y1 - 1.8), ("orderno",), size=1.0)
+    if wr.ld is None:
+        wr.text("JLCJLCJLCJLC", (x1 - 40, y1 - 1.8), ("orderno",), size=1.0)
     nets = "\n".join(f'\t(net {i} "{n}")' for i, n in enumerate([""] + wr.items.nets))
     head = "\n".join(
         [
@@ -1132,9 +1289,23 @@ def dru_text(mask_rules: Sequence[str]) -> str:
     return "\n".join(out) + "\n"
 
 
-def project_json(name: str) -> dict:
+# OSH Park 4-layer (the oshpark-4l fab profile): 5/5 mil, 10 mil drill, 4 mil ring, 10 mil drill
+# to inner copper, copper 15 mil from every milled edge
+RULES_OSHPARK_4L = {
+    "min_clearance": 0.127,
+    "min_copper_edge_clearance": 0.381,
+    "min_hole_clearance": 0.254,
+    "min_hole_to_hole": 0.254,
+    "min_through_hole_diameter": 0.254,
+    "min_track_width": 0.127,
+    "min_via_annular_width": 0.1016,
+    "min_via_diameter": 0.4572,
+}
+
+
+def project_json(name: str, rules_override: Optional[dict] = None) -> dict:
     """The .kicad_pro with the design rules DRC checks (JLC multilayer capabilities, conservative;
-    see the fab notes)."""
+    see the fab notes), or with `rules_override` (RULES_OSHPARK_4L)."""
     rules = {
         "allow_blind_buried_vias": False,
         "allow_microvias": False,
@@ -1158,6 +1329,7 @@ def project_json(name: str) -> dict:
         "solder_mask_to_copper_clearance": 0.0,
         "use_height_for_length_calcs": True,
     }
+    rules.update(rules_override or {})
     return {
         "board": {
             "design_settings": {

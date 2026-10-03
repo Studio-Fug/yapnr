@@ -513,16 +513,15 @@ def _place_route_loop(
             )
             report.connection_history.append(missing)
             if folder:
-                (folder / "routes.json").write_text(
-                    json.dumps(
-                        dict(
-                            tracks=broute.tracks,
-                            vias=broute.vias,
-                            unrouted=broute.result.unrouted,
-                            deferred=report.deferred_nets,
-                        )
-                    )
+                payload = dict(
+                    tracks=broute.tracks,
+                    vias=broute.vias,
+                    unrouted=broute.result.unrouted,
+                    deferred=report.deferred_nets,
                 )
+                if getattr(broute, "via_spans", None):  # blind, buried, micro (pnr.via_policy)
+                    payload["via_spans"] = broute.via_spans
+                (folder / "routes.json").write_text(json.dumps(payload))
                 (folder / "result.json").write_text(
                     json.dumps(
                         dict(

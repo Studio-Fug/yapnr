@@ -147,31 +147,57 @@ the design's declared kinds (`via_policy.allowed`: `through`, `blind`, `buried`,
 `micro`, with an optional `microvia: {diameter_mm, drill_mm}`) less every kind the
 board's `.kicad_dru` disallows (`blind_via`, `buried_via`, `micro_via` or `via`; a
 ban limited by a layer or condition counts everywhere), on the board's stackup
-block (copper layers and dielectric thickness). Nothing declared, or every other
-kind banned, means through vias only, exactly as before. Under a policy:
+block (copper layers, dielectric thickness and kind, `core` or `prepreg`).
+Nothing declared, every other kind banned, or no other span worth its drill pair
+on this board means through vias only, exactly as before. Under a policy:
 
+- a span is only used when it can be built on the declared stack: a laser
+  microvia joins two adjacent layers, one of them outer, through a dielectric no
+  deeper than its drill (aspect ratio 1:1; KiCad accepts any pair, the engine
+  keeps to these); a controlled-depth blind via is drilled from an outer layer no
+  deeper than its drill; a laminated blind or buried via is the through hole of a
+  sub-laminate, so each end faces a prepreg bond line or the board's face, never
+  the other face of a core. On the 6-layer rungs (prepreg / core In1-In2 /
+  prepreg / core In3-In4 / prepreg) F.Cu-In3.Cu, In1.Cu-In3.Cu and In2.Cu-B.Cu
+  cannot be built;
+- the board's spans form one build (`via_policy.build`, in `rules.json` and the PnR
+  report's `escape_diagnostics.via_build`): its laminated spans nest or are
+  disjoint (one sequential-lamination tree) and every span is one more drill pair,
+  priced as two through vias (`via_policy.drill_pair_cost` overrides it). The
+  build is the cheapest for what the parts need (`pnr.via_policy.board_needs`:
+  plane drops, signal layer changes, return ties), so a span enters only where
+  its vias save more than its drill pair; on the 6-layer chaser rungs that is
+  F.Cu-In1.Cu (a microvia, or a controlled-depth blind via) and F.Cu-In2.Cu;
 - a via spans two copper layers and occupies only the layers between them: the
   router tests, reserves and prices it there (blind F.Cu to In2.Cu leaves B.Cu
   free), at a keep-out from its own diameter. Its price is the via cost times
   `0.5 + 0.5 * depth / board thickness` (through: 1.0). A layer change takes the
-  cheapest allowed span covering both layers; hole spacing is kept between all
-  vias whatever their spans, and same-net vias at one site whose spans share a
-  layer are one barrel;
-- a microvia joins two adjacent layers, one of them outer, whose dielectric is no
-  deeper than its drill (aspect ratio 1:1); KiCad accepts any pair, the engine
-  keeps to these. Its size is the declared one, else the project's net class
-  microvia, widened to the board's minimum annular width (which KiCad applies to
-  microvias too); blind and buried vias take the routed via size;
-- a plane pad drops to its net's plane nearest the pad (a microvia when one
-  qualifies). A net with several plane layers (two ground planes) gets two
-  connections on each: drops are deepened where clear, else buried stitches are
-  placed beside them. The counts are in the PnR report
-  (`escape_diagnostics.plane_layer_connections`) and the write-back log; KiCad
-  keeps a plane layer without any connection filled, floating, and its DRC does
-  not flag it;
+  cheapest span of the build covering both layers; hole spacing is kept between
+  all vias whatever their spans, two nets' vias never share a site, and same-net
+  vias at one site whose spans share a layer are one barrel. A microvia's size is
+  the declared one, else the project's net class microvia, widened to the board's
+  minimum annular width (which KiCad applies to microvias too); blind and buried
+  vias take the routed via size;
+- a plane pad drops to its net's plane nearest the pad. A signal via whose ends
+  are referenced (the plane nearest above and below each) to two plane layers of
+  one net (two ground planes) gets a via of that net joining both within
+  `return_tie.max_mm`: the distance whose return detour, out and back, is delayed
+  no more than `0.1 * t_rise` (the stub rule's k), with `t_rise` the design's
+  `via_policy.t_rise_ns` or 1 ns (an assumption, reported) and the stack's
+  dielectric constant (7.07 mm at 1 ns and 4.5). A drop nearby is deepened where
+  clear, else a tie via of the build's span goes at the clear site nearest the
+  signal via; every plane layer of such a net is joined at least once. The PnR
+  report gives each plane layer's connections
+  (`escape_diagnostics.plane_layer_connections`) and the rule, the ties needed,
+  met and added, any unmet with its nearest tie, and the signal vias whose two
+  references are planes of different nets (`escape_diagnostics.return_ties`). A
+  plane layer with no connection at all keeps its fill in KiCad 10, and its DRC
+  reports it as isolated copper;
 - `routes.json` lists each non-through via in `via_spans` (`[net, x, y, top,
   bottom, kind]`); write-back emits the KiCad via type and layer pair, and fixed
-  copper keeps blind, buried and micro vias (each reserves only its span).
+  copper keeps blind, buried and micro vias (each reserves only its span). The
+  packed maze kernel (`PNR_PACKED_MAZE=1`), the native KiCad repair loop and the
+  hierarchical driver add through vias only; the first and last say so on stderr.
 
 ### `fixed` — lock a pose (hard)
 

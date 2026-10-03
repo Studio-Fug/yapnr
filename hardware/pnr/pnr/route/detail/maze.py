@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import heapq
 import os
+import sys
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
@@ -107,6 +108,20 @@ def remaining_connections(access, edges):
     return max(0, len({find(c) for c in access}) - 1)
 
 
+_PACKED_NOTED = []
+
+
+def _note_packed_fallback():
+    """Say once per process that the packed kernel (through vias only) is skipped
+    for a grid with a via model (PNR_PACKED_MAZE=1 asks for it)."""
+    if not _PACKED_NOTED:
+        _PACKED_NOTED.append(True)
+        sys.stderr.write(
+            "pnr.maze: PNR_PACKED_MAZE=1 ignored for a board with blind, buried or micro "
+            "vias (the packed kernel models through vias only); the Python search runs\n"
+        )
+
+
 def _astar(
     grid: RouteGrid,
     sources: Set[Cell],
@@ -129,6 +144,8 @@ def _astar(
     pass may cross at a price) are passable but expensive. Returns the path or None."""
     # The packed kernel models through vias only: a grid with a via model (blind,
     # buried or micro vias allowed) searches here.
+    if os.environ.get("PNR_PACKED_MAZE") == "1" and getattr(grid, "via_model", None) is not None:
+        _note_packed_fallback()
     if os.environ.get("PNR_PACKED_MAZE") == "1" and getattr(grid, "via_model", None) is None:
         from .packed_maze import astar
 

@@ -465,6 +465,7 @@ def coarse_ladder_trace(case_dir):
     layers = header["copper_layers"]
     fab = rules.get("fab") or {}
     via = [um(fab.get("via_diameter_mm", 0.6)), um(fab.get("via_drill_mm", 0.3))]
+    sizes = (rules.get("via_policy") or {}).get("sizes") or {}
 
     def blob(obj):
         import hashlib
@@ -501,10 +502,20 @@ def coarse_ladder_trace(case_dir):
                 row = [layers.index(layer) if layer in layers else 0]
                 row += [um(a[0]), um(a[1]), um(b[0]), um(b[1]), um(w)]
                 per_net.setdefault(net, ([], []))[0].append(row)
+            # A blind, buried or micro via (routes["via_spans"], pnr.via_policy) is
+            # drawn at its own size, one entry per barrel; the trace records no
+            # layer pair.
+            spans = {}
+            for net, x, y, _top, _bottom, kind in routes.get("via_spans", []):
+                spans.setdefault((net, x, y), []).append(kind)
             for net, x, y in routes.get("vias", []):
                 if net not in per_net:
                     order.append(net)
-                per_net.setdefault(net, ([], []))[1].append([um(x), um(y)] + via)
+                for kind in spans.get((net, x, y)) or [None]:
+                    size = sizes.get(kind)
+                    per_net.setdefault(net, ([], []))[1].append(
+                        [um(x), um(y)] + ([um(size[0]), um(size[1])] if size else via)
+                    )
             unrouted = set(routes.get("unrouted", []))
             done = 0
             nets = {}

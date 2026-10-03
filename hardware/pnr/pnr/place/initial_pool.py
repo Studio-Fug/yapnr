@@ -745,17 +745,15 @@ def select_initial_placement(
         evaluated.append(candidate)
         report["route_finalists"].append(name)
         if root:
-            (root / name / "routes.json").write_text(
-                json.dumps(
-                    dict(
-                        tracks=route.tracks,
-                        vias=route.vias,
-                        unrouted=route.result.unrouted,
-                        deferred=sorted(route.deferred_nets),
-                    ),
-                    indent=2,
-                )
+            payload = dict(
+                tracks=route.tracks,
+                vias=route.vias,
+                unrouted=route.result.unrouted,
+                deferred=sorted(route.deferred_nets),
             )
+            if getattr(route, "via_spans", None):  # blind, buried, micro (pnr.via_policy)
+                payload["via_spans"] = route.via_spans
+            (root / name / "routes.json").write_text(json.dumps(payload, indent=2))
             (root / name / "routing-result.json").write_text(
                 json.dumps(
                     dict(

@@ -1280,6 +1280,12 @@ def emit_routes(
     def code(net_name):
         return net_code.get(net_name, 0)
 
+    # A declared fanout (pnr.route.detail.fanout) sizes its own vias and may lock
+    # its copper; both keys are absent otherwise.
+    sizes = {(n, x, y): (d, h) for n, x, y, d, h in routes.get("via_sizes", [])}
+    locked = routes.get("locked") or {}
+    locked_tracks = {(n, la, tuple(a), tuple(b)) for n, la, a, b in locked.get("tracks", [])}
+    locked_vias = {tuple(v) for v in locked.get("vias", [])}
     n_tracks = 0
     for net, layer, (x0, y0), (x1, y1), w in routes.get("tracks", []):
         t = pcbnew.PCB_TRACK(board)
@@ -1290,6 +1296,8 @@ def emit_routes(
             layer_id[layer] = copper_layer(board, layer)
         t.SetLayer(layer_id[layer])
         t.SetNetCode(code(net))
+        if locked_tracks and (net, layer, (x0, y0), (x1, y1)) in locked_tracks:
+            t.SetLocked(True)
         board.Add(t)
         n_tracks += 1
     # Profile 5B only: a via the grid placed inside a same-net SMD pad is the
@@ -1322,13 +1330,20 @@ def emit_routes(
             if smd
             else None
         )
-        v.SetFrontWidth(
-            _nm(size[0]) if size else via_d
-        )  # from the fab profile; radius-1 keep-out ⇒ DRC-clean
-        v.SetDrill(_nm(size[1]) if size else via_drill)  # via-via + via-track at the grid pitch
+        own = sizes.get((net, x, y))
+        if own is not None and size is None:
+            v.SetFrontWidth(_nm(own[0]))  # a fanout via class (pnr.fanout)
+            v.SetDrill(_nm(own[1]))
+        else:
+            v.SetFrontWidth(
+                _nm(size[0]) if size else via_d
+            )  # from the fab profile; radius-1 keep-out ⇒ DRC-clean
+            v.SetDrill(_nm(size[1]) if size else via_drill)  # via-via + via-track at the grid pitch
         v.SetNetCode(code(net))
         if size:
             style_in_pad_via(g, v)
+        if (net, x, y) in locked_vias:
+            v.SetLocked(True)
         board.Add(v)
     board.BuildConnectivity()
     return n_tracks

@@ -521,6 +521,7 @@ def _place_route_loop(
                 )
                 if getattr(broute, "via_spans", None):  # blind, buried, micro (pnr.via_policy)
                     payload["via_spans"] = broute.via_spans
+                payload.update(broute.extras())  # a declared fanout's (pnr.fanout)
                 (folder / "routes.json").write_text(json.dumps(payload))
                 (folder / "result.json").write_text(
                     json.dumps(

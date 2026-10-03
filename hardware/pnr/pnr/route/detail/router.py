@@ -153,10 +153,24 @@ class BoardRoute:
     stack_warnings: List[str] = field(default_factory=list)
     # Pair / group length tuning report (pnr.route.detail.tune); None without sets.
     length_report: Optional[list] = None
+    # Declared fanouts only (pnr.route.detail.fanout), else empty: the emitted vias
+    # whose size is not the fab default, [net, x, y, diameter, drill], and the
+    # copper written locked, {"tracks": [[net, layer, a, b]], "vias": [[net, x, y]]}.
+    via_sizes: List[list] = field(default_factory=list)
+    locked: dict = field(default_factory=dict)
 
     @property
     def fully_routed(self) -> bool:
         return self.result.fully_routed
+
+    def extras(self) -> dict:
+        """The ``routes.json`` keys a declared fanout adds (empty without one)."""
+        out = {}
+        if self.via_sizes:
+            out["via_sizes"] = self.via_sizes
+        if self.locked:
+            out["locked"] = self.locked
+        return out
 
     def summary(self) -> str:
         return "%s; %d track segs, %d vias (planes: %d nets)" % (
@@ -875,6 +889,21 @@ def route_board(
             outset=via_radius_mm + clearance_mm + fab["track_width_mm"],
         )
     drop_span = _drop_span(vm, stack) if drop_widths else None
+    # Declared fanouts (rules["fanouts"]): their balls' copper is planned exactly and
+    # reserved before any other escape; the planner below leaves those balls alone.
+    fanouts = None
+    if rules and rules.get("fanouts"):
+        from .fanout import plan_fanouts
+
+        fanouts = plan_fanouts(
+            grid,
+            graph,
+            rules,
+            plane_nets=set(drop_widths),
+            signal_nets=signal_nets,
+            via_keepout=via_keepout,
+            fixed_copper=fixed_copper,
+        )
     plan = plan_escapes(
         grid,
         graph,
@@ -892,7 +921,17 @@ def route_board(
         drop_pad_width=pad_drop_width,
         plane_access=plane_access,
         drop_span=drop_span,
+        **({"skip_pads": fanouts.skip_pads} if fanouts is not None else {}),
     )
+    if fanouts is not None:
+        plan.escapes.extend(fanouts.escapes)
+        for n, cells in sorted(fanouts.access.items()):
+            plan.net_access.setdefault(n, []).extend(cells)
+        plan.blocked_nets |= fanouts.blocked_nets
+        for n, sites in sorted(fanouts.drop_failures.items()):
+            plan.drop_failures.setdefault(n, []).extend(sites)
+        grid.protected_escape_access.update(fanouts.protected)
+        plan.diagnostics["fanout"] = fanouts.report
     from pnr.stack import assess
 
     stack_warnings = list(assess(rules, getattr(graph, "stack", None))[1])
@@ -964,6 +1003,8 @@ def route_board(
     for net, sites in plan.drop_failures.items():
         # A plane pad without a drop is localized at the pad for the placement loop.
         board.failure_sites[net] = sorted(set(board.failure_sites.get(net, [])) | set(sites))
+    for net, sites in sorted((fanouts.failure_sites if fanouts is not None else {}).items()):
+        board.failure_sites[net] = sorted(set(board.failure_sites.get(net, [])) | set(sites))
     if os.environ.get("PNR_LOCAL_PRESSURE") == "1":
         from .pressure import localized_pressure
 
@@ -1004,15 +1045,24 @@ def route_board(
 
     # Emit each routed pad's escape geometry (on-layer stub, via-in-pad, or dog-bone
     # stub + via) so the net is electrically whole from the real pad centre.
+    emitted = []  # declared fanouts' escapes that were emitted
     for esc in plan.escapes:
         if esc.net in drop_widths:
             # A plane drop needs no maze route: its via reaches the plane(s).
             _emit_escape(board, esc, grid, esc.width or drop_widths[esc.net], span_at)
+            if esc.fanout and esc.kind != "blocked":
+                emitted.append(esc)
             continue
         rn = result.nets.get(esc.net)
         if rn is None or esc.access not in set(rn.cells):
             continue
-        _emit_escape(board, esc, grid, net_width.get(esc.net, track_width_mm), span_at)
+        # A declared fanout's escape keeps the width it was planned at.
+        w = esc.width if esc.fanout else net_width.get(esc.net, track_width_mm)
+        _emit_escape(board, esc, grid, w, span_at)
+        if esc.fanout:
+            emitted.append(esc)
+    if fanouts is not None:
+        _fanout_extras(board, emitted, fanouts, fab)
     # Zero-length pad-to-grid stubs add no connection and become dangling items.
     board.tracks = [t for t in board.tracks if math.dist(t[2], t[3]) >= 1e-6]
     board.vias = list(dict.fromkeys(board.vias))
@@ -1045,6 +1095,32 @@ def route_board(
     if route_trace is not None:
         route_trace.end(board)
     return board
+
+
+def _fanout_extras(board: BoardRoute, emitted, fanouts, fab) -> None:
+    """Record the emitted fanout vias that are not the fab's default size, and the
+    copper of the fanouts written locked (``lock``), for writeback."""
+    vias = set()
+    for esc in emitted:
+        if esc.via_xy is not None:
+            vias.add((esc.net, *esc.via_xy))
+    sizes = []
+    for key in sorted(vias):
+        d, h = fanouts.via_sizes.get(key, (fab["via_diameter_mm"], fab["via_drill_mm"]))
+        if abs(d - fab["via_diameter_mm"]) > 1e-9 or abs(h - fab["via_drill_mm"]) > 1e-9:
+            sizes.append([key[0], key[1], key[2], d, h])
+    board.via_sizes = sizes
+    locked = [esc for esc in emitted if esc.fanout in fanouts.locked]
+    if locked:
+        board.locked = dict(
+            tracks=[
+                [esc.net, layer, list(a), list(b)]
+                for esc in locked
+                for layer, a, b in esc.segments
+                if math.dist(a, b) >= 1e-6
+            ],
+            vias=sorted([esc.net, *esc.via_xy] for esc in locked if esc.via_xy is not None),
+        )
 
 
 def _emit_escape(board: BoardRoute, esc, grid: RouteGrid, w: float, span_at=None) -> None:

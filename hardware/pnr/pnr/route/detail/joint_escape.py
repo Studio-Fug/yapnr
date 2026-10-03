@@ -652,6 +652,7 @@ def plan_joint_escapes(
     drop_pad_width=None,
     plane_access=None,
     drop_span=None,
+    skip_pads=None,
 ):
     """Choose every terminal's exit jointly. ``drop_widths`` (net -> entry width)
     names the nets with a dedicated plane: each of their surface pads becomes a
@@ -661,7 +662,8 @@ def plan_joint_escapes(
     drop's stub is ``drop_pad_width[(ref, pad)]`` wide (else its net's width), and
     ``plane_access`` (:class:`pnr.stack.PlaneAccess`) keeps its via inside the
     net's own plane fill. ``drop_span(net, side)``, when given, is the drop via's
-    span from the pad's grid layer (pnr.via_policy.Span; None: through)."""
+    span from the pad's grid layer (pnr.via_policy.Span; None: through).
+    ``skip_pads`` ((ref, pad) pairs) get no exit here: a declared fanout holds them."""
     from .escape import Escape, EscapePlan
 
     drop_widths = drop_widths or {}
@@ -677,6 +679,8 @@ def plan_joint_escapes(
     for comp in sorted(graph.components, key=lambda c: c.ref):
         side = grid.side_layer(comp.side)
         for index, ((name, net, rect), pad) in enumerate(zip(pad_rects(comp), comp.pads)):
+            if skip_pads and (comp.ref, name) in skip_pads:
+                continue
             if net in drop_widths and net not in net_names:
                 if pad.through_hole:
                     continue  # the plated barrel already reaches every plane

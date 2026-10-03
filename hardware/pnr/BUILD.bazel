@@ -753,6 +753,14 @@ py_test(
 )
 
 py_test(
+    name = "fanout_route_test",
+    size = "medium",
+    srcs = ["tests/test_fanout_route.py"],
+    main = "tests/test_fanout_route.py",
+    deps = [":pnr", ":pnr_detail", ":pnr_route", ":pnr_place"],
+)
+
+py_test(
     name = "fanout_reserve_test",
     size = "small",
     srcs = ["tests/test_fanout_reserve.py"],

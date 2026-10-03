@@ -51,6 +51,9 @@ class Escape:
     width: Optional[float] = None  # a plane drop's stub width (its pad's entry width)
     # The via's span (pnr.via_policy.Span) under the grid's via model; None: through.
     via_span: Optional[object] = None
+    # The declared fanout (pnr.route.detail.fanout) this escape belongs to: it is
+    # emitted at its own ``width``. None for every planned escape.
+    fanout: Optional[str] = None
 
 
 @dataclass
@@ -132,6 +135,7 @@ def plan_escapes(
     drop_pad_width: Optional[Dict[Tuple[str, str], float]] = None,
     plane_access=None,
     drop_span=None,
+    skip_pads=None,
 ) -> EscapePlan:
     """Plan a legal escape for every pad of the routable ``net_names``.
 
@@ -148,7 +152,8 @@ def plan_escapes(
     pad's stub ((ref, pad) -> width) and ``plane_access``
     (:class:`pnr.stack.PlaneAccess`) admits only via sites inside the net's own
     plane fill. ``drop_span(net, side)`` gives a drop's blind or micro via span
-    under the grid's via model (None: a through via).
+    under the grid's via model (None: a through via). ``skip_pads`` ((ref, pad)
+    pairs) are left alone: a declared fanout (:mod:`.fanout`) holds them.
     """
     if joint:
         from .joint_escape import plan_joint_escapes
@@ -169,6 +174,7 @@ def plan_escapes(
             drop_pad_width=drop_pad_width,
             plane_access=plane_access,
             drop_span=drop_span,
+            **({"skip_pads": skip_pads} if skip_pads else {}),
         )
     plan = EscapePlan()
     plan.diagnostics = {"model": "legacy-sequential", "complete": None}
@@ -179,7 +185,7 @@ def plan_escapes(
         side = grid.side_layer(comp.side)
         cx_part, cy_part = comp.pos
         for name, net, r in pad_rects(comp):
-            if net not in net_names:
+            if net not in net_names or (skip_pads and (comp.ref, name) in skip_pads):
                 continue
             ci, cj = grid.cell_of(r.cx, r.cy)
             center = Cell(side, ci, cj)

@@ -66,14 +66,17 @@ def fetch_skus(key: str, opener: Callable = _open) -> List[Dict[str, Any]]:
     skus: List[Dict[str, Any]] = []
     token = None
     for _ in range(MAX_PAGES):
-        query = {"currencyCode": "USD", "pageSize": "5000", "key": key}
+        query = {"currencyCode": "USD", "pageSize": "5000"}
         if token:
             query["pageToken"] = token
-        request = urllib.request.Request(CATALOG_URL + "?" + urllib.parse.urlencode(query))
+        # The key goes in a header, never in the URL (URLs end up in proxy and error logs).
+        request = urllib.request.Request(
+            CATALOG_URL + "?" + urllib.parse.urlencode(query), headers={"X-Goog-Api-Key": key}
+        )
         try:
             with opener(request) as response:
                 page = json.loads(response.read().decode())
-        except Exception as err:  # never echo the URL: it carries the key
+        except Exception as err:  # never echo the request: its header carries the key
             raise PriceError("Billing Catalog request failed: %s" % type(err).__name__) from err
         skus += page.get("skus", [])
         token = page.get("nextPageToken")

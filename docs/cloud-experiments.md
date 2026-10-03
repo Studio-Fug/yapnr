@@ -155,7 +155,7 @@ tofu plan -var-file="$HOME/.config/yapnr/gcp.tfvars" -out=bootstrap.plan
 tofu apply bootstrap.plan
 ```
 
-The plan creates 69 resources for two regions ([infra/gcp](https://github.com/Studio-Fug/yapnr/tree/main/infra/gcp)):
+The plan creates 70 resources for two regions ([infra/gcp](https://github.com/Studio-Fug/yapnr/tree/main/infra/gcp)):
 APIs, the VPC, both buckets, the service accounts and grants, the registry caches, the Spot
 templates, the budget and the guard functions.
 

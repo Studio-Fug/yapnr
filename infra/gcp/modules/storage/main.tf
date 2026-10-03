@@ -115,10 +115,23 @@ resource "google_storage_bucket_iam_member" "runner_inputs" {
   member = "serviceAccount:${var.runner_email}"
 }
 
+# Tasks read everything in the runs bucket (control/frozen included) and write anywhere but
+# control/: a task must not be able to clear the kill switch's marker.
+resource "google_storage_bucket_iam_member" "runner_runs_read" {
+  bucket = google_storage_bucket.runs.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${var.runner_email}"
+}
+
 resource "google_storage_bucket_iam_member" "runner_runs" {
   bucket = google_storage_bucket.runs.name
   role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${var.runner_email}"
+
+  condition {
+    title      = "not-control-prefix"
+    expression = "!resource.name.startsWith(\"projects/_/buckets/${google_storage_bucket.runs.name}/objects/control/\")"
+  }
 }
 
 # The guard writes control/frozen, and nothing else.

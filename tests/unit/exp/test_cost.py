@@ -193,6 +193,38 @@ class PricesTest(unittest.TestCase):
         with self.assertRaises(prices.PriceError):
             prices.api_key(["false"])
 
+    def test_the_key_travels_in_a_header_not_the_url(self):
+        seen = []
+
+        class Response:
+            def __init__(self, body):
+                self.body = body
+
+            def read(self):
+                return self.body
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        def opener(request):
+            seen.append(request)
+            return Response(b'{"skus": [{"skuId": "x"}]}')
+
+        self.assertEqual(prices.fetch_skus("secret-key", opener), [{"skuId": "x"}])
+        self.assertNotIn("secret-key", seen[0].full_url)
+        self.assertEqual(seen[0].get_header("X-goog-api-key"), "secret-key")
+
+        def failing(request):
+            raise OSError("cannot reach %s" % request.full_url)
+
+        with self.assertRaises(prices.PriceError) as ctx:
+            prices.fetch_skus("secret-key", failing)
+        self.assertNotIn("secret-key", str(ctx.exception))
+        self.assertNotIn("secret-key", str(ctx.exception.__cause__))
+
 
 class CalibrationTest(unittest.TestCase):
     def record(self, wall, machine=None, case="05-timer-led-10", seed="0", verdict="pass"):

@@ -1,5 +1,6 @@
 """Contracts of the hard rungs (hard_rungs.py): circuits, one-dimension variants, judge rules."""
 
+import math
 import re
 import unittest
 from collections import Counter
@@ -31,6 +32,8 @@ CHECK_KINDS = {
     "align",
     "plane",
     "microvia_span",
+    "copper_digest",
+    "no_copper",
 }
 
 
@@ -260,6 +263,53 @@ class HardRungContract(unittest.TestCase):
             self.assertNotIn("region-" + name, checks)
         for name in ("flush", "pins", "loose"):
             self.assertNotIn("align-" + name, checks)
+
+    def test_arc_block_rung(self):
+        """The fixed-copper rung: 64 arcs in one group with the U.FL connectors, the
+        digest the checker expects, keep-outs expressed to the engine and judged by
+        the tool-neutral checks, one dimension (parts) away from 4L-SGPS."""
+        from hard_rungs import ARC_GROUP, block_sha256
+
+        from pnr.constraints import compile_constraints, compile_routing_rules
+        from pnr.fixed_block import arc_center
+
+        spec = self.by_name["07-chaser-20-4L-SGPS-arcblock"]
+        block = spec["fixed_block"]
+        self.assertGreaterEqual(len(block["arcs"]), 60)
+        for net, layer, a, m, z, w in block["arcs"]:
+            (cx, cy), r, sweep = arc_center(a, m, z)
+            self.assertAlmostEqual(r, 0.25, places=9)
+            self.assertAlmostEqual(abs(sweep), math.pi / 2, places=9)
+        # Every piece of copper ends on another (no dangling end) but the two ports.
+        ends = Counter()
+        for net, layer, a, z, w in block["tracks"]:
+            ends[(net, tuple(a))] += 1
+            ends[(net, tuple(z))] += 1
+        for net, layer, a, m, z, w in block["arcs"]:
+            ends[(net, tuple(a))] += 1
+            ends[(net, tuple(z))] += 1
+        single = sorted(
+            (round(p[0], 6), round(p[1], 6))
+            for (net, p), n in ends.items()
+            if n == 1 and net == "CLOCK"
+        )
+        self.assertEqual(single, [(24.8, 22.4), (24.8, 27.6), (38.175, 22.4), (38.175, 27.6)])
+        self.assertEqual(block["sha256"], block_sha256(block, 32))
+        parent = self.by_name["07-chaser-20-4L-SGPS"]
+        self.assertEqual(
+            [k for k in spec["dims"] if spec["dims"][k] != parent["dims"][k]], ["parts"]
+        )
+        kinds = Counter(c["kind"] for c in spec["checks"])
+        self.assertEqual((kinds["copper_digest"], kinds["no_copper"]), (1, 4))
+        refs = [p["ref"] for p in spec["parts"]]
+        compiled = compile_constraints(spec["constraints"], refs)
+        self.assertEqual(compiled.fixed_blocks[0]["group"], ARC_GROUP)
+        rules = compile_routing_rules(
+            compiled, sorted({n for p in spec["parts"] for n in p["pins"].values() if n})
+        )
+        guard = [k for k in rules["copper_keepouts"] if k["name"] == "guard-west"][0]
+        self.assertEqual(guard["allowed_nets"], ["CLOCK", "GND", "VCC"])
+        self.assertIn("arcs", spec["features"])
 
     def test_runner_offers_the_hard_rungs(self):
         args = parser().parse_args(["--out", "x", "--hard"])

@@ -1431,13 +1431,19 @@ py_test(
     deps = [":pnr"],
 )
 
-# The constraint checker's plane and microvia-span checks on small boards (KiCad's Python:
-# run it there by hand, python3 -m unittest test_check_constraints in regression/).
+# The constraint checker's plane, microvia-span, copper-digest and no-copper checks on
+# small boards, and the fixed-block rung's generated digest (KiCad's Python: run it
+# there by hand, python3 -m unittest test_check_constraints in regression/).
 py_test(
     name = "check_constraints_test",
     size = "small",
     srcs = [
         "regression/check_constraints.py",
+        "regression/designs.py",
+        "regression/hard_rungs.py",
+        "regression/native.py",
+        "regression/run.py",
+        "regression/stackup.py",
         "regression/test_check_constraints.py",
     ],
     imports = ["regression"],
@@ -1447,6 +1453,7 @@ py_test(
         "manual",
         "requires-kicad",
     ],
+    deps = [":pnr"],
 )
 
 py_binary(

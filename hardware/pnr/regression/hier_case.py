@@ -81,6 +81,12 @@ def load(root):
     constraints = compile_constraints(spec["constraints"], graph.refs)
     # Route under the fab profile writeback stamps and KiCad judges, as route_case.py does.
     rules = apply_rules(compile_routing_rules(constraints, [n.name for n in graph.nets]))
+    board = root / "source.kicad_pcb"
+    if board.exists():
+        from pnr.length_model import attach_board
+
+        # Pairs and groups are tuned against the board's own stackup and pad lands.
+        attach_board(rules, board.read_text())
     return spec, graph, constraints, rules
 
 
@@ -410,6 +416,13 @@ def route_metrics(route):
     return _route_metrics(route)
 
 
+def route_rank(record):
+    """A knit's sort key (:func:`pnr.place.initial_pool.route_rank`)."""
+    from pnr.place.initial_pool import route_rank as rank
+
+    return rank(record)
+
+
 def knit(case, k, flat, reps, choice=None, attempt=0):
     """Route the nets between blocks for one placed seed; returns its record.
 
@@ -470,6 +483,11 @@ def knit(case, k, flat, reps, choice=None, attempt=0):
             len(top_vias),
             round(metrics["copper_length_mm"], 6),
         ],
+        **(
+            {"length_unmatched": metrics["length_unmatched"]}
+            if "length_unmatched" in metrics
+            else {}
+        ),
         representatives={
             "%s/%s" % key: "%s.%s" % reps[key][(choice or {}).get(key, 0) % len(reps[key])]
             for key in sorted(reps)
@@ -581,7 +599,7 @@ def run(root, seed):
             if not choice:
                 break
             retry = knit(case, k, flat, reps, choice, attempt=tries)
-            if retry["objective"] < result["objective"]:
+            if route_rank(retry) < route_rank(result):
                 result = retry
         record.update(
             objective=result["objective"],
@@ -597,7 +615,7 @@ def run(root, seed):
         )
     if not routed:
         raise RuntimeError("no legal top-level placement among %d seeds" % len(seeds))
-    best = min(routed, key=lambda r: (r["objective"], r["id"]))
+    best = min(routed, key=lambda r: (route_rank(r), r["id"]))
     trace.select(
         "top-seed",
         [r["id"] for r in routed],

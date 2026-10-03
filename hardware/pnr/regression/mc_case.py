@@ -30,7 +30,7 @@ from pnr.fab_profile import apply_rules
 from pnr.graph import BoardGraph
 from pnr.length_model import attach_board
 from pnr.mc.halving import _rank_key
-from pnr.place.initial_pool import _route_metrics
+from pnr.place.initial_pool import _route_metrics, route_rank
 from pnr.place.metrics import hpwl
 from pnr.route.detail.router import route_board
 
@@ -122,7 +122,7 @@ for rec in finalists:
         )
     )
     print("final", rec["id"], metrics["objective"], "%.1fs" % (time.monotonic() - t), flush=True)
-best = min(evaluated, key=lambda c: (c["metrics"]["objective"], c["id"]))
+best = min(evaluated, key=lambda c: (route_rank(c["metrics"]), c["id"]))
 route = best["route"]
 (root / "placed.json").write_text(best["graph"].to_json())
 (root / "routes.json").write_text(

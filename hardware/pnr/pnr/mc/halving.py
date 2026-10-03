@@ -489,7 +489,9 @@ def _rank_key(stage):
     if stage == "place":
         return lambda r: (r.get("proxy_score", math.inf), r.get("cheap_score", math.inf))
     if stage == "screen":
-        return lambda r: tuple(r.get("objective") or [math.inf])
+        from pnr.place.initial_pool import route_rank
+
+        return route_rank
     # native/deep. objective = [violations, blocked, reference, subwidth, unqualified_pairs, unconnected]
     # key: violations, unconnected, unqualified pairs, reference failures, blocked entries, width debt, id
     # PNR_SI=1: routed SI layout failures (pnr.si side field `si_layout_failures`) right after

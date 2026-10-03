@@ -392,7 +392,7 @@ def _route_metrics(board):
     length = sum(math.dist(a, b) for _, _, a, b, _ in board.tracks)
     # These are screening metrics, not DRC/electrical qualification. Deferred
     # modes remain explicitly listed and all finalists receive the same budget.
-    return dict(
+    out = dict(
         missing_connections=missing,
         unresolved_nets=sorted(unresolved),
         deferred_nets=sorted(board.deferred_nets),
@@ -400,6 +400,21 @@ def _route_metrics(board):
         copper_length_mm=length,
         objective=[missing, len(unresolved), len(board.vias), length],
     )
+    report = getattr(board, "length_report", None)
+    if report is not None:
+        # Declared pairs / groups the tuner left outside their budgets (route_rank).
+        out["length_unmatched"] = sum(
+            1 for r in report if r.get("status") in ("length_unmatched", "tuning_error")
+        )
+    return out
+
+
+def route_rank(metrics) -> tuple:
+    """Sort key of routed candidates: missing connections, unresolved nets, then
+    declared pairs / groups outside their budgets (``length_unmatched``, only when
+    the design declares any), then vias and copper length (the ``objective``)."""
+    objective = list(metrics.get("objective") or [math.inf])
+    return tuple(objective[:2]) + (metrics.get("length_unmatched", 0),) + tuple(objective[2:])
 
 
 def select_initial_placement(
@@ -767,7 +782,7 @@ def select_initial_placement(
                     indent=2,
                 )
             )
-    chosen = min(evaluated, key=lambda c: (c["metrics"]["objective"], c["id"]))
+    chosen = min(evaluated, key=lambda c: (route_rank(c["metrics"]), c["id"]))
     if _trace.current() is not None:  # PNR_TRACE_DIR only
         _trace.select(
             "chosen",

@@ -210,6 +210,10 @@ class OptimizerSpec:
     # Robust optimization (Hammond et al. §5.3): projection thresholds of extra designs (above
     # `eta`: eroded, below: dilated) whose objectives join the epigraph with the nominal ones.
     eta_variants: tuple[float, ...] = ()
+    # The β from which the variants join the epigraph (below it the nominal design alone): at
+    # β = 8 the eroded and dilated designs of a gray design are about as gray as it is, and they
+    # triple an iteration's cost. Binarized designs are always judged with every variant.
+    robust_from_beta: float = 0.0
     # Adaptive move limits with a step test on the epigraph value (`Epigraph.trust_step`): a
     # step whose true t exceeds t_k + trust_slack·max(1, |t_k|) is refused and retried with
     # half the move (one forward run per refusal); accepted improving steps grow the move
@@ -270,6 +274,7 @@ _OPTIMIZER_NEW = {
     "adaptive_move": False,
     "trust_slack": 0.05,
     "adaptive_from_beta": 0.0,
+    "robust_from_beta": 0.0,
     "epoch_objectives": [],
     "epoch_frequency_scale": [],
     "reference_ohm": None,

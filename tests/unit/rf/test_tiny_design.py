@@ -152,6 +152,21 @@ class BestDesignTest(unittest.TestCase):
         self.assertEqual([bool(h_["t_trials"]) for h_ in h], [False, False, True, True])
         self.assertNotIn("adaptive_from_beta", tiny_spec().to_dict()["optimizer"])
 
+    def test_robust_from_beta(self):
+        # The nominal design alone below `robust_from_beta`, the variants from it on; binarized
+        # designs are judged with every variant throughout.
+        spec = tiny_spec(
+            betas=(8, 16), iterations_per_beta=2, eta_variants=(0.45, 0.55), robust_from_beta=16.0
+        )
+        opt = Optimizer(Problem(spec, cache_dir=self.cache))
+        opt.run(max_iterations=4)
+        h = opt.history
+        self.assertEqual([len(h_.get("t_variants", [0])) for h_ in h], [1, 1, 3, 3])
+        self.assertEqual(len(h[0]["keys"]), len(h[0]["f"]))
+        self.assertEqual(len(h[2]["f"]), 3 * len(h[0]["f"]))
+        self.assertTrue(np.isfinite(h[0]["t_binary"]))  # judged with every variant
+        self.assertNotIn("robust_from_beta", tiny_spec().to_dict()["optimizer"])
+
     def test_epoch_objectives(self):
         # The radiation objective in the first epoch (one value per lower bound on a radiated
         # fraction), the spec's epigraph in the second; binary designs are always judged by

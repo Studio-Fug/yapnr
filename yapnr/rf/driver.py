@@ -309,11 +309,12 @@ class Optimizer:
         return (str(eo[e]) if eo else "spec", float(fs[e]) if fs else 1.0)
 
     def _evaluate(self, x: np.ndarray, beta: float, gradients: bool, objective=("spec", 1.0)):
-        """The nominal evaluation, every variant's values (concatenated after the nominal ones)
-        and, with `gradients`, ∂f/∂x of all of them."""
+        """The nominal evaluation, every variant's values (concatenated after the nominal ones;
+        from β = `optimizer.robust_from_beta` on) and, with `gradients`, ∂f/∂x of all of them."""
         prob, param = self.problem, self.param
         evs, dfs = [], []
-        for e in self.variants:
+        robust = beta >= prob.spec.optimizer.robust_from_beta
+        for e in self.variants if robust else self.variants[:1]:
             ev = prob.evaluate(
                 param.rho_bar(x, beta, e),
                 gradients=gradients,

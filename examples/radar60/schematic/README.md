@@ -23,11 +23,14 @@ per RF port.
 | `tools/footprints.py`             | land patterns from the package drawings (ABL0161B, RNF0026C, RPW0010A, Samtec QTH, Vishay WFCP0612) |
 | `tools/data/abl0161_ballmap.json` | the IWR6843 ABL0161 ball map, from TI SWRS219F                                                      |
 | `tools/check_schematic.py`        | ERC-equivalent checks of the built board                                                            |
+| `yapnr-parts.lock.json`           | the parts lock: every part directory by content id (below)                                          |
+| `BUILD.bazel`                     | the generators and the lock for `//tests/unit/radar60`                                              |
 
 ## Build
 
 ```sh
 examples/radar60/schematic/tools/gen_parts.py           # parts -> elec/src/parts/
+yapnr part-cache import-parts --imported-from radar60 examples/radar60/schematic/elec/src/parts
 yapnr atopile build examples/radar60/schematic -b rev-a        # development fit
 yapnr atopile build examples/radar60/schematic -b rev-a-prod   # product fit
 examples/radar60/schematic/tools/check_schematic.py yapnr-out/schematic/rev-a/rev-a.kicad_pcb
@@ -81,6 +84,23 @@ MP1-MP4 on the centreline (on GND), and two 1.02 mm NPTH holes for the alignment
 apart and 2.03 mm towards the pin-1 row. Samtec's stencil drawing opens the lands 1:1 for a
 0.152 mm stencil. The flash's exposed pad was 3.4 x 4.3 mm (KiCad's Winbond variant), 0.2 mm
 longer than the Macronix maximum. No vendor PDF is committed.
+
+## Parts lock
+
+`yapnr-parts.lock.json` pins every part directory by content id, and a build materializes the
+locked parts from the [part cache](../../../docs/part-cache.md), checking every file. The parts
+are generated, so the cache is filled from `gen_parts.py`'s output (Build, above). The ids hold
+for KiCad 10.0.6's stock library, whose footprints are copied byte for byte; with another KiCad
+the stock parts get other ids, and `yapnr atopile lock-parts examples/radar60/schematic` shows
+which (`git diff`). `//tests/unit/radar60` checks that the parts built only from
+`tools/footprints.py` (U1, the PMIC, the eFuse, J2 in both fits, R_SH1 in both fits, the Kelvin
+pads, RFM1) still have their locked ids, so a change to a generator needs a new lock:
+
+```sh
+examples/radar60/schematic/tools/gen_parts.py --catalog /tmp/radar60-catalog.json
+yapnr atopile lock-parts examples/radar60/schematic --upload --imported-from "yapnr@<commit>"
+yapnr part-cache import-catalog /tmp/radar60-catalog.json
+```
 
 ## Checks
 

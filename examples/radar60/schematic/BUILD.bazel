@@ -1,0 +1,13 @@
+package(default_visibility = ["//visibility:public"])
+
+# The part generators and the parts lock, for //tests/unit/radar60. The schematic itself is built
+# with `yapnr atopile build` (README.md); its parts come from the part cache (yapnr-parts.lock.json).
+filegroup(
+    name = "parts_sources",
+    srcs = [
+        "tools/data/abl0161_ballmap.json",
+        "tools/footprints.py",
+        "tools/gen_parts.py",
+        "yapnr-parts.lock.json",
+    ],
+)

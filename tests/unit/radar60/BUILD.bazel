@@ -1,0 +1,8 @@
+load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+
+# The radar60 example's part data, land patterns and parts lock (examples/radar60/schematic).
+# Hermetic: the generators and the lock only; no KiCad library and no atopile.
+yapnr_py_tests(
+    data = ["//examples/radar60/schematic:parts_sources"],
+    deps = ["//yapnr/partcache"],
+)

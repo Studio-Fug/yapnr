@@ -1,0 +1,272 @@
+{
+  "parts": [
+    {
+      "id": "d3c99bb77c5243a5001730624adb10dcb64d52af0ad770f578be66985d6bc2b8",
+      "lcsc": "C8545",
+      "name": "Radar60_2N7002"
+    },
+    {
+      "id": "12e1e2b4e58fb69501a5e73c4fe84518f215a61ab470a36fca1b71760e0d79e2",
+      "name": "Radar60_ARM10_1p27_DNP"
+    },
+    {
+      "id": "746cc88c7336a85d4aa871094d78e4ea18de9f7340e3cabfb8d33f90ed2ae204",
+      "lcsc": "C2908116",
+      "name": "Radar60_CX3225SA40000D0PTWCC"
+    },
+    {
+      "id": "e5b6b16a06faef674cd3081efb1b554b4625a92177d76a1937cf03f9bb4bca69",
+      "lcsc": "C1525",
+      "name": "Radar60_C_100n_0402"
+    },
+    {
+      "id": "3fb60ffc4e346eb3f4bf2e6d095acba0053603de6d09ae9308ab598490921e0b",
+      "lcsc": "C15195",
+      "name": "Radar60_C_10n_0402"
+    },
+    {
+      "id": "ac66ddbbeb4d661461096928872140517630c6a7dd9f40027a29527201ed8bf7",
+      "lcsc": "C19702",
+      "name": "Radar60_C_10u_0603"
+    },
+    {
+      "id": "6a768f61de316abbc20f94860d2a63741f5a56a2c79723fd1b8fc44ef4e01571",
+      "lcsc": "C15850",
+      "name": "Radar60_C_10u_0805"
+    },
+    {
+      "id": "071ce8b2a040674bab600b5bf9b6c166079a9b8cb73760961a56c4b71fef63c1",
+      "lcsc": "C1523",
+      "name": "Radar60_C_1n_0402"
+    },
+    {
+      "id": "b9cacd51c31e7de3fab580db894f8076d90b20d331655b6a38c15e1031b61b32",
+      "lcsc": "C52923",
+      "name": "Radar60_C_1u_0402"
+    },
+    {
+      "id": "2c0e74273dbab30286de5e76e8b5beb7d26438140b5084f2be10bddf63fe34e3",
+      "lcsc": "C16772",
+      "name": "Radar60_C_220n_0402"
+    },
+    {
+      "id": "edd2d55bff9554b257fc43ad791ca3c68193a64c2f2996c202c5671832d3d63d",
+      "lcsc": "C45783",
+      "name": "Radar60_C_22u_0805"
+    },
+    {
+      "id": "762013756229151352f58a973d2205a087224cd21adb446e7c946ca44c0427db",
+      "name": "Radar60_C_22u_0805_DNP"
+    },
+    {
+      "id": "cef6d59f543b6ee307b35502284c6d924758207a2107eeff50c92e778e63e8dc",
+      "lcsc": "C12530",
+      "name": "Radar60_C_2u2_0402"
+    },
+    {
+      "id": "eb05974e167b9edfbad9b990f0a119ac284f2f908ddd4cb689463c88dc0f8100",
+      "lcsc": "C723890",
+      "name": "Radar60_C_390p_0402"
+    },
+    {
+      "id": "25fba8e48810e3b60395f4926e85841aa0ff6227e2ce354a0b39fe1db9e68da0",
+      "lcsc": "C1537",
+      "name": "Radar60_C_470p_0402"
+    },
+    {
+      "id": "c35ab76c57f509fa6f21b613a338100864bfe6ca91e33baaadd6bd3c97c25d65",
+      "lcsc": "C77017",
+      "name": "Radar60_C_47n_0402"
+    },
+    {
+      "id": "3c5ce653be538f27fcd89b4ed42e5904efa9ac45cf3695ef9d06afcf4950ab19",
+      "name": "Radar60_C_4n7_0402_DNP"
+    },
+    {
+      "id": "6746d3106ad30367c57d107609b9d57b4db49a461bd7c9962ea936da8d71c39c",
+      "lcsc": "C1569",
+      "name": "Radar60_C_4p7_0402"
+    },
+    {
+      "id": "db3932c69b56bcb034dc76012e8a9e3ea2e38f03b968864dc747bec715d91c17",
+      "lcsc": "C5736151",
+      "name": "Radar60_ESD2CAN24DBZRQ1"
+    },
+    {
+      "id": "50775fbc8434223df0d43eb7e5939f7bbf0f4c5b222f6d98818c2d19c9941185",
+      "lcsc": "C15957",
+      "name": "Radar60_FB_MPZ2012S101A"
+    },
+    {
+      "id": "f94661b83fc08dcfbb24ddd1570c148111d03900bc6c7645d7bdb51eae11d594",
+      "name": "Radar60_Fiducial_1mm"
+    },
+    {
+      "id": "7505ac22e3d0ea029b7fce73f6075cff12dca5ddf09dead034d9c2d9c07beb83",
+      "lcsc": "C2866258",
+      "name": "Radar60_IWR6843AQGABLR"
+    },
+    {
+      "id": "94bd5bd731783797eafb3953a0cd897f8cf3631d8022391bead64c4d76b21cdb",
+      "lcsc": "C265111",
+      "name": "Radar60_JST_SM08B_GHS_TB"
+    },
+    {
+      "id": "3aff55e498705daae1208a7343ae0b484b9710ddd71bbebc9e848763290f6a7b",
+      "name": "Radar60_KelvinSense_2Pad"
+    },
+    {
+      "id": "45677d6d6397899b1ec0122276a2e45e3f3ae53aae64f578ede9fbdf37024d1a",
+      "lcsc": "C72043",
+      "name": "Radar60_LED_Green_0603"
+    },
+    {
+      "id": "873f324054028dbc39ca3750339ea0d936cf333f3bed47e9d424584e676d4e7a",
+      "lcsc": "C701982",
+      "name": "Radar60_LP87524JRNFRQ1"
+    },
+    {
+      "id": "565b2d5f07cea24d4d39d31151d64253d38dd79579f090c16381cb5372a7600c",
+      "lcsc": "C844982",
+      "name": "Radar60_L_0u47_IHLP1616BZ"
+    },
+    {
+      "id": "658e562fb0b8e997e2849db2e0fac5b931817ac11463cf9f8903a98cce1eb93b",
+      "lcsc": "C655211",
+      "name": "Radar60_L_0u47_MCKK2012"
+    },
+    {
+      "id": "b4ec3ee8ef4b7b4a45f6136774583a15805506e15787c1a16450738acbf67d07",
+      "lcsc": "C2908148",
+      "name": "Radar60_MX25V1635FZNQ"
+    },
+    {
+      "id": "b8065ee9256d72bb3a9a075058b70dd5c61241e1ad09b600d6878b050055e966",
+      "name": "Radar60_MountingHole_M2p5"
+    },
+    {
+      "id": "f67739897dd0818f1249fa0e353957d266f4f2ebceb6a91a7a2afeef9807017d",
+      "lcsc": "C2843756",
+      "name": "Radar60_QTH_030_01_L_D_A"
+    },
+    {
+      "id": "60bae0931bf7ae6da58678d676f846e5850ea836bc6bb582b186684cf6b39e5f",
+      "name": "Radar60_QTH_030_01_L_D_A_DNP"
+    },
+    {
+      "id": "da56a5a26b4b99060e51cf2ce3caa6e153fa2c5080805cdd17a0286acdccc059",
+      "name": "Radar60_RFM1_Placeholder"
+    },
+    {
+      "id": "edf27a771e5150d17acd1aea7f3fca46d2c68fe184bd91536c0815113332e56e",
+      "name": "Radar60_R_0R22_0402_DNP"
+    },
+    {
+      "id": "6fd8810b82f1ced0b3575578f20549aad210d5345a47044a1661e082a11a5a79",
+      "lcsc": "C17168",
+      "name": "Radar60_R_0_0402"
+    },
+    {
+      "id": "ab49194647ee6689b22a52645210f7bbedfdf7d5698b176806fef01843909454",
+      "name": "Radar60_R_0_0402_DNP"
+    },
+    {
+      "id": "ae3ad8af7c6c0407eac18cdffb08c696182c63f52c60b9319bc83c0211d26da5",
+      "lcsc": "C25741",
+      "name": "Radar60_R_100k_0402"
+    },
+    {
+      "id": "509c3f2f30530370c17a2870a45b2232f728dad7e709d98542cb6fb55b8c6a41",
+      "lcsc": "C25744",
+      "name": "Radar60_R_10k_0402"
+    },
+    {
+      "id": "00e39b9a32bac30e7c815288032f0f138f1a6a5847740b116354e9e0f2d0afd9",
+      "name": "Radar60_R_10k_0402_DNP"
+    },
+    {
+      "id": "e3d9b8adcb864f332c0d920c42ac63b7895a0e185bb13f22bc6a9b31a3a2ddd5",
+      "lcsc": "C25749",
+      "name": "Radar60_R_11k_0402"
+    },
+    {
+      "id": "88e6f027b661d97615b6413d9ffdf18679a907bd14b96bdb7c4751bf58faab63",
+      "lcsc": "C25869",
+      "name": "Radar60_R_1k65_0402"
+    },
+    {
+      "id": "6c6c67e1a9738fe442d30d80985a72ce01744096742b25057f12508d8dab0275",
+      "lcsc": "C11702",
+      "name": "Radar60_R_1k_0402"
+    },
+    {
+      "id": "f949f22fc0ed336a19e58ce0792a4a67e6e97586f3df40c639ca2ed08cf536fc",
+      "lcsc": "C4231187",
+      "name": "Radar60_R_1m_0612"
+    },
+    {
+      "id": "3847ddb5ec1ece2c749acee879c6fb55a0a33f2bf751780047d22aae02da7375",
+      "lcsc": "C25092",
+      "name": "Radar60_R_22_0402"
+    },
+    {
+      "id": "405b1b1ef3f2dc172f190a51844f5af896487f3adbc2c14bfc67f0b0f722f81a",
+      "lcsc": "C25769",
+      "name": "Radar60_R_24k_0402"
+    },
+    {
+      "id": "d0bec99c2efa94dc71eadc2ef7d821685201fd3ecd20439e4df78d6cfea0ef7d",
+      "lcsc": "C3917256",
+      "name": "Radar60_R_2m_0612"
+    },
+    {
+      "id": "2010335ad11f08a20a6e76aebaa5f22027ee31f8223405284be0561e349eb71c",
+      "lcsc": "C25783",
+      "name": "Radar60_R_39k_0402"
+    },
+    {
+      "id": "c5a9256b3d496de3a80de788c400f613236122802151531e63af378700cd557d",
+      "lcsc": "C3988797",
+      "name": "Radar60_R_3R9_0402"
+    },
+    {
+      "id": "446d7626ecf3b60b9f96dbbb752b9747ad63d59e04805e67440f4550923820c0",
+      "lcsc": "C25903",
+      "name": "Radar60_R_4k99_0402"
+    },
+    {
+      "id": "87acef1968f12f398ec9c5296920b8e751e4bca219e14d0c1cdff8a27a2b67a7",
+      "name": "Radar60_R_62_0402_DNP"
+    },
+    {
+      "id": "e743e19867fc29352560ead6daf2986bac9cf3b3924f552b464df5cde6c2a368",
+      "lcsc": "C151296",
+      "name": "Radar60_SMF5V0A"
+    },
+    {
+      "id": "7c5a2d24e0aa0017735706e492181cfe9165b84a8f93415e5488b493e81ccb34",
+      "lcsc": "C3234119",
+      "name": "Radar60_TCAN1044AVDRBRQ1"
+    },
+    {
+      "id": "6f8dd88757f45a91f88c5c8e1f105ebeabdb298e99caed38101e9b82142a6313",
+      "lcsc": "C1855726",
+      "name": "Radar60_TPD2E2U06DCKR"
+    },
+    {
+      "id": "f612d8d738332e351e49ef500ef7a391e2b02be17858274f500772052866fd9f",
+      "name": "Radar60_TPS22917DBVR_DNP"
+    },
+    {
+      "id": "5eae9ea013dad5c454f03a0a78b351fba969b0019a2a3253344b458b2da3d440",
+      "lcsc": "C3662807",
+      "name": "Radar60_TPS259474ARPWR"
+    },
+    {
+      "id": "358c0f1b52d83ae87d19f648d3a080f6cc0038ceb594ed3861fbefe3a3e1b8c5",
+      "name": "Radar60_TestPad_D1"
+    }
+  ],
+  "parts_dir": "elec/src/parts",
+  "schema": "yapnr-atopile-parts-lock-v1"
+}

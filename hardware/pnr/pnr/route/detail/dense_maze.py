@@ -43,16 +43,139 @@ from .grid import Cell, RouteGrid
 # position-dependent at the last bit; such a grid falls back to the reference.
 _STENCIL_MARGIN = 1e-9
 
+# What the fields reproduce, as it was when they were last checked against it:
+# the source of the grid predicates and of the reference search (whitespace
+# folded; :func:`model_sources`), and the grid attributes the fields know. A grid
+# whose predicates, search or state stray from this is routed by the reference
+# kernel (correct, slower; one warning per process), and
+# ``tests/test_dense_maze.py`` (GridModelGuardTest) fails until the fields and the
+# kernels are ported to the change, checked for parity, and this updated.
+MODELLED_SOURCES = {
+    "RouteGrid.in_bounds": "82de6984f75cd003",
+    "RouteGrid.passable": "0e9a97df280cc3c4",
+    "RouteGrid.via_passable": "24c4f5a0141c8844",
+    "RouteGrid.plated_transition": "c1d3b5a6d337614d",
+    "RouteGrid.hole_site_clear": "4c3d077575fe0373",
+    "maze._astar_reference": "e90464d2042c802a",
+}
+MODELLED_ATTRIBUTES = frozenset(
+    (
+        "_pth_keepouts _smd_index _wide_seen _wide_specs _wide_tables access blocked "
+        "clearance component_pth_min_drill drilled_pads escape_segments escape_vias "
+        "height hole_clearance in_pad layers net_clearances net_widths nlayers "
+        "npth_hole_gap nx ny pad_net pad_rectangles pitch plated_ports "
+        "protected_escape_access pth_hole_gap routing_track_halos routing_via_keepout "
+        "smd_pads smd_via_blocked source_drill_plated source_drills track_width "
+        "via_blocked via_drill_radius via_halo via_hole_gap via_radius via_spacing "
+        "via_to_smd_pad wide_pad_net width"
+    ).split()
+)
+_PREDICATES = ("passable", "via_passable", "plated_transition", "hole_site_clear")
+_STALE: Optional[list] = None
+_WARNED: set = set()
+
+
+def model_sources() -> Dict[str, Optional[str]]:
+    """Fingerprints of the code the fields reproduce (None: no source to read)."""
+    import hashlib
+    import inspect
+
+    from . import maze
+
+    out = {}
+    for name in MODELLED_SOURCES:
+        owner, attr = name.split(".")
+        obj = getattr(RouteGrid if owner == "RouteGrid" else maze, attr)
+        try:
+            text = " ".join(inspect.getsource(obj).split())
+        except (OSError, TypeError):
+            out[name] = None
+            continue
+        out[name] = hashlib.sha256(text.encode()).hexdigest()[:16]
+    return out
+
+
+def _stale_sources() -> list:
+    global _STALE
+    if _STALE is None:
+        _STALE = sorted(
+            name
+            for name, key in model_sources().items()
+            if key is not None and key != MODELLED_SOURCES[name]
+        )
+    return _STALE
+
+
+def _neutral(value) -> bool:
+    if value is None or value is False:
+        return True
+    return isinstance(value, (dict, list, tuple, set, frozenset, str)) and not value
+
+
+def unmodelled(grid) -> Optional[str]:
+    """Why the fields cannot stand in for ``grid``'s predicates, or None."""
+    if not isinstance(grid, RouteGrid):
+        return "not a RouteGrid"
+    stock = RouteGrid.__dict__
+    for name in _PREDICATES:
+        if getattr(type(grid), name) is not stock[name] or name in vars(grid):
+            return "RouteGrid.%s is overridden" % name
+    stale = _stale_sources()
+    if stale:
+        return "changed since the dense fields were checked against it: " + ", ".join(stale)
+    extra = sorted(
+        k for k, v in vars(grid).items() if k not in MODELLED_ATTRIBUTES and not _neutral(v)
+    )
+    if extra:
+        return "grid state the dense fields do not model: " + ", ".join(extra)
+    return None
+
 
 def supports(grid) -> bool:
-    """Fields model the stock :class:`RouteGrid` predicates only."""
-    if not isinstance(grid, RouteGrid):
-        return False
-    stock = RouteGrid.__dict__
-    return all(
-        getattr(type(grid), name) is stock[name] and name not in vars(grid)
-        for name in ("passable", "via_passable", "plated_transition", "hole_site_clear")
-    )
+    """Fields model the stock :class:`RouteGrid` predicates, the reference search
+    and the grid state they were checked against (:data:`MODELLED_SOURCES`,
+    :data:`MODELLED_ATTRIBUTES`) only; otherwise the reference kernel routes, and
+    the reason is written to stderr once."""
+    reason = unmodelled(grid)
+    if reason is None:
+        return True
+    if isinstance(grid, RouteGrid) and reason not in _WARNED:
+        import sys
+
+        _WARNED.add(reason)
+        sys.stderr.write("dense maze fields: reference kernel instead (%s)\n" % reason)
+    return False
+
+
+_STENCILS: Dict[tuple, object] = {}
+
+
+def drill_stencil(grid):
+    """``(radius, mask)``: column offsets at which two new grid-centre drills
+    violate the via spacing (``hole_site_clear``'s site test), or None when an
+    offset sits on the threshold to the last bit (the grid then routes with the
+    reference kernel). Depends on the pitch and the via spacing only."""
+    key = (grid.pitch, grid.via_spacing)
+    cached = _STENCILS.get(key)
+    if cached is None:
+        spacing = grid.via_spacing - 1e-7
+        radius = max(0, int(math.ceil(grid.via_spacing / grid.pitch)) + 1)
+        mask = np.zeros((2 * radius + 1, 2 * radius + 1), dtype=np.uint8)
+        exact = True
+        origin = grid.center_of(radius, radius)
+        for dj in range(-radius, radius + 1):
+            for di in range(-radius, radius + 1):
+                d = math.dist(origin, grid.center_of(radius + di, radius + dj))
+                if d < 1e-7:
+                    continue
+                if abs(d - spacing) < _STENCIL_MARGIN or abs(d - 1e-7) < _STENCIL_MARGIN:
+                    exact = False
+                if d < spacing:
+                    mask[dj + radius, di + radius] = 1
+        if mask[0].any() or mask[-1].any() or mask[:, 0].any() or mask[:, -1].any():
+            exact = False
+        cached = _STENCILS[key] = (radius, mask) if exact else False
+    return cached or None
 
 
 def _inside(grid, layer, i, j):
@@ -196,7 +319,6 @@ class GridStatic:
         self._nets: Dict[str, tuple] = {}
         self._wide: Dict[int, np.ndarray] = {}
         self._hole = None
-        self._stencil = None
 
     def _owners(self, table, shape):
         out = np.full(shape, -1, dtype=np.int32)
@@ -266,29 +388,8 @@ class GridStatic:
         return self._hole
 
     def stencil(self):
-        """``(radius, mask)``: column offsets at which two new grid-centre drills
-        violate the via spacing (``hole_site_clear``'s site test), or None when an
-        offset sits on the threshold to the last bit."""
-        if self._stencil is None:
-            grid = self.grid
-            spacing = grid.via_spacing - 1e-7
-            radius = max(0, int(math.ceil(grid.via_spacing / grid.pitch)) + 1)
-            mask = np.zeros((2 * radius + 1, 2 * radius + 1), dtype=np.uint8)
-            exact = True
-            origin = grid.center_of(radius, radius)
-            for dj in range(-radius, radius + 1):
-                for di in range(-radius, radius + 1):
-                    d = math.dist(origin, grid.center_of(radius + di, radius + dj))
-                    if d < 1e-7:
-                        continue
-                    if abs(d - spacing) < _STENCIL_MARGIN or abs(d - 1e-7) < _STENCIL_MARGIN:
-                        exact = False
-                    if d < spacing:
-                        mask[dj + radius, di + radius] = 1
-            if mask[0].any() or mask[-1].any() or mask[:, 0].any() or mask[:, -1].any():
-                exact = False
-            self._stencil = (radius, mask) if exact else False
-        return self._stencil or None
+        """The grid's :func:`drill_stencil`."""
+        return drill_stencil(self.grid)
 
 
 def _columns_near(grid, point, distance):
@@ -376,9 +477,11 @@ def build_field(
     """The search field of ``net`` for one pricing state, or None when the grid
     or the inputs fall outside the dense model (the caller then searches with
     the reference kernel)."""
-    if not supports(grid):
-        return None
-    static = static or GridStatic(grid)
+    if static is None:
+        # The cheap verdicts first: an unsupported grid builds no static tables.
+        if not supports(grid) or drill_stencil(grid) is None:
+            return None
+        static = GridStatic(grid)
     stencil = static.stencil()
     if stencil is None:
         return None
@@ -545,11 +648,14 @@ def build_exact_field(
 
 
 class DenseSession:
-    """Static predicates shared by every field of one routing call."""
+    """Static predicates shared by every field of one routing call (``static``
+    None: the grid is outside the dense model, the reference kernel routes)."""
 
     def __init__(self, grid):
         self.grid = grid
-        self.static = GridStatic(grid) if supports(grid) else None
+        self.static = (
+            GridStatic(grid) if supports(grid) and drill_stencil(grid) is not None else None
+        )
 
     def field(self, net, occ, history, pres_fac, blocked=None, soft=None):
         if self.static is None:

@@ -374,8 +374,9 @@ def _route_one(
     diagonally vs orthogonally connected, for DRC-correct 45° emit + corner
     reservation). ``blocked`` cells are hard-impassable; ``soft`` adds a crossing
     penalty (rip-up pass). ``_session`` (:class:`.dense_maze.DenseSession`) builds
-    the net's dense search field once for all of its tree's searches; ``_field``
-    is such a field built by the caller (the exact-separation router)."""
+    the net's dense search field once for all of its tree's searches (without one,
+    the dense kernels make one for this tree); ``_field`` is such a field built by
+    the caller (the exact-separation router)."""
     access = list(dict.fromkeys(access))  # de-dup, keep order
     original_access = list(access)
     access = [c for c in access if grid.passable(c.layer, c.i, c.j, net)]
@@ -388,6 +389,11 @@ def _route_one(
     all_cells: List[Cell] = [access[0]]
     edges: List[Tuple[Cell, Cell]] = []
     field = _field
+    if field is None and _session is None and maze_kernel() != "reference":
+        from .dense_maze import DenseSession
+
+        # The grid's static predicates once for this tree, not once per search.
+        _session = DenseSession(grid)
     while remaining:
         if field is None and _session is not None:
             field = _session.field(net, occ, history, pres_fac, blocked, soft)

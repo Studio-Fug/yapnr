@@ -117,7 +117,22 @@ def reference(grid, args):
 
 
 def packed(grid, args):
+    """The packed (or native) search on a dense field. The field must exist, so a
+    parity test never compares the reference with itself; only a drill stencil on
+    a threshold (``drill_stencil`` None) leaves the reference to search."""
+    from pnr.route.detail.dense_maze import drill_stencil
+
     args = dict(args)
+    field = build_field(
+        grid,
+        args["net"],
+        args["occ"],
+        args["history"],
+        args["pres_fac"],
+        args.get("blocked"),
+        args.get("soft"),
+    )
+    assert field is not None or drill_stencil(grid) is None, "dense field missing"
     return astar(
         grid,
         set(args.pop("sources")),
@@ -128,6 +143,7 @@ def packed(grid, args):
         args.pop("via_cost"),
         args.pop("pres_fac"),
         **args,
+        field=field,
     )
 
 
@@ -378,15 +394,18 @@ class RouteParityTest(unittest.TestCase):
                 via_cost=rng.choice((3.0, 6.0)),
             )
 
-    def routes(self, environ):
+    def routes(self, environ, workers="1"):
         # The halo model on every kernel (the exact-separation recovery needs a dense
         # kernel, so the reference kernel never runs it; test_exact_route covers it).
+        from pnr.route.detail.dense_maze import DenseSession
+
         out = []
         with patch.dict(
             os.environ,
-            dict(environ, PNR_SINGLE_TRACK_WORKERS="1", PNR_EXACT_SEPARATION="off"),
+            dict(environ, PNR_SINGLE_TRACK_WORKERS=workers, PNR_EXACT_SEPARATION="off"),
         ):
             for grid, access, kwargs in self.boards():
+                self.assertIsNotNone(DenseSession(grid).static)  # the dense path runs
                 out.append(route(grid, access, **kwargs))
         return out
 
@@ -397,6 +416,153 @@ class RouteParityTest(unittest.TestCase):
         kernel = native_kernel(self)
         with patch.object(native_maze, "load", return_value=kernel):
             self.assertEqual(self.routes({"PNR_MAZE_KERNEL": "native"}), expected)
+
+    def test_parallel_workers_route_like_the_reference(self):
+        # Two route workers: the grid and the occupancy snapshots cross a process
+        # boundary (the mirrored tables arrive as plain dictionaries).
+        expected = self.routes({"PNR_PACKED_MAZE": "0"}, workers="2")
+        self.assertEqual(self.routes({"PNR_MAZE_KERNEL": "packed"}, workers="2"), expected)
+
+
+def fixture_grid(wide_net=None):
+    """The detailed grid ``route_board`` builds for the splanc_dev fixture (its
+    rules, planes and escape plan), captured where routing would start."""
+    import yaml
+
+    from pnr.constraints import compile_constraints, compile_routing_rules
+    from pnr.graph import BoardGraph
+    from pnr.route.detail import router
+    from pnr.route.detail.maze import RouteResult
+
+    here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "testdata", "splanc_dev")
+    with open(os.path.join(here, "graph.json"), encoding="utf-8") as fh:
+        graph = BoardGraph.from_json(fh.read())
+    with open(os.path.join(here, "constraints.yaml"), encoding="utf-8") as fh:
+        constraints = compile_constraints(yaml.safe_load(fh), graph.refs)
+    rules = compile_routing_rules(constraints, [n.name for n in graph.nets])
+    if wide_net:
+        rules["net_classes"].append(dict(name="wide", width_mm=0.9, nets=[wide_net]))
+    captured = {}
+
+    def capture(grid, net_access, **kwargs):
+        grid.routing_track_halos = kwargs.get("net_halo") or {}
+        grid.routing_via_keepout = kwargs.get("via_keepout", 1)
+        grid.reserve_wide_pad_clearance()
+        captured.update(grid=grid, access=net_access)
+        return RouteResult(nets={}, unrouted=[], iterations=0)
+
+    with patch.object(router, "route", capture):
+        router.route_board(graph, constraints, rules, pitch=0.5, max_iters=2)
+    return captured["grid"], captured["access"]
+
+
+class GridModelGuardTest(unittest.TestCase):
+    """The dense fields stand in for the grid predicates and the reference search
+    only while those are what the fields were checked against."""
+
+    def test_modelled_sources_are_current(self):
+        from pnr.route.detail.dense_maze import MODELLED_SOURCES, model_sources
+
+        self.assertEqual(
+            model_sources(),
+            MODELLED_SOURCES,
+            "RouteGrid's predicates or the reference A* changed: port the change to the "
+            "dense fields (dense_maze), the packed and native kernels and the exact "
+            "router, check parity (this file, test_exact_route), then update "
+            "dense_maze.MODELLED_SOURCES (and MODELLED_ATTRIBUTES for new grid state).",
+        )
+
+    def test_real_board_grid_matches_the_fields(self):
+        from pnr.route.detail.dense_maze import GridStatic, unmodelled
+
+        grid, access = fixture_grid(wide_net="SCL")
+        self.assertIsNone(unmodelled(grid))
+        self.assertIn("SCL", grid.wide_pad_net)
+        static = GridStatic(grid)
+        hole = static.hole()
+        nets = sorted(access)[:12] + ["SCL", "lv"]
+        for net in nets:
+            passable, via, plated = static.net(net)
+            for la in range(grid.nlayers):
+                for j in range(grid.ny):
+                    for i in range(grid.nx):
+                        self.assertEqual(
+                            bool(passable[la, j, i]), grid.passable(la, i, j, net), (net, la, i, j)
+                        )
+                        self.assertEqual(
+                            bool(via[la, j, i]), grid.via_passable(la, i, j, net), (net, la, i, j)
+                        )
+            for j in range(grid.ny):
+                for i in range(grid.nx):
+                    self.assertEqual(
+                        bool(plated[j, i]), grid.plated_transition(net, i, j) is not None
+                    )
+        for j in range(grid.ny):
+            for i in range(grid.nx):
+                self.assertEqual(bool(hole[j, i]), grid.hole_site_clear(grid.center_of(i, j)))
+
+    def test_unmodelled_grid_state_routes_with_the_reference(self):
+        import io
+        from contextlib import redirect_stderr
+
+        from pnr.route.detail import dense_maze
+
+        grid = RouteGrid(8, 8, 1)
+        access = {"A": [Cell(0, 0, 3), Cell(0, 7, 3)], "B": [Cell(0, 3, 0), Cell(1, 3, 7)]}
+        grid.layer_mask = None  # neutral: modelled as absent
+        self.assertTrue(dense_maze.supports(grid))
+        grid.layer_mask = {"A": frozenset({1})}
+        log = io.StringIO()
+        with redirect_stderr(log):
+            self.assertFalse(dense_maze.supports(grid))
+            self.assertIsNone(dense_maze.DenseSession(grid).static)
+        self.assertIn("layer_mask", log.getvalue())
+        with patch.dict(os.environ, {"PNR_SINGLE_TRACK_WORKERS": "1"}):
+            with patch.dict(os.environ, {"PNR_PACKED_MAZE": "0"}):
+                expected = route(grid, access, max_iters=2)
+            self.assertEqual(route(grid, access, max_iters=2), expected)
+        with patch.object(dense_maze, "_STALE", ["RouteGrid.passable"]):
+            self.assertIn("RouteGrid.passable", dense_maze.unmodelled(RouteGrid(4, 4, 1)))
+
+    def test_one_static_table_per_tree_without_a_session(self):
+        from pnr.route.detail import dense_maze
+        from pnr.route.detail.maze import _route_one
+
+        built = []
+        original = dense_maze.GridStatic.__init__
+
+        def counting(self, grid):
+            built.append(1)
+            original(self, grid)
+
+        grid = RouteGrid(10, 10, 1)
+        access = [Cell(0, 0, 0), Cell(0, 9, 0), Cell(1, 9, 9), Cell(0, 0, 9)]
+        with patch.object(dense_maze.GridStatic, "__init__", counting):
+            tree = _route_one(grid, access, "N", {}, {}, 3.0, 0.5)
+        self.assertEqual(len(built), 1)
+        with patch.dict(os.environ, {"PNR_PACKED_MAZE": "0"}):
+            self.assertEqual(_route_one(grid, access, "N", {}, {}, 3.0, 0.5), tree)
+
+    def test_drill_stencil_on_a_threshold_builds_no_tables(self):
+        from pnr.route.detail import dense_maze
+        from pnr.route.detail.maze import _route_one
+
+        grid = RouteGrid(10, 10, 1)
+        grid.via_spacing = 2.0 + 1e-7  # an offset of exactly 2 cells sits on the rule
+        self.assertIsNone(dense_maze.drill_stencil(grid))
+        built = []
+        original = dense_maze.GridStatic.__init__
+
+        def counting(self, grid):
+            built.append(1)
+            original(self, grid)
+
+        access = [Cell(0, 0, 0), Cell(1, 9, 9), Cell(0, 0, 9)]
+        with patch.object(dense_maze.GridStatic, "__init__", counting):
+            tree = _route_one(grid, access, "N", {}, {}, 3.0, 0.5)
+        self.assertEqual(built, [])
+        with patch.dict(os.environ, {"PNR_PACKED_MAZE": "0"}):
+            self.assertEqual(_route_one(grid, access, "N", {}, {}, 3.0, 0.5), tree)
 
 
 if __name__ == "__main__":

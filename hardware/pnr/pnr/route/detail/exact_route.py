@@ -374,8 +374,10 @@ def supported(grid) -> bool:
 
     if maze_kernel() == "reference":
         return False
-    static = DenseSession(grid).static
-    return static is not None and static.stencil() is not None
+    from .dense_maze import drill_stencil
+    from .dense_maze import supports as dense
+
+    return dense(grid) and drill_stencil(grid) is not None
 
 
 def route_exact(

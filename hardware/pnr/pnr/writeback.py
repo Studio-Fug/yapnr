@@ -337,6 +337,7 @@ def form_planes(
     codes = dict(net_code or _net_code_map(board))
     board.BuildConnectivity()
     added = 0
+    left = []
     for net in sorted(stack.plane_nets):
         code = codes.get(net)
         if code is None:
@@ -349,7 +350,13 @@ def form_planes(
             and pad.GetAttribute() == pcbnew.PAD_ATTRIB_SMD
             and not _has_through_access(board, pad)
         ]
-        if unreached:
+        if unreached and (rules or {}).get("plane_fallback_drops", True) is False:
+            # board.plane_fallback_drops: false: no copper nobody routed; listed.
+            left.extend(
+                "%s.%s" % (pad.GetParentFootprint().GetReference(), pad.GetNumber())
+                for pad in unreached
+            )
+        elif unreached:
             added += _dogbone_fanout_net(board, code, rules=rules, skip_connected=True, stack=stack)
     if regions is None:
         pads: Dict[str, list] = {}
@@ -390,6 +397,12 @@ def form_planes(
         board.Add(z)
         present.setdefault(region.layer, set()).add(region.net)
         made.append((region.layer, region.net))
+    if left:
+        sys.stderr.write(
+            "writeback: unreached plane pads (plane_fallback_drops false): %d: %s\n"
+            % (len(left), " ".join(sorted(left)))
+        )
+        return dict(fallback_vias=added, zones=made, unreached=sorted(left))
     return dict(fallback_vias=added, zones=made)
 
 

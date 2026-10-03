@@ -320,6 +320,25 @@ class WritebackKeepsBlock(unittest.TestCase):
         self.assertEqual(len(bare.GetTracks()), 0)  # without the block: every track goes
         self.assertIsNotNone(placed.FindFootprintByReference("ANT"))
 
+    def test_plane_fallback_drops_false_adds_no_copper(self):
+        from test_stack_kicad import board, smd, stack_of
+
+        from pnr.writeback import form_planes
+
+        for flag, vias in ((None, 2), (True, 2), (False, 0)):
+            b, _ = board("SPPS")
+            smd(b, "C1", (38.0, 40.0), [("1", "VCC", (-0.8, 0)), ("2", "GND", (0.8, 0))])
+            stack, rules = stack_of("SPPS", {"GND": "In1.Cu", "VCC": "In2.Cu"})
+            if flag is not None:
+                rules["plane_fallback_drops"] = flag
+            formed = form_planes(b, stack, rules, 30.0, 20.0)
+            self.assertEqual(formed["fallback_vias"], vias, flag)
+            self.assertEqual(sum(t.GetClass() == "PCB_VIA" for t in b.GetTracks()), vias)
+            if flag is False:
+                self.assertEqual(formed["unreached"], ["C1.1", "C1.2"])
+            else:
+                self.assertNotIn("unreached", formed)
+
 
 def drc(cli, board):
     out = Path(board).with_suffix(".drc.json")

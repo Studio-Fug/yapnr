@@ -13,7 +13,10 @@ unless ``--allow-failed``; its end card then shows KiCad's findings in red. The 
 here, so the fixtures stay unchanged. ``--runner-arg ARG`` (repeatable, e.g. ``--runner-arg=--compact
 --runner-arg=--gloss``) passes one more argument to every ``run.py``; the options that shaped a
 run (``--compact``, ``--compact-off``, ``--shrink``, ``--gloss``, ``--gloss-flag``, read back from
-its provenance) are part of each animation's ``config`` in the manifest.
+its provenance) are part of each animation's ``config`` in the manifest. The baseline fallback
+reruns a failed case with the same ``--runner-arg`` list unless ``--fallback-runner-arg ARG``
+(repeatable; ``--fallback-runner-arg=`` for none) names its own, e.g. a compact ladder whose
+failed case falls back to the default mode with ``--fallback-runner-arg=--gloss``.
 """
 
 from __future__ import annotations
@@ -159,6 +162,14 @@ def ladder_provenance(run, image=None, kicad=None):
     )
 
 
+def fallback_arguments(args):
+    """The baseline fallback's extra run.py arguments: ``--fallback-runner-arg``'s when
+    given (empty values dropped), else ``--runner-arg``'s."""
+    if args.fallback_runner_arg is None:
+        return list(args.runner_arg)
+    return [arg for arg in args.fallback_runner_arg if arg]
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--render-only", type=Path, nargs="+", metavar="RUN_DIR")
@@ -181,6 +192,16 @@ def main(argv=None):
         metavar="ARG",
         help="one more run.py argument for every run (repeatable; e.g. --runner-arg=--compact)",
     )
+    ap.add_argument(
+        "--fallback-runner-arg",
+        action="append",
+        default=None,
+        metavar="ARG",
+        help=(
+            "the baseline fallback's run.py arguments instead of --runner-arg's (repeatable; "
+            "an empty value adds nothing, so --fallback-runner-arg= falls back to the default mode)"
+        ),
+    )
     a = ap.parse_args(argv)
     from pnr.animate.cli import render_animation
     from pnr.provenance import Trace
@@ -200,7 +221,7 @@ def main(argv=None):
         failed = [c for c, (_d, r) in cases_of(pool_run).items() if not r["passed"]]
         if failed and not a.no_baseline_fallback:
             baseline = pool_run.parent / (pool_run.name + "-baseline")
-            run_ladder(repo, baseline, a, list(a.runner_arg), failed)
+            run_ladder(repo, baseline, a, fallback_arguments(a), failed)
             runs.append(baseline)
     chosen = {}
     for run in runs:

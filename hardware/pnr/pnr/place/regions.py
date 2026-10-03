@@ -888,7 +888,7 @@ def check_feasible(graph, constraints, width, height, orient=True, trials_fixed=
 # ------------------------------------------------------------------ exact snap
 
 
-def snap_aligns(placed, constraints, clearance=0.0, pad_edge=None, size=None):
+def snap_aligns(placed, constraints, clearance=0.0, pad_edge=None, size=None, margins=None):
     """After legalization, put the anchors of each hard align whose spread exceeds its
     ``tol_mm`` (one under the legalizer's band floor, e.g. 0) on one line, best effort.
     An align already within ``tol_mm`` is left alone: a snap would move parts off the
@@ -901,8 +901,10 @@ def snap_aligns(placed, constraints, clearance=0.0, pad_edge=None, size=None):
     outline, keep-outs, regions, edge bands, groups, the other aligns), brings no
     other part within ``clearance`` that was not within it before and, with
     ``pad_edge`` (PNR_PAD_EDGE_CLEARANCE=1, ``size`` = (width, height)), keeps the
-    pads' edge rule. Returns the refs moved; an align that cannot be snapped keeps
-    its legal spread (within ``max(tol_mm, the legalizer's band floor)``)."""
+    pads' edge rule. ``margins`` ({ref: mm}, PNR_COMPACT ``LEGALIZE`` copper margins)
+    add both parts' margins to ``clearance``, as the legalizer's slots do. Returns the
+    refs moved; an align that cannot be snapped keeps its legal spread (within
+    ``max(tol_mm, the legalizer's band floor)``)."""
     import copy
 
     from pnr.constraints import Constraint
@@ -937,6 +939,11 @@ def snap_aligns(placed, constraints, clearance=0.0, pad_edge=None, size=None):
         for c in constraints.constraints
     ]
 
+    margins = margins or {}
+
+    def gap(a, b):
+        return clearance + margins.get(a, 0.0) + margins.get(b, 0.0)
+
     def near(comp):
         mine = placement_rects(comp)
         return {
@@ -945,8 +952,10 @@ def snap_aligns(placed, constraints, clearance=0.0, pad_edge=None, size=None):
             if other.ref != comp.ref
             for other_side, other_rect in placement_rects(other)
             for side, rect in mine
-            if side == other_side and rect.overlaps(other_rect, gap=clearance)
+            if side == other_side and rect.overlaps(other_rect, gap=gap(comp.ref, other.ref))
         }
+
+    guarded = clearance > 0 or bool(margins)
 
     moved = []
     for con in rules:
@@ -976,11 +985,11 @@ def snap_aligns(placed, constraints, clearance=0.0, pad_edge=None, size=None):
                 except ValueError:  # the legalized board is not legal: leave it
                     return moved
                 comp = comps[ref]
-                before = near(comp) if clearance > 0 else set()
+                before = near(comp) if guarded else set()
                 point = list(comp.pos)
                 point[k] += delta
                 comp.pos = tuple(point)
-                ok = legal(comp) and (clearance <= 0 or near(comp) <= before)
+                ok = legal(comp) and (not guarded or near(comp) <= before)
                 if ok and pad_edge is not None:
                     ok = not pad_edge_violations(
                         placed, size[0], size[1], pad_edge, exclude=set(comps) - {ref}

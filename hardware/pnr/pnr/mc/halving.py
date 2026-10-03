@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures as cf
+import functools
 import hashlib
 import json
 import math
@@ -178,6 +179,13 @@ def _load(inputs: Path, constraints_path: Path):
 
     rules = apply_rules(json.loads((inputs / "rules.json").read_text()))
     return graph, constraints, rules
+
+
+@functools.lru_cache(maxsize=4)
+def _ranked_constraints(inputs: str, constraints_path: str):
+    """PNR_COMPACT ``RANK``: the constraints a native record's bounding box is measured
+    on, loaded once per worker (read only)."""
+    return _load(Path(inputs), Path(constraints_path))[1]
 
 
 # ---------------------------------------------------------------- stage 0
@@ -475,7 +483,7 @@ def _native_one(
         try:
             from pnr.graph import BoardGraph
 
-            _, ranked, _ = _load(inputs, constraints_path)
+            ranked = _ranked_constraints(str(inputs), str(constraints_path))
             placed = BoardGraph.from_json((cand / "placed.json").read_text())
             record.update(_compactness(placed, ranked))
         except Exception as error:  # an unmeasured candidate ranks last, never crashes

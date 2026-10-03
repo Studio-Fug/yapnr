@@ -345,7 +345,14 @@ def place(
         # Hard aligns onto one exact line where that is legal (pnr.place.regions).
         from .regions import snap_aligns
 
-        snap_aligns(placed, constraints, clearance, pad_edge, (width, height))
+        snap_aligns(
+            placed,
+            constraints,
+            clearance,
+            pad_edge,
+            (width, height),
+            **compact.margin_kwargs(tight),
+        )
     if (constraints.diff_pairs or constraints.length_matches) and (
         (getattr(constraints, "tuning", None) or {}).get("placement", True)
     ):

@@ -162,17 +162,17 @@ def compactness(placed):
     )
 
 
-def constraint_reasons(spec, placed, use_body=False):
+def constraint_reasons(spec, placed, use_body=False, shrunk=False):
     """Independent audit (stdlib, not the engine's metrics) of the showcase constraints
     on ``placed`` (placed.json): each line group collinear at its pitch or gap, in member
     order, with its declared rotation, and each hard edge part within its tolerance of
-    placed.json's outline (the shrunk one under ``--shrink``), measured on its body box
-    with ``use_body`` (``--compact``: the placer holds off-centre bodies).
+    the design's outline (placed.json's with ``shrunk``: ``--shrink``), measured on its
+    body box with ``use_body`` (``--compact``: the placer holds off-centre bodies).
     Returns ``(checked, findings)``."""
     cons = spec["constraints"]
     width, height = cons["board"]["outline"]["w"], cons["board"]["outline"]["h"]
     outline = placed.get("outline") or {}
-    if outline.get("width") and outline.get("height"):
+    if shrunk and outline.get("width") and outline.get("height"):
         width, height = outline["width"], outline["height"]
     comps = {c["ref"]: c for c in placed["components"]}
     checked, findings = [], []
@@ -222,8 +222,9 @@ def constraint_reasons(spec, placed, use_body=False):
 # with the engine so a run under oshpark-4l or jlc-4l uses the data of its own checkout.
 FAB_DATA_SOURCES = ("yapnr/__init__.py", "yapnr/fab/__init__.py", "yapnr/fab/capability.py")
 
-# The parts of PNR_COMPACT (pnr.compact_flags.PARTS) --compact-off may drop.
-COMPACT_PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD")
+# The parts of PNR_COMPACT (pnr.compact_flags.PARTS; test_compact keeps them equal)
+# --compact-off may drop.
+COMPACT_PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD", "DROPS")
 
 
 def compact_environment(compact, compact_off=(), shrink=False):
@@ -1111,6 +1112,7 @@ def main():
                         spec,
                         placed_doc,
                         use_body=args.compact and "COURTYARD" not in args.compact_off,
+                        shrunk=args.shrink,
                     )
                     result["constraint_audit"] = dict(checked=checked, findings=findings)
                     if findings:

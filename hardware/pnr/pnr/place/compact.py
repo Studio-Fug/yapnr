@@ -57,10 +57,12 @@ __all__ = [
     "margins",
     "LegalizeSettings",
     "legalize_settings",
+    "margin_kwargs",
     "placement_clearance",
     "shrink_skip_reason",
     "shrink_lower_bound",
     "scaled_constraints",
+    "moved_fixed",
     "probe_size",
     "shrink_search",
 ]
@@ -78,9 +80,10 @@ BUCKETS = 20
 # Extra block utilisations of the hierarchical driver's block trials.
 UTILISATIONS = (0.5, 0.6)
 # Shrink search: utilisation of the area lower bound, probe count, size rounding (mm), the
-# band (fraction of the outline) within which a fixed ``at`` keeps its distance to an edge
-# instead of scaling with the outline, and the margin (mm) added around the envelope run's
-# bounding box (twice the edge clearance plus this, per axis) for the first probe.
+# band (fraction of the outline) next to the far (north, east) edges within which a fixed
+# ``at`` keeps its distance to that edge (anywhere else it keeps its absolute position; the
+# outline keeps its origin), and the margin (mm) added around the envelope run's bounding
+# box (twice the edge clearance plus this, per axis) for the first probe.
 SHRINK_UTILISATION = 0.7
 SHRINK_PROBES = 4
 SHRINK_ROUND_MM = 0.5
@@ -134,7 +137,8 @@ def metrics(graph, width: float, height: float) -> Dict[str, object]:
 
     - routed initial-pool finalists, the halving screen and the hierarchical top seed
       (:func:`pnr.place.initial_pool.route_rank`): ``missing, unresolved,
-      length_unmatched, bucket, vias, length``, then the id;
+      length_unmatched, vias, bucket, length``, then the id (``bucket`` before ``vias``
+      under ``PNR_SHRINK``, where the outline follows the bounding box);
     - halving native and deep stages: ``bbox_mm2`` after every completion key, before
       the id;
     - the place-route loop's best round: ``(overflow, unfinished, bbox_mm2)``;
@@ -307,6 +311,12 @@ def legalize_settings(graph, constraints, rules) -> Optional[LegalizeSettings]:
     )
 
 
+def margin_kwargs(settings: Optional[LegalizeSettings]) -> dict:
+    """``{"margins": ...}`` for a placement check of :func:`legalize_settings`'s copper
+    margins, ``{}`` without any (the flag off, or no part hugging its pads)."""
+    return {} if not (settings and settings.margins) else dict(margins=settings.margins)
+
+
 def placement_clearance(constraints) -> float:
     """The clearance placement keeps between courtyards: the courtyard gap with
     ``LEGALIZE``, else the board's ``default_clearance_mm`` (unchanged)."""
@@ -332,14 +342,13 @@ def probe_size(scale: float, width: float, height: float) -> Tuple[float, float]
 
 
 def _scaled_coordinate(value: float, size: float, new: float) -> float:
-    """A fixed ``at`` coordinate on a ``size`` axis shrunk to ``new``: within
-    :data:`SHRINK_EDGE_BAND` of an edge it keeps its distance to that edge, otherwise it
-    scales with the outline."""
-    if value <= SHRINK_EDGE_BAND * size:
-        return float(value)
+    """A fixed ``at`` coordinate on a ``size`` axis shrunk to ``new`` (the outline keeps
+    its origin and loses its far edge): within :data:`SHRINK_EDGE_BAND` of the far edge it
+    keeps its distance to that edge (a part on the north or east edge stays on it);
+    anywhere else it is absolute and never moves."""
     if value >= (1.0 - SHRINK_EDGE_BAND) * size:
         return float(new - (size - value))
-    return float(value * new / size)
+    return float(value)
 
 
 def shrink_skip_reason(constraints, auto_outline=False) -> Optional[str]:
@@ -356,9 +365,10 @@ def shrink_skip_reason(constraints, auto_outline=False) -> Optional[str]:
 
 
 def scaled_constraints(constraints, width: float, height: float, new_w: float, new_h: float):
-    """A copy of ``constraints`` on a ``new_w`` x ``new_h`` outline: each fixed ``at`` moves
-    by :func:`_scaled_coordinate`; edge rules, groups, rows and line groups are relative
-    and follow the outline by themselves."""
+    """A copy of ``constraints`` on a ``new_w`` x ``new_h`` outline: a fixed ``at`` near
+    the far edge keeps its distance to it, any other stays put (:func:`_scaled_coordinate`);
+    edge rules, groups, rows and line groups are relative and follow the outline by
+    themselves."""
     out = copy.deepcopy(constraints)
     out.board.width = float(new_w)
     out.board.height = float(new_h)
@@ -372,11 +382,24 @@ def scaled_constraints(constraints, width: float, height: float, new_w: float, n
     return out
 
 
+def moved_fixed(constraints, scaled) -> List[dict]:
+    """The fixed ``at`` poses ``scaled`` (:func:`scaled_constraints` of ``constraints``)
+    moved: ``[{"refs", "at", "to"}]``, only parts on a far edge's band."""
+    before = [c for c in constraints.constraints if c.kind == "fixed"]
+    after = [c for c in scaled.constraints if c.kind == "fixed"]
+    out = []
+    for a, b in zip(before, after):
+        at, to = a.params.get("at"), b.params.get("at")
+        if at and to and [float(v) for v in at] != [float(v) for v in to]:
+            out.append(dict(refs=list(a.refs), at=[float(v) for v in at], to=list(to)))
+    return out
+
+
 def shrink_lower_bound(graph, constraints, width: float, height: float) -> float:
     """Smallest outline scale worth probing: the summed body area at
     :data:`SHRINK_UTILISATION`, every part fitting the outline at its better rotation, and
-    every fixed part's box inside the scaled outline (an edge-band ``at`` keeps its edge
-    distance, any other scales)."""
+    every fixed part's box inside the scaled outline (an ``at`` in a far edge's band keeps
+    its distance to that edge, any other keeps its position)."""
     from .geometry import courtyard_rect
 
     area = sum(part_area(c) for c in graph.components)
@@ -409,15 +432,10 @@ def shrink_lower_bound(graph, constraints, width: float, height: float) -> float
             (r.left, r.right, float(at[0]), width),
             (r.bottom, r.top, float(at[1]), height),
         ):
-            if x <= SHRINK_EDGE_BAND * size:  # keeps its distance to the low edge
-                bound = max(bound, hi / size)
-            elif x >= (1.0 - SHRINK_EDGE_BAND) * size:  # to the high edge
+            if x >= (1.0 - SHRINK_EDGE_BAND) * size:  # keeps its distance to the far edge
                 bound = max(bound, (size - lo) / size)
-            else:  # scales: s*x - (x - lo) >= 0 and s*x + (hi - x) <= s*size
-                if x > 0:
-                    bound = max(bound, (x - lo) / x)
-                if size - x > 0:
-                    bound = max(bound, (hi - x) / (size - x))
+            else:  # stays put: its box must end inside the scaled outline
+                bound = max(bound, hi / size)
     return min(1.0, bound)
 
 

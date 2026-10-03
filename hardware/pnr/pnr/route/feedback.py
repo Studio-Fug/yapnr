@@ -820,7 +820,9 @@ def _shrink_to_fit(graph, constraints, width, height, loop_args):
     twice the edge clearance and 0.5 mm, then bisection), each with the same seed on
     :func:`pnr.place.compact.scaled_constraints`. The smallest outline that converges
     legally wins; ``constraints`` take its outline and fixed poses and the placed graph
-    its outline (write-back stamps it). Traced runs record each run as a scope
+    its outline (write-back stamps it). The outline keeps its origin: a fixed ``at``
+    stays put unless it lies in a far edge's band, where it keeps its distance to that
+    edge (``moved_fixed`` in the record lists those). Traced runs record each run as a scope
     ``shrink-NN`` and the choice as the selection ``shrink``; round diagnostics go to
     ``shrink-NN`` folders, the chosen run's copied to the usual place."""
     import os
@@ -895,6 +897,10 @@ def _shrink_to_fit(graph, constraints, width, height, loop_args):
                     shutil.copytree(item, target, dirs_exist_ok=True)
                 else:
                     shutil.copy2(item, target)
+    # Fixed parts on a far edge's band moved with that edge (every other ``at`` stays).
+    record["moved_fixed"] = (
+        [] if scaled is constraints else compact.moved_fixed(constraints, scaled)
+    )
     constraints.board.width, constraints.board.height = w, h
     if scaled is not constraints:
         constraints.constraints = scaled.constraints

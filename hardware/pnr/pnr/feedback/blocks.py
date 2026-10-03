@@ -143,7 +143,7 @@ def block_board(
                 bad.setdefault(kind, []).extend(values)
         return sorted(bad)
 
-    from pnr.place.compact import placement_clearance
+    from pnr.place.compact import legalize_settings, margin_kwargs, placement_clearance
 
     return MoveBoard(
         graph=g2,
@@ -152,8 +152,10 @@ def block_board(
         anchors=anchors,
         tier1=tier1,
         origin=origin,
-        # The board clearance; the courtyard gap with PNR_COMPACT LEGALIZE.
+        # The board clearance; the courtyard gap with PNR_COMPACT LEGALIZE, plus the
+        # copper margins of parts whose box hugs their pads.
         clearance=placement_clearance(c2),
+        **margin_kwargs(legalize_settings(g2, c2, r2)),
         plane=plane_nets(g2, c2),
         extra_check=extra,
         guard=guard,

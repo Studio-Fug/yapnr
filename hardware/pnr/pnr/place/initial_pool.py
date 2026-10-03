@@ -651,13 +651,17 @@ def route_rank(metrics) -> tuple:
     the design declares any), then vias and copper length (the ``objective``).
 
     PNR_COMPACT ``RANK``: a record carrying the compactness ``bucket``
-    (:func:`pnr.place.compact.rank_bucket`) ranks it right before the vias, after every
-    completion key; a record without one is keyed as before."""
+    (:func:`pnr.place.compact.rank_bucket`) ranks it after every completion key and the
+    vias, before the copper length: on a fixed outline a smaller bounding box is free
+    but a via is not. Under PNR_SHRINK (the outline follows the bounding box) the
+    bucket ranks before the vias. A record without one is keyed as before."""
     objective = list(metrics.get("objective") or [math.inf])
     head = tuple(objective[:2]) + (metrics.get("length_unmatched", 0),)
-    if "bucket" in metrics:
-        head = head + (metrics["bucket"],)
-    return head + tuple(objective[2:])
+    if "bucket" not in metrics:
+        return head + tuple(objective[2:])
+    if compact.shrink_enabled():
+        return head + (metrics["bucket"],) + tuple(objective[2:])
+    return head + tuple(objective[2:3]) + (metrics["bucket"],) + tuple(objective[3:])
 
 
 def select_initial_placement(
@@ -816,6 +820,7 @@ def select_initial_placement(
                                 compact.placement_clearance(placement_constraints),
                                 pad_edge_rule(placement_constraints, rules),
                                 (source.outline.width, source.outline.height),
+                                **compact.margin_kwargs(tight),
                             )
                         prep = PlacementReport(
                             placed.outline.width,

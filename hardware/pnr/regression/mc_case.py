@@ -33,6 +33,7 @@ from pnr.fab_profile import apply_rules
 from pnr.graph import BoardGraph
 from pnr.length_model import attach_board
 from pnr.mc.halving import _rank_key
+from pnr.place import compact
 from pnr.place.initial_pool import _route_metrics, route_rank
 from pnr.place.metrics import hpwl
 from pnr.place.sides import plan as side_plan
@@ -124,8 +125,6 @@ for rec in finalists:
         cand, constraints, rules, pitch=mc.get("pitch_mm", 0.25), max_iters=mc["final_iters"]
     )
     metrics = _route_metrics(route)
-    from pnr.place import compact
-
     if compact.enabled("RANK"):  # PNR_COMPACT RANK: the bucket after completion
         from pnr.place.geometry import outline_size
 
@@ -203,6 +202,8 @@ unresolved = sorted(set(route.result.unrouted) - set(route.deferred_nets))
                 if getattr(route, "length_report", None) is not None
                 else {}
             ),
+            # PNR_SHRINK is the flat driver's: recorded as skipped (absent otherwise).
+            **({"shrink": dict(skipped="mc driver")} if compact.shrink_enabled() else {}),
         ),
         indent=2,
     )

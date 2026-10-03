@@ -1,8 +1,8 @@
 # yapnr experiment infrastructure on Google Cloud (docs/cloud-experiments.md, runbook step 3).
-# Creates: the project's APIs, a VPC without ingress, two buckets, three service accounts and
-# their grants, an Artifact Registry pull-through cache of ghcr.io per region, Spot instance
-# templates for Hyperdisk families, a budget with a Pub/Sub topic, and the budget guard and
-# reaper functions. Quotas are not managed here (the kill switch lowers them; an apply must not
+# Creates: the project's APIs, a VPC without ingress, two buckets, the service accounts and their
+# grants, per region an Artifact Registry pull-through cache of ghcr.io and an images repository
+# (task images built by Cloud Build), Spot instance templates for Hyperdisk families, a budget
+# with a Pub/Sub topic, and the budget guard and reaper functions. Quotas are not managed here (the kill switch lowers them; an apply must not
 # raise them back): see README.md.
 
 provider "google" {
@@ -42,6 +42,7 @@ module "storage" {
   submit_email              = module.identity.submit_email
   runner_email              = module.identity.runner_email
   guard_email               = module.identity.guard_email
+  image_build_email         = module.identity.image_build_email
   result_retention_days     = var.result_retention_days
   checkpoint_retention_days = var.checkpoint_retention_days
   depends_on                = [module.services]
@@ -53,6 +54,7 @@ module "registry" {
   project_number    = var.project_number
   regions           = var.regions
   readers           = { submit = module.identity.submit_email, runner = module.identity.runner_email }
+  writers           = { build = module.identity.image_build_email }
   ghcr_token_secret = var.ghcr_token_secret
   ghcr_username     = var.ghcr_username
   depends_on        = [module.services]

@@ -81,7 +81,7 @@ with 0.2 mm mask dams at the connector pads; one coupon (A10) keeps the mask on.
 
 | Stick    | Structure                                                                 | Size (mm)   | What it determines                                 |
 | -------- | ------------------------------------------------------------------------- | ----------- | -------------------------------------------------- |
-| D1       | window for the optimizer's thin divider (12 × 15 mm), feeds and keep-away | 28 × 41     | **placeholder** until D1 passes: the headline demo |
+| D1       | window for the optimizer's thin divider (12 × 15 mm), feeds and keep-away | 29 × 41     | **placeholder** until D1 passes: the headline demo |
 | R1       | a copy of O0-M's R1                                                       | 29 × 38     | D1 and a reference on one lot                      |
 | A01, A04 | thru and 30 mm line                                                       | 20, 50 × 12 | this lot's εeff, loss and relative Z0              |
 

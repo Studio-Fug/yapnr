@@ -142,7 +142,14 @@ DEFAULT_FAB_PROFILE = "legacy"
 
 
 def engine_revision(repo):
-    """``(commit, dirty)`` of the checkout the sources are frozen from; ``(None, None)`` without git."""
+    """``(commit, dirty)`` of the checkout the sources are frozen from; ``(None, None)`` without git.
+
+    A source bundle of ``yapnr exp`` (a ``git archive``, no ``.git``) gets its commit from the task
+    wrapper's ``YAPNR_ENGINE_REVISION`` and ``YAPNR_ENGINE_DIRTY``, which win over git: the
+    bundle's work directory may sit inside an unrelated checkout.
+    """
+    if os.environ.get("YAPNR_ENGINE_REVISION"):
+        return os.environ["YAPNR_ENGINE_REVISION"], os.environ.get("YAPNR_ENGINE_DIRTY") == "1"
 
     def git(*args):
         return subprocess.run(

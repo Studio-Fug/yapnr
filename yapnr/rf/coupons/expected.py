@@ -106,7 +106,7 @@ def scalars_o(design: catalog.Board, sid: str, out_dir: str) -> Dict[str, str]:
     """The pre-registered scalars of one upload on one substrate (review L1): the held-out
     notches (ring n = 1 and 3, the stub) to 10 kHz, and every line family's εeff, α and Zc on
     the measurement grid (6 MHz to 6 GHz in 6 MHz steps) as CSV."""
-    import json
+    from yapnr.rf.coupons import jsonfmt
 
     st = stackups.get(sid)
     v = stackups.with_values(st, {})
@@ -146,9 +146,7 @@ def scalars_o(design: catalog.Board, sid: str, out_dir: str) -> Dict[str, str]:
         for r in zip(*rows):
             fh.write(",".join(r) + "\n")
     p_json = os.path.join(out_dir, "scalars.json")
-    with open(p_json, "w", encoding="utf-8") as fh:
-        json.dump(doc, fh, indent=2)
-        fh.write("\n")
+    jsonfmt.dump(doc, p_json)
     return {f"{sid}:scalars": p_json, f"{sid}:lines": p_csv}
 
 

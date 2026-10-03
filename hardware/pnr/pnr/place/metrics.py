@@ -7,6 +7,10 @@ hard-legality checks (overlaps, outline containment, fixed poses, keep-outs).
 PNR_PAIR_LANDING_RESERVE=1 (src13): overlap_pairs / hard_violations /
 translation_checker see diff-pair via landing reserves through placement_rects
 (a bottom part over a top terminal part's landing is an overlap).
+
+With side-free parts (:func:`pnr.place.sides.stack_refs`) two parts that fan out
+stacked back to back on opposite sides are an overlap too (hard_violations,
+translation_checker, pose_checker).
 """
 
 from __future__ import annotations
@@ -34,6 +38,7 @@ from .geometry import (
     resolve_hard_rotations,
     resolve_hard_sides,
 )
+from .sides import STACK_PLANE, stack_refs
 
 
 def hpwl(graph: BoardGraph) -> float:
@@ -71,6 +76,32 @@ def overlap_pairs(graph: BoardGraph, clearance: float = 0.0) -> List[Tuple[str, 
             for other_side, other_rect in regions
         )
     ]
+
+
+def stack_pairs(
+    graph: BoardGraph, refs, clearance: float = 0.0, exempt=()
+) -> List[Tuple[str, str]]:
+    """Pairs of ``refs`` (:func:`pnr.place.sides.stack_refs`) on opposite sides whose
+    courtyards overlap (with clearance): two parts that fan out stacked back to back.
+    A pair of two ``exempt`` (fixed) parts is the designer's and is not reported."""
+    comps = [c for c in graph.components if c.ref in refs]
+    out = []
+    for i, a in enumerate(comps):
+        area = courtyard_rect(a)
+        for b in comps[i + 1 :]:
+            if a.side == b.side or (a.ref in exempt and b.ref in exempt):
+                continue
+            if area.overlaps(courtyard_rect(b), gap=clearance):
+                out.append((a.ref, b.ref))
+    return out
+
+
+def _with_stack(comp, regions, stack):
+    """``regions`` plus the part's courtyard on the stack plane when the no-stacking
+    rule covers it (:func:`pnr.place.sides.stack_refs`)."""
+    if comp.ref in stack:
+        return list(regions) + [(STACK_PLANE, courtyard_rect(comp))]
+    return regions
 
 
 def outside_outline(graph: BoardGraph, width: float, height: float, exclude=()) -> List[str]:
@@ -148,8 +179,19 @@ def hard_violations(
     rows_bad = row_violations(graph, constraints)
     rows_bad = rows_bad + line_violations(graph, constraints)
     rows_bad = rows_bad + edge_band_violations(graph, constraints, width, height)
+    overlaps = overlap_pairs(graph, clearance)
+    stack = stack_refs(graph, constraints)
+    if stack:
+        exempt = (
+            set(poses)
+            | set(constraints.locked_refs)
+            | {c.ref for c in graph.components if c.locked}
+        )
+        overlaps += [
+            pair for pair in stack_pairs(graph, stack, clearance, exempt) if pair not in overlaps
+        ]
     return {
-        "overlaps": overlap_pairs(graph, clearance),
+        "overlaps": overlaps,
         "outside_outline": outside_outline(graph, width, height, exclude=constraints.locked_refs),
         "fixed_misplaced": sorted(
             set(misplaced_fixed(graph, poses))
@@ -191,7 +233,8 @@ def translation_checker(graph, constraints, clearance=0.0):
     poses = resolve_fixed_poses(graph, constraints)
     keepouts = keepout_rects(graph, constraints, poses)
     limits = hard_group_limits(constraints, {c.ref: c.pos for c in graph.components})
-    geometry = {c.ref: placement_rects(c) for c in graph.components}
+    stack = stack_refs(graph, constraints)
+    geometry = {c.ref: _with_stack(c, placement_rects(c), stack) for c in graph.components}
     sides_required = resolve_hard_sides(constraints)
     rotations_required = resolve_hard_rotations(constraints)
     bands = hard_edge_bands(constraints)
@@ -230,7 +273,7 @@ def translation_checker(graph, constraints, clearance=0.0):
             ref != comp.ref and side == other_side and area.overlaps(other, gap=clearance)
             for ref, regions in geometry.items()
             for other_side, other in regions
-            for side, area in placement_rects(comp)
+            for side, area in _with_stack(comp, placement_rects(comp), stack)
         )
 
     return legal
@@ -289,14 +332,15 @@ def pose_checker(graph, constraints, *, clearance=0.0, spread=1.0, pad_edge=None
         for cell in cells_of[ref]:
             buckets.setdefault(cell, set()).add(ref)
 
+    stack = stack_refs(graph, constraints)
     for c in graph.components:
-        index(c.ref, placement_rects(c))
+        index(c.ref, _with_stack(c, placement_rects(c), stack))
 
     def grown(comp):
         from .geometry import ReserveRect
 
         out = []
-        for side, rect in placement_rects(comp):
+        for side, rect in _with_stack(comp, placement_rects(comp), stack):
             if spread > 1.0 and not isinstance(rect, ReserveRect):
                 rect = Rect(rect.cx, rect.cy, rect.w * spread, rect.h * spread)
             out.append((side, rect))
@@ -358,14 +402,15 @@ def pose_checker(graph, constraints, *, clearance=0.0, spread=1.0, pad_edge=None
                 if any(
                     side == other_side and area.overlaps(other, gap=clearance)
                     for side, area in mine[a.ref]
-                    for other_side, other in placement_rects(b)
+                    for other_side, other in _with_stack(b, placement_rects(b), stack)
                 ):
                     return False
         return True
 
     def update(refs):
         for ref in refs:
-            index(ref, placement_rects(graph.component(ref)))
+            comp = graph.component(ref)
+            index(ref, _with_stack(comp, placement_rects(comp), stack))
 
     legal.update = update
     return legal

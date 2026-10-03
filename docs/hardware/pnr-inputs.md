@@ -183,7 +183,11 @@ rotation, the legalizer may take a slot on the other side, and a seeded detail
 pass tries flips and pairwise swaps. Every side choice is costed in wirelength
 millimetres: 3 mm for each non-plane net whose surface pins end up on both
 sides without a drilled pin (a layer change), the `side_pref` cost, and 0.5 mm
-for each part off its source side. Writeback flips a bottom part as KiCad's
+for each part off its source side. While any part is free, two parts with three
+or more connected pads (ICs, not two-terminal passives) may not overlap on
+opposite sides: a through via under such a stack would land on the far part's
+pads, so neither could fan out there. A capacitor under an IC is allowed.
+Writeback flips a bottom part as KiCad's
 Flip does (mirrored footprint, every pad, graphic and text on `B.*`).
 `fixed.side` and `side` are honored end-to-end.
 

@@ -30,6 +30,16 @@ millimetres of wirelength:
   when that saves more than a token amount (and a mirror image of the whole board is
   not an equal alternative).
 
+While a plan frees any part, two parts that *fan out* (:func:`fans_out`: surface parts
+with at least :data:`STACK_PADS` connected pads, an IC rather than a two-terminal
+passive) may not overlap on opposite sides either (:func:`stack_refs`; the
+``stack`` plane of :func:`pnr.place.legalize.legalize` and of the placement
+checkers). A through via inside such an overlap would land on the far part's pads, so
+every pin under the stack could leave only on its own layer; on the two-layer chaser
+rungs the finalists with two ICs back to back were the ones left with unrouted
+connections. A two-terminal part (a decoupling capacitor) may still sit under an IC.
+Without free parts nothing changes, so a single-sided board is checked as before.
+
 Every function here is pure and stdlib-only; :func:`plan` reads the board graph and
 the compiled constraints only.
 """
@@ -60,6 +70,21 @@ def drilled(comp) -> bool:
 def macro(comp) -> bool:
     footprint = comp.footprint or ""
     return footprint.startswith("block:") or footprint.startswith("line:") or bool(comp.hull)
+
+
+# Parts with at least this many connected pads fan out through vias near their body
+# and may not be stacked back to back (see the module docstring).
+STACK_PADS = 3
+# The occupancy plane / region tag of that rule.
+STACK_PLANE = "stack"
+
+
+def fans_out(comp) -> bool:
+    """A surface part (no drilled pad, not a macro) with at least :data:`STACK_PADS`
+    connected pads."""
+    return (
+        not drilled(comp) and not macro(comp) and sum(1 for p in comp.pads if p.net) >= STACK_PADS
+    )
 
 
 @dataclass(frozen=True)
@@ -182,6 +207,14 @@ def plan(graph, constraints, rules: Optional[dict] = None) -> SidePlan:
         plane_nets=_plane_nets(graph, constraints),
         drilled_nets=drilled_nets,
     )
+
+
+def stack_refs(graph, constraints) -> frozenset:
+    """The parts the no-stacking rule covers on this board: every part that
+    :func:`fans_out` when the side plan frees any part, else none."""
+    if not plan(graph, constraints).active:
+        return frozenset()
+    return frozenset(c.ref for c in graph.components if fans_out(c))
 
 
 def with_policy(doc: Optional[dict], sides: Optional[str]) -> dict:

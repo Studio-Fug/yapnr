@@ -28,10 +28,12 @@ with the rotation temperature, initialised toward its start side. Pin offsets ar
 the expectation over both sides (the bottom mirrors them, as KiCad's Flip does) and
 rotations; two parts repel with weight ``min(1, o_i . o_j)``, ``o = [1 - q, q]`` for a
 surface part and ``[1, 1]`` for one that occupies both sides (the constant per-side
-mask when nothing is free). Three terms join the loss, in wirelength millimetres:
-the expected layer changes ``VIA_MM * sum P(net split)``, ``P = 1 - prod(1 - q) -
-prod(q)`` over each splittable net's parts, the ``side_pref`` bias and a small cost
-per part off its source side. Each free part snaps to the bottom when ``q > 0.5``.
+mask when nothing is free), and two parts that fan out with weight 1 whatever their
+sides (no back-to-back stacking, :func:`pnr.place.sides.stack_refs`). Three terms
+join the loss, in wirelength millimetres: the expected layer changes
+``VIA_MM * sum P(net split)``, ``P = 1 - prod(1 - q) - prod(q)`` over each splittable
+net's parts, the ``side_pref`` bias and a small cost per part off its source side.
+Each free part snaps to the bottom when ``q > 0.5``.
 Without free parts none of this runs and the result is unchanged.
 """
 
@@ -264,7 +266,9 @@ def global_place(
     pin_off4_t = torch.tensor(pin_off4, dtype=torch.float32)  # (P, 4, 2)
     sided = None
     if free_side:
-        sided = _side_terms(graph, comps, idx, side_plan, free_side, initial_sides, pin_off4_t)
+        sided = _side_terms(
+            graph, constraints, comps, idx, side_plan, free_side, initial_sides, pin_off4_t
+        )
         params.append(sided["logits"])
     net_pin_idx = [[pin_key[p] for p in net.pins if p in pin_key] for net in graph.nets]
     net_pin_idx = [pins for pins in net_pin_idx if len(pins) >= 2]
@@ -501,13 +505,15 @@ def global_place(
 SIDE_LOGIT = 2.0
 
 
-def _side_terms(graph, comps, idx, side_plan, free, initial_sides, pin_off4_t):
+def _side_terms(graph, constraints, comps, idx, side_plan, free, initial_sides, pin_off4_t):
     """Constant tensors of the side relaxation (see the module docstring)."""
-    from .sides import FLIP_MM, SIDE_PREF_MM, VIA_MM
+    from .sides import FLIP_MM, SIDE_PREF_MM, VIA_MM, stack_refs
 
     n = len(comps)
     current_bottom = torch.tensor([c.side == "bottom" for c in comps], dtype=torch.bool)
     both = torch.tensor([len(set(occupied_sides(c))) > 1 for c in comps], dtype=torch.bool)
+    stack = stack_refs(graph, constraints)
+    fan = torch.tensor([c.ref in stack for c in comps], dtype=torch.float32) if stack else None
     init = []
     for i in free:
         start = (initial_sides or {}).get(comps[i].ref, comps[i].side)
@@ -541,6 +547,7 @@ def _side_terms(graph, comps, idx, side_plan, free, initial_sides, pin_off4_t):
         logits=torch.nn.Parameter(torch.tensor(init, dtype=torch.float32)),
         current_bottom=current_bottom,
         both=both,
+        fan=fan,
         pin_off4_mirror=mirror,
         member=member if nets else None,
         pref=pref,
@@ -559,10 +566,13 @@ def _bottom_probability(sided, temp):
 
 
 def _side_overlap(sided, bottom):
-    """(n, n) expected same-side weight ``min(1, o_i . o_j)``."""
+    """(n, n) expected same-side weight ``min(1, o_i . o_j)``; two parts that fan out
+    (:func:`pnr.place.sides.stack_refs`) also share the stack plane, weight 1."""
     top_o = torch.where(sided["both"], 1.0, 1.0 - bottom)
     bottom_o = torch.where(sided["both"], 1.0, bottom)
     weight = top_o.unsqueeze(1) * top_o.unsqueeze(0) + bottom_o.unsqueeze(1) * bottom_o.unsqueeze(0)
+    if sided["fan"] is not None:
+        weight = weight + sided["fan"].unsqueeze(1) * sided["fan"].unsqueeze(0)
     return torch.clamp(weight, max=1.0)
 
 

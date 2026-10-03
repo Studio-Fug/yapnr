@@ -40,6 +40,7 @@ from .geometry import (
     placement_rects,
     set_component_side,
 )
+from .sides import STACK_PLANE
 from .sides import opposite as opposite_side
 
 # PNR_PAIR_LANDING_RESERVE=1 (pnr.place.pair_landing): besides the per-side body
@@ -272,6 +273,7 @@ def legalize(
     side_cost=None,
     side_weight: float = 3.0,
     side_retry_mm: float = 1.0,
+    stack: Optional[frozenset] = None,
 ) -> BoardGraph:
     """Return a copy of ``graph`` with movable parts snapped to a legal layout.
 
@@ -313,6 +315,10 @@ def legalize(
     slot cost (squared displacement plus channel demand) plus ``side_weight`` (mm)
     times ``side_cost(graph)`` (mm, :func:`pnr.place.sides.side_cost` of the board
     with that choice). A part with one option keeps its side.
+
+    ``stack`` (refs, :func:`pnr.place.sides.stack_refs`; None = off) adds a ``stack``
+    occupancy plane that each of those parts tests and marks whatever its side, so two
+    of them never overlap back to back on opposite sides.
 
     With hull macros (``PNR_MACRO_HULL=1``) the occupancy gains an ``inner`` plane:
     hull macros mark their inner-layer mask there, drilled parts and solid block
@@ -365,6 +371,10 @@ def legalize(
     def is_hull(comp):
         return hulls and bool(comp.hull)
 
+    stacked = frozenset(stack or ())  # (``stack`` below is the backtracking stack)
+    if stacked:
+        occupancy[STACK_PLANE] = np.zeros((ny, nx), dtype=bool)
+
     def part_sides(comp):
         """Occupancy planes a slot tests and marks (drilled parts: both sides)."""
         sides = (
@@ -376,6 +386,8 @@ def legalize(
             and (hullmod.drilled(comp) or str(comp.footprint).startswith("block:"))
         ):
             sides = tuple(sides) + ("inner",)
+        if comp.ref in stacked:
+            sides = tuple(sides) + (STACK_PLANE,)
         return sides
 
     boxes = {}
@@ -534,6 +546,9 @@ def legalize(
                 _mark(
                     mounted[side], g, Rect(rect.cx, rect.cy, rect.w + clearance, rect.h + clearance)
                 )
+        if comp.ref in stacked:
+            cr = courtyard_rect(comp)
+            _mark(occupancy[STACK_PLANE], g, Rect(cr.cx, cr.cy, cr.w + clearance, cr.h + clearance))
 
     # Minimum-remaining-slots ordering accounts for actual fixed obstacles and
     # intersections of group discs. Radius alone can let a flexible neighbor

@@ -151,6 +151,93 @@ class LegalizerTest(unittest.TestCase):
         self.assertEqual(placed.component("U2").pads[0].offset[1], -0.1)  # mirrored
 
 
+def twin_ics(policy="double", **extra):
+    """Two eight-pin ICs wired pin for pin, so a back-to-back stack would shorten
+    every net, and a two-pin capacitor on one of their nets."""
+    nets = ["N%d" % i for i in range(8)]
+    u1 = smd("U1", nets, (6, 4), (8, 7), pitch=1.27, rows=2)
+    u2 = smd("U2", nets, (6, 4), (8, 7), pitch=1.27, rows=2)
+    g = board(u1, u2, smd("C1", ["N0", "N7"], pos=(14, 12)), outline=(24, 14))
+    return g, rules(g, policy, outline=(24, 14), **extra)
+
+
+class StackingTest(unittest.TestCase):
+    """Two parts that fan out never stack back to back while a part is side-free."""
+
+    def test_rule_covers_parts_that_fan_out_under_a_side_free_plan(self):
+        g, c = twin_ics()
+        self.assertEqual(S.stack_refs(g, c), frozenset({"U1", "U2"}))
+        g1, single = twin_ics("single")
+        self.assertEqual(S.stack_refs(g1, single), frozenset())
+        self.assertFalse(S.fans_out(th("J1", ["A", "B", "C"])))
+
+    def test_back_to_back_ics_are_an_overlap_but_a_capacitor_under_one_is_not(self):
+        g, c = twin_ics()
+        set_component_side(g.component("U2"), "bottom")
+        self.assertEqual(hard_violations(g, c)["overlaps"], [("U1", "U2")])
+        g1, single = twin_ics("single")
+        set_component_side(g1.component("U2"), "bottom")
+        self.assertEqual(hard_violations(g1, single)["overlaps"], [])
+        g2, c2 = twin_ics()
+        g2.component("U2").pos = (18, 7)
+        set_component_side(g2.component("C1"), "bottom")
+        g2.component("C1").pos = (8, 7)
+        self.assertEqual(hard_violations(g2, c2)["overlaps"], [])
+        # Two fixed parts stacked by the designer stay legal.
+        g3, _ = twin_ics()
+        set_component_side(g3.component("U2"), "bottom")
+        fixed = dict(
+            U1=dict(at=[8, 7], rot=0, side="top"), U2=dict(at=[8, 7], rot=0, side="bottom")
+        )
+        self.assertEqual(
+            hard_violations(g3, rules(g3, "double", outline=(24, 14), fixed=fixed))["overlaps"], []
+        )
+
+    def test_legalizer_keeps_two_ics_apart_across_sides(self):
+        g, c = twin_ics()
+        set_component_side(g.component("U2"), "bottom")
+        kw = dict(fixed={}, keepouts=[], grid_mm=0.25, clearance=0.2)
+        stacked = legalize(g, 24, 14, **kw)
+        self.assertEqual(stacked.component("U1").pos, stacked.component("U2").pos)
+        apart = legalize(g, 24, 14, stack=S.stack_refs(g, c), **kw)
+        self.assertFalse(
+            courtyard_rect(apart.component("U1")).overlaps(courtyard_rect(apart.component("U2")))
+        )
+        self.assertFalse(any(hard_violations(apart, c).values()))
+
+    def test_pose_checker_rejects_a_flip_under_another_ic(self):
+        g, c = twin_ics()
+        g.component("U2").pos = (18, 7)
+        legal = pose_checker(g, c)
+        u2 = g.component("U2")
+        set_component_side(u2, "bottom")
+        u2.pos = (8, 7)
+        self.assertFalse(legal([u2]))
+        cap = g.component("C1")
+        set_component_side(cap, "bottom")
+        cap.pos = (8, 7)
+        self.assertTrue(legal([cap]))
+
+    def test_placement_never_stacks_two_ics(self):
+        from pnr.place.metrics import stack_pairs
+
+        # Plane nets: a side change costs no layer change, so only the rule keeps the
+        # ICs from stacking (without it every seed below stacks them).
+        nets = ["N%d" % i for i in range(8)]
+        g, c = twin_ics(layers=4, net_class=dict(p=dict(nets=nets, plane_layer="In1.Cu")))
+        for seed in (0, 1, 2):
+            placed, report = place(g, c, seed=seed, iters=200)
+            self.assertTrue(report.legal, report.summary())
+            self.assertEqual(stack_pairs(placed, {"U1", "U2"}), [])
+
+    def test_a_board_too_small_for_two_ics_on_one_side_stays_illegal(self):
+        a = smd("U1", ["A", "B", "C"], (6, 4))
+        b = smd("U2", ["A", "B", "C"], (6, 4))
+        g = board(a, b, outline=(7, 5))
+        with self.assertRaises(LegalizationError):
+            place(g, rules(g, "double", outline=(7, 5)), seed=0, iters=80)
+
+
 class DetailMovesTest(unittest.TestCase):
     def crossed(self):
         anchors = [

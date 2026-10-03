@@ -116,7 +116,8 @@ def place(
     placement relaxes its side too (starting toward ``initial_sides``, {ref: side}),
     the legalizer may take the slot on its other side, and a detail pass
     (:mod:`pnr.place.detail_moves`) tries flips and pairwise swaps; a held part never
-    changes side (checked). With nothing free the flow is the single-sided one, as it
+    changes side (checked), and two parts that fan out never stack back to back
+    (:func:`pnr.place.sides.stack_refs`). With nothing free the flow is the single-sided one, as it
     is under power-first placement (``PNR_POWER_FIRST=1``), which keeps every side.
     """
     if any(c.kind == "line_group" for c in constraints.constraints):
@@ -174,8 +175,11 @@ def place(
     keepouts = keepout_rects(graph, constraints, poses)
     clearance = float(constraints.board.default_clearance_mm)
     from .sides import plan as side_plan_of
+    from .sides import stack_refs
 
     side_plan = side_plan_of(graph, constraints, channel_rules)
+    # Parts that fan out may not stack back to back while any part is side-free.
+    stack = stack_refs(graph, constraints)
 
     roles = None
     if os.environ.get("PNR_POWER_FIRST") == "1":
@@ -291,6 +295,7 @@ def place(
         # Hard edge_align (opt-in): only passed when a design declares one.
         **({} if not bands else dict(edge_bands=bands)),
         **(_side_legalization(side_plan) if sided else {}),
+        **({} if not stack else dict(stack=stack)),
     )
     if sided:
         from .detail_moves import improve

@@ -44,7 +44,7 @@ from .metrics import hard_violations, hpwl
 from .placer import PlacementReport, place
 from .sides import opposite
 from .sides import plan as side_plan
-from .sides import same_footprint, under_body_sides
+from .sides import same_footprint, stack_refs, under_body_sides
 
 
 @dataclass(frozen=True)
@@ -619,6 +619,11 @@ def select_initial_placement(
                                 {}
                                 if not hard_edge_bands(placement_constraints)
                                 else dict(edge_bands=hard_edge_bands(placement_constraints))
+                            ),
+                            **(
+                                {}
+                                if not stack_refs(seed_graph, placement_constraints)
+                                else dict(stack=stack_refs(seed_graph, placement_constraints))
                             ),
                         )
                         prep = PlacementReport(

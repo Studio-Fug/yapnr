@@ -538,6 +538,37 @@ The gloss, dekink and corridor-coalescing pass (`PNR_GLOSS`,
 - **Private board data stays out:** the port's tests and examples use generated geometry and the
   public ladder boards; Splanc's groups file and replay boards are not ported.
 
+Compact placement (`PNR_COMPACT`, shrink-to-fit `PNR_SHRINK`,
+[design](design/compact-placement.md)); owner decisions of 2026-10-03:
+
+- **Behind `PNR_COMPACT`, off by default,** in five parts that can be dropped one at a time
+  (`PNR_COMPACT_<PART>=0`): spread 1.0 with clustered starts, the compact legalizer (courtyard
+  gap, copper margins, finer slots, pads off the edge), offset courtyards, a compactness
+  tie-break in the Monte Carlo selection and plane drops planned before routing (`DROPS`).
+  With the switch unset the engine's outputs are those of the parent commit (tested); the
+  ladder's `result.json` gains a `compactness` measure in every arm.
+- **Completion first:** the compactness tie-break ranks after every completion key and the
+  vias (before the vias only under `PNR_SHRINK`); copper clearance stays with the router and
+  KiCad's DRC.
+- **Default-on rule:** only if, per gloss setting, every case that passes with the switch off
+  passes with it on, opens and DRC findings are no worse and the pin-1-origin header rung
+  passes. `PNR_SHRINK` stays opt-in, since it changes the board outline.
+- **Outcome: off by default.** The ladder, the showcases, the header rung and the nightly hard
+  rungs pass under it (`08-chaser-20-plane` only once `DROPS` plans its plane drops before
+  routing), but 5 of the 16 manual `09-mcu-usb-31` rung cells that pass without it fail with it
+  (USB pair skew or a leg unrouted), and 3 with `COURTYARD` alone. Dense placement needs room
+  reserved for pair tuning before another A/B.
+- **The docs animations show compact placement and gloss** (the owner's request: "regenerate
+  the animations in the docs and readme to show the new glossed results"). Compact placement won
+  the ladder A/B (every ladder and showcase cell passes; placed bounding box -38 %, copper -16 %,
+  vias +10 %); what keeps it off by default is the manual `09-mcu-usb-31` lane, which the
+  animations do not show. So the ladder and showcase animations are rendered from one traced run
+  with `--compact --gloss` (seed 0, darwin-arm64, engine `cfb7cb3`), each animation's `config`
+  in the manifest says so, the pages and the README caption name both opt-in switches, and the
+  CI traced runs take the same options so their trace hashes stay comparable. The renderer
+  (version 3) plays the gloss stage's saved board as a before/after: the copper the stage
+  replaced in red, its new copper in green, marked by geometry, not by track rows.
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.

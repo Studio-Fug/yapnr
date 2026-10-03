@@ -235,6 +235,7 @@
 <li class="toctree-l1"><a class="reference internal" href="cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../references.html">Foundations and references</a></li>
@@ -309,10 +310,20 @@ timeline never shows routed copper at 0 %. Montages cross-fade with the board.</
 <li><p><strong>Progress bar.</strong> The number and the bar count committed connections; negotiation fills a
 lighter bar behind them (§5.2 drew the provisional count in the bar itself, which reached 100 %
 and then dropped when commits began). The title card’s backdrop is the unplaced board.</p></li>
+<li><p><strong>The gloss stage (renderer 3, 2026-10-03).</strong> A board saved after <code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--gloss</span></code>’s stage
+(a <code class="docutils literal notranslate"><span class="pre">native</span></code> board event with <code class="docutils literal notranslate"><span class="pre">stage:</span> <span class="pre">gloss</span></code>) plays as a before/after: the board before it
+with the copper the stage replaced drawn as ripped (dashed red), a cross-fade, and the board
+after it with its new copper flashed (green); the footer gives the copper length before and
+after. The changed copper is the geometric difference of the two boards
+(<code class="docutils literal notranslate"><span class="pre">pnr.animate.gloss</span></code>: track pieces no collinear track of the same layer and width covers,
+sampled every 0.1 mm), so the pass’s merging of collinear pieces is not marked. A stage that
+changed no copper holds for 0.4 s (“Gloss · no copper changed”). Traces without the stage
+render as before (the timeline golden holds).</p></li>
 <li><p><strong>Draw order.</strong> Vias are drawn after pads, as KiCad draws them (§5.2 had them before, which hid
 a via on a pad); native frames ring each KiCad DRC finding.</p></li>
 <li><p><strong>Results.</strong> <code class="docutils literal notranslate"><span class="pre">docs/animations/ladder-results.json</span></code> (every case’s gate result, with KiCad’s
-findings by rule) sits next to the manifest. The manifest records the ladder run’s own
+findings by rule; since 2026-10-03 also the placed parts’ <code class="docutils literal notranslate"><span class="pre">compactness</span></code> and the gloss stage’s
+bends and length) sits next to the manifest. The manifest records the ladder run’s own
 provenance (commit and dirty flag, <code class="docutils literal notranslate"><span class="pre">sources_sha256</span></code>, profile, platform, image, KiCad) apart from
 the render’s, and frame counts as encoded.</p></li>
 <li><p><strong>README case.</strong> The README shows <code class="docutils literal notranslate"><span class="pre">05-timer-led-10</span></code>, the TLC555 blinker: the request’s “555

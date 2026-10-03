@@ -235,6 +235,7 @@
 <li class="toctree-l1"><a class="reference internal" href="design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="references.html">Foundations and references</a></li>
@@ -827,6 +828,37 @@ does not cost completion. The ladder A/B (gloss after a complete route) cannot d
 regression there (gate, DRC, opens, objective) is a bug.</p></li>
 <li><p><strong>Private board data stays out:</strong> the port’s tests and examples use generated geometry and the
 public ladder boards; Splanc’s groups file and replay boards are not ported.</p></li>
+</ul>
+<p>Compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>, shrink-to-fit <code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>,
+<a class="reference internal" href="design/compact-placement.html"><span class="std std-doc">design</span></a>); owner decisions of 2026-10-03:</p>
+<ul class="simple">
+<li><p><strong>Behind <code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>, off by default,</strong> in five parts that can be dropped one at a time
+(<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT_&lt;PART&gt;=0</span></code>): spread 1.0 with clustered starts, the compact legalizer (courtyard
+gap, copper margins, finer slots, pads off the edge), offset courtyards, a compactness
+tie-break in the Monte Carlo selection and plane drops planned before routing (<code class="docutils literal notranslate"><span class="pre">DROPS</span></code>).
+With the switch unset the engine’s outputs are those of the parent commit (tested); the
+ladder’s <code class="docutils literal notranslate"><span class="pre">result.json</span></code> gains a <code class="docutils literal notranslate"><span class="pre">compactness</span></code> measure in every arm.</p></li>
+<li><p><strong>Completion first:</strong> the compactness tie-break ranks after every completion key and the
+vias (before the vias only under <code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>); copper clearance stays with the router and
+KiCad’s DRC.</p></li>
+<li><p><strong>Default-on rule:</strong> only if, per gloss setting, every case that passes with the switch off
+passes with it on, opens and DRC findings are no worse and the pin-1-origin header rung
+passes. <code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code> stays opt-in, since it changes the board outline.</p></li>
+<li><p><strong>Outcome: off by default.</strong> The ladder, the showcases, the header rung and the nightly hard
+rungs pass under it (<code class="docutils literal notranslate"><span class="pre">08-chaser-20-plane</span></code> only once <code class="docutils literal notranslate"><span class="pre">DROPS</span></code> plans its plane drops before
+routing), but 5 of the 16 manual <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> rung cells that pass without it fail with it
+(USB pair skew or a leg unrouted), and 3 with <code class="docutils literal notranslate"><span class="pre">COURTYARD</span></code> alone. Dense placement needs room
+reserved for pair tuning before another A/B.</p></li>
+<li><p><strong>The docs animations show compact placement and gloss</strong> (the owner’s request: “regenerate
+the animations in the docs and readme to show the new glossed results”). Compact placement won
+the ladder A/B (every ladder and showcase cell passes; placed bounding box -38 %, copper -16 %,
+vias +10 %); what keeps it off by default is the manual <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> lane, which the
+animations do not show. So the ladder and showcase animations are rendered from one traced run
+with <code class="docutils literal notranslate"><span class="pre">--compact</span> <span class="pre">--gloss</span></code> (seed 0, darwin-arm64, engine <code class="docutils literal notranslate"><span class="pre">cfb7cb3</span></code>), each animation’s <code class="docutils literal notranslate"><span class="pre">config</span></code>
+in the manifest says so, the pages and the README caption name both opt-in switches, and the
+CI traced runs take the same options so their trace hashes stay comparable. The renderer
+(version 3) plays the gloss stage’s saved board as a before/after: the copper the stage
+replaced in red, its new copper in green, marked by geometry, not by track rows.</p></li>
 </ul>
 </section>
 <section id="pinned-versions">

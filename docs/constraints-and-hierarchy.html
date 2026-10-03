@@ -235,6 +235,7 @@
 <li class="toctree-l1"><a class="reference internal" href="design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
 <li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
 <li class="toctree-l1"><a class="reference internal" href="references.html">Foundations and references</a></li>
@@ -301,9 +302,14 @@ boards and KiCad’s verdict.</p>
 they are not ladder cases: they sit outside the ladder’s gate and its pull-request lane (the
 nightly lane runs them for information). All five cases below come from one traced run: seed 0,
 a placement snapshot every 5 iterations, the legacy fabrication profile, KiCad 10.0.6 on the
-development Mac (darwin-arm64). The four flat cases use the initial placement pool (8 starts, 3
-routed finalists); the hierarchical case uses its own block trials and four top-level seeds.
-Every case passes the gate: 100 % routed, no open connections and no findings in KiCad’s DRC.</p>
+development Mac (darwin-arm64), engine <code class="docutils literal notranslate"><span class="pre">cfb7cb3</span></code>, with the ladder animations’ two opt-in stages:
+<a class="reference internal" href="design/compact-placement.html"><span class="std std-doc">compact placement</span></a> (<code class="docutils literal notranslate"><span class="pre">--compact</span></code>, <code class="docutils literal notranslate"><span class="pre">PNR_COMPACT=1</span></code>) and the
+<a class="reference internal" href="design/gloss.html"><span class="std std-doc">gloss pass</span></a> (<code class="docutils literal notranslate"><span class="pre">--gloss</span></code>, <code class="docutils literal notranslate"><span class="pre">PNR_GLOSS=1</span></code>), both off by default. The four flat
+cases use the initial placement pool (8 starts, 3 routed finalists); the hierarchical case uses
+its own block trials and four top-level seeds. Every case passes the gate: 100 % routed, no open
+connections and no findings in KiCad’s DRC. Each animation ends with the gloss stage’s before
+and after (the copper it replaces in red, its new copper in green; see
+<a class="reference internal" href="regression-ladder.html#reading-an-animation"><span class="std std-ref">Reading an animation</span></a>).</p>
 <section id="line-groups">
 <h2>Line groups<a class="headerlink" href="#line-groups" title="Link to this heading">¶</a></h2>
 <p><img src="animations/showcase-chaser-line.webp" width="960"
@@ -327,16 +333,16 @@ the legalizer places it in one step; afterwards the members are posed from the l
 <p>What to watch:</p>
 <ul class="simple">
 <li><p><strong>Global placement:</strong> the dashed rectangle is the rigid line. It slides as one body while the
-other parts spread around it. The placer’s rotation is a four-way choice, and here it keeps
-the line vertical, flipping it end for end a few times (a half-turn is drawn as a flip: the
-engine records only the chosen direction, never the angles in between).</p></li>
-<li><p><strong>Legalization:</strong> the line is placed in one step, not five (15 steps instead of 19).</p></li>
+other parts gather around it. The placer’s rotation is a four-way choice: here it turns the
+line upright within the first five iterations and keeps it there (the engine records only the
+chosen direction, never the angles in between; a half-turn would be drawn as a flip).</p></li>
+<li><p><strong>Legalization:</strong> the line is placed in one step, not five (16 steps instead of 20).</p></li>
 <li><p><strong>The pool’s shortlist:</strong> the eight starts put the line in different places and directions
 (vertical in seven starts, horizontal in one, both ways round).</p></li>
 <li><p><strong>The caption strips:</strong> HPWL (the half-perimeter wirelength of every net, from the frame’s
 poses) and the “LED line error”, the largest distance of D1 to D5 from their best-fit line. On
 the left the dashed path through D1 to D5 shows where the sequence goes; its error ends at
-6.85 mm. On the right it is 0.00 mm throughout.</p></li>
+5.91 mm. On the right it is 0.00 mm throughout.</p></li>
 </ul>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
@@ -358,10 +364,10 @@ the left the dashed path through D1 to D5 shows where the sequence goes; its err
 <td class="text-center"><p>100 %</p></td>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>0</p></td>
-<td class="text-right"><p>19</p></td>
-<td class="text-right"><p>310.75</p></td>
-<td class="text-right"><p>271</p></td>
-<td class="text-right"><p>114.3</p></td>
+<td class="text-right"><p>23</p></td>
+<td class="text-right"><p>272.90</p></td>
+<td class="text-right"><p>240</p></td>
+<td class="text-right"><p>74.0</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">line-chaser-20</span></code></p></td>
 <td class="text-right"><p>20</p></td>
@@ -369,14 +375,16 @@ the left the dashed path through D1 to D5 shows where the sequence goes; its err
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>20</p></td>
-<td class="text-right"><p>322.49</p></td>
-<td class="text-right"><p>272</p></td>
-<td class="text-right"><p>121.6</p></td>
+<td class="text-right"><p>268.74</p></td>
+<td class="text-right"><p>241</p></td>
+<td class="text-right"><p>60.3</p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>The line costs one via, 12 mm of copper and 1 mm of HPWL here. Caveats: a line turned by 180°
+<p>The line costs 1 mm of HPWL here, and its board ends with three vias and 4 mm of copper fewer
+than the free one (one seed: the two boards route differently, so the difference is not the
+line’s own price). Caveats: a line turned by 180°
 reverses the sequence on the board, which a human would accept either way, so the placer may
 choose either direction (near the end of global placement its choice can flip between the two).
 Only the LEDs are grouped; their resistors stay free (a rigid LED-and-resistor row is a follow-up).</p>
@@ -409,17 +417,16 @@ moves respect it.</p>
 <li><p><strong>Tethers:</strong> a line from each held part to the edge, red while it is farther than its
 tolerance, mint once it is within it. During global placement the pull is soft, so parts
 approach the edge; the legalizer’s band then holds them there.</p></li>
-<li><p><strong>The order along the edge:</strong> the caption strip reads it live (“south: D1 · J1 · SW1”). In the
-start the animation follows, the order stays D1, J1, SW1: the parts approach the edge and SW1
-slides about 4 mm along it. The order changes in other starts, so the shortlist first replays
+<li><p><strong>The order along the edge:</strong> the caption strip reads it live (“south: J1 · SW1 · D1”). In the
+start the animation follows, D1 and SW1 pass each other as the parts approach the edge, and the
+order ends J1, SW1, D1. The order changes in other starts, so the shortlist first replays
 the global placement of all eight starts side by side (recorded snapshots, one clock), with each
-tile’s order under it: in three starts two edge parts pass each other during global placement,
-and in two the legalizer changes the order. The tiles then hold each start’s legalized order:
-four different orders among the eight.</p></li>
+tile’s order under it: in four starts two edge parts pass each other during global placement
+(in one of them twice), and in two the legalizer changes the order. The tiles then hold each
+start’s legalized order: three different orders among the eight.</p></li>
 <li><p><strong>The free board:</strong> the dashed edge is the other board’s target, drawn for reference; “on edge
-0 of 3” counts its parts within 1 mm of it. In the start it follows, D1 and three other parts
-stay off the board until the legalizer places them, so the camera widens over its global
-placement and zooms back to the board after legalization.</p></li>
+0 of 3” counts its parts within 1 mm of it. Its parts stay on the board throughout the start it
+follows (in another start of its pool, nine leave it during global placement).</p></li>
 </ul>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
@@ -441,25 +448,27 @@ placement and zooms back to the board after legalization.</p></li>
 <td class="text-center"><p>100 %</p></td>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>0</p></td>
-<td class="text-right"><p>9</p></td>
-<td class="text-right"><p>176.87</p></td>
-<td class="text-right"><p>139</p></td>
-<td class="text-right"><p>61.9</p></td>
+<td class="text-right"><p>8</p></td>
+<td class="text-right"><p>154.85</p></td>
+<td class="text-right"><p>126</p></td>
+<td class="text-right"><p>55.1</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">edge-io-12</span></code></p></td>
 <td class="text-right"><p>12</p></td>
 <td class="text-center"><p>100 %</p></td>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>0</p></td>
-<td class="text-right"><p>8</p></td>
-<td class="text-right"><p>198.47</p></td>
-<td class="text-right"><p>169</p></td>
-<td class="text-right"><p>34.2</p></td>
+<td class="text-right"><p>11</p></td>
+<td class="text-right"><p>134.35</p></td>
+<td class="text-right"><p>103</p></td>
+<td class="text-right"><p>40.1</p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>Holding the three parts on the edge costs 30 mm of HPWL and 22 mm of copper, and saves a via.</p>
+<p>Here the held board ends shorter: 23 mm less HPWL and 20 mm less copper than the free one, for
+three more vias (one seed: the two boards come from different placements, so the difference is
+not the constraint’s own price).</p>
 </section>
 <section id="regions-and-alignments">
 <h2>Regions and alignments<a class="headerlink" href="#regions-and-alignments" title="Link to this heading">¶</a></h2>
@@ -599,10 +608,11 @@ a 56 × 40 mm board. Each part carries an atopile-style address (<code class="do
 banks share one template. Only VCC, GND and CLOCK cross block boundaries.</p>
 <p>What to watch:</p>
 <ol class="arabic simple">
-<li><p><strong>Blocks.</strong> Each template is placed and routed on its own board, in eight trials (two seeds on
-each of four outlines); the tiles replay each template’s chosen trial side by side, at one
-scale. The bank template’s trials follow with their rank (opens, port debt, area, vias,
-copper), and both banks reuse the chosen layout: one layout, two instances.</p></li>
+<li><p><strong>Blocks.</strong> Each template is placed and routed on its own board, in sixteen trials (two seeds
+on each of eight outlines: four sizes, each wide and tall; compact placement adds the two
+denser sizes); the tiles replay each template’s chosen trial side by side, at one scale. The
+bank template’s trials follow with their rank (opens, port debt, area, vias, copper), and both
+banks reuse the chosen layout, the densest size here: one layout, two instances.</p></li>
 <li><p><strong>Top level.</strong> The blocks become rigid macros (their outline is dashed) and move onto the
 board; the top-level placer places them like parts, moving a whole block with its copper and
 flipping it end for end (the placer records a block only at 0° or 180° here; a half-turn is
@@ -632,10 +642,10 @@ montage follows, then KiCad’s writeback, planes, zone refill and verdict.</p><
 <td class="text-center"><p>100 %</p></td>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>0</p></td>
-<td class="text-right"><p>38</p></td>
-<td class="text-right"><p>598.02</p></td>
-<td class="text-right"><p>437</p></td>
-<td class="text-right"><p>175.5</p></td>
+<td class="text-right"><p>42</p></td>
+<td class="text-right"><p>558.94</p></td>
+<td class="text-right"><p>415</p></td>
+<td class="text-right"><p>98.9</p></td>
 </tr>
 </tbody>
 </table>
@@ -664,6 +674,8 @@ row. The display layout before it (the blocks side by side, without the board) i
 presentation, not a placement.</p></li>
 <li><p><strong>Comparisons.</strong> The two halves are synchronized scene by scene; the shorter half holds its last
 frame of a scene until the other catches up.</p></li>
+<li><p><strong>The gloss stage.</strong> The saved boards before and after it cross-fade; the red (replaced) and
+green (new) copper is the geometric difference between those two boards.</p></li>
 </ul>
 <p>Nothing else is invented: no easing of the engine’s order, no reordering, no copper the engine
 did not commit. The caption metrics (HPWL, LED line error, parts on their edge and their order)
@@ -673,11 +685,12 @@ are computed from the poses on screen.</p>
 <h2>Regenerating<a class="headerlink" href="#regenerating" title="Link to this heading">¶</a></h2>
 <p>The showcase run needs what the ladder needs (a numerical Python, KiCad 10 with its Python module
 and footprint library; see <a class="reference internal" href="regression-ladder.html#regenerating"><span class="std std-ref">Regression ladder</span></a>). The
-hierarchical case takes about three minutes on the development Mac.</p>
+hierarchical case takes about two minutes on the development Mac.</p>
 <div class="highlight-sh notranslate"><div class="highlight"><pre><span></span><span class="c1"># 1. The showcase run (07-chaser-20 and the four showcase cases); the output must not exist.</span>
+<span class="c1">#    --compact --gloss: the committed animations&#39; opt-in stages.</span>
 <span class="s2">&quot;</span><span class="nv">$NUMERIC_PYTHON</span><span class="s2">&quot;</span><span class="w"> </span>hardware/pnr/regression/run.py<span class="w"> </span>--repo<span class="w"> </span>.<span class="w"> </span>--out<span class="w"> </span>.yapnr/ladder/SHOWCASES<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--seed<span class="w"> </span><span class="m">0</span><span class="w"> </span>--trace<span class="w"> </span>--trace-placement-every<span class="w"> </span><span class="m">5</span><span class="w"> </span>--initial-pool<span class="w"> </span>--initial-starts<span class="w"> </span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--initial-finalists<span class="w"> </span><span class="m">3</span><span class="w"> </span>--timeout<span class="w"> </span><span class="m">1200</span><span class="w"> </span>--showcases<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--initial-finalists<span class="w"> </span><span class="m">3</span><span class="w"> </span>--timeout<span class="w"> </span><span class="m">1200</span><span class="w"> </span>--showcases<span class="w"> </span>--compact<span class="w"> </span>--gloss<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--case<span class="w"> </span><span class="m">07</span>-chaser-20<span class="w"> </span>--case<span class="w"> </span>line-chaser-20<span class="w"> </span>--case<span class="w"> </span>edge-io-12-free<span class="w"> </span>--case<span class="w"> </span>edge-io-12<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--case<span class="w"> </span>hier-twin-bank-32<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--python<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$NUMERIC_PYTHON</span><span class="s2">&quot;</span><span class="w"> </span>--kicad-python<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PNR_KICAD_PYTHON</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>

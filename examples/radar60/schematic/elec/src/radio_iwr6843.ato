@@ -29,7 +29,7 @@ from "parts/Radar60_C_2u2_0402/Radar60_C_2u2_0402.ato" import Radar60_C_2u2_0402
 from "parts/Radar60_C_10u_0603/Radar60_C_10u_0603.ato" import Radar60_C_10u_0603
 from "parts/Radar60_C_22u_0805/Radar60_C_22u_0805.ato" import Radar60_C_22u_0805
 from "parts/Radar60_C_10n_0402/Radar60_C_10n_0402.ato" import Radar60_C_10n_0402
-from "parts/Radar60_C_47n_0603/Radar60_C_47n_0603.ato" import Radar60_C_47n_0603
+from "parts/Radar60_C_47n_0402/Radar60_C_47n_0402.ato" import Radar60_C_47n_0402
 from "parts/Radar60_C_4p7_0402/Radar60_C_4p7_0402.ato" import Radar60_C_4p7_0402
 from "parts/Radar60_R_0_0402/Radar60_R_0_0402.ato" import Radar60_R_0_0402
 from "parts/Radar60_R_10k_0402/Radar60_R_10k_0402.ato" import Radar60_R_10k_0402
@@ -157,8 +157,8 @@ module Radio:
     c_clk_bulk = new Radar60_C_10u_0603
     c_clk_bulk.p1 ~ u1.VIN_18CLK
     c_clk_bulk.p2 ~ gnd
-    # VBGAP (B10): 47 nF (errata ANA#19)
-    c_vbgap = new Radar60_C_47n_0603
+    # VBGAP (B10): 47 nF (errata ANA#19, its example part GRM155R71E473KA88, 0402)
+    c_vbgap = new Radar60_C_47n_0402
     c_vbgap.p1 ~ u1.VBGAP
     c_vbgap.p2 ~ gnd
     # internal LDO outputs: 1 uF each (APLL A10, SYNTH B13)

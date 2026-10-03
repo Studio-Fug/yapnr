@@ -209,7 +209,11 @@ def abl0161b(balls: Dict[str, str]) -> Footprint:
     # be clipped (6 DRC findings at integration). Pin 1 (A1, the RF corner) is marked on F.Fab
     # and by the two remaining corner marks' asymmetry; the courtyard is unchanged.
     _silk_corners(fp, half, half, 1.0, pin1=False, skip_edges=("left", "top"))
-    _courtyard(fp, (-half - 1.0, -half - 1.0, half + 1.0, half + 1.0))
+    # Courtyard 0.5 mm beyond the body: IPC-7351B least-density BGA excess. The radio's
+    # ball-anchored decoupling (internal-LDO outputs, VBGAP, crystal load caps) sits right at the
+    # package edge; with the nominal 1.0 mm the B-row caps' pads cannot come within 3.5 mm of
+    # their balls (radar60 review 2026-10-03).
+    _courtyard(fp, (-half - 0.5, -half - 0.5, half + 0.5, half + 0.5))
     return fp
 
 

@@ -657,15 +657,17 @@ def parts() -> List[Part]:
             25,
             "22 uF 25 V X5R 0805",
         ),
+        # VBGAP in 0402: the part TI's errata names (SWRZ087D ANA#19: GRM155R71E473KA88), so the
+        # cap fits beside B10 at the package edge (review 2026-10-03); LCSC number not verified
         cap(
-            "Radar60_C_47n_0603",
-            "CL10B473KB8NNNC",
-            S,
-            "C1622",
-            "0603",
+            "Radar60_C_47n_0402",
+            "GRM155R71E473KA88D",
+            MU,
+            "",
+            "0402",
             47e-9,
-            50,
-            "47 nF 50 V X7R 0603 (VBGAP, errata ANA#19)",
+            25,
+            "47 nF 25 V X7R 0402 (VBGAP, errata ANA#19 example part)",
         ),
         cap(
             "Radar60_C_10n_0402",

@@ -545,21 +545,21 @@ class LegalizeTest(unittest.TestCase):
 
     def test_exact_alignment(self):
         """tol_mm 0: the legalizer keeps its band of a few slot pitches, then the snap
-        puts both ICs' origins on one line; the default tolerance snaps too."""
+        puts both ICs' origins on one line. Within the default tolerance the snap
+        leaves the legalized (on-grid) poses alone."""
         graph = chaser()
         for tol in (0, 0.25):
             cc = compile_constraints(relative(tol_mm=tol), graph.refs)
-            exact = 0
             for seed in range(4):
                 with self.subTest(tol=tol, seed=seed):
                     placed = placed_ok(self, graph, cc, seed)
                     spread = regions.align_spread(placed, regions.align_rules(cc)[0])
                     self.assertLessEqual(spread, tol + 1e-9)
-                    exact += spread <= 1e-9
-            self.assertGreaterEqual(exact, 3)
+                    self.assertEqual(regions.snap_aligns(copy.deepcopy(placed), cc), [])
 
     def test_snap_keeps_every_other_rule(self):
-        """The snap takes the first line every member reaches legally, else none."""
+        """The snap (tol_mm 0) takes the first line every member reaches legally, else
+        none; an align within its tolerance is not snapped."""
 
         def board(*extra):
             parts = [
@@ -573,7 +573,7 @@ class LegalizeTest(unittest.TestCase):
             graph = BoardGraph("snap", parts, [], BoardOutline(20.0, 10.0))
             spec = dict(
                 board=dict(outline=dict(w=20, h=10), default_clearance_mm=0.0),
-                align=[dict(name="ab", refs=["A", "B"], axis="y")],
+                align=[dict(name="ab", refs=["A", "B"], axis="y", tol_mm=0)],
             )
             return graph, compile_constraints(spec, graph.refs)
 
@@ -587,6 +587,9 @@ class LegalizeTest(unittest.TestCase):
         self.assertEqual(regions.snap_aligns(graph, cc), [])
         self.assertEqual(graph.component("A").pos, (3.0, 4.0))
         self.assertEqual(graph.component("B").pos, (8.0, 4.2))
+        graph, cc = board()
+        regions.align_rules(cc)[0].params["tol_mm"] = 0.25  # already within its tolerance
+        self.assertEqual(regions.snap_aligns(graph, cc), [])
 
     def test_align_with_a_hard_edge_band(self):
         """D1 locked to the south edge; U1's south courtyard edge on D1's."""

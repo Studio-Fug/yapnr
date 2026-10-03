@@ -870,7 +870,10 @@ def check_feasible(graph, constraints, width, height, orient=True, trials_fixed=
 
 
 def snap_aligns(placed, constraints, clearance=0.0, pad_edge=None, size=None):
-    """After legalization, put each hard align's anchors on one line, best effort.
+    """After legalization, put the anchors of each hard align whose spread exceeds its
+    ``tol_mm`` (one under the legalizer's band floor, e.g. 0) on one line, best effort.
+    An align already within ``tol_mm`` is left alone: a snap would move parts off the
+    legalizer's grid, which the router's grid follows.
 
     Members move along the aligned axis only, each by at most the align's current
     spread; the line is the members' anchor (a fixed member's, if any) that needs
@@ -932,8 +935,10 @@ def snap_aligns(placed, constraints, clearance=0.0, pad_edge=None, size=None):
         k = 0 if axis == "x" else 1
         members = [r for r in con.refs if r in comps]
         values = {r: anchor_value(comps[r], anchor_spec(con, r), axis) for r in members}
-        if len(values) < 2 or max(values.values()) - min(values.values()) <= 1e-9:
+        if len(values) < 2:
             continue
+        if max(values.values()) - min(values.values()) <= con.params["tol_mm"] + CHECK_EPS_MM:
+            continue  # within its tolerance: no snap needed
         fixed = sorted({round(values[r], 9) for r in members if r in pinned})
         if len(fixed) > 1:
             continue

@@ -3,5 +3,9 @@ MODULE.bazel.lock
 requirements.lock
 # Written by //hardware/pnr:ladder_animations; kept as generated, so a refresh has no churn.
 docs/animations/
+# Written by `python -m yapnr.rf.coupons generate|expected` and the 2D table tool; regenerated, not
+# edited (their own formats, see yapnr/rf/coupons/jsonfmt.py).
+examples/rf-coupons/JLC*/
+yapnr/rf/coupons/data/
 # Written by the tests (YAPNR_UPDATE_GOLDEN=1, tests/unit/exp) and compared byte for byte.
 tests/unit/exp/golden/

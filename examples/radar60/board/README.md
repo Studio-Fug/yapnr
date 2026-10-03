@@ -1,0 +1,112 @@
+# radar60 board track: floorplan, rules, constraints and the BGA escape probe
+
+The board-level inputs for the radar60 Rev A board (a 60 GHz IWR6843 FMCW radar, 60 × 46 mm,
+6-layer RO4835/RO4450F + FR-4 hybrid at PCBWay): the outline and fixed items, the RF region,
+the KiCad custom rules, the yapnr constraint file, and a probe of whether yapnr can escape the
+radio's FCBGA-161 on this stackup. Nothing here is routed yet; the board is placed and routed
+by yapnr from the atopile source in `../schematic` and the RF macro in `../rf`.
+
+Every value comes from the radar60 plan (sections 4, 5 and 7), from TI's public data sheet
+SWRS219F, from PCBWay's capability pages or from the Rogers data sheets; numbers marked [D] in
+`floorplan.yaml` are derived, [E] are planning allowances. No TI design file is used or
+committed.
+
+## Files
+
+| File                | What it is                                                                                                                   |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `floorplan.yaml`    | The single source: outline, U1 pose, J1, holes, radome lands, RF region and pocket, R4 guard, placement regions, net classes |
+| `gen_board.py`      | Generates the four files below from it; `--check` fails on a stale file, `--compile` runs yapnr's constraint compiler        |
+| `constraints.yaml`  | yapnr constraints (generated)                                                                                                |
+| `radar60.kicad_pcb` | Floorplan board (generated): outline with 1 mm corner radii, 4 plated M2.5 holes, 2 radome lands, GND planes, rule areas     |
+| `radar60.kicad_pro` | Design rules of the `pcbway-adv-6l-rf` profile and the net classes (generated)                                               |
+| `radar60.kicad_dru` | KiCad custom rules: the profile's, then the board's own (generated)                                                          |
+| `fcbga161.py`       | IWR6843 FCBGA-161 (ABL0161) ball map and KiCad footprint, from SWRS219F only                                                 |
+| `dru_selftest.py`   | Plants 20 items on the floorplan board and checks that each board rule fires, and only where it should (headless kicad-cli)  |
+| `escape_probe.py`   | The BGA escape probe: builds the synthetic board as a regression-runner design and analyses a run                            |
+
+The fab data lives in the yapnr package: profile `yapnr/fab/data/profiles/pcbway-adv-6l-rf.json`
+and stackup `yapnr/fab/data/stackups/pcbway-6l-ro4835-ro4450f.json` (status draft until the
+PCBWay quote and CAM reply confirm the hybrid materials).
+
+## Floorplan (origin at the lower-left corner, +y north towards the antennas)
+
+| Item                                        | Pose or extent                                                                                                                            |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Outline                                     | 60.0 × 46.0 mm, 1 mm corner radii                                                                                                         |
+| U1 (IWR6843, FCBGA-161)                     | fixed at (26.0, 28.0), 270°: RX balls (column 2) face north, TX balls (row B) face east                                                   |
+| Mounting holes                              | 4 × Ø2.7 mm plated, GND, Ø5.0 mm pad, Ø6.5 mm keepout, at (3.5, 3.5), (56.5, 3.5), (3.5, 42.5), (56.5, 42.5)                              |
+| Radome standoff lands                       | Ø3.0 mm, Ø5.0 mm keepout, at (3.5, 27.0) and (56.5, 27.0): the test radome covers y ≥ 27                                                  |
+| J1 (JST GH-6, right angle)                  | fixed on the south edge, centred at x = 30, cable entry south                                                                             |
+| RF region (F.Cu-In2.Cu)                     | RX fan and west ground margin x 16.0-29.7, y 33.2-46; TX feeds and bank x 32.1-44.5, y 26.8-46; strips around the pocket                  |
+| VOUT_PA pocket                              | x 29.7-32.1, y 33.2-34.4 (0402 caps, ≤ 0.6 mm tall), cut out of the RF region down to the package edge                                    |
+| R4 guard (no digital copper on F.Cu-In2.Cu) | a 5 mm band around the RF region without the package body: x 11-20.8 for y ≥ 28.2, and x 31.2-49.5 for y 21.8-26.8 plus x 44.5-49.5 above |
+| J2 (QTH-030, development)                   | region x 10-42, y 4-18 (south of the LVDS balls)                                                                                          |
+| J3 (JTAG, DNP)                              | region x 1-14, y 18-30 (the plan's y 40 breaks the radome rule for a 5 mm header: 7.0 mm of 8.7 mm)                                       |
+| PMIC block / switch nodes                   | x 36-58, y 2-24 / x 41-58, y 2-21.8 (≥ 9.8 mm from the crystal zone, ≥ 5 mm from the RF region)                                           |
+| Y1 (40 MHz)                                 | x 26-31.2, y 17.5-22.6, next to CLKP/CLKM (B15/C15 at (29.9, 23.45) and (29.25, 23.45))                                                   |
+
+`gen_board.py --radome` checks the 30° radome visibility rule (a part of height h stays 1.73 h
+from the patch copper) against the regions: J2 has 13.8 mm for 7.45 mm, J3 8.72 mm for 8.66 mm,
+the PMIC inductors 10.1 mm for 1.73 mm; J1 is 25 mm away.
+
+## Custom rules (`radar60.kicad_dru`)
+
+Part 1 is the `pcbway-adv-6l-rf` profile's rules, copied from `pnr.fab_profile.dru_text`. yapnr
+writes those alone beside a board that has no rules file, and leaves a file without its
+generated header untouched, so this file carries both parts. Part 2, the board's rules (rule
+areas `RF_REGION`, `RF_POCKET` and `RF_GUARD` are drawn in `radar60.kicad_pcb`; net classes
+`RF`, `XTAL`, `LVDS`/`dp_lvds_*`, `QSPI`, `PWR`, `SW`, `GND` come from `constraints.yaml`):
+
+| Rule                                     | What it enforces                                                                                                |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `rf_region_tracks`                       | no non-RF tracks in the RF region on F.Cu-In2.Cu (In3-B.Cu stay free)                                           |
+| `rf_region_vias`, `rf_fence_vias`        | no vias there but GND fence vias of 0.15/0.32 mm (pitch ≥ 0.45 mm from the 11 mil hole to hole)                 |
+| `rf_region_parts`                        | no top-side parts there but RFM1, U1 and parts enclosed by the pocket                                           |
+| `rf_no_vias`                             | the 60 GHz nets never change layer                                                                              |
+| `rf_guard_digital`                       | R4: no digital tracks (F.Cu-In2.Cu) or vias in the guard band                                                   |
+| `bga_signal_vias`, `bga_gnd_vias`        | under U1: signal and power vias 0.20/0.40 (dog-bones); 0.15/0.35 only for GND (interstitial)                    |
+| `general_vias`                           | elsewhere 0.20/0.40 or larger                                                                                   |
+| `xtal_no_vias`, `sw_to_xtal`, `sw_to_rf` | crystal nets on F.Cu only; switch nodes ≥ 8 mm from the crystal, ≥ 5 mm from RF copper                          |
+| `lvds_pairs`, `lvds_outer_layers`        | 0.17/0.18 mm pairs (99-103 Ω for Dk 3.33-3.66 [D]), 0.1 mm intra-pair skew, ≤ 3 mm uncoupled; F.Cu or B.Cu only |
+| `qspi_length`                            | ≤ 25 mm at 80 MHz                                                                                               |
+| `plane_in1`, `plane_in4`                 | no tracks on the GND planes                                                                                     |
+
+`dru_selftest.py` (KiCad 10.0.6, headless) passes all 20 planted cases; the floorplan board
+itself is clean (0 violations, 0 unconnected) under these rules.
+
+## Constraints (`constraints.yaml`)
+
+Parts are named by atopile instance path and nets by the radio's ball (`net@<path>:<ball>`), so
+no generated designator appears; `floorplan.yaml` (`parts:`) lists the paths the schematic must
+provide. The file compiles with yapnr's compiler on `main` and on the region branch
+(`gen_board.py --compile [CHECKOUT]`): `fixed` (U1 at its pose in the RF macro's frame, J1 on
+the south edge), `mounting_hole` (holes and radome lands; parsed today though the compiler's list
+of known sections misses it), `keepout` and `copper_keepout` (the RF region minus the pocket, in
+U1's frame), `region` (J2, J3, PMIC block, switch nodes, Y1, pocket caps; hard; needs the region
+work), `group` (decoupling, Y1, buck inductors; hard, centre to centre), `net_class`,
+`diff_pair` and `length_match` (LVDS 2 mm group skew). `rf_macro`, `noise_keepout` and
+`height_limit` are proposed sections: the engine warns and ignores them, and the custom rules and
+the RF audit stand in for them.
+
+## Regenerating and checking
+
+```sh
+# From the repository root, with PyYAML.
+PYTHONPATH=.:hardware/pnr python3 examples/radar60/board/gen_board.py            # write
+PYTHONPATH=.:hardware/pnr python3 examples/radar60/board/gen_board.py --check --compile --radome
+PYTHONPATH=.:hardware/pnr python3 examples/radar60/board/dru_selftest.py --kicad-cli "$PNR_KICAD_CLI"
+```
+
+## U1 footprint
+
+`fcbga161.py` builds the ball map from SWRS219F sections 6.2 and Table 6-1 (70 GND, 25 supply,
+7 RF and 59 signal balls; 64 depopulated sites) and the footprint from its package drawing and
+example board layout (0.32 mm NSMD lands, 0.42 mm mask openings, 0.125 mm stencil). The top view
+puts A1 at the top left. Checked locally against the IPC-356 netlist of TI's IWR6843LEVM design
+files (not committed): at 270° every ball lands within 2 µm of TI's U1 coordinates, and the GND
+and RF balls agree.
+
+## BGA escape probe
+
+See `escape_probe.py` for the method and the radar60 stage report for the results.

@@ -1,0 +1,213 @@
+# radar60 Rev A floorplan: the single source of the board track's geometry.
+#
+# gen_board.py turns this file into constraints.yaml (yapnr), radar60.kicad_pcb (the outline,
+# mounting holes and named rule areas), radar60.kicad_pro (net classes, design rules) and
+# radar60.kicad_dru (KiCad custom rules). Edit this file, then run `python3 gen_board.py`.
+#
+# Frame: millimetres, origin at the board's lower-left corner, +x east, +y north (towards the
+# antennas), rotations in degrees counter-clockwise (yapnr's frame, docs/hardware/pnr-inputs.md).
+# Numbers marked [D] are derived in the radar60 plan (board-design.md, sections 5 and 7), not
+# measured; [E] marks a planning allowance.
+
+board:
+  width: 60.0 # [D] fits the 100 x 70 mm envelope (SYS-05) with enclosure walls
+  height: 46.0
+  corner_radius: 1.0
+  copper_layers: 6
+  profile: pcbway-adv-6l-rf # yapnr/fab/data/profiles
+  stackup: pcbway-6l-ro4835-ro4450f
+  sides: single # bottom side only if the decoupling-loop audit fails top-only (plan 4.2)
+  # Layer roles (plan 4.1): In1 GND (RF reference), In2 GND under the RF region and escape
+  # signals elsewhere, In3 power pours, In4 GND, F/B signals.
+  planes: { In1.Cu: GND, In4.Cu: GND }
+
+# Instance paths (atopile addresses) of the parts this file constrains. This is the interface to
+# the schematic track (examples/radar60/schematic): change a path here if the source names it
+# differently; every generated file follows.
+parts:
+  radio: board.radio.ic # U1, IWR6843AQGABLR, footprint IWR6843_FCBGA-161_ABL0161 (fcbga161.py)
+  radio_decoupling: board.radio.c_* # every capacitor of the radio block
+  pa_decoupling: board.radio.c_pa* # VOUT_PA / VIN_13RF2 capacitors: the RFM1 pocket
+  crystal: board.radio.xtal # Y1, 40 MHz 3225
+  crystal_caps: board.radio.c_xtal* # Y1 load capacitors
+  pmic: board.pmic.ic # U2, LP87524J
+  pmic_inductors: board.pmic.l_* # L1-L4 (switch nodes)
+  pmic_parts: board.pmic.* # the whole PMIC block (filters, caps, shunt)
+  connector: board.conn # J1, JST SM06B-GHS-TB (GH-6, right angle)
+  lvds_header: board.debug.lvds_header # J2, Samtec QTH-030 (development builds)
+  jtag: board.debug.jtag # J3, 10-pin 1.27 mm (DNP)
+  flash: board.flash.ic # U3, QSPI flash
+  holes: board.mech.h* # H1-H4
+  rf_macro: board.rf_macro # RFM1 (yapnr.rf macro footprint, reference RFM1)
+
+# Net-class membership, by the radio's ball (net@<radio>:<ball> resolves to the net on that
+# ball) or by net-name glob. The class names are the ones radar60.kicad_dru tests.
+nets:
+  RF: { balls: [B4, B6, B8, M2, K2, H2, F2] } # TX1-TX3, RX1-RX4 (SWRS219F 6.2.2)
+  XTAL: { balls: [B15, C15] } # CLKP, CLKM
+  QSPI: { balls: [R12, P11, R13, N12, R14, P12] } # CLK, CS_N, D0-D3
+  LVDS: # (p, n) per lane; development builds only
+    pairs:
+      lvds_tx0: [J14, J15]
+      lvds_tx1: [K14, K15]
+      lvds_clk: [L14, L15]
+      lvds_frclk: [M14, M15]
+  PWR:
+    {
+      balls:
+        [
+          G5,
+          H5,
+          J5,
+          C2,
+          D2,
+          A2,
+          B2,
+          H15,
+          N11,
+          P15,
+          R6,
+          G15,
+          P14,
+          R10,
+          F15,
+          R9,
+          B11,
+          D15,
+          K5,
+          F5,
+          B12,
+          A10,
+          B13,
+          B10,
+        ],
+    }
+  SW: { globs: ['*sw_b*', '*SW_B*'] } # the four buck switch nodes (named so in the PMIC block)
+  GND: { globs: [GND] }
+
+lvds: # 100 ohm edge-coupled microstrip on F.Cu over In1.Cu (RO4835 4 mil): 99-103 ohm for Dk 3.33-3.66 [D]
+  width: 0.17
+  gap: 0.18
+  skew_mm: 0.1 # within a pair (plan 3.4 @pnr-pair)
+  group_skew_mm: 2.0 # across the four pairs
+qspi_max_length_mm: 25.0 # plan 3.4 @pnr-si
+
+u1:
+  ref: U1 # the radio's reference designator in the routed board (rules name it)
+  at: [26.0, 28.0] # [D] plan 5.1
+  rot: 270 # RX edge (ball column 2) north, TX edge (row B) east
+  body_mm: 10.4
+  courtyard_mm: 11.5
+
+connector: # J1 GH-6 on the south edge, centred at x = 30, cable entry facing south (plan 5.1)
+  x: 30.0
+  rot: 0 # the stock footprint's mating face points +y in KiCad (south here): verify on the part
+  height_mm: 4.25
+
+mounting_holes: # 4 x M2.5, plated, GND (plan 5.1)
+  drill: 2.7
+  pad: 5.0
+  keepout_diameter: 6.5
+  at: [[3.5, 3.5], [56.5, 3.5], [3.5, 42.5], [56.5, 42.5]]
+
+radome_lands: # standoff lands for the north-only test radome (plan 5.4, review) [D]
+  diameter: 3.0
+  keepout_diameter: 5.0
+  at: [[3.5, 27.0], [56.5, 27.0]]
+
+rf:
+  macro_ref: RFM1 # reference of the RF macro footprint (generated in U1's frame, plan 6)
+  patches: # patch copper extents, for the radome rule (plan 5.2) [D]
+    rx: [21.0, 35.2, 29.7, 39.6]
+    tx: [33.2, 31.8, 39.5, 36.2]
+  # RF region (plan 5.2): (a) the RX fan, (b) the TX feeds and bank, plus a 5 mm ground margin
+  # west of the RX bank; the VOUT_PA pocket is cut out of it down to the package edge.
+  region: # [x0, y0, x1, y1] rectangles whose union is the region minus the pocket
+    - [16.0, 33.2, 29.7, 46.0] # RX fan and the west ground margin
+    - [29.7, 34.4, 32.1, 46.0] # above the pocket
+    - [32.1, 26.8, 44.5, 46.0] # TX feeds and bank
+    - [31.2, 26.8, 32.1, 33.2] # TX launches, east of the package, south of the pocket
+  pocket: [29.7, 33.2, 32.1, 34.4] # 0402 VOUT_PA / VIN_13RF2 caps, <= 0.6 mm tall (plan 5.2)
+  # R4 (plan 7.5): no digital net within 5 mm of RF copper on F.Cu-In2.Cu. A rectangular 5 mm
+  # band around the region, without the package body (the radio's own balls and escapes) and
+  # without the region itself; the RF audit (E6) measures the exact distance.
+  guard_mm: 5.0
+  guard: # [x0, y0, x1, y1]
+    - [11.0, 28.2, 16.0, 46.0] # west of the ground margin
+    - [16.0, 28.2, 20.8, 33.2] # south of the RX fan, west of the package
+    - [31.2, 21.8, 49.5, 26.8] # south of the TX region, east of the package
+    - [44.5, 26.8, 49.5, 46.0] # east of the TX bank
+  fence_via: { drill: 0.15, diameter: 0.32, min_pitch: 0.45 } # RFS-5; 11 mil hole to hole
+
+noise: # plan 3.4 noise budget and 7.5 R4
+  sw_to_crystal_mm: 8.0
+  sw_to_rf_mm: 5.0
+
+# Placement regions (plan 5.1, 7.3); yapnr `region` constraints, hard.
+regions:
+  lvds_header:
+    {
+      parts: [lvds_header],
+      rect: [10.0, 4.0, 42.0, 18.0],
+      reason: 'J2 south of the LVDS balls (columns 14/15 face south)',
+    }
+  # Plan 5.1 gives y 18-40; the radome rule keeps a 5 mm header 8.7 mm from the RX patches, so
+  # the region stops at y 30 [D] (gen_board.py --radome).
+  jtag:
+    {
+      parts: [jtag],
+      rect: [1.0, 18.0, 14.0, 30.0],
+      reason: 'J3 west of U1 on the JTAG/UART side, below the radome line',
+    }
+  pmic_block:
+    { parts: [pmic_parts], rect: [36.0, 2.0, 58.0, 24.0], reason: 'PMIC block, power-first' }
+  # The switch nodes keep >= 8 mm from the crystal zone (x <= 31.2) and >= 5 mm from the RF
+  # region (y <= 21.8): x >= 41 gives 9.8 mm, y <= 21.8 gives 5.0 mm, by construction [D].
+  pmic_switching:
+    {
+      parts: [pmic, pmic_inductors],
+      rect: [41.0, 2.0, 58.0, 21.8],
+      reason: 'switch nodes >= 8 mm from Y1 and >= 5 mm from RF',
+    }
+  # Y1 within about 3 mm of CLKP/CLKM (B15/C15 at (29.9, 23.45)/(29.25, 23.45) after rotation),
+  # south of the package, west of the RF guard.
+  crystal:
+    {
+      parts: [crystal, crystal_caps],
+      rect: [26.0, 17.5, 31.2, 22.6],
+      reason: 'Y1 next to B15/C15, outside the RF guard',
+    }
+  pa_pocket:
+    {
+      parts: [pa_decoupling],
+      rect: [29.7, 33.2, 32.1, 34.4],
+      reason: 'RFM1 pocket for the VOUT_PA caps',
+    }
+
+groups: # hard proximity, centre to centre (pnr.place.geometry.hard_group_edges)
+  radio_decoupling:
+    {
+      anchor: radio,
+      members: [radio_decoupling],
+      radius_mm: 9.0,
+      reason: 'within about 3 mm of the package edge (5.2 mm half body + 3 mm + part)',
+    }
+  crystal:
+    {
+      anchor: radio,
+      members: [crystal],
+      radius_mm: 7.0,
+      reason: 'B15/C15 are 5.7 mm from the U1 centre',
+    }
+  pmic: { anchor: pmic, members: [pmic_inductors], radius_mm: 4.0, reason: 'tight buck hot loops' }
+
+# Radome visibility (plan 5.2, R5): no part above a 30 degree line from the nearest patch edge,
+# i.e. a part of height h stays >= h / tan(30 deg) = 1.73 h from the patch copper.
+radome:
+  angle_deg: 30.0
+  test_radome_south_y: 27.0 # the test radome covers y >= 27 (plan 5.4)
+  heights: { connector: 4.25, lvds_header: 4.3, jtag: 5.0, pmic_inductors: 1.0 } # [E] part heights, mm
+
+# Probe and documentation only: where U1's signal escapes may leave the package (plan 7.2).
+escape:
+  forbidden_edges: [north, east] # the RF edges carry only RF, GND and power balls

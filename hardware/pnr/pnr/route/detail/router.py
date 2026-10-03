@@ -79,6 +79,37 @@ def _net_clearances(rules: Optional[dict]) -> dict:
     return out
 
 
+def _late_copper(graph: BoardGraph, planes: Set[str], deferred: Set[str]) -> Optional[str]:
+    """What later stages add to the board without the signal grid holding it, or
+    None: the via drops of plane nets' surface pads (writeback dog-bones them after
+    routing, :func:`pnr.writeback._dogbone_fanout_net`) and the deferred power and
+    pair nets (routed natively after the grid). :func:`.maze.route` skips its
+    exact-separation recovery when there is any."""
+    pads = sorted(
+        "%s.%s" % (comp.ref, pad.name)
+        for comp in graph.components
+        for pad in comp.pads
+        if pad.net in planes and not pad.through_hole
+    )
+    parts = []
+    if pads:
+        parts.append(
+            "%d plane-net surface pad%s (%s%s)"
+            % (
+                len(pads),
+                "" if len(pads) == 1 else "s",
+                ", ".join(pads[:6]),
+                ", ..." if len(pads) > 6 else "",
+            )
+        )
+    if deferred:
+        parts.append(
+            "%d deferred net%s (%s)"
+            % (len(deferred), "" if len(deferred) == 1 else "s", ", ".join(sorted(deferred)[:6]))
+        )
+    return "; ".join(parts) or None
+
+
 def _track_halo(width: float, signal_width: float, clearance: float, pitch: float) -> int:
     """Cells to reserve so even a fine grid preserves copper separation."""
     return max(0, math.ceil((width / 2 + clearance + signal_width / 2) / pitch) - 1)
@@ -253,7 +284,8 @@ def _diag_unrouted(grid, net_access, unrouted, via_keepout):
 
     alone_ok = 0
     for net in unrouted:
-        r = route(grid, {net: net_access[net]}, max_iters=6, via_keepout=via_keepout)
+        # The halo model alone, as documented: what negotiation could not separate.
+        r = route(grid, {net: net_access[net]}, max_iters=6, via_keepout=via_keepout, exact="off")
         if not r.unrouted:
             alone_ok += 1
     sys.stderr.write(
@@ -446,6 +478,7 @@ def route_board(
         net_halo=net_halo,
         rrr_rounds=ripup_rounds,
         via_cost=3.0 / grid.pitch,
+        late_copper=_late_copper(graph, planes, deferred),
     )
 
     if deferred or plan.blocked_nets:

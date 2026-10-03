@@ -380,6 +380,109 @@ class ClassClearanceTest(unittest.TestCase):
                     self.assertGreaterEqual(class_gaps(grid, result, widths), -1e-9)
 
 
+class RecoveryScopeTest(unittest.TestCase):
+    """The recovery runs only when the route sees all the board's copper, says
+    when it does not, and its route is what a traced route's events end on."""
+
+    def setUp(self):
+        self.environ = patch.dict(
+            os.environ, {"PNR_SINGLE_TRACK_WORKERS": "1", "PNR_EXACT_SEPARATION": "recover"}
+        )
+        self.environ.start()
+        self.addCleanup(self.environ.stop)
+
+    def improvable(self):
+        for seed in range(25):
+            grid, access, _ = random_board(seed)
+            kwargs = dict(
+                max_iters=4, via_cost=12.0, net_halo={n: 1 for n in access}, via_keepout=3
+            )
+            plain = route(grid, access, exact="off", **kwargs)
+            recovered = route(grid, access, **kwargs)
+            if missing_connections(recovered) < missing_connections(plain):
+                return grid, access, kwargs, plain, recovered
+        self.fail("no random board the recovery improves")
+
+    def test_late_copper_keeps_the_halo_route(self):
+        import io
+        from contextlib import redirect_stderr
+
+        grid, access, kwargs, plain, recovered = self.improvable()
+        log = io.StringIO()
+        with redirect_stderr(log):
+            late = route(
+                grid, access, late_copper="2 plane-net surface pads (U1.3, U1.4)", **kwargs
+            )
+        self.assertEqual(late, plain)
+        self.assertIn("exact-separation recovery skipped", log.getvalue())
+        self.assertIn("U1.3", log.getvalue())
+
+    def test_late_copper_of_a_board(self):
+        from pnr.graph import BoardGraph, Component, Net, Pad
+        from pnr.route.detail.router import _late_copper
+
+        comp = Component(
+            ref="U1",
+            footprint="SOIC-3",
+            pos=(5.0, 5.0),
+            rot=0.0,
+            side="top",
+            courtyard=(4.0, 2.0),
+            bbox=(4.0, 2.0),
+            pads=[
+                Pad("1", "GND", (0, 0), (0.5, 0.5)),
+                Pad("2", "GND", (1, 0), (0.5, 0.5), through_hole=True),
+                Pad("3", "SIG", (2, 0), (0.5, 0.5)),
+            ],
+        )
+        graph = BoardGraph(name="t", components=[comp], nets=[Net("GND", 1), Net("SIG", 2)])
+        self.assertIsNone(_late_copper(graph, set(), set()))
+        self.assertIn("1 plane-net surface pad (U1.1)", _late_copper(graph, {"GND"}, set()))
+        self.assertIn("1 deferred net (SIG)", _late_copper(graph, set(), {"SIG"}))
+
+    def test_trace_events_end_on_the_recovered_route(self):
+        from pnr.route.detail.maze import _to_geometry
+
+        grid, access, kwargs, plain, recovered = self.improvable()
+        calls = []
+
+        class Hook:
+            def net(self, net, tree, op, provisional, pass_index):
+                calls.append((net, tree, op, provisional))
+
+        with patch("pnr.trace.route_hook", return_value=Hook()):
+            result = route(grid, access, **kwargs)
+        self.assertEqual(result, recovered)
+        final = {}
+        for net, tree, op, provisional in calls:
+            if not provisional:
+                final[net] = (op, tree)
+        for net, rn in result.nets.items():
+            op, tree = final[net]
+            if rn.cells:
+                self.assertEqual(op, "commit")
+                geometry = _to_geometry(tree)
+                self.assertEqual(sorted(geometry.segments), sorted(rn.segments))
+                self.assertEqual(geometry.vias, rn.vias)
+            else:
+                self.assertEqual(op, "drop")
+
+    def test_unknown_modes_are_errors(self):
+        from pnr.route.detail.exact_route import exact_mode
+        from pnr.route.detail.maze import maze_kernel
+
+        with self.assertRaises(ValueError):
+            exact_mode("sometimes")
+        with patch.dict(os.environ, {"PNR_EXACT_SEPARATION": "Recover"}), self.assertRaises(
+            ValueError
+        ):
+            exact_mode()
+        with patch.dict(os.environ, {"PNR_MAZE_KERNEL": "fast"}), self.assertRaises(ValueError):
+            maze_kernel()
+        with patch.dict(os.environ, {"PNR_EXACT_SEPARATION": ""}):
+            self.assertEqual(exact_mode(), "recover")
+
+
 class DiagonalMaskParityTest(unittest.TestCase):
     """The 45° step block mask, packed against native."""
 

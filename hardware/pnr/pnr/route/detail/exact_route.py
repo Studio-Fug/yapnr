@@ -49,15 +49,22 @@ from .grid import Cell
 MODES = ("off", "recover", "full")
 
 
-def exact_mode() -> str:
-    """``PNR_EXACT_SEPARATION``: ``recover`` (the default: route again with the
-    exact rule when the negotiated route leaves connections open, and keep the
-    route with fewer open connections, so complete routes are unchanged), ``off``
-    or ``full`` (route with the exact rule only)."""
+def exact_mode(override: Optional[str] = None) -> str:
+    """``override``, else ``PNR_EXACT_SEPARATION``: ``recover`` (the default:
+    route again with the exact rule when the negotiated route leaves connections
+    open, and keep the route with fewer open connections, so complete routes are
+    unchanged), ``off`` or ``full`` (route with the exact rule only). Any other
+    value is an error."""
     import os
 
-    mode = os.environ.get("PNR_EXACT_SEPARATION", "recover")
-    return mode if mode in MODES else "recover"
+    mode = override if override is not None else os.environ.get("PNR_EXACT_SEPARATION")
+    if not mode:
+        return "recover"
+    if mode not in MODES:
+        raise ValueError(
+            "PNR_EXACT_SEPARATION must be one of %s, not %r" % (", ".join(MODES), mode)
+        )
+    return mode
 
 
 class Separation:
@@ -393,10 +400,13 @@ def route_exact(
     rip_penalty: float = 4.0,
     max_rip: int = 8,
     session: Optional[DenseSession] = None,
+    _events: Optional[list] = None,
     **_unused,
 ):
     """Negotiated detailed route of ``net_access`` under the exact separation
-    model. The passes mirror :func:`pnr.route.detail.maze._route_impl`."""
+    model. The passes mirror :func:`pnr.route.detail.maze._route_impl`.
+    ``_events`` (a list) receives each net's final tree, ``(net, _Route or
+    None)``, for the caller's trace and live events."""
     from .maze import (
         RoutedNet,
         RouteResult,
@@ -589,6 +599,7 @@ def route_exact(
     committed = Occupancy(grid, sep)
     for name, saved in best_snap.items():
         committed.add(zone_of(name, saved))
+    final = dict(best_snap)
     for net in sorted(unrouted):
         saved = best_snap.get(net)
         forest = _Route(list(saved.cells), list(saved.edges)) if saved else _Route()
@@ -637,6 +648,11 @@ def route_exact(
         rn.routed = rn.remaining_connections == 0
         result_nets[net] = rn
         committed.add(zone_of(net, forest))
+        final[net] = forest
+    if _events is not None:
+        _events.extend(
+            (net, final[net] if final.get(net) and final[net].cells else None) for net in nets
+        )
     unrouted = [net for net in nets if not result_nets[net].routed]
     return RouteResult(nets=result_nets, unrouted=sorted(unrouted), iterations=iters)
 

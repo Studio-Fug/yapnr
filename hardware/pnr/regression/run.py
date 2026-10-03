@@ -339,22 +339,31 @@ def main():
         if args.reference_maze:
             raise SystemExit("--maze-kernel native and --reference-maze are exclusive")
         # The frozen C source, compiled once for the run (pnr.route.detail.native_maze).
-        library = subprocess.run(
-            [
-                args.python,
-                "-c",
-                "import sys; from pnr.route.detail.native_maze import build_library; "
-                "print(build_library(sys.argv[1]))",
-                str(out / "native"),
-            ],
-            env=dict(env, PYTHONPATH=str(freeze / "hardware/pnr")),
-            capture_output=True,
-            text=True,
-            timeout=600,
-            check=True,
-        ).stdout.strip()
-        env.update(PNR_MAZE_KERNEL="native", PNR_MAZE_LIB=library)
-        native = dict(library=Path(library).name, sha256=sha(Path(library)))
+        # Without a working compiler the run keeps the packed kernel (identical routes)
+        # and says so here and in provenance.
+        try:
+            library = subprocess.run(
+                [
+                    args.python,
+                    "-c",
+                    "import sys; from pnr.route.detail.native_maze import build_library; "
+                    "print(build_library(sys.argv[1]))",
+                    str(out / "native"),
+                ],
+                env=dict(env, PYTHONPATH=str(freeze / "hardware/pnr")),
+                capture_output=True,
+                text=True,
+                timeout=600,
+                check=True,
+            ).stdout.strip()
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as error:
+            detail = (getattr(error, "stderr", None) or str(error)).strip().splitlines()
+            reason = detail[-1] if detail else type(error).__name__
+            print("native maze kernel not built (%s); the packed kernel routes" % reason)
+            native = dict(library=None, error=reason)
+        else:
+            env.update(PNR_MAZE_KERNEL="native", PNR_MAZE_LIB=library)
+            native = dict(library=Path(library).name, sha256=sha(Path(library)))
     if args.dense_maze_cost:
         env["PNR_DENSE_MAZE_COST"] = "1"
     if args.detail_pitch_mm is not None:

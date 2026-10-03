@@ -118,8 +118,10 @@ def maze_kernel() -> str:
     """
     if os.environ.get("PNR_PACKED_MAZE") == "0":
         return "reference"
-    kernel = os.environ.get("PNR_MAZE_KERNEL", "packed")
-    return kernel if kernel in ("reference", "native") else "packed"
+    kernel = os.environ.get("PNR_MAZE_KERNEL") or "packed"
+    if kernel not in ("packed", "reference", "native"):
+        raise ValueError("PNR_MAZE_KERNEL must be packed, native or reference, not %r" % kernel)
+    return kernel
 
 
 def _astar(
@@ -511,6 +513,41 @@ def _to_geometry(route: "_Route") -> RoutedNet:
     return rn
 
 
+def _live_net(grid, net, route, kind, pass_index, pres_fac):
+    """One net's live-view event (``PNR_LIVE_DIR`` only): its grid segments."""
+    import os
+
+    if not os.environ.get("PNR_LIVE_DIR"):
+        return
+    from pnr.live import emit
+
+    rn = _to_geometry(route) if route else None
+    tracks = []
+    if rn:
+        for layer, a, b in rn.segments:
+            tracks.append(
+                (
+                    net,
+                    grid.layers[layer],
+                    grid.center_of(*a),
+                    grid.center_of(*b),
+                    grid.track_width,
+                )
+            )
+    emit(
+        kind,
+        data=dict(
+            net=net,
+            phase="signals",
+            pass_index=pass_index,
+            pres_fac=pres_fac,
+            provisional=True,
+            tracks=tracks,
+            preview_width=True,
+        ),
+    )
+
+
 def _route_impl(
     grid: RouteGrid,
     net_access: Dict[str, List[Cell]],
@@ -569,7 +606,6 @@ def _route_impl(
     routed: Dict[str, Optional[_Route]] = {n: None for n in nets}
     fps: Dict[str, Set[Cell]] = {n: set() for n in nets}
 
-    import os
     import time
 
     from pnr.live import emit
@@ -578,33 +614,7 @@ def _route_impl(
     trace_hook = route_hook()  # None unless a traced route scope is open (pnr.trace)
 
     def live_net(net, route, kind):
-        if not os.environ.get("PNR_LIVE_DIR"):
-            return
-        rn = _to_geometry(route) if route else None
-        tracks = []
-        if rn:
-            for layer, a, b in rn.segments:
-                tracks.append(
-                    (
-                        net,
-                        grid.layers[layer],
-                        grid.center_of(*a),
-                        grid.center_of(*b),
-                        grid.track_width,
-                    )
-                )
-        emit(
-            kind,
-            data=dict(
-                net=net,
-                phase="signals",
-                pass_index=iters,
-                pres_fac=pres_fac,
-                provisional=True,
-                tracks=tracks,
-                preview_width=True,
-            ),
-        )
+        _live_net(grid, net, route, kind, iters, pres_fac)
 
     def _place(net, route, fp=None):
         live_net(net, route, "signal_net_added")
@@ -1001,7 +1011,19 @@ def _route_impl(
     return RouteResult(nets=result_nets, unrouted=sorted(unrouted), iterations=iters)
 
 
-def route(grid, net_access, **kwargs):
+def route(grid, net_access, *, late_copper=None, exact=None, **kwargs):
+    """Detailed route of ``net_access`` on ``grid``: :func:`_route_impl` (the halo
+    model), and the exact-separation model (:mod:`.exact_route`) by its mode
+    (``exact``, else ``PNR_EXACT_SEPARATION``): ``recover`` routes again with it
+    when the halo route leaves connections open and keeps the route that leaves
+    fewer; ``full`` routes with it only.
+
+    ``late_copper`` describes copper that later stages add to the board without
+    this grid holding it (the plane drops writeback places after routing, natively
+    routed deferred nets), or is None. The recovery packs nets as tightly as the
+    rules allow and can only count this route's own connections, so it cannot
+    tell whether it took room those stages need: it is skipped then (logged).
+    """
     # Set before spawning so serial and worker proposals use identical geometry.
     grid.routing_track_halos = kwargs.get("net_halo") or {}
     grid.routing_via_keepout = kwargs.get("via_keepout", 1)
@@ -1010,19 +1032,23 @@ def route(grid, net_access, **kwargs):
         # power-array sources): the tables cover it before anything reads them.
         grid.reserve_wide_pad_clearance()
     import os
+    import sys
 
     from pnr.runtime_controls import route_workers
 
     from .exact_route import exact_mode
 
-    mode = exact_mode()
+    mode = exact_mode(exact)
     if mode != "off":
         from .exact_route import route_exact, supported
 
         if not supported(grid):
             mode = "off"
     if mode == "full":
-        return route_exact(grid, net_access, **kwargs)
+        events = []
+        result = route_exact(grid, net_access, _events=events, **kwargs)
+        _replay(grid, None, events, result.iterations)
+        return result
     workers = route_workers("grid-start")
     if workers == 1 and not os.environ.get("PNR_CONTROL_FILE"):
         result = _route_impl(grid, net_access, **kwargs)
@@ -1035,18 +1061,53 @@ def route(grid, net_access, **kwargs):
         finally:
             pool.close()
     if mode == "recover" and result.unrouted:
-        # Open connections left: route again with the exact pairwise separation
-        # and keep it only when it leaves strictly fewer connections open.
-        import sys
-
         from .exact_route import missing_connections
 
-        exact = route_exact(grid, net_access, **kwargs)
-        before, after = missing_connections(result), missing_connections(exact)
+        before = missing_connections(result)
+        if late_copper:
+            sys.stderr.write(
+                "exact-separation recovery skipped (%d open connections): later stages add "
+                "copper this route cannot see: %s\n" % (before, late_copper)
+            )
+            return result
+        # Open connections left: route again with the exact pairwise separation
+        # and keep it only when it leaves strictly fewer connections open.
+        events = []
+        exact_result = route_exact(grid, net_access, _events=events, **kwargs)
+        after = missing_connections(exact_result)
         sys.stderr.write(
             "exact-separation recovery: %d -> %d open connections (%s)\n"
             % (before, after, "kept" if after < before else "discarded")
         )
         if after < before:
-            return exact
+            _replay(grid, result, events, exact_result.iterations)
+            return exact_result
     return result
+
+
+def _replay(grid, previous, events, pass_index):
+    """Trace (:mod:`pnr.trace`) and live-view events for a route that replaces
+    ``previous`` (a :class:`RouteResult`, or None): every net of ``previous``
+    with copper is dropped, then each net of the new route is committed with its
+    final tree (``events``: ``(net, _Route or None)``), so a traced route's net
+    events end on the board it returns. Observational only."""
+    import os
+
+    from pnr.trace import route_hook
+
+    hook = route_hook()
+    live = bool(os.environ.get("PNR_LIVE_DIR"))
+    if hook is None and not live:
+        return
+    for net in sorted(previous.nets) if previous is not None else ():
+        if previous.nets[net].cells:
+            if hook is not None:
+                hook.net(net, None, "drop", False, pass_index)
+            if live:
+                _live_net(grid, net, None, "signal_net_removed", pass_index, 0.0)
+    for net, tree in events:
+        if hook is not None:
+            hook.net(net, tree, "commit" if tree else "drop", False, pass_index)
+        if live:
+            kind = "signal_net_added" if tree else "signal_net_removed"
+            _live_net(grid, net, tree, kind, pass_index, 0.0)

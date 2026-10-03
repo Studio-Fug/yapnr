@@ -1137,6 +1137,24 @@ py_test(
     deps = [":pnr"],
 )
 
+# The constraint checker's plane check on small boards (KiCad's Python: run it there by
+# hand, python3 -m unittest test_check_constraints in regression/).
+py_test(
+    name = "check_constraints_test",
+    size = "small",
+    srcs = [
+        "regression/check_constraints.py",
+        "regression/test_check_constraints.py",
+    ],
+    imports = ["regression"],
+    main = "regression/test_check_constraints.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+)
+
 py_binary(
     name = "native_regression",
     srcs = [

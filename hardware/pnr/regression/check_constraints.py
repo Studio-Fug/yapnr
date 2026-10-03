@@ -213,29 +213,36 @@ def check_align(b, c):
 
 
 def check_plane(b, c):
+    """The layer is a plane of ``net``: its zones fill at least ``min_fill_fraction``
+    of the outline, and no other copper pour shares the layer. (The judge's rules
+    keep tracks off a plane layer; a zone of another net, or of no net, there would
+    carry that net, or nothing, on the plane instead.)"""
     board = b.board
     lid = board.GetLayerID(c["layer"])
-    zones = [
-        z
-        for z in board.Zones()
-        if not z.GetIsRuleArea() and z.GetNetname() == c["net"] and z.IsOnLayer(lid)
-    ]
+    on_layer = [z for z in board.Zones() if not z.GetIsRuleArea() and z.IsOnLayer(lid)]
+    zones = [z for z in on_layer if z.GetNetname() == c["net"]]
+    foreign = [z for z in on_layer if z.GetNetname() != c["net"]]
+    limit = dict(min_fill_fraction=c["min_fill_fraction"], foreign_fill_fraction=0.0)
     if not zones:
-        return (
-            False,
-            dict(zones=0, fill_fraction=0.0),
-            dict(min_fill_fraction=c["min_fill_fraction"]),
-        )
+        return (False, dict(zones=0, fill_fraction=0.0, foreign_zones=len(foreign)), limit)
     filled_here = False
-    if not all(z.IsFilled() for z in zones):
+    if not all(z.IsFilled() for z in on_layer):
         pcbnew.ZONE_FILLER(board).Fill(board.Zones())  # in memory only; never saved
         filled_here = True
     area = sum(mm(mm(z.GetFilledPolysList(lid).Area())) for z in zones)
     fraction = area / (b.w * b.h)
+    foreign_area = sum(mm(mm(z.GetFilledPolysList(lid).Area())) for z in foreign)
+    foreign_fraction = foreign_area / (b.w * b.h)
     return (
-        fraction + 1e-9 >= c["min_fill_fraction"],
-        dict(zones=len(zones), fill_fraction=round(fraction, 4), filled_by_checker=filled_here),
-        dict(min_fill_fraction=c["min_fill_fraction"]),
+        fraction + 1e-9 >= c["min_fill_fraction"] and foreign_area <= 1e-6,
+        dict(
+            zones=len(zones),
+            fill_fraction=round(fraction, 4),
+            filled_by_checker=filled_here,
+            foreign_zones=sorted({z.GetNetname() or "<no net>" for z in foreign}),
+            foreign_fill_fraction=round(foreign_fraction, 4),
+        ),
+        limit,
     )
 
 

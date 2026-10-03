@@ -9,9 +9,10 @@ is reversed between its two ends (a part facing the connector routes it with eve
 net crossing every other). ``lm-bus-corner`` turns the bus round a corner instead:
 the inner nets are the short ones and have no room for meanders until the bus is
 spaced out. ``bus-pair-4L-ps`` is the crossing board on
-the 4L-SGPS stack with the budgets in picoseconds only (judged by the engine's audit:
+the 4L-SGPS stack with the bus's budget in picoseconds (judged by the engine's audit:
 KiCad 10.0.6's ``kicad-cli pcb drc`` reads every delay as 0 ps, KiCad issue 23868, so
-it cannot judge a time-domain rule).
+it cannot judge a time-domain rule); its pair keeps its budget in mm, which the
+rung's own KiCad rule judges.
 
     python lenmatch_scratch.py write OUT.json          # the design list for run.py --design-json
     python lenmatch_scratch.py judge CASE_DIR --kicad-cli PATH [--json OUT]
@@ -106,12 +107,12 @@ def bus_corner():
 
 
 def bus_pair_ps():
-    """The board on the 4L-SGPS stack, with the budgets in picoseconds."""
+    """The board on the 4L-SGPS stack, with the bus's budget in picoseconds (a set
+    gives mm or ps, not both; the pair keeps 1.0 mm, the rung judge's KiCad rule)."""
     spec = with_stackup(bus_pair(), "4L-SGPS")
     spec["name"] = "lm-bus-pair-4L-ps"
     cons = spec["constraints"]
     cons["length_match"] = [dict(name="bus", nets=list(BUS), tolerance_ps=3.0)]
-    cons["diff_pair"] = [dict(name="d", p="DP", n="DN", skew_ps=5.0)]
     return spec
 
 

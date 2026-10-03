@@ -7,8 +7,8 @@
 3. upload the campaign files (``campaign.json``, ``tasks.jsonl``, ``task.py``), refusing to
    overwrite different ones, and the bundles that are not in the inputs store yet;
 4. list the pending tasks (no ``_DONE``), per resource class, and refuse those a live submission
-   still holds (gcp-batch: a queued, scheduled or running job), so a repeated submit never runs
-   and bills a task twice;
+   still holds (a queued, scheduled or running Batch job, a running local pool, a Slurm array
+   with elements pending or running), so a repeated submit never runs and bills a task twice;
 5. estimate them, apply the per-submit caps, and ask for confirmation above ``confirm_usd``;
 6. per class: take the next submission number, write ``submissions/<n>.indices``, render the
    backend's artefacts, launch them and write ``submissions/<n>.json``.
@@ -165,6 +165,8 @@ class Backend:
     """One backend; subclasses implement the hooks below."""
 
     name = ""
+    # The ``state()`` values of a submission whose tasks may still start or run.
+    live_states: Sequence[str] = ("RUNNING",)
 
     def stores(self, plan: planning.Plan, config: Config, cloud=None) -> Stores:
         raise NotImplementedError
@@ -329,7 +331,31 @@ class Backend:
         cloud=None,
     ) -> List[str]:
         """Live submissions that still hold some of ``todo`` (a pending task may be running)."""
-        return []
+        wanted = {i for lines in todo.values() for i in lines}
+        out = []
+        for record in submissions(runs, plan.id):
+            if record.get("dry_run"):
+                continue
+            view = self.state(plan.meta, record, config, cloud)
+            if not view or view.get("state") not in self.live_states:
+                continue
+            rel = "%s/submissions/%d.indices" % (campaign_prefix(plan.id), record["submission"])
+            try:
+                held = {int(x) for x in runs.read_text(rel).split()}
+            except Exception:  # unreadable: assume it holds them all
+                held = set(wanted)
+            if held & wanted:
+                job = record.get("job") or {}
+                out.append(
+                    "submission %s (%s) is %s and holds %d of these tasks"
+                    % (
+                        record["submission"],
+                        job.get("id") or job.get("pid") or "?",
+                        view["state"],
+                        len(held & wanted),
+                    )
+                )
+        return out
 
     def check_limits(self, plan, config, todo, *, yes, max_usd, confirm, say, price_table=None):
         """Per-submit caps and confirmation; only the money-spending backend has any."""

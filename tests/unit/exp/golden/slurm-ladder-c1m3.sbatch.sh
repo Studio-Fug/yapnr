@@ -25,11 +25,18 @@ cmd=(apptainer exec --cleanenv --containall
   --campaign 20261002-ladder-cca5a3 --submission "${YAPNR_SUBMISSION}"
   --index "${SLURM_ARRAY_TASK_ID}" --chunk 2 --retry "${restarts}"
   --toolchain image --work-root /scratch)
+# The time limit is near: stop the wrapper (it flushes checkpoints and exits 75), then
+# requeue a bounded number of times; finished tasks are skipped on the next run.
 requeue() {
   kill -USR1 "${child}" 2>/dev/null || true
   wait "${child}" || true
-  scontrol requeue "${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
-  exit 0
+  rm -rf "${scratch}"
+  if [ "${restarts}" -lt 3 ]; then
+    scontrol requeue "${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
+    exit 0
+  fi
+  echo "time limit reached after ${restarts} requeue(s); not requeued again" >&2
+  exit 75
 }
 trap requeue USR1
 "${cmd[@]}" &

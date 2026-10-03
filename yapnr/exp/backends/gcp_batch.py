@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from yapnr.exp import batch_schema, cost, image
 from yapnr.exp import plan as planning
-from yapnr.exp.backends.base import Backend, Stores, SubmitError, campaign_prefix, submissions
+from yapnr.exp.backends.base import Backend, Stores, SubmitError
 from yapnr.exp.cloud import FakeCloud, Gcloud
 from yapnr.exp.config import Config, Gcp
 from yapnr.exp.store import GcsStore
@@ -87,8 +87,7 @@ def render_job(
         raise SubmitError("the image %s is not pinned to a digest" % cls.image)
     registry = gcp.registry.format(region=placement.region, project=gcp.project)
     image_uri = image.mirror(ref, registry) if ref.registry == "ghcr.io" else ref.pinned
-    vcpus_per_task = max(1, placement.cpu_milli // 1000)
-    parallelism = max(1, min(task_count, limits.max_parallel_vcpus // vcpus_per_task))
+    parallelism = cost.parallel_tasks(task_count, placement, limits.max_parallel_vcpus)
     wall = int(cls.max_wall_s)
     options = "--init --shm-size 1g"
     if gcp.container_user:
@@ -241,31 +240,7 @@ class GcpBatch(Backend):
         check_job(job)
         return {"%s.job.json" % cls.name: json.dumps(job, indent=2, sort_keys=True) + "\n"}
 
-    def live_overlap(self, plan, config, runs, todo, cloud=None) -> List[str]:
-        wanted = {i for lines in todo.values() for i in lines}
-        out = []
-        for record in submissions(runs, plan.id):
-            if record.get("dry_run"):
-                continue
-            view = self.state(plan.meta, record, config, cloud)
-            if not view or view.get("state") not in LIVE_STATES:
-                continue
-            rel = "%s/submissions/%d.indices" % (campaign_prefix(plan.id), record["submission"])
-            try:
-                held = {int(x) for x in runs.read_text(rel).split()}
-            except Exception:  # unreadable: assume it holds them all
-                held = set(wanted)
-            if held & wanted:
-                out.append(
-                    "submission %s (%s) is %s and holds %d of these tasks"
-                    % (
-                        record["submission"],
-                        (record.get("job") or {}).get("id", "?"),
-                        view["state"],
-                        len(held & wanted),
-                    )
-                )
-        return out
+    live_states = LIVE_STATES
 
     def check_limits(self, plan, config, todo, *, yes, max_usd, confirm, say, price_table=None):
         # The kill switch's quota cut and the quota ceiling cover Spot (preemptible) CPUs only.
@@ -344,9 +319,16 @@ class GcpBatch(Backend):
         for group in (status.get("taskGroups") or {}).values():
             for key, value in (group.get("counts") or {}).items():
                 counts[key] = counts.get(key, 0) + int(value)
+        # Exit codes are on task-level status events only (StatusEvent.taskExecution: "only
+        # defined for task-level status events where the task fails"), so count them per task.
+        tasks = cloud.json(
+            ["batch", "tasks", "list", "--job=%s" % job["id"], "--location=%s" % job["region"]],
+            check=False,
+        )
         preemptions = sum(
             1
-            for event in status.get("statusEvents") or []
+            for task in (tasks if isinstance(tasks, list) else [])
+            for event in (task.get("status") or {}).get("statusEvents") or []
             if (event.get("taskExecution") or {}).get("exitCode") == 50001
         )
         return {

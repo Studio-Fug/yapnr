@@ -77,6 +77,18 @@ class TaskSpecTest(unittest.TestCase):
         )
         self.assertEqual(len(errors), 5, errors)
 
+    def test_placement_keys_are_checked_not_ignored(self):
+        def errors(**placement):
+            return spec.campaign_errors(
+                {"schema": spec.CAMPAIGN_SCHEMA, "kind": "smoke", "placement": placement}
+            )
+
+        self.assertEqual(errors(spot=False, shape="c4d-highcpu-8", region="us-west4"), [])
+        # A key nothing reads would be silently dropped; a string "false" would mean Spot.
+        self.assertEqual(errors(parallelism=8), ["unknown placement key 'parallelism'"])
+        self.assertEqual(errors(spot="false"), ["placement.spot is a boolean"])
+        self.assertEqual(len(errors(shape=16, region="US West")), 2)
+
     def test_image_pinning(self):
         self.assertTrue(spec.is_pinned("ghcr.io/studio-fug/yapnr@" + testing.DIGEST))
         self.assertFalse(spec.is_pinned("ghcr.io/studio-fug/yapnr:edge"))

@@ -2,8 +2,10 @@
 # yapnr exp: submit campaign 20261002-ladder-cca5a3 on Slurm site example-site.
 # Run on the login node from the plan directory copied there:
 #   bash backend/slurm/submit.sh
-# Needs bash, coreutils, Slurm (sbatch) and Apptainer. Finished tasks are skipped, so
-# running it again submits the unfinished ones (every array element checks _DONE).
+# Needs bash, coreutils, Slurm (sbatch) and Apptainer. Running it again submits every
+# task of each class again; array elements skip finished tasks (their _DONE markers) and
+# exit in seconds. Run it again only after the earlier arrays ended (status.sh), or a
+# task still running there runs twice.
 set -euo pipefail
 plan="$(cd "$(dirname "$0")/../.." && pwd)"
 store="$SCRATCH/yapnr-store"

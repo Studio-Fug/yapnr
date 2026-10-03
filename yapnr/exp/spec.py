@@ -315,7 +315,6 @@ PLACEMENT_KEYS = {
     "region",
     "vm_vcpus",
     "packing",
-    "parallelism",
 }
 
 
@@ -362,8 +361,14 @@ def campaign_errors(campaign: Any) -> List[str]:
             _strings(placement["families"]) and placement["families"]
         ):
             errors.append("placement.families is a non-empty list of machine families")
-        if not isinstance(placement.get("template", True), bool):
-            errors.append("placement.template is a boolean")
+        for key in ("template", "spot"):
+            if not isinstance(placement.get(key, True), bool):
+                errors.append("placement.%s is a boolean" % key)
+        for key in ("shape", "region"):
+            if key in placement and not (
+                isinstance(placement[key], str) and re.match(r"^[a-z][a-z0-9-]+$", placement[key])
+            ):
+                errors.append("placement.%s is a name such as c4d-highcpu-16 or us-west4" % key)
         if placement.get("prefer", "cost") not in ("cost", "first-family"):
             errors.append("placement.prefer is 'cost' or 'first-family'")
         if placement.get("packing", "core") not in ("core", "vcpu"):

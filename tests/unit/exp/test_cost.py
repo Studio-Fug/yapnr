@@ -120,8 +120,59 @@ class CostTest(unittest.TestCase):
         expected = (task_hours / 8 + 1 * 120 / 3600.0) * vm_hour
         self.assertAlmostEqual(est.expected_usd, expected, places=6)
         worst = (8 * 2.0 * 4 / 8 + 120 / 3600.0) * vm_hour
-        quota = 64 / 16.0 * 12 * vm_hour
+        quota = 64 // 16 * (12 + 0.25) * vm_hour  # whole VMs, the reaper's 15 minutes
         self.assertAlmostEqual(est.ceiling_usd, min(worst, quota), places=6)
+
+    def test_a_partly_filled_vm_is_billed_whole(self):
+        # 4 tasks on an 8-slot VM: one VM runs for the 4 tasks' time, with 4 slots idle.
+        p = cost.place(self.table, self.none, cpus=1, memory_gb=2, families=["c4d"], regions=["r1"])
+        self.assertEqual(p.tasks_per_vm, 8)
+        est = cost.estimate_gcp(
+            self.table,
+            [("c1m2", p, [3600.0] * 4, [7200.0] * 4, 4)],
+            max_retries=0,
+            max_parallel_vcpus=64,
+            max_campaign_hours=12,
+        )
+        vm_hour = 16 * 0.01 + 30 * 0.001 + 0.08 * 30 / 730.0
+        task_hours = 4 * 1.0 / 0.8 * 1.08
+        self.assertAlmostEqual(
+            est.expected_usd, (task_hours / 4 + 120 / 3600.0) * vm_hour, places=6
+        )
+        self.assertAlmostEqual(est.ceiling_usd, (4 * 2.0 / 4 + 120 / 3600.0) * vm_hour, places=6)
+        # 10 tasks at once on 8-slot VMs: two VMs of 5 each.
+        est = cost.estimate_gcp(
+            self.table,
+            [("c1m2", p, [3600.0] * 10, [7200.0] * 10, 10)],
+            max_retries=0,
+            max_parallel_vcpus=64,
+            max_campaign_hours=12,
+        )
+        task_hours = 10 * 1.0 / 0.8 * 1.08
+        self.assertAlmostEqual(
+            est.expected_usd, (task_hours / 5 + 2 * 120 / 3600.0) * vm_hour, places=6
+        )
+
+    def test_parallelism_counts_whole_vms(self):
+        p = cost.place(self.table, self.none, cpus=1, memory_gb=2, families=["c4d"], regions=["r1"])
+        self.assertEqual((p.vm_vcpus, p.tasks_per_vm, p.cpu_milli), (16, 8, 2000))
+        self.assertEqual(cost.parallel_tasks(100, p, 64), 32)  # 4 VMs of 8
+        self.assertEqual(cost.parallel_tasks(3, p, 64), 3)
+        self.assertEqual(cost.parallel_tasks(100, p, 4), 2)  # below one VM: the vCPU count
+        # Memory packs 4 tasks of 13 GB on a 16-vCPU standard VM (62 GB): 4 VMs hold 16 tasks,
+        # not the 32 that 64 vCPUs / 2 vCPUs per task would start on 8 VMs (128 vCPUs).
+        big = cost.place(
+            self.table, self.none, cpus=1, memory_gb=13, families=["c4d"], regions=["r1"]
+        )
+        self.assertEqual((big.vm_vcpus, big.tasks_per_vm), (16, 4))
+        self.assertEqual(cost.parallel_tasks(100, big, 64), 16)
+
+    def test_batch_graces_match_the_job(self):
+        from yapnr.exp.backends import gcp_batch
+
+        self.assertEqual(
+            gcp_batch.UPLOAD_GRACE_S + gcp_batch.RUN_GRACE_S, cost.BATCH_ATTEMPT_GRACE_S
+        )
 
     def test_caps(self):
         limits = config.Limits(max_tasks=10, confirm_usd=1, refuse_usd=5, hard_refuse_usd=20)

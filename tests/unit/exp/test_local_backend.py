@@ -1,5 +1,6 @@
 """The local backend end to end with smoke tasks (no KiCad): plan, submit, status, fetch,
-assemble; and cancel never signals a process it did not start."""
+assemble; a running pool blocks a second submit of its tasks; and cancel never signals a process
+it did not start."""
 
 from __future__ import annotations
 
@@ -8,6 +9,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import unittest.mock
 from pathlib import Path
@@ -49,6 +51,27 @@ class LocalBackendTest(unittest.TestCase):
         self.assertEqual(rows[0]["info"]["python"].split(".")[0], "3")
         # A second submit has nothing left to do.
         self.assertEqual(backend.submit(plan, self.config, say=lambda s: None), [])
+
+    def test_a_running_pool_blocks_a_second_submit_of_its_tasks(self):
+        plan = self.plan(testing.SMOKE_CAMPAIGN.replace("sleep_s = 0", "sleep_s = 60"))
+        backend = local.Local()
+        record = backend.submit(plan, self.config, say=lambda s: None)[0].record
+        runs = backend.stores(plan, self.config).runs
+        try:
+            with self.assertRaises(base.SubmitError) as ctx:
+                backend.submit(plan, self.config, say=lambda s: None)
+            self.assertIn("holds 2 of these tasks", str(ctx.exception))
+            self.assertEqual(len(base.submissions(runs, plan.id)), 1)
+        finally:
+            backend.cancel(record, self.config)
+        deadline = time.monotonic() + 120
+        while time.monotonic() < deadline:
+            if backend.state(plan.meta, record, self.config)["state"] != "RUNNING":
+                break
+            time.sleep(0.2)
+        todo = base.pending(plan, base.done_markers(runs, plan.id))
+        self.assertEqual(todo, {"c1m1": [0, 1]})  # stopped tasks record nothing
+        self.assertEqual(backend.live_overlap(plan, self.config, runs, todo), [])
 
     def test_missing_toolchain_is_reported_before_anything_runs(self):
         self.config.local.python = None

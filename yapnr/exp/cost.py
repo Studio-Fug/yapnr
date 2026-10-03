@@ -30,6 +30,11 @@ SHARED_PRICES = {"us-east1": "us-central1", "us-west1": "us-central1"}
 MAX_TASKS_PER_VM = 20  # Batch's limit (docs.cloud.google.com/batch/docs/create-run-job)
 MEMORY_RESERVE_GB = 1.0  # left to the OS, Docker and the Batch agent on every VM
 MEMORY_USABLE = 0.9
+# What a Batch attempt may run beyond the task's max_wall_s: the runnable's timeout adds 300 s
+# for the upload, maxRunDuration 300 s more (backends/gcp_batch.py). The ceiling prices this.
+BATCH_ATTEMPT_GRACE_S = 600
+# The reaper (infra/gcp/functions/guard) cancels a job past its deadline label every 15 minutes.
+REAPER_INTERVAL_H = 0.25
 
 
 class CostError(ValueError):
@@ -297,6 +302,18 @@ def place(
     return best[2]
 
 
+def parallel_tasks(task_count: int, placement: Placement, max_parallel_vcpus: int) -> int:
+    """A job's ``parallelism``: the tasks at once within ``max_parallel_vcpus``, in whole VMs.
+
+    Batch starts VMs of ``vm_vcpus`` that hold up to ``tasks_per_vm`` tasks, so when memory packs
+    fewer tasks per VM than it has cores, counting only the tasks' own vCPUs starts more VMs
+    (and vCPUs) than the limit allows.
+    """
+    by_task = max_parallel_vcpus // max(1, placement.cpu_milli // 1000)
+    by_vm = max(1, max_parallel_vcpus // max(1, placement.vm_vcpus)) * placement.tasks_per_vm
+    return max(1, min(task_count, by_task, by_vm))
+
+
 @dataclass
 class ClassEstimate:
     name: str
@@ -339,22 +356,31 @@ def estimate_gcp(
     max_parallel_vcpus: int,
     max_campaign_hours: float,
 ) -> Estimate:
-    """``classes``: (name, placement, reference seconds per task, max wall s per task, parallel)."""
+    """``classes``: (name, placement, reference seconds per task, the longest one attempt of each
+    task may run, parallel). On Batch an attempt may run its max wall time plus
+    ``BATCH_ATTEMPT_GRACE_S`` (maxRunDuration), which is what the caller passes.
+
+    VMs are billed whole: when fewer tasks run at once than ``tasks_per_vm`` (a small submission,
+    or a low ``parallel``), each VM holds only ``occupancy`` tasks and pays for the idle slots.
+    The quota bound counts whole VMs within ``max_parallel_vcpus`` (as ``parallel_tasks`` does)
+    for the campaign's hours plus the reaper's interval, after which it cancels the job.
+    """
     est = Estimate(backend="gcp-batch")
     rework = table.rework
     for name, p, reference, max_wall, parallel in classes:
         disk_hour = table.disk_hour(p.boot_disk, table.data["overheads"]["boot_disk_gib"])
         per_vm_hour = p.vm_hour + disk_hour
         task_hours = sum(s / p.speed for s in reference) / 3600.0 * (1 + rework)
-        vms = max(
-            1, min(math.ceil(len(reference) / p.tasks_per_vm), math.ceil(parallel / p.tasks_per_vm))
-        )
+        at_once = max(1, min(len(reference), parallel))
+        vms = max(1, math.ceil(at_once / p.tasks_per_vm))
+        occupancy = max(1, min(p.tasks_per_vm, math.ceil(at_once / vms)))
         start_hours = vms * table.vm_start_s / 3600.0
-        vm_hours = task_hours / p.tasks_per_vm + start_hours
+        vm_hours = task_hours / occupancy + start_hours
         expected = vm_hours * per_vm_hour
         worst_task_hours = sum(max_wall) / 3600.0 * (1 + max_retries)
-        worst = (worst_task_hours / p.tasks_per_vm + start_hours) * per_vm_hour
-        quota = max_parallel_vcpus / float(p.vm_vcpus) * max_campaign_hours * per_vm_hour
+        worst = (worst_task_hours / occupancy + start_hours) * per_vm_hour
+        quota_vms = max(1, max_parallel_vcpus // max(1, p.vm_vcpus))
+        quota = quota_vms * (max_campaign_hours + REAPER_INTERVAL_H) * per_vm_hour
         slots = max(1, parallel)
         longest = max(reference) / p.speed / 3600.0 if reference else 0.0
         makespan = max(longest, task_hours / slots) + table.vm_start_s / 3600.0

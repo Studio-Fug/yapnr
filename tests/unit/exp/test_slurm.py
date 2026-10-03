@@ -1,11 +1,15 @@
 """The slurm backend: golden sbatch, submit.sh and status.sh scripts (bash -n, shellcheck when
-installed), chunking against the site's array limit, and the private-campaign guard."""
+installed), the batch script's bounded requeues (run with stub apptainer and scontrol), the
+sacct view, chunking against the site's array limit, and the private-campaign guard."""
 
 from __future__ import annotations
 
+import os
 import shutil
+import signal
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -72,6 +76,71 @@ class SlurmTest(unittest.TestCase):
         self.assertIn("--chunk 2", sbatch)
         self.assertIn("apptainer exec --cleanenv --containall", sbatch)
 
+    def run_element(self, sbatch, restarts, signal_usr1, code=0):
+        """Run the batch script with stub apptainer and scontrol; returns (exit, scontrol call)."""
+        stubs = self.tmp / "stubs"
+        stubs.mkdir(exist_ok=True)
+        started = self.tmp / "started"
+        if started.exists():
+            started.unlink()
+        log = self.tmp / "scontrol.log"
+        log.write_text("")
+        if signal_usr1:  # a long task that the time-limit signal stops (the wrapper exits 75)
+            body = "trap 'exit 75' USR1\ntouch %s\nsleep 20 &\nwait $! || true\n" % started
+        else:
+            body = "touch %s\n" % started
+        (stubs / "apptainer").write_text("#!/bin/bash\n%sexit %d\n" % (body, code))
+        (stubs / "scontrol").write_text('#!/bin/bash\necho "$@" >> %s\n' % log)
+        for stub in stubs.iterdir():
+            stub.chmod(0o755)
+        env = dict(
+            os.environ,
+            PATH="%s:%s" % (stubs, os.environ.get("PATH", "/usr/bin:/bin")),
+            YAPNR_STORE=str(self.tmp / "store"),
+            YAPNR_SIF=str(self.tmp / "image.sif"),
+            YAPNR_SUBMISSION="1",
+            SLURM_JOB_ID="42",
+            SLURM_ARRAY_JOB_ID="41",
+            SLURM_ARRAY_TASK_ID="0",
+            SLURM_RESTART_COUNT=str(restarts),
+            SLURM_TMPDIR=str(self.tmp / "node"),
+        )
+        proc = subprocess.Popen(["bash", str(sbatch)], env=env)
+        if signal_usr1:
+            deadline = time.monotonic() + 20
+            while not started.exists() and time.monotonic() < deadline:
+                time.sleep(0.05)
+            time.sleep(0.3)
+            proc.send_signal(signal.SIGUSR1)
+        return proc.wait(timeout=30), log.read_text().split("\n")[0]
+
+    def test_requeues_are_bounded_by_max_retries(self):
+        plan = self.plan(testing.LADDER_CAMPAIGN)
+        sbatch = plan.dir / "backend" / "slurm" / "c1m3.sbatch"
+        # The time-limit signal requeues the element until SLURM_RESTART_COUNT reaches 3.
+        self.assertEqual(self.run_element(sbatch, 0, True), (0, "requeue 41_0"))
+        self.assertEqual(self.run_element(sbatch, 3, True), (75, ""))
+        # So does a transient failure (the wrapper's 75); any other exit ends the element.
+        self.assertEqual(self.run_element(sbatch, 2, False, code=75), (0, "requeue 41_0"))
+        self.assertEqual(self.run_element(sbatch, 3, False, code=75), (75, ""))
+        self.assertEqual(self.run_element(sbatch, 0, False, code=0), (0, ""))
+        self.assertEqual(self.run_element(sbatch, 0, False, code=2), (2, ""))
+
+    def test_array_view(self):
+        live = "41_0|COMPLETED\n41_1|RUNNING\n41_[2-3]|PENDING\n"
+        self.assertEqual(
+            slurm.array_view(live),
+            {
+                "state": "RUNNING",
+                "counts": {"COMPLETED": 1, "RUNNING": 1, "PENDING": 1},
+                "preemptions": 0,
+            },
+        )
+        ended = "41_0|COMPLETED\n41_1|CANCELLED by 1000\n41_2|PREEMPTED\n"
+        view = slurm.array_view(ended)
+        self.assertEqual((view["state"], view["preemptions"]), ("FINISHED", 1))
+        self.assertEqual(slurm.array_view("")["state"], "UNKNOWN")
+
     def test_chunk_grows_to_fit_the_array_limit(self):
         text = testing.LADDER_CAMPAIGN.replace("seed = [0, 1]", "seed = [0, 1, 2, 3, 4, 5]")
         plan = self.plan(text)  # 12 tasks, max_array 4: at least 3 tasks per element
@@ -93,8 +162,6 @@ class SlurmTest(unittest.TestCase):
 
     def test_dry_run_launch_builds_the_sbatch_command(self):
         plan = self.plan(testing.LADDER_CAMPAIGN)
-        import os
-
         os.environ["SCRATCH"] = str(self.tmp / "scratch")
         try:
             done = slurm.Slurm().submit(plan, self.config, dry_run=True, say=lambda s: None)

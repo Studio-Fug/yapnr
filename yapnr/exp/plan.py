@@ -253,9 +253,10 @@ def estimate(
         rows = []
         for cls, lines, reference in picked:
             p = placements[cls.name]
-            vcpus_per_task = max(1, p.cpu_milli // 1000)
-            parallel = max(1, min(len(lines), limits.max_parallel_vcpus // vcpus_per_task))
-            rows.append((cls.name, p, reference, [float(cls.max_wall_s)] * len(lines), parallel))
+            parallel = cost.parallel_tasks(len(lines), p, limits.max_parallel_vcpus)
+            # The longest one Batch attempt may run is maxRunDuration, not the task's own limit.
+            attempt_s = float(cls.max_wall_s + cost.BATCH_ATTEMPT_GRACE_S)
+            rows.append((cls.name, p, reference, [attempt_s] * len(lines), parallel))
         return cost.estimate_gcp(
             table,
             rows,

@@ -11,7 +11,9 @@ session); ``yapnr exp submit`` does the same where yapnr is installed on the log
   ``MaxArraySize`` (1001 by default) and QOS limits cap array sizes.
 - ``--requeue --signal=B:USR1@300``: the batch shell forwards USR1 to the container, waits, and
   requeues the element; finished tasks are skipped through their ``_DONE`` markers. An element
-  whose wrapper exits 75 (a transient failure) is requeued too, up to ``limits.max_retries``.
+  whose wrapper exits 75 (a transient failure) is requeued too. Both requeues stop after
+  ``limits.max_retries`` (``SLURM_RESTART_COUNT``), so an element that cannot finish within its
+  time limit fails instead of burning the allocation in a loop.
 - The store is a directory on the site's project or scratch file system with the bucket layout:
   ``bundles/``, ``campaigns/<cid>/...``, ``control/frozen``.
 
@@ -100,11 +102,18 @@ def render_sbatch(
         '  --campaign %s --submission "${YAPNR_SUBMISSION}"' % cid,
         '  --index "${SLURM_ARRAY_TASK_ID}" --chunk %d --retry "${restarts}"' % chunk,
         "  --toolchain image --work-root /scratch)",
+        "# The time limit is near: stop the wrapper (it flushes checkpoints and exits 75), then",
+        "# requeue a bounded number of times; finished tasks are skipped on the next run.",
         "requeue() {",
         '  kill -USR1 "${child}" 2>/dev/null || true',
         '  wait "${child}" || true',
-        '  scontrol requeue "${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}"',
-        "  exit 0",
+        '  rm -rf "${scratch}"',
+        '  if [ "${restarts}" -lt %d ]; then' % max_retries,
+        '    scontrol requeue "${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}"',
+        "    exit 0",
+        "  fi",
+        '  echo "time limit reached after ${restarts} requeue(s); not requeued again" >&2',
+        "  exit 75",
         "}",
         "trap requeue USR1",
         '"${cmd[@]}" &',
@@ -134,8 +143,10 @@ def render_submit(plan_meta: Dict[str, Any], site: SlurmSite, chunk: int) -> str
         "# yapnr exp: submit campaign %s on Slurm site %s." % (cid, site.name),
         "# Run on the login node from the plan directory copied there:",
         "#   bash backend/slurm/submit.sh",
-        "# Needs bash, coreutils, Slurm (sbatch) and Apptainer. Finished tasks are skipped, so",
-        "# running it again submits the unfinished ones (every array element checks _DONE).",
+        "# Needs bash, coreutils, Slurm (sbatch) and Apptainer. Running it again submits every",
+        "# task of each class again; array elements skip finished tasks (their _DONE markers) and",
+        "# exit in seconds. Run it again only after the earlier arrays ended (status.sh), or a",
+        "# task still running there runs twice.",
         "set -euo pipefail",
         'plan="$(cd "$(dirname "$0")/../.." && pwd)"',
         'store="%s"' % site.store,
@@ -311,10 +322,41 @@ class Slurm(Backend):
             text=True,
             timeout=60,
         )
-        counts: Dict[str, int] = {}
-        for line in done.stdout.splitlines():
-            parts = line.split("|")
-            if len(parts) == 2:
-                state = parts[1].split()[0] if parts[1] else "UNKNOWN"
-                counts[state] = counts.get(state, 0) + 1
-        return {"state": "SLURM", "counts": counts, "preemptions": 0}
+        return array_view(done.stdout if done.returncode == 0 else None)
+
+
+# sacct states of an array element that may still run (sacct(1), "JOB STATE CODES").
+LIVE_STATES = frozenset(
+    (
+        "PENDING",
+        "CONFIGURING",
+        "RUNNING",
+        "COMPLETING",
+        "REQUEUED",
+        "REQUEUE_FED",
+        "REQUEUE_HOLD",
+        "RESIZING",
+        "SIGNALING",
+        "STAGE_OUT",
+        "STOPPED",
+        "SUSPENDED",
+    )
+)
+
+
+def array_view(sacct_output: Any) -> Dict[str, Any]:
+    """The view of one array from ``sacct -X -n -P --format=JobID,State``: RUNNING while any
+    element may still run, FINISHED when none can, UNKNOWN when sacct gave nothing."""
+    counts: Dict[str, int] = {}
+    for line in (sacct_output or "").splitlines():
+        parts = line.split("|")
+        if len(parts) == 2:
+            state = parts[1].split()[0] if parts[1].strip() else "UNKNOWN"
+            counts[state] = counts.get(state, 0) + 1
+    if not counts:
+        state = "UNKNOWN"
+    elif LIVE_STATES & set(counts):
+        state = "RUNNING"
+    else:
+        state = "FINISHED"
+    return {"state": state, "counts": counts, "preemptions": counts.get("PREEMPTED", 0)}

@@ -248,12 +248,22 @@ class GcpBatchTest(unittest.TestCase):
         cloud.jobs[name]["status"] = {
             "state": "RUNNING",
             "taskGroups": {"group0": {"counts": {"RUNNING": "1", "SUCCEEDED": "1"}}},
-            "statusEvents": [{"taskExecution": {"exitCode": 50001}}],
+            "statusEvents": [{"type": "STATUS_CHANGED", "description": "Job state is RUNNING"}],
         }
+        # Exit codes are on the tasks' own status events (StatusEvent.taskExecution).
+        preempted = {"taskExecution": {"exitCode": 50001}, "taskState": "FAILED"}
+        cloud.tasks[name] = [
+            {"name": name + "/taskGroups/group0/tasks/0", "status": {"statusEvents": [preempted]}},
+            {
+                "name": name + "/taskGroups/group0/tasks/1",
+                "status": {"statusEvents": [preempted, {"taskExecution": {"exitCode": 75}}]},
+            },
+        ]
         view = backend.state(plan.meta, record, self.config, cloud)
         self.assertEqual(
-            view, {"state": "RUNNING", "counts": {"RUNNING": 1, "SUCCEEDED": 1}, "preemptions": 1}
+            view, {"state": "RUNNING", "counts": {"RUNNING": 1, "SUCCEEDED": 1}, "preemptions": 2}
         )
+        self.assertIn("--job=" + record["job"]["id"], cloud.calls[-1])
         backend.cancel(record, self.config, cloud)
         self.assertEqual(cloud.jobs[name]["status"]["state"], "CANCELLATION_IN_PROGRESS")
         self.assertIn("cancel", cloud.calls[-1])

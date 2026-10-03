@@ -1,7 +1,8 @@
 # Two Cloud Run functions (2nd gen), source in functions/guard (standard library only):
-#   budget_guard  on every budget notification: at 100% of actual spend, cancel every job labelled
-#                 yapnr=1 and write control/frozen; at quota_cut_at, also set the preemptible CPU
-#                 quota preferences to 0. Idempotent: notifications repeat several times a day.
+#   budget_guard  on every budget notification: at 100% of actual spend, disable yapnr-submit,
+#                 write control/frozen and cancel every job labelled yapnr=1; at quota_cut_at, also
+#                 set the preemptible CPU quota preferences to 0. Idempotent: notifications repeat
+#                 several times a day.
 #   reaper        every 15 minutes (Cloud Scheduler -> Pub/Sub): cancel jobs past their deadline
 #                 label, and delete yapnr VMs that outlive their deadline by an hour.
 
@@ -23,6 +24,11 @@ variable "runs_bucket" {
 
 variable "guard_email" {
   type = string
+}
+
+variable "submit_email" {
+  description = "The account every submit runs as; the guard disables it at 100% of the budget."
+  type        = string
 }
 
 variable "build_service_account" {
@@ -95,6 +101,7 @@ locals {
     YAPNR_RUNS_BUCKET       = var.runs_bucket
     YAPNR_QUOTA_PREFERENCES = join(",", [for region, quota in var.quota_preferences : "${region}=${quota}"])
     YAPNR_QUOTA_CUT_AT      = tostring(var.quota_cut_at)
+    YAPNR_SUBMIT_ACCOUNT    = var.submit_email
   }
   functions = {
     budget = { entry = "budget_guard", topic = var.budget_topic }
@@ -147,6 +154,10 @@ resource "google_cloud_run_service_iam_member" "invoker" {
   service  = each.value.service_config[0].service
   role     = "roles/run.invoker"
   member   = "serviceAccount:${var.guard_email}"
+}
+
+output "environment" {
+  value = local.environment
 }
 
 output "functions" {

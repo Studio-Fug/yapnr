@@ -54,6 +54,20 @@ run "owner_config_matches_the_cli" {
   }
 }
 
+run "the_kill_switch_can_stop_submits" {
+  command = plan
+
+  assert {
+    condition     = module.guard.environment.YAPNR_SUBMIT_ACCOUNT == module.identity.submit_email
+    error_message = "the budget guard must know the submit account it disables"
+  }
+
+  assert {
+    condition     = module.identity.disable_submit_permissions == toset(["iam.serviceAccounts.get", "iam.serviceAccounts.disable"])
+    error_message = "the guard may disable the submit account, and do nothing else with it"
+  }
+}
+
 run "templates_per_shape_and_region" {
   command = plan
 

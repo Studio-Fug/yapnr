@@ -379,6 +379,8 @@ def _cmd_unfreeze(args) -> int:
     if not store.exists(FROZEN):
         print("not frozen")
         return 0
+    # On gcp-batch the guard also disabled yapnr-submit; this command runs as that account, so it
+    # gets here only after the owner re-enabled it (runbook, "Kill-switch drill").
     print(store.read_text(FROZEN).strip())
     if not args.yes:
         if not sys.stdin.isatty() or input("clear the freeze? [y/N] ").strip().lower() not in (

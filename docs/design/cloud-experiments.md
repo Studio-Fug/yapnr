@@ -504,20 +504,24 @@ times per day" [50, 51]. The guards are layered so that each still holds when a 
    with alerts at 50%, 90% and 100% of actual spend and 100% of forecast, published to Pub/Sub
    [50, 53]. The `budget-guard` function, idempotent because notifications repeat [51]:
 
-   - at 100% of actual spend, cancels every queued, scheduled or running job labelled `yapnr`
-     [55] and writes `control/frozen`, which `submit` checks and which running tasks check before
-     starting work;
+   - at 100% of actual spend, disables the `yapnr-submit` service account (a custom role on that
+     account only: `iam.serviceAccounts.get` and `.disable`), so no client can submit whatever
+     it does, cancels every queued, scheduled or running job labelled `yapnr` [55] and writes
+     `control/frozen`, which `submit` checks and which running tasks check before starting work;
    - at 120%, also lowers the preemptible CPU quota preference to 0
      (`--allow-quota-decrease-below-usage` [54]).
 
    Google's "disable billing" recipe is not used: it stops everything, and resources "might be
-   irretrievably deleted" [52]. `yapnr exp unfreeze` (owner, explicit) clears the marker; quota
-   is raised again by the runbook command, which may need re-approval (§21).
+   irretrievably deleted" [52]. The owner re-enables `yapnr-submit` with their own credentials
+   and `yapnr exp unfreeze` clears the marker; quota is raised again by the runbook command,
+   which may need re-approval (§21). The budget counts spend gross of credits
+   (`EXCLUDE_ALL_CREDITS`), so credits cannot hide a runaway.
 
 6. **Lifecycle rules** (§8) bound storage cost.
 7. **Labels for attribution**: `yapnr=1`, `campaign=<cid>`, `kind=<kind>`, `visibility`,
    `submission=<n>` and `deadline` in `allocationPolicy.labels`, which reach VMs and disks [15];
-   budgets can filter on labels [53].
+   `yapnr`, `campaign`, `submission` and `deadline` also in the job's own labels, which the
+   reaper reads; budgets can filter on labels [53].
 
 Idle cost of the whole infrastructure is est. under $1/month plus stored results [34, 39]:
 buckets, the Artifact Registry caches (about one image per region), functions and Pub/Sub within

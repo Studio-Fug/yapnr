@@ -155,9 +155,18 @@ tofu plan -var-file="$HOME/.config/yapnr/gcp.tfvars" -out=bootstrap.plan
 tofu apply bootstrap.plan
 ```
 
-The plan creates 67 resources for two regions ([infra/gcp](https://github.com/Studio-Fug/yapnr/tree/main/infra/gcp)):
+The plan creates 69 resources for two regions ([infra/gcp](https://github.com/Studio-Fug/yapnr/tree/main/infra/gcp)):
 APIs, the VPC, both buckets, the service accounts and grants, the registry caches, the Spot
 templates, the budget and the guard functions.
+
+The project's `default` network allows SSH from anywhere and gives VMs external IPs; yapnr jobs
+never use it, so delete it, and with it any way a hand-written job could land there:
+
+```sh
+gcloud compute firewall-rules list --filter="network=default" --format="value(name)" \
+  | xargs -r gcloud compute firewall-rules delete --quiet
+gcloud compute networks delete default --quiet
+```
 
 ### 4. Quotas
 
@@ -228,14 +237,22 @@ yapnr exp doctor --backend gcp-batch      # buckets, Batch access, quotas, templ
 ### 9. Kill-switch drill
 
 With the owner configuration (it may publish to the topic), publish a synthetic over-budget message
-and check that `control/frozen` appears and `submit` refuses; then clear it:
+and check that `yapnr-submit` is disabled (`yapnr exp doctor` and `submit` fail to impersonate it)
+and `control/frozen` appears. Only the owner can undo the freeze: re-enable the account, then clear
+the marker:
 
 ```sh
 gcloud pubsub topics publish yapnr-budget --configuration=yapnr-owner --message='{
   "budgetDisplayName": "drill", "costAmount": 51, "budgetAmount": 50,
   "costIntervalStart": "<first day of this month>T00:00:00Z", "currencyCode": "USD"}'
+gcloud iam service-accounts describe "yapnr-submit@${PROJECT}.iam.gserviceaccount.com" \
+  --configuration=yapnr-owner --format="value(disabled)"          # True
+gcloud iam service-accounts enable "yapnr-submit@${PROJECT}.iam.gserviceaccount.com" \
+  --configuration=yapnr-owner
 yapnr exp unfreeze --backend gcp-batch
 ```
+
+After a real freeze, do the same once you know why the budget ran out.
 
 To drill the quota cut too, use a cost of 61 (above 120%), then restore the quota with the step 4
 command and learn whether that needs a new approval.
@@ -288,17 +305,22 @@ The layers, each of which holds when the one above fails:
    hour, less in `us-west4`.
 2. **Per-submit caps** (`[limits]`): `max_tasks`, `max_task_wall_s`, `max_parallel_vcpus` (the
    jobs' parallelism), `max_retries` (at most 3, infrastructure exit codes only) and
-   `max_campaign_hours` (the jobs' deadline).
+   `max_campaign_hours` (the jobs' deadline). `submit` refuses tasks that a queued or running job
+   of the campaign still holds (no task runs twice), and on-demand placements (`spot = false`,
+   outside the quota ceiling) unless `allow_on_demand = true`.
 3. **The estimate**: every plan prints the expected cost and a ceiling (every task at its maximum
    wall time with every retry, or the quota for `max_campaign_hours`, whichever is lower).
    `submit` asks above `confirm_usd` and refuses a ceiling above `refuse_usd` unless `--max-usd`
    raises it, never above `hard_refuse_usd`.
 4. **The reaper**: every 15 minutes it cancels jobs past their `deadline` label and deletes yapnr VMs
    an hour past it.
-5. **The budget and kill switch**: at 100% of the monthly budget the guard writes `control/frozen`
+5. **The budget and kill switch**: at 100% of the monthly budget the guard disables
+   `yapnr-submit` (no client can submit until the owner re-enables it), writes `control/frozen`
    (submit and every task check it) and cancels every yapnr job; at 120% it sets the preemptible
-   CPU quota preferences to 0. Budget data lags by hours ([budgets][budgets]), which is why it is
-   the last layer. Google's "disable billing" recipe is not used: it can delete resources.
+   CPU quota preferences to 0. The budget counts spend gross of credits, so free-trial or
+   research credits do not hide a runaway; raise `budget_usd` to spend credits faster. Budget
+   data lags by hours ([budgets][budgets]), which is why it is the last layer. Google's "disable
+   billing" recipe is not used: it can delete resources.
 6. **Lifecycle rules** delete result archives after 90 days and checkpoints after 14.
 
 `fetch` downloads summaries by default; `--full` adds every `result.tar.gz`, and internet egress

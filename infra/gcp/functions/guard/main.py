@@ -4,9 +4,11 @@
 possibly out of order) and acts on the spend ratio ``costAmount / budgetAmount`` of the current
 budget period, so a repeated or late message never does harm:
 
-- ratio >= 1.0: write ``control/frozen`` in the runs bucket (``yapnr exp submit`` and every task
-  check it) and cancel every queued, scheduled or running Batch job labelled ``yapnr=1`` in the
-  enabled regions;
+- ratio >= 1.0: disable the ``yapnr-submit`` service account (``YAPNR_SUBMIT_ACCOUNT``), so no
+  new job can be submitted through it whatever the client does; write ``control/frozen`` in the
+  runs bucket (``yapnr exp submit`` and every task check it); and cancel every queued, scheduled
+  or running Batch job labelled ``yapnr=1`` in the enabled regions. Only the owner re-enables the
+  account (docs/cloud-experiments.md, "Kill-switch drill");
 - ratio >= ``YAPNR_QUOTA_CUT_AT`` (1.2 by default): also set the preemptible CPU quota preferences
   in ``YAPNR_QUOTA_PREFERENCES`` to 0, which stops Spot VMs from being created at all.
 
@@ -45,6 +47,7 @@ BATCH = "https://batch.googleapis.com/v1"
 STORAGE_UPLOAD = "https://storage.googleapis.com/upload/storage/v1"
 QUOTAS = "https://cloudquotas.googleapis.com/v1"
 COMPUTE = "https://compute.googleapis.com/compute/v1"
+IAM = "https://iam.googleapis.com/v1"
 ACTIVE = ("QUEUED", "SCHEDULED", "RUNNING")
 VM_GRACE_S = 3600
 FROZEN = "control/frozen"
@@ -94,6 +97,7 @@ def settings(environ=None):
         "bucket": env["YAPNR_RUNS_BUCKET"],
         "preferences": preferences,
         "cut_at": float(env.get("YAPNR_QUOTA_CUT_AT", "1.2")),
+        "submit_account": env.get("YAPNR_SUBMIT_ACCOUNT", ""),
     }
 
 
@@ -167,6 +171,16 @@ def freeze(http, cfg, reason):
     return status
 
 
+def disable_submit(http, cfg):
+    """Disable the account every submit runs as; None when none is configured."""
+    email = cfg.get("submit_account")
+    if not email:
+        return None
+    url = "%s/projects/%s/serviceAccounts/%s:disable" % (IAM, cfg["project"], email)
+    status, _ = http("POST", url, {})
+    return status
+
+
 def cut_quota(http, cfg):
     statuses = {}
     for region, quota in sorted(cfg["preferences"].items()):
@@ -209,7 +223,10 @@ def handle_budget(budget, http, cfg, now=None):
         budget.get("budgetAmount"),
         budget.get("currencyCode", ""),
     )
-    summary = {"action": "freeze", "ratio": round(ratio, 3), "frozen": freeze(http, cfg, reason)}
+    # Block new submits first, so nothing started after the job listing below survives it.
+    summary = {"action": "freeze", "ratio": round(ratio, 3)}
+    summary["submit_disabled"] = disable_submit(http, cfg)
+    summary["frozen"] = freeze(http, cfg, reason)
     summary["cancelled"] = [
         job["name"]
         for job in yapnr_jobs(http, cfg)

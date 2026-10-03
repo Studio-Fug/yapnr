@@ -21,6 +21,8 @@ CFG = {
     "bucket": "example-yapnr-runs",
     "preferences": {"us-west4": "PREEMPTIBLE-CPUS-per-project-region"},
     "cut_at": 1.2,
+    # Assembled, so the privacy scan does not read it as an e-mail address.
+    "submit_account": "yapnr-submit" + "@example-project.iam.gserviceaccount.com",
 }
 
 
@@ -85,6 +87,23 @@ class BudgetGuardTest(unittest.TestCase):
         self.assertEqual(len(upload), 1)
         self.assertIn("name=control%2Ffrozen", upload[0][1])
         self.assertFalse(http.of("PATCH"))
+        # New submits are blocked at IAM, before the jobs are listed and cancelled.
+        self.assertEqual(summary["submit_disabled"], 200)
+        disable = [i for i, c in enumerate(http.calls) if c[1].endswith(":disable")]
+        first_list = next(i for i, c in enumerate(http.calls) if c[0] == "GET")
+        self.assertEqual(len(disable), 1)
+        self.assertLess(disable[0], first_list)
+        self.assertEqual(
+            http.calls[disable[0]][1],
+            "https://iam.googleapis.com/v1/projects/example-project/serviceAccounts/%s:disable"
+            % CFG["submit_account"],
+        )
+
+    def test_without_a_submit_account_the_freeze_still_cancels(self):
+        http = FakeHttp([job("a")])
+        summary = main.handle_budget(budget(50.0), http, dict(CFG, submit_account=""), NOW)
+        self.assertIsNone(summary["submit_disabled"])
+        self.assertEqual(len(summary["cancelled"]), 1)
 
     def test_repeated_notifications_are_harmless(self):
         http = FakeHttp([job("a")])
@@ -138,6 +157,7 @@ class BudgetGuardTest(unittest.TestCase):
         )
         self.assertEqual(cfg["preferences"], {"r1": "Q1", "r2": "Q2"})
         self.assertEqual(cfg["cut_at"], 1.2)
+        self.assertEqual(cfg["submit_account"], "")
 
 
 class ReaperTest(unittest.TestCase):

@@ -1,7 +1,8 @@
 # A monthly budget on the project with alerts at 50%, 90% and 100% of actual spend and 100% of
 # forecast, published to a Pub/Sub topic that the budget guard subscribes to. Budgets do not cap
 # spending (cost data lags by hours); the quota ceiling, the per-submit caps and the reaper do not
-# depend on them.
+# depend on them. Spend is gross of credits: free-trial, promotional or research credits would
+# otherwise hide a runaway from the guard until they were used up.
 
 variable "project_id" {
   type = string
@@ -32,7 +33,7 @@ resource "google_billing_budget" "monthly" {
   budget_filter {
     projects               = ["projects/${var.project_number}"]
     calendar_period        = "MONTH"
-    credit_types_treatment = "INCLUDE_ALL_CREDITS"
+    credit_types_treatment = "EXCLUDE_ALL_CREDITS"
   }
 
   amount {

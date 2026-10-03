@@ -47,7 +47,7 @@ variable "billing_account" {
 }
 
 variable "budget_usd" {
-  description = "The monthly budget; the guard cancels jobs at 100% and cuts quota at quota_cut_at."
+  description = "The monthly budget in USD, gross of credits (credits do not raise it); the guard cancels jobs at 100% and cuts quota at quota_cut_at."
   type        = number
   default     = 50
 }

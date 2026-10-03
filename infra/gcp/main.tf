@@ -85,6 +85,7 @@ module "guard" {
   regions               = var.regions
   runs_bucket           = module.storage.runs_bucket
   guard_email           = module.identity.guard_email
+  submit_email          = module.identity.submit_email
   build_service_account = module.identity.build_id
   budget_topic          = module.budget.topic_id
   quota_preferences     = var.quota_preferences

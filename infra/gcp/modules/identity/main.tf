@@ -92,6 +92,23 @@ resource "google_service_account_iam_member" "mac_impersonates_submit" {
   member             = var.mac_identity
 }
 
+# The budget guard disables yapnr-submit at 100% of the budget, so no client can submit until the
+# owner re-enables it. A custom role on that one account: Service Account Admin would also let the
+# guard change the account's IAM policy and impersonate it.
+resource "google_project_iam_custom_role" "disable_submit" {
+  project     = var.project_id
+  role_id     = "yapnrDisableSubmit"
+  title       = "yapnr budget guard: disable the submit account"
+  description = "Disable (not enable, not change) a service account; granted on yapnr-submit only."
+  permissions = ["iam.serviceAccounts.get", "iam.serviceAccounts.disable"]
+}
+
+resource "google_service_account_iam_member" "guard_disables_submit" {
+  service_account_id = google_service_account.submit.name
+  role               = google_project_iam_custom_role.disable_submit.name
+  member             = "serviceAccount:${google_service_account.guard.email}"
+}
+
 output "submit_email" {
   value = google_service_account.submit.email
 }
@@ -106,6 +123,10 @@ output "guard_email" {
 
 output "build_id" {
   value = google_service_account.build.id
+}
+
+output "disable_submit_permissions" {
+  value = toset(google_project_iam_custom_role.disable_submit.permissions)
 }
 
 output "submit_account_id" {

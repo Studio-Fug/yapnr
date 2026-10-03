@@ -1,5 +1,6 @@
 gcloud storage objects describe gs://example-yapnr-runs/control/frozen --format=json --project=example-project --quiet --impersonate-service-account=yapnr-submit@{project}.iam.gserviceaccount.com
 gcloud storage cat 'gs://example-yapnr-runs/campaigns/20261002-smoke-093d37/tasks/*/_DONE' --project=example-project --quiet --impersonate-service-account=yapnr-submit@{project}.iam.gserviceaccount.com
+gcloud storage ls 'gs://example-yapnr-runs/campaigns/20261002-smoke-093d37/submissions/*.json' --project=example-project --quiet --impersonate-service-account=yapnr-submit@{project}.iam.gserviceaccount.com
 gcloud storage objects describe gs://example-yapnr-runs/campaigns/20261002-smoke-093d37/campaign.json --format=json --project=example-project --quiet --impersonate-service-account=yapnr-submit@{project}.iam.gserviceaccount.com
 gcloud storage cp {tmp}/plan/campaign.json gs://example-yapnr-runs/campaigns/20261002-smoke-093d37/campaign.json --project=example-project --quiet --impersonate-service-account=yapnr-submit@{project}.iam.gserviceaccount.com
 gcloud storage objects describe gs://example-yapnr-runs/campaigns/20261002-smoke-093d37/tasks.jsonl --format=json --project=example-project --quiet --impersonate-service-account=yapnr-submit@{project}.iam.gserviceaccount.com

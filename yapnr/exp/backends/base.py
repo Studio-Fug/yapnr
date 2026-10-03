@@ -6,7 +6,9 @@
 2. refuse when the store's ``control/frozen`` marker exists (the budget kill switch);
 3. upload the campaign files (``campaign.json``, ``tasks.jsonl``, ``task.py``), refusing to
    overwrite different ones, and the bundles that are not in the inputs store yet;
-4. list the pending tasks (no ``_DONE``), per resource class;
+4. list the pending tasks (no ``_DONE``), per resource class, and refuse those a live submission
+   still holds (gcp-batch: a queued, scheduled or running job), so a repeated submit never runs
+   and bills a task twice;
 5. estimate them, apply the per-submit caps, and ask for confirmation above ``confirm_usd``;
 6. per class: take the next submission number, write ``submissions/<n>.indices``, render the
    backend's artefacts, launch them and write ``submissions/<n>.json``.
@@ -246,6 +248,12 @@ class Backend:
         if not todo:
             say("campaign %s: every task is done; nothing to submit" % plan.id)
             return []
+        overlap = self.live_overlap(plan, config, stores.runs, todo, cloud)
+        if overlap:
+            raise SubmitError(
+                "; ".join(overlap) + ": submitting them again would run and bill them twice; "
+                "wait for the job to end, `yapnr exp cancel` it, or pass --only for other tasks"
+            )
         self.check_limits(
             plan,
             config,
@@ -311,6 +319,17 @@ class Backend:
             )
             out.append(Submission(number, cls.name, lines, record))
         return out
+
+    def live_overlap(
+        self,
+        plan: planning.Plan,
+        config: Config,
+        runs: Store,
+        todo: Dict[str, List[int]],
+        cloud=None,
+    ) -> List[str]:
+        """Live submissions that still hold some of ``todo`` (a pending task may be running)."""
+        return []
 
     def check_limits(self, plan, config, todo, *, yes, max_usd, confirm, say, price_table=None):
         """Per-submit caps and confirmation; only the money-spending backend has any."""

@@ -40,6 +40,7 @@ max_retries = 3               # infrastructure exit codes only; at most 3
 confirm_usd = 5               # submit asks above this expected cost
 refuse_usd = 25               # submit refuses above this ceiling ...
 hard_refuse_usd = 100         # ... unless --max-usd raises it, never above this
+allow_on_demand = false       # placement spot = false: not covered by the Spot quota ceiling
 
 # --- The local backend (`--backend local`): a niced process pool on this machine.
 [local]

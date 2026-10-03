@@ -46,6 +46,7 @@ class Limits:
     confirm_usd: float = 5
     refuse_usd: float = 25
     hard_refuse_usd: float = 100
+    allow_on_demand: bool = False
 
 
 @dataclass

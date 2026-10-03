@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from yapnr.exp import batch_schema, cost, image
 from yapnr.exp import plan as planning
-from yapnr.exp.backends.base import Backend, Stores, SubmitError
+from yapnr.exp.backends.base import Backend, Stores, SubmitError, campaign_prefix, submissions
 from yapnr.exp.cloud import FakeCloud, Gcloud
 from yapnr.exp.config import Config, Gcp
 from yapnr.exp.store import GcsStore
@@ -46,6 +46,8 @@ RETRY_EXIT_CODES = [50001, 50002, 50003, 50006, 75]
 UPLOAD_GRACE_S = 300
 RUN_GRACE_S = 300
 LABEL_VALUE_RE = re.compile(r"[^a-z0-9_-]")
+# Job states in which tasks may still start or run (Batch v1 ``JobStatus.state``).
+LIVE_STATES = ("STATE_UNSPECIFIED", "QUEUED", "SCHEDULED", "RUNNING")
 JOB_ID_RE = re.compile(r"^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$")
 
 
@@ -191,7 +193,14 @@ def render_job(
     return {
         "taskGroups": [task_group],
         "allocationPolicy": allocation,
-        "labels": {"yapnr": "1", "campaign": label(cid), "submission": label(submission)},
+        # The reaper reads ``deadline`` from the job's own labels: allocationPolicy.labels are
+        # documented for the VMs and disks, not for what a job listing returns.
+        "labels": {
+            "yapnr": "1",
+            "campaign": label(cid),
+            "submission": label(submission),
+            "deadline": label(deadline),
+        },
         "logsPolicy": {"destination": "CLOUD_LOGGING"},
     }
 
@@ -232,7 +241,41 @@ class GcpBatch(Backend):
         check_job(job)
         return {"%s.job.json" % cls.name: json.dumps(job, indent=2, sort_keys=True) + "\n"}
 
+    def live_overlap(self, plan, config, runs, todo, cloud=None) -> List[str]:
+        wanted = {i for lines in todo.values() for i in lines}
+        out = []
+        for record in submissions(runs, plan.id):
+            if record.get("dry_run"):
+                continue
+            view = self.state(plan.meta, record, config, cloud)
+            if not view or view.get("state") not in LIVE_STATES:
+                continue
+            rel = "%s/submissions/%d.indices" % (campaign_prefix(plan.id), record["submission"])
+            try:
+                held = {int(x) for x in runs.read_text(rel).split()}
+            except Exception:  # unreadable: assume it holds them all
+                held = set(wanted)
+            if held & wanted:
+                out.append(
+                    "submission %s (%s) is %s and holds %d of these tasks"
+                    % (
+                        record["submission"],
+                        (record.get("job") or {}).get("id", "?"),
+                        view["state"],
+                        len(held & wanted),
+                    )
+                )
+        return out
+
     def check_limits(self, plan, config, todo, *, yes, max_usd, confirm, say, price_table=None):
+        # The kill switch's quota cut and the quota ceiling cover Spot (preemptible) CPUs only.
+        on_demand = sorted(name for name in todo if plan.placement(name).model != "spot")
+        if on_demand and not config.limits.allow_on_demand:
+            raise SubmitError(
+                "class(es) %s would run on-demand VMs, which the quota ceiling and the budget "
+                "guard's quota cut do not cover; set limits.allow_on_demand = true in the owner "
+                "config to allow it" % ", ".join(on_demand)
+            )
         table = price_table or cost.PriceTable.load(config.price_table)
         est = planning.estimate(
             self.name, plan.classes, plan.placements(), config, table, subset=todo

@@ -101,6 +101,14 @@ class GcpBatchTest(unittest.TestCase):
         self.assertEqual(group["taskSpec"]["maxRunDuration"], "2400s")  # 1800 + 300 + 300
         self.assertEqual(group["taskSpec"]["runnables"][0]["timeout"], "2100s")
 
+    def test_reaper_finds_the_deadline_on_the_job(self):
+        # The reaper (infra/gcp/functions/guard) cancels a job by its own `deadline` label.
+        plan = self.plan(testing.SMOKE_CAMPAIGN)
+        job = render(plan, self.config)
+        self.assertEqual(job["labels"]["deadline"], str(testing.DEADLINE))
+        self.assertEqual(job["labels"]["yapnr"], "1")
+        self.assertEqual(job["allocationPolicy"]["labels"]["deadline"], str(testing.DEADLINE))
+
     def test_labels_and_job_ids(self):
         self.assertEqual(gcp_batch.label("Ladder/Cell.1"), "ladder-cell-1")
         self.assertEqual(
@@ -146,7 +154,8 @@ class GcpBatchTest(unittest.TestCase):
         cloud = FakeCloud()
         cloud.impersonate = self.config.gcp.submit_email
         backend = gcp_batch.GcpBatch()
-        backend.submit(plan, self.config, cloud=cloud, say=lambda s: None)
+        first = backend.submit(plan, self.config, cloud=cloud, say=lambda s: None)
+        cloud.jobs[first[0].record["job"]["name"]]["status"]["state"] = "FAILED"
         marker = {"task": plan.tasks[0]["id"], "attempt": "s1r0", "verdict": "done"}
         key = "gs://example-yapnr-runs/campaigns/%s/tasks/%s/_DONE" % (plan.id, "smoke~0")
         cloud.objects[key] = (json.dumps(marker) + "\n").encode()
@@ -163,6 +172,33 @@ class GcpBatchTest(unittest.TestCase):
             json.dumps(dict(marker, task=plan.tasks[1]["id"])) + "\n"
         ).encode()
         self.assertEqual(backend.submit(plan, self.config, cloud=cloud, say=lambda s: None), [])
+
+    def test_a_live_job_holding_pending_tasks_refuses_a_resubmit(self):
+        # A repeated submit (or a retry loop around it) must not run and bill the tasks twice.
+        plan = self.plan(testing.SMOKE_CAMPAIGN)
+        cloud = FakeCloud()
+        backend = gcp_batch.GcpBatch()
+        first = backend.submit(plan, self.config, cloud=cloud, say=lambda s: None)
+        name = first[0].record["job"]["name"]
+        for state in ("QUEUED", "SCHEDULED", "RUNNING"):
+            cloud.jobs[name]["status"]["state"] = state
+            with self.assertRaises(base.SubmitError) as ctx:
+                backend.submit(plan, self.config, cloud=cloud, say=lambda s: None)
+            self.assertIn("twice", str(ctx.exception))
+        self.assertEqual(sum(c[1:4] == ["batch", "jobs", "submit"] for c in cloud.calls), 1)
+        cloud.jobs[name]["status"]["state"] = "CANCELLED"
+        again = backend.submit(plan, self.config, cloud=cloud, say=lambda s: None)
+        self.assertEqual(again[0].number, 2)
+
+    def test_on_demand_needs_the_owner_config(self):
+        plan = self.plan(testing.SMOKE_CAMPAIGN + "\n[placement]\nspot = false\n")
+        backend = gcp_batch.GcpBatch()
+        with self.assertRaises(base.SubmitError) as ctx:
+            backend.submit(plan, self.config, cloud=FakeCloud(), say=lambda s: None)
+        self.assertIn("allow_on_demand", str(ctx.exception))
+        self.config.limits.allow_on_demand = True
+        done = backend.submit(plan, self.config, cloud=FakeCloud(), say=lambda s: None)
+        self.assertEqual(len(done), 1)
 
     def test_frozen_store_refuses(self):
         plan = self.plan(testing.SMOKE_CAMPAIGN)

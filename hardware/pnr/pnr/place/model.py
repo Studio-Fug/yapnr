@@ -246,7 +246,9 @@ def global_place(
     # soft compromise between them.
     import fnmatch as _fnmatch
 
-    plane_patterns = [pat for nc in constraints.net_classes if nc.plane_layer for pat in nc.nets]
+    from pnr.stack import split_plane_patterns
+
+    plane_patterns = split_plane_patterns(constraints, graph)
     plane_pin_idx: List[List[int]] = []
     for net in graph.nets:
         if any(_fnmatch.fnmatch(net.name, pat) for pat in plane_patterns):

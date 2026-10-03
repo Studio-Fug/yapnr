@@ -1314,8 +1314,8 @@ py_test(
     deps = [":pnr"],
 )
 
-# The constraint checker's plane check on small boards (KiCad's Python: run it there by
-# hand, python3 -m unittest test_check_constraints in regression/).
+# The constraint checker's plane and microvia-span checks on small boards (KiCad's Python:
+# run it there by hand, python3 -m unittest test_check_constraints in regression/).
 py_test(
     name = "check_constraints_test",
     size = "small",

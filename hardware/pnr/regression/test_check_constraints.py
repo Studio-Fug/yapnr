@@ -1,4 +1,5 @@
-"""The constraint checker's plane check on small KiCad boards (KiCad's Python only)."""
+"""The constraint checker's plane and microvia-span checks on small KiCad boards
+(KiCad's Python only)."""
 
 import importlib.util
 import tempfile
@@ -77,6 +78,52 @@ class PlaneCheck(unittest.TestCase):
         ok, measured, _ = self.check([("In1.Cu", "GND", (0, 0.3))])
         self.assertFalse(ok)
         self.assertLess(measured["fill_fraction"], 0.5)
+
+
+@unittest.skipUnless(NATIVE, "requires KiCad Python")
+class MicroviaSpanCheck(unittest.TestCase):
+    CHECK = dict(id="microvia-span", kind="microvia_span", max_dielectrics=1)
+
+    def check(self, vias):
+        """``vias``: ``[(type, top layer, bottom layer)]`` on the four-layer board."""
+        import pcbnew as k
+        from check_constraints import Board, check_microvia_span
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "b.kicad_pcb"
+            plane_board(path, [])
+            b = k.LoadBoard(str(path))
+            for n, (kind, top, bottom) in enumerate(vias):
+                via = k.PCB_VIA(b)
+                via.SetPosition(k.VECTOR2I(35_000_000 + n * 2_000_000, 40_000_000))
+                via.SetViaType(kind)
+                via.SetLayerPair(b.GetLayerID(top), b.GetLayerID(bottom))
+                via.SetWidth(400_000)
+                via.SetDrill(100_000)
+                b.Add(via)
+            k.SaveBoard(str(path), b)
+            return check_microvia_span(Board(path), self.CHECK)
+
+    def test_microvias_to_the_neighbouring_layer_pass(self):
+        import pcbnew as k
+
+        ok, measured, _ = self.check(
+            [(k.VIATYPE_MICROVIA, "F.Cu", "In1.Cu"), (k.VIATYPE_MICROVIA, "In2.Cu", "B.Cu")]
+        )
+        self.assertTrue(ok)
+        self.assertEqual((measured["microvias"], measured["too_deep"]), (2, 0))
+
+    def test_a_microvia_across_two_dielectrics_fails(self):
+        # KiCad's DRC passes this one; a blind via of the same span stays legal.
+        import pcbnew as k
+
+        ok, measured, limit = self.check(
+            [(k.VIATYPE_MICROVIA, "F.Cu", "In2.Cu"), (k.VIATYPE_BLIND, "F.Cu", "In2.Cu")]
+        )
+        self.assertFalse(ok)
+        self.assertEqual((measured["microvias"], measured["too_deep"]), (1, 1))
+        self.assertEqual(measured["examples"][0]["layers"], ["F.Cu", "In2.Cu"])
+        self.assertEqual(limit["max_dielectrics"], 1)
 
 
 if __name__ == "__main__":

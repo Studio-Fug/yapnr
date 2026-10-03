@@ -14,7 +14,8 @@ footprint layer, confirmed by its surface pads (a part marked flipped whose pads
 on F.Cu is on neither side).
 
 Check kinds: ``inside_board``, ``side``, ``fixed``, ``edge``, ``orientation``,
-``keepout``, ``region``, ``proximity``, ``line``, ``align``, ``plane``.
+``keepout``, ``region``, ``proximity``, ``line``, ``align``, ``plane``,
+``microvia_span``.
 
     python3 check_constraints.py BOARD.kicad_pcb --spec SPEC.json --out OUT.json
 
@@ -261,6 +262,36 @@ def check_plane(b, c):
     )
 
 
+def check_microvia_span(b, c):
+    """Every microvia joins neighbouring copper layers: it crosses at most
+    ``max_dielectrics`` dielectric layers (one, a laser drill's depth). KiCad's DRC
+    accepts a microvia of any span, so without this a board passes the judge with
+    "microvias" that no laser drill makes. Spans count in the board's copper order."""
+    board = b.board
+    order = {lid: i for i, lid in enumerate(board.GetEnabledLayers().CuStack())}
+    limit = c.get("max_dielectrics", 1)
+    count, deep = 0, []
+    for via in board.GetTracks():
+        if via.Type() != pcbnew.PCB_VIA_T or via.GetViaType() != pcbnew.VIATYPE_MICROVIA:
+            continue
+        count += 1
+        top, bottom = via.TopLayer(), via.BottomLayer()
+        if abs(order[bottom] - order[top]) > limit:
+            p = via.GetPosition()
+            deep.append(
+                dict(
+                    net=via.GetNetname(),
+                    layers=[board.GetLayerName(top), board.GetLayerName(bottom)],
+                    at=[round(mm(p.x) - b.x0, 3), round(b.y1 - mm(p.y), 3)],
+                )
+            )
+    return (
+        not deep,
+        dict(microvias=count, too_deep=len(deep), examples=deep[:5]),
+        dict(max_dielectrics=limit),
+    )
+
+
 KINDS = dict(
     inside_board=check_inside_board,
     side=check_side,
@@ -273,6 +304,7 @@ KINDS = dict(
     line=check_line,
     align=check_align,
     plane=check_plane,
+    microvia_span=check_microvia_span,
 )
 
 

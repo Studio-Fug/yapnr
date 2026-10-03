@@ -30,6 +30,7 @@ CHECK_KINDS = {
     "line",
     "align",
     "plane",
+    "microvia_span",
 }
 
 
@@ -155,6 +156,17 @@ class HardRungContract(unittest.TestCase):
                 )
                 self.assertEqual(text.count("(rule"), text.count("(constraint"))
         self.assertIsNone(dru_text(designs()[0]))
+
+    def test_microvias_are_held_to_one_dielectric_where_permitted(self):
+        # KiCad's DRC accepts a microvia of any span, so the checker holds the span.
+        for spec in self.rungs:
+            with self.subTest(spec=spec["name"]):
+                spans = [c for c in spec["checks"] if c["kind"] == "microvia_span"]
+                if "micro" in spec["via_policy"]["allowed"]:
+                    self.assertEqual([c["max_dielectrics"] for c in spans], [1])
+                else:
+                    self.assertEqual(spans, [])
+        self.assertTrue(any("micro" in s["via_policy"]["allowed"] for s in self.rungs))
 
     def test_footprints_and_pads_match_the_library(self):
         """Every pad name a part maps exists in its KiCad footprint and every footprint

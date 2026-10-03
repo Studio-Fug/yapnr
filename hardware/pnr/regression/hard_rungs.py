@@ -14,7 +14,9 @@ Most rungs are *variants* of two base designs (``09-mcu-usb-31`` and the ladder'
     real KiCad 10 board stackup (layer types, dielectrics) with plane zones;
 ``via_policy``
     through vias only, or blind/buried vias (and microvias) permitted, written as
-    KiCad custom rules (``.kicad_dru``) so the judge itself enforces it;
+    KiCad custom rules (``.kicad_dru``) so the judge itself enforces it; where
+    microvias are permitted, a ``microvia_span`` check holds each to one dielectric,
+    which KiCad's DRC does not;
 ``sides``
     single-sided (every part on the top side), double-sided (the tool may use both
     sides), or assigned (the designer locks named parts to the bottom side);
@@ -206,6 +208,13 @@ def with_via_policy(spec, policy):
     spec["name"] += {"blind-buried": "-BB", "hdi": "-HDI"}[policy]
     spec["dims"]["via_policy"] = policy
     spec["features"] = sorted(set(spec["features"]) | {"via-" + policy})
+    if "micro" in spec["via_policy"]["allowed"]:
+        # KiCad's DRC accepts a microvia of any span; a laser drill crosses one
+        # dielectric. (A .kicad_dru rule cannot say it without reading, to a tool that
+        # takes its via bans from the rules, as a ban on every microvia.)
+        spec["checks"].append(
+            dict(id="microvia-span", kind="microvia_span", max_dielectrics=1, engine="via_policy")
+        )
     return spec
 
 

@@ -566,7 +566,7 @@ results out as local runs leave them:
 python3 tools/exp/openems_plan.py image --run
 python3 tools/exp/openems_plan.py plan models.toml --out <dir>      # pins the image's digest
 yapnr exp plan <dir>/campaign.toml --backend gcp-batch
-yapnr exp submit <cid> && yapnr exp watch <cid>
+yapnr exp submit <cid> && yapnr exp status <cid>      # again until every task is done
 yapnr exp fetch <cid> --full
 python3 tools/exp/openems_plan.py collect <cid> --dest <tree>       # <tree>/runs/<model>/...
 ```

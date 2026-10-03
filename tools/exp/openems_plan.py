@@ -43,7 +43,7 @@ plan, ``campaign.toml`` (image pinned by digest, ``[runtime]`` for the openEMS i
 ``manifest.json``. Then::
 
     yapnr exp plan DIR/campaign.toml --backend gcp-batch
-    yapnr exp submit CID && yapnr exp watch CID
+    yapnr exp submit CID && yapnr exp status CID   # until every task is done
     yapnr exp fetch CID --full
     python3 tools/exp/openems_plan.py collect CID --dest TREE
 

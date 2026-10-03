@@ -12,6 +12,9 @@ name: Ladder
 #                     (informational: a hard rung never decides the job)
 #   manual            cases, seeds, animations, showcases and a hard-rung lane as given
 #
+# Every run first judges the exact-separation router's routes with KiCad's DRC
+# (tests/test_exact_route_kicad.py, the KiCad tier of its unit tests).
+#
 # The ladder runs the checkout's engine sources (run.py freezes them), not the image's wheel. A
 # pull request can change the runtime pins, so a runtime guard compares the image's /opt/venv
 # with docker/yapnr/runtime-arm64.lock and, if they differ, installs the checkout's lock into
@@ -240,6 +243,18 @@ jobs:
                   --require-hashes --no-deps -r docker/yapnr/runtime-arm64.lock'
             echo "LADDER_PY=/work/out/venv/bin/python" >> "${GITHUB_ENV}"
           fi
+
+      # The KiCad tier of the router's unit tests (exact_route_kicad_test in Bazel): routes
+      # under the exact pairwise separation, a net class's clearance included, judged by
+      # kicad-cli's DRC in the image that has KiCad.
+      - name: Exact-separation routes under KiCad's DRC
+        timeout-minutes: 15
+        run: |
+          docker run --rm --init -u "$(id -u):$(id -g)" -v "${PWD}:/work" -w /work/hardware/pnr \
+            -e PYTHONPATH=/work/hardware/pnr -e PNR_KICAD_PYTHON=/usr/bin/python3 \
+            -e PNR_KICAD_CLI=/usr/bin/kicad-cli \
+            --entrypoint /usr/local/bin/yapnr-kicad-env "${LADDER_IMAGE}" \
+            "${LADDER_PY}" -m unittest -v tests.test_exact_route_kicad
 
       - name: Run the ladder (baseline)
         id: baseline

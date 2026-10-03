@@ -492,7 +492,7 @@ fanout:
 | `reserved`        | `{rect or polygon, layers, frame}` areas no fanout copper enters (`frame`: `part`, the default, or `board`).                    |
 | `neck_mm`         | The signal track width inside the fanout; the router continues at the net's own width from the exit.                         |
 | `lock`            | Write the fanout copper locked (default `true`), so later passes leave it alone.                                               |
-| `bottom_sites`    | `{parts, max_stub_mm, zone, rotations}`: decoupling sites under the array on the bottom side (see below).                     |
+| `bottom_sites`    | `{parts, max_stub_mm, zone, rotations}`: decoupling sites under the array on the bottom side (below).                         |
 | `variant`         | A seeded permutation of the planner's tie-breaks (default 0, none).                                                            |
 
 How it works (`pnr/fanout`): the lattice gives the sites; tracks run on the half
@@ -512,6 +512,20 @@ the drop via of a plane ball is its connection. The fanout's vias keep their cla
 (`routes.json` `via_sizes`), and its copper is written locked (`locked`). The
 route report's escape diagnostics carry a `fanout` block per fanout (escaped
 signals, drops, via sites, failures, balls without an access cell).
+
+A plane ball that already touches fixed copper of its own net (a pour or track of
+a fixed block, `fixed_copper` `polygons`) is joined by it and gets no drop; other
+nets keep their clearance from that copper. Each pair of nets keeps the larger of
+their class clearances, as KiCad's DRC judges them, and a via class must meet the
+judge's minimum via (`min_via_diameter_mm`, else `via_diameter_mm`).
+
+`bottom_sites: {parts: [C50, C56], max_stub_mm: 0.5, zone: interior}` puts each
+listed part (in priority order) on the bottom side under the array, where every pad
+clears the fanout's vias and bottom tracks and lies within `max_stub_mm` of a
+fanout via of its net; `interior` keeps the sites inside the array's outermost
+fully vacant ring (else inside ring 2), `shadow` allows the whole array. Placement
+takes the sites as fixed bottom poses; parts no site fits are reported. Other bottom
+parts are kept out of the array by the side policy only.
 
 `python -m pnr.fanout plan GRAPH --rules RULES --out DIR` writes the plan
 (`fanout-<name>.json`: copper, every ball's terminal, diagnostics) without routing;

@@ -458,12 +458,17 @@ def task_key(task_id: str) -> str:
     return task_id.replace("/", "~")
 
 
-def collect(plan_dir: Path, fetched: Path, dest: Path) -> Dict[str, Any]:
-    """Copy each fetched model's outputs into ``dest/runs`` as a local run would have left them."""
+def collect(
+    plan_dir: Path, fetched: Path, dest: Path, campaign: Optional[str] = None
+) -> Dict[str, Any]:
+    """Copy each fetched model's outputs into ``dest/runs`` as a local run would have left them.
+
+    ``campaign`` (default: the plan directory's name, as in the store) names the summary."""
+    campaign = campaign or plan_dir.name
     tasks = [json.loads(x) for x in (plan_dir / "tasks.jsonl").read_text().splitlines() if x]
     runs = dest / "runs"
     runs.mkdir(parents=True, exist_ok=True)
-    summary: Dict[str, Any] = {"campaign": plan_dir.name, "models": {}, "missing": []}
+    summary: Dict[str, Any] = {"campaign": campaign, "models": {}, "missing": []}
     for task in tasks:
         model = task["labels"].get("model") or task["labels"].get("candidate")
         base = fetched / "tasks" / task_key(task["id"])
@@ -492,7 +497,7 @@ def collect(plan_dir: Path, fetched: Path, dest: Path) -> Dict[str, Any]:
             "arch_flags": record.get("arch_flags"),
             "full": (base / "result").is_dir(),
         }
-    path = runs / ("%s.summary.json" % plan_dir.name)
+    path = runs / ("%s.summary.json" % campaign)
     path.write_text(json.dumps(summary, indent=1, sort_keys=True) + "\n")
     summary["path"] = str(path)
     return summary
@@ -547,7 +552,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             root = cfg.local.store_path(private)
             plan_dir = args.plan or root / "plans" / args.campaign
             fetched = args.fetched or root / "fetched" / args.campaign
-            summary = collect(plan_dir, fetched, args.dest)
+            summary = collect(plan_dir, fetched, args.dest, args.campaign)
             print(json.dumps(summary, indent=1, sort_keys=True))
             return 0 if not summary["missing"] else 1
         gcp = cfg.require_gcp()

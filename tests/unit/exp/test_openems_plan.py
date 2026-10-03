@@ -245,6 +245,12 @@ class OpenemsPlanTest(unittest.TestCase):
         self.assertTrue((tree / "runs" / "m1" / "s.csv").is_file())
         self.assertEqual((tree / "runs" / "m1.log").read_text(), "exit 0\n")
         self.assertTrue((tree / "runs" / "20261003-mceval-abcdef.summary.json").is_file())
+        # A plan directory given by path (--plan) still names the summary by the campaign.
+        moved = self.tmp / "elsewhere"
+        plan_dir.rename(moved)
+        summary = openems_plan.collect(moved, fetched, tree, "20261003-mceval-abcdef")
+        self.assertEqual(summary["campaign"], "20261003-mceval-abcdef")
+        self.assertFalse((tree / "runs" / "elsewhere.summary.json").exists())
 
 
 if __name__ == "__main__":

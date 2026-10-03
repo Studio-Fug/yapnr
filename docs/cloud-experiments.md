@@ -553,9 +553,11 @@ from source with its Python bindings, numpy, h5py, scipy, matplotlib and shapely
 variants: a generic x86-64 build and an AVX-512 build (`-march=x86-64-v4 -mtune=znver4`) for
 C4D's Zen 5 cores. Cloud Build builds both on one machine and pushes them as
 `openems:<openEMS version>-x86-64` and `...-x86-64-v4`, running as `yapnr-image-build`; the
-submitter must be allowed to start builds and act as that account (the project owner). Builds
-bill per build-minute of the `e2-highcpu-32` machine `cloudbuild.yaml` asks for (see the Cloud
-Build pricing page), and the stored images per GiB-month like the registry caches.
+submitter must be allowed to start builds and act as that account (the project owner). A
+regional build bills the vCPU- and GiB-minutes of the `e2-highcpu-32` machine `cloudbuild.yaml`
+asks for (in us-west4 in October 2026, $0.0018 per vCPU-minute and $0.0004 per GiB-minute: about
+$0.07 a minute, so $1.1-1.8 for a 15-25 minute build; see the Cloud Build pricing page), and the
+stored images per GiB-month like the registry caches.
 
 `tools/exp/openems_plan.py` does the rest. `image` prints (`--run`: submits) the build,
 `digests` lists the built tags with their digests and sizes, `plan` turns N model scripts into
@@ -582,8 +584,10 @@ script: the runner starts it under a bootstrap that adds them to `Run`'s keyword
 the record and the task's labels carry them. `models_per_vm` models of
 `threads` cores share a VM: `vm_vcpus` is `2 x models_per_vm x threads` on C4D (two vCPUs a core),
 or half that with `packing = "vcpu"`, which runs the threads on SMT siblings; a shape without an
-instance template runs from an instance policy. openEMS runs do not checkpoint, so a preempted
-model starts again.
+instance template runs from an instance policy. A model with its own `threads` becomes a task
+class of its own (its own Batch job and VMs, still `models_per_vm` to a VM of `vm_vcpus`), so
+keep one thread count per jobs file to fill the VMs. openEMS runs do not checkpoint, so a
+preempted model starts again.
 
 ## Testing
 

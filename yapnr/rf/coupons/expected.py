@@ -8,8 +8,9 @@ not 3D-modelled yet (design §6.2).
 
 from __future__ import annotations
 
+import math
 import os
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 
@@ -79,6 +80,78 @@ def cpad_z(model: models.Model, fam: str, size_mm: float) -> np.ndarray:
     return 1.0 / model.stub_admittance(fam, size_mm + ext, "open")
 
 
+def notches(model: models.Model, elements, z_ref, f_lo: float, f_hi: float) -> List[float]:
+    """Frequencies (Hz) of the |S21| minima of a structure between f_lo and f_hi, located on
+    the 6 MHz grid and refined on a 10 kHz grid with a parabola through the three lowest points:
+    the pre-registered scalars sit well below the grid step (review L1)."""
+    st_id, v = model.st.id, model.v
+    f0 = np.arange(f_lo, f_hi + 1.0, 6e6)
+    m0 = models.Model(st_id, v, f0, tables=model.tables, roughness=model.roughness)
+    a = np.abs(models.structure_s(m0, elements, z_ref)[:, 1, 0])
+    out = []
+    for k in range(1, len(f0) - 1):
+        if not (a[k] < a[k - 1] and a[k] <= a[k + 1] and a[k] < 0.5):
+            continue
+        f1 = np.arange(f0[k] - 12e6, f0[k] + 12e6 + 1.0, 1e4)
+        m1 = models.Model(st_id, v, f1, tables=model.tables, roughness=model.roughness)
+        b = np.abs(models.structure_s(m1, elements, z_ref)[:, 1, 0])
+        j = int(np.clip(np.argmin(b), 1, len(f1) - 2))
+        y0, y1, y2 = b[j - 1], b[j], b[j + 1]
+        den = y0 - 2 * y1 + y2
+        out.append(float(f1[j] + (0.5 * (y0 - y2) / den * 1e4 if den > 0 else 0.0)))
+    return out
+
+
+def scalars_o(design: catalog.Board, sid: str, out_dir: str) -> Dict[str, str]:
+    """The pre-registered scalars of one upload on one substrate (review L1): the held-out
+    notches (ring n = 1 and 3, the stub) to 10 kHz, and every line family's εeff, α and Zc on
+    the measurement grid (6 MHz to 6 GHz in 6 MHz steps) as CSV."""
+    import json
+
+    st = stackups.get(sid)
+    v = stackups.with_values(st, {})
+    f = GRID_O_CPAD
+    model = models.Model(sid, v, f)
+    doc = {
+        "schema": "yapnr-order0-scalars/1",
+        "stackup": sid,
+        "geometry": f"{O_SUBSTRATES[0]} design, upload {design.name}",
+        "parameters": "nominal",
+        "notches_ghz": {},
+        "lines_csv": "lines.csv",
+    }
+    for s in design.sticks:
+        if s.kind not in ("ring", "stub"):
+            continue
+        ref = model.line(design.trl[s.trl]["family"]).zc[0]
+        found = notches(model, s.elements, ref, 0.5e9, 6.0e9)
+        doc["notches_ghz"][s.id] = [round(x / 1e9, 5) for x in found]
+    fams = sorted(
+        {s.family for s in design.sticks if s.family and s.kind in ("line", "variant", "thru")}
+    )
+    cols, rows = ["f_ghz"], [[f"{x / 1e9:.3f}" for x in f]]
+    for fam in fams:
+        line = model.line(fam)
+        cols += [f"{fam}.eps_eff", f"{fam}.alpha_db_per_cm", f"{fam}.zc_re", f"{fam}.zc_im"]
+        rows += [
+            [f"{x:.5f}" for x in line.eps_eff],
+            [f"{x:.5f}" for x in line.gamma.real * 20 / math.log(10) / 100],
+            [f"{x:.3f}" for x in line.zc.real],
+            [f"{x:.3f}" for x in line.zc.imag],
+        ]
+    os.makedirs(out_dir, exist_ok=True)
+    p_csv = os.path.join(out_dir, "lines.csv")
+    with open(p_csv, "w", encoding="utf-8") as fh:
+        fh.write(",".join(cols) + "\n")
+        for r in zip(*rows):
+            fh.write(",".join(r) + "\n")
+    p_json = os.path.join(out_dir, "scalars.json")
+    with open(p_json, "w", encoding="utf-8") as fh:
+        json.dump(doc, fh, indent=2)
+        fh.write("\n")
+    return {f"{sid}:scalars": p_json, f"{sid}:lines": p_csv}
+
+
 def write_o(
     upload: str,
     out_dir: str,
@@ -100,6 +173,7 @@ def write_o(
         d = os.path.join(out_dir, sub)
         os.makedirs(d, exist_ok=True)
         model = models.Model(sid, stackups.with_values(st, {}), f)
+        out.update(scalars_o(design, sid, d))
         head = [
             f"stackup {sid}, nominal parameters; geometry of the {O_SUBSTRATES[0]} design",
             "model: 2D quasi-static RLGC (Djordjevic-Sarkar, Huray roughness, Wheeler loss);"

@@ -663,6 +663,10 @@ def tune(b: Board, model) -> Board:
 
 O_TRL_M = (0.0, 4.5, 13.0, 30.0, 70.0)  # design §4.2: thru + ΔL 4.5, 13.0, 30, 70 mm
 O_TRL_W = (0.0, 5.0, 14.0, 34.0)  # design §4.3: thru + ΔL 5, 14, 34 mm
+# O0-D's own lot: thru + ΔL 9 and 30 mm (review M2: A04 alone has |sin βΔL| 0.08 at 6 GHz; with
+# 9 mm the best pair keeps >= 0.958 over D1's 4.25-5.75 GHz and >= 0.81 over 1-6 GHz for εeff
+# 2.60-2.95, derived)
+O_TRL_D = (0.0, 9.0, 30.0)
 O_VERIFY_M = 21.0
 O_VARIANT_MM = 30.0
 O_RING_ARC = 0.25  # feeds a quarter turn apart: notches at the odd resonances n = 1, 3
@@ -676,6 +680,15 @@ O_KEEP = {"M": 1.0, "W": 4.2}  # L1 keep-away (5 h, 3 h)
 O_PITCH = {"M": 0.10, "W": 0.50}  # the optimizer's grid (design §3.1 rf block)
 O_LINE = {"M": "M", "W": "W"}
 O_REV = "A"
+# The sticks' turns in each upload's panel (layout_o.Placed.rot), chosen by running the panel
+# search over every combination (review F5: tabs only on edges without a launch, so a demo
+# hangs by its port-free east edge; O0-M's A04R and the tag link the lines; O0-D turns its
+# lines too). O0-M 26.9, O0-W 11.7, O0-D 7.2 sq in.
+O_ROTS = {
+    "M": {"R1": 180, "A04R": 90},
+    "W": {"R1t": 90, "D2": 270},
+    "D": {"R1": 0, "D1": 180, "A01": 90, "A20": 90, "A04": 90},
+}
 
 # The demo windows (design §4.4, spec sketch of divider-osh-m; divider-osh-w by analogy: the
 # specs are not written yet). x from the window's west edge (P1's plane), y across, ports W (y),
@@ -687,32 +700,65 @@ O_WINDOWS = {
 }
 
 
+# R1 / R1t from 2D quasi-static solves at 5.0 GHz, nominal FR408HR, 43 µm copper, the coupon
+# model's dispersion (scratch solves with families.solve_point at the arm width; derived): the
+# output line (Z, εeff), the arm (width, Z, εeff, λ/4), the substrate height of the junction model.
+O_REF_2D = {
+    "M": dict(z_out=50.66, eps_out=2.7062, w_arm=0.70, z_arm=35.72, eps_arm=2.8667, qw=8.8532,
+              h=0.1999, w_out=0.40, win_h=12.0),
+    "W": dict(z_out=48.64, eps_out=2.9173, w_arm=5.0, z_arm=34.47, eps_arm=3.0521, qw=8.5800,
+              h=1.3904, w_out=3.0, win_h=22.0),
+}  # fmt: skip
+# The references' FDTD forward runs use refine 2 of the optimizer's grid (M 0.05 mm, W 0.25 mm):
+# R1's 0.70 mm arm (7 cells at 0.10 mm, centred on a node) cannot be drawn on the 0.10 mm grid,
+# 14 cells at 0.05 mm can (review H2).
+O_REF_PITCH = {"M": 0.05, "W": 0.25}
+F_REF_O = 5.0e9  # the references' centre frequency
+
+
 def o_reference(region: str) -> dict:
     """R1 / R1t: the lossless T-junction with a λ/4 transformer [Pozar §7.2, §5.5] for
-    4.25-5.75 GHz, drawn on the optimizer's grid so that its FDTD prediction sees exactly this
-    copper. The 35.36 Ω arm width and λ/4 at 5.0 GHz (to the junction centre) are 2D quasi-static
-    solves with 43 µm copper on nominal FR408HR (Dk 3.58 at 5 GHz, Kirschning-Jansen dispersion;
-    derived): M 0.707 x 8.878 mm (the design's 0.708 x 8.88), W 4.900 x 8.533 mm (design 5.03 x
-    8.46, closed form); snapped to M 0.70 x 8.9 and W 5.0 x 8.5 mm."""
-    pitch = O_PITCH[region]
-    w_out = 0.40 if region == "M" else 3.0
-    w_arm, l_centre = (0.70, 8.9) if region == "M" else (5.0, 8.5)
-    arm = round(l_centre - w_out / 2, 4)  # drawn arm, from the window edge to the output line
-    h = 12.0 if region == "M" else 22.0  # window height: the outputs run to its edges
+    4.25-5.75 GHz. The arm is the 2D-solved width nearest the ideal sqrt(Z_out · Z_out / 2) on
+    the reference grid (M 0.70 mm, 35.7 Ω against 35.8; W 5.0 mm, 34.5 Ω against 34.4), and λ/4
+    long at 5.0 GHz from the T-junction's branch reference plane, which sits `d_branch` from the
+    output line's centre line (Hammerstad's model, `models.tee_offsets`; M 0.37 mm, W 2.18 mm).
+    Counted to the junction centre, as before the review (M1), the arm was short by d_branch:
+    R1 4 % and R1t 25 % high in frequency. The drawn length is snapped to the refine-2 grid
+    (O_REF_PITCH); the step from the feed to the arm is not corrected (est.)."""
+    from yapnr.rf.coupons import models
+
+    r = O_REF_2D[region]
+    pitch = O_REF_PITCH[region]
+    w_out, w_arm, h = r["w_out"], r["w_arm"], r["win_h"]
+    _, d_branch = models.tee_offsets(
+        r["z_out"], r["eps_out"], r["z_arm"], r["eps_arm"], r["h"], F_REF_O
+    )
+    l_ideal = r["qw"] + d_branch  # window edge to the junction centre
+    arm = round(round((l_ideal - w_out / 2) / pitch) * pitch, 4)  # window edge to the output line
+    l_centre = round(arm + w_out / 2, 4)
+    f0 = F_REF_O / 1e9 * r["qw"] / (l_centre - d_branch)
     w = round(arm + w_out, 4)
-    px = round(arm + w_out / 2, 4)
     copper = [
-        (0.0, arm + 0.5 * pitch * 0, -w_arm / 2, w_arm / 2),  # the λ/4 arm
+        (0.0, arm, -w_arm / 2, w_arm / 2),  # the λ/4 arm
         (arm, arm + w_out, -h / 2, h / 2),  # the 50 Ω outputs through the junction
     ]
     return dict(
         region=region,
         w=w,
         h=h,
-        ports=(("W", 0.0), ("N", px), ("S", px)),
-        copper=[tuple(round(v, 4) for v in r) for r in copper],
-        arm=dict(w=w_arm, l_to_centre=l_centre, z0_design=35.36, f0_ghz=5.0),
-        source="Pozar §7.2 (T-junction) and §5.5 (λ/4 transformer); 2D solve, grid-snapped",
+        ports=(("W", 0.0), ("N", l_centre), ("S", l_centre)),
+        copper=[tuple(round(v, 4) for v in c) for c in copper],
+        arm=dict(
+            w=w_arm,
+            z0_2d=r["z_arm"],
+            quarter_wave_mm=r["qw"],
+            l_to_centre=l_centre,
+            junction_d_branch_mm=round(d_branch, 4),
+            f0_ghz_est=round(f0, 3),
+        ),
+        fdtd_pitch_mm=pitch,
+        source="Pozar §7.2 (T-junction) and §5.5 (λ/4 transformer); 2D solves; Hammerstad's"
+        " T-junction reference plane; snapped to the refine-2 grid",
     )
 
 
@@ -820,6 +866,8 @@ def _o_demo(sid, kind, region, label, determines, window, ports_n=3, tier="core"
         ],
         stick_w=w_stick,
     )
+    if kind == "window":
+        g["placeholder"] = True  # `yapnr fab check` refuses the board until it is filled
     return Stick(
         sid,
         kind,
@@ -876,7 +924,7 @@ def _o_ring_geometry(sid, r, label) -> Stick:
 
 
 def _o_stub(sid, label, stub_mm=7.81) -> Stick:
-    """A12: an open λ/4 stub at 5.8 GHz, shunt at the middle of a 15 mm M line (the stub's
+    """A12: an open λ/4 stub (notch at F_STUB_O), shunt at the middle of a 15 mm M line (the stub's
     length is set at nominal by `tune`)."""
     clear = 0.2 + O_KEEP["M"]
     bottom = 0.2 + stub_mm + O_KEEP["M"] + 2.6
@@ -890,7 +938,7 @@ def _o_stub(sid, label, stub_mm=7.81) -> Stick:
         2 * LAUNCH_MM + O_STUB_LINE,
         height,
         elements=[],
-        determines="held out: the open-end model; notch at 5.8 GHz",
+        determines="held out: the open-end and T-junction models; notch at 5.5 GHz",
         label=label,
         geometry=dict(
             region="M", end="open", stub_mm=stub_mm, axis_y=round(-height / 2 + top, 4), clear=clear
@@ -1062,9 +1110,11 @@ def _board_o(st, upload: str) -> Board:
             tdr="B04",
         )
     elif up == "D":
-        s += [x for x in _o_line_sticks("A", 1, "M", (0.0, 30.0), "M", tag) if x.kind != "reflect"]
-        s[1].id = "A04"
-        s[1].label = f"{tag} A04 M dL30"
+        s += [x for x in _o_line_sticks("A", 1, "M", O_TRL_D, "M", tag) if x.kind != "reflect"]
+        # the O0-M ids where the line is the same (A01, A04); the 9 mm line is O0-D's own
+        for x, sid in zip(s, ("A01", "A20", "A04")):
+            x.id = sid
+            x.label = f"{tag} {sid} M " + ("THRU" if x.dl == 0 else f"dL{x.dl:g}")
         s.append(
             _o_demo(
                 "R1",
@@ -1086,10 +1136,18 @@ def _board_o(st, upload: str) -> Board:
             )
         )
         trl["M"] = dict(
-            family="M", dl=[0.0, 30.0], sticks=["A01", "A04"], reflect="", verify="", tdr=""
+            family="M",
+            dl=list(O_TRL_D),
+            sticks=["A01", "A20", "A04"],
+            reflect="",
+            verify="",
+            tdr="",
         )
     else:
         raise ValueError(f"board O uploads are M, W and D, not {upload!r}")
+    for x in s:
+        if x.id in O_ROTS[up]:
+            x.geometry["rot"] = O_ROTS[up][x.id]
     launches = {reg: designed_launch(f"oshpark-4l-fr408hr:{reg}") for reg in ("M", "W")}
     main_region = "W" if up == "W" else "M"
     return Board(
@@ -1105,37 +1163,58 @@ def _board_o(st, upload: str) -> Board:
     )
 
 
+F_STUB_O = 5.5e9  # A12's notch (review H1: inside the LibreVNA's 6 GHz with its upper shoulder)
+
+
 def tune_o(b: Board, model) -> Board:
-    """Board O at nominal: the ring's radius puts its n = 3 notch at 5.8 GHz, the open stub's
-    drawn length its notch at 5.8 GHz (λ/4 from the line's centre, less the open-end extension
-    and half the line width; the T-junction is not modelled, est.)."""
+    """Board O at nominal FR408HR: the ring's radius puts its n = 3 notch at 5.8 GHz, the open
+    stub's drawn length its notch at F_STUB_O. Both use Hammerstad's T-junction reference planes
+    (`models.tee_offsets`): the stub counts from its plane `d_branch` off the main line's centre
+    line (0.28 mm, beyond the 0.20 mm line edge) plus the open-end extension; each ring arc is
+    shortened by the feeds' `d_main` at both ends; the main line and the feeds by theirs."""
     from yapnr.rf.coupons import families, models
 
     f = model.f
+
+    def at(f0):
+        line = model.line("M")
+        k = int(np.argmin(abs(f - f0)))
+        lam = 2 * math.pi / line.gamma[k].imag * 1e3
+        z, eps = float(line.zc[k].real), float(line.eps_eff[k])
+        d_main, d_branch = models.tee_offsets(z, eps, z, eps, model.v["pp1.h"], f0)
+        return lam, eps, d_main, d_branch
+
     for s in b.sticks:
         if s.kind == "ring":
-            line = model.line("M")
-            k = int(np.argmin(abs(f - F0)))
-            lam = 2 * math.pi / line.gamma[k].imag * 1e3
-            r = float(round(3 * lam / (2 * math.pi), 3))
+            lam, _, d_main, d_branch = at(F0)
+            # 2πr - 4 d_main = 3λ at F0
+            r = float(round((3 * lam + 4 * d_main) / (2 * math.pi), 3))
             rebuilt = _o_ring_geometry(s.id, r, s.label)
-            s.elements, s.geometry, s.height = rebuilt.elements, rebuilt.geometry, rebuilt.height
+            s.geometry, s.height = rebuilt.geometry, rebuilt.height
+            feed = rebuilt.geometry["feed"]
+            s.elements = [
+                ("line", "M", round(feed - d_branch, 4)),
+                ("ring2", "M", r, O_RING_ARC, round(d_main, 4)),
+                ("line", "M", round(feed - d_branch, 4)),
+            ]
+            s.geometry["junction"] = dict(d_main=round(d_main, 4), d_branch=round(d_branch, 4))
         if s.kind == "stub":
-            line = model.line("M")
-            k = int(np.argmin(abs(f - F0)))
-            lam = 2 * math.pi / line.gamma[k].imag * 1e3
+            lam, eps, d_main, d_branch = at(F_STUB_O)
             fam = families.get("M", b.stackup)
             w = fam.w
-            eps = float(line.eps_eff[k])
             h_kj, er_kj = fam.dispersion_substrate(model.v)
             ext = models.open_end_extension(w, h_kj, er_kj, eps)
-            drawn = 0.25 * lam - w / 2 - ext
+            # from the main line's edge: λ/4 - open end + (d_branch - w/2)
+            drawn = 0.25 * lam - ext + d_branch - w / 2
             rebuilt = _o_stub(s.id, s.label, round(drawn, 3))
             s.geometry, s.height = rebuilt.geometry, rebuilt.height
             half = O_STUB_LINE / 2
+            electrical = round(drawn, 3) + w / 2 - d_branch + ext
             s.elements = [
-                ("line", "M", half),
-                ("stub", "M", round(drawn + w / 2 + ext, 4), "open"),
-                ("line", "M", half),
+                ("line", "M", round(half - d_main, 4)),
+                ("stub", "M", round(electrical, 4), "open"),
+                ("line", "M", round(half - d_main, 4)),
             ]
+            s.geometry["junction"] = dict(d_main=round(d_main, 4), d_branch=round(d_branch, 4))
+            s.geometry["notch_ghz_target"] = F_STUB_O / 1e9
     return b

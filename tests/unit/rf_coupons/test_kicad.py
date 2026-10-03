@@ -52,6 +52,23 @@ class GenerateTest(unittest.TestCase):
             self.assertEqual(out["drc"]["violations"], {}, out["drc"]["details"][:5])
             self.assertEqual(out["drc"]["unconnected"], 0)
 
+    def test_misplaced_mouse_bites_fail_the_drc(self):
+        """The board's MB1 rule exempts only bites inside a tab: the review's F1 (bite rows
+        laid along the slot's end lines of a tab across a vertical slot) is a DRC error."""
+        from yapnr.rf.coupons import layout_o
+
+        finish = layout_o._finish
+
+        def wrong(its, width, height, tabs, meta):
+            return finish(its, width, height, tabs, [("h", a, b) for _, a, b in meta])
+
+        layout_o._finish = wrong
+        try:
+            out = fab.generate("OSHPARK-4L-FR408HR", self.dir, upload="D", git="test")
+        finally:
+            layout_o._finish = finish
+        self.assertGreater(out["drc"]["violations"].get("error:hole_clearance", 0), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

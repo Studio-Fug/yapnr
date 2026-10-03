@@ -8,8 +8,9 @@ keep-away (the masked line A10 aside), with 0.2 mm dams at the pin pads.
 
 The panel (`pack`) is OSH Park's frameless form: one outline, the sticks separated by 2.54 mm
 milled slots (OSH Park's 0.1 in between outlines) and held by OSH Park's suggested tab (0.1 in
-wide, three 0.020 in holes at 0.040 in on each edge [O-panel, the tab drawing]) on edges away
-from every launch (at least 6.1 mm from a launch end: past the leg pads). numpy only.
+wide, three 0.020 in holes on each stick edge it bridges [O-panel, the tab drawing]), at least
+two per stick, only on edges without a launch (at least 6.1 mm from a launch end: past the leg
+pads). numpy only.
 """
 
 from __future__ import annotations
@@ -30,11 +31,15 @@ from yapnr.rf.coupons.layout import (
     _u,
     label_width,
     line_start,
+    text_width,
 )
 
 SLOT = 2.54  # OSH Park: 0.1 in between outlines [O-panel]
 TAB_W = 2.54  # OSH Park's suggested tab: 0.10 in wide [O-panel, tab drawing]
-BITE_D, BITE_PITCH, BITES = 0.508, 1.016, 3  # 0.020 in holes at 0.040 in, three per edge
+# three 0.020 in holes on each edge, at 0.976 mm (0.0384 in, inside OSH Park's 0.035-0.045 in):
+# the outer holes 0.04 mm inside the 0.1 in tab's milled sides (0.015 mm past the outline's
+# 0.05 mm stroke), so the DRC can tell a bite from a hole on a milled edge
+BITE_D, BITE_PITCH, BITES = 0.508, 0.976, 3
 TAB_CLEAR = 6.1  # tab edge from a launch end: past the leg pads (Cinch E = 5.08 mm) + 1 mm
 TAB_EVERY = 30.0  # mm of long edge per tab
 STITCH = 3.0  # stitching via pitch (design §4.2: <= 3 mm)
@@ -141,24 +146,28 @@ def _text(wr: Writer, pl: Placed, text: str, x: float, y: float, key, vertical=F
     wr.text(text, pl.p(x, y), key, size=size, angle=ang)
 
 
-def _copy_box(wr: Writer, pl: Placed, x: float, y: float, key, sid: str = ""):
+def _copy_box(wr: Writer, pl: Placed, xc: float, yc: float, key, sid: str = "", y_text=None):
     """A 3 x 3 mm box for the copy number on the back silkscreen (the back is ground under
-    mask: no RF field, no mask opening), its top-left corner at stick (x, y), the stick id
-    beside it."""
+    mask: no RF field, no mask opening), centred on stick (xc, yc), and the upload and stick id
+    ("O0-D A01": A01 and R1 are on two uploads, two lots; review F2): centred on (xc, y_text),
+    or beside the box (the pair centred on xc). Each stick puts them where no via but plane
+    stitching lies (review F6)."""
     c = COPY_BOX
+    if sid and wr.b.upload:
+        sid = f"{wr.b.name} {sid}"
+    beside = sid and y_text is None
+    x = xc - (c + 0.6 + text_width(sid)) / 2 if beside else xc - c / 2
+    y = yc - c / 2
     pts = [(x, y), (x + c, y), (x + c, y + c), (x, y + c)]
     for k in range(4):
         wr.gr_line(pl.p(*pts[k]), pl.p(*pts[(k + 1) % 4]), "B.SilkS", key + (k,), width=0.15)
-    if sid:
-        wr.text(
-            sid,
-            pl.p(x + c + 0.6 + label_width(sid), y + c / 2),
-            key + ("id",),
-            size=1.0,
-            layer="B.SilkS",
-            angle=pl.angle,
-            justify="left mirror",
-        )
+    if not sid:
+        return
+    if beside:
+        at, just = (x + c + 0.6 + text_width(sid), yc), "left mirror"
+    else:
+        at, just = (xc, y_text), "mirror"
+    wr.text(sid, pl.p(*at), key + ("id",), size=1.0, layer="B.SilkS", angle=pl.angle, justify=just)
 
 
 def _label_x(s: catalog.Stick, x_free: float, ticks: Sequence[float]) -> Tuple[str, float]:
@@ -188,9 +197,13 @@ def _label_2port(wr: Writer, pl: Placed, x_free: float):
     hh = s.height / 2
     rp1, rp2 = s.rp
     text, x0 = _label_x(s, x_free, [rp1, rp2])
-    _text(wr, pl, text, x0, -hh + 1.4, ("lab", s.id))
+    # W: between the edge and the fence row at the 4.2 mm keep-away (6.2 mm off the axis)
+    _text(wr, pl, text, x0, -hh + (0.9 if region(s) == "W" else 1.4), ("lab", s.id))
     _ticks(wr, pl, sorted(set(s.rp)), ("rp", s.id))
-    _copy_box(wr, pl, s.length / 2 - 4.0, -COPY_BOX / 2, ("box", s.id), s.id)
+    if region(s) == "W":
+        _copy_box(wr, pl, s.length / 2, -1.9, ("box", s.id), s.id, y_text=1.4)
+    else:
+        _copy_box(wr, pl, s.length / 2, -3.8, ("box", s.id), s.id, y_text=3.8)
 
 
 def _launch_pair(
@@ -405,7 +418,8 @@ def cpad_stick(wr: Writer, pl: Placed):
     _stitch(wr, pl, gnd, keep, (s.id, "st"))
     _text(wr, pl, s.label or s.id, rp1 + a + ld.keepaway + 0.8, -half + 1.4, ("lab", s.id))
     _ticks(wr, pl, [rp1, rp2], ("rp", s.id), inner=half - b / 2 - ld.keepaway - 0.2)
-    _copy_box(wr, pl, L / 2 - 4.0, -COPY_BOX / 2, ("box", s.id), s.id)
+    xc = 0.5 * (rp1 + a + ld.keepaway + L - rp1 - b - ld.keepaway)  # between the pads
+    _copy_box(wr, pl, xc, -3.8, ("box", s.id), s.id, y_text=3.8)
 
 
 def ring_stick(wr: Writer, pl: Placed):
@@ -436,6 +450,18 @@ def ring_stick(wr: Writer, pl: Placed):
     disc = _circle_pts(*pl.p(cx, cy), rk, 72)
     wr.keepout(["F.Cu"], disc, (s.id, "disc"))
     _mask(wr, disc, f"MO_{s.id}D")
+    # where a feed's mask channel meets the disc, the channel edge and the circle close an
+    # acute mask wedge (review F9): open the convex hull of the channel's last 3 mm and the
+    # nearby arc as well
+    hw_c = prof[-1][1]
+    for fx, k, sg in ((f1, "L", -1.0), (f2, "R", 1.0)):
+        pts = [(fx + sg * dx, ay + dy) for dx in (0.0, 3.0) for dy in (-hw_c, hw_c)]
+        pts += [
+            (x, y)
+            for x, y in _circle_pts(cx, cy, rk, 720)
+            if abs(x - fx) <= 3.0 and abs(y - ay) <= hw_c + 3.0
+        ]
+        _mask(wr, [pl.p(*q) for q in _hull(pts)], f"MO_{s.id}{k}J")
     # the ring as arcs split at the feed points (angles counter-clockwise from east, y up):
     # the short arc through the north between the feeds, the long arc in three parts
     a0 = 90.0 - 180.0 * arc  # the east feed
@@ -472,7 +498,27 @@ def ring_stick(wr: Writer, pl: Placed):
     _stitch(wr, pl, gnd, keep, (s.id, "st"))
     _text(wr, pl, s.label or s.id, 0.9, half - 2.4, ("lab", s.id))
     _ticks(wr, pl, [rp1, rp2], ("rp", s.id), sides=(-1,))
-    _copy_box(wr, pl, L / 2 - 4.0, -COPY_BOX / 2, ("box", s.id), s.id)
+    _copy_box(wr, pl, cx, cy - 2.5, ("box", s.id), s.id, y_text=cy + 1.5)  # inside the ring
+
+
+def _hull(pts: Sequence[Tuple[float, float]]) -> List[Tuple[float, float]]:
+    """Convex hull (Andrew's monotone chain), counter-clockwise."""
+    p = sorted(set((round(x, 6), round(y, 6)) for x, y in pts))
+
+    def cross(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    lower: List[Tuple[float, float]] = []
+    upper: List[Tuple[float, float]] = []
+    for q in p:
+        while len(lower) >= 2 and cross(lower[-2], lower[-1], q) <= 0:
+            lower.pop()
+        lower.append(q)
+    for q in reversed(p):
+        while len(upper) >= 2 and cross(upper[-2], upper[-1], q) <= 0:
+            upper.pop()
+        upper.append(q)
+    return lower[:-1] + upper[:-1]
 
 
 def stub_stick(wr: Writer, pl: Placed):
@@ -535,7 +581,7 @@ def stub_stick(wr: Writer, pl: Placed):
     _stitch(wr, pl, gnd, keep, (s.id, "st"))
     _text(wr, pl, s.label or s.id, 0.9, half - 1.4, ("lab", s.id))
     _ticks(wr, pl, list(s.rp), ("rp", s.id), sides=(-1,))
-    _copy_box(wr, pl, L / 2 - 4.0, half - 1.2 - COPY_BOX, ("box", s.id), s.id)
+    _copy_box(wr, pl, L / 2, ay - 3.8, ("box", s.id), s.id)  # the side without the stub
 
 
 def demo_stick(wr: Writer, pl: Placed):
@@ -611,6 +657,20 @@ def demo_stick(wr: Writer, pl: Placed):
     for k in range(4):
         wr.gr_line(wo[k], wo[(k + 1) % 4], "Dwgs.User", (s.id, "wo", k), width=0.05)
     if placeholder:
+        # the marker `yapnr fab check` stops on (FAB-PLACEHOLDER) until the copper is in
+        wr.footprint(
+            f"Placeholder_{s.id}",
+            pl.p(xw + ww / 2, 0.0),
+            pl.angle,
+            [],
+            ("ph", s.id),
+            ref=f"PH{s.id}",
+            attrs="board_only exclude_from_pos_files exclude_from_bom",
+            props={
+                "yapnr_placeholder": f"{s.id}: the optimizer's copper goes into this"
+                f" {ww:g} x {wh:g} mm window when {s.id} passes its validation"
+            },
+        )
         wr.text(
             f"{s.id} window {ww:g} x {wh:g}",
             pl.p(xw + 0.5, -wh / 2 + 1.5),
@@ -644,7 +704,7 @@ def demo_stick(wr: Writer, pl: Placed):
         _text(wr, pl, text, 2.4, -launch.W_RING - 1.0, ("lab", s.id), vertical=True)
     _ticks(wr, pl, [catalog.LAUNCH_MM], ("rpW", s.id))
     _ticks_y(wr, pl, [-H / 2 + catalog.LAUNCH_MM, H / 2 - catalog.LAUNCH_MM], ("rpNS", s.id))
-    _copy_box(wr, pl, xw + ww / 2 - 4.0, -COPY_BOX / 2, ("box", s.id), s.id)
+    _copy_box(wr, pl, xw + ww / 2, -2.0, ("box", s.id), s.id, y_text=1.6)  # under the window
 
 
 def _window_x(lf: float) -> float:
@@ -689,14 +749,14 @@ def copper_pad(wr: Writer, pl: Placed, s: catalog.Stick, xw: float, net: str):
 
 def tag_stick(wr: Writer, pl: Placed, info: Dict[str, str]):
     """A15: the QR (light modules and quiet zone in silkscreen, dark modules bare purple mask
-    over laminate: design §6) with the tag text under it; the microsection lines (M, M0.7,
+    over a copper fill: design §6, review F7) with the tag text under it; the microsection
+    lines (M, M0.7,
     M1.4, M-MK side by side with their L1 ground at the keep-away, a cut mark across); two
     4-wire meanders on L1 (0.20 x 200 mm, 0.50 x 250 mm) with test-point holes."""
     s = pl.stick
     g = s.geometry
     _, gnd = _nets(wr, s)
-    L, H = s.length, s.height
-    hh = H / 2
+    hh = s.height / 2
     wr.stick_zones(pl, gnd, layers=wr.layers[1:])
     # 1. the QR
     mods = qr.matrix(g["url"])
@@ -728,15 +788,12 @@ def tag_stick(wr: Writer, pl: Placed, info: Dict[str, str]):
             ya = y0 + quiet + r * m
             wr.gr_poly("F.SilkS", _rect(pl, xa, xb, ya, ya + m), qkey + (r, c))
             c = c1
-    wr.keepout(["F.Cu"], _rect(pl, x0 - 0.3, x0 + side + 0.3, y0 - 0.3, y0 + side + 0.3), qkey)
-    lines = [
-        info.get("title", ""),
-        info.get("stackup", ""),
-        info.get("git", ""),
-        info.get("designs", ""),
-    ]
+    # copper under the code (inside the keep-back), so the dark modules are purple mask over
+    # copper, not over pale laminate (review F7)
+    wr.gr_poly("F.Cu", _rect(pl, x0, x0 + side, y0, y0 + side), qkey + ("cu",))
+    lines = [info.get("title", ""), info.get("stackup", ""), info.get("git", "")]
     for k, t in enumerate(x for x in lines if x):
-        _text(wr, pl, t, x0, y0 + side + 1.0 + 1.25 * k, (s.id, "tag", k), size=0.8)
+        _text(wr, pl, t, x0, y0 + side + 0.9 + 1.8 * k, (s.id, "tag", k), size=1.0)
     # 2. the microsection lines
     xs0 = x0 + side + 2.0
     xlen = 16.0
@@ -784,12 +841,12 @@ def tag_stick(wr: Writer, pl: Placed, info: Dict[str, str]):
         ("lab", s.id),
         size=1.0,
     )
-    _text(wr, pl, "XSEC M M0.7 M1.4 MK", xs0, y_x1 + 3.6, ("xl", s.id), size=0.8)
+    _text(wr, pl, "XSEC M M0.7 M1.4 MK", xs0, y_x1 + 3.6, ("xl", s.id), size=1.0)
     # 3. the meanders, right of the microsection lines
     x_m = xs0 + xlen + 4.8
     for k, mm in enumerate(g["meanders"]):
         x_m = _meander(wr, pl, s, x_m, -hh + 1.6, hh - 4.2, mm, k) + 3.2
-    _copy_box(wr, pl, L / 2 - 4.0, -COPY_BOX / 2, ("box", s.id), s.id)
+    _copy_box(wr, pl, x0 + side / 2, y0 + side / 2, ("box", s.id), s.id)  # behind the QR
 
 
 def _meander(wr, pl, s, x0, y_top, y_bot, m, k) -> float:
@@ -866,6 +923,10 @@ class Item:
 
         if self.rot == 90:
             return Placed(self.stick, self.x + self.w / 2, self.y, rot=90)
+        if self.rot == 180:
+            return Placed(self.stick, self.x + self.w, self.y + self.h / 2, rot=180)
+        if self.rot == 270:
+            return Placed(self.stick, self.x + self.w / 2, self.y + self.h, rot=270)
         s = (
             self.stick
             if abs(self.stick.height - self.h) < 1e-9
@@ -882,6 +943,15 @@ class OPanel:
     tabs: List[Tuple[float, float, float, float]]
     bites: List[Tuple[float, float]]
     mask_rules: List[str] = field(default_factory=list)
+    # per tab: "h" (across a horizontal slot: the bridge runs along y) or "v", and the two items
+    tab_meta: List[Tuple[str, int, int]] = field(default_factory=list)
+
+    def tabs_per_item(self) -> List[int]:
+        n = [0] * len(self.items)
+        for _, a, b in self.tab_meta:
+            n[a] += 1
+            n[b] += 1
+        return n
 
     @property
     def placed(self) -> List[Placed]:
@@ -894,34 +964,31 @@ class OPanel:
 
 def allowed(s: catalog.Stick) -> Dict[str, List[Tuple[float, float]]]:
     """Where a tab may sit on each edge of a stick (stick coordinates along the edge: x for N
-    and S, y for W and E): away from every launch (TAB_CLEAR from a launch end, and the
-    connector's ground pads plus 3 mm around a port on its own edge)."""
+    and S, y for W and E): only on edges that carry no launch (the owner's decision: tabs on the
+    long sides only; the plan: launch ends always milled), TAB_CLEAR from the corners of a launch
+    edge. A 2-port stick: N and S; a 3-port demo (ports W, N, S): E; the tag (no port): every
+    edge, 1 mm from the corners."""
     L, H = s.length, s.height
-    leg = launch.CINCH_142_0701_851.gnd_pad_y[1]
     if s.kind in ("demo", "window"):
-        out = {"N": [(0.0, L)], "S": [(0.0, L)], "W": [(-H / 2, H / 2)], "E": [(-H / 2, H / 2)]}
-        for p in s.geometry["ports"]:
-            side = p["side"]
-            at = 0.0 if side == "W" else p["at"]
-            band = (at - leg - 3.0, at + leg + 3.0)
-            out[side] = _minus(out[side], band)
-            # launches near a corner also forbid the start of the adjacent edges
-            if side == "W":
-                for e in ("N", "S"):
-                    out[e] = _minus(out[e], (-1e9, TAB_CLEAR))
+        sides = {p["side"] for p in s.geometry["ports"]}
+        out: Dict[str, List[Tuple[float, float]]] = {}
+        for e in "NSWE":
+            if e in sides:
+                out[e] = []
+                continue
+            span = (0.0, L) if e in "NS" else (-H / 2, H / 2)
+            lo, hi = span
+            if e in "NS":
+                lo += TAB_CLEAR if "W" in sides else 0.0
+                hi -= TAB_CLEAR if "E" in sides else 0.0
             else:
-                e = side
-                adj = ("W", "E")
-                for a in adj:
-                    lim = (
-                        (-H / 2 - 1, -H / 2 + TAB_CLEAR)
-                        if side == "N"
-                        else (H / 2 - TAB_CLEAR, H / 2 + 1)
-                    )
-                    out[a] = _minus(out[a], lim)
+                lo += TAB_CLEAR if "N" in sides else 0.0
+                hi -= TAB_CLEAR if "S" in sides else 0.0
+            out[e] = [(lo, hi)] if hi - lo >= TAB_W else []
         return out
-    if s.ports == 0:
-        return {"N": [(1.0, L - 1.0)], "S": [(1.0, L - 1.0)], "W": [], "E": []}
+    if s.ports == 0:  # the tag: every edge
+        ends = [(-H / 2 + 1.0, H / 2 - 1.0)]
+        return {"N": [(1.0, L - 1.0)], "S": [(1.0, L - 1.0)], "W": ends, "E": ends}
     return {"N": [(TAB_CLEAR, L - TAB_CLEAR)], "S": [(TAB_CLEAR, L - TAB_CLEAR)], "W": [], "E": []}
 
 
@@ -938,34 +1005,49 @@ def _minus(ivs, band):
     return [(a, b) for a, b in out if b - a > 1e-6]
 
 
+_EDGES: Dict[tuple, list] = {}
+
+
 def _panel_edges(it: Item):
     """The item's edges in panel coordinates with their allowed tab intervals:
     [(orientation, fixed coordinate, [(lo, hi)])], "h" edges along x, "v" along y."""
+    key = (it.stick.id, it.stick.length, it.stick.height, it.rot, it.w, it.h)
+    rel = _EDGES.get(key)
+    if rel is None:
+        rel = _EDGES[key] = _rel_edges(it)
+    out = []
+    for orient, c, ivs in rel:
+        if orient == "h":
+            out.append((orient, c + it.y, [(a + it.x, b + it.x) for a, b in ivs]))
+        else:
+            out.append((orient, c + it.x, [(a + it.y, b + it.y) for a, b in ivs]))
+    return out
+
+
+def _rel_edges(it: Item):
+    """_panel_edges with the item's corner at the origin."""
+    import dataclasses
+
     s = it.stick
     al = allowed(s)
-    x0, y0, x1, y1 = it.x, it.y, it.x + it.w, it.y + it.h
-    if it.rot == 90:
-        # stick x runs along panel +y from y0; stick y runs along panel -x (N = +x side)
-        def tr_x(iv):
-            return [(y0 + a, y0 + b) for a, b in iv]
+    pl = dataclasses.replace(it, x=0.0, y=0.0).placed()
+    L, H = s.length, pl.stick.height
 
-        def tr_y(iv):
-            xc = (x0 + x1) / 2
-            return [(xc - b, xc - a) for a, b in iv]
+    def pt(e, t):
+        return pl.p(*{"N": (t, -H / 2), "S": (t, H / 2), "W": (0.0, t), "E": (L, t)}[e])
 
-        return [
-            ("v", x1, tr_x(al["N"])),
-            ("v", x0, tr_x(al["S"])),
-            ("h", y0, tr_y(al["W"])),
-            ("h", y1, tr_y(al["E"])),
-        ]
-    yc = (y0 + y1) / 2
-    return [
-        ("h", y0, [(x0 + a, x0 + b) for a, b in al["N"]]),
-        ("h", y1, [(x0 + a, x0 + b) for a, b in al["S"]]),
-        ("v", x0, [(yc + a, yc + b) for a, b in al["W"]]),
-        ("v", x1, [(yc + a, yc + b) for a, b in al["E"]]),
-    ]
+    out = []
+    for e in "NSWE":
+        full = (0.0, L) if e in "NS" else (-H / 2, H / 2)
+        a, b = pt(e, full[0]), pt(e, full[1])
+        orient = "h" if abs(a[1] - b[1]) < 1e-9 else "v"
+        k = 0 if orient == "v" else 1  # the edge's fixed coordinate
+        ivs = []
+        for lo, hi in al[e]:
+            u, v = pt(e, lo)[1 - k], pt(e, hi)[1 - k]
+            ivs.append((min(u, v), max(u, v)))
+        out.append((orient, a[k], ivs))
+    return out
 
 
 def _rows(items: List[Item], row_max: float):
@@ -1020,10 +1102,19 @@ def _layout(items: List[Item], row_max: float) -> Tuple[float, float]:
     return width, y - SLOT - ORIGIN[1]
 
 
+TABS_MIN = 2  # tabs per stick (review F4: one 2.54 mm tab keeps about 1 mm of web)
+# two tabs fit a common interval this long with a slot-wide cut between them (the 0.068 in mill
+# fits a 2.54 mm square)
+TAB_PAIR_MIN = 2 * TAB_W + SLOT
+
+
 def _tabs(items: List[Item]):
-    """Tabs between facing edges one slot apart, inside both edges' allowed intervals, about
-    one per TAB_EVERY mm of shared edge; returns the tabs and the stick graph's edges."""
-    tabs, links = [], []
+    """Tabs between facing edges one slot apart, inside both edges' allowed intervals: one per
+    TAB_EVERY mm of shared edge, and two on any interval of TAB_PAIR_MIN or more, so a stick
+    that hangs on one edge still has two. They sit evenly about the interval's middle (at a
+    quarter and three quarters of a long one), at least a slot apart. Returns the tabs, their
+    (orientation, item, item) and the stick graph's edges."""
+    tabs, meta, links = [], [], []
     edges = [(k, e) for k, it in enumerate(items) for e in _panel_edges(it)]
     for i, (ka, (oa, ca, iva)) in enumerate(edges):
         for kb, (ob, cb, ivb) in edges[i + 1 :]:
@@ -1052,19 +1143,25 @@ def _tabs(items: List[Item]):
                         common.append((lo, hi))
             placed = []
             for lo, hi in common:
-                n = max(1, int((hi - lo) // TAB_EVERY))
+                span = hi - lo
+                n = max(1, int(span // TAB_EVERY))
+                if span >= TAB_PAIR_MIN - 1e-6:
+                    n = max(n, TABS_MIN)
+                while n > 1 and (n - 1) * (TAB_W + SLOT) > span - TAB_W + 1e-6:
+                    n -= 1
+                pitch = max(span / n, TAB_W + SLOT) if n > 1 else 0.0
+                mid = 0.5 * (lo + hi)
                 for j in range(n):
-                    c = lo + (hi - lo) * (j + 0.5) / n
-                    c = min(max(c, lo + TAB_W / 2), hi - TAB_W / 2)
-                    placed.append(c)
+                    placed.append(mid + (j - (n - 1) / 2) * pitch)
             for c in placed:
                 if oa == "h":
                     tabs.append((c - TAB_W / 2, c + TAB_W / 2, lo_c, hi_c))
                 else:
                     tabs.append((lo_c, hi_c, c - TAB_W / 2, c + TAB_W / 2))
+                meta.append((oa, ka, kb))
             if placed:
                 links.append((ka, kb))
-    return tabs, links
+    return tabs, meta, links
 
 
 def _connected(n: int, links) -> bool:
@@ -1111,10 +1208,10 @@ def _clear(it: Item, placed: Sequence[Item]) -> bool:
 
 
 def _grow(items: List[Item], wmax: float, order: Optional[Sequence[int]] = None):
-    """Place the sticks in `order` (default: largest first), each where it hangs on a tab from
-    a placed stick (one of its allowed edges facing an allowed edge across a slot, TAB_W or
-    more in common), at the position that keeps the bounding rectangle smallest within `wmax`
-    wide."""
+    """Place the sticks in `order` (default: largest first), each where it hangs on two tabs
+    from a placed stick (one of its allowed edges facing an allowed edge across a slot,
+    TAB_PAIR_MIN or more in common), at the position that keeps the bounding rectangle smallest
+    within `wmax` wide."""
     if order is None:
         order = sorted(items, key=lambda i: (-(i.w * i.h), -i.w, i.stick.id))
     else:
@@ -1152,7 +1249,7 @@ def _grow(items: List[Item], wmax: float, order: Optional[Sequence[int]] = None)
                     cands = [(x, y) for y in ys_c]
                 for x, y in cands:
                     it.x, it.y = x, y
-                    if _overlap(_facing(it, orient, face_c), ivq) < TAB_W - 1e-6:
+                    if _overlap(_facing(it, orient, face_c), ivq) < TAB_PAIR_MIN - 1e-6:
                         continue
                     if not _clear(it, placed):
                         continue
@@ -1181,31 +1278,31 @@ def _grow(items: List[Item], wmax: float, order: Optional[Sequence[int]] = None)
 
 
 def pack(sticks: Sequence[catalog.Stick], wmax: Optional[float] = None) -> OPanel:
-    """The frameless panel: every stick hangs on tabs from the others (one outline), the billed
-    rectangle as small as the constructive search finds (widths from the longest stick to
-    250 mm in 2 mm steps, or `wmax`)."""
+    """The frameless panel: every stick hangs on at least TABS_MIN tabs from the others (one
+    outline), the billed rectangle as small as the constructive search finds (widths from the
+    longest stick to 250 mm in 4 mm steps, or `wmax`). The sticks' turns are the catalogue's
+    (`geometry["rot"]`: the demos' port-free edge and, on O0-D, the lines; catalog.O_ROTS)."""
+    best = _search(sticks, {}, wmax, None)
+    if best is None:
+        raise ValueError(
+            f"no arrangement lets the sticks hang together on at least {TABS_MIN} tabs each"
+        )
+    _, its, width, height, tabs, meta = best
+    return _finish(its, width, height, tabs, meta)
 
+
+def _search(sticks, rots: Dict[str, int], wmax, bound):
     def items():
         out = []
         for s in sticks:
-            rot = int(s.geometry.get("rot", 0))
-            w, h = (s.height, s.length) if rot == 90 else (s.length, s.height)
+            rot = rots.get(s.id, int(s.geometry.get("rot", 0)))
+            w, h = (s.height, s.length) if rot in (90, 270) else (s.length, s.height)
             out.append(Item(s, w, h, rot))
         return out
 
-    widths = (
-        [wmax]
-        if wmax
-        else list(
-            np.arange(
-                math.ceil(max((s.height if s.geometry.get("rot") else s.length) for s in sticks)),
-                251.0,
-                4.0,
-            )
-        )
-    )
-    n = len(sticks)
     base = items()
+    widths = [wmax] if wmax else list(np.arange(math.ceil(max(i.w for i in base)), 251.0, 4.0))
+    n = len(sticks)
     by_area = sorted(
         range(n), key=lambda k: (-(base[k].w * base[k].h), -base[k].w, base[k].stick.id)
     )
@@ -1225,24 +1322,32 @@ def pack(sticks: Sequence[catalog.Stick], wmax: Optional[float] = None) -> OPane
             if res is None:
                 continue
             width, height = res
-            if best is not None and width * height > best[0][0] + 1e-6:
+            lim = best[0][0] if best is not None else (bound[0] if bound else None)
+            if lim is not None and width * height > lim + 1e-6:
                 continue
-            tabs, links = _tabs(its)
+            tabs, meta, links = _tabs(its)
             if not _connected(len(its), links):
+                continue
+            per = [0] * len(its)
+            for _, a, b in meta:
+                per[a] += 1
+                per[b] += 1
+            if min(per) < TABS_MIN:
                 continue
             key = (round(width * height, 3), abs(width - height))
             if best is None or key < best[0]:
-                best = (key, its, width, height, tabs)
-    if best is None:
-        raise ValueError("no arrangement lets the sticks hang together on tabs")
-    _, its, width, height, tabs = best
-    return _finish(its, width, height, tabs)
+                best = (key, its, width, height, tabs, meta)
+    return best
 
 
-def _finish(its, width, height, tabs) -> OPanel:
+def _finish(its, width, height, tabs, meta) -> OPanel:
+    """The mouse bites: BITES holes on each stick edge a tab bridges, along that edge. An "h"
+    tab crosses a horizontal slot (the stick edges are its y0 and y1 lines, the holes spread in
+    x); a "v" tab a vertical one (edges x0 and x1, holes spread in y). The orientation comes
+    from the slot, not the tab's aspect: the tabs are square (TAB_W = SLOT; review F1)."""
     bites = []
-    for x0, x1, y0, y1 in tabs:
-        if x1 - x0 < y1 - y0 + 1e-9 and abs((y1 - y0) - SLOT) < 1e-6:  # vertical bridge
+    for (x0, x1, y0, y1), (orient, _, _) in zip(tabs, meta):
+        if orient == "h":
             cx = (x0 + x1) / 2
             for k in range(BITES):
                 bx = cx + (k - (BITES - 1) / 2) * BITE_PITCH
@@ -1252,7 +1357,7 @@ def _finish(its, width, height, tabs) -> OPanel:
             for k in range(BITES):
                 by = cy + (k - (BITES - 1) / 2) * BITE_PITCH
                 bites += [(x0, by), (x1, by)]
-    return OPanel(width, height, its, tabs, bites)
+    return OPanel(width, height, its, tabs, bites, tab_meta=list(meta))
 
 
 def outline_loops(panel: OPanel) -> List[List[Tuple[float, float]]]:
@@ -1331,6 +1436,7 @@ def build(wr: Writer, panel: OPanel, info: Dict[str, str]):
             tag_stick(wr, pl, info)
         else:
             raise NotImplementedError(f"board O stick kind {k!r}")
+    wr.drop_vias_under_silk(("st",))
     # outline and mouse bites
     for k, loop in enumerate(outline_loops(panel)):
         wr.gr_poly("Edge.Cuts", loop, ("oloop", k), fill=False, width=0.05)

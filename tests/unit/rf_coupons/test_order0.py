@@ -138,7 +138,11 @@ class CatalogTest(unittest.TestCase):
         self.assertTrue(all(s.height == 16.0 for s in w.sticks if s.kind in ("thru", "line")))
         self.assertEqual(w.stick("D2").kind, "window")
         d = catalog.board(FR, "D")
-        self.assertEqual(sorted(s.id for s in d.sticks), ["A01", "A04", "D1", "R1"])
+        self.assertEqual(sorted(s.id for s in d.sticks), ["A01", "A04", "A20", "D1", "R1"])
+        self.assertEqual(d.trl["M"]["dl"], [0.0, 9.0, 30.0])  # review M2: O0-D's own lines
+        for u, sid in (("W", "D2"), ("D", "D1")):
+            self.assertTrue(catalog.board(FR, u).stick(sid).geometry["placeholder"])
+        self.assertNotIn("placeholder", m.stick("R1").geometry)
 
     def test_conditioning(self):
         """Design §4.2/§4.3: the M set >= 0.926 over 0.5-6 GHz for εeff 2.60-2.95, the W set
@@ -149,16 +153,38 @@ class CatalogTest(unittest.TestCase):
         for eps in (2.85, 3.05, 3.25):
             c = catalog.conditioning(catalog.O_TRL_W, eps, np.linspace(1e9, 6e9, 2001))
             self.assertGreater(c.min(), 0.928, eps)
+        # O0-D (review M2): >= 0.95 over D1's band, >= 0.80 over 1-6 GHz
+        for eps in (2.60, 2.70, 2.80, 2.95):
+            c = catalog.conditioning(catalog.O_TRL_D, eps, np.linspace(4.25e9, 5.75e9, 601))
+            self.assertGreater(c.min(), 0.95, eps)
+            c = catalog.conditioning(catalog.O_TRL_D, eps, np.linspace(1e9, 6e9, 2001))
+            self.assertGreater(c.min(), 0.80, eps)
 
     def test_references(self):
-        """R1 / R1t on the optimizer's grid: the λ/4 35.36 Ω arm to the junction centre."""
-        for reg, (w_arm, lc, pitch) in (("M", (0.70, 8.9, 0.1)), ("W", (5.0, 8.5, 0.5))):
+        """R1 / R1t: the λ/4 arm counted from Hammerstad's branch reference plane (review M1),
+        every edge on the refine-2 grid the FDTD runs them at (review H2: 0.70 mm is 14 cells of
+        0.05 mm about a node, not 7 of 0.10 mm)."""
+        for reg, (w_arm, d2) in (("M", (0.70, 0.37)), ("W", (5.0, 2.18))):
             r = catalog.o_reference(reg)
-            (ax0, ax1, ay0, ay1), (ox0, ox1, _, _) = r["copper"]
+            (ax0, ax1, ay0, ay1), (ox0, ox1, oy0, _) = r["copper"]
             self.assertAlmostEqual(ay1 - ay0, w_arm)
-            self.assertAlmostEqual((ox0 + ox1) / 2, lc)
-            for v in (ax1, ay1 - ay0, ox1 - ox0, r["h"]):
+            arm = r["arm"]
+            self.assertAlmostEqual(arm["junction_d_branch_mm"], d2, delta=0.01)
+            self.assertAlmostEqual((ox0 + ox1) / 2, arm["l_to_centre"])
+            # λ/4 from the branch plane within half a grid step; f0 within 1 % of 5 GHz
+            pitch = r["fdtd_pitch_mm"]
+            self.assertLess(abs(arm["l_to_centre"] - d2 - arm["quarter_wave_mm"]), pitch / 2 + 0.01)
+            self.assertAlmostEqual(arm["f0_ghz_est"], 5.0, delta=0.05)
+            for v in (ax1, ay0, ay1, ox0, ox1, oy0, r["w"], r["h"]):
                 self.assertAlmostEqual(v / pitch, round(v / pitch), places=6)
+
+    def test_tee_offsets(self):
+        """Hammerstad's T-junction: equal 50 Ω arms on M put the branch plane 0.31 D off the
+        main line's centre (0.28 mm), the main planes 0.055 D (0.05 mm)."""
+        d_main, d_branch = models.tee_offsets(50.6, 2.70, 50.6, 2.70, 0.1999, 5.8e9)
+        D = models.ETA0 * 0.1999 / (50.6 * math.sqrt(2.70))
+        self.assertAlmostEqual(d_branch / D, 0.309, delta=0.002)
+        self.assertAlmostEqual(d_main / D, 0.055, delta=0.001)
 
     def test_demo_geometry(self):
         """Each demo port: the standard launch half (10 mm to its RP) and L_f to the window."""
@@ -176,17 +202,30 @@ class CatalogTest(unittest.TestCase):
             self.skipTest("board O tables not built")
         r = b.stick("A11").geometry["radius"]
         self.assertAlmostEqual(r, 15.1, delta=0.3)  # design: n = 3 at 5.79 GHz
-        self.assertAlmostEqual(b.stick("A12").geometry["stub_mm"], 7.81, delta=0.3)
+        # review H1: the notch at 5.5 GHz from the branch plane, 0.28 mm off the line's centre
+        g = b.stick("A12").geometry
+        self.assertAlmostEqual(g["junction"]["d_branch"], 0.28, delta=0.01)
+        self.assertAlmostEqual(g["stub_mm"], 8.29, delta=0.1)
+        m = models.Model(FR, stackups.with_values(stackups.get(FR), {}), expected.GRID_O_CPAD)
+        s12 = b.stick("A12")
+        ref = m.line("M").zc[0]
+        (f_notch,) = expected.notches(m, s12.elements, ref, 4.5e9, 6.0e9)
+        self.assertAlmostEqual(f_notch / 1e9, 5.5, delta=0.01)
+        f_ring = expected.notches(m, b.stick("A11").elements, ref, 0.5e9, 6.0e9)
+        self.assertEqual(len(f_ring), 2)  # n = 1 and 3; n = 2 passes
+        self.assertAlmostEqual(f_ring[1] / 1e9, 5.8, delta=0.02)
 
 
 class PanelTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.panels = {u: layout_o.pack(catalog.board(FR, u).sticks) for u in "MWD"}
+        board = fab.tuned_board if _have_tables() else catalog.board  # the shipped geometry
+        cls.panels = {u: layout_o.pack(board(FR, u).sticks) for u in "MWD"}
 
     def test_size_and_cost(self):
-        """Within the design's estimates (§16.7) at $10 per square inch."""
-        limits = {"M": 26.0, "W": 12.6, "D": 6.6}
+        """Near the design's estimates (§16.7) at $10 per square inch: O0-M 24.2 sq in grows by
+        tabs off the launch edges (review F5) and two per stick (F4); O0-D by its 9 mm line."""
+        limits = {"M": 27.5, "W": 12.6, "D": 7.5}
         for u, p in self.panels.items():
             self.assertLess(p.sq_in, limits[u], u)
 
@@ -219,24 +258,47 @@ class PanelTest(unittest.TestCase):
                     )
                     self.assertGreaterEqual(gap, layout_o.SLOT - 1e-6, (u, a.stick.id, b.stick.id))
 
-    def test_tabs_away_from_launches(self):
-        """Tabs on allowed edges only: never on a 2-port stick's short (launch) ends, and at
-        least TAB_CLEAR from them; three bites on each side of every tab."""
+    def test_tabs_on_port_free_edges(self):
+        """Every tab bridges two edges that carry no launch (2-port sticks: the long sides; the
+        demos: their east edge; review F5), TAB_CLEAR from a launch end; every stick has at
+        least two tabs (F4)."""
+        for u, p in self.panels.items():
+            self.assertGreaterEqual(min(p.tabs_per_item()), layout_o.TABS_MIN, u)
+            for (x0, x1, y0, y1), (orient, a, b) in zip(p.tabs, p.tab_meta):
+                c = 0.5 * (x0 + x1) if orient == "h" else 0.5 * (y0 + y1)
+                for k in (a, b):
+                    ok = False
+                    for o, cc, ivs in layout_o._panel_edges(p.items[k]):
+                        on = o == orient and (
+                            abs(cc - y0) < 1e-6 or abs(cc - y1) < 1e-6
+                            if o == "h"
+                            else abs(cc - x0) < 1e-6 or abs(cc - x1) < 1e-6
+                        )
+                        if on and any(
+                            lo - 1e-6 <= c - layout_o.TAB_W / 2
+                            and c + layout_o.TAB_W / 2 <= hi + 1e-6
+                            for lo, hi in ivs
+                        ):
+                            ok = True
+                    self.assertTrue(ok, (u, p.items[k].stick.id, orient, c))
+
+    def test_bites_on_the_tabbed_edges(self):
+        """Review F1: three bites on each of a tab's two stick edges, centred on the edge line,
+        spread along it inside the tab, the outer ones 0.04 mm clear of its milled sides."""
+        r = layout_o.BITE_D / 2
         for u, p in self.panels.items():
             self.assertEqual(len(p.bites), 6 * len(p.tabs), u)
-            for x0, x1, y0, y1 in p.tabs:
-                for it in p.items:
-                    if it.stick.kind in ("demo", "window") or it.stick.ports != 2:
-                        continue
-                    if it.rot == 90:
-                        lo, hi, a0, a1 = it.y, it.y + it.h, y0, y1
-                        touch = abs(x1 - it.x) < 1e-6 or abs(x0 - (it.x + it.w)) < 1e-6
+            for t, ((x0, x1, y0, y1), (orient, _, _)) in enumerate(zip(p.tabs, p.tab_meta)):
+                bites = p.bites[6 * t : 6 * t + 6]
+                for bx, by in bites:
+                    if orient == "h":  # edges y0, y1; the tab spans x0..x1
+                        self.assertTrue(min(abs(by - y0), abs(by - y1)) < 1e-9, (u, t))
+                        self.assertGreaterEqual(min(bx - r - x0, x1 - bx - r), 0.04 - 1e-9)
                     else:
-                        lo, hi, a0, a1 = it.x, it.x + it.w, x0, x1
-                        touch = abs(y1 - it.y) < 1e-6 or abs(y0 - (it.y + it.h)) < 1e-6
-                    if touch and a1 > lo and a0 < hi:
-                        self.assertGreaterEqual(a0 - lo, layout_o.TAB_CLEAR - 1e-6, it.stick.id)
-                        self.assertGreaterEqual(hi - a1, layout_o.TAB_CLEAR - 1e-6, it.stick.id)
+                        self.assertTrue(min(abs(bx - x0), abs(bx - x1)) < 1e-9, (u, t))
+                        self.assertGreaterEqual(min(by - r - y0, y1 - by - r), 0.04 - 1e-9)
+        pitch_in = layout_o.BITE_PITCH / 25.4
+        self.assertTrue(0.035 <= pitch_in <= 0.045)  # OSH Park's hole spacing [O-panel]
 
     def test_board_text(self):
         b = catalog.board(FR, "M")
@@ -256,9 +318,39 @@ class PanelTest(unittest.TestCase):
         self.assertEqual(
             text.count('(footprint "SMA_EdgeLaunch_Cinch_142-0701-851"'), 33
         )  # design §16.7: 33 SMAs per O0-M copy
+        self.assertIn('(footprint "Placeholder', layout.board_text(FR, catalog.board(FR, "D"))[0])
         dru = layout.dru_text(panel.mask_rules, bites=True)
         self.assertIn("memberOfFootprint('MB1')", dru)
-        self.assertIn("physical_hole_clearance", dru)
+        self.assertIn("physical_hole_clearance (min 0.005mm)", dru)
+        self.assertNotIn('severity ignore))\n(rule "MO', dru.split("MB1")[1][:200])
+
+    def test_upload_ids_and_placeholders(self):
+        """Review F2: every stick's back silkscreen names its upload; F3: an empty window is a
+        placeholder footprint that `yapnr fab check` stops on."""
+        for u in "MWD":
+            b = catalog.board(FR, u)
+            text, panel = layout.board_text(FR, b, "A", dict(title="t", git="g"))
+            back = re.findall(r'\(gr_text "([^"]*)" \(at [^)]*\) \(layer "B\.SilkS"\)', text)
+            ids = {s.id for s in b.sticks}
+            self.assertEqual({t.split(" ", 1)[1] for t in back}, ids, u)
+            self.assertTrue(all(t.startswith(f"O0-{u} ") for t in back), u)
+            ph = re.findall(r'\(property "yapnr_placeholder" "([^"]*)"', text)
+            self.assertEqual(len(ph), {"M": 0, "W": 1, "D": 1}[u], u)
+
+    def test_no_stitching_under_silk(self):
+        """Review F6: no plane-stitching via within 0.1 mm of a silkscreen item."""
+        st = stackups.get(FR)
+        for u in "MW":
+            b = catalog.board(FR, u)
+            wr = layout.Writer(st, b)
+            layout_o.build(wr, layout_o.pack(b.sticks), dict(title="t", git="g"))
+            r = wr.via_size[0] / 2 + 0.1
+            for p, key in wr.via_log:
+                if key[1] != "st":
+                    continue
+                for _, (x0, x1, y0, y1) in wr.silk_boxes:
+                    inside = x0 - r <= p[0] <= x1 + r and y0 - r <= p[1] <= y1 + r
+                    self.assertFalse(inside, (u, key))
 
 
 class QrTest(unittest.TestCase):
@@ -312,6 +404,17 @@ class ExpectedTest(unittest.TestCase):
         c = -1 / (2 * math.pi * f1[k1] * z[k1].imag)
         c_pp = 8.854e-12 * 3.6 * 36e-6 / 0.1999e-3
         self.assertTrue(1.0 < c / c_pp < 1.4, c / c_pp)  # parallel plate plus fringing
+        # review L1: the held-out scalars to 10 kHz and the lines on the 6 MHz grid
+        import json
+
+        with open(paths[f"{FR}:scalars"], encoding="utf-8") as fh:
+            doc = json.load(fh)
+        self.assertAlmostEqual(doc["notches_ghz"]["A12"][0], 5.5, delta=0.01)
+        self.assertEqual(len(doc["notches_ghz"]["A11"]), 2)
+        with open(paths[f"{FR}:lines"], encoding="utf-8") as fh:
+            rows = fh.read().splitlines()
+        self.assertEqual(len(rows), 1 + 1000)
+        self.assertTrue(rows[0].startswith("f_ghz,M.eps_eff,M.alpha_db_per_cm"))
 
 
 class LaunchFrameTest(unittest.TestCase):

@@ -239,6 +239,18 @@ _PRIORS_O = (
         (-0.04, 0.04),
     ),
     _geo(_p("L1.t", 0.04318, 0.005, "mm", f"1.7 mil finished, {_OSH} page; σ est.", 0.02, 0.07)),
+    # OSH Park states no foil: the Order 0 review's prior Rq 1.0 ± 0.5 µm (its F2), as the Huray
+    # ratio whose factor at 5 GHz equals Hammerstad's for that Rq: 1.12 / 2.98 / 3.82 at Rq 0.5 /
+    # 1.0 / 1.5 µm (derived)
+    _p(
+        "L1.rough",
+        3.0,
+        1.3,
+        "",
+        "Huray ratio (a = 0.5 µm) of Rq 1.0 ± 0.5 µm at 5 GHz, Order 0 review F2; derived",
+        0.0,
+        8.0,
+    ),
     _p(
         "mask.scale",
         1.0,

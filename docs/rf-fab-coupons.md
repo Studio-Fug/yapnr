@@ -118,19 +118,31 @@ uploads of one catalogue (`--upload M|W|D`):
 
 - **O0-M**: the region M multiline TRL set (thru, ΔL 4.5, 13, 30, 70 mm, an open reflect, a 21 mm
   verification line), the width set (0.28, 0.56 mm), the masked line, a directly fed ring
-  (notches at n = 1 and 3, 1.93 and 5.80 GHz), an open λ/4 stub at 5.8 GHz, the switch-term
+  (notches at n = 1 and 3, 1.92 and 5.79 GHz), an open λ/4 stub notching at 5.5 GHz, the switch-term
   coupon (a shunt 0402 100 Ω), two C-pads (6 and 12 mm, for h), the 30 mm line turned 90°, the
   DC/microsection/tag stick with the QR to docs/rf/order0, and R1, the textbook divider;
 - **O0-W**: the region W set (thru, ΔL 5, 14, 34 mm, an open reflect), R1t and the D2 window;
-- **O0-D**: the D1 window, an R1 copy, a thru and a 30 mm line.
+- **O0-D**: the D1 window, an R1 copy, a thru and lines ΔL 9 and 30 mm (its own lot's γ up to
+  6 GHz).
+
+R1 and R1t, the textbook dividers, count their λ/4 arm from Hammerstad's T-junction reference
+plane (`models.tee_offsets`), as does the stub, and lie on the optimizer's second grid refinement,
+where their FDTD predictions run. The ring's arcs and the stub carry the same junction planes in
+the expected S-parameters, and `expected` also writes the pre-registered scalars: the notch
+frequencies to 10 kHz (`scalars.json`) and every line family on the 6 MHz measurement grid
+(`lines.csv`).
 
 The line families are solved on the sticks' real cross-sections (the L1 ground at the 1.0 mm or
 4.2 mm keep-away, W over prepreg, core and prepreg with the stitched inner ring) and shipped in
 `data/OSHPARK-4L-FR408HR.json`; the EM528 alternate reads the same tables with its own priors. The
 panel is OSH Park's frameless form: one outline, 2.54 mm milled slots, OSH Park's suggested
-mouse-bite tab (0.1 in wide, three 0.020 in holes at 0.040 in on each side) only on edges at least
-6.1 mm from any connector, and nothing on a frame. Demo windows (D1, D2) carry their launches,
-feeds, outline and keep-away; the optimizer's copper goes in when a design passes.
+mouse-bite tab (0.1 in wide, three 0.020 in holes at 0.0384 in along each stick edge it bridges,
+the outer ones just inside its milled sides), at least two per stick, only on edges that carry no
+connector (a 3-port demo is turned so its fourth edge meets a neighbour's long side), and nothing
+on a frame. The board's `.kicad_dru` lets only those holes come within 0.005 mm of a milled edge.
+The back silkscreen names each stick's upload. Demo windows (D1, D2) carry their launches, feeds,
+outline and keep-away and a placeholder footprint that `yapnr fab check` refuses
+(`FAB-PLACEHOLDER`); the optimizer's copper replaces it when a design passes.
 
 ```sh
 YAPNR_KICAD_CLI=<headless kicad-cli> python -m yapnr.rf.coupons generate \

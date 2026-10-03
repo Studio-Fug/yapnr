@@ -65,12 +65,10 @@ def git_describe() -> str:
 def tag_info(b: catalog.Board, revision: str, git: Optional[str] = None) -> Dict[str, str]:
     """The tag stick's text (board O): design §6."""
     st = stackups.get(b.stackup)
-    designs = {"M": "R1 here; D1 on O0-D; D2 on O0-W", "W": "R1t, D2", "D": "D1, R1"}
     return dict(
         title=f"yapnr Order 0 rev {revision} {b.name}",
         stackup=st.id.lower(),
         git=f"gen {git or git_describe()}",
-        designs=designs.get(b.upload, ""),
     )
 
 

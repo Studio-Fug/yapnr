@@ -59,19 +59,23 @@ def _n(x: float) -> str:
 @dataclass
 class Placed:
     stick: catalog.Stick
-    x0: float  # panel coordinates of the stick's left end (rot 90: x of its centre line)
-    yc: float  # panel y of the stick centre line (rot 90: y of its first end)
-    rot: int = 0  # 90: the stick's x axis runs along panel +y (board O's A04R)
+    x0: float  # panel x of the stick's first end (x = 0); rot 90, 270: of its centre line
+    yc: float  # panel y of the stick's centre line; rot 90, 270: of its first end
+    rot: int = 0  # the stick's x axis along panel +x (0), +y (90: board O's A04R), -x, -y
 
     def p(self, x: float, y: float) -> Tuple[float, float]:
         if self.rot == 90:
             return (self.x0 - y, self.yc + x)
+        if self.rot == 180:
+            return (self.x0 - x, self.yc - y)
+        if self.rot == 270:
+            return (self.x0 + y, self.yc - x)
         return (self.x0 + x, self.yc + y)
 
     @property
     def angle(self) -> float:
         """KiCad rotation (degrees, counter-clockwise on screen) of the stick's frame."""
-        return -90.0 if self.rot == 90 else 0.0
+        return {0: 0.0, 90: -90.0, 180: 180.0, 270: 90.0}[self.rot]
 
 
 class Frame:
@@ -154,6 +158,8 @@ class Writer:
         self.lds = {r: launch.design(x.design) for r, x in b.launches.items()}
         self.edge_clear = self.ld.board.keepback if self.ld else EDGE_CLEAR
         self.via_size = (launch.VIA_D, launch.VIA_DRILL) if self.ld else (VIA_D, VIA_DRILL)
+        self.via_log: List[Tuple[Tuple[float, float], tuple]] = []  # parallel to items.vias
+        self.silk_boxes: List[Tuple[str, Tuple[float, float, float, float]]] = []
 
     # primitives -----------------------------------------------------------------------------
 
@@ -167,6 +173,7 @@ class Writer:
 
     def via(self, p, net, key, remove_unused=False):
         extra = " (remove_unused_layers yes) (keep_end_layers yes)" if remove_unused else ""
+        self.via_log.append(((float(p[0]), float(p[1])), tuple(key)))
         self.items.vias.append(
             f"\t(via (at {_n(p[0])} {_n(p[1])}) (size {_n(self.via_size[0])}) (drill {_n(self.via_size[1])})"
             f' (layers "F.Cu" "B.Cu"){extra} (net "{net}"))'
@@ -194,9 +201,12 @@ class Writer:
     def mask_opening(self, pts, name):
         """An intentional solder-mask opening over a line and its ground (the mask-off sticks
         measure bare copper). It is a footprint (reference `name`) holding the F.Mask polygon,
-        so a `bridged_mask` rule in the board's .kicad_dru can be scoped to it alone."""
-        cx = sum(p[0] for p in pts) / len(pts)
-        cy = sum(p[1] for p in pts) / len(pts)
+        so a `bridged_mask` rule in the board's .kicad_dru can be scoped to it alone. Its anchor
+        is the polygon's lower-left corner on a 0.01 mm grid, not the centroid: a mean of
+        coordinates on the 0.1 µm output grid often falls half way and rounds differently
+        under another numpy (review F9)."""
+        cx = round(min(p[0] for p in pts), 2)
+        cy = round(min(p[1] for p in pts), 2)
         body = [
             f"\t\t(fp_poly (pts {_poly_pts([(x - cx, y - cy) for x, y in pts])})"
             f' (stroke (width 0) (type solid)) (fill yes) (layer "F.Mask") (uuid "{_u("mo", name)}"))'
@@ -205,18 +215,39 @@ class Writer:
         self.mask_rules.append(name)
 
     def gr_poly(self, layer, pts, key, fill=True, width=0.0):
+        if layer.endswith("SilkS"):
+            xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+            self.silk_boxes.append((layer, (min(xs), max(xs), min(ys), max(ys))))
         self.items.graphics.append(
             f"\t(gr_poly (pts {_poly_pts(pts)}) (stroke (width {_n(width)}) (type solid))"
             f' (fill {"yes" if fill else "no"}) (layer "{layer}") (uuid "{_u("poly", key)}"))'
         )
 
     def gr_line(self, a, b, layer, key, width=0.15):
+        if layer.endswith("SilkS"):
+            h = width / 2
+            box = (
+                min(a[0], b[0]) - h,
+                max(a[0], b[0]) + h,
+                min(a[1], b[1]) - h,
+                max(a[1], b[1]) + h,
+            )
+            self.silk_boxes.append((layer, box))
         self.items.graphics.append(
             f"\t(gr_line (start {_n(a[0])} {_n(a[1])}) (end {_n(b[0])} {_n(b[1])})"
             f' (stroke (width {_n(width)}) (type solid)) (layer "{layer}") (uuid "{_u("line", key)}"))'
         )
 
     def text(self, s, p, key, size=1.0, layer="F.SilkS", angle=0.0, justify="left"):
+        # upside-down text reads the right way up turned half a turn, justified the other way:
+        # it covers the same strip
+        angle = (angle + 180.0) % 360.0 - 180.0
+        if abs(abs(angle) - 180.0) < 1e-6:
+            angle = 0.0
+            flip = {"left": "right", "right": "left"}
+            justify = " ".join(flip.get(w, w) for w in justify.split())
+        if layer.endswith("SilkS"):
+            self.silk_boxes.append((layer, text_box(s, p, size, angle, justify)))
         j = f" (justify {justify})" if justify != "center" else ""
         self.items.graphics.append(
             f'\t(gr_text "{s}" (at {_n(p[0])} {_n(p[1])} {_n(angle)}) (layer "{layer}")'
@@ -224,14 +255,41 @@ class Writer:
             f" (thickness {_n(0.15 * size)})){j}))"
         )
 
+    def drop_vias_under_silk(self, kinds: Sequence[str], margin: float = 0.1) -> int:
+        """Remove the vias whose key names one of `kinds` (key[1], e.g. "st", plane stitching)
+        and whose pad comes within `margin` of a silkscreen item (front or back: the vias are
+        tented, and ink over a dimple prints badly; review F6). Returns how many went."""
+        r = self.via_size[0] / 2 + margin
+        keep_v, keep_l, n = [], [], 0
+        for text, (p, key) in zip(self.items.vias, self.via_log):
+            hit = len(key) > 1 and key[1] in kinds
+            hit = hit and any(
+                x0 - r <= p[0] <= x1 + r and y0 - r <= p[1] <= y1 + r
+                for _, (x0, x1, y0, y1) in self.silk_boxes
+            )
+            if hit:
+                n += 1
+                continue
+            keep_v.append(text)
+            keep_l.append((p, key))
+        self.items.vias[:] = keep_v
+        self.via_log[:] = keep_l
+        return n
+
     def net(self, name):
         if name not in self.items.nets:
             self.items.nets.append(name)
         return name
 
-    def footprint(self, name, at, rot, body: List[str], key, ref=None, attrs="smd"):
+    def footprint(self, name, at, rot, body: List[str], key, ref=None, attrs="smd", props=None):
+        """A footprint; `props` adds hidden fields (name -> value) after Reference and Value."""
         self.ref += 1
         r = ref or f"X{self.ref}"
+        extra = [
+            f'\t\t(property "{k}" "{v}" (at 0 0 {_n(rot)}) (layer "F.Fab") (hide yes)'
+            f' (uuid "{_u("prop", key, k)}") (effects (font (size 0.8 0.8) (thickness 0.12))))'
+            for k, v in (props or {}).items()
+        ]
         self.items.footprints.append(
             "\n".join(
                 [
@@ -241,8 +299,9 @@ class Writer:
                     f' (uuid "{_u("ref", key)}") (effects (font (size 0.8 0.8) (thickness 0.12))))',
                     f'\t\t(property "Value" "{name}" (at 0 0 {_n(rot)}) (layer "F.Fab") (hide yes)'
                     f' (uuid "{_u("val", key)}") (effects (font (size 0.8 0.8) (thickness 0.12))))',
-                    f"\t\t(attr {attrs})",
                 ]
+                + extra
+                + [f"\t\t(attr {attrs})"]
                 + body
                 + ["\t)"]
             )
@@ -486,6 +545,32 @@ class Writer:
 def label_width(text: str, size: float = 1.0) -> float:
     """Upper estimate of a KiCad stroke-font text's length (mm): 0.92 em per character."""
     return 0.92 * size * len(text)
+
+
+def text_width(text: str, size: float = 1.0) -> float:
+    """A safe upper bound of a KiCad stroke-font text's extent (mm), stroke included: 1.05 em
+    per character (KiCad 10 draws "O0-M A01" 8.15 mm long at 1 mm)."""
+    return 1.05 * size * len(text)
+
+
+def text_box(
+    text: str, p, size: float, angle: float, justify: str
+) -> Tuple[float, float, float, float]:
+    """Panel bounding box (x0, x1, y0, y1) of a gr_text: text_width long, 1.3 em tall about
+    its anchor (KiCad centres text vertically), justified and mirrored as given, turned by
+    `angle` (counter-clockwise on screen)."""
+    w = text_width(text, size)
+    words = justify.split()
+    x0, x1 = (-w, 0.0) if "right" in words else (0.0, w) if "left" in words else (-w / 2, w / 2)
+    if "mirror" in words:
+        x0, x1 = -x1, -x0
+    hh = 0.65 * size
+    a = math.radians(angle)
+    ca, sa = math.cos(a), math.sin(a)
+    pts = [(x * ca + y * sa, -x * sa + y * ca) for x in (x0, x1) for y in (-hh, hh)]
+    xs = [p[0] + u for u, _ in pts]
+    ys = [p[1] + v for _, v in pts]
+    return (min(xs), max(xs), min(ys), max(ys))
 
 
 def _profile_launch(b: catalog.Board, x_end: float, w_line: float, gap: float):
@@ -1364,15 +1449,17 @@ def _board_text_osh(st, b, wr, sticks, revision, info):
 def dru_text(mask_rules: Sequence[str], bites: bool = False) -> str:
     """Custom rules: each intentional mask opening may bridge its line and ground (the
     mask-off sticks measure bare copper); with `bites`, the mouse-bite holes (footprint MB1)
-    sit on the break-off edge (OSH Park's suggested tab pattern), so the hole-to-edge rule does
-    not apply to them. Nothing else is relaxed."""
+    sit on the sticks' break-off edges inside the tabs, the outer ones 0.015 mm from the
+    tab's milled sides (past the outline's stroke; OSH Park's tab pattern), so their
+    hole-to-edge clearance is lowered to 0.005 mm for them alone: a hole that touches or
+    crosses a milled edge (a bite on the wrong line: review F1) still fails. Nothing else is
+    relaxed."""
     out = ["(version 1)"]
     if bites:
         out.append(
-            '(rule "MB1: mouse-bite holes on the break-off edge (OSH Park tab pattern)"\n'
-            "\t(constraint physical_hole_clearance)\n"
-            "\t(condition \"A.memberOfFootprint('MB1') && B.Layer == 'Edge.Cuts'\")\n"
-            "\t(severity ignore))"
+            '(rule "MB1: mouse-bite holes inside the tabs (OSH Park tab pattern)"\n'
+            "\t(constraint physical_hole_clearance (min 0.005mm))\n"
+            "\t(condition \"A.memberOfFootprint('MB1') && B.Layer == 'Edge.Cuts'\"))"
         )
     for n in mask_rules:
         out.append(

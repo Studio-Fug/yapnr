@@ -104,6 +104,9 @@ filegroup(
         "pnr/reference_guard.py",
         "pnr/pad_identity.py",
         "pnr/via_coalesce.py",
+        # PNR_GLOSS=1 gloss/dekink/corridor pass (imported only with the flag set).
+        "pnr/gloss.py",
+        "pnr/gloss_geometry.py",
         "pnr/track_graph.py",
         "pnr/quality.py",
         "pnr/specctra.py",
@@ -611,6 +614,50 @@ py_test(
     data = glob(["pnr/**/*.py", "regression/*.py"]) + ["//hardware/tools:keyhole_region.py"],
     main = "tests/test_board_delete.py",
     deps = [":pnr"],
+)
+
+# PNR_GLOSS KiCad adapter and controller (pnr.gloss). The native tests build in-memory
+# boards (gloss_fixture) and run every worker in process; the end-to-end tests drive the
+# KiCad-python workers and kicad-cli one at a time (PNR_KICAD_PYTHON, PNR_KICAD_CLI). Both
+# need the headless KiCad: the KiCad lane.
+py_test(
+    name = "gloss_native_test",
+    size = "medium",
+    srcs = [
+        "tests/gloss_fixture.py",
+        "tests/test_gloss_native.py",
+    ],
+    imports = ["tests"],
+    main = "tests/test_gloss_native.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+    ],
+)
+
+py_test(
+    name = "gloss_e2e_test",
+    size = "large",
+    srcs = [
+        "tests/gloss_fixture.py",
+        "tests/test_gloss_e2e.py",
+    ],
+    imports = ["tests"],
+    main = "tests/test_gloss_e2e.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+    ],
 )
 
 # Code keys of the routing feedback (pnr.feedback.signals): formatting-only

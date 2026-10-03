@@ -206,6 +206,23 @@ elif case == 'release':
         kept += fanout_reserve.add_rule_area(b, fanout_reserve.PREFIX + 'U1.%d' % i, poly,
                                               [k.F_Cu] if i else list(b.GetEnabledLayers().CuStack()))
     assert fanout_reserve.release(b) == 3 and not list(b.Zones())
+elif case == 'gloss':
+    from types import SimpleNamespace
+    from pnr.gloss import apply_spec, uid
+    kink = [track((1, 1), (2, 1)), track((2, 1), (2, 2)), track((2, 2), (3, 2))]
+    split = [track((3, 2), (4, 2)), track((4, 2), (5, 2))]
+    kept += kink + split
+    model = SimpleNamespace(k=k, b=b, lid={'F.Cu': k.F_Cu}, by_uid={uid(t): t for t in kink + split})
+    ids = [uid(t) for t in kink + split]
+    nm = lambda x, y: (round(x * 1e6), round(y * 1e6))
+    merge = dict(step='normalize', layer='F.Cu', delete=[ids[4]], modify={ids[3]: (nm(3, 2), nm(5, 2))})
+    pull = dict(step='gloss', net='n', layer='F.Cu', old_nm=[nm(1, 1), nm(2, 1), nm(2, 2), nm(3, 2)],
+                new_nm=[nm(1, 1), nm(2, 2), nm(3, 2)], old_segments_nm=[],
+                ops=dict(remove=ids[:2], keep=[], width=200000))
+    for spec in (merge, pull):
+        done, alive = apply_spec(model, spec)
+        kept += alive
+    assert len(list(b.GetTracks())) == 4, len(list(b.GetTracks()))
 b.BuildConnectivity(); k.SaveBoard(out, b)
 del b; gc.collect()  # the board goes first, as when a worker rebinds or returns
 del kept; gc.collect()
@@ -238,7 +255,7 @@ class DeleteNativeTests(unittest.TestCase):
         return result, out
 
     def test_discarding_paths_match_remove_output_and_exit_cleanly(self):
-        for case in ("writeback", "cycle", "release"):
+        for case in ("writeback", "cycle", "release", "gloss"):
             with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
                 deleted, out = self.child("delete", case, directory)
                 self.assertEqual(deleted.returncode, 0, deleted.stderr[-2000:])

@@ -1531,11 +1531,12 @@ def writeback(
             counts = plane_connections(board, stack)
             sys.stderr.write("writeback: plane layer connections %s\n" % counts)
             for net, layers in sorted(counts.items()):
-                for layer, n in sorted(layers.items()):
-                    if not n:
+                for layer, joined in sorted(layers.items()):
+                    if not joined:
                         sys.stderr.write(
                             "writeback: warning: plane %s %s has no via or plated pad: "
-                            "the zone filler removes it as an island\n" % (layer, net)
+                            "it floats (KiCad keeps the fill and DRC does not flag it)\n"
+                            % (layer, net)
                         )
     pcbnew.SaveBoard(out_pcb, board)
     # Text pass: strip all (stale) Edge.Cuts — pcbnew reformats gr_lines into

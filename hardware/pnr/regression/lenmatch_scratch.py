@@ -159,6 +159,7 @@ def judge(case: Path, kicad_cli: str) -> dict:
         subprocess.run(
             [kicad_cli, "pcb", "drc", str(board), "--format", "json", "--output", str(out)],
             check=True,
+            timeout=600,  # a scratch board's DRC takes seconds; a hung kicad-cli must not
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )

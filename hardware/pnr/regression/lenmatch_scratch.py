@@ -9,16 +9,18 @@ is reversed between its two ends (a part facing the connector routes it with eve
 net crossing every other). ``lm-bus-corner`` turns the bus round a corner instead:
 the inner nets are the short ones and have no room for meanders until the bus is
 spaced out. ``bus-pair-4L-ps`` is the crossing board on
-the 4L-SGPS stack with the budgets in picoseconds (judged by the engine's audit: the
-ladder's KiCad rules carry millimetres only).
+the 4L-SGPS stack with the budgets in picoseconds only (judged by the engine's audit:
+KiCad 10.0.6's ``kicad-cli pcb drc`` reads every delay as 0 ps, KiCad issue 23868, so
+it cannot judge a time-domain rule).
 
     python lenmatch_scratch.py write OUT.json          # the design list for run.py --design-json
     python lenmatch_scratch.py judge CASE_DIR --kicad-cli PATH [--json OUT]
 
 ``judge`` is KiCad's DRC on a copy of the routed board with one ``skew`` rule per pair
-(``inDiffPair``) and per group (its net names), each at the design's budget in mm, and
-reports the violations, each net's KiCad length and the engine's own length report
-(``pnr-report.json``). The rung judge itself (``run.py``) is unchanged.
+(``inDiffPair``) and per group (its net names) that has a budget in mm, and reports the
+violations, each net's KiCad length and the engine's own length report
+(``pnr-report.json``); a set with a budget in ps is reported from the engine's report
+only (``engine_only``). The rung judge itself (``run.py``) is unchanged.
 """
 
 import argparse
@@ -108,8 +110,8 @@ def bus_pair_ps():
     spec = with_stackup(bus_pair(), "4L-SGPS")
     spec["name"] = "lm-bus-pair-4L-ps"
     cons = spec["constraints"]
-    cons["length_match"] = [dict(name="bus", nets=list(BUS), tolerance_mm=0.5, tolerance_ps=3.0)]
-    cons["diff_pair"] = [dict(name="d", p="DP", n="DN", skew_mm=1.0, skew_ps=5.0)]
+    cons["length_match"] = [dict(name="bus", nets=list(BUS), tolerance_ps=3.0)]
+    cons["diff_pair"] = [dict(name="d", p="DP", n="DN", skew_ps=5.0)]
     return spec
 
 
@@ -118,18 +120,23 @@ def designs():
 
 
 def judge_rules(spec) -> str:
-    """KiCad custom rules: one skew rule per pair and per group, in mm."""
+    """KiCad custom rules: one skew rule per pair and per group with a budget in mm."""
     rules = ["(version 1)"]
     for pair in spec["constraints"].get("diff_pair") or []:
+        if pair.get("skew_ps") is not None:
+            continue
         rules.append(
             '(rule "pair %s skew"\n  (condition "A.inDiffPair(\'%s\')")\n'
-            "  (constraint skew (max %gmm)))" % (pair["name"], pair["p"][:-1], pair["skew_mm"])
+            "  (constraint skew (max %gmm)))"
+            % (pair["name"], pair["p"][:-1], pair.get("skew_mm", 0.5))
         )
     for group in spec["constraints"].get("length_match") or []:
+        if group.get("tolerance_ps") is not None:
+            continue
         names = " || ".join("A.NetName == '%s'" % n for n in group["nets"])
         rules.append(
             '(rule "group %s skew"\n  (condition "%s")\n  (constraint skew (max %gmm)))'
-            % (group["name"], names, group["tolerance_mm"])
+            % (group["name"], names, group.get("tolerance_mm", 1.0))
         )
     return "\n".join(rules) + "\n"
 
@@ -165,14 +172,31 @@ def judge(case: Path, kicad_cli: str) -> dict:
     pnr = json.loads((case / "pnr-report.json").read_text())
     sets = []
     for pair in spec["constraints"].get("diff_pair") or []:
-        sets.append((pair["name"], [pair["p"], pair["n"]], pair["skew_mm"]))
+        sets.append(
+            (pair["name"], [pair["p"], pair["n"]], pair.get("skew_mm"), pair.get("skew_ps"))
+        )
     for group in spec["constraints"].get("length_match") or []:
-        sets.append((group["name"], group["nets"], group["tolerance_mm"]))
-    kicad = {}
-    for name, members, budget in sets:
+        sets.append(
+            (group["name"], group["nets"], group.get("tolerance_mm"), group.get("tolerance_ps"))
+        )
+    kicad, engine_only = {}, {}
+    engine = {r["name"]: r for r in pnr.get("length_tuning") or []}
+    for name, members, budget_mm, budget_ps in sets:
         got = [lengths.get(n) for n in members]
         spread = None if None in got else round(max(got) - min(got), 4)
-        kicad[name] = dict(budget_mm=budget, spread_mm=spread)
+        if budget_ps is None:
+            kicad[name] = dict(
+                budget_mm=budget_mm if budget_mm is not None else 1.0, spread_mm=spread
+            )
+        else:
+            # No KiCad judge for a time budget (module docstring): the engine's audit.
+            entry = engine.get(name, {})
+            engine_only[name] = dict(
+                budget_ps=budget_ps,
+                spread_ps=entry.get("spread"),
+                status=entry.get("status"),
+                kicad_spread_mm=spread,
+            )
     return dict(
         case=case.name,
         skew_violations=len(skews),
@@ -182,6 +206,7 @@ def judge(case: Path, kicad_cli: str) -> dict:
         ),
         unconnected=len(drc["unconnected_items"]),
         kicad=kicad,
+        engine_only=engine_only,
         lengths_mm=lengths,
         engine=pnr.get("length_tuning"),
     )

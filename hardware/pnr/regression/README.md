@@ -180,7 +180,10 @@ SOIC in reverse pin order, and `lm-bus-pair-4L-ps`), and the bus turning a corne
 an SOIC fixed above and to the right of the connector (`lm-bus-corner`). `run.py --design-json OUT.json` offers
 any such list to `--case`. `lenmatch_scratch.py judge CASE_DIR --kicad-cli PATH`
 then runs KiCad's DRC on a copy of the routed board with a `skew` rule per pair and
-per group and reports KiCad's lengths beside the engine's `length_tuning` report.
+per group with a budget in mm and reports KiCad's lengths beside the engine's
+`length_tuning` report. A budget in ps has no KiCad judge: KiCad 10.0.6's
+`kicad-cli pcb drc` reads every delay as 0 ps (KiCad issue 23868), so those sets are
+reported from the engine's audit only.
 
 Performance opt-ins can be tested explicitly with `--packed-maze` and
 `--batched-wirelength`. They are recorded in provenance; ambient variables are

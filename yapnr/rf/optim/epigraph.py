@@ -25,8 +25,13 @@ raised curvature, so calling again at the same point continues the inner iterati
 `trust_step` is the other safeguard, adaptive move limits with a step test on the epigraph
 value itself (a trust region in the max-norm, as in move-limit strategies for MMA): the
 subproblem is solved with the current move; the new point is accepted when its true epigraph
-value is at most t_k + slack·max(1, |t_k|), else the move halves and the subproblem is solved
-again from x_k with the same asymptotes. The test is on the maximum, not on every constraint
+value is at most t_ref + slack·max(1, |t_ref|), t_ref = t_k or (with `reference`) the smaller
+of t_k and a given value such as the best t of the β epoch, else the move halves and the
+subproblem is solved again from x_k with the same asymptotes. Measured from t_k the slack bounds
+each step's rise but not their sum: in round 2's divider and combiner half the adaptive steps
+were accepted with t rising, and t crept from 0.03 to 0.11 over five steps; measured from the
+epoch's best, every accepted point stays within the slack of it. Neither is a descent
+guarantee (the conservative variant is). The test is on the maximum, not on every constraint
 (which at high β the conservative variant rarely satisfies), so near-binary designs whose
 boundary pixel flips break a line are refused at the price of one forward run per refusal,
 while ordinary steps cost nothing extra (their forward runs are the next iteration's).
@@ -152,14 +157,17 @@ class Epigraph:
         max_inner: int = 4,
         slack: float = 0.05,
         move_min: float = 1e-3,
+        reference: float | None = None,
         xmin=0.0,
         xmax=1.0,
     ) -> TrustResult:
         """One adaptive-move step (see the module doc). `evaluate(x̂)` returns (f, g) at x̂
-        (no gradients). When every trial is refused, x stays (`accepted` False) and the state
+        (no gradients); `reference` (e.g. the best t of the epoch) lowers the value the slack is
+        measured from. When every trial is refused, x stays (`accepted` False) and the state
         is unchanged; the caller keeps the halved move for the next call."""
         t = float(np.max(f))
-        limit = t + slack * max(1.0, abs(t))
+        t_ref = t if reference is None else min(t, float(reference))
+        limit = t_ref + slack * max(1.0, abs(t_ref))
         trials = []
         mv = float(move)
         step = None

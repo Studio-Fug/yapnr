@@ -155,6 +155,23 @@ class EpigraphTest(unittest.TestCase):
         self.assertLess(ts[-1], -0.81)
         self.assertGreater(refused, 3)
 
+    def test_adaptive_slack_from_the_best(self):
+        # A trial point 0.04 above t_k: within the slack (0.05) of t_k, so accepted when the
+        # slack is measured from t_k, and refused (every trial, x kept) when it is measured
+        # from an epoch's best t 0.5 lower (`optimizer.trust_reference: best`).
+        epi = Epigraph(2, settings=MMASettings(move=0.2, epsimin=1e-9))
+        x = np.array([0.1, 0.9])
+        f, df = quads(x)
+        up = float(np.max(f)) + 0.04
+        kw = dict(move=0.2, evaluate=lambda xh: (np.array([up]), None), slack=0.05)
+        tr = epi.trust_step(x, f, df, MMAState(), **kw)
+        self.assertTrue(tr.step.accepted)
+        self.assertEqual(tr.trials, 1)
+        tr = epi.trust_step(x, f, df, MMAState(), reference=float(np.max(f)) - 0.5, **kw)
+        self.assertFalse(tr.step.accepted)
+        np.testing.assert_array_equal(tr.step.x, x)
+        self.assertGreater(tr.trials, 1)
+
     def test_lengthscale_style_constraint(self):
         # min max_k |x − c_k|² subject to x_0 ≥ 0.6 (as g = 0.6 − x_0 ≤ 0).
         epi = Epigraph(2, settings=MMASettings(move=0.2, epsimin=1e-9))

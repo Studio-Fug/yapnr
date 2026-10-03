@@ -224,6 +224,11 @@ class OptimizerSpec:
     # again up to the schedule's. Off by default.
     adaptive_move: bool = False
     trust_slack: float = 0.05
+    # What the slack is measured from: "current", t_k (round 2's runs: steps may each raise t
+    # by the slack, so t can creep up over an epoch), or "best", the best t of the β epoch so
+    # far, with the slack scaled by β_a/β from the first adaptive β_a on (accepted points stay
+    # within a shrinking slack of the epoch's best; design §24). Neither guarantees descent.
+    trust_reference: str = "current"
     # With `adaptive_move`, the β from which the adaptive steps apply (epochs below it take plain
     # MMA steps at the schedule's move): free exploration while the design is gray, steps that
     # keep the epigraph value once it is nearly binary. 0: every epoch.
@@ -277,6 +282,7 @@ _OPTIMIZER_NEW = {
     "seed": None,
     "adaptive_move": False,
     "trust_slack": 0.05,
+    "trust_reference": "current",
     "adaptive_from_beta": 0.0,
     "robust_from_beta": 0.0,
     "epoch_objectives": [],
@@ -606,6 +612,8 @@ class Spec:
         ref = self.optimizer.reference_ohm
         if ref is not None and (len(self.ports) != 1 or not ref > 0):
             raise ValueError("optimizer.reference_ohm: a positive reference, one-port specs only")
+        if self.optimizer.trust_reference not in ("current", "best"):
+            raise ValueError("optimizer.trust_reference must be 'current' or 'best'")
         fs = self.optimizer.epoch_frequency_scale
         if fs and (len(fs) != len(self.optimizer.betas) or not all(0.5 < f < 2.0 for f in fs)):
             raise ValueError("optimizer.epoch_frequency_scale: one factor in (0.5, 2) per β epoch")

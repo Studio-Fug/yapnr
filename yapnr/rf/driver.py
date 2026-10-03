@@ -378,6 +378,11 @@ class Optimizer:
         if opt.adaptive_move and beta >= opt.adaptive_from_beta:
             base = sch.move_for(st.epoch)
             mv = base if st.move is None else min(st.move, base)
+            slack, ref = opt.trust_slack, None
+            if opt.trust_reference == "best":
+                # The epoch's best t so far, and a slack shrinking as β grows (design §24).
+                ref = min(st.t_epoch) if st.t_epoch else None
+                slack *= min(1.0, max(opt.adaptive_from_beta, sch.betas[0]) / beta)
             trust = epi.trust_step(
                 st.x,
                 values,
@@ -388,7 +393,8 @@ class Optimizer:
                 move=mv,
                 evaluate=true_values,
                 max_inner=opt.max_inner,
-                slack=opt.trust_slack,
+                slack=slack,
+                reference=ref,
             )
             step = trust.step
             if not step.accepted:

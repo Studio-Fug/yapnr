@@ -259,15 +259,40 @@ def _score(comp, fields, target, terminals):
     return score + 0.1 * air
 
 
-def _swaps(g, posed, scored, terminals, rules, tracks, vias, pitch, tried, temperature, limit=2):
-    """Swap proposals among the parts :func:`propose` scored: pairs with courtyard
-    areas within a factor of two, legal when exchanged (``posed``), ranked by the
-    endpoint screen; the best ``limit`` are scored with fields rebuilt without both."""
+def _shifted(terminals, shifts):
+    """``terminals`` ({net: [(ref, xy)]}) with the pins of each ref in ``shifts``
+    ({ref: (dx, dy)}) moved by its shift."""
+    return {
+        net: [
+            (ref, (xy[0] + shifts[ref][0], xy[1] + shifts[ref][1]) if ref in shifts else xy)
+            for ref, xy in pins
+        ]
+        for net, pins in terminals.items()
+    }
+
+
+def _swaps(
+    g, posed, scored, terminals, rules, tracks, vias, pitch, tried, temperature, limit=2, held=()
+):
+    """Swap proposals among the parts :func:`propose` scored (except ``held`` ones:
+    row and line members, macros): pairs with courtyard areas within a factor of two,
+    legal when exchanged (``posed``), ranked by the endpoint screen; the best
+    ``limit`` are scored with fields rebuilt without both. Before and after are
+    costed alike: each part by :func:`_score` in the fields without its partner, its
+    peers' pins where they are (after: the partner's at its new centre)."""
     if posed is None or len(scored) < 2:
         return []
     from .geometry import courtyard_rect
 
-    refs = sorted(scored)
+    refs = sorted(r for r in scored if r not in held)
+
+    def swapped(ca, cb):
+        pa, pb = ca.pos, cb.pos
+        return _shifted(
+            terminals,
+            {ca.ref: (pb[0] - pa[0], pb[1] - pa[1]), cb.ref: (pa[0] - pb[0], pa[1] - pb[1])},
+        )
+
     pairs = []
     for i, a in enumerate(refs):
         for b in refs[i + 1 :]:
@@ -278,8 +303,9 @@ def _swaps(g, posed, scored, terminals, rules, tracks, vias, pitch, tried, tempe
             if (a, b, "swap") in tried:
                 continue
             pa, pb = ca.pos, cb.pos
+            after = swapped(ca, cb)
             gain = sum(
-                _score(c, {}, here, terminals) - _score(c, {}, there, terminals)
+                _score(c, {}, here, terminals) - _score(c, {}, there, after)
                 for c, here, there in ((ca, pa, pb), (cb, pb, pa))
             )
             ca.pos, cb.pos = pb, pa
@@ -291,14 +317,23 @@ def _swaps(g, posed, scored, terminals, rules, tracks, vias, pitch, tried, tempe
     for _, a, b in sorted(pairs)[:limit]:
         ca, cb = g.component(a), g.component(b)
         pa, pb = ca.pos, cb.pos
-        cost = 0.0
-        for comp, target, partner in ((ca, pb, b), (cb, pa, a)):
+        after_terminals = swapped(ca, cb)
+        before = after = 0.0
+        for comp, here, target, partner in ((ca, pa, pb, b), (cb, pb, pa, a)):
             fields = _fields(g, comp, rules, tracks, vias, pitch, without=(partner,))
-            cost += _score(comp, fields, target, terminals)
-        before = scored[a][1] + scored[b][1]
-        if cost < before - 1e-6 or temperature > 0:
+            before += _score(comp, fields, here, terminals)
+            after += _score(comp, fields, target, after_terminals)
+        if after < before - 1e-6 or temperature > 0:
             out.append(
-                (before - cost, a, pb, before, cost, (a, b, "swap"), [(a, pb, None), (b, pa, None)])
+                (
+                    before - after,
+                    a,
+                    pb,
+                    before,
+                    after,
+                    (a, b, "swap"),
+                    [(a, pb, None), (b, pa, None)],
+                )
             )
     return out
 
@@ -355,11 +390,15 @@ def propose(
     legal = translation_checker(g, constraints)
     from .geometry import set_component_side
     from .metrics import pose_checker
-    from .sides import opposite
+    from .sides import macro, opposite
     from .sides import plan as side_plan
 
     plan = side_plan(g, constraints, rules)
     posed = pose_checker(g, constraints) if plan.active else None
+    # Swaps move two parts by pose_checker, which does not re-check rows and lines.
+    unswappable = {
+        r for con in constraints.constraints if con.kind in ("line_group", "row") for r in con.refs
+    } | {c.ref for c in g.components if macro(c)}
     scored = {}  # ref -> (original centre, baseline heavy cost), for swaps
     terminals = {}
     for c in g.components:
@@ -526,26 +565,48 @@ def propose(
                     screen="Layered routing proxy plus .1 endpoint Manhattan distance; fixed face/orientation",
                 ),
             )
-    choices += _swaps(g, posed, scored, terminals, rules, tracks, vias, pitch, tried, temperature)
-    if not choices:
-        return None
-    # Compare relative improvements across components with different pin counts.
-    # Zero temperature retains the original deterministic greedy behavior.
-    chosen = (
-        choose_cost([(v[4] - v[3]) / max(1.0, v[3]) for v in choices], temperature, rng)
-        if temperature > 0
-        else max(range(len(choices)), key=lambda i: (choices[i][0], choices[i][1], choices[i][2]))
+    choices += _swaps(
+        g,
+        posed,
+        scored,
+        terminals,
+        rules,
+        tracks,
+        vias,
+        pitch,
+        tried,
+        temperature,
+        held=unswappable,
     )
-    gain, ref, pos, before, after, identity, moves = choices[chosen]
-    tried.add(identity)
-    olds = {r: (g.component(r).pos, g.component(r).side) for r, _, _ in moves}
-    for r, xy, side in moves:
-        g.component(r).pos = xy
-        if side is not None:
+    while True:
+        if not choices:
+            return None
+        # Compare relative improvements across components with different pin counts.
+        # Zero temperature retains the original deterministic greedy behavior.
+        chosen = (
+            choose_cost([(v[4] - v[3]) / max(1.0, v[3]) for v in choices], temperature, rng)
+            if temperature > 0
+            else max(
+                range(len(choices)), key=lambda i: (choices[i][0], choices[i][1], choices[i][2])
+            )
+        )
+        gain, ref, pos, before, after, identity, moves = choices[chosen]
+        tried.add(identity)
+        olds = {r: (g.component(r).pos, g.component(r).side) for r, _, _ in moves}
+        for r, xy, side in moves:
+            g.component(r).pos = xy
+            if side is not None:
+                set_component_side(g.component(r), side)
+        bad = hard_violations(g, constraints)
+        if not any(bad.values()):
+            break
+        if len(moves) == 1 and moves[0][2] is None:
+            raise AssertionError(bad)  # a translation: translation_checker disagrees
+        # A flip or swap that breaks a rule pose_checker does not know: undo, drop it.
+        for r, (xy, side) in olds.items():
+            g.component(r).pos = xy
             set_component_side(g.component(r), side)
-    bad = hard_violations(g, constraints)
-    if any(bad.values()):
-        raise AssertionError(bad)
+        choices.pop(chosen)
     report = PlacementReport(width, height, hpwl(graph), hpwl(g), **bad)
     return (
         g,

@@ -509,6 +509,75 @@ class SearchTest(unittest.TestCase):
         self.assertFalse(any(hard_violations(new, c).values()))
         self.assertEqual(g.component("A").side, "top")
 
+    def test_relocation_swap_costs_before_and_after_alike(self):
+        from pnr.place.metrics import pose_checker as checker
+        from pnr.place.relocate import _swaps
+
+        def terminals(g):
+            from pnr.place.geometry import pin_positions
+
+            out = {}
+            for comp in g.components:
+                for pad, (_, xy) in zip(comp.pads, pin_positions(comp)):
+                    out.setdefault(pad.net, []).append((comp.ref, xy))
+            return out
+
+        # Two alike parts joined only to each other: exchanging them changes nothing,
+        # so no swap is proposed (costed apart, the after side lost the shared nets).
+        r1 = smd("R1", ["p", "q"], (2, 1.2), (6, 5))
+        r2 = smd("R2", ["p", "q"], (2, 1.2), (14, 5))
+        g = board(r1, r2, outline=(20, 10))
+        c = rules(g, "double", outline=(20, 10))
+        scored = {"R1": None, "R2": None}
+        args = (terminals(g), {}, [], [], 1.0, set(), 0.0)
+        self.assertEqual(_swaps(g, checker(g, c), scored, *args), [])
+        # A crossing: the swap is proposed and its gain is real.
+        g, c = DetailMovesTest().crossed()
+        scored = {"P1": None, "P2": None}
+        out = _swaps(g, checker(g, c), scored, terminals(g), {}, [], [], 1.0, set(), 0.0)
+        self.assertEqual(len(out), 1)
+        gain, _, _, before, after, identity, moves = out[0]
+        self.assertGreater(gain, 10)
+        self.assertAlmostEqual(gain, before - after)
+        self.assertEqual(identity, ("P1", "P2", "swap"))
+        # Row members are not swapped (pose_checker does not re-check rows).
+        held = _swaps(
+            g, checker(g, c), scored, terminals(g), {}, [], [], 1.0, set(), 0.0, held={"P1"}
+        )
+        self.assertEqual(held, [])
+
+    def test_relocation_drops_a_flip_a_full_check_rejects(self):
+        from pnr.place import relocate
+
+        a = smd("A", ["n"], (1, 1), (6, 3))
+        b = smd("B", ["n"], (1, 1), (3, 3))
+        cover = smd("K", [], (4, 4), (3, 3))
+        set_component_side(b, "bottom")
+        g = board(a, b, cover, outline=(30, 20))
+        c = rules(
+            g,
+            "double",
+            outline=(30, 20),
+            fixed=dict(B=dict(at=[3, 3], side="bottom"), K=dict(at=[3, 3], side="top")),
+        )
+        real = relocate.hard_violations
+        rejected = []
+
+        def unknown_rule(graph, constraints, *args, **kwargs):
+            # A rule pose_checker does not know: A may not be on the bottom.
+            out = dict(real(graph, constraints, *args, **kwargs))
+            out["region_outside"] = ["A"] if graph.component("A").side == "bottom" else []
+            rejected.extend(out["region_outside"])
+            return out
+
+        with mock.patch.object(relocate, "hard_violations", side_effect=unknown_rule):
+            result = relocate.propose(g, c, {}, [], pitch=1.0, max_parts=1)
+        self.assertEqual(rejected, ["A"])  # the flip was chosen, then dropped
+        if result is not None:
+            new, report, event = result
+            self.assertEqual(new.component("A").side, "top")
+            self.assertNotIn("side", event["moves"][0])
+
     @unittest.skipUnless(
         importlib.util.find_spec("pnr.mc") is not None, "pnr.mc is not in this build"
     )

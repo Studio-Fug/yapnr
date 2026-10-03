@@ -376,7 +376,12 @@ def doctor(config: Config, cloud: Gcloud, digest: Optional[str] = None) -> List[
         checks.append({"check": name, "ok": ok, "detail": detail})
 
     for name in (gcp.runs_bucket, gcp.inputs_bucket):
-        run("bucket %s" % name, ["storage", "buckets", "describe", "gs://%s" % name])
+        # An object listing, not `buckets describe`: the submit account holds object roles on the
+        # buckets (objectAdmin), not storage.buckets.get, and object access is what it needs.
+        run(
+            "bucket %s" % name,
+            ["storage", "objects", "list", "gs://%s/" % name, "--limit=1"],
+        )
     frozen = GcsStore(gcp.runs_bucket, cloud)
     try:
         fired = frozen.exists("control/frozen")

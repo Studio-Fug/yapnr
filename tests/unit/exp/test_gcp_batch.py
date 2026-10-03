@@ -283,6 +283,10 @@ class GcpBatchTest(unittest.TestCase):
         names = [c["check"] for c in checks]
         self.assertIn("budget kill switch not fired", names)
         self.assertTrue(all(c["ok"] for c in checks), checks)
+        # Bucket access is checked with an object listing the submit account is allowed to make.
+        listings = [c for c in cloud.calls if c[1:4] == ["storage", "objects", "list"]]
+        self.assertEqual(len(listings), 2, cloud.calls)
+        self.assertFalse(any(c[1:4] == ["storage", "buckets", "describe"] for c in cloud.calls))
 
     def test_unknown_region_in_the_table_is_priced_conservatively(self):
         table = cost.PriceTable.load()

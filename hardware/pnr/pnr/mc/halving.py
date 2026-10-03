@@ -260,8 +260,9 @@ def _place_impl(
                 initial_positions=start.get("positions"),
                 initial_rotations=start.get("rotations"),
                 pair_weights=pair_weights,
+                **({"initial_sides": start["sides"]} if start.get("sides") else {}),
             )
-        errors = _hard_and_source_errors(placed, source, constraints)
+        errors = _hard_and_source_errors(placed, source, constraints, rules)
         from pnr.place.metrics import hard_violations
 
         flat_violations = {k: v for k, v in hard_violations(placed, constraints).items() if v}
@@ -302,7 +303,7 @@ def _starts(inputs, constraints_path, n, seed):
     constraints = preserve_source_locks(graph, constraints)
     source = _prepared_source(graph, constraints, rules)
     cfg = InitialPoolConfig(starts=n, route_finalists=1, proxy_budget=n)
-    starts = initial_starts(source, constraints, cfg, seed=seed, orient=True)
+    starts = initial_starts(source, constraints, cfg, seed=seed, orient=True, rules=rules)
     for s in starts:
         s["id"] = "p%03d" % int(s["id"].split("-")[1])
     return starts
@@ -787,7 +788,7 @@ def _generations(a, ctx):
     def load_parent(r):
         cand = out / "cand" / r["id"]
         pose, src = parent_pose(cand / "placed.json", round_dir(r) / "evaluated-placed.json")
-        if src == "evaluated" and source_errors(pose, source, con):
+        if src == "evaluated" and source_errors(pose, source, con, rules):
             pose, src = parent_pose(cand / "placed.json")
         return pose, src
 

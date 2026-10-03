@@ -24,7 +24,7 @@ import re
 import sys
 from typing import Dict, List, Optional
 
-from pnr.graph import SIDE_BOTTOM, BoardGraph
+from pnr.graph import SIDE_BOTTOM, BoardGraph, footprint_point
 
 _EDGE_LAYER = '(layer "Edge.Cuts")'
 _GR_TOKEN = re.compile(r"\(gr_(?:line|rect|poly|arc|curve)\b")
@@ -1357,10 +1357,9 @@ def apply_copper_keepouts(board, graph, rules, height):
     """Recreate all-layer copper restrictions in final placement coordinates.
 
     Atopile 0.15.8 strips footprint rule areas; keeping this in compiled layout
-    rules makes it survive that generation step and the Specctra export.
+    rules makes it survive that generation step and the Specctra export. The rule
+    area follows the part like its pads do (:func:`pnr.graph.footprint_point`).
     """
-    import math
-
     import pcbnew
 
     for zone in list(board.Zones()):
@@ -1370,8 +1369,6 @@ def apply_copper_keepouts(board, graph, rules, height):
     for spec in rules.get("copper_keepouts", []):
         comp = graph.component(spec["ref"])
         x0, y0, x1, y1 = spec["rect_mm"]
-        angle = math.radians(comp.rot)
-        co, si = math.cos(angle), math.sin(angle)
         zone = pcbnew.ZONE(board)
         zone.SetIsRuleArea(True)
         zone.SetZoneName("PNR keepout:" + spec["name"])
@@ -1384,11 +1381,7 @@ def apply_copper_keepouts(board, graph, rules, height):
         polygon = zone.Outline()
         polygon.NewOutline()
         for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1)):
-            if comp.side == SIDE_BOTTOM:
-                x = -x
-            polygon.Append(
-                frame.point(comp.pos[0] + co * x - si * y, comp.pos[1] + si * x + co * y)
-            )
+            polygon.Append(frame.point(*footprint_point(comp, x, y)))
         board.Add(zone)
     return len(rules.get("copper_keepouts", []))
 

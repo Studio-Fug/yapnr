@@ -80,7 +80,13 @@ def load(root):
     addresses = {p["ref"]: p["address"] for p in spec["parts"] if p.get("address")}
     for comp in graph.components:
         comp.address = addresses.get(comp.ref, comp.address)
-    constraints = compile_constraints(spec["constraints"], graph.refs)
+    # The rung's side policy (``sides: double``) as the engine's ``board.sides``, as
+    # route_case.py maps it (hierarchical blocks and their macros stay on their side).
+    from pnr.place.sides import with_policy
+
+    constraints = compile_constraints(
+        with_policy(spec["constraints"], spec.get("sides")), graph.refs
+    )
     # Route under the fab profile writeback stamps and KiCad judges, as route_case.py does.
     rules = apply_rules(compile_routing_rules(constraints, [n.name for n in graph.nets]))
     declared = set((spec.get("via_policy") or {}).get("allowed") or []) - {"through"}

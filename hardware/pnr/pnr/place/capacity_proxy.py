@@ -13,6 +13,7 @@ from collections import defaultdict
 import numpy as np
 
 from pnr.electrical import net_policy
+from pnr.graph import footprint_point
 
 from .geometry import courtyard_rect, pad_rects, pin_positions
 
@@ -120,14 +121,7 @@ class CapacityGraph:
         for v in rules.get("copper_keepouts", []):
             c = graph.component(v["ref"])
             x0, y0, x1, y1 = v["rect_mm"]
-            a = math.radians(c.rot)
-            pts = [
-                (
-                    c.pos[0] + x * math.cos(a) - y * math.sin(a),
-                    c.pos[1] + x * math.sin(a) + y * math.cos(a),
-                )
-                for x, y in [(x0, y0), (x0, y1), (x1, y0), (x1, y1)]
-            ]
+            pts = [footprint_point(c, x, y) for x, y in [(x0, y0), (x0, y1), (x1, y0), (x1, y1)]]
             box(
                 range(len(self.layers)),
                 min(x for x, y in pts),

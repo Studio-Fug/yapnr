@@ -32,6 +32,9 @@ from pnr.length_model import attach_board
 from pnr.mc.halving import _rank_key
 from pnr.place.initial_pool import _route_metrics, route_rank
 from pnr.place.metrics import hpwl
+from pnr.place.sides import plan as side_plan
+from pnr.place.sides import report as sides_report
+from pnr.place.sides import with_policy
 from pnr.route.detail.exact_route import exact_mode
 from pnr.route.detail.native_maze import status as maze_status
 from pnr.route.detail.router import route_board
@@ -42,7 +45,10 @@ seed = int(sys.argv[2])
 spec = json.loads((root / "design.json").read_text())
 mc = spec["mc"]
 graph = BoardGraph.from_json((root / "source-graph.json").read_text())
-constraints = compile_constraints(spec["constraints"], graph.refs)
+# The rung's side policy (``sides: double``) as the engine's ``board.sides``, for this
+# driver and for halving's workers (constraints.yaml), as route_case.py maps it.
+doc = with_policy(spec["constraints"], spec.get("sides"))
+constraints = compile_constraints(doc, graph.refs)
 rules = apply_rules(compile_routing_rules(constraints, [n.name for n in graph.nets]))
 # As route_case.py: the rung's via policy on its board (none: through vias only).
 via_policy = board_policy(spec.get("via_policy"), root / "source.kicad_pcb", rules, graph=graph)
@@ -57,7 +63,7 @@ inputs = root / "mc-inputs"
 inputs.mkdir(exist_ok=True)
 (inputs / "graph.json").write_text((root / "source-graph.json").read_text())
 (inputs / "rules.json").write_text(json.dumps(rules, indent=2))
-(inputs / "constraints.yaml").write_text(yaml.safe_dump(spec["constraints"], sort_keys=True))
+(inputs / "constraints.yaml").write_text(yaml.safe_dump(doc, sort_keys=True))
 out = root / "mc"
 started = time.monotonic()
 cmd = [
@@ -175,6 +181,7 @@ unresolved = sorted(set(route.result.unrouted) - set(route.deferred_nets))
             deferred=sorted(route.deferred_nets),
             unresolved=unresolved,
             mc=dict(selected=best["id"], finalists=[c["id"] for c in evaluated]),
+            sides=sides_report(best["graph"], side_plan(graph, constraints, rules)),
             escape_diagnostics=getattr(route, "escape_diagnostics", {}),
             maze_kernel=maze_status(),
             exact_separation=exact_mode(),

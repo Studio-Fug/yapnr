@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Set, Tuple
 
 from pnr.constraints import CompiledConstraints
-from pnr.graph import BoardGraph
+from pnr.graph import BoardGraph, footprint_point
 
 from ...place.geometry import Rect, outline_size, pad_rects
 from .escape import plan_escapes, trapped_access_sites
@@ -313,13 +313,8 @@ def _mark_copper_keepouts(grid: RouteGrid, graph: BoardGraph, rules: Optional[di
     for spec in rules.get("copper_keepouts", []):
         comp = graph.component(spec["ref"])
         x0, y0, x1, y1 = spec["rect_mm"]
-        angle = math.radians(comp.rot)
-        co, si = math.cos(angle), math.sin(angle)
-        points = []
-        for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1)):
-            if comp.side == "bottom":
-                x = -x  # Keep identical to writeback's rule-area transform.
-            points.append((comp.pos[0] + co * x - si * y, comp.pos[1] + si * x + co * y))
+        # The same transform as writeback's rule area (mirrored with the pads).
+        points = [footprint_point(comp, x, y) for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))]
         xs, ys = zip(*points)
         grid.block_region(
             Rect(

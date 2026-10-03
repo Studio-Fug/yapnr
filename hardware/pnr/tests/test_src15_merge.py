@@ -324,7 +324,9 @@ class LegalizeCompositionTest(unittest.TestCase):
             if caller in ("available_pose", "starves"):
                 self.assertEqual((reserves, avoid), (False, ()), caller)
             else:
-                self.assertEqual((caller, reserves), ("legalize", True))
+                # The legalizer's own slot search (its nested ``search``).
+                self.assertIn(caller, ("legalize", "search"))
+                self.assertTrue(reserves)
                 self.assertTrue(avoid)  # the macro's mount side(s)
 
 

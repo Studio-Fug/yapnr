@@ -58,10 +58,12 @@ def prepared(graph, constraints, rules):
     return con, _prepared_source(graph, con, rules)
 
 
-def source_errors(candidate, source, constraints):
+def source_errors(candidate, source, constraints, rules=None):
     from pnr.place.initial_pool import _hard_and_source_errors
 
-    return {k: v for k, v in _hard_and_source_errors(candidate, source, constraints).items() if v}
+    return {
+        k: v for k, v in _hard_and_source_errors(candidate, source, constraints, rules).items() if v
+    }
 
 
 def top_board(
@@ -95,7 +97,7 @@ def top_board(
             guard = power_guard(parent, roles)
 
     def extra(graph_, moved):
-        return sorted(source_errors(graph_, source, con))
+        return sorted(source_errors(graph_, source, con, rules))
 
     return MoveBoard(
         graph=parent,

@@ -41,8 +41,8 @@ stage in `regression/run.py`.
   and gated by native checks including a cold KiCad DRC; a phase-end gate bisects or reverts the
   pass; the loop's own `gate()` can keep the pre-pass board; later legalizers rip up glossed copper
   like any other.
-- **Off by default.** With `PNR_GLOSS` unset, `pnr.gloss` is never imported and no label, event
-  or progress key changes.
+- **Off by default.** With `PNR_GLOSS` unset, `pnr.gloss` is never imported and no label, event,
+  progress key, router key or code key depends on it (§6).
 
 ## 2. Eligible copper and anchors
 
@@ -98,8 +98,13 @@ parallel run at minimum pitch beyond `max(allowance, run before)`.
 - **Metrics.** L (eligible length), bends (`bends_all` counts every degree-2 vertex), X (the
   sampled gap to same-class neighbours within 2 mm, minus the required clearance), T (length
   packed at minimum pitch), DS (free area no track of the class can use) and A2/A3 (area usable by
-  a 2- or 3-track bus). `python -m pnr.gloss --measure BOARD... --rules R --out J` reports them
-  with the cold DRC, the objective and the audit.
+  a 2- or 3-track bus). X and the hug score do not depend on which way a segment is drawn: each
+  segment is sampled from its canonical (sorted) first end, and a ray that meets a same-class
+  parallel neighbour and other copper at the same distance (a neighbour's vertex) counts the
+  neighbour. The source sampled from the drawn first end and broke such ties by an order that
+  followed the drawing direction: one merged segment drawn the other way changed X by 0.155 mm²
+  on a ladder board with the same copper. `python -m pnr.gloss --measure BOARD... --rules R --out J`
+  reports them with the cold DRC, the objective and the audit.
 
 ## 5. Transactions and the legalizer override
 
@@ -126,7 +131,12 @@ parallel run at minimum pitch beyond `max(allowance, run before)`.
 Budgets (global, never per board): 240 s per pass, checked before each inventory and transaction;
 48 transactions; a deterministic per-chain planning budget (6000 shape and contact checks), with a
 120 s inventory safety net that is reported when hit. Every worker runs under its `pnr.proc`
-deadline; a signal exit is retried once, a deadline kill is not.
+deadline; a signal exit is retried once, a deadline kill is not. The 240 s and 120 s are wall
+clock: a slower machine can stop a pass on `time_budget` where a faster one finishes. The pass
+reports why it stopped (`stop`: `time_budget`, `max_transactions` or null), its budget and its
+planning totals (`deadline_hits`); the ladder keeps them in `result.json`. For an A/B across
+machines, raise `PNR_GLOSS_SECONDS` well above the pass's need and bound the pass by
+`PNR_GLOSS_MAX_TRANSACTIONS`, so both arms stop for the same reason.
 
 ## 6. Flags
 
@@ -148,10 +158,24 @@ None is read unless `PNR_GLOSS=1`.
 | `PNR_GLOSS_CROSS_GROUP_MM`   | `10`                              | cross-group cap in mm; needs one of the two above      |
 | `PNR_GLOSS_CYCLE`            | rejected                          | the in-cycle pass and un-glossing are not implemented  |
 
-A malformed value stops `native_loop` before any phase runs. `PNR_STOP_AFTER_PHASE` accepts the
-two gloss labels only with the flag set. With the flag, `progress.json` gains a `gloss` key and
-`evaluation.json` the side fields `gloss_summary` and `gloss_metrics`; the objective vector is
-unchanged. `pnr.gloss` and `pnr.gloss_geometry` are part of the evaluation code key.
+A malformed value, or a groups file or rules that give no functional groups, stops `native_loop`
+before any phase runs. `PNR_STOP_AFTER_PHASE` accepts the two gloss labels only with the flag set
+(and its error then lists them). With the flag, `progress.json` gains `gloss` (per pass: the
+summary, `accepted`, `status` and `cost`, its wall and CPU seconds) and `gloss_key`, and
+`evaluation.json` the side fields `gloss_summary` and `gloss_metrics` (the metrics worker measures
+the passes' functional groups); the objective vector is unchanged.
+
+**Keys.** The router key (`pnr.feedback.signals.current_key`) gains `gloss`: null with the flag
+unset, else `pnr.gloss.settings_key`, a digest of every sub-flag's effective value and of the
+groups file's content (never its path). `key_string` adds a `gloss=` field only then, so flag-off
+key strings are what they were. A record's gloss key comes from its `progress.json`, and
+`check_import` refuses an evaluation whose gloss key differs from the run's: the two arms of a
+gloss A/B, or two gloss configurations, never mix in a feedback library or a halving import.
+`pnr.gloss` and `pnr.gloss_geometry` are evaluation code (part of the code key) only with
+`PNR_GLOSS=1`, as `pnr.shove` is only with `PNR_SHOVE=1`; with the flag the key also covers
+`pnr.shove.gates`, whose unjustified sub-width check the pass runs under any router. Gloss edits
+therefore never change a flag-off code key; the hooks in `native_loop` and `full_iteration`
+changed the plain-router code key once, when they landed.
 
 ## 7. Functional groups and the cross-group cap
 
@@ -183,8 +207,12 @@ two groups is an error. `docs/examples/gloss-groups-chaser.json` is the file of 
 
 **Derived groups** (`PNR_GLOSS_CLASSES_FROM`, a comma list of `netclasses`, `pairs`, `si`,
 `length_match`): each rules net class, differential pair, `@pnr-si` intent or length-match group
-becomes a group. Derived groups with the same members are one group; a net derived into two
-groups with different members is an error. A groups-file entry wins for its net.
+becomes a group. Derived groups with the same members are one group. A net derived into groups
+with different members joins the most specific one: the fewest members, then the first source in
+the order above. A differential pair inside a wider net class is thus a group of its own, and the
+class keeps its other nets (the more specific group caps more pairs, the conservative choice). A
+groups-file entry wins for its net. The groups are checked against the rules at controller start
+(`si` needs the board and is resolved by the pass).
 
 E4 still limits edits to `Default`-class nets; admitting named signal classes is a later
 decision.
@@ -193,15 +221,21 @@ decision.
 
 The regression ladder has no native loop. `run.py --gloss` runs one pass with 07g semantics on the
 refilled board, before the audit, transactional and gated as in the loop, then gated again by the
-kicad-cli DRC that judges the case: if opens or the count of any violation type rise,
-`routed.pre-gloss.kicad_pcb` (always kept) is restored. A failing stage restores the board and
-fails the case (`gloss_error`). `--gloss-flag PNR_GLOSS_NAME=VALUE` passes sub-flags (the runner
-strips ambient `PNR_*` variables; they are recorded in `provenance.json`), and `--gloss-measure`
-measures each final board, for both arms of an A/B. Each case's `result.json` gains a path-free
-`gloss` block (pass summary, metrics before and after, the outer gate, the pre- and post-gloss
-board and copper hashes, the sub-flags with a groups file by its name) and `stage_cpu`; `--trace`
-snapshots the board after the stage. The KiCad-lane test `gloss_e2e_test` runs the stage on the
-public case `04-inverter-leds-8`.
+kicad-cli DRC that judges the case, as strictly as the pass's own transaction gate
+(`via_coalesce.violation_keys`): if opens rise, a violation is new by its type and items (one
+that moved to other items counts, even when its type's count holds) or dangling tracks or vias
+rise, `routed.pre-gloss.kicad_pcb` (always kept) is restored. A failing stage restores the board
+and fails the case (`gloss_error`). `--gloss-flag PNR_GLOSS_NAME=VALUE` passes sub-flags (the
+runner strips ambient `PNR_*` variables); a groups file is copied into `source-freeze` and read
+from there, and `provenance.json` records the sub-flags and the file by name and sha256, never by
+path. `--gloss-measure` measures each final board, for both arms of an A/B. Each case's
+`result.json` gains a path-free `gloss` block (pass summary with `stop`, `budget` and the planning
+totals, metrics before and after, the outer gate, the pre- and post-gloss board and copper hashes,
+the sub-flags and the groups file by name and sha256); per-stage CPU is `cpu_stages` and
+`cpu_seconds`, as on the hard-rungs branch. `--trace` snapshots the board after the stage. The
+KiCad-lane test `gloss_e2e_test` runs the stage on the public case `04-inverter-leds-8`, and the
+nightly ladder runs it on `04-inverter-leds-8` and `07-chaser-20` (seed 0): a stage error fails
+the job, a stage that keeps no edit on either case is a warning.
 
 ```sh
 hardware/pnr/regression/run.py --repo . --out .yapnr/ladder/AB-OFF --seed 0 --seed 1 \
@@ -211,7 +245,9 @@ hardware/pnr/regression/run.py --repo . --out .yapnr/ladder/AB-ON --seed 0 --see
 ```
 
 Writeback gives tracks random uuids, so each case also records `copper_sha256`, a hash of its
-copper without uuids. An on-arm case pairs with its off-arm twin when its
+copper without uuids and without the direction a segment is drawn in (it raises on a board whose
+track or via blocks it cannot parse, rather than hashing nothing). An on-arm case pairs with its
+off-arm twin when its
 `pre_gloss_copper_sha256`, `placed.json` and `routes.json` match the twin's. The ladder
 measures what the pass does to a finished board; it cannot measure completion, because the pass
 runs after a complete route. Results:
@@ -233,25 +269,57 @@ does not have. Differences from the source:
 - Workers run through `pnr.proc.run_status`, retried once after a signal exit only.
 - The tests' board-derived geometry is generated, with the same asserted properties, and net
   names are neutral.
-- New: derived functional groups, the ladder stage and the public example groups file.
+- The ray metric (X and the hug score) samples from a segment's canonical end and counts a
+  same-class neighbour at a tie (§4); the source depended on the drawing direction. The same
+  patch is handed back to the source.
+- New: derived functional groups (the most specific group wins), the ladder stage and the public
+  example groups file; the gloss settings in the router key and the flag-gated code key (§6); the
+  passes' cost in `progress.json`; the functional groups in `full_iteration`'s metrics.
 
 Identity: the port and the source engine were run on three replay points of a private board
 (a finished board as 07g, with and without groups, and a 06-signals capture as 06g), each with a
-fresh DRC cache; the evidence stays private. On all three the port reproduces the source
-exactly: the same output copper (a uuid-free hash, also equal to the source's archived run), the
-same transaction sequence and accepted count, the same edits per step and the same metrics; the
-cold DRC, the objective and the audit are unchanged by the pass in both engines. The first run
-diverged at the first corridor transaction (the `Delete` difference above) and led to the fix.
-With the flag unset, the stubbed loop controller of this branch and of `main` produce identical
-outputs.
+fresh DRC cache; the evidence stays private. Before the ray-metric fix, the port reproduced the
+source exactly on all three: the same output copper (a uuid-free hash, also equal to the source's
+archived run), the same transaction sequence and accepted count, the same edits per step and the
+same metrics; the cold DRC, the objective and the audit are unchanged by the pass in both
+engines. The first run diverged at the first corridor transaction (the `Delete` difference
+above) and led to that fix. After the ray-metric fix, the port is again exact against the source
+with the same patch on all three points (the run with groups needs a budget above 240 s in both
+engines: under load the source's pass stopped on its wall-clock budget one transaction short,
+the variance §5 describes). Against the unpatched source the fix moves a few decisions: one gloss
+edit more on one point, one corridor edit fewer on another; length within 0.03 mm, bends equal,
+DRC, objective and audit unchanged. With the flag unset, the stubbed loop controller of this
+branch and of `main` produce identical outputs, and `pnr.gloss` is not imported.
 
 ## 10. Open points
 
 - **Default-on** needs a paired A/B of the native loop (completion and opens per cycle), larger
-  than the source's inconclusive three-placement run; then the owner decides.
-- **06g routability** on public boards is unmeasured: the ladder cannot measure it.
+  than the source's inconclusive three-placement run; then the owner decides. For an
+  equal-compute comparison, the A/B reports each arm's wall and CPU per evaluation: the passes'
+  own cost is in `progress.json` (`gloss.<label>.cost`), and `06g-gloss` runs before
+  `begin_refinement`, so its time is outside the refinement budget. Raise `PNR_GLOSS_SECONDS`
+  and bound the passes by `PNR_GLOSS_MAX_TRANSACTIONS` (§5), so a slower machine does not stop
+  one arm early.
+- **06g routability** on public boards is unmeasured: the ladder runs the pass after a complete
+  route. A real native loop with the flag on a public ladder board (no annotation sources, two
+  refinement cycles) ran both passes with real workers: `06g-gloss` (open-net guard) kept two
+  transactions, 4 fewer bends and 0.7 mm less length, the loop's gate accepted it, and the loop
+  ended with the same opens as the same run without the flag. One board, one seed: a smoke test,
+  not evidence about completion.
+- **Cost.** On the ladder the stage costs a roughly fixed 30 to 125 s of CPU per case (KiCad
+  worker start-up and three cold DRCs dominate on small boards), so the overhead is largest on
+  the smallest cases (see the [ladder A/B](../regression-ladder.md#gloss-opt-in)). In the native
+  loop each pass adds its own inspect, check and DRC workers to the evaluation, and
+  `full_iteration` one metrics worker; on the private board each pass took 2 to 4 minutes of
+  wall time.
 - Gloss may loosen adjacency where it saves at least 0.2 mm (router cost ranks first).
 - Whole open nets are frozen (deterministic, conservative).
 - Corridor moves are drag-only; no jogs, no co-mitred bus corners.
 - E4 limits edits to the `Default` netclass.
 - No crosstalk budget beyond the cross-group cap.
+- No fixture has more than two copper layers; a four-layer gloss fixture belongs with the N-layer
+  stackup work. The KiCad-lane tests (`gloss_native_test`, `gloss_e2e_test`) are `manual`, so
+  only the nightly ladder's gloss stage runs the pass on KiCad in CI.
+- When the hard rungs land, their independent `checks` stage runs after the gloss stage on the
+  final board; the gloss outer gate does not consult it, so a pass that broke a declared
+  constraint would fail the rung rather than be reverted.

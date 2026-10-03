@@ -3,7 +3,8 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-10-02 (fab outputs and staged ordering, F2, F1 and O1, on `claude/fab-order`).
+Last updated: 2026-10-03 (the gloss port's review fixes, on `claude/gloss-port`).
+Before that, 2026-10-02: fab outputs and staged ordering, F2, F1 and O1, on `claude/fab-order`.
 Before that, 2026-09-30: PR4, #10, the ladder animations, the atopile toolchain and the
 privacy-scan trailer rule merged; line groups, hard board edges, the hierarchical ladder driver and
 their animations on `claude/animations-groups-hier`.
@@ -12,16 +13,20 @@ their animations on `claude/animations-groups-hier`.
 
 - **Gloss, dekink and corridor coalescing (`PNR_GLOSS`, off by default)** (branch
   `claude/gloss-port`; design [docs/design/gloss.md](docs/design/gloss.md)): ported from Splanc's
-  src18 with its tests (geometry 64, native 16, loop 15, end-to-end 7 with the ladder stage on
-  `04-inverter-leds-8`, ladder contract 10), `board.Delete` instead of `Remove`, workers through
-  `pnr.proc.run_status`; the `06g-gloss` and `07g-gloss` loop passes, the ladder's opt-in
-  `--gloss` stage with `--gloss-flag` and `--gloss-measure`, functional groups derived from the
-  rules (`PNR_GLOSS_CLASSES_FROM`) and the public example groups file for `07-chaser-20`. Identity
-  with the source engine is exact on three private replay points; flag-off identity with `main`
-  (stubbed loop) holds. Ladder A/B (24 runs per arm, no regression): see
+  src18 with its tests, `board.Delete` instead of `Remove`, workers through `pnr.proc.run_status`;
+  the `06g-gloss` and `07g-gloss` loop passes, the ladder's opt-in `--gloss` stage with
+  `--gloss-flag` and `--gloss-measure`, functional groups derived from the rules
+  (`PNR_GLOSS_CLASSES_FROM`, the most specific group wins) and the public example groups file for
+  `07-chaser-20`. Review fixes: the ray metric no longer depends on which way a segment is drawn
+  (patch handed back to the source), gloss settings in the router key and imports, the code key
+  covers the pass only with the flag, the ladder's outer gate by violation keys, frozen and hashed
+  groups file, per-stage CPU as on the hard-rungs branch, a nightly CI lane. Identity with the
+  source (plus the same ray patch) is exact on three private replay points; flag-off identity with
+  `main` (stubbed loop) holds; a real native loop with the flag ran both passes on a public board.
+  Ladder A/B (24 runs per arm, no regression, bends -32 %, length -4 %, CPU 2.2 times): see
   [docs/regression-ladder.md](docs/regression-ladder.md#gloss-opt-in). Next: the larger paired
-  native-loop A/B on the cloud lane decides default-on (owner); 06g routability is unmeasured on
-  public boards.
+  native-loop A/B on the cloud lane decides default-on (owner); rebase `run.py` onto
+  `claude/ladder-hard-rungs` when it lands.
 
 - **Fab outputs and staged ordering** (branch `claude/fab-order`; design
   [docs/design/fab-and-ordering.md](docs/design/fab-and-ordering.md), guide

@@ -503,8 +503,17 @@ The gloss, dekink and corridor-coalescing pass (`PNR_GLOSS`,
 [design](design/gloss.md)); owner decisions of 2026-09-30 (in Splanc) and 2026-10-02:
 
 - **Behind `PNR_GLOSS`, off by default,** in the native loop (passes `06g-gloss` and
-  `07g-gloss`) and as the ladder's opt-in `--gloss` stage. With the flag unset nothing is
-  imported and no output changes.
+  `07g-gloss`) and as the ladder's opt-in `--gloss` stage. With the flag unset the pass is never
+  imported or run: the routed copper and the loop's outputs are the same as without the port
+  (byte-identical outputs are impossible even between two runs of `main`, because writeback gives
+  tracks random uuids; the comparison is uuid-normalised). What does change: the ladder's
+  `result.json` gains `copper_sha256` and per-stage CPU and its `provenance.json` a `gloss`
+  block, and the plain-router code key changed once, when `native_loop` and `full_iteration`
+  gained the hooks.
+- **Keys keep the arms apart:** the router key carries a digest of the gloss settings (null with
+  the flag unset, so flag-off key strings are unchanged), and an import whose gloss key differs
+  is refused; `pnr.gloss` is part of the code key only with the flag, so a gloss edit never
+  invalidates a flag-off library.
 - **The router's cost, never traded:** rule R (shorter, or the same length with fewer bends) for
   dekink and gloss; corridor moves and adjacency tie-breaks may spend at most the
   `align_parallel` slack, **0.2 mm** of length per member. Dead space never buys router cost
@@ -516,8 +525,10 @@ The gloss, dekink and corridor-coalescing pass (`PNR_GLOSS`,
   functional group and capped at **10 mm** of parallel run between groups (a net in no group is
   its own group; `PNR_GLOSS_CROSS_GROUP_MM`). Groups come from a documented file
   (`PNR_GLOSS_CLASSES`) or are derived from net classes, pairs, SI intents and length-match groups
-  (`PNR_GLOSS_CLASSES_FROM`); a file entry wins for its net. A noise-budget model may later
-  replace the fixed cap with per-pair allowances through one hook (`allowed_parallel_mm`).
+  (`PNR_GLOSS_CLASSES_FROM`); a file entry wins for its net, and a net derived into several
+  groups joins the most specific one (fewest members, then the first source). A noise-budget
+  model may later replace the fixed cap with per-pair allowances through one hook
+  (`allowed_parallel_mm`).
 - **Only `Default`-class signal nets are edited** (E4), as the regional router; admitting named
   signal classes is a later decision.
 - **Default-on rule:** the pass is turned on by default only if a paired native-loop A/B, larger

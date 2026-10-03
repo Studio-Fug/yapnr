@@ -214,8 +214,8 @@ runner's own DRC (a worse DRC restores `routed.pre-gloss.kicad_pcb`). `--gloss-f
 PNR_GLOSS_NAME=VALUE` passes sub-flags, and `--gloss-measure` measures every final board, for both
 arms of an A/B.
 
-A/B of 2026-10-02: the eight cases and the four showcases, seeds 0 and 1, one engine commit
-(`879f22c`) for both arms, legacy profile, on the development Mac (niced, beside other work):
+A/B of 2026-10-03: the eight cases and the four showcases, seeds 0 and 1, one engine (`2fc4cc9`)
+for both arms, legacy profile, on the development Mac (niced, beside other work):
 
 ```sh
 run.py ... --seed 0 --seed 1 --showcases --gloss-measure            # off
@@ -226,55 +226,65 @@ Every on-arm case pairs with its off-arm twin (the same placement, routes and pr
 `copper_sha256`). "Length" and "Bends" are the eligible signal copper (`Default` netclass, signal
 width) and every degree-2 vertex on it; X is the summed excess gap to same-class neighbours within
 2 mm (smaller is tighter) and DS the free area no signal track can use. Transactions are accepted
-of proposed; "Gloss" is the stage's wall time.
+of proposed. "Gloss" is the stage's wall and CPU time with its two cold DRCs; "Case CPU" is the
+whole case's CPU time without `--gloss-measure`, which both arms run.
 
-| Case               | Seed | Gate off / on | Opens, findings |   Length (mm) |     Bends |     X (mm²) |    DS (mm²) | Transactions | Gloss (s) |
-| ------------------ | ---: | ------------- | --------------- | ------------: | --------: | ----------: | ----------: | -----------: | --------: |
-| 01-connector-led-2 |    0 | pass / pass   | 0, 0 → 0, 0     |           4.6 |         3 |         0.0 |        0.03 |       1 of 1 |        10 |
-| 01-connector-led-2 |    1 | pass / pass   | 0, 0 → 0, 0     |           4.6 |         3 |         0.0 |        0.03 |       1 of 1 |        13 |
-| 02-resistor-led-3  |    0 | pass / pass   | 0, 0 → 0, 0     |           3.7 |         5 |         0.0 |        0.21 |       1 of 1 |        11 |
-| 02-resistor-led-3  |    1 | pass / pass   | 0, 0 → 0, 0     |     6.7 → 5.9 |     9 → 5 |         0.0 | 0.32 → 0.09 |       3 of 3 |        20 |
-| 03-branched-leds-5 |    0 | pass / pass   | 0, 0 → 0, 0     |   10.2 → 10.1 |    12 → 9 |         0.0 |        0.17 |       2 of 2 |        12 |
-| 03-branched-leds-5 |    1 | pass / pass   | 0, 0 → 0, 0     |           8.2 |        10 |         0.0 |        0.10 |       1 of 1 |         8 |
-| 04-inverter-leds-8 |    0 | pass / pass   | 0, 0 → 0, 0     |   35.6 → 35.0 |   33 → 26 |   3.8 → 6.1 | 0.52 → 0.46 |       3 of 3 |        13 |
-| 04-inverter-leds-8 |    1 | pass / pass   | 0, 0 → 0, 0     |   38.3 → 37.3 |   40 → 27 |         0.0 | 0.66 → 0.57 |       5 of 5 |        17 |
-| 05-timer-led-10    |    0 | pass / pass   | 0, 0 → 0, 0     |   47.4 → 45.7 |   59 → 41 |         0.6 | 2.01 → 1.90 |       4 of 5 |        17 |
-| 05-timer-led-10    |    1 | pass / pass   | 0, 0 → 0, 0     |   69.6 → 65.8 |   67 → 44 |   6.5 → 4.4 | 2.12 → 1.20 |       8 of 8 |        30 |
-| 06-chaser-14       |    0 | pass / pass   | 0, 0 → 0, 0     | 150.7 → 144.7 |  113 → 85 | 33.7 → 20.8 | 2.29 → 2.62 |       7 of 7 |        45 |
-| 06-chaser-14       |    1 | pass / pass   | 0, 0 → 0, 0     | 113.5 → 111.6 |   91 → 65 | 12.8 → 13.7 | 2.98 → 2.56 |       6 of 6 |        25 |
-| 07-chaser-20       |    0 | pass / pass   | 0, 0 → 0, 0     | 231.8 → 220.0 | 191 → 130 |  20.3 → 9.2 | 3.93 → 3.88 |     10 of 10 |        55 |
-| 07-chaser-20       |    1 | pass / pass   | 0, 0 → 0, 0     | 217.8 → 206.6 | 180 → 120 | 51.3 → 38.1 | 4.59 → 2.98 |     13 of 14 |        60 |
-| 08-chaser-20-plane |    0 | pass / pass   | 0, 0 → 0, 0     | 231.7 → 226.9 | 171 → 127 | 36.7 → 24.8 | 4.74 → 3.82 |     13 of 13 |        52 |
-| 08-chaser-20-plane |    1 | pass / pass   | 0, 0 → 0, 0     | 248.3 → 237.0 | 192 → 110 | 44.2 → 21.5 | 4.98 → 2.78 |     15 of 15 |        57 |
-| edge-io-12         |    0 | pass / pass   | 0, 0 → 0, 0     |   93.0 → 89.6 |   90 → 53 |   9.0 → 3.8 | 1.51 → 1.25 |       6 of 6 |        29 |
-| edge-io-12         |    1 | pass / pass   | 0, 0 → 0, 0     |   94.7 → 91.0 |   94 → 61 | 18.7 → 14.9 | 1.55 → 1.31 |     10 of 10 |        53 |
-| edge-io-12-free    |    0 | pass / pass   | 0, 0 → 0, 0     |  100.1 → 95.6 |   82 → 52 | 18.4 → 21.4 | 1.77 → 1.67 |       8 of 8 |        30 |
-| edge-io-12-free    |    1 | pass / pass   | 0, 0 → 0, 0     |   94.4 → 90.9 |   82 → 43 | 13.6 → 11.6 |        1.58 |       9 of 9 |        33 |
-| hier-twin-bank-32  |    0 | pass / pass   | 0, 0 → 0, 0     | 323.9 → 307.8 | 279 → 210 | 64.7 → 53.4 | 8.56 → 5.21 |       7 of 7 |        47 |
-| hier-twin-bank-32  |    1 | pass / pass   | 0, 0 → 0, 0     | 307.4 → 294.3 | 271 → 202 | 61.9 → 56.7 | 8.71 → 6.14 |       7 of 7 |        42 |
-| line-chaser-20     |    0 | pass / pass   | 0, 0 → 0, 0     | 235.8 → 227.5 | 188 → 125 | 33.3 → 20.6 | 3.57 → 3.26 |     10 of 10 |        38 |
-| line-chaser-20     |    1 | pass / pass   | 0, 0 → 0, 0     | 184.3 → 177.6 |  162 → 96 | 20.4 → 10.3 | 3.22 → 3.17 |       6 of 6 |        27 |
+| Case               | Seed | Gate off / on | Opens, findings |   Length (mm) |     Bends |     X (mm²) |    DS (mm²) | Transactions | Gloss wall / CPU (s) | Case CPU off / on (s) |
+| ------------------ | ---: | ------------- | --------------- | ------------: | --------: | ----------: | ----------: | -----------: | -------------------: | --------------------: |
+| 01-connector-led-2 |    0 | pass / pass   | 0, 0 → 0, 0     |           4.6 |         3 |         0.0 |        0.03 |       1 of 1 |              12 / 29 |                9 / 38 |
+| 01-connector-led-2 |    1 | pass / pass   | 0, 0 → 0, 0     |           4.6 |         3 |         0.0 |        0.03 |       1 of 1 |              12 / 29 |                9 / 38 |
+| 02-resistor-led-3  |    0 | pass / pass   | 0, 0 → 0, 0     |           3.7 |         5 |         0.0 |        0.21 |       1 of 1 |              12 / 29 |                9 / 38 |
+| 02-resistor-led-3  |    1 | pass / pass   | 0, 0 → 0, 0     |     6.7 → 5.9 |     9 → 5 |         0.0 | 0.32 → 0.09 |       3 of 3 |              18 / 40 |                9 / 50 |
+| 03-branched-leds-5 |    0 | pass / pass   | 0, 0 → 0, 0     |   10.2 → 10.1 |    12 → 9 |         0.0 |        0.17 |       2 of 2 |              15 / 34 |                9 / 44 |
+| 03-branched-leds-5 |    1 | pass / pass   | 0, 0 → 0, 0     |           8.2 |        10 |         0.0 |        0.10 |       1 of 1 |              11 / 29 |               10 / 39 |
+| 04-inverter-leds-8 |    0 | pass / pass   | 0, 0 → 0, 0     |   35.6 → 35.0 |   33 → 26 |   4.0 → 6.3 | 0.52 → 0.46 |       3 of 3 |              16 / 41 |               12 / 53 |
+| 04-inverter-leds-8 |    1 | pass / pass   | 0, 0 → 0, 0     |   38.3 → 37.3 |   40 → 27 |         0.0 | 0.66 → 0.57 |       5 of 5 |              20 / 52 |               13 / 65 |
+| 05-timer-led-10    |    0 | pass / pass   | 0, 0 → 0, 0     |   47.4 → 45.7 |   59 → 41 |   0.8 → 0.6 | 2.01 → 1.90 |       4 of 5 |              21 / 48 |               15 / 63 |
+| 05-timer-led-10    |    1 | pass / pass   | 0, 0 → 0, 0     |   69.6 → 65.8 |   67 → 44 |   6.8 → 4.4 | 2.12 → 1.20 |       8 of 8 |              30 / 71 |              49 / 122 |
+| 06-chaser-14       |    0 | pass / pass   | 0, 0 → 0, 0     | 150.7 → 144.7 |  113 → 85 | 34.6 → 21.2 | 2.29 → 2.62 |       7 of 7 |              31 / 71 |              31 / 102 |
+| 06-chaser-14       |    1 | pass / pass   | 0, 0 → 0, 0     | 113.5 → 111.6 |   91 → 65 | 13.3 → 14.3 | 2.98 → 2.49 |       6 of 6 |              24 / 60 |               37 / 96 |
+| 07-chaser-20       |    0 | pass / pass   | 0, 0 → 0, 0     | 231.8 → 220.0 | 191 → 130 |  20.8 → 9.7 | 3.93 → 3.88 |     10 of 10 |              41 / 92 |              49 / 142 |
+| 07-chaser-20       |    1 | pass / pass   | 0, 0 → 0, 0     | 217.8 → 206.6 | 180 → 120 | 52.1 → 38.7 | 4.59 → 2.98 |     13 of 14 |             55 / 114 |             115 / 231 |
+| 08-chaser-20-plane |    0 | pass / pass   | 0, 0 → 0, 0     | 231.7 → 226.9 | 171 → 127 | 37.4 → 25.1 | 4.74 → 3.82 |     13 of 13 |             46 / 107 |              82 / 188 |
+| 08-chaser-20-plane |    1 | pass / pass   | 0, 0 → 0, 0     | 248.3 → 237.0 | 192 → 110 | 45.6 → 22.1 | 4.98 → 2.78 |     15 of 15 |             53 / 121 |             198 / 315 |
+| edge-io-12         |    0 | pass / pass   | 0, 0 → 0, 0     |   93.0 → 89.6 |   90 → 53 |   9.5 → 3.8 | 1.51 → 1.25 |       6 of 6 |              25 / 61 |               21 / 81 |
+| edge-io-12         |    1 | pass / pass   | 0, 0 → 0, 0     |   94.7 → 91.0 |   94 → 61 | 19.0 → 14.1 | 1.55 → 1.31 |     10 of 10 |              38 / 85 |              38 / 122 |
+| edge-io-12-free    |    0 | pass / pass   | 0, 0 → 0, 0     |  100.1 → 95.6 |   82 → 52 | 18.7 → 21.5 | 1.77 → 1.67 |       8 of 8 |              29 / 72 |              32 / 105 |
+| edge-io-12-free    |    1 | pass / pass   | 0, 0 → 0, 0     |   94.4 → 90.9 |   82 → 43 | 13.8 → 11.8 |        1.58 |       9 of 9 |              30 / 76 |               22 / 98 |
+| hier-twin-bank-32  |    0 | pass / pass   | 0, 0 → 0, 0     | 323.9 → 307.8 | 279 → 210 | 66.1 → 54.5 | 8.56 → 5.21 |       7 of 7 |              45 / 84 |             213 / 296 |
+| hier-twin-bank-32  |    1 | pass / pass   | 0, 0 → 0, 0     | 307.4 → 294.3 | 271 → 202 | 63.2 → 58.4 | 8.71 → 6.14 |       7 of 7 |              42 / 83 |             224 / 305 |
+| line-chaser-20     |    0 | pass / pass   | 0, 0 → 0, 0     | 235.8 → 227.4 | 188 → 125 | 34.2 → 32.6 | 3.57 → 3.26 |     10 of 10 |              39 / 90 |              58 / 147 |
+| line-chaser-20     |    1 | pass / pass   | 0, 0 → 0, 0     | 184.3 → 177.6 |  162 → 96 | 20.8 → 10.4 | 3.22 → 3.17 |       6 of 6 |              30 / 67 |              35 / 102 |
 
 - **No regression:** all 24 runs pass the gate in both arms; KiCad's opens and findings (0 and 0
   everywhere), the objective vector and the audit are unchanged. The runner's outer gate never
-  fired and no pass reverted at its end gate.
+  fired, no pass reverted at its end gate and none stopped on a budget.
 - **Bends -32 %** in total (2427 to 1652; 0 to -48 % per run), **length -4.0 %** (2856.3 to
-  2742.0 mm; never up), X -26 % in total and DS -22 %. X rose on three runs and DS on one: the
+  2741.9 mm; never up), X -24 % in total and DS -22 %. X rose on three runs and DS on one: the
   router's cost ranks first, and a shortcut that saves at least 0.2 mm is kept even when it moves
   a track off its neighbour.
 - **The legalizer at work:** 156 of 158 transactions accepted; the trial worker dropped the other
   two edits on the applied board (a new same-net contact, `L2`, and a corridor member whose
   segments an earlier transaction had replaced). Edits: normalize 281, dekink 162, gloss 185,
   corridor 18.
-- **Cost:** 8 to 60 s of wall time and 29 to 125 s of CPU per case (KiCad worker start-up dominates
-  on these small boards); in all, the on arm used 3087 s of CPU against 1434 s.
-- **Functional groups:** 07-chaser-20 with the example groups file
+- **Cost:** the stage takes 11 to 55 s of wall time and 29 to 121 s of CPU per case, a roughly
+  fixed overhead (KiCad worker start-up and the cold DRCs dominate on these small boards). In all,
+  the on arm used 2880 s of CPU against 1301 s (2.2 times) and 1918 s of wall time against 1226 s
+  (+56 %). Per case the CPU factor falls with the case's size: 2.5 to 5.4 on cases 01 to 05, 3.2
+  to 4.4 on the edge-io showcases, 1.6 to 3.3 on the chaser cases and 1.4 on hier-twin-bank-32.
+- **Against the first A/B** (engine `879f22c`, before the ray metric stopped depending on the
+  drawing direction): the off arm's copper is the same on all 24 runs; 21 of the 24 on-arm runs
+  keep the same copper, and three take a different equal-cost edit (length within 0.1 mm, the same
+  bends). X counts a few more samples now (a ray through a neighbour's vertex counts the
+  neighbour), so its values are not comparable with the first A/B's.
+- **Functional groups** (first A/B): 07-chaser-20 with the example groups file
   (`docs/examples/gloss-groups-chaser.json`) and the groups derived from the rules gives the same
   copper as without groups (longest cross-group run at minimum pitch 0 and 1.5 mm, under the
   10 mm cap).
-- **Determinism:** a rerun of 04-inverter-leds-8 and 07-chaser-20 (seed 0) gives the same
-  copper; only the direction in which a few merged segments are drawn differs (1 and 4
-  segments), which `copper_sha256` ignores.
+- **Determinism:** the off arm repeats the first A/B's copper on all 24 runs, and a rerun of
+  04-inverter-leds-8 and 07-chaser-20 (seed 0) with the gloss stage gave the same copper; only the
+  direction in which a few merged segments are drawn differed (1 and 4 segments), which
+  `copper_sha256` and the metrics ignore.
 
 The ladder runs the pass after a complete route, so it cannot show whether the pass helps or
 hurts completion; turning it on by default waits for a paired A/B of the native loop.
@@ -285,7 +295,9 @@ hurts completion; turning it on by default waits for a paired A/B of the native 
 with seed 0 on pull requests that change engine inputs, and nightly all eight cases with seeds 0 and
 1, plus a traced pool run whose animations are uploaded as an artifact and whose trace hashes are
 compared with <a href="animations/manifest.json"><code>animations/manifest.json</code></a> (a drift
-is a notice). The lane is informational, not a required check yet; its aggregate check is named
-`ladder`.
+is a notice). The nightly run also takes the opt-in [gloss stage](#gloss-opt-in) through
+`04-inverter-leds-8` and `07-chaser-20` (seed 0): a stage error fails the job, and a stage that
+kept no edit on either case is a warning. The lane is informational, not a required check yet;
+its aggregate check is named `ladder`.
 
 [ladder-readme]: https://github.com/Studio-Fug/yapnr/blob/main/hardware/pnr/regression/README.md

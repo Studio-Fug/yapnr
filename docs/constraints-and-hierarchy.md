@@ -114,6 +114,61 @@ What to watch:
 
 Holding the three parts on the edge costs 30 mm of HPWL and 22 mm of copper, and saves a via.
 
+## Regions and alignments
+
+Two more relations a designer asks for: keep a subsystem in one area of the board, and line
+parts up on one coordinate. Both are hard by default (a soft variant is a weighted penalty) and
+take any refs, globs or `@addresses`:
+
+```yaml
+region: # the clock parts' courtyards stay in the west half of the 42 x 32 mm board
+  - name: clock
+    refs: [U1, R1, R2, C1, C2, C3]
+    rect: [0, 0, 21, 32] # or polygon: [[x, y], ...], or areas: [...] (a union)
+align: # the two ICs' origins on one horizontal line
+  - name: ics
+    refs: [U1, U2]
+    axis: y
+    anchor: origin # or centre, pad1, pad:<name>, a courtyard edge; or {ref: anchor}
+    tol_mm: 0.25
+```
+
+Every stage honours them. Global placement adds a region term (the squared distance of each
+courtyard corner from the area, in expectation over the part's rotation distribution) and an
+alignment term (the squared deviation of each expected anchor from the members' mean). The
+legalizer bounds each slot centre: a rectangle region as a box per tried rotation, a polygon or
+union as a 0.25 mm raster mask, and an align as the band the members already placed leave; the
+aligned members are placed as one block, onto their line, and a slot that leaves a later member
+no room is backtracked. The initial pool moves its starts into the outline, into the regions
+and onto the lines before global placement. The legality checks, and with them every feedback
+move, relocation and the Monte-Carlo search, reject a violation; a member of a line group or a
+hierarchical block carries its region and its anchor inside the rigid macro. The
+[input reference](hardware/pnr-inputs.md) lists the keys of both sections.
+
+The ladder's constraint rungs (`hardware/pnr/regression/hard_rungs.py`, `run.py --hard`) use
+both: `07-chaser-20-abs` confines the clock to the west half, `07-chaser-20-rel` aligns the
+timer and the counter, and the MCU board's rungs do the same with its regulator and its two
+buttons. The independent checker (`check_constraints.py`) measures them on the saved KiCad
+board, as it does for every other tool.
+
+Before the engine took them, the boards it routed for these rungs broke them: the clock sat 7 to
+20 mm outside the west half, and the two ICs were 6.4 and 10.1 mm off one line. Now every check
+holds on both seeds (the initial pool: eight starts, three routed finalists), with DRC-clean
+boards:
+
+| Case               | Seed | Checks | Vias | Copper (mm) | HPWL (mm) | CPU (s) | Before: checks, vias, copper |
+| ------------------ | ---: | -----: | ---: | ----------: | --------: | ------: | ---------------------------- |
+| `07-chaser-20-abs` |    0 |  19/19 |   22 |       358.3 |       290 |     256 | 18/19, 18, 336.2             |
+| `07-chaser-20-abs` |    1 |  19/19 |   26 |       417.6 |       308 |     568 | 18/19, 24, 346.9             |
+| `07-chaser-20-rel` |    0 |    8/8 |   20 |       338.9 |       293 |     122 | 7/8, 15, 358.0               |
+| `07-chaser-20-rel` |    1 |    8/8 |   18 |       337.7 |       272 |     169 | 7/8, 18, 332.6               |
+
+The clock in the west half costs 22 and 71 mm of copper and two to four vias: its six parts
+share that half with the connector and a mounting hole, and their nets reach across to the
+counter. The aligned ICs cost no copper (19 mm less on one seed, 5 mm more on the other). The MCU
+board's rungs satisfy the regulator's region and the buttons' alignment on both seeds, and on
+every legal start of the pool; that board does not yet route completely, with or without them.
+
 ## Hierarchical place and route
 
 <p><img src="animations/showcase-hier-twin-bank.webp" width="800"

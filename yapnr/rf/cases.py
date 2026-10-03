@@ -8,12 +8,15 @@ The cases, each at two scales:
 - `antenna`: a 1-port microstrip-fed antenna over ground, 9.85–10.15 GHz, matched and
   radiating, grown by the optimization from the feed line alone (design §11.3, §22);
   `antenna_patch_reference` is the closed-form patch it is compared with (not a case);
-- `diplexer`: a 3-port two-channel filter bank, channels 7.6–8.4 and 11.6–12.4 GHz (§11.4).
+- `diplexer`: a 3-port two-channel filter bank, channels 7.6–8.4 and 11.6–12.4 GHz (§11.4);
+- `filterbank3`: a 4-port three-channel bank, 7.0–7.6, 9.7–10.3 and 12.4–13.0 GHz (stretch).
 
-`scale="full"` is the design's case (minutes to an hour at 4 threads); `scale="smoke"` is the
-same topology on a tiny grid with a few iterations, for CI. The criteria are checked on the
-binary design re-simulated from the exported footprint, on the optimization grid ("coarse")
-and on a grid twice as fine in-plane and 1.5 times in the substrate ("fine", `validate`).
+`scale="full"` is the design's case (up to about two hours at 4 threads); `scale="smoke"` is
+the same topology on a tiny grid with a few iterations, for CI. The criteria are checked on the
+binary design re-simulated from the exported footprint, on the optimization grid ("coarse"),
+on a grid twice as fine in-plane and 1.5 times in the substrate ("fine") and on one three times
+as fine with twice the substrate cells ("finer", `validate`). Round 2's settings (the solver's
+copper-edge correction and modal source, adaptive moves, robust variants) are design §21–§23.
 
     python -m yapnr.rf.cases run divider --out runs/divider          # optimize, export, validate
     python -m yapnr.rf.cases run divider --out runs/divider --smoke
@@ -35,8 +38,10 @@ from dataclasses import asdict, dataclass, replace
 import numpy as np
 
 from yapnr.rf.spec import (
+    Absorbed,
     Band,
     GridSpec,
+    Loss,
     Lumped,
     OptimizerSpec,
     Port,
@@ -70,9 +75,14 @@ _SMOKE_GRID = dict(
 #
 # - The divider starts from a uniform x = 0.3: ρ̄ ≈ 0.04 at β = 8, an almost transparent sheet
 #   (about 3.3 kΩ/sq) still on the steep part of the projection.
-# - The diplexer starts from a plain junction of its ports (`seed: star`): from x = 0.3 its
-#   transmissions stayed below −30 dB for 15 iterations (the window absorbed), and at iteration
-#   30 it was a radiating copper mass at t = 8.5.
+# - The Wilkinson-type combiner starts from its ports' lines continued to the window's centre
+#   line, unjoined (`seed: feeds`): from x = 0.3 its pads stayed unconnected or a gray bridge
+#   between the arms did the resistor's work, and the star's junction shorts the resistor
+#   (design §23).
+# - The filter banks start from a junction of their ports with quarter-wave stubs
+#   (`seed: stubs`): from x = 0.3 the diplexer's transmissions stayed below −30 dB for 15
+#   iterations (the window absorbed), and at iteration 30 it was a radiating copper mass at
+#   t = 8.5; from the plain junction (`seed: star`) its branches only learned to roll off.
 # - The antenna starts from the feed line alone (`seed: star`: the port's line continued to the
 #   window's centre); round 2's attempts (uniform, gray with the radiation objective, frequency
 #   continuation, reactive sheet) are in docs/decisions.md. Round 1 started it from the
@@ -80,6 +90,13 @@ _SMOKE_GRID = dict(
 INIT = 0.3
 _SMOKE_OPT = OptimizerSpec(betas=(8.0, 32.0), iterations_per_beta=2, min_iterations=2, init=INIT)
 _SMOKE_SOLVER = SolverSpec(backend="torch", dtype="float32", sweep_points=21)
+# Round 2 (design §21, §23): every case runs with the copper-edge correction and the modal port
+# source (the grids then agree to about 0.2 % in frequency, and the excited port's incident
+# wave is unbiased) and with adaptive moves (plain MMA oscillated from β = 16–32 in every
+# round-1 case).
+ROUND2_SOLVER = dict(edge_correction=True, port_source="mode")
+_R2_SMOKE_SOLVER = replace(_SMOKE_SOLVER, **ROUND2_SOLVER)
+_R2_SMOKE_OPT = replace(_SMOKE_OPT, adaptive_move=True)
 
 
 def _check_scale(scale: str) -> None:
@@ -114,8 +131,8 @@ def divider(scale: str = "full") -> Spec:
             ports=(Port(1, "W", 0.0, 3), Port(2, "E", 1.8, 3), Port(3, "E", -1.8, 3)),
             bands={"pass": Band(8.5, 11.5, 3)},
             requirements=reqs,
-            optimizer=_SMOKE_OPT,
-            solver=_SMOKE_SOLVER,
+            optimizer=_R2_SMOKE_OPT,
+            solver=_R2_SMOKE_SOLVER,
         )
     return Spec(
         name="divider-x10",
@@ -131,13 +148,25 @@ def divider(scale: str = "full") -> Spec:
         # edge, guide "Accuracy") and a run without this lost 1.8 dB of |S11| per refinement
         # (−17.5, −15.7, −13.9 dB at 0.3, 0.15, 0.1 mm), so the epigraph also holds the eroded
         # design (projection threshold 0.55).
+        # Round 2 (design §23): the dilated design joins the eroded one, plain MMA at β = 8 and
+        # adaptive moves from β = 16, as the diplexer. With round 1's formulation and the
+        # round-2 solver, adaptive moves throughout crept (moves of 0.01–0.03 from β = 16; the
+        # best design, robust binarized t 0.46, failed the match on every grid: −15.4, −13.4,
+        # −13.7 dB) and plain MMA throughout oscillated from β = 16 (best t 0.92 by iteration
+        # 48). Round 1's footprint re-simulated with the round-2 solver reads −16.2, −17.8 and
+        # −16.0 dB (the coarse criterion is −17 dB): it was tuned to the uncorrected copper.
         optimizer=OptimizerSpec(
-            iterations_per_beta=30,
-            budget_min=75,
+            betas=(8, 16, 32, 64),
+            iterations_per_beta=(30, 15, 15, 10),
+            budget_min=180,
             init=INIT,
-            eta_variants=(0.55,),
+            eta_variants=(0.45, 0.55),
+            robust_from_beta=16.0,
             move_late=0.05,
+            adaptive_move=True,
+            adaptive_from_beta=16.0,
         ),
+        solver=SolverSpec(**ROUND2_SOLVER),
     )
 
 
@@ -154,6 +183,15 @@ def wilkinson(scale: str = "full") -> Spec:
         S(3, 1).at_least_db(-3.4, band="pass"),
         S(2, 2).at_most_db(-20, band="pass"),
         S(3, 2).at_most_db(-20, band="pass"),
+        # The isolation resistor takes most of what an output port does not pass on (an ideal
+        # Wilkinson's resistor dissipates half the power entering port 2; the rest goes to port
+        # 1), and little else is lost (radiation, the copper's and the substrate's dissipation:
+        # a few per cent in a binary design). Without these the optimizer isolated the outputs
+        # with gray copper beside the resistor or bridging the arms (a lossy sheet), which the
+        # binary design does not have; with the share alone it still bridged the arms with
+        # gray copper east of the resistor (design §23).
+        Absorbed("R1", 2).at_least(0.4, band="pass"),
+        Loss(2).at_most(0.08, band="pass"),
     )
     if scale == "smoke":
         return Spec(
@@ -167,8 +205,8 @@ def wilkinson(scale: str = "full") -> Spec:
             bands={"pass": Band(9.0, 11.0, 2)},
             requirements=reqs,
             lumped=(Lumped("R1", (3.0, 3.6), (-0.3, 0.3), "y", 100.0, 0.6),),
-            optimizer=_SMOKE_OPT,
-            solver=_SMOKE_SOLVER,
+            optimizer=replace(_R2_SMOKE_OPT, seed="feeds"),
+            solver=_R2_SMOKE_SOLVER,
         )
     return Spec(
         name="wilkinson-x10",
@@ -180,11 +218,33 @@ def wilkinson(scale: str = "full") -> Spec:
         ports=(Port(1, "W", 0.0), Port(2, "E", 4.2), Port(3, "E", -4.2)),
         bands=band,
         requirements=reqs,
-        # The resistor sits about a quarter wave (4.5–5 mm of a 70 Ω line) from port 1, where a
-        # Wilkinson's arms end; at 7.2–7.8 mm (a first try) the arms were three eighths of a
-        # wave long and the run ended with |S22| −8 dB.
-        lumped=(Lumped("R1", (4.8, 5.4), (-0.3, 0.3), "y", 100.0, 0.6),),
-        optimizer=OptimizerSpec(iterations_per_beta=30, budget_min=90, init=INIT, move_late=0.05),
+        # The resistor sits where a Wilkinson's quarter-wave arms end, 4.8 mm (the straight
+        # distance) from the port pad: the arms run side by side as coupled lines, whose odd
+        # mode (the one the resistor terminates) is faster than the even one, so they need
+        # about 5 mm for its quarter wave against 4.6 mm for the even mode. Round 1 had it at
+        # 4.8–5.4 mm, where the coupled arms were about 65° long in the odd mode and the
+        # outputs stayed at −11 dB of match and −13 dB of isolation (an ideal circuit with those
+        # lengths gives −12 dB); at 7.2–7.8 mm (three eighths of a wave) |S22| was −8 dB.
+        lumped=(Lumped("R1", (5.4, 6.0), (-0.3, 0.3), "y", 100.0, 0.6),),
+        # Robust from β = 16: the dilated and eroded designs join the epigraph (at β = 8 they are
+        # about as gray as the nominal design). With gray copper a resistive sheet, the nominal
+        # design alone isolated the outputs with a gray bridge between the arms (a distributed
+        # resistor) that the binarized design turned into a short (gray t 1.15, binarized
+        # t 15–20, round 2's screens); the robust variants alone did not stop it at β = 8 (gray
+        # t 0.39, binarized 1.3–1.5); the requirements on the resistor's share and on the loss
+        # do (design §23). Plain MMA at β = 8, adaptive moves from β = 16, as the filter banks.
+        optimizer=OptimizerSpec(
+            betas=(8, 16, 32, 64),
+            iterations_per_beta=(25, 15, 15, 10),
+            budget_min=240,
+            seed="feeds",
+            move_late=0.05,
+            eta_variants=(0.45, 0.55),
+            robust_from_beta=16.0,
+            adaptive_move=True,
+            adaptive_from_beta=16.0,
+        ),
+        solver=SolverSpec(**ROUND2_SOLVER),
     )
 
 
@@ -318,8 +378,10 @@ def diplexer(scale: str = "full") -> Spec:
     if scale == "smoke":
         bands = {"A": Band(7.6, 8.4, 2), "B": Band(11.6, 12.4, 2)}
     else:
-        # The objective frequencies widen each channel by 0.2 GHz against coarse-to-fine shifts.
-        bands = {"A": Band(7.4, 8.6, 4), "B": Band(11.4, 12.6, 4)}
+        # The objective frequencies widen each channel by 0.1 GHz against coarse-to-fine shifts
+        # (round 1: 0.2 GHz, when they were 1.5–2 %; with the copper-edge correction they are
+        # about 0.2 %, 0.02 GHz here), five points per channel.
+        bands = {"A": Band(7.5, 8.5, 5), "B": Band(11.5, 12.5, 5)}
     reqs = (
         S(2, 1).at_least_db(-1.0, band="A"),
         S(3, 1).at_most_db(-22, band="A"),
@@ -338,8 +400,8 @@ def diplexer(scale: str = "full") -> Spec:
             ports=(Port(1, "W", 0.0, 3), Port(2, "E", 1.8, 3), Port(3, "E", -1.8, 3)),
             bands=bands,
             requirements=reqs,
-            optimizer=replace(_SMOKE_OPT, seed="stubs"),
-            solver=_SMOKE_SOLVER,
+            optimizer=replace(_R2_SMOKE_OPT, seed="stubs"),
+            solver=_R2_SMOKE_SOLVER,
         )
     return Spec(
         name="diplexer-x8x12",
@@ -355,7 +417,25 @@ def diplexer(scale: str = "full") -> Spec:
         # on each branch (`seeds.stub_mask`), which the optimizer then reshapes. Its best
         # binarized design comes at β = 8 (t 0.79) and plain MMA loses it from β = 16 on (t 1.84;
         # the export keeps the best); moves of 0.15/0.05 did worse (best t 1.84).
-        optimizer=OptimizerSpec(iterations_per_beta=25, budget_min=55, seed="stubs"),
+        # Robust (round 2): the dilated and eroded designs join the epigraph. Without them the
+        # run's designs relied on one-pixel lines (an open stub 0.3 mm wide) that the width and
+        # space repair removed: its binarized design read t 0.67 before the repair and 1.52 after
+        # (channel B's rejection −17.7 → −6.8 dB), so the best repaired design stayed at β = 8.
+        # Plain MMA at β = 8, adaptive moves from β = 16 (`adaptive_from_beta`): with adaptive
+        # moves from the start the moves fell to 0.004–0.01 by β = 32 and the design stopped
+        # changing (the divider likewise); with plain MMA throughout the best design came at the
+        # end of β = 8 and β = 16 oscillated (t up to 3.5) without improving on it (design §23).
+        optimizer=OptimizerSpec(
+            betas=(8, 16, 32, 64),
+            iterations_per_beta=(25, 15, 15, 15),
+            budget_min=150,
+            seed="stubs",
+            move_late=0.05,
+            eta_variants=(0.45, 0.55),
+            adaptive_move=True,
+            adaptive_from_beta=16.0,
+        ),
+        solver=SolverSpec(**ROUND2_SOLVER),
     )
 
 
@@ -366,7 +446,8 @@ def filterbank3(scale: str = "full") -> Spec:
     if scale == "smoke":
         bands = {"A": Band(7.0, 7.6, 1), "B": Band(9.7, 10.3, 1), "C": Band(12.4, 13.0, 1)}
     else:
-        bands = {"A": Band(6.8, 7.8, 3), "B": Band(9.5, 10.5, 3), "C": Band(12.2, 13.2, 3)}
+        # Each channel widened by 0.1 GHz (round 1: 0.2 GHz; the diplexer's note), four points.
+        bands = {"A": Band(6.9, 7.7, 4), "B": Band(9.6, 10.4, 4), "C": Band(12.3, 13.1, 4)}
     reqs = []
     for band, port in (("A", 2), ("B", 3), ("C", 4)):
         reqs.append(S(port, 1).at_least_db(-1.5, band=band))
@@ -387,8 +468,8 @@ def filterbank3(scale: str = "full") -> Spec:
             ),
             bands=bands,
             requirements=tuple(reqs),
-            optimizer=_SMOKE_OPT,
-            solver=_SMOKE_SOLVER,
+            optimizer=_R2_SMOKE_OPT,
+            solver=_R2_SMOKE_SOLVER,
         )
     return Spec(
         name="filterbank3-x7x10x13",
@@ -399,11 +480,23 @@ def filterbank3(scale: str = "full") -> Spec:
         ports=(Port(1, "W", 0.0), Port(2, "E", 6.0), Port(3, "E", 0.0), Port(4, "E", -6.0)),
         bands=bands,
         requirements=tuple(reqs),
-        # Moves of 0.05 from β = 32 on: with 0.1 the near-binary designs of the other cases
-        # flipped boundary pixels back and forth (t alternating between 0.7 and 8).
+        # Robust from β = 16, plain MMA at β = 8 and adaptive moves from β = 16, as the diplexer
+        # (whose designs relied on one-pixel stubs the repair removed, and whose adaptive moves
+        # from the start stalled). Moves of 0.05 from β = 32 on: with 0.1 the near-binary
+        # designs of the other cases flipped boundary pixels back and forth (t alternating
+        # between 0.7 and 8).
         optimizer=OptimizerSpec(
-            iterations_per_beta=25, budget_min=90, seed="stubs", move_late=0.05
+            betas=(8, 16, 32, 64),
+            iterations_per_beta=(25, 15, 10, 10),
+            budget_min=240,
+            seed="stubs",
+            move_late=0.05,
+            eta_variants=(0.45, 0.55),
+            robust_from_beta=16.0,
+            adaptive_move=True,
+            adaptive_from_beta=16.0,
         ),
+        solver=SolverSpec(**ROUND2_SOLVER),
     )
 
 

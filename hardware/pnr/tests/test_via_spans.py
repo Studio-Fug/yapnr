@@ -52,14 +52,17 @@ class GridSpans(unittest.TestCase):
         g.pad_net[(1, 0, 0)] = "OTHER"
         self.assertIsNone(_astar(g, {Cell(0, 0, 0)}, {Cell(2, 0, 0)}, "N", {}, {}, 5, 1))
 
-    def test_blind_via_is_cheaper(self):
-        """With the same detour available, the router changes layer by a blind via
-        priced by its span (a 3-unit via costs 3 * 0.72 on F-In2)."""
-        g = grid(5, BB)
-        path = _astar(g, {Cell(0, 0, 0)}, {Cell(1, 4, 0)}, "N", {}, {}, 3.0, 1)
-        self.assertIsNotNone(path)
-        vias = [(a, b) for a, b in zip(path, path[1:]) if a.layer != b.layer]
-        self.assertEqual(len(vias), 1)
+    def test_via_priced_by_its_span(self):
+        """A layer change costs the via cost times its span's multiplier: an F-In2
+        blind via (0.72) is cheaper than a through via (1.0), and F to B takes the
+        direct through via rather than two blind ones (0.72 + 0.78)."""
+        from pnr.route.detail.maze import _astar as astar
+
+        g = grid(1, BB)
+        fi = g.via_model.span(0, 1)
+        self.assertLess(fi.cost, g.via_model.span(0, 2).cost)
+        path = astar(g, {Cell(0, 0, 0)}, {Cell(2, 0, 0)}, "N", {}, {}, 10.0, 1)
+        self.assertEqual([c.layer for c in path], [0, 2])
 
     def test_footprint_only_on_span_layers(self):
         g = grid(12, BB, keepout=1)

@@ -485,6 +485,34 @@ class GlossNativeTest(unittest.TestCase):
         (g2,) = [x for x in g.guards("sig", la, 200000, box) if x.name == "G2"]
         self.assertEqual(len(g2.shapes), 1 + len(m.groups["on", la]))  # + every 'on' track
 
+    def test_nothing_reads_the_pre_apply_board_after_a_corridor_apply(self):
+        # apply_spec deletes the members' old tracks (board.Delete invalidates their wrappers),
+        # so the pre-apply Corridor and grids may not be consulted after the apply.
+        from pnr import gloss
+
+        path, rules = self.board()
+        (spec,) = self.run_worker(worker="inventory", board=path, rules=rules, step="corridor")[
+            "specs"
+        ]
+        model0 = self.model(path, rules)
+        pre = gloss.corridor_before(model0, spec)
+        self.assertEqual(pre["E_after"], pre["cor"].excess(pre["after"], pre["window"]))
+
+        def stale(*a, **kw):
+            raise AssertionError("the pre-apply board was read after the apply")
+
+        pre["cor"].excess = stale
+        for grid in list(model0._item_grid.values()) + list(model0._grids.values()):
+            grid.query = stale
+        applied, alive = gloss.apply_spec(model0, spec)
+        self.assertEqual(len(applied["removed"]), len(spec["members"][0]["ops"]["remove"]))
+        model0.b.BuildConnectivity()
+        model1 = gloss.Model(model0.b, json.loads(Path(rules).read_text()), path=path, base=model0)
+        self.assertIsNone(gloss.recheck(model1, spec, applied))
+        q = gloss.corridor_after(model1, spec, pre)
+        self.assertLess(q["dX_mm2"], 0)
+        self.assertEqual(q["E_new_mm2"], pre["E_after"] / MM / MM)
+
     def test_derived_groups_from_rule_net_classes(self):
         # PNR_GLOSS_CLASSES_FROM=netclasses: c1 and c2 in one rules net class are one group
         # (packing unlimited); a groups file entry wins for its net (c1 moves to its own group)

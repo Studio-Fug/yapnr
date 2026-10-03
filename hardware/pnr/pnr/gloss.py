@@ -1918,7 +1918,11 @@ def board_adjacency(model, la, window):
 
 
 def corridor_before(model0, spec):
-    """Pre-apply corridor state of a spec: (Corridor, base state, after state, window, E0, X0, DS0) or None."""
+    """Pre-apply corridor state of a spec: (Corridor, base state, after state, window, E0, X0, DS0) or None.
+
+    The planned state's excess E1 is computed here too: the Corridor's strip check reads the
+    pre-apply board's items, and apply_spec deletes the members' old tracks (board.Delete), so
+    nothing may consult this Corridor once the spec is applied."""
     g = model0.g
     la = model0.lid[spec["layer"]]
     cor, _, _ = model0.corridor(la, planner=False)
@@ -1938,6 +1942,7 @@ def corridor_before(model0, spec):
         w=some.width,
         c=some.clearance,
         E=cor.excess(base, window),
+        E_after=cor.excess(after, window),
         X=board_adjacency(model0, la, window),
         DS=model0.dead_space(la, some.width, some.clearance, window),
     )
@@ -1947,7 +1952,7 @@ def corridor_after(model1, spec, pre):
     """dX, dE (mm^2) and window dead space after applying, recomputed on the real board (design 3.1;
     the acceptance metric is the ray metric X, E is kept as a diagnostic)."""
     la = model1.lid[spec["layer"]]
-    e1 = pre["cor"].excess(pre["after"], pre["window"])
+    e1 = pre["E_after"]  # computed before apply (corridor_before)
     x1 = board_adjacency(model1, la, pre["window"])
     d1 = model1.dead_space(la, pre["w"], pre["c"], pre["window"])
     return dict(

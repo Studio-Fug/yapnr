@@ -314,7 +314,11 @@ py_test(
     imports = ["."],
     legacy_create_init = False,
     main = "tests/test_length_model.py",
-    deps = [":pnr"],
+    # The bottom-side pad cases place their part with pnr.place.geometry.
+    deps = [
+        ":pnr",
+        ":pnr_place",
+    ],
 )
 
 # The same model against KiCad's own DRC lengths on probe boards; run it under KiCad's

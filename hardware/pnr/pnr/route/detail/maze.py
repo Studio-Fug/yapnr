@@ -56,6 +56,9 @@ class RoutedNet:
     cells: List[Cell] = field(default_factory=list)  # tree of occupied cells
     segments: List[Tuple[int, Tuple[int, int], Tuple[int, int]]] = field(default_factory=list)
     vias: List[Tuple[int, int]] = field(default_factory=list)  # (i, j) grid via sites
+    # (i, j) -> the vias there (pnr.via_policy.Span) when the grid has a via model
+    # (blind/buried/micro vias allowed); empty otherwise (every via is through).
+    via_spans: Dict[Tuple[int, int], list] = field(default_factory=dict)
     routed: bool = False
     remaining_connections: int = 0  # grid-terminal estimate, never native DRC
 
@@ -124,7 +127,9 @@ def _astar(
     DRC-safe 45° steps (both corners free) to shorten diagonal runs. ``blocked``
     cells are hard-impassable; ``soft`` cells (committed other-net copper the rip-up
     pass may cross at a price) are passable but expensive. Returns the path or None."""
-    if os.environ.get("PNR_PACKED_MAZE") == "1":
+    # The packed kernel models through vias only: a grid with a via model (blind,
+    # buried or micro vias allowed) searches here.
+    if os.environ.get("PNR_PACKED_MAZE") == "1" and getattr(grid, "via_model", None) is None:
         from .packed_maze import astar
 
         return astar(
@@ -180,10 +185,17 @@ def _astar(
 
     from functools import lru_cache
 
+    vm = getattr(grid, "via_model", None)
+
     @lru_cache(maxsize=None)
     def cell_cost(c: Cell, via=False) -> float:
-        radius = max(track_halo, via_halo) if via else track_halo
-        layers = range(grid.nlayers) if via else (c.layer,)
+        # ``via``: True for a through via, a Span (its layers, its keep-out) else.
+        if via is True:
+            radius, layers = max(track_halo, via_halo), range(grid.nlayers)
+        elif via:
+            radius, layers = max(track_halo, via.keepout), via.layers()
+        else:
+            radius, layers = track_halo, (c.layer,)
         cells = [
             Cell(la, c.i + di, c.j + dj)
             for la in layers
@@ -270,24 +282,46 @@ def _astar(
         # tests, the plated transition, the hole spacing and a drilled via's price
         # do not depend on the destination layer: each is evaluated at most once
         # per expanded cell (``column``), with the same verdicts and prices.
+        # With a via model (blind/buried/micro vias allowed) a via occupies only
+        # the grid layers of its span: those alone are tested, priced and reserved,
+        # and its price is ``via_cost`` times the span's multiplier.
         column = None
+        columns = {}
         for la in range(grid.nlayers):
             if la == cur.layer:
                 continue
             nc = Cell(la, cur.i, cur.j)
             if not grid.passable(nc.layer, nc.i, nc.j, net):
                 continue
-            if column is None:
-                column = _via_column(
-                    grid, cur, net, block, raw_block, via_halo, drill_sites + path_drills[cur]
-                )
-            # A via needs the wider via-clearance from foreign pads, and the column
-            # must be clear where it lands (checked here and at the source layer).
-            allowed, plated = column
+            if vm is None:
+                if column is None:
+                    column = _via_column(
+                        grid, cur, net, block, raw_block, via_halo, drill_sites + path_drills[cur]
+                    )
+                # A via needs the wider via-clearance from foreign pads, and the column
+                # must be clear where it lands (checked here and at the source layer).
+                allowed, plated = column
+                span = None
+            else:
+                span = vm.span(cur.layer, la)
+                if span not in columns:
+                    columns[span] = _via_column(
+                        grid,
+                        cur,
+                        net,
+                        block,
+                        raw_block,
+                        span.keepout,
+                        drill_sites + path_drills[cur],
+                        span.layers(),
+                    )
+                allowed, plated = columns[span]
             if not allowed:
                 continue
-            if plated is None:
+            if plated is None and span is None:
                 ng = base + cell_cost(Cell(0, nc.i, nc.j), via=True) + via_cost
+            elif plated is None:
+                ng = base + cell_cost(Cell(span.lo, nc.i, nc.j), via=span) + via_cost * span.cost
             else:
                 ng = base + cell_cost(nc)
             if ng < g.get(nc, float("inf")):
@@ -301,21 +335,22 @@ def _astar(
     return None
 
 
-def _via_column(grid, cur, net, block, raw_block, via_halo, sites):
-    """``(allowed, plated)`` for a through via at ``cur``'s column: every layer's
-    cell clear of ``block`` and via-passable, then (a drilled via, ``plated`` None)
-    its halo window clear of ``raw_block`` and its hole spaced from ``sites``."""
+def _via_column(grid, cur, net, block, raw_block, via_halo, sites, layers=None):
+    """``(allowed, plated)`` for a via at ``cur``'s column: every layer's cell (of
+    ``layers``, a span's grid layers; all of them for a through via) clear of
+    ``block`` and via-passable, then (a drilled via, ``plated`` None) its halo
+    window clear of ``raw_block`` and its hole spaced from ``sites``. Hole spacing
+    is judged for every via whatever its span (a conservative reading)."""
     i, j = cur.i, cur.j
-    if any(
-        Cell(z, i, j) in block or not grid.via_passable(z, i, j, net) for z in range(grid.nlayers)
-    ):
+    layers = range(grid.nlayers) if layers is None else layers
+    if any(Cell(z, i, j) in block or not grid.via_passable(z, i, j, net) for z in layers):
         return False, None
     plated = getattr(grid, "plated_transition", lambda *a: None)(net, i, j)
     if plated is not None:
         return True, plated
     if any(
         Cell(z, i + di, j + dj) in raw_block
-        for z in range(grid.nlayers)
+        for z in layers
         for di in range(-via_halo, via_halo + 1)
         for dj in range(-via_halo, via_halo + 1)
     ):
@@ -435,6 +470,19 @@ def _footprint(
                     ni, nj = c.i + di, c.j + dj
                     if grid.in_bounds(ni, nj):
                         fp.add(Cell(c.layer, ni, nj))
+    vm = getattr(grid, "via_model", None)
+    if vm is not None:
+        # Each via reserves its keep-out on its own span's grid layers only.
+        for (i, j), spans in _via_spans(grid, cells, edges, net).items():
+            for span in spans:
+                k = span.keepout
+                for la in span.layers():
+                    for di in range(-k, k + 1):
+                        for dj in range(-k, k + 1):
+                            ni, nj = i + di, j + dj
+                            if grid.in_bounds(ni, nj):
+                                fp.add(Cell(la, ni, nj))
+        return fp
     via_sites = _via_sites(cells) if edges is None else _new_via_sites(grid, edges, net)
     for i, j in via_sites:
         for la in range(grid.nlayers):
@@ -446,12 +494,42 @@ def _footprint(
     return fp
 
 
-def _to_geometry(route: "_Route") -> RoutedNet:
+def _via_spans(grid, cells, edges=None, net=None):
+    """(i, j) -> the vias (pnr.via_policy.Span) at each drilled via site, under the
+    grid's via model: the spans of the via moves there, merged where they share a
+    copper layer (one barrel). Without ``edges`` a column's layers give one span
+    from its top to its bottom layer (a conservative superset)."""
+    vm = grid.via_model
+    out = {}
+    if edges is None:
+        by_ij = defaultdict(set)
+        for c in cells:
+            by_ij[(c.i, c.j)].add(c.layer)
+        for ij, lays in by_ij.items():
+            if len(lays) > 1:
+                out[ij] = [vm.span(min(lays), max(lays))]
+        return out
+    plated = getattr(grid, "plated_transition", lambda *a: None)
+    moves = defaultdict(list)
+    for a, b in edges:
+        if a.layer != b.layer and (net is None or plated(net, a.i, a.j) is None):
+            moves[(a.i, a.j)].append(vm.span(a.layer, b.layer))
+    return {ij: vm.merged(spans) for ij, spans in moves.items()}
+
+
+def _to_geometry(route: "_Route", grid=None) -> RoutedNet:
     """Turn a :class:`_Route` into track segments + via sites. Each *same-layer* edge
     (orthogonal OR 45° diagonal) is a track segment; a column present on two layers
     is a via. Emitting from the recorded edges — not by re-scanning cell adjacency —
-    is what keeps the 45° segments exactly the ones the router chose."""
+    is what keeps the 45° segments exactly the ones the router chose. With a
+    ``grid`` that has a via model the vias' spans are kept (``via_spans``)."""
     rn = RoutedNet(name="", cells=list(route.cells))
+    if grid is not None and getattr(grid, "via_model", None) is not None:
+        moves = defaultdict(list)
+        for a, b in route.edges:
+            if a.layer != b.layer:
+                moves[(a.i, a.j)].append(grid.via_model.span(a.layer, b.layer))
+        rn.via_spans = {ij: grid.via_model.merged(sp) for ij, sp in sorted(moves.items())}
     seen: Set[Tuple[Tuple[int, int], Tuple[int, int], int]] = set()
     for a, b in route.edges:
         if a.layer != b.layer:
@@ -521,7 +599,7 @@ def _route_impl(
     def live_net(net, route, kind):
         if not os.environ.get("PNR_LIVE_DIR"):
             return
-        rn = _to_geometry(route) if route else None
+        rn = _to_geometry(route, grid) if route else None
         tracks = []
         if rn:
             for layer, a, b in rn.segments:
@@ -648,7 +726,7 @@ def _route_impl(
             occupied[c] = net
             committed.add(c)
         routes[net] = route
-        rn = _to_geometry(route)
+        rn = _to_geometry(route, grid)
         rn.name = net
         rn.routed = True
         result_nets[net] = rn
@@ -805,7 +883,7 @@ def _route_impl(
     unrouted = []
     for net in nets:
         route = best_snap.get(net)
-        rn = _to_geometry(route) if route else _to_geometry(_Route())
+        rn = _to_geometry(route, grid) if route else _to_geometry(_Route())
         rn.name = net
         rn.remaining_connections = remaining_connections(
             net_access[net], route.edges if route else []
@@ -866,7 +944,7 @@ def _route_impl(
                 forest = trial
                 tree.update(path)
                 remaining.difference_update(path)
-        rn = _to_geometry(forest)
+        rn = _to_geometry(forest, grid)
         rn.name = net
         rn.remaining_connections = remaining_connections(net_access[net], forest.edges)
         rn.routed = rn.remaining_connections == 0

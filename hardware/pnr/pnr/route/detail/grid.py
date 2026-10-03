@@ -115,6 +115,13 @@ class RouteGrid:
         # for a declared stack only (route_board: a current-rated net stays off an
         # inner layer whose copper would need a wider track); vias still cross.
         self.layer_mask = None
+        # Blind, buried and micro vias (pnr.via_policy.GridVias): None when the
+        # board allows through vias only, which keeps every via full-stack. A via
+        # then occupies (and is checked, reserved and priced on) only its span's
+        # grid layers. ``escape_via_spans`` gives a planned escape via's span by
+        # (net, site); a via missing from it is through.
+        self.via_model = None
+        self.escape_via_spans = {}
 
     def plated_transition(self, net, i, j):
         """Exact source PTH centre when this column fits its existing copper land.

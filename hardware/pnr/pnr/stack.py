@@ -652,14 +652,17 @@ class PlaneAccess:
         own = [r for r in rows if r.net == net and r.outline is None]
         return any(not any(f.net != net and f.priority >= r.priority for f in rows) for r in own)
 
-    def constrained(self, net: str) -> bool:
+    def constrained(self, net: str, layers: Optional[Sequence[str]] = None) -> bool:
         """False when every site of ``net`` reaches one of its planes (a plane of
-        its own over the whole board): the test can be skipped."""
-        layers = self.stack.net_planes(net)
+        its own over the whole board): the test can be skipped. ``layers`` limits
+        the planes to those a via reaches (a blind or micro drop's span)."""
+        layers = self.stack.net_planes(net) if layers is None else list(layers)
         return bool(layers) and not any(self._free(net, la) for la in layers)
 
-    def site_ok(self, net: str, p: Tuple[float, float]) -> bool:
-        for layer in self.stack.net_planes(net):
+    def site_ok(
+        self, net: str, p: Tuple[float, float], layers: Optional[Sequence[str]] = None
+    ) -> bool:
+        for layer in self.stack.net_planes(net) if layers is None else layers:
             rows = self.by_layer.get(layer, [])
             for r in rows:
                 if r.net != net:

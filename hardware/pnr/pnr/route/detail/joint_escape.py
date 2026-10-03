@@ -38,8 +38,9 @@ def _segment_clear(grid, net, layer, a, b, width):
     # and retained copper. Exact foreign-pad checks below may relax pad *halos*,
     # but they may never relax this mask.
     steps = max(1, math.ceil(math.dist(a, b) / (grid.pitch / 4)))
-    # Fixed-block copper (a centreline reservation, like the maze's): judged at the
-    # centre samples. Absent, nothing.
+    # Copper keepouts with allow lists and fixed-block copper (both centreline
+    # reservations, like the maze's): judged at the centre samples. Absent, nothing.
+    keepouts = getattr(grid, "net_keepouts", None)
     owned = getattr(grid, "fixed_owned", None)
     for step in range(steps + 1):
         x = a[0] + (b[0] - a[0]) * step / steps
@@ -52,6 +53,8 @@ def _segment_clear(grid, net, layer, a, b, width):
                 return False
             if dx or dy:
                 continue
+            if keepouts and grid.net_blocked(net, layer, i, j):
+                return False
             if owned:
                 holder = owned.get((layer, i, j))
                 if holder is not None and holder != net:
@@ -110,8 +113,11 @@ def _via_clear(grid, net, p, via_keepout, span=None):
         return False
     # Checking a point with the via diameter reuses the exact foreign copper test
     # in every layer; via-blocked applies even when tracks may use an inner gap.
+    keepouts = getattr(grid, "net_keepouts", None)
     return all(
-        not grid.via_blocked[la, j, i] and _segment_clear(grid, net, la, p, p, 2 * radius)
+        not grid.via_blocked[la, j, i]
+        and not (keepouts and grid.net_blocked(net, la, i, j, via=True))
+        and _segment_clear(grid, net, la, p, p, 2 * radius)
         for la in layers
     )
 
@@ -418,8 +424,11 @@ def _drop_via_clear(grid, net, p, span=None):
         (grid.via_halo, getattr(grid, "pad_via_halo", {})),
     )
     radius = grid.via_radius if span is None else span.radius
+    keepouts = getattr(grid, "net_keepouts", None)
     for la in range(grid.nlayers) if span is None else span.layers():
         if grid.via_blocked[la, j, i]:
+            return False
+        if keepouts and grid.net_blocked(net, la, i, j, via=True):
             return False
         key = (la, i, j)
         for table, pads_only in halos:

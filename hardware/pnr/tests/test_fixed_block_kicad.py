@@ -344,5 +344,85 @@ def drc(cli, board):
     return json.loads(out.read_text())
 
 
+@unittest.skipUnless(NATIVE and CLI, "requires KiCad Python and PNR_KICAD_CLI")
+class KeepoutRulesJudgedByKiCad(unittest.TestCase):
+    """The keepouts writeback writes, judged by kicad-cli: a class keepout bars
+    other nets' tracks and vias on its layers only, never an allowed class or an
+    exempt group's copper; a plain v1 keepout bars every net on its layers."""
+
+    def test_rule_areas_and_custom_rules(self):
+        import pcbnew as k
+
+        from pnr.fab_profile import append_board_rules
+        from pnr.graph import BoardGraph
+        from pnr.writeback import _keepout_v1_area, _WriteFrame, keepout_dru
+
+        b, nets = block_board()
+        guard = dict(
+            name="guard",
+            polygon=[[14, 6], [23, 6], [23, 15], [14, 15]],
+            layers=["F.Cu", "In1.Cu"],
+            items=["tracks", "vias"],
+            allow_classes=["pwr"],
+            allow_nets=[],
+            allowed_nets=["VCC"],
+            exempt_groups=["BLK"],
+        )
+        plain = dict(
+            name="plain",
+            polygon=[[2, 2], [8, 2], [8, 6], [2, 6]],
+            layers=["B.Cu"],
+            items=["tracks"],
+            allow_classes=[],
+            allow_nets=[],
+            allowed_nets=[],
+            exempt_groups=[],
+        )
+        rules = dict(
+            layers=4,
+            copper_keepouts=[guard, plain],
+            net_classes=[dict(name="pwr", nets=["VCC"])],
+        )
+        frame = _WriteFrame(SIZE[1], OFFSET)
+        for spec in (guard, plain):
+            b.Add(_keepout_v1_area(b, BoardGraph("t"), spec, frame))
+        planted = {
+            "sig_front": track(b, nets["SIG"], (14.5, 7), (16.5, 7)),  # barred
+            "sig_back": track(
+                b, nets["SIG"], (14.5, 7.5), (16.5, 7.5), layer=k.B_Cu
+            ),  # other layer
+            "vcc_front": track(b, nets["VCC"], (20.5, 7), (22.5, 7)),  # allowed class
+            "sig_via": via(b, nets["SIG"], (22, 14.5)),  # barred (vias, through F.Cu)
+            "plain_back": track(b, nets["SIG"], (3, 3), (6, 3), layer=k.B_Cu),  # plain: barred
+            "plain_front": track(b, nets["SIG"], (3, 4), (6, 4)),  # plain: F.Cu free
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "keepout.kicad_pcb"
+            k.SaveBoard(str(path), b)
+            project = {
+                "net_settings": {
+                    "classes": [{"name": "Default"}, {"name": "pwr"}],
+                    "netclass_patterns": [{"netclass": "pwr", "pattern": "VCC"}],
+                }
+            }
+            path.with_suffix(".kicad_pro").write_text(json.dumps(project))
+            block = keepout_dru(rules)
+            self.assertIn("A.intersectsArea('PNR keepout:guard')", block)
+            self.assertIn("!A.memberOfGroup('BLK')", block)
+            self.assertNotIn("plain", block)
+            append_board_rules(path, block)
+            report = drc(CLI, path)
+        hits = {}
+        for v in report["violations"]:
+            if v["type"] != "items_not_allowed":  # the planted copper also dangles
+                continue
+            for item in v.get("items", []):
+                hits.setdefault(item.get("uuid"), set()).add(v["type"])
+        flagged = {name for name, item in planted.items() if item.m_Uuid.AsString() in hits}
+        self.assertEqual(flagged, {"sig_front", "sig_via", "plain_back"}, report["violations"])
+        group_items = {t.m_Uuid.AsString() for t in b.GetTracks() if t.GetParentGroup()}
+        self.assertFalse(group_items & set(hits), "the exempt group's copper is never flagged")
+
+
 if __name__ == "__main__":
     unittest.main()

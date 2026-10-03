@@ -1388,6 +1388,9 @@ def apply_copper_keepouts(board, graph, rules, height):
             board.Delete(zone)  # recreated below; the old area is discarded
     frame = _WriteFrame(height)
     for spec in rules.get("copper_keepouts", []):
+        if "items" in spec:
+            board.Add(_keepout_v1_area(board, graph, spec, frame))
+            continue
         comp = graph.component(spec["ref"])
         x0, y0, x1, y1 = spec["rect_mm"]
         zone = pcbnew.ZONE(board)
@@ -1405,6 +1408,87 @@ def apply_copper_keepouts(board, graph, rules, height):
             polygon.Append(frame.point(*footprint_point(comp, x, y)))
         board.Add(zone)
     return len(rules.get("copper_keepouts", []))
+
+
+def _keepout_v1_area(board, graph, spec, frame):
+    """The rule area of a v1 keepout: on its layers; without allow lists or exempt
+    groups it forbids its ``items`` itself (v0's flags), otherwise it forbids nothing
+    and :func:`keepout_dru` writes its custom rules."""
+    import pcbnew
+
+    from pnr.fixed_block import keepout_class_mode, keepout_polygon
+
+    zone = pcbnew.ZONE(board)
+    zone.SetIsRuleArea(True)
+    zone.SetZoneName("PNR keepout:" + spec["name"])
+    lset = pcbnew.LSET()
+    for name in spec["layers"]:
+        lset.AddLayer(copper_layer(board, name))
+    zone.SetLayerSet(lset)
+    flags = not keepout_class_mode(spec)
+    items = set(spec["items"])
+    zone.SetDoNotAllowTracks(flags and "tracks" in items)
+    zone.SetDoNotAllowVias(flags and "vias" in items)
+    zone.SetDoNotAllowZoneFills(flags and "pours" in items)
+    zone.SetDoNotAllowPads(False)
+    zone.SetDoNotAllowFootprints(False)
+    polygon = zone.Outline()
+    polygon.NewOutline()
+    for x, y in keepout_polygon(graph, spec):
+        polygon.Append(frame.point(x, y))
+    return zone
+
+
+def keepout_dru(rules: Optional[dict]) -> Optional[str]:
+    """The custom rules (``.kicad_dru``) of the v1 keepouts with allow lists or exempt
+    groups, as one marked block (pnr.fab_profile.append_board_rules), or None when
+    there are none. Per keepout and layer: items intersecting its rule area are
+    disallowed unless their net is allowed (``hasNetclass`` for a class, the net name
+    for a net) or they belong to an exempt group (``memberOfGroup``)."""
+    from pnr.fab_profile import KEEPOUT_DRU_BEGIN, KEEPOUT_DRU_END
+    from pnr.fixed_block import keepout_class_mode
+
+    def quote(text):
+        if "'" in text or '"' in text or "\\" in text:
+            raise ValueError("keepout DRU: unsupported quote in %r" % text)
+        return text
+
+    kinds = {"tracks": "track", "vias": "via", "pours": "zone"}
+    rules_out = []
+    for spec in (rules or {}).get("copper_keepouts", []):
+        if "items" not in spec or not keepout_class_mode(spec):
+            continue
+        name = quote(spec["name"])
+        terms = ["A.intersectsArea('PNR keepout:%s')" % name]
+        terms += ["!A.hasNetclass('%s')" % quote(c) for c in spec.get("allow_classes") or []]
+        literal = set(spec.get("allowed_nets") or []) - _class_nets(rules, spec)
+        terms += ["A.NetName != '%s'" % quote(n) for n in sorted(literal)]
+        terms += ["!A.memberOfGroup('%s')" % quote(g) for g in spec.get("exempt_groups") or []]
+        disallow = " ".join(kinds[i] for i in ("tracks", "vias", "pours") if i in spec["items"])
+        for layer in spec["layers"]:
+            rules_out.append(
+                '(rule "yapnr keepout %s %s"\n  (layer "%s")\n  (condition "%s")\n'
+                "  (constraint disallow %s))" % (name, layer, layer, " && ".join(terms), disallow)
+            )
+    if not rules_out:
+        return None
+    return (
+        "%s (pnr.writeback: copper_keepout allow lists and exempt groups; replaced whole)\n"
+        "%s\n%s\n" % (KEEPOUT_DRU_BEGIN, "\n".join(rules_out), KEEPOUT_DRU_END)
+    )
+
+
+def _class_nets(rules, spec):
+    """Nets of the keepout's allowed classes (their ``hasNetclass`` term covers them)."""
+    classes = set(spec.get("allow_classes") or [])
+    nets = set()
+    for nc in (rules or {}).get("net_classes", []):
+        if nc["name"] in classes:
+            nets.update(nc.get("nets") or [])
+    for dp in (rules or {}).get("diff_pairs", []):
+        if "dp_" + dp["name"] in classes:
+            nets.update((dp["p"], dp["n"]))
+    return nets
 
 
 def apply_mounting_holes(board, rules, height):
@@ -1573,6 +1657,13 @@ def writeback(
         fh.write(text)
     if rules and out_pcb.endswith(".kicad_pcb"):
         patch_project_rules(out_pcb[: -len(".kicad_pcb")] + ".kicad_pro", rules)
+        block = keepout_dru(rules)
+        if block is not None:
+            # The keepouts with allow lists: their rules beside the profile's (or a
+            # hand-written file's) own, only this block replaced.
+            from pnr.fab_profile import append_board_rules
+
+            append_board_rules(out_pcb, block)
     # NB: planes are poured *after* the detailed route (see pnr.planes) — a
     # FreeRouting DSN/SES round-trip drops pre-poured zones.
     return n

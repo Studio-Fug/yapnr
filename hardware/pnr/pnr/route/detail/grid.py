@@ -181,6 +181,11 @@ class RouteGrid:
         # (net, site); a via missing from it is through.
         self.via_model = None
         self.escape_via_spans = {}
+        # Copper keepouts with allow lists (``copper_keepout`` v1 allow_classes /
+        # allow_nets, :meth:`add_net_keepout`): ``(track_mask, via_mask, allowed)``,
+        # masks ``[layer, j, i]`` (None: that item is not barred); a net outside
+        # ``allowed`` may not put a track (a via) on a masked cell. Empty: no effect.
+        self.net_keepouts = []
         # Cells owned by fixed-block copper (pnr.route.detail.fixed, blocks only):
         # (layer, i, j) -> net (or a conflict). A mirror of their ``pad_net`` claims
         # for the exact escape tests (joint_escape), which read pad rectangles, not
@@ -341,6 +346,8 @@ class RouteGrid:
         owner = self.pad_net.get((layer, i, j))
         if owner is not None and owner != net:
             return False
+        if self.net_keepouts and self.net_blocked(net, layer, i, j):
+            return False
         wide = self.wide_pad_net.get(net)
         if wide is None:
             return True
@@ -371,8 +378,28 @@ class RouteGrid:
         owner = self.pad_net.get((layer, i, j))
         if owner is not None and owner != net:
             return False
+        if self.net_keepouts and self.net_blocked(net, layer, i, j, via=True):
+            return False
         vh = self.via_halo.get((layer, i, j))
         return vh is None or vh == net
+
+    def net_blocked(
+        self, net: Optional[str], layer: int, i: int, j: int, via: bool = False
+    ) -> bool:
+        """A copper keepout with allow lists bars ``net``'s track (``via``: its via)
+        on cell (layer, i, j) (:attr:`net_keepouts`)."""
+        for track, via_mask, allowed in self.net_keepouts:
+            if net is not None and net in allowed:
+                continue
+            mask = via_mask if via else track
+            if mask is not None and mask[layer, j, i]:
+                return True
+        return False
+
+    def add_net_keepout(self, track_mask, via_mask, allowed) -> None:
+        """Bar every net outside ``allowed`` from the masked cells (``[layer, j,
+        i]`` bool arrays; None: tracks, or vias, are not barred)."""
+        self.net_keepouts.append((track_mask, via_mask, frozenset(allowed)))
 
     def polygon_cells(self, outline, holes=(), grow: float = 0.0):
         """``[ny, nx]`` bool: cells whose centre lies inside the polygon (``outline``

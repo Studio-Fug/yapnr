@@ -24,8 +24,8 @@ from pnr.fixed_block import (
 )
 from pnr.graph import BoardGraph, Component, Net, Pad
 from pnr.route.detail.fixed import reserve_fixed_copper
-from pnr.route.detail.grid import RouteGrid
-from pnr.route.detail.router import block_ports
+from pnr.route.detail.grid import Cell, RouteGrid
+from pnr.route.detail.router import _mark_copper_keepouts, block_ports
 
 
 def _seg_dist(p, a, b):
@@ -337,6 +337,233 @@ class ConstraintTest(unittest.TestCase):
             with self.subTest(extra=extra):
                 with self.assertRaises(ConstraintError):
                     _compile(extra)
+
+
+class RouterKeepoutTest(unittest.TestCase):
+    def grid(self):
+        g = RouteGrid(10, 10, 0.2, layers=("F.Cu", "B.Cu"), clearance=0.1, track_width=0.2)
+        g.net_widths = {}
+        return g
+
+    def test_per_layer_static_keepout(self):
+        g = self.grid()
+        spec = dict(
+            name="k",
+            polygon=[[4, 4], [6, 4], [6, 6], [4, 6]],
+            layers=["F.Cu"],
+            items=["tracks"],
+            allowed_nets=[],
+        )
+        _mark_copper_keepouts(g, BoardGraph("t"), {"copper_keepouts": [spec]})
+        i, j = g.cell_of(5, 5)
+        self.assertFalse(g.passable(0, i, j, "A"))
+        self.assertTrue(g.passable(1, i, j, "A"))
+        self.assertTrue(g.via_passable(0, i, j, "A"))  # vias not barred
+        self.assertTrue(g.passable(0, *g.cell_of(7, 7), "A"))
+
+    def test_plane_layer_keepout_bars_vias_only(self):
+        g = self.grid()
+        spec = dict(
+            name="k",
+            polygon=[[4, 4], [6, 4], [6, 6], [4, 6]],
+            layers=["In1.Cu"],
+            items=["tracks", "vias"],
+            allowed_nets=[],
+        )
+        _mark_copper_keepouts(g, BoardGraph("t"), {"copper_keepouts": [spec]})
+        i, j = g.cell_of(5, 5)
+        self.assertTrue(g.passable(0, i, j, "A") and g.passable(1, i, j, "A"))
+        self.assertFalse(g.via_passable(0, i, j, "A") or g.via_passable(1, i, j, "A"))
+
+    def test_class_keepout_bars_only_other_nets(self):
+        g = self.grid()
+        spec = dict(
+            name="guard",
+            polygon=[[4, 4], [6, 4], [6, 6], [4, 6]],
+            layers=["F.Cu", "B.Cu"],
+            items=["tracks", "vias"],
+            allow_classes=["pwr"],
+            allow_nets=[],
+            allowed_nets=["VCC"],
+        )
+        _mark_copper_keepouts(g, BoardGraph("t"), {"copper_keepouts": [spec]})
+        self.assertFalse(g.blocked.any() or g.via_blocked.any())
+        i, j = g.cell_of(5, 5)
+        for la in range(2):
+            self.assertTrue(g.passable(la, i, j, "VCC"))
+            self.assertTrue(g.via_passable(la, i, j, "VCC"))
+            self.assertFalse(g.passable(la, i, j, "SIG"))
+            self.assertFalse(g.via_passable(la, i, j, "SIG"))
+        self.assertTrue(g.net_blocked("SIG", 0, i, j))
+        self.assertFalse(g.net_blocked("VCC", 0, i, j))
+
+    def test_dense_fields_match_the_predicates(self):
+        from pnr.route.detail.dense_maze import GridStatic, unmodelled
+
+        g = self.grid()
+        spec = dict(
+            name="guard",
+            polygon=[[3, 3], [7, 3], [7, 7], [3, 7]],
+            layers=["F.Cu"],
+            items=["tracks", "vias"],
+            allow_classes=["pwr"],
+            allow_nets=[],
+            allowed_nets=["VCC"],
+        )
+        _mark_copper_keepouts(g, BoardGraph("t"), {"copper_keepouts": [spec]})
+        reserve_fixed_copper(
+            g, dict(frame="engine-mm-y-up", tracks=[], vias=[], blocks=[meander_block()])
+        )
+        self.assertIsNone(unmodelled(g))
+        static = GridStatic(g)
+        for net in ("VCC", "SIG", "CLK", "GND"):
+            passable, via, _ = static.net(net)
+            for la in range(g.nlayers):
+                for j in range(g.ny):
+                    for i in range(g.nx):
+                        self.assertEqual(
+                            bool(passable[la, j, i]), g.passable(la, i, j, net), (net, la, i, j)
+                        )
+                        self.assertEqual(
+                            bool(via[la, j, i]), g.via_passable(la, i, j, net), (net, la, i, j)
+                        )
+
+    def test_kernels_route_identically_around_a_class_keepout(self):
+        import os
+
+        from pnr.route.detail.maze import route
+
+        results = {}
+        for kernel in ("reference", "packed"):
+            g = self.grid()
+            spec = dict(
+                name="guard",
+                polygon=[[4, 1], [6, 1], [6, 9], [4, 9]],
+                layers=["F.Cu", "B.Cu"],
+                items=["tracks", "vias"],
+                allow_classes=["pwr"],
+                allow_nets=[],
+                allowed_nets=["VCC"],
+            )
+            _mark_copper_keepouts(g, BoardGraph("t"), {"copper_keepouts": [spec]})
+            access = {
+                "VCC": [Cell(0, *g.cell_of(1, 5)), Cell(0, *g.cell_of(9, 5))],
+                "SIG": [Cell(0, *g.cell_of(1, 3)), Cell(0, *g.cell_of(9, 3))],
+            }
+            old = os.environ.get("PNR_MAZE_KERNEL")
+            os.environ["PNR_MAZE_KERNEL"] = kernel
+            try:
+                r = route(g, access, max_iters=3, rrr_rounds=1)
+            finally:
+                if old is None:
+                    os.environ.pop("PNR_MAZE_KERNEL", None)
+                else:
+                    os.environ["PNR_MAZE_KERNEL"] = old
+            results[kernel] = {n: (rn.routed, list(rn.cells)) for n, rn in r.nets.items()}
+            self.assertTrue(r.nets["VCC"].routed)
+            self.assertTrue(r.nets["SIG"].routed)
+            self.assertFalse(
+                any(g.net_blocked("SIG", c.layer, c.i, c.j) for c in r.nets["SIG"].cells)
+            )
+            self.assertTrue(
+                any(g.net_blocked("SIG", c.layer, c.i, c.j) for c in r.nets["VCC"].cells)
+            )
+        self.assertEqual(results["reference"], results["packed"])
+
+
+class KeepoutRulesFileTest(unittest.TestCase):
+    """The marked custom-rules block: written beside the profile's rules or a
+    hand-written file's, replaced alone, carried through regenerations."""
+
+    GUARD = dict(
+        name="guard",
+        polygon=[[0, 0], [1, 0], [1, 1]],
+        layers=["F.Cu", "In1.Cu"],
+        items=["tracks", "vias"],
+        allow_classes=["pwr"],
+        allow_nets=["V*"],
+        allowed_nets=["VBAT", "VCC"],
+        exempt_groups=["BLK"],
+    )
+
+    def test_keepout_dru_text(self):
+        from pnr.fab_profile import KEEPOUT_DRU_BEGIN, KEEPOUT_DRU_END
+        from pnr.writeback import keepout_dru
+
+        plain = dict(
+            self.GUARD,
+            name="plain",
+            allow_classes=[],
+            allow_nets=[],
+            allowed_nets=[],
+            exempt_groups=[],
+        )
+        v0 = dict(name="U1", ref="U1", rect_mm=[0, 0, 1, 1])
+        self.assertIsNone(keepout_dru({"copper_keepouts": [plain, v0]}))
+        rules = {
+            "copper_keepouts": [self.GUARD, plain],
+            "net_classes": [dict(name="pwr", nets=["VCC"])],
+        }
+        text = keepout_dru(rules)
+        self.assertTrue(text.startswith(KEEPOUT_DRU_BEGIN))
+        self.assertTrue(text.rstrip().endswith(KEEPOUT_DRU_END))
+        self.assertEqual(text.count("(rule "), 2)  # one per layer of the guard only
+        self.assertIn('(layer "In1.Cu")', text)
+        self.assertIn(
+            "A.intersectsArea('PNR keepout:guard') && !A.hasNetclass('pwr') && "
+            "A.NetName != 'VBAT' && !A.memberOfGroup('BLK')",
+            text,
+        )
+        self.assertIn("(constraint disallow track via))", text)
+
+    def test_append_replace_and_regenerate(self):
+        import tempfile
+        from pathlib import Path
+
+        from pnr.fab_profile import (
+            DRU_HEADER,
+            KEEPOUT_ONLY_HEADER,
+            append_board_rules,
+            board_rules_block,
+            write_dru,
+        )
+        from pnr.writeback import keepout_dru
+
+        block = keepout_dru({"copper_keepouts": [self.GUARD]})
+        other = block.replace("guard", "guard2")
+        with tempfile.TemporaryDirectory() as tmp:
+            board = Path(tmp) / "b.kicad_pcb"
+            dru = board.with_suffix(".kicad_dru")
+            # No file: one with the block alone, managed; legacy keeps it.
+            append_board_rules(board, block)
+            self.assertTrue(dru.read_text().startswith(KEEPOUT_ONLY_HEADER))
+            write_dru(board, name="legacy")
+            self.assertEqual(board_rules_block(dru.read_text()), block)
+            # A profile regenerates its rules and keeps the block.
+            write_dru(board, name="jlc-pofv")
+            text = dru.read_text()
+            self.assertIn(DRU_HEADER, text)
+            self.assertEqual(board_rules_block(text), block)
+            # Replacing changes the block only.
+            append_board_rules(board, other)
+            after = dru.read_text()
+            self.assertEqual(board_rules_block(after), other)
+            self.assertEqual(after.replace(other, ""), text.replace(block, ""))
+            # A hand-written file keeps its own rules.
+            dru.write_text("(version 1)\n(rule own (constraint clearance (min 0.2mm)))\n")
+            append_board_rules(board, block)
+            self.assertTrue(dru.read_text().startswith("(version 1)\n(rule own"))
+            self.assertEqual(board_rules_block(dru.read_text()), block)
+            write_dru(board, name="jlc-pofv")  # hand-written: untouched
+            self.assertEqual(board_rules_block(dru.read_text()), block)
+            append_board_rules(board, None)
+            self.assertIsNone(board_rules_block(dru.read_text()))
+            self.assertIn("(rule own", dru.read_text())
+            # Legacy without a block: a generated file goes, as before.
+            dru.unlink()
+            write_dru(board, name="jlc-pofv")
+            write_dru(board, name="legacy")
+            self.assertFalse(dru.exists())
 
 
 class RouteBoardPortTest(unittest.TestCase):

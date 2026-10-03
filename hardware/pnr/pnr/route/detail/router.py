@@ -311,6 +311,9 @@ def _mark_copper_keepouts(grid: RouteGrid, graph: BoardGraph, rules: Optional[di
         diameter = spec["clearance_diameter_mm"]
         grid.block_region(Rect(x, y, diameter, diameter), grow=grid.via_radius)
     for spec in rules.get("copper_keepouts", []):
+        if "items" in spec:  # v1: per layer, per item, optional allow lists
+            _mark_keepout_v1(grid, graph, spec)
+            continue
         comp = graph.component(spec["ref"])
         x0, y0, x1, y1 = spec["rect_mm"]
         # The same transform as writeback's rule area (mirrored with the pads).
@@ -325,6 +328,44 @@ def _mark_copper_keepouts(grid: RouteGrid, graph: BoardGraph, rules: Optional[di
             ),
             grow=grid.via_radius,
         )
+
+
+def _mark_keepout_v1(grid: RouteGrid, graph: BoardGraph, spec: dict) -> None:
+    """A v1 keepout on the grid. Tracks are barred on the listed layers the grid
+    routes; vias (through: every layer) wherever any listed layer bars them, as
+    KiCad's rule areas do. A cell is barred when its centre comes within half the
+    widest track (or the via radius) plus half a cell diagonal of the polygon.
+    Without allow lists every net is barred (static obstacles); with them only the
+    nets outside ``allowed_nets`` (:meth:`RouteGrid.add_net_keepout`). Pours are
+    writeback's (rule area flags or custom rules)."""
+    import numpy as np
+
+    from pnr.fixed_block import keepout_polygon
+
+    poly = keepout_polygon(graph, spec)
+    names = list(spec.get("layers") or grid.layers)
+    items = spec.get("items") or ("tracks", "vias", "pours")
+    layers = [grid.layers.index(n) for n in names if n in grid.layers]
+    cell_radius = grid.pitch / math.sqrt(2)
+    widest = max([grid.track_width] + list((grid.net_widths or {}).values()))
+    shape = (grid.nlayers, grid.ny, grid.nx)
+    track = via = None
+    if "tracks" in items and layers:
+        cells = grid.polygon_cells(poly, (), widest / 2 + cell_radius)
+        track = np.zeros(shape, dtype=bool)
+        track[layers] = cells
+    if "vias" in items and names:
+        cells = grid.polygon_cells(poly, (), grid.via_radius + cell_radius)
+        via = np.zeros(shape, dtype=bool)
+        via[:] = cells
+    if spec.get("allow_classes") or spec.get("allow_nets"):
+        if track is not None or via is not None:
+            grid.add_net_keepout(track, via, spec.get("allowed_nets") or ())
+        return
+    if track is not None:
+        grid.blocked |= track
+    if via is not None:
+        grid.via_blocked |= via
 
 
 def block_ports(grid: RouteGrid, graph: BoardGraph, copper: Optional[dict], skip=()):

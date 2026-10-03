@@ -54,14 +54,14 @@
   ],
   "bands": {
     "A": {
-      "lo_ghz": 7.4,
-      "hi_ghz": 8.6,
-      "points": 4
+      "lo_ghz": 7.5,
+      "hi_ghz": 8.5,
+      "points": 5
     },
     "B": {
-      "lo_ghz": 11.4,
-      "hi_ghz": 12.6,
-      "points": 4
+      "lo_ghz": 11.5,
+      "hi_ghz": 12.5,
+      "points": 5
     }
   },
   "requirements": [
@@ -98,12 +98,12 @@
   ],
   "fixed": [],
   "optimizer": {
-    "betas": [8.0, 16.0, 32.0, 64.0, 128.0],
-    "iterations_per_beta": 25,
+    "betas": [8, 16, 32, 64],
+    "iterations_per_beta": [25, 15, 15, 15],
     "min_iterations": 8,
-    "budget_min": 55,
+    "budget_min": 150,
     "move": 0.2,
-    "move_late": 0.1,
+    "move_late": 0.05,
     "init": 0.5,
     "eta": 0.5,
     "tau": 0.05,
@@ -116,7 +116,9 @@
     "filter_radius_mm": null,
     "seed": "stubs",
     "binary_every": 5,
-    "eta_variants": []
+    "eta_variants": [0.45, 0.55],
+    "adaptive_move": true,
+    "adaptive_from_beta": 16.0
   },
   "solver": {
     "backend": "torch",
@@ -126,6 +128,8 @@
     "decimation": "auto",
     "max_steps": 200000,
     "threads": 4,
-    "sweep_points": 101
+    "sweep_points": 101,
+    "edge_correction": true,
+    "port_source": "mode"
   }
 }

@@ -1424,6 +1424,96 @@ torch's four, and an adjoint run on the antenna's grid used about 7 cores and to
 instead of 28.3 s with one OpenBLAS thread. The Bazel targets set `OPENBLAS_NUM_THREADS=1`
 and the guide says so; the round-1 and accuracy runs were affected the same way.
 
+## 23. Round 2: the cases
+
+The divider, the Wilkinson-type combiner and the two filter banks re-run with the round-2 solver
+(§21: the copper-edge correction and the modal port source), one at a time on 4 threads, each
+exported and re-validated from its footprint on three grids (§11.5). The Mac was shared with
+another experiment from about 10:15 (load 8–10), and iterations took 1.5–2 times as long as on
+an idle machine; times below are wall clock.
+
+### 23.1 Changes common to the cases
+
+- **Solver.** `solver.edge_correction` and `solver.port_source: mode` in every case
+  (`cases.ROUND2_SOLVER`), smoke variants included.
+- **Width and space repair: conflicting necks** (`export.repair`). The repair stopped at a fixed
+  point of its round (opening, space pass, corner bridges) that was not a fixed point of each
+  pass: a one-pixel bridge between two blocks offset diagonally by a pixel is removed by the
+  opening and put back by the space pass, since removed it leaves a one-pixel gap. Round 1's
+  Wilkinson footprint kept two such bridges (the 0.14 mm "necks" the polygon check reported).
+  Such a pixel is now widened to the minimum width (the k × k square through it that needs the
+  fewest new copper pixels, none fixed void or outside the window) and the rounds continue; on
+  round 1's Wilkinson design that adds 2 pixels and the polygon check passes (unit test).
+- **Forward runs of every variant are reused.** An adaptive step evaluates the trial point's
+  nominal and variant designs (forward runs only) and the next iteration the same designs with
+  gradients; the forward-run cache held one design, so robust runs repeated a forward run per
+  variant and excitation (the combiner: 95 s per iteration). `Problem` now keeps two designs
+  per variant (LRU; 63 s), with identical values and gradients (unit test).
+- **Robust variants** (the dilated and eroded designs, thresholds 0.45 and 0.55, [1] §5.3) in
+  the combiner, the divider and the filter banks, as in the antenna. Without them the designs
+  leaned on what the binary, repaired design does not have (23.2). From β = 16 on
+  (`optimizer.robust_from_beta`, new; the diplexer, run before it, from β = 8): at β = 8 the
+  variants of a gray design are about as gray as it is and triple the cost; binarized designs
+  are judged with every variant throughout, so the export's choice is the same.
+- **The isolation resistor's share** (`spec.Absorbed`, requirement quantity "absorbed"): the
+  fraction of the power incident at port j that a lumped resistor dissipates,
+  P*R/P_inc,j with P_R = ½ Σ_e c*ω σ*e V_e |Ê_e|² over the part's edges (σ_e its own
+  conductivity, c*ω = cos(ωΔt/2) as in §5.7's dissipation), from probes on those edges, whose
+  adjoint sources are J sources there. φ = (a_min − a)/0.1 like the radiated fraction. The
+  combiner asks R1 to take ≥ 0.4 of what enters port 2 (an ideal Wilkinson's resistor takes
+  0.5): with gray copper a resistive sheet, every earlier formulation isolated the outputs with
+  gray copper beside the resistor, which the binarized design does not have (W1–W7). Pipeline
+  gradient against finite differences (copper-edge correction and modal source on): 2–4e-8
+  relative on the share alone; its value equals the §5.7 dissipation on the part's edges less
+  the sheet's.
+- **The lost fraction** (`spec.Loss`, quantity "loss"): what leaves neither through a port nor
+  into a lumped resistor, L_j = −Σ_n (P(b_n) − P(a_n))/P_inc,j − Σ_R P_R/P_inc,j with
+  P(w) = ½|w|² times port n's power factor (the idle ports' residual incident waves included):
+  radiation and the dissipation in the copper, gray copper included, and the substrate. It
+  needs no field over the design plane (the sheet's dissipation would need adjoint sources on
+  every copper-plane edge). The combiner bounds L_2 ≤ 0.08 (a binary design loses a few per
+  cent): with the share alone (W8) the optimizer still bridged the arms with gray copper.
+  Gradient against finite differences: 1.4–2.2e-10 relative on L alone.
+- **Plain MMA, then adaptive moves** (`optimizer.adaptive_from_beta`, new: adaptive steps from
+  that β on, plain MMA steps before it). Adaptive moves from the start made every case creep
+  (moves of 0.004–0.03; 23.2), plain MMA throughout oscillated from β = 16 without improving
+  on the end of β = 8.
+- **Objective bands of the filter banks** widen each channel by 0.1 GHz instead of 0.2 GHz, with
+  five points (diplexer) and four (bank) per channel: the widening absorbs coarse-to-fine
+  shifts, which the edge correction reduced from 1.5–2.4 % to about 0.2 %. Criteria unchanged.
+- **Figures** plot every |S_ij| the criteria judge (the combiner's output match and isolation,
+  not only |S_i1|) and outline lumped parts.
+
+### 23.2 Attempts
+
+One at a time on 4 threads (wall clock on the shared Mac). "t" is the epigraph value,
+"binarized" the β = ∞ design after the width and space repair (with robust variants, the
+largest over the three designs). Run directories are under the round-2 scratch directory
+`rftopo/round2/cases/` (`scr/`, `attempts/`, `final/`), whose `attempts.md` has the notes.
+
+| #   | Case      | Start, resistor       | Formulation                                                          | Iterations, wall | Outcome                                                                                                                                                                                                                                                                                                                                                     |
+| --- | --------- | --------------------- | -------------------------------------------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W1  | Wilkinson | uniform 0.3, R 4.8 mm | nominal, adaptive moves (screen)                                     | 25, 12 min       | the ports joined only at iteration 17 (round 1's plain MMA: 6); best binarized t 1.62 (\|S22\| −4 dB)                                                                                                                                                                                                                                                       |
+| W2  | Wilkinson | uniform 0.3, R 5.4 mm | as W1 (screen)                                                       | 40, 20 min       | gray t 1.12 but binarized t 15–20: a gray bridge between the arms did the resistor's work and became a short when binarized (\|S32\| −1 dB)                                                                                                                                                                                                                 |
+| W3  | Wilkinson | uniform 0.3, R 5.4 mm | eroded and dilated, adaptive                                         | 26, 37 min       | t 1.22 at the end of β = 8; the resistor's pads never connected (the input spread into a plate, the outputs fed by plates along the window's edges)                                                                                                                                                                                                         |
+| W4  | Wilkinson | `star`, R 5.4 mm      | eroded and dilated, adaptive                                         | 12, 19 min       | t flat at 1.3: the star's junction shorts the resistor on both sides, and either cut alone leaves it shorted                                                                                                                                                                                                                                                |
+| W5  | Wilkinson | `feeds`, R 5.4 mm     | eroded and dilated, adaptive                                         | 12, 32 min       | joined by iteration 3, then moves of 0.008–0.012 and t flat at 2.7–2.9                                                                                                                                                                                                                                                                                      |
+| W6  | Wilkinson | `feeds`, R 5.4 mm     | eroded and dilated, plain MMA                                        | 32, 50 min       | t 0.39 at the end of β = 8 (gray; \|S22\| −18 to −27, \|S32\| −19 to −36 dB) but binarized t 1.3–1.5 (\|S22\| −5 dB): gray copper beside the resistor shared its work, at β = 8 the robust variants are gray too; β = 16 oscillated (t up to 15)                                                                                                            |
+| W7  | Wilkinson | `feeds`, R 5.4 mm     | as W6 with the reactive (inductive) sheet                            | 13, 25 min       | the first steps turned the lines gray and disconnected the outputs (t 41–48)                                                                                                                                                                                                                                                                                |
+| W8s | Wilkinson | `feeds`, R 5.4 mm     | nominal, plain MMA, plus R1's share ≥ 0.4 of port 2's power (screen) | 20, 22 min       | binarized t tracks the gray one (0.86–0.94 against 0.72–0.88; W2: 15–20 against 1.12); \|S22\| −11 to −18, \|S32\| −13 to −17 dB, R1's share 0.35                                                                                                                                                                                                           |
+| W8  | Wilkinson | `feeds`, R 5.4 mm     | W8s, robust from β = 16, adaptive moves from β = 16                  | 29, 51 min       | the same β = 8 path (t 0.66), but robust binarized t 3.9: gray pixels bridged the arms across the symmetry line east of the resistor (resistors in parallel with it); at β = 16 they became one-pixel copper bridges shorting its pads (share 0.11–0.14), and the adaptive moves (0.014–0.02) crept (t 3.29 → 2.59 in 4 iterations of 4–7 minutes); stopped |
+| D1  | diplexer  | `stubs`               | nominal, adaptive, bands ± 0.1 GHz                                   | 66, 24 min       | best binarized t 0.715 (iteration 25); from iteration 30 the binarized design read t 0.67 before the repair and 1.52 after (a one-pixel stub removed); validated: fails (23.3)                                                                                                                                                                              |
+| D2  | diplexer  | `stubs`               | eroded and dilated, plain MMA                                        | 49, 60 min       | best binarized t 0.49 at the end of β = 8; β = 16 oscillated (t up to 3.5), β = 32 did not improve; validated (23.3)                                                                                                                                                                                                                                        |
+| D3  | diplexer  | D2 at iteration 25    | as D2, adaptive moves from β = 16                                    | 11 more, 55 min  | t 0.43 → 0.30, binarized 0.49 → 0.44 in 11 iterations (moves 0.007–0.025); stopped when other jobs loaded the Mac (600–900 s per iteration); validated (23.3)                                                                                                                                                                                               |
+| V1  | divider   | uniform 0.3           | round 1's (eroded variant), adaptive                                 | 125, 74 min      | moves 0.01–0.03 from β = 16; best robust binarized t 0.455 at iteration 80 (round 1: 0.10); validated: fails the match at 8.5 GHz (23.3)                                                                                                                                                                                                                    |
+| V2  | divider   | uniform 0.3           | round 1's, plain MMA (round 1's optimizer)                           | 48, 54 min       | best robust binarized t 0.92 (end of β = 8), β = 16 oscillated (t up to 11); stopped (the 75-minute budget would have ended it near iteration 65 under the load)                                                                                                                                                                                            |
+| V0  | divider   | round 1's footprint   | re-validated with the round-2 solver (no optimization)               | 34 min           | \|S11\| −16.2 / −17.8 / −16.0 dB: fails the coarse criterion (−17 dB); round 1 tuned it to the uncorrected copper                                                                                                                                                                                                                                           |
+
+D3 is D2's run directory at the start of β = 16 (iteration 25: its x was D2's tracked best,
+its MMA state fresh, as at every β change) continued with the D3 spec: the two specs take the
+same steps at β = 8, so this is what a D3 run from the seed computes (its iteration 25
+reproduced D2's t and binarized t to the printed digits), without repeating 46 minutes.
+
 ## References
 
 1. A. M. Hammond, A. Oskooi, M. Chen, Z. Lin, S. G. Johnson, S. E. Ralph, "High-performance hybrid

@@ -717,6 +717,83 @@ start, formulation, iterations and outcome is in the design's table):
   28.3 s (the antenna's grid). The earlier rounds' runs were affected the same way (they used
   `OPENBLAS_NUM_THREADS=4`, or none).
 
+Round 2, the cases (design §23, guide "End-to-end cases"; every attempt is in the design's
+table):
+
+- **Every case runs with the round-2 solver** (`solver.edge_correction`,
+  `solver.port_source: mode`; `cases.ROUND2_SOLVER`), the smoke variants too. The diplexer's
+  and the divider's footprints then agree between the three grids within 0.1–2 dB on every
+  check (round 1: up to 2.7 dB and 1–4.7 % in frequency).
+- **Adaptive moves only once the design is nearly binary** (`optimizer.adaptive_from_beta`,
+  new): plain MMA steps below that β, adaptive ones from it on. With adaptive moves (slack 0.05)
+  from the start the cases crept: the divider's moves settled at 0.01–0.03 from β = 16 and its
+  best design (robust binarized t 0.455 at iteration 80, where round 1's plain MMA had 0.10)
+  failed the match on every grid; the non-robust diplexer's moves fell to 0.004–0.01 by
+  β = 32; the combiner's to 0.008–0.012 by its sixth iteration. A full MMA step on the
+  minimax often raises the maximum (one tried t 16.5 from 0.61), so the move halves more often
+  than it grows. Plain MMA explores (its excursions, t up to 15, are kept out of the exports by
+  the best-binarized-design export) but did not improve on the end of β = 8 in the diplexer;
+  the adaptive steps after it keep what β = 8 found and polish it. The antenna keeps adaptive
+  moves throughout (it passed with them).
+- **The width and space repair widens a conflicting neck instead of stopping on it.** A
+  one-pixel bridge between two blocks offset diagonally by a pixel is too narrow as copper and,
+  removed, leaves a one-pixel gap: the opening removed it, the space pass put it back, and the
+  repair stopped at that fixed point of its round. Round 1's Wilkinson footprint kept two such
+  bridges (the 0.14 mm necks the polygon check reported). The repair now makes the k × k square
+  through such a pixel copper (the one needing the fewest new pixels), which keeps the
+  connection the design made; removing the bridge would cut it.
+- **Robust variants in the epigraph for the combiner, the divider and the filter banks** (the
+  dilated and eroded designs, projection thresholds 0.45 and 0.55, as the antenna). Without them the
+  optimizer leaned on what the binary, repaired design does not have: the combiner on gray
+  copper between its arms (a resistive sheet doing the isolation resistor's work, which the
+  binarized design turned into a short: gray t 1.15, binarized t 15–20), the diplexer on
+  one-pixel lines the width and space repair removed (binarized t 0.67 before the repair and
+  1.52 after; channel B's rejection −17.7 → −6.8 dB). With them the diplexer's binarized design
+  reached t 0.49 (0.715 without). It triples the cost per iteration; the forward runs of every
+  variant are now kept for the next iteration (`Problem.fwd_cache_size`), which saves a third
+  of it with adaptive moves. **From β = 16** (`optimizer.robust_from_beta`, new) in the
+  combiner, the divider and the bank: at β = 8 the variants of a gray design are about as gray
+  as it is (the combiner's robust run W6 still leaned on gray copper there), so they cost
+  three times as much for little; binarized designs are judged with every variant throughout.
+  The diplexer, run before the option existed, has them from β = 8.
+- **The combiner's isolation resistor must take its share** (`Absorbed("R1", 2).at_least(0.4)`,
+  a new requirement quantity: the fraction of the power incident at port 2 that the lumped
+  resistor dissipates, ½ c_ω Σ σ_e V_e |Ê_e|² over its edges, through probes on them). An
+  ideal Wilkinson's resistor dissipates half of what enters an output port. With gray copper
+  a resistive sheet, the optimizer isolated the outputs with gray copper beside the resistor
+  in every formulation tried (uniform and seeded starts, nominal and robust, plain and adaptive
+  MMA; the reactive sheet disconnected the outputs instead), and the binarized design lost
+  the isolation (gray t 0.39–1.15, binarized 1.3–20). The requirement makes the gray loss pay
+  against the resistor's share: in its 20-iteration screen the binarized design tracked the
+  gray one (t 0.86 against 0.72; W2's nominal screen: 1.12 against 15–20). It did not stop gray
+  copper bridging the arms east of the resistor, which became copper shorts at β = 16 (W8), so
+  the combiner also bounds **the lost fraction** (`Loss(2).at_most(0.08)`, new: the power
+  leaving neither through a port nor into a resistor, from the port waves and the resistor's
+  share; radiation and the copper's and substrate's dissipation, gray copper's included, a few
+  per cent for a binary design). Both are objectives, not criteria; the validator reports them.
+- **The combiner's resistor moves to 5.4–6.0 mm from port 1** (was 4.8–5.4 mm; a change of the
+  spec's `lumped` part, its criteria unchanged). A Wilkinson's resistor ends its quarter-wave
+  arms; the optimizer's arms run side by side as coupled lines, and the resistor terminates
+  their odd mode, which is faster than the even one: its quarter wave is about 5 mm against
+  4.6 mm. At 4.8–5.4 mm the coupled arms were about 65° long in the odd mode, and round 1 ended
+  at −11 dB of output match and −13 dB of isolation, close to what an ideal circuit with those
+  lengths gives (−12 dB).
+- **The combiner starts from its feeds** (`seed: feeds`, new: each port's 50 Ω line continued to
+  the window's centre line, the lines not joined; port 1's ends on the resistor's pads). From a
+  uniform x = 0.3 the resistor's pads stayed unconnected (W3) or gray copper did the resistor's
+  work (W1, W2); from the joined star the junction shorts the resistor on both sides, and
+  cutting either side alone leaves it shorted, so the gradient does not lead to the cut (W4).
+  The seed is computed from the ports and the part alone, and every pixel stays a variable.
+- **The divider re-runs with the robust variants and adaptive moves from β = 16.** Round 1's
+  footprint re-simulated with the round-2 solver misses the coarse match criterion (|S11|
+  −16.2 dB against −17; −17.8 and −16.0 dB on the finer grids, which pass): it was tuned to the
+  uncorrected copper. Round 1's formulation with the round-2 solver failed with adaptive moves
+  throughout (best robust binarized t 0.455; −15.4, −13.4, −13.7 dB) and plain MMA throughout
+  oscillated from β = 16 (best t 0.92 by iteration 48).
+- **The filter banks' objective bands widen each channel by 0.1 GHz** (was 0.2 GHz) against
+  coarse-to-fine shifts, which the edge correction reduced to about 0.2 %; five points per
+  diplexer channel and four per bank channel. The criteria are unchanged.
+
 ## Pinned versions
 
 Update a pin together with the file that holds it, and note why here.

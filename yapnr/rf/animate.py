@@ -547,7 +547,8 @@ def figure(run_dir: str, out: str, *, width: int = 1000) -> dict:
         self.frame(e_box, ghz[0], ghz[-1], 0.0, 1.0, "radiated fraction")
         for c in crit:
             if c.kind == "eta_min":
-                self.hline(min(c.at_ghz), max(c.at_ghz), c.limit, OK)
+                f0, f1 = c.ghz if c.at_ghz is None else (min(c.at_ghz), max(c.at_ghz))
+                self.hline(f0, f1, c.limit, OK)
         for table, lw in tables:
             self.curve(table["ghz"], table["eta1"], ACCENT, lw)
     buf = io.BytesIO()
@@ -608,9 +609,10 @@ class _Plot:
         )
 
     def curve(self, xs, ys, colour, lw):
-        # Break the line at gaps in frequency (the diplexer's two channels).
+        # Break the line at gaps in frequency (the diplexer's two channels), against the 90th
+        # percentile of the steps (the antenna's sweep mixes 0.04 and 0.01 GHz steps).
         xs = list(xs)
-        step = min(b - a for a, b in zip(xs, xs[1:])) if len(xs) > 1 else 1.0
+        step = float(np.percentile(np.diff(xs), 90)) if len(xs) > 1 else 1.0
         seg = []
         for i, (x, y) in enumerate(zip(xs, ys)):
             if seg and x - xs[i - 1] > 3.5 * step:

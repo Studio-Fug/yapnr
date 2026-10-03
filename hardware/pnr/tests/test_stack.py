@@ -226,6 +226,35 @@ class Roles(unittest.TestCase):
         self.assertEqual(stack.dedicated, (("In2.Cu", "VCC"),))
         self.assertTrue(any("In1.Cu is a signal layer with zones of GND" in w for w in warnings))
 
+    def test_the_boards_no_track_rules_make_a_plane(self):
+        # A board that marks its planes only by custom rules (disallow track) on
+        # layers typed signal: the stack applies and those layers carry no tracks.
+        rec = record("SSSS", {"In1.Cu": ["GND"], "In2.Cu": ["VCC"]})
+        rec["no_track_layers"] = ["In1.Cu", "In2.Cu", "F.Cu"]
+        stack, warnings = assess(plane_rules(4, {}), rec)
+        self.assertEqual(stack.grid_layers, ("F.Cu", "B.Cu"))
+        self.assertEqual(stack.dedicated, (("In1.Cu", "GND"), ("In2.Cu", "VCC")))
+        self.assertTrue(any("disallow tracks on In1.Cu (typed signal)" in w for w in warnings))
+        self.assertTrue(any("outer layer F.Cu" in w for w in warnings))
+
+    def test_no_track_rules_are_read_from_the_judges_rules_file(self):
+        import tempfile
+
+        from pnr.ingest import _no_track_layers
+
+        spec = next(r for r in hard_rungs() if r["name"].endswith("8L-SGSGPSGS"))
+        with tempfile.TemporaryDirectory() as tmp:
+            board = Path(tmp) / "b.kicad_pcb"
+            board.with_suffix(".kicad_dru").write_text(dru_text(spec))
+            self.assertEqual(_no_track_layers(str(board)), ["In1.Cu", "In3.Cu", "In4.Cu", "In6.Cu"])
+            # A conditional rule about something else does not count.
+            board.with_suffix(".kicad_dru").write_text(
+                '(version 1)\n(rule "x"\n  (layer "In2.Cu")\n'
+                "  (condition \"A.NetClass == 'hv'\")\n  (constraint disallow track))\n"
+            )
+            self.assertEqual(_no_track_layers(str(board)), [])
+        self.assertEqual(_no_track_layers(None), [])
+
     def test_a_power_layer_without_a_net_warns(self):
         stack, warnings = assess(plane_rules(4, {}), record("SPSS"))
         self.assertEqual(stack.layer("In1.Cu").role, PLANE)

@@ -178,6 +178,14 @@ def assess(
         raise ValueError("duplicate copper layer names in the stack record")
     kinds = [str(r.get("type", "signal")) for r in rows]
     described = ", ".join("%s %s" % (n, k) for n, k in zip(names, kinds))
+    # The board's own rules may keep tracks off a layer typed signal or mixed (a
+    # .kicad_dru "disallow track" rule): an inner one is a plane, as if typed power.
+    no_tracks = set(record.get("no_track_layers", ()))
+    retyped = []
+    for i in range(1, len(rows) - 1):
+        if names[i] in no_tracks and kinds[i] in ("signal", "mixed"):
+            retyped.append("%s (typed %s)" % (names[i], kinds[i]))
+            kinds[i] = "power"
     if len(rows) < 2:
         return None, (
             "the declared stack has one copper layer (%s): legacy layer heuristic" % described,
@@ -227,6 +235,15 @@ def assess(
             % (", ".join(missing), ", ".join(names))
         )
     warnings = []
+    if retyped:
+        warnings.append(
+            "the board's rules disallow tracks on %s: routed as plane layers" % ", ".join(retyped)
+        )
+    for name in sorted(no_tracks & {names[0], names[-1]}):
+        warnings.append(
+            "the board's rules disallow tracks on outer layer %s, which carries pads: "
+            "it is still routed" % name
+        )
     layers = []
     for index, (row, kind) in enumerate(zip(rows, kinds)):
         name = names[index]

@@ -102,12 +102,14 @@ can leave the place↔route loop unable to reach zero overflow.
 **Declared copper stack.** A board whose KiCad file declares a physical stackup
 (Board Setup > Physical Stackup) is routed on its own stack (`pnr.stack`), for any
 layer count, when it types at least one layer `power` or `mixed` (Board Setup >
-Board Editor Layers), or when it declares no `plane_layer` class and draws no zone
-on a signal-typed inner layer:
+Board Editor Layers) or keeps tracks off an inner layer by a custom rule
+(`.kicad_dru`: `(layer ...)`, `(constraint disallow track)`), or when it declares no
+`plane_layer` class and draws no zone on a signal-typed inner layer:
 
-- a `power` inner layer is a **dedicated plane**: no tracks. Its nets are the
-  `plane_layer` classes naming it plus the nets of zones already drawn on it, so a
-  second ground plane is just a zone in the source board. Every surface pad of
+- a `power` inner layer (or one a custom rule keeps free of tracks) is a
+  **dedicated plane**: no tracks. Its nets are the `plane_layer` classes naming it
+  plus the nets of zones already drawn on it, so a second ground plane is just a
+  zone in the source board. Every surface pad of
   such a net drops a through via to it, planned together with the signal escapes
   and sized for that pad's own entry width. The via must land where the net's
   copper fills on one of its planes; a pad without such a site is reported

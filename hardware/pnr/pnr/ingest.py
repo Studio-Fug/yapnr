@@ -332,6 +332,34 @@ def _parse_stackup(text: str) -> Optional[List[Tuple[str, float]]]:
     return [(name, float(value)) for name, value in re.findall(pattern, block)]
 
 
+def _no_track_layers(path: Optional[str]) -> List[str]:
+    """Copper layers the board's custom rules (the ``.kicad_dru`` beside the board
+    file) keep free of tracks: a rule on one layer whose constraint disallows
+    tracks, with no condition or only ``A.Type == 'Track'``."""
+    import os
+    import re
+
+    if not path or not path.endswith(".kicad_pcb"):
+        return []
+    dru = path[: -len(".kicad_pcb")] + ".kicad_dru"
+    if not os.path.exists(dru):
+        return []
+    try:
+        with open(dru, encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError:
+        return []
+    layers = set()
+    for block in re.split(r"\(rule\s", text)[1:]:
+        named = re.findall(r'\(layer\s+"([^"]+)"\s*\)', block)
+        if len(named) != 1 or not re.search(r"\(constraint\s+disallow\b[^)]*\btrack\b", block):
+            continue
+        conditions = re.findall(r'\(condition\s+"([^"]*)"\s*\)', block)
+        if all(re.fullmatch(r"\s*A\.Type\s*==\s*'Track'\s*", c) for c in conditions):
+            layers.add(named[0])
+    return sorted(layers)
+
+
 def _copper_thickness_mm(path: Optional[str]) -> dict:
     """copper layer name -> thickness (mm) from the board file's stackup block."""
     return dict(_stackup_copper(path) or [])
@@ -343,7 +371,8 @@ def stack_record(board, path: Optional[str] = None) -> Optional[dict]:
     copper thickness and the nets of the (non-rule-area) zones on them, by KiCad's
     standard layer names (the names the routing rules use); for a ``power`` layer
     also the zones' outlines and priorities (``zone_shapes``, graph frame), which
-    bound where a drop via reaches its plane (:func:`pnr.stack.plane_regions`).
+    bound where a drop via reaches its plane (:func:`pnr.stack.plane_regions`); and
+    the layers the board's custom rules keep free of tracks (``no_track_layers``).
 
     A stackup block whose copper rows are not the board's copper layers (KiCad does
     not rewrite the block when the layer count changes: an atopile layout saved
@@ -414,7 +443,11 @@ def stack_record(board, path: Optional[str] = None) -> Optional[dict]:
                 )
             row["zone_shapes"] = shapes
         rows.append(row)
-    return record_from_rows(rows)
+    record = record_from_rows(rows)
+    no_tracks = [n for n in _no_track_layers(path) if n in names]
+    if no_tracks:
+        record["no_track_layers"] = no_tracks
+    return record
 
 
 def board_stack(board, rules: Optional[dict], path: Optional[str] = None):

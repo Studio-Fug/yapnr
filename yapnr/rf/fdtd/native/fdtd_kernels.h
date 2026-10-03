@@ -4,8 +4,6 @@
  * same order; the comments name them.
  */
 
-/* Edges per work item of sources and probes (Python chunks to the same size). */
-
 /* A value that is either a vector over j or one scalar for the row. */
 #define AT(p, v, j) ((v) ? (p)[j] : (p)[0])
 
@@ -458,10 +456,8 @@ static void SFX(mu_item)(const yf_sim *s, int64_t item) {
 static void SFX(job_sweep)(yf_pool *P, int tid, const yf_sim *s, const yf_run *r) {
   int64_t base = 0;
   int sense = 0;
-  R *scratch = NULL;
-  double *pv = NULL;
-  if (posix_memalign((void **)&scratch, 64, sizeof(R) * ((size_t)s->jp + 16)) != 0) abort();
-  if (posix_memalign((void **)&pv, 64, sizeof(double) * 1024) != 0) abort();
+  R *scratch = (R *)P->scr[tid];
+  double *pv = (double *)((char *)P->scr[tid] + scratch_rows_bytes(s));
   const int rows = r->rows > 0 ? r->rows : 1;
   const int64_t nrows = (int64_t)s->np * s->ni;
   const int64_t nitems = (nrows + rows - 1) / rows;
@@ -514,8 +510,6 @@ static void SFX(job_sweep)(yf_pool *P, int tid, const yf_sim *s, const yf_run *r
       es++;
     }
   }
-  free(scratch);
-  free(pv);
 }
 
 /* ---- wavefront: `tblock` steps per pass over the planes ------------------------------------
@@ -597,11 +591,9 @@ static void SFX(e_full)(const yf_sim *s, const yf_run *r, int k, int i, int64_t 
 }
 
 static void SFX(job_wave)(yf_pool *P, int tid, const yf_sim *s, const yf_run *r) {
-  (void)tid;
   int64_t base = 0;
   int sense = 0;
-  R *scratch = NULL;
-  if (posix_memalign((void **)&scratch, 64, sizeof(R) * (3 * (size_t)s->jp + 16)) != 0) abort();
+  R *scratch = (R *)P->scr[tid];
   const int T = r->tblock;
   const int np = s->np, ni = s->ni;
   const int rows = r->rows > 0 ? r->rows : 1;
@@ -623,7 +615,7 @@ static void SFX(job_wave)(yf_pool *P, int tid, const yf_sim *s, const yf_run *r)
     const int nphase = np + 3 * (S - 1) + 1;
     for (int p = 0; p < nphase; p++) {
       /* tasks of this phase: (step t, H or E, plane) */
-      int tk[64], tt[64], te[64], ntask = 0;
+      int tk[2 * YF_MAX_TBLOCK], tt[2 * YF_MAX_TBLOCK], te[2 * YF_MAX_TBLOCK], ntask = 0;
       for (int t = 0; t < S; t++) {
         const int kh = p - 3 * t, ke = p - 1 - 3 * t;
         if (kh >= 0 && kh < np) {
@@ -650,7 +642,6 @@ static void SFX(job_wave)(yf_pool *P, int tid, const yf_sim *s, const yf_run *r)
       });
     }
   }
-  free(scratch);
 }
 
 static void SFX(job)(yf_pool *P, int tid, const yf_sim *s, const yf_run *r) {

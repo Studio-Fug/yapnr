@@ -11,9 +11,14 @@ Selection (docs/rf-solver-backends.md): ``Simulation(backend="native")``; for pr
 environment overrides the spec, ``YAPNR_RF_BACKEND=native`` (``YAPNR_RF_DTYPE``, default
 float64 for an overridden backend; ``YAPNR_RF_THREADS``, the native thread count). The library
 is looked up at ``YAPNR_RF_FDTD_LIB``, then beside this module (``native/``), then in the Bazel
-runfiles (``yapnr/rf/``). Without a loadable library (or on an ABI mismatch) the numpy reference
-runs and `status` says why; a compiled dependency is never required. ``python -m
-yapnr.rf.fdtd.native_kernel build`` compiles it with the host compiler into ``native/``.
+runfiles (``yapnr/rf/``); under ``bazel test`` only the runfiles count, never the source tree.
+A library is refused when its ABI or structures differ, when it was built from other sources
+than the ones beside this module (a stale build), or when its arithmetic fuses or reassociates
+(`Kernel`). Without a usable library the problem runs its spec's own backend (native chosen by
+the environment) or numpy (native asked for in code or spec), says why once on stderr, and
+`status` records it; ``YAPNR_RF_REQUIRE_NATIVE=1`` makes that an error instead (cloud jobs). A
+compiled dependency is never required. ``python -m yapnr.rf.fdtd.native_kernel build``
+compiles it with the host compiler into ``native/``.
 """
 
 from __future__ import annotations
@@ -28,8 +33,9 @@ import numpy as np
 
 from yapnr.rf.mesh import COMPONENTS, E_COMPONENTS
 
-_ABI = 3
+_ABI = 4
 ENV_LIB = "YAPNR_RF_FDTD_LIB"
+ENV_REQUIRE = "YAPNR_RF_REQUIRE_NATIVE"
 ENV_BACKEND = "YAPNR_RF_BACKEND"
 ENV_DTYPE = "YAPNR_RF_DTYPE"
 ENV_THREADS = "YAPNR_RF_THREADS"
@@ -57,8 +63,9 @@ CFLAGS = [
     "-shared",
     "-pthread",
 ]
-# Edges per work item of sources and probes (the C side's probe scratch holds 1024).
+# Edges per work item of sources and probes (at most the C side's YF_MAX_CHUNK, 1024).
 CHUNK = 512
+DTYPES = (np.dtype(np.float64), np.dtype(np.float32))
 
 _STATE = {"loaded": False, "kernel": None, "reason": "not requested", "warned": False}
 
@@ -209,8 +216,13 @@ def _candidates():
     # Beside the package (an installed or locally built library), then Bazel's runfiles
     # (yapnr/rf/, where //yapnr/rf:libyapnr_fdtd.so lands): the module's own (unresolved) path
     # is inside the runfiles tree, the resolved one is the source tree.
+    # Under `bazel test` (TEST_SRCDIR) only the runfiles count: the resolved path is the source
+    # tree, where a library built by hand may be older than the sources Bazel tests.
+    heres = [Path(os.path.abspath(__file__)).parent]
+    if not os.environ.get("TEST_SRCDIR"):
+        heres.append(HERE)
     roots = []
-    for here in (Path(os.path.abspath(__file__)).parent, HERE):
+    for here in heres:
         roots += [here / "native", here.parent]
     for env in ("RUNFILES_DIR", "TEST_SRCDIR"):
         if os.environ.get(env):
@@ -224,15 +236,49 @@ def _candidates():
                 yield path
 
 
+def source_sha256() -> str | None:
+    """sha256 of the C sources (fdtd.c, then fdtd_kernels.h), as `build_library` defines
+    YF_SRC_SHA; None when they are not beside this module."""
+    try:
+        return hashlib.sha256(b"".join(p.read_bytes() for p in SOURCES)).hexdigest()
+    except OSError:
+        return None
+
+
+def fp_check(library) -> str | None:
+    """Why the library's arithmetic is not numpy's, or None: `yf_fp_probe_*` computes x·y − p
+    with p = fl(x·y) (0 unless fused into a multiply-add) and (u + v) − u with v below u's ulp
+    (0 unless reassociated), in each precision, with inputs the compiler cannot see."""
+    problems = []
+    for name, dt, eps in (("f64", np.float64, 2.0**-30), ("f32", np.float32, 2.0**-13)):
+        x = dt(1.0 + eps)
+        p = np.multiply(x, x, dtype=dt)  # one rounded product
+        probe = np.array([x, x, p, 1.0, eps * eps], dtype=dt)
+        out = np.full(2, np.nan, dtype=dt)
+        getattr(library, "yf_fp_probe_" + name)(probe.ctypes.data, out.ctypes.data)
+        if out[0] != 0:
+            problems.append(f"{name} multiply-add fused")
+        if out[1] != 0:
+            problems.append(f"{name} sums reassociated")
+    return "; ".join(problems) or None
+
+
 class Kernel:
-    """The loaded library."""
+    """The loaded library, refused (OSError) unless it matches this module: the structure
+    sizes, the C side's limits, numpy's arithmetic (`fp_check`) and, when the build recorded
+    it and the sources are here, the sources' sha256."""
 
     def __init__(self, library, path: Path):
         self.lib = library
         self.path = Path(path)
         library.yf_abi.restype = c_int32
         library.yf_sizes.argtypes = [c_void_p]
+        library.yf_limits.argtypes = [c_void_p]
         library.yf_isa.restype = ctypes.c_char_p
+        library.yf_src_sha.restype = ctypes.c_char_p
+        library.yf_compiler.restype = ctypes.c_char_p
+        library.yf_fp_probe_f64.argtypes = [c_void_p, c_void_p]
+        library.yf_fp_probe_f32.argtypes = [c_void_p, c_void_p]
         library.yf_pool_new.restype = c_void_p
         library.yf_pool_new.argtypes = [c_int32]
         library.yf_pool_free.argtypes = [c_void_p]
@@ -245,13 +291,30 @@ class Kernel:
         want = [ctypes.sizeof(s) for s in _STRUCTS]
         if sizes.tolist() != want:
             raise OSError(f"structure sizes {sizes.tolist()} != {want}")
+        limits = np.zeros(2, dtype=np.int64)
+        library.yf_limits(limits.ctypes.data)
+        if MAX_TBLOCK > limits[0] or CHUNK > limits[1]:
+            raise OSError(f"limits {limits.tolist()} below ({MAX_TBLOCK}, {CHUNK})")
+        problem = fp_check(library)
+        if problem:
+            raise OSError(f"not numpy's arithmetic ({problem}): build with {' '.join(CFLAGS[:4])}")
+        self.src_sha = library.yf_src_sha().decode()
+        here = source_sha256()
+        if self.src_sha and here and self.src_sha != here:
+            raise OSError(
+                f"stale: built from sources {self.src_sha[:12]}, these are {here[:12]} "
+                "(python -m yapnr.rf.fdtd.native_kernel build)"
+            )
+        self.compiler = library.yf_compiler().decode()
         self.isa = library.yf_isa().decode()
         self.sha256 = hashlib.sha256(self.path.read_bytes()).hexdigest()
 
 
 def build_library(out_dir, compiler=None, timeout=300, extra_flags=()) -> Path:
     """Compile ``native/fdtd.c`` into ``out_dir`` with the host C compiler (``$CC`` or ``cc``)
-    and return the library path. Bazel builds the same source with the same flags."""
+    and return the library path; RuntimeError with the compiler's messages if it fails. Bazel
+    builds the same source with the same flags; this build also records the sources' sha256
+    (YF_SRC_SHA), so that the loader refuses it once they change."""
     import shutil
     import subprocess
 
@@ -260,12 +323,14 @@ def build_library(out_dir, compiler=None, timeout=300, extra_flags=()) -> Path:
         raise FileNotFoundError("no C compiler (set CC)")
     out = Path(out_dir) / library_names()[0]
     out.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        [compiler, *CFLAGS, *extra_flags, "-o", str(out), str(SOURCE)],
-        check=True,
-        timeout=timeout,
-        capture_output=True,
-    )
+    define = f'-DYF_SRC_SHA="{source_sha256()}"'
+    cmd = [compiler, *CFLAGS, define, *extra_flags, "-o", str(out), str(SOURCE)]
+    done = subprocess.run(cmd, timeout=timeout, capture_output=True, text=True)
+    if done.returncode != 0:
+        raise RuntimeError(
+            f"building the native FDTD library failed ({done.returncode}): {' '.join(cmd)}\n"
+            + (done.stderr or done.stdout)[-4000:]
+        )
     return out
 
 
@@ -285,24 +350,34 @@ def load() -> Kernel | None:
             continue
         try:
             library = ctypes.CDLL(str(path))
-            if library.yf_abi() != _ABI:
-                reasons.append(f"{path.name}: ABI mismatch")
+            abi = library.yf_abi()
+            if abi != _ABI:
+                reasons.append(f"{path}: ABI {abi}, this module needs {_ABI} (rebuild it)")
                 continue
             _STATE["kernel"] = Kernel(library, path)
             _STATE["reason"] = "loaded " + path.name
             return _STATE["kernel"]
         except (OSError, AttributeError) as error:
-            reasons.append(f"{path.name}: {error}")
+            reasons.append(f"{path}: {error}")
     _STATE["reason"] = "; ".join(reasons) or "library not found"
     return None
 
 
-def require_or_warn() -> Kernel | None:
-    """`load`, saying once on stderr why the numpy reference runs instead."""
+def required() -> bool:
+    """``YAPNR_RF_REQUIRE_NATIVE`` is set: a missing library is an error, not a fallback."""
+    return os.environ.get(ENV_REQUIRE, "").strip().lower() not in ("", "0", "false", "no")
+
+
+def require_or_warn(fallback: str = "numpy") -> Kernel | None:
+    """`load`; without a library, say once on stderr why the `fallback` backend runs instead,
+    or raise RuntimeError when ``YAPNR_RF_REQUIRE_NATIVE`` is set."""
     kernel = load()
-    if kernel is None and not _STATE["warned"]:
-        _STATE["warned"] = True
-        sys.stderr.write(f"yapnr.rf native FDTD: {_STATE['reason']}; numpy backend used\n")
+    if kernel is None:
+        if required():
+            raise RuntimeError(f"yapnr.rf native FDTD required ({ENV_REQUIRE}): {_STATE['reason']}")
+        if not _STATE["warned"]:
+            _STATE["warned"] = True
+            sys.stderr.write(f"yapnr.rf native FDTD: {_STATE['reason']}; {fallback} backend used\n")
     return kernel
 
 
@@ -315,7 +390,10 @@ def status() -> dict:
         "loaded": True,
         "library": kernel.path.name,
         "sha256": kernel.sha256,
+        "source_sha256": kernel.src_sha or None,
+        "compiler": kernel.compiler,
         "isa": kernel.isa,
+        "arithmetic": "no contraction, no reassociation (checked at load)",
     }
 
 
@@ -331,23 +409,39 @@ def provenance(sim) -> dict | None:
 # -- backend selection ---------------------------------------------------------------------------
 
 
+def _env_dtype():
+    text = os.environ.get(ENV_DTYPE, "").strip().lower()
+    if not text:
+        return None
+    dtype = {"f64": "float64", "float64": "float64", "f32": "float32", "float32": "float32"}
+    if text not in dtype:
+        raise ValueError(f"{ENV_DTYPE}={text!r}: expected float64 (f64) or float32 (f32)")
+    return np.dtype(dtype[text])
+
+
 def choose(backend, dtype, spec_backend: str, spec_dtype, *, exact: bool = False):
     """(backend, dtype) of a problem: explicit arguments, then ``YAPNR_RF_BACKEND`` and
     ``YAPNR_RF_DTYPE``, then the spec. An exact problem runs numpy float64, or native float64
-    (bit-identical) when the environment asks for native."""
+    (bit-identical) when the environment asks for native. Native chosen by the environment
+    alone, without a usable library, runs the spec's own backend and precision (not numpy
+    float64, which is 6 times slower than the specs' torch float32), saying so once; or raises
+    with ``YAPNR_RF_REQUIRE_NATIVE``."""
     env_backend = os.environ.get(ENV_BACKEND, "").strip().lower() or None
-    env_dtype = os.environ.get(ENV_DTYPE, "").strip().lower() or None
+    env_dtype = _env_dtype()
     if env_backend is not None and env_backend not in BACKENDS:
         raise ValueError(f"{ENV_BACKEND}={env_backend!r}: expected one of {BACKENDS}")
     if exact:
         chosen = backend or ("native" if env_backend == "native" else "numpy")
         return chosen, np.dtype(dtype or np.float64)
     chosen = backend or env_backend or spec_backend
+    by_env = backend is None and env_backend == "native" and spec_backend != "native"
+    if by_env and require_or_warn(f"the spec's {spec_backend}") is None:
+        return spec_backend, np.dtype(dtype or env_dtype or spec_dtype)
     if dtype is not None:
         return chosen, np.dtype(dtype)
     if env_dtype is not None:
-        return chosen, np.dtype({"f64": "float64", "f32": "float32"}.get(env_dtype, env_dtype))
-    if backend is None and env_backend == "native" and spec_backend != "native":
+        return chosen, env_dtype
+    if by_env:
         # The spec's precision was chosen for its own backend (torch float32 for speed); a
         # backend switched by the environment runs the reference precision unless asked.
         return chosen, np.dtype(np.float64)
@@ -380,10 +474,22 @@ def last_level_cache_mb() -> float:
     return max(sizes) / 2**20 if sizes else DEFAULT_CACHE_MB
 
 
+def available_cpus() -> int:
+    """CPUs this process may run on (its affinity mask where the platform has one)."""
+    if hasattr(os, "process_cpu_count"):  # Python 3.13
+        return os.process_cpu_count() or 1
+    if hasattr(os, "sched_getaffinity"):
+        return len(os.sched_getaffinity(0)) or 1
+    return os.cpu_count() or 1
+
+
 def thread_count(threads: int) -> int:
+    """The native pool's threads: ``$YAPNR_RF_THREADS`` or `threads`, at most the CPUs this
+    process may use. On a shared machine keep it at the free cores: threads that wait at a
+    phase's barrier spin for about a millisecond before they sleep."""
     env = os.environ.get(ENV_THREADS, "").strip()
     n = int(env) if env else int(threads)
-    return max(1, min(n, os.cpu_count() or 1))
+    return max(1, min(n, available_cpus()))
 
 
 # -- the stepper ---------------------------------------------------------------------------------
@@ -413,6 +519,8 @@ class NativeStepper:
         self.kernel = kernel
         grid = sim.grid
         self.dtype = np.dtype(sim.dtype)
+        if self.dtype not in DTYPES:
+            raise ValueError(f"the native FDTD stepper runs float64 or float32, not {self.dtype}")
         nx, ny, nz = grid.n
         self.ni, self.np_ = nx + 1, nz + 1
         self.jp = _round_up(ny + 1, 64 // self.dtype.itemsize)
@@ -712,6 +820,7 @@ class _NativeRun:
 
     def __init__(self, stepper: NativeStepper, srcs, probes, omega_count: int, decimation: int):
         self.st = stepper
+        self.m = int(omega_count)
         tblock = stepper.tblock
         index = {c: n for n, c in enumerate(COMPONENTS)}
         self.srcs = srcs
@@ -734,16 +843,16 @@ class _NativeRun:
                 q.k = 0
                 q.amp = 0
             self.keep += [off, scale, val]
+        self.probes = probes
         self.probe = (YfProbe * max(1, len(probes)))()
         for n, (p, acc) in enumerate(probes):
             q = self.probe[n]
             q.comp = index[p.comp]
             q.count = p.index.size
             off = stepper.offsets(p.comp, p.index)
-            if not (acc.re.flags.c_contiguous and acc.im.flags.c_contiguous):
-                raise ValueError("DTFT accumulators must be C-contiguous")
-            q.off, q.re, q.im = _ptr(off), _ptr(acc.re), _ptr(acc.im)
+            q.off = _ptr(off)
             self.keep.append(off)
+        self._bind_accumulators()
         pmag = [p.comp[0] == "h" for p, _ in probes]
         smag = [sp.comp[0] == "h" for sp in srcs]
         self.hitem = _items([p.index.size for p, _ in probes], pmag, True)
@@ -778,8 +887,21 @@ class _NativeRun:
         r.hitem, r.eitem = _ptr(self.hitem), _ptr(self.eitem)
         r.hsitem, r.esitem = _ptr(self.hsitem), _ptr(self.esitem)
 
+    def _bind_accumulators(self) -> None:
+        """Point the C probes at the DTFT accumulators (again before every block, so that an
+        accumulator replaced rather than updated in place is never written through a stale
+        pointer)."""
+        for n, (p, acc) in enumerate(self.probes):
+            for a in (acc.re, acc.im):
+                if not (a.flags.c_contiguous and a.flags.writeable and a.dtype == np.float64):
+                    raise ValueError("DTFT accumulators must be writeable C-contiguous float64")
+                if a.shape != (self.m, p.index.size):
+                    raise ValueError(f"DTFT accumulator shape {a.shape} of probe {n}")
+            self.probe[n].re, self.probe[n].im = _ptr(acc.re), _ptr(acc.im)
+
     def block(self, n0: int, n1: int, tables) -> None:
         """Run steps n0 .. n1 − 1 with the block's tables (`engine._BlockTables`)."""
+        self._bind_accumulators()
         r = self.run
         r.n0, r.n1 = n0, n1
         keep = []
@@ -796,7 +918,8 @@ class _NativeRun:
         )
         del keep
         if err:
-            raise RuntimeError(f"native FDTD block failed ({err})")
+            why = {-4: "a count or work item out of range", -5: "out of memory"}.get(err, "")
+            raise RuntimeError(f"native FDTD block failed ({err}{': ' + why if why else ''})")
 
 
 def main(argv=None) -> int:

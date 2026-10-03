@@ -15,8 +15,9 @@ py_library(
             "testing.py",
         ],
     ),
-    # The native stepper's C source ships with the package, so an installed yapnr can build it
-    # (python -m yapnr.rf.fdtd.native_kernel build); nothing compiles it by default.
+    # The native stepper's C source travels with the library (runfiles, a bazel_dep), so it can
+    # be built where it runs (python -m yapnr.rf.fdtd.native_kernel build); nothing compiles it
+    # by default. (yapnr.rf is not in the yapnr wheel: //yapnr does not depend on it.)
     data = glob([
         "fdtd/native/*.c",
         "fdtd/native/*.h",

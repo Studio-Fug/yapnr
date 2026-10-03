@@ -262,7 +262,8 @@ class Simulation:
     """A microstrip FDTD model ready to run: grid, materials, CPML and the time step.
 
     `backend` "numpy" (the reference), "torch" or "native" (`native_kernel`; falls back to
-    numpy, saying so once, when its library is missing); None: ``$YAPNR_RF_BACKEND`` or numpy.
+    numpy, saying so once, when its library is missing or refused, or raises with
+    ``$YAPNR_RF_REQUIRE_NATIVE``); None: ``$YAPNR_RF_BACKEND`` or numpy.
     `threads`: torch's intra-op threads (at most 4) or the native pool (``$YAPNR_RF_THREADS``
     overrides it).
     """

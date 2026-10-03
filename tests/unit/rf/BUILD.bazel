@@ -31,8 +31,14 @@ yapnr_py_tests(
         "test_kicad_cli": {"tags": ["kicad"]},
         "test_microstrip": {"size": "medium"},
         "test_modes": {"size": "medium"},
+        # The kernel's equivalence on a library compiled with the host compiler (skips without
+        # one); the optimizer and case comparisons run in test_native_kernel_native below.
         "test_native_kernel": {
             "deps": ["//yapnr/rf:testing"],
+            "env": dict(
+                _ENV,
+                YAPNR_RF_NATIVE_QUICK = "1",
+            ),
             "size": "medium",
         },
         "test_pipeline_gradient": {
@@ -70,7 +76,8 @@ py_test(
 
 # The native FDTD stepper (//yapnr/rf:libyapnr_fdtd.so, needs a C toolchain): its equivalence
 # tests on the Bazel-built library, and the finite-difference gradient checks run on it
-# (YAPNR_RF_BACKEND=native: exact problems and default simulations use the native stepper).
+# (YAPNR_RF_BACKEND=native: exact problems and default simulations use the native stepper;
+# YAPNR_RF_REQUIRE_NATIVE: an unloadable library fails them instead of running numpy).
 #   bazel test //tests/unit/rf:test_native_kernel_native //tests/unit/rf:test_adjoint_gradients_native \
 #     //tests/unit/rf:test_pipeline_gradient_native
 py_test(
@@ -78,7 +85,10 @@ py_test(
     size = "medium",
     srcs = ["test_native_kernel.py"],
     data = ["//yapnr/rf:libyapnr_fdtd.so"],
-    env = _ENV,
+    env = dict(
+        _ENV,
+        YAPNR_RF_REQUIRE_NATIVE = "1",
+    ),
     main = "test_native_kernel.py",
     tags = [
         "manual",
@@ -99,6 +109,7 @@ py_test(
         env = dict(
             _ENV,
             YAPNR_RF_BACKEND = "native",
+            YAPNR_RF_REQUIRE_NATIVE = "1",
         ),
         main = name + ".py",
         tags = [

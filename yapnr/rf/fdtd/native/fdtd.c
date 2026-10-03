@@ -29,10 +29,25 @@
  *   [E sources; sheet branches]      when an E source is active this step
  *   [E probes]                       when n + 1 is a sample step
  * Work within a phase is handed out dynamically (rows, source chunks, probe chunks).
+ *
+ * The exactness depends on the build: no contraction into fused multiply-adds, no fast-math.
+ * The flags say so (native_kernel.CFLAGS, //yapnr/rf:libyapnr_fdtd.so); the pragma below
+ * keeps clang's default (-ffp-contract=on) from fusing when a build omits them, fast-math is
+ * an error, and the loader runs `yf_fp_probe_*` and refuses a library whose arithmetic fuses
+ * or reassociates (a build with -ffp-contract=fast, which overrides the pragma, or gcc in a
+ * GNU mode, which ignores it).
  */
 
-/* posix_memalign under -std=c11 with glibc */
+/* posix_memalign and clock_gettime under -std=c11 with glibc */
 #define _POSIX_C_SOURCE 200809L
+
+#if defined(__clang__) /* gcc ignores it (and warns): its ISO modes do not contract */
+#pragma STDC FP_CONTRACT OFF
+#endif
+
+#if defined(__FAST_MATH__)
+#error "fdtd.c must be built without fast-math: the native backend is bit-identical to numpy"
+#endif
 
 #include <pthread.h>
 #include <sched.h>
@@ -41,8 +56,19 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
-#define YF_ABI 3
+#define YF_ABI 4
+
+/* Limits of the C side, checked by `yf_run_block` (Python's MAX_TBLOCK and CHUNK are below). */
+#define YF_MAX_TBLOCK 32 /* steps per wavefront pass: `job_wave` holds 2 tasks per step */
+#define YF_MAX_CHUNK 1024 /* edges per probe or source work item: the probe scratch */
+
+/* sha256 of fdtd.c and fdtd_kernels.h (in that order), set by native_kernel.build_library so
+ * that the loader can tell a library built from other sources; "" when unknown. */
+#ifndef YF_SRC_SHA
+#define YF_SRC_SHA ""
+#endif
 
 #define ALWAYS static inline __attribute__((always_inline))
 
@@ -162,7 +188,12 @@ struct yf_pool {
   atomic_int remaining;
   atomic_int bar_count;
   atomic_int bar_sense;
+  atomic_int bar_sleepers; /* threads asleep at the barrier */
+  pthread_mutex_t bar_mu;
+  pthread_cond_t bar_cv;
   _Atomic int64_t ticket;
+  void **scr;       /* [n]: each thread's scratch (rows and probe values), 64-byte aligned */
+  size_t scr_bytes; /* their size */
 };
 
 typedef struct {
@@ -180,21 +211,60 @@ static inline void cpu_relax(void) {
 
 #define SPINS 4000
 
+static inline int64_t now_ns(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (int64_t)ts.tv_sec * 1000000000 + ts.tv_nsec;
+}
+
+/* Waiting at a barrier: spin with the pause hint for YF_SPIN_NS, then yield the core until
+ * YF_YIELD_NS, then sleep on the barrier's condition variable. On an idle machine a phase's last
+ * thread arrives well within the spin; on a loaded one (more threads than free cores) the
+ * waiting threads stop taking cycles from the ones still working after about a millisecond. */
+#ifndef YF_SPIN_NS /* (a test build sets both to 0: every wait sleeps) */
+#define YF_SPIN_NS 50000
+#endif
+#ifndef YF_YIELD_NS
+#define YF_YIELD_NS 1000000
+#endif
+
+/* 1 once *flag == want, 0 when YF_YIELD_NS passed first. */
+static int spin_wait(atomic_int *flag, int want) {
+  int64_t t0 = -1;
+  for (unsigned it = 1;; it++) {
+    if (atomic_load_explicit(flag, memory_order_acquire) == want) return 1;
+    if (it % 64) {
+      cpu_relax();
+      continue;
+    }
+    const int64_t t = now_ns();
+    if (t0 < 0) t0 = t;
+    if (t - t0 >= YF_YIELD_NS) return 0;
+    if (t - t0 > YF_SPIN_NS) sched_yield();
+  }
+}
+
 static void barrier(yf_pool *P, int *sense) {
   const int s = !*sense;
   *sense = s;
   if (atomic_fetch_add_explicit(&P->bar_count, 1, memory_order_acq_rel) == P->n - 1) {
     atomic_store_explicit(&P->bar_count, 0, memory_order_relaxed);
-    atomic_store_explicit(&P->bar_sense, s, memory_order_release);
-  } else {
-    int spins = 0;
-    while (atomic_load_explicit(&P->bar_sense, memory_order_acquire) != s) {
-      if (++spins < SPINS)
-        cpu_relax();
-      else
-        sched_yield();
+    /* Sequentially consistent with the sleepers' count: either a thread about to sleep sees
+     * the new sense, or this thread sees it counted and wakes it. */
+    atomic_store(&P->bar_sense, s);
+    if (atomic_load(&P->bar_sleepers) > 0) {
+      pthread_mutex_lock(&P->bar_mu);
+      pthread_cond_broadcast(&P->bar_cv);
+      pthread_mutex_unlock(&P->bar_mu);
     }
+    return;
   }
+  if (spin_wait(&P->bar_sense, s)) return;
+  pthread_mutex_lock(&P->bar_mu);
+  atomic_fetch_add(&P->bar_sleepers, 1);
+  while (atomic_load(&P->bar_sense) != s) pthread_cond_wait(&P->bar_cv, &P->bar_mu);
+  atomic_fetch_sub(&P->bar_sleepers, 1);
+  pthread_mutex_unlock(&P->bar_mu);
 }
 
 /* Dynamic hand-out without resets: in every phase each thread makes exactly one failing
@@ -224,6 +294,16 @@ static void *worker_main(void *arg) {
     job(P, tid, sim, run);
     atomic_fetch_sub_explicit(&P->remaining, 1, memory_order_acq_rel);
   }
+}
+
+/* Each thread's scratch (pool->scr[tid]): three rows of the box in the wider precision (the
+ * wavefront's rows before a mu blend; the sweeps use one), then YF_MAX_CHUNK probe values. */
+static inline size_t scratch_rows_bytes(const yf_sim *s) {
+  return (sizeof(double) * (3 * (size_t)s->jp + 16) + 63) & ~(size_t)63;
+}
+
+static inline size_t scratch_bytes(const yf_sim *s) {
+  return scratch_rows_bytes(s) + sizeof(double) * YF_MAX_CHUNK;
 }
 
 /* ---- the kernels, once per precision ---------------------------------------------------- */
@@ -256,6 +336,39 @@ void yf_sizes(int64_t *out) {
   out[7] = (int64_t)sizeof(yf_run);
 }
 
+/* The limits `yf_run_block` enforces: steps per wavefront pass, edges per work item. */
+void yf_limits(int64_t *out) {
+  out[0] = YF_MAX_TBLOCK;
+  out[1] = YF_MAX_CHUNK;
+}
+
+/* Provenance of the build: the sources' sha256 ("" when the build did not say) and the
+ * compiler. */
+const char *yf_src_sha(void) { return YF_SRC_SHA; }
+
+const char *yf_compiler(void) {
+#if defined(__clang__)
+  return __VERSION__; /* "Apple LLVM 17.0.0 (clang-...)", "Clang 18.1.3 ..." */
+#elif defined(__GNUC__)
+  return "gcc " __VERSION__;
+#else
+  return "unknown";
+#endif
+}
+
+/* The loader's check of the arithmetic (native_kernel.Kernel), in the instruction-set variant
+ * the sweeps run: with x, y and p = fl(x y) from the caller, x y - p is 0 unless the compiler
+ * fused it into a multiply-add, and (u + v) - u is fl(u + v) - u unless it reassociated. */
+CLONES void yf_fp_probe_f64(const double *in, double *out) {
+  out[0] = in[0] * in[1] - in[2];
+  out[1] = (in[3] + in[4]) - in[3];
+}
+
+CLONES void yf_fp_probe_f32(const float *in, float *out) {
+  out[0] = in[0] * in[1] - in[2];
+  out[1] = (in[3] + in[4]) - in[3];
+}
+
 /* The instruction-set variant the sweeps run with (provenance). */
 const char *yf_isa(void) {
 #if defined(__x86_64__) && defined(__linux__) && !defined(YF_NO_CLONES)
@@ -272,6 +385,30 @@ const char *yf_isa(void) {
 #endif
 }
 
+static void free_scratch(yf_pool *P) {
+  if (P->scr)
+    for (int t = 0; t < P->n; t++) free(P->scr[t]);
+  free(P->scr);
+  P->scr = NULL;
+  P->scr_bytes = 0;
+}
+
+/* Every thread's scratch of at least `bytes`; 0, or -1 when out of memory. */
+static int ensure_scratch(yf_pool *P, size_t bytes) {
+  if (P->scr && P->scr_bytes >= bytes) return 0;
+  free_scratch(P);
+  P->scr = (void **)calloc((size_t)P->n, sizeof(void *));
+  if (!P->scr) return -1;
+  for (int t = 0; t < P->n; t++)
+    if (posix_memalign(&P->scr[t], 64, bytes) != 0) {
+      P->scr[t] = NULL;
+      free_scratch(P);
+      return -1;
+    }
+  P->scr_bytes = bytes;
+  return 0;
+}
+
 void yf_pool_free(void *handle) {
   yf_pool *P = (yf_pool *)handle;
   if (!P) return;
@@ -282,35 +419,78 @@ void yf_pool_free(void *handle) {
   for (int t = 1; t < P->n; t++) pthread_join(P->th[t], NULL);
   pthread_mutex_destroy(&P->mu);
   pthread_cond_destroy(&P->cv);
+  pthread_mutex_destroy(&P->bar_mu);
+  pthread_cond_destroy(&P->bar_cv);
+  free_scratch(P);
   free(P->th);
   free(P);
 }
 
+/* A pool of `nthreads` (the caller is thread 0); NULL when out of memory. Fewer threads when
+ * the system refuses more (yf_pool_threads). */
 void *yf_pool_new(int nthreads) {
   if (nthreads < 1) nthreads = 1;
   if (nthreads > 256) nthreads = 256;
   yf_pool *P = (yf_pool *)calloc(1, sizeof(yf_pool));
   if (!P) return NULL;
-  P->n = nthreads;
   P->th = (pthread_t *)calloc((size_t)nthreads, sizeof(pthread_t));
+  if (!P->th) {
+    free(P);
+    return NULL;
+  }
+  P->n = 1;
   pthread_mutex_init(&P->mu, NULL);
   pthread_cond_init(&P->cv, NULL);
+  pthread_mutex_init(&P->bar_mu, NULL);
+  pthread_cond_init(&P->bar_cv, NULL);
   for (int t = 1; t < nthreads; t++) {
     yf_worker_arg *a = (yf_worker_arg *)malloc(sizeof(yf_worker_arg));
+    if (!a) break;
     a->pool = P;
     a->tid = t;
     if (pthread_create(&P->th[t], NULL, worker_main, a) != 0) {
       free(a);
-      P->n = t;
       break;
     }
+    P->n = t + 1;
   }
   return P;
 }
 
-int yf_pool_threads(void *handle) { return ((yf_pool *)handle)->n; }
+int yf_pool_threads(void *handle) { return handle ? ((yf_pool *)handle)->n : 0; }
 
-/* Run steps run->n0 .. run->n1 - 1. Returns 0, or a negative error. */
+/* -4 unless the run's counts, work items and pass length are within the structures and the
+ * C side's limits. */
+static int check_items(const yf_item *items, int n, int nlist, const void *list, size_t stride,
+                       size_t count_at) {
+  if (n < 0 || (n && (!items || !list))) return -4;
+  for (int t = 0; t < n; t++) {
+    const yf_item *x = &items[t];
+    if (x->index < 0 || x->index >= nlist) return -4;
+    const int count = *(const int32_t *)((const char *)list + (size_t)x->index * stride + count_at);
+    if (x->p0 < 0 || x->p1 < x->p0 || x->p1 > count || x->p1 - x->p0 > YF_MAX_CHUNK) return -4;
+  }
+  return 0;
+}
+
+static int check_run(const yf_run *r) {
+  if (r->tblock < 0 || r->tblock > YF_MAX_TBLOCK || r->m < 0) return -4;
+  if (r->nsrc < 0 || r->nprobe < 0 || (r->nsrc && !r->src) || (r->nprobe && !r->probe))
+    return -4;
+  const size_t sp = sizeof(yf_probe), ss = sizeof(yf_src);
+  const size_t cp = offsetof(yf_probe, count), cs = offsetof(yf_src, count);
+  if (check_items(r->hitem, r->nhitem, r->nprobe, r->probe, sp, cp) ||
+      check_items(r->eitem, r->neitem, r->nprobe, r->probe, sp, cp) ||
+      check_items(r->hsitem, r->nhsitem, r->nsrc, r->src, ss, cs) ||
+      check_items(r->esitem, r->nesitem, r->nsrc, r->src, ss, cs) ||
+      check_items(r->sitem, r->nsitem, r->nsrc, r->src, ss, cs))
+    return -4;
+  return 0;
+}
+
+/* Run steps run->n0 .. run->n1 - 1. Returns 0, or a negative error: -1 no pool or structures,
+ * -2 decimation < 1, -3 element size not 8 or 4, -4 counts, items or pass length out of range,
+ * -5 out of memory. */
 int yf_run_block(void *handle, const yf_sim *sim, const yf_run *run) {
   yf_pool *P = (yf_pool *)handle;
   if (!P || !sim || !run) return -1;
@@ -323,9 +503,12 @@ int yf_run_block(void *handle, const yf_sim *sim, const yf_run *run) {
     job = job_f32;
   else
     return -3;
+  if (check_run(run)) return -4;
+  if (ensure_scratch(P, scratch_bytes(sim))) return -5;
   atomic_store(&P->ticket, 0);
   atomic_store(&P->bar_count, 0);
   atomic_store(&P->bar_sense, 0);
+  atomic_store(&P->bar_sleepers, 0);
   atomic_store(&P->remaining, P->n - 1);
   pthread_mutex_lock(&P->mu);
   P->job = job;

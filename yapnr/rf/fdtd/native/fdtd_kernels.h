@@ -4,8 +4,6 @@
  * same order; the comments name them.
  */
 
-/* Rows per work item of the sweeps. */
-#define SFX_ROWS 2
 /* Edges per work item of sources and probes (Python chunks to the same size). */
 
 /* A value that is either a vector over j or one scalar for the row. */
@@ -409,9 +407,9 @@ static void SFX(probe_item)(const yf_sim *s, const yf_run *r, const yf_item *it,
 
 /* ---- sweeps: one step at a time, H then E over the whole box ------------------------------ */
 
-static void SFX(h_item)(const yf_sim *s, int64_t item, R *scratch, int mumode) {
+static void SFX(h_item)(const yf_sim *s, int64_t item, int rows, R *scratch, int mumode) {
   const int64_t nrows = (int64_t)s->np * s->ni;
-  const int64_t r0 = item * SFX_ROWS, r1 = r0 + SFX_ROWS < nrows ? r0 + SFX_ROWS : nrows;
+  const int64_t r0 = item * rows, r1 = r0 + rows < nrows ? r0 + rows : nrows;
   for (int64_t r = r0; r < r1; r++) {
     const int k = (int)(r / s->ni), i = (int)(r % s->ni);
     for (int c = 3; c < 6; c++) {
@@ -431,9 +429,9 @@ static void SFX(h_item)(const yf_sim *s, int64_t item, R *scratch, int mumode) {
   }
 }
 
-static void SFX(e_item)(const yf_sim *s, int64_t item, R *scratch, int sheetmode) {
+static void SFX(e_item)(const yf_sim *s, int64_t item, int rows, R *scratch, int sheetmode) {
   const int64_t nrows = (int64_t)s->np * s->ni;
-  const int64_t r0 = item * SFX_ROWS, r1 = r0 + SFX_ROWS < nrows ? r0 + SFX_ROWS : nrows;
+  const int64_t r0 = item * rows, r1 = r0 + rows < nrows ? r0 + rows : nrows;
   for (int64_t r = r0; r < r1; r++) {
     const int k = (int)(r / s->ni), i = (int)(r % s->ni);
     for (int c = 0; c < 3; c++)
@@ -464,8 +462,9 @@ static void SFX(job_sweep)(yf_pool *P, int tid, const yf_sim *s, const yf_run *r
   double *pv = NULL;
   if (posix_memalign((void **)&scratch, 64, sizeof(R) * ((size_t)s->jp + 16)) != 0) abort();
   if (posix_memalign((void **)&pv, 64, sizeof(double) * 1024) != 0) abort();
+  const int rows = r->rows > 0 ? r->rows : 1;
   const int64_t nrows = (int64_t)s->np * s->ni;
-  const int64_t nitems = (nrows + SFX_ROWS - 1) / SFX_ROWS;
+  const int64_t nitems = (nrows + rows - 1) / rows;
   int64_t mu_rows = 0;
   for (int e = 0; e < s->nmu; e++) mu_rows += (int64_t)(s->mu_k1[e] - s->mu_k0[e]) * s->ni;
   int64_t hs = 0, es = 0; /* sample counters */
@@ -480,7 +479,7 @@ static void SFX(job_sweep)(yf_pool *P, int tid, const yf_sim *s, const yf_run *r
           esrc = 1;
       }
     /* H sweep (with the mu blend when no H source acts) */
-    SFX_PHASE(nitems, SFX(h_item)(s, it, scratch, hsrc ? 2 : 1));
+    SFX_PHASE(nitems, SFX(h_item)(s, it, rows, scratch, hsrc ? 2 : 1));
     if (hsrc) {
       SFX_PHASE(r->nhsitem, {
         const yf_item *x = &r->hsitem[it];
@@ -496,7 +495,7 @@ static void SFX(job_sweep)(yf_pool *P, int tid, const yf_sim *s, const yf_run *r
       hs++;
     }
     /* E sweep (with the sheet's branches when no E source acts) */
-    SFX_PHASE(nitems, SFX(e_item)(s, it, scratch, esrc ? 2 : 1));
+    SFX_PHASE(nitems, SFX(e_item)(s, it, rows, scratch, esrc ? 2 : 1));
     if (esrc) {
       SFX_PHASE(r->nesitem, {
         const yf_item *x = &r->esitem[it];
@@ -605,7 +604,8 @@ static void SFX(job_wave)(yf_pool *P, int tid, const yf_sim *s, const yf_run *r)
   if (posix_memalign((void **)&scratch, 64, sizeof(R) * (3 * (size_t)s->jp + 16)) != 0) abort();
   const int T = r->tblock;
   const int np = s->np, ni = s->ni;
-  const int nchunk = (ni + SFX_ROWS - 1) / SFX_ROWS;
+  const int rows = r->rows > 0 ? r->rows : 1;
+  const int nchunk = (ni + rows - 1) / rows;
   for (int64_t n0 = r->n0; n0 < r->n1; n0 += T) {
     const int S = (int)(r->n1 - n0 < T ? r->n1 - n0 : T);
     /* this pass's source values */
@@ -640,8 +640,8 @@ static void SFX(job_wave)(yf_pool *P, int tid, const yf_sim *s, const yf_run *r)
       SFX_PHASE((int64_t)ntask * nchunk, {
         const int task = (int)(it / nchunk), ch = (int)(it % nchunk);
         const int k = tk[task], t = tt[task];
-        const int i1 = (ch + 1) * SFX_ROWS < ni ? (ch + 1) * SFX_ROWS : ni;
-        for (int i = ch * SFX_ROWS; i < i1; i++) {
+        const int i1 = (ch + 1) * rows < ni ? (ch + 1) * rows : ni;
+        for (int i = ch * rows; i < i1; i++) {
           if (te[task])
             SFX(e_full)(s, r, k, i, n0 + t, t, scratch);
           else
@@ -660,7 +660,6 @@ static void SFX(job)(yf_pool *P, int tid, const yf_sim *s, const yf_run *r) {
     SFX(job_sweep)(P, tid, s, r);
 }
 
-#undef SFX_ROWS
 #undef SFX_HCALL
 #undef SFX_HSW
 #undef SFX_ECALL

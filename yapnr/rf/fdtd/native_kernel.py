@@ -28,15 +28,18 @@ import numpy as np
 
 from yapnr.rf.mesh import COMPONENTS, E_COMPONENTS
 
-_ABI = 2
+_ABI = 3
 ENV_LIB = "YAPNR_RF_FDTD_LIB"
 ENV_BACKEND = "YAPNR_RF_BACKEND"
 ENV_DTYPE = "YAPNR_RF_DTYPE"
 ENV_THREADS = "YAPNR_RF_THREADS"
 ENV_TBLOCK = "YAPNR_RF_TBLOCK"
 ENV_CACHE = "YAPNR_RF_CACHE_MB"
-# Steps per wavefront pass: the planes a pass keeps (about 3 per step) should fit in this much
-# cache (the last level a thread team shares), MiB.
+ENV_ROWS = "YAPNR_RF_ROWS"
+# Rows of the box per work item: fewer claims on the shared counter than one or two rows
+# (divider, 4 threads: 8 rows about 20 % faster than 2), still hundreds of items per phase.
+DEFAULT_ROWS = 8
+# The cache the wavefront schedule plans for when the last level cannot be read, MiB.
 DEFAULT_CACHE_MB = 8.0
 MAX_TBLOCK = 8
 BACKENDS = ("numpy", "torch", "native")
@@ -163,6 +166,8 @@ class YfRun(ctypes.Structure):
         ("nesitem", c_int32),
         ("tblock", c_int32),
         ("nsitem", c_int32),
+        ("rows", c_int32),
+        ("pad_", c_int32),
         ("src", c_void_p),
         ("probe", c_void_p),
         ("hitem", c_void_p),
@@ -349,6 +354,32 @@ def choose(backend, dtype, spec_backend: str, spec_dtype, *, exact: bool = False
     return chosen, np.dtype(spec_dtype)
 
 
+def last_level_cache_mb() -> float:
+    """The largest CPU cache, MiB (Linux sysfs, macOS sysctl); `DEFAULT_CACHE_MB` if unknown."""
+    sizes = []
+    try:
+        for d in Path("/sys/devices/system/cpu/cpu0/cache").glob("index*"):
+            text = (d / "size").read_text().strip().upper()
+            mult = {"K": 2**10, "M": 2**20, "G": 2**30}.get(text[-1:], 1)
+            sizes.append(int(text.rstrip("KMG")) * mult)
+    except (OSError, ValueError):
+        pass
+    if not sizes and sys.platform == "darwin":
+        import subprocess
+
+        for key in ("hw.perflevel0.l2cachesize", "hw.l3cachesize", "hw.l2cachesize"):
+            try:
+                out = subprocess.run(
+                    ["sysctl", "-n", key], capture_output=True, text=True, timeout=5
+                ).stdout.strip()
+                if out and int(out) > 0:
+                    sizes.append(int(out))
+                    break
+            except (OSError, ValueError, subprocess.SubprocessError):
+                continue
+    return max(sizes) / 2**20 if sizes else DEFAULT_CACHE_MB
+
+
 def thread_count(threads: int) -> int:
     env = os.environ.get(ENV_THREADS, "").strip()
     n = int(env) if env else int(threads)
@@ -430,15 +461,21 @@ class NativeStepper:
             self.pool = None
 
     def _tblock(self) -> int:
-        """Steps per wavefront pass, ``$YAPNR_RF_TBLOCK``: unset or 0, the sweeps (one pass over
-        the box per half step); N, N steps per pass; "auto", as many as keep about three planes
-        per step within ``$YAPNR_RF_CACHE_MB`` (0 when not even one fits)."""
+        """Steps per wavefront pass (0: the sweeps, one pass over the box per half step):
+        ``$YAPNR_RF_TBLOCK`` N, else ("auto") the sweeps while the box (fields and ψ) fits in
+        half the last-level cache (``$YAPNR_RF_CACHE_MB``, else read from the system), and
+        otherwise as many steps as keep about three planes per step in that cache (0 when not
+        even one fits). C4D-16 (32 MiB L3), divider at 0.80 M cells, 16 threads: 0.74 ms per
+        step in 5-step passes against 1.24 in sweeps; at 0.20 M cells the sweeps are ahead."""
         env = os.environ.get(ENV_TBLOCK, "").strip().lower()
-        if env != "auto":
-            return max(0, min(MAX_TBLOCK, int(env or 0)))
-        cache = float(os.environ.get(ENV_CACHE, "").strip() or DEFAULT_CACHE_MB) * 2**20
-        plane = 6 * self.ni * self.jp * self.dtype.itemsize
-        plane += sum(p.nbytes for p in self._psi) / self.np_
+        if env not in ("", "auto"):
+            return max(0, min(MAX_TBLOCK, int(env)))
+        cache = float(os.environ.get(ENV_CACHE, "").strip() or last_level_cache_mb()) * 2**20
+        psi = sum(p.nbytes for p in self._psi)
+        box = 6 * self.size * self.dtype.itemsize + psi
+        if box <= cache / 2:
+            return 0
+        plane = box / self.np_
         return max(0, min(MAX_TBLOCK, int(cache // (3 * plane))))
 
     # -- layout ----------------------------------------------------------------------------------
@@ -716,6 +753,7 @@ class _NativeRun:
         self.sitem = np.concatenate([self.hsitem, self.esitem])
         r = self.run = YfRun()
         r.tblock = tblock
+        r.rows = max(1, int(os.environ.get(ENV_ROWS, "").strip() or DEFAULT_ROWS))
         r.nsitem = len(self.sitem)
         r.sitem = _ptr(self.sitem)
         if tblock:

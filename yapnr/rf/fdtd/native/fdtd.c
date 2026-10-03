@@ -42,7 +42,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define YF_ABI 2
+#define YF_ABI 3
 
 #define ALWAYS static inline __attribute__((always_inline))
 
@@ -130,6 +130,8 @@ typedef struct {
   int32_t nhsitem, nesitem; /* source chunks */
   int32_t tblock;           /* steps per wavefront pass; 0: sweeps */
   int32_t nsitem;           /* chunks of all sources */
+  int32_t rows;             /* rows per work item of the sweeps and the passes */
+  int32_t pad_;
   const yf_src *src;
   const yf_probe *probe;
   const yf_item *hitem, *eitem;   /* probe chunks of the H and E probes */

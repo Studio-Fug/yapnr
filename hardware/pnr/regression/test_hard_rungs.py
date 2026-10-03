@@ -15,6 +15,7 @@ from hard_rungs import (
     dru_text,
     hard_rungs,
     plane_layers,
+    ufbga_base,
 )
 from run import parser
 
@@ -31,6 +32,9 @@ CHECK_KINDS = {
     "align",
     "plane",
     "microvia_span",
+    "via_class",
+    "escape",
+    "pad_distance",
 }
 
 
@@ -87,7 +91,9 @@ class HardRungContract(unittest.TestCase):
         # The chaser variants' base is the ladder's own 07-chaser-20 (not a hard rung).
         chaser = chaser_base()
         self.assertEqual(chaser["parts"], designs()[6]["parts"])
-        bases = {"chaser-20": chaser}
+        # The BGA rung's base (two layers) is not a hard rung either: its drops need planes.
+        bga = ufbga_base()
+        bases = {"chaser-20": chaser, "ufbga201-fanout": bga}
         for spec in self.rungs:
             dims = spec["dims"]
             if all(
@@ -102,9 +108,12 @@ class HardRungContract(unittest.TestCase):
                 ).items()
             ):
                 bases[spec["base"]] = spec
-        self.assertEqual(set(bases), {"mcu-usb-31", "quad-bank-56", "power-switch-31", "chaser-20"})
+        self.assertEqual(
+            set(bases),
+            {"mcu-usb-31", "quad-bank-56", "power-switch-31", "chaser-20", "ufbga201-fanout"},
+        )
         family = {}
-        for spec in self.rungs + [chaser]:
+        for spec in self.rungs + [chaser, bga]:
             family.setdefault(spec["base"], []).append(spec)
         for spec in self.rungs:
             base = bases[spec["base"]]

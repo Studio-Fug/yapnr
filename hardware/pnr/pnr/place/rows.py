@@ -155,6 +155,14 @@ def sample_constraints(graph, constraints, seed, attempts=96, pad_edge=None):
     rng = random.Random(seed)
     base_fixed = resolve_fixed_poses(graph, constraints)
     base_rot = resolve_hard_rotations(constraints)
+    from pnr.constraints import ConstraintError
+
+    from .regions import check_feasible, declared
+
+    related = declared(constraints)
+    if related:
+        # A region or align no row choice can rescue is the author's to fix: name it.
+        check_feasible(graph, constraints, width, height)
     for attempt in range(attempts):
         work = BoardGraph.from_json(graph.to_json())
         cc = copy.deepcopy(constraints)
@@ -247,6 +255,17 @@ def sample_constraints(graph, constraints, seed, attempts=96, pad_edge=None):
             continue
         if violations(work, cc):
             continue
+        from .regions import violations as related_violations
+
+        # A region or align among the parts placed so far (fixed poses, rows).
+        if related_violations([work.component(ref) for ref in placed], cc):
+            continue
+        if related:
+            # A trial that leaves an aligned or confined part nowhere to go.
+            try:
+                check_feasible(work, cc, width, height, trials_fixed=True)
+            except ConstraintError:
+                continue
         for row in cc.constraints:
             if row.kind == "row":
                 row.params["trial_resolved"] = True

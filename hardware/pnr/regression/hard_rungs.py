@@ -28,8 +28,9 @@ Every rung carries a tool-neutral description of those dimensions (``stackup``,
 ``via_policy``, ``sides``, ``checks``) besides the engine's own ``constraints``. The
 ``checks`` are verified on the saved board by ``check_constraints.py``, which reads
 any tool's KiCad board, so other place-and-route tools are judged by the same list.
-A check the engine cannot express carries ``"engine": "unsupported"``: it is still
-measured, never silently dropped.
+Each check names the engine constraint that expresses it (``engine``); a check the
+engine could not express would carry ``"engine": "unsupported"``: still measured,
+never silently dropped.
 
 Each rung has a ``ci`` tag: ``lane`` (``nightly``: informational, every night;
 ``manual``: on request only) and ``minutes``, the per-seed wall budget its lane must
@@ -291,8 +292,11 @@ def base_checks(spec, fixed_ids=True):
 
 def derived_checks(spec):
     """Checks for a ladder or showcase design without a ``checks`` list, derived from
-    its engine constraints (fixed poses, hard edge locks, orientations, line groups)
-    plus the board-wide inside-the-outline and single-sided checks."""
+    its engine constraints (fixed poses, hard edge locks, orientations, line groups,
+    hard rectangle regions, hard origin-anchored aligns) plus the board-wide
+    inside-the-outline and single-sided checks. A region or align the checker cannot
+    measure (a polygon or union, another anchor, a glob or @address) gets no derived
+    check."""
     cons = spec["constraints"]
     checks = [
         dict(id="inside-board", kind="inside_board", refs="*", engine="native"),
@@ -339,6 +343,37 @@ def derived_checks(spec):
                     rot=group.get("rot", 0),
                     tol_mm=0.01,
                     engine="line_group",
+                )
+            )
+
+    def plain(refs):  # the checker takes literal refs, not globs or @addresses
+        return all(not set(r) & set("*?[@") for r in refs)
+
+    for rule in cons.get("region") or []:
+        if rule.get("hard", True) and rule.get("rect") is not None and plain(rule["refs"]):
+            checks.append(
+                dict(
+                    id="region-" + rule["name"],
+                    kind="region",
+                    refs=list(rule["refs"]),
+                    rect=list(rule["rect"]),
+                    engine="region",
+                )
+            )
+    for rule in cons.get("align") or []:
+        if (
+            rule.get("hard", True)
+            and rule.get("anchor", "origin") == "origin"
+            and plain(rule["refs"])
+        ):
+            checks.append(
+                dict(
+                    id="align-" + rule["name"],
+                    kind="align",
+                    refs=list(rule["refs"]),
+                    axis=rule["axis"],
+                    tol_mm=rule.get("tol_mm", 0.25),
+                    engine="align",
                 )
             )
     return checks
@@ -537,7 +572,7 @@ def absolute(spec, *, holes, edges, rotations, keepout, region, describe):
     """Absolute placement constraints: mounting holes (stock NPTH footprints) at fixed
     poses, hard edge locks (``edges``: ref -> edge, 1 mm tolerance), locked rotations,
     a placement keep-out rectangle, and a board-region restriction (``region``: refs
-    and rectangle), which the engine cannot express: it is checked, not given."""
+    and rectangle; the engine's hard ``region``, each courtyard inside the rectangle)."""
     spec = deepcopy(spec)
     for ref in holes:
         spec["parts"].append(pinned(ref, "hole_m2", "M2", {"": ""}))
@@ -552,6 +587,8 @@ def absolute(spec, *, holes, edges, rotations, keepout, region, describe):
     cons["orientation"] = dict(rotations)
     x0, y0, x1, y1 = keepout
     cons["keepout"] = [dict(name="label", polygon=[[x0, y0], [x1, y0], [x1, y1], [x0, y1]])]
+    refs, rect = region
+    cons["region"] = [dict(name="region", refs=list(refs), rect=list(rect), hard=True)]
     checks = base_checks(spec)
     checks += [
         dict(id="edge-" + ref, kind="edge", ref=ref, edge=edge, max_mm=1.0, engine="edge_align")
@@ -564,8 +601,7 @@ def absolute(spec, *, holes, edges, rotations, keepout, region, describe):
     checks.append(
         dict(id="keepout-label", kind="keepout", rect=keepout, refs="*", engine="keepout")
     )
-    refs, rect = region
-    checks.append(dict(id="region", kind="region", refs=refs, rect=rect, engine="unsupported"))
+    checks.append(dict(id="region", kind="region", refs=refs, rect=rect, engine="region"))
     spec["checks"] = checks
     spec["description"] += " " + describe
     spec["name"] += "-abs"
@@ -578,8 +614,8 @@ def relative(spec, *, lines, groups, align, describe):
     """Relative placement constraints: ordered lines at a pitch (``line_group``: a
     rigid row, which also fixes the members' order and their offsets), hard proximity
     groups (members within a radius of an anchor), and an alignment (``align``: refs
-    sharing one coordinate within 0.25 mm), which the engine cannot express: it is
-    checked, not given."""
+    sharing one coordinate within 0.25 mm; the engine's hard ``align`` on the
+    footprint origins, as the check measures)."""
     spec = deepcopy(spec)
     cons = spec["constraints"]
     cons["line_group"] = [
@@ -589,6 +625,10 @@ def relative(spec, *, lines, groups, align, describe):
     cons["group"] = [
         dict(members=members, anchor=anchor, hard=True, radius_mm=radius)
         for _name, anchor, members, radius in groups
+    ]
+    refs, axis = align
+    cons["align"] = [
+        dict(name="align", refs=list(refs), axis=axis, anchor="origin", tol_mm=0.25, hard=True)
     ]
     checks = base_checks(spec)
     checks += [
@@ -614,10 +654,7 @@ def relative(spec, *, lines, groups, align, describe):
         )
         for name, anchor, members, radius in groups
     ]
-    refs, axis = align
-    checks.append(
-        dict(id="align", kind="align", refs=refs, axis=axis, tol_mm=0.25, engine="unsupported")
-    )
+    checks.append(dict(id="align", kind="align", refs=refs, axis=axis, tol_mm=0.25, engine="align"))
     spec["checks"] = checks
     spec["description"] += " " + describe
     spec["name"] += "-rel"

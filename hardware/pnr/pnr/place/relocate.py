@@ -271,14 +271,28 @@ def _shifted(terminals, shifts):
 
 
 def _swaps(
-    g, posed, scored, terminals, rules, tracks, vias, pitch, tried, temperature, limit=2, held=()
+    g,
+    posed,
+    scored,
+    terminals,
+    rules,
+    tracks,
+    vias,
+    pitch,
+    tried,
+    temperature,
+    limit=2,
+    held=(),
+    soft=None,
 ):
     """Swap proposals among the parts :func:`propose` scored (except ``held`` ones:
     row and line members, macros): pairs with courtyard areas within a factor of two,
     legal when exchanged (``posed``), ranked by the endpoint screen; the best
     ``limit`` are scored with fields rebuilt without both. Before and after are
     costed alike: each part by :func:`_score` in the fields without its partner, its
-    peers' pins where they are (after: the partner's at its new centre)."""
+    peers' pins where they are (after: the partner's at its new centre). ``soft``
+    (refs -> penalty, :func:`pnr.place.regions.soft_penalty`) adds the soft region and
+    align penalty of both parts, before and after alike."""
     if posed is None or len(scored) < 2:
         return []
     from .geometry import courtyard_rect
@@ -322,6 +336,11 @@ def _swaps(
             fields = _fields(g, comp, rules, tracks, vias, pitch, without=(partner,))
             before += _score(comp, fields, here, terminals)
             after += _score(comp, fields, target, after_terminals)
+        if soft is not None:
+            before += soft(ca, cb)
+            ca.pos, cb.pos = pb, pa
+            after += soft(ca, cb)
+            ca.pos, cb.pos = pa, pb
         if after < before - 1e-6 or temperature > 0:
             out.append(
                 (
@@ -389,9 +408,13 @@ def propose(
     legal = translation_checker(g, constraints)
     from .geometry import set_component_side
     from .metrics import pose_checker
+    from .regions import declared
     from .sides import macro, opposite
     from .sides import plan as side_plan
 
+    related = declared(constraints)
+    if related:
+        from .regions import align_snap, soft_penalty
     plan = side_plan(g, constraints, rules)
     posed = pose_checker(g, constraints) if plan.active else None
     # Swaps move two parts by pose_checker, which does not re-check rows and lines.
@@ -434,13 +457,23 @@ def propose(
 
         # Compute light cost with component at original pose.
         points = []
+        # A hard-aligned part moves along its line only (pnr.place.regions).
+        snap = align_snap(g, constraints, comp) if related else {}
+        seen = set()
         for x in np.arange(candidate_pitch / 2, width, candidate_pitch):
             for y in np.arange(candidate_pitch / 2, height, candidate_pitch):
-                comp.pos = (float(x), float(y))
+                point = [float(x), float(y)]
+                for k, value in snap.items():
+                    point[k] = value
+                point = tuple(point)
+                if point in seen:
+                    continue
+                seen.add(point)
+                comp.pos = point
                 ok = legal(comp)
                 comp.pos = original
                 if ok:
-                    points.append((light((x, y)), (float(x), float(y))))
+                    points.append((light(point), point))
         points.sort()
         selected = [p for _, p in points[:shortlist]]
         # Do not let a short-airwire basin hide empty distant regions.
@@ -471,6 +504,8 @@ def propose(
                     )
                 )
                 total = score + 0.1 * air
+                if related:
+                    total += soft_penalty(g, constraints, comp, pos)
                 evaluated[tuple(pos)] = dict(
                     position=list(pos),
                     cost=total,
@@ -493,6 +528,8 @@ def propose(
                     missing += 1
                     best = 10000.0
                 score += best
+            if related:
+                score += soft_penalty(g, constraints, comp, pos)
             return score + 0.1 * light(pos), missing
 
         baseline, _ = heavy(original)
@@ -576,6 +613,11 @@ def propose(
         tried,
         temperature,
         held=unswappable,
+        soft=(
+            (lambda *parts: sum(soft_penalty(g, constraints, p, p.pos) for p in parts))
+            if related
+            else None
+        ),
     )
     while True:
         if not choices:

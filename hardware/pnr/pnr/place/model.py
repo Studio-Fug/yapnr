@@ -9,6 +9,7 @@ Relaxes a continuous placement by gradient descent on a smooth loss:
       + w_keep   * keepout_penalty    # keep movable parts out of keep-outs
       + w_group  * grouping           # cluster grouped parts near their anchor
       + w_match  * length_mismatch    # equal estimated lengths in pairs / groups
+      + region / align                # allowed areas, shared coordinates (if declared)
 
 Positions of ``fixed`` parts are held constant (they still anchor the wirelength);
 everything else is an optimized parameter. This is the DREAMPlace reframing —
@@ -376,6 +377,18 @@ def global_place(
                 (members, idx[anchor], float(con.params.get("radius_mm") or 5.0), con.weight or 1.0)
             )
 
+    # Regions and aligns (pnr.place.regions): None unless the design declares one,
+    # so other designs build no extra tensors and keep their loss bit for bit.
+    related = None
+    from .regions import declared
+
+    if declared(constraints):
+        from .regions import GlobalTerms
+
+        related = GlobalTerms(
+            constraints, comps, idx, ANGLES, (~is_fixed).tolist(), flippable=free_side
+        )
+
     keepouts = keepout_rects(graph, constraints, poses)
     keep_t = (
         torch.tensor([[k.cx, k.cy, k.w / 2, k.h / 2] for k in keepouts], dtype=torch.float32)
@@ -503,6 +516,12 @@ def global_place(
             m = torch.tensor(members, dtype=torch.long)
             d = torch.linalg.vector_norm(pos[m] - pos[anchor], dim=1)
             loss = loss + weight * (torch.clamp(d - radius, min=0.0) ** 2).sum()
+
+        if related is not None:
+            # A side-free part's bodies and anchors are mixed over both sides, as its pins.
+            term = related.loss(pos, p, away if sided is not None else None)
+            if term is not None:
+                loss = loss + term
 
         if keep_t is not None:
             kdx = (cx.unsqueeze(1) - keep_t[:, 0].unsqueeze(0)).abs()

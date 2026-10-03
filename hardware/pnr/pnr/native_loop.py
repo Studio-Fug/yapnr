@@ -725,6 +725,10 @@ def placements(inventory, constraints_path, scores, tried, original, max_move, r
     if any(base.values()):
         raise ValueError("baseline hard placement violations: " + json.dumps(base))
     legal = translation_checker(g, cc)
+    from pnr.place.regions import soft_refs, soft_total
+
+    soft = soft_refs(cc)
+    soft_before = soft_total(g, cc) if soft else 0.0
     result = []
     for c in sorted(g.components, key=lambda c: (-scores.get(c.ref, 0), c.ref)):
         if c.locked or c.ref in fixed or not scores.get(c.ref):
@@ -762,11 +766,18 @@ def placements(inventory, constraints_path, scores, tried, original, max_move, r
                             rank=sum(o["ref"] == c.ref for o in result),
                         )
                     )
+                    if c.ref in soft:
+                        # A soft region or align (pnr.place.regions): note its growth.
+                        result[-1]["soft_growth"] = soft_total(g, cc) - soft_before
                 c.pos = old
     if rules:
         result = rank_translation_channels(g, rules, result)
-    # Interleave components: one congested IC cannot consume every trial.
-    return sorted(result, key=lambda o: (o["rank"], -o["score"], o["ref"]))
+    # Interleave components: one congested IC cannot consume every trial. A trial
+    # that grows a soft region or align penalty waits until the others are tried.
+    return sorted(
+        result,
+        key=lambda o: (o.get("soft_growth", 0.0) > 1e-9, o["rank"], -o["score"], o["ref"]),
+    )
 
 
 def pair_placements(inventory, constraints_path, pair, rules=None):

@@ -150,6 +150,39 @@ def _band_box(box, rect, band, width, height):
     return (x_lo, x_hi, y_lo, y_hi)
 
 
+def legalize_constraint_kwargs(graph, constraints, poses, pad_edge=None) -> dict:
+    """The constraint keyword arguments of :func:`legalize` for ``constraints``.
+
+    ``poses`` are the resolved fixed poses and ``graph`` the graph keep-outs are
+    resolved on. Optional relations add their keys only when the design declares
+    them (``pad_edge`` when given, ``edge_bands`` for a hard ``edge_align``,
+    ``regions``/``aligns`` for a ``region`` or ``align``), so every other design
+    calls the legalizer exactly as before."""
+    from .geometry import (
+        hard_edge_bands,
+        hard_group_edges,
+        hard_group_limits,
+        keepout_rects,
+        resolve_hard_rotations,
+    )
+    from .regions import legalize_kwargs
+
+    out = dict(
+        fixed=poses,
+        keepouts=keepout_rects(graph, constraints, poses),
+        group_limits=hard_group_limits(constraints, poses, partial=True),
+        group_edges=hard_group_edges(constraints),
+        rotations=resolve_hard_rotations(constraints),
+    )
+    if pad_edge is not None:
+        out["pad_edge"] = pad_edge
+    bands = hard_edge_bands(constraints)
+    if bands:
+        out["edge_bands"] = bands
+    out.update(legalize_kwargs(constraints, graph.components))
+    return out
+
+
 class LegalizationError(RuntimeError):
     """Raised when a part cannot be placed (outline too small / too full)."""
 
@@ -177,6 +210,8 @@ def _place_part(
     attached=(),
     free=None,
     box=None,
+    mask=None,
+    box_label="keeping pads clear of the board edge",
 ) -> Tuple[int, int]:
     """Find the free ``bh x bw`` block nearest ``target`` (returns top-left r, c).
 
@@ -186,7 +221,10 @@ def _place_part(
     ``free`` (hull macros, :func:`pnr.place.hull.free_map`) replaces the
     whole-block test on ``occ`` with a precomputed map of valid top-lefts.
     ``box`` (``PNR_PAD_EDGE_CLEARANCE=1``, :func:`pad_edge_box`) bounds the
-    block centre so the part's pads and drills keep the fab edge rules."""
+    block centre so the part's pads and drills keep the fab edge rules; it also carries
+    a hard edge band, a rectangle region and an align band.
+    ``mask`` (a polygon or union region, :meth:`pnr.place.regions.LegalizeRules.mask`)
+    is a map of the top-lefts whose courtyard lies inside the region."""
     ny, nx = occ.shape
     if free is not None:
         if free is False:
@@ -212,6 +250,10 @@ def _place_part(
             free &= (integ2[r1, c1] - integ2[r0, c1] - integ2[r1, c0] + integ2[r0, c0]) == 0
     if not free.any():
         raise LegalizationError("no free slot for part")
+    if mask is not None:
+        free &= mask
+        if not free.any():
+            raise LegalizationError("no free slot inside the part's region")
 
     # Centre of the block for each candidate top-left (r, c).
     rows = np.arange(free.shape[0])[:, None]
@@ -226,7 +268,7 @@ def _place_part(
             & (cy <= box[3] + 1e-9)
         )
         if not free.any():
-            raise LegalizationError("no free slot keeping pads clear of the board edge")
+            raise LegalizationError("no free slot " + box_label)
     for ax, ay, radius in limits:
         free &= (cx - ax) ** 2 + (cy - ay) ** 2 <= radius**2 + 1e-9
     for rr, cc in forbidden:
@@ -274,6 +316,8 @@ def legalize(
     side_weight: float = 3.0,
     side_retry_mm: float = 1.0,
     stack: Optional[frozenset] = None,
+    regions=None,
+    aligns=None,
 ) -> BoardGraph:
     """Return a copy of ``graph`` with movable parts snapped to a legal layout.
 
@@ -319,6 +363,14 @@ def legalize(
     ``stack`` (refs, :func:`pnr.place.sides.stack_refs`; None = off) adds a ``stack``
     occupancy plane that each of those parts tests and marks whatever its side, so two
     of them never overlap back to back on opposite sides.
+
+    ``regions`` / ``aligns`` (the ``region`` / ``align`` constraints,
+    :func:`legalize_constraint_kwargs`; None = off): a hard region bounds the slot
+    centre per tried rotation (a rectangle as a box, a polygon or union as a raster
+    mask), a hard align bounds it to the band the members already placed leave
+    (``tol_mm``), and each aligned member's target moves onto the line. Soft ones add
+    their penalty to the candidate cost. Aligned members are ordered as one block,
+    and a slot that strands a later member is backtracked like a hard group's.
 
     With hull macros (``PNR_MACRO_HULL=1``) the occupancy gains an ``inner`` plane:
     hull macros mark their inner-layer mask there, drilled parts and solid block
@@ -392,14 +444,23 @@ def legalize(
 
     boxes = {}
     bands = edge_bands or {}
+    # Regions and aligns (pnr.place.regions): None unless the design declares one;
+    # built once the hard rotations and fixed poses are applied (below).
+    rules = None
+    if regions or aligns:
+        from .regions import _intersect as intersect_boxes
 
-    def edge_box(comp):
-        """pad_edge_box at comp.rot, narrowed to the part's hard edge band (None when
-        neither the pad-edge rule nor a band applies)."""
+    def constrained(comp):
+        return rules is not None and rules.applies(comp.ref)
+
+    def static_edge_box(comp):
+        """pad_edge_box at comp.rot, narrowed to the part's hard edge band and its hard
+        rectangle regions (None when none applies)."""
         band = bands.get(comp.ref)
-        if pad_edge is None and band is None:
+        if pad_edge is None and band is None and not constrained(comp):
             return None
-        key = (comp.ref, round(comp.rot % 360, 6))
+        # Per side too: a flipped part's pads and off-centre body are mirrored.
+        key = (comp.ref, round(comp.rot % 360, 6), comp.side)
         hit = boxes.get(key)
         if hit is None:
             if pad_edge is None:
@@ -408,18 +469,101 @@ def legalize(
                 hit = pad_edge_box(comp, pad_edge, width, height)
             if band is not None:
                 hit = _band_box(hit, courtyard_rect(comp), band, width, height)
+            if constrained(comp):
+                region = rules.static_box(comp)
+                if region is not None:
+                    hit = intersect_boxes(hit, region)
             boxes[key] = hit
         return hit
 
-    def spreading(comp):
+    def edge_box(comp):
+        """static_edge_box, narrowed to the part's hard align band (None when none
+        applies)."""
+        hit = static_edge_box(comp)
+        if constrained(comp):
+            dynamic = rules.align_box(comp, {c.ref: c for c in neighbors}, by_ref)
+            if dynamic is not None:
+                hit = intersect_boxes(hit, dynamic)
+        return hit
+
+    def centre_limits(comp, rot):
+        """The slot centres ``comp`` could take at ``rot`` on an empty board: its block
+        on the grid, inside static_edge_box; None when there is none. The align bands
+        of the other members of its aligns are built from these
+        (pnr.place.regions.LegalizeRules.reach). A part with a hard edge band has the
+        block its band cap gives it, and its bounds move inward onto its slot lattice
+        (exact: a partner placed first then leaves it a slot); any other part could
+        have its block shrunk to its courtyard by the align cap (spreading), so its
+        bounds are those of that smallest block (never too narrow)."""
+        saved = comp.rot
+        comp.rot = rot
+        try:
+            cr = courtyard_rect(comp)
+            banded = comp.ref in bands
+            infl = spreading(comp, aligned=False) if banded else 1.0
+            bw = int(math.ceil((cr.w * infl + clearance) / g))
+            bh = int(math.ceil((cr.h * infl + clearance) / g))
+            if bw > nx or bh > ny:
+                return None
+            box = ((bw / 2.0) * g, (nx - bw / 2.0) * g, (bh / 2.0) * g, (ny - bh / 2.0) * g)
+            static = static_edge_box(comp)
+            if static is not None:
+                box = intersect_boxes(box, static)
+            if not banded:
+                ok = box[0] <= box[1] + 1e-9 and box[2] <= box[3] + 1e-9
+                return box if ok else None
+            lo_c = math.ceil(box[0] / g - bw / 2.0 - 1e-9)
+            hi_c = math.floor(box[1] / g - bw / 2.0 + 1e-9)
+            lo_r = math.ceil(box[2] / g - bh / 2.0 - 1e-9)
+            hi_r = math.floor(box[3] / g - bh / 2.0 + 1e-9)
+            if lo_c > hi_c or lo_r > hi_r:
+                return None
+            return (
+                (lo_c + bw / 2.0) * g,
+                (hi_c + bw / 2.0) * g,
+                (lo_r + bh / 2.0) * g,
+                (hi_r + bh / 2.0) * g,
+            )
+        finally:
+            comp.rot = saved
+
+    def region_mask(comp, bw, bh):
+        """The hard polygon/union region mask of comp at comp.rot (None when none)."""
+        if not constrained(comp) or bw > nx or bh > ny:
+            return None
+        return rules.mask(comp, bw, bh, g, (ny - bh + 1, nx - bw + 1))
+
+    def box_label_of(comp):
+        if not constrained(comp):
+            return {}
+        return dict(box_label="inside its edge band, region and align band")
+
+    def target_of(comp):
+        """The slot target: comp.pos, with an aligned axis moved onto its line."""
+        if not constrained(comp):
+            return comp.pos
+        return rules.target(comp, {c.ref: c for c in neighbors}, comp.pos)
+
+    def spreading(comp, aligned=True):
         """The part's slot inflation: the spread floor or its feedback inflation, capped
-        for a hard edge part so the slot fits its band."""
+        for a hard edge part so the slot fits its band, and (``aligned``) for a
+        hard-aligned part so the slot fits beside the board edge its align band runs
+        along."""
         infl = max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
         band = bands.get(comp.ref)
         if band is not None:
             cr = courtyard_rect(comp)
             normal = cr.h if band[0] in ("south", "north") else cr.w
             infl = min(infl, max(1.0, 1.0 + (2 * band[1] - clearance - g) / normal))
+        if aligned and constrained(comp):
+            bound = rules.align_box(comp, {c.ref: c for c in neighbors}, by_ref)
+            if bound is not None:
+                cr = courtyard_rect(comp)
+                for k, normal, size in ((0, cr.w, width), (1, cr.h, height)):
+                    # The widest block centred in [lo, hi] that stays on the board.
+                    lo, hi = bound[2 * k], bound[2 * k + 1]
+                    room = 2 * min(hi, size - lo, size / 2)
+                    infl = min(infl, max(1.0, (room - clearance - g) / normal))
         return infl
 
     free_cache = {}
@@ -478,17 +622,22 @@ def legalize(
                 occupancy[side][r : r + bh, c : c + bw] = True
 
     def displaced(comp, r, c, bw, bh):
-        return math.dist(comp.pos, ((c + bw / 2.0) * g, (r + bh / 2.0) * g))
+        return math.dist(target_of(comp), ((c + bw / 2.0) * g, (r + bh / 2.0) * g))
 
     def slot_cost(comp, outcome, neighbors):
-        """Cost of a :func:`search` outcome (its side and turn set on ``comp``)."""
+        """Cost of a :func:`search` outcome (its side and turn set on ``comp``), measured
+        from the slot target (an aligned axis on its line, :func:`target_of`)."""
         if outcome[2] is not None:
             return math.inf
         _, _, _, r, c, bw, bh = outcome[:7]
         x, y = (c + bw / 2.0) * g, (r + bh / 2.0) * g
-        cost = (x - comp.pos[0]) ** 2 + (y - comp.pos[1]) ** 2
+        tx, ty = target_of(comp)
+        cost = (x - tx) ** 2 + (y - ty) ** 2
         if channel_model is not None:
             cost += channel_weight * float(channel_model.penalty(comp, neighbors, x, y))
+        if rules is not None and rules.has_soft(comp.ref):
+            extra = rules.soft_cost(comp, {q.ref: q for q in neighbors}, x, y)
+            cost += 0.0 if extra is None else float(extra)
         if side_cost is not None:
             cost += side_weight * float(side_cost(placed))
         return cost
@@ -550,6 +699,21 @@ def legalize(
             cr = courtyard_rect(comp)
             _mark(occupancy[STACK_PLANE], g, Rect(cr.cx, cr.cy, cr.w + clearance, cr.h + clearance))
 
+    if regions or aligns:
+        from .regions import LegalizeRules
+
+        # Align lines start at the median of the global anchors (fixed parts at their pose).
+        rules = LegalizeRules(
+            regions,
+            aligns,
+            placed.components,
+            grid_mm=g,
+            limits=centre_limits,
+            # The rotations the slot search tries per part (below).
+            turns=lambda m: [m.rot]
+            + ([(m.rot + 90) % 360] if allow_rotation and m.ref not in rotations else []),
+        )
+
     # Minimum-remaining-slots ordering accounts for actual fixed obstacles and
     # intersections of group discs. Radius alone can let a flexible neighbor
     # consume the only legal site of another equally constrained component.
@@ -557,7 +721,11 @@ def legalize(
 
     def available_pose(comp):
         cr = courtyard_rect(comp)
-        infl = spreading(comp) if bands else max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
+        infl = (
+            spreading(comp)
+            if bands or rules is not None
+            else max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
+        )
         bw = int(math.ceil((cr.w * infl + clearance) / g))
         bh = int(math.ceil((cr.h * infl + clearance) / g))
         occ = np.logical_or.reduce([occupancy[side] for side in part_sides(comp)])
@@ -581,6 +749,9 @@ def legalize(
                 & (cy >= box[2] - 1e-9)
                 & (cy <= box[3] + 1e-9)
             )
+        mask = region_mask(comp, bw, bh)
+        if mask is not None:
+            free &= mask
         return int(free.sum())
 
     def available(comp):
@@ -624,7 +795,9 @@ def legalize(
                 sides_m = part_sides(m)
                 occ_m = np.logical_or.reduce([occupancy[side] for side in sides_m])
                 infl_m = (
-                    spreading(m) if bands else max(1.0, spread, float(inflation.get(m.ref, 1.0)))
+                    spreading(m)
+                    if bands or rules is not None
+                    else max(1.0, spread, float(inflation.get(m.ref, 1.0)))
                 )
                 target = aid.target(m.ref, neighbors)
                 turns = (
@@ -673,6 +846,12 @@ def legalize(
     for anchor, member, _ in group_edges:
         adjacency.setdefault(anchor, set()).add(member)
         adjacency.setdefault(member, set()).add(anchor)
+    if rules is not None:
+        # Aligned members share one band: place them as one block.
+        for a, b in rules.edges():
+            if a in by_ref and b in by_ref:
+                adjacency.setdefault(a, set()).add(b)
+                adjacency.setdefault(b, set()).add(a)
     blocks = {}
     for ref in sorted(adjacency):
         if ref in blocks:
@@ -755,7 +934,8 @@ def legalize(
             r = c = None
             bw = bh = 0
             infl = max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
-            banded = comp.ref in bands
+            # A hard edge band, or a hard align: the inflation is capped per tried rotation.
+            banded = comp.ref in bands or (rules is not None and comp.ref in rules.align_of)
             sides = part_sides(comp)
             occ = np.logical_or.reduce([occupancy[side] for side in sides])
             if landing:
@@ -774,10 +954,11 @@ def legalize(
                 comp.rot = rotation
                 cr = courtyard_rect(comp)
                 if banded:
-                    infl = spreading(comp)  # capped per tried rotation (hard edge band)
+                    infl = spreading(comp)  # capped per tried rotation (edge band, align band)
                 bw = int(math.ceil((cr.w * infl + clearance) / g))
                 bh = int(math.ceil((cr.h * infl + clearance) / g))
                 attached = _landing_blocks(comp, bw, bh, g, clearance, mounted) if landing else ()
+                target = target_of(comp)
                 try:
                     candidate_cost = (
                         None
@@ -808,13 +989,21 @@ def legalize(
                                 )
                             return channel_weight * channel
 
+                    if rules is not None and rules.has_soft(comp.ref):
+                        # Soft region / align: their penalty joins the candidate cost.
+                        def candidate_cost(xs, ys, _base=candidate_cost):
+                            extra = rules.soft_cost(comp, {c.ref: c for c in neighbors}, xs, ys)
+                            value = 0.0 if _base is None else _base(xs, ys)
+                            return value + (0.0 if extra is None else extra)
+
                     slot_free = hull_free(comp, bw, bh) if is_hull(comp) else None
+                    slot_mask = region_mask(comp, bw, bh)
                     r, c = _place_part(
                         occ,
                         g,
                         bw,
                         bh,
-                        comp.pos,
+                        target,
                         limits_for(comp.ref),
                         candidate_cost=candidate_cost,
                         forbidden=[
@@ -825,6 +1014,8 @@ def legalize(
                         attached=attached,
                         free=slot_free,
                         box=edge_box(comp),
+                        mask=slot_mask,
+                        **box_label_of(comp),
                     )
                     if aid is not None:
                         tried = [
@@ -845,13 +1036,15 @@ def legalize(
                                 g,
                                 bw,
                                 bh,
-                                comp.pos,
+                                target,
                                 limits_for(comp.ref),
                                 candidate_cost=candidate_cost,
                                 forbidden=tried,
                                 attached=attached,
                                 free=slot_free,
                                 box=edge_box(comp),
+                                mask=slot_mask,
+                                **box_label_of(comp),
                             )
                     error = None
                     break
@@ -883,7 +1076,7 @@ def legalize(
         if (
             error is not None
             and trail
-            and (group_edges or group_limits)
+            and (group_edges or group_limits or (rules is not None and rules.hard))
             and backtracks < backtrack_budget
         ):
             previous, chosen_ref, chosen_pose = trail.pop()

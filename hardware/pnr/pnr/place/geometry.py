@@ -189,6 +189,9 @@ def set_component_side(comp: Component, side: str):
     if comp.side != side:
         for pad in comp.pads:
             pad.offset = (pad.offset[0], -pad.offset[1])
+        if comp.body is not None:  # an off-centre body box mirrors with its pads
+            x0, y0, x1, y1 = comp.body
+            comp.body = (x0, -y1, x1, -y0)
         comp.side = side
 
 

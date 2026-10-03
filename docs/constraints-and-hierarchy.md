@@ -114,6 +114,94 @@ What to watch:
 
 Holding the three parts on the edge costs 30 mm of HPWL and 22 mm of copper, and saves a via.
 
+## Regions and alignments
+
+Two more relations a designer asks for: keep a subsystem in one area of the board, and line
+parts up on one coordinate. Both are hard by default (a soft variant is a weighted penalty) and
+take any refs, globs or `@addresses`:
+
+```yaml
+region: # the clock parts' courtyards stay in the west half of the 42 x 32 mm board
+  - name: clock
+    refs: [U1, R1, R2, C1, C2, C3]
+    rect: [0, 0, 21, 32] # or polygon: [[x, y], ...], or areas: [...] (a union)
+align: # the two ICs' origins on one horizontal line
+  - name: ics
+    refs: [U1, U2]
+    axis: y
+    anchor: origin # or centre, pad1, pad:<name>, a courtyard edge; or {ref: anchor}
+    tol_mm: 0.25
+```
+
+A part is measured by its body: its courtyard widened to its pads and silkscreen, where it really
+lies about the footprint origin, so a pin header measured from pin 1 or a connector with an
+offset shell is not padded out to a box centred on its origin.
+
+How each stage treats them:
+
+- **Before placement:** a hard region or align that no placement can meet is refused by name,
+  for example a fixed part outside its region, or members whose regions keep their anchors
+  apart.
+- **Initial pool:** the starts move into the outline, into the regions and onto the lines.
+- **Global placement:** a region term (the squared distance of each body corner from the area,
+  in expectation over the part's rotation distribution) and an alignment term (the squared
+  deviation of each expected anchor from the members' mean).
+- **Legalizer:** it bounds each slot centre. A rectangle region is a box per tried rotation, and
+  a polygon or union a raster mask whose grid lines are the pieces' own edges. An align is the
+  band the members already placed leave, narrowed to where the others can still reach. The
+  aligned members are placed as one block, and a slot that leaves a later member no room is
+  backtracked. An align whose `tol_mm` is under that band, such as 0, then has its members
+  moved onto one exact line wherever that stays legal.
+- **Later moves:** the legality checks, and with them every feedback move, relocation, the side
+  pass's flips and swaps and the Monte-Carlo search, reject a hard violation. A member of a line
+  group or a hierarchical block carries its region and its anchor inside the rigid macro.
+- **Double-sided boards** (`board.sides: double`): a part is measured on the side it is tried
+  on, its pads, anchors and body mirrored on the bottom. That holds for the legalizer's
+  other-side slot, a start drawn on the bottom, and global placement, which mixes both sides by
+  each free part's side probability, as it does for the pins.
+- **Soft variants:** a soft region or align is a cost in global placement, the legalizer (both
+  sides' slots), relocation (moves, flips and swaps), the side pass, batch relocation, the
+  elastic mesh and the feedback children. The native loop tries a move that grows it last.
+- **Not supported:** `PNR_POWER_FIRST=1` refuses a design with either constraint.
+
+The [input reference](hardware/pnr-inputs.md) lists the keys of both sections.
+
+The ladder's constraint rungs (`hardware/pnr/regression/hard_rungs.py`, `run.py --hard`) use
+both: `07-chaser-20-abs` confines the clock to the west half, `07-chaser-20-rel` aligns the
+timer and the counter, and the MCU board's rungs do the same with its regulator and its two
+buttons. The independent checker (`check_constraints.py`) measures them on the saved KiCad
+board, as it does for every other tool.
+
+Before the engine took them, the boards it routed for these rungs broke them: the clock sat 7 to
+20 mm outside the west half, and the two ICs were 6.4 and 10.1 mm off one line. Now every check
+holds on both seeds (the initial pool: eight starts, three routed finalists), with DRC-clean
+boards:
+
+| Case               | Seed | Checks | Vias | Copper (mm) | HPWL (mm) | CPU (s) | Before: checks, vias, copper |
+| ------------------ | ---: | -----: | ---: | ----------: | --------: | ------: | ---------------------------- |
+| `07-chaser-20-abs` |    0 |  19/19 |   22 |       358.3 |       290 |     283 | 18/19, 18, 336.2             |
+| `07-chaser-20-abs` |    1 |  19/19 |   26 |       417.6 |       308 |     761 | 18/19, 24, 346.9             |
+| `07-chaser-20-rel` |    0 |    8/8 |   20 |       338.9 |       293 |     111 | 7/8, 15, 358.0               |
+| `07-chaser-20-rel` |    1 |    8/8 |   18 |       337.7 |       272 |     163 | 7/8, 18, 332.6               |
+
+The clock in the west half costs 22 and 71 mm of copper and two to four vias: its six parts
+share that half with the connector and a mounting hole, and their nets reach across to the
+counter. The alignment's own cost shows in runs from the unchanged source start: 19 and 5 mm
+more copper, and 9 and 0 more vias. The table also includes the initial pool's outline fit,
+which brings a source board staged outside the outline inside it, keeping the parts' order,
+before the starts are projected. On seed 0 the fit took the aligned board from 377 back to
+339 mm, so that gain belongs to the fit, not to the alignment.
+
+The fit runs where a region or an align is declared; `PNR_FIT_OUTLINE=1` runs it for every
+design (for the engine directly; the ladder runner strips ambient `PNR_` switches). On the old
+gate's source boards it lowers the source start's HPWL by up to 149 mm. It changes the routed
+finalists, or the source start among them, on 13 of 16 cases, so turning it on everywhere waits
+for a re-baselined gate.
+
+The MCU board's rungs satisfy the regulator's region and the buttons' alignment on both seeds,
+and on every legal start of the pool. That board does not yet route completely, with or
+without them.
+
 ## Hierarchical place and route
 
 <p><img src="animations/showcase-hier-twin-bank.webp" width="800"

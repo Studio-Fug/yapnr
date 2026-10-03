@@ -7,7 +7,8 @@ mover) on a 0.25 mm lattice within ``max_move`` (tier-1 power parts only for a
 tier-1 to tier-1 connection, and no pad of theirs moves more than 1 mm), at any cardinal rotation the
 constraints allow. The cost is the weighted length of the mover's failed
 connections plus 0.5 x any growth of its other pads' nearest same-net peer
-distance (plane nets excluded); the target connection must shorten by at least
+distance (plane nets excluded) plus any growth of a soft region or align
+penalty (:func:`pnr.place.regions.soft_total`); the target connection must shorten by at least
 0.25 mm, the cost must drop, and the mover stays within ``lineage_cap`` of its
 generation-0 pose. Every other part keeps its exact parent pose, so a child is
 local by construction (no re-legalization).
@@ -161,6 +162,10 @@ class MoveBoard:
 
         self._hard = hard_violations
         self.baseline = self._violations()
+        from pnr.place.regions import soft_refs
+
+        # Refs in a soft region or align: their moves pay its growth (search()).
+        self.soft = soft_refs(self.constraints)
         self.pads_by_net = {}
         for c in g.components:
             for p in c.pads:
@@ -262,6 +267,21 @@ class MoveBoard:
             return None
         finally:
             self._restore(saved)
+
+    def soft_growth(self, refs, cand):
+        """Per candidate ``(dx, dy, rot)``: the growth of the board's soft region and
+        soft align penalty (:func:`pnr.place.regions.soft_total`) when ``refs`` move."""
+        from pnr.place.regions import soft_total
+
+        before = soft_total(self.graph, self.constraints)
+        out = np.zeros(len(cand))
+        for m, (dx, dy, rot) in enumerate(cand):
+            saved = self._apply(refs, dx, dy, rot)
+            try:
+                out[m] = soft_total(self.graph, self.constraints) - before
+            finally:
+                self._restore(saved)
+        return out
 
     def within_lineage(self, refs, dx, dy, cap):
         return all(
@@ -390,6 +410,8 @@ class MoveBoard:
         c1, t1 = fail_cost(pos)
         o1 = other_len(pos)
         cost = c1 + OTHER_PAD_PENALTY * np.maximum(0.0, o1 - o0)
+        if set(self.units[unit]) & self.soft:
+            cost = cost + self.soft_growth(self.units[unit], cand)
         shorten = t0 - t1
         moves = np.hypot([c[0] for c in cand], [c[1] for c in cand])
         pad_move = np.max(np.linalg.norm(pos - ident[None], axis=-1), axis=-1)

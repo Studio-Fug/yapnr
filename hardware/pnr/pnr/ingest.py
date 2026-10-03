@@ -118,6 +118,31 @@ def _phys_bbox_mm(fp) -> Tuple[float, float]:
     raise RuntimeError("GetBoundingBox unavailable")
 
 
+def _local_box(box, origin) -> Tuple[float, float, float, float]:
+    """A pcbnew box about ``origin`` as ``(x0, y0, x1, y1)`` mm in the engine's y-up frame."""
+    return (
+        _mm(box.GetLeft() - origin.x),
+        -_mm(box.GetBottom() - origin.y),
+        _mm(box.GetRight() - origin.x),
+        -_mm(box.GetTop() - origin.y),
+    )
+
+
+def _phys_box(fp) -> Tuple[float, float, float, float]:
+    """The box behind :func:`_phys_bbox_mm`, as it lies about the origin (y up)."""
+    import pcbnew
+
+    fp = pcbnew.FOOTPRINT(fp)
+    fp.SetOrientationDegrees(0)
+    origin = fp.GetPosition()
+    for args in ((False, False), (False,), ()):
+        try:
+            return _local_box(fp.GetBoundingBox(*args), origin)
+        except Exception:  # pragma: no cover - version shim
+            continue
+    raise RuntimeError("GetBoundingBox unavailable")
+
+
 def _atopile_address(fp) -> str:
     """KiCad 8/9 compatibility for the source path stored by atopile."""
     if hasattr(fp, "GetFields"):
@@ -141,6 +166,10 @@ def _component(fp, frame: _Frame) -> Component:
     # Courtyard is the placement/overlap footprint. These atomic (EasyEDA-sourced)
     # parts carry no F/B.CrtYd layer, so GetCourtyard is empty — fall back to the
     # text-excluded body box (any silk keep-out area is drawn on the body).
+    # ``body`` is the same box as it lies about the origin (an off-centre body:
+    # a pin header measured from pin 1, a connector's shell); the symmetric sizes
+    # are its hull about the origin. Only region/align (pnr.place.regions) read it.
+    body = None
     try:
         layer = pcbnew.B_CrtYd if fp.IsFlipped() else pcbnew.F_CrtYd
         local_fp = pcbnew.FOOTPRINT(fp)
@@ -151,12 +180,15 @@ def _component(fp, frame: _Frame) -> Component:
             2 * _mm(max(abs(cyard.GetLeft() - origin.x), abs(cyard.GetRight() - origin.x))),
             2 * _mm(max(abs(cyard.GetTop() - origin.y), abs(cyard.GetBottom() - origin.y))),
         )
+        body = _local_box(cyard, origin)
         if cyard.GetWidth() <= 0 or cyard.GetHeight() <= 0:
-            courtyard_mm = bbox_mm
+            courtyard_mm, body = bbox_mm, None
         if courtyard_mm[0] <= 0 or courtyard_mm[1] <= 0:
-            courtyard_mm = bbox_mm
+            courtyard_mm, body = bbox_mm, None
     except Exception:  # pragma: no cover - version shim
-        courtyard_mm = bbox_mm
+        courtyard_mm, body = bbox_mm, None
+    if body is None:
+        body = _phys_box(fp)
 
     # Some library courtyards exclude a silk pin-1 marker or even copper.
     # Reserve the real pad/silk envelope as well; F.Fab drawings and labels
@@ -177,6 +209,15 @@ def _component(fp, frame: _Frame) -> Component:
             2 * _mm(max(abs(box.GetTop() - origin.y), abs(box.GetBottom() - origin.y))),
         )
         courtyard_mm = tuple(max(a, b) for a, b in zip(courtyard_mm, extent))
+        local = _local_box(box, origin)
+        body = (
+            min(body[0], local[0]),
+            min(body[1], local[1]),
+            max(body[2], local[2]),
+            max(body[3], local[3]),
+        )
+    if abs(body[0] + body[2]) <= 1e-9 and abs(body[1] + body[3]) <= 1e-9:
+        body = None  # centred: the courtyard box itself
 
     pads: List[Pad] = []
     for pad in fp.Pads():
@@ -285,6 +326,7 @@ def _component(fp, frame: _Frame) -> Component:
         locked=bool(getattr(fp, "IsLocked", lambda: False)()),
         pads=pads,
         smd_body=bool(fp.GetAttributes() & pcbnew.FP_SMD),
+        body=body,
     )
 
 

@@ -29,8 +29,6 @@ from pnr.graph import BoardGraph, BoardOutline
 from .geometry import (
     apply_hard_sides,
     courtyard_rect,
-    hard_edge_bands,
-    hard_group_edges,
     hard_group_limits,
     keepout_rects,
     outline_size,
@@ -156,8 +154,16 @@ def _opposite_body_basins(graph, constraints):
     keepouts = keepout_rects(fixed_graph, constraints, poses)
     groups = hard_group_limits(constraints, {c.ref: c.pos for c in graph.components})
     clearance = constraints.board.default_clearance_mm
-    # A line-group member moves only with its whole group (pnr.place.line_group).
-    lined = {r for con in constraints.constraints if con.kind == "line_group" for r in con.refs}
+    # A line-group member moves only with its whole group (pnr.place.line_group); an
+    # aligned part only along its line (pnr.place.regions).
+    lined = {
+        r
+        for con in constraints.constraints
+        if con.kind in ("line_group", "align")
+        for r in con.refs
+    }
+    from .regions import region_offenders
+
     basins = []
     for moving in sorted(graph.components, key=lambda c: (-len(c.pads), c.ref)):
         if moving.ref in poses or moving.locked or len(moving.pads) < 4 or moving.ref in lined:
@@ -182,6 +188,8 @@ def _opposite_body_basins(graph, constraints):
                 if not rect.inside(width, height):
                     continue
                 if any(rect.overlaps(k, gap=clearance) for k in keepouts):
+                    continue
+                if region_offenders([trial], constraints):
                     continue
                 if any(
                     math.dist(trial.pos, (x, y)) > radius + 1e-9
@@ -292,6 +300,19 @@ def initial_starts(graph, constraints, config, seed=0, orient=True, rules=None):
                 )
                 for ref in free
             }
+    # Regions and aligns: move the start points into the outline, their hard regions
+    # and onto the align lines (a projection; no extra random draws). The outline fit
+    # (_fit_outline) runs where a region or align is declared; PNR_FIT_OUTLINE=1 runs
+    # it for every design, PNR_FIT_OUTLINE=0 for none (a control).
+    from .regions import declared
+
+    fit = os.environ.get("PNR_FIT_OUTLINE")
+    if declared(constraints):
+        for start in result[1:]:
+            _project_start(graph, constraints, start, fit=fit != "0")
+    elif fit == "1":
+        for start in result[1:]:
+            _fit_outline(graph, constraints, start["positions"])
     # Reserve at most two of the bounded starts for otherwise easily-erased
     # under-body basins. This adds topology diversity, not more route budget.
     for start, basin in zip(result[2:4], _opposite_body_basins(graph, constraints)):
@@ -302,6 +323,11 @@ def initial_starts(graph, constraints, config, seed=0, orient=True, rules=None):
             start["rotations"][basin["ref"]] = basin["rot"]
     if free:
         _under_body_start(graph, plan, result, fixed_poses, width, height)
+        if declared(constraints):
+            # The under-body start moves and flips parts after the projection above.
+            for start in result[2:]:
+                if start["kind"] == "under-body-sides":
+                    _project_start(graph, constraints, start, fit=False)
     return result
 
 
@@ -340,6 +366,117 @@ def _under_body_start(graph, plan, result, fixed_poses, width, height):
                 min(max(x, half_x), width - half_x),
                 min(max(centre[1], half_y), height - half_y),
             ]
+
+
+# Margin, as a fraction of the outline, that _fit_outline leaves on each side.
+FIT_MARGIN = 0.05
+
+
+def _fit_outline(graph, constraints, positions):
+    """Bring a start whose points leave the outline inside it, keeping their order.
+
+    A source board may hold its parts outside the outline (a generated staging row, a
+    netlist import); projecting only the region parts would then leave the start half
+    on and half off the board, which the global placer does not recover from.
+
+    - Most points off the board (a staging layout): on each axis whose points leave
+      the outline, the points' span maps affinely onto the outline less
+      :data:`FIT_MARGIN`; every point is then clamped so the part's courtyard fits.
+    - Most points on the board (a designer's layout with a few parts parked beside
+      it): only the parked points move. On each axis, the coordinates that leave the
+      outline map from their own span onto the outline less the margin (a single one
+      is clamped), and each moved point is clamped so the courtyard fits; every part
+      already on the board keeps its place.
+
+    A start already inside the outline is unchanged."""
+    width, height = outline_size(graph, constraints)
+    sizes = (width, height)
+    off = [
+        ref for ref, (x, y) in positions.items() if not (0.0 <= x <= width and 0.0 <= y <= height)
+    ]
+    if not off:
+        return
+    by_ref = {c.ref: c for c in graph.components}
+    staging = 2 * len(off) > len(positions)
+    moving = list(positions) if staging else off
+    fitted = {ref: list(positions[ref]) for ref in moving}
+    for k, size in enumerate(sizes):
+        margin = FIT_MARGIN * size
+        if staging:
+            mapped = moving
+        else:
+            mapped = [r for r in moving if not 0.0 <= positions[r][k] <= size]
+        values = [positions[r][k] for r in mapped]
+        lo, hi = (min(values), max(values)) if values else (0.0, 0.0)
+        scale = hi - lo > 1e-9 and (lo < 0.0 or hi > size)
+        for ref in moving:
+            value = positions[ref][k]
+            if scale and ref in mapped:
+                value = margin + (value - lo) / (hi - lo) * (size - 2.0 * margin)
+            half = min(size / 2.0, by_ref[ref].courtyard[k] / 2.0) if ref in by_ref else 0.0
+            fitted[ref][k] = min(max(value, half), size - half)
+    positions.update(fitted)
+
+
+def _project_start(graph, constraints, start, fit=True):
+    """Project ``start``'s positions into the outline (:func:`_fit_outline`, with
+    ``fit``), into the hard regions of their refs, then each align's members onto the
+    line through the median of their anchors (a fixed member's anchor when there is
+    one), each part on the side the start gives it."""
+    from .regions import (
+        align_rules,
+        anchor_offset,
+        anchor_spec,
+        anchor_value,
+        project_start,
+        region_rules,
+    )
+
+    positions, rotations = start["positions"], start["rotations"] or {}
+    by_ref = {c.ref: c for c in graph.components}
+    # A part the start draws on its other side (pnr.place.sides) has the mirrored
+    # footprint's anchors and body.
+    for ref, side in (start.get("sides") or {}).items():
+        if ref in by_ref and by_ref[ref].side != side:
+            by_ref[ref] = copy.deepcopy(by_ref[ref])
+            set_component_side(by_ref[ref], side)
+    poses = resolve_fixed_poses(graph, constraints)
+    hard_rot = resolve_hard_rotations(constraints)
+
+    def rot_of(ref):
+        return hard_rot.get(ref, rotations.get(ref, by_ref[ref].rot))
+
+    if fit:
+        _fit_outline(graph, constraints, positions)
+    regions = region_rules(constraints)
+    for ref, xy in positions.items():
+        rules = [c for c in regions if ref in c.refs]
+        if rules and ref in by_ref:
+            positions[ref] = project_start(by_ref[ref], rules, xy, rot_of(ref))
+    for con in align_rules(constraints):
+        axis = con.params["axis"]
+        k = 0 if axis == "x" else 1
+        members = [r for r in con.refs if r in by_ref]
+        fixed = [
+            anchor_value(by_ref[r], anchor_spec(con, r), axis, rot_of(r), poses[r])
+            for r in members
+            if r in poses
+        ]
+        free = [
+            anchor_value(by_ref[r], anchor_spec(con, r), axis, rot_of(r), positions[r])
+            for r in members
+            if r in positions
+        ]
+        values = sorted(fixed or free)
+        if not values or not free:
+            continue
+        mid = len(values) // 2
+        line = values[mid] if len(values) % 2 else (values[mid - 1] + values[mid]) / 2.0
+        for r in members:
+            if r in positions:
+                point = list(positions[r])
+                point[k] = line - anchor_offset(by_ref[r], anchor_spec(con, r), axis, rot_of(r))
+                positions[r] = point
 
 
 def _pose(graph):
@@ -601,7 +738,7 @@ def select_initial_placement(
                         # This extra bounded attempt is reported, not called a new
                         # independent optimized global placement.
                         from .channels import ChannelModel
-                        from .legalize import legalize, pad_edge_rule
+                        from .legalize import legalize, legalize_constraint_kwargs, pad_edge_rule
 
                         seed_graph = copy.deepcopy(legal[0]["graph"])
                         poses = resolve_fixed_poses(seed_graph, placement_constraints)
@@ -618,27 +755,16 @@ def select_initial_placement(
                             seed_graph,
                             source.outline.width,
                             source.outline.height,
-                            fixed=poses,
-                            keepouts=keepout_rects(seed_graph, placement_constraints, poses),
-                            group_limits=hard_group_limits(
-                                placement_constraints, poses, partial=True
-                            ),
-                            group_edges=hard_group_edges(placement_constraints),
-                            rotations=resolve_hard_rotations(placement_constraints),
                             clearance=placement_constraints.board.default_clearance_mm,
                             grid_mm=0.25,
                             allow_rotation=orient,
                             channel_model=ChannelModel(seed_graph, rules),
                             spread=min(spread, 1.3),
-                            **(
-                                {}
-                                if pad_edge_rule(placement_constraints, rules) is None
-                                else dict(pad_edge=pad_edge_rule(placement_constraints, rules))
-                            ),
-                            **(
-                                {}
-                                if not hard_edge_bands(placement_constraints)
-                                else dict(edge_bands=hard_edge_bands(placement_constraints))
+                            **legalize_constraint_kwargs(
+                                seed_graph,
+                                placement_constraints,
+                                poses,
+                                pad_edge_rule(placement_constraints, rules),
                             ),
                             **(
                                 {}
@@ -646,6 +772,16 @@ def select_initial_placement(
                                 else dict(stack=stack_refs(seed_graph, placement_constraints))
                             ),
                         )
+                        from .regions import declared, snap_aligns
+
+                        if declared(placement_constraints):
+                            snap_aligns(
+                                placed,
+                                placement_constraints,
+                                placement_constraints.board.default_clearance_mm,
+                                pad_edge_rule(placement_constraints, rules),
+                                (source.outline.width, source.outline.height),
+                            )
                         prep = PlacementReport(
                             placed.outline.width,
                             placed.outline.height,

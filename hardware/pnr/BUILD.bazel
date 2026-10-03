@@ -1544,6 +1544,43 @@ py_test(
     ],
 )
 
+# Regions and alignments (pnr.place.regions): parser, anchors at every rotation and side,
+# area containment, the legalizer and global terms on the 07-chaser-20 netlist, rigid
+# macros (line groups, blocks), the checks, and an unchanged path without them.
+py_test(
+    name = "region_align_test",
+    size = "medium",
+    srcs = ["tests/test_region_align.py"],
+    imports = ["."],
+    main = "tests/test_region_align.py",
+    deps = [
+        ":pnr",
+        ":pnr_hier",
+        ":pnr_place",
+    ],
+)
+
+# Regions and aligns under board.sides: double (pnr.place.regions with pnr.place.sides).
+py_test(
+    name = "sides_regions_test",
+    size = "medium",
+    srcs = [
+        "tests/test_region_align.py",
+        "tests/test_sides_regions.py",
+    ],
+    imports = [
+        ".",
+        "tests",
+    ],
+    main = "tests/test_sides_regions.py",
+    deps = [
+        ":pnr",
+        ":pnr_hier",
+        ":pnr_place",
+        requirement("torch"),
+    ],
+)
+
 py_test(
     name = "initial_pool_test",
     srcs = ["tests/test_initial_pool.py"],

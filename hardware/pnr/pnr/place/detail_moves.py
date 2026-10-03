@@ -20,8 +20,9 @@ The cost is the half-perimeter wirelength plus the side cost
 (:func:`pnr.place.sides.side_cost`: layer changes, side preferences, departures from
 the source side), in millimetres, plus global placement's soft terms
 (:mod:`pnr.place.model`): ``weight * d**2`` for an ``edge_align`` part's courtyard at
-``d`` mm from its edge, and ``weight * max(0, d - radius)**2`` for a ``group`` member
-at ``d`` mm from its anchor. Candidates are drawn by
+``d`` mm from its edge, ``weight * max(0, d - radius)**2`` for a ``group`` member
+at ``d`` mm from its anchor, and a soft ``region`` or ``align`` member's penalty
+(:func:`pnr.place.regions.soft_penalty`). Candidates are drawn by
 :func:`pnr.place.anneal.choose_cost` at a temperature that falls linearly to zero over
 the first 70 % of the budget (greedy after), and the cheapest board seen is
 returned. Options are costed before they are checked, cheapest first, and one that
@@ -100,7 +101,13 @@ class _Cost:
         self.edges: Dict[str, List[Tuple[str, float]]] = {}
         self.groups: Dict[str, List[Tuple[str, str, float, float]]] = {}
         self.size = (0.0, 0.0)
+        # Soft regions and aligns (pnr.place.regions): empty unless a design declares one.
+        self.constraints = constraints
+        self.soft = frozenset()
         if constraints is not None:
+            from .regions import soft_refs
+
+            self.soft = soft_refs(constraints)
             self.size = outline_size(graph, constraints)
             for con in constraints.constraints:
                 if con.kind == "edge_align" and con.params.get("edge"):
@@ -184,6 +191,10 @@ class _Cost:
         cost = 0.0
         for edge, weight in self.edges.get(comp.ref, ()):
             cost += weight * edge_distance(comp, edge, *self.size) ** 2
+        if comp.ref in self.soft:
+            from .regions import soft_penalty
+
+            cost += soft_penalty(self.graph.components, self.constraints, comp, comp.pos)
         pref = self.plan.preferred.get(comp.ref)
         if pref is not None and comp.side != pref[0]:
             cost += SIDE_PREF_MM * pref[1]

@@ -193,7 +193,7 @@ def hard_violations(
         overlaps += [
             pair for pair in stack_pairs(graph, stack, clearance, exempt) if pair not in overlaps
         ]
-    return {
+    out = {
         "overlaps": overlaps,
         "outside_outline": outside_outline(graph, width, height, exclude=constraints.locked_refs),
         "fixed_misplaced": sorted(
@@ -220,13 +220,22 @@ def hard_violations(
             }
         ),
     }
+    # Hard region / align (pnr.place.regions): their own keys, present only when the
+    # design declares one, so other designs report exactly the keys they always had.
+    from .regions import align_offenders, declared, region_offenders
+
+    if declared(constraints):
+        out["region_outside"] = sorted(set(region_offenders(graph, constraints)))
+        out["align_off"] = sorted(set(align_offenders(graph, constraints)))
+    return out
 
 
 def part_rules(graph, constraints, *, clearance=0.0, pad_edge=None):
     """The hard rules one re-posed part of ``graph`` must meet on its own: its hard
     rotation and side, a fixed pose, the outline (locked parts exempt) and, with
-    ``pad_edge``, the pad-edge rule, a hard edge band, keep-outs (with ``clearance``)
-    and hard group radii against the other part's current centre. Everything but
+    ``pad_edge``, the pad-edge rule, a hard edge band, a hard region or align
+    (:mod:`pnr.place.regions`, against the other parts' current poses), keep-outs (with
+    ``clearance``) and hard group radii against the other part's current centre. Everything but
     the overlap with other parts and row/line membership, which the checkers test
     themselves. Returns ``ok(comp)``; the board must be otherwise unchanged."""
     width, height = outline_size(graph, constraints)
@@ -240,6 +249,9 @@ def part_rules(graph, constraints, *, clearance=0.0, pad_edge=None):
     rotations_required = resolve_hard_rotations(constraints)
     bands = hard_edge_bands(constraints)
     locked = set(constraints.locked_refs)
+    from .regions import declared, ref_ok
+
+    related = declared(constraints)
 
     def ok(comp):
         if (
@@ -264,6 +276,10 @@ def part_rules(graph, constraints, *, clearance=0.0, pad_edge=None):
         if (
             comp.ref in bands
             and edge_distance(comp, bands[comp.ref][0], width, height) > bands[comp.ref][1] + 1e-6
+        ):
+            return False
+        if related and not ref_ok(
+            [comp if c.ref == comp.ref else c for c in graph.components], constraints, comp.ref
         ):
             return False
         if any(rect.overlaps(k, gap=clearance) for k in keepouts):

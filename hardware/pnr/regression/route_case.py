@@ -9,7 +9,7 @@ from pathlib import Path
 from pnr.constraints import compile_constraints, compile_routing_rules
 from pnr.fab_profile import apply_rules
 from pnr.graph import BoardGraph
-from pnr.length_model import attach_stackup
+from pnr.length_model import attach_board
 from pnr.route.feedback import route_and_place
 
 root = Path(sys.argv[1])
@@ -20,8 +20,9 @@ g = BoardGraph.from_json((root / "source-graph.json").read_text())
 c = compile_constraints(spec["constraints"], g.refs)
 # Route under the fab profile writeback stamps and KiCad judges (PNR_FAB_PROFILE; legacy: unchanged).
 rules = apply_rules(compile_routing_rules(c, [n.name for n in g.nets]))
-# Pairs and groups are tuned against the board's own stackup (via lengths).
-attach_stackup(rules, (root / "source.kicad_pcb").read_text())
+# Pairs and groups are tuned against the board's own stackup (via lengths) and the
+# exact lands of their pads.
+attach_board(rules, (root / "source.kicad_pcb").read_text())
 (root / "rules.json").write_text(json.dumps(rules, indent=2))
 os.environ["PNR_ROUND_DIAGNOSTICS"] = str(root / "rounds")
 t = time.monotonic()

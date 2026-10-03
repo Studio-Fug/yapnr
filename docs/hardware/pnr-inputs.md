@@ -274,7 +274,10 @@ straight runs of its own path and layer, legal by the router's own clearance rul
 until the spread is within the budget. Lengths are measured as KiCad's DRC measures
 them (`pnr/length_model.py`: merged track lines straightened inside pads and vias,
 plus each via's span through the stackup), so a KiCad `skew` or `length` rule sees
-the same numbers. The per-set result (lengths, margin, meanders) is in the route
+the same numbers. The stackup and the exact lands of the matched nets' pads (a
+through-hole pad's circle or square, which the graph does not record) come from the
+board itself: `python -m pnr.route ... --board BOARD.kicad_pcb`; without it the tuner
+assumes KiCad's default two-layer stack and a rounded square for through-hole lands. The per-set result (lengths, margin, meanders) is in the route
 report as `length_tuning`; a set that could not be matched is `length_unmatched`.
 When the short members have no room left for meanders, the longest member is routed
 again around the other nets (vias priced high) and kept if it is shorter (`rerouted`

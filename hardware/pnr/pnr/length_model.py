@@ -167,6 +167,77 @@ def attach_stackup(rules: dict, board_text: str) -> bool:
     return True
 
 
+_NUM = r"[-\d.eE+]+"
+
+
+def read_pad_lands(text: str, nets: Iterable[str]) -> List[list]:
+    """``[ref, pad, corner_mm]`` for each pad of ``nets`` on a KiCad board whose
+    copper is a plain shape at a quarter turn: rect (corner 0), roundrect (its ratio
+    times the short side), circle and oval (half the short side). The graph knows the
+    exact land of a plain SMD pad (``Pad.land_corner``) but not of a through-hole
+    one, where a track entering off its axis is cut at the outline. Custom,
+    chamfered and trapezoid pads, offset pads, and a name a footprint repeats with
+    different lands are left out (the graph's estimate stands)."""
+    wanted = set(nets)
+    found: Dict[Tuple[str, str], Optional[float]] = {}
+    for fp in _blocks(text, "footprint "):
+        ref = re.search(r'\(property\s+"Reference"\s+"([^"]*)"', fp)
+        fp_at = re.search(r"\(at\s+%s\s+%s(?:\s+(%s))?\)" % (_NUM, _NUM, _NUM), fp)
+        if not ref or not fp_at:
+            continue
+        fp_angle = float(fp_at.group(1) or 0.0)
+        for pad in _blocks(fp, "pad "):
+            head = re.match(r'\(pad\s+"([^"]*)"\s+\w+\s+(\w+)', pad)
+            net = re.search(r'\(net\s+(?:\d+\s+)?"([^"]*)"\)', pad)
+            size = re.search(r"\(size\s+(%s)\s+(%s)\)" % (_NUM, _NUM), pad)
+            at = re.search(r"\(at\s+%s\s+%s(?:\s+(%s))?\)" % (_NUM, _NUM, _NUM), pad)
+            if not head or not net or not size or net.group(1) not in wanted:
+                continue
+            name, shape = head.groups()
+            short = min(float(size.group(1)), float(size.group(2)))
+            quarter = all(
+                abs(a / 90.0 - round(a / 90.0)) < 1e-6
+                for a in (fp_angle, float(at.group(1) or 0.0) if at else 0.0)
+            )
+            corner: Optional[float] = None
+            if "(offset" in pad:
+                corner = None
+            elif shape == "circle":
+                corner = short / 2
+            elif quarter and shape == "oval":
+                corner = short / 2
+            elif quarter and shape == "rect":
+                corner = 0.0
+            elif quarter and shape == "roundrect":
+                ratio = re.search(r"\(roundrect_rratio\s+(%s)\)" % _NUM, pad)
+                corner = float(ratio.group(1)) * short if ratio else None
+            key = (ref.group(1), name)
+            if key in found and found[key] != corner:
+                corner = None
+            found[key] = corner
+    return [
+        [ref, name, round(corner, 6)]
+        for (ref, name), corner in sorted(found.items())
+        if corner is not None
+    ]
+
+
+def attach_board(rules: dict, board_text: str) -> bool:
+    """Give a design that declares pairs or groups what the length tuner reads from
+    its board: the stackup (:func:`attach_stackup`) and the exact lands of the
+    matched nets' pads (``rules["pad_lands"]``, :func:`read_pad_lands`). Rules
+    without pairs or groups are left as they are. Returns whether the rules changed."""
+    changed = attach_stackup(rules, board_text)
+    nets = [n for dp in rules.get("diff_pairs") or [] for n in (dp.get("p"), dp.get("n")) if n]
+    nets += [n for group in rules.get("length_match") or [] for n in group.get("nets") or []]
+    if nets and not rules.get("pad_lands"):
+        lands = read_pad_lands(board_text, nets)
+        if lands:
+            rules["pad_lands"] = lands
+            changed = True
+    return changed
+
+
 def stackup_copper(st: dict) -> List[str]:
     return [x["name"] for x in st["layers"] if x["kind"] == "copper"]
 
@@ -282,14 +353,19 @@ def _inside_convex(poly: Sequence[Point], p: Point) -> bool:
 
 
 def graph_pads(
-    graph, nets: Optional[Iterable[str]] = None, conservative: bool = False
+    graph,
+    nets: Optional[Iterable[str]] = None,
+    conservative: bool = False,
+    lands: Optional[Iterable[Sequence]] = None,
 ) -> List[PadCopper]:
     """The pad copper of ``nets`` (every connected pad when None) on a placed graph:
     the pad rectangle with its land corner, at the part's rotation, on the part's side
-    (every copper layer for a through-hole pad: :data:`ALL_LAYERS`). A land the graph
-    does not know exactly gets KiCad's 25 % roundrect corner, or with ``conservative``
-    its full bounding rectangle; ``conservative`` also includes unconnected pads (for
-    clearance, not length)."""
+    (every copper layer for a through-hole pad: :data:`ALL_LAYERS`). ``lands``
+    (``[ref, pad, corner_mm]`` rows, :func:`read_pad_lands`) gives the exact corner of
+    a land the graph does not know; any other such land gets KiCad's 25 % roundrect
+    corner, or with ``conservative`` its full bounding rectangle; ``conservative``
+    also includes unconnected pads (for clearance, not length)."""
+    known = {(str(row[0]), str(row[1])): float(row[2]) for row in lands or ()}
     from pnr.place.geometry import pin_positions
 
     wanted = None if nets is None else set(nets)
@@ -304,6 +380,8 @@ def graph_pads(
                 continue
             if pad.land_corner is not None:
                 corner = pad.land_corner
+            elif (comp.ref, pad.name) in known and not conservative:
+                corner = known[(comp.ref, pad.name)]
             else:
                 corner = 0.0 if conservative else 0.25 * min(w, h)
             layers = ALL_LAYERS if pad.through_hole else frozenset((side,))
@@ -780,14 +858,16 @@ def board_route_lengths(
     st: dict,
     delay: Optional[DelayModel] = None,
     via_radius: Optional[float] = None,
+    lands: Optional[Iterable[Sequence]] = None,
 ) -> Dict[str, NetLength]:
     """KiCad-equivalent lengths of ``nets`` in a detailed route (``tracks`` as
     ``(net, layer, a, b, width)``, ``vias`` as ``(net, x, y)`` of radius
-    ``via_radius``), in the frame the routed board is written in."""
+    ``via_radius``), in the frame the routed board is written in; ``lands`` as for
+    :func:`graph_pads`."""
     frame = board_frame(graph.outline.height) if graph.outline is not None else None
     nets = list(dict.fromkeys(nets))
     wanted = set(nets)
-    pads = graph_pads(graph, wanted)
+    pads = graph_pads(graph, wanted, lands=lands)
     tracks: Dict[str, List[Track]] = {n: [] for n in nets}
     vias: Dict[str, List[Point]] = {n: [] for n in nets}
     for net, layer, a, b, width in board_route.tracks:

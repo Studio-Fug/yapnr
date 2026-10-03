@@ -28,7 +28,7 @@ import yaml
 from pnr.constraints import compile_constraints, compile_routing_rules
 from pnr.fab_profile import apply_rules
 from pnr.graph import BoardGraph
-from pnr.length_model import attach_stackup
+from pnr.length_model import attach_board
 from pnr.mc.halving import _rank_key
 from pnr.place.initial_pool import _route_metrics
 from pnr.place.metrics import hpwl
@@ -41,8 +41,9 @@ mc = spec["mc"]
 graph = BoardGraph.from_json((root / "source-graph.json").read_text())
 constraints = compile_constraints(spec["constraints"], graph.refs)
 rules = apply_rules(compile_routing_rules(constraints, [n.name for n in graph.nets]))
-# Pairs and groups are tuned against the board's own stackup (via lengths).
-attach_stackup(rules, (root / "source.kicad_pcb").read_text())
+# Pairs and groups are tuned against the board's own stackup (via lengths) and the
+# exact lands of their pads.
+attach_board(rules, (root / "source.kicad_pcb").read_text())
 (root / "rules.json").write_text(json.dumps(rules, indent=2))
 
 inputs = root / "mc-inputs"

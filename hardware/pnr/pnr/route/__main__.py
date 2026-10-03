@@ -37,6 +37,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--dump-json", metavar="PATH")
     ap.add_argument("--dump-svg", metavar="PATH")
     ap.add_argument(
+        "--board",
+        metavar="KICAD_PCB",
+        help="the KiCad board the graph was ingested from: declared diff pairs and "
+        "length-match groups are tuned against its stackup and its pads' lands",
+    )
+    ap.add_argument(
         "--dump-rules",
         metavar="PATH",
         help="write resolved net-class/diff-pair/length-match rules (rules.json) "
@@ -180,6 +186,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     # Fab capability profile (PNR_FAB_PROFILE; identity for legacy): every
     # downstream consumer of the dumped rules.json sees one rule set.
     rules = apply_rules(rules)
+    if args.board:
+        from pnr.length_model import attach_board
+
+        with open(args.board, encoding="utf-8") as fh:
+            attach_board(rules, fh.read())
     si_dir = None
     from pnr.si import enabled as si_enabled
 

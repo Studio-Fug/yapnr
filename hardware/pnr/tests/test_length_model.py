@@ -80,6 +80,93 @@ class StackupTest(unittest.TestCase):
         self.assertAlmostEqual(lm.layer_distance(st, "In1.Cu", "In2.Cu"), gap + 0.035, places=9)
 
 
+BOARD_PADS = """
+  (footprint "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
+    (layer "F.Cu")
+    (at 41.375 50.125)
+    (property "Reference" "J3" (at 0 -2.33 0))
+    (pad "1" thru_hole rect (at 0 0) (size 1.7 1.7) (drill 1) (net "DP"))
+    (pad "2" thru_hole circle (at 0 2.54) (size 1.7 1.7) (drill 1) (net "DN"))
+  )
+  (footprint "Package_SO:SOIC-8"
+    (layer "F.Cu")
+    (at 20 20 90)
+    (property "Reference" "U1" (at 0 0 90))
+    (pad "1" smd roundrect (at -2.475 -1.905 90) (size 1.95 0.6) (roundrect_rratio 0.25)
+      (net "DP"))
+    (pad "2" smd rect (at -2.475 -0.635 90) (size 1.95 0.6) (net "GND"))
+    (pad "3" thru_hole oval (at 0 0 90) (size 1.2 1.6) (drill 0.8 (offset 0.1 0)) (net "DN"))
+    (pad "4" smd rect (at 1 1 90) (size 1 1) (net "DN"))
+    (pad "4" smd circle (at 2 1 90) (size 1 1) (net "DN"))
+  )
+  (footprint "Turned"
+    (layer "F.Cu")
+    (at 5 5 45)
+    (property "Reference" "J9" (at 0 0 45))
+    (pad "1" thru_hole oval (at 0 0 45) (size 1 2) (drill 0.6) (net "DP"))
+    (pad "2" thru_hole circle (at 1 0 45) (size 1.5 1.5) (drill 0.6) (net "DP"))
+  )
+"""
+
+
+class PadLandTest(unittest.TestCase):
+    def test_reads_the_plain_lands_of_the_matched_pads(self):
+        self.assertEqual(
+            lm.read_pad_lands(BOARD_PADS, ["DP", "DN"]),
+            [
+                ["J3", "1", 0.0],
+                ["J3", "2", 0.85],
+                ["J9", "2", 0.75],  # a circle at any angle; the turned oval is left out
+                ["U1", "1", 0.15],  # roundrect: its ratio times the short side
+                # U1 3 has an offset hole, U1 4 two lands of one name: left out.
+            ],
+        )
+
+    def test_attach_board_only_for_pairs_or_groups(self):
+        rules = {"diff_pairs": [], "length_match": []}
+        self.assertFalse(lm.attach_board(rules, BOARD_PADS))
+        self.assertEqual(rules, {"diff_pairs": [], "length_match": []})
+        rules = {"diff_pairs": [{"name": "d", "p": "DP", "n": "DN"}], "length_match": []}
+        self.assertTrue(lm.attach_board(rules, BOARD_PADS + SGPS))
+        self.assertIn(["J3", "2", 0.85], rules["pad_lands"])
+        self.assertIn("stackup", rules)
+
+    def test_a_track_entering_a_round_pad_off_its_axis(self):
+        # A routed ladder board (lm-bus-corner, seed 1): DP runs straight from the
+        # square pad of J3, then turns at 45 degrees into J4's round pad 0.54 mm off
+        # the pad's axis. KiCad 10.0.6 measures 5.6936 mm: the part inside the round
+        # land counts straight from the centre to where the track crosses the circle.
+        # Taken for a 25 % roundrect (the graph's estimate of a through-hole land),
+        # the crossing moves and the net measures 0.034 mm short.
+        xs = [41.375 + 0.25 * k for k in range(21)]
+        tracks = [("F.Cu", (a, 50.125), (b, 50.125), 0.25) for a, b in zip(xs, xs[1:])]
+        tracks += [
+            ("F.Cu", (46.375, 50.125), (46.625, 49.875), 0.25),
+            ("F.Cu", (46.625, 49.875), (46.875, 49.625), 0.25),
+            ("F.Cu", (46.875, 49.625), (46.875, 49.585), 0.25),
+        ]
+        j3 = lm.PadCopper(
+            "N",
+            (41.375, 50.125),
+            lm.ALL_LAYERS,
+            lm.rounded_rect((41.375, 50.125), (1.7, 1.7), 0.0, 0.0),
+        )
+
+        def j4(corner):
+            return lm.PadCopper(
+                "N",
+                (46.875, 49.585),
+                lm.ALL_LAYERS,
+                lm.rounded_rect((46.875, 49.585), (1.7, 1.7), corner, 0.0),
+            )
+
+        st = lm.default_stackup(2)
+        exact = lm.net_length("N", tracks, [], [j3, j4(0.85)], st)
+        guess = lm.net_length("N", tracks, [], [j3, j4(0.425)], st)
+        self.assertAlmostEqual(exact.total_mm, 5.6936, delta=0.002)
+        self.assertGreater(exact.total_mm - guess.total_mm, 0.02)
+
+
 class LengthTest(unittest.TestCase):
     st = lm.default_stackup(2)
 

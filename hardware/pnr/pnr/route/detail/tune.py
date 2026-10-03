@@ -32,7 +32,8 @@ changes layer, so it never puts copper on a plane layer.
 Rules (``rules.json``) read here: ``diff_pairs`` (``skew_mm`` or ``skew_ps``),
 ``length_match`` (``tolerance_mm`` or ``tolerance_ps``), the optional ``tuning`` block
 (``gap_mm``, ``amplitude_max_mm``, ``min_segment_mm``, ``style``, ``mitre``), ``fab``,
-``layers`` and ``stackup`` (else KiCad's default stack).
+``layers``, ``stackup`` (else KiCad's default stack) and ``pad_lands`` (the exact
+lands of matched pads the graph does not know, :func:`pnr.length_model.attach_board`).
 """
 
 from __future__ import annotations
@@ -529,7 +530,7 @@ class Tuner:
         self.members = sorted({n for s in self.sets for n in s.nets})
         # Exact lands for the length model; bounding rectangles (no corner) where the
         # graph does not know the land, for clearance.
-        self.member_pads = lm.graph_pads(graph, self.members)
+        self.member_pads = lm.graph_pads(graph, self.members, lands=rules.get("pad_lands"))
         self.pads = lm.graph_pads(graph, conservative=True)
         # Lengths are measured in the routed board's own frame (KiCad's inside tests
         # are half-open, so the y flip matters).

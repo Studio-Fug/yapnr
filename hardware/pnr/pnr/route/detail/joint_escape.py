@@ -32,11 +32,12 @@ class AccessOption:
     spans: tuple = ()
 
 
-def _segment_clear(grid, net, layer, a, b, width):
+def _segment_clear(grid, net, layer, a, b, width, own=None):
     radius = width / 2 + grid.clearance
     # The blocked mask includes absolute keepouts, no-net pads, the edge inset
     # and retained copper. Exact foreign-pad checks below may relax pad *halos*,
-    # but they may never relax this mask.
+    # but they may never relax this mask, except ``own``: the cells of the net's own
+    # legacy plane region (PNR_COMPACT DROPS, RouteGrid.own_plane_cells; None: none).
     steps = max(1, math.ceil(math.dist(a, b) / (grid.pitch / 4)))
     for step in range(steps + 1):
         x = a[0] + (b[0] - a[0]) * step / steps
@@ -45,7 +46,7 @@ def _segment_clear(grid, net, layer, a, b, width):
             if not (0 <= x + dx <= grid.width and 0 <= y + dy <= grid.height):
                 return False
             i, j = grid.cell_of(x + dx, y + dy)
-            if grid.blocked[layer, j, i]:
+            if grid.blocked[layer, j, i] and (own is None or (layer, j, i) not in own):
                 return False
     for la, owner, r in grid.pad_rectangles:
         if la != layer or owner == net:
@@ -409,6 +410,8 @@ def _drop_via_clear(grid, net, p, span=None):
         (grid.via_halo, getattr(grid, "pad_via_halo", {})),
     )
     radius = grid.via_radius if span is None else span.radius
+    # PNR_COMPACT DROPS: a legacy plane drop crosses its own net's plane region.
+    own = getattr(grid, "own_plane_cells", {}).get(net)
     for la in range(grid.nlayers) if span is None else span.layers():
         if grid.via_blocked[la, j, i]:
             return False
@@ -417,7 +420,7 @@ def _drop_via_clear(grid, net, p, span=None):
             owner = table.get(key)
             if owner is not None and owner != net and owner != pads_only.get(key):
                 return False
-        if not _segment_clear(grid, net, la, p, p, 2 * radius):
+        if not _segment_clear(grid, net, la, p, p, 2 * radius, own=own):
             return False
     return True
 

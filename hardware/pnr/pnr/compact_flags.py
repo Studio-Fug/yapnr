@@ -16,7 +16,12 @@ same question as the placer without importing torch or numpy.
 ``COURTYARD``
     offset courtyards: a part occupies its real body box (``Component.body``), which
     lies off its origin for a pin-1-origin header, instead of the origin-symmetric
-    envelope.
+    envelope;
+``DROPS``
+    a ``plane_layer`` net class without a declared stack (the legacy plane path) plans
+    its surface pads' through-via drops with the signal escapes, before routing, as a
+    declared stack does, instead of leaving them to writeback's dog-bones after
+    routing, where routed copper can enclose a pad.
 
 ``PNR_COMPACT_<PART>=0`` drops one part (an ablation). ``PNR_SHRINK=1`` (the flat
 driver's shrink-to-fit outline search) is separate and never on by default. Unset, every
@@ -27,7 +32,7 @@ from __future__ import annotations
 
 import os
 
-PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD")
+PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD", "DROPS")
 
 
 def enabled(part=None) -> bool:

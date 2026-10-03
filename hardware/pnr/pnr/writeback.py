@@ -232,9 +232,17 @@ def apply_planes(board, rules: dict, pad_margin_mm: float = 2.0) -> int:
     keeps clearance where regions overlap, and smaller zones carve out of larger
     ones by priority). Each net's pads are via-stitched down to its zone. Returns
     the number of zones poured.
+
+    PNR_COMPACT ``DROPS`` (default off): the detailed router already dropped the
+    surface pads of these nets (:func:`pnr.route.detail.router.route_board`), so the
+    fanout here is the fallback for pads it could not drop (``skip_connected``).
     """
     import pcbnew
 
+    from pnr.compact_flags import enabled as compact_enabled
+
+    # PNR_COMPACT DROPS: only the pads without a through contact yet (else every pad).
+    dropped = dict(skip_connected=True) if compact_enabled("DROPS") else {}
     edges = board.GetBoardEdgesBoundingBox()
     bx0, by0, bx1, by1 = edges.GetLeft(), edges.GetTop(), edges.GetRight(), edges.GetBottom()
     margin = _nm(pad_margin_mm)
@@ -292,7 +300,9 @@ def apply_planes(board, rules: dict, pad_margin_mm: float = 2.0) -> int:
             for x, y in [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]:
                 outline.Append(pcbnew.VECTOR2I(int(x), int(y)))
             board.Add(z)
-            _dogbone_fanout_net(board, net.GetNetCode(), rules=rules, width_log=width_log)
+            _dogbone_fanout_net(
+                board, net.GetNetCode(), rules=rules, width_log=width_log, **dropped
+            )
             zones.append(((x1 - x0) * (y1 - y0), z))
 
     if width_log:

@@ -75,8 +75,9 @@ FLAGS = {
     "gloss": "--gloss",
     "gloss_measure": "--gloss-measure",
 }
-# The PNR_COMPACT parts ``compact_off`` may name (run.py --compact-off).
-COMPACT_PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD")
+# The PNR_COMPACT parts ``compact_off`` may name (run.py --compact-off; equal to
+# hardware/pnr/pnr/compact_flags.py PARTS, which test_kinds checks).
+COMPACT_PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD", "DROPS")
 
 SUMMARY = [
     "run/summary.json",

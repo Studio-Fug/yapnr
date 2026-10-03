@@ -1,0 +1,159 @@
+{
+  "strip_mm": [60.0, 25.0],
+  "structures": [
+    {
+      "id": "CP60-L0",
+      "kind": "GCPW line, GSG both ends",
+      "line_mm": 0.5,
+      "pad_to_pad_mm": 1.2,
+      "y": 1.2
+    },
+    {
+      "id": "CP60-L1",
+      "kind": "GCPW line, GSG both ends",
+      "line_mm": 0.75,
+      "pad_to_pad_mm": 1.45,
+      "y": 2.5999999999999996
+    },
+    {
+      "id": "CP60-L2",
+      "kind": "GCPW line, GSG both ends",
+      "line_mm": 1.0,
+      "pad_to_pad_mm": 1.7,
+      "y": 3.9999999999999996
+    },
+    {
+      "id": "CP60-L3",
+      "kind": "GCPW line, GSG both ends",
+      "line_mm": 1.5,
+      "pad_to_pad_mm": 2.2,
+      "y": 5.3999999999999995
+    },
+    {
+      "id": "CP60-L4",
+      "kind": "GCPW line, GSG both ends",
+      "line_mm": 2.5,
+      "pad_to_pad_mm": 3.2,
+      "y": 6.799999999999999
+    },
+    {
+      "id": "CP60-L5",
+      "kind": "GCPW line, GSG both ends",
+      "line_mm": 4.5,
+      "pad_to_pad_mm": 5.2,
+      "y": 8.2
+    },
+    {
+      "id": "CP60-OPEN",
+      "kind": "1-port open, 1.0 mm",
+      "y": 9.6
+    },
+    {
+      "id": "CP60-SHORT",
+      "kind": "1-port short (via at 1.0 mm)",
+      "y": 11.0
+    },
+    {
+      "id": "CP60-RING",
+      "kind": "gap-coupled ring, 3 \u03bbg at 62.05 GHz",
+      "radius_mm": 1.4027,
+      "gap_mm": 0.1,
+      "centre": [12.5, 3.2]
+    },
+    {
+      "id": "CP-D-CONV",
+      "kind": "corporate divider back-to-back",
+      "quarter35_mm": 0.7099958454716279,
+      "arm_sep_mm": 1.2,
+      "y": 7.6
+    },
+    {
+      "id": "CP-L1",
+      "kind": "launch half-replica",
+      "y": 1.4
+    },
+    {
+      "id": "CP-L2",
+      "kind": "launch back-to-back",
+      "y": 3.6
+    },
+    {
+      "id": "CP-M-100",
+      "kind": "line/gap comb",
+      "width_mm": 0.1
+    },
+    {
+      "id": "CP-M-125",
+      "kind": "line/gap comb",
+      "width_mm": 0.125
+    },
+    {
+      "id": "CP-M-150",
+      "kind": "line/gap comb",
+      "width_mm": 0.15
+    },
+    {
+      "id": "CP-T-TX1",
+      "kind": "TX1 feed replica P0->P1",
+      "length_mm": 13.7118
+    },
+    {
+      "id": "CP-A-CORP",
+      "kind": "corporate 2-patch column (RFS-4)",
+      "phase_centre": [9.5, 17.45]
+    },
+    {
+      "id": "CP-A-SER",
+      "kind": "series-fed 2-patch column (RFS-4S, D5 fallback)",
+      "link_mm": 1.5391,
+      "centre_spacing_mm": 2.7289
+    },
+    {
+      "id": "CP-A-PATCH-M25",
+      "kind": "single inset patch",
+      "l_mm": 1.1649
+    },
+    {
+      "id": "CP-A-PATCH-NOM",
+      "kind": "single inset patch",
+      "l_mm": 1.1899
+    },
+    {
+      "id": "CP-A-PATCH-P25",
+      "kind": "single inset patch",
+      "l_mm": 1.2149
+    },
+    {
+      "id": "CP6-THRU",
+      "kind": "SMA thru (DC-6 GHz)",
+      "line_mm": 18.6,
+      "x": 30.5
+    },
+    {
+      "id": "CP6-LINE",
+      "kind": "SMA line (DC-6 GHz)",
+      "line_mm": 20.675,
+      "x": 38.5
+    },
+    {
+      "id": "CP6-RING",
+      "kind": "gap-coupled ring, 1 \u03bbg near 5 GHz",
+      "radius_mm": 5.803,
+      "gap_mm": 0.15
+    },
+    {
+      "id": "CP6-R-L1",
+      "kind": "4-wire copper bar 0.5 x 20 mm",
+      "layer": "F.Cu"
+    },
+    {
+      "id": "CP6-R-L3",
+      "kind": "4-wire copper bar 0.5 x 20 mm",
+      "layer": "In2.Cu"
+    },
+    {
+      "id": "_layout",
+      "next_free_y_left": 12.4
+    }
+  ]
+}

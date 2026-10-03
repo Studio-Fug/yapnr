@@ -1,0 +1,414 @@
+{
+  "params": {
+    "variant": 1,
+    "bracket_step": 0.018,
+    "mirror_x": false,
+    "w50": 0.2,
+    "gap": 0.2,
+    "fence_offset": 0.5,
+    "fence_pitch": 0.45,
+    "antipad_r": 0.3,
+    "l2_cut_r": 0.38,
+    "launch_len": 1.3,
+    "patch_w": 1.45,
+    "patch_l": null,
+    "inset": null,
+    "notch": 0.1,
+    "spacing": 2.9,
+    "window_margin": 0.15,
+    "windows": true,
+    "w35": 0.353,
+    "t_y": 0.37,
+    "in_x": 1.171,
+    "p1_y": -2.3,
+    "rx_col_y": 9.5,
+    "tx_col_x0": 8.0,
+    "tx_col_y": 6.1,
+    "bend_r_rx": 1.0,
+    "bend_r_tx": 0.6,
+    "bump_r_rx": 0.3,
+    "meander_r_min": 0.4,
+    "tx_meander": {
+      "TX1": "h",
+      "TX2": "v",
+      "TX3": "v"
+    },
+    "pour_clear_ant": 1.0,
+    "pour_clear_feed": 0.45
+  },
+  "dims": {
+    "f0_target_ghz": 62.05,
+    "band_ghz": [60.3, 63.8],
+    "lambda0_mm": 4.8315,
+    "window": {
+      "h_mm": 0.2151,
+      "er_composite": 3.5388
+    },
+    "patch": {
+      "w": 1.45,
+      "l": 1.2113,
+      "l_nominal": 1.1899,
+      "length_scale": 1.018,
+      "f0_ghz": 61.1068,
+      "bw_vswr2": 0.0401,
+      "bw_ghz": 2.4512,
+      "edge_r_ohm": 346.9292,
+      "g1_s": 0.0009,
+      "g12_s": 0.0005,
+      "inset": 0.4555,
+      "inset_closed_form": 0.4555,
+      "w_over_l": 1.1971,
+      "efficiency": 0.9032,
+      "directivity_dbi": 6.4611
+    },
+    "column": {
+      "spacing": 2.9,
+      "spacing_lambda0": 0.6002,
+      "directivity_dbi": 10.0759,
+      "divider_loss_db": null
+    },
+    "lines": {
+      "source": "2D solver (yapnr.rf.coupons.xsec) + KJ82 dispersion",
+      "z50_ms": 50.0427,
+      "z50_gcpw": 48.834,
+      "z35": 35.4174,
+      "lambda_g50": 2.9379,
+      "lambda_g35": 2.84,
+      "quarter35": 0.71,
+      "half50": 1.469,
+      "alpha50_db_mm": 0.0744,
+      "alpha50_gcpw_db_mm": 0.0742
+    },
+    "floorplan": {
+      "rx_col_y": 10.9497,
+      "tx_col_y": 8.7854,
+      "p0_rx_y": 5.2,
+      "p0_tx_x": 5.2
+    }
+  },
+  "feeds": {
+    "RX1": {
+      "ball_to_p1_mm": 5.4991,
+      "p0_to_p1_mm": 4.1991,
+      "p0_to_p1_line_loss_db": 0.3118,
+      "ball_to_p0_mm": 1.3
+    },
+    "RX2": {
+      "ball_to_p1_mm": 5.4991,
+      "p0_to_p1_mm": 4.1991,
+      "p0_to_p1_line_loss_db": 0.3118,
+      "ball_to_p0_mm": 1.3
+    },
+    "RX3": {
+      "ball_to_p1_mm": 5.4991,
+      "p0_to_p1_mm": 4.1991,
+      "p0_to_p1_line_loss_db": 0.3118,
+      "ball_to_p0_mm": 1.3
+    },
+    "RX4": {
+      "ball_to_p1_mm": 5.4991,
+      "p0_to_p1_mm": 4.1991,
+      "p0_to_p1_line_loss_db": 0.3118,
+      "ball_to_p0_mm": 1.3
+    },
+    "TX1": {
+      "ball_to_p1_mm": 15.0118,
+      "p0_to_p1_mm": 13.7118,
+      "p0_to_p1_line_loss_db": 1.0181,
+      "ball_to_p0_mm": 1.3
+    },
+    "TX2": {
+      "ball_to_p1_mm": 15.0118,
+      "p0_to_p1_mm": 13.7118,
+      "p0_to_p1_line_loss_db": 1.0181,
+      "ball_to_p0_mm": 1.3
+    },
+    "TX3": {
+      "ball_to_p1_mm": 15.0118,
+      "p0_to_p1_mm": 13.7118,
+      "p0_to_p1_line_loss_db": 1.0181,
+      "ball_to_p0_mm": 1.3
+    }
+  },
+  "columns": {
+    "RX1": {
+      "phase_centre": [-5.334, 10.9497],
+      "p1": [-4.163, 8.6497],
+      "input_side": "east",
+      "arms": {
+        "north": 0.9299,
+        "south": 2.3988,
+        "diff": 1.469,
+        "target": 1.469
+      }
+    },
+    "RX2": {
+      "phase_centre": [-2.992, 10.9497],
+      "p1": [-1.821, 8.6497],
+      "input_side": "east",
+      "arms": {
+        "north": 0.9299,
+        "south": 2.3988,
+        "diff": 1.469,
+        "target": 1.469
+      }
+    },
+    "RX3": {
+      "phase_centre": [-0.65, 10.9497],
+      "p1": [0.521, 8.6497],
+      "input_side": "east",
+      "arms": {
+        "north": 0.9299,
+        "south": 2.3988,
+        "diff": 1.469,
+        "target": 1.469
+      }
+    },
+    "RX4": {
+      "phase_centre": [1.692, 10.9497],
+      "p1": [2.863, 8.6497],
+      "input_side": "east",
+      "arms": {
+        "north": 0.9299,
+        "south": 2.3988,
+        "diff": 1.469,
+        "target": 1.469
+      }
+    },
+    "TX1": {
+      "phase_centre": [9.171, 8.7854],
+      "p1": [8.0, 6.4854],
+      "input_side": "west",
+      "arms": {
+        "north": 0.9299,
+        "south": 2.3988,
+        "diff": 1.469,
+        "target": 1.469
+      }
+    },
+    "TX2": {
+      "phase_centre": [11.513, 8.7854],
+      "p1": [10.342, 6.4854],
+      "input_side": "west",
+      "arms": {
+        "north": 0.9299,
+        "south": 2.3988,
+        "diff": 1.469,
+        "target": 1.469
+      }
+    },
+    "TX3": {
+      "phase_centre": [13.855, 8.7854],
+      "p1": [12.684, 6.4854],
+      "input_side": "west",
+      "arms": {
+        "north": 0.9299,
+        "south": 2.3988,
+        "diff": 1.469,
+        "target": 1.469
+      }
+    }
+  },
+  "ports": {
+    "RX1.Pb": {
+      "at": [-2.6, 3.9],
+      "kind": "ball land",
+      "note": "vendor boundary"
+    },
+    "RX1.P0": {
+      "at": [-2.6, 5.2],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "RX1.P1": {
+      "at": [-4.163, 8.6497],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "RX2.Pb": {
+      "at": [-1.3, 3.9],
+      "kind": "ball land",
+      "note": "vendor boundary"
+    },
+    "RX2.P0": {
+      "at": [-1.3, 5.2],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "RX2.P1": {
+      "at": [-1.821, 8.6497],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "RX3.Pb": {
+      "at": [0.0, 3.9],
+      "kind": "ball land",
+      "note": "vendor boundary"
+    },
+    "RX3.P0": {
+      "at": [0.0, 5.2],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "RX3.P1": {
+      "at": [0.521, 8.6497],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "RX4.Pb": {
+      "at": [1.3, 3.9],
+      "kind": "ball land",
+      "note": "vendor boundary"
+    },
+    "RX4.P0": {
+      "at": [1.3, 5.2],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "RX4.P1": {
+      "at": [2.863, 8.6497],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "TX1.Pb": {
+      "at": [3.9, 2.6],
+      "kind": "ball land",
+      "note": "vendor boundary"
+    },
+    "TX1.P0": {
+      "at": [5.2, 2.6],
+      "heading_deg": 0.0,
+      "z0": 50.0
+    },
+    "TX1.P1": {
+      "at": [8.0, 6.4854],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "TX2.Pb": {
+      "at": [3.9, 1.3],
+      "kind": "ball land",
+      "note": "vendor boundary"
+    },
+    "TX2.P0": {
+      "at": [5.2, 1.3],
+      "heading_deg": 0.0,
+      "z0": 50.0
+    },
+    "TX2.P1": {
+      "at": [10.342, 6.4854],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "TX3.Pb": {
+      "at": [3.9, -0.0],
+      "kind": "ball land",
+      "note": "vendor boundary"
+    },
+    "TX3.P0": {
+      "at": [5.2, 0.0],
+      "heading_deg": 0.0,
+      "z0": 50.0
+    },
+    "TX3.P1": {
+      "at": [12.684, 6.4854],
+      "heading_deg": 90.0,
+      "z0": 50.0
+    },
+    "iso_fence_x": {
+      "at": [5.7045, 0.0]
+    },
+    "vout_pa_pocket": {
+      "rect": [3.563, 5.45, 5.25, 7.0]
+    }
+  },
+  "region_u1_mm": {
+    "x": [-11.059, 19.58],
+    "y": [-3.9, 18.005]
+  },
+  "vias": {
+    "fence": 128,
+    "launch": 14,
+    "isolation": 16
+  },
+  "checks": [
+    {
+      "check": "equal length P0->P1 RX",
+      "lengths_mm": {
+        "RX1": 4.1991,
+        "RX2": 4.1991,
+        "RX3": 4.1991,
+        "RX4": 4.1991
+      },
+      "spread_mm": 0.0,
+      "limit_mm": 0.036,
+      "ok": true
+    },
+    {
+      "check": "equal length P0->P1 TX",
+      "lengths_mm": {
+        "TX1": 13.7118,
+        "TX2": 13.7118,
+        "TX3": 13.7118
+      },
+      "spread_mm": 0.0,
+      "limit_mm": 0.036,
+      "ok": true
+    },
+    {
+      "check": "ball to P1 lengths",
+      "lengths_mm": {
+        "RX1": 5.499,
+        "RX2": 5.499,
+        "RX3": 5.499,
+        "RX4": 5.499,
+        "TX1": 15.012,
+        "TX2": 15.012,
+        "TX3": 15.012
+      }
+    },
+    {
+      "check": "feed corridor separation",
+      "min_mm": 1.089,
+      "pair": ["RX3", "RX4"],
+      "limit_mm": 1.0,
+      "ok": true
+    },
+    {
+      "check": "column input line to L2 window edge (both sides)",
+      "clearance_mm": 0.196,
+      "limit_mm": 0.1524,
+      "ok": true
+    },
+    {
+      "check": "divider arms",
+      "north": 0.9299,
+      "south": 2.3988,
+      "diff": 1.469,
+      "target": 1.469
+    }
+  ],
+  "geometry_sha256": "1034e1d3be736da2a6b9d54421e0147fb7a05cc4b59a1f3340a1d93e1a6db5cd",
+  "board_frame": {
+    "u1_at": [26.0, 28.0],
+    "rx_patch_bbox": [19.941, 36.8941, 28.417, 41.0054],
+    "tx_patch_bbox": [34.446, 34.7297, 40.58, 38.841],
+    "region_bbox": [14.941, 24.1, 45.58, 46.005],
+    "vout_pa_pocket": [29.563, 33.45, 31.25, 35.0],
+    "phase_centres": {
+      "RX1": [20.666, 38.9497],
+      "RX2": [23.008, 38.9497],
+      "RX3": [25.35, 38.9497],
+      "RX4": [27.692, 38.9497],
+      "TX1": [35.171, 36.7854],
+      "TX2": [37.513, 36.7854],
+      "TX3": [39.855, 36.7854]
+    }
+  },
+  "schema": "radar60-rfmacro/1",
+  "files": {
+    "pcb": "rfm1-p.kicad_pcb",
+    "pro": "rfm1-p.kicad_pro",
+    "dru": "rfm1-p.kicad_dru"
+  }
+}

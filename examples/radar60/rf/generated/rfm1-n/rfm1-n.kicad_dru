@@ -1,0 +1,9 @@
+(version 1)
+(rule "RF mask opening, no mask over RF copper per SPRACG5"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO1') || B.memberOfFootprint('MO1')")
+	(severity ignore))
+(rule "SMA edge launches reach the board edge"
+	(constraint edge_clearance)
+	(condition "A.memberOfFootprint('J*')")
+	(severity ignore))

@@ -1,0 +1,45 @@
+(version 1)
+(rule "MB1: mouse-bite holes on the break-off edge (OSH Park tab pattern)"
+	(constraint physical_hole_clearance)
+	(condition "A.memberOfFootprint('MB1') && B.Layer == 'Edge.Cuts'")
+	(severity ignore))
+(rule "MO_A01: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_A01')")
+	(severity ignore))
+(rule "MO_A04: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_A04')")
+	(severity ignore))
+(rule "MO_R1_1: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_R1_1')")
+	(severity ignore))
+(rule "MO_R1_2: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_R1_2')")
+	(severity ignore))
+(rule "MO_R1_3: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_R1_3')")
+	(severity ignore))
+(rule "MO_R1_W: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_R1_W')")
+	(severity ignore))
+(rule "MO_D1_1: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_D1_1')")
+	(severity ignore))
+(rule "MO_D1_2: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_D1_2')")
+	(severity ignore))
+(rule "MO_D1_3: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_D1_3')")
+	(severity ignore))
+(rule "MO_D1_W: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_D1_W')")
+	(severity ignore))

@@ -211,7 +211,12 @@ def plan(graph, constraints, rules: Optional[dict] = None) -> SidePlan:
 
 def stack_refs(graph, constraints) -> frozenset:
     """The parts the no-stacking rule covers on this board: every part that
-    :func:`fans_out` when the side plan frees any part, else none."""
+    :func:`fans_out` when the side plan frees any part, else none (without a
+    ``double`` policy or a ``side_pref`` nothing is free, and the plan is not built)."""
+    if getattr(getattr(constraints, "board", None), "sides", "single") != "double" and not any(
+        con.kind == "side_pref" for con in getattr(constraints, "constraints", ())
+    ):
+        return frozenset()
     if not plan(graph, constraints).active:
         return frozenset()
     return frozenset(c.ref for c in graph.components if fans_out(c))

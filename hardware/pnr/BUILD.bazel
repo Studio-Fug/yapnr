@@ -616,10 +616,6 @@ py_test(
     deps = [":pnr"],
 )
 
-# PNR_GLOSS KiCad adapter and controller (pnr.gloss). The native tests build in-memory
-# boards (gloss_fixture) and run every worker in process; the end-to-end tests drive the
-# KiCad-python workers and kicad-cli one at a time (PNR_KICAD_PYTHON, PNR_KICAD_CLI). Both
-# need the headless KiCad: the KiCad lane.
 # PNR_GLOSS wiring in pnr.native_loop with stubbed workers and DRC: no import, label,
 # event or progress key with the flag unset; both passes, skips and the outer gate with it.
 py_test(
@@ -634,6 +630,11 @@ py_test(
     ],
 )
 
+# PNR_GLOSS KiCad adapter and controller (pnr.gloss). The native tests build in-memory
+# boards (gloss_fixture) and run every worker in process; the end-to-end tests drive the
+# KiCad-python workers and kicad-cli one at a time (PNR_KICAD_PYTHON, PNR_KICAD_CLI), and
+# run the regression ladder's --gloss stage on the public case 04-inverter-leds-8. Both
+# need the headless KiCad: the KiCad lane.
 py_test(
     name = "gloss_native_test",
     size = "medium",
@@ -661,6 +662,7 @@ py_test(
         "tests/gloss_fixture.py",
         "tests/test_gloss_e2e.py",
     ],
+    data = glob(["regression/*.py"]),  # the ladder case runs regression/run.py
     imports = ["tests"],
     main = "tests/test_gloss_e2e.py",
     tags = [

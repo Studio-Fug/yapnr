@@ -4,8 +4,9 @@ PnR runtime python drives the KiCad-python workers and kicad-cli strictly one at
 (PNR_KICAD_PYTHON / PNR_KICAD_CLI). The fixture is gloss_fixture (built by a KiCad-python
 subprocess). Covers: a full pass stays DRC/ERC clean, a corridor transaction, an injected
 illegal edit rejected by the native DRC gate and attributed to its edit, phase-end
-bisection that drops the failing transaction and replays the rest, and a whole-pass
-revert to the byte-identical input.
+bisection that drops the failing transaction and replays the rest, a whole-pass
+revert to the byte-identical input, and the regression ladder's opt-in --gloss stage on
+the public case 04-inverter-leds-8 (place, route, gloss and audit; a few minutes).
 """
 
 import argparse
@@ -15,6 +16,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -233,6 +235,74 @@ class GlossEndToEndTest(unittest.TestCase):
             digest(self.input / "board.kicad_pcb"),
         )
         self.assertEqual(result["output_sha256"], result["source_sha256"])
+
+
+@unittest.skipUnless(READY, "requires PNR_KICAD_PYTHON and PNR_KICAD_CLI")
+class GlossLadderCaseTest(unittest.TestCase):
+    """run.py --gloss on a public ladder case, end to end: the case passes, the stage keeps
+    its edits only through the runner's outer DRC gate, the router's objective holds, length
+    and bends never rise, and result.json pairs the arms without holding a path."""
+
+    CASE = "04-inverter-leds-8"
+
+    def test_ladder_gloss_stage_on_a_public_case(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp).resolve() / "ladder"
+            log = Path(tmp) / "run.log"
+            with log.open("w") as handle:
+                code = subprocess.run(
+                    [
+                        sys.executable,
+                        str(HERE.parent / "regression" / "run.py"),
+                        "--repo",
+                        str(HERE.parents[2]),
+                        "--out",
+                        str(out),
+                        "--case",
+                        self.CASE,
+                        "--seed",
+                        "0",
+                        "--python",
+                        sys.executable,
+                        "--kicad-python",
+                        KP,
+                        "--kicad-cli",
+                        CLI,
+                        "--gloss",
+                        "--gloss-measure",
+                    ],
+                    stdout=handle,
+                    stderr=subprocess.STDOUT,
+                    timeout=1800,
+                ).returncode
+            case = out / (self.CASE + "-seed-0")
+            self.assertEqual(code, 0, log.read_text()[-2000:])
+            text = (case / "result.json").read_text()
+            self.assertNotIn(tmp, text)
+            self.assertNotIn(str(out), text)
+            result = json.loads(text)
+            self.assertTrue(result["passed"], result["reasons"])
+            self.assertEqual(result["opens"], 0)
+            block = result["gloss"]
+            summary = block["summary"]
+            self.assertEqual(summary["status"], "ok")
+            self.assertTrue(block["outer_gate"]["passed"], block["outer_gate"]["reasons"])
+            self.assertGreater(summary["accepted_transactions"], 0)
+            self.assertTrue(block["kept"])
+            self.assertFalse(summary["end_gate"]["reverted"])
+            self.assertTrue(
+                all(a <= b for a, b in zip(summary["objective_after"], summary["objective_before"]))
+            )
+            before, after = summary["metrics_before"], summary["metrics_after"]
+            self.assertLessEqual(after["length_mm"], before["length_mm"] + 1e-6)
+            self.assertLessEqual(after["bends_all"], before["bends_all"])
+            self.assertTrue((case / "routed.pre-gloss.kicad_pcb").exists())
+            self.assertEqual(result["copper_sha256"], block["copper_sha256"])
+            self.assertNotEqual(block["copper_sha256"], block["pre_gloss_copper_sha256"])
+            measured = result["gloss_measure"]
+            self.assertEqual(measured["objective"], summary["objective_after"])
+            self.assertAlmostEqual(measured["length_mm"], after["length_mm"], places=2)
+            self.assertIn("gloss", result["stage_cpu"])
 
 
 if __name__ == "__main__":

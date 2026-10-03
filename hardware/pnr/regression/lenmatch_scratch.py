@@ -4,7 +4,11 @@ No ladder rung declares a length-match group (``length_match``); the MCU rungs d
 two differential pairs with a skew budget. These designs exercise both on a small
 board: an 8-net bus from an SMD connector to an SOIC (a group with a 0.5 mm
 tolerance) and a differential pair whose pins are swapped between its two connectors
-(about 5 mm of native skew, 1.0 mm budget). ``bus-pair-4L-ps`` is the same board on
+(about 5 mm of native skew, 1.0 mm budget); on ``lm-bus-pair`` the bus's pin order
+is reversed between its two ends (a part facing the connector routes it with every
+net crossing every other). ``lm-bus-corner`` turns the bus round a corner instead:
+the inner nets are the short ones and have no room for meanders until the bus is
+spaced out. ``bus-pair-4L-ps`` is the crossing board on
 the 4L-SGPS stack with the budgets in picoseconds (judged by the engine's audit: the
 ladder's KiCad rules carry millimetres only).
 
@@ -68,6 +72,37 @@ def bus_pair():
     return hard(spec, "lm-bus-pair", ["length-match", "diff-pair"], "manual", 30)
 
 
+def bus_corner():
+    """The bus turning a corner. J1 carries the bus in the order a part facing it
+    takes without crossings (B0 at the top), and U1 is fixed above and to the right
+    of J1 with its bus pins facing down, so the bus turns a corner: its inner nets
+    run several mm shorter than the outer ones and, routed at the pins' pitch, have
+    no room beside them for meanders."""
+    spec = bus_pair()
+    spec["name"] = "lm-bus-corner"
+    spec["description"] = (
+        "Length-matching scratch board: an 8-net bus turning a corner (group, 0.5 mm) "
+        "and a differential pair with swapped pins (1.0 mm skew)."
+    )
+    for part in spec["parts"]:
+        if part["ref"] == "J1":
+            part["pins"] = {**{str(k + 1): BUS[7 - k] for k in range(8)}, "MP": ""}
+    spec["constraints"]["fixed"]["U1"] = dict(at=[20.0, 22.0], rot=90, side="top")
+    spec["checks"].append(
+        dict(
+            id="fixed-U1",
+            kind="fixed",
+            ref="U1",
+            at=[20.0, 22.0],
+            rot=90,
+            side="top",
+            tol_mm=0.01,
+            engine="fixed",
+        )
+    )
+    return spec
+
+
 def bus_pair_ps():
     """The board on the 4L-SGPS stack, with the budgets in picoseconds."""
     spec = with_stackup(bus_pair(), "4L-SGPS")
@@ -79,7 +114,7 @@ def bus_pair_ps():
 
 
 def designs():
-    return deepcopy([bus_pair(), bus_pair_ps()])
+    return deepcopy([bus_pair(), bus_corner(), bus_pair_ps()])
 
 
 def judge_rules(spec) -> str:

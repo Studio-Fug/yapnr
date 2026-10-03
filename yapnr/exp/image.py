@@ -18,7 +18,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from typing import Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
 
 DEFAULT_REPOSITORY = "ghcr.io/studio-fug/yapnr"
 TOKEN_ENV = "YAPNR_REGISTRY_TOKEN"
@@ -39,8 +39,22 @@ INDEX_TYPES = (
 )
 
 
+# How the yapnr image runs the task wrapper: its interpreter, and its KiCad environment launcher
+# as the container entrypoint. A campaign's ``runtime`` table replaces either for another image.
+YAPNR_PYTHON = "/opt/venv/bin/python"
+YAPNR_ENTRYPOINT = "/usr/local/bin/yapnr-kicad-env"
+
+
 class ImageError(ValueError):
     pass
+
+
+def runtime(image_meta: Dict[str, Any]) -> Tuple[str, Optional[str]]:
+    """(python, entrypoint or None) that run ``task.py`` in a plan's image (``meta["image"]``)."""
+    given = image_meta.get("runtime") or {}
+    python = given.get("python") or YAPNR_PYTHON
+    entrypoint = given.get("entrypoint", YAPNR_ENTRYPOINT)
+    return python, (entrypoint or None)
 
 
 @dataclass(frozen=True)

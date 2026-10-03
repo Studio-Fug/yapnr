@@ -403,6 +403,12 @@ def make_plan(
             repo=root,
         )
         tasks = kind.expand(campaign, ctx)
+        # An image other than yapnr's: its own launcher (or none) wraps every task's command.
+        runtime = campaign.get("runtime")
+        if runtime is not None and "entrypoint" in runtime:
+            for task in tasks:
+                task["entrypoint"] = runtime["entrypoint"] or None
+                spec.check_task(task)
     except (bundle.BundleError, ValueError, OSError) as err:
         shutil.rmtree(out, ignore_errors=True)
         raise PlanError(str(err)) from err
@@ -466,6 +472,7 @@ def make_plan(
             "requested": image_text,
             "digest": pinned.digest if pinned else None,
             "repository": pinned.name if pinned else None,
+            **({"runtime": dict(campaign["runtime"])} if "runtime" in campaign else {}),
         },
         "bundles": sorted({i["bundle"] for t in tasks for i in t["inputs"]}),
         "task_count": len(tasks),

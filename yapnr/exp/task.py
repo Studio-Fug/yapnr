@@ -892,6 +892,11 @@ def main(argv=None):
             raise TaskFailure(EXIT_USAGE, "--chunk is at least 1")
         campaign = Campaign(args.store, args.campaign, args.submission)
         toolchain = load_toolchain(args.toolchain)
+        if args.toolchain == "image":
+            # Another image than yapnr's names its interpreter in the campaign's runtime.
+            runtime = (campaign.meta.get("image") or {}).get("runtime") or {}
+            if runtime.get("python"):
+                toolchain["PYTHON"] = runtime["python"]
         positions = campaign.positions(resolve_index(args.index), args.chunk)
     except TaskFailure as failure:
         print(

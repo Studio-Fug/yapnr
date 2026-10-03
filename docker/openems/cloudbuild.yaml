@@ -1,0 +1,55 @@
+# Cloud Build of the openEMS task image (README.md here): the generic x86-64 build and the
+# AVX-512 build (x86-64-v4, tuned for Zen 4/5: C4D) side by side on one builder, both from the
+# shared `deps` stage, pushed to the project's images repository. tools/exp/openems_plan.py
+# image prints (or runs) the submit command with the owner config's values:
+#
+#   gcloud builds submit docker/openems --config docker/openems/cloudbuild.yaml \
+#     --region REGION --service-account projects/PROJECT/serviceAccounts/BUILD_ACCOUNT \
+#     --gcs-source-staging-dir gs://INPUTS_BUCKET/cloudbuild/source \
+#     --substitutions _IMAGE=REGION-docker.pkg.dev/PROJECT/images/openems,_TAG=0.37.0-rc3
+steps:
+  - id: deps
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --target=deps
+      - --build-arg=OPENEMS_REF=${_OPENEMS_REF}
+      - --tag=deps
+      - .
+  - id: generic
+    name: gcr.io/cloud-builders/docker
+    waitFor: [deps]
+    args:
+      - build
+      - --build-arg=OPENEMS_REF=${_OPENEMS_REF}
+      - --build-arg=NJOBS=${_NJOBS}
+      - --build-arg=ARCH_FLAGS=
+      - --tag=${_IMAGE}:${_TAG}-x86-64
+      - .
+  - id: x86-64-v4
+    name: gcr.io/cloud-builders/docker
+    waitFor: [deps]
+    args:
+      - build
+      - --build-arg=OPENEMS_REF=${_OPENEMS_REF}
+      - --build-arg=NJOBS=${_NJOBS}
+      - --build-arg=ARCH_FLAGS=${_V4_FLAGS}
+      - --tag=${_IMAGE}:${_TAG}-x86-64-v4
+      - .
+images:
+  - ${_IMAGE}:${_TAG}-x86-64
+  - ${_IMAGE}:${_TAG}-x86-64-v4
+substitutions:
+  _IMAGE: ''
+  _TAG: 0.37.0-rc3
+  _OPENEMS_REF: v0.37.0-rc3
+  _NJOBS: '16'
+  _V4_FLAGS: -march=x86-64-v4 -mtune=znver4
+options:
+  machineType: E2_HIGHCPU_32
+  # The build account writes its logs to Cloud Logging (it has no logs bucket).
+  logging: CLOUD_LOGGING_ONLY
+  env:
+    - DOCKER_BUILDKIT=1
+timeout: 3600s
+tags: [yapnr, openems]

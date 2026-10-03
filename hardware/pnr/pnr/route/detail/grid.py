@@ -73,6 +73,12 @@ class RouteGrid:
         # frees the pad-dense top layer for tracks instead of over-reserving it at
         # via width (which forced routing onto the back layer).
         self.via_halo: Dict[Tuple[int, int, int], str] = {}
+        # The part of ``pad_net`` / ``via_halo`` that pads alone wrote (add_pad), so
+        # a check that judges every pad rectangle exactly (a plane drop's via site)
+        # can tell a pad's cell-rounded halo from any other reservation. Fixed
+        # copper that claims a cell removes it here (pnr.route.detail.fixed).
+        self.pad_track_halo: Dict[Tuple[int, int, int], str] = {}
+        self.pad_via_halo: Dict[Tuple[int, int, int], str] = {}
         # Access cell per (net, pad_key) recorded during build.
         self.access: Dict[Tuple[str, str], Cell] = {}
         self.pad_rectangles = []
@@ -377,24 +383,25 @@ class RouteGrid:
 
         self.pad_rectangles.append((layer, net, r))
 
-        def reserve(table, la, i, j):
+        def reserve(table, mirror, la, i, j):
             key = (la, i, j)
-            owner = table.get(key)
             # An overlap belongs to neither net. A later pad must never erase a
             # foreign pad's clearance halo (or vice versa).
-            table[key] = net if owner is None or owner == net else "\0conflict"
+            for t in (table, mirror):
+                owner = t.get(key)
+                t[key] = net if owner is None or owner == net else "\0conflict"
 
         self._mark_rect(
             layer,
             r,
             self.clearance + self.via_radius,
-            lambda la, i, j: reserve(self.via_halo, la, i, j),
+            lambda la, i, j: reserve(self.via_halo, self.pad_via_halo, la, i, j),
         )
         self._mark_rect(
             layer,
             r,
             self.clearance + 0.5 * self.track_width,
-            lambda la, i, j: reserve(self.pad_net, la, i, j),
+            lambda la, i, j: reserve(self.pad_net, self.pad_track_halo, la, i, j),
         )
 
     def block_region(

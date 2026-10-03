@@ -45,6 +45,17 @@ def chip(ref, pos, a, b, rot=0.0, side="top"):
     return Component(ref, "0603", pos, rot, side, (3.0, 1.6), (3.0, 1.6), pads=pads)
 
 
+def sot23_5(ref, pos, nets, rot=0.0, side="top"):
+    """A SOT-23-5 land pattern: pins 1-3 south at 0.95 mm pitch, pins 4-5 north
+    (no middle pin), 0.6 x 1.325 mm pads on rows 2.275 mm apart."""
+    at = [(-0.95, -1.1375), (0.0, -1.1375), (0.95, -1.1375), (0.95, 1.1375), (-0.95, 1.1375)]
+    pads = [
+        Pad(str(k + 1), net, xy, (0.6, 1.325), land_corner=0.0)
+        for k, (net, xy) in enumerate(zip(nets, at))
+    ]
+    return Component(ref, "SOT-23-5", pos, rot, side, (3.3, 3.6), (3.3, 3.6), pads=pads)
+
+
 def board(components, size=(24.0, 16.0)):
     nets = {}
     for c in components:
@@ -280,6 +291,72 @@ class DropPlanning(unittest.TestCase):
                 max(rect.left - x, 0, x - rect.right), max(rect.bottom - y, 0, y - rect.top)
             )
             self.assertGreaterEqual(gap, 0.3 + 0.2 - 1e-9)  # via radius + clearance
+
+    def test_middle_pin_by_the_edge_drops_under_the_body_at_exact_clearance(self):
+        """A SOT-23-5's middle pin facing the board edge: the only via sites are
+        under the body, between foreign pads whose cell-rounded halos cover them.
+        The pad rectangles are judged exactly; a halo another reservation wrote
+        still rules a site out."""
+        from pnr.route.detail.grid import RouteGrid
+        from pnr.route.detail.joint_escape import enumerate_drops
+
+        g = board([sot23_5("U1", (6.0, 3.0), ["A", "GND", "B", "", "C"])], size=(12.0, 8.0))
+
+        def drops():
+            grid = RouteGrid.from_graph(
+                g, 12.0, 8.0, pitch=0.25, clearance=0.2, track_width=0.25, via_radius=0.3
+            )
+            rect = pad_rects(g.component("U1"))[1][2]
+            point = (rect.cx, rect.cy)
+            return grid, enumerate_drops(
+                grid, "GND", point, 0, rect=rect, width=0.4, via_keepout=3, reach=8
+            )
+
+        grid, options = drops()
+        self.assertTrue(options)
+        rects = pad_rects(g.component("U1"))
+        for o in options:
+            ((x, y),) = o.vias
+            for name, net, r in rects:
+                gap = math.hypot(max(r.left - x, 0, x - r.right), max(r.bottom - y, 0, y - r.top))
+                self.assertGreaterEqual(gap, 0.3 + 0.2 - 1e-9, (name, x, y))
+            self.assertGreater(y, 3.0)  # under the body, not at the board edge
+            # The cell-rounded halo of a foreign pad covers the site: only the exact
+            # rectangle check admits it.
+            i, j = grid.cell_of(x, y)
+            owners = {grid.via_halo.get((0, i, j)), grid.pad_net.get((0, i, j))}
+            self.assertTrue(owners - {None, "GND"}, (x, y))
+        # A halo cell that is not a pad's own (fixed copper, say) still rejects.
+        sites = {grid.cell_of(*o.vias[0]) for o in options}
+        grid2, _ = drops()
+        for i, j in sites:
+            grid2.via_halo[(0, i, j)] = "X"
+        rect = pad_rects(g.component("U1"))[1][2]
+        again = enumerate_drops(
+            grid2, "GND", (rect.cx, rect.cy), 0, rect=rect, width=0.4, via_keepout=3, reach=8
+        )
+        self.assertFalse({grid2.cell_of(*o.vias[0]) for o in again} & sites)
+        # Own-net fixed copper of the neighbour pin's net under the body: where it
+        # claims a pad's halo cell the cell is no longer a pad's alone, so no drop
+        # via comes within clearance of that track.
+        from pnr.route.detail.fixed import reserve_fixed_copper
+
+        grid3, _ = drops()
+        track = ["C", "F.Cu", [6.0, 3.0], [6.0, 4.0], 0.25]
+        reserve_fixed_copper(grid3, dict(frame="engine-mm-y-up", tracks=[track]), own_net=True)
+        popped = set(grid.pad_via_halo) - set(grid3.pad_via_halo)
+        self.assertTrue(popped)
+        for la, i, j in popped:
+            x, y = grid3.center_of(i, j)
+            near = math.hypot(x - 6.0, max(3.0 - y, 0, y - 4.0))
+            self.assertLessEqual(near, 0.125 + 0.2 + 0.3 + grid3.pitch)
+        third = enumerate_drops(
+            grid3, "GND", (rect.cx, rect.cy), 0, rect=rect, width=0.4, via_keepout=3, reach=8
+        )
+        for o in third:
+            ((x, y),) = o.vias
+            gap = math.hypot(x - 6.0, max(3.0 - y, 0, y - 4.0))
+            self.assertGreaterEqual(gap, 0.125 + 0.2 + 0.3 - 1e-9, (x, y))
 
     def test_so8_row_resolves_drops_and_signal_exits_together(self):
         from pnr.route.detail.escape import plan_escapes

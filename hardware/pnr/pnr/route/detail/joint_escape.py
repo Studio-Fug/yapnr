@@ -334,21 +334,38 @@ def _outside_own_lands(grid, net, p, rect=None):
 
 def _drop_via_clear(grid, net, p):
     """A plane-drop via site judged on exact geometry: the drill's hole spacing,
-    every grid layer's via mask and via halo at the site's cell, and the via disk
-    against foreign pad rectangles, escape copper and the blocked mask
-    (``_segment_clear``). Unlike ``_via_clear`` it does not reject a site for a
-    foreign track-halo cell inside the square keep-out: that square is the maze's
-    reservation (still claimed for the chosen drop), not a copper-to-copper rule,
-    and it shuts a fine-pitch row's middle pins out of every outward site."""
+    every grid layer's via mask, and the via disk against foreign pad rectangles,
+    escape copper and the blocked mask (``_segment_clear``).
+
+    Unlike ``_via_clear`` it does not reject a site for a foreign track-halo cell
+    inside the square keep-out: that square is the maze's reservation (still
+    claimed for the chosen drop), not a copper-to-copper rule, and it shuts a
+    fine-pitch row's middle pins out of every outward site. Nor does it reject one
+    for a foreign pad's cell-rounded halo (``RouteGrid.pad_track_halo`` /
+    ``pad_via_halo``), which overstates the pad's clearance by up to a cell: the
+    pad rectangle itself is judged exactly. A halo cell any other reservation
+    wrote (a plated hole, fixed copper) still rejects the site, as does the fab
+    profile's via-to-SMD-pad rule."""
     i, j = grid.cell_of(*p)
-    if not grid.hole_site_clear(p):
+    if not grid.in_bounds(i, j) or not grid.hole_site_clear(p):
         return False
-    return all(
-        not grid.via_blocked[la, j, i]
-        and grid.via_passable(la, i, j, net, p)
-        and _segment_clear(grid, net, la, p, p, 2 * grid.via_radius)
-        for la in range(grid.nlayers)
+    if grid.smd_via_blocked is not None and not grid.smd_via_ok(p, net):
+        return False
+    halos = (
+        (grid.pad_net, getattr(grid, "pad_track_halo", {})),
+        (grid.via_halo, getattr(grid, "pad_via_halo", {})),
     )
+    for la in range(grid.nlayers):
+        if grid.via_blocked[la, j, i]:
+            return False
+        key = (la, i, j)
+        for table, pads_only in halos:
+            owner = table.get(key)
+            if owner is not None and owner != net and owner != pads_only.get(key):
+                return False
+        if not _segment_clear(grid, net, la, p, p, 2 * grid.via_radius):
+            return False
+    return True
 
 
 def enumerate_drops(

@@ -47,6 +47,9 @@ def reserve_fixed_copper(grid, copper, route_width=None, own_net=False):
             key = (layer, i, j)
             owner = table.get(key)
             table[key] = net if owner is None or owner == net else "\0conflict"
+            # No longer a pad-only halo: exact pad checks do not see fixed copper.
+            for mirror in ("pad_track_halo", "pad_via_halo"):
+                getattr(grid, mirror, {}).pop(key, None)
 
         return claim
 

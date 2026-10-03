@@ -1,12 +1,14 @@
 # Design: fab-model test coupons
 
-Status: **proposal** for the fab-model coupon item of
-[issue #32](https://github.com/Studio-Fug/yapnr/issues/32), 2026-10-02. Nothing is implemented or
-ordered. The numbers come from 2D quasi-static cross-section solves (scikit-fem P2, the FEA spike's
-solver, [FEA design §5.3](fea-integration.md#53-q2-capacitance-and-inductance)) and from closed
-forms, as stated at each table; "est." marks planning estimates and "unverified" marks vendor data
-that could not be checked against a datasheet. The implementation reproduces every table here in
-a test (§11.3).
+Status: **implemented in part** (2026-10-02) for the fab-model coupon item of
+[issue #32](https://github.com/Studio-Fug/yapnr/issues/32): the generator, boards A and B, the
+expected S-parameters, the extraction and the synthetic recovery are in `yapnr/rf/coupons`; the
+user guide [docs/rf-fab-coupons.md](../rf-fab-coupons.md) lists what differs from this design.
+Nothing is ordered. The numbers come from 2D quasi-static cross-section solves (scikit-fem P2, the
+FEA spike's solver, [FEA design §5.3](fea-integration.md#53-q2-capacitance-and-inductance)) and
+from closed forms, as stated at each table; "est." marks planning estimates and "unverified" marks
+vendor data that could not be checked against a datasheet. The implementation's tests reproduce
+the line table of §4.3 and the conditioning table of §5.1 (§11.3).
 
 ## 1. Goals
 

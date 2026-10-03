@@ -29,6 +29,9 @@ command line currently offers `yapnr --version` and a `yapnr doctor` stub; the l
 - [The atopile toolchain](frontends/atopile.md): build atopile projects offline, without Nix.
 - [The part cache](part-cache.md): where part data lives instead of the repository.
 - [Releases and versioning](releases.md): version numbers, image tags, what a release publishes.
+- [RF fab-model test coupons](rf-fab-coupons.md): coupon boards that measure the fab's stackup
+  (εr, loss, heights, copper, etch, mask), and the extraction that turns VNA data into a fitted
+  stackup with uncertainties.
 - [Regression ladder](regression-ladder.md): eight boards of rising complexity, up to a TLC555 +
   CD4017B LED chaser, with an animation of each board's place and route.
 - [Constraints and hierarchy](constraints-and-hierarchy.md): a line of LEDs, parts held on the
@@ -65,6 +68,7 @@ viewer
 frontends/atopile
 part-cache
 releases
+rf-fab-coupons
 ```
 
 ```{toctree}

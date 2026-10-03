@@ -78,6 +78,15 @@ animations on `claude/animations-groups-hier`).
   trace digests are identical to the first run; all pass. Next: the owner's review of the
   decisions in `docs/decisions.md` and the pull request.
 
+- **RF fab-model coupons** (#32, branch `claude/rf-coupons`; design
+  `docs/design/rf-fab-coupons.md`, guide `docs/rf-fab-coupons.md`): `yapnr/rf/coupons` generates
+  boards A (JLC04161H-7628) and B (JLC06161H-7628), DRC-clean, with expected S-parameters and fab
+  zips under `examples/rf-coupons/`, and extracts the fab parameters from a VNA session
+  (`python -m yapnr.rf.coupons extract`): multiline TRL, a joint fit with connection nuisances
+  and a parametric bootstrap. Synthetic recovery passes in CI. Next: the owner's decisions of
+  design §14 (connector, VNA, scope), checking the SMA footprint and JLC's edge clearance, and
+  the order (owner only).
+
 ## Next
 
 1. Owner (viewer, #12): review after the fact; decide the agent's default model (opus, $2 per

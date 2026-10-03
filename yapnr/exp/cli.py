@@ -407,6 +407,18 @@ def _cmd_calibration(args) -> int:
     calibration.write(data, Path(args.out))
     for key, value in sorted(data["speed"].items()):
         print("%-20s speed %.3f (%d pairs)" % (key, value, data["samples"][key]))
+    load = data.get("reference_load")
+    if load:
+        print(
+            "reference load %.2f (median 1-minute load at task start) on %s vCPUs"
+            % (load["median_load_1m"], load["vcpus"] or "?")
+        )
+        if load["busy"]:
+            print(
+                "warning   the reference ran on a busy machine, so the speed factors overstate the "
+                "cloud shapes; run the reference again on an idle Mac (docs/cloud-experiments.md, "
+                "Calibration)"
+            )
     print("wrote %s (set [prices] calibration to use it)" % args.out)
     return 0
 

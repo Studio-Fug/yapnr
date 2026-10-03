@@ -363,10 +363,30 @@ yapnr exp calibration ingest --reference <fetched>/<local id> --cloud <fetched>/
   --out ~/.config/yapnr/calibration.json
 ```
 
+The speed factors are ratios to the reference's wall times, so a loaded reference makes every cloud
+shape look faster than it is. Run the reference on an otherwise idle Mac (stop the other
+experiments first) and plan it with a copy of the owner config (`YAPNR_CLOUD_CONFIG=<copy>`) whose
+`[local]` has `nice = 0` and `workers` at most the performance cores
+(`sysctl -n hw.perflevel0.physicalcpu`: 4 on the development Mac, which also has 6 efficiency
+cores). `ingest` prints the reference's median load average and warns when it reached half the
+Mac's cores.
+
 `ingest` pairs tasks by kind and labels and writes, per machine type and family, the median of
 reference wall time over cloud wall time, with the number of pairs and the spread; set
 `[prices] calibration` to use it. Each shape costs a few cents at the table's prices; the design's
 full calibration (nine families, two regions, both SMT packings) is capped at $10.
+
+Read two rankings from the factors. Cost per result (price / speed) says where a campaign is
+cheapest; results per hour within the quota (speed / vCPUs per task) says how fast it finishes,
+and the quota is the scarce part: C4D at one task per core yields about 0.4 of an M4 core per
+quota vCPU, T2D and C4A (a full core per vCPU) about 0.55 at the table's factors. Hard rungs and
+wall-clock-budgeted search favour the fastest core (C4D); seed sweeps of short cells may favour
+throughput. Neither T2D nor C4A is offered in the two proposed regions: add a region that has them
+(the price table lists `northamerica-northeast2` for T2D and `europe-west4` for C4A) to
+`regions` and the tfvars before calibrating them, and compare C4A (arm64) boards only with other
+arm64 runs, such as the Mac's and the CI ladder's. `ingest` keys factors by machine type, not by
+packing: ingest a one-task-per-vCPU run (`[placement] packing = "vcpu"` in a copy of the campaign)
+into a calibration file of its own.
 
 ## Private campaigns
 

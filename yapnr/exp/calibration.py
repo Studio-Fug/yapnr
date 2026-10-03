@@ -11,6 +11,12 @@ records by kind and labels, and writes a ``yapnr-calibration-v1`` file:
 
 Only tasks with a real result count (verdict pass, fail or done); errors and timeouts are left out.
 The owner config's ``[prices] calibration`` points the estimator at the file.
+
+Every factor is a ratio to the reference's wall times, so a reference measured on a loaded Mac
+(other experiments running, or tasks pushed onto efficiency cores) makes every cloud shape look
+faster than it is. ``reference_load`` records the median one-minute load average at task start
+and the reference's vCPUs; ``busy`` is set when the load reached half the vCPUs, a heuristic for
+"not an idle machine" (the pool's own workers count towards it).
 """
 
 from __future__ import annotations
@@ -47,6 +53,7 @@ def ingest(
     cloud: Iterable[Mapping[str, Any]],
     created: Optional[_dt.date] = None,
 ) -> Dict[str, Any]:
+    reference = list(reference)
     ref_times: Dict[Tuple[str, str], List[float]] = {}
     by_case: Dict[str, Dict[str, List[float]]] = {}
     for record in reference:
@@ -70,6 +77,23 @@ def ingest(
         ratios.setdefault(machine, []).append(ratio)
         ratios.setdefault(machine.split("-")[0], []).append(ratio)
     speed = {k: round(statistics.median(v), 4) for k, v in sorted(ratios.items())}
+    loads, vcpus = [], []
+    for record in reference:
+        load = record.get("load_avg_start") if _usable(record) else None
+        if load:
+            loads.append(float(load[0]))
+            count = (record.get("machine") or {}).get("vcpus")
+            if count:
+                vcpus.append(int(count))
+    reference_load = None
+    if loads:
+        median_load = round(statistics.median(loads), 2)
+        cores = min(vcpus) if vcpus else None
+        reference_load = {
+            "median_load_1m": median_load,
+            "vcpus": cores,
+            "busy": bool(cores) and median_load >= cores / 2.0,
+        }
     spread = {k: [round(x, 4) for x in _quartiles(v)] for k, v in sorted(ratios.items())}
     return {
         "schema": SCHEMA,
@@ -78,6 +102,7 @@ def ingest(
         "speed": speed,
         "samples": {k: len(v) for k, v in sorted(ratios.items())},
         "spread": spread,
+        "reference_load": reference_load,
         "reference_seconds": {
             kind: {case: round(statistics.median(v), 1) for case, v in sorted(cases.items())}
             for kind, cases in sorted(by_case.items())

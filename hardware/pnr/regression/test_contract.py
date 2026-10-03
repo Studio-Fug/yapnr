@@ -11,6 +11,7 @@ import unittest
 import unittest.mock
 from collections import Counter
 from pathlib import Path
+from types import SimpleNamespace
 
 from designs import LIB as LIBRARY
 from designs import PAD_AXIS, designs, showcases
@@ -19,6 +20,11 @@ from run import (
     acceptance,
     constraint_reasons,
     engine_revision,
+    gloss_flags,
+    gloss_gate,
+    gloss_stage,
+    gloss_summary,
+    measure_summary,
     new_result,
     parser,
     sources_digest,
@@ -501,6 +507,160 @@ class NativeTraceContract(unittest.TestCase):
             native.snapshot("writeback", root / "missing.kicad_pcb", "kicad-cli", 5)
             self.assertTrue((root / "trace" / "errors.json").is_file())
             native.finish(root / "missing.kicad_pcb", {}, {})
+
+
+def drc_report(opens=0, **violations):
+    return dict(
+        unconnected_items=[dict(items=[])] * opens,
+        violations=[dict(type=t) for t, n in violations.items() for _ in range(n)],
+    )
+
+
+class GlossStageContract(unittest.TestCase):
+    """run.py --gloss (PNR_GLOSS, opt-in): one gated stage after refill, stubbed here."""
+
+    def test_options_are_opt_in(self):
+        args = parser().parse_args(["--out", "x"])
+        self.assertEqual((args.gloss, args.gloss_flag, args.gloss_measure), (False, [], False))
+        args = parser().parse_args(
+            ["--out", "x", "--gloss", "--gloss-flag", "PNR_GLOSS_STEPS=dekink", "--gloss-measure"]
+        )
+        self.assertEqual((args.gloss, args.gloss_flag), (True, ["PNR_GLOSS_STEPS=dekink"]))
+
+    def test_flags_are_gloss_sub_flags_only(self):
+        repo = Path("/repo")
+        self.assertEqual(
+            gloss_flags(
+                ["PNR_GLOSS_STEPS=dekink,gloss", "PNR_GLOSS_CLASSES=docs/examples/g.json"], repo
+            ),
+            dict(
+                PNR_GLOSS_STEPS="dekink,gloss",
+                PNR_GLOSS_CLASSES=str((repo / "docs/examples/g.json").resolve()),
+            ),
+        )
+        for bad in ("PNR_SHOVE=1", "PNR_GLOSS_STEPS", "STEPS=dekink", "PNR_GLOSS=1"):
+            with self.assertRaises(ValueError, msg=bad):
+                gloss_flags([bad], repo)
+
+    def test_outer_gate(self):
+        self.assertEqual(gloss_gate(drc_report(1, clearance=1), drc_report(1, clearance=1)), [])
+        self.assertEqual(gloss_gate(drc_report(1, clearance=2), drc_report(0, clearance=1)), [])
+        self.assertEqual(gloss_gate(drc_report(0), drc_report(1)), ["opens 0 -> 1"])
+        self.assertEqual(
+            gloss_gate(drc_report(0, clearance=2), drc_report(0, clearance=1, track_dangling=1)),
+            ["track_dangling 0 -> 1"],
+        )
+
+    def stage(self, after_drc=None, accepted=1, fail=None):
+        """Run gloss_stage with a stub ``run``: returns (block, board bytes, stage names)."""
+        tmp = Path(tempfile.mkdtemp())
+        root = tmp / "case"
+        root.mkdir()
+        board = root / "routed.kicad_pcb"
+        board.write_text("input board\n")
+        args = SimpleNamespace(
+            python="py", kicad_cli="kicad-cli", kicad_python="kp", gloss=True, timeout=600
+        )
+        names = []
+
+        def run(name, cmd, extra=None):
+            names.append(name)
+            cmd = [str(c) for c in cmd]
+            if name == fail:
+                raise subprocess.CalledProcessError(1, cmd)
+            if name.startswith("gloss-drc"):
+                report = after_drc if name == "gloss-drc-after" else drc_report(0, clearance=1)
+                Path(cmd[cmd.index("--output") + 1]).write_text(json.dumps(report))
+            elif name == "gloss":
+                self.assertEqual(extra["PNR_GLOSS"], "1")
+                self.assertEqual(extra["PNR_GLOSS_STEPS"], "dekink")
+                self.assertNotIn("--guard-open-nets", cmd)  # 07g semantics
+                Path(cmd[cmd.index("--out") + 1]).write_text("glossed board\n")
+                Path(cmd[cmd.index("--report") + 1]).write_text(
+                    json.dumps(
+                        dict(
+                            status="ok",
+                            accepted_transactions=accepted,
+                            edits_by_step=dict(dekink=3),
+                            transactions=[dict(folder=str(tmp))],
+                            cross_group=dict(groups=str(tmp / "groups.json"), cap_mm=10.0),
+                        )
+                    )
+                )
+
+        block = gloss_stage(root, board, args, run, dict(PNR_GLOSS_STEPS="dekink"))
+        self.assertEqual((root / "routed.pre-gloss.kicad_pcb").read_text(), "input board\n")
+        self.assertNotIn(str(tmp), json.dumps(block))  # result.json holds no paths
+        return block, board.read_text(), names
+
+    def test_a_clean_pass_replaces_the_board(self):
+        block, text, names = self.stage(after_drc=drc_report(0, clearance=1))
+        self.assertEqual(text, "glossed board\n")
+        self.assertTrue(block["kept"] and block["outer_gate"]["passed"])
+        self.assertEqual(names, ["gloss-drc-before", "gloss", "gloss-drc-after"])
+        self.assertEqual(block["summary"]["edits_by_step"], dict(dekink=3))
+        self.assertEqual(block["summary"]["cross_group"]["groups"], "groups.json")
+        self.assertNotIn("transactions", block["summary"])
+        self.assertEqual(
+            block["pre_gloss_board_sha256"], hashlib.sha256(b"input board\n").hexdigest()
+        )
+        self.assertEqual(block["board_sha256"], hashlib.sha256(b"glossed board\n").hexdigest())
+
+    def test_a_worse_drc_restores_the_pre_gloss_board(self):
+        for after in (drc_report(1, clearance=1), drc_report(0, clearance=2)):
+            block, text, _ = self.stage(after_drc=after)
+            self.assertEqual(text, "input board\n")
+            self.assertFalse(block["kept"] or block["outer_gate"]["passed"])
+            self.assertEqual(block["board_sha256"], block["pre_gloss_board_sha256"])
+
+    def test_no_accepted_transaction_keeps_the_board_without_a_second_drc(self):
+        block, text, names = self.stage(accepted=0)
+        self.assertEqual((text, block["kept"]), ("input board\n", False))
+        self.assertEqual(names, ["gloss-drc-before", "gloss"])
+
+    def test_a_stage_error_restores_the_board_and_is_reported(self):
+        for name in ("gloss", "gloss-drc-after"):
+            block, text, _ = self.stage(after_drc=drc_report(0), fail=name)
+            self.assertEqual(
+                (text, block["kept"], block["status"]), ("input board\n", False, "error")
+            )
+
+    def test_summary_and_measure_figures(self):
+        self.assertEqual(
+            gloss_summary(dict(status="ok", inverse_specs=[1], steps_report={}, wall_seconds=3)),
+            dict(status="ok", wall_seconds=3),
+        )
+        row = dict(
+            objective=[0, 0, 0, 0, 0, 0],
+            drc=dict(violations=0, unconnected=0, types={}),
+            audit=dict(subwidth=0),
+            pad_entry=dict(blocked=0),
+            seconds=1.5,
+            metrics=dict(
+                classes=dict(eligible=dict(length_mm=12.34567, segments=9, bends_all=7)),
+                X_mm2=1.23456,
+                T_mm=2.0,
+                DS_mm2=0.5,
+                A3_mm2=100.0,
+                cross_group=dict(max_mm=4.0, max_pair=["A", "B"], over_cap=[]),
+            ),
+        )
+        summary = measure_summary(row)
+        self.assertEqual(
+            (summary["length_mm"], summary["bends_all"], summary["X_mm2"]), (12.346, 7, 1.235)
+        )
+        self.assertEqual((summary["cross_group_max_mm"], summary["cross_group_over_cap"]), (4.0, 0))
+
+    def test_the_public_example_groups_cover_only_nets_of_their_design(self):
+        from pnr.gloss import load_class_tags
+
+        example = Path(__file__).resolve().parents[3] / "docs/examples/gloss-groups-chaser.json"
+        tags = load_class_tags(str(example))
+        spec = next(c for c in designs() if c["name"] == "07-chaser-20")
+        nets = {n for p in spec["parts"] for n in p["pins"].values() if n}
+        self.assertEqual(set(tags) - nets, set())
+        self.assertEqual(sorted(set(tags.values())), ["clock_reset", "led_drive", "timer"])
+        self.assertEqual(nets - set(tags), {"GND", "VCC"})  # the rails: their own net classes
 
 
 class LadderResultsContract(unittest.TestCase):

@@ -1135,6 +1135,7 @@ py_test(
         "regression/test_contract.py",
         "regression/trace_native.py",
     ],
+    data = ["//docs:examples/gloss-groups-chaser.json"],
     imports = [
         ".",
         "regression",

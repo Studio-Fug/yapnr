@@ -210,6 +210,55 @@ class BottomSideWritebackTest(unittest.TestCase):
                 self.assertEqual(inside, pad.GetNumber() == first, "%s.%s" % (ref, pad.GetNumber()))
 
 
+@unittest.skipUnless(importlib.util.find_spec("pcbnew") is not None, "requires KiCad's pcbnew")
+class CheckerSideTest(unittest.TestCase):
+    """The ladder's constraint checker reads a part's side from its footprint layer
+    and its surface pads: a footprint marked flipped whose pads stay on F.Cu (never
+    mirrored) is on neither side."""
+
+    def test_a_flip_needs_its_pads_on_the_bottom(self):
+        import pcbnew
+
+        spec = importlib.util.spec_from_file_location(
+            "check_constraints",
+            Path(__file__).resolve().parents[1] / "regression" / "check_constraints.py",
+        )
+        checker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(checker)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            library = root / "inline.pretty"
+            library.mkdir()
+            name = "SOT-23-5"
+            (library / (name + ".kicad_mod")).write_text(kicad_mod(name, *FOOTPRINTS[name]))
+            board = pcbnew.BOARD()
+            edge = pcbnew.PCB_SHAPE(board)
+            edge.SetShape(pcbnew.SHAPE_T_RECT)
+            edge.SetStart(pcbnew.VECTOR2I(0, 0))
+            edge.SetEnd(pcbnew.VECTOR2I(pcbnew.FromMM(40), pcbnew.FromMM(20)))
+            edge.SetLayer(pcbnew.Edge_Cuts)
+            board.Add(edge)
+            for i, ref in enumerate(("TOP", "FLIPPED", "FAKE")):
+                fp = pcbnew.FootprintLoad(str(library), name)
+                fp.SetReference(ref)
+                fp.SetPosition(pcbnew.VECTOR2I(pcbnew.FromMM(8 + 12 * i), pcbnew.FromMM(10)))
+                board.Add(fp)
+                if ref != "TOP":
+                    fp.Flip(fp.GetPosition(), False)
+                if ref == "FAKE":  # flipped back, then only the footprint layer set
+                    fp.Flip(fp.GetPosition(), False)
+                    fp.SetLayer(pcbnew.B_Cu)
+            path = root / "sides.kicad_pcb"
+            pcbnew.SaveBoard(str(path), board)
+            judged = checker.Board(path)
+            self.assertEqual(judged.side("TOP"), "top")
+            self.assertEqual(judged.side("FLIPPED"), "bottom")
+            self.assertEqual(judged.side("FAKE"), "mixed")
+            ok, measured, _ = checker.check_side(judged, dict(refs=["FAKE"], side="bottom"))
+            self.assertFalse(ok)
+            self.assertEqual(measured["wrong_side"], ["FAKE"])
+
+
 class FootprintPointTest(unittest.TestCase):
     """The engine side of the convention, without KiCad: footprint_point on the bottom
     equals pin_positions after set_component_side, at every quarter turn."""

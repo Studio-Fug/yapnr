@@ -9,7 +9,9 @@ verdict per check with the measured value:
 Frame: millimetres from the board outline's lower-left corner, y up (the ladder's
 engine frame); a part's position is its footprint origin and its rotation KiCad's
 footprint orientation. Courtyards are the footprint's own courtyard layer (the
-bottom courtyard for a flipped part), as an axis-aligned box.
+bottom courtyard for a flipped part), as an axis-aligned box. A part's side is its
+footprint layer, confirmed by its surface pads (a part marked flipped whose pads stay
+on F.Cu is on neither side).
 
 Check kinds: ``inside_board``, ``side``, ``fixed``, ``edge``, ``orientation``,
 ``keepout``, ``region``, ``proximity``, ``line``, ``align``, ``plane``.
@@ -65,7 +67,20 @@ class Board:
         return self.fps[ref].GetOrientationDegrees() % 360
 
     def side(self, ref):
-        return "bottom" if self.fps[ref].IsFlipped() else "top"
+        """``top`` or ``bottom`` by the footprint's layer (KiCad Flip), or ``mixed``
+        when its surface pads (one copper layer) contradict it: a footprint marked
+        flipped whose surface pads all stay on F.Cu (or the reverse) was never
+        mirrored, and is on neither side. Drilled pads span both and do not count."""
+        fp = self.fps[ref]
+        side, copper = ("bottom", pcbnew.B_Cu) if fp.IsFlipped() else ("top", pcbnew.F_Cu)
+        surface = [
+            pad.GetLayerSet()
+            for pad in fp.Pads()
+            if pad.GetLayerSet().Contains(pcbnew.F_Cu) != pad.GetLayerSet().Contains(pcbnew.B_Cu)
+        ]
+        if surface and not any(layers.Contains(copper) for layers in surface):
+            return "mixed"
+        return side
 
     def courtyard(self, ref):
         """(x0, y0, x1, y1) in the engine frame."""

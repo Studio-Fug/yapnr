@@ -526,6 +526,27 @@ py_test(
     ],
 )
 
+# The same through KiCad (KiCad Python only, by hand: python3 -m unittest
+# tests.test_via_spans_kicad): via types and layer pairs written back, the fixed
+# copper round trip, the native checker's span, plane layer connection counts.
+py_test(
+    name = "via_spans_kicad_test",
+    size = "small",
+    srcs = [
+        "tests/test_stack_kicad.py",
+        "tests/test_via_spans_kicad.py",
+    ],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_via_spans_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
+)
+
 # R5 acceptance: the detailed router on a real placed board (place -> route,
 # DRC-clean by construction). Places the fixture, so it needs torch.
 py_test(

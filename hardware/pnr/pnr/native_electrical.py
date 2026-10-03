@@ -604,20 +604,39 @@ class Oracle:
         )
         self.cache.clear()
 
-    def reserve_via(self, net, point, diameter=0.6, drill=0.3):
+    def span_layers(self, span):
+        """The copper layer ids a via of ``span`` (None: through; else ``(top,
+        bottom)`` layer ids, a blind, buried or micro via) occupies."""
+        if span is None:
+            return list(self.layers)
+        a, z = self.layers.index(span[0]), self.layers.index(span[1])
+        return self.layers[min(a, z) : max(a, z) + 1]
+
+    def _via_item(self, p, diameter, drill, span=None, kind=None):
         import pcbnew as k
 
-        via = k.PCB_VIA(self.b)
-        via.SetPosition(vec(point))
-        via.SetFrontWidth(round(diameter * 1e6))
-        via.SetDrill(round(drill * 1e6))
-        via.SetViaType(k.VIATYPE_THROUGH)
-        via.SetLayerPair(k.F_Cu, k.B_Cu)
+        v = k.PCB_VIA(self.b)
+        v.SetPosition(vec(p))
+        v.SetFrontWidth(round(diameter * 1e6))
+        v.SetDrill(round(drill * 1e6))
+        if span is None:
+            v.SetViaType(k.VIATYPE_THROUGH)
+            v.SetLayerPair(k.F_Cu, k.B_Cu)
+        else:
+            types = {"micro": k.VIATYPE_MICROVIA, "buried": k.VIATYPE_BURIED}
+            v.SetViaType(types.get(kind, k.VIATYPE_BLIND))
+            v.SetLayerPair(*span)
+        return v
+
+    def reserve_via(self, net, point, diameter=0.6, drill=0.3, span=None, kind=None):
+        """Make a planned via an obstacle: a through via, or one of ``span`` (``(top,
+        bottom)`` layer ids) and ``kind`` (pnr.via_policy) on its own layers only."""
+        via = self._via_item(point, diameter, drill, span, kind)
         via.SetNetCode(self.b.FindNet(net).GetNetCode())
         self.items.append(via)
         self.drilled.append(via)
         self.index_physical(via)
-        for layer in self.layers:
+        for layer in self.span_layers(span):
             self.add(
                 via.GetEffectiveShape(layer),
                 via.GetBoundingBox(),
@@ -628,17 +647,15 @@ class Oracle:
             )
         self.cache.clear()
 
-    def via(self, net, p, diameter, drill):
+    def via(self, net, p, diameter, drill, span=None):
+        """A new via of ``net`` at ``p`` is clear: a through via on every layer, or
+        (``span``: ``(top, bottom)`` layer ids) a blind, buried or micro via on its
+        own layers. Holes keep their spacing whatever the spans (conservative)."""
         import pcbnew as k
 
         # Through vias may cut clearance voids in foreign planes, but cannot
         # collide with tracks/pads/keepouts. Plane contact is checked after fill.
-        v = k.PCB_VIA(self.b)
-        v.SetPosition(vec(p))
-        v.SetFrontWidth(round(diameter * 1e6))
-        v.SetDrill(round(drill * 1e6))
-        v.SetViaType(k.VIATYPE_THROUGH)
-        v.SetLayerPair(k.F_Cu, k.B_Cu)
+        v = self._via_item(p, diameter, drill, span)
         if not self.reference_guard.via_clear(net, p, diameter):
             return False
         hole = v.GetEffectiveHoleShape()
@@ -656,7 +673,7 @@ class Oracle:
             return False
         gap = net_policy(net, self.rules)["clearance_mm"] + 0.001
         r = max(gap, self.clearance_cap, 0.05)
-        for la in self.layers:
+        for la in self.span_layers(span):
             near = set()
             shape = v.GetEffectiveShape(la)
             box = shape.BBox()
@@ -682,7 +699,9 @@ class Oracle:
             if (
                 z.GetIsRuleArea()
                 and z.GetDoNotAllowVias()
-                and z.Outline().Collide(v.GetEffectiveShape(k.F_Cu), 1000)
+                and z.Outline().Collide(
+                    v.GetEffectiveShape(k.F_Cu if span is None else span[0]), 1000
+                )
             ):
                 return False
         g = self.geometry

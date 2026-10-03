@@ -184,5 +184,18 @@ class BlockedTerminalTest(unittest.TestCase):
         )
 
 
+class ViaLayerOrderTest(unittest.TestCase):
+    def test_the_opposite_outer_layer_comes_first_from_either_side(self):
+        from pnr.route.detail.escape import via_layer_order
+
+        # A top pad: B.Cu, then the inner layers (the legacy order).
+        self.assertEqual(via_layer_order(4, 0), [3, 1, 2])
+        self.assertEqual(via_layer_order(2, 0), [1])
+        # A bottom pad: F.Cu first, which it was never offered before.
+        self.assertEqual(via_layer_order(4, 3), [0, 1, 2])
+        self.assertEqual(via_layer_order(2, 1), [0])
+        self.assertEqual(via_layer_order(6, 5), [0, 1, 2, 3, 4])
+
+
 if __name__ == "__main__":
     unittest.main()

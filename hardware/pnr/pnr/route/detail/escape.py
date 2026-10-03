@@ -91,8 +91,10 @@ def _via_clean(grid: RouteGrid, i: int, j: int, net: str, via_keepout: int, poin
 
 def via_layer_order(nlayers: int, side: int) -> List[int]:
     """Layers to try for an escape via from the pad layer ``side``: the opposite
-    outer layer first, then the inner layers outer to inner (F side first)."""
-    order = [nlayers - 1] + list(range(1, nlayers - 1))
+    outer layer first (B.Cu for a top pad, F.Cu for a bottom pad), then the inner
+    layers from F.Cu's side."""
+    opposite = 0 if side == nlayers - 1 else nlayers - 1
+    order = [opposite] + list(range(1, nlayers - 1))
     return [la for la in dict.fromkeys(order) if 0 <= la < nlayers and la != side]
 
 

@@ -107,6 +107,7 @@ filegroup(
         "pnr/specctra.py",
         "pnr/writeback.py",
         "pnr/stack.py",
+        "pnr/via_policy.py",
         # PNR_SI=1 (the prepare worker imports pnr.si even with the flag off): SI v1
         # package + its committed models (profiles, cable, connector, receiver, parts).
         "pnr/si/__init__.py",
@@ -483,6 +484,85 @@ py_test(
         ":pnr_detail",
         ":pnr_place",
     ],
+)
+
+# The board's via policy (pnr.via_policy): DRU bans for each rung, declared kinds,
+# microvia adjacency and size, spans buildable on the stack's cores and prepregs
+# (4/6/8 layers), the board's build (a laminar family priced per drill pair), span
+# cost, the return-tie rule.
+py_test(
+    name = "via_policy_test",
+    size = "small",
+    srcs = [
+        "regression/designs.py",
+        "regression/hard_rungs.py",
+        "regression/stackup.py",
+        "tests/test_via_policy.py",
+    ],
+    imports = [
+        ".",
+        "regression",
+    ],
+    legacy_create_init = False,
+    main = "tests/test_via_policy.py",
+    deps = [":pnr"],
+)
+
+# Blind, buried and micro vias in the detailed router: span-only checks and
+# reservations, an all-through model identical to the legacy one, fixed vias of a
+# span, every via a span of the board's build, return ties between two ground
+# planes (deepened drops, through or buried ties), drops from bottom-side parts.
+py_test(
+    name = "via_spans_test",
+    size = "medium",
+    srcs = [
+        "tests/test_stack_route.py",
+        "tests/test_via_spans.py",
+    ],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_via_spans.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+    ],
+)
+
+# Vias of two nets never share a site under a via model (blind, buried, micro),
+# whatever their spans.
+py_test(
+    name = "via_holes_test",
+    size = "small",
+    srcs = ["tests/test_via_holes.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_via_holes.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+    ],
+)
+
+# The same through KiCad (KiCad Python only, by hand: python3 -m unittest
+# tests.test_via_spans_kicad): via types and layer pairs written back, the fixed
+# copper round trip, the native checker's span, plane layer connection counts.
+py_test(
+    name = "via_spans_kicad_test",
+    size = "small",
+    srcs = [
+        "tests/test_stack_kicad.py",
+        "tests/test_via_spans_kicad.py",
+    ],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_via_spans_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
 )
 
 # R5 acceptance: the detailed router on a real placed board (place -> route,

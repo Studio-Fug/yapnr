@@ -115,6 +115,13 @@ class RouteGrid:
         # for a declared stack only (route_board: a current-rated net stays off an
         # inner layer whose copper would need a wider track); vias still cross.
         self.layer_mask = None
+        # Blind, buried and micro vias (pnr.via_policy.GridVias): None when the
+        # board allows through vias only, which keeps every via full-stack. A via
+        # then occupies (and is checked, reserved and priced on) only its span's
+        # grid layers. ``escape_via_spans`` gives a planned escape via's span by
+        # (net, site); a via missing from it is through.
+        self.via_model = None
+        self.escape_via_spans = {}
 
     def plated_transition(self, net, i, j):
         """Exact source PTH centre when this column fits its existing copper land.
@@ -132,8 +139,14 @@ class RouteGrid:
                 return centre
         return None
 
-    def hole_site_clear(self, point, sites=()):
-        """Same-net copper may merge; two distinct drills still need spacing."""
+    def hole_site_clear(self, point, sites=(), net=None):
+        """Same-net copper may merge; two distinct drills still need spacing.
+
+        ``sites`` are the net's own drills (one exactly there is the same barrel).
+        With ``net`` (a grid with a via model, whose vias of two nets may share no
+        grid layer) an escape via of another net is never shared either; without
+        it any exactly co-located escape via passes here, as before (a through
+        via's layer occupancy rejects a foreign one)."""
         import math
 
         if self.pth_hole_gap is None:
@@ -147,6 +160,15 @@ class RouteGrid:
             for k, (p, radius) in enumerate(self.source_drills)
         ):
             return False
+        if net is not None:
+            return all(
+                (math.dist(point, p) < 1e-7 and owner == net)
+                or math.dist(point, p) >= self.via_spacing - 1e-7
+                for owner, p in self.escape_vias
+            ) and all(
+                math.dist(point, p) < 1e-7 or math.dist(point, p) >= self.via_spacing - 1e-7
+                for p in sites
+            )
         return all(
             math.dist(point, p) < 1e-7 or math.dist(point, p) >= self.via_spacing - 1e-7
             for p in [xy for _, xy in self.escape_vias] + list(sites)

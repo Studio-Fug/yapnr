@@ -350,7 +350,7 @@ def form_planes(
             and not _has_through_access(board, pad)
         ]
         if unreached:
-            added += _dogbone_fanout_net(board, code, rules=rules, skip_connected=True)
+            added += _dogbone_fanout_net(board, code, rules=rules, skip_connected=True, stack=stack)
     if regions is None:
         pads: Dict[str, list] = {}
         for fp in board.GetFootprints():
@@ -597,6 +597,63 @@ def outline_bounds(board):
     return board.GetBoardEdgesBoundingBox()
 
 
+def plane_drop_span(board, rules, stack, net, surface):
+    """``(top, bottom, kind, diameter_mm, drill_mm)`` (layer ids) of a plane drop of
+    ``net`` from copper layer id ``surface`` under the rules' via policy
+    (pnr.via_policy): the via to the net's dedicated plane of ``stack`` nearest that
+    layer. None for a through via (no policy, no stack, or through is the span)."""
+    import pcbnew
+
+    policy = (rules or {}).get("via_policy")
+    if not policy or stack is None or not stack.net_planes(net):
+        return None
+    from pnr.via_policy import THROUGH, ViaModel
+
+    fab = _fab(rules)
+    model = ViaModel(policy, (fab["via_diameter_mm"], fab["via_drill_mm"]))
+    name = pcbnew.BOARD.GetStandardLayerName(surface)
+    if name not in model.layers:
+        return None
+    here = model.index(name)
+    nearest = min(
+        stack.net_planes(net), key=lambda la: (abs(model.index(la) - here), model.index(la))
+    )
+    t, b, kind = model.cover(here, model.index(nearest))
+    if kind == THROUGH:
+        return None
+    return (
+        copper_layer(board, model.layers[t]),
+        copper_layer(board, model.layers[b]),
+        kind,
+        *model.size(kind),
+    )
+
+
+def plane_connections(board, stack) -> dict:
+    """``{net: {layer: n}}``: the vias and plated pads joining each dedicated plane
+    layer of ``stack`` (a via joins the layers of its span). A plane layer with none
+    floats: KiCad 10 keeps its fill and its DRC reports it (``isolated_copper``)."""
+    import pcbnew
+
+    out: dict = {}
+    for layer, net in stack.dedicated:
+        lid = copper_layer(board, layer)
+        n = 0
+        for t in board.GetTracks():
+            if t.GetClass() == "PCB_VIA" and t.GetNetname() == net and t.IsOnLayer(lid):
+                n += 1
+        for fp in board.GetFootprints():
+            for pad in fp.Pads():
+                if (
+                    pad.GetNetname() == net
+                    and pad.GetAttribute() == pcbnew.PAD_ATTRIB_PTH
+                    and pad.IsOnLayer(lid)
+                ):
+                    n += 1
+        out.setdefault(net, {})[layer] = n
+    return out
+
+
 def _dogbone_fanout_net(
     board,
     netcode: int,
@@ -604,12 +661,16 @@ def _dogbone_fanout_net(
     rules=None,
     width_log=None,
     skip_connected: bool = False,
+    stack=None,
 ) -> int:
     """Add only checked external pad-to-plane escapes; never force via-in-pad.
 
     ``skip_connected`` leaves alone every pad that already reaches a through
     contact (a via or plated hole in its connected copper): the stack-aware
     fallback for pads the detailed router could not drop (:func:`form_planes`).
+    With ``stack`` and a via policy in ``rules`` each drop is the blind or micro
+    via to its net's nearest plane (:func:`plane_drop_span`), checked on its own
+    layers.
 
     Under a fab profile with a filled via-in-pad policy (5B) a pad with no legal
     external escape may take a checked in-pad via instead (_in_pad_plane_via).
@@ -635,6 +696,7 @@ def _dogbone_fanout_net(
     clr = _nm(max(clearance_mm, fab["clearance_mm"]))
     trace_w = _nm(fab["track_width_mm"])
     via_keep = max(via_r + clr, drill_d / 2.0 + _nm(fab["hole_clearance_mm"]))
+    through_geometry = (via_d, via_r, drill_d, via_keep)
     obstacles = _collect_obstacles(board)
     bounds = outline_bounds(board)
     edge = via_r + _nm(fab["edge_clearance_mm"])
@@ -713,6 +775,14 @@ def _dogbone_fanout_net(
             pos = pad.GetPosition()
             point = (pos.x, pos.y)
             size = pad.GetSize()
+            drop = plane_drop_span(board, rules, stack, pad.GetNetname(), surface)
+            if drop is None:
+                via_d, via_r, drill_d, via_keep = through_geometry
+            else:
+                via_d, drill_d = _nm(drop[3]), _nm(drop[4])
+                via_r = via_d / 2.0
+                via_keep = max(via_r + clr, drill_d / 2.0 + _nm(fab["hole_clearance_mm"]))
+            span = None if drop is None else drop[:2]
             # Via outside the complete pad, avoiding unsupported via-in-pad fab.
             base = math.hypot(size.x, size.y) / 2.0 + via_r + clr
             angle = math.atan2(pos.y - center.y, pos.x - center.x)
@@ -735,7 +805,9 @@ def _dogbone_fanout_net(
                         continue
                     if oracle:
                         a, z = tuple(v / 1e6 for v in point), tuple(v / 1e6 for v in target)
-                        if not oracle.via(pad.GetNetname(), z, via_d / 1e6, drill_d / 1e6):
+                        if not oracle.via(
+                            pad.GetNetname(), z, via_d / 1e6, drill_d / 1e6, span=span
+                        ):
                             continue
                         if not oracle.clear(pad.GetNetname(), surface, a, z, trace_w / 1e6):
                             continue
@@ -746,13 +818,25 @@ def _dogbone_fanout_net(
                             point, target, trace_w / 2.0 + clr, netcode, obstacles
                         ):
                             continue
-                    via = pcbnew.PCB_VIA(board)
-                    via.SetPosition(pcbnew.VECTOR2I(x, y))
-                    via.SetViaType(pcbnew.VIATYPE_THROUGH)
-                    via.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
-                    via.SetFrontWidth(via_d)
-                    via.SetDrill(drill_d)
-                    via.SetNetCode(netcode)
+                    if drop is None:
+                        via = pcbnew.PCB_VIA(board)
+                        via.SetPosition(pcbnew.VECTOR2I(x, y))
+                        via.SetViaType(pcbnew.VIATYPE_THROUGH)
+                        via.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
+                        via.SetFrontWidth(via_d)
+                        via.SetDrill(drill_d)
+                        via.SetNetCode(netcode)
+                    else:
+                        via = span_via(
+                            board,
+                            pcbnew.VECTOR2I(x, y),
+                            netcode,
+                            board.GetLayerName(drop[0]),
+                            board.GetLayerName(drop[1]),
+                            drop[2],
+                            drop[3],
+                            drop[4],
+                        )
                     board.Add(via)
                     track = pcbnew.PCB_TRACK(board)
                     track.SetStart(pos)
@@ -773,7 +857,14 @@ def _dogbone_fanout_net(
                     obstacles.append((target, target, drill_d / 2.0, -1))
                     obstacles.append((point, target, trace_w / 2.0, netcode))
                     if oracle:
-                        oracle.reserve_via(pad.GetNetname(), z, via_d / 1e6, drill_d / 1e6)
+                        oracle.reserve_via(
+                            pad.GetNetname(),
+                            z,
+                            via_d / 1e6,
+                            drill_d / 1e6,
+                            span=span,
+                            kind=None if drop is None else drop[2],
+                        )
                         oracle.reserve_track(pad.GetNetname(), surface, a, z, trace_w / 1e6)
                     added += 1
                     board.BuildConnectivity()
@@ -782,7 +873,12 @@ def _dogbone_fanout_net(
                     break
                 if placed:
                     break
-            if not placed and oracle is not None and oracle.geometry.in_pad is not None:
+            if (
+                not placed
+                and drop is None
+                and oracle is not None
+                and oracle.geometry.in_pad is not None
+            ):
                 # Profile only (5B): no legal dog-bone, so try a filled via in the pad.
                 placed = _in_pad_plane_via(board, pad, rules or {}, oracle, obstacles)
                 if placed:
@@ -1198,7 +1294,18 @@ def emit_routes(
 
     g = geometry(rules) if rules else None
     smd = [p for f in board.GetFootprints() for p in f.Pads()] if g is not None and g.in_pad else []
+    # Blind, buried and micro vias (routes["via_spans"], pnr.via_policy): one entry
+    # per barrel; a via without one is through, as before.
+    spans: Dict[tuple, list] = {}
+    for net, x, y, top, bottom, kind in routes.get("via_spans", []):
+        spans.setdefault((net, x, y), []).append((top, bottom, kind))
+    policy_sizes = ((rules or {}).get("via_policy") or {}).get("sizes") or {}
     for net, x, y in routes.get("vias", []):
+        if spans.get((net, x, y)):
+            for top, bottom, kind in spans[(net, x, y)]:
+                size = policy_sizes.get(kind) or (fab["via_diameter_mm"], fab["via_drill_mm"])
+                board.Add(span_via(board, frame.point(x, y), code(net), top, bottom, kind, *size))
+            continue
         v = pcbnew.PCB_VIA(board)
         v.SetPosition(frame.point(x, y))
         v.SetViaType(pcbnew.VIATYPE_THROUGH)
@@ -1218,6 +1325,25 @@ def emit_routes(
         board.Add(v)
     board.BuildConnectivity()
     return n_tracks
+
+
+_VIA_TYPES = {"blind": "VIATYPE_BLIND", "buried": "VIATYPE_BURIED", "micro": "VIATYPE_MICROVIA"}
+
+
+def span_via(board, position, netcode, top, bottom, kind, diameter_mm, drill_mm):
+    """A via of ``kind`` (pnr.via_policy: blind, buried, micro or through) from copper
+    layer ``top`` to ``bottom`` (names), ``diameter_mm``/``drill_mm``, at ``position``
+    (board nm)."""
+    import pcbnew
+
+    v = pcbnew.PCB_VIA(board)
+    v.SetPosition(position)
+    v.SetViaType(getattr(pcbnew, _VIA_TYPES.get(kind, "VIATYPE_THROUGH")))
+    v.SetLayerPair(copper_layer(board, top), copper_layer(board, bottom))
+    v.SetFrontWidth(_nm(diameter_mm))
+    v.SetDrill(_nm(drill_mm))
+    v.SetNetCode(netcode)
+    return v
 
 
 def apply_copper_keepouts(board, graph, rules, height):
@@ -1400,6 +1526,18 @@ def writeback(
         regions = plane_regions(stack, record, pad_points(graph), width, height)
         formed = form_planes(board, stack, rules, width, height, net_code or None, regions)
         sys.stderr.write("writeback: stack planes " + str(formed) + "\n")
+        if (rules or {}).get("via_policy"):
+            # Blind and micro drops join only some plane layers: each layer's count.
+            counts = plane_connections(board, stack)
+            sys.stderr.write("writeback: plane layer connections %s\n" % counts)
+            for net, layers in sorted(counts.items()):
+                for layer, joined in sorted(layers.items()):
+                    if not joined:
+                        sys.stderr.write(
+                            "writeback: warning: plane %s %s has no via or plated pad: "
+                            "it floats (KiCad keeps the fill; its DRC reports isolated "
+                            "copper)\n" % (layer, net)
+                        )
     pcbnew.SaveBoard(out_pcb, board)
     # Text pass: strip all (stale) Edge.Cuts — pcbnew reformats gr_lines into
     # nested strokes a single-level regex can't remove — then stamp one clean

@@ -10,6 +10,7 @@ from pnr.constraints import compile_constraints, compile_routing_rules
 from pnr.fab_profile import apply_rules
 from pnr.graph import BoardGraph
 from pnr.route.feedback import route_and_place
+from pnr.via_policy import board_policy
 
 root = Path(sys.argv[1])
 seed = int(sys.argv[2])
@@ -19,6 +20,12 @@ g = BoardGraph.from_json((root / "source-graph.json").read_text())
 c = compile_constraints(spec["constraints"], g.refs)
 # Route under the fab profile writeback stamps and KiCad judges (PNR_FAB_PROFILE; legacy: unchanged).
 rules = apply_rules(compile_routing_rules(c, [n.name for n in g.nets]))
+# The rung's tool-neutral via policy, less what the board's own rules disallow, on
+# its declared stack, with the build (drill pairs) its parts need (pnr.via_policy);
+# none for through vias only, as before.
+via_policy = board_policy(spec.get("via_policy"), root / "source.kicad_pcb", rules, graph=g)
+if via_policy:
+    rules["via_policy"] = via_policy
 (root / "rules.json").write_text(json.dumps(rules, indent=2))
 os.environ["PNR_ROUND_DIAGNOSTICS"] = str(root / "rounds")
 t = time.monotonic()
@@ -37,9 +44,10 @@ g, report = route_and_place(
 r = report.detail_result
 if r is None:
     raise RuntimeError("No detailed route produced")
-(root / "routes.json").write_text(
-    json.dumps(dict(tracks=r.tracks, vias=r.vias, unrouted=r.result.unrouted), indent=2)
-)
+routes = dict(tracks=r.tracks, vias=r.vias, unrouted=r.result.unrouted)
+if getattr(r, "via_spans", None):
+    routes["via_spans"] = r.via_spans  # blind, buried and micro vias (pnr.via_policy)
+(root / "routes.json").write_text(json.dumps(routes, indent=2))
 (root / "pnr-report.json").write_text(
     json.dumps(
         dict(

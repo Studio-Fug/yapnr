@@ -80,6 +80,11 @@ class BoardRoute:
         default_factory=list
     )
     vias: List[Tuple[str, float, float]] = field(default_factory=list)
+    # The vias above that are not through vias (a board whose via policy allows
+    # blind, buried or micro vias, pnr.via_policy): (net, x, y, top layer, bottom
+    # layer, kind), one per barrel; a via without an entry is through. Two entries
+    # with one (net, x, y) are two holes whose spans do not overlap.
+    via_spans: List[Tuple[str, float, float, str, str, str]] = field(default_factory=list)
     plane_nets: Set[str] = field(default_factory=set)
     # net -> localized static escape failures in engine mm
     failure_sites: dict = field(default_factory=dict)
@@ -320,6 +325,322 @@ def _diag_unrouted(grid, net_access, unrouted, via_keepout):
     )
 
 
+def _via_model(rules, layers, grid, fab, via_keepout, graph=None):
+    """The grid's via model (pnr.via_policy.GridVias) from the rules' via policy,
+    or None (through vias only: the router's legacy model, unchanged). A policy
+    without a build (pnr.via_policy.select_build) gets one from ``graph`` here."""
+    policy = (rules or {}).get("via_policy")
+    if not policy:
+        return None
+    from pnr.via_policy import GridVias, board_needs, select_build
+
+    if "build" not in policy and graph is not None:
+        build = select_build(
+            policy,
+            board_needs(graph, rules, policy["layers"]),
+            (fab["via_diameter_mm"], fab["via_drill_mm"]),
+        )
+        _warn_once(["via policy: no build given; chosen from this board: %s" % build["spans"]])
+        if not build["spans"]:
+            return None
+        policy = dict(policy, build=build)
+
+    missing = [name for name in layers if name not in policy["layers"]]
+    if missing:
+        _warn_once(
+            [
+                "the via policy's copper layers (%s) lack routed layer(s) %s: through vias "
+                "only" % (", ".join(policy["layers"]), ", ".join(missing))
+            ]
+        )
+        return None
+    _warn_once(["via policy: %s" % text for text in policy.get("warnings", [])])
+    return GridVias(
+        policy,
+        layers,
+        grid.pitch,
+        grid.clearance,
+        (fab["via_diameter_mm"], fab["via_drill_mm"]),
+        via_keepout,
+    )
+
+
+def _drop_span(vm, stack):
+    """``drop_span(net, side)``: a plane drop from grid layer ``side`` is the via to
+    the net's dedicated plane nearest that layer (the shortest span), or None with
+    no via model or no stack (a through drop)."""
+    if vm is None or stack is None:
+        return None
+    names = vm.model.layers
+
+    def drop_span(net, side):
+        planes = stack.net_planes(net)
+        if not planes:
+            return None
+        here = vm.stack_index[side]
+        nearest = min(planes, key=lambda la: (abs(names.index(la) - here), names.index(la)))
+        return vm.to_layer(side, nearest)
+
+    return drop_span
+
+
+def tie_plane_layers(grid, graph, stack, plan, result, plane_access, via_keepout, net_halo, rule):
+    """Tie the plane layers of a net with several (two ground planes), whose blind
+    or micro drops reach only the plane nearest each pad (pnr.via_policy).
+
+    Return ties: a signal via whose ends are referenced (the plane nearest above
+    and below each end, pnr.via_policy.reference_planes) to two plane layers of
+    one net needs a via of that net joining both within ``rule["max_mm"]`` (the
+    policy's ``return_tie``) of it. A plated pad, a drop or an earlier tie there
+    serves; else the nearest drop of the net within reach is extended to the
+    deeper span, else a tie via of the build's span joining the two planes goes
+    at the clear site nearest the signal via. Floor: every plane layer of such a
+    net is joined at least once (a drop extended, else a tie beside one). Every
+    new via is checked like a drop (exact pads, escape copper, its own net's
+    lands, the net's plane fill on each plane it must join), on its grid layers
+    clear of every routed net's reserved cells, and clear of every other net's
+    drill by the hole spacing (never on one, whatever the spans).
+
+    Returns ``(ties, report)``: ties ``[(net, (x, y), span)]``; the report gives
+    ``plane_layer_connections`` (every dedicated plane layer: the plated pads
+    and vias joining it) and ``return_ties`` (the rule, the signal vias that
+    need a tie, those met, the ties added and drops extended, each unmet one
+    with its nearest tie, and the signal vias whose two references are planes of
+    different nets, which only decoupling can bridge)."""
+    from collections import defaultdict
+
+    from pnr.via_policy import reference_planes, return_tie_rule
+
+    from .joint_escape import _drop_via_clear, _outside_own_lands
+    from .maze import _footprint
+
+    vm = grid.via_model
+    rule = rule or return_tie_rule()
+    names = vm.model.layers
+    last = len(names) - 1
+    dedicated = list(stack.dedicated)
+    plane_nets = set(stack.plane_nets)
+    multi = {net: stack.net_planes(net) for net in sorted(plane_nets)}
+    multi = {net: planes for net, planes in multi.items() if len(planes) > 1}
+    limit = float((rule or {}).get("max_mm") or 0.0)
+
+    # Every via joining each plane net's layers: [xy, top, bottom, drop escape].
+    ties = defaultdict(list)
+    for e in plan.escapes:
+        if e.net in plane_nets and e.kind == "joint" and e.via_xy is not None:
+            span = e.via_span or vm.full
+            ties[e.net].append([tuple(e.via_xy), span.t, span.b, e])
+    for _layers, net, centre, _radius, plated in grid.drilled_pads:
+        if plated and net in plane_nets:
+            ties[net].append([tuple(centre), 0, last, None])
+
+    occupied = {}
+    holes = []
+    for name, rn in result.nets.items():
+        if rn.cells:
+            for c in _footprint(grid, rn.cells, via_keepout, net_halo.get(name, 0)):
+                occupied.setdefault((c.layer, c.i, c.j), set()).add(name)
+        holes.extend((name, grid.center_of(i, j)) for i, j in rn.vias)
+
+    def clear(net, p, span, layers):
+        # Each plane layer ``layers`` the via must join has the net's fill at p.
+        for layer in layers:
+            if plane_access is not None and plane_access.constrained(net, (layer,)):
+                if not plane_access.site_ok(net, p, (layer,)):
+                    return False
+        if not _drop_via_clear(grid, net, p, span):
+            return False
+        if not _outside_own_lands(grid, net, p, None, span.radius):
+            return False
+        if not grid.hole_site_clear(p, net=net):
+            return False
+        for owner, q in holes:
+            gap = math.dist(p, q)
+            if gap < grid.via_spacing - 1e-7 and (owner != net or gap >= 1e-7):
+                return False
+        i, j = grid.cell_of(*p)
+        k = span.keepout
+        for la in span.layers():
+            for di in range(-k, k + 1):
+                for dj in range(-k, k + 1):
+                    if occupied.get((la, i + di, j + dj), set()) - {net}:
+                        return False
+        return True
+
+    added = []
+
+    def place(net, q, span):
+        grid.escape_vias.append((net, q))
+        grid.escape_via_spans[(net, q)] = span
+        holes.append((net, q))
+        ties[net].append([q, span.t, span.b, None])
+        added.append((net, q, span))
+
+    def extend(net, tie, lo, hi):
+        e = tie[3]
+        span = e.via_span or vm.full
+        deeper = vm.stack_span(min(span.t, lo), max(span.b, hi))
+        new = [la for la in multi[net] if vm.reaches(deeper, la) and not vm.reaches(span, la)]
+        if not new or not clear(net, tie[0], deeper, new):
+            return False
+        e.via_span = deeper
+        grid.escape_via_spans[(net, tie[0])] = deeper
+        tie[1], tie[2] = deeper.t, deeper.b
+        return True
+
+    # The signal vias, with the grid layers each joins (plated pads excluded).
+    grid_names = list(grid.layers)
+    signal = {}
+    for name, rn in result.nets.items():
+        if name in plane_nets or not rn.vias:
+            continue
+        columns = defaultdict(set)
+        for c in rn.cells:
+            columns[(c.i, c.j)].add(c.layer)
+        for i, j in rn.vias:
+            if grid.plated_transition(name, i, j) is not None:
+                continue
+            used = columns.get((i, j), set())
+            if len(used) > 1:
+                signal.setdefault((name, grid.center_of(i, j)), set()).update(used)
+    for e in plan.escapes:
+        if e.net in plane_nets or e.via_xy is None or e.access is None:
+            continue
+        used = {e.access.layer}
+        if e.side_layer in grid_names:
+            used.add(grid_names.index(e.side_layer))
+        if len(used) > 1:
+            signal.setdefault((e.net, tuple(e.via_xy)), set()).update(used)
+
+    needs = []
+    cross = 0
+    for (net, p), used in sorted(signal.items()):
+        refs = set()
+        for la in used:
+            refs.update(reference_planes(names, dedicated, grid_names[la]))
+        if len({n for _, n in refs}) > 1:
+            cross += 1
+        for plane_net in sorted({n for _, n in refs} & set(multi)):
+            joined = sorted({names.index(la) for la, n in refs if n == plane_net})
+            if len(joined) > 1:
+                needs.append((plane_net, p, joined[0], joined[-1], net))
+
+    reach = max(1, int(limit / grid.pitch))
+    offsets = sorted(
+        ((di, dj) for di in range(-reach, reach + 1) for dj in range(-reach, reach + 1)),
+        key=lambda d: (d[0] ** 2 + d[1] ** 2, d),
+    )
+    met = extended = 0
+    unmet = []
+    for plane_net, p, lo, hi, net in needs:
+        covering = [t[0] for t in ties[plane_net] if t[1] <= lo and t[2] >= hi]
+        near = min((math.dist(p, q) for q in covering), default=None)
+        if near is not None and near <= limit + 1e-9:
+            met += 1
+            continue
+        done = False
+        drops = sorted(
+            (t for t in ties[plane_net] if t[3] is not None and math.dist(p, t[0]) <= limit),
+            key=lambda t: (math.dist(p, t[0]), t[0]),
+        )
+        for tie in drops:
+            if extend(plane_net, tie, lo, hi):
+                extended += 1
+                done = True
+                break
+        if not done:
+            span = vm.stack_span(lo, hi)
+            joins = [la for la in multi[plane_net] if vm.reaches(span, la)]
+            ci, cj = grid.cell_of(*p)
+            for di, dj in offsets:
+                if not grid.in_bounds(ci + di, cj + dj):
+                    continue
+                q = grid.center_of(ci + di, cj + dj)
+                if math.dist(p, q) > limit + 1e-9:
+                    continue
+                if clear(plane_net, q, span, joins):
+                    place(plane_net, q, span)
+                    done = True
+                    break
+        if done:
+            met += 1
+        else:
+            unmet.append(
+                dict(
+                    net=plane_net,
+                    signal=net,
+                    xy=[round(p[0], 4), round(p[1], 4)],
+                    nearest_mm=None if near is None else round(near, 3),
+                )
+            )
+
+    # Floor: every plane layer of a net with several is joined at least once.
+    beside = sorted(
+        ((di, dj) for di in range(-12, 13) for dj in range(-12, 13)),
+        key=lambda d: (d[0] ** 2 + d[1] ** 2, d),
+    )
+    for net, planes in multi.items():
+        for layer in planes:
+            index = names.index(layer)
+            if any(t[1] <= index <= t[2] for t in ties[net]):
+                continue
+            drops = sorted((t for t in ties[net] if t[3] is not None), key=lambda t: t[0])
+            if any(extend(net, tie, index, index) for tie in drops):
+                extended += 1
+                continue
+            reached = [
+                la
+                for la in planes
+                if la != layer and any(t[1] <= names.index(la) <= t[2] for t in ties[net])
+            ]
+            if not reached:
+                continue
+            other = min(reached, key=lambda la: (abs(names.index(la) - index), la))
+            span = vm.stack_span(names.index(other), index)
+            done = False
+            for tie in drops:
+                ci, cj = grid.cell_of(*tie[0])
+                for di, dj in beside:
+                    if not grid.in_bounds(ci + di, cj + dj):
+                        continue
+                    q = grid.center_of(ci + di, cj + dj)
+                    if clear(net, q, span, (other, layer)):
+                        place(net, q, span)
+                        done = True
+                        break
+                if done:
+                    break
+
+    counts = {}
+    for layer, net in dedicated:
+        index = names.index(layer)
+        counts.setdefault(net, {})[layer] = sum(t[1] <= index <= t[2] for t in ties[net])
+    report = dict(
+        plane_layer_connections=counts,
+        return_ties=dict(
+            rule=dict(rule or {}),
+            required=len(needs),
+            met=met,
+            ties_added=len(added),
+            drops_extended=extended,
+            unmet=unmet,
+            reference_net_changes=cross,
+        ),
+    )
+    floating = sorted(
+        "%s %s" % (layer, net)
+        for net, layers in counts.items()
+        for layer, n in layers.items()
+        if not n
+    )
+    if floating:
+        report["floating_planes"] = floating
+        _warn_once(
+            ["plane layer %s has no via or plated pad: it floats" % text for text in floating]
+        )
+    return added, report
+
+
 def detail_pitch(explicit, track_width_mm, clearance_mm):
     """Resolve one pitch for source screening and fixed-copper signal handoff.
 
@@ -408,6 +729,7 @@ def route_board(
         via_radius=via_radius_mm,
     )
     grid.net_widths = net_width
+    grid.via_model = vm = _via_model(rules, layers, grid, fab, via_keepout, graph)
     if stack is not None:
         grid.layer_mask = (
             current_layer_mask(stack, layers, rules, net_width, track_width_mm) or None
@@ -495,6 +817,7 @@ def route_board(
             inset=via_radius_mm,
             outset=via_radius_mm + clearance_mm + fab["track_width_mm"],
         )
+    drop_span = _drop_span(vm, stack) if drop_widths else None
     plan = plan_escapes(
         grid,
         graph,
@@ -511,6 +834,7 @@ def route_board(
         drop_in_pad=grid.in_pad is not None,
         drop_pad_width=pad_drop_width,
         plane_access=plane_access,
+        drop_span=drop_span,
     )
     from pnr.stack import assess
 
@@ -551,6 +875,26 @@ def route_board(
     if os.environ.get("PNR_DIAG_UNROUTED"):
         _diag_unrouted(grid, net_access, result.unrouted, via_keepout)
 
+    # Blind and micro drops reach only the nearest plane of their net: a net with
+    # several plane layers (two ground planes) gets return ties (and every plane
+    # layer at least one via); each plane layer's joins are reported.
+    stitches = []
+    if vm is not None:
+        plan.diagnostics["via_build"] = vm.model.policy.get("build")
+    if drop_span is not None:
+        stitches, report = tie_plane_layers(
+            grid,
+            graph,
+            stack,
+            plan,
+            result,
+            plane_access,
+            via_keepout,
+            net_halo,
+            vm.model.policy.get("return_tie"),
+        )
+        plan.diagnostics.update(report)
+
     board = BoardRoute(
         result=result,
         grid=grid,
@@ -568,6 +912,8 @@ def route_board(
         board.pressure_events = localized_pressure(grid, net_access, result, deferred)
     layer_names = grid.layers
     routed_names = {n for n, rn in result.nets.items() if rn.routed}
+    # (net, x, y) -> the spans of the vias there (via model only), merged below.
+    span_at = {} if vm is not None else None
     for name, rn in result.nets.items():
         w = net_width.get(name, track_width_mm)  # per-net (type/amperage) width
         for layer, (i0, j0), (i1, j1) in rn.segments:
@@ -587,7 +933,14 @@ def route_board(
             else:
                 board.vias.append((name, x, y))
                 new_vias.append((i, j))
+                if span_at is not None:
+                    span_at.setdefault((name, x, y), []).extend(
+                        rn.via_spans.get((i, j)) or [vm.full]
+                    )
         rn.vias = new_vias
+    for net, (x, y), span in stitches:
+        board.vias.append((net, x, y))
+        span_at.setdefault((net, x, y), []).append(span)
 
     board.deferred_nets = deferred
 
@@ -595,27 +948,39 @@ def route_board(
     # stub + via) so the net is electrically whole from the real pad centre.
     for esc in plan.escapes:
         if esc.net in drop_widths:
-            # A plane drop needs no maze route: its through via reaches the planes.
-            _emit_escape(board, esc, grid, esc.width or drop_widths[esc.net])
+            # A plane drop needs no maze route: its via reaches the plane(s).
+            _emit_escape(board, esc, grid, esc.width or drop_widths[esc.net], span_at)
             continue
         rn = result.nets.get(esc.net)
         if rn is None or esc.access not in set(rn.cells):
             continue
-        _emit_escape(board, esc, grid, net_width.get(esc.net, track_width_mm))
+        _emit_escape(board, esc, grid, net_width.get(esc.net, track_width_mm), span_at)
     # Zero-length pad-to-grid stubs add no connection and become dangling items.
     board.tracks = [t for t in board.tracks if math.dist(t[2], t[3]) >= 1e-6]
     board.vias = list(dict.fromkeys(board.vias))
+    if vm is not None:
+        # One barrel per same-net site whose spans share a copper layer (two holes
+        # there would be co-located); a through via needs no entry.
+        for key in board.vias:
+            for span in vm.merged(span_at.get(key) or [vm.full]):
+                if not span.through:
+                    board.via_spans.append((*key, span.top, span.bottom, span.kind))
     if route_trace is not None:
         route_trace.end(board)
     return board
 
 
-def _emit_escape(board: BoardRoute, esc, grid: RouteGrid, w: float) -> None:
-    """Append the mm-space geometry that bonds a pad to its maze access cell."""
+def _emit_escape(board: BoardRoute, esc, grid: RouteGrid, w: float, span_at=None) -> None:
+    """Append the mm-space geometry that bonds a pad to its maze access cell.
+    ``span_at`` ((net, x, y) -> spans, a grid with a via model) gets each via's
+    span (a planned escape's own; the legacy planner's vias are through)."""
     access_ctr = grid.center_of(esc.access.i, esc.access.j)
     access_layer = grid.layers[esc.access.layer]
     if esc.kind == "blocked":
         return
+    if span_at is not None and esc.via_xy is not None:
+        span = esc.via_span if esc.kind == "joint" and esc.via_span else grid.via_model.full
+        span_at.setdefault((esc.net, *esc.via_xy), []).append(span)
     if esc.kind == "joint":
         for layer, a, b in esc.segments:
             board.tracks.append((esc.net, layer, a, b, w))

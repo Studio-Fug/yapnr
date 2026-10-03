@@ -49,6 +49,8 @@ class Escape:
     via_xy: Optional[Tuple[float, float]] = None  # via site (mm): pad ctr or stub end
     segments: Optional[list] = None  # joint access: (layer name, exact start, end)
     width: Optional[float] = None  # a plane drop's stub width (its pad's entry width)
+    # The via's span (pnr.via_policy.Span) under the grid's via model; None: through.
+    via_span: Optional[object] = None
 
 
 @dataclass
@@ -69,14 +71,19 @@ def _line_clear(
     return all(grid.passable(layer, ci + di * k, cj + dj * k, net) for k in range(dist + 1))
 
 
-def _via_clean(grid: RouteGrid, i: int, j: int, net: str, via_keepout: int, point=None) -> bool:
+def _via_clean(
+    grid: RouteGrid, i: int, j: int, net: str, via_keepout: int, point=None, layers=None
+) -> bool:
     """True if a via for ``net`` at column (i, j) clears all *other*-net copper — its
-    keep-out halo (all layers) touches no cell owned by another net. A Ø0.45 via
-    dropped in a 0.5 mm-pitch pad field would short its neighbours; this rejects that
-    (the pad must then dog-bone out, or stay unrouted — honest ground truth)."""
-    if not grid.hole_site_clear(grid.center_of(i, j)):
+    keep-out halo (all layers, or a span's ``layers``) touches no cell owned by
+    another net. A Ø0.45 via dropped in a 0.5 mm-pitch pad field would short its
+    neighbours; this rejects that (the pad must then dog-bone out, or stay unrouted —
+    honest ground truth)."""
+    # A grid with a via model never shares a site with another net's escape via.
+    owner = net if getattr(grid, "via_model", None) is not None else None
+    if not grid.hole_site_clear(grid.center_of(i, j), net=owner):
         return False
-    for la in range(grid.nlayers):
+    for la in range(grid.nlayers) if layers is None else layers:
         # ``point``: an exact off-grid via site (a pad centre) for the fab
         # profile's via-to-SMD-pad rule; None judges the cell centre.
         if not grid.via_passable(la, i, j, net, point):
@@ -124,6 +131,7 @@ def plan_escapes(
     drop_in_pad: bool = False,
     drop_pad_width: Optional[Dict[Tuple[str, str], float]] = None,
     plane_access=None,
+    drop_span=None,
 ) -> EscapePlan:
     """Plan a legal escape for every pad of the routable ``net_names``.
 
@@ -139,7 +147,8 @@ def plan_escapes(
     planner leaves them to the native plane fanout); ``drop_pad_width`` sizes each
     pad's stub ((ref, pad) -> width) and ``plane_access``
     (:class:`pnr.stack.PlaneAccess`) admits only via sites inside the net's own
-    plane fill.
+    plane fill. ``drop_span(net, side)`` gives a drop's blind or micro via span
+    under the grid's via model (None: a through via).
     """
     if joint:
         from .joint_escape import plan_joint_escapes
@@ -159,6 +168,7 @@ def plan_escapes(
             drop_in_pad=drop_in_pad,
             drop_pad_width=drop_pad_width,
             plane_access=plane_access,
+            drop_span=drop_span,
         )
     plan = EscapePlan()
     plan.diagnostics = {"model": "legacy-sequential", "complete": None}

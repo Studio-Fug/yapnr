@@ -112,10 +112,13 @@ DIELECTRICS_MM = {
 VIA_POLICIES = {
     "through": dict(name="through", allowed=["through"]),
     "blind-buried": dict(name="blind-buried", allowed=["through", "blind", "buried"]),
+    # A 0.1 mm laser drill in a 0.4 mm land: the 0.15 mm ring every rung's fab
+    # (designs.py, via_annular_mm) requires of a via, which KiCad also applies to
+    # microvias (a 0.3 mm land, 0.1 mm ring, fails the judge's annular_width rule).
     "hdi": dict(
         name="hdi",
         allowed=["through", "blind", "buried", "micro"],
-        microvia=dict(diameter_mm=0.3, drill_mm=0.1),
+        microvia=dict(diameter_mm=0.4, drill_mm=0.1),
     ),
 }
 

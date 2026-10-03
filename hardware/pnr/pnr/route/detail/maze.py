@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import heapq
 import os
+import sys
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
@@ -56,6 +57,9 @@ class RoutedNet:
     cells: List[Cell] = field(default_factory=list)  # tree of occupied cells
     segments: List[Tuple[int, Tuple[int, int], Tuple[int, int]]] = field(default_factory=list)
     vias: List[Tuple[int, int]] = field(default_factory=list)  # (i, j) grid via sites
+    # (i, j) -> the vias there (pnr.via_policy.Span) when the grid has a via model
+    # (blind/buried/micro vias allowed); empty otherwise (every via is through).
+    via_spans: Dict[Tuple[int, int], list] = field(default_factory=dict)
     routed: bool = False
     remaining_connections: int = 0  # grid-terminal estimate, never native DRC
 
@@ -104,6 +108,20 @@ def remaining_connections(access, edges):
     return max(0, len({find(c) for c in access}) - 1)
 
 
+_PACKED_NOTED = []
+
+
+def _note_packed_fallback():
+    """Say once per process that the packed kernel (through vias only) is skipped
+    for a grid with a via model (PNR_PACKED_MAZE=1 asks for it)."""
+    if not _PACKED_NOTED:
+        _PACKED_NOTED.append(True)
+        sys.stderr.write(
+            "pnr.maze: PNR_PACKED_MAZE=1 ignored for a board with blind, buried or micro "
+            "vias (the packed kernel models through vias only); the Python search runs\n"
+        )
+
+
 def _astar(
     grid: RouteGrid,
     sources: Set[Cell],
@@ -124,7 +142,11 @@ def _astar(
     DRC-safe 45° steps (both corners free) to shorten diagonal runs. ``blocked``
     cells are hard-impassable; ``soft`` cells (committed other-net copper the rip-up
     pass may cross at a price) are passable but expensive. Returns the path or None."""
-    if os.environ.get("PNR_PACKED_MAZE") == "1":
+    # The packed kernel models through vias only: a grid with a via model (blind,
+    # buried or micro vias allowed) searches here.
+    if os.environ.get("PNR_PACKED_MAZE") == "1" and getattr(grid, "via_model", None) is not None:
+        _note_packed_fallback()
+    if os.environ.get("PNR_PACKED_MAZE") == "1" and getattr(grid, "via_model", None) is None:
         from .packed_maze import astar
 
         return astar(
@@ -179,6 +201,32 @@ def _astar(
         return best or 0.0
 
     from functools import lru_cache
+
+    vm = getattr(grid, "via_model", None)
+
+    @lru_cache(maxsize=None)
+    def layer_window(la: int, i: int, j: int, radius: int):
+        """Max occupancy, history and soft price in one layer's window."""
+        cells = [
+            Cell(la, i + di, j + dj)
+            for di in range(-radius, radius + 1)
+            for dj in range(-radius, radius + 1)
+            if grid.in_bounds(i + di, j + dj)
+        ]
+        return (
+            max([0] + [occ.get(p, 0) for p in cells]),
+            max(history.get(p, 0.0) for p in cells),
+            max(softc.get(p, 0.0) for p in cells),
+        )
+
+    @lru_cache(maxsize=None)
+    def span_cost(i: int, j: int, span) -> float:
+        """:func:`cell_cost` of a via of ``span`` (its layers, its keep-out): the
+        maxima over its layers' windows, each window shared by every span."""
+        radius = max(track_halo, span.keepout)
+        windows = [layer_window(la, i, j, radius) for la in span.layers()]
+        present = 1.0 + pres_fac * max(w[0] for w in windows)
+        return (1.0 + max(w[1] for w in windows)) * present + max(w[2] for w in windows)
 
     @lru_cache(maxsize=None)
     def cell_cost(c: Cell, via=False) -> float:
@@ -270,24 +318,37 @@ def _astar(
         # tests, the plated transition, the hole spacing and a drilled via's price
         # do not depend on the destination layer: each is evaluated at most once
         # per expanded cell (``column``), with the same verdicts and prices.
+        # With a via model (blind/buried/micro vias allowed) a via occupies only
+        # the grid layers of its span: those alone are tested, priced and reserved,
+        # and its price is ``via_cost`` times the span's multiplier.
         column = None
+        memo = {}
         for la in range(grid.nlayers):
             if la == cur.layer:
                 continue
             nc = Cell(la, cur.i, cur.j)
             if not grid.passable(nc.layer, nc.i, nc.j, net):
                 continue
-            if column is None:
-                column = _via_column(
-                    grid, cur, net, block, raw_block, via_halo, drill_sites + path_drills[cur]
+            if vm is None:
+                if column is None:
+                    column = _via_column(
+                        grid, cur, net, block, raw_block, via_halo, drill_sites + path_drills[cur]
+                    )
+                # A via needs the wider via-clearance from foreign pads, and the column
+                # must be clear where it lands (checked here and at the source layer).
+                allowed, plated = column
+                span = None
+            else:
+                span = vm.span(cur.layer, la)
+                allowed, plated = _span_column(
+                    grid, cur, net, block, raw_block, drill_sites + path_drills[cur], span, memo
                 )
-            # A via needs the wider via-clearance from foreign pads, and the column
-            # must be clear where it lands (checked here and at the source layer).
-            allowed, plated = column
             if not allowed:
                 continue
-            if plated is None:
+            if plated is None and span is None:
                 ng = base + cell_cost(Cell(0, nc.i, nc.j), via=True) + via_cost
+            elif plated is None:
+                ng = base + span_cost(nc.i, nc.j, span) + via_cost * span.cost
             else:
                 ng = base + cell_cost(nc)
             if ng < g.get(nc, float("inf")):
@@ -299,6 +360,40 @@ def _astar(
                 heapq.heappush(open_heap, (ng + h(nc), tie, nc))
                 tie += 1
     return None
+
+
+def _span_column(grid, cur, net, block, raw_block, sites, span, memo):
+    """:func:`_via_column` for a via of ``span`` (pnr.via_policy.Span) at ``cur``'s
+    column, judged on the span's grid layers only at its own keep-out. Each
+    layer's verdict, the plated transition and the hole test are kept in ``memo``
+    (one expanded cell) and shared by every span there; the verdict is the one
+    :func:`_via_column` gives on those layers."""
+    i, j = cur.i, cur.j
+    for z in span.layers():
+        key = ("cell", z)
+        if key not in memo:
+            memo[key] = Cell(z, i, j) not in block and grid.via_passable(z, i, j, net)
+        if not memo[key]:
+            return False, None
+    if "plated" not in memo:
+        memo["plated"] = getattr(grid, "plated_transition", lambda *a: None)(net, i, j)
+    if memo["plated"] is not None:
+        return True, memo["plated"]
+    k = span.keepout
+    if raw_block:
+        for z in span.layers():
+            key = ("halo", z, k)
+            if key not in memo:
+                memo[key] = not any(
+                    Cell(z, i + di, j + dj) in raw_block
+                    for di in range(-k, k + 1)
+                    for dj in range(-k, k + 1)
+                )
+            if not memo[key]:
+                return False, None
+    if "hole" not in memo:
+        memo["hole"] = grid.hole_site_clear(grid.center_of(i, j), sites, net=net)
+    return (True, None) if memo["hole"] else (False, None)
 
 
 def _via_column(grid, cur, net, block, raw_block, via_halo, sites):
@@ -435,6 +530,19 @@ def _footprint(
                     ni, nj = c.i + di, c.j + dj
                     if grid.in_bounds(ni, nj):
                         fp.add(Cell(c.layer, ni, nj))
+    vm = getattr(grid, "via_model", None)
+    if vm is not None:
+        # Each via reserves its keep-out on its own span's grid layers only.
+        for (i, j), spans in _via_spans(grid, cells, edges, net).items():
+            for span in spans:
+                k = span.keepout
+                for la in span.layers():
+                    for di in range(-k, k + 1):
+                        for dj in range(-k, k + 1):
+                            ni, nj = i + di, j + dj
+                            if grid.in_bounds(ni, nj):
+                                fp.add(Cell(la, ni, nj))
+        return fp
     via_sites = _via_sites(cells) if edges is None else _new_via_sites(grid, edges, net)
     for i, j in via_sites:
         for la in range(grid.nlayers):
@@ -446,12 +554,42 @@ def _footprint(
     return fp
 
 
-def _to_geometry(route: "_Route") -> RoutedNet:
+def _via_spans(grid, cells, edges=None, net=None):
+    """(i, j) -> the vias (pnr.via_policy.Span) at each drilled via site, under the
+    grid's via model: the spans of the via moves there, merged where they share a
+    copper layer (one barrel). Without ``edges`` a column's layers give one span
+    from its top to its bottom layer (a conservative superset)."""
+    vm = grid.via_model
+    out = {}
+    if edges is None:
+        by_ij = defaultdict(set)
+        for c in cells:
+            by_ij[(c.i, c.j)].add(c.layer)
+        for ij, lays in by_ij.items():
+            if len(lays) > 1:
+                out[ij] = [vm.span(min(lays), max(lays))]
+        return out
+    plated = getattr(grid, "plated_transition", lambda *a: None)
+    moves = defaultdict(list)
+    for a, b in edges:
+        if a.layer != b.layer and (net is None or plated(net, a.i, a.j) is None):
+            moves[(a.i, a.j)].append(vm.span(a.layer, b.layer))
+    return {ij: vm.merged(spans) for ij, spans in moves.items()}
+
+
+def _to_geometry(route: "_Route", grid=None) -> RoutedNet:
     """Turn a :class:`_Route` into track segments + via sites. Each *same-layer* edge
     (orthogonal OR 45° diagonal) is a track segment; a column present on two layers
     is a via. Emitting from the recorded edges — not by re-scanning cell adjacency —
-    is what keeps the 45° segments exactly the ones the router chose."""
+    is what keeps the 45° segments exactly the ones the router chose. With a
+    ``grid`` that has a via model the vias' spans are kept (``via_spans``)."""
     rn = RoutedNet(name="", cells=list(route.cells))
+    if grid is not None and getattr(grid, "via_model", None) is not None:
+        moves = defaultdict(list)
+        for a, b in route.edges:
+            if a.layer != b.layer:
+                moves[(a.i, a.j)].append(grid.via_model.span(a.layer, b.layer))
+        rn.via_spans = {ij: grid.via_model.merged(sp) for ij, sp in sorted(moves.items())}
     seen: Set[Tuple[Tuple[int, int], Tuple[int, int], int]] = set()
     for a, b in route.edges:
         if a.layer != b.layer:
@@ -521,7 +659,7 @@ def _route_impl(
     def live_net(net, route, kind):
         if not os.environ.get("PNR_LIVE_DIR"):
             return
-        rn = _to_geometry(route) if route else None
+        rn = _to_geometry(route, grid) if route else None
         tracks = []
         if rn:
             for layer, a, b in rn.segments:
@@ -648,7 +786,7 @@ def _route_impl(
             occupied[c] = net
             committed.add(c)
         routes[net] = route
-        rn = _to_geometry(route)
+        rn = _to_geometry(route, grid)
         rn.name = net
         rn.routed = True
         result_nets[net] = rn
@@ -805,7 +943,7 @@ def _route_impl(
     unrouted = []
     for net in nets:
         route = best_snap.get(net)
-        rn = _to_geometry(route) if route else _to_geometry(_Route())
+        rn = _to_geometry(route, grid) if route else _to_geometry(_Route())
         rn.name = net
         rn.remaining_connections = remaining_connections(
             net_access[net], route.edges if route else []
@@ -866,7 +1004,7 @@ def _route_impl(
                 forest = trial
                 tree.update(path)
                 remaining.difference_update(path)
-        rn = _to_geometry(forest)
+        rn = _to_geometry(forest, grid)
         rn.name = net
         rn.remaining_connections = remaining_connections(net_access[net], forest.edges)
         rn.routed = rn.remaining_connections == 0

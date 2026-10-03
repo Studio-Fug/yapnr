@@ -255,6 +255,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             "vias": [[net, x, y] for (net, x, y) in board.vias],
             "unrouted": board.result.unrouted,
         }
+        if board.via_spans:  # blind, buried and micro vias (pnr.via_policy)
+            routes["via_spans"] = [list(s) for s in board.via_spans]
         with open(args.dump_routes, "w", encoding="utf-8") as fh:
             json.dump(routes, fh, indent=2, sort_keys=True)
 

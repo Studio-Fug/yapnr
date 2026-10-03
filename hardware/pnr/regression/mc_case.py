@@ -32,6 +32,7 @@ from pnr.mc.halving import _rank_key
 from pnr.place.initial_pool import _route_metrics
 from pnr.place.metrics import hpwl
 from pnr.route.detail.router import route_board
+from pnr.via_policy import board_policy
 
 root = Path(sys.argv[1]).resolve()
 seed = int(sys.argv[2])
@@ -40,6 +41,10 @@ mc = spec["mc"]
 graph = BoardGraph.from_json((root / "source-graph.json").read_text())
 constraints = compile_constraints(spec["constraints"], graph.refs)
 rules = apply_rules(compile_routing_rules(constraints, [n.name for n in graph.nets]))
+# As route_case.py: the rung's via policy on its board (none: through vias only).
+via_policy = board_policy(spec.get("via_policy"), root / "source.kicad_pcb", rules, graph=graph)
+if via_policy:
+    rules["via_policy"] = via_policy
 (root / "rules.json").write_text(json.dumps(rules, indent=2))
 
 inputs = root / "mc-inputs"
@@ -121,9 +126,10 @@ for rec in finalists:
 best = min(evaluated, key=lambda c: (c["metrics"]["objective"], c["id"]))
 route = best["route"]
 (root / "placed.json").write_text(best["graph"].to_json())
-(root / "routes.json").write_text(
-    json.dumps(dict(tracks=route.tracks, vias=route.vias, unrouted=route.result.unrouted), indent=2)
-)
+routes = dict(tracks=route.tracks, vias=route.vias, unrouted=route.result.unrouted)
+if getattr(route, "via_spans", None):
+    routes["via_spans"] = route.via_spans
+(root / "routes.json").write_text(json.dumps(routes, indent=2))
 status = json.loads((out / "status.json").read_text())
 legal = [r for r in placed.values() if r.get("status") == "legal"]
 summary = dict(

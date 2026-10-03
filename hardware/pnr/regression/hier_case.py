@@ -81,6 +81,13 @@ def load(root):
     constraints = compile_constraints(spec["constraints"], graph.refs)
     # Route under the fab profile writeback stamps and KiCad judges, as route_case.py does.
     rules = apply_rules(compile_routing_rules(constraints, [n.name for n in graph.nets]))
+    declared = set((spec.get("via_policy") or {}).get("allowed") or []) - {"through"}
+    if declared:
+        # Blind, buried and micro vias reach the flat drivers only (pnr.via_policy).
+        sys.stderr.write(
+            "hier_case: via policy %s not applied: hierarchical blocks route through vias "
+            "only\n" % ", ".join(sorted(declared))
+        )
     return spec, graph, constraints, rules
 
 

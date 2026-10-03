@@ -49,6 +49,10 @@ docker run --rm --cpus 4 -v "$PWD":/w -w /w radar60-openems:0.37.0-rc3 \
   python3 openems/column_sim.py --out out/col --threads 4
 ```
 
+On a Mac with colima, write openEMS output to a directory the Docker VM shares (under the
+home directory or an external volume); a `-v` mount of a path the VM does not share silently
+lands inside the VM.
+
 `--set key=json` overrides any parameter of `rfmacro/params.py` (for example
 `--set window_margin=0.25`).
 
@@ -63,7 +67,8 @@ docker run --rm --cpus 4 -v "$PWD":/w -w /w radar60-openems:0.37.0-rc3 \
   symmetric bump on the inner lines; P0->P1 4.199 mm for all four. TX: L-routes (R 0.6) with
   serpentines (R >= 0.4) for TX1 (north fingers on its eastward leg) and TX2 (west fingers on its
   northward leg); P0->P1 13.712 mm for all three. Spread 0 um (geometric).
-- **Columns (RFS-4, x7):** two inset-fed patches (W 1.45, L 1.190, inset 0.445 mm, notch 0.10)
+- **Columns (RFS-4, x7):** two inset-fed patches (W 1.45, L 1.151 = closed-form 1.190 x 0.967
+  full-wave correction, inset 0.30 mm from the first openEMS calibration, notch 0.10)
   at 2.90 mm (0.60 lambda0), each on an L2 window 0.15 mm larger, fed at their facing edges by a
   T (35.4 ohm lambda/4 0.710 mm, 50 ohm arms; the south arm is lambda_g/2 = 1.469 mm longer to
   undo the 180 degrees of the facing feeds). The input runs up the 0.89 mm gap between columns,

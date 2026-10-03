@@ -46,16 +46,19 @@ def compute(p: Dict[str, object]) -> Dict[str, object]:
         h_w, er_w = STACK["h_core"], STACK["dk_core"]
     W = float(p["patch_w"])
     L_nom = cf.patch_length(F0, W, h_w, er_w)
-    L = float(p["patch_l"]) if p["patch_l"] is not None else L_nom
-    L *= length_scale(p)
-    f0 = cf.patch_f0(W, L, h_w, er_w)
-    bw = cf.patch_bw(W, L, h_w, er_w, f0)
-    ins = cf.inset_depth(W, L, f0)
+    L_cf = (float(p["patch_l"]) if p["patch_l"] is not None else L_nom) * length_scale(p)
+    # closed-form quantities at the electrical design length; the drawn length carries the
+    # full-wave correction (declared, with the run it comes from)
+    fw = float(p["fullwave_l_scale"])
+    L = L_cf * fw
+    f0 = cf.patch_f0(W, L_cf, h_w, er_w)
+    bw = cf.patch_bw(W, L_cf, h_w, er_w, f0)
+    ins = cf.inset_depth(W, L_cf, f0)
     inset = float(p["inset"]) if p["inset"] is not None else ins["y0"]
     k_r = cf.roughness_factor(STACK["rq_l1_um"], F0)
     eta = cf.patch_efficiency(bw, 0.5 * (STACK["df_core"] + STACK["df_bond"]), h_w, F0, k_r)
-    d_patch = cf.patch_directivity(W, L, h_w, er_w, F0)
-    d_col = cf.column_directivity(W, L, h_w, er_w, F0, float(p["spacing"]))
+    d_patch = cf.patch_directivity(W, L_cf, h_w, er_w, F0)
+    d_col = cf.column_directivity(W, L_cf, h_w, er_w, F0, float(p["spacing"]))
 
     ms = _line(rows, "macro microstrip w 0.200")
     gc = _line(rows, "macro GCPW w 0.200 g 0.200")
@@ -80,6 +83,9 @@ def compute(p: Dict[str, object]) -> Dict[str, object]:
             w=W,
             l=L,
             l_nominal=L_nom,
+            l_closed_form=L_cf,
+            fullwave_l_scale=fw,
+            fullwave_ref=p["fullwave_ref"],
             length_scale=length_scale(p),
             f0_ghz=f0 / 1e9,
             bw_vswr2=bw,

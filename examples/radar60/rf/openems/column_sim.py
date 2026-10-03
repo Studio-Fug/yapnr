@@ -93,9 +93,24 @@ def model(args):
                 (end[0] - w50 / 2, end[1] + sgn * 0.02),
             ]
         )
+    windows = list(col.windows)
+    xin, p1y = float(p["in_x"]), float(p["p1_y"])
+    if args.single:  # diagnostic: the upper patch alone, inset-fed straight from the south
+        edge = float(p["spacing"]) / 2 - d["patch"]["l"] / 2
+        ins = d["patch"]["inset"]
+        xin, p1y = 0.0, edge - 0.6
+        polys = [
+            list(col.patches[1]),
+            [
+                (-w50 / 2, p1y),
+                (w50 / 2, p1y),
+                (w50 / 2, edge + ins + 0.02),
+                (-w50 / 2, edge + ins + 0.02),
+            ],
+        ]
+        windows = [col.windows[1]]
     xs = [q[0] for pp in polys for q in pp]
     ys = [q[1] for pp in polys for q in pp]
-    xin, p1y = float(p["in_x"]), float(p["p1_y"])
     lport = 1.2
     y_port0 = p1y - lport
     bx0, bx1 = min(xs), max(xs)
@@ -124,7 +139,7 @@ def model(args):
     core.AddBox([sx0, sy0, z_l2], [sx1, sy1, z_l1], priority=1)
     pec.AddBox([sx0, sy0, 0.0], [sx1, sy1, 0.0], priority=10)  # L3
     pec.AddBox([sx0, sy0, z_l2], [sx1, sy1, z_l2], priority=10)  # L2 ...
-    for win in col.windows:  # ... with the radiator windows (bondply wins on the sheet)
+    for win in windows:  # ... with the radiator windows (bondply wins on the sheet)
         wx = [q[0] for q in win]
         wy = [q[1] for q in win]
         bond.AddBox([min(wx), min(wy), z_l2], [max(wx), max(wy), z_l2], priority=20)
@@ -141,7 +156,7 @@ def model(args):
     if (
         args.stitch > 0
     ):  # through GND vias (0.15 drill as a square post, 0.30 L1 pad) round each window
-        for win in col.windows:
+        for win in windows:
             wx = [q[0] for q in win]
             wy = [q[1] for q in win]
             off = 0.15 + 0.05  # pad radius + 50 um from the window edge
@@ -202,7 +217,7 @@ def model(args):
                 mx.add(round(a[0], 4))
             if abs(a[1] - b[1]) < 1e-6 and abs(a[0] - b[0]) > 0.03:
                 my.add(round(a[1], 4))
-    for win in col.windows:
+    for win in windows:
         mx.update(round(q[0], 4) for q in win)
         my.update(round(q[1], 4) for q in win)
     lines_x, lines_y = [], []
@@ -278,6 +293,9 @@ def main():
     ap.add_argument("--set", action="append", default=[])
     ap.add_argument("--setup-only", action="store_true")
     ap.add_argument("--debug-names", action="store_true")
+    ap.add_argument(
+        "--single", action="store_true", help="one inset patch on its window (diagnostic)"
+    )
     ap.add_argument(
         "--stitch",
         type=float,

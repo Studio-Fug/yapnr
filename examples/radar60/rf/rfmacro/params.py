@@ -83,7 +83,14 @@ DEFAULTS: Dict[str, object] = {
     # column (RFS-4): patch on the L2 window, corporate divider on 4 mil over L2
     "patch_w": 1.45,  # W/L >= 1.2 and 0.2 mm from the gap line to the window [BD §14.4 R2]
     "patch_l": None,  # None: closed form for F0 on the window (set by dims)
-    "inset": None,  # None: closed form for 50 ohm
+    # Inset and drawn length from the first openEMS calibration (stage-2 C0a, 2026-10-03): the
+    # closed-form patch (L 1.190, inset 0.445) resonated at 60.0 GHz with |S11| >= -8.4 dB; the
+    # mechanical pick of the single-patch sweep L x0.967, inset {0.30, 0.38, 0.45} by |S11| at
+    # 62.05 GHz is inset 0.30 (RL >= 10 dB 60.90-62.80 GHz, -26.9 dB at 61.9 GHz)
+    # [results/openems/patch-c-i30]. None restores the closed form.
+    "inset": 0.30,
+    "fullwave_l_scale": 0.967,  # drawn L = closed-form L x this (1.0: closed form only)
+    "fullwave_ref": "results/openems/patch-c-i30 (C0a single-patch sweep)",
     "notch": 0.10,  # inset slot width beside the feed [D]
     "spacing": 2.90,  # patch centre spacing along the column, ~0.6 lambda0 [BD §6.2]
     "window_margin": 0.15,  # L2 window beyond the patch outline [D], swept (RFS-6)

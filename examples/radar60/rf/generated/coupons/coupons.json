@@ -106,22 +106,22 @@
       "id": "CP-A-SER",
       "kind": "series-fed 2-patch column (RFS-4S, D5 fallback)",
       "link_mm": 1.5391,
-      "centre_spacing_mm": 2.7289
+      "centre_spacing_mm": 2.6897
     },
     {
       "id": "CP-A-PATCH-M25",
       "kind": "single inset patch",
-      "l_mm": 1.1649
+      "l_mm": 1.1256
     },
     {
       "id": "CP-A-PATCH-NOM",
       "kind": "single inset patch",
-      "l_mm": 1.1899
+      "l_mm": 1.1506
     },
     {
       "id": "CP-A-PATCH-P25",
       "kind": "single inset patch",
-      "l_mm": 1.2149
+      "l_mm": 1.1756
     },
     {
       "id": "CP6-THRU",

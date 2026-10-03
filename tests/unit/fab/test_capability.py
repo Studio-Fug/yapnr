@@ -125,7 +125,7 @@ class ValidationTest(unittest.TestCase):
     def test_stackup_copper_order_and_priors(self):
         doc = copy.deepcopy(self.stackup)
         doc["layers"][1]["name"] = "In1.Cu"
-        del doc["layers"][2]["df_prior_src"]
+        doc["layers"][2]["df_prior"] = 0.009  # a stand-in without its source
         problems = capability.validate("stackups", "oshpark-4l-fr408hr", doc)
         self.assertTrue(any("must be F.Cu, In1.Cu.. B.Cu" in p for p in problems), problems)
         self.assertTrue(any("df_prior" in p for p in problems), problems)

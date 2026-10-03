@@ -175,7 +175,7 @@ class EvaluateTest(unittest.TestCase):
         facts = self.facts(layers=4)
         facts.stackup = [
             {"name": "d1", "type": "prepreg", "thickness": 0.2, "epsilon_r": 4.5},
-            {"name": "d2", "type": "core", "thickness": 0.99, "epsilon_r": 3.61},
+            {"name": "d2", "type": "core", "thickness": 0.99, "epsilon_r": 3.87},
             {"name": "d3", "type": "prepreg", "thickness": 0.2, "epsilon_r": 3.61},
         ]
         findings = self.run_check(facts)

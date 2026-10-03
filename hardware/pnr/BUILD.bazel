@@ -1352,6 +1352,27 @@ py_test(
     ],
 )
 
+# Exact-separation routes judged by kicad-cli's DRC (no clearance, hole or short
+# finding). Skips unless PNR_KICAD_PYTHON and PNR_KICAD_CLI name a headless KiCad
+# (pass them with --test_env).
+py_test(
+    name = "exact_route_kicad_test",
+    size = "small",
+    srcs = [
+        "tests/test_exact_route.py",
+        "tests/test_exact_route_kicad.py",
+    ],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_exact_route_kicad.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        requirement("numpy"),
+    ],
+)
+
 py_test(
     name = "batched_cost_test",
     size = "small",

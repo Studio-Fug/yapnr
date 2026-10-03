@@ -48,6 +48,12 @@ class ReferenceLoadTest(unittest.TestCase):
         data = calibration.ingest([record(30.0)], [record(40.0, "c4d-highcpu-8", vcpus=8)])
         self.assertIsNone(data["reference_load"])
 
+    def test_slurm_records_are_keyed_by_cpu_model(self):
+        site = dict(record(60.0), backend="slurm")
+        site["machine"] = {"cpu_model": "AMD EPYC 7763 64-Core Processor", "vcpus": 128}
+        data = calibration.ingest([record(30.0)], [site])
+        self.assertEqual(data["speed"], {"slurm/AMD EPYC 7763 64-Core Processor": 0.5})
+
     def test_cli_warns_about_a_busy_reference(self):
         with tempfile.TemporaryDirectory() as tmp:
             for name, rec in (("ref", record(30.0, load=10.0)), ("cloud", record(40.0, "c4d-x-8"))):

@@ -268,7 +268,11 @@ def estimate(
     if backend == "local":
         return cost.estimate_local(reference, config.local.workers)
     cpus = [cls.cpus for cls, lines, _ in picked for _ in lines]
-    return cost.estimate_slurm(reference, cpus, site.max_concurrent if site else 1)
+    if site is None:
+        return cost.estimate_slurm(reference, cpus, 1)
+    return cost.estimate_slurm(
+        reference, cpus, site.max_concurrent * max(1, site.slots), speed=site.speed
+    )
 
 
 def _write_json(path: Path, data: Any) -> None:
@@ -484,7 +488,8 @@ def make_plan(
     if site_config is not None:
         chunk = max(site_config.chunk, 1)
         for cls in classes:
-            chunk = max(chunk, math.ceil(len(cls.lines) / site_config.max_array))
+            per_element = site_config.max_array * max(1, site_config.slots)
+            chunk = max(chunk, math.ceil(len(cls.lines) / per_element))
         meta["backend"].update(site=site_config.name, chunk=chunk)
     if backend == "gcp-batch":
         meta["backend"].update(home_region=config.require_gcp().home_region)

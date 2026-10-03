@@ -5,7 +5,8 @@ on the development Mac (the reference) and on each candidate machine type. ``ing
 records by kind and labels, and writes a ``yapnr-calibration-v1`` file:
 
 - ``speed[<machine type>]`` and ``speed[<family>]``: the median over paired tasks of reference wall
-  time / cloud wall time (1.0 = as fast as the reference core);
+  time / cloud wall time (1.0 = as fast as the reference core); records of a Slurm site, which has
+  no machine types, give ``speed["slurm/<CPU model>"]``, the value for the site's ``speed``;
 - ``reference_seconds[<kind>][<case>]``: the median reference wall time per case;
 - ``samples`` and ``spread``: how many pairs each factor rests on and their interquartile range.
 
@@ -69,13 +70,19 @@ def ingest(
     for record in cloud:
         if not _usable(record):
             continue
-        machine = (record.get("machine") or {}).get("machine_type")
+        info = record.get("machine") or {}
+        machine = info.get("machine_type")
+        if not machine and record.get("backend") == "slurm" and info.get("cpu_model"):
+            # An HPC site has no machine types: its factor is keyed by CPU model, for the
+            # site's `speed` in the owner config.
+            machine = "slurm/%s" % info["cpu_model"]
         ref = ref_times.get(pair_key(record))
         if not machine or not ref:
             continue
         ratio = statistics.median(ref) / float(record["wall_s"])
         ratios.setdefault(machine, []).append(ratio)
-        ratios.setdefault(machine.split("-")[0], []).append(ratio)
+        if info.get("machine_type"):
+            ratios.setdefault(machine.split("-")[0], []).append(ratio)
     speed = {k: round(statistics.median(v), 4) for k, v in sorted(ratios.items())}
     loads, vcpus = [], []
     for record in reference:

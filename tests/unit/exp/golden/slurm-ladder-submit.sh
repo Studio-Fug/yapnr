@@ -34,7 +34,12 @@ for name in campaign.json tasks.jsonl task.py; do
 done
 if [ ! -e "${sif}" ]; then
   echo "building ${sif} from ghcr.io/studio-fug/yapnr@sha256:abababababababababababababababababababababababababababababababab" >&2
-  mkdir -p "$(dirname "${sif}")"
+  module load apptainer 2>/dev/null || true
+  # The layers and the build need several times the image's size: keep them off HOME and
+  # the login node's /tmp (set APPTAINER_CACHEDIR / APPTAINER_TMPDIR to override).
+  export APPTAINER_CACHEDIR="${APPTAINER_CACHEDIR:-${store}/.apptainer/cache}"
+  export APPTAINER_TMPDIR="${APPTAINER_TMPDIR:-${store}/.apptainer/tmp}"
+  mkdir -p "$(dirname "${sif}")" "${APPTAINER_CACHEDIR}" "${APPTAINER_TMPDIR}"
   apptainer pull "${sif}" "docker://ghcr.io/studio-fug/yapnr@sha256:abababababababababababababababababababababababababababababababab"
 fi
 sif_sha256="$(sha256sum "${sif}" | cut -d" " -f1)"

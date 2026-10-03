@@ -329,7 +329,7 @@ is billed (about $0.12 per GiB, [network pricing][network-pricing]).
 ## Slurm and Apptainer (HPC allocations)
 
 Add the site to the owner config (`[slurm.<site>]`: account, partition, store, SIF path, array and
-concurrency limits, `chunk`), then:
+concurrency limits, `chunk`, `slots`, `speed`), then:
 
 ```sh
 yapnr exp plan experiments/ladder-sweep.toml --backend slurm --site <site>
@@ -348,6 +348,26 @@ shell forwards the signal, the wrapper flushes checkpoints and exits, and the el
 finished tasks are skipped. Copy the store's `campaigns/<id>` back and run
 `yapnr exp fetch <plan> --from <copy>`. A private campaign is refused on a site unless the owner
 config marks it `private_ok = true`.
+
+Before writing an allocation request, read the site's charging policy:
+
+- **Per core** (shared nodes): keep `slots = 1`; each array element is one task's cores.
+- **Per node** (the scheduler gives whole nodes, as many large centres do): set `slots` to the
+  tasks one node holds (its cores over the task's cores, within its memory) and add
+  `extra_sbatch = ["--exclusive"]`. Each element then runs that many wrappers side by side and
+  is charged one node; with `slots = 1` every one-core task would be charged a whole node.
+- **The request itself**: `plan --backend slurm` prints core-hours at the site's `speed`
+  (default 0.5 of the Mac's M4 performance core, typical of HPC server cores by single-thread
+  rating), before requeues and the idle tail of each element. A calibration run on the site
+  replaces the guess before the full request: plan `experiments/calibration-ladder.toml` with
+  `--backend slurm`, fetch it with `--from`, and `calibration ingest` it like a cloud shape; its
+  factor is keyed `slurm/<CPU model>`, the value for `speed`. Sites that bill node-hours want the
+  core-hours divided by the cores per node.
+- **Images**: `submit.sh` pulls the SIF on the login node, keeping Apptainer's layer cache and
+  build directory under the store (`APPTAINER_CACHEDIR`, `APPTAINER_TMPDIR`; set them to
+  override), because home quotas and login-node `/tmp` are small. While the GHCR packages are
+  private, export `APPTAINER_DOCKER_USERNAME` and `APPTAINER_DOCKER_PASSWORD` (a `read:packages`
+  token) before running it. Compute nodes need no internet access.
 
 ## Calibration
 

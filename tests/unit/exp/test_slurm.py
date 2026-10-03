@@ -177,6 +177,82 @@ class SlurmTest(unittest.TestCase):
         self.assertTrue((store / "campaigns" / plan.id / "submissions" / "1.indices").is_file())
         self.assertTrue((store / "bundles").is_dir())
 
+    def test_slots_run_wrappers_side_by_side(self):
+        # A site that allocates whole nodes: four one-core tasks per element, one element.
+        site = self.config.slurm["example-site"]
+        site.slots = 4
+        site.extra_sbatch = ["--exclusive"]
+        plan = self.plan(testing.LADDER_CAMPAIGN)  # 4 tasks, chunk 2: indices 0 and 1 only
+        directory = plan.dir / "backend" / "slurm"
+        sbatch = (directory / "c1m3.sbatch").read_text()
+        self.assertIn("#SBATCH --cpus-per-task=4\n", sbatch)
+        self.assertIn("#SBATCH --mem=12288M\n", sbatch)
+        self.assertIn("#SBATCH --exclusive\n", sbatch)
+        self.check_shell(directory / "c1m3.sbatch")
+        submit = (directory / "submit.sh").read_text()
+        self.assertIn("elements=$(((count + 8 - 1) / 8))", submit)
+        self.assertIn(
+            'APPTAINER_CACHEDIR="${APPTAINER_CACHEDIR:-${store}/.apptainer/cache}"', submit
+        )
+        submissions = self.tmp / "store" / "campaigns" / plan.id / "submissions"
+        submissions.mkdir(parents=True)
+        (submissions / "1.indices").write_text("0\n1\n2\n3\n")
+        calls = self.tmp / "calls.log"
+        stubs = self.tmp / "stubs"
+        stubs.mkdir()
+        # Each wrapper records its --index (the last argument); index 1 fails transiently (75).
+        (stubs / "apptainer").write_text(
+            '#!/bin/bash\nfor a in "$@"; do last="$a"; done\n'
+            'echo "index ${last}" >> %s\nif [ "${last}" = 1 ]; then exit 75; fi\nexit 0\n' % calls
+        )
+        (stubs / "scontrol").write_text('#!/bin/bash\necho "scontrol $*" >> %s\n' % calls)
+        for stub in stubs.iterdir():
+            stub.chmod(0o755)
+        env = dict(
+            os.environ,
+            PATH="%s:%s" % (stubs, os.environ.get("PATH", "/usr/bin:/bin")),
+            YAPNR_STORE=str(self.tmp / "store"),
+            YAPNR_SIF=str(self.tmp / "image.sif"),
+            YAPNR_SUBMISSION="1",
+            SLURM_JOB_ID="42",
+            SLURM_ARRAY_JOB_ID="41",
+            SLURM_ARRAY_TASK_ID="0",
+            SLURM_RESTART_COUNT="0",
+            SLURM_TMPDIR=str(self.tmp / "node"),
+        )
+        done = subprocess.run(
+            ["bash", str(directory / "c1m3.sbatch")], env=env, timeout=60, capture_output=True
+        )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        lines = sorted(calls.read_text().split("\n")[:-1])
+        self.assertEqual(lines, ["index 0", "index 1", "scontrol requeue 41_0"])
+        # The submit packs the same way: one element for the four tasks.
+        os.environ["SCRATCH"] = str(self.tmp / "scratch")
+        try:
+            done = slurm.Slurm().submit(plan, self.config, dry_run=True, say=lambda s: None)
+        finally:
+            del os.environ["SCRATCH"]
+        self.assertEqual(done[0].record["job"]["argv"][2], "--array=0-0%16")
+
+    def test_site_speed_scales_the_core_hours(self):
+        # The core-hours an allocation request quotes assume the site's speed (default 0.5).
+        estimate = self.plan(testing.LADDER_CAMPAIGN).meta["estimate"]
+        self.assertIn("speed 0.50 of the reference core", estimate["assumptions"][0])
+        self.config.slurm["example-site"].speed = 1.0
+        faster = self.plan(testing.LADDER_CAMPAIGN, replace=True).meta["estimate"]
+        self.assertIn("speed 1.00 of the reference core", faster["assumptions"][0])
+        self.assertGreater(estimate["core_hours"], faster["core_hours"])
+
+    def test_slots_and_speed_are_checked(self):
+        from yapnr.exp import config as config_mod
+
+        (self.tmp / "bad").mkdir()
+        path = testing.write_config(self.tmp / "bad", "slots = 0\nspeed = 0\n", slurm=True)
+        with self.assertRaises(config_mod.ConfigError) as caught:
+            config_mod.load(str(path))
+        self.assertIn("slots is at least 1", str(caught.exception))
+        self.assertIn("speed is above 0", str(caught.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

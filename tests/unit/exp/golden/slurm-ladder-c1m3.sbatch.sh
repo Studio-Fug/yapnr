@@ -17,19 +17,22 @@ module load apptainer 2>/dev/null || true
 scratch="${SLURM_TMPDIR:-${TMPDIR:-/tmp}}/yapnr-${SLURM_JOB_ID}"
 mkdir -p "${scratch}"
 restarts="${SLURM_RESTART_COUNT:-0}"
+count="$(wc -l < "${YAPNR_STORE}/campaigns/20261002-ladder-cca5a3/submissions/${YAPNR_SUBMISSION}.indices" | tr -d " ")"
 cmd=(apptainer exec --cleanenv --containall
   --bind "${YAPNR_STORE}:/store" --bind "${scratch}:/scratch"
   --env "YAPNR_BACKEND=slurm,YAPNR_SIF_SHA256=${YAPNR_SIF_SHA256:-}"
   "${YAPNR_SIF}" /usr/local/bin/yapnr-kicad-env /opt/venv/bin/python
   /store/campaigns/20261002-ladder-cca5a3/task.py --store /store --inputs /store/bundles
   --campaign 20261002-ladder-cca5a3 --submission "${YAPNR_SUBMISSION}"
-  --index "${SLURM_ARRAY_TASK_ID}" --chunk 2 --retry "${restarts}"
-  --toolchain image --work-root /scratch)
-# The time limit is near: stop the wrapper (it flushes checkpoints and exits 75), then
+  --chunk 2 --retry "${restarts}" --toolchain image --work-root /scratch)
+children=()
+# The time limit is near: stop the wrappers (they flush checkpoints and exit 75), then
 # requeue a bounded number of times; finished tasks are skipped on the next run.
 requeue() {
-  kill -USR1 "${child}" 2>/dev/null || true
-  wait "${child}" || true
+  if [ "${#children[@]}" -gt 0 ]; then
+    kill -USR1 "${children[@]}" 2>/dev/null || true
+    wait "${children[@]}" || true
+  fi
   rm -rf "${scratch}"
   if [ "${restarts}" -lt 3 ]; then
     scontrol requeue "${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
@@ -39,10 +42,21 @@ requeue() {
   exit 75
 }
 trap requeue USR1
-"${cmd[@]}" &
-child=$!
+# 1 wrapper(s) side by side (the site's slots), each on 2 consecutive task(s).
+for ((slot = 0; slot < 1; slot++)); do
+  index=$((SLURM_ARRAY_TASK_ID * 1 + slot))
+  if [ $((index * 2)) -ge "${count}" ]; then break; fi
+  "${cmd[@]}" --index "${index}" &
+  children+=("$!")
+done
 status=0
-wait "${child}" || status=$?
+for child in "${children[@]}"; do
+  code=0
+  wait "${child}" || code=$?
+  if [ "${code}" -ne 0 ] && { [ "${status}" -eq 0 ] || [ "${code}" -eq 75 ]; }; then
+    status="${code}"
+  fi
+done
 rm -rf "${scratch}"
 # 75: a transient failure (staging, upload); requeue a bounded number of times.
 if [ "${status}" -eq 75 ] && [ "${restarts}" -lt 3 ]; then

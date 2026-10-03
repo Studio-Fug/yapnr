@@ -8,7 +8,9 @@ session); ``yapnr exp submit`` does the same where yapnr is installed on the log
 - The image is a SIF built once on the login node from the campaign's pinned digest:
   ``apptainer pull <sif> docker://ghcr.io/studio-fug/yapnr@sha256:...``.
 - Each array element runs ``chunk`` consecutive tasks of the submission in sequence, because
-  ``MaxArraySize`` (1001 by default) and QOS limits cap array sizes.
+  ``MaxArraySize`` (1001 by default) and QOS limits cap array sizes, in each of the site's
+  ``slots``: wrappers side by side, so that a site that allocates (and charges) whole nodes gets
+  a node's worth of tasks per element instead of one task per node.
 - ``--requeue --signal=B:USR1@300``: the batch shell forwards USR1 to the container, waits, and
   requeues the element; finished tasks are skipped through their ``_DONE`` markers. An element
   whose wrapper exits 75 (a transient failure) is requeued too. Both requeues stop after
@@ -54,6 +56,11 @@ def element_seconds(cls: planning.ResourceClass, chunk: int) -> int:
     return chunk * (int(cls.max_wall_s) + TASK_GRACE_S) + ELEMENT_GRACE_S
 
 
+def module_line(site: SlurmSite) -> str:
+    """Load the site's Apptainer module where there is one (a missing ``module`` is fine)."""
+    return "module load %s 2>/dev/null || true" % shlex.quote(site.module) if site.module else ":"
+
+
 def render_sbatch(
     plan_meta: Dict[str, Any],
     site: SlurmSite,
@@ -73,15 +80,16 @@ def render_sbatch(
     for key, value in (("account", site.account), ("partition", site.partition), ("qos", site.qos)):
         if value:
             directives.append("--%s=%s" % (key, value))
+    slots = max(1, site.slots)
     directives += [
-        "--cpus-per-task=%d" % cls.cpus,
-        "--mem=%dM" % int(math.ceil(cls.memory_gb * 1024)),
+        "--cpus-per-task=%d" % (cls.cpus * slots),
+        "--mem=%dM" % (int(math.ceil(cls.memory_gb * 1024)) * slots),
         "--time=%s" % _hms(seconds),
         "--requeue",
         "--signal=B:USR1@300",
     ]
     directives += list(site.extra_sbatch)
-    module = "module load %s 2>/dev/null || true" % shlex.quote(site.module) if site.module else ":"
+    module = module_line(site)
     lines = ["#!/bin/bash", "# yapnr exp: campaign %s, class %s." % (cid, cls.name)]
     lines += ["#SBATCH %s" % d for d in directives]
     lines += [
@@ -94,19 +102,23 @@ def render_sbatch(
         'scratch="${SLURM_TMPDIR:-${TMPDIR:-/tmp}}/yapnr-${SLURM_JOB_ID}"',
         'mkdir -p "${scratch}"',
         'restarts="${SLURM_RESTART_COUNT:-0}"',
+        'count="$(wc -l < "${YAPNR_STORE}/campaigns/%s/submissions/${YAPNR_SUBMISSION}.indices"'
+        ' | tr -d " ")"' % cid,
         "cmd=(%s exec --cleanenv --containall" % shlex.quote(site.apptainer),
         '  --bind "${YAPNR_STORE}:/store" --bind "${scratch}:/scratch"',
         '  --env "YAPNR_BACKEND=slurm,YAPNR_SIF_SHA256=${YAPNR_SIF_SHA256:-}"',
         '  "${YAPNR_SIF}" %s %s' % (IMAGE_ENTRYPOINT, IMAGE_PYTHON),
         "  /store/campaigns/%s/task.py --store /store --inputs /store/bundles" % cid,
         '  --campaign %s --submission "${YAPNR_SUBMISSION}"' % cid,
-        '  --index "${SLURM_ARRAY_TASK_ID}" --chunk %d --retry "${restarts}"' % chunk,
-        "  --toolchain image --work-root /scratch)",
-        "# The time limit is near: stop the wrapper (it flushes checkpoints and exits 75), then",
+        '  --chunk %d --retry "${restarts}" --toolchain image --work-root /scratch)' % chunk,
+        "children=()",
+        "# The time limit is near: stop the wrappers (they flush checkpoints and exit 75), then",
         "# requeue a bounded number of times; finished tasks are skipped on the next run.",
         "requeue() {",
-        '  kill -USR1 "${child}" 2>/dev/null || true',
-        '  wait "${child}" || true',
+        '  if [ "${#children[@]}" -gt 0 ]; then',
+        '    kill -USR1 "${children[@]}" 2>/dev/null || true',
+        '    wait "${children[@]}" || true',
+        "  fi",
         '  rm -rf "${scratch}"',
         '  if [ "${restarts}" -lt %d ]; then' % max_retries,
         '    scontrol requeue "${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}"',
@@ -116,10 +128,22 @@ def render_sbatch(
         "  exit 75",
         "}",
         "trap requeue USR1",
-        '"${cmd[@]}" &',
-        "child=$!",
+        "# %d wrapper(s) side by side (the site's slots), each on %d consecutive task(s)."
+        % (slots, chunk),
+        "for ((slot = 0; slot < %d; slot++)); do" % slots,
+        "  index=$((SLURM_ARRAY_TASK_ID * %d + slot))" % slots,
+        '  if [ $((index * %d)) -ge "${count}" ]; then break; fi' % chunk,
+        '  "${cmd[@]}" --index "${index}" &',
+        '  children+=("$!")',
+        "done",
         "status=0",
-        'wait "${child}" || status=$?',
+        'for child in "${children[@]}"; do',
+        "  code=0",
+        '  wait "${child}" || code=$?',
+        '  if [ "${code}" -ne 0 ] && { [ "${status}" -eq 0 ] || [ "${code}" -eq 75 ]; }; then',
+        '    status="${code}"',
+        "  fi",
+        "done",
         'rm -rf "${scratch}"',
         "# 75: a transient failure (staging, upload); requeue a bounded number of times.",
         'if [ "${status}" -eq 75 ] && [ "${restarts}" -lt %d ]; then' % max_retries,
@@ -134,6 +158,7 @@ def render_sbatch(
 def render_submit(plan_meta: Dict[str, Any], site: SlurmSite, chunk: int) -> str:
     """``submit.sh``: stage the store, then one array per resource class (bash and Slurm only)."""
     cid = plan_meta["id"]
+    per_element = chunk * max(1, site.slots)
     ref = plan_meta["image"]["ref"]
     digest = (plan_meta["image"].get("digest") or "").replace("sha256:", "")
     sif = site.sif.replace("{digest12}", digest[:12])
@@ -175,7 +200,12 @@ def render_submit(plan_meta: Dict[str, Any], site: SlurmSite, chunk: int) -> str
         "done",
         'if [ ! -e "${sif}" ]; then',
         '  echo "building ${sif} from %s" >&2' % ref,
-        '  mkdir -p "$(dirname "${sif}")"',
+        "  %s" % module_line(site),
+        "  # The layers and the build need several times the image's size: keep them off HOME and",
+        "  # the login node's /tmp (set APPTAINER_CACHEDIR / APPTAINER_TMPDIR to override).",
+        '  export APPTAINER_CACHEDIR="${APPTAINER_CACHEDIR:-${store}/.apptainer/cache}"',
+        '  export APPTAINER_TMPDIR="${APPTAINER_TMPDIR:-${store}/.apptainer/tmp}"',
+        '  mkdir -p "$(dirname "${sif}")" "${APPTAINER_CACHEDIR}" "${APPTAINER_TMPDIR}"',
         '  %s pull "${sif}" "docker://%s"' % (shlex.quote(site.apptainer), ref),
         "fi",
         'sif_sha256="$(sha256sum "${sif}" | cut -d" " -f1)"',
@@ -191,7 +221,7 @@ def render_submit(plan_meta: Dict[str, Any], site: SlurmSite, chunk: int) -> str
         "  next=$((next + 1))",
         '  cp "${plan}/backend/slurm/${class}.indices" "${dir}/submissions/${n}.indices"',
         '  count="$(wc -l < "${dir}/submissions/${n}.indices" | tr -d " ")"',
-        "  elements=$(((count + %d - 1) / %d))" % (chunk, chunk),
+        "  elements=$(((count + %d - 1) / %d))" % (per_element, per_element),
         "  job=$(sbatch --parsable --array=0-$((elements - 1))%%%d \\" % site.max_concurrent,
         '    --output="${dir}/slurm/%A_%a.out" \\',
         '    --export="ALL,YAPNR_STORE=${store},YAPNR_SIF=${sif},'
@@ -277,7 +307,7 @@ class Slurm(Backend):
         site = self.site(plan, config)
         chunk = int(plan.meta["backend"]["chunk"])
         indices = files["%s.indices" % cls.name].read_text().split()
-        elements = max(1, math.ceil(len(indices) / chunk))
+        elements = max(1, math.ceil(len(indices) / (chunk * max(1, site.slots))))
         store = str(stores.runs.root)
         ref = image.parse(plan.meta["image"]["ref"])
         sif = os.path.expandvars(

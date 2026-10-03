@@ -445,7 +445,8 @@ def estimate_slurm(
     est.core_hours = sum(h * c for h, c in zip(hours, cpus))
     est.makespan_h = max(max(hours, default=0.0), sum(hours) / max(1, concurrent))
     est.assumptions.append(
-        "core-hours at speed %.2f of the reference core (site unknown until calibrated)" % speed
+        "core-hours at speed %.2f of the reference core (the site's `speed` until a calibration "
+        "on the site measures it); sites that allocate whole nodes charge node-hours" % speed
     )
     return est
 

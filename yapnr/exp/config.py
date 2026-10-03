@@ -117,6 +117,14 @@ class SlurmSite:
     apptainer: str = "apptainer"
     private_ok: bool = False
     extra_sbatch: List[str] = field(default_factory=list)
+    # Tasks run side by side in one array element. 1 suits sites that share nodes and charge per
+    # core; on sites that allocate (and charge) whole nodes, set it to the tasks a node holds and
+    # add "--exclusive" to extra_sbatch, or every one-core task is billed a whole node.
+    slots: int = 1
+    # The site's core speed relative to the reference core (the development Mac's M4 performance
+    # core) for the core-hour estimate; typical HPC server cores are about half of it (PassMark
+    # single-thread), until a calibration run on the site measures it.
+    speed: float = 0.5
 
 
 @dataclass
@@ -273,6 +281,10 @@ def parse(data: Mapping[str, Any], path: str = "<config>") -> Config:
                     errors.append("slurm.%s.chunk is at least 1" % name)
                 if isinstance(site.max_array, int) and site.max_array < 1:
                     errors.append("slurm.%s.max_array is at least 1" % name)
+                if isinstance(site.slots, int) and site.slots < 1:
+                    errors.append("slurm.%s.slots is at least 1" % name)
+                if isinstance(site.speed, (int, float)) and not 0 < site.speed <= 4:
+                    errors.append("slurm.%s.speed is above 0 (1.0: the reference core)" % name)
                 config.slurm[name] = site
     prices = data.get("prices", {})
     if isinstance(prices, dict):

@@ -240,6 +240,80 @@ class StackRouting(unittest.TestCase):
         self.assertTrue(any(math.dist(p, (6.8, 6.0)) < 1e-6 for p in sites))
 
 
+class SharedPlaneLayer(unittest.TestCase):
+    """GND and VCC both on a dedicated In1 (several nets on one plane layer): VCC
+    fills its pads' bounding box at a higher priority, GND the rest of the outline.
+    A GND drop inside VCC's box would touch only an island of GND copper, so the
+    router must not take it, and must not call GND complete without it."""
+
+    def test_drops_stay_in_their_own_region_and_the_rest_are_reported(self):
+        from pnr.stack import PlaneAccess, plane_regions, resolve
+
+        g = sample()
+        g.stack = typed("SPSS")
+        c, rules = compiled(g, 4, {"GND": "In1.Cu", "VCC": "In1.Cu"})
+        route = route_board(g, c, rules, pitch=0.25, max_iters=8)
+        stack = resolve(rules, g.stack)
+        pads = {}
+        for comp in g.components:
+            for _name, net, rect in pad_rects(comp):
+                pads.setdefault(net, []).append((rect.cx, rect.cy))
+        access = PlaneAccess(stack, plane_regions(stack, g.stack, pads, 24.0, 16.0), 0.3, 0.75)
+        drops = [(n, (x, y)) for n, x, y in route.vias if n in ("GND", "VCC")]
+        self.assertTrue(drops)
+        for net, p in drops:
+            self.assertTrue(access.site_ok(net, p), (net, p))
+        # VCC's box covers most GND pads of this sample: those have no drop and GND
+        # is reported unrouted at each of them.
+        self.assertIn("GND", route.result.unrouted)
+        self.assertNotIn("VCC", route.result.unrouted)
+        sites = route.failure_sites["GND"]
+        self.assertTrue(sites)
+        for p in sites:
+            self.assertTrue(any(math.dist(p, q) < 1e-6 for q in pads["GND"]))
+        self.assertIn("shared by GND, VCC", " ".join(route.stack_warnings))
+        self.assertEqual(route.escape_diagnostics["stack_warnings"], route.stack_warnings)
+
+    def test_with_a_second_ground_plane_every_pad_drops(self):
+        g = sample()
+        g.stack = typed("SPPS", {"In2.Cu": ["GND"]})
+        c, rules = compiled(g, 4, {"GND": "In1.Cu", "VCC": "In1.Cu"})
+        route = route_board(g, c, rules, pitch=0.25, max_iters=8)
+        self.assertEqual(route.result.unrouted, [])
+
+
+class DropWidths(unittest.TestCase):
+    def test_each_drop_stub_has_its_own_pads_width(self):
+        import pnr.pad_entry as pad_entry
+
+        g = sample()
+        g.stack = typed("SGPS")
+        c, rules = compiled(g, 4, {"GND": "In1.Cu", "VCC": "In2.Cu"})
+        original = pad_entry.terminal_required_width
+        # A terminal contract widens only C1's ground pad.
+        pad_entry.terminal_required_width = lambda ref, number, net, rules: (
+            0.6 if (ref, number) == ("C1", "2") else original(ref, number, net, rules)
+        )
+        try:
+            route = route_board(g, c, rules, pitch=0.25, max_iters=8)
+        finally:
+            pad_entry.terminal_required_width = original
+        widths = {}
+        for comp in g.components:
+            for (name, net, rect), pad in zip(pad_rects(comp), comp.pads):
+                if net == "GND":
+                    stubs = [
+                        t
+                        for t in route.tracks
+                        if t[0] == "GND" and math.dist(t[2], (rect.cx, rect.cy)) < 1e-6
+                    ]
+                    if stubs:
+                        widths[(comp.ref, name)] = {t[4] for t in stubs}
+        self.assertEqual(widths.pop(("C1", "2")), {0.6})
+        self.assertTrue(widths)
+        self.assertEqual(set().union(*widths.values()), {0.4})
+
+
 class CurrentLayers(unittest.TestCase):
     def test_a_current_rated_net_stays_off_thin_inner_copper(self):
         from pnr.route.detail.router import current_layer_mask
@@ -269,6 +343,75 @@ class CurrentLayers(unittest.TestCase):
         self.assertEqual(
             current_layer_mask(stack, layers, rules, {"VBUS": 0.7, "VCC": 0.4}, 0.25), {}
         )
+
+
+class CurrentLayersEveryKernel(unittest.TestCase):
+    """The current rule's layer mask (``RouteGrid.layer_mask``) holds whichever A*
+    kernel routes. Each kernel switch is tried, including ``PNR_MAZE_KERNEL``
+    values this tree may not know yet: a kernel that precomputes passability must
+    still apply the mask (a merged tree runs them all here)."""
+
+    def test_a_current_rated_net_never_takes_the_thin_inner_layer(self):
+        import os
+
+        rows = [
+            dict(name="F.Cu", type="signal", copper_mm=0.035),
+            dict(name="In1.Cu", type="signal", copper_mm=0.0152),
+            dict(name="In2.Cu", type="power", copper_mm=0.0152),
+            dict(name="B.Cu", type="signal", copper_mm=0.035),
+        ]
+        wall = [
+            Component(
+                ref,
+                "wall",
+                (12.0, 7.0),
+                0.0,
+                side,
+                (0.6, 12.0),
+                (0.6, 12.0),
+                pads=[Pad("1", "", (0.0, 0.0), (0.6, 12.0))],
+            )
+            for ref, side in (("W1", "top"), ("W2", "bottom"))
+        ]
+        g = board(
+            [
+                chip("R1", (5.0, 7.0), "VBUS", "A"),
+                chip("R2", (19.0, 7.0), "VBUS", "A"),
+                chip("C1", (5.0, 10.0), "GND", "B"),
+                chip("C2", (19.0, 10.0), "GND", "B"),
+            ]
+            + wall
+        )
+        g.stack = record_from_rows(rows)
+        c, rules = compiled(g, 4, {"GND": "In2.Cu"})
+        supply = dict(name="supply", nets=["VBUS"], width_mm=0.4, delta_t_c=10.0)
+        rules["net_classes"].append(supply)
+        # Without a current rating VBUS crosses the wall on In1 too.
+        free = route_board(g, c, rules, pitch=0.25, max_iters=4)
+        self.assertIn("In1.Cu", {t[1] for t in free.tracks if t[0] == "VBUS"})
+        supply["current_a"] = 0.5
+        saved = {k: os.environ.get(k) for k in ("PNR_PACKED_MAZE", "PNR_MAZE_KERNEL")}
+        try:
+            for packed in (None, "0", "1"):
+                for kernel in (None, "reference", "packed", "native"):
+                    for key, value in (("PNR_PACKED_MAZE", packed), ("PNR_MAZE_KERNEL", kernel)):
+                        if value is None:
+                            os.environ.pop(key, None)
+                        else:
+                            os.environ[key] = value
+                    with self.subTest(packed=packed, kernel=kernel):
+                        route = route_board(g, c, rules, pitch=0.25, max_iters=4)
+                        self.assertEqual(route.grid.layers, ("F.Cu", "In1.Cu", "B.Cu"))
+                        layers = {t[1] for t in route.tracks if t[0] == "VBUS"}
+                        self.assertNotIn("In1.Cu", layers)
+                        # The wall leaves In1 the only crossing: the signals use it.
+                        self.assertIn("In1.Cu", {t[1] for t in route.tracks if t[0] in "AB"})
+        finally:
+            for key, value in saved.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
 
 
 class DropPlanning(unittest.TestCase):

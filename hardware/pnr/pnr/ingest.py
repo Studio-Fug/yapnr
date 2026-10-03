@@ -288,21 +288,40 @@ def _component(fp, frame: _Frame) -> Component:
     )
 
 
-def _copper_thickness_mm(path: Optional[str]) -> dict:
-    """copper layer name -> thickness (mm) from the board file's ``(stackup ...)``
-    block. KiCad's Python does not wrap the stackup descriptor; the file states it."""
-    import re
+def _stackup_copper(path: Optional[str]) -> Optional[List[Tuple[str, float]]]:
+    """``[(name, thickness_mm)]`` of the copper rows of the board file's ``(stackup
+    ...)`` block, in file order, or None when the file has no such block. KiCad's
+    Python does not wrap the stackup descriptor; the file states it."""
+    import os
 
     if not path:
-        return {}
+        return None
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    key = (path, st.st_mtime_ns, st.st_size)
+    if key in _STACKUP_CACHE:
+        return _STACKUP_CACHE[key]
     try:
         with open(path, encoding="utf-8") as fh:
             text = fh.read()
     except OSError:
-        return {}
+        return None
+    _STACKUP_CACHE.clear()  # one board file at a time
+    _STACKUP_CACHE[key] = rows = _parse_stackup(text)
+    return rows
+
+
+_STACKUP_CACHE: dict = {}
+
+
+def _parse_stackup(text: str) -> Optional[List[Tuple[str, float]]]:
+    import re
+
     start = text.find("(stackup")
     if start < 0:
-        return {}
+        return None
     depth = 0
     for end in range(start, len(text)):
         depth += {"(": 1, ")": -1}.get(text[end], 0)
@@ -310,37 +329,109 @@ def _copper_thickness_mm(path: Optional[str]) -> dict:
             break
     block = text[start : end + 1]
     pattern = r'\(layer\s+"([^"]+)"\s*\(type\s+"copper"\)\s*\(thickness\s+([0-9.eE+-]+)\)'
-    return {name: float(value) for name, value in re.findall(pattern, block)}
+    return [(name, float(value)) for name, value in re.findall(pattern, block)]
+
+
+def _copper_thickness_mm(path: Optional[str]) -> dict:
+    """copper layer name -> thickness (mm) from the board file's stackup block."""
+    return dict(_stackup_copper(path) or [])
 
 
 def stack_record(board, path: Optional[str] = None) -> Optional[dict]:
     """The board's declared copper stack (:mod:`pnr.stack`), or None when the board
     declares no physical stackup. Copper layers in order with their KiCad layer type,
     copper thickness and the nets of the (non-rule-area) zones on them, by KiCad's
-    standard layer names (the names the routing rules use)."""
+    standard layer names (the names the routing rules use); for a ``power`` layer
+    also the zones' outlines and priorities (``zone_shapes``, graph frame), which
+    bound where a drop via reaches its plane (:func:`pnr.stack.plane_regions`).
+
+    A stackup block whose copper rows are not the board's copper layers (KiCad does
+    not rewrite the block when the layer count changes: an atopile layout saved
+    two-layer, then built four-layer) does not describe the board: None, with a
+    note on stderr, as for a KiCad build that does not expose the stackup flag."""
+    import sys
+
     import pcbnew
 
     from pnr.stack import KICAD_LAYER_TYPES, record_from_rows
 
-    if not getattr(board.GetDesignSettings(), "m_HasStackup", False):
-        return None
-    thickness = _copper_thickness_mm(path if path is not None else board.GetFileName())
-    rows = []
-    for lid in board.GetEnabledLayers().CuStack():
-        name = pcbnew.BOARD.GetStandardLayerName(lid)
-        rows.append(
-            dict(
-                name=name,
-                type=KICAD_LAYER_TYPES.get(int(board.GetLayerType(lid)), "signal"),
-                copper_mm=thickness.get(name, thickness.get(board.GetLayerName(lid))),
-                zones=[
-                    z.GetNetname()
-                    for z in board.Zones()
-                    if not z.GetIsRuleArea() and z.GetNetCode() > 0 and z.IsOnLayer(lid)
-                ],
-            )
+    settings = board.GetDesignSettings()
+    if not hasattr(settings, "m_HasStackup"):
+        sys.stderr.write(
+            "pnr.ingest: this KiCad build does not expose the board stackup flag; "
+            "the declared copper stack is not read (legacy layer heuristic)\n"
         )
+        return None
+    if not settings.m_HasStackup:
+        return None
+    path = path if path is not None else board.GetFileName()
+    declared = _stackup_copper(path)
+    cu = list(board.GetEnabledLayers().CuStack())
+    names = [pcbnew.BOARD.GetStandardLayerName(lid) for lid in cu]
+    if (
+        declared
+        and [n for n, _ in declared] != names
+        and [n for n, _ in declared] != [board.GetLayerName(lid) for lid in cu]
+    ):
+        sys.stderr.write(
+            "pnr.ingest: the stackup block lists copper %s but the board has %s; the "
+            "block is stale and the declared copper stack is not used\n"
+            % (", ".join(n for n, _ in declared), ", ".join(names))
+        )
+        return None
+    thickness = dict(declared or [])
+    frame = None
+    rows = []
+    for lid, name in zip(cu, names):
+        kind = KICAD_LAYER_TYPES.get(int(board.GetLayerType(lid)), "signal")
+        zones = [
+            z
+            for z in board.Zones()
+            if not z.GetIsRuleArea() and z.GetNetCode() > 0 and z.IsOnLayer(lid)
+        ]
+        row = dict(
+            name=name,
+            type=kind,
+            copper_mm=thickness.get(name, thickness.get(board.GetLayerName(lid))),
+            zones=[z.GetNetname() for z in zones],
+        )
+        if kind == "power" and zones:
+            if frame is None:
+                frame, _ = _board_frame(board)
+            shapes = []
+            for z in zones:
+                outline = z.Outline()
+                if not outline.OutlineCount():
+                    continue
+                chain = outline.Outline(0)
+                points = [chain.CPoint(i) for i in range(chain.PointCount())]
+                shapes.append(
+                    dict(
+                        net=z.GetNetname(),
+                        priority=int(z.GetAssignedPriority()),
+                        outline=[frame.point(q.x, q.y) for q in points],
+                    )
+                )
+            row["zone_shapes"] = shapes
+        rows.append(row)
     return record_from_rows(rows)
+
+
+def board_stack(board, rules: Optional[dict], path: Optional[str] = None):
+    """The declared copper stack of an open ``board`` under ``rules``
+    (:func:`pnr.stack.resolve` of :func:`stack_record`), None for the legacy
+    heuristic. Its warnings go to stderr once per board and text."""
+    from pnr.stack import assess
+
+    stack, warnings = assess(rules, stack_record(board, path))
+    for text in warnings:
+        if text not in _STACK_WARNED:
+            _STACK_WARNED.add(text)
+            sys.stderr.write("pnr.stack: warning: %s\n" % text)
+    return stack
+
+
+_STACK_WARNED: set = set()
 
 
 def build_graph(board, name: Optional[str] = None) -> BoardGraph:

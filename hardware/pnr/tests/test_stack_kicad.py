@@ -277,5 +277,275 @@ class FormPlanes(unittest.TestCase):
         self.assertEqual(form_planes(b, stack, rules, 30.0, 20.0)["fallback_vias"], 0)
 
 
+def via(b, net, at):
+    """A 0.6/0.3 mm through via of ``net`` at board mm ``at``."""
+    import pcbnew as k
+
+    v = k.PCB_VIA(b)
+    v.SetPosition(k.VECTOR2I(round(at[0] * 1e6), round(at[1] * 1e6)))
+    v.SetViaType(k.VIATYPE_THROUGH)
+    v.SetLayerPair(k.F_Cu, k.B_Cu)
+    v.SetWidth(600_000)
+    v.SetDrill(300_000)
+    v.SetNetCode(b.FindNet(net).GetNetCode())
+    b.Add(v)
+    return v
+
+
+@unittest.skipUnless(NATIVE, "requires KiCad Python")
+class SharedPlaneConnectivity(unittest.TestCase):
+    """The router's plane-region model against KiCad's own zone fill: on a plane
+    layer shared by two nets, a via site the model admits lands in its net's main
+    fill, and the site the review found (a GND via inside VCC's higher-priority
+    box) is refused by the model and is indeed only a GND island in KiCad."""
+
+    def test_admitted_sites_reach_the_main_fill(self):
+        import pcbnew as k
+
+        from pnr.stack import PlaneAccess
+        from pnr.writeback import _WriteFrame, form_planes
+
+        b, _ = board("SPSS")
+        # Board mm: outline (30, 30)-(60, 50). VCC pads span (35.2..44.8, 36..40).
+        smd(b, "C1", (36.0, 36.0), [("1", "VCC", (-0.8, 0)), ("2", "GND", (0.8, 0))])
+        smd(b, "C2", (44.0, 40.0), [("1", "VCC", (-0.8, 0)), ("2", "GND", (0.8, 0))])
+        smd(b, "C3", (55.0, 45.0), [("1", "SIG", (-0.8, 0)), ("2", "GND", (0.8, 0))])
+        stack, rules = stack_of("SPSS", {"GND": "In1.Cu", "VCC": "In1.Cu"})
+        formed = form_planes(b, stack, rules, 30.0, 20.0)
+        self.assertEqual(sorted(formed["zones"]), [("In1.Cu", "GND"), ("In1.Cu", "VCC")])
+        frame = _WriteFrame(20.0)
+        from pnr.stack import plane_regions
+
+        pads = {}
+        for fp in b.GetFootprints():
+            for pad in fp.Pads():
+                q = pad.GetPosition()
+                pads.setdefault(pad.GetNetname(), []).append(frame.local(q.x, q.y))
+        access = PlaneAccess(stack, plane_regions(stack, None, pads, 30.0, 20.0), 0.3, 0.75)
+        candidates = []
+        for x in (31.0, 33.0, 35.0, 37.0, 40.0, 43.0, 46.0, 47.0, 50.0, 57.0):
+            for y in (31.0, 34.0, 36.5, 38.0, 41.5, 43.0, 46.0, 49.0):
+                for net in ("GND", "VCC"):
+                    local = frame.local(round(x * 1e6), round(y * 1e6))
+                    candidates.append((net, (x, y), access.site_ok(net, local)))
+        admitted = [(n, p) for n, p, ok in candidates if ok]
+        refused = [(n, p) for n, p, ok in candidates if not ok]
+        self.assertTrue(admitted and refused)
+        # The review's site: a GND via inside VCC's box, beside VCC's pads.
+        bad = ("GND", (37.0, 38.0))
+        self.assertIn(bad, refused)
+        checked = []
+        # Each via alone (several close vias would change each other's fill).
+        for net, p in admitted[::2] + [bad]:
+            v = via(b, net, p)
+            k.ZONE_FILLER(b).Fill(b.Zones())
+            lid = b.GetLayerID("In1.Cu")
+            zone = next(z for z in b.Zones() if z.GetNetname() == net)
+            fill = zone.GetFilledPolysList(lid)
+            areas = [abs(fill.Outline(i).Area()) for i in range(fill.OutlineCount())]
+            main = fill.Outline(areas.index(max(areas)))
+            inside = main.PointInside(v.GetPosition())
+            checked.append((net, p, inside))
+            b.Remove(v)
+        self.assertGreaterEqual(len(checked), 20)
+        self.assertEqual({n for n, _, _ in checked[:-1]}, {"GND", "VCC"})
+        for net, p, inside in checked[:-1]:
+            self.assertTrue(inside, "admitted %s via at %s is not in its main fill" % (net, p))
+        self.assertFalse(checked[-1][2], "the refused GND site reached GND's main fill")
+
+
+@unittest.skipUnless(NATIVE, "requires KiCad Python")
+class DeclaredStackBoards(unittest.TestCase):
+    def save(self, b, tmp, name, block_layers=None):
+        import pcbnew as k
+
+        path = str(Path(tmp) / name)
+        k.SaveBoard(path, b)
+        text = Path(path).read_text()
+        if block_layers is not None and '(type "copper")' not in text:
+            rows = "".join(
+                '\n\t\t\t(layer "%s" (type "copper") (thickness 0.035))' % n for n in block_layers
+            )
+            text = text.replace("(setup", "(setup\n\t\t(stackup" + rows + "\n\t\t)", 1)
+            Path(path).write_text(text)
+        return path
+
+    def test_a_stale_stackup_block_is_not_the_boards_stack(self):
+        # An atopile layout saved two-layer, then built four-layer: KiCad keeps the
+        # two-row block when the layer count changes.
+        import pcbnew as k
+
+        from pnr.ingest import stack_record
+
+        b, _ = board("SS")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.save(b, tmp, "two.kicad_pcb", ["F.Cu", "B.Cu"])
+            b = k.LoadBoard(path)
+            self.assertEqual(len(stack_record(b, path)["layers"]), 2)
+            b.SetCopperLayerCount(4)
+            out = str(Path(tmp) / "four.kicad_pcb")
+            k.SaveBoard(out, b)
+            self.assertIn('(layer "B.Cu"', Path(out).read_text())
+            self.assertIsNone(stack_record(k.LoadBoard(out), out))
+
+    def test_writeback_keeps_a_declared_stacks_layer_types(self):
+        # Plane classes on a declared stack typed signal (a product board): the
+        # legacy heuristic routes it, and the written board keeps its types, so a
+        # later reading of the routed board resolves the same (legacy) stack. A board
+        # without a stackup block is retyped as before.
+        import pcbnew as k
+
+        from pnr.graph import BoardGraph
+        from pnr.ingest import stack_record
+        from pnr.stack import resolve
+        from pnr.writeback import writeback
+
+        rules = dict(
+            layers=4,
+            fab=FAB,
+            net_classes=[
+                dict(name="p_gnd", nets=["GND"], plane_layer="In1.Cu", width_mm=0.4),
+                dict(name="p_vcc", nets=["VCC"], plane_layer="In2.Cu", width_mm=0.4),
+            ],
+        )
+        for declared in (True, False):
+            with self.subTest(declared=declared), tempfile.TemporaryDirectory() as tmp:
+                b, _ = board("SSSS")
+                smd(b, "C1", (40.0, 40.0), [("1", "VCC", (-0.8, 0)), ("2", "GND", (0.8, 0))])
+                b.GetDesignSettings().m_HasStackup = declared
+                names = ["F.Cu", "In1.Cu", "In2.Cu", "B.Cu"]
+                src = self.save(b, tmp, "src.kicad_pcb", names if declared else None)
+                if not declared:
+                    self.assertNotIn("(stackup", Path(src).read_text())
+                record = stack_record(k.LoadBoard(src), src)
+                self.assertIsNone(resolve(rules, record))
+                out = str(Path(tmp) / "out.kicad_pcb")
+                writeback(
+                    src, BoardGraph(name="x"), out, width=30.0, height=20.0, rules=rules, layers=4
+                )
+                routed = k.LoadBoard(out)
+                types = [
+                    int(routed.GetLayerType(lid)) for lid in routed.GetEnabledLayers().CuStack()
+                ]
+                if declared:
+                    self.assertEqual(types, [k.LT_SIGNAL] * 4)
+                    self.assertIsNone(resolve(rules, stack_record(routed, out)))
+                else:
+                    self.assertEqual(types, [k.LT_SIGNAL, k.LT_POWER, k.LT_POWER, k.LT_SIGNAL])
+                    self.assertIsNone(stack_record(routed, out))
+
+    def test_writeback_forms_the_planes_of_an_applied_stack(self):
+        # KiCad's Python writes back a declared SGPS stack: its planes come from
+        # the regions the router used (no torch-side import on this path).
+        import pcbnew as k
+
+        from pnr.ingest import load
+        from pnr.writeback import writeback
+
+        rules = dict(
+            layers=4,
+            fab=FAB,
+            net_classes=[
+                dict(name="p_gnd", nets=["GND"], plane_layer="In1.Cu", width_mm=0.4),
+                dict(name="p_vcc", nets=["VCC"], plane_layer="In2.Cu", width_mm=0.4),
+            ],
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            b, _ = board("SPPS")
+            smd(b, "C1", (40.0, 40.0), [("1", "VCC", (-0.8, 0)), ("2", "GND", (0.8, 0))])
+            src = self.save(b, tmp, "src.kicad_pcb", ["F.Cu", "In1.Cu", "In2.Cu", "B.Cu"])
+            graph = load(src)
+            self.assertIsNotNone(graph.stack)
+            out = str(Path(tmp) / "out.kicad_pcb")
+            writeback(src, graph, out, width=30.0, height=20.0, rules=rules, layers=4)
+            routed = k.LoadBoard(out)
+        zones = sorted(
+            (routed.GetLayerName(z.GetLayer()), z.GetNetname(), z.GetBoundingBox().GetWidth())
+            for z in routed.Zones()
+        )
+        self.assertEqual(zones, [("In1.Cu", "GND", 30_000_000), ("In2.Cu", "VCC", 30_000_000)])
+        types = [int(routed.GetLayerType(lid)) for lid in routed.GetEnabledLayers().CuStack()]
+        self.assertEqual(types, [k.LT_SIGNAL, k.LT_POWER, k.LT_POWER, k.LT_SIGNAL])
+
+    def test_native_layers_follow_a_four_layer_ssgs_board(self):
+        import pcbnew as k
+
+        from pnr.ingest import board_stack
+        from pnr.stack import contact_layer_names, power_layer_names, reference_layer
+
+        b, _ = board("SSPS")
+        rules = dict(layers=4, net_classes=[dict(name="g", nets=["GND"], plane_layer="In2.Cu")])
+        stack = board_stack(b, rules)
+        ids = [b.GetLayerID(n) for n in power_layer_names(stack)]
+        self.assertEqual(ids, [k.F_Cu, k.B_Cu, k.In1_Cu])
+        self.assertEqual(
+            [b.GetLayerID(n) for n in contact_layer_names(stack)], [k.F_Cu, k.In1_Cu, k.B_Cu]
+        )
+        self.assertEqual(reference_layer(stack), "In2.Cu")
+        # No stackup block: the native loop's own layers, by the same ids as before.
+        b.GetDesignSettings().m_HasStackup = False
+        stack = board_stack(b, rules)
+        self.assertIsNone(stack)
+        self.assertEqual(
+            [b.GetLayerID(n) for n in power_layer_names(stack)], [k.F_Cu, k.B_Cu, k.In2_Cu]
+        )
+
+    def test_through_hole_plane_pads_need_no_drop(self):
+        import pcbnew as k
+
+        from pnr.writeback import form_planes
+
+        b, nets = board("SPPS")
+        f = k.FOOTPRINT(b)
+        f.SetReference("J1")
+        b.Add(f)
+        f.SetPosition(k.VECTOR2I(40_000_000, 40_000_000))
+        p = k.PAD(f)
+        p.SetNumber("1")
+        p.SetAttribute(k.PAD_ATTRIB_PTH)
+        p.SetShape(k.PAD_SHAPE_CIRCLE)
+        p.SetSize(k.VECTOR2I(1_700_000, 1_700_000))
+        p.SetDrillSize(k.VECTOR2I(1_000_000, 1_000_000))
+        p.SetLayerSet(k.PAD.PTHMask())
+        p.SetPosition(k.VECTOR2I(40_000_000, 40_000_000))
+        p.SetNet(nets["GND"])
+        f.Add(p)
+        stack, rules = stack_of("SPPS", {"GND": "In1.Cu", "VCC": "In2.Cu"})
+        formed = form_planes(b, stack, rules, 30.0, 20.0)
+        self.assertEqual(formed["fallback_vias"], 0)
+        self.assertFalse([t for t in b.GetTracks() if t.GetClass() == "PCB_VIA"])
+        self.assertIn(("In1.Cu", "GND"), formed["zones"])
+
+    def test_zone_outlines_on_power_layers_reach_the_record(self):
+        import pcbnew as k
+
+        from pnr.ingest import load
+
+        b, nets = board("SPPS")
+        smd(b, "C1", (40.0, 40.0), [("1", "VCC", (-0.8, 0)), ("2", "GND", (0.8, 0))])
+        z = k.ZONE(b)
+        z.SetLayer(b.GetLayerID("In2.Cu"))
+        z.SetNetCode(nets["VCC"].GetNetCode())
+        z.SetAssignedPriority(2)
+        outline = z.Outline()
+        outline.NewOutline()
+        for x, y in ((40, 32), (58, 32), (58, 48), (40, 48)):
+            outline.Append(k.VECTOR2I(x * 1_000_000, y * 1_000_000))
+        b.Add(z)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.save(b, tmp, "zone.kicad_pcb", ["F.Cu", "In1.Cu", "In2.Cu", "B.Cu"])
+            g = load(path)
+        row = g.stack["layers"][2]
+        self.assertEqual(row["zones"], ["VCC"])
+        (shape,) = row["zone_shapes"]
+        self.assertEqual(shape["priority"], 2)
+        # Graph frame: mm from the outline's lower-left corner, y up.
+        self.assertEqual(
+            sorted(map(tuple, shape["outline"])),
+            [(10.0, 2.0), (10.0, 18.0), (28.0, 2.0), (28.0, 18.0)],
+        )
+        self.assertNotIn("zone_shapes", g.stack["layers"][1])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -18,12 +18,22 @@ from pnr.stack import (  # noqa: E402
     SIGNAL,
     SPLIT,
     UNUSED,
+    PlaneAccess,
+    assess,
+    bridge_layer_names,
+    contact_layer_names,
     copper_names,
     grid_layers,
     legacy_layers,
+    local_record,
     plane_nets,
+    plane_regions,
+    power_layer_names,
     record_from_rows,
+    reference_layer,
+    reference_nets,
     resolve,
+    split_plane_patterns,
 )
 
 
@@ -170,11 +180,236 @@ class Roles(unittest.TestCase):
         self.assertEqual(stack.layer("In1.Cu").role, SIGNAL)
         self.assertTrue(stack.warnings)
 
-    def test_errors(self):
+    def test_rules_naming_a_missing_plane_layer_raise(self):
         with self.assertRaises(ValueError):
             resolve(plane_rules(4, {"GND": "In5.Cu"}), record("SGPS"))
-        with self.assertRaises(ValueError):
-            resolve(plane_rules(4, {}), record("SGPS", kinds={"In1.Cu": "bogus"}))
+
+    def test_unusable_stacks_fall_back_to_legacy_with_a_warning(self):
+        cases = {
+            "unknown type": (plane_rules(4, {}), record("SGPS", kinds={"In1.Cu": "bogus"})),
+            "outer jumper": (plane_rules(4, {}), record("JGPS")),
+            "one layer": (dict(layers=1), record_from_rows([dict(name="F.Cu")])),
+            "layer count": (plane_rules(4, {}), record("SS")),
+        }
+        for label, (rules, rec) in cases.items():
+            with self.subTest(case=label):
+                stack, warnings = assess(rules, rec)
+                self.assertIsNone(stack)
+                self.assertEqual(len(warnings), 1)
+                self.assertIn("legacy layer heuristic", warnings[0])
+                self.assertEqual(grid_layers(rules, rec), legacy_layers(rules))
+        # The warning names the layers and their types.
+        _, warnings = assess(plane_rules(4, {}), record("JGPS"))
+        self.assertIn("F.Cu jumper", warnings[0])
+        self.assertIn("In1.Cu power", warnings[0])
+
+    def test_zones_on_signal_typed_inner_layers_keep_the_legacy_routing(self):
+        # A typical KiCad four-layer board: every layer left at the default type
+        # signal, ground and supply pours drawn on the inner layers, no plane class.
+        rec = record("SSSS", {"In1.Cu": ["GND"], "In2.Cu": ["VCC"]})
+        stack, warnings = assess(plane_rules(4, {}), rec)
+        self.assertIsNone(stack)
+        self.assertIn("In1.Cu, In2.Cu", warnings[0])
+        self.assertIn("type each plane layer power", warnings[0])
+        self.assertEqual(grid_layers(plane_rules(4, {}), rec), ("F.Cu", "B.Cu"))
+        # Pours on the outer layers only (a two-layer habit): the stack applies.
+        rec = record("SSSS", {"F.Cu": ["GND"], "B.Cu": ["GND"]})
+        self.assertEqual(
+            resolve(plane_rules(4, {}), rec).grid_layers, ("F.Cu", "In1.Cu", "In2.Cu", "B.Cu")
+        )
+        # A typed plane layer makes the stack apply; pours on a signal layer are then
+        # reported (tracks cross them, the zone refills around them).
+        stack, warnings = assess(
+            plane_rules(4, {}), record("SSPS", {"In1.Cu": ["GND"], "In2.Cu": ["VCC"]})
+        )
+        self.assertEqual(stack.grid_layers, ("F.Cu", "In1.Cu", "B.Cu"))
+        self.assertEqual(stack.dedicated, (("In2.Cu", "VCC"),))
+        self.assertTrue(any("In1.Cu is a signal layer with zones of GND" in w for w in warnings))
+
+    def test_a_power_layer_without_a_net_warns(self):
+        stack, warnings = assess(plane_rules(4, {}), record("SPSS"))
+        self.assertEqual(stack.layer("In1.Cu").role, PLANE)
+        self.assertEqual(stack.layer("In1.Cu").nets, ())
+        self.assertTrue(any("In1.Cu is typed power but no net" in w for w in warnings))
+        self.assertEqual(stack.warnings, warnings)
+
+
+def shape(net, outline, priority=0):
+    return dict(net=net, priority=priority, outline=[list(p) for p in outline])
+
+
+class PlaneRegions(unittest.TestCase):
+    W, H = 24.0, 16.0
+
+    def test_one_net_per_full_plane_constrains_nothing(self):
+        # Every hard rung: each plane layer one net over the whole outline, from a
+        # class or from a full-outline source zone.
+        full = [(0, 0), (self.W, 0), (self.W, self.H), (0, self.H)]
+        rec = record("SGSGPSGS", {"In3.Cu": ["GND"], "In6.Cu": ["GND"]})
+        for row in rec["layers"]:
+            if row["name"] in ("In3.Cu", "In6.Cu"):
+                row["zone_shapes"] = [shape("GND", full)]
+        stack = resolve(plane_rules(8, {"GND": "In1.Cu", "VCC": "In4.Cu"}), rec)
+        regions = plane_regions(stack, rec, {"GND": [(1, 1)], "VCC": [(2, 2)]}, self.W, self.H)
+        self.assertTrue(all(r.outline is None for r in regions))
+        self.assertEqual(
+            sorted((r.layer, r.net, r.source) for r in regions),
+            [
+                ("In1.Cu", "GND", False),
+                ("In3.Cu", "GND", True),
+                ("In4.Cu", "VCC", False),
+                ("In6.Cu", "GND", True),
+            ],
+        )
+        access = PlaneAccess(stack, regions, 0.3, 0.75)
+        self.assertFalse(access.constrained("GND"))
+        self.assertFalse(access.constrained("VCC"))
+
+    def test_a_shared_plane_layer_splits_by_pad_boxes(self):
+        stack = resolve(plane_rules(4, {"GND": "In1.Cu", "VCC": "In1.Cu"}), record("SPSS"))
+        pads = {"GND": [(2, 2), (20, 12), (6, 6)], "VCC": [(5, 5), (10, 8)]}
+        regions = plane_regions(stack, None, pads, self.W, self.H)
+        gnd, vcc = sorted(regions, key=lambda r: r.priority)
+        self.assertEqual((gnd.net, gnd.priority, gnd.outline), ("GND", 0, None))
+        self.assertEqual(vcc.net, "VCC")
+        self.assertEqual(vcc.priority, 1)
+        self.assertEqual(vcc.outline, ((3.0, 3.0), (12.0, 3.0), (12.0, 10.0), (3.0, 10.0)))
+        access = PlaneAccess(stack, regions, 0.3, 0.75)
+        self.assertTrue(access.constrained("GND"))
+        self.assertTrue(access.constrained("VCC"))
+        # GND fills the outline except VCC's box (which carves out of it), and keeps
+        # a via's clearance from that box.
+        self.assertTrue(access.site_ok("GND", (20.0, 12.0)))
+        self.assertFalse(access.site_ok("GND", (6.0, 6.0)))
+        self.assertFalse(access.site_ok("GND", (12.5, 6.0)))
+        self.assertTrue(access.site_ok("GND", (13.0, 6.0)))
+        # VCC fills only its own box, a via radius inside its edge.
+        self.assertTrue(access.site_ok("VCC", (6.0, 6.0)))
+        self.assertFalse(access.site_ok("VCC", (11.9, 6.0)))
+        self.assertFalse(access.site_ok("VCC", (20.0, 12.0)))
+
+    def test_a_second_plane_lets_a_drop_reach_the_net_elsewhere(self):
+        # GND shares In1 with VCC but also has In2 alone: any site reaches GND.
+        stack = resolve(
+            plane_rules(4, {"GND": "In1.Cu", "VCC": "In1.Cu"}), record("SPPS", {"In2.Cu": ["GND"]})
+        )
+        regions = plane_regions(
+            stack, None, {"GND": [(2, 2), (20, 12), (6, 6)], "VCC": [(5, 5)]}, self.W, self.H
+        )
+        access = PlaneAccess(stack, regions, 0.3, 0.75)
+        self.assertFalse(access.constrained("GND"))
+        self.assertTrue(access.constrained("VCC"))
+
+    def test_a_partial_source_zone_bounds_its_drops(self):
+        box = [(10, 2), (22, 2), (22, 14), (10, 14)]
+        rec = record("SGPS", {"In2.Cu": ["VCC"]})
+        rec["layers"][2]["zone_shapes"] = [shape("VCC", box, priority=2)]
+        rec = record_from_rows(rec["layers"])  # normalizes and keeps the shapes
+        self.assertEqual(rec["layers"][2]["zone_shapes"][0]["priority"], 2)
+        stack = resolve(plane_rules(4, {"GND": "In1.Cu"}), rec)
+        regions = plane_regions(
+            stack, rec, {"GND": [(1, 1)], "VCC": [(3, 3), (15, 8)]}, self.W, self.H
+        )
+        vcc = [r for r in regions if r.net == "VCC"]
+        self.assertEqual(len(vcc), 1)
+        self.assertTrue(vcc[0].source)
+        self.assertEqual(vcc[0].outline, tuple(map(tuple, map(lambda p: map(float, p), box))))
+        access = PlaneAccess(stack, regions, 0.3, 0.75)
+        self.assertTrue(access.site_ok("VCC", (15, 8)))
+        self.assertFalse(access.site_ok("VCC", (3, 3)))
+        self.assertFalse(access.constrained("GND"))
+        # A sub-board in a frame of its own drops the shapes: the zone covers it.
+        local = local_record(rec)
+        self.assertNotIn("zone_shapes", local["layers"][2])
+        self.assertEqual(local["layers"][2]["zones"], ["VCC"])
+        regions = plane_regions(stack, local, {"VCC": [(3, 3)]}, 5.0, 5.0)
+        self.assertTrue(all(r.outline is None for r in regions))
+
+    def test_region_priority_decides_overlaps(self):
+        # Two source zones on one power layer: the higher priority wins the overlap.
+        a = [(0, 0), (14, 0), (14, 16), (0, 16)]
+        b = [(10, 0), (24, 0), (24, 16), (10, 16)]
+        rec = record("SPSS", {"In1.Cu": ["GND", "VCC"]})
+        rec["layers"][1]["zone_shapes"] = [shape("GND", a, 0), shape("VCC", b, 3)]
+        stack = resolve(plane_rules(4, {}), rec)
+        access = PlaneAccess(stack, plane_regions(stack, rec, {}, self.W, self.H), 0.3, 0.75)
+        self.assertTrue(access.site_ok("VCC", (12, 8)))
+        self.assertFalse(access.site_ok("GND", (12, 8)))
+        self.assertTrue(access.site_ok("GND", (5, 8)))
+
+
+class NativeLayers(unittest.TestCase):
+    def test_legacy_lists_are_the_native_loops_own(self):
+        self.assertEqual(power_layer_names(None), ["F.Cu", "B.Cu", "In2.Cu"])
+        self.assertEqual(bridge_layer_names(None), ["B.Cu", "In2.Cu", "F.Cu"])
+        self.assertEqual(contact_layer_names(None), ["F.Cu", "In2.Cu", "B.Cu"])
+        self.assertEqual(reference_layer(None), "In1.Cu")
+        self.assertEqual(reference_layer(None, {"reference_layer": "In2.Cu"}), "In2.Cu")
+        rules = plane_rules(4, {"GND": "In1.Cu", "VCC": "In2.Cu"})
+        self.assertEqual(reference_nets(None, rules, "In1.Cu"), {"GND"})
+
+    def test_a_four_layer_ssgs_stack(self):
+        # In2 is the ground plane, In1 a routed signal layer: power paths may use
+        # In1 (never the plane), and a pair's reference plane is In2.
+        rules = plane_rules(4, {"GND": "In2.Cu"})
+        stack = resolve(rules, record("SSGS"))
+        self.assertEqual(power_layer_names(stack), ["F.Cu", "B.Cu", "In1.Cu"])
+        self.assertEqual(bridge_layer_names(stack), ["B.Cu", "In1.Cu", "F.Cu"])
+        self.assertEqual(contact_layer_names(stack), ["F.Cu", "In1.Cu", "B.Cu"])
+        self.assertEqual(reference_layer(stack), "In2.Cu")
+        self.assertEqual(reference_nets(stack, rules, "In2.Cu"), {"GND"})
+
+    def test_plane_layers_never_carry_power_paths(self):
+        cases = {
+            ("SGPS", (("GND", "In1.Cu"), ("VCC", "In2.Cu"))): ["F.Cu", "B.Cu"],
+            ("SGSGPS", (("GND", "In1.Cu"), ("VCC", "In4.Cu"))): ["F.Cu", "B.Cu", "In2.Cu"],
+            ("SGSSPS", (("GND", "In1.Cu"), ("VCC", "In4.Cu"))): [
+                "F.Cu",
+                "B.Cu",
+                "In2.Cu",
+                "In3.Cu",
+            ],
+        }
+        for (code, planes), expected in cases.items():
+            with self.subTest(code=code):
+                stack = resolve(plane_rules(len(code), dict(planes)), record(code))
+                self.assertEqual(power_layer_names(stack), expected)
+                self.assertEqual(reference_layer(stack), "In1.Cu")
+
+    def test_the_reference_plane_is_the_nearest_one(self):
+        stack = resolve(plane_rules(6, {"VCC": "In4.Cu"}), record("SSSSPS"))
+        self.assertEqual(stack.reference_plane("F.Cu").name, "In4.Cu")
+        self.assertEqual(stack.reference_plane("B.Cu").name, "In4.Cu")
+        stack = resolve(plane_rules(4, {}), record("SSSS"))
+        self.assertIsNone(stack.reference_plane("F.Cu"))
+        self.assertEqual(reference_layer(stack), "In1.Cu")
+
+
+class PlacementPlaneTerms(unittest.TestCase):
+    def test_only_split_planes_keep_their_placement_terms(self):
+        from types import SimpleNamespace
+
+        from pnr.graph import Net
+
+        graph = BoardGraph(
+            name="x", nets=[Net(n, i, []) for i, n in enumerate(("GND", "VCC", "A"))]
+        )
+        classes = [
+            SimpleNamespace(nets=("GND",), plane_layer="In1.Cu"),
+            SimpleNamespace(nets=("V*",), plane_layer="In2.Cu"),
+        ]
+        constraints = SimpleNamespace(board=SimpleNamespace(layers=4), net_classes=classes)
+        # No declared stack: the class patterns, as before.
+        self.assertEqual(split_plane_patterns(constraints, graph), ["GND", "V*"])
+        # Both dedicated planes: no split plane, so no plane placement terms.
+        graph.stack = record("SGPS")
+        self.assertEqual(split_plane_patterns(constraints, graph), [])
+        # A mixed In2: VCC is a split plane there and keeps its terms.
+        graph.stack = record("SGMS")
+        self.assertEqual(split_plane_patterns(constraints, graph), ["VCC"])
+        # Planes from the rules on signal-typed layers: legacy, unchanged.
+        graph.stack = record("SSSS")
+        self.assertEqual(split_plane_patterns(constraints, graph), ["GND", "V*"])
 
 
 class RungConsistency(unittest.TestCase):

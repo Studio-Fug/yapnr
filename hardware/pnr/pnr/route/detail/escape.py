@@ -48,6 +48,7 @@ class Escape:
     stub_path: Optional[List[Tuple[float, float]]] = None
     via_xy: Optional[Tuple[float, float]] = None  # via site (mm): pad ctr or stub end
     segments: Optional[list] = None  # joint access: (layer name, exact start, end)
+    width: Optional[float] = None  # a plane drop's stub width (its pad's entry width)
 
 
 @dataclass
@@ -119,6 +120,8 @@ def plan_escapes(
     joint_max_cluster_size: int = 24,
     drop_widths: Optional[Dict[str, float]] = None,
     drop_in_pad: bool = False,
+    drop_pad_width: Optional[Dict[Tuple[str, str], float]] = None,
+    plane_access=None,
 ) -> EscapePlan:
     """Plan a legal escape for every pad of the routable ``net_names``.
 
@@ -131,7 +134,10 @@ def plan_escapes(
 
     ``drop_widths`` (net -> stub width) names the nets with a dedicated plane whose
     surface pads get a plane drop, planned jointly (``joint`` only; the sequential
-    planner leaves them to the native plane fanout).
+    planner leaves them to the native plane fanout); ``drop_pad_width`` sizes each
+    pad's stub ((ref, pad) -> width) and ``plane_access``
+    (:class:`pnr.stack.PlaneAccess`) admits only via sites inside the net's own
+    plane fill.
     """
     if joint:
         from .joint_escape import plan_joint_escapes
@@ -149,6 +155,8 @@ def plan_escapes(
             max_cluster_size=joint_max_cluster_size,
             drop_widths=drop_widths,
             drop_in_pad=drop_in_pad,
+            drop_pad_width=drop_pad_width,
+            plane_access=plane_access,
         )
     plan = EscapePlan()
     plan.diagnostics = {"model": "legacy-sequential", "complete": None}

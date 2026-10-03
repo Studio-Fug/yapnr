@@ -401,7 +401,9 @@ py_test(
 )
 
 # The board's copper stack through KiCad: ingest record, copper on any named layer,
-# plane layers formed at writeback (KiCad Python; skipped elsewhere).
+# plane layers formed at writeback, the plane-region model against KiCad's own zone
+# fill. It needs KiCad's Python (pcbnew): run it there by hand, as the other KiCad
+# tests (python3 -m unittest tests.test_stack_kicad).
 py_test(
     name = "stack_kicad_test",
     size = "small",
@@ -409,6 +411,11 @@ py_test(
     imports = ["."],
     legacy_create_init = False,
     main = "tests/test_stack_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
     deps = [":pnr"],
 )
 

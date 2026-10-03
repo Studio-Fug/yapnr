@@ -86,6 +86,9 @@ class BoardRoute:
     pressure_events: Optional[list] = None
     deferred_nets: Set[str] = field(default_factory=set)
     escape_diagnostics: dict = field(default_factory=dict)
+    # The declared copper stack's warnings (pnr.stack.assess); also in
+    # escape_diagnostics["stack_warnings"], which the run's PnR report keeps.
+    stack_warnings: List[str] = field(default_factory=list)
 
     @property
     def fully_routed(self) -> bool:
@@ -139,13 +142,28 @@ def layer_plan(graph: BoardGraph, rules: Optional[dict]):
     A board that declares its copper stack (:mod:`pnr.stack`) routes every signal
     and split-plane layer in stack order and keeps every net with a dedicated plane
     out of the maze; otherwise (``stack`` None) the legacy heuristic, unchanged."""
-    from pnr.stack import resolve
+    from pnr.stack import assess
 
-    stack = resolve(rules, getattr(graph, "stack", None))
+    stack, warnings = assess(rules, getattr(graph, "stack", None))
+    _warn_once(warnings)
     planes = _plane_nets(rules)
     if stack is None:
         return _signal_layers(rules), planes, None
     return stack.grid_layers, planes | set(stack.plane_nets), stack
+
+
+_WARNED: Set[str] = set()
+
+
+def _warn_once(warnings) -> None:
+    """Each stack warning (pnr.stack.assess) once per process, on stderr, where the
+    run's place-and-route log keeps it; the route result also carries them."""
+    import sys
+
+    for text in warnings:
+        if text not in _WARNED:
+            _WARNED.add(text)
+            sys.stderr.write("pnr.stack: warning: %s\n" % text)
 
 
 # Copper thickness of one ounce per square foot (mm), the IPC-2221 unit.
@@ -453,18 +471,30 @@ def route_board(
         )
     # Stack-aware: every surface pad of a net with a dedicated plane drops a through
     # via to it, planned jointly with the signal exits (no drop is left to after
-    # routing). The stub carries the pad's required entry width.
+    # routing). Each stub carries its own pad's required entry width, and its via
+    # must land where the net's own plane fills (a layer shared by several nets
+    # splits into regions, pnr.stack.plane_regions).
     drop_widths = {}
+    pad_drop_width = {}
+    plane_access = None
     if stack is not None:
         from pnr.pad_entry import terminal_required_width
+        from pnr.stack import PlaneAccess, pad_points, plane_regions
 
         for comp in graph.components:
             for pad in comp.pads:
                 if pad.net in stack.plane_nets and not pad.through_hole:
-                    width = terminal_required_width(comp.ref, pad.name, pad.net, rules or {})
-                    drop_widths[pad.net] = max(drop_widths.get(pad.net, 0.0), width)
+                    w = terminal_required_width(comp.ref, pad.name, pad.net, rules or {})
+                    pad_drop_width[(comp.ref, pad.name)] = w
+                    drop_widths[pad.net] = max(drop_widths.get(pad.net, 0.0), w)
         for n, w in drop_widths.items():
             net_width.setdefault(n, w)
+        plane_access = PlaneAccess(
+            stack,
+            plane_regions(stack, graph.stack, pad_points(graph), width, height),
+            inset=via_radius_mm,
+            outset=via_radius_mm + clearance_mm + fab["track_width_mm"],
+        )
     plan = plan_escapes(
         grid,
         graph,
@@ -479,7 +509,14 @@ def route_board(
         joint_max_cluster_size=int(os.environ.get("PNR_JOINT_ACCESS_CLUSTER", "24")),
         drop_widths=drop_widths or None,
         drop_in_pad=grid.in_pad is not None,
+        drop_pad_width=pad_drop_width,
+        plane_access=plane_access,
     )
+    from pnr.stack import assess
+
+    stack_warnings = list(assess(rules, getattr(graph, "stack", None))[1])
+    if stack_warnings:
+        plan.diagnostics["stack_warnings"] = stack_warnings
     net_access = {
         n: cells
         for n, cells in plan.net_access.items()
@@ -520,6 +557,7 @@ def route_board(
         plane_nets=planes,
         failure_sites=trapped_access_sites(grid, plan.net_access, result.unrouted),
         escape_diagnostics=plan.diagnostics,
+        stack_warnings=stack_warnings,
     )
     for net, sites in plan.drop_failures.items():
         # A plane pad without a drop is localized at the pad for the placement loop.
@@ -558,7 +596,7 @@ def route_board(
     for esc in plan.escapes:
         if esc.net in drop_widths:
             # A plane drop needs no maze route: its through via reaches the planes.
-            _emit_escape(board, esc, grid, drop_widths[esc.net])
+            _emit_escape(board, esc, grid, esc.width or drop_widths[esc.net])
             continue
         rn = result.nets.get(esc.net)
         if rn is None or esc.access not in set(rn.cells):

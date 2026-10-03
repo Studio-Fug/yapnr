@@ -380,6 +380,7 @@ def enumerate_drops(
     allow_in_pad=False,
     reach=4,
     max_options=8,
+    site_ok=None,
 ):
     """Plane-drop exits for a surface pad of a net with a dedicated plane.
 
@@ -388,11 +389,17 @@ def enumerate_drops(
     the via reaches every plane of the net, so no maze tail follows. A filled via
     in the pad is an option only under the fab profile's in-pad policy
     (``allow_in_pad``), as for the native plane fanout. ``width`` is the pad's
-    required entry width (pnr.pad_entry).
+    required entry width (pnr.pad_entry). ``site_ok(point)``, when given, admits
+    only sites where the via reaches its net's own plane fill (a plane layer
+    shared by several nets, a partial plane zone: pnr.stack.PlaneAccess).
     """
     options = []
     ci, cj = grid.cell_of(*pad_xy)
-    if allow_in_pad and _via_clear(grid, net, pad_xy, via_keepout):
+    if (
+        allow_in_pad
+        and (site_ok is None or site_ok(pad_xy))
+        and _via_clear(grid, net, pad_xy, via_keepout)
+    ):
         options.append(
             _make_option(
                 grid, net, pad_xy, side, Cell(side, ci, cj), (), (pad_xy,), "drop", via_keepout
@@ -408,6 +415,8 @@ def enumerate_drops(
         if not grid.in_bounds(i, j):
             continue
         q = grid.center_of(i, j)
+        if site_ok is not None and not site_ok(q):
+            continue
         if not _outside_own_lands(grid, net, q, rect) or not _drop_via_clear(grid, net, q):
             continue
         for path in sorted(elbows(pad_xy, q), key=lambda p: (length(p), len(p), p)):
@@ -499,18 +508,29 @@ def plan_joint_escapes(
     max_cluster_size=24,
     drop_widths=None,
     drop_in_pad=False,
+    drop_pad_width=None,
+    plane_access=None,
 ):
     """Choose every terminal's exit jointly. ``drop_widths`` (net -> entry width)
     names the nets with a dedicated plane: each of their surface pads becomes a
     plane-drop terminal (:func:`enumerate_drops`) planned together with the signal
     exits, kept out of ``net_access``; one without a drop is reported in
-    ``plan.blocked_nets`` and ``plan.drop_failures`` (net -> pad centres)."""
+    ``plan.blocked_nets`` and ``plan.drop_failures`` (net -> pad centres). Each
+    drop's stub is ``drop_pad_width[(ref, pad)]`` wide (else its net's width), and
+    ``plane_access`` (:class:`pnr.stack.PlaneAccess`) keeps its via inside the
+    net's own plane fill."""
     from .escape import Escape, EscapePlan
 
     drop_widths = drop_widths or {}
+    drop_pad_width = drop_pad_width or {}
     options = {}
     terminals = {}
     drops = set()
+    drop_width = {}
+    site_tests = {}
+    for net in drop_widths:
+        if plane_access is not None and plane_access.constrained(net):
+            site_tests[net] = lambda q, net=net: plane_access.site_ok(net, q)
     for comp in sorted(graph.components, key=lambda c: c.ref):
         side = grid.side_layer(comp.side)
         for index, ((name, net, rect), pad) in enumerate(zip(pad_rects(comp), comp.pads)):
@@ -521,17 +541,19 @@ def plan_joint_escapes(
                 point = (rect.cx, rect.cy)
                 terminals[key] = (net, point, side)
                 drops.add(key)
+                drop_width[key] = drop_pad_width.get((comp.ref, pad.name), drop_widths[net])
                 options[key] = enumerate_drops(
                     grid,
                     net,
                     point,
                     side,
                     rect=rect,
-                    width=drop_widths[net],
+                    width=drop_width[key],
                     via_keepout=via_keepout,
                     allow_in_pad=drop_in_pad,
                     reach=dogbone_reach,
                     max_options=max(1, max_options // 2),
+                    site_ok=site_tests.get(net),
                 )
                 continue
             if net not in net_names:
@@ -583,6 +605,8 @@ def plan_joint_escapes(
         if key in selection.selected:
             choice = options[key][selection.selected[key]]
             esc = choice.escape
+            if key in drops:
+                esc.width = drop_width[key]
             # The complete legal assignment is known before any reservation is
             # committed. Foreign pad halos may still overlap the coarse corridor;
             # retain that conflict rather than erasing an unrelated obstacle.

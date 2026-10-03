@@ -22,6 +22,7 @@ from types import SimpleNamespace
 
 from pnr.constraints import DEFAULT_WEIGHTS, Constraint, Enforcement
 from pnr.graph import BoardGraph
+from pnr.stack import local_record
 
 TOLERANCE_MM = 1e-5
 
@@ -112,7 +113,9 @@ def collapse(graph, constraints, rules):
     layouts = []
     for con in lines:
         width, height, poses = layout(graph, con, clearance)
-        sub = BoardGraph(name=graph.name + ":line:" + con.name, stack=copy.deepcopy(graph.stack))
+        sub = BoardGraph(
+            name=graph.name + ":line:" + con.name, stack=local_record(copy.deepcopy(graph.stack))
+        )
         for ref in con.refs:
             comp = copy.deepcopy(graph.component(ref))
             if comp.side != "top":

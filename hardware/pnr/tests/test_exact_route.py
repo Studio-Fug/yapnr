@@ -270,6 +270,64 @@ class ExactRouteTest(unittest.TestCase):
             self.assertEqual(route(grid, access, max_iters=2), reference)
 
 
+def class_gaps(grid, result, widths):
+    """Least (copper gap - the pair's clearance) between different nets (mm)."""
+    classes = grid.net_clearances
+    items = []
+    for net, rn in result.nets.items():
+        r = widths.get(net, grid.track_width) / 2
+        c = max(grid.clearance, classes.get(net, grid.clearance))
+        for layer, a, b in rn.segments:
+            items.append((net, layer, grid.center_of(*a), grid.center_of(*b), r, c))
+        for i, j in rn.vias:
+            p = grid.center_of(i, j)
+            for layer in range(grid.nlayers):
+                items.append((net, layer, p, p, grid.via_radius, c))
+    worst = math.inf
+    for x in range(len(items)):
+        for y in range(x + 1, len(items)):
+            a, b = items[x], items[y]
+            if a[0] == b[0] or a[1] != b[1]:
+                continue
+            gap = math.sqrt(_segment_distance_sq(a[2], a[3], b[2], b[3])) - a[4] - b[4]
+            worst = min(worst, gap - max(a[5], b[5]))
+    return worst
+
+
+class ClassClearanceTest(unittest.TestCase):
+    """A net class's clearance above the fab clearance holds between two nets
+    (the larger of the two, as KiCad judges it)."""
+
+    def test_separation_table(self):
+        grid = board(widths={"W": 0.6})
+        grid.net_clearances = {"H": 0.5}
+        sep = Separation(grid, ["S", "W", "H"])
+        s, w, h = sep.kind["S"], sep.kind["W"], sep.kind["H"]
+        self.assertAlmostEqual(sep.distance[s][s], 0.45)
+        self.assertAlmostEqual(sep.distance[h][s], 0.75)
+        self.assertAlmostEqual(sep.distance[h][w], 0.25 / 2 + 0.3 + 0.5)
+        self.assertEqual(sep.via_kind["S"], sep.via)
+        self.assertNotEqual(sep.via_kind["H"], sep.via)
+        self.assertAlmostEqual(sep.distance[sep.via_kind["H"]][s], 0.3 + 0.125 + 0.5)
+        self.assertAlmostEqual(sep.distance[sep.via_kind["H"]][sep.via], 1.1)
+        # Without class clearances: one via kind, the plain table.
+        plain = Separation(board(widths={"W": 0.6}), ["S", "W"])
+        self.assertEqual(len(plain), 3)
+        self.assertEqual(set(plain.via_kind.values()), {plain.via})
+
+    def test_routes_keep_each_pair_of_classes_apart(self):
+        with patch.dict(os.environ, {"PNR_SINGLE_TRACK_WORKERS": "1"}):
+            for seed in range(12):
+                grid, access, widths = random_board(seed)
+                rng = random.Random(100 + seed)
+                grid.net_clearances = {
+                    n: rng.choice((0.3, 0.5)) for n in sorted(access) if rng.random() < 0.4
+                }
+                result = route_exact(grid, access, max_iters=4, via_cost=12.0)
+                with self.subTest(seed=seed):
+                    self.assertGreaterEqual(class_gaps(grid, result, widths), -1e-9)
+
+
 class DiagonalMaskParityTest(unittest.TestCase):
     """The 45° step block mask, packed against native."""
 

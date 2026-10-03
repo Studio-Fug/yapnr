@@ -63,6 +63,22 @@ def _net_widths(rules: Optional[dict], default_mm: float) -> dict:
     return out
 
 
+def _net_clearances(rules: Optional[dict]) -> dict:
+    """net name -> the largest clearance (mm) of the net classes that list it.
+    Writeback stamps each class's clearance into the project
+    (:func:`pnr.writeback.patch_project_rules`), KiCad judges two nets at the
+    larger of their clearances, and a net outside every class keeps the fab
+    clearance (the grid's)."""
+    out: dict = {}
+    for nc in (rules or {}).get("net_classes", []):
+        value = nc.get("clearance_mm")
+        if not value:
+            continue
+        for n in nc.get("nets", []):
+            out[n] = max(out.get(n, 0.0), float(value))
+    return out
+
+
 def _track_halo(width: float, signal_width: float, clearance: float, pitch: float) -> int:
     """Cells to reserve so even a fine grid preserves copper separation."""
     return max(0, math.ceil((width / 2 + clearance + signal_width / 2) / pitch) - 1)
@@ -335,6 +351,7 @@ def route_board(
         via_radius=via_radius_mm,
     )
     grid.net_widths = net_width
+    grid.net_clearances = _net_clearances(rules)
     grid.reserve_wide_pad_clearance()
     # Fab-profile per-hole-kind rules ride in rules['fab'] beside the 5 keys
     # _fab() keeps; absent (legacy rules) they leave the original model intact.

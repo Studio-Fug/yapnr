@@ -4,8 +4,8 @@ The dense random boards of ``test_exact_route`` are routed with the exact pairwi
 separation (:func:`pnr.route.detail.exact_route.route_exact`), their tracks and vias
 are written into one KiCad board (each board a tile with its own nets) by KiCad's
 Python, the project gets the same rules (0.25 mm tracks, 0.2 mm clearance, 0.6/0.3 mm
-vias, 0.25 mm between holes), and kicad-cli's DRC must report no clearance, hole or
-short finding. Needs ``PNR_KICAD_PYTHON`` (a Python with ``pcbnew``) and
+vias, 0.25 mm between holes; on some boards a 0.35 mm clearance class), and kicad-cli's
+DRC must report no clearance, hole or short finding. Needs ``PNR_KICAD_PYTHON`` (a Python with ``pcbnew``) and
 ``PNR_KICAD_CLI``; skipped otherwise.
 """
 
@@ -90,9 +90,15 @@ class ExactRouteKiCadDrcTest(unittest.TestCase):
     def test_dense_boards_have_no_spacing_findings(self):
         tracks, vias = [], []
         x0, routed = 2.0, 0
+        # Boards 16-23 put some nets in a 0.35 mm clearance class (the project gets
+        # the class, as writeback stamps it): KiCad judges each pair at the larger.
+        gapped = []
         with patch.dict(os.environ, {"PNR_SINGLE_TRACK_WORKERS": "1"}):
-            for seed in range(16):
+            for seed in range(24):
                 grid, access, widths = random_board(seed)
+                if seed >= 16:
+                    grid.net_clearances = {n: 0.35 for n in sorted(access)[::2]}
+                    gapped += ["S%d_%s" % (seed, n) for n in grid.net_clearances]
                 result = route_exact(grid, access, max_iters=4, via_cost=12.0)
                 for net, rn in result.nets.items():
                     name = "S%d_%s" % (seed, net)
@@ -136,8 +142,11 @@ class ExactRouteKiCadDrcTest(unittest.TestCase):
                 min_through_drill_mm=0.3,
                 edge_clearance_mm=0.2,
             )
+            classes = [dict(name="gap", clearance_mm=0.35, nets=gapped)]
             self.assertTrue(
-                patch_project_rules(str(board.with_suffix(".kicad_pro")), dict(fab=fab))
+                patch_project_rules(
+                    str(board.with_suffix(".kicad_pro")), dict(fab=fab, net_classes=classes)
+                )
             )
             report = root / "drc.json"
             judged = subprocess.run(

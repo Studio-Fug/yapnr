@@ -63,24 +63,40 @@ def exact_mode() -> str:
 class Separation:
     """Core kinds and their separations.
 
-    Kinds ``0 .. K-2`` are the distinct track radii of the nets, kind ``K-1``
-    (``via``) is a through-via. ``distance(e, k)`` is the least centre distance
-    (mm) between an element of kind ``e`` of one net and a core of kind ``k`` of
-    another: the two radii plus the clearance, and for two vias at least the via
-    drill spacing. The stencils hold the grid offsets closer than that (with a
-    1 nm margin), between cell centres (``cc``), from a 45° step's centre to cell
-    centres (``mc``) and from a cell centre to 45° step centres (``cm``).
+    A kind is a core radius and its net's copper clearance: the distinct
+    (half track width, clearance) pairs of the nets' tracks, then a through-via
+    (half the via diameter) at each distinct clearance. A net's clearance is its
+    class clearance where that exceeds the fab clearance (``net_clearances``),
+    else the fab clearance; with one clearance there is one via kind, ``via``.
+    ``kind[net]`` and ``via_kind[net]`` are a net's track and via kinds.
+    ``distance(e, k)`` is the least centre distance (mm) between an element of
+    kind ``e`` of one net and a core of kind ``k`` of another: the two radii plus
+    the larger of the two clearances (KiCad's rule between two net classes), and
+    for two vias at least the via drill spacing. The stencils hold the grid
+    offsets closer than that (with a 1 nm margin), between cell centres (``cc``),
+    from a 45° step's centre to cell centres (``mc``) and from a cell centre to
+    45° step centres (``cm``).
     """
 
     MARGIN = 1e-6
 
     def __init__(self, grid, nets):
         default = grid.track_width
+        classes = getattr(grid, "net_clearances", {}) or {}
+
+        def clearance(n):
+            return max(grid.clearance, classes.get(n, grid.clearance))
+
         radius = {n: grid.net_widths.get(n, default) / 2 for n in nets}
-        tracks = sorted(set(radius.values()))
-        self.kind = {n: tracks.index(r) for n, r in radius.items()}
-        self.via = len(tracks)
-        self.radii = tracks + [grid.via_radius]
+        gaps = {n: clearance(n) for n in nets}
+        tracks = sorted(set((radius[n], gaps[n]) for n in nets))
+        vias = sorted(set(gaps.values()) | {grid.clearance})
+        self.kind = {n: tracks.index((radius[n], gaps[n])) for n in nets}
+        self.via = len(tracks) + vias.index(grid.clearance)
+        self.via_kind = {n: len(tracks) + vias.index(gaps[n]) for n in nets}
+        self.vias = set(range(len(tracks), len(tracks) + len(vias)))
+        self.radii = [r for r, _ in tracks] + [grid.via_radius] * len(vias)
+        self.gaps = [g for _, g in tracks] + vias
         self.pitch = grid.pitch
         kinds = range(len(self.radii))
         self.distance = [[self._distance(grid, e, k) for k in kinds] for e in kinds]
@@ -90,8 +106,8 @@ class Separation:
         self.reach = max(math.ceil(d / self.pitch) for row in self.distance for d in row) + 2
 
     def _distance(self, grid, e, k):
-        d = self.radii[e] + self.radii[k] + grid.clearance
-        if e == self.via and k == self.via:
+        d = self.radii[e] + self.radii[k] + max(self.gaps[e], self.gaps[k])
+        if e in self.vias and k in self.vias:
             d = max(d, grid.via_spacing)
         return d
 
@@ -147,11 +163,23 @@ class Zone:
       for another net's 45° step through that block.
     """
 
-    __slots__ = ("net", "kind", "box", "cells", "blocks", "track", "steps", "ends", "vias")
+    __slots__ = (
+        "net",
+        "kind",
+        "via_kind",
+        "box",
+        "cells",
+        "blocks",
+        "track",
+        "steps",
+        "ends",
+        "vias",
+    )
 
     def __init__(self, grid, sep: Separation, net, route):
         self.net = net
         self.kind = kind = sep.kind[net]
+        self.via_kind = via_kind = sep.via_kind[net]
         track = {(c.layer, c.j, c.i) for c in route.cells}
         steps = set()
         ends = set()
@@ -188,8 +216,8 @@ class Zone:
                 _stamp(cells[k], self.steps, sep.mc[kind][k], origin)
                 _stamp(blocks[k], self.steps, sep.cc[kind][k], origin)
             if self.vias is not None:
-                _stamp(cells[k], self.vias, sep.cc[sep.via][k], origin, every_layer=True)
-                _stamp(blocks[k], self.vias, sep.cm[sep.via][k], origin, every_layer=True)
+                _stamp(cells[k], self.vias, sep.cc[via_kind][k], origin, every_layer=True)
+                _stamp(blocks[k], self.vias, sep.cm[via_kind][k], origin, every_layer=True)
         self.cells = cells
         self.blocks = blocks
 
@@ -236,7 +264,7 @@ class Occupancy:
         kind = self.sep.kind[net]
         return (
             self._others("cells", net, kind) > 0,
-            (self._others("cells", net, self.sep.via) > 0).any(axis=0),
+            (self._others("cells", net, self.sep.via_kind[net]) > 0).any(axis=0),
             self._others("blocks", net, kind) > 0,
         )
 
@@ -260,7 +288,7 @@ class Occupancy:
                 out.append(table[layer[inside], j[inside] - j0, i[inside] - i0])
 
         take(cells[zone.kind], zone.track)
-        take(cells[self.sep.via], zone.vias, every_layer=True)
+        take(cells[zone.via_kind], zone.vias, every_layer=True)
         take(blocks[zone.kind], zone.steps)
         return out
 
@@ -298,7 +326,7 @@ class Occupancy:
             if zone.vias is not None:
                 j, i = zone.vias
                 for layer in range(self.cells.shape[1]):
-                    over = self.cells[self.sep.via][layer, j, i].astype(np.int64) - 1
+                    over = self.cells[zone.via_kind][layer, j, i].astype(np.int64) - 1
                     hit = over > 0
                     if hit.any():
                         np.add.at(increment, (layer, j[hit], i[hit]), over[hit])
@@ -384,7 +412,7 @@ def route_exact(
             static,
             net,
             track_count=occ.cells[kind],
-            via_count=occ.cells[sep.via],
+            via_count=occ.cells[sep.via_kind[net]],
             history=history,
             pres_fac=pres_fac,
         )

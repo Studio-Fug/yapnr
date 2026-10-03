@@ -79,6 +79,9 @@ class RouteGrid:
         self.escape_segments = []
         self.escape_vias = []
         self.net_widths = {}
+        # net -> pad clearance table at that net's own width, for nets too wide
+        # for the pad track halo (reserve_wide_pad_clearance); others: absent.
+        self.wide_pad_net: Dict[str, Dict[Tuple[int, int, int], str]] = {}
         self.via_spacing = 2 * self.via_radius
         self.via_drill_radius = self.via_radius  # conservative until fab rules supply the drill
         self.hole_clearance = 0.2
@@ -229,12 +232,19 @@ class RouteGrid:
 
     def passable(self, layer: int, i: int, j: int, net: Optional[str] = None) -> bool:
         """True if net ``net`` may occupy cell (layer, i, j): in bounds, not a
-        static obstacle, and either free of pads or a pad of its own net."""
+        static obstacle, and either free of pads or a pad of its own net (for a
+        net in :attr:`wide_pad_net`, free of the pads' halos at its width too)."""
         if not self.in_bounds(i, j):
             return False
         if self.blocked[layer, j, i]:
             return False
         owner = self.pad_net.get((layer, i, j))
+        if owner is not None and owner != net:
+            return False
+        wide = self.wide_pad_net.get(net)
+        if wide is None:
+            return True
+        owner = wide.get((layer, i, j))
         return owner is None or owner == net
 
     def via_passable(
@@ -388,6 +398,43 @@ class RouteGrid:
             self.clearance + 0.5 * self.track_width,
             lambda la, i, j: reserve(self.pad_net, la, i, j),
         )
+
+    def reserve_wide_pad_clearance(self) -> None:
+        """Give every net too wide for the pad track halo its own pad halo.
+
+        A route edge runs between two cell centres (a 45° step also needs its two
+        corner cells), so it stays inside cells that miss every foreign pad's track
+        halo rectangle (``clearance + ½track``, all cells it touches): at least
+        ``clearance + ½track + ½pitch`` from the pad. That clears a track up to
+        ``track + pitch`` wide. A wider net (``net_widths``) gets a table like
+        :attr:`pad_net` grown by ``clearance + ½width - ½pitch`` instead, which
+        :meth:`passable` also reads for it. The cells a pad's rectangle touches
+        belong to the pad's net in that table whatever halo covers them, so a
+        wide net still lands on each of its pads (from the side away from a close
+        neighbour). Nets of the same width share one table; a board without such
+        a net gets none.
+        """
+        base = self.clearance + 0.5 * self.track_width
+        tables: Dict[float, Dict[Tuple[int, int, int], str]] = {}
+        for net, width in sorted(self.net_widths.items()):
+            grow = self.clearance + 0.5 * width - 0.5 * self.pitch
+            if grow <= base + 1e-9:
+                continue
+            table = tables.get(width)
+            if table is None:
+                table = tables[width] = {}
+                body: Dict[Tuple[int, int, int], str] = {}
+                for layer, owner, r in self.pad_rectangles:
+                    for mark, distance in ((table, grow), (body, 0.0)):
+
+                        def reserve(la, i, j, owner=owner, mark=mark):
+                            key = (la, i, j)
+                            old = mark.get(key)
+                            mark[key] = owner if old is None or old == owner else "\0conflict"
+
+                        self._mark_rect(layer, r, distance, reserve)
+                table.update(body)
+            self.wide_pad_net[net] = table
 
     def block_region(
         self,

@@ -335,6 +335,7 @@ def route_board(
         via_radius=via_radius_mm,
     )
     grid.net_widths = net_width
+    grid.reserve_wide_pad_clearance()
     # Fab-profile per-hole-kind rules ride in rules['fab'] beside the 5 keys
     # _fab() keeps; absent (legacy rules) they leave the original model intact.
     extra = dict((rules or {}).get("fab") or {})

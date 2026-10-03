@@ -194,6 +194,7 @@ class GridStatic:
             via &= ~np.asarray(grid.smd_via_blocked, dtype=bool)[None, :, :]
         self.via_free = via
         self._nets: Dict[str, tuple] = {}
+        self._wide: Dict[int, np.ndarray] = {}
         self._hole = None
         self._stencil = None
 
@@ -212,9 +213,19 @@ class GridStatic:
         """``(passable, via_passable, plated)`` arrays for ``net``."""
         cached = self._nets.get(net)
         if cached is None:
+            # RouteGrid.passable: a wide net also keeps its own-width pad halos
+            # (one table per width, shared by the nets of that width).
+            table = self.grid.wide_pad_net.get(net)
+            wide = None
+            if table is not None:
+                wide = self._wide.get(id(table))
+                if wide is None:
+                    wide = self._wide[id(table)] = self._owners(table, self.pad.shape)
             index = self.names.get(net, -2)
             own_pad = (self.pad == -1) | (self.pad == index)
             passable = ~self.blocked & own_pad
+            if wide is not None:
+                passable &= (wide == -1) | (wide == index)
             via = self.via_free & own_pad & ((self.halo == -1) | (self.halo == index))
             cached = self._nets[net] = (passable, via, self._plated(net))
         return cached

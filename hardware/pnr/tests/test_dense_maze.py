@@ -67,6 +67,12 @@ def random_grid(rng, nx=None, ny=None, layers=None):
         (rng.choice(("N", "OTHER")), c, rng.uniform(0.5, 2) * pitch) for c in centres
     ]
     grid.net_widths = {"N": rng.choice((0.1, 0.2))}
+    if rng.random() < 0.5:
+        # A wide net's own-width pad halos (RouteGrid.reserve_wide_pad_clearance).
+        grid.wide_pad_net["N"] = {
+            (c.layer, c.i, c.j): rng.choice(("OTHER", "N", "", "\0conflict"))
+            for c in rng.sample(cells, len(cells) // 8)
+        }
     return grid, cells
 
 
@@ -355,6 +361,14 @@ class RouteParityTest(unittest.TestCase):
                 ]
                 for n in names
             }
+            if seed % 2:
+                # Net A is a wide net with its own-width pad halos.
+                grid.wide_pad_net["A"] = {
+                    (rng.randrange(grid.nlayers), rng.randrange(14), rng.randrange(12)): (
+                        rng.choice(("B", "A", ""))
+                    )
+                    for _ in range(20)
+                }
             halo = {n: rng.randrange(2) for n in names}
             yield grid, access, dict(
                 max_iters=rng.randrange(1, 5),

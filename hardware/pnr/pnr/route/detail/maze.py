@@ -266,30 +266,30 @@ def _astar(
                     tie += 1
         # A through-via crosses every copper layer. Plane pours may antipad it,
         # but foreign pads, routed copper, holes and physical keepouts may not.
-        # Track entry onto the destination plane remains forbidden.
+        # Track entry onto the destination plane remains forbidden. The column
+        # tests, the plated transition, the hole spacing and a drilled via's price
+        # do not depend on the destination layer: each is evaluated at most once
+        # per expanded cell (``column``), with the same verdicts and prices.
+        column = None
         for la in range(grid.nlayers):
             if la == cur.layer:
                 continue
             nc = Cell(la, cur.i, cur.j)
+            if not grid.passable(nc.layer, nc.i, nc.j, net):
+                continue
+            if column is None:
+                column = _via_column(
+                    grid, cur, net, block, raw_block, via_halo, drill_sites + path_drills[cur]
+                )
             # A via needs the wider via-clearance from foreign pads, and the column
             # must be clear where it lands (checked here and at the source layer).
-            if not grid.passable(nc.layer, nc.i, nc.j, net) or any(
-                Cell(z, nc.i, nc.j) in block or not grid.via_passable(z, nc.i, nc.j, net)
-                for z in range(grid.nlayers)
-            ):
+            allowed, plated = column
+            if not allowed:
                 continue
-            plated = getattr(grid, "plated_transition", lambda *a: None)(net, nc.i, nc.j)
-            if plated is None and any(
-                Cell(z, nc.i + di, nc.j + dj) in raw_block
-                for z in range(grid.nlayers)
-                for di in range(-via_halo, via_halo + 1)
-                for dj in range(-via_halo, via_halo + 1)
-            ):
-                continue
-            sites = drill_sites + path_drills[cur]
-            if plated is None and not grid.hole_site_clear(grid.center_of(cur.i, cur.j), sites):
-                continue
-            ng = base + cell_cost(nc, via=plated is None) + (via_cost if plated is None else 0.0)
+            if plated is None:
+                ng = base + cell_cost(Cell(0, nc.i, nc.j), via=True) + via_cost
+            else:
+                ng = base + cell_cost(nc)
             if ng < g.get(nc, float("inf")):
                 g[nc] = ng
                 came[nc] = cur
@@ -299,6 +299,30 @@ def _astar(
                 heapq.heappush(open_heap, (ng + h(nc), tie, nc))
                 tie += 1
     return None
+
+
+def _via_column(grid, cur, net, block, raw_block, via_halo, sites):
+    """``(allowed, plated)`` for a through via at ``cur``'s column: every layer's
+    cell clear of ``block`` and via-passable, then (a drilled via, ``plated`` None)
+    its halo window clear of ``raw_block`` and its hole spaced from ``sites``."""
+    i, j = cur.i, cur.j
+    if any(
+        Cell(z, i, j) in block or not grid.via_passable(z, i, j, net) for z in range(grid.nlayers)
+    ):
+        return False, None
+    plated = getattr(grid, "plated_transition", lambda *a: None)(net, i, j)
+    if plated is not None:
+        return True, plated
+    if any(
+        Cell(z, i + di, j + dj) in raw_block
+        for z in range(grid.nlayers)
+        for di in range(-via_halo, via_halo + 1)
+        for dj in range(-via_halo, via_halo + 1)
+    ):
+        return False, None
+    if not grid.hole_site_clear(grid.center_of(i, j), sites):
+        return False, None
+    return True, None
 
 
 def _route_one(

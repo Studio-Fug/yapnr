@@ -72,7 +72,10 @@ def pair_tensors(pair_weights, pin_key):
 
 def matched_pin_sets(graph: BoardGraph, constraints, pin_key) -> List[List[torch.Tensor]]:
     """Pin index tensors per member net of each declared diff pair and length-match
-    group whose members all have two or more placed pins ([] when none)."""
+    group whose members all have two or more placed pins ([] when none, or with
+    ``tuning: {placement: false}``)."""
+    if not ((getattr(constraints, "tuning", None) or {}).get("placement", True)):
+        return []
     pins_of = {
         net.name: [pin_key[p] for p in net.pins if p in pin_key]
         for net in getattr(graph, "nets", [])

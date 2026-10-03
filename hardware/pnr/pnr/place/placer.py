@@ -268,7 +268,9 @@ def place(
         # Hard edge_align (opt-in): only passed when a design declares one.
         **({} if not bands else dict(edge_bands=bands)),
     )
-    if constraints.diff_pairs or constraints.length_matches:
+    if (constraints.diff_pairs or constraints.length_matches) and (
+        (getattr(constraints, "tuning", None) or {}).get("placement", True)
+    ):
         # Even the legs of each pair / group the packer pulled apart (pnr.place.matched).
         from .matched import refine_matched
 

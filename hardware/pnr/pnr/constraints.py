@@ -197,8 +197,8 @@ class DiffPair:
     width_mm: Optional[float] = None
     gap_mm: Optional[float] = None
     skew_mm: float = 0.5  # max acceptable + / - routed-length difference
-    # A skew budget in time (ps); when given it replaces ``skew_mm`` for tuning and
-    # is judged on delay (per-layer propagation delay from the board's stackup).
+    # A skew budget in time (ps), judged on delay (per-layer propagation delay from
+    # the board's stackup). A pair gives ``skew_mm`` or ``skew_ps``, not both.
     skew_ps: Optional[float] = None
     # PNR_BUS_CLASSES=1 only: ``_defaulted`` (a plain attribute, not a dataclass
     # field, so asdict() is unchanged) names the fields the constraint file left to
@@ -212,7 +212,7 @@ class LengthMatch:
     name: str
     nets: Tuple[str, ...] = ()
     tolerance_mm: float = 1.0
-    tolerance_ps: Optional[float] = None  # a time budget; replaces tolerance_mm
+    tolerance_ps: Optional[float] = None  # a time budget; never with tolerance_mm
 
 
 @dataclass
@@ -314,27 +314,35 @@ def _positive(value, where: str) -> Optional[float]:
 TUNING_STYLES = ("auto", "trombone", "serpentine", "accordion")
 
 
+TUNING_NUMBERS = ("gap_mm", "amplitude_max_mm", "min_segment_mm", "max_added_mm")
+TUNING_SWITCHES = ("mitre", "meanders", "placement")
+
+
 def _parse_tuning(raw) -> Optional[Dict]:
     """The ``tuning:`` block (meanders for pair / group length matching): ``gap_mm``
     (edge to edge, at least the clearance and the track width), ``amplitude_max_mm``,
-    ``min_segment_mm``, ``style`` (auto, trombone, serpentine, accordion) and
-    ``mitre`` (45-degree corners for the fine step). None when absent."""
+    ``min_segment_mm``, ``max_added_mm`` (meander length one net may gain), ``style``
+    (auto, trombone, serpentine, accordion), ``mitre`` (45-degree corners for the fine
+    step), and the switches ``meanders`` (the router tunes the sets after routing) and
+    ``placement`` (placement keeps the members' estimated lengths even), both on by
+    default. None when absent."""
     if raw is None:
         return None
     if not isinstance(raw, dict):
         raise ConstraintError("tuning must be a mapping")
     out: Dict = {}
-    for key in ("gap_mm", "amplitude_max_mm", "min_segment_mm"):
+    for key in TUNING_NUMBERS:
         if raw.get(key) is not None:
             out[key] = _positive(raw[key], f"tuning.{key}")
     if raw.get("style") is not None:
         _require_enum(raw["style"], TUNING_STYLES, "tuning.style")
         out["style"] = str(raw["style"])
-    if raw.get("mitre") is not None:
-        if not isinstance(raw["mitre"], bool):
-            raise ConstraintError("tuning.mitre must be true or false")
-        out["mitre"] = raw["mitre"]
-    unknown = sorted(set(raw) - {"gap_mm", "amplitude_max_mm", "min_segment_mm", "style", "mitre"})
+    for key in TUNING_SWITCHES:
+        if raw.get(key) is not None:
+            if not isinstance(raw[key], bool):
+                raise ConstraintError(f"tuning.{key} must be true or false")
+            out[key] = raw[key]
+    unknown = sorted(set(raw) - set(TUNING_NUMBERS) - set(TUNING_SWITCHES) - {"style"})
     if unknown:
         raise ConstraintError("tuning: unknown key(s) %s" % ", ".join(unknown))
     return out
@@ -984,6 +992,10 @@ def compile_constraints(
         entry = entry or {}
         if not entry.get("p") or not entry.get("n"):
             raise ConstraintError(f"diff_pair {entry.get('name')!r}: needs 'p' and 'n' nets")
+        if entry.get("skew_mm") is not None and entry.get("skew_ps") is not None:
+            raise ConstraintError(
+                f"diff_pair {entry.get('name')!r}: give skew_mm or skew_ps, not both"
+            )
         dp = DiffPair(
             name=str(entry.get("name") or f"{entry['p']}/{entry['n']}"),
             p=str(entry["p"]),
@@ -1004,6 +1016,10 @@ def compile_constraints(
         nets = entry.get("nets") or []
         if len(nets) < 2:
             raise ConstraintError(f"length_match {entry.get('name')!r}: needs >= 2 nets")
+        if entry.get("tolerance_mm") is not None and entry.get("tolerance_ps") is not None:
+            raise ConstraintError(
+                f"length_match {entry.get('name')!r}: give tolerance_mm or tolerance_ps, not both"
+            )
         length_matches.append(
             LengthMatch(
                 name=str(entry.get("name") or "group"),

@@ -59,7 +59,7 @@ def series_board(r1=(20.0, 10.0), r2=(20.0, 6.0)):
     return BoardGraph("series", comps, nets, BoardOutline(W, H))
 
 
-def constraints(graph, pairs=True):
+def constraints(graph, pairs=True, tuning=None):
     doc = {
         "board": {"outline": {"w": W, "h": H}},
         "fixed": {
@@ -72,6 +72,8 @@ def constraints(graph, pairs=True):
             {"name": "a", "p": "AP", "n": "AN", "skew_mm": 1.0},
             {"name": "b", "p": "BP", "n": "BN", "skew_mm": 1.0},
         ]
+    if tuning is not None:
+        doc["tuning"] = tuning
     return compile_constraints(doc, graph.refs)
 
 
@@ -101,6 +103,18 @@ class GlobalTermTest(unittest.TestCase):
         self.assertEqual(
             global_place(g, cc, W, H, seed=0, iters=50),
             global_place(g, cc, W, H, seed=0, iters=50, w_match=7.0),
+        )
+
+    def test_placement_opt_out(self):
+        # tuning: {placement: false} places the pairs as if undeclared.
+        from pnr.place.model import matched_pin_sets
+
+        g = series_board()
+        off = constraints(g, tuning={"placement": False})
+        self.assertEqual(matched_pin_sets(g, off, {}), [])
+        self.assertEqual(
+            global_place(g, off, W, H, seed=0, iters=50),
+            global_place(g, constraints(g, pairs=False), W, H, seed=0, iters=50),
         )
 
 

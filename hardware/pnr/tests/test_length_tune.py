@@ -28,8 +28,18 @@ from pnr.route.detail.tune import (
     tune_board,
 )
 
-# An error inside tuning fails the test instead of leaving the route untuned.
-os.environ["PNR_TUNE_STRICT"] = "1"
+# An error inside tuning fails the test instead of leaving the route untuned (this
+# module only: a test run that imports several modules keeps its own environment).
+_STRICT = mock.patch.dict(os.environ, {"PNR_TUNE_STRICT": "1"})
+
+
+def setUpModule():
+    _STRICT.start()
+
+
+def tearDownModule():
+    _STRICT.stop()
+
 
 FAB = {
     "track_width_mm": 0.25,

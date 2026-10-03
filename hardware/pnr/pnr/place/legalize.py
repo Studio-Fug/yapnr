@@ -371,7 +371,7 @@ def legalize(
     def is_hull(comp):
         return hulls and bool(comp.hull)
 
-    stacked = frozenset(stack or ())  # (``stack`` below is the backtracking stack)
+    stacked = frozenset(stack or ())
     if stacked:
         occupancy[STACK_PLANE] = np.zeros((ny, nx), dtype=bool)
 
@@ -688,7 +688,7 @@ def legalize(
         for v in members:
             blocks[v] = members
     active_block = set()
-    stack = []
+    trail = []  # backtracking: (state, ref, chosen slot)
     banned = {}
     backtracks = 0
     while movable:
@@ -818,7 +818,9 @@ def legalize(
                         limits_for(comp.ref),
                         candidate_cost=candidate_cost,
                         forbidden=[
-                            (rr, cc) for rot, rr, cc in banned.get(comp.ref, ()) if rot == rotation
+                            (rr, cc)
+                            for rot, rr, cc, side in banned.get(comp.ref, ())
+                            if rot == rotation and side == comp.side
                         ],
                         attached=attached,
                         free=slot_free,
@@ -826,7 +828,9 @@ def legalize(
                     )
                     if aid is not None:
                         tried = [
-                            (rr, cc) for rot, rr, cc in banned.get(comp.ref, ()) if rot == rotation
+                            (rr, cc)
+                            for rot, rr, cc, side in banned.get(comp.ref, ())
+                            if rot == rotation and side == comp.side
                         ]
                         for attempt in range(LOOK_AHEAD_TRIES):
                             if not starves(comp, r, c, bw, bh, sides):
@@ -878,11 +882,11 @@ def legalize(
                 _, _, error, r, c, bw, bh, sides, attached, captured_fields = there
         if (
             error is not None
-            and stack
+            and trail
             and (group_edges or group_limits)
             and backtracks < backtrack_budget
         ):
-            previous, chosen_ref, chosen_pose = stack.pop()
+            previous, chosen_ref, chosen_pose = trail.pop()
             occupancy = previous["occupancy"]
             neighbors = previous["neighbors"]
             if landing:
@@ -948,9 +952,11 @@ def legalize(
                         0.0,
                     ),
                     poses={q.ref: (q.pos, q.rot) for q in placed.components},
+                    sides={q.ref: q.side for q in placed.components},
                 )
             )
-        stack.append((state, comp.ref, (comp.rot, r, c)))
+        # A slot is banned on the side it was taken (the other side's cell is free).
+        trail.append((state, comp.ref, (comp.rot, r, c, comp.side)))
         banned.pop(comp.ref, None)
         if is_hull(comp):
             mark_slot(comp, r, c, bw, bh, sides)
@@ -976,7 +982,7 @@ def legalize(
     from pnr import trace as _trace
 
     if _trace.current() is not None:  # PNR_TRACE_DIR only
-        _trace.legal([ref for _state, ref, _pose in stack], placed, backtracks)
+        _trace.legal([ref for _state, ref, _pose in trail], placed, backtracks)
     if cost_records:
         import hashlib
         import json
@@ -991,6 +997,8 @@ def legalize(
             for ref, (pos, rot) in v["poses"].items():
                 replay_refs[ref].pos = pos
                 replay_refs[ref].rot = rot
+            for ref, side in v["sides"].items():
+                set_component_side(replay_refs[ref], side)
             records.append(
                 legalizer_decision(
                     replay,

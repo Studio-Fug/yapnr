@@ -163,10 +163,14 @@ def _silk_corners(
     xw, yh = half_w + o, half_h + o
     for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
         cx, cy = sx * xw, sy * yh
-        if ("top" if sy < 0 else "bottom") not in skip_edges:
-            fp.line((cx, cy), (cx - sx * arm, cy), "F.SilkS", 0.12)
-        if ("left" if sx < 0 else "right") not in skip_edges:
-            fp.line((cx, cy), (cx, cy - sy * arm), "F.SilkS", 0.12)
+        horizontal, vertical = ("top" if sy < 0 else "bottom"), ("left" if sx < 0 else "right")
+        # an arm at a corner of a skipped edge starts 0.3 mm short of that edge
+        gx = 0.3 if vertical in skip_edges else 0.0
+        gy = 0.3 if horizontal in skip_edges else 0.0
+        if horizontal not in skip_edges:
+            fp.line((cx - sx * gx, cy), (cx - sx * arm, cy), "F.SilkS", 0.12)
+        if vertical not in skip_edges:
+            fp.line((cx, cy - sy * gy), (cx, cy - sy * arm), "F.SilkS", 0.12)
     if pin1:
         fp.poly(
             [(-xw - 0.1, -yh - 0.1), (-xw - 0.6, -yh - 0.1), (-xw - 0.1, -yh - 0.6)],

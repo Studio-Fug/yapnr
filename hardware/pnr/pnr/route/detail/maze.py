@@ -999,6 +999,10 @@ def route(grid, net_access, **kwargs):
     # Set before spawning so serial and worker proposals use identical geometry.
     grid.routing_track_halos = kwargs.get("net_halo") or {}
     grid.routing_via_keepout = kwargs.get("via_keepout", 1)
+    if getattr(grid, "_wide_specs", None) is not None:
+        # Copper recorded since the wide nets' tables were built (the escape plan,
+        # power-array sources): the tables cover it before anything reads them.
+        grid.reserve_wide_pad_clearance()
     import os
 
     from pnr.runtime_controls import route_workers

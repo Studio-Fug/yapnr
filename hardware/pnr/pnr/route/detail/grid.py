@@ -28,6 +28,53 @@ from ...place.geometry import Rect, pad_rects
 DEFAULT_SIGNAL_LAYERS = ("F.Cu", "B.Cu")
 
 
+def _point_segment_distance_sq(p, a, b) -> float:
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    den = dx * dx + dy * dy
+    t = 0.0 if den == 0 else max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / den))
+    ex, ey = p[0] - a[0] - t * dx, p[1] - a[1] - t * dy
+    return ex * ex + ey * ey
+
+
+def _square_segment_distance_sq(x0, y0, x1, y1, a, b) -> float:
+    """Squared distance between the box ``[x0, x1] x [y0, y1]`` and the segment
+    ``a``-``b``: zero when they meet (Liang-Barsky clipping), otherwise the least
+    of the ends' distances to the box and the corners' distances to the segment."""
+    t0, t1 = 0.0, 1.0
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    meets = True
+    for p, q in ((-dx, a[0] - x0), (dx, x1 - a[0]), (-dy, a[1] - y0), (dy, y1 - a[1])):
+        if p == 0:
+            if q < 0:
+                meets = False
+                break
+            continue
+        t = q / p
+        if p < 0:
+            if t > t1:
+                meets = False
+                break
+            t0 = max(t0, t)
+        else:
+            if t < t0:
+                meets = False
+                break
+            t1 = min(t1, t)
+    if meets and t0 <= t1:
+        return 0.0
+
+    def to_box(p):
+        ex = max(x0 - p[0], 0.0, p[0] - x1)
+        ey = max(y0 - p[1], 0.0, p[1] - y1)
+        return ex * ex + ey * ey
+
+    return min(
+        to_box(a),
+        to_box(b),
+        *(_point_segment_distance_sq(c, a, b) for c in ((x0, y0), (x1, y0), (x0, y1), (x1, y1))),
+    )
+
+
 @dataclass(frozen=True)
 class Cell:
     """A grid node: layer index + column/row."""
@@ -79,9 +126,18 @@ class RouteGrid:
         self.escape_segments = []
         self.escape_vias = []
         self.net_widths = {}
+        # net -> its net class's copper clearance (mm), from the rules
+        # (route_board); the fab ``clearance`` holds where larger or absent.
+        self.net_clearances: Dict[str, float] = {}
         # net -> pad clearance table at that net's own width, for nets too wide
         # for the pad track halo (reserve_wide_pad_clearance); others: absent.
         self.wide_pad_net: Dict[str, Dict[Tuple[int, int, int], str]] = {}
+        # reserve_wide_pad_clearance's state: the wide nets' (width, clearance),
+        # the tables per such pair, and how much recorded copper they cover.
+        self._wide_specs: Optional[Dict[str, Tuple[float, float]]] = None
+        self._wide_tables: Dict[Tuple[float, float], tuple] = {}
+        self._wide_seen = (0, 0, 0, False)
+        self._pth_keepouts: Optional[Tuple[float, Optional[float]]] = None
         self.via_spacing = 2 * self.via_radius
         self.via_drill_radius = self.via_radius  # conservative until fab rules supply the drill
         self.hole_clearance = 0.2
@@ -171,6 +227,8 @@ class RouteGrid:
         component PTH drill wall even where its copper land is narrow (the pad
         track halo only guarantees ``clearance`` from the land). A footprint's
         via-class drill keeps ``via_hole_clearance`` instead (none if None)."""
+        # A wide net keeps these gaps at its own width (reserve_wide_pad_clearance).
+        self._pth_keepouts = (pth_hole_clearance, via_hole_clearance)
         for layers, net, (cx, cy), radius, plated in self.drilled_pads:
             if not plated:
                 continue
@@ -233,7 +291,8 @@ class RouteGrid:
     def passable(self, layer: int, i: int, j: int, net: Optional[str] = None) -> bool:
         """True if net ``net`` may occupy cell (layer, i, j): in bounds, not a
         static obstacle, and either free of pads or a pad of its own net (for a
-        net in :attr:`wide_pad_net`, free of the pads' halos at its width too)."""
+        net in :attr:`wide_pad_net`, free of the static copper's halos at its
+        width too: :meth:`reserve_wide_pad_clearance`)."""
         if not self.in_bounds(i, j):
             return False
         if self.blocked[layer, j, i]:
@@ -399,8 +458,25 @@ class RouteGrid:
             lambda la, i, j: reserve(self.pad_net, la, i, j),
         )
 
+    def _mark_capsule(self, layer: int, a, b, grow: float, setter) -> None:
+        """Apply ``setter(layer, i, j)`` over cells whose square comes within
+        ``grow`` of the segment ``a``-``b`` (a point when ``a == b``)."""
+        p = self.pitch
+        i0 = max(0, int((min(a[0], b[0]) - grow) / p))
+        i1 = min(self.nx - 1, int((max(a[0], b[0]) + grow) / p))
+        j0 = max(0, int((min(a[1], b[1]) - grow) / p))
+        j1 = min(self.ny - 1, int((max(a[1], b[1]) + grow) / p))
+        limit = grow * grow + 1e-12
+        for j in range(j0, j1 + 1):
+            for i in range(i0, i1 + 1):
+                if (
+                    _square_segment_distance_sq(i * p, j * p, (i + 1) * p, (j + 1) * p, a, b)
+                    <= limit
+                ):
+                    setter(layer, i, j)
+
     def reserve_wide_pad_clearance(self) -> None:
-        """Give every net too wide for the pad track halo its own pad halo.
+        """Give every net too wide for the static track halos its own halos.
 
         A route edge runs between two cell centres (a 45° step also needs its two
         corner cells), so it stays inside cells that miss every foreign pad's track
@@ -411,30 +487,95 @@ class RouteGrid:
         :meth:`passable` also reads for it. The cells a pad's rectangle touches
         belong to the pad's net in that table whatever halo covers them, so a
         wide net still lands on each of its pads (from the side away from a close
-        neighbour). Nets of the same width share one table; a board without such
-        a net gets none.
+        neighbour). Nets of the same width (and clearance) share one table; a
+        board without such a net gets none.
+
+        The table covers the other static copper a route must clear in the same
+        way, each at its own extent: escape stubs (``½stub + clearance + ½width
+        - ½pitch`` from the stub, every cell its capsule touches), escape vias
+        (``via radius + …``, every layer) and, under a fab profile, PTH drill
+        keep-outs (:meth:`mark_pth_hole_keepouts`). The clearance between two
+        nets is the larger of theirs (``net_clearances``, else ``clearance``).
+
+        Incremental: a later call adds the copper recorded since the previous one
+        (a pad added afterwards, such as a power array's reserved copper, or the
+        escape plan), so :func:`pnr.route.detail.maze.route` calls it again before
+        it routes a grid that called it once. A board whose net widths changed
+        between calls is rebuilt.
         """
         base = self.clearance + 0.5 * self.track_width
-        tables: Dict[float, Dict[Tuple[int, int, int], str]] = {}
+        half = 0.5 * self.pitch
+        clearances = self.net_clearances
+
+        def clearance(net):
+            return max(self.clearance, clearances.get(net, self.clearance))
+
+        wanted: Dict[str, Tuple[float, float]] = {}
         for net, width in sorted(self.net_widths.items()):
-            grow = self.clearance + 0.5 * width - 0.5 * self.pitch
-            if grow <= base + 1e-9:
+            own = clearance(net)
+            if own + 0.5 * width - half <= base + 1e-9:
                 continue
-            table = tables.get(width)
-            if table is None:
-                table = tables[width] = {}
-                body: Dict[Tuple[int, int, int], str] = {}
-                for layer, owner, r in self.pad_rectangles:
-                    for mark, distance in ((table, grow), (body, 0.0)):
+            wanted[net] = (width, own)
+        if wanted != self._wide_specs:
+            self._wide_specs = wanted
+            self._wide_tables = {}
+            self._wide_seen = (0, 0, 0, False)
+            self.wide_pad_net = {}
+            for net, key in wanted.items():
+                if key not in self._wide_tables:
+                    self._wide_tables[key] = ({}, {})
+                self.wide_pad_net[net] = self._wide_tables[key][0]
+        pads, segments, vias, holes = self._wide_seen
+        self._wide_seen = (
+            len(self.pad_rectangles),
+            len(self.escape_segments),
+            len(self.escape_vias),
+            holes or self._pth_keepouts is not None,
+        )
+        for (width, own), (table, body) in sorted(self._wide_tables.items()):
+            # The cells a pad's rectangle touches stay its net's (the body); every
+            # other cell of a halo belongs to its owner, or to no net on overlap.
+            def halo(owner):
+                def mark(la, i, j):
+                    key = (la, i, j)
+                    if key in body:
+                        return
+                    old = table.get(key)
+                    table[key] = owner if old is None or old == owner else "\0conflict"
 
-                        def reserve(la, i, j, owner=owner, mark=mark):
-                            key = (la, i, j)
-                            old = mark.get(key)
-                            mark[key] = owner if old is None or old == owner else "\0conflict"
+                return mark
 
-                        self._mark_rect(layer, r, distance, reserve)
-                table.update(body)
-            self.wide_pad_net[net] = table
+            def landing(owner):
+                def mark(la, i, j):
+                    key = (la, i, j)
+                    old = body.get(key)
+                    body[key] = table[key] = owner if old is None or old == owner else "\0conflict"
+
+                return mark
+
+            def grow(owner, extent):
+                return extent + max(own, clearance(owner)) + 0.5 * width - half
+
+            for layer, owner, r in self.pad_rectangles[pads:]:
+                self._mark_rect(layer, r, grow(owner, 0.0), halo(owner))
+                self._mark_rect(layer, r, 0.0, landing(owner))
+            for layer, owner, a, b in self.escape_segments[segments:]:
+                stub = 0.5 * self.net_widths.get(owner, self.track_width)
+                self._mark_capsule(layer, a, b, grow(owner, stub), halo(owner))
+            for owner, point in self.escape_vias[vias:]:
+                for layer in range(self.nlayers):
+                    self._mark_capsule(
+                        layer, point, point, grow(owner, self.via_radius), halo(owner)
+                    )
+            if self._pth_keepouts is not None and not holes:
+                pth_gap, via_gap = self._pth_keepouts
+                for layers, owner, (cx, cy), radius, plated in self.drilled_pads:
+                    gap = via_gap if self._via_class_drill(radius) else pth_gap
+                    if not plated or gap is None:
+                        continue
+                    hole = Rect(cx, cy, 2 * radius, 2 * radius)
+                    for layer in layers:
+                        self._mark_rect(layer, hole, gap + 0.5 * width - half, halo(owner))
 
     def block_region(
         self,

@@ -104,6 +104,14 @@ their animations on `claude/animations-groups-hier`.
   re-checked with an independent finite-volume solver (within 0.1 Ω) and IPC-2141A (stripline
   50.5 Ω); recovery re-run with another seed, a wrong nominal stackup and a worse lab. Open: the
   SMA part, the panel fee, a mask-off stick on board B.
+- **RF coupons, Order 0 on OSH Park** (branch `claude/order0`, from `claude/rf-coupons`; pages
+  [docs/rf/order0/](docs/rf/order0/README.md)): the Cinch 142-0701-851 launch of regions M and W
+  (2D-designed), board O as three uploads (O0-M coupons + R1 + A16 + A04R + tag/QR; O0-W light
+  with the D2 window; O0-D with the D1 window), the OSH Park frameless panel, line tables for
+  FR408HR (EM528 shares them), coupon predictions on both substrates; board B moved to
+  JLC06161H-2116C with a mask-off tie line. All DRC-clean; `yapnr fab check` 0 errors. Next: D1/D2
+  copper and the R1/R1t FDTD predictions (#29 round 2), the fab bundles, the pre-registration
+  release, the capture tooling (WP7).
 
 ## Next
 

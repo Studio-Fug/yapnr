@@ -5,21 +5,21 @@ Order the coupons exactly as the product will be ordered (design §5.6).
 
 | Option | Value |
 | --- | --- |
-| Layers, thickness | 6, 1.55 mm nominal (1.6 mm class) |
-| Impedance control | yes, stackup JLC06161H-7628 |
+| Layers, thickness | 6, 1.59 mm nominal (1.6 mm class) |
+| Impedance control | yes, stackup JLC06161H-2116C |
 | Impedance tolerance | the product's (±10 % standard) |
 | Copper | 1 oz outer, 0.5 oz inner |
 | Finish | ENIG |
 | Mask, silkscreen | the product's colours |
 | Vias | 0.3 mm drill, 0.5 mm pad; tented; filled and capped (6-layer default) |
-| Panel | customer panel 134.0 x 189.0 mm, milled slots, mouse bites |
+| Panel | customer panel 224.0 x 120.0 mm, milled slots, mouse bites |
 | Quantity | 5 (measure at least 3) |
 | Order number | at the 'JLCJLCJLCJLC' text on the frame (specify location) |
 
 Controlled-impedance traces (do not change these widths; record any engineering query that does, since the width is an input of the fit):
 
-- P: L1 grounded coplanar, 0.291 mm with 0.20 mm gaps, under mask, 50 ohm.
-- S: L3 stripline, 0.214 mm between L2 and L4, 50 ohm.
+- P: L1 grounded coplanar, 0.350 mm with 0.20 mm gaps, under mask, 50 ohm.
+- S: L3 stripline, 0.279 mm between L2 and L4, 50 ohm.
 - every other trace and gap on the board (the 0.7x and 1.4x width variants, the coupled pair, the ring and stubs) is a test structure as well: no width or gap may be changed.
 
 Intentional features:
@@ -32,6 +32,8 @@ Unverified (check before ordering): the edge SMA geometry (Samtec SMA-J-P-H-ST-E
 
 Checked against JLC's capabilities page (read 2026-10-02): copper at least 0.2 mm from a routed edge (the zones stop 0.30 mm from every edge; the DRC checks 0.25 mm); mouse-bite tabs at least 5 mm wide with 0.5-0.8 mm bites (5 mm, 0.5 mm at 0.8 mm pitch); silkscreen text 1.0 mm high, 0.15 mm lines.
 
+- board B since 2026-10-02: the product's stackup (Order 0 owner decision); its L1 dielectric is 2116, so board B no longer shares L1 with board A
+
 KiCad DRC (zones refilled):
 
 - no violations
@@ -43,19 +45,20 @@ Sticks:
 | --- | --- | --- | --- | --- |
 | B18 | dc | - | 56 x 40 | w·t and etch per layer; via chain |
 | B11 | ring | S | 60 x 40 | held out: εeff at 2.9, 5.8, 11.6 GHz from the ring's notches |
-| B19 | xsec | - | 30 x 18 | microsection: h_core, h_pp, t_L3 |
-| B05 | line | S | 60 x 18 | calibration; γ(f) of S |
-| B02 | line | S | 22.5 x 18 | calibration; γ(f) of S |
+| B05 | line | S | 60 x 15 | calibration; γ(f) of S |
+| B19 | xsec | - | 30 x 23 | microsection: h_core, h_pp, t_L3 |
+| B03 | line | S | 26.5 x 15 | calibration; γ(f) of S |
+| B13 | line | P | 26.5 x 23 | calibration; γ(f) of P |
 | B06 | line | S | 120 x 15 | calibration; γ(f) of S |
 | B09 | variant | S0.7 | 60 x 15 | etch and heights on L3 |
-| B08 | verify | S | 48 x 15 | residual calibration error |
+| B02 | line | S | 22.5 x 15 | calibration; γ(f) of S |
 | B10 | variant | S1.4 | 60 x 15 | tan δ vs roughness on L3 |
-| B04 | line | S | 36 x 15 | calibration; γ(f) of S |
-| B01 | thru | S | 20 x 15 | calibration; γ(f) of S |
 | B15 | line | P | 60 x 15 | calibration; γ(f) of P |
+| B24 | variant | P-MO | 60 x 15 | mask Dk x thickness on L1 (board B self-sufficient) |
+| B01 | thru | S | 20 x 15 | calibration; γ(f) of S |
+| B08 | verify | S | 48 x 15 | residual calibration error |
+| B04 | line | S | 36 x 15 | calibration; γ(f) of S |
 | B14 | line | P | 36 x 15 | calibration; γ(f) of P |
-| B12 | thru | P | 20 x 15 | calibration; γ(f) of P |
 | B07 | reflect | S | 30 x 15 | calibration (reflect) |
 | B16 | reflect | P | 30 x 15 | calibration (reflect) |
-| B03 | line | S | 26.5 x 15 | calibration; γ(f) of S |
-| B13 | line | P | 26.5 x 15 | calibration; γ(f) of P |
+| B12 | thru | P | 20 x 15 | calibration; γ(f) of P |

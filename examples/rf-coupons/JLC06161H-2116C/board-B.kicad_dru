@@ -1,0 +1,5 @@
+(version 1)
+(rule "MO_B24: intentional mask opening over a test line"
+	(constraint bridged_mask)
+	(condition "A.memberOfFootprint('MO_B24')")
+	(severity ignore))

@@ -84,16 +84,16 @@ flowchart LR
     out --> rf["yapnr.rf materials<br/>robust variants"]
 ```
 
-| Topic         | Choice                                                                                                       | Reason                                                                                                      |
-| ------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| Boards        | A: 4L JLC04161H-7628; B: 6L JLC06161H-7628 (JLC06161H-2116C as the alternative)                              | the 4L target, and a 6L with stripline that shares A's L1 cross-section, so one board ties the other (§4.2) |
-| Format        | "sticks": every structure on its own break-out strip with an edge SMA at each end                            | every port needs a board edge with room for the connector and wrench; sticks are measured independently     |
-| Calibration   | two tiers: SOLT at the cable ends, then multiline TRL on the board                                           | Jargon and Marks' two-tier scheme for low-cost VNAs; removes connectors and launches from every structure   |
-| Line lengths  | thru 20 mm (2 × 10 mm) plus lines ΔL = 2.5, 6.5, 16, 40 and 100 mm                                           | conditioning ≥ 0.95 over 1–12 GHz for every family; the 100 mm line doubles as the loss line (§5.1)         |
-| Separation    | width set, mask-off copies, a second line type, DC meanders, microsection                                    | each breaks one degeneracy of the line data (§8.8)                                                          |
-| Forward model | 2D quasi-static RLGC per family; Djordjevic–Sarkar dielectric; causal roughness; closed-form discontinuities | fast, accurate for uniform lines; held-out resonators test the model form                                   |
-| Connector     | Cinch 142-0701-851 edge SMA (18 GHz) by default; optionally one reusable clamp-on pair for the TRL sets      | soldered connectors differ between sticks, which TRL assumes away (§6.1)                                    |
-| Output        | `yapnr-stackup-fit/1`: values, covariance, provenance                                                        | one record that `rules['stackup']` and the RF solver both read                                              |
+| Topic         | Choice                                                                                                       | Reason                                                                                                    |
+| ------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| Boards        | A: 4L JLC04161H-7628; B: 6L JLC06161H-2116C, the product stackup (JLC06161H-7628 as the alternative)         | the 4L target, and a 6L with the product's stripline; B ties its own L1 with a mask-off line (§4.2)       |
+| Format        | "sticks": every structure on its own break-out strip with an edge SMA at each end                            | every port needs a board edge with room for the connector and wrench; sticks are measured independently   |
+| Calibration   | two tiers: SOLT at the cable ends, then multiline TRL on the board                                           | Jargon and Marks' two-tier scheme for low-cost VNAs; removes connectors and launches from every structure |
+| Line lengths  | thru 20 mm (2 × 10 mm) plus lines ΔL = 2.5, 6.5, 16, 40 and 100 mm                                           | conditioning ≥ 0.95 over 1–12 GHz for every family; the 100 mm line doubles as the loss line (§5.1)       |
+| Separation    | width set, mask-off copies, a second line type, DC meanders, microsection                                    | each breaks one degeneracy of the line data (§8.8)                                                        |
+| Forward model | 2D quasi-static RLGC per family; Djordjevic–Sarkar dielectric; causal roughness; closed-form discontinuities | fast, accurate for uniform lines; held-out resonators test the model form                                 |
+| Connector     | Cinch 142-0701-851 edge SMA (18 GHz) by default; optionally one reusable clamp-on pair for the TRL sets      | soldered connectors differ between sticks, which TRL assumes away (§6.1)                                  |
+| Output        | `yapnr-stackup-fit/1`: values, covariance, provenance                                                        | one record that `rules['stackup']` and the RF solver both read                                            |
 
 ## 3. Why the fab model needs measuring
 
@@ -173,6 +173,13 @@ a true stripline on L3:
 - **JLC06161H-2116C (alternative):** 0.30 mm core above, 3 × 2116 (0.366 mm, εr 4.16) below, the
   most symmetric stripline. Its L1 dielectric is 2116 (0.2464 mm), so nothing is shared with
   board A. Choose it if the product will use it; the generator then builds a board B' from it.
+
+_Decision (owner, 2026-10-02):_ the product stackup is JLC06161H-2116C, so **board B is built on
+JLC06161H-2116C** (S 0.279 mm, P 0.350 / 0.200 mm at 50 Ω; the launch's coplanar gap re-solved
+to 0.435 mm with L2 and L3 cut). Because its L1 no longer shares board A's prepreg, board A's fit
+cannot serve as board B's prior: board B gets a mask-off copy of its L1 tie line (B24, P-MO) so
+that its own L1 sticks separate the mask from the 2116's εr. The 7628 board B stays defined as an
+alternative (and keeps the synthetic-study results of §10).
 
 The 6-layer service fills and caps vias and has no HASL finish (ENIG only).
 
@@ -873,7 +880,8 @@ a dependency.
 
 1. **Product line type:** L1 GCPW under mask (the default P), microstrip, or mask-free RF lines?
    It sets the primary family.
-2. **Board B stackup:** JLC06161H-7628 (default, shares L1 with board A) or JLC06161H-2116C?
+2. ~~**Board B stackup:** JLC06161H-7628 (default, shares L1 with board A) or JLC06161H-2116C?~~
+   Decided 2026-10-02: JLC06161H-2116C, the product stackup (§4.2).
 3. **Connectors:** soldered 142-0701-851 on every measured stick, or one reusable clamp-on pair for
    the TRL sets as well?
 4. **VNA:** which instrument, and is a lab VNA to at least 13.5 GHz available for one session?

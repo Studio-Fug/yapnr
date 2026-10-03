@@ -1,19 +1,20 @@
 {
   "schema": "yapnr-coupon-catalog/1",
-  "stackup": "JLC06161H-7628",
+  "stackup": "JLC06161H-2116C",
   "board": "B",
   "launch": {
     "pad_w": 1.27,
     "pad_x0": 0.5,
     "pad_len": 3.2,
-    "pad_gap": 0.616,
+    "pad_gap": 0.435,
     "taper_len": 1.0,
     "cut_layers": [
       2,
       3
     ],
     "via_x": 7.0,
-    "source": "2D, L2+L3 cut, L4 reference"
+    "source": "2D, L2+L3 cut, L4 reference",
+    "design": ""
   },
   "trl": {
     "S": {
@@ -85,7 +86,7 @@
       "family": "S",
       "trl": "S",
       "length": 22.5,
-      "height": 18.0,
+      "height": 15.0,
       "dl": 2.5,
       "elements": [
         [
@@ -166,7 +167,7 @@
       "family": "S",
       "trl": "S",
       "length": 60.0,
-      "height": 18.0,
+      "height": 15.0,
       "dl": 40.0,
       "elements": [
         [
@@ -332,18 +333,18 @@
         [
           "line",
           "S",
-          16.112
+          16.065
         ],
         [
           "ring2",
           "S",
-          7.776,
+          7.87,
           0.16666666666666666
         ],
         [
           "line",
           "S",
-          16.112
+          16.065
         ]
       ],
       "tier": "core",
@@ -352,9 +353,9 @@
       "determines": "held out: \u03b5eff at 2.9, 5.8, 11.6 GHz from the ring's notches",
       "label": "B11 RING S",
       "geometry": {
-        "radius": 7.776,
+        "radius": 7.87,
         "arc": 0.16666666666666666,
-        "feed": 16.112
+        "feed": 16.065
       },
       "generated": true,
       "rp_mm": [
@@ -389,7 +390,7 @@
       "family": "P",
       "trl": "PB",
       "length": 26.5,
-      "height": 15.0,
+      "height": 23.0,
       "dl": 6.5,
       "elements": [
         [
@@ -654,7 +655,7 @@
       "family": "",
       "trl": "",
       "length": 30.0,
-      "height": 18.0,
+      "height": 23.0,
       "dl": 0.0,
       "elements": [],
       "tier": "core",
@@ -672,6 +673,35 @@
       },
       "generated": true,
       "rp_mm": []
+    },
+    {
+      "id": "B24",
+      "kind": "variant",
+      "family": "P-MO",
+      "trl": "PB",
+      "length": 60.0,
+      "height": 15.0,
+      "dl": 0.0,
+      "elements": [
+        [
+          "line",
+          "P-MO",
+          40.0
+        ]
+      ],
+      "tier": "core",
+      "fitted": true,
+      "ports": 2,
+      "determines": "mask Dk x thickness on L1 (board B self-sufficient)",
+      "label": "B24 P-MO",
+      "geometry": {
+        "ref_family": "P"
+      },
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        50.0
+      ]
     },
     {
       "id": "B20",
@@ -764,7 +794,7 @@
     "B17 (via 2x-thru) and the extended set are not generated yet"
   ],
   "panel_mm": [
-    134.0,
-    189.0
+    224.0,
+    120.0
   ]
 }

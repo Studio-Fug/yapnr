@@ -1,0 +1,786 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="yapnr migration plan" href="migration-plan.html"><link rel="prev" title="Regression ladder" href="regression-ladder.html">
+        <link rel="prefetch" href="../static/yapnr-logo-256.png" as="image">
+        <link rel="prefetch" href="../static/yapnr-logo-light.png" as="image">
+
+    <link rel="shortcut icon" href="../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
+        <title>Constraints and hierarchy - yapnr documentation</title>
+      <link rel="stylesheet" type="text/css" href="../static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../static/custom.css?v=ad564152" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-brand-primary: #024823;
+  --color-brand-content: #024823;
+  --color-brand-visited: #024823;
+  --color-yapnr-accent: #ba9015;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">yapnr documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="../static/yapnr-logo-256.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../static/yapnr-logo-light.png" alt="Dark Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="viewer.html">The live viewer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="frontends/atopile.html">The atopile toolchain</a></li>
+<li class="toctree-l1"><a class="reference internal" href="part-cache.html">The part cache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fab-and-ordering.html">Fab bundles and staged orders</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html">Releases and versioning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-fab-coupons.html">RF fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cloud-experiments.html">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="regression-ladder.html">Regression ladder</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Constraints and hierarchy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="decisions.html">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/fea-integration.html">Design: thermal and electromagnetic field solvers (FEA) in yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/rf-fab-coupons.html">Design: fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="design/gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="history/import-manifest.html">History import manifest</a></li>
+<li class="toctree-l1"><a class="reference internal" href="about-the-name.html">About the name</a></li>
+<li class="toctree-l1"><a class="reference internal" href="references.html">Foundations and references</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../DEVELOPERS.html">Developing yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Contributing to yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../AGENTS.html">Rules for agents</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../WORKLOG.html">Worklog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../THIRD_PARTY.html">Third-party material</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../README.html">yapnr</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/blob/main/docs/constraints-and-hierarchy.md?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/edit/main/docs/constraints-and-hierarchy.md" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="constraints-and-hierarchy">
+<h1>Constraints and hierarchy<a class="headerlink" href="#constraints-and-hierarchy" title="Link to this heading">¶</a></h1>
+<p>Three showcases of how yapnr handles what a human would ask of a layout: a row of LEDs that
+reads as a row, connectors and buttons on the board edge, and a board built from reusable
+blocks. Each animation is recorded engine state, like the <a class="reference internal" href="regression-ladder.html"><span class="std std-doc">regression ladder</span></a>’s:
+global placement snapshots, the legalizer’s order, every net the router commits, the saved KiCad
+boards and KiCad’s verdict.</p>
+<p>The showcase cases (<code class="docutils literal notranslate"><span class="pre">designs.showcases()</span></code> in
+<a class="reference external" href="https://github.com/Studio-Fug/yapnr/blob/main/hardware/pnr/regression/designs.py"><code class="docutils literal notranslate"><span class="pre">hardware/pnr/regression/designs.py</span></code></a>) run through the ladder’s runner and its gate, but
+they are not ladder cases: they sit outside the ladder’s gate and its pull-request lane (the
+nightly lane runs them for information). All five cases below come from one traced run: seed 0,
+a placement snapshot every 5 iterations, the legacy fabrication profile, KiCad 10.0.6 on the
+development Mac (darwin-arm64). The four flat cases use the initial placement pool (8 starts, 3
+routed finalists); the hierarchical case uses its own block trials and four top-level seeds.
+Every case passes the gate: 100 % routed, no open connections and no findings in KiCad’s DRC.</p>
+<section id="line-groups">
+<h2>Line groups<a class="headerlink" href="#line-groups" title="Link to this heading">¶</a></h2>
+<p><img src="animations/showcase-chaser-line.webp" width="960"
+  alt="Animation, side by side: the five-stage LED chaser placed and routed twice. Left, the LEDs
+  land wherever the placer puts them; right, LEDs D1 to D5 move and turn as one rigid line.
+  Both pass KiCad's DRC."></p>
+<p>The five-stage chaser (<code class="docutils literal notranslate"><span class="pre">07-chaser-20</span></code>: a TLC555 clocking a CD4017B that drives five LEDs) twice,
+on the same board, with the same seed and budgets. On the left the LEDs are free; on the right,
+<code class="docutils literal notranslate"><span class="pre">line-chaser-20</span></code> holds D1 to D5 in one line group, the only difference:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">line_group</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chaser_leds</span>
+<span class="w">    </span><span class="nt">members</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">D1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">D2</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">D3</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">D4</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">D5</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="c1"># in order along the line</span>
+<span class="w">    </span><span class="nt">pitch_mm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3.0</span><span class="w"> </span><span class="c1"># centre to centre</span>
+<span class="w">    </span><span class="nt">rot</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">90</span><span class="w"> </span><span class="c1"># each LED&#39;s rotation in the line&#39;s frame</span>
+<span class="w">    </span><span class="nt">reason</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Chaser LEDs in one row, so the sequence reads as a line</span>
+</pre></div>
+</div>
+<p>A line group is a hard constraint. The placer sees it as one rigid part (a macro: the members’
+courtyards and pads in the line’s frame), so global placement moves and turns the whole line and
+the legalizer places it in one step; afterwards the members are posed from the line’s pose.</p>
+<p>What to watch:</p>
+<ul class="simple">
+<li><p><strong>Global placement:</strong> the dashed rectangle is the rigid line. It slides as one body while the
+other parts spread around it. The placer’s rotation is a four-way choice, and here it keeps
+the line vertical, flipping it end for end a few times (a half-turn is drawn as a flip: the
+engine records only the chosen direction, never the angles in between).</p></li>
+<li><p><strong>Legalization:</strong> the line is placed in one step, not five (15 steps instead of 19).</p></li>
+<li><p><strong>The pool’s shortlist:</strong> the eight starts put the line in different places and directions
+(vertical in seven starts, horizontal in one, both ways round).</p></li>
+<li><p><strong>The caption strips:</strong> HPWL (the half-perimeter wirelength of every net, from the frame’s
+poses) and the “LED line error”, the largest distance of D1 to D5 from their best-fit line. On
+the left the dashed path through D1 to D5 shows where the sequence goes; its error ends at
+6.85 mm. On the right it is 0.00 mm throughout.</p></li>
+</ul>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Case</p></th>
+<th class="head text-right"><p>Parts</p></th>
+<th class="head text-center"><p>Routed</p></th>
+<th class="head text-right"><p>Opens</p></th>
+<th class="head text-right"><p>Findings</p></th>
+<th class="head text-right"><p>Vias</p></th>
+<th class="head text-right"><p>Copper (mm)</p></th>
+<th class="head text-right"><p>HPWL (mm)</p></th>
+<th class="head text-right"><p>Time (s)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">07-chaser-20</span></code></p></td>
+<td class="text-right"><p>20</p></td>
+<td class="text-center"><p>100 %</p></td>
+<td class="text-right"><p>0</p></td>
+<td class="text-right"><p>0</p></td>
+<td class="text-right"><p>19</p></td>
+<td class="text-right"><p>310.75</p></td>
+<td class="text-right"><p>271</p></td>
+<td class="text-right"><p>114.3</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">line-chaser-20</span></code></p></td>
+<td class="text-right"><p>20</p></td>
+<td class="text-center"><p>100 %</p></td>
+<td class="text-right"><p>0</p></td>
+<td class="text-right"><p>0</p></td>
+<td class="text-right"><p>20</p></td>
+<td class="text-right"><p>322.49</p></td>
+<td class="text-right"><p>272</p></td>
+<td class="text-right"><p>121.6</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The line costs one via, 12 mm of copper and 1 mm of HPWL here. Caveats: a line turned by 180°
+reverses the sequence on the board, which a human would accept either way, so the placer may
+choose either direction (near the end of global placement its choice can flip between the two).
+Only the LEDs are grouped; their resistors stay free (a rigid LED-and-resistor row is a follow-up).</p>
+</section>
+<section id="board-edges">
+<h2>Board edges<a class="headerlink" href="#board-edges" title="Link to this heading">¶</a></h2>
+<p><img src="animations/showcase-edge-io.webp" width="960"
+  alt="Animation, side by side: a small TLC555 board placed and routed twice. Left, the connector,
+  button and LED are free; right, they are held on the south edge and slide along it. Both pass
+  KiCad's DRC."></p>
+<p>A “hold to blink” board (a TLC555 astable that runs while pushbutton SW1 is held), twice. On the
+right, <code class="docutils literal notranslate"><span class="pre">edge-io-12</span></code> holds the supply connector J1, the button SW1 and the LED D1 on the south
+edge, each turned so that its long axis runs along the edge; the order along the edge is left to
+the placer. On the left, <code class="docutils literal notranslate"><span class="pre">edge-io-12-free</span></code> drops those constraints. Nothing else is fixed.</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">edge_align</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">J1</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> edge</span><span class="p">:</span><span class="w"> </span><span class="nv">south</span><span class="p p-Indicator">,</span><span class="nt"> hard</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">,</span><span class="nt"> tolerance_mm</span><span class="p">:</span><span class="w"> </span><span class="nv">1.0</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">SW1</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> edge</span><span class="p">:</span><span class="w"> </span><span class="nv">south</span><span class="p p-Indicator">,</span><span class="nt"> hard</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">,</span><span class="nt"> tolerance_mm</span><span class="p">:</span><span class="w"> </span><span class="nv">1.0</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">D1</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> edge</span><span class="p">:</span><span class="w"> </span><span class="nv">south</span><span class="p p-Indicator">,</span><span class="nt"> hard</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">,</span><span class="nt"> tolerance_mm</span><span class="p">:</span><span class="w"> </span><span class="nv">1.0</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="nt">orientation</span><span class="p">:</span><span class="w"> </span><span class="c1"># the facing is set by the orientation constraint</span>
+<span class="w">  </span><span class="nt">J1</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">90</span>
+<span class="w">  </span><span class="nt">SW1</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+<span class="w">  </span><span class="nt">D1</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">edge_align</span></code> pulls a part towards its edge during global placement. With <code class="docutils literal notranslate"><span class="pre">hard:</span> <span class="pre">true</span></code> the
+legalizer also keeps it within <code class="docutils literal notranslate"><span class="pre">tolerance_mm</span></code> of the edge, and the legality checks and feedback
+moves respect it.</p>
+<p>What to watch:</p>
+<ul class="simple">
+<li><p><strong>Tethers:</strong> a line from each held part to the edge, red while it is farther than its
+tolerance, mint once it is within it. During global placement the pull is soft, so parts
+approach the edge; the legalizer’s band then holds them there.</p></li>
+<li><p><strong>The order along the edge:</strong> the caption strip reads it live (“south: D1 · J1 · SW1”). In the
+start the animation follows, the order stays D1, J1, SW1: the parts approach the edge and SW1
+slides about 4 mm along it. The order changes in other starts, so the shortlist first replays
+the global placement of all eight starts side by side (recorded snapshots, one clock), with each
+tile’s order under it: in three starts two edge parts pass each other during global placement,
+and in two the legalizer changes the order. The tiles then hold each start’s legalized order:
+four different orders among the eight.</p></li>
+<li><p><strong>The free board:</strong> the dashed edge is the other board’s target, drawn for reference; “on edge
+0 of 3” counts its parts within 1 mm of it. In the start it follows, D1 and three other parts
+stay off the board until the legalizer places them, so the camera widens over its global
+placement and zooms back to the board after legalization.</p></li>
+</ul>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Case</p></th>
+<th class="head text-right"><p>Parts</p></th>
+<th class="head text-center"><p>Routed</p></th>
+<th class="head text-right"><p>Opens</p></th>
+<th class="head text-right"><p>Findings</p></th>
+<th class="head text-right"><p>Vias</p></th>
+<th class="head text-right"><p>Copper (mm)</p></th>
+<th class="head text-right"><p>HPWL (mm)</p></th>
+<th class="head text-right"><p>Time (s)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">edge-io-12-free</span></code></p></td>
+<td class="text-right"><p>12</p></td>
+<td class="text-center"><p>100 %</p></td>
+<td class="text-right"><p>0</p></td>
+<td class="text-right"><p>0</p></td>
+<td class="text-right"><p>9</p></td>
+<td class="text-right"><p>176.87</p></td>
+<td class="text-right"><p>139</p></td>
+<td class="text-right"><p>61.9</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">edge-io-12</span></code></p></td>
+<td class="text-right"><p>12</p></td>
+<td class="text-center"><p>100 %</p></td>
+<td class="text-right"><p>0</p></td>
+<td class="text-right"><p>0</p></td>
+<td class="text-right"><p>8</p></td>
+<td class="text-right"><p>198.47</p></td>
+<td class="text-right"><p>169</p></td>
+<td class="text-right"><p>34.2</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Holding the three parts on the edge costs 30 mm of HPWL and 22 mm of copper, and saves a via.</p>
+</section>
+<section id="regions-and-alignments">
+<h2>Regions and alignments<a class="headerlink" href="#regions-and-alignments" title="Link to this heading">¶</a></h2>
+<p>Two more relations a designer asks for: keep a subsystem in one area of the board, and line
+parts up on one coordinate. Both are hard by default (a soft variant is a weighted penalty) and
+take any refs, globs or <code class="docutils literal notranslate"><span class="pre">&#64;addresses</span></code>:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">region</span><span class="p">:</span><span class="w"> </span><span class="c1"># the clock parts&#39; courtyards stay in the west half of the 42 x 32 mm board</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">clock</span>
+<span class="w">    </span><span class="nt">refs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">U1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">R1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">R2</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">C1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">C2</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">C3</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">rect</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">0</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">0</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">21</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">32</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="c1"># or polygon: [[x, y], ...], or areas: [...] (a union)</span>
+<span class="nt">align</span><span class="p">:</span><span class="w"> </span><span class="c1"># the two ICs&#39; origins on one horizontal line</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ics</span>
+<span class="w">    </span><span class="nt">refs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">U1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">U2</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">axis</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">y</span>
+<span class="w">    </span><span class="nt">anchor</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">origin</span><span class="w"> </span><span class="c1"># or centre, pad1, pad:&lt;name&gt;, a courtyard edge; or {ref: anchor}</span>
+<span class="w">    </span><span class="nt">tol_mm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.25</span>
+</pre></div>
+</div>
+<p>A part is measured by its body: its courtyard widened to its pads and silkscreen, where it really
+lies about the footprint origin, so a pin header measured from pin 1 or a connector with an
+offset shell is not padded out to a box centred on its origin.</p>
+<p>How each stage treats them:</p>
+<ul class="simple">
+<li><p><strong>Before placement:</strong> a hard region or align that no placement can meet is refused by name,
+for example a fixed part outside its region, or members whose regions keep their anchors
+apart.</p></li>
+<li><p><strong>Initial pool:</strong> the starts move into the outline, into the regions and onto the lines.</p></li>
+<li><p><strong>Global placement:</strong> a region term (the squared distance of each body corner from the area,
+in expectation over the part’s rotation distribution) and an alignment term (the squared
+deviation of each expected anchor from the members’ mean).</p></li>
+<li><p><strong>Legalizer:</strong> it bounds each slot centre. A rectangle region is a box per tried rotation, and
+a polygon or union a raster mask whose grid lines are the pieces’ own edges. An align is the
+band the members already placed leave, narrowed to where the others can still reach. The
+aligned members are placed as one block, and a slot that leaves a later member no room is
+backtracked. An align whose <code class="docutils literal notranslate"><span class="pre">tol_mm</span></code> is under that band, such as 0, then has its members
+moved onto one exact line wherever that stays legal.</p></li>
+<li><p><strong>Later moves:</strong> the legality checks, and with them every feedback move, relocation, the side
+pass’s flips and swaps and the Monte-Carlo search, reject a hard violation. A member of a line
+group or a hierarchical block carries its region and its anchor inside the rigid macro.</p></li>
+<li><p><strong>Double-sided boards</strong> (<code class="docutils literal notranslate"><span class="pre">board.sides:</span> <span class="pre">double</span></code>): a part is measured on the side it is tried
+on, its pads, anchors and body mirrored on the bottom. That holds for the legalizer’s
+other-side slot, a start drawn on the bottom, and global placement, which mixes both sides by
+each free part’s side probability, as it does for the pins.</p></li>
+<li><p><strong>Soft variants:</strong> a soft region or align is a cost in global placement, the legalizer (both
+sides’ slots), relocation (moves, flips and swaps), the side pass, batch relocation, the
+elastic mesh and the feedback children. The native loop tries a move that grows it last.</p></li>
+<li><p><strong>Not supported:</strong> <code class="docutils literal notranslate"><span class="pre">PNR_POWER_FIRST=1</span></code> refuses a design with either constraint.</p></li>
+</ul>
+<p>The <a class="reference internal" href="#hardware/pnr-inputs.md"><span class="xref myst">input reference</span></a> lists the keys of both sections.</p>
+<p>The ladder’s constraint rungs (<code class="docutils literal notranslate"><span class="pre">hardware/pnr/regression/hard_rungs.py</span></code>, <code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--hard</span></code>) use
+both: <code class="docutils literal notranslate"><span class="pre">07-chaser-20-abs</span></code> confines the clock to the west half, <code class="docutils literal notranslate"><span class="pre">07-chaser-20-rel</span></code> aligns the
+timer and the counter, and the MCU board’s rungs do the same with its regulator and its two
+buttons. The independent checker (<code class="docutils literal notranslate"><span class="pre">check_constraints.py</span></code>) measures them on the saved KiCad
+board, as it does for every other tool.</p>
+<p>Before the engine took them, the boards it routed for these rungs broke them: the clock sat 7 to
+20 mm outside the west half, and the two ICs were 6.4 and 10.1 mm off one line. Now every check
+holds on both seeds (the initial pool: eight starts, three routed finalists), with DRC-clean
+boards:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Case</p></th>
+<th class="head text-right"><p>Seed</p></th>
+<th class="head text-right"><p>Checks</p></th>
+<th class="head text-right"><p>Vias</p></th>
+<th class="head text-right"><p>Copper (mm)</p></th>
+<th class="head text-right"><p>HPWL (mm)</p></th>
+<th class="head text-right"><p>CPU (s)</p></th>
+<th class="head"><p>Before: checks, vias, copper</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">07-chaser-20-abs</span></code></p></td>
+<td class="text-right"><p>0</p></td>
+<td class="text-right"><p>19/19</p></td>
+<td class="text-right"><p>22</p></td>
+<td class="text-right"><p>358.3</p></td>
+<td class="text-right"><p>290</p></td>
+<td class="text-right"><p>283</p></td>
+<td><p>18/19, 18, 336.2</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">07-chaser-20-abs</span></code></p></td>
+<td class="text-right"><p>1</p></td>
+<td class="text-right"><p>19/19</p></td>
+<td class="text-right"><p>26</p></td>
+<td class="text-right"><p>417.6</p></td>
+<td class="text-right"><p>308</p></td>
+<td class="text-right"><p>761</p></td>
+<td><p>18/19, 24, 346.9</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">07-chaser-20-rel</span></code></p></td>
+<td class="text-right"><p>0</p></td>
+<td class="text-right"><p>8/8</p></td>
+<td class="text-right"><p>20</p></td>
+<td class="text-right"><p>338.9</p></td>
+<td class="text-right"><p>293</p></td>
+<td class="text-right"><p>111</p></td>
+<td><p>7/8, 15, 358.0</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">07-chaser-20-rel</span></code></p></td>
+<td class="text-right"><p>1</p></td>
+<td class="text-right"><p>8/8</p></td>
+<td class="text-right"><p>18</p></td>
+<td class="text-right"><p>337.7</p></td>
+<td class="text-right"><p>272</p></td>
+<td class="text-right"><p>163</p></td>
+<td><p>7/8, 18, 332.6</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The clock in the west half costs 22 and 71 mm of copper and two to four vias: its six parts
+share that half with the connector and a mounting hole, and their nets reach across to the
+counter. The alignment’s own cost shows in runs from the unchanged source start: 19 and 5 mm
+more copper, and 9 and 0 more vias. The table also includes the initial pool’s outline fit,
+which brings a source board staged outside the outline inside it, keeping the parts’ order,
+before the starts are projected. On seed 0 the fit took the aligned board from 377 back to
+339 mm, so that gain belongs to the fit, not to the alignment.</p>
+<p>The fit runs where a region or an align is declared; <code class="docutils literal notranslate"><span class="pre">PNR_FIT_OUTLINE=1</span></code> runs it for every
+design (for the engine directly; the ladder runner strips ambient <code class="docutils literal notranslate"><span class="pre">PNR_</span></code> switches). On the old
+gate’s source boards it lowers the source start’s HPWL by up to 149 mm. It changes the routed
+finalists, or the source start among them, on 13 of 16 cases, so turning it on everywhere waits
+for a re-baselined gate.</p>
+<p>The MCU board’s rungs satisfy the regulator’s region and the buttons’ alignment on both seeds,
+and on every legal start of the pool. That board does not yet route completely, with or
+without them.</p>
+</section>
+<section id="hierarchical-place-and-route">
+<h2>Hierarchical place and route<a class="headerlink" href="#hierarchical-place-and-route" title="Link to this heading">¶</a></h2>
+<p><img src="animations/showcase-hier-twin-bank.webp" width="800"
+  alt="Animation in three chapters: two block templates are placed and routed on their own
+  boards, the twin bank layout is reused, the blocks move onto the board as rigid macros, and
+  the nets between them are routed; KiCad's DRC passes."></p>
+<p><code class="docutils literal notranslate"><span class="pre">hier-twin-bank-32</span></code>: a TLC555 clock driving two identical CD4017B banks of five LEDs, 32 parts on
+a 56 × 40 mm board. Each part carries an atopile-style address (<code class="docutils literal notranslate"><span class="pre">top.clock.u</span></code>,
+<code class="docutils literal notranslate"><span class="pre">top.bank_a.r0</span></code>, …), from which the engine derives three blocks and two templates: the two
+banks share one template. Only VCC, GND and CLOCK cross block boundaries.</p>
+<p>What to watch:</p>
+<ol class="arabic simple">
+<li><p><strong>Blocks.</strong> Each template is placed and routed on its own board, in eight trials (two seeds on
+each of four outlines); the tiles replay each template’s chosen trial side by side, at one
+scale. The bank template’s trials follow with their rank (opens, port debt, area, vias,
+copper), and both banks reuse the chosen layout: one layout, two instances.</p></li>
+<li><p><strong>Top level.</strong> The blocks become rigid macros (their outline is dashed) and move onto the
+board; the top-level placer places them like parts, moving a whole block with its copper and
+flipping it end for end (the placer records a block only at 0° or 180° here; a half-turn is
+drawn as a flip), and legalizes one macro per step.</p></li>
+<li><p><strong>Knitting.</strong> The block copper is kept as it is (drawn dimmed): the progress bar starts at the
+50 of 60 connections the blocks already make. The router adds the nets between blocks, the
+connector and the bulk capacitor (full colour). Four top-level seeds were knitted; their
+montage follows, then KiCad’s writeback, planes, zone refill and verdict.</p></li>
+</ol>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Case</p></th>
+<th class="head text-right"><p>Parts</p></th>
+<th class="head text-center"><p>Routed</p></th>
+<th class="head text-right"><p>Opens</p></th>
+<th class="head text-right"><p>Findings</p></th>
+<th class="head text-right"><p>Vias</p></th>
+<th class="head text-right"><p>Copper (mm)</p></th>
+<th class="head text-right"><p>HPWL (mm)</p></th>
+<th class="head text-right"><p>Time (s)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">hier-twin-bank-32</span></code></p></td>
+<td class="text-right"><p>32</p></td>
+<td class="text-center"><p>100 %</p></td>
+<td class="text-right"><p>0</p></td>
+<td class="text-right"><p>0</p></td>
+<td class="text-right"><p>38</p></td>
+<td class="text-right"><p>598.02</p></td>
+<td class="text-right"><p>437</p></td>
+<td class="text-right"><p>175.5</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="what-is-interpolated">
+<h2>What is interpolated<a class="headerlink" href="#what-is-interpolated" title="Link to this heading">¶</a></h2>
+<p>Every frame is either recorded engine state or a labelled transition between two recorded
+states:</p>
+<ul class="simple">
+<li><p><strong>Placement snapshots.</strong> Positions between two recorded global placement snapshots are
+interpolated linearly, as in the ladder’s animations.</p></li>
+<li><p><strong>Rigid bodies.</strong> A line group or a block macro moves as one: its centre is interpolated
+linearly and its angle along the shorter arc between two snapshots, and its members are posed
+from that pose (never one by one, which would shrink a line mid-turn). A half-turn has no
+shorter arc, and the placer records only its snapped four-way choice, so a body (or, in these
+animations, a single part) recorded at opposite angles flips at the middle of the interval: a
+half-turn is shown as a flip, not a rotation.</p></li>
+<li><p><strong>The camera.</strong> When recorded poses leave the board during global placement, the camera
+widens over all of that placement’s snapshots and zooms back to the board after legalization.</p></li>
+<li><p><strong>The pool replay (board edges).</strong> The shortlist’s tiles replay each start’s recorded global
+placement snapshots on one clock, then show its legalized placement in one step.</p></li>
+<li><p><strong>The lift (“Blocks become macros”, 0.8 s).</strong> The blocks move from their display layout to
+their first recorded macro poses; the connector and the bulk capacitor fly in from the unplaced
+row. The display layout before it (the blocks side by side, without the board) is a
+presentation, not a placement.</p></li>
+<li><p><strong>Comparisons.</strong> The two halves are synchronized scene by scene; the shorter half holds its last
+frame of a scene until the other catches up.</p></li>
+</ul>
+<p>Nothing else is invented: no easing of the engine’s order, no reordering, no copper the engine
+did not commit. The caption metrics (HPWL, LED line error, parts on their edge and their order)
+are computed from the poses on screen.</p>
+</section>
+<section id="regenerating">
+<h2>Regenerating<a class="headerlink" href="#regenerating" title="Link to this heading">¶</a></h2>
+<p>The showcase run needs what the ladder needs (a numerical Python, KiCad 10 with its Python module
+and footprint library; see <a class="reference internal" href="regression-ladder.html#regenerating"><span class="std std-ref">Regression ladder</span></a>). The
+hierarchical case takes about three minutes on the development Mac.</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span><span class="c1"># 1. The showcase run (07-chaser-20 and the four showcase cases); the output must not exist.</span>
+<span class="s2">&quot;</span><span class="nv">$NUMERIC_PYTHON</span><span class="s2">&quot;</span><span class="w"> </span>hardware/pnr/regression/run.py<span class="w"> </span>--repo<span class="w"> </span>.<span class="w"> </span>--out<span class="w"> </span>.yapnr/ladder/SHOWCASES<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--seed<span class="w"> </span><span class="m">0</span><span class="w"> </span>--trace<span class="w"> </span>--trace-placement-every<span class="w"> </span><span class="m">5</span><span class="w"> </span>--initial-pool<span class="w"> </span>--initial-starts<span class="w"> </span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--initial-finalists<span class="w"> </span><span class="m">3</span><span class="w"> </span>--timeout<span class="w"> </span><span class="m">1200</span><span class="w"> </span>--showcases<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--case<span class="w"> </span><span class="m">07</span>-chaser-20<span class="w"> </span>--case<span class="w"> </span>line-chaser-20<span class="w"> </span>--case<span class="w"> </span>edge-io-12-free<span class="w"> </span>--case<span class="w"> </span>edge-io-12<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--case<span class="w"> </span>hier-twin-bank-32<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--python<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$NUMERIC_PYTHON</span><span class="s2">&quot;</span><span class="w"> </span>--kicad-python<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PNR_KICAD_PYTHON</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--kicad-cli<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PNR_KICAD_CLI</span><span class="s2">&quot;</span><span class="w"> </span>--library<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PNR_KICAD_FOOTPRINTS</span><span class="s2">&quot;</span>
+
+<span class="c1"># 2. Render the four files into docs/animations/ and their manifest and results entries.</span>
+bazel<span class="w"> </span>run<span class="w"> </span>//hardware/pnr:showcase_animations<span class="w"> </span>--<span class="w"> </span>--render-only<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PWD</span><span class="s2">/.yapnr/ladder/SHOWCASES&quot;</span>
+</pre></div>
+</div>
+<p>One comparison of any two traced runs renders with
+<code class="docutils literal notranslate"><span class="pre">bazel</span> <span class="pre">run</span> <span class="pre">//hardware/pnr:animate</span> <span class="pre">--</span> <span class="pre">--compare</span> <span class="pre">LEFT</span> <span class="pre">RIGHT</span> <span class="pre">--out</span> <span class="pre">FILE.webp</span> <span class="pre">--labels</span> <span class="pre">A</span> <span class="pre">B</span></code> (a trace,
+a case directory or <code class="docutils literal notranslate"><span class="pre">RUN_DIR:CASE</span></code> each; <code class="docutils literal notranslate"><span class="pre">--replay-pool</span></code> replays the pool’s starts in the
+shortlist, as the board-edge file does); a hierarchical case directory renders like any other
+case (<code class="docutils literal notranslate"><span class="pre">--pacing</span> <span class="pre">showcase</span></code> gives placement and routing more time). Budgets: 2.5 MB per WebP (the
+hierarchical one 3.5 MB), 5 MB per GIF, 30 MB for <code class="docutils literal notranslate"><span class="pre">docs/animations/</span></code> in all
+(<code class="docutils literal notranslate"><span class="pre">tests/unit/repo/test_animations.py</span></code>). The provenance of each file (the run’s engine commit,
+<code class="docutils literal notranslate"><span class="pre">sources_sha256</span></code>, trace and content hashes) is in the <code class="docutils literal notranslate"><span class="pre">showcases</span></code> entries of
+<a href="animations/manifest.json"><code>animations/manifest.json</code></a>, and the cases’
+results in the <code class="docutils literal notranslate"><span class="pre">showcases</span></code> array of
+<a href="animations/ladder-results.json"><code>animations/ladder-results.json</code></a>. The
+design is <a class="reference internal" href="design/constraint-and-hier-animations.html"><span class="std std-doc">Design: line groups, board edges and hierarchical PnR, animated</span></a>.</p>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="migration-plan.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">yapnr migration plan</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="regression-ladder.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Regression ladder</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 Kevin Balke. Licensed under AGPL-3.0-or-later
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Constraints and hierarchy</a><ul>
+<li><a class="reference internal" href="#line-groups">Line groups</a></li>
+<li><a class="reference internal" href="#board-edges">Board edges</a></li>
+<li><a class="reference internal" href="#regions-and-alignments">Regions and alignments</a></li>
+<li><a class="reference internal" href="#hierarchical-place-and-route">Hierarchical place and route</a></li>
+<li><a class="reference internal" href="#what-is-interpolated">What is interpolated</a></li>
+<li><a class="reference internal" href="#regenerating">Regenerating</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../static/documentation_options.js?v=8a448e45"></script>
+    <script src="../static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../static/copybutton.js?v=fd10adb8"></script>
+    <script src="../static/design-tabs.js?v=f930bc37"></script>
+    </body>
+</html>

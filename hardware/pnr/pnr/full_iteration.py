@@ -51,6 +51,36 @@ def si_side_fields(board, rules, work, sources, inventory):
     )
 
 
+def gloss_side_fields(board, rules, work, annotations, run, progress):
+    """PNR_GLOSS=1: the loop's gloss pass summaries and the final board's gloss metrics, side
+    fields of the evaluation (the objective vector is unchanged). The metrics worker measures
+    the functional groups the passes used (PNR_GLOSS_CLASSES, _CLASSES_FROM, _CROSS_GROUP_MM),
+    so the cross-group runs are reported too. Never raises: a failure is the metrics' error."""
+    try:
+        from pnr.gloss import compact_metrics, group_args, settings
+
+        report = work / "gloss-metrics.json"
+        run(
+            [
+                "pnr.gloss",
+                board,
+                "--worker",
+                "metrics",
+                "--rules",
+                rules,
+                "--report",
+                report,
+                *annotations,
+                *group_args(settings()),
+            ],
+            "gloss-metrics",
+        )
+        metrics = compact_metrics(json.loads(report.read_text())["metrics"])
+    except (subprocess.CalledProcessError, OSError, ValueError, KeyError) as e:
+        metrics = dict(error=repr(e))
+    return dict(gloss_summary=progress.get("gloss"), gloss_metrics=metrics)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("round", type=Path)
@@ -320,30 +350,7 @@ def main():
         )
     if os.environ.get("PNR_GLOSS") == "1":
         # PNR_GLOSS=1 side fields only (assumptions/SI precedent); the objective vector is unchanged.
-        gloss_metrics = None
-        try:
-            run(
-                [
-                    "pnr.gloss",
-                    board,
-                    "--worker",
-                    "metrics",
-                    "--rules",
-                    rules,
-                    "--report",
-                    work / "gloss-metrics.json",
-                    *annotations,
-                ],
-                "gloss-metrics",
-            )
-            from pnr.gloss import compact_metrics
-
-            gloss_metrics = compact_metrics(
-                json.loads((work / "gloss-metrics.json").read_text())["metrics"]
-            )
-        except (subprocess.CalledProcessError, OSError, ValueError, KeyError) as e:
-            gloss_metrics = dict(error=repr(e))
-        result.update(gloss_summary=native_progress.get("gloss"), gloss_metrics=gloss_metrics)
+        result.update(gloss_side_fields(board, rules, work, annotations, run, native_progress))
     (p / "evaluation.json").write_text(json.dumps(result, indent=2) + "\n")
     emit("candidate_complete", board=board, data=result)
     print(json.dumps(dict(objective=result["objective"], qualified=result["qualified"])))

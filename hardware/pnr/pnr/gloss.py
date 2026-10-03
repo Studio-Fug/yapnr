@@ -20,6 +20,7 @@ Three layers, one module:
 """
 
 import argparse
+import dataclasses
 import hashlib
 import json
 import math
@@ -147,6 +148,18 @@ def settings(env=None):
         cross_group_mm,
         classes_from,
     )
+
+
+def settings_key(conf):
+    """A short digest of the settings a pass runs under: every sub-flag's effective value, the
+    groups file by its content (sha256), never by its path. The router key's ``gloss`` field
+    (pnr.feedback.signals) and native_loop's progress.json carry it, so evaluations of two gloss
+    configurations (or of gloss on and off) never mix in one feedback library."""
+    fields = {f.name: getattr(conf, f.name) for f in dataclasses.fields(conf)}
+    if fields.get("classes"):
+        fields["classes"] = "sha256:" + sha256(fields["classes"])
+    text = json.dumps(fields, sort_keys=True, default=list)
+    return hashlib.sha256(text.encode()).hexdigest()[:12]
 
 
 # ---------------------------------------------------------------- small helpers
@@ -340,7 +353,9 @@ def derive_class_tags(rules, kinds, intents=()):
     ``pairs`` (each differential pair, ``pair:NAME``), ``si`` (the nets of each @pnr-si intent,
     ``si:NAME``), ``length_match`` (each length-match group, ``length_match:NAME``). Derived
     groups with the same member set are one group (the first source's tag, e.g. a pair that is
-    also its own net class); a net derived into two groups with different members is an error."""
+    also its own net class). A net derived into groups with different members joins the most
+    specific one: the fewest members, then the first in source order (a differential pair inside
+    a wider net class is a group of its own; the class keeps its other nets)."""
     groups = []  # (tag, frozenset of nets), in source order
     for kind in [k for k in CLASS_SOURCES if k in kinds]:
         if kind == "netclasses":
@@ -365,20 +380,39 @@ def derive_class_tags(rules, kinds, intents=()):
                 raise ValueError("PNR_GLOSS_CLASSES_FROM: group %r must list net names" % tag)
             if nets:
                 groups.append((tag, frozenset(nets)))
-    out, members = {}, {}
+    unique = []  # the same group derived again (e.g. a pair declared as its own net class) is one
     for tag, nets in groups:
-        same = next((t for t, m in members.items() if m == nets), None)
-        if same is not None:
-            continue  # the same group derived again (e.g. a pair declared as its own net class)
-        members[tag] = nets
-        for net in sorted(nets):
-            if net in out:
-                raise ValueError(
-                    "PNR_GLOSS_CLASSES_FROM: net %r derived into groups %r and %r"
-                    % (net, out[net], tag)
-                )
-            out[net] = tag
+        if not any(members == nets for _, members in unique):
+            unique.append((tag, nets))
+    out = {}
+    for _, (tag, nets) in sorted(enumerate(unique), key=lambda row: (len(row[1][1]), row[0])):
+        for net in nets:
+            out.setdefault(net, tag)
+    return dict(sorted(out.items()))
+
+
+def group_args(conf):
+    """Worker arguments for the functional groups of ``conf`` ([] without groups)."""
+    out = []
+    if getattr(conf, "classes", None):
+        out += ["--classes", str(conf.classes)]
+    if getattr(conf, "classes_from", ()):
+        out += ["--classes-from", ",".join(conf.classes_from)]
+    if out:
+        out += ["--cross-group-mm", repr(float(getattr(conf, "cross_group_mm", 10.0)))]
     return out
+
+
+def check_groups(conf, rules):
+    """The functional groups a pass would use, from its settings and the rules alone (``si``
+    needs the board and is resolved by the pass): raises ValueError at controller start when
+    the groups file or the rules cannot give groups, rather than when a pass runs."""
+    if not getattr(conf, "classes", None) and not getattr(conf, "classes_from", ()):
+        return None
+    try:
+        return class_tags(conf.classes, tuple(k for k in conf.classes_from if k != "si"), rules)
+    except (ValueError, TypeError, AttributeError, KeyError) as error:
+        raise ValueError("PNR_GLOSS functional groups: %s" % (error,))
 
 
 def class_tags(classes=None, classes_from=(), rules=None, intents=()):
@@ -2536,12 +2570,7 @@ class GlossPass:
             cmd += ["--guard-open-nets"]
         if not getattr(self.conf, "hug", True):
             cmd += ["--no-hug"]
-        if getattr(self.conf, "classes", None):
-            cmd += ["--classes", str(self.conf.classes)]
-        if getattr(self.conf, "classes_from", ()):
-            cmd += ["--classes-from", ",".join(self.conf.classes_from)]
-        if getattr(self.conf, "classes", None) or getattr(self.conf, "classes_from", ()):
-            cmd += ["--cross-group-mm", repr(float(getattr(self.conf, "cross_group_mm", 10.0)))]
+        cmd += group_args(self.conf)
         cmd += [str(x) for x in extra]
         run_kicad(cmd, Path(report).with_suffix(".log"))
         return read(report)
@@ -3336,6 +3365,7 @@ def main(argv=None):
         ap.error("board, --out, --work-dir and --report are required")
     try:
         conf = settings()
+        check_groups(conf, read(a.rules))
     except ValueError as error:
         ap.error(str(error))
     result = GlossPass(a, conf).run()

@@ -1038,20 +1038,23 @@ def controller(argv=None, nested=False):
         ap.error("positive budgets required")
     # Recursive early subphases share os.environ; only the outer loop stops.
     stop_label = None if nested else os.environ.get("PNR_STOP_AFTER_PHASE") or None
-    if (
-        stop_label
-        and stop_label not in PHASE_LABELS
-        and not (os.environ.get("PNR_GLOSS") == "1" and stop_label in GLOSS_LABELS)
-    ):
-        ap.error("PNR_STOP_AFTER_PHASE must be one of: " + ", ".join(PHASE_LABELS))
+    stop_labels = PHASE_LABELS + (GLOSS_LABELS if os.environ.get("PNR_GLOSS") == "1" else ())
+    if stop_label and stop_label not in stop_labels:
+        ap.error("PNR_STOP_AFTER_PHASE must be one of: " + ", ".join(stop_labels))
     if os.environ.get("PNR_GLOSS") == "1" and not nested:
-        # PNR_GLOSS=1: reject malformed PNR_GLOSS_* sub-flags before any phase runs
+        # PNR_GLOSS=1: reject malformed PNR_GLOSS_* sub-flags, and a groups file or rules that
+        # give no functional groups, before any phase runs
+        from pnr.gloss import check_groups
         from pnr.gloss import settings as gloss_settings
+        from pnr.gloss import settings_key
 
         try:
-            gloss_settings()
+            conf = gloss_settings()
+            check_groups(conf, json.loads(a.rules.read_text()))
         except ValueError as error:
             ap.error(str(error))
+        # the router key's gloss field (pnr.feedback.signals reads it from progress.json)
+        a.gloss_key = settings_key(conf)
     a.out_dir = a.out_dir.resolve()
     a.out_dir.mkdir(parents=True, exist_ok=False)
     worker_root = a.out_dir / "worker-source"
@@ -1384,6 +1387,10 @@ def controller(argv=None, nested=False):
             return board
         if label not in conf.passes:
             return board
+        import resource
+
+        # the pass's cost (its own workers plus this outer gate's), for an equal-compute A/B
+        clock, cpu = time.monotonic(), resource.getrusage(resource.RUSAGE_CHILDREN)
         folder = a.out_dir / label
         folder.mkdir()
         output = folder / "candidate.kicad_pcb"
@@ -1437,6 +1444,11 @@ def controller(argv=None, nested=False):
                     event["status"] = "outer_gate"
         except subprocess.CalledProcessError as error:
             event.update(status="worker_error", returncode=error.returncode)
+        used = resource.getrusage(resource.RUSAGE_CHILDREN)
+        event["cost"] = dict(
+            wall_seconds=round(time.monotonic() - clock, 2),
+            cpu_seconds=round(used.ru_utime - cpu.ru_utime + used.ru_stime - cpu.ru_stime, 2),
+        )
         events.append(event)
         a.gloss_summaries = dict(
             getattr(a, "gloss_summaries", {}),
@@ -1445,6 +1457,7 @@ def controller(argv=None, nested=False):
                     event.get("summary") or {},
                     accepted=event["accepted"],
                     status=event.get("status", "ok"),
+                    cost=event["cost"],
                 )
             },
         )
@@ -1652,9 +1665,11 @@ def controller(argv=None, nested=False):
                 ),
             ),
         )
-        if os.environ.get("PNR_GLOSS") == "1" and getattr(a, "gloss_summaries", None):
+        if os.environ.get("PNR_GLOSS") == "1" and getattr(a, "gloss_key", None):
             progress = read(a.out_dir / "progress.json")
-            progress["gloss"] = a.gloss_summaries
+            progress["gloss_key"] = a.gloss_key
+            if getattr(a, "gloss_summaries", None):
+                progress["gloss"] = a.gloss_summaries
             save(a.out_dir / "progress.json", progress)
 
     portal_trials = set()

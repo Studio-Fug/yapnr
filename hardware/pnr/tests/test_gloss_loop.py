@@ -7,6 +7,8 @@ it against two trees (with and without the gloss hunks) and compare the normaliz
 progress.json, worker calls and outputs.
 """
 
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -24,9 +26,17 @@ def save(path, value):
 
 
 def stub_run(
-    root, *, electrical=True, gate_fail=False, nested=False, only_mode=None, argv_extra=()
+    root,
+    *,
+    electrical=True,
+    gate_fail=False,
+    nested=False,
+    only_mode=None,
+    argv_extra=(),
+    rules=None,
 ):
-    """Run native_loop.main on a stub board; returns (result, progress or None, calls)."""
+    """Run native_loop.main on a stub board; returns (result, progress or None, calls).
+    rules: a rules file whose content the run uses (default: the fab profile only)."""
     import pnr.native_drc
     import pnr.proc
     from pnr import native_loop
@@ -37,8 +47,9 @@ def stub_run(
     board = root / "in" / "board.kicad_pcb"
     board.write_text("(kicad_pcb (version 1))\n")
     board.with_suffix(".kicad_pro").write_text("{}\n")
+    content = json.loads(Path(rules).read_text()) if rules else {}
     rules = root / "in" / "rules.json"
-    save(rules, {"fab_profile": active_name()})
+    save(rules, dict(content, fab_profile=active_name()))
     repo = root / "repo"
     (repo / "hardware/tools").mkdir(parents=True)
     (repo / "hardware/tools/keyhole_region.py").write_text("")
@@ -252,14 +263,81 @@ class GlossLoopTest(unittest.TestCase):
             stub_run(self.root / "stop-off")
         self.assertNotIn("pnr.gloss", sys.modules)
 
-    def test_gloss_modules_are_in_the_code_key_closure(self):
-        # native_loop imports pnr.gloss (under the flag) and pnr.gloss imports the geometry
-        # core, so both are evaluation code: the code key changed once when they landed.
+    def test_gloss_modules_are_in_the_code_key_closure_only_with_the_flag(self):
+        # native_loop and full_iteration import pnr.gloss only under PNR_GLOSS=1, as the loop
+        # imports pnr.shove only under PNR_SHOVE=1: flag-off code keys never change with gloss
+        # code; with the flag the key covers the pass and the one shove module it runs.
         from pnr.feedback import signals
 
-        modules = signals.eval_code_modules(signals.PNR_ROOT, "plain")
-        self.assertIn("pnr.gloss", modules)
-        self.assertIn("pnr.gloss_geometry", modules)
+        for router in ("plain", "shove"):
+            off = signals.eval_code_modules(signals.PNR_ROOT, router, gloss=False)
+            on = signals.eval_code_modules(signals.PNR_ROOT, router, gloss=True)
+            self.assertFalse({"pnr.gloss", "pnr.gloss_geometry"} & set(off))
+            self.assertLessEqual(
+                {"pnr.gloss", "pnr.gloss_geometry", "pnr.shove", "pnr.shove.gates"}, set(on)
+            )
+            extra = set(on) - set(off)
+            if router == "plain":
+                self.assertEqual(
+                    extra, {"pnr.gloss", "pnr.gloss_geometry", "pnr.shove", "pnr.shove.gates"}
+                )
+            else:
+                self.assertEqual(extra, {"pnr.gloss", "pnr.gloss_geometry"})
+        with Env():
+            self.assertEqual(
+                signals.code_key(signals.PNR_ROOT, "plain"),
+                signals.code_key(signals.PNR_ROOT, "plain", gloss=False),
+            )
+            off_key = signals.TreeCode(signals.PNR_ROOT, "plain").key()
+        with Env(PNR_GLOSS="1"):
+            on_key = signals.TreeCode(signals.PNR_ROOT, "plain").key()
+            self.assertEqual(on_key, signals.code_key(signals.PNR_ROOT, "plain", gloss=True))
+        self.assertNotEqual(off_key, on_key)
+
+    def test_router_key_and_imports_separate_gloss_arms(self):
+        # the two arms of a gloss A/B (and two gloss configurations) never share a router key,
+        # and an evaluation of one arm is never imported into the other
+        from pnr import gloss
+        from pnr.feedback import signals
+
+        with Env():
+            off = signals.current_key("native", 900)
+        self.assertIsNone(off["gloss"])
+        self.assertNotIn("gloss=", signals.key_string(off))  # flag-off strings as before
+        self.assertTrue(signals.key_string(off).endswith("|%s|2" % off["code"]))
+        with Env(PNR_GLOSS="1"):
+            on = signals.current_key("native", 900)
+        with Env(PNR_GLOSS="1", PNR_GLOSS_STEPS="dekink"):
+            dekink = signals.current_key("native", 900)
+        self.assertEqual(on["gloss"], gloss.settings_key(gloss.settings({})))
+        self.assertNotEqual(on["gloss"], dekink["gloss"])
+        self.assertIn("|gloss=%s|%s|2" % (on["gloss"], on["code"]), signals.key_string(on))
+        self.assertNotEqual(signals.key_string(on), signals.key_string(dekink))
+        # a groups file is keyed by its content, not its path
+        a, b = self.root / "a.json", self.root / "b" / "a.json"
+        b.parent.mkdir()
+        for f in (a, b):
+            f.write_text(json.dumps({"classes": {"g": ["N1", "N2"]}}))
+        keys = [gloss.settings_key(gloss.settings(dict(PNR_GLOSS_CLASSES=str(f)))) for f in (a, b)]
+        self.assertEqual(keys[0], keys[1])
+        b.write_text(json.dumps({"classes": {"g": ["N1", "N3"]}}))
+        self.assertNotEqual(
+            keys[0], gloss.settings_key(gloss.settings(dict(PNR_GLOSS_CLASSES=str(b))))
+        )
+        # imports: the record's gloss key (progress.json) must equal this run's
+        fb = dict(router="plain", budget_seconds=900, fab_profile=on["fab_profile"])
+        for record, current, refused in (
+            (None, off, False),
+            (None, on, True),
+            (on["gloss"], off, True),
+            (on["gloss"], on, False),
+            (dekink["gloss"], on, True),
+        ):
+            errors, _ = signals.check_import(
+                signals.observed_key(dict(fb, gloss=record), stage="native", power_first=False),
+                current,
+            )
+            self.assertEqual(any(e.startswith("gloss ") for e in errors), refused, errors)
 
     def test_flag_on_runs_both_passes_and_records_them(self):
         with Env(PNR_GLOSS="1"):
@@ -268,9 +346,18 @@ class GlossLoopTest(unittest.TestCase):
         self.assertEqual([c[c.index("--label") + 1] for c in gloss], ["06g-gloss", "07g-gloss"])
         self.assertTrue(all(c[0] == sys.executable and "--kicad-python" in c for c in gloss))
         self.assertEqual(sorted(progress["gloss"]), ["06g-gloss", "07g-gloss"])
+        from pnr import gloss as gloss_module
+
+        self.assertEqual(
+            progress["gloss_key"], gloss_module.settings_key(gloss_module.settings({}))
+        )
         events = [e for e in progress["events"] if e["stage"] == "gloss_pass"]
         self.assertEqual([e["phase"] for e in events], ["06g-gloss", "07g-gloss"])
         self.assertTrue(all(e["accepted"] for e in events))
+        # each pass reports its cost (wall and CPU of its workers and the outer gate)
+        for label, row in progress["gloss"].items():
+            self.assertEqual(sorted(row["cost"]), ["cpu_seconds", "wall_seconds"])
+            self.assertGreaterEqual(row["cost"]["wall_seconds"], 0)
 
     def test_passes_subflag_and_skips(self):
         with Env(PNR_GLOSS="1", PNR_GLOSS_PASSES="07g-gloss"):
@@ -302,6 +389,13 @@ class GlossLoopTest(unittest.TestCase):
             result, progress, calls = stub_run(self.root / "stop")
         self.assertEqual(progress["termination"], "stopped_after_phase")
         self.assertEqual(progress["stopped_after_phase"], "06g-gloss")
+        # an unknown label: the error lists the gloss labels only with the flag
+        for flags, listed in ((dict(PNR_GLOSS="1"), True), ({}, False)):
+            err = io.StringIO()
+            with Env(PNR_STOP_AFTER_PHASE="07x", **flags), contextlib.redirect_stderr(err):
+                with self.assertRaises(SystemExit):
+                    stub_run(self.root / ("stop-bad-%s" % listed))
+            self.assertEqual("07g-gloss" in err.getvalue(), listed, err.getvalue())
 
     def test_settings(self):
         from pnr import gloss
@@ -436,10 +530,29 @@ class GlossLoopTest(unittest.TestCase):
             gloss.derive_class_tags(rules, ("pairs",)), {"DP": "pair:usb", "DN": "pair:usb"}
         )
         self.assertEqual(gloss.derive_class_tags(rules, ("si",)), {})  # no intents given
-        # a net derived into two groups with different members is an error
+        # a net derived into groups with different members joins the most specific one: a pair
+        # inside a wider net class is its own group, the class keeps its other nets
+        wide = dict(rules, net_classes=[dict(name="hs", nets=["DP", "DN", "CLK", "STB"])])
+        self.assertEqual(
+            gloss.derive_class_tags(wide, ("netclasses", "pairs")),
+            {"CLK": "netclass:hs", "DN": "pair:usb", "DP": "pair:usb", "STB": "netclass:hs"},
+        )
+        self.assertEqual(
+            gloss.derive_class_tags(wide, ("pairs", "netclasses")),
+            gloss.derive_class_tags(wide, ("netclasses", "pairs")),
+        )
+        # equal sizes: the first source (CLASS_SOURCES order) wins
         clash = dict(rules, length_match=[dict(name="bus", nets=["DP", "D0"])])
+        self.assertEqual(
+            gloss.derive_class_tags(clash, ("length_match", "pairs")),
+            {"D0": "length_match:bus", "DN": "pair:usb", "DP": "pair:usb"},
+        )
+        # the controller start validates the groups against the rules (si needs the board)
+        conf = gloss.settings(dict(PNR_GLOSS_CLASSES_FROM="netclasses,pairs,si"))
+        self.assertEqual(gloss.check_groups(conf, wide)["DP"], "pair:usb")
+        self.assertIsNone(gloss.check_groups(gloss.settings({}), wide))
         with self.assertRaises(ValueError):
-            gloss.derive_class_tags(clash, ("pairs", "length_match"))
+            gloss.check_groups(conf, dict(net_classes=[dict(name="x", nets="DP")]))
         # a groups file entry wins for its net; neither source: no groups (no cap)
         groups = Path(tempfile.mkdtemp()) / "groups.json"
         groups.write_text(json.dumps({"classes": {"sense": ["DP"]}}))
@@ -482,6 +595,11 @@ class GlossLoopTest(unittest.TestCase):
         ):
             with Env(PNR_GLOSS="1", **flags), self.assertRaises(SystemExit):
                 stub_run(self.root / ("bad-%d" % len(list(self.root.glob("bad-*")))))
+        # groups the rules cannot give (a net class listing a string) stop it before any phase
+        rules = self.root / "bad-rules.json"
+        rules.write_text(json.dumps(dict(net_classes=[dict(name="x", nets="DP")])))
+        with Env(PNR_GLOSS="1", PNR_GLOSS_CLASSES_FROM="netclasses"), self.assertRaises(SystemExit):
+            stub_run(self.root / "bad-groups", rules=rules)
         # the same typo without the master flag is never read
         with Env(PNR_GLOSS_STEPS="dekinks"):
             result, progress, calls = stub_run(self.root / "typo-off")
@@ -614,6 +732,51 @@ class GlossLoopTest(unittest.TestCase):
         self.assertEqual({d for _, d in workers}, {b0})
         self.assertIn("planning", result)
         self.assertEqual(result["planning"]["deadline_hits"], 0)
+
+    def test_evaluation_side_fields_measure_the_groups_of_the_passes(self):
+        # full_iteration's gloss-metrics worker gets the same functional groups as the passes
+        import subprocess
+
+        from pnr.full_iteration import gloss_side_fields
+
+        metrics = dict(
+            classes=dict(eligible=dict(length_mm=1.0, bends_all=2)),
+            E_mm2=0.0,
+            E_bbox_mm2=0.0,
+            DS_mm2=0.5,
+            US_mm2=0.0,
+            layers={},
+            cross_group=dict(max_mm=3.0),
+        )
+        calls = []
+
+        def run(cmd, name, fail=False):
+            calls.append([str(c) for c in cmd])
+            if fail:
+                raise subprocess.CalledProcessError(1, cmd)
+            report = Path(calls[-1][calls[-1].index("--report") + 1])
+            report.write_text(json.dumps(dict(metrics=metrics)))
+
+        progress = dict(gloss={"07g-gloss": dict(accepted=True)})
+        flags = dict(
+            PNR_GLOSS="1", PNR_GLOSS_CLASSES_FROM="netclasses", PNR_GLOSS_CROSS_GROUP_MM="4"
+        )
+        with Env(**flags):
+            fields = gloss_side_fields("b.kicad_pcb", "r.json", self.root, [], run, progress)
+        cmd = calls[-1]
+        self.assertEqual(cmd[cmd.index("--classes-from") + 1], "netclasses")
+        self.assertEqual(cmd[cmd.index("--cross-group-mm") + 1], "4.0")
+        self.assertEqual(fields["gloss_metrics"]["cross_group"], dict(max_mm=3.0))
+        self.assertEqual(fields["gloss_summary"], progress["gloss"])
+        with Env(PNR_GLOSS="1"):
+            gloss_side_fields("b.kicad_pcb", "r.json", self.root, [], run, progress)
+        self.assertNotIn("--cross-group-mm", calls[-1])
+        with Env(PNR_GLOSS="1"):
+            fields = gloss_side_fields(
+                "b.kicad_pcb", "r.json", self.root, [], lambda c, n: run(c, n, True), {}
+            )
+        self.assertIn("CalledProcessError", fields["gloss_metrics"]["error"])
+        self.assertIsNone(fields["gloss_summary"])
 
     def test_gloss_module_has_no_kicad_import_at_module_level(self):
         import ast

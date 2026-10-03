@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import heapq
 import os
-import sys
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple

@@ -395,39 +395,94 @@ class Checkpoints:
     """Copies a resumable task's checkpoint to the store and restores it on a retry.
 
     ``checkpoint.path`` names a file, or a directory whose top-level files are the checkpoint
-    (subdirectories, such as caches, are not kept). ``_checkpoint.json`` is written after the
-    files and lists them; a restore reads only what it lists.
+    (subdirectories, such as caches, are not kept). A checkpoint of several files is consistent
+    only as a set, and a sync can be cut short (a Spot VM gets about 30 s, the container less),
+    so each sync writes its changed files into a new generation directory ``g<n>/`` and then
+    ``_checkpoint.json``, which maps every file to the copy it belongs with. A restore reads only
+    what the manifest names: a cut-short sync leaves the previous generation whole. Generations
+    no manifest names any more are removed after the manifest is written.
     """
 
     MANIFEST = "_checkpoint.json"
+    STORED_RE = re.compile(r"^g[0-9]+/[^/]+$")
 
     def __init__(self, task, work, store_dir):
         self.spec = task["checkpoint"] if task["restart"] == "resume" else None
         self.local = work / self.spec["path"] if self.spec else None
+        self.work = work
         self.remote = store_dir
         self.last_sync = time.monotonic()
-        self.mtimes = {}
+        self.stamps = {}  # file name -> (mtime_ns, size) of the copy in the store
+        self.stored = {}  # file name -> its path in the store (the manifest's "files")
+        self.generation = 0
 
     def _files(self):
+        """The checkpoint's files; hidden ones (an application's temporary files) are not kept."""
         if self.local.is_dir():
-            return [p for p in sorted(self.local.iterdir()) if p.is_file()]
+            return [
+                p
+                for p in sorted(self.local.iterdir())
+                if p.is_file() and not p.name.startswith(".")
+            ]
         return [self.local] if self.local.is_file() else []
 
+    @staticmethod
+    def _stamp(path):
+        stat = path.stat()
+        return (stat.st_mtime_ns, stat.st_size)
+
+    def _manifest(self):
+        try:
+            manifest = json.loads((self.remote / self.MANIFEST).read_text())
+        except FileNotFoundError:
+            return None
+        except ValueError:
+            return None
+        files = manifest.get("files") or {}
+        if isinstance(files, list):  # the first layout: the files flat beside the manifest
+            files = {name: name for name in files}
+        safe = {
+            name: stored
+            for name, stored in files.items()
+            if "/" not in name
+            and not name.startswith(".")
+            and (self.STORED_RE.match(stored) or stored == name)
+        }
+        return dict(manifest, files=safe)
+
     def restore(self):
+        """Restore the last whole checkpoint; False if there is none (start from scratch).
+
+        The files are copied into a staging directory first, so a store error never leaves a
+        half-restored mix in the work directory. Raises TaskFailure(EXIT_TEMPFAIL) when the store
+        cannot be read (a retry may succeed).
+        """
         if not self.spec:
             return False
         try:
-            manifest = json.loads((self.remote / self.MANIFEST).read_text())
-        except (OSError, ValueError):
+            manifest = self._manifest()
+            if not manifest or not manifest["files"]:
+                return False
+            staging = self.work / ".yapnr" / "restore"
+            shutil.rmtree(staging, ignore_errors=True)
+            staging.mkdir(parents=True)
+            for name, stored in manifest["files"].items():
+                shutil.copyfile(self.remote / stored, staging / name)
+        except FileNotFoundError:
+            # A file the manifest names is gone: nothing consistent to resume from.
+            shutil.rmtree(self.work / ".yapnr" / "restore", ignore_errors=True)
             return False
+        except OSError as err:
+            raise TaskFailure(EXIT_TEMPFAIL, "checkpoint restore: %s" % err) from err
         target = self.local if manifest.get("kind") == "dir" else self.local.parent
         target.mkdir(parents=True, exist_ok=True)
-        for name in manifest.get("files", []):
-            if "/" in name or name.startswith("."):
-                continue
-            shutil.copyfile(self.remote / name, target / name)
-            self.mtimes[name] = (target / name).stat().st_mtime
-        return bool(manifest.get("files"))
+        for name in manifest["files"]:
+            os.replace(staging / name, target / name)
+            self.stamps[name] = self._stamp(target / name)
+        shutil.rmtree(staging, ignore_errors=True)
+        self.stored = dict(manifest["files"])
+        self.generation = int(manifest.get("generation") or 0)
+        return True
 
     def due(self):
         return bool(self.spec) and time.monotonic() - self.last_sync >= self.spec["sync_every_s"]
@@ -436,21 +491,54 @@ class Checkpoints:
         if not self.spec:
             return False
         self.last_sync = time.monotonic()
-        files, changed = self._files(), False
+        files = self._files()
+        generation = self.generation + 1
+        stored, stamps, changed = {}, {}, False
         for path in files:
-            mtime = path.stat().st_mtime
-            if self.mtimes.get(path.name) != mtime:
-                copy_atomic(path, self.remote / path.name)
-                self.mtimes[path.name] = mtime
+            stamp = self._stamp(path)
+            if self.stamps.get(path.name) == stamp and path.name in self.stored:
+                stored[path.name] = self.stored[path.name]
+            else:
+                stored[path.name] = "g%d/%s" % (generation, path.name)
+                copy_atomic(path, self.remote / stored[path.name])
                 changed = True
-        if changed:
-            manifest = dict(
-                kind="dir" if self.local.is_dir() else "file",
-                files=[p.name for p in files],
-                time=utc_now(),
-            )
-            write_atomic(self.remote / self.MANIFEST, json.dumps(manifest).encode())
-        return changed
+            stamps[path.name] = stamp
+        if not changed and set(stored) == set(self.stored):
+            return False
+        manifest = dict(
+            kind="dir" if self.local.is_dir() else "file",
+            files=stored,
+            generation=generation,
+            time=utc_now(),
+        )
+        write_atomic(self.remote / self.MANIFEST, json.dumps(manifest).encode())
+        self.stored, self.stamps, self.generation = stored, stamps, generation
+        self._prune()
+        return True
+
+    def _prune(self):
+        """Remove the generations (and first-layout files) the manifest no longer names."""
+        keep = set(self.stored.values())
+        keep_dirs = {stored.split("/", 1)[0] for stored in keep if "/" in stored}
+        try:
+            entries = list(self.remote.iterdir())
+        except OSError:
+            return
+        for entry in entries:
+            if entry.name == self.MANIFEST or entry.name.startswith("."):
+                continue
+            try:
+                if entry.is_dir() and re.match(r"^g[0-9]+$", entry.name):
+                    if entry.name not in keep_dirs:
+                        shutil.rmtree(entry, ignore_errors=True)
+                    else:
+                        for child in entry.iterdir():
+                            if "%s/%s" % (entry.name, child.name) not in keep:
+                                child.unlink()
+                elif entry.is_file() and entry.name not in keep:
+                    entry.unlink()
+            except OSError:
+                pass  # the next sync tries again
 
 
 def _done(task, work):
@@ -559,7 +647,10 @@ def run_command(argv, cwd, env, wall_s, niceness, stop, checkpoints, logs, on_gc
                 return proc.returncode, False, None, usage
             if stop.signal is not None:
                 if checkpoints.spec and checkpoints.spec["on_signal"]:
-                    checkpoints.sync()
+                    try:
+                        checkpoints.sync()
+                    except OSError:
+                        pass  # the last whole generation in the store stays the checkpoint
                 _kill_group(proc.pid, KILL_GRACE_S)
                 proc.returncode = -1
                 return None, False, stop.signal, None
@@ -683,7 +774,10 @@ def run_task(args, campaign, position, toolchain, stop):
         else:
             verdict = "error"
         if checkpoints.spec:
-            checkpoints.sync()
+            try:
+                checkpoints.sync()
+            except OSError:
+                pass  # the result below is what counts; a checkpoint only serves a resume
         staging = work / ".yapnr" / "attempt"
         pruned, summary_files = collect(task, work, logs, staging)
         rss = usage.ru_maxrss if usage else None

@@ -165,7 +165,73 @@ class WrapperTest(unittest.TestCase):
         self.assertEqual(
             json.loads((attempt / "summary" / "done.json").read_text()), {"resumed_from": 1}
         )
-        self.assertEqual(json.loads((ckpt / "state.json").read_text()), {"n": 2})
+        # The final sync wrote a new generation and removed the superseded first-layout file.
+        manifest = json.loads((ckpt / "_checkpoint.json").read_text())
+        self.assertEqual(manifest["files"], {"state.json": "g1/state.json"})
+        self.assertEqual(json.loads((ckpt / "g1" / "state.json").read_text()), {"n": 2})
+        self.assertFalse((ckpt / "state.json").exists())
+
+    def checkpoint(self, root):
+        task = {"restart": "resume", "checkpoint": {"path": "run", "sync_every_s": 30}}
+        return wrapper.Checkpoints(task, root, self.store / "checkpoints" / "t")
+
+    def test_a_cut_short_sync_leaves_the_last_whole_checkpoint(self):
+        # Two files that only make sense together (a field and its iteration count).
+        work = self.tmp / "work1"
+        (work / "run").mkdir(parents=True)
+        (work / "run" / "field.npz").write_text("field@10")
+        (work / "run" / "history.json").write_text("10")
+        (work / "run" / ".field.npz.tmp").write_text("an application's temporary file")
+        first = self.checkpoint(work)
+        self.assertTrue(first.sync())
+        self.assertFalse(first.sync())  # nothing changed, nothing written
+        time.sleep(0.01)
+        (work / "run" / "field.npz").write_text("field@20")
+        (work / "run" / "history.json").write_text("20")
+        # Spot preemption: the container is killed after the first file of the next sync.
+        copies = []
+        real = wrapper.copy_atomic
+
+        def dies_on_second(src, dest):
+            copies.append(dest)
+            if len(copies) == 2:
+                raise OSError("killed")
+            real(src, dest)
+
+        wrapper.copy_atomic = dies_on_second
+        try:
+            with self.assertRaises(OSError):
+                first.sync()
+        finally:
+            wrapper.copy_atomic = real
+        # The retry restores generation 1 whole, not field@20 with history 10.
+        work2 = self.tmp / "work2"
+        second = self.checkpoint(work2)
+        self.assertTrue(second.restore())
+        self.assertEqual((work2 / "run" / "field.npz").read_text(), "field@10")
+        self.assertEqual((work2 / "run" / "history.json").read_text(), "10")
+        self.assertFalse((work2 / "run" / ".field.npz.tmp").exists())
+        # Its next sync starts generation 2 and removes the half-written attempt's leftovers.
+        (work2 / "run" / "history.json").write_text("11")
+        self.assertTrue(second.sync())
+        ckpt = self.store / "checkpoints" / "t"
+        manifest = json.loads((ckpt / "_checkpoint.json").read_text())
+        self.assertEqual(
+            manifest["files"], {"field.npz": "g1/field.npz", "history.json": "g2/history.json"}
+        )
+        self.assertEqual(sorted(p.name for p in (ckpt / "g2").iterdir()), ["history.json"])
+        self.assertFalse((ckpt / "g1" / "history.json").exists())
+
+    def test_a_checkpoint_with_a_missing_file_is_not_restored(self):
+        work = self.tmp / "work1"
+        (work / "run").mkdir(parents=True)
+        (work / "run" / "a").write_text("a")
+        (work / "run" / "b").write_text("b")
+        self.checkpoint(work).sync()
+        (self.store / "checkpoints" / "t" / "g1" / "b").unlink()
+        work2 = self.tmp / "work2"
+        self.assertFalse(self.checkpoint(work2).restore())
+        self.assertFalse((work2 / "run" / "a").exists())  # no half-restored mix
 
     def test_summary_and_prune_globs(self):
         script = (

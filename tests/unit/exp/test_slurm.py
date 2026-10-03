@@ -117,6 +117,10 @@ class SlurmTest(unittest.TestCase):
     def test_requeues_are_bounded_by_max_retries(self):
         plan = self.plan(testing.LADDER_CAMPAIGN)
         sbatch = plan.dir / "backend" / "slurm" / "c1m3.sbatch"
+        # What submit.sh stages before sbatch: the submission's indices in the store.
+        submissions = self.tmp / "store" / "campaigns" / plan.id / "submissions"
+        submissions.mkdir(parents=True)
+        (submissions / "1.indices").write_text("0\n1\n2\n3\n")
         # The time-limit signal requeues the element until SLURM_RESTART_COUNT reaches 3.
         self.assertEqual(self.run_element(sbatch, 0, True), (0, "requeue 41_0"))
         self.assertEqual(self.run_element(sbatch, 3, True), (75, ""))

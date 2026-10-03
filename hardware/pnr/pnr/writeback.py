@@ -1369,10 +1369,14 @@ def writeback(
     # Type the plane layers as POWER so signals stay on the outer layers
     # (F.Cu/B.Cu) and the inner layers carry the ground/power planes (pnr.planes).
     if rules:
-        # A board that declares its stackup keeps its own layer types, whether the
-        # stack applies or the legacy heuristic does: retyping them would make every
-        # later reading of this board (the native loop's) resolve another stack.
-        if record is None:
+        # A board whose declared stackup describes the board being built keeps its
+        # own layer types, whether the stack applies or the legacy heuristic does:
+        # retyping them would make every later reading of this board (the native
+        # loop's) resolve another stack. A board without one is retyped as before;
+        # so is one whose stackup block has another layer count (an atopile layout
+        # saved two-layer): the written board's block is then stale, and is not read.
+        rows = len(record["layers"]) if record else 0
+        if not rows or int(rules.get("layers") or rows) != rows:
             _type_plane_layers(board, rules)
         apply_copper_keepouts(board, graph, rules, height)
         apply_mounting_holes(board, rules, height)

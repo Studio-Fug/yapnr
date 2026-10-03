@@ -389,10 +389,11 @@ class DeclaredStackBoards(unittest.TestCase):
             self.assertIsNone(stack_record(k.LoadBoard(out), out))
 
     def test_writeback_keeps_a_declared_stacks_layer_types(self):
-        # Plane classes on a declared stack typed signal (a product board): the
-        # legacy heuristic routes it, and the written board keeps its types, so a
-        # later reading of the routed board resolves the same (legacy) stack. A board
-        # without a stackup block is retyped as before.
+        # Plane classes on a declared four-layer stack typed signal: the legacy
+        # heuristic routes it, and the written board keeps its types, so a later
+        # reading of the routed board resolves the same (legacy) stack. A board
+        # without a stackup block, or with a two-row block built four-layer (the
+        # atopile product layouts), is retyped as before.
         import pcbnew as k
 
         from pnr.graph import BoardGraph
@@ -408,14 +409,17 @@ class DeclaredStackBoards(unittest.TestCase):
                 dict(name="p_vcc", nets=["VCC"], plane_layer="In2.Cu", width_mm=0.4),
             ],
         )
-        for declared in (True, False):
-            with self.subTest(declared=declared), tempfile.TemporaryDirectory() as tmp:
-                b, _ = board("SSSS")
+        for case in ("declared", "none", "two-row"):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
+                b, _ = board("SS" if case == "two-row" else "SSSS")
                 smd(b, "C1", (40.0, 40.0), [("1", "VCC", (-0.8, 0)), ("2", "GND", (0.8, 0))])
-                b.GetDesignSettings().m_HasStackup = declared
-                names = ["F.Cu", "In1.Cu", "In2.Cu", "B.Cu"]
-                src = self.save(b, tmp, "src.kicad_pcb", names if declared else None)
-                if not declared:
+                b.GetDesignSettings().m_HasStackup = case != "none"
+                names = {
+                    "declared": ["F.Cu", "In1.Cu", "In2.Cu", "B.Cu"],
+                    "two-row": ["F.Cu", "B.Cu"],
+                }
+                src = self.save(b, tmp, "src.kicad_pcb", names.get(case))
+                if case == "none":
                     self.assertNotIn("(stackup", Path(src).read_text())
                 record = stack_record(k.LoadBoard(src), src)
                 self.assertIsNone(resolve(rules, record))
@@ -427,10 +431,11 @@ class DeclaredStackBoards(unittest.TestCase):
                 types = [
                     int(routed.GetLayerType(lid)) for lid in routed.GetEnabledLayers().CuStack()
                 ]
-                if declared:
+                if case == "declared":
                     self.assertEqual(types, [k.LT_SIGNAL] * 4)
                     self.assertIsNone(resolve(rules, stack_record(routed, out)))
                 else:
+                    # Retyped exactly as before; the two-row block is now stale.
                     self.assertEqual(types, [k.LT_SIGNAL, k.LT_POWER, k.LT_POWER, k.LT_SIGNAL])
                     self.assertIsNone(stack_record(routed, out))
 

@@ -3,13 +3,39 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-10-03 (the gloss port's review fixes, on `claude/gloss-port`).
-Before that, 2026-10-02: fab outputs and staged ordering, F2, F1 and O1, on `claude/fab-order`.
-Before that, 2026-09-30: PR4, #10, the ladder animations, the atopile toolchain and the
-privacy-scan trailer rule merged; line groups, hard board edges, the hierarchical ladder driver and
-their animations on `claude/animations-groups-hier`.
+Last updated: 2026-10-03 (the hard rungs on `claude/ladder-hard-rungs` and the engine's fixes for
+them on `claude/gap-fixes`, with `claude/gap-constraints` merged; the gloss port's review fixes on
+`claude/gloss-port`). Before that, 2026-10-02: fab outputs and staged ordering, F2, F1 and O1, on
+`claude/fab-order`. Before that, 2026-09-30: PR4, #10, the ladder animations, the atopile
+toolchain and the privacy-scan trailer rule merged; line groups, hard board edges, the
+hierarchical ladder driver and their animations on `claude/animations-groups-hier`.
 
 ## In progress
+
+- **Hard-rung gap fixes** (branch `claude/gap-fixes` on `claude/ladder-hard-rungs`, local, not
+  pushed). The hard rungs (`regression/hard_rungs.py`: stackups, via kinds, sides, absolute and
+  relative constraints, Monte-Carlo search, a THT header) found capabilities the engine lacked.
+  Five tracks are merged, each new behaviour following from the board's inputs (a board without
+  them routes as before; the eight ladder cases and four showcases give identical boards):
+
+  - declared stackups (`pnr/stack.py`): a KiCad stackup with a `power` or `mixed` layer, or a
+    custom rule keeping tracks off a layer, routes every signal layer of any count; plane drops are
+    planned with the pin escapes; every plane layer is formed (full outline by default);
+  - blind, buried and micro vias (`pnr/via_policy.py`, the rules' `via_policy`): only spans the
+    declared stack can build, one build per board, return ties between two planes of one net;
+  - sides (`board.sides: double`, `pnr/place/sides.py`, `detail_moves.py`): placement chooses the
+    side of free parts; writeback mirrors bottom parts on `B.*`;
+  - length matching (`pnr/route/detail/tune.py`, `pnr/length_model.py`, `pnr/place/matched.py`):
+    declared pairs and groups are tuned with meanders against KiCad's own length measure;
+  - router speed: the packed kernel with dense per-net fields is the default (identical routes),
+    an optional C search loop (`PNR_MAZE_KERNEL=native`), and an exact-separation recovery
+    (`PNR_EXACT_SEPARATION=recover`, the default) for routes the halo model leaves open.
+
+  Results (two seeds each): ladder and showcases 24 of 24, CPU 2,281 s to 442 s; hard rungs clean
+  in 37 of 48 runs (7 before), CPU 11,537 s to 1,964 s on the 46 runs with a before. Still failing:
+  07/09 `abs` and `rel` (`region`, `align`: on `claude/gap-constraints`, not merged), 09 `header`
+  (no legal placement) and 09 4L-SSGS seed 0 (USB pair skew after a detour). Three "Ladder fix"
+  commits came with the tracks (the plane check, the side check, the HDI microvia size).
 
 - **Gloss, dekink and corridor coalescing (`PNR_GLOSS`, off by default)** (branch
   `claude/gloss-port`; design [docs/design/gloss.md](docs/design/gloss.md)): ported from Splanc's
@@ -192,6 +218,17 @@ their animations on `claude/animations-groups-hier`.
     2.5 MB budget at quality 70 by 450 bytes here, the encoder steps down where it must). The
     ladder's own animations still sweep single parts through half-turns (their timelines are
     pinned); move them to flips with the next deliberate refresh of `docs/animations/`.
+18. Hard-rung gaps: merge `claude/gap-constraints` (region and align; it conflicts with the sides
+    track in seven placement files) and rerun the `abs` and `rel` rungs; give the placement model
+    an origin-to-courtyard offset (the THT header's origin is pin 1, so its courtyard is placed
+    off by half its length and never legalizes); carry the three Ladder fixes (plane check, side
+    check, HDI microvia) to `claude/ladder-hard-rungs`, or land the rungs and the fixes together.
+19. Owner: whether the optional C maze kernel becomes "use it when present". Recommended once CI
+    runs `dense_maze_native_test` and `exact_route_native_test` on both Linux architectures; until
+    then the packed Python kernel stays the default and no C toolchain is needed.
+20. Boards with blind, buried or micro vias: the packed and native kernels hand them to the
+    reference kernel (so no exact-separation recovery there), the length tuner only adds
+    meanders, and the native KiCad repair loop and the hierarchical driver add through vias only.
 
 ## Blockers
 

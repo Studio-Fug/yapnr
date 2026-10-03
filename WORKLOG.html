@@ -293,14 +293,40 @@
 <h1>Worklog<a class="headerlink" href="#worklog" title="Link to this heading">¶</a></h1>
 <p>A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.</p>
-<p>Last updated: 2026-10-03 (the gloss port’s review fixes, on <code class="docutils literal notranslate"><span class="pre">claude/gloss-port</span></code>).
-Before that, 2026-10-02: fab outputs and staged ordering, F2, F1 and O1, on <code class="docutils literal notranslate"><span class="pre">claude/fab-order</span></code>.
-Before that, 2026-09-30: PR4, #10, the ladder animations, the atopile toolchain and the
-privacy-scan trailer rule merged; line groups, hard board edges, the hierarchical ladder driver and
-their animations on <code class="docutils literal notranslate"><span class="pre">claude/animations-groups-hier</span></code>.</p>
+<p>Last updated: 2026-10-03 (the hard rungs on <code class="docutils literal notranslate"><span class="pre">claude/ladder-hard-rungs</span></code> and the engine’s fixes for
+them on <code class="docutils literal notranslate"><span class="pre">claude/gap-fixes</span></code>, with <code class="docutils literal notranslate"><span class="pre">claude/gap-constraints</span></code> merged; the gloss port’s review fixes on
+<code class="docutils literal notranslate"><span class="pre">claude/gloss-port</span></code>). Before that, 2026-10-02: fab outputs and staged ordering, F2, F1 and O1, on
+<code class="docutils literal notranslate"><span class="pre">claude/fab-order</span></code>. Before that, 2026-09-30: PR4, #10, the ladder animations, the atopile
+toolchain and the privacy-scan trailer rule merged; line groups, hard board edges, the
+hierarchical ladder driver and their animations on <code class="docutils literal notranslate"><span class="pre">claude/animations-groups-hier</span></code>.</p>
 <section id="in-progress">
 <h2>In progress<a class="headerlink" href="#in-progress" title="Link to this heading">¶</a></h2>
+<ul>
+<li><p><strong>Hard-rung gap fixes</strong> (branch <code class="docutils literal notranslate"><span class="pre">claude/gap-fixes</span></code> on <code class="docutils literal notranslate"><span class="pre">claude/ladder-hard-rungs</span></code>, local, not
+pushed). The hard rungs (<code class="docutils literal notranslate"><span class="pre">regression/hard_rungs.py</span></code>: stackups, via kinds, sides, absolute and
+relative constraints, Monte-Carlo search, a THT header) found capabilities the engine lacked.
+Five tracks are merged, each new behaviour following from the board’s inputs (a board without
+them routes as before; the eight ladder cases and four showcases give identical boards):</p>
 <ul class="simple">
+<li><p>declared stackups (<code class="docutils literal notranslate"><span class="pre">pnr/stack.py</span></code>): a KiCad stackup with a <code class="docutils literal notranslate"><span class="pre">power</span></code> or <code class="docutils literal notranslate"><span class="pre">mixed</span></code> layer, or a
+custom rule keeping tracks off a layer, routes every signal layer of any count; plane drops are
+planned with the pin escapes; every plane layer is formed (full outline by default);</p></li>
+<li><p>blind, buried and micro vias (<code class="docutils literal notranslate"><span class="pre">pnr/via_policy.py</span></code>, the rules’ <code class="docutils literal notranslate"><span class="pre">via_policy</span></code>): only spans the
+declared stack can build, one build per board, return ties between two planes of one net;</p></li>
+<li><p>sides (<code class="docutils literal notranslate"><span class="pre">board.sides:</span> <span class="pre">double</span></code>, <code class="docutils literal notranslate"><span class="pre">pnr/place/sides.py</span></code>, <code class="docutils literal notranslate"><span class="pre">detail_moves.py</span></code>): placement chooses the
+side of free parts; writeback mirrors bottom parts on <code class="docutils literal notranslate"><span class="pre">B.*</span></code>;</p></li>
+<li><p>length matching (<code class="docutils literal notranslate"><span class="pre">pnr/route/detail/tune.py</span></code>, <code class="docutils literal notranslate"><span class="pre">pnr/length_model.py</span></code>, <code class="docutils literal notranslate"><span class="pre">pnr/place/matched.py</span></code>):
+declared pairs and groups are tuned with meanders against KiCad’s own length measure;</p></li>
+<li><p>router speed: the packed kernel with dense per-net fields is the default (identical routes),
+an optional C search loop (<code class="docutils literal notranslate"><span class="pre">PNR_MAZE_KERNEL=native</span></code>), and an exact-separation recovery
+(<code class="docutils literal notranslate"><span class="pre">PNR_EXACT_SEPARATION=recover</span></code>, the default) for routes the halo model leaves open.</p></li>
+</ul>
+<p>Results (two seeds each): ladder and showcases 24 of 24, CPU 2,281 s to 442 s; hard rungs clean
+in 37 of 48 runs (7 before), CPU 11,537 s to 1,964 s on the 46 runs with a before. Still failing:
+07/09 <code class="docutils literal notranslate"><span class="pre">abs</span></code> and <code class="docutils literal notranslate"><span class="pre">rel</span></code> (<code class="docutils literal notranslate"><span class="pre">region</span></code>, <code class="docutils literal notranslate"><span class="pre">align</span></code>: on <code class="docutils literal notranslate"><span class="pre">claude/gap-constraints</span></code>, not merged), 09 <code class="docutils literal notranslate"><span class="pre">header</span></code>
+(no legal placement) and 09 4L-SSGS seed 0 (USB pair skew after a detour). Three “Ladder fix”
+commits came with the tracks (the plane check, the side check, the HDI microvia size).</p>
+</li>
 <li><p><strong>Gloss, dekink and corridor coalescing (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>, off by default)</strong> (branch
 <code class="docutils literal notranslate"><span class="pre">claude/gloss-port</span></code>; design <a class="reference internal" href="docs/design/gloss.html"><span class="std std-doc">docs/design/gloss.md</span></a>): ported from Splanc’s
 src18 with its tests, <code class="docutils literal notranslate"><span class="pre">board.Delete</span></code> instead of <code class="docutils literal notranslate"><span class="pre">Remove</span></code>, workers through <code class="docutils literal notranslate"><span class="pre">pnr.proc.run_status</span></code>;
@@ -481,6 +507,17 @@ runner (its runtime and its placements are unmeasured; <code class="docutils lit
 2.5 MB budget at quality 70 by 450 bytes here, the encoder steps down where it must). The
 ladder’s own animations still sweep single parts through half-turns (their timelines are
 pinned); move them to flips with the next deliberate refresh of <code class="docutils literal notranslate"><span class="pre">docs/animations/</span></code>.</p></li>
+<li><p>Hard-rung gaps: merge <code class="docutils literal notranslate"><span class="pre">claude/gap-constraints</span></code> (region and align; it conflicts with the sides
+track in seven placement files) and rerun the <code class="docutils literal notranslate"><span class="pre">abs</span></code> and <code class="docutils literal notranslate"><span class="pre">rel</span></code> rungs; give the placement model
+an origin-to-courtyard offset (the THT header’s origin is pin 1, so its courtyard is placed
+off by half its length and never legalizes); carry the three Ladder fixes (plane check, side
+check, HDI microvia) to <code class="docutils literal notranslate"><span class="pre">claude/ladder-hard-rungs</span></code>, or land the rungs and the fixes together.</p></li>
+<li><p>Owner: whether the optional C maze kernel becomes “use it when present”. Recommended once CI
+runs <code class="docutils literal notranslate"><span class="pre">dense_maze_native_test</span></code> and <code class="docutils literal notranslate"><span class="pre">exact_route_native_test</span></code> on both Linux architectures; until
+then the packed Python kernel stays the default and no C toolchain is needed.</p></li>
+<li><p>Boards with blind, buried or micro vias: the packed and native kernels hand them to the
+reference kernel (so no exact-separation recovery there), the length tuner only adds
+meanders, and the native KiCad repair loop and the hierarchical driver add through vias only.</p></li>
 </ol>
 </section>
 <section id="blockers">

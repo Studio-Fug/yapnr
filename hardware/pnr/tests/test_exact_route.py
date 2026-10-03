@@ -270,6 +270,58 @@ class ExactRouteTest(unittest.TestCase):
             self.assertEqual(route(grid, access, max_iters=2), reference)
 
 
+class ZoneKeysTest(unittest.TestCase):
+    """A zone holds exactly the cell centres (and 2x2 block centres) where a core
+    of each kind of another net would be closer than the rule: brute force in mm."""
+
+    def test_random_routes(self):
+        for seed in range(30):
+            rng = random.Random(seed)
+            layers = ("F.Cu", "B.Cu") if seed % 3 else ("F.Cu", "In1.Cu", "B.Cu")
+            grid = board(nx=14, ny=12, layers=layers, widths={"A": rng.choice((0.25, 0.4, 0.9))})
+            grid.net_widths["B"] = rng.choice((0.25, 0.6))
+            if seed % 2:
+                grid.net_clearances = {"A": rng.choice((0.3, 0.45))}
+            sep = Separation(grid, ["A", "B"])
+            # A random tree: an orthogonal run, a 45° run and a via.
+            la = rng.randrange(grid.nlayers)
+            i, j = rng.randrange(3, 10), rng.randrange(3, 9)
+            cells = [Cell(la, i + k, j) for k in range(3)]
+            cells += [Cell(la, i + 2 + k, j + k) for k in range(1, 3)]
+            top = Cell((la + 1) % grid.nlayers, cells[-1].i, cells[-1].j)
+            route_ = _Route(cells + [top], list(zip(cells, cells[1:])) + [(cells[-1], top)])
+            zone = Zone(grid, sep, "A", route_)
+            p = grid.pitch
+            cores = [
+                (c.layer, (c.i + 0.5) * p, (c.j + 0.5) * p, sep.kind["A"]) for c in route_.cells
+            ]
+            cores += [
+                (la, (min(a.i, b.i) + 1) * p, (min(a.j, b.j) + 1) * p, sep.kind["A"])
+                for a, b in route_.edges
+                if a.layer == b.layer and a.i != b.i and a.j != b.j
+            ]
+            vx, vy = (top.i + 0.5) * p, (top.j + 0.5) * p
+            cores += [(z, vx, vy, sep.via_kind["A"]) for z in range(grid.nlayers)]
+            plane = grid.nx * grid.ny
+            for k in range(len(sep)):
+                cells_k, blocks_k = set(zone.cells[k].tolist()), set(zone.blocks[k].tolist())
+                for z in range(grid.nlayers):
+                    for jj in range(grid.ny):
+                        for ii in range(grid.nx):
+                            key = z * plane + jj * grid.nx + ii
+                            for table, (x, y) in (
+                                (cells_k, ((ii + 0.5) * p, (jj + 0.5) * p)),
+                                (blocks_k, ((ii + 1) * p, (jj + 1) * p)),
+                            ):
+                                near = any(
+                                    cz == z
+                                    and math.hypot(cx - x, cy - y)
+                                    < sep.distance[e][k] + Separation.MARGIN
+                                    for cz, cx, cy, e in cores
+                                )
+                                self.assertEqual(key in table, near, (seed, k, z, ii, jj))
+
+
 def class_gaps(grid, result, widths):
     """Least (copper gap - the pair's clearance) between different nets (mm)."""
     classes = grid.net_clearances

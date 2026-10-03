@@ -129,23 +129,39 @@ class Separation:
         return len(self.radii)
 
 
-def _stamp(mask, points, stencil, origin, every_layer=False):
-    """Set ``mask`` (``[L, h, w]``) at ``points`` + every ``stencil`` offset."""
-    dj, di = stencil
-    j0, i0 = origin
+def _keys(grid, points, stencil=None, every_layer=False):
+    """Flat ``[layer, j, i]`` keys of ``points`` (``(layer, j, i)`` arrays, or
+    ``(j, i)`` on every layer) moved by each ``stencil`` offset, inside the grid."""
+    if points is None:
+        return np.zeros(0, dtype=np.int64)
+    plane = grid.ny * grid.nx
     if every_layer:
         j, i = points
-        jj = (j[:, None] + dj[None, :]).ravel() - j0
-        ii = (i[:, None] + di[None, :]).ravel() - i0
-        keep = (jj >= 0) & (jj < mask.shape[1]) & (ii >= 0) & (ii < mask.shape[2])
-        mask[:, jj[keep], ii[keep]] = True
-        return
-    layer, j, i = points
-    jj = (j[:, None] + dj[None, :]).ravel() - j0
-    ii = (i[:, None] + di[None, :]).ravel() - i0
-    ll = np.repeat(layer, len(dj))
-    keep = (jj >= 0) & (jj < mask.shape[1]) & (ii >= 0) & (ii < mask.shape[2])
-    mask[ll[keep], jj[keep], ii[keep]] = True
+        layer = None
+    else:
+        layer, j, i = points
+    if stencil is None:
+        jj, ii = j.astype(np.int64), i.astype(np.int64)
+        ll = None if layer is None else layer.astype(np.int64)
+    else:
+        dj, di = stencil
+        jj = (j[:, None] + dj[None, :]).ravel().astype(np.int64)
+        ii = (i[:, None] + di[None, :]).ravel().astype(np.int64)
+        ll = None if layer is None else np.repeat(layer, len(dj)).astype(np.int64)
+    keep = (jj >= 0) & (jj < grid.ny) & (ii >= 0) & (ii < grid.nx)
+    flat = jj[keep] * grid.nx + ii[keep]
+    if ll is None:
+        return (np.arange(grid.nlayers, dtype=np.int64)[:, None] * plane + flat[None, :]).ravel()
+    return ll[keep] * plane + flat
+
+
+def _member(keys, table):
+    """Which ``keys`` are in the sorted unique ``table``."""
+    if not len(table) or not len(keys):
+        return np.zeros(len(keys), dtype=bool)
+    at = np.searchsorted(table, keys)
+    at[at == len(table)] = 0
+    return table[at] == keys
 
 
 def _arrays(points):
@@ -153,14 +169,18 @@ def _arrays(points):
 
 
 class Zone:
-    """One net's cores and, per core kind ``k``, its separation zones, cropped
-    to ``box`` (``j0, j1, i0, i1``, half-open):
+    """One net's cores and, per core kind ``k``, its separation zones as sorted
+    flat ``[layer, j, i]`` keys (only the cells a zone covers are held, so a long
+    net on a large board costs its own area, not its bounding box's):
 
     * ``cells[k]``: cell centres where a core of kind ``k`` of another net would
       be too close to this net's copper (its centreline cells, the centres of
       its 45° steps, its vias);
     * ``blocks[k]``: 2x2 blocks (by lower-left cell) whose centre is too close,
       for another net's 45° step through that block.
+
+    ``box`` (``j0, j1, i0, i1``, half-open) bounds every zone; ``track_keys``,
+    ``via_keys`` (every layer) and ``step_keys`` are the cores' own keys.
     """
 
     __slots__ = (
@@ -174,6 +194,9 @@ class Zone:
         "steps",
         "ends",
         "vias",
+        "track_keys",
+        "via_keys",
+        "step_keys",
     )
 
     def __init__(self, grid, sep: Separation, net, route):
@@ -195,6 +218,9 @@ class Zone:
         self.steps = _arrays(sorted(steps))
         self.ends = _arrays(sorted(ends))
         self.vias = _arrays(vias)
+        self.track_keys = _keys(grid, self.track)
+        self.via_keys = _keys(grid, self.vias, every_layer=True)
+        self.step_keys = _keys(grid, self.steps)
         js = [j for _, j, _ in track] + [j + 1 for _, j, _ in steps] + [j for j, _ in vias]
         is_ = [i for _, _, i in track] + [i + 1 for _, _, i in steps] + [i for _, i in vias]
         if not js:
@@ -204,22 +230,20 @@ class Zone:
         j0, j1 = max(0, min(js) - reach), min(grid.ny, max(js) + reach + 1)
         i0, i1 = max(0, min(is_) - reach), min(grid.nx, max(is_) + reach + 1)
         self.box = (j0, j1, i0, i1)
-        shape = (len(sep), grid.nlayers, j1 - j0, i1 - i0)
-        cells = np.zeros(shape, dtype=bool)
-        blocks = np.zeros(shape, dtype=bool)
-        origin = (j0, i0)
+        self.cells, self.blocks = [], []
         for k in range(len(sep)):
-            if self.track is not None:
-                _stamp(cells[k], self.track, sep.cc[kind][k], origin)
-                _stamp(blocks[k], self.track, sep.cm[kind][k], origin)
-            if self.steps is not None:
-                _stamp(cells[k], self.steps, sep.mc[kind][k], origin)
-                _stamp(blocks[k], self.steps, sep.cc[kind][k], origin)
-            if self.vias is not None:
-                _stamp(cells[k], self.vias, sep.cc[via_kind][k], origin, every_layer=True)
-                _stamp(blocks[k], self.vias, sep.cm[via_kind][k], origin, every_layer=True)
-        self.cells = cells
-        self.blocks = blocks
+            cells = [
+                _keys(grid, self.track, sep.cc[kind][k]),
+                _keys(grid, self.steps, sep.mc[kind][k]),
+                _keys(grid, self.vias, sep.cc[via_kind][k], every_layer=True),
+            ]
+            blocks = [
+                _keys(grid, self.track, sep.cm[kind][k]),
+                _keys(grid, self.steps, sep.cc[kind][k]),
+                _keys(grid, self.vias, sep.cm[via_kind][k], every_layer=True),
+            ]
+            self.cells.append(np.unique(np.concatenate(cells)))
+            self.blocks.append(np.unique(np.concatenate(blocks)))
 
 
 class Occupancy:
@@ -232,22 +256,30 @@ class Occupancy:
         shape = (len(sep), grid.nlayers, grid.ny, grid.nx)
         self.cells = np.zeros(shape, dtype=np.int16)
         self.blocks = np.zeros(shape, dtype=np.int16)
+        # Flat views of the same counts, per kind.
+        self._flat = {
+            "cells": self.cells.reshape(len(sep), -1),
+            "blocks": self.blocks.reshape(len(sep), -1),
+        }
         self.zones: Dict[str, Zone] = {}
+
+    def _count(self, zone: Zone, step: int):
+        flat_cells, flat_blocks = self._flat["cells"], self._flat["blocks"]
+        for k in range(len(self.sep)):
+            # A zone's keys are unique: a fancy-indexed add counts each once.
+            flat_cells[k, zone.cells[k]] += step
+            flat_blocks[k, zone.blocks[k]] += step
 
     def add(self, zone: Zone):
         self.remove(zone.net)
         self.zones[zone.net] = zone
         if zone.box is not None:
-            j0, j1, i0, i1 = zone.box
-            self.cells[:, :, j0:j1, i0:i1] += zone.cells
-            self.blocks[:, :, j0:j1, i0:i1] += zone.blocks
+            self._count(zone, 1)
 
     def remove(self, net):
         zone = self.zones.pop(net, None)
         if zone is not None and zone.box is not None:
-            j0, j1, i0, i1 = zone.box
-            self.cells[:, :, j0:j1, i0:i1] -= zone.cells
-            self.blocks[:, :, j0:j1, i0:i1] -= zone.blocks
+            self._count(zone, -1)
 
     def _others(self, table, net, kind):
         counts = getattr(self, table)[kind]
@@ -255,8 +287,7 @@ class Occupancy:
         if zone is None or zone.box is None:
             return counts
         out = counts.copy()
-        j0, j1, i0, i1 = zone.box
-        out[:, j0:j1, i0:i1] -= getattr(zone, table)[kind]
+        out.reshape(-1)[getattr(zone, table)[kind]] -= 1
         return out
 
     def blocked(self, net):
@@ -268,49 +299,43 @@ class Occupancy:
             self._others("blocks", net, kind) > 0,
         )
 
-    def _hits(self, zone: Zone, cells, blocks, box=None):
-        """Per core group, the given counts/masks at the zone's cores."""
-        out = []
-        j0, j1, i0, i1 = box or (0, cells.shape[-2], 0, cells.shape[-1])
-
-        def take(table, points, every_layer=False):
-            if points is None:
-                return
-            if every_layer:
-                j, i = points
-                inside = (j >= j0) & (j < j1) & (i >= i0) & (i < i1)
-                if inside.any():
-                    out.append(table[:, j[inside] - j0, i[inside] - i0].reshape(-1))
-                return
-            layer, j, i = points
-            inside = (j >= j0) & (j < j1) & (i >= i0) & (i < i1)
-            if inside.any():
-                out.append(table[layer[inside], j[inside] - j0, i[inside] - i0])
-
-        take(cells[zone.kind], zone.track)
-        take(cells[zone.via_kind], zone.vias, every_layer=True)
-        take(blocks[zone.kind], zone.steps)
-        return out
+    @staticmethod
+    def _groups(zone: Zone):
+        """The zone's core keys with the table and kind each is judged in."""
+        return (
+            ("cells", zone.kind, zone.track_keys),
+            ("cells", zone.via_kind, zone.via_keys),
+            ("blocks", zone.kind, zone.step_keys),
+        )
 
     def conflicts(self, zone: Zone) -> bool:
         """A core of ``zone`` lies in another placed net's zone."""
-        cells, blocks = self.cells, self.blocks
         own = self.zones.get(zone.net)
-        if own is not None and own.box is not None:
-            cells, blocks = cells.copy(), blocks.copy()
-            j0, j1, i0, i1 = own.box
-            cells[:, :, j0:j1, i0:i1] -= own.cells
-            blocks[:, :, j0:j1, i0:i1] -= own.blocks
-        return any((v > 0).any() for v in self._hits(zone, cells, blocks))
+        if own is not None and own.box is None:
+            own = None
+        for table, kind, keys in self._groups(zone):
+            if not len(keys):
+                continue
+            counts = self._flat[table][kind][keys].astype(np.int64)
+            if own is not None:
+                counts -= _member(keys, getattr(own, table)[kind])
+            if (counts > 0).any():
+                return True
+        return False
 
     def crossed(self, zone: Zone) -> List[str]:
         """Placed nets other than ``zone.net`` whose zones hold a core of ``zone``."""
+        groups = self._groups(zone)
         return sorted(
             name
             for name, other in self.zones.items()
             if name != zone.net
             and other.box is not None
-            and any(v.any() for v in self._hits(zone, other.cells, other.blocks, other.box))
+            and any(
+                _member(keys, getattr(other, table)[kind]).any()
+                for table, kind, keys in groups
+                if len(keys)
+            )
         )
 
     def overuse(self):

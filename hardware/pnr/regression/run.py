@@ -292,6 +292,14 @@ def gloss_gate(before, after):
     return reasons
 
 
+def gloss_flags_record(flags):
+    """The sub-flags as result.json records them: a groups file by its name, never its path."""
+    return {
+        key: Path(value).name if key == "PNR_GLOSS_CLASSES" and value else value
+        for key, value in flags.items()
+    }
+
+
 def gloss_summary(report):
     """The pass summary kept in result.json: no transactions, specs or paths."""
     block = {k: report[k] for k in GLOSS_SUMMARY_KEYS if k in report}
@@ -325,7 +333,7 @@ def gloss_stage(root, board, args, run, flags):
     block = dict(
         pre_gloss_board_sha256=pre_sha,
         pre_gloss_copper_sha256=copper_sha(board),
-        flags=dict(flags),
+        flags=gloss_flags_record(flags),
         kept=False,
     )
     try:

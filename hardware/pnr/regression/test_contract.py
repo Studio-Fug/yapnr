@@ -584,6 +584,7 @@ class GlossStageContract(unittest.TestCase):
             elif name == "gloss":
                 self.assertEqual(extra["PNR_GLOSS"], "1")
                 self.assertEqual(extra["PNR_GLOSS_STEPS"], "dekink")
+                self.assertEqual(extra["PNR_GLOSS_CLASSES"], str(tmp / "groups.json"))
                 self.assertNotIn("--guard-open-nets", cmd)  # 07g semantics
                 Path(cmd[cmd.index("--out") + 1]).write_text(GLOSS_BOARD % "glossed")
                 Path(cmd[cmd.index("--report") + 1]).write_text(
@@ -598,7 +599,8 @@ class GlossStageContract(unittest.TestCase):
                     )
                 )
 
-        block = gloss_stage(root, board, args, run, dict(PNR_GLOSS_STEPS="dekink"))
+        flags = dict(PNR_GLOSS_STEPS="dekink", PNR_GLOSS_CLASSES=str(tmp / "groups.json"))
+        block = gloss_stage(root, board, args, run, flags)
         self.assertEqual((root / "routed.pre-gloss.kicad_pcb").read_text(), GLOSS_BOARD % "input")
         self.assertNotIn(str(tmp), json.dumps(block))  # result.json holds no paths
         return block, board.read_text(), names
@@ -610,6 +612,9 @@ class GlossStageContract(unittest.TestCase):
         self.assertEqual(names, ["gloss-drc-before", "gloss", "gloss-drc-after"])
         self.assertEqual(block["summary"]["edits_by_step"], dict(dekink=3))
         self.assertEqual(block["summary"]["cross_group"]["groups"], "groups.json")
+        self.assertEqual(
+            block["flags"], dict(PNR_GLOSS_STEPS="dekink", PNR_GLOSS_CLASSES="groups.json")
+        )
         self.assertNotIn("transactions", block["summary"])
         self.assertEqual(
             block["pre_gloss_board_sha256"],

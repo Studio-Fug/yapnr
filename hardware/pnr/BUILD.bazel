@@ -1575,6 +1575,40 @@ py_test(
     ],
 )
 
+# Compact placement and shrink-to-fit (PNR_COMPACT / PNR_SHRINK, default off;
+# docs/design/compact-placement.md): flag-off identity against the parent commit's goldens on
+# two ladder cases, offset courtyards, the compact legalizer, the pin-1-origin header rung,
+# the compactness tie-break, the shrink search and the runner's switches.
+py_test(
+    name = "compact_test",
+    size = "medium",
+    srcs = [
+        "tests/compact_fixture.py",
+        "tests/test_compact.py",
+    ],
+    # pnr.mc and pnr.feedback are not in :pnr yet (PR3b); run.py reads the regression modules.
+    data = glob([
+        "pnr/**/*.py",
+        "regression/*.py",
+        "testdata/compact/*",
+    ]),
+    imports = [
+        ".",
+        "regression",
+        "tests",
+    ],
+    main = "tests/test_compact.py",
+    deps = [
+        ":pnr",
+        ":pnr_animate",
+        ":pnr_detail",
+        ":pnr_hier",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("pyyaml"),
+    ],
+)
+
 # Line groups: parser, group layout, rigid placement, legality, macro collapse defaults.
 py_test(
     name = "line_group_test",

@@ -166,6 +166,29 @@ class LengthTest(unittest.TestCase):
         r = self.length(tracks[:2], vias=[(1, 0)], via_radius=0.3)
         self.assertEqual(len(r.lines), 1)
 
+    def test_a_branching_net_gives_the_range_of_merge_orders(self):
+        # A route that steps up on F.Cu to a via and back down on B.Cu: four track
+        # ends meet one point, and KiCad merges them in its items' memory order. On the
+        # routed lm-bus-pair seed 0 board KiCad 10.0.6 measured this net (B7) 0.25 mm
+        # under the raw-order result: F.Cu first, as its file holds the tracks.
+        pad, p, v = (32.0, 40.5), (31.875, 40.625), (31.875, 40.375)
+        q, r = (31.875, 40.875), (31.875, 41.125)
+        tracks = [
+            ("B.Cu", v, p, 0.25),
+            ("B.Cu", p, q, 0.25),
+            ("B.Cu", q, r, 0.25),
+            ("F.Cu", pad, p, 0.25),
+            ("F.Cu", p, v, 0.25),
+        ]
+        pads = [
+            lm.PadCopper("N", pad, frozenset(["F.Cu"]), lm.rounded_rect(pad, (1.55, 0.6), 0.15))
+        ]
+        got = lm.net_length("N", tracks, [v], pads, self.st, via_radius=0.3)
+        self.assertAlmostEqual(got.high_mm - got.low_mm, 0.25, places=6)
+        self.assertAlmostEqual(got.total_mm, got.low_mm, places=9)
+        plain = lm.net_length("N", tracks[:3], [v], pads, self.st, via_radius=0.3)
+        self.assertEqual(plain.low_mm, plain.high_mm)
+
     def test_board_frame_is_the_writebacks(self):
         from pnr.writeback import to_pcb_nm
 

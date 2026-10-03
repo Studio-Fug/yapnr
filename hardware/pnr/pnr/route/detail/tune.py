@@ -420,6 +420,9 @@ class MemberReport:
     added_mm: float = 0.0
     bumps: int = 0
     mitres: int = 0
+    # The lengths KiCad may report for a branching member (its merge order).
+    low_mm: Optional[float] = None
+    high_mm: Optional[float] = None
 
 
 @dataclass
@@ -430,7 +433,9 @@ class SetReport:
     budget: float
     target_residual: float
     members: List[MemberReport] = field(default_factory=list)
+    # Worst case over the members' possible KiCad lengths; nominal in KiCad's file order.
     spread: Optional[float] = None
+    nominal_spread: Optional[float] = None
     status: str = "unrouted"  # ok | tuned | length_unmatched | unrouted
 
     def to_json(self) -> dict:
@@ -442,6 +447,11 @@ class SetReport:
             target_residual=round(self.target_residual, 6),
             spread=None if self.spread is None else round(self.spread, 6),
             margin=None if self.spread is None else round(self.budget - self.spread, 6),
+            **(
+                {"nominal_spread": round(self.nominal_spread, 6)}
+                if self.nominal_spread is not None and self.nominal_spread != self.spread
+                else {}
+            ),
             status=self.status,
             members=[
                 dict(
@@ -452,6 +462,11 @@ class SetReport:
                     added_mm=round(m.added_mm, 6),
                     bumps=m.bumps,
                     mitres=m.mitres,
+                    **(
+                        {"length_range_mm": [round(m.low_mm, 6), round(m.high_mm, 6)]}
+                        if m.low_mm is not None and m.high_mm - m.low_mm > 1e-6
+                        else {}
+                    ),
                 )
                 for m in self.members
             ],
@@ -524,6 +539,17 @@ class Tuner:
 
     def value(self, length: lm.NetLength, unit: str) -> float:
         return length.delay_ps if unit == "ps" else length.total_mm
+
+    def spread(self, nets: Sequence[str], unit: str) -> Tuple[float, float]:
+        """(nominal, worst-case) spread of ``nets``: the worst case takes each
+        branching member's whole range of lengths KiCad may report."""
+        lengths = {n: self.measure(n) for n in nets}
+        nominal = [self.value(x, unit) for x in lengths.values()]
+        spans = [x.span(unit) for x in lengths.values()]
+        return (
+            max(nominal) - min(nominal),
+            max(hi for _lo, hi in spans) - min(lo for lo, _hi in spans),
+        )
 
     def copper_index(self) -> CopperIndex:
         index = CopperIndex()
@@ -910,9 +936,13 @@ class Tuner:
                     status = "tuned"
                 if not progressed:
                     break
-            values = {n: self.value(self.measure(n), s.unit) for n in s.nets}
-            report.spread = max(values.values()) - min(values.values())
-            if report.spread > report.target_residual + 1e-9:
+            # Matched: the nominal spread (KiCad's file order) within the target and
+            # every merge order KiCad might take within the budget.
+            report.nominal_spread, report.spread = self.spread(s.nets, s.unit)
+            if (
+                report.nominal_spread > report.target_residual + 1e-9
+                or report.spread > report.budget + 1e-9
+            ):
                 status = "length_unmatched"
             report.status = status
         for s, report in zip(self.sets, reports):
@@ -930,11 +960,12 @@ class Tuner:
                         added,
                         bumps,
                         mitres,
+                        length.low_mm,
+                        length.high_mm,
                     )
                 )
             if len(report.members) == len(s.nets):
-                vals = [m.delay_ps if s.unit == "ps" else m.length_mm for m in report.members]
-                report.spread = max(vals) - min(vals)
+                report.nominal_spread, report.spread = self.spread(s.nets, s.unit)
         return reports
 
 

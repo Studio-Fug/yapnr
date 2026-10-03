@@ -47,6 +47,7 @@ one uses KiCad's default stack (:func:`default_stackup`). Pure stdlib.
 from __future__ import annotations
 
 import math
+import random
 import re
 from dataclasses import dataclass, field
 from typing import Dict, FrozenSet, Iterable, List, Optional, Sequence, Tuple
@@ -340,10 +341,23 @@ class NetLength:
     delay_ps: Optional[float] = None
     vias: int = 0
     lines: List[Tuple[str, List[Point]]] = field(default_factory=list)
+    # The lengths KiCad may report when the net branches (three or more track ends at
+    # one point): KiCad merges such junctions in its items' memory order, so the
+    # result depends on it. Equal to the total for a net without a branch.
+    low_mm: Optional[float] = None
+    high_mm: Optional[float] = None
+    low_ps: Optional[float] = None
+    high_ps: Optional[float] = None
 
     @property
     def total_mm(self) -> float:
         return self.track_mm + self.via_mm
+
+    def span(self, unit: str = "mm") -> Tuple[float, float]:
+        """(lowest, highest) length (``mm``) or delay (``ps``) KiCad may report."""
+        if unit == "ps":
+            return (self.low_ps, self.high_ps)
+        return (self.low_mm, self.high_mm)
 
 
 def _seg_nm(a: IPoint, b: IPoint) -> int:
@@ -591,12 +605,18 @@ def net_length(
     delay: Optional[DelayModel] = None,
     via_radius: Optional[float] = None,
     frame=None,
+    orders: int = 16,
 ) -> NetLength:
     """KiCad-equivalent length of one net from its ``tracks``, vias (``(x, y)`` with
     ``via_radius``, or ``(x, y, radius)``) and pads (those of other nets are ignored):
     the DRC's length of the net's items (KiCad 10.0.6, module docstring). ``frame``
     maps a point to the board's nanometres (:func:`board_frame` for engine
-    geometry); by default the points already are the board's, in millimetres."""
+    geometry); by default the points already are the board's, in millimetres.
+
+    The total takes the tracks layer by layer (F.Cu first, then by KiCad layer id),
+    each layer in the given order, the order KiCad's file holds them in. A net that
+    branches is measured again in ``orders - 1`` other orders (reversed, then seeded
+    shuffles) for the range KiCad's own order may give (``low_mm`` .. ``high_mm``)."""
     _nm = frame or _key
     mine = [p for p in pads if p.net == net]
     pad_items = [_Pad(_nm(p.centre), [_nm(q) for q in p.outline], p.layers, p.side) for p in mine]
@@ -608,7 +628,7 @@ def net_length(
     names = stackup_copper(st)
     order = {n: k for k, n in enumerate(names)}
     result = NetLength(net)
-    total_ps = 0.0
+    via_ps = 0.0
 
     # optimiseVias (on the tracks before merging).
     plain = [(layer, a, b) for layer, a, b, _w in raw]
@@ -619,8 +639,66 @@ def net_length(
         result.via_mm += mm
         result.vias += 1
         if delay is not None:
-            total_ps += mm * delay.barrel_ps_per_mm
+            via_ps += mm * delay.barrel_ps_per_mm
 
+    # KiCad saves a net's tracks layer by layer, F.Cu first: measure in that order.
+    raw = sorted(raw, key=lambda t: _kicad_layer_id(t[0]))
+    track_mm, track_ps, result.lines = _track_length(raw, via_items, pad_items, delay)
+    result.track_mm = track_mm
+    totals = [(result.via_mm + track_mm, via_ps + track_ps)]
+    if orders > 1 and _branches(raw):
+        # KiCad saves a net's tracks layer by layer (F.Cu first, then in layer id
+        # order) and in random UUID order within a layer, and measures them in its
+        # items' memory order, which mostly follows the file: half the samples keep
+        # the layers in that order, half shuffle freely.
+        rng = random.Random(len(raw))
+        index = list(range(len(raw)))
+        by_layer: Dict[str, List[int]] = {}
+        for k, (layer, _a, _b, _w) in enumerate(raw):
+            by_layer.setdefault(layer, []).append(k)
+        layers = sorted(by_layer, key=_kicad_layer_id)
+        perms = [index[::-1]]
+        for n in range(orders - 2):
+            if n % 2 == 0:
+                perms.append(
+                    [k for la in layers for k in rng.sample(by_layer[la], len(by_layer[la]))]
+                )
+            else:
+                perms.append(rng.sample(index, len(index)))
+        for perm in perms:
+            mm, ps, _lines = _track_length([raw[k] for k in perm], via_items, pad_items, delay)
+            totals.append((result.via_mm + mm, via_ps + ps))
+    result.low_mm = min(t[0] for t in totals)
+    result.high_mm = max(t[0] for t in totals)
+    if delay is not None:
+        result.delay_ps = via_ps + track_ps
+        result.low_ps = min(t[1] for t in totals)
+        result.high_ps = max(t[1] for t in totals)
+    return result
+
+
+def _kicad_layer_id(name: str) -> int:
+    """KiCad 9+ copper layer ids: F.Cu 0, B.Cu 2, InN.Cu 2 N + 2."""
+    if name == "F.Cu":
+        return 0
+    if name == "B.Cu":
+        return 2
+    m = re.match(r"In(\d+)\.Cu$", name)
+    return 2 * int(m.group(1)) + 2 if m else 1000
+
+
+def _branches(raw) -> bool:
+    """Three or more track ends at one point: KiCad's merge there depends on order."""
+    ends: Dict[IPoint, int] = {}
+    for _layer, a, b, _w in raw:
+        for p in (a, b):
+            ends[p] = ends.get(p, 0) + 1
+    return any(n >= 3 for n in ends.values())
+
+
+def _track_length(raw, via_items, pad_items, delay):
+    """Track length (mm), its delay (ps) and the measured lines, for the tracks in
+    this order: merge, clip in vias, clip in pads (module docstring)."""
     lines = [_Line(layer, w, [a, b]) for layer, a, b, w in raw]
     _merge_lines(lines)
     live = [line for line in lines if line.status == 1]
@@ -663,16 +741,15 @@ def net_length(
             elif inside(line.pts[-1]):
                 line.pts = _clip(line.pts, False, inside, crossing, pad.centre)
 
+    track_mm = track_ps = 0.0
+    out = []
     for line in live:
-        nm = _chain_nm(line.pts)
-        mm = nm / NM
-        result.track_mm += mm
-        result.lines.append((line.layer, [(x / NM, y / NM) for x, y in line.pts]))
+        mm = _chain_nm(line.pts) / NM
+        track_mm += mm
+        out.append((line.layer, [(x / NM, y / NM) for x, y in line.pts]))
         if delay is not None:
-            total_ps += mm * delay.track(line.layer, line.width)
-    if delay is not None:
-        result.delay_ps = total_ps
-    return result
+            track_ps += mm * delay.track(line.layer, line.width)
+    return track_mm, track_ps, out
 
 
 def _via_touches_pad(centre: IPoint, radius: int, pad: _Pad) -> bool:

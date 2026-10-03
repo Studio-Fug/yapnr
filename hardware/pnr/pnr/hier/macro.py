@@ -108,6 +108,7 @@ class MacroPlan:
                 src = by_ref[comp.ref]
                 comp.pos, comp.rot, comp.side = src.pos, src.rot, src.side
                 comp.pads = copy.deepcopy(src.pads)  # keep any side mirroring the placer applied
+                comp.body = src.body
         out.outline = copy.deepcopy(placed.outline)
         return out
 

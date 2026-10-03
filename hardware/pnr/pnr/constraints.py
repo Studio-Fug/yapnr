@@ -646,9 +646,6 @@ def _parse_line_groups(raw, known_refs, board, prior) -> List[Constraint]:
 REGION_WEIGHT = 10.0  # soft region: penalty weight default
 ALIGN_WEIGHT = 5.0  # soft align: penalty weight default
 ALIGN_TOLERANCE_MM = 0.25
-# Hard align: the smallest largest-anchor-spread. Legalization slot centres are
-# 0.25 mm apart, so a narrower band could hold no slot for a second member.
-MIN_ALIGN_TOLERANCE_MM = 0.15
 AXIS_EDGES = {"x": ("west", "east"), "y": ("south", "north")}
 POINT_ANCHORS = ("origin", "centre", "pad1")
 
@@ -708,7 +705,62 @@ def _area(spec, where):
     twice = sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(pts, pts[1:] + pts[:1]))  # shoelace
     if abs(twice) < 1e-9:
         raise ConstraintError(where + ": polygon has no area")
+    crossing = _self_intersection(pts)
+    if crossing is not None:
+        raise ConstraintError(
+            "%s: polygon is not simple (edges %d and %d meet)" % (where, crossing[0], crossing[1])
+        )
     return {"polygon": pts}
+
+
+def _self_intersection(pts):
+    """The first pair of polygon edges (by index) that touch or cross other than at
+    the vertex adjacent edges share, else None. A repeated point is a zero-length
+    edge, which also counts."""
+    n = len(pts)
+    edges = [(pts[i], pts[(i + 1) % n]) for i in range(n)]
+
+    def orient(a, b, c):
+        v = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+        return 0 if abs(v) <= 1e-12 else (1 if v > 0 else -1)
+
+    def on(a, b, c):  # c on segment a-b, given collinear
+        return min(a[0], b[0]) <= c[0] <= max(a[0], b[0]) and min(a[1], b[1]) <= c[1] <= max(
+            a[1], b[1]
+        )
+
+    def meet(p, q):
+        (a, b), (c, d) = p, q
+        o1, o2, o3, o4 = orient(a, b, c), orient(a, b, d), orient(c, d, a), orient(c, d, b)
+        if o1 != o2 and o3 != o4 and 0 not in (o1, o2, o3, o4):
+            return True
+        return (
+            (o1 == 0 and on(a, b, c))
+            or (o2 == 0 and on(a, b, d))
+            or (o3 == 0 and on(c, d, a))
+            or (o4 == 0 and on(c, d, b))
+        )
+
+    for i, (a, b) in enumerate(edges):
+        if a == b:
+            return (i, i)
+    for i in range(n):
+        for j in range(i + 1, n):
+            if j == i + 1 or (i == 0 and j == n - 1):
+                # Adjacent edges share one vertex; they may not fold back onto each other.
+                shared = edges[i][1] if j == i + 1 else edges[i][0]
+                p = edges[i][0] if j == i + 1 else edges[i][1]
+                q = edges[j][1] if j == i + 1 else edges[j][0]
+                if orient(p, shared, q) == 0 and (
+                    (p[0] - shared[0]) * (q[0] - shared[0])
+                    + (p[1] - shared[1]) * (q[1] - shared[1])
+                    > 0
+                ):
+                    return (i, j)
+                continue
+            if meet(edges[i], edges[j]):
+                return (i, j)
+    return None
 
 
 def _parse_regions(raw, known_refs, warnings) -> List[Constraint]:
@@ -781,8 +833,8 @@ def _anchor(value, axis, where):
 def _parse_aligns(raw, known_refs, warnings, prior) -> List[Constraint]:
     """The ``align`` section: the anchors of ``refs`` share one ``axis`` coordinate
     (``y``: one horizontal line). Hard by default (the largest anchor spread is at
-    most ``tol_mm``); a soft align is a penalty on the spread. ``prior`` holds the
-    constraints parsed before (the line groups)."""
+    most ``tol_mm``, 0 for exact); a soft align is a penalty on the spread. ``prior``
+    holds the constraints parsed before (the line groups)."""
     if raw is None:
         return []
     if not isinstance(raw, list):
@@ -812,10 +864,8 @@ def _parse_aligns(raw, known_refs, warnings, prior) -> List[Constraint]:
             default = _anchor(spec, axis, where)
             anchors = {r: default for r in refs}
         tol = entry.get("tol_mm", ALIGN_TOLERANCE_MM)
-        if not _finite_number(tol) or tol < MIN_ALIGN_TOLERANCE_MM:
-            raise ConstraintError(
-                "%s: tol_mm must be finite and at least %g mm" % (where, MIN_ALIGN_TOLERANCE_MM)
-            )
+        if not _finite_number(tol) or tol < 0:
+            raise ConstraintError(where + ": tol_mm must be finite and not negative")
         lines = {}
         for ref in refs:
             if ref in line_of:

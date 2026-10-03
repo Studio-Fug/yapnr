@@ -280,12 +280,18 @@ def initial_starts(graph, constraints, config, seed=0, orient=True):
             )
         )
     # Regions and aligns: move the start points into the outline, their hard regions
-    # and onto the align lines (a projection; no extra random draws).
+    # and onto the align lines (a projection; no extra random draws). The outline fit
+    # (_fit_outline) runs where a region or align is declared; PNR_FIT_OUTLINE=1 runs
+    # it for every design, PNR_FIT_OUTLINE=0 for none (a control).
     from .regions import declared
 
+    fit = os.environ.get("PNR_FIT_OUTLINE")
     if declared(constraints):
         for start in result[1:]:
-            _project_start(graph, constraints, start)
+            _project_start(graph, constraints, start, fit=fit != "0")
+    elif fit == "1":
+        for start in result[1:]:
+            _fit_outline(graph, constraints, start["positions"])
     # Reserve at most two of the bounded starts for otherwise easily-erased
     # under-body basins. This adds topology diversity, not more route budget.
     for start, basin in zip(result[2:4], _opposite_body_basins(graph, constraints)):
@@ -306,34 +312,52 @@ def _fit_outline(graph, constraints, positions):
 
     A source board may hold its parts outside the outline (a generated staging row, a
     netlist import); projecting only the region parts would then leave the start half
-    on and half off the board, which the global placer does not recover from. On each
-    axis whose points leave the outline, the points' span maps affinely onto the
-    outline less :data:`FIT_MARGIN`; every point is then clamped so the part's
-    courtyard fits. A start already inside the outline is unchanged."""
+    on and half off the board, which the global placer does not recover from.
+
+    - Most points off the board (a staging layout): on each axis whose points leave
+      the outline, the points' span maps affinely onto the outline less
+      :data:`FIT_MARGIN`; every point is then clamped so the part's courtyard fits.
+    - Most points on the board (a designer's layout with a few parts parked beside
+      it): only the parked points move. On each axis, the coordinates that leave the
+      outline map from their own span onto the outline less the margin (a single one
+      is clamped), and each moved point is clamped so the courtyard fits; every part
+      already on the board keeps its place.
+
+    A start already inside the outline is unchanged."""
     width, height = outline_size(graph, constraints)
-    points = list(positions.values())
-    if not points or all(0.0 <= x <= width and 0.0 <= y <= height for x, y in points):
+    sizes = (width, height)
+    off = [
+        ref for ref, (x, y) in positions.items() if not (0.0 <= x <= width and 0.0 <= y <= height)
+    ]
+    if not off:
         return
     by_ref = {c.ref: c for c in graph.components}
-    fitted = {ref: list(xy) for ref, xy in positions.items()}
-    for k, size in ((0, width), (1, height)):
-        values = [p[k] for p in points]
-        lo, hi = min(values), max(values)
-        scale = hi - lo > 1e-9 and (lo < 0.0 or hi > size)
+    staging = 2 * len(off) > len(positions)
+    moving = list(positions) if staging else off
+    fitted = {ref: list(positions[ref]) for ref in moving}
+    for k, size in enumerate(sizes):
         margin = FIT_MARGIN * size
-        for ref, xy in positions.items():
-            value = xy[k]
-            if scale:
+        if staging:
+            mapped = moving
+        else:
+            mapped = [r for r in moving if not 0.0 <= positions[r][k] <= size]
+        values = [positions[r][k] for r in mapped]
+        lo, hi = (min(values), max(values)) if values else (0.0, 0.0)
+        scale = hi - lo > 1e-9 and (lo < 0.0 or hi > size)
+        for ref in moving:
+            value = positions[ref][k]
+            if scale and ref in mapped:
                 value = margin + (value - lo) / (hi - lo) * (size - 2.0 * margin)
             half = min(size / 2.0, by_ref[ref].courtyard[k] / 2.0) if ref in by_ref else 0.0
             fitted[ref][k] = min(max(value, half), size - half)
     positions.update(fitted)
 
 
-def _project_start(graph, constraints, start):
-    """Project ``start``'s positions into the outline (:func:`_fit_outline`), into the
-    hard regions of their refs, then each align's members onto the line through the
-    median of their anchors (a fixed member's anchor when there is one)."""
+def _project_start(graph, constraints, start, fit=True):
+    """Project ``start``'s positions into the outline (:func:`_fit_outline`, with
+    ``fit``), into the hard regions of their refs, then each align's members onto the
+    line through the median of their anchors (a fixed member's anchor when there is
+    one)."""
     from .regions import (
         align_rules,
         anchor_offset,
@@ -351,7 +375,8 @@ def _project_start(graph, constraints, start):
     def rot_of(ref):
         return hard_rot.get(ref, rotations.get(ref, by_ref[ref].rot))
 
-    _fit_outline(graph, constraints, positions)
+    if fit:
+        _fit_outline(graph, constraints, positions)
     regions = region_rules(constraints)
     for ref, xy in positions.items():
         rules = [c for c in regions if ref in c.refs]
@@ -633,6 +658,16 @@ def select_initial_placement(
                                 pad_edge_rule(placement_constraints, rules),
                             ),
                         )
+                        from .regions import declared, snap_aligns
+
+                        if declared(placement_constraints):
+                            snap_aligns(
+                                placed,
+                                placement_constraints,
+                                placement_constraints.board.default_clearance_mm,
+                                pad_edge_rule(placement_constraints, rules),
+                                (source.outline.width, source.outline.height),
+                            )
                         prep = PlacementReport(
                             placed.outline.width,
                             placed.outline.height,

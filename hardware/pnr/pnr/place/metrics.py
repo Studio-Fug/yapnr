@@ -148,11 +148,7 @@ def hard_violations(
     rows_bad = row_violations(graph, constraints)
     rows_bad = rows_bad + line_violations(graph, constraints)
     rows_bad = rows_bad + edge_band_violations(graph, constraints, width, height)
-    # Hard region / align (pnr.place.regions): empty unless the design declares one.
-    from .regions import violations as region_violations
-
-    rows_bad = rows_bad + region_violations(graph, constraints)
-    return {
+    out = {
         "overlaps": overlap_pairs(graph, clearance),
         "outside_outline": outside_outline(graph, width, height, exclude=constraints.locked_refs),
         "fixed_misplaced": sorted(
@@ -179,6 +175,14 @@ def hard_violations(
             }
         ),
     }
+    # Hard region / align (pnr.place.regions): their own keys, present only when the
+    # design declares one, so other designs report exactly the keys they always had.
+    from .regions import align_offenders, declared, region_offenders
+
+    if declared(constraints):
+        out["region_outside"] = sorted(set(region_offenders(graph, constraints)))
+        out["align_off"] = sorted(set(align_offenders(graph, constraints)))
+    return out
 
 
 def translation_checker(graph, constraints, clearance=0.0):

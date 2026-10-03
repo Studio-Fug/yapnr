@@ -1,7 +1,8 @@
 """Regions and alignments (pnr.place.regions): the parser, anchors at every rotation and
-side, area containment, the legalizer and global placer on the 07-chaser-20 netlist,
-rigid macros (line groups and blocks), the translation checker and relocation helpers,
-and an unchanged path for designs without either constraint."""
+side (off-centre bodies included), area containment, the feasibility check, the
+legalizer, the exact snap and global placer on the 07-chaser-20 netlist, rigid macros
+(line groups and blocks), the translation checker and relocation helpers, and an
+unchanged path for designs without either constraint."""
 
 import copy
 import random
@@ -77,6 +78,9 @@ def chaser():
                 Pad("1", "VCC", (0.0, 0.0), (1.7, 1.7), True, (1.0, 1.0), True),
                 Pad("2", "GND", (0.0, -2.54), (1.7, 1.7), True, (1.0, 1.0), True),
             ],
+            # The stock header's origin is pin 1: its body runs 4.365 mm south of the
+            # origin and 1.815 mm north (the ingested Component.body).
+            body=(-1.815, -4.365, 1.815, 1.815),
         ),
         soic("U1", timer, (7.49, 5.72)),
         soic("U2", counter, (7.49, 10.8)),
@@ -207,6 +211,10 @@ class ParserTest(unittest.TestCase):
             dict(name="r", refs=["U1"], areas=[dict(rect=WEST, polygon=[[0, 0]])]),
             dict(name="r", refs=["U1"], rect=WEST, hard="yes"),
             dict(name="r", refs=["U1"], rect=WEST, weight=0),
+            dict(name="r", refs=["U1"], polygon=[[0, 0], [4, 4], [4, 0], [0, 6]]),  # a bow tie
+            dict(name="r", refs=["U1"], polygon=[[0, 0], [4, 0], [4, 0], [4, 4]]),  # repeated
+            dict(name="r", refs=["U1"], polygon=[[0, 0], [6, 0], [3, 0], [3, 4]]),  # folds back
+            dict(name="r", refs=["U1"], polygon=[[0, 0], [8, 0], [8, 8], [4, 0], [0, 8]]),  # touch
         ):
             with self.subTest(bad=bad), self.assertRaises(ConstraintError):
                 self.compile(region=[bad])
@@ -249,7 +257,7 @@ class ParserTest(unittest.TestCase):
             (dict(name="a", refs=["U1", "U2"], axis="x", anchor="north"), {}),
             (dict(name="a", refs=["U1", "U2"], axis="y", anchor="pin1"), {}),
             (dict(name="a", refs=["U1", "U2"], axis="y", anchor={"C1": "origin"}), {}),
-            (dict(name="a", refs=["U1", "U2"], axis="y", tol_mm=0.1), {}),
+            (dict(name="a", refs=["U1", "U2"], axis="y", tol_mm=-0.1), {}),
             (dict(name="a", refs=["U1", "U2"], axis="y", hard=1), {}),
             (dict(name="a", refs=["D1", "D3", "U1"], axis="y"), lines),  # two in one line
         ):
@@ -257,6 +265,8 @@ class ParserTest(unittest.TestCase):
                 self.compile(align=[bad], **extra)
         # One member of a line group is fine (the line's macro carries its anchor).
         self.compile(align=[dict(name="a", refs=["D1", "U1"], axis="y")], **lines)
+        # An exact alignment (tol_mm 0) is a valid request.
+        self.compile(align=[dict(name="a", refs=["U1", "U2"], axis="y", tol_mm=0)])
 
 
 class AnchorTest(unittest.TestCase):
@@ -291,6 +301,48 @@ class AnchorTest(unittest.TestCase):
         self.assertAlmostEqual(regions.anchor_offset(u1, "pad1", "x", 90), 1.905)
         self.assertAlmostEqual(regions.anchor_offset(u1, "south", "y", 0), -5.72 / 2)
 
+    def test_off_centre_body_measures_edges_and_regions(self):
+        """A pin header measured from pin 1: edge anchors and region bodies use its real
+        body box, not the courtyard centred on the origin (twice as tall here)."""
+        graph = chaser()
+        j1 = graph.component("J1")
+        self.assertEqual(regions.courtyard_box(j1), (-1.815, -4.365, 1.815, 1.815))
+        self.assertEqual(regions.courtyard_box(graph.component("U1")), (-3.745, -2.86, 3.745, 2.86))
+        self.assertAlmostEqual(regions.anchor_offset(j1, "north", "y", 0), 1.815)
+        self.assertAlmostEqual(regions.anchor_offset(j1, "south", "y", 0), -4.365)
+        self.assertAlmostEqual(regions.anchor_offset(j1, "east", "x", 90), 4.365)
+        self.assertAlmostEqual(regions.anchor_offset(j1, "west", "x", 270), -4.365)
+        # The body rides with the side flip, like the pads.
+        flipped = copy.deepcopy(j1)
+        set_component_side(flipped, "bottom")
+        self.assertEqual(flipped.body, (-1.815, -1.815, 1.815, 4.365))
+        self.assertAlmostEqual(regions.anchor_offset(flipped, "north", "y", 0), 4.365)
+        # Region containment: the real body fits where the centred box would not.
+        cc = compile_constraints(
+            doc(fixed={}, region=[dict(name="hdr", refs=["J1"], rect=[0, 5, 10, 12])]), graph.refs
+        )
+        j1.pos = (5.0, 10.0)  # body y 5.635..11.815; the centred box reaches 14.365
+        self.assertEqual(regions.region_offenders(graph, cc), [])
+        centred = copy.deepcopy(graph)
+        centred.component("J1").body = None
+        self.assertEqual(regions.region_offenders(centred, cc), ["J1"])
+        # The graph JSON carries the body only where it is off-centre, and round-trips it.
+        data = BoardGraph.from_json(graph.to_json())
+        self.assertEqual(data.component("J1").body, j1.body)
+        self.assertIsNone(data.component("U2").body)
+        self.assertNotIn("body", graph.to_dict()["components"][graph.refs.index("U2")])
+        # Placement: a 7 x 6.5 mm pocket holds the header's 3.63 x 6.18 body, never its
+        # 3.63 x 8.73 centred box (at any turn), which the feasibility check refuses.
+        pocket = doc(fixed={}, region=[dict(name="hdr", refs=["J1"], rect=[30, 0, 37, 6.5])])
+        cc = compile_constraints(pocket, graph.refs)
+        for seed in range(2):
+            with self.subTest(seed=seed):
+                placed = placed_ok(self, graph, cc, seed)
+                box = regions.placed_boxes(placed.component("J1"), regions.region_rules(cc)[0])[0]
+                self.assertTrue(regions.area_of(regions.region_rules(cc)[0]).contains(box), box)
+        with self.assertRaisesRegex(ConstraintError, "region 'hdr': J1"):
+            placer.place(centred, cc, seed=0, iters=20)
+
 
 class AreaTest(unittest.TestCase):
     def test_rectangle(self):
@@ -312,6 +364,71 @@ class AreaTest(unittest.TestCase):
         self.assertFalse(regions.Area([("polygon", slit)]).contains((2, 1, 8, 2)))
         self.assertGreater(area.dist2([7], [7])[0], 0.0)
         self.assertEqual(area.dist2([2], [7])[0], 0.0)
+
+    def test_union_seams_off_the_grid_are_exact(self):
+        """Pieces meeting at a seam off any 0.25 mm grid: a box across the seam fits
+        (the raster's grid lines are the pieces' own edges), in the check and in the
+        legalizer."""
+        union = regions.Area([("rect", (0, 0, 10.1, 10)), ("rect", (10.1, 0, 20, 10))])
+        self.assertTrue(union.contains((9, 2, 11, 4)))
+        self.assertTrue(union.contains((0, 0, 20, 10)))
+        self.assertFalse(union.contains((9, 2, 11, 10.01)))
+        self.assertFalse(union.contains((-0.01, 2, 11, 4)))
+        steps = regions.Area(
+            [("polygon", [(0, 0), (10.1, 0), (10.1, 6.3), (0, 6.3)]), ("rect", (10.1, 0, 20, 10))]
+        )
+        self.assertTrue(steps.contains((8, 1, 12, 6.3)))
+        self.assertFalse(steps.contains((8, 1, 12, 6.31)))
+        graph = chaser()
+        cc = compile_constraints(
+            doc(
+                region=[
+                    dict(
+                        name="u",
+                        refs=["U2"],
+                        areas=[dict(rect=[20, 0, 26.1, 32]), dict(rect=[26.1, 0, 31, 32])],
+                    )
+                ]
+            ),
+            graph.refs,
+        )
+        placed = placed_ok(self, graph, cc, 0)
+        box = regions.placed_boxes(placed.component("U2"), regions.region_rules(cc)[0])[0]
+        self.assertTrue(20 - 1e-6 <= box[0] and box[2] <= 31 + 1e-6, box)
+
+    def test_polygon_raster_is_fast_and_never_over_accepts(self):
+        import math
+        import time
+
+        ring = [
+            (100 + 100 * math.cos(math.pi * i / 16), 100 + 100 * math.sin(math.pi * i / 16))
+            for i in range(32)
+        ]
+        started = time.monotonic()
+        regions.Area([("polygon", ring)]).raster()
+        self.assertLess(time.monotonic() - started, 2.0)  # 200 mm, 32 sloped edges
+        # A union whose two polygons share a sloped seam: the raster refuses the cells
+        # the seam cuts, and never accepts a box that leaves the union.
+        union = regions.Area(
+            [
+                ("polygon", [(0, 0), (10, 0), (10, 4), (4.1, 4), (4.1, 10), (0, 10)]),
+                ("polygon", [(4.1, 4), (10, 4), (4.1, 10)]),
+            ]
+        )
+        rng = random.Random(1)
+        accepted = 0
+        for _ in range(600):
+            x, y = rng.uniform(0, 9), rng.uniform(0, 9)
+            box = (x, y, x + rng.uniform(0.2, 4), y + rng.uniform(0.2, 4))
+            if union.contains(box):
+                accepted += 1
+                grid = [
+                    (box[0] + (box[2] - box[0]) * i / 12, box[1] + (box[3] - box[1]) * j / 12)
+                    for i in range(13)
+                    for j in range(13)
+                ]
+                self.assertEqual(max(union.dist2(*zip(*grid))), 0.0, box)
+        self.assertGreater(accepted, 50)
 
     def test_union_and_conservative_raster(self):
         union = regions.Area([("rect", (0, 0, 5, 5)), ("rect", (5, 0, 10, 5))])
@@ -425,6 +542,179 @@ class LegalizeTest(unittest.TestCase):
             for s in range(4)
         )
         self.assertLess(with_soft, without)
+
+    def test_exact_alignment(self):
+        """tol_mm 0: the legalizer keeps its band of a few slot pitches, then the snap
+        puts both ICs' origins on one line; the default tolerance snaps too."""
+        graph = chaser()
+        for tol in (0, 0.25):
+            cc = compile_constraints(relative(tol_mm=tol), graph.refs)
+            exact = 0
+            for seed in range(4):
+                with self.subTest(tol=tol, seed=seed):
+                    placed = placed_ok(self, graph, cc, seed)
+                    spread = regions.align_spread(placed, regions.align_rules(cc)[0])
+                    self.assertLessEqual(spread, tol + 1e-9)
+                    exact += spread <= 1e-9
+            self.assertGreaterEqual(exact, 3)
+
+    def test_snap_keeps_every_other_rule(self):
+        """The snap takes the first line every member reaches legally, else none."""
+
+        def board(*extra):
+            parts = [
+                Component("A", "x", (3.0, 4.0), 0.0, "top", (2.0, 2.0), (2.0, 2.0), smd_body=True),
+                Component("B", "x", (8.0, 4.2), 0.0, "top", (2.0, 2.0), (2.0, 2.0), smd_body=True),
+            ]
+            parts += [
+                Component(r, "x", pos, 0.0, "top", (2.0, 0.1), (2.0, 0.1), smd_body=True)
+                for r, pos in extra
+            ]
+            graph = BoardGraph("snap", parts, [], BoardOutline(20.0, 10.0))
+            spec = dict(
+                board=dict(outline=dict(w=20, h=10), default_clearance_mm=0.0),
+                align=[dict(name="ab", refs=["A", "B"], axis="y")],
+            )
+            return graph, compile_constraints(spec, graph.refs)
+
+        graph, cc = board()
+        self.assertEqual(regions.snap_aligns(graph, cc), ["B"])  # the lower line: B sinks
+        self.assertEqual(graph.component("B").pos, (8.0, 4.0))
+        graph, cc = board(("F", (8.0, 3.1)))  # a floor under B: A rises instead
+        self.assertEqual(regions.snap_aligns(graph, cc), ["A"])
+        self.assertAlmostEqual(graph.component("A").pos[1], 4.2)
+        graph, cc = board(("F", (8.0, 3.1)), ("W", (3.0, 5.1)))  # and a wall over A
+        self.assertEqual(regions.snap_aligns(graph, cc), [])
+        self.assertEqual(graph.component("A").pos, (3.0, 4.0))
+        self.assertEqual(graph.component("B").pos, (8.0, 4.2))
+
+    def test_align_with_a_hard_edge_band(self):
+        """D1 locked to the south edge; U1's south courtyard edge on D1's."""
+        graph = chaser()
+        cc = compile_constraints(
+            doc(
+                edge_align={"D1": dict(edge="south", hard=True)},
+                align=[dict(name="floor", refs=["D1", "U1"], axis="y", anchor="south")],
+            ),
+            graph.refs,
+        )
+        for seed in range(3):
+            with self.subTest(seed=seed):
+                placed = placed_ok(self, graph, cc, seed)
+                d1, u1 = placed.component("D1"), placed.component("U1")
+                self.assertLessEqual(regions.anchor_value(d1, "south", "y"), 1.0 + 1e-6)
+                self.assertLessEqual(
+                    abs(
+                        regions.anchor_value(u1, "south", "y")
+                        - regions.anchor_value(d1, "south", "y")
+                    ),
+                    0.25 + 1e-9,
+                )
+
+    def test_align_with_a_row_member(self):
+        """A row along an edge (its pose is a sampled trial) and a free part aligned with
+        one of its members."""
+        graph = chaser()
+        cc = compile_constraints(
+            doc(
+                row=[
+                    dict(
+                        name="leds",
+                        members=["D1", "D2", "D3"],
+                        gap_mm=1,
+                        edge="any",
+                        facing="south",
+                    )
+                ],
+                align=[dict(name="under", refs=["D2", "U2"], axis="x")],
+            ),
+            graph.refs,
+        )
+        for seed in range(3):
+            with self.subTest(seed=seed):
+                placed = placed_ok(self, graph, cc, seed)
+                d2, u2 = placed.component("D2"), placed.component("U2")
+                self.assertLessEqual(abs(d2.pos[0] - u2.pos[0]), 0.25 + 1e-9)
+
+    def test_soft_align_in_the_legalizer(self):
+        """A soft align's penalty steers the legalizer's slot choice: from the same
+        global placement the spread is smaller with it than without."""
+        graph = chaser()
+        soft = compile_constraints(relative(hard=False, weight=50.0), graph.refs)
+        con = regions.align_rules(soft)[0]
+        cont = BoardGraph.from_json(graph.to_json())
+        for i, comp in enumerate(cont.components):
+            comp.pos = (4.0 + (i % 6) * 6.5, 4.0 + (i // 6) * 7.0)
+        cont.component("U1").pos, cont.component("U2").pos = (12.0, 9.0), (30.0, 22.0)
+        common = dict(fixed={}, keepouts=[], clearance=0.2, grid_mm=0.25, allow_rotation=False)
+        plain = legalize(cont, *SIZE, **common)
+        steered = legalize(cont, *SIZE, **common, regions=[], aligns=[con])
+        self.assertLess(regions.align_spread(steered, con) + 5.0, regions.align_spread(plain, con))
+
+
+class FeasibilityTest(unittest.TestCase):
+    """Impossible combinations are refused before placement, by name."""
+
+    def refused(self, pattern, **extra):
+        graph = chaser()
+        cc = compile_constraints(doc(**extra), graph.refs)
+        with self.assertRaisesRegex(ConstraintError, pattern):
+            placer.place(graph, cc, seed=0, iters=20)
+
+    def test_fixed_part_outside_its_region(self):
+        self.refused(
+            r"region 'east': J1 is fixed at \(4.000, 16.000\)",
+            region=[dict(name="east", refs=["J1"], rect=[21, 0, 42, 32])],
+        )
+
+    def test_fixed_members_too_far_apart(self):
+        self.refused(
+            "align 'pair': its fixed members J1 and U1 are 9.000 mm apart",
+            fixed={"J1": dict(at=[4, 16], rot=0), "U1": dict(at=[20, 25], rot=0)},
+            align=[dict(name="pair", refs=["J1", "U1"], axis="y")],
+        )
+
+    def test_region_under_a_keepout(self):
+        self.refused(
+            "region 'corner': U1 .* keep-out 'label'",
+            keepout=[dict(name="label", polygon=[[0, 0], [12, 0], [12, 12], [0, 12]])],
+            region=[dict(name="corner", refs=["U1"], rect=[0, 0, 10, 10])],
+        )
+
+    def test_region_against_a_hard_edge_band(self):
+        self.refused(
+            "region 'top': D1 .* hard edge_align \\(south",
+            edge_align={"D1": dict(edge="south", hard=True)},
+            region=[dict(name="top", refs=["D1"], rect=[0, 20, 42, 32])],
+        )
+
+    def test_region_smaller_than_the_part(self):
+        self.refused(
+            "region 'tiny': U2", region=[dict(name="tiny", refs=["U2"], rect=[0, 0, 6, 6])]
+        )
+
+    def test_anchor_naming_a_missing_pad(self):
+        self.refused(
+            "align 'p': .*U1 has no pad '99'",
+            align=[dict(name="p", refs=["U1", "U2"], axis="x", anchor={"U1": "pad:99"})],
+        )
+
+    def test_members_confined_apart(self):
+        self.refused(
+            "align 'ics': no line within tol_mm 0.25 reaches every member: U1 reaches y in "
+            "\\[2.860, 5.140\\] \\(region 'low'\\), U2 reaches y",
+            region=[
+                dict(name="low", refs=["U1"], rect=[0, 0, 42, 8]),
+                dict(name="high", refs=["U2"], rect=[0, 20, 42, 32]),
+            ],
+            align=[dict(name="ics", refs=["U1", "U2"], axis="y")],
+        )
+
+    def test_feasible_designs_pass(self):
+        graph = chaser()
+        for spec in (absolute(), relative(), relative(tol_mm=0)):
+            cc = compile_constraints(spec, graph.refs)
+            regions.check_feasible(graph, cc, *SIZE)
 
 
 class GlobalTest(unittest.TestCase):
@@ -542,6 +832,14 @@ class MacroTest(unittest.TestCase):
         # Block extraction keeps aligned parts top-level.
         for block in extract_blocks(graph, cc):
             self.assertFalse({"U1", "D1"} & set(block.refs))
+        # A top-level placement of the macro graph, expanded: the block members C1 and
+        # R3 lie in their region, and U1 and D1 (top-level) are aligned.
+        for seed in range(2):
+            with self.subTest(seed=seed):
+                mplaced, report = placer.place(mgraph, mcon, seed=seed, iters=150, spread=1.3)
+                self.assertTrue(report.legal, report.summary())
+                expanded = plan.expand(mplaced, flat)
+                self.assertEqual(regions.violations(expanded, cc), [])
         # Two aligned refs inside one macro cannot be expressed on it.
         both = compile_constraints(
             doc(align=[dict(name="a", refs=["R3", "D1"], axis="y")]), graph.refs
@@ -566,10 +864,16 @@ class CheckerTest(unittest.TestCase):
         old = u1.pos
         u1.pos = (SIZE[0] - 5, old[1])  # out of the west half
         self.assertFalse(legal(u1))
-        self.assertIn("U1", hard_violations(placed, cc)["group_outside"])
+        found = hard_violations(placed, cc)
+        self.assertEqual(found["region_outside"], ["U1"])
+        self.assertEqual(found["group_outside"], [])
         u1.pos = (old[0], old[1] + 1.0)  # off the line
         self.assertFalse(legal(u1))
         self.assertEqual(sorted(regions.align_offenders(placed, cc)), ["U1", "U2"])
+        self.assertEqual(hard_violations(placed, cc)["align_off"], ["U1", "U2"])
+        report = placer.PlacementReport(1, 1, 1, 1, **hard_violations(placed, cc))
+        self.assertFalse(report.legal)
+        self.assertIn("align_off=2", report.summary())
         snap = regions.align_snap(placed, cc, u1)
         self.assertEqual(snap, {1: u2.pos[1]})
         u1.pos = old
@@ -649,6 +953,203 @@ class PoolStartTest(unittest.TestCase):
         # Without a region or an align the source start is the source board, unchanged.
         for ref, xy in sampled[1]["positions"].items():
             self.assertEqual(tuple(xy), graph.component(ref).pos)
+        # PNR_FIT_OUTLINE=1 fits it for every design; =0 leaves even a region's start
+        # unfitted (only its region parts are projected).
+        with mock.patch.dict("os.environ", {"PNR_FIT_OUTLINE": "1"}):
+            fitted = initial_starts(graph, bare, config, seed=0)
+        for ref in outside:
+            self.assertEqual(fitted[1]["positions"][ref], source[ref])
+        with mock.patch.dict("os.environ", {"PNR_FIT_OUTLINE": "0"}):
+            unfitted = initial_starts(graph, cc, config, seed=0)
+        for ref in outside:
+            self.assertEqual(tuple(unfitted[1]["positions"][ref]), graph.component(ref).pos)
+
+    def test_parked_parts_move_alone(self):
+        """A designer's layout with two parts parked beside the board: only those two
+        move (in their order, inside the outline); every other part keeps its place."""
+        from pnr.place.initial_pool import _fit_outline
+
+        graph = chaser()
+        cc = compile_constraints(absolute(), graph.refs)
+        positions = {}
+        for i, comp in enumerate(graph.components):
+            positions[comp.ref] = [4.0 + (i % 6) * 6.5, 4.0 + (i // 6) * 7.0]
+        positions["D4"], positions["D5"] = [50.0, 10.0], [60.0, 12.0]
+        before = copy.deepcopy(positions)
+        _fit_outline(graph, cc, positions)
+        for ref in positions:
+            if ref not in ("D4", "D5"):
+                self.assertEqual(positions[ref], before[ref], ref)
+        (x4, y4), (x5, y5) = positions["D4"], positions["D5"]
+        self.assertLess(x4, x5)
+        self.assertLessEqual(x5 + 3.49 / 2, SIZE[0] + 1e-9)
+        self.assertEqual((y4, y5), (10.0, 12.0))  # in range on y: untouched
+        # One parked part is pulled in to the nearest edge.
+        positions = copy.deepcopy(before)
+        positions["D5"] = [41.0, 12.0]
+        _fit_outline(graph, cc, positions)
+        self.assertAlmostEqual(positions["D4"][0], SIZE[0] - 3.49 / 2)
+
+
+class SoftMoversTest(unittest.TestCase):
+    """The movers after placement (batch relocation, feedback children, native loop
+    trials, the elastic mesh) pay a soft region's or align's growth."""
+
+    @staticmethod
+    def pair(soft):
+        """A (fixed) and B on one row of a 20 x 20 board, with ``soft`` sections."""
+        parts = [
+            Component(
+                r,
+                "x",
+                (x, 10.0),
+                0.0,
+                "top",
+                (1.6, 0.8),
+                (1.6, 0.8),
+                pads=[Pad("1", "n", (0.0, 0.0), (0.4, 0.4))],
+            )
+            for r, x in (("A", 4.0), ("B", 16.0))
+        ]
+        nets = [Net("n", 1, [("A", "1"), ("B", "1")])]
+        graph = BoardGraph("soft", parts, nets, BoardOutline(20, 20))
+        spec = dict(board=dict(outline=dict(w=20, h=20)), fixed={"A": dict(at=[4, 10])}, **soft)
+        return graph, compile_constraints(spec, graph.refs)
+
+    def test_soft_total(self):
+        graph, cc = self.pair(
+            dict(
+                region=[dict(name="east", refs=["B"], rect=[15, 0, 20, 20], hard=False, weight=2)],
+                align=[dict(name="row", refs=["A", "B"], axis="y", hard=False, weight=3)],
+            )
+        )
+        self.assertEqual(regions.soft_refs(cc), {"A", "B"})
+        self.assertEqual(regions.soft_total(graph, cc), 0.0)
+        graph.component("B").pos = (15.0, 11.0)  # 0.8 mm west of the region, 1 mm off the row
+        self.assertAlmostEqual(regions.soft_total(graph, cc), 2 * 2 * 0.8**2 + 3 * 2 * 0.5**2)
+        hard, cc_hard = self.pair(
+            dict(region=[dict(name="east", refs=["B"], rect=[15, 0, 20, 20])])
+        )
+        self.assertEqual(regions.soft_refs(cc_hard), frozenset())
+        self.assertEqual(regions.soft_total(hard, cc_hard), 0.0)
+
+    def test_batch_relocation_ranks_by_the_soft_penalty(self):
+        from pnr.place.batch_relocate import joint_configurations
+
+        options = {
+            "B": [
+                dict(position=[16.0, 10.0], cost=5.0),
+                dict(position=[8.0, 10.0], cost=4.0),  # cheaper probe, 7 mm out of the region
+                dict(position=[16.0, 12.0], cost=4.5),
+            ]
+        }
+        graph, cc = self.pair(
+            dict(region=[dict(name="east", refs=["B"], rect=[15, 0, 20, 20], hard=False)])
+        )
+        chosen, _ = joint_configurations(graph, cc, options, samples=1)
+        self.assertEqual(chosen[0]["moves"][0]["position"], [16.0, 12.0])
+        self.assertIn("soft_region_align", [t["key"] for t in chosen[0]["terms"]])
+        plain, cc_plain = self.pair({})
+        chosen, _ = joint_configurations(plain, cc_plain, options, samples=1)
+        self.assertEqual(chosen[0]["moves"][0]["position"], [8.0, 10.0])
+        self.assertNotIn("soft_region_align", [t["key"] for t in chosen[0]["terms"]])
+
+    def test_feedback_children_pay_the_soft_growth(self):
+        from pnr.feedback.moves import MoveBoard, default_anchors, pull_children
+
+        conn = dict(id="A.1|B.1", a=["A", "1"], b=["B", "1"], mode="signal", net="n")
+        fb = dict(router="plain", conns=[dict(conn, no_room=False)])
+
+        region = dict(name="east", refs=["B"], rect=[15.2, 0, 20, 20], hard=False, weight=100)
+        graph, cc = self.pair(dict(region=[region]))
+
+        def child(soft):
+            g, c = self.pair(soft)
+            board = MoveBoard(
+                graph=g,
+                constraints=c,
+                key_of={r: r for r in g.refs},
+                anchors=default_anchors(g, c, {"A"}),
+                clearance=0.2,
+            )
+            (kid,) = pull_children(board, fb, n=1)
+            x, y, rot, _ = kid["poses"]["B"]
+            graph.component("B").pos, graph.component("B").rot = (x, y), rot
+            return x, regions.soft_total(graph, cc)
+
+        x, penalty = child({})
+        self.assertLess(x, 16.0)  # B pulled west toward A, out of the region
+        self.assertGreater(penalty, 1.0)
+        x, penalty = child(dict(region=[region]))
+        self.assertLess(x, 16.0)  # still pulled west, turned to stay inside
+        self.assertEqual(penalty, 0.0)
+
+    def test_native_loop_tries_soft_growth_last(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        import yaml
+
+        from pnr.native_loop import placements
+
+        graph, _ = self.pair({})
+        inv = dict(
+            graph=json.loads(graph.to_json()),
+            footprint_poses={c.ref: [c.pos[0], 20 - c.pos[1]] for c in graph.components},
+        )
+        spec = dict(
+            schema="v0",
+            board=dict(outline=dict(w=20, h=20)),
+            fixed={"A": dict(at=[4, 10])},
+            align=[dict(name="row", refs=["A", "B"], axis="y", hard=False)],
+        )
+        with tempfile.TemporaryDirectory() as d:
+            config = Path(d) / "constraints.yaml"
+            config.write_text(yaml.safe_dump(spec))
+            options = placements(inv, config, {"B": 2}, set(), inv["footprint_poses"], 1.0)
+        growth = [o["soft_growth"] > 1e-9 for o in options]
+        self.assertTrue(any(growth) and not all(growth))
+        self.assertEqual(growth, sorted(growth))  # every flat trial before any that grows
+        self.assertTrue(all(o["dy"] == 0 for o, grows in zip(options, growth) if not grows))
+
+    def test_elastic_mesh_ranks_by_the_soft_penalty(self):
+        from pnr.place.channels import ChannelModel
+        from pnr.place.elastic import deform
+
+        parts = [
+            Component(
+                ref,
+                "t",
+                (x, 5),
+                0,
+                "top",
+                (1, 1),
+                (1, 1),
+                pads=[Pad("1", net, (0.4, 0), (0.2, 0.2))],
+            )
+            for ref, x, net in [("A", 2, "n1"), ("B", 3.1, "n2"), ("C", 4.2, "n3"), ("D", 8, "n1")]
+        ]
+        nets = [
+            Net(n, i, [(r, "1") for r in refs])
+            for i, (n, refs) in enumerate(
+                [("n1", ["A", "D"]), ("n2", ["B", "D"]), ("n3", ["C", "D"])]
+            )
+        ]
+        graph = BoardGraph("mesh", parts, nets, BoardOutline(12, 10))
+        spec = dict(
+            board=dict(outline=dict(w=12, h=10)),
+            fixed={"A": dict(at=[2, 5])},
+            align=[dict(name="row", refs=["B", "C"], axis="y", hard=False, weight=50)],
+        )
+        cc = compile_constraints(spec, graph.refs)
+        rules = {"fab": {"track_width_mm": 1.2}, "default_clearance_mm": 0.2}
+        out, report, event = deform(graph, cc, rules, {"A": 2}, iters=110, max_move=2)
+        self.assertTrue(report.legal)
+        self.assertAlmostEqual(event["soft_region_align"], regions.soft_total(out, cc))
+        self.assertAlmostEqual(
+            event["channel_after"], ChannelModel(out, rules).report(out)["shortage_score"]
+        )
 
 
 class UnchangedTest(unittest.TestCase):

@@ -196,6 +196,9 @@ def deform(
     limits = hard_group_limits(constraints, {c.ref: c.pos for c in g.components})
     legalizer_failures = []
     candidates = []
+    from .regions import soft_refs, soft_total
+
+    soft = bool(soft_refs(constraints))
     diagnostics = {} if diagnostics is None else diagnostics
     diagnostics["attempts"] = legalizer_failures
     optimizer = torch.optim.Adam([nodes], lr=0.035)
@@ -274,6 +277,9 @@ def deform(
             legalizer_failures.append(dict(step=step + 1, excess_displacement=max(distances)))
             continue
         score = ChannelModel(candidate, rules).report(candidate)["shortage_score"]
+        if soft:
+            # Soft regions and aligns (pnr.place.regions) rank the candidates too.
+            score += soft_total(candidate, constraints)
         moved = {
             c.ref: dict(before=original[indices[c.ref]].tolist(), after=list(c.pos))
             for c in candidate.components
@@ -294,6 +300,10 @@ def deform(
     if not candidates:
         return None
     score, candidate, event = min(candidates, key=lambda a: a[0])
+    if soft:
+        penalty = soft_total(candidate, constraints)
+        score -= penalty
+        event["soft_region_align"] = penalty
     bad = hard_violations(candidate, constraints)
     event.update(
         channel_refreshes=refreshes,

@@ -41,6 +41,9 @@ class PlacementReport:
     group_outside: List[str] = field(default_factory=list)
     rotated: int = 0
     side_misplaced: List[str] = field(default_factory=list)
+    # Hard region / align breaches (pnr.place.regions); always empty without them.
+    region_outside: List[str] = field(default_factory=list)
+    align_off: List[str] = field(default_factory=list)
 
     @property
     def legal(self) -> bool:
@@ -51,6 +54,8 @@ class PlacementReport:
             or self.keepout
             or self.group_outside
             or self.side_misplaced
+            or self.region_outside
+            or self.align_off
         )
 
     @property
@@ -69,7 +74,13 @@ class PlacementReport:
             f"(overlaps={len(self.overlaps)}, "
             f"outside={len(self.outside_outline)}, "
             f"fixed_off={len(self.fixed_misplaced)}, "
-            f"keepout={len(self.keepout)}, group_outside={len(self.group_outside)}, side_off={len(self.side_misplaced)})"
+            f"keepout={len(self.keepout)}, group_outside={len(self.group_outside)}, side_off={len(self.side_misplaced)}"
+            + (
+                f", region_outside={len(self.region_outside)}, align_off={len(self.align_off)}"
+                if self.region_outside or self.align_off
+                else ""
+            )
+            + ")"
         )
 
 
@@ -156,6 +167,12 @@ def place(
         )
     width, height = outline_size(graph, constraints)
     baseline = metrics.hpwl(graph)
+    from .regions import check_feasible, declared
+
+    related = declared(constraints)
+    if related:
+        # Region / align: refuse an impossible one by name before placing.
+        check_feasible(graph, constraints, width, height, orient=orient)
 
     poses = resolve_fixed_poses(graph, constraints)
     keepouts = keepout_rects(graph, constraints, poses)
@@ -163,9 +180,7 @@ def place(
 
     roles = None
     if os.environ.get("PNR_POWER_FIRST") == "1":
-        from .regions import declared
-
-        if declared(constraints):
+        if related:
             raise ValueError("region and align constraints do not support PNR_POWER_FIRST=1")
         # Power-first placement: derive tiers/loops, staged lexicographic global
         # placement, then power-first legalization (pnr.place.power_first).
@@ -262,6 +277,11 @@ def place(
         # relations (pad-edge rule, hard edge_align, region, align) only when declared.
         **legalize_constraint_kwargs(graph, constraints, poses, pad_edge),
     )
+    if related:
+        # Hard aligns onto one exact line where that is legal (pnr.place.regions).
+        from .regions import snap_aligns
+
+        snap_aligns(placed, constraints, clearance, pad_edge, (width, height))
     return _finish(placed, graph, constraints, width, height, baseline, pad_edge)
 
 
@@ -343,6 +363,8 @@ def _finish(placed, graph, constraints, width, height, baseline, pad_edge=None):
         side_misplaced=v["side_misplaced"],
         keepout=v["keepout"],
         group_outside=v["group_outside"],
+        region_outside=v.get("region_outside", []),
+        align_off=v.get("align_off", []),
         rotated=sum(1 for c in placed.components if int(round(c.rot)) % 360 != 0),
     )
     return placed, report

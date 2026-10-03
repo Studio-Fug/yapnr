@@ -276,14 +276,11 @@ def native_worker(a):
                         targets[-1]["leaf_rms_a"] = leaf
         g = build_graph(b)
         physical_locks = sorted(c.ref for c in g.components if c.locked)
+        from pnr.stack import plane_nets_of, resolve
+
+        plane_nets = plane_nets_of(rules, resolve(rules, g.stack))
         for c in g.components:
             # Protect non-plane power/pair pad geometry and explicit source contracts.
-            plane_nets = {
-                n
-                for cl in rules.get("net_classes", [])
-                if cl.get("plane_layer")
-                for n in cl.get("nets", [])
-            }
             if any(p.net in movement_excluded - plane_nets for p in c.pads) or any(
                 i["ref"] == c.ref for i in intents
             ):
@@ -402,16 +399,15 @@ def native_worker(a):
         )
         return
     if a.worker == "move":
+        from pnr.ingest import board_stack
         from pnr.route.detail.keyhole import elbows
+        from pnr.stack import contact_layer_names, plane_nets_of
 
         spec = read(a.spec)
         f = next(f for f in b.GetFootprints() if f.GetReference() == spec["ref"])
-        plane_nets = {
-            n
-            for cl in rules.get("net_classes", [])
-            if cl.get("plane_layer")
-            for n in cl.get("nets", [])
-        }
+        stack = board_stack(b, rules)
+        plane_nets = plane_nets_of(rules, stack)
+        contact_layers = [b.GetLayerID(name) for name in contact_layer_names(stack)]
         if (
             f.IsLocked()
             or any(p.GetNetname() in movement_excluded - plane_nets for p in f.Pads())
@@ -444,11 +440,7 @@ def native_worker(a):
                 key = contact_ids[id(contact)]
                 if key in handled:
                     continue
-                layers = [
-                    la
-                    for la in (k.F_Cu, k.In2_Cu, k.B_Cu)
-                    if p.IsOnLayer(la) and contact.IsOnLayer(la)
-                ]
+                layers = [la for la in contact_layers if p.IsOnLayer(la) and contact.IsOnLayer(la)]
                 if not layers:
                     continue
                 la = layers[0]

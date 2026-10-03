@@ -6,8 +6,11 @@ class ReferenceGuard:
         import pcbnew as k
 
         from pnr.electrical import net_policy
+        from pnr.ingest import board_stack
         from pnr.native_electrical import vec
+        from pnr.stack import reference_layer, reference_nets
 
+        stack = board_stack(board, rules)
         self.rules = rules
         self.rows = []
         self.net_gaps = {}
@@ -17,13 +20,8 @@ class ReferenceGuard:
             pair = pairs[witness["pair"]]
             if not {pair["p"], pair["n"]} <= present:
                 continue
-            layer = pair.get("reference_layer", "In1.Cu")
-            nets = {
-                n
-                for c in rules.get("net_classes", [])
-                if c.get("plane_layer") == layer
-                for n in c["nets"]
-            }
+            layer = reference_layer(stack, pair)
+            nets = reference_nets(stack, rules, layer)
             zones = [
                 z
                 for z in board.Zones()

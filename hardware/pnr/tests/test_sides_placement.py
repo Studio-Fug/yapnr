@@ -136,6 +136,22 @@ class DoublePolicyTest(unittest.TestCase):
         b, _ = place(g, c, seed=4, iters=120)
         self.assertEqual(a.to_json(), b.to_json())
 
+    def test_edge_align_side_puts_the_part_there(self):
+        g = decoupled()
+        edge = dict(edge_align=dict(C1=dict(edge="west", side="bottom")))
+        placed, report = place(g, rules(g, "double", **DECOUPLED_FIXED, **edge), seed=0, iters=120)
+        self.assertTrue(report.legal, report.summary())
+        self.assertEqual(placed.component("C1").side, "bottom")
+        single, _ = place(g, rules(g, "single", **DECOUPLED_FIXED, **edge), seed=0, iters=120)
+        self.assertEqual(single.component("C1").side, "top")
+
+    def test_side_pref_moves_nothing_on_a_single_sided_board(self):
+        g = decoupled()
+        pref = dict(side_pref=dict(bottom=["C1"]))
+        with_pref, _ = place(g, rules(g, "single", **DECOUPLED_FIXED, **pref), seed=2, iters=120)
+        without, _ = place(g, rules(g, "single", **DECOUPLED_FIXED), seed=2, iters=120)
+        self.assertEqual(with_pref.to_json(), without.to_json())
+
 
 class LegalizerTest(unittest.TestCase):
     def test_falls_back_to_the_other_side(self):
@@ -336,6 +352,12 @@ class SearchTest(unittest.TestCase):
         set_component_side(flipped.component("C1"), "bottom" if cap.side == "top" else "top")
         single = rules(g, "single", **DECOUPLED_FIXED)
         self.assertIn("source_geometry_changed", _hard_and_source_errors(flipped, g, single))
+        # The routing rules hold a plane-access part, as the placer does.
+        intents = dict(plane_access_intents=[dict(ref="C1", kind="via_array")])
+        self.assertEqual(_hard_and_source_errors(flipped, g, c), {})
+        self.assertEqual(
+            _hard_and_source_errors(flipped, g, c, intents)["source_geometry_changed"], ["C1"]
+        )
 
     def test_shortlist_keeps_one_other_side_candidate(self):
         from pnr.place.initial_pool import keep_other_side

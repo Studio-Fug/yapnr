@@ -387,7 +387,7 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
 
 def _parse_board(raw: Dict) -> BoardSpec:
     outline = raw.get("outline") or {}
-    return BoardSpec(
+    board = BoardSpec(
         width=outline.get("w"),
         height=outline.get("h"),
         layers=int(raw.get("layers", 2)),
@@ -395,6 +395,9 @@ def _parse_board(raw: Dict) -> BoardSpec:
         references_on_fab=bool(raw.get("references_on_fab", False)),
         sides=_require_enum(raw.get("sides") or "single", SIDE_POLICIES, "board.sides"),
     )
+    if board.sides == "double" and board.layers < 2:
+        raise ConstraintError("board.sides: double needs at least 2 copper layers")
+    return board
 
 
 _OPTIONAL_FAB = (
@@ -823,7 +826,10 @@ def compile_constraints(
             Constraint(kind="side", enforcement=Enforcement.HARD, refs=refs, params={"side": side})
         )
 
-    # side_pref: SOFT — bias a set of parts to a side.
+    # side_pref: SOFT — bias a set of parts to a side. Only a double-sided board
+    # (board.sides: double) lets placement choose sides; elsewhere it has no effect.
+    if doc.get("side_pref") and board.sides != "double":
+        warnings.append("side_pref has no effect unless board.sides is double (ignored)")
     for side, patterns in (doc.get("side_pref") or {}).items():
         _require_enum(side, SIDES, "side_pref key")
         refs = _expand_refs(patterns or [], known_refs, warnings, f"side_pref.{side}")

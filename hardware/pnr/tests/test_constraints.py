@@ -113,7 +113,10 @@ class RealFixtureTest(unittest.TestCase):
 
     def test_fixture_compiles_without_warnings(self):
         cc = load_constraints(self.path, self.refs)
-        self.assertEqual(cc.warnings, [], f"unexpected warnings: {cc.warnings}")
+        # The fixture's side_pref takes effect only on a double-sided board
+        # (board.sides: double); the compiler says so, and that is all it says.
+        notice = "side_pref has no effect unless board.sides is double (ignored)"
+        self.assertEqual(cc.warnings, [notice], f"unexpected warnings: {cc.warnings}")
 
     def test_fixture_intent(self):
         cc = load_constraints(self.path, self.refs)

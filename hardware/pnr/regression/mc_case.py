@@ -169,7 +169,7 @@ unresolved = sorted(set(route.result.unrouted) - set(route.deferred_nets))
             deferred=sorted(route.deferred_nets),
             unresolved=unresolved,
             mc=dict(selected=best["id"], finalists=[c["id"] for c in evaluated]),
-            sides=sides_report(best["graph"], side_plan(graph, constraints)),
+            sides=sides_report(best["graph"], side_plan(graph, constraints, rules)),
             escape_diagnostics=getattr(route, "escape_diagnostics", {}),
             elapsed_seconds=time.monotonic() - started,
             summary=route.summary(),

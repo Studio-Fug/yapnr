@@ -3,19 +3,23 @@
 The board's side policy is an input (``board.sides`` in the constraints):
 
 ``single`` (the default)
-    every part stays on the side it arrives on, except a part a ``side_pref`` names:
-    the designer has said either side is acceptable, so the preference is a bias the
-    placer weighs, not a lock;
+    every part stays on the side it arrives on (or the side a hard ``side`` or
+    ``fixed`` rule names). ``side_pref`` has no effect here: the compiler warns that
+    it needs ``board.sides: double``;
 ``double``
-    placement chooses the side of every part that nothing else holds.
+    placement chooses the side of every part that nothing else holds, and a
+    ``side_pref`` is a bias it weighs, not a lock.
 
-A part is *held* on one side, whatever the policy, by a hard ``side`` rule or a
-``fixed`` pose (its side, or its source side), a source lock, membership of a line
-group or a row, being a block or line macro, a drilled pad (a through-hole body
-occupies both sides and is soldered from the far one), a keep-out or copper keep-out
-tied to its reference, a plane-access intent or a diff-pair landing reserve. Those
-are geometric commitments made in the source side's frame; the placer does not
-re-derive them for a mirrored footprint.
+Under ``double`` a part is *held* on one side by a hard ``side`` rule or a ``fixed``
+pose (its side, or its source side), the ``side`` of an ``edge_align`` (the part is
+put on that side before placement), a source lock, membership of a line group or a
+row, being a block or line macro, a drilled pad (a through-hole body occupies both
+sides and is soldered from the far one), a keep-out or copper keep-out tied to its
+reference, a plane-access intent, a diff-pair landing reserve, or a pad on a
+matched net (a ``diff_pair`` leg or a ``length_match`` member: the coupled pair
+router keeps a pair on one layer, and a part flipped on one leg would add a via's
+length to that leg alone). Those are geometric or electrical commitments made in the
+source side's frame; the placer does not re-derive them for a mirrored footprint.
 
 The *side cost* is the placer's estimate of what a side assignment costs, in
 millimetres of wirelength:
@@ -30,15 +34,16 @@ millimetres of wirelength:
   when that saves more than a token amount (and a mirror image of the whole board is
   not an equal alternative).
 
-While a plan frees any part, two parts that *fan out* (:func:`fans_out`: surface parts
-with at least :data:`STACK_PADS` connected pads, an IC rather than a two-terminal
-passive) may not overlap on opposite sides either (:func:`stack_refs`; the
-``stack`` plane of :func:`pnr.place.legalize.legalize` and of the placement
-checkers). A through via inside such an overlap would land on the far part's pads, so
-every pin under the stack could leave only on its own layer; on the two-layer chaser
+Under ``double``, two parts that *fan out* (:func:`fans_out`: surface parts with at
+least :data:`STACK_PADS` connected pads, an IC rather than a two-terminal passive)
+may not overlap on opposite sides either (:func:`stack_refs`; the ``stack`` plane of
+:func:`pnr.place.legalize.legalize` and of the placement checkers). A through via
+inside such an overlap would land on the far part's pads, so every pin under the
+stack could leave only on its own layer; on the two-layer chaser
 rungs the finalists with two ICs back to back were the ones left with unrouted
 connections. A two-terminal part (a decoupling capacitor) may still sit under an IC.
-Without free parts nothing changes, so a single-sided board is checked as before.
+The rule follows from the policy alone, so every checker agrees on it whatever
+routing rules it was given; a single-sided board is checked as before.
 
 Every function here is pure and stdlib-only; :func:`plan` reads the board graph and
 the compiled constraints only.
@@ -92,9 +97,9 @@ class SidePlan:
     """The side policy resolved against one board.
 
     ``options`` maps every part to the sides it may take, its source side first;
-    ``held`` names why a part has one option (only for parts the policy would
-    otherwise free, or that ``side_pref`` names); ``preferred`` is the ``side_pref``
-    bias ``{ref: (side, weight)}``; ``plane_nets`` the nets poured as planes, which
+    ``held`` names why a part has one option (under ``double``, where every other
+    part is free); ``preferred`` is the ``side_pref`` bias ``{ref: (side, weight)}``
+    (under ``double`` only); ``plane_nets`` the nets poured as planes, which
     cost no layer change; ``drilled_nets`` the nets with a drilled pin."""
 
     policy: str
@@ -138,11 +143,31 @@ def _plane_nets(graph, constraints) -> frozenset:
     )
 
 
+def policy_of(constraints) -> str:
+    return getattr(getattr(constraints, "board", None), "sides", "single") or "single"
+
+
+def matched_nets(graph, constraints) -> frozenset:
+    """The board's nets in a ``diff_pair`` or a ``length_match`` group (names or
+    globs, as :func:`pnr.constraints.compile_routing_rules` expands them)."""
+    patterns = [n for dp in constraints.diff_pairs for n in (dp.p, dp.n) if n]
+    patterns += [n for lm in constraints.length_matches for n in lm.nets if n]
+    if not patterns:
+        return frozenset()
+    return frozenset(
+        net.name
+        for net in graph.nets
+        if net.name and any(fnmatch.fnmatchcase(net.name, p) for p in patterns)
+    )
+
+
 def plan(graph, constraints, rules: Optional[dict] = None) -> SidePlan:
     """Resolve the board's side policy (``constraints.board.sides``) against ``graph``.
 
-    ``rules`` (the routing rules, optional) adds the plane-access intent holds."""
-    policy = getattr(constraints.board, "sides", "single") or "single"
+    ``rules`` (the routing rules) adds the plane-access intent holds; pass them
+    wherever they are known, so every caller agrees on which parts are free."""
+    policy = policy_of(constraints)
+    double = policy == "double"
     hard = resolve_hard_sides(constraints)
     fixed = set(constraints.locked_refs)
     lined = {
@@ -154,14 +179,15 @@ def plan(graph, constraints, rules: Optional[dict] = None) -> SidePlan:
     edge_side = {
         ref: con.params["side"]
         for con in constraints.constraints
-        if con.kind == "edge_align" and con.params.get("side")
+        if double and con.kind == "edge_align" and con.params.get("side")
         for ref in con.refs
     }
     preferred = {}
     for con in constraints.constraints:
-        if con.kind == "side_pref":
+        if double and con.kind == "side_pref":
             for ref in con.refs:
                 preferred[ref] = (con.params["side"], float(con.weight or 1.0))
+    matched = matched_nets(graph, constraints)
     source, options, held = {}, {}, {}
     for comp in graph.components:
         ref = comp.ref
@@ -187,13 +213,13 @@ def plan(graph, constraints, rules: Optional[dict] = None) -> SidePlan:
             reason = "landing_reserve"
         elif ref in edge_side:
             reason = "edge_side"
-        wanted = policy == "double" or ref in preferred
-        if reason is None and wanted:
+        elif any(p.net in matched for p in comp.pads):
+            reason = "matched_net"
+        if reason is None and double:
             options[ref] = (comp.side, opposite(comp.side))
             continue
-        side = hard.get(ref) or edge_side.get(ref) if reason in ("hard_side", "edge_side") else None
-        options[ref] = (side or comp.side,)
-        if wanted and reason is not None:
+        options[ref] = (hard.get(ref) or edge_side.get(ref) or comp.side,)
+        if double:
             held[ref] = reason
     drilled_nets = frozenset(
         p.net for c in graph.components if drilled(c) for p in c.pads if p.through_hole and p.net
@@ -210,16 +236,25 @@ def plan(graph, constraints, rules: Optional[dict] = None) -> SidePlan:
 
 
 def stack_refs(graph, constraints) -> frozenset:
-    """The parts the no-stacking rule covers on this board: every part that
-    :func:`fans_out` when the side plan frees any part, else none (without a
-    ``double`` policy or a ``side_pref`` nothing is free, and the plan is not built)."""
-    if getattr(getattr(constraints, "board", None), "sides", "single") != "double" and not any(
-        con.kind == "side_pref" for con in getattr(constraints, "constraints", ())
-    ):
-        return frozenset()
-    if not plan(graph, constraints).active:
+    """The parts the no-stacking rule covers on this board: under ``double`` every
+    part that :func:`fans_out`, else none. It depends on the policy and the footprints
+    only, so the placer, the legalizer and every checker agree on it."""
+    if policy_of(constraints) != "double":
         return frozenset()
     return frozenset(c.ref for c in graph.components if fans_out(c))
+
+
+def apply_held(graph, side_plan: SidePlan) -> List[str]:
+    """Put every held part on its one allowed side (a hard ``side`` rule is applied
+    already; this places an ``edge_align`` side under ``double``); returns the refs
+    that changed."""
+    changed = []
+    for comp in graph.components:
+        options = side_plan.options.get(comp.ref, ())
+        if len(options) == 1 and comp.side != options[0]:
+            set_component_side(comp, options[0])
+            changed.append(comp.ref)
+    return changed
 
 
 def with_policy(doc: Optional[dict], sides: Optional[str]) -> dict:
@@ -307,24 +342,28 @@ def same_footprint(comp, original) -> bool:
 
 
 def report(graph, side_plan: SidePlan) -> dict:
-    """The ``sides`` block of a placement report."""
+    """The ``sides`` block of a placement report: ``flipped`` names the free parts
+    placement put off their source side, ``assigned`` the held parts a rule (a hard
+    ``side``, a ``fixed`` side, an ``edge_align`` side) put there."""
     sides = sides_of(graph)
     split = split_nets(graph, side_plan, sides)
     reasons: Dict[str, int] = {}
     for reason in side_plan.held.values():
         reasons[reason] = reasons.get(reason, 0) + 1
+    moved = sorted(r for r, s in sides.items() if s != side_plan.source.get(r, s))
     return dict(
         policy=side_plan.policy,
         free=len(side_plan.free),
         held=dict(sorted(reasons.items())),
         bottom=sorted(r for r, s in sides.items() if s == SIDE_BOTTOM),
-        flipped=sorted(r for r, s in sides.items() if s != side_plan.source.get(r, s)),
+        flipped=[r for r in moved if len(side_plan.options.get(r, ())) > 1],
+        assigned=[r for r in moved if len(side_plan.options.get(r, ())) <= 1],
         split_nets=split,
         side_cost_mm=round(side_cost(graph, side_plan, sides), 3),
     )
 
 
-def under_body_sides(graph, side_plan: SidePlan, rng=None) -> Dict[str, Tuple[str, str]]:
+def under_body_sides(graph, side_plan: SidePlan) -> Dict[str, Tuple[str, str]]:
     """``{ref: (side, host)}``: every free two-pin part under the largest part (by pad
     count, at least six pads) it shares a net with, on the side opposite that host's
     source side. A start proposal, never a rule."""

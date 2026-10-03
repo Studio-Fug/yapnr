@@ -42,6 +42,9 @@ class PolicyTest(unittest.TestCase):
         )
         with self.assertRaises(ConstraintError):
             compiled(g, {"board": {"sides": "both"}})
+        with self.assertRaises(ConstraintError):
+            compiled(g, {"board": {"layers": 1, "sides": "double"}})
+        self.assertEqual(compiled(g, {"board": {"layers": 1}}).board.sides, "single")
 
     def test_with_policy_maps_only_double_and_never_mutates(self):
         doc = {"board": {"outline": {"w": 9, "h": 9}}, "fixed": {}}
@@ -113,13 +116,66 @@ class OptionsTest(unittest.TestCase):
         self.assertEqual(plan.held["C1"], "locked")
         self.assertEqual(plan.held["C2"], "landing_reserve")
 
-    def test_side_pref_frees_a_part_under_single(self):
-        plan = sides.plan(self.graph, compiled(self.graph, {"side_pref": {"bottom": ["C*", "J1"]}}))
-        self.assertEqual(plan.free, ("C1", "C2", "C3"))
+    def test_side_pref_is_ignored_and_warned_under_single(self):
+        c = compiled(self.graph, {"side_pref": {"bottom": ["C*", "J1"]}})
+        self.assertTrue(any("side_pref" in w and "double" in w for w in c.warnings), c.warnings)
+        plan = sides.plan(self.graph, c)
+        self.assertFalse(plan.active)
+        self.assertEqual(plan.preferred, {})
+        self.assertEqual(plan.held, {})
+        self.assertEqual(sides.stack_refs(self.graph, c), frozenset())
+
+    def test_side_pref_is_a_bias_under_double(self):
+        doc = {"board": {"sides": "double"}, "side_pref": {"bottom": ["C*", "J1"]}}
+        c = compiled(self.graph, doc)
+        self.assertFalse(any("side_pref" in w for w in c.warnings), c.warnings)
+        plan = sides.plan(self.graph, c)
+        self.assertEqual(plan.free, ("C1", "C2", "C3", "R1", "R2", "R3", "U1"))
         self.assertEqual(plan.preferred["C1"], ("bottom", 1.0))
         self.assertEqual(plan.held, {"J1": "drilled"})
         self.assertEqual(sides.preference_cost(plan, {"C1": "top"}), sides.SIDE_PREF_MM)
         self.assertEqual(sides.preference_cost(plan, {"C1": "bottom"}), 0.0)
+
+    def test_matched_net_parts_are_held(self):
+        doc = {
+            "board": {"sides": "double"},
+            "diff_pair": [{"name": "usb", "p": "A", "n": "B"}],
+            "length_match": [{"name": "bus", "nets": ["E*", "Z"]}],
+        }
+        plan = sides.plan(self.graph, compiled(self.graph, doc))
+        # A/B (pair) and E (glob) reach U1, C1, C3, R1 and R3; C2 and R2 stay free.
+        self.assertEqual(plan.free, ("C2", "R2"))
+        for ref in ("U1", "C1", "C3", "R1", "R3"):
+            self.assertEqual(plan.held[ref], "matched_net", ref)
+        self.assertEqual(plan.held["J1"], "drilled")
+
+    def test_edge_align_side_holds_and_is_applied_under_double_only(self):
+        doc = {"edge_align": {"C1": {"edge": "west", "side": "bottom"}}}
+        single = sides.plan(self.graph, compiled(self.graph, doc))
+        self.assertEqual(single.options["C1"], ("top",))
+        self.assertEqual(sides.apply_held(self.graph, single), [])
+        doc["board"] = {"sides": "double"}
+        plan = sides.plan(self.graph, compiled(self.graph, doc))
+        self.assertEqual(plan.options["C1"], ("bottom",))
+        self.assertEqual(plan.held["C1"], "edge_side")
+        self.assertEqual(sides.apply_held(self.graph, plan), ["C1"])
+        self.assertEqual(self.graph.component("C1").side, "bottom")
+        self.assertEqual(self.graph.component("C1").pads[0].offset, (-0.5, -0.25))
+        sides.check_held(self.graph, plan)
+
+    def test_stacking_rule_follows_the_policy_alone(self):
+        # Under double the rule covers every part that fans out, even when routing
+        # rules hold the only free part (every checker sees the same rule).
+        doc = {"board": {"sides": "double"}, "fixed": {"U1": {"at": [10, 10]}}}
+        c = compiled(self.graph, doc)
+        held_all = {
+            "plane_access_intents": [
+                {"ref": r, "kind": "x"} for r in ("C1", "C2", "C3", "R1", "R2", "R3")
+            ]
+        }
+        self.assertFalse(sides.plan(self.graph, c, held_all).active)
+        self.assertEqual(sides.stack_refs(self.graph, c), frozenset({"U1"}))
+        self.assertEqual(sides.stack_refs(self.graph, compiled(self.graph, {})), frozenset())
 
 
 class CostTest(unittest.TestCase):
@@ -169,15 +225,24 @@ class CostTest(unittest.TestCase):
         b.pads[0].offset = (9.0, 9.0)
         self.assertFalse(sides.same_footprint(b, a))
 
-    def test_report_names_bottom_and_flipped_parts(self):
-        g = board(part("U1", ["A", "B", "C", "D", "E", "F"]), part("C1", ["A", "B"]))
-        plan = sides.plan(g, compiled(g, {"board": {"sides": "double"}}))
+    def test_report_names_bottom_flipped_and_assigned_parts(self):
+        g = board(
+            part("U1", ["A", "B", "C", "D", "E", "F"]),
+            part("C1", ["A", "B"]),
+            part("C2", ["C", "D"]),
+        )
+        doc = {"board": {"sides": "double"}, "side": {"bottom": ["C2"]}}
+        plan = sides.plan(g, compiled(g, doc))  # from the source: C2 still on top
         sides.assign(g, {"C1": "bottom"}, plan)
+        from pnr.place.geometry import set_component_side
+
+        set_component_side(g.component("C2"), "bottom")  # as the placer applies the rule
         out = sides.report(g, plan)
         self.assertEqual(out["policy"], "double")
-        self.assertEqual(out["bottom"], ["C1"])
+        self.assertEqual(out["bottom"], ["C1", "C2"])
         self.assertEqual(out["flipped"], ["C1"])
-        self.assertEqual(out["split_nets"], ["A", "B"])
+        self.assertEqual(out["assigned"], ["C2"])
+        self.assertEqual(out["split_nets"], ["A", "B", "C", "D"])
 
     def test_under_body_sides_puts_two_pin_parts_under_their_ic(self):
         g = board(

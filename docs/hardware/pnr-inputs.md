@@ -94,7 +94,7 @@ The approximate board you're targeting.
 | `outline: {w, h}`      | Placement region (mm). Parts are kept inside it; it becomes the `Edge.Cuts` rectangle. Omit to use the board's own outline.       |
 | `layers`               | Copper layer count (2/4). Inner layers are treated as power/ground planes, so routing capacity scales with the **signal** layers. |
 | `default_clearance_mm` | Minimum courtyard-to-courtyard gap enforced in legalization, and the track pitch the lookahead router assumes.                    |
-| `sides`                | Side policy: `single` (default; every part stays on its source side) or `double` (placement chooses the side of every part nothing holds; see `side_pref`). |
+| `sides`                | Side policy: `single` (default; every part stays on its source side, and `side_pref` is ignored) or `double` (placement chooses the side of every part nothing holds; needs 2 or more layers; see `side_pref`). |
 
 The outline is _approximate guidance_: the placer frames the parts within it. Make
 it a bit larger than the parts need — an over-tight outline forces congestion and
@@ -134,7 +134,7 @@ does not is illegal. Parts on the same edge slide along it and may change order.
 | Key            | Meaning                                                                              |
 | -------------- | ------------------------------------------------------------------------------------ |
 | `edge`         | Target edge (required).                                                              |
-| `side`         | Preferred side (`top`/`bottom`).                                                     |
+| `side`         | `top`/`bottom`: with `board.sides: double` the part is placed and held on that side; a single-sided board keeps its source side. |
 | `weight`       | Penalty weight (default 5.0); higher pulls harder.                                   |
 | `hard`         | `true` keeps the part at the edge through legalization (default `false`).            |
 | `tolerance_mm` | With `hard`: largest courtyard-to-edge distance (default 1.0, at least 0.5).        |
@@ -171,19 +171,25 @@ side_pref:
   top: [U*, J*] # ICs and connectors prefer the front
 ```
 
-A `side_pref` frees the parts it names to either side, under either
-`board.sides` policy: the preference is a cost (`weight` x 5 mm of wirelength for
-a part on the other side), not a lock. With `board.sides: double` every part
-nothing holds is free. A part stays on its source side when a hard `side` rule, a
-`fixed` pose, a source lock, a line group or row, a drilled pad, a keep-out or
-copper keep-out tied to it, a plane-access intent or a landing reserve holds it.
+A `side_pref` takes effect only on a double-sided board (`board.sides:
+double`), where placement chooses sides: there the preference is a cost (`weight`
+x 5 mm of wirelength for a part on the other side), not a lock. On a single-sided
+board (the default) every part stays on its source side and the compiler warns
+that the `side_pref` is ignored.
+
+With `board.sides: double` every part nothing holds is free. A part stays on its
+source side when a hard `side` rule, a `fixed` pose, a source lock, a line group
+or row, a drilled pad, a keep-out or copper keep-out tied to it, a plane-access
+intent, a landing reserve or a pad on a `diff_pair` or `length_match` net holds it
+(the pair router keeps a pair on one layer, and a part flipped on one leg would
+lengthen that leg alone). An `edge_align` with a `side` puts the part on that side.
 
 For free parts, global placement relaxes the side with the position and
 rotation, the legalizer may take a slot on the other side, and a seeded detail
 pass tries flips and pairwise swaps. Every side choice is costed in wirelength
 millimetres: 3 mm for each non-plane net whose surface pins end up on both
 sides without a drilled pin (a layer change), the `side_pref` cost, and 0.5 mm
-for each part off its source side. While any part is free, two parts with three
+for each part off its source side. On a double-sided board two parts with three
 or more connected pads (ICs, not two-terminal passives) may not overlap on
 opposite sides: a through via under such a stack would land on the far part's
 pads, so neither could fan out there. A capacitor under an IC is allowed.

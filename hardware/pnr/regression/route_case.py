@@ -38,7 +38,7 @@ g, report = route_and_place(
     spread=1.3,
 )
 (root / "placed.json").write_text(g.to_json())
-plan = side_plan(BoardGraph.from_json((root / "source-graph.json").read_text()), c)
+plan = side_plan(BoardGraph.from_json((root / "source-graph.json").read_text()), c, rules)
 r = report.detail_result
 if r is None:
     raise RuntimeError("No detailed route produced")

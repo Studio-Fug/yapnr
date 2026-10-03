@@ -42,9 +42,9 @@ from .geometry import (
 from .legalize import LegalizationError
 from .metrics import hard_violations, hpwl
 from .placer import PlacementReport, place
-from .sides import opposite
+from .sides import apply_held, opposite
 from .sides import plan as side_plan
-from .sides import same_footprint, stack_refs, under_body_sides
+from .sides import policy_of, same_footprint, stack_refs, under_body_sides
 
 
 @dataclass(frozen=True)
@@ -126,6 +126,9 @@ def _prepared_source(graph, constraints, rules=None):
         from .pair_landing import attach
 
         attach(source, rules)
+    if policy_of(constraints) == "double":
+        # A held part's one side (an edge_align side), as place() applies it.
+        apply_held(source, side_plan(source, constraints, rules))
     width, height = outline_size(source, constraints)
     source.outline = BoardOutline(width, height)
     return source
@@ -204,13 +207,15 @@ def _opposite_body_basins(graph, constraints):
     return basins
 
 
-def initial_starts(graph, constraints, config, seed=0, orient=True):
+def initial_starts(graph, constraints, config, seed=0, orient=True, rules=None):
     """Return explicit independent global starts; no perturbation of a last route.
 
     Baseline preserves the previous global initialization exactly. Subsequent
     arrangements cover board-wide strata or independent Latin-hypercube axes;
     sampled cardinal rotations alter pin-facing topology as well as centres.
     Hard-fixed centres/rotations are left for the existing constraint resolver.
+    ``rules`` (the routing rules) lets the side plan hold plane-access parts, as the
+    placer does.
     """
     width, height = outline_size(graph, constraints)
     fixed_poses = resolve_fixed_poses(graph, constraints)
@@ -218,7 +223,7 @@ def initial_starts(graph, constraints, config, seed=0, orient=True):
     movable = sorted((c for c in graph.components if c.ref not in fixed), key=lambda c: c.ref)
     # Side-free parts (pnr.place.sides): explicit starts also draw sides, from their
     # own generator so positions and rotations are those of a single-sided start.
-    plan = side_plan(graph, constraints)
+    plan = side_plan(graph, constraints, rules)
     free = [r for r in plan.free if r not in fixed]
     result = [dict(id="start-00", kind="legacy-global", seed=seed, positions=None, rotations=None)]
     result.append(
@@ -422,7 +427,7 @@ def keep_other_side(pool, required, key, plan):
     return required + [users[0]["id"]] if users else required
 
 
-def _hard_and_source_errors(candidate, source, constraints):
+def _hard_and_source_errors(candidate, source, constraints, rules=None):
     errors = {k: v for k, v in hard_violations(candidate, constraints).items() if v}
     before = {c.ref: c for c in source.components}
     changed = []
@@ -438,7 +443,7 @@ def _hard_and_source_errors(candidate, source, constraints):
         if comp.side != original.side:
             # Only a part the side policy frees may change side, as the same
             # footprint mirrored (pnr.place.sides).
-            plan = plan or side_plan(source, constraints)
+            plan = plan or side_plan(source, constraints, rules)
             if not plan.allows(comp.ref, comp.side) or not same_footprint(comp, original):
                 changed.append(comp.ref)
         elif [asdict(p) for p in comp.pads] != [
@@ -527,7 +532,7 @@ def select_initial_placement(
     )
     legal = []
     seen = {}
-    for start in initial_starts(source, constraints, config, seed, orient):
+    for start in initial_starts(source, constraints, config, seed, orient, rules=rules):
         record = dict(start, status="started")
         report["candidates"].append(record)
         folder = root / start["id"] if root else None
@@ -537,7 +542,7 @@ def select_initial_placement(
         with initial_start_context(start), _trace.scope(start["id"], "start", kind=start["kind"]):
             t = time.monotonic()
             try:
-                source_errors = _hard_and_source_errors(source, source, constraints)
+                source_errors = _hard_and_source_errors(source, source, constraints, rules)
                 if start["kind"] == "source-start" and not source_errors:
                     # Retain an existing legal incumbent exactly, including its chosen
                     # rotations. The optimizer would otherwise erase this baseline.
@@ -633,7 +638,7 @@ def select_initial_placement(
                             hpwl(placed),
                             **hard_violations(placed, constraints),
                         )
-                errors = _hard_and_source_errors(placed, source, constraints)
+                errors = _hard_and_source_errors(placed, source, constraints, rules)
                 if errors or not prep.legal:
                     record.update(status="rejected_hard_constraints", errors=errors)
                     continue

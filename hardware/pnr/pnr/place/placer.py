@@ -112,13 +112,15 @@ def place(
     torch build); another platform gives a different placement of the same
     quality on average (pnr.place.model).
 
-    Sides (:mod:`pnr.place.sides`): when the board's side policy frees a part, global
-    placement relaxes its side too (starting toward ``initial_sides``, {ref: side}),
-    the legalizer may take the slot on its other side, and a detail pass
-    (:mod:`pnr.place.detail_moves`) tries flips and pairwise swaps; a held part never
-    changes side (checked), and two parts that fan out never stack back to back
-    (:func:`pnr.place.sides.stack_refs`). With nothing free the flow is the single-sided one, as it
-    is under power-first placement (``PNR_POWER_FIRST=1``), which keeps every side.
+    Sides (:mod:`pnr.place.sides`): on a double-sided board (``board.sides: double``)
+    a held part is put on its one side first (an ``edge_align`` side), global
+    placement relaxes the side of every free part too (starting toward
+    ``initial_sides``, {ref: side}), the legalizer may take the slot on its other side,
+    and a detail pass (:mod:`pnr.place.detail_moves`) tries flips and pairwise swaps; a
+    held part never changes side (checked), and two parts that fan out never stack back
+    to back (:func:`pnr.place.sides.stack_refs`). With nothing free the flow is the
+    single-sided one, as it is under power-first placement (``PNR_POWER_FIRST=1``),
+    which keeps every side.
     """
     if any(c.kind == "line_group" for c in constraints.constraints):
         # Line groups (pnr.place.line_group): each group is one rigid macro here.
@@ -174,11 +176,14 @@ def place(
     poses = resolve_fixed_poses(graph, constraints)
     keepouts = keepout_rects(graph, constraints, poses)
     clearance = float(constraints.board.default_clearance_mm)
+    from .sides import apply_held
     from .sides import plan as side_plan_of
     from .sides import stack_refs
 
     side_plan = side_plan_of(graph, constraints, channel_rules)
-    # Parts that fan out may not stack back to back while any part is side-free.
+    # A held part's one side (an edge_align side under board.sides: double).
+    apply_held(graph, side_plan)
+    # On a double-sided board parts that fan out may not stack back to back.
     stack = stack_refs(graph, constraints)
 
     roles = None

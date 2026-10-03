@@ -183,7 +183,7 @@ def global_place(
     )
     for ref, side in (initial_sides or {}).items():
         if ref not in idx or side not in ("top", "bottom"):
-            raise ValueError("invalid initial side")
+            raise ValueError("invalid initial side %r for %s" % (side, ref))
     # A start may only propose a side the plan allows; any other start side is moot.
     is_fixed = torch.zeros(n, dtype=torch.bool)
     fixed_xy = torch.zeros(n, 2, dtype=torch.float32)

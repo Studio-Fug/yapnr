@@ -164,7 +164,7 @@ def propose_batches(
     fixed = resolve_fixed_poses(graph, constraints)
     unsupported = {
         v["ref"] for v in rules.get("plane_access_intents", []) if v["kind"] == "power_array"
-    } | {v["ref"] for v in rules.get("copper_keepouts", [])}
+    } | {v["ref"] for v in rules.get("copper_keepouts", []) if v.get("ref")}
     eligible = [
         c.ref
         for c in graph.components

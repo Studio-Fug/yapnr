@@ -101,6 +101,7 @@ The approximate board you're targeting.
 | `layers`               | Copper layer count (2 to 32). Without a declared stack (below), inner layers are treated as power/ground planes, so routing capacity scales with the **signal** layers. |
 | `default_clearance_mm` | Minimum courtyard-to-courtyard gap enforced in legalization, and the track pitch the lookahead router assumes.                    |
 | `sides`                | Side policy: `single` (default; every part stays on its source side, and `side_pref` is ignored) or `double` (placement chooses the side of every part nothing holds; needs 2 or more layers; see `side_pref`). |
+| `plane_fallback_drops` | `true` (default): writeback drops a via from every plane pad the router left without a through contact (dog-bone fallback). `false`: writeback adds no copper nobody routed; the unreached plane pads are listed on stderr (`writeback: unreached plane pads`). Use `false` for a placement-only writeback and for boards whose plane access another stage owns (a BGA fanout). |
 
 The outline is _approximate guidance_: the placer frames the parts within it. Make
 it a bit larger than the parts need — an over-tight outline forces congestion and
@@ -269,6 +270,103 @@ clearance, a mounting-hole boss, a shield footprint. Two forms:
   (taken as its bounding box in v0).
 
 Give each keep-out a `name` so warnings and reports are legible.
+
+### `copper_keepout` — no foreign copper in an area (hard, routing)
+
+Copper keep-outs restrict tracks, vias and pours (placement ignores them; use
+`keepout` for parts). The router keeps its copper out, and writeback writes a KiCad
+rule area named `PNR keepout:<name>` so KiCad's DRC enforces the same area.
+
+```yaml
+copper_keepout:
+  - { ref: U5, rect_mm: [-3, 8, 3, 12] } # v0: every copper layer, every net
+  - name: rf_region # v1
+    polygon: [[15, 33], [30, 33], [30, 46], [15, 46]] # or rect: [x0, y0, x1, y1]
+    layers: [F.Cu, In1.Cu, In2.Cu] # default: every copper layer
+    items: [tracks, vias] # default: tracks, vias, pours
+    exempt_groups: [RFM1_MACRO] # a fixed_block's group never violates it
+  - name: rf_guard
+    rect: [10, 28, 21, 46]
+    layers: [F.Cu, In1.Cu, In2.Cu]
+    allow_classes: [RF, PWR, GND, ANALOG] # declared net_class names (or dp_<pair>)
+    allow_nets: ["VREF*"] # literal names or globs
+```
+
+- **v0** (`ref` + `rect_mm`, nothing else): a rectangle in the part's own frame that
+  follows the part (mirrored with its pads on the bottom side), on every copper
+  layer; the rule area forbids tracks, vias and fills. Unchanged.
+- **v1** (any of the keys below): the area is `polygon` or `rect` in board
+  coordinates, or `ref` + `rect_mm` in the part's frame; it needs a unique `name`.
+  - `layers` lists copper layers of the board. Tracks are barred on the listed layers
+    the router uses; vias wherever any listed layer bars them, as in KiCad (a through
+    via crosses every layer), so an inner plane layer in the list keeps vias out. A
+    cell is barred when its centre comes within half the widest track (the via
+    radius) plus half a cell diagonal of the polygon.
+  - `items` chooses what is barred: `tracks`, `vias`, `pours` (fills; writeback only).
+  - `allow_classes` / `allow_nets` exempt nets: the router bars only the other nets
+    (per-net masks the maze, its dense kernels and the escape planner all read).
+  - `exempt_groups` names `fixed_block` groups whose copper may sit in the area.
+
+A v1 keep-out without allow lists or exempt groups is a rule area with KiCad's own
+flags on its layers. With them, the rule area forbids nothing itself and writeback
+adds one custom rule per layer to the board's `.kicad_dru`, in a block between
+`# >>> yapnr copper_keepout` and `# <<< yapnr copper_keepout`:
+
+```text
+(rule "yapnr keepout rf_guard F.Cu"
+  (layer "F.Cu")
+  (condition "A.intersectsArea('PNR keepout:rf_guard') && !A.hasNetclass('RF') && ... && A.NetName != 'VREF1' && !A.memberOfGroup('RFM1_MACRO')")
+  (constraint disallow track via))
+```
+
+Only that block is replaced on a later writeback; the fab profile's generated rules
+and a hand-written file's own rules stay (the profile regenerates its rules around
+the block). Pours become `disallow zone`. A keep-out on a layer the router does not
+route (a dedicated plane) affects vias and pours only.
+
+### `fixed_block` — copper kept exactly as drawn (hard, routing)
+
+A fixed block is copper the engine must not change: an RF macro, an antenna feed, a
+matched meander. Draw it on the source board and put it in a KiCad group; the group
+may hold tracks, **arcs**, vias, zones, rule areas and footprints.
+
+```yaml
+fixed_block:
+  - name: rfm1
+    group: RFM1_MACRO # the KiCad group on the source board
+    anchor: U1 # optional; a part with a fixed pose: the frame of the digest
+    sha256: 8301dcd5... # optional: the copper digest, checked at export and validate
+    solid_layers: [In2.Cu] # its copper zones on these layers are obstacles
+    refs: [RFM1] # its footprints (also read from the group at export)
+```
+
+- **Placement.** The block's footprints are held out of the placement graph
+  (`pnr.fixed_block.hold_out`), as mounting holes are; declare a `keepout` over the
+  block so parts stay off it. Its nets keep their other pins; KiCad sees them joined
+  through the block's copper.
+- **Routing.** The copper is exported to `fixed.json` (schema 2: `arcs` and
+  `blocks`, see `pnr.fixed_block`) and reserved as copper its own nets own: other
+  nets keep their clearance from every track, arc (chords within 1 um), via, pad and
+  solid zone, its own nets may join it. A solid zone on a layer the router does not
+  route keeps foreign vias out. A net with pads in the circuit joins the block at a
+  **port**: for each connected piece of the net's block copper that no pad already
+  reaches, the free end of its tracks and arcs nearest the net's pads. Rule areas in
+  the group bar what their flags say. The regression runner carries the copper in
+  `rules.json` (`fixed_copper`), so every route of the placement loop sees it.
+- **Writeback** keeps the group's tracks, arcs and vias (they are not preview
+  routing); zones and footprints stay where the source has them.
+- **Checks.** `pnr.fixed_copper --validate` requires the same digest (and the
+  declared one), the same lock state of every block item and the same block zones,
+  besides `fixed_copper_preserved` (which now covers arcs).
+- **Digest.** `python -m pnr.fixed_copper BOARD --digest GROUP [--anchor REF]
+  [--rename MAP.json]` prints it: every track, arc and via of the group, to the
+  nanometre, in the anchor's frame (position and orientation), with layers, widths,
+  via sizes and nets.
+
+v0 limits: the series topology of a block with two ports on one net is not imposed
+(the router joins the net's pads and the port nearest them, so the second end may be
+left as a stub); placement does not see block ports (only its footprints' absence and
+your `keepout`).
 
 ### `side_pref` — top/bottom bias (soft)
 

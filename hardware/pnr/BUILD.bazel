@@ -61,6 +61,8 @@ filegroup(
         "pnr/drc_warm/session.py",
 
         "pnr/fixed_copper.py",
+        # Fixed blocks and copper keepouts (stdlib only): fixed_copper and writeback.
+        "pnr/fixed_block.py",
         "pnr/paired_bootstrap.py",
         "pnr/placement_trials.py",
         "pnr/placement_copper.py",
@@ -1122,6 +1124,18 @@ py_test(
     size = "small",
     srcs = ["tests/test_fixed_copper.py"],
     main = "tests/test_fixed_copper.py",
+    deps = [":pnr", ":pnr_detail", ":pnr_route", ":pnr_place"],
+)
+
+# Fixed copper blocks (arcs, polygons, ownership, ports) and per-layer / per-class
+# copper keepouts: schema, router, dense fields, custom-rules block.
+py_test(
+    name = "fixed_block_test",
+    size = "small",
+    srcs = ["tests/test_fixed_block.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_fixed_block.py",
     deps = [":pnr", ":pnr_detail", ":pnr_route", ":pnr_place"],
 )
 

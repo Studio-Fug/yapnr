@@ -42,7 +42,7 @@ graph = BoardGraph.from_json((root / "source-graph.json").read_text())
 constraints = compile_constraints(spec["constraints"], graph.refs)
 rules = apply_rules(compile_routing_rules(constraints, [n.name for n in graph.nets]))
 # As route_case.py: the rung's via policy on its board (none: through vias only).
-via_policy = board_policy(spec.get("via_policy"), root / "source.kicad_pcb", rules)
+via_policy = board_policy(spec.get("via_policy"), root / "source.kicad_pcb", rules, graph=graph)
 if via_policy:
     rules["via_policy"] = via_policy
 (root / "rules.json").write_text(json.dumps(rules, indent=2))

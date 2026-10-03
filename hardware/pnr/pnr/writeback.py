@@ -632,7 +632,7 @@ def plane_drop_span(board, rules, stack, net, surface):
 def plane_connections(board, stack) -> dict:
     """``{net: {layer: n}}``: the vias and plated pads joining each dedicated plane
     layer of ``stack`` (a via joins the layers of its span). A plane layer with none
-    is an island the zone filler removes."""
+    floats: KiCad 10 keeps its fill and its DRC reports it (``isolated_copper``)."""
     import pcbnew
 
     out: dict = {}
@@ -1535,8 +1535,8 @@ def writeback(
                     if not joined:
                         sys.stderr.write(
                             "writeback: warning: plane %s %s has no via or plated pad: "
-                            "it floats (KiCad keeps the fill and DRC does not flag it)\n"
-                            % (layer, net)
+                            "it floats (KiCad keeps the fill; its DRC reports isolated "
+                            "copper)\n" % (layer, net)
                         )
     pcbnew.SaveBoard(out_pcb, board)
     # Text pass: strip all (stale) Edge.Cuts — pcbnew reformats gr_lines into

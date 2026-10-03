@@ -487,7 +487,9 @@ py_test(
 )
 
 # The board's via policy (pnr.via_policy): DRU bans for each rung, declared kinds,
-# microvia adjacency and size, span classification on 4/6/8 layers, span cost.
+# microvia adjacency and size, spans buildable on the stack's cores and prepregs
+# (4/6/8 layers), the board's build (a laminar family priced per drill pair), span
+# cost, the return-tie rule.
 py_test(
     name = "via_policy_test",
     size = "small",
@@ -508,7 +510,8 @@ py_test(
 
 # Blind, buried and micro vias in the detailed router: span-only checks and
 # reservations, an all-through model identical to the legacy one, fixed vias of a
-# span, and plane drops that join every plane layer of their net.
+# span, every via a span of the board's build, return ties between two ground
+# planes (deepened drops, through or buried ties), drops from bottom-side parts.
 py_test(
     name = "via_spans_test",
     size = "medium",

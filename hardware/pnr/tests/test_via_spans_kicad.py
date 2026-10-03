@@ -28,7 +28,10 @@ def policy(micro=True):
 
     kinds = ["through", "blind", "buried"] + (["micro"] if micro else [])
     return resolve(
-        dict(allowed=kinds, microvia=dict(diameter_mm=0.3, drill_mm=0.1)), SIX, gaps=GAPS6
+        dict(allowed=kinds, microvia=dict(diameter_mm=0.3, drill_mm=0.1)),
+        SIX,
+        gaps=GAPS6,
+        bonds=["prepreg", "core", "prepreg", "core", "prepreg"],
     )
 
 
@@ -194,12 +197,13 @@ class PlaneLayers(unittest.TestCase):
 
     def test_each_plane_layer_counts_its_own_vias(self):
         """A micro drop joins In1 only: In3 has no connection (KiCad keeps such a
-        fill, so the engine counts and reports it) until a buried stitch joins it."""
+        fill and its DRC reports isolated copper; the engine counts and reports it)
+        until a buried In1-In4 tie joins it."""
         from pnr.writeback import plane_connections
 
         alone = plane_connections(self.board([]), six_stack())
         self.assertEqual(alone, {"GND": {"In1.Cu": 1, "In3.Cu": 0}, "VCC": {"In4.Cu": 0}})
-        stitched = self.board([["GND", 15.0, 10.0, "In1.Cu", "In3.Cu", "buried"]])
+        stitched = self.board([["GND", 15.0, 10.0, "In1.Cu", "In4.Cu", "buried"]])
         counts = plane_connections(stitched, six_stack())
         self.assertEqual(counts["GND"], {"In1.Cu": 2, "In3.Cu": 1})
         b = stitched

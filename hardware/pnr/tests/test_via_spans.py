@@ -18,10 +18,21 @@ from pnr.route.detail.grid import Cell, RouteGrid  # noqa: E402
 from pnr.route.detail.maze import _astar, _footprint, route  # noqa: E402
 from pnr.route.detail.router import route_board  # noqa: E402
 from pnr.stack import copper_names  # noqa: E402
-from pnr.via_policy import BLIND, BURIED, MICRO, THROUGH, GridVias, resolve  # noqa: E402
+from pnr.via_policy import (  # noqa: E402
+    BLIND,
+    BURIED,
+    MICRO,
+    THROUGH,
+    GridVias,
+    ViaModel,
+    board_needs,
+    compatible,
+    resolve,
+)
 
 SIX = copper_names(6)
 GAPS6 = [0.09, 0.55, 0.2, 0.55, 0.09]
+BONDS6 = ["prepreg", "core", "prepreg", "core", "prepreg"]
 HDI = dict(allowed=[THROUGH, BLIND, BURIED, MICRO], microvia=dict(diameter_mm=0.3, drill_mm=0.1))
 BB = dict(allowed=[THROUGH, BLIND, BURIED])
 GRID_LAYERS = ("F.Cu", "In2.Cu", "B.Cu")  # the routed layers of SGSGPS
@@ -31,7 +42,13 @@ def grid(n=12, policy=BB, keepout=1, pitch=1.0):
     g = RouteGrid(n, n, pitch, layers=GRID_LAYERS, clearance=0.2, via_radius=0.3)
     g.via_spacing = 0.55
     if policy is not None:
-        p = resolve(policy, SIX, gaps=GAPS6, banned=() if MICRO in policy["allowed"] else {MICRO})
+        p = resolve(
+            policy,
+            SIX,
+            gaps=GAPS6,
+            bonds=BONDS6,
+            banned=() if MICRO in policy["allowed"] else {MICRO},
+        )
         g.via_model = GridVias(p, GRID_LAYERS, pitch, 0.2, (0.6, 0.3), keepout)
     return g
 
@@ -159,11 +176,21 @@ class FixedSpans(unittest.TestCase):
 
 
 class BoardSpans(unittest.TestCase):
-    def routed(self, policy, banned=()):
-        g = sample()
+    def routed(self, policy, banned=(), graph=None, build=True):
+        """``policy`` on the SGSGPS sample (or ``graph``), its build chosen from the
+        board as the ladder drivers do (``build`` False: the router chooses it)."""
+        g = graph or sample()
         g.stack = typed("SGSGPS", zones={"In3.Cu": ["GND"]})
         c, rules = compiled(g, 6, planes={"GND": "In1.Cu", "VCC": "In4.Cu"})
-        p = resolve(policy, SIX, gaps=GAPS6, banned=banned)
+        p = resolve(
+            policy,
+            SIX,
+            gaps=GAPS6,
+            bonds=BONDS6,
+            banned=banned,
+            eps_r=4.5,
+            needs=board_needs(g, rules, SIX) if build and policy else None,
+        )
         if p:
             rules["via_policy"] = p
         return g, route_board(g, c, rules, pitch=0.25)
@@ -181,9 +208,7 @@ class BoardSpans(unittest.TestCase):
             self.assertFalse(b.result.unrouted)
             kinds = Counter(s[5] for s in b.via_spans)
             self.assertTrue(kinds, policy)
-            if MICRO in policy["allowed"]:
-                self.assertIn(MICRO, kinds)
-            else:
+            if MICRO not in policy["allowed"]:
                 self.assertNotIn(MICRO, kinds)
             names = list(SIX)
             sites = {}
@@ -195,21 +220,135 @@ class BoardSpans(unittest.TestCase):
                     self.assertEqual(z, t + 1)
                     self.assertTrue(t == 0 or z == 5)
                 sites.setdefault((net, x, y), []).append((t, z))
+            for (net, x, y), spans in sites.items():
                 for tnet, layer, a, e, _w in b.tracks:
                     if tnet == net and any(math.dist(p, (x, y)) < 1e-6 for p in (a, e)):
-                        # A track ending on the via is on one of its layers (or the
-                        # via joins it through a plane, never for a signal).
+                        # A track ending on the via is on one of its layers.
                         self.assertTrue(
-                            any(
-                                names.index(layer) in range(s, w + 1) for s, w in sites[(net, x, y)]
-                            )
-                            or len(sites[(net, x, y)]) < 1,
-                            (net, layer, top, bottom),
+                            any(names.index(layer) in range(s, w + 1) for s, w in spans),
+                            (net, layer, spans),
                         )
             for spans in sites.values():
                 spans.sort()
                 for (a0, a1), (b0, b1) in zip(spans, spans[1:]):
                     self.assertLess(a1, b0)  # disjoint: two holes, no shared layer
+
+    def test_every_via_is_in_the_build(self):
+        """Every via is a span of the board's build (or through), buildable on the
+        stack (no span ends inside a core), and the build's laminated spans nest or
+        are disjoint (review finding: F-In3 blind and In1-In3 buried vias)."""
+        for policy, banned in ((BB, {MICRO}), (HDI, ())):
+            g, b = self.routed(policy, banned)
+            build = b.escape_diagnostics["via_build"]
+            self.assertTrue(build["spans"])
+            family = {(s[0], s[1]): s for s in build["spans"]}
+            model = ViaModel(
+                resolve(policy, SIX, gaps=GAPS6, bonds=BONDS6, banned=banned), (0.6, 0.3)
+            )
+            names = list(SIX)
+            laminated = []
+            for top, bottom, kind, how in build["spans"]:
+                self.assertEqual(model.how(names.index(top), names.index(bottom)), (kind, how))
+                if how == "laminate":
+                    laminated.append((names.index(top), names.index(bottom)))
+            for a in laminated:
+                for c in laminated:
+                    self.assertTrue(compatible(a, c))
+            for net, x, y, top, bottom, kind in b.via_spans:
+                self.assertIn((top, bottom), family, (net, top, bottom))
+                self.assertEqual(family[(top, bottom)][2], kind)
+
+    def test_return_ties(self):
+        """Each signal via between F (referenced to In1) and In2 (In1 and In3) has
+        a GND via joining In1 and In3 within the rule's distance."""
+        for policy, banned in ((BB, {MICRO}), (HDI, ())):
+            g, b = self.routed(policy, banned)
+            ties = b.escape_diagnostics["return_ties"]
+            limit = ties["rule"]["max_mm"]
+            self.assertAlmostEqual(limit, 7.0662, places=3)
+            self.assertEqual(ties["unmet"], [])
+            self.assertEqual(ties["met"], ties["required"])
+            names = list(SIX)
+            spans = {}
+            for s in b.via_spans:
+                spans.setdefault((s[0], s[1], s[2]), []).append(
+                    (names.index(s[3]), names.index(s[4]))
+                )
+            gnd = [
+                (x, y)
+                for net, x, y in b.vias
+                if net == "GND"
+                and any(t <= 1 and z >= 3 for t, z in spans.get((net, x, y), [(0, 5)]))
+            ]
+            changes = 0
+            for net, x, y in b.vias:
+                if net in ("GND", "VCC"):
+                    continue
+                for t, z in spans.get((net, x, y), [(0, 5)]):
+                    if t == 0 and z >= 2:  # F to In2 (or further): In1 -> In3 reference
+                        changes += 1
+                        self.assertTrue(
+                            any(math.dist((x, y), q) <= limit + 1e-6 for q in gnd), (net, x, y)
+                        )
+            self.assertGreater(changes, 0)
+            conn = b.escape_diagnostics["plane_layer_connections"]
+            self.assertGreaterEqual(conn["GND"]["In3.Cu"], 1)
+            self.assertGreaterEqual(conn["VCC"]["In4.Cu"], 1)
+
+    def test_buried_ties(self):
+        """A build with the In1-In4 sub-laminate (a 1+N+1 HDI build) ties In1 to In3
+        with buried vias when no drop near a signal via can be deepened."""
+        g = sample()
+        g.stack = typed("SGSGPS", zones={"In3.Cu": ["GND"]})
+        c, rules = compiled(g, 6, planes={"GND": "In1.Cu", "VCC": "In4.Cu"})
+        p = resolve(HDI, SIX, gaps=GAPS6, bonds=BONDS6, eps_r=4.5)
+        p["build"] = dict(
+            spans=[["F.Cu", "In1.Cu", MICRO, "laser"], ["In1.Cu", "In4.Cu", BURIED, "laminate"]]
+        )
+        p["return_tie"] = dict(p["return_tie"], max_mm=1.5)
+        rules["via_policy"] = p
+        b = route_board(g, c, rules, pitch=0.25)
+        self.assertFalse(b.result.unrouted)
+        ties = b.escape_diagnostics["return_ties"]
+        self.assertGreater(ties["ties_added"], 0, ties)
+        kinds = Counter((s[0], s[3], s[4], s[5]) for s in b.via_spans)
+        self.assertIn(("GND", "In1.Cu", "In4.Cu", BURIED), kinds)
+        self.assertFalse(any(k[1:] == ("F.Cu", "In2.Cu", BLIND) for k in kinds))
+
+    def test_bottom_side_drops(self):
+        """A part on the bottom drops from B.Cu to its net's nearest plane (In3 for
+        GND, In4 for VCC) on a span of the build, or through."""
+        from test_stack_route import board, chip, soic
+
+        graph = board(
+            [
+                soic("U1", (6.0, 8.0), ["GND", "A", "B", "VCC", "C", "D", "E", "VCC"]),
+                soic("U2", (17.0, 8.0), ["A", "B", "GND", "GND", "C", "D", "E", "VCC"]),
+                chip("C1", (6.0, 3.0), "VCC", "GND", side="bottom"),
+                chip("C2", (17.0, 3.0), "VCC", "GND", side="bottom"),
+                chip("C3", (11.5, 13.0), "VCC", "GND", side="bottom"),
+                chip("C4", (11.5, 3.0), "VCC", "GND", side="bottom"),
+            ]
+        )
+        g, b = self.routed(dict(BB, drill_pair_cost=0.5), {MICRO}, graph=graph)
+        self.assertFalse(b.result.unrouted)
+        build = {(s[0], s[1]) for s in b.escape_diagnostics["via_build"]["spans"]}
+        bottom = [s for s in b.via_spans if s[0] in ("GND", "VCC") and s[4] == "B.Cu"]
+        self.assertTrue(bottom)
+        for net, x, y, top, bottom_layer, kind in bottom:
+            self.assertIn((top, bottom_layer), build)
+            self.assertIn(top, ("In3.Cu", "In4.Cu") if net == "GND" else ("In4.Cu",))
+
+    def test_vcc_drops_follow_the_build(self):
+        """VCC drops are through vias: a blind F-In4 via saves 3 % of a through
+        via's price per drop, far below a drill pair. Free drill pairs make them
+        blind F-In4 vias."""
+        g, b = self.routed(BB, {MICRO})
+        self.assertFalse([s for s in b.via_spans if s[0] == "VCC"])
+        g, b = self.routed(dict(BB, drill_pair_cost=0.0), {MICRO})
+        vcc = [s for s in b.via_spans if s[0] == "VCC"]
+        self.assertTrue(vcc)
+        self.assertTrue(all((s[3], s[4], s[5]) == ("F.Cu", "In4.Cu", BLIND) for s in vcc))
 
     def test_vias_keep_their_clearances(self):
         """Holes keep their spacing whatever the spans; two nets' vias that share a
@@ -238,32 +377,10 @@ class BoardSpans(unittest.TestCase):
                     if a[0] != b2[0] and la & lb:
                         self.assertGreaterEqual(d, ra + rb + 0.2 - 1e-6, (a, b2))
 
-    def test_every_gnd_plane_layer_connected(self):
-        """GND has two planes (In1, In3): blind or micro drops reach In1, and some
-        reach In3 (deeper drops or buried stitches), at least two each."""
-        for policy, banned in ((BB, {MICRO}), (HDI, ())):
-            g, b = self.routed(policy, banned)
-            conn = b.escape_diagnostics["plane_layer_connections"]["GND"]
-            self.assertGreaterEqual(conn["In1.Cu"], 2)
-            self.assertGreaterEqual(conn["In3.Cu"], 2)
-            reach = Counter()
-            names = list(SIX)
-            spans = {(s[0], s[1], s[2]): s for s in b.via_spans}
-            for net, x, y in b.vias:
-                if net != "GND":
-                    continue
-                s = spans.get((net, x, y))
-                t, z = (0, 5) if s is None else (names.index(s[3]), names.index(s[4]))
-                for layer in ("In1.Cu", "In3.Cu"):
-                    reach[layer] += t <= names.index(layer) <= z
-            self.assertGreaterEqual(reach["In3.Cu"], 2)
-            self.assertGreaterEqual(reach["In1.Cu"], 2)
-
-    def test_vcc_drops_are_blind_to_in4(self):
-        g, b = self.routed(BB, {MICRO})
-        vcc = [s for s in b.via_spans if s[0] == "VCC"]
-        self.assertTrue(vcc)
-        self.assertTrue(all((s[3], s[4], s[5]) == ("F.Cu", "In4.Cu", BLIND) for s in vcc))
+    def test_router_chooses_a_build_when_the_policy_has_none(self):
+        g, b = self.routed(BB, {MICRO}, build=False)
+        self.assertFalse(b.result.unrouted)
+        self.assertTrue(b.escape_diagnostics["via_build"]["spans"])
 
 
 if __name__ == "__main__":

@@ -21,8 +21,9 @@ c = compile_constraints(spec["constraints"], g.refs)
 # Route under the fab profile writeback stamps and KiCad judges (PNR_FAB_PROFILE; legacy: unchanged).
 rules = apply_rules(compile_routing_rules(c, [n.name for n in g.nets]))
 # The rung's tool-neutral via policy, less what the board's own rules disallow, on
-# its declared stack (pnr.via_policy); none for through vias only, as before.
-via_policy = board_policy(spec.get("via_policy"), root / "source.kicad_pcb", rules)
+# its declared stack, with the build (drill pairs) its parts need (pnr.via_policy);
+# none for through vias only, as before.
+via_policy = board_policy(spec.get("via_policy"), root / "source.kicad_pcb", rules, graph=g)
 if via_policy:
     rules["via_policy"] = via_policy
 (root / "rules.json").write_text(json.dumps(rules, indent=2))

@@ -1,4 +1,5 @@
-"""The board's via policy (pnr.via_policy): DRU bans, declared kinds, spans, cost."""
+"""The board's via policy (pnr.via_policy): DRU bans, declared kinds, buildable
+spans, the build (a laminar family priced per drill pair), cost, return ties."""
 
 import json
 import sys
@@ -15,19 +16,41 @@ from pnr.stack import copper_names, stackup_rows  # noqa: E402
 from pnr.via_policy import (  # noqa: E402
     BLIND,
     BURIED,
+    DEPTH,
+    LAMINATE,
+    LASER,
     MICRO,
     THROUGH,
     GridVias,
     ViaModel,
     board_policy,
+    compatible,
+    copper_bonds,
     copper_gaps,
     dru_via_bans,
     merge_ranges,
+    reference_planes,
     resolve,
+    return_tie_rule,
+    select_build,
+    stack_eps_r,
 )
 
 SIX = copper_names(6)
 GAPS6 = [0.09, 0.55, 0.2, 0.55, 0.09]
+# The rungs' 6-layer build: prepreg / core (In1-In2) / prepreg / core (In3-In4) / prepreg.
+BONDS6 = ["prepreg", "core", "prepreg", "core", "prepreg"]
+BONDS4 = ["prepreg", "core", "prepreg"]
+BONDS8 = ["prepreg", "core", "prepreg", "core", "prepreg", "core", "prepreg"]
+# What the 6-layer chaser rungs need (pnr.via_policy.board_needs on their graph).
+NEEDS6 = [
+    ("F.Cu", "In1.Cu", 13.0, "drop"),
+    ("F.Cu", "In2.Cu", 12.0, "signal"),
+    ("F.Cu", "In4.Cu", 7.0, "drop"),
+    ("F.Cu", "B.Cu", 12.0, "signal"),
+    ("In1.Cu", "In3.Cu", 1.0, "floor"),
+    ("In1.Cu", "In3.Cu", 12.0, "tie"),
+]
 HDI = dict(allowed=[THROUGH, BLIND, BURIED, MICRO], microvia=dict(diameter_mm=0.3, drill_mm=0.1))
 BB = dict(allowed=[THROUGH, BLIND, BURIED])
 
@@ -130,6 +153,9 @@ class Resolve(unittest.TestCase):
             policy = board_policy(spec["via_policy"], pcb, rules)
             self.assertEqual(policy["layers"], SIX)
             self.assertEqual(policy["gaps_mm"], GAPS6)
+            self.assertEqual(policy["bonds"], BONDS6)
+            self.assertNotIn("build", policy)  # no graph: no build
+            self.assertAlmostEqual(policy["return_tie"]["max_mm"], 7.0662, places=3)
             self.assertEqual(policy["allowed"], [THROUGH, BLIND, BURIED])  # the BB rules ban micro
             (Path(tmp) / "source.kicad_dru").write_text(dru_text(spec))
             hdi = board_policy(spec["via_policy"], pcb, rules)
@@ -143,34 +169,67 @@ class Resolve(unittest.TestCase):
         )
         self.assertEqual(copper_gaps(rows, SIX), GAPS6)
         self.assertIsNone(copper_gaps(rows, copper_names(4)))
+        self.assertEqual(copper_bonds(rows, SIX), BONDS6)
+        self.assertIsNone(copper_bonds(rows, copper_names(4)))
+        self.assertEqual(stack_eps_r(rows), 4.5)
+        # A gap of unstated kind is unknown; a prepreg row anywhere in a gap is a bond line.
+        rows = [
+            dict(name="F.Cu", type="copper", thickness_mm=0.035, epsilon_r=None),
+            dict(name="dielectric 1", type="foo", thickness_mm=0.1, epsilon_r=None),
+            dict(name="In1.Cu", type="copper", thickness_mm=0.035, epsilon_r=None),
+            dict(name="dielectric 2", type="core", thickness_mm=0.5, epsilon_r=None),
+            dict(name="dielectric 2a", type="prepreg", thickness_mm=0.1, epsilon_r=None),
+            dict(name="B.Cu", type="copper", thickness_mm=0.035, epsilon_r=None),
+        ]
+        self.assertEqual(copper_bonds(rows, ["F.Cu", "In1.Cu", "B.Cu"]), [None, "prepreg"])
+        self.assertIsNone(stack_eps_r(rows))
 
 
 class Spans(unittest.TestCase):
-    def model(self, code_layers, gaps, decl=HDI, banned=()):
+    def model(self, code_layers, gaps, decl=HDI, banned=(), bonds=None):
         names = copper_names(code_layers)
-        return ViaModel(resolve(decl, names, gaps=gaps, banned=banned), (0.6, 0.3))
+        bonds = bonds or {4: BONDS4, 6: BONDS6, 8: BONDS8}[code_layers]
+        return ViaModel(resolve(decl, names, gaps=gaps, banned=banned, bonds=bonds), (0.6, 0.3))
 
     def test_classify(self):
         m = self.model(6, GAPS6)
         self.assertEqual(m.kind_of(0, 5), THROUGH)
-        self.assertEqual(m.kind_of(0, 1), MICRO)  # 0.09 mm dielectric, 0.1 mm drill
+        self.assertEqual(m.how(0, 1), (MICRO, LASER))  # 0.09 mm dielectric, 0.1 mm drill
         self.assertEqual(m.kind_of(4, 5), MICRO)
-        self.assertEqual(m.kind_of(0, 2), BLIND)
-        self.assertEqual(m.kind_of(2, 5), BLIND)
-        self.assertEqual(m.kind_of(1, 3), BURIED)
-        self.assertEqual(m.kind_of(1, 2), BURIED)  # adjacent but inner: no microvia
-        # A dielectric deeper than the drill: no microvia, a blind via.
+        self.assertEqual(m.how(0, 2), (BLIND, LAMINATE))  # F foil + the In1-In2 core
+        self.assertEqual(m.how(3, 5), (BLIND, LAMINATE))
+        self.assertEqual(m.how(0, 4), (BLIND, LAMINATE))
+        self.assertEqual(m.how(1, 4), (BURIED, LAMINATE))
+        self.assertEqual(m.how(1, 2), (BURIED, LAMINATE))  # one core; inner: no microvia
+        # A deeper dielectric than the drill: no microvia, a controlled-depth blind via.
         deep = self.model(4, [0.2104, 1.065, 0.2104])
-        self.assertEqual(deep.kind_of(0, 1), BLIND)
-        # Microvias banned: the adjacent pair is a blind via.
-        self.assertEqual(self.model(6, GAPS6, banned={MICRO}).kind_of(0, 1), BLIND)
+        self.assertEqual(deep.how(0, 1), (BLIND, DEPTH))
+        # Microvias banned: the adjacent pair is a controlled-depth blind via.
+        self.assertEqual(self.model(6, GAPS6, banned={MICRO}).how(0, 1), (BLIND, DEPTH))
+
+    def test_spans_that_split_a_core_cannot_be_built(self):
+        """In3 is the top face of the In3-In4 core and In2 the bottom face of the
+        In1-In2 core: no sub-laminate ends there, and each is deeper than a drill
+        from the outside (review finding: F-In3 blind and In1-In3 buried vias)."""
+        m = self.model(6, GAPS6)
+        for t, b in ((0, 3), (1, 3), (2, 5), (2, 4), (2, 3)):
+            self.assertIsNone(m.how(t, b), (t, b))
+        # Without the dielectrics' kinds no laminated span qualifies (and it says so).
+        bare = resolve(BB, SIX, gaps=GAPS6)
+        self.assertTrue(any("cores and which prepreg" in w for w in bare["warnings"]))
+        m = ViaModel(bare, (0.6, 0.3))
+        self.assertEqual(m.how(0, 1), (BLIND, DEPTH))
+        self.assertIsNone(m.how(0, 2))
+        self.assertIsNone(m.how(1, 4))
 
     def test_two_four_eight_layers(self):
         self.assertEqual(self.model(4, [0.2104, 1.065, 0.2104]).kind_of(1, 2), BURIED)
         eight = self.model(8, [0.09, 0.33, 0.14, 0.33, 0.14, 0.33, 0.09])
         self.assertEqual(eight.kind_of(0, 1), MICRO)
         self.assertEqual(eight.kind_of(6, 7), MICRO)
-        self.assertEqual(eight.kind_of(2, 5), BURIED)
+        self.assertEqual(eight.kind_of(1, 6), BURIED)
+        self.assertEqual(eight.kind_of(3, 4), BURIED)
+        self.assertIsNone(eight.kind_of(2, 5))  # In2 and In5 are core faces
         self.assertEqual(eight.kind_of(0, 7), THROUGH)
 
     def test_cost(self):
@@ -189,10 +248,16 @@ class Spans(unittest.TestCase):
         self.assertEqual(m.cover(0, 5), (0, 5, THROUGH))
 
     def test_grid_spans(self):
-        """On the SGSGPS grid (F, In2, B) a layer change is a blind via of its own
-        span, F to B is through; drops reach the nearest plane."""
+        """On the SGSGPS grid (F, In2, B), every buildable span a candidate: F to In2
+        is the F-In2 sub-laminate's blind via, In2 to B the In1-B one (no span may
+        start at In2, a core face), F to B through; drops reach the nearest plane."""
         grid = GridVias(
-            resolve(HDI, SIX, gaps=GAPS6), ["F.Cu", "In2.Cu", "B.Cu"], 0.25, 0.2, (0.6, 0.3), 3
+            resolve(HDI, SIX, gaps=GAPS6, bonds=BONDS6),
+            ["F.Cu", "In2.Cu", "B.Cu"],
+            0.25,
+            0.2,
+            (0.6, 0.3),
+            3,
         )
         fi = grid.span(0, 1)
         self.assertEqual(
@@ -200,7 +265,7 @@ class Spans(unittest.TestCase):
         )
         ib = grid.span(1, 2)
         self.assertEqual(
-            (ib.top, ib.bottom, ib.kind, ib.lo, ib.hi), ("In2.Cu", "B.Cu", BLIND, 1, 2)
+            (ib.top, ib.bottom, ib.kind, ib.lo, ib.hi), ("In1.Cu", "B.Cu", BLIND, 1, 2)
         )
         fb = grid.span(0, 2)
         self.assertEqual((fb.kind, fb.keepout, fb.cost), (THROUGH, 3, 1.0))
@@ -219,6 +284,93 @@ class Spans(unittest.TestCase):
         self.assertEqual(merge_ranges([(0, 2), (2, 5)]), [(0, 5)])
         self.assertEqual(merge_ranges([(0, 1), (4, 5)]), [(0, 1), (4, 5)])
         self.assertEqual(merge_ranges([(2, 3), (0, 2), (4, 5)]), [(0, 3), (4, 5)])
+
+
+class Build(unittest.TestCase):
+    def policy(self, decl, **kw):
+        return resolve(decl, SIX, gaps=GAPS6, bonds=BONDS6, **kw)
+
+    def test_compatible(self):
+        self.assertTrue(compatible((0, 2), (3, 5)))  # disjoint halves
+        self.assertTrue(compatible((0, 2), (0, 4)))  # nested
+        self.assertTrue(compatible((1, 2), (1, 4)))
+        self.assertFalse(compatible((0, 4), (3, 5)))  # overlap, neither inside
+        self.assertFalse(compatible((0, 2), (1, 4)))
+
+    def test_chaser_build(self):
+        """The 6-layer chaser rungs: the GND drops' F-In1 span (laser microvia, or a
+        controlled-depth blind via without microvias) and the signals' F-In2
+        sub-laminate earn their drill pairs; F-In4 (3 % cheaper than through for the
+        VCC drops) and In1-In4 do not."""
+        for decl, banned, first in ((HDI, (), (MICRO, LASER)), (BB, {MICRO}, (BLIND, DEPTH))):
+            build = select_build(self.policy(decl, banned=banned), NEEDS6)
+            self.assertEqual(
+                build["spans"],
+                [["F.Cu", "In1.Cu", *first], ["F.Cu", "In2.Cu", BLIND, LAMINATE]],
+            )
+            self.assertLess(build["price"], build["through_price"])
+            model = ViaModel(dict(self.policy(decl, banned=banned), build=build), (0.6, 0.3))
+            self.assertEqual(model.cover(0, 4), (0, 5, THROUGH))  # VCC drops: through
+            self.assertEqual(model.cover(1, 3), (0, 5, THROUGH))  # GND ties: through
+            self.assertEqual(model.cover(2, 5), (0, 5, THROUGH))
+            self.assertEqual(model.cover(0, 1)[2], first[0])
+
+    def test_drill_pair_price_decides(self):
+        free = select_build(self.policy(dict(BB, drill_pair_cost=0.0)), NEEDS6)
+        spans = [tuple(s[:2]) for s in free["spans"]]
+        self.assertIn(("F.Cu", "In4.Cu"), spans)  # free pairs: every saving counts
+        laminated = [s for s in free["spans"] if s[3] == LAMINATE]
+        index = SIX.index
+        for a in laminated:
+            for b in laminated:
+                self.assertTrue(
+                    compatible((index(a[0]), index(a[1])), (index(b[0]), index(b[1]))), (a, b)
+                )
+        dear = select_build(self.policy(dict(BB, drill_pair_cost=100.0)), NEEDS6)
+        self.assertEqual(dear["spans"], [])
+        # resolve: no span earns its pair -> through vias only.
+        self.assertIsNone(self.policy(dict(BB, drill_pair_cost=100.0), needs=NEEDS6))
+        self.assertEqual(self.policy(BB, needs=NEEDS6)["build"]["spans"][1][:2], ["F.Cu", "In2.Cu"])
+
+    def test_ties_without_signals_favour_buried(self):
+        """Many In1-In3 ties and no signal changes: the In1-In4 sub-laminate (a
+        buried tie, 0.94 of a through via) earns its pair once it saves more than
+        the pair's price (2.0): 40 ties save 2.4, 30 only 1.8."""
+        self.assertEqual(
+            select_build(self.policy(BB), [("In1.Cu", "In3.Cu", 30.0, "tie")])["spans"], []
+        )
+        needs = [("In1.Cu", "In3.Cu", 40.0, "tie")]
+        build = select_build(self.policy(BB), needs)
+        self.assertEqual(build["spans"], [["In1.Cu", "In4.Cu", BURIED, LAMINATE]])
+
+    def test_model_keeps_to_the_build(self):
+        policy = self.policy(BB, needs=NEEDS6)
+        model = ViaModel(policy, (0.6, 0.3))
+        self.assertIsNone(model.kind_of(0, 4))  # buildable, not in the build
+        self.assertEqual(model.how(0, 4), (BLIND, LAMINATE))
+        self.assertEqual(model.kind_of(0, 2), BLIND)
+
+
+class ReturnTies(unittest.TestCase):
+    def test_rule(self):
+        rule = return_tie_rule(None, 4.5)
+        # 0.1 * 1000 ps / (2 * sqrt(4.5) / c) = 7.07 mm
+        self.assertAlmostEqual(rule["max_mm"], 0.1 * 1000 / (2 * 4.5**0.5 / 0.299792458), 3)
+        self.assertEqual(rule["t_rise_ns"], 1.0)
+        self.assertIn("default", rule["t_rise_source"])
+        slow = return_tie_rule(dict(t_rise_ns=2.0), 4.5)
+        self.assertAlmostEqual(slow["max_mm"], 2 * rule["max_mm"], 3)
+        self.assertEqual(return_tie_rule(None, None)["eps_r"], 4.5)
+        with self.assertRaises(ValueError):
+            return_tie_rule(dict(t_rise_ns=0), 4.5)
+
+    def test_reference_planes(self):
+        dedicated = [("In1.Cu", "GND"), ("In3.Cu", "GND"), ("In4.Cu", "VCC")]
+        self.assertEqual(reference_planes(SIX, dedicated, "F.Cu"), [("In1.Cu", "GND")])
+        self.assertEqual(
+            reference_planes(SIX, dedicated, "In2.Cu"), [("In1.Cu", "GND"), ("In3.Cu", "GND")]
+        )
+        self.assertEqual(reference_planes(SIX, dedicated, "B.Cu"), [("In4.Cu", "VCC")])
 
 
 if __name__ == "__main__":

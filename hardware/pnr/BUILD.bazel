@@ -107,6 +107,7 @@ filegroup(
         "pnr/specctra.py",
         "pnr/writeback.py",
         "pnr/stack.py",
+        "pnr/via_policy.py",
         # PNR_SI=1 (the prepare worker imports pnr.si even with the flag off): SI v1
         # package + its committed models (profiles, cable, connector, receiver, parts).
         "pnr/si/__init__.py",
@@ -483,6 +484,26 @@ py_test(
         ":pnr_detail",
         ":pnr_place",
     ],
+)
+
+# The board's via policy (pnr.via_policy): DRU bans for each rung, declared kinds,
+# microvia adjacency and size, span classification on 4/6/8 layers, span cost.
+py_test(
+    name = "via_policy_test",
+    size = "small",
+    srcs = [
+        "regression/designs.py",
+        "regression/hard_rungs.py",
+        "regression/stackup.py",
+        "tests/test_via_policy.py",
+    ],
+    imports = [
+        ".",
+        "regression",
+    ],
+    legacy_create_init = False,
+    main = "tests/test_via_policy.py",
+    deps = [":pnr"],
 )
 
 # R5 acceptance: the detailed router on a real placed board (place -> route,

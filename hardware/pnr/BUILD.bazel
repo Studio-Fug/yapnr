@@ -512,6 +512,19 @@ py_test(
     deps = [":pnr_detail"],
 )
 
+# PNR_GLOSS geometry core (pnr.gloss_geometry): pure Python, no KiCad; the router's keyhole
+# search and bend cost come from :pnr_detail.
+py_test(
+    name = "gloss_geometry_test",
+    size = "medium",
+    srcs = ["tests/test_gloss_geometry.py"],
+    main = "tests/test_gloss_geometry.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+    ],
+)
+
 py_test(
     name = "regional_test",
     size = "small",

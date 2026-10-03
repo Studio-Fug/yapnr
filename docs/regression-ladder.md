@@ -289,6 +289,31 @@ whole case's CPU time without `--gloss-measure`, which both arms run.
 The ladder runs the pass after a complete route, so it cannot show whether the pass helps or
 hurts completion; turning it on by default waits for a paired A/B of the native loop.
 
+## Compact placement (opt-in)
+
+`run.py --compact` places with `PNR_COMPACT=1` (off by default; [design](design/compact-placement.md)):
+spread 1.0 and starts clustered around the fixed parts, the courtyard gap instead of the routing
+clearance in the legalizer (with a copper margin only where a part's box hugs its pads), offset
+courtyards (a pin-1-origin header occupies its real extent) and a compactness tie-break after
+every completion key. `--compact-off PART` drops one part (`GP`, `RANK`, `LEGALIZE`,
+`COURTYARD`) for an ablation. `--shrink` (`PNR_SHRINK=1`) also searches a smaller outline inside
+the design's and writes the board at the smallest that routes; hard rungs are exempt. Both are
+recorded in `provenance.json` (`pnr_environment`).
+
+Every case's `result.json` gains `compactness`, measured alike in every arm on the parts' body
+boxes in `placed.json`: the bounding box (`bbox_mm2`, `bbox_mm`), the summed body area,
+`utilization` (area over bbox), `occupancy` (area over the outline) and the outline area.
+
+```sh
+run.py ... --seed 0 --seed 1 --showcases --gloss-measure                      # off
+run.py ... --seed 0 --seed 1 --showcases --gloss-measure --compact            # compact
+run.py ... --seed 0 --seed 1 --showcases --gloss-measure --compact --shrink   # and shrink
+```
+
+The animation scripts pass such options with `--runner-arg` (for example
+`animate_ladder.py ... --runner-arg=--compact --runner-arg=--gloss`) and record them in each
+animation's `config`.
+
 ## In CI
 
 `.github/workflows/ladder.yaml` runs the ladder inside the published arm64 image: cases 01 to 06

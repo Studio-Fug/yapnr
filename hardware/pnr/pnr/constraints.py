@@ -238,6 +238,8 @@ class CompiledConstraints:
     length_matches: List[LengthMatch] = field(default_factory=list)
     # Meander rules for pair / group length tuning (``tuning:``); None = defaults.
     tuning: Optional[Dict] = None
+    # Opt-in legalizer options (``legalize:``, :mod:`pnr.place.legal_options`); None = off.
+    legalize: Optional[Dict] = None
     copper_keepouts: List[Dict] = field(default_factory=list)
     mounting_holes: List[Dict] = field(default_factory=list)
 
@@ -351,6 +353,37 @@ def _parse_tuning(raw) -> Optional[Dict]:
     unknown = sorted(set(raw) - set(TUNING_NUMBERS) - set(TUNING_SWITCHES) - {"style"})
     if unknown:
         raise ConstraintError("tuning: unknown key(s) %s" % ", ".join(unknown))
+    return out
+
+
+# ``legalize:`` (pnr.place.legal_options): each key's values, the first the default.
+LEGALIZE_OPTIONS = {
+    "outline": ("raster", "exact"),
+    "order": ("blocks", "scarcity"),
+    "lookahead": ("none", "regions"),
+}
+
+
+def _parse_legalize(raw) -> Optional[Dict]:
+    """The ``legalize:`` block: opt-in legalizer options, each a name from
+    :data:`LEGALIZE_OPTIONS` (``outline: exact`` keeps every courtyard inside the board
+    outline by the same test as the hard check, ``order: scarcity`` orders parts held to
+    a region or an edge band with the hard-group blocks by remaining slots,
+    ``lookahead: regions`` refuses a slot that strands a scarce region or group part).
+    None when absent; only the keys given, so a default-valued key is kept as written."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ConstraintError("legalize must be a mapping")
+    unknown = sorted(set(raw) - set(LEGALIZE_OPTIONS))
+    if unknown:
+        raise ConstraintError("legalize: unknown key(s) %s" % ", ".join(map(str, unknown)))
+    out: Dict = {}
+    for key, allowed in LEGALIZE_OPTIONS.items():
+        if key in raw:
+            out[key] = _require_enum(raw[key], allowed, f"legalize.{key}")
+            if out[key] is None:
+                raise ConstraintError(f"legalize.{key} must be one of {allowed}")
     return out
 
 
@@ -999,6 +1032,7 @@ def compile_constraints(
         "diff_pair",
         "length_match",
         "tuning",
+        "legalize",
         "copper_keepout",
     }
     for key in doc:
@@ -1301,6 +1335,7 @@ def compile_constraints(
             )
         )
     tuning = _parse_tuning(doc.get("tuning"))
+    legalize = _parse_legalize(doc.get("legalize"))
 
     # Mechanical fastener envelopes reserve both faces and every copper layer.
     import math
@@ -1383,6 +1418,7 @@ def compile_constraints(
         diff_pairs=diff_pairs,
         length_matches=length_matches,
         tuning=tuning,
+        legalize=legalize,
         copper_keepouts=copper_keepouts,
         mounting_holes=mounting_holes,
     )

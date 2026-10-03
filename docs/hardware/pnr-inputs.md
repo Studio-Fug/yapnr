@@ -455,6 +455,31 @@ Both work with `board.sides: double`: a part free to take either side keeps its
 regions and aligns there, measured with its pads, anchors and body mirrored on
 the bottom (so a `pad1` anchor moves when the part flips, an `origin` never).
 
+### `legalize` — legalizer options (opt-in)
+
+The legalizer snaps the global placement onto a grid of slots (0.25 mm) and packs
+the parts one by one. These options change how; each is off unless the file sets it,
+and a design without the section is legalized exactly as before.
+
+| Key       | Values                      | Meaning                                                                                   |
+| --------- | --------------------------- | ----------------------------------------------------------------------------------------- |
+| `outline` | `raster` (default), `exact` | `exact`: every part's courtyard stays inside the outline by the test the hard check uses. |
+
+```yaml
+legalize:
+  outline: exact
+```
+
+`outline: exact` matters when the outline is not a whole number of slots (a 46.3 mm
+board on the 0.25 mm grid): the slot raster then has a partial last row or column
+that reaches past the edge, and a part packed there keeps its courtyard inside the
+raster but up to a slot minus half the clearance outside the board, which the
+placement's hard check refuses (`outside_outline`). With `exact` each slot centre is
+bounded by the box in which the part's courtyard, at the tried rotation and side, lies
+inside the outline, and the legalizer checks the result with the hard check itself.
+The length-matching pass after legalization keeps off those cells too. The outline is
+the `board.outline` rectangle; rounded corners are not modelled.
+
 ### `net_class` / `diff_pair` / `length_match` — routing rules
 
 These describe how nets are _routed_ rather than how parts are _placed_ — they

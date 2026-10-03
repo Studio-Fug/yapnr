@@ -1625,6 +1625,23 @@ py_test(
     ],
 )
 
+# Opt-in legalizer options (legalize:, pnr.place.legal_options): the parser, outline:
+# exact, scarcity order, region look-ahead, pad-anchored hard groups, and an unchanged
+# legalizer without them.
+py_test(
+    name = "legal_options_test",
+    size = "small",
+    srcs = ["tests/test_legal_options.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_legal_options.py",
+    deps = [
+        ":pnr",
+        ":pnr_place",
+        requirement("numpy"),
+    ],
+)
+
 # Regions and alignments (pnr.place.regions): parser, anchors at every rotation and side,
 # area containment, the legalizer and global terms on the 07-chaser-20 netlist, rigid
 # macros (line groups, blocks), the checks, and an unchanged path without them.

@@ -157,7 +157,9 @@ def legalize_constraint_kwargs(graph, constraints, poses, pad_edge=None) -> dict
     resolved on. Optional relations add their keys only when the design declares
     them (``pad_edge`` when given, ``edge_bands`` for a hard ``edge_align``,
     ``regions``/``aligns`` for a ``region`` or ``align``), so every other design
-    calls the legalizer exactly as before."""
+    calls the legalizer exactly as before; so do the ``legalize:`` options
+    (:func:`pnr.place.legal_options.legalize_kwargs`)."""
+    from . import legal_options
     from .geometry import (
         hard_edge_bands,
         hard_group_edges,
@@ -180,6 +182,8 @@ def legalize_constraint_kwargs(graph, constraints, poses, pad_edge=None) -> dict
     if bands:
         out["edge_bands"] = bands
     out.update(legalize_kwargs(constraints, graph.components))
+    # The opt-in ``legalize:`` options (pnr.place.legal_options): {} when undeclared.
+    out.update(legal_options.legalize_kwargs(constraints))
     return out
 
 
@@ -289,6 +293,35 @@ def _place_part(
     return int(r), int(c)
 
 
+def _exact_outline_box(static_edge_box, width, height):
+    """``static_edge_box`` intersected with the courtyard-in-outline box
+    (:func:`pnr.place.legal_options.outline_box`), cached per part, rotation and side
+    as ``static_edge_box`` is (``legalize: {outline: exact}``)."""
+    from .legal_options import intersect, outline_box
+
+    cache = {}
+
+    def box(comp):
+        key = (comp.ref, round(comp.rot % 360, 6), comp.side)
+        hit = cache.get(key)
+        if hit is None:
+            hit = cache[key] = intersect(static_edge_box(comp), outline_box(comp, width, height))
+        return hit
+
+    return box
+
+
+def _assert_inside_outline(placed, width, height, fixed):
+    """``legalize: {outline: exact}``: the legalized parts pass the hard outline check."""
+    from .legal_options import outline_offenders
+
+    bad = outline_offenders(
+        placed, width, height, [c.ref for c in placed.components if c.ref not in fixed]
+    )
+    if bad:
+        raise LegalizationError("outline: exact left %s outside the outline" % ", ".join(bad))
+
+
 def legalize(
     graph: BoardGraph,
     width: float,
@@ -318,6 +351,7 @@ def legalize(
     stack: Optional[frozenset] = None,
     regions=None,
     aligns=None,
+    outline: Optional[str] = None,
 ) -> BoardGraph:
     """Return a copy of ``graph`` with movable parts snapped to a legal layout.
 
@@ -376,6 +410,11 @@ def legalize(
     hull macros mark their inner-layer mask there, drilled parts and solid block
     macros their whole slot, so a hole never lands on block inner copper and two
     blocks' inner copper never meet.
+
+    ``outline`` (``legalize: {outline: exact}``, :mod:`pnr.place.legal_options`; None =
+    the raster alone) bounds every slot centre so the part's courtyard stays inside the
+    ``width x height`` outline by the hard check's own test, which the raster's partial
+    last row and column do not.
     """
     inflation = inflation or {}
     group_limits = group_limits or {}
@@ -475,6 +514,10 @@ def legalize(
                     hit = intersect_boxes(hit, region)
             boxes[key] = hit
         return hit
+
+    if outline == "exact":
+        # legalize: {outline: exact}: every box also keeps the courtyard in the outline.
+        static_edge_box = _exact_outline_box(static_edge_box, width, height)
 
     def edge_box(comp):
         """static_edge_box, narrowed to the part's hard align band (None when none
@@ -1171,6 +1214,9 @@ def legalize(
                 ] = True
         comp.pos = ((c + bw / 2.0) * g, (r + bh / 2.0) * g)
         neighbors.append(comp)
+
+    if outline == "exact":
+        _assert_inside_outline(placed, width, height, fixed)
 
     from pnr import trace as _trace
 

@@ -12,7 +12,8 @@ A header that lists placement constraints (or a comparison's reference overlay) 
 (:mod:`.highlight`): tints and a line group's guide line right after the substrate, and the
 rigid bodies, target edges and tethers after the outline. Copper a route keeps as it is (a
 hierarchical knit's block copper, ``View.fixed``) is drawn dimmed. Without either, a frame is
-drawn exactly as before.
+drawn exactly as before. The gloss stage's changes (``View.overlay``: what it removed, red and
+dashed, or added, mint) are drawn over a saved board's own copper.
 
 Overlay text is whitelisted: :func:`safe_text` rejects anything that looks like a path or an
 e-mail address, and every other string comes from the fixed tables of :mod:`.theme`.
@@ -197,6 +198,9 @@ class Renderer:
             self._zones(big, tf, view.native.get("zones", []), view.zone_reveal)
             draw = ImageDraw.Draw(big)
             layers = [({"": view.native}, {})]
+            for index, (copper, style) in enumerate(view.overlay or ()):
+                key = "overlay-%d" % index  # the gloss stage's changes, over the board
+                layers.append(({key: copper}, {key: style}))
         else:
             layers = self._engine_copper(view)
             if view.fixed is not None:  # a hierarchical knit's block copper, kept as it is

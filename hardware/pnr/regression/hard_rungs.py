@@ -1479,7 +1479,8 @@ def ufbga_block(spec):
         for name, rect in sorted(LAUNCH_GUARDS.items())
     ]
     cons["keepout"] = (cons.get("keepout") or []) + [
-        dict(name=LAUNCH_NAME, polygon=rect_polygon([24.1, 17.0, 29.0, 21.6]))  # J4 from 29.12
+        # The launch and the array's east exits beside it (J4's courtyard starts at 29.12).
+        dict(name=LAUNCH_NAME, polygon=rect_polygon([24.1, 14.5, 29.0, 24.0]))
     ]
     spec["checks"] = [c for c in spec["checks"] if c["id"] != "fanout-escape"]
     signals = sorted(b for balls in bga_signals().values() for b in balls)

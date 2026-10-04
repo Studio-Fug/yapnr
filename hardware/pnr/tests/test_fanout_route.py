@@ -302,6 +302,44 @@ class FanoutRouteTest(unittest.TestCase):
         self.assertGreater(across, 1e-6)  # off the ray
         self.assertGreater(along, 0.25 * math.hypot(along, across) - 1e-9)
 
+    def test_the_tail_judges_a_class_keepout_exactly(self):
+        # A class keepout 0.12 mm beside A5's exit: the grid bars the exit's own cell
+        # (half a track plus half a cell diagonal), the planner judged the exit exactly.
+        # The hand-over judges the tail exactly too, so the ball keeps its access.
+        from pnr.fanout import cached_plan
+        from pnr.route.detail.fanout import plan_fanouts
+        from pnr.route.detail.router import _mark_keepout_v1
+
+        signals = {n.name for n in self.g.nets if n.name != "GND"}
+        plan = cached_plan(
+            self.g,
+            self.rules,
+            self.rules["fanouts"][0],
+            grid_layers=["F.Cu", "In2.Cu", "B.Cu"],
+            plane_nets={"GND"},
+            signal_nets=signals,
+        )
+        a5, b4 = plan["terminals"]["A5"], plan["terminals"]["B4"]
+        ex, ey = a5["exit"]
+        x1 = ex - 0.12
+        keepout = dict(
+            name="beside",
+            polygon=[[x1 - 0.5, ey - 0.2], [x1, ey - 0.2], [x1, ey + 3.0], [x1 - 0.5, ey + 3.0]],
+            layers=["F.Cu"],
+            items=["tracks"],
+            allow_nets=[b4["net"]],
+            allowed_nets=[b4["net"]],
+        )
+        rules = dict(self.rules, copper_keepouts=[keepout])
+        grid = self.grid()
+        _mark_keepout_v1(grid, self.g, keepout)
+        i, j = grid.cell_of(ex, ey)
+        self.assertTrue(grid.net_blocked(a5["net"], 0, i, j))  # the exit's own cell
+        fo = plan_fanouts(
+            grid, self.g, rules, plane_nets={"GND"}, signal_nets=signals, via_keepout=1
+        )
+        self.assertNotIn("A5", fo.report["U1"]["no_access"])
+
     def test_class_clearances_reach_the_halo_and_the_pad_checks(self):
         from pnr.place.geometry import Rect
         from pnr.route.detail.fanout import _clear_of_pads, _via_halo

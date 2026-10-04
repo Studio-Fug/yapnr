@@ -116,14 +116,18 @@ def _via_halo(grid, segments, vias):
     return out
 
 
-def _access(grid, net, layer, exit_xy, outward, width, taken, owners, reach_mm=2.0, pads=None):
+def _access(
+    grid, net, layer, exit_xy, outward, width, taken, owners, reach_mm=2.0, pads=None, areas=()
+):
     """The first cell along the exit's outward ray that ``net`` may hold and leave
     outward, with a clear tail from the exit to its centre: ``(cell, tail end)``.
     The tail keeps each foreign pad in ``pads`` at the larger of the two nets' class
     clearances (``grid.net_clearances``). When the ray finds none (a part placed
     against the array's edge), the tail may turn: the nearest cell within
     ``reach_mm`` and within 75 degrees of the outward direction that passes the same
-    tests, leaving along the tail's own direction."""
+    tests, leaving along the tail's own direction. ``areas`` (:func:`_keepout_areas`)
+    are judged on the tail exactly, as the planner judged the exit, instead of by the
+    grid's conservative keepout cells (the access cell itself still needs them)."""
     classes = getattr(grid, "net_clearances", None) or {}
     steps = max(1, int(math.ceil(reach_mm / (grid.pitch / 4))))
     seen = set()
@@ -138,7 +142,9 @@ def _access(grid, net, layer, exit_xy, outward, width, taken, owners, reach_mm=2
             continue
         seen.add((i, j))
         rays.append((i, j, int(round(outward[0])), int(round(outward[1]))))
-    found = _first_access(grid, net, layer, exit_xy, width, taken, owners, pads, classes, rays)
+    found = _first_access(
+        grid, net, layer, exit_xy, width, taken, owners, pads, classes, rays, areas
+    )
     if found is not None:
         return found
     ci, cj = grid.cell_of(*exit_xy)
@@ -157,11 +163,27 @@ def _access(grid, net, layer, exit_xy, outward, width, taken, owners, reach_mm=2
             fan.append((round(d, 9), i, j, int(round(vx / d)), int(round(vy / d))))
     fan.sort()
     return _first_access(
-        grid, net, layer, exit_xy, width, taken, owners, pads, classes, [f[1:] for f in fan]
+        grid, net, layer, exit_xy, width, taken, owners, pads, classes, [f[1:] for f in fan], areas
     )
 
 
-def _first_access(grid, net, layer, exit_xy, width, taken, owners, pads, classes, candidates):
+def _keepout_areas(graph, rules):
+    """``[(polygon, track layer names, allowed nets)]`` of the v1 copper keepouts that
+    bar tracks, in the board frame: what the fanout planner judges exactly."""
+    from pnr.fixed_block import keepout_polygon
+
+    out = []
+    for spec in (rules or {}).get("copper_keepouts") or []:
+        if "items" not in spec or "tracks" not in spec["items"]:
+            continue
+        allowed = frozenset(spec.get("allowed_nets") or ())
+        out.append((keepout_polygon(graph, spec), frozenset(spec.get("layers") or ()), allowed))
+    return out
+
+
+def _first_access(
+    grid, net, layer, exit_xy, width, taken, owners, pads, classes, candidates, areas=()
+):
     """The first ``(i, j, di, dj)`` candidate whose cell and its ``(di, dj)`` neighbour the
     net may hold and whose tail from the exit is clear (see :func:`_access`)."""
     for i, j, di, dj in candidates:
@@ -178,8 +200,8 @@ def _first_access(grid, net, layer, exit_xy, width, taken, owners, pads, classes
         if not ok:
             continue
         centre = grid.center_of(i, j)
-        if math.dist(centre, exit_xy) > 1e-9 and not _segment_clear(
-            grid, net, layer, exit_xy, centre, width
+        if math.dist(centre, exit_xy) > 1e-9 and not _tail_clear(
+            grid, net, layer, exit_xy, centre, width, areas
         ):
             continue
         if (
@@ -195,6 +217,23 @@ def _first_access(grid, net, layer, exit_xy, width, taken, owners, pads, classes
     return None
 
 
+def _tail_clear(grid, net, layer, a, b, width, areas):
+    """The access tail ``a``-``b`` clears the grid's obstacles, the copper keepouts
+    judged exactly (``areas``) when there are any, else by the grid's cells."""
+    if not areas:
+        return _segment_clear(grid, net, layer, a, b, width)
+    from pnr.fanout.geom import segment_polygon
+    from pnr.fanout.sites import MARGIN
+
+    name = grid.layers[layer]
+    for poly, layers, allowed in areas:
+        if net in allowed or (layers and name not in layers):
+            continue
+        if segment_polygon(a, b, poly) < width / 2 + MARGIN:
+            return False
+    return _segment_clear(grid, net, layer, a, b, width, net_keepouts=False)
+
+
 def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fixed_copper=None):
     """Plan, reserve and translate every declared fanout on ``grid`` (see module doc)."""
     from pnr.fanout import cached_plan
@@ -205,6 +244,7 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
     layer_index = {name: i for i, name in enumerate(grid.layers)}
     clearance = grid.clearance
     classes = getattr(grid, "net_clearances", None) or {}
+    areas = _keepout_areas(graph, rules)
     planned = []
     for spec in rules.get("fanouts") or []:
         plan = cached_plan(
@@ -363,6 +403,7 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
                 taken,
                 owners,
                 pads=foreign_of[spec["name"]],
+                areas=areas,
             )
             if found is None:
                 out.report[spec["name"]]["no_access"].append(name)

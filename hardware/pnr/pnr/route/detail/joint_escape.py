@@ -32,7 +32,10 @@ class AccessOption:
     spans: tuple = ()
 
 
-def _segment_clear(grid, net, layer, a, b, width, own=None):
+def _segment_clear(grid, net, layer, a, b, width, own=None, net_keepouts=True):
+    """``a``-``b`` of ``width`` on ``layer`` clears the grid's obstacles for ``net``.
+    ``net_keepouts=False`` leaves the copper keepouts' cell masks to the caller (a
+    fanout's hand-over judges them exactly, as its planner does)."""
     radius = width / 2 + grid.clearance
     # Net class clearances (route_board's _net_clearances): two nets keep the larger
     # of theirs, as KiCad's DRC judges them, against pads and escape copper. A board
@@ -51,7 +54,7 @@ def _segment_clear(grid, net, layer, a, b, width, own=None):
     steps = max(1, math.ceil(math.dist(a, b) / (grid.pitch / 4)))
     # Copper keepouts with allow lists and fixed-block copper (both centreline
     # reservations, like the maze's): judged at the centre samples. Absent, nothing.
-    keepouts = getattr(grid, "net_keepouts", None)
+    keepouts = getattr(grid, "net_keepouts", None) if net_keepouts else None
     owned = getattr(grid, "fixed_owned", None)
     for step in range(steps + 1):
         x = a[0] + (b[0] - a[0]) * step / steps

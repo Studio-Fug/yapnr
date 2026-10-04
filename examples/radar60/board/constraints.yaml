@@ -23,6 +23,9 @@ board:
   default_clearance_mm: 0.2
   references_on_fab: true
   plane_fallback_drops: false
+  class_clearance: maze
+  dru_routing: true
+  edge: exact
 fab:
   track_width_mm: 0.15
 fixed:
@@ -400,19 +403,10 @@ fanout:
     forbidden_exits: [north, east]
     neck_mm: 0.1
     neck_classes: [LVDS]
-    drop_nets:
-      [
-        '1V0_PA',
-        '1V0_RF1',
-        '1V0_RF2',
-        '1V2',
-        '1V8',
-        '3V3_RADIO_IO',
-        VBGAP,
-        VOUT_14APLL,
-        VOUT_14SYNTH,
-      ]
+    drop_nets: ['1V0_PA', '1V2', '1V8', '3V3_RADIO_IO', VBGAP, VOUT_14APLL, VOUT_14SYNTH]
     lock: true
+    partial:
+      bridge: true
     bottom_sites:
       parts:
         [
@@ -768,6 +762,12 @@ net_class:
       ]
     width_mm: 0.17
     clearance_mm: 0.1
+  rail_1v0_rf1:
+    nets: ['1V0_RF1']
+    plane_layer: In3.Cu
+  rail_1v0_rf2:
+    nets: ['1V0_RF2']
+    plane_layer: In3.Cu
 diff_pair:
   - name: lvds_tx0
     p: LVDS_TX0_P
@@ -807,6 +807,105 @@ length_match:
         LVDS_FRCLK_N,
       ]
     tolerance_mm: 2
+plane_partition:
+  - layer: In3.Cu
+    nets: ['1V0_RF1', '1V0_RF2']
+    fill: GND
+    split_gap_mm: 0.3
+    min_width_mm: 1
+    currents:
+      '1V0_RF1': 2.5
+      '1V0_RF2': 2.5
+    budgets_mohm:
+      '1V0_RF1': 4
+      '1V0_RF2': 4
+    sources:
+      '1V0_RF1':
+        '@pmic.fb_rf1': '2'
+      '1V0_RF2':
+        '@pmic.fb_rf2_a': '2'
+ir_drop:
+  - net: '1V0_RF1'
+    sources:
+      '@pmic.fb_rf1': ['2']
+    sinks:
+      '@radio.u1': [G5, H5, J5]
+    current_a: 2.5
+    budget_mohm: 4
+    temperature_c: 60
+    two_point: false
+  - net: '1V0_RF2'
+    sources:
+      '@pmic.fb_rf2_a': ['2']
+      '@pmic.fb_rf2_b': ['2']
+    sinks:
+      '@radio.u1': [C2, D2]
+      '@radio.r_pa': ['1']
+    current_a: 2.5
+    budget_mohm: 4
+    temperature_c: 60
+    two_point: false
+  - net: '1V2'
+    sources:
+      '@pmic.fb_1v2': ['2']
+    sinks:
+      '@radio.u1': [G15, H15, N11, P14, P15, R6]
+    current_a: 1
+    budget_mohm: 12
+    temperature_c: 60
+    two_point: false
+  - net: '1V8'
+    sources:
+      '@pmic.fb_1v8': ['2']
+    sinks:
+      '@radio.u1': [B11, B12, D15, F5, K5, R9]
+    current_a: 0.85
+    budget_mohm: 21
+    temperature_c: 60
+    two_point: false
+  - net: '3V3_RADIO_IO'
+    sources:
+      '@radio.u6': ['6']
+    sinks:
+      '@radio.u1': [F15, R10]
+    current_a: 0.2
+    budget_mohm: 165
+    temperature_c: 60
+    two_point: false
+  - net: '3V3'
+    sources:
+      '@pmic.l_b0': ['2']
+    current_a: 0.2
+    budget_mohm: 165
+    temperature_c: 60
+    two_point: false
+  - net: '5V_SYS'
+    sources:
+      '@power_in.efuse': ['6']
+    current_a: 1.5
+    budget_mohm: 33
+    temperature_c: 60
+    two_point: false
+  - net: '1V0_BUCK'
+    sources:
+      '@pmic.l_b2': ['2']
+    sinks:
+      '@pmic.r_sh': ['1']
+    current_a: 2.5
+    budget_mohm: 0.5
+    temperature_c: 60
+    two_point: false
+  - net: '1V0_SH'
+    sources:
+      '@pmic.r_sh': ['2']
+    sinks:
+      '@pmic.fb_rf1': ['1']
+      '@pmic.fb_rf2_a': ['1']
+      '@pmic.fb_rf2_b': ['1']
+    current_a: 2.5
+    budget_mohm: 0.5
+    temperature_c: 60
+    two_point: false
 rf_macro:
   ref: '@rf_macro.rfm1'
   frame: '@radio.u1'

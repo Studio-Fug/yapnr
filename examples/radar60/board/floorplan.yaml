@@ -24,6 +24,74 @@ board:
   # Layer roles (plan 4.1): In1 GND (RF reference), In2 GND under the RF region and escape
   # signals elsewhere, In3 power pours, In4 GND, F/B signals.
   planes: { In1.Cu: GND, In4.Cu: GND }
+  # Router switches (yapnr stage 3b, opt-in): net class clearances in the maze (PWR, XTAL,
+  # SW, LVDS), the board's custom rules where they constrain routing (no vias on XTAL/RF,
+  # LVDS on F/B only, SW-XTAL 8 mm, SW-RF 5 mm, In1/In4 track-free, hole to edge), and the
+  # board's own rounded outline.
+  routing: { class_clearance: maze, dru_routing: true, edge: exact }
+
+# In3.Cu (typed power): a plane partition for the two 2.5 A core rails (stage 3b power track:
+# 1V2 and 1V8 interleave with them round U1, so they stay drop nets with traces); the rest of
+# In3 is GND. Each rail's trunk is rooted at its ferrite. The IR-drop report covers every rail
+# (design 2.7: copper only, source pad -> sinks, at the annotated peak, 60 C) [D].
+power:
+  layer: In3.Cu
+  partition:
+    nets: [1V0_RF1, 1V0_RF2]
+    fill: GND
+    split_gap_mm: 0.3
+    min_width_mm: 1.0
+    sources: { 1V0_RF1: { pmic.fb_rf1: '2' }, 1V0_RF2: { pmic.fb_rf2_a: '2' } }
+  temperature_c: 60
+  rails:
+    1V0_RF1:
+      {
+        sources: { pmic.fb_rf1: ['2'] },
+        sinks: { radio.u1: [G5, H5, J5] },
+        current_a: 2.5,
+        budget_mohm: 4.0,
+      }
+    1V0_RF2:
+      sources: { pmic.fb_rf2_a: ['2'], pmic.fb_rf2_b: ['2'] }
+      sinks: { radio.u1: [C2, D2], radio.r_pa: ['1'] }
+      current_a: 2.5
+      budget_mohm: 4.0
+    1V2:
+      {
+        sources: { pmic.fb_1v2: ['2'] },
+        sinks: { radio.u1: [G15, H15, N11, P14, P15, R6] },
+        current_a: 1.0,
+        budget_mohm: 12.0,
+      }
+    1V8:
+      {
+        sources: { pmic.fb_1v8: ['2'] },
+        sinks: { radio.u1: [B11, B12, D15, F5, K5, R9] },
+        current_a: 0.85,
+        budget_mohm: 21.0,
+      }
+    3V3_RADIO_IO:
+      {
+        sources: { radio.u6: ['6'] },
+        sinks: { radio.u1: [F15, R10] },
+        current_a: 0.2,
+        budget_mohm: 165.0,
+      }
+    3V3: { sources: { pmic.l_b0: ['2'] }, current_a: 0.2, budget_mohm: 165.0 }
+    5V_SYS: { sources: { power_in.efuse: ['6'] }, current_a: 1.5, budget_mohm: 33.0 }
+    # 1V0_BUCK + 1V0_SH share the design's 1 mOhm: half each [D]
+    1V0_BUCK:
+      {
+        sources: { pmic.l_b2: ['2'] },
+        sinks: { pmic.r_sh: ['1'] },
+        current_a: 2.5,
+        budget_mohm: 0.5,
+      }
+    1V0_SH:
+      sources: { pmic.r_sh: ['2'] }
+      sinks: { pmic.fb_rf1: ['1'], pmic.fb_rf2_a: ['1'], pmic.fb_rf2_b: ['1'] }
+      current_a: 2.5
+      budget_mohm: 0.5
 
 # Instance paths (atopile addresses) of the parts this file constrains: the interface to the
 # schematic track (examples/radar60/schematic, elec/src). Change a path here if the source names
@@ -305,10 +373,13 @@ fanout:
   forbidden_exits: [north, east]
   neck_mm: 0.1
   neck_classes: [LVDS]
-  # supplies and the LDO outputs drop a via beside the ball (decoupled under the array, fed
-  # from In3) instead of escaping
-  drop_nets: [1V0_PA, 1V0_RF1, 1V0_RF2, 1V2, 1V8, 3V3_RADIO_IO, VBGAP, VOUT_14APLL, VOUT_14SYNTH]
+  # supplies and the LDO outputs drop a via beside the ball (decoupled under the array)
+  # instead of escaping; 1V0_RF1 and 1V0_RF2 are In3 plane nets (power.partition)
+  drop_nets: [1V0_PA, 1V2, 1V8, 3V3_RADIO_IO, VBGAP, VOUT_14APLL, VOUT_14SYNTH]
   lock: true
+  # A ball whose plan fails no longer blocks its net: bridged to a same-net neighbour, else
+  # given to the board's escapes, else reported open (yapnr stage 3b).
+  partial: { bridge: true }
   # Bottom-side decoupling sites under the array, in priority order (trial 2 placed 6 of 9;
   # the VOUT_PA corner parts keep their bottom regions until macro v2 puts its pocket vias in)
   bottom_sites:

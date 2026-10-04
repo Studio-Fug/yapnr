@@ -210,6 +210,7 @@ FANOUT_KEYS = (
     "neck_classes",
     "drop_nets",
     "lock",
+    "partial",
 )
 
 
@@ -227,6 +228,50 @@ def fanout_entry(fp):
             **{k: v for k, v in sites.items() if k != "parts"},
         )
     return entry
+
+
+def power_sections(d):
+    """``plane_partition`` and ``ir_drop`` (yapnr stage 3b) from floorplan ``power``: the
+    partition of the power layer and one IR-drop report per rail. Parts by address."""
+    power = d.get("power")
+    if not power:
+        return {}
+
+    def parts(spec):
+        return {"@" + _glob_literal(a): list(pads) for a, pads in spec.items()}
+
+    out = {}
+    part = power.get("partition")
+    if part:
+        rails = power.get("rails") or {}
+        out["plane_partition"] = [
+            {
+                "layer": power["layer"],
+                "nets": list(part["nets"]),
+                "fill": part["fill"],
+                "split_gap_mm": part["split_gap_mm"],
+                "min_width_mm": part["min_width_mm"],
+                "currents": {n: rails[n]["current_a"] for n in part["nets"] if n in rails},
+                "budgets_mohm": {n: rails[n]["budget_mohm"] for n in part["nets"] if n in rails},
+                "sources": {
+                    n: {"@" + _glob_literal(a): str(pad) for a, pad in src.items()}
+                    for n, src in part["sources"].items()
+                },
+            }
+        ]
+    out["ir_drop"] = []
+    for net, rail in (power.get("rails") or {}).items():
+        entry = {"net": net, "sources": parts(rail["sources"])}
+        if rail.get("sinks"):
+            entry["sinks"] = parts(rail["sinks"])
+        entry.update(
+            current_a=rail["current_a"],
+            budget_mohm=rail["budget_mohm"],
+            temperature_c=power.get("temperature_c", 25),
+            two_point=False,
+        )
+        out["ir_drop"].append(entry)
+    return out
 
 
 def constraints(fp: Floorplan):
@@ -269,6 +314,10 @@ def constraints(fp: Floorplan):
     ]
     lvds_nets = [x for pair in d["nets"]["LVDS"]["pairs"].values() for x in pair]
     net_class["LVDS"] = {"nets": lvds_nets, "width_mm": lv["width"], "clearance_mm": 0.1}
+    power = d.get("power") or {}
+    part = power.get("partition") or {}
+    for net in part.get("nets", []):  # a partitioned rail is a plane net of the power layer
+        net_class["rail_" + net.lower()] = {"nets": [net], "plane_layer": power["layer"]}
     region, side = [], {}
     for name, spec in d["regions"].items():
         area = (
@@ -335,6 +384,7 @@ def constraints(fp: Floorplan):
             # No plane drop outside the fanout plan (stage 3a review): writeback adds none, so
             # a drop never lands on the RF macro's launches.
             "plane_fallback_drops": False,
+            **dict(d["board"].get("routing") or {}),
         },
         "fab": {"track_width_mm": 0.15},
         "fixed": {
@@ -376,6 +426,7 @@ def constraints(fp: Floorplan):
         "length_match": [
             {"name": "lvds", "nets": lvds_nets, "tolerance_mm": lv["group_skew_mm"]},
         ],
+        **power_sections(d),
         # Proposed sections (plan 3.4, 7.3): the current engine warns and ignores them.
         "rf_macro": {
             "ref": "@" + fp.part("rf_macro"),
@@ -1055,7 +1106,7 @@ def board(fp):
 \t\t(0 "F.Cu" signal)
 \t\t(4 "In1.Cu" power)
 \t\t(6 "In2.Cu" signal)
-\t\t(8 "In3.Cu" mixed)
+\t\t(8 "In3.Cu" power)
 \t\t(10 "In4.Cu" power)
 \t\t(2 "B.Cu" signal)
 \t\t(9 "F.Adhes" user "F.Adhesive")
@@ -1266,6 +1317,17 @@ def compile_check(fp, engine=None):
             ref = "U1" if role == "radio" else "P%d" % len(refs)
             addresses[path.replace("*", "x")] = ref
             refs.append(ref)
+    # The power section names supply parts by address too (sources and sinks).
+    power = fp.doc.get("power") or {}
+    specs = [
+        r.get(k) or {} for r in (power.get("rails") or {}).values() for k in ("sources", "sinks")
+    ]
+    specs += list(((power.get("partition") or {}).get("sources") or {}).values())
+    for spec in specs:
+        for path in spec:
+            if path not in addresses:
+                addresses[path] = "P%d" % len(refs)
+                refs.append(addresses[path])
     compiled = compile_constraints(doc, refs, addresses=addresses)
     kinds = sorted({c.kind for c in compiled.constraints})
     return compiled.warnings, kinds, compiled

@@ -162,14 +162,35 @@ def _access(
                 continue
             fan.append((round(d, 9), i, j, int(round(vx / d)), int(round(vy / d))))
     fan.sort()
-    return _first_access(
+    found = _first_access(
         grid, net, layer, exit_xy, width, taken, owners, pads, classes, [f[1:] for f in fan], areas
+    )
+    if found is not None or not areas:
+        return found
+    # Last: the same cells with the tail judged as the planner judged the exit (rule
+    # areas and keepouts exactly, the grid's grown obstacles on the centre line), for
+    # an exit the grid's cells put too close to an area it legally clears.
+    return _first_access(
+        grid,
+        net,
+        layer,
+        exit_xy,
+        width,
+        taken,
+        owners,
+        pads,
+        classes,
+        rays + [f[1:] for f in fan],
+        areas,
+        exact=True,
     )
 
 
-def _keepout_areas(graph, rules):
-    """``[(polygon, track layer names, allowed nets)]`` of the v1 copper keepouts that
-    bar tracks, in the board frame: what the fanout planner judges exactly."""
+def _keepout_areas(graph, rules, fixed_copper=None):
+    """``[(polygon, track layer names, allowed nets)]`` of the v1 copper keepouts and
+    the fixed blocks' rule areas that bar tracks, in the board frame: what the fanout
+    planner judges exactly."""
+    from pnr.fanout.planner import fixed_items
     from pnr.fixed_block import keepout_polygon
 
     out = []
@@ -178,11 +199,26 @@ def _keepout_areas(graph, rules):
             continue
         allowed = frozenset(spec.get("allowed_nets") or ())
         out.append((keepout_polygon(graph, spec), frozenset(spec.get("layers") or ()), allowed))
+    for poly in fixed_items(fixed_copper)[2] if fixed_copper else ():
+        if poly.get("kind") == "rule_area" and poly.get("tracks") and poly.get("layers"):
+            outline = [tuple(p) for p in poly["outline"]]
+            out.append((outline, frozenset(poly["layers"]), frozenset()))
     return out
 
 
 def _first_access(
-    grid, net, layer, exit_xy, width, taken, owners, pads, classes, candidates, areas=()
+    grid,
+    net,
+    layer,
+    exit_xy,
+    width,
+    taken,
+    owners,
+    pads,
+    classes,
+    candidates,
+    areas=(),
+    exact=False,
 ):
     """The first ``(i, j, di, dj)`` candidate whose cell and its ``(di, dj)`` neighbour the
     net may hold and whose tail from the exit is clear (see :func:`_access`)."""
@@ -201,7 +237,7 @@ def _first_access(
             continue
         centre = grid.center_of(i, j)
         if math.dist(centre, exit_xy) > 1e-9 and not _tail_clear(
-            grid, net, layer, exit_xy, centre, width, areas
+            grid, net, layer, exit_xy, centre, width, areas, exact
         ):
             continue
         if (
@@ -217,9 +253,11 @@ def _first_access(
     return None
 
 
-def _tail_clear(grid, net, layer, a, b, width, areas):
+def _tail_clear(grid, net, layer, a, b, width, areas, exact=False):
     """The access tail ``a``-``b`` clears the grid's obstacles, the copper keepouts
-    judged exactly (``areas``) when there are any, else by the grid's cells."""
+    judged exactly (``areas``) when there are any, else by the grid's cells.
+    ``exact``: the rule areas in ``areas`` too, and the grid's blocked cells (grown
+    obstacles) on the tail's centre line only."""
     if not areas:
         return _segment_clear(grid, net, layer, a, b, width)
     from pnr.fanout.geom import segment_polygon
@@ -231,7 +269,7 @@ def _tail_clear(grid, net, layer, a, b, width, areas):
             continue
         if segment_polygon(a, b, poly) < width / 2 + MARGIN:
             return False
-    return _segment_clear(grid, net, layer, a, b, width, net_keepouts=False)
+    return _segment_clear(grid, net, layer, a, b, width, net_keepouts=False, offsets=not exact)
 
 
 def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fixed_copper=None):
@@ -244,7 +282,7 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
     layer_index = {name: i for i, name in enumerate(grid.layers)}
     clearance = grid.clearance
     classes = getattr(grid, "net_clearances", None) or {}
-    areas = _keepout_areas(graph, rules)
+    areas = _keepout_areas(graph, rules, fixed_copper)
     planned = []
     for spec in rules.get("fanouts") or []:
         plan = cached_plan(

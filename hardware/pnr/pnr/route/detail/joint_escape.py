@@ -32,10 +32,12 @@ class AccessOption:
     spans: tuple = ()
 
 
-def _segment_clear(grid, net, layer, a, b, width, own=None, net_keepouts=True):
+def _segment_clear(grid, net, layer, a, b, width, own=None, net_keepouts=True, offsets=True):
     """``a``-``b`` of ``width`` on ``layer`` clears the grid's obstacles for ``net``.
     ``net_keepouts=False`` leaves the copper keepouts' cell masks to the caller (a
-    fanout's hand-over judges them exactly, as its planner does)."""
+    fanout's hand-over judges them exactly, as its planner does). ``offsets=False``
+    reads the blocked mask on the centre line only: every obstacle in it is already
+    grown by at least half a track (the caller judges rule areas exactly)."""
     radius = width / 2 + grid.clearance
     # Net class clearances (route_board's _net_clearances): two nets keep the larger
     # of theirs, as KiCad's DRC judges them, against pads and escape copper. A board
@@ -59,7 +61,9 @@ def _segment_clear(grid, net, layer, a, b, width, own=None, net_keepouts=True):
     for step in range(steps + 1):
         x = a[0] + (b[0] - a[0]) * step / steps
         y = a[1] + (b[1] - a[1]) * step / steps
-        for dx, dy in ((0, 0), (radius, 0), (-radius, 0), (0, radius), (0, -radius)):
+        for dx, dy in (
+            ((0, 0), (radius, 0), (-radius, 0), (0, radius), (0, -radius)) if offsets else ((0, 0),)
+        ):
             if not (0 <= x + dx <= grid.width and 0 <= y + dy <= grid.height):
                 return False
             i, j = grid.cell_of(x + dx, y + dy)

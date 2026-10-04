@@ -340,6 +340,58 @@ class FanoutRouteTest(unittest.TestCase):
         )
         self.assertNotIn("A5", fo.report["U1"]["no_access"])
 
+    def test_the_tail_judges_a_block_rule_area_exactly(self):
+        # A fixed block's F.Cu rule area 0.225 mm east of A5's exit (0.2 mm grid): the
+        # grid blocks the cells within half a track plus half a cell diagonal of it, so
+        # every tail's side sample falls in a blocked cell; the last pass judges the
+        # area exactly and the grid's grown obstacles on the centre line.
+        import math as m
+
+        from pnr.fanout import cached_plan
+        from pnr.route.detail.fanout import plan_fanouts
+
+        signals = {n.name for n in self.g.nets if n.name != "GND"}
+        plan = cached_plan(
+            self.g,
+            self.rules,
+            self.rules["fanouts"][0],
+            grid_layers=["F.Cu", "In2.Cu", "B.Cu"],
+            plane_nets={"GND"},
+            signal_nets=signals,
+        )
+        ex, ey = plan["terminals"]["A5"]["exit"]
+        x0 = ex + 0.225
+        area = [[x0, ey - 0.2], [x0 + 0.5, ey - 0.2], [x0 + 0.5, ey + 3], [x0, ey + 3]]
+        fixed = dict(
+            frame="engine-mm-y-up",
+            blocks=[
+                dict(polygons=[dict(kind="rule_area", layers=["F.Cu"], outline=area, tracks=True)])
+            ],
+        )
+        from pnr.route.detail.grid import RouteGrid
+
+        grid = RouteGrid.from_graph(
+            self.g,
+            20,
+            20,
+            pitch=0.2,
+            layers=("F.Cu", "In2.Cu", "B.Cu"),
+            clearance=0.1,
+            track_width=0.1,
+            via_radius=0.2,
+        )
+        grid.block_polygon(area, [], [0], 0.05 + grid.pitch / m.sqrt(2), block_vias=False)
+        fo = plan_fanouts(
+            grid,
+            self.g,
+            self.rules,
+            plane_nets={"GND"},
+            signal_nets=signals,
+            via_keepout=1,
+            fixed_copper=fixed,
+        )
+        self.assertNotIn("A5", fo.report["U1"]["no_access"])
+
     def test_class_clearances_reach_the_halo_and_the_pad_checks(self):
         from pnr.place.geometry import Rect
         from pnr.route.detail.fanout import _clear_of_pads, _via_halo

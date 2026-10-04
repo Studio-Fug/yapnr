@@ -96,6 +96,8 @@ def model(m, args):
         cu.AddPolygon(np.array(pp).T, "z", z_l1, priority=30)
     for vx, vy, dr in m["vias"]:
         pec.AddBox([vx - dr / 2, vy - dr / 2, 0.0], [vx + dr / 2, vy + dr / 2, z_l1], priority=50)
+    for vx, vy, dr in m.get("shorts", []):  # shorted dummy loads: signal land to L3
+        pec.AddBox([vx - dr / 2, vy - dr / 2, 0.0], [vx + dr / 2, vy + dr / 2, z_l1], priority=50)
 
     res = args.res
     fine = res / 3
@@ -124,17 +126,49 @@ def model(m, args):
         ly += [ld["at"][1] - ld["half"], ld["at"][1] + ld["half"]]
     lx += [bx0, bx1, sx0, sx1, ax0, ax1]
     ly += [by0, by1, sy0, sy1, ay0, ay1]
+    # x lines repeat at the column pitch over each bank's periodic span (review 2026-10-04): the
+    # lines of every period are folded into one period, merged, and laid out again in each, and
+    # the fill inside a span is a whole number of cells per period, so every column of a bank
+    # sees the same x mesh (edge and interior columns compare without a mesh difference)
+    spans = [tuple(v) for v in m.get("periods", {}).values()]
     lx = dedupe(lx, res / 2)
+    fill_x = res * 1.6
+    px = []
+    for lo, hi, dd in spans:
+        us = dedupe([(x - lo) % dd for x in lx if lo - 1e-9 <= x <= hi + 1e-9], res / 2)
+        if us and us[-1] > dd - res / 2:  # wrap-around duplicate of u = 0
+            us = us[:-1]
+        nper = int(round((hi - lo) / dd))
+        nf = int(math.ceil(dd / fill_x))
+        uf = [dd * i / nf for i in range(nf)]
+        uf = (
+            [u for u in uf if min(min(abs(u - w), dd - abs(u - w)) for w in us) > res / 2]
+            if us
+            else uf
+        )
+        for k in range(nper + 1):
+            px += [lo + k * dd + u for u in us + uf if lo + k * dd + u <= hi + 1e-9]
+    inside = [(lo - res / 2, hi + res / 2) for lo, hi, _ in spans]
+    lx = [x for x in lx if not any(a < x < b for a, b in inside)]
+    lx = sorted(set(round(x, 6) for x in lx + px))
     ly = dedupe(ly, res / 2)
     grid.AddLine("x", lx)
     grid.AddLine("y", ly)
     zl = list(np.linspace(0, z_l2, 5)) + list(np.linspace(z_l2, z_l1, 5))
     zl += [az0, az1, z_l1 + 0.3, -0.3]
     grid.AddLine("z", sorted(set(round(v, 6) for v in zl)))
-    fx = np.arange(bx0, bx1, res * 1.6)
-    fy = np.arange(by0, by1, res * 1.6)
-    grid.AddLine("x", [v for v in fx if min(abs(v - u) for u in lx) > res / 2])
-    grid.AddLine("y", [v for v in fy if min(abs(v - u) for u in ly) > res / 2])
+    fx = np.arange(bx0, bx1, fill_x)
+    fy = np.arange(by0, by1, fill_x)
+    fx = [
+        v
+        for v in fx
+        if min(abs(v - u) for u in lx) > res / 2 and not any(a < v < b for a, b in inside)
+    ]
+    fy = [v for v in fy if min(abs(v - u) for u in ly) > res / 2]
+    if fx:
+        grid.AddLine("x", fx)
+    if fy:
+        grid.AddLine("y", fy)
     for axn in ("x", "y", "z"):
         grid.SmoothMeshLines(axn, cell_air, 1.3)
 
@@ -171,6 +205,12 @@ def model(m, args):
     nf = fdtd.CreateNF2FFBox(
         start=[sx0 - nfm, sy0 - nfm, -nfm], stop=[sx1 + nfm, sy1 + nfm, z_l1 + nfm]
     )
+    if args.dump_bond:  # E at mid-bondply (L2-L3 parallel plate), frequency domain
+        zb = s["h_bond"] / 2
+        dump = csx.AddDump(
+            "e_bond", dump_type=10, frequency=[f * 1e9 for f in (60.3, 62.05, 63.8)], file_type=1
+        )
+        dump.AddBox([sx0, sy0, zb], [sx1, sy1, zb])
     gx, gy, gz = (np.array(grid.GetLines(dd)) for dd in "xyz")
     meta = dict(
         mesh=dict(nx=len(gx), ny=len(gy), nz=len(gz)),
@@ -183,6 +223,8 @@ def model(m, args):
         k_rough=k_r,
         substrate_mm=[sx1 - sx0, sy1 - sy0],
     )
+    if args.setup_only:
+        meta["x_lines"] = [round(float(v), 5) for v in gx]
     return fdtd, ports, loads, nf, meta
 
 
@@ -208,6 +250,7 @@ def main():
     ap.add_argument("--max-steps", type=int, default=150000)
     ap.add_argument("--end-db", type=float, default=1e-4)
     ap.add_argument("--setup-only", action="store_true")
+    ap.add_argument("--dump-bond", action="store_true", help="E at mid-bondply (e_bond.h5)")
     a = ap.parse_args()
     m = json.load(open(a.model))
     out = os.path.abspath(a.out)
@@ -245,8 +288,8 @@ def main():
     for name, p in ports.items():
         sv = p.uf_ref / pe.uf_inc
         db = 20 * np.log10(np.abs(sv))
-        cols += [db, np.degrees(np.unwrap(np.angle(sv)))]
-        hdr += [f"s_{name}_db", f"s_{name}_deg"]
+        cols += [db, np.degrees(np.unwrap(np.angle(sv))), np.real(sv), np.imag(sv)]
+        hdr += [f"s_{name}_db", f"s_{name}_deg", f"s_{name}_re", f"s_{name}_im"]
         res["s"][name] = dict(
             db_at={
                 f"{x:.2f}": float(np.interp(x * 1e9, f, db)) for x in (58, 60.3, 62.05, 63.8, 66)
@@ -312,6 +355,14 @@ def main():
         )
         prad = float(r_e.Prad[0])
         dmax = float(r_e.Dmax[0])
+        # complex cuts: E * r, normalised so |E|^2 / (2 eta0) integrates to P_rad / P_inc
+        cplx = {}
+        for tag, rr in (("e", r_e), ("h", r_h)):
+            for comp in ("E_theta", "E_phi"):
+                ev = np.asarray(getattr(rr, comp)[0])[:, 0] / math.sqrt(p_inc)
+                cplx[f"{tag}_{comp}"] = [
+                    [round(float(v.real), 6), round(float(v.imag), 6)] for v in ev[::2]
+                ]
         i0 = int(np.argmin(np.abs(theta)))
         d_bs = float(e_cut[i0])
         res["far_field"][f"{fx / 1e9:.2f}"] = dict(
@@ -330,9 +381,13 @@ def main():
             cut_theta_deg=theta[::2].tolist(),
             e_cut_dbi=[round(v, 2) for v in e_cut[::2].tolist()],
             h_cut_dbi=[round(v, 2) for v in h_cut[::2].tolist()],
+            nf2ff_centre=[pc[0], pc[1], 0.0],
+            complex_cuts=cplx,
         )
     with open(os.path.join(out, "result.json"), "w") as fh:
         json.dump(res, fh, indent=1, default=float)
+    if a.dump_bond and os.path.exists(os.path.join(sim, "e_bond.h5")):
+        shutil.copy(os.path.join(sim, "e_bond.h5"), os.path.join(out, "e_bond.h5"))
     shutil.rmtree(sim, ignore_errors=True)
     print(
         json.dumps(

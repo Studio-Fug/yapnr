@@ -73,16 +73,20 @@ def build(m, a):
     z_top = z_l1 + a.air + 8 * cell_air
 
     w = 2 * math.pi * f0
+    lossy = 0.0 if a.lossless else 1.0  # --lossless: what is still lost is radiated or leaked
     core = csx.AddMaterial(
-        "RO4835", epsilon=s["dk_core"], kappa=w * EPS0 * s["dk_core"] * s["df_core"]
+        "RO4835", epsilon=s["dk_core"], kappa=lossy * w * EPS0 * s["dk_core"] * s["df_core"]
     )
     k_r = cf.roughness_factor(s["rq_l1_um"], f0)
-    cu = csx.AddConductingSheet("L1", conductivity=5.8e7 / k_r**2, thickness=s["t_l1"] * 1e-3)
     pec = csx.AddMetal("PEC")
+    if a.lossless:
+        cu = pec
+    else:
+        cu = csx.AddConductingSheet("L1", conductivity=5.8e7 / k_r**2, thickness=s["t_l1"] * 1e-3)
     core.AddBox([x0, y0, z_l2], [x1, y1, z_l1], priority=1)
     if layered:
         bond = csx.AddMaterial(
-            "RO4450F", epsilon=s["dk_bond"], kappa=w * EPS0 * s["dk_bond"] * s["df_bond"]
+            "RO4450F", epsilon=s["dk_bond"], kappa=lossy * w * EPS0 * s["dk_bond"] * s["df_bond"]
         )
         bond.AddBox([x0, y0, 0.0], [x1, y1, z_l2], priority=1)
         pec.AddBox([x0, y0, z_l2], [x1, y1, z_l2], priority=10)
@@ -277,6 +281,9 @@ def main():
     ap.add_argument("--dump", action="store_true")
     ap.add_argument("--dump-f", type=float, nargs="+", default=[58.0, 60.0, 62.0, 64.0, 66.0])
     ap.add_argument("--setup-only", action="store_true")
+    ap.add_argument(
+        "--lossless", action="store_true", help="PEC L1, lossless dielectrics (radiation only)"
+    )
     ap.add_argument("--post-only", action="store_true", help="post-process an existing OUT/sim")
     a = ap.parse_args()
     m = json.load(open(a.model))
@@ -308,7 +315,13 @@ def main():
     pe = ports[a.excite] if not multi else None
     cols, hdr = [f / 1e9], ["f_ghz"]
     res = dict(
-        model=m["model"], variant=m["variant"], excite=a.excite, wall_s=wall, meta=meta, ports={}
+        model=m["model"],
+        variant=m["variant"],
+        excite=a.excite,
+        lossless=a.lossless,
+        wall_s=wall,
+        meta=meta,
+        ports={},
     )
     for name, p in ports.items():
         if multi:  # every line driven at its P0: S of line n relative to n.P0's incident wave

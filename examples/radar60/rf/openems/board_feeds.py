@@ -108,7 +108,7 @@ for t in d["tracks"]:
         nets.setdefault(t["net"], []).append(track_poly(t))
 load_pads = {}  # net -> (signal pad polygon, gnd pad polygon)
 for pd in d["pads"]:
-    if pd["layer"] != "F.Cu" or not pd["ref"].startswith("RL"):
+    if pd["layer"] != "F.Cu" or not pd["ref"].startswith(("RT", "RL")):
         continue
     q = mp(pd["poly"])
     load_pads.setdefault(pd["ref"], {})[pd["net"]] = q

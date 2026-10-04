@@ -224,6 +224,9 @@ class DrivenTest(unittest.TestCase):
         rs, ls = config.impedance_rl(5.8e7, 0.035, 62.0, interior=False)
         self.assertAlmostEqual(rs / z.real, 2.0, places=9)
         self.assertAlmostEqual(omega * ls / z.real, 2.0, places=9)
+        # a saved adapted mesh: the sheet is two exterior faces already, each 1 / Z
+        rs, ls = config.impedance_rl(5.8e7, 0.035, 62.0, interior=True, precracked=True)
+        self.assertAlmostEqual(rs / z.real, 2.0, places=9)
 
     def test_port_face_ends_in_ground(self):
         g = model.port_geometry(self.doc)["P1"]

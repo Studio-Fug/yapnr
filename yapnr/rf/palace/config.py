@@ -54,7 +54,7 @@ def face_impedance(sigma: float, thickness_mm: float, f_ghz: float) -> complex:
 
 
 def impedance_rl(
-    sigma: float, thickness_mm: float, f_ghz: float, interior: bool
+    sigma: float, thickness_mm: float, f_ghz: float, interior: bool, precracked: bool = False
 ) -> Tuple[float, Optional[float]]:
     """(Rs ohm/sq, Ls H/sq) of the ``Impedance`` boundary that matches a ``Conductivity`` one at
     ``f_ghz``: copper written this way when ``copper_bc`` is "impedance".
@@ -72,9 +72,17 @@ def impedance_rl(
     Rs = 1 / Re Y and Ls = -1 / (omega Im Y); for thick copper Rs = omega Ls = Re Z (sheet) or
     2 Re Z (solid). Exact at ``f_ghz`` (one-rank runs give the same n_eff and Z_PV to the
     printed digits); elsewhere Re(1/Y) goes as 1/(1 + (f0/f)^2) instead of sqrt(f): the
-    conductor loss is about 8 % low at 54 GHz and 6 % high at 70 GHz for f0 = 62 GHz."""
+    conductor loss is about 8 % low at 54 GHz and 6 % high at 70 GHz for f0 = 62 GHz.
+
+    ``precracked``: the mesh is an adapted mesh Palace saved, whose interior sheets are already
+    split into two exterior faces; Palace no longer knows them as cracked and gives each face the
+    whole Impedance, so each face gets 1 / Z instead (written as if the sheet were the interior
+    one, the conductor loss of a sweep on a saved mesh comes out about half: 0.063 against
+    0.088-0.090 dB/mm for the GCPW line)."""
     omega = 2.0 * math.pi * f_ghz * 1e9
-    if interior:
+    if interior and precracked:
+        y = 1.0 / face_impedance(sigma, thickness_mm, f_ghz)
+    elif interior:
         y = 2.0 / face_impedance(sigma, thickness_mm, f_ghz)
     else:
         y = 1.0 / face_impedance(sigma, 2.0 * thickness_mm, f_ghz)
@@ -121,6 +129,7 @@ def _boundaries(
     absorbing_order: Optional[int],
     copper_bc: str = "conductivity",
     copper_f_ghz: Optional[float] = None,
+    precracked: bool = False,
 ) -> Dict[str, Any]:
     if copper_bc not in COPPER_BCS:
         raise ValueError(f"copper_bc is one of {COPPER_BCS}, not {copper_bc!r}")
@@ -139,7 +148,11 @@ def _boundaries(
             pec.append(tag)
         elif copper_bc == "impedance":  # sheet (interior, two faces) or solid (outside, one)
             rs, ls = impedance_rl(
-                model.sigma_eff(lay), float(lay["t"]), float(copper_f_ghz), lay["model"] == "sheet"
+                model.sigma_eff(lay),
+                float(lay["t"]),
+                float(copper_f_ghz),
+                lay["model"] == "sheet",
+                precracked,
             )
             imp.append(dict(Attributes=[tag], Rs=rs, **({"Ls": ls} if ls else {})))
         elif lay["model"] == "sheet":
@@ -237,6 +250,7 @@ def driven(
     adaptive_max_samples: Optional[int] = None,
     copper_bc: str = "conductivity",
     copper_f_ghz: Optional[float] = None,
+    precracked: bool = False,
     verbose: int = 2,
 ) -> Dict[str, Any]:
     """A Driven configuration: S-parameters from ``f_min`` to ``f_max`` (GHz) every ``f_step``.
@@ -289,6 +303,7 @@ def driven(
             absorbing_order,
             copper_bc,
             copper_f_ghz or 0.5 * (f_min + f_max),
+            precracked,
         ),
         Solver=dict(
             Order=int(order),

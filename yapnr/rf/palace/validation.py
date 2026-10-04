@@ -155,6 +155,7 @@ def write_configs(
             df,
             mesh_file="postpro-amr/mesh.meshgz",
             output="postpro-sweep",
+            precracked=True,  # the saved adapted mesh has its sheets split already
             **sweep,
         ),
     }

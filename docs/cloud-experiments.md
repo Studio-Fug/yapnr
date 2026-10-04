@@ -685,9 +685,10 @@ A job names a Palace configuration (`config`, a path in the task: an input, or t
 `/opt/palace/share/palace/examples/...`), optional overrides (`set = {"Solver.Order" = 3}`, for the
 campaign or per job), an optional `prepare` script that meshes the model and writes the
 configuration into `{out}` first, optional `stages` (configurations solved first, each into
-`out/<id>/stage-<name>`, `CONFIG@1` on one rank) with `mesh_from` naming the stage whose saved
-adapted mesh the main configuration solves (refinement, then a sweep of the refined mesh, in one
-task), and an optional `reference` directory whose `port-S.csv` the result must match. Each task
+`out/<id>/stage-<k>-<name>` with `k` its place in the list, `CONFIG@1` on one rank; a stage
+listed twice is refused) with `mesh_from` naming the stage whose saved adapted mesh the main
+configuration solves (refinement, then a sweep of the refined mesh, in one task), and an optional
+`reference` directory whose `port-S.csv` the result must match. Each task
 runs the job bundle's `palace_job.py`: it reads the configuration
 (Palace's relaxed JSON: comments, trailing commas, integer ranges), applies the overrides, moves
 the output to `out/<id>/postpro` and makes the mesh path absolute (`out/<id>/config.json`), checks
@@ -698,7 +699,9 @@ or libfabric: one VM, no RDMA) on the 1 GiB of `/dev/shm` the task containers ge
 `out/<id>.job.json` (its verdict is `ok`: the solve exited 0 and matched the reference), keeps the
 stage that failed, wall and CPU time, the CPU, and Palace's own numbers from `palace.json` and its
 log: degrees of freedom and mesh elements, the AMR refinements and the unknowns of each solve,
-linear solves and iterations, timers, peak memory per rank and summed over the ranks.
+linear solves and iterations, timers, peak memory per rank and summed over the ranks. It is
+written when the task starts (`failed` is `running`), after every stage and at the end, so a task
+killed at its time limit or preempted still leaves the stages it finished.
 
 The smoke campaign (2026-10-04) ran Palace's coplanar-waveguide example from the image, a driven
 sweep over 7 frequencies with four wave ports, on 8 ranks of a `c4d-highcpu-16`: 117,764 degrees
@@ -712,9 +715,14 @@ bound to them; `packing = "vcpu"` puts a rank on each hardware thread, and with
 cores). `memory_gb` decides between the highcpu and standard shapes (`yapnr exp plan`'s rule);
 the plan asks for an instance policy when none of its families has a Spot template for that
 shape (`infra/gcp` makes them for `c4d-highcpu-8`, `c4d-highcpu-16` and `c4d-standard-16`, and
-for `c4-highcpu-8` and `c4-highcpu-16` in the example's second region). Palace does not
-checkpoint and adaptive refinement cannot restart, so a preempted model starts again: keep Spot
-models to an hour or two.
+for `c4-highcpu-8` and `c4-highcpu-16` in the example's second region). A job may set its own
+`ranks` or `memory_gb`: `yapnr exp` gives each such resource class its own shape, and the plan
+checks every job, so one that needs a shape without a template (56 GB: `c4d-highmem-16`; 16
+ranks: a 32-vCPU shape) turns the campaign to instance policies instead of being refused at
+submit. A job with fewer ranks than the campaign still reserves the campaign's cores (a
+rank-scaling run gets the VM to itself rather than sharing it with another job bound to the same
+cores). Palace does not checkpoint and adaptive refinement cannot restart, so a preempted model
+starts again: keep Spot models to an hour or two.
 
 ## Testing
 

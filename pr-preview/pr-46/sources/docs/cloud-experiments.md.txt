@@ -660,16 +660,27 @@ OpenBLAS: SuperLU_DIST and MUMPS, ARPACK for the wave-port mode solves and eigen
 LIBXSMM; no SLEPc, STRUMPACK, SUNDIALS (transient) or GPU. The image adds Palace's
 coplanar-waveguide example and its regression references, and a Python 3.12 with gmsh, numpy and
 shapely, so a task can mesh its model before the solve. There is one variant,
-`palace:<commit7>-x86-64-v3` (AVX2), because a second one doubles the build while the hot kernels
-pick AVX-512 at run time anyway (OpenBLAS, LIBXSMM). One of the dependencies Palace's superbuild
-always links, ParMETIS, is licensed for evaluation use outside non-profit research and may not be
-redistributed: the image stays in the private registry (see the image's README).
+`palace:<commit7>-pts-x86-64-v3` (AVX2), because a second one doubles the build while the hot
+kernels pick AVX-512 at run time anyway (OpenBLAS, LIBXSMM).
+
+The image has no ParMETIS, which Palace's superbuild always links but whose licence allows
+evaluation use only outside non-profit research and forbids redistribution: `docker/palace/patches`
+builds Scotch/PT-Scotch (CeCILL-C) in its place and keeps the orderings parallel. SuperLU_DIST's
+parallel ordering (`ColumnOrdering: "ParMETIS"`) calls Scotch's ParMETIS-compatible library, MUMPS
+calls PT-Scotch (`ColumnOrdering: "PTScotch"`), and the default stays SuperLU_DIST with serial
+METIS. The build proves the absence (the superbuild, the installed files and symbols, Palace's link
+map, a conformance test of the ordering against the ParMETIS manual, an SPDX bill of materials and
+syft's scan of the image) and fails otherwise; the image's README has the details. The earlier
+build with ParMETIS, `palace:b797ea8-x86-64-v3`, is kept for evaluation (comparisons) only.
 
 Cloud Build builds it on the 8-vCPU machine the regional quota allows, in a 3-hour budget (the
-default timeout is 10 minutes); the first build took 31 minutes (22 for the dependencies, 6 for
-Palace), about $0.56 (October 2026). The dependency stage is pushed as `palace-deps:<tag>-x86-64-v3`
-before Palace compiles and is read back with `--cache-from`, so a build that fails in Palace, or a
-change to the runtime stage, does not rebuild the dependencies. `tools/exp/palace_plan.py` works
+default timeout is 10 minutes); a build without its caches takes about 25 minutes (14 for the
+dependencies, 5 for Palace), about $0.45, and one with both dependency stages cached about 7
+minutes (October 2026). The dependency stages are pushed as
+`palace-deps:<tag>-x86-64-v3-solvers` (the ordering libraries and the direct solvers) and
+`palace-deps:<tag>-x86-64-v3` before Palace compiles and are read back with `--cache-from`, so a
+build that fails in MFEM or Palace, or a change to the runtime stage, does not rebuild the
+dependencies. `tools/exp/palace_plan.py` works
 like `openems_plan.py` (both use `tools/exp/image_tasks.py`); the jobs format is in its docstring:
 
 ```sh

@@ -19,8 +19,9 @@ terminals:
    the trunk would be narrower than it should be, and inside another rail's
    terminal disc), claimed with its width ``w`` = the largest of ``min_width_mm``,
    the IPC-2221 internal width for the rail's current, and ``R_sq L / R_share``
-   for its IR budget (``R_share`` the budget less two via barrels, at least a
-   quarter of it), keeping ``split_gap_mm`` of copper from every other rail;
+   for its IR budget (``L`` the root's path to its farthest terminal, ``R_share``
+   the budget less two via barrels, at least a quarter of it; at most 10 mm),
+   keeping ``split_gap_mm`` of copper from every other rail;
 4. a terminal no path reaches is reported (the pad's drop then fails in the drop
    planner, as a pad outside its region does);
 5. the territories grow into the free cells round the board (a breadth-first
@@ -52,6 +53,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 
 _CACHE: Dict[str, "Partition"] = {}
+MAX_WIDTH_MM = 10.0  # a trunk's widest target (its room decides below that)
 
 
 @dataclass
@@ -225,8 +227,10 @@ _DIAG = ((1, 1), (1, -1), (-1, 1), (-1, -1))
 
 def _steiner(cost: np.ndarray, terminals: List[np.ndarray], root: int):
     """Shortest-path-heuristic Steiner tree on the cell ``cost`` grid (inf: blocked)
-    joining ``terminals`` (flat cell index arrays) from ``root``. Returns (tree path
-    cells as a flat index array, reached terminal indices, tree length in cells)."""
+    joining ``terminals`` (flat cell index arrays) from ``root``. A diagonal step keeps
+    an orthogonal corner cell, so the tree is 4-connected (copper touching at a corner
+    is not joined). Returns (tree path cells as a flat index array, reached terminal
+    indices, tree length in cells, the longest root-to-terminal path in cells)."""
     ny, nx = cost.shape
     flat = cost.ravel()
     owner = {}
@@ -246,6 +250,7 @@ def _steiner(cost: np.ndarray, terminals: List[np.ndarray], root: int):
                     remaining.discard(t)
                     reached.append(t)
 
+    rdist = {c: 0.0 for c in tree}  # distance from the root along the tree
     covered(tree)
     length = 0.0
     sq2 = math.sqrt(2.0)
@@ -296,19 +301,40 @@ def _steiner(cost: np.ndarray, terminals: List[np.ndarray], root: int):
         if found is None:
             break
         k, t = found
+        walk = []
         while k not in tree:
-            path_cells.add(k)
-            p = prev[k]
-            a, b = divmod(k, nx), divmod(p, nx)
-            length += math.hypot(a[0] - b[0], a[1] - b[1])
-            k = p
-        tree |= path_cells
+            walk.append(k)
+            k = prev[k]
+        walk.append(k)  # the attach cell, on the tree
+        walk.reverse()
+        new = []
+        d = rdist.get(walk[0], 0.0)
+        for a, b in zip(walk, walk[1:]):
+            (ja, ia), (jb, ib) = divmod(a, nx), divmod(b, nx)
+            if ia != ib and ja != jb:  # diagonal: keep the cheaper orthogonal corner
+                c1, c2 = ja * nx + ib, jb * nx + ia
+                corner = c1 if flat[c1] <= flat[c2] else c2
+                if corner not in tree:
+                    new.append(corner)
+                    rdist.setdefault(corner, d)
+            step = math.hypot(ia - ib, ja - jb)
+            d += step
+            length += step
+            new.append(b)
+            rdist[b] = d
+        path_cells.update(new)
+        tree.update(new)
         added = set(int(c) for c in terminals[t].tolist() if math.isfinite(flat[c])) - tree
+        for c in added:
+            rdist[c] = d
         tree |= added
         reached.append(t)
         remaining.discard(t)
-        covered(path_cells | added)
-    return np.array(sorted(path_cells), dtype=np.int64), reached, length
+        covered(set(new) | added)
+    reach = max(
+        (rdist.get(int(c), 0.0) for t in reached for c in terminals[t].tolist()), default=0.0
+    )
+    return np.array(sorted(path_cells), dtype=np.int64), reached, length, reach
 
 
 # ----------------------------------------------------------------- polygons
@@ -551,13 +577,14 @@ def _partition(
     widths = {}
     for k in order:
         n = nets[k]
-        tree_mm = lengths[n] * h
+        tree_mm = lengths[n][0] * h
+        path_mm = lengths[n][1] * h  # the root to its farthest terminal
         budget = budgets.get(n)
         w_budget = 0.0
         if budget:
             share = max(0.25 * budget, budget - 2e3 * barrel_ohm(0.6, via_drill_mm, rho=rho))
-            w_budget = r_sq * tree_mm / (share * 1e-3)
-        w = min(max(wants[n], w_budget), 20.0)
+            w_budget = r_sq * path_mm / (share * 1e-3)
+        w = min(max(wants[n], w_budget), MAX_WIDTH_MM)
         widths[n] = w
         spine = spines[n]
         if spine.any() and w > min_w:
@@ -578,6 +605,7 @@ def _partition(
             width_budget_mm=round(w_budget, 4),
             budget_mohm=budget,
             tree_mm=round(tree_mm, 3),
+            path_mm=round(path_mm, 3),
             terminals=len(terminals[n]),
             reached=reached_of[n],
             unreached=[
@@ -687,9 +715,9 @@ def _connect(ctx, label0, order):
         flat_terms = [np.flatnonzero(disc & allowed) for disc in ctx["cells_of"][n]]
         root = _root(n, ctx["terminals"][n], flat_terms, ctx["sources"])
         if flat_terms:
-            path, reached, length = _steiner(cost, flat_terms, root)
+            path, reached, length, reach = _steiner(cost, flat_terms, root)
         else:
-            path, reached, length = np.zeros(0, dtype=np.int64), [], 0.0
+            path, reached, length, reach = np.zeros(0, dtype=np.int64), [], 0.0, 0.0
         spine = g.zeros()
         spine.ravel()[path] = True
         half = ctx["min_w"] / g.h / 2
@@ -698,7 +726,7 @@ def _connect(ctx, label0, order):
             trunk |= ctx["cells_of"][n][t] & allowed
         label[trunk & (label < 0)] = k
         spines[n] = spine
-        lengths[n] = length
+        lengths[n] = (length, reach)
         reached_of[n] = len(reached)
         unreached[n] = [
             ctx["terminals"][n][t] for t in range(len(ctx["terminals"][n])) if t not in set(reached)

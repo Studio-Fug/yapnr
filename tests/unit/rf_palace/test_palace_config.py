@@ -216,6 +216,20 @@ class DrivenTest(unittest.TestCase):
         rs, ls = config.sheet_impedance(5.8e7, 1e-5, 1.0)  # 10 nm at 1 GHz (delta 2 um)
         self.assertAlmostEqual(rs * 5.8e7 * 1e-8, 2.0, places=3)
 
+    def test_port_face_ends_in_ground(self):
+        g = model.port_geometry(self.doc)["P1"]
+        self.assertEqual(g["half_width_actual"], [0.8, 0.8])  # the edges lie inside the ground
+        doc = copy.deepcopy(self.doc)
+        gnd = next(c for c in doc["conductors"] if c["net"] == "GND")
+        for pg in gnd["polygons"]:  # the upper ground strip now stops at y 0.6, short of 0.8
+            if pg["outer"][0][1] > 0:
+                pg["outer"] = [[0.0, 0.3], [6.0, 0.3], [6.0, 0.6], [0.0, 0.6]]
+        g = model.port_geometry(doc)["P1"]
+        self.assertAlmostEqual(g["half_width_actual"][1], 0.45)  # its middle, not a floating strip
+        self.assertAlmostEqual(g["half_width_actual"][0], 0.8)
+        msl = adapters.line_model("msl", length=5.0)
+        self.assertEqual(model.port_geometry(msl)["P1"]["half_width_actual"], [0.8, 0.8])
+
     def test_boundary_mode_wall(self):
         cfg = config.boundary_mode(self.doc, self.rec, "P1", 1.0, face="wall")
         self.assertEqual(config.validate(cfg), [])

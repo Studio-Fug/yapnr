@@ -135,6 +135,11 @@ def _boundaries(
                     External=False,
                 )
             )
+        elif copper_bc == "impedance":  # solid: the copper's outer surface, one-sided
+            rs, ls = sheet_impedance(
+                model.sigma_eff(lay), 2.0 * float(lay["t"]), float(copper_f_ghz)
+            )
+            imp.append(dict(Attributes=[tag], Rs=rs, Ls=ls))
         else:
             cond.append(dict(Attributes=[tag], Conductivity=model.sigma_eff(lay), External=True))
     pec += sorted(_groups(rec, "via:").values())

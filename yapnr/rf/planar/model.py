@@ -335,13 +335,60 @@ def wall_of(direction: str) -> str:
     return ("x", "y")[axis] + ("min" if sign > 0 else "max")
 
 
+def wall_copper(
+    doc: Dict[str, Any], layer_name: str, axis: int, plane: float, nets: Sequence[str]
+) -> List[Tuple[float, float]]:
+    """The intervals (along the other axis) where copper of ``nets`` on ``layer_name`` crosses
+    the wall ``axis = plane`` (sampled a micrometre inside the domain), merged and sorted."""
+    x0, x1, y0, y1 = (float(v) for v in doc["domain"]["box"][:4])
+    lo, hi = ((x0, x1), (y0, y1))[axis]
+    at = plane + 1e-3 if abs(plane - lo) < abs(plane - hi) else plane - 1e-3
+    lat = 1 - axis
+    spans: List[Tuple[float, float]] = []
+    for c in doc.get("conductors", []):
+        if c["layer"] != layer_name or c["net"] not in nets:
+            continue
+        for pg in c["polygons"]:
+            cuts: List[float] = []
+            for ring in [pg["outer"]] + list(pg.get("holes", [])):
+                pts = ring_points(ring)
+                for i, a in enumerate(pts):
+                    b = pts[(i + 1) % len(pts)]
+                    if (a[axis] - at) * (b[axis] - at) < 0:
+                        t = (at - a[axis]) / (b[axis] - a[axis])
+                        cuts.append(a[lat] + t * (b[lat] - a[lat]))
+            cuts.sort()
+            spans += [(cuts[i], cuts[i + 1]) for i in range(0, len(cuts) - 1, 2)]
+    spans.sort()
+    merged: List[Tuple[float, float]] = []
+    for a, b in spans:
+        if merged and a <= merged[-1][1] + TOL:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], b))
+        else:
+            merged.append((a, b))
+    return merged
+
+
+def ground_nets(doc: Dict[str, Any]) -> List[str]:
+    """The ground nets: the document's ``ground_nets``, else every net named GND*."""
+    if doc.get("ground_nets"):
+        return list(doc["ground_nets"])
+    return sorted(
+        {c["net"] for c in doc.get("conductors", []) if c["net"].upper().startswith("GND")}
+    )
+
+
 def port_geometry(doc: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     """Face rectangle, de-embedding offset and voltage path of every port, by name.
 
     A wave port's face lies on the wall behind ``at``: laterally ``face.half_width`` either side
     of the line, cut back at the domain edge and halfway to a neighbouring port on the same wall;
-    vertically from the reference layer to ``face.height`` above the signal layer. A lumped
-    port's face is the ``width`` x (signal - reference) rectangle across the dielectric at ``at``.
+    vertically from the reference layer to ``face.height`` above the signal layer. A side that
+    has coplanar ground on the signal layer then ends inside it: an edge that falls in a gap is
+    pulled back to the middle of the last ground strip before it, because the face's edges are
+    PEC in the port's 2D mode solve and a ground strip that does not reach one would float there
+    (a different mode: TX1.P0 of tx12 gave Z_PV 24 ohm before this rule). A lumped port's face is
+    the ``width`` x (signal - reference) rectangle across the dielectric at ``at``.
     Coordinates are mm; ``rect`` lists the four corners in order.
     """
     x0, x1, y0, y1, z0, z1 = (float(v) for v in doc["domain"]["box"])
@@ -386,6 +433,23 @@ def port_geometry(doc: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
             mid = 0.5 * (a["g"]["centre"] + b["g"]["centre"])
             a["g"]["lat"][1] = min(a["g"]["lat"][1], mid)
             b["g"]["lat"][0] = max(b["g"]["lat"][0], mid)
+    gnd = ground_nets(doc)
+    for p in doc.get("ports", []):
+        g = out[p["name"]]
+        if g["kind"] != "wave" or not gnd:
+            continue
+        axis = 0 if g["axis"] == "x" else 1
+        spans = wall_copper(doc, p["layer"], axis, g["plane"], gnd)
+        c, w2 = g["centre"], float(p["width"]) / 2
+        lo, hi = g["lat"]
+        if spans and not any(a - TOL <= hi <= b + TOL for a, b in spans):
+            inner = [(a, b) for a, b in spans if a > c + w2 - TOL and b < hi]
+            if inner:
+                g["lat"][1] = 0.5 * (inner[-1][0] + inner[-1][1])
+        if spans and not any(a - TOL <= lo <= b + TOL for a, b in spans):
+            inner = [(a, b) for a, b in spans if b < c - w2 + TOL and a > lo]
+            if inner:
+                g["lat"][0] = 0.5 * (inner[0][0] + inner[0][1])
     for p in doc.get("ports", []):
         g = out[p["name"]]
         lo, hi = g["lat"]

@@ -42,28 +42,28 @@ def case_settings(name: str) -> Dict[str, Any]:
             adaptive_tol=1e-3,
             excite=["P1"],
             amr_freqs=[62.0],
-            amr=dict(MaxIts=4, MaxSize=2_000_000),
+            amr=dict(MaxIts=3, MaxSize=1_200_000),
             modes=[1.0, 30.0, 62.0],
             copper_bc="impedance",
         )
     if name.startswith("patch-"):
         return dict(
             band=(58.0, 66.0, 0.05),
-            adaptive_tol=1e-4,
+            adaptive_tol=1e-3,
             adaptive_max_samples=30,
             excite=["P1"],
             amr_freqs=[61.0, 61.9, 62.8],
-            amr=dict(MaxIts=5, MaxSize=2_500_000),
+            amr=dict(MaxIts=1, MaxSize=1_500_000),
             copper_bc="impedance",
         )
     if name.startswith("tx12-"):
         return dict(
             band=(54.0, 70.0, 0.025),
-            adaptive_tol=1e-4,
+            adaptive_tol=1e-3,
             adaptive_max_samples=30,
             excite=["TX1.P0"],
             amr_freqs=[59.0, 60.0, 61.0, 63.8],
-            amr=dict(MaxIts=5, MaxSize=2_500_000),
+            amr=dict(MaxIts=1, MaxSize=2_000_000),
             copper_bc="impedance",
         )
     raise KeyError(name)

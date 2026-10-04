@@ -323,8 +323,18 @@ copper lies (R1’s 0.70 mm arm is 14 cells about a node there; on the 0.10 mm g
 drawn 0.6 or 0.8 mm). Their geometry is frozen in this release as drawn: a quarter wave from
 Hammerstad’s T-junction reference plane, a closed-form correction; it is not tuned after
 any D1 or D2 result;</p></li>
+<li><p>the ring A11 and the stub A12 also in the optimizer’s FDTD, forward only, with R1’s settings
+(0.05 mm, the FR408HR and EM528 thickness-equivalent substrates): a second, independent
+prediction of the held-out notches next to the coupon model’s;</p></li>
 <li><p>D1, D2: the optimizer’s validation runs on the thickness-equivalent and on the nominal
-substrate, with the spec, <code class="docutils literal notranslate"><span class="pre">result.json</span></code>, <code class="docutils literal notranslate"><span class="pre">validation.json</span></code> and the footprint.</p></li>
+substrate (and on EM528’s thickness-equivalent one), with the spec, <code class="docutils literal notranslate"><span class="pre">result.json</span></code>,
+<code class="docutils literal notranslate"><span class="pre">validation.json</span></code> and the footprint;</p></li>
+<li><p>the thru and the reflects (A01, A06, B01, B05) are calibration standards (the thru is the
+identity between its reference planes, the reflect is not assumed), A15 has no RF port; the
+tier-1 view of A01 and A04 (the launches included) is the openEMS prediction below.
+Every solver prediction names its source: yapnr commit <code class="docutils literal notranslate"><span class="pre">917222a</span></code> (the bundle the cloud tasks
+ran; the <code class="docutils literal notranslate"><span class="pre">result.json</span></code> provenance shows the image wheel’s version string, <code class="docutils literal notranslate"><span class="pre">688fac3</span></code>) and the
+image <code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr&#64;sha256:f41a4760…</span></code> with its native float64 kernel.</p></li>
 </ul>
 </li>
 <li><p><strong>The solver’s loss correction</strong>: the predicted |S21| of the demos and references is published
@@ -339,9 +349,18 @@ any geometry (D1, D2) the fraction of the incident power the solver dissipates i
 α_coupon/α_solver of the port line (<a class="reference internal" href="demos.html#run-0b-the-loss-correction-and-the-s21-criterion"><span class="std std-ref">demos</span></a>). Closed forms disagree on the smooth part
 (the coupon model’s 2D Wheeler factor gives 0.037 dB/cm on M at 5 GHz, Hammerstad-Jensen 0.059),
 so the measured α(f) of the lines, not either model, settles it, and the post-fit prediction uses
-the fitted loss.</p></li>
+the fitted loss. Each substrate is corrected with its own lines (M-eq: run 0b’s; M-nom, M-eq-em528,
+W-eq, W-nom, W-eq-em528: the same lines run on that substrate) against the coupon model of the
+board it stands for (FR408HR, or EM528 for the <code class="docutils literal notranslate"><span class="pre">-em528</span></code> substrates); R1t uses the 3.0 mm line’s
+Δα along its path (region W has no 5.0 mm line run). The corrected files and the raw and
+corrected worst cases are in <a class="reference internal" href="#predictions/corrected/summary.json"><span class="xref myst">predictions/corrected/</span></a>
+(<code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.rf.order0</span> <span class="pre">correct</span></code>).</p></li>
 <li><p><strong>The full optimizer history</strong>: every D1 and D2 attempt with its validation, failures included,
 and the rule that picked the shipped run.</p></li>
+<li><p><strong>An independent 3D prediction</strong> (openEMS 0.37, <a class="reference internal" href="#predictions/openems/README.md"><span class="xref myst">predictions/openems/</span></a>):
+D1 and R1 with 43 µm copper on the nominal FR408HR stack at two meshes, the 0.40 mm line, and
+the sticks A01 and A04 with the Cinch launches as the tier-1 calibration sees them, with the
+comparison against the optimizer’s FDTD stated as found.</p></li>
 <li><p><strong>The criteria</strong> (below) and the analysis order.</p></li>
 </ol>
 <p>D1 and D2 carry the first 8 hex digits of the sha256 of their <code class="docutils literal notranslate"><span class="pre">result.json</span></code> in silkscreen, which
@@ -358,6 +377,10 @@ ties the physical part to its prediction.</p>
 </section>
 <section id="acceptance-criteria-draft">
 <h2>Acceptance criteria (draft)<a class="headerlink" href="#acceptance-criteria-draft" title="Link to this heading">¶</a></h2>
+<p>The table is the Order 0 design’s (§7), with its review’s replacement of “agrees with
+prediction” (the −15 dB band edges it first named lie above the LibreVNA’s 6 GHz: R1’s −15 dB
+band is 3.3-6.7 GHz, 68 %). D3 and D4 (the antenna and the diplexer) are stretch items that do
+not ship on Order 0; their rows are kept as written.</p>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
 <thead>
@@ -367,27 +390,70 @@ ties the physical part to its prediction.</p>
 </thead>
 <tbody>
 <tr class="row-even"><td><p>Coupons, held out</p></td>
-<td><p>Ring notches (n = 1 and 3) and the stub notch within 0.5 % of the <strong>post-fit</strong> model. A measured notch frequency comes from fitting the model’s notch shape to the data around it, not from the lowest sample (the n = 3 notch lies 10-20 dB above the instrument floor). Verification line consistent with the mTRL uncertainty.</p></td>
+<td><p>Ring f_n and stub notch within 0.5 % of the <strong>post-fit</strong> model. Verification line consistent with the mTRL uncertainty.</p></td>
 </tr>
 <tr class="row-odd"><td><p>D1, D2: “meets spec”</p></td>
-<td><p>Measured (mTRL-corrected, renormalized to 50 Ω with the fitted line Z0 and its uncertainty) |S11| ≤ −20 dB and |S21|, |S31| ≥ −3.4 dB over 4.25-5.75 GHz (−3.4 dB confirmed by run 0b under D-O0-11 before D1 runs: the loss-corrected R1 reaches −3.285 dB; <a class="reference internal" href="demos.html#run-0b-the-loss-correction-and-the-s21-criterion"><span class="std std-ref">demos</span></a>)</p></td>
+<td><p>Measured (mTRL-corrected, renormalized to 50 Ω) |S11| ≤ −20 dB and |S21|, |S31| ≥ −3.4 dB over 4.25-5.75 GHz</p></td>
 </tr>
 <tr class="row-even"><td><p>D1, D2: “meets validation criteria”</p></td>
-<td><p>|S11| ≤ −15 dB and |S21|, |S31| ≥ −3.6 dB</p></td>
+<td><p>|S11| ≤ −15 dB and ≥ −3.6 dB</p></td>
 </tr>
 <tr class="row-odd"><td><p>D1, D2: “agrees with prediction”</p></td>
-<td><p>Over 4.25-5.75 GHz, in the optimizer’s port reference: the measured data, which mTRL gives in the fitted Zc of the region’s line, are renormalized to the port impedance the solver calibrates for that run (<code class="docutils literal notranslate"><span class="pre">yapnr.rf.ports.calibrate_line</span></code>, recorded with the result) before comparing. On W the two differ by about 1.4 Ω (the TRL line 48.6 Ω with its L1 pour and inner-layer ring, the solver’s port on open L1 about 50.0 Ω), |Γ| 0.014 per port. Then: max |S11,meas − S11,pred| ≤ 0.05; frequencies of the in-band |S11| minima within ±1.5 %; |S21| within ±0.25 dB; |S21| − |S31| within 0.3 dB. A difference inside the k = 2 measurement uncertainty, reported next to every number, also counts as agreement. The same for R1 and R1t.</p></td>
+<td><p>Max over 4.25-5.75 GHz of the vector difference |S11,meas − S11,pred| ≤ 0.05 (a −20 dB S11 is 0.10), in the mTRL native reference (line Z0, the same as the solver’s modal port); frequencies of in-band |S11| minima within ±1.5 %; |S21| within ±0.25 dB; |S21| − |S31| within 0.3 dB. “Agrees” also counts a difference that lies inside the k = 2 measurement uncertainty, which is reported next to each number.</p></td>
 </tr>
-<tr class="row-even"><td><p>D1 against R1, D2 against R1t</p></td>
-<td><p>The claim tested is “the optimizer automatically matches a textbook-class design”, not that it beats one: both against the same criteria, with footprint area, worst in-band |S11| and |S21|, imbalance, compute hours and the number of optimizer attempts</p></td>
+<tr class="row-even"><td><p>D1, D2, R1, R1t: reference impedance</p></td>
+<td><p>“Meets spec” is evaluated after renormalizing to 50 Ω with the fitted line Z0, and that Z0 uncertainty is propagated. ±1.3 Ω without A16 moves a −20 dB |S11| by about ±1 dB; ±0.5 Ω with A16 moves it by ±0.4 dB.</p></td>
+</tr>
+<tr class="row-odd"><td><p>D1 against R1</p></td>
+<td><p>The claim tested is <strong>“the optimizer automatically matches a textbook-class design”</strong>, not that it beats one. Report both against the same criteria, plus footprint area, worst in-band |S11| and |S21|, imbalance, compute hours and the number of optimizer attempts.</p></td>
+</tr>
+<tr class="row-even"><td><p>D3 (stretch, not on Order 0)</p></td>
+<td><p>Frequency of the |S11| minimum within ±1 %, and the −10 dB bandwidth within ±20 % (relative)</p></td>
+</tr>
+<tr class="row-odd"><td><p>D4 (stretch, not on Order 0)</p></td>
+<td><p>Channel centres within ±1 %, insertion loss within 0.3 dB, rejection within 3 dB of prediction while at least 10 dB above the floor</p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>Every result is reported three ways: against the pre-registered nominal prediction, against the
-post-fit prediction (the stackup fitted from this lot’s coupons), and against the spec. The
-instrument’s floor is drawn on every transmission plot. Criteria are never changed after data
-arrive; if one must be, results are reported against both versions.</p>
+<p>Each result is reported three ways: against the pre-registered nominal prediction, against the
+post-fit prediction (stackup fitted from the coupons), and against the spec. The instrument
+floor is drawn on every transmission plot.</p>
+<p>How the rows are applied (decided before any measurement; none of these changes a limit):</p>
+<ul class="simple">
+<li><p><strong>The prediction compared</strong> is the loss-corrected one (<a class="reference internal" href="#predictions/corrected/summary.json"><span class="xref myst">predictions/corrected/</span></a>):
+the solver’s |S21|, |S31| with the conductor loss it does not model added from the coupon
+model, per substrate. “Meets spec” uses −3.4 dB (run 0b, D-O0-11: the corrected R1 reaches
+−3.285 dB, <a class="reference internal" href="demos.html#run-0b-the-loss-correction-and-the-s21-criterion"><span class="std std-ref">demos</span></a>); it applies to R1 and R1t as well, which are judged like D1 and D2.</p></li>
+<li><p><strong>The reference of “agrees”</strong>: the solver’s modal port is calibrated on the open-L1 line of the
+run (<code class="docutils literal notranslate"><span class="pre">yapnr.rf.ports.calibrate_line</span></code>, recorded with each result); the multiline TRL gives the
+measured data in the fitted Zc of the board’s line, which on W has its L1 pour and the
+inner-layer ring (about 48.6 Ω against the solver’s 50.0 Ω, |Γ| 0.014 per port). The
+measured data are therefore renormalized from the fitted TRL-line Zc to the run’s port
+impedance before the comparison; on M the two agree within the fit’s uncertainty.</p></li>
+<li><p><strong>Measured notch frequencies</strong> (ring, stub) come from fitting the model’s notch shape to the
+data around the notch, not from the lowest sample (the n = 3 notch lies 10-20 dB above the
+instrument floor).</p></li>
+<li><p><strong>D2</strong> ships only as the owner decides (no D2 formulation passed its own validation; the nearest,
+<code class="docutils literal notranslate"><span class="pre">d2-star-sched</span></code>, missed its coarse |S21| criterion by 0.012 dB). If it ships, it is judged by
+the same rows, labelled a design that missed its own criterion.</p></li>
+<li><p>Criteria are never changed after data arrive; if one must be, results are reported against
+both versions.</p></li>
+</ul>
+<section id="the-k-2-uncertainty-model">
+<h3>The k = 2 uncertainty model<a class="headerlink" href="#the-k-2-uncertainty-model" title="Link to this heading">¶</a></h3>
+<p>Every comparison above carries a per-frequency k = 2 band (see <a class="reference internal" href="#uncertainty-to-publish">Uncertainty to publish</a>):
+the linear propagation of the multiline TRL’s inputs (Hatab’s method and code,
+<a class="reference external" href="https://github.com/ZiadHatab/uncertainty-multiline-trl-calibration">uncertainty-multiline-trl-calibration</a>,
+BSD-3: standard definitions, line lengths, noise), the measured connection repeatability (three
+connections), the copy-to-copy spread (two copies, one lot), the fitted line Z0’s uncertainty and
+the multiline-TRL against IEEE 370 2x-thru difference. Before the boards exist, the expected size
+is the Monte Carlo of the coupon set with the LibreVNA’s specified noise and a prototype
+connection-repeatability model (solder variation σ_L 0.02 nH, σ_C 0.01 pF per launch): εeff
+±0.37 % per point (±11 MHz at 5.8 GHz), α ±0.0044 dB/cm, Z0 ±1-1.5 Ω model-assisted (±0.5 Ω with
+A16); twice the solder variation gives εeff ±0.65 %. The measured repeatability replaces the
+prototype numbers.</p>
+</section>
 </section>
 <section id="the-c-pads-a16-how-h-is-read">
 <h2>The C-pads (A16): how h is read<a class="headerlink" href="#the-c-pads-a16-how-h-is-read" title="Link to this heading">¶</a></h2>
@@ -466,7 +532,10 @@ specifications.</p>
 <li><a class="reference internal" href="#">Order 0: pre-registration</a><ul>
 <li><a class="reference internal" href="#what-is-frozen-before-upload">What is frozen before upload</a></li>
 <li><a class="reference internal" href="#proof-that-the-predictions-came-first">Proof that the predictions came first</a></li>
-<li><a class="reference internal" href="#acceptance-criteria-draft">Acceptance criteria (draft)</a></li>
+<li><a class="reference internal" href="#acceptance-criteria-draft">Acceptance criteria (draft)</a><ul>
+<li><a class="reference internal" href="#the-k-2-uncertainty-model">The k = 2 uncertainty model</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#the-c-pads-a16-how-h-is-read">The C-pads (A16): how h is read</a></li>
 <li><a class="reference internal" href="#analysis-order-blind">Analysis order (blind)</a></li>
 <li><a class="reference internal" href="#uncertainty-to-publish">Uncertainty to publish</a></li>

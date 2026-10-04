@@ -323,32 +323,186 @@ The thru and the reflect are calibration standards and have no file.</p>
 </pre></div>
 </div>
 </section>
-<section id="demos-and-references">
-<h2>Demos and references<a class="headerlink" href="#demos-and-references" title="Link to this heading">¶</a></h2>
+<section id="every-stick-and-its-prediction">
+<h2>Every stick and its prediction<a class="headerlink" href="#every-stick-and-its-prediction" title="Link to this heading">¶</a></h2>
+<p>Raw solver files are byte-for-byte copies of the cloud tasks’ outputs (yapnr commit <code class="docutils literal notranslate"><span class="pre">917222a</span></code>,
+image <code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr&#64;sha256:f41a4760…</span></code>, native float64); the loss-corrected files
+derived from them are in <a class="reference internal" href="#corrected/summary.json"><span class="xref myst">corrected/</span></a> and are the predictions the criteria
+use (<a class="reference internal" href="../preregistration.html#acceptance-criteria-draft"><span class="std std-ref">pre-registration</span></a>). “FR408HR” is the
+thickness-equivalent substrate of nominal FR408HR (M-eq, W-eq) for the solver and nominal FR408HR
+for the coupon model; “EM528” likewise (M-eq-em528, W-eq-em528); the solver’s raw nominal view
+(zero-thickness copper on M-nom, W-nom) is published besides.</p>
+<section id="o0-m">
+<h3>O0-M<a class="headerlink" href="#o0-m" title="Link to this heading">¶</a></h3>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
 <thead>
-<tr class="row-odd"><th class="head"><p>Item</p></th>
-<th class="head"><p>Prediction</p></th>
-<th class="head"><p>Status</p></th>
+<tr class="row-odd"><th class="head"><p>Stick</p></th>
+<th class="head"><p>FR408HR</p></th>
+<th class="head"><p>EM528</p></th>
+<th class="head"><p>Method</p></th>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p><a class="reference internal" href="D1/README.html"><span class="std std-doc">D1</span></a></p></td>
-<td><p>the optimizer’s validation runs: thickness-equivalent (M-eq), nominal (M-nom) and EM528 (M-eq-em528) substrates</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">d1-star</span></code> passes (coarse, fine, finer); every run in <code class="docutils literal notranslate"><span class="pre">D1/runs/</span></code>, the shipped one on the other substrates in <code class="docutils literal notranslate"><span class="pre">D1/variants/</span></code></p></td>
+<tr class="row-even"><td><p>A01 thru</p></td>
+<td><p>none between its reference planes (a calibration standard: the identity); the launches as tier-1 data see them: <a class="reference internal" href="#openems/"><span class="xref myst">openems/a01.s2p</span></a></p></td>
+<td><p>–</p></td>
+<td><p>openEMS 3D (launch)</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="D2/README.html"><span class="std std-doc">D2</span></a></p></td>
-<td><p>the same, region W</p></td>
-<td><p>no formulation passes (8 runs, <code class="docutils literal notranslate"><span class="pre">D2/runs/</span></code>); the nearest miss on the other substrates in <code class="docutils literal notranslate"><span class="pre">D2/variants/</span></code></p></td>
+<tr class="row-odd"><td><p>A02-A05, A04R</p></td>
+<td><p><a class="reference internal" href="#coupons/O0-M/fr408hr/"><span class="xref myst">coupons/O0-M/fr408hr/</span></a> <code class="docutils literal notranslate"><span class="pre">A0x-M-line.s2p</span></code></p></td>
+<td><p><a class="reference internal" href="#coupons/O0-M/em528/"><span class="xref myst">coupons/O0-M/em528/</span></a></p></td>
+<td><p>coupon model</p></td>
 </tr>
-<tr class="row-even"><td><p>R1, R1t</p></td>
-<td><p>the optimizer’s FDTD, forward only (<code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.rf.order0</span> <span class="pre">write</span></code>: forward-run directories), loss-corrected, at refine 2 (0.05 / 0.25 mm)</p></td>
-<td><p>R1 on M-eq: run 0b; R1 on M-nom and M-eq-em528, R1t on W-eq, W-nom and W-eq-em528 and the W loss lines: <a class="reference internal" href="#references/"><span class="xref myst">references/</span></a></p></td>
+<tr class="row-even"><td><p>A06 reflect</p></td>
+<td><p>none (a standard; its reflection is not assumed)</p></td>
+<td><p>–</p></td>
+<td><p>–</p></td>
+</tr>
+<tr class="row-odd"><td><p>A07 verification</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">A07-M-verify.s2p</span></code></p></td>
+<td><p>the same</p></td>
+<td><p>coupon model</p></td>
+</tr>
+<tr class="row-even"><td><p>A08, A09, A10</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">A08-M07-variant.s2p</span></code>, <code class="docutils literal notranslate"><span class="pre">A09-M14-variant.s2p</span></code>, <code class="docutils literal notranslate"><span class="pre">A10-MMK-variant.s2p</span></code></p></td>
+<td><p>the same</p></td>
+<td><p>coupon model</p></td>
+</tr>
+<tr class="row-odd"><td><p>A11 ring</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">A11-M-ring.s2p</span></code>, notches in <code class="docutils literal notranslate"><span class="pre">scalars.json</span></code>; <a class="reference internal" href="#fdtd/"><span class="xref myst">fdtd/a11-ring-m-eq/</span></a></p></td>
+<td><p>the same; <a class="reference internal" href="#fdtd/"><span class="xref myst">fdtd/a11-ring-m-eq-em528/</span></a></p></td>
+<td><p>coupon model; our FDTD (forward, R1’s settings)</p></td>
+</tr>
+<tr class="row-even"><td><p>A12 stub</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">A12-M-stub.s2p</span></code>, notch in <code class="docutils literal notranslate"><span class="pre">scalars.json</span></code>; <a class="reference internal" href="#fdtd/"><span class="xref myst">fdtd/a12-stub-m-eq/</span></a></p></td>
+<td><p>the same; <a class="reference internal" href="#fdtd/"><span class="xref myst">fdtd/a12-stub-m-eq-em528/</span></a></p></td>
+<td><p>coupon model; our FDTD</p></td>
+</tr>
+<tr class="row-odd"><td><p>A14 switch-term</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">A14-M-switch.s2p</span></code></p></td>
+<td><p>the same</p></td>
+<td><p>coupon model (0402 as 100 Ω + 0.6 nH)</p></td>
+</tr>
+<tr class="row-even"><td><p>A15 tag, DC</p></td>
+<td><p>no RF port</p></td>
+<td><p>–</p></td>
+<td><p>–</p></td>
+</tr>
+<tr class="row-odd"><td><p>A16 C-pads</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">A16-C6-pad1.s1p</span></code>, <code class="docutils literal notranslate"><span class="pre">A16-C12-pad2.s1p</span></code></p></td>
+<td><p>the same</p></td>
+<td><p>coupon model</p></td>
+</tr>
+<tr class="row-even"><td><p>R1</p></td>
+<td><p><a class="reference internal" href="#run0b/r1-m-eq.s3p"><span class="xref myst">run0b/r1-m-eq.s3p</span></a>, corrected <code class="docutils literal notranslate"><span class="pre">r1-m-eq-loss-corrected.s3p</span></code>; raw nominal view <a class="reference internal" href="#references/r1-m-nom/"><span class="xref myst">references/r1-m-nom/</span></a>, corrected <code class="docutils literal notranslate"><span class="pre">r1-m-nom-…</span></code>; <a class="reference internal" href="#openems/"><span class="xref myst">openems/</span></a></p></td>
+<td><p><a class="reference internal" href="#references/r1-m-eq-em528/"><span class="xref myst">references/r1-m-eq-em528/</span></a>, corrected <code class="docutils literal notranslate"><span class="pre">r1-m-eq-em528-…</span></code></p></td>
+<td><p>our FDTD, refine 2; openEMS 3D (FR408HR)</p></td>
 </tr>
 </tbody>
 </table>
 </div>
+</section>
+<section id="o0-w-light">
+<h3>O0-W light<a class="headerlink" href="#o0-w-light" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Stick</p></th>
+<th class="head"><p>FR408HR</p></th>
+<th class="head"><p>EM528</p></th>
+<th class="head"><p>Method</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>B01 thru</p></td>
+<td><p>none (a standard)</p></td>
+<td><p>–</p></td>
+<td><p>–</p></td>
+</tr>
+<tr class="row-odd"><td><p>B02-B04</p></td>
+<td><p><a class="reference internal" href="#coupons/O0-W/fr408hr/"><span class="xref myst">coupons/O0-W/fr408hr/</span></a> <code class="docutils literal notranslate"><span class="pre">B0x-W-line.s2p</span></code></p></td>
+<td><p><a class="reference internal" href="#coupons/O0-W/em528/"><span class="xref myst">coupons/O0-W/em528/</span></a></p></td>
+<td><p>coupon model</p></td>
+</tr>
+<tr class="row-even"><td><p>B05 reflect</p></td>
+<td><p>none (a standard)</p></td>
+<td><p>–</p></td>
+<td><p>–</p></td>
+</tr>
+<tr class="row-odd"><td><p>R1t</p></td>
+<td><p><a class="reference internal" href="#references/r1t-w-eq/"><span class="xref myst">references/r1t-w-eq/</span></a>, corrected <code class="docutils literal notranslate"><span class="pre">r1t-w-eq-…</span></code>; raw nominal view <a class="reference internal" href="#references/r1t-w-nom/"><span class="xref myst">references/r1t-w-nom/</span></a></p></td>
+<td><p><a class="reference internal" href="#references/r1t-w-eq-em528/"><span class="xref myst">references/r1t-w-eq-em528/</span></a></p></td>
+<td><p>our FDTD</p></td>
+</tr>
+<tr class="row-even"><td><p>D2 window</p></td>
+<td><p>if the owner ships the nearest miss <code class="docutils literal notranslate"><span class="pre">d2-star-sched</span></code>: <a class="reference internal" href="#D2/runs/d2-star-sched/"><span class="xref myst">D2/runs/d2-star-sched/</span></a> (W-eq, three grids), <a class="reference internal" href="#D2/variants/"><span class="xref myst">D2/variants/</span></a> (W-eq wide, W-nom); corrected <code class="docutils literal notranslate"><span class="pre">d2-star-sched-…</span></code></p></td>
+<td><p><a class="reference internal" href="#D2/variants/d2-star-sched-w-eq-em528/"><span class="xref myst">D2/variants/d2-star-sched-w-eq-em528/</span></a></p></td>
+<td><p>our FDTD</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="o0-d">
+<h3>O0-D<a class="headerlink" href="#o0-d" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Stick</p></th>
+<th class="head"><p>FR408HR</p></th>
+<th class="head"><p>EM528</p></th>
+<th class="head"><p>Method</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>D1</p></td>
+<td><p><a class="reference internal" href="#D1/runs/d1-star/"><span class="xref myst">D1/runs/d1-star/</span></a> (M-eq: coarse, fine, finer), <a class="reference internal" href="#D1/variants/d1-star-m-eq/"><span class="xref myst">D1/variants/d1-star-m-eq/</span></a> (3-7 GHz), <a class="reference internal" href="#D1/variants/d1-star-m-nom/"><span class="xref myst">d1-star-m-nom/</span></a>; corrected <code class="docutils literal notranslate"><span class="pre">d1-…</span></code>; <a class="reference internal" href="#openems/"><span class="xref myst">openems/</span></a></p></td>
+<td><p><a class="reference internal" href="#D1/variants/d1-star-m-eq-em528/"><span class="xref myst">D1/variants/d1-star-m-eq-em528/</span></a></p></td>
+<td><p>our FDTD; openEMS 3D (FR408HR)</p></td>
+</tr>
+<tr class="row-odd"><td><p>R1 copy</p></td>
+<td><p>as O0-M’s R1</p></td>
+<td><p>as O0-M’s</p></td>
+<td><p>–</p></td>
+</tr>
+<tr class="row-even"><td><p>A01</p></td>
+<td><p>as O0-M’s A01</p></td>
+<td><p>–</p></td>
+<td><p>–</p></td>
+</tr>
+<tr class="row-odd"><td><p>A20, A04</p></td>
+<td><p><a class="reference internal" href="#coupons/O0-D/fr408hr/"><span class="xref myst">coupons/O0-D/fr408hr/</span></a> <code class="docutils literal notranslate"><span class="pre">A20-M-line.s2p</span></code>, <code class="docutils literal notranslate"><span class="pre">A04-M-line.s2p</span></code>; A04 with its launches: <a class="reference internal" href="#openems/"><span class="xref myst">openems/a04.s2p</span></a></p></td>
+<td><p><a class="reference internal" href="#coupons/O0-D/em528/"><span class="xref myst">coupons/O0-D/em528/</span></a></p></td>
+<td><p>coupon model; openEMS 3D</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+<section id="the-loss-correction">
+<h2>The loss correction<a class="headerlink" href="#the-loss-correction" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.rf.order0</span> <span class="pre">correct</span> <span class="pre">--out</span> <span class="pre">docs/rf/order0/predictions/corrected</span></code> writes the
+corrected file of every demo and reference prediction and
+<a class="reference internal" href="#corrected/summary.json"><span class="xref myst">corrected/summary.json</span></a> (raw and corrected worst cases over
+4.25-5.75 GHz, Δα and the ratio at 5 GHz per substrate). Each substrate uses its own loss lines:
+M-eq run 0b’s (<a class="reference internal" href="#run0b/"><span class="xref myst">run0b/</span></a>), W-eq the compute stage’s (<a class="reference internal" href="#references/"><span class="xref myst">references/line-w-*</span></a>),
+the others the predictions stage’s (<a class="reference internal" href="#lines/"><span class="xref myst">lines/</span></a>).</p>
+</section>
+<section id="our-fdtd-on-the-held-out-resonators">
+<h2>Our FDTD on the held-out resonators<a class="headerlink" href="#our-fdtd-on-the-held-out-resonators" title="Link to this heading">¶</a></h2>
+<p><a class="reference internal" href="#fdtd/"><span class="xref myst">fdtd/</span></a> holds the forward runs of the ring A11 and the stub A12 (the tuned O0-M geometry
+from reference plane to reference plane, on the references’ 0.05 mm grid, the stub’s open end
+snapped to the grid: 8.279 mm drawn, 8.30 mm simulated), and <a class="reference internal" href="#fdtd/resonators.json"><span class="xref myst">fdtd/resonators.json</span></a>
+their notches next to the coupon model’s. The criterion stays the coupon model’s post-fit notch;
+these are the optimizer’s own solver predicting a held-out resonance before fabrication.</p>
+</section>
+<section id="openems-d-o0-13a">
+<h2>openEMS (D-O0-13a)<a class="headerlink" href="#openems-d-o0-13a" title="Link to this heading">¶</a></h2>
+<p><a class="reference internal" href="#openems/README.md"><span class="xref myst">openems/</span></a>: D1, R1 and the 0.40 mm line with 43 µm copper on the nominal
+FR408HR stack at two meshes, and A01/A04 with the Cinch launches; the models are
+<a class="reference internal" href="#../openems/"><span class="xref myst">../openems/</span></a> (<code class="docutils literal notranslate"><span class="pre">order0_em.py</span></code>).</p>
 </section>
 </section>
 
@@ -391,7 +545,15 @@ The thru and the reflect are calibration standards and have no file.</p>
             <ul>
 <li><a class="reference internal" href="#">Order 0: predictions</a><ul>
 <li><a class="reference internal" href="#coupons">Coupons</a></li>
-<li><a class="reference internal" href="#demos-and-references">Demos and references</a></li>
+<li><a class="reference internal" href="#every-stick-and-its-prediction">Every stick and its prediction</a><ul>
+<li><a class="reference internal" href="#o0-m">O0-M</a></li>
+<li><a class="reference internal" href="#o0-w-light">O0-W light</a></li>
+<li><a class="reference internal" href="#o0-d">O0-D</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#the-loss-correction">The loss correction</a></li>
+<li><a class="reference internal" href="#our-fdtd-on-the-held-out-resonators">Our FDTD on the held-out resonators</a></li>
+<li><a class="reference internal" href="#openems-d-o0-13a">openEMS (D-O0-13a)</a></li>
 </ul>
 </li>
 </ul>

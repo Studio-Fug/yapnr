@@ -214,6 +214,16 @@ every ground and supply ball dropped to its plane. The board declares the escape
 balls. Its `via_class` and `escape` checks (`check_constraints.py`) hold the drops to
 their class and site and every listed ball to an escape.
 
+`11-ufbga201-fanout-6L-SGSGPS-block` adds a fixed block (one new dimension, `parts`):
+an RF launch from ball F15 to a U.FL connector east of the array, in one KiCad group
+with two ground stitching vias on the array's interstitial lattice beside F15 (sites
+the ground balls E15 and G15 may also choose: the plan joins them instead of drilling
+again), a ground fence and an F.Cu-only rule area at the fanout's north-east edge. A
+class keep-out over the launch lets only ground into F.Cu, In2.Cu and the supply plane
+In4.Cu (the engine cuts its VCC plane out of it), and a class guard on F.Cu lets only
+the plane nets pass beside it. Its `no_copper` checks judge zones too (`items: zones`),
+so a plane poured into the launch fails the rung.
+
 ## Length-matching scratch designs
 
 No ladder case or hard rung declares a length-match group, so

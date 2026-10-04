@@ -10,8 +10,10 @@ Most rungs are *variants* of two base designs (``09-mcu-usb-31`` and the ladder'
 ``07-chaser-20``) that change exactly one dimension, so an effect can be attributed.
 ``11-ufbga201-fanout`` breaks a 0.65 mm UFBGA176+25 out to four connectors on six
 layers through a declared ``fanout`` (pnr.fanout): interstitial plane drops, surface
-and dog-bone escapes, a reserved corridor and a per-layer forbidden exit. The
-dimensions:
+and dog-bone escapes, a reserved corridor and a per-layer forbidden exit; its
+``-block`` variant puts a fixed RF launch beside it (ground vias on the ball lattice,
+a class keep-out with the supply plane cut out, a class guard, an F.Cu-only rule
+area). The dimensions:
 
 ``stackup``
     the copper stack: number of plane layers and signal layers and their order, as a
@@ -1391,6 +1393,151 @@ def ufbga_fanout():
     return with_stackup(ufbga_base(), "6L-SGSGPS")
 
 
+# A fixed block on the BGA rung (11-ufbga201-fanout-6L-SGSGPS-block): an RF launch from
+# ball F15 to a U.FL connector east of the array, all one KiCad group: the feed, two
+# ground stitching vias on the array's interstitial lattice beside F15 (sites the ground
+# drops of E15 and G15 may also choose: the plan reuses them, never drills them again),
+# a ground fence along the feed and the connector's ground vias. A copper keep-out over
+# the launch bars every net but ground (its plane class) on F.Cu, In2.Cu and the
+# supply plane In4.Cu (tracks, vias and pours: the engine cuts its VCC plane out of it);
+# a class guard on F.Cu north and south of it lets only the plane nets through; a rule
+# area in the group bars tracks on F.Cu alone north-east of the array (inner-layer exits
+# stay open below it).
+LAUNCH_GROUP = "LAUNCH"
+LAUNCH_NAME = "launch"
+LAUNCH_UFL = (27.6, 19.3)  # J6's centre: pad 1 at x - 1.525, ground pads at y +- 1.475
+LAUNCH_BALL = (22.55, 19.3)  # F15 (U1 at the board centre, rot 0)
+LAUNCH_KEEPOUT = [22.95, 18.3, 29.0, 20.3]
+LAUNCH_GUARDS = {"guard-north": [22.95, 20.3, 30.0, 21.4], "guard-south": [22.95, 17.2, 30.0, 18.3]}
+LAUNCH_RULE = [22.95, 21.4, 23.9, 22.6]  # F.Cu tracks only: rows A-B's surface exits east
+LAUNCH_VIA = (0.35, 0.15)  # the fanout's plane class (via_class judges them inside U1)
+
+
+def launch_block():
+    """The launch: footprint pose, tracks, vias and rule areas (engine mm, y up)."""
+    ux, uy = LAUNCH_UFL
+    bx, by = LAUNCH_BALL
+    tracks = [["RF_OUT", "F.Cu", [bx, by], [ux - 1.525, uy], 0.2]]
+    vias = [["GND", [bx - 0.325, by + 0.325]], ["GND", [bx - 0.325, by - 0.325]]]
+    vias += [["GND", [24.6, by + 0.55]], ["GND", [24.6, by - 0.55]]]
+    vias += [["GND", [25.0, by + 1.0]], ["GND", [25.0, by - 1.0]]]
+    for y in (uy + 1.475, uy - 1.475):  # the connector's ground pads to their own vias
+        tracks.append(["GND", "F.Cu", [ux, y], [ux + 1.6, y], 0.4])
+        vias.append(["GND", [ux + 1.6, y]])
+    return dict(
+        name=LAUNCH_NAME,
+        group=LAUNCH_GROUP,
+        footprints={"J6": [ux, uy, 0]},
+        tracks=tracks,
+        arcs=[],
+        vias=[[net, xy, LAUNCH_VIA[0], LAUNCH_VIA[1]] for net, xy in vias],
+        rule_areas=[
+            dict(polygon=rect_polygon(LAUNCH_RULE), layers=["F.Cu"], tracks=True, vias=False)
+        ],
+    )
+
+
+def ufbga_block(spec):
+    """``spec`` (the 6L BGA rung) with the launch block: F15 drives it (RF_OUT), E15 and
+    G15 become ground balls beside it, the fanout skips F15 instead of reserving the
+    three balls' corridor, and the constraints and checks that express the block."""
+    spec = deepcopy(spec)
+    block = launch_block()
+    block["sha256"] = block_sha256(block, spec["constraints"]["board"]["outline"]["h"])
+    spec["fixed_block"] = block
+    u1 = spec["parts"][0]
+    u1["pins"].update(E15="GND", F15="RF_OUT", G15="GND")
+    spec["parts"].append(pinned("J6", "u_fl", "U.FL RF out", {"1": "RF_OUT", "2": "GND"}))
+    spec["expected_components"] = len(spec["parts"])
+    spec["expected_connected_pads"] = connected_pads(spec["parts"])
+    cons = spec["constraints"]
+    cons["fixed_block"] = [
+        dict(name=LAUNCH_NAME, group=LAUNCH_GROUP, sha256=block["sha256"], refs=["J6"])
+    ]
+    (fanout,) = cons["fanout"]
+    fanout.pop("reserved")
+    fanout["skip_pads"] = ["F15"]
+    planes = sorted(k for k, c in cons["net_class"].items() if c.get("plane_layer"))
+    ground = sorted(k for k in planes if "GND" in cons["net_class"][k]["nets"])
+    cons["copper_keepout"] = [
+        dict(
+            name=LAUNCH_NAME,
+            rect=list(LAUNCH_KEEPOUT),
+            layers=["F.Cu", "In2.Cu", "In4.Cu"],
+            allow_classes=ground,
+            exempt_groups=[LAUNCH_GROUP],
+        )
+    ] + [
+        dict(
+            name=name,
+            rect=rect,
+            layers=["F.Cu"],
+            items=["tracks", "vias"],
+            allow_classes=planes,
+            exempt_groups=[LAUNCH_GROUP],
+        )
+        for name, rect in sorted(LAUNCH_GUARDS.items())
+    ]
+    cons["keepout"] = (cons.get("keepout") or []) + [
+        dict(name=LAUNCH_NAME, polygon=rect_polygon([24.1, 17.0, 30.2, 21.6]))
+    ]
+    spec["checks"] = [c for c in spec["checks"] if c["id"] != "fanout-escape"]
+    signals = sorted(b for balls in bga_signals().values() for b in balls)
+    spec["checks"] += [
+        dict(id="fanout-escape", kind="escape", ref="U1", pads=signals, engine="fanout"),
+        dict(
+            id="block-copper",
+            kind="copper_digest",
+            group=LAUNCH_GROUP,
+            sha256=block["sha256"],
+            engine="fixed_block",
+        ),
+        dict(
+            id="keepout-launch",
+            kind="no_copper",
+            polygon=rect_polygon(LAUNCH_KEEPOUT),
+            layers=["F.Cu", "In2.Cu", "In4.Cu"],
+            items=["tracks", "vias", "pads", "zones"],
+            allow_nets=["GND"],
+            exempt_groups=[LAUNCH_GROUP],
+            engine="copper_keepout",
+        ),
+        dict(
+            id="block-rule-area",
+            kind="no_copper",
+            polygon=rect_polygon(LAUNCH_RULE),
+            layers=["F.Cu"],
+            items=["tracks"],
+            allow_nets=[],
+            exempt_groups=[LAUNCH_GROUP],
+            engine="fixed_block",
+        ),
+    ]
+    for name, rect in sorted(LAUNCH_GUARDS.items()):
+        spec["checks"].append(
+            dict(
+                id="keepout-" + name,
+                kind="no_copper",
+                polygon=rect_polygon(rect),
+                layers=["F.Cu"],
+                items=["tracks", "vias", "pads"],
+                allow_nets=["GND", "VCC"],
+                exempt_groups=[LAUNCH_GROUP],
+                engine="copper_keepout",
+            )
+        )
+    spec["name"] += "-block"
+    spec["description"] = (
+        spec.get("description", "")
+        + " With a fixed block: an RF launch from F15 to a U.FL, ground stitching vias on "
+        "the array's interstitial lattice, a class keep-out over it (the supply plane cut "
+        "out), a class guard and an F.Cu-only rule area at the fanout's edge."
+    )
+    spec["dims"]["parts"] = "block"
+    spec["features"] = sorted(set(spec["features"]) | {"fixed-copper", "copper-keepout"})
+    return spec
+
+
 # --------------------------------------------------------- run configurations
 
 # yapnr's configuration per family (run.py arguments). The ladder's documented best: the
@@ -1432,7 +1579,8 @@ def hard_rungs():
     chasers += [with_double_sided(base), with_double_sided(with_stackup(base, "4L-SGPS"))]
     chasers += [chaser_absolute(base), chaser_relative(base), chaser_sidelock(base)]
     chasers.append(chaser_arcblock(chasers[0]))  # on 4L-SGPS: one new dimension
-    others = [quad_bank(), power_switch(), ufbga_fanout()]
+    bga = ufbga_fanout()
+    others = [quad_bank(), power_switch(), bga, ufbga_block(bga)]
     for spec in chasers + others:
         spec["yapnr_args"] = YAPNR_BEST
     return deepcopy(out + chasers + others)

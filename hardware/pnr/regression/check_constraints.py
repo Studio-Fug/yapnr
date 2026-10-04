@@ -385,9 +385,10 @@ def check_copper_digest(b, c):
 
 def check_no_copper(b, c):
     """No foreign copper in a polygon (board frame, mm) on ``layers``: tracks, arcs
-    and vias (``items`` tracks / vias) and footprint pads (``pads``) touching it,
-    unless their net is in ``allow_nets`` or they belong to a KiCad group in
-    ``exempt_groups`` (a pad: its footprint's group). Zones are not judged."""
+    and vias (``items`` tracks / vias), footprint pads (``pads``) and, when listed,
+    the filled copper of zones (``zones``) touching it, unless their net is in
+    ``allow_nets`` or they belong to a KiCad group in ``exempt_groups`` (a pad: its
+    footprint's group). Zones are judged only when ``items`` lists them."""
     board = b.board
     keep = pcbnew.SHAPE_POLY_SET()
     keep.NewOutline()
@@ -405,6 +406,10 @@ def check_no_copper(b, c):
         for fp in board.GetFootprints():
             for pad in fp.Pads():
                 candidates.append((pad, "pad", group_of(fp)))
+    if "zones" in items:
+        for zone in board.Zones():
+            if not zone.GetIsRuleArea():
+                candidates.append((zone, "zone", group_of(zone)))
     hits = []
     for layer_name in c["layers"]:
         layer = board.GetLayerID(layer_name)
@@ -413,8 +418,11 @@ def check_no_copper(b, c):
                 continue
             if not item.IsOnLayer(layer):
                 continue
-            shape = pcbnew.SHAPE_POLY_SET()
-            item.TransformShapeToPolygon(shape, layer, 0, 1000, pcbnew.ERROR_INSIDE)
+            if kind == "zone":
+                shape = pcbnew.SHAPE_POLY_SET(item.GetFilledPolysList(layer))
+            else:
+                shape = pcbnew.SHAPE_POLY_SET()
+                item.TransformShapeToPolygon(shape, layer, 0, 1000, pcbnew.ERROR_INSIDE)
             shape.BooleanIntersection(keep)
             if shape.OutlineCount() and shape.Area() > 0:
                 p = item.GetPosition()

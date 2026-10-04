@@ -194,6 +194,28 @@ def add_fixed_block(b, spec, nets, height):
         ident(v, "via/%d" % n)
         b.Add(v)
         items.append(v)
+    for n, area in enumerate(block.get("rule_areas") or []):
+        # A rule area of the block (its own copper is exempt only through the group's
+        # keep-outs, so it bars what its flags say on its layers for every item).
+        z = k.ZONE(b)
+        z.SetIsRuleArea(True)
+        z.SetZoneName("%s rule %d" % (block["group"], n))
+        layers = k.LSET()
+        for name in area["layers"]:
+            layers.AddLayer(b.GetLayerID(name))
+        z.SetLayerSet(layers)
+        z.SetDoNotAllowTracks(bool(area.get("tracks")))
+        z.SetDoNotAllowVias(bool(area.get("vias")))
+        z.SetDoNotAllowZoneFills(bool(area.get("pours")))
+        z.SetDoNotAllowPads(False)
+        z.SetDoNotAllowFootprints(False)
+        outline = z.Outline()
+        outline.NewOutline()
+        for xy in area["polygon"]:
+            outline.Append(point(xy))
+        ident(z, "rule/%d" % n)
+        b.Add(z)
+        items.append(z)
     for item in items:
         group.AddItem(item)
         item.SetLocked(True)

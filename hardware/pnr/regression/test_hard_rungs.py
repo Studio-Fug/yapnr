@@ -320,6 +320,45 @@ class HardRungContract(unittest.TestCase):
         self.assertEqual(guard["allowed_nets"], ["CLOCK", "GND", "VCC"])
         self.assertIn("arcs", spec["features"])
 
+    def test_bga_block_rung(self):
+        """The BGA rung with a fixed block: its launch copper digest, ground stitching
+        vias on U1's interstitial lattice, a group rule area on F.Cu alone, keep-outs
+        the engine compiles (ground allowed in the launch, the plane nets in the
+        guards), checks that judge zones, one dimension (parts) from the 6L rung."""
+        from hard_rungs import LAUNCH_GROUP, block_sha256
+
+        from pnr.constraints import compile_constraints, compile_routing_rules
+
+        spec = self.by_name["11-ufbga201-fanout-6L-SGSGPS-block"]
+        block = spec["fixed_block"]
+        self.assertEqual(block["sha256"], block_sha256(block, 36))
+        self.assertEqual(block["rule_areas"][0]["layers"], ["F.Cu"])
+        lattice = [v for v in block["vias"] if 12 < v[1][0] < 24]
+        for _net, (x, y), d, h in lattice:  # interstitial: half a pitch off every ball
+            self.assertAlmostEqual(((x - 18) / 0.65) % 1, 0.5, places=6)
+            self.assertAlmostEqual(((y - 18) / 0.65) % 1, 0.5, places=6)
+            self.assertEqual((d, h), (0.35, 0.15))
+        self.assertEqual(len(lattice), 2)
+        u1 = spec["parts"][0]["pins"]
+        self.assertEqual((u1["E15"], u1["F15"], u1["G15"]), ("GND", "RF_OUT", "GND"))
+        parent = self.by_name["11-ufbga201-fanout-6L-SGSGPS"]
+        self.assertEqual(
+            [k for k in spec["dims"] if spec["dims"][k] != parent["dims"][k]], ["parts"]
+        )
+        refs = [p["ref"] for p in spec["parts"]]
+        compiled = compile_constraints(spec["constraints"], refs)
+        self.assertEqual(compiled.fixed_blocks[0]["group"], LAUNCH_GROUP)
+        rules = compile_routing_rules(
+            compiled, sorted({n for p in spec["parts"] for n in p["pins"].values() if n})
+        )
+        keepouts = {k["name"]: k for k in rules["copper_keepouts"]}
+        self.assertEqual(keepouts["launch"]["allowed_nets"], ["GND"])
+        self.assertIn("pours", keepouts["launch"]["items"])
+        self.assertEqual(keepouts["guard-north"]["allowed_nets"], ["GND", "VCC"])
+        self.assertEqual(rules["fanouts"][0]["skip_pads"], ["F15"])
+        launch = [c for c in spec["checks"] if c["id"] == "keepout-launch"][0]
+        self.assertIn("zones", launch["items"])
+
     def test_runner_offers_the_hard_rungs(self):
         args = parser().parse_args(["--out", "x", "--hard"])
         self.assertTrue(args.hard)

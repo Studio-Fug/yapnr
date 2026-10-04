@@ -129,7 +129,8 @@ class MicroviaSpanCheck(unittest.TestCase):
 def block_board(path, *, move_arc=False, foreign=()):
     """The 30 x 20 mm board with group BLK (a CLOCK track and arc, a GND via) and
     ``foreign`` planted items: ``[(kind, net, layer, (x, y) engine mm)]`` with kind
-    ``track`` (2 mm along x), ``via`` or ``pad`` (a 1 mm SMD pad of part P<n>)."""
+    ``track`` (2 mm along x), ``via``, ``zone`` (a filled 2 mm square) or ``pad`` (a
+    1 mm SMD pad of part P<n>)."""
     import pcbnew as k
 
     plane_board(path, [])
@@ -185,6 +186,16 @@ def block_board(path, *, move_arc=False, foreign=()):
             f.SetDrill(300_000)
             f.SetNet(nets[net])
             b.Add(f)
+        elif kind == "zone":  # a 2 mm square pour from (x, y), filled
+            f = k.ZONE(b)
+            f.SetLayer(b.GetLayerID(layer))
+            f.SetNet(nets[net])
+            outline = f.Outline()
+            outline.NewOutline()
+            for dx, dy in ((0, 0), (2, 0), (2, 2), (0, 2)):
+                outline.Append(at(x + dx, y + dy))
+            b.Add(f)
+            k.ZONE_FILLER(b).Fill(b.Zones())
         else:
             fp = k.FOOTPRINT(b)
             fp.SetReference("P%d" % n)
@@ -378,6 +389,25 @@ class NoCopperCheck(unittest.TestCase):
                 self.assertFalse(ok)
                 self.assertGreaterEqual(measured["foreign"], 1)
                 self.assertEqual(measured["examples"][0]["net"], "SIG")
+
+    def test_zones_are_judged_only_when_listed(self):
+        from check_constraints import Board, check_no_copper
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "b.kicad_pcb"
+            block_board(
+                path,
+                foreign=[("zone", "SIG", "In1.Cu", (5, 9)), ("zone", "VCC", "In1.Cu", (11, 13))],
+            )
+            board = Board(path)
+            self.assertTrue(check_no_copper(board, self.CHECK)[0])
+            ok, measured, _ = check_no_copper(board, dict(self.CHECK, items=["zones"]))
+            self.assertFalse(ok)
+            self.assertEqual(measured["foreign"], 1)
+            self.assertEqual(
+                measured["examples"][0],
+                dict(kind="zone", net="SIG", layer="In1.Cu", at=measured["examples"][0]["at"]),
+            )
 
 
 class FanoutChecks(unittest.TestCase):

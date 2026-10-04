@@ -16,44 +16,61 @@ isolation, adjacent-column coupling, phase centres, the L2-L3 parallel plate) is
 Every JSON record carries this as `status`. The joint C1 sweep and the C2 solve come before the
 macro is frozen for an order. The RF-uniformity layout (guard band, straight run-ins, terminated
 dummy columns, R 0.5 stitched equalizers; owner finding 2026-10-03, "identical structures across
-the array within the keepout") was checked in openEMS [S] (`results/openems/rfuni/`, 40 um
-mesh unless noted): the as-built TX1 tongue notch (-7.9 to -9.2 dB near 60 GHz) is gone on 40,
-27 and 20 um meshes; TX P0 -> P1 loss is 1.9 / 1.7-1.8 / 1.45 dB for TX1 / TX2 / TX3 on 20 um
-(the equalizers add up to 0.46 dB over the straight TX3), so the TX feed alone exceeds RF-03's
-1.5 dB; skew between equal-length lines stays within 1.1 ps on every mesh but is not converged;
-TX2-TX3 feed coupling is -34 dB. The pour, ring and entry move the column's match and gain
-(one cell: RL 4.4 / 7.1 / 12.1 dB at Pg, realized gain 5.5 / 6.3 / 8.7 dBi at 60.3 / 62.05 /
-63.8 GHz; about +-1 dB of model and mesh spread), so C1 must sweep the column with them. In the
-TX bank the dummies make the edge column's match track the interior one (0.7 dB RMS in band,
-4.0 dB without them); the embedded patterns are only partly equalized. Not simulated: the 0201
-load itself (ideal 50 ohm), 35 um copper, the launch, the RX bank.
+the array within the keepout") was checked in openEMS [S] (`results/openems/rfuni/` and, after
+the review fixes of 2026-10-04, `results/openems/rfuni-fix/`):
+
+- the as-built TX1 tongue notch (-7.9 to -9.2 dB near 60 GHz) is gone on every mesh;
+- TX P0 -> P1 loss over seven meshes (xy 40-12 um, 4-8 cells across the core): TX1 1.73-2.04,
+  TX2 1.65-1.93, TX3 1.34-1.68 dB at 62.05 GHz; xy refinement raises it and z refinement lowers
+  it, so it is not converged, and TX1/TX2 exceed RF-03's 1.5 dB alone. The equalizers' excess
+  over the straight TX3 is radiated or leaked, not dissipated: lossless runs lose 0.40-0.46 dB
+  (TX1), 0.31-0.32 dB (TX2) and <= 0.02 dB (TX3);
+- skew between the equal-length TX lines swings with the mesh (TX1 - TX3 -21 to +3.5 deg at
+  62.05 GHz) and stays within 1 ps;
+- both banks on one board (the cut-outs plus lambda0, identical synthetic leads south of Pg, an x
+  mesh that repeats at the column pitch): edge and interior columns differ by |dGamma| 0.024-0.041
+  RMS in band with dummies (two interior columns: 0.027) and 0.024-0.069 without; the earlier
+  bank models' 0.46 (a constant 72 deg rotation) was the leads and the mesh, not the antenna.
+  Embedded H-plane gain within +-45 deg differs by <= 3.2 dB (two interior columns: 3.5 dB),
+  fitted phase centres sit within
+  0.27 mm of the lattice, TX -> RX coupling is <= -36.7 dB (-35.9 dB without dummies);
+- the dummies' effect on the match is structural: open or shorted loads move TX1's Gamma by
+  <= 0.015 RMS (a shorted dummy changes the pattern by up to 3 dB at 60.3 GHz, an open one 1.2 dB);
+- the L2-L3 bondply under each bank is a cavity excited through the L2 windows (field -10 to -25
+  dB across the bank), contained by the ring vias;
+- the column's match is not mesh-converged: one cell at Pg moves from RL-10 63.45-65.5 GHz (40
+  um) to 64.35-66 GHz (15 um), so C1 must retune (lengthen) the column on a fine mesh. Gamma at
+  an MSL port also moves when mesh lines move inside its lead: compare columns only within one
+  model and mesh.
+  Not simulated: the 0201 load itself, 35 um copper, the launch, the package.
 
 ## Contents
 
-| Path                      | What                                                                                       |
-| ------------------------- | ------------------------------------------------------------------------------------------ |
-| `rfmacro/params.py`       | stackup, fab rules, lattice and every declared parameter, with sources                     |
-| `rfmacro/closedform.py`   | microstrip, conductor-backed CPW, patch, inset, directivity models (sources in the file)   |
-| `rfmacro/xsec2d.py`       | 2D cross-sections with `yapnr.rf.coupons.xsec` (FEM, Wheeler loss), -> `results/`          |
-| `rfmacro/dims.py`         | start dimensions and closed-form predictions                                               |
-| `rfmacro/macro.py`        | launches, the fit search, equal-length feeds, column cells, dummies, pour (U1 frame)       |
-| `rfmacro/vias.py`         | deterministic GND via placement (lattice, fences, rings, rows, grid, fill)                 |
-| `rfmacro/rules.py`        | the RF-uniformity checks G1-G6, shared with the board audit                                |
-| `rfmacro/raster.py`       | standard-library bitset raster for the stitch-reach and congruence checks                  |
-| `rfmacro/kicad.py`        | KiCad 10 board of the macro                                                                |
-| `rfmacro/coupons.py`      | the coupon strip                                                                           |
-| `../board/rf_audit.py`    | A1-A5: the same rules on a filled board (KiCad Python)                                     |
-| `tests/`                  | unit tests (`python3 -m unittest discover -s tests`)                                       |
-| `openems/Dockerfile`      | openEMS v0.37.0-rc3 source build (Ubuntu 24.04 packages none)                              |
-| `openems/column_sim.py`   | openEMS model of one column + divider from the same geometry                               |
-| `openems/board_export.py` | filled KiCad board -> JSON copper in U1's frame (KiCad Python), for the two builders below |
-| `openems/board_feeds.py`  | feed models from the filled board: TX1-TX3 or RX1-RX4 P0 -> P1 (shapely)                   |
-| `openems/board_ant.py`    | radiating models from the filled board: one cell with its entry, the bank, a control       |
-| `openems/feed_sim.py`     | openEMS run of a feed model (GCPW with fences, MSL ports, loads, all-driven mode)          |
-| `openems/ant_sim.py`      | openEMS run of a radiating model (column_sim's stack, mesh, ports and far field)           |
-| `generated/rfm1-{m,n,p}/` | the macro for the D12 bracketing variants (patch length x0.982, x1, x1.018)                |
-| `generated/coupons/`      | the coupon strip (60 x 25 mm) and its structure catalogue                                  |
-| `results/`                | the 2D line table, the openEMS column results, `openems/rfuni/` (uniformity EM check)      |
+| Path                        | What                                                                                       |
+| --------------------------- | ------------------------------------------------------------------------------------------ |
+| `rfmacro/params.py`         | stackup, fab rules, lattice and every declared parameter, with sources                     |
+| `rfmacro/closedform.py`     | microstrip, conductor-backed CPW, patch, inset, directivity models (sources in the file)   |
+| `rfmacro/xsec2d.py`         | 2D cross-sections with `yapnr.rf.coupons.xsec` (FEM, Wheeler loss), -> `results/`          |
+| `rfmacro/dims.py`           | start dimensions and closed-form predictions                                               |
+| `rfmacro/macro.py`          | launches, the fit search, equal-length feeds, column cells, dummies, pour (U1 frame)       |
+| `rfmacro/vias.py`           | deterministic GND via placement (lattice, fences, rings, rows, grid, fill)                 |
+| `rfmacro/rules.py`          | the RF-uniformity checks G1-G6, shared with the board audit                                |
+| `rfmacro/raster.py`         | standard-library bitset raster for the stitch-reach and congruence checks                  |
+| `rfmacro/kicad.py`          | KiCad 10 board of the macro                                                                |
+| `rfmacro/coupons.py`        | the coupon strip                                                                           |
+| `../board/rf_audit.py`      | A1-A5: the same rules on a filled board (KiCad Python)                                     |
+| `tests/`                    | unit tests (`python3 -m unittest discover -s tests`)                                       |
+| `openems/Dockerfile`        | openEMS v0.37.0-rc3 source build (Ubuntu 24.04 packages none)                              |
+| `openems/column_sim.py`     | openEMS model of one column + divider from the same geometry                               |
+| `openems/board_export.py`   | filled KiCad board -> JSON copper in U1's frame (KiCad Python), for the two builders below |
+| `openems/board_feeds.py`    | feed models from the filled board: TX1-TX3 or RX1-RX4 P0 -> P1 (shapely)                   |
+| `openems/board_ant.py`      | radiating models from the filled board: one cell with its entry, the bank, a control       |
+| `openems/feed_sim.py`       | openEMS run of a feed model (GCPW with fences, MSL ports, loads, all-driven mode)          |
+| `openems/ant_sim.py`        | openEMS run of a radiating model (column_sim's stack, mesh, ports and far field)           |
+| `openems/rfuni_analysis.py` | edge vs interior (complex), coupling, isolation, active reflection, patterns, mesh series  |
+| `generated/rfm1-{m,n,p}/`   | the macro for the D12 bracketing variants (patch length x0.982, x1, x1.018)                |
+| `generated/coupons/`        | the coupon strip (60 x 25 mm) and its structure catalogue                                  |
+| `results/`                  | the 2D line table, the openEMS column results, `openems/rfuni/` (uniformity EM check)      |
 
 Each generated directory holds the board (`.kicad_pcb`, zones unfilled), its project and custom
 rules, a JSON record (parameters, dimensions, ports, lengths, checks, a geometry hash) and the

@@ -39,6 +39,7 @@ from rfmacro import closedform as cf  # noqa: E402
 from rfmacro.params import F_HI, F_LO, STACK  # noqa: E402
 
 EPS0 = 8.8541878128e-12
+NF_F = (F_LO, 62.05e9, F_HI)  # far-field frequencies (FD NF2FF dumps)
 
 
 def dedupe(v, tol):
@@ -121,7 +122,8 @@ def model(m, args):
     for pt in m["ports"]:
         lx += [pt["at"][0]]
         ly += [pt["start_y"], pt["at"][1]]
-    for ld in m["loads"]:
+    # the load cells' lines whatever the load (50 ohm, shorted, open): one mesh for the A/B
+    for ld in m.get("load_mesh", m["loads"]):
         lx += [ld["at"][0] - ld["half"], ld["at"][0] + ld["half"]]
         ly += [ld["at"][1] - ld["half"], ld["at"][1] + ld["half"]]
     lx += [bx0, bx1, sx0, sx1, ax0, ax1]
@@ -202,8 +204,12 @@ def model(m, args):
             excite=0,
             priority=45,
         )
+    # frequency-domain NF2FF dumps at the three band frequencies (review fixes 2026-10-04): the
+    # time-domain dumps of a 16 M-cell bank model outgrew an 18 GB task disk
     nf = fdtd.CreateNF2FFBox(
-        start=[sx0 - nfm, sy0 - nfm, -nfm], stop=[sx1 + nfm, sy1 + nfm, z_l1 + nfm]
+        start=[sx0 - nfm, sy0 - nfm, -nfm],
+        stop=[sx1 + nfm, sy1 + nfm, z_l1 + nfm],
+        frequency=list(NF_F),
     )
     if args.dump_bond:  # E at mid-bondply (L2-L3 parallel plate), frequency domain
         zb = s["h_bond"] / 2
@@ -337,7 +343,7 @@ def main():
     )
     pc = m["phase_centres"][a.excite.split(".")[0]]
     theta = np.arange(-180.0, 180.5, 1.0)
-    for fx in (F_LO, 62.05e9, F_HI):
+    for fx in NF_F:
         pe.CalcPort(sim, [fx], ref_impedance=50)
         p_inc = float(np.real(pe.P_inc[0]))
         p_acc = float(np.real(pe.P_acc[0]))

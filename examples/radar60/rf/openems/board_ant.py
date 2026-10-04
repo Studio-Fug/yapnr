@@ -315,12 +315,13 @@ def main():
                 windows.append([round(v, 5) for v in bx])
     assert len(windows) == 2 * len(keep), (len(windows), keep)
 
-    loads, shorts = [], []
+    loads, shorts, load_mesh = [], [], []
     for ref, pads in sorted(load_pads.items()):
         sig = [n for n in pads if n != "GND"][0]
         if sig in keep:
             cc = pads[sig].centroid
             at = [round(cc.x, 5), round(cc.y, 5)]
+            load_mesh.append(dict(ref=ref, at=at, half=0.10))
             if a.loads == "50":
                 loads.append(dict(ref=ref, net=sig, at=at, half=0.10, R=50.0))
             elif a.loads == "short":
@@ -354,6 +355,7 @@ def main():
         shorts=shorts,
         windows=windows,
         loads=loads,
+        load_mesh=load_mesh,
         ports=[dict(name=f"{c}.{pname}", net=c, at=pg[c], start_y=yport[c]) for c in fed],
         phase_centres={c: cols[c]["phase_centre"] for c in keep},
     )

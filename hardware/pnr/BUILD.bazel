@@ -2002,6 +2002,23 @@ py_test(
     ],
 )
 
+# board.class_clearance: maze: class halos and via keep-outs in the maze, class tables,
+# the exact check and reroute (class_check), the copper audit, kernel parity.
+py_test(
+    name = "class_clearance_test",
+    size = "small",
+    srcs = ["tests/test_class_clearance.py"],
+    main = "tests/test_class_clearance.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+        requirement("pyyaml"),
+    ],
+)
+
 # The same values read from KiCad footprints by pnr.ingest (inline footprints; the
 # KiCad lane runs it, it skips without pcbnew).
 py_test(

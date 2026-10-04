@@ -107,6 +107,18 @@ def remaining_connections(access, edges):
     return max(0, len({find(c) for c in access}) - 1)
 
 
+def net_via_keepout(grid, net, default=None) -> int:
+    """The via keep-out radius (cells) of ``net``'s vias: the routing call's
+    (``routing_via_keepout``, else ``default``), or the net's own where larger
+    (``routing_via_keepouts``: a net class clearance above the fab's,
+    ``board.class_clearance: maze``; empty otherwise)."""
+    k = getattr(grid, "routing_via_keepout", 0) if default is None else default
+    own = getattr(grid, "routing_via_keepouts", None)
+    if own and net is not None:
+        k = max(k, own.get(net, 0))
+    return k
+
+
 def maze_kernel() -> str:
     """The A\\* kernel this process routes with.
 
@@ -210,7 +222,7 @@ def _astar_reference(
     tset = targets
     raw_block = blocked or set()
     track_halo = getattr(grid, "routing_track_halos", {}).get(net, 0)
-    via_halo = getattr(grid, "routing_via_keepout", 0)
+    via_halo = net_via_keepout(grid, net)
     # Search the same reserved footprint that final commit checks. Testing only
     # the centreline repeatedly proposes a path whose width/via halo is rejected.
     block = set(raw_block)
@@ -556,9 +568,13 @@ def _footprint(
     (≥ 0.6 mm centre-to-centre ⇒ DRC-clean copper and hole spacing). Reserving the
     halo (not just the via cell) is what makes vias DRC-clean by construction, the
     same way the pitch does for tracks. Same-net copper may share freely — the
-    caller accounts ownership per net."""
+    caller accounts ownership per net.
+
+    With ``net`` the keep-out is the net's own where larger (:func:`net_via_keepout`:
+    a class clearance above the fab's)."""
     fp: Set[Cell] = set(cells)
     cellset = set(cells)
+    via_keepout = net_via_keepout(grid, net, via_keepout)
     # Only actual route edges create diagonal corners or via barrels. Two
     # branches can cross at the same XY on different layers without a via.
     route_edges = (
@@ -1166,10 +1182,16 @@ def route(grid, net_access, *, late_copper=None, exact=None, **kwargs):
     routed deferred nets), or is None. The recovery packs nets as tightly as the
     rules allow and can only count this route's own connections, so it cannot
     tell whether it took room those stages need: it is skipped then (logged).
+
+    ``via_keepouts`` (net -> cells) widens the via keep-out of the nets whose class
+    clearance needs more than ``via_keepout`` (:func:`net_via_keepout`).
     """
     # Set before spawning so serial and worker proposals use identical geometry.
     grid.routing_track_halos = kwargs.get("net_halo") or {}
     grid.routing_via_keepout = kwargs.get("via_keepout", 1)
+    via_keepouts = kwargs.pop("via_keepouts", None)
+    if via_keepouts or getattr(grid, "routing_via_keepouts", None):
+        grid.routing_via_keepouts = dict(via_keepouts or {})
     if getattr(grid, "_wide_specs", None) is not None:
         # Copper recorded since the wide nets' tables were built (the escape plan,
         # power-array sources): the tables cover it before anything reads them.

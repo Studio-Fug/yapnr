@@ -598,7 +598,7 @@ def tie_plane_layers(grid, graph, stack, plan, result, plane_access, via_keepout
     holes = []
     for name, rn in result.nets.items():
         if rn.cells:
-            for c in _footprint(grid, rn.cells, via_keepout, net_halo.get(name, 0)):
+            for c in _footprint(grid, rn.cells, via_keepout, net_halo.get(name, 0), net=name):
                 occupied.setdefault((c.layer, c.i, c.j), set()).add(name)
         holes.extend((name, grid.center_of(i, j)) for i, j in rn.vias)
 
@@ -866,10 +866,20 @@ def route_board(
     # Per-net track width from the net classes (type/amperage), default = fab width.
     net_width = _net_widths(rules, track_width_mm)
     pitch = detail_pitch(pitch, track_width_mm, clearance_mm)
+    # board.class_clearance: maze: a net's own clearance is its class clearance where
+    # that exceeds the fab's (KiCad judges two nets at the larger of theirs); its
+    # track halo and via keep-out are sized from it, and the exact check after the
+    # route (class_check) holds every pair to it. Off: the fab clearance for all.
+    class_maze = (rules or {}).get("class_clearance") == "maze"
+    class_of = _net_clearances(rules) if class_maze else {}
+
+    def own_clearance(n):
+        return max(clearance_mm, class_of.get(n, 0.0))
+
     # Every net reserves enough track halo for this pitch, including signals:
     # other-net centre must be ≥ width/2 + clearance + ½signal from this net's cells.
     net_halo = {
-        n: _track_halo(w, track_width_mm, clearance_mm, pitch)
+        n: _track_halo(w, track_width_mm, own_clearance(n), pitch)
         for n in (net.name for net in graph.nets)
         for w in (net_width.get(n, track_width_mm),)
     }
@@ -879,6 +889,12 @@ def route_board(
     # allowed other-net via sits ⌈(via_d+clr)/pitch⌉ cells away ⇒ keep-out radius one
     # less. (Default 0.45/0.13/0.30 ⇒ 1; a tighter fab needs a wider halo.)
     via_keepout = max(1, math.ceil((2 * via_radius_mm + clearance_mm) / pitch) - 1)
+    # A net whose class clearance needs more keeps its own (class_clearance: maze).
+    via_keepouts = {}
+    for n in sorted(class_of):
+        k = max(via_keepout, math.ceil((2 * via_radius_mm + own_clearance(n)) / pitch) - 1)
+        if k > via_keepout:
+            via_keepouts[n] = k
 
     width, height = outline_size(graph, constraints)
     layers, planes, stack = layer_plan(graph, rules)
@@ -1090,6 +1106,10 @@ def route_board(
         graph, grid, plan, net_width, track_width_mm, planes, deferred, max_iters
     )
 
+    if class_maze:
+        # Every routed net judges the static copper (pads, escapes) at its own width
+        # and class clearance, its vias too (RouteGrid.class_tables).
+        grid.class_tables = frozenset(net_access)
     # Price a layer transition in physical distance so finer grids do not
     # accidentally make short via excursions cheaper than surface detours.
     result = route(
@@ -1101,7 +1121,18 @@ def route_board(
         rrr_rounds=ripup_rounds,
         via_cost=3.0 / grid.pitch,
         late_copper=_late_copper(graph, planes, deferred, plan.escapes),
+        **({"via_keepouts": via_keepouts} if via_keepouts else {}),
     )
+    class_report = None
+    if class_maze:
+        # The exact pairwise rule over the routed nets: offenders rerouted (class_check).
+        from .class_check import repair
+
+        class_report = repair(grid, net_access, result, via_cost=3.0 / grid.pitch)
+        class_report["halos"] = {
+            "nets": len(class_of),
+            "via_keepouts": dict(sorted(via_keepouts.items())),
+        }
 
     if deferred or plan.blocked_nets:
         from .maze import RoutedNet
@@ -1242,6 +1273,16 @@ def route_board(
                 via_radius=via_radius_mm,
                 fixed_copper=_flat(fixed_copper),
             )
+    if class_report is not None:
+        # What the emitted copper keeps from other nets at their class clearances.
+        import sys
+
+        from .class_check import copper_audit, summarize
+
+        class_report["audit"] = copper_audit(grid, board.tracks, board.vias, board.via_sizes)
+        board.escape_diagnostics["class_clearance"] = class_report
+        for line in summarize(class_report):
+            sys.stderr.write(line + "\n")
     if route_trace is not None:
         route_trace.end(board)
     return board

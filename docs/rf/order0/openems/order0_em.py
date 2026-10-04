@@ -67,6 +67,7 @@ STACK = dict(
 )
 FREQS = np.linspace(1.0e9, 8.0e9, 701)
 F0, FC = 4.5e9, 3.5e9  # Gaussian pulse: 1-8 GHz above -20 dB
+F_TOP = 9.0e9  # the custom pulse's Nyquist frequency (its spectrum is about -33 dB there)
 
 
 def dc_free_pulse(f0: float = F0, fc: float = FC) -> str:
@@ -457,7 +458,9 @@ def main(argv=None) -> int:
     else:
         raise SystemExit(f"unknown model kind {m['kind']!r}")
     if m["kind"] == "launch":
-        FDTD.SetCustomExcite(dc_free_pulse(), F0, 8.5e9)
+        # openEMS samples the probes at the Nyquist rate of the custom excitation's "f0"
+        # argument (CalcCustomExcitation overwrites fmax with it): pass the top frequency there
+        FDTD.SetCustomExcite(dc_free_pulse(), F_TOP, F_TOP)
         info["excitation"] = "openEMS Gaussian (f0 4.5 GHz, fc 3.5 GHz) less its DC content"
     FDTD.SetBoundaryCond(bc)
     print(json.dumps(dict(model=m["name"], excite=a.excite, **info)), flush=True)

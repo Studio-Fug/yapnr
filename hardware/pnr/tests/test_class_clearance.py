@@ -236,6 +236,29 @@ class RepairTest(unittest.TestCase):
         self.assertEqual({n: rn.cells for n, rn in result.nets.items()}, before)
 
 
+class JoinTest(unittest.TestCase):
+    def test_pruned_route_is_joined_again(self):
+        # A straight route with two cells taken out (too close to something) is joined
+        # again around them; with no field path it stays in two pieces (open).
+        from pnr.route.detail.class_check import _join, _prune
+        from pnr.route.detail.dense_maze import DenseSession, build_exact_field
+        from pnr.route.detail.maze import remaining_connections
+
+        grid = RouteGrid(6, 3, 0.25, clearance=0.1, track_width=0.15, via_radius=0.2)
+        grid.via_spacing, grid.via_drill_radius = 0.48, 0.1
+        cells = [Cell(0, i, 5) for i in range(2, 22)]
+        route = _Route(cells, list(zip(cells, cells[1:])))
+        terminals = [cells[0], cells[-1]]
+        pruned = _prune(route, {Cell(0, 10, 5), Cell(0, 11, 5)})
+        self.assertEqual(remaining_connections(terminals, pruned.edges), 1)
+        session = DenseSession(grid)
+        field = build_exact_field(session.static, "X")
+        joined = _join(grid, "X", pruned, terminals, lambda trial: True, 12.0, field)
+        self.assertEqual(remaining_connections(terminals, joined.edges), 0)
+        apart = _join(grid, "X", pruned, terminals, lambda trial: False, 12.0, field)
+        self.assertEqual(remaining_connections(terminals, apart.edges), 1)
+
+
 class AuditTest(unittest.TestCase):
     def test_track_to_via_shortfall_at_the_larger_class(self):
         # The radar trial-2 case: a 0.25 mm PWR track 0.118 mm from a signal via.

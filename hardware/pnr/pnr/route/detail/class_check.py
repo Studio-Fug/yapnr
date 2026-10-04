@@ -75,14 +75,7 @@ def repair(grid, net_access, result, *, via_cost, session=None, also=()):
     are ripped to open."""
     from .dense_maze import DenseSession, build_exact_field
     from .exact_route import Occupancy, Separation, Zone, supported
-    from .maze import (
-        _astar,
-        _new_via_sites,
-        _Route,
-        _route_one,
-        _to_geometry,
-        remaining_connections,
-    )
+    from .maze import _Route, _route_one, _to_geometry, remaining_connections
 
     class AtTheRule(Separation):
         # Two nets exactly at their clearance are legal (KiCad's DRC, and the halo
@@ -106,6 +99,7 @@ def repair(grid, net_access, result, *, via_cost, session=None, also=()):
     for name, zone in sorted(zones.items()):
         if occ.conflicts(zone):
             pairs.update(tuple(sorted((name, other))) for other in occ.crossed(zone))
+    also = also if isinstance(also, dict) else {n: [] for n in also}
     static = sorted(n for n in set(also) if n in routes)
     if not pairs and not static:
         return report
@@ -147,39 +141,20 @@ def repair(grid, net_access, result, *, via_cost, session=None, also=()):
             if route and not committed.conflicts(Zone(grid, sep, net, route)):
                 forest = route
             else:
-                # Keep what fits: grow trees terminal by terminal around the rest.
-                remaining = set(net_access[net])
-                while remaining:
-                    seed = min(remaining, key=lambda c: (c.layer, c.i, c.j))
-                    remaining.remove(seed)
-                    tree = {seed}
-                    while remaining:
-                        path = _astar(
-                            grid,
-                            tree,
-                            remaining,
-                            net,
-                            {},
-                            {},
-                            via_cost,
-                            0.0,
-                            drill_sites=tuple(
-                                grid.center_of(i, j)
-                                for i, j in _new_via_sites(grid, forest.edges, net)
-                            ),
-                            _field=field,
-                        )
-                        if not path:
-                            break
-                        trial = _Route(
-                            list(set(forest.cells) | set(path)),
-                            forest.edges + list(zip(path, path[1:])),
-                        )
-                        if committed.conflicts(Zone(grid, sep, net, trial)):
-                            break
-                        forest = trial
-                        tree.update(path)
-                        remaining.difference_update(path)
+                # Keep what fits: the old route less its cells too close to the rest
+                # (or to static copper), its pieces joined again around everything.
+                bad = _bad_cells(grid, zones[net], committed) | _row_cells(
+                    grid, routes[net], also.get(net) or ()
+                )
+                forest = _join(
+                    grid,
+                    net,
+                    _prune(routes[net], bad),
+                    net_access[net],
+                    lambda trial: not committed.conflicts(Zone(grid, sep, net, trial)),
+                    via_cost,
+                    field,
+                )
         rn = _to_geometry(forest, grid)
         rn.name = net
         rn.remaining_connections = remaining_connections(net_access[net], forest.edges)
@@ -194,6 +169,134 @@ def repair(grid, net_access, result, *, via_cost, session=None, also=()):
     )
     report["model"] = "exact" if exact else "ripped (grid outside the dense model)"
     return report
+
+
+def _order(c):
+    return (c.layer, c.i, c.j)
+
+
+def _cell_of_key(grid, key):
+    plane = grid.ny * grid.nx
+    layer, rest = divmod(int(key), plane)
+    j, i = divmod(rest, grid.nx)
+    return Cell(layer, i, j)
+
+
+def _bad_cells(grid, zone, committed):
+    """Cells of ``zone``'s route that lie in another committed net's zone: its track
+    cells, the cells of its 45° steps' blocks, every layer of its via columns."""
+    flat = committed._flat
+    out = set()
+    if len(zone.track_keys):
+        hit = flat["cells"][zone.kind][zone.track_keys] > 0
+        out.update(_cell_of_key(grid, k) for k in zone.track_keys[hit])
+    if len(zone.step_keys):
+        hit = flat["blocks"][zone.kind][zone.step_keys] > 0
+        for k in zone.step_keys[hit]:
+            c = _cell_of_key(grid, k)
+            out.update(Cell(c.layer, c.i + di, c.j + dj) for di in (0, 1) for dj in (0, 1))
+    if len(zone.via_keys):
+        hit = flat["cells"][zone.via_kind][zone.via_keys] > 0
+        for k in zone.via_keys[hit]:
+            c = _cell_of_key(grid, k)
+            out.update(Cell(la, c.i, c.j) for la in range(grid.nlayers))
+    return out
+
+
+def _row_cells(grid, route, rows):
+    """Cells of ``route`` at the copper the static check found too close (``rows``
+    of :func:`static_offenders`: a track's two ends on its layer, a via's column)."""
+    out = set()
+    index = {name: k for k, name in enumerate(grid.layers)}
+    for row in rows:
+        points = [row["at"], row.get("to") or row["at"]]
+        if points[0] == points[1]:  # the route's via: its column
+            layers = range(grid.nlayers)
+        else:  # the route's track, on its layer
+            layers = [index[row["layer"]]] if row.get("layer") in index else range(grid.nlayers)
+        for x, y in points:
+            i, j = grid.cell_of(x, y)
+            out.update(Cell(la, i, j) for la in layers)
+    cells = set(route.cells)
+    return {c for c in out if c in cells}
+
+
+def _prune(route, bad):
+    """``route`` without the ``bad`` cells and the edges that touch them."""
+    from .maze import _Route
+
+    edges = [(a, b) for a, b in route.edges if a not in bad and b not in bad]
+    cells = {c for c in route.cells if c not in bad}
+    return _Route(sorted(cells, key=lambda c: (c.layer, c.i, c.j)), edges)
+
+
+def _join(grid, net, forest, terminals, clean, via_cost, field):
+    """``forest`` (pieces of a route) and the net's ``terminals`` joined by A* paths
+    on ``field``, the largest piece first, each path kept only when the trial tree
+    stays ``clean``. What cannot be joined stays apart (open connections)."""
+    from .maze import _astar, _new_via_sites, _Route
+
+    parent = {}
+
+    def find(c):
+        parent.setdefault(c, c)
+        while parent[c] != c:
+            parent[c] = parent[parent[c]]
+            c = parent[c]
+        return c
+
+    for a, b in forest.edges:
+        parent[find(a)] = find(b)
+    for c in forest.cells:
+        find(c)
+    for t in terminals:
+        find(t)
+    pieces = {}
+    for c in parent:
+        pieces.setdefault(find(c), set()).add(c)
+    # Pieces worth joining: those holding a terminal.
+    terms = set(terminals)
+    pieces = [cells for cells in pieces.values() if cells & terms]
+    pieces.sort(key=lambda cells: (-len(cells & terms), -len(cells), min(map(_order, cells))))
+    if not pieces:
+        return _Route()
+    keep = set().union(*pieces)
+    loose = sorted(terms - set(forest.cells), key=_order)
+    forest = _Route(
+        [c for c in forest.cells if c in keep] + loose,
+        [(a, b) for a, b in forest.edges if a in keep],
+    )
+    tree, others = set(pieces[0]), [set(p) for p in pieces[1:]]
+    while others:
+        targets = set().union(*others)
+        path = _astar(
+            grid,
+            tree,
+            targets,
+            net,
+            {},
+            {},
+            via_cost,
+            0.0,
+            drill_sites=tuple(
+                grid.center_of(i, j) for i, j in _new_via_sites(grid, forest.edges, net)
+            ),
+            _field=field,
+        )
+        if not path:
+            break
+        trial = _Route(
+            list(dict.fromkeys(list(forest.cells) + path)), forest.edges + list(zip(path, path[1:]))
+        )
+        if not clean(trial):
+            break
+        forest = trial
+        tree.update(path)
+        joined = [p for p in others if path[-1] in p]
+        for p in joined:
+            tree |= p
+            others.remove(p)
+    return forest
 
 
 # --------------------------------------------------------------------- copper audit
@@ -375,6 +478,7 @@ def _shortfalls(grid, items, *, classes=None, pairs=None, only=None):
                         gap_mm=round(gap, 4),
                         need_mm=round(need, 4),
                         at=[round(v, 4) for v in a],
+                        to=[round(v, 4) for v in b],
                     )
     return sorted(found.values(), key=lambda v: (v["net"], v["other"], v["kind"], v["at"]))
 

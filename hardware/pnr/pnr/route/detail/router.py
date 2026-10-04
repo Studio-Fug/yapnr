@@ -1218,9 +1218,7 @@ def route_board(
             _fanout_via_sizes(fanouts),
             classes=_net_clearances(rules),
         )
-        class_report = repair(
-            grid, net_access, result, via_cost=3.0 / grid.pitch, also=sorted(offenders)
-        )
+        class_report = repair(grid, net_access, result, via_cost=3.0 / grid.pitch, also=offenders)
         class_report["mode"] = class_mode
         class_report["halos"] = {
             "nets": len(class_of),

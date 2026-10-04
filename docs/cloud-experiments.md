@@ -559,11 +559,17 @@ CASE --out out/<id>` with the spec, the criteria, `optimizer.seed` or `solver.th
 (or that command itself for a job with nothing to replace and `attempt_s = 0`) on as many cores as
 it has threads, with `OMP_NUM_THREADS` and `MKL_NUM_THREADS` at that number and
 `OPENBLAS_NUM_THREADS=1`. Cores are physical, two vCPUs each on SMT shapes: one 4-thread run fills
-a `c4d-highcpu-8`. The solver runs its native kernel by default, on the job's threads, from the
-image's yapnr wheel when the bundle's C sources are the ones that library was built from
-(otherwise the numpy reference, said in the task's log; set `YAPNR_RF_REQUIRE_NATIVE=1` to stop
-instead; [solver backends](rf-solver-backends.md)); a bundle from before the native kernel runs
-torch on at most 4 threads, and the generator warns above that.
+a `c4d-highcpu-8`. The solver runs its native kernel by default, on the job's threads (`YAPNR_RF_THREADS`,
+re-validations included), from the image's yapnr wheel when the bundle's C sources are the ones
+that library was built from ([solver backends](rf-solver-backends.md)). Every line sets
+`YAPNR_RF_REQUIRE_NATIVE=1` unless its job says `require_native = false`: a bundle whose C
+sources differ from the image's would otherwise run the numpy reference, 12–60 times slower, with
+one line in the task's log; with it the task fails at its first simulation and the diagnostic
+job's `ok` is false. `--image-commit REV` (the image's source revision, its
+`org.opencontainers.image.revision`) refuses such a bundle before anything is uploaded, and the
+manifest records both sources' sha256. A job's `backend`, `dtype` and `env` (other `YAPNR_RF_*`
+variables, such as `YAPNR_RF_TBLOCK`) set the solver's environment over its spec. A bundle from
+before the native kernel runs torch on at most 4 threads, and the generator warns above that.
 The record is `out/<id>/validation.json` (the verdict is its `ok`), the run directory is the
 checkpoint, and the cases runner resumes from it; `--max-iterations` counts the iterations of one
 attempt, so an attempt resumed mid-loop may run that many again. A run longer than `max_wall_s`

@@ -212,7 +212,10 @@ RF cloud jobs run a job bundle's sources on `PYTHONPATH` (`tools/exp/rf_stage_pl
 loader then also looks at the installed wheel's library, and uses it when the bundle's C sources
 are the ones it was built from (the sha256 it records). A bundle whose C source differs from the
 image's runs numpy instead, says so, or with `YAPNR_RF_REQUIRE_NATIVE=1` stops at once; such a
-job can still ship a library of its own and point `YAPNR_RF_FDTD_LIB` at it.
+job can still ship a library of its own and point `YAPNR_RF_FDTD_LIB` at it. The stage plan sets
+`YAPNR_RF_REQUIRE_NATIVE=1` and `YAPNR_RF_THREADS` on every line by default, and
+`--image-commit` refuses a bundle whose C sources are not the image's
+([cloud experiments](cloud-experiments.md#rf-runs)).
 
 ## Performance
 

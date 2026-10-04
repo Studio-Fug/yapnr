@@ -236,9 +236,12 @@ class FanoutRouteTest(unittest.TestCase):
         la = grid.layers.index(row["layer"])
         ex, ey = row["exit"]
         ox, oy = row["outward"]
-        for k in range(12):
-            i, j = grid.cell_of(ex + ox * 0.2 * k, ey + oy * 0.2 * k)
-            grid.blocked[la, j, i] = True
+        ci, cj = grid.cell_of(ex, ey)
+        for dj in range(-10, 11):  # everything beyond the exit, within 2.5 mm
+            for di in range(-10, 11):
+                c = grid.center_of(ci + di, cj + dj)
+                if (c[0] - ex) * ox + (c[1] - ey) * oy > 0 and grid.in_bounds(ci + di, cj + dj):
+                    grid.blocked[la, cj + dj, ci + di] = True
         fo = plan_fanouts(
             grid,
             self.g,
@@ -255,6 +258,49 @@ class FanoutRouteTest(unittest.TestCase):
         self.assertFalse([k for k in fo.via_sizes if k[0] == row["net"]])
         others = [s for s in grid.escape_segments if s[1] != row["net"]]
         self.assertTrue(others)  # the other balls keep theirs
+
+    def test_a_blocked_ray_turns_its_tail(self):
+        # A part against the array's edge blocks the exit's straight outward ray: the
+        # tail turns to the nearest free cell beside it instead of failing the ball.
+        from pnr.fanout import cached_plan
+        from pnr.route.detail.fanout import plan_fanouts
+
+        plan = cached_plan(
+            self.g,
+            self.rules,
+            self.rules["fanouts"][0],
+            grid_layers=["F.Cu", "In2.Cu", "B.Cu"],
+            plane_nets={"GND"},
+            signal_nets={n.name for n in self.g.nets if n.name != "GND"},
+        )
+        exits = {k: r for k, r in sorted(plan["terminals"].items()) if r.get("exit")}
+        name = "A3" if "A3" in exits else sorted(exits)[0]  # an edge ball, not a corner
+        row = exits[name]
+        grid = self.grid()
+        la = grid.layers.index(row["layer"])
+        ex, ey = row["exit"]
+        ox, oy = row["outward"]
+        # A part's pad on the ray, 0.3 to 2.7 mm beyond the exit: its halo closes the
+        # ray's cells; its sides stay open.
+        from pnr.place.geometry import Rect
+
+        size = (0.6, 2.4) if abs(ox) < 0.5 else (2.4, 0.6)
+        grid.add_pad(la, "X", Rect(ex + ox * 1.5, ey + oy * 1.5, *size))
+        fo = plan_fanouts(
+            grid,
+            self.g,
+            self.rules,
+            plane_nets={"GND"},
+            signal_nets={n.name for n in self.g.nets if n.name != "GND"},
+            via_keepout=1,
+        )
+        self.assertNotIn(name, fo.report["U1"]["no_access"])
+        (cell,) = fo.access[row["net"]]
+        centre = grid.center_of(cell.i, cell.j)
+        along = (centre[0] - ex) * ox + (centre[1] - ey) * oy
+        across = abs((centre[0] - ex) * oy - (centre[1] - ey) * ox)
+        self.assertGreater(across, 1e-6)  # off the ray
+        self.assertGreater(along, 0.25 * math.hypot(along, across) - 1e-9)
 
     def test_class_clearances_reach_the_halo_and_the_pad_checks(self):
         from pnr.place.geometry import Rect

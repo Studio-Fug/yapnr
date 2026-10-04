@@ -120,10 +120,14 @@ def _access(grid, net, layer, exit_xy, outward, width, taken, owners, reach_mm=2
     """The first cell along the exit's outward ray that ``net`` may hold and leave
     outward, with a clear tail from the exit to its centre: ``(cell, tail end)``.
     The tail keeps each foreign pad in ``pads`` at the larger of the two nets' class
-    clearances (``grid.net_clearances``)."""
+    clearances (``grid.net_clearances``). When the ray finds none (a part placed
+    against the array's edge), the tail may turn: the nearest cell within
+    ``reach_mm`` and within 75 degrees of the outward direction that passes the same
+    tests, leaving along the tail's own direction."""
     classes = getattr(grid, "net_clearances", None) or {}
     steps = max(1, int(math.ceil(reach_mm / (grid.pitch / 4))))
     seen = set()
+    rays = []
     for k in range(steps + 1):
         t = k * grid.pitch / 4
         q = (exit_xy[0] + outward[0] * t, exit_xy[1] + outward[1] * t)
@@ -133,7 +137,35 @@ def _access(grid, net, layer, exit_xy, outward, width, taken, owners, reach_mm=2
         if (i, j) in seen:
             continue
         seen.add((i, j))
-        ni, nj = i + int(round(outward[0])), j + int(round(outward[1]))
+        rays.append((i, j, int(round(outward[0])), int(round(outward[1]))))
+    found = _first_access(grid, net, layer, exit_xy, width, taken, owners, pads, classes, rays)
+    if found is not None:
+        return found
+    ci, cj = grid.cell_of(*exit_xy)
+    span = int(math.ceil(reach_mm / grid.pitch))
+    fan = []
+    for dj in range(-span, span + 1):
+        for di in range(-span, span + 1):
+            i, j = ci + di, cj + dj
+            if (i, j) in seen or not grid.in_bounds(i, j):
+                continue
+            c = grid.center_of(i, j)
+            vx, vy = c[0] - exit_xy[0], c[1] - exit_xy[1]
+            d = math.hypot(vx, vy)
+            if d < 1e-9 or d > reach_mm or vx * outward[0] + vy * outward[1] < 0.25 * d:
+                continue
+            fan.append((round(d, 9), i, j, int(round(vx / d)), int(round(vy / d))))
+    fan.sort()
+    return _first_access(
+        grid, net, layer, exit_xy, width, taken, owners, pads, classes, [f[1:] for f in fan]
+    )
+
+
+def _first_access(grid, net, layer, exit_xy, width, taken, owners, pads, classes, candidates):
+    """The first ``(i, j, di, dj)`` candidate whose cell and its ``(di, dj)`` neighbour the
+    net may hold and whose tail from the exit is clear (see :func:`_access`)."""
+    for i, j, di, dj in candidates:
+        ni, nj = i + di, j + dj
         ok = True
         for ci, cj in ((i, j), (ni, nj)):
             key = (layer, ci, cj)

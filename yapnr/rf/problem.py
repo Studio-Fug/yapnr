@@ -797,8 +797,9 @@ class Problem:
             raise ValueError(f"port {port}: no feed face on the radiation box")
         return total / p_inc, p_inc
 
-    def quantities(self, dft, port: int, omega=None) -> dict:
-        """Waves of every port, S_ij for excitation j = `port`, and η_j (numpy or torch)."""
+    def quantities(self, dft, port: int, omega=None, *, far: bool = True) -> dict:
+        """Waves of every port, S_ij for excitation j = `port`, and η_j (numpy or torch); on a
+        board model with pattern requirements (and `far`) the far-field quantities too."""
         omega = self.omega if omega is None else np.asarray(omega)
         waves = {n: self.port_waves(n, dft, omega, port) for n in self.ports}
         a_j = waves[port][0]
@@ -811,9 +812,13 @@ class Problem:
             # The Huygens box lies in air around the whole board: its flux is the radiated
             # power, η the total efficiency.
             out["eta"][port] = self.box.power(dft) / p_inc
-            if self.table is not None and port in self.pattern_ports | {
-                r.excitation for r in self.spec.requirements if r.quantity == "efficiency"
-            }:
+            if (
+                far
+                and self.table is not None
+                and port
+                in self.pattern_ports
+                | {r.excitation for r in self.spec.requirements if r.quantity == "efficiency"}
+            ):
                 out["far"] = {port: self.far_quantities(dft, port, omega, waves)}
                 out["table"] = self.table
         elif self.box is not None:
@@ -1046,7 +1051,7 @@ class Problem:
         for j in excited:
             res = self.forward(j, omega=omega, design=False)
             steps[j] = res.steps
-            qty = self.quantities(res.dft, j, omega)
+            qty = self.quantities(res.dft, j, omega, far=False)
             for (i, jj), v in qty["s"].items():
                 s[:, i - 1, jj - 1] = v
             for k, (a, b) in qty["waves"].items():

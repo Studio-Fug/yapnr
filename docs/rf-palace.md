@@ -355,14 +355,22 @@ A stage written `CONFIG@1` runs on one rank. Two things about refinement at b797
   therefore writes the sheets per face (`config.impedance_rl(..., precracked=True)`; validation's
   `palace-sweep.json` does). Without that, its conductor loss comes out about half.
 
-## 7. What the first runs showed
+## 7. What the validation showed
 
-The validation report (`palace/validation.md` in the project notes) has the numbers; for model
-builders:
+The validation report (`palace/validation.md` in the project notes) has the numbers, all solver
+predictions; for model builders:
 
 - **Copper model.** The zero-thickness sheet that openEMS also uses makes the 4-mil 50-ohm lines
   about 53 ohm with an effective permittivity about 5 % high, against 35 µm copper (the 2D solver
-  agrees). Sign off with `solid` copper; keep `sheet` for comparisons with openEMS.
+  agrees; Palace with solid copper matches the 2D solver within 0.3 % in εeff and 0.6 % in Z at
+  1 GHz). On the radar60 TX1 feed the copper's thickness moves the GND-sliver notch up by about
+  2.4 %: Palace with solid copper and openEMS with the copper as 35 µm PEC agree on that shift.
+  Sign off with `solid` copper; keep `sheet` for comparisons with openEMS's lossy sheet.
+- **The ground is lossy too.** The L2 ground carries about a quarter of the lines' conductor loss
+  (the 2D solver: 0.011 of 0.043 dB/mm at 62 GHz; openEMS: +0.007 dB/mm); on the radar60 TX1
+  feed a PEC floor understates the dissipation by about 0.18 dB over 14 mm. Use the `metal` floor
+  (the default of the line, feed and KiCad adapters). A zero-thickness sheet has no
+  mesh-converged loss (its edge current is singular), so validate loss on solid copper.
 - **Port faces.** A wave port's face must not hold a floating conductor: in its 2D mode solve the
   face's edges are PEC, so a coplanar ground strip that does not reach one floats and the port
   picks another mode (tx12's TX1.P0 gave Z_PV 24 ohm). `port_geometry` therefore ends a side
@@ -371,9 +379,104 @@ builders:
   onto the port plane by Palace; Z_PV comes out as expected.
 - **Memory.** About 12 kB per unknown at order 2 for a driven sweep with the reduced model, 8-10
   kB for a single solve: 1.7 M unknowns took 20-23 GB, 2.6 M ran a 32 GB VM out of memory.
-- **Absorbing order.** The walls are first-order absorbing (Palace has no PML). On the single
-  patch, walls 0.5 λ0 instead of 0.3 λ0 away, or second-order walls, moved the |S11| dip by at
-  most 0.06 GHz (0.1 %).
-- **Agreement with openEMS.** The TX1 sliver notch agrees within 0.2 %; the line εeff and the
-  patch dip agree once openEMS's fill-size trend is extrapolated (openEMS at 20 µm is still 3 %
-  high in εeff and 1.2 % low in the patch dip).
+- **Absorbing walls.** First- and second-order only (no PML); see section 10 before modelling
+  anything that radiates at oblique angles.
+- **openEMS's mesh.** Refine z with x and y: 8 cells across the 4-mil core instead of 4 leave
+  the lines' εeff unchanged but move their impedance by 2 %, their loss by 10 % and small
+  reflections by 2 dB. At 20 µm fill openEMS's εeff is still about 3 % above Palace's.
+- **Agreement with openEMS.** The TX1 sliver notch (sheet copper) agrees within 0.3 % over both
+  solvers' meshes; the line εeff and the patch's |S11| dip agree once openEMS's fill-size trend
+  is taken into account (the patch dip is 1.2 % apart at openEMS's finest mesh: an explained
+  difference, not a pass).
+
+## 8. Reading the results
+
+`yapnr.rf.palace.results` reads what a task leaves in the fetch store
+(`yapnr exp fetch <cid>`, then `<store>/fetched/<cid>/tasks/mc~<id>/summary/<id>/`):
+
+```python
+from yapnr.rf.palace import results
+
+for name, post in results.stage_dirs(task_dir):      # stage-1-palace-uniform, ..., main
+    f, S = results.port_s(post + "/port-S.csv")      # {(i, j): complex S}, modal (own Z_PV)
+    f, Z = results.port_z(post + "/port-Z.csv")      # {port: Z_PV}
+    S50 = results.to_50(S, Z, excite=1)              # openEMS's 50-ohm port waves
+    fn, depth = results.notch(f, 20 * np.log10(abs(S50[(2, 1)])), 55, 66)
+cmp = results.compare((f, S50[(2, 1)]), (f_oems, s21_oems), [60.3, 62.05, 63.8], feature=(55, 66))
+```
+
+- `to_50` turns Palace's modal S (each port matched to its own mode, power waves) into openEMS's
+  convention (50-ohm voltage waves, the lines terminated in their own impedance), so the two
+  solvers' columns compare directly.
+- `eeff_loss(f, s21_short, s21_long, dl)`: εeff and loss per mm from two lines `dl` apart (the
+  ports' ends cancel); `mode_results(post)`: εeff, loss per mm and Z_PV of a BoundaryMode solve.
+- `notch`, `dip`, `re_peak`, `band_below`: feature frequencies (parabolic refinement);
+  `deembed_lumped`: a lumped port's S11 moved along the lead (Z0 and γ from mode solves).
+- `compare`: |S21| and phase differences at chosen frequencies and the notch frequencies of both;
+  `ok` is |Δ|S21|| ≤ 0.5 dB and the notches within 1 %. Phase is reported, not judged: an
+  absolute phase over a long feed carries both solvers' dispersion error (see section 7).
+
+## 9. A sign-off run, step by step
+
+1. **The planar document.** A region of the zone-filled board, with the solid copper, the lossy
+   L2 floor, the pads, and the solder mask where the board has it:
+
+   ```python
+   from yapnr.rf.planar import adapters, model, stackups
+
+   diel, layers = stackups.radar60("feed", l1_model="solid")
+   mask = stackups.solder_mask(layers[0], outline=MASK_RING)   # the launch runs under mask
+   doc = adapters.from_kicad(BOARD, [x0, x1, y0, y1], {"F.Cu": "L1"}, (diel + [mask], layers),
+                             frame=(kx0, ky0, True), nets=["GND", "RF_TX1"])
+   doc["name"] = "launch-tx1"
+   doc["ports"] = [dict(name="TX1.P0", kind="wave", net="RF_TX1", layer="L1", ref="zmin",
+                        at=[x, y], dir="+x", width=0.2, z0=50.0, excite=True), ...]
+   model.check(doc)
+   ```
+
+   Check `provenance.pads_skipped` and `cleaning_xor_mm2`. A wave-port face must end inside
+   coplanar ground (`port_geometry` does this; look at `mesh.json`'s `ports`). Put the walls off
+   the vias (`adapters.fit_box`).
+
+2. **Mesh and configurations:** `python -m yapnr.rf.palace case launch-tx1.json --out
+models/launch-tx1 --band 54 70 0.025 --excite TX1.P0 --amr-freqs 60.3 62.05 63.8
+--orders 3` (the sign-off settings of section 5; `mesh.json` estimates the unknowns).
+3. **The campaign:** one job per model, `stages = [palace-uniform, palace-amr]`, `mesh_from` the
+   refinement, `config = palace-sweep`; `memory_gb` from section 10. `palace_plan.py plan`, then
+   `yapnr exp plan / submit / status / fetch`.
+4. **The comparison:** both solvers at their converged settings (openEMS at 20 µm fill or finer
+   with 8 cells across the 4-mil core; Palace's refined mesh against its initial one, and order
+   3), `results.compare` on the quantities that decide the sign-off. Frequencies of resonances
+   and notches agree within 1 % and transmission within 0.5 dB, or the difference is explained
+   (one solver still moving with its mesh, a model difference such as zero-thickness copper).
+   Report the material range too: the RO4835 Dk range of the stackup (3.33–3.66) moves resonances
+   by more than the solvers differ.
+
+## 10. Sizes, memory and the bank
+
+- **Memory:** about 12 kB per unknown at order 2 for a sweep with the reduced model, 8–10 kB for
+  a single solve, about 8 kB at order 3. Palace counted 0–8 % more unknowns than `mesh.json`'s
+  `dofs_estimate` on the validation models; one refinement step (`UpdateFraction` 0.7) added 4–6 %
+  on the feed and patch models.
+- **Shapes** (Spot, us-west4, October 2026): `c4d-standard-16` 62 GB (up to about 4 M unknowns),
+  `c4d-highmem-16` 126 GB (8 M; no template, an instance policy), `c4d-highmem-32` 252 GB
+  (16 M), `c4d-highmem-48` 378 GB (25 M), `c4d-highmem-64` 504 GB (35 M) at $0.21, 0.43, 0.64
+  and 0.85 an hour. Give such a job `ranks` = the shape's cores (16 ranks on a 32-vCPU shape) and
+  `memory_gb`; the plan places it (section 6).
+- **Quota:** the project's Spot quota is 64 vCPUs per region, shared by every track; a 64-vCPU
+  model needs a whole region to itself and waits until it is free. On-demand VMs are off in the
+  owner configuration.
+- **No checkpoint:** a preempted Palace task starts again; refinement cannot resume. Keep a Spot
+  task under one to two hours.
+- **The bank** (15–30 M unknowns at order 2 with finite board and radome, 180–360 GB): one
+  `c4d-highmem-48/64` and a whole region's quota for one to two hours a sweep, a
+  preemption-sized risk. Measure the rank scaling (4/8/16 ranks on a feed model) first, then
+  prefer smaller models that answer the same questions: a column with its divider (3–5 M), pairs
+  of columns for coupling, the radome on a single column; the full bank once, at the end.
+- **Absorbing walls:** Palace has first- and second-order absorbing boundaries, no PML. A
+  first-order wall reflects (1 − cos θ)/(1 + cos θ) of a plane wave at incidence θ: −15 dB at
+  45°, −9.5 dB at 60° [closed form]. The single-patch box check (0.3 against 0.5 λ0, first against
+  second order) moved its broadside |S11| dip by at most 0.06 GHz but its depth by 6–7 dB. For
+  arrays and anything scanned or with a radome: walls at least λ0 from radiating copper and from
+  the radome, second order, and a box study (two wall distances) on coupling, active S11 and the
+  pattern before trusting them.

@@ -199,6 +199,15 @@ hierarchical ladder driver and their animations on `claude/animations-groups-hie
   re-checked with an independent finite-volume solver (within 0.1 Ω) and IPC-2141A (stripline
   50.5 Ω); recovery re-run with another seed, a wrong nominal stackup and a worse lab. Open: the
   SMA part, the panel fee, a mask-off stick on board B.
+- **Palace, the second RF solver** (#46, branch `claude/palace`; guide
+  [docs/rf-palace.md](docs/rf-palace.md), image `docker/palace`): planar documents
+  (`yapnr.rf.planar`: lines, the radar60 patch and feed models, KiCad regions with footprint pads;
+  lossy `metal` floor; solder mask over solid copper), the Gmsh builder, configurations checked
+  against Palace's schema, the validated sign-off settings (`python -m yapnr.rf.palace case`),
+  `yapnr.rf.palace.results`, and `palace_plan.py`/`palace_job.py` campaigns with stages. Validated
+  against openEMS and the 2D cross-section solver on the radar60 lines, single patch and TX1
+  feed; two reviews' fixes in. Open: Palace issues to report upstream, a rank-scaling run before
+  the bank model, the image's ParMETIS licence (owner).
 
 ## Next
 

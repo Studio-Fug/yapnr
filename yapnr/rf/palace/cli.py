@@ -2,9 +2,11 @@
 
     mesh MODEL.json --out DIR [--copper sheet|solid|pec] [--edge-h MM] [--grade G] [--threads N]
     driven DIR --band F0 F1 DF [--adaptive-tol T] [--excite PORT ...] [--order P]
-           [--amr-its N --amr-freqs F ...] [--mesh-file FILE] [--name palace.json]
+           [--amr-its N --amr-freqs F ...] [--mesh-file FILE --precracked] [--name palace.json]
+           [--copper-bc impedance|conductivity] [--copper-f F]
     mode DIR --port PORT --freq F [--name ...]
     case MODEL.json --out DIR [--band F0 F1 DF --excite PORT ... --amr-freqs F ...]
+         [--settings auto|signoff] [--orders 3]
     configs DIR ...                     # rewrite a meshed case's configs (validation settings)
     validate CONFIG.json ...
     validation --out DIR [--record RFMACRO.json] [--feed NAME=MODEL.json ...]
@@ -12,9 +14,14 @@
 
 ``DIR`` holds ``model.json`` (the planar document as meshed), ``mesh.msh`` and ``mesh.json``.
 ``case`` does it all in one step (the ``prepare`` of a Palace task): mesh, then the uniform,
-refinement and sweep configurations (``validation.write_case``), with the settings of a validation
-case or the ones given. Configs are checked against the vendored Palace schema before they are
-written.
+refinement and sweep configurations (``validation.write_case``). A model named like a validation
+case (``line-``, ``patch-``, ``tx12-``) keeps that case's settings and copper model unless
+``--settings signoff``; any other model gets the validated sign-off settings
+(``validation.signoff_settings``: solid copper unless ``--copper``, ``Impedance`` copper, adaptive
+sweep at 1e-3 with at most 30 solves, one refinement capped at 2 M unknowns), which need
+``--band``. The copper is ``Impedance`` by default everywhere (``Conductivity`` aborts multi-rank
+runs with wave ports at b797ea8). Configs are checked against the vendored Palace schema before
+they are written.
 """
 
 from __future__ import annotations
@@ -56,17 +63,25 @@ def cmd_mesh(a) -> int:
 def cmd_driven(a) -> int:
     doc = _load(os.path.join(a.dir, "model.json"))
     rec = _load(os.path.join(a.dir, "mesh.json"))
-    amr = dict(validation.AMR_DEFAULT, MaxIts=a.amr_its) if a.amr_its else None
+    amr = None
+    if a.amr_its:
+        amr = dict(validation.AMR_DEFAULT, MaxIts=a.amr_its)
+        if a.amr_max_size:
+            amr["MaxSize"] = a.amr_max_size
     cfg = config.driven(
         doc,
         rec,
         *a.band,
         adaptive_tol=a.adaptive_tol,
+        adaptive_max_samples=a.adaptive_max_samples,
         excite=a.excite or None,
         order=a.order,
         amr=amr,
         amr_freqs=a.amr_freqs,
         mesh_file=a.mesh_file,
+        precracked=a.precracked,
+        copper_bc=a.copper_bc,
+        copper_f_ghz=a.copper_f,
         output=a.output,
     )
     config.check(cfg)
@@ -94,27 +109,60 @@ def cmd_mode(a) -> int:
     return 0
 
 
+def case_inputs(doc, band=None, excite=None, amr_freqs=None, copper=None, settings="auto"):
+    """(document, settings) of ``case``: a validation case's own settings and copper model (unless
+    ``settings`` is "signoff"), else ``validation.signoff_settings`` on ``band`` with solid copper
+    unless ``copper`` names another model."""
+    st = None
+    if settings == "auto":
+        try:
+            st = validation.case_settings(doc["name"])
+        except KeyError:
+            st = None
+    if st is None:
+        if not band:
+            raise ValueError(
+                f"{doc['name']!r} is not a validation case: the sign-off settings need --band"
+            )
+        st = validation.signoff_settings(band, excite, amr_freqs)
+        copper = copper or st["layer_model"]
+    else:
+        if band:
+            st["band"] = tuple(float(v) for v in band)
+        if amr_freqs:
+            st["amr_freqs"] = [float(f) for f in amr_freqs]
+    if excite:
+        st["excite"] = list(excite)
+    st.setdefault("excite", [p["name"] for p in doc["ports"] if p.get("excite")])
+    if not st["excite"]:
+        raise ValueError("no port is excited: give --excite")
+    if copper:
+        doc = model.with_layer_model(doc, copper)
+    return doc, st
+
+
 def cmd_case(a) -> int:
     doc = model.check(_load(a.model))
-    if a.copper:
-        doc = model.with_layer_model(doc, a.copper)
     try:
-        st = validation.case_settings(doc["name"])
-    except KeyError:
-        st = None
-    if a.band:
-        st = dict(st or {}, band=tuple(a.band))
-    if st is None or "band" not in st:
-        raise SystemExit(f"no settings for case {doc['name']!r}: give --band (and --excite)")
-    st.setdefault("adaptive_tol", 1e-4)
-    if a.excite:
-        st["excite"] = a.excite
-    st.setdefault("excite", [p["name"] for p in doc["ports"] if p.get("excite")])
-    if a.amr_freqs:
-        st["amr_freqs"] = a.amr_freqs
-    st.setdefault("amr_freqs", [0.5 * (st["band"][0] + st["band"][1])])
+        doc, st = case_inputs(doc, a.band, a.excite, a.amr_freqs, a.copper, a.settings)
+    except ValueError as err:
+        raise SystemExit(str(err))
+    if a.orders:
+        st["orders"] = a.orders
     rec = validation.write_case(doc, a.out, dict(edge_h=a.edge_h, threads=a.threads), st)
+    copper = sorted({la["model"] for la in doc["stack"]["layers"]})
     print(mesh.summary(rec))
+    print(
+        "settings: %s; copper %s as %s; adaptive tol %g; refinement %s at %s GHz"
+        % (
+            "sign-off" if "layer_model" in st else "validation case",
+            "/".join(copper),
+            st.get("copper_bc", "impedance"),
+            st["adaptive_tol"],
+            dict(validation.AMR_DEFAULT, **st.get("amr", {})),
+            st["amr_freqs"],
+        )
+    )
     print("configs: " + ", ".join(rec["configs"]))
     return 0
 
@@ -192,7 +240,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--order", type=int, default=2)
     p.add_argument("--amr-its", type=int, default=0)
     p.add_argument("--amr-freqs", type=float, nargs="*")
+    p.add_argument("--amr-max-size", type=int, help="refinement MaxSize (default 2 M unknowns)")
+    p.add_argument("--adaptive-max-samples", type=int)
     p.add_argument("--mesh-file")
+    p.add_argument(
+        "--precracked", action="store_true", help="the mesh is an adapted mesh Palace saved"
+    )
+    p.add_argument("--copper-bc", choices=config.COPPER_BCS, default="impedance")
+    p.add_argument("--copper-f", type=float, help="GHz where Impedance copper is exact")
     p.add_argument("--output", default="postpro")
     p.add_argument("--name", default="palace.json")
     p.set_defaults(fn=cmd_driven)
@@ -211,6 +266,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--band", type=float, nargs=3, metavar=("F0", "F1", "DF"))
     p.add_argument("--excite", nargs="*")
     p.add_argument("--amr-freqs", type=float, nargs="*")
+    p.add_argument(
+        "--settings",
+        choices=("auto", "signoff"),
+        default="auto",
+        help="auto: a validation case's own settings, else sign-off (default)",
+    )
+    p.add_argument("--orders", type=int, nargs="*", help="extra uniform-sweep orders (check)")
     p.add_argument("--edge-h", type=float)
     p.add_argument("--threads", type=int, default=1)
     p.set_defaults(fn=cmd_case)

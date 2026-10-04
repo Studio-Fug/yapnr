@@ -1,9 +1,10 @@
+load("@yapnr_pypi//:requirements.bzl", "requirement")
 load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
 
-# yapnr.rf.planar and yapnr.rf.palace. The document model, the configuration writer and the
-# schema check are stdlib only and run here, against the vendored Palace schema. The shapely
-# adapters and the Gmsh builder need the FEA environment, so those tests are manual here (and skip
-# without shapely or gmsh), like the coupons' 2D solver:
+# yapnr.rf.planar and yapnr.rf.palace. The document model, the configuration writer, the schema
+# check (against the vendored Palace schema) and the results readers (numpy) run here. The
+# shapely adapters and the Gmsh builder need the FEA environment, so those tests are manual here
+# (and skip without shapely or gmsh), like the coupons' 2D solver:
 #
 #     python -m unittest tests/unit/rf_palace/test_*.py   # in the FEA environment
 yapnr_py_tests(
@@ -15,5 +16,6 @@ yapnr_py_tests(
     deps = [
         "//yapnr/rf/palace",
         "//yapnr/rf/planar",
+        requirement("numpy"),
     ],
 )

@@ -24,25 +24,65 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 from yapnr.rf.palace import config, mesh
 from yapnr.rf.planar import adapters, model
 
-AMR_DEFAULT = dict(Tol=1e-2, MaxIts=6, UpdateFraction=0.7, MaxSize=4_000_000)
+# One nonconforming refinement, at most 2 M unknowns (config.REFINEMENT): what the validation
+# ran. Palace stops refining once a solve has more than MaxSize unknowns, so the last mesh can be
+# up to about twice that: 4 M unknowns at about 12 kB each is the 64 GB of a c4d-standard-16.
+AMR_DEFAULT = {
+    k: v
+    for k, v in config.REFINEMENT.items()
+    if k in ("Tol", "MaxIts", "MaxSize", "UpdateFraction")
+}
+SIGNOFF = dict(
+    adaptive_tol=1e-3,
+    adaptive_max_samples=30,
+    copper_bc="impedance",
+    layer_model="solid",
+)
+
+
+def signoff_settings(
+    band: Sequence[float],
+    excite: Optional[Sequence[str]] = None,
+    amr_freqs: Optional[Sequence[float]] = None,
+    copper_f_ghz: Optional[float] = None,
+) -> Dict[str, Any]:
+    """The validated Palace settings for a radar sign-off model (palace/validation.md, READY.md):
+    solid copper (``layer_model``, applied by ``case``) written as ``Impedance`` at the band
+    centre, adaptive sweep at 1e-3 with at most 30 full solves, one nonconforming refinement at
+    ``amr_freqs`` (default: the band centre) capped at 2 M unknowns, the refined mesh swept in a
+    separate solve (``palace-sweep.json``). ``band`` is (f0, f1, df) in GHz."""
+    f0, f1, df = (float(v) for v in band)
+    if not (f1 > f0 > 0 and df > 0):
+        raise ValueError("band is (f0, f1, df) with 0 < f0 < f1 and df > 0")
+    st: Dict[str, Any] = dict(
+        SIGNOFF,
+        band=(f0, f1, df),
+        amr_freqs=[float(f) for f in (amr_freqs or [0.5 * (f0 + f1)])],
+        amr=dict(AMR_DEFAULT),
+    )
+    if excite:
+        st["excite"] = list(excite)
+    if copper_f_ghz:
+        st["copper_f_ghz"] = float(copper_f_ghz)
+    return st
 
 
 def case_settings(name: str) -> Dict[str, Any]:
-    """Sweep, excitation and refinement settings of a case (GHz).
+    """Sweep, excitation and refinement settings of a validation case (GHz).
 
-    ``amr`` overrides ``AMR_DEFAULT`` (Palace stops refining once a solve has more than
-    ``MaxSize`` unknowns, so the last mesh can be up to about twice that); ``adaptive_max_samples``
-    caps the adaptive sweep's full solves (Palace's default is 20); ``copper_bc`` "impedance"
-    writes the copper sheets as Impedance boundaries frozen at the band centre (see
-    ``config.impedance_rl``: Palace b797ea8 aborts a multi-rank mode solve whose cross-section
-    a Conductivity sheet crosses)."""
+    ``amr`` overrides ``AMR_DEFAULT``; ``adaptive_max_samples`` caps the adaptive sweep's full
+    solves (Palace's default is 20); ``copper_bc`` "impedance" writes the copper as Impedance
+    boundaries frozen at the band centre (see ``config.impedance_rl``: Palace b797ea8 aborts a
+    multi-rank mode solve whose cross-section a Conductivity sheet crosses). These keep the
+    validation's copper model as each case was built (sheets, for the comparison with openEMS);
+    sign-off models use ``signoff_settings``."""
     if name.startswith("line-"):
         return dict(
             band=(54.0, 70.0, 0.5),
             adaptive_tol=1e-3,
             excite=["P1"],
             amr_freqs=[62.0],
-            amr=dict(MaxIts=3, MaxSize=1_200_000),
+            amr=dict(MaxIts=3, MaxSize=1_200_000),  # the lines' refinement study
             modes=[1.0, 30.0, 62.0],
             copper_bc="impedance",
         )
@@ -118,13 +158,13 @@ def write_configs(
 
     ``palace-uniform.json`` sweeps the initial mesh, ``palace-amr.json`` refines it at the
     ``amr_freqs`` (saving every iteration's results and the adapted mesh) and
-    ``palace-sweep.json`` sweeps the adapted mesh; ``palace-mode-<f>GHz.json`` (the port face,
-    shielded as the 3D port sees it) and ``palace-mode-wall-<f>GHz.json`` (the whole wall, open)
-    are the 2D mode solves on P1's plane."""
+    ``palace-sweep.json`` sweeps the adapted mesh; ``palace-uniform-p<N>.json`` sweeps the initial
+    mesh at each extra order of ``st["orders"]`` (the order check); ``palace-mode-<f>GHz.json``
+    (the port face, shielded as the 3D port sees it) and ``palace-mode-wall-<f>GHz.json`` (the
+    whole wall, open) are the 2D mode solves on P1's plane, at order 2 and at each order of
+    ``st["mode_orders"]`` beyond it (``-p<N>``)."""
     f0, f1, df = st["band"]
-    copper = dict(
-        copper_bc=st.get("copper_bc", "conductivity"), copper_f_ghz=st.get("copper_f_ghz")
-    )
+    copper = dict(copper_bc=st.get("copper_bc", "impedance"), copper_f_ghz=st.get("copper_f_ghz"))
     sweep = dict(
         adaptive_tol=st["adaptive_tol"],
         adaptive_max_samples=st.get("adaptive_max_samples"),
@@ -159,17 +199,24 @@ def write_configs(
             **sweep,
         ),
     }
+    for order in st.get("orders", []):
+        cfgs[f"palace-uniform-p{order}.json"] = config.driven(
+            doc, rec, f0, f1, df, order=int(order), output=f"postpro-uniform-p{order}", **sweep
+        )
     for f in st.get("modes", []):
-        for face, tag in (("port", ""), ("wall", "wall-")):
-            cfgs[f"palace-mode-{tag}{f:g}GHz.json"] = config.boundary_mode(
-                doc,
-                rec,
-                "P1",
-                f,
-                face=face,
-                copper_bc=copper["copper_bc"],
-                output=f"postpro-mode-{tag}{f:g}GHz",
-            )
+        for order in sorted({2, *st.get("mode_orders", [])}):
+            sfx = "" if order == 2 else f"-p{order}"
+            for face, tag in (("port", ""), ("wall", "wall-")):
+                cfgs[f"palace-mode-{tag}{f:g}GHz{sfx}.json"] = config.boundary_mode(
+                    doc,
+                    rec,
+                    "P1",
+                    f,
+                    face=face,
+                    order=order,
+                    copper_bc=copper["copper_bc"],
+                    output=f"postpro-mode-{tag}{f:g}GHz{sfx}",
+                )
     for fname, cfg in cfgs.items():
         config.check(cfg)
         with open(os.path.join(out, fname), "w", encoding="utf-8") as fh:

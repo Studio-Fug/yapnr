@@ -94,17 +94,41 @@ class DrivenTest(unittest.TestCase):
         self.assertEqual(mats[tag["diel:RO4835"]]["Permittivity"], 3.56)
         self.assertEqual(mats[tag["diel:RO4835"]]["LossTan"], 0.0037)
         b = cfg["Boundaries"]
-        # PEC: the floor and the via barrels; absorbing: the other walls
-        self.assertEqual(sorted(b["PEC"]["Attributes"]), sorted([tag["wall:zmin"], tag["via:GND"]]))
+        # PEC: the via barrels; absorbing: the walls but the floor, which is the lossy L2
+        self.assertEqual(b["PEC"]["Attributes"], [tag["via:GND"]])
         self.assertEqual(b["Absorbing"]["Order"], 1)
         self.assertNotIn(tag["wall:zmin"], b["Absorbing"]["Attributes"])
-        # copper: sigma / K^2, 35 um sheet, internal
+        # copper by default: Impedance at the band centre (Conductivity aborts multi-rank wave
+        # port runs); the sheets Rs = omega Ls = Re Z, the floor one face: 2 Re Z (thick)
+        self.assertNotIn("Conductivity", b)
+        imp = {i["Attributes"][0]: i for i in b["Impedance"]}
+        self.assertEqual(
+            sorted(imp), sorted([tag["cond:L1:SIG"], tag["cond:L1:GND"], tag["wall:zmin"]])
+        )
         lay = self.doc["stack"]["layers"][0]
-        for c in b["Conductivity"]:
-            self.assertAlmostEqual(c["Conductivity"], 5.8e7 / lay["rough_k"] ** 2)
-            self.assertEqual(c["Thickness"], 0.035)
-            self.assertFalse(c["External"])
-        self.assertEqual(len(b["Conductivity"]), 2)  # SIG and GND
+        z = config.face_impedance(model.sigma_eff(lay), 0.035, 62.0)
+        self.assertAlmostEqual(imp[tag["cond:L1:SIG"]]["Rs"] / z.real, 1.0, places=9)
+        floor = self.doc["domain"]["metal"]["zmin"]
+        zf = config.face_impedance(model.sigma_eff(floor), 2 * floor["t"], 62.0)
+        self.assertAlmostEqual(imp[tag["wall:zmin"]]["Rs"] / zf.real, 2.0, places=9)
+        self.assertEqual(floor["rough_k"], lay["rough_k"])  # L2: the same LoPro foil
+        # Conductivity on request (one-rank checks): sigma / K^2, 35 um sheet, internal; the
+        # floor one external face
+        cc = config.driven(self.doc, self.rec, 54.0, 70.0, 0.5, copper_bc="conductivity")
+        self.assertEqual(config.validate(cc), [])
+        cond = {c["Attributes"][0]: c for c in cc["Boundaries"]["Conductivity"]}
+        for t in (tag["cond:L1:SIG"], tag["cond:L1:GND"]):
+            self.assertAlmostEqual(cond[t]["Conductivity"], 5.8e7 / lay["rough_k"] ** 2)
+            self.assertEqual(cond[t]["Thickness"], 0.035)
+            self.assertFalse(cond[t]["External"])
+        self.assertTrue(cond[tag["wall:zmin"]]["External"])
+        self.assertEqual(len(cond), 3)
+        # the openEMS feed models' PEC floor
+        pec = adapters.line_model("gcpw", length=5.0, floor="pec")
+        bp = config.driven(pec, _record(pec), 54.0, 70.0, 0.5)["Boundaries"]
+        self.assertEqual(
+            sorted(bp["PEC"]["Attributes"]), sorted([tag["wall:zmin"], tag["via:GND"]])
+        )
         # wave ports: offsets back to the reference planes, P1 excited, walls behind them PEC
         # in the port mode solve
         wp = {p["Index"]: p for p in b["WavePort"]}
@@ -142,11 +166,16 @@ class DrivenTest(unittest.TestCase):
         tag = {k: v["tag"] for k, v in self.rec["groups"].items()}
         self.assertIn(tag["cond:L1:SIG"], cfg["Boundaries"]["PEC"]["Attributes"])
         solid = model.with_layer_model(self.doc, "solid")
-        cfg = config.driven(solid, self.rec, 54, 70, 1)
+        cfg = config.driven(solid, self.rec, 54, 70, 1, copper_bc="conductivity")
         self.assertEqual(config.validate(cfg), [])
         self.assertTrue(
             all(c["External"] and "Thickness" not in c for c in cfg["Boundaries"]["Conductivity"])
         )
+        # by default the outside of solid copper is one face: Rs = omega Ls = 2 Re Z
+        cfg = config.driven(solid, self.rec, 54, 70, 1)
+        imp = {i["Attributes"][0]: i for i in cfg["Boundaries"]["Impedance"]}
+        z = config.face_impedance(model.sigma_eff(solid["stack"]["layers"][0]), 0.07, 62.0)
+        self.assertAlmostEqual(imp[tag["cond:L1:SIG"]]["Rs"] / z.real, 2.0, places=9)
 
     def test_lumped_port(self):
         doc = copy.deepcopy(self.doc)
@@ -196,7 +225,7 @@ class DrivenTest(unittest.TestCase):
         tag = {k: v["tag"] for k, v in self.rec["groups"].items()}
         self.assertEqual(
             sorted(i["Attributes"][0] for i in imp),
-            sorted([tag["cond:L1:SIG"], tag["cond:L1:GND"]]),
+            sorted([tag["cond:L1:SIG"], tag["cond:L1:GND"], tag["wall:zmin"]]),
         )
         # frozen at the band centre (62 GHz): thick copper, Rs = omega Ls = 1/(sigma delta)
         sigma = model.sigma_eff(self.doc["stack"]["layers"][0])
@@ -207,6 +236,11 @@ class DrivenTest(unittest.TestCase):
         mode = config.boundary_mode(self.doc, self.rec, "P1", 1.0, copper_bc="impedance")
         self.assertEqual(config.validate(mode), [])
         self.assertIn("Impedance", mode["Boundaries"])
+        # the lossy floor stays an Impedance edge of the port's 2D mode solve
+        self.assertIn(
+            tag["wall:zmin"],
+            [i["Attributes"][0] for i in mode["Boundaries"]["Impedance"]],
+        )
         with self.assertRaises(ValueError):
             config.driven(self.doc, self.rec, 54.0, 70.0, 0.5, copper_bc="lossy")
 
@@ -257,6 +291,71 @@ class DrivenTest(unittest.TestCase):
         self.assertIn(tag["wall:xmax"], absorbing)  # parallel to the plane: no edge there
         with self.assertRaises(ValueError):
             config.boundary_mode(self.doc, self.rec, "P1", 1.0, face="box")
+
+
+class SignoffTest(unittest.TestCase):
+    """``case`` on a model that is not a validation case gets the validated sign-off setup."""
+
+    def test_signoff_settings(self):
+        from yapnr.rf.palace import validation
+
+        st = validation.signoff_settings((54, 70, 0.025), ["TX1.P0"])
+        self.assertEqual(st["copper_bc"], "impedance")
+        self.assertEqual(st["layer_model"], "solid")
+        self.assertEqual((st["adaptive_tol"], st["adaptive_max_samples"]), (1e-3, 30))
+        self.assertEqual(st["amr"]["MaxIts"], 1)
+        self.assertEqual(st["amr"]["MaxSize"], 2_000_000)
+        self.assertEqual(st["amr_freqs"], [62.0])
+        with self.assertRaises(ValueError):
+            validation.signoff_settings((70, 54, 0.025))
+
+    def test_case_defaults(self):
+        from yapnr.rf.palace import cli, validation
+
+        doc = adapters.line_model("msl", length=5.0)
+        doc["name"] = "launch-tx1"  # not a validation case name
+        out, st = cli.case_inputs(doc, band=(54, 70, 0.025))
+        self.assertEqual({la["model"] for la in out["stack"]["layers"]}, {"solid"})
+        self.assertEqual(st["excite"], ["P1"])
+        rec = _record(out)
+        cfgs = {}
+        for name, kwargs in (
+            ("uniform", {}),
+            ("amr", dict(amr=dict(validation.AMR_DEFAULT, **st["amr"]), amr_freqs=st["amr_freqs"])),
+        ):
+            cfgs[name] = config.driven(
+                out,
+                rec,
+                *st["band"],
+                excite=st["excite"],
+                adaptive_tol=None if name == "amr" else st["adaptive_tol"],
+                adaptive_max_samples=st["adaptive_max_samples"],
+                copper_bc=st["copper_bc"],
+                **kwargs,
+            )
+            self.assertEqual(config.validate(cfgs[name]), [])
+        self.assertNotIn("Conductivity", cfgs["uniform"]["Boundaries"])
+        drv = cfgs["uniform"]["Solver"]["Driven"]
+        self.assertEqual((drv["AdaptiveTol"], drv["AdaptiveMaxSamples"]), (1e-3, 30))
+        ref = cfgs["amr"]["Model"]["Refinement"]
+        self.assertEqual((ref["MaxIts"], ref["MaxSize"], ref["Nonconformal"]), (1, 2_000_000, True))
+        # --copper keeps another copper model; a validation case keeps its own settings
+        out, _ = cli.case_inputs(doc, band=(54, 70, 0.025), copper="sheet")
+        self.assertEqual({la["model"] for la in out["stack"]["layers"]}, {"sheet"})
+        doc["name"] = "line-msl-5mm"
+        out, st = cli.case_inputs(doc)
+        self.assertEqual({la["model"] for la in out["stack"]["layers"]}, {"sheet"})
+        self.assertEqual(st["band"], (54.0, 70.0, 0.5))
+        out, st = cli.case_inputs(doc, band=(54, 70, 0.025), settings="signoff")
+        self.assertEqual({la["model"] for la in out["stack"]["layers"]}, {"solid"})
+        with self.assertRaises(ValueError):
+            cli.case_inputs(dict(doc, name="other"))  # sign-off needs the band
+        # the driven defaults are the validated refinement
+        cfg = config.driven(out, rec, 54, 70, 0.5, amr={}, amr_freqs=[62.0])
+        self.assertEqual(cfg["Model"]["Refinement"], {})  # no refinement asked for
+        cfg = config.driven(out, rec, 54, 70, 0.5, amr=dict(Tol=1e-2), amr_freqs=[62.0])
+        self.assertEqual(cfg["Model"]["Refinement"]["MaxIts"], 1)
+        self.assertEqual(cfg["Model"]["Refinement"]["MaxSize"], 2_000_000)
 
 
 if __name__ == "__main__":

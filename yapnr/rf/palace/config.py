@@ -6,14 +6,19 @@ adaptive mesh refinement); ``boundary_mode`` the 2D mode solve on one wave-port 
 The mapping, attribute by attribute (``mesh.json``):
 
 - ``air``, ``diel:<name>``: ``Domains.Materials`` (Permittivity, LossTan);
-- ``cond:<layer>:<net>``: ``Boundaries.PEC`` for a ``pec`` layer, else ``Boundaries.Conductivity``
-  with sigma / rough_k^2 and, for a ``sheet``, the copper thickness (Palace's finite-thickness
-  surface impedance; the sheet is internal, so ``External`` is false); ``solid`` copper is the
-  outer surface of the removed copper (``External``, thick-conductor impedance);
+- ``cond:<layer>:<net>``: ``Boundaries.PEC`` for a ``pec`` layer; else, by default
+  (``copper_bc="impedance"``), ``Boundaries.Impedance`` with the admittance of the copper's
+  surface impedance at one frequency (``impedance_rl``), or (``copper_bc="conductivity"``)
+  ``Boundaries.Conductivity`` with sigma / rough_k^2 and, for a ``sheet``, the copper thickness
+  (Palace's finite-thickness surface impedance; the sheet is internal, so ``External`` is
+  false); ``solid`` copper is the outer surface of the removed copper (``External``,
+  thick-conductor impedance). ``Conductivity`` aborts multi-rank runs with wave ports at
+  b797ea8 (``impedance_rl``), so it is for one-rank checks only;
 - ``via:<net>``: PEC;
 - ``wall:<face>``: per the document's boundaries (``abc1``/``abc2`` -> ``Absorbing``, ``pec``,
-  ``pmc``); walls that touch wave ports are also ``WavePortPEC``, so each port face is a shielded
-  guide in its 2D mode solve;
+  ``pmc``, ``metal`` -> the copper boundary of its ``domain.metal`` conductor, one face, thick);
+  walls that touch wave ports are also ``WavePortPEC``, so each port face is a shielded guide in
+  its 2D mode solve;
 - ``port:<name>``: ``WavePort`` (``Offset`` back to the reference plane, ``VoltagePath`` from the
   strip to its reference for polarity and Z_PV) or ``LumpedPort`` (``R`` = z0, ``Direction`` from
   the strip down to its reference).
@@ -35,6 +40,17 @@ from yapnr.rf.planar import model
 L0 = 1.0e-3  # mesh units: mm
 
 LINEAR_DEFAULT = dict(Type="Default", KSPType="GMRES", Tol=1.0e-6, MaxIts=400)
+# Adaptive mesh refinement as validated (palace/validation.md): one nonconforming step at the
+# feature frequencies, at most 2 M unknowns (about 24 GB at order 2 for the sweep that follows).
+REFINEMENT = dict(
+    Tol=1e-2,
+    MaxIts=1,
+    MaxSize=2_000_000,
+    UpdateFraction=0.7,
+    Nonconformal=True,
+    SaveAdaptMesh=True,
+    SaveAdaptIterations=True,
+)
 MU0 = 4.0e-7 * math.pi
 COPPER_BCS = ("conductivity", "impedance")
 
@@ -127,7 +143,7 @@ def _boundaries(
     rec: Dict[str, Any],
     excite: Optional[Iterable[str]],
     absorbing_order: Optional[int],
-    copper_bc: str = "conductivity",
+    copper_bc: str = "impedance",
     copper_f_ghz: Optional[float] = None,
     precracked: bool = False,
 ) -> Dict[str, Any]:
@@ -175,6 +191,15 @@ def _boundaries(
             pec.append(tag)
         elif k == "pmc":
             pmc.append(tag)
+        elif k == "metal":  # a lossy ground wall: one face of a thick conductor
+            m = model.metal_of(doc, face)
+            if copper_bc == "impedance":
+                rs, ls = impedance_rl(
+                    model.sigma_eff(m), float(m.get("t", 0.0)), float(copper_f_ghz), False
+                )
+                imp.append(dict(Attributes=[tag], Rs=rs, **({"Ls": ls} if ls else {})))
+            else:
+                cond.append(dict(Attributes=[tag], Conductivity=model.sigma_eff(m), External=True))
         else:
             absorbing.append(tag)
             order = max(order, 2 if k == "abc2" else 1)
@@ -248,7 +273,7 @@ def driven(
     absorbing_order: Optional[int] = None,
     linear: Optional[Dict[str, Any]] = None,
     adaptive_max_samples: Optional[int] = None,
-    copper_bc: str = "conductivity",
+    copper_bc: str = "impedance",
     copper_f_ghz: Optional[float] = None,
     precracked: bool = False,
     verbose: int = 2,
@@ -256,22 +281,18 @@ def driven(
     """A Driven configuration: S-parameters from ``f_min`` to ``f_max`` (GHz) every ``f_step``.
 
     ``adaptive_tol`` turns on Palace's adaptive fast sweep. ``amr`` (``Refinement`` keys: Tol,
-    MaxIts, MaxSize, UpdateFraction ...) turns on adaptive mesh refinement; since Palace sums the
-    error estimate over every solved frequency, ``amr_freqs`` (GHz) replaces the sweep with those
-    points for the refinement run (then sweep the saved mesh in a second run).
+    MaxIts, MaxSize, UpdateFraction ...) turns on adaptive mesh refinement, by default one
+    nonconforming refinement capped at 2 M unknowns (``REFINEMENT``: the validated setting; Palace
+    stops once a solve exceeds MaxSize, so the last mesh can be up to about twice that); since
+    Palace sums the error estimate over every solved frequency, ``amr_freqs`` (GHz) replaces the
+    sweep with those points for the refinement run (then sweep the saved mesh in a second run,
+    ``precracked``). The copper is ``Impedance`` at ``copper_f_ghz`` (default: the band centre).
     """
     if not f_max > f_min > 0 or f_step <= 0:
         raise ValueError("need 0 < f_min < f_max and f_step > 0")
     refinement: Dict[str, Any] = {}
     if amr:
-        refinement = dict(
-            Tol=1e-2,
-            MaxIts=6,
-            UpdateFraction=0.7,
-            Nonconformal=True,
-            SaveAdaptMesh=True,
-            SaveAdaptIterations=True,
-        )
+        refinement = dict(REFINEMENT)
         refinement.update(amr)
     if amr and amr_freqs:
         samples = [dict(Type="Point", Freq=[float(f) for f in amr_freqs], SaveStep=0)]
@@ -328,7 +349,7 @@ def boundary_mode(
     freq: float,
     *,
     face: str = "port",
-    copper_bc: str = "conductivity",
+    copper_bc: str = "impedance",
     n: int = 1,
     order: int = 2,
     mesh_file: Optional[str] = None,

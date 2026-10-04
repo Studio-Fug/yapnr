@@ -255,6 +255,7 @@ def apply_planes(board, rules: dict, pad_margin_mm: float = 2.0) -> int:
 
     zones = []  # (area, zone) for priority assignment
     reused = 0
+    left = []  # plane pads left without a drop (plane_fallback_drops: false)
     width_log = []  # @pnr-terminal-width fanout choices (PNR_TERMINAL_MIN_WIDTH=1 only)
     for nc in rules.get("net_classes", []):
         layer = nc.get("plane_layer")
@@ -300,15 +301,34 @@ def apply_planes(board, rules: dict, pad_margin_mm: float = 2.0) -> int:
             for x, y in [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]:
                 outline.Append(pcbnew.VECTOR2I(int(x), int(y)))
             board.Add(z)
-            _dogbone_fanout_net(
-                board, net.GetNetCode(), rules=rules, width_log=width_log, **dropped
-            )
+            if (rules or {}).get("plane_fallback_drops", True) is False:
+                # board.plane_fallback_drops: false: no copper nobody routed; listed.
+                board.BuildConnectivity()
+                left.extend(
+                    "%s.%s" % (pad.GetParentFootprint().GetReference(), pad.GetNumber())
+                    for fp in board.GetFootprints()
+                    for pad in fp.Pads()
+                    if pad.GetNetCode() == net.GetNetCode()
+                    and pad.GetAttribute() == pcbnew.PAD_ATTRIB_SMD
+                    and not _has_through_access(board, pad)
+                )
+            else:
+                _dogbone_fanout_net(
+                    board, net.GetNetCode(), rules=rules, width_log=width_log, **dropped
+                )
             zones.append(((x1 - x0) * (y1 - y0), z))
 
     if width_log:
         import json
 
         sys.stderr.write("planes: terminal widths " + json.dumps(width_log, sort_keys=True) + "\n")
+    if left:
+        sys.stderr.write(
+            "planes: unreached plane pads (plane_fallback_drops false): %d: %s\n"
+            % (len(left), " ".join(sorted(left)))
+        )
+    # Declared keepouts that bar other nets' pours (allow lists, exempt groups).
+    clip_keepout_pours(board, rules, [z for _area, z in zones])
     # Priority: smaller zones fill on top of (carve out of) larger overlapping ones.
     for rank, (_area, z) in enumerate(sorted(zones, key=lambda az: -az[0])):
         z.SetAssignedPriority(rank)
@@ -385,6 +405,7 @@ def form_planes(
     full = [frame.point(0, 0), frame.point(width, 0), frame.point(width, height)]
     full.append(frame.point(0, height))
     made = []
+    formed = []
     for region in regions:
         if region.source or region.net in present.get(region.layer, set()):
             continue
@@ -407,6 +428,9 @@ def form_planes(
         board.Add(z)
         present.setdefault(region.layer, set()).add(region.net)
         made.append((region.layer, region.net))
+        formed.append(z)
+    # Declared keepouts that bar other nets' pours (allow lists, exempt groups).
+    clip_keepout_pours(board, rules, formed)
     if left:
         sys.stderr.write(
             "writeback: unreached plane pads (plane_fallback_drops false): %d: %s\n"
@@ -1548,6 +1572,69 @@ def keepout_dru(rules: Optional[dict]) -> Optional[str]:
         "%s (pnr.writeback: copper_keepout allow lists and exempt groups; replaced whole)\n"
         "%s\n%s\n" % (KEEPOUT_DRU_BEGIN, "\n".join(rules_out), KEEPOUT_DRU_END)
     )
+
+
+def clip_keepout_pours(board, rules, zones, gap_mm=0.005):
+    """Cut the copper keepouts that bar pours out of ``zones`` (copper zones the
+    engine formed, such as its planes) where they do not allow the zone's net.
+
+    A keepout without allow lists or exempt groups forbids fills itself (its rule
+    area's flag, which the zone filler honours). One with them is written as custom
+    rules over a rule area that forbids nothing itself (:func:`keepout_dru`), so the
+    filler would pour the engine's zones into it and the run would fail its own DRC:
+    each such zone loses the keepout's rule area (grown by ``gap_mm`` so the two do
+    not touch). A zone drawn in the source is not changed; each one such a keepout
+    would flag is listed on stderr. Nothing happens without a keepout of this kind,
+    so other boards keep their bytes. Returns ``{"cut": n, "drawn": [...]}``."""
+    import pcbnew
+
+    from pnr.fixed_block import keepout_class_mode
+
+    specs = [
+        s
+        for s in (rules or {}).get("copper_keepouts", [])
+        if "items" in s and "pours" in s["items"] and keepout_class_mode(s)
+    ]
+    if not specs:
+        return dict(cut=0, drawn=[])
+    areas = {z.GetZoneName(): z for z in board.Zones() if z.GetIsRuleArea()}
+    formed = {z.m_Uuid.AsString() for z in zones}
+    cut, drawn = set(), []
+    for spec in specs:
+        area = areas.get("PNR keepout:" + spec["name"])
+        if area is None:
+            sys.stderr.write("writeback: keepout %s has no rule area to clip by\n" % spec["name"])
+            continue
+        allowed = set(spec.get("allowed_nets") or []) | _class_nets(rules, spec)
+        exempt = set(spec.get("exempt_groups") or [])
+        layers = [copper_layer(board, name) for name in spec["layers"]]
+        grown = pcbnew.SHAPE_POLY_SET(area.Outline())
+        grown.Inflate(_nm(gap_mm), pcbnew.CORNER_STRATEGY_ROUND_ALL_CORNERS, 1000)
+        for z in list(board.Zones()):
+            if z.GetIsRuleArea() or z.GetNetname() in allowed or group_name(z) in exempt:
+                continue
+            if not any(z.IsOnLayer(la) for la in layers):
+                continue
+            overlap = pcbnew.SHAPE_POLY_SET(z.Outline())
+            overlap.BooleanIntersection(area.Outline())
+            if not overlap.OutlineCount() or overlap.Area() <= 0:
+                continue
+            uid = z.m_Uuid.AsString()
+            if uid in formed:
+                z.Outline().BooleanSubtract(grown)
+                cut.add(uid)
+            else:
+                drawn.append(
+                    "%s (%s) by %s" % (z.GetZoneName() or "zone", z.GetNetname(), spec["name"])
+                )
+    if cut:
+        sys.stderr.write("writeback: plane zones cut by pour keepouts: %d\n" % len(cut))
+    if drawn:
+        sys.stderr.write(
+            "writeback: drawn zones inside a keepout that bars their pours (not changed): %s\n"
+            % "; ".join(sorted(set(drawn)))
+        )
+    return dict(cut=len(cut), drawn=sorted(set(drawn)))
 
 
 def _class_nets(rules, spec):

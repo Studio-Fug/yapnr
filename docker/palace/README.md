@@ -143,7 +143,9 @@ What a rebuild reproduces, and what it does not:
 
 The image of the validation, `palace:b797ea8-x86-64-v3@sha256:9d157377…` (build `38aa2afc`), is
 the build with ParMETIS. It stays in the registry under its own tag, for evaluation (comparisons
-with this build) only; nothing new should run on it.
+with this build) only; nothing new should run on it. With the default ordering this build
+reproduces it: the validated `line-gcpw-5mm-sg` order-2 run (625,628 unknowns, 8 ranks,
+c4d-standard-16) gives port S, Z, V and I within 5e-10 of the validation's output.
 
 ## Licences
 

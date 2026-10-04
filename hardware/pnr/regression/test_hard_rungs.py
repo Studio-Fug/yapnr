@@ -38,6 +38,7 @@ CHECK_KINDS = {
     "via_class",
     "escape",
     "pad_distance",
+    "net_vias",
 }
 
 
@@ -319,6 +320,35 @@ class HardRungContract(unittest.TestCase):
         guard = [k for k in rules["copper_keepouts"] if k["name"] == "guard-west"][0]
         self.assertEqual(guard["allowed_nets"], ["CLOCK", "GND", "VCC"])
         self.assertIn("arcs", spec["features"])
+
+    def test_bga_classes_rung(self):
+        """The BGA rung with class clearances, custom rules, a fiducial and a rounded
+        outline: the engine switches, the judge's rules and the checks that hold them."""
+        from hard_rungs import CLASSES_FIDUCIAL, CLASSES_OUTLINE
+
+        from pnr.constraints import compile_constraints, compile_routing_rules
+
+        spec = self.by_name["11-ufbga201-fanout-6L-SGSGPS-classes"]
+        board = spec["constraints"]["board"]
+        self.assertEqual(
+            (board["class_clearance"], board["dru_routing"], board["edge"]),
+            ("maze", True, "exact"),
+        )
+        self.assertEqual(spec["outline_shape"], CLASSES_OUTLINE)
+        text = dru_text(spec)
+        self.assertIn("A.hasNetclass('clk')", text)
+        self.assertIn("physical_hole_clearance (min 0.425mm)", text)
+        (check,) = [c for c in spec["checks"] if c["kind"] == "net_vias"]
+        self.assertEqual(check["nets"], ["PB1", "PE7"])
+        self.assertEqual(spec["constraints"]["fixed"]["FID1"]["at"], list(CLASSES_FIDUCIAL))
+        refs = [p["ref"] for p in spec["parts"]]
+        compiled = compile_constraints(spec["constraints"], refs)
+        nets = sorted({n for p in spec["parts"] for n in p["pins"].values() if n})
+        rules = compile_routing_rules(compiled, nets)
+        self.assertEqual(rules["class_clearance"], "maze")
+        classes = {c["name"]: c for c in rules["net_classes"]}
+        self.assertEqual(classes["clk"]["clearance_mm"], 0.2)
+        self.assertEqual(classes["plane_vcc"]["clearance_mm"], 0.12)
 
     def test_bga_block_rung(self):
         """The BGA rung with a fixed block: its launch copper digest, ground stitching

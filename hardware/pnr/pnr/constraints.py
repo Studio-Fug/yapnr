@@ -253,6 +253,9 @@ class CompiledConstraints:
     plane_fallback_drops: Optional[bool] = None
     # Declared BGA fanouts (``fanout:``, pnr.fanout.spec); the router plans them.
     fanouts: List[Dict] = field(default_factory=list)
+    # Opt-in detailed-router switches from ``board:`` (:data:`ROUTING_SWITCHES`), as
+    # the rules.json keys they become; empty (the default) adds no key.
+    routing: Dict = field(default_factory=dict)
 
     @property
     def hard(self) -> List[Constraint]:
@@ -510,7 +513,45 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
             if compiled.fanouts
             else {}
         ),
+        # Opt-in router switches (board.class_clearance, ...): declared keys only.
+        **dict(getattr(compiled, "routing", None) or {}),
     }
+
+
+# Opt-in detailed-router switches under ``board:`` -> (rules.json key, allowed values).
+# Each is off unless declared, and a board without any keeps its rules.json bytes.
+#   class_clearance: maze   net class clearances in the maze router's halos and
+#                           tables, with exact checks after routing
+#                           (pnr.route.detail.router, pnr.route.detail.class_check)
+#   class_clearance: repair the route as without the switch, then the same checks:
+#                           only the nets too close are routed again, exactly
+#   edge: exact             the board's own Edge.Cuts outline (arcs, stroke) for
+#                           the router's edge and hole-to-edge model, kept by
+#                           writeback (pnr.board_edge)
+#   keep_outline: true      writeback keeps the source outline (no router change)
+#   dru_routing: true       the board's custom rules (.kicad_dru) where they
+#                           constrain routing (pnr.dru_rules, route.detail.dru_apply)
+ROUTING_SWITCHES = {
+    "class_clearance": ("class_clearance", ("maze", "repair")),
+    "edge": ("edge", ("exact",)),
+    "keep_outline": ("keep_outline", (True, False)),
+    "dru_routing": ("dru_routing", (True, False)),
+}
+
+
+def _parse_routing(raw: Dict) -> Dict:
+    """The declared :data:`ROUTING_SWITCHES` of ``board:`` as rules.json keys."""
+    out = {}
+    for key, (rule, allowed) in ROUTING_SWITCHES.items():
+        if key not in raw or raw[key] is None:
+            continue
+        value = raw[key]
+        if value not in allowed or isinstance(value, bool) != isinstance(allowed[0], bool):
+            raise ConstraintError(
+                "board.%s must be one of %s" % (key, ", ".join(repr(v) for v in allowed))
+            )
+        out[rule] = value
+    return out
 
 
 # copper_keepout v1 (layers, items, allow lists, exempt groups); a v0 entry is
@@ -1551,6 +1592,7 @@ def compile_constraints(
         fixed_blocks=fixed_blocks,
         plane_fallback_drops=fallback,
         fanouts=fanouts,
+        routing=_parse_routing(doc.get("board") or {}),
     )
 
 

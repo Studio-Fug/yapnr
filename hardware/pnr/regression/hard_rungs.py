@@ -70,6 +70,8 @@ HARD_LIB = {
     "jst_sh_12": "Connector_JST:JST_SH_SM12B-SRSS-TB_1x12-1MP_P1.00mm_Horizontal",
     "c_0402": "Capacitor_SMD:C_0402_1005Metric",
     "r_0402": "Resistor_SMD:R_0402_1005Metric",
+    # A 1 mm fiducial with its own 0.6 mm clearance and 0.5 mm mask margin.
+    "fiducial_1mm": "Fiducial:Fiducial_1mm_Mask2mm",
 }
 
 
@@ -250,8 +252,9 @@ def with_double_sided(spec):
 
 def dru_text(spec):
     """KiCad 10 custom rules (``.kicad_dru``) that make the judge enforce the rung's
-    via policy, its plane layers (a plane layer carries no tracks) and its
-    differential-pair skew. ``None`` for a rung without such dimensions."""
+    via policy, its plane layers (a plane layer carries no tracks), its
+    differential-pair skew and its own rules (``dru_rules``: a ``-classes`` rung's).
+    ``None`` for a rung without such dimensions."""
     if "via_policy" not in spec:
         return None
     rules = ["(version 1)"]
@@ -278,6 +281,7 @@ def dru_text(spec):
             '(rule "pair %s skew"\n  (condition "A.inDiffPair(\'%s\')")\n'
             "  (constraint skew (max %gmm)))" % (pair["name"], base, pair["skew_mm"])
         )
+    rules += list(spec.get("dru_rules") or ())
     return "\n".join(rules) + "\n"
 
 
@@ -1539,6 +1543,86 @@ def ufbga_block(spec):
     return spec
 
 
+# Net class clearances, a board's custom rules and its own outline on the BGA rung
+# (11-ufbga201-fanout-6L-SGSGPS-classes): the supply plane class at 0.12 mm (its
+# 0.35 mm interstitial drops leave 0.125 mm to the 0.32 mm balls around them) and two
+# ring-0 south GPIO nets in a CLK class at 0.20 mm that the custom rules keep off
+# vias and 0.25 mm from every net without a class; a 1 mm fiducial with its own
+# 0.6 mm clearance and 0.5 mm mask margin in the south exits' corridor; an outline
+# with 1 mm corner radii at a 0.15 mm stroke (J1-J4's pads within 1 mm of the edge),
+# judged by a hole-to-edge rule written for that stroke. The engine declares
+# board.class_clearance: maze, dru_routing and edge: exact.
+CLASSES_CLK_BALLS = ["R4", "R8"]  # ring 0, south: PB1 and PE7, to J2
+CLASSES_FIDUCIAL = (21.5, 9.0)  # between U1 (y >= 12.7) and J2 (y <= 6.9)
+CLASSES_OUTLINE = dict(corner_radius_mm=1.0, stroke_mm=0.15)
+CLASSES_CORNER_KEEPOUT = 1.1  # mm: past the 1 mm arc; J5 (fixed at 2.5, 5.5) starts at y 1.135
+CLASSES_RULES = [
+    '(rule "clk: no vias"\n  (constraint disallow via)\n'
+    "  (condition \"A.Type == 'Via' && A.hasNetclass('clk')\"))",
+    '(rule "clk to nets without a class"\n  (constraint clearance (min 0.25mm))\n'
+    "  (condition \"A.hasNetclass('clk') && B.NetClass == 'Default'\"))",
+    '(rule "hole to edge, to the 0.15 mm stroke"\n'
+    "  (constraint physical_hole_clearance (min 0.425mm))\n"
+    "  (condition \"A.Layer == 'Edge.Cuts' || B.Layer == 'Edge.Cuts'\"))",
+]
+
+
+def ufbga_classes(spec):
+    """``spec`` (the 6L BGA rung) with net class clearances, custom rules, a fiducial
+    and a rounded outline (above), and the checks that judge them."""
+    spec = deepcopy(spec)
+    u1 = spec["parts"][0]
+    clk = [u1["pins"][ball] for ball in CLASSES_CLK_BALLS]
+    spec["parts"].append(pinned("FID1", "fiducial_1mm", "Fiducial", {"": ""}))
+    spec["expected_components"] = len(spec["parts"])
+    spec["expected_connected_pads"] = connected_pads(spec["parts"])
+    cons = spec["constraints"]
+    cons["fixed"]["FID1"] = dict(at=list(CLASSES_FIDUCIAL), rot=0, side="top")
+    cons["net_class"]["plane_vcc"]["clearance_mm"] = 0.12
+    cons["net_class"]["clk"] = dict(nets=clk, clearance_mm=0.2)
+    cons["board"].update(class_clearance="maze", dru_routing=True, edge="exact")
+    spec["outline_shape"] = dict(CLASSES_OUTLINE)
+    # The placer frames parts in the outline's rectangle: the rounded corners (and
+    # the edge clearance past them) are kept free of parts by keep-outs.
+    w, h = cons["board"]["outline"]["w"], cons["board"]["outline"]["h"]
+    c = CLASSES_CORNER_KEEPOUT
+    cons["keepout"] = (cons.get("keepout") or []) + [
+        dict(name="corner-" + name, polygon=rect_polygon(rect))
+        for name, rect in (
+            ("sw", [0, 0, c, c]),
+            ("se", [w - c, 0, w, c]),
+            ("ne", [w - c, h - c, w, h]),
+            ("nw", [0, h - c, c, h]),
+        )
+    ]
+    spec["dru_rules"] = list(CLASSES_RULES)
+    spec["checks"] += [
+        dict(
+            id="fixed-FID1",
+            kind="fixed",
+            ref="FID1",
+            at=list(CLASSES_FIDUCIAL),
+            rot=0,
+            side="top",
+            tol_mm=0.01,
+            engine="fixed",
+        ),
+        dict(id="clk-no-vias", kind="net_vias", nets=clk, max=0, engine="dru_routing"),
+    ]
+    spec["name"] += "-classes"
+    spec["description"] = (
+        spec.get("description", "")
+        + " With class clearances (supply 0.12 mm, two CLK nets 0.20 mm), custom rules (no "
+        "vias on CLK, CLK 0.25 mm from unclassed nets, hole to edge to the stroke), a "
+        "fiducial with its own clearance in an exit corridor and 1 mm rounded corners."
+    )
+    spec["dims"]["constraints"] = "classes"
+    spec["features"] = sorted(
+        set(spec["features"]) | {"class-clearance", "custom-rules", "board-edge", "pad-clearance"}
+    )
+    return spec
+
+
 # --------------------------------------------------------- run configurations
 
 # yapnr's configuration per family (run.py arguments). The ladder's documented best: the
@@ -1581,7 +1665,7 @@ def hard_rungs():
     chasers += [chaser_absolute(base), chaser_relative(base), chaser_sidelock(base)]
     chasers.append(chaser_arcblock(chasers[0]))  # on 4L-SGPS: one new dimension
     bga = ufbga_fanout()
-    others = [quad_bank(), power_switch(), bga, ufbga_block(bga)]
+    others = [quad_bank(), power_switch(), bga, ufbga_block(bga), ufbga_classes(bga)]
     for spec in chasers + others:
         spec["yapnr_args"] = YAPNR_BEST
     return deepcopy(out + chasers + others)

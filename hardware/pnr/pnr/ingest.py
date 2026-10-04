@@ -94,6 +94,45 @@ def _pad_name(pad) -> str:
     return ""
 
 
+# A solder mask margin at or under this (mm) is not recorded on the graph: KiCad's
+# library defaults (0.05 mm on BGA lands) sit inside every fab profile's copper
+# clearance, so they never widen a pad's keep-away, and recording them would change
+# the graph of boards that need nothing.
+MASK_MARGIN_FLOOR_MM = 0.05
+
+
+def _local_value(item, getter):
+    """``item.getter()`` in mm, or None when the item does not set it (KiCad 8+
+    returns an optional) or the accessor is missing."""
+    fn = getattr(item, getter, None)
+    if fn is None:
+        return None
+    try:
+        value = fn()
+    except Exception:  # pragma: no cover - version shim
+        return None
+    return None if value is None else _mm(value)
+
+
+def _pad_local_rules(pad, fp) -> dict:
+    """``{clearance_mm, mask_margin_mm}`` a pad sets for itself, or its footprint for
+    every pad (KiCad's local overrides; the pad's own value wins). A clearance is
+    kept when positive; a mask margin when above :data:`MASK_MARGIN_FLOOR_MM`.
+    Empty for a pad without either (the graph is then unchanged)."""
+    out = {}
+    clearance = _local_value(pad, "GetLocalClearance")
+    if clearance is None:
+        clearance = _local_value(fp, "GetLocalClearance")
+    if clearance is not None and clearance > 0:
+        out["clearance_mm"] = round(clearance, 6)
+    margin = _local_value(pad, "GetLocalSolderMaskMargin")
+    if margin is None:
+        margin = _local_value(fp, "GetLocalSolderMaskMargin")
+    if margin is not None and margin > MASK_MARGIN_FLOOR_MM + 1e-9:
+        out["mask_margin_mm"] = round(margin, 6)
+    return out
+
+
 def _phys_bbox_mm(fp) -> Tuple[float, float]:
     """Physical footprint extent (mm), **excluding** the reference/value text.
 
@@ -311,6 +350,7 @@ def _component(fp, frame: _Frame) -> Component:
                     else 0.0
                 ),
                 land_corner=land_corner,
+                **_pad_local_rules(pad, fp),
             )
         )
 

@@ -1811,7 +1811,20 @@ def writeback(
     # outline at the placement region so every pad is inside it.
     with open(out_pcb, encoding="utf-8") as fh:
         text = fh.read()
-    text = frame_region(strip_edge_cuts(normalize_duplicate_drill_text(text)), width, height)
+    text = normalize_duplicate_drill_text(text)
+    kept = None
+    from pnr.board_edge import keep_outline, kept_outline_text
+
+    if keep_outline(rules):
+        # board.keep_outline / board.edge: exact: the source's own Edge.Cuts (arcs,
+        # stroke) moved to this frame, when it frames the placement region.
+        kept = kept_outline_text(text, width, height)
+        if kept is None:
+            sys.stderr.write(
+                "writeback: warning: keep_outline: the source outline does not frame the "
+                "%.3f x %.3f mm placement region; the rectangle is stamped\n" % (width, height)
+            )
+    text = kept if kept is not None else frame_region(strip_edge_cuts(text), width, height)
     with open(out_pcb, "w", encoding="utf-8") as fh:
         fh.write(text)
     if rules and out_pcb.endswith(".kicad_pcb"):

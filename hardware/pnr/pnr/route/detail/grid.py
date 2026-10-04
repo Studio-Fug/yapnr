@@ -75,6 +75,21 @@ def _square_segment_distance_sq(x0, y0, x1, y1, a, b) -> float:
     )
 
 
+def pad_keepaway(pad) -> Optional[float]:
+    """The clearance (mm) a pad asks of foreign copper by itself (graph ``Pad``):
+    its own clearance, or its solder mask margin plus 1 µm (foreign copper inside
+    the mask aperture is exposed beside the pad: KiCad's ``solder_mask_bridge``),
+    whichever is larger. None when the pad sets neither: its net's class decides."""
+    values = []
+    clearance = getattr(pad, "clearance_mm", None)
+    if clearance is not None:
+        values.append(float(clearance))
+    margin = getattr(pad, "mask_margin_mm", None)
+    if margin is not None:
+        values.append(float(margin) + 0.001)
+    return max(values) if values else None
+
+
 @dataclass(frozen=True)
 class Cell:
     """A grid node: layer index + column/row."""
@@ -129,6 +144,11 @@ class RouteGrid:
         # Access cell per (net, pad_key) recorded during build.
         self.access: Dict[Tuple[str, str], Cell] = {}
         self.pad_rectangles = []
+        # (layer, net, Rect) of ``pad_rectangles`` -> the clearance (mm) that pad
+        # asks of foreign copper when it sets its own (add_pad ``keepaway``: a local
+        # clearance or mask margin above the fab clearance); empty on boards whose
+        # footprints set none.
+        self.pad_keepaways: Dict[tuple, float] = {}
         self.escape_segments = []
         self.escape_vias = []
         self.net_widths = {}
@@ -138,10 +158,17 @@ class RouteGrid:
         # net -> pad clearance table at that net's own width, for nets too wide
         # for the pad track halo (reserve_wide_pad_clearance); others: absent.
         self.wide_pad_net: Dict[str, Dict[Tuple[int, int, int], str]] = {}
+        # board.class_clearance: maze (route_board): the routed nets, every one of
+        # which then judges the static copper through tables at its own width and
+        # class clearance, for its tracks (``wide_pad_net``) and its vias
+        # (``wide_via_net``, which via_passable reads); None: off, no via tables.
+        self.class_tables: Optional[frozenset] = None
+        self.wide_via_net: Dict[str, Dict[Tuple[int, int, int], str]] = {}
         # reserve_wide_pad_clearance's state: the wide nets' (width, clearance),
         # the tables per such pair, and how much recorded copper they cover.
         self._wide_specs: Optional[Dict[str, Tuple[float, float]]] = None
         self._wide_tables: Dict[Tuple[float, float], tuple] = {}
+        self._via_tables: Dict[tuple, tuple] = {}  # class mode: wide_via_net's tables
         self._wide_seen = (0, 0, 0, False)
         self._pth_keepouts: Optional[Tuple[float, Optional[float]]] = None
         self.via_spacing = 2 * self.via_radius
@@ -384,6 +411,13 @@ class RouteGrid:
             return False
         if self.net_keepouts and self.net_blocked(net, layer, i, j, via=True):
             return False
+        if self.wide_via_net:
+            # board.class_clearance: maze: the net's own via table (class clearances).
+            table = self.wide_via_net.get(net)
+            if table is not None:
+                owner = table.get((layer, i, j))
+                if owner is not None and owner != net:
+                    return False
         vh = self.via_halo.get((layer, i, j))
         return vh is None or vh == net
 
@@ -542,7 +576,7 @@ class RouteGrid:
             for i in range(i0, i1 + 1):
                 setter(layer, i, j)
 
-    def add_pad(self, layer: int, net: str, r: Rect) -> None:
+    def add_pad(self, layer: int, net: str, r: Rect, keepaway: Optional[float] = None) -> None:
         """Record a pad with a **two-tier clearance halo** so the pad-dense layer
         stays routable by tracks:
 
@@ -557,9 +591,17 @@ class RouteGrid:
         Reserving the whole via-width around every pad (the old behaviour) walled off
         the top layer for tracks and pushed routing to the back; the track halo is the
         tighter reservation a track actually needs. The pad's centre is its access.
+
+        ``keepaway`` is the pad's own clearance (:func:`pad_keepaway`: its local
+        clearance or mask margin, mm): both halos then use the larger of it and
+        ``clearance``, and :attr:`pad_keepaways` keeps it for the exact checks.
         """
 
         self.pad_rectangles.append((layer, net, r))
+        clearance = self.clearance
+        if keepaway is not None:
+            clearance = max(clearance, float(keepaway))
+            self.pad_keepaways[(layer, net, r)] = clearance
 
         def reserve(table, mirror, la, i, j):
             key = (la, i, j)
@@ -572,13 +614,13 @@ class RouteGrid:
         self._mark_rect(
             layer,
             r,
-            self.clearance + self.via_radius,
+            clearance + self.via_radius,
             lambda la, i, j: reserve(self.via_halo, self.pad_via_halo, la, i, j),
         )
         self._mark_rect(
             layer,
             r,
-            self.clearance + 0.5 * self.track_width,
+            clearance + 0.5 * self.track_width,
             lambda la, i, j: reserve(self.pad_net, self.pad_track_halo, la, i, j),
         )
 
@@ -626,6 +668,16 @@ class RouteGrid:
         escape plan), so :func:`pnr.route.detail.maze.route` calls it again before
         it routes a grid that called it once. A board whose net widths changed
         between calls is rebuilt.
+
+        With :attr:`class_tables` (``board.class_clearance: maze``) every net named
+        there gets tables, for its tracks and (:attr:`wide_via_net`) its vias: a
+        net whose class clearance exceeds the fab's judges every owner's copper at
+        the larger of the two clearances; any other net judges the copper of the
+        owners whose class clearance does (``scope "class"``), so a net keeps a
+        class net's clearance from that net's pads and escapes too. A via halo is
+        ``clearance + via radius - ½pitch`` past the copper (a via sits at a cell
+        centre, at least ½pitch inside every cell its square does not share). In
+        this mode a halo never takes another net's protected escape access cell.
         """
         base = self.clearance + 0.5 * self.track_width
         half = 0.5 * self.pitch
@@ -634,21 +686,37 @@ class RouteGrid:
         def clearance(net):
             return max(self.clearance, clearances.get(net, self.clearance))
 
-        wanted: Dict[str, Tuple[float, float]] = {}
+        wanted: Dict[str, tuple] = {}
         for net, width in sorted(self.net_widths.items()):
             own = clearance(net)
             if own + 0.5 * width - half <= base + 1e-9:
                 continue
             wanted[net] = (width, own)
-        if wanted != self._wide_specs:
-            self._wide_specs = wanted
+        via_wanted: Dict[str, tuple] = {}
+        class_mode = bool(self.class_tables)
+        if class_mode:
+            for net in sorted(self.class_tables):
+                own = clearance(net)
+                scoped = own <= self.clearance + 1e-9  # its own clearance is the fab's
+                width = self.net_widths.get(net, self.track_width)
+                wanted.setdefault(net, (width, own, "class") if scoped else (width, own))
+                via_wanted[net] = (own, "class") if scoped else (own,)
+        specs = (wanted, via_wanted) if class_mode else wanted
+        if specs != self._wide_specs:
+            self._wide_specs = specs
             self._wide_tables = {}
+            self._via_tables = {}
             self._wide_seen = (0, 0, 0, False)
             self.wide_pad_net = {}
+            self.wide_via_net = {}
             for net, key in wanted.items():
                 if key not in self._wide_tables:
                     self._wide_tables[key] = ({}, {})
                 self.wide_pad_net[net] = self._wide_tables[key][0]
+            for net, key in via_wanted.items():
+                if key not in self._via_tables:
+                    self._via_tables[key] = ({}, {})
+                self.wide_via_net[net] = self._via_tables[key][0]
         pads, segments, vias, holes = self._wide_seen
         self._wide_seen = (
             len(self.pad_rectangles),
@@ -656,7 +724,19 @@ class RouteGrid:
             len(self.escape_vias),
             holes or self._pth_keepouts is not None,
         )
-        for (width, own), (table, body) in sorted(self._wide_tables.items()):
+        protected = getattr(self, "protected_escape_access", None) if class_mode else None
+
+        def classy(owner):  # an owner whose class clearance exceeds the fab's
+            return clearance(owner) > self.clearance + 1e-9
+
+        tables = [(key, tb, False) for key, tb in sorted(self._wide_tables.items())]
+        tables += [(key, tb, True) for key, tb in sorted(getattr(self, "_via_tables", {}).items())]
+        for key, (table, body), via in tables:
+            own = key[0] if via else key[1]
+            scoped = key[-1] == "class"
+            # The core's radius past its centre line: half the width, or the via's.
+            core = self.via_radius if via else 0.5 * key[0]
+
             # The cells a pad's rectangle touches stay its net's (the body); every
             # other cell of a halo belongs to its owner, or to no net on overlap.
             def halo(owner):
@@ -664,6 +744,10 @@ class RouteGrid:
                     key = (la, i, j)
                     if key in body:
                         return
+                    if protected:
+                        held = protected.get(key)
+                        if held is not None and held != owner:
+                            return  # another net's planned access (class mode)
                     old = table.get(key)
                     table[key] = owner if old is None or old == owner else "\0conflict"
 
@@ -678,20 +762,29 @@ class RouteGrid:
                 return mark
 
             def grow(owner, extent):
-                return extent + max(own, clearance(owner)) + 0.5 * width - half
+                return extent + max(own, clearance(owner)) + core - half
 
             for layer, owner, r in self.pad_rectangles[pads:]:
-                self._mark_rect(layer, r, grow(owner, 0.0), halo(owner))
+                keep = self.pad_keepaways.get((layer, owner, r))
+                if not scoped or classy(owner):
+                    extent = grow(owner, 0.0)
+                    if keep is not None:  # the pad's own clearance (add_pad keepaway)
+                        extent = max(extent, keep + core - half)
+                    self._mark_rect(layer, r, extent, halo(owner))
                 self._mark_rect(layer, r, 0.0, landing(owner))
             for layer, owner, a, b in self.escape_segments[segments:]:
+                if scoped and not classy(owner):
+                    continue
                 stub = 0.5 * self.net_widths.get(owner, self.track_width)
                 self._mark_capsule(layer, a, b, grow(owner, stub), halo(owner))
             for owner, point in self.escape_vias[vias:]:
+                if scoped and not classy(owner):
+                    continue
                 for layer in range(self.nlayers):
                     self._mark_capsule(
                         layer, point, point, grow(owner, self.via_radius), halo(owner)
                     )
-            if self._pth_keepouts is not None and not holes:
+            if self._pth_keepouts is not None and not holes and not scoped and not via:
                 pth_gap, via_gap = self._pth_keepouts
                 for layers, owner, (cx, cy), radius, plated in self.drilled_pads:
                     gap = via_gap if self._via_class_drill(radius) else pth_gap
@@ -699,7 +792,7 @@ class RouteGrid:
                         continue
                     hole = Rect(cx, cy, 2 * radius, 2 * radius)
                     for layer in layers:
-                        self._mark_rect(layer, hole, gap + 0.5 * width - half, halo(owner))
+                        self._mark_rect(layer, hole, gap + 0.5 * key[0] - half, halo(owner))
 
     def block_region(
         self,
@@ -815,6 +908,8 @@ class RouteGrid:
                     )
                     if pad.plated is True and net and pad.plated_land_radius > 0:
                         g.plated_ports.append((net, (r.cx, r.cy), pad.plated_land_radius))
+                # A pad's own clearance or mask margin (a fiducial's), None: unset.
+                keepaway = pad_keepaway(pad)
                 if not net:
                     # NC/mounting pads remain foreign copper on every actual pad
                     # layer. Preserve their exact rectangles and separate track/
@@ -823,12 +918,12 @@ class RouteGrid:
                     # and wrongly seals ordinary SOT-23 pin rows. No routable net
                     # has the empty name, and no access point is created here.
                     for la in pad_layers:
-                        g.add_pad(la, "", r)
+                        g.add_pad(la, "", r, keepaway)
                     if not pad.through_hole and r.w > 0 and r.h > 0:
                         g.smd_pads.append((side, "", r, land))
                     continue
                 for la in pad_layers:
-                    g.add_pad(la, net, r)
+                    g.add_pad(la, net, r, keepaway)
                 if not pad.through_hole and r.w > 0 and r.h > 0:
                     g.smd_pads.append((side, net, r, land))
                 # Access cell on the component's side (where a same-side track meets

@@ -77,10 +77,16 @@ def _segment_clear(grid, net, layer, a, b, width, own=None, net_keepouts=True, o
                 holder = owned.get((layer, i, j))
                 if holder is not None and holder != net:
                     return False
+    # A pad that sets its own clearance or mask margin (RouteGrid.pad_keepaways).
+    keepaways = getattr(grid, "pad_keepaways", None) or {}
     for la, owner, r in grid.pad_rectangles:
         if la != layer or owner == net:
             continue
         grow = reach(owner) if classes else radius
+        if keepaways:
+            keep = keepaways.get((la, owner, r))
+            if keep is not None:
+                grow = max(grow, width / 2 + keep)
         if (
             max(a[0], b[0]) + grow < r.left
             or min(a[0], b[0]) - grow > r.right
@@ -590,6 +596,12 @@ def _overlap(a, b):
 def options_conflict(grid, a, b):
     if not _overlap(a.bounds, b.bounds):
         return False
+    # board.class_clearance (route_board sets class_escapes): two options of
+    # different nets keep the larger of their class clearances, as the maze does.
+    clearance = grid.clearance
+    if getattr(grid, "class_escapes", False) and a.escape.net != b.escape.net:
+        classes = getattr(grid, "net_clearances", None) or {}
+        clearance = max(clearance, classes.get(a.escape.net, 0.0), classes.get(b.escape.net, 0.0))
     # Even same-net vias cannot have overlapping distinct drill holes. Co-located
     # same-net holes can be fused by the normal emitted-via deduplication.
     for p in a.vias:
@@ -610,26 +622,24 @@ def options_conflict(grid, a, b):
         for lb, r, s, wb in b.segments:
             if (
                 la == lb
-                and _segment_distance_sq(p, q, r, s) < ((wa + wb) / 2 + grid.clearance) ** 2 - 1e-10
+                and _segment_distance_sq(p, q, r, s) < ((wa + wb) / 2 + clearance) ** 2 - 1e-10
             ):
                 return True
         for r in b.vias:
             if (
                 _segment_distance_sq(p, q, r, r)
-                < (wa / 2 + grid.via_radius + grid.clearance) ** 2 - 1e-10
+                < (wa / 2 + grid.via_radius + clearance) ** 2 - 1e-10
             ):
                 return True
     for lb, p, q, wb in b.segments:
         for r in a.vias:
             if (
                 _segment_distance_sq(p, q, r, r)
-                < (wb / 2 + grid.via_radius + grid.clearance) ** 2 - 1e-10
+                < (wb / 2 + grid.via_radius + clearance) ** 2 - 1e-10
             ):
                 return True
     return any(
-        math.dist(p, q) < 2 * grid.via_radius + grid.clearance - 1e-10
-        for p in a.vias
-        for q in b.vias
+        math.dist(p, q) < 2 * grid.via_radius + clearance - 1e-10 for p in a.vias for q in b.vias
     )
 
 

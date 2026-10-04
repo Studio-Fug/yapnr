@@ -457,6 +457,17 @@ class FanoutChecks(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(measured["not_escaped"], ["A1", "C3"])
 
+    def test_net_vias(self):
+        # A no-via rule's check (the -classes rung): vias of the listed nets.
+        check = dict(nets=["S_C3"], max=0)
+        ok, measured, _ = self.run_check("net_vias", check, vias=[("S_C3", 10.65, 9.0, 0.4, 0.2)])
+        self.assertFalse(ok)
+        self.assertEqual(measured["vias"], 1)
+        ok, measured, _ = self.run_check(
+            "net_vias", check, vias=[("GND", 10.325, 10.325, 0.35, 0.15)]
+        )
+        self.assertTrue(ok, measured)
+
     def test_pad_distance(self):
         check = dict(refs=["C1"], anchor="U1", max_mm=5.0)
         ok, measured, _ = self.run_check("pad_distance", check)

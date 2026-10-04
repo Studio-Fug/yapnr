@@ -65,6 +65,10 @@ filegroup(
         "pnr/fixed_copper.py",
         # Fixed blocks and copper keepouts (stdlib only): fixed_copper and writeback.
         "pnr/fixed_block.py",
+        # board.edge: exact / keep_outline: the board's own outline (writeback keeps it).
+        "pnr/board_edge.py",
+        # board.dru_routing: the custom rules where they constrain routing (staged_signal).
+        "pnr/dru_rules.py",
         "pnr/paired_bootstrap.py",
         "pnr/placement_trials.py",
         "pnr/placement_copper.py",
@@ -1983,6 +1987,103 @@ py_test(
         ":pnr_place",
         requirement("numpy"),
     ],
+)
+
+# Pad-local clearance and solder mask margin (a fiducial's): graph keys, grid halos,
+# the exact escape and fanout checks, and a routed board that keeps them.
+py_test(
+    name = "pad_clearance_test",
+    size = "small",
+    srcs = ["tests/test_pad_clearance.py"],
+    main = "tests/test_pad_clearance.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+        requirement("pyyaml"),
+    ],
+)
+
+# board.class_clearance: maze: class halos and via keep-outs in the maze, class tables,
+# the exact check and reroute (class_check), the copper audit, kernel parity.
+py_test(
+    name = "class_clearance_test",
+    size = "small",
+    srcs = ["tests/test_class_clearance.py"],
+    main = "tests/test_class_clearance.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+        requirement("pyyaml"),
+    ],
+)
+
+# board.edge: exact: the outline parsed into the engine frame, the via and track insets
+# KiCad's hole-to-edge rule implies (stroke, rounded corners), the routed vias, and the
+# writeback text that keeps the outline.
+py_test(
+    name = "board_edge_test",
+    size = "small",
+    srcs = ["tests/test_board_edge.py"],
+    main = "tests/test_board_edge.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+        requirement("pyyaml"),
+    ],
+)
+
+# board.dru_routing: the custom-rules parser and its three-valued conditions, the
+# routing effects of a radar60-style rules file and what it lists unmodelled, and
+# route_board applying them (no-via layer, pair keep-outs, length report).
+py_test(
+    name = "dru_rules_test",
+    size = "small",
+    srcs = ["tests/test_dru_rules.py"],
+    main = "tests/test_dru_rules.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+        requirement("pyyaml"),
+    ],
+)
+
+# Writeback keeps the outline under KiCad (inline board; the KiCad lane runs it).
+py_test(
+    name = "board_edge_kicad_test",
+    size = "small",
+    srcs = ["tests/test_board_edge_kicad.py"],
+    main = "tests/test_board_edge_kicad.py",
+    tags = [
+        "kicad",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
+)
+
+# The same values read from KiCad footprints by pnr.ingest (inline footprints; the
+# KiCad lane runs it, it skips without pcbnew).
+py_test(
+    name = "pad_clearance_kicad_test",
+    size = "small",
+    srcs = ["tests/test_pad_clearance_kicad.py"],
+    main = "tests/test_pad_clearance_kicad.py",
+    tags = [
+        "kicad",
+        "requires-kicad",
+    ],
+    deps = [":pnr"],
 )
 
 # The native kernel's parity cases on the Bazel-built library (needs a C toolchain):

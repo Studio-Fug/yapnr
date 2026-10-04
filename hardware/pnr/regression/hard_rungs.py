@@ -1555,6 +1555,7 @@ def ufbga_block(spec):
 CLASSES_CLK_BALLS = ["R4", "R8"]  # ring 0, south: PB1 and PE7, to J2
 CLASSES_FIDUCIAL = (21.5, 9.0)  # between U1 (y >= 12.7) and J2 (y <= 6.9)
 CLASSES_OUTLINE = dict(corner_radius_mm=1.0, stroke_mm=0.15)
+CLASSES_CORNER_KEEPOUT = 1.1  # mm: past the 1 mm arc; J5 (fixed at 2.5, 5.5) starts at y 1.135
 CLASSES_RULES = [
     '(rule "clk: no vias"\n  (constraint disallow via)\n'
     "  (condition \"A.Type == 'Via' && A.hasNetclass('clk')\"))",
@@ -1581,6 +1582,19 @@ def ufbga_classes(spec):
     cons["net_class"]["clk"] = dict(nets=clk, clearance_mm=0.2)
     cons["board"].update(class_clearance="maze", dru_routing=True, edge="exact")
     spec["outline_shape"] = dict(CLASSES_OUTLINE)
+    # The placer frames parts in the outline's rectangle: the rounded corners (and
+    # the edge clearance past them) are kept free of parts by keep-outs.
+    w, h = cons["board"]["outline"]["w"], cons["board"]["outline"]["h"]
+    c = CLASSES_CORNER_KEEPOUT
+    cons["keepout"] = (cons.get("keepout") or []) + [
+        dict(name="corner-" + name, polygon=rect_polygon(rect))
+        for name, rect in (
+            ("sw", [0, 0, c, c]),
+            ("se", [w - c, 0, w, c]),
+            ("ne", [w - c, h - c, w, h]),
+            ("nw", [0, h - c, c, h]),
+        )
+    ]
     spec["dru_rules"] = list(CLASSES_RULES)
     spec["checks"] += [
         dict(

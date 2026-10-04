@@ -3,15 +3,35 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-10-04 (RF round 2 with the native FDTD kernel on `claude/rf-topopt`, merged
-with `main`; the hard rungs on `claude/ladder-hard-rungs` and the engine's fixes for
-them on `claude/gap-fixes`, with `claude/gap-constraints` merged; the gloss port's review fixes on
-`claude/gloss-port`). Before that, 2026-10-02: fab outputs and staged ordering, F2, F1 and O1, on
-`claude/fab-order`. Before that, 2026-09-30: PR4, #10, the ladder animations, the atopile
-toolchain and the privacy-scan trailer rule merged; line groups, hard board edges, the
-hierarchical ladder driver and their animations on `claude/animations-groups-hier`.
+Last updated: 2026-10-04 (the radar60 stage-3b routing engine, pull request 49, on
+`claude/radar-routing-engine-2`). Earlier the same day: RF round 2 with the native FDTD kernel
+on `claude/rf-topopt`, merged with `main`; the hard rungs on `claude/ladder-hard-rungs` and the
+engine's fixes for them on `claude/gap-fixes`, with `claude/gap-constraints` merged; the gloss
+port's review fixes on `claude/gloss-port`. Before that, 2026-10-02: fab outputs and staged
+ordering, F2, F1 and O1, on `claude/fab-order`. Before that, 2026-09-30: PR4, #10, the ladder
+animations, the atopile toolchain and the privacy-scan trailer rule merged; line groups, hard
+board edges, the hierarchical ladder driver and their animations on
+`claude/animations-groups-hier`.
 
 ## In progress
+
+- **Routing engine for radar60 Rev A, stage 3b** (#49, branch `claude/radar-routing-engine-2`;
+  all opt-in, byte-identical where undeclared). Router: pad-local clearance and mask margin (data),
+  `board.class_clearance: maze | repair`, `board.dru_routing` (a board's `.kicad_dru` where it
+  constrains routing; the rest listed as unmodelled), `board.edge: exact`, and SMD lands on the
+  far side of their footprint (`Pad.far_side`). Power: partial fanouts (the fanout's
+  `partial`: bridge, retry), `plane_partition` (connected per-rail territories on a power
+  layer; trees only where a zone of the minimum width fills, foreign copper at the pair's class
+  clearance) and `ir_drop`
+  (a resistive network per rail on the refilled board; `unsolved` when CG stops short; the solve
+  runs in `PNR_PYTHON` where KiCad's Python has no numpy). New hard rungs `11-ufbga201-...-classes`,
+  `-partial` (run.py excuses a spec's `designed_open` pads, held exact by its `unconnected`
+  check) and `-rails`. Identity regression against `main` (GCP C4D, `--compact --gloss`, 78
+  shared cells): placed, routes and rules identical in all; boards identical modulo segment
+  direction in 77, the 78th (`-block` s1) differs after the gloss stage only (its pre-gloss
+  board is identical; KiCad's dangling check on a 0.035 mm segment depends on the direction the
+  gloss writes); 78/78 same verdict. Next: the radar trial's open items (the U2 power stage
+  escapes, LVDS as coupled pairs (A8), 1V2/1V8 delivery, the PA corner with macro v2).
 
 - **RF microstrip inverse design** (#29, branch `claude/rf-topopt`; design
   [docs/design/rf-topology-optimization.md](docs/design/rf-topology-optimization.md), guide

@@ -96,7 +96,25 @@ def copper_sha(board):
     return hashlib.sha256("\n".join(sorted(blocks)).encode()).hexdigest()
 
 
-def acceptance(pnr, audit, drc):
+# A KiCad unconnected item's pad: "Pad K4 [VCC] of U1 on F.Cu".
+PAD_ITEM = re.compile(r"^Pad (\S+) \[[^\]]*\] of (\S+) on ")
+
+
+def designed_open(item, pads):
+    """Whether KiCad's unconnected ``item`` names one of ``pads`` ("REF.PAD"): a rung's
+    designed opens (``designed_open``), which its ``unconnected`` check holds exact."""
+    for end in item.get("items") or []:
+        m = PAD_ITEM.match(end.get("description") or "")
+        if m and "%s.%s" % (m.group(2), m.group(1)) in pads:
+            return True
+    return False
+
+
+def acceptance(pnr, audit, drc, designed=()):
+    """The reasons a routed case fails. ``designed`` ("REF.PAD", a spec's
+    ``designed_open``): KiCad's unconnected items at those pads are the design's own
+    (the partial-fanout rung leaves one ball open by design) and are not reasons; the
+    spec's ``unconnected`` check judges that exactly those pads are cut off."""
     reasons = []
     if not pnr.get("legal"):
         reasons.append("illegal_placement")
@@ -113,7 +131,8 @@ def acceptance(pnr, audit, drc):
     ):
         reasons.append("invalid_drc_report")
     else:
-        if drc["unconnected_items"]:
+        pads = set(designed)
+        if [u for u in drc["unconnected_items"] if not (pads and designed_open(u, pads))]:
             reasons.append("native_unconnected_items")
         if drc["violations"]:
             reasons.append("native_drc_violations")
@@ -959,6 +978,9 @@ def main():
     env["PNR_FAB_PROFILE"] = (
         args.fab_profile
     )  # routed and judged under one profile (route_case.py, writeback)
+    # The KiCad-side judge's numeric solves (pnr.ir_extract, the ir_drop check) run in this
+    # Python when KiCad's has no numpy (the container image's).
+    env["PNR_PYTHON"] = str(args.python)
     if args.initial_pool:
         if not 2 <= args.initial_starts <= 128 or not 1 <= args.initial_finalists <= min(
             args.initial_starts, 16
@@ -989,7 +1011,9 @@ def main():
         ),
         arguments={k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
         pnr_environment={
-            k: v for k, v in env.items() if k.startswith("PNR_") and k != "PNR_MAZE_LIB"
+            k: v
+            for k, v in env.items()
+            if k.startswith("PNR_") and k not in ("PNR_MAZE_LIB", "PNR_PYTHON")
         },
         native_maze=native,
     )
@@ -1184,7 +1208,7 @@ def main():
                 audit = json.loads((root / "native-audit.json").read_text())
                 drc = json.loads((root / "drc.json").read_text())
                 result.update(
-                    reasons=acceptance(pnr, audit, drc),
+                    reasons=acceptance(pnr, audit, drc, spec.get("designed_open") or ()),
                     opens=len(drc["unconnected_items"]),
                     violations=dict(Counter(x["type"] for x in drc["violations"])),
                     tracks=audit["tracks"],

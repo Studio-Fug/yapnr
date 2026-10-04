@@ -253,6 +253,13 @@ class CompiledConstraints:
     plane_fallback_drops: Optional[bool] = None
     # Declared BGA fanouts (``fanout:``, pnr.fanout.spec); the router plans them.
     fanouts: List[Dict] = field(default_factory=list)
+    # Opt-in detailed-router switches from ``board:`` (:data:`ROUTING_SWITCHES`), as
+    # the rules.json keys they become; empty (the default) adds no key.
+    routing: Dict = field(default_factory=dict)
+    # Supply rails sharing a plane layer (``plane_partition:``) and the rails' IR-drop
+    # reports (``ir_drop:``), pnr.power_spec; empty when not declared.
+    plane_partitions: List[Dict] = field(default_factory=list)
+    ir_drop: List[Dict] = field(default_factory=list)
 
     @property
     def hard(self) -> List[Constraint]:
@@ -510,7 +517,58 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
             if compiled.fanouts
             else {}
         ),
+        # Opt-in router switches (board.class_clearance, ...): declared keys only.
+        **dict(getattr(compiled, "routing", None) or {}),
+        # Declared only (pnr.power_spec): rails sharing a plane layer, with their net
+        # globs expanded, and the rails' IR-drop reports.
+        **(
+            {
+                "plane_partition": [
+                    dict(p, nets=list(_expand_nets(p["nets"], net_names)))
+                    for p in compiled.plane_partitions
+                ]
+            }
+            if compiled.plane_partitions
+            else {}
+        ),
+        **({"ir_drop": [dict(e) for e in compiled.ir_drop]} if compiled.ir_drop else {}),
     }
+
+
+# Opt-in detailed-router switches under ``board:`` -> (rules.json key, allowed values).
+# Each is off unless declared, and a board without any keeps its rules.json bytes.
+#   class_clearance: maze   net class clearances in the maze router's halos and
+#                           tables, with exact checks after routing
+#                           (pnr.route.detail.router, pnr.route.detail.class_check)
+#   class_clearance: repair the route as without the switch, then the same checks:
+#                           only the nets too close are routed again, exactly
+#   edge: exact             the board's own Edge.Cuts outline (arcs, stroke) for
+#                           the router's edge and hole-to-edge model, kept by
+#                           writeback (pnr.board_edge)
+#   keep_outline: true      writeback keeps the source outline (no router change)
+#   dru_routing: true       the board's custom rules (.kicad_dru) where they
+#                           constrain routing (pnr.dru_rules, route.detail.dru_apply)
+ROUTING_SWITCHES = {
+    "class_clearance": ("class_clearance", ("maze", "repair")),
+    "edge": ("edge", ("exact",)),
+    "keep_outline": ("keep_outline", (True, False)),
+    "dru_routing": ("dru_routing", (True, False)),
+}
+
+
+def _parse_routing(raw: Dict) -> Dict:
+    """The declared :data:`ROUTING_SWITCHES` of ``board:`` as rules.json keys."""
+    out = {}
+    for key, (rule, allowed) in ROUTING_SWITCHES.items():
+        if key not in raw or raw[key] is None:
+            continue
+        value = raw[key]
+        if value not in allowed or isinstance(value, bool) != isinstance(allowed[0], bool):
+            raise ConstraintError(
+                "board.%s must be one of %s" % (key, ", ".join(repr(v) for v in allowed))
+            )
+        out[rule] = value
+    return out
 
 
 # copper_keepout v1 (layers, items, allow lists, exempt groups); a v0 entry is
@@ -1124,6 +1182,8 @@ def compile_constraints(
         "copper_keepout",
         "fixed_block",
         "fanout",
+        "plane_partition",
+        "ir_drop",
     }
     for key in doc:
         if key not in known_keys:
@@ -1535,6 +1595,18 @@ def compile_constraints(
                     % (f["name"], f["ref"])
                 )
 
+    # plane_partition / ir_drop: supply rails on a shared plane layer and their IR
+    # reports (pnr.power_spec), validated here; the router and pnr.ir_extract use them.
+    partitions, ir_drop = [], []
+    if doc.get("plane_partition") is not None or doc.get("ir_drop") is not None:
+        from pnr.power_spec import PowerSpecError, parse_ir_drop, parse_partition
+
+        try:
+            partitions = parse_partition(doc.get("plane_partition"))
+            ir_drop = parse_ir_drop(doc.get("ir_drop"))
+        except PowerSpecError as error:
+            raise ConstraintError(str(error)) from None
+
     return CompiledConstraints(
         board=board,
         constraints=constraints,
@@ -1551,6 +1623,9 @@ def compile_constraints(
         fixed_blocks=fixed_blocks,
         plane_fallback_drops=fallback,
         fanouts=fanouts,
+        routing=_parse_routing(doc.get("board") or {}),
+        plane_partitions=partitions,
+        ir_drop=ir_drop,
     )
 
 

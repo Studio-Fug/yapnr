@@ -440,6 +440,55 @@ def form_planes(
     return dict(fallback_vias=added, zones=made)
 
 
+def draw_plane_regions(board, rows, rules: dict, point, full, net_code=None) -> list:
+    """Draw a plane partition's regions (routes.json ``plane_regions``,
+    :mod:`pnr.plane_partition`): the single-layer zones of each partitioned layer's
+    nets are replaced by one zone per region, with its holes and priority. ``point``
+    maps a graph-frame (x, y) to a ``VECTOR2I``; ``full`` is the outline's corners
+    (a region without an outline covers it). Returns the zones drawn."""
+    import pcbnew
+
+    fab = _fab(rules)
+    codes = dict(net_code or _net_code_map(board))
+    nets_of: Dict[str, set] = {}
+    for r in rows:
+        nets_of.setdefault(r["layer"], set()).add(r["net"])
+    for z in list(board.Zones()):
+        if z.GetIsRuleArea():
+            continue
+        for layer, nets in nets_of.items():
+            lid = copper_layer(board, layer)
+            if z.IsOnLayer(lid) and z.GetNetname() in nets and len(z.GetLayerSet().Seq()) == 1:
+                board.Delete(z)
+                break
+    made = []
+    for r in rows:
+        if r["net"] not in codes:
+            found = board.FindNet(r["net"])  # a net without pads (a fill net, say)
+            if found is None or found.GetNetCode() <= 0:
+                continue
+            codes[r["net"]] = found.GetNetCode()
+        z = pcbnew.ZONE(board)
+        z.SetLayer(copper_layer(board, r["layer"]))
+        z.SetNetCode(codes[r["net"]])
+        z.SetZoneName("plane %s %s" % (r["net"], r["layer"]))
+        z.SetLocalClearance(_nm(fab["clearance_mm"]))
+        z.SetMinThickness(_nm(fab["track_width_mm"]))
+        z.SetAssignedPriority(int(r["priority"]))
+        outline = z.Outline()
+        outline.NewOutline()
+        for corner in full if r["outline"] is None else [point(p) for p in r["outline"]]:
+            outline.Append(corner)
+        for hole in r.get("holes") or []:
+            index = outline.NewHole()
+            for p in hole:
+                outline.Append(point(p), -1, index)
+        board.Add(z)
+        made.append(z)
+    clip_keepout_pours(board, rules, made)
+    return made
+
+
 def _type_plane_layers(board, rules: dict) -> None:
     """Mark each ``plane_layer`` as a POWER layer so the router keeps signals off
     it (the ground/power plane is poured there after routing)."""
@@ -1791,6 +1840,18 @@ def writeback(
 
         # The router's plane regions: the placed graph's pads and the source zones.
         regions = plane_regions(stack, record, pad_points(graph), width, height)
+        rows = (routes or {}).get("plane_regions")
+        if rows:
+            # A plane partition (pnr.plane_partition): its layers' zones as routed.
+            frame = _WriteFrame(height)
+            full = [frame.point(0, 0), frame.point(width, 0), frame.point(width, height)]
+            full.append(frame.point(0, height))
+            drawn = draw_plane_regions(
+                board, rows, rules, lambda p: frame.point(*p), full, net_code or None
+            )
+            sys.stderr.write("writeback: plane partition zones %d\n" % len(drawn))
+            done = {r["layer"] for r in rows}
+            regions = [r for r in regions if r.layer not in done]
         formed = form_planes(board, stack, rules, width, height, net_code or None, regions)
         sys.stderr.write("writeback: stack planes " + str(formed) + "\n")
         if (rules or {}).get("via_policy"):
@@ -1811,7 +1872,20 @@ def writeback(
     # outline at the placement region so every pad is inside it.
     with open(out_pcb, encoding="utf-8") as fh:
         text = fh.read()
-    text = frame_region(strip_edge_cuts(normalize_duplicate_drill_text(text)), width, height)
+    text = normalize_duplicate_drill_text(text)
+    kept = None
+    from pnr.board_edge import keep_outline, kept_outline_text
+
+    if keep_outline(rules):
+        # board.keep_outline / board.edge: exact: the source's own Edge.Cuts (arcs,
+        # stroke) moved to this frame, when it frames the placement region.
+        kept = kept_outline_text(text, width, height)
+        if kept is None:
+            sys.stderr.write(
+                "writeback: warning: keep_outline: the source outline does not frame the "
+                "%.3f x %.3f mm placement region; the rectangle is stamped\n" % (width, height)
+            )
+    text = kept if kept is not None else frame_region(strip_edge_cuts(text), width, height)
     with open(out_pcb, "w", encoding="utf-8") as fh:
         fh.write(text)
     if rules and out_pcb.endswith(".kicad_pcb"):

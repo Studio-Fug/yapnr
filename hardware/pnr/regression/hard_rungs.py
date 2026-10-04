@@ -70,6 +70,8 @@ HARD_LIB = {
     "jst_sh_12": "Connector_JST:JST_SH_SM12B-SRSS-TB_1x12-1MP_P1.00mm_Horizontal",
     "c_0402": "Capacitor_SMD:C_0402_1005Metric",
     "r_0402": "Resistor_SMD:R_0402_1005Metric",
+    # A 1 mm fiducial with its own 0.6 mm clearance and 0.5 mm mask margin.
+    "fiducial_1mm": "Fiducial:Fiducial_1mm_Mask2mm",
 }
 
 
@@ -250,8 +252,9 @@ def with_double_sided(spec):
 
 def dru_text(spec):
     """KiCad 10 custom rules (``.kicad_dru``) that make the judge enforce the rung's
-    via policy, its plane layers (a plane layer carries no tracks) and its
-    differential-pair skew. ``None`` for a rung without such dimensions."""
+    via policy, its plane layers (a plane layer carries no tracks), its
+    differential-pair skew and its own rules (``dru_rules``: a ``-classes`` rung's).
+    ``None`` for a rung without such dimensions."""
     if "via_policy" not in spec:
         return None
     rules = ["(version 1)"]
@@ -278,6 +281,7 @@ def dru_text(spec):
             '(rule "pair %s skew"\n  (condition "A.inDiffPair(\'%s\')")\n'
             "  (constraint skew (max %gmm)))" % (pair["name"], base, pair["skew_mm"])
         )
+    rules += list(spec.get("dru_rules") or ())
     return "\n".join(rules) + "\n"
 
 
@@ -1539,6 +1543,281 @@ def ufbga_block(spec):
     return spec
 
 
+# Net class clearances, a board's custom rules and its own outline on the BGA rung
+# (11-ufbga201-fanout-6L-SGSGPS-classes): the supply plane class at 0.12 mm (its
+# 0.35 mm interstitial drops leave 0.125 mm to the 0.32 mm balls around them) and two
+# ring-0 south GPIO nets in a CLK class at 0.20 mm that the custom rules keep off
+# vias and 0.25 mm from every net without a class; a 1 mm fiducial with its own
+# 0.6 mm clearance and 0.5 mm mask margin in the south exits' corridor; an outline
+# with 1 mm corner radii at a 0.15 mm stroke (J1-J4's pads within 1 mm of the edge),
+# judged by a hole-to-edge rule written for that stroke. The engine declares
+# board.class_clearance: maze, dru_routing and edge: exact.
+CLASSES_CLK_BALLS = ["R4", "R8"]  # ring 0, south: PB1 and PE7, to J2
+CLASSES_FIDUCIAL = (21.5, 9.0)  # between U1 (y >= 12.7) and J2 (y <= 6.9)
+CLASSES_OUTLINE = dict(corner_radius_mm=1.0, stroke_mm=0.15)
+CLASSES_CORNER_KEEPOUT = 1.1  # mm: past the 1 mm arc; J5 (fixed at 2.5, 5.5) starts at y 1.135
+CLASSES_RULES = [
+    '(rule "clk: no vias"\n  (constraint disallow via)\n'
+    "  (condition \"A.Type == 'Via' && A.hasNetclass('clk')\"))",
+    '(rule "clk to nets without a class"\n  (constraint clearance (min 0.25mm))\n'
+    "  (condition \"A.hasNetclass('clk') && B.NetClass == 'Default'\"))",
+    '(rule "hole to edge, to the 0.15 mm stroke"\n'
+    "  (constraint physical_hole_clearance (min 0.425mm))\n"
+    "  (condition \"A.Layer == 'Edge.Cuts' || B.Layer == 'Edge.Cuts'\"))",
+]
+
+
+def ufbga_classes(spec):
+    """``spec`` (the 6L BGA rung) with net class clearances, custom rules, a fiducial
+    and a rounded outline (above), and the checks that judge them."""
+    spec = deepcopy(spec)
+    u1 = spec["parts"][0]
+    clk = [u1["pins"][ball] for ball in CLASSES_CLK_BALLS]
+    spec["parts"].append(pinned("FID1", "fiducial_1mm", "Fiducial", {"": ""}))
+    spec["expected_components"] = len(spec["parts"])
+    spec["expected_connected_pads"] = connected_pads(spec["parts"])
+    cons = spec["constraints"]
+    cons["fixed"]["FID1"] = dict(at=list(CLASSES_FIDUCIAL), rot=0, side="top")
+    cons["net_class"]["plane_vcc"]["clearance_mm"] = 0.12
+    cons["net_class"]["clk"] = dict(nets=clk, clearance_mm=0.2)
+    cons["board"].update(class_clearance="maze", dru_routing=True, edge="exact")
+    spec["outline_shape"] = dict(CLASSES_OUTLINE)
+    # The placer frames parts in the outline's rectangle: the rounded corners (and
+    # the edge clearance past them) are kept free of parts by keep-outs.
+    w, h = cons["board"]["outline"]["w"], cons["board"]["outline"]["h"]
+    c = CLASSES_CORNER_KEEPOUT
+    cons["keepout"] = (cons.get("keepout") or []) + [
+        dict(name="corner-" + name, polygon=rect_polygon(rect))
+        for name, rect in (
+            ("sw", [0, 0, c, c]),
+            ("se", [w - c, 0, w, c]),
+            ("ne", [w - c, h - c, w, h]),
+            ("nw", [0, h - c, c, h]),
+        )
+    ]
+    spec["dru_rules"] = list(CLASSES_RULES)
+    spec["checks"] += [
+        dict(
+            id="fixed-FID1",
+            kind="fixed",
+            ref="FID1",
+            at=list(CLASSES_FIDUCIAL),
+            rot=0,
+            side="top",
+            tol_mm=0.01,
+            engine="fixed",
+        ),
+        dict(id="clk-no-vias", kind="net_vias", nets=clk, max=0, engine="dru_routing"),
+    ]
+    spec["name"] += "-classes"
+    spec["description"] = (
+        spec.get("description", "")
+        + " With class clearances (supply 0.12 mm, two CLK nets 0.20 mm), custom rules (no "
+        "vias on CLK, CLK 0.25 mm from unclassed nets, hole to edge to the stroke), a "
+        "fiducial with its own clearance in an exit corridor and 1 mm rounded corners."
+    )
+    spec["dims"]["constraints"] = "classes"
+    spec["features"] = sorted(
+        set(spec["features"]) | {"class-clearance", "custom-rules", "board-edge", "pad-clearance"}
+    )
+    return spec
+
+
+# Partial fanout and rails on the BGA rung (11-ufbga201-fanout-6L-SGSGPS-partial and
+# -rails). Ball centres in U1's frame (x east, y north): column c at (c - 8) * 0.65,
+# row r (A = 0) at (7 - r) * 0.65.
+
+
+def _ball_xy(ball):
+    r, c = BGA_ROWS.index(ball[0]), int(ball[1:])
+    return ((c - 8) * 0.65, (7 - r) * 0.65)
+
+
+def _square(centre, half):
+    x, y = centre
+    return [[x - half, y - half], [x + half, y - half], [x + half, y + half], [x - half, y + half]]
+
+
+# C8 is a VCC ball between VCC balls C7 and C9: reserved squares on its four via
+# sites, its north, south and east channels and the two diagonal steps out of its west
+# channel leave it no drop (the planner would otherwise reach C7's via through that
+# channel), and the bridge joins it to C7 straight through the channel. K4 is a VCC
+# ball without a VCC neighbour: a copper keepout over it bars tracks and vias, so it
+# stays open.
+PARTIAL_BRIDGED = "C8"
+PARTIAL_OPEN = "K4"
+
+
+def ufbga_partial(spec):
+    """``spec`` (the 6L BGA rung) with a partial fanout (``partial: {bridge: true}``):
+    one supply ball bridged to its neighbour, one left open while its net (the VCC
+    plane) is whole."""
+    spec = deepcopy(spec)
+    cons = spec["constraints"]
+    (fanout,) = cons["fanout"]
+    fanout["partial"] = dict(bridge=True)
+    x, y = _ball_xy(PARTIAL_BRIDGED)
+    h = 0.325
+    sites = [(x - h, y - h), (x + h, y - h), (x + h, y + h), (x - h, y + h)]
+    sites += [(x, y + h), (x, y - h), (x + h, y)]  # north, south, east channels
+    steps = [(x - 1.5 * h, y + h / 2), (x - 1.5 * h, y - h / 2)]  # west channel's diagonals
+    fanout["reserved"] = (
+        list(fanout.get("reserved") or [])
+        + [
+            dict(name="c8-%d" % k, polygon=_square(p, 0.08), layers=["*"])
+            for k, p in enumerate(sites)
+        ]
+        + [
+            dict(name="c8-%d" % (len(sites) + k), polygon=_square(p, 0.05), layers=["*"])
+            for k, p in enumerate(steps)
+        ]
+    )
+    w, hh = BGA_SIZE
+    bx, by = _ball_xy(PARTIAL_OPEN)
+    keep = [w / 2 + bx - 0.3, hh / 2 + by - 0.3, w / 2 + bx + 0.3, hh / 2 + by + 0.3]
+    cons["copper_keepout"] = list(cons.get("copper_keepout") or []) + [
+        dict(
+            name="k4",
+            rect=keep,
+            layers=copper_names(spec["stackup"]["copper_layers"]),
+            items=["tracks", "vias"],
+        )
+    ]
+    spec["checks"].append(
+        dict(
+            id="unconnected-designed",
+            kind="unconnected",
+            pads=["U1." + PARTIAL_OPEN],
+            engine="fanout.partial",
+        )
+    )
+    # K4's open is the design's: run.py does not count it (its check above holds the
+    # cut-off pads to exactly this list).
+    spec["designed_open"] = ["U1." + PARTIAL_OPEN]
+    spec["name"] += "-partial"
+    spec["description"] = (
+        spec.get("description", "")
+        + " With a partial fanout: C8's drop sites are reserved and the bridge joins it to C7;"
+        " K4 sits under a keepout and stays open while the VCC plane is whole."
+    )
+    spec["dims"]["constraints"] = "partial"
+    spec["features"] = sorted(set(spec["features"]) | {"partial-fanout"})
+    return spec
+
+
+# The rails rung: VCC split by the STM32F207's supply pins (VDD, VDDA with VREF+,
+# VBAT), each from its own header (VDDA from J5 by its balls, VDD from J6, VBAT from
+# J7 by C1), all three on the supply plane In4 with the rest ground. Currents and
+# budgets [D]: VDD 0.15 A (the datasheet's run-mode envelope), VDDA 0.02 A, VBAT
+# 0.001 A; each rail's copper may drop 1 % of 3.3 V (33 mV).
+RAIL_OF = {"VDD": "VDD", "VDDA": "VDDA", "VREF+": "VDDA", "VBAT": "VBAT"}
+RAIL_HEADERS = {"VDDA": ("J5", (2.5, 5.5)), "VDD": ("J6", (33.5, 5.5)), "VBAT": ("J7", (2.5, 33.0))}
+RAIL_CURRENT = {"VDD": 0.15, "VDDA": 0.02, "VBAT": 0.001}
+RAIL_BUDGET_MV = 33.0
+RAIL_CAPS = {"C1": "VDD", "C2": "VDD", "C3": "VDD", "C4": "VDD", "C5": "VDDA", "C6": "VBAT"}
+
+
+def ufbga_rails(spec):
+    """``spec`` (the 6L BGA rung) with its supply split into three rails sharing the
+    supply plane (``plane_partition``) and an IR-drop check per rail (``ir_drop``)."""
+    spec = deepcopy(spec)
+    u1 = spec["parts"][0]
+    balls = {}
+    for row, names in STM32F207_UFBGA176.items():
+        for col, name in enumerate(names.split()):
+            if name in RAIL_OF:
+                ball = row + str(col + 1)
+                u1["pins"][ball] = RAIL_OF[name]
+                balls.setdefault(RAIL_OF[name], []).append(ball)
+    parts = {p["ref"]: p for p in spec["parts"]}
+    for ref, net in RAIL_CAPS.items():
+        parts[ref]["pins"]["1"] = net
+    parts["C7"]["pins"]["1"] = "VDD"
+    cons = spec["constraints"]
+    for net, (ref, at) in sorted(RAIL_HEADERS.items()):
+        if ref in parts:
+            parts[ref]["pins"] = {"1": net, "2": "GND"}
+        else:
+            spec["parts"].append(part(ref, "connector", "%s input" % net, [net, "GND"]))
+        cons["fixed"][ref] = dict(at=list(at), rot=0, side="top")
+    spec["expected_components"] = len(spec["parts"])
+    spec["expected_connected_pads"] = connected_pads(spec["parts"])
+    rails = ["VDD", "VDDA", "VBAT"]
+    classes = cons["net_class"]
+    vcc = classes.pop("plane_vcc")
+    for net in rails:
+        classes["plane_" + net.lower()] = dict(vcc, nets=[net])
+    layer = vcc["plane_layer"]
+    for x in spec["stackup"]["layers"]:
+        if x.get("net") == "VCC":
+            x["net"] = "VDD"
+    (fanout,) = cons["fanout"]
+    fanout["via_classes"]["planes"]["nets"] = ["GND"] + rails
+    cons["plane_partition"] = [
+        dict(
+            layer=layer,
+            nets=rails,
+            split_gap_mm=0.3,
+            min_width_mm=1.0,
+            fill="GND",
+            currents=dict(RAIL_CURRENT),
+        )
+    ]
+    cons["ir_drop"] = []
+    checks = [c for c in spec["checks"] if not (c["kind"] == "plane" and c["net"] == "VCC")]
+    for c in checks:
+        if c["id"] == "fanout-plane-vias":
+            c["nets"] = ["GND"] + rails
+    for net in rails:
+        sink = {"U1": sorted(balls[net])}
+        entry = dict(
+            net=net,
+            sources=["%s:1" % RAIL_HEADERS[net][0]],
+            sinks=sink,
+            current_a=RAIL_CURRENT[net],
+            budget_mv=RAIL_BUDGET_MV,
+            temperature_c=25,
+        )
+        cons["ir_drop"].append(entry)
+        checks.append(dict(dict(entry, id="ir-" + net, kind="ir_drop"), engine="ir_drop"))
+    checks.append(
+        dict(
+            id="rails-" + layer.split(".")[0],
+            kind="rail_zones",
+            layer=layer,
+            nets=rails,
+            fill="GND",
+            min_area_mm2=1.0,
+            engine="plane_partition",
+        )
+    )
+    have = {c["id"] for c in checks}
+    for net, (ref, at) in sorted(RAIL_HEADERS.items()):
+        if "fixed-" + ref not in have:
+            checks.append(
+                dict(
+                    id="fixed-" + ref,
+                    kind="fixed",
+                    ref=ref,
+                    at=list(at),
+                    rot=0,
+                    side="top",
+                    tol_mm=0.01,
+                    engine="fixed",
+                )
+            )
+    spec["checks"] = checks
+    spec["name"] += "-rails"
+    spec["description"] = (
+        spec.get("description", "")
+        + " With three supply rails (VDD, VDDA with VREF+, VBAT) from their own headers,"
+        " sharing the supply plane by a plane partition, each within 33 mV of IR drop."
+    )
+    spec["dims"]["parts"] = "rails"
+    spec["features"] = sorted(set(spec["features"]) | {"plane-partition", "ir-drop"})
+    return spec
+
+
 # --------------------------------------------------------- run configurations
 
 # yapnr's configuration per family (run.py arguments). The ladder's documented best: the
@@ -1581,7 +1860,8 @@ def hard_rungs():
     chasers += [chaser_absolute(base), chaser_relative(base), chaser_sidelock(base)]
     chasers.append(chaser_arcblock(chasers[0]))  # on 4L-SGPS: one new dimension
     bga = ufbga_fanout()
-    others = [quad_bank(), power_switch(), bga, ufbga_block(bga)]
+    others = [quad_bank(), power_switch(), bga, ufbga_block(bga), ufbga_classes(bga)]
+    others += [ufbga_partial(bga), ufbga_rails(bga)]
     for spec in chasers + others:
         spec["yapnr_args"] = YAPNR_BEST
     return deepcopy(out + chasers + others)

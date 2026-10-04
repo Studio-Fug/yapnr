@@ -6,7 +6,9 @@ import sys
 import time
 from pathlib import Path
 
+from pnr.board_edge import attach_edges
 from pnr.constraints import compile_constraints, compile_routing_rules
+from pnr.dru_rules import attach_dru
 from pnr.fab_profile import apply_rules
 from pnr.graph import BoardGraph
 from pnr.length_model import attach_board
@@ -44,7 +46,14 @@ if spec.get("fixed_block"):
     rules["fixed_copper"] = fixed
 # Pairs and groups are tuned against the board's own stackup (via lengths) and the
 # exact lands of their pads.
-attach_board(rules, (root / "source.kicad_pcb").read_text())
+source_text = (root / "source.kicad_pcb").read_text()
+attach_board(rules, source_text)
+# board.edge: exact: the source outline (arcs, stroke) for the router (pnr.board_edge);
+# board.dru_routing: the custom rules beside the board where they constrain routing
+# (pnr.dru_rules). Nothing otherwise.
+attach_edges(rules, source_text)
+dru_path = root / "source.kicad_dru"
+attach_dru(rules, dru_path.read_text() if dru_path.exists() else None, [n.name for n in g.nets])
 (root / "rules.json").write_text(json.dumps(rules, indent=2))
 os.environ["PNR_ROUND_DIAGNOSTICS"] = str(root / "rounds")
 t = time.monotonic()

@@ -102,6 +102,10 @@ The approximate board you're targeting.
 | `default_clearance_mm` | Minimum courtyard-to-courtyard gap enforced in legalization, and the track pitch the lookahead router assumes.                    |
 | `sides`                | Side policy: `single` (default; every part stays on its source side, and `side_pref` is ignored) or `double` (placement chooses the side of every part nothing holds; needs 2 or more layers; see `side_pref`). |
 | `plane_fallback_drops` | `true` (default): writeback and the plane stage (`pnr.planes`) drop a via from every plane pad the router left without a through contact (dog-bone fallback). `false`: neither adds copper nobody routed; the unreached plane pads are listed on stderr (`unreached plane pads`). Use `false` for a placement-only writeback and for boards whose plane access another stage owns (a BGA fanout). |
+| `class_clearance`      | `maze` or `repair` (opt-in). `maze`: the grid router keeps net class clearances in the maze itself. Each net's track halo and via keep-out are sized from its own clearance (its class `clearance_mm` where larger than the fab's), every routed net judges pads and escape copper through tables at its own width and clearance (a class net's copper at the class clearance for every other net too), the routed nets are then checked with the exact pairwise rule (any pair still too close is ripped and routed again around the rest; a net that cannot be is left open, not emitted), and an mm audit of all emitted copper against other nets and pads is reported in the PnR report (`escape_diagnostics.class_clearance`: `pairs`, `static`, `ripped`, `rerouted`, `audit`). `repair`: the route is the one without the switch; then the routed nets too close to static copper at their class clearances, and the fewest that part every pair the exact rule finds too close, are ripped and routed again exactly around the rest (the class tables now in force), with the same audit. `maze` costs routing capacity on a grid whose pitch is one signal track and clearance (each class net's halo grows by a cell); `repair` costs only the nets it reroutes. Off (default): every reservation uses the fab clearance and only the escape and drop checks read the classes. |
+| `edge`                 | `exact` (opt-in): the router judges the board edge on the board's own `Edge.Cuts` outline (lines, arcs, circles; rounded corners and notches count) instead of the placement rectangle: tracks keep `edge_clearance_mm + ½width` from its centre line and vias the larger of `edge_clearance_mm + via radius` and the hole-to-edge rule as KiCad measures it (to the stroke's edge: `limit + ½stroke + ½drill`, with `limit` the board's own `physical_hole_clearance` to `Edge.Cuts` when `dru_routing` reads one), 1 µm margin. The drivers (`route_case.py`, `pnr.staged_signal`) attach the outline to the rules (`board_edges`, `pnr.board_edge`); an outline that does not frame the `outline` region falls back to the rectangle (warned, `escape_diagnostics.board_edge`). Implies `keep_outline`. |
+| `keep_outline`         | `true` (opt-in): writeback keeps the source board's `Edge.Cuts` (moved to its frame) instead of stamping the 0.15 mm rectangle, when it frames the placement region (else the rectangle, with a warning). |
+| `dru_routing`          | `true` (opt-in): the router reads the board's custom rules (`<board>.kicad_dru`) where they constrain routing (`pnr.dru_rules`): `disallow via` for a net (a no-via class) keeps it on its pads' one layer; `disallow track` on layers takes those layers from the net; a `clearance` between two kinds of nets (`A.hasNetclass('SW') && B.hasNetclass('XTAL')`) raises one side's clearance when it is 1 mm or less, else keeps each side's tracks and vias that far from the other side's pads, escapes and fixed copper; `length (max)` is reported against the routed length; `physical_hole_clearance` / `edge_clearance` against `Edge.Cuts` feed `edge: exact`. Conditions are judged for each net's tracks and vias (`A/B.Type`, `NetClass`, `NetName`, `Layer`, `hasNetclass`, a via's `Hole`, `&& \|\| !`); every rule or constraint it cannot state exactly (areas, courtyards, pad properties, sizes, pair geometry) is listed with its reason in the PnR report (`escape_diagnostics.dru`: `applied`, `unmodelled`, `length`, `pair_keepouts`, `audit`), never dropped. |
 
 The outline is _approximate guidance_: the placer frames the parts within it. Make
 it a bit larger than the parts need — an over-tight outline forces congestion and
@@ -600,6 +604,7 @@ fanout:
     neck_mm: 0.10 # signal tracks inside the fanout (default: the net's width)
     neck_classes: [QSPI] # classes whose own minimum width the neck may go below
     drop_nets: [1V0_PA, "VDD*"] # routed nets whose balls take a via instead of an exit
+    partial: { bridge: true } # a failed ball does not block its net (default: it does)
     lock: true # write the fanout copper locked (default)
 ```
 
@@ -618,6 +623,7 @@ fanout:
 | `neck_mm`         | The signal track width inside the fanout; the router continues at the net's own width from the exit. It narrows a signal below the fab's default track width, never below a minimum the net has of its own (a class `width_mm`, a width from `current_a`, an electrical outer width or terminal budget) unless `neck_classes` names one of its classes, never below a terminal width contract, and never widens; `fanout.check` refuses a value under `min_track_width_mm`. The validator takes each declared neck as an authorized short escape: the pad's required entry width is the neck's (`pnr.pad_entry.fanout_neck`), and the plan lists them (`diagnostics.necks`). |
 | `neck_classes`    | Net classes (or `dp_<pair>`) whose own minimum width `neck_mm` may go below (needs `neck_mm`; an unknown name is a warning). |
 | `drop_nets`       | Routed (non-plane) nets, names or globs, whose balls drop a via of their class beside the ball, as a plane ball does, instead of escaping across the array edge (no exit, no neck): a supply decoupled under the array or fed from another layer. The router takes each via as the net's terminal on the layer opposite the part and routes on from it. |
+| `partial`         | `true` or `{bridge: true, retry: false}`: a ball whose escape fails (no plan, a conflict on the board, no access cell, or an access cell another fanout's tail took) no longer blocks its net, which routes among its other terminals (below). Default: the net is blocked. |
 | `lock`            | Write the fanout copper locked (default `true`), so later passes leave it alone.                                               |
 | `bottom_sites`    | `{parts, max_stub_mm, zone, rotations}`: decoupling sites under the array on the bottom side (below).                         |
 | `variant`         | A seeded permutation of the planner's tie-breaks (default 0, none).                                                            |
@@ -650,6 +656,24 @@ the drop via of a plane ball is its connection. The fanout's vias keep their cla
 route report's escape diagnostics carry a `fanout` block per fanout (escaped
 signals, drops, via sites, failures, balls without an access cell).
 
+With `partial`, a ball whose escape fails no longer blocks its net. With `bridge`,
+the router first tries a straight surface stub, at the ball's planned width, to the
+nearest adjacent ball of its net (orthogonal, then diagonal) whose escape stands,
+judged exactly against foreign pads at the larger class clearance, the escape copper
+and vias, keepouts, rule areas and the fanout's `reserved` areas; the stub is written
+with that ball's escape (locked with it). At 0.65 mm pitch with 0.32 mm lands an
+orthogonal stub keeps 0.44 mm from the side balls and a diagonal one crosses the
+interstitial site (so it fits only where no other net's via sits there). Otherwise
+the ball goes back to the board's escape planner for a second try, unless
+`retry: false` (that planner knows none of the fanout's via classes, class layers or
+necks, so a pair or a class kept to the outer layers may want to stay out of it).
+A ball neither joins stays open: its net routes among its other terminals (a net left with fewer
+than two is still blocked), the ball is a failure site, the route's `partial_open`
+names it (`{net: {"U1.P14": reason}}`, and the route is not fully routed), and the
+fanout report lists every such ball under `partial` (`{ball: {net, reason,
+outcome}}`, the outcome `bridged to P15`, `escaped by the board's escapes` or
+`open`). KiCad's DRC reports the open ball as unconnected.
+
 A plane ball that already touches fixed copper of its own net (a pour or track of
 a fixed block, `fixed_copper` `polygons`) is joined by it and gets no drop; other
 nets keep their clearance from that copper. Each pair of nets keeps the larger of
@@ -670,6 +694,114 @@ parts are kept out of the array by the side policy only.
 Python) adds it to a copy of the board and judges it with the native Oracle and
 KiCad's DRC. Balls on a net with a dedicated plane drop only on a board that
 declares its copper stack; without one the plane stage drops them.
+
+### `plane_partition` — supply rails sharing a plane layer
+
+Divides one dedicated plane layer (typed `power`) among the rails whose net classes
+name it as `plane_layer`. Without it, every rail but the one with the most pads gets
+its pads' bounding box plus 2 mm, and the boxes of rails whose balls spread over
+one package overlap. Without the section nothing changes.
+
+```yaml
+plane_partition:
+  - layer: In3.Cu
+    nets: [1V0_RF1, 1V0_RF2, 1V2, 1V8] # names or globs; each a plane net of the layer
+    order: current # by peak current, then terminal count (or: listed)
+    split_gap_mm: 0.3 # copper gap between two rails
+    min_width_mm: 1.0 # a rail's narrowest trunk
+    fill: GND # what is left (a zone over the outline at priority 0), or absent
+    core_no_vias: true # other nets' vias stay out of each trunk's core
+    terminal_reach_mm: 0.8 # a pad without a drop yet: where its drop will land
+    currents: { 1V2: 1.0 } # A; default the @pnr-current peak, else the class current_a
+    budgets_mohm: { 1V2: 12 } # widens a trunk for its IR budget (default: its ir_drop budget)
+    sources: { 1V2: { "@pmic.fb_1v2": "2" } } # the trunk's root (default: the central terminal)
+    h_mm: 0.1 # the raster
+```
+
+How it works (`pnr/plane_partition.py`, run by the router after the declared
+fanouts are planned): the layer is rasterized inside the outline less the edge
+clearance, with every other net's through copper blocked at the larger class
+clearance of the pair, as KiCad's fill keeps it (planned fanout vias, fixed vias,
+plated holes, mounting holes), fixed copper of other nets on
+the layer, and the `copper_keepout`s that bar pours there (except for the nets they
+allow). A rail's terminals are its planned drop vias (fanout and fixed vias) and,
+for a surface pad without one, the disc within `terminal_reach_mm` of it. First
+every rail is connected at its minimum width: a Steiner tree over its terminals
+(Dijkstra from the tree to the nearest remaining terminal; a cell costs more where
+the trunk would be narrower than it should be and inside another rail's pad disc),
+keeping `split_gap_mm` of copper from every other rail and leaving the pad discs of
+the rails still to come free; a tree passes only where a zone of the fab track width
+(the minimum width writeback gives the zones) fills, so a neck KiCad would not fill
+leaves its terminals unreached instead of on an island. A rail left with an unreached terminal is tried first
+in turn, and the order with the fewest unreached terminals wins. Then each trunk
+widens, the higher current first, to the largest of `min_width_mm`, the IPC-2221
+internal width for its current (at the layer's copper) and `R_sq L / R_share` for
+its IR budget (`R_share` the budget less two via barrels, at least a quarter of
+it), where no other rail's copper or pad disc is. The territories then grow over
+the free cells round the board (breadth first), grown copper is carved back to keep
+the split gap, and each territory becomes polygons with holes (a hole holding only
+another net's antipad is filled: KiCad clears it). The regions replace the
+bounding boxes on that layer for every drop the router plans (`pnr.stack.
+PlaneAccess`), and `routes.json` carries them (`plane_regions`) to writeback, which
+replaces that layer's zones of those nets with one zone per region (its holes and
+priority; the fill net under them all). With `core_no_vias`, other nets' vias keep
+via radius plus clearance beyond half the minimum width of each trunk's centre line,
+so a row of vias cannot cut a rail's neck.
+
+The route's escape diagnostics carry a `plane_partition` report per layer: per rail
+its current, width (and the IPC and budget widths), tree length, terminals reached,
+the unreached ones (also failure sites; a pad's drop then fails in the drop planner,
+as a pad outside its region does), connected pieces, area, the narrowest width along
+its trunk (`core_min_mm`), and the smallest gap between rails. `ir_drop` (below)
+measures the result on the routed board.
+
+### `ir_drop` — the DC drop of a supply rail
+
+Asks for a report of a rail's copper resistance on the routed board. It is a
+report: it changes no copper, and it fails a run only with `hard: true`.
+
+```yaml
+ir_drop:
+  - net: 1V0_RF1
+    sources: { "@pmic.fb_rf1": ["2"] } # {part: [pads]} or ["FB3:2", ...]
+    sinks: { "@radio.u1": [G5, H5, J5] } # the same forms, or all (default: every other pad)
+    current_a: 2.5 # default: the net's @pnr-current peak, else its class current_a
+    split: equal # each sink draws I/n; area: by pad area
+    budget_mohm: 4.0 # or budget_mv
+    temperature_c: 60 # copper resistivity at this temperature
+    h_mm: 0.1 # the plane raster
+    two_point: true # also each sink's resistance with the others open (a solve per sink)
+    hard: false
+```
+
+`python -m pnr.ir_extract BOARD --rules RULES --out DIR [--heatmaps]` (KiCad's
+Python with numpy; `pnr.staged_signal` runs it after the refill when the rules
+carry `ir_drop`) reads the rail's copper from the board: the filled zones per
+layer, tracks and arcs with their width, vias with drill and span, every pad of the
+net, and the copper thickness and depth of each layer from the board's stackup
+block. Fixed-block copper counts like any other. `pnr.ir_drop` then builds a
+resistive network: zones and pads rasterized at `h_mm` (one square of copper,
+`t / rho`, between neighbouring cells), tracks as exact resistors `rho L / (w t)`
+(joined at end points, to the cell under each end and at T joins), each via a
+chain of barrel segments `rho dz / (pi (d + t) t)` with 20 um plating and its land
+one node per layer. The source pads are held at 0 V and each sink draws its share
+over its pad; Jacobi-preconditioned conjugate gradients solve it to a relative
+residual of 1e-10, after a connectivity pass that reports a sink no copper reaches
+as **open** instead of a number. `ir.json` gives, per rail: the drop at each sink,
+the effective resistance (worst drop / current), the two-point resistance of each
+sink with the others open (`two_point`), the I²R loss, the largest current per mm of width on
+each layer with its location and a `neck` flag where it is above what an IPC-2221
+trace carrying the whole current would carry per mm, and `status` (`pass`, `fail`
+against the budget, `open`, or `unsolved` when the solve stops short of its
+tolerance: then no drop or resistance is given). Warnings take the quantified-assumption form, for
+instance what the worst sink's drop would be if the whole current went to it.
+With `--heatmaps` each layer's potential is written as a PNG. The extraction runs
+under KiCad's Python; where that Python has no numpy (the container image's), the
+solve runs in the numeric Python named by `PNR_PYTHON`, which `regression/run.py` and
+`pnr.staged_signal` set. Copper only: the
+resistance of parts in the path (ferrites, sense resistors) is not modelled. On the
+`-rails` rung's VDD (320 thousand nodes at 0.05 mm) 0.1 mm gives 2.590 against
+2.574 mOhm (0.6 %) in 4 s against 57 s of one solve.
 
 ### `net_class` / `diff_pair` / `length_match` — routing rules
 
@@ -696,7 +828,12 @@ length_match:
   routed length per class. A class `clearance_mm` larger than the fab's holds
   between its nets and every other net, as KiCad's DRC judges two nets (the larger
   of their clearances): the grid router's exact escape and drop checks against pads
-  and escape copper use it, and so does a fanout's hand-over. A class may also set
+  and escape copper use it, and so does a fanout's hand-over; with
+  `board.class_clearance: maze` the maze keeps it too. A pad whose footprint sets
+  its own clearance or solder mask margin (a fiducial's `(clearance 0.6)
+  (solder_mask_margin 0.5)`) keeps foreign copper the larger of the two away (the
+  margin plus 1 µm: copper inside the aperture is a mask bridge); margins of 0.05 mm
+  or less (KiCad's BGA land default) are not read. A class may also set
   **`plane_layer`** (e.g.
   `In1.Cu`): its net is **poured as a copper plane** on that layer instead of
   being trace-routed — the right home for a high-fanout ground or power net on a

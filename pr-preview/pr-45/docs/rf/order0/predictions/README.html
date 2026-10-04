@@ -336,15 +336,15 @@ The thru and the reflect are calibration standards and have no file.</p>
 <tbody>
 <tr class="row-even"><td><p><a class="reference internal" href="D1/README.html"><span class="std std-doc">D1</span></a></p></td>
 <td><p>the optimizer’s validation runs: thickness-equivalent (M-eq), nominal (M-nom) and EM528 (M-eq-em528) substrates</p></td>
-<td><p>specs and formulations written (<a class="reference internal" href="../demos.html"><span class="std std-doc">demos</span></a>, <a class="reference internal" href="#../inputs/"><span class="xref myst">inputs</span></a>); not optimized yet</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">d1-star</span></code> passes (coarse, fine, finer); every run in <code class="docutils literal notranslate"><span class="pre">D1/runs/</span></code>, the shipped one on the other substrates in <code class="docutils literal notranslate"><span class="pre">D1/variants/</span></code></p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="D2/README.html"><span class="std std-doc">D2</span></a></p></td>
 <td><p>the same, region W</p></td>
-<td><p>the same</p></td>
+<td><p>no formulation passes (8 runs, <code class="docutils literal notranslate"><span class="pre">D2/runs/</span></code>); the nearest miss on the other substrates in <code class="docutils literal notranslate"><span class="pre">D2/variants/</span></code></p></td>
 </tr>
 <tr class="row-even"><td><p>R1, R1t</p></td>
 <td><p>the optimizer’s FDTD, forward only (<code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.rf.order0</span> <span class="pre">write</span></code>: forward-run directories), loss-corrected, at refine 2 (0.05 / 0.25 mm)</p></td>
-<td><p>R1 on M-eq: run 0b (<a class="reference internal" href="../demos.html#run-0b-the-loss-correction-and-the-s21-criterion"><span class="std std-ref">demos</span></a>); the others not yet</p></td>
+<td><p>R1 on M-eq: run 0b; R1 on M-nom and M-eq-em528, R1t on W-eq, W-nom and W-eq-em528 and the W loss lines: <a class="reference internal" href="#references/"><span class="xref myst">references/</span></a></p></td>
 </tr>
 </tbody>
 </table>

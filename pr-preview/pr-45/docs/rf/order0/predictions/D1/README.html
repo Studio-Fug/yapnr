@@ -8,7 +8,7 @@
         <link rel="prefetch" href="../../../../../static/yapnr-logo-light.png" as="image">
 
     <link rel="shortcut icon" href="../../../../../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
-        <title>D1: the optimizer’s thin divider (placeholder) - yapnr documentation</title>
+        <title>D1: the optimizer’s thin divider - yapnr documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../../../static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../../../static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../../../static/copybutton.css?v=76b2166b" />
@@ -293,15 +293,23 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="d1-the-optimizer-s-thin-divider-placeholder">
-<h1>D1: the optimizer’s thin divider (placeholder)<a class="headerlink" href="#d1-the-optimizer-s-thin-divider-placeholder" title="Link to this heading">¶</a></h1>
+          <section id="d1-the-optimizer-s-thin-divider">
+<h1>D1: the optimizer’s thin divider<a class="headerlink" href="#d1-the-optimizer-s-thin-divider" title="Link to this heading">¶</a></h1>
+<p><strong>Compute stage, 2026-10-04 (drafts until the pre-registration release).</strong> The shipped run is
+<code class="docutils literal notranslate"><span class="pre">d1-star</span></code> (the junction start): it passes every validation check on the coarse, fine and finer
+grids of M-eq, worst-case fine/finer margin 0.299 dB (|S11| ≤ −20.70 dB, |S21| = |S31| ≥
+−3.251 dB raw), <code class="docutils literal notranslate"><span class="pre">result.json</span></code> sha256 <code class="docutils literal notranslate"><span class="pre">ad20e643…</span></code> (label <code class="docutils literal notranslate"><span class="pre">O0</span> <span class="pre">D1</span> <span class="pre">divider-osh-m</span> <span class="pre">ad20e643</span></code>). Every
+formulation’s run is in <a class="reference internal" href="#runs/"><span class="xref myst">runs/</span></a> (spec, <code class="docutils literal notranslate"><span class="pre">result.json</span></code>, <code class="docutils literal notranslate"><span class="pre">validation.json</span></code>, footprint, the
+re-validation Touchstone files, the optimizer history), the selection in
+<a class="reference internal" href="#selection.json"><span class="xref myst">selection.json</span></a> (rule: <a class="reference internal" href="../../demos.html#formulations"><span class="std std-ref">demos</span></a>), and the shipped
+footprint re-validated on M-eq with the 3-7 GHz pulse, M-nom and M-eq-em528 in
+<a class="reference internal" href="#variants/"><span class="xref myst">variants/</span></a>. Raw solver output: the loss-corrected prediction is stage 4’s.</p>
 <p>Region M (L1 over In1.Cu), window 12 × 15 mm, ports W / N / S, 4.25-5.75 GHz (Order 0 design §4.4).
-Not optimized yet: its specs (one per formulation), criteria and substrate are in
-<a class="reference internal" href="#../../inputs/"><span class="xref myst">inputs/</span></a> and explained in <a class="reference internal" href="../../demos.html"><span class="std std-doc">demos</span></a>. When D1 passes its validation,
-this directory receives its spec, <code class="docutils literal notranslate"><span class="pre">result.json</span></code>, <code class="docutils literal notranslate"><span class="pre">validation.json</span></code>, footprint and predicted
-Touchstone files (thickness-equivalent and nominal substrate, FR408HR and EM528), and its copper
-goes into the D1 window of upload O0-D, with the first 8 hex digits of the sha256 of <code class="docutils literal notranslate"><span class="pre">result.json</span></code>
-in silkscreen.</p>
+Its specs (one per formulation), criteria and substrate are in <a class="reference internal" href="#../../inputs/"><span class="xref myst">inputs/</span></a> and
+explained in <a class="reference internal" href="../../demos.html"><span class="std std-doc">demos</span></a>. This directory receives its spec, <code class="docutils literal notranslate"><span class="pre">result.json</span></code>,
+<code class="docutils literal notranslate"><span class="pre">validation.json</span></code>, footprint and predicted Touchstone files (thickness-equivalent and nominal
+substrate, FR408HR and EM528), and its copper goes into the D1 window of upload O0-D, with the
+first 8 hex digits of the sha256 of <code class="docutils literal notranslate"><span class="pre">result.json</span></code> in silkscreen.</p>
 <p>What the board around the window is, for the spec (<code class="docutils literal notranslate"><span class="pre">divider-osh-m</span></code>):</p>
 <ul class="simple">
 <li><p>the window’s west edge is P1’s port plane; P2 and P3 sit on its north and south edges 6.0 mm

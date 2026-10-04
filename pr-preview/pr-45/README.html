@@ -342,11 +342,13 @@ red, its new copper in green), ending on KiCad’s clean DRC verdict. Recorded w
 <p align="center">
   <img src="docs/animations/showcase-chaser-line.gif" width="800"
     alt="Animation, side by side: an LED chaser placed and routed twice, its LEDs placed freely
-    on the left and held in one line that the placer moves and turns as a whole on the right">
+    on the left and held in one line on the right, each LED's series resistor beside it, which
+    the placer moves and turns as a whole">
 </p>
 <p><em>Left: LEDs placed freely. Right: the same chaser with its LEDs held in a
-<a class="reference internal" href="docs/constraints-and-hierarchy.html"><span class="std std-doc">line group</span></a>; the placer moves and turns the whole line. Both
-with compact placement and gloss, as above.</em></p>
+<a class="reference internal" href="docs/constraints-and-hierarchy.html"><span class="std std-doc">line group</span></a>; compact placement keeps each LED’s series resistor
+flush beside it, and the placer moves and turns the whole row. Both with compact placement and
+gloss, as above.</em></p>
 <p>yapnr places components and routes copper for KiCad boards. It uses a mechanical,
 Monte-Carlo-driven search: hierarchical block synthesis, power-first placement, native KiCad
 routing and DRC in the loop, and electrical contracts (current, pairs, plane access) declared

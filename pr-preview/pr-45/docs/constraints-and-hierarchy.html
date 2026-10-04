@@ -305,7 +305,7 @@ boards and KiCad’s verdict.</p>
 they are not ladder cases: they sit outside the ladder’s gate and its pull-request lane (the
 nightly lane runs them for information). All five cases below come from one traced run: seed 0,
 a placement snapshot every 5 iterations, the legacy fabrication profile, KiCad 10.0.6 on the
-development Mac (darwin-arm64), engine <code class="docutils literal notranslate"><span class="pre">cfb7cb3</span></code>, with the ladder animations’ two opt-in stages:
+development Mac (darwin-arm64), engine <code class="docutils literal notranslate"><span class="pre">d002bfa</span></code>, with the ladder animations’ two opt-in stages:
 <a class="reference internal" href="design/compact-placement.html"><span class="std std-doc">compact placement</span></a> (<code class="docutils literal notranslate"><span class="pre">--compact</span></code>, <code class="docutils literal notranslate"><span class="pre">PNR_COMPACT=1</span></code>) and the
 <a class="reference internal" href="design/gloss.html"><span class="std std-doc">gloss pass</span></a> (<code class="docutils literal notranslate"><span class="pre">--gloss</span></code>, <code class="docutils literal notranslate"><span class="pre">PNR_GLOSS=1</span></code>), both off by default. The four flat
 cases use the initial placement pool (8 starts, 3 routed finalists); the hierarchical case uses
@@ -339,13 +339,14 @@ the legalizer places it in one step; afterwards the members are posed from the l
 other parts gather around it. The placer’s rotation is a four-way choice: here it turns the
 line upright within the first five iterations and keeps it there (the engine records only the
 chosen direction, never the angles in between; a half-turn would be drawn as a flip).</p></li>
-<li><p><strong>Legalization:</strong> the line is placed in one step, not five (16 steps instead of 20).</p></li>
+<li><p><strong>Legalization:</strong> the line, with its five series resistors beside the LEDs, is placed in one
+step, not ten (11 steps instead of 20).</p></li>
 <li><p><strong>The pool’s shortlist:</strong> the eight starts put the line in different places and directions
-(vertical in seven starts, horizontal in one, both ways round).</p></li>
+(vertical in six starts, horizontal in two, both ways round).</p></li>
 <li><p><strong>The caption strips:</strong> HPWL (the half-perimeter wirelength of every net, from the frame’s
 poses) and the “LED line error”, the largest distance of D1 to D5 from their best-fit line. On
 the left the dashed path through D1 to D5 shows where the sequence goes; its error ends at
-5.91 mm. On the right it is 0.00 mm throughout.</p></li>
+6.45 mm. On the right it is 0.00 mm throughout.</p></li>
 </ul>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
@@ -367,30 +368,35 @@ the left the dashed path through D1 to D5 shows where the sequence goes; its err
 <td class="text-center"><p>100 %</p></td>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>0</p></td>
-<td class="text-right"><p>23</p></td>
-<td class="text-right"><p>272.90</p></td>
-<td class="text-right"><p>240</p></td>
-<td class="text-right"><p>74.0</p></td>
+<td class="text-right"><p>13</p></td>
+<td class="text-right"><p>220.85</p></td>
+<td class="text-right"><p>185</p></td>
+<td class="text-right"><p>47.5</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">line-chaser-20</span></code></p></td>
 <td class="text-right"><p>20</p></td>
 <td class="text-center"><p>100 %</p></td>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>0</p></td>
-<td class="text-right"><p>20</p></td>
-<td class="text-right"><p>268.74</p></td>
-<td class="text-right"><p>241</p></td>
-<td class="text-right"><p>60.3</p></td>
+<td class="text-right"><p>9</p></td>
+<td class="text-right"><p>209.18</p></td>
+<td class="text-right"><p>154</p></td>
+<td class="text-right"><p>35.2</p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>The line costs 1 mm of HPWL here, and its board ends with three vias and 4 mm of copper fewer
-than the free one (one seed: the two boards route differently, so the difference is not the
-line’s own price). Caveats: a line turned by 180°
-reverses the sequence on the board, which a human would accept either way, so the placer may
-choose either direction (near the end of global placement its choice can flip between the two).
-Only the LEDs are grouped; their resistors stay free (a rigid LED-and-resistor row is a follow-up).</p>
+<p>Here the line board ends shorter: 31 mm less HPWL, 11.7 mm less copper and four vias fewer than the
+free one (one seed: the two boards come from different placements, so the difference is not the
+line’s own price). Caveats: a line turned by 180° reverses the sequence on the board, which a human
+would accept either way, so the placer may choose either direction (near the end of global
+placement its choice can flip between the two).</p>
+<p>Each LED’s series resistor rides in the line with it: compact placement’s <code class="docutils literal notranslate"><span class="pre">SATELLITES</span></code> part
+(<code class="docutils literal notranslate"><span class="pre">PNR_LINE_SATELLITES</span></code>, <a class="reference internal" href="design/compact-placement.html"><span class="std std-doc">design</span></a>, section 11) adds to a line group
+every free two-pad part joined to one member pad by a two-pin net, flush beside that member and in
+line with it, so the placer moves and turns LED and resistor rows as one body. Wirelength alone
+cannot put a resistor there (anywhere on the path from its driver pin to its LED it has the same
+wirelength). Without compact placement the resistors stay free.</p>
 </section>
 <section id="board-edges">
 <h2>Board edges<a class="headerlink" href="#board-edges" title="Link to this heading">¶</a></h2>
@@ -425,8 +431,9 @@ start the animation follows, D1 and SW1 pass each other as the parts approach th
 order ends J1, SW1, D1. The order changes in other starts, so the shortlist first replays
 the global placement of all eight starts side by side (recorded snapshots, one clock), with each
 tile’s order under it: in four starts two edge parts pass each other during global placement
-(in one of them twice), and in two the legalizer changes the order. The tiles then hold each
-start’s legalized order: three different orders among the eight.</p></li>
+(in one of them twice), and in five the legalizer changes the order (it picks each
+part’s slot with its wirelength). The tiles then hold each start’s legalized order: two
+different orders among the eight.</p></li>
 <li><p><strong>The free board:</strong> the dashed edge is the other board’s target, drawn for reference; “on edge
 0 of 3” counts its parts within 1 mm of it. Its parts stay on the board throughout the start it
 follows (in another start of its pool, nine leave it during global placement).</p></li>
@@ -451,27 +458,27 @@ follows (in another start of its pool, nine leave it during global placement).</
 <td class="text-center"><p>100 %</p></td>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>0</p></td>
-<td class="text-right"><p>8</p></td>
-<td class="text-right"><p>154.85</p></td>
-<td class="text-right"><p>126</p></td>
-<td class="text-right"><p>55.1</p></td>
+<td class="text-right"><p>5</p></td>
+<td class="text-right"><p>109.38</p></td>
+<td class="text-right"><p>95</p></td>
+<td class="text-right"><p>31.2</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">edge-io-12</span></code></p></td>
 <td class="text-right"><p>12</p></td>
 <td class="text-center"><p>100 %</p></td>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>0</p></td>
-<td class="text-right"><p>11</p></td>
-<td class="text-right"><p>134.35</p></td>
-<td class="text-right"><p>103</p></td>
-<td class="text-right"><p>40.1</p></td>
+<td class="text-right"><p>6</p></td>
+<td class="text-right"><p>122.89</p></td>
+<td class="text-right"><p>97</p></td>
+<td class="text-right"><p>32.7</p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>Here the held board ends shorter: 23 mm less HPWL and 20 mm less copper than the free one, for
-three more vias (one seed: the two boards come from different placements, so the difference is
-not the constraint’s own price).</p>
+<p>Here the held board ends longer: 2 mm more HPWL, 13.5 mm more copper and one more via than the free
+one (one seed: the two boards come from different placements, so the difference is not the
+constraint’s own price).</p>
 </section>
 <section id="regions-and-alignments">
 <h2>Regions and alignments<a class="headerlink" href="#regions-and-alignments" title="Link to this heading">¶</a></h2>
@@ -645,10 +652,10 @@ montage follows, then KiCad’s writeback, planes, zone refill and verdict.</p><
 <td class="text-center"><p>100 %</p></td>
 <td class="text-right"><p>0</p></td>
 <td class="text-right"><p>0</p></td>
-<td class="text-right"><p>42</p></td>
-<td class="text-right"><p>558.94</p></td>
-<td class="text-right"><p>415</p></td>
-<td class="text-right"><p>98.9</p></td>
+<td class="text-right"><p>37</p></td>
+<td class="text-right"><p>443.97</p></td>
+<td class="text-right"><p>320</p></td>
+<td class="text-right"><p>102.4</p></td>
 </tr>
 </tbody>
 </table>

@@ -1,12 +1,21 @@
-# D1: the optimizer's thin divider (placeholder)
+# D1: the optimizer's thin divider
+
+**Compute stage, 2026-10-04 (drafts until the pre-registration release).** The shipped run is
+`d1-star` (the junction start): it passes every validation check on the coarse, fine and finer
+grids of M-eq, worst-case fine/finer margin 0.299 dB (\|S11\| ≤ −20.70 dB, \|S21\| = \|S31\| ≥
+−3.251 dB raw), `result.json` sha256 `ad20e643…` (label `O0 D1 divider-osh-m ad20e643`). Every
+formulation's run is in [runs/](runs/) (spec, `result.json`, `validation.json`, footprint, the
+re-validation Touchstone files, the optimizer history), the selection in
+[selection.json](selection.json) (rule: [demos](../../demos.md#formulations)), and the shipped
+footprint re-validated on M-eq with the 3-7 GHz pulse, M-nom and M-eq-em528 in
+[variants/](variants/). Raw solver output: the loss-corrected prediction is stage 4's.
 
 Region M (L1 over In1.Cu), window 12 × 15 mm, ports W / N / S, 4.25-5.75 GHz (Order 0 design §4.4).
-Not optimized yet: its specs (one per formulation), criteria and substrate are in
-[inputs/](../../inputs/) and explained in [demos](../../demos.md). When D1 passes its validation,
-this directory receives its spec, `result.json`, `validation.json`, footprint and predicted
-Touchstone files (thickness-equivalent and nominal substrate, FR408HR and EM528), and its copper
-goes into the D1 window of upload O0-D, with the first 8 hex digits of the sha256 of `result.json`
-in silkscreen.
+Its specs (one per formulation), criteria and substrate are in [inputs/](../../inputs/) and
+explained in [demos](../../demos.md). This directory receives its spec, `result.json`,
+`validation.json`, footprint and predicted Touchstone files (thickness-equivalent and nominal
+substrate, FR408HR and EM528), and its copper goes into the D1 window of upload O0-D, with the
+first 8 hex digits of the sha256 of `result.json` in silkscreen.
 
 What the board around the window is, for the spec (`divider-osh-m`):
 

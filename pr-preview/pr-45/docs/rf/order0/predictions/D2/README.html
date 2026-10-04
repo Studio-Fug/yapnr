@@ -8,7 +8,7 @@
         <link rel="prefetch" href="../../../../../static/yapnr-logo-light.png" as="image">
 
     <link rel="shortcut icon" href="../../../../../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
-        <title>D2: the optimizer’s thick divider (placeholder) - yapnr documentation</title>
+        <title>D2: the optimizer’s thick divider - yapnr documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../../../static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../../../static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../../../static/copybutton.css?v=76b2166b" />
@@ -293,12 +293,18 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="d2-the-optimizer-s-thick-divider-placeholder">
-<h1>D2: the optimizer’s thick divider (placeholder)<a class="headerlink" href="#d2-the-optimizer-s-thick-divider-placeholder" title="Link to this heading">¶</a></h1>
+          <section id="d2-the-optimizer-s-thick-divider">
+<h1>D2: the optimizer’s thick divider<a class="headerlink" href="#d2-the-optimizer-s-thick-divider" title="Link to this heading">¶</a></h1>
+<p><strong>Compute stage, 2026-10-04 (drafts).</strong> No formulation passes (8 in two waves,
+<a class="reference internal" href="#runs/"><span class="xref myst">runs/</span></a>, <a class="reference internal" href="#selection.json"><span class="xref myst">selection.json</span></a>; wave 2: <a class="reference internal" href="#../../inputs/wave2/"><span class="xref myst">inputs/wave2/</span></a>).
+The nearest misses fail only the coarse-grid |S21| limit (−3.40 dB), by 0.012 dB at 5.75 GHz,
+and pass fine and finer; R1t reaches −3.549 dB on the same substrate. Whether O0-W carries the
+nearest miss (<code class="docutils literal notranslate"><span class="pre">d2-star-sched</span></code>, re-validated on W-eq, W-nom and W-eq-em528 in
+<a class="reference internal" href="#variants/"><span class="xref myst">variants/</span></a>) as a pre-registered failing design is the owner’s decision.</p>
 <p>Region W (L1 over B.Cu, inner layers removed), window 20 × 24 mm, ports W / N / S, 4.25-5.75 GHz
-(Order 0 design §4.4). Not optimized yet: its specs (one per formulation), criteria and substrate
-are in <a class="reference internal" href="#../../inputs/"><span class="xref myst">inputs/</span></a> and explained in <a class="reference internal" href="../../demos.html"><span class="std std-doc">demos</span></a>. When D2 passes its
-validation, this directory receives its spec, <code class="docutils literal notranslate"><span class="pre">result.json</span></code>, <code class="docutils literal notranslate"><span class="pre">validation.json</span></code>, footprint and
+(Order 0 design §4.4). Its specs (one per formulation), criteria and substrate are in
+<a class="reference internal" href="#../../inputs/"><span class="xref myst">inputs/</span></a> and explained in <a class="reference internal" href="../../demos.html"><span class="std std-doc">demos</span></a>. If D2 ships, this directory
+receives its spec, <code class="docutils literal notranslate"><span class="pre">result.json</span></code>, <code class="docutils literal notranslate"><span class="pre">validation.json</span></code>, footprint and
 predicted Touchstone files (FR408HR and EM528), and its copper goes into the D2 window of upload
 O0-W.</p>
 <p>What the board around the window is, for the spec (<code class="docutils literal notranslate"><span class="pre">divider-osh-w</span></code>), which the solver’s open L1

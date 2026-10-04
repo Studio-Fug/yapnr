@@ -499,9 +499,10 @@ tofu<span class="w"> </span>plan<span class="w"> </span>-var-file<span class="o"
 tofu<span class="w"> </span>apply<span class="w"> </span>bootstrap.plan
 </pre></div>
 </div>
-<p>The plan creates 70 resources for two regions (<a class="reference external" href="https://github.com/Studio-Fug/yapnr/tree/main/infra/gcp">infra/gcp</a>):
-APIs, the VPC, both buckets, the service accounts and grants, the registry caches, the Spot
-templates, the budget and the guard functions.</p>
+<p>The plan creates 81 resources for two regions (<a class="reference external" href="https://github.com/Studio-Fug/yapnr/tree/main/infra/gcp">infra/gcp</a>):
+APIs, the VPC, both buckets, the service accounts and grants, the registry caches and the
+<code class="docutils literal notranslate"><span class="pre">images</span></code> repositories for <a class="reference internal" href="#task-images-openems">task images</a>, the Spot templates, the budget and
+the guard functions.</p>
 <p>The project’s <code class="docutils literal notranslate"><span class="pre">default</span></code> network allows SSH from anywhere and gives VMs external IPs; yapnr jobs
 never use it, so delete it, and with it any way a hand-written job could land there:</p>
 <div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>gcloud<span class="w"> </span>compute<span class="w"> </span>firewall-rules<span class="w"> </span>list<span class="w"> </span>--filter<span class="o">=</span><span class="s2">&quot;network=default&quot;</span><span class="w"> </span>--format<span class="o">=</span><span class="s2">&quot;value(name)&quot;</span><span class="w"> </span><span class="se">\</span>
@@ -865,6 +866,63 @@ branch or image. <code class="docutils literal notranslate"><span class="pre">--
 <code class="docutils literal notranslate"><span class="pre">yapnr</span></code> whose <code class="docutils literal notranslate"><span class="pre">mc-eval</span></code> refuses them.</p>
 </section>
 </section>
+<section id="task-images-openems">
+<h3>Task images (openEMS)<a class="headerlink" href="#task-images-openems" title="Link to this heading">¶</a></h3>
+<p>A campaign runs in the yapnr image unless <code class="docutils literal notranslate"><span class="pre">image</span></code> names another one by its full reference. Batch
+VMs have no internet access, so such an image lives in the project’s <code class="docutils literal notranslate"><span class="pre">images</span></code> repository
+(<code class="docutils literal notranslate"><span class="pre">[gcp]</span> <span class="pre">images</span></code>, one per region, made by <code class="docutils literal notranslate"><span class="pre">infra/gcp</span></code>), and a campaign pins it by digest. An image
+that is not a yapnr image says how it runs the task wrapper in a <code class="docutils literal notranslate"><span class="pre">[runtime]</span></code> table: <code class="docutils literal notranslate"><span class="pre">python</span></code>, the
+interpreter that runs <code class="docutils literal notranslate"><span class="pre">task.py</span></code> and that <code class="docutils literal notranslate"><span class="pre">${PYTHON}</span></code> names in commands (default
+<code class="docutils literal notranslate"><span class="pre">/opt/venv/bin/python</span></code>), and <code class="docutils literal notranslate"><span class="pre">entrypoint</span></code>, the launcher around both (default the yapnr image’s
+<code class="docutils literal notranslate"><span class="pre">yapnr-kicad-env</span></code>; <code class="docutils literal notranslate"><span class="pre">&quot;&quot;</span></code> for none). The wrapper needs only the standard library of Python 3.9 or
+later.</p>
+<div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="n">image</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&lt;region&gt;-docker.pkg.dev/&lt;project&gt;/images/openems:0.37.0-rc3-x86-64-v4@sha256:...&quot;</span>
+
+<span class="k">[runtime]</span>
+<span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/opt/openEMS/venv/bin/python&quot;</span>
+<span class="n">entrypoint</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&quot;</span>
+</pre></div>
+</div>
+<p><a class="reference external" href="https://github.com/Studio-Fug/yapnr/tree/main/docker/openems"><code class="docutils literal notranslate"><span class="pre">docker/openems</span></code></a> builds openEMS
+from source with its Python bindings, numpy, h5py, scipy, matplotlib and shapely, in two
+variants: a generic x86-64 build and an AVX-512 build (<code class="docutils literal notranslate"><span class="pre">-march=x86-64-v4</span> <span class="pre">-mtune=znver4</span></code>) for
+C4D’s Zen 5 cores. Cloud Build builds both on one machine and pushes them as
+<code class="docutils literal notranslate"><span class="pre">openems:&lt;openEMS</span> <span class="pre">version&gt;-x86-64</span></code> and <code class="docutils literal notranslate"><span class="pre">...-x86-64-v4</span></code>, running as <code class="docutils literal notranslate"><span class="pre">yapnr-image-build</span></code>; the
+submitter must be allowed to start builds and act as that account (the project owner). A
+regional build bills the vCPU- and GiB-minutes of the <code class="docutils literal notranslate"><span class="pre">e2-highcpu-8</span></code> machine <code class="docutils literal notranslate"><span class="pre">cloudbuild.yaml</span></code>
+asks for (in us-west4 in October 2026, $0.0018 per vCPU-minute and $0.0004 per GiB-minute: about
+$0.018 a minute; see the Cloud Build pricing page), and the stored images per GiB-month like the
+registry caches. A new project’s regional quota may refuse larger build machines
+(<code class="docutils literal notranslate"><span class="pre">FAILED_PRECONDITION</span> <span class="pre">...</span> <span class="pre">cannot</span> <span class="pre">run</span> <span class="pre">builds</span> <span class="pre">of</span> <span class="pre">this</span> <span class="pre">machine</span> <span class="pre">type</span> <span class="pre">in</span> <span class="pre">this</span> <span class="pre">region</span></code>), so the file asks
+for the 8-vCPU machine; raise <code class="docutils literal notranslate"><span class="pre">machineType</span></code> and <code class="docutils literal notranslate"><span class="pre">_NJOBS</span></code> together once the quota allows.</p>
+<p><code class="docutils literal notranslate"><span class="pre">tools/exp/openems_plan.py</span></code> does the rest. <code class="docutils literal notranslate"><span class="pre">image</span></code> prints (<code class="docutils literal notranslate"><span class="pre">--run</span></code>: submits) the build,
+<code class="docutils literal notranslate"><span class="pre">digests</span></code> lists the built tags with their digests and sizes, <code class="docutils literal notranslate"><span class="pre">plan</span></code> turns N model scripts into
+one <code class="docutils literal notranslate"><span class="pre">mc-eval</span></code> campaign of N tasks (the format is in its docstring), and <code class="docutils literal notranslate"><span class="pre">collect</span></code> lays fetched
+results out as local runs leave them:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/exp/openems_plan.py<span class="w"> </span>image<span class="w"> </span>--run
+python3<span class="w"> </span>tools/exp/openems_plan.py<span class="w"> </span>plan<span class="w"> </span>models.toml<span class="w"> </span>--out<span class="w"> </span>&lt;dir&gt;<span class="w">      </span><span class="c1"># pins the image&#39;s digest</span>
+yapnr<span class="w"> </span>exp<span class="w"> </span>plan<span class="w"> </span>&lt;dir&gt;/campaign.toml<span class="w"> </span>--backend<span class="w"> </span>gcp-batch
+yapnr<span class="w"> </span>exp<span class="w"> </span>submit<span class="w"> </span>&lt;cid&gt;<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>yapnr<span class="w"> </span>exp<span class="w"> </span>status<span class="w"> </span>&lt;cid&gt;<span class="w">      </span><span class="c1"># again until every task is done</span>
+yapnr<span class="w"> </span>exp<span class="w"> </span>fetch<span class="w"> </span>&lt;cid&gt;<span class="w"> </span>--full
+python3<span class="w"> </span>tools/exp/openems_plan.py<span class="w"> </span>collect<span class="w"> </span>&lt;cid&gt;<span class="w"> </span>--dest<span class="w"> </span>&lt;tree&gt;<span class="w">       </span><span class="c1"># &lt;tree&gt;/runs/&lt;model&gt;/...</span>
+</pre></div>
+</div>
+<p>Each task runs <code class="docutils literal notranslate"><span class="pre">SCRIPT</span> <span class="pre">ARGS</span></code> through the job bundle’s <code class="docutils literal notranslate"><span class="pre">openems_job.py</span></code> with <code class="docutils literal notranslate"><span class="pre">OMP_NUM_THREADS</span></code> at
+the model’s <code class="docutils literal notranslate"><span class="pre">threads</span></code> and records <code class="docutils literal notranslate"><span class="pre">out/&lt;id&gt;.job.json</span></code> (its verdict is <code class="docutils literal notranslate"><span class="pre">ok</span></code>, the exit code of the
+script): wall and CPU time, peak memory, the CPU and whether it has AVX-512, the image’s build
+flags and openEMS’s own iterations, cells, seconds and MCells/s. <code class="docutils literal notranslate"><span class="pre">engine</span></code> (<code class="docutils literal notranslate"><span class="pre">basic</span></code>, <code class="docutils literal notranslate"><span class="pre">sse</span></code>,
+<code class="docutils literal notranslate"><span class="pre">sse-compressed</span></code> or <code class="docutils literal notranslate"><span class="pre">multithreaded</span></code>, openEMS’s default) and <code class="docutils literal notranslate"><span class="pre">openems_options</span></code> (openEMS
+command-line options such as <code class="docutils literal notranslate"><span class="pre">exact-endcriteria</span></code>, which makes the stop step independent of the
+machine’s speed), for the campaign or per model, reach every <code class="docutils literal notranslate"><span class="pre">openEMS.Run</span></code> of an unchanged model
+script: the runner starts it under a bootstrap that adds them to <code class="docutils literal notranslate"><span class="pre">Run</span></code>’s keyword arguments, and
+the record and the task’s labels carry them. <code class="docutils literal notranslate"><span class="pre">models_per_vm</span></code> models of
+<code class="docutils literal notranslate"><span class="pre">threads</span></code> cores share a VM: <code class="docutils literal notranslate"><span class="pre">vm_vcpus</span></code> is <code class="docutils literal notranslate"><span class="pre">2</span> <span class="pre">x</span> <span class="pre">models_per_vm</span> <span class="pre">x</span> <span class="pre">threads</span></code> on C4D (two vCPUs a core),
+or half that with <code class="docutils literal notranslate"><span class="pre">packing</span> <span class="pre">=</span> <span class="pre">&quot;vcpu&quot;</span></code>, which runs the threads on SMT siblings; a shape without an
+instance template runs from an instance policy. A model with its own <code class="docutils literal notranslate"><span class="pre">threads</span></code> becomes a task
+class of its own (its own Batch job and VMs, still <code class="docutils literal notranslate"><span class="pre">models_per_vm</span></code> to a VM of <code class="docutils literal notranslate"><span class="pre">vm_vcpus</span></code>), so
+keep one thread count per jobs file to fill the VMs. openEMS runs do not checkpoint, so a
+preempted model starts again.</p>
+</section>
 </section>
 <section id="testing">
 <h2>Testing<a class="headerlink" href="#testing" title="Link to this heading">¶</a></h2>
@@ -1010,6 +1068,7 @@ stub <code class="docutils literal notranslate"><span class="pre">apptainer</spa
 <li><a class="reference internal" href="#rf-runs">RF runs</a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#task-images-openems">Task images (openEMS)</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#testing">Testing</a></li>

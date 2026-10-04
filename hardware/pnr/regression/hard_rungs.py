@@ -1405,10 +1405,10 @@ def ufbga_fanout():
 # stay open below it).
 LAUNCH_GROUP = "LAUNCH"
 LAUNCH_NAME = "launch"
-LAUNCH_UFL = (27.6, 19.3)  # J6's centre: pad 1 at x - 1.525, ground pads at y +- 1.475
+LAUNCH_UFL = (27.0, 19.3)  # J6's centre: pad 1 at x - 1.525, ground pads at y +- 1.475
 LAUNCH_BALL = (22.55, 19.3)  # F15 (U1 at the board centre, rot 0)
-LAUNCH_KEEPOUT = [22.95, 18.3, 29.0, 20.3]
-LAUNCH_GUARDS = {"guard-north": [22.95, 20.3, 30.0, 21.4], "guard-south": [22.95, 17.2, 30.0, 18.3]}
+LAUNCH_KEEPOUT = [22.95, 18.3, 28.4, 20.3]
+LAUNCH_GUARDS = {"guard-north": [22.95, 20.3, 29.0, 21.4], "guard-south": [22.95, 17.2, 29.0, 18.3]}
 LAUNCH_RULE = [22.95, 21.4, 23.9, 22.6]  # F.Cu tracks only: rows A-B's surface exits east
 LAUNCH_VIA = (0.35, 0.15)  # the fanout's plane class (via_class judges them inside U1)
 
@@ -1479,7 +1479,7 @@ def ufbga_block(spec):
         for name, rect in sorted(LAUNCH_GUARDS.items())
     ]
     cons["keepout"] = (cons.get("keepout") or []) + [
-        dict(name=LAUNCH_NAME, polygon=rect_polygon([24.1, 17.0, 30.2, 21.6]))
+        dict(name=LAUNCH_NAME, polygon=rect_polygon([24.1, 17.0, 29.0, 21.6]))  # J4 from 29.12
     ]
     spec["checks"] = [c for c in spec["checks"] if c["id"] != "fanout-escape"]
     signals = sorted(b for balls in bga_signals().values() for b in balls)

@@ -64,8 +64,14 @@
 #define YF_MAX_TBLOCK 32 /* steps per wavefront pass: `job_wave` holds 2 tasks per step */
 #define YF_MAX_CHUNK 1024 /* edges per probe or source work item: the probe scratch */
 
-/* sha256 of fdtd.c and fdtd_kernels.h (in that order), set by native_kernel.build_library so
- * that the loader can tell a library built from other sources; "" when unknown. */
+/* sha256 of fdtd.c and fdtd_kernels.h (in that order), so that the loader can tell a library
+ * built from other sources: -DYF_SRC_SHA from native_kernel.build_library, or the header that
+ * Bazel generates beside this file (//yapnr/rf:fdtd_src_sha); "" when unknown. */
+#if !defined(YF_SRC_SHA) && defined(__has_include)
+#if __has_include("yapnr/rf/fdtd/native/yf_src_sha.h")
+#include "yapnr/rf/fdtd/native/yf_src_sha.h"
+#endif
+#endif
 #ifndef YF_SRC_SHA
 #define YF_SRC_SHA ""
 #endif

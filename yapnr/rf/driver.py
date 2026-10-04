@@ -490,13 +490,28 @@ class Optimizer:
         )
         return rec
 
-    def run(self, *, resume: bool = True, max_iterations: int | None = None) -> LoopState:
+    def run(
+        self,
+        *,
+        resume: bool = True,
+        max_iterations: int | None = None,
+        until_epoch: int | None = None,
+    ) -> LoopState:
         """Iterate until the schedule ends or the budget is used up; `max_iterations` stops
-        early (without finishing, so a later `run` continues)."""
+        early (without finishing, so a later `run` continues).
+
+        `until_epoch` (design `multistart.md` §2, halving rungs) pauses once
+        `state.epoch >= until_epoch`, before the next iteration, without touching `stop_reason`
+        or anything else in `state` — so a later `run(until_epoch=later_or_None)` on the same
+        checkpoint continues with bit-identical results to a single uninterrupted run. An epoch
+        can end early on convergence, so `until_epoch` is a rung on epoch boundaries, not on a
+        fixed iteration count."""
         if resume:
             self.load_checkpoint()
         n = 0
         while not self.done and (max_iterations is None or n < max_iterations):
+            if until_epoch is not None and self.state.epoch >= until_epoch:
+                break
             self.iterate()
             self.checkpoint()
             n += 1

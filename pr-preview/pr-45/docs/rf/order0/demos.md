@@ -63,8 +63,11 @@ against the baseline, aimed at the main risk that D1 does not pass (Order 0 desi
 **Selection rule (fixed before any run).** Among the formulations whose exported design passes
 every validation criterion on all three grids (coarse; fine and finer), ship the one with the
 largest worst-case margin over the fine and finer grids, the margin of a check being (limit −
-worst) in dB for \|S11\| and (worst − limit) for \|S21\| and \|S31\|; on a tie (0.05 dB) the
-earlier one in the order base, robust, star, sched. Every attempt and its validation is published.
+worst) in dB for \|S11\| and (worst − limit) for \|S21\| and \|S31\|; on a tie (within 0.05 dB)
+the one whose export changed the fewest pixels in the width and space repair (`repaired_pixels` in
+`validation.json`), then the earlier one in the order base, robust, star, sched. Every attempt and
+its validation is published. (The repair tie-break was added on 2026-10-04 at 09:48 UTC, after the
+compute campaigns were submitted at 09:46 and before any of their tasks had finished.)
 
 ## Criteria
 
@@ -78,15 +81,52 @@ moved with it: \|S11\| ≤ −17 dB (coarse) and ≤ −15 dB (fine, finer); \|S
 
 ## Run 0b: the loss correction and the S21 criterion
 
-RUN0B_RESULTS
+Run 0b (Order 0 design §10.1, D-O0-11) ran on 2026-10-04 on GCP Batch (campaign
+`20261004-mceval-bc9089`, Spot `c4-highcpu-16` in northamerica-northeast1, one machine family for
+every arm; image `ghcr.io/studio-fug/yapnr@sha256:f41a4760…` = main 688fac3; native float64,
+`YAPNR_RF_REQUIRE_NATIVE=1`, the library loaded from the image's wheel, x86-64 AVX-512). Inputs:
+[inputs/runs/](inputs/runs/) (R1 on M-eq and four straight lines on the same 0.05 mm grid, 6
+substrate cells); outputs: [predictions/run0b/](predictions/run0b/) (`run0b.json`, the Touchstone
+files as simulated, R1's loss-corrected one). Everything is _derived_.
+
+**The solver's lines.** The FDTD's 0.40 mm port line on M-eq calibrates to **Zc 50.788 Ω**, the 2D
+target to 0.001 Ω, and its εeff (from the two lines' phase) is 2.7147 at 5 GHz against the
+quasi-static 2.7115 (+0.12 %, microstrip dispersion, which the FDTD has); the 0.70 mm line
+calibrates to 34.84 Ω (2D on M-eq: 34.82 Ω). The loss of each width comes from two lengths (10 and
+30 mm) through Re acosh(A) of the ABCD matrix, which no reference impedance biases:
+
+| Line                          | Solver α at 5 GHz | Coupon model α at 5 GHz | Δα over 4.25–5.75 GHz  | Ratio at 5 GHz |
+| ----------------------------- | ----------------- | ----------------------- | ---------------------- | -------------- |
+| 0.40 mm (port line, family M) | 0.117 dB/cm       | 0.131 dB/cm             | −0.002 to +0.031 dB/cm | 1.12           |
+| 0.70 mm (R1's arm; M1.4)      | 0.109 dB/cm       | 0.132 dB/cm             | +0.006 to +0.039 dB/cm | 1.21           |
+
+The solver is only 11–21 % low at 5 GHz (the design review expected more): its sheet is resistive
+at R_s(5 GHz) with the edge correction concentrating the current, and its substrate's tan δ
+falls as 1/f around f_ref (more dielectric loss below 5 GHz, less above, hence Δα near zero at
+4.25 GHz). The coupon model's α includes the ground plane, Rq 1.0 µm roughness and the
+Djordjevic-Sarkar loss.
+
+**R1 on M-eq** (2.31 M cells, 323 s for the three excitations at 16 threads): \|S11\| ≤ −21.3 dB
+over the band, minimum −31.3 dB at 5.05 GHz, −20 dB from 4.125 to 6.0 GHz, −15 dB from 3.28 to
+6.9 GHz; \|S21\| = \|S31\| −3.239 dB worst (4.25 GHz), −3.209 dB at 5 GHz. Corrected along its path
+(9.2 mm of arm, 6.0 mm of output line) by Δα: −0.004 to −0.054 dB, **worst corrected \|S21\|
+−3.285 dB**; the path-free check (the dissipated fraction scaled by the port line's ratio) gives
+−3.283 dB.
+
+**D-O0-11:** the corrected R1 clears −3.4 dB by 0.115 dB (≥ 0.1 dB), so **the \|S21\|, \|S31\|
+criterion stays −3.4 dB** for D1 and R1 (D2 and R1t take the same). The margin over the rule's
+threshold is 0.015 dB: a rougher foil than the Rq 1.0 µm prior, or ENIG, would have tipped it to
+−3.5 dB, which is noted for review. The optimizer works on the raw solver, so its requirement is
+−3.4 + 0.05 = **−3.35 dB** (R1's largest correction, 0.054 dB, rounded), and the validation
+criteria are \|S21\|, \|S31\| ≥ −3.40 dB (coarse) and ≥ −3.55 dB (fine, finer).
 
 ## Reproducing
 
 ```sh
 python -m yapnr.rf.coupons.equivalent                      # FEA environment: the 2D solves
-python -m yapnr.rf.order0 write --out docs/rf/order0/inputs --s21 S21 --offset OFFSET
+python -m yapnr.rf.order0 write --out docs/rf/order0/inputs --s21 -3.4 --offset 0.05
 python3 tools/exp/rf_stage_plan.py docs/rf/order0/inputs/run0b.toml --repo . \
     --image-commit IMAGE_COMMIT --out CAMPAIGN_DIR
 yapnr exp plan CAMPAIGN_DIR/campaign.toml --backend gcp-batch     # then submit, status, fetch --full
-python -m yapnr.rf.order0 loss --fetched FETCHED/out
+python -m yapnr.rf.order0 loss --fetched FETCHED --out-dir docs/rf/order0/predictions/run0b
 ```

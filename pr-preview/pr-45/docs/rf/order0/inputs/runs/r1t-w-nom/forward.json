@@ -1,7 +1,7 @@
 {
  "schema": "yapnr-rf-forward/1",
  "spec": "r1t-osh-w-w-nom",
- "spec_sha256": "782da88b5c0acffe131a9a7c1dbe83e28f3e2b4abebaa1c3f1c29b1eb425c14b",
+ "spec_sha256": "1b39f7667ebf57d47b12464abbcca90e938fef1b750bc38b06a7eb75a527d4ee",
  "copper_mm": [
   [
    0.0,

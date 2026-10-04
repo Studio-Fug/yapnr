@@ -92,10 +92,10 @@ with 0.2 mm mask dams at the connector pads; one coupon (A10) keeps the mask on.
 
 ### The demos and their references
 
-| Demo      | Specification                                                                                               | Window                                | Reference                                             |
-| --------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------- | ----------------------------------------------------- |
-| D1 (O0-D) | 4.25-5.75 GHz: \|S11\| ≤ −20 dB, \|S21\|, \|S31\| ≥ −3.4 dB (to be confirmed after the solver's loss check) | region M, 12 × 15 mm, ports W / N / S | R1: arm 0.70 × 9.0 mm (9.2 mm to the junction centre) |
-| D2 (O0-W) | the same                                                                                                    | region W, 20 × 24 mm, ports W / N / S | R1t: arm 5.0 × 9.25 mm (10.75 mm to the centre)       |
+| Demo      | Specification                                                                     | Window                                | Reference                                             |
+| --------- | --------------------------------------------------------------------------------- | ------------------------------------- | ----------------------------------------------------- |
+| D1 (O0-D) | 4.25-5.75 GHz: \|S11\| ≤ −20 dB, \|S21\|, \|S31\| ≥ −3.4 dB (confirmed by run 0b) | region M, 12 × 15 mm, ports W / N / S | R1: arm 0.70 × 9.0 mm (9.2 mm to the junction centre) |
+| D2 (O0-W) | the same                                                                          | region W, 20 × 24 mm, ports W / N / S | R1t: arm 5.0 × 9.25 mm (10.75 mm to the centre)       |
 
 Each demo port has exactly the coupons' launch (10 mm from the milled edge to its reference plane)
 and a straight feed (3 mm on M, 4 mm on W) to the window, so the comparison plane is the

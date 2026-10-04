@@ -456,8 +456,11 @@ against the baseline, aimed at the main risk that D1 does not pass (Order 0 desi
 <p><strong>Selection rule (fixed before any run).</strong> Among the formulations whose exported design passes
 every validation criterion on all three grids (coarse; fine and finer), ship the one with the
 largest worst-case margin over the fine and finer grids, the margin of a check being (limit −
-worst) in dB for |S11| and (worst − limit) for |S21| and |S31|; on a tie (0.05 dB) the
-earlier one in the order base, robust, star, sched. Every attempt and its validation is published.</p>
+worst) in dB for |S11| and (worst − limit) for |S21| and |S31|; on a tie (within 0.05 dB)
+the one whose export changed the fewest pixels in the width and space repair (<code class="docutils literal notranslate"><span class="pre">repaired_pixels</span></code> in
+<code class="docutils literal notranslate"><span class="pre">validation.json</span></code>), then the earlier one in the order base, robust, star, sched. Every attempt and
+its validation is published. (The repair tie-break was added on 2026-10-04 at 09:48 UTC, after the
+compute campaigns were submitted at 09:46 and before any of their tasks had finished.)</p>
 </section>
 <section id="criteria">
 <h2>Criteria<a class="headerlink" href="#criteria" title="Link to this heading">¶</a></h2>
@@ -471,16 +474,70 @@ moved with it: |S11| ≤ −17 dB (coarse) and ≤ −15 dB (fine, finer); |S21|
 </section>
 <section id="run-0b-the-loss-correction-and-the-s21-criterion">
 <h2>Run 0b: the loss correction and the S21 criterion<a class="headerlink" href="#run-0b-the-loss-correction-and-the-s21-criterion" title="Link to this heading">¶</a></h2>
-<p>RUN0B_RESULTS</p>
+<p>Run 0b (Order 0 design §10.1, D-O0-11) ran on 2026-10-04 on GCP Batch (campaign
+<code class="docutils literal notranslate"><span class="pre">20261004-mceval-bc9089</span></code>, Spot <code class="docutils literal notranslate"><span class="pre">c4-highcpu-16</span></code> in northamerica-northeast1, one machine family for
+every arm; image <code class="docutils literal notranslate"><span class="pre">ghcr.io/studio-fug/yapnr&#64;sha256:f41a4760…</span></code> = main 688fac3; native float64,
+<code class="docutils literal notranslate"><span class="pre">YAPNR_RF_REQUIRE_NATIVE=1</span></code>, the library loaded from the image’s wheel, x86-64 AVX-512). Inputs:
+<a class="reference internal" href="#inputs/runs/"><span class="xref myst">inputs/runs/</span></a> (R1 on M-eq and four straight lines on the same 0.05 mm grid, 6
+substrate cells); outputs: <a class="reference internal" href="#predictions/run0b/"><span class="xref myst">predictions/run0b/</span></a> (<code class="docutils literal notranslate"><span class="pre">run0b.json</span></code>, the Touchstone
+files as simulated, R1’s loss-corrected one). Everything is <em>derived</em>.</p>
+<p><strong>The solver’s lines.</strong> The FDTD’s 0.40 mm port line on M-eq calibrates to <strong>Zc 50.788 Ω</strong>, the 2D
+target to 0.001 Ω, and its εeff (from the two lines’ phase) is 2.7147 at 5 GHz against the
+quasi-static 2.7115 (+0.12 %, microstrip dispersion, which the FDTD has); the 0.70 mm line
+calibrates to 34.84 Ω (2D on M-eq: 34.82 Ω). The loss of each width comes from two lengths (10 and
+30 mm) through Re acosh(A) of the ABCD matrix, which no reference impedance biases:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Line</p></th>
+<th class="head"><p>Solver α at 5 GHz</p></th>
+<th class="head"><p>Coupon model α at 5 GHz</p></th>
+<th class="head"><p>Δα over 4.25–5.75 GHz</p></th>
+<th class="head"><p>Ratio at 5 GHz</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>0.40 mm (port line, family M)</p></td>
+<td><p>0.117 dB/cm</p></td>
+<td><p>0.131 dB/cm</p></td>
+<td><p>−0.002 to +0.031 dB/cm</p></td>
+<td><p>1.12</p></td>
+</tr>
+<tr class="row-odd"><td><p>0.70 mm (R1’s arm; M1.4)</p></td>
+<td><p>0.109 dB/cm</p></td>
+<td><p>0.132 dB/cm</p></td>
+<td><p>+0.006 to +0.039 dB/cm</p></td>
+<td><p>1.21</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The solver is only 11–21 % low at 5 GHz (the design review expected more): its sheet is resistive
+at R_s(5 GHz) with the edge correction concentrating the current, and its substrate’s tan δ
+falls as 1/f around f_ref (more dielectric loss below 5 GHz, less above, hence Δα near zero at
+4.25 GHz). The coupon model’s α includes the ground plane, Rq 1.0 µm roughness and the
+Djordjevic-Sarkar loss.</p>
+<p><strong>R1 on M-eq</strong> (2.31 M cells, 323 s for the three excitations at 16 threads): |S11| ≤ −21.3 dB
+over the band, minimum −31.3 dB at 5.05 GHz, −20 dB from 4.125 to 6.0 GHz, −15 dB from 3.28 to
+6.9 GHz; |S21| = |S31| −3.239 dB worst (4.25 GHz), −3.209 dB at 5 GHz. Corrected along its path
+(9.2 mm of arm, 6.0 mm of output line) by Δα: −0.004 to −0.054 dB, <strong>worst corrected |S21|
+−3.285 dB</strong>; the path-free check (the dissipated fraction scaled by the port line’s ratio) gives
+−3.283 dB.</p>
+<p><strong>D-O0-11:</strong> the corrected R1 clears −3.4 dB by 0.115 dB (≥ 0.1 dB), so <strong>the |S21|, |S31|
+criterion stays −3.4 dB</strong> for D1 and R1 (D2 and R1t take the same). The margin over the rule’s
+threshold is 0.015 dB: a rougher foil than the Rq 1.0 µm prior, or ENIG, would have tipped it to
+−3.5 dB, which is noted for review. The optimizer works on the raw solver, so its requirement is
+−3.4 + 0.05 = <strong>−3.35 dB</strong> (R1’s largest correction, 0.054 dB, rounded), and the validation
+criteria are |S21|, |S31| ≥ −3.40 dB (coarse) and ≥ −3.55 dB (fine, finer).</p>
 </section>
 <section id="reproducing">
 <h2>Reproducing<a class="headerlink" href="#reproducing" title="Link to this heading">¶</a></h2>
 <div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.coupons.equivalent<span class="w">                      </span><span class="c1"># FEA environment: the 2D solves</span>
-python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.order0<span class="w"> </span>write<span class="w"> </span>--out<span class="w"> </span>docs/rf/order0/inputs<span class="w"> </span>--s21<span class="w"> </span>S21<span class="w"> </span>--offset<span class="w"> </span>OFFSET
+python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.order0<span class="w"> </span>write<span class="w"> </span>--out<span class="w"> </span>docs/rf/order0/inputs<span class="w"> </span>--s21<span class="w"> </span>-3.4<span class="w"> </span>--offset<span class="w"> </span><span class="m">0</span>.05
 python3<span class="w"> </span>tools/exp/rf_stage_plan.py<span class="w"> </span>docs/rf/order0/inputs/run0b.toml<span class="w"> </span>--repo<span class="w"> </span>.<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--image-commit<span class="w"> </span>IMAGE_COMMIT<span class="w"> </span>--out<span class="w"> </span>CAMPAIGN_DIR
 yapnr<span class="w"> </span>exp<span class="w"> </span>plan<span class="w"> </span>CAMPAIGN_DIR/campaign.toml<span class="w"> </span>--backend<span class="w"> </span>gcp-batch<span class="w">     </span><span class="c1"># then submit, status, fetch --full</span>
-python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.order0<span class="w"> </span>loss<span class="w"> </span>--fetched<span class="w"> </span>FETCHED/out
+python<span class="w"> </span>-m<span class="w"> </span>yapnr.rf.order0<span class="w"> </span>loss<span class="w"> </span>--fetched<span class="w"> </span>FETCHED<span class="w"> </span>--out-dir<span class="w"> </span>docs/rf/order0/predictions/run0b
 </pre></div>
 </div>
 </section>

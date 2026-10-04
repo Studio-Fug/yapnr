@@ -328,6 +328,246 @@ class GcpBatchTest(unittest.TestCase):
         self.assertEqual(len(listings), 2, cloud.calls)
         self.assertFalse(any(c[1:4] == ["storage", "buckets", "describe"] for c in cloud.calls))
 
+    # Quota-aware placement at submit: the first ranked pair whose region has Spot quota for one
+    # more VM, with the quota and the templates answered by the fake gcloud.
+
+    def ranked_plan(self, **kw):
+        self.config.gcp.ranking = list(testing.RANKING)
+        text = testing.SMOKE_CAMPAIGN.replace("[config]", testing.RANKED_FAMILIES + "\n[config]")
+        return self.plan(text, **kw)
+
+    def two_regions(self, west, northeast, templates=None):
+        cloud = FakeCloud()
+        cloud.quotas = {"us-west4": west, "northamerica-northeast1": northeast}
+        cloud.templates = dict(testing.TEMPLATES if templates is None else templates)
+        return cloud
+
+    def submit(self, plan, cloud, **kw):
+        said = []
+        done = gcp_batch.GcpBatch().submit(plan, self.config, cloud=cloud, say=said.append, **kw)
+        return done, said
+
+    @staticmethod
+    def calls(cloud, *prefix):
+        return [c[1:] for c in cloud.calls if c[1 : 1 + len(prefix)] == list(prefix)]
+
+    def test_a_class_goes_to_the_first_ranked_region_with_room(self):
+        plan = self.ranked_plan()
+        cloud = self.two_regions(west=(64, 48), northeast=(64, 0))
+        done, said = self.submit(plan, cloud)
+        record = done[0].record
+        self.assertEqual(record["job"]["region"], "us-west4")
+        choice = record["placement"]["choice"]
+        self.assertEqual((choice["pair"], choice["rank"]), ("c4d/us-west4", 1))
+        self.assertIn("16 of 64 Spot vCPUs free", choice["why"])
+        self.assertEqual(choice["looked_at"][0]["free"], 16)
+        # The first region had room, so the second was not asked.
+        self.assertEqual(
+            [c[3] for c in self.calls(cloud, "compute", "regions", "describe")], ["us-west4"]
+        )
+        self.assertTrue(any("c4d-highcpu-16 in us-west4 (candidate 1)" in s for s in said), said)
+
+    def test_a_full_region_spills_to_the_next_ranked_pair(self):
+        plan = self.ranked_plan()
+        cloud = self.two_regions(west=(64, 56), northeast=(64, 0))
+        done, _ = self.submit(plan, cloud)
+        record = done[0].record
+        self.assertEqual(record["job"]["region"], "northamerica-northeast1")
+        self.assertEqual(record["placement"]["region"], "northamerica-northeast1")
+        self.assertEqual(record["placement"]["shape"], "c4-highcpu-16")
+        choice = record["placement"]["choice"]
+        self.assertEqual((choice["pair"], choice["rank"]), ("c4/northamerica-northeast1", 2))
+        self.assertTrue(choice["looked_at"][0]["full"])
+        self.assertEqual(choice["looked_at"][0]["free"], 8)  # less than one 16-vCPU VM
+        submit = self.calls(cloud, "batch", "jobs", "submit")[0]
+        self.assertIn("--location=northamerica-northeast1", submit)
+        job = json.loads(Path(plan.dir / "submissions" / "1" / "c1m1.job.json").read_text())
+        self.assertEqual(
+            job["allocationPolicy"]["instances"][0],
+            {"instanceTemplate": "yapnr-c4-highcpu-16-spot-northamerica-northeast1"},
+        )
+        self.assertEqual(
+            job["allocationPolicy"]["location"]["allowedLocations"],
+            ["regions/northamerica-northeast1"],
+        )
+        image = job["taskGroups"][0]["taskSpec"]["runnables"][0]["container"]["imageUri"]
+        self.assertTrue(image.startswith("northamerica-northeast1-docker.pkg.dev/"), image)
+        self.assertEqual(batch_schema.validate(job, batch_schema.load()), [])
+
+    def test_when_no_region_has_room_the_class_waits_in_the_first(self):
+        plan = self.ranked_plan()
+        cloud = self.two_regions(west=(64, 64), northeast=(64, 60))
+        done, _ = self.submit(plan, cloud)
+        choice = done[0].record["placement"]["choice"]
+        self.assertEqual((choice["pair"], choice["rank"]), ("c4d/us-west4", 1))
+        self.assertIn("waits in us-west4", choice["why"])
+        self.assertEqual(len(choice["looked_at"]), 3)
+        self.assertEqual(done[0].record["job"]["region"], "us-west4")
+
+    def test_a_pair_without_its_template_is_skipped(self):
+        plan = self.ranked_plan()
+        templates = dict(testing.TEMPLATES)
+        del templates["yapnr-c4d-highcpu-16-spot-us-west4"]
+        cloud = self.two_regions(west=(64, 0), northeast=(64, 0), templates=templates)
+        done, _ = self.submit(plan, cloud)
+        choice = done[0].record["placement"]["choice"]
+        self.assertEqual(choice["pair"], "c4/northamerica-northeast1")
+        self.assertIn("no instance template", choice["looked_at"][0]["skipped"])
+        # Not one candidate with a template: refused before anything is uploaded.
+        plan = self.ranked_plan(out=self.tmp / "none")
+        cloud = self.two_regions(west=(64, 0), northeast=(64, 0), templates={})
+        with self.assertRaises(base.SubmitError) as ctx:
+            self.submit(plan, cloud)
+        self.assertIn("region_template_shapes", str(ctx.exception))
+        self.assertEqual(self.calls(cloud, "batch", "jobs", "submit"), [])
+        self.assertEqual(self.calls(cloud, "storage", "cp"), [])
+
+    def test_an_unreadable_quota_is_not_room(self):
+        plan = self.ranked_plan()
+        cloud = self.two_regions(west=(64, 0), northeast=(64, 0))
+        del cloud.quotas["us-west4"]  # the fake answers without quotas
+        done, _ = self.submit(plan, cloud)
+        choice = done[0].record["placement"]["choice"]
+        self.assertEqual(choice["pair"], "c4/northamerica-northeast1")
+        self.assertIn("unknown", choice["looked_at"][0]["quota"])
+        # Nothing readable anywhere: the first candidate, as before quotas were read.
+        plan = self.ranked_plan(out=self.tmp / "blind")
+        cloud = self.two_regions(west=(64, 0), northeast=(64, 0))
+        cloud.quotas = {}
+        done, _ = self.submit(plan, cloud)
+        choice = done[0].record["placement"]["choice"]
+        self.assertEqual(choice["pair"], "c4d/us-west4")
+        # It says the quota was not read, not that the regions are full (a dry run reads none).
+        self.assertIn("could not be read in any candidate region", choice["why"])
+        self.assertNotIn("waits", choice["why"])
+        # One region full, the other unreadable: full, and which one was not read.
+        plan = self.ranked_plan(out=self.tmp / "half")
+        cloud = self.two_regions(west=(64, 64), northeast=(64, 0))
+        del cloud.quotas["northamerica-northeast1"]
+        done, _ = self.submit(plan, cloud)
+        choice = done[0].record["placement"]["choice"]
+        self.assertEqual(choice["pair"], "c4d/us-west4")
+        self.assertIn("(unreadable: c4/northamerica-northeast1); waits in us-west4", choice["why"])
+
+    def test_submit_region_pins_the_region(self):
+        plan = self.ranked_plan()
+        cloud = self.two_regions(west=(64, 0), northeast=(64, 64))
+        done, _ = self.submit(plan, cloud, region="northamerica-northeast1")
+        choice = done[0].record["placement"]["choice"]
+        self.assertEqual(choice["pair"], "c4/northamerica-northeast1")
+        self.assertEqual(choice["why"], "pinned to northamerica-northeast1")
+        self.assertEqual(choice["region_pin"], "northamerica-northeast1")
+        self.assertEqual(self.calls(cloud, "compute", "regions", "describe"), [])
+        # A region the config does not enable, or one the plan has no candidate in.
+        with self.assertRaises(base.SubmitError):
+            self.submit(self.ranked_plan(out=self.tmp / "eu"), cloud, region="europe-west4")
+        pinned = self.ranked_plan(out=self.tmp / "ne", region="northamerica-northeast1")
+        with self.assertRaises(base.SubmitError) as ctx:
+            self.submit(pinned, cloud, region="us-west4")
+        self.assertIn("no candidate in us-west4", str(ctx.exception))
+
+    def test_classes_of_one_submit_count_against_the_region(self):
+        # Two classes: the first takes two 16-vCPU VMs of us-west4's last 32 free vCPUs, so the
+        # second goes to the next region instead of queueing behind it.
+        lines = [
+            {
+                "id": "a%d" % i,
+                "command": ["${PYTHON}", "-c", "pass"],
+                "record": "out/a%d.json" % i,
+                "resources": {"cpus": 1, "memory_gb": 1, "disk_gb": 1, "max_wall_s": 600},
+            }
+            for i in range(16)
+        ]
+        lines.append(
+            {
+                "id": "b0",
+                "command": ["${PYTHON}", "-c", "pass"],
+                "record": "out/b0.json",
+                "resources": {"cpus": 4, "memory_gb": 4, "max_wall_s": 600},
+            }
+        )
+        (self.tmp / "stage.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines))
+        campaign = (
+            'schema = "yapnr-campaign-v1"\nkind = "mc-eval"\nname = "two"\nsource = "none"\n'
+            'image = "edge"\ndeterminism = "seeded"\n\n%s\n[config]\nstage_plan = "stage.jsonl"\n'
+            % testing.RANKED_FAMILIES
+        )
+        self.config.gcp.ranking = list(testing.RANKING)
+        plan = self.plan(campaign)
+        self.assertEqual([len(c.lines) for c in plan.classes], [16, 1])
+        self.assertEqual(plan.placement(plan.classes[0].name).tasks_per_vm, 8)
+        cloud = self.two_regions(west=(64, 32), northeast=(64, 0))
+        done, _ = self.submit(plan, cloud)
+        first, second = (d.record["placement"]["choice"] for d in done)
+        self.assertEqual(first["pair"], "c4d/us-west4")
+        self.assertEqual(second["pair"], "c4/northamerica-northeast1")
+        self.assertEqual(second["looked_at"][0]["claimed"], 32)
+        self.assertEqual(second["looked_at"][0]["free"], 0)
+        # The estimate the caps checked priced each class where it went.
+        regions = [d.record["job"]["region"] for d in done]
+        self.assertEqual(regions, ["us-west4", "northamerica-northeast1"])
+
+    def test_a_wall_clock_budgeted_campaign_keeps_its_machine_type(self):
+        # The ladder runs on one machine type: the first submission chooses it by quota (C4 in
+        # Montreal here), and a later submission keeps it although us-west4 has room again.
+        self.config.gcp.ranking = list(testing.RANKING)
+        plan = self.plan(testing.LADDER_CAMPAIGN + "\n" + testing.RANKED_FAMILIES)
+        self.assertEqual(len(plan.candidates("c1m3")), 3)
+        cloud = self.two_regions(west=(64, 64), northeast=(64, 0))
+        backend = gcp_batch.GcpBatch()
+        first = backend.submit(plan, self.config, cloud=cloud, say=lambda s: None)
+        self.assertEqual(first[0].record["placement"]["shape"], "c4-highcpu-16")
+        cloud.jobs[first[0].record["job"]["name"]]["status"]["state"] = "FAILED"
+        cloud.quotas["us-west4"] = (64, 0)
+        cloud.quotas["northamerica-northeast1"] = (64, 64)
+        again = backend.submit(
+            planning.Plan(plan.dir), self.config, cloud=cloud, say=lambda s: None
+        )
+        record = again[0].record
+        self.assertEqual(record["placement"]["shape"], "c4-highcpu-16")
+        # C4 in us-west4 (rank 3) has room, but no template there: it waits in Montreal.
+        self.assertEqual(record["placement"]["choice"]["pair"], "c4/northamerica-northeast1")
+        self.assertIn("waits", record["placement"]["choice"]["why"])
+        cloud.templates["yapnr-c4-highcpu-16-spot-us-west4"] = "c4-highcpu-16"
+        cloud.jobs[record["job"]["name"]]["status"]["state"] = "FAILED"
+        third = backend.submit(
+            planning.Plan(plan.dir), self.config, cloud=cloud, say=lambda s: None
+        )
+        self.assertEqual(third[0].record["placement"]["choice"]["pair"], "c4/us-west4")
+        # Pinned to us-west4, the C4D pair there is not the campaign's machine type.
+        cloud.jobs[third[0].record["job"]["name"]]["status"]["state"] = "FAILED"
+        fourth = backend.submit(
+            planning.Plan(plan.dir), self.config, cloud=cloud, say=lambda s: None, region="us-west4"
+        )
+        choice = fourth[0].record["placement"]["choice"]
+        self.assertEqual((choice["pair"], choice["why"]), ("c4/us-west4", "pinned to us-west4"))
+
+    def test_a_class_with_one_candidate_reads_no_quota(self):
+        plan = self.plan(testing.SMOKE_CAMPAIGN)
+        cloud = FakeCloud()
+        done, _ = self.submit(plan, cloud)
+        self.assertEqual(done[0].record["placement"]["choice"]["why"], "the only candidate")
+        self.assertEqual(self.calls(cloud, "compute"), [])
+
+    def test_doctor_checks_the_templates_of_every_ranked_pair(self):
+        self.config.gcp.ranking = list(testing.RANKING)
+        cloud = self.two_regions(west=(64, 16), northeast=(64, 0))
+        checks = {c["check"]: c for c in gcp_batch.doctor(self.config, cloud)}
+        west = checks["templates for ranked c4d/us-west4"]
+        self.assertTrue(west["ok"])
+        self.assertEqual(west["detail"], "c4d-highcpu-16, c4d-highcpu-8, c4d-standard-16")
+        northeast = checks["templates for ranked c4/northamerica-northeast1"]
+        self.assertEqual(
+            (northeast["ok"], northeast["detail"]), (True, "c4-highcpu-16, c4-highcpu-8")
+        )
+        # The ranked C4 pair in us-west4 has no template there: a finding, with what to do.
+        self.assertFalse(checks["templates for ranked c4/us-west4"]["ok"])
+        self.assertIn(
+            "region_template_shapes", checks["templates for ranked c4/us-west4"]["detail"]
+        )
+        self.assertEqual(checks["quota in us-west4"]["detail"], "preemptible CPUs: 16 of 64 in use")
+        self.assertTrue(checks["quota in northamerica-northeast1"]["ok"])
+
     def test_unknown_region_in_the_table_is_priced_conservatively(self):
         table = cost.PriceTable.load()
         vcpu, _, source = table.rate("c4d", "europe-west99")

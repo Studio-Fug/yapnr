@@ -179,6 +179,16 @@ class Placement:
         out["vm_hour_usd"] = round(self.vm_hour, 5)
         return out
 
+    @classmethod
+    def from_json(cls, data: Mapping[str, Any]) -> "Placement":
+        """A placement from ``to_json`` (keys it added, such as prices, are left out)."""
+        names = cls.__dataclass_fields__
+        return cls(**{k: v for k, v in data.items() if k in names})
+
+    @property
+    def pair(self) -> str:
+        return "%s/%s" % (self.family, self.region)
+
 
 def choose_shape(
     table: PriceTable,
@@ -233,7 +243,19 @@ def choose_shape(
     )
 
 
-def place(
+def ranked_pairs(
+    ranking: Sequence[Tuple[str, str]], families: Sequence[str], regions: Sequence[str]
+) -> List[Tuple[str, str]]:
+    """The owner's ranked (family, region) pairs that ``families`` and ``regions`` allow."""
+    return [(f, r) for f, r in ranking if f in families and r in regions]
+
+
+def place(table: PriceTable, calibration: Calibration, **kwargs) -> Placement:
+    """Where a resource class runs: the best of ``placements``."""
+    return placements(table, calibration, **kwargs)[0]
+
+
+def placements(
     table: PriceTable,
     calibration: Calibration,
     *,
@@ -250,22 +272,20 @@ def place(
     prefer: str = "cost",
     disk_gb: float = 0.0,
     disk_free_gb: Optional[float] = None,
-) -> Placement:
-    """Where a resource class runs: one (family, region, shape) among the allowed ones.
+) -> List[Placement]:
+    """Every usable (family, region, shape) among the allowed ones, best first.
 
-    - ``ranking`` (the owner's ranked pairs, from the calibration) wins when given: the first
-      usable pair, in order.
+    - ``ranking`` (the owner's ranked pairs, from the calibration) wins when given: the usable
+      pairs, in order (``submit`` takes the first whose region has Spot quota for one more VM).
     - ``prefer="first-family"``: the first family of ``families`` that has a usable shape, in its
       cheapest region (the fastest core first: wall-clock-budgeted campaigns, section 6.2).
     - ``prefer="cost"``: the cheapest pair per result (price / speed).
     """
     if prefer not in ("cost", "first-family"):
         raise CostError("prefer is 'cost' or 'first-family'")
-    pairs = [(f, r) for f, r in ranking if f in families and r in regions] or [
-        (f, r) for f in families for r in regions
-    ]
-    ranked = bool([p for p in ranking if p[0] in families and p[1] in regions])
-    best: Optional[Tuple[float, float, Placement]] = None
+    pairs = ranked_pairs(ranking, families, regions) or [(f, r) for f in families for r in regions]
+    ranked = bool(ranked_pairs(ranking, families, regions))
+    found: List[Tuple[Tuple[float, float], Placement]] = []
     errors = []
     for rank, (family, region) in enumerate(pairs):
         try:
@@ -309,16 +329,16 @@ def place(
         )
         per_result = (placement.vm_hour / per_vm) / speed
         if ranked:
-            key = (float(rank), 0)
+            key = (float(rank), 0.0)
         elif prefer == "first-family":
             key = (float(list(families).index(family)), round(per_result, 9))
         else:
-            key = (round(per_result, 9), 0)
-        if best is None or key < best[:2]:
-            best = (key[0], key[1], placement)
-    if best is None:
+            key = (round(per_result, 9), 0.0)
+        found.append((key, placement))
+    if not found:
         raise CostError("no usable placement: " + "; ".join(errors or ["no candidates"]))
-    return best[2]
+    # A stable sort: of two equal keys, the pair met first stays first.
+    return [placement for _, placement in sorted(found, key=lambda item: item[0])]
 
 
 def parallel_tasks(task_count: int, placement: Placement, max_parallel_vcpus: int) -> int:

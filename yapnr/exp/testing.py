@@ -31,6 +31,18 @@ DEADLINE = 1790000000
 UPDATE_ENV = "YAPNR_UPDATE_GOLDEN"
 CID = "20261002-smoke-000001"
 
+# The two-region setup: C4D in us-west4, C4 in northamerica-northeast1 (which has no C4D), and
+# the instance templates infra/gcp makes for it (region_template_shapes).
+RANKING = [("c4d", "us-west4"), ("c4", "northamerica-northeast1"), ("c4", "us-west4")]
+RANKED_FAMILIES = '[placement]\nfamilies = ["c4d", "c4"]\n'
+TEMPLATES = {
+    "yapnr-c4d-highcpu-16-spot-us-west4": "c4d-highcpu-16",
+    "yapnr-c4d-standard-16-spot-us-west4": "c4d-standard-16",
+    "yapnr-c4d-highcpu-8-spot-us-west4": "c4d-highcpu-8",
+    "yapnr-c4-highcpu-16-spot-northamerica-northeast1": "c4-highcpu-16",
+    "yapnr-c4-highcpu-8-spot-northamerica-northeast1": "c4-highcpu-8",
+}
+
 GCP_TOML = """
 [gcp]
 project = "example-project"

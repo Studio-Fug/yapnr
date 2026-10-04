@@ -54,6 +54,12 @@
       "y": 11.0
     },
     {
+      "id": "CP-Z",
+      "kind": "0201 50 ohm dummy load on the run-in, 1-port (also the probe load standard)",
+      "line_mm": 1.35,
+      "load": "50R 0201 thin film"
+    },
+    {
       "id": "CP60-RING",
       "kind": "gap-coupled ring, 3 \u03bbg at 62.05 GHz",
       "radius_mm": 1.4027,
@@ -93,20 +99,37 @@
       "width_mm": 0.15
     },
     {
-      "id": "CP-T-TX1",
-      "kind": "TX1 feed replica P0->P1",
-      "length_mm": 13.7118
-    },
-    {
-      "id": "CP-A-CORP",
-      "kind": "corporate 2-patch column (RFS-4)",
-      "phase_centre": [9.5, 17.45]
-    },
-    {
       "id": "CP-A-SER",
       "kind": "series-fed 2-patch column (RFS-4S, D5 fallback)",
       "link_mm": 1.5391,
       "centre_spacing_mm": 2.6897
+    },
+    {
+      "id": "CP-T",
+      "kind": "TX1 feed replica P0 -> Pg -> run-in -> entry -> P1, GSG both ends",
+      "p0_to_p1_mm": 18.5735,
+      "p0_to_pg_mm": 16.6735,
+      "p0": [1.6, 16.2],
+      "p1": [7.947, 21.4]
+    },
+    {
+      "id": "CP-T3",
+      "kind": "TX3 feed replica P0 -> Pg -> run-in -> entry -> P1, GSG both ends",
+      "p0_to_p1_mm": 18.5735,
+      "p0_to_pg_mm": 16.6735,
+      "p0": [1.6, 13.6],
+      "p1": [12.631, 21.4]
+    },
+    {
+      "id": "CP-A",
+      "kind": "column cell from Pg between two terminated dummy columns (centre fed)",
+      "pg": [20.042, 15.0],
+      "cutout": [14.804, 15.9, 23.384, 22.236]
+    },
+    {
+      "id": "CP-A-CORP",
+      "kind": "corporate 2-patch column alone (RFS-4)",
+      "phase_centre": [26.0, 17.65]
     },
     {
       "id": "CP-A-PATCH-M25",

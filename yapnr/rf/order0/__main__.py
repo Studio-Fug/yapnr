@@ -1,4 +1,5 @@
-"""python -m yapnr.rf.order0 write --out DIR | loss --fetched DIR (see `yapnr.rf.order0.write`)."""
+"""python -m yapnr.rf.order0 write --out DIR | predict --out DIR | loss --fetched DIR | variant ...
+(see `yapnr.rf.order0.write`)."""
 
 from __future__ import annotations
 
@@ -22,6 +23,9 @@ def main(argv=None) -> int:
     )
     lo.add_argument("--out", help="write the result here (JSON)")
     lo.add_argument("--out-dir", help="also write run0b.json and the Touchstone files here")
+    pr = sub.add_parser("predict", help="the predictions stage: resonators and loss lines")
+    pr.add_argument("--out", required=True)
+    pr.add_argument("--image", default="edge", help="the image (pin the designs' digest)")
     v = sub.add_parser("variant", help="an optimized run's footprint as a forward run")
     v.add_argument("--run", required=True, help="the (fetched) run directory")
     v.add_argument("--out", required=True)
@@ -32,6 +36,10 @@ def main(argv=None) -> int:
         from yapnr.rf.order0 import demos
 
         print(demos.forward_variant(args.run, args.out, args.substrate, not args.no_wide))
+        return 0
+    if args.command == "predict":
+        manifest = write.predict(args.out, image=args.image)
+        print(json.dumps(sorted(manifest["runs"])))
         return 0
     if args.command == "write":
         manifest = write.write(args.out, args.s21, args.offset)

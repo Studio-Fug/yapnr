@@ -71,9 +71,9 @@ def _toml(value) -> str:
     raise TypeError(value)
 
 
-def jobs_toml(name: str, comment: str, shape: str, jobs: List[dict]) -> str:
+def jobs_toml(name: str, comment: str, shape: str, jobs: List[dict], image: str = "edge") -> str:
     lines = [f"# {line}" for line in comment.splitlines()]
-    lines += [f"name = {_toml(name)}", 'image = "edge"', "", "[defaults]"]
+    lines += [f"name = {_toml(name)}", f"image = {_toml(image)}", "", "[defaults]"]
     lines += [f"{k} = {_toml(v)}" for k, v in TASK.items()]
     lines += ["require_native = true", "", "[placement]", f"shape = {_toml(shape)}"]
     for job in jobs:
@@ -196,6 +196,99 @@ def write(out: str, s21: float = -3.4, offset: float = 0.10, data: Optional[dict
                     "for the comparison. Written by python -m yapnr.rf.order0 write.",
                     SHAPES[region],
                     jobs,
+                )
+            )
+    _dump(os.path.join(out, "manifest.json"), manifest)
+    return manifest
+
+
+# The predictions stage: the held-out resonators in our FDTD (A11 and A12 on FR408HR's and
+# EM528's thickness-equivalent substrates) and the loss lines on the substrates run 0b did not
+# cover, so every demo and reference prediction is loss-corrected with its own substrate's Δα.
+PREDICT_RESONATOR_SUBS = ("M-eq", "M-eq-em528")
+PREDICT_LINE_SUBS = {"M": ("M-nom", "M-eq-em528"), "W": ("W-nom", "W-eq-em528")}
+RING_DENSE = 1101  # 1.0-6.5 GHz in 5 MHz steps
+STUB_DENSE = 801  # 3.0-7.0 GHz in 5 MHz steps
+RESONATOR_WALL_S = {"ring": 7200, "stub": 3600}  # about 1 h and 10 min expected (16 threads)
+LINE_WALL_S = 1800  # run 0b's lines took 3-8 min, two to a VM
+
+
+def line_id(region: str, w: float, length: float, sub: Optional[str] = None) -> str:
+    lid = f"line-{region.lower()}-w{int(round(w * 100)):03d}-l{length:g}"
+    return lid if sub in (None, f"{region}-eq") else f"{lid}-{sub.lower()}"
+
+
+def predict(out: str, image: str = "edge", data: Optional[dict] = None) -> dict:
+    """Write the predictions stage's inputs under `out`: runs/ (forward-run directories),
+    criteria/, predict-m.toml (region M: the ring, the stub and M's lines; C4, as D1's track) and
+    predict-w.toml (W's lines; C4D, as D2's track), and manifest.json."""
+    data = data or demos.eq_data()
+    manifest: Dict[str, object] = {"schema": "yapnr-order0-predict/1", "runs": {}}
+    crit = {
+        "ring": demos.coupon_criteria(demos.RING_BAND, RING_DENSE),
+        "stub": demos.coupon_criteria(demos.STUB_BAND, STUB_DENSE),
+        "line": demos.line_criteria(),
+    }
+    for k, v in crit.items():
+        _dump(os.path.join(out, "criteria", f"{k}.json"), v)
+    jobs: Dict[str, List[dict]] = {"M": [], "W": []}
+    for sub in PREDICT_RESONATOR_SUBS:
+        for kind, fn in (("ring", demos.ring_spec), ("stub", demos.stub_spec)):
+            spec, mask, geo = fn(sub, data)
+            rid = ("a11-ring-" if kind == "ring" else "a12-stub-") + sub.lower()
+            meta = dict(what=f"{geo['stick']} ({kind}) on {sub}, our FDTD", substrate=sub)
+            meta.update(geo)
+            demos.forward_dir(spec, mask, os.path.join(out, "runs", rid), meta)
+            manifest["runs"][rid] = dict(spec=spec.name, sha256=spec.sha256())
+            jobs["M"].append(
+                dict(
+                    id=rid,
+                    case="divider",
+                    validate=f"runs/{rid}",
+                    criteria=f"criteria/{kind}.json",
+                    args=["--no-fine"],
+                    max_wall_s=RESONATOR_WALL_S[kind],
+                )
+            )
+    for region, lines in (("M", LINES), ("W", W_LINES)):
+        for sub in PREDICT_LINE_SUBS[region]:
+            for _, w, length in lines:
+                spec, rects = demos.line_spec(region, w, length, sub, data)
+                lid = line_id(region, w, length, sub)
+                demos.forward_dir(
+                    spec,
+                    rects,
+                    os.path.join(out, "runs", lid),
+                    dict(what=f"straight {w} mm line, {length:g} mm, loss line", substrate=sub),
+                )
+                manifest["runs"][lid] = dict(spec=spec.name, sha256=spec.sha256())
+                job = dict(
+                    id=lid,
+                    case="divider",
+                    validate=f"runs/{lid}",
+                    criteria="criteria/line.json",
+                    args=["--no-fine"],
+                )
+                job.update(SMALL if region == "M" else W_TASK)
+                job["max_wall_s"] = LINE_WALL_S
+                jobs[region].append(job)
+    for region, name in (("M", "predict-m"), ("W", "predict-w")):
+        with open(os.path.join(out, f"{name}.toml"), "w", encoding="utf-8") as fh:
+            fh.write(
+                jobs_toml(
+                    f"order0-{name}",
+                    "Order 0 predictions: "
+                    + (
+                        "the ring A11 and the stub A12 in our FDTD (M-eq, M-eq-em528) and the\n"
+                        "0.40 / 0.70 mm loss lines on M-nom and M-eq-em528"
+                        if region == "M"
+                        else "the 3.0 mm loss lines on W-nom and W-eq-em528"
+                    )
+                    + f". One family ({SHAPES[region]}),\nas the region's demo."
+                    " Written by python -m yapnr.rf.order0 predict.",
+                    SHAPES[region],
+                    jobs[region],
+                    image=image,
                 )
             )
     _dump(os.path.join(out, "manifest.json"), manifest)

@@ -330,31 +330,32 @@ def raster(spec: Spec, rects: Sequence[tuple]) -> np.ndarray:
     return m
 
 
-def forward_dir(spec: Spec, rects: Sequence[tuple], out: str, meta: Optional[dict] = None) -> str:
-    """A run directory holding `spec` and the footprint of the fixed copper `rects` (written by
-    the optimizer's exporter, so the validator re-simulates exactly this copper), plus
-    `forward.json` (what it is). No FDTD runs here: the problem is built with placeholder line
-    calibrations, which only the simulation would use."""
+def forward_dir(spec: Spec, rects, out: str, meta: Optional[dict] = None) -> str:
+    """A run directory holding `spec` and the footprint of the fixed copper `rects` (rectangles
+    on the grid, or the window's pixel mask itself), written by the optimizer's exporter so the
+    validator re-simulates exactly this copper, plus `forward.json` (what it is). No FDTD runs
+    here: the problem is built with placeholder line calibrations, which only the simulation
+    would use."""
     from yapnr.rf.driver import write_json
     from yapnr.rf.export.kicad import write_footprint
     from yapnr.rf.export.report import footprint_of
     from yapnr.rf.problem import Problem
 
     prob = Problem(spec, calibrations={"*": None})
-    mask = raster(spec, rects)
+    given_mask = isinstance(rects, np.ndarray)
+    mask = np.asarray(rects, dtype=np.float64) if given_mask else raster(spec, rects)
     if mask.shape != prob.design_shape:
         raise ValueError(f"raster {mask.shape} is not the window {prob.design_shape}")
     fp, _ = footprint_of(prob, mask, name=f"RF_{spec.name}")
     os.makedirs(out, exist_ok=True)
     write_json(os.path.join(out, "spec.json"), spec.to_dict())
     write_footprint(fp, os.path.join(out, "footprint.kicad_mod"))
-    info = dict(
-        schema="yapnr-rf-forward/1",
-        spec=spec.name,
-        spec_sha256=spec.sha256(),
-        copper_mm=[list(r) for r in rects],
-        pixels=int(mask.sum()),
+    info: Dict[str, object] = dict(
+        schema="yapnr-rf-forward/1", spec=spec.name, spec_sha256=spec.sha256()
     )
+    if not given_mask:
+        info["copper_mm"] = [list(r) for r in rects]
+    info["pixels"] = int(mask.sum())
     info.update(meta or {})
     write_json(os.path.join(out, "forward.json"), info)
     return out
@@ -397,6 +398,135 @@ def forward_variant(
         ),
     )
     return out
+
+
+# --- the held-out resonators in our FDTD (design §7 item 2: "ring, stubs ... forward only") -----
+
+# The ring A11 and the open stub A12 of O0-M, as the generator draws them (the FR408HR design,
+# tuned by `coupons.catalog.tune_o`), predicted by the optimizer's FDTD with R1's settings: the
+# references' grid (0.05 mm, 6 substrate cells), edge correction, the modal source, native
+# float64. The window runs from reference plane to reference plane, so the files compare with
+# the coupon model's (`coupons.expected`) and with the multiline-TRL-corrected measurement. Not
+# modelled here, as for every solver prediction: the L1 ground 1.0 mm from the copper (the
+# solver's L1 is open) and the copper's thickness (the thickness-equivalent substrate stands in).
+COUPON_PITCH = 0.05
+RING_BAND = (1.0, 6.5)  # A11's notches n = 1 and 3 (1.92 and 5.79 GHz) with their shoulders
+STUB_BAND = WIDE  # A12's notch at 5.5 GHz
+RING_MAX_STEPS = 600_000  # the ring rings longer than a divider: room before the hard cap
+
+
+def _tuned_stick(sid: str):
+    from yapnr.rf.coupons import fab
+
+    board = fab.tuned_board("OSHPARK-4L-FR408HR", "M")
+    return next(s for s in board.sticks if s.id == sid)
+
+
+def _centres(region: Tuple[float, float, float, float], pitch: float):
+    x0, x1, y0, y1 = region
+    ni, nj = int(round((x1 - x0) / pitch)), int(round((y1 - y0) / pitch))
+    xc = x0 + (np.arange(ni) + 0.5) * pitch
+    yc = y0 + (np.arange(nj) + 0.5) * pitch
+    return np.meshgrid(xc, yc, indexing="ij")
+
+
+def _two_port(name, sub, region, band, data, max_steps=None) -> Spec:
+    from yapnr.rf.coupons import catalog
+
+    w_line = catalog.O_REF_2D["M"]["w_out"]
+    cells = int(round(w_line / COUPON_PITCH))
+    solver = SolverSpec(threads=16, **ROUND2_SOLVER)
+    if max_steps:
+        solver = replace(solver, max_steps=int(max_steps))
+    return Spec(
+        name=f"{name}-{sub.lower()}",
+        stackup=stackup(sub, data),
+        grid=GridSpec(pitch_mm=COUPON_PITCH, substrate_cells=6),
+        design_region=region,
+        symmetry="none",
+        ports=(Port(1, "W", 0.0, cells), Port(2, "E", 0.0, cells)),
+        bands={"band": Band(band[0], band[1], 12)},
+        requirements=(
+            S(2, 1).at_most_db(0.0, band="band"),
+            S(1, 1).at_most_db(0.0, band="band"),
+        ),
+        solver=solver,
+    )
+
+
+def ring_spec(substrate: Optional[str] = None, data=None) -> Tuple[Spec, np.ndarray, dict]:
+    """A11: the directly fed ring (feeds a quarter turn apart) between its reference planes,
+    the port axis at y = 0 and the ring's centre south of it; (spec, pixel mask, geometry)."""
+    from yapnr.rf.coupons import catalog
+
+    s = _tuned_stick("A11")
+    g = s.geometry
+    r, arc, feed = float(g["radius"]), float(g["arc"]), float(g["feed"])
+    w = catalog.O_REF_2D["M"]["w_out"]
+    p = COUPON_PITCH
+    half_chord = r * math.sin(math.pi * arc)
+    length = round(round(2 * (feed + half_chord) / p) * p, 4)
+    cx, cy = length / 2, -r * math.cos(math.pi * arc)
+    y0 = math.floor((cy - r - w / 2 - 0.5) / p) * p
+    y1 = math.ceil((cy + r + w / 2 + 0.5) / p) * p
+    region = (0.0, length, round(y0, 4), round(y1, 4))
+    spec = _two_port("a11-ring-osh-m", substrate or "M-eq", region, RING_BAND, data, RING_MAX_STEPS)
+    xx, yy = _centres(region, p)
+    rho = np.hypot(xx - cx, yy - cy)
+    on_ring = np.abs(rho - r) <= w / 2
+    feeds = (np.abs(yy) <= w / 2) & ((xx <= cx - half_chord) | (xx >= cx + half_chord))
+    mask = (on_ring | feeds).astype(np.float64)
+    geo = dict(
+        stick="A11",
+        radius_mm=r,
+        arc=arc,
+        feed_mm=feed,
+        rp_to_rp_mm=length,
+        centre_mm=[round(cx, 4), round(cy, 4)],
+        line_w_mm=w,
+        drawn_on="the 0.05 mm grid: pixel centres within the ring's strip (staircase)",
+    )
+    return spec, mask, geo
+
+
+def stub_spec(substrate: Optional[str] = None, data=None) -> Tuple[Spec, np.ndarray, dict]:
+    """A12: the open stub, shunt at the middle of the 15 mm line between the reference planes;
+    its open end is snapped to the nearest grid line (recorded, with the drawn length)."""
+    from yapnr.rf.coupons import catalog
+
+    s = _tuned_stick("A12")
+    g = s.geometry
+    w = catalog.O_REF_2D["M"]["w_out"]
+    p = COUPON_PITCH
+    length = catalog.O_STUB_LINE
+    drawn = float(g["stub_mm"])  # from the line's edge to the open end
+    y_end = round(round((w / 2 + drawn) / p) * p, 4)
+    region = (0.0, length, -1.5, round(y_end + 1.0, 4))
+    spec = _two_port("a12-stub-osh-m", substrate or "M-eq", region, STUB_BAND, data)
+    rects = [
+        (0.0, length, -w / 2, w / 2),
+        (round(length / 2 - w / 2, 4), round(length / 2 + w / 2, 4), w / 2, y_end),
+    ]
+    mask = raster(spec, rects)
+    geo = dict(
+        stick="A12",
+        stub_drawn_mm=drawn,
+        stub_simulated_mm=round(y_end - w / 2, 4),
+        line_mm=length,
+        line_w_mm=w,
+        copper_mm=[list(r) for r in rects],
+        junction=g.get("junction"),
+    )
+    return spec, mask, geo
+
+
+def coupon_criteria(band: Tuple[float, float], points: int) -> dict:
+    """A forward run's sanity checks (no pass/fail: the prediction is the file)."""
+    checks = [
+        dict(name="|S11| max dB", kind="s_max", ports=[1, 1], limit=0.0, ghz=list(band)),
+        dict(name="passivity", kind="passivity", limit=-0.001),
+    ]
+    return {"dense_ghz": [[band[0], band[1], points]], "coarse": checks, "fine": checks}
 
 
 # --- run 0b: the loss correction --------------------------------------------------------------

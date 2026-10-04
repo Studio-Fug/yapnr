@@ -126,9 +126,16 @@ FROM runtime-base
 ARG ARCH_FLAGS="-march=x86-64-v3 -mtune=znver4"
 ARG PALACE_COMMIT=b797ea8060a52241cd9ab1176199f06af8585816
 ARG PALACE_VERSION=v0.18.1-160-gb797ea8
+ARG YAPNR_COMMIT=""
+# The licences of what the image holds, as SPDX: Palace and hypre/METIS (Apache-2.0), MFEM,
+# SuperLU_DIST, ScaLAPACK, ARPACK-NG, LIBXSMM, OpenBLAS, OpenMPI, numpy, shapely (BSD), libCEED
+# (BSD-2-Clause), GSLIB (MIT), MUMPS (CeCILL-C), GEOS (LGPL-2.1), gmsh (GPL-2.0-or-later) and
+# ParMETIS (its own terms, no redistribution: README.md); the texts are in
+# /opt/palace/share/palace/licenses.
 LABEL org.opencontainers.image.title="Palace task image" \
       org.opencontainers.image.source="https://github.com/Studio-Fug/yapnr" \
-      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.revision="${YAPNR_COMMIT}" \
+      org.opencontainers.image.licenses="Apache-2.0 AND BSD-3-Clause AND BSD-2-Clause AND MIT AND CECILL-C AND LGPL-2.1-only AND GPL-2.0-or-later AND LicenseRef-ParMETIS" \
       org.opencontainers.image.description="AWS Palace ${PALACE_VERSION} (MPI, ARPACK, MUMPS, SuperLU_DIST) with gmsh" \
       io.github.studio-fug.yapnr.palace.commit="${PALACE_COMMIT}" \
       io.github.studio-fug.yapnr.palace.version="${PALACE_VERSION}" \

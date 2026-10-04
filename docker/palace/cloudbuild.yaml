@@ -37,6 +37,7 @@ steps:
       - --build-arg=ARCH_FLAGS=${_ARCH_FLAGS}
       - --build-arg=NJOBS=${_NJOBS}
       - --build-arg=PALACE_NJOBS=${_PALACE_NJOBS}
+      - --build-arg=YAPNR_COMMIT=${_YAPNR_COMMIT}
       - --tag=${_IMAGE}:${_TAG}-${_VARIANT}
       - .
 images:
@@ -51,6 +52,9 @@ substitutions:
   _ARCH_FLAGS: -march=x86-64-v3 -mtune=znver4
   _NJOBS: '6'
   _PALACE_NJOBS: '4'
+  # The yapnr commit of this directory (palace_plan.py image fills it in), recorded as the
+  # image's org.opencontainers.image.revision label.
+  _YAPNR_COMMIT: ''
 options:
   machineType: E2_HIGHCPU_8
   # The build account writes its logs to Cloud Logging (it has no logs bucket).

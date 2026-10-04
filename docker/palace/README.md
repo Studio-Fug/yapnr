@@ -62,6 +62,31 @@ dependencies, 6 for Palace, then the runtime stage and the pushes; about $0.56. 
 Locally (any platform; `ARCH_FLAGS=` for arm64, where PyPI has no gmsh wheel and the image goes
 without it): `docker build -t palace:local docker/palace`.
 
+## Reproducibility
+
+What a rebuild reproduces, and what it does not:
+
+- **Pinned:** the Ubuntu base (by digest), the Palace commit (checked after the fetch), every
+  dependency the superbuild fetches (Palace pins their commits), the Python packages (versions and
+  hashes, `requirements.txt`), the compiler flags.
+- **Not pinned:** the Ubuntu packages (`apt-get install` takes the archive's current versions:
+  GCC, OpenMPI, OpenBLAS). `runtime-packages.txt` in the image lists the ones the solver links,
+  with their versions as installed.
+- **Tags are mutable:** `palace:<tag>-<variant>` and the `palace-deps` cache tag that the next
+  build reads with `--cache-from` are overwritten by each build. The digest is the image's
+  identity: campaigns pin it (`palace_plan.py plan` resolves the tag to its digest), and the
+  validation and every sign-off name the digest they ran.
+- **Source:** `palace_plan.py image` records the yapnr commit as the
+  `org.opencontainers.image.revision` label (`-dirty` with uncommitted changes in this directory).
+
+The image of the validation, `palace:b797ea8-x86-64-v3@sha256:9d157377…` (build `38aa2afc`),
+was built before the label existed, from a working tree ten minutes before yapnr commit
+`a38695a`, whose Dockerfile has the same build steps (the build log matches them); its labels
+say `licenses="Apache-2.0"` only. The label changes since then touch the last stage only: the
+next build reuses the cached dependency stage, and its digest will differ from the validated
+one, so a campaign should keep the validated digest until a rebuilt image has passed the smoke
+test and one validation case.
+
 ## Licences
 
 Palace is Apache-2.0. Its superbuild fetches and links pinned dependencies; the build copies

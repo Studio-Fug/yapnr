@@ -1,9 +1,16 @@
-# D2: the optimizer's thick divider (placeholder)
+# D2: the optimizer's thick divider
+
+**Compute stage, 2026-10-04 (drafts).** No formulation passes (8 in two waves,
+[runs/](runs/), [selection.json](selection.json); wave 2: [inputs/wave2/](../../inputs/wave2/)).
+The nearest misses fail only the coarse-grid \|S21\| limit (−3.40 dB), by 0.012 dB at 5.75 GHz,
+and pass fine and finer; R1t reaches −3.549 dB on the same substrate. Whether O0-W carries the
+nearest miss (`d2-star-sched`, re-validated on W-eq, W-nom and W-eq-em528 in
+[variants/](variants/)) as a pre-registered failing design is the owner's decision.
 
 Region W (L1 over B.Cu, inner layers removed), window 20 × 24 mm, ports W / N / S, 4.25-5.75 GHz
-(Order 0 design §4.4). Not optimized yet: its specs (one per formulation), criteria and substrate
-are in [inputs/](../../inputs/) and explained in [demos](../../demos.md). When D2 passes its
-validation, this directory receives its spec, `result.json`, `validation.json`, footprint and
+(Order 0 design §4.4). Its specs (one per formulation), criteria and substrate are in
+[inputs/](../../inputs/) and explained in [demos](../../demos.md). If D2 ships, this directory
+receives its spec, `result.json`, `validation.json`, footprint and
 predicted Touchstone files (FR408HR and EM528), and its copper goes into the D2 window of upload
 O0-W.
 

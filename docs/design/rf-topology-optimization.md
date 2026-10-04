@@ -361,6 +361,12 @@ P_B = ½ Re Σ_face [ Êx·conj(avg_z Ĥy) − Êy·conj(avg_z Ĥx) ] dA      (o
 Power carried by surface waves in the substrate does not reach B and counts as lost, which is
 conservative for a finite board. A near-to-far transform for pattern targets is future work.
 
+**Superseded (§25):** the window and the open bottom made this box drop 3–7 % of the input
+power and count part of the guided wave; on S2 the TM0 surface wave carries 95 % of its power in
+the air, so the box counts it as radiation rather than as lost. The box is now closed by the
+ground, without windows, and the feeds' guided waves are separated modally (§25.2); pattern
+targets need a finite board (§26).
+
 ### 5.7 Dissipation and power balance
 
 ```text
@@ -1873,6 +1879,266 @@ copper and is the exported design on every grid (`copper_xor` 0).
 Validation wall times on three threads with the shared Mac at load 3–27: coarse 7–114 s, fine
 2.4–15.8 minutes, finer 7.7–39 minutes per case.
 
+## 25. The radiation box, corrected
+
+The owner asked (2026-10-04) whether the radiation box's parameterization makes sense. It did
+not: an audit (rftopo/pattern `audit.md`, numbers labelled [S] there) found the solver's discrete
+Poynting accounting exact (a closed box without a window: flux plus dissipation zero to 1e-4),
+but the radiated fraction off by 4–10 % through four modelling choices that partly cancelled:
+the port's V/I waves read the antenna's own radiation (the incident power −5.2..+2.0 % off),
+the feed window dropped 3–6 % of the input power leaving backwards through it and counted
+1–1.6 % of the guided wave, the open bottom dropped the substrate's 2–4 %, and the 4 % balance
+compared the window's flux with a port 7 mm upstream (0.8–3.5 % of feed loss in between). The
+round-2 balance failures on the finer grids (4.6 and 4.7 %) are the sum of these terms, not an
+energy error. The box's four knobs (offset, height, window margin and height) were the wrong
+ones: closed and modal, the result does not depend on the box (§25.2).
+
+### 25.1 Modal port waves (`ports.ModalPlane`, `solver.port_extraction`)
+
+A line port's waves come from projecting the transverse plane at its measurement node (the V/I
+node nearer the reference plane, `meas_cells` behind it) on the feed's discrete line mode
+(`modes.line_mode`, the profile the modal source launches). The plane is a one-face `FluxBox`:
+E on the node plane and H̄, the mean of the two half-cell H planes, at the same edge centres.
+A forward mode e^{iKa} gives H̄ = c h with c = cos(KΔ/2), so with unconjugated cross products
+along the feed axis and the face's area weights
+
+```text
+a₊ + a₋ = ∫ E × h_m / N,    c (a₊ − a₋) = ∫ e_m × H̄ / N,    N = ∫ e_m × h_m
+P_net = ½ Re[(a₊ + a₋) (c (a₊ − a₋))* M],   M = ∫ e_m × h_m*
+```
+
+The mode is scaled to unit power (½ Re(c\* M) = ½), so P_inc = ½|a|² needs no power factor or
+Z_c, and its voltage −∫E_z dz under the strip is made real and positive, so the phases follow
+the V/I convention. Mode orthogonality removes the radiated and surface-wave fields reaching the
+plane. The waves are de-embedded to the reference plane by the phase of Re K (as before, §5.4).
+For a line along y the solver's mode frame is left-handed (H → −H, `modes`); the projection
+uses the physical components. The plane spans the interior (one node inside the CPML, the
+ground to below the top CPML), cut half way to the strips of other ports on the same side.
+
+Modes are solved per frequency once per process, keyed by the cross-section's content
+(`modes.cached_line_mode`), and the face projections likewise: the solve's numpy complex
+arithmetic is not reproducible to the last bit between calls (§21.2), and the native/numpy
+identity tests compare problems built in the same process. A solve costs 0.15 s per frequency
+on the antenna's R1 cross-section.
+
+The default is `"modal"`; `"vi"` keeps round 2's waves. `port_extraction` joins the solver keys
+omitted from the hash at their default (`_SOLVER_NEW`), so the circuit cases' hashes do not
+change; there the two agree to about 1e-4 (the audit). The adjoint needs nothing new: the
+waves are linear functionals of the plane's probes, whose adjoint sources fill the plane.
+
+Measured [S] (native float64, rftopo/pattern):
+
+- The closed-form inset patch on the antenna's grid at R1, 10.25 GHz: modal |S11| −21.8 dB
+  against V/I −26.1 dB (audit: −21.6 / −26.0).
+- The incident power with the design against an empty design region (an open end, |Γ| ≈ 1) at
+  9.7, 10.0, 10.3 GHz: modal +3e-4 (round-2 antenna) and ±2e-4 (patch); V/I −0.6..−2.0 % and
+  −2.3..−3.8 %.
+- A straight two-port on S1 (`testing.line_spec`): modal |S11| below −45 dB, |S21| within
+  0.05 dB of V/I, |S21 − S12| 2e-4 on a gray design. With the default 4h margin the modal
+  planes miss the feed mode's lateral tail in the CPML and an open end moves the incident power
+  by up to 2e-3; with 8 mm, 4e-4. On the tiny test grid (2-cell feeds, 6-cell CPML) the modal
+  waves are not usable (its straight line reads −15 to −18 dB), so `testing.tiny_spec` keeps
+  `"vi"` and the gradient tests run both.
+
+### 25.2 The closed box (`Domain.radiation_box`, `Problem.nonguided`)
+
+Faces x−, x+, y−, y+ and z+ from the ground (the PEC carries no flux), no windows. Where a feed
+crosses a face, the guided wave is separated by the modal projection on the whole transverse
+plane at that face's node (`ClosedBox.planes`, one more probe plane per port):
+
+```text
+η = [Φ_out(box) + Σ_p s_p P_net,mode(face_p)] / P_inc,mode(face_j)
+```
+
+with s_p the port's inward sign. Because the closed box's flux is minus the dissipation inside
+it (exactly, for the scheme), η = 1 − Σ|S_ij|² − P_diss/P_inc at the faces, whatever the box's
+size: the guided mode's part that passes beside or above the box (5 % above a top two cells
+over the copper on the antenna's grid) is counted where it enters. A first version projected on
+the box's face alone and lost that part (η 0.914 against 0.918 for the patch); the full plane
+gives 0.920 at R1 and 10.25 GHz (audit 0.918–0.919). Its dependence on the box is the feed's
+own loss inside it (0.12 %/mm), and a matched straight line driven by the modal source reads
+|η| ≤ 2e-4.
+
+### 25.3 The spec (`RadiationBox`)
+
+`radiation: {clearance_cells: 2}` (the default, written `{}`): the box encloses the design
+region by that many cells (times `refine`) on every side and above the copper, at least two
+cells from the CPML (an error otherwise, naming the margin or air to add). `offset_mm` and
+`height_mm` stay as optional placement and move η by at most the feed loss. The window keys
+are removed: a non-null `window_margin_mm` or `window_height_mm` is an error citing this
+section; round 2's files with nulls still load. The antenna presets use `RadiationBox()`. The
+published `docs/rf/antenna/spec.json` is round 2's run directory's spec and stays as it was
+run; it still loads (as an offset and height box).
+
+### 25.4 What η means on the infinite substrate
+
+The substrate extends into the CPML, so every closed surface crosses it and the TM0 surface
+wave never leaves: no measurement near the antenna separates it from radiation. η is therefore
+the **non-guided fraction**, radiation and surface wave together, and the problem reports it so
+(`describe()["radiation_box"]["eta"]`) with a quantified assumption (`Problem.assumptions`, in
+`result.json` and `validation.json`): the surface wave's share of a half-wave patch's power,
+P_sw/(P_sp + P_sw) = 1 − e_hed by Jackson and Alexopoulos's closed form [32]
+(`stackup.surface_wave_share`), 0.27 on S2 at 10 GHz. openEMS on a finite 50 × 42 mm board put
+the round-2 antenna's radiation efficiency at 0.82–0.85 against η 0.94–0.95 (the audit).
+Radiation efficiency, gain and patterns need a board model (§26); the spec refuses pattern
+requirements without one.
+
+### 25.5 The validator's checks (`validate.power_balance`)
+
+Round 2's 4 % balance is replaced (`cases.CRITERIA["antenna"]`):
+
+- **incident** (≤ 1e-3): the port's incident power with the design against a second run with an
+  empty design region (`incident_error`): the incident wave does not depend on the design, so
+  this measures what the extraction mistakes for it;
+- **balance** (≤ 0.5 %): the closed-box identity η + |Γ|² + the other ports + the dissipation
+  inside the box − 1, from the modal amplitudes on the faces (`error`; the report also splits the
+  flux by face);
+- **far field** (≤ 1 %, board models, §26): the quadrature's radiated power against the Huygens
+  box's flux (`validate.far_field_report`).
+
+These runs use `tol` 1e-4 (`BALANCE_TOL`; at 1e-3 a resonant design keeps up to 0.3 % of
+truncation in the identity). Measured on the round-2 antenna at R1, 9.7–10.3 GHz: incident
+3e-4, identity ≤ 3e-4, η 0.904, 0.925, 0.892; the closed-form patch: incident ≤ 2e-4, identity
+≤ 1.3e-3 (at 9.7 GHz, |Γ|² 0.41). **The published cases are not re-validated in this change**:
+the divider, combiner, diplexer and bank move by about 1e-4 (the audit) and keep their hashes;
+the antenna's `validation.json` was made with the round-2 box and V/I waves.
+
+## 26. Board models, the far field and pattern requirements
+
+### 26.1 Board models (`board`, `BoardDomain`)
+
+| `board.ground`          | substrate                    | ground                                        | Huygens box                       | far field                       |
+| ----------------------- | ---------------------------- | --------------------------------------------- | --------------------------------- | ------------------------------- |
+| (no `board`)            | infinite, into the CPML      | PEC floor z = 0                               | none (§25.4)                      | none; η the non-guided fraction |
+| `"infinite"`            | a block of the board outline | PEC floor                                     | five faces in air from z = 0      | image theory, upper half space  |
+| `{x_mm, y_mm, keepout}` | a block, `thickness_mm` deep | PEC sheet on z = 0, the outline less keepouts | six faces in air around the board | free space, full sphere         |
+
+The copper is at z = h (`stackup.h_mm`, the copper-to-ground height the lines are calibrated
+with), the ground at z = 0, and a free board's block reaches `thickness_mm` − h below the ground
+(the 5.8 GHz board: L1 over L2 at 0.246 mm, 1.6 mm thick). The lateral axes are uniform at the
+design pitch over the design region, the ports and `board.copper` (fixed top copper, such as
+the feed from a port at the board's edge), then graded with nodes on the board's, the ground's
+and the keepouts' edges (`mesh.breakpoint_axis`; finer inside the block, at most λ_d/15), then
+`air_mm` (default λ0/4) to the CPML. The z axis has the substrate cells between ground and
+copper, graded cells below the ground and in the air, and CPML at both ends for a free board
+(`PMLCells.z_lo`: the engine's and the native kernel's CPML code already handled both ends of
+every axis). Materials come per cell and are averaged onto the edges like the copper plane's
+interface (`materials.edge_average`, which reproduces the layered model to rounding); the ground
+is PEC on its plane's Ex and Ey edges next to a ground pixel (openEMS's convention). A board's
+edges must be at least half a pitch from the uniform core or on its pitch grid.
+
+Ports are lumped (`ports[].kind: "lumped"`, `x_mm` × `y_mm` a rectangle of nodes, `ohms`
+default 50): Ez columns from the ground's plane to the copper (`LumpedPort.ground`), each
+standing on a ground pixel (checked), with a = V̂_s/(2√R), b = (2V̂ − V̂_s)/(2√R) and P_inc =
+½|a|² (§5.5). A line port's feed into the CPML would cross the Huygens box. The port's own
+reactance (the column's current) is part of the model, as in openEMS's lumped port; across
+S2's 1.524 mm it is of order j10–15 Ω at 10 GHz (an estimate). Line ports are refused on a board
+and lumped ports without one; the closed-form seeds and `reference_ohm` need line ports. In the
+material grid the pixels around a port's columns inside the window are fixed copper.
+
+Not modelled: several ground layers and vias, the copper-edge correction on the ground's edges
+(a keepout's edge then acts about half a pixel larger: 0.15 mm on a 14 mm clearance, under 1 %
+on a monopole's resonance), and the ground as a design layer (the gradient formula is the same
+on any sheet plane; later). The KiCad export of a board design carries the window's copper as
+netless islands, without port pads or rule areas.
+
+### 26.2 The transform (`farfield.FarField`)
+
+The Huygens box's own samples (a `FluxBox`: E and H̄ collocated at the Yee edge centres, the
+flux's area weights) give the equivalent currents, J = n̂ × H̄ and M = −n̂ × E per face pair
+(module doc). With r̂ the direction and the internal e^{−iωt} convention:
+
+```text
+N = Σ A c_J J e^{−ik r̂·r},   L = Σ A M e^{−ik r̂·r},   F = η0 N_⊥ − r̂ × L
+E_far = ik e^{ikr}/(4πr) F,   U = k²/(32π² η0) |F|²
+```
+
+c_J = 2/(e^{−ik_nΔ⁻/2} + e^{ik_nΔ⁺/2}) undoes H̄'s averaging over the face's two half cells for
+the component the far field picks (k_n = k r̂·n̂); with the image ground the top face's image has
+the mirrored offsets, c_J(−k_n). Images: J → (−J_x, −J_y, J_z), M → (M_x, M_y, −M_z) at −z, so
+e^{−ikwz} becomes −2i sin(kwz) for J_x, J_y, M_z and 2 cos(kwz) for J_z, M_x, M_y. Each face
+pair's samples form a tensor grid, so a face costs two matrix products per frequency (torch
+complex128, differentiable).
+
+Quantities per excitation j, frequency and direction: P*rad = P_box (exact, the box lies in
+air), D = 4πU/P_rad, G = 4πU/P_acc, G_r = 4πU/P_inc, e_rad = P_rad/P_acc, e_tot = P_rad/P_inc
+(P_acc = P_inc − ½|b_j|²). In a board model `radiated` is e_tot. The quadrature
+(`sphere_quadrature`): Gauss–Legendre in cos θ with n*θ = ⌈k*max a⌉ + 10 nodes (a the radius of
+the sphere around the box) and 2n*θ uniform φ, the upper hemisphere over an image ground.
+`Frame(axis, zero)` sets the polar axis and φ = 0; polarization: θ, φ, Ludwig-3 co and cross
+about `reference_phi_deg`, and circular, IEEE RHCP = (θ̂ − jφ̂)/√2 in e^{+jωt}, internally
+ê_R = (θ̂ + iφ̂)/√2 (pinned by the crossed-dipole test).
+
+Measured: analytic point sources sampled on a ±λ/4 box (V1, `test_farfield`): the transform's F
+within 7.9e-4 of the exact far field at λ/40 cells and 3.2e-3 at λ/20 (second order; c_J
+changes the analytic case's error little, its residual is the faces' quadrature at their rims);
+a dipole's D 1.5009 by the 338-point quadrature, P_ff and the box's flux within 2e-4 and 1e-3 of
+the closed form; images to 2e-3. FDTD (V2, `test_board`; a lumped column of 2 mm at 3 GHz,
+1 mm pitch): the pattern within 0.002 dB (free space) and 0.012 dB (on an infinite ground) of
+sin²θ over 10–170°, D(90°) from the box's flux 1.5003 and 3.002; P_ff/P_box − 1 = −6e-3 with the
+box at 0.1 λ (two cells off the board, where the element's reactive near field, ten times its
+far field, must cancel on the box), −4e-4 at 0.2 λ and +7e-5 at 0.33 λ. Cost: the transform and
+its gradient for one excitation take 0.17 s on the 50 × 42 mm demo (146k box samples, 88
+directions) and 1.1 s on the 5.8 GHz board (195k samples, 498 directions with the quadrature),
+4 threads, against tens of seconds per FDTD run.
+
+### 26.3 Pattern requirements (`patterns`)
+
+Requirements per excitation port, over a band, in `far_field.frame` (or a requirement's own
+`frame`); each gives one normalized violation per frequency and direction, every one a term of
+the excitation's smooth maximum (§9), so the epigraph raises the worst direction (null filling
+for an omni antenna), not the average:
+
+| form                                                                                                          | x                                                                 | φ                                                       | s    |
+| ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------- | ---- |
+| `{gain: j, kind: realized\|gain\|directivity, pol, min_dbi\|max_dbi\|min_mask_dbi\|max_mask_dbi, directions}` | 10 log10 G_r, G or D (default realized; masks in the set's angle) | (L − x)/s or (x − L)/s per direction                    | 1 dB |
+| `{ripple: j, max_db, directions}`                                                                             | smooth max − smooth min (log-sum-exp, τ 0.2 dB)                   | (R − L)/s                                               | 1 dB |
+| `{hpbw: j, cut_phi_deg, boresight_theta_deg, between_deg: [b1, b2]}`                                          | x at θ_b ± b1/2 and ± b2/2 against x(boresight) − 3 dB            | four terms                                              | 1 dB |
+| `{front_to_back: j, min_db, front, back}`                                                                     | x(front) − smooth max over back                                   | (L − FB)/s                                              | 1 dB |
+| `{cross_pol: j, max_db, directions, reference_phi_deg}`                                                       | 10 log10(U_x/U_co)                                                | (x − L)/s                                               | 3 dB |
+| `{shape: j, target, max_rms_db, form: kl\|log_l2, weight}`                                                    | KL(q‖p) or the weighted mean square dB error                      | KL/KL_tol − 1, KL_tol = (rms/4.343)²/2; or MSE/rms² − 1 | 1    |
+| `{efficiency: j, kind: radiation\|total, min}`                                                                | e_rad or e_tot                                                    | (L − e)/s                                               | 0.1  |
+
+Directions: `{point}`, conical and elevation `{cut}`s (negative θ the far side), `{cone}`,
+`"upper"` and `"sphere"` (the quadrature). Targets (`patterns: {name: …}`): a θ–φ grid in dBi
+(bilinear, periodic in φ), real orthonormal spherical harmonics of the power density, or the
+presets `beam` (cos^q of the angle from `toward`, q = ln ½/ln cos(hpbw/2), separate E- and
+H-plane widths, a `back_db` level) and `omni` (cos^q of the elevation about `axis`, or sin²θ for
+`"dipole"`, with `tilt_deg`); floored at `floor_db` (−20 dB) below the peak and normalized by the
+quadrature to ∮ D_t dΩ = 4π. KL (forward, mode-covering) depends on the shape only and does not
+fight the efficiency terms; log-L2 with `weight: target` shapes a main lobe without chasing
+nulls. Warnings (`Problem.assumptions`): a grid or harmonics target that integrates more than
+1 % off 4π, a target peak above Harrington's (ka)² + 2ka [33] for the box radius, and a shape or
+directivity requirement without a realized-gain or efficiency floor on the same excitation
+(lossy gray copper can buy a pattern by absorbing). Over an infinite ground every direction
+needs z ≥ 0. The radiation epoch objective (§22) still grows the radiator at β 8; the pattern
+terms act in the spec epochs.
+
+### 26.4 Adjoint and checks
+
+Every term is a fixed linear map of the box's DTFTs (the transform) followed by smooth
+functions, so `adjoint.wirtinger` differentiates it and `adjoint_sources` puts the gradient on
+the box's E samples and both H half planes: pattern terms in the excitation's group cost no
+extra adjoint run. Finite-difference checks (`test_pattern_gradients`, float64, exact runs,
+`aggregate: none` so that each requirement is checked alone): every form on a free board and
+over an image ground, every polarization and gain kind and both mask kinds on a board with a
+ground keepout, and the group's smooth maximum: 1e-12–3e-9 relative. (A cross-pol term on the
+symmetry plane of a mirror-symmetric design is identically −∞ dB and has no derivative; the
+test samples off it.) The board model's numpy and native float64 runs are bit-identical
+(`test_native_identity.test_board_model`, with the copper-edge correction).
+
+### 26.5 Demos (specs only)
+
+`docs/rf/antenna-beam/spec.json` (S2, 50 × 42 mm board, the design region 18 × 18 mm, a lumped
+port at the board's west edge through a fixed 3.2 mm feed: broadside realized gain ≥ 6.5 dBi,
+HPBW 55–90° in both planes, front-to-back ≥ 15 dB, cross-pol ≤ −15 dB in a 30° cone, e_rad ≥ 0.8,
+|S11| ≤ −10 dB over 9.7–10.3 GHz; 0.66 M cells) and `docs/rf/antenna-omni-5g8/spec.json` (the
+transceiver's 30 × 60 × 1.6 mm FR-4 board, ground on L2 under y < 0, the 14 mm clearance as the
+design region at 0.25 mm pitch, frame axis +y: realized gain ≥ −1 dBi at 12 azimuths, ripple ≤
+5 dB over 36, e_tot ≥ 0.6, an omni shape, |S11| ≤ −12 dB over 5.70–5.90 GHz; 1.05 M cells,
+Δt 0.315 ps). They load, build and evaluate; they have not been run, and their limits are the
+design's first guesses.
+
 ## References
 
 1. A. M. Hammond, A. Oskooi, M. Chen, Z. Lin, S. G. Johnson, S. E. Ralph, "High-performance hybrid
@@ -1941,9 +2207,17 @@ Validation wall times on three threads with the shared Mac at load 3–27: coars
     of 0.7, GCMMA, and the objective log(D₁₁ D₂₁ / D₁ₚ) whose received-energy term "enforces
     the design material to be less lossy" (read for round 2).
 
+32. D. R. Jackson, N. G. Alexopoulos, "Simple approximate formulas for input resistance,
+    bandwidth, and efficiency of a resonant rectangular patch," IEEE Trans. Antennas Propag.
+    39(3), 407–410 (1991).
+33. R. F. Harrington, "On the gain and beamwidth of directional antennas," IRE Trans. Antennas
+    Propag. 6(3), 219–225 (1958).
+
 [28–30] are cited from memory for round 2 (the web-search quota was used up); the corner
 exponent was recomputed here (§21.1). The paper [1] was read in full, including §5.2 and
 App. A. The adaptation to microstrip rests on [2–11] and on Meep's public adjoint filters (for
 conventions only). [12–15] are cited for the nonlinear response of metallic designs to
 conductivity; their specific interpolations were not re-read for this design (the web-search
-quota ran out), and nothing here depends on them.
+quota ran out), and nothing here depends on them. [32] and [33] are cited from memory for §25
+and §26: [32]'s space-wave efficiency formula is the one the audit's `jackson.py` coded and
+checked against its Q factors; [33] is used only for a warning.

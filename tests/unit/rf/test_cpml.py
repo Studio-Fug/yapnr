@@ -58,7 +58,7 @@ class CPMLReflectionTest(unittest.TestCase):
     def run_case(self, extra):
         grid, s = domain(extra)
         dt = 0.95 * grid.courant_dt()
-        sim = Simulation(grid, s, dt=dt, backend="torch", dtype=np.float64)
+        sim = Simulation(grid, s, dt=dt, dtype=np.float64)
         i_src = N_PML + 15
         j_c = N_PML + 15
         src = PulseSource(

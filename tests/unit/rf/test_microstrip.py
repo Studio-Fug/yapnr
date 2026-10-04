@@ -63,12 +63,12 @@ def measure(cells_per_width: int, n_sub: int):
     grid = dom.grid
     dt = 0.95 * grid.courant_dt()
     omega = 2 * np.pi * FREQS
-    cal = calibrate_line(dom.line_spec(cells_per_width, dt), omega, backend="torch")
+    cal = calibrate_line(dom.line_spec(cells_per_width, dt), omega, backend="auto")
     p1, p2 = dom.ports
     gd = np.zeros(dom.design_shape)
     i0, i1, j0, j1 = dom.window
     gd[:, p1.ta - j0 : p1.tb - j0] = S1.g_max
-    sim = Simulation(grid, dom.structure(gd), dt=dt, backend="torch", dtype=np.float64)
+    sim = Simulation(grid, dom.structure(gd), dt=dt, dtype=np.float64)
     res = sim.run(
         p1.mode_sources(GaussianPulse.for_band(2e9, 12e9), dt),
         p1.probes + p2.probes,

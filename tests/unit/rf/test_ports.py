@@ -63,7 +63,7 @@ class TerminationSignTest(unittest.TestCase):
             for j in range(p1.ta, p1.tb + 1):
                 st.set_pec("ez", g.flat_index("ez", p1.i_ref, j, ks))
         dt = 0.95 * g.courant_dt()
-        sim = Simulation(g, st, dt=dt, backend="torch", dtype=np.float64)
+        sim = Simulation(g, st, dt=dt, dtype=np.float64)
         omega = 2 * np.pi * np.array([1.5e9, 2.5e9])
         res = sim.run(
             p1.mode_sources(GaussianPulse(2e9, 1.0e9), dt),
@@ -105,7 +105,7 @@ class OrientationTest(unittest.TestCase):
         gd[6:10, 9:12] = S1.g_max
         st = dom.structure(gd.T if along_y else gd)
         dt = 0.95 * g.courant_dt()
-        sim = Simulation(g, st, dt=dt, backend="torch", dtype=np.float64)
+        sim = Simulation(g, st, dt=dt, dtype=np.float64)
         omega = 2 * np.pi * np.array([4e9, 6e9, 8e9])
         res = sim.run(
             p1.mode_sources(GaussianPulse.for_band(4e9, 8e9), dt),

@@ -92,7 +92,7 @@ class SheetVersusPecTest(unittest.TestCase):
         else:
             st = dom.structure(gd)
         dt = 0.95 * grid.courant_dt()
-        sim = Simulation(grid, st, dt=dt, backend="torch", dtype=np.float64)
+        sim = Simulation(grid, st, dt=dt, dtype=np.float64)
         omega = 2 * np.pi * np.array([8e9, 10e9, 12e9])
         res = sim.run(
             p1.mode_sources(GaussianPulse.for_band(8e9, 12e9), dt),

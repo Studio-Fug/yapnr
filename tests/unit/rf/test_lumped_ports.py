@@ -40,7 +40,7 @@ class LumpedPortTest(unittest.TestCase):
         for p in cls.ports:
             p.apply(st)
         dt = 0.95 * g.courant_dt()
-        sim = Simulation(g, st, dt=dt, backend="torch", dtype=np.float64)
+        sim = Simulation(g, st, dt=dt, dtype=np.float64)
         pulse = GaussianPulse.for_band(2e9, 6e9)
         vs = source_dtft(pulse, OMEGA, dt)
         probes = [pr for p in cls.ports for pr in p.probes]

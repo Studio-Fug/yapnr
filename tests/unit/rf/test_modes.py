@@ -94,7 +94,6 @@ class ModalSourceTest(unittest.TestCase):
             bands={"b": Band(8.5, 11.5, 3)},
             requirements=(S(2, 1).at_least_db(-1, band="b"),),
             solver=SolverSpec(
-                backend="torch",
                 dtype="float64",
                 tol=1e-5,
                 edge_correction=edge_correction,

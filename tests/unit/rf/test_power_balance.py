@@ -73,7 +73,7 @@ class ClosedBoxTest(unittest.TestCase):
         rho = rng.uniform(0.2, 0.9, dom.design_shape)
         cls.st = dom.structure(sheet_conductance(rho, S1.g_min, S1.g_max))
         dt = 0.95 * g.courant_dt()
-        sim = Simulation(g, cls.st, dt=dt, backend="torch", dtype=np.float64)
+        sim = Simulation(g, cls.st, dt=dt, dtype=np.float64)
         i0, i1, j0, j1 = dom.window
         kc = g.k_c
         cls.node_box = ((i0 - 2, i1 + 2), (j0 - 3, j1 + 3), (0, kc + 6))
@@ -115,7 +115,7 @@ class ClosedBoxTest(unittest.TestCase):
         raw = np.abs(flux - net) / np.abs(net)
         self.assertLess(raw.max(), 0.1, raw)
         # The calibration's power factor (measured on a separate straight line) corrects it.
-        cal = calibrate_line(self.dom.line_spec(6, self.dt), OMEGA, backend="torch")
+        cal = calibrate_line(self.dom.line_spec(6, self.dt), OMEGA, backend="auto")
         err = np.abs(flux - cal.power_at(OMEGA) * net) / np.abs(net)
         self.assertLess(err.max(), 0.02, err)  # measured 0.5 %, 0.15 %, 1.3 % (8, 10, 12 GHz)
 
@@ -129,7 +129,7 @@ class FeedWindowTest(unittest.TestCase):
         i0, i1, j0, j1 = dom.window
         gd[:, p1.ta - j0 : p1.tb - j0] = S1.g_max
         dt = 0.95 * g.courant_dt()
-        sim = Simulation(g, dom.structure(gd), dt=dt, backend="torch", dtype=np.float64)
+        sim = Simulation(g, dom.structure(gd), dt=dt, dtype=np.float64)
         kc = g.k_c
         box = dom.radiation_box(0.0, float(g.z.nodes[kc + 8] - S1.h))
         self.assertEqual(box.node_box, ((i0, i1), (j0, j1), (kc, kc + 8)))
@@ -173,7 +173,7 @@ class PassivityTest(unittest.TestCase):
         for trial in range(2):
             rho = rng.uniform(0, 1, dom.design_shape)
             st = dom.structure(sheet_conductance(rho, S1.g_min, S1.g_max))
-            sim = Simulation(g, st, dt=dt, backend="torch", dtype=np.float64)
+            sim = Simulation(g, st, dt=dt, dtype=np.float64)
             probes = [pr for p in dom.ports for pr in p.probes]
             # Real reference impedance and phase-only shift: exact power waves.
             cal = LineCalibration(OMEGA, np.full(3, 48.0 + 0j), OMEGA * 1.7 / 3e8, dt)

@@ -67,6 +67,9 @@ if r is None:
 routes = dict(tracks=r.tracks, vias=r.vias, unrouted=r.result.unrouted)
 if getattr(r, "via_spans", None):
     routes["via_spans"] = r.via_spans  # blind, buried and micro vias (pnr.via_policy)
+routes.update(
+    getattr(r, "extras", dict)()
+)  # a declared fanout's via sizes and locked copper (pnr.fanout)
 (root / "routes.json").write_text(json.dumps(routes, indent=2))
 (root / "pnr-report.json").write_text(
     json.dumps(

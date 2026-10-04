@@ -203,6 +203,17 @@ performance opt-in `--batched-wirelength` can be tested explicitly. All of these
 are recorded in provenance; ambient variables are still cleared, so a baseline
 invocation keeps its original algorithms.
 
+## BGA fanout rung
+
+`11-ufbga201-fanout-6L-SGSGPS` (`hard_rungs.py`, manual lane) breaks an STM32F207 in
+KiCad's stock 0.65 mm `UFBGA-201` footprint (UFBGA176+25; the ball map is KiCad's stock
+symbol for the part) out to four fixed JST SH connectors: 47 GPIO balls from rings 0-3,
+every ground and supply ball dropped to its plane. The board declares the escape as a
+`fanout` (docs/hardware/pnr-inputs.md): 0.35/0.15 mm plane vias on interstitial sites,
+0.40/0.20 mm dog-bones, no surface exit north, a reserved corridor over three east-edge
+balls. Its `via_class` and `escape` checks (`check_constraints.py`) hold the drops to
+their class and site and every listed ball to an escape.
+
 ## Length-matching scratch designs
 
 No ladder case or hard rung declares a length-match group, so

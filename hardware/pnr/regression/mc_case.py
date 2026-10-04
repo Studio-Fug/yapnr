@@ -150,6 +150,9 @@ route = best["route"]
 routes = dict(tracks=route.tracks, vias=route.vias, unrouted=route.result.unrouted)
 if getattr(route, "via_spans", None):
     routes["via_spans"] = route.via_spans
+routes.update(
+    getattr(route, "extras", dict)()
+)  # a declared fanout's via sizes and locked copper (pnr.fanout)
 (root / "routes.json").write_text(json.dumps(routes, indent=2))
 status = json.loads((out / "status.json").read_text())
 legal = [r for r in placed.values() if r.get("status") == "legal"]

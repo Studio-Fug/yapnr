@@ -7,7 +7,11 @@ hierarchical block synthesis with a template reused four times, current-sized po
 copper, and Monte-Carlo successive-halving search over placements.
 
 Most rungs are *variants* of two base designs (``09-mcu-usb-31`` and the ladder's
-``07-chaser-20``) that change exactly one dimension, so an effect can be attributed:
+``07-chaser-20``) that change exactly one dimension, so an effect can be attributed.
+``11-ufbga201-fanout`` breaks a 0.65 mm UFBGA176+25 out to four connectors on six
+layers through a declared ``fanout`` (pnr.fanout): interstitial plane drops, surface
+and dog-bone escapes, a reserved corridor and a per-layer forbidden exit. The
+dimensions:
 
 ``stackup``
     the copper stack: number of plane layers and signal layers and their order, as a
@@ -39,6 +43,7 @@ datasheets named beside each part.
 """
 
 import math
+import re
 from copy import deepcopy
 
 from designs import LIB, chaser, circuit, part, timer_parts
@@ -59,13 +64,21 @@ HARD_LIB = {
     "terminal_2p": "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal",
     "hole_m2": "MountingHole:MountingHole_2.2mm_M2",
     "u_fl": "Connector_Coaxial:U.FL_Hirose_U.FL-R-SMT-1_Vertical",
+    "ufbga201": "Package_BGA:UFBGA-201_10x10mm_Layout15x15_P0.65mm",
+    "jst_sh_12": "Connector_JST:JST_SH_SM12B-SRSS-TB_1x12-1MP_P1.00mm_Horizontal",
+    "c_0402": "Capacitor_SMD:C_0402_1005Metric",
+    "r_0402": "Resistor_SMD:R_0402_1005Metric",
 }
 
 
 # Pad names a footprint repeats (one net for every copy): the receptacle's eight
 # shield pads. The generator maps a name to all its pads; the connected-pad count the
 # runner asserts counts each copy.
-REPEATED_PADS = {HARD_LIB["usb_micro_b"]: {"SH": 8}, HARD_LIB["u_fl"]: {"2": 2}}
+REPEATED_PADS = {
+    HARD_LIB["usb_micro_b"]: {"SH": 8},
+    HARD_LIB["u_fl"]: {"2": 2},
+    HARD_LIB["jst_sh_12"]: {"MP": 2},
+}
 
 
 def connected_pads(parts):
@@ -1182,6 +1195,202 @@ def chaser_arcblock(spec):
     return spec
 
 
+# ------------------------------------------------------------ BGA fanout
+
+# STM32F207IGH6 in UFBGA176+25 (ST DS6329, "UFBGA176+25 ballout"), the device KiCad's
+# stock footprint Package_BGA:UFBGA-201_10x10mm_Layout15x15_P0.65mm is drawn for: the
+# ball map of KiCad's stock symbol MCU_ST_STM32F2:STM32F207IGHx (generated from ST's
+# open pin data), row by row, columns 1-15; "-" is a vacant site (ring 4 and the centre
+# block's surround). The 25 centre balls are VSS.
+STM32F207_UFBGA176 = {
+    "A": "PE3 PE2 PE1 PE0 PB8 PB5 PG14 PG13 PB4 PB3 PD7 PC12 PA15 PA14 PA13",
+    "B": "PE4 PE5 PE6 PB9 PB7 PB6 PG15 PG12 PG11 PG10 PD6 PD0 PC11 PC10 PA12",
+    "C": "VBAT PI7 PI6 PI5 VDD RFU VDD VDD VDD PG9 PD5 PD1 PI3 PI2 PA11",
+    "D": "PC13 PI8 PI9 PI4 VSS BOOT0 VSS VSS VSS PD4 PD3 PD2 PH15 PI1 PA10",
+    "E": "PC14 PF0 PI10 PI11 - - - - - - - PH13 PH14 PI0 PA9",
+    "F": "PC15 VSS VDD PH2 - VSS VSS VSS VSS VSS - VSS VCAP_2 PC9 PA8",
+    "G": "PH0 VSS VDD PH3 - VSS VSS VSS VSS VSS - VSS VDD PC8 PC7",
+    "H": "PH1 PF2 PF1 PH4 - VSS VSS VSS VSS VSS - VSS VDD PG8 PC6",
+    "J": "NRST PF3 PF4 PH5 - VSS VSS VSS VSS VSS - VDD VDD PG7 PG6",
+    "K": "PF7 PF6 PF5 VDD - VSS VSS VSS VSS VSS - PH12 PG5 PG4 PG3",
+    "L": "PF10 PF9 PF8 REGOFF - - - - - - - PH11 PH10 PD15 PG2",
+    "M": "VSSA PC0 PC1 PC2 PC3 PB2 PG1 VSS VSS VCAP_1 PH6 PH8 PH9 PD14 PD13",
+    "N": "VREF- PA1 PA0 PA4 PC4 PF13 PG0 VDD VDD VDD PE13 PH7 PD12 PD11 PD10",
+    "P": "VREF+ PA2 PA6 PA5 PC5 PF12 PF15 PE8 PE9 PE11 PE14 PB12 PB13 PD9 PD8",
+    "R": "VDDA PA3 PA7 PB1 PB0 PF11 PF14 PE7 PE10 PE12 PE15 PB10 PB11 PB14 PB15",
+}
+BGA_ROWS = "ABCDEFGHJKLMNPR"
+BGA_SIZE = (36, 36)
+# Three east-edge balls left for a small fixed block (an RF launch, say): unconnected
+# here, their surface exits a reserved corridor in U1's frame (x east, y north).
+BGA_RESERVED_BALLS = ["E15", "F15", "G15"]
+BGA_RESERVED_RECT = [4.8, 0.3, 6.4, 2.3]
+
+
+def _bga_ring(ball):
+    r, c = BGA_ROWS.index(ball[0]), int(ball[1:]) - 1
+    return r, c, min(r, c, 14 - r, 14 - c)
+
+
+def bga_signals():
+    """``{side: [balls]}``: three GPIO balls per ring 0-3 on each side (fewer where a
+    ring has fewer), each ball on the side of its nearest package edge (corners and
+    ties left out), spread along the edge."""
+    out = {}
+    for side in ("north", "south", "west", "east"):
+        rings = {k: [] for k in range(4)}
+        for row, names in STM32F207_UFBGA176.items():
+            for col, name in enumerate(names.split()):
+                ball = row + str(col + 1)
+                if ball in BGA_RESERVED_BALLS or not re.fullmatch(r"P[A-I]\d+", name):
+                    continue
+                r, c, k = _bga_ring(ball)
+                if k > 3:
+                    continue
+                edge = dict(north=r, south=14 - r, west=c, east=14 - c)
+                if [e for e in edge if edge[e] == min(edge.values())] != [side]:
+                    continue
+                rings[k].append((c if side in ("north", "south") else r, ball))
+        balls = []
+        for k in range(4):
+            ring = sorted(rings[k])
+            n = len(ring)
+            picks = [round((i + 0.5) * n / 3 - 0.5) for i in range(3)] if n >= 3 else range(n)
+            balls += [ring[i][1] for i in picks]
+        out[side] = balls
+    return out
+
+
+def ufbga_base():
+    """A 0.65 mm UFBGA breakout: the 2-layer base of ``11-ufbga201-fanout``.
+
+    STM32F207IGH6 (UFBGA176+25) fixed at the centre; 47 GPIO balls from rings 0-3 run
+    to four 12-pin JST SH connectors fixed at the four edges (each its own side's
+    balls, in edge order); decoupling (six 100 nF, a 4.7 uF bulk), the VCAP, NRST and
+    BOOT0 parts, and a 2-pin supply header. VDD, VDDA, VREF+ and VBAT are VCC; VSS,
+    VSSA, VREF- and REGOFF (regulator on) are GND."""
+    nets = {}
+    for row, names in STM32F207_UFBGA176.items():
+        for col, name in enumerate(names.split()):
+            if name == "-":
+                continue
+            ball = row + str(col + 1)
+            net = ""
+            if name in ("VDD", "VDDA", "VREF+", "VBAT"):
+                net = "VCC"
+            elif name in ("VSS", "VSSA", "VREF-", "REGOFF"):
+                net = "GND"
+            elif name in ("VCAP_1", "VCAP_2", "NRST", "BOOT0"):
+                net = name
+            nets[ball] = net
+    sides = bga_signals()
+    for balls in sides.values():
+        for ball in balls:
+            r, c, _ = _bga_ring(ball)
+            nets[ball] = STM32F207_UFBGA176[ball[0]].split()[c]
+    parts = [pinned("U1", "ufbga201", "STM32F207IGH6", nets)]
+    order = dict(north=1, south=-1, west=1, east=-1)  # pin 1 first along the edge at its pose
+    for k, side in enumerate(("north", "south", "west", "east")):
+        balls = sorted(
+            sides[side],
+            key=lambda b: order[side]
+            * (int(b[1:]) if side in ("north", "south") else -BGA_ROWS.index(b[0])),
+        )
+        pins = {str(i + 1): "" for i in range(12)}
+        for i, ball in enumerate(balls):
+            pins[str(i + 1)] = nets[ball]
+        pins["MP"] = ""
+        parts.append(pinned("J%d" % (k + 1), "jst_sh_12", "SM12B-SRSS-TB", pins))
+    parts.append(part("J5", "connector", "3V3 input", ["VCC", "GND"]))
+    for i in range(1, 7):
+        parts.append(pinned("C%d" % i, "c_0402", "100n", ["VCC", "GND"]))
+    parts += [
+        pinned("C7", "capacitor", "4.7u", ["VCC", "GND"]),
+        pinned("C8", "c_0402", "2.2u", ["VCAP_1", "GND"]),
+        pinned("C9", "c_0402", "2.2u", ["VCAP_2", "GND"]),
+        pinned("C10", "c_0402", "100n", ["NRST", "GND"]),
+        pinned("R1", "r_0402", "10k", ["BOOT0", "GND"]),
+    ]
+    spec = circuit(
+        "11-ufbga201-fanout",
+        "STM32F207 in a 0.65 mm UFBGA176+25 broken out to four connectors: 47 GPIO balls "
+        "from rings 0-3, the ground and supply balls dropped to their planes.",
+        parts,
+        BGA_SIZE,
+    )
+    cons = spec["constraints"]
+    cons["board"]["default_clearance_mm"] = 0.2
+    # Fine-pitch rules: 0.10/0.10 mm tracks, 0.40/0.20 mm vias, 0.15 mm minimum drill.
+    cons["fab"] = dict(
+        track_width_mm=0.1,
+        clearance_mm=0.1,
+        via_diameter_mm=0.4,
+        via_drill_mm=0.2,
+        hole_clearance_mm=0.15,
+        edge_clearance_mm=0.3,
+        min_through_drill_mm=0.15,
+        via_annular_mm=0.075,
+        min_track_width_mm=0.1,
+        smd_pad_clearance_mm=0.1,
+        hole_to_hole_mm=0.25,
+        via_to_smd_pad_mm=0.1,
+        min_via_diameter_mm=0.35,
+    )
+    cons["net_class"] = {
+        "supply": dict(nets=["VCC"], width_mm=0.1),
+        "return": dict(nets=["GND"], width_mm=0.1),
+    }
+    w, h = BGA_SIZE
+    cons["fixed"] = {
+        "U1": dict(at=[w / 2, h / 2], rot=0, side="top"),
+        "J1": dict(at=[w / 2, h - 3.6], rot=0, side="top"),
+        "J2": dict(at=[w / 2, 3.6], rot=180, side="top"),
+        "J3": dict(at=[3.6, h / 2], rot=90, side="top"),
+        "J4": dict(at=[w - 3.6, h / 2], rot=270, side="top"),
+        "J5": dict(at=[2.5, 5.5], rot=0, side="top"),
+    }
+    # Escape every ball of U1: ground and supply drops 0.35/0.15 at interstitial sites,
+    # signals by the 0.40/0.20 class; no surface exit north (an antenna edge, say).
+    cons["fanout"] = [
+        dict(
+            name="u1",
+            ref="U1",
+            via_classes=dict(
+                planes=dict(
+                    diameter_mm=0.35, drill_mm=0.15, nets=["GND", "VCC"], sites=["interstitial"]
+                ),
+                default=dict(diameter_mm=0.4, drill_mm=0.2, sites=["vacant", "outside"]),
+            ),
+            surface_rings=2,
+            forbidden_exits={"F.Cu": ["north"]},
+            reserved=[dict(name="block", rect=BGA_RESERVED_RECT, layers=["F.Cu"])],
+        )
+    ]
+    spec["supply"] = dict(voltage_v=3.3, max_current_a=0.1)
+    spec = hard(spec, "ufbga201-fanout", ["bga-fanout", "fine-pitch"], "manual", 120)
+    signals = sorted(b for balls in sides.values() for b in balls)
+    spec["checks"] += [
+        dict(
+            id="fanout-plane-vias",
+            kind="via_class",
+            ref="U1",
+            nets=["GND", "VCC"],
+            diameter_mm=0.35,
+            drill_mm=0.15,
+            site="interstitial",
+            engine="fanout",
+        ),
+        dict(id="fanout-escape", kind="escape", ref="U1", pads=signals, engine="fanout"),
+    ]
+    return spec
+
+
+def ufbga_fanout():
+    """``11-ufbga201-fanout``: the base on six layers (S G S G P S), where the drops reach
+    the ground (In1, In3) and supply (In4) planes."""
+    return with_stackup(ufbga_base(), "6L-SGSGPS")
+
+
 # --------------------------------------------------------- run configurations
 
 # yapnr's configuration per family (run.py arguments). The ladder's documented best: the
@@ -1223,7 +1432,7 @@ def hard_rungs():
     chasers += [with_double_sided(base), with_double_sided(with_stackup(base, "4L-SGPS"))]
     chasers += [chaser_absolute(base), chaser_relative(base), chaser_sidelock(base)]
     chasers.append(chaser_arcblock(chasers[0]))  # on 4L-SGPS: one new dimension
-    others = [quad_bank(), power_switch()]
+    others = [quad_bank(), power_switch(), ufbga_fanout()]
     for spec in chasers + others:
         spec["yapnr_args"] = YAPNR_BEST
     return deepcopy(out + chasers + others)

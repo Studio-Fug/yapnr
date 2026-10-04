@@ -533,6 +533,9 @@ def _place_route_loop(
                 )
                 if getattr(broute, "via_spans", None):  # blind, buried, micro (pnr.via_policy)
                     payload["via_spans"] = broute.via_spans
+                payload.update(
+                    getattr(broute, "extras", dict)()
+                )  # a declared fanout's (pnr.fanout)
                 (folder / "routes.json").write_text(json.dumps(payload))
                 (folder / "result.json").write_text(
                     json.dumps(
@@ -755,6 +758,10 @@ def route_and_place(
     Returns the final placed :class:`BoardGraph` and a :class:`FeedbackReport`.
     Deterministic under a fixed ``seed``.
     """
+    # A declared fanout's bottom-side decoupling sites become fixed poses (pnr.fanout).
+    from pnr.fanout.bottom import derive as _fanout_sites
+
+    constraints = _fanout_sites(graph, constraints, detail_rules)
     base_w, base_h = outline_size(graph, constraints)
     from pnr import trace as _trace
     from pnr.place import compact

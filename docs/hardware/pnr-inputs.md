@@ -573,6 +573,85 @@ Both work with `board.sides: double`: a part free to take either side keeps its
 regions and aligns there, measured with its pads, anchors and body mirrored on
 the bottom (so a `pad1` anchor moves when the part flips, an `origin` never).
 
+### `fanout` — escape an area-array part (BGA, LGA)
+
+Plans every ball of a named area-array part before routing: signal balls escape
+out of the array, balls of a net with a dedicated plane get their drop via, each
+by the rules and the via classes you give. Without the section nothing changes.
+
+```yaml
+fanout:
+  - name: u1
+    ref: U1 # the part (fix it: its fanout is planned at its pose)
+    skip_pads: [B4, B6] # balls left alone (copper another input owns, RF launches)
+    via_classes: # first class naming a net wins; default takes the rest
+      ground: { diameter_mm: 0.35, drill_mm: 0.15, nets: [GND], sites: [interstitial] }
+      default: { diameter_mm: 0.40, drill_mm: 0.20, sites: [vacant, outside] }
+    surface_rings: 2 # rings 0-1 may escape on the part's own layer
+    escape_layers: [In2.Cu, B.Cu] # where a dog-bone hands a signal over
+    forbidden_exits: [north, east] # or {F.Cu: [north]}: per layer
+    reserved: # corridors kept free, in the part's frame (frame: board for absolute)
+      - { rect: [-5.4, -0.2, -4.4, 0.2], layers: [F.Cu] }
+    neck_mm: 0.10 # signal tracks inside the fanout (default: the net's width)
+    lock: true # write the fanout copper locked (default)
+```
+
+| Key               | Meaning                                                                                                                        |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `ref`             | The part. Its lands of the most common size form the lattice (pitch per axis, rings, vacant sites); other lands are obstacles. |
+| `name`            | Unique name (default: the ref); the report and `fanout-<name>.json` use it.                                                     |
+| `pads`            | Pad names or globs to fan out (default `*`, every netted ball).                                                                |
+| `skip_pads`       | Balls the fanout leaves alone. Their lands stay obstacles.                                                                     |
+| `via_classes`     | `name: {diameter_mm, drill_mm, nets, sites}`; `sites` from `interstitial` (a lattice cell centre), `vacant` (a lattice point without a ball), `outside` (beyond the array), `in_pad` (a filled via in the ball; needs the fab profile's in-pad class); optional `layers`, the only copper layers the class's nets may use (a board rule that keeps LVDS on the outer layers, say). Checked against the fab rules. |
+| `surface_rings`   | Balls in rings below this may escape on the surface; deeper rings need a via (default 2).                                      |
+| `escape_layers`   | Routing layers a dog-bone may change to (default: every routing layer of the stack but the surface).                           |
+| `ring_layers`     | `{ring: [layers]}`: the only exit layers of that ring (the surface included by naming it).                                     |
+| `forbidden_exits` | Board compass edges of the part no escape may leave across: a list (every layer) or `{layer: [edges]}`.                        |
+| `reserved`        | `{rect or polygon, layers, frame}` areas no fanout copper enters (`frame`: `part`, the default, or `board`).                    |
+| `neck_mm`         | The signal track width inside the fanout; the router continues at the net's own width from the exit.                         |
+| `lock`            | Write the fanout copper locked (default `true`), so later passes leave it alone.                                               |
+| `bottom_sites`    | `{parts, max_stub_mm, zone, rotations}`: decoupling sites under the array on the bottom side (below).                         |
+| `variant`         | A seeded permutation of the planner's tie-breaks (default 0, none).                                                            |
+
+How it works (`pnr/fanout`): the lattice gives the sites; tracks run on the half
+lattice (through the channel between two balls, the interstitial sites and the
+vacant ones, orthogonal or at 45 degrees) and every object is judged on exact
+geometry against the lands, fixed copper, `copper_keepout`s, mounting holes,
+reserved corridors, the outline and the fab's via, hole and edge rules. All balls
+are assigned together by negotiated congestion, so signals and drops share the
+sites: most signals escaped first, then most drops, then the least length and vias.
+A ball with no legal path is reported `failed`, with its reason. At 0.65 mm pitch
+with 0.32 mm lands and 0.10/0.10 rules a 0.35/0.15 via fits an interstitial site
+and a 0.40/0.20 one does not, and one 0.10 mm track fits between two balls.
+
+The router reserves the planned copper, routes each escaped signal on from the
+first free grid cell beyond its exit, and leaves the fanned-out balls to the plan;
+the drop via of a plane ball is its connection. The fanout's vias keep their class
+(`routes.json` `via_sizes`), and its copper is written locked (`locked`). The
+route report's escape diagnostics carry a `fanout` block per fanout (escaped
+signals, drops, via sites, failures, balls without an access cell).
+
+A plane ball that already touches fixed copper of its own net (a pour or track of
+a fixed block, `fixed_copper` `polygons`) is joined by it and gets no drop; other
+nets keep their clearance from that copper. Each pair of nets keeps the larger of
+their class clearances, as KiCad's DRC judges them, and a via class must meet the
+judge's minimum via (`min_via_diameter_mm`, else `via_diameter_mm`).
+
+`bottom_sites: {parts: [C50, C56], max_stub_mm: 0.5, zone: interior}` puts each
+listed part (in priority order) on the bottom side under the array, where every pad
+clears the fanout's vias and bottom tracks and lies within `max_stub_mm` of a
+fanout via of its net; `interior` keeps the sites inside the array's outermost
+fully vacant ring (else inside ring 2), `shadow` allows the whole array. Placement
+takes the sites as fixed bottom poses; parts no site fits are reported. Other bottom
+parts are kept out of the array by the side policy only.
+
+`python -m pnr.fanout plan GRAPH --rules RULES --out DIR` writes the plan
+(`fanout-<name>.json`: copper, every ball's terminal, diagnostics) without routing;
+`python -m pnr.fanout verify BOARD --rules RULES --out DIR --kicad-cli CLI` (KiCad's
+Python) adds it to a copy of the board and judges it with the native Oracle and
+KiCad's DRC. Balls on a net with a dedicated plane drop only on a board that
+declares its copper stack; without one the plane stage drops them.
+
 ### `net_class` / `diff_pair` / `length_match` — routing rules
 
 These describe how nets are _routed_ rather than how parts are _placed_ — they

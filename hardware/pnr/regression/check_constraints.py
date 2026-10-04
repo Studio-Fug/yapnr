@@ -15,7 +15,10 @@ on F.Cu is on neither side).
 
 Check kinds: ``inside_board``, ``side``, ``fixed``, ``edge``, ``orientation``,
 ``keepout``, ``region``, ``proximity``, ``line``, ``align``, ``plane``,
-``microvia_span``, ``copper_digest``, ``no_copper``.
+``microvia_span``, ``copper_digest``, ``no_copper``, and for area-array parts
+``via_class`` (the size and site of a part's plane vias), ``escape`` (each listed ball's
+copper reaches a via or leaves the courtyard) and ``pad_distance`` (parts' pads near their
+net's pads on an anchor).
 
     python3 check_constraints.py BOARD.kicad_pcb --spec SPEC.json --out OUT.json
 
@@ -430,6 +433,134 @@ def check_no_copper(b, c):
     )
 
 
+def _ref_pads(b, ref):
+    """{pad name: (engine-frame centre, pad)} of a part's pads."""
+    out = {}
+    for pad in b.fps[ref].Pads():
+        p = pad.GetPosition()
+        out[pad.GetNumber()] = ((mm(p.x) - b.x0, b.y1 - mm(p.y)), pad)
+    return out
+
+
+def check_via_class(b, c):
+    """Every via of ``nets`` inside ``ref``'s courtyard is ``diameter_mm``/``drill_mm``
+    and, with ``site: interstitial``, sits at the centre of a cell of the part's ball
+    lattice (pitch per axis from its pads, in the footprint's own frame)."""
+    x0, y0, x1, y1 = b.courtyard(c["ref"])
+    nets = set(c["nets"])
+    fp = b.fps[c["ref"]]
+    # The ball lattice in the footprint's own frame: pitch per axis, origin at a ball.
+    local = [(mm(p.GetFPRelativePosition().x), mm(p.GetFPRelativePosition().y)) for p in fp.Pads()]
+
+    def pitch(values):
+        v = sorted({round(x, 4) for x in values})
+        gaps = [round(q - p, 3) for p, q in zip(v, v[1:]) if q - p > TOL]
+        return min(gaps, key=lambda g: (-gaps.count(g), g)) if gaps else 0.0
+
+    px, py = pitch([p[0] for p in local]), pitch([p[1] for p in local])
+    ox, oy = local[0] if local else (0.0, 0.0)
+    angle = math.radians(fp.GetOrientationDegrees())
+    centre = fp.GetPosition()
+
+    def interstitial(via):
+        # The via in the footprint frame (KiCad y down, as GetFPRelativePosition).
+        dx, dy = mm(via.x - centre.x), mm(via.y - centre.y)
+        u = dx * math.cos(angle) - dy * math.sin(angle)
+        v = dx * math.sin(angle) + dy * math.cos(angle)
+        if fp.IsFlipped():
+            u = -u
+        fu, fv = (u - ox) / px - 0.5, (v - oy) / py - 0.5
+        return abs(fu - round(fu)) * px <= 0.005 and abs(fv - round(fv)) * py <= 0.005
+
+    wrong, off_site, count = [], [], 0
+    for t in b.board.GetTracks():
+        if t.GetClass() != "PCB_VIA" or t.GetNetname() not in nets:
+            continue
+        p = t.GetPosition()
+        at = (mm(p.x) - b.x0, b.y1 - mm(p.y))
+        if not (x0 <= at[0] <= x1 and y0 <= at[1] <= y1):
+            continue
+        count += 1
+        size = (round(mm(t.GetWidth(pcbnew.F_Cu)), 4), round(mm(t.GetDrillValue()), 4))
+        if abs(size[0] - c["diameter_mm"]) > TOL or abs(size[1] - c["drill_mm"]) > TOL:
+            wrong.append([round(at[0], 3), round(at[1], 3), *size])
+        if c.get("site") == "interstitial" and not (px and py and interstitial(p)):
+            off_site.append([round(at[0], 3), round(at[1], 3)])
+    return (
+        count > 0 and not wrong and not off_site,
+        dict(vias=count, wrong_size=wrong[:10], off_site=off_site[:10]),
+        dict(diameter_mm=c["diameter_mm"], drill_mm=c["drill_mm"], site=c.get("site")),
+    )
+
+
+def check_escape(b, c):
+    """Each listed pad of ``ref`` reaches, through its own net's tracks, a via or a
+    point outside the part's courtyard (its copper leaves the ball field)."""
+    x0, y0, x1, y1 = b.courtyard(c["ref"])
+    pads = _ref_pads(b, c["ref"])
+    by_net = {}
+    for t in b.board.GetTracks():
+        by_net.setdefault(t.GetNetname(), []).append(t)
+
+    def xy(v):
+        return (mm(v.x) - b.x0, b.y1 - mm(v.y))
+
+    def outside(p):
+        return not (x0 <= p[0] <= x1 and y0 <= p[1] <= y1)
+
+    stuck = []
+    for name in c["pads"]:
+        centre, pad = pads[name]
+        items = by_net.get(pad.GetNetname(), []) if pad.GetNetname() else []
+        frontier, seen, ok = [centre], set(), False
+        while frontier and not ok:
+            p = frontier.pop()
+            for i, t in enumerate(items):
+                if i in seen:
+                    continue
+                if t.GetClass() == "PCB_VIA":
+                    if math.dist(xy(t.GetPosition()), p) <= mm(t.GetWidth(pcbnew.F_Cu)) / 2 + TOL:
+                        ok = True
+                        break
+                    continue
+                a, z = xy(t.GetStart()), xy(t.GetEnd())
+                for e, other in ((a, z), (z, a)):
+                    if math.dist(e, p) <= TOL:
+                        seen.add(i)
+                        if outside(other):
+                            ok = True
+                        frontier.append(other)
+                        break
+                if ok:
+                    break
+        if not ok:
+            stuck.append(name)
+    return (
+        not stuck,
+        dict(escaped=len(c["pads"]) - len(stuck), pads=len(c["pads"]), not_escaped=stuck),
+        dict(pads=len(c["pads"])),
+    )
+
+
+def check_pad_distance(b, c):
+    """Each netted pad of ``refs`` is within ``max_mm`` (centre to centre) of a pad of
+    ``anchor`` on its own net."""
+    anchor = _ref_pads(b, c["anchor"])
+    worst, out = 0.0, {}
+    for ref in c["refs"]:
+        for name, (centre, pad) in sorted(_ref_pads(b, ref).items()):
+            net = pad.GetNetname()
+            if not net:
+                continue
+            d = min(
+                (math.dist(centre, q) for q, other in anchor.values() if other.GetNetname() == net),
+                default=math.inf,
+            )
+            out["%s.%s" % (ref, name)] = round(d, 3)
+            worst = max(worst, d)
+    return worst <= c["max_mm"] + TOL, dict(distance_mm=out), dict(max_mm=c["max_mm"])
+
+
 KINDS = dict(
     inside_board=check_inside_board,
     side=check_side,
@@ -445,6 +576,9 @@ KINDS = dict(
     microvia_span=check_microvia_span,
     copper_digest=check_copper_digest,
     no_copper=check_no_copper,
+    via_class=check_via_class,
+    escape=check_escape,
+    pad_distance=check_pad_distance,
 )
 
 

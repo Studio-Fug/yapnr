@@ -349,6 +349,12 @@ def append(source, fixed, routes, rules, out):
     def point(a):
         return k.VECTOR2I(round(frame._left + a[0] * 1e6), round(frame._bottom - a[1] * 1e6))
 
+    # A declared fanout (pnr.route.detail.fanout) sizes its own vias and may lock
+    # its copper; both keys are absent otherwise.
+    own_sizes = {(n, x, y): (d, h) for n, x, y, d, h in routes.get("via_sizes", [])}
+    locked = routes.get("locked") or {}
+    locked_tracks = {(n, la, tuple(a), tuple(b)) for n, la, a, b in locked.get("tracks", [])}
+    locked_vias = {tuple(v) for v in locked.get("vias", [])}
     for net, layer, a, z, w in routes.get("tracks", []):
         layer_id = board.GetLayerID(layer)
         if layer_id not in list(board.GetEnabledLayers().CuStack()):
@@ -359,6 +365,8 @@ def append(source, fixed, routes, rules, out):
         t.SetEnd(point(z))
         t.SetWidth(round(w * 1e6))
         t.SetLayer(layer_id)
+        if locked_tracks and (net, layer, tuple(a), tuple(z)) in locked_tracks:
+            t.SetLocked(True)
         board.Add(t)
         keep.append(t)
     # Profile 5B only: a grid via inside a same-net SMD pad (escape E2 or a maze via
@@ -395,13 +403,17 @@ def append(source, fixed, routes, rules, out):
             if g.in_pad
             else None
         )
-        diameter, drill = size or (fab["via_diameter_mm"], fab["via_drill_mm"])
+        diameter, drill = size or own_sizes.get(
+            (net, x, y), (fab["via_diameter_mm"], fab["via_drill_mm"])
+        )
         t.SetFrontWidth(round(diameter * 1e6))
         t.SetDrill(round(drill * 1e6))
         t.SetViaType(k.VIATYPE_THROUGH)
         t.SetLayerPair(k.F_Cu, k.B_Cu)
         if size:
             style_in_pad_via(g, t)
+        if (net, x, y) in locked_vias:
+            t.SetLocked(True)
         board.Add(t)
         keep.append(t)
     board.BuildConnectivity()

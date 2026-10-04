@@ -251,6 +251,8 @@ class CompiledConstraints:
     fixed_blocks: List[Dict] = field(default_factory=list)
     # ``board.plane_fallback_drops`` (None: not declared, the default true behaviour).
     plane_fallback_drops: Optional[bool] = None
+    # Declared BGA fanouts (``fanout:``, pnr.fanout.spec); the router plans them.
+    fanouts: List[Dict] = field(default_factory=list)
 
     @property
     def hard(self) -> List[Constraint]:
@@ -501,6 +503,13 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
             if compiled.plane_fallback_drops is not None
             else {}
         ),
+        # Declared fanouts (pnr.fanout), with their via classes' net globs expanded;
+        # absent without one, so such a board's rules keep their bytes.
+        **(
+            {"fanouts": [_fanout_nets(f, net_names) for f in compiled.fanouts]}
+            if compiled.fanouts
+            else {}
+        ),
     }
 
 
@@ -530,6 +539,12 @@ def _keepout_rules(spec: Dict, compiled: "CompiledConstraints", net_names: Seque
             allowed.update(n for n in (dp.p, dp.n) if n in set(net_names))
     out["allowed_nets"] = sorted(allowed)
     return out
+
+
+def _fanout_nets(spec: Dict, net_names: Sequence[str]) -> Dict:
+    from pnr.fanout.spec import expand_nets
+
+    return expand_nets(spec, net_names)
 
 
 def _parse_board(raw: Dict) -> BoardSpec:
@@ -1108,6 +1123,7 @@ def compile_constraints(
         "legalize",
         "copper_keepout",
         "fixed_block",
+        "fanout",
     }
     for key in doc:
         if key not in known_keys:
@@ -1502,6 +1518,23 @@ def compile_constraints(
     if fallback is not None and not isinstance(fallback, bool):
         raise ConstraintError("board.plane_fallback_drops must be true or false")
 
+    # fanout: declared BGA fanouts (pnr.fanout), validated here; the router plans them.
+    fanouts = []
+    if doc.get("fanout") is not None:
+        from pnr.fanout.spec import FanoutError, parse_all
+
+        try:
+            fanouts = parse_all(doc.get("fanout"), known_refs)
+        except FanoutError as error:
+            raise ConstraintError(str(error)) from None
+        fixed_refs = {r for c in constraints if c.kind == "fixed" for r in c.refs}
+        for f in fanouts:
+            if f["ref"] not in fixed_refs:
+                warnings.append(
+                    "fanout %s: %s is not fixed; its fanout is planned at each placed pose"
+                    % (f["name"], f["ref"])
+                )
+
     return CompiledConstraints(
         board=board,
         constraints=constraints,
@@ -1517,6 +1550,7 @@ def compile_constraints(
         mounting_holes=mounting_holes,
         fixed_blocks=fixed_blocks,
         plane_fallback_drops=fallback,
+        fanouts=fanouts,
     )
 
 

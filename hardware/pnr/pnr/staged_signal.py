@@ -67,6 +67,7 @@ def run(board, rules, constraints, out, kicad_python, kicad_cli, iterations=12):
     payload = dict(tracks=result.tracks, vias=result.vias, unrouted=result.result.unrouted)
     if result.via_spans:  # blind, buried and micro vias (pnr.via_policy)
         payload["via_spans"] = result.via_spans
+    payload.update(result.extras())  # a declared fanout's via sizes and locked copper
     routes.write_text(json.dumps(payload))
     (out / "result.json").write_text(
         json.dumps(

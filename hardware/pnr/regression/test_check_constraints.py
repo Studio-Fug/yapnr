@@ -378,6 +378,8 @@ class NoCopperCheck(unittest.TestCase):
                 self.assertFalse(ok)
                 self.assertGreaterEqual(measured["foreign"], 1)
                 self.assertEqual(measured["examples"][0]["net"], "SIG")
+
+
 class FanoutChecks(unittest.TestCase):
     def run_check(self, kind, check, **board):
         import check_constraints

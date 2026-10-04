@@ -1249,6 +1249,8 @@ def _flat(copper):
     from pnr.fixed_block import flatten
 
     return flatten(copper)
+
+
 def _fanout_extras(board: BoardRoute, emitted, fanouts, fab) -> None:
     """Record the emitted fanout vias that are not the fab's default size, and the
     copper of the fanouts written locked (``lock``), for writeback."""

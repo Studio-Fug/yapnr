@@ -3,6 +3,9 @@ load("@yapnr_pypi//:requirements.bzl", "requirement")
 
 package(default_visibility = ["//visibility:public"])
 
+# The package marker, for the files KiCad-side workers stage (//yapnr/fab:capability_files).
+exports_files(["__init__.py"])
+
 py_library(
     name = "yapnr",
     srcs = [
@@ -12,9 +15,13 @@ py_library(
         "frontends/__init__.py",
     ],
     imports = [".."],
-    # The `atopile`, `picker` and `part-cache` commands (imported when the parser is built).
+    # The `atopile`, `picker`, `part-cache`, `exp`, `fab` and `order` commands (imported when the
+    # parser is built).
     deps = [
+        "//yapnr/exp",
+        "//yapnr/fab",
         "//yapnr/frontends/atopile",
+        "//yapnr/order",
         "//yapnr/partcache",
     ],
 )

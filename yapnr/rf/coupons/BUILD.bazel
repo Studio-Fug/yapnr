@@ -1,0 +1,36 @@
+"""yapnr.rf.coupons: fab-model test coupons (docs/design/rf-fab-coupons.md, docs/rf-fab-coupons.md).
+
+numpy and PyYAML only. The 2D cross-section solver (xsec.py, families.py `build`) imports
+scikit-fem and gmsh lazily: it runs in the FEA environment, never under Bazel, and the shipped
+tables in data/ are what the fit reads. It needs nothing of the RF solver in yapnr/rf, only that
+package's marker (//yapnr/rf:package).
+"""
+
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+load("@yapnr_pypi//:requirements.bzl", "requirement")
+
+package(default_visibility = ["//visibility:public"])
+
+py_library(
+    name = "coupons",
+    srcs = glob(
+        ["*.py"],
+        exclude = ["__main__.py"],
+    ),
+    data = glob(["data/*.json"]),
+    imports = ["../../.."],
+    deps = [
+        "//yapnr:package",
+        "//yapnr/rf:package",
+        requirement("numpy"),
+        requirement("pyyaml"),
+    ],
+)
+
+# bazel run //yapnr/rf/coupons:cli -- <command> ...  (python -m yapnr.rf.coupons)
+py_binary(
+    name = "cli",
+    srcs = ["__main__.py"],
+    main = "__main__.py",
+    deps = [":coupons"],
+)

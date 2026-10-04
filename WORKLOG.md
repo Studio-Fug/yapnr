@@ -3,11 +3,13 @@
 A short, live status board: rewritten at the end of each session, not appended to. History lives in
 git and in the pull requests.
 
-Last updated: 2026-10-03 (RF round 2 and its review fixes on `claude/rf-topopt`: accuracy, the
-generated antenna, the re-run cases, the pixel-exact export; before
-that PR4, #10, the ladder animations, the atopile toolchain and the privacy-scan trailer rule
-merged; line groups, hard board edges, the hierarchical ladder driver and their animations on
-`claude/animations-groups-hier`).
+Last updated: 2026-10-03 (RF round 2 with the native FDTD kernel on `claude/rf-topopt`, merged
+with `main`; the hard rungs on `claude/ladder-hard-rungs` and the engine's fixes for
+them on `claude/gap-fixes`, with `claude/gap-constraints` merged; the gloss port's review fixes on
+`claude/gloss-port`). Before that, 2026-10-02: fab outputs and staged ordering, F2, F1 and O1, on
+`claude/fab-order`. Before that, 2026-09-30: PR4, #10, the ladder animations, the atopile
+toolchain and the privacy-scan trailer rule merged; line groups, hard board edges, the
+hierarchical ladder driver and their animations on `claude/animations-groups-hier`.
 
 ## In progress
 
@@ -35,6 +37,70 @@ merged; line groups, hard board edges, the hierarchical ladder driver and their 
   filter banks), a CI run, sub-pixel tuning of binary copper for resonant filters, a modal port
   extraction for radiators, a `yapnr rf` CLI, an external cross-check, footprints in PnR.
 
+- **Compact placement (`PNR_COMPACT`, shrink-to-fit `PNR_SHRINK`, both off by default)**
+  (branch `claude/compact` on `main`; design
+  [docs/design/compact-placement.md](docs/design/compact-placement.md)): offset courtyards, the
+  compact legalizer, spread 1.0 with clustered starts, a compactness tie-break after the vias,
+  legacy plane drops planned before routing (`DROPS`) and the flat driver's outline search.
+  Flag-off identity holds on x86 (placed and routed bytes of 30 cells against `main`). The A/B
+  (GCP, seeds 0 and 1) passes the ladder, the showcases, the header rung, `08-chaser-20-plane`
+  on ten seeds and the nightly hard rungs, but 5 of 16 manual `09-mcu-usb-31` cells regress (USB
+  pair skew), so it stays opt-in. The docs and README animations (ladder and showcases) are
+  regenerated with `--compact --gloss` (renderer 3: the gloss stage as a before/after; CI's
+  traced runs take the same options). Next: reserve room for pair tuning under compact, then
+  another A/B.
+
+- **Hard-rung gap fixes** (branch `claude/gap-fixes` on `claude/ladder-hard-rungs`, local, not
+  pushed). The hard rungs (`regression/hard_rungs.py`: stackups, via kinds, sides, absolute and
+  relative constraints, Monte-Carlo search, a THT header) found capabilities the engine lacked.
+  Five tracks are merged, each new behaviour following from the board's inputs (a board without
+  them routes as before; the eight ladder cases and four showcases give identical boards):
+
+  - declared stackups (`pnr/stack.py`): a KiCad stackup with a `power` or `mixed` layer, or a
+    custom rule keeping tracks off a layer, routes every signal layer of any count; plane drops are
+    planned with the pin escapes; every plane layer is formed (full outline by default);
+  - blind, buried and micro vias (`pnr/via_policy.py`, the rules' `via_policy`): only spans the
+    declared stack can build, one build per board, return ties between two planes of one net;
+  - sides (`board.sides: double`, `pnr/place/sides.py`, `detail_moves.py`): placement chooses the
+    side of free parts; writeback mirrors bottom parts on `B.*`;
+  - length matching (`pnr/route/detail/tune.py`, `pnr/length_model.py`, `pnr/place/matched.py`):
+    declared pairs and groups are tuned with meanders against KiCad's own length measure;
+  - router speed: the packed kernel with dense per-net fields is the default (identical routes),
+    an optional C search loop (`PNR_MAZE_KERNEL=native`), and an exact-separation recovery
+    (`PNR_EXACT_SEPARATION=recover`, the default) for routes the halo model leaves open.
+
+  Results (two seeds each): ladder and showcases 24 of 24, CPU 2,281 s to 442 s; hard rungs clean
+  in 37 of 48 runs (7 before), CPU 11,537 s to 1,964 s on the 46 runs with a before. Still failing:
+  07/09 `abs` and `rel` (`region`, `align`: on `claude/gap-constraints`, not merged), 09 `header`
+  (no legal placement) and 09 4L-SSGS seed 0 (USB pair skew after a detour). Three "Ladder fix"
+  commits came with the tracks (the plane check, the side check, the HDI microvia size).
+
+- **Gloss, dekink and corridor coalescing (`PNR_GLOSS`, off by default)** (branch
+  `claude/gloss-port`; design [docs/design/gloss.md](docs/design/gloss.md)): ported from Splanc's
+  src18 with its tests, `board.Delete` instead of `Remove`, workers through `pnr.proc.run_status`;
+  the `06g-gloss` and `07g-gloss` loop passes, the ladder's opt-in `--gloss` stage with
+  `--gloss-flag` and `--gloss-measure`, functional groups derived from the rules
+  (`PNR_GLOSS_CLASSES_FROM`, the most specific group wins) and the public example groups file for
+  `07-chaser-20`. Review fixes: the ray metric no longer depends on which way a segment is drawn
+  (patch handed back to the source), gloss settings in the router key and imports, the code key
+  covers the pass only with the flag, the ladder's outer gate by violation keys, frozen and hashed
+  groups file, per-stage CPU as on the hard-rungs branch, a nightly CI lane. Identity with the
+  source (plus the same ray patch) is exact on three private replay points; flag-off identity with
+  `main` (stubbed loop) holds; a real native loop with the flag ran both passes on a public board.
+  Ladder A/B (24 runs per arm, no regression, bends -32 %, length -4 %, CPU 2.2 times): see
+  [docs/regression-ladder.md](docs/regression-ladder.md#gloss-opt-in). Next: the larger paired
+  native-loop A/B on the cloud lane decides default-on (owner); rebase `run.py` onto
+  `claude/ladder-hard-rungs` when it lands.
+
+- **Fab outputs and staged ordering** (branch `claude/fab-order`; design
+  [docs/design/fab-and-ordering.md](docs/design/fab-and-ordering.md), guide
+  [docs/fab-and-ordering.md](docs/fab-and-ordering.md)). Built: vendor profiles and stackups as
+  data (`oshpark-2l/4l/6l`, `jlc-4l`; drafts `jlc-6l`, `pcbway-std`, `pcbway-hf-2l`), engine
+  support for them (`PNR_FAB_PROFILE`, `run.py --fab-profile`; `legacy` and `jlc-pofv` unchanged,
+  golden-pinned), `yapnr fab profiles|show|check|build|preview` and `yapnr order stage|vendors`
+  (staging only, never uploads). Ladder cases 04 (`oshpark-2l`) and 08 (`oshpark-4l`, `jlc-4l`,
+  `pcbway-std`) route clean under them and stage as dry runs. Not built: O2 and O3 (decisions D1
+  and D3), JLC rotation corrections in the part cache.
 - **Merged today:** PR3a (#9, code key scheme 2 and the engine format), the viewer (#12, PR4:
   `yapnr/viewer`, `bazel run //:viewer -- --root <live>`, paid features off by default, elkjs and
   three.js fetched pinned; guide [docs/viewer.md](docs/viewer.md), choices in
@@ -104,6 +170,23 @@ merged; line groups, hard board edges, the hierarchical ladder driver and their 
   trace digests are identical to the first run; all pass. Next: the owner's review of the
   decisions in `docs/decisions.md` and the pull request.
 
+- **RF fab-model coupons** (#32, branch `claude/rf-coupons`; design
+  `docs/design/rf-fab-coupons.md`, guide `docs/rf-fab-coupons.md`): `yapnr/rf/coupons` generates
+  boards A (JLC04161H-7628) and B (JLC06161H-7628), DRC-clean, with expected S-parameters and fab
+  zips under `examples/rf-coupons/`, and extracts the fab parameters from a VNA session
+  (`python -m yapnr.rf.coupons extract`): multiline TRL, a joint fit with connection nuisances
+  and a parametric bootstrap. Synthetic recovery passes in CI. Next: the owner's decisions of
+  design §14 (connector, VNA, scope), checking the SMA footprint and JLC's edge clearance, and
+  the order (owner only).
+- **RF coupons, adversarial review** (#32): the boards' TRL sticks carried no stick id (fixed, all
+  labels now `A05 P L40`); mouse-bite tabs widened to JLC's 5 mm minimum; multiline TRL dropped
+  nearly degenerate line pairs, whose swapped roots spiked the error boxes and failed a quarter of
+  nominal verification lines; a fit stuck at the 2D-table edge is now a reported problem; board B
+  alone does not split the core's and the 7628's εr (use board A's fit as `--prior`). Impedances
+  re-checked with an independent finite-volume solver (within 0.1 Ω) and IPC-2141A (stripline
+  50.5 Ω); recovery re-run with another seed, a wrong nominal stackup and a worse lab. Open: the
+  SMA part, the panel fee, a mask-off stick on board B.
+
 ## Next
 
 1. Owner (viewer, #12): review after the fact; decide the agent's default model (opus, $2 per
@@ -156,20 +239,34 @@ merged; line groups, hard board edges, the hierarchical ladder driver and their 
 13. First release tag `v0.1.0` (owner) once the engine runs end to end inside the published image on
     both architectures (the PR6b example), after the `Image` run of that commit on `main` is green;
     make the `image` check required then.
-14. Owner: decide whether the ladder should default to `--fab-profile jlc-pofv` (the engine's
+14. Owner, fab and ordering (design §12): decisions D1 to D5. For the first OSH Park order, route
+    the board under an OSH Park profile, run `yapnr order stage BOARD --vendor oshpark`, drop the
+    zip on oshpark.com, check the preview and pay there; RF boards also pin `--stackup` (D4).
+15. Owner: decide whether the ladder should default to `--fab-profile jlc-pofv` (the engine's
     default JLCPCB profile) instead of `legacy` (the fixtures' own rules; `docs/decisions.md`).
     With `route_case.py` applying the profile, `jlc-pofv` passes every case too (2026-09-30:
     pool seed 0, 8 of 8; baseline seeds 0 and 1, 16 of 16; other boards than legacy's, e.g. case
     07 with 17 vias instead of 19). Flipping it changes the rules the ladder README states and
     needs a refresh of `docs/animations/`. The first `ladder.yaml` run (the pull request of
     `claude/ladder-animations`) is the first run of its container path.
-15. Rebuild the KiCad base monthly (bump `docker/yapnr-kicad/TAG` to the next `-N`), or with the
+16. Rebuild the KiCad base monthly (bump `docker/yapnr-kicad/TAG` to the next `-N`), or with the
     Dependabot `ubuntu` digest update (docs/releases.md, "Maintaining the images").
-16. Showcases (`claude/animations-groups-hier`): the first nightly showcase step on the arm64
+17. Showcases (`claude/animations-groups-hier`): the first nightly showcase step on the arm64
     runner (its runtime and its placements are unmeasured; `showcase-edge-io.webp` fits its
     2.5 MB budget at quality 70 by 450 bytes here, the encoder steps down where it must). The
     ladder's own animations still sweep single parts through half-turns (their timelines are
     pinned); move them to flips with the next deliberate refresh of `docs/animations/`.
+18. Hard-rung gaps: merge `claude/gap-constraints` (region and align; it conflicts with the sides
+    track in seven placement files) and rerun the `abs` and `rel` rungs; give the placement model
+    an origin-to-courtyard offset (the THT header's origin is pin 1, so its courtyard is placed
+    off by half its length and never legalizes); carry the three Ladder fixes (plane check, side
+    check, HDI microvia) to `claude/ladder-hard-rungs`, or land the rungs and the fixes together.
+19. Owner: whether the optional C maze kernel becomes "use it when present". Recommended once CI
+    runs `dense_maze_native_test` and `exact_route_native_test` on both Linux architectures; until
+    then the packed Python kernel stays the default and no C toolchain is needed.
+20. Boards with blind, buried or micro vias: the packed and native kernels hand them to the
+    reference kernel (so no exact-separation recovery there), the length tuner only adds
+    meanders, and the native KiCad repair loop and the hierarchical driver add through vias only.
 
 ## Blockers
 

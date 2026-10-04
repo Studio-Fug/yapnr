@@ -1,0 +1,770 @@
+{
+  "schema": "yapnr-coupon-catalog/1",
+  "stackup": "JLC06161H-7628",
+  "board": "B",
+  "launch": {
+    "pad_w": 1.27,
+    "pad_x0": 0.5,
+    "pad_len": 3.2,
+    "pad_gap": 0.616,
+    "taper_len": 1.0,
+    "cut_layers": [
+      2,
+      3
+    ],
+    "via_x": 7.0,
+    "source": "2D, L2+L3 cut, L4 reference"
+  },
+  "trl": {
+    "S": {
+      "family": "S",
+      "dl": [
+        0.0,
+        2.5,
+        6.5,
+        16.0,
+        40.0,
+        100.0
+      ],
+      "sticks": [
+        "B01",
+        "B02",
+        "B03",
+        "B04",
+        "B05",
+        "B06"
+      ],
+      "reflect": "B07",
+      "verify": "B08",
+      "tdr": "B06"
+    },
+    "PB": {
+      "family": "P",
+      "dl": [
+        0.0,
+        6.5,
+        16.0,
+        40.0
+      ],
+      "sticks": [
+        "B12",
+        "B13",
+        "B14",
+        "B15"
+      ],
+      "reflect": "B16",
+      "verify": "",
+      "tdr": "B15"
+    }
+  },
+  "sticks": [
+    {
+      "id": "B01",
+      "kind": "thru",
+      "family": "S",
+      "trl": "S",
+      "length": 20.0,
+      "height": 15.0,
+      "dl": 0.0,
+      "elements": [],
+      "tier": "core",
+      "fitted": true,
+      "ports": 2,
+      "determines": "calibration; \u03b3(f) of S",
+      "label": "B01 S THRU",
+      "geometry": {},
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        10.0
+      ]
+    },
+    {
+      "id": "B02",
+      "kind": "line",
+      "family": "S",
+      "trl": "S",
+      "length": 22.5,
+      "height": 18.0,
+      "dl": 2.5,
+      "elements": [
+        [
+          "line",
+          "S",
+          2.5
+        ]
+      ],
+      "tier": "core",
+      "fitted": true,
+      "ports": 2,
+      "determines": "calibration; \u03b3(f) of S",
+      "label": "B02 S L2.5",
+      "geometry": {},
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        12.5
+      ]
+    },
+    {
+      "id": "B03",
+      "kind": "line",
+      "family": "S",
+      "trl": "S",
+      "length": 26.5,
+      "height": 15.0,
+      "dl": 6.5,
+      "elements": [
+        [
+          "line",
+          "S",
+          6.5
+        ]
+      ],
+      "tier": "core",
+      "fitted": true,
+      "ports": 2,
+      "determines": "calibration; \u03b3(f) of S",
+      "label": "B03 S L6.5",
+      "geometry": {},
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        16.5
+      ]
+    },
+    {
+      "id": "B04",
+      "kind": "line",
+      "family": "S",
+      "trl": "S",
+      "length": 36.0,
+      "height": 15.0,
+      "dl": 16.0,
+      "elements": [
+        [
+          "line",
+          "S",
+          16.0
+        ]
+      ],
+      "tier": "core",
+      "fitted": true,
+      "ports": 2,
+      "determines": "calibration; \u03b3(f) of S",
+      "label": "B04 S L16",
+      "geometry": {},
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        26.0
+      ]
+    },
+    {
+      "id": "B05",
+      "kind": "line",
+      "family": "S",
+      "trl": "S",
+      "length": 60.0,
+      "height": 18.0,
+      "dl": 40.0,
+      "elements": [
+        [
+          "line",
+          "S",
+          40.0
+        ]
+      ],
+      "tier": "core",
+      "fitted": true,
+      "ports": 2,
+      "determines": "calibration; \u03b3(f) of S",
+      "label": "B05 S L40",
+      "geometry": {},
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        50.0
+      ]
+    },
+    {
+      "id": "B06",
+      "kind": "line",
+      "family": "S",
+      "trl": "S",
+      "length": 120.0,
+      "height": 15.0,
+      "dl": 100.0,
+      "elements": [
+        [
+          "line",
+          "S",
+          100.0
+        ]
+      ],
+      "tier": "core",
+      "fitted": true,
+      "ports": 2,
+      "determines": "calibration; \u03b3(f) of S",
+      "label": "B06 S L100",
+      "geometry": {},
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        110.0
+      ]
+    },
+    {
+      "id": "B07",
+      "kind": "reflect",
+      "family": "S",
+      "trl": "S",
+      "length": 30.0,
+      "height": 15.0,
+      "dl": 0.0,
+      "elements": [],
+      "tier": "core",
+      "fitted": false,
+      "ports": 2,
+      "determines": "calibration (reflect)",
+      "label": "B07 S REFL",
+      "geometry": {},
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        20.0
+      ]
+    },
+    {
+      "id": "B08",
+      "kind": "verify",
+      "family": "S",
+      "trl": "S",
+      "length": 48.0,
+      "height": 15.0,
+      "dl": 28.0,
+      "elements": [
+        [
+          "line",
+          "S",
+          28.0
+        ]
+      ],
+      "tier": "core",
+      "fitted": false,
+      "ports": 2,
+      "determines": "residual calibration error",
+      "label": "B08 S VER28",
+      "geometry": {},
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        38.0
+      ]
+    },
+    {
+      "id": "B09",
+      "kind": "variant",
+      "family": "S0.7",
+      "trl": "S",
+      "length": 60.0,
+      "height": 15.0,
+      "dl": 0.0,
+      "elements": [
+        [
+          "line",
+          "S0.7",
+          40.0
+        ]
+      ],
+      "tier": "core",
+      "fitted": true,
+      "ports": 2,
+      "determines": "etch and heights on L3",
+      "label": "B09 S0.7",
+      "geometry": {
+        "ref_family": "S"
+      },
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        50.0
+      ]
+    },
+    {
+      "id": "B10",
+      "kind": "variant",
+      "family": "S1.4",
+      "trl": "S",
+      "length": 60.0,
+      "height": 15.0,
+      "dl": 0.0,
+      "elements": [
+        [
+          "line",
+          "S1.4",
+          40.0
+        ]
+      ],
+      "tier": "core",
+      "fitted": true,
+      "ports": 2,
+      "determines": "tan \u03b4 vs roughness on L3",
+      "label": "B10 S1.4",
+      "geometry": {
+        "ref_family": "S"
+      },
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        50.0
+      ]
+    },
+    {
+      "id": "B11",
+      "kind": "ring",
+      "family": "S",
+      "trl": "S",
+      "length": 60.0,
+      "height": 40.0,
+      "dl": 0.0,
+      "elements": [
+        [
+          "line",
+          "S",
+          16.112
+        ],
+        [
+          "ring2",
+          "S",
+          7.776,
+          0.16666666666666666
+        ],
+        [
+          "line",
+          "S",
+          16.112
+        ]
+      ],
+      "tier": "core",
+      "fitted": false,
+      "ports": 2,
+      "determines": "held out: \u03b5eff at 2.9, 5.8, 11.6 GHz from the ring's notches",
+      "label": "B11 RING S",
+      "geometry": {
+        "radius": 7.776,
+        "arc": 0.16666666666666666,
+        "feed": 16.112
+      },
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        50.0
+      ]
+    },
+    {
+      "id": "B12",
+      "kind": "thru",
+      "family": "P",
+      "trl": "PB",
+      "length": 20.0,
+      "height": 15.0,
+      "dl": 0.0,
+      "elements": [],
+      "tier": "core",
+      "fitted": true,
+      "ports": 2,
+      "determines": "calibration; \u03b3(f) of P",
+      "label": "B12 P THRU",
+      "geometry": {},
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        10.0
+      ]
+    },
+    {
+      "id": "B13",
+      "kind": "line",
+      "family": "P",
+      "trl": "PB",
+      "length": 26.5,
+      "height": 15.0,
+      "dl": 6.5,
+      "elements": [
+        [
+          "line",
+          "P",
+          6.5
+        ]
+      ],
+      "tier": "core",
+      "fitted": true,
+      "ports": 2,
+      "determines": "calibration; \u03b3(f) of P",
+      "label": "B13 P L6.5",
+      "geometry": {},
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        16.5
+      ]
+    },
+    {
+      "id": "B14",
+      "kind": "line",
+      "family": "P",
+      "trl": "PB",
+      "length": 36.0,
+      "height": 15.0,
+      "dl": 16.0,
+      "elements": [
+        [
+          "line",
+          "P",
+          16.0
+        ]
+      ],
+      "tier": "core",
+      "fitted": true,
+      "ports": 2,
+      "determines": "calibration; \u03b3(f) of P",
+      "label": "B14 P L16",
+      "geometry": {},
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        26.0
+      ]
+    },
+    {
+      "id": "B15",
+      "kind": "line",
+      "family": "P",
+      "trl": "PB",
+      "length": 60.0,
+      "height": 15.0,
+      "dl": 40.0,
+      "elements": [
+        [
+          "line",
+          "P",
+          40.0
+        ]
+      ],
+      "tier": "core",
+      "fitted": true,
+      "ports": 2,
+      "determines": "calibration; \u03b3(f) of P",
+      "label": "B15 P L40",
+      "geometry": {},
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        50.0
+      ]
+    },
+    {
+      "id": "B16",
+      "kind": "reflect",
+      "family": "P",
+      "trl": "PB",
+      "length": 30.0,
+      "height": 15.0,
+      "dl": 0.0,
+      "elements": [],
+      "tier": "core",
+      "fitted": false,
+      "ports": 2,
+      "determines": "calibration (reflect)",
+      "label": "B16 P REFL",
+      "geometry": {},
+      "generated": true,
+      "rp_mm": [
+        10.0,
+        20.0
+      ]
+    },
+    {
+      "id": "B17",
+      "kind": "via2x",
+      "family": "S",
+      "trl": "",
+      "length": 40.0,
+      "height": 15.0,
+      "dl": 0.0,
+      "elements": [],
+      "tier": "core",
+      "fitted": false,
+      "ports": 2,
+      "determines": "held out: the via model (2x-thru, not predicted)",
+      "label": "B17 VIA 2X",
+      "geometry": {},
+      "generated": false,
+      "rp_mm": [
+        10.0,
+        30.0
+      ]
+    },
+    {
+      "id": "B18",
+      "kind": "dc",
+      "family": "",
+      "trl": "",
+      "length": 56.0,
+      "height": 40.0,
+      "dl": 0.0,
+      "elements": [],
+      "tier": "core",
+      "fitted": false,
+      "ports": 0,
+      "determines": "w\u00b7t and etch per layer; via chain",
+      "label": "B18 DC",
+      "geometry": {
+        "meanders": [
+          {
+            "layer": 1,
+            "w": 0.2,
+            "pitch": 0.5,
+            "columns": 50,
+            "run": 3.51,
+            "escape": 1.5,
+            "length": 203.0,
+            "corners": 98
+          },
+          {
+            "layer": 1,
+            "w": 0.5,
+            "pitch": 1.0,
+            "columns": 26,
+            "run": 8.65,
+            "escape": 1.5,
+            "length": 252.9,
+            "corners": 50
+          },
+          {
+            "layer": 2,
+            "w": 0.2,
+            "pitch": 0.5,
+            "columns": 50,
+            "run": 3.51,
+            "escape": 1.5,
+            "length": 203.0,
+            "corners": 98
+          },
+          {
+            "layer": 2,
+            "w": 0.5,
+            "pitch": 1.0,
+            "columns": 26,
+            "run": 8.65,
+            "escape": 1.5,
+            "length": 252.9,
+            "corners": 50
+          },
+          {
+            "layer": 3,
+            "w": 0.2,
+            "pitch": 0.5,
+            "columns": 50,
+            "run": 3.51,
+            "escape": 1.5,
+            "length": 203.0,
+            "corners": 98
+          },
+          {
+            "layer": 3,
+            "w": 0.5,
+            "pitch": 1.0,
+            "columns": 26,
+            "run": 8.65,
+            "escape": 1.5,
+            "length": 252.9,
+            "corners": 50
+          },
+          {
+            "layer": 4,
+            "w": 0.2,
+            "pitch": 0.5,
+            "columns": 50,
+            "run": 3.51,
+            "escape": 1.5,
+            "length": 203.0,
+            "corners": 98
+          },
+          {
+            "layer": 4,
+            "w": 0.5,
+            "pitch": 1.0,
+            "columns": 26,
+            "run": 8.65,
+            "escape": 1.5,
+            "length": 252.9,
+            "corners": 50
+          },
+          {
+            "layer": 5,
+            "w": 0.2,
+            "pitch": 0.5,
+            "columns": 50,
+            "run": 3.51,
+            "escape": 1.5,
+            "length": 203.0,
+            "corners": 98
+          },
+          {
+            "layer": 5,
+            "w": 0.5,
+            "pitch": 1.0,
+            "columns": 26,
+            "run": 8.65,
+            "escape": 1.5,
+            "length": 252.9,
+            "corners": 50
+          },
+          {
+            "layer": 6,
+            "w": 0.2,
+            "pitch": 0.5,
+            "columns": 50,
+            "run": 3.51,
+            "escape": 1.5,
+            "length": 203.0,
+            "corners": 98
+          },
+          {
+            "layer": 6,
+            "w": 0.5,
+            "pitch": 1.0,
+            "columns": 26,
+            "run": 8.65,
+            "escape": 1.5,
+            "length": 252.9,
+            "corners": 50
+          }
+        ],
+        "via_chain": 50
+      },
+      "generated": true,
+      "rp_mm": []
+    },
+    {
+      "id": "B19",
+      "kind": "xsec",
+      "family": "",
+      "trl": "",
+      "length": 30.0,
+      "height": 18.0,
+      "dl": 0.0,
+      "elements": [],
+      "tier": "core",
+      "fitted": false,
+      "ports": 0,
+      "determines": "microsection: h_core, h_pp, t_L3",
+      "label": "B19 XSEC",
+      "geometry": {
+        "lines": [
+          "S",
+          "S0.7",
+          "S1.4",
+          "P"
+        ]
+      },
+      "generated": true,
+      "rp_mm": []
+    },
+    {
+      "id": "B20",
+      "kind": "coupled",
+      "family": "S",
+      "trl": "S",
+      "length": 0.0,
+      "height": 15.0,
+      "dl": 0.0,
+      "elements": [],
+      "tier": "extended",
+      "fitted": false,
+      "ports": 2,
+      "determines": "DIFF100-S",
+      "label": "",
+      "geometry": {},
+      "generated": false,
+      "rp_mm": [
+        10.0,
+        -10.0
+      ]
+    },
+    {
+      "id": "B21",
+      "kind": "coupled",
+      "family": "S",
+      "trl": "S",
+      "length": 0.0,
+      "height": 15.0,
+      "dl": 0.0,
+      "elements": [],
+      "tier": "extended",
+      "fitted": false,
+      "ports": 2,
+      "determines": "DIFF90-S",
+      "label": "",
+      "geometry": {},
+      "generated": false,
+      "rp_mm": [
+        10.0,
+        -10.0
+      ]
+    },
+    {
+      "id": "B22",
+      "kind": "stub",
+      "family": "S",
+      "trl": "S",
+      "length": 0.0,
+      "height": 15.0,
+      "dl": 0.0,
+      "elements": [],
+      "tier": "extended",
+      "fitted": false,
+      "ports": 2,
+      "determines": "S open stub",
+      "label": "",
+      "geometry": {},
+      "generated": false,
+      "rp_mm": [
+        10.0,
+        -10.0
+      ]
+    },
+    {
+      "id": "B23",
+      "kind": "rotated",
+      "family": "S",
+      "trl": "S",
+      "length": 0.0,
+      "height": 15.0,
+      "dl": 0.0,
+      "elements": [],
+      "tier": "extended",
+      "fitted": false,
+      "ports": 2,
+      "determines": "weave on L3",
+      "label": "",
+      "geometry": {},
+      "generated": false,
+      "rp_mm": [
+        10.0,
+        -10.0
+      ]
+    }
+  ],
+  "notes": [
+    "edge SMA footprint: Samtec SMA-J-P-H-ST-EM1 geometry (KiCad library)",
+    "L1 -> L3 transition: 0.3 mm via, antipads 1.0 mm on L2, L4-L6, four ground vias on a 0.9 mm radius; not 3D-tuned",
+    "B17 (via 2x-thru) and the extended set are not generated yet"
+  ],
+  "panel_mm": [
+    134.0,
+    189.0
+  ]
+}

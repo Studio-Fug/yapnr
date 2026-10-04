@@ -14,7 +14,7 @@
 #
 # hardware/ (the imported engine) is formatted and linted since PR3a: the
 # Python hooks cover its Python files (flake8 with the per-file baseline in
-# .flake8; name-tests-test but for two test helpers).
+# .flake8; name-tests-test but for three test helpers).
 # Its other files keep a per-hook exclude where the hook would rewrite or
 # reject them, until PR3b moves the code out: prettier (Markdown, SI model and
 # test data JSON), markdownlint (via .markdownlintignore), buildifier and
@@ -95,7 +95,7 @@ repos:
       - id: name-tests-test
         args: [--pytest-test-first]
         # Helper modules the engine's tests import; PR3b moves them out of tests/.
-        exclude: ^hardware/pnr/tests/(cost_fixture|power_topology_golden)\.py$
+        exclude: ^hardware/pnr/tests/(compact_fixture|cost_fixture|gloss_fixture|power_topology_golden)\.py$
 
   # Keep machine paths, tailnet hosts and addresses, personal e-mail
   # addresses and credentials out of this public repository. Stdlib-only.

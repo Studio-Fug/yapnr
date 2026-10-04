@@ -3,6 +3,9 @@
 The mesh is a proposal generator. Full physical legalization and routing decide
 acceptance; fixed/locked parts, pad geometry, orientations and board size survive.
 Pressure is in stable caller-defined units, never normalized to the current peak.
+
+PNR_COMPACT offset courtyards (:func:`pnr.place.geometry.body_shift`): the mesh and the
+collective projection move each part's body box, centred at ``pos`` plus its shift.
 """
 
 import math
@@ -14,6 +17,7 @@ from pnr.graph import BoardGraph
 
 from .channels import ChannelModel
 from .geometry import (
+    body_shift,
     courtyard_rect,
     hard_group_limits,
     keepout_rects,
@@ -63,8 +67,13 @@ def project_collectively(graph, constraints, fixed, sweeps=160):
                 continue
             r = courtyard_rect(c)
             x, y = c.pos
-            x = min(width - r.w / 2, max(r.w / 2, x))
-            y = min(height - r.h / 2, max(r.h / 2, y))
+            shift = body_shift(c)
+            if shift is None:
+                x = min(width - r.w / 2, max(r.w / 2, x))
+                y = min(height - r.h / 2, max(r.h / 2, y))
+            else:  # PNR_COMPACT offset courtyard: clamp the body box, keep pos its origin
+                x = min(width - r.w / 2, max(r.w / 2, x + shift[0])) - shift[0]
+                y = min(height - r.h / 2, max(r.h / 2, y + shift[1])) - shift[1]
             for ax, ay, radius in limits.get(c.ref, ()):
                 distance = math.hypot(x - ax, y - ay)
                 if distance > radius:
@@ -183,6 +192,13 @@ def deform(
         return None
     rects = [courtyard_rect(c) for c in parts]
     half = torch.tensor([[r.w / 2, r.h / 2] for r in rects], dtype=dtype)
+    # PNR_COMPACT offset courtyards: body centres sit at pos + shift (None: all centred).
+    shifts = [body_shift(c) for c in parts]
+    offset = (
+        None
+        if all(sh is None for sh in shifts)
+        else torch.tensor([sh or (0.0, 0.0) for sh in shifts], dtype=dtype)
+    )
     same = torch.tensor(
         [
             [
@@ -196,6 +212,9 @@ def deform(
     limits = hard_group_limits(constraints, {c.ref: c.pos for c in g.components})
     legalizer_failures = []
     candidates = []
+    from .regions import soft_refs, soft_total
+
+    soft = bool(soft_refs(constraints))
     diagnostics = {} if diagnostics is None else diagnostics
     diagnostics["attempts"] = legalizer_failures
     optimizer = torch.optim.Adam([nodes], lr=0.035)
@@ -204,6 +223,7 @@ def deform(
         field = max_move * torch.tanh(nodes)
         delta = W @ field.reshape(-1, 2)
         pos = xy + delta
+        body = pos if offset is None else pos + offset
         if refresh_channels and step % 20 == 0:
             tensors = channel_tensors(delta.detach().numpy())
             refreshes.append(dict(step=step, channels=0 if tensors is None else len(tensors[0])))
@@ -214,19 +234,19 @@ def deform(
             separation = gaps + ((delta[ib] - delta[ia]) * directions).sum(1)
             channel = (priorities * torch.relu(need - separation) ** 2).sum()
         penetration = (
-            half[:, None, :] + half[None, :, :] - torch.abs(pos[:, None, :] - pos[None, :, :])
+            half[:, None, :] + half[None, :, :] - torch.abs(body[:, None, :] - body[None, :, :])
         )
         overlap = torch.relu(penetration.min(2).values)[same].square().sum()
         bounds = (
-            torch.relu(half - pos).square().sum()
-            + torch.relu(pos + half - torch.tensor([width, height], dtype=dtype)).square().sum()
+            torch.relu(half - body).square().sum()
+            + torch.relu(body + half - torch.tensor([width, height], dtype=dtype)).square().sum()
         )
         keep = pos.sum() * 0
         for r in keepouts:
             pen = (
                 half
                 + torch.tensor([r.w / 2, r.h / 2], dtype=dtype)
-                - torch.abs(pos - torch.tensor([r.cx, r.cy], dtype=dtype))
+                - torch.abs(body - torch.tensor([r.cx, r.cy], dtype=dtype))
             )
             keep = keep + torch.relu(pen.min(1).values).square().sum()
         group = pos.sum() * 0
@@ -274,6 +294,9 @@ def deform(
             legalizer_failures.append(dict(step=step + 1, excess_displacement=max(distances)))
             continue
         score = ChannelModel(candidate, rules).report(candidate)["shortage_score"]
+        if soft:
+            # Soft regions and aligns (pnr.place.regions) rank the candidates too.
+            score += soft_total(candidate, constraints)
         moved = {
             c.ref: dict(before=original[indices[c.ref]].tolist(), after=list(c.pos))
             for c in candidate.components
@@ -294,6 +317,10 @@ def deform(
     if not candidates:
         return None
     score, candidate, event = min(candidates, key=lambda a: a[0])
+    if soft:
+        penalty = soft_total(candidate, constraints)
+        score -= penalty
+        event["soft_region_align"] = penalty
     bad = hard_violations(candidate, constraints)
     event.update(
         channel_refreshes=refreshes,

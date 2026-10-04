@@ -28,7 +28,15 @@ command line currently offers `yapnr --version` and a `yapnr doctor` stub; the l
   services and the cost and security of the (off by default) Ask agent.
 - [The atopile toolchain](frontends/atopile.md): build atopile projects offline, without Nix.
 - [The part cache](part-cache.md): where part data lives instead of the repository.
+- [Fab bundles and staged orders](fab-and-ordering.md): check a routed board under OSH Park's,
+  JLCPCB's or PCBWay's rules, build the files to upload and an order card, and open the vendor's
+  page. yapnr never uploads, orders or pays.
 - [Releases and versioning](releases.md): version numbers, image tags, what a release publishes.
+- [RF fab-model test coupons](rf-fab-coupons.md): coupon boards that measure the fab's stackup
+  (εr, loss, heights, copper, etch, mask), and the extraction that turns VNA data into a fitted
+  stackup with uncertainties.
+- [Cloud and HPC experiments](cloud-experiments.md): `yapnr exp` campaigns on a local pool, Google
+  Cloud Batch (Spot VMs) or a Slurm allocation, with cost guards; the owner's bootstrap runbook.
 - [Regression ladder](regression-ladder.md): eight boards of rising complexity, up to a TLC555 +
   CD4017B LED chaser, with an animation of each board's place and route.
 - [Constraints and hierarchy](constraints-and-hierarchy.md): a line of LEDs, parts held on the
@@ -40,6 +48,9 @@ command line currently offers `yapnr --version` and a `yapnr doctor` stub; the l
 - [History import manifest](history/import-manifest.md): what PR1 and PR2 imported from Splanc,
   and how it was rewritten and checked.
 - [About the name](about-the-name.md): "yet another place and route", and the circuit tree.
+- [Foundations and references](references.md): the papers and open-source projects behind the
+  place-and-route loop (DREAMPlace, freerouting, tscircuit, PathFinder and more), and what yapnr
+  takes from each.
 
 For contributors and agents:
 
@@ -62,7 +73,10 @@ viewer
 frontends/atopile
 part-cache
 rf-inverse-design
+fab-and-ordering
 releases
+rf-fab-coupons
+cloud-experiments
 ```
 
 ```{toctree}
@@ -78,8 +92,14 @@ design/animations
 design/constraint-and-hier-animations
 design/fea-integration
 design/rf-topology-optimization
+design/rf-fab-coupons
+design/cloud-experiments
+design/fab-and-ordering
+design/gloss
+design/compact-placement
 history/import-manifest
 about-the-name
+references
 ```
 
 ```{toctree}

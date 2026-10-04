@@ -1,0 +1,14 @@
+{
+ "04-inverter-leds-8": {
+  "legal": "13fee29c2f0a56c6ee7e54896b0bf7100ba4591bd6c7db3cc13faa482abfb570",
+  "place": {
+   "darwin-arm64": "98e208d8aa1dfa3b24c365712e00c95a80f832bc7be643fe0c5fd8b3557e411e"
+  }
+ },
+ "07-chaser-20": {
+  "legal": "3a3e7f2ca9611791aa7a21c4e48ddc3c92fff9a83cc39a5df7aded3f702395de",
+  "place": {
+   "darwin-arm64": "57b3c5bcaec588a60bed0d098f438d297bd659f1c06bbf06de871f467fc52a84"
+  }
+ }
+}

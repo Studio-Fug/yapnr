@@ -4,22 +4,40 @@ import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 
 _GRID = None
+_SESSION = None
 
 
 def initialize(grid):
-    global _GRID
+    global _GRID, _SESSION
     _GRID = grid
+    _SESSION = None
 
 
 def solve(job):
+    global _SESSION
     from pnr.profile import run
 
-    from .maze import _route_one
+    from .maze import _route_one, maze_kernel
 
+    if _SESSION is None and maze_kernel() != "reference":
+        from .dense_maze import DenseSession
+
+        # The worker's grid copy is immutable: its static predicates are shared.
+        _SESSION = DenseSession(_GRID)
     access, net, occ, history, via_cost, pres_fac, blocked = job
     return run(
         "grid-net:" + net,
-        lambda: _route_one(_GRID, access, net, occ, history, via_cost, pres_fac, blocked=blocked),
+        lambda: _route_one(
+            _GRID,
+            access,
+            net,
+            occ,
+            history,
+            via_cost,
+            pres_fac,
+            blocked=blocked,
+            _session=_SESSION,
+        ),
     )
 
 

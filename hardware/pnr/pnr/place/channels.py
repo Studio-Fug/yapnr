@@ -106,13 +106,13 @@ class ChannelModel:
                 )
                 both = np.logical_and(p, n)
                 either = np.logical_or(p, n)
+                # A pair that leaves its width or gap to the defaults routes at the
+                # fab track width and clearance.
+                width = pair.get("width_mm") or self.width
+                gap = pair.get("gap_mm") or self.clearance
                 bundles.append(
                     (
-                        np.where(
-                            both,
-                            2 * pair["width_mm"] + pair["gap_mm"],
-                            np.where(either, pair["width_mm"], 0),
-                        ),
+                        np.where(both, 2 * width + gap, np.where(either, width, 0)),
                         clearance,
                         either,
                     )

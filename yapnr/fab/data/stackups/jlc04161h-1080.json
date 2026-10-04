@@ -1,0 +1,108 @@
+{
+  "schema": "yapnr-fab-stackup-v1",
+  "id": "jlc04161h-1080",
+  "vendor": "jlcpcb",
+  "title": "JLCPCB 4 layer 1.6 mm, JLC04161H-1080",
+  "vendor_name": "JLC04161H-1080",
+  "checkout": "Under 'Specify Stackup' choose JLC04161H-1080.",
+  "thickness_mm": {
+    "value": 1.6,
+    "src": "J-imp"
+  },
+  "layers": [
+    {
+      "kind": "mask",
+      "side": "F",
+      "thickness_mm": null,
+      "er": 3.8,
+      "src": "J-imp"
+    },
+    {
+      "kind": "copper",
+      "name": "F.Cu",
+      "thickness_mm": 0.035,
+      "weight_oz": 1.0,
+      "plated": true,
+      "src": "J-imp"
+    },
+    {
+      "kind": "dielectric",
+      "type": "prepreg",
+      "material": "1080",
+      "thickness_mm": 0.0764,
+      "er": 3.91,
+      "er_freq_hz": null,
+      "df": null,
+      "src": "J-imp",
+      "df_prior": 0.017,
+      "df_prior_src": "derived: literature FR-4 near 1 GHz (0.015 to 0.02)"
+    },
+    {
+      "kind": "copper",
+      "name": "In1.Cu",
+      "thickness_mm": 0.0152,
+      "weight_oz": 0.5,
+      "plated": false,
+      "src": "J-imp"
+    },
+    {
+      "kind": "dielectric",
+      "type": "core",
+      "material": "FR-4 core",
+      "thickness_mm": 1.265,
+      "er": 4.6,
+      "er_freq_hz": null,
+      "df": null,
+      "src": "J-imp",
+      "df_prior": 0.017,
+      "df_prior_src": "derived: literature FR-4 near 1 GHz (0.015 to 0.02)"
+    },
+    {
+      "kind": "copper",
+      "name": "In2.Cu",
+      "thickness_mm": 0.0152,
+      "weight_oz": 0.5,
+      "plated": false,
+      "src": "J-imp"
+    },
+    {
+      "kind": "dielectric",
+      "type": "prepreg",
+      "material": "1080",
+      "thickness_mm": 0.0764,
+      "er": 3.91,
+      "er_freq_hz": null,
+      "df": null,
+      "src": "J-imp",
+      "df_prior": 0.017,
+      "df_prior_src": "derived: literature FR-4 near 1 GHz (0.015 to 0.02)"
+    },
+    {
+      "kind": "copper",
+      "name": "B.Cu",
+      "thickness_mm": 0.035,
+      "weight_oz": 1.0,
+      "plated": true,
+      "src": "J-imp"
+    },
+    {
+      "kind": "mask",
+      "side": "B",
+      "thickness_mm": null,
+      "er": 3.8,
+      "src": "J-imp"
+    }
+  ],
+  "tolerances": {
+    "impedance_pct": 10,
+    "thickness_pct": null,
+    "width_pct": null
+  },
+  "sources": {
+    "J-imp": {
+      "url": "https://jlcpcb.com/impedance",
+      "accessed": "2026-10-02"
+    }
+  },
+  "notes": ["JLC publishes Dk without a frequency and no Df (prior: literature FR-4)."]
+}

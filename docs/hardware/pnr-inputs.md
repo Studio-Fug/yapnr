@@ -70,6 +70,12 @@ edge_align: # soft: pull a part to a board edge
   SW1: { edge: south, side: top }
   CN1: { edge: east, side: top }
 
+region: # hard: keep parts inside an area
+  - { name: supply, refs: [U3, L1, C10], rect: [40, 0, 60, 20] }
+
+align: # hard: parts share one coordinate
+  - { name: buttons, refs: [SW1, SW2], axis: y }
+
 keepout: # hard: no parts/copper in a region
   - { name: esp32_antenna, ref: U5, extent: { edge: north, depth_mm: 6 } }
 
@@ -92,12 +98,118 @@ The approximate board you're targeting.
 | Key                    | Meaning                                                                                                                           |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | `outline: {w, h}`      | Placement region (mm). Parts are kept inside it; it becomes the `Edge.Cuts` rectangle. Omit to use the board's own outline.       |
-| `layers`               | Copper layer count (2/4). Inner layers are treated as power/ground planes, so routing capacity scales with the **signal** layers. |
+| `layers`               | Copper layer count (2 to 32). Without a declared stack (below), inner layers are treated as power/ground planes, so routing capacity scales with the **signal** layers. |
 | `default_clearance_mm` | Minimum courtyard-to-courtyard gap enforced in legalization, and the track pitch the lookahead router assumes.                    |
+| `sides`                | Side policy: `single` (default; every part stays on its source side, and `side_pref` is ignored) or `double` (placement chooses the side of every part nothing holds; needs 2 or more layers; see `side_pref`). |
 
 The outline is _approximate guidance_: the placer frames the parts within it. Make
 it a bit larger than the parts need — an over-tight outline forces congestion and
 can leave the place↔route loop unable to reach zero overflow.
+
+**Declared copper stack.** A board whose KiCad file declares a physical stackup
+(Board Setup > Physical Stackup) is routed on its own stack (`pnr.stack`), for any
+layer count, when it types at least one layer `power` or `mixed` (Board Setup >
+Board Editor Layers) or keeps tracks off an inner layer by a custom rule
+(`.kicad_dru`: `(layer ...)`, `(constraint disallow track)`), or when it declares no
+`plane_layer` class and draws no zone on a signal-typed inner layer:
+
+- a `power` inner layer (or one a custom rule keeps free of tracks) is a
+  **dedicated plane**: no tracks. Its nets are the `plane_layer` classes naming it
+  plus the nets of zones already drawn on it, so a second ground plane is just a
+  zone in the source board. Every surface pad of
+  such a net drops a through via to it, planned together with the signal escapes
+  and sized for that pad's own entry width. The via must land where the net's
+  copper fills on one of its planes; a pad without such a site is reported
+  unrouted at the pad. Write-back keeps the zones already drawn and forms the
+  rest: the whole outline for a layer's only net; on a layer shared by several
+  nets, the outline for the net with the most pads and, at a higher fill
+  priority, its pads' bounding box plus 2 mm for each other net. The outline
+  net's drops then stay out of those boxes, so on a shared layer whose nets'
+  pads interleave, give each net a layer of its own or draw the zones;
+- a `mixed` layer, or a `signal` layer named by a `plane_layer` class, is a split
+  plane: the class nets' pads' bounding box, with signals in the gaps;
+- every other `signal` layer is routed, inner ones included; zones on it refill
+  around its tracks. A class with `current_a` stays off an inner layer whose
+  declared copper thickness would need a wider track (IPC-2221 internal) than the
+  class width;
+- the native KiCad loop's power paths use the routed layers (never a dedicated
+  plane), and a pair without its own `reference_layer` takes the dedicated plane
+  nearest F.Cu as its reference.
+
+A board without a declared stack keeps the behaviour above, and so does a declared
+stack whose planes come only from `plane_layer` classes on signal-typed layers, or
+whose only plane hints are zones on signal-typed inner layers (KiCad's default
+type). A declared stack that cannot be used as declared also keeps it: one copper
+layer, an unknown layer type, a `jumper` outer layer, another copper layer count
+than `layers`, or a stackup block whose copper rows are not the board's layers
+(KiCad keeps the old block when the layer count changes). Write-back keeps a
+declared stack's layer types. Each such decision, and each ambiguity (a `power`
+layer no class or zone gives a net, a shared plane layer, zones on a signal
+layer), is a warning in the run's log and in the PnR report
+(`escape_diagnostics.stack_warnings`).
+
+**Via kinds (blind, buried, micro).** Every via is a through via unless the routing
+rules carry a `via_policy` (`pnr.via_policy`). The ladder drivers resolve it from
+the design's declared kinds (`via_policy.allowed`: `through`, `blind`, `buried`,
+`micro`, with an optional `microvia: {diameter_mm, drill_mm}`) less every kind the
+board's `.kicad_dru` disallows (`blind_via`, `buried_via`, `micro_via` or `via`; a
+ban limited by a layer or condition counts everywhere), on the board's stackup
+block (copper layers, dielectric thickness and kind, `core` or `prepreg`).
+Nothing declared, every other kind banned, or no other span worth its drill pair
+on this board means through vias only, exactly as before. Under a policy:
+
+- a span is only used when it can be built on the declared stack: a laser
+  microvia joins two adjacent layers, one of them outer, through a dielectric no
+  deeper than its drill (aspect ratio 1:1; KiCad accepts any pair, the engine
+  keeps to these); a controlled-depth blind via is drilled from an outer layer no
+  deeper than its drill; a laminated blind or buried via is the through hole of a
+  sub-laminate, so each end faces a prepreg bond line or the board's face, never
+  the other face of a core. On the 6-layer rungs (prepreg / core In1-In2 /
+  prepreg / core In3-In4 / prepreg) F.Cu-In3.Cu, In1.Cu-In3.Cu and In2.Cu-B.Cu
+  cannot be built;
+- the board's spans form one build (`via_policy.build`, in `rules.json` and the PnR
+  report's `escape_diagnostics.via_build`): its laminated spans nest or are
+  disjoint (one sequential-lamination tree) and every span is one more drill pair,
+  priced as two through vias (`via_policy.drill_pair_cost` overrides it). The
+  build is the cheapest for what the parts need (`pnr.via_policy.board_needs`:
+  plane drops, signal layer changes, return ties), so a span enters only where
+  its vias save more than its drill pair; on the 6-layer chaser rungs that is
+  F.Cu-In1.Cu (a microvia, or a controlled-depth blind via) and F.Cu-In2.Cu;
+- a via spans two copper layers and occupies only the layers between them: the
+  router tests, reserves and prices it there (blind F.Cu to In2.Cu leaves B.Cu
+  free), at a keep-out from its own diameter. Its price is the via cost times
+  `0.5 + 0.5 * depth / board thickness` (through: 1.0). A layer change takes the
+  cheapest span of the build covering both layers; hole spacing is kept between
+  all vias whatever their spans, two nets' vias never share a site, and same-net
+  vias at one site whose spans share a layer are one barrel. A microvia's size is
+  the declared one, else the project's net class microvia, widened to the board's
+  minimum annular width (which KiCad applies to microvias too); blind and buried
+  vias take the routed via size;
+- a plane pad drops to its net's plane nearest the pad. A signal via whose ends
+  are referenced (the plane nearest above and below each) to two plane layers of
+  one net (two ground planes) gets a via of that net joining both within
+  `return_tie.max_mm`: the distance whose return detour, out and back, is delayed
+  no more than `0.1 * t_rise` (the stub rule's k), with `t_rise` the design's
+  `via_policy.t_rise_ns` or 1 ns (an assumption, reported) and the stack's
+  dielectric constant (7.07 mm at 1 ns and 4.5). A drop nearby is deepened where
+  clear, else a tie via of the build's span goes at the clear site nearest the
+  signal via; every plane layer of such a net is joined at least once. The PnR
+  report gives each plane layer's connections
+  (`escape_diagnostics.plane_layer_connections`) and the rule, the ties needed,
+  met and added, any unmet with its nearest tie, and the signal vias whose two
+  references are planes of different nets (`escape_diagnostics.return_ties`). A
+  plane layer with no connection at all keeps its fill in KiCad 10, and its DRC
+  reports it as isolated copper;
+- `routes.json` lists each non-through via in `via_spans` (`[net, x, y, top,
+  bottom, kind]`); write-back emits the KiCad via type and layer pair, and fixed
+  copper keeps blind, buried and micro vias (each reserves only its span). The
+  packed and native maze kernels do not model spans: on such a board every search
+  runs on the reference kernel (the same routes, slower; stderr says so once), so
+  the exact-separation recovery, which needs the packed kernel's fields, does not
+  run there. The length tuner adds meanders there but routes no member again
+  (its new vias would lose their spans). The native KiCad repair loop and the
+  hierarchical driver add through vias only; the hierarchical driver says so on
+  stderr.
 
 ### `fixed` — lock a pose (hard)
 
@@ -133,7 +245,7 @@ does not is illegal. Parts on the same edge slide along it and may change order.
 | Key            | Meaning                                                                              |
 | -------------- | ------------------------------------------------------------------------------------ |
 | `edge`         | Target edge (required).                                                              |
-| `side`         | Preferred side (`top`/`bottom`).                                                     |
+| `side`         | `top`/`bottom`: with `board.sides: double` the part is placed and held on that side; a single-sided board keeps its source side. |
 | `weight`       | Penalty weight (default 5.0); higher pulls harder.                                   |
 | `hard`         | `true` keeps the part at the edge through legalization (default `false`).            |
 | `tolerance_mm` | With `hard`: largest courtyard-to-edge distance (default 1.0, at least 0.5).        |
@@ -170,9 +282,31 @@ side_pref:
   top: [U*, J*] # ICs and connectors prefer the front
 ```
 
-> Note: in the current MVP `side_pref` compiles to a soft term but legalization
-> keeps parts on the top side (single-sided legalize); two-sided placement is a
-> tracked follow-on. `fixed.side` is honored end-to-end.
+A `side_pref` takes effect only on a double-sided board (`board.sides:
+double`), where placement chooses sides: there the preference is a cost (`weight`
+x 5 mm of wirelength for a part on the other side), not a lock. On a single-sided
+board (the default) every part stays on its source side and the compiler warns
+that the `side_pref` is ignored.
+
+With `board.sides: double` every part nothing holds is free. A part stays on its
+source side when a hard `side` rule, a `fixed` pose, a source lock, a line group
+or row, a drilled pad, a keep-out or copper keep-out tied to it, a plane-access
+intent, a landing reserve or a pad on a `diff_pair` or `length_match` net holds it
+(the pair router keeps a pair on one layer, and a part flipped on one leg would
+lengthen that leg alone). An `edge_align` with a `side` puts the part on that side.
+
+For free parts, global placement relaxes the side with the position and
+rotation, the legalizer may take a slot on the other side, and a seeded detail
+pass tries flips and pairwise swaps. Every side choice is costed in wirelength
+millimetres: 3 mm for each non-plane net whose surface pins end up on both
+sides without a drilled pin (a layer change), the `side_pref` cost, and 0.5 mm
+for each part off its source side. On a double-sided board two parts with three
+or more connected pads (ICs, not two-terminal passives) may not overlap on
+opposite sides: a through via under such a stack would land on the far part's
+pads, so neither could fan out there. A capacitor under an IC is allowed.
+Writeback flips a bottom part as KiCad's
+Flip does (mirrored footprint, every pad, graphic and text on `B.*`).
+`fixed.side` and `side` are honored end-to-end.
 
 ### `group` — cluster a subsystem (soft)
 
@@ -221,6 +355,106 @@ side and carry no plane-access intents. The line occupies the sides its members
 occupy: a line of SMD parts may sit above a bottom-side part, and a drilled
 member reserves both sides of the whole line.
 
+### `region` — confine parts to an area (hard, or soft on request)
+
+Keeps the courtyards of the listed parts inside an allowed area in board
+coordinates: a clock section in one half of the board, a regulator in a corner,
+an analog front end away from the switching supply. The area is one rectangle, one
+polygon, or the union of several (`areas`). Several regions on one part all apply.
+
+| Key       | Meaning                                                                                |
+| --------- | -------------------------------------------------------------------------------------- |
+| `name`    | Unique name (required).                                                                |
+| `refs`    | Refs, globs or `@addresses` (at least one known part).                                 |
+| `rect`    | `[x0, y0, x1, y1]` with `x0 < x1`, `y0 < y1`.                                          |
+| `polygon` | `[[x, y], ...]`: at least three points, nonzero area, simple (concave is fine).        |
+| `areas`   | A list of `{rect: ...}` / `{polygon: ...}` pieces; the area is their union.            |
+| `hard`    | `true` (default): a placement outside is illegal. `false`: a penalty on the protrusion. |
+| `weight`  | Soft penalty weight (default 10).                                                      |
+| `reason`  | Free text for reports.                                                                 |
+
+```yaml
+region:
+  - name: clock
+    refs: [U1, "R[12]", C1, C2, C3]
+    rect: [0, 0, 21, 32] # the west half of a 42 x 32 mm board
+```
+
+The part's body is its courtyard widened to its pads and silkscreen, where it
+really lies about the footprint origin: a pin header measured from pin 1 or a
+connector with an offset shell is not padded out to a box centred on its origin. A
+rectangle, a single polygon, and a union whose pieces have only horizontal and
+vertical edges are tested exactly. Other unions are tested on a raster whose grid
+lines are the pieces' own coordinates plus a 0.25 mm grid; only the cells a sloped
+edge cuts are refused, so the test is conservative by at most one cell along a
+sloped edge. The legalizer uses that raster for every polygon and union. A region
+on a part in a `line_group` or a hierarchical block acts on the member's body
+inside the rigid line or block, at every rotation.
+
+A region no placement can meet is refused before placement, with the region and
+the part named: a fixed part outside it, or a part that fits nowhere inside it at
+any allowed rotation within the outline, its keep-outs and its hard edge band.
+Self-crossing polygons are refused when the file is read.
+
+### `align` — share one coordinate (hard, or soft on request)
+
+Makes the listed parts share an `x` (a vertical line) or a `y` (a horizontal
+line): two ICs on one centre line, a row of buttons at one height, connectors flush
+along one edge. Each part is measured at its `anchor`, evaluated at the part's
+rotation and side, so a rotation moves a pad or edge anchor but never `origin`.
+
+| Key      | Meaning                                                                                      |
+| -------- | -------------------------------------------------------------------------------------------- |
+| `name`   | Unique name (required).                                                                      |
+| `refs`   | Refs, globs or `@addresses` (at least two known parts).                                      |
+| `axis`   | `y`: the anchors share one y (a horizontal line); `x`: one x.                                |
+| `anchor` | One for every ref, or a `{ref: anchor}` map (unlisted refs: `origin`); see below.            |
+| `tol_mm` | With `hard`: the largest spread of the anchors (default 0.25; 0 asks for one exact line).   |
+| `hard`   | `true` (default): a larger spread is illegal. `false`: a penalty on each anchor's deviation. |
+| `weight` | Soft penalty weight (default 5).                                                             |
+| `reason` | Free text for reports.                                                                       |
+
+Anchors: `origin` (the footprint origin, as KiCad stores the position; the
+default), `centre` (the centre of the pad bounding box), `pad1` or `pad:<name>`,
+and a body edge: `south`/`north` with `axis: y`, `west`/`east` with `axis: x`. The
+body is the one a region measures (above), so an edge anchor finds the real edge of
+an off-centre part.
+
+```yaml
+align:
+  - name: ics
+    refs: [U1, U2]
+    axis: y # one horizontal line through both origins
+    tol_mm: 0.25
+  - name: connector_faces
+    refs: [J2, J3]
+    axis: x
+    anchor: east # their east courtyard edges flush
+```
+
+An align works with `row`, `line_group` and `edge_align`: a member of a rigid line
+carries its anchor in the line's frame (two refs of one line are refused, as the
+line already fixes their offsets), and a hard edge band and an align band both
+bound the part. The compiler refuses an edge anchor that does not measure the axis.
+
+The legalizer keeps each member within the band the members already placed leave
+(at least 0.15 mm wide, since its slots are 0.25 mm apart), narrowed to where the
+members not yet placed can still reach. A `tol_mm` under that band (0, say) is met
+afterwards: the members move onto one exact line wherever every move stays legal.
+An align already within its `tol_mm` keeps the legalized poses, which stay on the
+placement grid that the router's grid follows. A band that holds no slot is
+backtracked, and the legalizer fails with the part named if no arrangement fits.
+
+An align no placement can meet is refused before placement, naming the align:
+fixed members farther apart than `tol_mm`, members whose regions or edge bands keep
+their anchors apart, or a `pad:<name>` the part does not have. Aligned parts stay
+top-level parts in hierarchical placement. `PNR_POWER_FIRST=1` refuses a design
+with a `region` or an `align`.
+
+Both work with `board.sides: double`: a part free to take either side keeps its
+regions and aligns there, measured with its pads, anchors and body mirrored on
+the bottom (so a `pad1` anchor moves when the part flips, an `origin` never).
+
 ### `net_class` / `diff_pair` / `length_match` — routing rules
 
 These describe how nets are _routed_ rather than how parts are _placed_ — they
@@ -256,12 +490,75 @@ length_match:
     v3v3: { nets: [3V3], plane_layer: In2.Cu } # 3V3 plane on inner layer 2
   ```
 
-- **`diff_pair`** — two nets (`p`/`n`) routed together with `width_mm`/`gap_mm`;
-  the quality pass reports their routed-length **skew** and flags it if it
-  exceeds `skew_mm` (default 0.5).
+- **`diff_pair`** — two nets (`p`/`n`) with `width_mm`/`gap_mm`; the quality pass
+  reports their routed-length **skew** and flags it if it exceeds `skew_mm`
+  (default 0.5). `skew_ps` gives the budget as a delay instead (each layer's
+  propagation delay from the board's stackup); a pair gives one or the other. The
+  native electrical flow routes a pair coupled; the own grid router routes its two
+  legs as two nets and matches their lengths (the route report says how much of the
+  P leg runs beside the N leg).
 - **`length_match`** — a group of nets whose routed lengths must agree within
-  `tolerance_mm`; the quality pass reports the group **spread** and flags it if
-  it exceeds the tolerance.
+  `tolerance_mm` or `tolerance_ps` (not both); the quality pass reports the group
+  **spread** and flags it if it exceeds the tolerance.
+- **`tuning`** (optional) — the meander rules for both: `gap_mm` (edge to edge,
+  at least the clearance and the track width; without it three track widths where
+  that is enough, else the minimum), `amplitude_max_mm`, `min_segment_mm`,
+  `max_added_mm` (the meander length one net may gain), `style` (`auto`,
+  `trombone`, `serpentine`, `accordion`), `mitre` (45-degree corners, default on),
+  and two switches, both on by default: `meanders` (the router tunes the sets after
+  routing) and `placement` (placement keeps the members' estimated lengths even).
+
+The own detailed router **tunes** every declared pair and group after routing
+(`pnr/route/detail/tune.py`): each member shorter than the longest gets meanders on
+straight runs of its own path and layer, legal by the router's own clearance rules,
+until the spread is within the budget. Lengths are measured as KiCad's DRC measures
+them (`pnr/length_model.py`: merged track lines straightened inside pads and vias,
+plus each via's span through the stackup), so a KiCad `skew` or `length` rule in mm
+sees the same numbers. A budget in ps is judged by the engine's own audit
+(`pnr.quality`): KiCad 10.0.6's `kicad-cli pcb drc` reads every delay as 0 ps
+(KiCad issue 23868), so it cannot judge a time-domain rule. The stackup and the
+exact lands of the matched nets' pads (a through-hole pad's circle or square, which
+the graph does not record) come from the board itself: `python -m pnr.route ...
+--board BOARD.kicad_pcb` (the `atopile_pnr` rule passes its source board); without
+it the tuner takes KiCad's default stack for the board's layer count and a rounded
+square for through-hole lands, and a board stackup whose copper layers are not the
+board's layer count is not used.
+
+The per-set result (status, lengths, layers, margin, meanders and their gap) is in
+the route report and in `routes.json` as `length_tuning`; a set left outside its
+budget is `length_unmatched` and named on stderr. When the short members have no
+room left for meanders, the longest member is routed again around the other nets
+(vias priced high, so it may change layer) and kept if it is shorter (`rerouted` in
+the report; never on a board with blind, buried or micro vias, see above). A
+group member boxed in by its own neighbours (a bus routed at its pins' pitch round
+a corner, where the inner members are the short ones) gets room
+instead: from the route as it was before tuning, each member is routed again with
+the others in place, steps close to another member priced a little higher, so the
+bus fans out where the board has room; the set is tuned again and whichever attempt
+ends closer is kept (`spaced` in the report). A pair's legs are never routed apart.
+A set that still misses its budget keeps its meanders only when they closed at
+least half of the gap; otherwise it goes back to the route as routed (`reverted`).
+
+Pairs are tuned before groups. A group may lengthen a pair's legs (both, toward its
+longest member); a pair it puts out of its budget is tuned again, and if that fails
+the group's tuning is undone (`conflicts`). A net in two sets is never routed again.
+Copper the route keeps as it is (a hierarchical block's, or pairs routed before the
+grid) counts in its net's length; a set whose nets leave a hierarchical block is
+tuned on the whole board, not in the block (`partial`).
+
+Placement prepares for this: global placement pulls each set's members toward equal
+estimated lengths, and after legalization the small parts on matched nets (series
+resistors and the like) move to the legal slot that keeps the legs even
+(`pnr/place/matched.py`), so two series resistors of a pair do not end up at
+different distances from the connector. The candidate routes of the initial
+placement pool, the Monte-Carlo screen and the hierarchical knit rank a route with
+fewer sets outside their budgets ahead of fewer vias and less copper.
+
+```yaml
+diff_pair:
+  - { name: usb, p: USB_DP, n: USB_DM, width_mm: 0.2, gap_mm: 0.15, skew_ps: 2.0 }
+tuning: { gap_mm: 0.3, amplitude_max_mm: 1.0, style: serpentine }
+```
 
 The quality report ships in the fab bundle as `quality.txt`. Its diff-pair /
 length-match checks are **advisory** by default (reported, not enforced); set
@@ -279,10 +576,11 @@ similarly turns DRC violations into a build failure.
    nets, courtyards).
 2. **Placement** (differentiable, design §4) minimizes smooth wirelength +
    spreading + your constraint penalties; `fixed`/`keepout`/outline are hard
-   barriers, `edge_align`/`side_pref`/`group` are penalty gradients. Orientation
-   is co-optimized (§9.3).
+   barriers, `edge_align`/`side_pref`/`group`/`region`/`align` are penalty
+   gradients. Orientation is co-optimized (§9.3).
 3. **Legalization** snaps to a strictly non-overlapping, in-outline layout that
-   still honors the fixed poses and keep-outs.
+   still honors the fixed poses and keep-outs, and the hard edge bands, groups,
+   regions and alignments.
 4. **Place↔route loop** (design §6) global-routes the placement, and where copper
    demand exceeds capacity it inflates those parts' spacing and re-places — until
    the board is routable, then FreeRouting does the detailed route.

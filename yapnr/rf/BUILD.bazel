@@ -23,6 +23,15 @@ py_library(
     ],
 )
 
+# The package marker alone (yapnr/rf/__init__.py), for subpackages that need none of the solver
+# (//yapnr/rf/coupons): without it their runfiles would get an auto-created, empty one.
+py_library(
+    name = "package",
+    srcs = ["__init__.py"],
+    imports = ["../.."],
+    deps = ["//yapnr:package"],
+)
+
 # Test helpers (a tiny spec), for tests only.
 py_library(
     name = "testing",

@@ -1,0 +1,39 @@
+"""Board generation with KiCad's DRC and the fab package (design §11.3, slow lane); KiCad lane
+only (tag `kicad`): needs a headless kicad-cli in YAPNR_KICAD_CLI (DEVELOPERS.md, never the
+GUI bundle)."""
+
+from __future__ import annotations
+
+import os
+import shutil
+import tempfile
+import unittest
+import zipfile
+
+from yapnr.rf.coupons import fab
+
+CLI = os.environ.get("YAPNR_KICAD_CLI", "")
+
+
+@unittest.skipUnless(CLI and os.access(CLI, os.X_OK), "no headless kicad-cli in YAPNR_KICAD_CLI")
+class GenerateTest(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_boards_are_drc_clean(self):
+        for sid, letter in (("JLC04161H-7628", "A"), ("JLC06161H-7628", "B")):
+            out = fab.generate(sid, os.path.join(self.dir, sid))
+            self.assertEqual(out["drc"]["violations"], {}, out["drc"]["details"][:5])
+            self.assertEqual(out["drc"]["unconnected"], 0)
+            with zipfile.ZipFile(out["fab_zip"]) as z:
+                names = z.namelist()
+            self.assertIn(f"board-{letter}/board-{letter}-Edge_Cuts.gm1", names)
+            self.assertIn(f"board-{letter}/fab-notes.md", names)
+            self.assertTrue(any(n.endswith("-PTH.drl") for n in names))
+
+
+if __name__ == "__main__":
+    unittest.main()

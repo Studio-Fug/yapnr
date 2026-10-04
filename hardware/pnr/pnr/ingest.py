@@ -118,6 +118,31 @@ def _phys_bbox_mm(fp) -> Tuple[float, float]:
     raise RuntimeError("GetBoundingBox unavailable")
 
 
+def _local_box(box, origin) -> Tuple[float, float, float, float]:
+    """A pcbnew box about ``origin`` as ``(x0, y0, x1, y1)`` mm in the engine's y-up frame."""
+    return (
+        _mm(box.GetLeft() - origin.x),
+        -_mm(box.GetBottom() - origin.y),
+        _mm(box.GetRight() - origin.x),
+        -_mm(box.GetTop() - origin.y),
+    )
+
+
+def _phys_box(fp) -> Tuple[float, float, float, float]:
+    """The box behind :func:`_phys_bbox_mm`, as it lies about the origin (y up)."""
+    import pcbnew
+
+    fp = pcbnew.FOOTPRINT(fp)
+    fp.SetOrientationDegrees(0)
+    origin = fp.GetPosition()
+    for args in ((False, False), (False,), ()):
+        try:
+            return _local_box(fp.GetBoundingBox(*args), origin)
+        except Exception:  # pragma: no cover - version shim
+            continue
+    raise RuntimeError("GetBoundingBox unavailable")
+
+
 def _atopile_address(fp) -> str:
     """KiCad 8/9 compatibility for the source path stored by atopile."""
     if hasattr(fp, "GetFields"):
@@ -141,6 +166,10 @@ def _component(fp, frame: _Frame) -> Component:
     # Courtyard is the placement/overlap footprint. These atomic (EasyEDA-sourced)
     # parts carry no F/B.CrtYd layer, so GetCourtyard is empty — fall back to the
     # text-excluded body box (any silk keep-out area is drawn on the body).
+    # ``body`` is the same box as it lies about the origin (an off-centre body:
+    # a pin header measured from pin 1, a connector's shell); the symmetric sizes
+    # are its hull about the origin. Only region/align (pnr.place.regions) read it.
+    body = None
     try:
         layer = pcbnew.B_CrtYd if fp.IsFlipped() else pcbnew.F_CrtYd
         local_fp = pcbnew.FOOTPRINT(fp)
@@ -151,12 +180,15 @@ def _component(fp, frame: _Frame) -> Component:
             2 * _mm(max(abs(cyard.GetLeft() - origin.x), abs(cyard.GetRight() - origin.x))),
             2 * _mm(max(abs(cyard.GetTop() - origin.y), abs(cyard.GetBottom() - origin.y))),
         )
+        body = _local_box(cyard, origin)
         if cyard.GetWidth() <= 0 or cyard.GetHeight() <= 0:
-            courtyard_mm = bbox_mm
+            courtyard_mm, body = bbox_mm, None
         if courtyard_mm[0] <= 0 or courtyard_mm[1] <= 0:
-            courtyard_mm = bbox_mm
+            courtyard_mm, body = bbox_mm, None
     except Exception:  # pragma: no cover - version shim
-        courtyard_mm = bbox_mm
+        courtyard_mm, body = bbox_mm, None
+    if body is None:
+        body = _phys_box(fp)
 
     # Some library courtyards exclude a silk pin-1 marker or even copper.
     # Reserve the real pad/silk envelope as well; F.Fab drawings and labels
@@ -177,6 +209,15 @@ def _component(fp, frame: _Frame) -> Component:
             2 * _mm(max(abs(box.GetTop() - origin.y), abs(box.GetBottom() - origin.y))),
         )
         courtyard_mm = tuple(max(a, b) for a, b in zip(courtyard_mm, extent))
+        local = _local_box(box, origin)
+        body = (
+            min(body[0], local[0]),
+            min(body[1], local[1]),
+            max(body[2], local[2]),
+            max(body[3], local[3]),
+        )
+    if abs(body[0] + body[2]) <= 1e-9 and abs(body[1] + body[3]) <= 1e-9:
+        body = None  # centred: the courtyard box itself
 
     pads: List[Pad] = []
     for pad in fp.Pads():
@@ -285,7 +326,200 @@ def _component(fp, frame: _Frame) -> Component:
         locked=bool(getattr(fp, "IsLocked", lambda: False)()),
         pads=pads,
         smd_body=bool(fp.GetAttributes() & pcbnew.FP_SMD),
+        body=body,
     )
+
+
+def _stackup_copper(path: Optional[str]) -> Optional[List[Tuple[str, float]]]:
+    """``[(name, thickness_mm)]`` of the copper rows of the board file's ``(stackup
+    ...)`` block, in file order, or None when the file has no such block. KiCad's
+    Python does not wrap the stackup descriptor; the file states it."""
+    import os
+
+    if not path:
+        return None
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    key = (path, st.st_mtime_ns, st.st_size)
+    if key in _STACKUP_CACHE:
+        return _STACKUP_CACHE[key]
+    try:
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError:
+        return None
+    _STACKUP_CACHE.clear()  # one board file at a time
+    _STACKUP_CACHE[key] = rows = _parse_stackup(text)
+    return rows
+
+
+_STACKUP_CACHE: dict = {}
+
+
+def _parse_stackup(text: str) -> Optional[List[Tuple[str, float]]]:
+    import re
+
+    start = text.find("(stackup")
+    if start < 0:
+        return None
+    depth = 0
+    for end in range(start, len(text)):
+        depth += {"(": 1, ")": -1}.get(text[end], 0)
+        if depth == 0:
+            break
+    block = text[start : end + 1]
+    pattern = r'\(layer\s+"([^"]+)"\s*\(type\s+"copper"\)\s*\(thickness\s+([0-9.eE+-]+)\)'
+    return [(name, float(value)) for name, value in re.findall(pattern, block)]
+
+
+def _no_track_layers(path: Optional[str]) -> List[str]:
+    """Copper layers the board's custom rules (the ``.kicad_dru`` beside the board
+    file) keep free of tracks: a rule on one layer whose constraint disallows
+    tracks, with no condition or only ``A.Type == 'Track'``."""
+    import os
+    import re
+
+    if not path or not path.endswith(".kicad_pcb"):
+        return []
+    dru = path[: -len(".kicad_pcb")] + ".kicad_dru"
+    if not os.path.exists(dru):
+        return []
+    try:
+        with open(dru, encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError:
+        return []
+    layers = set()
+    for block in re.split(r"\(rule\s", text)[1:]:
+        named = re.findall(r'\(layer\s+"([^"]+)"\s*\)', block)
+        if len(named) != 1 or not re.search(r"\(constraint\s+disallow\b[^)]*\btrack\b", block):
+            continue
+        conditions = re.findall(r'\(condition\s+"([^"]*)"\s*\)', block)
+        if all(re.fullmatch(r"\s*A\.Type\s*==\s*'Track'\s*", c) for c in conditions):
+            layers.add(named[0])
+    return sorted(layers)
+
+
+def stack_record(board, path: Optional[str] = None) -> Optional[dict]:
+    """The board's declared copper stack (:mod:`pnr.stack`), or None when the board
+    declares no physical stackup. Copper layers in order with their KiCad layer type,
+    copper thickness and the nets of the (non-rule-area) zones on them, by KiCad's
+    standard layer names (the names the routing rules use); for a ``power`` layer
+    also the zones' outlines and priorities (``zone_shapes``, graph frame), which
+    bound where a drop via reaches its plane (:func:`pnr.stack.plane_regions`); and
+    the layers the board's custom rules keep free of tracks (``no_track_layers``).
+
+    A stackup block whose copper rows are not the board's copper layers (KiCad does
+    not rewrite the block when the layer count changes: an atopile layout saved
+    two-layer, then built four-layer) does not describe the board: None, with a
+    note on stderr, as for a KiCad build that does not expose the stackup flag."""
+    import sys
+
+    import pcbnew
+
+    from pnr.stack import KICAD_LAYER_TYPES, record_from_rows
+
+    settings = board.GetDesignSettings()
+    if not hasattr(settings, "m_HasStackup"):
+        sys.stderr.write(
+            "pnr.ingest: this KiCad build does not expose the board stackup flag; "
+            "the declared copper stack is not read (legacy layer heuristic)\n"
+        )
+        return None
+    if not settings.m_HasStackup:
+        return None
+    path = path if path is not None else board.GetFileName()
+    declared = _stackup_copper(path)
+    cu = list(board.GetEnabledLayers().CuStack())
+    names = [pcbnew.BOARD.GetStandardLayerName(lid) for lid in cu]
+    if (
+        declared
+        and [n for n, _ in declared] != names
+        and [n for n, _ in declared] != [board.GetLayerName(lid) for lid in cu]
+    ):
+        sys.stderr.write(
+            "pnr.ingest: the stackup block lists copper %s but the board has %s; the "
+            "block is stale and the declared copper stack is not used\n"
+            % (", ".join(n for n, _ in declared), ", ".join(names))
+        )
+        return None
+    thickness = dict(declared or [])
+    frame = None
+    rows = []
+    for lid, name in zip(cu, names):
+        kind = KICAD_LAYER_TYPES.get(int(board.GetLayerType(lid)), "signal")
+        zones = [
+            z
+            for z in board.Zones()
+            if not z.GetIsRuleArea() and z.GetNetCode() > 0 and z.IsOnLayer(lid)
+        ]
+        row = dict(
+            name=name,
+            type=kind,
+            copper_mm=thickness.get(name, thickness.get(board.GetLayerName(lid))),
+            zones=[z.GetNetname() for z in zones],
+        )
+        if kind == "power" and zones:
+            if frame is None:
+                frame, _ = _board_frame(board)
+            shapes = []
+            for z in zones:
+                outline = z.Outline()
+                if not outline.OutlineCount():
+                    continue
+                chain = outline.Outline(0)
+                points = [chain.CPoint(i) for i in range(chain.PointCount())]
+                shapes.append(
+                    dict(
+                        net=z.GetNetname(),
+                        priority=int(z.GetAssignedPriority()),
+                        outline=[frame.point(q.x, q.y) for q in points],
+                    )
+                )
+            row["zone_shapes"] = shapes
+        rows.append(row)
+    record = record_from_rows(rows)
+    no_tracks = [n for n in _no_track_layers(path) if n in names]
+    if no_tracks:
+        record["no_track_layers"] = no_tracks
+    return record
+
+
+def board_stack(board, rules: Optional[dict], path: Optional[str] = None):
+    """The declared copper stack of an open ``board`` under ``rules``
+    (:func:`pnr.stack.resolve` of :func:`stack_record`), None for the legacy
+    heuristic. Its warnings go to stderr once per board and text."""
+    from pnr.stack import assess
+
+    stack, warnings = assess(rules, stack_record(board, path))
+    for text in warnings:
+        if text not in _STACK_WARNED:
+            _STACK_WARNED.add(text)
+            sys.stderr.write("pnr.stack: warning: %s\n" % text)
+    return stack
+
+
+_STACK_WARNED: set = set()
+
+
+def declared_si_stackup(board, rules: Optional[dict], path: Optional[str] = None):
+    """The SI model's stack from ``board``'s declared stackup block
+    (:func:`pnr.stack.si_stackup`), or None when the declared stack does not apply
+    (the SI model then keeps its default four-layer stack)."""
+    from pnr.stack import si_stackup, stackup_rows
+
+    stack = board_stack(board, rules, path)
+    path = path if path is not None else board.GetFileName()
+    if stack is None or not path:
+        return None
+    try:
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError:
+        return None
+    return si_stackup(stackup_rows(text), stack)
 
 
 def build_graph(board, name: Optional[str] = None) -> BoardGraph:
@@ -316,6 +550,7 @@ def build_graph(board, name: Optional[str] = None) -> BoardGraph:
         components=components,
         nets=nets,
         outline=outline,
+        stack=stack_record(board),
     )
 
 

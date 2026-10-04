@@ -63,6 +63,9 @@ def joint_configurations(
         indices = list(dict.fromkeys([base, *singles, *indices]))
     legal = []
     rejections = []
+    from .regions import soft_refs, soft_total
+
+    soft = bool(soft_refs(constraints))
     for choices in indices:
         g = BoardGraph.from_json(graph.to_json())
         cost = 0.0
@@ -93,23 +96,21 @@ def joint_configurations(
         component_probe_cost = cost
         wire = hpwl(g)
         cost += 0.1 * wire
-        legal.append(
+        terms = [
             dict(
-                indices=choices,
-                cost=cost,
-                moves=moves,
-                graph=g,
-                terms=[
-                    dict(
-                        key="component_probe_cost",
-                        raw=component_probe_cost,
-                        weight=1.0,
-                        weighted=component_probe_cost,
-                    ),
-                    dict(key="joint_hpwl", raw=wire, weight=0.1, weighted=0.1 * wire),
-                ],
-            )
-        )
+                key="component_probe_cost",
+                raw=component_probe_cost,
+                weight=1.0,
+                weighted=component_probe_cost,
+            ),
+            dict(key="joint_hpwl", raw=wire, weight=0.1, weighted=0.1 * wire),
+        ]
+        if soft:
+            # Soft regions and aligns (pnr.place.regions): their whole-board penalty.
+            penalty = soft_total(g, constraints)
+            cost += penalty
+            terms.append(dict(key="soft_region_align", raw=penalty, weight=1.0, weighted=penalty))
+        legal.append(dict(indices=choices, cost=cost, moves=moves, graph=g, terms=terms))
     legal_count = len(legal)
     proxy_audit = None
     if rules is not None:

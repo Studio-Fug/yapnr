@@ -1,0 +1,32 @@
+{
+  "schema": "pnr-gloss-groups-v1",
+  "design": "07-chaser-20 (hardware/pnr/regression/designs.py: chaser(5))",
+  "rule": "PNR_GLOSS_CLASSES: parallel runs at minimum pitch are unlimited within a group and capped at PNR_GLOSS_CROSS_GROUP_MM (default 10 mm) between groups; a net in no group is a group of its own",
+  "classes": {
+    "timer": {
+      "interface": "TLC555 astable timing network",
+      "nets": ["TIMING", "DISCHARGE", "CONTROL"],
+      "provenance": [
+        "TIMING: U1 pins 2 and 6, R2, C1",
+        "DISCHARGE: U1 pin 7, R1, R2",
+        "CONTROL: U1 pin 5, C2"
+      ]
+    },
+    "clock_reset": {
+      "interface": "CD4017B clock and modulo reset",
+      "nets": ["CLOCK", "RESET"],
+      "provenance": [
+        "CLOCK: U1 pin 3 (output) to U2 pin 14 (CLK)",
+        "RESET: U2 pin 1 (Q5) to U2 pin 15 (RESET)"
+      ]
+    },
+    "led_drive": {
+      "interface": "counter outputs and their LED current paths",
+      "nets": ["Q0", "Q1", "Q2", "Q3", "Q4", "LED0", "LED1", "LED2", "LED3", "LED4"],
+      "provenance": [
+        "Qn: U2 counter output to the series resistor R(n+3)",
+        "LEDn: R(n+3) to the anode of D(n+1)"
+      ]
+    }
+  }
+}

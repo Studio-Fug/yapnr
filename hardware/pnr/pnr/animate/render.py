@@ -12,7 +12,8 @@ A header that lists placement constraints (or a comparison's reference overlay) 
 (:mod:`.highlight`): tints and a line group's guide line right after the substrate, and the
 rigid bodies, target edges and tethers after the outline. Copper a route keeps as it is (a
 hierarchical knit's block copper, ``View.fixed``) is drawn dimmed. Without either, a frame is
-drawn exactly as before.
+drawn exactly as before. The gloss stage's changes (``View.overlay``: what it removed, red and
+dashed, or added, mint) are drawn over a saved board's own copper.
 
 Overlay text is whitelisted: :func:`safe_text` rejects anything that looks like a path or an
 e-mail address, and every other string comes from the fixed tables of :mod:`.theme`.
@@ -84,6 +85,31 @@ def _rotate(x, y, degrees):
     a = math.radians(degrees)
     c, s = math.cos(a), math.sin(a)
     return x * c - y * s, x * s + y * c
+
+
+def courtyard_rect(comp, pose):
+    """``(cx, cy, w, h)`` (um) of a header component's courtyard under ``pose``: the
+    ``courtyard`` centred on the pose, or (PNR_COMPACT) its off-centre ``body`` box,
+    mirrored when the pose's side differs from the header's and turned with the part."""
+    x, y, rot, side = pose
+    body = comp.get("body")
+    if not body:
+        w, h = comp["courtyard"]
+        if int(round(rot / 90.0)) % 2 == 1:
+            w, h = h, w
+        return x, y, w, h
+    x0, y0, x1, y1 = body
+    if side != comp["side"]:
+        y0, y1 = -y1, -y0
+    q = int(round(rot / 90.0)) % 4
+    pts = [((px, py), (-py, px), (-px, -py), (py, -px))[q] for px in (x0, x1) for py in (y0, y1)]
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    return (
+        x + (min(xs) + max(xs)) / 2.0,
+        y + (min(ys) + max(ys)) / 2.0,
+        max(xs) - min(xs),
+        max(ys) - min(ys),
+    )
 
 
 class Renderer:
@@ -172,6 +198,9 @@ class Renderer:
             self._zones(big, tf, view.native.get("zones", []), view.zone_reveal)
             draw = ImageDraw.Draw(big)
             layers = [({"": view.native}, {})]
+            for index, (copper, style) in enumerate(view.overlay or ()):
+                key = "overlay-%d" % index  # the gloss stage's changes, over the board
+                layers.append(({key: copper}, {key: style}))
         else:
             layers = self._engine_copper(view)
             if view.fixed is not None:  # a hierarchical knit's block copper, kept as it is
@@ -388,11 +417,7 @@ class Renderer:
             )
 
     def _courtyard_box(self, tf, ref, pose):
-        comp = self.components[ref]
-        x, y, rot, _side = pose
-        w, h = comp["courtyard"]
-        if int(round(rot / 90.0)) % 2 == 1:
-            w, h = h, w
+        x, y, w, h = courtyard_rect(self.components[ref], pose)
         a, b = tf(x - w / 2.0, y + h / 2.0), tf(x + w / 2.0, y - h / 2.0)
         return a + b
 

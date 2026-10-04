@@ -25,6 +25,8 @@ yapnr.local.toml
 # --- Local drops / OS -------------------------------------------------------
 *.zip
 .DS_Store
+# ...except the generated fab packages of the RF coupons (python -m yapnr.rf.coupons generate)
+!/examples/rf-coupons/*/fab/*-fab.zip
 
 # `yapnr atopile build` outputs (default ./yapnr-out/<project>/<build>)
 yapnr-out/

@@ -131,7 +131,9 @@ the critical path from the unplaced board to KiCad's verdict, with the rejected
 candidates of each selection as montages (`pnr.provenance`);
 `//hardware/pnr:ladder_animations` runs the traced ladder with the initial pool
 and renders every case (`--render-only RUN_DIR` skips the ladder) into
-`docs/animations/`, with `manifest.json` and `ladder-results.json`. Case
+`docs/animations/`, with `manifest.json` and `ladder-results.json`; the
+committed ones were recorded with `--compact --gloss` (`--runner-arg`), and a
+board saved after the gloss stage plays as a before/after. Case
 directories in `result.json`, `summary.json` and `junit.xml` are relative to the
 run directory. `provenance.json` records the fab profile, the checkout's commit
 (and whether engine files were modified), the platform and `sources_sha256`, one
@@ -143,8 +145,8 @@ objectives and the winning rung's native phases).
 
 CI (`.github/workflows/ladder.yaml`, informational) runs cases 01 to 06 on pull
 requests that change engine inputs, and all cases with seeds 0 and 1 nightly,
-inside the arm64 image, plus a traced pool run whose animations are uploaded as
-an artifact.
+inside the arm64 image, plus a traced pool run (with the committed animations'
+`--compact --gloss`) whose animations are uploaded as an artifact.
 
 ## Showcases
 
@@ -169,6 +171,50 @@ chapters (hierarchy) into `docs/animations/`; the page is
 [Constraints and hierarchy](../../../docs/constraints-and-hierarchy.md). The
 showcases never gate: the nightly lane runs them for information.
 
-Performance opt-ins can be tested explicitly with `--packed-maze` and
-`--batched-wirelength`. They are recorded in provenance; ambient variables are
-still cleared, so a baseline invocation keeps its original algorithms.
+The detailed router's A\* runs on the packed kernel by default (integer cell
+keys; the same predicates, prices and tie order as the reference search, so the
+same routes). `--reference-maze` routes with the reference kernel instead, and
+`--packed-maze` is accepted as a no-op for recorded configurations.
+`--maze-kernel native` compiles the kernel's search loop in C from the frozen
+sources with the host compiler and routes with it (the same routes again; the
+search itself runs about six times faster than packed on a dense board, while
+on the small ladder boards the whole run is about as fast as packed, since
+little of it is search); each case's `pnr-report.json` records the kernel that
+actually ran (`maze_kernel`), which is packed when the library cannot load or
+no compiler is found (the runner then says so and records it in provenance), and
+under `maze_kernel.reference_fallback` why searches ran on the reference kernel
+instead (a grid the dense fields do not model, such as a board with blind, buried
+or micro vias).
+`--exact-separation recover|full|off` sets the detailed router's separation
+model (`PNR_EXACT_SEPARATION`, `pnr/route/detail/exact_route.py`): `full` routes
+with the exact pairwise copper separation instead of the halo model (which
+keeps nets about twice as far apart as the rules ask), `recover` routes again
+with it only when a detailed route leaves connections open and keeps that route
+when it leaves fewer open, so every route that completes is unchanged (the
+engine's default). The recovery is skipped on a board whose later stages add
+copper the route does not hold (plane drops placed after routing, deferred
+native nets), since it cannot tell whether it took their room. It needs the
+packed or native kernel, so `--reference-maze` also turns it off: a reference
+run differs from a default one in the kernel *and* in the recovery. Each
+case's `pnr-report.json` records the mode (`exact_separation`), and
+`place-route.log` each recovery or skip. An unknown kernel or mode is an
+error. The
+performance opt-in `--batched-wirelength` can be tested explicitly. All of these
+are recorded in provenance; ambient variables are still cleared, so a baseline
+invocation keeps its original algorithms.
+
+## Length-matching scratch designs
+
+No ladder case or hard rung declares a length-match group, so
+`lenmatch_scratch.py write OUT.json` writes scratch designs for the router's
+length tuning: an 8-net bus from a fixed SMD connector to an SOIC (a group, 0.5 mm)
+and a differential pair whose pins swap between its connectors (1.0 mm skew), on two
+layers and on 4L-SGPS with the bus's budget in ps (`lm-bus-pair`, whose bus reaches the
+SOIC in reverse pin order, and `lm-bus-pair-4L-ps`), and the bus turning a corner to
+an SOIC fixed above and to the right of the connector (`lm-bus-corner`). `run.py --design-json OUT.json` offers
+any such list to `--case`. `lenmatch_scratch.py judge CASE_DIR --kicad-cli PATH`
+then runs KiCad's DRC on a copy of the routed board with a `skew` rule per pair and
+per group with a budget in mm and reports KiCad's lengths beside the engine's
+`length_tuning` report. A budget in ps has no KiCad judge: KiCad 10.0.6's
+`kicad-cli pcb drc` reads every delay as 0 ps (KiCad issue 23868), so those sets are
+reported from the engine's audit only.

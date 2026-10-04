@@ -108,6 +108,7 @@ class MacroPlan:
                 src = by_ref[comp.ref]
                 comp.pos, comp.rot, comp.side = src.pos, src.rot, src.side
                 comp.pads = copy.deepcopy(src.pads)  # keep any side mirroring the placer applied
+                comp.body = src.body
         out.outline = copy.deepcopy(placed.outline)
         return out
 
@@ -160,6 +161,44 @@ def _macro_frame(geo, w, h, margin, shrink):
     )
 
 
+def _macro_relation(c, refs, plan, member_frame):
+    """A ``region`` or ``align`` on the macro graph: a member's bodies become bodies
+    of its macro, a member's anchor the macro's anchor, both in the macro frame, so
+    the relation stays exact at every macro rotation (pnr.place.regions)."""
+    from pnr.place.regions import anchor_spec, macro_anchor, macro_bodies
+
+    params = dict(c.params)
+    if c.kind == "region":
+        given = params.get("bodies") or {}
+        bodies = {}
+        for r in c.refs:
+            m = plan.member_of.get(r)
+            if m is None:
+                if r in given:
+                    bodies[r] = given[r]
+                continue
+            member, offset, rot = member_frame[r]
+            bodies.setdefault(m, []).extend(macro_bodies(member, c, offset, rot))
+        if bodies:
+            params["bodies"] = bodies
+    else:
+        anchors = {}
+        for r in c.refs:
+            m = plan.member_of.get(r)
+            if m is None:
+                anchors[r] = anchor_spec(c, r)
+                continue
+            if m in anchors:
+                raise ValueError(
+                    "align %r: two of its refs are members of macro %s (block %s), whose "
+                    "layout already fixes their offsets" % (c.name, m, plan.macros[m]["block"])
+                )
+            member, offset, rot = member_frame[r]
+            anchors[m] = macro_anchor(member, anchor_spec(c, r), offset, rot)
+        params["anchors"] = anchors
+    return Constraint(c.kind, c.enforcement, refs, params, c.weight, c.name)
+
+
 def collapse(
     flat: BoardGraph,
     constraints: CompiledConstraints,
@@ -193,7 +232,11 @@ def collapse(
     """
     plan = MacroPlan()
     by_ref = {c.ref: c for c in flat.components}
-    macro_graph = BoardGraph(name=flat.name + ":macro", outline=copy.deepcopy(flat.outline))
+    macro_graph = BoardGraph(
+        name=flat.name + ":macro",
+        outline=copy.deepcopy(flat.outline),
+        stack=copy.deepcopy(flat.stack),
+    )
     pad_alias: Dict[Tuple[str, str], Tuple[str, str]] = {}
     # Orientation is a per-ref absolute axis: every ref of a lock counts, not just refs[0].
     orient_locks = {
@@ -214,6 +257,10 @@ def collapse(
 
     shrink, with_hull = shrink_enabled(), hull_enabled()
     shaped = geometry is not None and (shrink or with_hull)
+    # Each member's component in the block frame, its offset from the macro centre
+    # (macro unrotated) and its rotation there: regions and aligns on members
+    # become bodies and anchors of the macro (pnr.place.regions).
+    member_frame = {}
     for index, (block, sub, w, h) in enumerate(layouts):
         mref = "%s%02d" % (prefix, index)
         members = {}
@@ -229,6 +276,8 @@ def collapse(
             reserves.extend(macro_reserves(c))
             members[c.ref] = (c.pos[0], c.pos[1], c.rot, c.side)
             plan.member_of[c.ref] = mref
+            centre = (fx, fy) if frame is not None else (w / 2, h / 2)
+            member_frame[c.ref] = (c, (c.pos[0] - centre[0], c.pos[1] - centre[1]), c.rot)
             for p in c.pads:
                 ox, oy = _rot(p.offset[0], p.offset[1], c.rot)
                 q = copy.deepcopy(p)
@@ -352,6 +401,9 @@ def collapse(
                 f"these parts together or leave the block flat"
             )
         refs = tuple(dict.fromkeys(plan.member_of.get(r, r) for r in c.refs))
+        if c.kind in ("region", "align"):
+            kept.append(_macro_relation(c, refs, plan, member_frame))
+            continue
         if c.kind == "orientation" and c.refs[0] in plan.member_of:
             continue
         if c.kind == "side" and all(r in plan.member_of for r in c.refs):

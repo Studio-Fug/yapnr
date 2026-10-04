@@ -7,7 +7,8 @@ mover) on a 0.25 mm lattice within ``max_move`` (tier-1 power parts only for a
 tier-1 to tier-1 connection, and no pad of theirs moves more than 1 mm), at any cardinal rotation the
 constraints allow. The cost is the weighted length of the mover's failed
 connections plus 0.5 x any growth of its other pads' nearest same-net peer
-distance (plane nets excluded); the target connection must shorten by at least
+distance (plane nets excluded) plus any growth of a soft region or align
+penalty (:func:`pnr.place.regions.soft_total`); the target connection must shorten by at least
 0.25 mm, the cost must drop, and the mover stays within ``lineage_cap`` of its
 generation-0 pose. Every other part keeps its exact parent pose, so a child is
 local by construction (no re-legalization).
@@ -19,7 +20,8 @@ feedback beats perturbation.
 
 A unit is a single part, or (hierarchical top level) a whole library block
 moved rigidly by translation. Legality: the mover's courtyards (with plane-array
-reservations) clear every other part by the board clearance, stay inside the
+reservations) clear every other part by the board clearance (PNR_COMPACT
+``LEGALIZE``: the courtyard gap plus both parts' copper margins), stay inside the
 outline, out of keep-outs and within hard group radii; then the full
 :func:`pnr.place.metrics.hard_violations` of the child may add nothing; then the
 driver's ``extra_check`` and (PNR_POWER_FIRST=1) the power guard (no new power
@@ -130,6 +132,9 @@ class MoveBoard:
     tier1: FrozenSet[str] = frozenset()
     origin: Optional[Dict[str, Tuple[float, float]]] = None
     clearance: float = 0.0
+    # PNR_COMPACT LEGALIZE copper margins ({ref: mm}, pnr.place.compact.margins): a part
+    # clears others by the clearance plus both parts' margins, as the legalizer's slots.
+    margins: Dict[str, float] = field(default_factory=dict)
     plane: FrozenSet[str] = frozenset()
     extra_check: Optional[Callable] = None  # f(graph, moved {ref: pose}) -> [problems]
     guard: Optional[Callable] = None  # f(graph) -> reason or None
@@ -161,6 +166,10 @@ class MoveBoard:
 
         self._hard = hard_violations
         self.baseline = self._violations()
+        from pnr.place.regions import soft_refs
+
+        # Refs in a soft region or align: their moves pay its growth (search()).
+        self.soft = soft_refs(self.constraints)
         self.pads_by_net = {}
         for c in g.components:
             for p in c.pads:
@@ -209,7 +218,8 @@ class MoveBoard:
             rect = courtyard_rect(comp)
             if ref not in self.locked and not rect.inside(self.width, self.height):
                 return "outline"
-            if any(rect.overlaps(k, gap=self.clearance) for k in self.keepouts):
+            margin = self.margins.get(ref, 0.0)
+            if any(rect.overlaps(k, gap=self.clearance + margin) for k in self.keepouts):
                 return "keepout"
             for anchor, member, radius in self.edges:
                 if ref in (anchor, member):
@@ -220,8 +230,9 @@ class MoveBoard:
                 for other, regions in self.rects.items():
                     if other in inside:
                         continue
+                    gap = self.clearance + margin + self.margins.get(other, 0.0)
                     for other_side, rect2 in regions:
-                        if other_side == side and area.overlaps(rect2, gap=self.clearance):
+                        if other_side == side and area.overlaps(rect2, gap=gap):
                             return "overlap"
         return None
 
@@ -262,6 +273,21 @@ class MoveBoard:
             return None
         finally:
             self._restore(saved)
+
+    def soft_growth(self, refs, cand):
+        """Per candidate ``(dx, dy, rot)``: the growth of the board's soft region and
+        soft align penalty (:func:`pnr.place.regions.soft_total`) when ``refs`` move."""
+        from pnr.place.regions import soft_total
+
+        before = soft_total(self.graph, self.constraints)
+        out = np.zeros(len(cand))
+        for m, (dx, dy, rot) in enumerate(cand):
+            saved = self._apply(refs, dx, dy, rot)
+            try:
+                out[m] = soft_total(self.graph, self.constraints) - before
+            finally:
+                self._restore(saved)
+        return out
 
     def within_lineage(self, refs, dx, dy, cap):
         return all(
@@ -390,6 +416,8 @@ class MoveBoard:
         c1, t1 = fail_cost(pos)
         o1 = other_len(pos)
         cost = c1 + OTHER_PAD_PENALTY * np.maximum(0.0, o1 - o0)
+        if set(self.units[unit]) & self.soft:
+            cost = cost + self.soft_growth(self.units[unit], cand)
         shorten = t0 - t1
         moves = np.hypot([c[0] for c in cand], [c[1] for c in cand])
         pad_move = np.max(np.linalg.norm(pos - ident[None], axis=-1), axis=-1)

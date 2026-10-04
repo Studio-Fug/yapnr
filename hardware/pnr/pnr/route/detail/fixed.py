@@ -2,7 +2,10 @@
 
 These are obstacles only: they do not assert that any net is complete. Native
 connectivity remains authoritative. Layer-specific tracks reserve only that
-layer, while through-vias reserve the entire stack including drill spacing.
+layer, while through-vias reserve the entire stack including drill spacing. A
+blind, buried or micro via (``type`` with ``layers``: its top and bottom copper)
+reserves its copper only on the grid layers inside its span; its drill spacing
+still applies on every layer (conservative).
 
 ``own_net=True`` (the hierarchical knit, ``route_board(fixed_copper_own_net=True)``):
 a fixed track's clearance cells are owned by its net instead of blocked for every
@@ -13,6 +16,7 @@ every net (hole spacing applies within a net too); their copper is owned the sam
 """
 
 import math
+import re
 
 from pnr.writeback import _segment_distance_sq
 
@@ -47,6 +51,9 @@ def reserve_fixed_copper(grid, copper, route_width=None, own_net=False):
             key = (layer, i, j)
             owner = table.get(key)
             table[key] = net if owner is None or owner == net else "\0conflict"
+            # No longer a pad-only halo: exact pad checks do not see fixed copper.
+            for mirror in ("pad_track_halo", "pad_via_halo"):
+                getattr(grid, mirror, {}).pop(key, None)
 
         return claim
 
@@ -70,12 +77,15 @@ def reserve_fixed_copper(grid, copper, route_width=None, own_net=False):
         drill = via["drill_mm"]
         if not all(math.isfinite(v) for v in [*p, diameter, drill]) or not 0 < drill < diameter:
             raise ValueError("invalid fixed via geometry")
-        if via.get("type") != "through":
-            raise ValueError("only through fixed vias supported")
+        kind = via.get("type")
+        if kind not in ("through", "blind", "buried", "micro"):
+            raise ValueError("unsupported fixed via type %r" % kind)
+        span = _span_layers(grid, via) if kind != "through" else range(grid.nlayers)
         net = via.get("net") if own_net else None
         for la in range(grid.nlayers):
             copper_table = owned(grid.pad_net, net) if net else grid.blocked
-            reserve(la, p, p, diameter / 2 + grid.clearance + track_radius, copper_table)
+            if la in span:
+                reserve(la, p, p, diameter / 2 + grid.clearance + track_radius, copper_table)
             drill_clear = (drill + 2 * grid.via_radius) / 2 + grid.clearance
             reserve(
                 la,
@@ -84,3 +94,26 @@ def reserve_fixed_copper(grid, copper, route_width=None, own_net=False):
                 max(diameter / 2 + grid.clearance + grid.via_radius, drill_clear),
                 grid.via_blocked,
             )
+
+
+def _copper_order(name):
+    """Stack position of a copper layer by KiCad's standard names (F.Cu, In1.Cu ..
+    InN.Cu, B.Cu)."""
+    if name == "F.Cu":
+        return 0
+    if name == "B.Cu":
+        return 10**6
+    match = re.fullmatch(r"In(\d+)\.Cu", name)
+    if not match:
+        raise ValueError("not a copper layer name: %r" % name)
+    return int(match.group(1))
+
+
+def _span_layers(grid, via):
+    """The grid layer indices inside a blind, buried or micro fixed via's span (its
+    ``layers``: top and bottom copper names)."""
+    layers = via.get("layers")
+    if not layers or len(layers) != 2:
+        raise ValueError("a fixed %s via needs its two copper layers" % via.get("type"))
+    top, bottom = sorted(_copper_order(n) for n in layers)
+    return {i for i, name in enumerate(grid.layers) if top <= _copper_order(name) <= bottom}

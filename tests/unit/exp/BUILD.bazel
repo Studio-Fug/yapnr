@@ -1,0 +1,33 @@
+load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+
+# Offline and free: FakeCloud for every Google Cloud call (real gcloud calls are disabled in the
+# test process), fixture git repositories, smoke tasks with the test's own Python. The local
+# backend's run of a real ladder cell needs KiCad and is manual (test_local_ladder).
+yapnr_py_tests(
+    size = "medium",
+    data = glob(["golden/*"]) + [
+        "//docs:examples/cloud.toml.example",
+        # test_kinds reads pnr/compact_flags.py's parts (the ladder kind's compact_off).
+        "//hardware/pnr:pnr_kicad_srcs",
+    ],
+    overrides = {
+        # A real ladder cell with the host's KiCad; skipped without YAPNR_EXP_LADDER_REPO and
+        # YAPNR_CLOUD_CONFIG (pass them with --test_env).
+        "test_local_ladder": {
+            "tags": [
+                "kicad",
+                "local",
+                "manual",
+            ],
+        },
+        # Runs wrapper processes, including a preemption and a retry.
+        "test_wrapper": {"timeout": "moderate"},
+    },
+    deps = [
+        "//tools/ci:ci_lib",
+        "//tools/exp:exp_lib",
+        "//yapnr",
+        "//yapnr/exp",
+        "//yapnr/exp:testing",
+    ],
+)

@@ -1,0 +1,134 @@
+{
+  "allocationPolicy": {
+    "instances": [
+      {
+        "blockProjectSshKeys": true,
+        "policy": {
+          "bootDisk": {
+            "sizeGb": "30",
+            "type": "hyperdisk-balanced"
+          },
+          "machineType": "c4d-highcpu-4",
+          "provisioningModel": "SPOT"
+        }
+      }
+    ],
+    "labels": {
+      "campaign": "20261002-smoke-95b3e2",
+      "class": "c1m1",
+      "deadline": "1790000000",
+      "kind": "smoke",
+      "submission": "1",
+      "visibility": "public",
+      "yapnr": "1"
+    },
+    "location": {
+      "allowedLocations": [
+        "regions/us-west4"
+      ]
+    },
+    "network": {
+      "networkInterfaces": [
+        {
+          "network": "projects/example-project/global/networks/yapnr",
+          "noExternalIpAddress": true,
+          "subnetwork": "projects/example-project/regions/us-west4/subnetworks/yapnr-us-west4"
+        }
+      ]
+    },
+    "serviceAccount": {
+      "email": "yapnr-runner@{project}.iam.gserviceaccount.com"
+    }
+  },
+  "labels": {
+    "campaign": "20261002-smoke-95b3e2",
+    "deadline": "1790000000",
+    "submission": "1",
+    "yapnr": "1"
+  },
+  "logsPolicy": {
+    "destination": "CLOUD_LOGGING"
+  },
+  "taskGroups": [
+    {
+      "parallelism": "2",
+      "taskCount": "2",
+      "taskCountPerNode": "2",
+      "taskSpec": {
+        "computeResource": {
+          "cpuMilli": "2000",
+          "memoryMib": "1024"
+        },
+        "environment": {
+          "variables": {
+            "YAPNR_BACKEND": "gcp-batch"
+          }
+        },
+        "lifecyclePolicies": [
+          {
+            "action": "RETRY_TASK",
+            "actionCondition": {
+              "exitCodes": [
+                50001,
+                50002,
+                50003,
+                50006,
+                75
+              ]
+            }
+          }
+        ],
+        "maxRetryCount": 3,
+        "maxRunDuration": "1200s",
+        "runnables": [
+          {
+            "container": {
+              "commands": [
+                "/opt/venv/bin/python",
+                "/mnt/disks/runs/campaigns/20261002-smoke-95b3e2/task.py",
+                "--store",
+                "/mnt/disks/runs",
+                "--inputs",
+                "/mnt/disks/inputs",
+                "--campaign",
+                "20261002-smoke-95b3e2",
+                "--submission",
+                "1",
+                "--toolchain",
+                "image",
+                "--work-root",
+                "/tmp/yapnr-work"
+              ],
+              "entrypoint": "/usr/local/bin/yapnr-kicad-env",
+              "imageUri": "us-west4-docker.pkg.dev/example-project/ghcr/studio-fug/yapnr@sha256:abababababababababababababababababababababababababababababababab",
+              "options": "--init --shm-size 1g --user 0:0"
+            },
+            "displayName": "yapnr-task",
+            "timeout": "900s"
+          }
+        ],
+        "volumes": [
+          {
+            "gcs": {
+              "remotePath": "example-yapnr-runs"
+            },
+            "mountOptions": [
+              "--implicit-dirs"
+            ],
+            "mountPath": "/mnt/disks/runs"
+          },
+          {
+            "gcs": {
+              "remotePath": "example-yapnr-inputs/bundles"
+            },
+            "mountOptions": [
+              "--implicit-dirs",
+              "-o ro"
+            ],
+            "mountPath": "/mnt/disks/inputs"
+          }
+        ]
+      }
+    }
+  ]
+}

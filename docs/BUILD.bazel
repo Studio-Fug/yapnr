@@ -32,3 +32,11 @@ py_binary(
     srcs = ["serve.py"],
     main = "serve.py",
 )
+
+# The annotated owner configuration of `yapnr exp` (tests/unit/exp checks that it parses) and
+# the PNR_GLOSS functional groups of ladder case 07-chaser-20 (the regression contract checks
+# that every net exists in the design).
+exports_files([
+    "examples/cloud.toml.example",
+    "examples/gloss-groups-chaser.json",
+])

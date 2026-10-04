@@ -1,0 +1,110 @@
+{
+  "schema": "yapnr-fab-vendor-v1",
+  "vendor": "pcbway",
+  "title": "PCBWay",
+  "country": "CN",
+  "profiles_by_layers": {
+    "4": "pcbway-std"
+  },
+  "gerbers": {
+    "layers": [
+      "copper",
+      "F.Mask",
+      "B.Mask",
+      "F.Silkscreen",
+      "B.Silkscreen",
+      "F.Paste",
+      "B.Paste",
+      "Edge.Cuts"
+    ],
+    "protel_extensions": false,
+    "names": null,
+    "subtract_soldermask": true,
+    "x2": true,
+    "src": "P-plug (plugins/process.py: no Protel extensions, X2 attributes, mask subtracted from silk)"
+  },
+  "drill": {
+    "units": "in",
+    "zeros": "decimal",
+    "oval": "alternate",
+    "origin": "absolute",
+    "separate_th": true,
+    "map": null,
+    "names": {
+      "pth": "{board}-PTH.drl",
+      "npth": "{board}-NPTH.drl"
+    },
+    "src": "P-plug (plugins/process.py: inch, decimal, PTH and NPTH separate, no map)"
+  },
+  "extras": ["ipcd356"],
+  "assembly": {
+    "bom": {
+      "file": "{board}-pcbway-bom.csv",
+      "columns": [
+        "Item #",
+        "Designator",
+        "Qty",
+        "Manufacturer",
+        "Mfg Part #",
+        "Description / Value",
+        "Footprint",
+        "Type",
+        "Your Instructions / Notes"
+      ],
+      "src": "KK (kikit/fab/pcbway.py column set)"
+    },
+    "cpl": {
+      "file": "{board}-pcbway-cpl.csv",
+      "columns": ["Designator", "Mid X", "Mid Y", "Layer", "Rotation"],
+      "units": "mm",
+      "layers": {
+        "top": "Top",
+        "bottom": "Bottom"
+      },
+      "src": "P-asm"
+    },
+    "part_key": "mpn",
+    "rotation_check": false
+  },
+  "staging": {
+    "manual": {
+      "url": "https://www.pcbway.com/orderonline.aspx",
+      "steps": [
+        "Choose 'Single pieces', enter the size and layers on this card, click 'Calculate'.",
+        "Upload {zip} as the PCB file and set the options on this card.",
+        "Put the card's remark, if any, in 'Other special request'; 'Save to Cart' and pay there."
+      ],
+      "src": "P-order"
+    },
+    "assembly": {
+      "url": "https://www.pcbway.com/quotesmt.aspx",
+      "steps": [
+        "Enter the assembly quantities and part counts on this card.",
+        "Upload {zip}, the BOM and the CPL files when the quote asks for them."
+      ],
+      "src": "P-smt"
+    }
+  },
+  "sources": {
+    "KK": {
+      "url": "https://github.com/yaqwsx/KiKit",
+      "accessed": "2026-10-02"
+    },
+    "P-asm": {
+      "url": "https://www.pcbway.com/pcb-assembly.html",
+      "accessed": "2026-10-02"
+    },
+    "P-order": {
+      "url": "https://www.pcbway.com/orderonline.aspx",
+      "accessed": "2026-10-02"
+    },
+    "P-plug": {
+      "url": "https://github.com/pcbway/PCBWay-Plug-in-for-Kicad",
+      "accessed": "2026-10-02"
+    },
+    "P-smt": {
+      "url": "https://www.pcbway.com/quotesmt.aspx",
+      "accessed": "2026-10-02"
+    }
+  }
+}

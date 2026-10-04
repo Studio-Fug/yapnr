@@ -22,12 +22,18 @@ each cheap stage as a predictor is measured rather than assumed.
 With ``--library`` the block library is frozen once into
 ``out/library.snapshot.json``; every worker (and any resume of the same --out)
 reads that snapshot, never the live library directory.
+
+PNR_COMPACT=1 ``RANK`` (default off, :mod:`pnr.place.compact`): screen and native records
+carry ``compactness``; the screen ranks by :func:`pnr.place.initial_pool.route_rank` with the
+compactness ``bucket`` after the completion keys, and the native and deep stages put
+``bbox_mm2`` after every completion key, before the id.
 """
 
 from __future__ import annotations
 
 import argparse
 import concurrent.futures as cf
+import functools
 import hashlib
 import json
 import math
@@ -175,6 +181,13 @@ def _load(inputs: Path, constraints_path: Path):
     return graph, constraints, rules
 
 
+@functools.lru_cache(maxsize=4)
+def _ranked_constraints(inputs: str, constraints_path: str):
+    """PNR_COMPACT ``RANK``: the constraints a native record's bounding box is measured
+    on, loaded once per worker (read only)."""
+    return _load(Path(inputs), Path(constraints_path))[1]
+
+
 # ---------------------------------------------------------------- stage 0
 
 PLACE_JOB = (
@@ -260,8 +273,9 @@ def _place_impl(
                 initial_positions=start.get("positions"),
                 initial_rotations=start.get("rotations"),
                 pair_weights=pair_weights,
+                **({"initial_sides": start["sides"]} if start.get("sides") else {}),
             )
-        errors = _hard_and_source_errors(placed, source, constraints)
+        errors = _hard_and_source_errors(placed, source, constraints, rules)
         from pnr.place.metrics import hard_violations
 
         flat_violations = {k: v for k, v in hard_violations(placed, constraints).items() if v}
@@ -302,7 +316,7 @@ def _starts(inputs, constraints_path, n, seed):
     constraints = preserve_source_locks(graph, constraints)
     source = _prepared_source(graph, constraints, rules)
     cfg = InitialPoolConfig(starts=n, route_finalists=1, proxy_budget=n)
-    starts = initial_starts(source, constraints, cfg, seed=seed, orient=True)
+    starts = initial_starts(source, constraints, cfg, seed=seed, orient=True, rules=rules)
     for s in starts:
         s["id"] = "p%03d" % int(s["id"].split("-")[1])
     return starts
@@ -332,11 +346,26 @@ def _screen_one(args):
             **{k: v for k, v in m.items() if k != "unresolved_nets"},
             unresolved=len(m["unresolved_nets"]),
         )
+        record.update(_compactness(placed, constraints))
         (cand / "screen.json").write_text(json.dumps(m, indent=2))
     except Exception as error:
         record.update(status="failed", error=repr(error), traceback=traceback.format_exc()[-2000:])
     record["seconds"] = time.monotonic() - t
     return record
+
+
+def _compactness(placed, constraints):
+    """PNR_COMPACT ``RANK``: ``{"compactness": ..., "bucket": ...}`` of a placed graph
+    (:func:`pnr.place.compact.metrics`), else ``{}``."""
+    from pnr.compact_flags import enabled as compact_enabled
+
+    if not compact_enabled("RANK"):
+        return {}
+    from pnr.place import compact
+    from pnr.place.geometry import outline_size
+
+    measured = compact.metrics(placed, *outline_size(placed, constraints))
+    return dict(compactness=measured, bucket=measured["bucket"])
 
 
 # ---------------------------------------------------------------- stage 2/3
@@ -448,6 +477,17 @@ def _native_one(
     record.update(exit_code=code, loadavg_end=_loadavg())
     if timed_out:
         record["timed_out"] = True
+    from pnr.compact_flags import enabled as compact_enabled
+
+    if compact_enabled("RANK"):  # PNR_COMPACT RANK: the evaluated placement's bbox
+        try:
+            from pnr.graph import BoardGraph
+
+            ranked = _ranked_constraints(str(inputs), str(constraints_path))
+            placed = BoardGraph.from_json((cand / "placed.json").read_text())
+            record.update(_compactness(placed, ranked))
+        except Exception as error:  # an unmeasured candidate ranks last, never crashes
+            record["compactness_error"] = repr(error)
     evaluation = round_dir / "evaluation.json"
     if evaluation.exists():
         e = json.loads(evaluation.read_text())
@@ -489,7 +529,11 @@ def _rank_key(stage):
     if stage == "place":
         return lambda r: (r.get("proxy_score", math.inf), r.get("cheap_score", math.inf))
     if stage == "screen":
-        return lambda r: tuple(r.get("objective") or [math.inf])
+        # route_rank: with PNR_COMPACT RANK the records' compactness bucket after the
+        # completion keys.
+        from pnr.place.initial_pool import route_rank
+
+        return route_rank
     # native/deep. objective = [violations, blocked, reference, subwidth, unqualified_pairs, unconnected]
     # key: violations, unconnected, unqualified pairs, reference failures, blocked entries, width debt, id
     # PNR_SI=1: routed SI layout failures (pnr.si side field `si_layout_failures`) right after
@@ -508,12 +552,25 @@ def _rank_key(stage):
                 else (math.inf,) * 7 + (r["id"],)
             )
 
-        return si_key
+        key = si_key
+    else:
 
-    def key(r):
-        o = r.get("objective")
-        return (o[0], o[5], o[4], o[2], o[1], o[3], r["id"]) if o else (math.inf,) * 6 + (r["id"],)
+        def key(r):
+            o = r.get("objective")
+            return (
+                (o[0], o[5], o[4], o[2], o[1], o[3], r["id"]) if o else (math.inf,) * 6 + (r["id"],)
+            )
 
+    from pnr.compact_flags import enabled as compact_enabled
+
+    if compact_enabled("RANK"):
+        # PNR_COMPACT RANK: bbox_mm2 after every completion key, before the id.
+        def compact_key(r, base=key):
+            k = base(r)
+            bbox = (r.get("compactness") or {}).get("bbox_mm2")
+            return k[:-1] + (math.inf if bbox is None else float(bbox), k[-1])
+
+        return compact_key
     return key
 
 
@@ -785,7 +842,7 @@ def _generations(a, ctx):
     def load_parent(r):
         cand = out / "cand" / r["id"]
         pose, src = parent_pose(cand / "placed.json", round_dir(r) / "evaluated-placed.json")
-        if src == "evaluated" and source_errors(pose, source, con):
+        if src == "evaluated" and source_errors(pose, source, con, rules):
             pose, src = parent_pose(cand / "placed.json")
         return pose, src
 

@@ -11,6 +11,8 @@ import json
 import math
 import os
 import platform
+import re
+import resource
 import shutil
 import subprocess
 import sys
@@ -21,6 +23,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from designs import designs, showcases
+from hard_rungs import dru_text, hard_rungs
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
@@ -41,6 +44,56 @@ def kicad_footprints():
 
 def sha(p):
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+
+
+def _oriented(block):
+    """A track or arc block with its ends in sorted order (a segment drawn either way is the
+    same copper; which end a merged segment keeps can follow its random uuid)."""
+    ends = [i for i, text in enumerate(block) if text.startswith(("(start ", "(end "))]
+    if len(ends) != 2:
+        return block
+    i, j = ends
+
+    def point(text):
+        return tuple(float(v) for v in text.split("(", 1)[1].rstrip(")").split()[1:])
+
+    if point(block[j]) < point(block[i]):
+        block = list(block)
+        block[i], block[j] = "(start" + block[j][4:], "(end" + block[i][6:]
+    return block
+
+
+COPPER_ITEM = re.compile(r"^\s*\((segment|via)[\s)]", re.M)  # tracks and vias, any layout
+
+
+def copper_sha(board):
+    """SHA-256 of a board's copper without uuids: its track, arc and via blocks, uuid lines
+    dropped, ends in sorted order, sorted. Writeback gives tracks random uuids, so two runs of
+    one case differ in ``sha`` but not here when their copper is the same (pairing A/B arms,
+    determinism). Raises ValueError when the board holds a track or via block this reader
+    does not parse (another file layout): a hash of nothing would pair any two boards."""
+    text = Path(board).read_text()
+    blocks, block, depth = [], None, 0
+    for line in text.splitlines():
+        item = line.strip()
+        if block is None:
+            if item.startswith(("(segment", "(arc", "(via")) and line.startswith("\t("):
+                block, depth = [item], item.count("(") - item.count(")")
+            continue
+        depth += item.count("(") - item.count(")")
+        if not item.startswith("(uuid"):
+            block.append(item)
+        if depth <= 0:
+            blocks.append(" ".join(_oriented(block)))
+            block = None
+    parsed = sum(b.startswith(("(segment", "(via")) for b in blocks)
+    found = len(COPPER_ITEM.findall(text))
+    if parsed != found:
+        raise ValueError(
+            "copper_sha: %s has %d track and via blocks, %d parsed"
+            % (Path(board).name, found, parsed)
+        )
+    return hashlib.sha256("\n".join(sorted(blocks)).encode()).hexdigest()
 
 
 def acceptance(pnr, audit, drc):
@@ -67,13 +120,60 @@ def acceptance(pnr, audit, drc):
     return reasons
 
 
-def constraint_reasons(spec, placed):
+def _quarter(x, y, rot):
+    """``(x, y)`` turned ``rot`` degrees CCW (a quarter turn, exactly)."""
+    return ((x, y), (-y, x), (-x, -y), (y, -x))[int(round(rot / 90.0)) % 4]
+
+
+def body_extent(comp, use_body=True):
+    """``(x0, y0, x1, y1)`` of a placed.json component's box at its pose: its off-centre
+    ``body`` (``use_body``, when it has one), else the ``courtyard`` centred on ``pos``."""
+    x, y = comp["pos"]
+    body = comp.get("body") if use_body else None
+    if not body:
+        w, h = comp["courtyard"]
+        body = (-w / 2.0, -h / 2.0, w / 2.0, h / 2.0)
+    corners = [
+        _quarter(px, py, comp["rot"]) for px in (body[0], body[2]) for py in (body[1], body[3])
+    ]
+    xs, ys = [c[0] for c in corners], [c[1] for c in corners]
+    return (x + min(xs), y + min(ys), x + max(xs), y + max(ys))
+
+
+def compactness(placed):
+    """Stdlib measure of a placed.json (every arm alike, the engine's
+    pnr.place.compact.metrics): the bounding box of the parts' body boxes, their summed
+    area, utilization (area / bbox), occupancy (area / outline) and the outline area."""
+    boxes = [body_extent(c) for c in placed["components"]]
+    outline = placed.get("outline") or {}
+    board = float(outline.get("width") or 0.0) * float(outline.get("height") or 0.0)
+    if not boxes:
+        return None
+    bw = max(b[2] for b in boxes) - min(b[0] for b in boxes)
+    bh = max(b[3] for b in boxes) - min(b[1] for b in boxes)
+    area = sum((b[2] - b[0]) * (b[3] - b[1]) for b in boxes)
+    return dict(
+        bbox_mm2=round(bw * bh, 3),
+        bbox_mm=[round(bw, 3), round(bh, 3)],
+        area_mm2=round(area, 3),
+        utilization=round(area / (bw * bh), 3) if bw * bh > 0 else 0.0,
+        occupancy=round(area / board, 3) if board > 0 else None,
+        outline_mm2=round(board, 3),
+    )
+
+
+def constraint_reasons(spec, placed, use_body=False, shrunk=False):
     """Independent audit (stdlib, not the engine's metrics) of the showcase constraints
     on ``placed`` (placed.json): each line group collinear at its pitch or gap, in member
-    order, with its declared rotation, and each hard edge part within its tolerance.
+    order, with its declared rotation, and each hard edge part within its tolerance of
+    the design's outline (placed.json's with ``shrunk``: ``--shrink``), measured on its
+    body box with ``use_body`` (``--compact``: the placer holds off-centre bodies).
     Returns ``(checked, findings)``."""
     cons = spec["constraints"]
     width, height = cons["board"]["outline"]["w"], cons["board"]["outline"]["h"]
+    outline = placed.get("outline") or {}
+    if shrunk and outline.get("width") and outline.get("height"):
+        width, height = outline["width"], outline["height"]
     comps = {c["ref"]: c for c in placed["components"]}
     checked, findings = [], []
 
@@ -111,16 +211,42 @@ def constraint_reasons(spec, placed):
             continue
         checked.append("edge_align " + ref)
         comp = comps[ref]
-        w, h = comp["courtyard"]
-        if int(round(comp["rot"] / 90.0)) % 2:
-            w, h = h, w
-        x, y = comp["pos"]
-        distance = dict(
-            south=y - h / 2, north=height - y - h / 2, west=x - w / 2, east=width - x - w / 2
-        )[rule["edge"]]
+        x0, y0, x1, y1 = body_extent(comp, use_body)
+        distance = dict(south=y0, north=height - y1, west=x0, east=width - x1)[rule["edge"]]
         if distance > rule.get("tolerance_mm", 1.0) + 1e-3:
             findings.append("%s: %.3f mm from the %s edge" % (ref, distance, rule["edge"]))
     return checked, findings
+
+
+# The vendor profile data pnr.fab_profile resolves data profiles from (yapnr.fab.capability), frozen
+# with the engine so a run under oshpark-4l or jlc-4l uses the data of its own checkout.
+FAB_DATA_SOURCES = ("yapnr/__init__.py", "yapnr/fab/__init__.py", "yapnr/fab/capability.py")
+
+# The parts of PNR_COMPACT (pnr.compact_flags.PARTS; test_compact keeps them equal)
+# --compact-off may drop.
+COMPACT_PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD", "DROPS")
+
+
+def compact_environment(compact, compact_off=(), shrink=False):
+    """The PNR_COMPACT / PNR_SHRINK variables of ``--compact``, ``--compact-off`` and
+    ``--shrink`` (set after the ambient PNR_* variables are stripped, so provenance
+    records them); empty when none is given."""
+    if compact_off and not compact:
+        raise ValueError("--compact-off needs --compact")
+    env = {}
+    if compact:
+        env["PNR_COMPACT"] = "1"
+        for part in sorted(set(compact_off)):
+            env["PNR_COMPACT_" + part] = "0"
+    if shrink:
+        env["PNR_SHRINK"] = "1"
+    return env
+
+
+def fab_data_inputs(repo):
+    return [repo / p for p in FAB_DATA_SOURCES] + sorted(
+        (repo / "yapnr/fab/data/profiles").glob("*.json")
+    )
 
 
 def source_inputs(repo):
@@ -129,20 +255,37 @@ def source_inputs(repo):
         raise FileNotFoundError("Native regression requires " + str(scanner))
     return (
         sorted((repo / "hardware/pnr/pnr").rglob("*.py"))
+        + sorted((repo / "hardware/pnr/pnr").rglob("*.c"))
         + sorted((repo / "hardware/pnr/regression").glob("*.py"))
         + [scanner]
+        + [p for p in fab_data_inputs(repo) if p.is_file()]
     )
 
 
 # The fabrication profile the ladder routes and is judged under (pnr.fab_profile). The fixtures
 # carry their own fab block (0.2 mm clearance, 0.6/0.3 mm vias; README), which is exactly what the
 # legacy profile enforces; the engine's default (jlc-pofv) overrides it with JLC capability values.
+# The vendor profiles of yapnr/fab/data (oshpark-2l, oshpark-4l, jlc-4l, ...) route and judge a
+# case under that vendor's rules (docs/fab-and-ordering.md).
 FAB_PROFILES = ("legacy", "jlc-pofv")
 DEFAULT_FAB_PROFILE = "legacy"
 
 
+def fab_profiles(repo=REPO):
+    """Every profile ``--fab-profile`` accepts: the built-in ones and the data profiles."""
+    data = sorted(p.stem for p in (repo / "yapnr/fab/data/profiles").glob("*.json"))
+    return tuple(sorted(set(FAB_PROFILES) | set(data)))
+
+
 def engine_revision(repo):
-    """``(commit, dirty)`` of the checkout the sources are frozen from; ``(None, None)`` without git."""
+    """``(commit, dirty)`` of the checkout the sources are frozen from; ``(None, None)`` without git.
+
+    A source bundle of ``yapnr exp`` (a ``git archive``, no ``.git``) gets its commit from the task
+    wrapper's ``YAPNR_ENGINE_REVISION`` and ``YAPNR_ENGINE_DIRTY``, which win over git: the
+    bundle's work directory may sit inside an unrelated checkout.
+    """
+    if os.environ.get("YAPNR_ENGINE_REVISION"):
+        return os.environ["YAPNR_ENGINE_REVISION"], os.environ.get("YAPNR_ENGINE_DIRTY") == "1"
 
     def git(*args):
         return subprocess.run(
@@ -170,6 +313,266 @@ LISTING = (
     "import importlib.metadata as m;"
     "print('\\n'.join(sorted('%s==%s'%(d.metadata['Name'],d.version) for d in m.distributions())))"
 )
+
+
+# --- PNR_GLOSS ladder stage (opt-in, docs/design/gloss.md "Ladder stage") ---------------------
+# The ladder has no native loop, so --gloss runs one gloss pass with 07g semantics (no open-net
+# guard) on the refilled board, before the audit: transactional and gated inside pnr.gloss, then
+# gated again here by the cold kicad-cli DRC that judges the case.
+GLOSS_SUMMARY_KEYS = (
+    "status",
+    "accepted_transactions",
+    "proposed_transactions",
+    "rejected_transactions",
+    "split_transactions",
+    "edits_by_step",
+    "rejections_by_check",
+    "end_gate",
+    "stop",  # why the pass stopped early (time_budget, max_transactions) or null
+    "budget",
+    "seconds",
+    "wall_seconds",
+    "objective_before",
+    "objective_after",
+    "metrics_before",
+    "metrics_after",
+    "delta_by_step",
+    "cross_group",
+)
+
+
+def gloss_flags(items, repo):
+    """``--gloss-flag KEY=VALUE`` items -> {KEY: VALUE}, PNR_GLOSS_* sub-flags only (the runner
+    strips ambient PNR_* variables). A relative PNR_GLOSS_CLASSES file is taken from the repo."""
+    out = {}
+    for item in items:
+        key, sep, value = item.partition("=")
+        if not sep or not key.startswith("PNR_GLOSS_"):
+            raise ValueError("--gloss-flag takes PNR_GLOSS_<NAME>=VALUE, got %r" % item)
+        if key == "PNR_GLOSS_CLASSES" and value and not Path(value).is_absolute():
+            value = str((Path(repo) / value).resolve())
+        out[key] = value
+    return out
+
+
+def drc_counts(report):
+    """(opens, {violation type: count}) of a kicad-cli DRC report."""
+    return len(report["unconnected_items"]), dict(Counter(v["type"] for v in report["violations"]))
+
+
+DANGLING = ("track_dangling", "via_dangling")
+
+
+def violation_keys(report):
+    """As pnr.via_coalesce.violation_keys (the pass's own gate): each violation as its type and
+    the sorted uuids of its items, the dangling kinds aside (they are counted)."""
+    return Counter(
+        (v["type"], tuple(sorted(i["uuid"] for i in v.get("items", []))))
+        for v in report["violations"]
+        if v["type"] not in DANGLING
+    )
+
+
+def gloss_gate(before, after):
+    """The outer gate of the gloss stage, as strict as the pass's own transaction gate: [] when
+    the cold DRC did not get worse, else the reasons. Worse: more opens, any violation that is
+    new by its type and items (a violation that moved to other items is new, even when the
+    count of its type holds), or more dangling tracks or vias."""
+    (o0, v0), (o1, v1) = drc_counts(before), drc_counts(after)
+    reasons = ["opens %d -> %d" % (o0, o1)] if o1 > o0 else []
+    new = violation_keys(after) - violation_keys(before)
+    for kind in sorted({kind for kind, _ in new}):
+        reasons.append("new %s %d" % (kind, sum(n for (k, _), n in new.items() if k == kind)))
+    for kind in DANGLING:
+        if v1.get(kind, 0) > v0.get(kind, 0):
+            reasons.append("%s %d -> %d" % (kind, v0.get(kind, 0), v1[kind]))
+    return reasons
+
+
+def freeze_gloss_groups(flags, freeze):
+    """A PNR_GLOSS_CLASSES groups file is copied into the run's source freeze and the run reads
+    the copy, as it reads every engine source: (flags naming the copy, the file's record
+    {name, sha256} for provenance.json; None without a groups file)."""
+    path = flags.get("PNR_GLOSS_CLASSES")
+    if not path:
+        return flags, None
+    if not Path(path).is_file():
+        raise ValueError("--gloss-flag PNR_GLOSS_CLASSES: no such file %r" % Path(path).name)
+    target = freeze / "gloss-groups" / Path(path).name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(path, target)
+    return dict(flags, PNR_GLOSS_CLASSES=str(target)), gloss_groups_record(flags)
+
+
+def gloss_groups_record(flags):
+    """The groups file of the sub-flags by its name and content, never its path (or None)."""
+    path = flags.get("PNR_GLOSS_CLASSES")
+    if not path or not Path(path).is_file():
+        return None
+    return dict(name=Path(path).name, sha256=sha(path))
+
+
+def gloss_flags_record(flags):
+    """The sub-flags as result.json records them: a groups file by its name, never its path."""
+    return {
+        key: Path(value).name if key == "PNR_GLOSS_CLASSES" and value else value
+        for key, value in flags.items()
+    }
+
+
+def gloss_summary(report):
+    """The pass summary kept in result.json: no transactions, specs or paths. ``planning``
+    keeps its totals (inventories, wall-clock safety-net hits), not its rows."""
+    block = {k: report[k] for k in GLOSS_SUMMARY_KEYS if k in report}
+    if isinstance(report.get("planning"), dict):
+        block["planning"] = {k: v for k, v in report["planning"].items() if k != "rows"}
+    if (block.get("cross_group") or {}).get("groups"):
+        block["cross_group"] = dict(
+            block["cross_group"], groups=Path(block["cross_group"]["groups"]).name
+        )
+    return block
+
+
+def gloss_stage(root, board, args, run, flags):
+    """--gloss: the PNR_GLOSS pass on ``board`` (in place); returns the case's gloss block.
+
+    ``routed.pre-gloss.kicad_pcb`` keeps the input. The pass output replaces the board only when
+    it kept edits and the cold kicad-cli DRC of the replaced board is not worse (gloss_gate);
+    otherwise, and on any stage error, the input is restored."""
+    folder = root / "gloss"
+    folder.mkdir()
+    pre = root / "routed.pre-gloss.kicad_pcb"
+    shutil.copyfile(board, pre)
+    pre_sha = sha(board)
+
+    def cold_drc(name):
+        out = folder / (name + ".drc.json")
+        run(
+            "gloss-" + name,
+            [args.kicad_cli, "pcb", "drc", board, "--format", "json", "--output", out],
+        )
+        return json.loads(out.read_text())
+
+    block = dict(
+        pre_gloss_board_sha256=pre_sha,
+        pre_gloss_copper_sha256=copper_sha(board),
+        flags=gloss_flags_record(flags),
+        groups=gloss_groups_record(flags),
+        kept=False,
+    )
+    try:
+        before = cold_drc("drc-before")
+        candidate = folder / "candidate.kicad_pcb"
+        run(
+            "gloss",
+            [
+                args.python,
+                "-m",
+                "pnr.gloss",
+                board,
+                "--rules",
+                root / "rules.json",
+                "--out",
+                candidate,
+                "--work-dir",
+                folder / "work",
+                "--report",
+                folder / "result.json",
+                "--kicad-cli",
+                args.kicad_cli,
+                "--kicad-python",
+                args.kicad_python,
+                "--label",
+                "07g-gloss",
+                "--metrics",
+            ],
+            dict(flags, PNR_GLOSS="1"),
+        )
+        report = json.loads((folder / "result.json").read_text())
+        block.update(summary=gloss_summary(report))
+        reasons, after = [], before
+        if report.get("accepted_transactions") and sha(candidate) != pre_sha:
+            shutil.copyfile(candidate, board)
+            after = cold_drc("drc-after")
+            reasons = gloss_gate(before, after)
+            block["kept"] = not reasons
+        block["outer_gate"] = dict(
+            passed=not reasons,
+            reasons=reasons,
+            before=dict(zip(("opens", "violations"), drc_counts(before))),
+            after=dict(zip(("opens", "violations"), drc_counts(after))),
+        )
+    except (subprocess.SubprocessError, OSError, ValueError, KeyError) as ex:
+        # no paths in result.json: the error's kind and exit code; the stage logs have the rest
+        code = getattr(ex, "returncode", None)
+        block.update(
+            status="error", error=type(ex).__name__ + ("" if code is None else " %s" % code)
+        )
+    if not block["kept"]:
+        shutil.copyfile(pre, board)
+    block["board_sha256"] = sha(board)
+    block["copper_sha256"] = copper_sha(board)
+    return block
+
+
+def measure_summary(row):
+    """--gloss-measure: the A/B figures of one pnr.gloss --measure row."""
+    m = row["metrics"]
+    eligible = m["classes"].get("eligible") or {}
+    cross = m.get("cross_group") or {}
+    return dict(
+        objective=row["objective"],
+        drc=row["drc"],
+        audit=row["audit"],
+        pad_entry=row["pad_entry"],
+        length_mm=round(eligible.get("length_mm", 0.0), 3),
+        segments=eligible.get("segments", 0),
+        bends_all=eligible.get("bends_all", 0),
+        X_mm2=round(m.get("X_mm2", 0.0), 3),
+        T_mm=round(m.get("T_mm", 0.0), 3),
+        DS_mm2=round(m.get("DS_mm2", 0.0), 3),
+        A3_mm2=round(m.get("A3_mm2", 0.0), 3),
+        cross_group_max_mm=cross.get("max_mm"),
+        cross_group_max_pair=cross.get("max_pair"),
+        cross_group_over_cap=len(cross.get("over_cap") or []),
+        seconds=row.get("seconds"),
+    )
+
+
+def gloss_measure(root, board, args, run, flags):
+    """--gloss-measure: pnr.gloss --measure on a copy of the final board (both A/B arms)."""
+    folder = root / "gloss-measure"
+    folder.mkdir()
+    copy = folder / board.name
+    for ext in (".kicad_pcb", ".kicad_pro", ".kicad_dru"):
+        if board.with_suffix(ext).exists():
+            shutil.copyfile(board.with_suffix(ext), copy.with_suffix(ext))
+    if (root / "fp-lib-table").exists():
+        shutil.copyfile(root / "fp-lib-table", folder / "fp-lib-table")
+    cmd = [
+        args.python,
+        "-m",
+        "pnr.gloss",
+        "--measure",
+        copy,
+        "--rules",
+        root / "rules.json",
+        "--out",
+        folder / "measure.json",
+        "--kicad-cli",
+        args.kicad_cli,
+        "--kicad-python",
+        args.kicad_python,
+    ]
+    if flags.get("PNR_GLOSS_CLASSES"):
+        cmd += ["--classes", flags["PNR_GLOSS_CLASSES"]]
+    if flags.get("PNR_GLOSS_CLASSES_FROM"):
+        cmd += ["--classes-from", flags["PNR_GLOSS_CLASSES_FROM"]]
+    if flags.get("PNR_GLOSS_CROSS_GROUP_MM"):
+        cmd += ["--cross-group-mm", flags["PNR_GLOSS_CROSS_GROUP_MM"]]
+    run("gloss-measure", cmd)
+    rows = json.loads((folder / "measure.json").read_text())
+    return measure_summary(next(iter(rows.values())))
 
 
 def new_result(spec, seed, root):
@@ -202,7 +605,32 @@ def parser():
         help="Explicit signal grid pitch for source and fixed-copper handoff; 0 keeps automatic pitch",
     )
     ap.add_argument(
-        "--packed-maze", action="store_true", help="Validate the packed CPU maze kernel explicitly"
+        "--packed-maze",
+        action="store_true",
+        help="The packed CPU maze kernel (the default; kept so recorded configurations still parse)",
+    )
+    ap.add_argument(
+        "--maze-kernel",
+        choices=("packed", "native"),
+        default="packed",
+        help=(
+            "native: build the C search loop from the frozen sources with the host compiler and "
+            "route with it (identical routes; the packed kernel runs if it cannot load)"
+        ),
+    )
+    ap.add_argument(
+        "--exact-separation",
+        choices=("off", "recover", "full"),
+        help=(
+            "PNR_EXACT_SEPARATION: recover routes again with the exact pairwise separation when "
+            "a detailed route leaves connections open (and keeps it only with fewer open), full "
+            "routes with it only; default: the engine's (recover)"
+        ),
+    )
+    ap.add_argument(
+        "--reference-maze",
+        action="store_true",
+        help="Route with the reference dict A* kernel (PNR_PACKED_MAZE=0) instead of the packed one",
     )
     ap.add_argument(
         "--batched-wirelength",
@@ -232,12 +660,77 @@ def parser():
         help="Also offer the showcase cases (designs.showcases(), outside the ladder) to --case",
     )
     ap.add_argument(
+        "--hard",
+        action="store_true",
+        help="Also offer the hard rungs (hard_rungs.hard_rungs(), outside the ladder) to --case",
+    )
+    ap.add_argument(
+        "--design-json",
+        action="append",
+        default=[],
+        help="Also offer the designs in this JSON list (e.g. lenmatch_scratch.py write) to --case",
+    )
+    ap.add_argument(
+        "--lane",
+        choices=("nightly", "manual"),
+        help="Run the hard rungs whose ci.lane is LANE (with any --case given); implies --hard",
+    )
+    ap.add_argument(
+        "--gloss",
+        action="store_true",
+        help=(
+            "Run the opt-in PNR_GLOSS pass (dekink, pull-tight, corridor packing; 07g semantics) "
+            "after refill, before the audit; a cold-DRC gate restores the pre-gloss board if "
+            "opens or findings rise"
+        ),
+    )
+    ap.add_argument(
+        "--gloss-flag",
+        action="append",
+        default=[],
+        metavar="PNR_GLOSS_NAME=VALUE",
+        help="A PNR_GLOSS_* sub-flag for the gloss stage and --gloss-measure (repeatable)",
+    )
+    ap.add_argument(
+        "--gloss-measure",
+        action="store_true",
+        help=(
+            "pnr.gloss --measure on a copy of each final board (objective, length, bends, "
+            "adjacency, dead space): the figures of a gloss A/B, for both arms"
+        ),
+    )
+    ap.add_argument(
+        "--compact",
+        action="store_true",
+        help=(
+            "PNR_COMPACT=1: compact placement (spread 1.0, clustered starts, the courtyard gap "
+            "and copper margins in the legalizer, offset courtyards, a compactness tie-break)"
+        ),
+    )
+    ap.add_argument(
+        "--compact-off",
+        action="append",
+        default=[],
+        choices=COMPACT_PARTS,
+        metavar="PART",
+        help="With --compact: drop one part, PNR_COMPACT_<PART>=0 (repeatable; ablations)",
+    )
+    ap.add_argument(
+        "--shrink",
+        action="store_true",
+        help=(
+            "PNR_SHRINK=1: the flat driver searches a smaller outline inside the design's "
+            "(the board shrinks); hard rungs are exempt"
+        ),
+    )
+    ap.add_argument(
         "--fab-profile",
-        choices=FAB_PROFILES,
+        choices=fab_profiles(),
         default=DEFAULT_FAB_PROFILE,
         help=(
             "PNR_FAB_PROFILE for every stage (default legacy: the fixtures' own fab block); "
-            "jlc-pofv routes and judges under the engine's default profile"
+            "jlc-pofv routes and judges under the engine's default profile, a vendor profile "
+            "(oshpark-4l, jlc-4l, ...) under that vendor's rules"
         ),
     )
     ap.add_argument(
@@ -265,9 +758,22 @@ def main():
         not args.trace or args.trace_placement_every < 1
     ):
         raise SystemExit("--trace-placement-every needs --trace and a positive N")
+    try:
+        glossing = gloss_flags(args.gloss_flag, REPO)
+    except ValueError as error:
+        raise SystemExit(str(error))
+    if glossing and not (args.gloss or args.gloss_measure):
+        raise SystemExit("--gloss-flag needs --gloss or --gloss-measure")
     out.mkdir(parents=True, exist_ok=False)
-    allcases = designs() + (showcases() if args.showcases else [])
-    cases = [c for c in allcases if not args.case or c["name"] in args.case]
+    hard = hard_rungs() if args.hard or args.lane else []
+    allcases = designs() + (showcases() if args.showcases else []) + hard
+    for path in args.design_json:
+        allcases += json.loads(Path(path).read_text())
+    if args.lane:
+        lane = {c["name"] for c in hard if c["ci"]["lane"] == args.lane}
+        cases = [c for c in allcases if c["name"] in lane or c["name"] in args.case]
+    else:
+        cases = [c for c in allcases if not args.case or c["name"] in args.case]
     if not cases or (set(args.case) - {c["name"] for c in cases}):
         raise SystemExit("Unknown/empty case selection")
     source_files = source_inputs(REPO)
@@ -278,13 +784,58 @@ def main():
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_path, target)
     frozen_here = freeze / "hardware/pnr/regression"
-    env = dict(os.environ, PYTHONPATH=str(freeze / "hardware/pnr"), PNR_LOCAL_PRESSURE="1")
+    try:
+        glossing, gloss_groups = freeze_gloss_groups(glossing, freeze)
+    except ValueError as error:
+        raise SystemExit(str(error))
+    # The frozen root carries yapnr.fab.capability and its profile data (fab_data_inputs).
+    env = dict(
+        os.environ,
+        PYTHONPATH=os.pathsep.join([str(freeze / "hardware/pnr"), str(freeze)]),
+        PNR_LOCAL_PRESSURE="1",
+    )
     # Ambient experiment switches must not silently change the suite configuration.
     for key in list(env):
         if key.startswith("PNR_") and key not in ("PNR_LOCAL_PRESSURE", "PNR_JOINT_ACCESS"):
             del env[key]
+    if args.packed_maze and args.reference_maze:
+        raise SystemExit("--packed-maze and --reference-maze are exclusive")
     if args.packed_maze:
         env["PNR_PACKED_MAZE"] = "1"
+    if args.reference_maze:
+        env["PNR_PACKED_MAZE"] = "0"
+    if args.exact_separation:
+        env["PNR_EXACT_SEPARATION"] = args.exact_separation
+    native = None
+    if args.maze_kernel == "native":
+        if args.reference_maze:
+            raise SystemExit("--maze-kernel native and --reference-maze are exclusive")
+        # The frozen C source, compiled once for the run (pnr.route.detail.native_maze).
+        # Without a working compiler the run keeps the packed kernel (identical routes)
+        # and says so here and in provenance.
+        try:
+            library = subprocess.run(
+                [
+                    args.python,
+                    "-c",
+                    "import sys; from pnr.route.detail.native_maze import build_library; "
+                    "print(build_library(sys.argv[1]))",
+                    str(out / "native"),
+                ],
+                env=dict(env, PYTHONPATH=str(freeze / "hardware/pnr")),
+                capture_output=True,
+                text=True,
+                timeout=600,
+                check=True,
+            ).stdout.strip()
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as error:
+            detail = (getattr(error, "stderr", None) or str(error)).strip().splitlines()
+            reason = detail[-1] if detail else type(error).__name__
+            print("native maze kernel not built (%s); the packed kernel routes" % reason)
+            native = dict(library=None, error=reason)
+        else:
+            env.update(PNR_MAZE_KERNEL="native", PNR_MAZE_LIB=library)
+            native = dict(library=Path(library).name, sha256=sha(Path(library)))
     if args.dense_maze_cost:
         env["PNR_DENSE_MAZE_COST"] = "1"
     if args.detail_pitch_mm is not None:
@@ -295,6 +846,10 @@ def main():
         env["PNR_DETAIL_PITCH_MM"] = str(args.detail_pitch_mm)
     if args.batched_wirelength:
         env["PNR_BATCHED_WIRELENGTH"] = "1"
+    try:
+        env.update(compact_environment(args.compact, args.compact_off, args.shrink))
+    except ValueError as error:
+        raise SystemExit(str(error))
     env["PNR_FAB_PROFILE"] = (
         args.fab_profile
     )  # routed and judged under one profile (route_case.py, writeback)
@@ -320,8 +875,17 @@ def main():
         platform="%s-%s" % (sys.platform, platform.machine().lower()),
         seeds=args.seed or [0],
         trace=bool(args.trace),
+        gloss=dict(
+            enabled=bool(args.gloss),
+            measure=bool(args.gloss_measure),
+            flags=gloss_flags_record(glossing),
+            groups=gloss_groups,
+        ),
         arguments={k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
-        pnr_environment={k: v for k, v in env.items() if k.startswith("PNR_")},
+        pnr_environment={
+            k: v for k, v in env.items() if k.startswith("PNR_") and k != "PNR_MAZE_LIB"
+        },
+        native_maze=native,
     )
     (out / "provenance.json").write_text(json.dumps(provenance, indent=2))
     for key, cmd in [
@@ -340,18 +904,28 @@ def main():
         import trace_native as tracing
     results = []
 
-    def stage(root, name, cmd, extra=None):
+    def stage(root, name, cmd, extra=None, cpu=None):
+        """Run one stage; its wall seconds are returned and, with ``cpu``, its CPU
+        seconds (user + system of the stage's whole waited-for process tree) recorded."""
         t = time.monotonic()
-        with (root / (name + ".log")).open("w") as log:
-            subprocess.run(
-                list(map(str, cmd)),
-                cwd=REPO,
-                env=dict(env, **(extra or {})),
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                check=True,
-                timeout=args.timeout,
-            )
+        before = resource.getrusage(resource.RUSAGE_CHILDREN)
+        try:
+            with (root / (name + ".log")).open("w") as log:
+                subprocess.run(
+                    list(map(str, cmd)),
+                    cwd=REPO,
+                    env=dict(env, **(extra or {})),
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    check=True,
+                    timeout=args.timeout,
+                )
+        finally:
+            after = resource.getrusage(resource.RUSAGE_CHILDREN)
+            if cpu is not None:
+                cpu[name] = round(
+                    after.ru_utime - before.ru_utime + after.ru_stime - before.ru_stime, 3
+                )
         return time.monotonic() - t
 
     for spec in cases:
@@ -364,8 +938,10 @@ def main():
             print("START " + root.name, flush=True)
             try:
 
+                result["cpu_stages"] = {}
+
                 def run(name, cmd, extra=None):
-                    result["stages"][name] = stage(root, name, cmd, extra)
+                    result["stages"][name] = stage(root, name, cmd, extra, result["cpu_stages"])
 
                 native = tracing.NativeTrace(root, spec, seed, args, out.name) if tracing else None
                 run(
@@ -386,12 +962,28 @@ def main():
                     sum(bool(p["net"]) for c in graph["components"] for p in c["pads"])
                     == spec["expected_connected_pads"]
                 )
-                # A design's driver: flat (route_case.py) or hierarchical (hier_case.py).
-                driver = "hier_case.py" if spec.get("driver") == "hier" else "route_case.py"
+                # A hard rung's custom rules (via policy, plane layers, pair skew) sit
+                # beside the boards before any stage loads them: the zone filler and
+                # the judge read <board>.kicad_dru (never generated under legacy, so
+                # the fab profile leaves a hand-written file alone).
+                dru = dru_text(spec) if spec.get("tier") == "hard" else None
+                if dru:
+                    for stem in ("source", "routed"):
+                        (root / (stem + ".kicad_dru")).write_text(dru)
+                # A design's driver: flat (route_case.py), hierarchical (hier_case.py) or
+                # Monte-Carlo successive halving (mc_case.py).
+                driver = {"hier": "hier_case.py", "mc": "mc_case.py"}.get(
+                    spec.get("driver"), "route_case.py"
+                )
+                extra = dict(native.environment()) if native else {}
+                if args.shrink and spec.get("tier") == "hard":
+                    # A hard rung's outline is part of its contract: never shrunk.
+                    extra["PNR_SHRINK"] = "0"
+                    result["shrink_exempt"] = True
                 run(
                     "place-route",
                     [args.python, frozen_here / driver, root, seed, args.rounds],
-                    native.environment() if native else None,
+                    extra or None,
                 )
                 board = root / "routed.kicad_pcb"
                 run(
@@ -432,6 +1024,12 @@ def main():
                         "--refill-only",
                     ],
                 )
+                if args.gloss:
+                    result["gloss"] = gloss_stage(root, board, args, run, glossing)
+                    if result["gloss"].get("status") == "error":
+                        result["gloss_error"] = result["gloss"]["error"]
+                    if native:
+                        native.snapshot("gloss", board, args.kicad_cli, args.timeout)
                 run(
                     "audit",
                     [args.kicad_python, frozen_here / "native.py", "audit", root, "--pcb", board],
@@ -461,6 +1059,21 @@ def main():
                         root / "via-scan",
                     ],
                 )
+                # The independent constraint check (check_constraints.py) on the saved
+                # board: every case, gating only the hard rungs.
+                run(
+                    "checks",
+                    [
+                        args.kicad_python,
+                        frozen_here / "check_constraints.py",
+                        board,
+                        "--spec",
+                        root / "design.json",
+                        "--out",
+                        root / "checks.json",
+                        "--exit-zero",
+                    ],
+                )
                 pnr = json.loads((root / "pnr-report.json").read_text())
                 audit = json.loads((root / "native-audit.json").read_text())
                 drc = json.loads((root / "drc.json").read_text())
@@ -474,16 +1087,32 @@ def main():
                     pnr=pnr,
                     source_board_sha256=source,
                     board_sha256=sha(board),
+                    copper_sha256=copper_sha(board),
                     project_sha256=sha(board.with_suffix(".kicad_pro")),
                 )
                 if source != sha(root / "source.kicad_pcb"):
                     result["reasons"].append("source_changed")
+                checks = json.loads((root / "checks.json").read_text())
+                result["checks"] = checks["summary"]
+                if spec.get("tier") == "hard":
+                    result["dims"] = spec["dims"]
+                    if checks["summary"]["satisfied"] != checks["summary"]["total"]:
+                        result["reasons"].append("constraint_violated")
+                if result.get("gloss_error"):
+                    result["reasons"].append("gloss_error")
+                if args.gloss_measure:
+                    result["gloss_measure"] = gloss_measure(root, board, args, run, glossing)
+                placed_doc = json.loads((root / "placed.json").read_text())
+                result["compactness"] = compactness(placed_doc)
                 constraints = spec["constraints"]
                 if constraints.get("line_group") or any(
                     rule.get("hard") for rule in (constraints.get("edge_align") or {}).values()
                 ):
                     checked, findings = constraint_reasons(
-                        spec, json.loads((root / "placed.json").read_text())
+                        spec,
+                        placed_doc,
+                        use_body=args.compact and "COURTYARD" not in args.compact_off,
+                        shrunk=args.shrink,
                     )
                     result["constraint_audit"] = dict(checked=checked, findings=findings)
                     if findings:
@@ -496,6 +1125,7 @@ def main():
                     error=str(ex), traceback=traceback.format_exc(), reasons=["stage_failure"]
                 )
             result["elapsed_seconds"] = time.monotonic() - t
+            result["cpu_seconds"] = round(sum((result.get("cpu_stages") or {}).values()), 3)
             (root / "result.json").write_text(json.dumps(result, indent=2))
             results.append(result)
             (out / "summary.json").write_text(

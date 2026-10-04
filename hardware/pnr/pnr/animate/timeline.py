@@ -17,6 +17,10 @@ showcase pacing does the same for single parts. The legalizer's order places a b
 step. ``marks`` records where each scene begins (frame index and scene type) without changing
 the frames, so a comparison can synchronize two runs by phase.
 
+A saved board after the gloss stage (``run.py --gloss``) plays as a before/after: the board
+before it with the copper the stage replaced in red, a cross-fade, and the board after it with
+its new copper in mint (:mod:`pnr.animate.gloss`).
+
 The showcase pacing also widens the camera over a global placement whose recorded poses leave
 the board (the board then zooms back in after legalization), and with ``replay_pool`` a pool's
 shortlist montage first replays every start's recorded global placement in its tile.
@@ -27,6 +31,7 @@ from __future__ import annotations
 import copy
 import math
 
+from .gloss import copper_change, copper_length_mm
 from .storyboard import score_key
 from .theme import MONTAGE_TEXT, PHASE_TEXT, criterion_text
 
@@ -61,6 +66,11 @@ REPLAY_S = 4.0  # a pool's starts replayed in their montage tiles (replay_pool)
 REPLAY_LEGAL_S = 0.6
 NATIVE_S = {"writeback": 0.6, "planes": 1.2, "refill": 0.4}
 NATIVE_EMPTY_S = 0.3
+# The gloss stage (run.py --gloss): the board before with the copper it replaces in red, a
+# cross-fade, the board after with its new copper in mint (pnr.animate.gloss).
+GLOSS_BEFORE_S, GLOSS_BLEND_S, GLOSS_AFTER_S = 1.0, 0.5, 1.2
+GLOSS_SAME_S = 0.4  # a gloss stage that left the copper as it was
+NATIVE_S["gloss"] = GLOSS_BEFORE_S + GLOSS_BLEND_S + GLOSS_AFTER_S
 END_S = 2.8
 FLASH_FRAMES = 2
 RIP_FRAMES = 3
@@ -188,6 +198,7 @@ class View:
         "blend",
         "bodies",
         "fixed",
+        "overlay",
     )
 
     def __init__(self, **fields):
@@ -216,6 +227,7 @@ class View:
         self.blend = None
         self.bodies = None  # rigid bodies' own poses (line groups, block macros)
         self.fixed = None  # copper a route keeps as it is (a hierarchical knit's blocks)
+        self.overlay = ()  # ((copper, style), ...) drawn over a saved board (the gloss stage)
         for key, value in fields.items():
             setattr(self, key, value)
 
@@ -333,6 +345,7 @@ class Timeline:
         )
         self.replay_pool = bool(replay_pool)
         self._cameras = {}
+        self._glosses = {}  # gloss scenes' changes by native event (_gloss_change)
         nominal = sum(self.duration(s) for s in storyboard["scenes"])
         self.scale = min(1.0, float(max_seconds) / nominal) if nominal > 0 else 1.0
         source = header_poses(self.header)
@@ -375,6 +388,8 @@ class Timeline:
             zones = event and self.trace.blob(event["copper"]).get("zones")
             if scene["stage"] in ("planes", "refill") and not zones:
                 return NATIVE_EMPTY_S
+            if scene["stage"] == "gloss" and not self._gloss_change(scene)[2]:
+                return GLOSS_SAME_S
             return NATIVE_S.get(scene["stage"], 0.5)
         if kind == "end":
             return END_S
@@ -927,7 +942,11 @@ class Timeline:
             ripped={},
             provisional={},
             camera=outline_camera(self.header),
+            overlay=(),
         )
+        if stage == "gloss" and self._gloss_change(scene)[0] is not None:
+            self._gloss(base, scene)
+            return
         seconds = self.duration(scene)
         steps = self.frames_for(seconds)
         if self.view.native is None:
@@ -942,6 +961,62 @@ class Timeline:
         else:
             self.hold(seconds, base.copy(native=copper, native_mix=1.0))
         self.view = base.copy(native=copper, native_mix=1.0, zone_reveal=1.0)
+
+    def _gloss_change(self, scene):
+        """``(before, removed, added)`` of a gloss scene: the saved board before it (the native
+        lane's board event before the scene's, ``None`` when there is none) and what the stage
+        removed and added (:func:`pnr.animate.gloss.copper_change`; ``None`` when it changed
+        no copper)."""
+        key = scene.get("seq")
+        if key not in self._glosses:
+            event = self._native_event(scene)
+            boards = [
+                e
+                for e in self.trace.events("native")
+                if event is not None and e["kind"] == "board" and e["seq"] < event["seq"]
+            ]
+            if not boards:
+                self._glosses[key] = (None, None, None)
+            else:
+                before = self.trace.blob(boards[-1]["copper"])
+                removed, added = copper_change(before, self.trace.blob(event["copper"]))
+                changed = any(removed[k] or added[k] for k in ("tracks", "vias"))
+                self._glosses[key] = (before, removed, added) if changed else (before, None, None)
+        return self._glosses[key]
+
+    def _gloss(self, base, scene):
+        """The gloss stage's before/after: the board before it with the copper it replaces in
+        red, a cross-fade, then the board after it with its new copper in mint; the caption
+        gives the copper length before and after. A stage that changed no copper holds."""
+        before, removed, added = self._gloss_change(scene)
+        after = self.trace.blob(self._native_event(scene)["copper"])
+        board = dict(native_mix=1.0, zone_reveal=1.0)
+        if removed is None:
+            same = base.copy(native=after, phase="gloss", caption="no copper changed", **board)
+            self.hold(GLOSS_SAME_S, same)
+            self.view = same.copy(caption="")
+            return
+        was, now = copper_length_mm(before), copper_length_mm(after)
+        pre = base.copy(
+            native=before,
+            phase="gloss-before",
+            caption="%.1f mm of copper" % was,
+            overlay=((removed, "ripped"),),
+            **board,
+        )
+        post = base.copy(
+            native=after,
+            phase="gloss-after",
+            caption="%.1f mm of copper (%+.1f mm)" % (now, now - was),
+            overlay=((added, "flash"),),
+            **board,
+        )
+        self.hold(GLOSS_BEFORE_S, pre)
+        steps = self.frames_for(GLOSS_BLEND_S)
+        for k in range(steps):
+            self.emit(post.copy(blend=(pre, 1.0 - ease((k + 1) / steps))))
+        self.hold(GLOSS_AFTER_S, post)
+        self.view = post.copy(overlay=(), caption="")
 
     def _end(self, scene, following):
         result = dict(scene.get("result") or {})

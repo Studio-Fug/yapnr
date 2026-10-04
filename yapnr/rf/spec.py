@@ -177,13 +177,41 @@ class Lumped:
 
 @dataclass(frozen=True)
 class RadiationBox:
-    """The radiated-power box (design §5.6): `offset_mm` beyond the design region, `height_mm`
-    above the copper; feed windows (defaults 2h and 3h)."""
+    """The radiated-power box (design §25.2–§25.3): closed by the ground, without feed windows,
+    enclosing the design region by `clearance_cells` on every side and above the copper.
+    `offset_mm` (beyond the design region) and `height_mm` (above the copper) optionally place
+    its faces further out; the result does not depend on them beyond the feed's own loss inside
+    the box (about 0.12 %/mm on S2, the audit).
 
+    The feed windows of round 2 (`window_margin_mm`, `window_height_mm`) are removed: they
+    dropped 3–6 % of the input power leaving backwards through the window and counted 1–1.6 %
+    of the guided wave as inflow; a non-null value is an error."""
+
+    clearance_cells: int = 2
     offset_mm: float | None = None
     height_mm: float | None = None
-    window_margin_mm: float | None = None
-    window_height_mm: float | None = None
+    window_margin_mm: None = None
+    window_height_mm: None = None
+
+    def __post_init__(self) -> None:
+        for key in ("window_margin_mm", "window_height_mm"):
+            if getattr(self, key) is not None:
+                raise ValueError(
+                    f"radiation.{key} is removed: the radiation box is closed and the feeds' "
+                    "guided waves are separated modally (docs/design/rf-topology-optimization.md "
+                    "§25.3); leave it out"
+                )
+        if int(self.clearance_cells) < 1:
+            raise ValueError("radiation.clearance_cells must be at least 1")
+
+    def to_dict(self) -> dict:
+        out: dict = {}
+        if self.clearance_cells != 2:
+            out["clearance_cells"] = int(self.clearance_cells)
+        for key in ("offset_mm", "height_mm"):
+            if getattr(self, key) is not None:
+                out[key] = getattr(self, key)
+        return out
 
 
 @dataclass(frozen=True)
@@ -278,10 +306,16 @@ class SolverSpec:
     # line's discrete mode, `yapnr.rf.modes`, which removes the excited port's incident-wave
     # bias of up to 2 %).
     port_source: str = "static"
+    # The line ports' waves: "modal" (the transverse plane projected on the feed's discrete
+    # mode, `ports.ModalPlane`, design §25.1) or "vi" (round 2's voltage and current samples
+    # with the calibration's Z_c; radiation reaching the V/I plane biases them by up to 5 %
+    # next to an antenna). The default changed to "modal" with the corrected radiation box; on
+    # circuits the two agree to about 1e-4.
+    port_extraction: str = "modal"
 
 
 # Solver options added after the first cases, with their defaults (`Spec.to_dict`).
-_SOLVER_NEW = {"edge_correction": False, "port_source": "static"}
+_SOLVER_NEW = {"edge_correction": False, "port_source": "static", "port_extraction": "modal"}
 _OPTIMIZER_NEW = {
     "seed": None,
     "adaptive_move": False,
@@ -616,6 +650,8 @@ class Spec:
         ref = self.optimizer.reference_ohm
         if ref is not None and (len(self.ports) != 1 or not ref > 0):
             raise ValueError("optimizer.reference_ohm: a positive reference, one-port specs only")
+        if self.solver.port_extraction not in ("modal", "vi"):
+            raise ValueError("solver.port_extraction must be 'modal' or 'vi'")
         if self.solver.backend not in ("auto", "native", "numpy", "torch"):
             raise ValueError("solver.backend must be 'auto', 'native', 'numpy' or 'torch'")
         try:
@@ -695,7 +731,7 @@ class Spec:
             },
         }
         if self.radiation is not None:
-            out["radiation"] = clean(self.radiation)
+            out["radiation"] = self.radiation.to_dict()
         if self.lumped:
             out["lumped"] = [clean(el) for el in self.lumped]
         return out

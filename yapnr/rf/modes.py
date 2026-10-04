@@ -409,6 +409,29 @@ def _profile_key(cs: CrossSection, stackup, f_lo, f_hi, dt, cpml) -> str:
     return h.hexdigest()
 
 
+# Solved line modes by content (`_profile_key` and ω), for the modal port waves
+# (`ports.ModalPlane`): every problem of a process projects on the same bits (see `_PROFILES`).
+_MODES: OrderedDict = OrderedDict()
+_MODES_MAX = 4096
+
+
+def cached_line_mode(cs: CrossSection, stackup, omega: float, dt: float, cpml=CPMLParams()):
+    """`line_mode` once per process for the same cross-section, ω, Δt and CPML (read-only)."""
+    key = _profile_key(cs, stackup, omega, omega, dt, cpml)
+    m = _MODES.get(key)
+    if m is None:
+        m = line_mode(cs, stackup, float(omega), dt, cpml)
+        for a in (m.ea, m.et, m.ez, m.ht, m.hz):
+            a.setflags(write=False)
+        m.key = key
+        _MODES[key] = m
+        while len(_MODES) > _MODES_MAX:
+            _MODES.popitem(last=False)
+    else:
+        _MODES.move_to_end(key)
+    return m
+
+
 def mode_profile(
     cs: CrossSection,
     stackup,

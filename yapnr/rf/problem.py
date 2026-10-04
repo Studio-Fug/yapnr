@@ -55,7 +55,7 @@ from yapnr.rf.materials import (
 )
 from yapnr.rf.numerics import re_conj_product
 from yapnr.rf.objectives import build_groups, group_values, violations
-from yapnr.rf.ports import LineCalibration, calibrate_line
+from yapnr.rf.ports import LineCalibration, ModalPlane, calibrate_line
 from yapnr.rf.spec import FixedRegion, Spec
 
 PAD_DEPTH = 2  # pixels of fixed feed copper inside the design window at each port (§5.1)
@@ -216,16 +216,34 @@ class Problem:
         self.dt = self._time_step(self.grid)
         self.ports = {pg.port.number: pg for pg in dom.ports}
         self.cal = {n: self._calibration(widths[n]) for n in self.ports}
+        self.port_extraction = sv.port_extraction
         self.box = None
         if spec.radiation is not None:
             rb = spec.radiation
             self.box = dom.radiation_box(
-                (rb.offset_mm * 1e-3) if rb.offset_mm is not None else 0.5 * dom.spec.margin,
-                (rb.height_mm * 1e-3) if rb.height_mm is not None else 0.6 * dom.spec.air,
-                window_margin=None if rb.window_margin_mm is None else rb.window_margin_mm * 1e-3,
-                window_height=None if rb.window_height_mm is None else rb.window_height_mm * 1e-3,
+                clearance=rb.clearance_cells * self.refine,
+                offset=None if rb.offset_mm is None else rb.offset_mm * 1e-3,
+                height=None if rb.height_mm is None else rb.height_mm * 1e-3,
             )
+        # The modal planes of the line ports (design §25.1): the ports' waves with "modal"
+        # extraction, and the modes that separate the guided waves on the box's feed faces.
+        self.modal: dict = {}
+        if self.port_extraction == "modal" or self.box is not None:
+            for n, pg in self.ports.items():
+                others = [q for m, q in self.ports.items() if m != n]
+                self.modal[n] = ModalPlane(
+                    pg,
+                    self.stackup,
+                    self.dt,
+                    edge_correction=self.edge_correction,
+                    neighbours=others,
+                )
+        if self.box is not None:
+            for n, face in self.box.feeds.items():
+                self.box.planes[n] = self.modal[n].plane(face.node, f"rad_p{n}")
         self.port_probes = [p for n in sorted(self.ports) for p in self.ports[n].probes]
+        if self.port_extraction == "modal":
+            self.port_probes += [p for n in sorted(self.modal) for p in self.modal[n].probes]
         self.box_probes = self.box.probes if self.box is not None else []
         self.design_probes = dom.design_probes()
         self.watched = [p.name for p in self.port_probes + self.box_probes]
@@ -282,6 +300,8 @@ class Problem:
             self.watched = self.watched + [pr.name for pr in extra]
         if spec.lumped:
             self.sim.update_materials()
+        for a in self.assumptions():
+            self.log(f"assumption ({a['code']}): {a['message']}")
         self.pitch = spec.grid.pitch_mm * 1e-3 / refine
         self.filter = ConicFilter(filter_radius(spec), self.pitch)
         self.material = self._material_grid(self.filter.ring_width)
@@ -530,30 +550,73 @@ class Problem:
             edge_correction=self.edge_correction,
         )
 
+    def port_waves(self, n: int, dft, omega):
+        """(a, b) of port `n` at its reference plane (`solver.port_extraction`)."""
+        if self.port_extraction == "modal":
+            return self.modal[n].waves(dft, omega)
+        return sparams.port_waves(self.ports[n], self.cal[n], dft, omega)
+
+    def wave_power(self, n: int, a, omega):
+        """½|a|² as a power (W): exact for modal waves, times the calibration's power factor
+        for V/I waves (`sparams.incident_power`)."""
+        if self.port_extraction == "modal":
+            return 0.5 * abs(a) ** 2
+        return sparams.incident_power(a, self.cal[n], omega)
+
+    def nonguided(self, dft, port: int, omega=None) -> tuple:
+        """(η, P_inc) of excitation `port` from the closed box (design §25.2): the outward flux
+        plus, where each feed crosses the box, the guided wave's net modal power into the box
+        (`ModalPlane.net_power`, projected on the whole transverse plane at the face's node),
+        over the incident modal power there:
+
+            η = [Φ_out + Σ_p P_net,in,mode(face_p)] / P_inc,mode(face_j)
+
+        The closed box's discrete Poynting identity (Φ_out = −P_diss inside) makes this
+        1 − Σ_i |S_ij|² − P_diss/P_inc with the S-parameters at the faces, whatever the box's
+        size: the part of the guided mode that passes beside or above the box is counted
+        where it enters. On the infinite substrate η is the non-guided fraction: radiation and
+        the substrate's surface wave together (design §25.4)."""
+        omega = self.omega if omega is None else np.asarray(omega)
+        total = self.box.power(dft)
+        p_inc = None
+        for n, plane in self.box.planes.items():
+            mp = self.modal[n]
+            face = plane.faces[0]
+            fms = mp.face_modes(face, omega)
+            ap, am = mp.amplitudes(face, fms, dft)
+            sign = mp.pg.sign
+            total = total + sign * ModalPlane.net_power(fms, ap, am)
+            if n == port:
+                inc = ap if sign > 0 else am
+                p_inc = 0.5 * abs(inc) ** 2
+        if p_inc is None:
+            raise ValueError(f"port {port}: no feed face on the radiation box")
+        return total / p_inc, p_inc
+
     def quantities(self, dft, port: int, omega=None) -> dict:
         """Waves of every port, S_ij for excitation j = `port`, and η_j (numpy or torch)."""
         omega = self.omega if omega is None else np.asarray(omega)
-        waves = {n: sparams.port_waves(pg, self.cal[n], dft, omega) for n, pg in self.ports.items()}
+        waves = {n: self.port_waves(n, dft, omega) for n in self.ports}
         a_j = waves[port][0]
         out = {"waves": waves, "s": {}, "eta": {}}
         for n, (_, b) in waves.items():
             out["s"][(n, port)] = b / a_j
-        if self.box is not None or self.lumped_probes or port in self.loss_ports:
-            p_inc = sparams.incident_power(a_j, self.cal[port], omega)
+        if self.lumped_probes or port in self.loss_ports:
+            p_inc = self.wave_power(port, a_j, omega)
         if self.box is not None:
-            out["eta"][port] = self.box.power(dft) / p_inc
+            out["eta"][port] = self.nonguided(dft, port, omega)[0]
         out["absorbed"] = {
             (name, port): p / p_inc for name, p in self.lumped_power(dft, omega).items()
         }
         out["loss"] = {}
         if port in self.loss_ports:
             # The net power into the device, less the net power out of the other ports and into
-            # every lumped resistor: −Σ_n (|b_n|² − |a_n|²) times each port's power factor (the
-            # idle ports' residual incident waves included), less the resistors' shares.
+            # every lumped resistor: −Σ_n (|b_n|² − |a_n|²) (V/I waves: times each port's power
+            # factor; the idle ports' residual incident waves included), less the resistors'
+            # shares.
             lost = 0.0
             for n, (a, b) in waves.items():
-                cal = self.cal[n]
-                net = sparams.incident_power(b, cal, omega) - sparams.incident_power(a, cal, omega)
+                net = self.wave_power(n, b, omega) - self.wave_power(n, a, omega)
                 lost = lost - net / p_inc
             for v in out["absorbed"].values():
                 lost = lost - v
@@ -813,10 +876,45 @@ class Problem:
             out += f" ({native['library']}, {native['isa']})"
         return out
 
+    def assumptions(self) -> list:
+        """The model's assumptions that bear on the results, quantified where a closed form
+        exists (design §25.4), for the result and validation reports: on the infinite substrate
+        the radiated fraction is the non-guided fraction, which includes the TM0 surface wave."""
+        out = []
+        if self.box is not None:
+            from yapnr.rf.stackup import surface_wave_share
+
+            st = self.stackup
+            share = surface_wave_share(st.er, st.h, st.f_ref)
+            out.append(
+                {
+                    "code": "eta_nonguided",
+                    "value": share,
+                    "message": (
+                        "the radiated fraction is the non-guided fraction of the infinite "
+                        "substrate: it includes the TM0 surface wave, closed-form share "
+                        f"P_sw/(P_sp + P_sw) = {share:.2f} for a half-wave patch on this "
+                        f"stackup at f_ref = {st.f_ref / 1e9:g} GHz (Jackson and Alexopoulos); "
+                        "a radiation efficiency needs a finite board (design §25.4)"
+                    ),
+                }
+            )
+        return out
+
     def describe(self) -> dict:
         """Solver settings for the result's provenance."""
         g = self.grid
         fc = np.array([2.0 * np.pi * self.pulse.f_center])
+        box = None
+        if self.box is not None:
+            box = {
+                "mm": [
+                    [float(ax.nodes[lo] * 1e3), float(ax.nodes[hi] * 1e3)]
+                    for ax, (lo, hi) in zip((g.x, g.y, g.z), self.box.node_box)
+                ],
+                "nodes": [list(map(int, r)) for r in self.box.node_box],
+                "eta": "non-guided fraction (radiation and surface wave)",
+            }
         return {
             "grid_cells": list(g.n),
             "cells": int(g.cells),
@@ -836,6 +934,9 @@ class Problem:
             "decimation": self._decimation(),
             "edge_correction": self.edge_correction,
             "port_source": self.spec.solver.port_source,
+            "port_extraction": self.port_extraction,
+            "radiation_box": box,
+            "assumptions": self.assumptions(),
             "tol": self.tol,
             "adjoint_tol": self.adjoint_tol,
             "backend": self.backend,

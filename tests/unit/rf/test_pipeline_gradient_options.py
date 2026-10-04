@@ -1,6 +1,7 @@
 """The pipeline gradient (test_pipeline_gradient.py) with the options the cases do not use:
 the reactive interpolation (alone and with the copper-edge correction and modal source), the
-radiation objective of `optimizer.epoch_objectives` and the lost fraction (`Loss`); split from
+radiation objective of `optimizer.epoch_objectives`, the lost fraction (`Loss`) and the modal
+port waves with the closed radiation box (design §25); split from
 test_pipeline_gradient.py so that the two run side by side (one thread each).
 """
 
@@ -32,6 +33,23 @@ class ReactiveEdgeCorrectionPipelineGradientTest(GradientChecks, unittest.TestCa
     def test_both_models_on(self):
         self.assertTrue(self.p.sim.structure.inductive)
         self.assertTrue(self.p.sim.structure.edge_correction)
+
+
+class ModalPortsPipelineGradientTest(GradientChecks, unittest.TestCase):
+    """The modal port waves (`ports.ModalPlane`, design §25.1) and the closed radiation box's
+    non-guided fraction (its feed faces separated modally on the full transverse planes, §25.2):
+    linear functionals of the plane probes, whose adjoint sources fill the planes."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = tiny_spec(radiated=True, extraction="modal")
+        spec = spec.replace(solver=replace(spec.solver, port_source="mode"))
+        cls.setup_gradient(spec, 9)
+
+    def test_modal_planes_are_probed(self):
+        names = {p.name for p in self.p.port_probes + self.p.box_probes}
+        self.assertIn("p1_mode_x+_ey", names)
+        self.assertIn("rad_p2_x+_hz_lo", names)
 
 
 class RadiationObjectivePipelineGradientTest(GradientChecks, unittest.TestCase):

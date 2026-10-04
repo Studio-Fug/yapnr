@@ -32,7 +32,9 @@ source J = n̂ × H takes the same form, J_t = −H_z and J_z = H_t, in both cas
 
 from __future__ import annotations
 
+import hashlib
 import math
+from collections import OrderedDict
 from dataclasses import dataclass
 
 import numpy as np
@@ -376,6 +378,37 @@ def _ring_current(cs: CrossSection, m: LineMode) -> complex:
     return complex(ring)
 
 
+# Solved profiles by the content of their arguments (`_profile_key`), so that every problem of
+# a process (the optimizer's, the calibrations', the validation's; numpy, native, float32 or
+# float64) drives its ports with the same bits, and the solve runs once. The solve's numpy
+# complex arithmetic is not reproducible to the last bit between processes everywhere: on the
+# development Mac (macOS 27 beta, M4, numpy 1.26.4) the same complex multiplication of fixed
+# arrays rounded unfused (a·b − c·d) in the first calls of some processes started side by side
+# and fused (an FMA) afterwards, cause not established; a profile then moved by an ulp and a
+# line calibration by up to 5e-11 (docs/rf-solver-backends.md, Exactness). Read-only.
+_PROFILES: OrderedDict = OrderedDict()
+_PROFILES_MAX = 64
+
+
+def _profile_key(cs: CrossSection, stackup, f_lo, f_hi, dt, cpml) -> str:
+    h = hashlib.sha256()
+    g = cs.grid
+    for a in (g.x.nodes, g.y.nodes, g.z.nodes):
+        h.update(np.ascontiguousarray(a, dtype=np.float64).tobytes())
+    for d in (cs.eps, cs.sig, cs.mu):
+        for k in sorted(d):
+            v = np.ascontiguousarray(d[k])
+            h.update(f"{k}{v.dtype}{v.shape}".encode())
+            h.update(v.tobytes())
+    h.update(
+        repr(
+            (g.k_c, g.pml, cs.axis, cs.ta, cs.tb, float(cs.pitch_a), stackup)
+            + (float(f_lo), float(f_hi), float(dt), cpml)
+        ).encode()
+    )
+    return h.hexdigest()
+
+
 def mode_profile(
     cs: CrossSection,
     stackup,
@@ -384,7 +417,23 @@ def mode_profile(
     dt: float,
     cpml: CPMLParams = CPMLParams(),
 ) -> ModeProfile:
-    """Solve the mode at f_lo, f_hi and their mean and fit P0 + ω² P2 through the outer two."""
+    """Solve the mode at f_lo, f_hi and their mean and fit P0 + ω² P2 through the outer two
+    (once per process for the same arguments: `_PROFILES`)."""
+    key = _profile_key(cs, stackup, f_lo, f_hi, dt, cpml)
+    prof = _PROFILES.get(key)
+    if prof is None:
+        prof = _solve_profile(cs, stackup, f_lo, f_hi, dt, cpml)
+        for a in (prof.jt0, prof.jz0, prof.jt2, prof.jz2):
+            a.setflags(write=False)
+        _PROFILES[key] = prof
+        while len(_PROFILES) > _PROFILES_MAX:
+            _PROFILES.popitem(last=False)
+    else:
+        _PROFILES.move_to_end(key)
+    return prof
+
+
+def _solve_profile(cs, stackup, f_lo, f_hi, dt, cpml) -> ModeProfile:
     kc = cs.grid.k_c
     fs = (f_lo, 0.5 * (f_lo + f_hi), f_hi)
     prof, ees = [], []

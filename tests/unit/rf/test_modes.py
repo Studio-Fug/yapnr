@@ -75,6 +75,20 @@ class LineModeTest(unittest.TestCase):
         kc, c = self.grid.k_c, self.cs.ta + 3
         self.assertLess(prof.jz0[c, kc - 1], 0.0)  # the static source's sign
 
+    def test_profile_once_per_process(self):
+        # The same arguments (an equal cross-section built again) give the same profile, solved
+        # once; other arguments another one; profiles are read-only.
+        prof = mode_profile(self.cs, S1, 8e9, 12e9, self.dt)
+        _, _, cs2 = line_grid()
+        self.assertIs(mode_profile(cs2, S1, 8e9, 12e9, self.dt), prof)
+        other = mode_profile(self.cs, S1, 8e9, 12e9, 0.99 * self.dt)
+        self.assertIsNot(other, prof)
+        self.assertFalse(np.array_equal(other.jt2, prof.jt2))
+        cs2.eps["z"][0, 0] *= 1.5
+        self.assertIsNot(mode_profile(cs2, S1, 8e9, 12e9, self.dt), prof)
+        with self.assertRaises(ValueError):
+            prof.jt0[0, 0] = 1.0
+
 
 class ModalSourceTest(unittest.TestCase):
     """A matched line through a 9.6 mm window: |S21| against the mode's loss (module doc)."""

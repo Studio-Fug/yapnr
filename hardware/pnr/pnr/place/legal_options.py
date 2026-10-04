@@ -28,9 +28,11 @@ Every option is off unless the constraint file declares it, and then the legaliz
     the unplaced hard-limited parts fails) without power-first: the parts that join the
     trial are those held by a hard group, region or edge band whose reach meets the slot
     and that keep at most :data:`SCARCE_SLOTS` free slots, each packed at its own slot
-    target inside its edge box and region mask. Up to ``LOOK_AHEAD_TRIES`` slots are
-    tried; when every one strands a part the nearest slot is kept, as without the
-    look-ahead, and backtracking deals with the stranded part.
+    target inside its edge box and region mask; a part that does not fit even without
+    the slot is stranded anyway and left out. Up to ``LOOK_AHEAD_TRIES`` slots are tried
+    per turn, then the part's next turn; when no turn has a slot that strands nothing,
+    the first turn's nearest slot is kept, as without the look-ahead, and backtracking
+    deals with the stranded part.
 
 Pad-anchored hard groups (``group: [{..., hard: true, anchor_pad: "2"}]``)
     A hard group measures each member's centre from its anchor's centre. With

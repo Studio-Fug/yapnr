@@ -629,9 +629,11 @@ part of the block being packed (a roomy region a block is filling), it goes next
 
 `lookahead: regions` checks each slot before taking it: a greedy trial pack of the
 parts still to place that are held by a hard group, region or edge band, can still
-reach the slot and would keep at most 64 free slots once it is taken. When one of them
-no longer fits, the next nearest slot is tried (up to 40); when every tried slot
-strands a part, the nearest one is kept and backtracking deals with the part. It is
+reach the slot and would keep at most 64 free slots once it is taken (a part that does
+not fit even without the slot is stranded anyway and left out). When one of them no
+longer fits, the next nearest slot is tried (up to 40), then the part's other turn;
+when no turn has a slot that strands nothing, the nearest slot of the first is kept
+and backtracking deals with the part. It is
 the look-ahead of power-first placement (`PNR_POWER_FIRST=1`, which refuses regions)
 for the default flow, and costs the trial packs: it is meant for boards with narrow
 regions.

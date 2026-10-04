@@ -1,0 +1,13 @@
+load("//tools/bazel:py_tests.bzl", "yapnr_py_tests")
+
+# yapnr.rf.planar. The document model is stdlib only and runs here; the shapely adapters need the
+# FEA environment, so their test is manual here (and skips without shapely), like the coupons'
+# 2D solver:
+#
+#     python -m unittest tests/unit/rf_palace/test_*.py   # in the FEA environment
+yapnr_py_tests(
+    overrides = {
+        "test_planar_adapters": {"tags": ["manual"]},
+    },
+    deps = ["//yapnr/rf/planar"],
+)

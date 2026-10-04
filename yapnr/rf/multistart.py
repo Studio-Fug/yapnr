@@ -81,6 +81,16 @@ def derive_starts(spec: Spec) -> list[Spec]:
     combine = spec.starts.get("combine", "zip")
     overrides = _combinations(vary, combine)
 
+    n_epochs = len(base.optimizer.betas)
+    rungs = (spec.starts.get("halving") or {}).get("rungs", ())
+    for r in rungs:
+        if r["after_epoch"] >= n_epochs - 1:
+            raise ValueError(
+                f"starts.halving.rungs: after_epoch={r['after_epoch']} is at or past the last "
+                f"epoch of this spec's schedule ({n_epochs} epochs, indices 0..{n_epochs - 1}); "
+                "halving would silently skip this rung"
+            )
+
     derived = []
     seen = {}
     for i, ov in enumerate(overrides):
@@ -88,6 +98,11 @@ def derive_starts(spec: Spec) -> list[Spec]:
         if bad:
             raise ValueError(f"start {i}: {sorted(bad)} may not be varied across starts")
         s = base.replace(optimizer=base.optimizer.__class__(**{**_opt_dict(base.optimizer), **ov}))
+        if s.optimizer.perturb_seed and not s.optimizer.perturb_amplitude:
+            raise ValueError(
+                f"start {i}: perturb_seed={s.optimizer.perturb_seed} with perturb_amplitude=0 "
+                "does nothing (Optimizer.__init__ only perturbs x0 when amplitude is nonzero)"
+            )
         sha = s.sha256()
         if i == 0 and sha != base.sha256():
             raise ValueError("start 0 must equal the base spec")

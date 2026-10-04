@@ -195,6 +195,10 @@ class Optimizer:
             x0 = initial_x(problem, cache_dir=out_dir, log=self.log)
         else:
             x0 = self.param.grid.initial(spec.optimizer.init)
+        if spec.optimizer.perturb_amplitude:
+            from yapnr.rf.multistart import perturb
+
+            x0 = perturb(x0, spec.optimizer.perturb_amplitude, spec.optimizer.perturb_seed)
         self.state = LoopState(x=x0)
         self.spec_sha = spec.sha256()
 

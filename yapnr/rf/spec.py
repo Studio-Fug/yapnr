@@ -753,8 +753,15 @@ class Spec:
     # Multi-start (design `multistart.md` §1): a top-level key, not `optimizer.starts`, so that
     # a single run's optimizer never reads it and start 0's hash equals this spec's hash with
     # `starts` absent. None: one run, today's behavior. Otherwise a plain dict matching
-    # `yapnr-rf-starts/1`'s `starts:` block (validated by `yapnr.rf.multistart.validate_starts`).
-    starts: dict | None = None
+    # `yapnr-rf-starts/1`'s `starts:` block (validated by `yapnr.rf.spec._validate_starts_structure`
+    # and, per start, by `yapnr.rf.multistart.derive_starts`).
+    # hash=False: keeps `starts` (a plain dict) out of the dataclass-generated `__hash__`
+    # tuple, so it isn't a second cause of `hash(spec)`'s `TypeError: unhashable type: 'dict'`
+    # alongside the pre-existing `bands` field above (unrelated to `starts`, already on `main`,
+    # and out of this change's scope). No caller hashes a `Spec` today (no `lru_cache` in
+    # `yapnr.rf`); this is for whoever adds one later. Equality (the dataclass default) still
+    # compares `starts`; `.sha256()` below is the real identity used everywhere in this module.
+    starts: dict | None = field(default=None, hash=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "requirements", _flatten(self.requirements))
@@ -1128,14 +1135,23 @@ def _validate_starts_structure(starts: dict) -> None:
         rungs = halving.get("rungs")
         if not rungs:
             raise ValueError("starts.halving.rungs must be non-empty")
-        epochs = [r["after_epoch"] for r in rungs]
-        if epochs != sorted(set(epochs)) or any(e < 0 for e in epochs):
-            raise ValueError("starts.halving.rungs: after_epoch must be strictly increasing")
         for r in rungs:
+            missing = {"after_epoch", "keep"} - set(r)
+            if missing:
+                raise ValueError(f"starts.halving.rungs[]: missing keys {sorted(missing)}")
             unknown = set(r) - {"after_epoch", "keep"}
             if unknown:
                 raise ValueError(f"starts.halving.rungs: unknown keys {sorted(unknown)}")
-            if not 0 < r["keep"] < 1:
+        epochs = [r["after_epoch"] for r in rungs]
+        if any(isinstance(e, bool) or not isinstance(e, int) for e in epochs):
+            raise ValueError("starts.halving.rungs[].after_epoch must be an int")
+        if epochs != sorted(set(epochs)) or any(e < 0 for e in epochs):
+            raise ValueError("starts.halving.rungs: after_epoch must be strictly increasing")
+        for r in rungs:
+            keep = r["keep"]
+            if isinstance(keep, bool) or not isinstance(keep, (int, float)):
+                raise ValueError("starts.halving.rungs[].keep must be a number")
+            if not 0 < keep < 1:
                 raise ValueError("starts.halving.rungs[].keep must lie in (0, 1)")
         if int(halving.get("min_keep", 1)) < 1:
             raise ValueError("starts.halving.min_keep must be at least 1")

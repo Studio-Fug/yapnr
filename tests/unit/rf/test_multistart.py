@@ -55,6 +55,56 @@ class SchemaTest(unittest.TestCase):
         s = tiny_spec().replace(starts={"vary": {"move": [0.2, 0.18, 0.19], "perturb_seed": [0]}})
         self.assertEqual(s.starts["vary"]["perturb_seed"], [0])
 
+    def test_starts_field_excluded_from_generated_hash(self):
+        """L2: `starts` must not be in dataclass's `__hash__` tuple (it's a plain dict).
+
+        `Spec` is unhashable regardless (the pre-existing `bands: dict` field, on `main`
+        before this branch) and fixing that is out of this branch's scope; this only checks
+        that `starts` itself was not left as a second, branch-introduced cause of the same
+        `TypeError`.
+        """
+        starts_field = next(f for f in dataclasses.fields(Spec) if f.name == "starts")
+        self.assertFalse(starts_field.hash)
+
+    def test_rung_missing_after_epoch_is_value_error(self):
+        """M4: a malformed rung must raise ValueError, not KeyError."""
+        with self.assertRaises(ValueError):
+            tiny_spec().replace(
+                starts={
+                    "vary": {"move": [0.2, 0.18]},
+                    "halving": {"rungs": [{"keep": 0.5}]},
+                }
+            )
+
+    def test_rung_keep_must_be_numeric(self):
+        """M4: a string `keep` used to raise TypeError from the `0 < keep < 1` comparison."""
+        with self.assertRaises(ValueError):
+            tiny_spec().replace(
+                starts={
+                    "vary": {"move": [0.2, 0.18]},
+                    "halving": {"rungs": [{"after_epoch": 0, "keep": "0.5"}]},
+                }
+            )
+
+    def test_rung_after_last_epoch_refused(self):
+        """M4: a rung at or past the schedule's last epoch would be silently skipped."""
+        base = tiny_spec()
+        n_epochs = len(base.optimizer.betas)
+        with self.assertRaises(ValueError):
+            derive_starts(
+                base.replace(
+                    starts={
+                        "vary": {"move": [0.2, 0.18]},
+                        "halving": {"rungs": [{"after_epoch": n_epochs - 1, "keep": 0.5}]},
+                    }
+                )
+            )
+
+    def test_perturb_seed_without_amplitude_refused(self):
+        """H1: a `perturb_seed` varied with `perturb_amplitude` at 0 does nothing."""
+        with self.assertRaises(ValueError):
+            derive_starts(tiny_spec().replace(starts={"vary": {"perturb_seed": [0, 1, 2]}}))
+
     def test_keep_must_lie_in_open_unit_interval(self):
         for bad in (0.0, 1.0, -0.1, 1.5):
             with self.assertRaises(ValueError):
@@ -117,10 +167,11 @@ class DeriveTest(unittest.TestCase):
         base_move = tiny_spec().optimizer.move
         base_seed = tiny_spec().optimizer.perturb_seed
         s = tiny_spec().replace(
+            optimizer=dataclasses.replace(tiny_spec().optimizer, perturb_amplitude=0.05),
             starts={
                 "vary": {"move": [base_move, 0.18], "perturb_seed": [base_seed, 1]},
                 "combine": "product",
-            }
+            },
         )
         derived = derive_starts(s)
         pairs = {(d.optimizer.move, d.optimizer.perturb_seed) for d in derived}
@@ -172,6 +223,22 @@ class PerturbTest(unittest.TestCase):
         draws = np.array([_uniform01(0, i) for i in range(5000)])
         self.assertTrue(np.all(draws >= 0.0) and np.all(draws < 1.0))
         self.assertAlmostEqual(draws.mean(), 0.5, delta=0.03)
+
+
+class OptimizerWiringTest(unittest.TestCase):
+    """H1: `perturb_amplitude`/`perturb_seed` must actually reach `Optimizer`'s x0."""
+
+    def test_nonzero_amplitude_changes_x0(self):
+        from yapnr.rf.driver import Optimizer
+        from yapnr.rf.problem import Problem
+
+        base = tiny_spec()
+        perturbed = base.replace(
+            optimizer=dataclasses.replace(base.optimizer, perturb_amplitude=0.2, perturb_seed=1)
+        )
+        x0_base = Optimizer(Problem(base)).state.x
+        x0_perturbed = Optimizer(Problem(perturbed)).state.x
+        self.assertFalse(np.array_equal(x0_base, x0_perturbed))
 
 
 if __name__ == "__main__":

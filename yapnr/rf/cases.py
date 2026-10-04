@@ -12,7 +12,9 @@ The cases, each at two scales:
 - `filterbank3`: a 4-port three-channel bank, 7.0–7.6, 9.7–10.3 and 12.4–13.0 GHz (stretch).
 
 `scale="full"` is the design's case (up to about two hours at 4 threads); `scale="smoke"` is
-the same topology on a tiny grid with a few iterations, for CI. The criteria are checked on the
+the same topology on a tiny grid with a few iterations, for CI. Both run the solver's default
+backend, native float64 where its library loads and numpy float64 otherwise (the same values;
+the cases ran on torch float32 until the native kernel, docs/rf-solver-backends.md). The criteria are checked on the
 binary design re-simulated from the exported footprint, on the optimization grid ("coarse"),
 on a grid twice as fine in-plane and 1.5 times in the substrate ("fine") and on one three times
 as fine with twice the substrate cells ("finer", `validate`). Round 2's settings (the solver's
@@ -89,7 +91,7 @@ _SMOKE_GRID = dict(
 #   closed-form patch, which the optimizer did not change (now `antenna_patch_reference`).
 INIT = 0.3
 _SMOKE_OPT = OptimizerSpec(betas=(8.0, 32.0), iterations_per_beta=2, min_iterations=2, init=INIT)
-_SMOKE_SOLVER = SolverSpec(backend="torch", dtype="float32", sweep_points=21)
+_SMOKE_SOLVER = SolverSpec(sweep_points=21)
 # Round 2 (design §21, §23): every case runs with the copper-edge correction and the modal port
 # source (the grids then agree to about 0.2 % in frequency, and the excited port's incident
 # wave is unbiased) and with adaptive moves (plain MMA oscillated from β = 16–32 in every

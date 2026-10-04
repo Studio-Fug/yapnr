@@ -4,7 +4,8 @@
 - `tiny_spec`: a tiny two-port spec for the optimizer tests (about 1e4 cells, 6 × 6 pixels):
   S-parameter requirements on a 2.4 mm square region between two 2-cell (0.8 mm) feeds on a
   0.8 mm substrate, 8–12 GHz; the best binary design is the straight line continuing the
-  feeds. A run of the optimization on it takes about 1.5 s per iteration (numpy, float64).
+  feeds. A run of the optimization on it takes about 1.5 s per iteration (numpy, float64; the
+  default backend, native where its library loads, is faster).
 - `CaseChecks`: the shared body of the end-to-end case tests (tests/e2e/rf, design §11). Each
   case test optimizes its preset (`yapnr.rf.cases`), exports it, re-validates the exported
   footprint on the optimization grid and on a finer grid, and asserts the case's criteria.
@@ -74,7 +75,7 @@ def tiny_spec(*, radiated: bool = False, **optimizer) -> Spec:
         rules=Rules(0.8, 0.8),
         symmetry="mirror_y",
         optimizer=OptimizerSpec(**opt),
-        solver=SolverSpec(backend="numpy", dtype="float64", sweep_points=11),
+        solver=SolverSpec(sweep_points=11),
     )
 
 
@@ -83,6 +84,46 @@ def nominal_calibration() -> dict:
     om = 2 * np.pi * np.array([8e9, 10e9, 12e9])
     zc = np.array([72 + 1j, 72.5 + 0.8j, 73 + 0.6j])
     return {"*": LineCalibration(om, zc, om * np.sqrt(2.3) / 3e8 + 0.5j, 0.0)}
+
+
+# -- the native kernel --------------------------------------------------------------------------
+
+_NATIVE_BUILT: dict = {}
+
+
+def native_kernel_or_skip(test):
+    """The native FDTD kernel for a test: the library the loader finds (Bazel: the one
+    //yapnr/rf carries), else one compiled once per process with the host compiler (``cc`` or
+    ``$CC``, into a temporary directory removed at exit); skips the test without either, and
+    fails it instead when ``YAPNR_RF_REQUIRE_NATIVE`` is set."""
+    import atexit
+    import shutil
+    import tempfile
+    from unittest.mock import patch
+
+    from yapnr.rf.fdtd import native_kernel
+
+    kernel = native_kernel.load()
+    if (
+        kernel is None
+        and "dir" not in _NATIVE_BUILT
+        and native_kernel.SOURCE.is_file()
+        and shutil.which(os.environ.get("CC", "cc"))
+    ):
+        out = _NATIVE_BUILT["dir"] = tempfile.mkdtemp(prefix="yapnr-fdtd-")
+        atexit.register(shutil.rmtree, out, True)
+        _NATIVE_BUILT["library"] = native_kernel.build_library(out)
+    if kernel is None and "library" in _NATIVE_BUILT:
+        # (again after a test that made the loader forget it)
+        native_kernel.reset()
+        with patch.dict(os.environ, {native_kernel.ENV_LIB: str(_NATIVE_BUILT["library"])}):
+            kernel = native_kernel.load()
+    if kernel is None:
+        reason = "native FDTD library unavailable: " + native_kernel.status()["reason"]
+        if native_kernel.required():  # the library is the point
+            test.fail(reason)
+        test.skipTest(reason)
+    return kernel
 
 
 # -- pipeline gradients -------------------------------------------------------------------------

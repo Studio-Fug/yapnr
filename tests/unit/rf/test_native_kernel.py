@@ -12,12 +12,12 @@ fallback, the loader's refusals (stale sources, fused or reassociated arithmetic
 and the C side's bounds checks; both schedules of the C side, the sweeps and the wavefront
 passes (YAPNR_RF_TBLOCK).
 
-The native cases need the library: the Bazel-built one (the manual `test_native_kernel_native`
-target), else this test compiles it with the host compiler (``cc``/``$CC``); without a compiler
-they skip, and a compiler that fails is a test error with its messages. With
-``YAPNR_RF_NATIVE_QUICK=1`` (the plain Bazel target, so that CI stays within its time) the
-optimizer and case comparisons, which take most of the time, skip; the ``_native`` target and a
-direct run include them.
+The native cases need the library: the one Bazel builds (//yapnr/rf carries it; the Bazel
+target sets ``YAPNR_RF_REQUIRE_NATIVE``, so a library that does not load fails them), else this
+test compiles it with the host compiler (``cc``/``$CC``); without a compiler they skip, and a
+compiler that fails is a test error with its messages. With ``YAPNR_RF_NATIVE_QUICK=1`` the
+optimizer and case comparisons, which take most of the time, skip. The sha256 matrix of the
+cases and the round-2 options is test_native_identity.
 """
 
 from __future__ import annotations
@@ -32,6 +32,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr
 from dataclasses import replace
+from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
@@ -43,8 +44,8 @@ from yapnr.rf.fdtd.sources import GaussianPulse, NuttallFit, SpectralSource, com
 from yapnr.rf.fdtd.stop import StopRule
 from yapnr.rf.mesh import COMPONENTS
 from yapnr.rf.stackup import Stackup
+from yapnr.rf.testing import native_kernel_or_skip
 
-_BUILT: dict = {}
 QUICK = os.environ.get("YAPNR_RF_NATIVE_QUICK", "") == "1"
 
 
@@ -53,33 +54,7 @@ def compiler_or_skip(test):
         test.skipTest("no C compiler")
 
 
-def kernel_or_skip(test):
-    """The native kernel: the provided library, else one compiled with the host compiler."""
-    kernel = native_kernel.load()
-    if (
-        kernel is None
-        and "dir" not in _BUILT
-        and native_kernel.SOURCE.is_file()
-        and shutil.which(os.environ.get("CC", "cc"))
-    ):
-        out = _BUILT["dir"] = tempfile.mkdtemp(prefix="yapnr-fdtd-")
-        _BUILT["library"] = native_kernel.build_library(out)
-    if kernel is None and "library" in _BUILT:
-        # (again after a test that made the loader forget it)
-        native_kernel.reset()
-        with patch.dict(os.environ, {native_kernel.ENV_LIB: str(_BUILT["library"])}):
-            kernel = native_kernel.load()
-    if kernel is None:
-        reason = "native FDTD library unavailable: " + native_kernel.status()["reason"]
-        if native_kernel.required():  # the _native targets: the library is the point
-            test.fail(reason)
-        test.skipTest(reason)
-    return kernel
-
-
-def tearDownModule():
-    if "dir" in _BUILT:
-        shutil.rmtree(_BUILT.pop("dir"), True)
+kernel_or_skip = native_kernel_or_skip
 
 
 def domain(edge_pml=8):
@@ -140,15 +115,28 @@ class SelectionTest(unittest.TestCase):
     def test_choose(self):
         choose = native_kernel.choose
         f32, f64 = np.dtype(np.float32), np.dtype(np.float64)
-        with patch.object(native_kernel, "load", return_value=object()):
+        with patch.object(native_kernel, "load", return_value=object()), redirect_stderr(
+            io.StringIO()
+        ):
+            # "auto", the spec's default: native where the library loads.
+            self.assertEqual(choose(None, None, "auto", "float64"), ("native", f64))
+            self.assertEqual(choose(None, None, "auto", "float32"), ("native", f32))
             self.assertEqual(choose(None, None, "torch", "float32"), ("torch", f32))
-            self.assertEqual(choose(None, None, "torch", "float32", exact=True), ("numpy", f64))
+            self.assertEqual(choose(None, None, "numpy", "float64"), ("numpy", f64))
+            # Exact problems: float64 on "auto" (native or numpy, the same bits).
+            self.assertEqual(choose(None, None, "torch", "float32", exact=True), ("native", f64))
+            self.assertEqual(choose("numpy", None, "torch", "float32", exact=True), ("numpy", f64))
             os.environ[native_kernel.ENV_BACKEND] = "native"
             # A backend switched by the environment runs float64 unless asked.
             self.assertEqual(choose(None, None, "torch", "float32"), ("native", f64))
             self.assertEqual(choose(None, None, "native", "float32"), ("native", f32))
+            self.assertEqual(choose(None, None, "auto", "float32"), ("native", f32))
             self.assertEqual(choose(None, None, "torch", "float32", exact=True), ("native", f64))
             self.assertEqual(choose("numpy", None, "torch", "float32"), ("numpy", f32))
+            os.environ[native_kernel.ENV_BACKEND] = "numpy"
+            self.assertEqual(choose(None, None, "auto", "float64"), ("numpy", f64))
+            self.assertEqual(choose(None, None, "auto", "float64", exact=True), ("numpy", f64))
+            os.environ[native_kernel.ENV_BACKEND] = "native"
             os.environ[native_kernel.ENV_DTYPE] = "f32"
             self.assertEqual(choose(None, None, "torch", "float64"), ("native", f32))
             os.environ[native_kernel.ENV_DTYPE] = "float16"
@@ -159,19 +147,53 @@ class SelectionTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 choose(None, None, "torch", "float32")
 
+    def test_auto_without_library_runs_numpy(self):
+        """The default backend without a library: numpy (the same float64 values), said once
+        on stderr; with YAPNR_RF_REQUIRE_NATIVE an error."""
+        self.no_library()
+        err = io.StringIO()
+        dom = domain()
+        with redirect_stderr(err):
+            self.assertEqual(
+                native_kernel.choose(None, None, "auto", "float64"), ("numpy", np.dtype(np.float64))
+            )
+            sim = Simulation(dom.grid, dom.structure())
+            self.assertEqual(Simulation(dom.grid, dom.structure(), backend="auto").backend, "numpy")
+        self.assertEqual(sim.backend, "numpy")
+        self.assertEqual(sim.requested_backend, None)
+        self.assertEqual(err.getvalue().count("numpy backend used (the same float64 values"), 1)
+        os.environ[native_kernel.ENV_REQUIRE] = "1"
+        with self.assertRaisesRegex(RuntimeError, native_kernel.ENV_REQUIRE):
+            Simulation(dom.grid, dom.structure())
+
+    def test_auto_with_library_runs_native(self):
+        kernel = kernel_or_skip(self)
+        dom = domain()
+        err = io.StringIO()
+        native_kernel._SAID["loaded"] = False
+        with redirect_stderr(err):
+            sim = Simulation(dom.grid, dom.structure(), threads=2)
+            Simulation(dom.grid, dom.structure())
+        self.assertEqual(sim.backend, "native")
+        self.assertEqual(sim.threads, native_kernel.thread_count(2))
+        # One line names the library that runs.
+        self.assertEqual(err.getvalue().count("yapnr.rf native FDTD: "), 1)
+        self.assertIn(str(kernel.path), err.getvalue())
+
     def test_environment_fallback_keeps_the_spec(self):
         """Native chosen by the environment, no library: the spec's backend and precision
-        (torch float32), not numpy float64; native asked for in the spec: numpy, as before."""
+        (torch float32), not numpy float64; native or auto in the spec: numpy, as before."""
         self.no_library()
         os.environ[native_kernel.ENV_BACKEND] = "native"
         err = io.StringIO()
         with redirect_stderr(err):
             got = native_kernel.choose(None, None, "torch", "float32")
             self.assertEqual(got, ("torch", np.dtype(np.float32)))
-            self.assertEqual(native_kernel.choose(None, None, "native", "float32")[0], "native")
+            self.assertEqual(native_kernel.choose(None, None, "native", "float32")[0], "numpy")
+            self.assertEqual(native_kernel.choose(None, None, "auto", "float32")[0], "numpy")
             self.assertEqual(
                 native_kernel.choose(None, None, "torch", "float32", exact=True),
-                ("native", np.dtype(np.float64)),
+                ("numpy", np.dtype(np.float64)),
             )
         self.assertEqual(err.getvalue().count("the spec's torch backend used"), 1)
 
@@ -198,6 +220,24 @@ class SelectionTest(unittest.TestCase):
         self.assertIsNone(sim.threads)
         self.assertEqual(err.getvalue().count("numpy backend used"), 1)
         self.assertFalse(native_kernel.status()["loaded"])
+
+    def test_installed_wheel_is_a_candidate(self):
+        """Outside `bazel test`, an installed yapnr wheel's library is looked at last (a job
+        bundle on PYTHONPATH in the image); under `bazel test` never."""
+        fake = Path(tempfile.mkdtemp(prefix="yapnr-dist-"))
+        self.addCleanup(shutil.rmtree, fake, True)
+
+        class Dist:
+            def locate_file(self, rel):
+                return fake / rel
+
+        with patch("importlib.metadata.distribution", return_value=Dist()):
+            os.environ.pop("TEST_SRCDIR", None)
+            got = list(native_kernel._candidates())
+            self.assertIn(fake / "yapnr" / "rf" / native_kernel.library_names()[0], got)
+            os.environ["TEST_SRCDIR"] = str(fake)
+            got = list(native_kernel._candidates())
+            self.assertNotIn(fake / "yapnr" / "rf" / native_kernel.library_names()[0], got)
 
 
 class SourceTableTest(unittest.TestCase):

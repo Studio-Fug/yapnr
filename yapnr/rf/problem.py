@@ -188,7 +188,8 @@ class Problem:
         self.edge_correction = bool(sv.edge_correction)
         self.exact = exact
         # Explicit arguments, then $YAPNR_RF_BACKEND / $YAPNR_RF_DTYPE, then the spec
-        # (`fdtd.native_kernel.choose`; exact problems: numpy float64, or native float64).
+        # (`fdtd.native_kernel.choose`: "auto" is native where its library loads, else numpy;
+        # exact problems run float64, native or numpy, the same bits).
         self.backend, self.dtype = choose_backend(backend, dtype, sv.backend, sv.dtype, exact=exact)
         # The spec's threads; each backend applies its own cap and $YAPNR_RF_THREADS
         # (`engine.thread_count` for torch, `native_kernel.thread_count` for the native pool).
@@ -256,6 +257,7 @@ class Problem:
             threads=self.threads,
         )
         self.backend = self.sim.backend  # "numpy" when the native library is missing
+        self.log(f"FDTD backend: {self.solver_label()}")
         # Probes on the resistors an `absorbed` requirement names: P = ½ c_ω Σ_e σ_e V_e |Ê_e|²
         # over the part's edges (`dissipated_power` with the part's own σ only), name →
         # (probe, ½ σ_e V_e).
@@ -792,6 +794,25 @@ class Problem:
 
     # -- reports --------------------------------------------------------------------------------
 
+    def effective_threads(self) -> int:
+        """The threads the stepper runs: the native pool's, torch's (`engine.thread_count`), or
+        1 for numpy."""
+        if self.sim.threads is not None:
+            return int(self.sim.threads)
+        if self.backend == "torch":
+            from yapnr.rf.fdtd.engine import thread_count
+
+            return thread_count(self.threads)
+        return 1
+
+    def solver_label(self) -> str:
+        """The backend, precision and threads that run, and the native library (one line)."""
+        out = f"{self.backend} {self.dtype.name}, {self.effective_threads()} thread(s)"
+        native = native_status(self.sim)
+        if native:
+            out += f" ({native['library']}, {native['isa']})"
+        return out
+
     def describe(self) -> dict:
         """Solver settings for the result's provenance."""
         g = self.grid
@@ -819,7 +840,7 @@ class Problem:
             "adjoint_tol": self.adjoint_tol,
             "backend": self.backend,
             "dtype": str(self.dtype),
-            "threads": self.threads,
+            "threads": self.effective_threads(),
             "native": native_status(self.sim),
             "filter_radius_mm": self.filter.radius * 1e3,
             "material_grid": self.material.to_json(),

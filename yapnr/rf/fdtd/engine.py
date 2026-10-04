@@ -16,8 +16,9 @@ update, E probes at t = (n + 1)Δt after the E update.
 
 Backends: "numpy" (reference) and "torch" (CPU, intra-op threads), float64 or float32 fields;
 their code path is shared and only a handful of array primitives differ (`_NumpyOps`,
-`_TorchOps`). "native" (`native_kernel`, optional) runs blocks of steps in C with the numpy
-reference's operations in the same order: float64 runs are bit-identical to numpy's.
+`_TorchOps`). "native" (`native_kernel`) runs blocks of steps in C with the numpy reference's
+operations in the same order: float64 runs are bit-identical to numpy's. The default, "auto",
+is native where its library loads and numpy otherwise.
 
 A run advances in blocks of steps that end where the stop rule checks; the sources' values and
 the DTFT phase factors of a block are tabulated once (`_BlockTables`) and every backend uses
@@ -270,11 +271,12 @@ def thread_count(threads: int) -> int:
 class Simulation:
     """A microstrip FDTD model ready to run: grid, materials, CPML and the time step.
 
-    `backend` "numpy" (the reference), "torch" or "native" (`native_kernel`; falls back to
-    numpy, saying so once, when its library is missing or refused, or raises with
-    ``$YAPNR_RF_REQUIRE_NATIVE``); None: ``$YAPNR_RF_BACKEND`` or numpy.
-    `threads`: torch's intra-op threads (at most 4) or the native pool (``$YAPNR_RF_THREADS``
-    overrides it).
+    `backend` "auto" (native where its library loads, else numpy), "numpy" (the reference),
+    "torch" or "native" (`native_kernel`; falls back to numpy, saying so once, when its library
+    is missing or refused, or raises with ``$YAPNR_RF_REQUIRE_NATIVE``); None:
+    ``$YAPNR_RF_BACKEND``, else "auto". `backend` afterwards names the one that runs.
+    `threads`: torch's intra-op threads (at most 4, capped by ``$YAPNR_RF_THREADS``) or the
+    native pool (``$YAPNR_RF_THREADS`` replaces it).
     """
 
     def __init__(
@@ -293,16 +295,11 @@ class Simulation:
         self.structure = structure
         self.cpml = cpml
         self.dt = float(dt) if dt is not None else courant * grid.courant_dt()
-        if backend is None:
-            backend = os.environ.get("YAPNR_RF_BACKEND", "").strip().lower() or "numpy"
-        self.requested_backend = backend
-        kernel = None
-        if backend == "native":
-            from yapnr.rf.fdtd import native_kernel
+        from yapnr.rf.fdtd import native_kernel
 
-            kernel = native_kernel.require_or_warn()
-            if kernel is None:
-                backend = "numpy"
+        self.requested_backend = backend
+        backend = native_kernel.resolve(backend)
+        kernel = native_kernel.load() if backend == "native" else None
         # The native backend builds its coefficients with the numpy primitives (same values).
         self.ops = make_ops("numpy" if backend == "native" else backend, dtype)
         self.backend = backend

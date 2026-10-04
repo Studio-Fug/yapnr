@@ -1,4 +1,4 @@
-"""Optional native FDTD stepper: blocks of Yee steps in C, loaded with ctypes (backend "native").
+"""Native FDTD stepper: blocks of Yee steps in C, loaded with ctypes (backend "native").
 
 The C side (``native/fdtd.c``) runs `engine.Simulation`'s steps (sweeps with the CPML, the
 Crank-Nicolson coefficients, the copper-edge μ planes, the inductive sheet, sources and DTFT
@@ -7,18 +7,22 @@ numpy reference's operations in the same order and no floating-point contraction
 is bit-identical to the numpy backend, for any thread count and instruction set. float32 is the
 same code with float fields (equal to numpy float32).
 
-Selection (docs/rf-solver-backends.md): ``Simulation(backend="native")``; for problems the
-environment overrides the spec, ``YAPNR_RF_BACKEND=native`` (``YAPNR_RF_DTYPE``, default
-float64 for an overridden backend; ``YAPNR_RF_THREADS``, the native thread count). The library
-is looked up at ``YAPNR_RF_FDTD_LIB``, then beside this module (``native/``), then in the Bazel
-runfiles (``yapnr/rf/``); under ``bazel test`` only the runfiles count, never the source tree.
-A library is refused when its ABI or structures differ, when it was built from other sources
-than the ones beside this module (a stale build), or when its arithmetic fuses or reassociates
-(`Kernel`). Without a usable library the problem runs its spec's own backend (native chosen by
-the environment) or numpy (native asked for in code or spec), says why once on stderr, and
-`status` records it; ``YAPNR_RF_REQUIRE_NATIVE=1`` makes that an error instead (cloud jobs). A
-compiled dependency is never required. ``python -m yapnr.rf.fdtd.native_kernel build``
-compiles it with the host compiler into ``native/``.
+Selection (docs/rf-solver-backends.md): the default backend, "auto", is native wherever the
+library loads and the numpy reference otherwise (the same float64 values, slower); "numpy",
+"torch" and "native" ask for one. ``Simulation(backend=None)`` takes ``YAPNR_RF_BACKEND`` or
+"auto"; for problems the environment overrides the spec (`choose`; ``YAPNR_RF_DTYPE``;
+``YAPNR_RF_THREADS``, the native thread count). The library is looked up at
+``YAPNR_RF_FDTD_LIB``, then beside this module (``native/``, the package directory, where the
+yapnr wheel puts it), then in the Bazel runfiles (``yapnr/rf/``), then in an installed yapnr
+wheel when this module runs from elsewhere (a job bundle on ``PYTHONPATH`` in the image); under
+``bazel test`` only the runfiles count, never the source tree. A library is refused when its
+ABI or structures differ, when it was built from other sources than the ones beside this module
+(a stale build), or when its arithmetic fuses or reassociates (`Kernel`). The first selection
+says on stderr, once, which library runs or why the numpy reference runs instead; a problem
+whose native comes only from the environment then runs its spec's own backend and precision,
+and ``YAPNR_RF_REQUIRE_NATIVE=1`` makes a missing library an error instead (cloud jobs).
+``python -m yapnr.rf.fdtd.native_kernel build`` compiles it with the host compiler into
+``native/``; ``status`` says what loads.
 """
 
 from __future__ import annotations
@@ -48,7 +52,7 @@ DEFAULT_ROWS = 8
 # The cache the wavefront schedule plans for when the last level cannot be read, MiB.
 DEFAULT_CACHE_MB = 8.0
 MAX_TBLOCK = 8
-BACKENDS = ("numpy", "torch", "native")
+BACKENDS = ("auto", "numpy", "torch", "native")
 
 HERE = Path(__file__).resolve().parent
 SOURCE = HERE / "native" / "fdtd.c"
@@ -68,6 +72,7 @@ CHUNK = 512
 DTYPES = (np.dtype(np.float64), np.dtype(np.float32))
 
 _STATE = {"loaded": False, "kernel": None, "reason": "not requested", "warned": False}
+_SAID = {"loaded": False}
 
 c_int32, c_int64, c_void_p = ctypes.c_int32, ctypes.c_int64, ctypes.c_void_p
 
@@ -209,17 +214,31 @@ def library_names() -> list[str]:
     return ["libyapnr_fdtd.so"]
 
 
+def _installed() -> list:
+    """Where an installed yapnr wheel keeps the library (`yapnr/rf/`), when this module is not
+    that wheel's (a job bundle on PYTHONPATH in the image). The loader still refuses it unless
+    it was built from the sources beside this module."""
+    try:
+        from importlib import metadata
+
+        dist = metadata.distribution("yapnr")
+        return [Path(dist.locate_file(f"yapnr/rf/{name}")) for name in library_names()]
+    except Exception:  # not installed, or no metadata
+        return []
+
+
 def _candidates():
     configured = os.environ.get(ENV_LIB)
     if configured:
         yield Path(configured)
-    # Beside the package (an installed or locally built library), then Bazel's runfiles
+    # Beside the package (a locally built library, or the wheel's), then Bazel's runfiles
     # (yapnr/rf/, where //yapnr/rf:libyapnr_fdtd.so lands): the module's own (unresolved) path
     # is inside the runfiles tree, the resolved one is the source tree.
     # Under `bazel test` (TEST_SRCDIR) only the runfiles count: the resolved path is the source
     # tree, where a library built by hand may be older than the sources Bazel tests.
+    testing = bool(os.environ.get("TEST_SRCDIR"))
     heres = [Path(os.path.abspath(__file__)).parent]
-    if not os.environ.get("TEST_SRCDIR"):
+    if not testing:
         heres.append(HERE)
     roots = []
     for here in heres:
@@ -231,6 +250,11 @@ def _candidates():
     for root in roots:
         for name in library_names():
             path = root / name
+            if path not in seen:
+                seen.add(path)
+                yield path
+    if not testing:
+        for path in _installed():
             if path not in seen:
                 seen.add(path)
                 yield path
@@ -337,6 +361,7 @@ def build_library(out_dir, compiler=None, timeout=300, extra_flags=()) -> Path:
 def reset() -> None:
     """Forget the loaded library (tests)."""
     _STATE.update(loaded=False, kernel=None, reason="not requested", warned=False)
+    _SAID.update(loaded=False)
 
 
 def load() -> Kernel | None:
@@ -369,16 +394,40 @@ def required() -> bool:
 
 
 def require_or_warn(fallback: str = "numpy") -> Kernel | None:
-    """`load`; without a library, say once on stderr why the `fallback` backend runs instead,
-    or raise RuntimeError when ``YAPNR_RF_REQUIRE_NATIVE`` is set."""
+    """`load`; say once on stderr which library runs, or, without one, why the `fallback`
+    backend runs instead (raise RuntimeError when ``YAPNR_RF_REQUIRE_NATIVE`` is set)."""
     kernel = load()
     if kernel is None:
         if required():
             raise RuntimeError(f"yapnr.rf native FDTD required ({ENV_REQUIRE}): {_STATE['reason']}")
         if not _STATE["warned"]:
             _STATE["warned"] = True
-            sys.stderr.write(f"yapnr.rf native FDTD: {_STATE['reason']}; {fallback} backend used\n")
+            same = " (the same float64 values, slower)" if fallback == "numpy" else ""
+            sys.stderr.write(
+                f"yapnr.rf native FDTD: {_STATE['reason']}; {fallback} backend used{same}\n"
+            )
+    elif not _SAID["loaded"]:
+        _SAID["loaded"] = True
+        what = [getattr(kernel, k, None) for k in ("isa", "compiler")]
+        sys.stderr.write(
+            f"yapnr.rf native FDTD: {getattr(kernel, 'path', '?')}"
+            f" ({'; '.join(str(w) for w in what if w)})\n"
+        )
     return kernel
+
+
+def resolve(backend: str | None) -> str:
+    """The backend a simulation runs: None takes ``$YAPNR_RF_BACKEND``, else "auto"; "auto" and
+    "native" are "native" when the library loads and "numpy" otherwise (said once, or an error
+    with ``YAPNR_RF_REQUIRE_NATIVE``); "numpy" and "torch" as asked."""
+    if backend is None:
+        backend = _env_backend() or "auto"
+    backend = str(backend).strip().lower()
+    if backend not in BACKENDS:
+        raise ValueError(f"unknown backend {backend!r} (one of {', '.join(BACKENDS)})")
+    if backend in ("auto", "native"):
+        return "native" if require_or_warn() is not None else "numpy"
+    return backend
 
 
 def status() -> dict:
@@ -419,24 +468,32 @@ def _env_dtype():
     return np.dtype(dtype[text])
 
 
+def _env_backend() -> str | None:
+    text = os.environ.get(ENV_BACKEND, "").strip().lower() or None
+    if text is not None and text not in BACKENDS:
+        raise ValueError(f"{ENV_BACKEND}={text!r}: expected one of {BACKENDS}")
+    return text
+
+
 def choose(backend, dtype, spec_backend: str, spec_dtype, *, exact: bool = False):
     """(backend, dtype) of a problem: explicit arguments, then ``YAPNR_RF_BACKEND`` and
-    ``YAPNR_RF_DTYPE``, then the spec. An exact problem runs numpy float64, or native float64
-    (bit-identical) when the environment asks for native. Native chosen by the environment
-    alone, without a usable library, runs the spec's own backend and precision (not numpy
-    float64, 4-7 times slower than the specs' torch float32), saying so once; or raises
-    with ``YAPNR_RF_REQUIRE_NATIVE``."""
-    env_backend = os.environ.get(ENV_BACKEND, "").strip().lower() or None
+    ``YAPNR_RF_DTYPE``, then the spec; "auto" (the spec's default) becomes native where the
+    library loads and numpy otherwise (`resolve`). An exact problem runs float64 on "auto"
+    unless the arguments or the environment name numpy or native (the same bits either way).
+    Native chosen by the environment alone over a spec that names torch or numpy runs, without
+    a usable library, that backend and precision (torch float32 is 4-7 times faster than numpy
+    float64), saying so once; or raises with ``YAPNR_RF_REQUIRE_NATIVE``."""
+    env_backend = _env_backend()
     env_dtype = _env_dtype()
-    if env_backend is not None and env_backend not in BACKENDS:
-        raise ValueError(f"{ENV_BACKEND}={env_backend!r}: expected one of {BACKENDS}")
+    spec_backend = str(spec_backend).strip().lower()
     if exact:
-        chosen = backend or ("native" if env_backend == "native" else "numpy")
-        return chosen, np.dtype(dtype or np.float64)
+        chosen = backend or (env_backend if env_backend in ("auto", "numpy", "native") else "auto")
+        return resolve(chosen), np.dtype(dtype or np.float64)
     chosen = backend or env_backend or spec_backend
-    by_env = backend is None and env_backend == "native" and spec_backend != "native"
+    by_env = backend is None and env_backend == "native" and spec_backend in ("numpy", "torch")
     if by_env and require_or_warn(f"the spec's {spec_backend}") is None:
         return spec_backend, np.dtype(dtype or env_dtype or spec_dtype)
+    chosen = resolve(chosen)
     if dtype is not None:
         return chosen, np.dtype(dtype)
     if env_dtype is not None:

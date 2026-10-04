@@ -256,10 +256,14 @@ class OptimizerSpec:
 
 @dataclass(frozen=True)
 class SolverSpec:
-    """Solver settings of the optimization runs."""
+    """Solver settings of the optimization runs.
 
-    backend: str = "torch"
-    dtype: str = "float32"
+    `backend`: "auto" (native where its library loads, else the numpy reference: the same
+    float64 values), "native", "numpy" or "torch"; `dtype` float64 or float32
+    (`fdtd.native_kernel.choose`, docs/rf-solver-backends.md)."""
+
+    backend: str = "auto"
+    dtype: str = "float64"
     tol: float = 1e-3
     adjoint_tol: float = 1e-3
     decimation: str | int = "auto"
@@ -612,6 +616,14 @@ class Spec:
         ref = self.optimizer.reference_ohm
         if ref is not None and (len(self.ports) != 1 or not ref > 0):
             raise ValueError("optimizer.reference_ohm: a positive reference, one-port specs only")
+        if self.solver.backend not in ("auto", "native", "numpy", "torch"):
+            raise ValueError("solver.backend must be 'auto', 'native', 'numpy' or 'torch'")
+        try:
+            dtype_ok = np.dtype(self.solver.dtype).name in ("float64", "float32")
+        except TypeError:
+            dtype_ok = False
+        if not dtype_ok:
+            raise ValueError("solver.dtype must be 'float64' or 'float32'")
         if self.optimizer.trust_reference not in ("current", "best"):
             raise ValueError("optimizer.trust_reference must be 'current' or 'best'")
         fs = self.optimizer.epoch_frequency_scale

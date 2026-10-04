@@ -141,6 +141,30 @@ class LossTest(unittest.TestCase):
         np.testing.assert_allclose(corr, -(0.002 * 9.2 + 0.003 * 6.0))
         self.assertEqual(demos.r1_path("M"), [("arm", 9.2), ("line", 6.0)])
 
+    def test_loss_end_to_end(self):
+        f = np.linspace(3e9, 7e9, 161)
+        with tempfile.TemporaryDirectory() as tmp:
+            for w in ("040", "070"):
+                for length in (10, 30):
+                    d = os.path.join(tmp, "tasks", f"mc~line-m-w{w}-l{length}", "result", "out")
+                    d = os.path.join(d, f"line-m-w{w}-l{length}")
+                    os.makedirs(d)
+                    s = np.zeros((f.size, 2, 2), complex)
+                    s[:, 1, 0] = s[:, 0, 1] = 10 ** (-0.009 * length / 20)
+                    write_touchstone(os.path.join(d, "coarse_dense.s2p"), f, s)
+            d = os.path.join(tmp, "r1-m-eq")
+            os.makedirs(d)
+            s = np.zeros((f.size, 3, 3), complex)
+            s[:, 0, 0] = 0.05
+            s[:, 1, 0] = s[:, 2, 0] = s[:, 0, 1] = s[:, 0, 2] = 10 ** (-3.2 / 20)
+            write_touchstone(os.path.join(d, "coarse_dense.s3p"), f, s)
+            out = write.loss(tmp)
+        self.assertAlmostEqual(out["lines"]["line"]["solver_db_per_cm_5ghz"], 0.09, places=4)
+        corr = out["r1"]["worst_s21_corrected_db"]
+        self.assertLess(corr, -3.2)  # the coupon model loses more than the solver
+        self.assertEqual(out["d_o0_11"]["criterion_db"], demos.d_o0_11(corr))
+        self.assertLess(out["r1"]["ratio_check"]["worst_s21_corrected_db"], -3.2)
+
     def test_ratio_correction(self):
         s = np.zeros((2, 3, 3), complex)
         s[:, 1, 0] = s[:, 2, 0] = np.sqrt([0.5, 0.45])  # lossless; 10 % dissipated

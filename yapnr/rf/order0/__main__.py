@@ -17,7 +17,9 @@ def main(argv=None) -> int:
     w.add_argument("--s21", type=float, default=-3.4, help="D-O0-11's |S21| criterion (dB)")
     w.add_argument("--offset", type=float, default=0.10, help="R1's loss correction (dB)")
     lo = sub.add_parser("loss", help="run 0b: the loss correction and D-O0-11")
-    lo.add_argument("--fetched", required=True, help="the fetched campaign's out/ directory")
+    lo.add_argument(
+        "--fetched", required=True, help="the fetched campaign (yapnr exp fetch --full)"
+    )
     lo.add_argument("--out", help="write the result here (JSON)")
     v = sub.add_parser("variant", help="an optimized run's footprint as a forward run")
     v.add_argument("--run", required=True, help="the (fetched) run directory")

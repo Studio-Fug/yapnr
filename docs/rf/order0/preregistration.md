@@ -30,14 +30,18 @@ each upload:
      any D1 or D2 result;
    - D1, D2: the optimizer's validation runs on the thickness-equivalent and on the nominal
      substrate, with the spec, `result.json`, `validation.json` and the footprint.
-3. **The solver's loss correction**: the predicted \|S21\| of the demos and references is
-   published twice, as the solver gives it and corrected for the conductor loss the solver does
-   not model (rough copper, the ground plane's loss, ENIG); the corrected one is the prediction.
-   The correction makes the solver's α(f) of a straight 0.40 mm (M) or 3.0 mm (W) line equal to
-   the shipped coupon model's on the same nominal stackup (`lines.csv`; M 0.132 dB/cm at 5 GHz,
-   with the roughness prior Rq 1.0 ± 0.5 µm). Closed forms disagree on the smooth part (the
-   coupon model's 2D Wheeler factor gives 0.037 dB/cm on M at 5 GHz, Hammerstad-Jensen 0.059), so
-   the measured α(f) of the lines, not either model, settles it, and the post-fit prediction uses
+3. **The solver's loss correction**: the predicted \|S21\| of the demos and references is published
+   twice, as the solver gives it and corrected for the conductor loss the solver does not model
+   (rough copper, the ground plane's loss, ENIG); the corrected one is the prediction. The
+   correction makes the solver's α(f) of a straight 0.40 mm (M) or 3.0 mm (W) line equal to the
+   shipped coupon model's on the same nominal stackup (`lines.csv`; M 0.132 dB/cm at 5 GHz, with the
+   roughness prior Rq 1.0 ± 0.5 µm). Run 0b measures the solver's α(f) from straight lines of two
+   lengths on the references' grid (0.40 and 0.70 mm wide, 10 and 30 mm long); the difference Δα(f)
+   is applied along R1's path (the 0.70 mm arm to the junction, then half the output line), and for
+   any geometry (D1, D2) the fraction of the incident power the solver dissipates is scaled by
+   α_coupon/α_solver of the port line ([demos][run0b]). Closed forms disagree on the smooth part
+   (the coupon model's 2D Wheeler factor gives 0.037 dB/cm on M at 5 GHz, Hammerstad-Jensen 0.059),
+   so the measured α(f) of the lines, not either model, settles it, and the post-fit prediction uses
    the fitted loss.
 4. **The full optimizer history**: every D1 and D2 attempt with its validation, failures included,
    and the rule that picked the shipped run.
@@ -100,3 +104,5 @@ A01, A03, A04 and each demo), the copy-to-copy spread (two copies, one lot), the
 uncertainty, and the difference between multiline TRL and IEEE 370 2x-thru de-embedding from A01.
 Not covered, and said so: one lot, two assembled copies, an instrument with preliminary
 specifications.
+
+[run0b]: demos.md#run-0b-the-loss-correction-and-the-s21-criterion

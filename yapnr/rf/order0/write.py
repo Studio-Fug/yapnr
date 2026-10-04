@@ -202,7 +202,16 @@ def loss(fetched: str, data: Optional[dict] = None) -> dict:
     and corrected |S21| over the band, and D-O0-11's criterion."""
 
     def ts(job: str, n: int) -> str:
-        return os.path.join(fetched, job, f"coarse_dense.s{n}p")
+        """A job's Touchstone: `fetched/<job>/` or a `yapnr exp fetch --full` campaign
+        directory's `tasks/mc~<job>/result/out/<job>/`."""
+        name = f"coarse_dense.s{n}p"
+        for d in (
+            os.path.join(fetched, job),
+            os.path.join(fetched, "tasks", f"mc~{job}", "result", "out", job),
+        ):
+            if os.path.isfile(os.path.join(d, name)):
+                return os.path.join(d, name)
+        raise FileNotFoundError(f"{name} of {job} under {fetched}")
 
     out: dict = {"schema": "yapnr-order0-run0b/1", "lines": {}}
     d_alpha, ratio = {}, {}

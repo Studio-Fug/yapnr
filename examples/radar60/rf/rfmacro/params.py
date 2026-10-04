@@ -107,20 +107,67 @@ DEFAULTS: Dict[str, object] = {
     "rx_col_y": 9.5,
     "tx_col_x0": 8.0,
     "tx_col_y": 6.1,
-    "bend_r_rx": 1.0,
     "bend_r_tx": 0.6,
-    "bump_r_rx": 0.30,  # inner RX lines: symmetric bump that equalizes the S-bend lengths
-    "meander_r_min": 0.40,  # smallest serpentine radius (2 x w) [D]
-    # where each TX serpentine sits: "h" on the eastward leg (fingers north), "v" on the
-    # northward leg (fingers west) [D]
-    "tx_meander": {"TX1": "h", "TX2": "v", "TX3": "v"},
+    # RX S-bends and the inner lines' equalizing bump: the fit takes the lowest bank whose lines
+    # keep 0.92 mm corridors (shared fence row) from these radius ranges [D]
+    "rx_bend_r_range": [0.4, 1.6],
+    "rx_bump_r": [0.30, 0.40, 0.50],
+    # straight before Pg on every RX line: the fence rows reach the run-in pair (E - guard_band)
+    # along a straight, so the last fence via sits one pitch below it clear of the ring sites; a
+    # bump ending closer meets the pair obliquely and leaves a fence opening [D]
+    "rx_tail": 0.40,
+    # RF uniformity (owner finding 2026-10-03: identical structures across the array within the
+    # keepout) [D, rf-uniform design]:
+    # guard band around each L1 cut-out: the stitch ring's 0.40 inset plus one 0.45 via spacing;
+    # inside it only the straight run-ins, their fence pairs, the ring and plain GND
+    "guard_band": 0.85,
+    # straight run-in before the entry (two fence pitches); P1 is pour_clear_ant inside the entry
+    "runin_out": 0.90,
+    # meander radius: legs 2R = 1.0 mm apart share one fence row; a via sits at each U-turn centre
+    "meander_r": 0.50,
+    # terminated dummy columns: "both" (all four bank ends), "outer" (RX0 and TX4) or "none"
+    "dummies": "both",
+    # dummy load: 50 ohm thin-film 0201 (KiCad R_0201_0603Metric land), along the run-in axis.
+    # Every load is the same cell (review 2026-10-04: fill vias had landed in three of the four
+    # GND lands): its GND end is returned by its own five vias, given relative to (x_in, Pg), each
+    # pad edge >= 0.14 mm from either land; no other via may sit in its via zone (x_in +-
+    # via_zone[0], Pg - via_zone[1] .. Pg). `zone` is the fit search's keep-clear box. The mask
+    # island (x_in +- mask[0], Pg - mask[1] .. Pg - mask[2]) is under solder mask, the lands
+    # opening by their own size, so the GND land is mask-defined like the signal land instead
+    # of wetting into the bare pour, and the load vias are tented [D]
+    "dummy_load": {
+        "value": "50R 0201 thin film",
+        "pad": [0.46, 0.40],
+        "pitch": 0.64,
+        "pad1_dy": 0.45,
+        "vias": [[-0.50, -1.09], [0.50, -1.09], [-0.58, -0.50], [0.58, -0.50], [0.0, -1.62]],
+        "zone": [0.66, 1.35],
+        "via_zone": [0.66, 1.65],
+        "mask": [0.78, 1.82, 0.05],
+    },
+    "bank_strip": 2.0,  # cut-out to cut-out between the banks, the isolation wall in the middle [D]
     "pour_clear_ant": 1.0,  # L1 GND pour kept this far from patch copper [D]
     "pour_clear_feed": 0.45,  # and this far from the column's microstrip divider [D]
-    # L2-L3 stitching (review 2026-10-03): GND through vias at <= lambda_d/4 in RO4450F
-    # (62 GHz: lambda0 4.83 mm / sqrt(3.52) = 2.58 mm -> 0.64 mm) round each bank and along the
-    # macro's In2.Cu GND boundary, so the L2-L3 parallel plate has no open edge [D]
+    # L2-L3 stitching (review 2026-10-03): GND through vias round each bank and along the macro's
+    # In2.Cu GND boundary, so the L2-L3 parallel plate has no open edge. The pitch is a via-lattice
+    # wall: 0.60 mm with 0.15 mm drills puts its parallel-plate cut-off near 120 GHz (about 35 dB/mm
+    # at 62 GHz; review 2026-10-04, not the lambda_d/4 = 0.64 mm argument) [D]; a maximum, rows are
+    # divided with ceil
     "stitch_pitch": 0.60,
-    "stitch_inset": 0.40,  # via centre inside the In2 GND boundary / outside a bank's field box
+    # via centre inside the In2 GND boundary: 0.30 keeps the boundary between two vias 0.60 apart
+    # within stitch_reach (stage 2's 0.40 would leave 0.50 mm) [D]
+    "stitch_inset": 0.30,
+    "runin_inset": 0.40,  # first run-in fence pair below the entry; the second at guard_band [D]
+    # fence rows start this far outside the package body (pad outside it, the GND at the body
+    # edge within stitch_reach) [D]
+    "fence_start": 0.25,
+    # ring sites between the run-in pairs and round the cut-out sides: 0.35 keeps the cut-out
+    # edge between two sites 0.447 apart within stitch_reach (0.40 would leave 0.46) [D]
+    "ring_inset": 0.35,
+    # L1 GND stitching: every GND point within lambda_g/10 (0.29 mm) + the 0.16 mm pad radius of a
+    # GND via, or the GND is removed; open pour gets this via grid [D]
+    "stitch_reach": 0.45,
+    "stitch_grid": 0.60,
 }
 
 

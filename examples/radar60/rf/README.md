@@ -14,23 +14,63 @@ input (openEMS `col-c`: RL 5.9 / 9.1 / 11.4 dB at 60.3 / 62.05 / 63.8 GHz, best 
 GHz), its length calibration (L x0.967) came from a single patch, and the bank (C2: TX-RX
 isolation, adjacent-column coupling, phase centres, the L2-L3 parallel plate) is not solved.
 Every JSON record carries this as `status`. The joint C1 sweep and the C2 solve come before the
-macro is frozen for an order.
+macro is frozen for an order. The RF-uniformity layout (guard band, straight run-ins, terminated
+dummy columns, R 0.5 stitched equalizers; owner finding 2026-10-03, "identical structures across
+the array within the keepout") was checked in openEMS [S] (`results/openems/rfuni/` and, after
+the review fixes of 2026-10-04, `results/openems/rfuni-fix/`):
+
+- the as-built TX1 tongue notch (-7.9 to -9.2 dB near 60 GHz) is gone on every mesh;
+- TX P0 -> P1 loss over seven meshes (xy 40-12 um, 4-8 cells across the core): TX1 1.73-2.04,
+  TX2 1.65-1.93, TX3 1.34-1.68 dB at 62.05 GHz; xy refinement raises it and z refinement lowers
+  it, so it is not converged, and TX1/TX2 exceed RF-03's 1.5 dB alone. The equalizers' excess
+  over the straight TX3 is radiated or leaked, not dissipated: lossless runs lose 0.40-0.46 dB
+  (TX1), 0.31-0.32 dB (TX2) and <= 0.02 dB (TX3);
+- skew between the equal-length TX lines swings with the mesh (TX1 - TX3 -21 to +3.5 deg at
+  62.05 GHz) and stays within 1 ps;
+- both banks on one board (the cut-outs plus lambda0, identical synthetic leads south of Pg, an x
+  mesh that repeats at the column pitch): edge and interior columns differ by |dGamma| 0.024-0.041
+  RMS in band with dummies (two interior columns: 0.027) and 0.024-0.069 without; the earlier
+  bank models' 0.46 (a constant 72 deg rotation) was the leads and the mesh, not the antenna.
+  Embedded H-plane gain within +-45 deg differs by <= 3.2 dB (two interior columns: 3.5 dB),
+  fitted phase centres sit within
+  0.27 mm of the lattice, TX -> RX coupling is <= -36.7 dB (-35.9 dB without dummies);
+- the dummies' effect on the match is structural: open or shorted loads move TX1's Gamma by
+  <= 0.015 RMS (a shorted dummy changes the pattern by up to 3 dB at 60.3 GHz, an open one 1.2 dB);
+- the L2-L3 bondply under each bank is a cavity excited through the L2 windows (field -10 to -25
+  dB across the bank), contained by the ring vias;
+- the column's match is not mesh-converged: one cell at Pg moves from RL-10 63.45-65.5 GHz (40
+  um) to 64.35-66 GHz (15 um), so C1 must retune (lengthen) the column on a fine mesh. Gamma at
+  an MSL port also moves when mesh lines move inside its lead: compare columns only within one
+  model and mesh.
+  Not simulated: the 0201 load itself, 35 um copper, the launch, the package.
 
 ## Contents
 
-| Path                             | What                                                                                     |
-| -------------------------------- | ---------------------------------------------------------------------------------------- |
-| `rfmacro/params.py`              | stackup, fab rules, lattice and every declared parameter, with sources                   |
-| `rfmacro/closedform.py`          | microstrip, conductor-backed CPW, patch, inset, directivity models (sources in the file) |
-| `rfmacro/xsec2d.py`              | 2D cross-sections with `yapnr.rf.coupons.xsec` (FEM, Wheeler loss), -> `results/`        |
-| `rfmacro/dims.py`                | start dimensions and closed-form predictions                                             |
-| `rfmacro/geom.py`, `macro.py`    | launches, equal-length feeds, columns, fences, windows, checks (U1 frame)                |
-| `rfmacro/kicad.py`, `coupons.py` | KiCad 10 boards of the macro and of the coupon strip                                     |
-| `openems/Dockerfile`             | openEMS v0.37.0-rc3 source build (Ubuntu 24.04 packages none)                            |
-| `openems/column_sim.py`          | openEMS model of one column + divider from the same geometry                             |
-| `generated/rfm1-{m,n,p}/`        | the macro for the D12 bracketing variants (patch length x0.982, x1, x1.018)              |
-| `generated/coupons/`             | the coupon strip (60 x 25 mm) and its structure catalogue                                |
-| `results/`                       | the 2D line table and the openEMS column results                                         |
+| Path                        | What                                                                                       |
+| --------------------------- | ------------------------------------------------------------------------------------------ |
+| `rfmacro/params.py`         | stackup, fab rules, lattice and every declared parameter, with sources                     |
+| `rfmacro/closedform.py`     | microstrip, conductor-backed CPW, patch, inset, directivity models (sources in the file)   |
+| `rfmacro/xsec2d.py`         | 2D cross-sections with `yapnr.rf.coupons.xsec` (FEM, Wheeler loss), -> `results/`          |
+| `rfmacro/dims.py`           | start dimensions and closed-form predictions                                               |
+| `rfmacro/macro.py`          | launches, the fit search, equal-length feeds, column cells, dummies, pour (U1 frame)       |
+| `rfmacro/vias.py`           | deterministic GND via placement (lattice, fences, rings, rows, grid, fill)                 |
+| `rfmacro/rules.py`          | the RF-uniformity checks G1-G6, shared with the board audit                                |
+| `rfmacro/raster.py`         | standard-library bitset raster for the stitch-reach and congruence checks                  |
+| `rfmacro/kicad.py`          | KiCad 10 board of the macro                                                                |
+| `rfmacro/coupons.py`        | the coupon strip                                                                           |
+| `../board/rf_audit.py`      | A1-A5: the same rules on a filled board (KiCad Python)                                     |
+| `tests/`                    | unit tests (`python3 -m unittest discover -s tests`)                                       |
+| `openems/Dockerfile`        | openEMS v0.37.0-rc3 source build (Ubuntu 24.04 packages none)                              |
+| `openems/column_sim.py`     | openEMS model of one column + divider from the same geometry                               |
+| `openems/board_export.py`   | filled KiCad board -> JSON copper in U1's frame (KiCad Python), for the two builders below |
+| `openems/board_feeds.py`    | feed models from the filled board: TX1-TX3 or RX1-RX4 P0 -> P1 (shapely)                   |
+| `openems/board_ant.py`      | radiating models from the filled board: one cell with its entry, the bank, a control       |
+| `openems/feed_sim.py`       | openEMS run of a feed model (GCPW with fences, MSL ports, loads, all-driven mode)          |
+| `openems/ant_sim.py`        | openEMS run of a radiating model (column_sim's stack, mesh, ports and far field)           |
+| `openems/rfuni_analysis.py` | edge vs interior (complex), coupling, isolation, active reflection, patterns, mesh series  |
+| `generated/rfm1-{m,n,p}/`   | the macro for the D12 bracketing variants (patch length x0.982, x1, x1.018)                |
+| `generated/coupons/`        | the coupon strip (60 x 25 mm) and its structure catalogue                                  |
+| `results/`                  | the 2D line table, the openEMS column results, `openems/rfuni/` (uniformity EM check)      |
 
 Each generated directory holds the board (`.kicad_pcb`, zones unfilled), its project and custom
 rules, a JSON record (parameters, dimensions, ports, lengths, checks, a geometry hash) and the
@@ -42,16 +82,29 @@ PnR places the macro as a locked block).
 
 ## Commands
 
-From this directory (Python 3.10+, standard library only, except `xsec`):
+From this directory (Python 3.9+, standard library only, except `xsec`; a build takes about
+30 s, most of it the via placement and the raster checks):
 
 ```sh
 python3 -m rfmacro build --variant 0 --out generated         # -1 / +1: D12 bracketing variants
 python3 -m rfmacro coupons --out generated
 YAPNR_KICAD_CLI=<headless kicad-cli> python3 -m rfmacro drc generated/rfm1-n/rfm1-n.kicad_pcb
+YAPNR_KICAD_CLI=<headless kicad-cli> python3 -m rfmacro drc --keep-filled <copy>/rfm1-n.kicad_pcb
+<kicad python> ../board/rf_audit.py <copy>/rfm1-n.filled.kicad_pcb generated/rfm1-n/rfm1-n.json
+python3 -m unittest discover -s tests
 PYTHONPATH=.:<yapnr checkout> <python with scikit-fem and gmsh> -m rfmacro xsec
 docker build -t radar60-openems:0.37.0-rc3 openems
 docker run --rm --cpus 4 -v "$PWD":/w -w /w radar60-openems:0.37.0-rc3 \
   python3 openems/column_sim.py --out out/col --threads 4
+# EM of the filled macro: export, build a model (host Python with shapely), run in the image
+<kicad python> openems/board_export.py <copy>/rfm1-n.filled.kicad_pcb out/b.json 100 100
+python3 openems/board_feeds.py out/b.json generated/rfm1-n/rfm1-n.json out/txa.json --model txa
+python3 openems/board_ant.py out/b.json generated/rfm1-n/rfm1-n.json out/bank.json --model bank \
+  --banks RX,TX            # both banks on one board; --loads short|open; --sub-record for a no-dummy board
+docker run --rm --cpus 4 -v "$PWD":/w -w /w radar60-openems:0.37.0-rc3 \
+  python3 openems/feed_sim.py out/txa.json --excite TX1.P0 --out out/txa-e1 --threads 4
+docker run --rm --cpus 4 -v "$PWD":/w -w /w radar60-openems:0.37.0-rc3 \
+  python3 openems/ant_sim.py out/bank.json --excite TX1.Pg --out out/bank-e1 --threads 4 [--dump-bond]
 ```
 
 On a Mac with colima, write openEMS output to a directory the Docker VM shares (under the
@@ -59,7 +112,9 @@ home directory or an external volume); a `-v` mount of a path the VM does not sh
 lands inside the VM.
 
 `--set key=json` overrides any parameter of `rfmacro/params.py` (for example
-`--set window_margin=0.25`).
+`--set window_margin=0.25` or `--set dummies='"outer"'`). `build` exits non-zero when any check
+fails; the record lists every check with its numbers. `drc --keep-filled` saves the filled board
+next to its input, so run it on a copy.
 
 ## Geometry (U1 frame: mm, U1 centre at the origin, +y north, RX edge north, TX edge east)
 
@@ -68,36 +123,140 @@ lands inside the VM.
   line leaving through the depopulated outer site to P0 at 1.3 mm [TI-RF §2.1.2], L1 GND joining
   the VSSA lands. TI's own transition uses microvias, so this one is new and is the first C1 sweep.
 - **Feeds (RFS-2/3):** 50 ohm GCPW (w 0.200, g 0.200) on 4 mil over solid L2 everywhere (D4: no
-  windows under the feeds), via fences 0.15/0.32 at 0.45 mm both sides (0.32 mm keeps the
-  profile's 3 mil via ring; no two vias closer than 0.43 mm, the 11 mil hole to hole). RX:
-  S-bends (R 1.0) plus a symmetric bump on the inner lines; P0->P1 4.199 mm for all four. TX:
-  L-routes (R 0.6) with serpentines (R >= 0.4) for TX1 (north fingers on its eastward leg) and
-  TX2 (west fingers on its northward leg); P0->P1 13.712 mm for all three. Spread 0 um
-  (geometric).
-- **Columns (RFS-4, x7):** two inset-fed patches (W 1.45, L 1.151 = closed-form 1.190 x 0.967
-  full-wave correction, inset 0.30 mm from the first openEMS calibration, notch 0.10)
-  at 2.90 mm (0.60 lambda0), each on an L2 window 0.15 mm larger, fed at their facing edges by a
-  T (35.4 ohm lambda/4 0.710 mm, 50 ohm arms; the south arm is lambda_g/2 = 1.469 mm longer to
-  undo the 180 degrees of the facing feeds). The input runs up the 0.89 mm gap between columns,
-  0.196 mm from the window edges. RX inputs sit in the east gaps, TX inputs in the west gaps
-  (mirrored columns), both on the board plan's lattice.
-- **Isolation (RFS-5):** a fence row between the banks; the nearest RX and TX phase centres
-  are 7.8 mm (1.6 lambda0) apart.
+  windows under the feeds), via fences 0.15/0.32 (0.32 mm keeps the profile's 3 mil via ring; no
+  two vias closer than 0.43 mm, the 11 mil hole to hole). Equal length P0 -> Pg per bank, then
+  the same run-in for every column (below). The fit search sets the bank positions and the
+  equalizers, sampling every extent from the paths (arc apexes included):
+  - RX: S-bends R 0.9 (RX1, RX4) and R 0.6 plus a symmetric R 0.3 bump (RX2, RX3), then at least
+    `rx_tail` 0.40 mm straight so the fence rows reach the run-in pair along a straight; P0 -> Pg
+    3.394 mm, P0 -> P1 5.294 mm for all four (0.39 dB [D]).
+  - TX: L-routes R 0.6, equalizers of radius `meander_r` 0.50 in declared places: TX1 one finger
+    north of its eastward leg (clear of the package by `fence_start`) and one in the TX1-TX2
+    lane, TX2 two in the TX2-TX3 lane, both lane equalizers ending exactly at Pg (the last arc's
+    centre via is then the run-in pair). The TX bank sits 3.547 mm further east than the plan
+    (room for TXD0 beside the RX cut-out, `bank_strip` 2.0 mm between the cut-outs). P0 -> Pg
+    16.674 mm, P0 -> P1 18.573 mm for all three (1.38 dB [D], 13.712 mm and 1.02 dB before).
+    Spread 0 um (geometric).
+- **Run-in and entry (identical for every column):** each feed (and dummy) ends at
+  Pg = E - `runin_out` (0.90 mm before the cut-out edge E), on its column's input axis heading
+  north, then runs straight: 0.90 mm of fenced GCPW (pairs at E - 0.40 and E - 0.85), the entry,
+  and `pour_clear_ant` 1.0 mm of microstrip to P1. Its line plus gap touches the cut-out only
+  there, over 0.600 mm.
+- **Guard band:** inside the cut-out grown by `guard_band` 0.85 mm there are only the straight
+  run-ins, their pairs, the ring sites and plain GND; every equalizer keeps its via locus (and
+  so its gap) at least 0.85 mm from every cut-out. Above Pg (0.90 mm) only the lattice vias sit.
+- **Columns (RFS-4):** one 2-patch cell, built once in its frame and instanced per column
+  (mirrored for TX): two inset-fed patches (W 1.45, L 1.151 = closed-form 1.190 x 0.967 full-wave
+  correction, inset 0.30 mm from the first openEMS calibration, notch 0.10) at 2.90 mm
+  (0.60 lambda0), each on an L2 window 0.15 mm larger, fed at their facing edges by a T (35.4 ohm
+  lambda/4 0.710 mm, 50 ohm arms; the south arm is lambda_g/2 = 1.469 mm longer to undo the 180
+  degrees of the facing feeds). The input runs up the 0.89 mm gap between columns, 0.196 mm from
+  the window edges. The L1 cut-out is the cells grown by 1.0 mm, the cell's top taken from the
+  longest D12 variant, so everything outside the cut-outs is the same for rfm1-m, -n and -p.
+- **Dummy columns (`dummies` "both"):** a full cell at each bank end (RXD0, RXD5, TXD0, TXD4,
+  nets of their own) whose run-in ends 0.45 mm below Pg in a 0201 50 ohm thin-film load (RT1-RT4;
+  RL1/RL2 are the board's radome lands; KiCad R_0201_0603Metric land, along the run-in). Every
+  load is one cell: its GND land returns through its own five vias (each pad edge >= 0.14 mm from
+  either land), no other via may sit in its via zone (x_in +- 0.66, Pg - 1.65 .. Pg; G7), and a
+  solder-mask island (x_in +- 0.78, Pg - 1.82 .. Pg - 0.05) makes the GND land mask-defined like
+  the signal land and tents the vias. Every active column then sees the same copper and the same
+  neighbours (G2); the active phase centres keep the lattice exactly and each bank only
+  translates (ANT-01). "outer" keeps RXD0 and TXD4 only.
+- **Isolation (RFS-5):** the 2.0 mm GND strip between the cut-outs with a via wall along its
+  middle; the nearest RX and TX phase centres are 11.19 mm (2.3 lambda0) apart.
 - **L3 (In2.Cu) GND:** only where the macro needs its reference: the RF region outside the
   package (the two L1 pour strips), the under-package ground of rows 1-3 and A-C, and each land's
   L2 cut-out plus 0.3 mm. Under the rest of the package In2 is the board's escape layer. The
   outlines are in each record (`board_frame.in2_gnd_polygons`) for the BGA fanout and the escape
-  probe.
-- **L2-L3 stitching:** GND through vias (0.15/0.32) every 0.6 mm (lambda_d/4 in RO4450F at
-  62 GHz is 0.64 mm) in a ring 0.4 mm outside each bank's field box (1.4 mm from the patches)
-  and 0.4 mm inside the In2 GND boundary (west, north and east edges, the south edges of the two
-  strips), so the L2-L3 parallel plate has no open edge. Not simulated yet (C2).
+  probe. The under-package pour gives the outer launches (RX1, RX4, TX1, TX3) 0.70 mm of GND
+  beside the gap like the others; the foreign lands next to it keep 0.14 mm.
+- **GND stitching (`rfmacro/vias.py`):** every L1 GND point of the region outside the package
+  lies within `stitch_reach` 0.45 mm (lambda_g/10 plus the pad radius) of a GND through via
+  (0.15/0.32), so the L1 pour has no unstitched sliver and the L2-L3 parallel plate no open edge.
+  The 0.60 mm pitch is set by the via lattice as a waveguide wall, not by lambda_d/4 (review
+  2026-10-04): with 0.15 mm drills its parallel-plate cut-off is near 120 GHz, about 35 dB/mm of
+  attenuation at 62 GHz [D]. In order: the lattice (run-in pairs, two ring
+  sites between neighbouring pairs, five per pitch along the top, at `ring_inset` 0.35 and
+  `guard_band` outside the cut-out); the loads' vias; a via at each meander arc centre; fence
+  rows on the corridor boundary, or one row midway where two corridors come within 1.43 mm, laid
+  as one chain per row at 0.43-0.47 mm (up to 0.12 mm beside the row to fit between fixed vias);
+  the isolation wall; rounded rings round the cut-outs; the In2 boundary rows `stitch_inset`
+  0.30 mm inside at <= 0.60 mm with a via in each corner; a 0.60 mm grid; vias that fill what
+  is still unreached. GND no via can reach becomes a pour keepout (gap); a load's GND land is
+  copper, not pour, and is not cut. rfm1-n: 1441 vias (283 ring, 44 run-in, 206 fence, 21
+  isolation, 172 boundary, 606 grid, 75 fill, 20 load, 14 launch); 9 pieces (0.078 mm² in all,
+  at the package edge and in bend pockets) made gap. The fence rows are laid at 0.43-0.47 mm
+  (`fence_pitch` 0.45 is the target); G4's acceptance limit is 0.50 mm and the largest gap on
+  rfm1-n is 0.498 mm, at a nudged via.
 
-Floorplan changes against board-design.md §5.3 that the macro forces: RX phase centres at
-y = 10.95 (plan 9.5) and x = -5.334 ... +1.692 (plan -4.163 ... +2.863, inputs now there), TX
-phase centres at y = 8.79 (plan 6.1) and x = 9.171 ... 13.855; the TX feeds are 15.0 mm from
-the ball (plan 10.9 mm). The VOUT_PA pocket moves to about x 3.4-5.0, y 5.45-7.0 (TX1's
-serpentine now occupies x 5.5-7.0).
+## Checks
+
+`rfmacro build` fails when any of these fails; each is in the record with its numbers.
+
+| Check               | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| equal length        | P0 -> P1 spread per bank <= 0.036 mm (geometric)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| corridors           | different feeds' centrelines >= 0.92 mm apart (one shared fence row)                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| G1 entry and band   | every feed and dummy run-in meets its cut-out once, at its entry: straight, on the input axis, contact 0.600 +- 0.005 mm; its flat-cap corridor (half-width 0.50) >= 0.85 mm from every cut-out before Pg; only run-in pairs and ring sites within 0.85 mm of a cut-out                                                                                                                                                                                                                                                            |
+| G2 congruence       | every active column's window (column frame, mirrored for TX; symmetric, +-(2 d - W/2 - window_margin) = +-3.80 mm, so both neighbours and both second-neighbour inputs; Pg to the cut-out top + 1.0 mm) has the same L1 copper and L1 GND (XOR <= 1e-3 mm², 10 um raster), the same L2 windows and the same vias (1 um) as an interior column's (RX2). One declared difference is masked and reported: at an open bank end (RX1, TX3) the second-neighbour input at -1.5 d is absent (0.95 mm² of copper, 0.53 mm² of GND, 2 vias) |
+| G3 unstitched GND   | every L1 GND point of the region outside the package within 0.45 mm (geodesic, through GND) of a GND via                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| G4 fence continuity | along every feed side from the fence start to Pg, consecutive fence vias <= 0.50 mm apart; run-in pairs present                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| G5 via accounting   | no lattice or load via lost (conflicts), merges within 0.10 mm only, optional drops counted by reason, boundary rows <= 0.60 mm                                                                                                                                                                                                                                                                                                                                                                                                    |
+| G6 fits and D12     | the equalizers from the fit search; the layout outside the cut-outs identical for the three D12 variants (hash)                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| G7 load cells       | the vias in every dummy load's via zone are exactly its five declared vias, no via's pad within 0.10 mm of an SMD land, no other line under the load's mask island                                                                                                                                                                                                                                                                                                                                                                 |
+
+`../board/rf_audit.py` repeats G1-G4 on a filled board (A1-A4: KiCad's fill can differ from the
+generator's polygons), checks that the board carries the record's macro and its loads (A5) and
+that no via sits in or beside an SMD land of the RF region (A6); it takes the U1 position and the
+integration's net prefix, so it also runs on the integrated board. A1 measures each contact along
+the cut-out boundary; A2 compares L1 copper and the filled GND of L1, In1 and In2 in G2's
+window. The unit tests run A1-A4 on the pre-fix geometry (`tests/fixtures/old-rfm1-n.json.gz`:
+rfm1-n of ab57757, filled by KiCad) and require them to fail: A1 reads the RX2/RX3 bumps (0.87
+mm), TX2's serpentine top (1.48 mm) and TX1's second contact.
+
+## Floorplan (board frame, U1 at (26, 28); `board_frame` in each record)
+
+| Item                      | Stage 2                       | Now                                                                                     |
+| ------------------------- | ----------------------------- | --------------------------------------------------------------------------------------- |
+| RX phase centres          | y 38.95, x 20.666 ... 27.692  | y 39.988, x unchanged                                                                   |
+| TX phase centres          | y 36.785, x 35.171 ... 39.855 | y 38.100, x 38.718 / 41.060 / 43.402                                                    |
+| L1 cut-outs               | -                             | RX 16.599-32.205 x 36.688-43.024; TX 34.205-47.469 x 34.800-41.136                      |
+| Dummy loads (centres)     | -                             | RT1 (19.495, 35.018), RT2 (31.205, 35.018), RT3 (35.205, 33.130), RT4 (44.573, 33.130)  |
+| RF region                 | x 14.94-45.58, y 26.7-45.98   | x 12.599-51.469, y 26.7-47.024                                                          |
+| R4 guard (region +- 5 mm) | -                             | x 7.599-56.469                                                                          |
+| Board height, at least    | 46.3                          | 47.349                                                                                  |
+| VOUT_PA pocket            | 29.56-31.25 x 33.2-35.0       | 29.557-31.250 x 33.450-34.200 (holds no part: the VOUT_PA parts are on the bottom side) |
+
+`../board/floorplan.yaml` follows this frame (board 60 x 47.35 mm, `gen_board.py --check
+--macro` passes for rfm1-m/n/p); the placed board in `../board/reva/` is still the old macro's.
+The board integration (`../board/kicad_ops.merge_macro`) still expects the seven corporate
+columns only: it has to take the four `radar60:COL2_DUMMY` footprints, the four
+`radar60:R_0201_0603Metric_LOAD` loads RT1-RT4 (BOM parts) and the mask islands before the macro
+can be merged again.
+
+## Coupons (`generated/coupons/coupons.json`)
+
+The 60 GHz set on the left half (GSG 250 um): CP-60 lines and standards, the gap-coupled ring,
+CP-D (divider back to back), CP-L launches, CP-M combs, and
+
+- **CP-T / CP-T2 / CP-T3:** the three TX feeds of the macro in their board positions (TX1 with
+  both equalizers, TX2 with its lane fingers, TX3 with none), each from P0 through Pg, the run-in
+  and the entry to P1, GSG at both ends, with the macro's own vias; equal length, so TX1 - TX3
+  gives the meander's skew directly (C1);
+- **CP-A:** the column cell from Pg (run-in, entry, column) between its two terminated dummy
+  neighbours, the centre column fed; CP-A-CORP the column alone (regression); CP-A-SER the
+  series-fed column (D5 fallback); three single patches (L -25 um, L, L +25 um);
+- **CP-Z:** the dummy run-in and its 0201 load cell (the macro's five vias and mask island),
+  1-port (the load model for C2 and the strip's probe load standard).
+
+The 60 GHz part of the strip is stitched like the macro (`coupons.stitch_strip`): rows 0.26 mm
+outside every gap and land outline, a 0.6 mm grid, fill vias where GND is still beyond 0.45 mm,
+the rest made gap (29 corners, 0.30 mm² in all; 1310 vias added); the record is `_G3` in
+`coupons.json`. CP-A's
+centre column sees the open-end surroundings of RX1 and TX3 (no second-neighbour input on one
+side), G2's declared difference.
+
+The DC-6 GHz LibreVNA set on the right half is unchanged.
 
 ## Sources
 

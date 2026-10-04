@@ -116,7 +116,7 @@ def u1_balls(mc: Macro) -> List[Tuple[str, Pt, str]]:
 
 def board_text(mc: Macro, title: str) -> str:
     items: List[str] = []
-    nets = ["GND"] + list(RF_BALLS)
+    nets = ["GND"] + list(RF_BALLS) + list(mc.loads)
     balls = u1_balls(mc)
     for _, _, n in balls:
         if n not in nets:
@@ -145,6 +145,8 @@ def board_text(mc: Macro, title: str) -> str:
     # --- feeds and column paths (tracks), patches (footprint custom pads)
     for n, f in mc.feeds.items():
         items += _path_items(f, n, f"feed/{n}")
+    for n, r in mc.runins.items():
+        items += _path_items(r, n, f"runin/{n}")
     for n, c in mc.columns.items():
         for i, q in enumerate(_place_paths(c)):
             items += _path_items(q, n, f"col/{n}/{i}")
@@ -162,14 +164,21 @@ def board_text(mc: Macro, title: str) -> str:
                 f" (primitives (gr_poly (pts {prim}) (width 0) (fill yes))))"
             )
         kx, ky = _k(o)
+        lib = "radar60:COL2_DUMMY" if c.dummy else "radar60:COL2_CORPORATE"
+        val = (
+            "2-patch corporate column, terminated dummy" if c.dummy else "2-patch corporate column"
+        )
         items.append(
-            f'\t(footprint "radar60:COL2_CORPORATE" (layer "F.Cu") (uuid "{_u("fp", n)}") (at {_n(kx)} {_n(ky)})\n'
+            f'\t(footprint "{lib}" (layer "F.Cu") (uuid "{_u("fp", n)}") (at {_n(kx)} {_n(ky)})\n'
             f'\t\t(property "Reference" "ANT_{n}" (at 0 {_n(-3.2)}) (layer "F.Fab") (uuid "{_u("ref", n)}") '
             "(effects (font (size 0.5 0.5) (thickness 0.08))))\n"
-            '\t\t(property "Value" "2-patch corporate column" (at 0 0) (layer "F.Fab") (hide yes) (uuid '
+            f'\t\t(property "Value" "{val}" (at 0 0) (layer "F.Fab") (hide yes) (uuid '
             f'"{_u("val", n)}") (effects (font (size 0.5 0.5) (thickness 0.08))))\n'
             "\t\t(attr smd exclude_from_pos_files exclude_from_bom)\n" + "\n".join(pd) + "\n\t)"
         )
+    # --- dummy loads: 0201 50 ohm thin film on the run-in axis (KiCad R_0201_0603Metric land)
+    for n, ld in mc.loads.items():
+        items.append(load_footprint(ld, mc.params))
     # --- vias
     for i, (xy, drill, pad, role) in enumerate(mc.vias):
         k = _k(xy)
@@ -194,6 +203,9 @@ def board_text(mc: Macro, title: str) -> str:
         items.append(_keepout(["F.Cu"], poly, f"anti{i}"))
     for i, poly in enumerate(mc.pour_keepouts):
         items.append(_keepout(["F.Cu"], poly, f"field{i}"))
+    # GND the vias cannot stitch within stitch_reach is gap (rfmacro.vias, G3)
+    for i, poly in enumerate(mc.unstitched):
+        items.append(_keepout(["F.Cu"], poly, f"unstitched{i}"))
     for i, poly in enumerate(mc.l2_cuts):
         items.append(_keepout(["In1.Cu"], poly, f"cut{i}"))
     for n, c in mc.columns.items():
@@ -225,6 +237,31 @@ def board_text(mc: Macro, title: str) -> str:
     )
     head = _header(title, nets)
     return head + "\n".join(items) + "\n)\n"
+
+
+def load_footprint(ld, p) -> str:
+    """One dummy load: pad 1 on the dummy's net toward Pg, pad 2 on GND, along the run-in."""
+    lz = dict(p["dummy_load"])
+    plen, pw = (float(v) for v in lz["pad"])
+    pitch = float(lz["pitch"])
+    kx, ky = _k(ld.centre)
+    pads = []
+    for num, dy, net in (("1", -pitch / 2, ld.net), ("2", pitch / 2, "GND")):
+        pads.append(
+            f'\t\t(pad "{num}" smd roundrect (at 0 {_n(dy)} 90) (size {_n(plen)} {_n(pw)}) (layers "F.Cu" '
+            f'"F.Mask" "F.Paste") (roundrect_rratio 0.25) (net "{net}") (uuid "{_u("ldpad", ld.name, num)}"))'
+        )
+    return (
+        f'\t(footprint "radar60:R_0201_0603Metric_LOAD" (layer "F.Cu") (uuid "{_u("fp", ld.ref)}") '
+        f"(at {_n(kx)} {_n(ky)})\n"
+        f'\t\t(property "Reference" "{ld.ref}" (at 0.9 0) (layer "F.Fab") (uuid "{_u("ldref", ld.ref)}") '
+        "(effects (font (size 0.4 0.4) (thickness 0.06))))\n"
+        f'\t\t(property "Value" "{lz["value"]}" (at 0 0) (layer "F.Fab") (hide yes) (uuid '
+        f'"{_u("ldval", ld.ref)}") (effects (font (size 0.4 0.4) (thickness 0.06))))\n'
+        f'\t\t(property "Description" "termination of dummy column {ld.name}" (at 0 0) (layer "F.Fab") '
+        f'(hide yes) (uuid "{_u("lddsc", ld.ref)}") (effects (font (size 0.4 0.4) (thickness 0.06))))\n'
+        "\t\t(attr smd)\n" + "\n".join(pads) + "\n\t)"
+    )
 
 
 def _header(title: str, nets: List[str]) -> str:

@@ -54,6 +54,12 @@
       "y": 11.0
     },
     {
+      "id": "CP-Z",
+      "kind": "0201 50 ohm dummy load on the run-in, 1-port (also the probe load standard)",
+      "line_mm": 1.35,
+      "load": "50R 0201 thin film"
+    },
+    {
       "id": "CP60-RING",
       "kind": "gap-coupled ring, 3 \u03bbg at 62.05 GHz",
       "radius_mm": 1.4027,
@@ -93,20 +99,45 @@
       "width_mm": 0.15
     },
     {
-      "id": "CP-T-TX1",
-      "kind": "TX1 feed replica P0->P1",
-      "length_mm": 13.7118
-    },
-    {
-      "id": "CP-A-CORP",
-      "kind": "corporate 2-patch column (RFS-4)",
-      "phase_centre": [9.5, 17.45]
-    },
-    {
       "id": "CP-A-SER",
       "kind": "series-fed 2-patch column (RFS-4S, D5 fallback)",
       "link_mm": 1.5391,
       "centre_spacing_mm": 2.6897
+    },
+    {
+      "id": "CP-T",
+      "kind": "TX1 feed replica P0 -> Pg -> run-in -> entry -> P1, GSG both ends",
+      "p0_to_p1_mm": 18.5735,
+      "p0_to_pg_mm": 16.6735,
+      "p0": [1.6, 16.2],
+      "p1": [7.947, 21.4]
+    },
+    {
+      "id": "CP-T2",
+      "kind": "TX2 feed replica P0 -> Pg -> run-in -> entry -> P1, GSG both ends",
+      "p0_to_p1_mm": 18.5735,
+      "p0_to_pg_mm": 16.6735,
+      "p0": [1.6, 14.9],
+      "p1": [10.289, 21.4]
+    },
+    {
+      "id": "CP-T3",
+      "kind": "TX3 feed replica P0 -> Pg -> run-in -> entry -> P1, GSG both ends",
+      "p0_to_p1_mm": 18.5735,
+      "p0_to_pg_mm": 16.6735,
+      "p0": [1.6, 13.6],
+      "p1": [12.631, 21.4]
+    },
+    {
+      "id": "CP-A",
+      "kind": "column cell from Pg between two terminated dummy columns (centre fed)",
+      "pg": [20.042, 15.0],
+      "cutout": [14.804, 15.9, 23.384, 22.236]
+    },
+    {
+      "id": "CP-A-CORP",
+      "kind": "corporate 2-patch column alone (RFS-4)",
+      "phase_centre": [26.0, 17.65]
     },
     {
       "id": "CP-A-PATCH-M25",
@@ -150,6 +181,133 @@
       "id": "CP6-R-L3",
       "kind": "4-wire copper bar 0.5 x 20 mm",
       "layer": "In2.Cu"
+    },
+    {
+      "id": "_G3",
+      "kind": "strip stitching: GND of the 60 GHz set within 0.45 mm (geodesic) of a GND via",
+      "region_bbox": [0.5, 0.5, 35.225, 23.25],
+      "grid_mm": 0.6,
+      "vias_added": 1310,
+      "fill_rounds": [167, 54, 39, 33, 29],
+      "made_gap": [
+        {
+          "at": [1.604, 0.722],
+          "area_mm2": 0.0474
+        },
+        {
+          "at": [32.643, 16.706],
+          "area_mm2": 0.0055
+        },
+        {
+          "at": [33.004, 8.726],
+          "area_mm2": 0.052
+        },
+        {
+          "at": [14.703, 2.854],
+          "area_mm2": 0.0363
+        },
+        {
+          "at": [32.281, 16.716],
+          "area_mm2": 0.0025
+        },
+        {
+          "at": [26.778, 22.504],
+          "area_mm2": 0.0036
+        },
+        {
+          "at": [33.004, 14.126],
+          "area_mm2": 0.052
+        },
+        {
+          "at": [26.778, 1.504],
+          "area_mm2": 0.0036
+        },
+        {
+          "at": [33.342, 9.82],
+          "area_mm2": 0.0124
+        },
+        {
+          "at": [35.22, 15.212],
+          "area_mm2": 0.0006
+        },
+        {
+          "at": [20.089, 8.622],
+          "area_mm2": 0.0134
+        },
+        {
+          "at": [1.535, 13.913],
+          "area_mm2": 0.0035
+        },
+        {
+          "at": [33.342, 15.22],
+          "area_mm2": 0.0124
+        },
+        {
+          "at": [3.254, 6.465],
+          "area_mm2": 0.0034
+        },
+        {
+          "at": [26.778, 0.904],
+          "area_mm2": 0.0036
+        },
+        {
+          "at": [32.643, 11.306],
+          "area_mm2": 0.0055
+        },
+        {
+          "at": [26.778, 21.904],
+          "area_mm2": 0.0036
+        },
+        {
+          "at": [32.281, 11.316],
+          "area_mm2": 0.0025
+        },
+        {
+          "at": [30.163, 20.366],
+          "area_mm2": 0.005
+        },
+        {
+          "at": [26.778, 2.104],
+          "area_mm2": 0.0036
+        },
+        {
+          "at": [30.866, 20.369],
+          "area_mm2": 0.0088
+        },
+        {
+          "at": [34.788, 21.049],
+          "area_mm2": 0.0018
+        },
+        {
+          "at": [1.904, 5.065],
+          "area_mm2": 0.0034
+        },
+        {
+          "at": [10.006, 13.906],
+          "area_mm2": 0.0008
+        },
+        {
+          "at": [24.92, 1.999],
+          "area_mm2": 0.0035
+        },
+        {
+          "at": [1.518, 15.211],
+          "area_mm2": 0.0023
+        },
+        {
+          "at": [11.248, 21.409],
+          "area_mm2": 0.0007
+        },
+        {
+          "at": [35.22, 9.995],
+          "area_mm2": 0.0006
+        },
+        {
+          "at": [8.898, 21.409],
+          "area_mm2": 0.0007
+        }
+      ],
+      "ok": true
     },
     {
       "id": "_layout",

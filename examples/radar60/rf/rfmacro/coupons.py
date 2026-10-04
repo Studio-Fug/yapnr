@@ -29,7 +29,7 @@ from . import dims as dims_mod
 from . import kicad as kc
 from .geom import Path, Pt, circle, outline, rect
 from .macro import _place_paths, build, build_column
-from .params import PKG, RULES, resolve
+from .params import D_LATTICE, PKG, RULES, resolve
 
 STRIP = (60.0, 25.0)
 GSG_PITCH = 0.25
@@ -48,6 +48,7 @@ class Strip:
     sma: List[Tuple[Pt, float, str, str]] = field(default_factory=list)  # (xy, angle, net, ref)
     catalog: List[Dict[str, object]] = field(default_factory=list)
     nets: List[str] = field(default_factory=list)
+    loads: List[object] = field(default_factory=list)  # macro.Load (0201 terminations)
 
     def net(self, n: str) -> str:
         if n not in self.nets:
@@ -209,19 +210,14 @@ def divider_b2b(st: Strip, x0: float, y0: float, d: Dict, p: Dict) -> None:
     )
 
 
-def tx_replica(st: Strip, origin: Pt) -> None:
-    mc = build()
-    f = mc.feeds["TX1"]
-    p0, s0 = f.marks["P0"]
-    net = st.net("CPT_TX1")
-    # copy the P0 -> P1 part, translated so P0 lands at `origin`
-    dx, dy = origin[0] - p0[0], origin[1] - p0[1]
-    q = Path((origin[0], origin[1]), 0.0, 0.2)
-    acc = 0.0
-    for sg in f.segs:
-        if acc + 1e-9 >= s0:
-            from .geom import Seg
+def _shift_path(path: Path, s_from: float, s_to: float, dx: float, dy: float) -> Path:
+    """The part of `path` between arc lengths s_from and s_to (segment ends), translated."""
+    from .geom import Seg
 
+    q = Path((0.0, 0.0), 0.0, path.width)
+    acc = 0.0
+    for sg in path.segs:
+        if acc + 1e-9 >= s_from and acc + sg.length <= s_to + 1e-9:
             q.segs.append(
                 Seg(
                     sg.kind,
@@ -235,17 +231,60 @@ def tx_replica(st: Strip, origin: Pt) -> None:
                 )
             )
         acc += sg.length
-    tip_a = (origin[0] - GSG_LEN - TAPER, origin[1])
-    _gsg(st, net, tip_a, 0.0, "cpt/a")
-    end = q.pos
-    _gsg(st, net, (end[0], end[1] + GSG_LEN + TAPER), -math.pi / 2, "cpt/b")
-    st.paths.append((net, q))
-    st.chan.append(outline(q, half=0.30))
-    for v in q.fence(0.50, 0.45, skip_from=0.1, skip_to=0.1):
-        st.vias.append((v, *RULES["via_fence"]))
-    st.catalog.append(
-        dict(id="CP-T-TX1", kind="TX1 feed replica P0->P1", length_mm=round(q.length, 4))
-    )
+    q.start = q.segs[0].p0
+    return q
+
+
+def tx_feeds(st: Strip, mc, origin: Pt) -> None:
+    """CP-T, CP-T2 and CP-T3: the three TX feeds of the macro in their board positions (TX1 with
+    both equalizers, TX2 with its two lane fingers, TX3 with none), each from P0 through Pg, the
+    run-in and the entry to P1, GSG at both ends; TX1 - TX3 is the meander's skew (C1). TX2 is in
+    (review 2026-10-04): without it its corridor was a 1.3 mm GND channel between two via rows,
+    0.65-0.72 mm from any via, a waveguide with its TE10 cut-off near 63-64 GHz. The cut-out is
+    the 1.0 mm from the entry to P1 between the neighbouring inputs; the vias are the macro's own
+    within 0.75 mm of the lines (the strip's stitching fills the rest, `stitch_strip`)."""
+    from .geom import path_dist
+
+    p0x = mc.feeds["TX3"].marks["P0"][0]
+    dx, dy = origin[0] - p0x[0], origin[1] - p0x[1]
+    d_l = D_LATTICE
+    keep = []
+    for n in ("TX1", "TX2", "TX3"):
+        f = mc.feeds[n]
+        net = st.net(f"CPT_{n}")
+        q = _shift_path(f, f.marks["P0"][1], f.length, dx, dy)
+        st.paths.append((net, q))
+        e_s = f.marks["E"][1] - f.marks["P0"][1]
+        st.chan.append(
+            outline(_shift_path(f, f.marks["P0"][1], f.marks["E"][1], dx, dy), half=0.30)
+        )
+        p0 = q.start
+        _gsg(st, net, (p0[0] - GSG_LEN - TAPER, p0[1]), 0.0, f"cpt/{n}/a")
+        p1 = q.pos
+        _gsg(st, net, (p1[0], p1[1] + GSG_LEN + TAPER), -math.pi / 2, f"cpt/{n}/b")
+        e = (f.marks["E"][0][0] + dx, f.marks["E"][0][1] + dy)
+        st.chan.append(rect(e[0] - d_l / 2, e[1], e[0] + d_l / 2, p1[1]))
+        keep.append((n, f, e_s))
+        st.catalog.append(
+            dict(
+                id={"TX1": "CP-T", "TX2": "CP-T2", "TX3": "CP-T3"}[n],
+                kind=f"{n} feed replica P0 -> Pg -> run-in -> entry -> P1, GSG both ends",
+                p0_to_p1_mm=round(f.length - f.marks["P0"][1], 4),
+                p0_to_pg_mm=round(f.marks["Pg"][1] - f.marks["P0"][1], 4),
+                p0=[round(p0[0], 3), round(p0[1], 3)],
+                p1=[round(p1[0], 3), round(p1[1], 3)],
+            )
+        )
+    for xy, drill, pad, role in mc.vias:
+        if role == "launch":
+            continue
+        near = min(path_dist(xy, mc.feeds[n], 0.05) for n, _, _ in keep)
+        if near > 0.75:
+            continue
+        e_y = mc.banks["TX"]["E"]
+        if xy[1] > e_y - 0.30:
+            continue
+        st.vias.append(((xy[0] + dx, xy[1] + dy), drill, pad))
 
 
 def launch_replicas(st: Strip, x0: float, y0: float, p: Dict) -> None:
@@ -286,13 +325,9 @@ def launch_replicas(st: Strip, x0: float, y0: float, p: Dict) -> None:
         )
 
 
-def antennas(st: Strip, x0: float, y_base: float, p: Dict, d: Dict) -> None:
-    """1-port antennas; each fed from a GSG pad at the bottom through its P1 line."""
+def corporate_single(st: Strip, x: float, y_base: float, p: Dict, d: Dict) -> None:
+    """CP-A-CORP: the corporate column alone, fed at P1 (regression against the earlier runs)."""
     W, L = d["patch"]["w"], d["patch"]["l"]
-    m = float(p["window_margin"])
-    pitch = 3.6
-    x = x0
-    # corporate column (the Board A column)
     net = st.net("CPA_CORP")
     org = (x, y_base + 2.0 + 2.3 + GSG_LEN + TAPER)
     col = build_column("CPA_CORP", net, org, False, p, d)
@@ -308,15 +343,129 @@ def antennas(st: Strip, x0: float, y_base: float, p: Dict, d: Dict) -> None:
         rect(
             x - W / 2 - 1.0,
             col.p1[1] - 0.05,
-            x + 1.171 + 0.5,
+            x + float(p["in_x"]) + 0.5,
             org[1] + float(p["spacing"]) / 2 + L / 2 + 1.0,
         )
     )
     st.catalog.append(
-        dict(id="CP-A-CORP", kind="corporate 2-patch column (RFS-4)", phase_centre=list(org))
+        dict(id="CP-A-CORP", kind="corporate 2-patch column alone (RFS-4)", phase_centre=list(org))
     )
-    x += pitch + 0.8
-    # series-fed column: feed at the south edge of the lower patch, 0.10 mm link of λg/2
+
+
+def column_trio(st: Strip, x_in0: float, y_pg: float, p: Dict, d: Dict) -> None:
+    """CP-A: the column cell as the macro instances it, from Pg up (run-in, entry, column),
+    between its two terminated dummy neighbours; the centre column fed from a GSG below Pg, the
+    neighbours ending in the macro's 0201 load. The cut-out, the run-in pairs and the ring sites
+    are the macro's lattice."""
+    from .macro import Rules, _load
+
+    ru = Rules(p, d)
+    e = y_pg + ru.lout
+    xs = [x_in0 + k * D_LATTICE for k in range(3)]
+    cut = ru.cut(xs, e, False)
+    st.chan.append(rect(*cut))
+    oy = e + ru.lin - ru.p1_y
+    for k, xi in enumerate(xs):
+        fed = k == 1
+        net = st.net("CPA_CELL" if fed else f"CPA_D{k}")
+        col = build_column(net, net, (xi - ru.in_x, oy), False, p, d)
+        for i, poly in enumerate(col.patches):
+            st.pads.append((net, poly, f"cpa/cell/{k}/{i}"))
+        for q in _place_paths(col):
+            st.paths.append((net, q))
+        st.l2_keep += col.windows
+        if fed:
+            tip = (xi, y_pg - 0.5 - GSG_LEN - TAPER)
+            a = _gsg(st, net, tip, math.pi / 2, "cpa/cell")
+            ln = Path(a, math.pi / 2, ru.w50)
+            ln.straight(e + ru.lin - a[1])
+            st.paths.append((net, ln))
+            st.chan.append(outline(ln, half=ru.lchan))
+        else:
+            ld = _load(net, net, xi, e, False, ru, len(st.loads) + 1)
+            ld.ref = f"RTA{k}"
+            st.loads.append(ld)
+            c1 = _pad_centre(ld.pad1)
+            ln = Path(c1, math.pi / 2, ru.w50)
+            ln.straight(e + ru.lin - c1[1])
+            st.paths.append((net, ln))
+            st.chan.append(outline(ln, half=ru.lchan))
+            st.chan.append(_grow(ld.pad1, ru.gap))
+            for v in ld.vias:
+                st.vias.append((v, *RULES["via_fence"], "GND", True))
+        for y in (e - float(p["runin_inset"]), e - ru.B):
+            for xv in (xi - ru.foff, xi + ru.foff):
+                st.vias.append(((xv, y), *RULES["via_fence"], "GND", True))
+    # ring sites between the run-in pairs and along the top, as in the macro's lattice
+    a_ = (D_LATTICE - 2 * ru.foff) / 3
+    top = cut[3]
+    for k in range(-1, 3):
+        xi = x_in0 + k * D_LATTICE
+        for xv in (xi + ru.foff + a_, xi + ru.foff + 2 * a_):
+            if cut[0] <= xv <= cut[2]:
+                st.vias.append(((xv, e - float(p["ring_inset"])), *RULES["via_fence"]))
+                st.vias.append(((xv, e - ru.B), *RULES["via_fence"]))
+        for j in range(5):
+            xv = xi + j * D_LATTICE / 5
+            if cut[0] <= xv <= cut[2]:
+                st.vias.append(((xv, top + float(p["ring_inset"])), *RULES["via_fence"]))
+        for j in range(5):  # the guard-band row along the top (review 2026-10-04: missing)
+            xv = xi + D_LATTICE / 10 + j * D_LATTICE / 5
+            if cut[0] - ru.B <= xv <= cut[2] + ru.B:
+                st.vias.append(((xv, top + ru.B), *RULES["via_fence"]))
+    for y in [cut[1] + 0.45 * i for i in range(int((cut[3] - cut[1]) / 0.45) + 1)]:
+        for xv in (cut[0] - float(p["ring_inset"]), cut[2] + float(p["ring_inset"])):
+            st.vias.append(((xv, y), *RULES["via_fence"]))
+    for y in [cut[1] + 0.3 + 0.45 * i for i in range(int((cut[3] + ru.B - cut[1]) / 0.45) + 1)]:
+        for xv in (cut[0] - ru.B, cut[2] + ru.B):  # the guard-band rows down the sides
+            st.vias.append(((xv, y), *RULES["via_fence"]))
+    st.catalog.append(
+        dict(
+            id="CP-A",
+            kind="column cell from Pg between two terminated dummy columns (centre fed)",
+            pg=[round(xs[1], 3), round(y_pg, 3)],
+            cutout=[round(v, 3) for v in cut],
+        )
+    )
+
+
+def load_coupon(st: Strip, x: float, y_tip: float, p: Dict, d: Dict) -> None:
+    """CP-Z: the dummy run-in and its 0201 load, 1-port from a GSG at the entry end (the load
+    model for C2, and the strip's probe load standard)."""
+    from .macro import Rules, _load
+
+    ru = Rules(p, d)
+    net = st.net("CPZ_LOAD")
+    a = _gsg(st, net, (x, y_tip), -math.pi / 2, "cpz")
+    pg = a[1] - ru.lout
+    ld = _load(net, net, x, pg + ru.lout, False, ru, 0)
+    ld.ref = "RTZ1"
+    st.loads.append(ld)
+    c1 = _pad_centre(ld.pad1)
+    ln = Path(a, -math.pi / 2, ru.w50)
+    ln.straight(a[1] - c1[1])
+    st.paths.append((net, ln))
+    st.chan.append(outline(ln, half=ru.lchan))
+    st.chan.append(_grow(ld.pad1, ru.gap))
+    for v in ld.vias:
+        st.vias.append((v, *RULES["via_fence"], "GND", True))
+    for y in (pg + ru.lout - float(p["runin_inset"]), pg + ru.lout - ru.B):
+        for xv in (x - ru.foff, x + ru.foff):
+            st.vias.append(((xv, y), *RULES["via_fence"], "GND", True))
+    st.catalog.append(
+        dict(
+            id="CP-Z",
+            kind="0201 50 ohm dummy load on the run-in, 1-port (also the probe load standard)",
+            line_mm=round(ln.length, 4),
+            load=p["dummy_load"]["value"],
+        )
+    )
+
+
+def series_column(st: Strip, x: float, y_base: float, p: Dict, d: Dict) -> None:
+    """CP-A-SER: series-fed column (RFS-4S, D5 fallback)."""
+    W, L = d["patch"]["w"], d["patch"]["l"]
+    m = float(p["window_margin"])
     net = st.net("CPA_SER")
     h = d["window"]["h_mm"]
     from . import closedform as cf
@@ -360,11 +509,19 @@ def antennas(st: Strip, x0: float, y_base: float, p: Dict, d: Dict) -> None:
             centre_spacing_mm=round(L + link, 4),
         )
     )
-    x += pitch
+
+
+def single_patches(st: Strip, x: float, y0: float, p: Dict, d: Dict) -> None:
+    """CP-A-PATCH: single inset patches at L - 25 um, L, L + 25 um, stacked."""
+    W, L = d["patch"]["w"], d["patch"]["l"]
+    m = float(p["window_margin"])
+    ins = d["patch"]["inset"]
+    nw = 0.1 + float(p["notch"])
+    y_base = y0
     for k, dl in (("M25", -0.025), ("NOM", 0.0), ("P25", 0.025)):
         net = st.net(f"CPA_P{k}")
         Lk = L + dl
-        y0p = yb + 0.6
+        y0p = y_base + 2.0 + GSG_LEN + TAPER + 0.6
         poly = [
             (x - W / 2, y0p),
             (x - nw, y0p),
@@ -384,7 +541,24 @@ def antennas(st: Strip, x0: float, y_base: float, p: Dict, d: Dict) -> None:
         st.chan.append(outline(fl, half=0.30))
         st.chan.append(rect(x - W / 2 - 1.0, y0p - 0.6, x + W / 2 + 1.0, y0p + Lk + 1.0))
         st.catalog.append(dict(id=f"CP-A-PATCH-{k}", kind="single inset patch", l_mm=round(Lk, 4)))
-        x += pitch
+        y_base = y0p + Lk + 1.3
+
+
+def _pad_centre(poly) -> Pt:
+    xs = [q[0] for q in poly]
+    ys = [q[1] for q in poly]
+    return (0.5 * (min(xs) + max(xs)), 0.5 * (min(ys) + max(ys)))
+
+
+def _unit(v):
+    n = math.hypot(v[0], v[1])
+    return (v[0] / n, v[1] / n) if n > 1e-12 else (0.0, 0.0)
+
+
+def _grow(poly, g: float):
+    xs = [q[0] for q in poly]
+    ys = [q[1] for q in poly]
+    return rect(min(xs) - g, min(ys) - g, max(xs) + g, max(ys) + g)
 
 
 def combs(st: Strip, x0: float, y0: float) -> None:
@@ -513,19 +687,199 @@ def _filter(st: Strip):
     return kept
 
 
+def stitch_strip(st: Strip, pitch: float = 0.6, reach: float = 0.45) -> Dict[str, object]:
+    """GND stitching of the 60 GHz set (review 2026-10-04: the strip had no grid and nothing ran
+    G3 on it): over the box of every 60 GHz structure plus 1.5 mm (all nets but the DC-6 GHz
+    CP6_* set; the SMA launches keep their own vias), a
+    `pitch` via grid where a via fits (pad 0.17 mm clear of every gap and land, 0.43 mm from every
+    via, outside the load cells), then fill vias where GND is still farther than `reach`
+    (geodesic) from a via, as the macro does; GND no via can reach becomes gap. Returns the G3
+    record of the strip (unreached pieces after the fill: none expected)."""
+    from .geom import PointIndex
+    from .raster import Grid
+    from .rules import H_RASTER, REACH_TOL
+
+    def bbox(poly):
+        xs, ys = [q[0] for q in poly], [q[1] for q in poly]
+        return (min(xs), min(ys), max(xs), max(ys))
+
+    boxes = []
+    for net, p in st.paths:
+        if not net.startswith("CP6"):
+            pts = [q for sg in p.segs for q, _ in sg.sample(0.2)]
+            boxes.append(bbox(pts))
+    for net, poly, _ in st.pads:
+        if not net.startswith("CP6"):
+            boxes.append(bbox(poly))
+    m = 1.5
+    W, H = STRIP
+    e = RULES["edge_clear"] + 0.2
+    boxes = [
+        (max(b[0] - m, e), max(b[1] - m, e), min(b[2] + m, W - e), min(b[3] + m, H - e))
+        for b in boxes
+    ]
+    x0, y0 = min(b[0] for b in boxes), min(b[1] for b in boxes)
+    x1, y1 = max(b[2] for b in boxes), max(b[3] for b in boxes)
+    g = Grid(x0, y0, x1, y1, H_RASTER)
+    region = g.empty()
+    g.rect(region, x0, y0, x1, y1)  # the whole box of the 60 GHz set: no unstitched pour cavity
+    gaps = g.empty()
+    for poly in st.chan:
+        g.polygon(gaps, poly)
+    for net, poly, _ in st.pads:  # every land not on GND, and its 0.2 mm gap
+        if net != "GND":
+            g.polygon(gaps, _grow(poly, 0.2))
+    for xy, ang, _, _ in st.sma:  # the SMA edge launches (their land, vias and pads; write())
+        a_ = math.radians(ang)
+        cs, sn = math.cos(a_), math.sin(a_)
+        g.polygon(
+            gaps,
+            [
+                (xy[0] + u * cs - v * sn, xy[1] + u * sn + v * cs)
+                for u, v in ((-0.6, -3.7), (4.6, -3.7), (4.6, 3.7), (-0.6, 3.7))
+            ],
+        )
+    gnd = g.andnot(region, gaps)
+    for ld in st.loads:  # a load's GND land is soldered copper, not pour (rules.gnd_mask)
+        land = g.empty()
+        g.polygon(land, ld.pad2)
+        gnd = g.andnot(gnd, land)
+    pr = RULES["via_fence"][1] / 2
+    forbid = g.or_(g.dilate(gaps, (pr + 0.01) / g.h), g.andnot(g.full(), region))
+    zones = [ld.via_zone for ld in st.loads]
+    st.vias = [tuple(v[:3]) + ("GND", True) if len(v) <= 4 else v for v in _filter(st)]
+    ix = PointIndex(0.5)
+    for v in st.vias:
+        ix.add(v[0])
+    added = []
+
+    def ok(q):
+        i = int((q[0] - g.x0) / g.h)
+        j = int((q[1] - g.y0) / g.h)
+        if not (0 <= i < g.nx and 0 <= j < g.ny) or (forbid[j] >> i) & 1:
+            return False
+        if any(
+            z[0] - pr - 0.1 < q[0] < z[2] + pr + 0.1 and z[1] - pr - 0.1 < q[1] < z[3] + pr
+            for z in zones
+        ):
+            return False
+        return not ix.within(q, RULES["fence_pitch_min"] - 1e-6)
+
+    def add(q):
+        ix.add(q)
+        added.append(q)
+        st.vias.append((q, *RULES["via_fence"], "GND", True))
+
+    # edge rows first: 0.26 mm outside every gap and land outline, at <= 0.45 mm, so the GND
+    # along a structure's edge is reached (the grid alone leaves strips between its rows)
+    outlines = [list(poly) for poly in st.chan]
+    outlines += [_grow(poly, 0.2) for net, poly, _ in st.pads if net != "GND"]
+    for poly in outlines:
+        n = len(poly)
+        if n < 3:
+            continue
+        area = sum(
+            poly[k][0] * poly[(k + 1) % n][1] - poly[(k + 1) % n][0] * poly[k][1] for k in range(n)
+        )
+        sg = 1.0 if area > 0 else -1.0  # outward normal of a CCW ring: (dy, -dx)
+        off = []
+        for k in range(n):
+            a, b, c = poly[k - 1], poly[k], poly[(k + 1) % n]
+            n1 = _unit((sg * (b[1] - a[1]), -sg * (b[0] - a[0])))
+            n2 = _unit((sg * (c[1] - b[1]), -sg * (c[0] - b[0])))
+            nv = _unit((n1[0] + n2[0], n1[1] + n2[1]))
+            cosh = max(0.5, n1[0] * nv[0] + n1[1] * nv[1])
+            off.append((b[0] + nv[0] * 0.26 / cosh, b[1] + nv[1] * 0.26 / cosh))
+        acc = 0.45
+        for k in range(n):
+            a, b = off[k], off[(k + 1) % n]
+            L = math.dist(a, b)
+            t = 0.0
+            while t <= L:
+                if acc >= 0.43:
+                    q = (
+                        round(a[0] + (b[0] - a[0]) * t / max(L, 1e-9), 5),
+                        round(a[1] + (b[1] - a[1]) * t / max(L, 1e-9), 5),
+                    )
+                    if ok(q):
+                        add(q)
+                        acc = 0.0
+                t += 0.02
+                acc += 0.02
+    for i in range(int(math.ceil(x0 / pitch)), int(x1 / pitch) + 1):
+        for j in range(int(math.ceil(y0 / pitch)), int(y1 / pitch) + 1):
+            q = (round(i * pitch, 6), round(j * pitch, 6))
+            if ok(q):
+                add(q)
+    rounds, made_gap = [], []
+    for _ in range(8):
+        seeds = g.empty()
+        g.points(seeds, [v[0] for v in st.vias])
+        got = g.geodesic_reach(seeds, gnd, reach + REACH_TOL, 3)
+        pieces = [c for c in g.components(g.andnot(gnd, got)) if len(c) >= 4]
+        rounds.append(len(pieces))
+        if not pieces:
+            break
+        n_add = 0
+        for comp in pieces:
+            dsc = g.describe(comp)
+            cx, cy = dsc["at"]
+            pi, pj = min(comp, key=lambda t: (g.xc(t[0]) - cx) ** 2 + (g.yc(t[1]) - cy) ** 2)
+            ax, ay = g.xc(pi), g.yc(pj)
+            best = None
+            n = int((reach - 0.02) / 0.02)
+            for a in range(-n, n + 1):
+                for b in range(-n, n + 1):
+                    q = (round(ax + a * 0.02, 5), round(ay + b * 0.02, 5))
+                    dd = math.dist(q, (ax, ay))
+                    if dd <= reach - 0.02 and (best is None or dd < best[0]) and ok(q):
+                        best = (dd, q)
+            if best is not None:
+                add(best[1])
+                n_add += 1
+        if not n_add:
+            break
+    seeds = g.empty()
+    g.points(seeds, [v[0] for v in st.vias])
+    got = g.geodesic_reach(seeds, gnd, reach + REACH_TOL, 3)
+    for comp in g.components(g.andnot(gnd, got)):
+        if len(comp) < 4:
+            continue
+        dsc = g.describe(comp)
+        bx = dsc["bbox"]
+        st.chan.append(rect(bx[0] - 0.02, bx[1] - 0.02, bx[2] + 0.02, bx[3] + 0.02))
+        made_gap.append(dict(at=dsc["at"], area_mm2=dsc["area_mm2"]))
+    return dict(
+        id="_G3",
+        kind="strip stitching: GND of the 60 GHz set within 0.45 mm (geodesic) of a GND via",
+        region_bbox=[round(v, 3) for v in (x0, y0, x1, y1)],
+        grid_mm=pitch,
+        vias_added=len(added),
+        fill_rounds=rounds,
+        made_gap=made_gap,
+        ok=True,
+    )
+
+
 def build_strip() -> Strip:
     p = resolve()
     d = dims_mod.compute(p)
+    mc = build()
     st = Strip()
     st.net("GND")
     y = cp60(st, 1.0, 1.2, d)
+    load_coupon(st, 8.0, 5.4, p, d)
     ring60(st, 12.5, 3.2, d)
     divider_b2b(st, 9.5, 7.6, d, p)
     launch_replicas(st, 18.0, 1.4, p)
     combs(st, 18.5, 5.9)
-    tx_replica(st, (2.0, 14.0))
-    antennas(st, 9.5, 12.8, p, d)
+    series_column(st, 24.6, 1.2, p, d)
+    tx_feeds(st, mc, (1.6, 13.6))
+    column_trio(st, 17.7, 15.0, p, d)
+    corporate_single(st, 26.0, 13.0, p, d)
+    single_patches(st, 33.0, 3.6, p, d)
     librevna(st, 27.0)
+    st.catalog.append(stitch_strip(st))
     st.catalog.append(dict(id="_layout", next_free_y_left=y))
     return st
 
@@ -559,6 +913,8 @@ def write(st: Strip, out_dir: str) -> Dict[str, str]:
             f" (options (clearance outline) (anchor circle)) (primitives (gr_poly (pts {prim}) (width 0) "
             "(fill yes))))\n\t)"
         )
+    for ld in st.loads:
+        items.append(kc.load_footprint(ld, resolve()))
     for i, (xy, ang, net, ref) in enumerate(st.sma):
         k = kc._k(xy)
         rot = ang  # footprint +x points into the board
@@ -620,10 +976,14 @@ def write(st: Strip, out_dir: str) -> Dict[str, str]:
         items.append(kc._keepout(["In1.Cu"], poly, f"cpl2{i}"))
     for i, poly in enumerate(st.l3_keep):
         items.append(kc._keepout(["In2.Cu"], poly, f"cpl3{i}"))
+    from .macro import rects_minus
+
     mask = "\n".join(
-        f"\t\t(fp_poly (pts {kc._pts(rect(0.4, 0.4, W - 0.4, H - 0.4), (0.0, 0.0))}) (stroke (width 0) "
-        f'(type solid)) (fill yes) (layer "F.Mask") (uuid "{kc._u("cpmask")}"))'
-        for _ in (0,)
+        f"\t\t(fp_poly (pts {kc._pts(rect(*r), (0.0, 0.0))}) (stroke (width 0) "
+        f'(type solid)) (fill yes) (layer "F.Mask") (uuid "{kc._u("cpmask", i)}"))'
+        for i, r in enumerate(
+            rects_minus([(0.4, 0.4, W - 0.4, H - 0.4)], [ld.mask for ld in st.loads])
+        )
     )
     items.append(
         f'\t(footprint "radar60:RFM1_MASK" (layer "F.Cu") (uuid "{kc._u("cpmaskfp")}") (at {kc._n(kc.X0)} '

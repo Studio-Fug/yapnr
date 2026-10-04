@@ -1,0 +1,66 @@
+{
+  "with_dummies": {
+    "s11_max_abs_diff_band_db": 3.18,
+    "s11_rms_diff_band_db": 0.74,
+    "s11_max_edge_band_db": -5.49,
+    "s11_max_interior_band_db": -5.37,
+    "cuts": {
+      "60.30": {
+        "h_realized_max_abs_diff_45": 2.38,
+        "h_realized_max_abs_diff_60": 2.38,
+        "e_realized_max_abs_diff_45": 6.92,
+        "g_bs_diff": -1.65,
+        "edge_h_min_realized_45": 0.54,
+        "interior_h_min_realized_45": 1.89
+      },
+      "62.05": {
+        "h_realized_max_abs_diff_45": 1.58,
+        "h_realized_max_abs_diff_60": 1.58,
+        "e_realized_max_abs_diff_45": 6.65,
+        "g_bs_diff": -0.25,
+        "edge_h_min_realized_45": 3.19,
+        "interior_h_min_realized_45": 2.1
+      },
+      "63.80": {
+        "h_realized_max_abs_diff_45": 2.35,
+        "h_realized_max_abs_diff_60": 2.35,
+        "e_realized_max_abs_diff_45": 3.76,
+        "g_bs_diff": 0.45,
+        "edge_h_min_realized_45": 4.02,
+        "interior_h_min_realized_45": 4.63
+      }
+    }
+  },
+  "without_dummies": {
+    "s11_max_abs_diff_band_db": 7.45,
+    "s11_rms_diff_band_db": 3.96,
+    "s11_max_edge_band_db": -5.09,
+    "s11_max_interior_band_db": -4.51,
+    "cuts": {
+      "60.30": {
+        "h_realized_max_abs_diff_45": 1.31,
+        "h_realized_max_abs_diff_60": 1.31,
+        "e_realized_max_abs_diff_45": 7.16,
+        "g_bs_diff": 0.6,
+        "edge_h_min_realized_45": 2.12,
+        "interior_h_min_realized_45": 1.97
+      },
+      "62.05": {
+        "h_realized_max_abs_diff_45": 4.88,
+        "h_realized_max_abs_diff_60": 4.88,
+        "e_realized_max_abs_diff_45": 10.44,
+        "g_bs_diff": -1.78,
+        "edge_h_min_realized_45": -0.11,
+        "interior_h_min_realized_45": 2.3
+      },
+      "63.80": {
+        "h_realized_max_abs_diff_45": 1.18,
+        "h_realized_max_abs_diff_60": 1.18,
+        "e_realized_max_abs_diff_45": 12.11,
+        "g_bs_diff": 0.12,
+        "edge_h_min_realized_45": 4.01,
+        "interior_h_min_realized_45": 4.37
+      }
+    }
+  }
+}

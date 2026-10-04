@@ -439,11 +439,11 @@ def step_place(a):
     work = Path(a.work)
     out = work / "mc"
     t = time.time()
+    # pnr.mc.halving, with prepare's fanout plan seeded into each worker (halving_seeded.py)
     _run(
         [
             a.python,
-            "-m",
-            "pnr.mc.halving",
+            HERE / "halving_seeded.py",
             "--out",
             out,
             "--inputs",
@@ -463,7 +463,7 @@ def step_place(a):
             "--stop-after",
             "place",
         ],
-        env=_env(a.engine),
+        env=_env(a.engine, {"RADAR60_FANOUT_CACHE": str(work / "inputs")}),
         cwd=a.engine,
         log=work / "place.log",
     )
@@ -745,7 +745,7 @@ def step_render(a):
     }
     files = []
     for name, extra in views.items():
-        png = out / ("radar60-reva-floorplan-%s.png" % name)
+        png = out / ("radar60-reva-placement-%s.png" % name)
         _run(
             [a.kicad_cli, "pcb", "render", "-o", png, "--width", "2400", "--height", "1800"]
             + ["--quality", "high", "--background", "opaque"]
@@ -754,7 +754,7 @@ def step_render(a):
         )
         files.append(png)
     if a.label_python:
-        _run([a.label_python, HERE / "label_png.py", "Rev A floorplan, not routed"] + files)
+        _run([a.label_python, HERE / "label_png.py", "Rev A placed, not routed"] + files)
     print("\n".join(str(f) for f in files))
 
 

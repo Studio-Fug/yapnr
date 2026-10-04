@@ -224,7 +224,7 @@ FAB_DATA_SOURCES = ("yapnr/__init__.py", "yapnr/fab/__init__.py", "yapnr/fab/cap
 
 # The parts of PNR_COMPACT (pnr.compact_flags.PARTS; test_compact keeps them equal)
 # --compact-off may drop.
-COMPACT_PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD", "DROPS")
+COMPACT_PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD", "DROPS", "WIRE", "TURN", "SATELLITES")
 
 
 def compact_environment(compact, compact_off=(), shrink=False):

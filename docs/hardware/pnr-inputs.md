@@ -842,7 +842,7 @@ regions.
 
 ### Legalizer and global-placement switches (environment, opt-in)
 
-Besides the per-design `legalize:` options above, five engine switches change how global
+Besides the per-design `legalize:` options above, seven engine switches change how global
 placement hands parts to the legalizer and how the legalizer turns them. They are environment
 variables (`pnr/legalize_flags.py`), off by default and independent of `PNR_COMPACT`; a run with
 none set is placed exactly as before. The regression runner sets them from its own options
@@ -855,11 +855,16 @@ none set is placed exactly as before. The regression runner sets them from its o
 | `PNR_POOL_SOURCE_CLAMP=1` | `--pool-source-clamp`         | The initial pool's source start begins inside the outline (the cluster box under compact placement).                         |
 | `PNR_LEGALIZE_HPWL=<w>`   | `--legalize-hpwl W`           | The legalizer weighs `w` times each part's wirelength (mm² per mm) and picks its turn among all four with the slot.          |
 | `PNR_LEGALIZE_REORIENT=1` | `--legalize-reorient [wire]`  | After legalization, parts turn in place where that shortens their wires, stays legal and keeps their channels (`wire`: legal only). |
+| `PNR_LEGALIZE_CHANNEL_CLEARANCE=fab` | `--legalize-channel-clearance fab` | The legalizer's routing-channel model spaces nets without a class at the fab clearance instead of the board's `default_clearance_mm`. |
+| `PNR_LINE_SATELLITES=1`   | `--line-satellites`           | A `line_group` carries each member's satellite (a free two-pad part on a two-pin net to one member pad, such as an LED's series resistor) flush beside it. |
 
 `PNR_LEGALIZE_HPWL` respects the turns a design pins: a part with an `orientation` (or a `fixed`
-`rot`) keeps it, and a `line_group` turns only as one rigid line. The in-place turns never touch
+`rot`) keeps it, and a `line_group` turns only as one rigid line; parts on a `diff_pair` or
+`length_match` net are legalized as without it. The in-place turns never touch
 fixed, locked or oriented parts, `row` and `line_group` members, hierarchical blocks, or parts on
-a `diff_pair` or `length_match` net. Design and measurements:
+a `diff_pair` or `length_match` net, and run only where the placer may turn parts. A line
+satellite is a part no constraint names, on the top side and on no matched net; a board with
+`sides: double` has none. Design and measurements:
 [compact placement, section 11](../design/compact-placement.md).
 
 ## How intent becomes a layout

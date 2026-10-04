@@ -330,16 +330,20 @@ spread 1.0 and starts clustered around the fixed parts, the courtyard gap instea
 clearance in the legalizer (with a copper margin only where a part's box hugs its pads), offset
 courtyards (a pin-1-origin header occupies its real extent), a compactness tie-break after
 every completion key and the vias, and the plane drops of a `plane_layer` net without a declared
-stack planned before routing. `--compact-off PART` drops one part (`GP`, `RANK`, `LEGALIZE`,
-`COURTYARD`, `DROPS`) for an ablation. `--shrink` (`PNR_SHRINK=1`) also searches a smaller outline inside
+stack planned before routing, and the legalizer parts of the design's section 11: the
+wirelength term with the turn chosen with the slot, in-place turns, and line satellites.
+`--compact-off PART` drops one part (`GP`, `RANK`, `LEGALIZE`, `COURTYARD`, `DROPS`, `WIRE`,
+`TURN`, `SATELLITES`) for an ablation. `--shrink` (`PNR_SHRINK=1`) also searches a smaller outline inside
 the design's and writes the board at the smallest that routes; hard rungs are exempt. Both are
 recorded in `provenance.json` (`pnr_environment`).
 
 The legalizer and global-placement switches of the [design's section 11](design/compact-placement.md)
 are runner options too, off by default and usable with or without `--compact`: `--gp-polish`,
-`--gp-channels L`, `--pool-source-clamp`, `--legalize-hpwl W` and `--legalize-reorient [wire]`
-(`PNR_GP_POLISH`, `PNR_GP_CHANNELS`, `PNR_POOL_SOURCE_CLAMP`, `PNR_LEGALIZE_HPWL`,
-`PNR_LEGALIZE_REORIENT`, recorded in `provenance.json` like the others).
+`--gp-channels L`, `--pool-source-clamp`, `--legalize-hpwl W`, `--legalize-reorient [wire]`,
+`--legalize-channel-clearance fab` and `--line-satellites` (`PNR_GP_POLISH`, `PNR_GP_CHANNELS`,
+`PNR_POOL_SOURCE_CLAMP`, `PNR_LEGALIZE_HPWL`, `PNR_LEGALIZE_REORIENT`,
+`PNR_LEGALIZE_CHANNEL_CLEARANCE`, `PNR_LINE_SATELLITES`, recorded in `provenance.json` like the
+others).
 
 Every case's `result.json` gains `compactness`, measured alike in every arm on the parts' body
 boxes in `placed.json`: the bounding box (`bbox_mm2`, `bbox_mm`), the summed body area,

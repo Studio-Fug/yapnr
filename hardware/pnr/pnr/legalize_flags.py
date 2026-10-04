@@ -36,6 +36,11 @@ default and works with or without ``PNR_COMPACT``:
     it, as part of the rigid line (:func:`pnr.place.line_group.satellites`).
 
 Unset (or ``0``), every caller takes its unchanged path and writes no new JSON keys.
+
+Under ``PNR_COMPACT=1`` three of them are compact parts (:mod:`pnr.compact_flags`): ``WIRE``
+(``PNR_LEGALIZE_HPWL`` at :data:`COMPACT_WIRE_WEIGHT`), ``TURN`` (``PNR_LEGALIZE_REORIENT=wire``)
+and ``SATELLITES`` (``PNR_LINE_SATELLITES=1``). A variable that is set, ``0`` included, wins over
+its part; ``PNR_COMPACT_<PART>=0`` drops the part.
 """
 
 from __future__ import annotations
@@ -44,8 +49,12 @@ import math
 import os
 from typing import Optional
 
+from pnr import compact_flags
+
 # Iterations of the global-placement polish phase (fixed: no wall-clock budget).
 POLISH_STEPS = 200
+# The wirelength weight of the PNR_COMPACT part WIRE (the review-fix A/B's choice, w 4).
+COMPACT_WIRE_WEIGHT = 4.0
 
 FLAGS = (
     "PNR_GP_POLISH",
@@ -87,8 +96,16 @@ def pool_source_clamp() -> bool:
     return os.environ.get("PNR_POOL_SOURCE_CLAMP") == "1"
 
 
+def _explicit(name: str) -> bool:
+    """``name`` is set to something (``0`` included): it wins over a compact part."""
+    return (os.environ.get(name) or "").strip() != ""
+
+
 def legalize_hpwl() -> Optional[float]:
-    """``PNR_LEGALIZE_HPWL``: the wirelength weight of the legalizer's slot cost, or None."""
+    """``PNR_LEGALIZE_HPWL``: the wirelength weight of the legalizer's slot cost, or None
+    (unset under ``PNR_COMPACT`` part ``WIRE``: :data:`COMPACT_WIRE_WEIGHT`)."""
+    if not _explicit("PNR_LEGALIZE_HPWL") and compact_flags.enabled("WIRE"):
+        return COMPACT_WIRE_WEIGHT
     return _weight("PNR_LEGALIZE_HPWL")
 
 
@@ -99,6 +116,8 @@ def legalize_reorient() -> Optional[str]:
     """``PNR_LEGALIZE_REORIENT``: ``"guarded"`` (``1``: wirelength, legality and the channel
     guard), ``"wire"`` (no channel guard) or None (unset or ``0``)."""
     raw = os.environ.get("PNR_LEGALIZE_REORIENT")
+    if not _explicit("PNR_LEGALIZE_REORIENT") and compact_flags.enabled("TURN"):
+        return "wire"  # the PNR_COMPACT part TURN
     if raw is None or raw in ("", "0"):
         return None
     if raw not in REORIENT_MODES:
@@ -120,7 +139,9 @@ def legalize_channel_clearance() -> Optional[str]:
 
 
 def line_satellites() -> bool:
-    """True with ``PNR_LINE_SATELLITES=1``."""
+    """True with ``PNR_LINE_SATELLITES=1`` (unset: the ``PNR_COMPACT`` part ``SATELLITES``)."""
+    if not _explicit("PNR_LINE_SATELLITES"):
+        return compact_flags.enabled("SATELLITES")
     return os.environ.get("PNR_LINE_SATELLITES") == "1"
 
 

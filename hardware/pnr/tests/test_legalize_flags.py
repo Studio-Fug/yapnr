@@ -72,6 +72,42 @@ class ParseTest(unittest.TestCase):
             with flags(PNR_LEGALIZE_HPWL=bad), self.assertRaises(ValueError):
                 legalize_flags.legalize_hpwl()
 
+    def test_compact_parts_and_explicit_values(self):
+        """WIRE, TURN and SATELLITES are PNR_COMPACT parts; a set variable (0 included) wins
+        over its part, and PNR_COMPACT_<PART>=0 drops it."""
+        with flags(PNR_COMPACT="1"):
+            self.assertEqual(legalize_flags.legalize_hpwl(), legalize_flags.COMPACT_WIRE_WEIGHT)
+            self.assertEqual(legalize_flags.legalize_reorient(), "wire")
+            self.assertTrue(legalize_flags.line_satellites())
+            self.assertEqual(
+                legalize_flags.active(),
+                dict(LEGALIZE_HPWL=4.0, LEGALIZE_REORIENT="wire", LINE_SATELLITES=True),
+            )
+        with flags(
+            PNR_COMPACT="1",
+            PNR_LEGALIZE_HPWL="16",
+            PNR_LEGALIZE_REORIENT="0",
+            PNR_LINE_SATELLITES="0",
+        ):
+            self.assertEqual(legalize_flags.legalize_hpwl(), 16.0)
+            self.assertIsNone(legalize_flags.legalize_reorient())
+            self.assertFalse(legalize_flags.line_satellites())
+        with flags(PNR_COMPACT="1", PNR_LEGALIZE_HPWL="0"):
+            self.assertIsNone(legalize_flags.legalize_hpwl())
+        saved = {k: os.environ.get(k) for k in ("PNR_COMPACT_WIRE", "PNR_COMPACT_TURN")}
+        try:
+            os.environ.update(PNR_COMPACT_WIRE="0", PNR_COMPACT_TURN="0")
+            with flags(PNR_COMPACT="1"):
+                self.assertIsNone(legalize_flags.legalize_hpwl())
+                self.assertIsNone(legalize_flags.legalize_reorient())
+                self.assertTrue(legalize_flags.line_satellites())
+        finally:
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+
     def test_channel_clearance_and_satellites(self):
         with flags():
             self.assertIsNone(legalize_flags.legalize_channel_clearance())

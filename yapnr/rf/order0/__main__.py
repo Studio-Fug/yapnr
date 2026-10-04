@@ -21,6 +21,7 @@ def main(argv=None) -> int:
         "--fetched", required=True, help="the fetched campaign (yapnr exp fetch --full)"
     )
     lo.add_argument("--out", help="write the result here (JSON)")
+    lo.add_argument("--out-dir", help="also write run0b.json and the Touchstone files here")
     v = sub.add_parser("variant", help="an optimized run's footprint as a forward run")
     v.add_argument("--run", required=True, help="the (fetched) run directory")
     v.add_argument("--out", required=True)
@@ -36,7 +37,7 @@ def main(argv=None) -> int:
         manifest = write.write(args.out, args.s21, args.offset)
         print(json.dumps({k: manifest[k] for k in ("s21_criterion_db", "s21_optimizer_db")}))
         return 0
-    result = write.loss(args.fetched)
+    result = write.loss(args.fetched, out_dir=args.out_dir)
     text = json.dumps(result, indent=1)
     if args.out:
         with open(args.out, "w", encoding="utf-8") as fh:

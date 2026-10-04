@@ -165,6 +165,21 @@ class LossTest(unittest.TestCase):
         self.assertEqual(out["d_o0_11"]["criterion_db"], demos.d_o0_11(corr))
         self.assertLess(out["r1"]["ratio_check"]["worst_s21_corrected_db"], -3.2)
 
+    def test_line_loss_any_reference(self):
+        # a 35 Ω line, 12 mm, α 0.01 dB/mm, β L of several radians, seen from 50 Ω ports
+        f = np.linspace(3e9, 7e9, 9)
+        gl = 0.012 * 12 / (20 * np.log10(np.e)) * 10 + 1j * 2 * np.pi * f / 1e9 * 1.3
+        zc, z0 = 35.0, 50.0
+        a, b = np.cosh(gl), zc * np.sinh(gl)
+        c, d = np.sinh(gl) / zc, np.cosh(gl)
+        den = a + b / z0 + c * z0 + d
+        s = np.zeros((f.size, 2, 2), complex)
+        s[:, 0, 0] = (a + b / z0 - c * z0 - d) / den
+        s[:, 1, 1] = (-a + b / z0 - c * z0 + d) / den
+        s[:, 0, 1] = s[:, 1, 0] = 2 / den
+        self.assertLess(np.max(20 * np.log10(np.abs(s[:, 0, 0]))), -5)  # badly matched
+        np.testing.assert_allclose(demos.line_loss_db(s), 0.012 * 12 * 10, rtol=1e-9)
+
     def test_ratio_correction(self):
         s = np.zeros((2, 3, 3), complex)
         s[:, 1, 0] = s[:, 2, 0] = np.sqrt([0.5, 0.45])  # lossless; 10 % dissipated

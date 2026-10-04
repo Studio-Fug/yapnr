@@ -1,7 +1,7 @@
 {
  "schema": "yapnr-rf-forward/1",
  "spec": "r1t-osh-w-w-eq-em528",
- "spec_sha256": "0121a31b3dfad4a46ceac4aaf0ac68d5e1e41ef1f83595d552ab7c9e1f9e7f67",
+ "spec_sha256": "d2290b99615c160990ec28ce10777fe32250b82c44eb9106eb30785a72655881",
  "copper_mm": [
   [
    0.0,

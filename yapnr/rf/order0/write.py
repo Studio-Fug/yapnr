@@ -196,7 +196,7 @@ def write(out: str, s21: float = -3.4, offset: float = 0.10, data: Optional[dict
     return manifest
 
 
-def loss(fetched: str, data: Optional[dict] = None) -> dict:
+def loss(fetched: str, data: Optional[dict] = None, out_dir: Optional[str] = None) -> dict:
     """Run 0b: the solver's α of the 0.40 and 0.70 mm lines (two lengths each), the coupon
     model's (M and M1.4, the nearest family to 0.70 mm: its α is within 1 % of M's), Δα, R1's raw
     and corrected |S21| over the band, and D-O0-11's criterion."""
@@ -271,4 +271,34 @@ def loss(fetched: str, data: Optional[dict] = None) -> dict:
         criterion_db=crit,
         offset_db=round(-float(np.min(corr[band])), 3),
     )
+    if out_dir:
+        _write_run0b(out_dir, out, ts, fr, s, corr)
     return out
+
+
+def _write_run0b(out_dir: str, result: dict, ts, fr, s, corr) -> None:
+    """run0b.json, the lines' and R1's Touchstone files as simulated, and R1's loss-corrected
+    one (every |S_i1| and |S_1i| of the outputs scaled by the path correction, phases kept)."""
+    import shutil
+
+    from yapnr.rf.export.touchstone import write_touchstone
+
+    os.makedirs(out_dir, exist_ok=True)
+    _dump(os.path.join(out_dir, "run0b.json"), result)
+    for job in [f"line-m-w0{w}-l{n}" for w in (40, 70) for n in (10, 30)]:
+        shutil.copyfile(ts(job, 2), os.path.join(out_dir, f"{job}.s2p"))
+    shutil.copyfile(ts("r1-m-eq", 3), os.path.join(out_dir, "r1-m-eq.s3p"))
+    g = 10 ** (corr / 20)
+    sc = np.array(s, dtype=complex)
+    for i in (1, 2):
+        sc[:, i, 0] *= g
+        sc[:, 0, i] *= g
+    write_touchstone(
+        os.path.join(out_dir, "r1-m-eq-loss-corrected.s3p"),
+        fr,
+        sc,
+        comments=[
+            "yapnr Order 0 R1 on M-eq, refine-2 grid (0.05 mm): run 0b's FDTD, loss-corrected",
+            "|S21|, |S31| (and S12, S13) scaled by -sum(dalpha * L) along R1's path; 50 ohm",
+        ],
+    )

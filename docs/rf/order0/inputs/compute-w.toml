@@ -20,24 +20,44 @@ id = "d2-base"
 case = "divider"
 spec = "specs/d2-base.json"
 criteria = "criteria/d2.json"
+threads = 8
+cpus = 4
+memory_gb = 8
+disk_gb = 4
+max_wall_s = 7200
 
 [[jobs]]
 id = "d2-robust"
 case = "divider"
 spec = "specs/d2-robust.json"
 criteria = "criteria/d2.json"
+threads = 8
+cpus = 4
+memory_gb = 8
+disk_gb = 4
+max_wall_s = 7200
 
 [[jobs]]
 id = "d2-star"
 case = "divider"
 spec = "specs/d2-star.json"
 criteria = "criteria/d2.json"
+threads = 8
+cpus = 4
+memory_gb = 8
+disk_gb = 4
+max_wall_s = 7200
 
 [[jobs]]
 id = "d2-sched"
 case = "divider"
 spec = "specs/d2-sched.json"
 criteria = "criteria/d2.json"
+threads = 8
+cpus = 4
+memory_gb = 8
+disk_gb = 4
+max_wall_s = 7200
 
 [[jobs]]
 id = "r1t-w-eq"
@@ -46,6 +66,10 @@ validate = "runs/r1t-w-eq"
 criteria = "criteria/ref-w.json"
 args = ["--no-fine"]
 max_wall_s = 4800
+threads = 8
+cpus = 4
+memory_gb = 8
+disk_gb = 4
 
 [[jobs]]
 id = "r1t-w-nom"
@@ -54,6 +78,10 @@ validate = "runs/r1t-w-nom"
 criteria = "criteria/ref-w.json"
 args = ["--no-fine"]
 max_wall_s = 4800
+threads = 8
+cpus = 4
+memory_gb = 8
+disk_gb = 4
 
 [[jobs]]
 id = "r1t-w-eq-em528"
@@ -62,3 +90,7 @@ validate = "runs/r1t-w-eq-em528"
 criteria = "criteria/ref-w.json"
 args = ["--no-fine"]
 max_wall_s = 4800
+threads = 8
+cpus = 4
+memory_gb = 8
+disk_gb = 4

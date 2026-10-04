@@ -245,9 +245,8 @@ def line_criteria(dense: Sequence = ((3.0, 7.0, 161),)) -> dict:
     band = list(BAND)
     checks = [
         dict(name="|S21| min dB", kind="s_min", ports=[2, 1], limit=-3.0, ghz=band),
-        dict(name="|S11| max dB", kind="s_max", ports=[1, 1], limit=-20.0, ghz=band),
         dict(name="passivity", kind="passivity", limit=-0.001),
-    ]
+    ]  # no |S11| check: the files are in 50 Ω, a 0.70 mm line is 35 Ω
     return {"dense_ghz": [list(d) for d in dense], "coarse": checks, "fine": checks}
 
 
@@ -409,15 +408,24 @@ def read_s(path: str) -> Tuple[np.ndarray, np.ndarray]:
     return np.asarray(f, float), np.asarray(s)
 
 
+def line_loss_db(s: np.ndarray) -> np.ndarray:
+    """The attenuation α·L (dB) of a uniform line section from its 2-port S-parameters in any
+    real reference: A = cosh(γL) of its ABCD matrix does not depend on the reference impedance
+    (a 0.70 mm line, 35 Ω, renormalized to 50 Ω has |S11| near −9 dB, which a |S21| reading
+    would count as loss), and Re acosh(A) = αL is free of the branch of βL."""
+    s11, s12, s21, s22 = s[:, 0, 0], s[:, 0, 1], s[:, 1, 0], s[:, 1, 1]
+    a = ((1 + s11) * (1 - s22) + s12 * s21) / (2 * s21)
+    return 20 * np.log10(math.e) * np.abs(np.real(np.arccosh(a.astype(complex))))
+
+
 def solver_alpha(short: str, long: str, dl_mm: float) -> Tuple[np.ndarray, np.ndarray]:
-    """(f in Hz, α in dB/mm) of the solver's line from two lengths' |S21| (the ports' own
-    effects cancel)."""
+    """(f in Hz, α in dB/mm) of the solver's line from two lengths (`line_loss_db`; their
+    difference also cancels what the port planes add)."""
     f1, s1 = read_s(short)
     f2, s2 = read_s(long)
     if f1.shape != f2.shape or np.max(np.abs(f1 - f2)) > 1.0:
         raise ValueError("the two lines' frequencies differ")
-    d = 20 * np.log10(np.abs(s1[:, 1, 0])) - 20 * np.log10(np.abs(s2[:, 1, 0]))
-    return f1, d / dl_mm
+    return f1, (line_loss_db(s2) - line_loss_db(s1)) / dl_mm
 
 
 def coupon_alpha(f_hz: np.ndarray, family: str, stackup_id: str = "OSHPARK-4L-FR408HR"):

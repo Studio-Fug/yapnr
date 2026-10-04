@@ -14,14 +14,14 @@
       "name": "|S21| min dB",
       "kind": "s_min",
       "ports": [2, 1],
-      "limit": -3.35,
+      "limit": -3.4,
       "ghz": [4.25, 5.75]
     },
     {
       "name": "|S31| min dB",
       "kind": "s_min",
       "ports": [3, 1],
-      "limit": -3.35,
+      "limit": -3.4,
       "ghz": [4.25, 5.75]
     },
     {
@@ -42,14 +42,14 @@
       "name": "|S21| min dB",
       "kind": "s_min",
       "ports": [2, 1],
-      "limit": -3.5,
+      "limit": -3.55,
       "ghz": [4.25, 5.75]
     },
     {
       "name": "|S31| min dB",
       "kind": "s_min",
       "ports": [3, 1],
-      "limit": -3.5,
+      "limit": -3.55,
       "ghz": [4.25, 5.75]
     },
     {

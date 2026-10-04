@@ -10,5 +10,6 @@ examples/rf-coupons/order0/O0-*/
 yapnr/rf/coupons/data/
 # Written by `python -m yapnr.rf.order0 write` (jsonfmt, KiCad footprints, stage-plan job files).
 docs/rf/order0/inputs/
+docs/rf/order0/predictions/run0b/
 # Written by the tests (YAPNR_UPDATE_GOLDEN=1, tests/unit/exp) and compared byte for byte.
 tests/unit/exp/golden/

@@ -1,8 +1,8 @@
 {
   "schema": "yapnr-order0-rf/1",
   "s21_criterion_db": -3.4,
-  "loss_offset_db": 0.1,
-  "s21_optimizer_db": -3.3,
+  "loss_offset_db": 0.05,
+  "s21_optimizer_db": -3.35,
   "band_ghz": [4.25, 5.75],
   "selection": "Among the formulations whose exported design passes every validation criterion on all three grids (coarse; fine and finer), ship the one with the largest worst-case margin over the fine and finer grids, the margin of a check being (limit - worst) in dB for |S11| and (worst - limit) for |S21| and |S31|; on a tie (0.05 dB) the earlier one in the order base, robust, star, sched. Every attempt and its validation is published (§7 items 1 and 6).",
   "formulations": {
@@ -52,61 +52,61 @@
   "specs": {
     "d1-base": {
       "name": "divider-osh-m",
-      "sha256": "5be7c1daf6b539845f97e5e1a2178bc08a33b058a4518f2ed3aefd245859d817"
+      "sha256": "5f9ddcedefad4aed05d2f8fbcb77e3204e53cba509d5b310db4f5bf76d40bc34"
     },
     "d1-robust": {
       "name": "divider-osh-m-robust",
-      "sha256": "85fee4016ea7f3685ac419141f5c2ae189256413b953150a098d712ffed228c9"
+      "sha256": "77fdf852d0d26631bb656d9616c4182d62ef43e9964dceb588096e13d75818f1"
     },
     "d1-star": {
       "name": "divider-osh-m-star",
-      "sha256": "17013269cb6f858a3f5c59f9c4bb625035210350c110600b28afd45671679c65"
+      "sha256": "5c8ff818df422873aa88d55bef2dedd6a6ce6afaf8815cf4395bdffaf75e430d"
     },
     "d1-sched": {
       "name": "divider-osh-m-sched",
-      "sha256": "cc22a269c7e6ad17317ad33829a55c0e025faafa8f51c043c8b7bcefaf85bb16"
+      "sha256": "bbfd3c2c71fb105c389fb3dd58c947bd2e93bc113f0c1115e98ed0f9a4913da3"
     },
     "d2-base": {
       "name": "divider-osh-w",
-      "sha256": "54275d6e386f24b7bdc794749b5b9bb9842a1ecee6440e9b4863b4605926bd41"
+      "sha256": "3cd0f6a2a9a37891d594ed3ba1acf0ce12e8548d047d79a06e902e9534abbdeb"
     },
     "d2-robust": {
       "name": "divider-osh-w-robust",
-      "sha256": "35222bd30e024391d1e9b7c64fdbb28f6c2e0a31e1408daf96c8a85b7e5dfa46"
+      "sha256": "8f479e5f857e9bf54e5d2235affc612db00f1d76f12a4d1e642bda1ef5ee0098"
     },
     "d2-star": {
       "name": "divider-osh-w-star",
-      "sha256": "9e84c896966e1117fbfa5fa53fa8b9d0aa3bc5d7812a77bd5085a06605161d12"
+      "sha256": "de4103301f0d5a853c1d2788c34c4c666907e1e8a5769c5e382f9ff9dba72351"
     },
     "d2-sched": {
       "name": "divider-osh-w-sched",
-      "sha256": "2f41cf1eba6abf0b1822563bd75f937714ec40a3844a2372d99f75eb7c9513b3"
+      "sha256": "26818186929a27e53de2ae2cba2be6dc548d652e38915d03ed060c0f9a833f84"
     }
   },
   "runs": {
     "r1-m-eq": {
       "spec": "r1-osh-m-m-eq",
-      "sha256": "3f8c16831ddcd4ca083011c373444b7bedade177b6ca474cbb31a5bdd8f7059d"
+      "sha256": "769fb6d724e574f22dc93fa04d4aad1b6461bc54a4a1c90037da95c76d8c3b1d"
     },
     "r1-m-nom": {
       "spec": "r1-osh-m-m-nom",
-      "sha256": "79a3d1980ba3db9db98445827a3e894c3aaaede3cbaec112eaca4e656b364719"
+      "sha256": "c78a055fdeea0098855e21ef95beb26403fe4553a80b5c85c466b745d02602b5"
     },
     "r1-m-eq-em528": {
       "spec": "r1-osh-m-m-eq-em528",
-      "sha256": "f4ac22cdea8f97c1711ec434733e4ae80bb73e950c4c787f94c29b4b7da1a762"
+      "sha256": "dd95213e35834942a596abac4efa3bdce33b844bcec5d314b49280e5b79e71dd"
     },
     "r1t-w-eq": {
       "spec": "r1t-osh-w-w-eq",
-      "sha256": "cd0fc6c40842415e1d0f2b2f4737fd9b232adddeb8a441e93893ca8ae49e2fdd"
+      "sha256": "c3d4cf500781792df2a3374838e874153ff17456793e00e14cea08fe5bd3db94"
     },
     "r1t-w-nom": {
       "spec": "r1t-osh-w-w-nom",
-      "sha256": "782da88b5c0acffe131a9a7c1dbe83e28f3e2b4abebaa1c3f1c29b1eb425c14b"
+      "sha256": "1b39f7667ebf57d47b12464abbcca90e938fef1b750bc38b06a7eb75a527d4ee"
     },
     "r1t-w-eq-em528": {
       "spec": "r1t-osh-w-w-eq-em528",
-      "sha256": "0121a31b3dfad4a46ceac4aaf0ac68d5e1e41ef1f83595d552ab7c9e1f9e7f67"
+      "sha256": "d2290b99615c160990ec28ce10777fe32250b82c44eb9106eb30785a72655881"
     },
     "line-m-w040-l10": {
       "spec": "line-osh-m-w0p40-l10-m-eq",

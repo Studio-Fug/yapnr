@@ -16,31 +16,44 @@ isolation, adjacent-column coupling, phase centres, the L2-L3 parallel plate) is
 Every JSON record carries this as `status`. The joint C1 sweep and the C2 solve come before the
 macro is frozen for an order. The RF-uniformity layout (guard band, straight run-ins, terminated
 dummy columns, R 0.5 stitched equalizers; owner finding 2026-10-03, "identical structures across
-the array within the keepout") is geometry only [D]: the cell with its neighbours, TX1 against
-TX3, the RX bump, the 0201 load and the bank patterns with and without dummies are not simulated
-yet.
+the array within the keepout") was checked in openEMS [S] (`results/openems/rfuni/`, 40 um
+mesh unless noted): the as-built TX1 tongue notch (-7.9 to -9.2 dB near 60 GHz) is gone on 40,
+27 and 20 um meshes; TX P0 -> P1 loss is 1.9 / 1.7-1.8 / 1.45 dB for TX1 / TX2 / TX3 on 20 um
+(the equalizers add up to 0.46 dB over the straight TX3), so the TX feed alone exceeds RF-03's
+1.5 dB; skew between equal-length lines stays within 1.1 ps on every mesh but is not converged;
+TX2-TX3 feed coupling is -34 dB. The pour, ring and entry move the column's match and gain
+(one cell: RL 4.4 / 7.1 / 12.1 dB at Pg, realized gain 5.5 / 6.3 / 8.7 dBi at 60.3 / 62.05 /
+63.8 GHz; about +-1 dB of model and mesh spread), so C1 must sweep the column with them. In the
+TX bank the dummies make the edge column's match track the interior one (0.7 dB RMS in band,
+4.0 dB without them); the embedded patterns are only partly equalized. Not simulated: the 0201
+load itself (ideal 50 ohm), 35 um copper, the launch, the RX bank.
 
 ## Contents
 
-| Path                      | What                                                                                     |
-| ------------------------- | ---------------------------------------------------------------------------------------- |
-| `rfmacro/params.py`       | stackup, fab rules, lattice and every declared parameter, with sources                   |
-| `rfmacro/closedform.py`   | microstrip, conductor-backed CPW, patch, inset, directivity models (sources in the file) |
-| `rfmacro/xsec2d.py`       | 2D cross-sections with `yapnr.rf.coupons.xsec` (FEM, Wheeler loss), -> `results/`        |
-| `rfmacro/dims.py`         | start dimensions and closed-form predictions                                             |
-| `rfmacro/macro.py`        | launches, the fit search, equal-length feeds, column cells, dummies, pour (U1 frame)     |
-| `rfmacro/vias.py`         | deterministic GND via placement (lattice, fences, rings, rows, grid, fill)               |
-| `rfmacro/rules.py`        | the RF-uniformity checks G1-G6, shared with the board audit                              |
-| `rfmacro/raster.py`       | standard-library bitset raster for the stitch-reach and congruence checks                |
-| `rfmacro/kicad.py`        | KiCad 10 board of the macro                                                              |
-| `rfmacro/coupons.py`      | the coupon strip                                                                         |
-| `../board/rf_audit.py`    | A1-A5: the same rules on a filled board (KiCad Python)                                   |
-| `tests/`                  | unit tests (`python3 -m unittest discover -s tests`)                                     |
-| `openems/Dockerfile`      | openEMS v0.37.0-rc3 source build (Ubuntu 24.04 packages none)                            |
-| `openems/column_sim.py`   | openEMS model of one column + divider from the same geometry                             |
-| `generated/rfm1-{m,n,p}/` | the macro for the D12 bracketing variants (patch length x0.982, x1, x1.018)              |
-| `generated/coupons/`      | the coupon strip (60 x 25 mm) and its structure catalogue                                |
-| `results/`                | the 2D line table and the openEMS column results                                         |
+| Path                      | What                                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------------ |
+| `rfmacro/params.py`       | stackup, fab rules, lattice and every declared parameter, with sources                     |
+| `rfmacro/closedform.py`   | microstrip, conductor-backed CPW, patch, inset, directivity models (sources in the file)   |
+| `rfmacro/xsec2d.py`       | 2D cross-sections with `yapnr.rf.coupons.xsec` (FEM, Wheeler loss), -> `results/`          |
+| `rfmacro/dims.py`         | start dimensions and closed-form predictions                                               |
+| `rfmacro/macro.py`        | launches, the fit search, equal-length feeds, column cells, dummies, pour (U1 frame)       |
+| `rfmacro/vias.py`         | deterministic GND via placement (lattice, fences, rings, rows, grid, fill)                 |
+| `rfmacro/rules.py`        | the RF-uniformity checks G1-G6, shared with the board audit                                |
+| `rfmacro/raster.py`       | standard-library bitset raster for the stitch-reach and congruence checks                  |
+| `rfmacro/kicad.py`        | KiCad 10 board of the macro                                                                |
+| `rfmacro/coupons.py`      | the coupon strip                                                                           |
+| `../board/rf_audit.py`    | A1-A5: the same rules on a filled board (KiCad Python)                                     |
+| `tests/`                  | unit tests (`python3 -m unittest discover -s tests`)                                       |
+| `openems/Dockerfile`      | openEMS v0.37.0-rc3 source build (Ubuntu 24.04 packages none)                              |
+| `openems/column_sim.py`   | openEMS model of one column + divider from the same geometry                               |
+| `openems/board_export.py` | filled KiCad board -> JSON copper in U1's frame (KiCad Python), for the two builders below |
+| `openems/board_feeds.py`  | feed models from the filled board: TX1-TX3 or RX1-RX4 P0 -> P1 (shapely)                   |
+| `openems/board_ant.py`    | radiating models from the filled board: one cell with its entry, the bank, a control       |
+| `openems/feed_sim.py`     | openEMS run of a feed model (GCPW with fences, MSL ports, loads, all-driven mode)          |
+| `openems/ant_sim.py`      | openEMS run of a radiating model (column_sim's stack, mesh, ports and far field)           |
+| `generated/rfm1-{m,n,p}/` | the macro for the D12 bracketing variants (patch length x0.982, x1, x1.018)                |
+| `generated/coupons/`      | the coupon strip (60 x 25 mm) and its structure catalogue                                  |
+| `results/`                | the 2D line table, the openEMS column results, `openems/rfuni/` (uniformity EM check)      |
 
 Each generated directory holds the board (`.kicad_pcb`, zones unfilled), its project and custom
 rules, a JSON record (parameters, dimensions, ports, lengths, checks, a geometry hash) and the
@@ -66,6 +79,14 @@ PYTHONPATH=.:<yapnr checkout> <python with scikit-fem and gmsh> -m rfmacro xsec
 docker build -t radar60-openems:0.37.0-rc3 openems
 docker run --rm --cpus 4 -v "$PWD":/w -w /w radar60-openems:0.37.0-rc3 \
   python3 openems/column_sim.py --out out/col --threads 4
+# EM of the filled macro: export, build a model (host Python with shapely), run in the image
+<kicad python> openems/board_export.py <copy>/rfm1-n.filled.kicad_pcb out/b.json 100 100
+python3 openems/board_feeds.py out/b.json generated/rfm1-n/rfm1-n.json out/txa.json --model txa
+python3 openems/board_ant.py out/b.json generated/rfm1-n/rfm1-n.json out/bank.json --model bank
+docker run --rm --cpus 4 -v "$PWD":/w -w /w radar60-openems:0.37.0-rc3 \
+  python3 openems/feed_sim.py out/txa.json --excite TX1.P0 --out out/txa-e1 --threads 4
+docker run --rm --cpus 4 -v "$PWD":/w -w /w radar60-openems:0.37.0-rc3 \
+  python3 openems/ant_sim.py out/bank.json --excite TX1.Pg --out out/bank-e1 --threads 4
 ```
 
 On a Mac with colima, write openEMS output to a directory the Docker VM shares (under the

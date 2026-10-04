@@ -201,6 +201,9 @@ def block_board(path, *, move_arc=False, foreign=()):
             pad.SetPosition(at(x, y))
             pad.SetNet(nets[net])
             fp.Add(pad)
+    k.SaveBoard(str(path), b)
+
+
 def bga_board(path, vias=(), tracks=()):
     """A 20 x 20 mm board with U1, a 3 x 3 array at 0.65 mm (balls A1..C3, B2 on GND,
     the others on S_<ball>) at the centre and its 2.5 mm square courtyard, plus ``vias``

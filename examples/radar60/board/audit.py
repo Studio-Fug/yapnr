@@ -59,6 +59,7 @@ DIGITAL = [
 HEIGHTS = [
     ("C_0402", 0.55),
     ("R_0402", 0.40),
+    ("R_0201", 0.30),  # the RF macro's dummy loads RT1-RT4
     ("C_0603", 0.95),
     ("LED_0603", 0.80),
     ("C_0805", 1.45),
@@ -207,6 +208,7 @@ def parts_from_engine(graph, poses):
                 side=side,
                 box=box,
                 pads=pads,
+                pad_at={p["name"]: at(*p["offset"]) for p in c["pads"] if p.get("name")},
                 at=(x, y),
                 rot=rot,
             )
@@ -232,9 +234,11 @@ def parts_from_board(poses, height_mm):
                 side=p["side"],
                 box=[x0, y0, x1, y1],
                 pads=[(q["net"], b(*q["at"])) for q in p["pads"]],
+                pad_at={q["number"]: b(*q["at"]) for q in p["pads"] if q["number"]},
                 at=b(*p["at"]),
                 rot=p["rot"],
                 dnp=p["dnp"],
+                group=p.get("group"),
             )
         )
     return out
@@ -247,7 +251,10 @@ def checks(parts, floorplan, footprint_of=None):
     d = floorplan
     rf, guard = d["rf"]["region"], d["rf"]["guard"]
     patches = list(d["rf"]["patches"].values())
-    exempt = {"U1", "RFM1"}
+    # U1 and the RF macro's own footprints (RFM1 and its dummy loads, the group RFM1_MACRO)
+    exempt = {"U1", "RFM1"} | {
+        p["ref"] for p in parts if p.get("group") == d["rf"].get("block", {}).get("group")
+    }
     res = {}
     # R2: no part in the RF region (top side), the pocket aside; U1 and the macro are its own.
     res["r2_parts_in_rf_region"] = sorted(
@@ -325,7 +332,8 @@ PIN_LIMITS = [
     # (role, limit mm, hard)
     ("pa_decoupling", 3.0, True),
     ("crystal_caps", 3.0, True),
-    ("qspi_series", 3.0, True),
+    # stage 3b: west of the R12 neighbours' exit bands (floorplan qspi_series), about 4.5 mm
+    ("qspi_series", 5.0, True),
     ("radio_east", 3.5, True),
     ("radio_west", 8.0, False),
     ("pa_bulk", 8.0, False),
@@ -475,16 +483,21 @@ def _constraint_checks(parts, floorplan):
     pending = {"pending_" + k: v for k, v in (d.get("blocks_pending") or {}).items()}
     for name, spec in list(d["groups"].items()) + list(pending.items()):
         anchor = role(spec["anchor"])[0]
+        # a pad-anchored group measures from that pad of the anchor (yapnr anchor_pad)
+        centre = (
+            anchor["pad_at"][str(spec["anchor_pad"])] if spec.get("anchor_pad") else anchor["at"]
+        )
         members = [p for r in spec["members"] for p in role(r)]
         far = {
-            p["ref"]: round(math.dist(p["at"], anchor["at"]), 2)
+            p["ref"]: round(math.dist(p["at"], centre), 2)
             for p in members
-            if math.dist(p["at"], anchor["at"]) > spec["radius_mm"] + 1e-3
+            if math.dist(p["at"], centre) > spec["radius_mm"] + 1e-3
         }
-        worst = max((math.dist(p["at"], anchor["at"]) for p in members), default=0.0)
+        worst = max((math.dist(p["at"], centre) for p in members), default=0.0)
         out["groups"][name] = {
             "members": len(members),
             "radius_mm": spec["radius_mm"],
+            "anchor_pad": spec.get("anchor_pad"),
             "max_distance_mm": round(worst, 2),
             "beyond": far,
         }
@@ -495,10 +508,31 @@ def _constraint_checks(parts, floorplan):
         out["fixed"][p["ref"]] = round(math.dist(p["at"], at), 4)
     j1 = role("connector")[0]
     out["fixed"]["J1"] = {"x": round(j1["at"][0], 3), "courtyard_y0": round(j1["box"][1], 3)}
-    for key, r in (("lvds_header_fixed", "lvds_header"), ("jtag_fixed", "jtag")):
-        if d.get(key):
-            part = role(r)[0]
-            out["fixed"][part["ref"]] = round(math.dist(part["at"], d[key]["at"]), 4)
+    return out
+
+
+def fanout_checks(parts, fanout):
+    """The fanout inputs on the placed board (integrate.py prepare's plan): no part's courtyard
+    in an exit band (any side), and every bottom-site part at its site on the bottom side."""
+    out = {"bands": {}, "sites": {}}
+    if not fanout:
+        return out
+    for band in fanout.get("bands") or []:
+        inside = sorted(p["ref"] for p in parts if overlap(p["box"], band["rect"]))
+        out["bands"][band["name"]] = {"balls": band["balls"], "rect": band["rect"], "parts": inside}
+    by_address = {p["address"]: p for p in parts if p["address"]}
+    for ref, site in (fanout.get("bottom_sites") or {}).items():
+        p = by_address.get(site.get("address"))
+        if p is None:
+            out["sites"][ref] = {"missing": True}
+            continue
+        err = math.dist(p["at"], site["at"])
+        out["sites"][ref] = {
+            "board_ref": p["ref"],
+            "side": p["side"],
+            "error_mm": round(err, 4),
+            "ok": p["side"] == "bottom" and err < 1e-3,
+        }
     return out
 
 
@@ -554,13 +588,16 @@ def _drc_summary(drc):
     }
 
 
-def board_audit(poses, drc, floorplan, macro_record, finish, selection):
+def board_audit(
+    poses, drc, floorplan, macro_record, finish, selection, rf_audit=None, fanout=None, prepare=None
+):
     h = floorplan["board"]["height"]
     parts = parts_from_board(poses, h)
     res = checks(parts, floorplan)
     fail = failures(res, floorplan)
     cons = _constraint_checks(parts, floorplan)
     macro = _macro_checks(parts, macro_record, finish)
+    fan = fanout_checks(parts, fanout)
     drc_s = _drc_summary(drc)
     placement_types = {
         "courtyards_overlap",
@@ -593,6 +630,17 @@ def board_audit(poses, drc, floorplan, macro_record, finish, selection):
         "pin_distance_failures": res["pin_distance"]["failures"],
         "protection_at_j1": res["pin_distance"]["protection"],
         "rf_ball_vs_macro_worst_um": macro["worst_um"],
+        "r1_macro_digest_v2_equal": (finish.get("r1_macro_copper") or {}).get("equal"),
+        "macro_loads": (finish.get("macro") or {}).get("loads"),
+        "rf_audit": (
+            {k: v.get("ok") for k, v in rf_audit.items() if k.startswith("A")} if rf_audit else None
+        ),
+        "rf_audit_ok": rf_audit.get("ok") if rf_audit else None,
+        "exit_bands_clear": all(not v["parts"] for v in fan["bands"].values()),
+        "exit_bands": len(fan["bands"]),
+        "bottom_sites_ok": all(v.get("ok") for v in fan["sites"].values()),
+        "bottom_sites": {k: v.get("board_ref") for k, v in fan["sites"].items()},
+        "fanout_plan": (prepare or {}).get("fanout", {}).get("diagnostics"),
         "macro_variant": finish["macro"].get("variant"),
         "macro_status": macro_record.get("status"),
         "drc_violations": drc_s["violations"],
@@ -605,6 +653,8 @@ def board_audit(poses, drc, floorplan, macro_record, finish, selection):
         "checks": res,
         "constraints": cons,
         "macro": macro,
+        "fanout": fan,
+        "rf_audit": rf_audit,
         "drc": drc_s,
         "finish": finish,
     }

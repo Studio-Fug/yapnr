@@ -4,30 +4,37 @@ board, placed by yapnr's Monte Carlo placement search, stopped before routing.
 Steps (each reads the previous one's files in WORK; nothing is placed by hand):
 
 ``source``   the board yapnr ingests (kicad_ops.py source): the floorplan board with every
-             footprint of the atopile build except the RF macro placeholder RFM1, which is held
-             out of the placement graph (the engine models a part as a box about its origin, and
-             the macro is neither a box nor movable: yapnr gap E2); its area is the RF region
-             keepout of constraints.yaml.
-``prepare``  ingest (pnr.ingest), the placement constraints (constraints.yaml without the
-             proposed rf_macro section, whose part is not in the graph), the routing rules under
-             the pcbway-adv-6l-rf profile, and the set checks (every radio capacitor in exactly
-             one decoupling set).
+             footprint of the atopile build, U1 at its fixed pose and the RF macro merged in
+             U1's frame (columns, dummy columns, loads RT1-RT4, mask islands, feeds, vias and
+             zones), every macro item in the KiCad group RFM1_MACRO (the engine's
+             ``fixed_block``), the board's In1 GND plane cut out of the RF region.
+``prepare``  ingest (pnr.ingest); the fixed block's copper (pnr.fixed_copper) and its
+             footprints held out of the placement graph (pnr.fixed_block.hold_out); U1's fanout
+             planned with that copper (pnr.fanout): every surface exit becomes a placement
+             keepout (bands.py; a ball-anchored slot that meets another net's band is refused
+             by name), and the parts given a bottom site lose their top-side regions; the
+             placement constraints (constraints.yaml without the proposed rf_macro section,
+             plus the R4 region and the bands); the routing rules under the pcbway-adv-6l-rf
+             profile, carrying the fixed copper; the set checks (every radio capacitor in
+             exactly one decoupling set).
 ``place``    pnr.mc.halving stage 0 only (--stop-after place): N seeded global starts
              (stratified and Latin-hypercube, initial_pool), each legalized and scored by the
              engine's width-aware routability proxy. Run it through the shared heavy-run queue.
 ``select``   the winner, mechanically: legal candidates that pass the placement audit
              (audit.py), ranked by the engine's own stage-0 key (proxy score, then cheap score),
              then HPWL, then id. Every candidate's audit and rank go to WORK/selection.json.
-``finish``   pnr.writeback of the winner (placement only, no routes), then kicad_ops.py finish
-             (outline, macro merge, zone fill), the project and custom rules beside it, KiCad's
-             DRC, the audit of the final board and its report.
-``render``   kicad-cli pcb render: top and an angled view (labelled with --label-python, a
-             Python with Pillow).
+``finish``   pnr.writeback of the winner (placement only, no routes; the copper keepouts as
+             rule areas and custom rules), then kicad_ops.py finish (outline, locks, zone fill,
+             macro digest R1 v2), the project and custom rules beside it, KiCad's DRC, the
+             placement audit and the RF audit (rf_audit.py A1-A6) of the final board, and its
+             report.
+``render``   kicad-cli pcb render: top, angled and bottom views (labelled with --label-python,
+             a Python with Pillow).
 
 Interpreters: this script runs under a numeric Python with PyYAML (the engine's
 pnr.mc.halving needs torch and numpy); ``--kicad-python`` (or $PNR_KICAD_PYTHON) is KiCad's
-own Python with pcbnew; ``--engine`` is the yapnr checkout whose hardware/pnr runs (the region,
-side and stackup work is on the integrated gap branch); ``--kicad-cli`` (or $PNR_KICAD_CLI).
+own Python with pcbnew; ``--engine`` is the yapnr checkout whose hardware/pnr runs;
+``--kicad-cli`` (or $PNR_KICAD_CLI).
 """
 
 from __future__ import annotations
@@ -59,6 +66,23 @@ def macro_board(variant):
 
 
 BOARD_NAME = "radar60-reva"
+OFFSET = 30.0  # KiCad page offset of the board origin (gen_board.OFFSET, pnr.writeback)
+
+
+def kicad_xy(floorplan, x, y):
+    """Board frame (mm, origin lower left, +y north) to KiCad page mm (y down)."""
+    return (round(OFFSET + x, 6), round(OFFSET + float(floorplan["board"]["height"]) - y, 6))
+
+
+def kicad_rect(floorplan, r):
+    (x0, y1), (x1, y0) = kicad_xy(floorplan, r[0], r[1]), kicad_xy(floorplan, r[2], r[3])
+    return [x0, y0, x1, y1]
+
+
+def macro_refs(variant):
+    """The fixed block's footprints: RFM1 and the record's dummy loads."""
+    rec = json.loads(macro_board(variant).with_suffix(".json").read_text())
+    return ["RFM1"] + sorted(spec["ref"] for spec in (rec.get("loads") or {}).values())
 
 
 def _env(engine, extra=None):
@@ -93,6 +117,19 @@ def _run(cmd, env=None, cwd=None, log=None):
 def step_source(a):
     work = Path(a.work)
     work.mkdir(parents=True, exist_ok=True)
+    floorplan = yaml.safe_load((HERE / "floorplan.yaml").read_text())
+    u1 = floorplan["u1"]
+    params = {
+        "macro_pcb": str(macro_board(a.macro_variant)),
+        "u1": {
+            "address": floorplan["parts"]["radio"],
+            "at_kicad": list(kicad_xy(floorplan, *u1["at"])),
+            # KiCad's orientation of a top-side part equals the engine's (both CCW)
+            "orientation_deg": float(u1["rot"]),
+        },
+        "rf_region_kicad": [kicad_rect(floorplan, r) for r in floorplan["rf"]["region"]],
+    }
+    (work / "source-params.json").write_text(json.dumps(params, indent=1))
     out = _run(
         [
             a.kicad_python,
@@ -101,9 +138,17 @@ def step_source(a):
             HERE / "radar60.kicad_pcb",
             a.ato_board,
             work / "source.kicad_pcb",
-        ]
+            work / "source-params.json",
+        ],
+        log=work / "source.log",
     )
-    print(out.strip().splitlines()[-1])
+    summary = json.loads(out.strip().splitlines()[-1])
+    (work / "source.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
+    print(json.dumps(summary, sort_keys=True)[:2000])
+    # The custom rules and the project beside the source: the fixed-copper export and the
+    # writeback read the board's rules from there.
+    shutil.copyfile(HERE / "radar60.kicad_pro", work / "source.kicad_pro")
+    shutil.copyfile(HERE / "radar60.kicad_dru", work / "source.kicad_dru")
     result = Path(a.ato_board).parent / "result.json"
     if result.is_file():
         rec = json.loads(result.read_text())
@@ -162,33 +207,12 @@ def decoupling_sets(floorplan, addresses):
     }
 
 
-def step_prepare(a):
-    work = Path(a.work)
-    inputs = work / "inputs"
-    inputs.mkdir(parents=True, exist_ok=True)
-    _run(
-        [
-            a.kicad_python,
-            "-m",
-            "pnr.ingest",
-            work / "source.kicad_pcb",
-            "--name",
-            "radar60",
-            "--dump-json",
-            inputs / "graph.json",
-        ],
-        env=_env(a.engine),
-        cwd=Path(a.engine) / "hardware/pnr",
-    )
+def _r4_region(doc, floorplan, graph_doc):
+    """R4 as a placement region (the engine's noise_keepout is only proposed): every movable
+    part with a guard-restricted pad (a routed net outside the RF, PWR, GND and ANALOG classes:
+    the custom rule's own test) stays out of the RF region and its 5 mm guard band."""
     import audit
 
-    doc = yaml.safe_load((HERE / "constraints.yaml").read_text())
-    doc.pop("rf_macro", None)  # its part is held out of the graph (see ``source``)
-    floorplan = yaml.safe_load((HERE / "floorplan.yaml").read_text())
-    # R4 as a placement region (the engine's noise_keepout is only proposed): every movable
-    # part with a guard-restricted pad (a routed net outside the RF, PWR, GND and ANALOG
-    # classes: the custom rule's own test) stays out of the RF region and its 5 mm guard band.
-    graph_doc = json.loads((inputs / "graph.json").read_text())
     fixed = {k for k in doc.get("fixed", {})}
     counts = {}
     for c in graph_doc["components"]:
@@ -203,20 +227,172 @@ def step_prepare(a):
         and c["ref"] not in fixed
         and any(audit.guard_restricted(p.get("net"), floorplan, counts) for p in c["pads"])
     )
-    doc.setdefault("region", []).append(
-        {
-            "name": "r4_digital",
-            "refs": ["@" + _glob_literal(x) for x in digital],
-            "areas": [{"rect": r} for r in audit.digital_region(floorplan)],
-            "hard": True,
-            "reason": "R4: no digital copper within 5 mm of the RF region (derived by integrate.py)",
-        }
+    return digital, {
+        "name": "r4_digital",
+        "refs": ["@" + _glob_literal(x) for x in digital],
+        "areas": [{"rect": r} for r in audit.digital_region(floorplan)],
+        "hard": True,
+        "reason": "R4: no digital copper within 5 mm of the RF region (derived by integrate.py)",
+    }
+
+
+def plan_fanout(engine, graph, compiled, rules, cache_dir=None):
+    """U1's fanout as the router (and the placement's bottom-site derivation) plans it: U1 at
+    its fixed pose, the fixed block's copper from the rules. The plan (several minutes) is kept
+    in ``cache_dir`` by its inputs' digest (pnr.fanout.planner.inputs_sha256)."""
+    sys.path[:0] = [str(Path(engine) / "hardware/pnr"), str(engine)]
+    from pnr.fanout.bottom import _posed
+    from pnr.fanout.planner import cached_plan, classify, inputs_sha256, plan_layers
+
+    spec = rules["fanouts"][0]
+    posed = _posed(graph, compiled, [spec["ref"]])
+    layers, drops, signals = classify(posed, rules)
+    part = posed.component(spec["ref"])
+    fixed = rules.get("fixed_copper")
+    key = inputs_sha256(
+        posed, rules, spec, plan_layers(spec, layers, part.side), drops, signals, fixed
     )
+    cached = Path(cache_dir) / ("fanout-%s.json" % key[:16]) if cache_dir else None
+    if cached and cached.is_file():
+        hit = json.loads(cached.read_text())
+        if hit.get("key") == key:
+            return spec, part, hit["plan"]
+    plan = cached_plan(
+        posed,
+        rules,
+        spec,
+        grid_layers=layers,
+        plane_nets=drops,
+        signal_nets=signals,
+        fixed_copper=fixed,
+    )
+    if cached:
+        cached.write_text(json.dumps({"key": key, "plan": plan}, default=str))
+    return spec, part, plan
+
+
+def _slots(floorplan, graph_doc):
+    """The ball-anchored slots (floorplan regions with ``slot: true``) with their parts' nets."""
+    nets_of = {
+        c.get("address"): {p["net"] for p in c["pads"] if p.get("net")}
+        for c in graph_doc["components"]
+    }
+    out = []
+    for name, spec in floorplan["regions"].items():
+        if not spec.get("slot"):
+            continue
+        nets = set()
+        for role in spec["parts"]:
+            pats = floorplan["parts"][role]
+            pats = pats if isinstance(pats, list) else [pats]
+            for address, ns in nets_of.items():
+                if address and any(fnmatch.fnmatchcase(address, q) for q in pats):
+                    nets |= ns
+        rects = spec["areas"] if "areas" in spec else [spec["rect"]]
+        for k, r in enumerate(rects):
+            out.append(
+                dict(name=name if not k else "%s.%d" % (name, k), rect=r, nets=nets - {"GND"})
+            )
+    return out
+
+
+def step_prepare(a):
+    import bands
+
+    work = Path(a.work)
+    inputs = work / "inputs"
+    inputs.mkdir(parents=True, exist_ok=True)
+    _run(
+        [
+            a.kicad_python,
+            "-m",
+            "pnr.ingest",
+            work / "source.kicad_pcb",
+            "--name",
+            "radar60",
+            "--dump-json",
+            inputs / "graph-full.json",
+        ],
+        env=_env(a.engine),
+        cwd=Path(a.engine) / "hardware/pnr",
+    )
+    doc = yaml.safe_load((HERE / "constraints.yaml").read_text())
+    doc.pop("rf_macro", None)  # proposed; the macro is the fixed_block
+    floorplan = yaml.safe_load((HERE / "floorplan.yaml").read_text())
+    # The fixed block's copper (fixed.json schema 2) as the router exports it.
+    _graph, _compiled, rules0 = _compile(a.engine, inputs / "graph-full.json", doc)
+    (inputs / "rules0.json").write_text(json.dumps(rules0, indent=1, sort_keys=True))
+    _run(
+        [
+            a.kicad_python,
+            "-m",
+            "pnr.fixed_copper",
+            work / "source.kicad_pcb",
+            "--export-dir",
+            inputs / "fixed",
+            "--rules",
+            inputs / "rules0.json",
+        ],
+        env=_env(a.engine),
+        cwd=Path(a.engine) / "hardware/pnr",
+        log=work / "fixed.log",
+    )
+    fixed_copper = json.loads((inputs / "fixed" / "fixed.json").read_text())
+    # The block's footprints (RFM1, RT1-RT4) leave the placement graph.
+    sys.path[:0] = [str(Path(a.engine) / "hardware/pnr"), str(a.engine)]
+    from pnr.fixed_block import hold_out
+    from pnr.graph import BoardGraph
+
+    graph = BoardGraph.from_json((inputs / "graph-full.json").read_text())
+    held = hold_out(graph, macro_refs(a.macro_variant))
+    (inputs / "graph.json").write_text(graph.to_json())
+    graph_doc = json.loads((inputs / "graph.json").read_text())
+    digital, r4 = _r4_region(doc, floorplan, graph_doc)
+    doc.setdefault("region", []).append(r4)
+
+    # U1's fanout before placement: exit bands and bottom sites.
+    graph, compiled, rules = _compile(a.engine, inputs / "graph.json", doc)
+    rules["fixed_copper"] = fixed_copper
+    spec, u1, plan = plan_fanout(a.engine, graph, compiled, rules, cache_dir=inputs)
+    half = float(floorplan["u1"]["courtyard_mm"]) / 2.0
+    cx, cy = u1.pos
+    courtyard = [cx - half, cy - half, cx + half, cy + half]
+    eb = floorplan["fanout"]["exit_bands"]
+    strips = bands.exit_strips(
+        plan["terminals"], courtyard, float(eb["width_mm"]), float(eb["beyond_courtyard_mm"])
+    )
+    kept, own, errors = bands.judge_slots(strips, _slots(floorplan, graph_doc))
+    merged = bands.merge_strips(kept)
+    sites = (plan.get("bottom") or {}).get("sites") or {}
+    by_ref = {c["ref"]: c.get("address") for c in graph_doc["components"]}
+    site_addresses = sorted(by_ref[r] for r in sites if by_ref.get(r))
+    removed = bands.drop_site_parts(doc, site_addresses)
+    doc.setdefault("keepout", []).extend(bands.keepout_entries(merged))
+    fanout_report = {
+        "inputs_sha256": plan.get("inputs_sha256"),
+        "diagnostics": {
+            k: plan["diagnostics"].get(k)
+            for k in ("signals", "signals_escaped", "drops", "drops_placed", "kinds", "failed")
+        },
+        "exit_strips": strips,
+        "own_path_strips": own,
+        "bands": merged,
+        "slot_errors": errors,
+        "bottom_sites": {r: dict(site, address=by_ref.get(r)) for r, site in sorted(sites.items())},
+        "bottom_unplaced": (plan.get("bottom") or {}).get("unplaced"),
+        "site_parts_removed_from": removed,
+    }
+    (work / "fanout-plan.json").write_text(json.dumps(fanout_report, indent=1, default=str))
+    if errors:
+        raise SystemExit("ball-anchored slots meet exit bands:\n  " + "\n  ".join(errors))
+
     (work / "constraints-place.yaml").write_text(
-        "# constraints.yaml without the proposed rf_macro section, plus the R4 region\n"
-        "# (integrate.py prepare; generated)\n" + yaml.safe_dump(doc, sort_keys=False)
+        "# constraints.yaml without the proposed rf_macro section, plus the R4 region, the fanout\n"
+        "# exit bands and the bottom-site edits (integrate.py prepare; generated)\n"
+        + yaml.safe_dump(doc, sort_keys=False)
     )
     graph, compiled, rules = _compile(a.engine, inputs / "graph.json", doc)
+    rules["fixed_copper"] = fixed_copper
     (inputs / "rules.json").write_text(json.dumps(rules, indent=1, sort_keys=True))
     sets = decoupling_sets(floorplan, [c.address for c in graph.components if c.address])
     # Every PMIC part is in the block region but the damping options (a list, not pmic.*)
@@ -233,14 +409,23 @@ def step_prepare(a):
     report = {
         "components": len(graph.components),
         "nets": len(graph.nets),
+        "held_out": held,
+        "fixed_blocks": [
+            {k: b.get(k) for k in ("name", "group", "anchor", "sha256", "refs")}
+            for b in fixed_copper.get("blocks") or []
+        ],
         "warnings": compiled.warnings,
         "constraints": sorted({c.kind for c in compiled.constraints}),
         "decoupling_sets": sets,
         "r4_digital_parts": len(digital),
-        "r4_region_rects": audit.digital_region(floorplan),
+        "r4_region_rects": r4["areas"],
+        "fanout": {
+            k: fanout_report[k] for k in ("diagnostics", "bands", "bottom_sites", "bottom_unplaced")
+        },
+        "own_path_strips": [(s["ball"], s["net"], s["slots"]) for s in own],
     }
-    (work / "prepare.json").write_text(json.dumps(report, indent=1))
-    print(json.dumps(report, indent=1))
+    (work / "prepare.json").write_text(json.dumps(report, indent=1, default=str))
+    print(json.dumps(report, indent=1, default=str)[:6000])
     if sets["uncovered"] or sets["in_several"]:
         raise SystemExit("decoupling sets do not partition the radio capacitors")
     if sets["pmic_unassigned"]:
@@ -447,6 +632,11 @@ def step_finish(a):
         sel = json.loads((work / "selection.json").read_text())
         placed_json = work / "mc" / "cand" / sel["winner"] / "placed.json"
     placed = work / "placed.kicad_pcb"
+    # The board's project and custom rules beside the writeback's output: writeback patches the
+    # project's rules and appends the copper keepouts' custom rules to the .kicad_dru (only its
+    # own marked block), and both go beside the final board.
+    shutil.copyfile(HERE / "radar60.kicad_pro", placed.with_suffix(".kicad_pro"))
+    shutil.copyfile(HERE / "radar60.kicad_dru", placed.with_suffix(".kicad_dru"))
     _run(
         [
             a.kicad_python,
@@ -468,8 +658,8 @@ def step_finish(a):
     board = out_dir / (BOARD_NAME + ".kicad_pcb")
     # The project and the custom rules go beside the board first: the zone filler in
     # kicad_ops.py finish reads them (hole clearances of the custom rules).
-    shutil.copyfile(HERE / "radar60.kicad_pro", out_dir / (BOARD_NAME + ".kicad_pro"))
-    shutil.copyfile(HERE / "radar60.kicad_dru", out_dir / (BOARD_NAME + ".kicad_dru"))
+    shutil.copyfile(placed.with_suffix(".kicad_pro"), out_dir / (BOARD_NAME + ".kicad_pro"))
+    shutil.copyfile(placed.with_suffix(".kicad_dru"), out_dir / (BOARD_NAME + ".kicad_dru"))
     _run(
         [
             a.kicad_python,
@@ -505,13 +695,38 @@ def step_finish(a):
     _run([a.kicad_python, HERE / "kicad_ops.py", "poses", board, poses])
     floorplan = yaml.safe_load((HERE / "floorplan.yaml").read_text())
     macro_record = json.loads(macro_board(a.macro_variant).with_suffix(".json").read_text())
+    # The RF audit (A1-A6) of the filled board: the macro as merged, in U1's frame.
+    finish = json.loads((work / "finish.json").read_text())
+    rf = work / "rf-audit.json"
+    subprocess.run(
+        [
+            a.kicad_python,
+            HERE / "rf_audit.py",
+            board,
+            macro_board(a.macro_variant).with_suffix(".json"),
+            "--u1",
+            "%s,%s" % tuple(finish["u1"]["at_kicad"]),
+            "--net-prefix",
+            "RF_",
+            "--out",
+            rf,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    prepare = json.loads((work / "prepare.json").read_text())
+    fanout_plan = json.loads((work / "fanout-plan.json").read_text())
     report = audit.board_audit(
         json.loads(poses.read_text()),
         json.loads(drc.read_text()),
         floorplan,
         macro_record,
-        json.loads((work / "finish.json").read_text()),
+        finish,
         sel,
+        rf_audit=json.loads(rf.read_text()) if rf.is_file() else None,
+        fanout=fanout_plan,
+        prepare=prepare,
     )
     (out_dir / (BOARD_NAME + ".kicad_prl")).unlink(missing_ok=True)  # KiCad's local view state
     report["summary"]["board_sha256"] = hashlib.sha256(board.read_bytes()).hexdigest()

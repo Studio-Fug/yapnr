@@ -1,0 +1,2130 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html"><link rel="next" title="Design: the gloss, dekink and corridor-coalescing pass (PNR_GLOSS)" href="gloss.html"><link rel="prev" title="Design: cloud and HPC experiment backends (GCP Batch, Slurm)" href="cloud-experiments.html">
+        <link rel="prefetch" href="../../static/yapnr-logo-256.png" as="image">
+        <link rel="prefetch" href="../../static/yapnr-logo-light.png" as="image">
+
+    <link rel="shortcut icon" href="../../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
+        <title>Design: fab outputs and staged ordering (yapnr fab, yapnr order stage) - yapnr documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../../static/custom.css?v=ad564152" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-brand-primary: #024823;
+  --color-brand-content: #024823;
+  --color-brand-visited: #024823;
+  --color-yapnr-accent: #ba9015;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">yapnr documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="../../static/yapnr-logo-256.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../../static/yapnr-logo-light.png" alt="Dark Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../viewer.html">The live viewer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../frontends/atopile.html">The atopile toolchain</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../part-cache.html">The part cache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../rf-inverse-design.html">RF inverse design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../rf-solver-backends.html">RF solver backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../fab-and-ordering.html">Fab bundles and staged orders</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../releases.html">Releases and versioning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../rf-fab-coupons.html">RF fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../cloud-experiments.html">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../regression-ladder.html">Regression ladder</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../decisions.html">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fea-integration.html">Design: thermal and electromagnetic field solvers (FEA) in yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-topology-optimization.html">Design: RF microstrip inverse design by topology optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-fab-coupons.html">Design: fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compact-placement.html">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../history/import-manifest.html">History import manifest</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../about-the-name.html">About the name</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../references.html">Foundations and references</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../DEVELOPERS.html">Developing yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../CONTRIBUTING.html">Contributing to yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../AGENTS.html">Rules for agents</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../WORKLOG.html">Worklog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../THIRD_PARTY.html">Third-party material</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../README.html">yapnr</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/blob/main/docs/design/fab-and-ordering.md?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/edit/main/docs/design/fab-and-ordering.md" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="design-fab-outputs-and-staged-ordering-yapnr-fab-yapnr-order-stage">
+<h1>Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)<a class="headerlink" href="#design-fab-outputs-and-staged-ordering-yapnr-fab-yapnr-order-stage" title="Link to this heading">¶</a></h1>
+<p>Status: <strong>F2, F1 and O1 built</strong> (2026-10-02; user guide <a class="reference internal" href="../fab-and-ordering.html"><span class="std std-doc">Fab bundles and staged
+orders</span></a>, differences in §14). O2 and O3 wait for the owner’s decisions D1
+and D3. The sections below are the design as proposed; §1 describes the state before it. It
+covers the fab outputs and ordering items of the end-to-end plan (F1, F2, O1 to O3, named in
+<code class="docutils literal notranslate"><span class="pre">WORKLOG.md</span></code>). The owner’s request was:</p>
+<blockquote>
+<div><p>where are we at with one-click order on JLC and PCBWay? Please also include a US vendor like
+OSHPark–I want to start sending out some boards ASAP.</p>
+</div></blockquote>
+<p>The first boards are RF demo boards (microstrip structures from <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code> topology optimization)
+and fab-model test coupons, probably at OSH Park. Assembled boards would go to JLCPCB or PCBWay
+later.</p>
+<p>Vendor facts come from public pages read on 2026-10-02 (§13). Nothing was uploaded to any vendor
+and no vendor API was called while writing this design. The headless kicad-cli 10.0.6 was run on a
+test board in the repository, and those runs are labelled “measured”. Numbers marked “derived” are
+choices made in this design and need the owner’s review (§12).</p>
+<section id="where-ordering-stands">
+<h2>1. Where ordering stands<a class="headerlink" href="#where-ordering-stands" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>No ordering code exists in yapnr.</strong> No command writes a vendor bundle, BOM, CPL or zip.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">hardware/pnr/pnr/fab_profile.py</span></code> is the only fab code.</strong> It has the default <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code>
+profile (JLCPCB 4-layer JLC04161H-7628 with epoxy-filled, capped vias) and <code class="docutils literal notranslate"><span class="pre">legacy</span></code>. It has no
+OSH Park or PCBWay profile and no stackup data.</p></li>
+<li><p><strong>The plan items were named but never defined.</strong> <code class="docutils literal notranslate"><span class="pre">WORKLOG.md</span></code> lists F1, F2 and O1 to O3 after
+the atopile, spec and agent items, without definitions. §2 defines them here.</p></li>
+<li><p><strong>The owner wants boards out quickly.</strong> This design therefore puts OSH Park first: bare boards
+with no assembly, which is all the RF demos and coupons need.</p></li>
+</ul>
+<p>The closest each vendor can get to one click, under the staging-only rule:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Vendor</p></th>
+<th class="head"><p>Best mechanism</p></th>
+<th class="head"><p>What the human does</p></th>
+<th class="head"><p>Plan item</p></th>
+<th class="head"><p>Needs</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>OSH Park (US)</strong></p></td>
+<td><p><strong>Public boards:</strong> an import link, <code class="docutils literal notranslate"><span class="pre">https://oshpark.com/import?url=&lt;public</span> <span class="pre">zip&gt;</span></code> <a class="reference external" href="https://docs.oshpark.com/tips+tricks/api/">O-api</a>. OSH Park fetches the zip itself, so yapnr uploads nothing. This is one click for anyone, owner included.</p></td>
+<td><p>Clicks the link, reviews the preview, picks options, pays</p></td>
+<td><p>O1</p></td>
+<td><p>A public URL for the zip, for example a docs-site or release asset. Owner decision D2 (§12).</p></td>
+</tr>
+<tr class="row-odd"><td><p>OSH Park (US)</p></td>
+<td><p><strong>Private boards:</strong> prints the card, then opens oshpark.com.</p></td>
+<td><p>Drags the zip onto the page</p></td>
+<td><p>O1</p></td>
+<td><p>Nothing</p></td>
+</tr>
+<tr class="row-even"><td><p>OSH Park (US)</p></td>
+<td><p><strong>Opt-in upload:</strong> a POST to the documented anonymous endpoint <code class="docutils literal notranslate"><span class="pre">/import.json</span></code>, then opens the returned page <a class="reference external" href="https://docs.oshpark.com/tips+tricks/api/">O-api</a>.</p></td>
+<td><p>Confirms the upload at the prompt, reviews, pays</p></td>
+<td><p>O2</p></td>
+<td><p>Owner decision D1</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>PCBWay</strong></p></td>
+<td><p>Prints the card, then opens the quote page <a class="reference external" href="https://www.pcbway.com/orderonline.aspx">P-order</a> <a class="reference external" href="https://www.pcbway.com/quotesmt.aspx">P-smt</a>.</p></td>
+<td><p>Uploads the zip and fills in options from the card</p></td>
+<td><p>O1</p></td>
+<td><p>Nothing</p></td>
+</tr>
+<tr class="row-even"><td><p>PCBWay</p></td>
+<td><p>The partner API: quote calls and “Add to Cart” only <a class="reference external" href="https://api-partner.pcbway.com/Help">P-api</a>.</p></td>
+<td><p>Pays in the PCBWay web account</p></td>
+<td><p>O3</p></td>
+<td><p>Partner access (application) and decision D3</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>JLCPCB</strong></p></td>
+<td><p>Prints the card, then opens <code class="docutils literal notranslate"><span class="pre">cart.jlcpcb.com/quote</span></code> <a class="reference external" href="https://cart.jlcpcb.com/quote">J-quote</a>.</p></td>
+<td><p>Uploads the zip, picks the named stackup, adds BOM/CPL</p></td>
+<td><p>O1</p></td>
+<td><p>Nothing</p></td>
+</tr>
+<tr class="row-even"><td><p>JLCPCB</p></td>
+<td><p>The official API, quotes only <a class="reference external" href="https://api.jlcpcb.com/">J-api</a>.</p></td>
+<td><p>As above</p></td>
+<td><p>O3</p></td>
+<td><p>API access (application)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>PCBWay’s own KiCad plugin uploads anonymously to an endpoint it does not document as an API
+<a class="reference external" href="https://github.com/pcbway/PCBWay-Plug-in-for-Kicad">P-plug</a>. This design does not use that endpoint unless the owner decides otherwise (D1).</p>
+</section>
+<section id="plan-items">
+<h2>2. Plan items<a class="headerlink" href="#plan-items" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Item</p></th>
+<th class="head"><p>Scope</p></th>
+<th class="head"><p>Command</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>F1</strong></p></td>
+<td><p>Per-vendor fab bundles from a routed <code class="docutils literal notranslate"><span class="pre">.kicad_pcb</span></code>: gerbers with vendor layer names, drill files, IPC-D-356 where useful, BOM and CPL with LCSC numbers, stackup and impedance notes, a fab README, deterministic zips, a manifest with hashes, and provenance.</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span> <span class="pre">build</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>F2</strong></p></td>
+<td><p>Vendor capability profiles and stackups as data, <code class="docutils literal notranslate"><span class="pre">fab_profile.py</span></code> extended to use them, and <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span> <span class="pre">check</span></code> (native KiCad DRC under the vendor’s rules, plus the checks KiCad cannot express). Also the stackup adapters for <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code> and the coupon work.</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span> <span class="pre">profiles/show/check</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>O1</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code> with no network access. It validates, builds or verifies the bundle, prints the order card and asks for confirmation, then opens or prints the vendor’s upload or quote page and names the exact file to drop. Includes OSH Park import links for public zips, and a dry-run mode for CI.</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>O2</strong></p></td>
+<td><p>Opt-in uploads through a documented vendor mechanism that never orders or pays. Today that is only OSH Park’s <code class="docutils literal notranslate"><span class="pre">/import.json</span></code>. The human opts in on each run, and at an interactive prompt.</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span> <span class="pre">--upload</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>O3</strong></p></td>
+<td><p>Vendor APIs, where access has been granted. Calls go through an allowlist of quote and add-to-cart endpoints; payment, confirmation and balance endpoints cannot be reached. Credentials come from the environment or the OS keychain at run time.</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span> <span class="pre">--api</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<section id="delivery-order">
+<h3>2.1 Delivery order<a class="headerlink" href="#delivery-order" title="Link to this heading">¶</a></h3>
+<p>Each step is one pull request. Each is useful on its own, and none changes the engine’s defaults.</p>
+<ol class="arabic simple">
+<li><p><strong>F2a: OSH Park profiles and stackup data.</strong> The <code class="docutils literal notranslate"><span class="pre">oshpark-2l</span></code>, <code class="docutils literal notranslate"><span class="pre">oshpark-4l</span></code> and <code class="docutils literal notranslate"><span class="pre">oshpark-6l</span></code>
+profiles, <code class="docutils literal notranslate"><span class="pre">jlc-4l</span></code>, the stackup files, the loader, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span> <span class="pre">profiles/show/check</span></code>, the
+<code class="docutils literal notranslate"><span class="pre">fab_profile.py</span></code> adapter and the <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code> stackup adapter. This step is enough to route an
+RF demo or coupon under OSH Park’s rules.</p></li>
+<li><p><strong>F1a: bare-board bundles for all three vendors.</strong> No assembly yet. Determinism, the manifest
+and the README are included.</p></li>
+<li><p><strong>O1a: <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code> for bare boards.</strong> Manual staging for all three vendors, OSH Park
+import links, the order card and <code class="docutils literal notranslate"><span class="pre">--dry-run</span></code>. <strong>After this step the first OSH Park order can be
+placed.</strong></p></li>
+<li><p><strong>F1b: assembly outputs.</strong> BOM and CPL for JLCPCB and PCBWay, and per-vendor placement
+corrections in the part cache.</p></li>
+<li><p><strong>O1b: assembly staging.</strong> The card’s assembly section, and the BOM and CPL steps on the
+vendor pages.</p></li>
+<li><p><strong>O2: the OSH Park opt-in upload.</strong> Lands only after decision D1.</p></li>
+<li><p><strong>O3: vendor APIs.</strong> Lands only after access is granted and decision D3 is made.</p></li>
+</ol>
+<p>Later, the Bazel rule <code class="docutils literal notranslate"><span class="pre">yapnr_fab</span></code> (migration plan §4.3, PR8) wraps <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span> <span class="pre">build</span></code>. The project
+manifest also gains a <code class="docutils literal notranslate"><span class="pre">[fab]</span></code> table (PR3d, §6.1).</p>
+<p><strong>Not in scope:</strong></p>
+<ul class="simple">
+<li><p><strong>Panelization.</strong> KiKit does it; <code class="docutils literal notranslate"><span class="pre">fab</span> <span class="pre">check</span></code> only checks OSH Park’s panel rules.</p></li>
+<li><p><strong>Other vendors:</strong> Aisler and Eurocircuits in the EU, and the US shops in §13. The vendor data
+format allows them later.</p></li>
+<li><p><strong>Stencil-only orders, price comparison across vendors, and a “stage order” button in the
+viewer.</strong></p></li>
+</ul>
+</section>
+</section>
+<section id="rules-that-bind-every-part-of-this-design">
+<h2>3. Rules that bind every part of this design<a class="headerlink" href="#rules-that-bind-every-part-of-this-design" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p><strong>Staging only.</strong> yapnr prepares files and takes the human to the vendor’s upload, quote or cart
+page. It never pays, never confirms or submits an order, never stores payment data, never logs
+in, never creates an account and never accepts terms for anyone. The owner decided this
+(<code class="docutils literal notranslate"><span class="pre">docs/decisions.md</span></code>: “the human pays on the vendor’s page”).</p></li>
+<li><p><strong>No network by default.</strong> <code class="docutils literal notranslate"><span class="pre">fab</span> <span class="pre">check</span></code>, <code class="docutils literal notranslate"><span class="pre">fab</span> <span class="pre">build</span></code> and <code class="docutils literal notranslate"><span class="pre">order</span> <span class="pre">stage</span></code> (O1) open no network
+connection. Opening a browser hands a URL to the human’s browser; yapnr does not fetch it. The
+only exceptions are the opt-in paths of O2 and O3, and <code class="docutils literal notranslate"><span class="pre">--verify-url</span></code> (§8.3), a read-only GET of
+our own published zip.</p></li>
+<li><p><strong>Opt-in on each run, by a human.</strong> O2 and O3 calls need a flag on that run plus a confirmation
+typed at an interactive terminal. No config file, environment variable or <code class="docutils literal notranslate"><span class="pre">--yes</span></code> replaces the
+typed confirmation. Agents run <code class="docutils literal notranslate"><span class="pre">order</span> <span class="pre">stage</span></code> only with <code class="docutils literal notranslate"><span class="pre">--dry-run</span></code>; this rule goes into
+<code class="docutils literal notranslate"><span class="pre">AGENTS.md</span></code>.</p></li>
+<li><p><strong>Credentials.</strong> A vendor token (O3) is read at run time from an environment variable or the OS
+keychain. It is never written to disk, logs, manifests, cards, exceptions or the command line.</p></li>
+<li><p><strong>Native KiCad DRC is the judge.</strong> <code class="docutils literal notranslate"><span class="pre">fab</span> <span class="pre">check</span></code> runs <code class="docutils literal notranslate"><span class="pre">kicad-cli</span> <span class="pre">pcb</span> <span class="pre">drc</span></code> under the vendor’s
+rules. It never relaxes or suppresses a finding.</p></li>
+<li><p><strong>Headless KiCad only, every subprocess time-bounded.</strong> kicad-cli is found the way the atopile
+frontend finds it (<code class="docutils literal notranslate"><span class="pre">yapnr.frontends.atopile.kicad.find_cli</span></code>, which refuses GUI bundles). Later
+<code class="docutils literal notranslate"><span class="pre">yapnr.kicad.toolchain</span></code> (PR6a) takes over.</p></li>
+<li><p><strong>Public repository.</strong> Vendor facts are committed only as data with a source and an access date.
+No vendor-API data and no part data are committed (the part-cache rule). Bundles carry no
+absolute paths and no local timezone.</p></li>
+</ol>
+</section>
+<section id="vendor-facts-that-shape-the-design">
+<h2>4. Vendor facts that shape the design<a class="headerlink" href="#vendor-facts-that-shape-the-design" title="Link to this heading">¶</a></h2>
+<section id="files-each-vendor-takes">
+<h3>4.1 Files each vendor takes<a class="headerlink" href="#files-each-vendor-takes" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Vendor</p></th>
+<th class="head"><p>Gerbers</p></th>
+<th class="head"><p>Drill</p></th>
+<th class="head"><p>Assembly</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>OSH Park</p></td>
+<td><p><strong>Zip of gerbers.</strong> Documented names: <code class="docutils literal notranslate"><span class="pre">.GTL</span> <span class="pre">.GBL</span> <span class="pre">.G2L</span> <span class="pre">.G3L</span> <span class="pre">.GTO</span> <span class="pre">.GBO</span> <span class="pre">.GTS</span> <span class="pre">.GBS</span> <span class="pre">.GKO</span></code>, not case-sensitive <a class="reference external" href="https://docs.oshpark.com/troubleshooting/naming-pattern/">O-name</a>. X2 is recommended, and the layers are F/B Cu, In1 to In4, silk, mask and Edge.Cuts; paste is optional <a class="reference external" href="https://docs.oshpark.com/design-tools/kicad/generating-kicad-gerbers/">O-kgerb</a>. OSH Park also reads <code class="docutils literal notranslate"><span class="pre">.kicad_pcb</span></code> with “KiCad 9.x” and does not refill zones <a class="reference external" href="https://docs.oshpark.com/design-tools/kicad/">O-kicad</a>. <strong>Our boards are KiCad 10, so we send gerbers.</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">.XLN</span></code> <a class="reference external" href="https://docs.oshpark.com/troubleshooting/naming-pattern/">O-name</a>. One page asks for “INCHES, 2:4, zero suppression None or Leading” <a class="reference external" href="https://docs.oshpark.com/submitting-orders/drill-specs/">O-drill</a>; the KiCad page asks for the alternate drill mode, absolute origin, “inches and millimeters work”, and prefers decimal <a class="reference external" href="https://docs.oshpark.com/design-tools/kicad/generating-kicad-gerbers/">O-kgerb</a>. Holes up to 6.604 mm are drilled; larger ones are milled <a class="reference external" href="https://docs.oshpark.com/submitting-orders/drill-specs/">O-drill</a>.</p></td>
+<td><p>None (no assembly service)</p></td>
+</tr>
+<tr class="row-odd"><td><p>JLCPCB</p></td>
+<td><p>Zip or rar, up to 100 MB <a class="reference external" href="https://cart.jlcpcb.com/quote">J-quote</a>. Layers F/B Cu, inner, paste, silk and mask, plus Edge.Cuts. Check zone fills, tent vias, <strong>Protel extensions</strong>, and subtract mask from silk <a class="reference external" href="https://jlcpcb.com/help/article/how-to-generate-gerber-and-drill-files-in-kicad-8">J-kicad</a>.</p></td>
+<td><p>mm, decimal, absolute, alternate oval mode, optional map <a class="reference external" href="https://jlcpcb.com/help/article/how-to-generate-gerber-and-drill-files-in-kicad-8">J-kicad</a></p></td>
+<td><p>BOM: <code class="docutils literal notranslate"><span class="pre">Comment,</span> <span class="pre">Designator,</span> <span class="pre">Footprint,</span> <span class="pre">JLCPCB</span> <span class="pre">Part</span> <span class="pre">#</span></code> <a class="reference external" href="https://jlcpcb.com/help/article/how-to-generate-the-bom-and-centroid-file-from-kicad">J-bomkicad</a> (csv/xls/xlsx <a class="reference external" href="https://jlcpcb.com/help/article/bill-of-materials-for-pcb-assembly">J-bom</a>). CPL: <code class="docutils literal notranslate"><span class="pre">Designator,</span> <span class="pre">Mid</span> <span class="pre">X,</span> <span class="pre">Mid</span> <span class="pre">Y,</span> <span class="pre">Layer,</span> <span class="pre">Rotation</span></code>, in mm, counter-clockwise positive, Top/Bottom <a class="reference external" href="https://jlcpcb.com/help/article/pick-place-file-for-pcb-assembly">J-cpl</a>. Rotation must match JLC’s own footprint orientation; the open tools keep correction tables <a class="reference external" href="https://github.com/bennymeg/Fabrication-Toolkit">FT</a> <a class="reference external" href="https://github.com/Bouni/kicad-jlcpcb-tools">JT</a> <a class="reference external" href="https://github.com/yaqwsx/KiKit">KK</a>.</p></td>
+</tr>
+<tr class="row-even"><td><p>PCBWay</p></td>
+<td><p>Zip of gerbers, IPC-D-356, BOM and pick-and-place. This is what PCBWay’s own plugin sends <a class="reference external" href="https://github.com/pcbway/PCBWay-Plug-in-for-Kicad">P-plug</a>.</p></td>
+<td><p>Excellon in the zip</p></td>
+<td><p>BOM with manufacturer part numbers; KiKit’s column set is <code class="docutils literal notranslate"><span class="pre">Item</span> <span class="pre">#,</span> <span class="pre">Designator,</span> <span class="pre">Qty,</span> <span class="pre">Manufacturer,</span> <span class="pre">Mfg</span> <span class="pre">Part</span> <span class="pre">#,</span> <span class="pre">Description</span> <span class="pre">/</span> <span class="pre">Value,</span> <span class="pre">Footprint,</span> <span class="pre">Type,</span> <span class="pre">Your</span> <span class="pre">Instructions</span> <span class="pre">/</span> <span class="pre">Notes</span></code> <a class="reference external" href="https://github.com/yaqwsx/KiKit">KK</a>; plus a centroid file <a class="reference external" href="https://www.pcbway.com/pcb-assembly.html">P-asm</a></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="what-kicad-cli-10-0-6-does-measured">
+<h3>4.2 What kicad-cli 10.0.6 does (measured)<a class="headerlink" href="#what-kicad-cli-10-0-6-does-measured" title="Link to this heading">¶</a></h3>
+<p>These runs used the repository’s <code class="docutils literal notranslate"><span class="pre">splanc_dev</span></code> test board and a 6-layer copy of it.</p>
+<ul>
+<li><p><strong>Two runs three seconds apart differ only in timestamps.</strong> Each gerber has two (<code class="docutils literal notranslate"><span class="pre">%TF.CreationDate</span></code>
+and <code class="docutils literal notranslate"><span class="pre">G04</span> <span class="pre">Created</span> <span class="pre">by</span> <span class="pre">KiCad</span> <span class="pre">...</span> <span class="pre">date</span></code>), the drill file two, and <code class="docutils literal notranslate"><span class="pre">.gbrjob</span></code> one. The IPC-D-356 and the
+position CSV are byte-identical. <code class="docutils literal notranslate"><span class="pre">%TF.ProjectId</span></code> is derived from the file name.</p></li>
+<li><p><strong>kicad-cli ignores <code class="docutils literal notranslate"><span class="pre">SOURCE_DATE_EPOCH</span></code>.</strong> The timestamps carry the local UTC offset; <code class="docutils literal notranslate"><span class="pre">TZ=UTC</span></code>
+makes it <code class="docutils literal notranslate"><span class="pre">+00:00</span></code>. yapnr therefore runs kicad-cli with <code class="docutils literal notranslate"><span class="pre">TZ=UTC</span></code> and rewrites those lines (§6.4).</p></li>
+<li><p><strong>Protel extensions (the default):</strong> <code class="docutils literal notranslate"><span class="pre">F.Cu</span> <span class="pre">.gtl</span></code>, <code class="docutils literal notranslate"><span class="pre">B.Cu</span> <span class="pre">.gbl</span></code>, <code class="docutils literal notranslate"><span class="pre">In1.Cu</span> <span class="pre">.g1</span></code> to <code class="docutils literal notranslate"><span class="pre">In4.Cu</span> <span class="pre">.g4</span></code>,
+<code class="docutils literal notranslate"><span class="pre">Edge.Cuts</span> <span class="pre">.gm1</span></code>, <code class="docutils literal notranslate"><span class="pre">.gto/.gbo</span></code>, <code class="docutils literal notranslate"><span class="pre">.gts/.gbs</span></code>, <code class="docutils literal notranslate"><span class="pre">.gtp/.gbp</span></code>. The X2 <code class="docutils literal notranslate"><span class="pre">FileFunction</span></code> names the copper
+layer as <code class="docutils literal notranslate"><span class="pre">L1</span></code>..<code class="docutils literal notranslate"><span class="pre">L6</span></code>.</p></li>
+<li><p><strong>Drill header.</strong> <code class="docutils literal notranslate"><span class="pre">-u</span> <span class="pre">in</span> <span class="pre">--excellon-zeros-format</span> <span class="pre">suppressleading</span></code> writes
+<code class="docutils literal notranslate"><span class="pre">FORMAT={2:4/</span> <span class="pre">absolute</span> <span class="pre">/</span> <span class="pre">inch</span> <span class="pre">/</span> <span class="pre">suppress</span> <span class="pre">leading</span> <span class="pre">zeros}</span></code>. PTH and NPTH are merged
+(<code class="docutils literal notranslate"><span class="pre">MixedPlating</span></code>) unless <code class="docutils literal notranslate"><span class="pre">--excellon-separate-th</span></code> is given.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">kicad-cli</span> <span class="pre">pcb</span> <span class="pre">export</span> <span class="pre">stats</span> <span class="pre">--format</span> <span class="pre">json</span></code></strong> gives what the checks need without <code class="docutils literal notranslate"><span class="pre">pcbnew</span></code>:</p>
+<ul class="simple">
+<li><p>the outline, its size and area;</p></li>
+<li><p>via counts by type (through, blind, buried, micro);</p></li>
+<li><p>pad counts, castellated pads included;</p></li>
+<li><p>a drill table (shape, size, plated, source, layer span);</p></li>
+<li><p>minimum track, clearance and drill;</p></li>
+<li><p>board thickness.</p></li>
+</ul>
+<p>It does not give the copper layer count; the <code class="docutils literal notranslate"><span class="pre">.gbrjob</span></code> file and the board’s <code class="docutils literal notranslate"><span class="pre">(layers</span> <span class="pre">...)</span></code>
+section do.</p>
+</li>
+</ul>
+</section>
+<section id="capabilities">
+<h3>4.3 Capabilities<a class="headerlink" href="#capabilities" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Rule</p></th>
+<th class="head"><p>OSH 2L <a class="reference external" href="https://docs.oshpark.com/services/two-layer/">O-2l</a></p></th>
+<th class="head"><p>OSH 4L <a class="reference external" href="https://docs.oshpark.com/services/four-layer/">O-4l</a></p></th>
+<th class="head"><p>OSH 6L <a class="reference external" href="https://docs.oshpark.com/services/six-layer/">O-6l</a></p></th>
+<th class="head"><p>JLC 4L (<code class="docutils literal notranslate"><span class="pre">jlc-4l</span></code>, from <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code>’s 5A rows)</p></th>
+<th class="head"><p>PCBWay std 4L <a class="reference external" href="https://www.pcbway.com/capabilities.html">P-cap</a></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Trace/space</p></td>
+<td><p>6/6 mil</p></td>
+<td><p>5/5 mil</p></td>
+<td><p>5/5 mil</p></td>
+<td><p>0.127/0.127 mm (abs. 0.09 <a class="reference external" href="https://jlcpcb.com/capabilities/pcb-capabilities">J-cap</a>)</p></td>
+<td><p>5/6 mil outer (4/4 headline)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Min drill</p></td>
+<td><p>10 mil <a class="reference external" href="https://docs.oshpark.com/submitting-orders/drill-specs/">O-drill</a></p></td>
+<td><p>10 mil <a class="reference external" href="https://docs.oshpark.com/submitting-orders/drill-specs/">O-drill</a></p></td>
+<td><p>8 mil <a class="reference external" href="https://docs.oshpark.com/submitting-orders/drill-specs/">O-drill</a></p></td>
+<td><p>0.20 mm (0.15 abs.)</p></td>
+<td><p>0.20 mm free (0.15 at cost)</p></td>
+</tr>
+<tr class="row-even"><td><p>Annular ring</p></td>
+<td><p>5 mil <a class="reference external" href="https://docs.oshpark.com/submitting-orders/drill-specs/">O-drill</a></p></td>
+<td><p>4 mil <a class="reference external" href="https://docs.oshpark.com/submitting-orders/drill-specs/">O-drill</a></p></td>
+<td><p>4 mil <a class="reference external" href="https://docs.oshpark.com/submitting-orders/drill-specs/">O-drill</a></p></td>
+<td><p>0.075 mm via</p></td>
+<td><p>0.15 mm</p></td>
+</tr>
+<tr class="row-odd"><td><p>Copper to board edge</p></td>
+<td><p>15 mil</p></td>
+<td><p>15 mil</p></td>
+<td><p>15 mil</p></td>
+<td><p>0.30 mm</p></td>
+<td><p>not transcribed (draft)</p></td>
+</tr>
+<tr class="row-even"><td><p>Hole to copper</p></td>
+<td><p>not published</p></td>
+<td><p>10 mil drill to inner copper</p></td>
+<td><p>not published</p></td>
+<td><p>0.20 via, 0.35 PTH, 0.20 NPTH</p></td>
+<td><p>not transcribed (draft)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Thickness</p></td>
+<td><p>1.6 mm</p></td>
+<td><p>1.6 mm</p></td>
+<td><p>1.6 mm</p></td>
+<td><p>0.4 to 4.5 mm</p></td>
+<td><p>0.2 to 3.2 mm</p></td>
+</tr>
+<tr class="row-even"><td><p>Copper (out/in)</p></td>
+<td><p>1 oz</p></td>
+<td><p>1 oz plated (1.7 mil) / 0.5 oz (0.68 mil)</p></td>
+<td><p>1 oz / 0.5 oz</p></td>
+<td><p>1 oz / 0.5 oz (15.2 µm finished)</p></td>
+<td><p>1 oz / 1 oz</p></td>
+</tr>
+<tr class="row-odd"><td><p>Finish, mask</p></td>
+<td><p>ENIG, purple (fixed)</p></td>
+<td><p>ENIG, purple (fixed)</p></td>
+<td><p>ENIG, purple</p></td>
+<td><p>HASL/ENIG/OSP, 7 colours</p></td>
+<td><p>many</p></td>
+</tr>
+<tr class="row-even"><td><p>Via fill / via-in-pad</p></td>
+<td><p>none <a class="reference external" href="https://docs.oshpark.com/services/two-layer/">O-2l</a></p></td>
+<td><p>none documented</p></td>
+<td><p>none documented</p></td>
+<td><p>POFV is an option (<code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code>)</p></td>
+<td><p>resin and cap, about $95–104 extra</p></td>
+</tr>
+<tr class="row-odd"><td><p>Controlled impedance</p></td>
+<td><p>no service</p></td>
+<td><p>no service</p></td>
+<td><p>no service</p></td>
+<td><p>±10 % (±5 % on request), named stackups</p></td>
+<td><p>±10 %, or ±5 Ω at 50 Ω and below <a class="reference external" href="https://www.pcbway.com/advanced-pcb-capabilities.html">P-adv</a></p></td>
+</tr>
+<tr class="row-even"><td><p>Size</p></td>
+<td><p>not stated (assumed as 4L)</p></td>
+<td><p>0.25 in to 16×22 in</p></td>
+<td><p>not stated (assumed as 4L)</p></td>
+<td><p>–</p></td>
+<td><p>–</p></td>
+</tr>
+<tr class="row-odd"><td><p>Quantity</p></td>
+<td><p>multiples of 3</p></td>
+<td><p>multiples of 3</p></td>
+<td><p>multiples of 3</p></td>
+<td><p>5 or more</p></td>
+<td><p>5 or more</p></td>
+</tr>
+<tr class="row-even"><td><p>Castellation</p></td>
+<td><p>“allowed, but not guaranteed” <a class="reference external" href="https://docs.oshpark.com/tips+tricks/castellation/">O-cast</a></p></td>
+<td><p>same</p></td>
+<td><p>same</p></td>
+<td><p>hole ≥ 0.5 mm, board ≥ 10×10 mm</p></td>
+<td><p>≥ 0.4 mm</p></td>
+</tr>
+<tr class="row-odd"><td><p>Panels</p></td>
+<td><p>0.1 in between outlines, frame ≥ 0.2 in <a class="reference external" href="https://docs.oshpark.com/troubleshooting/panelized-designs/">O-panel</a></p></td>
+<td><p>same</p></td>
+<td><p>same</p></td>
+<td><p>–</p></td>
+<td><p>–</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Boards routed for JLC do not transfer to OSH Park as they are.</strong> <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code>’s default via is
+0.45/0.30 mm, a 0.075 mm ring. OSH Park’s 4-layer minimum ring is 4 mil (0.1016 mm). Its 0.20 mm
+escape and in-pad vias are also below OSH Park’s 10 mil minimum drill, and OSH Park rounds smaller
+holes up <a class="reference external" href="https://docs.oshpark.com/submitting-orders/drill-specs/">O-drill</a>. A board for OSH Park is routed under an OSH Park profile from the start, and
+<code class="docutils literal notranslate"><span class="pre">fab</span> <span class="pre">check</span></code> reports the mismatch otherwise.</p>
+</section>
+<section id="prices-and-lead-times-for-a-5050-mm-board-3-875-sq-in">
+<h3>4.4 Prices and lead times for a 50×50 mm board (3.875 sq in)<a class="headerlink" href="#prices-and-lead-times-for-a-5050-mm-board-3-875-sq-in" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>OSH Park:</strong></p>
+<ul>
+<li><p>2-layer: $5/sq in for 3 boards, $19.38, ships in 9–12 days.</p></li>
+<li><p>4-layer: $10/sq in, $38.75, 9–14 days. Super Swift doubles the price ($77.50) and ships in 5–6
+business days.</p></li>
+<li><p>6-layer: $15/sq in, $58.13, 12–21 days.</p></li>
+<li><p>Free USPS First Class shipping in the US <a class="reference external" href="https://docs.oshpark.com/services/">O-svc</a> <a class="reference external" href="https://docs.oshpark.com/services/two-layer/">O-2l</a> <a class="reference external" href="https://docs.oshpark.com/services/four-layer/">O-4l</a> <a class="reference external" href="https://docs.oshpark.com/services/six-layer/">O-6l</a> <a class="reference external" href="https://docs.oshpark.com/submitting-orders/shipping-information/">O-ship</a>.</p></li>
+<li><p><strong>Coupons:</strong> the coupon research’s 100×120 mm 4-layer coupon board would cost $186 for 3 at
+OSH Park.</p></li>
+</ul>
+</li>
+<li><p><strong>JLCPCB:</strong></p>
+<ul>
+<li><p>FR-4 “from $2 / 5 pcs”, and Rogers/PTFE “from $47 / 5 pcs” <a class="reference external" href="https://jlcpcb.com/">J-home</a>.</p></li>
+<li><p>Economic assembly: $8.18 setup, $1.53 stencil, $3.07 for each extended part <a class="reference external" href="https://jlcpcb.com/help/article/pcb-assembly-price">J-pcba</a>. Confirm in
+the live quote.</p></li>
+</ul>
+</li>
+<li><p><strong>PCBWay:</strong></p>
+<ul>
+<li><p>4-layer, 5 pcs: $31.16 (a live quote on 2026-09-26).</p></li>
+<li><p>Assembly from “$29 for 1–20 pcs” <a class="reference external" href="https://www.pcbway.com/">P-home</a>.</p></li>
+<li><p>Rogers RO4003C (Dk 3.38, Df 0.0027 at 10 GHz) and RO4350B (3.48 and 0.0037). These build in
+7–10 days <a class="reference external" href="https://www.pcbway.com/pcb_prototype/What_is_High_Frequency__HF__PCB_.html">P-hf</a>.</p></li>
+</ul>
+</li>
+<li><p><strong>Import duties (not re-verified here).</strong> US duties apply to boards shipped from China since the
+US ended its de minimis exemption in 2025. OSH Park avoids them.</p></li>
+</ul>
+<p>The order card prints an estimate only where the price is a public formula (OSH Park). For the
+other vendors it says “see the vendor’s quote”.</p>
+</section>
+</section>
+<section id="data-profiles-stackups-and-vendors-f2">
+<h2>5. Data: profiles, stackups and vendors (F2)<a class="headerlink" href="#data-profiles-stackups-and-vendors-f2" title="Link to this heading">¶</a></h2>
+<section id="where-the-data-lives">
+<h3>5.1 Where the data lives<a class="headerlink" href="#where-the-data-lives" title="Link to this heading">¶</a></h3>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>yapnr/fab/data/
+├── profiles/&lt;name&gt;.json      capability profile: engine rules, vendor limits, sources
+├── stackups/&lt;id&gt;.json        stackup: layers, dielectrics, copper, mask, tolerances, sources
+└── vendors/&lt;vendor&gt;.json     file sets, layer naming, drill format, BOM/CPL columns,
+                              order options, staging URLs, sources
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><strong>The data is JSON, not TOML.</strong> The engine’s KiCad-side workers import <code class="docutils literal notranslate"><span class="pre">fab_profile</span></code>. They run
+under KiCad’s Python, which is 3.9 in the macOS headless bundle, and <code class="docutils literal notranslate"><span class="pre">tomllib</span></code> needs 3.11.</p></li>
+<li><p><strong>The loader is <code class="docutils literal notranslate"><span class="pre">yapnr/fab/capability.py</span></code>.</strong> It is stdlib-only and works on Python 3.9 and later.
+It validates every file against its schema (<code class="docutils literal notranslate"><span class="pre">yapnr-fab-profile-v1</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr-fab-stackup-v1</span></code>,
+<code class="docutils literal notranslate"><span class="pre">yapnr-fab-vendor-v1</span></code>).</p></li>
+<li><p><strong>Every value has provenance.</strong> It is the <code class="docutils literal notranslate"><span class="pre">src</span></code> of the object that holds it (a source key with a
+URL and access date), or <code class="docutils literal notranslate"><span class="pre">derived</span></code> with the reason, or a <code class="docutils literal notranslate"><span class="pre">*_prior</span></code> with its own <code class="docutils literal notranslate"><span class="pre">*_prior_src</span></code>
+for a stand-in value (§5.3).</p></li>
+</ul>
+<p><strong>A profile</strong> is a process capability; <strong>a stackup</strong> is a dielectric build. They are chosen
+separately. The three OSH Park 4-layer stackups share one rule set. A profile names the stackups
+it allows and its default. For example, “JLC 4-layer 7628” is <code class="docutils literal notranslate"><span class="pre">--profile</span> <span class="pre">jlc-4l</span></code> with
+<code class="docutils literal notranslate"><span class="pre">--stackup</span> <span class="pre">jlc04161h-7628</span></code>, which is that profile’s default.</p>
+</section>
+<section id="profiles">
+<h3>5.2 Profiles<a class="headerlink" href="#profiles" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Profile</p></th>
+<th class="head"><p>Status</p></th>
+<th class="head"><p>Vendor, service</p></th>
+<th class="head"><p>Default stackup</p></th>
+<th class="head"><p>Other stackups</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">legacy</span></code></p></td>
+<td><p>unchanged</p></td>
+<td><p>– (the fixtures’ own rules)</p></td>
+<td><p>–</p></td>
+<td><p>–</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code></p></td>
+<td><p>unchanged</p></td>
+<td><p>JLCPCB 4L, POFV on every via</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">jlc04161h-7628</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">jlc04161h-2116</span></code>, <code class="docutils literal notranslate"><span class="pre">-3313</span></code>, <code class="docutils literal notranslate"><span class="pre">-1080</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">jlc-4l</span></code></p></td>
+<td><p>new</p></td>
+<td><p>JLCPCB 4L standard: tented vias, no in-pad</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">jlc04161h-7628</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">jlc04161h-2116</span></code>, <code class="docutils literal notranslate"><span class="pre">-3313</span></code>, <code class="docutils literal notranslate"><span class="pre">-1080</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">jlc-6l</span></code></p></td>
+<td><p>new, draft</p></td>
+<td><p>JLCPCB 6L (filled vias are standard)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">jlc06161h-3313</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">jlc06161h-2116c</span></code>, <code class="docutils literal notranslate"><span class="pre">jlc06161h-7628</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">oshpark-2l</span></code></p></td>
+<td><p>new</p></td>
+<td><p>OSH Park 2 Layer</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">oshpark-2l-fr4</span></code></p></td>
+<td><p>–</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">oshpark-4l</span></code></p></td>
+<td><p>new</p></td>
+<td><p>OSH Park 4 Layer (and Super Swift)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">oshpark-4l-fr408hr</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">oshpark-4l-em528</span></code> (alternate offered at checkout since 2026-09-21 <a class="reference external" href="https://docs.oshpark.com/troubleshooting/alternate-4-layer-stackup/">O-alt</a>), <code class="docutils literal notranslate"><span class="pre">oshpark-4l-mixed</span></code> <a class="reference external" href="https://docs.oshpark.com/troubleshooting/mixed-material-4-layer-stackup/">O-mixed</a></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">oshpark-6l</span></code></p></td>
+<td><p>new</p></td>
+<td><p>OSH Park 6 Layer</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">oshpark-6l-fr408hr</span></code></p></td>
+<td><p>–</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">pcbway-std</span></code></p></td>
+<td><p>new, draft</p></td>
+<td><p>PCBWay standard 4L FR-4</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pcbway-4l-7628</span></code></p></td>
+<td><p>–</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">pcbway-hf-2l</span></code></p></td>
+<td><p>new, draft</p></td>
+<td><p>PCBWay Rogers 2L</p></td>
+<td><p>none: must be chosen</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pcbway-ro4003c-0.813</span></code>, <code class="docutils literal notranslate"><span class="pre">pcbway-ro4003c-0.508</span></code>, <code class="docutils literal notranslate"><span class="pre">pcbway-ro4003c-1.524</span></code>, <code class="docutils literal notranslate"><span class="pre">pcbway-ro4350b-0.508</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Draft profiles</strong> still have values that are published but not yet transcribed. <code class="docutils literal notranslate"><span class="pre">fab</span> <span class="pre">check</span></code> and
+<code class="docutils literal notranslate"><span class="pre">order</span> <span class="pre">stage</span></code> refuse a draft profile unless <code class="docutils literal notranslate"><span class="pre">--allow-draft</span></code> is given, and the card then says
+“draft profile”.</p>
+<p><strong>A profile file holds four blocks:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">engine</span></code>: the <code class="docutils literal notranslate"><span class="pre">fab</span></code> and <code class="docutils literal notranslate"><span class="pre">copper</span></code> blocks and the <code class="docutils literal notranslate"><span class="pre">qualification</span></code> text that <code class="docutils literal notranslate"><span class="pre">fab_profile.py</span></code> uses
+today, with the same keys.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">vendor_limits</span></code>: limits KiCad DRC cannot express. These are board size, layer counts, quantity
+multiple, maximum drilled hole, via types, castellation, panel rules, fixed finish and mask, and
+whether impedance control is offered.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">order_defaults</span></code>: what the card proposes. These are thickness, finish, colour, via covering and
+service.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sources</span></code>.</p></li>
+</ul>
+<p>The OSH Park engine values (all in mm):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Key</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">oshpark-2l</span></code></p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">oshpark-4l</span></code></p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">oshpark-6l</span></code></p></th>
+<th class="head"><p>Provenance</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">min_track_width_mm</span></code>, <code class="docutils literal notranslate"><span class="pre">clearance_mm</span></code></p></td>
+<td><p>0.1524</p></td>
+<td><p>0.127</p></td>
+<td><p>0.127</p></td>
+<td><p><a class="reference external" href="https://docs.oshpark.com/services/two-layer/">O-2l</a> <a class="reference external" href="https://docs.oshpark.com/services/four-layer/">O-4l</a> <a class="reference external" href="https://docs.oshpark.com/services/six-layer/">O-6l</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">smd_pad_clearance_mm</span></code></p></td>
+<td><p>0.1524</p></td>
+<td><p>0.127</p></td>
+<td><p>0.127</p></td>
+<td><p>derived: equal to the clearance (OSH Park publishes no separate pad rule)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">edge_clearance_mm</span></code></p></td>
+<td><p>0.381</p></td>
+<td><p>0.381</p></td>
+<td><p>0.381</p></td>
+<td><p>“15 mil edge keepout” <a class="reference external" href="https://docs.oshpark.com/services/two-layer/">O-2l</a> <a class="reference external" href="https://docs.oshpark.com/services/four-layer/">O-4l</a> <a class="reference external" href="https://docs.oshpark.com/services/six-layer/">O-6l</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">hole_clearance_mm</span></code>, <code class="docutils literal notranslate"><span class="pre">pth_hole_…</span></code>, <code class="docutils literal notranslate"><span class="pre">npth_hole_…</span></code></p></td>
+<td><p>0.254</p></td>
+<td><p>0.254</p></td>
+<td><p>0.254</p></td>
+<td><p>4L: “10 mil drill-to-internal-copper” <a class="reference external" href="https://docs.oshpark.com/services/four-layer/">O-4l</a>; 2L and 6L derived from it</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">hole_to_hole_mm</span></code> / <code class="docutils literal notranslate"><span class="pre">pth_hole_to_hole_mm</span></code></p></td>
+<td><p>0.254 / 0.50</p></td>
+<td><p>0.254 / 0.50</p></td>
+<td><p>0.254 / 0.50</p></td>
+<td><p>derived: not published; 0.50 copies JLC’s stricter PTH value</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">hole_to_edge_mm</span></code></p></td>
+<td><p>0.50</p></td>
+<td><p>0.50</p></td>
+<td><p>0.50</p></td>
+<td><p>derived: not published (the JLC/PCBWay value)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">min_through_drill_mm</span></code></p></td>
+<td><p>0.254</p></td>
+<td><p>0.254</p></td>
+<td><p>0.2032</p></td>
+<td><p><a class="reference external" href="https://docs.oshpark.com/submitting-orders/drill-specs/">O-drill</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">via_annular_mm</span></code></p></td>
+<td><p>0.127</p></td>
+<td><p>0.1016</p></td>
+<td><p>0.1016</p></td>
+<td><p><a class="reference external" href="https://docs.oshpark.com/submitting-orders/drill-specs/">O-drill</a></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">min_via_diameter_mm</span></code></p></td>
+<td><p>0.508</p></td>
+<td><p>0.4572</p></td>
+<td><p>0.4064</p></td>
+<td><p>drill + 2 × ring</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">min_npth_drill_mm</span></code></p></td>
+<td><p>0.254</p></td>
+<td><p>0.254</p></td>
+<td><p>0.2032</p></td>
+<td><p>derived: OSH Park publishes one minimum for all holes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">via_to_smd_pad_mm</span></code></p></td>
+<td><p>0.127</p></td>
+<td><p>0.127</p></td>
+<td><p>0.127</p></td>
+<td><p>derived: no filled vias at OSH Park <a class="reference external" href="https://docs.oshpark.com/services/two-layer/">O-2l</a>, so no via goes in a pad</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">component_pth_min_drill_mm</span></code></p></td>
+<td><p>0.30</p></td>
+<td><p>0.30</p></td>
+<td><p>0.30</p></td>
+<td><p>derived: a classification threshold, as in <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>via classes <code class="docutils literal notranslate"><span class="pre">default</span></code> / <code class="docutils literal notranslate"><span class="pre">escape</span></code> / <code class="docutils literal notranslate"><span class="pre">power</span></code> (dia/drill)</p></td>
+<td><p>0.60/0.30, 0.508/0.254, 0.70/0.40</p></td>
+<td><p>0.55/0.30, 0.4572/0.254, 0.70/0.40</p></td>
+<td><p>0.55/0.30, 0.4064/0.2032, 0.70/0.40</p></td>
+<td><p>derived; <code class="docutils literal notranslate"><span class="pre">escape</span></code> sits exactly at the minimum ring; there is no <code class="docutils literal notranslate"><span class="pre">in_pad</span></code> class</p></td>
+</tr>
+<tr class="row-odd"><td><p>copper: outer / inner / via plating (µm)</p></td>
+<td><p>35 / – / 25.4</p></td>
+<td><p>35 / 17.3 / 25.4</p></td>
+<td><p>35 / 17.3 / 25.4</p></td>
+<td><p>outer: nominal 1 oz, stricter than the published 1.7 mil plated; inner: 0.68 mil <a class="reference external" href="https://docs.oshpark.com/services/four-layer/">O-4l</a>; plating: 1 mil <a class="reference external" href="https://docs.oshpark.com/submitting-orders/drill-specs/">O-drill</a></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">jlc-4l</span></code> values are <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code>’s 5A rows without the 5B filled-via rows: no
+<code class="docutils literal notranslate"><span class="pre">filled_via_hole_to_hole_mm</span></code> and no <code class="docutils literal notranslate"><span class="pre">in_pad</span></code> class.</p>
+</section>
+<section id="stackups">
+<h3>5.3 Stackups<a class="headerlink" href="#stackups" title="Link to this heading">¶</a></h3>
+<p>A stackup file lists every layer from top to bottom:</p>
+<ul class="simple">
+<li><p><strong>Mask:</strong> thickness, εr.</p></li>
+<li><p><strong>Copper:</strong> KiCad layer name, finished thickness, nominal weight, plated or not, finish.</p></li>
+<li><p><strong>Dielectric:</strong> prepreg or core, material and glass style, thickness, εr with the frequency it was
+quoted at, and Df.</p></li>
+</ul>
+<p>It also gives the board thickness and tolerances, the vendor’s own name for the stackup, and the
+instruction the human must follow at checkout. Appendix A has the data for every stackup in §5.2.</p>
+<p><strong>Unpublished values stay <code class="docutils literal notranslate"><span class="pre">null</span></code>.</strong> A <code class="docutils literal notranslate"><span class="pre">prior</span></code> may sit beside a <code class="docutils literal notranslate"><span class="pre">null</span></code> value, with its source. For
+example, OSH Park gives no Df for the 4-layer 2113 prepreg, and its 6-layer page gives 0.009 for a
+2113 core. A consumer must ask for the prior explicitly, and the prior is recorded wherever it is
+used.</p>
+<p>The views:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">yapnr.fab</span><span class="w"> </span><span class="kn">import</span> <span class="n">stackups</span>
+
+<span class="n">s</span> <span class="o">=</span> <span class="n">stackups</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s2">&quot;oshpark-4l-fr408hr&quot;</span><span class="p">)</span>
+<span class="n">m</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">microstrip</span><span class="p">(</span><span class="s2">&quot;F.Cu&quot;</span><span class="p">)</span>             <span class="c1"># reference: the next copper layer (In1.Cu)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">h_mm</span><span class="p">,</span> <span class="n">m</span><span class="o">.</span><span class="n">er</span><span class="p">,</span> <span class="n">m</span><span class="o">.</span><span class="n">er_freq_hz</span><span class="p">,</span> <span class="n">m</span><span class="o">.</span><span class="n">t_um</span>   <span class="c1"># 0.1999, 3.61, 1e9, 43.2</span>
+<span class="n">m</span><span class="o">.</span><span class="n">tan_delta</span>                          <span class="c1"># None (not published); m.tan_delta_prior == 0.009</span>
+<span class="n">spec</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">rf_stackup_spec</span><span class="p">(</span><span class="n">f_ref_ghz</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">use_prior</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="c1"># -&gt; {&quot;er&quot;: 3.61, &quot;tan_delta&quot;: 0.009, &quot;h_mm&quot;: 0.1999, &quot;f_ref_ghz&quot;: 10.0}  (yapnr.rf StackupSpec)</span>
+<span class="n">rules</span> <span class="o">=</span> <span class="n">stackups</span><span class="o">.</span><span class="n">rf_rules</span><span class="p">(</span><span class="s2">&quot;oshpark-4l&quot;</span><span class="p">)</span>    <span class="c1"># -&gt; {&quot;min_width_mm&quot;: 0.127, &quot;min_space_mm&quot;: 0.127}</span>
+<span class="n">xs</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">cross_section</span><span class="p">(</span><span class="n">signal</span><span class="o">=</span><span class="s2">&quot;In2.Cu&quot;</span><span class="p">)</span>      <span class="c1"># every layer, for the 2D solver (coupons, FEA)</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><strong>For <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code>:</strong> <code class="docutils literal notranslate"><span class="pre">StackupSpec</span></code> is a uniform single substrate (εr, tan δ, h, f_ref).
+<code class="docutils literal notranslate"><span class="pre">microstrip()</span></code> refuses a reference plane more than one dielectric away. Its <code class="docutils literal notranslate"><span class="pre">f_ref</span></code> is the
+design’s reference frequency (copper sheet conductance, loss matching). It is not the frequency
+the vendor quoted Dk at. That frequency travels separately and is written into the RF spec’s
+provenance. <code class="docutils literal notranslate"><span class="pre">yapnr.rf.cases</span></code> gains <code class="docutils literal notranslate"><span class="pre">--stackup</span> <span class="pre">&lt;id&gt;[:&lt;layer&gt;]</span></code> and <code class="docutils literal notranslate"><span class="pre">--fab-profile</span> <span class="pre">&lt;name&gt;</span></code>, which
+set <code class="docutils literal notranslate"><span class="pre">StackupSpec</span></code> and <code class="docutils literal notranslate"><span class="pre">Rules(min_width_mm,</span> <span class="pre">min_space_mm)</span></code>.</p></li>
+<li><p><strong>For the coupon work:</strong> <code class="docutils literal notranslate"><span class="pre">cross_section()</span></code> gives the full layer list with priors and tolerances.
+This is the nominal model that the coupon fit starts from. A measured overlay
+(<code class="docutils literal notranslate"><span class="pre">yapnr-fab-stackup-measured-v1</span></code>) names its base stackup, the order or lot, the fitted values
+with their covariance, and the method. <code class="docutils literal notranslate"><span class="pre">stackups.load(id,</span> <span class="pre">measured=path)</span></code> applies it. The coupon
+work defines the fit; this design only reserves the format.</p></li>
+<li><p><strong>Board stackup comparison:</strong> <code class="docutils literal notranslate"><span class="pre">fab</span> <span class="pre">check</span></code> compares the board’s own KiCad stackup (from <code class="docutils literal notranslate"><span class="pre">.gbrjob</span></code>
+<code class="docutils literal notranslate"><span class="pre">MaterialStackup</span></code> and the board’s <code class="docutils literal notranslate"><span class="pre">(stackup</span> <span class="pre">...)</span></code> section) with the chosen stackup. A difference
+in layer count is an error; differences in thickness or εr are warnings.</p></li>
+</ul>
+</section>
+<section id="changes-to-fab-profile-py">
+<h3>5.4 Changes to <code class="docutils literal notranslate"><span class="pre">fab_profile.py</span></code><a class="headerlink" href="#changes-to-fab-profile-py" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Built-in profiles stay byte-identical.</strong> <code class="docutils literal notranslate"><span class="pre">legacy</span></code> and <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> stay Python literals.
+<code class="docutils literal notranslate"><span class="pre">apply_rules</span></code>, <code class="docutils literal notranslate"><span class="pre">dru_text</span></code>, <code class="docutils literal notranslate"><span class="pre">board_constraints</span></code> and <code class="docutils literal notranslate"><span class="pre">geometry</span></code> must give byte-identical output
+for both; a golden test pins this.</p></li>
+<li><p><strong>Other names resolve lazily.</strong> For a name that is not built in, <code class="docutils literal notranslate"><span class="pre">PROFILES</span></code> resolves through
+<code class="docutils literal notranslate"><span class="pre">yapnr.fab.capability.engine_profile(name)</span></code>. KiCad-side workers get <code class="docutils literal notranslate"><span class="pre">yapnr/__init__.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">yapnr/fab/{__init__,capability}.py</span></code> and <code class="docutils literal notranslate"><span class="pre">yapnr/fab/data/</span></code> staged next to <code class="docutils literal notranslate"><span class="pre">pnr_kicad_srcs</span></code>. This
+is the pure-Python import path PR6a plans. When PR3 moves the engine to <code class="docutils literal notranslate"><span class="pre">yapnr/core</span></code>, the import
+becomes direct.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">dru_text</span></code> becomes data-driven.</strong></p>
+<ul>
+<li><p>Each rule is written only when the profile has its key. Today a missing
+<code class="docutils literal notranslate"><span class="pre">filled_via_hole_to_hole_mm</span></code> raises.</p></li>
+<li><p>The rule comments cite the profile’s own sources instead of the “5A/5B” rows that <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code>
+cites.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> keeps its exact text.</p></li>
+</ul>
+</li>
+<li><p><strong>The default does not change.</strong> It stays <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> (<code class="docutils literal notranslate"><span class="pre">PNR_FAB_PROFILE</span></code> unset), so the engine
+behaves as before. Selecting a new profile is an explicit choice: the environment variable, the
+manifest’s <code class="docutils literal notranslate"><span class="pre">fab_profile</span></code>, or <code class="docutils literal notranslate"><span class="pre">--fab-profile</span></code>. No A/B is needed, because no default changes. The
+first ladder run under <code class="docutils literal notranslate"><span class="pre">oshpark-4l</span></code> is still recorded in the commit body as evidence that the
+profile routes.</p></li>
+</ul>
+</section>
+</section>
+<section id="yapnr-fab-build-f1">
+<h2>6. <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span> <span class="pre">build</span></code> (F1)<a class="headerlink" href="#yapnr-fab-build-f1" title="Link to this heading">¶</a></h2>
+<section id="command">
+<h3>6.1 Command<a class="headerlink" href="#command" title="Link to this heading">¶</a></h3>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>yapnr<span class="w"> </span>fab<span class="w"> </span>build<span class="w"> </span>BOARD.kicad_pcb<span class="w"> </span>--vendor<span class="w"> </span><span class="o">{</span>oshpark,jlcpcb,pcbway<span class="o">}</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span><span class="o">[</span>--profile<span class="w"> </span>P<span class="o">]</span><span class="w"> </span><span class="o">[</span>--stackup<span class="w"> </span>S<span class="o">]</span><span class="w"> </span><span class="o">[</span>--qty<span class="w"> </span>N<span class="o">]</span><span class="w"> </span><span class="o">[</span>--assembly<span class="w"> </span><span class="p">|</span><span class="w"> </span>--no-assembly<span class="o">]</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span><span class="o">[</span>--parts-lock<span class="w"> </span>yapnr-parts.lock.json<span class="o">]</span><span class="w"> </span><span class="o">[</span>--cache<span class="w"> </span>&lt;part<span class="w"> </span>cache&gt;<span class="o">]</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span><span class="o">[</span>--out<span class="w"> </span>DIR<span class="o">]</span><span class="w"> </span><span class="o">[</span>--source-date-epoch<span class="w"> </span>T<span class="o">]</span><span class="w"> </span><span class="o">[</span>--public<span class="o">]</span><span class="w"> </span><span class="o">[</span>--json<span class="o">]</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><strong>Profile.</strong> <code class="docutils literal notranslate"><span class="pre">--profile</span></code> defaults to the vendor’s profile for the board’s copper layer count:</p>
+<ul>
+<li><p>OSH Park: 2, 4 or 6 layers map to <code class="docutils literal notranslate"><span class="pre">oshpark-2l</span></code>, <code class="docutils literal notranslate"><span class="pre">-4l</span></code>, <code class="docutils literal notranslate"><span class="pre">-6l</span></code>.</p></li>
+<li><p>JLCPCB: <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> when the board has in-pad vias, else <code class="docutils literal notranslate"><span class="pre">jlc-4l</span></code>; <code class="docutils literal notranslate"><span class="pre">jlc-6l</span></code> for 6 layers.</p></li>
+<li><p>PCBWay: <code class="docutils literal notranslate"><span class="pre">pcbway-std</span></code>.</p></li>
+</ul>
+</li>
+<li><p><strong>Stackup.</strong> <code class="docutils literal notranslate"><span class="pre">--stackup</span></code> defaults to the profile’s default. It is required when the board carries
+RF footprints (§6.6).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">.kicad_pro</span></code>.</strong> The board’s <code class="docutils literal notranslate"><span class="pre">.kicad_pro</span></code> must sit beside it; it carries the netclasses that DRC
+needs. <code class="docutils literal notranslate"><span class="pre">--no-project</span></code> is an override and gives a warning.</p></li>
+<li><p><strong>Check first.</strong> <code class="docutils literal notranslate"><span class="pre">build</span></code> always runs <code class="docutils literal notranslate"><span class="pre">fab</span> <span class="pre">check</span></code> first (§7.1), and an error stops it.</p></li>
+<li><p><strong>From a project (PR3d).</strong> <code class="docutils literal notranslate"><span class="pre">yapnr.toml</span></code> keeps <code class="docutils literal notranslate"><span class="pre">fab_profile</span></code> under <code class="docutils literal notranslate"><span class="pre">[rules]</span></code> (the rules the board
+is routed by) and gains a <code class="docutils literal notranslate"><span class="pre">[fab]</span></code> table with <code class="docutils literal notranslate"><span class="pre">vendor</span></code>, <code class="docutils literal notranslate"><span class="pre">stackup</span></code>, <code class="docutils literal notranslate"><span class="pre">qty</span></code> and <code class="docutils literal notranslate"><span class="pre">options</span></code> (the card’s
+choices, such as <code class="docutils literal notranslate"><span class="pre">service</span> <span class="pre">=</span> <span class="pre">&quot;super-swift&quot;</span></code>). <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span> <span class="pre">build</span> <span class="pre">--run</span> <span class="pre">&lt;run-id&gt;</span></code> then takes the
+run’s best candidate from the store. Until PR3d, the flags above do the same.</p></li>
+</ul>
+</section>
+<section id="pipeline">
+<h3>6.2 Pipeline<a class="headerlink" href="#pipeline" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p><strong>Copy the board to scratch.</strong> The copy goes into <code class="docutils literal notranslate"><span class="pre">&lt;out&gt;/.work/</span></code> under a stable name,
+<code class="docutils literal notranslate"><span class="pre">&lt;board&gt;.kicad_pcb</span></code>, with its <code class="docutils literal notranslate"><span class="pre">.kicad_pro</span></code>. The vendor profile’s rules are written into the
+copy (§7.1).</p></li>
+<li><p><strong>DRC and zone refill.</strong> <code class="docutils literal notranslate"><span class="pre">kicad-cli</span> <span class="pre">pcb</span> <span class="pre">drc</span></code> runs on the scratch copy with <code class="docutils literal notranslate"><span class="pre">--refill-zones</span></code>,
+<code class="docutils literal notranslate"><span class="pre">--save-board</span></code>, <code class="docutils literal notranslate"><span class="pre">--format</span> <span class="pre">json</span></code> and <code class="docutils literal notranslate"><span class="pre">--severity-all</span></code>. The DRC report goes into the bundle. The
+export then uses that refilled copy, so the files are exactly what DRC judged, with zones filled
+under the vendor’s clearances.</p></li>
+<li><p><strong>Board facts.</strong> <code class="docutils literal notranslate"><span class="pre">kicad-cli</span> <span class="pre">pcb</span> <span class="pre">export</span> <span class="pre">stats</span> <span class="pre">--format</span> <span class="pre">json</span></code>, plus the <code class="docutils literal notranslate"><span class="pre">(layers</span> <span class="pre">...)</span></code>,
+<code class="docutils literal notranslate"><span class="pre">(stackup</span> <span class="pre">...)</span></code> and footprint fields of the board file. A small stdlib S-expression reader
+handles the board file; it needs no <code class="docutils literal notranslate"><span class="pre">pcbnew</span></code>.</p></li>
+<li><p><strong>Exports,</strong> all with <code class="docutils literal notranslate"><span class="pre">TZ=UTC</span></code> and a timeout:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">pcb</span> <span class="pre">export</span> <span class="pre">gerbers</span> <span class="pre">--subtract-soldermask</span> <span class="pre">--layers</span> <span class="pre">&lt;vendor</span> <span class="pre">set&gt;</span></code>, with X2 on;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pcb</span> <span class="pre">export</span> <span class="pre">drill</span></code> with the vendor’s format (§6.3);</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pcb</span> <span class="pre">export</span> <span class="pre">ipcd356</span></code> (PCBWay);</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pcb</span> <span class="pre">export</span> <span class="pre">pos</span> <span class="pre">--format</span> <span class="pre">csv</span> <span class="pre">--units</span> <span class="pre">mm</span> <span class="pre">--exclude-dnp</span></code> (assembly only).</p></li>
+</ul>
+</li>
+<li><p><strong>Normalize.</strong> §6.4.</p></li>
+<li><p><strong>Rename</strong> to the vendor’s layer names (§6.3), using a map checked against each file’s X2
+<code class="docutils literal notranslate"><span class="pre">FileFunction</span></code>.</p></li>
+<li><p><strong>Assembly outputs</strong> (§6.5).</p></li>
+<li><p><strong>Write the README, the order card data, the manifest and the zips</strong> (§6.7).</p></li>
+</ol>
+<p>Each step’s result is cached under <code class="docutils literal notranslate"><span class="pre">.work/</span></code> by the sha256 of its inputs. The board, the rules,
+the kicad-cli version and the yapnr version all count as inputs. Re-running <code class="docutils literal notranslate"><span class="pre">build</span></code> with an
+unchanged board skips KiCad entirely.</p>
+</section>
+<section id="per-vendor-file-sets">
+<h3>6.3 Per-vendor file sets<a class="headerlink" href="#per-vendor-file-sets" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Vendor</p></th>
+<th class="head"><p>Layers exported</p></th>
+<th class="head"><p>Names</p></th>
+<th class="head"><p>Drill</p></th>
+<th class="head"><p>Extra</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>OSH Park</p></td>
+<td><p>Cu (all), F/B Mask, F/B Silkscreen, Edge.Cuts</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&lt;b&gt;.GTL</span> <span class="pre">.GBL</span> <span class="pre">.GTS</span> <span class="pre">.GBS</span> <span class="pre">.GTO</span> <span class="pre">.GBO</span> <span class="pre">.GKO</span></code>; inner layers <code class="docutils literal notranslate"><span class="pre">.G2L</span> <span class="pre">.G3L</span></code> (4L, documented <a class="reference external" href="https://docs.oshpark.com/troubleshooting/naming-pattern/">O-name</a>); 6L <code class="docutils literal notranslate"><span class="pre">.G2L</span></code>..<code class="docutils literal notranslate"><span class="pre">.G5L</span></code> (documented on the 6 layer page <a class="reference external" href="https://docs.oshpark.com/services/six-layer/">O-6l</a>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&lt;b&gt;.XLN</span></code>: inches, decimal, absolute, alternate oval mode, PTH and NPTH merged</p></td>
+<td><p>none</p></td>
+</tr>
+<tr class="row-odd"><td><p>JLCPCB</p></td>
+<td><p>Cu (all), F/B Mask, F/B Silkscreen, F/B Paste, Edge.Cuts</p></td>
+<td><p>KiCad’s Protel extensions as kicad-cli writes them (<code class="docutils literal notranslate"><span class="pre">.gtl</span> <span class="pre">.g1</span> <span class="pre">…</span> <span class="pre">.gm1</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&lt;b&gt;-PTH.drl</span></code>, <code class="docutils literal notranslate"><span class="pre">&lt;b&gt;-NPTH.drl</span></code>: mm, decimal, absolute, alternate oval mode; map as <code class="docutils literal notranslate"><span class="pre">.gbr</span></code></p></td>
+<td><p>BOM and CPL kept separate from the gerber zip</p></td>
+</tr>
+<tr class="row-even"><td><p>PCBWay</p></td>
+<td><p>as JLCPCB</p></td>
+<td><p>KiCad names, as PCBWay’s plugin sends</p></td>
+<td><p>as JLCPCB</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&lt;b&gt;.d356</span></code> (IPC-D-356) in the zip; BOM and CPL separate</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>OSH Park drill format.</strong> The two OSH Park pages disagree (§4.1). The bundle uses inches, as the
+drill page asks, and decimal format with alternate oval mode, as the KiCad page asks. A KiCad-lane
+test pins the header. The first OSH Park order checks the drill preview. That fixture board
+includes one NPTH hole and one slot, because OSH Park’s NPTH handling in a merged file is not
+documented on the pages read.</p>
+<p><strong>The vendor zip holds fab files only.</strong> Unknown files in an upload are a risk with every vendor.
+The BOM, CPL, README, card, manifest and DRC report sit beside the zip, and in a separate archive
+zip (§6.7).</p>
+</section>
+<section id="determinism">
+<h3>6.4 Determinism<a class="headerlink" href="#determinism" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Normalization.</strong> kicad-cli runs with <code class="docutils literal notranslate"><span class="pre">TZ=UTC</span></code>, and a fixed set of lines is rewritten:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">%TF.CreationDate,…*%</span></code>, <code class="docutils literal notranslate"><span class="pre">G04</span> <span class="pre">Created</span> <span class="pre">by</span> <span class="pre">KiCad</span> <span class="pre">(…)</span> <span class="pre">date</span> <span class="pre">…*</span></code>, <code class="docutils literal notranslate"><span class="pre">;</span> <span class="pre">DRILL</span> <span class="pre">file</span> <span class="pre">…</span> <span class="pre">date</span> <span class="pre">…</span></code>,
+<code class="docutils literal notranslate"><span class="pre">;</span> <span class="pre">#&#64;!</span> <span class="pre">TF.CreationDate,…</span></code> and the <code class="docutils literal notranslate"><span class="pre">.gbrjob</span></code> <code class="docutils literal notranslate"><span class="pre">&quot;CreationDate&quot;</span></code>;</p></li>
+<li><p>the replacement time is <code class="docutils literal notranslate"><span class="pre">--source-date-epoch</span></code> / <code class="docutils literal notranslate"><span class="pre">SOURCE_DATE_EPOCH</span></code>, else the board’s yapnr
+provenance time, else <code class="docutils literal notranslate"><span class="pre">1980-01-01T00:00:00+00:00</span></code>.</p></li>
+</ul>
+</li>
+<li><p><strong>Unknown lines.</strong> A normalizer test fails when a kicad-cli update adds a line that differs
+between two runs.</p></li>
+<li><p><strong>Zips.</strong></p>
+<ul>
+<li><p>Entries are sorted, timestamps fixed (1980-01-01), external attributes <code class="docutils literal notranslate"><span class="pre">0o644</span></code>, no extra
+fields, no comment.</p></li>
+<li><p>Entries are <strong>stored</strong>, not deflated. Deflate output can differ between zlib builds; a stored
+zip is byte-identical across platforms. Gerbers are small, and every vendor limit is far
+larger.</p></li>
+</ul>
+</li>
+<li><p><strong>What is reproducible.</strong> The same board, rules, KiCad version and yapnr version give identical
+bytes on one platform. Zone fills and coordinates come from KiCad, so cross-platform identity is
+not claimed. The manifest records the platform, and the KiCad-lane test checks two builds on one
+platform.</p></li>
+</ul>
+</section>
+<section id="assembly-outputs-f1b">
+<h3>6.5 Assembly outputs (F1b)<a class="headerlink" href="#assembly-outputs-f1b" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Where parts come from.</strong> Every footprint with a <code class="docutils literal notranslate"><span class="pre">Reference</span></code>, not DNP and not
+<code class="docutils literal notranslate"><span class="pre">exclude_from_bom</span></code>.</p>
+<ul>
+<li><p>The <strong>LCSC id</strong> comes from the footprint’s <code class="docutils literal notranslate"><span class="pre">LCSC</span></code> field, or <code class="docutils literal notranslate"><span class="pre">lcsc_id</span></code>. atopile writes both,
+with <code class="docutils literal notranslate"><span class="pre">Manufacturer</span></code>, <code class="docutils literal notranslate"><span class="pre">Partnumber</span></code> and <code class="docutils literal notranslate"><span class="pre">atopile_address</span></code>.</p></li>
+<li><p>It is cross-checked against the parts lock: each locked part’s <code class="docutils literal notranslate"><span class="pre">lcsc</span></code>, else its part-cache
+manifest’s. A conflict is an error.</p></li>
+<li><p>A part with no id is an error for JLCPCB unless <code class="docutils literal notranslate"><span class="pre">--consign</span> <span class="pre">REF,...</span></code> names it. It is then listed
+on the card as “not assembled by the vendor”.</p></li>
+</ul>
+</li>
+<li><p><strong>RF footprints are excluded.</strong> <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code> footprints set <code class="docutils literal notranslate"><span class="pre">exclude_from_bom</span></code> and
+<code class="docutils literal notranslate"><span class="pre">exclude_from_pos_files</span></code>.</p></li>
+<li><p><strong>JLCPCB BOM</strong> (<code class="docutils literal notranslate"><span class="pre">&lt;b&gt;-jlcpcb-bom.csv</span></code>):</p>
+<ul>
+<li><p>columns <code class="docutils literal notranslate"><span class="pre">Comment,</span> <span class="pre">Designator,</span> <span class="pre">Footprint,</span> <span class="pre">JLCPCB</span> <span class="pre">Part</span> <span class="pre">#</span></code> <a class="reference external" href="https://jlcpcb.com/help/article/how-to-generate-the-bom-and-centroid-file-from-kicad">J-bomkicad</a>;</p></li>
+<li><p>one row per (LCSC id, value, footprint), designators sorted naturally;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Footprint</span></code> is the catalog’s <code class="docutils literal notranslate"><span class="pre">package</span></code> when present, else the KiCad footprint name without its
+library.</p></li>
+</ul>
+</li>
+<li><p><strong>JLCPCB CPL</strong> (<code class="docutils literal notranslate"><span class="pre">&lt;b&gt;-jlcpcb-cpl.csv</span></code>):</p>
+<ul>
+<li><p>columns <code class="docutils literal notranslate"><span class="pre">Designator,</span> <span class="pre">Mid</span> <span class="pre">X,</span> <span class="pre">Mid</span> <span class="pre">Y,</span> <span class="pre">Layer,</span> <span class="pre">Rotation</span></code>, mm, counter-clockwise positive,
+<code class="docutils literal notranslate"><span class="pre">Top</span></code>/<code class="docutils literal notranslate"><span class="pre">Bottom</span></code> <a class="reference external" href="https://jlcpcb.com/help/article/pick-place-file-for-pcb-assembly">J-cpl</a>;</p></li>
+<li><p>built from the kicad-cli pos CSV and transformed in yapnr. As built: read from the board file,
+with each part’s centre taken as its pads’ bounding box (Fabrication Toolkit’s default), not
+the footprint anchor, which sits on pin 1 for many connectors.</p></li>
+</ul>
+</li>
+<li><p><strong>JLCPCB rotation corrections.</strong></p>
+<ul>
+<li><p>They come from the part cache, <strong>per locked part</strong>, as new manifest metadata outside the part
+id (like <code class="docutils literal notranslate"><span class="pre">licence.distribution</span></code>): <code class="docutils literal notranslate"><span class="pre">placement.jlcpcb</span></code>, with <code class="docutils literal notranslate"><span class="pre">rotation_deg</span></code>, <code class="docutils literal notranslate"><span class="pre">dx_mm</span></code>, <code class="docutils literal notranslate"><span class="pre">dy_mm</span></code>,
+<code class="docutils literal notranslate"><span class="pre">checked</span></code> and <code class="docutils literal notranslate"><span class="pre">by</span></code>.</p></li>
+<li><p>They are set with <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">part-cache</span> <span class="pre">set-placement</span> <span class="pre">&lt;id&gt;</span> <span class="pre">--vendor</span> <span class="pre">jlcpcb</span> <span class="pre">--rotation</span> <span class="pre">90</span></code>, by a
+human who compared JLC’s preview.</p></li>
+<li><p>No correction database is copied into yapnr (decisions: no vendor data in the repository).</p></li>
+<li><p>Parts without a checked correction are listed on the card (“check rotation in JLC’s preview: U3,
+J1”).</p></li>
+<li><p><strong>Bottom side:</strong> the conversion follows Fabrication Toolkit’s published maths <a class="reference external" href="https://github.com/bennymeg/Fabrication-Toolkit">FT</a>: rotation
+<code class="docutils literal notranslate"><span class="pre">180</span> <span class="pre">−</span> <span class="pre">r</span></code> as seen from the top. It is pinned by a golden test. Until one bottom-side assembled
+order confirms it, the card warns on every bottom part.</p></li>
+</ul>
+</li>
+<li><p><strong>PCBWay BOM</strong> (<code class="docutils literal notranslate"><span class="pre">&lt;b&gt;-pcbway-bom.csv</span></code>): KiKit’s column set <a class="reference external" href="https://github.com/yaqwsx/KiKit">KK</a>. <code class="docutils literal notranslate"><span class="pre">Manufacturer</span></code> and <code class="docutils literal notranslate"><span class="pre">Mfg</span> <span class="pre">Part</span> <span class="pre">#</span></code>
+come from the footprint fields, and the LCSC id goes in the notes as a sourcing hint.
+<code class="docutils literal notranslate"><span class="pre">Type</span></code> is SMD or THT.</p></li>
+<li><p><strong>PCBWay CPL:</strong> the same columns as JLC’s, with no corrections. PCBWay’s engineers check
+placement.</p></li>
+<li><p><strong>Part-picker facts are not order facts.</strong> Basic or extended status comes from the picker
+catalog (<code class="docutils literal notranslate"><span class="pre">basic</span></code>). Stock is not known offline (<code class="docutils literal notranslate"><span class="pre">&quot;unknown&quot;</span></code>). The card says that stock and price
+are checked on the vendor’s BOM page.</p></li>
+</ul>
+</section>
+<section id="readme-stackup-and-impedance-notes">
+<h3>6.6 README, stackup and impedance notes<a class="headerlink" href="#readme-stackup-and-impedance-notes" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">README.md</span></code> in each bundle covers:</p>
+<ul class="simple">
+<li><p><strong>The board:</strong> name, size and area, layers, the stackup with its layers and the instruction for
+the human, thickness, finish, mask and via covering.</p></li>
+<li><p><strong>Impedance-relevant items:</strong> every footprint with a <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code> description, and every netclass
+with a target impedance. For each it gives the width, the reference layer and a nominal
+microstrip estimate.</p></li>
+<li><p><strong>The vendor’s impedance service:</strong> none at OSH Park (“nominal stackup only”); JLC’s named stackup
+and its ±10 %; PCBWay’s ±10 %.</p></li>
+<li><p><strong>The fab-check summary and the provenance.</strong></p></li>
+</ul>
+<p>An <strong>RF footprint</strong> is one that <code class="docutils literal notranslate"><span class="pre">yapnr.rf.export.kicad</span></code> wrote. Its description names the stackup
+the design assumed and the spec sha256. If the assumed εr and h differ from the chosen stackup’s
+signal-to-reference dielectric by more than 1 %, <code class="docutils literal notranslate"><span class="pre">fab</span> <span class="pre">check</span></code> stops with <code class="docutils literal notranslate"><span class="pre">FAB-RF</span></code>, and the
+stackup must then be named explicitly. Without this check, an RF demo could be ordered on the
+wrong substrate.</p>
+</section>
+<section id="bundle-layout-manifest-and-provenance">
+<h3>6.7 Bundle layout, manifest and provenance<a class="headerlink" href="#bundle-layout-manifest-and-provenance" title="Link to this heading">¶</a></h3>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;out&gt;/&lt;board&gt;-&lt;profile&gt;/
+├── &lt;board&gt;-&lt;vendor&gt;-gerbers.zip     the file to upload (fab files only, stored, deterministic)
+├── &lt;board&gt;-&lt;vendor&gt;-bom.csv         assembly vendors, with --assembly
+├── &lt;board&gt;-&lt;vendor&gt;-cpl.csv
+├── README.md                        §6.6
+├── order-card.json, order-card.md   §8.2 (the data; `order stage` adds the run&#39;s choices)
+├── drc.json                         kicad-cli DRC under the vendor profile
+├── fab-check.json                   every check, with severity and source
+├── manifest.json
+└── &lt;board&gt;-&lt;vendor&gt;-bundle.zip      everything above, for records or a release
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">manifest.json</span></code> has the schema <code class="docutils literal notranslate"><span class="pre">yapnr-fab-manifest-v1</span></code>. It records:</p>
+<ul class="simple">
+<li><p><strong>Files:</strong> the sha256 and size of every file, and of every member of the gerber zip.</p></li>
+<li><p><strong>The board:</strong> its sha256, and the <strong>input id</strong> (the sha256 with UUIDs normalized, as atopile
+builds do).</p></li>
+<li><p><strong>The run,</strong> if any: its id, candidate and engine id, from <code class="docutils literal notranslate"><span class="pre">yapnr-provenance.json</span></code> when the board
+came from <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">export</span> <span class="pre">kicad</span></code>.</p></li>
+<li><p><strong>Inputs:</strong> the parts lock and catalog sha256; the profile, stackup and vendor data file names and
+sha256; the oldest source access date in them.</p></li>
+<li><p><strong>Tools:</strong> the yapnr version and source revision, the kicad-cli version, the platform.</p></li>
+<li><p><strong>The command line,</strong> with relative paths only.</p></li>
+<li><p><strong>The time:</strong> the normalized time, never the wall clock.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">--public</span></code> adds a privacy pass over every text file of the bundle. It refuses absolute paths, home
+directories and e-mail addresses, using the rules of <code class="docutils literal notranslate"><span class="pre">tools/privacy_scan.py</span></code> once they are
+packaged. A minimal built-in check runs until then. Use it before attaching a bundle to a public
+release.</p>
+</section>
+</section>
+<section id="checks-f2">
+<h2>7. Checks (F2)<a class="headerlink" href="#checks-f2" title="Link to this heading">¶</a></h2>
+<section id="rules-applied-for-the-check">
+<h3>7.1 Rules applied for the check<a class="headerlink" href="#rules-applied-for-the-check" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">fab</span> <span class="pre">check</span> <span class="pre">BOARD</span> <span class="pre">--profile</span> <span class="pre">P</span> <span class="pre">[--stackup</span> <span class="pre">S]</span></code> runs on a scratch copy:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">.kicad_pro</span></code>.</strong> <code class="docutils literal notranslate"><span class="pre">board.design_settings.rules</span></code> is set, for each key, to the stricter of the
+project’s own value and the profile’s (<code class="docutils literal notranslate"><span class="pre">fab_profile.board_constraints</span></code>). Netclasses stay the
+project’s.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">.kicad_dru</span></code>.</strong> The profile’s <code class="docutils literal notranslate"><span class="pre">dru_text</span></code> replaces a generated rules file (one with the
+<code class="docutils literal notranslate"><span class="pre">#</span> <span class="pre">Generated</span> <span class="pre">by</span> <span class="pre">pnr.fab_profile</span></code> header). Hand-written rules are kept and appended after it.</p></li>
+<li><p><strong>Then <code class="docutils literal notranslate"><span class="pre">kicad-cli</span> <span class="pre">pcb</span> <span class="pre">drc</span> <span class="pre">--refill-zones</span> <span class="pre">--severity-all</span> <span class="pre">--format</span> <span class="pre">json</span></code>.</strong></p></li>
+</ul>
+</section>
+<section id="check-list">
+<h3>7.2 Check list<a class="headerlink" href="#check-list" title="Link to this heading">¶</a></h3>
+<p>Each finding has a code, a severity (error, warning or info) and the source of its limit.</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Code</p></th>
+<th class="head"><p>What</p></th>
+<th class="head"><p>Severity</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-DRC</span></code></p></td>
+<td><p>KiCad DRC errors under the vendor rules (the judge)</p></td>
+<td><p>error per DRC error; DRC warnings are warnings</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-LAYERS</span></code></p></td>
+<td><p>Copper layer count differs from the stackup’s</p></td>
+<td><p>error</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-OUTLINE</span></code></p></td>
+<td><p>No outline, or more than one closed outline (a panel); OSH Park’s panel rules <a class="reference external" href="https://docs.oshpark.com/troubleshooting/panelized-designs/">O-panel</a></p></td>
+<td><p>error / warning</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-SIZE</span></code></p></td>
+<td><p>Outside the vendor’s minimum or maximum board size</p></td>
+<td><p>error</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-VIA-TYPE</span></code></p></td>
+<td><p>Blind, buried or micro vias on a profile without them</p></td>
+<td><p>error</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-DRILL</span></code></p></td>
+<td><p>A hole above the vendor’s maximum drill (OSH Park mills it <a class="reference external" href="https://docs.oshpark.com/submitting-orders/drill-specs/">O-drill</a>); slots present (vendor slot notes); as built, non-plated holes in a merged drill file (OSH Park)</p></td>
+<td><p>warning</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-CASTELLATED</span></code></p></td>
+<td><p>Castellated pads: OSH Park “allowed, but not guaranteed” <a class="reference external" href="https://docs.oshpark.com/tips+tricks/castellation/">O-cast</a>; JLC needs the option and hole ≥ 0.5 mm</p></td>
+<td><p>warning / error</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-STACKUP</span></code></p></td>
+<td><p>The board’s KiCad stackup differs from the chosen stackup (thickness, εr)</p></td>
+<td><p>warning</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-RF</span></code></p></td>
+<td><p>An RF footprint’s assumed substrate differs from the order’s stackup (§6.6)</p></td>
+<td><p>error</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-IMPEDANCE</span></code></p></td>
+<td><p>Impedance-relevant items on a vendor or service without impedance control</p></td>
+<td><p>warning (the card states “not controlled”)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-ALTERNATE</span></code></p></td>
+<td><p>The vendor has an alternate substrate at checkout (OSH Park EM528) and the board has RF items</p></td>
+<td><p>info; the card tells the human what to pick</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-QTY</span></code></p></td>
+<td><p>Quantity not allowed (OSH Park: multiples of 3; JLC and PCBWay: 5 or more)</p></td>
+<td><p>error</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-MARKING</span></code></p></td>
+<td><p>Assembly vendors print an order number on the silkscreen unless the human chooses otherwise (to be confirmed on the live quote pages)</p></td>
+<td><p>info on the card</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-ASSEMBLY</span></code></p></td>
+<td><p>Missing LCSC id or MPN, unchecked rotation, bottom-side parts, DNP parts</p></td>
+<td><p>error / warning</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-PROFILE-DRAFT</span></code></p></td>
+<td><p>A draft profile</p></td>
+<td><p>error without <code class="docutils literal notranslate"><span class="pre">--allow-draft</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">FAB-PRIVACY</span></code></p></td>
+<td><p>With <code class="docutils literal notranslate"><span class="pre">--public</span></code>: absolute paths or e-mail addresses in bundle text</p></td>
+<td><p>error</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">fab</span> <span class="pre">check</span></code> exits non-zero on any error. <code class="docutils literal notranslate"><span class="pre">--json</span></code> prints the full finding list.</p>
+</section>
+</section>
+<section id="yapnr-order-stage-o1-to-o3">
+<h2>8. <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code> (O1 to O3)<a class="headerlink" href="#yapnr-order-stage-o1-to-o3" title="Link to this heading">¶</a></h2>
+<section id="command-and-flow">
+<h3>8.1 Command and flow<a class="headerlink" href="#command-and-flow" title="Link to this heading">¶</a></h3>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>yapnr<span class="w"> </span>order<span class="w"> </span>stage<span class="w"> </span>--vendor<span class="w"> </span><span class="o">{</span>oshpark,jlcpcb,pcbway<span class="o">}</span><span class="w"> </span><span class="o">(</span>BOARD<span class="w"> </span><span class="p">|</span><span class="w"> </span>--bundle<span class="w"> </span>DIR<span class="o">)</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span><span class="o">[</span>--profile<span class="w"> </span>P<span class="o">]</span><span class="w"> </span><span class="o">[</span>--stackup<span class="w"> </span>S<span class="o">]</span><span class="w"> </span><span class="o">[</span>--qty<span class="w"> </span>N<span class="o">]</span><span class="w"> </span><span class="o">[</span>--service<span class="w"> </span>S<span class="o">]</span><span class="w"> </span><span class="o">[</span>--option<span class="w"> </span><span class="nv">KEY</span><span class="o">=</span>VALUE<span class="w"> </span>...<span class="o">]</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span><span class="o">[</span>--dry-run<span class="o">]</span><span class="w"> </span><span class="o">[</span>--print-only<span class="o">]</span><span class="w"> </span><span class="o">[</span>--yes<span class="o">]</span><span class="w"> </span><span class="o">[</span>--reveal<span class="o">]</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span><span class="o">[</span>--via<span class="w"> </span>import-url<span class="w"> </span>--url<span class="w"> </span>URL<span class="w"> </span><span class="o">[</span>--verify-url<span class="o">]]</span><span class="w">      </span><span class="c1"># O1, OSH Park, public zips</span>
+<span class="w">    </span><span class="o">[</span>--upload<span class="o">]</span><span class="w">                                       </span><span class="c1"># O2, opt-in (OSH Park only)</span>
+<span class="w">    </span><span class="o">[</span>--api<span class="o">]</span><span class="w">                                          </span><span class="c1"># O3, opt-in (granted access only)</span>
+yapnr<span class="w"> </span>order<span class="w"> </span>vendors<span class="w"> </span><span class="o">[</span>--json<span class="o">]</span><span class="w">                         </span><span class="c1"># mechanisms, sources, status</span>
+</pre></div>
+</div>
+<ol class="arabic simple">
+<li><p><strong>Validate:</strong> run <code class="docutils literal notranslate"><span class="pre">fab</span> <span class="pre">check</span></code> (<code class="docutils literal notranslate"><span class="pre">--bundle</span></code> re-checks the manifest hashes instead).</p></li>
+<li><p><strong>Build:</strong> run <code class="docutils literal notranslate"><span class="pre">fab</span> <span class="pre">build</span></code> if no bundle was given.</p></li>
+<li><p><strong>Print the order card</strong> (§8.2) and write it into the bundle with the run’s choices.</p></li>
+<li><p><strong>Stage.</strong> The mechanism comes from the flags (§8.3):</p>
+<ul class="simple">
+<li><p>by default yapnr asks <code class="docutils literal notranslate"><span class="pre">Open</span> <span class="pre">&lt;url&gt;</span> <span class="pre">in</span> <span class="pre">your</span> <span class="pre">browser?</span> <span class="pre">[y/N]</span></code>;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--yes</span></code> answers yes for opening a page only;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--print-only</span></code> prints the URL and the file and opens nothing;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--reveal</span></code> also shows the zip in the file manager.</p></li>
+</ul>
+</li>
+<li><p><strong>Log</strong> <code class="docutils literal notranslate"><span class="pre">staged.jsonl</span></code> in the bundle. It records the time, vendor, mechanism, URL, the gerber
+zip’s sha256 and the opt-in confirmations. It holds no tokens and no vendor response bodies
+beyond an upload id.</p></li>
+</ol>
+<p><strong>Dry run</strong> is <code class="docutils literal notranslate"><span class="pre">--dry-run</span></code>, or forced when <code class="docutils literal notranslate"><span class="pre">CI</span></code> or <code class="docutils literal notranslate"><span class="pre">YAPNR_ORDER_DRY_RUN=1</span></code> is set. It does steps 1
+to 3, prints what step 4 would do, and exits 0. It never opens a browser and never opens a
+network connection. A CI dry run on fixture boards keeps the whole path tested.</p>
+</section>
+<section id="the-order-card">
+<h3>8.2 The order card<a class="headerlink" href="#the-order-card" title="Link to this heading">¶</a></h3>
+<p>It is the per-order confirmation summary. Example for an OSH Park 4-layer RF demo (values
+illustrative):</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>ORDER CARD  staging only: yapnr uploads nothing, orders nothing, pays nothing
+vendor      OSH Park (US), 4 Layer service (Super Swift: no)
+board       rf-divider   50.00 x 50.00 mm   3.875 sq in   input id 3f2a…
+layers      4: F.Cu, In1.Cu, In2.Cu, B.Cu        thickness 1.6 mm (fixed)
+stackup     oshpark-4l-fr408hr: 1.7 mil Cu / FR408HR 2113 7.87 mil, Dk 3.61 @ 1 GHz /
+            0.68 mil Cu / 39 mil core / 0.68 mil Cu / 7.87 mil / 1.7 mil Cu
+CHECKOUT    substrate: keep FR408-HR. Do NOT pick the EM528 alternate: this board&#39;s RF
+            structures assume Dk 3.61 on 0.200 mm (EM528: Dk 3.76 on 0.195 mm, -1.7 ohm,
+            -1.9 % wavelength).
+finish/mask ENIG / purple (fixed)        via covering: tented (no fill)
+impedance   not controlled (OSH Park has no impedance service); nominal stackup only
+qty         3 (multiples of 3)
+estimate    $38.75 (3.875 sq in x $10, 3 boards; docs.oshpark.com/services/four-layer, 2026-10-02)
+checks      oshpark-4l: DRC 0 errors, 0 warnings; FAB-ALTERNATE (info)
+file        out/rf-divider-oshpark-4l/rf-divider-oshpark-gerbers.zip
+            sha256 9c41…  (12 files, 214 kB)
+next        drop the file on https://oshpark.com/, check the preview, choose options, pay there.
+Open https://oshpark.com/ in your browser? [y/N]
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><strong>JLCPCB cards</strong> name the stackup to choose under “Specify Stackup” (for example
+<code class="docutils literal notranslate"><span class="pre">JLC04161H-7628</span></code>). They list the options to set (layers, thickness, finish, via covering, order
+number marking) and, for assembly, the BOM and CPL files and the parts needing a rotation check.</p></li>
+<li><p><strong>PCBWay cards</strong> list the options, the remark text to paste (for example “no copper thieving or
+silkscreen on the RF structures on L1”), and the assembly files.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">--json</span></code></strong> prints the same card as data for agents and scripts.</p></li>
+</ul>
+</section>
+<section id="mechanisms-per-vendor">
+<h3>8.3 Mechanisms per vendor<a class="headerlink" href="#mechanisms-per-vendor" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Vendor</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">manual</span></code> (O1, default)</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">import-url</span></code> (O1)</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">upload</span></code> (O2)</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">api</span></code> (O3)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>OSH Park</p></td>
+<td><p>Open <code class="docutils literal notranslate"><span class="pre">https://oshpark.com/</span></code>; drop the zip</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">https://oshpark.com/import?url=&lt;quote(url,</span> <span class="pre">safe=&quot;:/&quot;)&gt;</span></code> <a class="reference external" href="https://docs.oshpark.com/tips+tricks/api/">O-api</a>. <code class="docutils literal notranslate"><span class="pre">--url</span></code> must be <code class="docutils literal notranslate"><span class="pre">https</span></code>. <code class="docutils literal notranslate"><span class="pre">--verify-url</span></code> downloads it (read-only) and compares its sha256 with the bundle’s zip. The URL is published by the human or by a release workflow, never by <code class="docutils literal notranslate"><span class="pre">order</span> <span class="pre">stage</span></code>.</p></td>
+<td><p>After decision D1. <code class="docutils literal notranslate"><span class="pre">--upload</span></code> plus typing <code class="docutils literal notranslate"><span class="pre">oshpark</span></code> at a TTY prompt sends one multipart POST, field <code class="docutils literal notranslate"><span class="pre">file</span></code>, to <code class="docutils literal notranslate"><span class="pre">https://oshpark.com/import.json</span></code>. It reads <code class="docutils literal notranslate"><span class="pre">{&quot;token&quot;,&quot;url&quot;}</span></code> and opens <code class="docutils literal notranslate"><span class="pre">url</span></code> <a class="reference external" href="https://docs.oshpark.com/tips+tricks/api/">O-api</a>. The upload is anonymous, with no account, preview or warnings <a class="reference external" href="https://docs.oshpark.com/tips+tricks/api/">O-api</a>. No redirects followed; timeout 60 s; the zip is the only body.</p></td>
+<td><p>none</p></td>
+</tr>
+<tr class="row-odd"><td><p>JLCPCB</p></td>
+<td><p>Open <code class="docutils literal notranslate"><span class="pre">https://cart.jlcpcb.com/quote</span></code> <a class="reference external" href="https://cart.jlcpcb.com/quote">J-quote</a></p></td>
+<td><p>–</p></td>
+<td><p>none (no documented anonymous upload)</p></td>
+<td><p>If access is granted <a class="reference external" href="https://api.jlcpcb.com/">J-api</a>: quote endpoints only. Ordering through the API is out of scope; the cart site is never scripted.</p></td>
+</tr>
+<tr class="row-even"><td><p>PCBWay</p></td>
+<td><p>Open <code class="docutils literal notranslate"><span class="pre">https://www.pcbway.com/orderonline.aspx</span></code> <a class="reference external" href="https://www.pcbway.com/orderonline.aspx">P-order</a>; with assembly, <code class="docutils literal notranslate"><span class="pre">https://www.pcbway.com/quotesmt.aspx</span></code> <a class="reference external" href="https://www.pcbway.com/quotesmt.aspx">P-smt</a></p></td>
+<td><p>–</p></td>
+<td><p>Not implemented. The plugin endpoint (<code class="docutils literal notranslate"><span class="pre">/Common/KiCadUpFile/</span></code>, from the plugin’s source <a class="reference external" href="https://github.com/pcbway/PCBWay-Plug-in-for-Kicad">P-plug</a>) is not documented as an API (D1).</p></td>
+<td><p>After access and decision D3 <a class="reference external" href="https://api-partner.pcbway.com/Help">P-api</a>. Allowlist: <code class="docutils literal notranslate"><span class="pre">api/Pcb/PcbQuotation</span></code>, <code class="docutils literal notranslate"><span class="pre">api/SMT/SMTQuotation</span></code>, <code class="docutils literal notranslate"><span class="pre">api/Pcb/GetFreightByOrder</span></code>, and <code class="docutils literal notranslate"><span class="pre">api/Pcb/PlaceOrder</span></code> (“Add to Cart”) only with <code class="docutils literal notranslate"><span class="pre">--add-to-cart</span></code>. <strong>Never reachable:</strong> <code class="docutils literal notranslate"><span class="pre">ConfirmOrder</span></code> (“Confirm orders/Make Payment”), <code class="docutils literal notranslate"><span class="pre">PayTGroupOrder</span></code>, <code class="docutils literal notranslate"><span class="pre">QueryBalance</span></code>, <code class="docutils literal notranslate"><span class="pre">CancelOrder</span></code> and every endpoint not on the list.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="network-credentials-and-refusal-paths">
+<h3>8.4 Network, credentials and refusal paths<a class="headerlink" href="#network-credentials-and-refusal-paths" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">yapnr/order/http.py</span></code> is the only module that opens connections.</strong> Everything else is offline
+by construction, and a test proves it (§10).</p>
+<ul>
+<li><p>Requests are built only from <code class="docutils literal notranslate"><span class="pre">(vendor,</span> <span class="pre">endpoint)</span></code> pairs on an allowlist.</p></li>
+<li><p>Only https, to the vendor’s documented host; redirects are refused; every request has a
+timeout.</p></li>
+<li><p>Headers and bodies are never logged.</p></li>
+</ul>
+</li>
+<li><p><strong>Tokens (O3):</strong></p>
+<ul>
+<li><p>Read from <code class="docutils literal notranslate"><span class="pre">YAPNR_PCBWAY_API_KEY</span></code> or <code class="docutils literal notranslate"><span class="pre">YAPNR_JLCPCB_API_KEY</span></code>, else from the OS keychain.</p></li>
+<li><p>The keychain lookup runs <code class="docutils literal notranslate"><span class="pre">security</span> <span class="pre">find-generic-password</span> <span class="pre">-s</span> <span class="pre">yapnr-&lt;vendor&gt;</span> <span class="pre">-w</span></code> on macOS or
+<code class="docutils literal notranslate"><span class="pre">secret-tool</span> <span class="pre">lookup</span> <span class="pre">service</span> <span class="pre">yapnr-&lt;vendor&gt;</span></code> on Linux, through the time-bounded <code class="docutils literal notranslate"><span class="pre">proc.run</span></code>.</p></li>
+<li><p>Never accepted as a command-line argument, which would be visible in <code class="docutils literal notranslate"><span class="pre">ps</span></code>.</p></li>
+<li><p>Held in a <code class="docutils literal notranslate"><span class="pre">Secret</span></code> wrapper whose <code class="docutils literal notranslate"><span class="pre">repr</span></code> and <code class="docutils literal notranslate"><span class="pre">str</span></code> are redacted. Exception handlers in <code class="docutils literal notranslate"><span class="pre">order</span></code>
+scrub the token value from messages.</p></li>
+</ul>
+</li>
+<li><p><strong>Nothing about payment or accounts.</strong> yapnr never asks for or stores card details, addresses,
+account passwords or session cookies. A page that asks for any of them is the vendor’s page in
+the human’s browser.</p></li>
+</ul>
+</section>
+</section>
+<section id="rf-demo-boards-and-coupons-what-this-means-for-the-first-orders">
+<h2>9. RF demo boards and coupons: what this means for the first orders<a class="headerlink" href="#rf-demo-boards-and-coupons-what-this-means-for-the-first-orders" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>The existing RF cases are not OSH Park designs.</strong> <code class="docutils literal notranslate"><span class="pre">yapnr.rf.cases</span></code> optimized them on S1
+(εr 3.55, tan δ 0.0027, h 0.813 mm) and S2 (the same material, 1.524 mm). Those are Rogers
+RO4003C’s design Dk (3.55) and Df (0.0027 at 10 GHz) <a class="reference external" href="https://www.rogerscorp.com/advanced-electronics-solutions/ro4000-series-laminates/ro4003c-laminates">R-4003</a> at 32 mil and 60 mil. As built
+today, they match <strong>PCBWay’s RO4003C 2-layer</strong> service, <code class="docutils literal notranslate"><span class="pre">pcbway-hf-2l</span></code> (draft; available
+thicknesses must be confirmed on the quote).</p></li>
+<li><p><strong>On OSH Park they must be re-optimized.</strong> OSH Park offers no Rogers material. On its 4-layer
+FR408HR stackup (F.Cu over In1.Cu: h 0.200 mm, Dk 3.61 at 1 GHz, Df prior 0.009) the 50 Ω width
+drops from 1.82 mm to 0.44 mm. The min width and space become 0.127 mm.</p></li>
+<li><p><strong>Compute cost (est.).</strong> Scaling the grid with h (pitch 0.3 mm to about 0.074 mm, the same
+substrate cell count) costs roughly 16× in-plane and 4× in time steps, so <strong>about 65× per forward
+run</strong> over the same window. Measure it on the smoke variant before planning the demo schedule.</p></li>
+<li><p><strong>Antenna cases.</strong> On OSH Park 4L, an antenna like case S2 would need a multi-dielectric
+substrate (L1 to In2 or B.Cu), which <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code> does not model. OSH Park 2L, about 1.53 mm of
+KB6167F, is the closest single-dielectric match. Its Dk is published only at 10 MHz (4.5), so the
+coupons must pin it.</p></li>
+<li><p><strong>Pin the substrate.</strong> OSH Park’s EM528 alternate (Dk 3.76 on 7.67 mil) moves a FR408HR-designed
+50 Ω line to 48.3 Ω and shortens its guided wavelength by 1.9 % (Hammerstad–Jensen, uncoated).
+That is enough to detune narrow-band demos. The RF spec, the board’s RF footprints, the fab
+profile and the order card all carry the stackup id, and <code class="docutils literal notranslate"><span class="pre">FAB-RF</span></code> stops a mismatch.</p>
+<ul>
+<li><p>OSH Park posted FR408HR stock delays on 2026-09-21, with resolution expected around 2026-09-28
+to 2026-10-02 <a class="reference external" href="https://docs.oshpark.com/troubleshooting/alternate-4-layer-stackup/">O-alt</a>.</p></li>
+<li><p>Decision D4 (§12): design for FR408HR and wait, or design for EM528 and order now. The data
+supports either.</p></li>
+</ul>
+</li>
+<li><p><strong>Coupons characterize one vendor’s stackup.</strong> The coupon research targets JLC stackups. An OSH
+Park demo needs OSH Park coupons from the same order, as one panel or a second design: same
+material, same lot. OSH Park charges by area ($10/sq in on 4L), so a reduced set fits the budget
+better than the 100×120 mm board. A 50×100 mm coupon strip costs $77.50 for 3. The stackup data
+for every vendor is in Appendix A, so the coupon generator can target any of them.</p></li>
+<li><p><strong>Solder mask.</strong> OSH Park masks the lines (0.6 mil); its mask Dk is not published (prior 3.8,
+JLC’s calculator value). Exposed copper is ENIG, and its nickel adds loss at GHz. The
+masked/unmasked coupon pairs measure both effects.</p></li>
+</ul>
+</section>
+<section id="tests">
+<h2>10. Tests<a class="headerlink" href="#tests" title="Link to this heading">¶</a></h2>
+<p>All tests are hermetic unless tagged. None contacts a vendor.</p>
+<p><strong>Unit tests</strong> (<code class="docutils literal notranslate"><span class="pre">//tests/unit/fab/...</span></code>, <code class="docutils literal notranslate"><span class="pre">//tests/unit/order/...</span></code>):</p>
+<ul class="simple">
+<li><p><strong>Data:</strong></p>
+<ul>
+<li><p>every data file validates against its schema;</p></li>
+<li><p>every numeric value has provenance;</p></li>
+<li><p>every source key resolves to a URL and an access date;</p></li>
+<li><p>the profile copper matches each allowed stackup’s copper;</p></li>
+<li><p>no profile names a stackup that does not exist.</p></li>
+</ul>
+</li>
+<li><p><strong>Engine parity:</strong></p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">legacy</span></code> and <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code> give byte-identical <code class="docutils literal notranslate"><span class="pre">apply_rules</span></code>, <code class="docutils literal notranslate"><span class="pre">dru_text</span></code>, <code class="docutils literal notranslate"><span class="pre">board_constraints</span></code> and
+<code class="docutils literal notranslate"><span class="pre">geometry</span></code> output to the recorded goldens;</p></li>
+<li><p>new profiles give a <code class="docutils literal notranslate"><span class="pre">dru_text</span></code> that parses (a KiCad-lane test runs it).</p></li>
+</ul>
+</li>
+<li><p><strong>Stackup views:</strong></p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">microstrip()</span></code> thickness and εr against Appendix A;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">rf_stackup_spec()</span></code> refuses a <code class="docutils literal notranslate"><span class="pre">null</span></code> Df without <code class="docutils literal notranslate"><span class="pre">use_prior</span></code>;</p></li>
+<li><p>the Hammerstad–Jensen widths in Appendix A are recomputed with <code class="docutils literal notranslate"><span class="pre">yapnr.rf.stackup</span></code> to 0.005 mm.</p></li>
+</ul>
+</li>
+<li><p><strong>Normalizer:</strong> recorded kicad-cli 10.0.6 headers in, fixed lines out. Unknown differing lines
+are reported.</p></li>
+<li><p><strong>Zips:</strong> two builds from the same inputs give identical bytes, sorted entries, fixed times and
+stored entries.</p></li>
+<li><p><strong>Manifest:</strong> it hashes every file and zip member, and contains no absolute path.</p></li>
+<li><p><strong>Assembly:</strong></p>
+<ul>
+<li><p>BOM grouping and natural designator sort;</p></li>
+<li><p>LCSC from fields and lock, with conflicts reported;</p></li>
+<li><p>the CPL transform (rotation offsets, bottom-side rule) against a golden that follows <a class="reference external" href="https://github.com/bennymeg/Fabrication-Toolkit">FT</a>;</p></li>
+<li><p>consigned parts; RF footprints excluded.</p></li>
+</ul>
+</li>
+<li><p><strong>Checks:</strong> synthetic board facts (stats JSON fixtures) trigger every <code class="docutils literal notranslate"><span class="pre">FAB-*</span></code> code, and nothing
+else.</p></li>
+<li><p><strong>Order card:</strong> golden text and JSON for each vendor.</p></li>
+<li><p><strong>Staging:</strong></p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">import?url=</span></code> encoding (query strings, <code class="docutils literal notranslate"><span class="pre">&amp;</span></code>, spaces);</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--dry-run</span></code> and <code class="docutils literal notranslate"><span class="pre">CI=1</span></code> never call <code class="docutils literal notranslate"><span class="pre">webbrowser</span></code> and never connect;</p></li>
+<li><p>a fixture patches <code class="docutils literal notranslate"><span class="pre">socket.socket.connect</span></code> and <code class="docutils literal notranslate"><span class="pre">socket.create_connection</span></code> to fail for the
+entire O1 test run.</p></li>
+</ul>
+</li>
+<li><p><strong>O2:</strong></p>
+<ul>
+<li><p>the upload path runs against a <strong>loopback mock</strong> that serves the documented response shape
+<code class="docutils literal notranslate"><span class="pre">{&quot;token&quot;,&quot;url&quot;}</span></code>;</p></li>
+<li><p>it refuses without a TTY, with <code class="docutils literal notranslate"><span class="pre">--yes</span></code> alone, and with a wrong typed word;</p></li>
+<li><p>the request body is exactly the zip.</p></li>
+</ul>
+</li>
+<li><p><strong>O3:</strong></p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">ConfirmOrder</span></code>, <code class="docutils literal notranslate"><span class="pre">PayTGroupOrder</span></code> and <code class="docutils literal notranslate"><span class="pre">QueryBalance</span></code> cannot be built: the allowlist test fails
+on any new endpoint constant that is not on the list;</p></li>
+<li><p>a fake token never appears in stdout, stderr, logs, <code class="docutils literal notranslate"><span class="pre">staged.jsonl</span></code>, cards or exception text;</p></li>
+<li><p>the token is refused on the command line;</p></li>
+<li><p>a redirect is refused.</p></li>
+</ul>
+</li>
+</ul>
+<p><strong>KiCad lane</strong> (<code class="docutils literal notranslate"><span class="pre">requires-kicad</span></code>, headless kicad-cli):</p>
+<ul class="simple">
+<li><p><strong>Fixture boards.</strong> Synthetic 2L, 4L and 6L boards are generated by a test helper; Splanc data is
+not used. They include an NPTH hole, a slot, a castellated pad variant, a bottom-side part, a
+<code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code> footprint and LCSC fields.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">fab</span> <span class="pre">build</span></code> for each vendor gives the expected file names, matching X2 <code class="docutils literal notranslate"><span class="pre">FileFunction</span></code>s, the drill
+header formats (§6.3), and byte-identical results from two builds.</p></li>
+<li><p><strong>Planted violations.</strong> A 0.14 mm track passes <code class="docutils literal notranslate"><span class="pre">oshpark-4l</span></code> (5 mil) and fails <code class="docutils literal notranslate"><span class="pre">oshpark-2l</span></code>
+(6 mil). A 0.45/0.30 via fails <code class="docutils literal notranslate"><span class="pre">oshpark-4l</span></code> (ring) and passes <code class="docutils literal notranslate"><span class="pre">jlc-4l</span></code>. A 0.35/0.20 in-pad via
+fails <code class="docutils literal notranslate"><span class="pre">jlc-4l</span></code> and passes <code class="docutils literal notranslate"><span class="pre">jlc-pofv</span></code>.</p></li>
+<li><p><strong>RF mismatch.</strong> An RF footprint designed for S1 fails <code class="docutils literal notranslate"><span class="pre">FAB-RF</span></code> against <code class="docutils literal notranslate"><span class="pre">oshpark-4l-fr408hr</span></code>.</p></li>
+</ul>
+<p><strong>Manual end-to-end</strong> (<code class="docutils literal notranslate"><span class="pre">manual</span></code>): <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span> <span class="pre">--dry-run</span></code> for each vendor on a ladder case
+and on the first RF demo board, before its order.</p>
+</section>
+<section id="module-layout-bazel-and-docs">
+<h2>11. Module layout, Bazel and docs<a class="headerlink" href="#module-layout-bazel-and-docs" title="Link to this heading">¶</a></h2>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>yapnr/fab/
+├── __init__.py
+├── data/{profiles,stackups,vendors}/*.json
+├── capability.py   stdlib, Python ≥ 3.9: load and validate data; engine_profile(name)
+├── stackups.py     stackup model, microstrip/stripline/cross_section views, rf adapters
+├── board.py        board facts: kicad-cli stats, .gbrjob, a small S-expression reader
+├── check.py        fab check (§7)
+├── export.py       kicad-cli runs (time-bounded, TZ=UTC), normalization, renaming
+├── assembly.py     BOM and CPL, part-cache placement corrections
+├── bundle.py       README, manifest, deterministic zips, privacy pass
+└── cli.py          `yapnr fab profiles|show|check|build`
+yapnr/order/
+├── __init__.py
+├── card.py         order card (text, markdown, JSON)
+├── stage.py        flow, dry run, mechanisms
+├── vendors.py      per-vendor URLs and mechanisms (from vendors/*.json)
+├── http.py         the only network module: allowlist, https, no redirects, timeouts
+├── secrets.py      environment and keychain lookup, redacted Secret
+└── cli.py          `yapnr order stage|vendors`
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><strong>Bazel.</strong></p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">//yapnr/fab</span></code> and <code class="docutils literal notranslate"><span class="pre">//yapnr/order</span></code> are stdlib-only <code class="docutils literal notranslate"><span class="pre">py_library</span></code> targets, with the data as
+<code class="docutils literal notranslate"><span class="pre">data</span></code>, registered in <code class="docutils literal notranslate"><span class="pre">yapnr/cli.py</span></code> as the atopile commands are.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">//hardware/pnr:pnr</span></code> gains a dependency on <code class="docutils literal notranslate"><span class="pre">//yapnr/fab:capability</span></code>.</p></li>
+<li><p>The wheel includes <code class="docutils literal notranslate"><span class="pre">yapnr/fab/data</span></code>.</p></li>
+</ul>
+</li>
+<li><p><strong>Docs.</strong></p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">docs/fab-and-ordering.md</span></code>, the user guide, added to the “Using yapnr” toctree. It covers a
+quick start per vendor, choosing a profile and stackup, what <code class="docutils literal notranslate"><span class="pre">fab</span> <span class="pre">check</span></code> checks, the bundle,
+the order card, what yapnr never does, credentials for O3, the RF stackup pinning, and a table
+of vendor sources with access dates and a “re-verify before relying” note.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">docs/engine/fab-profiles.md</span></code> (planned in the migration plan) gets the profile reference,
+generated from the data files.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">decisions.md</span></code> gains the decisions of §12 once made.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">AGENTS.md</span></code> gains the <code class="docutils literal notranslate"><span class="pre">--dry-run</span></code> rule (§3).</p></li>
+</ul>
+</li>
+<li><p><strong>Data refresh.</strong> The vendor data is dated, and vendors change pages and prices. A yearly or
+per-order “re-verify” step lists every source with its access date (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span> <span class="pre">show</span> <span class="pre">--sources</span></code>).
+A source older than 180 days gives a warning on the card.</p></li>
+</ul>
+</section>
+<section id="decisions-for-the-owner-and-open-items">
+<h2>12. Decisions for the owner, and open items<a class="headerlink" href="#decisions-for-the-owner-and-open-items" title="Link to this heading">¶</a></h2>
+<p><strong>Decisions:</strong></p>
+<ul class="simple">
+<li><p><strong>D1. Do opt-in uploads count as staging?</strong></p>
+<ul>
+<li><p>Recommendation: <strong>yes for OSH Park’s documented <code class="docutils literal notranslate"><span class="pre">/import.json</span></code></strong> <a class="reference external" href="https://docs.oshpark.com/tips+tricks/api/">O-api</a>. It creates an
+anonymous upload page and no order, after a typed per-run confirmation.</p></li>
+<li><p><strong>No for PCBWay’s plugin endpoint</strong> for now. It works the same way but is not documented as an
+API, so it can change without notice. The manual page costs the human one drag.</p></li>
+</ul>
+</li>
+<li><p><strong>D2. Public “Order on OSH Park” links for the public demo boards.</strong></p>
+<ul>
+<li><p>The bundle zip would be published at a stable public URL (the docs site or a release asset), and
+the docs would carry an <code class="docutils literal notranslate"><span class="pre">oshpark.com/import?url=…</span></code> link.</p></li>
+<li><p>yapnr itself never uploads, and anyone can then order the same board.</p></li>
+<li><p>Recommendation: yes, per board, after its first order is checked.</p></li>
+</ul>
+</li>
+<li><p><strong>D3. Vendor API applications</strong> (PCBWay partner, JLCPCB). This is the owner’s account decision.
+O1 works without them. If PCBWay access is granted, should <code class="docutils literal notranslate"><span class="pre">PlaceOrder</span></code> (“Add to Cart”) be
+allowed at all, or only quotes? Recommendation: quotes, plus add-to-cart behind
+<code class="docutils literal notranslate"><span class="pre">--add-to-cart</span></code>.</p></li>
+<li><p><strong>D4. The substrate of the first OSH Park RF demo:</strong> FR408HR (wait for stock) or EM528 (now).
+Also whether the first demo is a 4L FR408HR re-optimization (§9: compute cost) or a 2L FR-4
+board.</p></li>
+<li><p><strong>D5. The derived values</strong> in §5.2: those marked “derived” in the OSH Park table. (The 6-layer
+inner layer names <code class="docutils literal notranslate"><span class="pre">.G2L</span></code> to <code class="docutils literal notranslate"><span class="pre">.G5L</span></code> are documented on OSH Park’s 6 layer page <a class="reference external" href="https://docs.oshpark.com/services/six-layer/">O-6l</a>.)</p></li>
+</ul>
+<p><strong>Unverified:</strong></p>
+<ul class="simple">
+<li><p><strong>Df values:</strong> OSH Park’s 4-layer prepreg Df (prior 0.009 from its 6-layer 2113 core); the OSH
+Park 2L Dk above 10 MHz and its Df.</p></li>
+<li><p><strong>Mask Dk:</strong> for OSH Park and PCBWay.</p></li>
+<li><p><strong>Live prices:</strong> JLC’s and PCBWay’s prices. (JLCPCB’s quote page states “No mark will be added
+by default.” <a class="reference external" href="https://cart.jlcpcb.com/quote">J-quote</a>; PCBWay’s “Remove product No.” defaults to “No” <a class="reference external" href="https://www.pcbway.com/orderonline.aspx">P-order</a>.)
+PCBWay’s Rogers thicknesses and 2-layer rules (draft profiles). JLC’s default 6-layer stackup
+when none is specified.</p></li>
+<li><p><strong>OSH Park file handling:</strong> NPTH handling in a merged drill file, and whether the 6-layer inner
+layer names are recognized. The X2 attributes make these low risk. The first order’s preview is
+the check.</p></li>
+<li><p><strong>That a KiCad 10 <code class="docutils literal notranslate"><span class="pre">.kicad_pcb</span></code> fails at OSH Park.</strong> Not tested, and not needed: the bundle sends
+gerbers.</p></li>
+<li><p><strong>US import duty details.</strong></p></li>
+</ul>
+</section>
+<section id="sources">
+<h2>13. Sources<a class="headerlink" href="#sources" title="Link to this heading">¶</a></h2>
+<p>Pages accessed 2026-10-02 unless noted. Vendor pages change; the data files carry these keys.</p>
+<ul class="simple">
+<li><p><strong>OSH Park:</strong></p>
+<ul>
+<li><p>services: <a class="reference external" href="https://docs.oshpark.com/services/">O-svc</a>, <a class="reference external" href="https://docs.oshpark.com/services/two-layer/">O-2l</a>, <a class="reference external" href="https://docs.oshpark.com/services/four-layer/">O-4l</a>, <a class="reference external" href="https://docs.oshpark.com/services/six-layer/">O-6l</a>;</p></li>
+<li><p>stackup changes: <a class="reference external" href="https://docs.oshpark.com/troubleshooting/alternate-4-layer-stackup/">O-alt</a>, <a class="reference external" href="https://docs.oshpark.com/troubleshooting/mixed-material-4-layer-stackup/">O-mixed</a>;</p></li>
+<li><p>ordering and files: <a class="reference external" href="https://oshpark.com/">O-home</a>, <a class="reference external" href="https://docs.oshpark.com/tips+tricks/api/">O-api</a>, <a class="reference external" href="https://docs.oshpark.com/design-tools/kicad/">O-kicad</a>, <a class="reference external" href="https://docs.oshpark.com/design-tools/kicad/generating-kicad-gerbers/">O-kgerb</a>, <a class="reference external" href="https://docs.oshpark.com/troubleshooting/naming-pattern/">O-name</a>, <a class="reference external" href="https://docs.oshpark.com/submitting-orders/drill-specs/">O-drill</a>;</p></li>
+<li><p>design notes and shipping: <a class="reference external" href="https://docs.oshpark.com/troubleshooting/panelized-designs/">O-panel</a>, <a class="reference external" href="https://docs.oshpark.com/tips+tricks/castellation/">O-cast</a>, <a class="reference external" href="https://docs.oshpark.com/submitting-orders/shipping-information/">O-ship</a>.</p></li>
+</ul>
+</li>
+<li><p><strong>JLCPCB:</strong></p>
+<ul>
+<li><p>ordering and files: <a class="reference external" href="https://cart.jlcpcb.com/quote">J-quote</a>, <a class="reference external" href="https://jlcpcb.com/help/article/how-to-generate-gerber-and-drill-files-in-kicad-8">J-kicad</a>, <a class="reference external" href="https://jlcpcb.com/help/article/bill-of-materials-for-pcb-assembly">J-bom</a>, <a class="reference external" href="https://jlcpcb.com/help/article/how-to-generate-the-bom-and-centroid-file-from-kicad">J-bomkicad</a>, <a class="reference external" href="https://jlcpcb.com/help/article/pick-place-file-for-pcb-assembly">J-cpl</a>;</p></li>
+<li><p>API and capabilities: <a class="reference external" href="https://api.jlcpcb.com/">J-api</a>, <a class="reference external" href="https://jlcpcb.com/impedance">J-imp</a>, <a class="reference external" href="https://jlcpcb.com/capabilities/pcb-capabilities">J-cap</a>;</p></li>
+<li><p>prices: <a class="reference external" href="https://jlcpcb.com/">J-home</a>, <a class="reference external" href="https://jlcpcb.com/help/article/pcb-assembly-price">J-pcba</a>. The JLC stackup values come from <a class="reference external" href="https://jlcpcb.com/impedance">J-imp</a> as read on 2026-10-02
+for the coupon research.</p></li>
+</ul>
+</li>
+<li><p><strong>PCBWay:</strong></p>
+<ul>
+<li><p>ordering: <a class="reference external" href="https://www.pcbway.com/orderonline.aspx">P-order</a>, <a class="reference external" href="https://www.pcbway.com/quotesmt.aspx">P-smt</a>, <a class="reference external" href="https://github.com/pcbway/PCBWay-Plug-in-for-Kicad">P-plug</a> (MIT; read in <code class="docutils literal notranslate"><span class="pre">plugins/thread.py</span></code>), <a class="reference external" href="https://api-partner.pcbway.com/Help">P-api</a>;</p></li>
+<li><p>capabilities and materials: <a class="reference external" href="https://www.pcbway.com/capabilities.html">P-cap</a>, <a class="reference external" href="https://www.pcbway.com/advanced-pcb-capabilities.html">P-adv</a>, <a class="reference external" href="https://www.pcbway.com/multi-layer-laminated-structure.html">P-lam</a>, <a class="reference external" href="https://www.pcbway.com/pcb_prototype/What_is_High_Frequency__HF__PCB_.html">P-hf</a>;</p></li>
+<li><p>assembly and prices: <a class="reference external" href="https://www.pcbway.com/pcb-assembly.html">P-asm</a>, <a class="reference external" href="https://www.pcbway.com/">P-home</a>. The PCBWay 4-layer price is from a live quote on
+2026-09-26.</p></li>
+</ul>
+</li>
+<li><p><strong>Materials:</strong> <a class="reference external" href="https://www.rogerscorp.com/advanced-electronics-solutions/ro4000-series-laminates/ro4003c-laminates">R-4003</a>.</p></li>
+<li><p><strong>Open tools</strong> (all AGPL-compatible licences; facts used, no code copied): Fabrication Toolkit
+<a class="reference external" href="https://github.com/bennymeg/Fabrication-Toolkit">FT</a> (Apache-2.0), KiKit <a class="reference external" href="https://github.com/yaqwsx/KiKit">KK</a> (MIT), kicad-jlcpcb-tools <a class="reference external" href="https://github.com/Bouni/kicad-jlcpcb-tools">JT</a> (MIT), Aisler Push <a class="reference external" href="https://github.com/AislerHQ/PushForKiCad">AISLER</a> (MIT).</p></li>
+<li><p><strong>Other US shops,</strong> for later: AdvancedPCB <a class="reference external" href="https://www.advancedpcb.com/en-us/">ADV</a> (quote portal needs a login; $99 each on RF
+material), Bay Area Circuits <a class="reference external" href="https://bayareacircuits.com/">BAC</a>, Sierra Circuits <a class="reference external" href="https://www.protoexpress.com/">SC</a> (Rogers, controlled impedance).</p></li>
+</ul>
+</section>
+<section id="as-built-2026-10-02">
+<h2>14. As built (2026-10-02)<a class="headerlink" href="#as-built-2026-10-02" title="Link to this heading">¶</a></h2>
+<p><strong>Built:</strong> F2a, F1a, O1a, F1b and O1b of §2.1, in <code class="docutils literal notranslate"><span class="pre">yapnr/fab</span></code> and <code class="docutils literal notranslate"><span class="pre">yapnr/order</span></code> as laid out in
+§11. The ladder routes under the new profiles (<code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--fab-profile</span></code>), and <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span> <span class="pre">--dry-run</span></code> stages every vendor from those boards:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Ladder case</p></th>
+<th class="head"><p>Profile</p></th>
+<th class="head"><p>Route</p></th>
+<th class="head"><p>KiCad DRC under the profile</p></th>
+<th class="head"><p>Bundle</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">04-inverter-leds-8</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">oshpark-2l</span></code></p></td>
+<td><p>363 tracks, 7 vias, 0 opens</p></td>
+<td><p>0 errors, 0 warnings</p></td>
+<td><p>8 files, <code class="docutils literal notranslate"><span class="pre">.GTL</span></code>..<code class="docutils literal notranslate"><span class="pre">.XLN</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">08-chaser-20-plane</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">oshpark-4l</span></code></p></td>
+<td><p>1077 tracks, 28 vias, 0 opens</p></td>
+<td><p>0 errors, 0 warnings</p></td>
+<td><p>10 files, <code class="docutils literal notranslate"><span class="pre">.G2L</span></code>, <code class="docutils literal notranslate"><span class="pre">.G3L</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">08-chaser-20-plane</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">jlc-4l</span></code></p></td>
+<td><p>1087 tracks, 28 vias, 0 opens</p></td>
+<td><p>0 errors, 0 warnings</p></td>
+<td><p>13 files, KiCad Protel names</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">08-chaser-20-plane</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pcbway-std</span></code></p></td>
+<td><p>1102 tracks, 28 vias, 0 opens</p></td>
+<td><p>0 errors, 0 warnings</p></td>
+<td><p>13 files, IPC-D-356 included</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Not built:</strong></p>
+<ul class="simple">
+<li><p><strong>O2 and O3</strong>, so neither <code class="docutils literal notranslate"><span class="pre">yapnr/order/http.py</span></code> nor <code class="docutils literal notranslate"><span class="pre">secrets.py</span></code> exists. <code class="docutils literal notranslate"><span class="pre">yapnr/order/net.py</span></code>
+holds the one network call of O1, <code class="docutils literal notranslate"><span class="pre">--verify-url</span></code>. It follows redirects to https only (release
+assets redirect to their storage host); the no-redirect rule of §8.4 stays for O2 and O3.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">yapnr.rf.cases</span> <span class="pre">--stackup/--fab-profile</span></code>:</strong> <code class="docutils literal notranslate"><span class="pre">yapnr.rf</span></code> is not in this repository yet. Its
+adapter is ready: <code class="docutils literal notranslate"><span class="pre">stackups.load(id).microstrip(layer).rf_stackup_spec(...)</span></code> and
+<code class="docutils literal notranslate"><span class="pre">stackups.rf_rules(profile)</span></code>.</p></li>
+<li><p><strong>Part-cache placement corrections</strong> (<code class="docutils literal notranslate"><span class="pre">placement.jlcpcb</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">part-cache</span> <span class="pre">set-placement</span></code>).
+Until they exist, the JLCPCB card asks for a rotation check of every placed part.</p></li>
+<li><p><strong>The project <code class="docutils literal notranslate"><span class="pre">[fab]</span></code> table (PR3d), <code class="docutils literal notranslate"><span class="pre">--run</span></code>, and the <code class="docutils literal notranslate"><span class="pre">yapnr_fab</span></code> Bazel rule:</strong> later, as planned.
+The measured stackup overlay is reserved; <code class="docutils literal notranslate"><span class="pre">stackups.load(...,</span> <span class="pre">measured=...)</span></code> refuses it.</p></li>
+</ul>
+<p><strong>Differences from the design:</strong></p>
+<ul class="simple">
+<li><p><strong>The default profile</strong> is first the profile the board was routed under, when its generated
+<code class="docutils literal notranslate"><span class="pre">.kicad_dru</span></code> names one of the chosen vendor’s profiles for its layer count. Otherwise it
+follows §6.1, with JLCPCB’s in-pad case found by a via on an SMD pad.</p></li>
+<li><p><strong>PCBWay drill files are in inches,</strong> as PCBWay’s own plugin writes them <a class="reference external" href="https://github.com/pcbway/PCBWay-Plug-in-for-Kicad">P-plug</a>, not in mm as
+§6.3 proposed. They stay decimal, with PTH and NPTH separate.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span> <span class="pre">preview</span></code></strong> (not in §6): a stdlib reader of the gerber and Excellon files in the zip.
+It renders each layer and a top and bottom composite to SVG, so the files to be uploaded can be
+looked at without KiCad.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">FAB-SOURCES</span></code></strong> (not in §7.2) warns when a source of the data is older than 180 days (§11,
+data refresh).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">order</span> <span class="pre">stage</span></code></strong> writes its card as <code class="docutils literal notranslate"><span class="pre">order-card.staged.{md,json}</span></code> beside the build’s card, so
+the manifest’s hashes stay valid. A dry run writes that card but no <code class="docutils literal notranslate"><span class="pre">staged.jsonl</span></code>.</p></li>
+<li><p><strong>The bundle archive</strong> also keeps KiCad’s job file (<code class="docutils literal notranslate"><span class="pre">kicad/&lt;board&gt;-job.gbrjob</span></code>).</p></li>
+</ul>
+<p><strong>Confirmed on the live pages</strong> (2026-10-02, read only):</p>
+<ul class="simple">
+<li><p><strong>JLCPCB’s quote page</strong> has “Add gerber file”, “Mark on PCB” (Remove Mark, Order Number, 2D
+barcode; “No mark will be added by default.”) and “SAVE TO CART” <a class="reference external" href="https://cart.jlcpcb.com/quote">J-quote</a>.</p></li>
+<li><p><strong>PCBWay’s quote page</strong> has “Single pieces”, “Calculate”, “Other special request” (200
+characters), “Remove product No.” (No, Yes for USD 1.50, Specify a location) and “Save to Cart”
+<a class="reference external" href="https://www.pcbway.com/orderonline.aspx">P-order</a>.</p></li>
+<li><p><strong>OSH Park’s upload area</strong> reads “Drag and drop your KiCAD, EagleCAD, or zipped Gerber files”,
+with a “Browse for files” button <a class="reference external" href="https://oshpark.com/">O-home</a>.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">FAB-MARKING</span></code> and the cards name these options. JLCPCB’s page states that no mark is added by
+default (re-read 2026-10-02); the card still names the option, since the default can change.</p>
+</section>
+<section id="appendix-a-stackup-data">
+<h2>Appendix A. Stackup data<a class="headerlink" href="#appendix-a-stackup-data" title="Link to this heading">¶</a></h2>
+<p><strong>Schema</strong> (<code class="docutils literal notranslate"><span class="pre">yapnr-fab-stackup-v1</span></code>). One full file:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;yapnr-fab-stackup-v1&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;oshpark-4l-fr408hr&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;vendor&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;oshpark&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;OSH Park 4 layer, FR408HR (standard)&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;vendor_name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;4 Layer, FR408-HR&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;checkout&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Keep the standard FR408-HR substrate; EM528 is the alternate offered at checkout since 2026-09-21.&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;thickness_mm&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1.6</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;src&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;O-4l&quot;</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;layers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;mask&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;side&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;F&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;thickness_mm&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.01524</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;er&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;er_prior&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">3.8</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;er_prior_src&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;J-imp calculator&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;src&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;O-4l&quot;</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;copper&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;F.Cu&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;thickness_mm&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.04318</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;weight_oz&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1.0</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;plated&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;finish&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;ENIG&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;src&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;O-4l&quot;</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;dielectric&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;prepreg&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;material&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;FR408HR 2113&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;thickness_mm&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.1999</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;er&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">3.61</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;er_freq_hz&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1e9</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;df&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;df_prior&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.009</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;df_prior_src&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;O-6l (2113 core)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;src&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;O-4l&quot;</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;copper&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;In1.Cu&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;thickness_mm&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.01727</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;weight_oz&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.5</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;plated&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;src&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;O-4l&quot;</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;dielectric&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;core&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;material&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;FR408HR&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;thickness_mm&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.9906</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;er&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;df&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;src&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;O-4l&quot;</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;copper&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;In2.Cu&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;thickness_mm&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.01727</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;weight_oz&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.5</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;plated&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;src&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;O-4l&quot;</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;dielectric&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;prepreg&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;material&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;FR408HR 2113&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;thickness_mm&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.1999</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;er&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">3.61</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;er_freq_hz&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1e9</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;df&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;df_prior&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.009</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;df_prior_src&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;O-6l (2113 core)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;src&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;O-4l&quot;</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;copper&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;B.Cu&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;thickness_mm&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.04318</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;weight_oz&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1.0</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;plated&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;finish&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;ENIG&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;src&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;O-4l&quot;</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;mask&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;side&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;B&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;thickness_mm&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.01524</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;er&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;er_prior&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">3.8</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;er_prior_src&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;J-imp calculator&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;src&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;O-4l&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;tolerances&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;impedance&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;thickness_pct&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;width_pct&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;sources&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;O-4l&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://docs.oshpark.com/services/four-layer/&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;accessed&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-10-02&quot;</span><span class="w"> </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">&quot;O-6l&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://docs.oshpark.com/services/six-layer/&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;accessed&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-10-02&quot;</span><span class="w"> </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">&quot;J-imp&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://jlcpcb.com/impedance&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;accessed&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-10-02&quot;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p><strong>All stackups.</strong> Thicknesses are in mm, from the top down to and including the middle core;
+every stackup listed is symmetric. Cu is the finished thickness where published. W50 is the 50 Ω
+microstrip width on F.Cu over the first reference layer: Hammerstad–Jensen, zero-thickness strip,
+no mask, computed with the formula of <code class="docutils literal notranslate"><span class="pre">yapnr.rf.stackup</span></code>. Copper thickness and mask each lower Z0
+by about 1 to 3 Ω at this width, so the 2D solver and the coupons set the real numbers.</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Id</p></th>
+<th class="head"><p>Layers, top to middle core (mm)</p></th>
+<th class="head"><p>Dk (Df), quoted at</p></th>
+<th class="head"><p>W50 (mm)</p></th>
+<th class="head"><p>Source</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">oshpark-2l-fr4</span></code></p></td>
+<td><p>Cu 1 oz; KB6167F about 1.53 (derived: 1.6 nominal minus copper)</p></td>
+<td><p>4.5 at 10 MHz (Df null, prior 0.017, literature)</p></td>
+<td><p>2.88</p></td>
+<td><p><a class="reference external" href="https://docs.oshpark.com/services/two-layer/">O-2l</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">oshpark-4l-fr408hr</span></code></p></td>
+<td><p>mask 0.0152; Cu 0.0432; 2113 pp 0.1999; Cu 0.0173; core 0.9906</p></td>
+<td><p>pp 3.61 at 1 GHz (Df null, prior 0.009); core null</p></td>
+<td><p>0.44</p></td>
+<td><p><a class="reference external" href="https://docs.oshpark.com/services/four-layer/">O-4l</a></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">oshpark-4l-em528</span></code></p></td>
+<td><p>Cu 1 oz; EM528 pp 0.1948 (7.67 mil); Cu 0.5 oz; EM528 core 0.9906 (39 mil)</p></td>
+<td><p>pp 3.76 (0.005); core 4.11 (0.005); frequency not stated</p></td>
+<td><p>0.42</p></td>
+<td><p><a class="reference external" href="https://docs.oshpark.com/troubleshooting/alternate-4-layer-stackup/">O-alt</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">oshpark-4l-mixed</span></code></p></td>
+<td><p>FR408HR prepreg as <code class="docutils literal notranslate"><span class="pre">-fr408hr</span></code>; EM528 core</p></td>
+<td><p>pp 3.61; core 4.11 (0.005)</p></td>
+<td><p>0.44</p></td>
+<td><p><a class="reference external" href="https://docs.oshpark.com/troubleshooting/mixed-material-4-layer-stackup/">O-mixed</a></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">oshpark-6l-fr408hr</span></code></p></td>
+<td><p>mask 0.0152; Cu 1 oz; 106 pp 0.1107; Cu 0.5 oz; 2113 core 0.1016; Cu 0.5 oz; core 0.9256</p></td>
+<td><p>106 pp 3.23 (0.011) at 1 GHz; 2113 core 3.66 (0.009) at 1 GHz</p></td>
+<td><p>0.27</p></td>
+<td><p><a class="reference external" href="https://docs.oshpark.com/services/six-layer/">O-6l</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">jlc04161h-7628</span></code></p></td>
+<td><p>Cu 0.035; 7628 0.2104; Cu 0.0152; core 1.065</p></td>
+<td><p>pp 4.4, core 4.6, mask 3.8; frequency and Df not published (prior 0.017)</p></td>
+<td><p>0.40</p></td>
+<td><p><a class="reference external" href="https://jlcpcb.com/impedance">J-imp</a></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">jlc04161h-2116</span></code> / <code class="docutils literal notranslate"><span class="pre">-3313</span></code> / <code class="docutils literal notranslate"><span class="pre">-1080</span></code></p></td>
+<td><p>Cu 0.035; pp 0.1164 / 0.0994 / 0.0764; Cu 0.0152; core 1.265</p></td>
+<td><p>pp 4.16 / 4.1 / 3.91; core 4.6</p></td>
+<td><p>0.23 / 0.20 / 0.16</p></td>
+<td><p><a class="reference external" href="https://jlcpcb.com/impedance">J-imp</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">jlc06161h-2116c</span></code></p></td>
+<td><p>Cu 0.035; 2116 0.127 + 0.1194; Cu 0.0152; core 0.30; Cu 0.0152; middle 2116 ×3: 0.1194 + 0.127 + 0.1194</p></td>
+<td><p>pp 4.16; core 4.6</p></td>
+<td><p>–</p></td>
+<td><p><a class="reference external" href="https://jlcpcb.com/impedance">J-imp</a> (coupon research)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">jlc06161h-7628</span></code></p></td>
+<td><p>Cu 0.035; 7628 0.2104; Cu 0.0152; core 0.40; Cu 0.0152; middle 7628 0.2028</p></td>
+<td><p>pp 4.4; core 4.6</p></td>
+<td><p>0.40</p></td>
+<td><p><a class="reference external" href="https://jlcpcb.com/impedance">J-imp</a> (coupon research)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">jlc06161h-3313</span></code></p></td>
+<td><p>Cu 0.035; 3313 0.0994; Cu 0.0152; core 0.55; Cu 0.0152; middle 2116 0.1088</p></td>
+<td><p>pp 4.1 / 4.16; core 4.6</p></td>
+<td><p>0.20</p></td>
+<td><p><a class="reference external" href="https://jlcpcb.com/impedance">J-imp</a> (coupon research)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">pcbway-4l-7628</span></code></p></td>
+<td><p>Cu 0.5 oz base plated to 1 oz; 7628 RC46 % 0.196 (0.1855 after lamination); Cu 1 oz; core 1.03</p></td>
+<td><p>pp 4.74; core 4.6; frequency and Df not published</p></td>
+<td><p>0.34</p></td>
+<td><p><a class="reference external" href="https://www.pcbway.com/multi-layer-laminated-structure.html">P-lam</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">pcbway-ro4003c-0.813</span></code> (<code class="docutils literal notranslate"><span class="pre">-0.508</span></code>, <code class="docutils literal notranslate"><span class="pre">-1.524</span></code>)</p></td>
+<td><p>Cu 1 oz; RO4003C 0.813</p></td>
+<td><p>process 3.38 ± 0.05, <strong>design 3.55</strong>; Df 0.0027 at 10 GHz</p></td>
+<td><p>1.82</p></td>
+<td><p><a class="reference external" href="https://www.pcbway.com/pcb_prototype/What_is_High_Frequency__HF__PCB_.html">P-hf</a> <a class="reference external" href="https://www.rogerscorp.com/advanced-electronics-solutions/ro4000-series-laminates/ro4003c-laminates">R-4003</a></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">pcbway-ro4350b-0.508</span></code></p></td>
+<td><p>Cu 1 oz; RO4350B 0.508</p></td>
+<td><p>process 3.48 ± 0.05, <strong>design 3.66</strong>; Df 0.0037 at 10 GHz</p></td>
+<td><p>1.11</p></td>
+<td><p><a class="reference external" href="https://www.pcbway.com/pcb_prototype/What_is_High_Frequency__HF__PCB_.html">P-hf</a> <a class="reference external" href="https://www.rogerscorp.com/advanced-electronics-solutions/ro4000-series-laminates/ro4350b-laminates">R-4350</a></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>For <code class="docutils literal notranslate"><span class="pre">pcbway-ro4350b-0.508</span></code>, the design Dk is Rogers’ published 3.66 <a class="reference external" href="https://www.rogerscorp.com/advanced-electronics-solutions/ro4000-series-laminates/ro4350b-laminates">R-4350</a>, as for RO4003C.</p>
+<p><strong>Notes on the table:</strong></p>
+<ul class="simple">
+<li><p><strong>Which Dk the RF solver uses.</strong> For Rogers material it uses the design Dk, which is what
+<code class="docutils literal notranslate"><span class="pre">yapnr.rf.cases</span></code> S1 and S2 use. The process Dk is kept in the file as well.</p></li>
+<li><p><strong>Rogers thicknesses.</strong> The standard Rogers thicknesses (0.203 to 1.524 mm) are offered by PCBWay
+only through the quote, so the <code class="docutils literal notranslate"><span class="pre">pcbway-ro*</span></code> ids list what the RF cases need. Each must be
+confirmed on the quote before use; the profile is draft.</p></li>
+<li><p><strong>Typical FR-4 Df.</strong> The prior 0.017 is the middle of the coupon research’s 0.015 to 0.02 range
+for FR-4 near 1 GHz. It is a literature value, not a vendor figure.</p></li>
+</ul>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="gloss.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="cloud-experiments.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 Kevin Balke. Licensed under AGPL-3.0-or-later
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a><ul>
+<li><a class="reference internal" href="#where-ordering-stands">1. Where ordering stands</a></li>
+<li><a class="reference internal" href="#plan-items">2. Plan items</a><ul>
+<li><a class="reference internal" href="#delivery-order">2.1 Delivery order</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#rules-that-bind-every-part-of-this-design">3. Rules that bind every part of this design</a></li>
+<li><a class="reference internal" href="#vendor-facts-that-shape-the-design">4. Vendor facts that shape the design</a><ul>
+<li><a class="reference internal" href="#files-each-vendor-takes">4.1 Files each vendor takes</a></li>
+<li><a class="reference internal" href="#what-kicad-cli-10-0-6-does-measured">4.2 What kicad-cli 10.0.6 does (measured)</a></li>
+<li><a class="reference internal" href="#capabilities">4.3 Capabilities</a></li>
+<li><a class="reference internal" href="#prices-and-lead-times-for-a-5050-mm-board-3-875-sq-in">4.4 Prices and lead times for a 50×50 mm board (3.875 sq in)</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#data-profiles-stackups-and-vendors-f2">5. Data: profiles, stackups and vendors (F2)</a><ul>
+<li><a class="reference internal" href="#where-the-data-lives">5.1 Where the data lives</a></li>
+<li><a class="reference internal" href="#profiles">5.2 Profiles</a></li>
+<li><a class="reference internal" href="#stackups">5.3 Stackups</a></li>
+<li><a class="reference internal" href="#changes-to-fab-profile-py">5.4 Changes to <code class="docutils literal notranslate"><span class="pre">fab_profile.py</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#yapnr-fab-build-f1">6. <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span> <span class="pre">build</span></code> (F1)</a><ul>
+<li><a class="reference internal" href="#command">6.1 Command</a></li>
+<li><a class="reference internal" href="#pipeline">6.2 Pipeline</a></li>
+<li><a class="reference internal" href="#per-vendor-file-sets">6.3 Per-vendor file sets</a></li>
+<li><a class="reference internal" href="#determinism">6.4 Determinism</a></li>
+<li><a class="reference internal" href="#assembly-outputs-f1b">6.5 Assembly outputs (F1b)</a></li>
+<li><a class="reference internal" href="#readme-stackup-and-impedance-notes">6.6 README, stackup and impedance notes</a></li>
+<li><a class="reference internal" href="#bundle-layout-manifest-and-provenance">6.7 Bundle layout, manifest and provenance</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#checks-f2">7. Checks (F2)</a><ul>
+<li><a class="reference internal" href="#rules-applied-for-the-check">7.1 Rules applied for the check</a></li>
+<li><a class="reference internal" href="#check-list">7.2 Check list</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#yapnr-order-stage-o1-to-o3">8. <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code> (O1 to O3)</a><ul>
+<li><a class="reference internal" href="#command-and-flow">8.1 Command and flow</a></li>
+<li><a class="reference internal" href="#the-order-card">8.2 The order card</a></li>
+<li><a class="reference internal" href="#mechanisms-per-vendor">8.3 Mechanisms per vendor</a></li>
+<li><a class="reference internal" href="#network-credentials-and-refusal-paths">8.4 Network, credentials and refusal paths</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#rf-demo-boards-and-coupons-what-this-means-for-the-first-orders">9. RF demo boards and coupons: what this means for the first orders</a></li>
+<li><a class="reference internal" href="#tests">10. Tests</a></li>
+<li><a class="reference internal" href="#module-layout-bazel-and-docs">11. Module layout, Bazel and docs</a></li>
+<li><a class="reference internal" href="#decisions-for-the-owner-and-open-items">12. Decisions for the owner, and open items</a></li>
+<li><a class="reference internal" href="#sources">13. Sources</a></li>
+<li><a class="reference internal" href="#as-built-2026-10-02">14. As built (2026-10-02)</a></li>
+<li><a class="reference internal" href="#appendix-a-stackup-data">Appendix A. Stackup data</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../../static/documentation_options.js?v=8a448e45"></script>
+    <script src="../../static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../static/copybutton.js?v=fd10adb8"></script>
+    <script src="../../static/design-tabs.js?v=f930bc37"></script>
+    </body>
+</html>

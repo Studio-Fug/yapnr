@@ -499,10 +499,11 @@ tofu<span class="w"> </span>plan<span class="w"> </span>-var-file<span class="o"
 tofu<span class="w"> </span>apply<span class="w"> </span>bootstrap.plan
 </pre></div>
 </div>
-<p>The plan creates 81 resources for two regions (<a class="reference external" href="https://github.com/Studio-Fug/yapnr/tree/main/infra/gcp">infra/gcp</a>):
+<p>The plan creates 80 resources for the example’s two regions (<a class="reference external" href="https://github.com/Studio-Fug/yapnr/tree/main/infra/gcp">infra/gcp</a>):
 APIs, the VPC, both buckets, the service accounts and grants, the registry caches and the
-<code class="docutils literal notranslate"><span class="pre">images</span></code> repositories for <a class="reference internal" href="#task-images-openems">task images</a>, the Spot templates, the budget and
-the guard functions.</p>
+<code class="docutils literal notranslate"><span class="pre">images</span></code> repositories for <a class="reference internal" href="#task-images-openems">task images</a>, the Spot templates (C4D in
+<code class="docutils literal notranslate"><span class="pre">us-west4</span></code>; C4 in <code class="docutils literal notranslate"><span class="pre">northamerica-northeast1</span></code>, which has no C4D: <code class="docutils literal notranslate"><span class="pre">region_template_shapes</span></code>), the
+budget and the guard functions.</p>
 <p>The project’s <code class="docutils literal notranslate"><span class="pre">default</span></code> network allows SSH from anywhere and gives VMs external IPs; yapnr jobs
 never use it, so delete it, and with it any way a hand-written job could land there:</p>
 <div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>gcloud<span class="w"> </span>compute<span class="w"> </span>firewall-rules<span class="w"> </span>list<span class="w"> </span>--filter<span class="o">=</span><span class="s2">&quot;network=default&quot;</span><span class="w"> </span>--format<span class="o">=</span><span class="s2">&quot;value(name)&quot;</span><span class="w"> </span><span class="se">\</span>
@@ -520,7 +521,7 @@ the id <code class="docutils literal notranslate"><span class="pre">yapnr-preemp
 System Limits); the budget guard finds an existing preference by quota id and region. Check first
 that the region offers the planned shapes (the price table only shows that the region bills them):</p>
 <div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>gcloud<span class="w"> </span>compute<span class="w"> </span>machine-types<span class="w"> </span>list<span class="w"> </span>--project<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$PROJECT</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--filter<span class="o">=</span><span class="s2">&quot;zone~^</span><span class="nv">$REGION</span><span class="s2">- AND name=( c4d-highcpu-16 c4d-highcpu-8 c3d-highcpu-8 )&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--filter<span class="o">=</span><span class="s2">&quot;zone~^</span><span class="nv">$REGION</span><span class="s2">- AND name=( c4d-highcpu-16 c4d-highcpu-8 c4-highcpu-16 c4-highcpu-8 )&quot;</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--format<span class="o">=</span><span class="s2">&quot;table(name,zone)&quot;</span>
 gcloud<span class="w"> </span>quotas<span class="w"> </span>info<span class="w"> </span>list<span class="w"> </span>--service<span class="o">=</span>compute.googleapis.com<span class="w"> </span>--project<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$PROJECT</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--filter<span class="o">=</span><span class="s2">&quot;quotaId~PREEMPTIBLE&quot;</span><span class="w"> </span>--format<span class="o">=</span><span class="s2">&quot;value(quotaId)&quot;</span>
@@ -617,16 +618,64 @@ gcloud<span class="w"> </span>auth<span class="w"> </span>application-default<sp
 <p>See <a class="reference internal" href="#id1">Calibration</a>. Then record the ranking in <code class="docutils literal notranslate"><span class="pre">[gcp]</span> <span class="pre">ranking</span></code>.</p>
 </section>
 </section>
+<section id="regions-and-quota-aware-placement">
+<h2>Regions and quota-aware placement<a class="headerlink" href="#regions-and-quota-aware-placement" title="Link to this heading">¶</a></h2>
+<p>Each region has its own preemptible CPU quota (step 4), so a second region doubles how much runs at
+once. A region needs four things: the quota, an entry in the tfvars’ <code class="docutils literal notranslate"><span class="pre">regions</span></code> (its subnet,
+registry caches and templates; <code class="docutils literal notranslate"><span class="pre">region_template_shapes</span></code> when it lacks a family of
+<code class="docutils literal notranslate"><span class="pre">template_shapes</span></code>), <code class="docutils literal notranslate"><span class="pre">quota_preferences</span></code> for the budget guard, and an entry in <code class="docutils literal notranslate"><span class="pre">[gcp]</span> <span class="pre">regions</span></code> of
+the owner config. Then rank the (family, region) pairs; each ranked pair of a Hyperdisk family
+needs templates for its shapes in its region (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span> <span class="pre">doctor</span></code> lists them):</p>
+<div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="k">[gcp]</span>
+<span class="n">regions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;us-west4&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;northamerica-northeast1&quot;</span><span class="p">]</span>
+<span class="n">ranking</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[[</span><span class="s2">&quot;c4d&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;us-west4&quot;</span><span class="p">],</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;c4&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;northamerica-northeast1&quot;</span><span class="p">]]</span>
+</pre></div>
+</div>
+<p>A second pair in the same region (C4 in <code class="docutils literal notranslate"><span class="pre">us-west4</span></code>, say) adds no capacity: it draws on the same
+quota.</p>
+<ul class="simple">
+<li><p><strong>Plan.</strong> Every ranked pair a class can use is a candidate, in rank order (a campaign without
+<code class="docutils literal notranslate"><span class="pre">[placement]</span> <span class="pre">families</span></code> may use every ranked family). <code class="docutils literal notranslate"><span class="pre">plan</span></code> prints them with their price per
+VM-hour and the class’s expected cost and ceiling there, and the ceiling if every class landed
+on its dearest candidate; its estimate and caps are those of the first. Without a ranking a
+class has one candidate, as before.</p></li>
+<li><p><strong>Submit.</strong> For each class, <code class="docutils literal notranslate"><span class="pre">submit</span></code> reads the candidates’ regional <code class="docutils literal notranslate"><span class="pre">PREEMPTIBLE_CPUS</span></code> limit
+and live usage (<code class="docutils literal notranslate"><span class="pre">gcloud</span> <span class="pre">compute</span> <span class="pre">regions</span> <span class="pre">describe</span></code>), subtracts the vCPUs the same submit already
+sent to that region, and places the class on the first candidate with room for one more of its
+VMs. A candidate whose instance template does not exist is skipped; a quota it cannot read is
+not room. When no candidate has room the class waits in the first (Batch queues the job until
+quota frees up). The caps are checked on the chosen placements, <code class="docutils literal notranslate"><span class="pre">submissions/&lt;n&gt;.json</span></code> records
+the choice under <code class="docutils literal notranslate"><span class="pre">placement.choice</span></code> (the pair, its rank, why, and each candidate looked at), and
+<code class="docutils literal notranslate"><span class="pre">status</span></code> prints each submission’s region. A class with one candidate reads nothing, and
+<code class="docutils literal notranslate"><span class="pre">submit</span> <span class="pre">--dry-run</span></code> reads no quota (it makes no calls), so it shows the first candidate.</p></li>
+<li><p><strong>One machine type.</strong> A wall-clock-budgeted campaign (<code class="docutils literal notranslate"><span class="pre">ladder-cell</span></code>, <code class="docutils literal notranslate"><span class="pre">bench</span></code> and <code class="docutils literal notranslate"><span class="pre">mc-eval</span></code> by
+default) runs on one machine type: a family is a candidate only if it gives every class the same
+shape, the first submission chooses it by quota, and later submissions keep it. A campaign that
+is compared with an earlier one should pin the earlier one’s family (<code class="docutils literal notranslate"><span class="pre">plan</span> <span class="pre">--family</span> <span class="pre">c4d</span></code>, or
+<code class="docutils literal notranslate"><span class="pre">--shape</span></code>): C4 and C4D search at different speeds.</p></li>
+<li><p><strong>Pins.</strong> <code class="docutils literal notranslate"><span class="pre">plan</span> <span class="pre">--region</span> <span class="pre">R</span></code> keeps only that region’s candidates; <code class="docutils literal notranslate"><span class="pre">submit</span> <span class="pre">--region</span> <span class="pre">R</span></code> keeps only
+the plan’s candidates in R for this submit (no spill to another region).</p></li>
+<li><p><strong>Data.</strong> The buckets stay in the home region, so tasks elsewhere read their bundles and write
+their results across regions (megabytes per task). yapnr images come through each region’s
+<code class="docutils literal notranslate"><span class="pre">ghcr</span></code> cache; an image from the <code class="docutils literal notranslate"><span class="pre">images</span></code> repository is pulled from the region its reference
+names, through Private Google Access, at $0.01 per GiB between North American regions (Billing
+Catalog, October 2026): about $0.02 per VM for the 1.6 GB openEMS image.</p></li>
+<li><p><strong>Not seen.</strong> Usage counts running VMs only: a job queued a moment ago, or another campaign’s
+submit at the same time, is not counted, and neither is a Spot stockout (a region with quota
+but no capacity). Cancel and <code class="docutils literal notranslate"><span class="pre">submit</span> <span class="pre">--region</span></code> the other region.</p></li>
+</ul>
+</section>
 <section id="costs-and-guards">
 <h2>Costs and guards<a class="headerlink" href="#costs-and-guards" title="Link to this heading">¶</a></h2>
 <p>Prices are list prices from the committed table
-(<a class="reference external" href="https://github.com/Studio-Fug/yapnr/blob/main/yapnr/exp/data/gcp-spot-prices.json"><code class="docutils literal notranslate"><span class="pre">yapnr/exp/data/gcp-spot-prices.json</span></code></a>,
-accessed 2026-10-02: the <a class="reference external" href="https://cloud.google.com/spot-vms/pricing">Spot pricing page</a> for <code class="docutils literal notranslate"><span class="pre">us-central1</span></code> and a public
-<a class="reference external" href="https://github.com/Cyclenerd/google-cloud-pricing-cost-calculator">Billing Catalog snapshot</a> of 2026-09-24 for other regions) until <code class="docutils literal notranslate"><span class="pre">prices</span> <span class="pre">--refresh</span></code>
-replaces them; regions missing from the table are priced at <code class="docutils literal notranslate"><span class="pre">us-central1</span></code>, which is above the
-median, and the plan says so. Speeds are PassMark single-thread ratios to the development Mac’s M4
-until the calibration measures them. Examples from that table, as <code class="docutils literal notranslate"><span class="pre">plan</span></code> prints them with the
-example owner config (C4D Spot in <code class="docutils literal notranslate"><span class="pre">us-west4</span></code>, one task per physical core):</p>
+(<a class="reference external" href="https://github.com/Studio-Fug/yapnr/blob/main/yapnr/exp/data/gcp-spot-prices.json"><code class="docutils literal notranslate"><span class="pre">yapnr/exp/data/gcp-spot-prices.json</span></code></a>:
+every region’s Spot prices from the <a class="reference external" href="https://docs.cloud.google.com/billing/docs/how-to/get-pricing-information-api">Cloud Billing Catalog API</a>, accessed 2026-10-04)
+until <code class="docutils literal notranslate"><span class="pre">prices</span> <span class="pre">--refresh</span></code> replaces them; regions missing from the table are priced at
+<code class="docutils literal notranslate"><span class="pre">us-central1</span></code>, which is above the median, and the plan says so. A price only shows that a region
+bills a family, not that it offers the machine types (step 4 checks that). Speeds are PassMark
+single-thread ratios to the development Mac’s M4 until the calibration measures them. Examples
+from that table, as <code class="docutils literal notranslate"><span class="pre">plan</span></code> prints them with the example owner config (C4D Spot in <code class="docutils literal notranslate"><span class="pre">us-west4</span></code>, one
+task per physical core):</p>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
 <thead>
@@ -640,22 +689,22 @@ example owner config (C4D Spot in <code class="docutils literal notranslate"><sp
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">smoke.toml</span></code> on <code class="docutils literal notranslate"><span class="pre">c4d-highcpu-4</span></code> (<code class="docutils literal notranslate"><span class="pre">--no-template</span></code>)</p></td>
 <td class="text-right"><p>2</p></td>
 <td class="text-right"><p>&lt; $0.01</p></td>
-<td class="text-right"><p>$0.06</p></td>
+<td class="text-right"><p>$0.05</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ladder-small.toml</span></code> (one <code class="docutils literal notranslate"><span class="pre">c4d-highcpu-16</span></code>)</p></td>
 <td class="text-right"><p>4</p></td>
 <td class="text-right"><p>$0.01</p></td>
-<td class="text-right"><p>$0.41</p></td>
+<td class="text-right"><p>$0.38</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">calibration-ladder.toml</span></code> (per shape, 8 vCPUs)</p></td>
 <td class="text-right"><p>12</p></td>
 <td class="text-right"><p>$0.01</p></td>
-<td class="text-right"><p>$1.09</p></td>
+<td class="text-right"><p>$1.03</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ladder-sweep.toml</span></code> (8 x 16)</p></td>
 <td class="text-right"><p>128</p></td>
 <td class="text-right"><p>$0.07</p></td>
-<td class="text-right"><p>$7.41</p></td>
+<td class="text-right"><p>$6.96</p></td>
 </tr>
 </tbody>
 </table>
@@ -739,7 +788,7 @@ token) before running it. Compute nodes need no internet access.</p></li>
 on the Mac (the reference) and on each candidate shape, then ingest the records:</p>
 <div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>yapnr<span class="w"> </span>exp<span class="w"> </span>plan<span class="w"> </span>experiments/calibration-ladder.toml<span class="w"> </span>--backend<span class="w"> </span><span class="nb">local</span>
 yapnr<span class="w"> </span>exp<span class="w"> </span>plan<span class="w"> </span>experiments/calibration-ladder.toml<span class="w"> </span>--backend<span class="w"> </span>gcp-batch<span class="w"> </span>--shape<span class="w"> </span>c4d-highcpu-8<span class="w"> </span>--region<span class="w"> </span>us-west4
-yapnr<span class="w"> </span>exp<span class="w"> </span>plan<span class="w"> </span>experiments/calibration-ladder.toml<span class="w"> </span>--backend<span class="w"> </span>gcp-batch<span class="w"> </span>--shape<span class="w"> </span>c3d-highcpu-8<span class="w"> </span>--region<span class="w"> </span>northamerica-northeast1
+yapnr<span class="w"> </span>exp<span class="w"> </span>plan<span class="w"> </span>experiments/calibration-ladder.toml<span class="w"> </span>--backend<span class="w"> </span>gcp-batch<span class="w"> </span>--shape<span class="w"> </span>c4-highcpu-8<span class="w"> </span>--region<span class="w"> </span>northamerica-northeast1
 <span class="c1"># ... submit each, fetch each, then:</span>
 yapnr<span class="w"> </span>exp<span class="w"> </span>calibration<span class="w"> </span>ingest<span class="w"> </span>--reference<span class="w"> </span>&lt;fetched&gt;/&lt;<span class="nb">local</span><span class="w"> </span>id&gt;<span class="w"> </span>--cloud<span class="w"> </span>&lt;fetched&gt;/&lt;id&gt;<span class="w"> </span>...<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--out<span class="w"> </span>~/.config/yapnr/calibration.json
@@ -952,7 +1001,8 @@ condition that keeps tasks out of <code class="docutils literal notranslate"><sp
 <li><p>on a Slurm site: whether <code class="docutils literal notranslate"><span class="pre">USR1</span></code> reaches the wrappers through Apptainer’s PID namespace and
 whether users may <code class="docutils literal notranslate"><span class="pre">scontrol</span> <span class="pre">requeue</span></code> their own array elements (the scripts are tested with
 stub <code class="docutils literal notranslate"><span class="pre">apptainer</span></code> and <code class="docutils literal notranslate"><span class="pre">scontrol</span></code> only);</p></li>
-<li><p>region fallback after a stockout is manual: cancel and plan again with <code class="docutils literal notranslate"><span class="pre">--region</span></code>.</p></li>
+<li><p>a Spot stockout is not seen by quota-aware placement (a region with quota but no capacity):
+cancel and <code class="docutils literal notranslate"><span class="pre">submit</span> <span class="pre">--region</span></code> another candidate region.</p></li>
 </ul>
 </section>
 <section id="references">
@@ -1060,6 +1110,7 @@ stub <code class="docutils literal notranslate"><span class="pre">apptainer</spa
 <li><a class="reference internal" href="#calibration">12. Calibration</a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#regions-and-quota-aware-placement">Regions and quota-aware placement</a></li>
 <li><a class="reference internal" href="#costs-and-guards">Costs and guards</a></li>
 <li><a class="reference internal" href="#slurm-and-apptainer-hpc-allocations">Slurm and Apptainer (HPC allocations)</a></li>
 <li><a class="reference internal" href="#id1">Calibration</a></li>

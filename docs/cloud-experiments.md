@@ -610,13 +610,14 @@ always links, ParMETIS, is licensed for evaluation use outside non-profit resear
 redistributed: the image stays in the private registry (see the image's README).
 
 Cloud Build builds it on the 8-vCPU machine the regional quota allows, in a 3-hour budget (the
-default timeout is 10 minutes). The dependency stage is pushed as `palace-deps:<tag>-x86-64-v3`
+default timeout is 10 minutes); the first build took 31 minutes (22 for the dependencies, 6 for
+Palace), about $0.56 (October 2026). The dependency stage is pushed as `palace-deps:<tag>-x86-64-v3`
 before Palace compiles and is read back with `--cache-from`, so a build that fails in Palace, or a
 change to the runtime stage, does not rebuild the dependencies. `tools/exp/palace_plan.py` works
 like `openems_plan.py` (both use `tools/exp/image_tasks.py`); the jobs format is in its docstring:
 
 ```sh
-python3 tools/exp/palace_plan.py image --run                      # about an hour or more
+python3 tools/exp/palace_plan.py image --run                      # about 30 minutes
 python3 tools/exp/palace_plan.py plan models.toml --out <dir>      # pins the image's digest
 yapnr exp plan <dir>/campaign.toml --backend gcp-batch
 yapnr exp submit <cid> && yapnr exp status <cid>      # again until every task is done
@@ -637,8 +638,14 @@ ptrace in the container), over shared memory (its `ob1` layer with the `vader` t
 or libfabric: one VM, no RDMA) on the 1 GiB of `/dev/shm` the task containers get. The record,
 `out/<id>.job.json` (its verdict is `ok`: the solve exited 0 and matched the reference), keeps the
 stage that failed, wall and CPU time, the CPU, and Palace's own numbers from `palace.json` and its
-log: degrees of freedom and mesh elements, AMR iterations and the unknowns of each, linear solves
-and iterations, timers, peak memory per rank and summed over the ranks.
+log: degrees of freedom and mesh elements, the AMR refinements and the unknowns of each solve,
+linear solves and iterations, timers, peak memory per rank and summed over the ranks.
+
+The smoke campaign (2026-10-04) ran Palace's coplanar-waveguide example from the image, a driven
+sweep over 7 frequencies with four wave ports, on 8 ranks of a `c4d-highcpu-16`: 117,764 degrees
+of freedom, 34 s of solve, 224 MB peak per rank, and its S-parameters matched Palace's regression
+reference to a complex difference of 6e-8 (the task used 51 s of the VM, which started 37 s
+after scheduling).
 
 A model gets a VM: `ranks` MPI ranks on as many physical cores (`vm_vcpus` is twice that on C4D),
 bound to them; `packing = "vcpu"` puts a rank on each hardware thread, and with

@@ -49,7 +49,8 @@ bundle (``palace_job.py``), the stage plan, ``campaign.toml`` (image pinned by d
 
 ``collect`` lays the results out like local runs (``TREE/runs/<id>/``, ``<id>.log``,
 ``<id>.job.json``) with ``TREE/runs/<cid>.summary.json``: per model the verdict, wall time,
-degrees of freedom, AMR iterations, linear iterations, peak memory and the reference check.
+degrees of freedom, AMR refinements and solves, linear iterations, peak memory and the
+reference check.
 
 ``image`` prints (``--run``: runs) the Cloud Build submit of docker/palace/cloudbuild.yaml, which
 pushes ``palace:<tag>-x86-64-v3`` (and its dependency stage, ``palace-deps:<tag>-x86-64-v3``, the
@@ -386,7 +387,8 @@ def collect(
             "solve_s": (record.get("stages") or {}).get("solve", {}).get("wall_s"),
             "dofs": palace.get("dofs"),
             "mesh_elements": palace.get("mesh_elements"),
-            "amr_iterations": palace.get("amr_iterations"),
+            "amr_refinements": (record.get("amr_completed") or {}).get("iterations"),
+            "adaptation_solves": palace.get("adaptation_solves"),
             "linear_iterations": palace.get("linear_iterations"),
             "peak_memory_mb_sum": palace.get("peak_memory_mb_sum"),
             "peak_memory_mb_max_rank": palace.get("peak_memory_mb_max_rank"),

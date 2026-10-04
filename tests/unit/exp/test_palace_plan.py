@@ -338,7 +338,7 @@ class PalacePlanTest(unittest.TestCase):
         )
         palace = record["palace"]
         self.assertEqual(
-            (palace["dofs"], palace["mpi_size"], palace["amr_iterations"]), (12000, 4, 2)
+            (palace["dofs"], palace["mpi_size"], palace["adaptation_solves"]), (12000, 4, 2)
         )
         self.assertEqual(
             (palace["peak_memory_mb_sum"], palace["peak_memory_mb_max_rank"]), (800.0, 120.0)
@@ -428,7 +428,8 @@ class PalacePlanTest(unittest.TestCase):
             "ranks": 8,
             "wall_s": 61.0,
             "stages": {"solve": {"exit": 0, "wall_s": 55.0}},
-            "palace": {"dofs": 12000, "amr_iterations": 2, "peak_memory_mb_sum": 800.0},
+            "palace": {"dofs": 12000, "adaptation_solves": 2, "peak_memory_mb_sum": 800.0},
+            "amr_completed": {"iterations": 1, "indicator": 0.004, "unknowns": 12000},
             "reference": {"ok": True, "max_abs_ds": 1e-7},
             "image": {"palace.version": "v0.18.1-160-gb797ea8"},
         }
@@ -439,6 +440,7 @@ class PalacePlanTest(unittest.TestCase):
         self.assertEqual(summary["missing"], ["m2"])
         model = summary["models"]["m1"]
         self.assertEqual((model["dofs"], model["solve_s"], model["full"]), (12000, 55.0, False))
+        self.assertEqual((model["amr_refinements"], model["adaptation_solves"]), (1, 2))
         self.assertEqual(model["palace"], "v0.18.1-160-gb797ea8")
         self.assertTrue((tree / "runs" / "m1" / "postpro" / "port-S.csv").is_file())
         self.assertTrue((tree / "runs" / "20261004-mceval-abcdef.summary.json").is_file())

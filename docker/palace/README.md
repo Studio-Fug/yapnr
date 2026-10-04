@@ -50,15 +50,17 @@ ever asks for it.
 
 ```sh
 python3 tools/exp/palace_plan.py image          # prints the gcloud builds submit command
-python3 tools/exp/palace_plan.py image --run    # submits it and waits (an hour or more)
+python3 tools/exp/palace_plan.py image --run    # submits it and waits (about 30 minutes)
 python3 tools/exp/palace_plan.py digests        # the tag's digest and size
 ```
 
 The build runs as `yapnr-image-build` (`infra/gcp`) on `E2_HIGHCPU_8` (8 vCPUs, 8 GB) with a
-3-hour timeout. The dependencies build at `-j6` and Palace at `-j4`, each with a second pass at
-`-j2` should the compiler run out of memory. Locally (any platform; `ARCH_FLAGS=` for arm64,
-where PyPI has no gmsh wheel and the image goes without it):
-`docker build -t palace:local docker/palace`.
+3-hour timeout. The first one (build `38aa2afc`, 2026-10-04) took 31 minutes: 22 for the
+dependencies, 6 for Palace, then the runtime stage and the pushes; about $0.56. The image is
+320 MB compressed, its dependency cache 1.5 GB. The dependencies build at `-j6` and Palace at
+`-j4`, each with a second pass at `-j2` should the compiler run out of memory (neither needed it).
+Locally (any platform; `ARCH_FLAGS=` for arm64, where PyPI has no gmsh wheel and the image goes
+without it): `docker build -t palace:local docker/palace`.
 
 ## Licences
 

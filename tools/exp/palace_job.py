@@ -26,7 +26,7 @@ Output goes to ``out/ID.log``, ending in ``exit N``; the last lines also go to s
 wrapper's log tail. ``out/ID.job.json`` (written last; the task's record) holds the exit code and
 the stage that failed, wall and CPU seconds, the peak memory of the largest process, the CPU and
 its vector extensions, the image's build, and Palace's own numbers from ``palace.json``: degrees
-of freedom and mesh elements, the number of AMR iterations and the unknowns of each, linear
+of freedom and mesh elements, the solves of an adaptive refinement and the unknowns of each, linear
 solves and iterations, timers, peak memory per rank (maximum) and summed over the ranks. ``ok`` is
 a solve that exited 0 (and matched the reference, if one was given).
 
@@ -238,7 +238,8 @@ def palace_metadata(post_dir):
         "dofs": problem.get("DegreesOfFreedom"),
         "multigrid_dofs": problem.get("MultigridDegreesOfFreedom"),
         "mesh_elements": problem.get("MeshElements"),
-        "amr_iterations": problem.get("Iteration"),
+        # The solves of an adaptive refinement, the first one included (1 without refinement).
+        "adaptation_solves": problem.get("Iteration"),
         "linear_solves": linear.get("TotalSolves"),
         "linear_iterations": linear.get("TotalIts"),
         "elapsed_s": durations.get("Total"),
@@ -296,19 +297,28 @@ def compare_port_s(actual_path, reference_path, tol):
 
 
 def cpu_info():
-    model, flags = platform.processor() or None, set()
+    """The CPU's model name (``/proc/cpuinfo``; Python's platform.processor() says x86_64 on
+    Linux), its AVX2 and AVX-512 support and the CPU count."""
+    model, flags = None, set()
     try:
         text = Path("/proc/cpuinfo").read_text()
     except OSError:
-        return {"model": model, "avx2": None, "avx512f": None, "count": os.cpu_count()}
+        text = ""
     for line in text.splitlines():
         key, _, value = line.partition(":")
         if key.strip() == "model name" and not model:
             model = value.strip()
         elif key.strip() == "flags" and not flags:
             flags = set(value.split())
+    if not text:
+        return {
+            "model": platform.processor() or None,
+            "avx2": None,
+            "avx512f": None,
+            "count": os.cpu_count(),
+        }
     return {
-        "model": model,
+        "model": model or platform.processor() or None,
         "avx2": "avx2" in flags,
         "avx512f": "avx512f" in flags,
         "count": os.cpu_count(),

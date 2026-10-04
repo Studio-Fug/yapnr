@@ -342,13 +342,23 @@ def main():
         p_inc = float(np.real(pe.P_inc[0]))
         p_acc = float(np.real(pe.P_acc[0]))
         r_e = nf.CalcNF2FF(
-            sim, fx, theta, [90.0], center=[pc[0], pc[1], 0], outfile=f"nf2ff_e_{fx / 1e9:.2f}.h5"
+            sim,
+            fx,
+            theta,
+            [90.0],
+            center=[pc[0] * 1e-3, pc[1] * 1e-3, 0],
+            outfile=f"nf2ff_e_{fx / 1e9:.2f}.h5",
         )
         e_cut = 20 * np.log10(r_e.E_norm[0][:, 0] / np.max(r_e.E_norm[0])) + 10 * np.log10(
             r_e.Dmax[0]
         )
         r_h = nf.CalcNF2FF(
-            sim, fx, theta, [0.0], center=[pc[0], pc[1], 0], outfile=f"nf2ff_h_{fx / 1e9:.2f}.h5"
+            sim,
+            fx,
+            theta,
+            [0.0],
+            center=[pc[0] * 1e-3, pc[1] * 1e-3, 0],
+            outfile=f"nf2ff_h_{fx / 1e9:.2f}.h5",
         )
         h_cut = 20 * np.log10(r_h.E_norm[0][:, 0] / np.max(r_h.E_norm[0])) + 10 * np.log10(
             r_h.Dmax[0]
@@ -381,7 +391,10 @@ def main():
             cut_theta_deg=theta[::2].tolist(),
             e_cut_dbi=[round(v, 2) for v in e_cut[::2].tolist()],
             h_cut_dbi=[round(v, 2) for v in h_cut[::2].tolist()],
-            nf2ff_centre=[pc[0], pc[1], 0.0],
+            # the NF2FF phase reference, in metres: openEMS reads `center` in the dumps' unit (m);
+            # runs before 2026-10-04 passed millimetres (the reference sat metres away: magnitudes
+            # unaffected, phases re-referenced in post-processing)
+            nf2ff_centre_m=[pc[0] * 1e-3, pc[1] * 1e-3, 0.0],
             complex_cuts=cplx,
         )
     with open(os.path.join(out, "result.json"), "w") as fh:

@@ -20,8 +20,14 @@
   "source_bundle": "917222a3a071"
  },
  "d1-sched": {
+  "attempt": "s2r0",
   "campaign": "20261004-mceval-142151",
-  "missing": true
+  "dir": "D1/runs/d1-sched",
+  "image": "ghcr.io/studio-fug/yapnr@sha256:f41a4760a3d07f5adf04f5ee2e7ef96ff6eab687c7942cbe02450e0ca2564fd9",
+  "machine": "c4-highcpu-16",
+  "ok": false,
+  "region": "northamerica-northeast1",
+  "source_bundle": "917222a3a071"
  },
  "d1-star": {
   "attempt": "s1r1",

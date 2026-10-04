@@ -34,7 +34,9 @@ a VM (one by default: a model gets the VM's cores, ranks bound to them)::
     config = "/opt/palace/share/palace/examples/cpw/cpw_wave_uniform.json"
     reference = "/opt/palace/share/palace/regression/cpw/wave_uniform"   # optional port-S check
     # set = {"Solver.Order" = 3}; prepare = ["code/mesh.py", "models/a.json", "--out", "{out}"];
-    # ranks, bind, memory_gb, disk_gb, max_wall_s, summary, labels, dry_run_only per job
+    # ranks, bind, memory_gb, disk_gb, max_wall_s, summary, labels, dry_run_only per job. A job
+    # with fewer ranks still reserves the campaign's cores; one that needs more cores or memory
+    # gets its own VM shape, and the campaign then runs from instance policies (no template).
 
     [[jobs]]                                   # refinement, then a sweep of the refined mesh
     id = "tx12-A"
@@ -171,8 +173,36 @@ TEMPLATE_SHAPES = (
 # --- image: the Cloud Build of docker/palace
 
 
+def source_revision() -> str:
+    """The yapnr commit the image is built from (recorded as the image's
+    ``org.opencontainers.image.revision``), with ``-dirty`` when docker/palace has uncommitted
+    changes; empty outside a git checkout."""
+    try:
+        rev = subprocess.run(
+            ["git", "-C", str(REPO), "rev-parse", "HEAD"], capture_output=True, text=True
+        )
+        dirty = subprocess.run(
+            ["git", "-C", str(REPO), "status", "--porcelain", "--", str(DOCKER_DIR)],
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return ""
+    if rev.returncode:
+        return ""
+    return rev.stdout.strip() + ("-dirty" if dirty.stdout.strip() else "")
+
+
 def build_command(gcp, tag: str, configuration: Optional[str], asynchronous: bool) -> List[str]:
-    return image_tasks.build_command(gcp, DOCKER_DIR, IMAGE_NAME, tag, configuration, asynchronous)
+    return image_tasks.build_command(
+        gcp,
+        DOCKER_DIR,
+        IMAGE_NAME,
+        tag,
+        configuration,
+        asynchronous,
+        {"_YAPNR_COMMIT": source_revision()},
+    )
 
 
 def digests(gcp, tag: str, configuration: Optional[str]) -> Dict[str, Dict[str, Any]]:
@@ -271,9 +301,22 @@ def vm_shape(family: str, ranks: int, memory_gb: float, vcpus: int, packing: str
     return cost.choose_shape(cost.PriceTable.load(), family, ranks, memory_gb, vcpus, packing)[0]
 
 
+def job_cpus(job: Mapping[str, Any], doc: Mapping[str, Any]) -> int:
+    """The cores a job reserves: its ranks, but never fewer than the campaign's ``ranks``, so that
+    a job with fewer ranks (a rank-scaling run) still has the campaign's VM share to itself rather
+    than being packed next to another job whose ranks would bind to the same cores."""
+    return max(int(job.get("ranks", doc["ranks"])), int(doc["ranks"]))
+
+
 def placement(doc: Mapping[str, Any]) -> Dict[str, Any]:
     """K models of R ranks per VM: 2*K*R vCPUs by core (C4D has two threads a core); an instance
-    policy when no family's shape for the VM has an instance template."""
+    policy when, for any job, no family's shape has an instance template.
+
+    ``yapnr exp`` places each resource class (cores, memory) of the plan on its own shape, but
+    the template flag is the campaign's: a job whose ``ranks`` or ``memory_gb`` needs a shape
+    without a template (c4d-highmem-16 for 56 GB, a 32-vCPU shape for 16 ranks) makes the whole
+    campaign run from instance policies, which every shape has, instead of being refused at
+    submit."""
     ranks = int(doc["ranks"])
     per_vm = int(doc["models_per_vm"])
     vcpus = per_vm * ranks * (2 if doc["packing"] == "core" else 1)
@@ -282,10 +325,13 @@ def placement(doc: Mapping[str, Any]) -> Dict[str, Any]:
         "vm_vcpus": vcpus,
         "packing": doc["packing"],
     }
-    memory = float(doc["memory_gb"])
-    shapes = [vm_shape(f, ranks, memory, vcpus, doc["packing"]) for f in doc["families"]]
-    if not any(shape in TEMPLATE_SHAPES for shape in shapes):
-        out["template"] = False
+    needs = {(ranks, float(doc["memory_gb"]))}
+    for job in doc.get("jobs", []):
+        needs.add((job_cpus(job, doc), float(job.get("memory_gb", doc["memory_gb"]))))
+    for cpus, memory in sorted(needs):
+        shapes = [vm_shape(f, cpus, memory, vcpus, doc["packing"]) for f in doc["families"]]
+        if not any(shape in TEMPLATE_SHAPES for shape in shapes):
+            out["template"] = False
     return out
 
 
@@ -324,7 +370,7 @@ def stage_line(job: Mapping[str, Any], doc: Mapping[str, Any]) -> Dict[str, Any]
         "inputs": inputs,
         "env": env,
         "resources": {
-            "cpus": ranks,
+            "cpus": job_cpus(job, doc),
             "memory_gb": job.get("memory_gb", doc["memory_gb"]),
             "disk_gb": job.get("disk_gb", doc["disk_gb"]),
             "max_wall_s": int(job.get("max_wall_s", doc["max_wall_s"])),

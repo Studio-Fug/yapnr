@@ -11,11 +11,13 @@ Runs the Palace configuration CONFIG on R MPI ranks in the task's work directory
    script with the interpreter running this file, for a task that meshes its model (gmsh) and
    writes CONFIG itself;
 2. each ``--stage CONFIG[@RANKS]`` (optional, in order) is solved first, as CONFIG is below but
-   with its output in ``out/ID/stage-<name>`` (``<name>``: the file's stem) and on RANKS ranks
-   if given (one rank works round a Palace limit, see docs/rf-palace.md); ``--mesh-from S``
-   then solves CONFIG on the adapted mesh that stage S saved (``Model.Refinement.SaveAdaptMesh``:
-   ``<stem>.meshgz``, or ``.mesh`` without zlib). Refinement, then a sweep of the refined mesh,
-   is one task this way. A failed stage stops the job (``failed`` = ``stage:<name>``);
+   with its output in ``out/ID/stage-<k>-<name>`` (``k`` its place from 1, ``<name>`` the file's
+   stem, so two stages never share a directory) and on RANKS ranks if given (one rank works
+   round a Palace limit, see docs/rf-palace.md); ``--mesh-from S`` then solves CONFIG on the
+   adapted mesh that stage S saved (``Model.Refinement.SaveAdaptMesh``: ``<stem>.meshgz``, or
+   ``.mesh`` without zlib). Refinement, then a sweep of the refined mesh, is one task this way.
+   A stage listed twice is refused (``--mesh-from`` would be ambiguous). A failed stage stops the
+   job (``failed`` = ``stage:<k>-<name>``);
 3. CONFIG (Palace's relaxed JSON: comments, trailing commas, integer ranges) is read, each
    ``--set Dotted.Key=VALUE`` (VALUE as JSON, else a string; list items by index) replaces a
    value, ``Problem.Output`` becomes ``out/ID/postpro`` and a relative ``Model.Mesh`` becomes
@@ -30,7 +32,9 @@ Runs the Palace configuration CONFIG on R MPI ranks in the task's work directory
 
 ``{out}`` in CONFIG, the prepare arguments and DIR becomes ``out/ID`` and ``{ranks}`` becomes R.
 Output goes to ``out/ID.log``, ending in ``exit N``; the last lines also go to stdout for the
-wrapper's log tail. ``out/ID.job.json`` (written last; the task's record) holds the exit code and
+wrapper's log tail. ``out/ID.job.json`` (the task's record) is written when the task starts
+(``failed`` = ``running``), again after every stage, and last at the end, so a task killed at its
+time limit or by a Spot preemption still leaves what it did; it holds the exit code and
 the stage that failed, wall and CPU seconds, the peak memory of the largest process, the CPU and
 its vector extensions, the image's build, and Palace's own numbers from ``palace.json``: degrees
 of freedom and mesh elements, the solves of an adaptive refinement and the unknowns of each, linear
@@ -463,6 +467,9 @@ def main(argv=None):
             stages.append((path, int(nranks) if at else args.ranks))
         if any(r < 1 for _, r in stages):
             raise ValueError("a stage runs on at least 1 rank")
+        paths = [p for p, _ in stages]
+        if len(set(paths)) != len(paths):
+            raise ValueError("a stage is listed twice: %s" % ", ".join(paths))
         if args.mesh_from and args.mesh_from not in [p for p, _ in stages]:
             raise ValueError("--mesh-from %s is not one of the stages" % args.mesh_from)
     except ValueError as err:
@@ -492,13 +499,27 @@ def main(argv=None):
         "attempt": os.environ.get("YAPNR_ATTEMPT"),
     }
     failed, code, solve_lines = None, 0, []
+    record_path = Path("out") / ("%s.job.json" % args.id)
+
+    def save(final=False):
+        """The record so far (``failed`` = ``running`` until the end)."""
+        now = dict(record, stages=run.stages, wall_s=round(time.time() - start, 3))
+        if not final:
+            now.update(ok=False, failed="running", exit=None)
+        tmp = record_path.with_name(record_path.name + ".tmp")
+        tmp.write_text(json.dumps(now, indent=1, sort_keys=True) + "\n")
+        os.replace(tmp, record_path)
+
+    record.update(cpu=cpu_info(), mem_total_gb=mem_total_gb(), image=image_build())
+    save()
     if prepare:
         argv_prep = [sys.executable] + [subst(a, out_rel, args.ranks) for a in prepare]
         code = run.stage("prepare", argv_prep, env=env)
         failed = "prepare" if code else None
+        save()
     adapted = {}
-    for path, nranks in stages if not failed and not args.dry_run_only else []:
-        name = Path(path).stem
+    for k, (path, nranks) in enumerate(stages if not failed and not args.dry_run_only else []):
+        name = "%d-%s" % (k + 1, Path(path).stem)
         try:
             binary = palace_binary(args.palace)
             stage_cfg = effective_config(
@@ -522,6 +543,7 @@ def main(argv=None):
         )
         record["stage_runs"].append(
             dict(
+                name=name,
                 config=path,
                 ranks=nranks,
                 exit=code,
@@ -530,6 +552,7 @@ def main(argv=None):
             )
         )
         adapted[path] = adapted_mesh(stage_cfg)
+        save()
         if code:
             failed = "stage:" + name
             break
@@ -553,6 +576,7 @@ def main(argv=None):
         record["palace_version"] = "".join(version_lines).strip() or None
         code = run.stage("dry_run", [binary, "--dry-run", str(out_dir / "config.json")], cwd, env)
         failed = "dry_run" if code else None
+        save()
     if not failed and not args.dry_run_only:
         argv_solve = [args.mpirun, "-np", str(args.ranks)] + BIND_FLAGS[args.bind]
         argv_solve += [binary, str(out_dir / "config.json")]
@@ -574,7 +598,6 @@ def main(argv=None):
                 record["reference"] = {"ok": False, "error": str(err), "dir": str(reference)}
             run.note("reference: %s" % json.dumps(record["reference"], sort_keys=True))
     run.close(code)
-    wall = time.time() - start
     usage = resource.getrusage(resource.RUSAGE_CHILDREN)
     sys.stdout.write("".join(run.tail))
     reference_ok = record["reference"] is None or bool(record["reference"].get("ok"))
@@ -582,19 +605,11 @@ def main(argv=None):
         ok=not failed and reference_ok,
         exit=code,
         failed=failed or (None if reference_ok else "reference"),
-        stages=run.stages,
-        wall_s=round(wall, 3),
         user_s=round(usage.ru_utime - cpu0.ru_utime, 3),
         sys_s=round(usage.ru_stime - cpu0.ru_stime, 3),
         max_rss_mb=round(usage.ru_maxrss / 1024.0, 1),
-        cpu=cpu_info(),
-        mem_total_gb=mem_total_gb(),
-        image=image_build(),
     )
-    record_path = Path("out") / ("%s.job.json" % args.id)
-    tmp = record_path.with_name(record_path.name + ".tmp")
-    tmp.write_text(json.dumps(record, indent=1, sort_keys=True) + "\n")
-    os.replace(tmp, record_path)
+    save(final=True)
     return 0
 
 

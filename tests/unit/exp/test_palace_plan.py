@@ -73,6 +73,9 @@ json.dump({"GitTag": "v0.18.1-160-gb797ea8",
            "PeakMemoryMegabytes": {"Min": 90.0, "Max": 120.0, "Average": 100.0, "Total": 800.0},
            "PeakNodeMemoryMegabytes": {"Total": 820.0}},
           open(os.path.join(out, "palace.json"), "w"))
+if os.environ.get("FAKE_SNAPSHOT") and not os.path.basename(out).startswith("stage-"):
+    src, dst = os.environ["FAKE_SNAPSHOT"].split(":")
+    open(dst, "w").write(open(src).read())
 sys.exit(int(os.environ.get("FAKE_EXIT", "0")))
 """
 # A stand-in mpirun: records its arguments, runs the program after the launcher's flags.
@@ -210,6 +213,32 @@ class PalacePlanTest(unittest.TestCase):
         doc = dict(palace_plan.DEFAULTS, ranks=16, packing="vcpu", memory_gb=20)
         self.assertEqual(palace_plan.placement(doc)["vm_vcpus"], 16)
         self.assertNotIn("template", palace_plan.placement(doc))
+
+    def test_per_job_resources_place_the_campaign(self):
+        # a job with 56 GB needs c4d-highmem-16, which has no template: the campaign runs from
+        # instance policies instead of being refused at submit (w3f)
+        base = dict(palace_plan.DEFAULTS, ranks=8, memory_gb=48)
+        job = {"id": "a", "config": "a.json"}
+        self.assertNotIn("template", palace_plan.placement(dict(base, jobs=[job])))
+        big = dict(job, id="b", memory_gb=56)
+        self.assertEqual(palace_plan.vm_shape("c4d", 8, 56, 16, "core"), "c4d-highmem-16")
+        self.assertIs(palace_plan.placement(dict(base, jobs=[job, big]))["template"], False)
+        # 16 ranks: 16 cores, a 32-vCPU shape (no template) with the ranks bound to its cores
+        wide = dict(job, id="c", ranks=16)
+        self.assertEqual(palace_plan.job_cpus(wide, base), 16)
+        self.assertEqual(palace_plan.vm_shape("c4d", 16, 48, 16, "core"), "c4d-highcpu-32")
+        self.assertIs(palace_plan.placement(dict(base, jobs=[job, wide]))["template"], False)
+        line = palace_plan.stage_line(wide, base)
+        self.assertEqual(line["resources"]["cpus"], 16)
+        self.assertEqual(line["command"][line["command"].index("--ranks") + 1], "16")
+        # 4 ranks reserve the campaign's 8 cores: one job per VM, its ranks bound to its cores,
+        # rather than two 4-rank jobs bound to the same cores of one VM
+        narrow = dict(job, id="d", ranks=4)
+        line = palace_plan.stage_line(narrow, base)
+        self.assertEqual(line["resources"]["cpus"], 8)
+        self.assertEqual(line["command"][line["command"].index("--ranks") + 1], "4")
+        self.assertEqual(line["command"][line["command"].index("--bind") + 1], "core")
+        self.assertNotIn("template", palace_plan.placement(dict(base, jobs=[job, narrow])))
 
     def test_binding_follows_the_packing(self):
         doc = dict(palace_plan.DEFAULTS)
@@ -430,16 +459,76 @@ class PalacePlanTest(unittest.TestCase):
         )
         self.assertEqual(record["stage_runs"][0]["palace"]["dofs"], 12000)
         self.assertIn("ranks 1 omp 1", log)
-        adapted = work / "out" / "m1" / "stage-amr" / "cpw.meshgz"
+        self.assertEqual([r["name"] for r in record["stage_runs"]], ["1-amr", "2-check"])
+        adapted = work / "out" / "m1" / "stage-1-amr" / "cpw.meshgz"
         self.assertTrue(adapted.is_file())
         config = json.loads((work / "out" / "m1" / "config.json").read_text())
         self.assertEqual(config["Model"]["Mesh"], str(adapted.resolve()))
-        self.assertTrue((work / "out" / "m1" / "stage-check" / "port-S.csv").is_file())
+        self.assertTrue((work / "out" / "m1" / "stage-2-check" / "port-S.csv").is_file())
         # a failed stage stops the job before the main solve
         work = self.tmp / "stage-fails"
         record = self.run_job(work, ["--stage", "models/cpw.json"], {"FAKE_EXIT": "5"})
-        self.assertEqual((record["ok"], record["failed"], record["exit"]), (False, "stage:cpw", 5))
+        self.assertEqual(
+            (record["ok"], record["failed"], record["exit"]), (False, "stage:1-cpw", 5)
+        )
         self.assertNotIn("solve", record["stages"])
+
+    def test_stages_of_the_same_name_keep_their_own_outputs(self):
+        # two refinement stages named palace-amr.json in different model directories: each gets
+        # its own output directory, and mesh_from takes the mesh of the stage it names
+        work = self.tmp / "same-name"
+        for model in ("a", "b"):
+            (work / "models" / model / "mesh").mkdir(parents=True)
+            cfg = palace_job.relaxed_json(CONFIG)
+            cfg["Model"]["Mesh"] = "mesh/%s.msh" % model
+            cfg["Model"]["Refinement"] = {"MaxIts": 1, "SaveAdaptMesh": True}
+            (work / "models" / model / "palace-amr.json").write_text(json.dumps(cfg))
+            (work / "models" / model / "mesh" / ("%s.msh" % model)).write_text("$MeshFormat\n")
+        (work / "models" / "mesh").mkdir(parents=True)
+        (work / "models" / "cpw.json").write_text(CONFIG)
+        (work / "models" / "mesh" / "cpw.msh").write_text("$MeshFormat\n")
+        stages = ["--stage", "models/a/palace-amr.json", "--stage", "models/b/palace-amr.json"]
+        record = self.run_job(work, stages + ["--mesh-from", "models/a/palace-amr.json"])
+        self.assertTrue(record["ok"], (work / "out" / "m1.log").read_text())
+        out = work / "out" / "m1"
+        self.assertTrue((out / "stage-1-palace-amr" / "a.meshgz").is_file())
+        self.assertTrue((out / "stage-2-palace-amr" / "b.meshgz").is_file())
+        config = json.loads((out / "config.json").read_text())
+        self.assertEqual(
+            config["Model"]["Mesh"], str((out / "stage-1-palace-amr" / "a.meshgz").resolve())
+        )
+        # the same stage twice is refused (mesh_from could not tell them apart)
+        with self.assertRaises(SystemExit):
+            palace_job.main(
+                [
+                    "--id",
+                    "x",
+                    "--ranks",
+                    "1",
+                    "--stage",
+                    "a.json",
+                    "--stage",
+                    "a.json",
+                    "--",
+                    "c.json",
+                ]
+            )
+
+    def test_the_record_is_written_while_the_job_runs(self):
+        # the fake solve copies the record as it is during the solve: a task killed at its time
+        # limit or preempted still leaves the stages it finished
+        work = self.tmp / "running"
+        snap = self.tmp / "snapshot.json"
+        record = self.run_job(
+            work,
+            ["--stage", "models/cpw.json"],
+            {"FAKE_SNAPSHOT": "%s:%s" % (work / "out" / "m1.job.json", snap)},
+        )
+        self.assertTrue(record["ok"])
+        during = json.loads(snap.read_text())
+        self.assertEqual((during["ok"], during["failed"]), (False, "running"))
+        self.assertEqual([r["name"] for r in during["stage_runs"]], ["1-cpw"])
+        self.assertIn("model", during["cpu"])
 
     def test_plan_passes_stages(self):
         job = {
@@ -501,11 +590,13 @@ class PalacePlanTest(unittest.TestCase):
         self.assertEqual(
             argv[argv.index("--config") + 1], str(palace_plan.DOCKER_DIR / "cloudbuild.yaml")
         )
+        subs = dict(kv.split("=", 1) for kv in argv[argv.index("--substitutions") + 1].split(","))
         self.assertEqual(
-            argv[argv.index("--substitutions") + 1],
-            "_IMAGE=%s/palace,_TAG=b797ea8"
-            % gcp.images.format(region=gcp.home_region, project=gcp.project),
+            subs["_IMAGE"],
+            "%s/palace" % gcp.images.format(region=gcp.home_region, project=gcp.project),
         )
+        self.assertEqual(subs["_TAG"], "b797ea8")
+        self.assertIn("_YAPNR_COMMIT", subs)  # the yapnr commit, recorded as an image label
         self.assertEqual(argv[-1], "--async")
         cloudbuild = palace_plan.DOCKER_DIR / "cloudbuild.yaml"
         if cloudbuild.is_file():  # a checkout (Bazel's runfiles have no docker/)

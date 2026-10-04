@@ -191,15 +191,32 @@ Palace sums the error estimate over every solved frequency, so refinement belong
 set around the feature. That run saves the adapted mesh, and a second configuration sweeps on
 it (`postpro-amr/mesh.meshgz`).
 
-`config.boundary_mode` writes the 2D mode solve on one wave-port face of the same 3D mesh
+`config.boundary_mode` writes the 2D mode solve on one wave port's plane of the same 3D mesh
 (`Solver.BoundaryMode.Attributes`). It gives n_eff and Z_PV along the port's voltage path.
+`face="port"` solves the port face alone with the rest of its wall PEC, the shielded guide the 3D
+run's port sees; `face="wall"` solves the whole wall, the line as an open structure. A GCPW's
+coplanar ground floats in the open-wall solve (no vias in a cross-section), so use the port face
+there.
+
+**Copper as `Impedance` (`copper_bc="impedance"`, the validation default).** At b797ea8 a
+`Conductivity` boundary that crosses a wave-port face or a BoundaryMode cross-section aborts the
+2D mode solve on more than one MPI rank ("Dimension mismatch for MaterialPropertyCoefficient and
+libCEED integrator"): the ranks that own none of its edges get an empty coefficient. `Impedance`
+boundaries are skipped where empty, so the copper is written as the `Impedance` with the same
+admittance at one frequency (`config.impedance_rl`, the band centre by default). Palace's
+`Impedance` is a parallel R ∥ L per square of the whole boundary, split over the two faces of a
+cracked interior sheet, while `Conductivity` applies its impedance on each face: a sheet gets
+Rs = ωLs = Re Z, the outside of solid copper Rs = ωLs = 2 Re Z (thick copper). One-rank runs with
+`Conductivity` give the same n_eff and Z_PV to the printed digits. Away from that frequency the
+conductor loss goes as 1/(1 + (f0/f)²) instead of √f: about 8 % low at 54 GHz and 6 % high at
+70 GHz for f0 = 62 GHz.
 
 | Attribute                                       | Palace boundary or material                                                                             |
 | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `air`, `diel:*`                                 | `Materials`: Permittivity, LossTan                                                                      |
 | `cond:*` of a `pec` layer, `via:*`, `pec` walls | `PEC`                                                                                                   |
-| `cond:*` of a `sheet` layer                     | `Conductivity`: σ / K², `Thickness` t, `External` false (the sheet is internal)                         |
-| `cond:*` of a `solid` layer                     | `Conductivity`: σ / K², `External` true (thick-conductor impedance)                                     |
+| `cond:*` of a `sheet` layer                     | `Conductivity`: σ / K², `Thickness` t, `External` false (the sheet is internal); or `Impedance` (above) |
+| `cond:*` of a `solid` layer                     | `Conductivity`: σ / K², `External` true (thick-conductor impedance); or `Impedance` (above)             |
 | `abc1`/`abc2` walls                             | `Absorbing`, order 1 or 2                                                                               |
 | wave ports                                      | `WavePort`: `Offset` back to the reference plane, `VoltagePath`, `Excitation` = Index for excited ports |
 | walls with wave ports                           | also `WavePortPEC`, so each port face is a shielded guide in its 2D mode solve                          |
@@ -260,19 +277,49 @@ prepare = ["-m", "yapnr.rf.palace", "case", "models/tx12-A.json", "--out", "{out
 config = "{out}/palace-amr.json"
 ```
 
-`palace_job.py` makes the mesh path absolute and moves Palace's output to `out/<id>/postpro`. A
-sweep on an adapted mesh therefore names that run's mesh with an override, for example
-`set = {"Model.Mesh" = "<path of the AMR run>/postpro/mesh.meshgz"}`.
+`palace_job.py` makes the mesh path absolute and moves Palace's output to `out/<id>/postpro`.
+Refinement followed by a sweep of the refined mesh is one job: `stages` are solved first (output
+in `out/<id>/stage-<name>`), and `mesh_from` points the main solve at the mesh that stage saved:
 
-## 7. Assumptions to check on the first runs
+```toml
+[[jobs]]
+id = "tx12-A"
+stages = ["models/tx12-A/palace-uniform.json", "models/tx12-A/palace-amr.json"]
+mesh_from = "models/tx12-A/palace-amr.json"
+config = "models/tx12-A/palace-sweep.json"
+memory_gb = 48            # about 12 kB per unknown at order 2 with the sweep's reduced model
+```
 
-- **Copper model.** The `sheet` model uses Palace's finite-thickness surface impedance with
-  σ / K² and 35 µm. This is meant to match openEMS's conducting sheet; validation case (a)
-  measures how well it does, against the loss of a 5 mm and a 10 mm line.
-- **Port faces.** In each port's 2D mode solve, the walls around the face act as PEC. A copper
-  sheet crossing the face enters that solve as a Robin edge, as Palace transfers it.
-- **Mode-solve voltage path.** The BoundaryMode configurations give the voltage path in 3D
-  coordinates on the port face. Whether Palace maps such a path onto the extracted 2D submesh is
-  not yet verified; the first `--dry-run` will show it.
-- **Absorbing order.** The walls are first-order absorbing. Palace has no PML. The box-size study
-  of the plan decides whether second order is needed for the patch.
+A stage written `CONFIG@1` runs on one rank. Two things about refinement at b797ea8:
+
+- Sweep the saved mesh in a separate solve rather than trusting the refinement loop's own late
+  iterations: with nonconforming refinement, the wave-port modes inside the loop drift after a
+  few refinements (line-msl-5mm at 62 GHz: Z_PV 55.9 -> 62.4 ohm and |S21| -0.47 -> -1.76 dB by
+  the fifth mesh).
+- A saved adapted mesh has its interior sheets split already, so a run that loads it no longer
+  treats them as cracked and gives each face the whole `Impedance`. The sweep of a saved mesh
+  therefore writes the sheets per face (`config.impedance_rl(..., precracked=True)`; validation's
+  `palace-sweep.json` does). Without that, its conductor loss comes out about half.
+
+## 7. What the first runs showed
+
+The validation report (`palace/validation.md` in the project notes) has the numbers; for model
+builders:
+
+- **Copper model.** The zero-thickness sheet that openEMS also uses makes the 4-mil 50-ohm lines
+  about 53 ohm with an effective permittivity about 5 % high, against 35 µm copper (the 2D solver
+  agrees). Sign off with `solid` copper; keep `sheet` for comparisons with openEMS.
+- **Port faces.** A wave port's face must not hold a floating conductor: in its 2D mode solve the
+  face's edges are PEC, so a coplanar ground strip that does not reach one floats and the port
+  picks another mode (tx12's TX1.P0 gave Z_PV 24 ohm). `port_geometry` therefore ends a side
+  that has coplanar ground inside it.
+- **Voltage paths.** The BoundaryMode and wave-port `VoltagePath` in 3D coordinates is projected
+  onto the port plane by Palace; Z_PV comes out as expected.
+- **Memory.** About 12 kB per unknown at order 2 for a driven sweep with the reduced model, 8-10
+  kB for a single solve: 1.7 M unknowns took 20-23 GB, 2.6 M ran a 32 GB VM out of memory.
+- **Absorbing order.** The walls are first-order absorbing (Palace has no PML). On the single
+  patch, walls 0.5 λ0 instead of 0.3 λ0 away, or second-order walls, moved the |S11| dip by at
+  most 0.06 GHz (0.1 %).
+- **Agreement with openEMS.** The TX1 sliver notch agrees within 0.2 %; the line εeff and the
+  patch dip agree once openEMS's fill-size trend is extrapolated (openEMS at 20 µm is still 3 %
+  high in εeff and 1.2 % low in the patch dip).

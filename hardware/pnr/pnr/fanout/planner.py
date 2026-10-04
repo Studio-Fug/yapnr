@@ -503,7 +503,7 @@ def plan(
     if spec.get("bottom_sites"):
         from .bottom import sites
 
-        result["bottom"] = sites(graph, spec, result, lat, pose, rules)
+        result["bottom"] = sites(graph, spec, result, lat, pose, rules, fixed=obs)
     return result
 
 

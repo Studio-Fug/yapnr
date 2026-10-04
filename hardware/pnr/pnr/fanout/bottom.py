@@ -45,8 +45,12 @@ def _zone(lat, zone: str):
     return (2 * k, 2 * k, 2 * (lat.cols - 1 - k), 2 * (lat.rows - 1 - k))
 
 
-def sites(graph, spec: Dict, plan: Dict, lat, pose: Pose, rules: Dict) -> Dict:
-    """``{"sites": {ref: {...}}, "unplaced": {ref: reason}, "keepouts": [...]}``."""
+def sites(graph, spec: Dict, plan: Dict, lat, pose: Pose, rules: Dict, fixed=None) -> Dict:
+    """``{"sites": {ref: {...}}, "unplaced": {ref: reason}, "keepouts": [...]}``.
+
+    ``fixed`` (the plan's :class:`.sites.Obstacles`, part frame): its vias and its
+    tracks on the bottom layer are kept clear too (a fixed block's stitching or
+    launch vias under the array), like the fanout's own copper."""
     from pnr.fab_profile import geometry
 
     bottom = spec["bottom_sites"]
@@ -73,6 +77,11 @@ def sites(graph, spec: Dict, plan: Dict, lat, pose: Pose, rules: Dict) -> Dict:
         for t in plan["copper"]["tracks"]
         if t[1] == bottom_layer
     ]
+    if fixed is not None:
+        vias += [(net, tuple(c), d) for net, c, d, _h in fixed.vias if d > 0]
+        last = len(plan["layers"]) - 1
+        if bottom_layer is not None:
+            tracks += [(net, a, b, w) for net, la, a, b, w in fixed.tracks if la == last]
     step = min(lat.px, lat.py) / 8.0
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
     nx = int(math.floor((x1 - x0) / 2 / step))
@@ -211,8 +220,16 @@ def derive(graph, constraints, rules: Optional[Dict]):
     posed = _posed(graph, constraints, [f["ref"] for f in specs])
     for spec in specs:
         layers, drops, signals = classify(posed, rules)
+        # The fixed copper the router plans the same fanout with (a fixed block's,
+        # carried in the rules): sites judged without it could sit on its vias.
         plan = cached_plan(
-            posed, rules, spec, grid_layers=layers, plane_nets=drops, signal_nets=signals
+            posed,
+            rules,
+            spec,
+            grid_layers=layers,
+            plane_nets=drops,
+            signal_nets=signals,
+            fixed_copper=(rules or {}).get("fixed_copper"),
         )
         found = plan.get("bottom") or {}
         reports[spec["name"]] = found

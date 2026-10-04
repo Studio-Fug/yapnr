@@ -677,6 +677,39 @@ class BottomSitesTest(unittest.TestCase):
             boxes.append(site["at"])
         self.assertGreater(math.dist(*boxes), 0.9)
         self.assertTrue(found["keepouts"])
+        # A fixed block's via where C1 went (a launch via under the array): C1 moves
+        # off it, and placement's derive plans with the rules' fixed copper too.
+        from pnr.fanout.bottom import derive
+        from pnr.graph import footprint_point
+
+        c1 = found["sites"]["C1"]
+        graph.component("C1").pos, graph.component("C1").rot = tuple(c1["at"]), c1["rot"]
+        graph.component("C1").side = "bottom"
+        hit = footprint_point(graph.component("C1"), -0.48, 0.0)
+        fixed = dict(
+            frame="engine-mm-y-up",
+            tracks=[],
+            vias=[dict(net="X", xy=list(hit), diameter_mm=0.35, drill_mm=0.15)],
+            polygons=[],
+        )
+        again = plan(
+            graph,
+            r,
+            sp,
+            grid_layers=["F.Cu", "In2.Cu", "B.Cu"],
+            plane_nets={"GND", "VCC"},
+            signal_nets=set(),
+            fixed_copper=fixed,
+        )["bottom"]["sites"]
+        self.assertNotEqual(again.get("C1", {}).get("at"), c1["at"])
+        self.assertNotEqual(again.get("C2", {}).get("at"), c1["at"])
+        from pnr.constraints import compile_constraints
+
+        doc = {"schema": "v0", "board": {"outline": {"w": 40, "h": 40}}, "fixed": {}}
+        cons = compile_constraints(doc, graph.refs)
+        derived = derive(graph, cons, dict(r, fanouts=[sp], fixed_copper=fixed))
+        posed = {c.refs[0]: c.params["at"] for c in derived.constraints if c.kind == "fixed"}
+        self.assertNotEqual(posed.get("C1"), c1["at"])
 
 
 class SpecTest(unittest.TestCase):

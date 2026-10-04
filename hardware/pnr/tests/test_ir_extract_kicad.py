@@ -1,5 +1,6 @@
 """A rail's copper extracted from a KiCad board and solved (pnr.ir_extract; KiCad
-Python only: python3 -m unittest tests.test_ir_extract_kicad)."""
+Python only: python3 -m unittest tests.test_ir_extract_kicad). Without numpy in KiCad's
+Python (the container image's) the solve runs in PNR_PYTHON (the ladder lane)."""
 
 import importlib.util
 import math
@@ -13,7 +14,8 @@ OFFSET = 30.0  # the board's outline corner, KiCad mm (y down)
 
 def build(tmp):
     """A 4-layer 20 x 10 mm board: net V from pad A.1 by a 0.25 mm F.Cu track to a via,
-    a filled In1 zone strip, a via up to pad B.1; pad C.1 on its own (an island)."""
+    a filled In1 zone strip, a via up to pad B.1; pad C.1 on its own (an island), and
+    a capacitor C1 (no DC load) on its own too."""
     import pcbnew as k
 
     def v(x, y):
@@ -31,7 +33,12 @@ def build(tmp):
     edge.SetLayer(k.Edge_Cuts)
     edge.SetWidth(50000)
     b.Add(edge)
-    for ref, (x, y) in (("A", (2.0, 5.0)), ("B", (18.0, 5.0)), ("C", (10.0, 9.0))):
+    for ref, (x, y) in (
+        ("A", (2.0, 5.0)),
+        ("B", (18.0, 5.0)),
+        ("C", (10.0, 9.0)),
+        ("C1", (14.0, 9.0)),
+    ):
         f = k.FOOTPRINT(b)
         f.SetReference(ref)
         b.Add(f)
@@ -116,7 +123,8 @@ class ExtractTest(unittest.TestCase):
             self.assertEqual(len(copper["tracks"]), 2)
             self.assertEqual(len(copper["vias"]), 2)
             self.assertEqual([z["layer"] for z in copper["zones"]], ["In1.Cu"])
-            self.assertEqual(sorted(p["ref"] for p in copper["pads"]), ["A", "B", "C"])
+            self.assertEqual(sorted(p["ref"] for p in copper["pads"]), ["A", "B", "C", "C1"])
+            self.assertEqual([p["ref"] for p in copper["pads"] if p.get("no_load")], ["C1"])
             # The graph frame: the outline corner is the origin, y up.
             a = next(p for p in copper["pads"] if p["ref"] == "A")
             self.assertAlmostEqual(a["at"][0], 2.0, places=4)
@@ -157,7 +165,8 @@ class ExtractTest(unittest.TestCase):
             rules = dict(ir_drop=[dict(net="V", sources=["A:1"], sinks="all", current_a=1.0)])
             rep = report(b, rules, Path(tmp) / "ir", path)["V"]
         self.assertEqual(rep["status"], "open")
-        self.assertEqual(rep["opens"], ["C.1"])
+        self.assertEqual(rep["opens"], ["C.1"])  # C1 (a capacitor) is no sink
+        self.assertEqual(rep["excluded_no_load"], ["C1.1"])
         self.assertTrue(math.isfinite(rep["loss_w"]))
 
 

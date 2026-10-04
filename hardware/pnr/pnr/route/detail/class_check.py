@@ -205,10 +205,14 @@ def _bad_cells(grid, zone, committed):
 
 def _row_cells(grid, route, rows):
     """Cells of ``route`` at the copper the static check found too close (``rows``
-    of :func:`static_offenders`: a track's two ends on its layer, a via's column)."""
+    of :func:`static_offenders`: a track's two ends on its layer, a via's column; or
+    rows naming their ``cells`` as ``[layer, i, j]``, as the pair check's do)."""
     out = set()
     index = {name: k for k, name in enumerate(grid.layers)}
     for row in rows:
+        if "cells" in row:
+            out.update(Cell(*c) for c in row["cells"])
+            continue
         points = [row["at"], row.get("to") or row["at"]]
         if points[0] == points[1]:  # the route's via: its column
             layers = range(grid.nlayers)

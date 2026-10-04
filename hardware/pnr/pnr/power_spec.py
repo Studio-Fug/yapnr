@@ -14,6 +14,7 @@ routing rules carry under the same names, only when declared.
         fill: GND                       # what is left (a net), or none
         core_no_vias: true              # other nets' vias stay out of each trunk core
         terminal_reach_mm: 0.8          # a pad's drop lands within this of it
+        neck_mm: 0                      # a trunk may narrow this close to its terminals
         currents: {1V2: 1.0}            # A, else the net's @pnr-current peak or class
         budgets_mohm: {1V2: 12}         # widens a trunk for its IR budget
         sources: {1V2: {"@pmic.fb_1v2": "2"}}  # the trunk's root (else a central pad)
@@ -21,7 +22,10 @@ routing rules carry under the same names, only when declared.
     ir_drop:
       - net: 1V0_RF1
         sources: {"@pmic.fb_rf1": ["2"]}     # {part: [pads]} or ["REF:PAD", ...]
-        sinks: {"@radio.u1": [G5, H5, J5]}   # the same forms, or all (the default)
+        sinks: {"@radio.u1": [G5, H5, J5]}   # the same forms, or all (the default:
+                                             # every pad but the sources and the
+                                             # capacitors', no DC load)
+        exclude: ["R54:1"]                   # more pads without a DC load (with all)
         current_a: 2.5     # default: the net's @pnr-current peak, else its class current
         split: equal       # or area
         budget_mohm: 4.0   # or budget_mv
@@ -52,6 +56,7 @@ PARTITION_KEYS = {
     "budgets_mohm",
     "sources",
     "h_mm",
+    "neck_mm",
 }
 IR_KEYS = {
     "net",
@@ -65,6 +70,7 @@ IR_KEYS = {
     "hard",
     "h_mm",
     "two_point",
+    "exclude",
 }
 
 
@@ -154,6 +160,8 @@ def parse_partition(raw) -> List[Dict]:
                 h_mm=_num(entry.get("h_mm", 0.1), where + ".h_mm", True),
             )
         )
+        if entry.get("neck_mm") is not None:  # only when declared (rules unchanged else)
+            out[-1]["neck_mm"] = _num(entry["neck_mm"], where + ".neck_mm", minimum=0.0)
     layers = [e["layer"] for e in out]
     if len(set(layers)) != len(layers):
         raise PowerSpecError("plane_partition: one entry per layer")
@@ -183,6 +191,11 @@ def parse_ir_drop(raw) -> List[Dict]:
         sinks = entry.get("sinks", "all")
         if sinks != "all":
             sinks = _terminals(sinks, where + ".sinks")
+        exclude = None
+        if entry.get("exclude") is not None:
+            if sinks != "all":
+                raise PowerSpecError(where + ".exclude goes with sinks: all")
+            exclude = _terminals(entry["exclude"], where + ".exclude")
         split = entry.get("split", "equal")
         if split not in ("equal", "area"):
             raise PowerSpecError(where + ".split must be equal or area")
@@ -192,6 +205,8 @@ def parse_ir_drop(raw) -> List[Dict]:
         if not isinstance(hard, bool):
             raise PowerSpecError(where + ".hard must be a boolean")
         row = dict(net=net, sources=sources, sinks=sinks, split=split, hard=hard)
+        if exclude:
+            row["exclude"] = exclude
         for key in ("current_a", "budget_mohm", "budget_mv"):
             if entry.get(key) is not None:
                 row[key] = _num(entry[key], where + "." + key, positive=True)

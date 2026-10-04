@@ -75,6 +75,26 @@ def _square_segment_distance_sq(x0, y0, x1, y1, a, b) -> float:
     )
 
 
+def pad_layer(grid, comp, pad) -> int:
+    """The grid layer of an SMD pad's land: its footprint's side, or the opposite outer
+    layer for a far-side land (``Pad.far_side``: a top part's thermal land on B.Cu)."""
+    if getattr(pad, "far_side", None):
+        return grid.side_layer(SIDE_BOTTOM if comp.side != SIDE_BOTTOM else "top")
+    return grid.side_layer(comp.side)
+
+
+def far_twins(comp) -> set:
+    """Indices into ``comp.pads`` of the far-side lands whose pad number also has a land
+    on the part's own side: that land is the pad's access, so escapes and drops are
+    planned there only (the footprint joins the two, an exposed pad's thermal vias).
+    Empty for a part without far-side lands."""
+    far = [k for k, p in enumerate(comp.pads) if getattr(p, "far_side", None)]
+    if not far:
+        return set()
+    near = {p.name for p in comp.pads if not getattr(p, "far_side", None)}
+    return {k for k in far if comp.pads[k].name in near}
+
+
 def pad_keepaway(pad) -> Optional[float]:
     """The clearance (mm) a pad asks of foreign copper by itself (graph ``Pad``):
     its own clearance, or its solder mask margin plus 1 µm (foreign copper inside
@@ -955,10 +975,11 @@ class RouteGrid:
                 comp = graph.component(ref)
             except KeyError:
                 continue
-            la = self.side_layer(comp.side)
-            # Absolute pad centre.
-            for name, pnet, r in pad_rects(comp):
-                if name == pad and pnet == net_name:
-                    cells.append(Cell(la, *self.cell_of(r.cx, r.cy)))
+            twins = far_twins(comp)
+            # Absolute pad centre, on the land's own layer (a far-side land's is the
+            # opposite outer one; a pad number with a near land is reached there).
+            for k, ((name, pnet, r), p) in enumerate(zip(pad_rects(comp), comp.pads)):
+                if name == pad and pnet == net_name and k not in twins:
+                    cells.append(Cell(pad_layer(self, comp, p), *self.cell_of(r.cx, r.cy)))
                     break
         return cells

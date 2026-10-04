@@ -11,7 +11,14 @@ route_board calls these in order:
   layer (``disallow via``: its pads' layer);
 * :func:`pair_keepouts` once the escapes are planned: for a larger pair clearance
   each side's tracks and vias are barred (net keep-outs) within the clearance of
-  the other side's pads, escape copper and fixed copper, both ways;
+  the other side's pads, escape copper and fixed copper, both ways (cells are judged
+  at their centres, so the reach carries :func:`step_margin`, what a 45-degree step
+  between two free centres can come closer);
+* :func:`pair_route_offenders` once the maze has routed: two routed nets of a larger
+  pair rule closer than its clearance (exact distances) are a conflict; the fewest
+  nets that leave none are barred from the other side's routed copper (net keep-outs)
+  and handed to the class repair (:func:`.class_check.repair`, which ``dru_routing``
+  implies), which routes them again around it;
 * :func:`length_report` on the finished copper: each length-limited net's routed
   length against its limit.
 
@@ -58,6 +65,8 @@ def layer_masks(grid, graph, dru: Optional[Dict]):
     nets the rules restrict), and what was applied or could not be."""
     from pnr.place.geometry import pad_rects
 
+    from .grid import pad_layer
+
     names = list(grid.layers)
     everything = frozenset(range(len(names)))
     masks: Dict[str, frozenset] = {}
@@ -69,10 +78,11 @@ def layer_masks(grid, graph, dru: Optional[Dict]):
             report["track_layers"] += 1
     pads: Dict[str, set] = {}
     for comp in graph.components:
-        side = grid.side_layer(comp.side)
         for (_name, net, _r), pad in zip(pad_rects(comp), comp.pads):
             if net:
-                pads.setdefault(net, set()).update(everything if pad.through_hole else {side})
+                # An SMD land's own layer (a far-side land's is the opposite outer one).
+                own = {pad_layer(grid, comp, pad)}
+                pads.setdefault(net, set()).update(everything if pad.through_hole else own)
     for net in (dru or {}).get("no_via", []):
         layers = pads.get(net)
         if not layers:
@@ -176,14 +186,138 @@ def _mask_near(grid, items, reach_of):
     return out
 
 
+def step_margin(grid) -> float:
+    """How much closer than its two cell centres a 45-degree step between them can
+    pass a point (``pitch (1 - 1/sqrt 2)``): a keep-out judged at cell centres grows
+    by it."""
+    return grid.pitch * (1.0 - 1.0 / math.sqrt(2.0))
+
+
+def _route_items(grid, rn, width):
+    """A routed net's copper as :func:`_mask_near` items: its segments (half the track
+    width) and its vias (every layer, the via radius)."""
+    out = []
+    for la, p, q in rn.segments:
+        out.append((la, "seg", (grid.center_of(*p), grid.center_of(*q)), width / 2))
+    for i, j in rn.vias:
+        c = grid.center_of(i, j)
+        out.append((None, "seg", (c, c), grid.via_radius))
+    return out
+
+
+def _items_gap(a_items, b_items):
+    """The least edge-to-edge distance (mm) between two item lists (same layer, or a
+    via against anything)."""
+    from pnr.writeback import _segment_distance_sq
+
+    best = math.inf
+    for la, _k, (p, q), ha in a_items:
+        for lb, _k2, (r, t), hb in b_items:
+            if la is not None and lb is not None and la != lb:
+                continue
+            d = math.sqrt(_segment_distance_sq(p, q, r, t)) - ha - hb
+            if d < best:
+                best = d
+    return best
+
+
+def pair_route_offenders(grid, nets, result, widths, dru: Optional[Dict]):
+    """The routed nets of ``result`` that break a pair clearance above
+    ``PAIR_RAISE_MAX_MM`` against another routed net (module doc). For the fewest nets
+    that leave no such pair (the net in most pairs first, then fewer routed cells,
+    then the name), net keep-outs bar their tracks and vias from the other side's
+    routed copper (reach: the clearance, the copper's half width, the net's half
+    width or via radius, and :func:`step_margin`). Returns ``({net: rows}, report)``:
+    rows carry the net's routed ``cells`` inside those keep-outs (the class repair
+    prunes them when it keeps what fits) and the pair."""
+    from pnr.dru_rules import PAIR_RAISE_MAX_MM
+
+    from .class_check import _cover
+    from .grid import Cell
+
+    rules = [
+        p for p in (dru or {}).get("pair_clearances", []) if float(p["clearance_mm"]) > PAIR_RAISE_MAX_MM + 1e-9
+    ]
+    report = {"pairs": [], "ripped": []}
+    if not rules:
+        return {}, report
+    routed = {n for n, rn in result.nets.items() if rn.cells}
+    items = {}
+
+    def copper(net):
+        if net not in items:
+            rn = result.nets[net]
+            items[net] = _route_items(grid, rn, widths.get(net, grid.track_width))
+        return items[net]
+
+    conflicts = {}  # (a, b) sorted -> (clearance, gap)
+    for pair in rules:
+        d = float(pair["clearance_mm"])
+        for a in pair["a"]:
+            for b in pair["b"]:
+                if a == b or a not in routed or b not in routed:
+                    continue
+                gap = _items_gap(copper(a), copper(b))
+                if gap < d - 1e-6:
+                    key = tuple(sorted((a, b)))
+                    old = conflicts.get(key)
+                    if old is None or d > old[0]:
+                        conflicts[key] = (d, gap)
+    if not conflicts:
+        return {}, report
+    sizes = {n: len(result.nets[n].cells) for n in routed}
+    ripped = _cover(set(conflicts), sizes)
+    every = frozenset(nets)
+    margin = step_margin(grid)
+    out = {}
+    for net in ripped:
+        others = []
+        for (a, b), (d, gap) in sorted(conflicts.items()):
+            if net not in (a, b):
+                continue
+            other = b if a == net else a
+            if other in ripped:
+                continue
+            others.append((other, d, gap))
+        if not others:
+            continue
+        w = widths.get(net, grid.track_width)
+        track = via = None
+        for other, d, _gap in others:
+            t = _mask_near(grid, copper(other), lambda half, d=d: d + half + w / 2 + margin)
+            v = _mask_near(grid, copper(other), lambda half, d=d: d + half + grid.via_radius + margin)
+            track = t if track is None else track | t
+            via = v if via is None else via | v
+        via = via.any(axis=0)[None, :, :].repeat(grid.nlayers, axis=0)
+        grid.add_net_keepout(track, via, every - {net})
+        rn = result.nets[net]
+        vias = set(rn.vias)
+        cells = [
+            [c.layer, c.i, c.j]
+            for c in rn.cells
+            if track[c.layer, c.j, c.i] or ((c.i, c.j) in vias and via[c.layer, c.j, c.i])
+        ]
+        out[net] = [
+            dict(pair=[net, other], need_mm=d, gap_mm=round(gap, 4), cells=cells)
+            for other, d, gap in others
+        ]
+    report["pairs"] = [
+        dict(nets=list(k), need_mm=v[0], gap_mm=round(v[1], 4)) for k, v in sorted(conflicts.items())
+    ][:20]
+    report["pair_count"] = len(conflicts)
+    report["ripped"] = sorted(out)
+    return out, report
+
+
 def pair_keepouts(grid, nets, dru: Optional[Dict], fixed_copper=None) -> list:
     """Net keep-outs for the pair clearances above ``PAIR_RAISE_MAX_MM`` (module
     doc): one per side and pair rule, barring that side's tracks within ``d +
     ½width`` and its vias within ``d + via radius`` of the other side's copper
-    (``d + extent``). Returns the report rows."""
+    (``d + extent``), plus :func:`step_margin`. Returns the report rows."""
     from pnr.dru_rules import PAIR_RAISE_MAX_MM
 
     every = frozenset(nets)
+    margin = step_margin(grid)
     rows = []
     for pair in (dru or {}).get("pair_clearances", []):
         d = float(pair["clearance_mm"])
@@ -196,8 +330,8 @@ def pair_keepouts(grid, nets, dru: Optional[Dict], fixed_copper=None) -> list:
                 rows.append({"rule": pair["rule"], "nets": side, "copper": len(copper), "cells": 0})
                 continue
             width = max(grid.net_widths.get(n, grid.track_width) for n in side)
-            track = _mask_near(grid, copper, lambda half: d + half + width / 2)
-            via = _mask_near(grid, copper, lambda half: d + half + grid.via_radius)
+            track = _mask_near(grid, copper, lambda half: d + half + width / 2 + margin)
+            via = _mask_near(grid, copper, lambda half: d + half + grid.via_radius + margin)
             via = via.any(axis=0)[None, :, :].repeat(grid.nlayers, axis=0)
             grid.add_net_keepout(track, via, every - frozenset(side))
             rows.append(

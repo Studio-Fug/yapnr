@@ -190,6 +190,117 @@ class UnreachedTest(unittest.TestCase):
         self.assertEqual(reached(0.6, 0.15), 2)
 
 
+class HardWidthTest(unittest.TestCase):
+    """min_width_mm is a hard limit outside a rail's own terminal discs: a trunk that
+    has to cross a field of foreign vias (a ball array's) goes round it where a way
+    that wide exists, else joins the far terminal through the field and reports it
+    necked, with the neck's width and place."""
+
+    ENTRY = dict(ENTRY, nets=["A"], min_width_mm=1.0)
+    TERMS = {"A": [via("A1", (1.0, 3.0)), via("A2", (11.0, 3.0))]}
+
+    @staticmethod
+    def field(top):
+        # Foreign vias (0.25 mm with their clearance) in a column at x = 6, 0.9 mm
+        # apart: 0.4 mm of copper between two, from y = 0.3 up to ``top``.
+        ys = np.arange(0.3, top + 1e-9, 0.9)
+        return [((6.0, float(y)), 0.25) for y in ys]
+
+    def solve(self, top, **kwargs):
+        _CACHE.clear()
+        return partition(
+            dict(self.ENTRY, **kwargs),
+            width=12.0,
+            height=6.0,
+            terminals=self.TERMS,
+            blocked=self.field(top),
+            fill_min_mm=0.15,
+        )
+
+    def test_a_way_round_the_field_is_taken(self):
+        part = self.solve(3.0)  # the field stops at y 3.0: 2.7 mm of free board above it
+        info = part.report["nets"]["A"]
+        self.assertEqual(info["reached"], 2)
+        self.assertEqual(info["necked"], [])
+        self.assertEqual(info["joined_narrow"], [])
+        self.assertEqual(info["status"], "ok")
+        self.assertGreaterEqual(info["way_min_mm"], 1.0 - 0.1 - 1e-9)
+
+    def test_a_trunk_through_the_field_is_necked(self):
+        part = self.solve(5.7)  # the field spans the board: no 1 mm way exists
+        info = part.report["nets"]["A"]
+        self.assertEqual(info["reached"], 2)  # joined (a zone fills 0.4 mm) ...
+        self.assertEqual(info["joined_narrow"], ["A2"])
+        self.assertEqual(info["status"], "necked")  # ... and reported, never silent
+        (row,) = info["necked"]
+        self.assertEqual(row["name"], "A2")
+        self.assertLess(row["width_mm"], 0.7)  # the 0.4 mm gaps, to a raster cell
+        self.assertAlmostEqual(row["neck_at"][0], 6.0, delta=0.3)
+        self.assertEqual(info["reached_at_width"], 1)
+        self.assertTrue(any("under min_width_mm" in w for w in info["warnings"]))
+
+    def test_neck_mm_lets_a_trunk_narrow_near_its_terminals(self):
+        # The field 0.6 mm from A2: within neck_mm 1.5 of it the trunk may narrow.
+        _CACHE.clear()
+        terms = {"A": [via("A1", (1.0, 3.0)), via("A2", (6.6, 3.0))]}
+        part = partition(
+            dict(self.ENTRY, neck_mm=1.5),
+            width=12.0,
+            height=6.0,
+            terminals=terms,
+            blocked=self.field(5.7),
+            fill_min_mm=0.15,
+        )
+        info = part.report["nets"]["A"]
+        self.assertEqual(info["status"], "ok", info)
+        self.assertEqual(info["joined_narrow"], [])
+
+    def test_the_cores_cover_the_claimed_width(self):
+        # A 2 A rail is widened past min_width_mm; core_no_vias keeps other nets' vias
+        # off all of its claimed copper, not only the minimum width's core.
+        _CACHE.clear()
+        terms = {"A": [pad("A1", (2.0, 3.0)), pad("A2", (10.0, 3.0))]}
+        part = partition(
+            dict(self.ENTRY, h_mm=0.1),
+            width=12.0,
+            height=6.0,
+            terminals=terms,
+            blocked=[],
+            currents={"A": 2.0},
+        )
+        w = part.report["nets"]["A"]["width_mm"]
+        self.assertGreater(w, 1.5)
+        points, half = part.cores["A"]
+        ys = [y for x, y in points if abs(x - 6.0) < 0.06]
+        self.assertGreaterEqual(max(ys) - min(ys) + 2 * half, w - 0.2)
+
+    def test_core_keepouts_spare_other_pads_drop_sites(self):
+        from types import SimpleNamespace
+
+        from pnr.plane_partition import _core_keepouts
+
+        masks = []
+        grid = SimpleNamespace(
+            nx=120,
+            ny=60,
+            pitch=0.1,
+            width=12.0,
+            height=6.0,
+            nlayers=2,
+            add_net_keepout=lambda track, via, allowed: masks.append((via, allowed)),
+        )
+        _CACHE.clear()
+        terms = {"A": [pad("A1", (2.0, 3.0)), pad("A2", (10.0, 3.0))]}
+        part = partition(
+            dict(self.ENTRY), width=12.0, height=6.0, terminals=terms, blocked=[]
+        )
+        _core_keepouts(grid, part, 0.35, spare=[(6.0, 3.2)], spare_reach=0.8)
+        (via, allowed), = masks
+        self.assertEqual(allowed, {"A"})
+        self.assertFalse(via[0, 32, 60])  # (6.05, 3.25): another pad's drop site
+        self.assertTrue(via[0, 30, 40])  # (4.05, 3.05): on the trunk
+
+
 class PlaneAccessHolesTest(unittest.TestCase):
     def test_a_site_in_a_hole_is_not_in_the_region(self):
         rec = {

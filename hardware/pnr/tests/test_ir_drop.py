@@ -201,6 +201,56 @@ class PlaneTest(unittest.TestCase):
         self.assertTrue(4.4 <= d["at"][0] <= 5.6, d)
 
 
+class CoverageTest(unittest.TestCase):
+    """A strip whose edges fall between cell centres: each cell's copper coverage
+    scales its conductance, so the strip keeps its width at any offset."""
+
+    @staticmethod
+    def strip(offset, h=0.1, width=0.45, length=6.0, subsample=None):
+        y0, y1 = 1.0 + offset, 1.0 + offset + width
+        bars = [
+            dict(ref=ref, pad="1", at=[x, (y0 + y1) / 2], layers=["In1.Cu"],
+                 polygon=rect(x - 0.05, y0, x + 0.05, y1))
+            for ref, x in (("S", 0.05), ("L", length - 0.05))
+        ]
+        c = copper(
+            zones=[dict(layer="In1.Cu", polygons=[dict(outline=rect(0, y0, length, y1), holes=[])])],
+            pads=bars,
+        )
+        kwargs = dict(sources=[0], sinks=[1], current_a=1.0, h=h, two_point=False)
+        if subsample is not None:
+            kwargs["subsample"] = subsample
+        expect = RHO / T_IN * (length - 0.1) / width
+        return ohms(solve(c, **kwargs)) / expect - 1.0
+
+    def test_a_misaligned_strip_keeps_its_width(self):
+        for offset in (0.0, 0.03, 0.05, 0.07):
+            err = self.strip(offset)
+            self.assertLess(abs(err), 0.02, (offset, err))
+
+    def test_without_coverage_the_raster_quantizes_the_width(self):
+        # One sample per cell (the cell is copper or not): 0.45 mm reads 0.5 or 0.4.
+        errs = [self.strip(offset, subsample=1) for offset in (0.0, 0.03, 0.07)]
+        self.assertGreater(max(abs(e) for e in errs), 0.08)
+
+    def test_a_narrow_neck_off_the_grid(self):
+        # 0.25 mm at an offset of 0.04 mm: within 3 %.
+        y0 = 1.04
+        for width in (0.25, 0.33):
+            c = copper(
+                zones=[dict(layer="In1.Cu", polygons=[dict(outline=rect(0, y0, 4, y0 + width), holes=[])])],
+                pads=[
+                    dict(ref="S", pad="1", at=[0.05, y0 + width / 2], layers=["In1.Cu"],
+                         polygon=rect(0.0, y0, 0.1, y0 + width)),
+                    dict(ref="L", pad="1", at=[3.95, y0 + width / 2], layers=["In1.Cu"],
+                         polygon=rect(3.9, y0, 4.0, y0 + width)),
+                ],
+            )
+            r = solve(c, sources=[0], sinks=[1], current_a=1.0, two_point=False)
+            expect = RHO / T_IN * 3.9 / width
+            self.assertAlmostEqual(ohms(r), expect, delta=expect * 0.03)
+
+
 class ViaTest(unittest.TestCase):
     def test_a_via_barrel(self):
         c = copper(
@@ -266,6 +316,61 @@ class NetworkTest(unittest.TestCase):
         self.assertIsNone(r["r_eff_mohm"])
         self.assertIn("residual", r["warnings"][0]["statement"])
         self.assertEqual(solve(c, sources=[0], sinks=[1], current_a=1.0)["status"], "pass")
+
+
+class ResidualTest(unittest.TestCase):
+    def test_the_residual_is_the_true_one(self):
+        # A chain Laplacian: the reported residual is |b - A x| / |b| at the exit.
+        import numpy as np
+
+        from pnr.ir_drop import _pcg
+
+        n = 400
+        i = np.arange(n - 1)
+        j = i + 1
+        g = np.linspace(1.0, 1e4, n - 1)  # a wide spread of conductances
+        diag = np.zeros(n)
+        np.add.at(diag, i, g)
+        np.add.at(diag, j, g)
+        diag[0] += 1.0  # tied to a held node
+        b = np.zeros(n)
+        b[-1] = 1.0
+        x, res, it = _pcg(i, j, g, diag, b, 1e-10, 100000)
+        ax = diag * x - np.bincount(i, weights=g * x[j], minlength=n)
+        ax -= np.bincount(j, weights=g * x[i], minlength=n)
+        true = float(np.sqrt(np.sum((b - ax) ** 2)) / np.sqrt(np.sum(b * b)))
+        self.assertAlmostEqual(res, true, delta=1e-14)
+        self.assertLessEqual(res, 1e-10)
+
+
+class SplitWarningTest(unittest.TestCase):
+    def test_without_two_point_the_split_is_bounded(self):
+        c = copper(
+            pads=[dot("S", (0.0, 0.0)), dot("A", (5.0, 1.0)), dot("B", (5.0, -1.0))],
+            tracks=[
+                dict(layer="F.Cu", a=[0.0, 0.0], b=[5.0, 1.0], width_mm=0.1),
+                dict(layer="F.Cu", a=[0.0, 0.0], b=[5.0, -1.0], width_mm=0.3),
+            ],
+        )
+        full = solve(c, sources=[0], sinks=[1, 2], current_a=1.0)
+        r = solve(c, sources=[0], sinks=[1, 2], current_a=1.0, two_point=False, budget_mv=20.0)
+        (w,) = [w for w in r["warnings"] if "splits" in w["statement"]]
+        self.assertIn("no two-point solve", w["statement"])
+        # A (the 0.1 mm track) is the worst; its all-in drop lies in the bounds.
+        all_in = max(t["r_mohm"] for t in full["two_point"])
+        a = [s for s in r["sinks"] if s["sink"] == "A.1"][0]
+        self.assertLessEqual(a["drop_mv"], all_in + 1e-9)
+        self.assertGreaterEqual(a["drop_mv"] / a["share"], all_in - 1e-9)
+        self.assertIn("A.1", w["consequence"])
+        self.assertIn("undetermined", w["consequence"])  # 20 mV lies between the bounds
+
+    def test_excluded_pads_are_reported(self):
+        c = copper(
+            pads=[dot("S", (0.0, 0.0)), dot("L", (5.0, 0.0))],
+            tracks=[dict(layer="F.Cu", a=[0.0, 0.0], b=[5.0, 0.0], width_mm=0.25)],
+        )
+        r = solve(c, sources=[0], sinks=[1], current_a=1.0, excluded=["C1.1", "C1.2"])
+        self.assertEqual(r["excluded_no_load"], ["C1.1", "C1.2"])
 
 
 class NumericPythonTest(unittest.TestCase):
@@ -372,6 +477,14 @@ class SpecTest(unittest.TestCase):
         self.assertEqual(ir["sources"], ["FB3:2"])
         self.assertEqual(ir["budget_mohm"], 4.0)
         self.assertFalse(ir["hard"])
+        self.assertNotIn("exclude", ir)
+        self.assertNotIn("neck_mm", part)  # only when declared
+        rules = self.compile(
+            plane_partition=[{"layer": "In2.Cu", "nets": ["V*"], "neck_mm": 0.8}],
+            ir_drop=[{"net": "V2", "sources": ["U2:6"], "exclude": ["R54:1", "R55:1"]}],
+        )
+        self.assertEqual(rules["plane_partition"][0]["neck_mm"], 0.8)
+        self.assertEqual(rules["ir_drop"][0]["exclude"], ["R54:1", "R55:1"])
 
     def test_bad_input_names_its_key(self):
         from pnr.constraints import ConstraintError
@@ -383,6 +496,8 @@ class SpecTest(unittest.TestCase):
             dict(ir_drop=[{"net": "V1", "sources": ["A:1"], "budget_mohm": 1, "budget_mv": 1}]),
             dict(ir_drop=[{"net": "V1", "sources": ["A:1"], "split": "half"}]),
             dict(ir_drop=[{"net": "V1", "sources": ["A1"]}]),
+            dict(ir_drop=[{"net": "V1", "sources": ["A:1"], "sinks": ["B:1"], "exclude": ["C:1"]}]),
+            dict(plane_partition=[{"layer": "In2.Cu", "nets": ["V1"], "neck_mm": -1}]),
         ):
             with self.assertRaises(ConstraintError):
                 self.compile(**sections)

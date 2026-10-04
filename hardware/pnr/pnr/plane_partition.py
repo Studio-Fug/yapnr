@@ -21,21 +21,29 @@ terminals:
    the IPC-2221 internal width for the rail's current, and ``R_sq L / R_share``
    for its IR budget (``L`` the root's path to its farthest terminal, ``R_share``
    the budget less two via barrels, at least a quarter of it; at most 10 mm),
-   keeping ``split_gap_mm`` of copper from every other rail; a tree passes only
-   where a zone of the board's minimum width (the fab track width writeback gives
-   the zones) fills, and foreign copper keeps the larger class clearance of the
-   pair, as KiCad's fill does;
-4. a terminal no path reaches is reported (the pad's drop then fails in the drop
-   planner, as a pad outside its region does);
+   keeping ``split_gap_mm`` of copper from every other rail. ``min_width_mm`` is a
+   hard limit: the tree passes only where a zone that wide fits, except inside the
+   rail's own terminal discs (and within ``neck_mm``, default 0, of them). A
+   terminal no such tree reaches is joined where a zone of the board's minimum
+   width (the fab track width writeback gives the zones) still fills, and reported
+   **necked** with the narrowest copper on its way (step 6). Foreign copper keeps
+   the larger class clearance of the pair, as KiCad's fill does;
+4. a terminal no path reaches at all is reported unreached (the pad's drop then
+   fails in the drop planner, as a pad outside its region does);
 5. the territories grow into the free cells round the board (a breadth-first
    competition), and grown copper is carved back to keep the split gap;
 6. each territory becomes polygons (cell boundaries, holes kept where another rail
-   or free copper sits in them), checked for one connected piece per rail and for
-   the narrowest width along its trunk. ``fill`` takes what is left (a zone of that
-   net over the whole outline at priority 0, under the rails);
-7. with ``core_no_vias`` other nets' vias may not land within the minimum width of
-   a trunk's centre line (the router's net keepouts), so a row of vias cannot cut
-   a rail's neck.
+   or free copper sits in them), checked for one connected piece per rail, for
+   the narrowest width along its trunk, and per terminal for the widest way to the
+   root (the largest, over all paths in the drawn copper, of the narrowest copper
+   along the path, the terminal discs exempt): a terminal behind copper narrower
+   than ``min_width_mm`` is **necked** (reported with the neck's width and place,
+   a failure site of the route, and a warning), as is a trunk narrower than its
+   IPC-2221 width (``ipc_neck``). ``fill`` takes what is left (a zone of that net
+   over the whole outline at priority 0, under the rails);
+7. with ``core_no_vias`` other nets' vias may not land on a trunk's claimed copper
+   (its width ``w`` about the centre line, where the trunk could take it: the
+   router's net keepouts), so a row of vias cannot cut a rail's trunk.
 
 The result is cached by the digest of its inputs. :func:`for_route` gathers the
 inputs on the detailed router's grid; :class:`Partition` gives the regions
@@ -538,11 +546,16 @@ def _partition(
     report = dict(layer=layer, h_mm=h, split_gap_mm=gap, nets={})
     gap_cells = (gap + h) / h
     pad_discs = {}
+    neck_mm = float(entry.get("neck_mm", 0.0) or 0.0)
+    exempt = {}  # a rail's own terminal discs (plus neck_mm): the hard width's exception
     for n in nets:
         pad_discs[n] = g.zeros()
+        own = g.zeros()
         for t, disc in zip(terminals[n], cells_of[n]):
+            own |= disc
             if t.kind == "pad":
                 pad_discs[n] |= disc
+        exempt[n] = dilate(own, neck_mm / h) if neck_mm > 0 and own.any() else own
     wants = {}
     w_ipcs = {}
     for n in nets:
@@ -564,6 +577,7 @@ def _partition(
         min_w=min_w,
         gap_cells=gap_cells,
         fill_min=fill_min_mm,
+        exempt=exempt,
     )
     # 3a. Connect every rail at its minimum width first, in order; a rail left with
     # an unreached terminal is tried first in turn, and the order with the fewest
@@ -617,13 +631,18 @@ def _partition(
             tree_mm=round(tree_mm, 3),
             path_mm=round(path_mm, 3),
             terminals=len(terminals[n]),
-            reached=reached_of[n],
+            reached=reached_of[n]["count"],
             unreached=[
                 dict(name=t.name, at=[round(t.at[0], 4), round(t.at[1], 4)]) for t in missing
             ],
         )
     trunks = spines
     claimed = label.copy()
+    # The trunks' claimed copper at their widths (core_no_vias protects all of it).
+    core_masks = {}
+    for k, n in enumerate(nets):
+        if spines[n].any():
+            core_masks[n] = (claimed == k) & dilate(spines[n], widths[n] / h / 2)
     # 5. Growth: a breadth-first competition into the free cells, then carving.
     grown = _grow(label, free, per_net_block, nets, order)
     # A grown cell keeps gap + h (centre to centre) from another rail's claimed copper
@@ -663,6 +682,47 @@ def _partition(
         if spine.any():
             inside = edt(~mine, 4 * widths[n] / h + 4)
             info["core_min_mm"] = round(float(2 * inside[spine].min() * h - h), 4)
+        # The widest way from each terminal to the root through the drawn copper.
+        ways = _width_check(
+            g, mine, n, terminals[n], cells_of[n], exempt[n], reached_of[n]["root"], min_w, h
+        )
+        narrowest = [row["width_mm"] for row in ways if row["width_mm"] is not None]
+        if narrowest:
+            info["way_min_mm"] = min(narrowest)
+        # One raster cell of tolerance (a strip of 2m cells reads (2m - 1) h wide).
+        necked = [
+            row for row in ways if row["width_mm"] is not None and row["width_mm"] < min_w - h - 1e-9
+        ]
+        # Joined by the tree only at the fill width (the hard width found no way).
+        info["joined_narrow"] = sorted(terminals[n][t].name for t in reached_of[n]["relaxed"])
+        info["necked"] = necked
+        info["reached_at_width"] = info["reached"] - len(necked)
+        warnings = []
+        if necked:
+            worst = min(necked, key=lambda row: (row["width_mm"], row["name"]))
+            warnings.append(
+                "%s: %d terminal(s) (%s) reach the root only through %.2f mm of copper at "
+                "(%.2f, %.2f), under min_width_mm %.2f"
+                % (
+                    n,
+                    len(necked),
+                    ", ".join(row["name"] for row in necked[:6]),
+                    worst["width_mm"],
+                    worst["neck_at"][0],
+                    worst["neck_at"][1],
+                    min_w,
+                )
+            )
+        if w_ipcs[n] and narrowest and info["way_min_mm"] < w_ipcs[n] - h - 1e-9:
+            info["ipc_neck"] = True
+            warnings.append(
+                "%s: a terminal's widest way to the root narrows to %.2f mm, under the %.2f mm "
+                "IPC-2221 internal width for %.3g A"
+                % (n, info["way_min_mm"], w_ipcs[n], currents.get(n) or 0.0)
+            )
+        info["status"] = "unreached" if info["unreached"] else ("necked" if necked else "ok")
+        if warnings:
+            info["warnings"] = warnings
         for c in keep:
             piece = lab == c
             piece = _fill_dead_holes(piece, grown, free, k)
@@ -690,9 +750,14 @@ def _partition(
         regions.insert(0, Region(layer, entry["fill"], 0, None))
     cores = {}
     if entry.get("core_no_vias", True):
+        # The trunk's claimed copper at its full width (not only the minimum width's
+        # core), as cell centres: a via keeps half a cell plus its reach from them.
         for n in nets:
-            jj, ii = np.nonzero(trunks[n])
-            cores[n] = (list(zip((ii + 0.5) * h, (jj + 0.5) * h)), min_w / 2)
+            mask = core_masks.get(n)
+            if mask is None:
+                continue
+            jj, ii = np.nonzero(mask)
+            cores[n] = (list(zip((ii + 0.5) * h, (jj + 0.5) * h)), h / 2)
     report["order"] = [nets[k] for k in order]
     return Partition(layer, regions, report, cores)
 
@@ -728,20 +793,52 @@ def _connect(ctx, label0, order):
         for m, nm in enumerate(nets):
             if m != k:
                 cost[ctx["pad_discs"][nm]] += 4.0
+
+        def fits(w):
+            # A zone of width w centred on the cell fits: half of it from the cell's
+            # centre to the nearest barred cell's edge.
+            return (clear - 0.5) * g.h >= w / 2 - 1e-9
+
         passable = allowed
         if ctx.get("fill_min"):
             # A zone fills no neck narrower than its minimum width: the tree passes
-            # only where that width fits (half of it from the cell's centre to the
-            # nearest barred cell's edge), or on this rail's own lands.
-            passable = allowed & ((clear - 0.5) * g.h >= ctx["fill_min"] / 2 - 1e-9)
+            # only where that width fits, or on this rail's own lands.
+            passable = allowed & fits(ctx["fill_min"])
             passable |= label == k
-        cost = np.where(passable, cost, np.inf)
+        # min_width_mm is hard: outside the rail's own terminal discs (and neck_mm
+        # round them) the tree passes only where a zone that wide fits, and not
+        # through the landing ground of a rail still to come (it would not widen there).
+        need = max(ctx["min_w"], ctx.get("fill_min") or 0.0)
+        room = allowed & ~later
+        wide = (edt(~room, need / g.h / 2 + 2) - 0.5) * g.h >= need / 2 - 1e-9
+        strict = passable & (wide | ctx["exempt"][n]) | (label == k)
         flat_terms = [np.flatnonzero(disc & passable) for disc in ctx["cells_of"][n]]
+        strict_terms = [np.flatnonzero(disc & strict) for disc in ctx["cells_of"][n]]
         root = _root(n, ctx["terminals"][n], flat_terms, ctx["sources"])
         if flat_terms:
-            path, reached, length, reach = _steiner(cost, flat_terms, root)
+            path, reached, length, reach = _steiner(
+                np.where(strict, cost, np.inf), strict_terms, root
+            )
         else:
             path, reached, length, reach = np.zeros(0, dtype=np.int64), [], 0.0, 0.0
+        missing = [t for t in range(len(flat_terms)) if t not in set(reached)]
+        relaxed = []
+        if missing and reached and (passable & ~strict).any():
+            # The terminals the hard width leaves out, joined where a zone of the
+            # minimum fill width still fills: necked (reported, never silent).
+            tree = set(path.tolist())
+            for t in reached:
+                tree.update(int(c) for c in strict_terms[t].tolist())
+            more = [np.array(sorted(tree), dtype=np.int64)] + [flat_terms[t] for t in missing]
+            path2, reached2, length2, _reach2 = _steiner(
+                np.where(passable, cost, np.inf), more, 0
+            )
+            relaxed = [missing[t - 1] for t in reached2 if t > 0]
+            if relaxed:
+                path = np.union1d(path, path2)
+                reached = list(reached) + relaxed
+                length += length2
+                reach = _tree_reach(g, path, flat_terms, root, reached)
         spine = g.zeros()
         spine.ravel()[path] = True
         half = ctx["min_w"] / g.h / 2
@@ -755,11 +852,125 @@ def _connect(ctx, label0, order):
         label[trunk & (label < 0)] = k
         spines[n] = spine
         lengths[n] = (length, reach)
-        reached_of[n] = len(reached)
+        reached_of[n] = dict(count=len(reached), relaxed=sorted(relaxed), root=root)
         unreached[n] = [
             ctx["terminals"][n][t] for t in range(len(ctx["terminals"][n])) if t not in set(reached)
         ]
     return label, spines, unreached, lengths, reached_of
+
+
+def _tree_reach(g, path, flat_terms, root, reached):
+    """The longest way (cells) from the root's cells along the tree (``path`` plus the
+    reached terminals' cells, 8-neighbour steps) to a reached terminal's cell."""
+    cells = set(path.tolist())
+    for t in reached:
+        cells.update(int(c) for c in flat_terms[t].tolist())
+    nx = g.nx
+    start = [int(c) for c in flat_terms[root].tolist() if int(c) in cells] if flat_terms else []
+    dist = {c: 0.0 for c in start}
+    heap = [(0.0, c) for c in start]
+    heapq.heapify(heap)
+    sq2 = math.sqrt(2.0)
+    while heap:
+        d, c = heapq.heappop(heap)
+        if d > dist.get(c, math.inf):
+            continue
+        j, i = divmod(c, nx)
+        for di in (-1, 0, 1):
+            for dj in (-1, 0, 1):
+                if not (di or dj):
+                    continue
+                nb = (j + dj) * nx + (i + di)
+                if nb not in cells or not (0 <= i + di < nx):
+                    continue
+                nd = d + (sq2 if di and dj else 1.0)
+                if nd < dist.get(nb, math.inf):
+                    dist[nb] = nd
+                    heapq.heappush(heap, (nd, nb))
+    return max(
+        (dist.get(int(c), 0.0) for t in reached for c in flat_terms[t].tolist()), default=0.0
+    )
+
+
+def _widest(mine, width, sources, nx):
+    """Widest-path search over the 4-connected cells of ``mine``: for every cell, the
+    largest (over paths from ``sources``) of the narrowest ``width`` along the path,
+    the shortest such path on a tie, and the predecessor map to walk it back.
+    Returns (best, prev) as flat arrays (best -1 off the reached copper)."""
+    flat = mine.ravel()
+    wf = width.ravel()
+    ny = mine.shape[0]
+    best = np.full(flat.size, -1.0)
+    steps = np.full(flat.size, np.iinfo(np.int64).max, dtype=np.int64)
+    prev = np.full(flat.size, -1, dtype=np.int64)
+    heap = []
+    for c in sources:
+        c = int(c)
+        if flat[c] and wf[c] > best[c]:
+            best[c] = wf[c]
+            steps[c] = 0
+            heap.append((-wf[c], 0, c))
+    heapq.heapify(heap)
+    while heap:
+        nb_, d, c = heapq.heappop(heap)
+        b = -nb_
+        if b < best[c] or (b == best[c] and d > steps[c]):
+            continue
+        j, i = divmod(c, nx)
+        for nb, ok in ((c - 1, i > 0), (c + 1, i < nx - 1), (c - nx, j > 0), (c + nx, j < ny - 1)):
+            if not ok or not flat[nb]:
+                continue
+            v = min(b, wf[nb])
+            if v > best[nb] or (v == best[nb] and d + 1 < steps[nb]):
+                best[nb] = v
+                steps[nb] = d + 1
+                prev[nb] = c
+                heapq.heappush(heap, (-v, d + 1, nb))
+    return best, prev
+
+
+def _width_check(g, mine, n, terms, cells_of, exempt, root, min_w, h):
+    """Per terminal of rail ``n``: the widest way through its drawn copper ``mine`` to
+    the root's cells (the narrowest copper on it; own terminal discs exempt), and
+    where that neck is. Returns ``[{name, width_mm, at, neck_at}]`` for every
+    terminal joined to the root (inf: no copper narrower than the disc exemption)."""
+    if not mine.any() or root is None:
+        return []
+    inside = edt(~mine, 4 * min_w / h + 4)
+    width = np.where(mine, 2 * inside * h - h, 0.0)
+    width = np.where(exempt & mine, np.inf, width)
+    sources = np.flatnonzero(cells_of[root] & mine)
+    if not len(sources):
+        return []
+    best, prev = _widest(mine, width, sources, g.nx)
+    wf = width.ravel()
+    out = []
+    for t, term in enumerate(terms):
+        if t == root:
+            continue
+        cells = np.flatnonzero(cells_of[t] & mine)
+        if not len(cells):
+            continue
+        k = int(cells[np.argmax(best[cells])])
+        b = float(best[k])
+        if b < 0:
+            continue  # not joined here (the connectivity check reports it)
+        neck, c, steps = k, k, 0
+        while c >= 0 and steps < mine.size:
+            if wf[c] < wf[neck]:
+                neck = c
+            c = int(prev[c])
+            steps += 1
+        j, i = divmod(neck, g.nx)
+        out.append(
+            dict(
+                name=term.name,
+                at=[round(term.at[0], 4), round(term.at[1], 4)],
+                width_mm=round(b, 4) if math.isfinite(b) else None,
+                neck_at=[round((i + 0.5) * h, 4), round((j + 0.5) * h, 4)],
+            )
+        )
+    return out
 
 
 def _cells(g, flat):
@@ -990,28 +1201,41 @@ def for_route(grid, graph, rules, stack, width, height, *, fixed_copper=None, fa
         if skipped:
             part.report["not_plane_nets"] = skipped
         if entry.get("core_no_vias", True):
-            _core_keepouts(grid, part, grid.via_radius + clearance)
+            # Other nets' surface pads keep their drop sites (within the terminal reach):
+            # a maze via may not cut a trunk, a pad's own drop may land beside it.
+            spare = [
+                (r.cx, r.cy)
+                for comp in graph.components
+                for (_name, net, r), pad in zip(pad_rects(comp), comp.pads)
+                if net and net not in terms and not pad.through_hole
+            ]
+            _core_keepouts(grid, part, grid.via_radius + clearance, spare, reach)
         out.append(part)
     return out
 
 
-def _core_keepouts(grid, part, via_reach):
+def _core_keepouts(grid, part, via_reach, spare=(), spare_reach=0.0):
     """Other nets' vias stay ``via_reach`` (via radius + clearance) beyond each trunk's
-    minimum-width core (the router's net keepouts, vias only)."""
+    claimed copper (the router's net keepouts, vias only), except within
+    ``spare_reach`` of a ``spare`` point (another net's pad: its drop site)."""
     if not part.cores:
         return
     xs = (np.arange(grid.nx) + 0.5) * grid.pitch
     ys = (np.arange(grid.ny) + 0.5) * grid.pitch
+    h = part.report["h_mm"]
+    g = _Grid(grid.width, grid.height, h)
+    keep = g.zeros()
+    for p in spare:
+        keep |= g.disc(p, spare_reach)
     for net, (points, half) in sorted(part.cores.items()):
         if not points:
             continue
-        h = part.report["h_mm"]
-        g = _Grid(grid.width, grid.height, h)
         spine = g.zeros()
         for x, y in points:
             i, j = g.cell((x, y))
             spine[j, i] = True
         near = edt(spine, (half + via_reach) / h + 1) * h <= half + via_reach
+        near &= ~keep
         ii = np.minimum((xs / h).astype(int), g.nx - 1)
         jj = np.minimum((ys / h).astype(int), g.ny - 1)
         cells = near[np.ix_(jj, ii)]

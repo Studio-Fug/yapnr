@@ -7,6 +7,7 @@ switch-node pair clearances, a QSPI length limit, the hole-to-edge rule written 
 lists the rest; route_board applies the effects.
 """
 
+import math
 import unittest
 
 from pnr.constraints import compile_constraints, compile_routing_rules
@@ -244,6 +245,65 @@ class RouteTest(unittest.TestCase):
         self.assertEqual(length["max_mm"], 12.0)
         self.assertEqual(length["ok"], length["length_mm"] <= 12.0)
         self.assertEqual(report["audit"]["count"], 0)
+
+
+def dip_board():
+    """A 20 x 10 mm two-layer board: X (class XTAL, no vias) from (5, 8) to (15, 8)
+    must dip under a top wall (no net, y 5.5-10) to about y 5.3; S (class SW) from
+    (6, 3) to (14, 3) runs straight 2.3 mm under that dip, far from X's pads."""
+    parts = [
+        _part("X1", 5.0, 8.0, "X"),
+        _part("X2", 15.0, 8.0, "X"),
+        _part("W1", 10.0, 7.75, "", 0.6, 4.5),
+        _part("S1", 6.0, 3.0, "S"),
+        _part("S2", 14.0, 3.0, "S"),
+    ]
+    nets = [
+        Net(name="X", code=1, pins=[("X1", "1"), ("X2", "1")]),
+        Net(name="S", code=2, pins=[("S1", "1"), ("S2", "1")]),
+    ]
+    return BoardGraph(name="dip", components=parts, nets=nets)
+
+
+class RoutedPairTest(unittest.TestCase):
+    """A pair rule above the raise limit between two routed nets: dru_routing implies
+    the repair, which finds S's route too close to X's and routes S again around it."""
+
+    @classmethod
+    def setUpClass(cls):
+        graph = dip_board()
+        doc = {
+            "board": {"outline": {"w": 20, "h": 10}, "dru_routing": True},
+            "net_class": {"XTAL": {"nets": ["X"]}, "SW": {"nets": ["S"]}},
+        }
+        compiled = compile_constraints(doc, graph.refs)
+        rules = compile_routing_rules(compiled, ["X", "S"])
+        rules["fab"] = dict(FAB)
+        attach_dru(rules, BOARD_DRU, ["X", "S"])
+        cls.board = route_board(graph, compiled, rules, pitch=0.25)
+
+    def test_the_repair_parts_the_routed_pair(self):
+        report = self.board.escape_diagnostics["class_clearance"]
+        self.assertEqual(report["mode"], "repair")
+        self.assertEqual(report["implied_by"], "dru_routing")
+        pairs = report["pair_rules"]
+        self.assertEqual(pairs["pair_count"], 1)
+        self.assertEqual(pairs["ripped"], ["S"])
+        self.assertEqual(self.board.result.unrouted, [])
+        self.assertEqual(self.board.escape_diagnostics["dru"]["audit"]["count"], 0)
+
+    def test_s_keeps_the_clearance_from_x_on_its_layer(self):
+        from pnr.writeback import _segment_distance_sq
+
+        x = [t for t in self.board.tracks if t[0] == "X"]
+        s = [t for t in self.board.tracks if t[0] == "S"]
+        self.assertTrue(x and s)
+        for _n, la, a, b, w in s:
+            for _m, lb, c, d, v in x:
+                if la != lb:
+                    continue
+                gap = math.sqrt(_segment_distance_sq(a, b, c, d)) - w / 2 - v / 2
+                self.assertGreaterEqual(gap, 3.0 - 1e-6)
 
 
 if __name__ == "__main__":

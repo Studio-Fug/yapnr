@@ -1,7 +1,12 @@
 """A plane partition drawn and filled by KiCad (KiCad Python only: python3 -m unittest
-tests.test_plane_partition_kicad)."""
+tests.test_plane_partition_kicad). Without numpy in KiCad's Python (the container
+image's, the ladder lane) the partition and the IR solves run in PNR_PYTHON."""
 
 import importlib.util
+import json
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -75,20 +80,67 @@ def board():
     return b, pads, v
 
 
+_PARTITION = """
+import json, sys
+from pnr.plane_partition import _CACHE, Terminal, partition
+d = json.load(sys.stdin)
+terms = {n: [Terminal(**t) for t in ts] for n, ts in d["terms"].items()}
+blocked = [(tuple(c), r) for c, r in d["blocked"]]
+_CACHE.clear()
+part = partition(d["entry"], width=d["w"], height=d["h"], terminals=terms, blocked=blocked)
+json.dump(part.rows(), sys.stdout)
+"""
+
+
+def partition_rows(entry, pads, blocked):
+    """The partition's region rows (pnr.plane_partition, numpy): here, or in the numeric
+    Python PNR_PYTHON names when this one has no numpy."""
+    terms = {
+        net: [dict(name="%s%d.1" % (net, n), kind="via", at=list(p), radius=0.2)
+              for n, p in enumerate(points)]
+        for net, points in pads.items()
+    }
+    payload = dict(entry=entry, terms=terms, blocked=[[list(c), r] for c, r in blocked], w=W, h=H)
+    if importlib.util.find_spec("numpy") is not None:
+        from pnr.plane_partition import _CACHE, Terminal, partition
+
+        _CACHE.clear()
+        part = partition(
+            entry,
+            width=W,
+            height=H,
+            terminals={n: [Terminal(**t) for t in ts] for n, ts in terms.items()},
+            blocked=blocked,
+        )
+        return part.rows()
+    python = os.environ.get("PNR_PYTHON")
+    if not python:
+        raise unittest.SkipTest("no numpy here and no PNR_PYTHON")
+    root = str(Path(__file__).resolve().parents[1])  # hardware/pnr (the pnr package)
+    paths = [root] + [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join(paths))
+    out = subprocess.run(
+        [python, "-c", _PARTITION],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=600,
+    )
+    if out.returncode:
+        raise AssertionError("the partition in PNR_PYTHON failed:\n" + out.stderr[-3000:])
+    return json.loads(out.stdout)
+
+
 @unittest.skipUnless(NATIVE, "requires KiCad Python")
 class DrawTest(unittest.TestCase):
     def test_zones_fill_apart_and_the_rails_are_whole(self):
         import pcbnew as k
 
         from pnr.ir_extract import report
-        from pnr.plane_partition import _CACHE, Terminal, partition
         from pnr.writeback import draw_plane_regions
 
         b, pads, v = board()
-        terms = {
-            net: [Terminal("%s%d.1" % (net, n), "via", p, 0.2) for n, p in enumerate(points)]
-            for net, points in pads.items()
-        }
         blocked = [((x, 6.0), 0.3) for x in (6.0, 8.0, 12.0, 14.0)]
         entry = dict(
             layer="In2.Cu",
@@ -101,15 +153,14 @@ class DrawTest(unittest.TestCase):
             terminal_reach_mm=0.8,
             h_mm=0.1,
         )
-        _CACHE.clear()
-        part = partition(entry, width=W, height=H, terminals=terms, blocked=blocked)
+        rows = partition_rows(entry, pads, blocked)
         rules = dict(fab=dict(clearance_mm=0.1, track_width_mm=0.1))
         full = [v(0, 0), v(W, 0), v(W, H), v(0, H)]
-        made = draw_plane_regions(b, part.rows(), rules, lambda p: v(*p), full)
+        made = draw_plane_regions(b, rows, rules, lambda p: v(*p), full)
         self.assertEqual(sorted(z.GetNetname() for z in made), ["A", "B", "GND"])
         # Drawn again (a placed board whose writeback drew the rails' zones, then the
         # routed append): the rails' single-layer zones on the layer are replaced.
-        made = draw_plane_regions(b, part.rows(), rules, lambda p: v(*p), full)
+        made = draw_plane_regions(b, rows, rules, lambda p: v(*p), full)
         lid = b.GetLayerID("In2.Cu")
         rails = [z for z in b.Zones() if z.IsOnLayer(lid) and z.GetNetname() in ("A", "B")]
         self.assertEqual(len(rails), len([z for z in made if z.GetNetname() in ("A", "B")]))
@@ -144,11 +195,8 @@ class CheckerTest(unittest.TestCase):
     drawn partition: rail_zones, ir_drop and unconnected."""
 
     def test_supply_checks(self):
-        import sys
-
         import pcbnew as k
 
-        from pnr.plane_partition import _CACHE, Terminal, partition
         from pnr.writeback import draw_plane_regions
 
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "regression"))
@@ -160,11 +208,7 @@ class CheckerTest(unittest.TestCase):
         for t in list(b.GetTracks()):
             p = t.GetPosition()
             if t.GetClass() == "PCB_VIA" and (p.x, p.y) == (v(*cut).x, v(*cut).y):
-                b.Remove(t)
-        terms = {
-            net: [Terminal("%s%d.1" % (net, n), "via", p, 0.2) for n, p in enumerate(points)]
-            for net, points in pads.items()
-        }
+                b.Delete(t)
         entry = dict(
             layer="In2.Cu",
             nets=["A", "B"],
@@ -176,11 +220,10 @@ class CheckerTest(unittest.TestCase):
             terminal_reach_mm=0.8,
             h_mm=0.1,
         )
-        _CACHE.clear()
-        part = partition(entry, width=W, height=H, terminals=terms, blocked=[])
+        rows = partition_rows(entry, pads, [])
         rules = dict(fab=dict(clearance_mm=0.1, track_width_mm=0.1))
         full = [v(0, 0), v(W, 0), v(W, H), v(0, H)]
-        draw_plane_regions(b, part.rows(), rules, lambda p: v(*p), full)
+        draw_plane_regions(b, rows, rules, lambda p: v(*p), full)
         k.ZONE_FILLER(b).Fill(b.Zones())
         with tempfile.TemporaryDirectory() as tmp:
             path = str(Path(tmp) / "checks.kicad_pcb")

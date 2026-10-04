@@ -3,8 +3,14 @@
 The rail's copper (:func:`pnr.ir_extract.extract`, or any dict of the same form) is
 
 * **zones and pads**: rasterized per copper layer at ``h`` (default 0.1 mm); a cell
-  is copper when its centre is. Neighbouring copper cells of one layer are joined by
-  the conductance of one square, ``t / rho``;
+  is a copper node when its centre is copper. Each cell's copper coverage (the
+  fraction of it the shapes cover, sampled ``subsample`` x ``subsample`` times) scales
+  its conductance: a node of coverage ``c`` is a square of width ``c h``, the
+  coverage of a partly covered cell that is not a node goes to its neighbouring
+  nodes, and two nodes are joined by their two half cells in series,
+  ``t / rho * 2 c_a c_b / (c_a + c_b)`` (one square, ``t / rho``, when both are full).
+  A strip whose edges fall between cell centres keeps its width to a fraction of a
+  cell;
 * **tracks and arcs** (arcs as chords): exact one-dimensional resistors
   ``rho L / (w t)``, joined to the copper cell under each end point, to other track
   end points, and to the interior of another track an end point lies on (a T join);
@@ -14,18 +20,25 @@ The rail's copper (:func:`pnr.ir_extract.extract`, or any dict of the same form)
 
 The ``sources`` pads are held at 0 V; each sink draws its share of ``current_a``
 spread over its pad cells. The network is solved by Jacobi-preconditioned conjugate
-gradients to a relative residual of 1e-10 (``tol``); a union-find runs first, so a
-sink that no copper joins to a source is reported **open**, never as a number.
+gradients to a relative residual of 1e-10 (``tol``), judged on the true residual
+``b - A x`` when the iteration stops (CG restarts from there while it is above the
+tolerance and iterations remain); a union-find runs first, so a sink that no copper
+joins to a source is reported **open**, never as a number.
 
 :func:`solve` returns the report of one rail: the drop at each sink, the effective
 resistance (worst drop / current), the two-point resistance per sink with the other
 sinks open (comparable to a path measure), the I^2 R loss, the largest current density
 per layer (A per mm of width) with its location and a neck flag against IPC-2221, and
 pass or fail against ``budget_mohm`` or ``budget_mv``. Warnings take the quantified
-assumption form (statement, consequence). Copper only: the DC resistance of parts in
-the path (ferrites, sense resistors) is not modelled.
+assumption form (statement, consequence); the split among several sinks is always
+one: with ``two_point`` its worst case is the all-in drop at the worst sink, without
+it the bounds superposition gives (a sink drawing all the current drops at least its
+drop at the split and at most that over its share). Copper only: the DC resistance
+of parts in the path (ferrites, sense resistors) is not modelled.
 
-numpy only; no KiCad. Units: mm, A, V, ohm (reports in mV and mOhm).
+numpy only (the copper formulas, :func:`resistivity` and :func:`barrel_ohm`, import
+without it, as KiCad's Python in the container image has none); no KiCad. Units: mm,
+A, V, ohm (reports in mV and mOhm).
 """
 
 from __future__ import annotations
@@ -36,12 +49,16 @@ import struct
 import zlib
 from typing import Dict, List, Optional, Sequence, Tuple
 
-import numpy as np
+try:
+    import numpy as np
+except ImportError:  # KiCad's Python without numpy: the formulas only, no solve
+    np = None
 
 RHO_20C = 1.72e-5  # copper resistivity at 20 C, ohm mm
 ALPHA = 0.00393  # its temperature coefficient, 1/K
 PLATING_MM = 0.020  # via barrel plating (IPC-6012 class 2 average)
 DEFAULT_H = 0.1
+SUBSAMPLE = 4  # coverage samples per cell side
 
 
 def resistivity(temperature_c: float = 25.0) -> float:
@@ -67,6 +84,14 @@ class _Raster:
         self.y0 = math.floor(y0 / h) * h - h
         self.nx = int(math.ceil((x1 - self.x0) / h)) + 2
         self.ny = int(math.ceil((y1 - self.y0) / h)) + 2
+
+    def fine(self, s):
+        """The raster ``s`` times finer, its cells nested in this one's."""
+        out = _Raster.__new__(_Raster)
+        out.h = self.h / s
+        out.x0, out.y0 = self.x0, self.y0
+        out.nx, out.ny = self.nx * s, self.ny * s
+        return out
 
     def centres(self):
         xs = self.x0 + (np.arange(self.nx) + 0.5) * self.h
@@ -257,67 +282,133 @@ def _pcg(i, j, g, diag, b, tol, max_iter):
 
     inv = 1.0 / diag
     x = np.zeros(n)
-    r = b.copy()
     norm = math.sqrt(dot(b, b)) or 1.0
-    z = inv * r
-    p = z.copy()
-    rz = dot(r, z)
     it = 0
-    res = math.sqrt(dot(r, r)) / norm
-    while res > tol and it < max_iter:
-        q = matvec(p)
-        alpha = rz / dot(p, q)
-        x += alpha * p
-        r -= alpha * q
-        it += 1
-        if it % 50 == 0:  # refresh the true residual against drift
-            r = b - matvec(x)
+    while True:
+        # (Re)start from x on the true residual; the running residual drifts.
+        r = b - matvec(x)
         res = math.sqrt(dot(r, r)) / norm
+        if res <= tol or it >= max_iter:
+            return x, res, it  # judged on the true residual b - A x
         z = inv * r
-        rz_new = dot(r, z)
-        p = z + (rz_new / rz) * p
-        rz = rz_new
-    return x, res, it
+        p = z.copy()
+        rz = dot(r, z)
+        start = it
+        while res > tol and it < max_iter:
+            q = matvec(p)
+            alpha = rz / dot(p, q)
+            x += alpha * p
+            r -= alpha * q
+            it += 1
+            if it % 50 == 0:  # refresh the true residual against drift
+                r = b - matvec(x)
+            res = math.sqrt(dot(r, r)) / norm
+            z = inv * r
+            rz_new = dot(r, z)
+            p = z + (rz_new / rz) * p
+            rz = rz_new
+        if it == start:
+            return x, res, it
 
 
 def _key(p):
     return (round(p[0], 6), round(p[1], 6))
 
 
+def _shift(a, di, dj):
+    """``b[j, i] = a[j + dj, i + di]`` (zero outside)."""
+    out = np.zeros_like(a)
+    ny, nx = a.shape
+    out[max(0, -dj) : ny - max(0, dj), max(0, -di) : nx - max(0, di)] = a[
+        max(0, dj) : ny - max(0, -dj), max(0, di) : nx - max(0, -di)
+    ]
+    return out
+
+
+def _coverage(fine, mask, s):
+    """Per copper cell of ``mask``, its share of the copper ``fine`` (``s`` x ``s``
+    samples per cell) holds: its own coverage plus an equal part of each partly
+    covered neighbour that is no node (4-neighbours). Zero off the nodes; at least
+    half a sample on a node (a pad smaller than a sample is still copper)."""
+    ny, nx = mask.shape
+    cov = fine.reshape(ny, s, nx, s).mean(axis=(1, 3))
+    if s == 1:
+        return np.where(mask, 1.0, 0.0)
+    lost = np.where(mask, 0.0, cov)
+    steps = ((1, 0), (-1, 0), (0, 1), (0, -1))
+    count = sum(_shift(mask.astype(float), di, dj) for di, dj in steps)
+    share = np.where(count > 0, lost / np.maximum(count, 1.0), 0.0)
+    eff = np.where(mask, np.maximum(cov, 0.5 / (s * s)), 0.0)
+    for di, dj in steps:
+        eff += _shift(share, di, dj) * mask
+    return eff
+
+
 def build(
-    copper: Dict, h: float = DEFAULT_H, temperature_c: float = 25.0, plating_mm: float = PLATING_MM
+    copper: Dict,
+    h: float = DEFAULT_H,
+    temperature_c: float = 25.0,
+    plating_mm: float = PLATING_MM,
+    subsample: int = SUBSAMPLE,
 ):
-    """The rail's resistive network: a dict with the raster, node maps and edges."""
+    """The rail's resistive network: a dict with the raster, node maps and edges.
+    ``subsample``: coverage samples per cell side (1: a node cell is a full square)."""
+    if np is None:
+        raise RuntimeError("pnr.ir_drop: the network needs numpy (pnr.ir_extract.solve_jobs)")
     rho = resistivity(temperature_c)
     layers = [x["name"] for x in copper["layers"]]
     thick = {x["name"]: float(x["copper_mm"]) for x in copper["layers"]}
     zpos = {x["name"]: float(x["z_mm"]) for x in copper["layers"]}
     raster = _Raster(_bounds(copper), h)
+    s = max(1, int(subsample))
+    fine = raster.fine(s) if s > 1 else None
     masks = {la: np.zeros((raster.ny, raster.nx), dtype=bool) for la in layers}
+    fines = {la: None for la in layers}
+
+    def cover(la, shape):
+        if fine is None:
+            return
+        if fines[la] is None:
+            fines[la] = np.zeros((fine.ny, fine.nx), dtype=bool)
+        fines[la] |= shape
+
     for z in copper.get("zones", []):
         rings = []
         for poly in z["polygons"]:
             rings.append(poly["outline"])
             rings.extend(poly.get("holes", []))
         masks[z["layer"]] |= raster.polygon(rings)
+        if fine is not None:
+            cover(z["layer"], fine.polygon(rings))
     pad_cells = []
     for p in copper.get("pads", []):
-        shape = raster.polygon([p["polygon"]] + list(p.get("holes") or []))
+        rings = [p["polygon"]] + list(p.get("holes") or [])
+        shape = raster.polygon(rings)
         if not shape.any():
             shape = raster.disc(p["at"], 0.0)
+        fine_shape = fine.polygon(rings) if fine is not None else None
         cells = {}
         for la in p["layers"]:
             if la in masks:
                 masks[la] |= shape
                 cells[la] = shape
+                cover(la, fine_shape)
         pad_cells.append(cells)
     via_lands = []
     for v in copper.get("vias", []):
         span = layers[layers.index(v["top"]) : layers.index(v["bottom"]) + 1]
         land = raster.disc(v["at"], v["diameter_mm"] / 2)
+        fine_land = fine.disc(v["at"], v["diameter_mm"] / 2) if fine is not None else None
         for la in span:
             masks[la] |= land
+            cover(la, fine_land)
         via_lands.append((span, land))
+    weight = {}
+    for la in layers:
+        if fine is None or fines[la] is None:
+            weight[la] = np.where(masks[la], 1.0, 0.0)
+        else:
+            weight[la] = _coverage(fines[la], masks[la], s)
     net = _Network()
     node = {}
     for la in layers:
@@ -339,10 +430,15 @@ def build(
     for la in layers:
         ids = node[la]
         g = thick[la] / rho
+        c = weight[la]
+
+        def series(a, b):  # two half cells of widths a h and b h in series
+            return g * 2.0 * a * b / np.maximum(a + b, 1e-300)
+
         right = (ids[:, :-1] >= 0) & (ids[:, 1:] >= 0)
-        net.add(ids[:, :-1][right], ids[:, 1:][right], g, 0)
+        net.add(ids[:, :-1][right], ids[:, 1:][right], series(c[:, :-1], c[:, 1:])[right], 0)
         up = (ids[:-1, :] >= 0) & (ids[1:, :] >= 0)
-        net.add(ids[:-1, :][up], ids[1:, :][up], g, 0)
+        net.add(ids[:-1, :][up], ids[1:, :][up], series(c[:-1, :], c[1:, :])[up], 0)
 
     def cell_node(la, p):
         i, j = raster.cell(p)
@@ -533,11 +629,16 @@ def solve(
     two_point: bool = True,
     heatmap: Optional[str] = None,
     copper_oz_delta_t_c: float = 10.0,
+    subsample: int = SUBSAMPLE,
+    excluded: Sequence[str] = (),
 ) -> Dict:
     """The IR-drop report of one rail. ``sources``/``sinks`` index ``copper["pads"]``;
     ``split`` is ``equal`` (each sink draws I/n), ``area`` (by pad area) or
-    ``weights`` (explicit, normalized)."""
-    model = build(copper, h=h, temperature_c=temperature_c, plating_mm=plating_mm)
+    ``weights`` (explicit, normalized). ``excluded``: pad names left out of the sinks
+    (no DC load), reported as such."""
+    model = build(
+        copper, h=h, temperature_c=temperature_c, plating_mm=plating_mm, subsample=subsample
+    )
     pads = copper["pads"]
     held = np.unique(np.concatenate([_pad_nodes(model, k) for k in sources]))
     if not len(held):
@@ -595,6 +696,10 @@ def solve(
         opens=opens,
         loss_w=round(loss, 9),
     )
+    if subsample != SUBSAMPLE:
+        report["subsample"] = subsample
+    if excluded:
+        report["excluded_no_load"] = list(excluded)
     if not opens:
         report["worst_drop_mv"] = round(worst * 1e3, 6)
         report["r_eff_mohm"] = round(worst / current_a * 1e3, 6) if current_a else None
@@ -725,6 +830,7 @@ def _warnings(report, budget_mohm, budget_mv) -> List[Dict]:
         )
         return out
     tp = report.get("two_point") or []
+    sinks = [r for r in report.get("sinks") or () if "drop_mv" in r]
     if len(tp) > 1:
         worst = max(tp, key=lambda r: r["r_mohm"])
         all_in = worst["r_mohm"] * report["current_a"]
@@ -733,6 +839,33 @@ def _warnings(report, budget_mohm, budget_mv) -> List[Dict]:
                 statement="the load current splits %s among %d sinks" % (report["split"], len(tp)),
                 consequence="if all %.3g A flows into %s, its drop is %.3f mV (%.3f mOhm "
                 "two-point)" % (report["current_a"], worst["sink"], all_in, worst["r_mohm"]),
+            )
+        )
+    elif len(sinks) > 1:
+        # No two-point solves: superposition bounds the all-in drop at a sink k
+        # (0 <= R_kj <= R_kk): v_k <= R_kk I <= v_k / share_k.
+        def upper(r):
+            return r["drop_mv"] / r["share"] if r["share"] > 0 else math.inf
+
+        worst = max(sinks, key=lambda r: (upper(r), r["sink"]))
+        lo, hi = worst["drop_mv"], upper(worst)
+        budget = budget_mv
+        if budget is None and budget_mohm is not None:
+            budget = budget_mohm * report["current_a"]
+        verdict = ""
+        if budget is not None:
+            if lo > budget + 1e-12:
+                verdict = ": over the %.3f mV budget even at the lower bound" % budget
+            elif hi > budget + 1e-12:
+                verdict = ": against the %.3f mV budget, pass or fail is undetermined" % budget
+            else:
+                verdict = ": within the %.3f mV budget either way" % budget
+        out.append(
+            dict(
+                statement="the load current splits %s among %d sinks (%s draws %.3g of it); "
+                "no two-point solve" % (report["split"], len(sinks), worst["sink"], worst["share"]),
+                consequence="if all %.3g A flows into %s, its drop lies between %.3f and %.3f mV%s"
+                % (report["current_a"], worst["sink"], lo, hi, verdict),
             )
         )
     for la, d in sorted((report.get("density") or {}).items()):

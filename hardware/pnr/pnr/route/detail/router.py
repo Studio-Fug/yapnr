@@ -24,7 +24,7 @@ from pnr.graph import BoardGraph, footprint_point
 
 from ...place.geometry import Rect, outline_size, pad_rects
 from .escape import plan_escapes, trapped_access_sites
-from .grid import DEFAULT_SIGNAL_LAYERS, RouteGrid
+from .grid import DEFAULT_SIGNAL_LAYERS, RouteGrid, far_twins, pad_layer
 from .maze import RouteResult, route
 
 # Full copper stack for a 4-layer board, outer→inner→outer.
@@ -97,9 +97,10 @@ def _late_copper(
     pads = sorted(
         "%s.%s" % (comp.ref, name)
         for comp in graph.components
-        for (name, net, r), pad in zip(pad_rects(comp), comp.pads)
+        for k, ((name, net, r), pad) in enumerate(zip(pad_rects(comp), comp.pads))
         if net in planes
         and not pad.through_hole
+        and k not in far_twins(comp)  # its near land holds the drop
         and (net, round(r.cx, 6), round(r.cy, 6)) not in planned
     )
     parts = []
@@ -448,10 +449,10 @@ def block_ports(grid: RouteGrid, graph: BoardGraph, copper: Optional[dict], skip
         return {}
     pads = {}
     for comp in graph.components:
-        side = grid.layers[grid.side_layer(comp.side)]
         for (_name, net, r), pad in zip(pad_rects(comp), comp.pads):
             if not net:
                 continue
+            side = grid.layers[pad_layer(grid, comp, pad)]  # a far-side land's own layer
             for layer in grid.layers if pad.through_hole else (side,):
                 pads.setdefault(net, []).append((layer, r.left, r.bottom, r.right, r.top))
     out = {}
@@ -918,10 +919,16 @@ def route_board(
     # A small pair clearance raises one side's clearance before the halos are sized.
     dru = (rules or {}).get("dru") if (rules or {}).get("dru_routing") else None
     raised = {}
+    implied_repair = False
     if dru:
         from .dru_apply import raised_clearances
 
         raised = raised_clearances(dru)
+        if not class_mode:
+            # The rules' clearances are judged exactly after the route and their
+            # offenders routed again (class_check.repair): dru_routing implies it.
+            class_mode = "repair"
+            implied_repair = True
     class_of = _net_clearances(rules) if class_maze else {}
     for n, value in raised.items():
         if class_maze:
@@ -1257,8 +1264,24 @@ def route_board(
             _fanout_via_sizes(fanouts),
             classes=_net_clearances(rules),
         )
+        pair_report = None
+        if dru and dru.get("pair_clearances"):
+            # Routed nets of a pair rule above the raise limit (SW-XTAL 8 mm): the
+            # fewest that part every close pair are barred from the other side's routed
+            # copper and routed again by the repair (dru_apply.pair_route_offenders).
+            from .dru_apply import pair_route_offenders
+
+            pair_rows, pair_report = pair_route_offenders(
+                grid, [net.name for net in graph.nets], result, net_width, dru
+            )
+            for net, rows in sorted(pair_rows.items()):
+                offenders.setdefault(net, []).extend(rows)
         class_report = repair(grid, net_access, result, via_cost=3.0 / grid.pitch, also=offenders)
         class_report["mode"] = class_mode
+        if implied_repair:
+            class_report["implied_by"] = "dru_routing"
+        if pair_report is not None:
+            class_report["pair_rules"] = pair_report
         class_report["halos"] = {
             "nets": len(class_of),
             "via_keepouts": dict(sorted(via_keepouts.items())),
@@ -1315,10 +1338,13 @@ def route_board(
         for p in partitions:
             for net, info in sorted(p.report["nets"].items()):
                 sites = [tuple(t["at"]) for t in info["unreached"]]
+                # A terminal behind copper narrower than min_width_mm: its neck.
+                sites += [tuple(t["neck_at"]) for t in info.get("necked") or ()]
                 if sites:  # a terminal no territory reaches is a failure site
                     board.failure_sites[net] = sorted(
                         set(board.failure_sites.get(net, [])) | set(sites)
                     )
+                _warn_once(info.get("warnings") or (), "pnr.plane_partition")
     if os.environ.get("PNR_LOCAL_PRESSURE") == "1":
         from .pressure import localized_pressure
 
@@ -1443,7 +1469,7 @@ def route_board(
             board.escape_diagnostics["class_clearance"] = class_report
             for line in summarize(class_report):
                 sys.stderr.write(line + "\n")
-        else:
+        if dru_report is not None:
             dru_report["audit"] = audit
     if route_trace is not None:
         route_trace.end(board)

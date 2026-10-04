@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pnr.place.geometry import pad_rects
 from pnr.writeback import _segment_distance_sq
 
-from .grid import Cell
+from .grid import Cell, far_twins, pad_layer
 from .joint_access import select_joint
 from .keyhole import elbows, length
 
@@ -729,10 +729,14 @@ def plan_joint_escapes(
         if plane_access is not None and plane_access.constrained(net):
             site_tests[net] = lambda q, net=net: plane_access.site_ok(net, q)
     for comp in sorted(graph.components, key=lambda c: c.ref):
-        side = grid.side_layer(comp.side)
+        twins = far_twins(comp)
         for index, ((name, net, rect), pad) in enumerate(zip(pad_rects(comp), comp.pads)):
             if skip_pads and (comp.ref, name) in skip_pads:
                 continue
+            if index in twins:
+                continue  # a far-side land beside a near one: that one is the access
+            # The pad's own layer: a far-side land escapes on the opposite outer layer.
+            side = pad_layer(grid, comp, pad)
             if net in drop_widths and net not in net_names:
                 if pad.through_hole:
                     continue  # the plated barrel already reaches every plane

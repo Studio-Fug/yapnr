@@ -136,6 +136,24 @@ class InsetTest(unittest.TestCase):
         self.assertFalse(outside[90, 120])
 
 
+class WideNetTest(unittest.TestCase):
+    def test_a_wide_net_keeps_its_own_inset(self):
+        # Radar arm C: a 0.25 mm supply track 0.375 mm from the edge (0.25 mm copper
+        # gap, 0.3 mm rule). A signal (0.15 mm) may sit there; the wide net may not.
+        from pnr.board_edge import block_exact_edge
+
+        grid = RouteGrid(10, 6, 0.25, clearance=0.1, track_width=0.15, via_radius=0.2)
+        grid.net_widths = {"P": 0.25}
+        edges = parse_edges("(kicad_pcb\n" + outline_text(10, 6) + ")")
+        report = block_exact_edge(grid, {"fab": FAB}, edges, ["P", "S"])
+        self.assertEqual(report["wide_track_insets_mm"], {"0.25": 0.425})
+        i, j = grid.cell_of(5.0, 0.375)
+        self.assertTrue(grid.passable(0, i, j, "S"))
+        self.assertFalse(grid.passable(0, i, j, "P"))
+        i, j = grid.cell_of(5.0, 0.625)
+        self.assertTrue(grid.passable(0, i, j, "P"))
+
+
 def _part(ref, x, y, net):
     return Component(
         ref=ref,

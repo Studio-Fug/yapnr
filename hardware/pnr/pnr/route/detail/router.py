@@ -325,7 +325,7 @@ def _plane_region_rects(grid: RouteGrid, graph: BoardGraph, rules: Optional[dict
     return out
 
 
-def _exact_edge(grid: RouteGrid, rules: Optional[dict], width: float, height: float):
+def _exact_edge(grid: RouteGrid, rules: Optional[dict], width: float, height: float, nets=()):
     """``board.edge: exact``: bar the cells the board's own outline forbids
     (pnr.board_edge.block_exact_edge, ``rules["board_edges"]`` from the drivers'
     attach_edges) and return its report; None when off. An outline that does not
@@ -353,7 +353,7 @@ def _exact_edge(grid: RouteGrid, rules: Optional[dict], width: float, height: fl
         return {"model": "rectangle", "reason": "outline size differs from the region"}
     from pnr.board_edge import block_exact_edge
 
-    return dict(block_exact_edge(grid, rules, edges), model="exact")
+    return dict(block_exact_edge(grid, rules, edges, nets), model="exact")
 
 
 def _mark_copper_keepouts(grid: RouteGrid, graph: BoardGraph, rules: Optional[dict]) -> None:
@@ -1010,7 +1010,7 @@ def route_board(
         )
     # board.edge: exact: the board's own outline (arcs, notches, stroke) as KiCad
     # judges it, beside the rectangle model above (pnr.board_edge).
-    edge_report = _exact_edge(grid, rules, width, height)
+    edge_report = _exact_edge(grid, rules, width, height, [net.name for net in graph.nets])
     # Split planes on the inner layers become obstacles the signals route around
     # (matching the 2 mm writeback pour margin).
     _mark_plane_regions(grid, graph, rules, margin=PLANE_REGION_MARGIN_MM, stack=stack)

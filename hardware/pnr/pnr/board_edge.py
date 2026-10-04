@@ -334,10 +334,13 @@ def grid_edge_masks(grid, edges: Dict):
     return (inside % 2) == 0, dist
 
 
-def block_exact_edge(grid, rules: Dict, edges: Dict) -> Dict:
+def block_exact_edge(grid, rules: Dict, edges: Dict, nets=()) -> Dict:
     """Bar tracks and vias of every cell the exact outline forbids (module doc):
     outside it, a track centre within :func:`track_edge_inset`, a via within
-    :func:`via_edge_inset`. Pad cells keep their tracks (an edge connector's access,
+    :func:`via_edge_inset`. A net wider than the signal track (``grid.net_widths``)
+    keeps its own inset (a net keep-out per width barring it, and every wider net,
+    of the band its half width adds; ``nets``: every net of the board, the ones the
+    keep-out lets through). Pad cells keep their tracks (an edge connector's access,
     as the rectangle model does), never a via. Returns a report."""
     import numpy as np
 
@@ -355,9 +358,22 @@ def block_exact_edge(grid, rules: Dict, edges: Dict) -> Dict:
     before = int(grid.via_blocked.sum())
     grid.blocked |= track[None, :, :] & ~pads
     grid.via_blocked |= via[None, :, :]
+    widths = getattr(grid, "net_widths", None) or {}
+    wide = sorted({w for w in widths.values() if w > grid.track_width + 1e-9})
+    insets = {}
+    for w in wide:
+        inset = track_edge_inset(rules, w)
+        band = (outside | (dist < inset - 1e-9)) & ~track
+        if not band.any():
+            continue
+        barred = {n for n, nw in widths.items() if nw >= w - 1e-9}
+        mask = band[None, :, :] & ~pads
+        grid.add_net_keepout(mask, None, frozenset(nets) - barred)
+        insets["%g" % w] = round(inset, 6)
     return {
         "stroke_mm": edges.get("stroke_mm"),
         "track_inset_mm": round(track_in, 6),
+        "wide_track_insets_mm": insets,
         "via_inset_mm": round(via_in, 6),
         "items": len(edges["items"]),
         "via_cells_added": int(grid.via_blocked.sum()) - before,

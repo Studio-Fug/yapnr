@@ -145,6 +145,83 @@ class GridHaloTest(unittest.TestCase):
         self.assertFalse(_clear_of_pads(pads, "A", 0, a, b, 0.15, 0.1, {}, grid.pad_keepaways))
 
 
+def thermal_land_board(far=True):
+    """U1 (top) with an exposed pad (GND) repeated as a 1.5 x 1.75 mm land on B.Cu
+    (``far_side``), and net A from TP1 to TP2 on the bottom side straight under it."""
+    u1 = Component(
+        ref="U1",
+        footprint="test:U1",
+        pos=(10.0, 3.0),
+        rot=0.0,
+        side="top",
+        courtyard=(2.0, 2.2),
+        bbox=(2.0, 2.2),
+        pads=[
+            Pad(name="9", net="GND", offset=(0.0, 0.0), size=(1.5, 1.75), land_corner=0.0),
+            Pad(
+                name="9",
+                net="GND",
+                offset=(0.0, 0.0),
+                size=(1.5, 1.75),
+                land_corner=0.0,
+                far_side=True if far else None,
+            ),
+        ],
+    )
+    parts = [_part("TP1", 3.0, 3.0, "A"), _part("TP2", 17.0, 3.0, "A"), u1]
+    for tp in parts[:2]:
+        tp.side = "bottom"
+    nets = [
+        Net(name="A", code=1, pins=[("TP1", "1"), ("TP2", "1")]),
+        Net(name="GND", code=2, pins=[("U1", "9")]),
+    ]
+    return BoardGraph(name="land", components=parts, nets=nets)
+
+
+class FarSideLandTest(unittest.TestCase):
+    def test_the_land_bars_its_own_layer(self):
+        def grid(far):
+            return RouteGrid.from_graph(
+                thermal_land_board(far),
+                20,
+                6,
+                pitch=0.25,
+                clearance=0.1,
+                track_width=0.15,
+                via_radius=0.2,
+            )
+
+        i, j = grid(True).cell_of(10.0, 3.0)
+        self.assertFalse(grid(True).passable(1, i, j, "A"))  # B.Cu under the land
+        self.assertTrue(grid(False).passable(1, i, j, "A"))  # read as a second top land
+        self.assertFalse(grid(True).passable(0, i, j, "A"))  # the top land stays
+        layers = sorted({la for la, net, _r, _land in grid(True).smd_pads if net == "GND"})
+        self.assertEqual(layers, [0, 1])
+        self.assertEqual(grid(True).access[("GND", "U1.9")].layer, 0)
+
+    def test_graph_carries_the_key_only_when_set(self):
+        text = thermal_land_board().to_json()
+        pads = BoardGraph.from_json(text).component("U1").pads
+        self.assertEqual([p.far_side for p in pads], [None, True])
+        self.assertEqual(json.loads(text)["components"][2]["pads"][0].get("far_side", "-"), "-")
+
+    def test_route_keeps_off_the_land(self):
+        board = route_board(thermal_land_board(), _constraints(), _rules(), pitch=0.25)
+        self.assertEqual(board.result.unrouted, [])
+        for net, layer, a, b, w in board.tracks:
+            if net == "A" and layer == "B.Cu":
+                d = math.sqrt(_segment_distance_sq(a, b, (10.0, 3.0), (10.0, 3.0)))
+                self.assertGreaterEqual(d, 0.875 + w / 2 + 0.1 - 1e-6)
+        # Read as a second top land (no key), the bottom route crosses under it.
+        legacy = route_board(thermal_land_board(False), _constraints(), _rules(), pitch=0.25)
+        crossing = [
+            math.sqrt(_segment_distance_sq(a, b, (10.0, 3.0), (10.0, 3.0)))
+            for net, layer, a, b, _w in legacy.tracks
+            if net == "A" and layer == "B.Cu"
+        ]
+        self.assertLess(min(crossing), 0.875)
+
+
 class RouteTest(unittest.TestCase):
     def test_route_keeps_the_fiducial_clearance(self):
         board = route_board(fiducial_board(True), _constraints(), _rules(), pitch=0.25)

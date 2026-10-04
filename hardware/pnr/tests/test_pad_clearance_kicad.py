@@ -45,6 +45,36 @@ class IngestTest(unittest.TestCase):
         self.assertEqual(got["Bga"], {})
         self.assertEqual(got["Wide"], {"clearance_mm": 0.3})
 
+    def test_a_far_side_land(self):
+        # TI's DRB0008A as the radar's TCAN1044 uses it: the exposed pad on F.Cu and
+        # again as a thermal land on B.Cu, with plated vias between them.
+        import tempfile
+
+        import pcbnew
+
+        from pnr.ingest import _far_side
+
+        pads = (
+            '(pad "9" smd rect (at 0 0) (size 1.5 1.75) (layers "F.Cu" "F.Mask"))'
+            ' (pad "9" smd rect (at 0 0) (size 1.5 1.75) (layers "B.Cu"))'
+            ' (pad "9" thru_hole circle (at 0 0.625) (size 0.5 0.5) (drill 0.2)'
+            ' (layers "*.Cu"))'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            lib = os.path.join(tmp, "Local.pretty")
+            os.mkdir(lib)
+            with open(os.path.join(lib, "Ep.kicad_mod"), "w", encoding="utf-8") as fh:
+                fh.write(
+                    '(footprint "Ep" (version 20240108) (generator "test") (layer "F.Cu") %s)\n'
+                    % pads
+                )
+            fp = pcbnew.FootprintLoad(lib, "Ep")
+            got = []
+            for pad in fp.Pads():
+                through = pad.GetAttribute() in (pcbnew.PAD_ATTRIB_PTH, pcbnew.PAD_ATTRIB_NPTH)
+                got.append(_far_side(pad, fp, through))
+        self.assertEqual(got, [{}, {"far_side": True}, {}])
+
 
 if __name__ == "__main__":
     unittest.main()

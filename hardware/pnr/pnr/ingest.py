@@ -133,6 +133,22 @@ def _pad_local_rules(pad, fp) -> dict:
     return out
 
 
+def _far_side(pad, fp, through) -> dict:
+    """``{far_side: True}`` for an SMD land whose only copper is the outer layer
+    opposite its footprint's side (a thermal land under an exposed pad), else empty
+    (the graph is then unchanged)."""
+    if through:
+        return {}
+    try:
+        copper = list(pad.GetLayerSet().CuStack())
+        side = fp.GetLayer()
+    except Exception:  # pragma: no cover - version shim
+        return {}
+    if copper and side not in copper:
+        return {"far_side": True}
+    return {}
+
+
 def _phys_bbox_mm(fp) -> Tuple[float, float]:
     """Physical footprint extent (mm), **excluding** the reference/value text.
 
@@ -351,6 +367,7 @@ def _component(fp, frame: _Frame) -> Component:
                 ),
                 land_corner=land_corner,
                 **_pad_local_rules(pad, fp),
+                **_far_side(pad, fp, through),
             )
         )
 

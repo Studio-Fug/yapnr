@@ -891,13 +891,16 @@ class RouteGrid:
         )
         for comp in graph.components:
             side = g.side_layer(comp.side)
+            far = g.side_layer("bottom" if comp.side == "top" else "top")
             # pad_rects is exact only at quarter-turn part rotations.
             quarter = abs(comp.rot / 90.0 - round(comp.rot / 90.0)) < 1e-6
             for (name, net, r), pad in zip(pad_rects(comp), comp.pads):
                 land = pad.land_corner if quarter else None
                 # A through-hole pad occupies (and must be cleared on) *every* signal
-                # layer; an SMD pad only the component's side.
-                pad_layers = tuple(range(g.nlayers)) if pad.through_hole else (side,)
+                # layer; an SMD pad only the component's side, or the opposite outer
+                # layer for a far-side land (Pad.far_side).
+                own = far if getattr(pad, "far_side", None) else side
+                pad_layers = tuple(range(g.nlayers)) if pad.through_hole else (own,)
                 if max(pad.drill_size) > 0:
                     # Circular envelope is conservative for oval/rotated slots;
                     # source drills are obstacles even for copper on the same net.
@@ -920,15 +923,19 @@ class RouteGrid:
                     for la in pad_layers:
                         g.add_pad(la, "", r, keepaway)
                     if not pad.through_hole and r.w > 0 and r.h > 0:
-                        g.smd_pads.append((side, "", r, land))
+                        g.smd_pads.append((own, "", r, land))
                     continue
                 for la in pad_layers:
                     g.add_pad(la, net, r, keepaway)
                 if not pad.through_hole and r.w > 0 and r.h > 0:
-                    g.smd_pads.append((side, net, r, land))
+                    g.smd_pads.append((own, net, r, land))
                 # Access cell on the component's side (where a same-side track meets
                 # it); a through-hole pad is reachable from either side via its via.
-                g.access[(net, comp.ref + "." + name)] = Cell(side, *g.cell_of(r.cx, r.cy))
+                # A far-side land of a pad number that also has a land on the part's
+                # side leaves that one the access.
+                key = (net, comp.ref + "." + name)
+                if own == side or key not in g.access:
+                    g.access[key] = Cell(own, *g.cell_of(r.cx, r.cy))
         # Keep routed copper its edge clearance away from the board outline.
         g.block_edge_inset(clearance + g.via_radius)
         return g

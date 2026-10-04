@@ -85,6 +85,11 @@ class Pad:
     # and the graph JSON carries no key.
     clearance_mm: Optional[float] = None
     mask_margin_mm: Optional[float] = None
+    # True for an SMD land on the outer copper layer opposite its footprint's side
+    # (a top part's exposed pad repeated as a thermal land on B.Cu, say): the
+    # router keeps foreign copper off that layer there. None for every other pad,
+    # and the graph JSON carries no key.
+    far_side: Optional[bool] = None
 
     def __post_init__(self):
         self.offset = _fpair(self.offset)
@@ -238,7 +243,7 @@ class BoardGraph:
                 c.pop("body", None)
             for p in c.get("pads", ()):
                 # Pad-local rules only where a footprint sets them (pnr.ingest).
-                for key in ("clearance_mm", "mask_margin_mm"):
+                for key in ("clearance_mm", "mask_margin_mm", "far_side"):
                     if p.get(key) is None:
                         p.pop(key, None)
         if d.get("stack") is None:
@@ -280,6 +285,7 @@ class BoardGraph:
                         land_corner=p.get("land_corner"),
                         clearance_mm=p.get("clearance_mm"),
                         mask_margin_mm=p.get("mask_margin_mm"),
+                        far_side=p.get("far_side"),
                     )
                     for p in c.get("pads", [])
                 ],

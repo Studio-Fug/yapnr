@@ -148,10 +148,11 @@ DEFAULTS: Dict[str, object] = {
     "bank_strip": 2.0,  # cut-out to cut-out between the banks, the isolation wall in the middle [D]
     "pour_clear_ant": 1.0,  # L1 GND pour kept this far from patch copper [D]
     "pour_clear_feed": 0.45,  # and this far from the column's microstrip divider [D]
-    # L2-L3 stitching (review 2026-10-03): GND through vias at <= lambda_d/4 in RO4450F
-    # (62 GHz: lambda0 4.83 mm / sqrt(3.52) = 2.58 mm -> 0.64 mm) round each bank and along the
-    # macro's In2.Cu GND boundary, so the L2-L3 parallel plate has no open edge [D]; a maximum,
-    # rows are divided with ceil
+    # L2-L3 stitching (review 2026-10-03): GND through vias round each bank and along the macro's
+    # In2.Cu GND boundary, so the L2-L3 parallel plate has no open edge. The pitch is a via-lattice
+    # wall: 0.60 mm with 0.15 mm drills puts its parallel-plate cut-off near 120 GHz (about 35 dB/mm
+    # at 62 GHz; review 2026-10-04, not the lambda_d/4 = 0.64 mm argument) [D]; a maximum, rows are
+    # divided with ceil
     "stitch_pitch": 0.60,
     # via centre inside the In2 GND boundary: 0.30 keeps the boundary between two vias 0.60 apart
     # within stitch_reach (stage 2's 0.40 would leave 0.50 mm) [D]

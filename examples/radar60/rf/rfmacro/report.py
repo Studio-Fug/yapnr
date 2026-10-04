@@ -77,7 +77,14 @@ def _board_frame(mc: Macro) -> Dict[str, object]:
             for b in txn
         ),
         dummy_loads={
-            ld.ref: dict(column=n, centre=[ld.centre[0] + ux, ld.centre[1] + uy], axis="y")
+            ld.ref: dict(
+                column=n,
+                centre=[ld.centre[0] + ux, ld.centre[1] + uy],
+                axis="y",
+                # no via but the load's own five in the via zone; solder mask over the island
+                via_zone=[round(v + o, 4) for v, o in zip(ld.via_zone, (ux, uy, ux, uy))],
+                mask_island=[round(v + o, 4) for v, o in zip(ld.mask, (ux, uy, ux, uy))],
+            )
             for n, ld in mc.loads.items()
         },
         vout_pa_pocket=None if pk is None else [pk[0] + ux, pk[1] + uy, pk[2] + ux, pk[3] + uy],

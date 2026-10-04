@@ -161,10 +161,12 @@ tofu plan -var-file="$HOME/.config/yapnr/gcp.tfvars" -out=bootstrap.plan
 tofu apply bootstrap.plan
 ```
 
-The plan creates 81 resources for two regions ([infra/gcp](https://github.com/Studio-Fug/yapnr/tree/main/infra/gcp)):
+The plan creates 80 resources for the example's two regions ([infra/gcp](https://github.com/Studio-Fug/yapnr/tree/main/infra/gcp)):
 APIs, the VPC, both buckets, the service accounts and grants, the registry caches and the
 `images` repositories for task images ([openEMS](#task-images-openems),
-[Palace](#task-images-palace)), the Spot templates, the budget and the guard functions.
+[Palace](#task-images-palace)), the Spot templates (C4D in `us-west4`; C4 in
+`northamerica-northeast1`, which has no C4D: `region_template_shapes`), the budget and the guard
+functions.
 
 The project's `default` network allows SSH from anywhere and gives VMs external IPs; yapnr jobs
 never use it, so delete it, and with it any way a hand-written job could land there:
@@ -186,7 +188,7 @@ that the region offers the planned shapes (the price table only shows that the r
 
 ```sh
 gcloud compute machine-types list --project="$PROJECT" \
-  --filter="zone~^$REGION- AND name=( c4d-highcpu-16 c4d-highcpu-8 c3d-highcpu-8 )" \
+  --filter="zone~^$REGION- AND name=( c4d-highcpu-16 c4d-highcpu-8 c4-highcpu-16 c4-highcpu-8 )" \
   --format="table(name,zone)"
 gcloud quotas info list --service=compute.googleapis.com --project="$PROJECT" \
   --filter="quotaId~PREEMPTIBLE" --format="value(quotaId)"
@@ -289,23 +291,72 @@ gcloud auth application-default revoke
 
 See [Calibration](#calibration). Then record the ranking in `[gcp] ranking`.
 
+## Regions and quota-aware placement
+
+Each region has its own preemptible CPU quota (step 4), so a second region doubles how much runs at
+once. A region needs four things: the quota, an entry in the tfvars' `regions` (its subnet,
+registry caches and templates; `region_template_shapes` when it lacks a family of
+`template_shapes`), `quota_preferences` for the budget guard, and an entry in `[gcp] regions` of
+the owner config. Then rank the (family, region) pairs; each ranked pair of a Hyperdisk family
+needs templates for its shapes in its region (`yapnr exp doctor` lists them):
+
+```toml
+[gcp]
+regions = ["us-west4", "northamerica-northeast1"]
+ranking = [["c4d", "us-west4"], ["c4", "northamerica-northeast1"]]
+```
+
+A second pair in the same region (C4 in `us-west4`, say) adds no capacity: it draws on the same
+quota.
+
+- **Plan.** Every ranked pair a class can use is a candidate, in rank order (a campaign without
+  `[placement] families` may use every ranked family). `plan` prints them with their price per
+  VM-hour and the class's expected cost and ceiling there, and the ceiling if every class landed
+  on its dearest candidate; its estimate and caps are those of the first. Without a ranking a
+  class has one candidate, as before.
+- **Submit.** For each class, `submit` reads the candidates' regional `PREEMPTIBLE_CPUS` limit
+  and live usage (`gcloud compute regions describe`), subtracts the vCPUs the same submit already
+  sent to that region, and places the class on the first candidate with room for one more of its
+  VMs. A candidate whose instance template does not exist is skipped; a quota it cannot read is
+  not room. When no candidate has room the class waits in the first (Batch queues the job until
+  quota frees up). The caps are checked on the chosen placements, `submissions/<n>.json` records
+  the choice under `placement.choice` (the pair, its rank, why, and each candidate looked at), and
+  `status` prints each submission's region. A class with one candidate reads nothing, and
+  `submit --dry-run` reads no quota (it makes no calls), so it shows the first candidate.
+- **One machine type.** A wall-clock-budgeted campaign (`ladder-cell`, `bench` and `mc-eval` by
+  default) runs on one machine type: a family is a candidate only if it gives every class the same
+  shape, the first submission chooses it by quota, and later submissions keep it. A campaign that
+  is compared with an earlier one should pin the earlier one's family (`plan --family c4d`, or
+  `--shape`): C4 and C4D search at different speeds.
+- **Pins.** `plan --region R` keeps only that region's candidates; `submit --region R` keeps only
+  the plan's candidates in R for this submit (no spill to another region).
+- **Data.** The buckets stay in the home region, so tasks elsewhere read their bundles and write
+  their results across regions (megabytes per task). yapnr images come through each region's
+  `ghcr` cache; an image from the `images` repository is pulled from the region its reference
+  names, through Private Google Access, at $0.01 per GiB between North American regions (Billing
+  Catalog, October 2026): about $0.02 per VM for the 1.6 GB openEMS image.
+- **Not seen.** Usage counts running VMs only: a job queued a moment ago, or another campaign's
+  submit at the same time, is not counted, and neither is a Spot stockout (a region with quota
+  but no capacity). Cancel and `submit --region` the other region.
+
 ## Costs and guards
 
 Prices are list prices from the committed table
-([`yapnr/exp/data/gcp-spot-prices.json`](https://github.com/Studio-Fug/yapnr/blob/main/yapnr/exp/data/gcp-spot-prices.json),
-accessed 2026-10-02: the [Spot pricing page][spot-pricing] for `us-central1` and a public
-[Billing Catalog snapshot][snapshot] of 2026-09-24 for other regions) until `prices --refresh`
-replaces them; regions missing from the table are priced at `us-central1`, which is above the
-median, and the plan says so. Speeds are PassMark single-thread ratios to the development Mac's M4
-until the calibration measures them. Examples from that table, as `plan` prints them with the
-example owner config (C4D Spot in `us-west4`, one task per physical core):
+([`yapnr/exp/data/gcp-spot-prices.json`](https://github.com/Studio-Fug/yapnr/blob/main/yapnr/exp/data/gcp-spot-prices.json):
+every region's Spot prices from the [Cloud Billing Catalog API][catalog], accessed 2026-10-04)
+until `prices --refresh` replaces them; regions missing from the table are priced at
+`us-central1`, which is above the median, and the plan says so. A price only shows that a region
+bills a family, not that it offers the machine types (step 4 checks that). Speeds are PassMark
+single-thread ratios to the development Mac's M4 until the calibration measures them. Examples
+from that table, as `plan` prints them with the example owner config (C4D Spot in `us-west4`, one
+task per physical core):
 
 | Campaign                                          | Tasks | Expected | Ceiling |
 | ------------------------------------------------- | ----: | -------: | ------: |
-| `smoke.toml` on `c4d-highcpu-4` (`--no-template`) |     2 |  < $0.01 |   $0.06 |
-| `ladder-small.toml` (one `c4d-highcpu-16`)        |     4 |    $0.01 |   $0.41 |
-| `calibration-ladder.toml` (per shape, 8 vCPUs)    |    12 |    $0.01 |   $1.09 |
-| `ladder-sweep.toml` (8 x 16)                      |   128 |    $0.07 |   $7.41 |
+| `smoke.toml` on `c4d-highcpu-4` (`--no-template`) |     2 |  < $0.01 |   $0.05 |
+| `ladder-small.toml` (one `c4d-highcpu-16`)        |     4 |    $0.01 |   $0.38 |
+| `calibration-ladder.toml` (per shape, 8 vCPUs)    |    12 |    $0.01 |   $1.03 |
+| `ladder-sweep.toml` (8 x 16)                      |   128 |    $0.07 |   $6.96 |
 
 The ceilings are far above the expected costs on purpose: they price every attempt at its full
 `max_wall_s` plus Batch's 10-minute grace, with every retry, on whole VMs even when a small job
@@ -391,7 +442,7 @@ on the Mac (the reference) and on each candidate shape, then ingest the records:
 ```sh
 yapnr exp plan experiments/calibration-ladder.toml --backend local
 yapnr exp plan experiments/calibration-ladder.toml --backend gcp-batch --shape c4d-highcpu-8 --region us-west4
-yapnr exp plan experiments/calibration-ladder.toml --backend gcp-batch --shape c3d-highcpu-8 --region northamerica-northeast1
+yapnr exp plan experiments/calibration-ladder.toml --backend gcp-batch --shape c4-highcpu-8 --region northamerica-northeast1
 # ... submit each, fetch each, then:
 yapnr exp calibration ingest --reference <fetched>/<local id> --cloud <fetched>/<id> ... \
   --out ~/.config/yapnr/calibration.json
@@ -687,7 +738,8 @@ Instance Core|Ram running in ...`);
 - on a Slurm site: whether `USR1` reaches the wrappers through Apptainer's PID namespace and
   whether users may `scontrol requeue` their own array elements (the scripts are tested with
   stub `apptainer` and `scontrol` only);
-- region fallback after a stockout is manual: cancel and plan again with `--region`.
+- a Spot stockout is not seen by quota-aware placement (a region with quota but no capacity):
+  cancel and `submit --region` another candidate region.
 
 ## References
 

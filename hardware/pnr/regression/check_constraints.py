@@ -15,7 +15,10 @@ on F.Cu is on neither side).
 
 Check kinds: ``inside_board``, ``side``, ``fixed``, ``edge``, ``orientation``,
 ``keepout``, ``region``, ``proximity``, ``line``, ``align``, ``plane``,
-``microvia_span``.
+``microvia_span``, ``copper_digest``, ``no_copper``, and for area-array parts
+``via_class`` (the size and site of a part's plane vias), ``escape`` (each listed ball's
+copper reaches a via or leaves the courtyard) and ``pad_distance`` (parts' pads near their
+net's pads on an anchor).
 
     python3 check_constraints.py BOARD.kicad_pcb --spec SPEC.json --out OUT.json
 
@@ -62,6 +65,14 @@ class Board:
 
     def pos(self, ref):
         p = self.fps[ref].GetPosition()
+        return (mm(p.x) - self.x0, self.y1 - mm(p.y))
+
+    def pad_pos(self, ref, pad):
+        """The centre of ``ref``'s first pad numbered ``pad``, in the checker's frame."""
+        hit = self.fps[ref].FindPadByNumber(str(pad))
+        if hit is None:
+            raise ValueError("%s has no pad %r" % (ref, pad))
+        p = hit.GetPosition()
         return (mm(p.x) - self.x0, self.y1 - mm(p.y))
 
     def rot(self, ref):
@@ -187,10 +198,16 @@ def check_region(b, c):
 
 
 def check_proximity(b, c):
-    anchor = b.pos(c["anchor"])
+    """Each ref's position within ``max_mm`` of the anchor's position, or, with
+    ``anchor_pad``, of the centre of that pad of the anchor (a pad-anchored hard group)."""
+    pad = c.get("anchor_pad")
+    anchor = b.pos(c["anchor"]) if pad is None else b.pad_pos(c["anchor"], pad)
     dists = {r: round(math.dist(anchor, b.pos(r)), 3) for r in c["refs"]}
     worst = max(dists.values())
-    return worst <= c["max_mm"] + TOL, dict(distance_mm=dists), dict(max_mm=c["max_mm"])
+    expected = dict(max_mm=c["max_mm"])
+    if pad is not None:
+        expected["anchor_pad"] = str(pad)
+    return worst <= c["max_mm"] + TOL, dict(distance_mm=dists), expected
 
 
 def check_line(b, c):
@@ -292,6 +309,266 @@ def check_microvia_span(b, c):
     )
 
 
+def group_of(item):
+    """Name of the outermost KiCad group holding ``item`` (None outside any)."""
+    group = item.GetParentGroup()
+    name = None
+    while group is not None:
+        name = group.GetName()
+        owner = group.AsEdaItem() if hasattr(group, "AsEdaItem") else group
+        group = owner.GetParentGroup()
+    return name
+
+
+VIA_KINDS = {
+    int(pcbnew.VIATYPE_THROUGH): "through",
+    int(pcbnew.VIATYPE_BLIND): "blind",
+    int(pcbnew.VIATYPE_BURIED): "buried",
+    int(pcbnew.VIATYPE_MICROVIA): "micro",
+}
+
+
+def check_copper_digest(b, c):
+    """The copper of KiCad group ``group`` is the copper the rung gave: sha256 over
+    every track, arc and via of the group, to the nanometre, in the frame of footprint
+    ``anchor`` (position and orientation) or, without one, of the outline's lower-left
+    corner (KiCad's y down): kind, points, width or via size, drill, type and layers,
+    and net. (The same rows as the engine's pnr.fixed_copper.block_digest, computed
+    here independently.)"""
+    import hashlib
+
+    board = b.board
+    if c.get("anchor"):
+        fp = b.fps[c["anchor"]]
+        ox, oy, turn = fp.GetPosition().x, fp.GetPosition().y, fp.GetOrientationDegrees()
+    else:
+        ox, oy, turn = pcbnew.FromMM(b.x0), pcbnew.FromMM(b.y1), 0.0
+    quarter = round(turn / 90.0)
+    if abs(turn - 90.0 * quarter) > 1e-9:
+        raise ValueError("copper_digest: anchor turned off a quarter turn")
+
+    def local(p):
+        dx, dy = p.x - ox, p.y - oy
+        for _ in range(quarter % 4):
+            dx, dy = -dy, dx
+        return "%d %d" % (dx, dy)
+
+    rows = []
+    for t in board.GetTracks():
+        if group_of(t) != c["group"]:
+            continue
+        kind, name = t.GetClass(), board.GetLayerName
+        if kind == "PCB_VIA":
+            row = [
+                "via",
+                local(t.GetPosition()),
+                "d %d" % t.GetWidth(t.TopLayer()),
+                "drill %d" % t.GetDrillValue(),
+                "type %s" % VIA_KINDS.get(int(t.GetViaType()), str(int(t.GetViaType()))),
+                "%s-%s" % (name(t.TopLayer()), name(t.BottomLayer())),
+            ]
+        elif kind == "PCB_ARC":
+            row = ["arc", local(t.GetStart()), local(t.GetMid()), local(t.GetEnd())]
+            row += ["w %d" % t.GetWidth(), name(t.GetLayer())]
+        else:
+            row = ["segment", local(t.GetStart()), local(t.GetEnd())]
+            row += ["w %d" % t.GetWidth(), name(t.GetLayer())]
+        rows.append("|".join(row + [t.GetNetname()]))
+    rows.sort()
+    digest = hashlib.sha256("\n".join(rows).encode()).hexdigest()
+    return (
+        digest == c["sha256"],
+        dict(sha256=digest, items=len(rows)),
+        dict(sha256=c["sha256"]),
+    )
+
+
+def check_no_copper(b, c):
+    """No foreign copper in a polygon (board frame, mm) on ``layers``: tracks, arcs
+    and vias (``items`` tracks / vias), footprint pads (``pads``) and, when listed,
+    the filled copper of zones (``zones``) touching it, unless their net is in
+    ``allow_nets`` or they belong to a KiCad group in ``exempt_groups`` (a pad: its
+    footprint's group). Zones are judged only when ``items`` lists them."""
+    board = b.board
+    keep = pcbnew.SHAPE_POLY_SET()
+    keep.NewOutline()
+    for x, y in c["polygon"]:
+        keep.Append(pcbnew.FromMM(b.x0 + x), pcbnew.FromMM(b.y1 - y))
+    allowed = set(c.get("allow_nets") or [])
+    exempt = set(c.get("exempt_groups") or [])
+    items = set(c.get("items") or ("tracks", "vias", "pads"))
+    candidates = []
+    for t in board.GetTracks():
+        is_via = t.GetClass() == "PCB_VIA"
+        if ("vias" if is_via else "tracks") in items:
+            candidates.append((t, "via" if is_via else "track", group_of(t)))
+    if "pads" in items:
+        for fp in board.GetFootprints():
+            for pad in fp.Pads():
+                candidates.append((pad, "pad", group_of(fp)))
+    if "zones" in items:
+        for zone in board.Zones():
+            if not zone.GetIsRuleArea():
+                candidates.append((zone, "zone", group_of(zone)))
+    hits = []
+    for layer_name in c["layers"]:
+        layer = board.GetLayerID(layer_name)
+        for item, kind, group in candidates:
+            if item.GetNetname() in allowed or (group and group in exempt):
+                continue
+            if not item.IsOnLayer(layer):
+                continue
+            if kind == "zone":
+                shape = pcbnew.SHAPE_POLY_SET(item.GetFilledPolysList(layer))
+            else:
+                shape = pcbnew.SHAPE_POLY_SET()
+                item.TransformShapeToPolygon(shape, layer, 0, 1000, pcbnew.ERROR_INSIDE)
+            shape.BooleanIntersection(keep)
+            if shape.OutlineCount() and shape.Area() > 0:
+                p = item.GetPosition()
+                hits.append(
+                    dict(
+                        kind=kind,
+                        net=item.GetNetname(),
+                        layer=layer_name,
+                        at=[round(mm(p.x) - b.x0, 3), round(b.y1 - mm(p.y), 3)],
+                    )
+                )
+    return (
+        not hits,
+        dict(foreign=len(hits), examples=hits[:5]),
+        dict(layers=c["layers"], allow_nets=sorted(allowed), exempt_groups=sorted(exempt)),
+    )
+
+
+def _ref_pads(b, ref):
+    """{pad name: (engine-frame centre, pad)} of a part's pads."""
+    out = {}
+    for pad in b.fps[ref].Pads():
+        p = pad.GetPosition()
+        out[pad.GetNumber()] = ((mm(p.x) - b.x0, b.y1 - mm(p.y)), pad)
+    return out
+
+
+def check_via_class(b, c):
+    """Every via of ``nets`` inside ``ref``'s courtyard is ``diameter_mm``/``drill_mm``
+    and, with ``site: interstitial``, sits at the centre of a cell of the part's ball
+    lattice (pitch per axis from its pads, in the footprint's own frame)."""
+    x0, y0, x1, y1 = b.courtyard(c["ref"])
+    nets = set(c["nets"])
+    fp = b.fps[c["ref"]]
+    # The ball lattice in the footprint's own frame: pitch per axis, origin at a ball.
+    local = [(mm(p.GetFPRelativePosition().x), mm(p.GetFPRelativePosition().y)) for p in fp.Pads()]
+
+    def pitch(values):
+        v = sorted({round(x, 4) for x in values})
+        gaps = [round(q - p, 3) for p, q in zip(v, v[1:]) if q - p > TOL]
+        return min(gaps, key=lambda g: (-gaps.count(g), g)) if gaps else 0.0
+
+    px, py = pitch([p[0] for p in local]), pitch([p[1] for p in local])
+    ox, oy = local[0] if local else (0.0, 0.0)
+    angle = math.radians(fp.GetOrientationDegrees())
+    centre = fp.GetPosition()
+
+    def interstitial(via):
+        # The via in the footprint frame (KiCad y down, as GetFPRelativePosition).
+        dx, dy = mm(via.x - centre.x), mm(via.y - centre.y)
+        u = dx * math.cos(angle) - dy * math.sin(angle)
+        v = dx * math.sin(angle) + dy * math.cos(angle)
+        if fp.IsFlipped():
+            u = -u
+        fu, fv = (u - ox) / px - 0.5, (v - oy) / py - 0.5
+        return abs(fu - round(fu)) * px <= 0.005 and abs(fv - round(fv)) * py <= 0.005
+
+    wrong, off_site, count = [], [], 0
+    for t in b.board.GetTracks():
+        if t.GetClass() != "PCB_VIA" or t.GetNetname() not in nets:
+            continue
+        p = t.GetPosition()
+        at = (mm(p.x) - b.x0, b.y1 - mm(p.y))
+        if not (x0 <= at[0] <= x1 and y0 <= at[1] <= y1):
+            continue
+        count += 1
+        size = (round(mm(t.GetWidth(pcbnew.F_Cu)), 4), round(mm(t.GetDrillValue()), 4))
+        if abs(size[0] - c["diameter_mm"]) > TOL or abs(size[1] - c["drill_mm"]) > TOL:
+            wrong.append([round(at[0], 3), round(at[1], 3), *size])
+        if c.get("site") == "interstitial" and not (px and py and interstitial(p)):
+            off_site.append([round(at[0], 3), round(at[1], 3)])
+    return (
+        count > 0 and not wrong and not off_site,
+        dict(vias=count, wrong_size=wrong[:10], off_site=off_site[:10]),
+        dict(diameter_mm=c["diameter_mm"], drill_mm=c["drill_mm"], site=c.get("site")),
+    )
+
+
+def check_escape(b, c):
+    """Each listed pad of ``ref`` reaches, through its own net's tracks, a via or a
+    point outside the part's courtyard (its copper leaves the ball field)."""
+    x0, y0, x1, y1 = b.courtyard(c["ref"])
+    pads = _ref_pads(b, c["ref"])
+    by_net = {}
+    for t in b.board.GetTracks():
+        by_net.setdefault(t.GetNetname(), []).append(t)
+
+    def xy(v):
+        return (mm(v.x) - b.x0, b.y1 - mm(v.y))
+
+    def outside(p):
+        return not (x0 <= p[0] <= x1 and y0 <= p[1] <= y1)
+
+    stuck = []
+    for name in c["pads"]:
+        centre, pad = pads[name]
+        items = by_net.get(pad.GetNetname(), []) if pad.GetNetname() else []
+        frontier, seen, ok = [centre], set(), False
+        while frontier and not ok:
+            p = frontier.pop()
+            for i, t in enumerate(items):
+                if i in seen:
+                    continue
+                if t.GetClass() == "PCB_VIA":
+                    if math.dist(xy(t.GetPosition()), p) <= mm(t.GetWidth(pcbnew.F_Cu)) / 2 + TOL:
+                        ok = True
+                        break
+                    continue
+                a, z = xy(t.GetStart()), xy(t.GetEnd())
+                for e, other in ((a, z), (z, a)):
+                    if math.dist(e, p) <= TOL:
+                        seen.add(i)
+                        if outside(other):
+                            ok = True
+                        frontier.append(other)
+                        break
+                if ok:
+                    break
+        if not ok:
+            stuck.append(name)
+    return (
+        not stuck,
+        dict(escaped=len(c["pads"]) - len(stuck), pads=len(c["pads"]), not_escaped=stuck),
+        dict(pads=len(c["pads"])),
+    )
+
+
+def check_pad_distance(b, c):
+    """Each netted pad of ``refs`` is within ``max_mm`` (centre to centre) of a pad of
+    ``anchor`` on its own net."""
+    anchor = _ref_pads(b, c["anchor"])
+    worst, out = 0.0, {}
+    for ref in c["refs"]:
+        for name, (centre, pad) in sorted(_ref_pads(b, ref).items()):
+            net = pad.GetNetname()
+            if not net:
+                continue
+            d = min(
+                (math.dist(centre, q) for q, other in anchor.values() if other.GetNetname() == net),
+                default=math.inf,
+            )
+            out["%s.%s" % (ref, name)] = round(d, 3)
+            worst = max(worst, d)
+    return worst <= c["max_mm"] + TOL, dict(distance_mm=out), dict(max_mm=c["max_mm"])
+
+
 KINDS = dict(
     inside_board=check_inside_board,
     side=check_side,
@@ -305,6 +582,11 @@ KINDS = dict(
     align=check_align,
     plane=check_plane,
     microvia_span=check_microvia_span,
+    copper_digest=check_copper_digest,
+    no_copper=check_no_copper,
+    via_class=check_via_class,
+    escape=check_escape,
+    pad_distance=check_pad_distance,
 )
 
 

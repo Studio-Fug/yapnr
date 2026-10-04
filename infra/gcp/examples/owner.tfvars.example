@@ -18,8 +18,14 @@ quota_preferences = {
   "northamerica-northeast1" = "PREEMPTIBLE-CPUS-per-project-region"
 }
 
-# Spot templates for Hyperdisk-only families, in every region.
+# Spot templates for Hyperdisk-only families, in every region without its own list below.
 template_shapes = ["c4d-highcpu-16", "c4d-standard-16", "c4d-highcpu-8"]
+
+# A region's own template shapes, replacing template_shapes there: northamerica-northeast1 has no
+# C4D, so it gets C4 (`gcloud compute machine-types list` shows what a region offers).
+region_template_shapes = {
+  "northamerica-northeast1" = ["c4-highcpu-16", "c4-highcpu-8"]
+}
 
 # While the GHCR packages are private: a Secret Manager secret version with a read:packages token.
 # ghcr_token_secret = "projects/example-project/secrets/ghcr-read-packages/versions/1"

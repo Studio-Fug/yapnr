@@ -199,7 +199,11 @@ def _native(inputs, constraints_path, rec, names, out, seconds, workers, repo, r
             graph, constraints, rules, blk, rec["layout"], rec["width"], rec["height"]
         )
         doc = block_constraints_doc(
-            doc0, [c.address for c in g2.components], rec["width"], rec["height"]
+            doc0,
+            [c.address for c in g2.components],
+            rec["width"],
+            rec["height"],
+            refs=[c.ref for c in g2.components],
         )
         tag = "%s-s%d-%gx%g" % (
             name.replace(":", "_").replace(".", "_"),

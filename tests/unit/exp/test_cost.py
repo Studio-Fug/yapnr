@@ -121,6 +121,47 @@ class CostTest(unittest.TestCase):
         )
         self.assertEqual((ranked.family, ranked.region), ("c4d", "r1"))
 
+    def test_placements_list_every_ranked_pair_in_rank_order(self):
+        # submit takes the first ranked pair whose region has quota, so every usable ranked pair
+        # is a candidate, in rank order; place() is the first of them.
+        ranking = [("c4d", "r1"), ("n4d", "r1"), ("t2d", "r1"), ("c4d", "r2")]
+        options = cost.placements(
+            self.table,
+            self.none,
+            cpus=1,
+            memory_gb=2,
+            families=["c4d", "t2d", "n4d"],
+            regions=["r1", "r2"],
+            ranking=ranking,
+        )
+        self.assertEqual([o.pair for o in options], ["c4d/r1", "t2d/r1", "c4d/r2"])  # no n4d
+        first = cost.place(
+            self.table,
+            self.none,
+            cpus=1,
+            memory_gb=2,
+            families=["c4d", "t2d", "n4d"],
+            regions=["r1", "r2"],
+            ranking=ranking,
+        )
+        self.assertEqual(first.pair, "c4d/r1")
+        self.assertEqual(cost.ranked_pairs(ranking, ["t2d"], ["r1", "r2"]), [("t2d", "r1")])
+        # Without a ranking: every pair, cheapest per result first.
+        options = cost.placements(
+            self.table,
+            self.none,
+            cpus=1,
+            memory_gb=2,
+            families=["c4d", "t2d"],
+            regions=["r1", "r2"],
+        )
+        self.assertEqual([o.pair for o in options], ["t2d/r1", "c4d/r2", "c4d/r1"])
+
+    def test_placements_survive_the_plan_file(self):
+        p = cost.place(self.table, self.none, cpus=1, memory_gb=2, families=["c4d"], regions=["r1"])
+        row = dict(p.to_json(), expected_usd=0.5, ceiling_usd=2.0)
+        self.assertEqual(cost.Placement.from_json(row), p)
+
     def test_calibrated_speed_replaces_the_estimate(self):
         cal = cost.Calibration(
             {"schema": "yapnr-calibration-v1", "speed": {"c4d-highcpu-16": 1.25}}
@@ -211,10 +252,27 @@ class CostTest(unittest.TestCase):
 
     def test_committed_table_is_dated_and_sourced(self):
         table = cost.PriceTable.load()
-        self.assertEqual(table.accessed, "2026-10-02")
+        self.assertEqual(table.accessed, "2026-10-04")
         self.assertTrue(all(s["url"].startswith("https://") for s in table.data["sources"]))
         for name, family in table.families.items():
             self.assertIn("us-central1", family["spot"], name)
+
+    def test_the_two_regions_have_their_own_prices(self):
+        # The owner's regions are priced from the Billing Catalog (2026-10-04), not at the
+        # us-central1 fallback: C4 in Montreal is a third of its Las Vegas price.
+        table = cost.PriceTable.load()
+        for family, region in (
+            ("c4d", "us-west4"),
+            ("c4", "us-west4"),
+            ("c4", "northamerica-northeast1"),
+        ):
+            _, _, source = table.rate(family, region)
+            self.assertNotIn("fallback", source, (family, region))
+        self.assertEqual(table.rate("c4", "northamerica-northeast1")[:2], (0.00483, 0.000549))
+        self.assertEqual(table.rate("c4d", "us-west4")[:2], (0.00723, 0.000772))
+        self.assertLess(
+            table.rate("c4", "northamerica-northeast1")[0], table.rate("c4", "us-west4")[0] / 2
+        )
 
 
 def sku(description, region, units, nanos):

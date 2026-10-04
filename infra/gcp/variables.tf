@@ -65,9 +65,25 @@ variable "quota_preferences" {
 }
 
 variable "template_shapes" {
-  description = "Machine types that get Spot instance templates in every region (Hyperdisk families); c4d-highcpu-8 is the calibration's shape."
+  description = "Machine types that get Spot instance templates in every region without an entry in region_template_shapes (Hyperdisk families); c4d-highcpu-8 is the calibration's shape."
   type        = list(string)
   default     = ["c4d-highcpu-16", "c4d-standard-16", "c4d-highcpu-8"]
+}
+
+variable "region_template_shapes" {
+  description = "Per-region template shapes, replacing template_shapes in the regions listed (a region that lacks a family, e.g. C4D, gets the shapes it offers); {} keeps template_shapes everywhere."
+  type        = map(list(string))
+  default     = {}
+
+  validation {
+    condition     = alltrue([for region in keys(var.region_template_shapes) : contains(var.regions, region)])
+    error_message = "Every region in region_template_shapes must be one of regions."
+  }
+
+  validation {
+    condition     = alltrue([for shapes in values(var.region_template_shapes) : length(shapes) > 0])
+    error_message = "List at least one shape per region (leave the region out to use template_shapes)."
+  }
 }
 
 variable "boot_disk_gb" {

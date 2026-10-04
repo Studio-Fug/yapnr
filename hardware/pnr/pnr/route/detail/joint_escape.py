@@ -32,53 +32,86 @@ class AccessOption:
     spans: tuple = ()
 
 
-def _segment_clear(grid, net, layer, a, b, width, own=None):
+def _segment_clear(grid, net, layer, a, b, width, own=None, net_keepouts=True, offsets=True):
+    """``a``-``b`` of ``width`` on ``layer`` clears the grid's obstacles for ``net``.
+    ``net_keepouts=False`` leaves the copper keepouts' cell masks to the caller (a
+    fanout's hand-over judges them exactly, as its planner does). ``offsets=False``
+    reads the blocked mask on the centre line only: every obstacle in it is already
+    grown by at least half a track (the caller judges rule areas exactly)."""
     radius = width / 2 + grid.clearance
+    # Net class clearances (route_board's _net_clearances): two nets keep the larger
+    # of theirs, as KiCad's DRC judges them, against pads and escape copper. A board
+    # without class clearances keeps the fab clearance (the grid's) exactly.
+    classes = getattr(grid, "net_clearances", None) or {}
+
+    def reach(owner):
+        if net not in classes and owner not in classes:
+            return radius
+        return width / 2 + max(grid.clearance, classes.get(net, 0.0), classes.get(owner, 0.0))
+
     # The blocked mask includes absolute keepouts, no-net pads, the edge inset
     # and retained copper. Exact foreign-pad checks below may relax pad *halos*,
     # but they may never relax this mask, except ``own``: the cells of the net's own
     # legacy plane region (PNR_COMPACT DROPS, RouteGrid.own_plane_cells; None: none).
     steps = max(1, math.ceil(math.dist(a, b) / (grid.pitch / 4)))
+    # Copper keepouts with allow lists and fixed-block copper (both centreline
+    # reservations, like the maze's): judged at the centre samples. Absent, nothing.
+    keepouts = getattr(grid, "net_keepouts", None) if net_keepouts else None
+    owned = getattr(grid, "fixed_owned", None)
     for step in range(steps + 1):
         x = a[0] + (b[0] - a[0]) * step / steps
         y = a[1] + (b[1] - a[1]) * step / steps
-        for dx, dy in ((0, 0), (radius, 0), (-radius, 0), (0, radius), (0, -radius)):
+        for dx, dy in (
+            ((0, 0), (radius, 0), (-radius, 0), (0, radius), (0, -radius)) if offsets else ((0, 0),)
+        ):
             if not (0 <= x + dx <= grid.width and 0 <= y + dy <= grid.height):
                 return False
             i, j = grid.cell_of(x + dx, y + dy)
             if grid.blocked[layer, j, i] and (own is None or (layer, j, i) not in own):
                 return False
+            if dx or dy:
+                continue
+            if keepouts and grid.net_blocked(net, layer, i, j):
+                return False
+            if owned:
+                holder = owned.get((layer, i, j))
+                if holder is not None and holder != net:
+                    return False
     for la, owner, r in grid.pad_rectangles:
         if la != layer or owner == net:
             continue
+        grow = reach(owner) if classes else radius
         if (
-            max(a[0], b[0]) + radius < r.left
-            or min(a[0], b[0]) - radius > r.right
-            or max(a[1], b[1]) + radius < r.bottom
-            or min(a[1], b[1]) - radius > r.top
+            max(a[0], b[0]) + grow < r.left
+            or min(a[0], b[0]) - grow > r.right
+            or max(a[1], b[1]) + grow < r.bottom
+            or min(a[1], b[1]) - grow > r.top
         ):
             continue
         if any(r.left <= p[0] <= r.right and r.bottom <= p[1] <= r.top for p in (a, b)):
             return False
         corners = [(r.left, r.bottom), (r.right, r.bottom), (r.right, r.top), (r.left, r.top)]
         if any(
-            _segment_distance_sq(a, b, corners[k], corners[(k + 1) % 4]) < radius**2 - 1e-10
+            _segment_distance_sq(a, b, corners[k], corners[(k + 1) % 4]) < grow**2 - 1e-10
             for k in range(4)
         ):
             return False
     for la, owner, c, d in grid.escape_segments:
-        if (
-            la == layer
-            and owner != net
-            and _segment_distance_sq(a, b, c, d)
-            < ((width + grid.net_widths.get(owner, grid.track_width)) / 2 + grid.clearance) ** 2
-            - 1e-10
-        ):
+        if la != layer or owner == net:
+            continue
+        other = grid.net_widths.get(owner, grid.track_width)
+        grow = reach(owner) if classes else radius
+        if grow is radius:
+            limit = ((width + other) / 2 + grid.clearance) ** 2 - 1e-10
+        else:
+            limit = (other / 2 + grow) ** 2 - 1e-10
+        if _segment_distance_sq(a, b, c, d) < limit:
             return False
     for owner, p in grid.escape_vias:
         if (
             owner != net
-            and _segment_distance_sq(a, b, p, p) < (grid.via_radius + radius) ** 2 - 1e-10
+            and _segment_distance_sq(a, b, p, p)
+            < (grid.via_radius + (reach(owner) if classes else radius)) ** 2 - 1e-10
         ):
             return False
     return True
@@ -102,8 +135,11 @@ def _via_clear(grid, net, p, via_keepout, span=None):
         return False
     # Checking a point with the via diameter reuses the exact foreign copper test
     # in every layer; via-blocked applies even when tracks may use an inner gap.
+    keepouts = getattr(grid, "net_keepouts", None)
     return all(
-        not grid.via_blocked[la, j, i] and _segment_clear(grid, net, la, p, p, 2 * radius)
+        not grid.via_blocked[la, j, i]
+        and not (keepouts and grid.net_blocked(net, la, i, j, via=True))
+        and _segment_clear(grid, net, la, p, p, 2 * radius)
         for la in layers
     )
 
@@ -412,8 +448,11 @@ def _drop_via_clear(grid, net, p, span=None):
     radius = grid.via_radius if span is None else span.radius
     # PNR_COMPACT DROPS: a legacy plane drop crosses its own net's plane region.
     own = getattr(grid, "own_plane_cells", {}).get(net)
+    keepouts = getattr(grid, "net_keepouts", None)
     for la in range(grid.nlayers) if span is None else span.layers():
         if grid.via_blocked[la, j, i]:
+            return False
+        if keepouts and grid.net_blocked(net, la, i, j, via=True):
             return False
         key = (la, i, j)
         for table, pads_only in halos:
@@ -655,6 +694,7 @@ def plan_joint_escapes(
     drop_pad_width=None,
     plane_access=None,
     drop_span=None,
+    skip_pads=None,
 ):
     """Choose every terminal's exit jointly. ``drop_widths`` (net -> entry width)
     names the nets with a dedicated plane: each of their surface pads becomes a
@@ -664,7 +704,8 @@ def plan_joint_escapes(
     drop's stub is ``drop_pad_width[(ref, pad)]`` wide (else its net's width), and
     ``plane_access`` (:class:`pnr.stack.PlaneAccess`) keeps its via inside the
     net's own plane fill. ``drop_span(net, side)``, when given, is the drop via's
-    span from the pad's grid layer (pnr.via_policy.Span; None: through)."""
+    span from the pad's grid layer (pnr.via_policy.Span; None: through).
+    ``skip_pads`` ((ref, pad) pairs) get no exit here: a declared fanout holds them."""
     from .escape import Escape, EscapePlan
 
     drop_widths = drop_widths or {}
@@ -680,6 +721,8 @@ def plan_joint_escapes(
     for comp in sorted(graph.components, key=lambda c: c.ref):
         side = grid.side_layer(comp.side)
         for index, ((name, net, rect), pad) in enumerate(zip(pad_rects(comp), comp.pads)):
+            if skip_pads and (comp.ref, name) in skip_pads:
+                continue
             if net in drop_widths and net not in net_names:
                 if pad.through_hole:
                     continue  # the plated barrel already reaches every plane

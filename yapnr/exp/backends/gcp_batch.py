@@ -17,19 +17,27 @@ checked against the vendored Batch v1 discovery document before anything is sent
 - carries the labels the budget guard, the reaper and billing reports use (``yapnr``, ``campaign``,
   ``kind``, ``visibility``, ``submission``, ``deadline``).
 
+Where a class runs is chosen at submit (``choose``): a class planned with several candidates (the
+owner's ranked (family, region) pairs) goes to the first whose region has Spot quota for one more
+of its VMs (``PREEMPTIBLE_CPUS`` limit less usage, from ``compute regions describe``, less what
+this submit already sent there), skipping pairs without their instance template; when no region has
+room it waits in the first. The submission record says what was chosen and why.
+
 Every ``gcloud`` call goes through ``yapnr.exp.cloud.Gcloud`` with the impersonated submit account.
 """
 
 from __future__ import annotations
 
 import json
+import math
 import re
-from typing import Any, Dict, List, Optional, Sequence
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from yapnr.exp import batch_schema, cost, image
 from yapnr.exp import plan as planning
 from yapnr.exp.backends.base import Backend, Stores, SubmitError
-from yapnr.exp.cloud import FakeCloud, Gcloud
+from yapnr.exp.cloud import CloudError, FakeCloud, Gcloud
 from yapnr.exp.config import Config, Gcp
 from yapnr.exp.store import GcsStore
 
@@ -69,6 +77,204 @@ def template_name(gcp: Gcp, placement: cost.Placement) -> str:
     return gcp.template.format(
         shape=placement.shape, model=placement.model, region=placement.region
     )
+
+
+SPOT_QUOTA = "PREEMPTIBLE_CPUS"
+
+
+@dataclass
+class RegionQuota:
+    """A region's Spot (preemptible) CPU quota, or why it could not be read."""
+
+    region: str
+    limit: Optional[float] = None
+    usage: Optional[float] = None
+    error: Optional[str] = None
+
+    @property
+    def known(self) -> bool:
+        return self.limit is not None and self.usage is not None
+
+
+def region_quota(cloud: Gcloud, region: str) -> RegionQuota:
+    """The region's ``PREEMPTIBLE_CPUS`` limit and live usage (``compute regions describe``)."""
+    try:
+        data = cloud.json(["compute", "regions", "describe", region])
+    except CloudError as err:
+        return RegionQuota(region, error=str(err).splitlines()[0][:200])
+    for quota in (data or {}).get("quotas", []) if isinstance(data, dict) else []:
+        if quota.get("metric") == SPOT_QUOTA:
+            try:
+                return RegionQuota(region, float(quota["limit"]), float(quota.get("usage", 0)))
+            except (KeyError, TypeError, ValueError):
+                break
+    return RegionQuota(region, error="no %s quota in the answer" % SPOT_QUOTA)
+
+
+def template_exists(cloud: Gcloud, name: str) -> Optional[bool]:
+    """Whether the global instance template exists; None when that could not be read."""
+    try:
+        cloud.json(["compute", "instance-templates", "describe", name, "--global"])
+    except CloudError as err:
+        return False if err.not_found else None
+    return True
+
+
+def vms_at_once(placement: cost.Placement, tasks: int, max_parallel_vcpus: int) -> int:
+    """The VMs a job of ``tasks`` tasks runs at once (``parallelism`` in whole VMs)."""
+    parallel = cost.parallel_tasks(tasks, placement, max_parallel_vcpus)
+    return max(1, math.ceil(parallel / max(1, placement.tasks_per_vm)))
+
+
+def choose(
+    plan,
+    config: Config,
+    todo: Dict[str, List[int]],
+    cloud: Gcloud,
+    *,
+    region: Optional[str] = None,
+    say: Callable[[str], None] = print,
+    previous: Optional[Callable[[], List[Dict[str, Any]]]] = None,
+) -> Dict[str, Dict[str, Any]]:
+    """The placement of every pending class among its candidates, set with ``plan.choose``.
+
+    A class goes to the first candidate whose region has Spot quota for one more of its VMs: the
+    ``PREEMPTIBLE_CPUS`` limit less its live usage, less the vCPUs this submit already sent to the
+    region (classes are chosen one after the other, before any of their VMs exist). A template
+    placement whose instance template does not exist is skipped. When no candidate has room, the
+    class waits in the first usable one (Batch queues the job until quota frees up). ``region``
+    keeps only the candidates in that region (``submit --region``). A class with one candidate
+    makes no cloud call. A wall-clock-budgeted campaign runs on one machine type: the shape of its
+    first submission (``previous``), else the shape its first class chose now, for every class.
+    Returns, per class, the choice, why, and what was looked at.
+    """
+    gcp = config.require_gcp()
+    quotas: Dict[str, RegionQuota] = {}
+    templates: Dict[str, Optional[bool]] = {}
+    claimed: Dict[str, int] = {}
+    out: Dict[str, Dict[str, Any]] = {}
+    one_type = plan.meta.get("determinism") == "wall_clock_budgeted"
+    shape: Optional[str] = None
+    kept = ""
+    if (
+        one_type
+        and previous is not None
+        and any(len(plan.candidates(c.name)) > 1 for c in plan.classes if c.name in todo)
+    ):
+        for record in previous():
+            if not record.get("dry_run") and (record.get("placement") or {}).get("shape"):
+                shape = record["placement"]["shape"]
+                kept = " of %s, the campaign's machine type since its first submission" % shape
+                break
+    for cls in plan.classes:
+        lines = todo.get(cls.name)
+        if not lines:
+            continue
+        options = plan.candidates(cls.name)
+        if shape:
+            options = [p for p in options if p.shape == shape]
+            if not options:
+                raise SubmitError(
+                    "class %s: a wall-clock-budgeted campaign runs on one machine type, %s since "
+                    "its first submission, and the plan has no candidate of it" % (cls.name, shape)
+                )
+        if region:
+            options = [p for p in options if p.region == region]
+            if not options:
+                raise SubmitError(
+                    "class %s has no candidate in %s (candidates: %s); plan again with --region %s"
+                    % (
+                        cls.name,
+                        region,
+                        ", ".join(p.pair for p in plan.candidates(cls.name)),
+                        region,
+                    )
+                )
+        looked: List[Dict[str, Any]] = []
+        chosen: Optional[cost.Placement] = None
+        why = ""
+        usable: List[cost.Placement] = []
+        if len(options) == 1:
+            chosen = options[0]
+            why = "pinned to %s" % region if region else "the only candidate" + kept
+        else:
+            for p in options:
+                seen: Dict[str, Any] = {"pair": p.pair, "shape": p.shape}
+                looked.append(seen)
+                if p.template:
+                    name = template_name(gcp, p)
+                    if name not in templates:
+                        templates[name] = template_exists(cloud, name)
+                    if templates[name] is False:
+                        seen["skipped"] = "no instance template %s" % name
+                        continue
+                usable.append(p)
+                if p.region not in quotas:
+                    quotas[p.region] = region_quota(cloud, p.region)
+                quota = quotas[p.region]
+                if not quota.known:
+                    seen["quota"] = "unknown: %s" % quota.error
+                    continue
+                free = quota.limit - quota.usage - claimed.get(p.region, 0)
+                seen.update(
+                    limit=quota.limit,
+                    usage=quota.usage,
+                    claimed=claimed.get(p.region, 0),
+                    free=free,
+                    vm_vcpus=p.vm_vcpus,
+                )
+                if free >= p.vm_vcpus:
+                    chosen = p
+                    why = "%s has room: %g of %g Spot vCPUs free, one VM takes %d" % (
+                        p.region,
+                        free,
+                        quota.limit,
+                        p.vm_vcpus,
+                    )
+                    break
+                seen["full"] = True
+            if chosen is None:
+                if not usable:
+                    raise SubmitError(
+                        "class %s: none of its candidates has an instance template (%s); run "
+                        "`yapnr exp doctor --backend gcp-batch` and check the templates in the "
+                        "tfvars (region_template_shapes)"
+                        % (cls.name, "; ".join(x.get("skipped", "") for x in looked))
+                    )
+                chosen = usable[0]
+                unread = [x["pair"] for x in looked if "quota" in x]
+                if len(unread) == len(usable):
+                    # Nothing was read (a dry run reads nothing): no claim that the regions are full.
+                    why = (
+                        "the Spot quota could not be read in any candidate region; placed on "
+                        "%s, the first usable candidate" % chosen.pair
+                    )
+                else:
+                    note = " (unreadable: %s)" % ", ".join(unread) if unread else ""
+                    why = (
+                        "no candidate region has Spot quota for one more VM%s; waits in %s, the "
+                        "first usable candidate" % (note, chosen.region)
+                    )
+        if one_type:
+            shape = chosen.shape
+        rank = [p.pair for p in plan.candidates(cls.name)].index(chosen.pair) + 1
+        vcpus = vms_at_once(chosen, len(lines), config.limits.max_parallel_vcpus) * chosen.vm_vcpus
+        claimed[chosen.region] = claimed.get(chosen.region, 0) + vcpus
+        plan.choose(cls.name, chosen)
+        out[cls.name] = {
+            "pair": chosen.pair,
+            "region": chosen.region,
+            "shape": chosen.shape,
+            "rank": rank,
+            "why": why,
+            "looked_at": looked,
+            "region_pin": region,
+        }
+        say(
+            "class %s: %s in %s (candidate %d): %s"
+            % (cls.name, chosen.shape, chosen.region, rank, why)
+        )
+    return out
 
 
 def render_job(
@@ -244,6 +450,19 @@ class GcpBatch(Backend):
 
     live_states = LIVE_STATES
 
+    def choose(self, plan, config, todo, cloud=None, *, region=None, say=print, previous=None):
+        if region and region not in config.require_gcp().regions:
+            raise SubmitError("region %s is not one of gcp.regions in the owner config" % region)
+        return choose(
+            plan,
+            config,
+            todo,
+            cloud or make_cloud(config),
+            region=region,
+            say=say,
+            previous=previous,
+        )
+
     def check_limits(self, plan, config, todo, *, yes, max_usd, confirm, say, price_table=None):
         # The kill switch's quota cut and the quota ceiling cover Spot (preemptible) CPUs only.
         on_demand = sorted(name for name in todo if plan.placement(name).model != "spot")
@@ -398,6 +617,17 @@ def doctor(config: Config, cloud: Gcloud, digest: Optional[str] = None) -> List[
         checks.append(
             {"check": "budget kill switch not fired", "ok": False, "detail": str(err)[:200]}
         )
+    # Every template, once: the ranked Hyperdisk pairs of each region need their own.
+    templated: Dict[str, List[str]] = {}
+    listing_error = ""
+    try:
+        listing = cloud.json(["compute", "instance-templates", "list", "--filter=name~^yapnr-"])
+        for item in listing if isinstance(listing, list) else []:
+            machine = str((item.get("properties") or {}).get("machineType", "")).rsplit("/", 1)[-1]
+            if machine:
+                templated.setdefault(machine, []).append(item.get("name", ""))
+    except Exception as err:  # a finding, never a crash
+        listing_error = str(err).splitlines()[0][:200]
     for region in gcp.regions:
         run(
             "batch jobs list in %s" % region,
@@ -406,19 +636,33 @@ def doctor(config: Config, cloud: Gcloud, digest: Optional[str] = None) -> List[
 
         def quota(data, region=region):
             quotas = {q.get("metric"): q for q in (data or {}).get("quotas", [])}
-            spot = quotas.get("PREEMPTIBLE_CPUS", {})
+            spot = quotas.get(SPOT_QUOTA, {})
             limit = spot.get("limit", 0)
-            return limit > 0, "preemptible CPUs: %s" % limit
+            return limit > 0, "preemptible CPUs: %g of %g in use" % (spot.get("usage", 0), limit)
 
         run("quota in %s" % region, ["compute", "regions", "describe", region], quota)
         for family, ranked_region in gcp.ranking:
             if ranked_region != region or family not in gcp.template_families:
                 continue
-            shape = "%s-highcpu-16" % family
-            name = gcp.template.format(shape=shape, model="spot", region=region)
-            run(
-                "template %s" % name,
-                ["compute", "instance-templates", "describe", name, "--global"],
+            shapes = sorted(
+                shape
+                for shape in templated
+                if shape.split("-")[0] == family
+                and gcp.template.format(shape=shape, model="spot", region=region)
+                in templated[shape]
+            )
+            checks.append(
+                {
+                    "check": "templates for ranked %s/%s" % (family, region),
+                    "ok": bool(shapes) and not listing_error,
+                    "detail": listing_error
+                    or (
+                        ", ".join(shapes)
+                        if shapes
+                        else "none: add the region's shapes to "
+                        "template_shapes or region_template_shapes in the tfvars and apply"
+                    ),
+                }
             )
         if digest:
             registry = gcp.registry.format(region=region, project=gcp.project)

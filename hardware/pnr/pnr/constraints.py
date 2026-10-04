@@ -243,8 +243,16 @@ class CompiledConstraints:
     length_matches: List[LengthMatch] = field(default_factory=list)
     # Meander rules for pair / group length tuning (``tuning:``); None = defaults.
     tuning: Optional[Dict] = None
+    # Opt-in legalizer options (``legalize:``, :mod:`pnr.place.legal_options`); None = off.
+    legalize: Optional[Dict] = None
     copper_keepouts: List[Dict] = field(default_factory=list)
     mounting_holes: List[Dict] = field(default_factory=list)
+    # Fixed copper blocks (``fixed_block``, pnr.fixed_block): KiCad groups kept as drawn.
+    fixed_blocks: List[Dict] = field(default_factory=list)
+    # ``board.plane_fallback_drops`` (None: not declared, the default true behaviour).
+    plane_fallback_drops: Optional[bool] = None
+    # Declared BGA fanouts (``fanout:``, pnr.fanout.spec); the router plans them.
+    fanouts: List[Dict] = field(default_factory=list)
 
     @property
     def hard(self) -> List[Constraint]:
@@ -359,6 +367,46 @@ def _parse_tuning(raw) -> Optional[Dict]:
     return out
 
 
+# ``legalize:`` (pnr.place.legal_options): each key's values, the first the default.
+LEGALIZE_OPTIONS = {
+    "outline": ("raster", "exact"),
+    "order": ("blocks", "scarcity"),
+    "lookahead": ("none", "regions"),
+}
+
+
+def _parse_legalize(raw) -> Optional[Dict]:
+    """The ``legalize:`` block: opt-in legalizer options, each a name from
+    :data:`LEGALIZE_OPTIONS` (``outline: exact`` keeps every courtyard inside the board
+    outline by the same test as the hard check, ``order: scarcity`` orders parts held to
+    a region or an edge band with the hard-group blocks by remaining slots,
+    ``lookahead: regions`` refuses a slot that strands a scarce region or group part).
+    None when absent; only the keys given, so a default-valued key is kept as written."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ConstraintError("legalize must be a mapping")
+    unknown = sorted(set(raw) - set(LEGALIZE_OPTIONS))
+    if unknown:
+        raise ConstraintError("legalize: unknown key(s) %s" % ", ".join(map(str, unknown)))
+    out: Dict = {}
+    for key, allowed in LEGALIZE_OPTIONS.items():
+        if key in raw:
+            out[key] = _require_enum(raw[key], allowed, f"legalize.{key}")
+            if out[key] is None:
+                raise ConstraintError(f"legalize.{key} must be one of {allowed}")
+    return out
+
+
+def _anchor_pad(value, hard: bool) -> str:
+    """A hard group's ``anchor_pad``: the anchor's pad name (number or string)."""
+    if not hard:
+        raise ConstraintError("group.anchor_pad requires hard: true")
+    if isinstance(value, bool) or not isinstance(value, (str, int)) or str(value) == "":
+        raise ConstraintError("group.anchor_pad must be a pad name")
+    return str(value)
+
+
 def _expand_nets(patterns: Iterable[str], net_names: Sequence[str]) -> Tuple[str, ...]:
     """Expand net-name literals/globs against the real netlist (order-stable)."""
     resolved: List[str] = []
@@ -388,7 +436,9 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
     return {
         "layers": int(compiled.board.layers),
         "references_on_fab": compiled.board.references_on_fab,
-        "copper_keepouts": compiled.copper_keepouts,
+        "copper_keepouts": [
+            _keepout_rules(k, compiled, net_names) for k in compiled.copper_keepouts
+        ],
         "mounting_holes": compiled.mounting_holes,
         "default_clearance_mm": float(compiled.board.default_clearance_mm),
         "fab": {
@@ -442,7 +492,59 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
             for lm in compiled.length_matches
         ],
         **({"tuning": dict(compiled.tuning)} if compiled.tuning is not None else {}),
+        # Declared only: a board without them keeps its rules.json bytes.
+        **(
+            {"fixed_blocks": [dict(b) for b in compiled.fixed_blocks]}
+            if compiled.fixed_blocks
+            else {}
+        ),
+        **(
+            {"plane_fallback_drops": compiled.plane_fallback_drops}
+            if compiled.plane_fallback_drops is not None
+            else {}
+        ),
+        # Declared fanouts (pnr.fanout), with their via classes' net globs expanded;
+        # absent without one, so such a board's rules keep their bytes.
+        **(
+            {"fanouts": [_fanout_nets(f, net_names) for f in compiled.fanouts]}
+            if compiled.fanouts
+            else {}
+        ),
     }
+
+
+# copper_keepout v1 (layers, items, allow lists, exempt groups); a v0 entry is
+# ``{name, ref, rect_mm}`` exactly and keeps that form everywhere (pnr.fixed_block).
+from pnr.fixed_block import (  # noqa: E402 - stdlib-only helpers shared with pcbnew steps
+    KEEPOUT_ITEMS,
+    KEEPOUT_V1_KEYS,
+    keepout_is_v1,
+)
+
+
+def _keepout_rules(spec: Dict, compiled: "CompiledConstraints", net_names: Sequence[str]) -> Dict:
+    """The rules.json form of one compiled keepout: v0 unchanged; v1 with its
+    exempt nets resolved (``allowed_nets``: the allow-list globs and the nets of the
+    allowed classes, against the real netlist)."""
+    if not keepout_is_v1(spec):
+        return spec
+    out = dict(spec)
+    allowed = set(_expand_nets(spec.get("allow_nets") or (), net_names))
+    classes = set(spec.get("allow_classes") or ())
+    for nc in compiled.net_classes:
+        if nc.name in classes:
+            allowed.update(_expand_nets(nc.nets, net_names))
+    for dp in compiled.diff_pairs:  # a pair is the class "dp_<name>" (writeback)
+        if "dp_" + dp.name in classes:
+            allowed.update(n for n in (dp.p, dp.n) if n in set(net_names))
+    out["allowed_nets"] = sorted(allowed)
+    return out
+
+
+def _fanout_nets(spec: Dict, net_names: Sequence[str]) -> Dict:
+    from pnr.fanout.spec import expand_nets
+
+    return expand_nets(spec, net_names)
 
 
 def _parse_board(raw: Dict) -> BoardSpec:
@@ -1018,7 +1120,10 @@ def compile_constraints(
         "diff_pair",
         "length_match",
         "tuning",
+        "legalize",
         "copper_keepout",
+        "fixed_block",
+        "fanout",
     }
     for key in doc:
         if key not in known_keys:
@@ -1238,12 +1343,16 @@ def compile_constraints(
                 raise ConstraintError("hard group requires a known anchor")
         if anchor is not None and anchor not in known_refs:
             warnings.append(f"group.anchor: unknown component ref {anchor!r}")
+        params = {"anchor": anchor, "radius_mm": entry.get("radius_mm")}
+        if entry.get("anchor_pad") is not None:
+            # A hard group measured from one pad of its anchor (pnr.place.legal_options).
+            params["anchor_pad"] = _anchor_pad(entry["anchor_pad"], hard)
         constraints.append(
             Constraint(
                 kind="group",
                 enforcement=Enforcement.HARD if hard else Enforcement.SOFT,
                 refs=refs,
-                params={"anchor": anchor, "radius_mm": entry.get("radius_mm")},
+                params=params,
                 weight=float(entry.get("weight", DEFAULT_WEIGHTS["group"])),
             )
         )
@@ -1320,6 +1429,7 @@ def compile_constraints(
             )
         )
     tuning = _parse_tuning(doc.get("tuning"))
+    legalize = _parse_legalize(doc.get("legalize"))
 
     # Mechanical fastener envelopes reserve both faces and every copper layer.
     import math
@@ -1378,8 +1488,21 @@ def compile_constraints(
             )
         )
 
+    fixed_blocks = _parse_fixed_blocks(doc.get("fixed_block"), constraints, known_refs, warnings)
     copper_keepouts = []
+    v1_names = set()
     for entry in doc.get("copper_keepout") or []:
+        if not isinstance(entry, dict):
+            raise ConstraintError("copper_keepout: each entry is a mapping")
+        if keepout_is_v1(entry):
+            spec = _parse_keepout_v1(
+                entry, board, net_classes, diff_pairs, fixed_blocks, known_refs
+            )
+            if spec["name"] in v1_names:
+                raise ConstraintError(f"copper_keepout: duplicate name {spec['name']!r}")
+            v1_names.add(spec["name"])
+            copper_keepouts.append(spec)
+            continue
         ref = entry.get("ref")
         rect = entry.get("rect_mm", [])
         if ref not in known_refs:
@@ -1391,6 +1514,26 @@ def compile_constraints(
         copper_keepouts.append(
             {"name": str(entry.get("name") or ref), "ref": ref, "rect_mm": list(rect)}
         )
+    fallback = (doc.get("board") or {}).get("plane_fallback_drops")
+    if fallback is not None and not isinstance(fallback, bool):
+        raise ConstraintError("board.plane_fallback_drops must be true or false")
+
+    # fanout: declared BGA fanouts (pnr.fanout), validated here; the router plans them.
+    fanouts = []
+    if doc.get("fanout") is not None:
+        from pnr.fanout.spec import FanoutError, parse_all
+
+        try:
+            fanouts = parse_all(doc.get("fanout"), known_refs)
+        except FanoutError as error:
+            raise ConstraintError(str(error)) from None
+        fixed_refs = {r for c in constraints if c.kind == "fixed" for r in c.refs}
+        for f in fanouts:
+            if f["ref"] not in fixed_refs:
+                warnings.append(
+                    "fanout %s: %s is not fixed; its fanout is planned at each placed pose"
+                    % (f["name"], f["ref"])
+                )
 
     return CompiledConstraints(
         board=board,
@@ -1402,9 +1545,161 @@ def compile_constraints(
         diff_pairs=diff_pairs,
         length_matches=length_matches,
         tuning=tuning,
+        legalize=legalize,
         copper_keepouts=copper_keepouts,
         mounting_holes=mounting_holes,
+        fixed_blocks=fixed_blocks,
+        plane_fallback_drops=fallback,
+        fanouts=fanouts,
     )
+
+
+def copper_layer_names(count: int) -> List[str]:
+    """KiCad's copper layer names of a ``count``-layer board, top to bottom."""
+    count = max(2, int(count))
+    return ["F.Cu"] + ["In%d.Cu" % i for i in range(1, count - 1)] + ["B.Cu"]
+
+
+def _finite_points(raw, where: str, minimum: int) -> List[List[float]]:
+    if not isinstance(raw, (list, tuple)) or len(raw) < minimum:
+        raise ConstraintError(f"{where} needs at least {minimum} points")
+    out = []
+    for pt in raw:
+        if (
+            not isinstance(pt, (list, tuple))
+            or len(pt) != 2
+            or not all(_finite_number(v) for v in pt)
+        ):
+            raise ConstraintError(f"{where}: each point is two finite numbers")
+        out.append([float(pt[0]), float(pt[1])])
+    return out
+
+
+def _string_list(raw, where: str) -> List[str]:
+    if raw is None:
+        return []
+    if isinstance(raw, str) or not isinstance(raw, (list, tuple)):
+        raise ConstraintError(f"{where} must be a list")
+    if not all(isinstance(v, str) and v for v in raw):
+        raise ConstraintError(f"{where}: every entry is a non-empty string")
+    return list(raw)
+
+
+def _parse_keepout_v1(entry, board, net_classes, diff_pairs, fixed_blocks, known_refs) -> Dict:
+    """One ``copper_keepout`` entry in the v1 form (pnr.route.detail.router,
+    pnr.writeback.apply_copper_keepouts)."""
+    name = entry.get("name")
+    if not isinstance(name, str) or not name:
+        raise ConstraintError("copper_keepout: a v1 entry needs a name")
+    where = f"copper_keepout {name!r}"
+    unknown = sorted(set(entry) - set(KEEPOUT_V1_KEYS) - {"name", "ref", "rect_mm", "reason"})
+    if unknown:
+        raise ConstraintError(f"{where}: unknown key(s) {', '.join(unknown)}")
+    shapes = [k for k in ("polygon", "rect", "rect_mm") if k in entry]
+    if len(shapes) != 1:
+        raise ConstraintError(f"{where}: give exactly one of polygon, rect, or ref + rect_mm")
+    out: Dict = {"name": name}
+    if "polygon" in entry:
+        out["polygon"] = _finite_points(entry["polygon"], f"{where}.polygon", 3)
+    else:
+        key = shapes[0]
+        rect = entry[key]
+        if (
+            not isinstance(rect, (list, tuple))
+            or len(rect) != 4
+            or not all(_finite_number(v) for v in rect)
+        ):
+            raise ConstraintError(f"{where}.{key} needs four numbers")
+        if rect[0] >= rect[2] or rect[1] >= rect[3]:
+            raise ConstraintError(f"{where}: rectangle must have positive area")
+        if key == "rect_mm":
+            if entry.get("ref") not in known_refs:
+                raise ConstraintError(f"{where}: unknown ref {entry.get('ref')!r}")
+            out["ref"] = entry["ref"]
+            out["rect_mm"] = [float(v) for v in rect]
+        else:
+            x0, y0, x1, y1 = (float(v) for v in rect)
+            out["polygon"] = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
+    if "ref" in entry and "rect_mm" not in entry:
+        raise ConstraintError(f"{where}: ref goes with rect_mm (the part's frame)")
+    names = copper_layer_names(board.layers)
+    layers = _string_list(entry.get("layers"), f"{where}.layers") or list(names)
+    bad = [la for la in layers if la not in names]
+    if bad:
+        raise ConstraintError(f"{where}: not copper layers of this board: {', '.join(bad)}")
+    out["layers"] = [la for la in names if la in set(layers)]
+    items = _string_list(entry.get("items"), f"{where}.items") or list(KEEPOUT_ITEMS)
+    bad = [i for i in items if i not in KEEPOUT_ITEMS]
+    if bad:
+        raise ConstraintError(f"{where}.items: {bad} not in {KEEPOUT_ITEMS}")
+    out["items"] = [i for i in KEEPOUT_ITEMS if i in set(items)]
+    classes = _string_list(entry.get("allow_classes"), f"{where}.allow_classes")
+    declared = {nc.name for nc in net_classes} | {"dp_" + dp.name for dp in diff_pairs}
+    bad = [c for c in classes if c not in declared]
+    if bad:
+        raise ConstraintError(f"{where}.allow_classes: undeclared net class(es) {bad}")
+    groups = _string_list(entry.get("exempt_groups"), f"{where}.exempt_groups")
+    known_groups = {b["group"] for b in fixed_blocks}
+    bad = [g for g in groups if g not in known_groups]
+    if bad:
+        raise ConstraintError(f"{where}.exempt_groups: not fixed_block groups {bad}")
+    out["allow_classes"] = classes
+    out["allow_nets"] = _string_list(entry.get("allow_nets"), f"{where}.allow_nets")
+    out["exempt_groups"] = groups
+    return out
+
+
+def _parse_fixed_blocks(raw, constraints, known_refs, warnings) -> List[Dict]:
+    """The ``fixed_block`` list (pnr.fixed_block): name, KiCad group, optional fixed
+    anchor (the frame of the copper digest), digest, solid layers and footprints."""
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ConstraintError("fixed_block must be a list")
+    fixed = {r for c in constraints if c.kind == "fixed" for r in c.refs}
+    out, names, groups = [], set(), set()
+    for entry in raw:
+        if not isinstance(entry, dict):
+            raise ConstraintError("fixed_block: each entry is a mapping")
+        name, group = entry.get("name"), entry.get("group")
+        if not isinstance(name, str) or not name or name in names:
+            raise ConstraintError("fixed_block: each block needs a unique name")
+        where = f"fixed_block {name!r}"
+        if not isinstance(group, str) or not group or group in groups:
+            raise ConstraintError(f"{where}: needs a KiCad group name of its own")
+        unknown = sorted(
+            set(entry) - {"name", "group", "anchor", "sha256", "solid_layers", "refs", "reason"}
+        )
+        if unknown:
+            raise ConstraintError(f"{where}: unknown key(s) {', '.join(unknown)}")
+        spec: Dict = {"name": name, "group": group}
+        anchor = entry.get("anchor")
+        if anchor is not None:
+            if anchor not in known_refs:
+                raise ConstraintError(f"{where}: unknown anchor {anchor!r}")
+            if anchor not in fixed:
+                raise ConstraintError(f"{where}: anchor {anchor!r} must have a fixed pose")
+            spec["anchor"] = anchor
+        digest = entry.get("sha256")
+        if digest is not None:
+            if (
+                not isinstance(digest, str)
+                or len(digest) != 64
+                or any(ch not in "0123456789abcdef" for ch in digest)
+            ):
+                raise ConstraintError(f"{where}.sha256 must be 64 lowercase hex digits")
+            spec["sha256"] = digest
+        spec["solid_layers"] = _string_list(entry.get("solid_layers"), f"{where}.solid_layers")
+        refs = _expand_refs(
+            _string_list(entry.get("refs"), f"{where}.refs"), known_refs, warnings, where
+        )
+        if set(refs) & fixed:
+            raise ConstraintError(f"{where}: a block footprint is held out, it cannot be fixed")
+        spec["refs"] = list(refs)
+        names.add(name)
+        groups.add(group)
+        out.append(spec)
+    return out
 
 
 def load_constraints(path: str, known_refs: Sequence[str]) -> CompiledConstraints:

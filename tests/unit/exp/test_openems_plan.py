@@ -83,7 +83,7 @@ class OpenemsPlanTest(unittest.TestCase):
         manifest = openems_plan.generate(self.jobs, out, IMAGE)
         self.assertEqual(manifest["jobs"], ["tx12-A-e1", "col12-A-e1"])
         self.assertEqual(
-            manifest["placement"], {"families": ["c4d"], "packing": "core", "vm_vcpus": 16}
+            manifest["placement"], {"families": ["c4d", "c4"], "packing": "core", "vm_vcpus": 16}
         )
         self.assertFalse((out / "inputs" / "code" / "__pycache__").exists())
         lines = [json.loads(x) for x in (out / "stage.jsonl").read_text().splitlines()]
@@ -94,6 +94,7 @@ class OpenemsPlanTest(unittest.TestCase):
         self.assertEqual(lines[0]["env"]["OMP_NUM_THREADS"], "4")
         self.assertEqual(lines[0]["env"]["RFMACRO_ROOT"], "w")
         self.assertEqual(lines[1]["resources"]["max_wall_s"], 3600)
+        self.config.gcp.ranking = list(testing.RANKING)
         plan = planning.make_plan(
             out / "campaign.toml",
             "gcp-batch",
@@ -109,6 +110,15 @@ class OpenemsPlanTest(unittest.TestCase):
         cls = plan.classes[0]
         placement = plan.placement(cls.name)
         self.assertEqual((placement.shape, placement.tasks_per_vm), ("c4d-highcpu-16", 2))
+        # Both AVX-512 families: C4 in Montreal is where a submit spills when us-west4 is full.
+        self.assertEqual(
+            [(p.pair, p.shape) for p in plan.candidates(cls.name)],
+            [
+                ("c4d/us-west4", "c4d-highcpu-16"),
+                ("c4/northamerica-northeast1", "c4-highcpu-16"),
+                ("c4/us-west4", "c4-highcpu-16"),
+            ],
+        )
         job = gcp_batch.render_job(
             plan.meta, self.config, cls, placement, 1, len(cls.lines), testing.DEADLINE
         )

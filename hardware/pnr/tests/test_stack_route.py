@@ -291,8 +291,8 @@ class DropWidths(unittest.TestCase):
         c, rules = compiled(g, 4, {"GND": "In1.Cu", "VCC": "In2.Cu"})
         original = pad_entry.terminal_required_width
         # A terminal contract widens only C1's ground pad.
-        pad_entry.terminal_required_width = lambda ref, number, net, rules: (
-            0.6 if (ref, number) == ("C1", "2") else original(ref, number, net, rules)
+        pad_entry.terminal_required_width = lambda ref, number, net, rules, **kw: (
+            0.6 if (ref, number) == ("C1", "2") else original(ref, number, net, rules, **kw)
         )
         try:
             route = route_board(g, c, rules, pitch=0.25, max_iters=8)

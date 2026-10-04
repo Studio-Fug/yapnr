@@ -11,9 +11,10 @@ where it matters, give the same numbers:
 
 **The default is `auto`: native float64 wherever its library loads, the numpy reference
 otherwise.** Native float64 is numpy float64 bit for bit (below), so a run's results do not
-depend on whether the library was there, only its time does: one evaluation is 13–16 times
-faster than numpy on the shared Mac (4 threads) and 38–42 times on a C4D-16, and 3.4–6.3 times
-faster than the torch float32 the cases ran on before ([measurements](#performance)). The
+depend on whether the library was there, only its time does: one evaluation is 12–17 times
+faster than numpy on the shared Mac (4 threads) and 43–62 times on a C4D-16 (16 threads), and
+4.2–8.4 times faster than the torch float32 the cases ran on before
+([measurements](#performance)). The
 library ships in the yapnr wheel (one per platform) and so in the container image, Bazel builds
 it for `//yapnr/rf` and its tests, and a checkout builds it with one command. The first
 simulation of a process says on stderr, once, which
@@ -214,7 +215,73 @@ job can still ship a library of its own and point `YAPNR_RF_FDTD_LIB` at it.
 
 ## Performance
 
-### The default, measured on the integrated branch
+### Per iteration, divider and D1-size grids
+
+One evaluation with gradients of a gray design (forward and adjoint runs, the design gradients:
+the optimizer's cost per MMA step at the nominal design; the robust epochs pay three), on the
+divider's round-2 grid (0.20 M cells, 12,770 steps) and the same divider at refine 2 (0.80 M
+cells, 25,532 steps: the size of the Order 0 D1 grid), round-2 settings (copper-edge correction,
+modal source), line calibrations cached, `auto` schedule, seconds. The time is a process's
+second evaluation (another design, as the next iteration); the first evaluation of a process
+adds 0.8–1.0 s of one-time set-up (the port mode solves, the stepper's buffers and pool).
+
+Spot `c4d-highcpu-16` (AMD EPYC 9B45, Zen 5: 8 cores, 16 threads, 32 MiB L3), idle, the library
+CI built into the linux/amd64 wheel (gcc 13, AVX-512 sweeps), loaded from the unpacked wheel:
+
+| Grid            | numpy f64, 1 thread | torch f32, 1 / 4 threads | native f64, 1 / 4 / 8 / 16 threads | native f32, 1 / 4 / 8 / 16 threads |
+| --------------- | ------------------- | ------------------------ | ---------------------------------- | ---------------------------------- |
+| divider, 0.20 M | 90.5                | 29.3 / 12.4              | 10.5 / 3.28 / 1.72 / **1.47**      | 7.97 / 2.57 / 1.40 / **1.16**      |
+| D1 size, 0.80 M | 697                 | 223 / 101                | 95.8 / 28.8 / 17.5 / **16.1**      | 47.5 / 15.5 / 8.19 / **6.74**      |
+
+Mac mini M4, 4 threads, niced, shared with other work (load 6–28); two runs, their range:
+
+| Grid            | numpy f64, 1 thread | torch f32, 4 threads | native f64, 4 threads | native f32, 4 threads |
+| --------------- | ------------------- | -------------------- | --------------------- | --------------------- |
+| divider, 0.20 M | 68.9–92.4           | 20.4–23.4            | **4.15–5.57**         | 2.45–4.08             |
+| D1 size, 0.80 M | 668–684             | 126–250              | **40.0–57.5**         | 18.2–24.1             |
+
+- **Native float64 on 16 threads against the cases' former torch float32 (4 threads):** 8.4
+  times faster on the divider and 6.3 times on the D1-size grid, 62 and 43 times faster than
+  numpy; native float32 on 16 threads 10.7 and 15 times faster than torch float32. On the Mac at
+  4 threads native float64 is 4.2–6.0 times faster than torch float32 and 12–17 times faster
+  than numpy.
+- **Threads:** on the divider 1 → 4 → 8 → 16 threads gives 3.2, 1.9 and 1.17 times (the last
+  doubling is SMT); at 0.80 M cells 3.3, 1.6 and 1.09 times: from 8 threads on the grid is
+  memory-bound, 0.79 ns per cell-step in float64 and 0.33 in float32 (the 8-step float32 passes
+  keep more of it in cache).
+- **The same bits at every thread count:** on both machines and both grids every native float64
+  row's first evaluation has the numpy row's sha256 (objective values, gradients, S), and the
+  float64 objective t agrees across rows; float32 is within 4.9e-7 (divider) and 1.2e-6 (D1 size)
+  of float64 in t.
+- **Schedules `auto` chose:** C4D sweeps for the divider (the box fits half the L3), 5-step
+  passes in float64 and 8-step in float32 at 0.80 M cells; M4 7- and 8-step passes for the
+  divider, 2- and 5-step passes at 0.80 M cells.
+
+The independent check of the same stage, besides the tests: the full-grid matrix of
+`test_native_identity` again with another design (random gray with exact copper and void
+pixels; the diagonal one with lines along both diagonals) on the C4D (divider, antenna,
+diagonal design × edge correction × port source, the combiner's resistor, the reactive sheet:
+14 configurations), native float64 at 1 thread (sweeps), 16 (`auto`), 5 (2-step passes, 3 rows
+per item), 2 (7-step passes, 1 row) and 4 (1-step passes) and native float32 at 16 and 3 threads,
+each in a process of its own: all equal to numpy by bytes, and the line calibrations, computed
+separately for each backend, equal too (18 of 18). float32 against float64: objective values
+within 4.8e-6, gradients within 2.5e-5 overall and 1.1e-4 for the worst objective (the plain
+divider), cosine within 3.1e-10 of 1. End to end on the smoke grids (six-iteration optimizations
+with robust variants, adaptive moves from the epoch's best, a radiation epoch and frequency
+continuation for the antenna; binarization, repair, export, coarse sweep, calibrations and
+re-validation, every file of the run directory compared): native float64 at 1, 3 (3-step
+passes) and 4 threads equal to numpy float64, native float32 equal to numpy float32, for the
+divider, combiner and antenna on the C4D and for all five cases on the Mac (there with the mode
+profiles pinned, see [Exactness](#exactness)). The published divider and antenna, re-exported
+from their round-2 checkpoints and re-validated on native float64 (Mac, 4 threads, calibrations
+recomputed): the same verdicts (the divider passes on all three grids; the antenna meets |S11|
+and η but not the 4 % power balance on the finer two, 4.58 and 4.70 %), byte-identical
+footprints, every check within 8.4e-5 dB (divider) and 2.5e-4 dB (antenna, η within 2e-5) of
+round 2's torch float32 numbers, in 470 s and 351 s against 1,245 s and 668 s.
+
+### The integrated branch, first measurement
+
+These evaluations are a process's first (with its one-time set-up).
 
 One evaluation (forward and adjoint runs, gradients; the optimizer's unit per iteration) of a
 gray design on the cases' full grids, round-2 settings (copper-edge correction, its time step

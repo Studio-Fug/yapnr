@@ -840,6 +840,28 @@ the look-ahead of power-first placement (`PNR_POWER_FIRST=1`, which refuses regi
 for the default flow, and costs the trial packs: it is meant for boards with narrow
 regions.
 
+### Legalizer and global-placement switches (environment, opt-in)
+
+Besides the per-design `legalize:` options above, five engine switches change how global
+placement hands parts to the legalizer and how the legalizer turns them. They are environment
+variables (`pnr/legalize_flags.py`), off by default and independent of `PNR_COMPACT`; a run with
+none set is placed exactly as before. The regression runner sets them from its own options
+(it strips ambient `PNR_*` variables), and `provenance.json` records them.
+
+| Variable                  | Runner option                 | Meaning                                                                                                                       |
+| ------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `PNR_GP_POLISH=1`         | `--gp-polish`                 | A final global-placement phase (200 iterations, turns frozen) whose overlap term uses the legalizer's own slots.            |
+| `PNR_GP_CHANNELS=<l>`     | `--gp-channels L`             | The polish (implied) also weighs the legalizer's routing-channel cost by `l` (1 or 0.5 in the A/B).                          |
+| `PNR_POOL_SOURCE_CLAMP=1` | `--pool-source-clamp`         | The initial pool's source start begins inside the outline (the cluster box under compact placement).                         |
+| `PNR_LEGALIZE_HPWL=<w>`   | `--legalize-hpwl W`           | The legalizer weighs `w` times each part's wirelength (mm² per mm) and picks its turn among all four with the slot.          |
+| `PNR_LEGALIZE_REORIENT=1` | `--legalize-reorient [wire]`  | After legalization, parts turn in place where that shortens their wires, stays legal and keeps their channels (`wire`: legal only). |
+
+`PNR_LEGALIZE_HPWL` respects the turns a design pins: a part with an `orientation` (or a `fixed`
+`rot`) keeps it, and a `line_group` turns only as one rigid line. The in-place turns never touch
+fixed, locked or oriented parts, `row` and `line_group` members, hierarchical blocks, or parts on
+a `diff_pair` or `length_match` net. Design and measurements:
+[compact placement, section 11](../design/compact-placement.md).
+
 ## How intent becomes a layout
 
 1. **Ingest** reads the resolved board into a neutral graph (components, pads,

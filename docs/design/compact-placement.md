@@ -1,6 +1,7 @@
 # Design: compact placement (`PNR_COMPACT`) and shrink-to-fit (`PNR_SHRINK`)
 
-Status: implemented on branch `claude/compact`, off by default. Code: `hardware/pnr/pnr/compact_flags.py`
+Status: implemented on branch `claude/compact`, off by default; section 11 (legalizer spacing
+and turns) on branch `claude/legalize`, off by default. Code: `hardware/pnr/pnr/compact_flags.py`
 (the switches, stdlib only) and `hardware/pnr/pnr/place/compact.py` (metrics, cluster box,
 legalizer settings, shrink search); the call sites guard on the switches. Tests:
 `hardware/pnr/tests/test_compact.py`.
@@ -215,3 +216,167 @@ The full tables are in the workflow's A/B notes; the ladder documentation
 ([compact placement](../regression-ladder.md#compact-placement-opt-in)) summarises them.
 
 Still open: the 0.01 mm courtyard gap (no DRC finding in any arm).
+
+## 11. Spacing and turns at legalization (`PNR_GP_POLISH`, `PNR_LEGALIZE_HPWL`, ...)
+
+> Owner (2026-10-04): the legalizer moves a lot of components. How were the global placement
+> distances tuned? Are there slight overlaps with the packed placement? Does legalization have
+> the resolution not to treat the closer packing as overlaps? A component the legalizer moves
+> should have its rotation re-evaluated to minimise wirelength: the line-constrained LED chaser
+> in the README ends with extra track because its series resistors are not turned to lie flush
+> with the row after legalization.
+
+**Findings** (a GCP probe of 81 legalize calls per arm and paired Mac prototypes on 64 recorded
+pool starts; the workflow's notes keep the data):
+
+- **Nothing was tuned.** The global weights are the first placer's, unchanged; compact chose the
+  0.01 mm gap, the 0.125 mm grid, the cluster box and spread 1.0 in its design and measured them
+  only as a bundle.
+- **Global placement does leave slight overlaps under compact** (6.8 true courtyard overlaps per
+  result, median depth 0.07 mm), but removing them alone changes nothing measurable after routing.
+- **Resolution is not why parts move.** Re-legalizing the same result on a 0.01 mm grid removes
+  2.6 % of the displacement for 375 times the CPU; snapping is 4 % of the moved parts.
+- **The legalizer moves parts mainly for its routing-channel cost** (`channels.py`, 70 % of the
+  moves over 0.1 mm), which global placement never sees, then for the overlaps.
+- **The legalizer never turned a part on these boards:** it tries `rot + 90` only when the global
+  turn has no free slot at all, and its slot cost has no wirelength. The README resistors are not
+  a turn-in-place case: the legalizer put them on the far side of the LED row (the nearest free
+  slot), where every correctly polarised turn has the same wirelength. Choosing the slot and the
+  turn together, with wirelength in the cost, puts them upright beside their LEDs.
+
+Five switches, each off by default and usable with or without `PNR_COMPACT`
+(`pnr/legalize_flags.py`, stdlib only):
+
+| Switch                     | Part | What it does                                                                                                                                                                                                          |
+| -------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PNR_GP_POLISH=1`          | A    | 200 more iterations of `global_place`'s own loop with turns and free sides frozen, the overlap, outline and keep-out terms on the legalizer's slots, the overlap weight ramped 1 to 100 and the step 0.3 to 0.005 mm. |
+| `PNR_GP_CHANNELS=<lambda>` | A    | The polish (implied) also carries the legalizer's channel cost, smooth: `lambda / 2 · Σ shortage²` over facing pad rows.                                                                                              |
+| `PNR_POOL_SOURCE_CLAMP=1`  | A4   | The initial pool's source start begins with every movable part clamped into the outline (the cluster box under `GP`).                                                                                                 |
+| `PNR_LEGALIZE_HPWL=<w>`    | C1   | The legalizer's slot cost gains `w` times the part's wirelength, and each part's slot is searched at all four turns: the cheapest wins.                                                                               |
+| `PNR_LEGALIZE_REORIENT=1`  | C2   | After legalization, greedy in-place turns that shorten a part's wirelength, stay legal and do not raise its channel shortage; `=wire` drops the channel guard.                                                        |
+
+`run.py` takes `--gp-polish`, `--gp-channels L`, `--pool-source-clamp`, `--legalize-hpwl W` and
+`--legalize-reorient [wire]` (after it strips the ambient `PNR_*` variables, so `provenance.json`
+records them); the `ladder-cell` kind takes `gp_polish`, `gp_channels`, `pool_source_clamp`,
+`legalize_hpwl`, `legalize_reorient` and `legalize_reorient_wire`. A trace's header lists the
+active switches (`placement_switches`). An adopted switch is meant to become a `PNR_COMPACT` part.
+
+### A. Global placement and the legalizer agree on spacing
+
+`pnr/place/gp_polish.py`, run by `model.global_place(polish=...)` from the placer:
+
+- **The legalizer's slot.** Per frozen turn and side, `ceil((w · s + clearance + 2m) / g) · g` per
+  axis, centred where the legalizer centres it (the occupied box centre, offset courtyards
+  included), with `s`, `clearance`, `m` and `g` exactly as `legalize()` gets them (compact: 1 or
+  the feedback inflation, the gap, the margins, 0.125 mm; off: 1.3 or the inflation, the board
+  clearance, none, 0.25 mm). Slots of whole cells that do not overlap stay disjoint after the
+  nearest-cell snap, so a polished result legalizes by snapping alone unless the channel cost
+  moves a part. With the pad-edge rule the slot centre is also held inside `pad_edge_box`.
+- **The channel cost, soft.** The required gap of each ordered pair and facing direction is
+  `ChannelModel.active_demand` over the facing rows' nets that reach a third part (pair-local
+  nets reserve nothing), precomputed once for the frozen turns; the term is counted on facing
+  envelopes only (gap at least 0, projections overlapping), `ChannelModel.penalty`'s definition.
+  Enforcing the full demand as a hard spacing over-spaces (+5 to +11 % wirelength, +11 to +32 %
+  bounding box in the prototype); the legalizer itself tolerates some shortage.
+- **Everything else stays on** (wirelength, regions, aligns, groups, keep-outs, edge aligns,
+  planes, matched lengths, side terms); a fresh positions-only Adam runs the fixed 200 steps.
+  The trace shows them as more global-placement snapshots, so parts glide apart before
+  legalization instead of jumping at it.
+- Not with hull macros (ignored) or power-first placement (never asked).
+
+### B. Resolution: no change
+
+The 0.125 mm grid stays: a finer grid or an Abacus-style pass would buy 2.6 % of the
+displacement at 375 times the CPU, and Abacus assumes equal-height rows and a separable cost
+that the channel cost is not. Part A removes the grid's share instead.
+
+### C. Turns
+
+- **C1, the slot and the turn together** (`legalize.py`: `wire_cost`, `wire_turns`, the nested
+  `search_scored`). The candidate cost (displacement², channel demand, soft rules) gains
+  `w · wire_cost`: the half-perimeter wirelength of the part's nets with placed parts at their
+  legal pins, unplaced parts at their global targets and plane nets left out. `search_scored`
+  runs the existing `search()` once per turn of `[rot, rot + 90, rot + 180, rot + 270]` and keeps
+  the cheapest outcome by `slot_cost` (which gains the same term); a tie keeps the earlier turn,
+  hard rotations and `allow_rotation=False` keep the global turn, line and block macros turn as
+  one body, the side retry compares both sides' best turns, and under `lookahead: regions` a turn
+  whose every slot strands a part counts only when every turn does. The region and align reach
+  then also covers the four turns.
+- **C2, in-place turns** (`pnr/place/reorient.py`), run in `placer.place` after `legalize`,
+  `snap_aligns` and `refine_matched` and before `detail_moves`, so inside every pool start, line
+  group macro graph and hierarchical block. Greedy, best wirelength gain first (then the
+  reference, then the turn), to a fixed point and at most four turns per candidate, each about
+  the slot centre and checked by `metrics.pose_checker` with the legalizer's clearance, spreading
+  factor, margins and pad-edge rule. Never turned: fixed, locked and hard-rotated parts, row and
+  line-group members, macros, and parts on a diff-pair or length-match net. Ties keep the turn.
+  With `=1` a turn must not raise the part's `ChannelModel.penalty` against the others.
+
+### Determinism and tests
+
+Fixed step counts, no new random draws, float64 in the legalizer, first-index ties, a fixed
+turn order and `(gain, ref, turn)` order in C2: a seed reproduces its board on one platform.
+Tests: `test_legalize_flags.py` (parsing, the runner's options, the trace header, and the flag-off
+identity on 04-inverter-leds-8 and 07-chaser-20 against the compact goldens with every new
+function patched to fail), `test_legalize_wire.py` (the README case: the near-side slot with the
+term and the far one without; a reversed part half-turned; ties; hard rotations; offset courtyards
+at the chosen turn; and a line-group chaser whose series resistors end upright beside their LEDs
+only with the term), `test_reorient.py` (the best legal turn; neighbours, keep-outs and the spread
+factor rule turns out; the channel guard; exclusions; idempotence; the placer only gets shorter)
+and `test_gp_polish.py` (a tight toy packing legalizes by snapping alone after the polish, at most
+half a cell diagonal per part, against 2.9 mm without; the channel term opens an escaping pair and
+ignores a pair-local net; zero steps change nothing; the source clamp).
+
+### Measurements
+
+Wave 0 (2026-10-04, darwin-arm64, compact): the design's 64 recorded pool starts (8 ladder cases
+and showcases, seed 0) replayed through the unchanged placer with each switch set, every
+placement legal and routed once at the pool's finalist budget, paired against compact as on
+`main` on the same global result. 56 starts without the source start (which begins up to 233 mm
+off the board); base copper 191 mm per board:
+
+| Switches                                            | Legalizer move | Moved > 0.5 mm | HPWL    | Bounding box | Copper per board [95 % CI] | Vias  |
+| --------------------------------------------------- | -------------- | -------------- | ------- | ------------ | -------------------------- | ----- |
+| none (compact as on `main`)                         | 2.31 mm        | 76 %           |         |              |                            |       |
+| `GP_POLISH`                                         | 1.92 mm        | 70 %           | −1.8 %  | +1.4 %       | +0.1 [−4.1, +4.4]          | +0.36 |
+| `GP_CHANNELS=1`                                     | 0.53 mm        | 30 %           | −3.1 %  | +6.7 %       | −1.8 [−6.8, +3.2]          | −1.88 |
+| `GP_CHANNELS=0.5` (placement only)                  | 1.06 mm        | 50 %           | −4.5 %  | +1.9 %       |                            |       |
+| `LEGALIZE_REORIENT=wire`                            | 2.31 mm        | 76 %           | −2.3 %  | −0.9 %       | −3.5 [−7.9, +0.9]          | −0.14 |
+| `LEGALIZE_HPWL=4`                                   | 3.28 mm        | 95 %           | −13.4 % | −5.4 %       | −22.0 [−28.7, −15.3]       | −1.25 |
+| `LEGALIZE_HPWL=4`, `REORIENT=1`                     | 3.28 mm        | 95 %           | −13.6 % | −5.4 %       | −23.3 [−29.5, −17.2]       | −1.20 |
+| `LEGALIZE_HPWL=4`, `REORIENT=wire`                  | 3.28 mm        | 95 %           | −14.6 % | −6.0 %       | −26.6 [−32.5, −20.8]       | −1.50 |
+| `LEGALIZE_HPWL=16`, `REORIENT=wire`                 | 4.20 mm        | 95 %           | −25.6 % | −11.1 %      | −46.5 [−54.9, −38.0]       | −2.29 |
+| `GP_CHANNELS=1`, `LEGALIZE_HPWL=4`                  | 2.42 mm        | 89 %           | −13.4 % | −0.2 %       | −20.8 [−26.5, −15.1]       | −1.38 |
+| `GP_CHANNELS=1`, `LEGALIZE_HPWL=4`, `REORIENT=wire` | 2.42 mm        | 89 %           | −14.1 % | −0.5 %       | −21.2 [−27.9, −14.4]       | −1.52 |
+
+- Every figure lies inside the prototype's confidence interval; the wirelength term reproduces the
+  prototype's placements start by start, and the engine without switches its copper on 60 of 64
+  starts (the replay rounds the recorded targets to float32).
+- `REORIENT=1` (the channel guard) turns little: −0.5 % HPWL alone and −1.3 mm after
+  `LEGALIZE_HPWL=4`, against −2.3 % and −4.6 mm without the guard, whose turns raise the
+  channel model's shortage score from 1.2 to 2.8 mm² per board. The A/B measures both.
+- Legalization CPU per start rises from 0.21 s to 0.77 s with `LEGALIZE_HPWL` (four searches and
+  the term) and the polish adds about 0.2 s; global placement is not counted here.
+- README board (`line-chaser-20`, seed 0, start 00): 272.0 mm as on `main`; 295.7 mm with
+  `LEGALIZE_HPWL=4` alone; 257.9 mm (21 vias) with `REORIENT=wire` too, the series resistors R4,
+  R6 and R7 upright beside their LEDs; 277.2 mm (18 vias) with `GP_CHANNELS=1` as well.
+- Switches off: the unit suites, and `run.py --compact` on 04-inverter-leds-8 and 05-timer-led-10,
+  give the same placements and routes as `main`.
+
+These are one platform, seed 0, one route per placement, without the pool's ranking, feedback
+rounds or gloss. Adoption waits for the ladder A/B (8 cases and 4 showcases on two seeds, the
+header rung, then 08-chaser-20-plane on ten seeds, the hard rungs, the manual `09-mcu-usb-31`
+lane and `10-quad-bank-56`): a switch becomes a `PNR_COMPACT` part only if no cell loses
+completion or gains DRC or skew findings, copper improves with its 95 % interval below zero on
+the core cells and no hard family is more than 2 % worse, vias rise by at most 0.5 per board,
+placement CPU by at most 30 % and the bounding box by at most 5 % (`GP_CHANNELS=1` is at +6.7 %
+here, 0.5 the fallback). None of them targets the manual lane's failure (no room to tune the USB
+pairs), so compact placement itself is expected to stay opt-in.
+
+### Conflicts and open points
+
+- The legalizer options of `claude/s3a-legal` (scarcity order, region look-ahead, exact outline)
+  are on `main` (#44); C1 adds one `only=` argument to `search()` and a flag where its stranded
+  fallback is taken, so the look-ahead runs per turn. Their interaction is not measured.
+- The channel model reads `default_clearance_mm` (0.4 on the ladder) where the router and KiCad
+  use the fab clearance (0.2) for unclassed nets: one escaping track asks 1.05 mm between pads
+  where 0.65 to 0.90 mm routes. Unchanged here (it moves every result with the switches off).

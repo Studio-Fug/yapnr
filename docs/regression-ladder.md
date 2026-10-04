@@ -335,6 +335,12 @@ stack planned before routing. `--compact-off PART` drops one part (`GP`, `RANK`,
 the design's and writes the board at the smallest that routes; hard rungs are exempt. Both are
 recorded in `provenance.json` (`pnr_environment`).
 
+The legalizer and global-placement switches of the [design's section 11](design/compact-placement.md)
+are runner options too, off by default and usable with or without `--compact`: `--gp-polish`,
+`--gp-channels L`, `--pool-source-clamp`, `--legalize-hpwl W` and `--legalize-reorient [wire]`
+(`PNR_GP_POLISH`, `PNR_GP_CHANNELS`, `PNR_POOL_SOURCE_CLAMP`, `PNR_LEGALIZE_HPWL`,
+`PNR_LEGALIZE_REORIENT`, recorded in `provenance.json` like the others).
+
 Every case's `result.json` gains `compactness`, measured alike in every arm on the parts' body
 boxes in `placed.json`: the bounding box (`bbox_mm2`, `bbox_mm`), the summed body area,
 `utilization` (area over bbox), `occupancy` (area over the outline) and the outline area.

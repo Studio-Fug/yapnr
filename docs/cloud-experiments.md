@@ -163,8 +163,8 @@ tofu apply bootstrap.plan
 
 The plan creates 81 resources for two regions ([infra/gcp](https://github.com/Studio-Fug/yapnr/tree/main/infra/gcp)):
 APIs, the VPC, both buckets, the service accounts and grants, the registry caches and the
-`images` repositories for [task images](#task-images-openems), the Spot templates, the budget and
-the guard functions.
+`images` repositories for task images ([openEMS](#task-images-openems),
+[Palace](#task-images-palace)), the Spot templates, the budget and the guard functions.
 
 The project's `default` network allows SSH from anywhere and gives VMs external IPs; yapnr jobs
 never use it, so delete it, and with it any way a hand-written job could land there:
@@ -590,6 +590,63 @@ instance template runs from an instance policy. A model with its own `threads` b
 class of its own (its own Batch job and VMs, still `models_per_vm` to a VM of `vm_vcpus`), so
 keep one thread count per jobs file to fill the VMs. openEMS runs do not checkpoint, so a
 preempted model starts again.
+
+### Task images (Palace)
+
+[AWS Palace](https://github.com/awslabs/palace) (Apache-2.0) is the finite-element solver that
+checks openEMS's FDTD results: driven, eigenmode, electrostatic, magnetostatic and 2D
+boundary-mode problems, lumped and wave ports, conductivity and impedance boundaries, adaptive
+mesh refinement and adaptive frequency sweeps, all MPI-parallel. Palace publishes no public
+container image, so [`docker/palace`](https://github.com/Studio-Fug/yapnr/tree/main/docker/palace)
+builds its CMake superbuild at a pinned `main` commit (one with fixes for several boundary
+attributes that share a material entry, after release v0.18.1) on Ubuntu 24.04 with OpenMPI and
+OpenBLAS: SuperLU_DIST and MUMPS, ARPACK for the wave-port mode solves and eigenmodes, GSLIB and
+LIBXSMM; no SLEPc, STRUMPACK, SUNDIALS (transient) or GPU. The image adds Palace's
+coplanar-waveguide example and its regression references, and a Python 3.12 with gmsh, numpy and
+shapely, so a task can mesh its model before the solve. There is one variant,
+`palace:<commit7>-x86-64-v3` (AVX2), because a second one doubles the build while the hot kernels
+pick AVX-512 at run time anyway (OpenBLAS, LIBXSMM). One of the dependencies Palace's superbuild
+always links, ParMETIS, is licensed for evaluation use outside non-profit research and may not be
+redistributed: the image stays in the private registry (see the image's README).
+
+Cloud Build builds it on the 8-vCPU machine the regional quota allows, in a 3-hour budget (the
+default timeout is 10 minutes). The dependency stage is pushed as `palace-deps:<tag>-x86-64-v3`
+before Palace compiles and is read back with `--cache-from`, so a build that fails in Palace, or a
+change to the runtime stage, does not rebuild the dependencies. `tools/exp/palace_plan.py` works
+like `openems_plan.py` (both use `tools/exp/image_tasks.py`); the jobs format is in its docstring:
+
+```sh
+python3 tools/exp/palace_plan.py image --run                      # about an hour or more
+python3 tools/exp/palace_plan.py plan models.toml --out <dir>      # pins the image's digest
+yapnr exp plan <dir>/campaign.toml --backend gcp-batch
+yapnr exp submit <cid> && yapnr exp status <cid>      # again until every task is done
+yapnr exp fetch <cid>                                 # logs, records, Palace's tables
+python3 tools/exp/palace_plan.py collect <cid> --dest <tree>       # <tree>/runs/<model>/...
+```
+
+A job names a Palace configuration (`config`, a path in the task: an input, or the image's
+`/opt/palace/share/palace/examples/...`), optional overrides (`set = {"Solver.Order" = 3}`, for the
+campaign or per job), an optional `prepare` script that meshes the model and writes the
+configuration into `{out}` first, and an optional `reference` directory whose `port-S.csv` the
+result must match. Each task runs the job bundle's `palace_job.py`: it reads the configuration
+(Palace's relaxed JSON: comments, trailing commas, integer ranges), applies the overrides, moves
+the output to `out/<id>/postpro` and makes the mesh path absolute (`out/<id>/config.json`), checks
+it with `palace --dry-run`, then solves with `mpirun -np <ranks>` from the configuration's
+directory. OpenMPI runs as root there (Batch's container user) without cross-memory attach (no
+ptrace in the container), over shared memory (its `ob1` layer with the `vader` transport, not UCX
+or libfabric: one VM, no RDMA) on the 1 GiB of `/dev/shm` the task containers get. The record,
+`out/<id>.job.json` (its verdict is `ok`: the solve exited 0 and matched the reference), keeps the
+stage that failed, wall and CPU time, the CPU, and Palace's own numbers from `palace.json` and its
+log: degrees of freedom and mesh elements, AMR iterations and the unknowns of each, linear solves
+and iterations, timers, peak memory per rank and summed over the ranks.
+
+A model gets a VM: `ranks` MPI ranks on as many physical cores (`vm_vcpus` is twice that on C4D),
+bound to them; `packing = "vcpu"` puts a rank on each hardware thread, and with
+`models_per_vm` above one the ranks are left unbound (two `mpirun`s would bind to the same
+cores). `memory_gb` decides between the highcpu and standard shapes (`yapnr exp plan`'s rule);
+the plan asks for an instance policy where that shape has no Spot template (templates exist for
+`c4d-highcpu-8`, `c4d-highcpu-16` and `c4d-standard-16`). Palace does not checkpoint and adaptive
+refinement cannot restart, so a preempted model starts again: keep Spot models to an hour or two.
 
 ## Testing
 

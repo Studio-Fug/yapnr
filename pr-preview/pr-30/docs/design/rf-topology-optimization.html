@@ -2968,8 +2968,10 @@ experiment and a three-thread case validation (load 9–27): the 34 RF targets p
 all; the slowest are <code class="docutils literal notranslate"><span class="pre">test_wilkinson_smoke</span></code> (156 s), <code class="docutils literal notranslate"><span class="pre">test_pipeline_gradient_options</span></code> (149 s),
 <code class="docutils literal notranslate"><span class="pre">test_microstrip</span></code> (145 s), <code class="docutils literal notranslate"><span class="pre">test_pipeline_gradient</span></code> (139 s) and <code class="docutils literal notranslate"><span class="pre">test_tiny_design_options</span></code>
 (121 s), against the 900 s timeout, and every other one takes under 85 s. On CI’s four vCPUs that
-is about 6 minutes of RF tests if a vCPU matches one core here, 12 if it is half as fast. No CI
-run of the new head exists: this round does not push, so CI is not yet shown to pass.</p>
+is about 6 minutes of RF tests if a vCPU matches one core here, 12 if it is half as fast. This
+round did not push. CI passes on the integrated branch (the native kernel merged; <code class="docutils literal notranslate"><span class="pre">edf9c2f</span></code>, runs
+37182863668 and 37182863672): all 36 RF targets, the slowest in 119 s on ubuntu-24.04-arm and
+131 s on macOS.</p>
 </section>
 <section id="seeds-keepouts-and-generated-geometry">
 <h3>24.6 Seeds, keepouts and generated geometry<a class="headerlink" href="#seeds-keepouts-and-generated-geometry" title="Link to this heading">¶</a></h3>

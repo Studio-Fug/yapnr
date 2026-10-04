@@ -1758,8 +1758,10 @@ experiment and a three-thread case validation (load 9–27): the 34 RF targets p
 all; the slowest are `test_wilkinson_smoke` (156 s), `test_pipeline_gradient_options` (149 s),
 `test_microstrip` (145 s), `test_pipeline_gradient` (139 s) and `test_tiny_design_options`
 (121 s), against the 900 s timeout, and every other one takes under 85 s. On CI's four vCPUs that
-is about 6 minutes of RF tests if a vCPU matches one core here, 12 if it is half as fast. No CI
-run of the new head exists: this round does not push, so CI is not yet shown to pass.
+is about 6 minutes of RF tests if a vCPU matches one core here, 12 if it is half as fast. This
+round did not push. CI passes on the integrated branch (the native kernel merged; `edf9c2f`, runs
+37182863668 and 37182863672): all 36 RF targets, the slowest in 119 s on ubuntu-24.04-arm and
+131 s on macOS.
 
 ### 24.6 Seeds, keepouts and generated geometry
 

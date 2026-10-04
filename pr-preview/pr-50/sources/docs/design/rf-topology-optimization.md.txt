@@ -1978,10 +1978,13 @@ the **non-guided fraction**, radiation and surface wave together, and the proble
 (`describe()["radiation_box"]["eta"]`) with a quantified assumption (`Problem.assumptions`, in
 `result.json` and `validation.json`): the surface wave's share of a half-wave patch's power,
 P_sw/(P_sp + P_sw) = 1 − e_hed by Jackson and Alexopoulos's closed form [32]
-(`stackup.surface_wave_share`), 0.27 on S2 at 10 GHz. openEMS on a finite 50 × 42 mm board put
-the round-2 antenna's radiation efficiency at 0.82–0.85 against η 0.94–0.95 (the audit).
-Radiation efficiency, gain and patterns need a board model (§26); the spec refuses pattern
-requirements without one.
+(`stackup.surface_wave_share`), 0.27 on S2 at 10 GHz. An earlier openEMS comparison on a finite
+50 × 42 mm board (radiation efficiency 0.82–0.85 against η 0.94–0.95) used a far-field script
+that passed the NF2FF phase centre in millimetres where openEMS reads metres, which flipped two
+faces' equivalent currents; it is withdrawn (audit erratum, 2026-10-04) and not replaced here —
+a board-model comparison with corrected far-field numbers is an open item (§26.6). Radiation
+efficiency, gain and patterns need a board model (§26); the spec refuses pattern requirements
+without one.
 
 ### 25.5 The validator's checks (`validate.power_balance`)
 
@@ -2138,6 +2141,37 @@ design region at 0.25 mm pitch, frame axis +y: realized gain ≥ −1 dBi at 12 
 5 dB over 36, e_tot ≥ 0.6, an omni shape, |S11| ≤ −12 dB over 5.70–5.90 GHz; 1.05 M cells,
 Δt 0.315 ps). They load, build and evaluate; they have not been run, and their limits are the
 design's first guesses.
+
+### 26.6 Open items (adversarial review of c2caac2..dbda1b7)
+
+Tracked here rather than fixed in this round, with the evidence that raised each one:
+
+- **Board-model resonance against openEMS disagrees by ~3 %, cause unknown.** yapnr's board model
+  (§26.1) resonates at 10.21–10.22 GHz (R1/R2); a corrected openEMS run (coordinates rounded to
+  the mesh, §25.4's erratum) gives 9.92 GHz. The round-2 antenna's board-model minimum (10.91–
+  10.95 GHz) also falls outside its 9.7–10.3 GHz design band, where openEMS gives 10.28 GHz.
+  Suspects: the lumped-port column, averaging the substrate block's edges, and the ground sitting
+  on a node plane. No board-model number in this design doc should be read as agreeing with
+  openEMS until this is resolved.
+- **The default antenna objective (no board model) still optimizes η as the non-guided
+  fraction** (§25.4), which includes the TM0 surface wave (about 0.27 of a patch's radiated power
+  [D]): nothing stops the optimizer from raising η by launching more surface wave rather than
+  more radiation. A tighter objective — the flux through the box's air faces alone, as a lower
+  bound, or requiring a board model for the final antenna epochs — is not implemented here.
+- **The Huygens box's clearance is in cells, not wavelengths.** The default (`clearance_cells: 2`)
+  can put a face inside the reactive near field on a graded, fine mesh (about 0.01 λ from a thin
+  monopole tip on demo B's grid). `P_ff/P_box` has only been checked on the V2 validation geometry
+  (0.6 % at 0.1 λ) and the patch, not on either new demo.
+- **The omni board model is one ground layer, no feed cable, and a ground sized to the demo's own
+  board (30 × 46 mm, about 0.9 λ at 5.8 GHz), which sets most of the pattern.** A real 4-layer
+  board needs the keepout on every ground layer, a common-mode feed current is not modelled, and
+  `board` must match the real transceiver board for the gain/pattern numbers to mean anything
+  there.
+- **`shape` requirements with `form: max_rms_db`** are an RMS dB error only for small deviations
+  and under-penalize excess radiation where the target sits at its floor; the guide should say so
+  and point to `log_l2` with `weight: uniform` when sidelobe or off-axis radiation also needs
+  suppressing.
+- Demos A and B (§26.5) have not been run; their numeric limits are first guesses.
 
 ## References
 

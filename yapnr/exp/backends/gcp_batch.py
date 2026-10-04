@@ -242,10 +242,19 @@ def choose(
                         % (cls.name, "; ".join(x.get("skipped", "") for x in looked))
                     )
                 chosen = usable[0]
-                why = (
-                    "no candidate region has Spot quota for one more VM (or it could not be "
-                    "read); waits in %s, the first usable candidate" % chosen.region
-                )
+                unread = [x["pair"] for x in looked if "quota" in x]
+                if len(unread) == len(usable):
+                    # Nothing was read (a dry run reads nothing): no claim that the regions are full.
+                    why = (
+                        "the Spot quota could not be read in any candidate region; placed on "
+                        "%s, the first usable candidate" % chosen.pair
+                    )
+                else:
+                    note = " (unreadable: %s)" % ", ".join(unread) if unread else ""
+                    why = (
+                        "no candidate region has Spot quota for one more VM%s; waits in %s, the "
+                        "first usable candidate" % (note, chosen.region)
+                    )
         if one_type:
             shape = chosen.shape
         rank = [p.pair for p in plan.candidates(cls.name)].index(chosen.pair) + 1

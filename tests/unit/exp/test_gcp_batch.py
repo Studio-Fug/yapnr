@@ -435,7 +435,19 @@ class GcpBatchTest(unittest.TestCase):
         cloud = self.two_regions(west=(64, 0), northeast=(64, 0))
         cloud.quotas = {}
         done, _ = self.submit(plan, cloud)
-        self.assertEqual(done[0].record["placement"]["choice"]["pair"], "c4d/us-west4")
+        choice = done[0].record["placement"]["choice"]
+        self.assertEqual(choice["pair"], "c4d/us-west4")
+        # It says the quota was not read, not that the regions are full (a dry run reads none).
+        self.assertIn("could not be read in any candidate region", choice["why"])
+        self.assertNotIn("waits", choice["why"])
+        # One region full, the other unreadable: full, and which one was not read.
+        plan = self.ranked_plan(out=self.tmp / "half")
+        cloud = self.two_regions(west=(64, 64), northeast=(64, 0))
+        del cloud.quotas["northamerica-northeast1"]
+        done, _ = self.submit(plan, cloud)
+        choice = done[0].record["placement"]["choice"]
+        self.assertEqual(choice["pair"], "c4d/us-west4")
+        self.assertIn("(unreadable: c4/northamerica-northeast1); waits in us-west4", choice["why"])
 
     def test_submit_region_pins_the_region(self):
         plan = self.ranked_plan()

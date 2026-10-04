@@ -325,7 +325,8 @@ The submission record carries the choice and why. The queue-timeout resubmission
 (`--fallback`) is still not built: quota-aware placement does not see stockouts.
 
 The **provisional home region is `us-west4`** (the cheapest C4D Spot price in North America in the
-snapshot), with `northamerica-northeast1` as the second region (cheap C3D and C4). Both choices
+snapshot), with `northamerica-northeast1` as the second region (cheap C4; it is priced for C3D and
+C4D but offered neither at the October 2026 bootstrap, so its templates are C4). Both choices
 must be confirmed at bootstrap with `yapnr exp prices` and `gcloud compute machine-types list`
 and are recorded only in the owner config. Before relying on a region, `gcloud beta compute advice
 capacity` (obtainability, Preview) and `advice capacity-history` (30 days of preemption rates and
@@ -649,7 +650,7 @@ registry = "{region}-docker.pkg.dev/example-project/ghcr"
 subnetwork = "projects/example-project/regions/{region}/subnetworks/yapnr-{region}"
 template = "yapnr-{shape}-{model}-{region}"
 price_api_key_command = ["security", "find-generic-password", "-s", "yapnr-billing-catalog", "-w"]
-ranking = [["c4d", "us-west4"], ["c3d", "northamerica-northeast1"]]   # from calibration
+ranking = [["c4d", "us-west4"], ["c4", "northamerica-northeast1"]]   # from calibration
 
 [limits]
 max_tasks = 2000

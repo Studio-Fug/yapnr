@@ -52,6 +52,12 @@ DEFAULT_ROWS = 8
 # The cache the wavefront schedule plans for when the last level cannot be read, MiB.
 DEFAULT_CACHE_MB = 8.0
 MAX_TBLOCK = 8
+# Whether the `auto` schedule may choose wavefront passes. Not on macOS: on the M4 the passes
+# were never faster than the sweeps (6 threads, 0.20-1.79 M cells), and on the shared Mac, niced
+# (its threads land on the efficiency cores, whose L2 is 4 MiB, not the 16 MiB `auto` plans
+# for), the divider's and the antenna's line calibrations and one evaluation took 3-4 times as
+# long in 8-step passes as in sweeps.
+PASSES_PAY = sys.platform != "darwin"
 BACKENDS = ("auto", "numpy", "torch", "native")
 
 HERE = Path(__file__).resolve().parent
@@ -627,14 +633,17 @@ class NativeStepper:
 
     def _tblock(self) -> int:
         """Steps per wavefront pass (0: the sweeps, one pass over the box per half step):
-        ``$YAPNR_RF_TBLOCK`` N, else ("auto") the sweeps while the box (fields and ψ) fits in
-        half the last-level cache (``$YAPNR_RF_CACHE_MB``, else read from the system), and
-        otherwise as many steps as keep about three planes per step in that cache (0 when not
-        even one fits). C4D-16 (32 MiB L3), divider at 0.80 M cells, 16 threads: 0.74 ms per
-        step in 5-step passes against 1.24 in sweeps; at 0.20 M cells the sweeps are ahead."""
+        ``$YAPNR_RF_TBLOCK`` N, else ("auto") the sweeps on macOS (`PASSES_PAY`) and while the
+        box (fields and ψ) fits in half the last-level cache (``$YAPNR_RF_CACHE_MB``, else read
+        from the system), and otherwise as many steps as keep about three planes per step in
+        that cache (0 when not even one fits). C4D-16 (32 MiB L3), divider at 0.80 M cells,
+        16 threads: 0.74 ms per step in 5-step passes against 1.24 in sweeps; at 0.20 M cells
+        the sweeps are ahead."""
         env = os.environ.get(ENV_TBLOCK, "").strip().lower()
         if env not in ("", "auto"):
             return max(0, min(MAX_TBLOCK, int(env)))
+        if not PASSES_PAY:
+            return 0
         cache = float(os.environ.get(ENV_CACHE, "").strip() or last_level_cache_mb()) * 2**20
         psi = sum(p.nbytes for p in self._psi)
         box = 6 * self.size * self.dtype.itemsize + psi

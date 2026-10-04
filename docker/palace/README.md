@@ -8,16 +8,16 @@ image for `yapnr exp` campaigns that run electromagnetic models on Cloud Batch
 container image (its CI pushes to a private registry), so Cloud Build builds this one into the
 project's private `images` repository, which the task VMs read. It is not published on GHCR.
 
-| File                  | What                                                                                                                                                     |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Dockerfile`          | Palace's CMake superbuild at a pinned commit on Ubuntu 24.04 (GCC 13, OpenMPI 4.1, OpenBLAS), plus a Python with gmsh, numpy and shapely                 |
-| `patches/`            | Scotch/PT-Scotch in place of ParMETIS in the superbuild (`palace-ptscotch.diff`), and the MUMPS CMake wrapper's PT-Scotch option (`mumps-ptscotch.diff`) |
-| `conformance/`        | an MPI test of `ParMETIS_V3_NodeND` written from the ParMETIS manual, run against Scotch's version during the build ([README](conformance/README.md))    |
-| `provenance.py`       | the build's checks that no ParMETIS was fetched, built, installed or linked                                                                              |
-| `sbom.py`             | the image's SPDX bill of materials, and its comparison with syft's                                                                                       |
-| `requirements.txt`    | the Python packages, pinned and hash-checked                                                                                                             |
-| `runtime-packages.sh` | the packages of the shared libraries the build links, so the runtime stage installs those and none of the build (as in `docker/openems`)                 |
-| `cloudbuild.yaml`     | the build on one Cloud Build machine, with the dependency stages pushed mid-build and read back as its cache, then syft's scan of the image              |
+| File                  | What                                                                                                                                                                                                             |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Dockerfile`          | Palace's CMake superbuild at a pinned commit on Ubuntu 24.04 (GCC 13, OpenMPI 4.1, OpenBLAS), plus a Python with gmsh, numpy and shapely                                                                         |
+| `patches/`            | Scotch/PT-Scotch in place of ParMETIS in the superbuild (`palace-ptscotch.diff`), the MUMPS CMake wrapper's PT-Scotch option (`mumps-ptscotch.diff`), and a revert in Scotch (`scotch-hdgraph-fold.diff`, below) |
+| `conformance/`        | an MPI test of `ParMETIS_V3_NodeND` written from the ParMETIS manual, run against Scotch's version during the build ([README](conformance/README.md))                                                            |
+| `provenance.py`       | the build's checks that no ParMETIS was fetched, built, installed or linked                                                                                                                                      |
+| `sbom.py`             | the image's SPDX bill of materials, and its comparison with syft's                                                                                                                                               |
+| `requirements.txt`    | the Python packages, pinned and hash-checked                                                                                                                                                                     |
+| `runtime-packages.sh` | the packages of the shared libraries the build links, so the runtime stage installs those and none of the build (as in `docker/openems`)                                                                         |
+| `cloudbuild.yaml`     | the build on one Cloud Build machine, with the dependency stages pushed mid-build and read back as its cache, then syft's scan of the image                                                                      |
 
 ## What is in the image
 
@@ -54,7 +54,12 @@ so this image replaces it, keeping the orderings parallel:
   (the same ordering on every run), with 32-bit `SCOTCH_Num` like SuperLU_DIST's `int_t`.
 - **MUMPS** calls PT-Scotch itself (`-Dptscotch`, with `DETERMINISTIC_PARALLEL_GRAPH`) instead of
   ParMETIS: `ColumnOrdering: "PTScotch"` is its parallel analysis. Its `"ParMETIS"` now fails
-  with MUMPS error -38 (ordering not available), never silently.
+  loudly (Palace aborts on the MUMPS error), never silently.
+- **Scotch carries one revert**: its `hdgraphFold2()` refactor (Scotch commit `2747e2b`, first in
+  v7.0.15) made MUMPS's parallel analysis abort at 8 ranks inside PT-Scotch's nested dissection
+  (`MPI_Waitany`: `MPI_ERR_TRUNCATE`) on Palace's cpw example, while 2 and 4 ranks and the
+  ParMETIS API path ran. v7.0.10 ran it; v7.0.16 with that commit reverted runs it at 8 ranks and
+  passes the conformance test unchanged. To be reported to Scotch, and dropped once fixed there.
 - Unchanged: the default, `ColumnOrdering: "Default"`, is SuperLU_DIST with serial METIS on every
   rank (METIS is Apache-2.0). Every run of the validation used it, so no validated number ran
   ParMETIS code.

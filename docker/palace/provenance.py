@@ -140,6 +140,16 @@ def deps(tripwire: str, report: Report) -> None:
         bool(pinned) and head == pinned,
         "Scotch is at the pinned commit %s (HEAD %s)" % (pinned, head),
     )
+    changed = subprocess.run(
+        ["git", "-C", str(BUILD / "extern" / "scotch"), "diff", "--name-only"],
+        capture_output=True,
+        text=True,
+    ).stdout.split()
+    report.check(
+        changed == ["src/libscotch/hdgraph_fold.c", "src/libscotch/hdgraph_fold.h"],
+        "Scotch carries only the hdgraphFold2() revert (patches/scotch-hdgraph-fold.diff): %s"
+        % changed,
+    )
 
     named = sorted(str(p.relative_to(PREFIX)) for p in PREFIX.rglob("*") if PARMETIS.search(p.name))
     # CMake find modules named after ParMETIS (the consumers' own, removed from the image) hold

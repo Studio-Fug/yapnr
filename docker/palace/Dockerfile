@@ -63,13 +63,16 @@ RUN git init -q /src/palace \
  && printf '%s\n' "${PALACE_VERSION}" > /src/meta/palace.version \
  && printf '%s\n' "${ARCH_FLAGS:-generic}" > /src/meta/arch-flags.txt
 # patches/palace-ptscotch.diff: Scotch/PT-Scotch (pinned commit) in place of ParMETIS in the
-# superbuild; patches/mumps-ptscotch.diff: the MUMPS CMake wrapper's PT-Scotch option, which the
-# first one adds to the MUMPS patch list
+# superbuild; the two patches it adds to the superbuild's patch lists: mumps-ptscotch.diff (the
+# MUMPS CMake wrapper's PT-Scotch option) and scotch-hdgraph-fold.diff (Scotch's hdgraphFold2()
+# refactor of v7.0.15 reverted: it aborts MUMPS's parallel analysis at 8 ranks; README.md)
 COPY patches/ /src/patches/
 RUN cd /src/palace \
  && git apply --check /src/patches/palace-ptscotch.diff \
  && git apply /src/patches/palace-ptscotch.diff \
  && cp /src/patches/mumps-ptscotch.diff extern/patch/mumps/patch_ptscotch.diff \
+ && mkdir -p extern/patch/scotch \
+ && cp /src/patches/scotch-hdgraph-fold.diff extern/patch/scotch/patch_hdgraph_fold.diff \
  && (cd /src/patches && sha256sum ./*.diff) > /src/meta/patches.sha256 \
  && printf 'pt-scotch\n' > /src/meta/ordering.txt
 RUN (cmake -S /src/palace -B /src/build \

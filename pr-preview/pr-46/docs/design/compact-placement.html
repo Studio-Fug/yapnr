@@ -1,0 +1,664 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html"><link rel="next" title="History import manifest" href="../history/import-manifest.html"><link rel="prev" title="Design: the gloss, dekink and corridor-coalescing pass (PNR_GLOSS)" href="gloss.html">
+        <link rel="prefetch" href="../../static/yapnr-logo-256.png" as="image">
+        <link rel="prefetch" href="../../static/yapnr-logo-light.png" as="image">
+
+    <link rel="shortcut icon" href="../../static/yapnr-favicon.svg"><!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
+        <title>Design: compact placement (PNR_COMPACT) and shrink-to-fit (PNR_SHRINK) - yapnr documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../../static/custom.css?v=ad564152" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-brand-primary: #024823;
+  --color-brand-content: #024823;
+  --color-brand-visited: #024823;
+  --color-yapnr-accent: #ba9015;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #ddeee0;
+  --color-brand-content: #ddeee0;
+  --color-brand-visited: #ba9015;
+  --color-yapnr-accent: #ba9015;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">yapnr documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="../../static/yapnr-logo-256.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../../static/yapnr-logo-light.png" alt="Dark Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Using yapnr</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../containers.html">Container images</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../viewer.html">The live viewer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../frontends/atopile.html">The atopile toolchain</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../part-cache.html">The part cache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../rf-inverse-design.html">RF inverse design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../rf-solver-backends.html">RF solver backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../fab-and-ordering.html">Fab bundles and staged orders</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../releases.html">Releases and versioning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../rf-fab-coupons.html">RF fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../rf-palace.html">Palace models: planar structures, meshes and configurations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../cloud-experiments.html">Cloud and HPC experiments (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">exp</span></code>)</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../regression-ladder.html">Regression ladder</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../constraints-and-hierarchy.html">Constraints and hierarchy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../migration-plan.html">yapnr migration plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../decisions.html">Decisions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="animations.html">Design: the regression ladder in CI, PnR traces and critical-path animations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="constraint-and-hier-animations.html">Design: line groups, board edges and hierarchical PnR, animated</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fea-integration.html">Design: thermal and electromagnetic field solvers (FEA) in yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-topology-optimization.html">Design: RF microstrip inverse design by topology optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rf-fab-coupons.html">Design: fab-model test coupons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cloud-experiments.html">Design: cloud and HPC experiment backends (GCP Batch, Slurm)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fab-and-ordering.html">Design: fab outputs and staged ordering (<code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">fab</span></code>, <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">order</span> <span class="pre">stage</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gloss.html">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../history/import-manifest.html">History import manifest</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../about-the-name.html">About the name</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../references.html">Foundations and references</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../DEVELOPERS.html">Developing yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../CONTRIBUTING.html">Contributing to yapnr</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../AGENTS.html">Rules for agents</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../WORKLOG.html">Worklog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../THIRD_PARTY.html">Third-party material</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../README.html">yapnr</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/blob/main/docs/design/compact-placement.md?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/Studio-Fug/yapnr/edit/main/docs/design/compact-placement.md" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="design-compact-placement-pnr-compact-and-shrink-to-fit-pnr-shrink">
+<h1>Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)<a class="headerlink" href="#design-compact-placement-pnr-compact-and-shrink-to-fit-pnr-shrink" title="Link to this heading">¶</a></h1>
+<p>Status: implemented on branch <code class="docutils literal notranslate"><span class="pre">claude/compact</span></code>, off by default. Code: <code class="docutils literal notranslate"><span class="pre">hardware/pnr/pnr/compact_flags.py</span></code>
+(the switches, stdlib only) and <code class="docutils literal notranslate"><span class="pre">hardware/pnr/pnr/place/compact.py</span></code> (metrics, cluster box,
+legalizer settings, shrink search); the call sites guard on the switches. Tests:
+<code class="docutils literal notranslate"><span class="pre">hardware/pnr/tests/test_compact.py</span></code>.</p>
+<blockquote>
+<div><p>Owner request (2026-10-03): the PnR can achieve a much more compact result for the demoed
+blocks, since they are two layers and simple slow digital routing. The minimum distance between
+parts looks too conservative during global placement and legalization.</p>
+</div></blockquote>
+<p>Measured before the change (seed 0): the ladder’s courtyards cover only 11 to 22 % of their
+outlines. Four causes, one switch part each, and a fifth part (<code class="docutils literal notranslate"><span class="pre">DROPS</span></code>) for a defect the denser
+placement exposed:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Part</p></th>
+<th class="head"><p>Cause</p></th>
+<th class="head"><p>Change</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">GP</span></code></p></td>
+<td><p>The ladder places at <code class="docutils literal notranslate"><span class="pre">spread=1.3</span></code>, which “makes parts fill the whole board”; the random starts are spread over the whole interior.</p></td>
+<td><p>Spread 1.0; the starts are drawn in a cluster box around the fixed parts. Space grows only where the router measured congestion.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">LEGALIZE</span></code></p></td>
+<td><p>Slots are <code class="docutils literal notranslate"><span class="pre">ceil((size</span> <span class="pre">+</span> <span class="pre">0.4)</span> <span class="pre">/</span> <span class="pre">0.25</span> <span class="pre">mm)</span></code>: the routing clearance (0.4 mm on the ladder) between courtyards that KiCad already draws about 0.25 mm outside the pads.</p></td>
+<td><p>The courtyard gap (0.01 mm, or <code class="docutils literal notranslate"><span class="pre">board.courtyard_clearance_mm</span></code>), a copper margin only where a box hugs its pads, a 0.125 mm slot grid, pads off the edge.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">COURTYARD</span></code></p></td>
+<td><p>Courtyards are modelled symmetric about the footprint origin: a 1x8 pin header whose origin is pin 1 reserves twice its length, and <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-header</span></code> cannot be placed.</p></td>
+<td><p>Each part occupies its ingested body box (<code class="docutils literal notranslate"><span class="pre">Component.body</span></code>), off its origin and turned with the part.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">RANK</span></code></p></td>
+<td><p>Selections among equally complete candidates ignore compactness.</p></td>
+<td><p>A compactness tie-break after every completion key and the vias.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DROPS</span></code></p></td>
+<td><p>A <code class="docutils literal notranslate"><span class="pre">plane_layer</span></code> net without a declared stack gets its plane vias from writeback’s dog-bones after routing, where routed copper can enclose a pad (<code class="docutils literal notranslate"><span class="pre">08-chaser-20-plane</span></code>).</p></td>
+<td><p>The router plans those drops with the signal escapes before routing, as it does for a declared stack.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<section id="switches">
+<h2>1. Switches<a class="headerlink" href="#switches" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">PNR_COMPACT=1</span></code> turns on <code class="docutils literal notranslate"><span class="pre">GP</span></code>, <code class="docutils literal notranslate"><span class="pre">RANK</span></code>, <code class="docutils literal notranslate"><span class="pre">LEGALIZE</span></code>, <code class="docutils literal notranslate"><span class="pre">COURTYARD</span></code> and <code class="docutils literal notranslate"><span class="pre">DROPS</span></code>;
+<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT_&lt;PART&gt;=0</span></code> drops one part (ablations).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">run.py</span></code>’s <code class="docutils literal notranslate"><span class="pre">--compact-off</span></code> choices and the <code class="docutils literal notranslate"><span class="pre">ladder-cell</span></code> kind’s <code class="docutils literal notranslate"><span class="pre">compact_off</span></code> list the same
+parts as <code class="docutils literal notranslate"><span class="pre">pnr/compact_flags.py</span></code> (tests keep them equal).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">PNR_SHRINK=1</span></code> is separate and never on by default: it changes the board outline.</p></li>
+<li><p>Unset, every caller takes its unchanged path and the engine’s JSON gains no key. The flag-off
+identity is tested on 04-inverter-leds-8 and 07-chaser-20 against the parent commit (the
+legalizer, the initial pool’s starts and fixed poses on every platform; the whole placer on the
+platform the golden was recorded on). On every platform a guard test runs the placer, the
+legalizer and the initial pool with the compact-only functions patched to fail and checks
+that no part has an offset body.</p></li>
+<li><p>The ladder: <code class="docutils literal notranslate"><span class="pre">run.py</span> <span class="pre">--compact</span> <span class="pre">[--compact-off</span> <span class="pre">PART</span> <span class="pre">...]</span> <span class="pre">[--shrink]</span></code> sets the variables after
+the runner strips the ambient <code class="docutils literal notranslate"><span class="pre">PNR_*</span></code> ones, so <code class="docutils literal notranslate"><span class="pre">provenance.json</span></code> records them. The
+<code class="docutils literal notranslate"><span class="pre">ladder-cell</span></code> experiment kind takes <code class="docutils literal notranslate"><span class="pre">compact</span></code>, <code class="docutils literal notranslate"><span class="pre">compact_off</span></code>, <code class="docutils literal notranslate"><span class="pre">shrink</span></code>, <code class="docutils literal notranslate"><span class="pre">gloss</span></code>,
+<code class="docutils literal notranslate"><span class="pre">gloss_measure</span></code> and <code class="docutils literal notranslate"><span class="pre">hard</span></code>.</p></li>
+</ul>
+</section>
+<section id="offset-courtyards-courtyard">
+<h2>2. Offset courtyards (<code class="docutils literal notranslate"><span class="pre">COURTYARD</span></code>)<a class="headerlink" href="#offset-courtyards-courtyard" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Data:</strong> the ingest already records <code class="docutils literal notranslate"><span class="pre">Component.body</span></code>, the box the symmetric <code class="docutils literal notranslate"><span class="pre">courtyard</span></code> is
+built from (courtyard, or body, united with the pads and silk), as it lies about the origin in
+the unrotated frame of the current side, mirrored with the pads. No ingest or schema change.</p></li>
+<li><p><strong>Rectangle:</strong> <code class="docutils literal notranslate"><span class="pre">geometry.courtyard_rect</span></code> returns <code class="docutils literal notranslate"><span class="pre">pos</span> <span class="pre">+</span> <span class="pre">regions.rotate_box(body,</span> <span class="pre">rot)</span></code> and
+<code class="docutils literal notranslate"><span class="pre">geometry.body_shift(comp,</span> <span class="pre">rot)</span></code> its centre’s offset from <code class="docutils literal notranslate"><span class="pre">pos</span></code> (exact at quarter turns). Block
+and line macros keep their centred courtyard.</p></li>
+<li><p><strong>Correct through the rectangle:</strong> hard violations, <code class="docutils literal notranslate"><span class="pre">pose_checker</span></code>, the capacity proxy,
+relocation, feedback moves and the hierarchical extent; regions and aligns already measured
+<code class="docutils literal notranslate"><span class="pre">body</span></code>.</p></li>
+<li><p><strong>Converted between pose and slot centre:</strong> <code class="docutils literal notranslate"><span class="pre">legalize._place_part(...,</span> <span class="pre">shift)</span></code> compares the
+candidate slot centres less the shift with the target, the hard group discs, the edge box and
+the candidate cost, so all of them stay in pose space; callers set <code class="docutils literal notranslate"><span class="pre">pos</span> <span class="pre">=</span> <span class="pre">slot</span> <span class="pre">centre</span> <span class="pre">-</span> <span class="pre">shift</span></code>
+(the main loop, <code class="docutils literal notranslate"><span class="pre">available_pose</span></code>, the power-first look-ahead, <code class="docutils literal notranslate"><span class="pre">centre_limits</span></code>,
+<code class="docutils literal notranslate"><span class="pre">refine_channels</span></code>, <code class="docutils literal notranslate"><span class="pre">matched.refine_matched</span></code>). Landing reserves and region masks take the
+shift; a side retry recomputes it.</p></li>
+<li><p><strong>Global placement:</strong> <code class="docutils literal notranslate"><span class="pre">model.global_place</span></code> and <code class="docutils literal notranslate"><span class="pre">cost_inspect.Objective</span></code> use the body half sizes
+and the body offset expected under the rotation probabilities, mixed over both sides for a
+side-free part like the pin offsets; the overlap, outline, edge and keep-out terms use
+<code class="docutils literal notranslate"><span class="pre">pos</span> <span class="pre">+</span> <span class="pre">offset</span></code>. The cost capture replays the same offsets (<code class="docutils literal notranslate"><span class="pre">effective_shift</span></code>).</p></li>
+<li><p><strong>Also:</strong> edge-resolved fixed poses (the body flush with the edge, at the held rotation),
+ref-relative keep-outs (against the body’s edge), the elastic mesh and its projection, hull
+macro boards (<code class="docutils literal notranslate"><span class="pre">hull.gp_bodies</span></code>), <code class="docutils literal notranslate"><span class="pre">regions.check_feasible</span></code>, and <code class="docutils literal notranslate"><span class="pre">plane_intent</span></code>, which widens
+the body to its symmetric via-array reservation.</p></li>
+<li><p><strong>Unchanged</strong> (the symmetric box contains the body): <code class="docutils literal notranslate"><span class="pre">_fit_outline</span></code>, rows, line-group spacing,
+<code class="docutils literal notranslate"><span class="pre">_opposite_body_basins</span></code>, hierarchical block areas. <code class="docutils literal notranslate"><span class="pre">PNR_POWER_FIRST=1</span></code> refuses <code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>.</p></li>
+</ul>
+</section>
+<section id="global-placement-gp">
+<h2>3. Global placement (<code class="docutils literal notranslate"><span class="pre">GP</span></code>)<a class="headerlink" href="#global-placement-gp" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">compact.spread()</span></code> returns 1.0 at the top of <code class="docutils literal notranslate"><span class="pre">placer.place</span></code>,
+<code class="docutils literal notranslate"><span class="pre">initial_pool.select_initial_placement</span></code> and <code class="docutils literal notranslate"><span class="pre">feedback.route_and_place</span></code>, overriding the ladder’s
+<code class="docutils literal notranslate"><span class="pre">spread=1.3</span></code>; the feedback loop’s per-part inflation (RePlAce, from routed congestion) is
+unchanged.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">compact.cluster_box</span></code>: a rectangle of twice the summed body area with the board’s aspect,
+centred on the fixed parts (else the board) and clamped inside it. <code class="docutils literal notranslate"><span class="pre">global_place(start_box=)</span></code>
+and the initial pool’s stratified and Latin starts map their existing random draws into it (no
+new draws).</p></li>
+<li><p>The hierarchical regression driver’s block trials also try the utilisations 0.5 and 0.6 (its
+own budget, <code class="docutils literal notranslate"><span class="pre">hier_case.budget_of</span></code>; a caller of <code class="docutils literal notranslate"><span class="pre">pnr.hier</span></code> sets its own).</p></li>
+</ul>
+</section>
+<section id="legalizer-legalize">
+<h2>4. Legalizer (<code class="docutils literal notranslate"><span class="pre">LEGALIZE</span></code>)<a class="headerlink" href="#legalizer-legalize" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">compact.legalize_settings(graph,</span> <span class="pre">constraints,</span> <span class="pre">rules)</span></code> returns <code class="docutils literal notranslate"><span class="pre">(gap,</span> <span class="pre">grid_mm,</span> <span class="pre">margins)</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">compact.placement_clearance(constraints)</span></code> replaces <code class="docutils literal notranslate"><span class="pre">board.default_clearance_mm</span></code> wherever
+placement reads it as a courtyard clearance: the placer (legalize, <code class="docutils literal notranslate"><span class="pre">snap_aligns</span></code>,
+<code class="docutils literal notranslate"><span class="pre">refine_matched</span></code>, the side moves), the global objective and its inspector, the initial pool’s
+basin fallback and the hierarchical feedback boards. The copper margins go wherever that
+clearance is checked after legalization: <code class="docutils literal notranslate"><span class="pre">snap_aligns</span></code>, the side moves (<code class="docutils literal notranslate"><span class="pre">pose_checker</span></code>) and
+the feedback <code class="docutils literal notranslate"><span class="pre">MoveBoard</span></code> (both parts’ margins added to the gap). Rows and line groups keep the
+board’s <code class="docutils literal notranslate"><span class="pre">default_clearance_mm</span></code>, not the gap, so they need none.</p>
+<ul class="simple">
+<li><p><strong>Gap:</strong> <code class="docutils literal notranslate"><span class="pre">board.courtyard_clearance_mm</span></code> when authored, else 0.01 mm (KiCad courtyards carry
+about 0.25 mm around the pads; touching courtyards are legal; 10 µm guards nanometre rounding).</p></li>
+<li><p><strong>Copper margin:</strong> <code class="docutils literal notranslate"><span class="pre">m</span> <span class="pre">=</span> <span class="pre">max(0,</span> <span class="pre">c</span> <span class="pre">/</span> <span class="pre">2</span> <span class="pre">-</span> <span class="pre">pad</span> <span class="pre">inset)</span></code>, with <code class="docutils literal notranslate"><span class="pre">c</span></code> the routing copper clearance and
+the inset the smallest distance from a pad to the part’s box: zero for library courtyards, up
+to <code class="docutils literal notranslate"><span class="pre">c</span> <span class="pre">/</span> <span class="pre">2</span></code> for a box that hugs its pads (a part without a courtyard layer). Two neighbours’
+pads keep at least <code class="docutils literal notranslate"><span class="pre">c</span></code>.</p></li>
+<li><p><strong>Slot:</strong> <code class="docutils literal notranslate"><span class="pre">ceil((w</span> <span class="pre">·</span> <span class="pre">inflation</span> <span class="pre">+</span> <span class="pre">gap</span> <span class="pre">+</span> <span class="pre">2m)</span> <span class="pre">/</span> <span class="pre">g)</span></code> cells with <code class="docutils literal notranslate"><span class="pre">g</span> <span class="pre">=</span> <span class="pre">0.125</span> <span class="pre">mm</span></code>; edge-band and
+align caps subtract the margin too.</p></li>
+<li><p><strong>Edges:</strong> the pad and drill edge rule (<code class="docutils literal notranslate"><span class="pre">PNR_PAD_EDGE_CLEARANCE</span></code>) is on.</p></li>
+<li><p>Copper clearance stays with the router and native DRC; <code class="docutils literal notranslate"><span class="pre">channels.py</span></code> (escape demand) is
+unchanged.</p></li>
+</ul>
+</section>
+<section id="compactness-metric-and-selection-rank">
+<h2>5. Compactness metric and selection (<code class="docutils literal notranslate"><span class="pre">RANK</span></code>)<a class="headerlink" href="#compactness-metric-and-selection-rank" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">compact.metrics(graph,</span> <span class="pre">W,</span> <span class="pre">H)</span></code> is measured on the body boxes of every part, fixed ones included,
+whatever the switches (so every arm is measured alike): <code class="docutils literal notranslate"><span class="pre">bbox_mm2</span></code>, <code class="docutils literal notranslate"><span class="pre">utilization</span> <span class="pre">=</span> <span class="pre">ΣA</span> <span class="pre">/</span> <span class="pre">bbox</span></code>,
+<code class="docutils literal notranslate"><span class="pre">occupancy</span> <span class="pre">=</span> <span class="pre">ΣA</span> <span class="pre">/</span> <span class="pre">WH</span></code> and <code class="docutils literal notranslate"><span class="pre">bucket</span> <span class="pre">=</span> <span class="pre">floor(20</span> <span class="pre">·</span> <span class="pre">bbox</span> <span class="pre">/</span> <span class="pre">WH)</span></code>, rounded to 1e-3. The ladder records
+the same measure in each case’s <code class="docutils literal notranslate"><span class="pre">result.json</span></code> (<code class="docutils literal notranslate"><span class="pre">compactness</span></code>, every arm).</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">initial_pool.route_rank</span></code> (the pool’s routed finalists, the halving screen, <code class="docutils literal notranslate"><span class="pre">mc_case</span></code>, the
+hierarchical top seed): <code class="docutils literal notranslate"><span class="pre">missing,</span> <span class="pre">unresolved,</span> <span class="pre">length_unmatched,</span> <span class="pre">vias,</span> <span class="pre">bucket,</span> <span class="pre">length</span></code>, then
+the id: on a fixed outline a smaller bounding box is free but a via is not. Under
+<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code> (the outline follows the bounding box) the bucket ranks before the vias. A record
+without a bucket (the switch off) keeps the previous key.</p></li>
+<li><p>Halving native and deep stages: <code class="docutils literal notranslate"><span class="pre">bbox_mm2</span></code> after every completion key, before the id.</p></li>
+<li><p>The place-route loop’s best round: <code class="docutils literal notranslate"><span class="pre">(overflow,</span> <span class="pre">unfinished,</span> <span class="pre">bbox_mm2)</span></code>.</p></li>
+</ul>
+</section>
+<section id="plane-drops-before-routing-drops">
+<h2>6. Plane drops before routing (<code class="docutils literal notranslate"><span class="pre">DROPS</span></code>)<a class="headerlink" href="#plane-drops-before-routing-drops" title="Link to this heading">¶</a></h2>
+<p>A net class with a <code class="docutils literal notranslate"><span class="pre">plane_layer</span></code> and no declared stack (the legacy plane path, e.g.
+<code class="docutils literal notranslate"><span class="pre">08-chaser-20-plane</span></code>) routed its signals first and left every surface pad’s via to the plane to
+writeback’s dog-bone search (<code class="docutils literal notranslate"><span class="pre">writeback.apply_planes</span></code>, eight directions and five distances). Where
+routed copper enclosed a pad, the search failed (<code class="docutils literal notranslate"><span class="pre">planes:</span> <span class="pre">no</span> <span class="pre">clear</span> <span class="pre">fanout</span> <span class="pre">for</span> <span class="pre">...</span></code>) and the pad
+stayed off the plane: 1 seed in 6 with the switch off, 3 in 6 under compact. A placement-level
+count (a dog-bone site clear of every other net’s pad and of the edge, writeback’s search
+without the routed copper) found a free site for every plane pad in all 52 runs, so a placement
+margin would not have helped; the routed copper closed them.</p>
+<p>With <code class="docutils literal notranslate"><span class="pre">DROPS</span></code>, <code class="docutils literal notranslate"><span class="pre">route_board</span></code> treats those nets as a declared stack’s plane nets are treated: each
+surface pad gets a drop (stub plus through via, the pad’s required width) planned jointly with the
+signal exits and reserved before the maze runs. The via may cross its own net’s plane region on
+the plane layer (<code class="docutils literal notranslate"><span class="pre">RouteGrid.own_plane_cells</span></code>; blocked for tracks there, not for vias), which is
+cleared after the planning so the maze kernels see the grid they model. The planes stage then
+dog-bones only the pads still without a through contact (<code class="docutils literal notranslate"><span class="pre">skip_connected</span></code>).</p>
+</section>
+<section id="shrink-to-fit-pnr-shrink-flat-driver">
+<h2>7. Shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>, flat driver)<a class="headerlink" href="#shrink-to-fit-pnr-shrink-flat-driver" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">route_and_place</span></code> treats the outline as an envelope:</p>
+<ol class="arabic simple">
+<li><p>The loop runs on the envelope (the fallback); the search stops unless it converges legally.</p></li>
+<li><p>The first probe is the envelope run’s body bounding box plus <code class="docutils literal notranslate"><span class="pre">2</span> <span class="pre">·</span> <span class="pre">(edge</span> <span class="pre">clearance</span> <span class="pre">+</span> <span class="pre">0.5</span> <span class="pre">mm)</span></code>
+per axis, as a scale of the outline.</p></li>
+<li><p>Then bisection between the largest failed scale (at first the lower bound
+<code class="docutils literal notranslate"><span class="pre">max(√(ΣA</span> <span class="pre">/</span> <span class="pre">0.7</span> <span class="pre">WH),</span> <span class="pre">the</span> <span class="pre">part</span> <span class="pre">and</span> <span class="pre">fixed-part</span> <span class="pre">bounds)</span></code>) and the smallest converged one: at most
+four probes, sizes rounded to 0.5 mm.</p></li>
+<li><p>Each probe is a same-seed <code class="docutils literal notranslate"><span class="pre">_place_route_loop</span></code> on <code class="docutils literal notranslate"><span class="pre">compact.scaled_constraints</span></code>. The outline
+keeps its origin and gives up its north and east: a fixed <code class="docutils literal notranslate"><span class="pre">at</span></code> keeps its absolute position,
+except one within 25 % of the north or east edge, which keeps its distance to that edge
+(<code class="docutils literal notranslate"><span class="pre">moved_fixed</span></code> in the record lists those). The lower bound keeps every fixed part’s box
+inside the scaled outline.</p></li>
+<li><p>The smallest probe that converges legally sets the constraints’ outline and fixed poses and
+<code class="docutils literal notranslate"><span class="pre">placed.outline</span></code>, which write-back stamps; <code class="docutils literal notranslate"><span class="pre">pnr-report.json</span></code> records the search (<code class="docutils literal notranslate"><span class="pre">shrink</span></code>).</p></li>
+</ol>
+<p>Skipped, and recorded so, with <code class="docutils literal notranslate"><span class="pre">auto_outline</span></code>, keep-outs or regions; the hierarchical and Monte
+Carlo drivers never call it and record <code class="docutils literal notranslate"><span class="pre">shrink:</span> <span class="pre">{&quot;skipped&quot;:</span> <span class="pre">&quot;hier</span> <span class="pre">driver&quot;}</span></code> (or <code class="docutils literal notranslate"><span class="pre">&quot;mc</span> <span class="pre">driver&quot;</span></code>),
+and <code class="docutils literal notranslate"><span class="pre">run.py</span></code> exempts the hard rungs (their outline is part of the rung). Under <code class="docutils literal notranslate"><span class="pre">--shrink</span></code> the
+runner’s constraint audit judges hard edges against <code class="docutils literal notranslate"><span class="pre">placed.json</span></code>’s outline, otherwise against
+the design’s.</p>
+</section>
+<section id="trace-and-animation">
+<h2>8. Trace and animation<a class="headerlink" href="#trace-and-animation" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>The trace header carries each part’s <code class="docutils literal notranslate"><span class="pre">body</span></code> (µm) under <code class="docutils literal notranslate"><span class="pre">COURTYARD</span></code>; the renderer draws and
+measures it (courtyards, edge tethers, rigid line boxes).</p></li>
+<li><p>Shrink runs are trace scopes <code class="docutils literal notranslate"><span class="pre">shrink-NN</span></code>, the choice the selection <code class="docutils literal notranslate"><span class="pre">shrink</span></code>; the provenance
+model then follows only the chosen run and the header outline becomes its outline.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">animate_ladder.py</span></code> and <code class="docutils literal notranslate"><span class="pre">animate_showcases.py</span></code> take <code class="docutils literal notranslate"><span class="pre">--runner-arg</span> <span class="pre">ARG</span></code> (repeatable); the
+options that changed a run’s boards (<code class="docutils literal notranslate"><span class="pre">--compact</span></code>, <code class="docutils literal notranslate"><span class="pre">--compact-off</span></code>, <code class="docutils literal notranslate"><span class="pre">--shrink</span></code>, <code class="docutils literal notranslate"><span class="pre">--gloss</span></code>,
+<code class="docutils literal notranslate"><span class="pre">--gloss-flag</span></code>, read back from its provenance) are part of each animation’s <code class="docutils literal notranslate"><span class="pre">config</span></code> in the
+manifest. <code class="docutils literal notranslate"><span class="pre">animate_ladder.py</span></code>’s baseline fallback reruns a failed case with the same
+arguments unless <code class="docutils literal notranslate"><span class="pre">--fallback-runner-arg</span> <span class="pre">ARG</span></code> names its own (<code class="docutils literal notranslate"><span class="pre">--fallback-runner-arg=--gloss</span></code>:
+a compact ladder’s failed case falls back to the default mode).</p></li>
+<li><p>The committed animations (<code class="docutils literal notranslate"><span class="pre">docs/animations/</span></code>, 2026-10-03) are rendered from traced runs with
+<code class="docutils literal notranslate"><span class="pre">--compact</span> <span class="pre">--gloss</span></code> (ladder: 8 of 8 pass; showcases: 5 of 5), with the gloss stage as a
+before/after (renderer 3, <a class="reference internal" href="../regression-ladder.html#reading-an-animation"><span class="std std-ref">Regression ladder</span></a>);
+CI’s traced runs take the same options.</p></li>
+</ul>
+</section>
+<section id="determinism">
+<h2>9. Determinism<a class="headerlink" href="#determinism" title="Link to this heading">¶</a></h2>
+<p>No new random streams (the cluster box maps the existing draws), integer buckets, rounded floats,
+a fixed probe order and exact quarter-turn offsets: runs stay bitwise reproducible per platform,
+as before.</p>
+</section>
+<section id="measurements-and-the-default-on-rule">
+<h2>10. Measurements and the default-on rule<a class="headerlink" href="#measurements-and-the-default-on-rule" title="Link to this heading">¶</a></h2>
+<p>Default-on (with <code class="docutils literal notranslate"><span class="pre">PNR_COMPACT=0</span></code> restoring the previous behaviour) only if, for each gloss
+setting, every case that passes with the switch off also passes with it on, opens and DRC
+findings are no worse, and <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-header</span></code> passes. Shrink stays opt-in.</p>
+<p><strong>Outcome (2026-10-03): both stay off by default.</strong> Measured on GCP C4D (x86-64), every arm on
+one image, seeds 0 and 1 unless noted:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Cells</p></th>
+<th class="head"><p>off</p></th>
+<th class="head"><p>compact</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">COURTYARD</span></code> alone</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>8 ladder cases + 4 showcases (24)</p></td>
+<td><p>24 pass</p></td>
+<td><p>24 pass (also with gloss)</p></td>
+<td><p>24 pass</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31-header</span></code> (2)</p></td>
+<td><p>0 (pool fails)</p></td>
+<td><p>2 pass</p></td>
+<td><p>2 pass</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">08-chaser-20-plane</span></code>, seeds 0 to 9</p></td>
+<td><p>7 pass</p></td>
+<td><p>10 pass (7 without <code class="docutils literal notranslate"><span class="pre">DROPS</span></code>)</p></td>
+<td><p>7 pass</p></td>
+</tr>
+<tr class="row-odd"><td><p>nightly hard rungs, seed 0 (14)</p></td>
+<td><p>14 pass</p></td>
+<td><p>14 pass</p></td>
+<td><p>14 pass</p></td>
+</tr>
+<tr class="row-even"><td><p>manual <code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> rungs (16)</p></td>
+<td><p>16 pass</p></td>
+<td><p>11 pass</p></td>
+<td><p>13 pass</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">10-quad-bank-56</span></code> (2)</p></td>
+<td><p>1 pass</p></td>
+<td><p>2 pass</p></td>
+<td><p>2 pass</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>On the 24 cells compact cuts the summed placed bounding box from 13068 to 8122 mm² (median
+utilisation 0.36 to 0.55) and copper from 4777 to 4022 mm, for 28 more vias (282 to 310) and
+21 % more CPU; with <code class="docutils literal notranslate"><span class="pre">RANK</span></code> after the vias, dropping <code class="docutils literal notranslate"><span class="pre">RANK</span></code> changes nothing there. The manual
+<code class="docutils literal notranslate"><span class="pre">09-mcu-usb-31</span></code> rungs fail the rule: their USB pairs end out of skew (<code class="docutils literal notranslate"><span class="pre">skew_out_of_range</span></code>) or
+with one leg or <code class="docutils literal notranslate"><span class="pre">VBUS</span></code> unrouted on 5 cells under compact and 3 under <code class="docutils literal notranslate"><span class="pre">COURTYARD</span></code> alone, all of
+which pass with the switch off. Dense placement leaves no room for the pair tuning; reserving
+it (inflating the parts on declared pairs and length groups) is the next step before another
+A/B. Shrink passes 23 of 24: on <code class="docutils literal notranslate"><span class="pre">line-chaser-20</span></code> seed 1 a 0.4 mm GND track runs 0.175 mm from
+the shrunk edge, through pad cells the router’s edge inset leaves open.</p>
+<p>The full tables are in the workflow’s A/B notes; the ladder documentation
+(<a class="reference internal" href="../regression-ladder.html#compact-placement-opt-in"><span class="std std-ref">compact placement</span></a>) summarises them.</p>
+<p>Still open: the 0.01 mm courtyard gap (no DRC finding in any arm).</p>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="../history/import-manifest.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">History import manifest</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="gloss.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Design: the gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>)</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 Kevin Balke. Licensed under AGPL-3.0-or-later
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Design: compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>) and shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>)</a><ul>
+<li><a class="reference internal" href="#switches">1. Switches</a></li>
+<li><a class="reference internal" href="#offset-courtyards-courtyard">2. Offset courtyards (<code class="docutils literal notranslate"><span class="pre">COURTYARD</span></code>)</a></li>
+<li><a class="reference internal" href="#global-placement-gp">3. Global placement (<code class="docutils literal notranslate"><span class="pre">GP</span></code>)</a></li>
+<li><a class="reference internal" href="#legalizer-legalize">4. Legalizer (<code class="docutils literal notranslate"><span class="pre">LEGALIZE</span></code>)</a></li>
+<li><a class="reference internal" href="#compactness-metric-and-selection-rank">5. Compactness metric and selection (<code class="docutils literal notranslate"><span class="pre">RANK</span></code>)</a></li>
+<li><a class="reference internal" href="#plane-drops-before-routing-drops">6. Plane drops before routing (<code class="docutils literal notranslate"><span class="pre">DROPS</span></code>)</a></li>
+<li><a class="reference internal" href="#shrink-to-fit-pnr-shrink-flat-driver">7. Shrink-to-fit (<code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>, flat driver)</a></li>
+<li><a class="reference internal" href="#trace-and-animation">8. Trace and animation</a></li>
+<li><a class="reference internal" href="#determinism">9. Determinism</a></li>
+<li><a class="reference internal" href="#measurements-and-the-default-on-rule">10. Measurements and the default-on rule</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../../static/documentation_options.js?v=8a448e45"></script>
+    <script src="../../static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../static/copybutton.js?v=fd10adb8"></script>
+    <script src="../../static/design-tabs.js?v=f930bc37"></script>
+    </body>
+</html>

@@ -253,6 +253,14 @@ class RouteTest(unittest.TestCase):
         self.assertTrue(r.grid.net_keepouts)  # the trunk cores
         self.assertNotIn("S", r.result.unrouted)
 
+    def test_a_layer_not_typed_power_is_not_partitioned(self):
+        from pnr.route.detail.router import route_board
+
+        g, c, rules = self.setup()
+        g.stack["layers"][2]["type"] = "mixed"
+        r = route_board(g, c, rules, max_iters=2)
+        self.assertNotIn("plane_regions", r.extras())
+
     def test_identity_without_the_section(self):
         from pnr.route.detail.router import route_board
 

@@ -799,6 +799,16 @@ def for_route(grid, graph, rules, stack, width, height, *, fixed_copper=None, fa
         if layer not in stack.names:
             raise ValueError("plane_partition: %s is not a copper layer of the board" % layer)
         lay = stack.layer(layer)
+        if lay.role != "plane":
+            # Only a dedicated plane (typed power) takes drops into regions; a split or
+            # signal layer keeps the legacy model. Reported, nothing partitioned.
+            import sys
+
+            sys.stderr.write(
+                "pnr.plane_partition: warning: %s is typed %s, not power: not partitioned\n"
+                % (layer, lay.kind)
+            )
+            continue
         nets = [n for n in entry["nets"] if n in lay.nets]
         skipped = [n for n in entry["nets"] if n not in lay.nets]
         terms: Dict[str, List[Terminal]] = {n: [] for n in nets}

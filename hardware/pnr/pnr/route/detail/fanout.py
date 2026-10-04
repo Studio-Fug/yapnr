@@ -583,6 +583,22 @@ def plan_fanouts(grid, graph, rules, *, plane_nets, signal_nets, via_keepout, fi
                     )
                 )
                 continue
+        if spec["partial"].get("retry", True) is False:
+            out.note_partial(spec["name"], name, net, reason, "open")
+            out.partial_open.setdefault(net, {})["%s.%s" % (comp.ref, name)] = reason
+            out.failure_sites.setdefault(net, []).append(
+                (min(pad_xy[0], grid.width - 1e-9), min(pad_xy[1], grid.height - 1e-9))
+            )
+            out.escapes.append(
+                Escape(
+                    net=net,
+                    kind="blocked",
+                    access=Cell(side, *grid.cell_of(*pad_xy)),
+                    pad_xy=pad_xy,
+                    side_layer=grid.layers[side],
+                )
+            )
+            continue
         out.skip_pads.discard((comp.ref, name))
         out.retry[(comp.ref, name)] = (net, spec["name"], pad_xy, reason)
     return out

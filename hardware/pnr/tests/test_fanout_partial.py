@@ -163,7 +163,11 @@ class PartialSpecTest(unittest.TestCase):
         self.assertEqual(
             parse(dict(base, partial={"bridge": True}), ["U1"])["partial"], {"bridge": True}
         )
-        for bad in ("yes", {"bridge": 1}, {"bridges": True}):
+        self.assertEqual(
+            parse(dict(base, partial={"retry": False}), ["U1"])["partial"],
+            {"bridge": False, "retry": False},
+        )
+        for bad in ("yes", {"bridge": 1}, {"bridges": True}, {"retry": "no"}):
             with self.assertRaises(FanoutError):
                 parse(dict(base, partial=bad), ["U1"])
 
@@ -238,6 +242,17 @@ class PartialRetryTest(unittest.TestCase):
         self.assertEqual(r.partial_open, {})
         report = r.escape_diagnostics["fanout"]["U1"]["partial"]
         self.assertEqual(report["A1"]["outcome"], "escaped by the board's escapes")
+
+
+class NoRetryTest(unittest.TestCase):
+    def test_retry_false_keeps_the_ball_open(self):
+        # The same reserved corner ball the board's escapes would take: without the
+        # second try it stays open, and its net routes among its other terminals.
+        rules, r = route(partial={"retry": False}, reserved=[A1_RESERVED])
+        report = r.escape_diagnostics["fanout"]["U1"]["partial"]
+        self.assertEqual(report["A1"]["outcome"], "open")
+        self.assertEqual(list(r.partial_open), ["S_A1"])
+        self.assertNotIn("S_A1", r.result.unrouted)
 
 
 class PartialBridgeTest(unittest.TestCase):

@@ -248,21 +248,26 @@ def parse(entry: Dict, known_refs: Sequence[str], index: int = 0) -> Dict:
 
 
 def _partial(value, where):
-    """``partial: true`` / ``{bridge: true}`` as ``{"bridge": bool}``; None when absent
-    or false."""
+    """``partial: true`` / ``{bridge: true, retry: false}`` as ``{"bridge": bool}`` (plus
+    ``"retry": False`` when declared so); None when absent or false."""
     if value is None or value is False:
         return None
     if value is True:
         return dict(bridge=False)
     if not isinstance(value, dict):
-        raise FanoutError(where + " must be true, false or a mapping {bridge: true|false}")
-    bad = sorted(set(value) - {"bridge"})
+        raise FanoutError(where + " must be true, false or a mapping {bridge, retry}")
+    bad = sorted(set(value) - {"bridge", "retry"})
     if bad:
         raise FanoutError("%s: unknown key(s) %s" % (where, ", ".join(bad)))
-    bridge = value.get("bridge", False)
-    if not isinstance(bridge, bool):
-        raise FanoutError(where + ".bridge must be a boolean")
-    return dict(bridge=bridge)
+    out = dict(bridge=value.get("bridge", False))
+    for key in ("bridge", "retry"):
+        if not isinstance(value.get(key, False), bool):
+            raise FanoutError("%s.%s must be a boolean" % (where, key))
+    if value.get("retry", True) is False:
+        # The failed balls stay open instead of taking the board's generic escapes,
+        # which know none of the fanout's via classes, layers or necks.
+        out["retry"] = False
+    return out
 
 
 def parse_all(raw, known_refs: Sequence[str]) -> List[Dict]:

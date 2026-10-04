@@ -420,6 +420,12 @@ class HardRungContract(unittest.TestCase):
                 self.assertGreater(segment_polygon(a, b, r["polygon"]), 0.05 + 1e-3)
         (check,) = [c for c in spec["checks"] if c["kind"] == "unconnected"]
         self.assertEqual(check["pads"], ["U1." + PARTIAL_OPEN])
+        self.assertEqual(spec["designed_open"], check["pads"])
+        # A designed open is only excused where an unconnected check holds it exact.
+        for other in self.by_name.values():
+            if other.get("designed_open"):
+                pads = [c["pads"] for c in other["checks"] if c["kind"] == "unconnected"]
+                self.assertEqual(pads, [other["designed_open"]], other["name"])
 
         rails = self.by_name["11-ufbga201-fanout-6L-SGSGPS-rails"]
         nets = {n for p in rails["parts"] for n in p["pins"].values() if n}

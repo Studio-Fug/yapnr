@@ -1691,6 +1691,9 @@ def ufbga_partial(spec):
             engine="fanout.partial",
         )
     )
+    # K4's open is the design's: run.py does not count it (its check above holds the
+    # cut-off pads to exactly this list).
+    spec["designed_open"] = ["U1." + PARTIAL_OPEN]
     spec["name"] += "-partial"
     spec["description"] = (
         spec.get("description", "")

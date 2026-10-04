@@ -15,7 +15,7 @@ the openEMS image (docker/openems), packed ``models_per_vm`` to a VM at ``thread
     threads = 4                                # openEMS threads per model (the task's cores)
     models_per_vm = 2                          # models side by side on one VM
     packing = "core"                           # "vcpu": threads on SMT siblings (half the VM)
-    families = ["c4d"]                         # amd64 families with AVX-512 for the v4 build
+    families = ["c4d", "c4"]                   # amd64 families with AVX-512 for the v4 build
     memory_gb = 4                              # per model; disk_gb and max_wall_s too
     max_wall_s = 7200
     visibility = "public"                      # or "private" (opaque ids, private store)
@@ -124,7 +124,9 @@ DEFAULTS = {
     "threads": 4,
     "models_per_vm": 2,
     "packing": "core",
-    "families": ["c4d"],
+    # C4D (Zen 5, calibrated) and C4 (Xeon, AVX-512 too): submit spills to C4 in a second
+    # region when the first has no Spot quota left ([gcp] ranking orders them).
+    "families": ["c4d", "c4"],
     "memory_gb": 4,
     "disk_gb": 4,
     "max_wall_s": 7200,
@@ -132,8 +134,8 @@ DEFAULTS = {
     # Fetched without --full: the log, the record and the model's small result files.
     "summary": ["{id}.log", "{id}.job.json", "{id}/*.json", "{id}/*.csv"],
 }
-# Instance templates exist for these C4D shapes (infra/gcp template_shapes); others run from an
-# instance policy.
+# Instance templates exist for these vCPU counts (infra/gcp: C4D in template_shapes, C4 in a
+# region's region_template_shapes); others run from an instance policy.
 TEMPLATE_VCPUS = (8, 16)
 SKIP_NAMES = ("__pycache__", ".git", ".DS_Store")
 GCLOUD_TIMEOUT_S = 120

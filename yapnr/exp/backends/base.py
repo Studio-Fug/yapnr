@@ -9,9 +9,11 @@
 4. list the pending tasks (no ``_DONE``), per resource class, and refuse those a live submission
    still holds (a queued, scheduled or running Batch job, a running local pool, a Slurm array
    with elements pending or running), so a repeated submit never runs and bills a task twice;
-5. estimate them, apply the per-submit caps, and ask for confirmation above ``confirm_usd``;
-6. per class: take the next submission number, write ``submissions/<n>.indices``, render the
-   backend's artefacts, launch them and write ``submissions/<n>.json``.
+5. choose where each class runs (Batch: the first candidate whose region has Spot quota for one
+   more VM, ``choose``);
+6. estimate them, apply the per-submit caps, and ask for confirmation above ``confirm_usd``;
+7. per class: take the next submission number, write ``submissions/<n>.indices``, render the
+   backend's artefacts, launch them and write ``submissions/<n>.json`` (with the choice and why).
 
 A submission is one resource class on one backend, region and shape: one Batch job, one Slurm
 array or one local pool entry.
@@ -204,6 +206,24 @@ class Backend:
     def cancel(self, record: Dict[str, Any], config: Config, cloud=None, dry_run=False) -> str:
         raise NotImplementedError
 
+    def choose(
+        self,
+        plan: planning.Plan,
+        config: Config,
+        todo: Dict[str, List[int]],
+        cloud=None,
+        *,
+        region: Optional[str] = None,
+        say: Callable[[str], None] = print,
+        previous: Optional[Callable[[], List[Dict[str, Any]]]] = None,
+    ) -> Dict[str, Dict[str, Any]]:
+        """Pick each pending class's placement among its candidates (``plan.choose``); returns
+        what was chosen and why, per class. ``previous`` lists the campaign's earlier submission
+        records. Only Batch has a choice to make."""
+        if region:
+            raise SubmitError("--region is for the gcp-batch backend")
+        return {}
+
     def preview(self, plan: planning.Plan, config: Config) -> List[Path]:
         """Render submission 1 of every class into the plan directory, for review."""
         deadline = int(time.time() + config.limits.max_campaign_hours * 3600)
@@ -233,6 +253,7 @@ class Backend:
         now: Callable[[], float] = time.time,
         say: Callable[[str], None] = print,
         price_table: Optional[cost.PriceTable] = None,
+        region: Optional[str] = None,
     ) -> List[Submission]:
         if plan.backend != self.name:
             raise SubmitError("the plan is for the %s backend" % plan.backend)
@@ -256,6 +277,15 @@ class Backend:
                 "; ".join(overlap) + ": submitting them again would run and bill them twice; "
                 "wait for the job to end, `yapnr exp cancel` it, or pass --only for other tasks"
             )
+        choices = self.choose(
+            plan,
+            config,
+            todo,
+            cloud,
+            region=region,
+            say=say,
+            previous=lambda: submissions(stores.runs, plan.id),
+        )
         self.check_limits(
             plan,
             config,
@@ -312,6 +342,8 @@ class Backend:
                     "model": placement.model,
                     "tasks_per_vm": placement.tasks_per_vm,
                 }
+                if cls.name in choices:
+                    record["placement"]["choice"] = choices[cls.name]
             text = json.dumps(record, indent=2, sort_keys=True) + "\n"
             (directory / "record.json").write_text(text)  # the plan keeps a copy (dry runs too)
             stores.runs.write_text("%s/submissions/%d.json" % (prefix, number), text)

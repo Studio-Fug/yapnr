@@ -64,6 +64,7 @@ module "templates" {
   source           = "./modules/templates"
   project_id       = var.project_id
   shapes           = var.template_shapes
+  region_shapes    = var.region_template_shapes
   subnetworks      = module.network.subnetworks
   runner_email     = module.identity.runner_email
   boot_disk_gb     = var.boot_disk_gb

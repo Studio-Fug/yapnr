@@ -21,7 +21,10 @@ terminals:
    the IPC-2221 internal width for the rail's current, and ``R_sq L / R_share``
    for its IR budget (``L`` the root's path to its farthest terminal, ``R_share``
    the budget less two via barrels, at least a quarter of it; at most 10 mm),
-   keeping ``split_gap_mm`` of copper from every other rail;
+   keeping ``split_gap_mm`` of copper from every other rail; a tree passes only
+   where a zone of the board's minimum width (the fab track width writeback gives
+   the zones) fills, and foreign copper keeps the larger class clearance of the
+   pair, as KiCad's fill does;
 4. a terminal no path reaches is reported (the pad's drop then fails in the drop
    planner, as a pad outside its region does);
 5. the territories grow into the free cells round the board (a breadth-first
@@ -418,11 +421,13 @@ def partition(
     edge_mm: float = 0.3,
     via_drill_mm: float = 0.2,
     temperature_c: float = 25.0,
+    fill_min_mm: float = 0.0,
 ) -> Partition:
     """Partition ``entry["layer"]`` (see the module doc). ``terminals``: net ->
     :class:`Terminal` list (in the nets' order of ``entry["nets"]``); ``blocked``:
     foreign copper discs ``(centre, radius incl. clearance)``; ``blocked_polygons``:
-    ``(rings, allowed nets)`` keepouts barring pours on the layer."""
+    ``(rings, allowed nets)`` keepouts barring pours on the layer; ``fill_min_mm``:
+    the zones' minimum width (a tree passes only where a zone that wide fills)."""
     payload = dict(
         entry=entry,
         width=width,
@@ -438,6 +443,8 @@ def partition(
         drill=via_drill_mm,
         t=temperature_c,
     )
+    if fill_min_mm:
+        payload["fill_min"] = fill_min_mm
     key = _digest(payload)
     if key in _CACHE:
         return _CACHE[key]
@@ -455,6 +462,7 @@ def partition(
         edge_mm,
         via_drill_mm,
         temperature_c,
+        fill_min_mm,
     )
     result.report["inputs_sha256"] = key
     if len(_CACHE) > 8:
@@ -477,6 +485,7 @@ def _partition(
     edge_mm,
     via_drill_mm,
     temperature_c,
+    fill_min_mm=0.0,
 ):
     from pnr.electrical import current_width
     from pnr.ir_drop import barrel_ohm, resistivity
@@ -554,6 +563,7 @@ def _partition(
         wants=wants,
         min_w=min_w,
         gap_cells=gap_cells,
+        fill_min=fill_min_mm,
     )
     # 3a. Connect every rail at its minimum width first, in order; a rail left with
     # an unreached terminal is tried first in turn, and the order with the fewest
@@ -718,8 +728,15 @@ def _connect(ctx, label0, order):
         for m, nm in enumerate(nets):
             if m != k:
                 cost[ctx["pad_discs"][nm]] += 4.0
-        cost = np.where(allowed, cost, np.inf)
-        flat_terms = [np.flatnonzero(disc & allowed) for disc in ctx["cells_of"][n]]
+        passable = allowed
+        if ctx.get("fill_min"):
+            # A zone fills no neck narrower than its minimum width: the tree passes
+            # only where that width fits (half of it from the cell's centre to the
+            # nearest barred cell's edge), or on this rail's own lands.
+            passable = allowed & ((clear - 0.5) * g.h >= ctx["fill_min"] / 2 - 1e-9)
+            passable |= label == k
+        cost = np.where(passable, cost, np.inf)
+        flat_terms = [np.flatnonzero(disc & passable) for disc in ctx["cells_of"][n]]
         root = _root(n, ctx["terminals"][n], flat_terms, ctx["sources"])
         if flat_terms:
             path, reached, length, reach = _steiner(cost, flat_terms, root)
@@ -856,6 +873,10 @@ def for_route(grid, graph, rules, stack, width, height, *, fixed_copper=None, fa
 
     fab = dict(rules.get("fab") or {})
     clearance = float(fab.get("clearance_mm", grid.clearance))
+    # Foreign copper keeps the larger class clearance of the pair (KiCad's fill
+    # does), and the zones writeback draws fill no neck under the track width.
+    classes = dict(getattr(grid, "net_clearances", None) or {})
+    fill_min = float(fab.get("track_width_mm", grid.track_width))
     via_d = float(fab.get("via_diameter_mm", 2 * grid.via_radius))
     via_h = float(fab.get("via_drill_mm", via_d / 2))
     edge = float(fab.get("edge_clearance_mm", 0.3))
@@ -877,6 +898,11 @@ def for_route(grid, graph, rules, stack, width, height, *, fixed_copper=None, fa
             continue
         nets = [n for n in entry["nets"] if n in lay.nets]
         skipped = [n for n in entry["nets"] if n not in lay.nets]
+        rail_clear = max([clearance] + [classes.get(n, 0.0) for n in nets])
+
+        def gap_to(net):
+            return max(rail_clear, classes.get(net, 0.0))
+
         terms: Dict[str, List[Terminal]] = {n: [] for n in nets}
         blocked = []
         sizes = getattr(fanouts, "via_sizes", {}) if fanouts is not None else {}
@@ -885,7 +911,7 @@ def for_route(grid, graph, rules, stack, width, height, *, fixed_copper=None, fa
             if net in terms:
                 terms[net].append(Terminal("via %.3f,%.3f" % p, "via", tuple(p), d / 2))
             else:
-                blocked.append((tuple(p), d / 2 + clearance))
+                blocked.append((tuple(p), d / 2 + gap_to(net)))
         _t, fixed_vias, polygons = fixed_items(fixed_copper) if fixed_copper else ((), [], [])
         for net, xy, d, _drill in fixed_vias:
             if net in terms:
@@ -893,7 +919,7 @@ def for_route(grid, graph, rules, stack, width, height, *, fixed_copper=None, fa
                     Terminal("fixed via %.3f,%.3f" % tuple(xy), "via", tuple(xy), d / 2)
                 )
             else:
-                blocked.append((tuple(xy), d / 2 + clearance))
+                blocked.append((tuple(xy), d / 2 + gap_to(net)))
         skip = getattr(fanouts, "skip_pads", set()) if fanouts is not None else set()
         reach = float(entry.get("terminal_reach_mm", 0.8))
         for comp in graph.components:
@@ -905,7 +931,7 @@ def for_route(grid, graph, rules, stack, width, height, *, fixed_copper=None, fa
                             Terminal("%s.%s" % (comp.ref, name), "via", (r.cx, r.cy), half)
                         )
                     else:
-                        blocked.append(((r.cx, r.cy), half + clearance))
+                        blocked.append(((r.cx, r.cy), half + gap_to(net)))
                     continue
                 if net in terms and (comp.ref, name) not in skip:
                     terms[net].append(
@@ -959,6 +985,7 @@ def for_route(grid, graph, rules, stack, width, height, *, fixed_copper=None, fa
             copper_mm=lay.copper_mm or 0.035,
             edge_mm=edge,
             via_drill_mm=via_h,
+            fill_min_mm=fill_min,
         )
         if skipped:
             part.report["not_plane_nets"] = skipped

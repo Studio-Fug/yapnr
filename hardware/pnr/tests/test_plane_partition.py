@@ -160,6 +160,35 @@ class UnreachedTest(unittest.TestCase):
         self.assertEqual(info["reached"], 3)
         self.assertEqual([u["name"] for u in info["unreached"]], ["B4"])
 
+    def test_a_tree_passes_no_neck_a_zone_cannot_fill(self):
+        # One rail, two vias either side of a wall with a 0.22 mm slot: a 0.15 mm
+        # zone cannot fill the slot (its copper keeps half its width from the
+        # wall's cells), so with fill_min_mm the far via is unreached.
+        entry = dict(ENTRY, nets=["A"], min_width_mm=0.15)
+        terms = {"A": [via("A1", (1.0, 2.0)), via("A2", (9.0, 2.0))]}
+
+        def wall(slot):
+            low = [[4.9, -1.0], [5.1, -1.0], [5.1, 2.0 - slot / 2], [4.9, 2.0 - slot / 2]]
+            high = [[4.9, 2.0 + slot / 2], [5.1, 2.0 + slot / 2], [5.1, 5.0], [4.9, 5.0]]
+            return [([low], frozenset()), ([high], frozenset())]
+
+        def reached(slot, fill_min):
+            _CACHE.clear()
+            part = partition(
+                dict(entry),
+                width=10.0,
+                height=4.0,
+                terminals=terms,
+                blocked=[],
+                blocked_polygons=wall(slot),
+                fill_min_mm=fill_min,
+            )
+            return part.report["nets"]["A"]["reached"]
+
+        self.assertEqual(reached(0.22, 0.0), 2)  # the raster alone passes it
+        self.assertEqual(reached(0.22, 0.15), 1)
+        self.assertEqual(reached(0.6, 0.15), 2)
+
 
 class PlaneAccessHolesTest(unittest.TestCase):
     def test_a_site_in_a_hole_is_not_in_the_region(self):

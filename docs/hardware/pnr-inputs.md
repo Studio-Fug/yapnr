@@ -720,8 +720,9 @@ plane_partition:
 
 How it works (`pnr/plane_partition.py`, run by the router after the declared
 fanouts are planned): the layer is rasterized inside the outline less the edge
-clearance, with every other net's through copper blocked at its clearance (planned
-fanout vias, fixed vias, plated holes, mounting holes), fixed copper of other nets on
+clearance, with every other net's through copper blocked at the larger class
+clearance of the pair, as KiCad's fill keeps it (planned fanout vias, fixed vias,
+plated holes, mounting holes), fixed copper of other nets on
 the layer, and the `copper_keepout`s that bar pours there (except for the nets they
 allow). A rail's terminals are its planned drop vias (fanout and fixed vias) and,
 for a surface pad without one, the disc within `terminal_reach_mm` of it. First
@@ -729,7 +730,9 @@ every rail is connected at its minimum width: a Steiner tree over its terminals
 (Dijkstra from the tree to the nearest remaining terminal; a cell costs more where
 the trunk would be narrower than it should be and inside another rail's pad disc),
 keeping `split_gap_mm` of copper from every other rail and leaving the pad discs of
-the rails still to come free. A rail left with an unreached terminal is tried first
+the rails still to come free; a tree passes only where a zone of the fab track width
+(the minimum width writeback gives the zones) fills, so a neck KiCad would not fill
+leaves its terminals unreached instead of on an island. A rail left with an unreached terminal is tried first
 in turn, and the order with the fewest unreached terminals wins. Then each trunk
 widens, the higher current first, to the largest of `min_width_mm`, the IPC-2221
 internal width for its current (at the layer's copper) and `R_sq L / R_share` for

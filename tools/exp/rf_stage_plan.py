@@ -120,7 +120,9 @@ JOB_KEYS = {
 RUN_ONLY_KEYS = ("spec", "seed", "max_iterations", "attempt_s", "end_s")
 DEFAULTS = {"threads": 4, "memory_gb": 8, "disk_gb": 10, "max_wall_s": 14400, "args": []}
 DIAGNOSTIC_RESOURCES = {"cpus": 1, "memory_gb": 2, "disk_gb": 4, "max_wall_s": 600}
-# The engine sets torch's threads to min(cap, solver.threads) (yapnr/rf/fdtd/engine.py).
+# The engine of a bundle from before the native kernel set torch's threads to min(cap,
+# solver.threads) (yapnr/rf/fdtd/engine.py); a later engine runs native by default, whose pool
+# takes the job's threads (solver.threads, or YAPNR_RF_THREADS), and does not match.
 THREAD_CAP_RE = re.compile(r"set_num_threads\(\s*max\(\s*1\s*,\s*min\(\s*(\d+)\s*,")
 GIT_TIMEOUT_S = 120
 # A run's attempt ends this long (or a 24th of max_wall_s) before the wrapper's limit; the end

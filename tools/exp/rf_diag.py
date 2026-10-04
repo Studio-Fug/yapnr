@@ -6,9 +6,12 @@
 Records the interpreter, the CPUs the task sees, the versions of numpy, torch, Pillow, PyYAML
 (or the import error), torch's threading, a short float32 matmul timing, whether every module of
 ``SRC/yapnr/rf`` compiles on this interpreter, which ``yapnr`` package is imported (the source
-bundle's, not the image's), and the exit code and head of ``python -m yapnr.rf.cases --help``.
+bundle's, not the image's), the native FDTD library the bundle's sources would run (``native``:
+the loader's status, which names the image's wheel library when it was built from the bundle's
+C sources, or why not), and the exit code and head of ``python -m yapnr.rf.cases --help``.
 ``ok`` is true when numpy, torch and PyYAML import, the sources compile, ``yapnr.rf.cases``
-comes from the bundle and its help exits 0; Pillow (the animations) is reported, not required.
+comes from the bundle and its help exits 0; Pillow (the animations) and the native library are
+reported, not required.
 
 Written by tools/exp/rf_stage_plan.py into the job bundle of an ``mc-eval`` stage plan.
 """
@@ -103,6 +106,12 @@ def main(argv=None) -> int:
     except Exception as err:  # noqa: BLE001
         report["yapnr_error"] = "%s: %s" % (type(err).__name__, err)
         report["from_bundle"] = False
+    try:
+        from yapnr.rf.fdtd import native_kernel
+
+        report["native"] = native_kernel.status()
+    except Exception as err:  # noqa: BLE001 - a bundle from before the native kernel
+        report["native"] = {"loaded": False, "reason": "%s: %s" % (type(err).__name__, err)}
     try:
         proc = subprocess.run(
             [sys.executable, "-m", "yapnr.rf.cases", "--help"],

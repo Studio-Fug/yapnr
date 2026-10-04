@@ -103,12 +103,16 @@ S-parameters, the radiated fraction and the gray level per iteration), `frames.n
 iteration), `footprint.kicad_mod`, `coarse.sNp` (the binary design on the optimization grid,
 every port excited, renormalized to 50 Ω) and `result.json` (`yapnr-rf-result/1`: solver
 settings, optimizer summary, achieved values, the width and space check and provenance). A run
-that stops resumes from its checkpoint and reproduces the uninterrupted run bit for bit. Runs use
-at most 4 threads; on a shared machine start them with `nice -n 10`. Set
-`OPENBLAS_NUM_THREADS=1` (the Bazel targets do): torch steps the fields on its 4 threads, and
-numpy's OpenBLAS, which evaluates the adjoint sources each step, otherwise keeps its own 4
-threads spinning beside them (an adjoint run then used about 7 cores and took 1.6 times as
-long: 46.6 s against 28.3 s on the antenna's grid).
+that stops resumes from its checkpoint and reproduces the uninterrupted run bit for bit. The
+solver steps the fields with its native kernel, float64, where the library loads (the yapnr
+wheel and the container image carry it, Bazel builds it, and a checkout builds it with
+`python -m yapnr.rf.fdtd.native_kernel build`), and with the numpy reference otherwise: the same
+values, 11–40 times slower ([solver backends](rf-solver-backends.md)). The first simulation
+says on stderr which one runs. Runs use the spec's 4 threads (`YAPNR_RF_THREADS` sets the native
+pool); on a shared machine start them with `nice -n 10`. Set `OPENBLAS_NUM_THREADS=1` (the Bazel
+targets do): numpy's OpenBLAS, which evaluates the adjoint sources each step, otherwise keeps
+its own threads spinning beside the stepper's (with torch's 4 threads an adjoint run used about
+7 cores and took 1.6 times as long: 46.6 s against 28.3 s on the antenna's grid).
 
 The exported design is the best binarized one of the run, not the last iterate: the loop
 evaluates the binarized design (β = ∞ after the width and space repair; one forward run per
@@ -168,8 +172,9 @@ All cases use a substrate of εr 3.55 and tan δ 0.0027 (a Rogers 4003C-like lam
 S2 1.524 mm) over a solid ground, copper as a sheet with the surface resistance of smooth copper
 at 10 GHz, 50 Ω feeds (6 cells on S1, Z_c 52.7 Ω with the round-2 solver, 49.5 Ω without it;
 11 cells on S2, 47.5 Ω), the V/I planes 6h from the
-reference plane and the source, torch float32 on 4 threads. Times are wall times on the
-development Mac (Apple silicon), niced, next to other work.
+reference plane and the source, torch float32 on 4 threads (the runs below were made before the
+native kernel; the presets now run native float64, 4–6 times faster). Times are wall times on
+the development Mac (Apple silicon), niced, next to other work.
 
 | Case                                                | Ports, substrate   | Optimization grid (cells, Δt)  | Fine, finer cells | Window (pixels)  | Start (seed copper in the export)                  | Iterations, wall time | Coarse | Fine  | Finer |
 | --------------------------------------------------- | ------------------ | ------------------------------ | ----------------- | ---------------- | -------------------------------------------------- | --------------------- | ------ | ----- | ----- |

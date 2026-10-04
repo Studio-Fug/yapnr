@@ -16,6 +16,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
+from pnr import legalize_flags
 from pnr.constraints import CompiledConstraints
 from pnr.graph import BoardGraph, BoardOutline
 
@@ -373,6 +374,23 @@ def place(
             inflation=inflation,
             outline=_legal_outline(constraints),
             pad_edge=pad_edge,
+            **({} if not (tight and tight.margins) else dict(margins=tight.margins)),
+        )
+    reorienting = legalize_flags.legalize_reorient()
+    if reorienting:
+        # PNR_LEGALIZE_REORIENT: greedy in-place turns that shorten wires (pnr.place.reorient);
+        # ``wire`` drops the channel guard.
+        from .reorient import reorient
+
+        placed, _turned = reorient(
+            placed,
+            constraints,
+            clearance=clearance,
+            spread=min(spread, _LEGALIZE_SPREAD_CAP),
+            inflation=inflation,
+            pad_edge=pad_edge,
+            channel_model=channels,
+            channel_guard=reorienting != "wire",
             **({} if not (tight and tight.margins) else dict(margins=tight.margins)),
         )
     if sided:

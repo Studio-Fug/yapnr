@@ -1739,6 +1739,29 @@ py_test(
     ],
 )
 
+# PNR_LEGALIZE_REORIENT: in-place turns after legalization (pnr.place.reorient).
+py_test(
+    name = "reorient_test",
+    size = "medium",
+    srcs = [
+        "tests/compact_fixture.py",
+        "tests/test_reorient.py",
+    ],
+    data = ["testdata/compact/04-inverter-leds-8.json"],
+    imports = [
+        ".",
+        "tests",
+    ],
+    main = "tests/test_reorient.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_hier",
+        ":pnr_place",
+        ":pnr_route",
+    ],
+)
+
 # The hierarchical ladder driver (regression/hier_case.py) on a synthetic 10-part design.
 py_test(
     name = "hier_case_test",

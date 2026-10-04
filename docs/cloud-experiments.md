@@ -679,8 +679,11 @@ python3 tools/exp/palace_plan.py collect <cid> --dest <tree>       # <tree>/runs
 A job names a Palace configuration (`config`, a path in the task: an input, or the image's
 `/opt/palace/share/palace/examples/...`), optional overrides (`set = {"Solver.Order" = 3}`, for the
 campaign or per job), an optional `prepare` script that meshes the model and writes the
-configuration into `{out}` first, and an optional `reference` directory whose `port-S.csv` the
-result must match. Each task runs the job bundle's `palace_job.py`: it reads the configuration
+configuration into `{out}` first, optional `stages` (configurations solved first, each into
+`out/<id>/stage-<name>`, `CONFIG@1` on one rank) with `mesh_from` naming the stage whose saved
+adapted mesh the main configuration solves (refinement, then a sweep of the refined mesh, in one
+task), and an optional `reference` directory whose `port-S.csv` the result must match. Each task
+runs the job bundle's `palace_job.py`: it reads the configuration
 (Palace's relaxed JSON: comments, trailing commas, integer ranges), applies the overrides, moves
 the output to `out/<id>/postpro` and makes the mesh path absolute (`out/<id>/config.json`), checks
 it with `palace --dry-run`, then solves with `mpirun -np <ranks>` from the configuration's

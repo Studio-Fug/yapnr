@@ -161,9 +161,10 @@ tofu plan -var-file="$HOME/.config/yapnr/gcp.tfvars" -out=bootstrap.plan
 tofu apply bootstrap.plan
 ```
 
-The plan creates 70 resources for two regions ([infra/gcp](https://github.com/Studio-Fug/yapnr/tree/main/infra/gcp)):
-APIs, the VPC, both buckets, the service accounts and grants, the registry caches, the Spot
-templates, the budget and the guard functions.
+The plan creates 81 resources for two regions ([infra/gcp](https://github.com/Studio-Fug/yapnr/tree/main/infra/gcp)):
+APIs, the VPC, both buckets, the service accounts and grants, the registry caches and the
+`images` repositories for [task images](#task-images-openems), the Spot templates, the budget and
+the guard functions.
 
 The project's `default` network allows SSH from anywhere and gives VMs external IPs; yapnr jobs
 never use it, so delete it, and with it any way a hand-written job could land there:
@@ -532,6 +533,68 @@ image's Python, the native FDTD library the bundle would run (or why none), and
 `python -m yapnr.rf.cases --help`; run one before the first campaign of a new
 branch or image. `--plain-lines` leaves the three optional keys and the attempts out, for a
 `yapnr` whose `mc-eval` refuses them.
+
+### Task images (openEMS)
+
+A campaign runs in the yapnr image unless `image` names another one by its full reference. Batch
+VMs have no internet access, so such an image lives in the project's `images` repository
+(`[gcp] images`, one per region, made by `infra/gcp`), and a campaign pins it by digest. An image
+that is not a yapnr image says how it runs the task wrapper in a `[runtime]` table: `python`, the
+interpreter that runs `task.py` and that `${PYTHON}` names in commands (default
+`/opt/venv/bin/python`), and `entrypoint`, the launcher around both (default the yapnr image's
+`yapnr-kicad-env`; `""` for none). The wrapper needs only the standard library of Python 3.9 or
+later.
+
+```toml
+image = "<region>-docker.pkg.dev/<project>/images/openems:0.37.0-rc3-x86-64-v4@sha256:..."
+
+[runtime]
+python = "/opt/openEMS/venv/bin/python"
+entrypoint = ""
+```
+
+[`docker/openems`](https://github.com/Studio-Fug/yapnr/tree/main/docker/openems) builds openEMS
+from source with its Python bindings, numpy, h5py, scipy, matplotlib and shapely, in two
+variants: a generic x86-64 build and an AVX-512 build (`-march=x86-64-v4 -mtune=znver4`) for
+C4D's Zen 5 cores. Cloud Build builds both on one machine and pushes them as
+`openems:<openEMS version>-x86-64` and `...-x86-64-v4`, running as `yapnr-image-build`; the
+submitter must be allowed to start builds and act as that account (the project owner). A
+regional build bills the vCPU- and GiB-minutes of the `e2-highcpu-8` machine `cloudbuild.yaml`
+asks for (in us-west4 in October 2026, $0.0018 per vCPU-minute and $0.0004 per GiB-minute: about
+$0.018 a minute; see the Cloud Build pricing page), and the stored images per GiB-month like the
+registry caches. A new project's regional quota may refuse larger build machines
+(`FAILED_PRECONDITION ... cannot run builds of this machine type in this region`), so the file asks
+for the 8-vCPU machine; raise `machineType` and `_NJOBS` together once the quota allows.
+
+`tools/exp/openems_plan.py` does the rest. `image` prints (`--run`: submits) the build,
+`digests` lists the built tags with their digests and sizes, `plan` turns N model scripts into
+one `mc-eval` campaign of N tasks (the format is in its docstring), and `collect` lays fetched
+results out as local runs leave them:
+
+```sh
+python3 tools/exp/openems_plan.py image --run
+python3 tools/exp/openems_plan.py plan models.toml --out <dir>      # pins the image's digest
+yapnr exp plan <dir>/campaign.toml --backend gcp-batch
+yapnr exp submit <cid> && yapnr exp status <cid>      # again until every task is done
+yapnr exp fetch <cid> --full
+python3 tools/exp/openems_plan.py collect <cid> --dest <tree>       # <tree>/runs/<model>/...
+```
+
+Each task runs `SCRIPT ARGS` through the job bundle's `openems_job.py` with `OMP_NUM_THREADS` at
+the model's `threads` and records `out/<id>.job.json` (its verdict is `ok`, the exit code of the
+script): wall and CPU time, peak memory, the CPU and whether it has AVX-512, the image's build
+flags and openEMS's own iterations, cells, seconds and MCells/s. `engine` (`basic`, `sse`,
+`sse-compressed` or `multithreaded`, openEMS's default) and `openems_options` (openEMS
+command-line options such as `exact-endcriteria`, which makes the stop step independent of the
+machine's speed), for the campaign or per model, reach every `openEMS.Run` of an unchanged model
+script: the runner starts it under a bootstrap that adds them to `Run`'s keyword arguments, and
+the record and the task's labels carry them. `models_per_vm` models of
+`threads` cores share a VM: `vm_vcpus` is `2 x models_per_vm x threads` on C4D (two vCPUs a core),
+or half that with `packing = "vcpu"`, which runs the threads on SMT siblings; a shape without an
+instance template runs from an instance policy. A model with its own `threads` becomes a task
+class of its own (its own Batch job and VMs, still `models_per_vm` to a VM of `vm_vcpus`), so
+keep one thread count per jobs file to fill the VMs. openEMS runs do not checkpoint, so a
+preempted model starts again.
 
 ## Testing
 

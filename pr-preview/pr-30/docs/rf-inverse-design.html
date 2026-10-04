@@ -394,7 +394,7 @@ that stops resumes from its checkpoint and reproduces the uninterrupted run bit 
 solver steps the fields with its native kernel, float64, where the library loads (the yapnr
 wheel and the container image carry it, Bazel builds it, and a checkout builds it with
 <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.rf.fdtd.native_kernel</span> <span class="pre">build</span></code>), and with the numpy reference otherwise: the same
-values, 11–40 times slower (<a class="reference internal" href="rf-solver-backends.html"><span class="std std-doc">solver backends</span></a>). The first simulation
+values, 13–42 times slower (<a class="reference internal" href="rf-solver-backends.html"><span class="std std-doc">solver backends</span></a>). The first simulation
 says on stderr which one runs. Runs use the spec’s 4 threads (<code class="docutils literal notranslate"><span class="pre">YAPNR_RF_THREADS</span></code> sets the native
 pool); on a shared machine start them with <code class="docutils literal notranslate"><span class="pre">nice</span> <span class="pre">-n</span> <span class="pre">10</span></code>. Set <code class="docutils literal notranslate"><span class="pre">OPENBLAS_NUM_THREADS=1</span></code> (the Bazel
 targets do): numpy’s OpenBLAS, which evaluates the adjoint sources each step, otherwise keeps

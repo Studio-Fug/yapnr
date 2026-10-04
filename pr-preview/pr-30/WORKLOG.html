@@ -327,9 +327,15 @@ the −10 dB band in <code class="docutils literal notranslate"><span class="pre
 and η on all three but fails the 4 % power balance at 9.7 GHz on the finer two (4.6, 4.7 %; cause
 not established, design §24.7); the bank fails (adjacent channels −9.8 and −11.4 dB against −12
 dB). A diplexer from the plain junction (robust, 25 iterations) only rolled off (rejection 13–16
-dB; stopped). Artifacts in <code class="docutils literal notranslate"><span class="pre">docs/rf/</span></code>. Next: the owner’s decisions (balance criterion, the seeded
-filter banks), a CI run, sub-pixel tuning of binary copper for resonant filters, a modal port
-extraction for radiators, a <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">rf</span></code> CLI, an external cross-check, footprints in PnR.</p></li>
+dB; stopped). Artifacts in <code class="docutils literal notranslate"><span class="pre">docs/rf/</span></code>. Native kernel (2026-10-03, <code class="docutils literal notranslate"><span class="pre">claude/rf-kernels</span></code> merged
+with <code class="docutils literal notranslate"><span class="pre">main</span></code>, <a class="reference internal" href="docs/rf-solver-backends.html"><span class="std std-doc">docs/rf-solver-backends.md</span></a>): the C stepper is the
+default backend wherever its library loads (<code class="docutils literal notranslate"><span class="pre">auto</span></code>, float64, bit-identical to numpy; numpy
+otherwise, said once), with every round-2 option (sha256 matrix in <code class="docutils literal notranslate"><span class="pre">test_native_identity</span></code>);
+Bazel builds it into <code class="docutils literal notranslate"><span class="pre">//yapnr/rf</span></code>, the wheel is per platform (manylinux_2_34 x86_64 and
+aarch64, macOS arm64) and the image loads it from the wheel (smoke-tested). Next: the owner’s
+decisions (balance criterion, the seeded filter banks, the native defaults), sub-pixel tuning
+of binary copper for resonant filters, a modal port extraction for radiators, a <code class="docutils literal notranslate"><span class="pre">yapnr</span> <span class="pre">rf</span></code>
+CLI, an external cross-check, footprints in PnR.</p></li>
 <li><p><strong>Compact placement (<code class="docutils literal notranslate"><span class="pre">PNR_COMPACT</span></code>, shrink-to-fit <code class="docutils literal notranslate"><span class="pre">PNR_SHRINK</span></code>, both off by default)</strong>
 (branch <code class="docutils literal notranslate"><span class="pre">claude/compact</span></code> on <code class="docutils literal notranslate"><span class="pre">main</span></code>; design
 <a class="reference internal" href="docs/design/compact-placement.html"><span class="std std-doc">docs/design/compact-placement.md</span></a>): offset courtyards, the

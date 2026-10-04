@@ -33,9 +33,15 @@ hierarchical ladder driver and their animations on `claude/animations-groups-hie
   and η on all three but fails the 4 % power balance at 9.7 GHz on the finer two (4.6, 4.7 %; cause
   not established, design §24.7); the bank fails (adjacent channels −9.8 and −11.4 dB against −12
   dB). A diplexer from the plain junction (robust, 25 iterations) only rolled off (rejection 13–16
-  dB; stopped). Artifacts in `docs/rf/`. Next: the owner's decisions (balance criterion, the seeded
-  filter banks), a CI run, sub-pixel tuning of binary copper for resonant filters, a modal port
-  extraction for radiators, a `yapnr rf` CLI, an external cross-check, footprints in PnR.
+  dB; stopped). Artifacts in `docs/rf/`. Native kernel (2026-10-03, `claude/rf-kernels` merged
+  with `main`, [docs/rf-solver-backends.md](docs/rf-solver-backends.md)): the C stepper is the
+  default backend wherever its library loads (`auto`, float64, bit-identical to numpy; numpy
+  otherwise, said once), with every round-2 option (sha256 matrix in `test_native_identity`);
+  Bazel builds it into `//yapnr/rf`, the wheel is per platform (manylinux_2_34 x86_64 and
+  aarch64, macOS arm64) and the image loads it from the wheel (smoke-tested). Next: the owner's
+  decisions (balance criterion, the seeded filter banks, the native defaults), sub-pixel tuning
+  of binary copper for resonant filters, a modal port extraction for radiators, a `yapnr rf`
+  CLI, an external cross-check, footprints in PnR.
 
 - **Compact placement (`PNR_COMPACT`, shrink-to-fit `PNR_SHRINK`, both off by default)**
   (branch `claude/compact` on `main`; design

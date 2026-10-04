@@ -224,7 +224,7 @@ FAB_DATA_SOURCES = ("yapnr/__init__.py", "yapnr/fab/__init__.py", "yapnr/fab/cap
 
 # The parts of PNR_COMPACT (pnr.compact_flags.PARTS; test_compact keeps them equal)
 # --compact-off may drop.
-COMPACT_PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD", "DROPS")
+COMPACT_PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD", "DROPS", "WIRE", "TURN", "SATELLITES")
 
 
 def compact_environment(compact, compact_off=(), shrink=False):
@@ -240,6 +240,47 @@ def compact_environment(compact, compact_off=(), shrink=False):
             env["PNR_COMPACT_" + part] = "0"
     if shrink:
         env["PNR_SHRINK"] = "1"
+    return env
+
+
+def legalize_environment(
+    gp_polish=False,
+    gp_channels=None,
+    pool_source_clamp=False,
+    legalize_hpwl=None,
+    reorient=None,
+    channel_clearance=None,
+    line_satellites=False,
+):
+    """The PNR_GP_POLISH / PNR_GP_CHANNELS / PNR_POOL_SOURCE_CLAMP / PNR_LEGALIZE_HPWL /
+    PNR_LEGALIZE_REORIENT / PNR_LEGALIZE_CHANNEL_CLEARANCE / PNR_LINE_SATELLITES variables of
+    ``--gp-polish``, ``--gp-channels``, ``--pool-source-clamp``, ``--legalize-hpwl``,
+    ``--legalize-reorient``, ``--legalize-channel-clearance`` and ``--line-satellites``
+    (``pnr.legalize_flags``; set after the ambient PNR_* variables are stripped, so provenance
+    records them); empty when none is given. ``reorient`` is ``"1"`` (guarded), ``"wire"`` or
+    None; ``channel_clearance`` is ``"fab"`` or None."""
+    env = {}
+    for name, value in (("--gp-channels", gp_channels), ("--legalize-hpwl", legalize_hpwl)):
+        if value is not None and not (math.isfinite(value) and value > 0):
+            raise ValueError("%s takes a positive weight, got %r" % (name, value))
+    if gp_polish:
+        env["PNR_GP_POLISH"] = "1"
+    if gp_channels is not None:
+        env["PNR_GP_CHANNELS"] = repr(float(gp_channels))
+    if pool_source_clamp:
+        env["PNR_POOL_SOURCE_CLAMP"] = "1"
+    if legalize_hpwl is not None:
+        env["PNR_LEGALIZE_HPWL"] = repr(float(legalize_hpwl))
+    if reorient not in (None, "1", "wire"):
+        raise ValueError("--legalize-reorient takes nothing or wire, got %r" % (reorient,))
+    if reorient:
+        env["PNR_LEGALIZE_REORIENT"] = reorient
+    if channel_clearance not in (None, "fab"):
+        raise ValueError("--legalize-channel-clearance takes fab, got %r" % (channel_clearance,))
+    if channel_clearance:
+        env["PNR_LEGALIZE_CHANNEL_CLEARANCE"] = channel_clearance
+    if line_satellites:
+        env["PNR_LINE_SATELLITES"] = "1"
     return env
 
 
@@ -716,6 +757,60 @@ def parser():
         help="With --compact: drop one part, PNR_COMPACT_<PART>=0 (repeatable; ablations)",
     )
     ap.add_argument(
+        "--gp-polish",
+        action="store_true",
+        help=(
+            "PNR_GP_POLISH=1: a final global-placement phase on the legalizer's own slots, turns "
+            "frozen (docs/design/compact-placement.md, section 11)"
+        ),
+    )
+    ap.add_argument(
+        "--gp-channels",
+        type=float,
+        metavar="LAMBDA",
+        help="PNR_GP_CHANNELS=LAMBDA: the polish (implied) also weighs the legalizer's channel cost",
+    )
+    ap.add_argument(
+        "--pool-source-clamp",
+        action="store_true",
+        help="PNR_POOL_SOURCE_CLAMP=1: the initial pool's source start begins inside the outline",
+    )
+    ap.add_argument(
+        "--legalize-hpwl",
+        type=float,
+        metavar="W",
+        help=(
+            "PNR_LEGALIZE_HPWL=W: the legalizer's slot cost gains W times the part's wirelength "
+            "and the turn is chosen with the slot among all four"
+        ),
+    )
+    ap.add_argument(
+        "--legalize-reorient",
+        nargs="?",
+        const="1",
+        choices=("1", "wire"),
+        help=(
+            "PNR_LEGALIZE_REORIENT=1: in-place turns that shorten wires after legalization, "
+            "never raising a part's channel shortage; 'wire' drops that guard"
+        ),
+    )
+    ap.add_argument(
+        "--legalize-channel-clearance",
+        choices=("fab",),
+        help=(
+            "PNR_LEGALIZE_CHANNEL_CLEARANCE=fab: the legalizer's channel model spaces unclassed "
+            "nets at the fab clearance (the router's) instead of the board default"
+        ),
+    )
+    ap.add_argument(
+        "--line-satellites",
+        action="store_true",
+        help=(
+            "PNR_LINE_SATELLITES=1: a line group carries each member's series part (a two-pad "
+            "part on a two-pin net to the member) flush beside it"
+        ),
+    )
+    ap.add_argument(
         "--shrink",
         action="store_true",
         help=(
@@ -848,6 +943,17 @@ def main():
         env["PNR_BATCHED_WIRELENGTH"] = "1"
     try:
         env.update(compact_environment(args.compact, args.compact_off, args.shrink))
+        env.update(
+            legalize_environment(
+                args.gp_polish,
+                args.gp_channels,
+                args.pool_source_clamp,
+                args.legalize_hpwl,
+                args.legalize_reorient,
+                args.legalize_channel_clearance,
+                args.line_satellites,
+            )
+        )
     except ValueError as error:
         raise SystemExit(str(error))
     env["PNR_FAB_PROFILE"] = (

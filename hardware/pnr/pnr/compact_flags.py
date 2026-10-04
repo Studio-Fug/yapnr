@@ -21,9 +21,19 @@ same question as the placer without importing torch or numpy.
     a ``plane_layer`` net class without a declared stack (the legacy plane path) plans
     its surface pads' through-via drops with the signal escapes, before routing, as a
     declared stack does, instead of leaving them to writeback's dog-bones after
-    routing, where routed copper can enclose a pad.
+    routing, where routed copper can enclose a pad;
+``WIRE``
+    the legalizer weighs each part's wirelength (weight 4) and picks its turn with its slot
+    (``PNR_LEGALIZE_HPWL``, :mod:`pnr.legalize_flags`);
+``TURN``
+    after legalization, parts turn in place where that shortens their wires and stays legal
+    (``PNR_LEGALIZE_REORIENT=wire``);
+``SATELLITES``
+    a line group carries each member's satellite, such as an LED's series resistor, flush
+    beside it (``PNR_LINE_SATELLITES``).
 
-``PNR_COMPACT_<PART>=0`` drops one part (an ablation). ``PNR_SHRINK=1`` (the flat
+An explicit ``PNR_LEGALIZE_HPWL``, ``PNR_LEGALIZE_REORIENT`` or ``PNR_LINE_SATELLITES``
+(``0`` included) wins over its part. ``PNR_COMPACT_<PART>=0`` drops one part (an ablation). ``PNR_SHRINK=1`` (the flat
 driver's shrink-to-fit outline search) is separate and never on by default. Unset, every
 caller takes its unchanged path and writes no new JSON keys.
 """
@@ -32,7 +42,7 @@ from __future__ import annotations
 
 import os
 
-PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD", "DROPS")
+PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD", "DROPS", "WIRE", "TURN", "SATELLITES")
 
 
 def enabled(part=None) -> bool:

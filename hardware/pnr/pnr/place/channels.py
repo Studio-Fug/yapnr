@@ -22,10 +22,14 @@ from .geometry import occupied_sides, pad_rects
 
 
 class ChannelModel:
-    def __init__(self, graph, rules):
+    def __init__(self, graph, rules, clearance=None):
+        """``clearance`` (mm): the clearance of a net without a class (None: the board's
+        ``default_clearance_mm``; ``PNR_LEGALIZE_CHANNEL_CLEARANCE=fab`` passes the fab's)."""
         fab = rules.get("fab", {})
         self.width = float(fab.get("track_width_mm", 0.2))
-        self.clearance = float(rules.get("default_clearance_mm", 0.2))
+        self.clearance = (
+            float(rules.get("default_clearance_mm", 0.2)) if clearance is None else float(clearance)
+        )
         self.via = float(fab.get("via_diameter_mm", 0.6))
         self.classes = {}
         for cls in rules.get("net_classes", []):

@@ -60,6 +60,14 @@ OPTIONS = {
     "shrink": bool,
     "gloss": bool,
     "gloss_measure": bool,
+    "gp_polish": bool,
+    "gp_channels": (int, float),
+    "pool_source_clamp": bool,
+    "legalize_hpwl": (int, float),
+    "legalize_reorient": bool,
+    "legalize_reorient_wire": bool,
+    "legalize_channel_clearance_fab": bool,
+    "line_satellites": bool,
 }
 FLAGS = {
     "packed_maze": "--packed-maze",
@@ -74,10 +82,17 @@ FLAGS = {
     "shrink": "--shrink",
     "gloss": "--gloss",
     "gloss_measure": "--gloss-measure",
+    # The legalizer and global-placement switches (hardware/pnr/pnr/legalize_flags.py).
+    "gp_polish": "--gp-polish",
+    "pool_source_clamp": "--pool-source-clamp",
+    "legalize_reorient": "--legalize-reorient",
+    "line_satellites": "--line-satellites",
 }
+# Weighted legalizer switches: option -> runner flag taking the weight.
+WEIGHTS = {"gp_channels": "--gp-channels", "legalize_hpwl": "--legalize-hpwl"}
 # The PNR_COMPACT parts ``compact_off`` may name (run.py --compact-off; equal to
 # hardware/pnr/pnr/compact_flags.py PARTS, which test_kinds checks).
-COMPACT_PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD", "DROPS")
+COMPACT_PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD", "DROPS", "WIRE", "TURN", "SATELLITES")
 
 SUMMARY = [
     "run/summary.json",
@@ -116,6 +131,13 @@ def runner_arguments(options: Mapping[str, Any]) -> List[str]:
         args += ["--trace-placement-every", str(options["trace_placement_every"])]
     for part in options.get("compact_off") or []:
         args += ["--compact-off", part]
+    for key, flag in WEIGHTS.items():
+        if options.get(key) is not None:
+            args += [flag, repr(float(options[key]))]
+    if options.get("legalize_reorient_wire") and not options.get("legalize_reorient"):
+        args += ["--legalize-reorient", "wire"]  # the in-place turns without the channel guard
+    if options.get("legalize_channel_clearance_fab"):
+        args += ["--legalize-channel-clearance", "fab"]
     return args
 
 
@@ -166,6 +188,12 @@ class LadderCell(base.Kind):
                 errors.append(
                     "%s.compact_off names parts of %s" % (where, ", ".join(COMPACT_PARTS))
                 )
+            if options.get("legalize_reorient") and options.get("legalize_reorient_wire"):
+                errors.append("%s: legalize_reorient and legalize_reorient_wire exclude" % where)
+            for key in WEIGHTS:
+                value = options.get(key)
+                if isinstance(value, (int, float)) and not isinstance(value, bool) and value <= 0:
+                    errors.append("%s.%s is a positive weight" % (where, key))
             common = campaign.get("config", {}) if where != "config" else {}
             if off and not (options.get("compact") or common.get("compact")):
                 errors.append("%s.compact_off needs compact" % where)

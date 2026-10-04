@@ -43,8 +43,9 @@ hierarchical ladder driver and their animations on `claude/animations-groups-hie
   smoke grids, the divider and antenna re-validated on native float64 (round 2's verdicts, within
   2.5e-4 dB); one iteration on a C4D-16 takes 1.47 s (divider) and 16.1 s (D1 size) at 16
   threads, 8.4 and 6.3 times faster than torch float32. Fixed then: a case's run directory
-  resumes with its own spec, and a process solves each port mode profile once (the solve's last
-  bits varied between processes on the Mac). Next: the owner's
+  resumes with its own spec, a process solves each port mode profile once (the solve's last
+  bits varied between processes on the Mac), and the library's first load is thread-safe
+  (threads asking while it ran had fallen back to numpy). Next: the owner's
   decisions (balance criterion, the seeded filter banks, the native defaults), sub-pixel tuning
   of binary copper for resonant filters, a modal port extraction for radiators, a `yapnr rf`
   CLI, an external cross-check, footprints in PnR.

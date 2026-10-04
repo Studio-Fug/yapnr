@@ -33,6 +33,12 @@ holds a ``hier-blocks`` scope with one ``blocks`` event, a ``top-NN`` start scop
 seed (the macro placement, members expanded), a ``top-NN-route`` route scope per legal
 seed that opens with a ``fixed`` event (the block copper and the pins it already joins)
 and a ``top-seed`` selection.
+
+With ``PNR_COMPACT=1`` (pnr.place.compact, default off) the block trials also try the
+utilisations :data:`pnr.place.compact.UTILISATIONS` (``GP``; the budget is this driver's,
+so a caller of the engine's hierarchical API sets its own) and (``RANK``) the top seed
+ranks by the compactness bucket after the completion keys and vias (route_rank).
+``PNR_SHRINK`` does not apply to this driver; ``pnr-report.json`` records it as skipped.
 """
 
 from __future__ import annotations
@@ -108,6 +114,12 @@ def load(root):
 def budget_of(spec):
     budget = dict(DEFAULT_BUDGET)
     budget.update(spec.get("hier") or {})
+    from pnr.place import compact
+
+    if compact.enabled("GP"):
+        # PNR_COMPACT GP: denser block outlines join the trials (rank_key prefers less area).
+        extra = [u for u in compact.UTILISATIONS if u not in budget["utilisations"]]
+        budget["utilisations"] = list(budget["utilisations"]) + extra
     return budget
 
 
@@ -622,6 +634,15 @@ def run(root, seed):
             split_nets=result["split_nets"],
             representative_retries=tries,
         )
+        from pnr.place import compact
+
+        if compact.enabled("RANK"):
+            # PNR_COMPACT RANK: the compactness bucket after the completion keys (route_rank).
+            from pnr.place.geometry import outline_size
+
+            measured = compact.metrics(result["placed"], *outline_size(graph, constraints))
+            result["bucket"] = measured["bucket"]
+            record["compactness"] = measured
         routed.append(result)
         print(
             "Hierarchical top seed %d: HPWL %.0f mm, missing %d, objective %s"
@@ -717,6 +738,10 @@ def run(root, seed):
             top_copper=dict(tracks=len(best["top_tracks"]), vias=len(best["top_vias"])),
         ),
     )
+    from pnr.place import compact
+
+    if compact.shrink_enabled():  # PNR_SHRINK is the flat driver's: recorded as skipped
+        report["shrink"] = dict(skipped="hier driver")
     (root / "pnr-report.json").write_text(json.dumps(report, indent=2))
     return report, case
 

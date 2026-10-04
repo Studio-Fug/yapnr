@@ -94,6 +94,7 @@ design/rf-fab-coupons
 design/cloud-experiments
 design/fab-and-ordering
 design/gloss
+design/compact-placement
 history/import-manifest
 about-the-name
 references

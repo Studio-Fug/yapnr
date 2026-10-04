@@ -3,6 +3,11 @@
 PNR_PAIR_LANDING_RESERVE=1 (src13, default off): place() attaches the diff-pair
 via landing reserves of pnr.place.pair_landing (from ``channel_rules``) before
 legalization; legality/report then include them through placement_rects.
+
+PNR_COMPACT=1 (default off; :mod:`pnr.place.compact`, docs/design/compact-placement.md):
+spread 1.0 and starts drawn in a cluster box (``GP``), the compact legalizer settings
+(``LEGALIZE``: courtyard gap, copper margins, 0.125 mm slots, pads off the outline) and
+offset courtyards (``COURTYARD``) wherever a part has an off-centre body.
 """
 
 from __future__ import annotations
@@ -14,7 +19,7 @@ from typing import Dict, List, Optional, Tuple
 from pnr.constraints import CompiledConstraints
 from pnr.graph import BoardGraph, BoardOutline
 
-from . import metrics
+from . import compact, metrics
 from .geometry import (
     apply_hard_sides,
     hard_group_limits,
@@ -129,7 +134,13 @@ def place(
     to back (:func:`pnr.place.sides.stack_refs`). With nothing free the flow is the
     single-sided one, as it is under power-first placement (``PNR_POWER_FIRST=1``),
     which keeps every side.
+
+    PNR_COMPACT=1 (:mod:`pnr.place.compact`): the spread floor is 1.0 and the global
+    starts are drawn in a cluster box (``GP``), the legalizer keeps the courtyard gap,
+    copper margins and a finer grid (``LEGALIZE``), and offset courtyards hold their body
+    box (``COURTYARD``). Power-first placement does not support it.
     """
+    spread = compact.spread(spread)  # PNR_COMPACT GP: 1.0 (unchanged otherwise)
     if any(c.kind == "line_group" for c in constraints.constraints):
         # Line groups (pnr.place.line_group): each group is one rigid macro here.
         return _place_line_groups(
@@ -190,6 +201,17 @@ def place(
     poses = resolve_fixed_poses(graph, constraints)
     keepouts = keepout_rects(graph, constraints, poses)
     clearance = float(constraints.board.default_clearance_mm)
+    from pnr.constraints import compile_routing_rules
+
+    # PNR_COMPACT LEGALIZE: courtyard gap, slot grid and copper margins (None: unchanged).
+    tight = None
+    if compact.enabled("LEGALIZE"):
+        tight = compact.legalize_settings(
+            graph,
+            constraints,
+            channel_rules or compile_routing_rules(constraints, [n.name for n in graph.nets]),
+        )
+        clearance, grid_mm = tight.gap, tight.grid_mm
     from .sides import apply_held
     from .sides import plan as side_plan_of
     from .sides import stack_refs
@@ -202,6 +224,8 @@ def place(
 
     roles = None
     if os.environ.get("PNR_POWER_FIRST") == "1":
+        if compact.enabled():
+            raise ValueError("PNR_COMPACT does not support PNR_POWER_FIRST=1")
         if related:
             raise ValueError("region and align constraints do not support PNR_POWER_FIRST=1")
         # Power-first placement: derive tiers/loops, staged lexicographic global
@@ -263,6 +287,12 @@ def place(
             if sided
             else {}
         ),
+        # PNR_COMPACT GP: the random starts are drawn in the cluster box.
+        **(
+            dict(start_box=compact.cluster_box(graph, constraints, width, height))
+            if compact.enabled("GP")
+            else {}
+        ),
     )
     positions, rotations = placement[:2]
     cont = BoardGraph.from_json(graph.to_json())
@@ -275,8 +305,6 @@ def place(
         assign(cont, placement[2], side_plan)
 
     # Directional copper escape demand is part of production legalization.
-    from pnr.constraints import compile_routing_rules
-
     from .channels import ChannelModel
 
     channels = ChannelModel(
@@ -311,12 +339,20 @@ def place(
         **legalize_constraint_kwargs(graph, constraints, poses, pad_edge),
         **(_side_legalization(side_plan) if sided else {}),
         **({} if not stack else dict(stack=stack)),
+        **({} if not (tight and tight.margins) else dict(margins=tight.margins)),
     )
     if related:
         # Hard aligns onto one exact line where that is legal (pnr.place.regions).
         from .regions import snap_aligns
 
-        snap_aligns(placed, constraints, clearance, pad_edge, (width, height))
+        snap_aligns(
+            placed,
+            constraints,
+            clearance,
+            pad_edge,
+            (width, height),
+            **compact.margin_kwargs(tight),
+        )
     if (constraints.diff_pairs or constraints.length_matches) and (
         (getattr(constraints, "tuning", None) or {}).get("placement", True)
     ):
@@ -336,6 +372,7 @@ def place(
             spread=min(spread, _LEGALIZE_SPREAD_CAP),
             inflation=inflation,
             pad_edge=pad_edge,
+            **({} if not (tight and tight.margins) else dict(margins=tight.margins)),
         )
     if sided:
         from .detail_moves import improve
@@ -350,6 +387,7 @@ def place(
             inflation=inflation,
             allow_rotation=orient,
             **({} if pad_edge is None else dict(pad_edge=pad_edge)),
+            **({} if not (tight and tight.margins) else dict(margins=tight.margins)),
         )
         check_held(placed, side_plan)
     return _finish(placed, graph, constraints, width, height, baseline, pad_edge)

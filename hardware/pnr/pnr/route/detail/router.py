@@ -18,6 +18,7 @@ import os
 from dataclasses import dataclass, field
 from typing import List, Optional, Set, Tuple
 
+from pnr.compact_flags import enabled as compact_enabled
 from pnr.constraints import CompiledConstraints
 from pnr.graph import BoardGraph, footprint_point
 
@@ -268,6 +269,10 @@ def current_layer_mask(stack, layers, rules, net_width, default_width):
     return out
 
 
+# The margin (mm) around a legacy split plane's pads: the writeback pour's.
+PLANE_REGION_MARGIN_MM = 2.0
+
+
 def _mark_plane_regions(
     grid: RouteGrid, graph: BoardGraph, rules: Optional[dict], margin: float, stack=None
 ) -> None:
@@ -277,15 +282,23 @@ def _mark_plane_regions(
     clearance — the same split-plane geometry :func:`pnr.writeback.apply_planes`
     lays down, so the grid model and the emitted copper agree. With a declared
     ``stack`` only its split planes apply (dedicated planes are not grid layers)."""
+    for _net, la, region in _plane_region_rects(grid, graph, rules, stack):
+        grid.block_region(region, layers=[la], grow=margin + grid.clearance, block_vias=False)
+
+
+def _plane_region_rects(grid: RouteGrid, graph: BoardGraph, rules: Optional[dict], stack=None):
+    """``[(net, grid layer, Rect)]``: each split-plane net's region on its plane layer,
+    the bounding box of its pads (:func:`_mark_plane_regions` grows it)."""
     layer_idx = {name: i for i, name in enumerate(grid.layers)}
     net_layer = _net_plane_layer(rules) if stack is None else stack.split_nets
     if not net_layer:
-        return
+        return []
     rects: dict = {}
     for comp in graph.components:
         for _name, net, r in pad_rects(comp):
             if net in net_layer:
                 rects.setdefault(net, []).append(r)
+    out = []
     for net, rs in rects.items():
         la = layer_idx.get(net_layer[net])
         if la is None:
@@ -294,8 +307,8 @@ def _mark_plane_regions(
         x1 = max(r.right for r in rs)
         y0 = min(r.bottom for r in rs)
         y1 = max(r.top for r in rs)
-        region = Rect((x0 + x1) / 2.0, (y0 + y1) / 2.0, x1 - x0, y1 - y0)
-        grid.block_region(region, layers=[la], grow=margin + grid.clearance, block_vias=False)
+        out.append((net, la, Rect((x0 + x1) / 2.0, (y0 + y1) / 2.0, x1 - x0, y1 - y0)))
+    return out
 
 
 def _mark_copper_keepouts(grid: RouteGrid, graph: BoardGraph, rules: Optional[dict]) -> None:
@@ -824,7 +837,7 @@ def route_board(
         )
     # Split planes on the inner layers become obstacles the signals route around
     # (matching the 2 mm writeback pour margin).
-    _mark_plane_regions(grid, graph, rules, margin=2.0, stack=stack)
+    _mark_plane_regions(grid, graph, rules, margin=PLANE_REGION_MARGIN_MM, stack=stack)
     _mark_copper_keepouts(grid, graph, rules)
     _mark_source_arrays(grid, graph, rules)
 
@@ -874,6 +887,32 @@ def route_board(
             inset=via_radius_mm,
             outset=via_radius_mm + clearance_mm + fab["track_width_mm"],
         )
+    elif planes and compact_enabled("DROPS"):
+        # PNR_COMPACT DROPS (default off): a plane_layer net class without a declared
+        # stack plans its surface pads' through-via drops here too, jointly with the
+        # signal exits, instead of writeback dog-boning them after routing (where the
+        # routed copper of a dense placement can enclose a pad). No stack: a through
+        # drop (no span) and no plane region (the legacy pour spans the net's pads).
+        from pnr.pad_entry import terminal_required_width
+
+        for comp in graph.components:
+            for pad in comp.pads:
+                if pad.net in planes and not pad.through_hole:
+                    w = terminal_required_width(comp.ref, pad.name, pad.net, rules or {})
+                    pad_drop_width[(comp.ref, pad.name)] = w
+                    drop_widths[pad.net] = max(drop_widths.get(pad.net, 0.0), w)
+        for n, w in drop_widths.items():
+            net_width.setdefault(n, w)
+        # Each drop may cross its own net's plane region (blocked for tracks there).
+        for net, la, region in _plane_region_rects(grid, graph, rules):
+            if net in drop_widths:
+                cells = grid.own_plane_cells.setdefault(net, set())
+                grid._mark_rect(
+                    la,
+                    region,
+                    PLANE_REGION_MARGIN_MM + grid.clearance,
+                    lambda L, i, j: cells.add((L, j, i)),
+                )
     drop_span = _drop_span(vm, stack) if drop_widths else None
     plan = plan_escapes(
         grid,
@@ -893,6 +932,9 @@ def route_board(
         plane_access=plane_access,
         drop_span=drop_span,
     )
+    # PNR_COMPACT DROPS: the drops are planned and reserved; the maze's predicates never
+    # read the own-region cells, so the grid goes on as the maze kernels know it.
+    grid.own_plane_cells = {}
     from pnr.stack import assess
 
     stack_warnings = list(assess(rules, getattr(graph, "stack", None))[1])

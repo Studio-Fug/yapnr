@@ -54,6 +54,12 @@ OPTIONS = {
     "trace": bool,
     "trace_placement_every": int,
     "showcases": bool,
+    "hard": bool,
+    "compact": bool,
+    "compact_off": list,
+    "shrink": bool,
+    "gloss": bool,
+    "gloss_measure": bool,
 }
 FLAGS = {
     "packed_maze": "--packed-maze",
@@ -61,7 +67,17 @@ FLAGS = {
     "dense_maze_cost": "--dense-maze-cost",
     "trace": "--trace",
     "showcases": "--showcases",
+    # The hard rungs (hardware/pnr/regression/hard_rungs.py) become selectable cases.
+    "hard": "--hard",
+    # PNR_COMPACT / PNR_SHRINK (docs/design/compact-placement.md) and PNR_GLOSS.
+    "compact": "--compact",
+    "shrink": "--shrink",
+    "gloss": "--gloss",
+    "gloss_measure": "--gloss-measure",
 }
+# The PNR_COMPACT parts ``compact_off`` may name (run.py --compact-off; equal to
+# hardware/pnr/pnr/compact_flags.py PARTS, which test_kinds checks).
+COMPACT_PARTS = ("GP", "RANK", "LEGALIZE", "COURTYARD", "DROPS")
 
 SUMMARY = [
     "run/summary.json",
@@ -98,6 +114,8 @@ def runner_arguments(options: Mapping[str, Any]) -> List[str]:
         args += ["--detail-pitch-mm", str(options["detail_pitch_mm"])]
     if options.get("trace_placement_every") is not None:
         args += ["--trace-placement-every", str(options["trace_placement_every"])]
+    for part in options.get("compact_off") or []:
+        args += ["--compact-off", part]
     return args
 
 
@@ -143,6 +161,14 @@ class LadderCell(base.Kind):
                     errors.append("%s.%s has the wrong type" % (where, key))
             if options.get("fab_profile", "legacy") not in FAB_PROFILES:
                 errors.append("%s.fab_profile is one of %s" % (where, ", ".join(FAB_PROFILES)))
+            off = options.get("compact_off")
+            if isinstance(off, list) and any(p not in COMPACT_PARTS for p in off):
+                errors.append(
+                    "%s.compact_off names parts of %s" % (where, ", ".join(COMPACT_PARTS))
+                )
+            common = campaign.get("config", {}) if where != "config" else {}
+            if off and not (options.get("compact") or common.get("compact")):
+                errors.append("%s.compact_off needs compact" % where)
         for name in configs:
             if not re.match(r"^[a-z0-9][a-z0-9-]{0,30}$", name):
                 errors.append("configuration name %r: lower-case letters, digits, dashes" % name)

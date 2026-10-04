@@ -174,6 +174,10 @@ class RouteGrid:
         # for a declared stack only (route_board: a current-rated net stays off an
         # inner layer whose copper would need a wider track); vias still cross.
         self.layer_mask = None
+        # net -> the (layer, j, i) cells its own legacy plane region blocks for tracks
+        # (PNR_COMPACT DROPS only, route_board): a plane drop of that net may cross
+        # them, as a signal via may (the region does not set via_blocked).
+        self.own_plane_cells = {}
         # Blind, buried and micro vias (pnr.via_policy.GridVias): None when the
         # board allows through vias only, which keeps every via full-stack. A via
         # then occupies (and is checked, reserved and priced on) only its span's

@@ -37,6 +37,14 @@ join the loss, in wirelength millimetres: the expected layer changes
 net's parts, the ``side_pref`` bias and a small cost per part off its source side.
 Each free part snaps to the bottom when ``q > 0.5``.
 Without free parts none of this runs and the result is unchanged.
+
+**Compact placement** (PNR_COMPACT, :mod:`pnr.place.compact`, default off): ``start_box``
+maps the seeded random starts into a cluster box instead of the whole board (``GP``);
+the overlap and keep-out terms keep the courtyard gap instead of the routing clearance
+(``LEGALIZE``); a part with an offset courtyard (``COURTYARD``) spreads, stays inside the
+outline, aligns to an edge and avoids keep-outs with its body box, centred at ``pos``
+plus the body offset expected under the rotation (and side) distribution, like the pin
+offsets. Without the flag every term is computed exactly as before.
 """
 
 from __future__ import annotations
@@ -131,9 +139,47 @@ def length_mismatch(match_sets, pin_x, pin_y, gamma: float) -> torch.Tensor:
 
 
 def _base_half_sizes(graph: BoardGraph) -> torch.Tensor:
-    """Unrotated courtyard half-(w, h) per component (parts ingest at rot 0)."""
-    hs = [(c.courtyard[0] / 2.0, c.courtyard[1] / 2.0) for c in graph.components]
+    """Unrotated courtyard half-(w, h) per component (parts ingest at rot 0); the body
+    box's half size for a PNR_COMPACT offset courtyard."""
+    from .geometry import compact_body
+
+    hs = []
+    for c in graph.components:
+        body = compact_body(c)
+        if body is None:
+            hs.append((c.courtyard[0] / 2.0, c.courtyard[1] / 2.0))
+        else:
+            hs.append(((body[2] - body[0]) / 2.0, (body[3] - body[1]) / 2.0))
     return torch.tensor(hs, dtype=torch.float32)
+
+
+def _quarter_turns(x: float, y: float) -> List[Tuple[float, float]]:
+    """``(x, y)`` at 0, 90, 180 and 270 degrees CCW (exact)."""
+    return [(x, y), (-y, x), (-x, -y), (y, -x)]
+
+
+def body_offsets(graph: BoardGraph):
+    """PNR_COMPACT offset courtyards: ``(off4, mirror4)``, the (n, 4, 2) offsets of each
+    body box's centre from the origin at the four rotations, on the part's side and on
+    the other one (mirrored in y, as the pads); None when no part has one."""
+    from .geometry import compact_body
+
+    bodies = [compact_body(c) for c in graph.components]
+    if all(b is None for b in bodies):
+        return None
+    rows, mirrored = [], []
+    for body in bodies:
+        if body is None:
+            rows.append([(0.0, 0.0)] * 4)
+            mirrored.append([(0.0, 0.0)] * 4)
+            continue
+        cx, cy = (body[0] + body[2]) / 2.0, (body[1] + body[3]) / 2.0
+        rows.append(_quarter_turns(cx, cy))
+        mirrored.append(_quarter_turns(cx, -cy))
+    return (
+        torch.tensor(rows, dtype=torch.float32),
+        torch.tensor(mirrored, dtype=torch.float32),
+    )
 
 
 def global_place(
@@ -162,6 +208,7 @@ def global_place(
     side_plan=None,
     initial_sides: Optional[Dict[str, str]] = None,
     return_sides: bool = False,
+    start_box: Optional[Tuple[float, float, float, float]] = None,
 ):
     """Optimize continuous centres (+ orientation); return positions and angles.
 
@@ -185,6 +232,10 @@ def global_place(
     ``side_plan`` (:func:`pnr.place.sides.plan`) relaxes the side of each of its free
     parts too, starting toward ``initial_sides`` ({ref: side}, default the part's
     current side); without free parts it changes nothing.
+
+    ``start_box`` ((x0, y0, w, h), PNR_COMPACT ``GP``) maps the seeded random starts into
+    that box (:func:`pnr.place.compact.box_coordinate`, the same draws); None keeps them
+    spread across the board.
 
     Returns ``({ref: (x, y)}, {ref: angle_deg})`` for every component (angle is
     the arg-max of the relaxed rotation distribution, a legal 0/90/180/270), and
@@ -264,8 +315,21 @@ def global_place(
 
     # Init movable positions spread across the interior (seeded, deterministic).
     init = torch.rand(n, 2)
-    init[:, 0] = half[:, 0] + init[:, 0] * (width - 2 * half[:, 0])
-    init[:, 1] = half[:, 1] + init[:, 1] * (height - 2 * half[:, 1])
+    if start_box is None:
+        init[:, 0] = half[:, 0] + init[:, 0] * (width - 2 * half[:, 0])
+        init[:, 1] = half[:, 1] + init[:, 1] * (height - 2 * half[:, 1])
+    else:
+        # PNR_COMPACT GP: the same draws, mapped into the cluster box.
+        from .compact import box_coordinate
+
+        x0, y0, bw, bh = (float(v) for v in start_box)
+        init = torch.tensor(
+            [
+                [box_coordinate(u, hx, x0, bw, width), box_coordinate(v, hy, y0, bh, height)]
+                for (u, v), (hx, hy) in zip(init.tolist(), half.tolist())
+            ],
+            dtype=torch.float32,
+        ).reshape(n, 2)
     # Explicit global starts let the initial pool explore different arrangements
     # instead of replacing every supplied source pose with the same random path.
     if initial_positions is not None:
@@ -397,7 +461,12 @@ def global_place(
     )
 
     movable_f = (~is_fixed).float()
-    clearance = float(constraints.board.default_clearance_mm)
+    from .compact import placement_clearance
+
+    # The board's default clearance; the courtyard gap with PNR_COMPACT LEGALIZE.
+    clearance = placement_clearance(constraints)
+    # PNR_COMPACT COURTYARD: body-centre offsets per rotation (None: every part centred).
+    body_off = body_offsets(graph)
     opt = torch.optim.Adam(params, lr=lr)
     from pnr.trace import placement_tracer
 
@@ -438,11 +507,22 @@ def global_place(
         # Expected courtyard half-size (rotation-aware).
         exp_half = (p.unsqueeze(-1) * half4).sum(1)  # (n, 2)
         hw, hh = exp_half[:, 0], exp_half[:, 1]
+        # Courtyard centres: the origins, or (PNR_COMPACT offset courtyards) the origins
+        # plus the expected body offsets, mixed over both sides for a side-free part.
+        body = pos
+        if body_off is not None:
+            exp_body = (p.unsqueeze(-1) * body_off[0]).sum(1)
+            if sided is not None:
+                away_b = away.unsqueeze(-1)
+                exp_body = (1.0 - away_b) * exp_body + away_b * (p.unsqueeze(-1) * body_off[1]).sum(
+                    1
+                )
+            body = pos + exp_body
 
         # Pairwise smooth overlap (spreading), upper triangle only.
         if bodies is None:
-            dx = (pos[:, 0].unsqueeze(1) - pos[:, 0].unsqueeze(0)).abs()
-            dy = (pos[:, 1].unsqueeze(1) - pos[:, 1].unsqueeze(0)).abs()
+            dx = (body[:, 0].unsqueeze(1) - body[:, 0].unsqueeze(0)).abs()
+            dy = (body[:, 1].unsqueeze(1) - body[:, 1].unsqueeze(0)).abs()
             sw = hw.unsqueeze(1) + hw.unsqueeze(0) + clearance
             sh = hh.unsqueeze(1) + hh.unsqueeze(0) + clearance
             ox = torch.clamp(sw - dx, min=0.0)
@@ -453,7 +533,7 @@ def global_place(
             overlap = gp_overlap(bodies, pos, p, clearance)
 
         # Outline containment.
-        cx, cy = pos[:, 0], pos[:, 1]
+        cx, cy = body[:, 0], body[:, 1]
         bound = (
             torch.clamp(hw - cx, min=0.0) ** 2
             + torch.clamp(cx + hw - width, min=0.0) ** 2
@@ -510,7 +590,7 @@ def global_place(
                 target = extent
             else:  # north / east
                 target = (height if axis == 1 else width) - extent
-            loss = loss + weight * (pos[i, axis] - target) ** 2
+            loss = loss + weight * (body[i, axis] - target) ** 2
 
         for members, anchor, radius, weight in group_terms:
             m = torch.tensor(members, dtype=torch.long)
@@ -556,6 +636,8 @@ def global_place(
                 ),
                 inflation,
                 step,
+                # PNR_COMPACT offset courtyards: the expected body offsets (else none).
+                **({} if body_off is None else dict(shift=(body - pos).detach().tolist())),
             )
         if tracer is not None and tracer.due(step):
             tracer.snapshot(step, pos, p)

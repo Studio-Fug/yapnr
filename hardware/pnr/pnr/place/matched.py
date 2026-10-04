@@ -14,6 +14,10 @@ groups never gets here.
 
 The estimate is the 45-degree routing distance (octile) between the two pins of a
 two-pin net, and the half perimeter of a larger net's pins.
+
+PNR_COMPACT (:mod:`pnr.place.compact`, default off): a moved part with an offset
+courtyard takes the slot of its body box (pose = slot centre less its shift), and
+``margins`` grows every slot by the parts' copper margins, as in the legalizer.
 """
 
 from __future__ import annotations
@@ -25,7 +29,14 @@ import numpy as np
 
 from pnr.graph import BoardGraph
 
-from .geometry import Rect, courtyard_rect, occupied_sides, pin_positions, placement_rects
+from .geometry import (
+    Rect,
+    body_shift,
+    courtyard_rect,
+    occupied_sides,
+    pin_positions,
+    placement_rects,
+)
 from .legalize import LegalizationError, _mark, _place_part, pad_edge_box
 
 # Parts a pair's legs run through (series resistors, ESD arrays, common-mode chokes)
@@ -138,9 +149,11 @@ def refine_matched(
     spread: float = 1.0,
     inflation: Optional[Dict[str, float]] = None,
     pad_edge: Optional[Tuple[float, float]] = None,
+    margins: Optional[Dict[str, float]] = None,
 ) -> BoardGraph:
     """Move the small parts on matched nets to even each set's estimated lengths
-    (module docstring). Returns a new graph; ``graph`` itself when nothing moves."""
+    (module docstring). Returns a new graph; ``graph`` itself when nothing moves.
+    ``margins`` ({ref: mm}, PNR_COMPACT ``LEGALIZE``) grows each part's slot."""
     sets = matched_sets(constraints, graph)
     if not sets:
         return graph
@@ -182,16 +195,25 @@ def refine_matched(
             sides = set(occupied_sides(comp))
             for other in others:
                 infl = max(1.0, spread, float(inflation.get(other.ref, 1.0)))
+                grow = (
+                    clearance + 2 * margins[other.ref]
+                    if margins and other.ref in margins
+                    else clearance
+                )
                 for side, cr in placement_rects(other):
                     if side in sides:
                         _mark(
                             occ,
                             g,
-                            Rect(cr.cx, cr.cy, cr.w * infl + clearance, cr.h * infl + clearance),
+                            Rect(cr.cx, cr.cy, cr.w * infl + grow, cr.h * infl + grow),
                         )
             cr = courtyard_rect(comp)
             infl = max(1.0, spread, float(inflation.get(comp.ref, 1.0)))
-            bw, bh = (int(math.ceil((size * infl + clearance) / g)) for size in (cr.w, cr.h))
+            grow = (
+                clearance + 2 * margins[comp.ref] if margins and comp.ref in margins else clearance
+            )
+            bw, bh = (int(math.ceil((size * infl + grow) / g)) for size in (cr.w, cr.h))
+            shift = body_shift(comp)  # PNR_COMPACT offset courtyard (None: centred)
             x0, y0 = comp.pos
             nets = sorted({p.net for p in comp.pads if p.net and p.net in pins.nets})
 
@@ -223,10 +245,13 @@ def refine_matched(
                     list(limits.get(comp.ref, ())),
                     candidate_cost=cost,
                     box=None if pad_edge is None else pad_edge_box(comp, pad_edge, width, height),
+                    **({} if shift is None else dict(shift=shift)),
                 )
             except LegalizationError:
                 continue
             candidate = ((col + bw / 2) * g, (row + bh / 2) * g)
+            if shift is not None:
+                candidate = (candidate[0] - shift[0], candidate[1] - shift[1])
             cx, cy = np.array([candidate[0]]), np.array([candidate[1]])
             after_cost = float(cost(cx, cy)[0]) + math.dist(candidate, (x0, y0)) ** 2
             dx, dy = candidate[0] - x0, candidate[1] - y0

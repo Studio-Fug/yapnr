@@ -14,6 +14,9 @@ Writes the same outputs as ``route_case.py`` (rules.json, placed.json, routes.js
 pnr-report.json) plus ``mc/`` (halving's dataset and status) and ``mc-summary.json``,
 so the runner's native stages and gate run unchanged.
 
+With ``PNR_COMPACT=1`` ``RANK`` (default off, pnr.place.compact) the final choice ranks by
+the compactness bucket after the completion keys (route_rank), as halving's screen does.
+
     python mc_case.py ROOT SEED ROUNDS   (ROUNDS is unused: the search has its own budget)
 """
 
@@ -30,6 +33,7 @@ from pnr.fab_profile import apply_rules
 from pnr.graph import BoardGraph
 from pnr.length_model import attach_board
 from pnr.mc.halving import _rank_key
+from pnr.place import compact
 from pnr.place.initial_pool import _route_metrics, route_rank
 from pnr.place.metrics import hpwl
 from pnr.place.sides import plan as side_plan
@@ -121,6 +125,11 @@ for rec in finalists:
         cand, constraints, rules, pitch=mc.get("pitch_mm", 0.25), max_iters=mc["final_iters"]
     )
     metrics = _route_metrics(route)
+    if compact.enabled("RANK"):  # PNR_COMPACT RANK: the bucket after completion
+        from pnr.place.geometry import outline_size
+
+        measured = compact.metrics(cand, *outline_size(cand, constraints))
+        metrics = dict(metrics, bucket=measured["bucket"], compactness=measured)
     evaluated.append(
         dict(
             id=rec["id"],
@@ -193,6 +202,8 @@ unresolved = sorted(set(route.result.unrouted) - set(route.deferred_nets))
                 if getattr(route, "length_report", None) is not None
                 else {}
             ),
+            # PNR_SHRINK is the flat driver's: recorded as skipped (absent otherwise).
+            **({"shrink": dict(skipped="mc driver")} if compact.shrink_enabled() else {}),
         ),
         indent=2,
     )

@@ -79,6 +79,8 @@ if getattr(r, "via_spans", None):
             summary=report.summary(),
             # Pair / group length tuning (pnr.route.detail.tune), only when declared.
             **({"length_tuning": r.length_report} if r.length_report is not None else {}),
+            # PNR_SHRINK only (absent otherwise): the outline search and its choice.
+            **({"shrink": report.shrink} if report.shrink is not None else {}),
         ),
         indent=2,
     )

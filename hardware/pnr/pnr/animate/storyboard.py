@@ -11,7 +11,7 @@ Scenes, in path order:
 ``placement``   a global placement (snapshots) and its legalization (accepted order)
 ``move``        a round's placement that no global placement produced (local moves)
 ``route``       one detailed route: negotiation, commits, rip-ups, the final copper
-``native``      a saved KiCad board after writeback, planes or refill, with its DRC
+``native``      a saved KiCad board after writeback, planes, gloss or refill, with its DRC
 ``end``         KiCad's verdict and the metrics
 
 A storyboard names scopes and event sequence numbers of its trace, never files. A trace with a

@@ -3,6 +3,11 @@
 This evaluates the actual global placer's formula at rigid, observed poses. It
 is not the historical soft-rotation loss or the legalizer/route-probe objective.
 A counterfactual field uses whole-board delta, not an allocated component share.
+
+PNR_COMPACT (:mod:`pnr.place.compact`, default off): as in the global placer, a part's
+offset courtyard (``COURTYARD``) spreads, stays in the outline, aligns and avoids
+keep-outs with its body box centred at ``pos`` plus its offset, and the overlap and
+keep-out terms keep the courtyard gap (``LEGALIZE``).
 """
 
 import fnmatch
@@ -67,7 +72,8 @@ class Objective:
         effective_offsets=None,
         effective_half=None,
         roles=None,
-        pf_state=None
+        pf_state=None,
+        effective_shift=None
     ):
         self.graph = graph
         self.constraints = constraints
@@ -92,6 +98,9 @@ class Objective:
         self.keys = {}
         self.all_keys = {}
         halves = []
+        shifts = []
+        from .geometry import body_shift, compact_body
+
         for i, c in enumerate(graph.components):
             t = math.radians(c.rot)
             ct, st = math.cos(t), math.sin(t)
@@ -99,8 +108,13 @@ class Objective:
             # Same cardinal extent model as global_place at one-hot rotation.
             if abs(c.rot / 90 - round(c.rot / 90)) > 1e-5:
                 raise ValueError("Global placer only supports cardinal rotations: " + c.ref)
-            h = np.array(c.courtyard) / 2 * scale
+            body = compact_body(c)  # PNR_COMPACT offset courtyard (None: centred)
+            if body is None:
+                h = np.array(c.courtyard) / 2 * scale
+            else:
+                h = np.array((body[2] - body[0], body[3] - body[1])) / 2 * scale
             halves.append(h[::-1] if round(c.rot / 90) % 2 else h)
+            shifts.append(body_shift(c) or (0.0, 0.0))
             for pad in c.pads:
                 self.keys[c.ref, pad.name] = len(offsets)
                 self.all_keys.setdefault((c.ref, pad.name), []).append(len(offsets))
@@ -108,6 +122,10 @@ class Objective:
                 x, y = pad.offset
                 offsets.append((x * ct - y * st, x * st + y * ct))
         self.half = np.array(halves)
+        # Body-centre offsets from the origins (PNR_COMPACT offset courtyards), else None.
+        self.shift = None
+        if any(s != (0.0, 0.0) for s in shifts) or effective_shift is not None:
+            self.shift = np.array(shifts if effective_shift is None else effective_shift, float)
         self.pin_owner = np.array(self.pin_owner, dtype=int)
         self.offsets = np.array(offsets, dtype=float).reshape((-1, 2))
         if effective_offsets is not None:
@@ -134,7 +152,9 @@ class Objective:
             ]
         )
         self.overlap = np.triu(self.overlap, 1)
-        self.clearance = float(constraints.board.default_clearance_mm)
+        from .compact import placement_clearance
+
+        self.clearance = placement_clearance(constraints)
         self.width, self.height = outline_size(graph, constraints)
         self.keepouts = keepout_rects(graph, constraints, self.fixed)
         self.cap = []
@@ -317,7 +337,9 @@ class Objective:
                         * np.logaddexp(0.0, (J[j] - (1 + pf["eps"][j - 1]) * star) / scale),
                         sorted(owners[j]),
                     )
-        delta = np.abs(pos[:, :, None, :] - pos[:, None, :, :])
+        # Courtyard centres (PNR_COMPACT offset courtyards: pos plus the body offsets).
+        body = pos if self.shift is None else pos + self.shift
+        delta = np.abs(body[:, :, None, :] - body[:, None, :, :])
         span = (
             self.half[:, None, :]
             + self.half[None, :, :]
@@ -328,8 +350,8 @@ class Objective:
         raw[:, :, 1] = contribution
         weighted[:, :, 1] = contribution * (self.cfg["w_spread"] if pf is None else pf["w_ov"])
         bound = (
-            np.maximum(self.half - pos, 0) ** 2
-            + np.maximum(pos + self.half - np.array([self.width, self.height]), 0) ** 2
+            np.maximum(self.half - body, 0) ** 2
+            + np.maximum(body + self.half - np.array([self.width, self.height]), 0) ** 2
         ).sum(2) * self.movable
         raw[:, :, 2] = bound
         weighted[:, :, 2] = bound * (self.cfg["w_bound"] if pf is None else pf["bound"])
@@ -349,7 +371,7 @@ class Objective:
                 if edge in ("south", "west")
                 else (self.height if axis else self.width) - extent
             )
-            add(5, (pos[:, i, axis] - target) ** 2, [i], weight)
+            add(5, (body[:, i, axis] - target) ** 2, [i], weight)
         for i, j, radius, weight in self.groups if pf is None else self.pf_groups:
             add(
                 6,
@@ -358,7 +380,7 @@ class Objective:
                 weight * (1.0 if pf is None else pf["group"]),
             )
         for k in self.keepouts:
-            delta = np.abs(pos - np.array([k.cx, k.cy]))
+            delta = np.abs(body - np.array([k.cx, k.cy]))
             area = (
                 np.maximum(
                     self.half + np.array([k.w / 2, k.h / 2]) + self.clearance - delta, 0

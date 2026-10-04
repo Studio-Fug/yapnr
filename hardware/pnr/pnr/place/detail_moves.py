@@ -245,12 +245,16 @@ def improve(
     budget=None,
     inflation=None,
     allow_rotation=True,
+    margins=None,
 ):
-    """Return a copy of legal ``graph`` after the seeded flip/swap pass (see module)."""
+    """Return a copy of legal ``graph`` after the seeded flip/swap pass (see module).
+    PNR_COMPACT ``LEGALIZE``: the courtyard gap and ``margins`` (copper margins) apply."""
     placed = BoardGraph.from_json(graph.to_json())
     if not side_plan.active:
         return placed
-    clearance = float(constraints.board.default_clearance_mm)
+    from .compact import placement_clearance
+
+    clearance = placement_clearance(constraints)
     try:
         legal = pose_checker(
             placed,
@@ -259,6 +263,7 @@ def improve(
             spread=spread,
             pad_edge=pad_edge,
             inflation=inflation,
+            **({} if not margins else dict(margins=margins)),
         )
     except ValueError:
         return placed  # not a legal baseline: nothing to improve safely

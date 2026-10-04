@@ -13,12 +13,13 @@ Stack, boundaries, ports, mesh and far field follow stage 2's column model
   loads: 50 ohm lumped ports (signal pad to L2), not excited.
 - Mesh: fixed lines on every straight copper edge and window edge inside the fine box
   (1/3-2/3 pair at res/3), uniform res*1.6 fill inside it, graded x1.3 to lambda0/18 outside;
-  4 + 4 cells across the bond and the core. A comparison shares one mesh template (stage 3b):
+  4 + 4 cells across the bond and the core (`--nz-bond`, `--nz-core`; sign-off runs use 8 + 8,
+  palace validation). A comparison shares one mesh template (stage 3b):
   `--mesh-ref A.json,B.json` adds the edges of the other variants' copper and windows (the union
   of the variants' edges), and a model's own `mesh_lines` (x, y) are added as fixed lines.
 
   python3 openems/ant_sim.py MODEL.json --excite TX2.Pg --out OUT [--threads 4] [--res 0.025]
-      [--mesh-ref OTHER.json,...] [--probe-bond]
+      [--mesh-ref OTHER.json,...] [--nz-core 8 --nz-bond 8] [--fspan 54 70] [--probe-bond]
 
 Outputs OUT/result.json (S of every port, RL-10 band of the excited port, far field per band
 frequency: broadside directivity and realized gain, radiation efficiency, HPBW, E- and H-plane
@@ -104,6 +105,17 @@ def model(m, args):
         cu.AddPolygon(np.array(pp).T, "z", z_l1, priority=30)
     for vx, vy, dr in m["vias"]:
         pec.AddBox([vx - dr / 2, vy - dr / 2, 0.0], [vx + dr / 2, vy + dr / 2, z_l1], priority=50)
+    wall_m = getattr(args, "wall_windows", None)
+    if wall_m is not None:  # model-only bound: PEC walls L3-L2 round each window (no such via)
+        for wx0, wy0, wx1, wy1 in m["windows"]:
+            ex0, ey0, ex1, ey1 = wx0 - wall_m, wy0 - wall_m, wx1 + wall_m, wy1 + wall_m
+            for b0, b1 in (
+                ([ex0, ey0, 0.0], [ex1, ey0, z_l2]),
+                ([ex0, ey1, 0.0], [ex1, ey1, z_l2]),
+                ([ex0, ey0, 0.0], [ex0, ey1, z_l2]),
+                ([ex1, ey0, 0.0], [ex1, ey1, z_l2]),
+            ):
+                pec.AddBox(b0, b1, priority=50)
     for vx, vy, dr in m.get("shorts", []):  # shorted dummy loads: signal land to L3
         pec.AddBox([vx - dr / 2, vy - dr / 2, 0.0], [vx + dr / 2, vy + dr / 2, z_l1], priority=50)
 
@@ -127,6 +139,10 @@ def model(m, args):
     for wx0, wy0, wx1, wy1 in edge_windows:
         mx.update(round(v, 4) for v in (wx0, wx1))
         my.update(round(v, 4) for v in (wy0, wy1))
+        if getattr(args, "wall_windows", None) is not None:
+            wm = args.wall_windows
+            mx.update(round(v, 4) for v in (wx0 - wm, wx1 + wm))
+            my.update(round(v, 4) for v in (wy0 - wm, wy1 + wm))
     ml = m.get("mesh_lines") or {}
     mx.update(round(v, 4) for v in ml.get("x", []))
     my.update(round(v, 4) for v in ml.get("y", []))
@@ -172,7 +188,8 @@ def model(m, args):
     ly = dedupe(ly, res / 2)
     grid.AddLine("x", lx)
     grid.AddLine("y", ly)
-    zl = list(np.linspace(0, z_l2, 5)) + list(np.linspace(z_l2, z_l1, 5))
+    zl = list(np.linspace(0, z_l2, args.nz_bond + 1))
+    zl += list(np.linspace(z_l2, z_l1, args.nz_core + 1))
     zl += [az0, az1, z_l1 + 0.3, -0.3]
     grid.AddLine("z", sorted(set(round(v, 6) for v in zl)))
     fx = np.arange(bx0, bx1, fill_x)
@@ -297,6 +314,20 @@ def main():
         help="cavity ring-down: no port driven (--excite none), soft sources in the bondply at "
         "the bank sites, this many ns, probe poles only (bondprobe.py)",
     )
+    ap.add_argument(
+        "--wall-windows",
+        type=float,
+        help="model-only bound: PEC walls from L3 to L2 this far (mm) outside each window",
+    )
+    ap.add_argument("--nz-core", type=int, default=4, help="cells across the 4 mil core")
+    ap.add_argument("--nz-bond", type=int, default=4, help="cells across the bondply (with L2)")
+    ap.add_argument(
+        "--fspan",
+        type=float,
+        nargs=2,
+        default=[58.0, 66.0],
+        help="S-parameter span in GHz (inside the 53-71 GHz excitation)",
+    )
     a = ap.parse_args()
     if a.ringdown_ns:
         a.probe_bond = True
@@ -327,7 +358,8 @@ def main():
         json.dump(res, open(os.path.join(out, "result.json"), "w"), indent=1, default=float)
         shutil.rmtree(sim, ignore_errors=True)
         return
-    f = np.linspace(58e9, 66e9, 321)
+    f_lo, f_hi = a.fspan
+    f = np.linspace(f_lo * 1e9, f_hi * 1e9, int(round((f_hi - f_lo) * 40)) + 1)  # 25 MHz steps
     pe = ports[a.excite]
     for p in list(ports.values()) + list(loads.values()):
         p.CalcPort(sim, f, ref_impedance=50)

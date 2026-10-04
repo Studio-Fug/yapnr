@@ -16,7 +16,7 @@ cut, Pf); a dummy load in the box is a 50 ohm lumped termination. PML_8 on the s
 PEC below L4.
 
   python3 openems/pa_sim.py MODEL.json --out OUT --excite TX1.Pb|RX4.Pb|all [--pa short|open|port]
-      [--threads 8] [--res 0.020] [--lossless]
+      [--threads 8] [--res 0.020] [--lossless] [--mesh-ref OTHER.json]
 
 `--excite all` drives both lands at once (S of each line relative to its own land's incident
 wave; their mutual coupling is part of what is compared). Outputs OUT/result.json (S at the
@@ -119,7 +119,13 @@ def build(m, a):
     res, fine = a.res, a.res / 3
     ix0, ix1, iy0, iy1 = x0 + zone, x1 - zone, y0 + zone, y1 - zone
     mx, my = set(), set()
-    for pp in polys:
+    edge_polys = list(polys)
+    ref_vias = []
+    for ref in [r for r in (a.mesh_ref or "").split(",") if r]:  # one mesh template (A/B)
+        o = json.load(open(ref))
+        edge_polys += list(o["gnd"]) + [pp for v in o["nets"].values() for pp in v]
+        ref_vias += list(o["pa_vias"])
+    for pp in edge_polys:
         n = len(pp)
         for i in range(n):
             (ax_, ay_), (bx_, by_) = pp[i], pp[(i + 1) % n]
@@ -138,7 +144,7 @@ def build(m, a):
     for pt in m["ports"]:
         lx += [pt["at"][0]]
         ly += [pt["at"][1]]
-    for vx, vy, dr, pad in m["pa_vias"]:
+    for vx, vy, dr, pad in list(m["pa_vias"]) + ref_vias:
         lx += [vx - dr / 2, vx + dr / 2]
         ly += [vy - dr / 2, vy + dr / 2]
     lx = dedupe(lx + [ix0, ix1], res / 2)
@@ -235,6 +241,9 @@ def main():
     ap.add_argument("--max-steps", type=int, default=200000)
     ap.add_argument("--end-db", type=float, default=1e-4)
     ap.add_argument("--lossless", action="store_true")
+    ap.add_argument(
+        "--mesh-ref", help="comma-separated models whose copper edges join the mesh (A/B pairs)"
+    )
     ap.add_argument("--setup-only", action="store_true")
     a = ap.parse_args()
     m = json.load(open(a.model))

@@ -689,6 +689,47 @@ Python) adds it to a copy of the board and judges it with the native Oracle and
 KiCad's DRC. Balls on a net with a dedicated plane drop only on a board that
 declares its copper stack; without one the plane stage drops them.
 
+### `ir_drop` — the DC drop of a supply rail
+
+Asks for a report of a rail's copper resistance on the routed board. It is a
+report: it changes no copper, and it fails a run only with `hard: true`.
+
+```yaml
+ir_drop:
+  - net: 1V0_RF1
+    sources: { "@pmic.fb_rf1": ["2"] } # {part: [pads]} or ["FB3:2", ...]
+    sinks: { "@radio.u1": [G5, H5, J5] } # the same forms, or all (default: every other pad)
+    current_a: 2.5 # default: the net's @pnr-current peak, else its class current_a
+    split: equal # each sink draws I/n; area: by pad area
+    budget_mohm: 4.0 # or budget_mv
+    temperature_c: 60 # copper resistivity at this temperature
+    h_mm: 0.05 # the plane raster
+    hard: false
+```
+
+`python -m pnr.ir_extract BOARD --rules RULES --out DIR [--heatmaps]` (KiCad's
+Python with numpy; `pnr.staged_signal` runs it after the refill when the rules
+carry `ir_drop`) reads the rail's copper from the board: the filled zones per
+layer, tracks and arcs with their width, vias with drill and span, every pad of the
+net, and the copper thickness and depth of each layer from the board's stackup
+block. Fixed-block copper counts like any other. `pnr.ir_drop` then builds a
+resistive network: zones and pads rasterized at `h_mm` (one square of copper,
+`t / rho`, between neighbouring cells), tracks as exact resistors `rho L / (w t)`
+(joined at end points, to the cell under each end and at T joins), each via a
+chain of barrel segments `rho dz / (pi (d + t) t)` with 20 um plating and its land
+one node per layer. The source pads are held at 0 V and each sink draws its share
+over its pad; Jacobi-preconditioned conjugate gradients solve it to a relative
+residual of 1e-10, after a connectivity pass that reports a sink no copper reaches
+as **open** instead of a number. `ir.json` gives, per rail: the drop at each sink,
+the effective resistance (worst drop / current), the two-point resistance of each
+sink with the others open, the I²R loss, the largest current per mm of width on
+each layer with its location and a `neck` flag where it is above what an IPC-2221
+trace carrying the whole current would carry per mm, and `status` (`pass`, `fail`
+against the budget, or `open`). Warnings take the quantified-assumption form, for
+instance what the worst sink's drop would be if the whole current went to it.
+With `--heatmaps` each layer's potential is written as a PNG. Copper only: the
+resistance of parts in the path (ferrites, sense resistors) is not modelled.
+
 ### `net_class` / `diff_pair` / `length_match` — routing rules
 
 These describe how nets are _routed_ rather than how parts are _placed_ — they

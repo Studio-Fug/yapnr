@@ -253,6 +253,10 @@ class CompiledConstraints:
     plane_fallback_drops: Optional[bool] = None
     # Declared BGA fanouts (``fanout:``, pnr.fanout.spec); the router plans them.
     fanouts: List[Dict] = field(default_factory=list)
+    # Supply rails sharing a plane layer (``plane_partition:``) and the rails' IR-drop
+    # reports (``ir_drop:``), pnr.power_spec; empty when not declared.
+    plane_partitions: List[Dict] = field(default_factory=list)
+    ir_drop: List[Dict] = field(default_factory=list)
 
     @property
     def hard(self) -> List[Constraint]:
@@ -510,6 +514,19 @@ def compile_routing_rules(compiled: "CompiledConstraints", net_names: Sequence[s
             if compiled.fanouts
             else {}
         ),
+        # Declared only (pnr.power_spec): rails sharing a plane layer, with their net
+        # globs expanded, and the rails' IR-drop reports.
+        **(
+            {
+                "plane_partition": [
+                    dict(p, nets=list(_expand_nets(p["nets"], net_names)))
+                    for p in compiled.plane_partitions
+                ]
+            }
+            if compiled.plane_partitions
+            else {}
+        ),
+        **({"ir_drop": [dict(e) for e in compiled.ir_drop]} if compiled.ir_drop else {}),
     }
 
 
@@ -1124,6 +1141,8 @@ def compile_constraints(
         "copper_keepout",
         "fixed_block",
         "fanout",
+        "plane_partition",
+        "ir_drop",
     }
     for key in doc:
         if key not in known_keys:
@@ -1535,6 +1554,18 @@ def compile_constraints(
                     % (f["name"], f["ref"])
                 )
 
+    # plane_partition / ir_drop: supply rails on a shared plane layer and their IR
+    # reports (pnr.power_spec), validated here; the router and pnr.ir_extract use them.
+    partitions, ir_drop = [], []
+    if doc.get("plane_partition") is not None or doc.get("ir_drop") is not None:
+        from pnr.power_spec import PowerSpecError, parse_ir_drop, parse_partition
+
+        try:
+            partitions = parse_partition(doc.get("plane_partition"))
+            ir_drop = parse_ir_drop(doc.get("ir_drop"))
+        except PowerSpecError as error:
+            raise ConstraintError(str(error)) from None
+
     return CompiledConstraints(
         board=board,
         constraints=constraints,
@@ -1551,6 +1582,8 @@ def compile_constraints(
         fixed_blocks=fixed_blocks,
         plane_fallback_drops=fallback,
         fanouts=fanouts,
+        plane_partitions=partitions,
+        ir_drop=ir_drop,
     )
 
 

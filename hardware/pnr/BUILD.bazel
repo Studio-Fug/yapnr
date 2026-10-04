@@ -131,6 +131,11 @@ filegroup(
         "pnr/writeback.py",
         "pnr/stack.py",
         "pnr/via_policy.py",
+        # Rail IR drop (pnr.ir_extract under KiCad's Python, its numpy solver) and the
+        # plane_partition / ir_drop sections.
+        "pnr/ir_drop.py",
+        "pnr/ir_extract.py",
+        "pnr/power_spec.py",
         # PNR_SI=1 (the prepare worker imports pnr.si even with the flag off): SI v1
         # package + its committed models (profiles, cable, connector, receiver, parts).
         "pnr/si/__init__.py",
@@ -758,6 +763,41 @@ py_test(
         ":pnr",
         ":pnr_hier",
         ":pnr_place",
+    ],
+)
+
+# The rail IR-drop solver (pnr.ir_drop) against analytic resistances (numpy only).
+py_test(
+    name = "ir_drop_test",
+    size = "small",
+    srcs = ["tests/test_ir_drop.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_ir_drop.py",
+    deps = [
+        ":pnr",
+        requirement("numpy"),
+    ],
+)
+
+# A rail's copper extracted from a KiCad board and solved (pnr.ir_extract). It needs
+# KiCad's Python (pcbnew): run it there by hand (python3 -m unittest
+# tests.test_ir_extract_kicad).
+py_test(
+    name = "ir_extract_kicad_test",
+    size = "small",
+    srcs = ["tests/test_ir_extract_kicad.py"],
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/test_ir_extract_kicad.py",
+    tags = [
+        "kicad",
+        "manual",
+        "requires-kicad",
+    ],
+    deps = [
+        ":pnr",
+        requirement("numpy"),
     ],
 )
 

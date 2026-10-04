@@ -784,6 +784,34 @@ def judge(checks, freqs_hz, s, eta=None, balance=None) -> dict:
 
 # -- running a case ---------------------------------------------------------------------------
 
+# Solver settings that choose how a run computes, not what it designs.
+EXECUTION = ("backend", "dtype", "threads")
+
+
+def resume_spec(spec: Spec, out_dir: str, log=print) -> Spec:
+    """The spec to run `out_dir` with: the preset `spec`, or the run directory's own spec when
+    the directory holds a checkpoint and its spec differs from the preset only in the solver's
+    execution settings (`EXECUTION`). The presets said torch float32 until the native kernel
+    became the default, so a case run started before resumes with its own spec (and hash)
+    instead of stopping at "the checkpoint belongs to a different spec"; `$YAPNR_RF_BACKEND`
+    and `$YAPNR_RF_DTYPE` still choose what runs."""
+    path = os.path.join(out_dir, "spec.json")
+    if not (os.path.exists(path) and os.path.exists(os.path.join(out_dir, "checkpoint.npz"))):
+        return spec
+    with open(path, encoding="utf-8") as fh:
+        own = Spec.from_dict(json.load(fh))
+    if own.sha256() == spec.sha256():
+        return spec
+    same = replace(own.solver, **{k: getattr(spec.solver, k) for k in EXECUTION})
+    if own.replace(solver=same).sha256() != spec.sha256():
+        return spec  # another design problem: the checkpoint check refuses it
+    sv = own.solver
+    log(
+        f"resuming {out_dir} with its own solver settings ({sv.backend} {sv.dtype}, "
+        f"{sv.threads} threads; $YAPNR_RF_BACKEND and $YAPNR_RF_DTYPE override them)"
+    )
+    return own
+
 
 def run(
     case: str,
@@ -802,7 +830,7 @@ def run(
     from yapnr.rf import validate
     from yapnr.rf.driver import Optimizer, design
 
-    spec = spec_for(case, scale)
+    spec = resume_spec(spec_for(case, scale), out_dir, log=log)
     t0 = time.perf_counter()
     if max_iterations is not None:
         # Stop the loop early (still binarize, export and validate): for trials.

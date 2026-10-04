@@ -542,12 +542,16 @@ def design(
     from yapnr.rf.problem import Problem
 
     os.makedirs(out_dir, exist_ok=True)
-    write_json(os.path.join(out_dir, SPEC), spec.to_dict())
     t0 = time.perf_counter()
     if problem is None:
         problem = Problem(spec, cache_dir=os.path.join(out_dir, "cache"), log=log, **problem_kwargs)
     opt = Optimizer(problem, out_dir=out_dir, budget_s=budget_s, log=log)
-    opt.run(resume=resume)
+    # The checkpoint first: one of another spec stops the run before spec.json is replaced
+    # (the directory keeps describing its checkpoint).
+    if resume:
+        opt.load_checkpoint()
+    write_json(os.path.join(out_dir, SPEC), spec.to_dict())
+    opt.run(resume=False)
     final = opt.finish()
     result = report.export_design(problem, opt, final, out_dir, sweep=sweep, log=log)
     result["wall_s"]["total"] = time.perf_counter() - t0

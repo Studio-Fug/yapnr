@@ -13,6 +13,7 @@ Split from test_tiny_design.py so that the two run side by side (one thread each
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import tempfile
@@ -21,9 +22,10 @@ from dataclasses import replace
 
 import numpy as np
 
-from yapnr.rf.driver import Optimizer
+from yapnr.rf import cases
+from yapnr.rf.driver import Optimizer, design, write_json
 from yapnr.rf.problem import Problem
-from yapnr.rf.spec import RadiatedFraction
+from yapnr.rf.spec import RadiatedFraction, Spec
 from yapnr.rf.testing import tiny_spec
 
 
@@ -183,6 +185,58 @@ class BestDesignTest(unittest.TestCase):
         self.assertEqual(len(rec["t_variants"]), 3)
         self.assertAlmostEqual(rec["t"], max(rec["t_variants"]), places=12)
         self.assertEqual(len(rec["keys"]), len(rec["f"]))
+
+
+class ResumeTest(unittest.TestCase):
+    """A run directory keeps its spec: a run started with other solver execution settings (the
+    case presets said torch float32 before the native kernel became the default) resumes with
+    its own spec, and a checkpoint of another design problem stops `design` before spec.json is
+    replaced."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp(prefix="rf-resume-")
+        cls.cache = os.path.join(cls.tmp, "cache")
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def run_dir(self, name, spec, checkpoint=True):
+        d = os.path.join(self.tmp, name)
+        os.makedirs(d)
+        write_json(os.path.join(d, "spec.json"), spec.to_dict())
+        if checkpoint:
+            open(os.path.join(d, "checkpoint.npz"), "wb").close()
+        return d
+
+    def test_resume_spec(self):
+        quiet = lambda *_: None  # noqa: E731
+        preset = tiny_spec()
+        old = preset.replace(
+            solver=replace(preset.solver, backend="torch", dtype="float32", threads=3)
+        )
+        self.assertNotEqual(old.sha256(), preset.sha256())
+        got = cases.resume_spec(preset, self.run_dir("old", old), log=quiet)
+        self.assertEqual(got.sha256(), old.sha256())
+        # Another design problem, or no checkpoint: the preset (the checkpoint check refuses
+        # the former).
+        other = old.replace(optimizer=replace(old.optimizer, move=0.3))
+        self.assertIs(cases.resume_spec(preset, self.run_dir("other", other), log=quiet), preset)
+        fresh = self.run_dir("fresh", old, checkpoint=False)
+        self.assertIs(cases.resume_spec(preset, fresh, log=quiet), preset)
+        self.assertIs(cases.resume_spec(preset, os.path.join(self.tmp, "none")), preset)
+
+    def test_design_keeps_the_spec_of_a_foreign_checkpoint(self):
+        spec = tiny_spec(betas=(8,), iterations_per_beta=1)
+        out = os.path.join(self.tmp, "foreign")
+        Optimizer(Problem(spec, cache_dir=self.cache), out_dir=out).run(max_iterations=1)
+        write_json(os.path.join(out, "spec.json"), spec.to_dict())
+        other = tiny_spec(betas=(8,), iterations_per_beta=1, move=0.3)
+        with self.assertRaisesRegex(ValueError, "different spec"):
+            design(other, out, problem=Problem(other, cache_dir=self.cache), log=None)
+        with open(os.path.join(out, "spec.json"), encoding="utf-8") as fh:
+            self.assertEqual(Spec.from_dict(json.load(fh)).sha256(), spec.sha256())
 
 
 if __name__ == "__main__":

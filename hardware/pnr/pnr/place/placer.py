@@ -14,7 +14,7 @@ from typing import Dict, List, Optional, Tuple
 from pnr.constraints import CompiledConstraints
 from pnr.graph import BoardGraph, BoardOutline
 
-from . import legal_options, metrics
+from . import metrics
 from .geometry import (
     apply_hard_sides,
     hard_group_limits,
@@ -335,7 +335,7 @@ def place(
             grid_mm=grid_mm,
             spread=min(spread, _LEGALIZE_SPREAD_CAP),
             inflation=inflation,
-            outline=legal_options.options(constraints).get("outline"),
+            outline=_legal_outline(constraints),
             pad_edge=pad_edge,
         )
     if sided:
@@ -354,6 +354,13 @@ def place(
         )
         check_held(placed, side_plan)
     return _finish(placed, graph, constraints, width, height, baseline, pad_edge)
+
+
+def _legal_outline(constraints):
+    """``legalize: {outline: ...}`` of the constraints (None when undeclared)."""
+    from .legal_options import options
+
+    return options(constraints).get("outline")
 
 
 def _side_legalization(side_plan):

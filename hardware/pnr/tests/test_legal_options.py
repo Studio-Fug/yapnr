@@ -219,6 +219,95 @@ class LookaheadTest(unittest.TestCase):
         self.assertLess(legal_count(None, one_slot=True), 10)
         self.assertEqual(legal_count(dict(lookahead="regions"), one_slot=True), 10)
 
+    def test_a_part_stranded_anyway_does_not_disarm_it(self):
+        # X's region holds no slot at all (it is narrower than X): X fails whatever the
+        # others do. The look-ahead must still keep J2's one slot free of the caps.
+        import json
+        import os
+        import tempfile
+        from unittest import mock
+
+        from pnr.place.geometry import courtyard_rect, resolve_fixed_poses
+        from pnr.place.legalize import LegalizationError
+
+        for seed in range(4):
+            g, spec = window_board(seed, one_slot=True)
+            g.components.append(Component("X", "X", (3, 1), 0, "top", (7, 1), (7, 1)))
+            spec["orientation"]["X"] = 0
+            spec["region"].append(dict(name="x", refs=["X"], rect=[0, 0, 6, 2.6]))
+            spec["legalize"] = dict(lookahead="regions")
+            c = compile_constraints(spec, [p.ref for p in g.components])
+            kw = legalize_constraint_kwargs(g, c, resolve_fixed_poses(g, c))
+            with tempfile.TemporaryDirectory() as tmp:
+                dump = os.path.join(tmp, "diag.json")
+                with mock.patch.dict(os.environ, {"PNR_PLACEMENT_DIAGNOSTICS": dump}):
+                    with self.assertRaises(LegalizationError):
+                        legalize(g, 20, 10, clearance=0.2, grid_mm=0.25, backtrack_budget=0, **kw)
+                with open(dump) as fh:
+                    state = json.load(fh)
+            self.assertEqual(state["failed"], "X")
+            placed = BoardGraph.from_json(json.dumps(state["graph"]))
+            # J2's one slot: centre (3.875, 1.125), courtyard 6 x 2.
+            slot = part("J2", (3.875, 1.125), (6, 2))
+            for ref in state["placed"]:
+                if ref.startswith("C"):
+                    self.assertFalse(
+                        courtyard_rect(placed.component(ref)).overlaps(
+                            courtyard_rect(slot), gap=0.2
+                        ),
+                        (seed, ref),
+                    )
+
+    def test_next_turn_before_a_stranding_slot(self):
+        # Y (in a hard group, so packed first) starts turned 90 degrees: every slot of its
+        # region at that turn covers B's one slot; unturned it fits below B.
+        from pnr.place.geometry import resolve_fixed_poses
+        from pnr.place.legalize import LegalizationError
+        from pnr.place.metrics import hard_violations
+
+        def run(options):
+            g = board(
+                [
+                    part("U1", (2, 8), (2, 2)),
+                    part("Y", (8.8, 6.0), (4.3, 3.6), 90.0),
+                    part("B", (8.8, 6.6), (1.9, 1.0)),
+                ],
+                20,
+                10,
+            )
+            spec = dict(
+                schema="v0",
+                board=dict(outline=dict(w=20, h=10), default_clearance_mm=0.2),
+                fixed={"U1": dict(at=[2, 8], rot=0, side="top")},
+                orientation={"B": 0},
+                group=[dict(members=["Y"], anchor="U1", radius_mm=12, hard=True)],
+                region=[
+                    dict(name="y", refs=["Y"], rect=[4.5, 2.0, 11.2, 6.8]),
+                    dict(name="b", refs=["B"], rect=[7.85, 6.0, 9.9, 7.15]),
+                ],
+            )
+            if options:
+                spec["legalize"] = options
+            c = compile_constraints(spec, ["U1", "Y", "B"])
+            kw = legalize_constraint_kwargs(g, c, resolve_fixed_poses(g, c))
+            placed = legalize(
+                g,
+                20,
+                10,
+                clearance=0.2,
+                grid_mm=0.25,
+                allow_rotation=True,
+                backtrack_budget=0,
+                **kw
+            )
+            return placed, hard_violations(placed, c)
+
+        with self.assertRaises(LegalizationError):
+            run(None)
+        placed, bad = run(dict(lookahead="regions"))
+        self.assertFalse(any(bad.values()), bad)
+        self.assertEqual(placed.component("Y").rot % 180, 0.0)
+
     def test_window_without_scarcity(self):
         self.assertEqual(legal_count(dict(lookahead="regions")), 10)
         self.assertEqual(legal_count(dict(order="scarcity", lookahead="regions")), 10)

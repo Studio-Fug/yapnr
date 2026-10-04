@@ -26,7 +26,6 @@ import numpy as np
 from pnr.graph import BoardGraph
 
 from .geometry import Rect, courtyard_rect, occupied_sides, pin_positions, placement_rects
-from .legal_options import mark_outside
 from .legalize import LegalizationError, _mark, _place_part, pad_edge_box
 
 # Parts a pair's legs run through (series resistors, ESD arrays, common-mode chokes)
@@ -142,9 +141,7 @@ def refine_matched(
     pad_edge: Optional[Tuple[float, float]] = None,
 ) -> BoardGraph:
     """Move the small parts on matched nets to even each set's estimated lengths
-    (module docstring). Returns a new graph; ``graph`` itself when nothing moves.
-    ``outline`` (``legalize: {outline: exact}``; None = the raster alone) refuses the
-    raster cells past the outline, so no move leaves it."""
+    (module docstring). Returns a new graph; ``graph`` itself when nothing moves."""
     sets = matched_sets(constraints, graph)
     if not sets:
         return graph
@@ -184,6 +181,9 @@ def refine_matched(
             for keepout in keepouts:
                 _mark(occ, g, keepout)
             if outline == "exact":
+                # legalize: {outline: exact}: no move into raster cells past the outline.
+                from .legal_options import mark_outside
+
                 mark_outside(occ, g, width, height)
             sides = set(occupied_sides(comp))
             for other in others:

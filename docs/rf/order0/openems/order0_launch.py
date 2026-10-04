@@ -132,7 +132,9 @@ def build_launch(m: dict, a, CSX, FDTD):
     xfix += [leg_len, L - leg_len, c["lay_e"], L - c["lay_e"]]
     xreg = [(-0.4, m["launch_x"][-1] + 0.6, fine), (L - m["launch_x"][-1] - 0.6, L + 0.4, fine)]
     xreg += [(-x_end, 0.0, 0.1), (L, L + x_end, 0.1), (0.0, L, 0.2)]
-    xl = _lines(xfix, xreg, 0.2, -x_end, L + x_end)
+    k = getattr(a, "mesh_scale", 1.0)  # > 1: a coarse functional test only
+    xreg = [(u, v, d * k) for u, v, d in xreg]
+    xl = _lines(xfix, xreg, 0.2 * k, -x_end, L + x_end)
     yfix = [0.0] + [sg * v for v in m["y_fixed"] for sg in (-1, 1)]
     yfix += [
         sg * v
@@ -141,7 +143,8 @@ def build_launch(m: dict, a, CSX, FDTD):
     ]
     ymax = hw + 1.5
     yreg = [(-0.9, 0.9, 0.035), (-2.2, 2.2, 0.05), (-hw, hw, 0.1)]
-    yl = _lines(yfix, yreg, 0.4, -ymax, ymax)
+    yreg = [(u, v, d * k) for u, v, d in yreg]
+    yl = _lines(yfix, yreg, 0.4 * k, -ymax, ymax)
     z_bot = z_ax - fh / 2 - 1.0
     z_top = z_ax + fh / 2 + 1.0
     zfix = [0.0, z_l4, z_in2, z_in1, z_l1b, z_l1t, z_l1t + tab_t, z_l1t + leg_t, -leg_t]
@@ -155,7 +158,8 @@ def build_launch(m: dict, a, CSX, FDTD):
         (0.0, z_in2, 0.07),
         (z_ax - R_BORE, z_ax + R_BORE, 0.1),
     ]
-    zl = _lines(zfix, zreg, 0.4, z_bot, z_top)
+    zreg = [(u, v, d * (k if d > 0.05 else 1.0)) for u, v, d in zreg]
+    zl = _lines(zfix, zreg, 0.4 * k, z_bot, z_top)
     # PML cells beyond
     pml = 8
     xl = list(xl) + [xl[-1] + 0.2 * (k + 1) for k in range(pml)]

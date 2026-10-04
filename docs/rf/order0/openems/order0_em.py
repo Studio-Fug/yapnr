@@ -414,6 +414,7 @@ def main(argv=None) -> int:
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--sheets", action="store_true", help="conducting sheets (experimental)")
     ap.add_argument("--nz-sub", type=int, default=6, help="cells across the prepreg (msl)")
+    ap.add_argument("--mesh-scale", type=float, default=1.0, help="launch: coarser (tests only)")
     ap.add_argument("--setup-only", action="store_true")
     ap.add_argument("--res", type=float, default=0.05, help="fine cell (mm)")
     ap.add_argument("--max-steps", type=int, default=600000)

@@ -559,7 +559,11 @@ CASE --out out/<id>` with the spec, the criteria, `optimizer.seed` or `solver.th
 (or that command itself for a job with nothing to replace and `attempt_s = 0`) on as many cores as
 it has threads, with `OMP_NUM_THREADS` and `MKL_NUM_THREADS` at that number and
 `OPENBLAS_NUM_THREADS=1`. Cores are physical, two vCPUs each on SMT shapes: one 4-thread run fills
-a `c4d-highcpu-8`. The engine runs torch on at most 4 threads, and the generator warns above that.
+a `c4d-highcpu-8`. The solver runs its native kernel by default, on the job's threads, from the
+image's yapnr wheel when the bundle's C sources are the ones that library was built from
+(otherwise the numpy reference, said in the task's log; set `YAPNR_RF_REQUIRE_NATIVE=1` to stop
+instead; [solver backends](rf-solver-backends.md)); a bundle from before the native kernel runs
+torch on at most 4 threads, and the generator warns above that.
 The record is `out/<id>/validation.json` (the verdict is its `ok`), the run directory is the
 checkpoint, and the cases runner resumes from it; `--max-iterations` counts the iterations of one
 attempt, so an attempt resumed mid-loop may run that many again. A run longer than `max_wall_s`
@@ -575,7 +579,8 @@ own that starts again after a preemption: for a fine-grid validation longer than
 the run's last attempt (pass `--no-fine` or `--finer 0` to the run in `args`). A job with
 `diagnostic = true` runs the job bundle's `rf_diag.py` instead, which records the interpreter,
 the CPUs, the versions of numpy, torch, Pillow and PyYAML, whether the sources compile on the
-image's Python, and `python -m yapnr.rf.cases --help`; run one before the first campaign of a new
+image's Python, the native FDTD library the bundle would run (or why none), and
+`python -m yapnr.rf.cases --help`; run one before the first campaign of a new
 branch or image. `--plain-lines` leaves the three optional keys and the attempts out, for a
 `yapnr` whose `mc-eval` refuses them.
 

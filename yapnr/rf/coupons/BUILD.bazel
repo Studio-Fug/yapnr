@@ -2,8 +2,8 @@
 
 numpy and PyYAML only. The 2D cross-section solver (xsec.py, families.py `build`) imports
 scikit-fem and gmsh lazily: it runs in the FEA environment, never under Bazel, and the shipped
-tables in data/ are what the fit reads. yapnr/rf has no __init__.py on this branch (the RF
-inverse-design branch, #29, adds it with //yapnr/rf); the coupons package then depends on it.
+tables in data/ are what the fit reads. It needs nothing of the RF solver in yapnr/rf, only that
+package's marker (//yapnr/rf:package).
 """
 
 load("@rules_python//python:defs.bzl", "py_binary", "py_library")
@@ -21,6 +21,7 @@ py_library(
     imports = ["../../.."],
     deps = [
         "//yapnr:package",
+        "//yapnr/rf:package",
         requirement("numpy"),
         requirement("pyyaml"),
     ],

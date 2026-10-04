@@ -21,3 +21,12 @@ exception in /usr/share/doc/yapnr/licenses/GCC-COPYING.RUNTIME.
       links Intel oneAPI Math Kernel Library (oneMKL) statically, under the Intel Simplified
       Software License: /usr/share/doc/yapnr/licenses/Intel-Simplified-Software-License.txt.
       The other libraries it contains are listed in torch-2.3.1+cpu.dist-info/LICENSE.
+
+The yapnr wheel's own native library (linux/amd64), under /opt/venv/lib/python3.11/site-packages:
+
+  yapnr/rf/libyapnr_fdtd.so
+      yapnr.rf's FDTD kernel, yapnr's own code (AGPL-3.0-or-later; source: yapnr/rf/fdtd/native/
+      in the same package and in the yapnr repository), built by the image workflow on its
+      x86_64 runner with Ubuntu 24.04's GCC 13. It needs only libc; the parts of libgcc that
+      GCC links statically are under the GCC runtime library exception
+      (/usr/share/doc/yapnr/licenses/GCC-COPYING.RUNTIME).

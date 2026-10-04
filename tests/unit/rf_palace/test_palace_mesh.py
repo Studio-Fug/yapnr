@@ -147,5 +147,65 @@ class ViaAndPortTest(unittest.TestCase):
             mesh.build(adapters.line_model("msl", length=1.0), edge=0.1)
 
 
+@unittest.skipUnless(HAVE_GMSH, "gmsh not installed (FEA environment only)")
+class SolderMaskTest(unittest.TestCase):
+    """Solid copper under a solder mask (the BGA launch runs under one): the mask is a coating
+    of L1 with the copper cut out of it, conformal (h on the laminate and around the copper) or
+    level (the gaps filled to the copper's top, h over it); the copper faces stay conductors."""
+
+    def doc(self, fill):
+        from yapnr.rf.planar import stackups
+
+        d = adapters.line_model("gcpw", length=1.0, half_width=1.0, air=0.8, l1_model="solid")
+        l1 = d["stack"]["layers"][0]
+        d["stack"]["dielectrics"].append(stackups.solder_mask(l1, h=0.02, fill=fill))
+        return model.check(d)
+
+    def volume(self, rec, key):
+        a = rec["groups"][key]
+        return sum(
+            gmsh.model.occ.getMass(3, e)
+            for e in gmsh.model.getEntitiesForPhysicalGroup(3, a["tag"])
+        )
+
+    def test_conformal_and_level(self):
+        vols = {}
+        for fill in ("conformal", "level"):
+            doc = self.doc(fill)
+            gmsh.initialize(readConfigFiles=False)
+            try:
+                gmsh.option.setNumber("General.Terminal", 0)
+                rec = mesh._build(gmsh, doc, dict(mesh.DEFAULTS, **FAST))
+                vols[fill] = self.volume(rec, "diel:MASK")
+                groups = set(rec["groups"])
+            finally:
+                gmsh.finalize()
+            cfg = config.driven(doc, rec, 54.0, 70.0, 1.0)
+            self.assertEqual(config.validate(cfg), [])
+            self.assertIn("cond:L1:SIG", groups)
+            self.assertIn("cond:L1:GND", groups)
+            mats = {m["Permittivity"] for m in cfg["Domains"]["Materials"]}
+            self.assertIn(3.8, mats)
+        # the domain is 2.0 x 2.0 mm; the copper (0.2 strip and the two grounds beyond the
+        # 0.2 gaps) covers 2.0 - 0.4 = 1.6 mm of the width
+        area, gaps = 2.0 * 2.0, 2.0 * 0.4
+        level = area * (0.035 + 0.02) - 2.0 * 1.6 * 0.035
+        self.assertAlmostEqual(vols["level"], level, delta=2e-4)
+        # conformal: h on the laminate in the gaps, over the copper's top and up its four sides
+        # in the gaps (corners are rounded, the ends cut by the walls)
+        conformal = gaps * 0.02 + 2.0 * 1.6 * 0.02 + 4 * 2.0 * 0.035 * 0.02
+        self.assertAlmostEqual(vols["conformal"], conformal, delta=3e-4)
+        self.assertLess(vols["conformal"], vols["level"])
+
+    def test_validation(self):
+        d = self.doc("conformal")
+        bad = dict(d["stack"]["dielectrics"][-1], coat=dict(layer="L1", fill="poured"))
+        d2 = dict(d, stack=dict(d["stack"], dielectrics=d["stack"]["dielectrics"][:-1] + [bad]))
+        self.assertTrue(any("coat.fill" in e for e in model.validate(d2)))
+        slab = {k: v for k, v in d["stack"]["dielectrics"][-1].items() if k != "coat"}
+        d3 = dict(d, stack=dict(d["stack"], dielectrics=d["stack"]["dielectrics"][:-1] + [slab]))
+        self.assertTrue(any("overlap" in e for e in model.validate(d3)))
+
+
 if __name__ == "__main__":
     unittest.main()

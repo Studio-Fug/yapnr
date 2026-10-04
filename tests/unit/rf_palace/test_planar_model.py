@@ -63,7 +63,15 @@ class ValidateTest(unittest.TestCase):
                 ),
                 "below",
             ),
-            (lambda d: d["domain"]["boundaries"].update(xmin="pec"), "PEC"),
+            (lambda d: d["domain"]["boundaries"].update(xmin="pec"), "which is pec"),
+            (lambda d: d["domain"]["boundaries"].update(xmin="metal"), "domain.metal.xmin"),
+            (lambda d: d["domain"].update(metal={"zmax": {"sigma": 1.0}}), "not metal"),
+            (
+                lambda d: d["stack"]["dielectrics"].append(
+                    dict(name="MASK", z0=0.2, z1=0.3, eps_r=3.8, coat={"layer": "L9"})
+                ),
+                "coat must name a layer",
+            ),
             (lambda d: d["ports"][1].update(name="P1"), "repeated"),
             (lambda d: d["stack"]["layers"][0].update(model="solid", z=0.05), "overlap"),
             (

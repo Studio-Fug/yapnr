@@ -7,9 +7,16 @@ A document is plain JSON, in millimetres:
 - ``stack.layers``: conductor layers ``{name, z, t, sigma, rough_k, model}``. ``model`` is how a
   solver represents the copper: ``pec``; ``sheet`` (zero thickness at ``z``, surface impedance of
   conductivity ``sigma / rough_k**2`` and thickness ``t``); or ``solid`` (extruded from ``z`` to
-  ``z + t``, only for a layer with nothing but air above it). ``rough_k`` is the Hammerstad
-  roughness factor at the design frequency, so ``sigma / rough_k**2`` keeps the loss of the rough
-  surface (the openEMS models of the radar60 work use the same reduction).
+  ``z + t``, only for a layer with nothing but air, or its own coating, above it). ``rough_k`` is
+  the Hammerstad roughness factor at the design frequency, so ``sigma / rough_k**2`` keeps the
+  loss of the rough surface (the openEMS models of the radar60 work use the same reduction).
+- A dielectric with ``coat: {layer, fill}`` is a coating of that layer (solder mask): it starts at
+  the layer's ``z`` and its ``z1`` is the top of the coating over the copper's full thickness
+  (``z + t + h`` for a coating ``h`` thick, whatever the layer's model). Over ``solid`` copper,
+  ``fill`` "conformal" draws it ``h`` thick on the laminate and ``h`` around the copper's top and
+  sides (gaps narrower than ``2 h`` fill up); "level" fills the gaps up to the copper's top and
+  covers it by ``h``. Over a ``sheet`` or ``pec`` layer it is a slab ``h`` thick. An ``outline``
+  limits it (a mask opening is the area outside the outline).
 - ``conductors``: ``{layer, net, polygons: [{outer, holes}]}``. A ring is a list of points
   ``[x, y]``; an item ``{"mid": [x, y]}`` between two points makes that edge a circular arc
   through ``mid``, so arcs are exact rather than polygonized.
@@ -20,7 +27,9 @@ A document is plain JSON, in millimetres:
   ``at`` (the solver de-embeds back to ``at``); a ``lumped`` port is a rectangle across the
   dielectric under the line at ``at``. ``ref`` is the layer (or ``zmin``) the line refers to.
 - ``domain``: ``box`` ``[x0, x1, y0, y1, z0, z1]`` and ``boundaries`` per face (``xmin`` ...
-  ``zmax``): ``abc1``/``abc2`` (first/second-order absorbing), ``pec`` or ``pmc``.
+  ``zmax``): ``abc1``/``abc2`` (first/second-order absorbing), ``pec``, ``pmc``, or ``metal``: a
+  lossy conductor wall (a ground plane at the domain floor) whose ``{name, sigma, rough_k, t}``
+  is ``domain.metal[face]``; solvers give it the surface impedance of ``sigma / rough_k**2``.
 - ``mesh``: sizing hints for the mesher (all optional); ``provenance``: source and generator;
   ``features``: named regions of interest (for example the GND sliver of the radar60 TX1 feed),
   carried for probes and plots.
@@ -39,7 +48,8 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 SCHEMA = "yapnr-planar-v1"
 FACES = ("xmin", "xmax", "ymin", "ymax", "zmin", "zmax")
-BOUNDARY_KINDS = ("abc1", "abc2", "pec", "pmc")
+BOUNDARY_KINDS = ("abc1", "abc2", "pec", "pmc", "metal")
+COAT_FILLS = ("conformal", "level")
 LAYER_MODELS = ("pec", "sheet", "solid")
 PORT_KINDS = ("wave", "lumped")
 DIRS = {"+x": (0, 1), "-x": (0, -1), "+y": (1, 1), "-y": (1, -1)}
@@ -166,8 +176,34 @@ def z_of(doc: Dict[str, Any], name: str) -> float:
 
 
 def sigma_eff(lay: Dict[str, Any]) -> float:
-    """Conductivity with the Hammerstad roughness folded in: sigma / K^2."""
+    """Conductivity with the Hammerstad roughness folded in: sigma / K^2 (of a layer, or of a
+    ``metal`` wall's ``domain.metal`` entry)."""
     return float(lay["sigma"]) / float(lay.get("rough_k", 1.0)) ** 2
+
+
+def metal_of(doc: Dict[str, Any], face: str) -> Dict[str, Any]:
+    """The conductor of a ``metal`` wall: ``domain.metal[face]`` ({name, sigma, rough_k, t})."""
+    return (doc["domain"].get("metal") or {})[face]
+
+
+def coat_h(doc: Dict[str, Any], d: Dict[str, Any]) -> float:
+    """The thickness of a coating dielectric over its layer's copper: z1 - (z + t)."""
+    lay = layer(doc, d["coat"]["layer"])
+    return float(d["z1"]) - float(lay["z"]) - float(lay.get("t", 0.0))
+
+
+def _check_coat(doc: Dict[str, Any], d: Dict[str, Any], lnames: Iterable[str]) -> List[str]:
+    n, c = d.get("name"), d.get("coat")
+    if not isinstance(c, dict) or c.get("layer") not in set(lnames):
+        return [f"dielectric {n}: coat must name a layer"]
+    if c.get("fill", "conformal") not in COAT_FILLS:
+        return [f"dielectric {n}: coat.fill must be one of {COAT_FILLS}"]
+    lay = layer(doc, c["layer"])
+    if not (_num(d.get("z0")) and _num(lay.get("z")) and abs(d["z0"] - lay["z"]) <= TOL):
+        return [f"dielectric {n}: a coat starts at its layer's z ({lay.get('z')})"]
+    if not coat_h(doc, d) > TOL:
+        return [f"dielectric {n}: z1 must lie above the copper's top (z + t of {c['layer']})"]
+    return []
 
 
 # --- validation --------------------------------------------------------------------------------
@@ -199,6 +235,23 @@ def validate(doc: Dict[str, Any]) -> List[str]:
     for face in bnd:
         if face not in FACES:
             errs.append(f"domain.boundaries: unknown face {face!r}")
+    metal = dom.get("metal") or {}
+    for face in FACES:
+        if bnd.get(face) != "metal":
+            continue
+        m = metal.get(face)
+        if not isinstance(m, dict):
+            errs.append(f"domain.metal.{face} is needed for the metal {face} wall")
+            continue
+        if not (_num(m.get("sigma")) and m["sigma"] > 0):
+            errs.append(f"domain.metal.{face}: sigma > 0 required")
+        if not (_num(m.get("rough_k", 1.0)) and m.get("rough_k", 1.0) >= 1.0):
+            errs.append(f"domain.metal.{face}: rough_k >= 1 required")
+        if not (_num(m.get("t", 0.0)) and m.get("t", 0.0) >= 0):
+            errs.append(f"domain.metal.{face}: t >= 0 required")
+    for face in metal:
+        if bnd.get(face) != "metal":
+            errs.append(f"domain.metal.{face}: the {face} wall is not metal")
     stack = doc.get("stack") or {}
     names = set()
     for d in stack.get("dielectrics", []):
@@ -220,6 +273,13 @@ def validate(doc: Dict[str, Any]) -> List[str]:
             except (PlanarError, KeyError, TypeError, IndexError) as exc:
                 errs.append(f"dielectric {n}: bad outline ({exc})")
     lnames = set()
+    lnames_all = [la.get("name") for la in stack.get("layers", [])]
+    for d in stack.get("dielectrics", []):
+        if "coat" in d and _num(d.get("z1")):
+            try:
+                errs += _check_coat(doc, d, lnames_all)
+            except PlanarError as exc:
+                errs.append(f"dielectric {d.get('name')}: {exc}")
     for lay in stack.get("layers", []):
         n = lay.get("name")
         if not n or n in lnames or n == "zmin":
@@ -240,12 +300,17 @@ def validate(doc: Dict[str, Any]) -> List[str]:
             if not lay.get("t"):
                 errs.append(f"layer {n}: a solid layer needs t > 0")
             for d in stack.get("dielectrics", []):
+                if (d.get("coat") or {}).get("layer") == n:
+                    continue  # its own coating (solder mask): the copper is cut out of it
                 if (
                     _num(lay.get("z"))
                     and d["z0"] < lay["z"] + lay.get("t", 0) - TOL
                     and d["z1"] > lay["z"] + TOL
                 ):
-                    errs.append(f"layer {n}: solid copper would overlap dielectric {d['name']}")
+                    errs.append(
+                        f"layer {n}: solid copper would overlap dielectric {d['name']} "
+                        "(a coating of the layer is a dielectric with coat: {layer, fill})"
+                    )
     for k, c in enumerate(doc.get("conductors", [])):
         where = f"conductors[{k}] ({c.get('layer')}/{c.get('net')})"
         if c.get("layer") not in lnames:
@@ -308,8 +373,8 @@ def validate(doc: Dict[str, Any]) -> List[str]:
             errs.append(f"{where}: at outside the domain")
         if p.get("kind") == "wave" and p.get("dir") in DIRS:
             wall = wall_of(p["dir"])
-            if bnd.get(wall) == "pec":
-                errs.append(f"{where}: wave port on the {wall} wall, which is PEC")
+            if bnd.get(wall) in ("pec", "metal"):
+                errs.append(f"{where}: wave port on the {wall} wall, which is {bnd[wall]}")
     if not errs:
         try:
             port_geometry(doc)

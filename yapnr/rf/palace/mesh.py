@@ -3,7 +3,10 @@
 Geometry, in the document's millimetres:
 
 - the domain box is the air; dielectric slabs (boxes, or an ``outline`` extruded for a finite
-  board) override it, later slabs over earlier ones;
+  board) override it, later slabs over earlier ones; a coating (solder mask, ``coat``) over
+  ``solid`` copper is the slab ``h`` thick plus, when conformal, the copper's outline grown by
+  ``h`` and extruded to ``h`` over its top (shapely), or, when level, the slab up to its ``z1``:
+  the copper is cut out of it;
 - ``sheet`` and ``pec`` copper are zero-thickness surfaces at the layer's z, with exact arcs;
   ``solid`` copper is extruded by t and removed from the domain (its surface is the conductor);
 - via barrels are cylinders removed from the domain (their surface is PEC, as openEMS's posts);
@@ -142,13 +145,70 @@ def _check_volumes(gmsh) -> None:
         raise ValueError(f"OCC fragment produced degenerate volumes {bad}: check the geometry")
 
 
+def _thickness(doc: Dict[str, Any], d: Dict[str, Any]) -> float:
+    """A slab's thickness; a coating's ``h`` (its level fill over solid copper: z1 - z0)."""
+    if d.get("coat"):
+        lay = model.layer(doc, d["coat"]["layer"])
+        if lay["model"] == "solid" and d["coat"].get("fill", "conformal") == "level":
+            return float(d["z1"]) - float(d["z0"])
+        return model.coat_h(doc, d)
+    return float(d["z1"]) - float(d["z0"])
+
+
 def _bulk_sizes(doc: Dict[str, Any], o: Dict[str, Any]) -> Dict[str, float]:
     f = float(o["f_max_ghz"]) * 1e9
     lam0 = C0 / f * 1e3
     out = {"air": lam0 / o["lam_frac"]}
     for d in doc["stack"]["dielectrics"]:
         out[d["name"]] = min(
-            lam0 / math.sqrt(d["eps_r"]) / o["lam_frac"], o["slab_cap"] * (d["z1"] - d["z0"])
+            lam0 / math.sqrt(d["eps_r"]) / o["lam_frac"], o["slab_cap"] * _thickness(doc, d)
+        )
+    return out
+
+
+def coat_regions(doc: Dict[str, Any], d: Dict[str, Any]) -> List[Tuple[Any, float, float]]:
+    """The pieces of a coating dielectric as (planar polygon or None for the whole box, z0, z1):
+    over sheet or PEC copper a slab ``h`` thick; over solid copper with ``fill`` "level" the slab
+    up to ``z1``; "conformal": the slab ``h`` thick plus the copper's outline grown by ``h``
+    (round corners, 4 segments a quarter) and extruded to ``z1``. An ``outline`` clips every
+    piece (the slab itself is then the outline extruded)."""
+    lay = model.layer(doc, d["coat"]["layer"])
+    z, h = float(lay["z"]), model.coat_h(doc, d)
+    outline = d.get("outline")
+    if lay["model"] != "solid":
+        return [(outline, z, z + h)]
+    if d["coat"].get("fill", "conformal") == "level":
+        return [(outline, z, float(d["z1"]))]
+    from yapnr.rf.planar import clean
+
+    geometry, ops = clean._shapely()
+    rings = [
+        geometry.Polygon(
+            model.ring_points(pg["outer"], 0.005),
+            [model.ring_points(hh, 0.005) for hh in pg.get("holes", [])],
+        ).buffer(0)
+        for c in doc["conductors"]
+        if c["layer"] == lay["name"]
+        for pg in c["polygons"]
+    ]
+    x0, x1, y0, y1 = (float(v) for v in doc["domain"]["box"][:4])
+    clip = geometry.box(x0, y0, x1, y1)
+    if outline:
+        clip = clip.intersection(geometry.Polygon(model.ring_points(outline, 0.005)).buffer(0))
+    grown = ops.unary_union(rings).buffer(h, quad_segs=4).simplify(1e-4).intersection(clip)
+    out: List[Tuple[Any, float, float]] = [(outline, z, z + h)]
+    for g in getattr(grown, "geoms", [grown]):
+        if g.is_empty or g.geom_type != "Polygon" or g.area < 1e-8:
+            continue
+        out.append(
+            (
+                dict(
+                    outer=[list(p) for p in g.exterior.coords[:-1]],
+                    holes=[[list(p) for p in r.coords[:-1]] for r in g.interiors],
+                ),
+                z,
+                z + float(lay["t"]) + h,
+            )
         )
     return out
 
@@ -200,6 +260,17 @@ def _build(gmsh, doc: Dict[str, Any], o: Dict[str, Any]) -> Dict[str, Any]:
     layers = {la["name"]: la for la in doc["stack"]["layers"]}
     b.add((3, occ.addBox(x0, y0, z0, x1 - x0, y1 - y0, z1 - z0)), "air", None)
     for k, d in enumerate(doc["stack"]["dielectrics"]):
+        if d.get("coat"):
+            for shape, za, zb in coat_regions(doc, d):
+                if shape is None:
+                    b.add((3, occ.addBox(x0, y0, za, x1 - x0, y1 - y0, zb - za)), "diel", k)
+                    continue
+                poly = shape if isinstance(shape, dict) else dict(outer=shape)
+                ext = occ.extrude([(2, b.surface(poly, za))], 0, 0, zb - za)
+                for dt in ext:
+                    if dt[0] == 3:
+                        b.add(dt, "diel", k)
+            continue
         if d.get("outline"):
             s = b.surface(dict(outer=d["outline"]), d["z0"])
             ext = occ.extrude([(2, s)], 0, 0, d["z1"] - d["z0"])

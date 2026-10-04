@@ -14,5 +14,8 @@ py_library(
     name = "planar",
     srcs = glob(["*.py"]),
     imports = ["../../.."],
-    deps = ["//yapnr:package"],
+    deps = [
+        "//yapnr:package",
+        "//yapnr/rf:package",
+    ],
 )

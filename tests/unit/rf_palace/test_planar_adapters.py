@@ -24,6 +24,24 @@ from yapnr.rf.planar import adapters, model
 
 # The single patch as the radar60 record describes it (rfm1-n: W 1.45, calibrated L 1.1506,
 # inset 0.30, notch 0.10, 0.2 mm line, window margin 0.15, spacing 2.9).
+PADS = """(kicad_pcb (version 20260206) (generator "pcbnew")
+  (footprint "t:R" (layer "F.Cu") (at 110 100 90)
+    (property "Reference" "R1")
+    (pad "1" smd rect (at 1 0 90) (size 1 0.5) (layers "F.Cu" "F.Mask") (net "A"))
+    (pad "2" smd roundrect (at 0 -5 90) (size 0.6 0.4) (layers "F.Cu") (roundrect_rratio 0.25)
+      (net "B"))
+    (pad "3" smd trapezoid (at 0 3 90) (size 0.6 0.4) (layers "F.Cu") (net "C")))
+  (footprint "t:U" (layer "F.Cu") (at 110 100)
+    (property "Reference" "U1")
+    (pad "A1" smd circle (at -2 0) (size 0.32 0.32) (layers "F.Cu" "F.Paste") (net "GND"))
+    (pad "G" smd custom (at 2 5) (size 0.2 0.2) (layers "F.Cu") (net "GND")
+      (options (clearance outline) (anchor rect))
+      (primitives (gr_poly (pts (xy -1 -0.5) (xy 1 -0.5) (xy 0 0.5)) (width 0) (fill yes))))
+    (pad "M" thru_hole circle (at -4 2) (size 0.8 0.8) (drill 0.4) (layers "*.Cu" "*.Mask")
+      (net "H"))
+    (pad "X" smd rect (at 9 9) (size 1 1) (layers "B.Cu") (net "GND"))))
+"""
+
 RECORD = {
     "schema": "radar60-rfmacro/1",
     "geometry_sha256": "0" * 64,
@@ -175,8 +193,15 @@ class FeedModelTest(unittest.TestCase):
         self.assertEqual(len(d["vias"]), 2)  # the via outside the box is dropped
         self.assertEqual([p["dir"] for p in d["ports"]], ["+x"])
         self.assertAlmostEqual(model.port_geometry(d)["TX1.P0"]["offset"], 0.8)
-        self.assertEqual(d["domain"]["boundaries"]["zmin"], "pec")
+        # L2 is the lossy floor by default, with L1's roughness (the core's other LoPro foil)
+        self.assertEqual(d["domain"]["boundaries"]["zmin"], "metal")
+        floor = d["domain"]["metal"]["zmin"]
+        self.assertEqual((floor["name"], floor["t"]), ("L2", 0.0175))
+        self.assertEqual(floor["rough_k"], d["stack"]["layers"][0]["rough_k"])
         self.assertEqual(d["features"][0]["name"], "sliver0")
+        pec = adapters.from_feedmodel(self.fm(), box=[0.2, 3.8, 0.2, 2.8], floor="pec")
+        self.assertEqual(pec["domain"]["boundaries"]["zmin"], "pec")
+        self.assertNotIn("metal", pec["domain"])
 
 
 @unittest.skipUnless(HAVE_SHAPELY, "shapely not installed (FEA environment only)")
@@ -192,6 +217,29 @@ class KicadTest(unittest.TestCase):
         gnd = raw["copper"][("L1", "GND")]
         self.assertAlmostEqual(gnd.area, 5 * 1.5, delta=1e-3)  # the via pad lies inside the fill
         self.assertEqual(raw["vias"][0]["at"], [2.0, 3.0])
+
+    def test_pads(self):
+        # a footprint at (110, 100) turned 90 degrees: a rect pad 1 x 0.5 at local (1, 0) lies at
+        # board (110, 99) turned 90 (0.5 wide in x, 1 tall in y); a roundrect, a circle, a custom
+        # pad (gr_poly) and a through-hole pad (its hole a via barrel); a trapezoid is skipped
+        raw = adapters.read_kicad_copper(PADS, {"F.Cu": "L1"}, frame=(100.0, 100.0, True))
+        rect = raw["copper"][("L1", "A")]
+        self.assertAlmostEqual(rect.area, 0.5, delta=1e-9)
+        x0, y0, x1, y1 = rect.bounds
+        self.assertAlmostEqual(x1 - x0, 0.5, places=9)
+        self.assertAlmostEqual(y1 - y0, 1.0, places=9)
+        self.assertAlmostEqual(0.5 * (x0 + x1), 10.0, places=9)
+        self.assertAlmostEqual(0.5 * (y0 + y1), 1.0, places=9)  # y flipped: 100 - 99
+        rr = raw["copper"][("L1", "B")]  # 0.6 x 0.4, corner radius 0.25 x 0.4 = 0.1
+        self.assertAlmostEqual(rr.area, 0.6 * 0.4 - (4 - math.pi) * 0.01, delta=2e-4)
+        ball = raw["copper"][("L1", "GND")]
+        self.assertAlmostEqual(ball.area, math.pi * 0.16**2 + 1.0, delta=2e-3)  # ball + custom
+        self.assertTrue(ball.contains(Point(10.0 + 2.0, -5.0)))  # the custom pad's triangle
+        self.assertEqual([v["drill"] for v in raw["vias"]], [0.4])
+        self.assertEqual(len(raw["pads_skipped"]), 1)
+        self.assertIn("trapezoid", raw["pads_skipped"][0])
+        none = adapters.read_kicad_copper(PADS, {"F.Cu": "L1"}, (100.0, 100.0, True), pads=False)
+        self.assertEqual(none["copper"], {})
 
     def test_document(self):
         from yapnr.rf.planar import stackups

@@ -915,6 +915,7 @@ Round 2, review fixes (the physics and intent reviews of round 2; design §24):
   the optimizer chose the arms' width and path and the outputs (36 % of the exported copper is
   seed copper, free pixels). The guide says so; a uniform or star start with the keepouts was
   not tried.
+
 The gloss, dekink and corridor-coalescing pass (`PNR_GLOSS`,
 [design](design/gloss.md)); owner decisions of 2026-09-30 (in Splanc) and 2026-10-02:
 

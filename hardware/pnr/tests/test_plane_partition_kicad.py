@@ -107,6 +107,12 @@ class DrawTest(unittest.TestCase):
         full = [v(0, 0), v(W, 0), v(W, H), v(0, H)]
         made = draw_plane_regions(b, part.rows(), rules, lambda p: v(*p), full)
         self.assertEqual(sorted(z.GetNetname() for z in made), ["A", "B", "GND"])
+        # Drawn again (a placed board whose writeback drew the rails' zones, then the
+        # routed append): the rails' single-layer zones on the layer are replaced.
+        made = draw_plane_regions(b, part.rows(), rules, lambda p: v(*p), full)
+        lid = b.GetLayerID("In2.Cu")
+        rails = [z for z in b.Zones() if z.IsOnLayer(lid) and z.GetNetname() in ("A", "B")]
+        self.assertEqual(len(rails), len([z for z in made if z.GetNetname() in ("A", "B")]))
         k.ZONE_FILLER(b).Fill(b.Zones())
         lid = b.GetLayerID("In2.Cu")
         fills = {z.GetNetname(): z.GetFilledPolysList(lid) for z in made}

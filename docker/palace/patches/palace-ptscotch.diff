@@ -283,7 +283,7 @@ index 2df908b..e298665 100644
  
  # Add SuperLU_DIST
 diff --git a/palace/CMakeLists.txt b/palace/CMakeLists.txt
-index 252b296..bbd0804 100644
+index 252b296..d9b8c22 100644
 --- a/palace/CMakeLists.txt
 +++ b/palace/CMakeLists.txt
 @@ -83,6 +83,9 @@ set(METIS_DIR "" CACHE STRING
@@ -296,7 +296,7 @@ index 252b296..bbd0804 100644
  set(SUNDIALS_DIR "" CACHE STRING
    "Path to SUNDIALS build or installation directory (not required if already on CMAKE_PREFIX_PATH)"
  )
-@@ -520,7 +523,14 @@ else()
+@@ -520,7 +523,20 @@ else()
  endif()
  
  find_package(ParMETIS QUIET)
@@ -308,6 +308,12 @@ index 252b296..bbd0804 100644
 +  set_target_properties(ParMETIS::ParMETIS PROPERTIES
 +    INTERFACE_LINK_LIBRARIES "${PARMETIS_LIBRARIES};METIS::METIS")
 +  message(STATUS "Found ParMETIS API: ${PARMETIS_LIBRARIES}")
++  # The MUMPS CMake package built with (PT-)Scotch names Scotch::Scotch in its link interface
++  if(NOT TARGET Scotch::Scotch)
++    add_library(Scotch::Scotch INTERFACE IMPORTED)
++    set_target_properties(Scotch::Scotch PROPERTIES
++      INTERFACE_LINK_LIBRARIES "${PARMETIS_LIBRARIES}")
++  endif()
 +elseif(NOT TARGET ParMETIS::ParMETIS)
    find_library(PARMETIS_LIBRARY NAMES parmetis HINTS ${ParMETIS_ROOT}/lib REQUIRED)
    find_path(PARMETIS_INCLUDE_DIR NAMES parmetis.h HINTS ${ParMETIS_ROOT}/include REQUIRED)

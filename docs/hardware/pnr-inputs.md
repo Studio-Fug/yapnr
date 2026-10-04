@@ -624,7 +624,8 @@ fewest free slots first. A part held only by a narrow hard `region` (a connector
 window) therefore comes after every block and can find its window full. With
 `scarcity` each part held by a hard region or a hard `edge_align` band, and in no
 group, is a block of its own and takes its turn by the same measure, so a window part
-goes before a roomy block.
+goes before a roomy block; and once such a part has fewer free slots left than every
+part of the block being packed (a roomy region a block is filling), it goes next.
 
 `lookahead: regions` checks each slot before taking it: a greedy trial pack of the
 parts still to place that are held by a hard group, region or edge band, can still

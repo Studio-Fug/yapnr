@@ -19,7 +19,9 @@ Every option is off unless the constraint file declares it, and then the legaliz
     next block by its free slots per area, and only then the other parts, so a part
     held only by a narrow hard region (a connector's one window) finds its slots taken
     by unrelated blocks. With ``scarcity`` every part held by a hard region or a hard
-    edge band, and in no block, is a block of its own and competes by the same rank.
+    edge band, and in no block, is a block of its own and competes by the same rank, and
+    goes ahead of the block being packed once it has fewer free slots left than every
+    part of that block (minimum remaining slots across blocks).
 
 ``lookahead: regions``
     The power-first look-ahead (``starves``: refuse a slot when a greedy trial pack of

@@ -192,6 +192,51 @@ class OrderTest(unittest.TestCase):
         self.assertEqual(legal_count(None), 0)
         self.assertEqual(legal_count(dict(order="scarcity")), 10)
 
+    def test_squeezed_region_part_goes_ahead(self):
+        # D3's region is roomy at first, so the cap block (20 caps within 5.5 mm of U1)
+        # ranks first; its caps squeeze the region. D3 goes ahead of the block once it has
+        # fewer free slots than every cap.
+        from pnr.place.geometry import resolve_fixed_poses
+        from pnr.place.legalize import LegalizationError
+        from pnr.place.metrics import hard_violations
+
+        def legal(options, seed):
+            rng = random.Random(seed)
+            parts = [part("U1", (5, 6.5), (3, 3))]
+            for i in range(20):
+                parts.append(
+                    part("C%d" % i, (rng.uniform(1, 9), rng.uniform(0.5, 3.5)), (1.5, 0.9))
+                )
+            parts.append(part("D3", (5, 2), (3.0, 1.5)))
+            g = board(parts, 20, 10)
+            spec = dict(
+                schema="v0",
+                board=dict(outline=dict(w=20, h=10), default_clearance_mm=0.2),
+                fixed={"U1": dict(at=[5, 6.5], rot=0, side="top")},
+                orientation={"D3": 0},
+                group=[
+                    dict(
+                        members=["C%d" % i for i in range(20)],
+                        anchor="U1",
+                        radius_mm=5.5,
+                        hard=True,
+                    )
+                ],
+                region=[dict(name="d", refs=["D3"], rect=[0, 0, 10, 4])],
+            )
+            if options:
+                spec["legalize"] = options
+            c = compile_constraints(spec, [p.ref for p in g.components])
+            kw = legalize_constraint_kwargs(g, c, resolve_fixed_poses(g, c))
+            try:
+                placed = legalize(g, 20, 10, clearance=0.2, grid_mm=0.25, backtrack_budget=0, **kw)
+            except LegalizationError:
+                return False
+            return not any(hard_violations(placed, c).values())
+
+        self.assertLessEqual(sum(legal(None, seed) for seed in range(10)), 2)
+        self.assertEqual(sum(legal(dict(order="scarcity"), seed) for seed in range(10)), 10)
+
     def test_scarcity_blocks(self):
         from pnr.place.legalize import _scarcity_blocks
 

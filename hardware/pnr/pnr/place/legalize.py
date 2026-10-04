@@ -457,7 +457,8 @@ def legalize(
     ``order`` (``legalize: {order: scarcity}``; None = blocks first) makes every part
     held by a hard region or edge band and in no block a block of its own, so it is
     ordered with the hard-group blocks by remaining slots per area instead of after all
-    of them. ``lookahead`` (``legalize: {lookahead: regions}``; None = off) refuses a
+    of them, and goes ahead of the active block once it has fewer free slots left than
+    every part of that block. ``lookahead`` (``legalize: {lookahead: regions}``; None = off) refuses a
     slot that strands an unplaced part held by a hard group, region or edge band with
     few slots left (:func:`starves` without power-first; the nearest slot is kept when
     every tried one strands).
@@ -1099,6 +1100,23 @@ def legalize(
             blocks[v] = members
     if order == "scarcity":
         blocks = _scarcity_blocks(blocks, movable, rules, bands)
+
+    def scarce_first(active, eligible):
+        """``order: scarcity``: a part in a block of its own (held by a region or an edge
+        band) with fewer free slots left than every eligible part of the active block goes
+        ahead of the block (minimum remaining slots across blocks); else ``active``."""
+        singles = [
+            c for c in eligible if len(blocks.get(c.ref, ())) == 1 and c.ref not in active_block
+        ]
+        if not singles:
+            return active
+        counts = {c.ref: available(c) for c in singles}
+        best = min(
+            singles,
+            key=lambda c: (counts[c.ref], -courtyard_rect(c).w * courtyard_rect(c).h, c.ref),
+        )
+        return [best] if counts[best.ref] < min(available(c) for c in active) else active
+
     active_block = set()
     trail = []  # backtracking: (state, ref, chosen slot)
     banned = {}
@@ -1124,6 +1142,8 @@ def legalize(
                 root = min(grouped, key=block_rank)
                 active_block = blocks[root.ref]
                 active = [c for c in eligible if c.ref in active_block]
+        elif order == "scarcity":
+            active = scarce_first(active, eligible)
         if aid is None:
             comp = min(
                 active or eligible,

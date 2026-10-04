@@ -2,7 +2,7 @@
 
 The rail's copper (:func:`pnr.ir_extract.extract`, or any dict of the same form) is
 
-* **zones and pads**: rasterized per copper layer at ``h`` (default 0.05 mm); a cell
+* **zones and pads**: rasterized per copper layer at ``h`` (default 0.1 mm); a cell
   is copper when its centre is. Neighbouring copper cells of one layer are joined by
   the conductance of one square, ``t / rho``;
 * **tracks and arcs** (arcs as chords): exact one-dimensional resistors
@@ -41,7 +41,7 @@ import numpy as np
 RHO_20C = 1.72e-5  # copper resistivity at 20 C, ohm mm
 ALPHA = 0.00393  # its temperature coefficient, 1/K
 PLATING_MM = 0.020  # via barrel plating (IPC-6012 class 2 average)
-DEFAULT_H = 0.05
+DEFAULT_H = 0.1
 
 
 def resistivity(temperature_c: float = 25.0) -> float:

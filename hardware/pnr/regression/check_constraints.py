@@ -659,6 +659,7 @@ def check_ir_drop(b, c):
     _filled(b.board)
     keys = ("net", "sources", "sinks", "current_a", "budget_mv", "budget_mohm", "temperature_c")
     entry = {k: c[k] for k in keys if c.get(k) is not None}
+    entry["two_point"] = False  # the verdict needs the drop, not each sink alone
     with tempfile.TemporaryDirectory() as tmp:
         rep = report(b.board, dict(ir_drop=[entry]), Path(tmp), b.path)[c["net"]]
     measured = dict(

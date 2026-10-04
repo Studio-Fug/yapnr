@@ -26,6 +26,8 @@ routing rules carry under the same names, only when declared.
         split: equal       # or area
         budget_mohm: 4.0   # or budget_mv
         temperature_c: 60
+        h_mm: 0.1          # the plane raster
+        two_point: true    # also each sink's resistance alone (one solve per sink)
         hard: false        # a failure fails the run only when true
 
 A part is a ref or an ``@address`` (the constraint compiler resolves an address key
@@ -62,6 +64,7 @@ IR_KEYS = {
     "temperature_c",
     "hard",
     "h_mm",
+    "two_point",
 }
 
 
@@ -193,7 +196,11 @@ def parse_ir_drop(raw) -> List[Dict]:
             if entry.get(key) is not None:
                 row[key] = _num(entry[key], where + "." + key, positive=True)
         row["temperature_c"] = _num(entry.get("temperature_c", 25.0), where + ".temperature_c")
-        row["h_mm"] = _num(entry.get("h_mm", 0.05), where + ".h_mm", positive=True)
+        row["h_mm"] = _num(entry.get("h_mm", 0.1), where + ".h_mm", positive=True)
+        if entry.get("two_point") is not None:
+            if not isinstance(entry["two_point"], bool):
+                raise PowerSpecError(where + ".two_point must be a boolean")
+            row["two_point"] = entry["two_point"]
         out.append(row)
     return out
 

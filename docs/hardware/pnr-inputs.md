@@ -760,7 +760,8 @@ ir_drop:
     split: equal # each sink draws I/n; area: by pad area
     budget_mohm: 4.0 # or budget_mv
     temperature_c: 60 # copper resistivity at this temperature
-    h_mm: 0.05 # the plane raster
+    h_mm: 0.1 # the plane raster
+    two_point: true # also each sink's resistance with the others open (a solve per sink)
     hard: false
 ```
 
@@ -779,13 +780,15 @@ over its pad; Jacobi-preconditioned conjugate gradients solve it to a relative
 residual of 1e-10, after a connectivity pass that reports a sink no copper reaches
 as **open** instead of a number. `ir.json` gives, per rail: the drop at each sink,
 the effective resistance (worst drop / current), the two-point resistance of each
-sink with the others open, the I²R loss, the largest current per mm of width on
+sink with the others open (`two_point`), the I²R loss, the largest current per mm of width on
 each layer with its location and a `neck` flag where it is above what an IPC-2221
 trace carrying the whole current would carry per mm, and `status` (`pass`, `fail`
 against the budget, or `open`). Warnings take the quantified-assumption form, for
 instance what the worst sink's drop would be if the whole current went to it.
 With `--heatmaps` each layer's potential is written as a PNG. Copper only: the
-resistance of parts in the path (ferrites, sense resistors) is not modelled.
+resistance of parts in the path (ferrites, sense resistors) is not modelled. On the
+`-rails` rung's VDD (320 thousand nodes at 0.05 mm) 0.1 mm gives 2.590 against
+2.574 mOhm (0.6 %) in 4 s against 57 s of one solve.
 
 ### `net_class` / `diff_pair` / `length_match` — routing rules
 

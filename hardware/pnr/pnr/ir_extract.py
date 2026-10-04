@@ -246,7 +246,8 @@ def report(board, rules: Dict, out_dir: Path, path: Optional[str] = None, heatma
             budget_mohm=entry.get("budget_mohm"),
             budget_mv=entry.get("budget_mv"),
             temperature_c=entry.get("temperature_c", 25.0),
-            h=entry.get("h_mm", 0.05),
+            h=entry.get("h_mm", 0.1),
+            two_point=entry.get("two_point", True),
             heatmap=str(out_dir / ("ir-" + net.replace("/", "_"))) if heatmaps else None,
         )
         rep["hard"] = bool(entry.get("hard"))

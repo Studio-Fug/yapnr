@@ -28,7 +28,11 @@ from .lattice import Lattice
 
 # Track edge directions on the half lattice: east, north, north-east, north-west.
 DIRS = ((1, 0), (0, 1), (1, 1), (-1, 1))
-MARGIN = 1e-6  # mm: every clearance is judged with this margin (KiCad's nm rounding)
+# mm: every clearance, hole spacing, edge distance and keepout is judged with this
+# margin added, the native Oracle's (pnr.native_electrical.Oracle: rule + 1 um), so the
+# engine's own gate accepts every planned item (KiCad's DRC, in whole nanometres,
+# would pass copper at exactly the rule; the Oracle does not).
+MARGIN = 0.001
 AREA = "\0area:"  # a blocker token: an area that exempts some nets
 
 
@@ -184,7 +188,7 @@ class Model:
             return False
         n = len(poly)
         return all(
-            segment_segment(a, b, poly[k], poly[(k + 1) % n]) >= keep - MARGIN for k in range(n)
+            segment_segment(a, b, poly[k], poly[(k + 1) % n]) >= keep + MARGIN for k in range(n)
         )
 
     def edge_blockers(
@@ -213,18 +217,18 @@ class Model:
         half = width / 2
         if layer == 0:
             for land in self._near_lands(a, b):
-                if land.distance(a, b) < half + max(cl, self.cl(land.net)) - MARGIN:
+                if land.distance(a, b) < half + max(cl, self.cl(land.net)) + MARGIN:
                     if not land.net:
                         return None
                     nets.add(land.net)
         for net, la, p, q, w in self.obs.tracks:
-            gap = half + w / 2 + max(cl, self.cl(net)) - MARGIN
+            gap = half + w / 2 + max(cl, self.cl(net)) + MARGIN
             if la == layer and segment_segment(a, b, p, q) < gap:
                 if not net:
                     return None
                 nets.add(net)
         for net, c, dia, _drill in self.obs.vias:
-            if segment_segment(a, b, c, c) < half + dia / 2 + max(cl, self.cl(net)) - MARGIN:
+            if segment_segment(a, b, c, c) < half + dia / 2 + max(cl, self.cl(net)) + MARGIN:
                 if not net:
                     return None
                 nets.add(net)
@@ -235,7 +239,7 @@ class Model:
                 nets.add(AREA + name)
         for net, poly, layers in self.obs.zones:
             if layers is None or layer in layers:
-                if segment_polygon(a, b, poly) < half + max(cl, self.cl(net)) - MARGIN:
+                if segment_polygon(a, b, poly) < half + max(cl, self.cl(net)) + MARGIN:
                     if not net:
                         return None
                     nets.add(net)
@@ -277,23 +281,23 @@ class Model:
                 if kind == "ball":
                     if not self._in_pad_fits(land, p, d, h):
                         return None
-                elif dist < r + keep_own - MARGIN:
+                elif dist < r + keep_own + MARGIN:
                     return None
                 continue
-            if dist < r + max(cl, self.cl(land.net), self.via_to_pad or 0.0) - MARGIN:
+            if dist < r + max(cl, self.cl(land.net), self.via_to_pad or 0.0) + MARGIN:
                 if not land.net:
                     return None
                 nets.add(land.net)
         for other, _la, a, b, w in self.obs.tracks:
-            if segment_segment(p, p, a, b) < r + w / 2 + max(cl, self.cl(other)) - MARGIN:
+            if segment_segment(p, p, a, b) < r + w / 2 + max(cl, self.cl(other)) + MARGIN:
                 if not other:
                     return None
                 nets.add(other)
         for other, c, dia, drill in self.obs.vias:
             gap = math.dist(p, c)
-            if gap < (h + drill) / 2 + self.hole_to_hole - MARGIN and gap > 1e-6:
+            if gap < (h + drill) / 2 + self.hole_to_hole + MARGIN and gap > 1e-6:
                 return None  # drills too close, whatever the nets
-            if gap < r + dia / 2 + max(cl, self.cl(other)) - MARGIN:
+            if gap < r + dia / 2 + max(cl, self.cl(other)) + MARGIN:
                 if not other:
                     return None
                 nets.add(other)
@@ -303,7 +307,7 @@ class Model:
                     return None
                 nets.add(AREA + name)
         for other, poly, _layers in self.obs.zones:  # a through via meets every layer
-            if other != net and segment_polygon(p, p, poly) < r + max(cl, self.cl(other)) - MARGIN:
+            if other != net and segment_polygon(p, p, poly) < r + max(cl, self.cl(other)) + MARGIN:
                 if not other:
                     return None
                 nets.add(other)
@@ -394,10 +398,10 @@ class Model:
                     for db in range(-reach, reach + 1):
                         b0, b1, rb, hb, cb = self._shape(tb, (da, db))
                         gap = segment_segment(a0, a1, b0, b1)
-                        if gap < ra + rb + max(ca, cb) - MARGIN:
+                        if gap < ra + rb + max(ca, cb) + MARGIN:
                             other.append((da, db))
                         if ha is not None and hb is not None and (da, db) != (0, 0):
-                            if gap < (ha + hb) / 2 + self.hole_to_hole - MARGIN:
+                            if gap < (ha + hb) / 2 + self.hole_to_hole + MARGIN:
                                 other.append((da, db)) if (da, db) not in other else None
                                 same.append((da, db))
                 out[(ta, tb)] = (tuple(sorted(set(other))), tuple(sorted(same)))

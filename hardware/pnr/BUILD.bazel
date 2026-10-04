@@ -754,7 +754,7 @@ py_test(
     size = "small",
     srcs = ["tests/test_fanout.py"],
     main = "tests/test_fanout.py",
-    deps = [":pnr"],
+    deps = [":pnr", ":pnr_hier"],
 )
 
 py_test(

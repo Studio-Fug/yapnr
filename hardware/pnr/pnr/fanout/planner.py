@@ -185,17 +185,22 @@ def _obstacles(graph, rules, spec, comp, pose, layers, fixed_copper):
             )
     for poly in polygons:
         if poly.get("kind") == "rule_area":
-            # A block's rule area: the flags it carries bar every net's copper.
-            names = [poly.get("layer")] if poly.get("layer") else list(lidx)
+            # A block's rule area (pnr.fixed_copper exports its copper ``layers``): its
+            # flags bar every net's tracks on those layers and, through vias spanning
+            # them all, its vias wherever it has a layer, as the router reads it
+            # (route.detail.fixed._reserve_polygons). No layer: it bars nothing.
+            names = list(poly.get("layers") or ([poly["layer"]] if poly.get("layer") else []))
             layer_set = frozenset(lidx[n] for n in names if n in lidx)
             outline = [pose.to_local(tuple(p)) for p in poly["outline"]]
-            if poly.get("tracks", True) or poly.get("vias", True):
+            bars_tracks = bool(poly.get("tracks")) and bool(layer_set)
+            bars_vias = bool(poly.get("vias")) and bool(names)
+            if bars_tracks or bars_vias:
                 obs.areas.append(
                     (
                         "block-area:%d" % len(obs.areas),
                         outline,
-                        layer_set if poly.get("tracks", True) else frozenset(),
-                        bool(poly.get("vias", True)),
+                        layer_set if bars_tracks else frozenset(),
+                        bars_vias,
                         frozenset(),
                     )
                 )
@@ -341,7 +346,7 @@ def plan(
     """The fanout of ``spec['ref']`` (see the module docstring); raises
     :class:`FanoutError` for an input it cannot honour."""
     from pnr.fab_profile import geometry
-    from pnr.pad_entry import terminal_required_width
+    from pnr.pad_entry import fanout_neck, terminal_required_width
 
     plane_nets, signal_nets = set(plane_nets), set(signal_nets)
     try:
@@ -400,10 +405,16 @@ def plan(
             continue
         fanned[name] = (kind, col, row, land)
     widths = {}
+    necked = {}
     for name, (kind, col, row, land) in fanned.items():
-        w = terminal_required_width(comp.ref, name, land.net, rules)
-        if kind == "signal" and spec.get("neck_mm") is not None:
-            w = float(spec["neck_mm"])
+        w = terminal_required_width(comp.ref, name, land.net, rules, neck=False)
+        if kind == "signal":
+            # A declared neck narrows a signal's escape, never below the net's own
+            # class or current minimum unless its class is authorized (fanout_neck).
+            narrow = fanout_neck(comp.ref, name, land.net, rules, required=w, spec=spec)
+            if narrow is not None:
+                necked[name] = (round(float(w), 6), round(float(narrow), 6))
+                w = narrow
         widths[name] = round(float(w), 6)
     obs = _obstacles(graph, rules, spec, comp, pose, layers, fixed_copper)
     model = Model(
@@ -479,6 +490,10 @@ def plan(
     for name, net in joined.items():
         skipped[name] = ("fixed", net)
     result = _emit(spec, comp, pose, lat, model, tasks, skipped, warnings, assigner, digest, layers)
+    if necked:
+        # Declared necks (pad: [width without the neck, neck width]): the escapes the
+        # validator accepts at the neck width (pnr.pad_entry.fanout_neck).
+        result["diagnostics"]["necks"] = {k: list(necked[k]) for k in sorted(necked)}
     if spec.get("bottom_sites"):
         from .bottom import sites
 

@@ -101,7 +101,7 @@ The approximate board you're targeting.
 | `layers`               | Copper layer count (2 to 32). Without a declared stack (below), inner layers are treated as power/ground planes, so routing capacity scales with the **signal** layers. |
 | `default_clearance_mm` | Minimum courtyard-to-courtyard gap enforced in legalization, and the track pitch the lookahead router assumes.                    |
 | `sides`                | Side policy: `single` (default; every part stays on its source side, and `side_pref` is ignored) or `double` (placement chooses the side of every part nothing holds; needs 2 or more layers; see `side_pref`). |
-| `plane_fallback_drops` | `true` (default): writeback drops a via from every plane pad the router left without a through contact (dog-bone fallback). `false`: writeback adds no copper nobody routed; the unreached plane pads are listed on stderr (`writeback: unreached plane pads`). Use `false` for a placement-only writeback and for boards whose plane access another stage owns (a BGA fanout). |
+| `plane_fallback_drops` | `true` (default): writeback and the plane stage (`pnr.planes`) drop a via from every plane pad the router left without a through contact (dog-bone fallback). `false`: neither adds copper nobody routed; the unreached plane pads are listed on stderr (`unreached plane pads`). Use `false` for a placement-only writeback and for boards whose plane access another stage owns (a BGA fanout). |
 
 The outline is _approximate guidance_: the placer frames the parts within it. Make
 it a bit larger than the parts need — an over-tight outline forces congestion and
@@ -321,8 +321,13 @@ adds one custom rule per layer to the board's `.kicad_dru`, in a block between
 
 Only that block is replaced on a later writeback; the fab profile's generated rules
 and a hand-written file's own rules stay (the profile regenerates its rules around
-the block). Pours become `disallow zone`. A keep-out on a layer the router does not
-route (a dedicated plane) affects vias and pours only.
+the block). Pours become `disallow zone`, which KiCad's DRC judges but its zone
+filler does not, so such a keep-out with `pours` (the default) is also cut out of
+every plane zone the engine forms (`pnr.writeback.clip_keepout_pours`) whose net it
+does not allow. A zone drawn in the source is never changed: one such a keep-out
+would flag is listed on stderr (`drawn zones inside a keepout that bars their
+pours`). A keep-out on a layer the router does not route (a dedicated plane)
+affects vias and pours only.
 
 ### `fixed_block` — copper kept exactly as drawn (hard, routing)
 
@@ -593,6 +598,7 @@ fanout:
     reserved: # corridors kept free, in the part's frame (frame: board for absolute)
       - { rect: [-5.4, -0.2, -4.4, 0.2], layers: [F.Cu] }
     neck_mm: 0.10 # signal tracks inside the fanout (default: the net's width)
+    neck_classes: [QSPI] # classes whose own minimum width the neck may go below
     lock: true # write the fanout copper locked (default)
 ```
 
@@ -608,7 +614,8 @@ fanout:
 | `ring_layers`     | `{ring: [layers]}`: the only exit layers of that ring (the surface included by naming it).                                     |
 | `forbidden_exits` | Board compass edges of the part no escape may leave across: a list (every layer) or `{layer: [edges]}`.                        |
 | `reserved`        | `{rect or polygon, layers, frame}` areas no fanout copper enters (`frame`: `part`, the default, or `board`).                    |
-| `neck_mm`         | The signal track width inside the fanout; the router continues at the net's own width from the exit.                         |
+| `neck_mm`         | The signal track width inside the fanout; the router continues at the net's own width from the exit. It narrows a signal below the fab's default track width, never below a minimum the net has of its own (a class `width_mm`, a width from `current_a`, an electrical outer width or terminal budget) unless `neck_classes` names one of its classes, never below a terminal width contract, and never widens; `fanout.check` refuses a value under `min_track_width_mm`. The validator takes each declared neck as an authorized short escape: the pad's required entry width is the neck's (`pnr.pad_entry.fanout_neck`), and the plan lists them (`diagnostics.necks`). |
+| `neck_classes`    | Net classes (or `dp_<pair>`) whose own minimum width `neck_mm` may go below (needs `neck_mm`; an unknown name is a warning). |
 | `lock`            | Write the fanout copper locked (default `true`), so later passes leave it alone.                                               |
 | `bottom_sites`    | `{parts, max_stub_mm, zone, rotations}`: decoupling sites under the array on the bottom side (below).                         |
 | `variant`         | A seeded permutation of the planner's tie-breaks (default 0, none).                                                            |
@@ -618,8 +625,10 @@ lattice (through the channel between two balls, the interstitial sites and the
 vacant ones, orthogonal or at 45 degrees) and every object is judged on exact
 geometry against the lands, fixed copper, `copper_keepout`s (a v1 keepout bars
 only its `items` on its `layers`, and lets its allowed nets and classes through, as
-the router does), mounting holes,
-reserved corridors, the outline and the fab's via, hole and edge rules. All balls
+the router does), a fixed block's rule areas (tracks on their own `layers` only),
+mounting holes, reserved corridors, the outline and the fab's via, hole and edge
+rules, each with 1 µm added (the native Oracle's margin, so the engine's own gate
+accepts every planned item). All balls
 are assigned together by negotiated congestion, so signals and drops share the
 sites: most signals escaped first, then most drops, then the least length and vias.
 A ball with no legal path is reported `failed`, with its reason. At 0.65 mm pitch
@@ -627,7 +636,11 @@ with 0.32 mm lands and 0.10/0.10 rules a 0.35/0.15 via fits an interstitial site
 and a 0.40/0.20 one does not, and one 0.10 mm track fits between two balls.
 
 The router reserves the planned copper, routes each escaped signal on from the
-first free grid cell beyond its exit, and leaves the fanned-out balls to the plan;
+first free grid cell beyond its exit (the tail to it keeps each foreign pad at the
+larger of the two nets' class clearances, and the fanout copper keeps other nets'
+vias at the largest class clearance), and leaves the fanned-out balls to the plan.
+A ball whose exit finds no such cell is not emitted, and its planned copper goes
+back to the maze;
 the drop via of a plane ball is its connection. The fanout's vias keep their class
 (`routes.json` `via_sizes`), and its copper is written locked (`locked`). The
 route report's escape diagnostics carry a `fanout` block per fanout (escaped
@@ -676,7 +689,11 @@ length_match:
 - **`net_class`** — a named width/clearance rule over a set of nets. Applied to
   the board's net settings in write-back, so **FreeRouting routes those nets at
   the given width** (e.g. power rails wider). The quality report rolls up total
-  routed length per class. A class may also set **`plane_layer`** (e.g.
+  routed length per class. A class `clearance_mm` larger than the fab's holds
+  between its nets and every other net, as KiCad's DRC judges two nets (the larger
+  of their clearances): the grid router's exact escape and drop checks against pads
+  and escape copper use it, and so does a fanout's hand-over. A class may also set
+  **`plane_layer`** (e.g.
   `In1.Cu`): its net is **poured as a copper plane** on that layer instead of
   being trace-routed — the right home for a high-fanout ground or power net on a
   multilayer board (each pad reaches it with a short via, and the router only has

@@ -28,6 +28,7 @@ KEYS = {
     "escape_layers",
     "ring_layers",
     "neck_mm",
+    "neck_classes",
     "lock",
     "bottom_sites",
     "variant",
@@ -171,6 +172,10 @@ def parse(entry: Dict, known_refs: Sequence[str], index: int = 0) -> Dict:
         ring_layers[str(ring)] = _strings(layers, "%s.ring_layers.%s" % (where, key))
     neck = entry.get("neck_mm")
     neck = None if neck is None else _number(neck, where + ".neck_mm", positive=True)
+    # Net classes whose own minimum width (class width, current) the neck may go below.
+    neck_classes = _strings(entry.get("neck_classes"), where + ".neck_classes")
+    if neck_classes and neck is None:
+        raise FanoutError(where + ".neck_classes needs neck_mm")
     lock = entry.get("lock", True)
     if not isinstance(lock, bool):
         raise FanoutError(where + ".lock must be a boolean")
@@ -209,7 +214,7 @@ def parse(entry: Dict, known_refs: Sequence[str], index: int = 0) -> Dict:
             zone=zone,
             rotations=[float(r) % 360 for r in rotations],
         )
-    return dict(
+    out = dict(
         name=name,
         ref=ref,
         pads=_strings(entry.get("pads", "*"), where + ".pads"),
@@ -225,6 +230,9 @@ def parse(entry: Dict, known_refs: Sequence[str], index: int = 0) -> Dict:
         bottom_sites=sites,
         variant=variant,
     )
+    if neck_classes:  # only when declared: an entry without it keeps its bytes
+        out["neck_classes"] = sorted(set(neck_classes))
+    return out
 
 
 def parse_all(raw, known_refs: Sequence[str]) -> List[Dict]:
@@ -252,6 +260,13 @@ def expand_nets(spec: Dict, net_names: Sequence[str]) -> Dict:
         classes.append(dict(c, nets=nets))
     out["via_classes"] = classes
     return out
+
+
+def covers(spec: Dict, pad: str) -> bool:
+    """``pad`` is one of the entry's balls: it matches ``pads`` and not ``skip_pads``."""
+    return any(fnmatch.fnmatchcase(pad, p) for p in spec["pads"]) and not any(
+        fnmatch.fnmatchcase(pad, p) for p in spec.get("skip_pads") or ()
+    )
 
 
 def class_for(spec: Dict, net: str) -> Optional[Dict]:
@@ -315,6 +330,17 @@ def check(spec: Dict, rules: Dict, layers: Sequence[str]) -> List[str]:
                     "%s.escape_layers: %s is not a routing layer of the stack (%s)"
                     % (where, layer, ", ".join(layers))
                 )
+    neck = spec.get("neck_mm")
+    min_track = fab.get("min_track_width_mm")
+    if neck is not None and min_track is not None and neck < float(min_track) - 1e-9:
+        raise FanoutError(
+            "%s.neck_mm: %.3f is under the fab's min_track_width %.3f"
+            % (where, neck, float(min_track))
+        )
+    names = {c.get("name") for c in rules.get("net_classes", [])}
+    for c in spec.get("neck_classes") or ():
+        if c not in names:
+            warnings.append("%s.neck_classes: %s is not a net class (ignored)" % (where, c))
     for c in spec["via_classes"]:
         for layer in c.get("layers") or []:
             if layer not in layers:

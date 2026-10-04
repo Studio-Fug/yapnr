@@ -21,6 +21,7 @@ import math
 from typing import Dict, List, Optional, Tuple
 
 from .geom import Land, Pose
+from .sites import MARGIN
 
 
 def _zone(lat, zone: str):
@@ -52,6 +53,16 @@ def sites(graph, spec: Dict, plan: Dict, lat, pose: Pose, rules: Dict) -> Dict:
     g = geometry(rules)
     clearance = float((rules.get("fab") or {}).get("clearance_mm", 0.13))
     keep_via = max(clearance, g.via_to_smd_pad or 0.0)
+    # Two nets keep the larger of their class clearances (as the planner's Model).
+    net_clearance: Dict[str, float] = {}
+    for c in rules.get("net_classes", []):
+        if c.get("clearance_mm"):
+            for n in c.get("nets", []):
+                net_clearance[n] = max(net_clearance.get(n, 0.0), float(c["clearance_mm"]))
+
+    def cl(net):
+        return max(clearance, net_clearance.get(net, 0.0))
+
     za0, zb0, za1, zb1 = _zone(lat, bottom["zone"])
     x0, y0 = lat.point(za0, zb0)
     x1, y1 = lat.point(za1, zb1)
@@ -109,7 +120,8 @@ def sites(graph, spec: Dict, plan: Dict, lat, pose: Pose, rules: Dict) -> Dict:
                         own = math.inf
                         for vnet, c, d in vias:
                             gap = land.distance(c, c) - d / 2
-                            if gap < keep_via - 1e-6:
+                            keep = keep_via if vnet == net else max(keep_via, cl(net), cl(vnet))
+                            if gap < keep + MARGIN:
                                 ok = False
                                 break
                             if vnet == net and net:
@@ -117,7 +129,8 @@ def sites(graph, spec: Dict, plan: Dict, lat, pose: Pose, rules: Dict) -> Dict:
                         if not ok:
                             break
                         for tnet, a, b, tw in tracks:
-                            if tnet != net and land.distance(a, b) < tw / 2 + clearance - 1e-6:
+                            keep = max(cl(net), cl(tnet))
+                            if tnet != net and land.distance(a, b) < tw / 2 + keep + MARGIN:
                                 ok = False
                                 break
                         if not ok:

@@ -977,7 +977,9 @@ def route_board(
         for comp in graph.components:
             for pad in comp.pads:
                 if pad.net in stack.plane_nets and not pad.through_hole:
-                    w = terminal_required_width(comp.ref, pad.name, pad.net, rules or {})
+                    w = terminal_required_width(
+                        comp.ref, pad.name, pad.net, rules or {}, neck=False
+                    )
                     pad_drop_width[(comp.ref, pad.name)] = w
                     drop_widths[pad.net] = max(drop_widths.get(pad.net, 0.0), w)
         for n, w in drop_widths.items():
@@ -999,7 +1001,9 @@ def route_board(
         for comp in graph.components:
             for pad in comp.pads:
                 if pad.net in planes and not pad.through_hole:
-                    w = terminal_required_width(comp.ref, pad.name, pad.net, rules or {})
+                    w = terminal_required_width(
+                        comp.ref, pad.name, pad.net, rules or {}, neck=False
+                    )
                     pad_drop_width[(comp.ref, pad.name)] = w
                     drop_widths[pad.net] = max(drop_widths.get(pad.net, 0.0), w)
         for n, w in drop_widths.items():

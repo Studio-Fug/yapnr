@@ -294,11 +294,13 @@ def aspect_sizes(
     return out
 
 
-def block_constraints_doc(doc: dict, addresses, width: float, height: float) -> dict:
+def block_constraints_doc(doc: dict, addresses, width: float, height: float, refs=None) -> dict:
     """Authored constraints restricted to one block's parts, on a width x height board.
 
     Selectors are kept only where they match block members; board-level relations
-    (rows, fixed poses) are dropped because the block is posed at top level.
+    (rows, fixed poses) are dropped because the block is posed at top level. A
+    ``fanout`` entry is kept only when its part is one of the block's ``refs`` (its
+    ``bottom_sites`` parts filtered to them); without ``refs`` none is kept.
     """
     import fnmatch
 
@@ -325,6 +327,25 @@ def block_constraints_doc(doc: dict, addresses, width: float, height: float) -> 
     out.pop("fixed_block", None)
     out["fixed"] = {}
     out.pop("layout_array", None)
+    if "fanout" in out:
+        members = set(refs or ())
+        fanouts = []
+        for f in out["fanout"] or []:
+            if not isinstance(f, dict) or f.get("ref") not in members:
+                continue
+            f = dict(f)
+            bottom = f.get("bottom_sites")
+            if isinstance(bottom, dict):
+                parts = [r for r in bottom.get("parts") or [] if r in members]
+                if parts:
+                    f["bottom_sites"] = dict(bottom, parts=parts)
+                else:
+                    f.pop("bottom_sites")
+            fanouts.append(f)
+        if fanouts:
+            out["fanout"] = fanouts
+        else:
+            out.pop("fanout")
     if "side" in out:
         out["side"] = {k: [s for s in v if hits(s)] for k, v in out["side"].items()}
         out["side"] = {k: v for k, v in out["side"].items() if v}

@@ -427,6 +427,106 @@ class PlanTest(unittest.TestCase):
             if net.startswith("S_"):
                 self.assertIn(layer, ("F.Cu", "B.Cu"))
 
+    def test_a_neck_keeps_a_current_class_minimum_unless_authorized(self):
+        # neck_mm narrows a plain signal below the fab's default track width; a net of
+        # a current-annotated class (width resolved from current_a) keeps its class
+        # width unless the entry names the class in neck_classes. The validator's
+        # required width (terminal_required_width) is the planned width.
+        from pnr.pad_entry import terminal_required_width
+
+        positions = array(5)
+        nets = {n: "S_" + n if n[0] in "AE" else "GND" for n in positions}
+        nets["A3"] = "S_PWR"
+        graph = board(positions, nets)
+        r = rules()
+        r["fab"]["track_width_mm"] = 0.15
+        r["net_classes"].append(
+            dict(name="pwr", nets=["S_PWR"], width_mm=0.25, current_a=1.0, clearance_mm=0.1)
+        )
+        signals = {n.name for n in graph.nets if n.name != "GND"}
+        for classes, pwr_width in (([], 0.25), (["pwr"], 0.1)):
+            extra = {"neck_classes": classes} if classes else {}
+            sp = spec(neck_mm=0.1, skip_pads=["E5"], **extra)
+            p = plan(
+                graph,
+                r,
+                sp,
+                grid_layers=["F.Cu", "In2.Cu", "B.Cu"],
+                plane_nets={"GND"},
+                signal_nets=signals,
+            )
+            t = p["terminals"]
+            self.assertEqual(t["A1"]["width_mm"], 0.1)
+            self.assertEqual(t["A3"]["width_mm"], pwr_width, classes)
+            self.assertEqual(p["diagnostics"]["necks"]["A1"], [0.15, 0.1])
+            self.assertEqual("A3" in p["diagnostics"]["necks"], bool(classes))
+            for net, _la, _a, _b, w in p["copper"]["tracks"]:
+                if net == "S_PWR":
+                    self.assertEqual(w, pwr_width)
+                elif net != "GND":
+                    self.assertEqual(w, 0.1)
+            rr = dict(r, fanouts=[sp])
+            self.assertEqual(terminal_required_width("U1", "A1", "S_A1", rr), 0.1)
+            self.assertEqual(terminal_required_width("U1", "A3", "S_PWR", rr), pwr_width)
+            self.assertEqual(terminal_required_width("U1", "E5", "S_E5", rr), 0.15)  # skipped
+            self.assertEqual(terminal_required_width("U1", "A1", "S_A1", rr, neck=False), 0.15)
+            self.assertEqual(terminal_required_width("U2", "A1", "S_A1", rr), 0.15)
+            self.assertEqual(terminal_required_width("U1", "B1", "GND", rr), 0.15)  # a plane
+
+    def test_a_block_rule_area_bars_only_its_own_layers(self):
+        # pnr.fixed_copper exports a block's rule area with its copper ``layers``; the
+        # planner bars tracks on those layers only, as the router does.
+        from pnr.fanout.planner import _obstacles
+
+        graph = board(array(3), {})
+        comp = graph.component("U1")
+        poly = [[1.0, 1.0], [2.0, 1.0], [2.0, 2.0], [1.0, 2.0]]
+
+        def area(layers, tracks, vias):
+            return dict(kind="rule_area", layers=layers, outline=poly, tracks=tracks, vias=vias)
+
+        fixed = dict(
+            frame="engine-mm-y-up",
+            blocks=[
+                dict(
+                    polygons=[
+                        area(["F.Cu"], True, False),
+                        area(["In2.Cu"], False, True),
+                        area([], True, True),
+                    ]
+                )
+            ],
+        )
+        layers = ["F.Cu", "In2.Cu", "B.Cu"]
+        obs = _obstacles(graph, rules(), spec(), comp, Pose(comp.pos, comp.rot), layers, fixed)
+        self.assertEqual(
+            [a[2:4] for a in obs.areas], [(frozenset({0}), False), (frozenset(), True)]
+        )
+
+    def test_the_plan_keeps_the_oracles_micron(self):
+        # The native Oracle judges every clearance with 1 um added: an inner track at
+        # exactly the rule from a via is not planned.
+        lat = infer(lands(array(3)))
+        obs = Obstacles()
+        obs.vias.append(("GND", (0.325, 0.325), 0.35, 0.15))
+        m = Model(
+            lat,
+            ["F.Cu", "In2.Cu"],
+            obs,
+            clearance=0.1,
+            via_to_pad=0.1,
+            hole_to_hole=0.28,
+            edge_clearance=0.3,
+            hole_to_edge=0.5,
+            via_classes=[DEFAULT],
+            widths=[0.1],
+        )
+        # Along the row y = 0 on In2: 0.325 - 0.175 - 0.05 = 0.100 mm from the via.
+        at_rule = m.segment_blockers(1, (-0.65, 0.0), (0.65, 0.0), 0.1)
+        self.assertEqual(at_rule, frozenset({"GND"}))
+        clear = m.segment_blockers(1, (-0.65, -0.01), (0.65, -0.01), 0.1)
+        self.assertEqual(clear, frozenset())
+
     def test_failed_pad_has_a_reason(self):
         positions = array(5)
         signals = {"C3", "A1"}
@@ -561,6 +661,13 @@ class SpecTest(unittest.TestCase):
         sp = spec(escape_layers=["In7.Cu"])
         with self.assertRaisesRegex(FanoutError, "not a routing layer"):
             check(sp, rules(), ["F.Cu", "B.Cu"])
+        with self.assertRaisesRegex(FanoutError, "neck_mm.*min_track_width"):
+            check(spec(neck_mm=0.08), rules(), ["F.Cu", "B.Cu"])
+        self.assertEqual(check(spec(neck_mm=0.1), rules(), ["F.Cu", "B.Cu"]), [])
+        warnings = check(spec(neck_mm=0.1, neck_classes=["nope"]), rules(), ["F.Cu", "B.Cu"])
+        self.assertIn("neck_classes: nope is not a net class", warnings[0])
+        with self.assertRaisesRegex(FanoutError, "neck_classes needs neck_mm"):
+            spec(neck_classes=["gnd"])
 
     def test_rules_keep_their_bytes_without_a_fanout(self):
         from pnr.constraints import compile_constraints, compile_routing_rules
@@ -576,6 +683,26 @@ class SpecTest(unittest.TestCase):
         ]
         rules_ = compile_routing_rules(compile_constraints(doc, ["U1"]), ["GND", "SIG"])
         self.assertEqual(rules_["fanouts"][0]["via_classes"][0]["nets"], ["GND"])
+
+    def test_a_hierarchical_block_keeps_only_its_own_fanout(self):
+        # pnr.hier: a block's sub-board compiles the authored constraints restricted
+        # to its parts; a fanout of a part outside the block must not reach it.
+        from pnr.constraints import compile_constraints
+        from pnr.hier.blocks import block_constraints_doc
+
+        doc = {
+            "schema": "v0",
+            "board": {"outline": {"w": 30, "h": 30}},
+            "fanout": [dict(ref="U1", bottom_sites=dict(parts=["C1", "C2"]))],
+        }
+        mine = block_constraints_doc(doc, ["a.u1", "a.c1"], 10, 10, refs=["U1", "C1"])
+        self.assertEqual(mine["fanout"], [dict(ref="U1", bottom_sites=dict(parts=["C1"]))])
+        self.assertEqual(compile_constraints(mine, ["U1", "C1"]).fanouts[0]["ref"], "U1")
+        other = block_constraints_doc(doc, ["b.r1"], 10, 10, refs=["R1"])
+        self.assertNotIn("fanout", other)
+        self.assertEqual(compile_constraints(other, ["R1"]).fanouts, [])
+        self.assertNotIn("fanout", block_constraints_doc(doc, ["a.u1"], 10, 10))
+        self.assertEqual(doc["fanout"][0]["bottom_sites"]["parts"], ["C1", "C2"])  # unchanged
 
 
 if __name__ == "__main__":

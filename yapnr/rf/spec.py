@@ -408,6 +408,11 @@ class OptimizerSpec:
     # Z_c is a few per cent off 50 Ω (47.5 Ω for the antenna's 11-cell feed), which moves a
     # −10 dB reflection by up to 0.6 dB. None: the feed's Z_c (design §5.4).
     reference_ohm: float | None = None
+    # Multi-start perturbation (design `multistart.md` §1): x0 += perturb_amplitude·(2u − 1),
+    # clipped to [0, 1], from a counter-based SplitMix64 on (perturb_seed, dof index)
+    # (`yapnr.rf.multistart.perturb`). 0: no perturbation (the default, single-run behavior).
+    perturb_amplitude: float = 0.0
+    perturb_seed: int = 0
 
 
 @dataclass(frozen=True)
@@ -454,7 +459,20 @@ _OPTIMIZER_NEW = {
     "epoch_objectives": [],
     "epoch_frequency_scale": [],
     "reference_ohm": None,
+    "perturb_amplitude": 0.0,
+    "perturb_seed": 0,
 }
+# Optimizer path fields that `starts.vary` may override (design `multistart.md` §1): halving
+# compares starts at the same epoch of the same problem, so betas, iteration caps, objectives,
+# robust variants and anything else that changes what is being solved is refused.
+STARTS_VARY_ALLOWED = (
+    "move",
+    "move_late",
+    "init",
+    "seed",
+    "perturb_amplitude",
+    "perturb_seed",
+)
 OBJECTIVES = ("spec", "radiation")
 
 
@@ -732,6 +750,11 @@ class Spec:
     # `zero`), and the named target densities of `shape` requirements (`patterns.Target`).
     far_field: dict | None = None
     patterns: dict = field(default_factory=dict)
+    # Multi-start (design `multistart.md` §1): a top-level key, not `optimizer.starts`, so that
+    # a single run's optimizer never reads it and start 0's hash equals this spec's hash with
+    # `starts` absent. None: one run, today's behavior. Otherwise a plain dict matching
+    # `yapnr-rf-starts/1`'s `starts:` block (validated by `yapnr.rf.multistart.validate_starts`).
+    starts: dict | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "requirements", _flatten(self.requirements))
@@ -825,6 +848,8 @@ class Spec:
             raise ValueError("optimizer.epoch_frequency_scale: one factor in (0.5, 2) per β epoch")
         if any(r.quantity == "radiated" for r in self.requirements) and self.radiation is None:
             object.__setattr__(self, "radiation", RadiationBox())
+        if self.starts is not None:
+            _validate_starts_structure(self.starts)
 
     def _validate_board(self) -> None:
         from yapnr.rf.patterns import PatternRequirement, _frame, parse_target
@@ -954,6 +979,8 @@ class Spec:
             out["far_field"] = self.far_field
         if self.patterns:
             out["patterns"] = {k: v.spec for k, v in sorted(self.patterns.items())}
+        if self.starts is not None:
+            out["starts"] = self.starts
         return out
 
     def canonical_json(self) -> str:
@@ -1032,6 +1059,7 @@ class Spec:
             board=None if d.get("board") is None else BoardSpec.from_dict(d["board"]),
             far_field=d.get("far_field"),
             patterns=_targets(d.get("patterns", {})),
+            starts=d.get("starts"),
         )
 
     @classmethod
@@ -1057,6 +1085,78 @@ def _band_dict(b: Band) -> dict:
     if b.ghz_points:
         out["ghz_points"] = list(b.ghz_points)
     return out
+
+
+def _validate_starts_structure(starts: dict) -> None:
+    """Structural checks on a spec's `starts` block (design `multistart.md` §1).
+
+    Checks that need a derived spec per start (start 0 equals the base, no two starts share a
+    design sha256, every derived spec validates) are `yapnr.rf.multistart.derive_starts`'s job,
+    since they need `Spec` fully built; this is the part `Spec.validate` can do on the raw dict
+    alone, so it also runs when `starts` is loaded standalone (e.g. by tooling that never builds
+    a `Spec`).
+    """
+    unknown = set(starts) - {"vary", "combine", "halving", "select"}
+    if unknown:
+        raise ValueError(f"starts: unknown keys {sorted(unknown)}")
+    vary = starts.get("vary")
+    if not vary:
+        raise ValueError("starts.vary must be non-empty")
+    bad = set(vary) - set(STARTS_VARY_ALLOWED)
+    if bad:
+        raise ValueError(f"starts.vary: {sorted(bad)} may not be varied across starts")
+    lengths = set()
+    for k, v in vary.items():
+        if not isinstance(v, list) or not v:
+            raise ValueError(f"starts.vary.{k} must be a non-empty list")
+        lengths.add(len(v))
+    combine = starts.get("combine", "zip")
+    if combine not in ("zip", "product"):
+        raise ValueError("starts.combine must be 'zip' or 'product'")
+    if combine == "zip":
+        lengths = {n for n in lengths if n != 1}
+        if len(lengths) > 1:
+            raise ValueError(f"starts.vary (combine: zip): lengths disagree {sorted(lengths)}")
+    n = _starts_count(vary, combine)
+    if n > 64:
+        raise ValueError(f"starts: {n} starts, at most 64")
+    halving = starts.get("halving")
+    if halving is not None:
+        unknown = set(halving) - {"rungs", "min_keep", "control", "seed"}
+        if unknown:
+            raise ValueError(f"starts.halving: unknown keys {sorted(unknown)}")
+        rungs = halving.get("rungs")
+        if not rungs:
+            raise ValueError("starts.halving.rungs must be non-empty")
+        epochs = [r["after_epoch"] for r in rungs]
+        if epochs != sorted(set(epochs)) or any(e < 0 for e in epochs):
+            raise ValueError("starts.halving.rungs: after_epoch must be strictly increasing")
+        for r in rungs:
+            unknown = set(r) - {"after_epoch", "keep"}
+            if unknown:
+                raise ValueError(f"starts.halving.rungs: unknown keys {sorted(unknown)}")
+            if not 0 < r["keep"] < 1:
+                raise ValueError("starts.halving.rungs[].keep must lie in (0, 1)")
+        if int(halving.get("min_keep", 1)) < 1:
+            raise ValueError("starts.halving.min_keep must be at least 1")
+        if int(halving.get("control", 0)) < 0:
+            raise ValueError("starts.halving.control must be at least 0")
+    select = starts.get("select", {})
+    unknown = set(select) - {"criteria", "quantum_db"}
+    if unknown:
+        raise ValueError(f"starts.select: unknown keys {sorted(unknown)}")
+    if float(select.get("quantum_db", 0.001)) <= 0:
+        raise ValueError("starts.select.quantum_db must be positive")
+
+
+def _starts_count(vary: dict, combine: str) -> int:
+    lengths = [len(v) for v in vary.values()]
+    if combine == "product":
+        n = 1
+        for L in lengths:
+            n *= L
+        return n
+    return max(lengths)
 
 
 def _build(cls, d: dict):

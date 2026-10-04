@@ -1237,6 +1237,20 @@ Linux wheel on its own architecture’s runner and each image from its own wheel
 attach both Linux wheels. glibc 2.34 is the newest symbol version the library needs.</p></li>
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">YAPNR_RF_THREADS</span></code> sets the native pool and caps torch’s threads</strong> (torch at most 4): a job
 on a C4D-16 sets 16 without editing its spec; the Bazel RF tests set 1.</p></li>
+<li><p><strong>A case’s run directory keeps its own spec when it resumes.</strong> The presets’ new solver
+settings changed their hash, so <code class="docutils literal notranslate"><span class="pre">cases</span> <span class="pre">run</span></code> on a directory started before (every published
+run) stopped at its checkpoint. It now resumes a directory whose spec differs from the preset
+only in backend, dtype and threads with that spec (round 2’s runs keep torch float32 unless
+the environment chooses), and <code class="docutils literal notranslate"><span class="pre">design</span></code> checks the checkpoint before it writes <code class="docutils literal notranslate"><span class="pre">spec.json</span></code>.
+The alternative, a spec hash without the execution settings, would have changed every
+existing hash.</p></li>
+<li><p><strong>Mode profiles are solved once per process,</strong> keyed by the cross-section’s content: the
+mode solve’s numpy complex arithmetic was not reproducible to the last bit between processes
+on the development Mac (a complex multiplication rounded fused in some calls and unfused in
+others), which moved calibrations by up to 5e-11 relative; with one profile per process a
+run’s problems and both sides of an identity test agree. Two processes can still differ in
+the last bits of a modal-source run (not in the steppers); real-arithmetic products in the
+solve might close that, not tried (it would move every published number in the last bits).</p></li>
 </ul>
 <p>The gloss, dekink and corridor-coalescing pass (<code class="docutils literal notranslate"><span class="pre">PNR_GLOSS</span></code>,
 <a class="reference internal" href="design/gloss.html"><span class="std std-doc">design</span></a>); owner decisions of 2026-09-30 (in Splanc) and 2026-10-02:</p>

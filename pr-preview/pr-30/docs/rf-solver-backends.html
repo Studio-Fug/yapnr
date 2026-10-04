@@ -345,7 +345,9 @@ that runs.</p></li>
 <li><p><strong>In a spec:</strong> <code class="docutils literal notranslate"><span class="pre">solver:</span> <span class="pre">{backend:</span> <span class="pre">auto,</span> <span class="pre">dtype:</span> <span class="pre">float64,</span> <span class="pre">threads:</span> <span class="pre">4}</span></code> are the defaults;
 <code class="docutils literal notranslate"><span class="pre">backend</span></code> is <code class="docutils literal notranslate"><span class="pre">auto</span></code>, <code class="docutils literal notranslate"><span class="pre">native</span></code>, <code class="docutils literal notranslate"><span class="pre">numpy</span></code> or <code class="docutils literal notranslate"><span class="pre">torch</span></code>. Specs written before the native kernel say
 <code class="docutils literal notranslate"><span class="pre">backend:</span> <span class="pre">torch,</span> <span class="pre">dtype:</span> <span class="pre">float32</span></code> (the cases’ setting then) and keep running torch unless the
-environment says otherwise.</p></li>
+environment says otherwise. A case’s run directory from then resumes with its own spec:
+<code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">yapnr.rf.cases</span> <span class="pre">run</span></code> keeps a run directory’s <code class="docutils literal notranslate"><span class="pre">spec.json</span></code> when it differs from the
+preset only in <code class="docutils literal notranslate"><span class="pre">backend</span></code>, <code class="docutils literal notranslate"><span class="pre">dtype</span></code> and <code class="docutils literal notranslate"><span class="pre">threads</span></code>, so its checkpoint still matches.</p></li>
 <li><p><strong>From the environment,</strong> over the spec of every problem (<code class="docutils literal notranslate"><span class="pre">yapnr.rf.cases</span> <span class="pre">run</span></code>, the driver,
 validation):</p>
 <div class="table-wrapper colwidths-auto docutils container">
@@ -428,6 +430,19 @@ Under <code class="docutils literal notranslate"><span class="pre">bazel</span> 
 in Python, for every backend: each block of steps tabulates the sources’ values
 (<code class="docutils literal notranslate"><span class="pre">sources.combine</span></code>, an elementwise sum in a fixed order rather than a BLAS product) and the DTFT
 phase factors. Every backend applies these tables, so they cannot drift apart.</p>
+<p><strong>Not reproducible to the last bit: the modal source’s mode solve.</strong> The port source of
+<code class="docutils literal notranslate"><span class="pre">port_source:</span> <span class="pre">mode</span></code> comes from a small eigenproblem solved with numpy’s complex arithmetic
+(<code class="docutils literal notranslate"><span class="pre">modes</span></code>), outside the steppers. On the development Mac (macOS 27 beta, M4, numpy 1.26.4) its
+result was not the same in every process: in some processes started side by side, the same
+complex multiplication of fixed arrays rounded unfused (a·b − c·d) in its first calls and fused
+(an FMA) afterwards (cause not established). The profile then moved by an ulp, a line
+calibration’s Z_c by up to 5e-11 and k by 4e-13 relative, and a six-iteration smoke run of the
+filter bank ended on another design. Every backend sees this, numpy alone too, and the steppers
+do not: with the profile pinned, numpy and native line calibrations were identical in 24 of 24
+processes (1 to 4 threads, sweeps and passes), and so was every file of the end-to-end runs
+below. A process now solves each profile once (<code class="docutils literal notranslate"><span class="pre">modes._PROFILES</span></code>, keyed by the cross-section’s
+content), so all problems of a run, and both sides of an identity test, share it; two processes
+can still differ in the last bits of a modal-source run.</p>
 <p><code class="docutils literal notranslate"><span class="pre">tests/unit/rf/test_native_kernel.py</span></code> checks it with <code class="docutils literal notranslate"><span class="pre">assert_array_equal</span></code>:</p>
 <ul class="simple">
 <li><p>random fields stepped through every kernel on four structures (resistive sheet, copper-edge

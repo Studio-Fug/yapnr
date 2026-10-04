@@ -30,7 +30,9 @@ cloud jobs that pay for native speed should set it.
 - **In a spec:** `solver: {backend: auto, dtype: float64, threads: 4}` are the defaults;
   `backend` is `auto`, `native`, `numpy` or `torch`. Specs written before the native kernel say
   `backend: torch, dtype: float32` (the cases' setting then) and keep running torch unless the
-  environment says otherwise.
+  environment says otherwise. A case's run directory from then resumes with its own spec:
+  `python -m yapnr.rf.cases run` keeps a run directory's `spec.json` when it differs from the
+  preset only in `backend`, `dtype` and `threads`, so its checkpoint still matches.
 - **From the environment,** over the spec of every problem (`yapnr.rf.cases run`, the driver,
   validation):
 
@@ -93,6 +95,20 @@ What makes this possible is that the values that do not depend on the fields are
 in Python, for every backend: each block of steps tabulates the sources' values
 (`sources.combine`, an elementwise sum in a fixed order rather than a BLAS product) and the DTFT
 phase factors. Every backend applies these tables, so they cannot drift apart.
+
+**Not reproducible to the last bit: the modal source's mode solve.** The port source of
+`port_source: mode` comes from a small eigenproblem solved with numpy's complex arithmetic
+(`modes`), outside the steppers. On the development Mac (macOS 27 beta, M4, numpy 1.26.4) its
+result was not the same in every process: in some processes started side by side, the same
+complex multiplication of fixed arrays rounded unfused (a·b − c·d) in its first calls and fused
+(an FMA) afterwards (cause not established). The profile then moved by an ulp, a line
+calibration's Z_c by up to 5e-11 and k by 4e-13 relative, and a six-iteration smoke run of the
+filter bank ended on another design. Every backend sees this, numpy alone too, and the steppers
+do not: with the profile pinned, numpy and native line calibrations were identical in 24 of 24
+processes (1 to 4 threads, sweeps and passes), and so was every file of the end-to-end runs
+below. A process now solves each profile once (`modes._PROFILES`, keyed by the cross-section's
+content), so all problems of a run, and both sides of an identity test, share it; two processes
+can still differ in the last bits of a modal-source run.
 
 `tests/unit/rf/test_native_kernel.py` checks it with `assert_array_equal`:
 

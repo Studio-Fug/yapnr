@@ -210,7 +210,7 @@ def _segment_rect(a, b, r):
     )
 
 
-def copper_audit(grid, tracks, vias, via_sizes=(), *, limit=20):
+def copper_audit(grid, tracks, vias, via_sizes=(), *, pairs=None, classes=None, limit=20):
     """Clearance shortfalls between different nets' copper, in mm: ``tracks``
     ``(net, layer name, a, b, width)`` and ``vias`` ``(net, x, y)`` (a route_board
     result's emitted copper: maze routes, escapes, fanouts, block ports) against
@@ -218,12 +218,22 @@ def copper_audit(grid, tracks, vias, via_sizes=(), *, limit=20):
     Two nets keep the larger of their class clearances (``grid.net_clearances``)
     and the fab's; a pad that sets its own (``grid.pad_keepaways``) keeps that where
     larger. ``via_sizes`` gives a via's diameter where it is not the fab's
-    (``[net, x, y, diameter, drill]``). Returns ``{"count": n, "items": [...]}`` with
-    at most ``limit`` items ``{net, other, kind, layer, gap_mm, need_mm, at}``.
-    Same-net copper and drill spacing are not judged here."""
+    (``[net, x, y, diameter, drill]``). ``classes`` (net -> class clearance) stands
+    in for ``grid.net_clearances`` (which may hold clearances raised for routing);
+    ``pairs`` (``frozenset({a, b})`` -> mm, a board's pair rules: pnr.dru_rules) adds
+    pair clearances, judged out to their own distance. Returns ``{"count": n,
+    "items": [...]}`` with at most ``limit`` items ``{net, other, kind, layer,
+    gap_mm, need_mm, at}``. Same-net copper and drill spacing are not judged here."""
     from pnr.writeback import _segment_distance_sq
 
-    classes = getattr(grid, "net_clearances", None) or {}
+    if classes is None:
+        classes = getattr(grid, "net_clearances", None) or {}
+    pairs = pairs or {}
+    # The farthest a net's pair rules reach (the search window of its copper).
+    far = {}
+    for key, d in pairs.items():
+        for n in key:
+            far[n] = max(far.get(n, 0.0), d)
     keepaways = getattr(grid, "pad_keepaways", None) or {}
     layer_index = {name: k for k, name in enumerate(grid.layers)}
 
@@ -258,13 +268,15 @@ def copper_audit(grid, tracks, vias, via_sizes=(), *, limit=20):
         for key in boxes(r.left, r.bottom, r.right, r.top):
             buckets[key].append(("pad", k))
     found = {}
+    judged = set()  # copper pairs (lower index, higher), each judged once
     for k, (kind, layer, net, (a, b), half) in enumerate(items):
         seen = set()
-        x0, y0 = min(a[0], b[0]) - reach, min(a[1], b[1]) - reach
-        x1, y1 = max(a[0], b[0]) + reach, max(a[1], b[1]) + reach
+        window = max(reach, far.get(net, 0.0) + 1.0)
+        x0, y0 = min(a[0], b[0]) - window, min(a[1], b[1]) - window
+        x1, y1 = max(a[0], b[0]) + window, max(a[1], b[1]) + window
         for key in boxes(x0, y0, x1, y1):
             for what, m in buckets.get(key, ()):
-                if (what, m) in seen or (what == "copper" and m <= k):
+                if (what, m) in seen or (what == "copper" and m == k):
                     continue
                 seen.add((what, m))
                 if what == "copper":
@@ -273,8 +285,13 @@ def copper_audit(grid, tracks, vias, via_sizes=(), *, limit=20):
                         continue
                     if layer is not None and olayer is not None and layer != olayer:
                         continue
+                    key2 = (min(k, m), max(k, m))
+                    if key2 in judged:
+                        continue
+                    judged.add(key2)
                     gap = math.sqrt(_segment_distance_sq(a, b, c, d)) - half - ohalf
                     need = max(clearance(net), clearance(other))
+                    need = max(need, pairs.get(frozenset((net, other)), 0.0))
                     pair = "-".join(sorted((kind, okind)))
                 else:
                     _, olayer, other, rect, keep = pads[m]
@@ -282,11 +299,12 @@ def copper_audit(grid, tracks, vias, via_sizes=(), *, limit=20):
                         continue
                     gap = (_segment_rect(a, b, rect) if a != b else _point_rect(a, rect)) - half
                     need = max(clearance(net), clearance(other), keep or 0.0)
+                    need = max(need, pairs.get(frozenset((net, other)), 0.0))
                     pair = kind + "-pad"
                 if gap < need - 1e-6:
                     where = layer if layer is not None else olayer
                     name = grid.layers[where] if where is not None else None
-                    found[(k, what, m)] = dict(
+                    found[(min(k, m), max(k, m)) if what == "copper" else (k, what, m)] = dict(
                         net=net,
                         other=other,
                         kind=pair,

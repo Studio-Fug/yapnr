@@ -902,7 +902,19 @@ def route_board(
     # track halo and via keep-out are sized from it, and the exact check after the
     # route (class_check) holds every pair to it. Off: the fab clearance for all.
     class_maze = (rules or {}).get("class_clearance") == "maze"
+    # board.dru_routing: the board's custom rules where they constrain routing
+    # (rules["dru"], pnr.dru_rules, attached by the drivers; route.detail.dru_apply).
+    # A small pair clearance raises one side's clearance before the halos are sized.
+    dru = (rules or {}).get("dru") if (rules or {}).get("dru_routing") else None
+    raised = {}
+    if dru:
+        from .dru_apply import raised_clearances
+
+        raised = raised_clearances(dru)
     class_of = _net_clearances(rules) if class_maze else {}
+    for n, value in raised.items():
+        if class_maze:
+            class_of[n] = max(class_of.get(n, 0.0), value)
 
     def own_clearance(n):
         return max(clearance_mm, class_of.get(n, 0.0))
@@ -946,6 +958,21 @@ def route_board(
             current_layer_mask(stack, layers, rules, net_width, track_width_mm) or None
         )
     grid.net_clearances = _net_clearances(rules)
+    for n, value in raised.items():  # dru_routing: small pair clearances (dru_apply)
+        grid.net_clearances[n] = max(grid.net_clearances.get(n, 0.0), value)
+    dru_report = None
+    if dru:
+        # The layers a net may use: disallow track by layer, disallow via (its pads'
+        # one layer); intersected with the stack's current-rated masks.
+        from .dru_apply import layer_masks
+
+        masks, dru_report = layer_masks(grid, graph, dru)
+        if masks:
+            merged = dict(grid.layer_mask or {})
+            for n, allowed in masks.items():
+                merged[n] = merged[n] & allowed if n in merged else allowed
+            grid.layer_mask = merged
+        dru_report["raised_clearances"] = dict(sorted(raised.items()))
     grid.reserve_wide_pad_clearance()
     # Fab-profile per-hole-kind rules ride in rules['fab'] beside the 5 keys
     # _fab() keeps; absent (legacy rules) they leave the original model intact.
@@ -1125,6 +1152,13 @@ def route_board(
         plan.diagnostics["fanout"] = fanouts.report
     if edge_report is not None:
         plan.diagnostics["board_edge"] = edge_report
+    if dru:
+        # Large pair clearances: each side kept off the other side's copper (dru_apply).
+        from .dru_apply import pair_keepouts
+
+        dru_report["pair_keepouts"] = pair_keepouts(
+            grid, [net.name for net in graph.nets], dru, fixed_copper
+        )
     from pnr.stack import assess
 
     stack_warnings = list(assess(rules, getattr(graph, "stack", None))[1])
@@ -1309,16 +1343,36 @@ def route_board(
                 via_radius=via_radius_mm,
                 fixed_copper=_flat(fixed_copper),
             )
-    if class_report is not None:
-        # What the emitted copper keeps from other nets at their class clearances.
+    if dru:
+        from .dru_apply import length_report
+
+        dru_report["length"] = length_report(board.tracks, dru)
+        dru_report["applied"] = dru.get("applied", [])
+        dru_report["unmodelled"] = dru.get("unmodelled", [])
+        board.escape_diagnostics["dru"] = dru_report
+    if class_report is not None or (dru and dru.get("pair_clearances")):
+        # What the emitted copper keeps from other nets at their class clearances
+        # and the board's pair rules (the raised clearances are routing's only).
         import sys
 
         from .class_check import copper_audit, summarize
+        from .dru_apply import pair_needs
 
-        class_report["audit"] = copper_audit(grid, board.tracks, board.vias, board.via_sizes)
-        board.escape_diagnostics["class_clearance"] = class_report
-        for line in summarize(class_report):
-            sys.stderr.write(line + "\n")
+        audit = copper_audit(
+            grid,
+            board.tracks,
+            board.vias,
+            board.via_sizes,
+            pairs=pair_needs(dru),
+            classes=_net_clearances(rules),
+        )
+        if class_report is not None:
+            class_report["audit"] = audit
+            board.escape_diagnostics["class_clearance"] = class_report
+            for line in summarize(class_report):
+                sys.stderr.write(line + "\n")
+        else:
+            dru_report["audit"] = audit
     if route_trace is not None:
         route_trace.end(board)
     return board

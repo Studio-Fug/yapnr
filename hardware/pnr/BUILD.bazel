@@ -67,6 +67,8 @@ filegroup(
         "pnr/fixed_block.py",
         # board.edge: exact / keep_outline: the board's own outline (writeback keeps it).
         "pnr/board_edge.py",
+        # board.dru_routing: the custom rules where they constrain routing (staged_signal).
+        "pnr/dru_rules.py",
         "pnr/paired_bootstrap.py",
         "pnr/placement_trials.py",
         "pnr/placement_copper.py",
@@ -2029,6 +2031,24 @@ py_test(
     size = "small",
     srcs = ["tests/test_board_edge.py"],
     main = "tests/test_board_edge.py",
+    deps = [
+        ":pnr",
+        ":pnr_detail",
+        ":pnr_place",
+        ":pnr_route",
+        requirement("numpy"),
+        requirement("pyyaml"),
+    ],
+)
+
+# board.dru_routing: the custom-rules parser and its three-valued conditions, the
+# routing effects of a radar60-style rules file and what it lists unmodelled, and
+# route_board applying them (no-via layer, pair keep-outs, length report).
+py_test(
+    name = "dru_rules_test",
+    size = "small",
+    srcs = ["tests/test_dru_rules.py"],
+    main = "tests/test_dru_rules.py",
     deps = [
         ":pnr",
         ":pnr_detail",
